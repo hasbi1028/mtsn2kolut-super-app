@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output
+frontend/build/
+worker/build/
+
+# Database & data (sensitive)
+data/
+*.db
+*.sqlite
+backup.db
+
+# Logs & screenshots
+logs/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
