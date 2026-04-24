@@ -5,10 +5,10 @@
 {@render children()}
 
 <style>
-  /* Override .page padding/gap khusus halaman attendance */
   :global(.page) {
-    padding-top: 10px !important;
-    padding-bottom: 10px !important;
-    gap: 6px !important;
+    max-width: 420px !important;
+    margin: 0 auto !important;
+    padding: 6px 6px 6px !important;
+    gap: 4px !important;
   }
 </style>
