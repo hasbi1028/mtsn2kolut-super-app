@@ -32,7 +32,8 @@
     const s = e.active_status || e.last_status;
     const t = e.active_run_type || e.last_run_type;
     if (!s) return null;
-    const tipe = t === 'morning' ? 'pagi' : t === 'afternoon' ? 'sore' : t;
+    const labels = { morning: 'pagi', afternoon: 'sore', checkin: 'masuk', checkout: 'pulang' };
+    const tipe = labels[t] || t;
     return { status: s, tipe };
   }
 
@@ -87,6 +88,8 @@
           <div class="side">
             <button class="btn small"       onclick={() => onrun(e.id, 'morning')}   disabled={busyId === e.id}>Pagi</button>
             <button class="btn small ghost" onclick={() => onrun(e.id, 'afternoon')} disabled={busyId === e.id}>Sore</button>
+            <button class="btn small green" onclick={() => onrun(e.id, 'checkin')}   disabled={busyId === e.id}>☀ Masuk</button>
+            <button class="btn small orange" onclick={() => onrun(e.id, 'checkout')}  disabled={busyId === e.id}>🌙 Pulang</button>
             <button class="btn small stop"  onclick={() => doStop(e.id)}             disabled={busyId === e.id || !e.active_status}>
               {busyId === e.id ? '...' : '■ Stop'}
             </button>
@@ -139,6 +142,12 @@
   .btn.stop           { background: rgba(250,180,34,0.12); border: 1px solid #7a6010; color: #ffd788; }
   .btn.stop:hover     { background: rgba(250,180,34,0.22); }
   .btn.stop:disabled  { opacity: 0.3; cursor: not-allowed; }
+  .btn.green          { background: rgba(31,170,112,0.12); border: 1px solid #2a8a5a; color: #7ff0b7; }
+  .btn.green:hover    { background: rgba(31,170,112,0.22); }
+  .btn.green:disabled { opacity: 0.3; cursor: not-allowed; }
+  .btn.orange         { background: rgba(250,160,34,0.12); border: 1px solid #8a6a10; color: #ffc878; }
+  .btn.orange:hover   { background: rgba(250,160,34,0.22); }
+  .btn.orange:disabled { opacity: 0.3; cursor: not-allowed; }
   .btn.danger         { background: linear-gradient(180deg, #e05252, #c03030); }
   .btn.danger-outline { border-color: #7a3535; color: #ff9d9d; }
   .btn.danger-outline:hover { background: rgba(225,76,76,0.15); }

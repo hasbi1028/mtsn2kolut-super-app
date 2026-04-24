@@ -18,7 +18,8 @@
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ employee_id, run_type })
     });
-    showToast(`Job ${run_type === 'morning' ? 'pagi' : 'sore'} berhasil di-queue.`);
+    const labels = { morning: 'pagi', afternoon: 'sore', checkin: 'absensi masuk', checkout: 'absensi pulang' };
+    showToast(`Job ${labels[run_type] || run_type} berhasil di-queue.`);
   }
 
   function handleStop(_id, cancelled) {

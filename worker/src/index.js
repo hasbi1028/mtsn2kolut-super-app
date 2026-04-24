@@ -106,7 +106,18 @@ function claimNextJob(consumerId) {
 
 async function processJob(job, consumerId) {
   try {
-    const record = await scrapeToday(job.pusaka_username, job.pusaka_password);
+    let record;
+
+    if (job.run_type === 'checkin') {
+      await checkin(job.pusaka_username, job.pusaka_password);
+      record = { tanggal: toISODateMakassar(), jam_masuk: new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit' }), jam_pulang: '' };
+    } else if (job.run_type === 'checkout') {
+      await checkout(job.pusaka_username, job.pusaka_password);
+      record = { tanggal: toISODateMakassar(), jam_masuk: '', jam_pulang: new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit' }) };
+    } else {
+      // morning / afternoon — existing scrape
+      record = await scrapeToday(job.pusaka_username, job.pusaka_password);
+    }
 
     db.prepare(
       `INSERT INTO attendance_records (id, employee_id, tanggal, jam_masuk, jam_pulang, source_job_id)
@@ -280,6 +291,300 @@ async function scrapeOnce(username, password, attempt) {
       const file = path.join(SCREENSHOT_DIR, `fail-a${attempt}-${ts}.png`);
       await page.screenshot({ path: file, fullPage: false });
       log('WARN', 'failure screenshot saved', { file });
+    } catch { /* best-effort */ }
+    throw e;
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+}
+
+// ── Geolocation helpers ──────────────────────────────────────────────
+
+function randomGeo(baseLat, baseLng, radiusMeters = 10) {
+  const earthRadius = 6371000;
+  const latOffset = (Math.random() - 0.5) * 2 * (radiusMeters / earthRadius) * (180 / Math.PI);
+  const lngOffset = (Math.random() - 0.5) * 2 * (radiusMeters / earthRadius) * (180 / Math.PI) / Math.cos(baseLat * Math.PI / 180);
+  return { latitude: baseLat + latOffset, longitude: baseLng + lngOffset };
+}
+
+/**
+ * Melakukan absensi masuk (checkin) untuk satu akun.
+ * Navigasi langsung ke /profile/presence, inject geolocation,
+ * klik tombol 'Presensi masuk'.
+ */
+async function checkin(username, password) {
+  const BASE_LAT = -3.2163111;
+  const BASE_LNG = 121.0428659;
+  const BASE_URL = 'https://pusaka-v3.kemenag.go.id';
+
+  const geo = randomGeo(BASE_LAT, BASE_LNG, 10);
+  const { headless } = loadRuntimeSettings();
+
+  const browser = await chromium.launch({
+    headless,
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--disable-background-networking',
+    ],
+  });
+
+  const context = await browser.newContext({
+    geolocation: geo,
+    permissions: ['geolocation'],
+    locale: 'id-ID',
+    timezoneId: 'Asia/Makassar',
+    viewport: { width: 1280, height: 800 },
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  });
+
+  context.setDefaultTimeout(ACTION_TIMEOUT);
+  const page = await context.newPage();
+
+  try {
+    log('INFO', 'checkin: starting', { username, lat: geo.latitude.toFixed(7), lng: geo.longitude.toFixed(7) });
+
+    // Bypass: langsung ke halaman login
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+
+    const loginLink = page.getByRole('link', { name: /login/i }).first();
+    await loginLink.waitFor({ state: 'visible' });
+    await loginLink.click();
+
+    await page.getByPlaceholder('Username').fill(username);
+    await page.getByPlaceholder('Password').fill(password);
+    await page.getByRole('button', { name: 'Masuk', exact: true }).click();
+
+    // Verifikasi login
+    const loginErr = page.getByText(/username atau password salah|invalid credentials|login gagal/i).first();
+    const profileLink = page.getByRole('link', { name: /profile/i }).first();
+    const which = await Promise.race([
+      loginErr.waitFor({ state: 'visible' }).then(() => 'err'),
+      profileLink.waitFor({ state: 'visible', timeout: 20000 }).then(() => 'ok'),
+    ]);
+    if (which === 'err') throw new Error('Login gagal: username/password ditolak oleh server');
+    log('INFO', 'checkin: login ok', { username });
+
+    // Navigasi ke halaman presensi
+    await page.goto(`${BASE_URL}/profile/presence`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(3000);
+
+    // Trigger geolocation dari JS
+    await page.evaluate(() => {
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos),
+          (err) => resolve(err.message),
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      });
+    }).catch(() => {});
+    log('INFO', 'checkin: geolocation triggered', { username });
+    await page.waitForTimeout(2000);
+
+    // Cari tombol "Presensi masuk"
+    const btnMasuk = page.locator('button:has-text("Presensi masuk")');
+    const count = await btnMasuk.count();
+
+    if (count === 0) {
+      // Cek apakah sudah absen
+      const bodyText = await page.locator('body').innerText().catch(() => '');
+      if (bodyText.includes('Hadir') || bodyText.includes('hadir') || bodyText.includes('SUDAH')) {
+        log('WARN', 'checkin: sudah absen hari ini', { username });
+        return;
+      }
+      throw new Error('Tombol Presensi masuk tidak ditemukan');
+    }
+
+    const isDisabled = await btnMasuk.first().isDisabled().catch(() => false);
+    if (isDisabled) {
+      log('WARN', 'checkin: tombol disabled (mungkin sudah absen)', { username });
+      return;
+    }
+
+    // Trigger geolocation lagi lalu klik
+    await page.evaluate(() => {
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos),
+          (err) => resolve(err.message),
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      });
+    }).catch(() => {});
+    await page.waitForTimeout(1000);
+    await btnMasuk.first().click();
+    log('INFO', 'checkin: tombol diklik', { username });
+
+    // Tunggu hasil
+    await page.waitForTimeout(3000);
+    const resultText = await page.locator('body').innerText().catch(() => '');
+
+    if (resultText.includes('PRESENSI GAGAL')) {
+      throw new Error('PRESENSI GAGAL — Bad Request (mungkin GPS tidak valid)');
+    } else if (resultText.includes('BERHASIL') || resultText.includes('berhasil')) {
+      log('INFO', 'checkin: BERHASIL', { username });
+    } else if (resultText.includes('sudah presensi')) {
+      log('WARN', 'checkin: sudah absen sebelumnya', { username });
+    } else {
+      log('WARN', 'checkin: status tidak jelas, cek screenshot', { username, snippet: resultText.substring(0, 300) });
+    }
+  } catch (e) {
+    try {
+      fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const file = path.join(SCREENSHOT_DIR, `checkin-fail-${username}-${ts}.png`);
+      await page.screenshot({ path: file, fullPage: false });
+      log('WARN', 'checkin: failure screenshot saved', { file });
+    } catch { /* best-effort */ }
+    throw e;
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+}
+
+/**
+ * Melakukan absensi pulang (checkout) untuk satu akun.
+ * Navigasi ke /profile/presence, inject geolocation,
+ * klik 'Presensi pulang' lalu konfirmasi 'Ya'.
+ */
+async function checkout(username, password) {
+  const BASE_LAT = -3.2163111;
+  const BASE_LNG = 121.0428659;
+  const BASE_URL = 'https://pusaka-v3.kemenag.go.id';
+
+  const geo = randomGeo(BASE_LAT, BASE_LNG, 10);
+  const { headless } = loadRuntimeSettings();
+
+  const browser = await chromium.launch({
+    headless,
+    args: [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--disable-background-networking',
+    ],
+  });
+
+  const context = await browser.newContext({
+    geolocation: geo,
+    permissions: ['geolocation'],
+    locale: 'id-ID',
+    timezoneId: 'Asia/Makassar',
+    viewport: { width: 1280, height: 800 },
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  });
+
+  context.setDefaultTimeout(ACTION_TIMEOUT);
+  const page = await context.newPage();
+
+  try {
+    log('INFO', 'checkout: starting', { username, lat: geo.latitude.toFixed(7), lng: geo.longitude.toFixed(7) });
+
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+
+    const loginLink = page.getByRole('link', { name: /login/i }).first();
+    await loginLink.waitFor({ state: 'visible' });
+    await loginLink.click();
+
+    await page.getByPlaceholder('Username').fill(username);
+    await page.getByPlaceholder('Password').fill(password);
+    await page.getByRole('button', { name: 'Masuk', exact: true }).click();
+
+    const loginErr = page.getByText(/username atau password salah|invalid credentials|login gagal/i).first();
+    const profileLink = page.getByRole('link', { name: /profile/i }).first();
+    const which = await Promise.race([
+      loginErr.waitFor({ state: 'visible' }).then(() => 'err'),
+      profileLink.waitFor({ state: 'visible', timeout: 20000 }).then(() => 'ok'),
+    ]);
+    if (which === 'err') throw new Error('Login gagal: username/password ditolak oleh server');
+    log('INFO', 'checkout: login ok', { username });
+
+    await page.goto(`${BASE_URL}/profile/presence`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(3000);
+
+    // Trigger geolocation
+    await page.evaluate(() => {
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos),
+          (err) => resolve(err.message),
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      });
+    }).catch(() => {});
+    log('INFO', 'checkout: geolocation triggered', { username });
+    await page.waitForTimeout(2000);
+
+    // Cari tombol "Presensi pulang"
+    const btnPulang = page.locator('button:has-text("Presensi pulang")');
+    const count = await btnPulang.count();
+
+    if (count === 0) {
+      throw new Error('Tombol Presensi pulang tidak ditemukan');
+    }
+
+    const isDisabled = await btnPulang.first().isDisabled().catch(() => false);
+    if (isDisabled) {
+      log('WARN', 'checkout: tombol disabled (mungkin sudah absen pulang)', { username });
+      return;
+    }
+
+    // Klik Presensi pulang
+    await btnPulang.first().click();
+    log('INFO', 'checkout: tombol Presensi pulang diklik', { username });
+    await page.waitForTimeout(2000);
+
+    // Konfirmasi "Ya" di modal
+    const tombolYa = page.locator('button:has-text("Ya"), button:has-text("ya")');
+    const yaCount = await tombolYa.count();
+    if (yaCount > 0) {
+      const yaDisabled = await tombolYa.first().isDisabled().catch(() => false);
+      if (!yaDisabled) {
+        await tombolYa.first().click();
+        log('INFO', 'checkout: konfirmasi Ya diklik', { username });
+      }
+    } else {
+      // Fallback: cari button dengan teks 'Ya'
+      const allBtns = page.locator('button');
+      const btnCount = await allBtns.count();
+      for (let i = 0; i < btnCount; i++) {
+        const text = await allBtns.nth(i).innerText().catch(() => '');
+        if (text === 'Ya' || text.trim() === 'Ya') {
+          await allBtns.nth(i).click().catch(() => {});
+          log('INFO', 'checkout: konfirmasi Ya diklik (fallback)', { username });
+          break;
+        }
+      }
+    }
+
+    // Tunggu hasil
+    await page.waitForTimeout(3000);
+    const resultText = await page.locator('body').innerText().catch(() => '');
+
+    if (resultText.includes('PRESENSI GAGAL')) {
+      throw new Error('PRESENSI GAGAL — Bad Request (mungkin GPS tidak valid)');
+    } else if (resultText.includes('BERHASIL') || resultText.includes('berhasil')) {
+      log('INFO', 'checkout: BERHASIL', { username });
+    } else if (resultText.includes('sudah presensi')) {
+      log('WARN', 'checkout: sudah absen sebelumnya', { username });
+    } else {
+      log('WARN', 'checkout: status tidak jelas, cek screenshot', { username, snippet: resultText.substring(0, 300) });
+    }
+  } catch (e) {
+    try {
+      fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      const file = path.join(SCREENSHOT_DIR, `checkout-fail-${username}-${ts}.png`);
+      await page.screenshot({ path: file, fullPage: false });
+      log('WARN', 'checkout: failure screenshot saved', { file });
     } catch { /* best-effort */ }
     throw e;
   } finally {
