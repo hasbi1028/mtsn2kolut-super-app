@@ -9,7 +9,7 @@ import { chromium, type Page } from 'playwright';
 const FRONTEND_URL   = (process.env.FRONTEND_URL ?? 'http://localhost:8021').replace(/\/$/, '');
 const WORKER_TOKEN   = process.env.WORKER_TOKEN ?? '';
 const WORKER_ID      = process.env.WORKER_ID    ?? `worker-${os.hostname()}-${process.pid}`;
-const MAX_CONCURRENT = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 1));
+const MAX_CONCURRENT = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 5));
 const HEADLESS       = ['1', 'true'].includes(process.env.HEADLESS ?? 'true');
 const POLL_MS        = Number(process.env.POLL_MS        ?? 8000);
 const SCRAPE_RETRIES = Math.max(1, Number(process.env.SCRAPE_RETRIES ?? 3));
