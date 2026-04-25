@@ -11,6 +11,6 @@ export const PUT: RequestHandler = async ({ request }) => {
 		max_concurrent: payload.max_concurrent as number | undefined,
 		headless:       payload.headless as boolean | undefined,
 	});
-	logInfo('app settings updated', settings as Record<string, unknown>);
+	logInfo('app settings updated', settings as unknown as Record<string, unknown>);
 	return json(settings);
 };

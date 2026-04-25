@@ -91,7 +91,7 @@ export const rawDb = sqlite;
 
 function migrateSchema() {
 	// Ensure jobs table has all columns (older installs may be missing some)
-	const cols = sqlite.prepare('PRAGMA table_info(jobs)').all().map((c: { name: string }) => c.name);
+	const cols = (sqlite.prepare('PRAGMA table_info(jobs)').all() as { name: string }[]).map((c) => c.name);
 	if (!cols.includes('claimed_by'))    sqlite.exec(`ALTER TABLE jobs ADD COLUMN claimed_by TEXT NOT NULL DEFAULT ''`);
 	if (!cols.includes('claimed_at'))    sqlite.exec(`ALTER TABLE jobs ADD COLUMN claimed_at DATETIME`);
 	if (!cols.includes('attempts'))      sqlite.exec(`ALTER TABLE jobs ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0`);
@@ -152,7 +152,7 @@ function migrateRunTypeConstraint() {
 // ── Seed defaults ─────────────────────────────────────────────────────────────
 
 function seedDefaults() {
-	const existingTypes = sqlite.prepare('SELECT DISTINCT run_type FROM schedules').all().map((r: { run_type: string }) => r.run_type);
+	const existingTypes = (sqlite.prepare('SELECT DISTINCT run_type FROM schedules').all() as { run_type: string }[]).map((r) => r.run_type);
 	const defaults = [
 		{ id: 'sched-morning',  label: 'Pagi',         run_time: '07:00', run_type: 'morning' },
 		{ id: 'sched-afternoon',label: 'Sore',          run_time: '16:00', run_type: 'afternoon' },
