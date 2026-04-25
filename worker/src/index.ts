@@ -10,7 +10,7 @@ const FRONTEND_URL   = (process.env.FRONTEND_URL ?? 'http://localhost:8021').rep
 const WORKER_TOKEN   = process.env.WORKER_TOKEN ?? '';
 const WORKER_ID      = process.env.WORKER_ID    ?? `worker-${os.hostname()}-${process.pid}`;
 const MAX_CONCURRENT = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 1));
-const HEADLESS       = ['1', 'true'].includes(process.env.HEADLESS ?? 'false');
+const HEADLESS       = ['1', 'true'].includes(process.env.HEADLESS ?? 'true');
 const POLL_MS        = Number(process.env.POLL_MS        ?? 8000);
 const SCRAPE_RETRIES = Math.max(1, Number(process.env.SCRAPE_RETRIES ?? 3));
 const SCRAPE_RETRY_MS= Math.max(3000, Number(process.env.SCRAPE_RETRY_MS ?? 5000));
@@ -179,16 +179,43 @@ async function loginToPusaka(page: Page, username: string, password: string, lab
 	await page.getByRole('link', { name: /login/i }).first().click();
 	await page.getByPlaceholder('Username').fill(username);
 	await page.getByPlaceholder('Password').fill(password);
+
+	const urlBeforeSubmit = page.url();
 	await page.getByRole('button', { name: 'Masuk', exact: true }).click();
 
-	const loginErr    = page.getByText(/username atau password salah|invalid credentials|login gagal/i).first();
-	const profileLink = page.getByRole('link', { name: /profile/i }).first();
-	const which = await Promise.race([
-		loginErr.waitFor({ state: 'visible' }).then(() => 'err' as const),
-		profileLink.waitFor({ state: 'visible', timeout: 20000 }).then(() => 'ok' as const),
-	]);
-	if (which === 'err') throw new Error('Login gagal: username/password ditolak oleh server');
-	log('INFO', `${label}: login ok`, { username });
+	// Option A: wait for URL to change away from the login page
+	try {
+		await page.waitForURL(
+			(url) => url.href !== urlBeforeSubmit && !/login/i.test(url.pathname),
+			{ timeout: 25000 },
+		);
+
+		// Landed on a new page — double-check body for in-page error (some SPAs redirect then show error)
+		const bodyAfter = await page.locator('body').innerText().catch(() => '');
+		if (/username atau password salah|invalid credentials|login gagal/i.test(bodyAfter)) {
+			throw new Error('Login gagal: username/password ditolak oleh server');
+		}
+
+		log('INFO', `${label}: login ok`, { username, url: page.url() });
+		return;
+	} catch (urlErr) {
+		if ((urlErr as Error)?.message?.includes('username/password')) throw urlErr;
+	}
+
+	// Option C: URL did not change — inspect body to determine real state
+	const body = await page.locator('body').innerText().catch(() => '');
+
+	if (/username atau password salah|invalid credentials|login gagal/i.test(body)) {
+		throw new Error('Login gagal: username/password ditolak oleh server');
+	}
+
+	// Heuristic: page already shows post-login content despite URL not matching expectation
+	if (/absensi|dashboard|beranda|profil|selamat\s+datang/i.test(body)) {
+		log('INFO', `${label}: login ok (via body fallback)`, { username, url: page.url() });
+		return;
+	}
+
+	throw new Error(`Login timeout: halaman tidak merespons setelah submit (URL: ${page.url()})`);
 }
 
 async function triggerGeo(page: Page): Promise<void> {
