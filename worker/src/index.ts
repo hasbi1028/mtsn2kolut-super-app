@@ -1,50 +1,43 @@
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
-import Database from 'better-sqlite3';
+import os from 'os';
 import { chromium, type Page } from 'playwright';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const DB_PATH              = process.env.DB_PATH              ?? path.resolve('../data/pusaka.sqlite');
-const POLL_MS              = Number(process.env.POLL_MS              ?? 8000);
-const MAX_ATTEMPTS_DEFAULT = Math.max(1, Number(process.env.MAX_ATTEMPTS       ?? 3));
-const RETRY_BASE_SECONDS   = Math.max(10, Number(process.env.RETRY_BASE_SECONDS ?? 30));
-const WORKER_ID_PREFIX     = process.env.WORKER_ID             ?? `worker-${process.pid}`;
-const LOG_PATH             = process.env.WORKER_LOG_PATH       ?? path.resolve('../logs/worker.log');
-const SCRAPE_RETRIES       = Math.max(1, Number(process.env.SCRAPE_RETRIES     ?? 3));
-const SCRAPE_RETRY_MS      = Math.max(3000, Number(process.env.SCRAPE_RETRY_MS  ?? 5000));
-const ACTION_TIMEOUT       = Math.max(5000, Number(process.env.ACTION_TIMEOUT   ?? 20000));
-const SCREENSHOT_DIR       = process.env.SCREENSHOT_DIR        ?? path.resolve('../logs/screenshots');
+const FRONTEND_URL   = (process.env.FRONTEND_URL ?? 'http://localhost:8021').replace(/\/$/, '');
+const WORKER_TOKEN   = process.env.WORKER_TOKEN ?? '';
+const WORKER_ID      = process.env.WORKER_ID    ?? `worker-${os.hostname()}-${process.pid}`;
+const MAX_CONCURRENT = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 1));
+const HEADLESS       = ['1', 'true'].includes(process.env.HEADLESS ?? 'false');
+const POLL_MS        = Number(process.env.POLL_MS        ?? 8000);
+const SCRAPE_RETRIES = Math.max(1, Number(process.env.SCRAPE_RETRIES ?? 3));
+const SCRAPE_RETRY_MS= Math.max(3000, Number(process.env.SCRAPE_RETRY_MS ?? 5000));
+const ACTION_TIMEOUT = Math.max(5000, Number(process.env.ACTION_TIMEOUT  ?? 20000));
+const LOG_PATH       = process.env.WORKER_LOG_PATH ?? path.resolve('../logs/worker.log');
+const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR  ?? path.resolve('../logs/screenshots');
 
 const BASE_URL = 'https://pusaka-v3.kemenag.go.id';
 const BASE_LAT = -3.2163111;
 const BASE_LNG = 121.0428659;
 
 const BROWSER_ARGS = [
-	'--no-sandbox',
-	'--disable-dev-shm-usage',
-	'--disable-gpu',
-	'--disable-extensions',
-	'--disable-background-networking',
+	'--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu',
+	'--disable-extensions', '--disable-background-networking',
 ];
-
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type RunType   = 'morning' | 'afternoon' | 'checkin' | 'checkout';
-type JobStatus = 'queued' | 'running' | 'success' | 'failed';
+type RunType = 'morning' | 'afternoon' | 'checkin' | 'checkout';
 
-interface Job {
+interface ClaimedJob {
 	id:              string;
 	employee_id:     string;
 	run_type:        RunType;
-	status:          JobStatus;
 	attempts:        number;
 	max_attempts:    number;
-	next_retry_at:   string | null;
-	claimed_by:      string;
 	pusaka_username: string;
 	pusaka_password: string;
 }
@@ -55,68 +48,64 @@ interface AttendanceRecord {
 	jam_pulang: string;
 }
 
-interface RuntimeSettings {
-	max_concurrent: number;
-	headless:       boolean;
+interface GeoCoords { latitude: number; longitude: number; }
+
+// ── HTTP client ───────────────────────────────────────────────────────────────
+
+async function workerFetch(method: 'GET' | 'POST', path: string, body?: unknown): Promise<Response> {
+	return fetch(`${FRONTEND_URL}${path}`, {
+		method,
+		headers: {
+			'content-type':  'application/json',
+			'authorization': `Bearer ${WORKER_TOKEN}`,
+			'x-worker-id':   WORKER_ID,
+		},
+		body: body !== undefined ? JSON.stringify(body) : undefined,
+	});
 }
 
-interface GeoCoords {
-	latitude:  number;
-	longitude: number;
+async function claimJob(): Promise<ClaimedJob | null> {
+	const res = await workerFetch('POST', '/api/worker/claim');
+	if (res.status === 204) return null;
+	if (!res.ok) throw new Error(`claim failed: ${res.status} ${await res.text()}`);
+	const data = await res.json() as { job: ClaimedJob };
+	return data.job ?? null;
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+async function completeJob(jobId: string, record: AttendanceRecord): Promise<void> {
+	const res = await workerFetch('POST', '/api/worker/complete', { job_id: jobId, ...record });
+	if (!res.ok) throw new Error(`complete failed: ${res.status} ${await res.text()}`);
+}
+
+async function failJob(jobId: string, error: string): Promise<void> {
+	const res = await workerFetch('POST', '/api/worker/fail', { job_id: jobId, error });
+	if (!res.ok) log('WARN', 'fail report error', { jobId, status: res.status });
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
+log('INFO', 'worker starting', { WORKER_ID, FRONTEND_URL, MAX_CONCURRENT, HEADLESS, POLL_MS });
 
-const db = new Database(DB_PATH);
-db.pragma('foreign_keys = ON');
-ensureJobColumns();
-ensureSettingsTable();
-
-runLoop();
-
-// ── Main loop ─────────────────────────────────────────────────────────────────
-
-async function runLoop(): Promise<void> {
-	const initial = loadRuntimeSettings();
-	log('INFO', 'worker started', { DB_PATH, POLL_MS, MAX_ATTEMPTS_DEFAULT, ...initial });
-
-	let spawnedCount = 0;
-
-	function spawnConsumer(id: string) {
-		consumerLoop(id).catch((e) => {
-			log('ERROR', 'consumer crashed', { id, error: (e as Error)?.message ?? String(e) });
-		});
-	}
-
-	for (let i = 0; i < initial.max_concurrent; i++) {
-		spawnConsumer(`${WORKER_ID_PREFIX}-c${++spawnedCount}`);
-	}
-
-	// Reload settings every 30s — spawn additional consumers if max_concurrent increased
-	while (true) {
-		await sleep(30_000);
-		try {
-			const settings = loadRuntimeSettings();
-			if (settings.max_concurrent > spawnedCount) {
-				log('INFO', 'settings changed: spawning consumers', { prev: spawnedCount, next: settings.max_concurrent });
-				for (let i = spawnedCount; i < settings.max_concurrent; i++) {
-					spawnConsumer(`${WORKER_ID_PREFIX}-c${++spawnedCount}`);
-				}
-			}
-		} catch (e) {
-			log('ERROR', 'settings reload failed', { error: (e as Error)?.message ?? String(e) });
-		}
-	}
+// Spawn consumers
+for (let i = 1; i <= MAX_CONCURRENT; i++) {
+	const consumerId = `${WORKER_ID}-c${i}`;
+	consumerLoop(consumerId).catch((e) => {
+		log('ERROR', 'consumer crashed', { consumerId, error: (e as Error)?.message ?? String(e) });
+	});
 }
 
+// ── Consumer loop ─────────────────────────────────────────────────────────────
+
 async function consumerLoop(consumerId: string): Promise<void> {
+	log('INFO', 'consumer started', { consumerId });
 	while (true) {
 		try {
-			const claimed = claimNextJob(consumerId);
-			if (!claimed) { await sleep(POLL_MS); continue; }
-			await processJob(claimed, consumerId);
+			const job = await claimJob();
+			if (!job) { await sleep(POLL_MS); continue; }
+
+			log('INFO', 'job claimed', { consumerId, job_id: job.id, run_type: job.run_type, employee_id: job.employee_id });
+			await processJob(job, consumerId);
 		} catch (e) {
 			log('ERROR', 'consumer loop error', { consumerId, error: (e as Error)?.message ?? String(e) });
 			await sleep(Math.max(1000, Math.floor(POLL_MS / 2)));
@@ -124,86 +113,30 @@ async function consumerLoop(consumerId: string): Promise<void> {
 	}
 }
 
-// ── Job claim & process ───────────────────────────────────────────────────────
+// ── Job processing ────────────────────────────────────────────────────────────
 
-function claimNextJob(consumerId: string): Job | null {
-	const tx = db.transaction((): Job | null => {
-		const job = db.prepare(
-			`SELECT j.*, e.pusaka_username, e.pusaka_password
-			 FROM jobs j
-			 JOIN employees e ON e.id = j.employee_id
-			 WHERE j.status = 'queued'
-			   AND (j.next_retry_at IS NULL OR datetime(j.next_retry_at) <= CURRENT_TIMESTAMP)
-			 ORDER BY j.created_at ASC LIMIT 1`
-		).get() as Job | undefined;
-
-		if (!job) return null;
-
-		const updated = db.prepare(
-			`UPDATE jobs SET status='running', claimed_by=?, claimed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
-			 WHERE id=? AND status='queued'`
-		).run(consumerId, job.id);
-
-		if (updated.changes !== 1) return null;
-		return { ...job, claimed_by: consumerId };
-	});
-
-	return tx();
-}
-
-async function processJob(job: Job, consumerId: string): Promise<void> {
+async function processJob(job: ClaimedJob, consumerId: string): Promise<void> {
 	try {
 		let record: AttendanceRecord;
 
 		if (job.run_type === 'checkin') {
-			await withRetry((attempt) => checkin(job.pusaka_username, job.pusaka_password, attempt), 'checkin');
+			await withRetry((a) => checkin(job.pusaka_username, job.pusaka_password, a), 'checkin');
 			record = { tanggal: toISODateMakassar(), jam_masuk: toTimeWITA(), jam_pulang: '' };
 		} else if (job.run_type === 'checkout') {
-			await withRetry((attempt) => checkout(job.pusaka_username, job.pusaka_password, attempt), 'checkout');
+			await withRetry((a) => checkout(job.pusaka_username, job.pusaka_password, a), 'checkout');
 			record = { tanggal: toISODateMakassar(), jam_masuk: '', jam_pulang: toTimeWITA() };
 		} else {
 			record = await withRetry<AttendanceRecord>(
-				(attempt) => scrapeOnce(job.pusaka_username, job.pusaka_password, attempt),
-				'scrape'
+				(a) => scrapeOnce(job.pusaka_username, job.pusaka_password, a), 'scrape'
 			);
 		}
 
-		// UPSERT: only overwrite non-empty fields to preserve existing jam_masuk/jam_pulang
-		db.prepare(
-			`INSERT INTO attendance_records (id, employee_id, tanggal, jam_masuk, jam_pulang, source_job_id)
-			 VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)
-			 ON CONFLICT(employee_id, tanggal) DO UPDATE SET
-			   jam_masuk     = CASE WHEN excluded.jam_masuk  != '' THEN excluded.jam_masuk  ELSE jam_masuk  END,
-			   jam_pulang    = CASE WHEN excluded.jam_pulang != '' THEN excluded.jam_pulang ELSE jam_pulang END,
-			   source_job_id = excluded.source_job_id,
-			   updated_at    = CURRENT_TIMESTAMP`
-		).run(job.employee_id, record.tanggal, record.jam_masuk, record.jam_pulang, job.id);
-
-		db.prepare(
-			`UPDATE jobs SET status='success', error_message='', next_retry_at=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`
-		).run(job.id);
-
-		log('INFO', 'job success', { job_id: job.id, consumerId, employee_id: job.employee_id, record });
+		await completeJob(job.id, record);
+		log('INFO', 'job success', { consumerId, job_id: job.id, record });
 	} catch (e) {
-		const errMsg       = String((e as Error)?.message ?? e);
-		const nextAttempts = Number(job.attempts ?? 0) + 1;
-		const maxAttempts  = Number(job.max_attempts ?? MAX_ATTEMPTS_DEFAULT);
-
-		if (nextAttempts < maxAttempts) {
-			const delaySeconds = RETRY_BASE_SECONDS * Math.pow(2, nextAttempts - 1);
-			db.prepare(
-				`UPDATE jobs SET status='queued', attempts=?, error_message=?,
-				 next_retry_at=datetime(CURRENT_TIMESTAMP, '+' || ? || ' seconds'), updated_at=CURRENT_TIMESTAMP
-				 WHERE id=?`
-			).run(nextAttempts, errMsg, delaySeconds, job.id);
-			log('WARN', 'job queued for retry', { job_id: job.id, consumerId, attempts: nextAttempts, maxAttempts, retry_in_seconds: delaySeconds, error: errMsg });
-			return;
-		}
-
-		db.prepare(
-			`UPDATE jobs SET status='failed', attempts=?, error_message=?, next_retry_at=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`
-		).run(nextAttempts, errMsg, job.id);
-		log('ERROR', 'job failed permanently', { job_id: job.id, consumerId, attempts: nextAttempts, maxAttempts, error: errMsg });
+		const errMsg = String((e as Error)?.message ?? e);
+		await failJob(job.id, errMsg);
+		log('WARN', 'job failed — reported to frontend', { consumerId, job_id: job.id, error: errMsg });
 	}
 }
 
@@ -212,9 +145,8 @@ async function processJob(job: Job, consumerId: string): Promise<void> {
 async function withRetry<T>(fn: (attempt: number) => Promise<T>, label: string): Promise<T> {
 	let lastError: unknown;
 	for (let attempt = 1; attempt <= SCRAPE_RETRIES; attempt++) {
-		try {
-			return await fn(attempt);
-		} catch (e) {
+		try { return await fn(attempt); }
+		catch (e) {
 			lastError = e;
 			log('WARN', `${label} attempt ${attempt}/${SCRAPE_RETRIES} failed`, { error: (e as Error)?.message ?? String(e) });
 			if (attempt < SCRAPE_RETRIES) await sleep(SCRAPE_RETRY_MS * attempt);
@@ -225,11 +157,11 @@ async function withRetry<T>(fn: (attempt: number) => Promise<T>, label: string):
 
 // ── Shared browser helpers ────────────────────────────────────────────────────
 
-function getBrowserLaunchOptions(headless: boolean) {
-	return { headless, args: BROWSER_ARGS };
+function getBrowserOpts() {
+	return { headless: HEADLESS, args: BROWSER_ARGS };
 }
 
-function getBaseContext(extra: Record<string, unknown> = {}) {
+function getContextOpts(extra: Record<string, unknown> = {}) {
 	return { timezoneId: 'Asia/Makassar', locale: 'id-ID', viewport: { width: 1280, height: 800 }, userAgent: USER_AGENT, ...extra };
 }
 
@@ -243,11 +175,8 @@ async function blockAssets(page: Page): Promise<void> {
 
 async function loginToPusaka(page: Page, username: string, password: string, label: string): Promise<void> {
 	await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
-
-	const loginLink = page.getByRole('link', { name: /login/i }).first();
-	await loginLink.waitFor({ state: 'visible' });
-	await loginLink.click();
-
+	await page.getByRole('link', { name: /login/i }).first().waitFor({ state: 'visible' });
+	await page.getByRole('link', { name: /login/i }).first().click();
 	await page.getByPlaceholder('Username').fill(username);
 	await page.getByPlaceholder('Password').fill(password);
 	await page.getByRole('button', { name: 'Masuk', exact: true }).click();
@@ -272,12 +201,9 @@ async function assertPresenceResult(page: Page, label: string, username: string)
 	const text = await page.locator('body').innerText().catch(() => '');
 	if (text.includes('PRESENSI GAGAL'))
 		throw new Error('PRESENSI GAGAL — Bad Request (mungkin GPS tidak valid)');
-	if (/berhasil/i.test(text))
-		log('INFO', `${label}: BERHASIL`, { username });
-	else if (/sudah presensi/i.test(text))
-		log('WARN', `${label}: sudah absen sebelumnya`, { username });
-	else
-		log('WARN', `${label}: status tidak jelas`, { username, snippet: text.substring(0, 300) });
+	if (/berhasil/i.test(text)) log('INFO', `${label}: BERHASIL`, { username });
+	else if (/sudah presensi/i.test(text)) log('WARN', `${label}: sudah absen sebelumnya`, { username });
+	else log('WARN', `${label}: status tidak jelas`, { username, snippet: text.substring(0, 300) });
 }
 
 async function saveFailScreenshot(page: Page, name: string): Promise<void> {
@@ -286,39 +212,24 @@ async function saveFailScreenshot(page: Page, name: string): Promise<void> {
 		const ts   = new Date().toISOString().replace(/[:.]/g, '-');
 		const file = path.join(SCREENSHOT_DIR, `${name}-${ts}.png`);
 		await page.screenshot({ path: file, fullPage: false });
-		log('WARN', 'failure screenshot saved', { file });
+		log('WARN', 'screenshot saved', { file });
 	} catch { /* best-effort */ }
 }
 
-// ── Scrape (morning / afternoon) ──────────────────────────────────────────────
+// ── Scrape ────────────────────────────────────────────────────────────────────
 
 async function scrapeOnce(username: string, password: string, attempt: number): Promise<AttendanceRecord> {
-	const { headless } = loadRuntimeSettings();
-	const browser = await chromium.launch(getBrowserLaunchOptions(headless));
-	const context = await browser.newContext(getBaseContext());
+	const browser = await chromium.launch(getBrowserOpts());
+	const context = await browser.newContext(getContextOpts());
 	context.setDefaultTimeout(ACTION_TIMEOUT);
 	const page = await context.newPage();
 	await blockAssets(page);
 
 	try {
-		await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+		await loginToPusaka(page, username, password, 'scrape');
 
-		const loginLink  = page.getByRole('link', { name: /login/i }).first();
-		await loginLink.waitFor({ state: 'visible' });
-		await loginLink.click();
-
-		await page.getByPlaceholder('Username').fill(username);
-		await page.getByPlaceholder('Password').fill(password);
-		await page.getByRole('button', { name: 'Masuk', exact: true }).click();
-
-		const loginErr    = page.getByText(/username atau password salah|invalid credentials|login gagal/i).first();
 		const absensiLink = page.getByRole('link', { name: /Absensi/i }).first();
-		const which = await Promise.race([
-			loginErr.waitFor({ state: 'visible' }).then(() => 'err' as const),
-			absensiLink.waitFor({ state: 'visible' }).then(() => 'ok' as const),
-		]);
-		if (which === 'err') throw new Error('Login gagal: username/password ditolak oleh server');
-
+		await absensiLink.waitFor({ state: 'visible' });
 		await absensiLink.click();
 
 		const riwayatBtn = page.getByRole('button', { name: 'Riwayat Presensi', exact: true });
@@ -328,10 +239,8 @@ async function scrapeOnce(username: string, password: string, attempt: number): 
 		await page.getByText(/Jam Masuk|Sedang mengambil riwayat/i).first().waitFor().catch(() => {});
 		await page.waitForTimeout(2000);
 
-		const bodyText   = await page.locator('body').innerText();
-		const todayLabel = getTodayLabelID();
-		const parsed     = parseTodayFromText(bodyText, todayLabel);
-		if (!parsed) throw new Error(`Data untuk hari ini tidak ditemukan: ${todayLabel}`);
+		const parsed = parseTodayFromText(await page.locator('body').innerText(), getTodayLabelID());
+		if (!parsed) throw new Error(`Data hari ini tidak ditemukan: ${getTodayLabelID()}`);
 		return parsed;
 	} catch (e) {
 		await saveFailScreenshot(page, `scrape-fail-a${attempt}`);
@@ -347,17 +256,14 @@ async function scrapeOnce(username: string, password: string, attempt: number): 
 async function checkin(username: string, password: string, attempt: number): Promise<void> {
 	const label = 'checkin';
 	const geo   = randomGeo(BASE_LAT, BASE_LNG, 28);
-	const { headless } = loadRuntimeSettings();
-
-	const browser = await chromium.launch(getBrowserLaunchOptions(headless));
-	const context = await browser.newContext(getBaseContext({ geolocation: geo, permissions: ['geolocation'] }));
+	const browser = await chromium.launch(getBrowserOpts());
+	const context = await browser.newContext(getContextOpts({ geolocation: geo, permissions: ['geolocation'] }));
 	context.setDefaultTimeout(ACTION_TIMEOUT);
 	const page = await context.newPage();
 
 	try {
 		log('INFO', `${label}: starting`, { username, lat: geo.latitude.toFixed(7), lng: geo.longitude.toFixed(7) });
 		await loginToPusaka(page, username, password, label);
-
 		await page.goto(`${BASE_URL}/profile/presence`, { waitUntil: 'domcontentloaded' });
 		await page.waitForTimeout(3000);
 		await triggerGeo(page);
@@ -365,8 +271,9 @@ async function checkin(username: string, password: string, attempt: number): Pro
 
 		const btn = page.locator('button:has-text("Presensi masuk")');
 		if (await btn.count() === 0) {
-			const bodyText = await page.locator('body').innerText().catch(() => '');
-			if (/hadir|sudah/i.test(bodyText)) { log('WARN', `${label}: sudah absen`, { username }); return; }
+			if (/hadir|sudah/i.test(await page.locator('body').innerText().catch(() => ''))) {
+				log('WARN', `${label}: sudah absen`, { username }); return;
+			}
 			throw new Error('Tombol Presensi masuk tidak ditemukan');
 		}
 		if (await btn.first().isDisabled().catch(() => false)) {
@@ -393,17 +300,14 @@ async function checkin(username: string, password: string, attempt: number): Pro
 async function checkout(username: string, password: string, attempt: number): Promise<void> {
 	const label = 'checkout';
 	const geo   = randomGeo(BASE_LAT, BASE_LNG, 28);
-	const { headless } = loadRuntimeSettings();
-
-	const browser = await chromium.launch(getBrowserLaunchOptions(headless));
-	const context = await browser.newContext(getBaseContext({ geolocation: geo, permissions: ['geolocation'] }));
+	const browser = await chromium.launch(getBrowserOpts());
+	const context = await browser.newContext(getContextOpts({ geolocation: geo, permissions: ['geolocation'] }));
 	context.setDefaultTimeout(ACTION_TIMEOUT);
 	const page = await context.newPage();
 
 	try {
 		log('INFO', `${label}: starting`, { username, lat: geo.latitude.toFixed(7), lng: geo.longitude.toFixed(7) });
 		await loginToPusaka(page, username, password, label);
-
 		await page.goto(`${BASE_URL}/profile/presence`, { waitUntil: 'domcontentloaded' });
 		await page.waitForTimeout(3000);
 		await triggerGeo(page);
@@ -436,7 +340,7 @@ async function checkout(username: string, password: string, attempt: number): Pr
 	}
 }
 
-// ── Geo helpers ───────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function randomGeo(baseLat: number, baseLng: number, radiusMeters = 10): GeoCoords {
 	const R = 6371000;
@@ -445,15 +349,10 @@ function randomGeo(baseLat: number, baseLng: number, radiusMeters = 10): GeoCoor
 	return { latitude: baseLat + latOff, longitude: baseLng + lngOff };
 }
 
-// ── Text parsing ──────────────────────────────────────────────────────────────
-
 function parseTodayFromText(text: string, todayLabel: string): AttendanceRecord | null {
 	const lines = text.replace(/\r/g, '').split('\n').map((l) => l.trim()).filter(Boolean);
-	const candidates: number[] = [];
-	for (let i = 0; i < lines.length; i++) {
-		if (lines[i] === todayLabel) candidates.push(i);
-	}
-	if (candidates.length === 0) return null;
+	const candidates = lines.reduce<number[]>((acc, l, i) => { if (l === todayLabel) acc.push(i); return acc; }, []);
+	if (!candidates.length) return null;
 
 	const idx = candidates[candidates.length - 1];
 	const blockLines: string[] = [];
@@ -461,15 +360,10 @@ function parseTodayFromText(text: string, todayLabel: string): AttendanceRecord 
 		if (/^(Senin|Selasa|Rabu|Kamis|Jumat|Sabtu|Minggu),\s+\d{2}\s+\w+\s+\d{4}$/.test(lines[i])) break;
 		blockLines.push(lines[i]);
 	}
-
-	const block     = blockLines.join('\n');
+	const block = blockLines.join('\n');
 	const jamMasuk  = extractJam(block, 'Jam Masuk');
 	const jamPulang = extractJam(block, 'Jam Pulang');
-	return {
-		tanggal:    toISODateMakassar(),
-		jam_masuk:  jamMasuk === '-'  ? '' : jamMasuk,
-		jam_pulang: jamPulang === '-' ? '' : jamPulang,
-	};
+	return { tanggal: toISODateMakassar(), jam_masuk: jamMasuk === '-' ? '' : jamMasuk, jam_pulang: jamPulang === '-' ? '' : jamPulang };
 }
 
 function extractJam(block: string, label: string): string {
@@ -485,8 +379,6 @@ function extractJam(block: string, label: string): string {
 	}
 	return '';
 }
-
-// ── Date / time ───────────────────────────────────────────────────────────────
 
 function getTodayLabelID(): string {
 	return new Intl.DateTimeFormat('id-ID', {
@@ -505,38 +397,6 @@ function toTimeWITA(): string {
 		timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit', hour12: false,
 	}).format(new Date());
 }
-
-// ── DB helpers ────────────────────────────────────────────────────────────────
-
-function ensureSettingsTable(): void {
-	db.exec(`
-		CREATE TABLE IF NOT EXISTS app_settings (
-			key        TEXT PRIMARY KEY,
-			value      TEXT NOT NULL DEFAULT '',
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-	`);
-}
-
-function loadRuntimeSettings(): RuntimeSettings {
-	const rows = db.prepare('SELECT key, value FROM app_settings').all() as Array<{ key: string; value: string }>;
-	const map  = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-	return {
-		max_concurrent: Math.max(1, Number(map.max_concurrent ?? process.env.WORKER_CONCURRENCY ?? 1)),
-		headless: ['1', 'true'].includes(String(map.headless ?? process.env.HEADLESS ?? 'false')),
-	};
-}
-
-function ensureJobColumns(): void {
-	const cols = (db.prepare('PRAGMA table_info(jobs)').all() as Array<{ name: string }>).map((c) => c.name);
-	if (!cols.includes('claimed_by'))    db.exec(`ALTER TABLE jobs ADD COLUMN claimed_by TEXT NOT NULL DEFAULT ''`);
-	if (!cols.includes('claimed_at'))    db.exec(`ALTER TABLE jobs ADD COLUMN claimed_at DATETIME`);
-	if (!cols.includes('attempts'))      db.exec(`ALTER TABLE jobs ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0`);
-	if (!cols.includes('max_attempts'))  db.exec(`ALTER TABLE jobs ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 3`);
-	if (!cols.includes('next_retry_at')) db.exec(`ALTER TABLE jobs ADD COLUMN next_retry_at DATETIME`);
-}
-
-// ── Logging ───────────────────────────────────────────────────────────────────
 
 function log(level: 'INFO' | 'WARN' | 'ERROR', message: string, context: Record<string, unknown> = {}): void {
 	const line = `${new Date().toISOString()} [${level}] ${message} ${JSON.stringify(context)}`;
