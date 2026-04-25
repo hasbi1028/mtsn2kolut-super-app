@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import * as schema from './schema.js';
 
-const DB_PATH = process.env.DB_PATH ?? path.resolve('../data/pusaka.sqlite');
+const DB_PATH = process.env.DB_PATH ?? path.resolve('data/pusaka.sqlite');
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const sqlite = new BetterSqlite3(DB_PATH);

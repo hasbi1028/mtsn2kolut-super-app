@@ -6,10 +6,9 @@ frontend/build/
 worker/build/
 
 # Database & data (sensitive)
-data/
+frontend/data/
 *.db
 *.sqlite
-backup.db
 
 # Logs & screenshots
 logs/

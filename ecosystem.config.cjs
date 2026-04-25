@@ -19,7 +19,7 @@ module.exports = {
       env: {
         HOST: '0.0.0.0',
         PORT: '8021',
-        DB_PATH: '../data/pusaka.sqlite',
+        DB_PATH: 'data/pusaka.sqlite',
         NODE_ENV: 'production',
         // WORKER_TOKEN: 'ganti-dengan-secret-yang-kuat'
       },
