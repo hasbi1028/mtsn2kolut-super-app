@@ -1,0 +1,9 @@
+{
+  "port": 8021,
+  "environment": "production",
+  "startup_file": "build/index.js",
+  "max_pool_size": 2,
+  "min_instances": 1,
+  "log_file": "../logs/frontend-out.log",
+  "pid_file": "../logs/frontend.pid"
+}
