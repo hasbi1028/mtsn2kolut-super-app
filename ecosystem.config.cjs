@@ -24,8 +24,8 @@ module.exports = {
     {
       name: 'pusaka-worker',
       cwd: './worker',
-      script: 'src/index.js',
-      interpreter: 'node',
+      script: 'src/index.ts',
+      interpreter: 'node_modules/.bin/tsx',
       env_file: './worker/.env',
       env: {
         DB_PATH: '../data/pusaka.sqlite',
