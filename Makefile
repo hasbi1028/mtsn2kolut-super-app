@@ -1,16 +1,17 @@
-FRONTEND_DIR := frontend
-WORKER_DIR   := worker
-BACKEND_DIR  := backend
-LOGS_DIR     := logs
+WEB_DIR        := apps/web-admin
+WORKER_DIR     := services/pusaka-worker
+BACKEND_DIR    := services/core-api
+DB_SCRIPTS_DIR := $(BACKEND_DIR)/db/scripts
+LOGS_DIR       := logs
 
-# ── Install ────────────────────────────────────────────────────────────────────
+# ── Install ──────────────────────────────────────────────────────────────────
 
-.PHONY: install install-frontend install-worker install-backend
+.PHONY: install install-web install-worker install-backend install-db-scripts
 
-install: install-frontend install-worker install-backend
+install: install-web install-worker install-backend install-db-scripts
 
-install-frontend:
-	cd $(FRONTEND_DIR) && npm install
+install-web:
+	cd $(WEB_DIR) && npm install
 
 install-worker:
 	cd $(WORKER_DIR) && npm install
@@ -18,79 +19,59 @@ install-worker:
 install-backend:
 	cd $(BACKEND_DIR) && go mod download
 
-# ── Dev ────────────────────────────────────────────────────────────────────────
+install-db-scripts:
+	cd $(DB_SCRIPTS_DIR) && npm install
 
-.PHONY: dev dev-frontend dev-worker dev-backend
+# ── Dev ──────────────────────────────────────────────────────────────────────
 
-dev-frontend:
-	cd $(FRONTEND_DIR) && npm run dev
+.PHONY: dev-web dev-worker dev-backend
+
+dev-web:
+	cd $(WEB_DIR) && npm run dev
 
 dev-worker:
 	cd $(WORKER_DIR) && npm run dev
 
 dev-backend:
-	cd $(BACKEND_DIR) && go run ./cmd/api/
+	cd $(BACKEND_DIR) && go run ./cmd/api
 
-# ── Type check ────────────────────────────────────────────────────────────────
+# ── Check / Test ─────────────────────────────────────────────────────────────
 
-.PHONY: check check-frontend
+.PHONY: check check-web check-worker test-backend
 
-check-frontend:
-	cd $(FRONTEND_DIR) && npm run check
+check-web:
+	cd $(WEB_DIR) && npm run check
 
-check: check-frontend
+check-worker:
+	cd $(WORKER_DIR) && ./node_modules/.bin/tsc --noEmit
 
-# ── Build ─────────────────────────────────────────────────────────────────────
+test-backend:
+	cd $(BACKEND_DIR) && go test ./...
 
-.PHONY: build build-frontend build-worker build-backend
+check: check-web check-worker test-backend
 
-build-frontend:
-	cd $(FRONTEND_DIR) && npm run build
+# ── Build ────────────────────────────────────────────────────────────────────
+
+.PHONY: build build-web build-worker build-backend
+
+build-web:
+	cd $(WEB_DIR) && npm run build
 
 build-worker:
 	@echo "worker: no build step (tsx runs TypeScript directly)"
 
 build-backend:
-	cd $(BACKEND_DIR) && go build -o bin/api ./cmd/api/
+	cd $(BACKEND_DIR) && go build -o bin/api ./cmd/api
 
-build: build-frontend build-worker build-backend
+build: build-web build-worker build-backend
 
-# ── Zip (untuk upload ke VPS) ─────────────────────────────────────────────────
+# ── Start (production, manual) ───────────────────────────────────────────────
 
-.PHONY: zip zip-frontend zip-worker zip-backend
+.PHONY: start-web start-worker start-backend
 
-zip-frontend: build-frontend
-	rm -f dist-frontend.zip
-	cd $(FRONTEND_DIR) && zip -r ../dist-frontend.zip . \
-		--exclude "node_modules/*" \
-		--exclude ".env" \
-		--exclude "*.zip"
-	@echo "dist-frontend.zip siap"
-
-zip-worker:
-	rm -f dist-worker.zip
-	cd $(WORKER_DIR) && zip -r ../dist-worker.zip . \
-		--exclude "node_modules/*" \
-		--exclude ".env" \
-		--exclude "*.zip"
-	@echo "dist-worker.zip siap"
-
-zip-backend: build-backend
-	rm -f dist-backend.zip
-	cd $(BACKEND_DIR) && zip -r ../dist-backend.zip bin/ .env.example \
-		--exclude "*.zip" \
-		--exclude "postgres_data/*"
-	@echo "dist-backend.zip siap"
-
-zip: zip-frontend zip-worker zip-backend
-
-# ── Start (production, manual) ────────────────────────────────────────────────
-
-.PHONY: start-frontend start-worker start-backend logs
-
-start-frontend:
+start-web:
 	mkdir -p $(LOGS_DIR)
-	cd $(FRONTEND_DIR) && node build/index.js
+	cd $(WEB_DIR) && ./start.sh
 
 start-worker:
 	mkdir -p $(LOGS_DIR)
@@ -99,9 +80,12 @@ start-worker:
 start-backend:
 	$(BACKEND_DIR)/bin/api
 
-# ── PM2 (via ecosystem.config.cjs) ───────────────────────────────────────────
+# ── PM2 (via ecosystem.config.cjs) ──────────────────────────────────────────
 
 .PHONY: pm2-start pm2-stop pm2-restart pm2-logs pm2-status
+.PHONY: pm2-start-backend pm2-start-web pm2-start-worker
+.PHONY: pm2-restart-backend pm2-restart-web pm2-restart-worker
+.PHONY: pm2-stop-backend pm2-stop-web pm2-stop-worker
 
 pm2-start:
 	pm2 start ecosystem.config.cjs
@@ -118,73 +102,94 @@ pm2-logs:
 pm2-status:
 	pm2 status
 
-# ── DB helpers ────────────────────────────────────────────────────────────────
+pm2-start-backend:
+	pm2 start deploy/pm2/backend.config.cjs
 
-.PHONY: db-sqlc db-schema
+pm2-start-web:
+	pm2 start deploy/pm2/web.config.cjs
+
+pm2-start-worker:
+	pm2 start deploy/pm2/worker.config.cjs
+
+pm2-restart-backend:
+	pm2 restart deploy/pm2/backend.config.cjs
+
+pm2-restart-web:
+	pm2 restart deploy/pm2/web.config.cjs
+
+pm2-restart-worker:
+	pm2 restart deploy/pm2/worker.config.cjs
+
+pm2-stop-backend:
+	pm2 stop deploy/pm2/backend.config.cjs
+
+pm2-stop-web:
+	pm2 stop deploy/pm2/web.config.cjs
+
+pm2-stop-worker:
+	pm2 stop deploy/pm2/worker.config.cjs
+
+# ── DB helpers ───────────────────────────────────────────────────────────────
+
+.PHONY: db-sqlc db-migrate db-schema
 
 db-sqlc:
 	cd $(BACKEND_DIR)/db && sqlc generate
 
+db-migrate:
+	cd $(DB_SCRIPTS_DIR) && npm run migrate:pg
+
 db-schema:
 	psql "$${DATABASE_URL}" -f $(BACKEND_DIR)/db/migrations/001_initial_schema.sql
 
-# ── Clean ─────────────────────────────────────────────────────────────────────
+# ── Clean ────────────────────────────────────────────────────────────────────
 
-.PHONY: clean clean-build clean-zip
+.PHONY: clean clean-build
 
 clean-build:
-	rm -rf $(FRONTEND_DIR)/build $(WORKER_DIR)/build $(BACKEND_DIR)/bin
+	rm -rf $(WEB_DIR)/build $(BACKEND_DIR)/bin
 
-clean-zip:
-	rm -f dist-frontend.zip dist-worker.zip dist-backend.zip
+clean: clean-build
 
-clean: clean-build clean-zip
-
-# ── Help ──────────────────────────────────────────────────────────────────────
+# ── Help ─────────────────────────────────────────────────────────────────────
 
 .PHONY: help
 
 help:
 	@echo ""
-	@echo "Arsitektur: 3 komponen terpisah"
-	@echo "  VPS-Backend  : Go Chi API  (port 8080)"
-	@echo "  VPS-Frontend : SvelteKit   (port 8021)"
-	@echo "  VPS-Worker   : Playwright  (no HTTP port, pull jobs)"
+	@echo "Monorepo layout:"
+	@echo "  apps/web-admin         SvelteKit admin app"
+	@echo "  services/core-api      Go Chi API + sqlc + PostgreSQL"
+	@echo "  services/pusaka-worker Playwright worker"
 	@echo ""
-	@echo "── Install ──────────────────────────────────────────────────────────"
-	@echo "  install            npm install frontend + worker, go mod download"
-	@echo "  install-frontend   npm install frontend saja"
-	@echo "  install-worker     npm install worker saja"
-	@echo "  install-backend    go mod download"
+	@echo "Install:"
+	@echo "  install                install semua dependency"
+	@echo "  install-web            npm install apps/web-admin"
+	@echo "  install-worker         npm install services/pusaka-worker"
+	@echo "  install-backend        go mod download services/core-api"
+	@echo "  install-db-scripts     npm install services/core-api/db/scripts"
 	@echo ""
-	@echo "── Dev (jalankan 3 terminal terpisah) ───────────────────────────────"
-	@echo "  dev-backend        go run ./cmd/api/        (butuh .env di backend/)"
-	@echo "  dev-frontend       vite dev hot-reload       (butuh .env di frontend/)"
-	@echo "  dev-worker         tsx watch src/index.ts   (butuh .env di worker/)"
+	@echo "Dev:"
+	@echo "  dev-backend            go run ./cmd/api"
+	@echo "  dev-web                npm run dev"
+	@echo "  dev-worker             npm run dev"
 	@echo ""
-	@echo "── Build ────────────────────────────────────────────────────────────"
-	@echo "  build              build semua (frontend + backend)"
-	@echo "  build-frontend     npm run build (adapter-node)"
-	@echo "  build-backend      go build -o bin/api"
+	@echo "Verify:"
+	@echo "  check                  web check + worker typecheck + backend tests"
+	@echo "  db-sqlc                regenerate sqlc code"
+	@echo "  db-migrate             apply PostgreSQL migrations"
 	@echo ""
-	@echo "── Deploy (zip untuk upload ke VPS) ─────────────────────────────────"
-	@echo "  zip                zip semua: frontend + worker + backend"
-	@echo "  zip-frontend       build + zip dist-frontend.zip"
-	@echo "  zip-worker         zip dist-worker.zip (no build)"
-	@echo "  zip-backend        build + zip dist-backend.zip"
+	@echo "Deploy:"
+	@echo "  pm2-start-backend      start backend-only PM2 config"
+	@echo "  pm2-start-web          start web-only PM2 config"
+	@echo "  pm2-start-worker       start worker-only PM2 config"
+	@echo "  deploy/DEPLOY.md       step-by-step deploy contract for 3 VPS"
 	@echo ""
-	@echo "── PM2 ──────────────────────────────────────────────────────────────"
-	@echo "  pm2-start          pm2 start ecosystem.config.cjs"
-	@echo "  pm2-stop/restart   pm2 stop/restart ecosystem.config.cjs"
-	@echo "  pm2-logs           pm2 logs"
-	@echo "  pm2-status         pm2 status"
-	@echo ""
-	@echo "── Database ─────────────────────────────────────────────────────────"
-	@echo "  db-sqlc            sqlc generate (regenerate Go typed queries)"
-	@echo "  db-schema          apply 001_initial_schema.sql ke PostgreSQL"
-	@echo ""
-	@echo "── Clean ────────────────────────────────────────────────────────────"
-	@echo "  clean              hapus build output + zip"
+	@echo "Build:"
+	@echo "  build                  build web + backend"
+	@echo "  start-web              start SvelteKit production server"
+	@echo "  start-worker           start Playwright worker"
+	@echo "  start-backend          start compiled Go API"
 	@echo ""
 
 .DEFAULT_GOAL := help

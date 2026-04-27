@@ -2,15 +2,14 @@
 node_modules/
 
 # Build output
-frontend/build/
-worker/build/
-backend/bin/
+apps/web-admin/build/
+services/core-api/bin/
 
 # Docker volumes (local dev)
-backend/postgres_data/
+services/core-api/postgres_data/
 
 # Database & data (sensitive)
-frontend/data/
+apps/web-admin/data/
 *.db
 *.sqlite
 
@@ -31,4 +30,4 @@ Thumbs.db
 .idea/
 
 # Auto-generated
-frontend/README.md
+apps/web-admin/README.md

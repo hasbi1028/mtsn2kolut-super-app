@@ -1,60 +1,115 @@
-# pusaka-sveltekit-worker (NEW REPO)
+# MTSN 2 Kolut Super App
 
-Repo baru untuk manajemen scraping absensi Pusaka berbasis:
-- **SvelteKit fullstack** (UI + API + scheduler)
-- **Playwright worker** (proses queue job)
-- **SQLite**
+Monorepo ini menampung tiga deploy unit utama:
+
+- `apps/web-admin` untuk UI SvelteKit dan cookie/session admin
+- `services/core-api` untuk Go Chi API, `sqlc`, migration, scheduler, queue, dan PostgreSQL ownership
+- `services/pusaka-worker` untuk worker Playwright yang pull job dari API
+
+Prinsip boundary yang dipakai:
+
+- PostgreSQL hanya dimiliki `services/core-api`
+- query SQL typed tetap lewat `sqlc`
+- `apps/web-admin` tidak mengakses DB langsung
+- `services/pusaka-worker` tidak mengakses DB langsung
+- file SQLite lama, bila masih ada, hanya dipakai sebagai sumber migrasi satu arah
 
 ## Struktur
 
-- `frontend/` → app SvelteKit
-- `worker/` → worker polling queue jobs
-- `data/pusaka.sqlite` → database SQLite (dibuat otomatis)
+```text
+apps/
+  web-admin/
+services/
+  core-api/
+  pusaka-worker/
+tools/
+```
 
 ## Setup
 
 ```bash
-cd frontend && npm install
-cd ../worker && npm install
-cd ../worker && npx playwright install chromium
+make install
+cd services/pusaka-worker && npx playwright install chromium
 ```
+
+Atau manual:
+
+```bash
+cd services/core-api/db/scripts && npm install
+cd /home/hasbiopm/mtsn2kolut-super-app/services/core-api && go mod download
+cd /home/hasbiopm/mtsn2kolut-super-app/apps/web-admin && npm install
+cd /home/hasbiopm/mtsn2kolut-super-app/services/pusaka-worker && npm install
+```
+
+## Database PostgreSQL
+
+Jalankan database lokal:
+
+```bash
+cd services/core-api
+docker compose up -d
+```
+
+Apply migration ke database existing:
+
+```bash
+cd services/core-api/db/scripts
+DATABASE_URL=postgresql://pusaka:password@localhost:5432/pusaka npm run migrate:pg
+```
+
+Migrasi data lama dari SQLite bila masih diperlukan:
+
+```bash
+cd services/core-api/db/scripts
+SQLITE_PATH=../../../apps/web-admin/data/pusaka.sqlite \
+DATABASE_URL=postgresql://pusaka:password@localhost:5432/pusaka \
+npm run migrate
+```
+
+Catatan:
+
+- `apps/web-admin/data/pusaka.sqlite` diperlakukan sebagai artefak legacy untuk import data lama
+- runtime aktif tidak boleh menulis business state ke SQLite frontend
 
 ## Jalankan
 
-### 1) Frontend/API + Scheduler
+Backend Go:
 
 ```bash
-cd frontend
-npm run dev
+make dev-backend
 ```
 
-Scheduler internal aktif otomatis saat server jalan, dan akan enqueue sesuai tabel `schedules` (default: pagi 07:00, sore 16:00 WITA).
-
-### 2) Worker
+Web admin:
 
 ```bash
-cd worker
-npm run start
+make dev-web
 ```
 
-## Endpoint
+Worker:
 
-- `GET /api/employees`
-- `POST /api/employees`
-- `GET /api/jobs`
-- `POST /api/jobs/run-now`
-- `GET /api/schedules`
-- `PUT /api/schedules`
-- `POST /api/scheduler/tick` (manual trigger scheduler)
-- `GET /api/attendance`
+```bash
+make dev-worker
+```
 
-## Catatan implementasi worker
+## Verifikasi
 
-Worker melakukan:
-1. claim job `queued` dari SQLite
-2. login ke `https://pusaka-v3.kemenag.go.id/`
-3. buka menu `Absensi` -> tombol `Riwayat Presensi`
-4. parse blok **hari ini** (timezone Asia/Makassar)
-5. simpan `jam_masuk` dan `jam_pulang` ke `attendance_records`
+```bash
+make check
+```
 
-Jika data hari ini tidak ada / login gagal, job ditandai `failed` dengan `error_message`.
+Perintah ini menjalankan:
+
+- `svelte-check` untuk `apps/web-admin`
+- `tsc --noEmit` untuk worker
+- `go test ./...` untuk `services/core-api`
+
+## Endpoint ownership
+
+- Go API di `services/core-api` adalah owner endpoint aplikasi dan worker
+- SvelteKit berperan sebagai web app/BFF tipis ke Go API
+- Worker berbicara langsung ke Go API untuk claim, heartbeat, complete, dan fail job
+- SvelteKit tidak lagi menjadi transit untuk protocol worker
+
+## Deploy
+
+Monorepo ini tetap ditujukan untuk 3 VPS terpisah: frontend, backend, dan worker. Kontrak deploy detail ada di `deploy/DEPLOY.md`, dan config PM2 per service tersedia di `deploy/pm2/`.

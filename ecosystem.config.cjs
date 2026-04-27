@@ -1,12 +1,16 @@
+const path = require('path');
+
+const rootDir = __dirname;
+
 /**
  * Deployment topology:
- *   VPS-Backend  — pusaka-backend  (Go Chi API, port 8080) + PostgreSQL
- *   VPS-Frontend — pusaka-frontend (SvelteKit,  port 8021)
- *   VPS-Worker   — pusaka-worker   (Playwright, no HTTP port, pull-based)
+ *   VPS-Backend  — mtsn2kolut-core-api     (Go Chi API, port 8080) + PostgreSQL
+ *   VPS-Frontend — mtsn2kolut-web-admin    (SvelteKit,  port 8021)
+ *   VPS-Worker   — mtsn2kolut-pusaka-worker (Playwright, no HTTP port, pull-based)
  *
  * Required env vars:
  *   Backend  : DATABASE_URL, JWT_SECRET, ADMIN_PASSWORD, WORKER_API_KEY, INTERNAL_API_KEY, PORT
- *   Frontend : API_BASE_URL, INTERNAL_API_KEY, WORKER_API_KEY, SESSION_SECRET, ORIGIN
+ *   Frontend : API_BASE_URL, INTERNAL_API_KEY, SESSION_SECRET, ORIGIN
  *   Worker   : BACKEND_URL, WORKER_API_KEY, WORKER_ID, WORKER_CONCURRENCY
  *
  * Each VPS has its own ecosystem.config.cjs — copy the relevant app block only.
@@ -14,13 +18,13 @@
 module.exports = {
   apps: [
     // ── Backend (VPS-Backend) ────────────────────────────────────────────────
-    // Run: pusaka-backend/bin/api  (go build -o bin/api ./cmd/api/)
+    // Run: mtsn2kolut-core-api/bin/api  (go build -o bin/api ./cmd/api/)
     {
-      name: 'pusaka-backend',
-      cwd: './backend',
+      name: 'mtsn2kolut-core-api',
+      cwd: './services/core-api',
       script: 'bin/api',
       interpreter: 'none',
-      env_file: './backend/.env',
+      env_file: path.join(rootDir, 'services/core-api/.env'),
       env: {
         PORT:             '8080',
         NODE_ENV:         'production',
@@ -37,13 +41,10 @@ module.exports = {
 
     // ── Frontend (VPS-Frontend) ──────────────────────────────────────────────
     {
-      name: 'pusaka-frontend',
-      cwd: './frontend',
-      script: 'build/index.js',
-      interpreter: 'node',
-      env_file: './frontend/.env',
-      // Nilai sensitif (API_BASE_URL, INTERNAL_API_KEY, WORKER_API_KEY, SESSION_SECRET)
-      // diambil dari frontend/.env — jangan override di sini
+      name: 'mtsn2kolut-web-admin',
+      cwd: './apps/web-admin',
+      script: 'start.sh',
+      interpreter: 'bash',
       env: {
         HOST:             '0.0.0.0',
         PORT:             '8021',
@@ -63,12 +64,12 @@ module.exports = {
     // Copy blok ini ke setiap VPS worker, sesuaikan WORKER_ID.
     // Worker langsung memanggil Go API — tidak butuh akses ke SvelteKit.
     {
-      name: 'pusaka-worker',
-      cwd: './worker',
+      name: 'mtsn2kolut-pusaka-worker',
+      cwd: './services/pusaka-worker',
       script: 'node_modules/.bin/tsx',
       args: 'src/index.ts',
       interpreter: 'node',
-      env_file: './worker/.env',
+      env_file: path.join(rootDir, 'services/pusaka-worker/.env'),
       // Nilai sensitif (BACKEND_URL, WORKER_API_KEY) diambil dari worker/.env
       // Jangan override di sini agar tidak menimpa nilai dari env_file
       env: {

@@ -1,0 +1,15 @@
+{
+  "name": "mtsn2kolut-super-app",
+  "private": true,
+  "workspaces": [
+    "apps/web-admin",
+    "services/pusaka-worker",
+    "services/core-api/db/scripts"
+  ],
+  "scripts": {
+    "check:web": "npm --prefix apps/web-admin run check",
+    "check:worker": "cd services/pusaka-worker && ./node_modules/.bin/tsc --noEmit",
+    "test:backend": "cd services/core-api && go test ./...",
+    "db:migrate": "npm --prefix services/core-api/db/scripts run migrate:pg"
+  }
+}
