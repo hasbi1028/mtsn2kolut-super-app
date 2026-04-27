@@ -1,0 +1,17 @@
+{
+  "name": "pusaka-db-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "migrate": "node migrate_sqlite.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.9.0",
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.11.14"
+  }
+}

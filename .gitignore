@@ -4,6 +4,10 @@ node_modules/
 # Build output
 frontend/build/
 worker/build/
+backend/bin/
+
+# Docker volumes (local dev)
+backend/postgres_data/
 
 # Database & data (sensitive)
 frontend/data/
