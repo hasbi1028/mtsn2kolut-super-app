@@ -8,11 +8,16 @@
   let interval;
 
   async function load() {
-    const params = new URLSearchParams({ limit: String(limit) });
-    if (filterStatus) params.set('status', filterStatus);
-    const res  = await fetch(`/api/jobs?${params}`);
-    const data = await res.json();
-    jobs = data.items;
+    try {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (filterStatus) params.set('status', filterStatus);
+      const res  = await fetch(`/api/jobs?${params}`);
+      const data = await res.json();
+      if (data.error) { console.error('[pusaka] jobs:', data.error); return; }
+      jobs = data.items ?? [];
+    } catch (e) {
+      console.error('[pusaka] jobs load failed:', e);
+    }
   }
 
   function statusClass(s) {

@@ -1,3 +1,5 @@
+import { json } from '@sveltejs/kit';
+
 const BASE = (process.env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 const INTERNAL_KEY = process.env.INTERNAL_API_KEY ?? '';
 const WORKER_KEY   = process.env.WORKER_API_KEY   ?? '';
@@ -69,6 +71,21 @@ export async function apiLogin(username: string, password: string): Promise<stri
 	const json = await res.json() as { data?: { token: string }; error?: string };
 	if (!res.ok) throw new ApiError(res.status, json.error ?? 'unauthorized');
 	return json.data!.token;
+}
+
+// Error handler untuk semua route proxy — kembalikan JSON error yang jelas
+export function handleRouteError(e: unknown, route = ''): Response {
+	if (e instanceof ApiError) {
+		const prefix = route ? `[${route}]` : '[api-proxy]';
+		console.error(`${prefix} upstream ${e.status}:`, e.message);
+		// Jangan expose detail 5xx dari Go sebagai 500 SvelteKit — pakai 503
+		const status = e.status >= 500 ? 503 : e.status;
+		return json({ error: e.message }, { status });
+	}
+	const msg = (e as Error)?.message ?? String(e);
+	const route_label = route ? `[${route}]` : '[api-proxy]';
+	console.error(`${route_label} network/unhandled error:`, msg);
+	return json({ error: 'Backend tidak dapat dihubungi — pastikan Go API berjalan' }, { status: 503 });
 }
 
 // Format a Timestamptz ISO string to WITA display string

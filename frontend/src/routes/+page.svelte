@@ -9,12 +9,20 @@
   let confirmKey  = $state('');
 
   async function load() {
-    const [q, j] = await Promise.all([
-      fetch('/api/queue/stats').then((r) => r.json()),
-      fetch('/api/jobs?limit=5').then((r) => r.json())
-    ]);
-    queueStats = q;
-    recentJobs = j.items;
+    try {
+      const [qRes, jRes] = await Promise.all([
+        fetch('/api/queue/stats'),
+        fetch('/api/jobs?limit=5')
+      ]);
+      const q = await qRes.json();
+      const j = await jRes.json();
+      if (q.error)  console.error('[pusaka] queue/stats:', q.error);
+      else          queueStats = q;
+      if (j.error)  console.error('[pusaka] jobs:', j.error);
+      else          recentJobs = j.items ?? [];
+    } catch (e) {
+      console.error('[pusaka] load failed:', e);
+    }
   }
 
   async function act(key, fn, successMsg) {
@@ -25,6 +33,7 @@
       if (!res.ok) throw new Error(data.error || 'Gagal');
       showToast(successMsg + (data.cancelled != null ? ` (${data.cancelled} job)` : ''), 'ok');
     } catch (e) {
+      console.error('[pusaka] action error:', e.message);
       showToast(e.message, 'err');
     } finally {
       busy = { ...busy, [key]: false };

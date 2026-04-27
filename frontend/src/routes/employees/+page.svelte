@@ -7,17 +7,28 @@
   let toast     = $state('');
 
   async function load() {
-    const res = await fetch('/api/employees');
-    const data = await res.json();
-    employees = data.items;
+    try {
+      const res  = await fetch('/api/employees');
+      const data = await res.json();
+      if (data.error) { console.error('[pusaka] employees:', data.error); return; }
+      employees = data.items ?? [];
+    } catch (e) {
+      console.error('[pusaka] employees load failed:', e);
+    }
   }
 
   async function runNow(employee_id, run_type) {
-    await fetch('/api/jobs/run-now', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ employee_id, run_type })
-    });
+    try {
+      const res  = await fetch('/api/jobs/run-now', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ employee_id, run_type })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { console.error('[pusaka] run-now error:', data.error); }
+    } catch (e) {
+      console.error('[pusaka] run-now failed:', e);
+    }
     const labels = { morning: 'pagi', afternoon: 'sore', checkin: 'absensi masuk', checkout: 'absensi pulang' };
     showToast(`Job ${labels[run_type] || run_type} berhasil di-queue.`);
   }

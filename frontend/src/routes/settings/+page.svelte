@@ -13,31 +13,53 @@
   let pwLoading = $state(false);
 
   async function load() {
-    const [st, s] = await Promise.all([
-      fetch('/api/settings').then((r) => r.json()),
-      fetch('/api/schedules').then((r) => r.json())
-    ]);
-    appSettings = st;
-    schedules   = s.items;
+    try {
+      const [stRes, sRes] = await Promise.all([
+        fetch('/api/settings'),
+        fetch('/api/schedules')
+      ]);
+      const st = await stRes.json();
+      const s  = await sRes.json();
+      if (st.error) console.error('[pusaka] settings:', st.error);
+      else          appSettings = st;
+      if (s.error)  console.error('[pusaka] schedules:', s.error);
+      else          schedules = s.items ?? [];
+    } catch (e) {
+      console.error('[pusaka] settings load failed:', e);
+    }
   }
 
   async function saveSettings() {
-    await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(appSettings)
-    });
-    showToast('Pengaturan worker disimpan.');
+    try {
+      const res  = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(appSettings)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { console.error('[pusaka] save settings error:', data.error); showToast('Gagal menyimpan: ' + (data.error ?? res.status)); return; }
+      showToast('Pengaturan worker disimpan.');
+    } catch (e) {
+      console.error('[pusaka] save settings failed:', e);
+      showToast('Gagal menyimpan pengaturan');
+    }
   }
 
   async function saveSchedules() {
-    await fetch('/api/schedules', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ schedules })
-    });
-    showToast('Jadwal otomatis disimpan.');
-    await load();
+    try {
+      const res  = await fetch('/api/schedules', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ schedules })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { console.error('[pusaka] save schedules error:', data.error); showToast('Gagal menyimpan jadwal'); return; }
+      showToast('Jadwal otomatis disimpan.');
+      await load();
+    } catch (e) {
+      console.error('[pusaka] save schedules failed:', e);
+      showToast('Gagal menyimpan jadwal');
+    }
   }
 
   // Backup & Restore

@@ -6,11 +6,16 @@
   let limit      = $state(100);
 
   async function load() {
-    const params = new URLSearchParams({ limit: String(limit) });
-    if (filterDate) params.set('date', filterDate);
-    const res  = await fetch(`/api/attendance?${params}`);
-    const data = await res.json();
-    records = data.items;
+    try {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (filterDate) params.set('date', filterDate);
+      const res  = await fetch(`/api/attendance?${params}`);
+      const data = await res.json();
+      if (data.error) { console.error('[pusaka] attendance:', data.error); return; }
+      records = data.items ?? [];
+    } catch (e) {
+      console.error('[pusaka] attendance load failed:', e);
+    }
   }
 
   function todayWita() {
