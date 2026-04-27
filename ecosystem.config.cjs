@@ -42,16 +42,12 @@ module.exports = {
       script: 'build/index.js',
       interpreter: 'node',
       env_file: './frontend/.env',
+      // Nilai sensitif (API_BASE_URL, INTERNAL_API_KEY, WORKER_API_KEY, SESSION_SECRET)
+      // diambil dari frontend/.env — jangan override di sini
       env: {
         HOST:             '0.0.0.0',
         PORT:             '8021',
-        // Wajib: URL akses app agar form login tidak ditolak CSRF
-        ORIGIN:           'http://localhost:8021',
         NODE_ENV:         'production',
-        // API_BASE_URL:     'http://IP-VPS-BACKEND:8080'
-        // INTERNAL_API_KEY: 'ganti-dengan-key-yang-kuat'
-        // WORKER_API_KEY:   'ganti-dengan-key-yang-kuat'
-        // SESSION_SECRET:   'ganti-dengan-random-string-panjang'
       },
       instances: 1,
       exec_mode: 'fork',
@@ -73,9 +69,9 @@ module.exports = {
       args: 'src/index.ts',
       interpreter: 'node',
       env_file: './worker/.env',
+      // Nilai sensitif (BACKEND_URL, WORKER_API_KEY) diambil dari worker/.env
+      // Jangan override di sini agar tidak menimpa nilai dari env_file
       env: {
-        BACKEND_URL:        'http://localhost:8080',    // ganti IP/domain VPS-Backend
-        WORKER_API_KEY:     '',                          // harus sama dengan backend
         WORKER_ID:          'worker-vps1',               // unik per VPS
         WORKER_CONCURRENCY: '5',
         HEADLESS:           'true',

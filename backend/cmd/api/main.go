@@ -58,6 +58,15 @@ func main() {
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.SetHeader("Content-Type", "application/json"))
 
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		if err := pool.Ping(r.Context()); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"status":"error","db":"unreachable"}`))
+			return
+		}
+		w.Write([]byte(`{"status":"ok","db":"connected"}`))
+	})
+
 	r.Post("/api/auth/login", authH.Login)
 
 	r.Group(func(r chi.Router) {
