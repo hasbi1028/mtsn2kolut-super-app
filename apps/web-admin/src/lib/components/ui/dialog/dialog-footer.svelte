@@ -13,6 +13,6 @@
     gap: 8px;
     margin-top: 20px;
     padding-top: 16px;
-    border-top: 1px solid #2f4668;
+    border-top: 1px solid oklch(0.88 0.012 145);
   }
 </style>

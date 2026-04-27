@@ -8,9 +8,9 @@
 
 <style>
   .title {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     font-weight: 600;
-    color: #e2eaf6;
+    color: oklch(0.18 0.02 145);
     margin: 0 0 4px;
   }
 </style>
