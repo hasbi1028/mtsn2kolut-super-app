@@ -1,12 +1,13 @@
 FRONTEND_DIR := frontend
 WORKER_DIR   := worker
+BACKEND_DIR  := backend
 LOGS_DIR     := logs
 
 # ── Install ────────────────────────────────────────────────────────────────────
 
-.PHONY: install install-frontend install-worker
+.PHONY: install install-frontend install-worker install-backend
 
-install: install-frontend install-worker
+install: install-frontend install-worker install-backend
 
 install-frontend:
 	cd $(FRONTEND_DIR) && npm install
@@ -14,15 +15,21 @@ install-frontend:
 install-worker:
 	cd $(WORKER_DIR) && npm install
 
+install-backend:
+	cd $(BACKEND_DIR) && go mod download
+
 # ── Dev ────────────────────────────────────────────────────────────────────────
 
-.PHONY: dev dev-frontend dev-worker
+.PHONY: dev dev-frontend dev-worker dev-backend
 
 dev-frontend:
 	cd $(FRONTEND_DIR) && npm run dev
 
 dev-worker:
 	cd $(WORKER_DIR) && npm run dev
+
+dev-backend:
+	cd $(BACKEND_DIR) && go run ./cmd/api/
 
 # ── Type check ────────────────────────────────────────────────────────────────
 
@@ -35,7 +42,7 @@ check: check-frontend
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
-.PHONY: build build-frontend build-worker
+.PHONY: build build-frontend build-worker build-backend
 
 build-frontend:
 	cd $(FRONTEND_DIR) && npm run build
@@ -43,7 +50,10 @@ build-frontend:
 build-worker:
 	@echo "worker: no build step (tsx runs TypeScript directly)"
 
-build: build-frontend build-worker
+build-backend:
+	cd $(BACKEND_DIR) && go build -o bin/api ./cmd/api/
+
+build: build-frontend build-worker build-backend
 
 # ── Zip (untuk upload ke VPS) ─────────────────────────────────────────────────
 
@@ -66,11 +76,18 @@ zip-worker:
 		--exclude "*.zip"
 	@echo "dist-worker.zip siap"
 
-zip: zip-frontend zip-worker
+zip-backend: build-backend
+	rm -f dist-backend.zip
+	cd $(BACKEND_DIR) && zip -r ../dist-backend.zip bin/ .env.example \
+		--exclude "*.zip" \
+		--exclude "postgres_data/*"
+	@echo "dist-backend.zip siap"
+
+zip: zip-frontend zip-worker zip-backend
 
 # ── Start (production, manual) ────────────────────────────────────────────────
 
-.PHONY: start-frontend start-worker logs
+.PHONY: start-frontend start-worker start-backend logs
 
 start-frontend:
 	mkdir -p $(LOGS_DIR)
@@ -79,6 +96,9 @@ start-frontend:
 start-worker:
 	mkdir -p $(LOGS_DIR)
 	cd $(WORKER_DIR) && npm run start
+
+start-backend:
+	$(BACKEND_DIR)/bin/api
 
 # ── PM2 (via ecosystem.config.cjs) ───────────────────────────────────────────
 
@@ -101,7 +121,7 @@ pm2-status:
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
-.PHONY: db-studio db-generate db-migrate
+.PHONY: db-studio db-generate db-migrate db-sqlc db-schema
 
 db-studio:
 	cd $(FRONTEND_DIR) && npm run db:studio
@@ -112,15 +132,21 @@ db-generate:
 db-migrate:
 	cd $(FRONTEND_DIR) && npm run db:migrate
 
+db-sqlc:
+	cd $(BACKEND_DIR)/db && sqlc generate
+
+db-schema:
+	psql "$${DATABASE_URL}" -f $(BACKEND_DIR)/db/migrations/001_initial_schema.sql
+
 # ── Clean ─────────────────────────────────────────────────────────────────────
 
 .PHONY: clean clean-build clean-zip
 
 clean-build:
-	rm -rf $(FRONTEND_DIR)/build $(WORKER_DIR)/build
+	rm -rf $(FRONTEND_DIR)/build $(WORKER_DIR)/build $(BACKEND_DIR)/bin
 
 clean-zip:
-	rm -f dist-frontend.zip dist-worker.zip
+	rm -f dist-frontend.zip dist-worker.zip dist-backend.zip
 
 clean: clean-build clean-zip
 
@@ -141,9 +167,15 @@ help:
 	@echo "  start-frontend     jalankan frontend (node build/index.js)"
 	@echo "  start-worker       jalankan worker (tsx src/index.ts)"
 	@echo "  pm2-start/stop/restart/logs/status"
-	@echo "  db-studio          drizzle-kit studio"
-	@echo "  db-generate        drizzle-kit generate"
-	@echo "  db-migrate         drizzle-kit migrate"
+	@echo "  dev-backend        go run ./cmd/api/"
+	@echo "  build-backend      go build -o bin/api"
+	@echo "  start-backend      jalankan backend binary"
+	@echo "  zip-backend        build + buat dist-backend.zip"
+	@echo "  db-sqlc            sqlc generate (Go typed queries)"
+	@echo "  db-schema          apply 001_initial_schema.sql ke PostgreSQL"
+	@echo "  db-studio          drizzle-kit studio (SQLite, legacy)"
+	@echo "  db-generate        drizzle-kit generate (SQLite, legacy)"
+	@echo "  db-migrate         drizzle-kit migrate (SQLite, legacy)"
 	@echo "  clean              hapus build output + zip"
 	@echo ""
 
