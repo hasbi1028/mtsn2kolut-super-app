@@ -19,9 +19,12 @@ module.exports = {
       env: {
         HOST: '0.0.0.0',
         PORT: '8021',
+        // Sesuaikan ORIGIN dengan URL akses app (IP/domain:port) — wajib agar form login tidak ditolak CSRF
+        ORIGIN: 'http://localhost:8021',
         DB_PATH: 'data/pusaka.sqlite',
         NODE_ENV: 'production',
         // WORKER_TOKEN: 'ganti-dengan-secret-yang-kuat'
+        // SESSION_SECRET: 'ganti-dengan-random-string-panjang'
       },
       instances: 1,
       exec_mode: 'fork',

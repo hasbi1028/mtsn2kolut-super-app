@@ -40,6 +40,32 @@
     await load();
   }
 
+  // Backup & Restore
+  let restoreFile = $state<File | null>(null);
+  let restoreLoading = $state(false);
+  let restoreError = $state('');
+
+  function downloadBackup() {
+    window.location.href = '/api/backup';
+  }
+
+  async function doRestore() {
+    if (!restoreFile) return;
+    restoreError = '';
+    restoreLoading = true;
+    try {
+      const form = new FormData();
+      form.append('file', restoreFile);
+      const res = await fetch('/api/restore', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) { restoreError = data.error ?? 'Restore gagal'; return; }
+      showToast(data.message ?? 'Restore berhasil. App sedang restart...');
+      restoreFile = null;
+    } finally {
+      restoreLoading = false;
+    }
+  }
+
   async function changePassword() {
     pwError = '';
     if (pwForm.next !== pwForm.confirm) { pwError = 'Konfirmasi password tidak cocok'; return; }
@@ -79,6 +105,33 @@
 <WorkerSettings bind:settings={appSettings} onsave={saveSettings} />
 
 <ScheduleList bind:schedules onsave={saveSchedules} />
+
+<!-- Backup & Restore -->
+<section class="card">
+  <h3>Backup & Restore Database</h3>
+  <div class="backup-row">
+    <div class="backup-col">
+      <p class="hint">Unduh salinan database SQLite saat ini.</p>
+      <button class="btn-save btn-backup" onclick={downloadBackup}>Unduh Backup</button>
+    </div>
+    <div class="backup-divider"></div>
+    <div class="backup-col">
+      <p class="hint">Pulihkan database dari file backup. <strong>App akan restart otomatis.</strong></p>
+      {#if restoreError}
+        <div class="pw-error">{restoreError}</div>
+      {/if}
+      <div class="restore-row">
+        <label class="file-label">
+          <span>{restoreFile ? restoreFile.name : 'Pilih file .sqlite…'}</span>
+          <input type="file" accept=".sqlite,.db" onchange={(e) => restoreFile = (e.target as HTMLInputElement).files?.[0] ?? null} />
+        </label>
+        <button class="btn-save btn-restore" onclick={doRestore} disabled={!restoreFile || restoreLoading}>
+          {restoreLoading ? 'Memulihkan…' : 'Restore'}
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- Ubah Password -->
 <section class="card">
@@ -135,6 +188,26 @@
   }
   .btn-save:hover:not(:disabled) { background: #388bfd; }
   .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+  .backup-row { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+  .backup-col { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 10px; }
+  .backup-divider { width: 1px; background: rgba(130,157,204,0.12); align-self: stretch; }
+  .hint { margin: 0; font-size: 0.82rem; color: #9db2d1; line-height: 1.4; }
+  .hint strong { color: #ffb74d; }
+  .btn-backup { background: #2d6a4f; }
+  .btn-backup:hover { background: #40916c; }
+  .btn-restore { background: #7b2d2d; white-space: nowrap; }
+  .btn-restore:hover:not(:disabled) { background: #a03030; }
+  .restore-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .file-label {
+    flex: 1; display: flex; align-items: center;
+    background: rgba(7,11,19,0.5);
+    border: 1px solid rgba(130,157,204,0.2);
+    border-radius: 8px; padding: 7px 12px;
+    font-size: 0.85rem; color: #9db2d1; cursor: pointer;
+    min-width: 0; overflow: hidden;
+  }
+  .file-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-label input { display: none; }
   .pw-error {
     background: rgba(248, 81, 73, 0.12);
     border: 1px solid rgba(248, 81, 73, 0.35);

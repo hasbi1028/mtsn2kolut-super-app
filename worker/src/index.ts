@@ -250,10 +250,11 @@ async function scrapeOnce(username: string, password: string, attempt: number): 
 	const context = await browser.newContext(getContextOpts());
 	context.setDefaultTimeout(ACTION_TIMEOUT);
 	const page = await context.newPage();
-	await blockAssets(page);
 
 	try {
 		await loginToPusaka(page, username, password, 'scrape');
+		// Block heavy assets only after login so login page renders with full CSS
+		await blockAssets(page);
 
 		const absensiLink = page.getByRole('link', { name: /Absensi/i }).first();
 		await absensiLink.waitFor({ state: 'visible' });
