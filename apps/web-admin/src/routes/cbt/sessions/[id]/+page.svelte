@@ -36,7 +36,7 @@
 		if (s === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
 		if (s === 'finished') return 'bg-slate-100 text-slate-500 border-slate-200';
 		if (s === 'cancelled') return 'bg-red-100 text-red-700 border-red-200';
-		if (s === 'scheduled') return 'bg-blue-100 text-blue-700 border-blue-200';
+		if (s === 'scheduled') return 'bg-green-100 text-green-800 border-green-200';
 		return 'bg-amber-100 text-amber-700 border-amber-200';
 	}
 
@@ -126,7 +126,7 @@
 	<title>{session?.title ?? 'Hasil Ujian'} — MTSN 2 Kolut</title>
 </svelte:head>
 
-<div class="space-y-6 p-6 max-w-5xl mx-auto">
+<div class="space-y-6">
 	<!-- Breadcrumb -->
 	<div class="flex items-center gap-2 text-sm text-slate-500">
 		<a href="/cbt/sessions" class="hover:text-slate-700">Sesi Ujian</a>
@@ -214,7 +214,7 @@
 			<Card.Header class="pb-2">
 				<Card.Title class="text-base">Daftar Nilai ({results.length} peserta)</Card.Title>
 			</Card.Header>
-			<Card.Content class="p-0">
+			<Card.Content class="p-0 overflow-x-auto">
 				<Table.Root>
 					<Table.Header>
 						<Table.Row>

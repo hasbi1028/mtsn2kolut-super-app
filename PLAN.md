@@ -4,7 +4,8 @@ This file is a live handoff for the next agent or Claude Code session.
 
 ## Current Objective
 
-CBT exam loop selesai di sisi admin. Langkah selanjutnya adalah student portal dan/atau polish UI.
+UI seluruh halaman sudah dimigrasikan ke shadcn-svelte + tema hijau institusional.
+Langkah selanjutnya: **Sprint 1 — CBT bisa dipakai siswa** (token generation + halaman ujian).
 
 ---
 
@@ -22,42 +23,65 @@ CBT exam loop selesai di sisi admin. Langkah selanjutnya adalah student portal d
 
 ### Backend — COMPLETE ✅
 
-- Migration 004: academic foundation (years, classes, subjects, students, cbt_questions, cbt_packages)
-- Migration 005: fix gender enum L/P, add 'archived' status, drop question code unique, add exam sessions tables
-- sqlc generate — semua types generated
-- `go build ./...` dan `go test ./...` pass bersih
+- Migration 001–005 tersedia dan sudah diaplikasikan ke PostgreSQL
+- sqlc generated, `go build ./...` dan `go test ./...` pass bersih
 
 **Semua API endpoints:**
 - `/api/academic` (GET/POST/DELETE)
 - `/api/students` (GET/POST/DELETE)
+- `/api/employees` (GET/POST/PUT/DELETE + pusaka-status + update-pusaka)
 - `/api/cbt/questions` (GET/POST/DELETE)
 - `/api/cbt/packages` (GET/POST/DELETE)
 - `/api/cbt/sessions` (GET/POST)
-- `/api/cbt/sessions/{id}` (GET)
+- `/api/cbt/sessions/{id}` (GET/DELETE)
 - `/api/cbt/sessions/{id}/status` (PATCH)
-- `/api/cbt/sessions/{id}` (DELETE — draft only)
 - `/api/cbt/sessions/{id}/participants` (GET)
 - `/api/cbt/sessions/{id}/enroll` (POST — enroll satu kelas)
 - `/api/cbt/sessions/{id}/score` (POST — hitung skor)
 - `/api/cbt/sessions/{id}/results` (GET — skor + info per peserta)
-- `/api/cbt/sessions/{id}/participants/{pid}/answer` (POST — record jawaban)
+- `/api/cbt/sessions/{id}/participants/{pid}/answer` (POST)
 - `/api/cbt/sessions/{id}/participants/{pid}/answers` (GET)
+- `/api/jobs` + run-all, cancel, cancel-all, stats
+- `/api/attendance`, `/api/schedules`, `/api/settings`
+- `/api/worker/*` (claim, heartbeat, complete, fail, config, status)
+- `/api/scheduler/tick`
+- `/api/auth/*` (login, refresh, change-password)
+- `/health`
 
 ### Frontend — COMPLETE ✅
 
 **UI Stack:**
-- Tailwind CSS v4 + shadcn-svelte nova
-- Sidebar navigation dengan groups, icons, mobile support
-- Institutional light theme
+- Tailwind CSS v4 (`@tailwindcss/vite`) + shadcn-svelte nova
+- Tema hijau institusional (`--color-primary: oklch(0.38 0.13 145)`)
+- Sidebar dengan groups, icons, mobile support
+- `dialog/index.ts` diekspor dengan namespace (Root/Content/Header/Title/Description/Footer/Trigger)
 
-**Halaman:**
-- `/` — Dashboard (legacy dark)
+**Semua halaman sudah shadcn + tema hijau:**
+- `/` — Dashboard operasional (queue stats, job terbaru, kontrol scheduler)
+- `/employees` — Manajemen pegawai + dialog kredensial Pusaka
+- `/jobs` — Riwayat job dengan filter + auto-refresh
+- `/attendance` — Rekap absensi harian + status worker
+- `/attendance/queue` — Antrian job absensi
+- `/settings` — Worker settings, jadwal otomatis, ubah password
 - `/academic` — Tahun ajaran, kelas, mata pelajaran
 - `/students` — Daftar siswa
 - `/cbt/questions` — Bank soal
 - `/cbt/packages` — Paket ujian
 - `/cbt/sessions` — Sesi ujian (create, schedule, activate, enroll, finish)
-- `/cbt/sessions/[id]` — Halaman hasil: skor per peserta, stat kelulusan, ekspor CSV, trigger scoring
+- `/cbt/sessions/[id]` — Hasil: skor per peserta, stat kelulusan, ekspor CSV
+
+**SvelteKit API proxies tersedia:**
+- `/api/employees`, `/api/employees/[id]`, `/api/employees/[id]/test-pusaka`
+- `/api/jobs`, `/api/jobs/run-now`, `/api/jobs/run-all`, `/api/jobs/cancel`, `/api/jobs/cancel-all`
+- `/api/attendance`, `/api/queue/stats`
+- `/api/worker/status`, `/api/worker/restart`
+- `/api/schedules`, `/api/settings`
+- `/api/academic`, `/api/students`
+- `/api/cbt/questions`, `/api/cbt/packages`, `/api/cbt/sessions`
+- `/api/cbt/sessions/[id]/status`, `/api/cbt/sessions/[id]/enroll`
+- `/api/cbt/sessions/[id]/score`, `/api/cbt/sessions/[id]/results`
+- `/api/scheduler/tick`
+- `/api/auth/change-password`, `/api/auth/logout`
 
 ---
 
@@ -71,46 +95,60 @@ selesaikan → hitung skor → lihat hasil → ekspor CSV
 
 ---
 
-## Recommended Next Steps
+## Known Gaps & Bugs
 
-### Step 1: Smoke Test End-to-End
+### Belum Ada (Fungsional)
+- **Token generation** — field `token` di `cbt_exam_participants` masih kosong (`''`)
+- **Interface siswa** — tidak ada halaman untuk siswa login + mengerjakan ujian
+- **Edit master data** — hampir semua halaman hanya Create + Delete, tidak ada Update untuk:
+  - Soal CBT, Paket ujian, Data siswa, Data akademik
+- **Assign kelas ke siswa** — UI belum ada, meski `class_id` sudah ada di schema
+- **Filter rentang tanggal absensi** — hanya filter satu hari, belum rentang
+- **Export absensi** — belum ada CSV/Excel untuk absensi
 
-1. Apply DB migrations: `004` lalu `005` (urutan penting)
-2. Start backend: `cd services/core-api && go run ./cmd/api`
-3. Start frontend: `cd apps/web-admin && npm run dev`
-4. Test setiap halaman dari academic → sessions → results
-5. Verifikasi status transitions dan ekspor CSV
+### Risiko Teknis
+- `cbt_exam_sessions.class_id` FK wajib → satu sesi hanya untuk satu kelas
+- Token ujian kosong → siswa bisa akses jawaban tanpa autentikasi jika endpoint tidak dijaga
+- Single admin account → belum ada multi-user/roles guru
 
-### Step 2: Student-Facing Exam Interface (Next Big Slice)
+---
 
-Saat ini jawaban hanya bisa direkam via API langsung. Untuk CBT real:
-1. Buat route `/exam/[token]` atau app terpisah untuk siswa
-2. Endpoint login siswa dengan token dari `cbt_exam_participants.token`
-3. Tampilkan soal dari paket yang terkait
-4. Kirim jawaban ke `POST /api/cbt/sessions/{id}/participants/{pid}/answer`
-5. Auto-submit saat waktu habis
+## Next Steps — Prioritas
 
-### Step 3: Token Generation untuk Peserta
+### Sprint 1 — CBT Bisa Dipakai Siswa ← SELANJUTNYA
 
-Saat ini field `token` di `cbt_exam_participants` masih kosong.
-Tambahkan logika generate token unik saat `EnrollClass` dipanggil.
+1. **Backend:** Generate token saat `EnrollClass` dipanggil — update `cbt_exam_participants.token` dengan UUID/random string unik per peserta
+2. **Frontend Session Detail:** Tampilkan token per peserta di tabel, tombol "Generate Ulang Token"
+3. **Halaman `/exam/[token]`:** Login siswa dengan token, tampil soal, submit jawaban, konfirmasi selesai
+4. **Backend middleware:** Validasi token sebelum endpoint submit jawaban bisa diakses
 
-### Step 4: UI Polish (Prioritas Rendah)
+### Sprint 2 — Edit Master Data
 
-- Skeleton loaders menggantikan teks "Memuat data..."
-- Pagination di halaman siswa dan soal
-- Bulk import siswa via CSV
+1. Form edit inline / modal untuk Soal CBT
+2. Form edit Siswa + dropdown assign kelas
+3. Form edit Pegawai (nama, NIP, unit kerja)
+4. Edit judul/deskripsi Paket Ujian
 
-### Step 5: Migrasi Halaman Legacy (Opsional)
+### Sprint 3 — Laporan & Monitoring
 
-Halaman: dashboard, employees, jobs, attendance, settings masih pakai dark CSS.
-Migrasi ke Tailwind/shadcn bisa dilakukan bertahap — bukan blocker.
+1. Filter rentang tanggal + export CSV absensi
+2. Live monitoring CBT — siapa sudah submit, siapa belum, sisa waktu
+3. Rekap kehadiran per bulan per pegawai
+
+### Sprint 4 — Multi-user (Jangka Panjang)
+
+1. Akun guru dengan akses terbatas (kelas/mata pelajaran sendiri)
+2. Roles: admin, guru, siswa
+3. Migration baru untuk users/roles table
 
 ---
 
 ## Important Context
 
-- Deploy order: migration 004 → 005 → restart backend → deploy frontend
+- Deploy order: backend code → migration → restart backend → deploy frontend → deploy worker
 - Go clean architecture dan sqlc wajib dipertahankan
 - Sidebar.svelte = nav utama; Nav.svelte tidak lagi dipakai di layout
-- New pages = light institutional theme; legacy pages = dark CSS (preserved)
+- Semua halaman baru = light institutional green theme
+- Legacy CSS di app.css dipertahankan tapi sudah tidak dipakai halaman manapun
+- Jobs proxy (`/api/jobs/+server.ts`) rename `employee_nama` → `nama`, `employee_nip` → `nip`
+- `vite.config.js` — `ssr: { noExternal: ['lucide-svelte', 'bits-ui', 'tailwind-variants'] }`

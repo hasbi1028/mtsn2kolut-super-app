@@ -33,8 +33,11 @@ Current runtime units:
 - Use `shadcn-svelte` (nova style) for all new UI primitives — it is now installed.
 - Tailwind CSS v4 is now active via `@tailwindcss/vite` — use Tailwind utility classes.
 - `$lib/utils.ts` provides `cn`, `WithElementRef`, `WithoutChild`, `WithoutChildren` — use these, do not add duplicates.
-- New pages use the institutional light theme defined in `src/app.css` `@theme` block.
-- Existing dark-theme pages (dashboard, employees, jobs, attendance, settings) use legacy CSS — do not rewrite them unless explicitly asked.
+- ALL pages now use the institutional green light theme defined in `src/app.css` `@theme` block.
+- Primary color is `oklch(0.38 0.13 145)` — institutional green, Islamic school context (MTs).
+- No dark-theme legacy pages remain — all pages migrated to shadcn-svelte + green theme.
+- `dialog/index.ts` exports both namespace form (`Root`, `Content`, `Header`, `Title`, `Description`, `Footer`, `Trigger`) AND named form (`Dialog`, `DialogContent`, etc.) — always use `import * as Dialog` for namespaced access.
+- Jobs API proxy (`/api/jobs`) renames fields: `employee_nama` → `nama`, `employee_nip` → `nip` — use `nama`/`nip` in frontend.
 - Match the visual direction to an education context for MTs Negeri 2 Kolaka Utara.
 - Avoid generic SaaS styling, generic dashboards, and purple-gradient AI aesthetics.
 - Prefer layouts that feel institutional, calm, trustworthy, and clear for admin, guru, and sekolah workflows.
@@ -76,9 +79,9 @@ Migration order:
 
 ## Current Build Status
 
-**Completed slices (as of 2026-04-27):**
+**Completed slices (as of 2026-04-28):**
 - Backend CBT foundation: migration 004 + 005, sqlc generated, all handlers compiling and tests passing
-- Frontend UI stack: Tailwind v4 + shadcn-svelte nova
+- Frontend UI stack: Tailwind v4 + shadcn-svelte nova, tema hijau institusional (hue 145)
 - Sidebar navigation: replaces topnav — grouped with icons, mobile-friendly, all modules listed
 - Academic master data: `/academic` (tahun ajaran, kelas, mata pelajaran)
 - Students: `/students`
@@ -87,10 +90,16 @@ Migration order:
 - CBT exam sessions: `/cbt/sessions` — create, schedule, activate, finish, enroll students
 - CBT results: `/cbt/sessions/[id]` — skor per peserta, stat kelulusan, ekspor CSV, trigger scoring
 - Navigation: Sidebar.svelte — Nav.svelte is no longer used in layout
+- Dashboard, Employees, Jobs, Attendance, Queue, Settings — semua dimigrasikan ke shadcn-svelte
+- Employee components: EmployeeForm, EmployeeList — shadcn Cards + Table + Dialog
+- Komponen: QueueMonitor, WorkerSettings, ScheduleList — shadcn
+- API proxy baru: `/api/employees/[id]` (PUT), `/api/employees/[id]/test-pusaka` (POST)
+- Bug fix: queue page field names, dialog index namespace exports
 
 **Next planned slice:**
-- Student-facing exam interface (token login + soal display + submit jawaban)
-- Token generation untuk `cbt_exam_participants`
+- Token generation untuk `cbt_exam_participants` (field sudah ada, logika belum)
+- Student-facing exam interface: `/exam/[token]` — login token, tampil soal, submit jawaban
+- Edit master data: soal CBT, siswa, pegawai, paket ujian
 
 ## Documentation Map
 

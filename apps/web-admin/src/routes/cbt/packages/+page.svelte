@@ -110,8 +110,8 @@
 
 <svelte:head><title>Paket Ujian CBT — MTSN 2 Kolut</title></svelte:head>
 
-<div class="space-y-6 p-6 max-w-5xl mx-auto">
-	<div class="flex items-start justify-between">
+<div class="space-y-6">
+	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<h1 class="text-2xl font-semibold text-slate-800">Paket Ujian CBT</h1>
 			<p class="text-sm text-slate-500 mt-1">Buat dan kelola paket soal untuk sesi ujian</p>
@@ -174,7 +174,7 @@
 						<label class="text-xs text-slate-500 mb-2 block">
 							Pilih Soal dari Bank ({questionPool.length} soal tersedia)
 							{#if fSelectedIds.size > 0}
-								— <span class="text-blue-600 font-medium">{fSelectedIds.size} dipilih</span>
+								— <span class="text-green-700 font-medium">{fSelectedIds.size} dipilih</span>
 							{/if}
 						</label>
 						{#if questionPool.length === 0}
@@ -219,7 +219,7 @@
 			<Card.Header class="pb-2">
 				<Card.Title class="text-base">Daftar Paket ({packages.length})</Card.Title>
 			</Card.Header>
-			<Card.Content class="p-0">
+			<Card.Content class="p-0 overflow-x-auto">
 				<Table.Root>
 					<Table.Header>
 						<Table.Row>

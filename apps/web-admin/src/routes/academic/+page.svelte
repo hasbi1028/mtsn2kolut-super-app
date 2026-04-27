@@ -150,7 +150,7 @@
 
 <svelte:head><title>Data Akademik — MTSN 2 Kolut</title></svelte:head>
 
-<div class="space-y-6 p-6 max-w-5xl mx-auto">
+<div class="space-y-6">
 	<div>
 		<h1 class="text-2xl font-semibold text-slate-800">Data Akademik</h1>
 		<p class="text-sm text-slate-500 mt-1">Kelola tahun ajaran, kelas, dan mata pelajaran</p>
@@ -168,11 +168,13 @@
 		<p class="text-sm text-slate-500">Memuat data...</p>
 	{:else}
 		<Tabs.Root value="years">
-			<Tabs.List class="mb-4">
+			<div class="overflow-x-auto pb-1">
+				<Tabs.List class="mb-4 min-w-max">
 				<Tabs.Trigger value="years">Tahun Ajaran ({years.length})</Tabs.Trigger>
 				<Tabs.Trigger value="classes">Kelas ({classes.length})</Tabs.Trigger>
 				<Tabs.Trigger value="subjects">Mata Pelajaran ({subjects.length})</Tabs.Trigger>
 			</Tabs.List>
+			</div>
 
 			<!-- Tahun Ajaran Tab -->
 			<Tabs.Content value="years">
@@ -182,7 +184,7 @@
 							<Card.Header class="pb-2">
 								<Card.Title class="text-base">Daftar Tahun Ajaran</Card.Title>
 							</Card.Header>
-							<Card.Content class="p-0">
+							<Card.Content class="p-0 overflow-x-auto">
 								<Table.Root>
 									<Table.Header>
 										<Table.Row>
@@ -255,7 +257,7 @@
 							<Card.Header class="pb-2">
 								<Card.Title class="text-base">Daftar Kelas</Card.Title>
 							</Card.Header>
-							<Card.Content class="p-0">
+							<Card.Content class="p-0 overflow-x-auto">
 								<Table.Root>
 									<Table.Header>
 										<Table.Row>
@@ -333,7 +335,7 @@
 							<Card.Header class="pb-2">
 								<Card.Title class="text-base">Daftar Mata Pelajaran</Card.Title>
 							</Card.Header>
-							<Card.Content class="p-0">
+							<Card.Content class="p-0 overflow-x-auto">
 								<Table.Root>
 									<Table.Header>
 										<Table.Row>

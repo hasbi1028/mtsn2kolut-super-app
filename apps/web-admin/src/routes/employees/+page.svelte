@@ -1,45 +1,45 @@
-<script>
+<script lang="ts">
   import { onMount } from 'svelte';
   import EmployeeForm from '$lib/components/EmployeeForm.svelte';
   import EmployeeList from '$lib/components/EmployeeList.svelte';
 
-  let employees = $state([]);
+  let employees = $state<any[]>([]);
   let toast     = $state('');
 
   async function load() {
     try {
       const res  = await fetch('/api/employees');
       const data = await res.json();
-      if (data.error) { console.error('[mtsn2kolut] employees:', data.error); return; }
+      if (data.error) { console.error('[employees]', data.error); return; }
       employees = data.items ?? [];
     } catch (e) {
-      console.error('[mtsn2kolut] employees load failed:', e);
+      console.error('[employees] load failed:', e);
     }
   }
 
-  async function runNow(employee_id, run_type) {
+  async function runNow(employee_id: string, run_type: string) {
     try {
       const res  = await fetch('/api/jobs/run-now', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ employee_id, run_type })
+        body: JSON.stringify({ employee_id, run_type }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { console.error('[mtsn2kolut] run-now error:', data.error); }
+      if (!res.ok) console.error('[run-now]', data.error);
     } catch (e) {
-      console.error('[mtsn2kolut] run-now failed:', e);
+      console.error('[run-now] failed:', e);
     }
-    const labels = { morning: 'pagi', afternoon: 'sore', checkin: 'absensi masuk', checkout: 'absensi pulang' };
-    showToast(`Job ${labels[run_type] || run_type} berhasil di-queue.`);
+    const labels: Record<string, string> = { morning: 'pagi', afternoon: 'sore', checkin: 'absensi masuk', checkout: 'absensi pulang' };
+    showToast(`Job ${labels[run_type] ?? run_type} berhasil di-queue.`);
   }
 
-  function handleStop(_id, cancelled) {
+  function handleStop(_id: string, cancelled: number) {
     showToast(cancelled > 0 ? `${cancelled} job dibatalkan.` : 'Tidak ada job aktif untuk pegawai ini.');
   }
 
-  function showToast(msg) {
+  function showToast(msg: string) {
     toast = msg;
-    setTimeout(() => (toast = ''), 3000);
+    setTimeout(() => (toast = ''), 3500);
   }
 
   onMount(() => {
@@ -49,27 +49,20 @@
   });
 </script>
 
-<svelte:head><title>Pegawai — MTSN 2 Kolut Super App</title></svelte:head>
+<svelte:head><title>Pegawai — MTSN 2 Kolut</title></svelte:head>
 
-<h2 class="page-title">Manajemen Pegawai</h2>
+<div class="space-y-6">
+  <div>
+    <h1 class="text-2xl font-semibold text-slate-800">Manajemen Pegawai</h1>
+    <p class="text-sm text-muted-foreground mt-1">Data pegawai dan kontrol job absensi Pusaka Kemenag</p>
+  </div>
 
-{#if toast}
-  <div class="toast">{toast}</div>
-{/if}
+  {#if toast}
+    <div class="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+      {toast}
+    </div>
+  {/if}
 
-<EmployeeForm onadd={load} />
-
-<EmployeeList {employees} onrun={runNow} onstop={handleStop} ondelete={load} />
-
-<style>
-  .page-title { margin: 0 0 16px; font-size: 1.4rem; color: #e7edf7; }
-  .toast {
-    background: rgba(31, 170, 112, 0.2);
-    border: 1px solid rgba(31, 170, 112, 0.4);
-    color: #7ff0b7;
-    border-radius: 10px;
-    padding: 10px 16px;
-    font-size: 0.9rem;
-    margin-bottom: 4px;
-  }
-</style>
+  <EmployeeForm onadd={load} />
+  <EmployeeList {employees} onrun={runNow} onstop={handleStop} ondelete={load} />
+</div>

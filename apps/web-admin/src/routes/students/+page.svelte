@@ -99,8 +99,8 @@
 
 <svelte:head><title>Data Siswa — MTSN 2 Kolut</title></svelte:head>
 
-<div class="space-y-6 p-6 max-w-5xl mx-auto">
-	<div class="flex items-center justify-between">
+<div class="space-y-6">
+	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<h1 class="text-2xl font-semibold text-slate-800">Data Siswa</h1>
 			<p class="text-sm text-slate-500 mt-1">Kelola daftar siswa aktif madrasah</p>
@@ -177,12 +177,12 @@
 	{:else}
 		<Card.Root>
 			<Card.Header class="pb-3">
-				<div class="flex items-center justify-between gap-3">
-					<Card.Title class="text-base">Daftar Siswa ({students.length} total)</Card.Title>
-					<Input placeholder="Cari nama, NIS, NISN..." bind:value={search} class="max-w-xs" />
+				<div class="flex flex-col sm:flex-row sm:items-center gap-3">
+					<Card.Title class="text-base shrink-0">Daftar Siswa ({students.length} total)</Card.Title>
+					<Input placeholder="Cari nama, NIS, NISN..." bind:value={search} class="w-full sm:max-w-xs sm:ml-auto" />
 				</div>
 			</Card.Header>
-			<Card.Content class="p-0">
+			<Card.Content class="p-0 overflow-x-auto">
 				<Table.Root>
 					<Table.Header>
 						<Table.Row>

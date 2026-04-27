@@ -44,7 +44,7 @@
 		if (s === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
 		if (s === 'finished') return 'bg-slate-100 text-slate-500 border-slate-200';
 		if (s === 'cancelled') return 'bg-red-100 text-red-700 border-red-200';
-		if (s === 'scheduled') return 'bg-blue-100 text-blue-700 border-blue-200';
+		if (s === 'scheduled') return 'bg-green-100 text-green-800 border-green-200';
 		return 'bg-amber-100 text-amber-700 border-amber-200';
 	}
 
@@ -153,8 +153,8 @@
 
 <svelte:head><title>Sesi Ujian CBT — MTSN 2 Kolut</title></svelte:head>
 
-<div class="space-y-6 p-6 max-w-5xl mx-auto">
-	<div class="flex items-start justify-between">
+<div class="space-y-6">
+	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<h1 class="text-2xl font-semibold text-slate-800">Sesi Ujian CBT</h1>
 			<p class="text-sm text-slate-500 mt-1">Jadwalkan dan kelola pelaksanaan ujian per kelas</p>
@@ -223,10 +223,10 @@
 
 	<!-- Enroll modal -->
 	{#if enrollSession}
-		<Card.Root class="border-blue-200 bg-blue-50">
+		<Card.Root class="border-green-200 bg-green-50">
 			<Card.Header class="pb-2">
-				<Card.Title class="text-base text-blue-800">Daftarkan Siswa ke Sesi</Card.Title>
-				<p class="text-sm text-blue-600 mt-0.5">{enrollSession.title}</p>
+				<Card.Title class="text-base text-green-900">Daftarkan Siswa ke Sesi</Card.Title>
+				<p class="text-sm text-green-700 mt-0.5">{enrollSession.title}</p>
 			</Card.Header>
 			<Card.Content class="space-y-3">
 				<p class="text-sm text-slate-600">Semua siswa aktif dari kelas yang dipilih akan didaftarkan ke sesi ini.</p>
@@ -256,7 +256,7 @@
 			<Card.Header class="pb-2">
 				<Card.Title class="text-base">Daftar Sesi ({sessions.length})</Card.Title>
 			</Card.Header>
-			<Card.Content class="p-0">
+			<Card.Content class="p-0 overflow-x-auto">
 				<Table.Root>
 					<Table.Header>
 						<Table.Row>

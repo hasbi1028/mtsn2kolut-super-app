@@ -1,33 +1,34 @@
 <script lang="ts">
-  let { settings = $bindable(), onsave } = $props();
+  import * as Card from '$lib/components/ui/card';
+  import { Input } from '$lib/components/ui/input';
+  import { Button } from '$lib/components/ui/button';
+
+  let { settings = $bindable(), onsave }: {
+    settings: { max_concurrent: number; headless: boolean };
+    onsave: () => void;
+  } = $props();
 </script>
 
-<section class="card">
-  <h2>Worker Settings</h2>
-  <div class="settings-grid">
-    <label>
-      <span>Max Concurrent</span>
-      <input type="number" min="1" max="20" bind:value={settings.max_concurrent} />
-    </label>
-    <label class="check">
-      <span>Headless Mode</span>
-      <input type="checkbox" bind:checked={settings.headless} />
-    </label>
-    <div class="settings-actions">
-      <button class="btn" onclick={onsave}>Simpan Setting</button>
-      <p class="muted small-note">Worker akan sinkron otomatis dari backend dalam sekitar 30 detik.</p>
+<Card.Root>
+  <Card.Header class="pb-3">
+    <Card.Title class="text-base">Worker Settings</Card.Title>
+    <Card.Description>Konfigurasi Playwright worker untuk job Pusaka</Card.Description>
+  </Card.Header>
+  <Card.Content>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 items-end">
+      <div>
+        <label for="max-concurrent" class="mb-1.5 block text-sm font-medium">Max Concurrent</label>
+        <Input id="max-concurrent" type="number" min="1" max="20" bind:value={settings.max_concurrent} class="w-full" />
+      </div>
+      <div class="flex items-center gap-3 pb-1">
+        <input id="headless-mode" type="checkbox" bind:checked={settings.headless}
+          class="h-4 w-4 rounded border-input accent-green-700" />
+        <label for="headless-mode" class="text-sm font-medium cursor-pointer">Headless Mode</label>
+      </div>
+      <div>
+        <Button onclick={onsave} class="w-full sm:w-auto">Simpan Setting</Button>
+        <p class="mt-1.5 text-xs text-muted-foreground">Worker sinkron otomatis ~30 detik.</p>
+      </div>
     </div>
-  </div>
-</section>
-
-<style>
-  .settings-grid { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 16px; align-items: end; }
-  .settings-grid label { display: grid; gap: 6px; }
-  .settings-grid span { color: #9db2d1; font-size: 0.9rem; }
-  .settings-actions { display: grid; gap: 8px; }
-  .small-note { font-size: 0.86rem; margin: 0; }
-
-  @media (max-width: 900px) {
-    .settings-grid { grid-template-columns: 1fr; }
-  }
-</style>
+  </Card.Content>
+</Card.Root>

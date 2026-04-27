@@ -1,8 +1,12 @@
-<script>
-  let { onadd } = $props();
+<script lang="ts">
+  import * as Card from '$lib/components/ui/card';
+  import { Input } from '$lib/components/ui/input';
+  import { Button } from '$lib/components/ui/button';
+
+  let { onadd }: { onadd?: () => void } = $props();
 
   let form = $state({ nip: '', nama: '', unit_kerja: '', pusaka_username: '', pusaka_password: '' });
-  let error = $state('');
+  let error   = $state('');
   let loading = $state(false);
 
   async function submit() {
@@ -15,7 +19,7 @@
     const res = await fetch('/api/employees', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(form)
+      body: JSON.stringify(form),
     });
     loading = false;
     if (!res.ok) {
@@ -28,28 +32,40 @@
   }
 </script>
 
-<section class="card">
-  <h2>Tambah Pegawai</h2>
-  {#if error}
-    <p class="error">{error}</p>
-  {/if}
-  <div class="form-grid">
-    <input placeholder="NIP" bind:value={form.nip} />
-    <input placeholder="Nama" bind:value={form.nama} />
-    <input placeholder="Unit Kerja" bind:value={form.unit_kerja} />
-    <input placeholder="Username Pusaka" bind:value={form.pusaka_username} />
-    <input type="password" placeholder="Password Pusaka" bind:value={form.pusaka_password} />
-    <button class="btn" onclick={submit} disabled={loading}>
-      {loading ? 'Menyimpan...' : 'Simpan'}
-    </button>
-  </div>
-</section>
-
-<style>
-  .form-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
-  .error { color: #ff9d9d; font-size: 0.9rem; margin: 0 0 10px; }
-
-  @media (max-width: 900px) {
-    .form-grid { grid-template-columns: 1fr 1fr; }
-  }
-</style>
+<Card.Root>
+  <Card.Header class="pb-3">
+    <Card.Title class="text-base">Tambah Pegawai</Card.Title>
+  </Card.Header>
+  <Card.Content>
+    {#if error}
+      <p class="mb-3 text-sm text-destructive">{error}</p>
+    {/if}
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div class="xl:col-span-1">
+        <label class="mb-1 block text-xs font-medium text-muted-foreground">NIP <span class="text-destructive">*</span></label>
+        <Input placeholder="NIP Pegawai" bind:value={form.nip} />
+      </div>
+      <div class="xl:col-span-1">
+        <label class="mb-1 block text-xs font-medium text-muted-foreground">Nama <span class="text-destructive">*</span></label>
+        <Input placeholder="Nama Lengkap" bind:value={form.nama} />
+      </div>
+      <div class="xl:col-span-1">
+        <label class="mb-1 block text-xs font-medium text-muted-foreground">Unit Kerja</label>
+        <Input placeholder="Unit Kerja" bind:value={form.unit_kerja} />
+      </div>
+      <div class="xl:col-span-1">
+        <label class="mb-1 block text-xs font-medium text-muted-foreground">Username Pusaka <span class="text-destructive">*</span></label>
+        <Input placeholder="Username Pusaka" bind:value={form.pusaka_username} />
+      </div>
+      <div class="xl:col-span-1">
+        <label class="mb-1 block text-xs font-medium text-muted-foreground">Password Pusaka <span class="text-destructive">*</span></label>
+        <Input type="password" placeholder="Password Pusaka" bind:value={form.pusaka_password} />
+      </div>
+      <div class="xl:col-span-1 flex items-end">
+        <Button class="w-full" onclick={submit} disabled={loading}>
+          {loading ? 'Menyimpan...' : 'Simpan'}
+        </Button>
+      </div>
+    </div>
+  </Card.Content>
+</Card.Root>

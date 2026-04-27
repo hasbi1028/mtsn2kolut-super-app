@@ -50,7 +50,7 @@
 	}
 
 	function statusBadgeClass(s: string) {
-		if (s === 'published') return 'bg-blue-100 text-blue-700 border-blue-200';
+		if (s === 'published') return 'bg-green-100 text-green-800 border-green-200';
 		if (s === 'archived') return 'bg-slate-100 text-slate-500 border-slate-200';
 		return 'bg-slate-100 text-slate-600 border-slate-200';
 	}
@@ -119,8 +119,8 @@
 
 <svelte:head><title>Bank Soal CBT — MTSN 2 Kolut</title></svelte:head>
 
-<div class="space-y-6 p-6 max-w-5xl mx-auto">
-	<div class="flex items-start justify-between">
+<div class="space-y-6">
+	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<h1 class="text-2xl font-semibold text-slate-800">Bank Soal CBT</h1>
 			<p class="text-sm text-slate-500 mt-1">Kelola soal pilihan ganda untuk ujian berbasis komputer</p>
@@ -253,7 +253,7 @@
 					</select>
 				</div>
 			</Card.Header>
-			<Card.Content class="p-0">
+			<Card.Content class="p-0 overflow-x-auto">
 				<Table.Root>
 					<Table.Header>
 						<Table.Row>
@@ -277,7 +277,7 @@
 									<Badge variant="outline" class="text-xs">{q.subject_code}</Badge>
 								</Table.Cell>
 								<Table.Cell>
-									<Badge class="bg-blue-100 text-blue-700 border-blue-200 font-mono">{q.answer_key}</Badge>
+									<Badge class="bg-green-100 text-green-800 border-green-200 font-mono">{q.answer_key}</Badge>
 								</Table.Cell>
 								<Table.Cell>
 									<Badge class={diffBadgeClass(q.difficulty)}>{difficultyLabel[q.difficulty] ?? q.difficulty}</Badge>

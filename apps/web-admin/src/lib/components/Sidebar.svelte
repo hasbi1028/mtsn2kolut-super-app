@@ -91,7 +91,7 @@
 >
 	<!-- Brand -->
 	<div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-slate-200 px-4">
-		<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white text-xs font-bold shrink-0">
+		<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-green-700 text-white text-xs font-bold shrink-0">
 			MTs
 		</div>
 		<div class="min-w-0">
@@ -115,8 +115,8 @@
 								onclick={() => (open = false)}
 								class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors
 								       {isActive(item.href)
-								         ? 'bg-blue-50 text-blue-700'
-								         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'}"
+								         ? 'bg-green-50 text-green-800'
+								         : 'text-slate-600 hover:bg-green-50/60 hover:text-slate-800'}"
 							>
 								{@render SidebarIcon({ name: item.icon, active: isActive(item.href) })}
 								{item.label}
@@ -148,7 +148,7 @@
 
 <!-- Icon helper snippet -->
 {#snippet SidebarIcon({ name, active }: { name: string; active: boolean })}
-	<svg class="h-4 w-4 shrink-0 {active ? 'text-blue-600' : 'text-slate-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+	<svg class="h-4 w-4 shrink-0 {active ? 'text-green-700' : 'text-slate-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 		{#if name === 'grid'}
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
 		{:else if name === 'book-open'}

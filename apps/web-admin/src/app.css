@@ -8,29 +8,29 @@
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
 
-  /* Institutional color palette — calm, educational, trustworthy */
-  --color-background: oklch(0.98 0.002 240);
-  --color-foreground: oklch(0.18 0.02 240);
+  /* Institutional color palette — Islamic school, calm green, educational, trustworthy */
+  --color-background: oklch(0.98 0.004 145);
+  --color-foreground: oklch(0.18 0.02 145);
   --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.18 0.02 240);
+  --color-card-foreground: oklch(0.18 0.02 145);
   --color-popover: oklch(1 0 0);
-  --color-popover-foreground: oklch(0.18 0.02 240);
-  --color-primary: oklch(0.42 0.13 248);
+  --color-popover-foreground: oklch(0.18 0.02 145);
+  --color-primary: oklch(0.38 0.13 145);
   --color-primary-foreground: oklch(0.98 0 0);
-  --color-secondary: oklch(0.94 0.01 240);
-  --color-secondary-foreground: oklch(0.3 0.04 248);
-  --color-muted: oklch(0.95 0.008 240);
-  --color-muted-foreground: oklch(0.5 0.02 240);
-  --color-accent: oklch(0.93 0.03 248);
-  --color-accent-foreground: oklch(0.25 0.05 248);
+  --color-secondary: oklch(0.94 0.015 145);
+  --color-secondary-foreground: oklch(0.28 0.06 145);
+  --color-muted: oklch(0.95 0.008 145);
+  --color-muted-foreground: oklch(0.5 0.02 145);
+  --color-accent: oklch(0.92 0.04 145);
+  --color-accent-foreground: oklch(0.22 0.07 145);
   --color-destructive: oklch(0.55 0.22 27);
   --color-destructive-foreground: oklch(0.98 0 0);
-  --color-border: oklch(0.88 0.01 240);
-  --color-input: oklch(0.88 0.01 240);
-  --color-ring: oklch(0.42 0.13 248);
+  --color-border: oklch(0.88 0.012 145);
+  --color-input: oklch(0.88 0.012 145);
+  --color-ring: oklch(0.38 0.13 145);
 
   /* Status colors */
-  --color-success: oklch(0.5 0.14 155);
+  --color-success: oklch(0.45 0.14 145);
   --color-warning: oklch(0.65 0.15 65);
 }
 
@@ -72,7 +72,10 @@
 }
 
 /* Legacy page container — wraps all page content via <main class="page"> in layout */
-.page { max-width: 1100px; margin: 0 auto; padding: 24px 16px 40px; display: grid; gap: 16px; }
+.page { max-width: 1100px; margin: 0 auto; padding: 16px 12px 32px; display: grid; gap: 16px; }
+@media (min-width: 480px) {
+  .page { padding: 24px 16px 40px; }
+}
 .grid { display: grid; gap: 16px; }
 .grid.two { grid-template-columns: 1fr 1fr; }
 
@@ -85,17 +88,20 @@
   backdrop-filter: blur(6px);
 }
 
-h1 { margin: 0; font-size: 1.7rem; }
-h2 { margin: 0 0 12px; font-size: 1.1rem; color: #cbe0ff; }
-p  { margin: 6px 0 0; color: #9db2d1; }
+.card h2 { margin: 0 0 12px; font-size: 1.1rem; color: #cbe0ff; }
+.card p  { margin: 6px 0 0; color: #9db2d1; }
 
-input, select {
+.card input, .card select,
+.toolbar input, .toolbar select,
+.controls input, .controls select {
   width: 100%; box-sizing: border-box;
   background: #0d1626; color: #e8eefc;
   border: 1px solid #2b3d5a; border-radius: 10px;
   padding: 10px 12px; outline: none;
 }
-input:focus, select:focus {
+.card input:focus, .card select:focus,
+.toolbar input:focus, .toolbar select:focus,
+.controls input:focus, .controls select:focus {
   border-color: #58a6ff;
   box-shadow: 0 0 0 3px rgba(88,166,255,0.18);
 }
@@ -113,9 +119,9 @@ input:focus, select:focus {
 .stack { display: grid; gap: 10px; }
 
 .table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-th, td { padding: 10px; border-bottom: 1px solid #273a57; text-align: left; }
-th { color: #9ec6ff; font-weight: 600; }
+.card table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.card th, .card td { padding: 10px; border-bottom: 1px solid #273a57; text-align: left; }
+.card th { color: #9ec6ff; font-weight: 600; }
 
 .pill { padding: 4px 8px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; text-transform: uppercase; }
 .pill.ok   { background: rgba(31, 170, 112, .2); color: #7ff0b7; }

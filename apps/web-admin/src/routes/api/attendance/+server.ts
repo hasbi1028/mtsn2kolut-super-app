@@ -32,10 +32,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		const res = await raw.json() as GoAttResponse | { data: GoAttendance[] };
 
 		const rows = (res.data ?? []) as GoAttendance[];
-		const items = rows.map(({ employee_nip, employee_nama, ...a }) => ({
+		const items = rows.map((a) => ({
 			...a,
-			nip:             employee_nip,
-			nama:            employee_nama,
 			updated_at_wita: toWITA(a.updated_at),
 		}));
 
