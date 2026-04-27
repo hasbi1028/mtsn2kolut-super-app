@@ -57,14 +57,13 @@ build: build-frontend build-worker build-backend
 
 # ── Zip (untuk upload ke VPS) ─────────────────────────────────────────────────
 
-.PHONY: zip zip-frontend zip-worker
+.PHONY: zip zip-frontend zip-worker zip-backend
 
 zip-frontend: build-frontend
 	rm -f dist-frontend.zip
 	cd $(FRONTEND_DIR) && zip -r ../dist-frontend.zip . \
 		--exclude "node_modules/*" \
 		--exclude ".env" \
-		--exclude "data/*" \
 		--exclude "*.zip"
 	@echo "dist-frontend.zip siap"
 
@@ -121,16 +120,7 @@ pm2-status:
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
-.PHONY: db-studio db-generate db-migrate db-sqlc db-schema
-
-db-studio:
-	cd $(FRONTEND_DIR) && npm run db:studio
-
-db-generate:
-	cd $(FRONTEND_DIR) && npm run db:generate
-
-db-migrate:
-	cd $(FRONTEND_DIR) && npm run db:migrate
+.PHONY: db-sqlc db-schema
 
 db-sqlc:
 	cd $(BACKEND_DIR)/db && sqlc generate
@@ -156,26 +146,44 @@ clean: clean-build clean-zip
 
 help:
 	@echo ""
-	@echo "  install            npm install di frontend + worker"
-	@echo "  dev-frontend       vite dev (hot-reload)"
-	@echo "  dev-worker         tsx watch src/index.ts"
-	@echo "  check              svelte-check + TypeScript"
-	@echo "  build              build frontend (adapter-node)"
-	@echo "  zip                build + buat dist-frontend.zip & dist-worker.zip"
-	@echo "  zip-frontend       zip frontend saja"
-	@echo "  zip-worker         zip worker saja"
-	@echo "  start-frontend     jalankan frontend (node build/index.js)"
-	@echo "  start-worker       jalankan worker (tsx src/index.ts)"
-	@echo "  pm2-start/stop/restart/logs/status"
-	@echo "  dev-backend        go run ./cmd/api/"
+	@echo "Arsitektur: 3 komponen terpisah"
+	@echo "  VPS-Backend  : Go Chi API  (port 8080)"
+	@echo "  VPS-Frontend : SvelteKit   (port 8021)"
+	@echo "  VPS-Worker   : Playwright  (no HTTP port, pull jobs)"
+	@echo ""
+	@echo "── Install ──────────────────────────────────────────────────────────"
+	@echo "  install            npm install frontend + worker, go mod download"
+	@echo "  install-frontend   npm install frontend saja"
+	@echo "  install-worker     npm install worker saja"
+	@echo "  install-backend    go mod download"
+	@echo ""
+	@echo "── Dev (jalankan 3 terminal terpisah) ───────────────────────────────"
+	@echo "  dev-backend        go run ./cmd/api/        (butuh .env di backend/)"
+	@echo "  dev-frontend       vite dev hot-reload       (butuh .env di frontend/)"
+	@echo "  dev-worker         tsx watch src/index.ts   (butuh .env di worker/)"
+	@echo ""
+	@echo "── Build ────────────────────────────────────────────────────────────"
+	@echo "  build              build semua (frontend + backend)"
+	@echo "  build-frontend     npm run build (adapter-node)"
 	@echo "  build-backend      go build -o bin/api"
-	@echo "  start-backend      jalankan backend binary"
-	@echo "  zip-backend        build + buat dist-backend.zip"
-	@echo "  db-sqlc            sqlc generate (Go typed queries)"
+	@echo ""
+	@echo "── Deploy (zip untuk upload ke VPS) ─────────────────────────────────"
+	@echo "  zip                zip semua: frontend + worker + backend"
+	@echo "  zip-frontend       build + zip dist-frontend.zip"
+	@echo "  zip-worker         zip dist-worker.zip (no build)"
+	@echo "  zip-backend        build + zip dist-backend.zip"
+	@echo ""
+	@echo "── PM2 ──────────────────────────────────────────────────────────────"
+	@echo "  pm2-start          pm2 start ecosystem.config.cjs"
+	@echo "  pm2-stop/restart   pm2 stop/restart ecosystem.config.cjs"
+	@echo "  pm2-logs           pm2 logs"
+	@echo "  pm2-status         pm2 status"
+	@echo ""
+	@echo "── Database ─────────────────────────────────────────────────────────"
+	@echo "  db-sqlc            sqlc generate (regenerate Go typed queries)"
 	@echo "  db-schema          apply 001_initial_schema.sql ke PostgreSQL"
-	@echo "  db-studio          drizzle-kit studio (SQLite, legacy)"
-	@echo "  db-generate        drizzle-kit generate (SQLite, legacy)"
-	@echo "  db-migrate         drizzle-kit migrate (SQLite, legacy)"
+	@echo ""
+	@echo "── Clean ────────────────────────────────────────────────────────────"
 	@echo "  clean              hapus build output + zip"
 	@echo ""
 

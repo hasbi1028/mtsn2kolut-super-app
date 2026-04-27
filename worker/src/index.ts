@@ -6,8 +6,8 @@ import { chromium, type Page } from 'playwright';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const FRONTEND_URL   = (process.env.FRONTEND_URL ?? 'http://localhost:8021').replace(/\/$/, '');
-const WORKER_TOKEN   = process.env.WORKER_TOKEN ?? '';
+const BACKEND_URL    = (process.env.BACKEND_URL ?? 'http://localhost:8080').replace(/\/$/, '');
+const WORKER_API_KEY = process.env.WORKER_API_KEY ?? '';
 const WORKER_ID      = process.env.WORKER_ID    ?? `worker-${os.hostname()}-${process.pid}`;
 const MAX_CONCURRENT = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 5));
 const HEADLESS       = ['1', 'true'].includes(process.env.HEADLESS ?? 'true');
@@ -52,40 +52,44 @@ interface GeoCoords { latitude: number; longitude: number; }
 
 // ── HTTP client ───────────────────────────────────────────────────────────────
 
-async function workerFetch(method: 'GET' | 'POST', path: string, body?: unknown): Promise<Response> {
-	return fetch(`${FRONTEND_URL}${path}`, {
-		method,
-		headers: {
-			'content-type':  'application/json',
-			'authorization': `Bearer ${WORKER_TOKEN}`,
-			'x-worker-id':   WORKER_ID,
-		},
-		body: body !== undefined ? JSON.stringify(body) : undefined,
-	});
+function workerHeaders(): Record<string, string> {
+	return { 'content-type': 'application/json', 'x-worker-key': WORKER_API_KEY };
 }
 
 async function claimJob(): Promise<ClaimedJob | null> {
-	const res = await workerFetch('POST', '/api/worker/claim');
+	const res = await fetch(`${BACKEND_URL}/api/worker/claim`, {
+		method: 'POST',
+		headers: workerHeaders(),
+		body: JSON.stringify({ worker_id: WORKER_ID }),
+	});
 	if (res.status === 204) return null;
 	if (!res.ok) throw new Error(`claim failed: ${res.status} ${await res.text()}`);
-	const data = await res.json() as { job: ClaimedJob };
-	return data.job ?? null;
+	const data = await res.json() as { data: ClaimedJob };
+	return data.data ?? null;
 }
 
 async function completeJob(jobId: string, record: AttendanceRecord): Promise<void> {
-	const res = await workerFetch('POST', '/api/worker/complete', { job_id: jobId, ...record });
+	const res = await fetch(`${BACKEND_URL}/api/worker/jobs/${jobId}/complete`, {
+		method: 'POST',
+		headers: workerHeaders(),
+		body: JSON.stringify(record),
+	});
 	if (!res.ok) throw new Error(`complete failed: ${res.status} ${await res.text()}`);
 }
 
 async function failJob(jobId: string, error: string): Promise<void> {
-	const res = await workerFetch('POST', '/api/worker/fail', { job_id: jobId, error });
+	const res = await fetch(`${BACKEND_URL}/api/worker/jobs/${jobId}/fail`, {
+		method: 'POST',
+		headers: workerHeaders(),
+		body: JSON.stringify({ error }),
+	});
 	if (!res.ok) log('WARN', 'fail report error', { jobId, status: res.status });
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
-log('INFO', 'worker starting', { WORKER_ID, FRONTEND_URL, MAX_CONCURRENT, HEADLESS, POLL_MS });
+log('INFO', 'worker starting', { WORKER_ID, BACKEND_URL, MAX_CONCURRENT, HEADLESS, POLL_MS });
 
 // Spawn consumers
 for (let i = 1; i <= MAX_CONCURRENT; i++) {

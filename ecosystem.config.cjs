@@ -1,15 +1,41 @@
 /**
  * Deployment topology:
- *   VPS1 — pusaka-frontend (SvelteKit + SQLite)
- *   VPS2..N — pusaka-worker (Playwright, no DB, connects via HTTP API)
+ *   VPS-Backend  — pusaka-backend  (Go Chi API, port 8080) + PostgreSQL
+ *   VPS-Frontend — pusaka-frontend (SvelteKit,  port 8021)
+ *   VPS-Worker   — pusaka-worker   (Playwright, no HTTP port, pull-based)
  *
- * Required env vars per VPS:
- *   Frontend : DB_PATH, WORKER_TOKEN
- *   Worker   : FRONTEND_URL, WORKER_TOKEN, WORKER_ID, WORKER_CONCURRENCY
+ * Required env vars:
+ *   Backend  : DATABASE_URL, JWT_SECRET, ADMIN_PASSWORD, WORKER_API_KEY, INTERNAL_API_KEY, PORT
+ *   Frontend : API_BASE_URL, INTERNAL_API_KEY, WORKER_API_KEY, SESSION_SECRET, ORIGIN
+ *   Worker   : BACKEND_URL, WORKER_API_KEY, WORKER_ID, WORKER_CONCURRENCY
+ *
+ * Each VPS has its own ecosystem.config.cjs — copy the relevant app block only.
  */
 module.exports = {
   apps: [
-    // ── Frontend (VPS1) ──────────────────────────────────────────────────────
+    // ── Backend (VPS-Backend) ────────────────────────────────────────────────
+    // Run: pusaka-backend/bin/api  (go build -o bin/api ./cmd/api/)
+    {
+      name: 'pusaka-backend',
+      cwd: './backend',
+      script: 'bin/api',
+      interpreter: 'none',
+      env_file: './backend/.env',
+      env: {
+        PORT:             '8080',
+        NODE_ENV:         'production',
+      },
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '256M',
+      error_file: '../logs/backend-error.log',
+      out_file:   '../logs/backend-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
+    },
+
+    // ── Frontend (VPS-Frontend) ──────────────────────────────────────────────
     {
       name: 'pusaka-frontend',
       cwd: './frontend',
@@ -17,14 +43,15 @@ module.exports = {
       interpreter: 'node',
       env_file: './frontend/.env',
       env: {
-        HOST: '0.0.0.0',
-        PORT: '8021',
-        // Sesuaikan ORIGIN dengan URL akses app (IP/domain:port) — wajib agar form login tidak ditolak CSRF
-        ORIGIN: 'http://localhost:8021',
-        DB_PATH: 'data/pusaka.sqlite',
-        NODE_ENV: 'production',
-        // WORKER_TOKEN: 'ganti-dengan-secret-yang-kuat'
-        // SESSION_SECRET: 'ganti-dengan-random-string-panjang'
+        HOST:             '0.0.0.0',
+        PORT:             '8021',
+        // Wajib: URL akses app agar form login tidak ditolak CSRF
+        ORIGIN:           'http://localhost:8021',
+        NODE_ENV:         'production',
+        // API_BASE_URL:     'http://IP-VPS-BACKEND:8080'
+        // INTERNAL_API_KEY: 'ganti-dengan-key-yang-kuat'
+        // WORKER_API_KEY:   'ganti-dengan-key-yang-kuat'
+        // SESSION_SECRET:   'ganti-dengan-random-string-panjang'
       },
       instances: 1,
       exec_mode: 'fork',
@@ -36,9 +63,9 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     },
 
-    // ── Worker (VPS2 / VPS3 / dst) ───────────────────────────────────────────
-    // Copy blok ini ke masing-masing VPS worker, sesuaikan WORKER_ID.
-    // Tidak perlu DB_PATH — worker tidak akses SQLite langsung.
+    // ── Worker (VPS-Worker / multiple VPS) ───────────────────────────────────
+    // Copy blok ini ke setiap VPS worker, sesuaikan WORKER_ID.
+    // Worker langsung memanggil Go API — tidak butuh akses ke SvelteKit.
     {
       name: 'pusaka-worker',
       cwd: './worker',
@@ -47,9 +74,9 @@ module.exports = {
       interpreter: 'node',
       env_file: './worker/.env',
       env: {
-        FRONTEND_URL:       'http://localhost:8021',   // ganti IP/domain VPS1
-        WORKER_TOKEN:       '',                         // harus sama dengan frontend
-        WORKER_ID:          'worker-vps2',              // unik per VPS
+        BACKEND_URL:        'http://localhost:8080',    // ganti IP/domain VPS-Backend
+        WORKER_API_KEY:     '',                          // harus sama dengan backend
+        WORKER_ID:          'worker-vps1',               // unik per VPS
         WORKER_CONCURRENCY: '5',
         HEADLESS:           'true',
         POLL_MS:            '8000',

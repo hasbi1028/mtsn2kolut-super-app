@@ -4,10 +4,13 @@ import { apiGet, apiPut } from '$lib/server/api';
 
 interface GoSetting { key: string; value: string }
 
+const BLOCKED = new Set(['admin_password', 'admin_password_hash', 'admin_username']);
+
 export const GET: RequestHandler = async () => {
 	const rows = await apiGet<GoSetting[]>('/api/settings');
 	const flat: Record<string, unknown> = {};
 	for (const { key, value } of rows) {
+		if (BLOCKED.has(key)) continue;
 		if (key === 'max_concurrent') flat[key] = Number(value) || 1;
 		else if (key === 'headless')  flat[key] = value === 'true';
 		else                          flat[key] = value;
