@@ -1,34 +1,43 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { rawDb } from '$lib/server/db';
-import type { JobStatus } from '$lib/server/schema';
+import { apiGet } from '$lib/server/api';
+import { toWITA } from '$lib/server/api';
 
-const VALID_STATUSES = new Set<JobStatus>(['queued', 'running', 'success', 'failed']);
+interface GoJob {
+	id: string; employee_id: string;
+	employee_nama: string; employee_nip: string;
+	run_type: string; status: string; error_message: string;
+	claimed_by: string; claimed_at: string;
+	attempts: number; max_attempts: number;
+	next_retry_at: string; created_at: string; updated_at: string;
+}
 
-const stmtAll = rawDb.prepare(`
-	SELECT j.id, j.run_type, j.status, j.error_message, j.attempts, j.max_attempts,
-		j.next_retry_at, j.claimed_by, j.created_at,
-		strftime('%Y-%m-%d %H:%M:%S', datetime(j.created_at, '+8 hours')) || ' WITA' AS created_at_wita,
-		e.nip, e.nama
-	FROM jobs j JOIN employees e ON e.id = j.employee_id
-	ORDER BY j.created_at DESC LIMIT ?`);
+interface GoJobsResponse {
+	data: GoJob[];
+	meta: { total: number; page: number; per_page: number };
+}
 
-const stmtByStatus = rawDb.prepare(`
-	SELECT j.id, j.run_type, j.status, j.error_message, j.attempts, j.max_attempts,
-		j.next_retry_at, j.claimed_by, j.created_at,
-		strftime('%Y-%m-%d %H:%M:%S', datetime(j.created_at, '+8 hours')) || ' WITA' AS created_at_wita,
-		e.nip, e.nama
-	FROM jobs j JOIN employees e ON e.id = j.employee_id
-	WHERE j.status = ?
-	ORDER BY j.created_at DESC LIMIT ?`);
-
-export const GET: RequestHandler = ({ url }) => {
+export const GET: RequestHandler = async ({ url }) => {
 	const limit  = Math.min(500, Math.max(1, Number(url.searchParams.get('limit') ?? 50)));
-	const status = (url.searchParams.get('status') ?? '') as JobStatus;
+	const status = url.searchParams.get('status') ?? '';
 
-	const items = VALID_STATUSES.has(status)
-		? stmtByStatus.all(status, limit)
-		: stmtAll.all(limit);
+	const params = new URLSearchParams({ per_page: String(limit), page: '1' });
+	if (status) params.set('status', status);
+
+	const raw = await fetch(
+		`${process.env.API_BASE_URL ?? 'http://localhost:8080'}/api/jobs?${params}`,
+		{ headers: { 'X-Internal-Key': process.env.INTERNAL_API_KEY ?? '' } }
+	);
+	const res = await raw.json() as GoJobsResponse;
+
+	const items = (res.data ?? []).map((j) => ({
+		id: j.id, run_type: j.run_type, status: j.status,
+		error_message: j.error_message, attempts: j.attempts,
+		max_attempts: j.max_attempts, next_retry_at: j.next_retry_at,
+		claimed_by: j.claimed_by, created_at: j.created_at,
+		created_at_wita: toWITA(j.created_at),
+		nip: j.employee_nip, nama: j.employee_nama,
+	}));
 
 	return json({ items });
 };

@@ -1,29 +1,34 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { rawDb } from '$lib/server/db';
+import { toWITA } from '$lib/server/api';
 
-const stmtAll = rawDb.prepare(`
-	SELECT a.*,
-		strftime('%Y-%m-%d %H:%M:%S', datetime(a.updated_at, '+8 hours')) || ' WITA' AS updated_at_wita,
-		e.nip, e.nama, e.unit_kerja
-	FROM attendance_records a JOIN employees e ON e.id = a.employee_id
-	ORDER BY e.nip ASC LIMIT ?`);
+const BASE = (process.env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
+const INTERNAL_KEY = process.env.INTERNAL_API_KEY ?? '';
 
-const stmtByDate = rawDb.prepare(`
-	SELECT a.*,
-		strftime('%Y-%m-%d %H:%M:%S', datetime(a.updated_at, '+8 hours')) || ' WITA' AS updated_at_wita,
-		e.nip, e.nama, e.unit_kerja
-	FROM attendance_records a JOIN employees e ON e.id = a.employee_id
-	WHERE a.tanggal = ?
-	ORDER BY e.nip ASC LIMIT ?`);
+interface GoAttendance {
+	id: string; employee_id: string; tanggal: string;
+	jam_masuk: string; jam_pulang: string; source_job_id: string;
+	updated_at: string; nip: string; nama: string; unit_kerja: string;
+}
+interface GoAttResponse { data: GoAttendance[]; meta: { total: number } }
 
-export const GET: RequestHandler = ({ url }) => {
+export const GET: RequestHandler = async ({ url }) => {
 	const limit = Math.min(500, Math.max(1, Number(url.searchParams.get('limit') ?? 50)));
 	const date  = url.searchParams.get('date') ?? '';
 
-	const items = /^\d{4}-\d{2}-\d{2}$/.test(date)
-		? stmtByDate.all(date, limit)
-		: stmtAll.all(limit);
+	const isDate = /^\d{4}-\d{2}-\d{2}$/.test(date);
+	const endpoint = isDate
+		? `${BASE}/api/attendance/by-date/${date}`
+		: `${BASE}/api/attendance?per_page=${limit}&page=1`;
+
+	const raw = await fetch(endpoint, { headers: { 'X-Internal-Key': INTERNAL_KEY } });
+	const res = await raw.json() as GoAttResponse | { data: GoAttendance[] };
+
+	const rows = (res.data ?? []) as GoAttendance[];
+	const items = rows.map((a) => ({
+		...a,
+		updated_at_wita: toWITA(a.updated_at),
+	}));
 
 	return json({ items });
 };

@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { getPasswordHash, verifyPassword, createSessionCookie } from '$lib/server/auth';
+import { createSessionCookie } from '$lib/server/auth';
+import { apiLogin, ApiError } from '$lib/server/api';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (locals.user) throw redirect(302, url.searchParams.get('from') ?? '/');
@@ -13,12 +14,13 @@ export const actions: Actions = {
 		const username = String(data.get('username') ?? '').trim();
 		const password = String(data.get('password') ?? '');
 
-		if (username !== 'admin') {
-			return fail(401, { error: 'Username atau password salah' });
-		}
-
-		if (!verifyPassword(password, getPasswordHash())) {
-			return fail(401, { error: 'Username atau password salah' });
+		try {
+			await apiLogin(username, password);
+		} catch (e) {
+			if (e instanceof ApiError && e.status === 401) {
+				return fail(401, { error: 'Username atau password salah' });
+			}
+			return fail(500, { error: 'Server error, coba lagi' });
 		}
 
 		cookies.set('sid', createSessionCookie(), {

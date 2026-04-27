@@ -36,3 +36,7 @@ func (s *Employee) Update(ctx context.Context, p db.UpdateEmployeeParams) (db.Em
 func (s *Employee) Delete(ctx context.Context, id pgtype.UUID) error {
 	return s.q.DeleteEmployee(ctx, id)
 }
+
+func (s *Employee) ListWithStatus(ctx context.Context) ([]db.ListEmployeesWithStatusRow, error) {
+	return s.q.ListEmployeesWithStatus(ctx)
+}

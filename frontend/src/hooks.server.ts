@@ -5,7 +5,6 @@ import { verifySession } from '$lib/server/auth';
 
 initScheduler();
 
-// Routes that don't require a session
 const PUBLIC_PREFIXES = ['/login', '/api/worker/'];
 
 export const handle: Handle = async ({ event, resolve }) => {

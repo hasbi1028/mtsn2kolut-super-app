@@ -166,6 +166,72 @@ func (q *Queries) ListEmployees(ctx context.Context) ([]Employee, error) {
 	return items, nil
 }
 
+const listEmployeesWithStatus = `-- name: ListEmployeesWithStatus :many
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.is_active, e.created_at,
+  COALESCE(
+    (SELECT j.status::text FROM jobs j
+     WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
+     ORDER BY CASE j.status::text WHEN 'running' THEN 0 ELSE 1 END, j.created_at DESC
+     LIMIT 1), '') AS active_status,
+  COALESCE(
+    (SELECT j.run_type::text FROM jobs j
+     WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
+     ORDER BY CASE j.status::text WHEN 'running' THEN 0 ELSE 1 END, j.created_at DESC
+     LIMIT 1), '') AS active_run_type,
+  COALESCE(
+    (SELECT j.status::text FROM jobs j
+     WHERE j.employee_id = e.id ORDER BY j.created_at DESC LIMIT 1), '') AS last_status,
+  COALESCE(
+    (SELECT j.run_type::text FROM jobs j
+     WHERE j.employee_id = e.id ORDER BY j.created_at DESC LIMIT 1), '') AS last_run_type
+FROM employees e
+ORDER BY e.created_at DESC
+`
+
+type ListEmployeesWithStatusRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	Nip           string             `json:"nip"`
+	Nama          string             `json:"nama"`
+	UnitKerja     string             `json:"unit_kerja"`
+	IsActive      bool               `json:"is_active"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ActiveStatus  interface{}        `json:"active_status"`
+	ActiveRunType interface{}        `json:"active_run_type"`
+	LastStatus    interface{}        `json:"last_status"`
+	LastRunType   interface{}        `json:"last_run_type"`
+}
+
+func (q *Queries) ListEmployeesWithStatus(ctx context.Context) ([]ListEmployeesWithStatusRow, error) {
+	rows, err := q.db.Query(ctx, listEmployeesWithStatus)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEmployeesWithStatusRow{}
+	for rows.Next() {
+		var i ListEmployeesWithStatusRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nip,
+			&i.Nama,
+			&i.UnitKerja,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.ActiveStatus,
+			&i.ActiveRunType,
+			&i.LastStatus,
+			&i.LastRunType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateEmployee = `-- name: UpdateEmployee :one
 UPDATE employees
 SET nip             = $2,

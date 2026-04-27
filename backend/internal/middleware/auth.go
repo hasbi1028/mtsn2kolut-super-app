@@ -38,6 +38,19 @@ func JWT(secret string) func(http.Handler) http.Handler {
 	}
 }
 
+func InternalKeyOrJWT(internalKey, jwtSecret string) func(http.Handler) http.Handler {
+	jwtMW := JWT(jwtSecret)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if internalKey != "" && r.Header.Get("X-Internal-Key") == internalKey {
+				next.ServeHTTP(w, r)
+				return
+			}
+			jwtMW(next).ServeHTTP(w, r)
+		})
+	}
+}
+
 func WorkerKey(key string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

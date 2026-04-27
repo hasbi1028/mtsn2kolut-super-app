@@ -49,6 +49,39 @@ func (h *Worker) Complete(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid id")
 		return
 	}
+
+	// Optional attendance data in body
+	var body struct {
+		Tanggal   string `json:"tanggal"`
+		JamMasuk  string `json:"jam_masuk"`
+		JamPulang string `json:"jam_pulang"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	if body.Tanggal != "" {
+		// Need employee_id from job for attendance upsert
+		job, err := h.jobs.Get(r.Context(), id)
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		var tanggal pgtype.Date
+		if err := tanggal.Scan(body.Tanggal); err != nil {
+			api.BadRequest(w, "invalid tanggal")
+			return
+		}
+		if _, err := h.att.Upsert(r.Context(), db.UpsertAttendanceParams{
+			EmployeeID:  job.EmployeeID,
+			Tanggal:     tanggal,
+			JamMasuk:    body.JamMasuk,
+			JamPulang:   body.JamPulang,
+			SourceJobID: id,
+		}); err != nil {
+			api.Internal(w, err)
+			return
+		}
+	}
+
 	if err := h.jobs.Complete(r.Context(), id); err != nil {
 		api.Internal(w, err)
 		return

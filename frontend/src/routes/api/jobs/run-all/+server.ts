@@ -1,19 +1,15 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { enqueueAllActive } from '$lib/server/queue';
-import { logInfo } from '$lib/server/logger';
-import type { RunType } from '$lib/server/schema';
+import { apiPost } from '$lib/server/api';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const payload = await request.json().catch(() => ({})) as Record<string, unknown>;
-	const run_type: RunType     = payload?.run_type === 'afternoon' ? 'afternoon'
-		: payload?.run_type === 'checkin' ? 'checkin'
-		: payload?.run_type === 'checkout' ? 'checkout'
-		: 'morning';
+	const run_type    = String(payload?.run_type ?? 'morning');
 	const max_attempts = Math.max(1, Math.min(Number(payload?.max_attempts ?? 3), 10));
 
-	const result = enqueueAllActive(run_type, max_attempts);
-	logInfo('run-all enqueued', { run_type, ...result });
-
+	const result = await apiPost<{ inserted: number; skipped: number }>(
+		'/api/jobs/run-all',
+		{ run_type, max_attempts }
+	);
 	return json({ run_type, ...result }, { status: 201 });
 };

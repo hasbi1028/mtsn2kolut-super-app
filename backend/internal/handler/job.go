@@ -68,6 +68,57 @@ func (h *Job) Stats(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, stats)
 }
 
+func (h *Job) RunAll(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		RunType     string `json:"run_type"`
+		MaxAttempts int32  `json:"max_attempts"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	if body.RunType == "" {
+		body.RunType = "morning"
+	}
+	if body.MaxAttempts == 0 {
+		body.MaxAttempts = 3
+	}
+	inserted, skipped, err := h.svc.RunAll(r.Context(), body.RunType, body.MaxAttempts)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.Created(w, map[string]any{"inserted": inserted, "skipped": skipped})
+}
+
+func (h *Job) CancelEmployee(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		EmployeeID string `json:"employee_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	id, err := parseUUID(body.EmployeeID)
+	if err != nil {
+		api.BadRequest(w, "invalid employee_id")
+		return
+	}
+	if err := h.svc.CancelEmployee(r.Context(), id); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{"ok": true})
+}
+
+func (h *Job) CancelAll(w http.ResponseWriter, r *http.Request) {
+	if err := h.svc.CancelAll(r.Context()); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{"ok": true})
+}
+
 func pageSize(s string, def int) int {
 	n, err := strconv.Atoi(s)
 	if err != nil || n < 1 || n > 200 {

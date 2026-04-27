@@ -49,8 +49,9 @@ func main() {
 	settH := handler.NewSetting(settSvc)
 	workerH := handler.NewWorker(jobSvc, attSvc)
 
-	jwtSecret := mustEnv("JWT_SECRET")
-	workerKey := mustEnv("WORKER_API_KEY")
+	jwtSecret   := mustEnv("JWT_SECRET")
+	workerKey   := mustEnv("WORKER_API_KEY")
+	internalKey := getEnv("INTERNAL_API_KEY", "")
 
 	r := chi.NewRouter()
 	r.Use(chimw.Logger)
@@ -60,7 +61,7 @@ func main() {
 	r.Post("/api/auth/login", authH.Login)
 
 	r.Group(func(r chi.Router) {
-		r.Use(mw.JWT(jwtSecret))
+		r.Use(mw.InternalKeyOrJWT(internalKey, jwtSecret))
 		r.Post("/api/auth/change-password", authH.ChangePassword)
 
 		r.Get("/api/employees", empH.List)
@@ -72,6 +73,9 @@ func main() {
 		r.Get("/api/jobs", jobH.List)
 		r.Post("/api/jobs", jobH.Create)
 		r.Get("/api/jobs/stats", jobH.Stats)
+		r.Post("/api/jobs/run-all", jobH.RunAll)
+		r.Post("/api/jobs/cancel", jobH.CancelEmployee)
+		r.Post("/api/jobs/cancel-all", jobH.CancelAll)
 
 		r.Get("/api/attendance", attH.List)
 		r.Get("/api/attendance/by-date/{date}", attH.ByDate)

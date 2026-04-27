@@ -21,12 +21,25 @@ type Employee struct {
 func NewEmployee(svc *service.Employee) *Employee { return &Employee{svc: svc} }
 
 func (h *Employee) List(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("with_status") == "1" {
+		h.listWithStatus(w, r)
+		return
+	}
 	employees, err := h.svc.List(r.Context())
 	if err != nil {
 		api.Internal(w, err)
 		return
 	}
 	api.OK(w, employees)
+}
+
+func (h *Employee) listWithStatus(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.svc.ListWithStatus(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
 }
 
 func (h *Employee) Get(w http.ResponseWriter, r *http.Request) {

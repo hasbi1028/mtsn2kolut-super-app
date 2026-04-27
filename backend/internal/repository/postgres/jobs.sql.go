@@ -11,6 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cancelAllJobs = `-- name: CancelAllJobs :exec
+UPDATE jobs
+SET status = 'failed', error_message = 'Dibatalkan manual', next_retry_at = NULL, updated_at = NOW()
+WHERE status = 'queued' OR status = 'running'
+`
+
+func (q *Queries) CancelAllJobs(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, cancelAllJobs)
+	return err
+}
+
+const cancelEmployeeJobs = `-- name: CancelEmployeeJobs :exec
+UPDATE jobs
+SET status = 'failed', error_message = 'Dibatalkan manual', next_retry_at = NULL, updated_at = NOW()
+WHERE employee_id = $1 AND (status = 'queued' OR status = 'running')
+`
+
+func (q *Queries) CancelEmployeeJobs(ctx context.Context, employeeID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, cancelEmployeeJobs, employeeID)
+	return err
+}
+
 const claimJob = `-- name: ClaimJob :one
 WITH candidate AS (
   SELECT id FROM jobs
@@ -153,6 +175,32 @@ func (q *Queries) FailJob(ctx context.Context, arg FailJobParams) error {
 	return err
 }
 
+const getJob = `-- name: GetJob :one
+SELECT id, employee_id, run_type, status, error_message, claimed_by, claimed_at,
+       attempts, max_attempts, next_retry_at, created_at, updated_at
+FROM jobs WHERE id = $1
+`
+
+func (q *Queries) GetJob(ctx context.Context, id pgtype.UUID) (Job, error) {
+	row := q.db.QueryRow(ctx, getJob, id)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.EmployeeID,
+		&i.RunType,
+		&i.Status,
+		&i.ErrorMessage,
+		&i.ClaimedBy,
+		&i.ClaimedAt,
+		&i.Attempts,
+		&i.MaxAttempts,
+		&i.NextRetryAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getJobStats = `-- name: GetJobStats :one
 SELECT
   COUNT(*) FILTER (WHERE status = 'queued')  AS queued,
@@ -179,6 +227,26 @@ func (q *Queries) GetJobStats(ctx context.Context) (GetJobStatsRow, error) {
 		&i.Failed,
 	)
 	return i, err
+}
+
+const hasActiveJob = `-- name: HasActiveJob :one
+SELECT EXISTS(
+    SELECT 1 FROM jobs
+    WHERE employee_id = $1 AND run_type = $2
+      AND (status = 'queued' OR status = 'running')
+) AS exists
+`
+
+type HasActiveJobParams struct {
+	EmployeeID pgtype.UUID `json:"employee_id"`
+	RunType    RunTypeEnum `json:"run_type"`
+}
+
+func (q *Queries) HasActiveJob(ctx context.Context, arg HasActiveJobParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasActiveJob, arg.EmployeeID, arg.RunType)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const listJobs = `-- name: ListJobs :many

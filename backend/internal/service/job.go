@@ -80,3 +80,42 @@ func (s *Job) Fail(ctx context.Context, id pgtype.UUID, errMsg string, retryAfte
 		Column3:      retryAfterSecs,
 	})
 }
+
+func (s *Job) Get(ctx context.Context, id pgtype.UUID) (db.Job, error) {
+	return s.q.GetJob(ctx, id)
+}
+
+func (s *Job) RunAll(ctx context.Context, runType string, maxAttempts int32) (inserted, skipped int, err error) {
+	emps, err := s.q.ListActiveEmployees(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, emp := range emps {
+		has, err := s.q.HasActiveJob(ctx, db.HasActiveJobParams{
+			EmployeeID: emp.ID,
+			RunType:    db.RunTypeEnum(runType),
+		})
+		if err != nil || has {
+			skipped++
+			continue
+		}
+		if _, err := s.q.CreateJob(ctx, db.CreateJobParams{
+			EmployeeID:  emp.ID,
+			RunType:     db.RunTypeEnum(runType),
+			MaxAttempts: maxAttempts,
+		}); err != nil {
+			skipped++
+		} else {
+			inserted++
+		}
+	}
+	return inserted, skipped, nil
+}
+
+func (s *Job) CancelEmployee(ctx context.Context, employeeID pgtype.UUID) error {
+	return s.q.CancelEmployeeJobs(ctx, employeeID)
+}
+
+func (s *Job) CancelAll(ctx context.Context) error {
+	return s.q.CancelAllJobs(ctx)
+}

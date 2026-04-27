@@ -1,16 +1,28 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { getAppSettings, updateAppSettings } from '$lib/server/settings';
-import { logInfo } from '$lib/server/logger';
+import { apiGet, apiPut } from '$lib/server/api';
 
-export const GET: RequestHandler = () => json(getAppSettings());
+interface GoSetting { key: string; value: string }
+
+export const GET: RequestHandler = async () => {
+	const rows = await apiGet<GoSetting[]>('/api/settings');
+	const flat: Record<string, unknown> = {};
+	for (const { key, value } of rows) {
+		if (key === 'max_concurrent') flat[key] = Number(value) || 1;
+		else if (key === 'headless')  flat[key] = value === 'true';
+		else                          flat[key] = value;
+	}
+	return json(flat);
+};
 
 export const PUT: RequestHandler = async ({ request }) => {
 	const payload = await request.json().catch(() => ({})) as Record<string, unknown>;
-	const settings = updateAppSettings({
-		max_concurrent: payload.max_concurrent as number | undefined,
-		headless:       payload.headless as boolean | undefined,
-	});
-	logInfo('app settings updated', settings as unknown as Record<string, unknown>);
-	return json(settings);
+
+	await Promise.all(
+		Object.entries(payload).map(([key, val]) =>
+			apiPut(`/api/settings/${key}`, { value: String(val) })
+		)
+	);
+
+	return json({ ok: true, ...payload });
 };

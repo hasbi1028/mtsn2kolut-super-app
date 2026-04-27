@@ -74,6 +74,28 @@ SET status        = 'failed',
     updated_at    = NOW()
 WHERE id = $1;
 
+-- name: GetJob :one
+SELECT id, employee_id, run_type, status, error_message, claimed_by, claimed_at,
+       attempts, max_attempts, next_retry_at, created_at, updated_at
+FROM jobs WHERE id = $1;
+
+-- name: HasActiveJob :one
+SELECT EXISTS(
+    SELECT 1 FROM jobs
+    WHERE employee_id = $1 AND run_type = $2
+      AND (status = 'queued' OR status = 'running')
+) AS exists;
+
+-- name: CancelEmployeeJobs :exec
+UPDATE jobs
+SET status = 'failed', error_message = 'Dibatalkan manual', next_retry_at = NULL, updated_at = NOW()
+WHERE employee_id = $1 AND (status = 'queued' OR status = 'running');
+
+-- name: CancelAllJobs :exec
+UPDATE jobs
+SET status = 'failed', error_message = 'Dibatalkan manual', next_retry_at = NULL, updated_at = NOW()
+WHERE status = 'queued' OR status = 'running';
+
 -- name: GetJobStats :one
 SELECT
   COUNT(*) FILTER (WHERE status = 'queued')  AS queued,

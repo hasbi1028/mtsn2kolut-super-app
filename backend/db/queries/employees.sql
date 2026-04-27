@@ -36,3 +36,24 @@ DELETE FROM employees WHERE id = $1;
 
 -- name: CountEmployees :one
 SELECT COUNT(*) FROM employees;
+
+-- name: ListEmployeesWithStatus :many
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.is_active, e.created_at,
+  COALESCE(
+    (SELECT j.status::text FROM jobs j
+     WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
+     ORDER BY CASE j.status::text WHEN 'running' THEN 0 ELSE 1 END, j.created_at DESC
+     LIMIT 1), '') AS active_status,
+  COALESCE(
+    (SELECT j.run_type::text FROM jobs j
+     WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
+     ORDER BY CASE j.status::text WHEN 'running' THEN 0 ELSE 1 END, j.created_at DESC
+     LIMIT 1), '') AS active_run_type,
+  COALESCE(
+    (SELECT j.status::text FROM jobs j
+     WHERE j.employee_id = e.id ORDER BY j.created_at DESC LIMIT 1), '') AS last_status,
+  COALESCE(
+    (SELECT j.run_type::text FROM jobs j
+     WHERE j.employee_id = e.id ORDER BY j.created_at DESC LIMIT 1), '') AS last_run_type
+FROM employees e
+ORDER BY e.created_at DESC;

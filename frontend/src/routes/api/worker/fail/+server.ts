@@ -1,44 +1,20 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { rawDb } from '$lib/server/db';
-import { checkWorkerAuth } from '$lib/server/workerAuth';
+import { workerFetch } from '$lib/server/api';
 
-const RETRY_BASE_SECONDS = 30;
-
-interface FailBody {
-	job_id: string;
-	error:  string;
-}
+interface FailBody { job_id: string; error: string }
 
 export const POST: RequestHandler = async ({ request }) => {
-	if (!checkWorkerAuth(request)) return json({ error: 'Unauthorized' }, { status: 401 });
+	const workerKey = request.headers.get('x-worker-key') ?? '';
+	if (workerKey !== (process.env.WORKER_API_KEY ?? ''))
+		return json({ error: 'Unauthorized' }, { status: 401 });
 
 	const { job_id, error } = await request.json() as FailBody;
 	if (!job_id) return json({ error: 'job_id wajib' }, { status: 400 });
 
-	const job = rawDb.prepare('SELECT attempts, max_attempts FROM jobs WHERE id = ?')
-		.get(job_id) as { attempts: number; max_attempts: number } | undefined;
-	if (!job) return json({ error: 'Job tidak ditemukan' }, { status: 404 });
+	const res = await workerFetch('POST', `/api/worker/jobs/${job_id}/fail`, undefined, { error });
 
-	const nextAttempts = Number(job.attempts) + 1;
-	const maxAttempts  = Number(job.max_attempts);
-
-	if (nextAttempts < maxAttempts) {
-		const delaySeconds = RETRY_BASE_SECONDS * Math.pow(2, nextAttempts - 1);
-		rawDb.prepare(`
-			UPDATE jobs
-			SET status='queued', attempts=?, error_message=?,
-			    next_retry_at=datetime(CURRENT_TIMESTAMP, '+' || ? || ' seconds'),
-			    updated_at=CURRENT_TIMESTAMP
-			WHERE id = ?
-		`).run(nextAttempts, error, delaySeconds, job_id);
-		return json({ ok: true, action: 'retry', attempts: nextAttempts, retry_in_seconds: delaySeconds });
-	}
-
-	rawDb.prepare(`
-		UPDATE jobs
-		SET status='failed', attempts=?, error_message=?, next_retry_at=NULL, updated_at=CURRENT_TIMESTAMP
-		WHERE id = ?
-	`).run(nextAttempts, error, job_id);
-	return json({ ok: true, action: 'failed', attempts: nextAttempts });
+	if (res.ok || res.status === 204) return json({ ok: true });
+	const body = await res.json() as { error?: string };
+	return json({ error: body.error ?? 'upstream error' }, { status: res.status });
 };
