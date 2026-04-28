@@ -2,11 +2,9 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
 
 	"mtsn2kolut-super-app/backend/internal/api"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -28,14 +26,7 @@ func (h *Schedule) List(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, rows)
 }
 
-func (h *Schedule) Upsert(w http.ResponseWriter, r *http.Request) {
-	id, err := parseUUID(chi.URLParam(r, "id"))
-	if err != nil {
-		api.BadRequest(w, "invalid id")
-		return
-	}
-	_ = id // UpsertSchedule conflicts on run_type, not id
-
+func (h *Schedule) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Label     string `json:"label"`
 		RunTime   string `json:"run_time"`
@@ -46,19 +37,64 @@ func (h *Schedule) Upsert(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	sched, err := h.svc.Upsert(r.Context(), db.UpsertScheduleParams{
+	if body.RunType != "morning" {
+		api.BadRequest(w, "only morning schedules can be created via this endpoint")
+		return
+	}
+	if body.RunTime == "" {
+		api.BadRequest(w, "run_time is required")
+		return
+	}
+	sched, err := h.svc.Create(r.Context(), db.CreateScheduleParams{
 		Label:     body.Label,
 		RunTime:   body.RunTime,
 		RunType:   db.RunTypeEnum(body.RunType),
 		IsEnabled: body.IsEnabled,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		api.NotFound(w)
+	if err != nil {
+		api.Internal(w, err)
 		return
 	}
+	api.Created(w, sched)
+}
+
+func (h *Schedule) Update(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		Label     string `json:"label"`
+		RunTime   string `json:"run_time"`
+		IsEnabled bool   `json:"is_enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	sched, err := h.svc.UpdateByID(r.Context(), db.UpdateScheduleByIDParams{
+		ID:        id,
+		Label:     body.Label,
+		RunTime:   body.RunTime,
+		IsEnabled: body.IsEnabled,
+	})
 	if err != nil {
 		api.Internal(w, err)
 		return
 	}
 	api.OK(w, sched)
+}
+
+func (h *Schedule) Delete(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	if err := h.svc.DeleteByID(r.Context(), id); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]bool{"deleted": true})
 }

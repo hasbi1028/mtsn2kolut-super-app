@@ -529,6 +529,17 @@ type Employee struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type EmployeeSchedule struct {
+	ID                  pgtype.UUID        `json:"id"`
+	EmployeeID          pgtype.UUID        `json:"employee_id"`
+	RunType             RunTypeEnum        `json:"run_type"`
+	RunTime             string             `json:"run_time"`
+	IsEnabled           bool               `json:"is_enabled"`
+	LastEnqueuedForDate pgtype.Date        `json:"last_enqueued_for_date"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Job struct {
 	ID           pgtype.UUID        `json:"id"`
 	EmployeeID   pgtype.UUID        `json:"employee_id"`

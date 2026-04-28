@@ -21,11 +21,14 @@ const (
 type schedulerStore interface {
 	ClaimDueSchedules(ctx context.Context, arg db.ClaimDueSchedulesParams) ([]db.ClaimDueSchedulesRow, error)
 	ResetScheduleEnqueueState(ctx context.Context, arg db.ResetScheduleEnqueueStateParams) error
+	ClaimDueEmployeeSchedules(ctx context.Context, arg db.ClaimDueEmployeeSchedulesParams) ([]db.ClaimDueEmployeeSchedulesRow, error)
+	ResetEmployeeScheduleEnqueueState(ctx context.Context, arg db.ResetEmployeeScheduleEnqueueStateParams) error
 	GetSetting(ctx context.Context, key string) (db.AppSetting, error)
 }
 
 type schedulerJobRunner interface {
 	RunAll(ctx context.Context, runType string, maxAttempts int32) (inserted, skipped int, err error)
+	Create(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32) (db.Job, error)
 }
 
 type Scheduler struct {
@@ -90,10 +93,12 @@ func (s *Scheduler) Tick(ctx context.Context, now time.Time) (SchedulerResult, e
 		return SchedulerResult{}, err
 	}
 
-	schedules, err := s.store.ClaimDueSchedules(ctx, db.ClaimDueSchedulesParams{
+	claimParams := db.ClaimDueSchedulesParams{
 		LastEnqueuedForDate: today,
 		RunTime:             localNow.Format("15:04"),
-	})
+	}
+
+	schedules, err := s.store.ClaimDueSchedules(ctx, claimParams)
 	if err != nil {
 		return SchedulerResult{}, err
 	}
@@ -118,6 +123,29 @@ func (s *Scheduler) Tick(ctx context.Context, now time.Time) (SchedulerResult, e
 		}
 		result.Enqueued += inserted
 		result.Skipped += skipped
+	}
+
+	// Process per-employee checkin/checkout schedules
+	empSchedules, err := s.store.ClaimDueEmployeeSchedules(ctx, db.ClaimDueEmployeeSchedulesParams{
+		LastEnqueuedForDate: today,
+		RunTime:             localNow.Format("15:04"),
+	})
+	if err != nil {
+		slog.Error("scheduler: failed to claim employee schedules", "error", err)
+	} else {
+		for _, es := range empSchedules {
+			result.Processed++
+			_, createErr := s.jobs.Create(ctx, es.EmployeeID, string(es.RunType), maxAttempts)
+			if createErr != nil {
+				_ = s.store.ResetEmployeeScheduleEnqueueState(ctx, db.ResetEmployeeScheduleEnqueueStateParams{
+					ID:                  es.ID,
+					LastEnqueuedForDate: today,
+				})
+				slog.Error("scheduler: failed to create employee job", "employee_id", es.EmployeeID, "run_type", es.RunType, "error", createErr)
+				continue
+			}
+			result.Enqueued++
+		}
 	}
 
 	_ = s.setStatus(ctx, map[string]string{

@@ -49,6 +49,7 @@ func main() {
 	eventSvc := service.NewCbtEvent(pool)
 	examSvc := service.NewExam(pool)
 	schedSvc := service.NewSchedule(q)
+	empSchedSvc := service.NewEmployeeSchedule(q)
 	settSvc := service.NewSetting(q)
 	auditSvc := service.NewAudit(q)
 	schedulerSvc := service.NewScheduler(q, jobSvc, settSvc, auditSvc)
@@ -77,6 +78,7 @@ func main() {
 	examH := handler.NewExam(examSvc)
 	userH := handler.NewUser(q)
 	schedH := handler.NewSchedule(schedSvc)
+	empSchedH := handler.NewEmployeeSchedule(empSchedSvc)
 	settH := handler.NewSetting(settSvc)
 	schedulerH := handler.NewScheduler(schedulerSvc)
 	workerH := handler.NewWorker(jobSvc, attSvc, settSvc)
@@ -126,6 +128,9 @@ func main() {
 			r.Post("/api/employees/{id}/update-pusaka", empH.UpdatePusakaCredentials)
 			r.Put("/api/employees/{id}", empH.Update)
 			r.Delete("/api/employees/{id}", empH.Delete)
+			r.Get("/api/employees/{id}/schedules", empSchedH.List)
+			r.Post("/api/employees/{id}/schedules", empSchedH.Upsert)
+			r.Delete("/api/employees/{id}/schedules/{scheduleId}", empSchedH.Delete)
 		})
 
 		r.Get("/api/academic", academicH.Overview)
@@ -208,7 +213,9 @@ func main() {
 			r.Get("/api/attendance/by-employee/{id}", attH.ByEmployee)
 
 			r.Get("/api/schedules", schedH.List)
-			r.Put("/api/schedules/{id}", schedH.Upsert)
+			r.Post("/api/schedules", schedH.Create)
+			r.Put("/api/schedules/{id}", schedH.Update)
+			r.Delete("/api/schedules/{id}", schedH.Delete)
 			r.Get("/api/settings", settH.List)
 			r.Put("/api/settings/{key}", settH.Upsert)
 

@@ -71,6 +71,49 @@ func (q *Queries) ClaimDueSchedules(ctx context.Context, arg ClaimDueSchedulesPa
 	return items, nil
 }
 
+const createSchedule = `-- name: CreateSchedule :one
+INSERT INTO schedules (label, run_time, run_type, is_enabled)
+VALUES ($1, $2, $3, $4)
+RETURNING id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
+`
+
+type CreateScheduleParams struct {
+	Label     string      `json:"label"`
+	RunTime   string      `json:"run_time"`
+	RunType   RunTypeEnum `json:"run_type"`
+	IsEnabled bool        `json:"is_enabled"`
+}
+
+func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) (Schedule, error) {
+	row := q.db.QueryRow(ctx, createSchedule,
+		arg.Label,
+		arg.RunTime,
+		arg.RunType,
+		arg.IsEnabled,
+	)
+	var i Schedule
+	err := row.Scan(
+		&i.ID,
+		&i.Label,
+		&i.RunTime,
+		&i.RunType,
+		&i.IsEnabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastEnqueuedForDate,
+	)
+	return i, err
+}
+
+const deleteScheduleByID = `-- name: DeleteScheduleByID :exec
+DELETE FROM schedules WHERE id = $1
+`
+
+func (q *Queries) DeleteScheduleByID(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteScheduleByID, id)
+	return err
+}
+
 const getSchedule = `-- name: GetSchedule :one
 SELECT id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
 FROM schedules
@@ -96,7 +139,7 @@ func (q *Queries) GetSchedule(ctx context.Context, id pgtype.UUID) (Schedule, er
 const listSchedules = `-- name: ListSchedules :many
 SELECT id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
 FROM schedules
-ORDER BY run_type ASC
+ORDER BY run_type ASC, run_time ASC
 `
 
 func (q *Queries) ListSchedules(ctx context.Context) ([]Schedule, error) {
@@ -145,29 +188,28 @@ func (q *Queries) ResetScheduleEnqueueState(ctx context.Context, arg ResetSchedu
 	return err
 }
 
-const upsertSchedule = `-- name: UpsertSchedule :one
-INSERT INTO schedules (id, label, run_time, run_type, is_enabled)
-VALUES (gen_random_uuid(), $1, $2, $3, $4)
-ON CONFLICT (run_type) DO UPDATE
-  SET label      = EXCLUDED.label,
-      run_time   = EXCLUDED.run_time,
-      is_enabled = EXCLUDED.is_enabled,
-      updated_at = NOW()
+const updateScheduleByID = `-- name: UpdateScheduleByID :one
+UPDATE schedules
+SET label      = $2,
+    run_time   = $3,
+    is_enabled = $4,
+    updated_at = NOW()
+WHERE id = $1
 RETURNING id, label, run_time, run_type, is_enabled, created_at, updated_at, last_enqueued_for_date
 `
 
-type UpsertScheduleParams struct {
+type UpdateScheduleByIDParams struct {
+	ID        pgtype.UUID `json:"id"`
 	Label     string      `json:"label"`
 	RunTime   string      `json:"run_time"`
-	RunType   RunTypeEnum `json:"run_type"`
 	IsEnabled bool        `json:"is_enabled"`
 }
 
-func (q *Queries) UpsertSchedule(ctx context.Context, arg UpsertScheduleParams) (Schedule, error) {
-	row := q.db.QueryRow(ctx, upsertSchedule,
+func (q *Queries) UpdateScheduleByID(ctx context.Context, arg UpdateScheduleByIDParams) (Schedule, error) {
+	row := q.db.QueryRow(ctx, updateScheduleByID,
+		arg.ID,
 		arg.Label,
 		arg.RunTime,
-		arg.RunType,
 		arg.IsEnabled,
 	)
 	var i Schedule

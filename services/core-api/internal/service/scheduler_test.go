@@ -41,6 +41,14 @@ func (f *fakeSchedulerStore) GetSetting(ctx context.Context, key string) (db.App
 	return db.AppSetting{}, errors.New("not found")
 }
 
+func (f *fakeSchedulerStore) ClaimDueEmployeeSchedules(_ context.Context, _ db.ClaimDueEmployeeSchedulesParams) ([]db.ClaimDueEmployeeSchedulesRow, error) {
+	return nil, nil
+}
+
+func (f *fakeSchedulerStore) ResetEmployeeScheduleEnqueueState(_ context.Context, _ db.ResetEmployeeScheduleEnqueueStateParams) error {
+	return nil
+}
+
 type fakeJobRunner struct {
 	inserted int
 	skipped  int
@@ -53,6 +61,10 @@ func (f *fakeJobRunner) RunAll(ctx context.Context, runType string, maxAttempts 
 	f.calls++
 	f.runTypes = append(f.runTypes, runType)
 	return f.inserted, f.skipped, f.err
+}
+
+func (f *fakeJobRunner) Create(_ context.Context, _ pgtype.UUID, _ string, _ int32) (db.Job, error) {
+	return db.Job{}, nil
 }
 
 func TestSchedulerTickProcessesClaimedSchedules(t *testing.T) {
