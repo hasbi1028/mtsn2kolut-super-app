@@ -81,6 +81,60 @@ func (q *Queries) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const getExamQuestions = `-- name: GetExamQuestions :many
+SELECT
+  q.id, q.code, q.question_text, q.question_type, q.options,
+  q.option_a, q.option_b, q.option_c, q.option_d, q.option_e
+FROM cbt_package_questions pq
+JOIN cbt_questions q ON q.id = pq.question_id
+WHERE pq.package_id = $1 AND q.status = 'published'
+ORDER BY pq.position ASC
+`
+
+type GetExamQuestionsRow struct {
+	ID           pgtype.UUID `json:"id"`
+	Code         string      `json:"code"`
+	QuestionText string      `json:"question_text"`
+	QuestionType string      `json:"question_type"`
+	Options      []byte      `json:"options"`
+	OptionA      string      `json:"option_a"`
+	OptionB      string      `json:"option_b"`
+	OptionC      string      `json:"option_c"`
+	OptionD      string      `json:"option_d"`
+	OptionE      string      `json:"option_e"`
+}
+
+func (q *Queries) GetExamQuestions(ctx context.Context, packageID pgtype.UUID) ([]GetExamQuestionsRow, error) {
+	rows, err := q.db.Query(ctx, getExamQuestions, packageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetExamQuestionsRow{}
+	for rows.Next() {
+		var i GetExamQuestionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.QuestionText,
+			&i.QuestionType,
+			&i.Options,
+			&i.OptionA,
+			&i.OptionB,
+			&i.OptionC,
+			&i.OptionD,
+			&i.OptionE,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCbtPackageQuestions = `-- name: ListCbtPackageQuestions :many
 SELECT pq.package_id, pq.question_id, pq.position, pq.points,
        q.code AS question_code, q.question_text

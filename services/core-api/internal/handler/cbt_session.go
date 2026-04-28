@@ -46,6 +46,7 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		PackageID      string `json:"package_id"`
 		ClassID        string `json:"class_id"`
+		EventID        string `json:"event_id"`
 		Title          string `json:"title"`
 		ScheduledStart string `json:"scheduled_start"`
 		ScheduledEnd   string `json:"scheduled_end"`
@@ -61,10 +62,23 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "package_id invalid")
 		return
 	}
-	classID, err := parseUUID(body.ClassID)
-	if err != nil {
-		api.BadRequest(w, "class_id invalid")
-		return
+
+	var classID pgtype.UUID
+	if body.ClassID != "" {
+		classID, err = parseUUID(body.ClassID)
+		if err != nil {
+			api.BadRequest(w, "class_id invalid")
+			return
+		}
+	}
+
+	var eventID pgtype.UUID
+	if body.EventID != "" {
+		eventID, err = parseUUID(body.EventID)
+		if err != nil {
+			api.BadRequest(w, "event_id invalid")
+			return
+		}
 	}
 
 	start, err := time.Parse(time.RFC3339, body.ScheduledStart)
@@ -96,6 +110,7 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 	row, err := h.svc.Create(r.Context(), service.CreateCbtSessionInput{
 		PackageID:      packageID,
 		ClassID:        classID,
+		EventID:        eventID,
 		Title:          body.Title,
 		ScheduledStart: startTz,
 		ScheduledEnd:   endTz,
@@ -142,6 +157,8 @@ func (h *CbtSession) Delete(w http.ResponseWriter, r *http.Request) {
 	api.NoContent(w)
 }
 
+// --- Participants ---
+
 func (h *CbtSession) ListParticipants(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
@@ -180,6 +197,220 @@ func (h *CbtSession) EnrollClass(w http.ResponseWriter, r *http.Request) {
 	}
 	api.OK(w, map[string]string{"status": "enrolled"})
 }
+
+func (h *CbtSession) EnrollGrade(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	var body struct {
+		Level string `json:"level"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	if body.Level == "" {
+		api.BadRequest(w, "level required (e.g. VII, VIII, IX)")
+		return
+	}
+	if err := h.svc.EnrollGrade(r.Context(), sessionID, body.Level); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]string{"status": "enrolled"})
+}
+
+func (h *CbtSession) EnrollSchool(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	if err := h.svc.EnrollSchool(r.Context(), sessionID); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]string{"status": "enrolled"})
+}
+
+func (h *CbtSession) GenerateTokens(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	if err := h.svc.GenerateTokens(r.Context(), sessionID); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]string{"status": "tokens generated"})
+}
+
+func (h *CbtSession) RegenerateToken(w http.ResponseWriter, r *http.Request) {
+	pid, err := parseUUID(chi.URLParam(r, "pid"))
+	if err != nil {
+		api.BadRequest(w, "invalid participant id")
+		return
+	}
+	row, err := h.svc.RegenerateToken(r.Context(), pid)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+}
+
+// --- Rooms ---
+
+func (h *CbtSession) ListRooms(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	rows, err := h.svc.ListRooms(r.Context(), sessionID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *CbtSession) CreateRoom(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	var body struct {
+		RoomName string `json:"room_name"`
+		Capacity int32  `json:"capacity"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	if body.RoomName == "" {
+		api.BadRequest(w, "room_name required")
+		return
+	}
+	if body.Capacity <= 0 {
+		body.Capacity = 30
+	}
+	room, err := h.svc.CreateRoom(r.Context(), sessionID, body.RoomName, body.Capacity)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.Created(w, room)
+}
+
+func (h *CbtSession) DeleteRoom(w http.ResponseWriter, r *http.Request) {
+	roomID, err := parseUUID(chi.URLParam(r, "rid"))
+	if err != nil {
+		api.BadRequest(w, "invalid room id")
+		return
+	}
+	if err := h.svc.DeleteRoom(r.Context(), roomID); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.NoContent(w)
+}
+
+func (h *CbtSession) ShuffleRooms(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	if err := h.svc.ShuffleRooms(r.Context(), sessionID); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]string{"status": "shuffled"})
+}
+
+// --- Proctoring ---
+
+func (h *CbtSession) GetProctoringStatus(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	rows, err := h.svc.GetProctoringStatus(r.Context(), sessionID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *CbtSession) FlagParticipant(w http.ResponseWriter, r *http.Request) {
+	pid, err := parseUUID(chi.URLParam(r, "pid"))
+	if err != nil {
+		api.BadRequest(w, "invalid participant id")
+		return
+	}
+	var body struct {
+		Flag bool `json:"flag"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	if err := h.svc.SetSuspiciousFlag(r.Context(), pid, body.Flag); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]bool{"suspicious_flag": body.Flag})
+}
+
+// --- Essay Grading ---
+
+func (h *CbtSession) ListUngradedEssays(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	rows, err := h.svc.ListUngradedEssays(r.Context(), sessionID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *CbtSession) GradeEssay(w http.ResponseWriter, r *http.Request) {
+	answerID, err := parseUUID(chi.URLParam(r, "aid"))
+	if err != nil {
+		api.BadRequest(w, "invalid answer id")
+		return
+	}
+	var body struct {
+		ManualScore float64 `json:"manual_score"`
+		GradedBy    string  `json:"graded_by"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	if body.ManualScore < 0 || body.ManualScore > 100 {
+		api.BadRequest(w, "manual_score must be 0–100")
+		return
+	}
+	if err := h.svc.GradeEssay(r.Context(), answerID, body.ManualScore, body.GradedBy); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{"status": "graded", "manual_score": body.ManualScore})
+}
+
+// --- Answers & Scoring (existing) ---
 
 func (h *CbtSession) RecordAnswer(w http.ResponseWriter, r *http.Request) {
 	participantID, err := parseUUID(chi.URLParam(r, "pid"))

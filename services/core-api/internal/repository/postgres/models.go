@@ -11,6 +11,52 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type CbtExamType string
+
+const (
+	CbtExamTypeUlangan CbtExamType = "ulangan"
+	CbtExamTypeUts     CbtExamType = "uts"
+	CbtExamTypeUas     CbtExamType = "uas"
+	CbtExamTypeUam     CbtExamType = "uam"
+	CbtExamTypeTryout  CbtExamType = "tryout"
+	CbtExamTypeLainnya CbtExamType = "lainnya"
+)
+
+func (e *CbtExamType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CbtExamType(s)
+	case string:
+		*e = CbtExamType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CbtExamType: %T", src)
+	}
+	return nil
+}
+
+type NullCbtExamType struct {
+	CbtExamType CbtExamType `json:"cbt_exam_type"`
+	Valid       bool        `json:"valid"` // Valid is true if CbtExamType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCbtExamType) Scan(value interface{}) error {
+	if value == nil {
+		ns.CbtExamType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CbtExamType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCbtExamType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CbtExamType), nil
+}
+
 type CbtQuestionDifficultyEnum string
 
 const (
@@ -299,15 +345,42 @@ type AttendanceRecord struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CbtExamEvent struct {
+	ID             pgtype.UUID        `json:"id"`
+	Title          string             `json:"title"`
+	ExamType       CbtExamType        `json:"exam_type"`
+	Scope          string             `json:"scope"`
+	AcademicYearID pgtype.UUID        `json:"academic_year_id"`
+	Status         string             `json:"status"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CbtExamParticipant struct {
-	ID          pgtype.UUID        `json:"id"`
-	SessionID   pgtype.UUID        `json:"session_id"`
-	StudentID   pgtype.UUID        `json:"student_id"`
-	Token       string             `json:"token"`
-	JoinedAt    pgtype.Timestamptz `json:"joined_at"`
-	SubmittedAt pgtype.Timestamptz `json:"submitted_at"`
-	Score       pgtype.Numeric     `json:"score"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ID                pgtype.UUID        `json:"id"`
+	SessionID         pgtype.UUID        `json:"session_id"`
+	StudentID         pgtype.UUID        `json:"student_id"`
+	Token             string             `json:"token"`
+	JoinedAt          pgtype.Timestamptz `json:"joined_at"`
+	SubmittedAt       pgtype.Timestamptz `json:"submitted_at"`
+	Score             pgtype.Numeric     `json:"score"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	RoomID            pgtype.UUID        `json:"room_id"`
+	DeviceFingerprint pgtype.Text        `json:"device_fingerprint"`
+	QuestionOrder     []byte             `json:"question_order"`
+	LastHeartbeat     pgtype.Timestamptz `json:"last_heartbeat"`
+	AppSwitchCount    int32              `json:"app_switch_count"`
+	ScreenshotAttempt int32              `json:"screenshot_attempt"`
+	LoginIp           pgtype.Text        `json:"login_ip"`
+	SuspiciousFlag    bool               `json:"suspicious_flag"`
+}
+
+type CbtExamRoom struct {
+	ID        pgtype.UUID        `json:"id"`
+	SessionID pgtype.UUID        `json:"session_id"`
+	RoomName  string             `json:"room_name"`
+	Capacity  int32              `json:"capacity"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type CbtExamSession struct {
@@ -320,6 +393,7 @@ type CbtExamSession struct {
 	Status         CbtSessionStatusEnum `json:"status"`
 	CreatedAt      pgtype.Timestamptz   `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz   `json:"updated_at"`
+	EventID        pgtype.UUID          `json:"event_id"`
 }
 
 type CbtPackage struct {
@@ -342,6 +416,14 @@ type CbtPackageQuestion struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
+type CbtParticipantEvent struct {
+	ID            pgtype.UUID        `json:"id"`
+	ParticipantID pgtype.UUID        `json:"participant_id"`
+	EventType     string             `json:"event_type"`
+	EventData     []byte             `json:"event_data"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
 type CbtQuestion struct {
 	ID           pgtype.UUID               `json:"id"`
 	SubjectID    pgtype.UUID               `json:"subject_id"`
@@ -358,6 +440,8 @@ type CbtQuestion struct {
 	Status       CbtQuestionStatusEnum     `json:"status"`
 	CreatedAt    pgtype.Timestamptz        `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz        `json:"updated_at"`
+	QuestionType string                    `json:"question_type"`
+	Options      []byte                    `json:"options"`
 }
 
 type CbtStudentAnswer struct {
@@ -367,6 +451,9 @@ type CbtStudentAnswer struct {
 	Answer        string             `json:"answer"`
 	IsCorrect     pgtype.Bool        `json:"is_correct"`
 	AnsweredAt    pgtype.Timestamptz `json:"answered_at"`
+	ManualScore   pgtype.Numeric     `json:"manual_score"`
+	GradedBy      pgtype.Text        `json:"graded_by"`
+	GradedAt      pgtype.Timestamptz `json:"graded_at"`
 }
 
 type ClassSubjectAssignment struct {

@@ -1,13 +1,14 @@
 -- name: ListCbtExamSessions :many
 SELECT
   s.id, s.package_id, p.title AS package_title,
-  s.class_id, c.name AS class_name, c.code AS class_code,
+  s.class_id, s.event_id,
+  COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.title, s.scheduled_start, s.scheduled_end, s.status,
   s.created_at, s.updated_at,
   COUNT(ep.id)::int AS participant_count
 FROM cbt_exam_sessions s
 JOIN cbt_packages p ON p.id = s.package_id
-JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN school_classes c ON c.id = s.class_id
 LEFT JOIN cbt_exam_participants ep ON ep.session_id = s.id
 GROUP BY s.id, p.title, c.name, c.code
 ORDER BY s.scheduled_start DESC;
@@ -15,17 +16,18 @@ ORDER BY s.scheduled_start DESC;
 -- name: GetCbtExamSession :one
 SELECT
   s.id, s.package_id, p.title AS package_title, p.duration_minutes,
-  s.class_id, c.name AS class_name, c.code AS class_code,
+  s.class_id, s.event_id,
+  COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.title, s.scheduled_start, s.scheduled_end, s.status,
   s.created_at, s.updated_at
 FROM cbt_exam_sessions s
 JOIN cbt_packages p ON p.id = s.package_id
-JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN school_classes c ON c.id = s.class_id
 WHERE s.id = $1;
 
 -- name: CreateCbtExamSession :one
-INSERT INTO cbt_exam_sessions (id, package_id, class_id, title, scheduled_start, scheduled_end, status)
-VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+INSERT INTO cbt_exam_sessions (package_id, class_id, event_id, title, scheduled_start, scheduled_end, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: UpdateCbtExamSessionStatus :one
@@ -41,19 +43,167 @@ DELETE FROM cbt_exam_sessions WHERE id = $1 AND status = 'draft';
 SELECT
   ep.id, ep.session_id, ep.student_id,
   s.nis, s.nama, s.gender,
-  ep.token, ep.joined_at, ep.submitted_at, ep.score,
-  ep.created_at
+  ep.token, ep.room_id, ep.joined_at, ep.submitted_at, ep.score,
+  ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.last_heartbeat, ep.created_at,
+  COALESCE(r.room_name, '') AS room_name
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 WHERE ep.session_id = $1
 ORDER BY s.nama ASC;
 
+-- name: GetParticipantByToken :one
+SELECT
+  ep.id, ep.session_id, ep.student_id,
+  ep.token, ep.room_id, ep.device_fingerprint, ep.question_order,
+  ep.joined_at, ep.submitted_at, ep.score,
+  ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.last_heartbeat,
+  s.nis, s.nama, s.gender,
+  cs.status AS session_status,
+  cs.scheduled_start, cs.scheduled_end,
+  cs.package_id,
+  p.duration_minutes
+FROM cbt_exam_participants ep
+JOIN students s ON s.id = ep.student_id
+JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
+JOIN cbt_packages p ON p.id = cs.package_id
+WHERE ep.token = $1;
+
 -- name: EnrollClassToSession :exec
-INSERT INTO cbt_exam_participants (session_id, student_id)
-SELECT $1, s.id
+INSERT INTO cbt_exam_participants (session_id, student_id, token)
+SELECT $1, s.id, encode(gen_random_bytes(4), 'hex')
 FROM students s
 WHERE s.class_id = $2 AND s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING;
+
+-- name: EnrollGradeToSession :exec
+INSERT INTO cbt_exam_participants (session_id, student_id, token)
+SELECT $1, s.id, encode(gen_random_bytes(4), 'hex')
+FROM students s
+JOIN school_classes c ON c.id = s.class_id
+WHERE c.level = $2 AND s.is_active = TRUE
+ON CONFLICT (session_id, student_id) DO NOTHING;
+
+-- name: EnrollSchoolToSession :exec
+INSERT INTO cbt_exam_participants (session_id, student_id, token)
+SELECT $1, s.id, encode(gen_random_bytes(4), 'hex')
+FROM students s
+WHERE s.is_active = TRUE
+ON CONFLICT (session_id, student_id) DO NOTHING;
+
+-- name: GenerateTokensForSession :exec
+UPDATE cbt_exam_participants
+SET token = encode(gen_random_bytes(4), 'hex')
+WHERE session_id = $1 AND (token = '' OR token IS NULL);
+
+-- name: RegenerateParticipantToken :one
+UPDATE cbt_exam_participants
+SET token = encode(gen_random_bytes(4), 'hex')
+WHERE id = $1
+RETURNING id, token;
+
+-- name: AssignParticipantRoom :exec
+UPDATE cbt_exam_participants
+SET room_id = $2
+WHERE id = $1;
+
+-- name: ClearParticipantRooms :exec
+UPDATE cbt_exam_participants
+SET room_id = NULL
+WHERE session_id = $1;
+
+-- name: UpdateParticipantQuestionOrder :exec
+UPDATE cbt_exam_participants
+SET question_order = $2
+WHERE id = $1;
+
+-- name: UpdateParticipantLogin :exec
+UPDATE cbt_exam_participants
+SET device_fingerprint = $2,
+    login_ip           = $3,
+    joined_at          = COALESCE(joined_at, NOW()),
+    last_heartbeat     = NOW()
+WHERE id = $1;
+
+-- name: UpdateParticipantHeartbeat :exec
+UPDATE cbt_exam_participants
+SET last_heartbeat = NOW()
+WHERE id = $1;
+
+-- name: IncrementParticipantAppSwitch :exec
+UPDATE cbt_exam_participants
+SET app_switch_count = app_switch_count + 1
+WHERE id = $1;
+
+-- name: IncrementParticipantScreenshot :exec
+UPDATE cbt_exam_participants
+SET screenshot_attempt = screenshot_attempt + 1
+WHERE id = $1;
+
+-- name: SetParticipantSuspiciousFlag :exec
+UPDATE cbt_exam_participants
+SET suspicious_flag = $2
+WHERE id = $1;
+
+-- name: SubmitParticipantExam :one
+UPDATE cbt_exam_participants
+SET submitted_at = NOW()
+WHERE id = $1 AND submitted_at IS NULL
+RETURNING id, submitted_at;
+
+-- name: InsertParticipantEvent :exec
+INSERT INTO cbt_participant_events (participant_id, event_type, event_data)
+VALUES ($1, $2, $3);
+
+-- name: ListParticipantEvents :many
+SELECT id, participant_id, event_type, event_data, created_at
+FROM cbt_participant_events
+WHERE participant_id = $1
+ORDER BY created_at DESC
+LIMIT 100;
+
+-- name: GetSessionProctoringStatus :many
+SELECT
+  ep.id AS participant_id,
+  ep.student_id,
+  s.nis, s.nama,
+  ep.token,
+  COALESCE(r.room_name, '') AS room_name,
+  ep.submitted_at,
+  ep.last_heartbeat,
+  ep.app_switch_count,
+  ep.screenshot_attempt,
+  ep.suspicious_flag,
+  COUNT(sa.id)::int AS answered_count,
+  ep.score
+FROM cbt_exam_participants ep
+JOIN students s ON s.id = ep.student_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id
+WHERE ep.session_id = $1
+GROUP BY ep.id, s.nis, s.nama, r.room_name
+ORDER BY s.nama ASC;
+
+-- name: ListParticipantsByRoom :many
+SELECT
+  ep.id, ep.student_id, ep.token, ep.room_id,
+  s.nis, s.nama, s.gender,
+  COALESCE(r.room_name, '') AS room_name
+FROM cbt_exam_participants ep
+JOIN students s ON s.id = ep.student_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.session_id = $1
+ORDER BY r.room_name ASC NULLS LAST, s.nama ASC;
+
+-- name: GradeStudentEssay :exec
+UPDATE cbt_student_answers
+SET manual_score = $2,
+    graded_by    = $3,
+    graded_at    = NOW(),
+    is_correct   = ($2 > 0)
+WHERE id = $1;
 
 -- name: UpsertStudentAnswer :exec
 INSERT INTO cbt_student_answers (participant_id, question_id, answer, is_correct)
@@ -63,9 +213,20 @@ DO UPDATE SET answer = EXCLUDED.answer, is_correct = NULL, answered_at = NOW();
 
 -- name: UpdateAnswerCorrectness :exec
 UPDATE cbt_student_answers sa
-SET is_correct = (sa.answer = q.answer_key)
+SET is_correct = CASE
+  -- essay: skip, scored manually
+  WHEN q.question_type = 'essay' THEN NULL
+  -- multiple_answer: answer is comma-separated labels, must match answer_key exactly after sorting
+  WHEN q.question_type = 'multiple_answer' THEN
+    (array_to_string(ARRAY(SELECT unnest(string_to_array(sa.answer, ',')) ORDER BY 1), ',') =
+     array_to_string(ARRAY(SELECT unnest(string_to_array(q.answer_key, ',')) ORDER BY 1), ','))
+  -- all others: exact string match
+  ELSE (sa.answer = q.answer_key)
+END
 FROM cbt_questions q
 WHERE sa.question_id = q.id
+  AND q.question_type <> 'essay'
+  AND sa.manual_score IS NULL
   AND sa.participant_id IN (
     SELECT id FROM cbt_exam_participants WHERE session_id = $1
   );
@@ -79,10 +240,19 @@ FROM (
   SELECT
     sa.participant_id,
     ROUND(
-      SUM(CASE WHEN sa.is_correct THEN 1 ELSE 0 END)::numeric /
+      SUM(CASE
+        -- essay with manual score: treat as correct if manual_score >= passing threshold (stored as is_correct)
+        WHEN q.question_type = 'essay' AND sa.is_correct IS NOT NULL THEN
+          CASE WHEN sa.is_correct THEN 1 ELSE 0 END
+        -- auto-graded questions
+        WHEN q.question_type <> 'essay' AND sa.is_correct IS NOT NULL THEN
+          CASE WHEN sa.is_correct THEN 1 ELSE 0 END
+        ELSE 0
+      END)::numeric /
       NULLIF(COUNT(sa.id), 0) * 100, 2
     ) AS pct
   FROM cbt_student_answers sa
+  JOIN cbt_questions q ON q.id = sa.question_id
   WHERE sa.participant_id IN (
     SELECT ep2.id FROM cbt_exam_participants ep2 WHERE ep2.session_id = $1
   )
@@ -96,7 +266,7 @@ SELECT
   ep.student_id,
   s.nis, s.nama, s.gender,
   ep.submitted_at, ep.score,
-  COUNT(sa.id)::int               AS total_answers,
+  COUNT(sa.id)::int                                    AS total_answers,
   SUM(CASE WHEN sa.is_correct THEN 1 ELSE 0 END)::int AS correct_answers
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
@@ -107,11 +277,11 @@ ORDER BY ep.score DESC NULLS LAST, s.nama ASC;
 
 -- name: GetParticipantAnswers :many
 SELECT
-  sa.id, sa.participant_id, sa.question_id,
-  q.code AS question_code, q.question_text,
-  q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
-  q.answer_key,
-  sa.answer, sa.is_correct, sa.answered_at
+   sa.id, sa.participant_id, sa.question_id,
+   q.code AS question_code, q.question_text,
+   q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
+   q.answer_key,
+   sa.answer, sa.is_correct, sa.answered_at
 FROM cbt_student_answers sa
 JOIN cbt_questions q ON q.id = sa.question_id
 WHERE sa.participant_id = $1

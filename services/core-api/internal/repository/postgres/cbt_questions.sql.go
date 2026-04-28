@@ -13,17 +13,20 @@ import (
 
 const createCbtQuestion = `-- name: CreateCbtQuestion :one
 INSERT INTO cbt_questions (
-  id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e,
+  id, subject_id, code, question_text, question_type, options,
+  option_a, option_b, option_c, option_d, option_e,
   answer_key, explanation, difficulty, status
 )
-VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at
+VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options
 `
 
 type CreateCbtQuestionParams struct {
 	SubjectID    pgtype.UUID               `json:"subject_id"`
 	Code         string                    `json:"code"`
 	QuestionText string                    `json:"question_text"`
+	QuestionType string                    `json:"question_type"`
+	Options      []byte                    `json:"options"`
 	OptionA      string                    `json:"option_a"`
 	OptionB      string                    `json:"option_b"`
 	OptionC      string                    `json:"option_c"`
@@ -40,6 +43,8 @@ func (q *Queries) CreateCbtQuestion(ctx context.Context, arg CreateCbtQuestionPa
 		arg.SubjectID,
 		arg.Code,
 		arg.QuestionText,
+		arg.QuestionType,
+		arg.Options,
 		arg.OptionA,
 		arg.OptionB,
 		arg.OptionC,
@@ -67,6 +72,8 @@ func (q *Queries) CreateCbtQuestion(ctx context.Context, arg CreateCbtQuestionPa
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.QuestionType,
+		&i.Options,
 	)
 	return i, err
 }
@@ -81,20 +88,43 @@ func (q *Queries) DeleteCbtQuestion(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getCbtQuestion = `-- name: GetCbtQuestion :one
-SELECT id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e,
+SELECT id, subject_id, code, question_text, question_type, options,
+       option_a, option_b, option_c, option_d, option_e,
        answer_key, explanation, difficulty, status, created_at, updated_at
 FROM cbt_questions
 WHERE id = $1
 `
 
-func (q *Queries) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (CbtQuestion, error) {
+type GetCbtQuestionRow struct {
+	ID           pgtype.UUID               `json:"id"`
+	SubjectID    pgtype.UUID               `json:"subject_id"`
+	Code         string                    `json:"code"`
+	QuestionText string                    `json:"question_text"`
+	QuestionType string                    `json:"question_type"`
+	Options      []byte                    `json:"options"`
+	OptionA      string                    `json:"option_a"`
+	OptionB      string                    `json:"option_b"`
+	OptionC      string                    `json:"option_c"`
+	OptionD      string                    `json:"option_d"`
+	OptionE      string                    `json:"option_e"`
+	AnswerKey    string                    `json:"answer_key"`
+	Explanation  string                    `json:"explanation"`
+	Difficulty   CbtQuestionDifficultyEnum `json:"difficulty"`
+	Status       CbtQuestionStatusEnum     `json:"status"`
+	CreatedAt    pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz        `json:"updated_at"`
+}
+
+func (q *Queries) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (GetCbtQuestionRow, error) {
 	row := q.db.QueryRow(ctx, getCbtQuestion, id)
-	var i CbtQuestion
+	var i GetCbtQuestionRow
 	err := row.Scan(
 		&i.ID,
 		&i.SubjectID,
 		&i.Code,
 		&i.QuestionText,
+		&i.QuestionType,
+		&i.Options,
 		&i.OptionA,
 		&i.OptionB,
 		&i.OptionC,
@@ -112,7 +142,8 @@ func (q *Queries) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (CbtQuesti
 
 const listCbtQuestions = `-- name: ListCbtQuestions :many
 SELECT q.id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
-       q.code, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
+       q.code, q.question_text, q.question_type, q.options,
+       q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
        q.answer_key, q.explanation, q.difficulty, q.status, q.created_at, q.updated_at
 FROM cbt_questions q
 JOIN subjects s ON s.id = q.subject_id
@@ -126,6 +157,8 @@ type ListCbtQuestionsRow struct {
 	SubjectCode  string                    `json:"subject_code"`
 	Code         string                    `json:"code"`
 	QuestionText string                    `json:"question_text"`
+	QuestionType string                    `json:"question_type"`
+	Options      []byte                    `json:"options"`
 	OptionA      string                    `json:"option_a"`
 	OptionB      string                    `json:"option_b"`
 	OptionC      string                    `json:"option_c"`
@@ -155,6 +188,8 @@ func (q *Queries) ListCbtQuestions(ctx context.Context) ([]ListCbtQuestionsRow, 
 			&i.SubjectCode,
 			&i.Code,
 			&i.QuestionText,
+			&i.QuestionType,
+			&i.Options,
 			&i.OptionA,
 			&i.OptionB,
 			&i.OptionC,
@@ -166,6 +201,75 @@ func (q *Queries) ListCbtQuestions(ctx context.Context) ([]ListCbtQuestionsRow, 
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUngradedEssays = `-- name: ListUngradedEssays :many
+SELECT
+  sa.id AS answer_id,
+  sa.participant_id,
+  sa.question_id,
+  sa.answer,
+  sa.manual_score,
+  sa.graded_at,
+  q.code AS question_code,
+  q.question_text,
+  s.nis, s.nama,
+  COALESCE(r.room_name, '') AS room_name
+FROM cbt_student_answers sa
+JOIN cbt_questions q ON q.id = sa.question_id
+JOIN cbt_exam_participants ep ON ep.id = sa.participant_id
+JOIN students s ON s.id = ep.student_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.session_id = $1
+  AND q.question_type = 'essay'
+  AND sa.manual_score IS NULL
+ORDER BY q.code, s.nama
+`
+
+type ListUngradedEssaysRow struct {
+	AnswerID      pgtype.UUID        `json:"answer_id"`
+	ParticipantID pgtype.UUID        `json:"participant_id"`
+	QuestionID    pgtype.UUID        `json:"question_id"`
+	Answer        string             `json:"answer"`
+	ManualScore   pgtype.Numeric     `json:"manual_score"`
+	GradedAt      pgtype.Timestamptz `json:"graded_at"`
+	QuestionCode  string             `json:"question_code"`
+	QuestionText  string             `json:"question_text"`
+	Nis           string             `json:"nis"`
+	Nama          string             `json:"nama"`
+	RoomName      string             `json:"room_name"`
+}
+
+func (q *Queries) ListUngradedEssays(ctx context.Context, sessionID pgtype.UUID) ([]ListUngradedEssaysRow, error) {
+	rows, err := q.db.Query(ctx, listUngradedEssays, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUngradedEssaysRow{}
+	for rows.Next() {
+		var i ListUngradedEssaysRow
+		if err := rows.Scan(
+			&i.AnswerID,
+			&i.ParticipantID,
+			&i.QuestionID,
+			&i.Answer,
+			&i.ManualScore,
+			&i.GradedAt,
+			&i.QuestionCode,
+			&i.QuestionText,
+			&i.Nis,
+			&i.Nama,
+			&i.RoomName,
 		); err != nil {
 			return nil, err
 		}

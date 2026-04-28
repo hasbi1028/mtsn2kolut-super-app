@@ -28,18 +28,21 @@ func (h *CbtQuestion) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *CbtQuestion) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		SubjectID    string `json:"subject_id"`
-		Code         string `json:"code"`
-		QuestionText string `json:"question_text"`
-		OptionA      string `json:"option_a"`
-		OptionB      string `json:"option_b"`
-		OptionC      string `json:"option_c"`
-		OptionD      string `json:"option_d"`
-		OptionE      string `json:"option_e"`
-		AnswerKey    string `json:"answer_key"`
-		Explanation  string `json:"explanation"`
-		Difficulty   string `json:"difficulty"`
-		Status       string `json:"status"`
+		SubjectID    string            `json:"subject_id"`
+		Code         string            `json:"code"`
+		QuestionText string            `json:"question_text"`
+		QuestionType string            `json:"question_type"`
+		Options      []json.RawMessage `json:"options"`
+		// Legacy fields — still accepted for backward compat
+		OptionA     string `json:"option_a"`
+		OptionB     string `json:"option_b"`
+		OptionC     string `json:"option_c"`
+		OptionD     string `json:"option_d"`
+		OptionE     string `json:"option_e"`
+		AnswerKey   string `json:"answer_key"`
+		Explanation string `json:"explanation"`
+		Difficulty  string `json:"difficulty"`
+		Status      string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -50,10 +53,37 @@ func (h *CbtQuestion) Create(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "subject_id invalid")
 		return
 	}
+
+	questionType := body.QuestionType
+	if questionType == "" {
+		questionType = "multiple_choice"
+	}
+
+	// Serialise options array; default to empty JSON array
+	optionsJSON := []byte("[]")
+	if len(body.Options) > 0 {
+		optionsJSON, err = json.Marshal(body.Options)
+		if err != nil {
+			api.BadRequest(w, "options invalid json")
+			return
+		}
+	}
+
+	difficulty := db.CbtQuestionDifficultyEnum(body.Difficulty)
+	if difficulty == "" {
+		difficulty = db.CbtQuestionDifficultyEnumMedium
+	}
+	status := db.CbtQuestionStatusEnum(body.Status)
+	if status == "" {
+		status = db.CbtQuestionStatusEnumDraft
+	}
+
 	row, err := h.svc.Create(r.Context(), db.CreateCbtQuestionParams{
 		SubjectID:    subjectID,
 		Code:         body.Code,
 		QuestionText: body.QuestionText,
+		QuestionType: questionType,
+		Options:      optionsJSON,
 		OptionA:      body.OptionA,
 		OptionB:      body.OptionB,
 		OptionC:      body.OptionC,
@@ -61,8 +91,8 @@ func (h *CbtQuestion) Create(w http.ResponseWriter, r *http.Request) {
 		OptionE:      body.OptionE,
 		AnswerKey:    body.AnswerKey,
 		Explanation:  body.Explanation,
-		Difficulty:   db.CbtQuestionDifficultyEnum(body.Difficulty),
-		Status:       db.CbtQuestionStatusEnum(body.Status),
+		Difficulty:   difficulty,
+		Status:       status,
 	})
 	if err != nil {
 		api.Internal(w, err)

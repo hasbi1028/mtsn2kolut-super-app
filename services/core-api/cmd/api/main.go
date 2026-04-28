@@ -39,6 +39,8 @@ func main() {
 	questionSvc := service.NewCbtQuestion(q)
 	packageSvc := service.NewCbtPackage(pool)
 	sessionSvc := service.NewCbtSession(pool)
+	eventSvc := service.NewCbtEvent(pool)
+	examSvc := service.NewExam(pool)
 	schedSvc := service.NewSchedule(q)
 	settSvc := service.NewSetting(q)
 	schedulerSvc := service.NewScheduler(q, jobSvc, settSvc)
@@ -61,6 +63,8 @@ func main() {
 	questionH := handler.NewCbtQuestion(questionSvc)
 	packageH := handler.NewCbtPackage(packageSvc)
 	sessionH := handler.NewCbtSession(sessionSvc)
+	eventH := handler.NewCbtEvent(eventSvc)
+	examH := handler.NewExam(examSvc)
 	schedH := handler.NewSchedule(schedSvc)
 	settH := handler.NewSetting(settSvc)
 	schedulerH := handler.NewScheduler(schedulerSvc)
@@ -69,6 +73,8 @@ func main() {
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
 	internalKey := getEnv("INTERNAL_API_KEY", "")
+
+	examTokenMW := mw.ExamToken(examSvc.GetParticipantByToken)
 
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
@@ -80,6 +86,17 @@ func main() {
 
 	r.Post("/api/auth/login", authH.Login)
 	r.Post("/api/auth/refresh", authH.Refresh)
+
+	// Exam endpoints — authenticated via X-Exam-Token (no JWT needed)
+	r.Post("/api/exam/login", examH.Login)
+	r.Group(func(r chi.Router) {
+		r.Use(examTokenMW)
+		r.Get("/api/exam/status", examH.Status)
+		r.Post("/api/exam/heartbeat", examH.Heartbeat)
+		r.Post("/api/exam/event", examH.RecordEvent)
+		r.Post("/api/exam/answer", examH.SubmitAnswer)
+		r.Post("/api/exam/submit", examH.Submit)
+	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(mw.InternalKeyOrJWT(internalKey, jwtSecret, authSvc.CurrentAuthVersion))
@@ -109,17 +126,48 @@ func main() {
 		r.Post("/api/cbt/packages", packageH.Create)
 		r.Delete("/api/cbt/packages/{id}", packageH.Delete)
 
+		// CBT Events (kegiatan ujian)
+		r.Get("/api/cbt/events", eventH.List)
+		r.Post("/api/cbt/events", eventH.Create)
+		r.Get("/api/cbt/events/{id}", eventH.Get)
+		r.Put("/api/cbt/events/{id}", eventH.Update)
+		r.Patch("/api/cbt/events/{id}/status", eventH.UpdateStatus)
+		r.Delete("/api/cbt/events/{id}", eventH.Delete)
+
+		// CBT Sessions
 		r.Get("/api/cbt/sessions", sessionH.List)
 		r.Post("/api/cbt/sessions", sessionH.Create)
 		r.Get("/api/cbt/sessions/{id}", sessionH.Get)
 		r.Patch("/api/cbt/sessions/{id}/status", sessionH.UpdateStatus)
 		r.Delete("/api/cbt/sessions/{id}", sessionH.Delete)
+
+		// Participants & Enrollment
 		r.Get("/api/cbt/sessions/{id}/participants", sessionH.ListParticipants)
 		r.Post("/api/cbt/sessions/{id}/enroll", sessionH.EnrollClass)
+		r.Post("/api/cbt/sessions/{id}/enroll-grade", sessionH.EnrollGrade)
+		r.Post("/api/cbt/sessions/{id}/enroll-school", sessionH.EnrollSchool)
+		r.Post("/api/cbt/sessions/{id}/generate-tokens", sessionH.GenerateTokens)
+		r.Post("/api/cbt/sessions/{id}/participants/{pid}/regenerate-token", sessionH.RegenerateToken)
+
+		// Rooms & Shuffle
+		r.Get("/api/cbt/sessions/{id}/rooms", sessionH.ListRooms)
+		r.Post("/api/cbt/sessions/{id}/rooms", sessionH.CreateRoom)
+		r.Delete("/api/cbt/sessions/{id}/rooms/{rid}", sessionH.DeleteRoom)
+		r.Post("/api/cbt/sessions/{id}/shuffle-rooms", sessionH.ShuffleRooms)
+
+		// Scoring & Results
 		r.Post("/api/cbt/sessions/{id}/score", sessionH.ScoreSession)
 		r.Get("/api/cbt/sessions/{id}/results", sessionH.GetResults)
 		r.Post("/api/cbt/sessions/{id}/participants/{pid}/answer", sessionH.RecordAnswer)
 		r.Get("/api/cbt/sessions/{id}/participants/{pid}/answers", sessionH.GetParticipantAnswers)
+
+		// Proctoring
+		r.Get("/api/cbt/sessions/{id}/proctoring", sessionH.GetProctoringStatus)
+		r.Post("/api/cbt/sessions/{id}/participants/{pid}/flag", sessionH.FlagParticipant)
+
+		// Essay Grading
+		r.Get("/api/cbt/sessions/{id}/ungraded-essays", sessionH.ListUngradedEssays)
+		r.Post("/api/cbt/sessions/{id}/answers/{aid}/grade-essay", sessionH.GradeEssay)
 
 		r.Get("/api/jobs", jobH.List)
 		r.Post("/api/jobs", jobH.Create)

@@ -63,3 +63,8 @@ func Unauthorized(w http.ResponseWriter)               { Err(w, http.StatusUnaut
 func Forbidden(w http.ResponseWriter)                  { Err(w, http.StatusForbidden, "forbidden") }
 func NotFound(w http.ResponseWriter)                   { Err(w, http.StatusNotFound, "not found") }
 func Internal(w http.ResponseWriter, err error)        { Err(w, http.StatusInternalServerError, err.Error()) }
+
+// TooManyRequests responds with 429 Too Many Requests status.
+func TooManyRequests(w http.ResponseWriter) {
+	Err(w, http.StatusTooManyRequests, "too many requests")
+}

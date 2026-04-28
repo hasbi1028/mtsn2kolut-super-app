@@ -11,15 +11,43 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const assignParticipantRoom = `-- name: AssignParticipantRoom :exec
+UPDATE cbt_exam_participants
+SET room_id = $2
+WHERE id = $1
+`
+
+type AssignParticipantRoomParams struct {
+	ID     pgtype.UUID `json:"id"`
+	RoomID pgtype.UUID `json:"room_id"`
+}
+
+func (q *Queries) AssignParticipantRoom(ctx context.Context, arg AssignParticipantRoomParams) error {
+	_, err := q.db.Exec(ctx, assignParticipantRoom, arg.ID, arg.RoomID)
+	return err
+}
+
+const clearParticipantRooms = `-- name: ClearParticipantRooms :exec
+UPDATE cbt_exam_participants
+SET room_id = NULL
+WHERE session_id = $1
+`
+
+func (q *Queries) ClearParticipantRooms(ctx context.Context, sessionID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, clearParticipantRooms, sessionID)
+	return err
+}
+
 const createCbtExamSession = `-- name: CreateCbtExamSession :one
-INSERT INTO cbt_exam_sessions (id, package_id, class_id, title, scheduled_start, scheduled_end, status)
-VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
-RETURNING id, package_id, class_id, title, scheduled_start, scheduled_end, status, created_at, updated_at
+INSERT INTO cbt_exam_sessions (package_id, class_id, event_id, title, scheduled_start, scheduled_end, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, package_id, class_id, title, scheduled_start, scheduled_end, status, created_at, updated_at, event_id
 `
 
 type CreateCbtExamSessionParams struct {
 	PackageID      pgtype.UUID          `json:"package_id"`
 	ClassID        pgtype.UUID          `json:"class_id"`
+	EventID        pgtype.UUID          `json:"event_id"`
 	Title          string               `json:"title"`
 	ScheduledStart pgtype.Timestamptz   `json:"scheduled_start"`
 	ScheduledEnd   pgtype.Timestamptz   `json:"scheduled_end"`
@@ -30,6 +58,7 @@ func (q *Queries) CreateCbtExamSession(ctx context.Context, arg CreateCbtExamSes
 	row := q.db.QueryRow(ctx, createCbtExamSession,
 		arg.PackageID,
 		arg.ClassID,
+		arg.EventID,
 		arg.Title,
 		arg.ScheduledStart,
 		arg.ScheduledEnd,
@@ -46,6 +75,7 @@ func (q *Queries) CreateCbtExamSession(ctx context.Context, arg CreateCbtExamSes
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EventID,
 	)
 	return i, err
 }
@@ -60,8 +90,8 @@ func (q *Queries) DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) erro
 }
 
 const enrollClassToSession = `-- name: EnrollClassToSession :exec
-INSERT INTO cbt_exam_participants (session_id, student_id)
-SELECT $1, s.id
+INSERT INTO cbt_exam_participants (session_id, student_id, token)
+SELECT $1, s.id, encode(gen_random_bytes(4), 'hex')
 FROM students s
 WHERE s.class_id = $2 AND s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING
@@ -77,15 +107,59 @@ func (q *Queries) EnrollClassToSession(ctx context.Context, arg EnrollClassToSes
 	return err
 }
 
+const enrollGradeToSession = `-- name: EnrollGradeToSession :exec
+INSERT INTO cbt_exam_participants (session_id, student_id, token)
+SELECT $1, s.id, encode(gen_random_bytes(4), 'hex')
+FROM students s
+JOIN school_classes c ON c.id = s.class_id
+WHERE c.level = $2 AND s.is_active = TRUE
+ON CONFLICT (session_id, student_id) DO NOTHING
+`
+
+type EnrollGradeToSessionParams struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	Level     string      `json:"level"`
+}
+
+func (q *Queries) EnrollGradeToSession(ctx context.Context, arg EnrollGradeToSessionParams) error {
+	_, err := q.db.Exec(ctx, enrollGradeToSession, arg.SessionID, arg.Level)
+	return err
+}
+
+const enrollSchoolToSession = `-- name: EnrollSchoolToSession :exec
+INSERT INTO cbt_exam_participants (session_id, student_id, token)
+SELECT $1, s.id, encode(gen_random_bytes(4), 'hex')
+FROM students s
+WHERE s.is_active = TRUE
+ON CONFLICT (session_id, student_id) DO NOTHING
+`
+
+func (q *Queries) EnrollSchoolToSession(ctx context.Context, sessionID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, enrollSchoolToSession, sessionID)
+	return err
+}
+
+const generateTokensForSession = `-- name: GenerateTokensForSession :exec
+UPDATE cbt_exam_participants
+SET token = encode(gen_random_bytes(4), 'hex')
+WHERE session_id = $1 AND (token = '' OR token IS NULL)
+`
+
+func (q *Queries) GenerateTokensForSession(ctx context.Context, sessionID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, generateTokensForSession, sessionID)
+	return err
+}
+
 const getCbtExamSession = `-- name: GetCbtExamSession :one
 SELECT
   s.id, s.package_id, p.title AS package_title, p.duration_minutes,
-  s.class_id, c.name AS class_name, c.code AS class_code,
+  s.class_id, s.event_id,
+  COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.title, s.scheduled_start, s.scheduled_end, s.status,
   s.created_at, s.updated_at
 FROM cbt_exam_sessions s
 JOIN cbt_packages p ON p.id = s.package_id
-JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN school_classes c ON c.id = s.class_id
 WHERE s.id = $1
 `
 
@@ -95,6 +169,7 @@ type GetCbtExamSessionRow struct {
 	PackageTitle    string               `json:"package_title"`
 	DurationMinutes int32                `json:"duration_minutes"`
 	ClassID         pgtype.UUID          `json:"class_id"`
+	EventID         pgtype.UUID          `json:"event_id"`
 	ClassName       string               `json:"class_name"`
 	ClassCode       string               `json:"class_code"`
 	Title           string               `json:"title"`
@@ -114,6 +189,7 @@ func (q *Queries) GetCbtExamSession(ctx context.Context, id pgtype.UUID) (GetCbt
 		&i.PackageTitle,
 		&i.DurationMinutes,
 		&i.ClassID,
+		&i.EventID,
 		&i.ClassName,
 		&i.ClassCode,
 		&i.Title,
@@ -128,11 +204,11 @@ func (q *Queries) GetCbtExamSession(ctx context.Context, id pgtype.UUID) (GetCbt
 
 const getParticipantAnswers = `-- name: GetParticipantAnswers :many
 SELECT
-  sa.id, sa.participant_id, sa.question_id,
-  q.code AS question_code, q.question_text,
-  q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
-  q.answer_key,
-  sa.answer, sa.is_correct, sa.answered_at
+   sa.id, sa.participant_id, sa.question_id,
+   q.code AS question_code, q.question_text,
+   q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
+   q.answer_key,
+   sa.answer, sa.is_correct, sa.answered_at
 FROM cbt_student_answers sa
 JOIN cbt_questions q ON q.id = sa.question_id
 WHERE sa.participant_id = $1
@@ -191,13 +267,160 @@ func (q *Queries) GetParticipantAnswers(ctx context.Context, participantID pgtyp
 	return items, nil
 }
 
+const getParticipantByToken = `-- name: GetParticipantByToken :one
+SELECT
+  ep.id, ep.session_id, ep.student_id,
+  ep.token, ep.room_id, ep.device_fingerprint, ep.question_order,
+  ep.joined_at, ep.submitted_at, ep.score,
+  ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.last_heartbeat,
+  s.nis, s.nama, s.gender,
+  cs.status AS session_status,
+  cs.scheduled_start, cs.scheduled_end,
+  cs.package_id,
+  p.duration_minutes
+FROM cbt_exam_participants ep
+JOIN students s ON s.id = ep.student_id
+JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
+JOIN cbt_packages p ON p.id = cs.package_id
+WHERE ep.token = $1
+`
+
+type GetParticipantByTokenRow struct {
+	ID                pgtype.UUID          `json:"id"`
+	SessionID         pgtype.UUID          `json:"session_id"`
+	StudentID         pgtype.UUID          `json:"student_id"`
+	Token             string               `json:"token"`
+	RoomID            pgtype.UUID          `json:"room_id"`
+	DeviceFingerprint pgtype.Text          `json:"device_fingerprint"`
+	QuestionOrder     []byte               `json:"question_order"`
+	JoinedAt          pgtype.Timestamptz   `json:"joined_at"`
+	SubmittedAt       pgtype.Timestamptz   `json:"submitted_at"`
+	Score             pgtype.Numeric       `json:"score"`
+	AppSwitchCount    int32                `json:"app_switch_count"`
+	ScreenshotAttempt int32                `json:"screenshot_attempt"`
+	SuspiciousFlag    bool                 `json:"suspicious_flag"`
+	LastHeartbeat     pgtype.Timestamptz   `json:"last_heartbeat"`
+	Nis               string               `json:"nis"`
+	Nama              string               `json:"nama"`
+	Gender            GenderEnum           `json:"gender"`
+	SessionStatus     CbtSessionStatusEnum `json:"session_status"`
+	ScheduledStart    pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd      pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageID         pgtype.UUID          `json:"package_id"`
+	DurationMinutes   int32                `json:"duration_minutes"`
+}
+
+func (q *Queries) GetParticipantByToken(ctx context.Context, token string) (GetParticipantByTokenRow, error) {
+	row := q.db.QueryRow(ctx, getParticipantByToken, token)
+	var i GetParticipantByTokenRow
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.StudentID,
+		&i.Token,
+		&i.RoomID,
+		&i.DeviceFingerprint,
+		&i.QuestionOrder,
+		&i.JoinedAt,
+		&i.SubmittedAt,
+		&i.Score,
+		&i.AppSwitchCount,
+		&i.ScreenshotAttempt,
+		&i.SuspiciousFlag,
+		&i.LastHeartbeat,
+		&i.Nis,
+		&i.Nama,
+		&i.Gender,
+		&i.SessionStatus,
+		&i.ScheduledStart,
+		&i.ScheduledEnd,
+		&i.PackageID,
+		&i.DurationMinutes,
+	)
+	return i, err
+}
+
+const getSessionProctoringStatus = `-- name: GetSessionProctoringStatus :many
+SELECT
+  ep.id AS participant_id,
+  ep.student_id,
+  s.nis, s.nama,
+  ep.token,
+  COALESCE(r.room_name, '') AS room_name,
+  ep.submitted_at,
+  ep.last_heartbeat,
+  ep.app_switch_count,
+  ep.screenshot_attempt,
+  ep.suspicious_flag,
+  COUNT(sa.id)::int AS answered_count,
+  ep.score
+FROM cbt_exam_participants ep
+JOIN students s ON s.id = ep.student_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id
+WHERE ep.session_id = $1
+GROUP BY ep.id, s.nis, s.nama, r.room_name
+ORDER BY s.nama ASC
+`
+
+type GetSessionProctoringStatusRow struct {
+	ParticipantID     pgtype.UUID        `json:"participant_id"`
+	StudentID         pgtype.UUID        `json:"student_id"`
+	Nis               string             `json:"nis"`
+	Nama              string             `json:"nama"`
+	Token             string             `json:"token"`
+	RoomName          string             `json:"room_name"`
+	SubmittedAt       pgtype.Timestamptz `json:"submitted_at"`
+	LastHeartbeat     pgtype.Timestamptz `json:"last_heartbeat"`
+	AppSwitchCount    int32              `json:"app_switch_count"`
+	ScreenshotAttempt int32              `json:"screenshot_attempt"`
+	SuspiciousFlag    bool               `json:"suspicious_flag"`
+	AnsweredCount     int32              `json:"answered_count"`
+	Score             pgtype.Numeric     `json:"score"`
+}
+
+func (q *Queries) GetSessionProctoringStatus(ctx context.Context, sessionID pgtype.UUID) ([]GetSessionProctoringStatusRow, error) {
+	rows, err := q.db.Query(ctx, getSessionProctoringStatus, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetSessionProctoringStatusRow{}
+	for rows.Next() {
+		var i GetSessionProctoringStatusRow
+		if err := rows.Scan(
+			&i.ParticipantID,
+			&i.StudentID,
+			&i.Nis,
+			&i.Nama,
+			&i.Token,
+			&i.RoomName,
+			&i.SubmittedAt,
+			&i.LastHeartbeat,
+			&i.AppSwitchCount,
+			&i.ScreenshotAttempt,
+			&i.SuspiciousFlag,
+			&i.AnsweredCount,
+			&i.Score,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSessionResults = `-- name: GetSessionResults :many
 SELECT
   ep.id AS participant_id,
   ep.student_id,
   s.nis, s.nama, s.gender,
   ep.submitted_at, ep.score,
-  COUNT(sa.id)::int               AS total_answers,
+  COUNT(sa.id)::int                                    AS total_answers,
   SUM(CASE WHEN sa.is_correct THEN 1 ELSE 0 END)::int AS correct_answers
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
@@ -249,30 +472,97 @@ func (q *Queries) GetSessionResults(ctx context.Context, sessionID pgtype.UUID) 
 	return items, nil
 }
 
+const gradeStudentEssay = `-- name: GradeStudentEssay :exec
+UPDATE cbt_student_answers
+SET manual_score = $2,
+    graded_by    = $3,
+    graded_at    = NOW(),
+    is_correct   = ($2 > 0)
+WHERE id = $1
+`
+
+type GradeStudentEssayParams struct {
+	ID          pgtype.UUID    `json:"id"`
+	ManualScore pgtype.Numeric `json:"manual_score"`
+	GradedBy    pgtype.Text    `json:"graded_by"`
+}
+
+func (q *Queries) GradeStudentEssay(ctx context.Context, arg GradeStudentEssayParams) error {
+	_, err := q.db.Exec(ctx, gradeStudentEssay, arg.ID, arg.ManualScore, arg.GradedBy)
+	return err
+}
+
+const incrementParticipantAppSwitch = `-- name: IncrementParticipantAppSwitch :exec
+UPDATE cbt_exam_participants
+SET app_switch_count = app_switch_count + 1
+WHERE id = $1
+`
+
+func (q *Queries) IncrementParticipantAppSwitch(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, incrementParticipantAppSwitch, id)
+	return err
+}
+
+const incrementParticipantScreenshot = `-- name: IncrementParticipantScreenshot :exec
+UPDATE cbt_exam_participants
+SET screenshot_attempt = screenshot_attempt + 1
+WHERE id = $1
+`
+
+func (q *Queries) IncrementParticipantScreenshot(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, incrementParticipantScreenshot, id)
+	return err
+}
+
+const insertParticipantEvent = `-- name: InsertParticipantEvent :exec
+INSERT INTO cbt_participant_events (participant_id, event_type, event_data)
+VALUES ($1, $2, $3)
+`
+
+type InsertParticipantEventParams struct {
+	ParticipantID pgtype.UUID `json:"participant_id"`
+	EventType     string      `json:"event_type"`
+	EventData     []byte      `json:"event_data"`
+}
+
+func (q *Queries) InsertParticipantEvent(ctx context.Context, arg InsertParticipantEventParams) error {
+	_, err := q.db.Exec(ctx, insertParticipantEvent, arg.ParticipantID, arg.EventType, arg.EventData)
+	return err
+}
+
 const listCbtExamParticipants = `-- name: ListCbtExamParticipants :many
 SELECT
   ep.id, ep.session_id, ep.student_id,
   s.nis, s.nama, s.gender,
-  ep.token, ep.joined_at, ep.submitted_at, ep.score,
-  ep.created_at
+  ep.token, ep.room_id, ep.joined_at, ep.submitted_at, ep.score,
+  ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.last_heartbeat, ep.created_at,
+  COALESCE(r.room_name, '') AS room_name
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 WHERE ep.session_id = $1
 ORDER BY s.nama ASC
 `
 
 type ListCbtExamParticipantsRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	SessionID   pgtype.UUID        `json:"session_id"`
-	StudentID   pgtype.UUID        `json:"student_id"`
-	Nis         string             `json:"nis"`
-	Nama        string             `json:"nama"`
-	Gender      GenderEnum         `json:"gender"`
-	Token       string             `json:"token"`
-	JoinedAt    pgtype.Timestamptz `json:"joined_at"`
-	SubmittedAt pgtype.Timestamptz `json:"submitted_at"`
-	Score       pgtype.Numeric     `json:"score"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ID                pgtype.UUID        `json:"id"`
+	SessionID         pgtype.UUID        `json:"session_id"`
+	StudentID         pgtype.UUID        `json:"student_id"`
+	Nis               string             `json:"nis"`
+	Nama              string             `json:"nama"`
+	Gender            GenderEnum         `json:"gender"`
+	Token             string             `json:"token"`
+	RoomID            pgtype.UUID        `json:"room_id"`
+	JoinedAt          pgtype.Timestamptz `json:"joined_at"`
+	SubmittedAt       pgtype.Timestamptz `json:"submitted_at"`
+	Score             pgtype.Numeric     `json:"score"`
+	AppSwitchCount    int32              `json:"app_switch_count"`
+	ScreenshotAttempt int32              `json:"screenshot_attempt"`
+	SuspiciousFlag    bool               `json:"suspicious_flag"`
+	LastHeartbeat     pgtype.Timestamptz `json:"last_heartbeat"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	RoomName          string             `json:"room_name"`
 }
 
 func (q *Queries) ListCbtExamParticipants(ctx context.Context, sessionID pgtype.UUID) ([]ListCbtExamParticipantsRow, error) {
@@ -292,10 +582,16 @@ func (q *Queries) ListCbtExamParticipants(ctx context.Context, sessionID pgtype.
 			&i.Nama,
 			&i.Gender,
 			&i.Token,
+			&i.RoomID,
 			&i.JoinedAt,
 			&i.SubmittedAt,
 			&i.Score,
+			&i.AppSwitchCount,
+			&i.ScreenshotAttempt,
+			&i.SuspiciousFlag,
+			&i.LastHeartbeat,
 			&i.CreatedAt,
+			&i.RoomName,
 		); err != nil {
 			return nil, err
 		}
@@ -310,13 +606,14 @@ func (q *Queries) ListCbtExamParticipants(ctx context.Context, sessionID pgtype.
 const listCbtExamSessions = `-- name: ListCbtExamSessions :many
 SELECT
   s.id, s.package_id, p.title AS package_title,
-  s.class_id, c.name AS class_name, c.code AS class_code,
+  s.class_id, s.event_id,
+  COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.title, s.scheduled_start, s.scheduled_end, s.status,
   s.created_at, s.updated_at,
   COUNT(ep.id)::int AS participant_count
 FROM cbt_exam_sessions s
 JOIN cbt_packages p ON p.id = s.package_id
-JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN school_classes c ON c.id = s.class_id
 LEFT JOIN cbt_exam_participants ep ON ep.session_id = s.id
 GROUP BY s.id, p.title, c.name, c.code
 ORDER BY s.scheduled_start DESC
@@ -327,6 +624,7 @@ type ListCbtExamSessionsRow struct {
 	PackageID        pgtype.UUID          `json:"package_id"`
 	PackageTitle     string               `json:"package_title"`
 	ClassID          pgtype.UUID          `json:"class_id"`
+	EventID          pgtype.UUID          `json:"event_id"`
 	ClassName        string               `json:"class_name"`
 	ClassCode        string               `json:"class_code"`
 	Title            string               `json:"title"`
@@ -352,6 +650,7 @@ func (q *Queries) ListCbtExamSessions(ctx context.Context) ([]ListCbtExamSession
 			&i.PackageID,
 			&i.PackageTitle,
 			&i.ClassID,
+			&i.EventID,
 			&i.ClassName,
 			&i.ClassCode,
 			&i.Title,
@@ -372,11 +671,162 @@ func (q *Queries) ListCbtExamSessions(ctx context.Context) ([]ListCbtExamSession
 	return items, nil
 }
 
+const listParticipantEvents = `-- name: ListParticipantEvents :many
+SELECT id, participant_id, event_type, event_data, created_at
+FROM cbt_participant_events
+WHERE participant_id = $1
+ORDER BY created_at DESC
+LIMIT 100
+`
+
+func (q *Queries) ListParticipantEvents(ctx context.Context, participantID pgtype.UUID) ([]CbtParticipantEvent, error) {
+	rows, err := q.db.Query(ctx, listParticipantEvents, participantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CbtParticipantEvent{}
+	for rows.Next() {
+		var i CbtParticipantEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParticipantID,
+			&i.EventType,
+			&i.EventData,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listParticipantsByRoom = `-- name: ListParticipantsByRoom :many
+SELECT
+  ep.id, ep.student_id, ep.token, ep.room_id,
+  s.nis, s.nama, s.gender,
+  COALESCE(r.room_name, '') AS room_name
+FROM cbt_exam_participants ep
+JOIN students s ON s.id = ep.student_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.session_id = $1
+ORDER BY r.room_name ASC NULLS LAST, s.nama ASC
+`
+
+type ListParticipantsByRoomRow struct {
+	ID        pgtype.UUID `json:"id"`
+	StudentID pgtype.UUID `json:"student_id"`
+	Token     string      `json:"token"`
+	RoomID    pgtype.UUID `json:"room_id"`
+	Nis       string      `json:"nis"`
+	Nama      string      `json:"nama"`
+	Gender    GenderEnum  `json:"gender"`
+	RoomName  string      `json:"room_name"`
+}
+
+func (q *Queries) ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]ListParticipantsByRoomRow, error) {
+	rows, err := q.db.Query(ctx, listParticipantsByRoom, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListParticipantsByRoomRow{}
+	for rows.Next() {
+		var i ListParticipantsByRoomRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.Token,
+			&i.RoomID,
+			&i.Nis,
+			&i.Nama,
+			&i.Gender,
+			&i.RoomName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const regenerateParticipantToken = `-- name: RegenerateParticipantToken :one
+UPDATE cbt_exam_participants
+SET token = encode(gen_random_bytes(4), 'hex')
+WHERE id = $1
+RETURNING id, token
+`
+
+type RegenerateParticipantTokenRow struct {
+	ID    pgtype.UUID `json:"id"`
+	Token string      `json:"token"`
+}
+
+func (q *Queries) RegenerateParticipantToken(ctx context.Context, id pgtype.UUID) (RegenerateParticipantTokenRow, error) {
+	row := q.db.QueryRow(ctx, regenerateParticipantToken, id)
+	var i RegenerateParticipantTokenRow
+	err := row.Scan(&i.ID, &i.Token)
+	return i, err
+}
+
+const setParticipantSuspiciousFlag = `-- name: SetParticipantSuspiciousFlag :exec
+UPDATE cbt_exam_participants
+SET suspicious_flag = $2
+WHERE id = $1
+`
+
+type SetParticipantSuspiciousFlagParams struct {
+	ID             pgtype.UUID `json:"id"`
+	SuspiciousFlag bool        `json:"suspicious_flag"`
+}
+
+func (q *Queries) SetParticipantSuspiciousFlag(ctx context.Context, arg SetParticipantSuspiciousFlagParams) error {
+	_, err := q.db.Exec(ctx, setParticipantSuspiciousFlag, arg.ID, arg.SuspiciousFlag)
+	return err
+}
+
+const submitParticipantExam = `-- name: SubmitParticipantExam :one
+UPDATE cbt_exam_participants
+SET submitted_at = NOW()
+WHERE id = $1 AND submitted_at IS NULL
+RETURNING id, submitted_at
+`
+
+type SubmitParticipantExamRow struct {
+	ID          pgtype.UUID        `json:"id"`
+	SubmittedAt pgtype.Timestamptz `json:"submitted_at"`
+}
+
+func (q *Queries) SubmitParticipantExam(ctx context.Context, id pgtype.UUID) (SubmitParticipantExamRow, error) {
+	row := q.db.QueryRow(ctx, submitParticipantExam, id)
+	var i SubmitParticipantExamRow
+	err := row.Scan(&i.ID, &i.SubmittedAt)
+	return i, err
+}
+
 const updateAnswerCorrectness = `-- name: UpdateAnswerCorrectness :exec
 UPDATE cbt_student_answers sa
-SET is_correct = (sa.answer = q.answer_key)
+SET is_correct = CASE
+  -- essay: skip, scored manually
+  WHEN q.question_type = 'essay' THEN NULL
+  -- multiple_answer: answer is comma-separated labels, must match answer_key exactly after sorting
+  WHEN q.question_type = 'multiple_answer' THEN
+    (array_to_string(ARRAY(SELECT unnest(string_to_array(sa.answer, ',')) ORDER BY 1), ',') =
+     array_to_string(ARRAY(SELECT unnest(string_to_array(q.answer_key, ',')) ORDER BY 1), ','))
+  -- all others: exact string match
+  ELSE (sa.answer = q.answer_key)
+END
 FROM cbt_questions q
 WHERE sa.question_id = q.id
+  AND q.question_type <> 'essay'
+  AND sa.manual_score IS NULL
   AND sa.participant_id IN (
     SELECT id FROM cbt_exam_participants WHERE session_id = $1
   )
@@ -391,7 +841,7 @@ const updateCbtExamSessionStatus = `-- name: UpdateCbtExamSessionStatus :one
 UPDATE cbt_exam_sessions
 SET status = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, package_id, class_id, title, scheduled_start, scheduled_end, status, created_at, updated_at
+RETURNING id, package_id, class_id, title, scheduled_start, scheduled_end, status, created_at, updated_at, event_id
 `
 
 type UpdateCbtExamSessionStatusParams struct {
@@ -412,8 +862,56 @@ func (q *Queries) UpdateCbtExamSessionStatus(ctx context.Context, arg UpdateCbtE
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EventID,
 	)
 	return i, err
+}
+
+const updateParticipantHeartbeat = `-- name: UpdateParticipantHeartbeat :exec
+UPDATE cbt_exam_participants
+SET last_heartbeat = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) UpdateParticipantHeartbeat(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, updateParticipantHeartbeat, id)
+	return err
+}
+
+const updateParticipantLogin = `-- name: UpdateParticipantLogin :exec
+UPDATE cbt_exam_participants
+SET device_fingerprint = $2,
+    login_ip           = $3,
+    joined_at          = COALESCE(joined_at, NOW()),
+    last_heartbeat     = NOW()
+WHERE id = $1
+`
+
+type UpdateParticipantLoginParams struct {
+	ID                pgtype.UUID `json:"id"`
+	DeviceFingerprint pgtype.Text `json:"device_fingerprint"`
+	LoginIp           pgtype.Text `json:"login_ip"`
+}
+
+func (q *Queries) UpdateParticipantLogin(ctx context.Context, arg UpdateParticipantLoginParams) error {
+	_, err := q.db.Exec(ctx, updateParticipantLogin, arg.ID, arg.DeviceFingerprint, arg.LoginIp)
+	return err
+}
+
+const updateParticipantQuestionOrder = `-- name: UpdateParticipantQuestionOrder :exec
+UPDATE cbt_exam_participants
+SET question_order = $2
+WHERE id = $1
+`
+
+type UpdateParticipantQuestionOrderParams struct {
+	ID            pgtype.UUID `json:"id"`
+	QuestionOrder []byte      `json:"question_order"`
+}
+
+func (q *Queries) UpdateParticipantQuestionOrder(ctx context.Context, arg UpdateParticipantQuestionOrderParams) error {
+	_, err := q.db.Exec(ctx, updateParticipantQuestionOrder, arg.ID, arg.QuestionOrder)
+	return err
 }
 
 const updateParticipantScores = `-- name: UpdateParticipantScores :exec
@@ -425,10 +923,19 @@ FROM (
   SELECT
     sa.participant_id,
     ROUND(
-      SUM(CASE WHEN sa.is_correct THEN 1 ELSE 0 END)::numeric /
+      SUM(CASE
+        -- essay with manual score: treat as correct if manual_score >= passing threshold (stored as is_correct)
+        WHEN q.question_type = 'essay' AND sa.is_correct IS NOT NULL THEN
+          CASE WHEN sa.is_correct THEN 1 ELSE 0 END
+        -- auto-graded questions
+        WHEN q.question_type <> 'essay' AND sa.is_correct IS NOT NULL THEN
+          CASE WHEN sa.is_correct THEN 1 ELSE 0 END
+        ELSE 0
+      END)::numeric /
       NULLIF(COUNT(sa.id), 0) * 100, 2
     ) AS pct
   FROM cbt_student_answers sa
+  JOIN cbt_questions q ON q.id = sa.question_id
   WHERE sa.participant_id IN (
     SELECT ep2.id FROM cbt_exam_participants ep2 WHERE ep2.session_id = $1
   )

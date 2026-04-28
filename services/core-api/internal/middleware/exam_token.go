@@ -1,0 +1,46 @@
+package middleware
+
+import (
+	"context"
+	"net/http"
+
+	"mtsn2kolut-super-app/backend/internal/api"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
+)
+
+type examContextKey string
+
+const ExamParticipantKey examContextKey = "exam_participant"
+
+type ParticipantLookup func(ctx context.Context, token string) (db.GetParticipantByTokenRow, error)
+
+// ExamToken validates the X-Exam-Token header and injects the participant into context.
+// It rejects if the session is not active or the exam has already been submitted.
+func ExamToken(lookup ParticipantLookup) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := r.Header.Get("X-Exam-Token")
+			if token == "" {
+				api.Unauthorized(w)
+				return
+			}
+			p, err := lookup(r.Context(), token)
+			if err != nil {
+				api.Unauthorized(w)
+				return
+			}
+			if p.SessionStatus != db.CbtSessionStatusEnumActive {
+				api.Forbidden(w)
+				return
+			}
+			ctx := context.WithValue(r.Context(), ExamParticipantKey, p)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// ParticipantFromContext retrieves the exam participant injected by ExamToken middleware.
+func ParticipantFromContext(ctx context.Context) (db.GetParticipantByTokenRow, bool) {
+	p, ok := ctx.Value(ExamParticipantKey).(db.GetParticipantByTokenRow)
+	return p, ok
+}

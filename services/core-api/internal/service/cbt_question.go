@@ -17,7 +17,7 @@ func (s *CbtQuestion) List(ctx context.Context) ([]db.ListCbtQuestionsRow, error
 	return s.q.ListCbtQuestions(ctx)
 }
 
-func (s *CbtQuestion) Get(ctx context.Context, id pgtype.UUID) (db.CbtQuestion, error) {
+func (s *CbtQuestion) Get(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error) {
 	return s.q.GetCbtQuestion(ctx, id)
 }
 

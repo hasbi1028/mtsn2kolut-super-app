@@ -27,3 +27,12 @@ SELECT pq.package_id, pq.question_id, pq.position, pq.points,
 FROM cbt_package_questions pq
 JOIN cbt_questions q ON q.id = pq.question_id
 ORDER BY pq.package_id, pq.position ASC;
+
+-- name: GetExamQuestions :many
+SELECT
+  q.id, q.code, q.question_text, q.question_type, q.options,
+  q.option_a, q.option_b, q.option_c, q.option_d, q.option_e
+FROM cbt_package_questions pq
+JOIN cbt_questions q ON q.id = pq.question_id
+WHERE pq.package_id = $1 AND q.status = 'published'
+ORDER BY pq.position ASC;
