@@ -2,6 +2,9 @@ type JwtPayload = {
 	exp?: number;
 	type?: string;
 	sub?: string;
+	uid?: string;
+	role?: 'admin' | 'guru';
+	eid?: string;
 };
 
 function decodePayload(token: string): JwtPayload | null {
@@ -28,4 +31,16 @@ export function hasRefreshToken(token: string | undefined): boolean {
 	if (!token) return false;
 	const payload = decodePayload(token);
 	return !!payload && payload.type === 'refresh' && !!payload.exp && Date.now() < payload.exp * 1000;
+}
+
+export function getUserFromToken(token: string | undefined) {
+	if (!token) return null;
+	const p = decodePayload(token);
+	if (!p || p.type !== 'access') return null;
+	return {
+		id: p.uid,
+		username: p.sub,
+		role: p.role,
+		employee_id: p.eid,
+	};
 }

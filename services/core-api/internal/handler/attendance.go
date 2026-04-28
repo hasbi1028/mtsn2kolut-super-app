@@ -18,6 +18,28 @@ func NewAttendance(svc *service.Attendance) *Attendance { return &Attendance{svc
 
 func (h *Attendance) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	startStr := q.Get("start_date")
+	endStr := q.Get("end_date")
+
+	if startStr != "" && endStr != "" {
+		var start, end pgtype.Date
+		if err := start.Scan(startStr); err != nil {
+			api.BadRequest(w, "invalid start_date")
+			return
+		}
+		if err := end.Scan(endStr); err != nil {
+			api.BadRequest(w, "invalid end_date")
+			return
+		}
+		rows, err := h.svc.ListInRange(r.Context(), start, end)
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		api.OK(w, rows)
+		return
+	}
+
 	limit := int32(pageSize(q.Get("per_page"), 50))
 	page := pageNum(q.Get("page"), 1)
 	offset := int32((page - 1) * int(limit))
@@ -41,6 +63,34 @@ func (h *Attendance) ByDate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := h.svc.ByDate(r.Context(), d)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *Attendance) GetSummary(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	startStr := q.Get("start_date")
+	endStr := q.Get("end_date")
+
+	if startStr == "" || endStr == "" {
+		api.BadRequest(w, "start_date and end_date required")
+		return
+	}
+
+	var start, end pgtype.Date
+	if err := start.Scan(startStr); err != nil {
+		api.BadRequest(w, "invalid start_date")
+		return
+	}
+	if err := end.Scan(endStr); err != nil {
+		api.BadRequest(w, "invalid end_date")
+		return
+	}
+
+	rows, err := h.svc.GetSummary(r.Context(), start, end)
 	if err != nil {
 		api.Internal(w, err)
 		return

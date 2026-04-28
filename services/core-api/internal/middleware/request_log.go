@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -35,15 +35,14 @@ func RequestLog(next http.Handler) http.Handler {
 		next.ServeHTTP(rec, r)
 
 		reqID := chimw.GetReqID(r.Context())
-		log.Printf(
-			"http request_id=%s method=%s path=%s status=%d bytes=%d duration_ms=%d remote=%s",
-			reqID,
-			r.Method,
-			r.URL.RequestURI(),
-			rec.status,
-			rec.bytes,
-			time.Since(start).Milliseconds(),
-			r.RemoteAddr,
+		slog.Info("http",
+			"request_id", reqID,
+			"method", r.Method,
+			"path", r.URL.RequestURI(),
+			"status", rec.status,
+			"bytes", rec.bytes,
+			"duration_ms", time.Since(start).Milliseconds(),
+			"remote_addr", r.RemoteAddr,
 		)
 	})
 }

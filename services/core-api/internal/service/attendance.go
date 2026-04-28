@@ -26,11 +26,25 @@ func (s *Attendance) ByDate(ctx context.Context, date pgtype.Date) ([]db.ListAtt
 	return s.q.ListAttendanceByDate(ctx, date)
 }
 
+func (s *Attendance) ListInRange(ctx context.Context, start, end pgtype.Date) ([]db.ListAttendanceInRangeRow, error) {
+	return s.q.ListAttendanceInRange(ctx, db.ListAttendanceInRangeParams{
+		Tanggal:   start,
+		Tanggal_2: end,
+	})
+}
+
 func (s *Attendance) ByEmployee(ctx context.Context, empID pgtype.UUID, limit, offset int32) ([]db.ListAttendanceByEmployeeRow, error) {
 	return s.q.ListAttendanceByEmployee(ctx, db.ListAttendanceByEmployeeParams{
 		EmployeeID: empID,
 		Limit:      limit,
 		Offset:     offset,
+	})
+}
+
+func (s *Attendance) GetSummary(ctx context.Context, start, end pgtype.Date) ([]db.GetMonthlyAttendanceSummaryRow, error) {
+	return s.q.GetMonthlyAttendanceSummary(ctx, db.GetMonthlyAttendanceSummaryParams{
+		Tanggal:   start,
+		Tanggal_2: end,
 	})
 }
 

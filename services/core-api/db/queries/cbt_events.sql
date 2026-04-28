@@ -40,3 +40,21 @@ RETURNING *;
 
 -- name: DeleteCbtExamEvent :exec
 DELETE FROM cbt_exam_events WHERE id = $1 AND status = 'draft';
+
+-- name: GetEventResults :many
+SELECT 
+    p.id AS participant_id,
+    s.id AS session_id,
+    s.title AS session_title,
+    std.nis,
+    std.nama AS student_nama,
+    std.gender,
+    c.code AS class_code,
+    p.score,
+    p.submitted_at
+FROM cbt_exam_participants p
+JOIN cbt_exam_sessions s ON s.id = p.session_id
+JOIN students std ON std.id = p.student_id
+LEFT JOIN school_classes c ON c.id = std.class_id
+WHERE s.event_id = $1
+ORDER BY std.nama ASC, s.scheduled_start ASC;

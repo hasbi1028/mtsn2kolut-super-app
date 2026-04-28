@@ -275,6 +275,49 @@ WHERE ep.session_id = $1
 GROUP BY ep.id, s.nis, s.nama, s.gender
 ORDER BY ep.score DESC NULLS LAST, s.nama ASC;
 
+-- name: ListCbtExamSessionsByTeacher :many
+SELECT
+  s.id, s.package_id, p.title AS package_title,
+  s.class_id, s.event_id,
+  COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
+  s.title, s.scheduled_start, s.scheduled_end, s.status,
+  s.created_at, s.updated_at,
+  COUNT(ep.id)::int AS participant_count
+FROM cbt_exam_sessions s
+JOIN cbt_packages p ON p.id = s.package_id
+JOIN class_subject_assignments csa ON csa.subject_id = p.subject_id
+LEFT JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN cbt_exam_participants ep ON ep.session_id = s.id
+WHERE csa.teacher_employee_id = $1
+GROUP BY s.id, p.title, c.name, c.code
+ORDER BY s.scheduled_start DESC;
+
+-- name: GetSessionResultsByTeacher :many
+SELECT
+  ep.id AS participant_id,
+  ep.student_id,
+  s.nis, s.nama, s.gender,
+  ep.submitted_at, ep.score,
+  COUNT(sa.id)::int AS total_answers,
+  SUM(CASE WHEN sa.is_correct THEN 1 ELSE 0 END)::int AS correct_answers
+FROM cbt_exam_participants ep
+JOIN students s ON s.id = ep.student_id
+JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+JOIN cbt_packages pkg ON pkg.id = ses.package_id
+JOIN class_subject_assignments csa ON csa.subject_id = pkg.subject_id
+LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id
+WHERE ep.session_id = $1 AND csa.teacher_employee_id = $2
+GROUP BY ep.id, s.nis, s.nama, s.gender
+ORDER BY ep.score DESC NULLS LAST, s.nama ASC;
+
+-- name: GetSessionTeacherAccess :one
+SELECT EXISTS(
+  SELECT 1 FROM cbt_exam_sessions s
+  JOIN cbt_packages p ON p.id = s.package_id
+  JOIN class_subject_assignments csa ON csa.subject_id = p.subject_id
+  WHERE s.id = $1 AND csa.teacher_employee_id = $2
+) AS has_access;
+
 -- name: GetParticipantAnswers :many
 SELECT
    sa.id, sa.participant_id, sa.question_id,

@@ -1,12 +1,11 @@
 import { json } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
-import { apiGet, ApiError, handleRouteError } from '$lib/server/api';
+import type { RequestEvent } from '@sveltejs/kit';
+import { proxy, ApiError, handleRouteError } from '$lib/server/api';
 
-// POST /api/employees/:id/test-pusaka — checks if credentials are configured
-export const POST: RequestHandler = async ({ params }) => {
+export const POST = async (event: RequestEvent) => {
 	try {
-		const { id } = params;
-		const data = await apiGet<{ configured: boolean; pusaka_username: string }>(`/api/employees/${id}/pusaka-status`);
+		const { id } = event.params;
+		const data = await proxy(event).get<{ configured: boolean; pusaka_username: string }>(`/api/employees/${id}/pusaka-status`);
 
 		if (!data.configured) {
 			return json({ message: `Kredensial belum dikonfigurasi untuk pegawai ini.` }, { status: 200 });

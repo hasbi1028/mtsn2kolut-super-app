@@ -62,7 +62,7 @@
       <h1 class="text-2xl font-semibold text-slate-800">Riwayat Job</h1>
       <p class="text-sm text-muted-foreground mt-1">Log eksekusi job absensi Pusaka Kemenag</p>
     </div>
-    <Button variant="outline" size="sm" href="/attendance">← Absensi</Button>
+    <Button variant="outline" size="sm" href="/pusaka">← PUSAKA</Button>
   </div>
 
   <!-- Filter bar -->

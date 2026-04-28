@@ -42,24 +42,24 @@
     {/if}
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <div class="xl:col-span-1">
-        <label class="mb-1 block text-xs font-medium text-muted-foreground">NIP <span class="text-destructive">*</span></label>
-        <Input placeholder="NIP Pegawai" bind:value={form.nip} />
+        <label for="f-nip" class="mb-1 block text-xs font-medium text-muted-foreground">NIP <span class="text-destructive">*</span></label>
+        <Input id="f-nip" placeholder="NIP Pegawai" bind:value={form.nip} />
       </div>
       <div class="xl:col-span-1">
-        <label class="mb-1 block text-xs font-medium text-muted-foreground">Nama <span class="text-destructive">*</span></label>
-        <Input placeholder="Nama Lengkap" bind:value={form.nama} />
+        <label for="f-nama" class="mb-1 block text-xs font-medium text-muted-foreground">Nama <span class="text-destructive">*</span></label>
+        <Input id="f-nama" placeholder="Nama Lengkap" bind:value={form.nama} />
       </div>
       <div class="xl:col-span-1">
-        <label class="mb-1 block text-xs font-medium text-muted-foreground">Unit Kerja</label>
-        <Input placeholder="Unit Kerja" bind:value={form.unit_kerja} />
+        <label for="f-unit" class="mb-1 block text-xs font-medium text-muted-foreground">Unit Kerja</label>
+        <Input id="f-unit" placeholder="Unit Kerja" bind:value={form.unit_kerja} />
       </div>
       <div class="xl:col-span-1">
-        <label class="mb-1 block text-xs font-medium text-muted-foreground">Username Pusaka <span class="text-destructive">*</span></label>
-        <Input placeholder="Username Pusaka" bind:value={form.pusaka_username} />
+        <label for="f-user" class="mb-1 block text-xs font-medium text-muted-foreground">Username Pusaka <span class="text-destructive">*</span></label>
+        <Input id="f-user" placeholder="Username Pusaka" bind:value={form.pusaka_username} />
       </div>
       <div class="xl:col-span-1">
-        <label class="mb-1 block text-xs font-medium text-muted-foreground">Password Pusaka <span class="text-destructive">*</span></label>
-        <Input type="password" placeholder="Password Pusaka" bind:value={form.pusaka_password} />
+        <label for="f-pass" class="mb-1 block text-xs font-medium text-muted-foreground">Password Pusaka <span class="text-destructive">*</span></label>
+        <Input id="f-pass" type="password" placeholder="Password Pusaka" bind:value={form.pusaka_password} />
       </div>
       <div class="xl:col-span-1 flex items-end">
         <Button class="w-full" onclick={submit} disabled={loading}>

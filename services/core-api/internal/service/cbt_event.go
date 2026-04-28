@@ -33,6 +33,17 @@ func (s *CbtEvent) Get(ctx context.Context, id pgtype.UUID) (db.GetCbtExamEventR
 	return s.q.GetCbtExamEvent(ctx, id)
 }
 
+func (s *CbtEvent) GetResults(ctx context.Context, id pgtype.UUID) ([]db.GetEventResultsRow, error) {
+	rows, err := s.q.GetEventResults(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.GetEventResultsRow{}, nil
+	}
+	return rows, nil
+}
+
 type CreateCbtEventInput struct {
 	Title          string
 	ExamType       db.CbtExamType

@@ -1,10 +1,10 @@
 import { json } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
-import { apiGet, handleRouteError } from '$lib/server/api';
+import type { RequestEvent } from '@sveltejs/kit';
+import { proxy, handleRouteError } from '$lib/server/api';
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET = async (event: RequestEvent) => {
 	try {
-		const data = await apiGet(`/api/cbt/sessions/${params.id}/results`);
+		const data = await proxy(event).get(`/api/cbt/sessions/${event.params.id}/results`);
 		return json(data);
 	} catch (e) {
 		return handleRouteError(e, 'cbt/sessions results GET');

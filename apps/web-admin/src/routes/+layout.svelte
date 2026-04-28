@@ -21,7 +21,7 @@
 			lg:pt-0   — no offset needed on desktop (topbar hidden)
 		-->
 		<div class="flex-1 min-w-0 lg:pl-60 pt-14 lg:pt-0">
-			<main class="page">
+			<main class="max-w-[1100px] mx-auto px-3 py-4 sm:px-4 sm:py-6">
 				{@render children()}
 			</main>
 		</div>

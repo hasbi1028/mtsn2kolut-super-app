@@ -1,12 +1,12 @@
 import { json } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
-import { apiGet, handleRouteError } from '$lib/server/api';
+import type { RequestEvent } from '@sveltejs/kit';
+import { proxy, handleRouteError } from '$lib/server/api';
 
 interface GoStats { queued: number; running: number; success: number; failed: number }
 
-export const GET: RequestHandler = async () => {
+export const GET = async (event: RequestEvent) => {
 	try {
-		const s = await apiGet<GoStats>('/api/jobs/stats');
+		const s = await proxy(event).get<GoStats>('/api/jobs/stats');
 		return json({
 			queued:    s.queued,
 			running:   s.running,

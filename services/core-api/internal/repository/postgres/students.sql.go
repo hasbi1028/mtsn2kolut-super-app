@@ -123,3 +123,115 @@ func (q *Queries) ListStudents(ctx context.Context) ([]ListStudentsRow, error) {
 	}
 	return items, nil
 }
+
+const listStudentsByTeacher = `-- name: ListStudentsByTeacher :many
+SELECT DISTINCT
+  s.id, s.nis, s.nisn, s.nama, s.gender, s.parent_name, s.parent_phone,
+  s.class_id, c.name AS class_name, c.code AS class_code,
+  s.is_active, s.created_at, s.updated_at
+FROM students s
+JOIN school_classes c ON c.id = s.class_id
+JOIN class_subject_assignments csa ON csa.class_id = c.id
+WHERE csa.teacher_employee_id = $1 AND s.is_active = TRUE
+ORDER BY s.nama ASC
+`
+
+type ListStudentsByTeacherRow struct {
+	ID          pgtype.UUID        `json:"id"`
+	Nis         string             `json:"nis"`
+	Nisn        string             `json:"nisn"`
+	Nama        string             `json:"nama"`
+	Gender      GenderEnum         `json:"gender"`
+	ParentName  string             `json:"parent_name"`
+	ParentPhone string             `json:"parent_phone"`
+	ClassID     pgtype.UUID        `json:"class_id"`
+	ClassName   string             `json:"class_name"`
+	ClassCode   string             `json:"class_code"`
+	IsActive    bool               `json:"is_active"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListStudentsByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]ListStudentsByTeacherRow, error) {
+	rows, err := q.db.Query(ctx, listStudentsByTeacher, teacherEmployeeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStudentsByTeacherRow{}
+	for rows.Next() {
+		var i ListStudentsByTeacherRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nis,
+			&i.Nisn,
+			&i.Nama,
+			&i.Gender,
+			&i.ParentName,
+			&i.ParentPhone,
+			&i.ClassID,
+			&i.ClassName,
+			&i.ClassCode,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateStudent = `-- name: UpdateStudent :one
+UPDATE students
+SET nis = $2, nisn = $3, nama = $4, gender = $5, 
+    parent_name = $6, parent_phone = $7, class_id = $8, 
+    is_active = $9, updated_at = NOW()
+WHERE id = $1
+RETURNING id, nis, nisn, nama, gender, parent_name, parent_phone, class_id, is_active, created_at, updated_at
+`
+
+type UpdateStudentParams struct {
+	ID          pgtype.UUID `json:"id"`
+	Nis         string      `json:"nis"`
+	Nisn        string      `json:"nisn"`
+	Nama        string      `json:"nama"`
+	Gender      GenderEnum  `json:"gender"`
+	ParentName  string      `json:"parent_name"`
+	ParentPhone string      `json:"parent_phone"`
+	ClassID     pgtype.UUID `json:"class_id"`
+	IsActive    bool        `json:"is_active"`
+}
+
+func (q *Queries) UpdateStudent(ctx context.Context, arg UpdateStudentParams) (Student, error) {
+	row := q.db.QueryRow(ctx, updateStudent,
+		arg.ID,
+		arg.Nis,
+		arg.Nisn,
+		arg.Nama,
+		arg.Gender,
+		arg.ParentName,
+		arg.ParentPhone,
+		arg.ClassID,
+		arg.IsActive,
+	)
+	var i Student
+	err := row.Scan(
+		&i.ID,
+		&i.Nis,
+		&i.Nisn,
+		&i.Nama,
+		&i.Gender,
+		&i.ParentName,
+		&i.ParentPhone,
+		&i.ClassID,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

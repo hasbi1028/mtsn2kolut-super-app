@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
+import type { RequestEvent } from '@sveltejs/kit';
 
 const BASE = (env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 const INTERNAL_KEY = env.INTERNAL_API_KEY ?? '';
@@ -8,10 +9,18 @@ export class ApiError extends Error {
 	constructor(public status: number, message: string) { super(message); }
 }
 
-function headers(): Record<string, string> {
+export function authHeaders(accessToken?: string): Record<string, string> {
 	const h: Record<string, string> = { 'Content-Type': 'application/json' };
-	h['X-Internal-Key'] = INTERNAL_KEY;
+	if (accessToken) {
+		h['Authorization'] = `Bearer ${accessToken}`;
+	} else {
+		h['X-Internal-Key'] = INTERNAL_KEY;
+	}
 	return h;
+}
+
+function headers(bearerToken?: string): Record<string, string> {
+	return authHeaders(bearerToken);
 }
 
 async function unwrap<T>(res: Response): Promise<T> {
@@ -21,32 +30,55 @@ async function unwrap<T>(res: Response): Promise<T> {
 	return json.data as T;
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-	return unwrap<T>(await fetch(`${BASE}${path}`, { headers: headers() }));
+export async function apiGet<T>(path: string, accessToken?: string): Promise<T> {
+	return unwrap<T>(await fetch(`${BASE}${path}`, { headers: headers(accessToken) }));
 }
 
-export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+export async function apiPost<T>(path: string, body?: unknown, accessToken?: string): Promise<T> {
 	const res = await fetch(`${BASE}${path}`, {
-		method: 'POST', headers: headers(),
+		method: 'POST', headers: headers(accessToken),
 		body: body !== undefined ? JSON.stringify(body) : undefined,
 	});
 	return unwrap<T>(res);
 }
 
-export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
+export async function apiPut<T>(path: string, body?: unknown, accessToken?: string): Promise<T> {
 	const res = await fetch(`${BASE}${path}`, {
-		method: 'PUT', headers: headers(),
+		method: 'PUT', headers: headers(accessToken),
 		body: body !== undefined ? JSON.stringify(body) : undefined,
 	});
 	return unwrap<T>(res);
 }
 
-export async function apiDelete<T>(path: string, body?: unknown): Promise<T> {
+export async function apiPatch<T>(path: string, body?: unknown, accessToken?: string): Promise<T> {
 	const res = await fetch(`${BASE}${path}`, {
-		method: 'DELETE', headers: headers(),
+		method: 'PATCH', headers: headers(accessToken),
 		body: body !== undefined ? JSON.stringify(body) : undefined,
 	});
 	return unwrap<T>(res);
+}
+
+export async function apiDelete<T>(path: string, body?: unknown, accessToken?: string): Promise<T> {
+	const res = await fetch(`${BASE}${path}`, {
+		method: 'DELETE', headers: headers(accessToken),
+		body: body !== undefined ? JSON.stringify(body) : undefined,
+	});
+	return unwrap<T>(res);
+}
+
+export function proxy(event: RequestEvent) {
+	const accessToken = event.cookies.get('access_token');
+	return {
+		get: <T>(path: string) => apiGet<T>(path, accessToken),
+		post: <T>(path: string, body?: unknown) => apiPost<T>(path, body, accessToken),
+		put: <T>(path: string, body?: unknown) => apiPut<T>(path, body, accessToken),
+		patch: <T>(path: string, body?: unknown) => apiPatch<T>(path, body, accessToken),
+		del: <T>(path: string, body?: unknown) => apiDelete<T>(path, body, accessToken),
+		fetch: (path: string, init?: RequestInit) => {
+			const headers = authHeaders(accessToken);
+			return fetch(`${BASE}${path}`, { ...init, headers: { ...headers, ...(init?.headers as Record<string, string>) } });
+		},
+	};
 }
 
 export type TokenPair = {

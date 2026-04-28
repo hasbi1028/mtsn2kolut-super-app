@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math/rand"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -279,6 +278,38 @@ func (s *CbtSession) ScoreSession(ctx context.Context, sessionID pgtype.UUID) er
 	return tx.Commit(ctx)
 }
 
+func (s *CbtSession) ListByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]db.ListCbtExamSessionsByTeacherRow, error) {
+	rows, err := s.q.ListCbtExamSessionsByTeacher(ctx, teacherEmployeeID)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.ListCbtExamSessionsByTeacherRow{}, nil
+	}
+	return rows, nil
+}
+
+func (s *CbtSession) GetResultsByTeacher(ctx context.Context, sessionID, teacherEmployeeID pgtype.UUID) ([]db.GetSessionResultsByTeacherRow, error) {
+	rows, err := s.q.GetSessionResultsByTeacher(ctx, db.GetSessionResultsByTeacherParams{
+		SessionID:         sessionID,
+		TeacherEmployeeID: teacherEmployeeID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.GetSessionResultsByTeacherRow{}, nil
+	}
+	return rows, nil
+}
+
+func (s *CbtSession) CheckTeacherAccess(ctx context.Context, sessionID, teacherEmployeeID pgtype.UUID) (bool, error) {
+	return s.q.GetSessionTeacherAccess(ctx, db.GetSessionTeacherAccessParams{
+		ID:                 sessionID,
+		TeacherEmployeeID:  teacherEmployeeID,
+	})
+}
+
 func (s *CbtSession) GetResults(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionResultsRow, error) {
 	rows, err := s.q.GetSessionResults(ctx, sessionID)
 	if err != nil {
@@ -316,13 +347,4 @@ func UUIDsToJSON(ids []pgtype.UUID) ([]byte, error) {
 		strs[i] = pgUUIDString(u)
 	}
 	return json.Marshal(strs)
-}
-
-func pgUUIDString(u pgtype.UUID) string {
-	if !u.Valid {
-		return ""
-	}
-	b := u.Bytes
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }

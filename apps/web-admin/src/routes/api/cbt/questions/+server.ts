@@ -1,24 +1,24 @@
 import { json } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
-import { apiGet, apiPost, apiDelete, handleRouteError } from '$lib/server/api';
+import type { RequestEvent } from '@sveltejs/kit';
+import { proxy, handleRouteError } from '$lib/server/api';
 
-export const GET: RequestHandler = async () => {
+export const GET = async (event: RequestEvent) => {
 	try {
-		const data = await apiGet('/api/cbt/questions');
+		const data = await proxy(event).get('/api/cbt/questions');
 		return json(data);
 	} catch (e) {
 		return handleRouteError(e, 'cbt/questions GET');
 	}
 };
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST = async (event: RequestEvent) => {
 	try {
-		const body = await request.json() as Record<string, unknown>;
+		const body = await event.request.json() as Record<string, unknown>;
 		const { subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status } = body;
 		if (!subject_id || !question_text || !option_a || !option_b || !option_c || !option_d || !answer_key) {
 			return json({ error: 'subject_id, question_text, option A-D, dan answer_key wajib diisi' }, { status: 400 });
 		}
-		const data = await apiPost('/api/cbt/questions', {
+		const data = await proxy(event).post('/api/cbt/questions', {
 			subject_id, code: code ?? '', question_text,
 			option_a, option_b, option_c, option_d, option_e: option_e ?? '',
 			answer_key, explanation: explanation ?? '',
@@ -30,11 +30,11 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 };
 
-export const DELETE: RequestHandler = async ({ url }) => {
+export const DELETE = async (event: RequestEvent) => {
 	try {
-		const id = url.searchParams.get('id');
+		const id = event.url.searchParams.get('id');
 		if (!id) return json({ error: 'id required' }, { status: 400 });
-		await apiDelete(`/api/cbt/questions/${id}`);
+		await proxy(event).del(`/api/cbt/questions/${id}`);
 		return new Response(null, { status: 204 });
 	} catch (e) {
 		return handleRouteError(e, 'cbt/questions DELETE');

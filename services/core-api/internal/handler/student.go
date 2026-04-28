@@ -27,6 +27,31 @@ func (h *Student) List(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, rows)
 }
 
+func (h *Student) GuruAwareList(w http.ResponseWriter, r *http.Request) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	role, _ := claims["role"].(string)
+	if ok && role == "guru" {
+		eidRaw, _ := claims["eid"].(string)
+		if eidRaw == "" {
+			api.Forbidden(w)
+			return
+		}
+		var eid pgtype.UUID
+		if err := eid.Scan(eidRaw); err != nil {
+			api.Forbidden(w)
+			return
+		}
+		rows, err := h.svc.ListByTeacher(r.Context(), eid)
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		api.OK(w, rows)
+		return
+	}
+	h.List(w, r)
+}
+
 func (h *Student) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Nis         string `json:"nis"`
@@ -66,6 +91,53 @@ func (h *Student) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.Created(w, row)
+}
+
+func (h *Student) Update(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		Nis         string `json:"nis"`
+		Nisn        string `json:"nisn"`
+		Nama        string `json:"nama"`
+		Gender      string `json:"gender"`
+		ParentName  string `json:"parent_name"`
+		ParentPhone string `json:"parent_phone"`
+		ClassID     string `json:"class_id"`
+		IsActive    bool   `json:"is_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	var classID pgtype.UUID
+	if body.ClassID != "" {
+		cid, err := parseUUID(body.ClassID)
+		if err != nil {
+			api.BadRequest(w, "class_id invalid")
+			return
+		}
+		classID = cid
+	}
+	row, err := h.svc.Update(r.Context(), db.UpdateStudentParams{
+		ID:          id,
+		Nis:         body.Nis,
+		Nisn:        body.Nisn,
+		Nama:        body.Nama,
+		Gender:      db.GenderEnum(body.Gender),
+		ParentName:  body.ParentName,
+		ParentPhone: body.ParentPhone,
+		ClassID:     classID,
+		IsActive:    body.IsActive,
+	})
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
 }
 
 func (h *Student) Delete(w http.ResponseWriter, r *http.Request) {

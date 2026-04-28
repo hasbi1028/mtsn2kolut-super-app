@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import type { RequestEvent } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { toWITA, handleRouteError } from '$lib/server/api';
+import { authHeaders, toWITA, handleRouteError, ApiError } from '$lib/server/api';
 
 interface GoJob {
 	id: string; employee_id: string;
@@ -17,21 +17,22 @@ interface GoJobsResponse {
 	meta: { total: number; page: number; per_page: number };
 }
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET = async (event: RequestEvent) => {
 	try {
-		const limit  = Math.min(500, Math.max(1, Number(url.searchParams.get('limit') ?? 50)));
-		const status = url.searchParams.get('status') ?? '';
+		const accessToken = event.cookies.get('access_token');
+		const limit  = Math.min(500, Math.max(1, Number(event.url.searchParams.get('limit') ?? 50)));
+		const status = event.url.searchParams.get('status') ?? '';
 
 		const params = new URLSearchParams({ per_page: String(limit), page: '1' });
 		if (status) params.set('status', status);
 
 		const raw = await fetch(
 			`${env.API_BASE_URL ?? 'http://localhost:8080'}/api/jobs?${params}`,
-			{ headers: { 'X-Internal-Key': env.INTERNAL_API_KEY ?? '' } }
+			{ headers: authHeaders(accessToken) }
 		);
 		if (!raw.ok) {
 			const err = await raw.json().catch(() => ({})) as { error?: string };
-			throw Object.assign(new Error(err.error ?? `HTTP ${raw.status}`), { status: raw.status });
+			throw new ApiError(raw.status, err.error ?? `HTTP ${raw.status}`);
 		}
 		const res = await raw.json() as GoJobsResponse;
 

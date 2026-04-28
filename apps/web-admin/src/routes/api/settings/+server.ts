@@ -1,14 +1,14 @@
 import { json } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
-import { apiGet, apiPut, handleRouteError } from '$lib/server/api';
+import type { RequestEvent } from '@sveltejs/kit';
+import { proxy, handleRouteError } from '$lib/server/api';
 
 interface GoSetting { key: string; value: string }
 
 const BLOCKED = new Set(['admin_password', 'admin_password_hash', 'admin_username']);
 
-export const GET: RequestHandler = async () => {
+export const GET = async (event: RequestEvent) => {
 	try {
-		const rows = await apiGet<GoSetting[]>('/api/settings');
+		const rows = await proxy(event).get<GoSetting[]>('/api/settings');
 		const flat: Record<string, unknown> = {};
 		for (const { key, value } of rows) {
 			if (BLOCKED.has(key)) continue;
@@ -22,12 +22,13 @@ export const GET: RequestHandler = async () => {
 	}
 };
 
-export const PUT: RequestHandler = async ({ request }) => {
+export const PUT = async (event: RequestEvent) => {
 	try {
-		const payload = await request.json().catch(() => ({})) as Record<string, unknown>;
+		const payload = await event.request.json().catch(() => ({})) as Record<string, unknown>;
+		const p = proxy(event);
 		await Promise.all(
 			Object.entries(payload).map(([key, val]) =>
-				apiPut(`/api/settings/${key}`, { value: String(val) })
+				p.put(`/api/settings/${key}`, { value: String(val) })
 			)
 		);
 		return json({ ok: true, ...payload });

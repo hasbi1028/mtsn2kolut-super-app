@@ -25,6 +25,7 @@
 	let filterSubject = $state('');
 	let filterStatus = $state('');
 	let showForm = $state(false);
+	let editId = $state<string | null>(null);
 
 	let fSubjectId = $state('');
 	let fCode = $state('');
@@ -85,12 +86,39 @@
 		setTimeout(() => (toast = ''), 3000);
 	}
 
-	async function createQuestion() {
+	function resetForm() {
+		fSubjectId = ''; fCode = ''; fText = ''; fA = ''; fB = ''; fC = ''; fD = ''; fE = '';
+		fAnswer = 'A'; fExplanation = ''; fDifficulty = 'medium'; fStatus = 'draft';
+		editId = null;
+		showForm = false;
+	}
+
+	function openEdit(q: Question) {
+		fSubjectId = q.subject_id;
+		fCode = q.code;
+		fText = q.question_text;
+		fA = q.option_a;
+		fB = q.option_b;
+		fC = q.option_c;
+		fD = q.option_d;
+		fE = q.option_e;
+		fAnswer = q.answer_key;
+		fExplanation = q.explanation;
+		fDifficulty = q.difficulty;
+		fStatus = q.status;
+		editId = q.id;
+		showForm = true;
+		window.scrollTo({ top: 0, behavior: 'smooth' });
+	}
+
+	async function saveQuestion() {
 		if (!fSubjectId || !fText || !fA || !fB || !fC || !fD || !fAnswer) return;
 		fBusy = true;
 		try {
-			const res = await fetch('/api/cbt/questions', {
-				method: 'POST',
+			const method = editId ? 'PUT' : 'POST';
+			const path = editId ? `/api/cbt/questions/${editId}` : '/api/cbt/questions';
+			const res = await fetch(path, {
+				method,
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					subject_id: fSubjectId, code: fCode,
@@ -99,10 +127,8 @@
 				}),
 			});
 			if (!res.ok) { const j = await res.json(); showToast(j.error ?? 'Gagal'); return; }
-			fSubjectId = ''; fCode = ''; fText = ''; fA = ''; fB = ''; fC = ''; fD = ''; fE = '';
-			fAnswer = 'A'; fExplanation = ''; fDifficulty = 'medium'; fStatus = 'draft';
-			showForm = false;
-			showToast('Soal berhasil ditambahkan');
+			showToast(editId ? 'Soal diperbarui' : 'Soal berhasil ditambahkan');
+			resetForm();
 			await load();
 		} finally { fBusy = false; }
 	}
@@ -125,7 +151,7 @@
 			<h1 class="text-2xl font-semibold text-slate-800">Bank Soal CBT</h1>
 			<p class="text-sm text-slate-500 mt-1">Kelola soal pilihan ganda untuk ujian berbasis komputer</p>
 		</div>
-		<Button onclick={() => (showForm = !showForm)}>
+		<Button onclick={() => { if (showForm) resetForm(); else showForm = true; }}>
 			{showForm ? 'Batal' : '+ Tambah Soal'}
 		</Button>
 	</div>
@@ -140,13 +166,13 @@
 	{#if showForm}
 		<Card.Root>
 			<Card.Header class="pb-2">
-				<Card.Title class="text-base">Tambah Soal Baru</Card.Title>
+				<Card.Title class="text-base">{editId ? 'Edit Soal' : 'Tambah Soal Baru'}</Card.Title>
 			</Card.Header>
 			<Card.Content class="space-y-4">
 				<div class="grid gap-3 sm:grid-cols-3">
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Mata Pelajaran <span class="text-red-500">*</span></label>
-						<select class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fSubjectId}>
+						<label for="q-subject" class="text-xs text-slate-500 mb-1 block">Mata Pelajaran <span class="text-red-500">*</span></label>
+						<select id="q-subject" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fSubjectId}>
 							<option value="">-- Pilih --</option>
 							{#each subjects as s}
 								<option value={s.id}>{s.code} — {s.name}</option>
@@ -154,12 +180,12 @@
 						</select>
 					</div>
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Kode Soal</label>
-						<Input placeholder="mis: MTK-001" bind:value={fCode} />
+						<label for="q-code" class="text-xs text-slate-500 mb-1 block">Kode Soal</label>
+						<Input id="q-code" placeholder="mis: MTK-001" bind:value={fCode} />
 					</div>
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Tingkat Kesulitan</label>
-						<select class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fDifficulty}>
+						<label for="q-diff" class="text-xs text-slate-500 mb-1 block">Tingkat Kesulitan</label>
+						<select id="q-diff" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fDifficulty}>
 							<option value="easy">Mudah</option>
 							<option value="medium">Sedang</option>
 							<option value="hard">Sulit</option>
@@ -168,37 +194,37 @@
 				</div>
 
 				<div>
-					<label class="text-xs text-slate-500 mb-1 block">Teks Soal <span class="text-red-500">*</span></label>
-					<Textarea placeholder="Tulis pertanyaan di sini..." rows={3} bind:value={fText} />
+					<label for="q-text" class="text-xs text-slate-500 mb-1 block">Teks Soal <span class="text-red-500">*</span></label>
+					<Textarea id="q-text" placeholder="Tulis pertanyaan di sini..." rows={3} bind:value={fText} />
 				</div>
 
 				<div class="grid gap-3 sm:grid-cols-2">
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Opsi A <span class="text-red-500">*</span></label>
-						<Input placeholder="Jawaban opsi A" bind:value={fA} />
+						<label for="q-oa" class="text-xs text-slate-500 mb-1 block">Opsi A <span class="text-red-500">*</span></label>
+						<Input id="q-oa" placeholder="Jawaban opsi A" bind:value={fA} />
 					</div>
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Opsi B <span class="text-red-500">*</span></label>
-						<Input placeholder="Jawaban opsi B" bind:value={fB} />
+						<label for="q-ob" class="text-xs text-slate-500 mb-1 block">Opsi B <span class="text-red-500">*</span></label>
+						<Input id="q-ob" placeholder="Jawaban opsi B" bind:value={fB} />
 					</div>
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Opsi C <span class="text-red-500">*</span></label>
-						<Input placeholder="Jawaban opsi C" bind:value={fC} />
+						<label for="q-oc" class="text-xs text-slate-500 mb-1 block">Opsi C <span class="text-red-500">*</span></label>
+						<Input id="q-oc" placeholder="Jawaban opsi C" bind:value={fC} />
 					</div>
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Opsi D <span class="text-red-500">*</span></label>
-						<Input placeholder="Jawaban opsi D" bind:value={fD} />
+						<label for="q-od" class="text-xs text-slate-500 mb-1 block">Opsi D <span class="text-red-500">*</span></label>
+						<Input id="q-od" placeholder="Jawaban opsi D" bind:value={fD} />
 					</div>
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Opsi E (opsional)</label>
-						<Input placeholder="Jawaban opsi E" bind:value={fE} />
+						<label for="q-oe" class="text-xs text-slate-500 mb-1 block">Opsi E (opsional)</label>
+						<Input id="q-oe" placeholder="Jawaban opsi E" bind:value={fE} />
 					</div>
 				</div>
 
 				<div class="grid gap-3 sm:grid-cols-2">
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Kunci Jawaban <span class="text-red-500">*</span></label>
-						<select class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fAnswer}>
+						<label for="q-ans" class="text-xs text-slate-500 mb-1 block">Kunci Jawaban <span class="text-red-500">*</span></label>
+						<select id="q-ans" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fAnswer}>
 							<option value="A">A</option>
 							<option value="B">B</option>
 							<option value="C">C</option>
@@ -207,8 +233,8 @@
 						</select>
 					</div>
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Status</label>
-						<select class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fStatus}>
+						<label for="q-stat" class="text-xs text-slate-500 mb-1 block">Status</label>
+						<select id="q-stat" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fStatus}>
 							<option value="draft">Draft</option>
 							<option value="published">Aktif/Published</option>
 							<option value="archived">Arsip</option>
@@ -217,15 +243,15 @@
 				</div>
 
 				<div>
-					<label class="text-xs text-slate-500 mb-1 block">Penjelasan (opsional)</label>
-					<Textarea placeholder="Pembahasan jawaban..." rows={2} bind:value={fExplanation} />
+					<label for="q-exp" class="text-xs text-slate-500 mb-1 block">Penjelasan (opsional)</label>
+					<Textarea id="q-exp" placeholder="Pembahasan jawaban..." rows={2} bind:value={fExplanation} />
 				</div>
 
 				<div class="flex gap-2">
-					<Button disabled={fBusy || !fSubjectId || !fText || !fA || !fB || !fC || !fD} onclick={createQuestion}>
-						{fBusy ? 'Menyimpan...' : 'Simpan Soal'}
+					<Button disabled={fBusy || !fSubjectId || !fText || !fA || !fB || !fC || !fD} onclick={saveQuestion}>
+						{fBusy ? 'Menyimpan...' : (editId ? 'Perbarui Soal' : 'Simpan Soal')}
 					</Button>
-					<Button variant="outline" onclick={() => (showForm = false)}>Batal</Button>
+					<Button variant="outline" onclick={resetForm}>Batal</Button>
 				</div>
 			</Card.Content>
 		</Card.Root>
@@ -263,7 +289,7 @@
 							<Table.Head>Kunci</Table.Head>
 							<Table.Head>Kesulitan</Table.Head>
 							<Table.Head>Status</Table.Head>
-							<Table.Head></Table.Head>
+							<Table.Head class="text-right">Aksi</Table.Head>
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
@@ -285,8 +311,11 @@
 								<Table.Cell>
 									<Badge class={statusBadgeClass(q.status)}>{statusLabel[q.status] ?? q.status}</Badge>
 								</Table.Cell>
-								<Table.Cell>
-									<Button variant="destructive" size="xs" onclick={() => deleteQuestion(q.id)}>Hapus</Button>
+								<Table.Cell class="text-right">
+									<div class="flex gap-2 justify-end">
+										<Button variant="outline" size="sm" onclick={() => openEdit(q)}>Edit</Button>
+										<Button variant="destructive" size="sm" onclick={() => deleteQuestion(q.id)}>Hapus</Button>
+									</div>
 								</Table.Cell>
 							</Table.Row>
 						{:else}

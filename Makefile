@@ -37,7 +37,7 @@ dev-backend:
 
 # ── Check / Test ─────────────────────────────────────────────────────────────
 
-.PHONY: check check-web check-worker test-backend
+.PHONY: check check-web check-worker test-backend vet-backend audit-web lint-backend lint
 
 check-web:
 	cd $(WEB_DIR) && npm run check
@@ -48,7 +48,18 @@ check-worker:
 test-backend:
 	cd $(BACKEND_DIR) && go test ./...
 
-check: check-web check-worker test-backend
+vet-backend:
+	cd $(BACKEND_DIR) && go vet ./...
+
+audit-web:
+	cd $(WEB_DIR) && npm audit --audit-level=high
+
+lint-backend:
+	cd $(BACKEND_DIR) && (golangci-lint run ./... || true)
+
+lint: lint-backend
+
+check: check-web check-worker test-backend vet-backend audit-web
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
@@ -175,7 +186,8 @@ help:
 	@echo "  dev-worker             npm run dev"
 	@echo ""
 	@echo "Verify:"
-	@echo "  check                  web check + worker typecheck + backend tests"
+	@echo "  check                  web check + worker typecheck + backend tests + vet + npm audit"
+	@echo "  lint                   golangci-lint run (falls back if not installed)"
 	@echo "  db-sqlc                regenerate sqlc code"
 	@echo "  db-migrate             apply PostgreSQL migrations"
 	@echo ""

@@ -168,6 +168,33 @@ func (q *Queries) DeleteSubject(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const getAcademicStats = `-- name: GetAcademicStats :one
+SELECT 
+    (SELECT COUNT(*) FROM students WHERE is_active = TRUE)::int AS total_students,
+    (SELECT COUNT(*) FROM school_classes WHERE is_active = TRUE)::int AS total_classes,
+    (SELECT COUNT(*) FROM subjects WHERE is_active = TRUE)::int AS total_subjects,
+    (SELECT COUNT(*) FROM academic_years)::int AS total_years
+`
+
+type GetAcademicStatsRow struct {
+	TotalStudents int32 `json:"total_students"`
+	TotalClasses  int32 `json:"total_classes"`
+	TotalSubjects int32 `json:"total_subjects"`
+	TotalYears    int32 `json:"total_years"`
+}
+
+func (q *Queries) GetAcademicStats(ctx context.Context) (GetAcademicStatsRow, error) {
+	row := q.db.QueryRow(ctx, getAcademicStats)
+	var i GetAcademicStatsRow
+	err := row.Scan(
+		&i.TotalStudents,
+		&i.TotalClasses,
+		&i.TotalSubjects,
+		&i.TotalYears,
+	)
+	return i, err
+}
+
 const listAcademicYears = `-- name: ListAcademicYears :many
 SELECT id, name, start_date, end_date, is_active, created_at, updated_at
 FROM academic_years

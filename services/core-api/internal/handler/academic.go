@@ -34,7 +34,7 @@ func (h *Academic) Overview(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
-	assignments, err := h.svc.ListAssignments(r.Context())
+	assigns, err := h.svc.ListAssignments(r.Context())
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -43,11 +43,20 @@ func (h *Academic) Overview(w http.ResponseWriter, r *http.Request) {
 		"years":       years,
 		"classes":     classes,
 		"subjects":    subjects,
-		"assignments": assignments,
+		"assignments": assigns,
 	})
-}
+	}
 
-func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
+	func (h *Academic) GetStats(w http.ResponseWriter, r *http.Request) {
+	row, err := h.svc.GetStats(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+	}
+
+	func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 	entity := chi.URLParam(r, "entity")
 	switch entity {
 	case "years":

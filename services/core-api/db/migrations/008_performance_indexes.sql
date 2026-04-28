@@ -9,11 +9,11 @@ CREATE INDEX IF NOT EXISTS idx_cbt_student_answers_participant ON cbt_student_an
 -- Index for participant events lookup by participant and time (for audit trails)
 CREATE INDEX IF NOT EXISTS idx_cbt_participant_events_participant_time ON cbt_participant_events(participant_id, created_at DESC);
 
--- Index for CBT questions by package (for loading question banks)
-CREATE INDEX IF NOT EXISTS idx_cbt_questions_package ON cbt_questions(package_id);
+-- Index for CBT questions junction (replaces missing package_id in questions)
+CREATE INDEX IF NOT EXISTS idx_cbt_package_questions_lookup ON cbt_package_questions(package_id, question_id);
 
 -- Index for CBT packages by subject (for filtering)
-CREATE INDEX IF NOT EXISTS idx_cbt_packages_subject ON cbt_packages(subject_code);
+CREATE INDEX IF NOT EXISTS idx_cbt_packages_subject_lookup ON cbt_packages(subject_id);
 
 -- Index for exam sessions by status and scheduled time (for dashboard views)
 CREATE INDEX IF NOT EXISTS idx_cbt_sessions_status_time ON cbt_exam_sessions(status, scheduled_start);

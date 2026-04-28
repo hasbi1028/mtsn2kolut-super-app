@@ -29,6 +29,10 @@ func (s *Academic) ListAssignments(ctx context.Context) ([]db.ListClassSubjectAs
 	return s.q.ListClassSubjectAssignments(ctx)
 }
 
+func (s *Academic) GetStats(ctx context.Context) (db.GetAcademicStatsRow, error) {
+	return s.q.GetAcademicStats(ctx)
+}
+
 func (s *Academic) CreateYear(ctx context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error) {
 	return s.q.CreateAcademicYear(ctx, p)
 }

@@ -96,6 +96,67 @@ func (q *Queries) GetCbtExamEvent(ctx context.Context, id pgtype.UUID) (GetCbtEx
 	return i, err
 }
 
+const getEventResults = `-- name: GetEventResults :many
+SELECT 
+    p.id AS participant_id,
+    s.id AS session_id,
+    s.title AS session_title,
+    std.nis,
+    std.nama AS student_nama,
+    std.gender,
+    c.code AS class_code,
+    p.score,
+    p.submitted_at
+FROM cbt_exam_participants p
+JOIN cbt_exam_sessions s ON s.id = p.session_id
+JOIN students std ON std.id = p.student_id
+LEFT JOIN school_classes c ON c.id = std.class_id
+WHERE s.event_id = $1
+ORDER BY std.nama ASC, s.scheduled_start ASC
+`
+
+type GetEventResultsRow struct {
+	ParticipantID pgtype.UUID        `json:"participant_id"`
+	SessionID     pgtype.UUID        `json:"session_id"`
+	SessionTitle  string             `json:"session_title"`
+	Nis           string             `json:"nis"`
+	StudentNama   string             `json:"student_nama"`
+	Gender        GenderEnum         `json:"gender"`
+	ClassCode     pgtype.Text        `json:"class_code"`
+	Score         pgtype.Numeric     `json:"score"`
+	SubmittedAt   pgtype.Timestamptz `json:"submitted_at"`
+}
+
+func (q *Queries) GetEventResults(ctx context.Context, eventID pgtype.UUID) ([]GetEventResultsRow, error) {
+	rows, err := q.db.Query(ctx, getEventResults, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetEventResultsRow{}
+	for rows.Next() {
+		var i GetEventResultsRow
+		if err := rows.Scan(
+			&i.ParticipantID,
+			&i.SessionID,
+			&i.SessionTitle,
+			&i.Nis,
+			&i.StudentNama,
+			&i.Gender,
+			&i.ClassCode,
+			&i.Score,
+			&i.SubmittedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCbtExamEvents = `-- name: ListCbtExamEvents :many
 SELECT
   e.id, e.title, e.exam_type, e.scope, e.status,

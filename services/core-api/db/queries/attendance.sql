@@ -7,6 +7,19 @@ JOIN employees e ON e.id = ar.employee_id
 ORDER BY ar.tanggal DESC, e.nama ASC
 LIMIT $1 OFFSET $2;
 
+-- name: ListAttendanceInRange :many
+SELECT ar.id, ar.employee_id, e.nama AS employee_nama, e.nip AS employee_nip,
+       ar.tanggal, ar.jam_masuk, ar.jam_pulang, ar.source_job_id,
+       ar.created_at, ar.updated_at
+FROM attendance_records ar
+JOIN employees e ON e.id = ar.employee_id
+WHERE ar.tanggal >= $1 AND ar.tanggal <= $2
+ORDER BY ar.tanggal DESC, e.nama ASC;
+
+-- name: CountAttendanceInRange :one
+SELECT COUNT(*) FROM attendance_records
+WHERE tanggal >= $1 AND tanggal <= $2;
+
 -- name: ListAttendanceByDate :many
 SELECT ar.id, ar.employee_id, e.nama AS employee_nama, e.nip AS employee_nip,
        ar.tanggal, ar.jam_masuk, ar.jam_pulang, ar.source_job_id,
@@ -25,6 +38,22 @@ JOIN employees e ON e.id = ar.employee_id
 WHERE ar.employee_id = $1
 ORDER BY ar.tanggal DESC
 LIMIT $2 OFFSET $3;
+
+-- name: GetMonthlyAttendanceSummary :many
+SELECT 
+    e.id AS employee_id,
+    e.nama AS employee_nama,
+    e.nip AS employee_nip,
+    COUNT(ar.id)::int AS total_days,
+    COUNT(CASE WHEN ar.jam_masuk != '' AND ar.jam_pulang != '' THEN 1 END)::int AS complete_days,
+    COUNT(CASE WHEN ar.jam_masuk != '' AND ar.jam_pulang = '' THEN 1 END)::int AS missing_checkout,
+    COUNT(CASE WHEN ar.jam_masuk = '' AND ar.jam_pulang != '' THEN 1 END)::int AS missing_checkin
+FROM employees e
+LEFT JOIN attendance_records ar ON ar.employee_id = e.id 
+    AND ar.tanggal >= $1 AND ar.tanggal <= $2
+WHERE e.is_active = TRUE
+GROUP BY e.id, e.nama, e.nip
+ORDER BY e.nama ASC;
 
 -- name: UpsertAttendance :one
 INSERT INTO attendance_records (id, employee_id, tanggal, jam_masuk, jam_pulang, source_job_id)

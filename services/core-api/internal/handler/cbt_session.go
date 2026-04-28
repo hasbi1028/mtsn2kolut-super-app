@@ -451,6 +451,101 @@ func (h *CbtSession) ScoreSession(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]string{"status": "scored"})
 }
 
+func (h *CbtSession) GuruAwareList(w http.ResponseWriter, r *http.Request) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	role, _ := claims["role"].(string)
+	if ok && role == "guru" {
+		eidRaw, _ := claims["eid"].(string)
+		if eidRaw == "" {
+			api.Forbidden(w)
+			return
+		}
+		var eid pgtype.UUID
+		if err := eid.Scan(eidRaw); err != nil {
+			api.Forbidden(w)
+			return
+		}
+		rows, err := h.svc.ListByTeacher(r.Context(), eid)
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		api.OK(w, rows)
+		return
+	}
+	h.List(w, r)
+}
+
+func (h *CbtSession) GuruAwareResults(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	claims, ok := api.ClaimsFromContext(r.Context())
+	role, _ := claims["role"].(string)
+	if ok && role == "guru" {
+		eidRaw, _ := claims["eid"].(string)
+		if eidRaw == "" {
+			api.Forbidden(w)
+			return
+		}
+		var eid pgtype.UUID
+		if err := eid.Scan(eidRaw); err != nil {
+			api.Forbidden(w)
+			return
+		}
+		session, err := h.svc.Get(r.Context(), id)
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		results, err := h.svc.GetResultsByTeacher(r.Context(), id, eid)
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		api.OK(w, map[string]any{
+			"session": session,
+			"results": results,
+		})
+		return
+	}
+	h.GetResults(w, r)
+}
+
+func (h *CbtSession) GuruAwareParticipants(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	claims, ok := api.ClaimsFromContext(r.Context())
+	role, _ := claims["role"].(string)
+	if ok && role == "guru" {
+		eidRaw, _ := claims["eid"].(string)
+		if eidRaw == "" {
+			api.Forbidden(w)
+			return
+		}
+		var eid pgtype.UUID
+		if err := eid.Scan(eidRaw); err != nil {
+			api.Forbidden(w)
+			return
+		}
+		hasAccess, err := h.svc.CheckTeacherAccess(r.Context(), id, eid)
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		if !hasAccess {
+			api.Forbidden(w)
+			return
+		}
+	}
+	h.ListParticipants(w, r)
+}
+
 func (h *CbtSession) GetResults(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {

@@ -41,6 +41,20 @@ func (h *CbtEvent) Get(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, row)
 }
 
+func (h *CbtEvent) GetResults(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	rows, err := h.svc.GetResults(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
 func (h *CbtEvent) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Title          string `json:"title"`

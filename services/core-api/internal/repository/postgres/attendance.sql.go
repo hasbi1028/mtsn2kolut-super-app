@@ -22,6 +22,83 @@ func (q *Queries) CountAttendance(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countAttendanceInRange = `-- name: CountAttendanceInRange :one
+SELECT COUNT(*) FROM attendance_records
+WHERE tanggal >= $1 AND tanggal <= $2
+`
+
+type CountAttendanceInRangeParams struct {
+	Tanggal   pgtype.Date `json:"tanggal"`
+	Tanggal_2 pgtype.Date `json:"tanggal_2"`
+}
+
+func (q *Queries) CountAttendanceInRange(ctx context.Context, arg CountAttendanceInRangeParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAttendanceInRange, arg.Tanggal, arg.Tanggal_2)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getMonthlyAttendanceSummary = `-- name: GetMonthlyAttendanceSummary :many
+SELECT 
+    e.id AS employee_id,
+    e.nama AS employee_nama,
+    e.nip AS employee_nip,
+    COUNT(ar.id)::int AS total_days,
+    COUNT(CASE WHEN ar.jam_masuk != '' AND ar.jam_pulang != '' THEN 1 END)::int AS complete_days,
+    COUNT(CASE WHEN ar.jam_masuk != '' AND ar.jam_pulang = '' THEN 1 END)::int AS missing_checkout,
+    COUNT(CASE WHEN ar.jam_masuk = '' AND ar.jam_pulang != '' THEN 1 END)::int AS missing_checkin
+FROM employees e
+LEFT JOIN attendance_records ar ON ar.employee_id = e.id 
+    AND ar.tanggal >= $1 AND ar.tanggal <= $2
+WHERE e.is_active = TRUE
+GROUP BY e.id, e.nama, e.nip
+ORDER BY e.nama ASC
+`
+
+type GetMonthlyAttendanceSummaryParams struct {
+	Tanggal   pgtype.Date `json:"tanggal"`
+	Tanggal_2 pgtype.Date `json:"tanggal_2"`
+}
+
+type GetMonthlyAttendanceSummaryRow struct {
+	EmployeeID      pgtype.UUID `json:"employee_id"`
+	EmployeeNama    string      `json:"employee_nama"`
+	EmployeeNip     string      `json:"employee_nip"`
+	TotalDays       int32       `json:"total_days"`
+	CompleteDays    int32       `json:"complete_days"`
+	MissingCheckout int32       `json:"missing_checkout"`
+	MissingCheckin  int32       `json:"missing_checkin"`
+}
+
+func (q *Queries) GetMonthlyAttendanceSummary(ctx context.Context, arg GetMonthlyAttendanceSummaryParams) ([]GetMonthlyAttendanceSummaryRow, error) {
+	rows, err := q.db.Query(ctx, getMonthlyAttendanceSummary, arg.Tanggal, arg.Tanggal_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMonthlyAttendanceSummaryRow{}
+	for rows.Next() {
+		var i GetMonthlyAttendanceSummaryRow
+		if err := rows.Scan(
+			&i.EmployeeID,
+			&i.EmployeeNama,
+			&i.EmployeeNip,
+			&i.TotalDays,
+			&i.CompleteDays,
+			&i.MissingCheckout,
+			&i.MissingCheckin,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAttendance = `-- name: ListAttendance :many
 SELECT ar.id, ar.employee_id, e.nama AS employee_nama, e.nip AS employee_nip,
        ar.tanggal, ar.jam_masuk, ar.jam_pulang, ar.source_job_id,
@@ -174,6 +251,65 @@ func (q *Queries) ListAttendanceByEmployee(ctx context.Context, arg ListAttendan
 	items := []ListAttendanceByEmployeeRow{}
 	for rows.Next() {
 		var i ListAttendanceByEmployeeRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EmployeeID,
+			&i.EmployeeNama,
+			&i.EmployeeNip,
+			&i.Tanggal,
+			&i.JamMasuk,
+			&i.JamPulang,
+			&i.SourceJobID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAttendanceInRange = `-- name: ListAttendanceInRange :many
+SELECT ar.id, ar.employee_id, e.nama AS employee_nama, e.nip AS employee_nip,
+       ar.tanggal, ar.jam_masuk, ar.jam_pulang, ar.source_job_id,
+       ar.created_at, ar.updated_at
+FROM attendance_records ar
+JOIN employees e ON e.id = ar.employee_id
+WHERE ar.tanggal >= $1 AND ar.tanggal <= $2
+ORDER BY ar.tanggal DESC, e.nama ASC
+`
+
+type ListAttendanceInRangeParams struct {
+	Tanggal   pgtype.Date `json:"tanggal"`
+	Tanggal_2 pgtype.Date `json:"tanggal_2"`
+}
+
+type ListAttendanceInRangeRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	EmployeeID   pgtype.UUID        `json:"employee_id"`
+	EmployeeNama string             `json:"employee_nama"`
+	EmployeeNip  string             `json:"employee_nip"`
+	Tanggal      pgtype.Date        `json:"tanggal"`
+	JamMasuk     string             `json:"jam_masuk"`
+	JamPulang    string             `json:"jam_pulang"`
+	SourceJobID  pgtype.UUID        `json:"source_job_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListAttendanceInRange(ctx context.Context, arg ListAttendanceInRangeParams) ([]ListAttendanceInRangeRow, error) {
+	rows, err := q.db.Query(ctx, listAttendanceInRange, arg.Tanggal, arg.Tanggal_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAttendanceInRangeRow{}
+	for rows.Next() {
+		var i ListAttendanceInRangeRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.EmployeeID,

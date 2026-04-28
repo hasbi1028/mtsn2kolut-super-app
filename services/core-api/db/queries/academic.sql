@@ -39,6 +39,13 @@ RETURNING *;
 -- name: DeleteSubject :exec
 DELETE FROM subjects WHERE id = $1;
 
+-- name: GetAcademicStats :one
+SELECT 
+    (SELECT COUNT(*) FROM students WHERE is_active = TRUE)::int AS total_students,
+    (SELECT COUNT(*) FROM school_classes WHERE is_active = TRUE)::int AS total_classes,
+    (SELECT COUNT(*) FROM subjects WHERE is_active = TRUE)::int AS total_subjects,
+    (SELECT COUNT(*) FROM academic_years)::int AS total_years;
+
 -- name: ListClassSubjectAssignments :many
 SELECT a.id, a.class_id, c.name AS class_name, c.code AS class_code,
        a.subject_id, s.name AS subject_name, s.code AS subject_code,

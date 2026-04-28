@@ -20,9 +20,14 @@ const (
 	authVersionKey  = "auth_version"
 )
 
+// authStore defines the subset of db.Queries that Auth service needs.
 type authStore interface {
+	GetUserByUsername(ctx context.Context, username string) (db.User, error)
+	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
+	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
 	GetSetting(ctx context.Context, key string) (db.AppSetting, error)
 	UpsertSetting(ctx context.Context, arg db.UpsertSettingParams) error
+	ListSettings(ctx context.Context) ([]db.AppSetting, error)
 }
 
 type Auth struct {
@@ -35,44 +40,20 @@ func NewAuth(q *db.Queries, jwtSecret, adminPassword string) *Auth {
 	return &Auth{q: q, jwtSecret: []byte(jwtSecret), adminPassword: adminPassword}
 }
 
-func (s *Auth) SeedAdmin(ctx context.Context) error {
-	_, err := s.q.GetSetting(ctx, "admin_username")
-	if err == nil {
-		return nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return err
-	}
-	if s.adminPassword == "" {
-		return errors.New("ADMIN_PASSWORD is required to seed initial admin user")
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(s.adminPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-	if err := s.q.UpsertSetting(ctx, db.UpsertSettingParams{Key: "admin_username", Value: "admin"}); err != nil {
-		return err
-	}
-	if err := s.q.UpsertSetting(ctx, db.UpsertSettingParams{Key: authVersionKey, Value: "0"}); err != nil {
-		return err
-	}
-	return s.q.UpsertSetting(ctx, db.UpsertSettingParams{Key: "admin_password", Value: string(hash)})
-}
-
 func (s *Auth) Login(ctx context.Context, username, password string) (domain.TokenPair, error) {
-	uRow, err := s.q.GetSetting(ctx, "admin_username")
-	if err != nil || uRow.Value != username {
-		return domain.TokenPair{}, domain.ErrUnauthorized
-	}
-	pRow, err := s.q.GetSetting(ctx, "admin_password")
+	user, err := s.q.GetUserByUsername(ctx, username)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.TokenPair{}, domain.ErrUnauthorized
+		}
+		return domain.TokenPair{}, err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return domain.TokenPair{}, domain.ErrUnauthorized
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(pRow.Value), []byte(password)); err != nil {
-		return domain.TokenPair{}, domain.ErrUnauthorized
-	}
-	return s.issueTokenPair(ctx, username)
+
+	return s.issueTokenPair(ctx, user)
 }
 
 func (s *Auth) Refresh(ctx context.Context, refreshToken string) (domain.TokenPair, error) {
@@ -93,51 +74,71 @@ func (s *Auth) Refresh(ctx context.Context, refreshToken string) (domain.TokenPa
 	if !ok || username == "" {
 		return domain.TokenPair{}, domain.ErrUnauthorized
 	}
+
+	user, err := s.q.GetUserByUsername(ctx, username)
+	if err != nil {
+		return domain.TokenPair{}, domain.ErrUnauthorized
+	}
+
 	if !s.validAuthVersion(ctx, claims) {
 		return domain.TokenPair{}, domain.ErrUnauthorized
 	}
-	return s.issueTokenPair(ctx, username)
+	return s.issueTokenPair(ctx, user)
 }
 
 func (s *Auth) ChangePassword(ctx context.Context, username, oldPassword, newPassword string) error {
-	if err := s.verifyPassword(ctx, username, oldPassword); err != nil {
-		return err
+	user, err := s.q.GetUserByUsername(ctx, username)
+	if err != nil {
+		return domain.ErrUnauthorized
 	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPassword)); err != nil {
+		return domain.ErrUnauthorized
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	if err := s.q.UpsertSetting(ctx, db.UpsertSettingParams{Key: "admin_password", Value: string(hash)}); err != nil {
+
+	if err := s.q.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+		ID:           user.ID,
+		PasswordHash: string(hash),
+	}); err != nil {
 		return err
 	}
 	return s.bumpAuthVersion(ctx)
 }
 
-func (s *Auth) CurrentAuthVersion(ctx context.Context) (int64, error) {
-	return s.currentAuthVersion(ctx)
-}
-
-func (s *Auth) issueTokenPair(ctx context.Context, username string) (domain.TokenPair, error) {
+func (s *Auth) issueTokenPair(ctx context.Context, user db.User) (domain.TokenPair, error) {
 	now := time.Now()
-	version, err := s.currentAuthVersion(ctx)
+	version, err := s.CurrentAuthVersion(ctx)
 	if err != nil {
 		return domain.TokenPair{}, err
 	}
 
-	access := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  username,
+	claims := jwt.MapClaims{
+		"sub":  user.Username,
+		"uid":  pgUUIDString(user.ID),
+		"role": string(user.Role),
 		"type": "access",
 		"ver":  version,
 		"iat":  now.Unix(),
 		"exp":  now.Add(accessTokenTTL).Unix(),
-	})
+	}
+	
+	if user.EmployeeID.Valid {
+		claims["eid"] = pgUUIDString(user.EmployeeID)
+	}
+
+	access := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	accessSigned, err := access.SignedString(s.jwtSecret)
 	if err != nil {
 		return domain.TokenPair{}, err
 	}
 
 	refresh := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  username,
+		"sub":  user.Username,
 		"type": "refresh",
 		"ver":  version,
 		"iat":  now.Unix(),
@@ -151,7 +152,34 @@ func (s *Auth) issueTokenPair(ctx context.Context, username string) (domain.Toke
 	return domain.TokenPair{AccessToken: accessSigned, RefreshToken: refreshSigned}, nil
 }
 
-func (s *Auth) currentAuthVersion(ctx context.Context) (int64, error) {
+func (s *Auth) SeedAdmin(ctx context.Context) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(s.adminPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	existing, err := s.q.GetUserByUsername(ctx, "admin")
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		// Admin doesn't exist yet — create
+		_, err = s.q.CreateUser(ctx, db.CreateUserParams{
+			Username:     "admin",
+			PasswordHash: string(hash),
+			Role:         db.UserRoleAdmin,
+		})
+		return err
+	}
+
+	// Admin exists — update password
+	return s.q.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+		ID:           existing.ID,
+		PasswordHash: string(hash),
+	})
+}
+
+func (s *Auth) CurrentAuthVersion(ctx context.Context) (int64, error) {
 	row, err := s.q.GetSetting(ctx, authVersionKey)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -167,7 +195,7 @@ func (s *Auth) currentAuthVersion(ctx context.Context) (int64, error) {
 }
 
 func (s *Auth) bumpAuthVersion(ctx context.Context) error {
-	v, err := s.currentAuthVersion(ctx)
+	v, err := s.CurrentAuthVersion(ctx)
 	if err != nil {
 		return err
 	}
@@ -175,7 +203,7 @@ func (s *Auth) bumpAuthVersion(ctx context.Context) error {
 }
 
 func (s *Auth) validAuthVersion(ctx context.Context, claims jwt.MapClaims) bool {
-	current, err := s.currentAuthVersion(ctx)
+	current, err := s.CurrentAuthVersion(ctx)
 	if err != nil {
 		return false
 	}
@@ -188,18 +216,6 @@ func (s *Auth) validAuthVersion(ctx context.Context, claims jwt.MapClaims) bool 
 		return false
 	}
 	return claimed == current
-}
-
-func (s *Auth) verifyPassword(ctx context.Context, username, password string) error {
-	uRow, err := s.q.GetSetting(ctx, "admin_username")
-	if err != nil || uRow.Value != username {
-		return domain.ErrUnauthorized
-	}
-	pRow, err := s.q.GetSetting(ctx, "admin_password")
-	if err != nil {
-		return domain.ErrUnauthorized
-	}
-	return bcrypt.CompareHashAndPassword([]byte(pRow.Value), []byte(password))
 }
 
 func asInt64(v any) (int64, bool) {

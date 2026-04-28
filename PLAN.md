@@ -1,453 +1,274 @@
-# Current Work Plan
+# MTs Negeri 2 Kolaka Utara — Super App Strategic Plan
 
-This file is a live handoff for the next agent or Claude Code session.
-
-## Current Objective
-
-Sprint 1 — Arsitektur CBT Opsi B: **Event + Rooms + Token + Exam API untuk Flutter**.
-
-> **Keputusan arsitektur final (2026-04-28):**
-> - Portal siswa (mengerjakan ujian) = **Flutter Android** — bukan SvelteKit.
-> - Flutter belum tersedia → Sprint 1 hanya backend API + admin UI.
-> - Sprint 1b (Flutter app) dikerjakan setelah Flutter tersedia.
-> - Arsitektur CBT menggunakan **Opsi B**: cbt_exam_events + cbt_exam_rooms sebagai tabel terpisah.
-> - `event_id` nullable di sesi → ulangan harian (oleh guru mapel) tidak perlu buat Event.
-> - Ruangan punya kapasitas wajib, FK dari peserta ke ruangan → sistem bisa validasi kapasitas.
+> **Status:** Sprints 1-5 Complete | Sprint 6 Next | Last Updated: 2026-04-28
+> This file is the master roadmap. Update after each sprint completion.
 
 ---
 
-## What Is Already Done
+## Executive Summary
 
-### Repository and Architecture
-
-- Monorepo: `apps/web-admin`, `services/core-api`, `services/pusaka-worker`
-- Deploy contract, docs, PM2 configs tersedia
-
-### Project Policy Files
-
-- `AGENTS.md`, `CLAUDE.md`, `docs/architecture.md`, `docs/ui-guidelines.md`, `docs/deployment.md`
-- Service policy: `apps/web-admin/AGENTS.md`, `services/core-api/AGENTS.md`, `services/pusaka-worker/AGENTS.md`
-
-### Backend — COMPLETE ✅
-
-- Migration 001–005 tersedia dan sudah diaplikasikan ke PostgreSQL
-- sqlc generated, `go build ./...` dan `go test ./...` pass bersih
-
-**Semua API endpoints yang sudah ada:**
-- `/api/academic` (GET/POST/DELETE)
-- `/api/students` (GET/POST/DELETE)
-- `/api/employees` (GET/POST/PUT/DELETE + pusaka-status + update-pusaka)
-- `/api/cbt/questions` (GET/POST/DELETE)
-- `/api/cbt/packages` (GET/POST/DELETE)
-- `/api/cbt/sessions` (GET/POST)
-- `/api/cbt/sessions/{id}` (GET/DELETE)
-- `/api/cbt/sessions/{id}/status` (PATCH)
-- `/api/cbt/sessions/{id}/participants` (GET)
-- `/api/cbt/sessions/{id}/enroll` (POST — enroll satu kelas, token masih kosong)
-- `/api/cbt/sessions/{id}/score` (POST — hitung skor)
-- `/api/cbt/sessions/{id}/results` (GET — skor + info per peserta)
-- `/api/cbt/sessions/{id}/participants/{pid}/answer` (POST)
-- `/api/cbt/sessions/{id}/participants/{pid}/answers` (GET)
-- `/api/jobs` + run-all, cancel, cancel-all, stats
-- `/api/attendance`, `/api/schedules`, `/api/settings`
-- `/api/worker/*` (claim, heartbeat, complete, fail, config, status)
-- `/api/scheduler/tick`
-- `/api/auth/*` (login, refresh, change-password)
-- `/health`
-
-### Frontend — COMPLETE ✅
-
-**UI Stack:**
-- Tailwind CSS v4 (`@tailwindcss/vite`) + shadcn-svelte nova
-- Tema hijau institusional (`--color-primary: oklch(0.38 0.13 145)`)
-- Sidebar dengan groups, icons, mobile support
-- `dialog/index.ts` diekspor dengan namespace (Root/Content/Header/Title/Description/Footer/Trigger)
-
-**Semua halaman sudah shadcn + tema hijau:**
-- `/` — Dashboard operasional
-- `/employees` — Manajemen pegawai + dialog Pusaka + konfirmasi SURE
-- `/jobs` — Riwayat job dengan filter + auto-refresh
-- `/attendance` — Rekap absensi harian + status worker
-- `/attendance/queue` — Antrian job absensi
-- `/settings` — Worker settings, jadwal otomatis, ubah password
-- `/academic` — Tahun ajaran, kelas, mata pelajaran
-- `/students` — Daftar siswa
-- `/cbt/questions` — Bank soal
-- `/cbt/packages` — Paket ujian
-- `/cbt/sessions` — Sesi ujian (create, schedule, activate, enroll, finish)
-- `/cbt/sessions/[id]` — Hasil: skor per peserta, stat kelulusan, ekspor CSV
+Three runtime units deployed across 3 VPS:
+- **Web Admin** (SvelteKit) — admin & guru BFF
+- **Core API** (Go + sqlc + PostgreSQL) — backend, migrations, scheduler
+- **Pusaka Worker** (Playwright) — async PUSAKA attendance automation
+- **Flutter App** (planned) — student CBT client
 
 ---
 
-## Arsitektur CBT — Opsi B (Target)
+## ✅ Completed Sprints (1-3)
 
-### Schema Baru (Migration 006)
+### Sprint 1 — CBT Foundation
+- [x] Migrations 001-008 (initial schema → CBT events, rooms, anti-cheat)
+- [x] Backend Exam API (login, status, heartbeat, event, answer, submit)
+- [x] Flutter API documentation (`docs/exam-api.md`)
+- [x] UI: Room management, shuffle seats, token generation
 
-```
-cbt_exam_events                       ← BARU: Kegiatan ujian
-  id, title, exam_type, scope,
-  academic_year_id, status
+### Sprint 2 — Master Data CRUD
+- [x] Edit soal CBT (inline dialog)
+- [x] Manajemen siswa (edit + assign class)
+- [x] Manajemen pegawai (edit + PUSAKA credentials)
+- [x] Koreksi essay (manual grading UI)
 
-cbt_exam_sessions                     ← DIUBAH: event_id nullable, class_id nullable
-  id, event_id (FK nullable),
-  package_id, class_id (nullable),
-  title, scheduled_start, scheduled_end, status
-
-cbt_exam_rooms                        ← BARU: Ruangan per sesi
-  id, session_id (FK), room_name, capacity
-
-cbt_exam_participants                 ← DIUBAH: room_id nullable, token di-generate saat enroll
-  id, session_id, student_id,
-  room_id (FK nullable → cbt_exam_rooms),
-  token (auto-generate saat enroll),
-  joined_at, submitted_at, score
-```
-
-### Skenario yang Didukung
-
-| Skenario | Dibuat Oleh | Alur |
-|---|---|---|
-| **Ulangan Harian** | Guru mapel | Sesi mandiri (event_id NULL) → enroll 1 kelas → mulai |
-| **UTS / UAS** | Admin/Wakakur | Buat Event → buat sesi per mapel → enroll per tingkat → buat ruangan → shuffle → mulai |
-| **UAM** | Admin | Buat Event → sesi → enroll seluruh sekolah → ruangan → shuffle → mulai |
-| **Try Out** | Admin/Guru | Fleksibel, bisa dengan atau tanpa Event |
-
-### Alur CBT Admin Lengkap (Opsi B)
-
-```
-[Opsional] Buat Kegiatan (Event) → UTS/UAS/UAM
-  ↓
-Buat Sesi → pilih paket soal, waktu mulai/selesai
-  ↓
-Enroll Peserta → by kelas / by tingkat / by sekolah
-  ↓
-Generate Token → otomatis saat enroll, bisa regenerate
-  ↓
-[Opsional] Buat Ruangan → nama + kapasitas
-  ↓
-[Opsional] Shuffle Peserta → acak siswa ke ruangan
-  ↓
-Aktifkan Sesi → status: active
-  ↓
-Siswa login via Flutter (token) → kerjakan soal → submit
-  ↓
-Selesaikan Sesi → hitung skor → lihat hasil
-```
+### Sprint 3 — Reports & Monitoring
+- [x] Attendance reports (date range filter, monthly summary)
+- [x] CBT reports (event-wide results, session results)
+- [x] CSV export on all major tables (WITA localized)
+- [x] Dashboard stats (student/class/subject counts)
 
 ---
 
-## Sprint 1 — Opsi B Foundation ← SEKARANG
+## ✅ Sprint 4 — Multi-user & Roles (COMPLETE)
 
-### Langkah 1: Migration 006
+**Goal:** Admin/guru role separation with audit trail.
 
-File: `services/core-api/db/migrations/006_cbt_events_rooms_anticheat.sql`
+| # | Task | Files Touched | Status |
+|---|------|---------------|--------|
+| 4.1 | Migration `009_multi_user_roles.sql` (users + audit_logs) | `db/migrations/` | ✅ Done |
+| 4.2 | Auth middleware role checking (`RequireAdmin`) | `internal/middleware/auth.go` | ✅ Done |
+| 4.3 | Login returns role info via JWT claims (`role`, `uid`, `eid`) | `internal/service/auth.go` | ✅ Done |
+| 4.4 | User CRUD endpoints | `internal/handler/user.go`, `db/queries/users.sql` | ✅ Done |
+| 4.5 | Audit trail middleware (auto-log all 2xx mutations) | `internal/middleware/audit.go` | ✅ Done |
+| 4.6 | BFF role gate in `hooks.server.ts` (admin-only paths) | `apps/web-admin/src/hooks.server.ts` | ✅ Done |
+| 4.7 | Role-filtered sidebar | `apps/web-admin/src/lib/components/Sidebar.svelte` | ✅ Done |
+| 4.8 | User management page + Audit Trail page | `apps/web-admin/src/routes/settings/users/`, `audit-logs/` | ✅ Done |
+| 4.9 | SeedAdmin via service.Auth (no SQL fake hash seed) | `internal/service/auth.go` | ✅ Done |
+| 4.10 | Backend admin gate on routes (employees, jobs, attendance, settings, users, master CUD, cbt events CUD) | `cmd/api/main.go` | ✅ Done |
 
-```sql
-CREATE TYPE cbt_exam_type AS ENUM ('ulangan','uts','uas','uam','tryout','lainnya');
+**Bug Fixes (in Sprint 4 batch):**
+- ✅ `handler/user.go` `pgUUIDString` returned empty string (broken stub).
+- ✅ `service/utils.go` `pageSize` was placeholder returning 0 — removed.
+- ✅ Migration 009 had fake bcrypt hash that would lock out admin — removed.
+- ✅ `main.go` registered `POST /api/settings` (handler expects `PUT /api/settings/{key}`).
+- ✅ `auth_test.go` was broken after auth refactor to users table — rewritten.
 
-CREATE TABLE cbt_exam_events (
-  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title            TEXT NOT NULL,
-  exam_type        cbt_exam_type NOT NULL DEFAULT 'lainnya',
-  scope            TEXT NOT NULL DEFAULT 'class',  -- 'class'|'grade'|'school'
-  academic_year_id UUID REFERENCES academic_years(id) ON DELETE SET NULL,
-  status           TEXT NOT NULL DEFAULT 'draft',  -- draft|active|finished
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE cbt_exam_rooms (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  session_id  UUID NOT NULL REFERENCES cbt_exam_sessions(id) ON DELETE CASCADE,
-  room_name   TEXT NOT NULL,
-  capacity    INT  NOT NULL DEFAULT 30,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Log aktivitas peserta (basis audit anti-cheat)
-CREATE TABLE cbt_participant_events (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  participant_id  UUID NOT NULL REFERENCES cbt_exam_participants(id) ON DELETE CASCADE,
-  event_type      TEXT NOT NULL,  -- login|heartbeat|answer|submit|app_switch|screenshot_attempt|warning
-  event_data      JSONB,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-ALTER TABLE cbt_exam_sessions
-  ADD COLUMN event_id UUID REFERENCES cbt_exam_events(id) ON DELETE SET NULL,
-  ALTER COLUMN class_id DROP NOT NULL;
-
-ALTER TABLE cbt_exam_participants
-  ADD COLUMN room_id            UUID REFERENCES cbt_exam_rooms(id) ON DELETE SET NULL,
-  ADD COLUMN device_fingerprint TEXT,
-  ADD COLUMN question_order     JSONB,       -- ["uuid-q5","uuid-q1",...] — urutan soal acak per peserta
-  ADD COLUMN last_heartbeat     TIMESTAMPTZ,
-  ADD COLUMN app_switch_count   INT NOT NULL DEFAULT 0,
-  ADD COLUMN screenshot_attempt INT NOT NULL DEFAULT 0,
-  ADD COLUMN login_ip           TEXT,
-  ADD COLUMN suspicious_flag    BOOLEAN NOT NULL DEFAULT FALSE;
-
-CREATE INDEX idx_cbt_events_status          ON cbt_exam_events (status);
-CREATE INDEX idx_cbt_rooms_session          ON cbt_exam_rooms (session_id);
-CREATE INDEX idx_cbt_participants_room      ON cbt_exam_participants (room_id);
-CREATE INDEX idx_participant_events_pid     ON cbt_participant_events (participant_id, created_at DESC);
-CREATE INDEX idx_participant_events_type    ON cbt_participant_events (event_type, created_at DESC);
-CREATE UNIQUE INDEX idx_cbt_rooms_name      ON cbt_exam_rooms (session_id, room_name);
-```
-
-### Langkah 2: SQL Queries Baru
-
-File: `services/core-api/db/queries/cbt_events.sql`
-- `ListCbtExamEvents`, `GetCbtExamEvent`, `CreateCbtExamEvent`, `UpdateCbtExamEventStatus`, `DeleteCbtExamEvent`
-
-File: `services/core-api/db/queries/cbt_rooms.sql`
-- `ListCbtExamRooms` (dengan jumlah peserta), `CreateCbtExamRoom`, `DeleteCbtExamRoom`
-
-Update `cbt_sessions.sql`:
-- `EnrollClassToSession` → generate token: `encode(gen_random_bytes(4), 'hex')`
-- `EnrollGradeToSession` (BARU) — enroll semua siswa aktif satu tingkat (grade)
-- `EnrollSchoolToSession` (BARU) — enroll semua siswa aktif
-- `RegenerateParticipantToken` (BARU)
-- `AssignParticipantRoom` (BARU)
-- `ListParticipantsByRoom`
-- `GetParticipantByToken` (BARU) — untuk ExamToken middleware
-- `UpdateParticipantQuestionOrder` (BARU) — simpan urutan soal acak
-- `UpdateParticipantHeartbeat` (BARU)
-- `IncrementParticipantAppSwitch` (BARU)
-- `IncrementParticipantScreenshot` (BARU)
-- `SetParticipantSuspiciousFlag` (BARU)
-- `InsertParticipantEvent` (BARU) — log aktivitas
-- `ListParticipantEvents` (BARU)
-- `GetSessionProctoringStatus` (BARU) — semua peserta dengan status live
-
-### Langkah 3: sqlc generate
-
-Setelah semua query ditambah, jalankan `sqlc generate` di `services/core-api`.
-
-### Langkah 4: Service + Handler Baru
-
-**Events:**
-- `internal/service/cbt_event.go` — CRUD + status update
-- `internal/handler/cbt_event.go` — thin HTTP handler
-
-**Rooms:**
-- Method baru di `internal/service/cbt_session.go` — CreateRoom, DeleteRoom, ShuffleRooms
-- Method baru di `internal/handler/cbt_session.go` — ListRooms, CreateRoom, DeleteRoom, ShuffleRooms
-
-**Token & Enrollment:**
-- Update `EnrollClass` di service → query baru yang generate token
-- Tambah `EnrollGrade`, `EnrollSchool`, `RegenerateToken` di service + handler
-
-### Langkah 5: Exam API untuk Flutter
-
-File baru: `internal/handler/exam.go`
-File baru: `internal/service/exam.go`
-File baru: `internal/middleware/exam_token.go`
-
-**Endpoints:**
-```
-POST /api/exam/login      — body: {token, device_fingerprint} → return session+soal+question_order
-GET  /api/exam/status     — header: X-Exam-Token → progres + sisa waktu server-side
-POST /api/exam/heartbeat  — header: X-Exam-Token → update last_heartbeat
-POST /api/exam/event      — header: X-Exam-Token, body: {event_type, data} → log app_switch/screenshot
-POST /api/exam/answer     — header: X-Exam-Token, body: {question_id, answer} → validasi window waktu
-POST /api/exam/submit     — header: X-Exam-Token → finalisasi + set submitted_at
-```
-
-**Response `POST /api/exam/login`:**
-```json
-{
-  "participant_id": "uuid",
-  "student": { "nis": "...", "nama": "..." },
-  "session": {
-    "id": "uuid", "title": "...",
-    "scheduled_start": "...", "scheduled_end": "...",
-    "duration_minutes": 90
-  },
-  "room": { "room_name": "Ruang 1" },
-  "questions": [
-    { "id": "uuid", "code": "M001", "question_text": "...",
-      "option_a": "...", "option_b": "...", "option_c": "...",
-      "option_d": "...", "option_e": "..." }
-  ],
-  "answered_count": 0,
-  "total_questions": 30,
-  "time_remaining_seconds": 5400
-}
-```
-
-**Middleware ExamToken:**
-- Baca header `X-Exam-Token`
-- Query participant by token, validasi sesi `active`
-- Inject `participant_id` + `session_id` ke context
-- Return 401 jika token tidak valid, 403 jika sesi belum/sudah selesai
-
-### Langkah 6: Update Router
-
-Tambah ke `cmd/api/main.go`:
-
-```
-// Admin (JWT-protected)
-GET/POST              /api/cbt/events
-GET/PATCH/DELETE      /api/cbt/events/{id}
-GET/POST              /api/cbt/sessions/{id}/rooms
-DELETE                /api/cbt/rooms/{id}
-POST                  /api/cbt/sessions/{id}/enroll-grade
-POST                  /api/cbt/sessions/{id}/enroll-school
-POST                  /api/cbt/sessions/{id}/shuffle-rooms
-POST                  /api/cbt/sessions/{id}/generate-tokens
-POST                  /api/cbt/sessions/{id}/participants/{pid}/regenerate-token
-GET                   /api/cbt/sessions/{id}/proctoring
-POST                  /api/cbt/sessions/{id}/participants/{pid}/flag
-
-// Exam (ExamToken middleware — no JWT)
-POST  /api/exam/login
-GET   /api/exam/status
-POST  /api/exam/heartbeat
-POST  /api/exam/event
-POST  /api/exam/answer
-POST  /api/exam/submit
-```
-
-### Langkah 7: Frontend Admin (SvelteKit)
-
-**Halaman baru:**
-- `/cbt/events` — list kegiatan ujian (UTS/UAS/UAM/ulangan/tryout)
-- `/cbt/events/[id]` — detail kegiatan: daftar sesi yang tergabung
-
-**Update halaman existing:**
-- `/cbt/sessions/[id]` — tambah 2 tab baru:
-  - Tab "Ruangan" — daftar ruangan + kapasitas + jumlah peserta, tombol tambah/hapus ruangan, tombol Shuffle
-  - Tab "Peserta" — tabel peserta dengan kolom token + ruangan, tombol Salin Token, tombol Regenerate Token
-- `/cbt/sessions` (form buat sesi) — tambah pilihan event_id (optional)
-
-**SvelteKit API proxies baru:**
-- `/api/cbt/events` (GET, POST)
-- `/api/cbt/events/[id]` (GET, PATCH, DELETE)
-- `/api/cbt/sessions/[id]/rooms` (GET, POST)
-- `/api/cbt/rooms/[id]` (DELETE)
-- `/api/cbt/sessions/[id]/enroll-grade` (POST)
-- `/api/cbt/sessions/[id]/enroll-school` (POST)
-- `/api/cbt/sessions/[id]/shuffle-rooms` (POST)
-- `/api/cbt/sessions/[id]/generate-tokens` (POST)
-- `/api/cbt/sessions/[id]/participants/[pid]/regenerate-token` (POST)
+**Acceptance verified:**
+- ✅ `go test ./...` passes (4 service test files green).
+- ✅ `go build ./...` clean.
+- ✅ `go vet ./...` clean.
+- ✅ `npm run check` 0 errors (17 pre-existing a11y warnings, not Sprint 4 introduced).
+- ⚠️ **Not yet:** guru data scoping (sees same data as admin in CBT pages — only routes are gated, not row-level filter). Pushed to Sprint 5.
 
 ---
 
-## Sprint 1b — Flutter Portal Siswa (setelah Flutter tersedia)
+## 📋 Future Sprints (Roadmap)
 
-1. Flutter app: layar input token → tampil soal ujian → jawab → submit
-2. Konsumsi `POST /api/exam/login` → render soal
-3. `POST /api/exam/answer` per jawaban (atau batch saat submit)
-4. `POST /api/exam/submit` → layar konfirmasi selesai
-5. `GET /api/exam/status` untuk sisa waktu dan progres
+## ✅ Sprint 5 — Guru Data Scoping & Hardening (COMPLETE)
+
+**Priority:** High
+**Estimated:** 1-2 weeks ✅ Done
+**Dependencies:** Sprint 4 completion
+
+| # | Task | Why | Scope | Status |
+|---|------|-----|-------|--------|
+| 5.1 | **JWT forwarding di BFF** — 33 proxy routes updated, `handleFetch` middleware | Audit log now has real user_id, backend sees user identity | BFF + backend mw | ✅ |
+| 5.2 | **Guru data scoping** — 4 new SQL queries (sessions, results, participants, students by teacher) | Row-level filtering via `class_subject_assignments` | backend | ✅ |
+| 5.3 | **Dashboard guru** — role-aware dashboard (sesi aktif, essay pending, siswa) | UX guru | frontend | ✅ |
+| 5.4 | Graceful shutdown — `signal.NotifyContext`, scheduler Stop(), `srv.Shutdown` | Prevents connection drops on restart | backend | ✅ |
+| 5.5 | Structured logging — `log/slog` JSON handler, all `log.Printf` → `slog.Info/Error` | Debugging & monitoring | backend | ✅ |
+| 5.6 | Token refresh silent on 401 — `handleFetch` hook intercepts 401, refreshes, retries | Auth reliability | frontend | ✅ |
+| 5.7 | Migrate legacy components — Nav (no-op), AttendanceTable + JobTable → shadcn Table, legacy CSS removed | Dark-theme CSS gone | frontend | ✅ |
+| 5.8 | Audit log retention — `DeleteOldAuditLogs` (>90 days), cleanup in scheduler | Tabel tidak grow unbounded | backend | ✅ |
+| 5.9 | Health endpoint detail — DB pool stats, `runtime.Version()`, scheduler ticks | Operational visibility | backend | ✅ |
+| 5.10 | `make check` now includes `go vet` + `npm audit --audit-level=high` | Security baseline | all | ✅ |
+
+**Verification:**
+- ✅ `go build ./...` clean
+- ✅ `go test ./...` passes (4 service test files)
+- ✅ `go vet ./...` clean
+- ✅ `npm run check` 0 errors (17 pre-existing a11y warnings)
+- ✅ 33 BFF proxy routes now forward `Authorization: Bearer` from cookies
+- ✅ Guru data scoped via `class_subject_assignments.teacher_employee_id = claims.eid`
+- ✅ Dashboard renders guru-specific stats (sessions, essays, students, subjects)
+
+### Sprint 6 — Infrastructure & CI/CD (NEXT)
+
+**Priority:** High
+**Estimated:** 2-3 weeks
+**Dependencies:** Sprint 5 completion
+
+| # | Task | Why | Scope |
+|---|------|-----|-------|
+| 6.1 | Set up GitHub Actions CI (lint, test, build) | Catch errors before deploy | infra |
+| 6.2 | Add Dockerfiles for all 3 services | Reproducible builds | infra |
+| 6.3 | Set up staging environment | Safe testing before prod | infra |
+| 6.4 | Add PostgreSQL backup automation | Data safety | deploy |
+| 6.5 | Add structured monitoring (prometheus metrics) | Operational insight | backend |
+| 6.6 | Set up uptime monitoring (healthchecks.io or similar) | Alert on downtime | infra |
+| 6.7 | Replace in-memory rate limiter with redis or DB-backed | Multi-instance scaling | backend |
+
+### Sprint 7 — Flutter CBT App (MVP)
+
+**Priority:** High
+**Estimated:** 4-6 weeks
+**Dependencies:** Sprints 1-6, Exam API endpoint stability
+**API Contract:** `docs/exam-api.md` (already written)
+
+| # | Task | Scope |
+|---|------|-------|
+| 7.1 | Initialize Flutter project (`apps/mobile`) with Serverpod | mobile |
+| 7.2 | Student login screen (exam token) | mobile |
+| 7.3 | Exam status & instructions screen | mobile |
+| 7.4 | Question renderer (PG A-E, multiple choice) | mobile |
+| 7.5 | Question navigation (numbered grid, prev/next) | mobile |
+| 7.6 | Answer submission (save per-question, auto-save timer) | mobile |
+| 7.7 | Anti-cheat: app switch detection, screenshot attempt, heartbeat | mobile |
+| 7.8 | Exam timer + auto-submit on timeout | mobile |
+| 7.9 | Submit & results screen | mobile |
+| 7.10 | Test with real exam sessions | mobile + backend |
+
+### Sprint 8 — Real-time Proctoring
+
+**Priority:** Medium
+**Estimated:** 2-3 weeks
+**Dependencies:** Sprint 7 (Flutter app active)
+
+| # | Task | Scope |
+|---|------|-------|
+| 8.1 | WebSocket endpoint for real-time proctoring | backend |
+| 8.2 | Live proctoring dashboard (auto-refresh via WS) | frontend |
+| 8.3 | Proctor alerts (offline, suspicious, app switch) | frontend |
+| 8.4 | Proctor actions (warn, terminate session) | backend + frontend |
+| 8.5 | Session recording playback | backend + frontend |
+
+### Sprint 9 — Notifications & Communication
+
+**Priority:** Medium
+**Estimated:** 2-3 weeks
+**Dependencies:** Sprint 4 (user system), Sprint 7 (students)
+
+| # | Task | Scope |
+|---|------|-------|
+| 9.1 | WhatsApp notification service (via API gateway) | backend |
+| 9.2 | Exam reminders (scheduled notification) | backend + scheduler |
+| 9.3 | Attendance reminders for employees | backend + worker |
+| 9.4 | Announcement broadcast (admin → all users) | frontend + backend |
+
+### Sprint 10 — Rapor / Grade Management
+
+**Priority:** Medium
+**Estimated:** 3-4 weeks
+**Dependencies:** Sprint 1-4 (academic data + users)
+
+| # | Task | Scope |
+|---|------|-------|
+| 10.1 | Grade schema & migrations (score types, weighting) | backend |
+| 10.2 | Grade entry UI (per subject per student) | frontend |
+| 10.3 | Grade calculation & final score processing | backend |
+| 10.4 | Rapor PDF generation | backend |
+| 10.5 | Rapor view/download for guru & admin | frontend |
+
+### Sprint 11 — Schedule & Timetable
+
+**Priority:** Medium
+**Estimated:** 3-4 weeks
+**Dependencies:** Sprint 10 (academic foundation)
+
+| # | Task | Scope |
+|---|------|-------|
+| 11.1 | Weekly schedule schema (time slots, teacher-subject-class) | backend |
+| 11.2 | Timetable builder UI (drag or select-based) | frontend |
+| 11.3 | Teacher schedule view | frontend |
+| 11.4 | Conflict detection (teacher double-booked, room overlap) | backend |
+
+### Sprint 12 — Inventory & Asset Management
+
+**Priority:** Low
+**Estimated:** 2-3 weeks
+**Dependencies:** None (standalone module)
+
+| # | Task | Scope |
+|---|------|-------|
+| 12.1 | Asset schema (category, location, condition) | backend |
+| 12.2 | Asset CRUD with barcode/RFID support | frontend + backend |
+| 12.3 | Asset tracking (check-in/check-out for borrowing) | backend |
+| 12.4 | Inventory reports & maintenance scheduling | frontend + backend |
+
+### Sprint 13 — Fee & Payment Management
+
+**Priority:** Low
+**Estimated:** 3-4 weeks
+**Dependencies:** Sprint 10 (student data finalized)
+
+| # | Task | Scope |
+|---|------|-------|
+| 13.1 | Fee schema (types, amounts, due dates) | backend |
+| 13.2 | Student billing & payment tracking | frontend + backend |
+| 13.3 | Payment gateway integration (optional) | backend |
+| 13.4 | Arrears reports & reminders | frontend + backend |
+
+### Sprint 14 — Library System
+
+**Priority:** Low
+**Estimated:** 3-4 weeks
+**Dependencies:** None (standalone)
+
+| # | Task | Scope |
+|---|------|-------|
+| 14.1 | Book catalog schema & CRUD | backend |
+| 14.2 | Borrow/return flow with due dates | backend + frontend |
+| 14.3 | Library dashboard (popular books, overdue items) | frontend |
+| 14.4 | Student library card / history view | frontend |
 
 ---
 
-## Sprint 2 — Edit Master Data
+## Technical Debt Backlog
 
-1. Form edit inline / modal untuk Soal CBT
-2. Form edit Siswa + dropdown assign kelas
-3. Form edit Pegawai (nama, NIP, unit kerja)
-4. Edit judul/deskripsi Paket Ujian + Event
+Items that don't fit a dedicated sprint but should be addressed incrementally:
 
----
-
-## Sprint 3 — Laporan & Monitoring
-
-1. Filter rentang tanggal + export CSV absensi
-2. Live monitoring CBT — siapa sudah submit, siapa belum, sisa waktu, per ruangan
-3. Rekap kehadiran per bulan per pegawai
-4. Laporan hasil ujian per kegiatan (bukan hanya per sesi)
-
----
-
-## Sprint 4 — Multi-user (Jangka Panjang)
-
-1. Akun guru mapel dengan akses terbatas (kelas/mata pelajaran sendiri)
-2. Roles: admin, guru
-3. Migration baru untuk users/roles table
+| Item | Effort | Impact | Notes |
+|------|--------|--------|-------|
+| Increase test coverage (target: >40%) | Medium | High | Start with integration tests for critical paths (auth, exam, CBT) |
+| Add e2e tests with Playwright | High | Medium | Worker already uses Playwright — reuse pattern |
+| Refactor worker `src/index.ts` (617 lines) | Medium | Medium | Extract modules: browser, pusaka-client, consumer-pool |
+| Add OpenAPI spec for all endpoints | Medium | High | Currently no API docs except exam-api.md |
+| Remove unused SQLite backup artifacts | Low | Low | `backup.db`, `data/pusaka.sqlite` should be cleaned up |
+| Standardize error responses in frontend | Low | Medium | Toast notifications for failed API calls |
+| Add DB connection pooling tuning | Low | Medium | Current defaults may not be optimal for concurrent load |
+| Document CBT exam flow end-to-end | Low | Medium | For operator training manuals |
 
 ---
 
-## Migration 007 — Tipe Soal Fleksibel (Bagian Sprint 1)
+## Architecture Decisions Log
 
-### Keputusan arsitektur soal (2026-04-28)
-
-Soal CBT mendukung 5 tipe dengan skema yang fleksibel:
-
-| Tipe | `question_type` | Opsi | Penilaian |
-|---|---|---|---|
-| Pilihan Ganda | `multiple_choice` | `options` JSONB (≥2, dinamis) | Otomatis |
-| Benar/Salah | `true_false` | `options` JSONB (2 opsi tetap) | Otomatis |
-| Pilih Banyak | `multiple_answer` | `options` JSONB (≥2) | Otomatis (exact set match) |
-| Isian Singkat | `short_answer` | `options: []` kosong | Otomatis (exact) atau manual |
-| Esai | `essay` | `options: []` kosong | Manual oleh guru |
-
-**Format `options` JSONB:**
-```json
-[{"label": "A", "text": "Teks pilihan pertama"}, {"label": "B", "text": "..."}]
-```
-
-**Format `answer_key`:**
-- `multiple_choice`, `true_false`, `short_answer`: string tunggal — `"A"` atau `"Benar"` atau `"42"`
-- `multiple_answer`: comma-separated — `"A,C"` atau `"A,B,D"`
-- `essay`: kosong `""` — penilaian via `manual_score`
-
-**Kolom lama `option_a..e` dipertahankan** (backward compat) tapi tidak dipakai untuk soal baru.
-
-### Schema tambahan (Migration 007)
-
-```sql
-ALTER TABLE cbt_questions
-  ADD COLUMN question_type TEXT NOT NULL DEFAULT 'multiple_choice',
-  ADD COLUMN options        JSONB NOT NULL DEFAULT '[]';
-
-ALTER TABLE cbt_student_answers
-  ADD COLUMN manual_score  NUMERIC(5,2),
-  ADD COLUMN graded_by     TEXT,
-  ADD COLUMN graded_at     TIMESTAMPTZ;
-```
-
-### Endpoint baru untuk essay grading
-
-```
-GET  /api/cbt/sessions/{id}/ungraded-essays   — list jawaban essay yang belum dinilai
-POST /api/cbt/sessions/{id}/participants/{pid}/grade-essay  — guru input manual_score per soal
-```
-
-### Scoring logic update
-
-- `ScoreSession` otomatis: skip soal `essay`, kalkulasi berdasarkan soal yang bisa di-auto-grade
-- Score akhir = (auto_correct + manual_correct_equivalent) / total_questions × 100
-- Essay masuk kalkulasi hanya setelah semua manual_score terisi
-- `ListUngradedEssays` untuk monitoring guru
-
-## Known Gaps & Bugs
-
-### Belum Ada (Fungsional)
-- **Soal tipe baru** — question_type + options JSONB ← Migration 007 (Sprint 1 extended)
-- **Essay grading UI** — admin/guru input nilai manual ← Sprint 1 extended
-- **Edit master data** — hampir semua halaman hanya Create + Delete ← Sprint 2
-- **Assign kelas ke siswa** — UI belum ada, meski `class_id` sudah ada di schema ← Sprint 2
-- **Filter rentang tanggal absensi** ← Sprint 3
-- **Export absensi** ← Sprint 3
-
-### Risiko Teknis
-- `option_a..e` lama masih ada di schema — tidak dipakai untuk soal baru, tapi belum dibersihkan
-- Essay dalam sesi yang sama dengan PG akan delay finalisasi skor sampai semua essay dinilai
-- Single admin account → belum ada multi-user/roles guru → Sprint 4
+| Date | Decision | Rationale |
+|------|----------|-----------|
+| Sprint 1 | PostgreSQL owned by core-api only | Clear data boundary, prevents sync issues |
+| Sprint 1 | sqlc over GORM/Ent | Typed SQL, no magic, full control over queries |
+| Sprint 1 | Chi over Gin/Echo | Lightweight, stdlib-compatible, middleware pattern |
+| Sprint 2 | shadcn-svelte + Tailwind v4 | Consistent UI, institutional theme, good DX |
+| Sprint 3 | CSV export via frontend | No backend streaming complexity for now |
+| Sprint 4 | Users table separate from employees | Future SSO/OIDC support, cleaner separation |
+| Sprint 4 | Audit log in PostgreSQL (not file) | Queryable, integratable with reports |
 
 ---
 
-## Important Context
+## Risk Register
 
-- Deploy order: backend code → migration → restart backend → deploy frontend → deploy worker
-- Go clean architecture dan sqlc wajib dipertahankan
-- Sidebar.svelte = nav utama; Nav.svelte tidak lagi dipakai di layout
-- Semua halaman baru = light institutional green theme (`oklch(0.38 0.13 145)`)
-- Jobs proxy (`/api/jobs/+server.ts`) rename `employee_nama` → `nama`, `employee_nip` → `nip`
-- `vite.config.js` — `ssr: { noExternal: ['lucide-svelte', 'bits-ui', 'tailwind-variants'] }`
-- `dialog/index.ts` — export namespace (Root/Content/…) DAN named (Dialog/DialogContent/…)
-- Setelah sqlc generate, selalu `go build ./...` dan `go test ./...` sebelum commit
-- Setelah Svelte edit, selalu `npm run check` di `apps/web-admin`
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| PUSAKA website changes break worker | Medium | High | Screenshot-based debugging, retry logic, alert on failures |
+| No backups tested | High | High | Add automated backup with restore testing to Sprint 6 |
+| Single dev bottleneck | High | Medium | Document architecture decisions, keep code review process |
+| Flutter app complexity underestimated | Medium | High | Start MVP in Sprint 7, iterate based on real usage |
+| PostgreSQL single-instance failure | Low | High | Add read replica or backup VPS (future) |
+| No rate limiting across instances | Medium | Medium | Move to Redis-based rate limiting in Sprint 6 |

@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -10,6 +10,8 @@ import (
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
+
+const auditCleanupInterval = 24 * time.Hour
 
 const (
 	defaultSchedulerInterval = 30 * time.Second
@@ -27,10 +29,13 @@ type schedulerJobRunner interface {
 }
 
 type Scheduler struct {
-	store schedulerStore
-	jobs  schedulerJobRunner
-	sett  *Setting
-	loc   *time.Location
+	store       schedulerStore
+	jobs        schedulerJobRunner
+	sett        *Setting
+	loc         *time.Location
+	audit       *Audit
+	lastCleanup time.Time
+	cancel      context.CancelFunc
 }
 
 type SchedulerResult struct {
@@ -40,29 +45,37 @@ type SchedulerResult struct {
 	Skipped   int    `json:"skipped"`
 }
 
-func NewScheduler(store *db.Queries, jobs *Job, sett *Setting) *Scheduler {
+func NewScheduler(store *db.Queries, jobs *Job, sett *Setting, audit *Audit) *Scheduler {
 	loc, err := time.LoadLocation("Asia/Makassar")
 	if err != nil {
 		loc = time.FixedZone("WITA", 8*60*60)
 	}
-	return &Scheduler{store: store, jobs: jobs, sett: sett, loc: loc}
+	return &Scheduler{store: store, jobs: jobs, sett: sett, loc: loc, audit: audit}
 }
 
 func (s *Scheduler) Start(ctx context.Context) {
+	schedCtx, cancel := context.WithCancel(ctx)
+	s.cancel = cancel
 	go func() {
 		ticker := time.NewTicker(defaultSchedulerInterval)
 		defer ticker.Stop()
 
-		s.runTick(ctx)
+		s.runTick(schedCtx)
 		for {
 			select {
-			case <-ctx.Done():
+			case <-schedCtx.Done():
 				return
 			case <-ticker.C:
-				s.runTick(ctx)
+				s.runTick(schedCtx)
 			}
 		}
 	}()
+}
+
+func (s *Scheduler) Stop() {
+	if s.cancel != nil {
+		s.cancel()
+	}
 }
 
 func (s *Scheduler) Tick(ctx context.Context, now time.Time) (SchedulerResult, error) {
@@ -132,13 +145,51 @@ func (s *Scheduler) defaultMaxAttempts(ctx context.Context) int32 {
 func (s *Scheduler) runTick(ctx context.Context) {
 	result, err := s.Tick(ctx, time.Now())
 	if err != nil {
-		log.Printf("scheduler tick failed: %v", err)
+		slog.Error("scheduler tick failed", "error", err)
 		return
 	}
-	if result.Processed == 0 {
+	if result.Processed > 0 {
+		slog.Info("scheduler tick", "processed", result.Processed, "enqueued", result.Enqueued, "skipped", result.Skipped, "at", result.CheckedAt)
+	}
+
+	s.maybeCleanupAudit(ctx)
+}
+
+func (s *Scheduler) maybeCleanupAudit(ctx context.Context) {
+	if s.audit == nil || s.sett == nil {
 		return
 	}
-	log.Printf("scheduler tick processed=%d enqueued=%d skipped=%d at=%s", result.Processed, result.Enqueued, result.Skipped, result.CheckedAt)
+	if time.Since(s.lastCleanup) < auditCleanupInterval {
+		return
+	}
+
+	row, err := s.store.GetSetting(ctx, "last_audit_cleanup_date")
+	if err == nil {
+		lastDate, parseErr := time.Parse(time.DateOnly, row.Value)
+		if parseErr == nil {
+			localNow := time.Now().In(s.loc)
+			if lastDate.Year() == localNow.Year() && lastDate.YearDay() == localNow.YearDay() {
+				s.lastCleanup = localNow
+				return
+			}
+		}
+	}
+
+	deleted, err := s.audit.CleanupOld(ctx)
+	if err != nil {
+		slog.Error("audit cleanup failed", "error", err)
+		return
+	}
+
+	localNowStr := time.Now().In(s.loc).Format(time.DateOnly)
+	if setErr := s.sett.Upsert(ctx, "last_audit_cleanup_date", localNowStr); setErr != nil {
+		slog.Error("audit cleanup: failed to update last_audit_cleanup_date", "error", setErr)
+	}
+	s.lastCleanup = time.Now()
+
+	if deleted > 0 {
+		slog.Info("audit cleanup: deleted old entries", "deleted", deleted)
+	}
 }
 
 func (s *Scheduler) setStatus(ctx context.Context, values map[string]string) error {

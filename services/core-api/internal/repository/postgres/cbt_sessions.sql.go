@@ -472,6 +472,93 @@ func (q *Queries) GetSessionResults(ctx context.Context, sessionID pgtype.UUID) 
 	return items, nil
 }
 
+const getSessionResultsByTeacher = `-- name: GetSessionResultsByTeacher :many
+SELECT
+  ep.id AS participant_id,
+  ep.student_id,
+  s.nis, s.nama, s.gender,
+  ep.submitted_at, ep.score,
+  COUNT(sa.id)::int AS total_answers,
+  SUM(CASE WHEN sa.is_correct THEN 1 ELSE 0 END)::int AS correct_answers
+FROM cbt_exam_participants ep
+JOIN students s ON s.id = ep.student_id
+JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+JOIN cbt_packages pkg ON pkg.id = ses.package_id
+JOIN class_subject_assignments csa ON csa.subject_id = pkg.subject_id
+LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id
+WHERE ep.session_id = $1 AND csa.teacher_employee_id = $2
+GROUP BY ep.id, s.nis, s.nama, s.gender
+ORDER BY ep.score DESC NULLS LAST, s.nama ASC
+`
+
+type GetSessionResultsByTeacherParams struct {
+	SessionID         pgtype.UUID `json:"session_id"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+}
+
+type GetSessionResultsByTeacherRow struct {
+	ParticipantID  pgtype.UUID        `json:"participant_id"`
+	StudentID      pgtype.UUID        `json:"student_id"`
+	Nis            string             `json:"nis"`
+	Nama           string             `json:"nama"`
+	Gender         GenderEnum         `json:"gender"`
+	SubmittedAt    pgtype.Timestamptz `json:"submitted_at"`
+	Score          pgtype.Numeric     `json:"score"`
+	TotalAnswers   int32              `json:"total_answers"`
+	CorrectAnswers int32              `json:"correct_answers"`
+}
+
+func (q *Queries) GetSessionResultsByTeacher(ctx context.Context, arg GetSessionResultsByTeacherParams) ([]GetSessionResultsByTeacherRow, error) {
+	rows, err := q.db.Query(ctx, getSessionResultsByTeacher, arg.SessionID, arg.TeacherEmployeeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetSessionResultsByTeacherRow{}
+	for rows.Next() {
+		var i GetSessionResultsByTeacherRow
+		if err := rows.Scan(
+			&i.ParticipantID,
+			&i.StudentID,
+			&i.Nis,
+			&i.Nama,
+			&i.Gender,
+			&i.SubmittedAt,
+			&i.Score,
+			&i.TotalAnswers,
+			&i.CorrectAnswers,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSessionTeacherAccess = `-- name: GetSessionTeacherAccess :one
+SELECT EXISTS(
+  SELECT 1 FROM cbt_exam_sessions s
+  JOIN cbt_packages p ON p.id = s.package_id
+  JOIN class_subject_assignments csa ON csa.subject_id = p.subject_id
+  WHERE s.id = $1 AND csa.teacher_employee_id = $2
+) AS has_access
+`
+
+type GetSessionTeacherAccessParams struct {
+	ID                pgtype.UUID `json:"id"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+}
+
+func (q *Queries) GetSessionTeacherAccess(ctx context.Context, arg GetSessionTeacherAccessParams) (bool, error) {
+	row := q.db.QueryRow(ctx, getSessionTeacherAccess, arg.ID, arg.TeacherEmployeeID)
+	var has_access bool
+	err := row.Scan(&has_access)
+	return has_access, err
+}
+
 const gradeStudentEssay = `-- name: GradeStudentEssay :exec
 UPDATE cbt_student_answers
 SET manual_score = $2,
@@ -645,6 +732,76 @@ func (q *Queries) ListCbtExamSessions(ctx context.Context) ([]ListCbtExamSession
 	items := []ListCbtExamSessionsRow{}
 	for rows.Next() {
 		var i ListCbtExamSessionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PackageID,
+			&i.PackageTitle,
+			&i.ClassID,
+			&i.EventID,
+			&i.ClassName,
+			&i.ClassCode,
+			&i.Title,
+			&i.ScheduledStart,
+			&i.ScheduledEnd,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ParticipantCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtExamSessionsByTeacher = `-- name: ListCbtExamSessionsByTeacher :many
+SELECT
+  s.id, s.package_id, p.title AS package_title,
+  s.class_id, s.event_id,
+  COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
+  s.title, s.scheduled_start, s.scheduled_end, s.status,
+  s.created_at, s.updated_at,
+  COUNT(ep.id)::int AS participant_count
+FROM cbt_exam_sessions s
+JOIN cbt_packages p ON p.id = s.package_id
+JOIN class_subject_assignments csa ON csa.subject_id = p.subject_id
+LEFT JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN cbt_exam_participants ep ON ep.session_id = s.id
+WHERE csa.teacher_employee_id = $1
+GROUP BY s.id, p.title, c.name, c.code
+ORDER BY s.scheduled_start DESC
+`
+
+type ListCbtExamSessionsByTeacherRow struct {
+	ID               pgtype.UUID          `json:"id"`
+	PackageID        pgtype.UUID          `json:"package_id"`
+	PackageTitle     string               `json:"package_title"`
+	ClassID          pgtype.UUID          `json:"class_id"`
+	EventID          pgtype.UUID          `json:"event_id"`
+	ClassName        string               `json:"class_name"`
+	ClassCode        string               `json:"class_code"`
+	Title            string               `json:"title"`
+	ScheduledStart   pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd     pgtype.Timestamptz   `json:"scheduled_end"`
+	Status           CbtSessionStatusEnum `json:"status"`
+	CreatedAt        pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz   `json:"updated_at"`
+	ParticipantCount int32                `json:"participant_count"`
+}
+
+func (q *Queries) ListCbtExamSessionsByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]ListCbtExamSessionsByTeacherRow, error) {
+	rows, err := q.db.Query(ctx, listCbtExamSessionsByTeacher, teacherEmployeeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtExamSessionsByTeacherRow{}
+	for rows.Next() {
+		var i ListCbtExamSessionsByTeacherRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.PackageID,

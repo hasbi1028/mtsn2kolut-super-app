@@ -32,15 +32,20 @@
 		app_switch_count: number; screenshot_attempt: number;
 		suspicious_flag: boolean; answered_count: number; score: string | null;
 	};
+	type UngradedEssay = {
+		id: string; nis: string; nama: string;
+		question_text: string; answer: string;
+	};
 
 	const sessionId = page.params.id;
 
-	let activeTab = $state<'hasil' | 'peserta' | 'ruangan' | 'proctoring'>('hasil');
+	let activeTab = $state<'hasil' | 'peserta' | 'ruangan' | 'proctoring' | 'essay'>('hasil');
 	let session = $state<SessionInfo | null>(null);
 	let results = $state<ResultRow[]>([]);
 	let participants = $state<Participant[]>([]);
 	let rooms = $state<Room[]>([]);
 	let proctoring = $state<ProctoringRow[]>([]);
+	let essays = $state<UngradedEssay[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 	let toast = $state({ msg: '', ok: true });
@@ -50,6 +55,7 @@
 	let newRoomCap = $state(30);
 	let roomBusy = $state(false);
 	let procInterval: ReturnType<typeof setInterval> | null = null;
+	let gradeInput = $state<Record<string, number>>({});
 
 	const statusLabel: Record<string, string> = {
 		draft: 'Draft', scheduled: 'Terjadwal', active: 'Berlangsung',
@@ -138,10 +144,19 @@
 		if (res.ok) proctoring = await res.json();
 	}
 
+	async function loadEssays() {
+		const res = await fetch(`/api/cbt/sessions/${sessionId}/ungraded-essays`);
+		if (res.ok) {
+			const data = await res.json();
+			essays = data.data ?? data;
+		}
+	}
+
 	async function switchTab(tab: typeof activeTab) {
 		activeTab = tab;
 		if (tab === 'peserta') await loadParticipants();
 		if (tab === 'ruangan') { await loadRooms(); await loadParticipants(); }
+		if (tab === 'essay') await loadEssays();
 		if (tab === 'proctoring') {
 			await loadProctoring();
 			if (!procInterval) {
@@ -217,6 +232,25 @@
 			body: JSON.stringify({ flag }),
 		});
 		await loadProctoring();
+	}
+
+	async function submitGrade(aid: string) {
+		const score = gradeInput[aid];
+		if (score === undefined || score < 0 || score > 100) {
+			showToast('Nilai harus 0-100', false);
+			return;
+		}
+		const res = await fetch(`/api/cbt/sessions/${sessionId}/answers/${aid}/grade-essay`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ manual_score: score }),
+		});
+		if (res.ok) {
+			showToast('Nilai berhasil disimpan');
+			await loadEssays();
+		} else {
+			showToast('Gagal menyimpan nilai', false);
+		}
 	}
 
 	function exportCSV() {
@@ -311,6 +345,7 @@
 					{ id: 'peserta', label: 'Peserta & Token' },
 					{ id: 'ruangan', label: 'Ruangan' },
 					{ id: 'proctoring', label: 'Proctoring' },
+					{ id: 'essay', label: 'Koreksi Essay' },
 				] as tab}
 					<button
 						onclick={() => switchTab(tab.id as any)}
@@ -442,12 +477,12 @@
 				<Card.Content>
 					<div class="flex gap-3 flex-wrap items-end">
 						<div>
-							<label class="block text-sm font-medium mb-1">Nama Ruangan</label>
-							<Input bind:value={newRoomName} placeholder="Ruang 1 / Lab Komputer A" class="w-48" />
+							<label for="r-name" class="block text-sm font-medium mb-1">Nama Ruangan</label>
+							<Input id="r-name" bind:value={newRoomName} placeholder="Ruang 1 / Lab Komputer A" class="w-48" />
 						</div>
 						<div>
-							<label class="block text-sm font-medium mb-1">Kapasitas</label>
-							<Input type="number" bind:value={newRoomCap} min={1} max={100} class="w-24" />
+							<label for="r-cap" class="block text-sm font-medium mb-1">Kapasitas</label>
+							<Input id="r-cap" type="number" bind:value={newRoomCap} min={1} max={100} class="w-24" />
 						</div>
 						<Button onclick={createRoom} disabled={roomBusy || !newRoomName.trim()}>
 							{roomBusy ? 'Menyimpan...' : '+ Tambah Ruangan'}
@@ -463,7 +498,7 @@
 			</Card.Root>
 
 			{#if rooms.length > 0}
-				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
 					{#each rooms as room}
 						<Card.Root class="border-green-100">
 							<Card.Content class="p-4">
@@ -489,7 +524,7 @@
 				</div>
 
 				<!-- Participants by room -->
-				<Card.Root>
+				<Card.Root class="mt-4">
 					<Card.Header class="pb-2">
 						<Card.Title class="text-base">Peserta per Ruangan</Card.Title>
 					</Card.Header>
@@ -529,14 +564,14 @@
 					</Card.Content>
 				</Card.Root>
 			{:else}
-				<div class="rounded-lg border border-dashed border-green-200 p-8 text-center text-muted-foreground text-sm">
+				<div class="rounded-lg border border-dashed border-green-200 p-8 text-center text-muted-foreground text-sm mt-4">
 					Belum ada ruangan. Tambah ruangan di atas, lalu klik "Acak Peserta ke Ruangan".
 				</div>
 			{/if}
 
 		<!-- Tab: Proctoring -->
 		{:else if activeTab === 'proctoring'}
-			<div class="flex items-center justify-between">
+			<div class="flex items-center justify-between mb-4">
 				<p class="text-sm text-muted-foreground">Auto-refresh setiap 15 detik</p>
 				<Button variant="outline" size="sm" onclick={loadProctoring}>↻ Refresh Sekarang</Button>
 			</div>
@@ -593,6 +628,53 @@
 							{:else}
 								<Table.Row>
 									<Table.Cell colspan={8} class="text-center text-slate-400 py-8">Belum ada data proctoring</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				</Card.Content>
+			</Card.Root>
+
+		<!-- Tab: Essay Grading -->
+		{:else if activeTab === 'essay'}
+			<Card.Root>
+				<Card.Header class="pb-2">
+					<Card.Title class="text-base">Koreksi Jawaban Essay ({essays.length} belum dinilai)</Card.Title>
+				</Card.Header>
+				<Card.Content class="p-0 overflow-x-auto">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row class="bg-green-50">
+								<Table.Head>Siswa</Table.Head>
+								<Table.Head>Pertanyaan</Table.Head>
+								<Table.Head>Jawaban Siswa</Table.Head>
+								<Table.Head class="w-32">Nilai (0-100)</Table.Head>
+								<Table.Head></Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each essays as e}
+								<Table.Row>
+									<Table.Cell>
+										<div class="font-medium">{e.nama}</div>
+										<div class="text-xs text-slate-500 font-mono">{e.nis}</div>
+									</Table.Cell>
+									<Table.Cell class="max-w-xs text-sm">{e.question_text}</Table.Cell>
+									<Table.Cell class="max-w-sm">
+										<div class="rounded bg-slate-50 p-2 text-sm border border-slate-200 whitespace-pre-wrap">{e.answer}</div>
+									</Table.Cell>
+									<Table.Cell>
+										<Input type="number" min="0" max="100" bind:value={gradeInput[e.id]} placeholder="0-100" class="w-24 h-8" />
+									</Table.Cell>
+									<Table.Cell>
+										<Button size="sm" onclick={() => submitGrade(e.id)}>Simpan</Button>
+									</Table.Cell>
+								</Table.Row>
+							{:else}
+								<Table.Row>
+									<Table.Cell colspan={5} class="text-center text-slate-400 py-12">
+										Tidak ada jawaban essay yang perlu dikoreksi.
+									</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>

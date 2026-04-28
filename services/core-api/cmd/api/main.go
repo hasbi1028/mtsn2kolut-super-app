@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,12 +21,17 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
 	_ = godotenv.Load()
 
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, mustEnv("DATABASE_URL"))
+	mainCtx, mainCancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer mainCancel()
+
+	pool, err := pgxpool.New(mainCtx, mustEnv("DATABASE_URL"))
 	if err != nil {
-		log.Fatalf("connect db: %v", err)
+		slog.Error("connect db", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
@@ -43,15 +50,18 @@ func main() {
 	examSvc := service.NewExam(pool)
 	schedSvc := service.NewSchedule(q)
 	settSvc := service.NewSetting(q)
-	schedulerSvc := service.NewScheduler(q, jobSvc, settSvc)
+	auditSvc := service.NewAudit(q)
+	schedulerSvc := service.NewScheduler(q, jobSvc, settSvc, auditSvc)
 
-	if err := authSvc.SeedAdmin(ctx); err != nil {
-		log.Fatalf("seed admin: %v", err)
+	if err := authSvc.SeedAdmin(mainCtx); err != nil {
+		slog.Error("seed admin", "error", err)
+		os.Exit(1)
 	}
-	if err := settSvc.SeedDefaults(ctx); err != nil {
-		log.Fatalf("seed settings: %v", err)
+	if err := settSvc.SeedDefaults(mainCtx); err != nil {
+		slog.Error("seed settings", "error", err)
+		os.Exit(1)
 	}
-	schedulerSvc.Start(ctx)
+	schedulerSvc.Start(mainCtx)
 
 	authH := handler.NewAuth(authSvc)
 	academicH := handler.NewAcademic(academicSvc)
@@ -65,6 +75,7 @@ func main() {
 	sessionH := handler.NewCbtSession(sessionSvc)
 	eventH := handler.NewCbtEvent(eventSvc)
 	examH := handler.NewExam(examSvc)
+	userH := handler.NewUser(q)
 	schedH := handler.NewSchedule(schedSvc)
 	settH := handler.NewSetting(settSvc)
 	schedulerH := handler.NewScheduler(schedulerSvc)
@@ -98,25 +109,34 @@ func main() {
 		r.Post("/api/exam/submit", examH.Submit)
 	})
 
+	requireAdmin := mw.RequireAdmin(internalKey)
+
 	r.Group(func(r chi.Router) {
 		r.Use(mw.InternalKeyOrJWT(internalKey, jwtSecret, authSvc.CurrentAuthVersion))
+		r.Use(mw.Audit(q))
 		r.Post("/api/auth/change-password", authH.ChangePassword)
 
-		r.Get("/api/employees", empH.List)
-		r.Post("/api/employees", empH.Create)
-		r.Get("/api/employees/{id}", empH.Get)
-		r.Get("/api/employees/{id}/pusaka-status", empH.GetPusakaStatus)
-		r.Post("/api/employees/{id}/update-pusaka", empH.UpdatePusakaCredentials)
-		r.Put("/api/employees/{id}", empH.Update)
-		r.Delete("/api/employees/{id}", empH.Delete)
+		// Employees are admin-only
+		r.Group(func(r chi.Router) {
+			r.Use(requireAdmin)
+			r.Get("/api/employees", empH.List)
+			r.Post("/api/employees", empH.Create)
+			r.Get("/api/employees/{id}", empH.Get)
+			r.Get("/api/employees/{id}/pusaka-status", empH.GetPusakaStatus)
+			r.Post("/api/employees/{id}/update-pusaka", empH.UpdatePusakaCredentials)
+			r.Put("/api/employees/{id}", empH.Update)
+			r.Delete("/api/employees/{id}", empH.Delete)
+		})
 
 		r.Get("/api/academic", academicH.Overview)
-		r.Post("/api/academic/{entity}", academicH.Create)
-		r.Delete("/api/academic/{entity}/{id}", academicH.Delete)
+		r.Get("/api/academic/stats", academicH.GetStats)
+		r.With(requireAdmin).Post("/api/academic/{entity}", academicH.Create)
+		r.With(requireAdmin).Delete("/api/academic/{entity}/{id}", academicH.Delete)
 
-		r.Get("/api/students", studentH.List)
-		r.Post("/api/students", studentH.Create)
-		r.Delete("/api/students/{id}", studentH.Delete)
+		r.Get("/api/students", studentH.GuruAwareList)
+		r.With(requireAdmin).Post("/api/students", studentH.Create)
+		r.With(requireAdmin).Put("/api/students/{id}", studentH.Update)
+		r.With(requireAdmin).Delete("/api/students/{id}", studentH.Delete)
 
 		r.Get("/api/cbt/questions", questionH.List)
 		r.Post("/api/cbt/questions", questionH.Create)
@@ -126,23 +146,24 @@ func main() {
 		r.Post("/api/cbt/packages", packageH.Create)
 		r.Delete("/api/cbt/packages/{id}", packageH.Delete)
 
-		// CBT Events (kegiatan ujian)
+		// CBT Events (kegiatan ujian) — admin manages, guru reads
 		r.Get("/api/cbt/events", eventH.List)
-		r.Post("/api/cbt/events", eventH.Create)
+		r.With(requireAdmin).Post("/api/cbt/events", eventH.Create)
 		r.Get("/api/cbt/events/{id}", eventH.Get)
-		r.Put("/api/cbt/events/{id}", eventH.Update)
-		r.Patch("/api/cbt/events/{id}/status", eventH.UpdateStatus)
-		r.Delete("/api/cbt/events/{id}", eventH.Delete)
+		r.Get("/api/cbt/events/{id}/results", eventH.GetResults)
+		r.With(requireAdmin).Put("/api/cbt/events/{id}", eventH.Update)
+		r.With(requireAdmin).Patch("/api/cbt/events/{id}/status", eventH.UpdateStatus)
+		r.With(requireAdmin).Delete("/api/cbt/events/{id}", eventH.Delete)
 
 		// CBT Sessions
-		r.Get("/api/cbt/sessions", sessionH.List)
+		r.Get("/api/cbt/sessions", sessionH.GuruAwareList)
 		r.Post("/api/cbt/sessions", sessionH.Create)
 		r.Get("/api/cbt/sessions/{id}", sessionH.Get)
-		r.Patch("/api/cbt/sessions/{id}/status", sessionH.UpdateStatus)
-		r.Delete("/api/cbt/sessions/{id}", sessionH.Delete)
+		r.With(requireAdmin).Patch("/api/cbt/sessions/{id}/status", sessionH.UpdateStatus)
+		r.With(requireAdmin).Delete("/api/cbt/sessions/{id}", sessionH.Delete)
 
 		// Participants & Enrollment
-		r.Get("/api/cbt/sessions/{id}/participants", sessionH.ListParticipants)
+		r.Get("/api/cbt/sessions/{id}/participants", sessionH.GuruAwareParticipants)
 		r.Post("/api/cbt/sessions/{id}/enroll", sessionH.EnrollClass)
 		r.Post("/api/cbt/sessions/{id}/enroll-grade", sessionH.EnrollGrade)
 		r.Post("/api/cbt/sessions/{id}/enroll-school", sessionH.EnrollSchool)
@@ -157,7 +178,7 @@ func main() {
 
 		// Scoring & Results
 		r.Post("/api/cbt/sessions/{id}/score", sessionH.ScoreSession)
-		r.Get("/api/cbt/sessions/{id}/results", sessionH.GetResults)
+		r.Get("/api/cbt/sessions/{id}/results", sessionH.GuruAwareResults)
 		r.Post("/api/cbt/sessions/{id}/participants/{pid}/answer", sessionH.RecordAnswer)
 		r.Get("/api/cbt/sessions/{id}/participants/{pid}/answers", sessionH.GetParticipantAnswers)
 
@@ -169,24 +190,35 @@ func main() {
 		r.Get("/api/cbt/sessions/{id}/ungraded-essays", sessionH.ListUngradedEssays)
 		r.Post("/api/cbt/sessions/{id}/answers/{aid}/grade-essay", sessionH.GradeEssay)
 
-		r.Get("/api/jobs", jobH.List)
-		r.Post("/api/jobs", jobH.Create)
-		r.Get("/api/jobs/stats", jobH.Stats)
-		r.Post("/api/jobs/run-all", jobH.RunAll)
-		r.Post("/api/jobs/cancel", jobH.CancelEmployee)
-		r.Post("/api/jobs/cancel-all", jobH.CancelAll)
-		r.Post("/api/jobs/sync-attendance", jobH.SyncAttendance)
+		// Jobs / Attendance / Schedules / Settings / Users — admin-only
+		r.Group(func(r chi.Router) {
+			r.Use(requireAdmin)
 
-		r.Get("/api/attendance", attH.List)
-		r.Get("/api/attendance/by-date/{date}", attH.ByDate)
-		r.Get("/api/attendance/by-employee/{id}", attH.ByEmployee)
+			r.Get("/api/jobs", jobH.List)
+			r.Post("/api/jobs", jobH.Create)
+			r.Get("/api/jobs/stats", jobH.Stats)
+			r.Post("/api/jobs/run-all", jobH.RunAll)
+			r.Post("/api/jobs/cancel", jobH.CancelEmployee)
+			r.Post("/api/jobs/cancel-all", jobH.CancelAll)
+			r.Post("/api/jobs/sync-attendance", jobH.SyncAttendance)
 
-		r.Get("/api/schedules", schedH.List)
-		r.Put("/api/schedules/{id}", schedH.Upsert)
+			r.Get("/api/attendance", attH.List)
+			r.Get("/api/attendance/summary", attH.GetSummary)
+			r.Get("/api/attendance/by-date/{date}", attH.ByDate)
+			r.Get("/api/attendance/by-employee/{id}", attH.ByEmployee)
 
-		r.Get("/api/settings", settH.List)
-		r.Put("/api/settings/{key}", settH.Upsert)
-		r.Post("/api/scheduler/tick", schedulerH.Tick)
+			r.Get("/api/schedules", schedH.List)
+			r.Put("/api/schedules/{id}", schedH.Upsert)
+			r.Get("/api/settings", settH.List)
+			r.Put("/api/settings/{key}", settH.Upsert)
+
+			r.Get("/api/users", userH.List)
+			r.Get("/api/users/audit-logs", userH.ListAuditLogs)
+			r.Post("/api/users", userH.Create)
+			r.Delete("/api/users/{id}", userH.Delete)
+
+			r.Post("/api/scheduler/tick", schedulerH.Tick)
+		})
 	})
 
 	r.Group(func(r chi.Router) {
@@ -209,14 +241,32 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	log.Printf("pusaka-api listening on :%s", port)
-	log.Fatal(srv.ListenAndServe())
+	go func() {
+		slog.Info("server starting", "port", port)
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			slog.Error("server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	<-mainCtx.Done()
+	slog.Info("shutting down...")
+
+	schedulerSvc.Stop()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("shutdown error", "error", err)
+	}
+	slog.Info("shutdown complete")
 }
 
 func mustEnv(key string) string {
 	v := os.Getenv(key)
 	if v == "" {
-		log.Fatalf("missing required env: %s", key)
+		slog.Error("missing required env", "key", key)
+		os.Exit(1)
 	}
 	return v
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -13,10 +14,14 @@ import (
 
 type fakeStore struct {
 	settings map[string]string
+	users    map[string]db.User
 }
 
 func newFakeStore() *fakeStore {
-	return &fakeStore{settings: map[string]string{}}
+	return &fakeStore{
+		settings: map[string]string{},
+		users:    map[string]db.User{},
+	}
 }
 
 func (f *fakeStore) GetSetting(ctx context.Context, key string) (db.AppSetting, error) {
@@ -40,35 +45,65 @@ func (f *fakeStore) UpsertSetting(ctx context.Context, arg db.UpsertSettingParam
 	return nil
 }
 
-func TestAuthSeedAdminSetsAuthVersion(t *testing.T) {
+func (f *fakeStore) GetUserByUsername(ctx context.Context, username string) (db.User, error) {
+	u, ok := f.users[username]
+	if !ok {
+		return db.User{}, pgx.ErrNoRows
+	}
+	return u, nil
+}
+
+func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error) {
+	var id pgtype.UUID
+	_ = id.Scan("11111111-1111-1111-1111-111111111111")
+	u := db.User{
+		ID:           id,
+		Username:     arg.Username,
+		PasswordHash: arg.PasswordHash,
+		Role:         arg.Role,
+		EmployeeID:   arg.EmployeeID,
+	}
+	f.users[arg.Username] = u
+	return u, nil
+}
+
+func (f *fakeStore) UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error {
+	for k, u := range f.users {
+		if u.ID == arg.ID {
+			u.PasswordHash = arg.PasswordHash
+			f.users[k] = u
+			return nil
+		}
+	}
+	return pgx.ErrNoRows
+}
+
+func TestAuthSeedAdminCreatesUser(t *testing.T) {
 	store := newFakeStore()
 	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
 
 	if err := svc.SeedAdmin(context.Background()); err != nil {
 		t.Fatalf("SeedAdmin() error = %v", err)
 	}
-	if got := store.settings["admin_username"]; got != "admin" {
-		t.Fatalf("admin_username = %q", got)
+	u, ok := store.users["admin"]
+	if !ok {
+		t.Fatal("admin user not created")
 	}
-	if got := store.settings["auth_version"]; got != "0" {
-		t.Fatalf("auth_version = %q, want 0", got)
+	if u.Role != db.UserRoleAdmin {
+		t.Fatalf("admin role = %q, want admin", u.Role)
 	}
-	if _, err := bcrypt.Cost([]byte(store.settings["admin_password"])); err != nil {
-		t.Fatalf("admin_password not bcrypt hash: %v", err)
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte("admin")); err != nil {
+		t.Fatalf("admin password hash mismatch: %v", err)
 	}
 }
 
 func TestAuthRefreshRejectsOldTokenAfterPasswordChange(t *testing.T) {
 	store := newFakeStore()
-	hash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatal(err)
-	}
-	store.settings["admin_username"] = "admin"
-	store.settings["admin_password"] = string(hash)
-	store.settings["auth_version"] = "0"
-
 	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
+
+	if err := svc.SeedAdmin(context.Background()); err != nil {
+		t.Fatalf("SeedAdmin() error = %v", err)
+	}
 
 	pair, err := svc.Login(context.Background(), "admin", "admin")
 	if err != nil {
