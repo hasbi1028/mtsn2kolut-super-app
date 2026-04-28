@@ -33,7 +33,7 @@
   }
 
   function runTypeLabel(t: string) {
-    return { morning: 'Pagi', afternoon: 'Sore', checkin: 'Masuk', checkout: 'Pulang' }[t] ?? t;
+    return { morning: 'Rekap', afternoon: 'Rekap', checkin: 'Masuk', checkout: 'Pulang' }[t] ?? t;
   }
 
   function fmtDt(iso: string) {

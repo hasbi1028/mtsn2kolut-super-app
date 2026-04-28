@@ -33,11 +33,9 @@
 	];
 
 	const typeOptions = [
-		{ value: '', label: 'Semua Tipe' },
-		{ value: 'morning',   label: 'Pagi' },
-		{ value: 'afternoon', label: 'Sore' },
-		{ value: 'checkin',   label: 'Masuk' },
-		{ value: 'checkout',  label: 'Pulang' },
+		{ value: '',        label: 'Semua Tipe' },
+		{ value: 'checkin', label: 'Masuk' },
+		{ value: 'checkout',label: 'Pulang' },
 	];
 
 	function statusVariant(s: string): 'default' | 'destructive' | 'outline' | 'secondary' {
@@ -53,7 +51,7 @@
 	}
 
 	function runTypeLabel(t: string) {
-		return { morning: 'Pagi', afternoon: 'Sore', checkin: 'Masuk', checkout: 'Pulang' }[t] ?? t;
+		return { morning: 'Rekap', afternoon: 'Rekap', checkin: 'Masuk', checkout: 'Pulang' }[t] ?? t;
 	}
 
 	function fmtDt(iso: string) {

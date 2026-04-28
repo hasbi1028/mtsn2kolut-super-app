@@ -43,12 +43,12 @@
   let runConfirmInput = $state('');
 
   const runTypeLabel: Record<RunType, string> = {
-    morning: 'Pagi', afternoon: 'Sore', checkin: 'Masuk', checkout: 'Pulang',
+    morning: 'Rekap', afternoon: 'Rekap', checkin: 'Masuk', checkout: 'Pulang',
   };
 
   const runTypeDesc: Record<RunType, string> = {
-    morning:   'Rekam absensi pagi via Pusaka',
-    afternoon: 'Rekam absensi sore via Pusaka',
+    morning:   'Rekap kehadiran via PUSAKA Kemenag',
+    afternoon: 'Rekap kehadiran via PUSAKA Kemenag',
     checkin:   'Rekam absensi MASUK — akan langsung mengeksekusi login ke Pusaka',
     checkout:  'Rekam absensi PULANG — akan langsung mengeksekusi login ke Pusaka',
   };
@@ -125,7 +125,7 @@
     const s = e.active_status || e.last_status;
     const t = e.active_run_type || e.last_run_type;
     if (!s) return null;
-    const labels: Record<string, string> = { morning: 'Pagi', afternoon: 'Sore', checkin: 'Masuk', checkout: 'Pulang' };
+    const labels: Record<string, string> = { morning: 'Rekap', afternoon: 'Rekap', checkin: 'Masuk', checkout: 'Pulang' };
     return { status: s, tipe: labels[t] ?? t };
   }
 
@@ -210,11 +210,8 @@
                   <Button size="sm" variant="ghost" onclick={() => testPusakaCredentials(e)} disabled={testing || !isPusakaConfigured(e)}>
                     Test
                   </Button>
-                  <Button size="sm" variant="outline" onclick={() => onrun(e.id, 'morning')} disabled={busyId === e.id}>
-                    Pagi
-                  </Button>
-                  <Button size="sm" variant="outline" onclick={() => onrun(e.id, 'afternoon')} disabled={busyId === e.id}>
-                    Sore
+                  <Button size="sm" variant="outline" onclick={() => { onrun(e.id, 'morning'); onrun(e.id, 'afternoon'); }} disabled={busyId === e.id}>
+                    Rekap
                   </Button>
                   <Button size="sm" variant="outline"
                     onclick={() => openRunConfirm(e, 'checkin')}

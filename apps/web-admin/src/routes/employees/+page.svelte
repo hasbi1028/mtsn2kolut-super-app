@@ -29,7 +29,7 @@
     } catch (e) {
       console.error('[run-now] failed:', e);
     }
-    const labels: Record<string, string> = { morning: 'pagi', afternoon: 'sore', checkin: 'absensi masuk', checkout: 'absensi pulang' };
+    const labels: Record<string, string> = { morning: 'rekap', afternoon: 'rekap', checkin: 'absensi masuk', checkout: 'absensi pulang' };
     showToast(`Job ${labels[run_type] ?? run_type} berhasil di-queue.`);
   }
 

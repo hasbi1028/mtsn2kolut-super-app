@@ -59,7 +59,25 @@
 		}
 	}
 
-	const runAll        = (t: string) => act(`run_${t}`,  () => fetch('/api/jobs/run-all',   { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ run_type: t }) }), `Job ${t === 'morning' ? 'pagi' : 'sore'} di-queue`);
+	async function runRekap() {
+		busy = { ...busy, rekap: true };
+		try {
+			const [r1, r2] = await Promise.all([
+				fetch('/api/jobs/run-all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ run_type: 'morning' }) }),
+				fetch('/api/jobs/run-all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ run_type: 'afternoon' }) }),
+			]);
+			const [d1, d2] = await Promise.all([r1.json().catch(() => ({})), r2.json().catch(() => ({}))]);
+			if (!r1.ok && !r2.ok) throw new Error((d1 as any).error || 'Gagal');
+			const inserted = ((d1 as any).inserted ?? 0) + ((d2 as any).inserted ?? 0);
+			showToast(`Rekap di-queue: ${inserted} job baru`, 'ok');
+		} catch (e: any) {
+			showToast(e.message, 'err');
+		} finally {
+			busy = { ...busy, rekap: false };
+			await load();
+		}
+	}
+
 	const triggerSched  = ()          => act('sched',      () => fetch('/api/scheduler/tick', { method: 'POST' }), 'Scheduler tick dijalankan');
 	const cancelAll     = ()          => act('cancel_all', () => fetch('/api/jobs/cancel-all',{ method: 'POST' }), 'Semua antrian dibatalkan');
 
@@ -80,7 +98,7 @@
 	}
 
 	function runTypeLabel(t: string) {
-		return { morning: 'Pagi', afternoon: 'Sore', checkin: 'Masuk', checkout: 'Pulang' }[t] ?? t;
+		return { morning: 'Rekap', afternoon: 'Rekap', checkin: 'Masuk', checkout: 'Pulang' }[t] ?? t;
 	}
 
 	function fmtDt(iso: string) {
@@ -112,11 +130,8 @@
 			<Button variant="outline" size="sm" onclick={triggerSched} disabled={busy.sched}>
 				{busy.sched ? '...' : '⚡ Trigger Scheduler'}
 			</Button>
-			<Button size="sm" onclick={() => runAll('morning')} disabled={busy.run_morning}>
-				{busy.run_morning ? '...' : '▶ Run All Pagi'}
-			</Button>
-			<Button variant="outline" size="sm" onclick={() => runAll('afternoon')} disabled={busy.run_afternoon}>
-				{busy.run_afternoon ? '...' : '▶ Run All Sore'}
+			<Button size="sm" onclick={runRekap} disabled={busy.rekap}>
+				{busy.rekap ? '...' : '▶ Jalankan Rekap'}
 			</Button>
 			{#if confirmKey === 'cancel_all'}
 				<span class="self-center text-xs text-amber-700">Batalkan semua antrian?</span>

@@ -16,7 +16,7 @@
   let { schedules = $bindable(), onsave }: { schedules: Schedule[]; onsave: () => void } = $props();
 
   const typeLabels: Record<string, string> = {
-    morning: 'Pagi', afternoon: 'Sore', checkin: 'Masuk', checkout: 'Pulang',
+    morning: 'Rekap', afternoon: 'Rekap', checkin: 'Masuk', checkout: 'Pulang',
   };
 </script>
 
