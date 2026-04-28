@@ -210,7 +210,7 @@
                   <Button size="sm" variant="ghost" onclick={() => testPusakaCredentials(e)} disabled={testing || !isPusakaConfigured(e)}>
                     Test
                   </Button>
-                  <Button size="sm" variant="outline" onclick={() => { onrun(e.id, 'morning'); onrun(e.id, 'afternoon'); }} disabled={busyId === e.id}>
+                  <Button size="sm" variant="outline" onclick={() => onrun(e.id, 'morning')} disabled={busyId === e.id}>
                     Rekap
                   </Button>
                   <Button size="sm" variant="outline"

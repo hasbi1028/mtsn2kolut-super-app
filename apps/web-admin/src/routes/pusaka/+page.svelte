@@ -62,14 +62,10 @@
 	async function runRekap() {
 		busy = { ...busy, rekap: true };
 		try {
-			const [r1, r2] = await Promise.all([
-				fetch('/api/jobs/run-all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ run_type: 'morning' }) }),
-				fetch('/api/jobs/run-all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ run_type: 'afternoon' }) }),
-			]);
-			const [d1, d2] = await Promise.all([r1.json().catch(() => ({})), r2.json().catch(() => ({}))]);
-			if (!r1.ok && !r2.ok) throw new Error((d1 as any).error || 'Gagal');
-			const inserted = ((d1 as any).inserted ?? 0) + ((d2 as any).inserted ?? 0);
-			showToast(`Rekap di-queue: ${inserted} job baru`, 'ok');
+			const res  = await fetch('/api/jobs/run-all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ run_type: 'morning' }) });
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) throw new Error((data as any).error || 'Gagal');
+			showToast(`Rekap di-queue: ${(data as any).inserted ?? 0} job baru`, 'ok');
 		} catch (e: any) {
 			showToast(e.message, 'err');
 		} finally {
