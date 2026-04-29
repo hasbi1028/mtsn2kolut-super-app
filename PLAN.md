@@ -1,6 +1,6 @@
 # MTs Negeri 2 Kolaka Utara — Super App Strategic Plan
 
-> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Last Updated: 2026-04-29
+> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Last Updated: 2026-04-29
 > This file is the master roadmap. Update after each sprint completion.
 
 ---
@@ -104,10 +104,10 @@ Three runtime units deployed across 3 VPS:
 - [ ] Question renderer
 - [ ] Anti-cheat
 
-### Lightweight Ops Hardening
-- [ ] Basic CI for `go test` + `npm run check`
-- [ ] PostgreSQL backup automation
-- [ ] Uptime / health monitoring
+### ✅ Lightweight Ops Hardening (COMPLETE)
+- [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck
+- [x] PostgreSQL backup automation via root make target and deploy script
+- [x] Uptime / health monitoring via root make targets and deploy health script
 ### Sprint 8 — Real-time Proctoring
 - [ ] WebSocket endpoint
 - [ ] Live proctoring dashboard

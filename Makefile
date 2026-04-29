@@ -37,7 +37,8 @@ dev-backend:
 
 # ── Check / Test ─────────────────────────────────────────────────────────────
 
-.PHONY: check check-web check-worker test-backend vet-backend audit-web lint-backend lint
+.PHONY: check check-web check-worker test-backend vet-backend audit-web lint-backend lint ci-check
+.PHONY: ops-health ops-health-backend ops-health-frontend ops-health-worker ops-backup
 
 check-web:
 	cd $(WEB_DIR) && npm run check
@@ -58,6 +59,8 @@ lint-backend:
 	cd $(BACKEND_DIR) && (golangci-lint run ./... || true)
 
 lint: lint-backend
+
+ci-check: check-web check-worker test-backend
 
 check: check-web check-worker test-backend vet-backend audit-web
 
@@ -153,6 +156,23 @@ db-migrate:
 db-schema:
 	psql "$${DATABASE_URL}" -f $(BACKEND_DIR)/db/migrations/001_initial_schema.sql
 
+# ── Ops Hardening ────────────────────────────────────────────────────────────
+
+ops-health:
+	./deploy/scripts/health-check.sh all
+
+ops-health-backend:
+	./deploy/scripts/health-check.sh backend
+
+ops-health-frontend:
+	./deploy/scripts/health-check.sh frontend
+
+ops-health-worker:
+	./deploy/scripts/health-check.sh worker
+
+ops-backup:
+	./deploy/scripts/backup.sh
+
 # ── Clean ────────────────────────────────────────────────────────────────────
 
 .PHONY: clean clean-build
@@ -187,9 +207,12 @@ help:
 	@echo ""
 	@echo "Verify:"
 	@echo "  check                  web check + worker typecheck + backend tests + vet + npm audit"
+	@echo "  ci-check               web check + worker typecheck + backend tests"
 	@echo "  lint                   golangci-lint run (falls back if not installed)"
 	@echo "  db-sqlc                regenerate sqlc code"
 	@echo "  db-migrate             apply PostgreSQL migrations"
+	@echo "  ops-health             health check backend + frontend + worker"
+	@echo "  ops-backup             run PostgreSQL backup script"
 	@echo ""
 	@echo "Deploy:"
 	@echo "  pm2-start-backend      start backend-only PM2 config"

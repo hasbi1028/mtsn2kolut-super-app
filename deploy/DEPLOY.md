@@ -112,6 +112,47 @@ Worker:
 - cek log worker
 - pastikan heartbeat worker muncul di backend settings/status
 
+Shortcut lokal dari root repo:
+
+```bash
+make ops-health
+make ops-health-backend
+make ops-health-frontend
+make ops-health-worker
+```
+
+## Backup PostgreSQL minimum
+
+Dari root repo:
+
+```bash
+make ops-backup
+```
+
+Opsional override retention:
+
+```bash
+BACKUP_RETENTION_DAYS=14 make ops-backup
+```
+
+Contoh cron ringan di VPS backend:
+
+```bash
+0 2 * * * cd /path/to/mtsn2kolut-super-app && BACKUP_RETENTION_DAYS=14 ./deploy/scripts/backup.sh /backups/mtsn2kolut >> /var/log/mtsn2kolut-backup.log 2>&1
+```
+
+Backup ini menghasilkan dump PostgreSQL terkompresi `.sql.gz` dan membersihkan file yang lebih tua dari retention window.
+
+## CI ringan
+
+Repo ini sekarang punya workflow CI dasar untuk:
+
+- `go test ./...` pada `services/core-api`
+- `npm run check` pada `apps/web-admin`
+- `tsc --noEmit` pada `services/pusaka-worker`
+
+CI ini sengaja ringan dan hanya memeriksa kualitas dasar, bukan deploy automation.
+
 ## Rollback
 
 Jika deploy backend gagal:

@@ -9,7 +9,7 @@ BACKEND_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/services/core-a
 DB_SCRIPTS_DIR="$BACKEND_DIR/db/scripts"
 BACKUP_DIR="${1:-/backups/mtsn2kolut}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RETENTION_DAYS=7
+RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
 
 # Create backup directory if it doesn't exist
 mkdir -p "$BACKUP_DIR"
@@ -30,7 +30,7 @@ fi
 BACKUP_FILE="$BACKUP_DIR/pusaka_backup_$TIMESTAMP.sql.gz"
 echo "Starting database backup to $BACKUP_FILE..."
 
-if pg_dump "$DATABASE_URL" | gzip > "$BACKUP_FILE"; then
+if pg_dump --clean --if-exists --no-owner --no-privileges "$DATABASE_URL" | gzip > "$BACKUP_FILE"; then
     echo "Backup completed successfully: $BACKUP_FILE"
     
     # Verify backup file was created and is not empty
