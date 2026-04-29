@@ -4,9 +4,10 @@ import { proxy, ApiError, handleRouteError } from '$lib/server/api';
 
 interface GoEmployee {
 	id: string; nip: string; nama: string; unit_kerja: string;
-	is_active: boolean; created_at: string;
+	pusaka_username: string; is_active: boolean; created_at: string;
 	active_status: string; active_run_type: string;
 	last_status: string; last_run_type: string;
+	has_checkin_schedule: boolean; has_checkout_schedule: boolean;
 }
 
 export const GET = async (event: RequestEvent) => {

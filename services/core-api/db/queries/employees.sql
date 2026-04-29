@@ -38,7 +38,7 @@ DELETE FROM employees WHERE id = $1;
 SELECT COUNT(*) FROM employees;
 
 -- name: ListEmployeesWithStatus :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.is_active, e.created_at,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.pusaka_username, e.is_active, e.created_at,
   COALESCE(
     (SELECT j.status::text FROM jobs j
      WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
@@ -54,6 +54,14 @@ SELECT e.id, e.nip, e.nama, e.unit_kerja, e.is_active, e.created_at,
      WHERE j.employee_id = e.id ORDER BY j.created_at DESC LIMIT 1), '') AS last_status,
   COALESCE(
     (SELECT j.run_type::text FROM jobs j
-     WHERE j.employee_id = e.id ORDER BY j.created_at DESC LIMIT 1), '') AS last_run_type
+     WHERE j.employee_id = e.id ORDER BY j.created_at DESC LIMIT 1), '') AS last_run_type,
+  EXISTS(
+    SELECT 1 FROM employee_schedules es
+    WHERE es.employee_id = e.id AND es.run_type = 'checkin' AND es.is_enabled = TRUE
+  ) AS has_checkin_schedule,
+  EXISTS(
+    SELECT 1 FROM employee_schedules es
+    WHERE es.employee_id = e.id AND es.run_type = 'checkout' AND es.is_enabled = TRUE
+  ) AS has_checkout_schedule
 FROM employees e
 ORDER BY e.created_at DESC;

@@ -167,7 +167,7 @@ func (q *Queries) ListEmployees(ctx context.Context) ([]Employee, error) {
 }
 
 const listEmployeesWithStatus = `-- name: ListEmployeesWithStatus :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.is_active, e.created_at,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.pusaka_username, e.is_active, e.created_at,
   COALESCE(
     (SELECT j.status::text FROM jobs j
      WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
@@ -183,22 +183,33 @@ SELECT e.id, e.nip, e.nama, e.unit_kerja, e.is_active, e.created_at,
      WHERE j.employee_id = e.id ORDER BY j.created_at DESC LIMIT 1), '') AS last_status,
   COALESCE(
     (SELECT j.run_type::text FROM jobs j
-     WHERE j.employee_id = e.id ORDER BY j.created_at DESC LIMIT 1), '') AS last_run_type
+     WHERE j.employee_id = e.id ORDER BY j.created_at DESC LIMIT 1), '') AS last_run_type,
+  EXISTS(
+    SELECT 1 FROM employee_schedules es
+    WHERE es.employee_id = e.id AND es.run_type = 'checkin' AND es.is_enabled = TRUE
+  ) AS has_checkin_schedule,
+  EXISTS(
+    SELECT 1 FROM employee_schedules es
+    WHERE es.employee_id = e.id AND es.run_type = 'checkout' AND es.is_enabled = TRUE
+  ) AS has_checkout_schedule
 FROM employees e
 ORDER BY e.created_at DESC
 `
 
 type ListEmployeesWithStatusRow struct {
-	ID            pgtype.UUID        `json:"id"`
-	Nip           string             `json:"nip"`
-	Nama          string             `json:"nama"`
-	UnitKerja     string             `json:"unit_kerja"`
-	IsActive      bool               `json:"is_active"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	ActiveStatus  interface{}        `json:"active_status"`
-	ActiveRunType interface{}        `json:"active_run_type"`
-	LastStatus    interface{}        `json:"last_status"`
-	LastRunType   interface{}        `json:"last_run_type"`
+	ID                  pgtype.UUID        `json:"id"`
+	Nip                 string             `json:"nip"`
+	Nama                string             `json:"nama"`
+	UnitKerja           string             `json:"unit_kerja"`
+	PusakaUsername      string             `json:"pusaka_username"`
+	IsActive            bool               `json:"is_active"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	ActiveStatus        interface{}        `json:"active_status"`
+	ActiveRunType       interface{}        `json:"active_run_type"`
+	LastStatus          interface{}        `json:"last_status"`
+	LastRunType         interface{}        `json:"last_run_type"`
+	HasCheckinSchedule  bool               `json:"has_checkin_schedule"`
+	HasCheckoutSchedule bool               `json:"has_checkout_schedule"`
 }
 
 func (q *Queries) ListEmployeesWithStatus(ctx context.Context) ([]ListEmployeesWithStatusRow, error) {
@@ -215,12 +226,15 @@ func (q *Queries) ListEmployeesWithStatus(ctx context.Context) ([]ListEmployeesW
 			&i.Nip,
 			&i.Nama,
 			&i.UnitKerja,
+			&i.PusakaUsername,
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.ActiveStatus,
 			&i.ActiveRunType,
 			&i.LastStatus,
 			&i.LastRunType,
+			&i.HasCheckinSchedule,
+			&i.HasCheckoutSchedule,
 		); err != nil {
 			return nil, err
 		}

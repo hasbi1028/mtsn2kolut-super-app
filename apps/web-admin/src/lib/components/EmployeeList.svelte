@@ -16,6 +16,8 @@
     active_run_type: string;
     last_status: string;
     last_run_type: string;
+    has_checkin_schedule: boolean;
+    has_checkout_schedule: boolean;
   }
 
   interface EmployeeSchedule {
@@ -214,6 +216,24 @@
     return !!(emp.pusaka_username);
   }
 
+  function scheduleButtonClass(emp: Employee): string {
+    const ci = emp.has_checkin_schedule;
+    const co = emp.has_checkout_schedule;
+    if (ci && co)  return 'border-green-400 text-green-700 bg-green-50 hover:bg-green-100';
+    if (ci)        return 'border-amber-400 text-amber-700 bg-amber-50 hover:bg-amber-100';
+    if (co)        return 'border-cyan-400 text-cyan-700 bg-cyan-50 hover:bg-cyan-100';
+    return 'border-slate-300 text-slate-500 hover:bg-slate-50';
+  }
+
+  function scheduleButtonLabel(emp: Employee): string {
+    const ci = emp.has_checkin_schedule;
+    const co = emp.has_checkout_schedule;
+    if (ci && co) return '📅 Jadwal ✓';
+    if (ci)       return '📅 Masuk ✓';
+    if (co)       return '📅 Pulang ✓';
+    return '📅 Jadwal';
+  }
+
   const canConfirmRun = $derived(runConfirmInput.trim() === 'SURE');
 </script>
 
@@ -296,8 +316,8 @@
                   </Button>
                   <Button size="sm" variant="outline"
                     onclick={() => openScheduleDialog(e)}
-                    class="border-slate-300 text-slate-600 hover:bg-slate-50">
-                    Jadwal
+                    class={scheduleButtonClass(e)}>
+                    {scheduleButtonLabel(e)}
                   </Button>
                   <Button size="sm" variant="ghost" onclick={() => doStop(e.id)} disabled={busyId === e.id || !e.active_status}
                     class="text-amber-700 hover:text-amber-800">
