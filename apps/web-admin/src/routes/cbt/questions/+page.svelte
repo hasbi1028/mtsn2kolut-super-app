@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
@@ -125,6 +126,9 @@
 	let fBusy = $state(false);
 	let assetBusy = $state(false);
 	let isAdvanceMode = $derived(fAuthoringMode === 'advance');
+	let userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
+	let canSubmitReview = $derived(userRoles.includes('admin') || userRoles.includes('guru'));
+	let canApproveWorkflow = $derived(userRoles.includes('admin'));
 
 	let pageCount = $derived(Math.max(1, Math.ceil(totalItems / pageSize)));
 	let rangeStart = $derived(totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1);
@@ -322,9 +326,12 @@
 		selectedDetail = null;
 	}
 
-	async function openEdit(question: Question) {
+	async function openEdit(question: Question, forceMode?: 'beginner' | 'advance') {
 		const detail = (await loadDetail(question.id)) ?? question;
 		applyQuestionToForm(detail);
+		if (forceMode) {
+			fAuthoringMode = forceMode;
+		}
 		await loadAssets(question.id);
 		window.scrollTo({ top: 0, behavior: 'smooth' });
 	}
@@ -545,6 +552,10 @@
 		}
 	}
 
+	function openAdvanceCompletion(question: Question) {
+		void openEdit(question, 'advance');
+	}
+
 	async function applyFilters() {
 		selectedDetail = null;
 		await load(1);
@@ -607,6 +618,9 @@
 						</Card.Description>
 					</div>
 					<div class="flex flex-wrap gap-2">
+						{#if selectedDetail.suggested_mode !== 'advance'}
+							<Button variant="outline" size="sm" onclick={() => selectedDetail && openEdit(selectedDetail, 'advance')}>Lengkapi di Advanced</Button>
+						{/if}
 						<Button variant="outline" size="sm" onclick={() => selectedDetail && openEdit(selectedDetail)}>Edit</Button>
 						<Button variant="outline" size="sm" onclick={() => (selectedDetail = null)}>Tutup</Button>
 					</div>
@@ -678,6 +692,58 @@
 						</div>
 					{/if}
 				</div>
+				<div class="rounded-2xl border border-slate-200 bg-slate-950 p-5 text-slate-50 shadow-sm">
+					<div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+						<div>
+							<p class="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">Preview Peserta</p>
+							<p class="mt-1 text-sm text-slate-300">Simulasi tampilan soal saat dibuka oleh siswa pada client ujian.</p>
+						</div>
+						<div class="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">
+							{questionTypeLabel[selectedDetail.question_type] ?? selectedDetail.question_type}
+						</div>
+					</div>
+					<div class="mt-4 space-y-4">
+						{#if selectedDetail.stimulus_html}
+							<div class="rounded-xl border border-slate-800 bg-slate-900 p-4 text-slate-100">{@html selectedDetail.stimulus_html}</div>
+						{/if}
+						{#if selectedDetail.stimulus_latex}
+							<div class="rounded-xl border border-slate-800 bg-slate-900 p-4"><LatexBlock src={selectedDetail.stimulus_latex} class="text-white" /></div>
+						{/if}
+						<div class="rounded-xl border border-slate-800 bg-slate-900 p-4">
+							{#if selectedDetail.stem_html}
+								<div class="prose prose-invert max-w-none text-slate-100">{@html selectedDetail.stem_html}</div>
+							{:else}
+								<p class="text-sm text-slate-100">{selectedDetail.question_text || 'Tanpa ringkasan teks'}</p>
+							{/if}
+							{#if selectedDetail.stem_latex}
+								<LatexBlock src={selectedDetail.stem_latex} class="mt-3 text-white" />
+							{/if}
+						</div>
+						{#if objectiveType(selectedDetail.question_type)}
+							<div class="grid gap-3">
+								{#each selectedDetail.options as option (option.label)}
+									<label class="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3">
+										<input type="radio" disabled class="mt-1 size-4 accent-emerald-500" />
+										<div class="text-sm text-slate-100">
+											<span class="mr-2 font-semibold text-emerald-300">{option.label}.</span>
+											{#if option.html}
+												<span>{@html option.html}</span>
+											{:else if option.latex}
+												<LatexBlock src={option.latex} display={false} class="inline-block text-white" />
+											{:else}
+												<span>{option.text || '—'}</span>
+											{/if}
+										</div>
+									</label>
+								{/each}
+							</div>
+						{:else}
+							<div class="rounded-xl border border-dashed border-slate-700 bg-slate-900 px-4 py-4 text-sm text-slate-300">
+								Peserta akan melihat editor jawaban essay / uraian pada area ini.
+							</div>
+						{/if}
+					</div>
+				</div>
 			</Card.Content>
 		</Card.Root>
 	{/if}
@@ -715,6 +781,20 @@
 							<p class="mt-1 text-sm text-slate-600">Buka seluruh fitur blueprint kurikulum, workflow review, asset reuse, rich text, dan LaTeX.</p>
 						</button>
 					</div>
+					{#if !isAdvanceMode}
+						<div class="flex flex-wrap gap-2">
+							<Button variant="outline" size="sm" onclick={() => (fAuthoringMode = 'advance')}>Lengkapi di Advanced</Button>
+							{#if canSubmitReview}
+								<Button variant="outline" size="sm" onclick={async () => {
+									if (!editId) {
+										showError('Simpan item terlebih dahulu sebelum diajukan review');
+										return;
+									}
+									await workflowAction(editId, 'submit_review');
+								}}>Ajukan Review</Button>
+							{/if}
+						</div>
+					{/if}
 				</section>
 
 				{#if qualityWarnings.length > 0}
@@ -1204,22 +1284,28 @@
 									<div class="space-y-1">
 										<Badge class={workflowBadgeClass(q.workflow_status)}>{workflowLabel[q.workflow_status] ?? q.workflow_status}</Badge>
 										<Badge class={publicationBadgeClass(q.status)}>{statusLabel[q.status] ?? q.status}</Badge>
+										{#if q.suggested_mode === 'beginner'}
+											<Badge variant="outline">Beginner</Badge>
+										{/if}
 									</div>
 								</Table.Cell>
 								<Table.Cell class="align-top">
 									<div class="flex flex-wrap justify-end gap-2">
 										<Button size="sm" variant="outline" onclick={() => openDetail(q.id)} disabled={detailBusy && selectedDetail?.id === q.id}>Detail</Button>
 										<Button size="sm" variant="outline" onclick={() => duplicateQuestion(q.id)}>Duplikat</Button>
-										{#if q.workflow_status === 'draft' || q.workflow_status === 'rejected'}
+										{#if q.suggested_mode !== 'advance'}
+											<Button size="sm" variant="outline" onclick={() => openAdvanceCompletion(q)}>Lengkapi</Button>
+										{/if}
+										{#if canSubmitReview && (q.workflow_status === 'draft' || q.workflow_status === 'rejected')}
 											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'submit_review')}>Review</Button>
 										{/if}
-										{#if q.workflow_status === 'review'}
+										{#if canApproveWorkflow && q.workflow_status === 'review'}
 											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'approve')}>Approve</Button>
 										{/if}
-										{#if q.workflow_status === 'approved' && q.status !== 'published'}
+										{#if canApproveWorkflow && q.workflow_status === 'approved' && q.status !== 'published'}
 											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'publish')}>Publish</Button>
 										{/if}
-										{#if q.status === 'published'}
+										{#if canApproveWorkflow && q.status === 'published'}
 											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'archive')}>Arsipkan</Button>
 										{/if}
 										<Button size="sm" variant="outline" onclick={() => openEdit(q)}>Edit</Button>

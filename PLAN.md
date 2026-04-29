@@ -125,6 +125,9 @@ Three runtime units deployed across 3 VPS:
 ### CBT Question Authoring UX
 - [x] Beginner mode for quick teacher authoring with minimal required fields
 - [x] Advance mode for full CP/TP/KD, workflow, rich asset, and LaTeX authoring
+- [x] Beginner review flow (`Lengkapi di Advanced`, `Ajukan Review`)
+- [x] Participant-style preview for question authoring
+- [x] Stronger workflow role gate (`guru/admin` review, `admin` approve/publish/archive)
 
 ### Sprint 12 — Schedule & Timetable
 ### Sprint 13 — Inventory & Asset Management

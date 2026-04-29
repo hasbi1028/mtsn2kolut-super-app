@@ -193,9 +193,12 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username := currentUsername(r)
-	role := currentRole(r)
 	switch strings.TrimSpace(body.Action) {
 	case "submit_review":
+		if !hasAnyRole(r, "admin", "guru") {
+			api.Forbidden(w)
+			return
+		}
 		row, err := h.svc.SubmitReview(r.Context(), id, username, body.Notes)
 		if err != nil {
 			api.BadRequest(w, err.Error())
@@ -203,7 +206,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		}
 		api.OK(w, serializeQuestionModel(row))
 	case "approve":
-		if role != "admin" {
+		if !hasAnyRole(r, "admin") {
 			api.Forbidden(w)
 			return
 		}
@@ -214,7 +217,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		}
 		api.OK(w, serializeQuestionModel(row))
 	case "publish":
-		if role != "admin" {
+		if !hasAnyRole(r, "admin") {
 			api.Forbidden(w)
 			return
 		}
@@ -225,7 +228,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		}
 		api.OK(w, serializeQuestionModel(row))
 	case "archive":
-		if role != "admin" {
+		if !hasAnyRole(r, "admin") {
 			api.Forbidden(w)
 			return
 		}
@@ -336,6 +339,31 @@ func currentRole(r *http.Request) string {
 		return role
 	}
 	return ""
+}
+
+func hasAnyRole(r *http.Request, allowed ...string) bool {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		return false
+	}
+	if rawRoles, ok := claims["roles"].([]any); ok {
+		for _, role := range rawRoles {
+			roleStr, _ := role.(string)
+			for _, allowedRole := range allowed {
+				if roleStr == allowedRole {
+					return true
+				}
+			}
+		}
+	}
+	if role, _ := claims["role"].(string); role != "" {
+		for _, allowedRole := range allowed {
+			if role == allowedRole {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func serializeQuestionListRow(row db.ListCbtQuestionsFilteredRow) map[string]any {
