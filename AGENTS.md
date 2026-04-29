@@ -20,6 +20,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 5. **Legacy SQLite files** (`backup.db`, `data/pusaka.sqlite`) are one-way import artifacts only. Never active runtime storage.
 6. **Monorepo source, but 3 separate VPS deployments.** One repo does not mean one server.
 7. **Safe deploy order:** backend code → migrations → backend restart + health check → frontend → worker.
+8. **PUSAKA is a bounded subsystem.** Canonical contracts use `/api/pusaka/*`; legacy runtime aliases such as `/api/jobs`, `/api/attendance`, `/api/schedules`, `/api/settings`, and `/api/worker` are retired.
 
 ## Backend Architecture Rules
 
@@ -37,6 +38,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 
 - **SvelteKit is UI/BFF only.** No backend business logic leaks into frontend code.
 - **Use `shadcn-svelte` (bits-ui) for all new UI primitives.** Do not add one-off component patterns.
+- **Use `sonner` toast via the shared `ui/sonner` wrapper for notifications.** Do not add per-page local toast banners for new work.
 - **Tailwind CSS v4** via `@tailwindcss/vite`. Use utility classes, not custom CSS files.
 - **Type safety:** Always use `<script lang="ts">`. Explicit interfaces for props and state. No `any`.
 - **Accessibility:** All form labels use `for` + `id`. Run `npm run check` before finalizing.
@@ -45,11 +47,13 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **API proxy** renames fields where documented (e.g., `employee_nama` → `nama`, `employee_nip` → `nip` in Jobs API).
 - **Auth:** JWT access + refresh tokens stored as httpOnly cookies. Session handled via SvelteKit hooks.
 - **Always run `npm run check` (a11y + types) before finalizing Svelte changes.**
+- **CBT UI direction:** educational, institutional, and operator-friendly for MTsN 2 Kolaka Utara. Avoid generic SaaS dashboards for exam operations and printable artifacts.
 
 ## Worker Architecture Rules
 
 - **Worker is an API client of `services/core-api`.** No direct backend access.
 - **Keep communication direct to Go API.** No tunneling through SvelteKit.
+- **Use canonical PUSAKA worker routes.** Worker runtime should call `/api/pusaka/worker/*`.
 - **Never own business state.** All state lives in PostgreSQL via the Go API.
 - **Keep concurrency configurable.** Safe default: 5 consumers.
 - **Explicit retry, claim, and failure reporting.** No silent swallowing of errors.
@@ -60,6 +64,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 
 - **Prefer safe, staged migration over rewrites.** One sprint at a time.
 - **Do not collapse service boundaries for convenience.** Each unit has a clear role.
+- **Isolate PUSAKA by contract first.** Only move storage or package ownership further when the boundary is already stable and pain is proven.
 - **Preserve deployability to 3 VPS targets.** Every change should be safe for independent rollout.
 - **Prioritize correctness, operational safety, and maintainability.**
 - **No CI/CD yet** — deploy via `git pull` + `make build` + `pm2 restart` per VPS (documented in `deploy/DEPLOY.md`).
@@ -97,16 +102,37 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Health endpoint** — DB pool stats, `runtime.Version()`, scheduler/worker heartbeat detail
 - **`make check`** — includes `go vet` + `npm audit --audit-level=high`
 
+### ✅ Sprint 6A — CBT Standardized Bank, Cohort Scope, and Print Ops (Done)
+- **Question bank standardization** — rich content (`stem_html`, `stimulus_html`, LaTeX), curriculum metadata (`CP/TP/KD`), workflow review, asset storage, versioning fields.
+- **Question asset management** — backend-owned asset upload for image/audio/PDF through `cbt_question_assets`.
+- **Adaptive session scope** — `scope_type`, `scope_ref`, `mix_policy`, `assignment_mode`, `allow_cross_grade`, `is_special_event` live on `cbt_exam_sessions`.
+- **Adaptive mix policy rule** — `class -> same_class`, `grade -> same_grade`, `school/custom -> mixed_scope`.
+- **Seat plan support** — participants can store `seat_no`; sessions support auto/manual seat assignment by room.
+- **Print operations** — event exam cards and session minutes/berita acara are printable HTML routes, not PDF generators.
+
 ### 📋 Planned Future Phases
-1. **Sprint 5 — Guru Data Scoping:** Backend filter cbt_sessions/results/students by `class_subject_assignments.teacher_employee_id`. Endpoint guru hanya melihat data mata pelajaran yang diampu.
+1. **Academic Foundation & RBAC Expansion** — Unified `users` table with many-to-many roles (`admin`, `teacher`, `student`, `staff`, `parent`). Student lifecycle (`active`, `alumni`, `prospective`) and Parent-child linking.
 2. **Flutter Student App** — CBT exam client for students on tablet/phone (API sudah ready: `docs/exam-api.md`).
-3. **Real-time Proctoring** — WebSocket-based live monitoring (saat ini polling 15s).
+3. **Real-time Proctoring** — WebSocket-based live monitoring.
 4. **Notifications & Reminders** — WhatsApp/Telegram for exam schedules, attendance.
-5. **Raport / Grade Management** — Academic grading, report cards.
+5. **Raport / Grade Management** — Academic grading, report cards integrated with CBT scores.
 6. **Schedule & Timetable** — Class schedules, teacher assignments UI.
-7. **Inventory & Asset Management** — School asset tracking.
-8. **Fee Management** — Tuition, payments, scholarships.
-9. **Library System** — Book catalog, borrow/return tracking.
+7. **PUSAKA Isolation** — completed through Phase 3 for current scope: canonical `/api/pusaka/*`, `pusaka_accounts` as integration owner, and legacy `employees.pusaka_*` columns removed. Deeper package extraction is deferred until code churn justifies it.
+
+## RBAC & User Lifecycle Policy
+
+1. **Role Separation**: 
+   - **Admin**: System-wide configuration and full access.
+   - **Teacher**: Academic management, grading, and subject-specific CBT.
+   - **Student**: Exam taking, schedule viewing, and report card access.
+   - **Staff**: Operational administration (finance, inventory, scheduling).
+   - **Parent**: Monitoring children's progress (attendance, grades, billing).
+2. **Identity vs Entity**: Auth data (`users`) must be decoupled from profile data. A single identity can hold multiple roles (e.g., a teacher who is also a parent).
+3. **Lifecycle States**:
+   - **Prospective**: Limited access, used for PPDB (new student admission).
+   - **Active**: Full access based on role.
+   - **Alumni/Mutated**: Read-only access to historical records (grades, certificates), blocked from active sessions.
+4. **Archiving**: Never delete users with historical academic data (grades/attendance). Use `is_active = false` or `status = 'archived'`.
 
 ## Documentation Map
 
@@ -131,3 +157,5 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 4. **Rate limiting is in-memory per-IP** — does not scale across backend instances.
 5. **Audit log entity_id is path, not real entity ID.** Middleware logs URL path (`/api/students/uuid`) into `entity_id`. Sufficient for forensics but not perfect. Future: per-handler structured audit emit.
 6. **BFF uses `X-Internal-Key` for all admin calls** — backend can't see real user. JWT claims propagated only when frontend forwards JWT (currently bypassed). For higher-fidelity audit, BFF should forward user JWT in `Authorization` header instead of internal key for non-public endpoints.
+7. **CBT print artifacts are HTML-first.** Event cards and berita acara are printable browser views; no PDF rendering service yet.
+8. **Seat plan validation is still light.** Current backend stores `seat_no` and room assignment, but does not yet enforce uniqueness per `(room_id, seat_no)` at the database level.
