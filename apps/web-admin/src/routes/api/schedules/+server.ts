@@ -16,6 +16,16 @@ export const GET = async (event: RequestEvent) => {
 	}
 };
 
+export const POST = async (event: RequestEvent) => {
+	try {
+		const body = await event.request.json();
+		const sched = await proxy(event).post<GoSchedule>('/api/schedules', body);
+		return json(sched, { status: 201 });
+	} catch (e) {
+		return handleRouteError(e, 'schedules POST');
+	}
+};
+
 export const PUT = async (event: RequestEvent) => {
 	try {
 		const { schedules } = await event.request.json() as { schedules?: GoSchedule[] };
@@ -26,7 +36,6 @@ export const PUT = async (event: RequestEvent) => {
 			p.put(`/api/schedules/${s.id}`, {
 				label:      s.label,
 				run_time:   s.run_time,
-				run_type:   s.run_type,
 				is_enabled: s.is_enabled,
 			})
 		));

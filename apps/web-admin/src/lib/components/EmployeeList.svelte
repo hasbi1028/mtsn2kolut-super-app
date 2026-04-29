@@ -18,6 +18,13 @@
     last_run_type: string;
   }
 
+  interface EmployeeSchedule {
+    id: string;
+    run_type: string;
+    run_time: string;
+    is_enabled: boolean;
+  }
+
   type RunType = 'morning' | 'afternoon' | 'checkin' | 'checkout';
 
   let { employees, onrun, onstop, ondelete }: {
@@ -41,6 +48,17 @@
   // Run confirmation dialog
   let runConfirm = $state<{ emp: Employee; runType: RunType } | null>(null);
   let runConfirmInput = $state('');
+
+  // Per-employee schedule dialog
+  let showScheduleDialog      = $state(false);
+  let scheduleEmployee        = $state<Employee | null>(null);
+  let empSchedules            = $state<EmployeeSchedule[]>([]);
+  let scheduleCheckinTime     = $state('');
+  let scheduleCheckoutTime    = $state('');
+  let scheduleCheckinEnabled  = $state(true);
+  let scheduleCheckoutEnabled = $state(true);
+  let scheduleLoading = $state(false);
+  let scheduleSaving  = $state(false);
 
   const runTypeLabel: Record<RunType, string> = {
     morning: 'Rekap', afternoon: 'Rekap', checkin: 'Masuk', checkout: 'Pulang',
@@ -94,7 +112,7 @@
     testing = true;
     try {
       const res  = await fetch(`/api/employees/${emp.id}/test-pusaka`, { method: 'POST' });
-      const data = await res.json();
+      const data = await res.json() as { message?: string };
       alert(data.message || 'Test selesai');
     } catch { alert('Test gagal'); } finally { testing = false; }
   }
@@ -105,7 +123,7 @@
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ employee_id: id }),
     });
-    const data = await res.json().catch(() => ({}));
+    const data = await res.json().catch(() => ({})) as { cancelled?: number };
     busyId = null;
     onstop?.(id, data.cancelled ?? 0);
   }
@@ -119,6 +137,57 @@
     busyId = null;
     confirmId = null;
     ondelete?.();
+  }
+
+  async function openScheduleDialog(emp: Employee) {
+    scheduleEmployee = emp;
+    showScheduleDialog = true;
+    scheduleLoading = true;
+    scheduleCheckinTime = '';
+    scheduleCheckoutTime = '';
+    scheduleCheckinEnabled = true;
+    scheduleCheckoutEnabled = true;
+    try {
+      const res  = await fetch(`/api/employees/${emp.id}/schedules`);
+      const data = await res.json().catch(() => ([])) as EmployeeSchedule[];
+      empSchedules = Array.isArray(data) ? data : [];
+      const ci = empSchedules.find(s => s.run_type === 'checkin');
+      const co = empSchedules.find(s => s.run_type === 'checkout');
+      if (ci) { scheduleCheckinTime = ci.run_time; scheduleCheckinEnabled = ci.is_enabled; }
+      if (co) { scheduleCheckoutTime = co.run_time; scheduleCheckoutEnabled = co.is_enabled; }
+    } catch { empSchedules = []; }
+    finally { scheduleLoading = false; }
+  }
+
+  async function saveEmployeeSchedule(runType: 'checkin' | 'checkout') {
+    if (!scheduleEmployee) return;
+    const runTime   = runType === 'checkin' ? scheduleCheckinTime : scheduleCheckoutTime;
+    const isEnabled = runType === 'checkin' ? scheduleCheckinEnabled : scheduleCheckoutEnabled;
+    if (!runTime) return;
+    scheduleSaving = true;
+    try {
+      await fetch(`/api/employees/${scheduleEmployee.id}/schedules`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ run_type: runType, run_time: runTime, is_enabled: isEnabled }),
+      });
+      // Reload schedules to get updated id
+      const res  = await fetch(`/api/employees/${scheduleEmployee.id}/schedules`);
+      empSchedules = await res.json().catch(() => ([])) as EmployeeSchedule[];
+    } catch { /* silent */ }
+    finally { scheduleSaving = false; }
+  }
+
+  async function deleteEmployeeSchedule(runType: 'checkin' | 'checkout') {
+    if (!scheduleEmployee) return;
+    const sched = empSchedules.find(s => s.run_type === runType);
+    if (!sched) return;
+    try {
+      await fetch(`/api/employees/${scheduleEmployee.id}/schedules/${sched.id}`, { method: 'DELETE' });
+      if (runType === 'checkin') scheduleCheckinTime = '';
+      else scheduleCheckoutTime = '';
+      empSchedules = empSchedules.filter(s => s.run_type !== runType);
+    } catch { /* silent */ }
   }
 
   function statusInfo(e: Employee) {
@@ -225,6 +294,11 @@
                     class="border-amber-300 text-amber-700 hover:bg-amber-50">
                     🌙 Pulang
                   </Button>
+                  <Button size="sm" variant="outline"
+                    onclick={() => openScheduleDialog(e)}
+                    class="border-slate-300 text-slate-600 hover:bg-slate-50">
+                    Jadwal
+                  </Button>
                   <Button size="sm" variant="ghost" onclick={() => doStop(e.id)} disabled={busyId === e.id || !e.active_status}
                     class="text-amber-700 hover:text-amber-800">
                     ■ Stop
@@ -318,6 +392,88 @@
       <Button onclick={savePusakaCredentials} disabled={saving}>
         {saving ? 'Menyimpan...' : 'Simpan'}
       </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<!-- Dialog Jadwal Per-Pegawai -->
+<Dialog.Root bind:open={showScheduleDialog}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title>Jadwal Absensi — {scheduleEmployee?.nama ?? ''}</Dialog.Title>
+      <Dialog.Description>
+        Atur jam otomatis absen masuk dan pulang untuk pegawai ini
+      </Dialog.Description>
+    </Dialog.Header>
+
+    {#if scheduleLoading}
+      <div class="py-8 text-center text-sm text-muted-foreground">Memuat...</div>
+    {:else}
+      <div class="space-y-4 py-4">
+
+        <!-- Checkin -->
+        <div class="rounded-md border p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">☀ Absen Masuk</span>
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="ci-enabled" bind:checked={scheduleCheckinEnabled}
+                class="h-4 w-4 rounded border-input accent-green-700" />
+              <label for="ci-enabled" class="text-xs text-muted-foreground">Aktif</label>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <Input type="time" bind:value={scheduleCheckinTime} class="font-mono flex-1" />
+            <Button size="sm" variant="outline"
+              onclick={() => saveEmployeeSchedule('checkin')}
+              disabled={scheduleSaving || !scheduleCheckinTime}>
+              Simpan
+            </Button>
+            {#if empSchedules.find(s => s.run_type === 'checkin')}
+              <Button size="sm" variant="ghost" class="text-destructive hover:text-destructive"
+                onclick={() => deleteEmployeeSchedule('checkin')}>
+                Hapus
+              </Button>
+            {/if}
+          </div>
+          {#if !empSchedules.find(s => s.run_type === 'checkin')}
+            <p class="text-xs text-muted-foreground">Belum ada jadwal masuk terpasang</p>
+          {/if}
+        </div>
+
+        <!-- Checkout -->
+        <div class="rounded-md border p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">🌙 Absen Pulang</span>
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="co-enabled" bind:checked={scheduleCheckoutEnabled}
+                class="h-4 w-4 rounded border-input accent-green-700" />
+              <label for="co-enabled" class="text-xs text-muted-foreground">Aktif</label>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <Input type="time" bind:value={scheduleCheckoutTime} class="font-mono flex-1" />
+            <Button size="sm" variant="outline"
+              onclick={() => saveEmployeeSchedule('checkout')}
+              disabled={scheduleSaving || !scheduleCheckoutTime}>
+              Simpan
+            </Button>
+            {#if empSchedules.find(s => s.run_type === 'checkout')}
+              <Button size="sm" variant="ghost" class="text-destructive hover:text-destructive"
+                onclick={() => deleteEmployeeSchedule('checkout')}>
+                Hapus
+              </Button>
+            {/if}
+          </div>
+          {#if !empSchedules.find(s => s.run_type === 'checkout')}
+            <p class="text-xs text-muted-foreground">Belum ada jadwal pulang terpasang</p>
+          {/if}
+        </div>
+
+      </div>
+    {/if}
+
+    <Dialog.Footer>
+      <Button variant="outline" onclick={() => (showScheduleDialog = false)}>Tutup</Button>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>
