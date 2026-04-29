@@ -48,6 +48,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Auth:** JWT access + refresh tokens stored as httpOnly cookies. Session handled via SvelteKit hooks.
 - **Always run `npm run check` (a11y + types) before finalizing Svelte changes.**
 - **CBT UI direction:** educational, institutional, and operator-friendly for MTsN 2 Kolaka Utara. Avoid generic SaaS dashboards for exam operations and printable artifacts.
+- **Question bank experimentation:** `/cbt/questions` is the experiment hub for multiple frontend authoring routes. Variants may differ in UX, but they must keep the same backend contract, validation rules, beginner/advance semantics, workflow semantics, and storage model.
 - **Question bank authoring uses two UX modes:** `beginner` for quick teacher input with minimal required fields, and `advance` for full blueprint/workflow authoring. Both modes must write to the same backend model and API contract.
 
 ## Worker Architecture Rules

@@ -128,6 +128,8 @@ Three runtime units deployed across 3 VPS:
 - [x] Beginner review flow (`Lengkapi di Advanced`, `Ajukan Review`)
 - [x] Participant-style preview for question authoring
 - [x] Stronger workflow role gate (`guru/admin` review, `admin` approve/publish/archive)
+- [x] Six-route frontend experiment for `/cbt/questions` (`studio`, `wizard`, `grid`, `document`, `review`, `package-fit`) with one shared backend contract
+- [x] Local browser-based teacher evaluation notes per variant for manual UX comparison
 
 ### Sprint 12 — Schedule & Timetable
 ### Sprint 13 — Inventory & Asset Management
