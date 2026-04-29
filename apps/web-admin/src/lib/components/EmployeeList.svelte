@@ -464,86 +464,77 @@
 <Dialog.Root bind:open={showScheduleDialog}>
   <Dialog.Content>
     <Dialog.Header>
-      <Dialog.Title>Jadwal Absensi — {scheduleEmployee?.nama ?? ''}</Dialog.Title>
-      <Dialog.Description>
-        Atur jam otomatis per hari. ±mnt = acak hingga N menit setelah waktu yang ditentukan.
-      </Dialog.Description>
+      <Dialog.Title>Jadwal Absensi</Dialog.Title>
+      <Dialog.Description>{scheduleEmployee?.nama ?? ''}</Dialog.Description>
     </Dialog.Header>
 
     {#if scheduleLoading}
       <div class="py-8 text-center text-sm text-muted-foreground">Memuat...</div>
     {:else}
       {@const dayLabels = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']}
-      <div class="py-2 overflow-x-auto">
-        <table class="w-full text-sm border-collapse">
-          <thead>
-            <tr class="border-b">
-              <th class="text-left py-2 pr-2 font-medium text-muted-foreground">Hari</th>
-              <th class="text-center py-2 px-1 font-medium text-muted-foreground">☀ Masuk</th>
-              <th class="text-center py-2 px-1 font-medium text-muted-foreground">🌙 Pulang</th>
-              <th class="text-center py-2 px-1 font-medium text-muted-foreground">Aktif</th>
-              <th class="text-center py-2 px-1 font-medium text-muted-foreground">±mnt</th>
-              <th class="text-right py-2 pl-1 font-medium text-muted-foreground">Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each dayConfigs as cfg, dow}
-              <tr class="border-b last:border-0 hover:bg-slate-50">
-                <td class="py-2 pr-2 font-medium whitespace-nowrap">{dayLabels[dow]}</td>
-                <td class="py-2 px-1">
-                  <input type="time" bind:value={cfg.checkinTime}
-                    class="w-28 rounded border border-input bg-background px-2 py-1 font-mono text-xs" />
-                </td>
-                <td class="py-2 px-1">
-                  <input type="time" bind:value={cfg.checkoutTime}
-                    class="w-28 rounded border border-input bg-background px-2 py-1 font-mono text-xs" />
-                </td>
-                <td class="py-2 px-1">
-                  <div class="flex flex-col items-start gap-1">
-                    <label class="flex items-center gap-1 text-xs cursor-pointer">
-                      <input type="checkbox" bind:checked={cfg.checkinEnabled}
-                        class="h-3.5 w-3.5 rounded accent-green-700" />
-                      ☀
-                    </label>
-                    <label class="flex items-center gap-1 text-xs cursor-pointer">
-                      <input type="checkbox" bind:checked={cfg.checkoutEnabled}
-                        class="h-3.5 w-3.5 rounded accent-green-700" />
-                      🌙
-                    </label>
-                  </div>
-                </td>
-                <td class="py-2 px-1">
-                  <input type="number" min="0" max="60" bind:value={cfg.randomWindow}
-                    class="w-14 rounded border border-input bg-background px-2 py-1 text-xs text-center" />
-                </td>
-                <td class="py-2 pl-1 text-right">
-                  <div class="flex items-center justify-end gap-1 flex-wrap">
-                    <Button size="sm" variant="outline"
-                      onclick={() => saveDayRow(dow)}
-                      disabled={scheduleSaving || (!cfg.checkinTime && !cfg.checkoutTime)}
-                      class="h-7 px-2 text-xs">
-                      Simpan
-                    </Button>
-                    {#if cfg.checkinId}
-                      <Button size="sm" variant="ghost"
-                        class="h-7 px-1.5 text-xs text-destructive hover:text-destructive"
-                        onclick={() => deleteDaySchedule(dow, 'checkin')}>
-                        ✕☀
-                      </Button>
-                    {/if}
-                    {#if cfg.checkoutId}
-                      <Button size="sm" variant="ghost"
-                        class="h-7 px-1.5 text-xs text-destructive hover:text-destructive"
-                        onclick={() => deleteDaySchedule(dow, 'checkout')}>
-                        ✕🌙
-                      </Button>
-                    {/if}
-                  </div>
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
+      <div class="space-y-2 max-h-[65vh] overflow-y-auto py-1 pr-1">
+        {#each dayConfigs as cfg, dow}
+          <div class="rounded-lg border bg-card px-3 py-2.5 space-y-2">
+
+            <!-- Header baris hari -->
+            <div class="flex items-center justify-between">
+              <span class="text-sm font-semibold">{dayLabels[dow]}</span>
+              <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span>Acak ±</span>
+                <input type="number" min="0" max="60" bind:value={cfg.randomWindow}
+                  class="w-12 rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center" />
+                <span>mnt</span>
+              </div>
+            </div>
+
+            <!-- Baris masuk + pulang -->
+            <div class="space-y-1.5">
+              <div class="flex items-center gap-2">
+                <span class="w-14 shrink-0 text-xs text-muted-foreground">☀ Masuk</span>
+                <input type="time" bind:value={cfg.checkinTime}
+                  class="flex-1 min-w-0 rounded border border-input bg-background px-2 py-1 font-mono text-xs" />
+                <label class="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer shrink-0">
+                  <input type="checkbox" id="ci-{dow}" bind:checked={cfg.checkinEnabled}
+                    class="h-3.5 w-3.5 rounded accent-green-700" />
+                  Aktif
+                </label>
+                {#if cfg.checkinId}
+                  <button type="button"
+                    class="text-xs text-destructive hover:text-destructive/80 shrink-0"
+                    onclick={() => deleteDaySchedule(dow, 'checkin')}
+                    title="Hapus jadwal masuk">✕</button>
+                {/if}
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-14 shrink-0 text-xs text-muted-foreground">🌙 Pulang</span>
+                <input type="time" bind:value={cfg.checkoutTime}
+                  class="flex-1 min-w-0 rounded border border-input bg-background px-2 py-1 font-mono text-xs" />
+                <label class="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer shrink-0">
+                  <input type="checkbox" id="co-{dow}" bind:checked={cfg.checkoutEnabled}
+                    class="h-3.5 w-3.5 rounded accent-green-700" />
+                  Aktif
+                </label>
+                {#if cfg.checkoutId}
+                  <button type="button"
+                    class="text-xs text-destructive hover:text-destructive/80 shrink-0"
+                    onclick={() => deleteDaySchedule(dow, 'checkout')}
+                    title="Hapus jadwal pulang">✕</button>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Tombol simpan -->
+            <div class="flex justify-end">
+              <Button size="sm" variant="outline"
+                onclick={() => saveDayRow(dow)}
+                disabled={scheduleSaving || (!cfg.checkinTime && !cfg.checkoutTime)}
+                class="h-7 px-3 text-xs">
+                {scheduleSaving ? 'Menyimpan...' : 'Simpan'}
+              </Button>
+            </div>
+
+          </div>
+        {/each}
       </div>
     {/if}
 
