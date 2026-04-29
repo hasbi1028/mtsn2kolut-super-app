@@ -1,6 +1,6 @@
 # MTs Negeri 2 Kolaka Utara — Super App Strategic Plan
 
-> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Last Updated: 2026-04-29
+> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Last Updated: 2026-04-29
 > This file is the master roadmap. Update after each sprint completion.
 
 ---
@@ -117,8 +117,14 @@ Three runtime units deployed across 3 VPS:
 - [ ] Exam reminders
 
 ### Sprint 11 — Rapor / Grade Management
-- [ ] Grade schema & migrations
+- [x] Grade schema foundation (`grade_components`, `grade_entries`)
+- [x] Backend gradebook API foundation (`/api/grades`)
+- [x] Web admin gradebook page foundation (`/grades`)
 - [ ] Rapor PDF generation
+
+### CBT Question Authoring UX
+- [x] Beginner mode for quick teacher authoring with minimal required fields
+- [x] Advance mode for full CP/TP/KD, workflow, rich asset, and LaTeX authoring
 
 ### Sprint 12 — Schedule & Timetable
 ### Sprint 13 — Inventory & Asset Management
