@@ -538,6 +538,8 @@ type EmployeeSchedule struct {
 	LastEnqueuedForDate pgtype.Date        `json:"last_enqueued_for_date"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	RandomWindowMinutes int16              `json:"random_window_minutes"`
+	DayOfWeek           int16              `json:"day_of_week"`
 }
 
 type Job struct {
@@ -553,6 +555,7 @@ type Job struct {
 	NextRetryAt  pgtype.Timestamptz `json:"next_retry_at"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	NotBefore    pgtype.Timestamptz `json:"not_before"`
 }
 
 type Schedule struct {

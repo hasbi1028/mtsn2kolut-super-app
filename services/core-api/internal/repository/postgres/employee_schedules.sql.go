@@ -18,10 +18,11 @@ WITH due AS (
       updated_at = NOW()
   WHERE is_enabled = TRUE
     AND run_time <= $2
+    AND day_of_week = EXTRACT(DOW FROM $1::DATE)::SMALLINT
     AND (last_enqueued_for_date IS NULL OR last_enqueued_for_date < $1)
-  RETURNING id, employee_id, run_type, run_time, is_enabled, last_enqueued_for_date, created_at, updated_at
+  RETURNING id, employee_id, run_type, run_time, is_enabled, last_enqueued_for_date, created_at, updated_at, random_window_minutes, day_of_week
 )
-SELECT id, employee_id, run_type, run_time, is_enabled, last_enqueued_for_date, created_at, updated_at FROM due ORDER BY run_time ASC
+SELECT id, employee_id, run_type, run_time, is_enabled, last_enqueued_for_date, created_at, updated_at, random_window_minutes, day_of_week FROM due ORDER BY run_time ASC
 `
 
 type ClaimDueEmployeeSchedulesParams struct {
@@ -38,6 +39,8 @@ type ClaimDueEmployeeSchedulesRow struct {
 	LastEnqueuedForDate pgtype.Date        `json:"last_enqueued_for_date"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	RandomWindowMinutes int16              `json:"random_window_minutes"`
+	DayOfWeek           int16              `json:"day_of_week"`
 }
 
 func (q *Queries) ClaimDueEmployeeSchedules(ctx context.Context, arg ClaimDueEmployeeSchedulesParams) ([]ClaimDueEmployeeSchedulesRow, error) {
@@ -58,6 +61,8 @@ func (q *Queries) ClaimDueEmployeeSchedules(ctx context.Context, arg ClaimDueEmp
 			&i.LastEnqueuedForDate,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RandomWindowMinutes,
+			&i.DayOfWeek,
 		); err != nil {
 			return nil, err
 		}
@@ -84,27 +89,43 @@ func (q *Queries) DeleteEmployeeSchedule(ctx context.Context, arg DeleteEmployee
 }
 
 const listEmployeeSchedules = `-- name: ListEmployeeSchedules :many
-SELECT id, employee_id, run_type, run_time, is_enabled, last_enqueued_for_date, created_at, updated_at
+SELECT id, employee_id, run_type, run_time, is_enabled, random_window_minutes,
+       day_of_week, last_enqueued_for_date, created_at, updated_at
 FROM employee_schedules
 WHERE employee_id = $1
-ORDER BY run_type ASC
+ORDER BY day_of_week ASC, run_type ASC
 `
 
-func (q *Queries) ListEmployeeSchedules(ctx context.Context, employeeID pgtype.UUID) ([]EmployeeSchedule, error) {
+type ListEmployeeSchedulesRow struct {
+	ID                  pgtype.UUID        `json:"id"`
+	EmployeeID          pgtype.UUID        `json:"employee_id"`
+	RunType             RunTypeEnum        `json:"run_type"`
+	RunTime             string             `json:"run_time"`
+	IsEnabled           bool               `json:"is_enabled"`
+	RandomWindowMinutes int16              `json:"random_window_minutes"`
+	DayOfWeek           int16              `json:"day_of_week"`
+	LastEnqueuedForDate pgtype.Date        `json:"last_enqueued_for_date"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListEmployeeSchedules(ctx context.Context, employeeID pgtype.UUID) ([]ListEmployeeSchedulesRow, error) {
 	rows, err := q.db.Query(ctx, listEmployeeSchedules, employeeID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []EmployeeSchedule{}
+	items := []ListEmployeeSchedulesRow{}
 	for rows.Next() {
-		var i EmployeeSchedule
+		var i ListEmployeeSchedulesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.EmployeeID,
 			&i.RunType,
 			&i.RunTime,
 			&i.IsEnabled,
+			&i.RandomWindowMinutes,
+			&i.DayOfWeek,
 			&i.LastEnqueuedForDate,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -137,20 +158,23 @@ func (q *Queries) ResetEmployeeScheduleEnqueueState(ctx context.Context, arg Res
 }
 
 const upsertEmployeeSchedule = `-- name: UpsertEmployeeSchedule :one
-INSERT INTO employee_schedules (employee_id, run_type, run_time, is_enabled)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (employee_id, run_type) DO UPDATE
-  SET run_time   = EXCLUDED.run_time,
-      is_enabled = EXCLUDED.is_enabled,
-      updated_at = NOW()
-RETURNING id, employee_id, run_type, run_time, is_enabled, last_enqueued_for_date, created_at, updated_at
+INSERT INTO employee_schedules (employee_id, run_type, run_time, is_enabled, random_window_minutes, day_of_week)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (employee_id, run_type, day_of_week) DO UPDATE
+  SET run_time              = EXCLUDED.run_time,
+      is_enabled            = EXCLUDED.is_enabled,
+      random_window_minutes = EXCLUDED.random_window_minutes,
+      updated_at            = NOW()
+RETURNING id, employee_id, run_type, run_time, is_enabled, last_enqueued_for_date, created_at, updated_at, random_window_minutes, day_of_week
 `
 
 type UpsertEmployeeScheduleParams struct {
-	EmployeeID pgtype.UUID `json:"employee_id"`
-	RunType    RunTypeEnum `json:"run_type"`
-	RunTime    string      `json:"run_time"`
-	IsEnabled  bool        `json:"is_enabled"`
+	EmployeeID          pgtype.UUID `json:"employee_id"`
+	RunType             RunTypeEnum `json:"run_type"`
+	RunTime             string      `json:"run_time"`
+	IsEnabled           bool        `json:"is_enabled"`
+	RandomWindowMinutes int16       `json:"random_window_minutes"`
+	DayOfWeek           int16       `json:"day_of_week"`
 }
 
 func (q *Queries) UpsertEmployeeSchedule(ctx context.Context, arg UpsertEmployeeScheduleParams) (EmployeeSchedule, error) {
@@ -159,6 +183,8 @@ func (q *Queries) UpsertEmployeeSchedule(ctx context.Context, arg UpsertEmployee
 		arg.RunType,
 		arg.RunTime,
 		arg.IsEnabled,
+		arg.RandomWindowMinutes,
+		arg.DayOfWeek,
 	)
 	var i EmployeeSchedule
 	err := row.Scan(
@@ -170,6 +196,8 @@ func (q *Queries) UpsertEmployeeSchedule(ctx context.Context, arg UpsertEmployee
 		&i.LastEnqueuedForDate,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RandomWindowMinutes,
+		&i.DayOfWeek,
 	)
 	return i, err
 }

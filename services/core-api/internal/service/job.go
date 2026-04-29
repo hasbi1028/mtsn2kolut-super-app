@@ -25,7 +25,7 @@ type jobStore interface {
 	ClaimJob(ctx context.Context, workerID string) (db.ClaimJobRow, error)
 	CompleteJob(ctx context.Context, id pgtype.UUID) error
 	FailJob(ctx context.Context, arg db.FailJobParams) error
-	GetJob(ctx context.Context, id pgtype.UUID) (db.Job, error)
+	GetJob(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error)
 	ListActiveEmployees(ctx context.Context) ([]db.Employee, error)
 	CancelEmployeeJobs(ctx context.Context, employeeID pgtype.UUID) (int64, error)
 	CancelAllJobs(ctx context.Context) (int64, error)
@@ -66,10 +66,15 @@ func (s *Job) List(ctx context.Context, status string, limit, offset int32) ([]d
 }
 
 func (s *Job) Create(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32) (db.Job, error) {
+	return s.CreateWithDelay(ctx, employeeID, runType, maxAttempts, pgtype.Timestamptz{})
+}
+
+func (s *Job) CreateWithDelay(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32, notBefore pgtype.Timestamptz) (db.Job, error) {
 	job, err := s.q.CreateJobIfAbsent(ctx, db.CreateJobIfAbsentParams{
 		EmployeeID:  employeeID,
 		RunType:     db.RunTypeEnum(runType),
 		MaxAttempts: maxAttempts,
+		NotBefore:   notBefore,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return db.Job{}, domain.ErrConflict
@@ -101,7 +106,7 @@ func (s *Job) Fail(ctx context.Context, id pgtype.UUID, errMsg string, retryAfte
 	})
 }
 
-func (s *Job) Get(ctx context.Context, id pgtype.UUID) (db.Job, error) {
+func (s *Job) Get(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error) {
 	return s.q.GetJob(ctx, id)
 }
 

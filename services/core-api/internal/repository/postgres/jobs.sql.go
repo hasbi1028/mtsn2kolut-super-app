@@ -48,7 +48,7 @@ func (q *Queries) CancelEmployeeJobs(ctx context.Context, employeeID pgtype.UUID
 const claimJob = `-- name: ClaimJob :one
 WITH candidate AS (
   SELECT id FROM jobs
-  WHERE (status = 'queued')
+  WHERE (status = 'queued' AND (not_before IS NULL OR not_before <= NOW()))
      OR (status = 'failed' AND attempts < max_attempts AND next_retry_at <= NOW())
   ORDER BY created_at ASC
   FOR UPDATE SKIP LOCKED
@@ -132,22 +132,28 @@ func (q *Queries) CountJobsByStatus(ctx context.Context, status JobStatusEnum) (
 }
 
 const createJobIfAbsent = `-- name: CreateJobIfAbsent :one
-INSERT INTO jobs (id, employee_id, run_type, status, max_attempts)
-VALUES (gen_random_uuid(), $1, $2, 'queued', $3)
+INSERT INTO jobs (id, employee_id, run_type, status, max_attempts, not_before)
+VALUES (gen_random_uuid(), $1, $2, 'queued', $3, $4)
 ON CONFLICT (employee_id, run_type)
   WHERE status IN ('queued', 'running')
 DO NOTHING
-RETURNING id, employee_id, run_type, status, error_message, claimed_by, claimed_at, attempts, max_attempts, next_retry_at, created_at, updated_at
+RETURNING id, employee_id, run_type, status, error_message, claimed_by, claimed_at, attempts, max_attempts, next_retry_at, created_at, updated_at, not_before
 `
 
 type CreateJobIfAbsentParams struct {
-	EmployeeID  pgtype.UUID `json:"employee_id"`
-	RunType     RunTypeEnum `json:"run_type"`
-	MaxAttempts int32       `json:"max_attempts"`
+	EmployeeID  pgtype.UUID        `json:"employee_id"`
+	RunType     RunTypeEnum        `json:"run_type"`
+	MaxAttempts int32              `json:"max_attempts"`
+	NotBefore   pgtype.Timestamptz `json:"not_before"`
 }
 
 func (q *Queries) CreateJobIfAbsent(ctx context.Context, arg CreateJobIfAbsentParams) (Job, error) {
-	row := q.db.QueryRow(ctx, createJobIfAbsent, arg.EmployeeID, arg.RunType, arg.MaxAttempts)
+	row := q.db.QueryRow(ctx, createJobIfAbsent,
+		arg.EmployeeID,
+		arg.RunType,
+		arg.MaxAttempts,
+		arg.NotBefore,
+	)
 	var i Job
 	err := row.Scan(
 		&i.ID,
@@ -162,6 +168,7 @@ func (q *Queries) CreateJobIfAbsent(ctx context.Context, arg CreateJobIfAbsentPa
 		&i.NextRetryAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NotBefore,
 	)
 	return i, err
 }
@@ -196,9 +203,24 @@ SELECT id, employee_id, run_type, status, error_message, claimed_by, claimed_at,
 FROM jobs WHERE id = $1
 `
 
-func (q *Queries) GetJob(ctx context.Context, id pgtype.UUID) (Job, error) {
+type GetJobRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	EmployeeID   pgtype.UUID        `json:"employee_id"`
+	RunType      RunTypeEnum        `json:"run_type"`
+	Status       JobStatusEnum      `json:"status"`
+	ErrorMessage string             `json:"error_message"`
+	ClaimedBy    string             `json:"claimed_by"`
+	ClaimedAt    pgtype.Timestamptz `json:"claimed_at"`
+	Attempts     int32              `json:"attempts"`
+	MaxAttempts  int32              `json:"max_attempts"`
+	NextRetryAt  pgtype.Timestamptz `json:"next_retry_at"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetJob(ctx context.Context, id pgtype.UUID) (GetJobRow, error) {
 	row := q.db.QueryRow(ctx, getJob, id)
-	var i Job
+	var i GetJobRow
 	err := row.Scan(
 		&i.ID,
 		&i.EmployeeID,

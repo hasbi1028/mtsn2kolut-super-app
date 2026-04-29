@@ -67,6 +67,10 @@ func (f *fakeJobRunner) Create(_ context.Context, _ pgtype.UUID, _ string, _ int
 	return db.Job{}, nil
 }
 
+func (f *fakeJobRunner) CreateWithDelay(_ context.Context, _ pgtype.UUID, _ string, _ int32, _ pgtype.Timestamptz) (db.Job, error) {
+	return db.Job{}, nil
+}
+
 func TestSchedulerTickProcessesClaimedSchedules(t *testing.T) {
 	store := &fakeSchedulerStore{
 		settings: map[string]string{"default_max_attempts": "4"},

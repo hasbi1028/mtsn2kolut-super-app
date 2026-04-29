@@ -40,9 +40,11 @@ func (h *EmployeeSchedule) Upsert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		RunType   string `json:"run_type"`
-		RunTime   string `json:"run_time"`
-		IsEnabled bool   `json:"is_enabled"`
+		RunType             string `json:"run_type"`
+		RunTime             string `json:"run_time"`
+		IsEnabled           bool   `json:"is_enabled"`
+		RandomWindowMinutes int16  `json:"random_window_minutes"`
+		DayOfWeek           int16  `json:"day_of_week"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -56,11 +58,20 @@ func (h *EmployeeSchedule) Upsert(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "run_time is required")
 		return
 	}
+	if body.DayOfWeek < 0 || body.DayOfWeek > 6 {
+		api.BadRequest(w, "day_of_week must be 0 (Minggu) through 6 (Sabtu)")
+		return
+	}
+	if body.RandomWindowMinutes < 0 {
+		body.RandomWindowMinutes = 0
+	}
 	sched, err := h.svc.Upsert(r.Context(), db.UpsertEmployeeScheduleParams{
-		EmployeeID: empID,
-		RunType:    db.RunTypeEnum(body.RunType),
-		RunTime:    body.RunTime,
-		IsEnabled:  body.IsEnabled,
+		EmployeeID:          empID,
+		RunType:             db.RunTypeEnum(body.RunType),
+		RunTime:             body.RunTime,
+		IsEnabled:           body.IsEnabled,
+		RandomWindowMinutes: body.RandomWindowMinutes,
+		DayOfWeek:           body.DayOfWeek,
 	})
 	if err != nil {
 		api.Internal(w, err)

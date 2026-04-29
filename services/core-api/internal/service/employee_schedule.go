@@ -13,7 +13,7 @@ type EmployeeSchedule struct {
 
 func NewEmployeeSchedule(q *db.Queries) *EmployeeSchedule { return &EmployeeSchedule{q: q} }
 
-func (s *EmployeeSchedule) List(ctx context.Context, employeeID pgtype.UUID) ([]db.EmployeeSchedule, error) {
+func (s *EmployeeSchedule) List(ctx context.Context, employeeID pgtype.UUID) ([]db.ListEmployeeSchedulesRow, error) {
 	return s.q.ListEmployeeSchedules(ctx, employeeID)
 }
 

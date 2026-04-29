@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"log/slog"
+	"math/rand"
 	"strconv"
 	"time"
 
@@ -29,6 +30,7 @@ type schedulerStore interface {
 type schedulerJobRunner interface {
 	RunAll(ctx context.Context, runType string, maxAttempts int32) (inserted, skipped int, err error)
 	Create(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32) (db.Job, error)
+	CreateWithDelay(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32, notBefore pgtype.Timestamptz) (db.Job, error)
 }
 
 type Scheduler struct {
@@ -135,7 +137,14 @@ func (s *Scheduler) Tick(ctx context.Context, now time.Time) (SchedulerResult, e
 	} else {
 		for _, es := range empSchedules {
 			result.Processed++
-			_, createErr := s.jobs.Create(ctx, es.EmployeeID, string(es.RunType), maxAttempts)
+			notBefore := pgtype.Timestamptz{}
+			if es.RandomWindowMinutes > 0 {
+				delayMinutes := rand.Int31n(int32(es.RandomWindowMinutes) + 1)
+				if delayMinutes > 0 {
+					_ = notBefore.Scan(now.Add(time.Duration(delayMinutes) * time.Minute))
+				}
+			}
+			_, createErr := s.jobs.CreateWithDelay(ctx, es.EmployeeID, string(es.RunType), maxAttempts, notBefore)
 			if createErr != nil {
 				_ = s.store.ResetEmployeeScheduleEnqueueState(ctx, db.ResetEmployeeScheduleEnqueueStateParams{
 					ID:                  es.ID,

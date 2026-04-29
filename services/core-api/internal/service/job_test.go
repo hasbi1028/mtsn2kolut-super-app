@@ -66,8 +66,8 @@ func (f *fakeJobStore) FailJob(ctx context.Context, arg db.FailJobParams) error 
 	return nil
 }
 
-func (f *fakeJobStore) GetJob(ctx context.Context, id pgtype.UUID) (db.Job, error) {
-	return db.Job{}, nil
+func (f *fakeJobStore) GetJob(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error) {
+	return db.GetJobRow{}, nil
 }
 
 func (f *fakeJobStore) ListActiveEmployees(ctx context.Context) ([]db.Employee, error) {
