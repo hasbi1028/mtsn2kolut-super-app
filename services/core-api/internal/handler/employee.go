@@ -35,6 +35,16 @@ type employeeResponse struct {
 
 func NewEmployee(svc *service.Employee) *Employee { return &Employee{svc: svc} }
 
+func auditUserID(r *http.Request) pgtype.UUID {
+	var uid pgtype.UUID
+	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
+		if raw, ok := claims["uid"].(string); ok {
+			_ = uid.Scan(raw)
+		}
+	}
+	return uid
+}
+
 func (h *Employee) List(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("with_status") == "1" {
 		h.listWithStatus(w, r)
@@ -232,6 +242,13 @@ func (h *Employee) UpdatePusakaCredentials(w http.ResponseWriter, r *http.Reques
 		api.Internal(w, err)
 		return
 	}
+	meta, _ := json.Marshal(map[string]any{
+		"employee_id":      pgUUIDString(id),
+		"employment_type":  emp.EmploymentType,
+		"pusaka_username":  body.PusakaUsername,
+		"configured":       body.PusakaUsername != "",
+	})
+	_ = h.svc.CreateAuditLog(r.Context(), auditUserID(r), "PUSAKA_ACCOUNT_UPDATE", "pusaka_account", pgUUIDString(id), meta)
 	api.OK(w, map[string]any{
 		"status":     "success",
 		"configured": body.PusakaUsername != "" || updated.PusakaUsername != "",
@@ -259,6 +276,11 @@ func (h *Employee) UpdatePusakaAccountStatus(w http.ResponseWriter, r *http.Requ
 		api.Internal(w, err)
 		return
 	}
+	meta, _ := json.Marshal(map[string]any{
+		"employee_id": pgUUIDString(id),
+		"is_enabled":  body.IsEnabled,
+	})
+	_ = h.svc.CreateAuditLog(r.Context(), auditUserID(r), "PUSAKA_ACCOUNT_TOGGLE", "pusaka_account", pgUUIDString(id), meta)
 	api.OK(w, map[string]any{
 		"employee_id": id,
 		"is_enabled":  body.IsEnabled,

@@ -4,6 +4,7 @@
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
   import { resolve } from '$app/paths';
+  import * as Dialog from '$lib/components/ui/dialog';
 
   interface Employee {
     id: string;
@@ -25,6 +26,17 @@
   let confirmId = $state<string | null>(null);
   let busyId = $state<string | null>(null);
   let filterEmploymentType = $state('');
+  let showEditDialog = $state(false);
+  let editBusy = $state(false);
+  let editError = $state('');
+  let editingEmployee = $state<Employee | null>(null);
+  let editForm = $state({
+    nip: '',
+    nama: '',
+    unit_kerja: '',
+    employment_type: 'lainnya',
+    is_active: true,
+  });
 
   let filteredEmployees = $derived(
     filterEmploymentType
@@ -34,6 +46,41 @@
 
   function employmentLabel(value: string) {
     return { pns: 'PNS', pppk: 'PPPK', honorer: 'Honorer', lainnya: 'Lainnya' }[value] ?? value;
+  }
+
+  function openEditDialog(employee: Employee) {
+    editingEmployee = employee;
+    editError = '';
+    editForm = {
+      nip: employee.nip,
+      nama: employee.nama,
+      unit_kerja: employee.unit_kerja,
+      employment_type: employee.employment_type,
+      is_active: employee.is_active,
+    };
+    showEditDialog = true;
+  }
+
+  async function saveEdit() {
+    if (!editingEmployee) return;
+    editBusy = true;
+    editError = '';
+    try {
+      const res = await fetch(`/api/employees/${editingEmployee.id}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(editForm),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        editError = (data as { error?: string }).error || 'Gagal memperbarui pegawai';
+        return;
+      }
+      showEditDialog = false;
+      onreload();
+    } finally {
+      editBusy = false;
+    }
   }
 
   async function toggleEmployeeStatus(emp: Employee) {
@@ -148,6 +195,9 @@
                       <Button size="sm" variant="outline">Kelola PUSAKA</Button>
                     </a>
                   {/if}
+                  <Button size="sm" variant="outline" onclick={() => openEditDialog(e)}>
+                    Edit
+                  </Button>
                   <Button size="sm" variant="outline" onclick={() => toggleEmployeeStatus(e)} disabled={busyId === e.id}>
                     {e.is_active ? 'Nonaktifkan' : 'Aktifkan'}
                   </Button>
@@ -167,3 +217,52 @@
     </Table.Root>
   </Card.Content>
 </Card.Root>
+
+<Dialog.Root bind:open={showEditDialog}>
+  <Dialog.Content>
+    <div class="space-y-4">
+      <div>
+        <h2 class="text-base font-semibold text-slate-900">Edit Pegawai</h2>
+        <p class="mt-1 text-sm text-slate-500">Perbarui data umum pegawai tanpa masuk ke area operasional PUSAKA.</p>
+      </div>
+
+      {#if editError}
+        <div class="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{editError}</div>
+      {/if}
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label for="edit-nip" class="mb-1 block text-xs font-medium text-slate-600">NIP</label>
+          <input id="edit-nip" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.nip} />
+        </div>
+        <div>
+          <label for="edit-nama" class="mb-1 block text-xs font-medium text-slate-600">Nama</label>
+          <input id="edit-nama" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.nama} />
+        </div>
+        <div>
+          <label for="edit-unit" class="mb-1 block text-xs font-medium text-slate-600">Unit Kerja</label>
+          <input id="edit-unit" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.unit_kerja} />
+        </div>
+        <div>
+          <label for="edit-type" class="mb-1 block text-xs font-medium text-slate-600">Status Kepegawaian</label>
+          <select id="edit-type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.employment_type}>
+            <option value="pns">PNS</option>
+            <option value="pppk">PPPK</option>
+            <option value="honorer">Honorer</option>
+            <option value="lainnya">Lainnya</option>
+          </select>
+        </div>
+      </div>
+
+      <label class="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700">
+        <input type="checkbox" bind:checked={editForm.is_active} />
+        Pegawai aktif
+      </label>
+
+      <div class="flex justify-end gap-2">
+        <Button variant="outline" onclick={() => (showEditDialog = false)}>Batal</Button>
+        <Button onclick={saveEdit} disabled={editBusy}>{editBusy ? 'Menyimpan...' : 'Simpan Perubahan'}</Button>
+      </div>
+    </div>
+  </Dialog.Content>
+</Dialog.Root>

@@ -125,6 +125,17 @@ func (s *Employee) SetPusakaAccountEnabled(ctx context.Context, employeeID pgtyp
 	return s.UpsertPusakaAccount(ctx, employeeID, employee.PusakaUsername, employee.PusakaPassword, isEnabled)
 }
 
+func (s *Employee) CreateAuditLog(ctx context.Context, userID pgtype.UUID, action, entityType, entityID string, metadata []byte) error {
+	_, err := s.q.CreateAuditLog(ctx, db.CreateAuditLogParams{
+		UserID:     userID,
+		Action:     action,
+		EntityType: entityType,
+		EntityID:   entityID,
+		Metadata:   metadata,
+	})
+	return err
+}
+
 func (s *Employee) SetActive(ctx context.Context, id pgtype.UUID, isActive bool) error {
 	emp, err := s.q.GetEmployee(ctx, id)
 	if err != nil {

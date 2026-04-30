@@ -62,6 +62,7 @@
   let testing          = $state(false);
   let accountToggling  = $state(false);
   let filterMode = $state<'all' | 'configured' | 'needs_setup' | 'disabled'>('all');
+  let search = $state('');
 
   // Run confirmation dialog
   let runConfirm = $state<{ emp: Employee; runType: RunType } | null>(null);
@@ -80,10 +81,19 @@
   });
   let dayConfigs = $state<DayConfig[]>(Array.from({ length: 7 }, makeDayConfig));
   let filteredEmployees = $derived.by(() => {
-    if (filterMode === 'configured') return employees.filter((employee) => !!employee.pusaka_username && employee.pusaka_is_enabled !== false);
-    if (filterMode === 'needs_setup') return employees.filter((employee) => !employee.pusaka_username);
-    if (filterMode === 'disabled') return employees.filter((employee) => !!employee.pusaka_username && employee.pusaka_is_enabled === false);
-    return employees;
+    const normalizedSearch = search.trim().toLowerCase();
+    const scoped = filterMode === 'configured'
+      ? employees.filter((employee) => !!employee.pusaka_username && employee.pusaka_is_enabled !== false)
+      : filterMode === 'needs_setup'
+        ? employees.filter((employee) => !employee.pusaka_username)
+        : filterMode === 'disabled'
+          ? employees.filter((employee) => !!employee.pusaka_username && employee.pusaka_is_enabled === false)
+          : employees;
+    if (!normalizedSearch) return scoped;
+    return scoped.filter((employee) =>
+      employee.nama.toLowerCase().includes(normalizedSearch) ||
+      employee.nip.toLowerCase().includes(normalizedSearch)
+    );
   });
 
   const runTypeLabel: Record<RunType, string> = {
@@ -312,6 +322,7 @@
         <Card.Description>Hanya pegawai PNS dan PPPK yang dikelola di area ini untuk setup akun, jadwal, dan eksekusi job PUSAKA.</Card.Description>
       </div>
       <div class="flex items-center gap-2">
+        <Input placeholder="Cari nama / NIP..." bind:value={search} class="w-44" />
         <select bind:value={filterMode} class="rounded-md border border-input bg-background px-3 py-2 text-sm">
           <option value="all">Semua</option>
           <option value="configured">Akun aktif</option>
