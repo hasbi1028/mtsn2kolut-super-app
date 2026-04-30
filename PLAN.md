@@ -125,6 +125,8 @@ Three runtime units deployed across 3 VPS:
 - [x] Internal APK release checklist for operator verification and field trial preparation
 - [x] Visual connection-health card in exam shell for clearer BYOD sync interpretation
 - [x] Dedicated mobile status-guide screen explaining `Tersambung`, `Lokal`, `Gangguan`, and `Menurun`
+- [x] Heartbeat-quality `Waspada` state when last server contact becomes stale even before full degraded mode
+- [x] Operator quick-start guide for pengawas during BYOD field trials
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

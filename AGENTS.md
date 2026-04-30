@@ -156,6 +156,8 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Restore health baseline** — persisted mobile exam snapshots should preserve lightweight connection-health metadata so restore cards and restore-failed screens can show whether the previous session was recently stable or repeatedly degraded.
 - **Internal release checklist baseline** — `apps/mobile/RELEASE_CHECKLIST.md` should exist for operator-facing APK trial preparation, verification, and BYOD field guidance.
 - **Connection-legend baseline** — the mobile exam shell should expose a more visual connection-health summary, and the app should provide a simple status-guide screen so students and pengawas can interpret `Tersambung`, `Lokal`, `Gangguan`, and `Menurun` consistently.
+- **Heartbeat-quality baseline** — mobile connection status should not rely only on the latest error flag; it should also consider stale last-contact timing so the shell can surface a softer `Waspada` state before a session is fully degraded.
+- **Operator quick-start baseline** — `apps/mobile/OPERATOR_QUICKSTART.md` should exist as a short non-technical guide for pengawas/operator during BYOD field trials.
 
 ### ✅ Sprint 15 — Library System (Done)
 - **Library schema** — `library_books` and `library_loans` tables (migration 027). No separate member table; loans reference existing `students` and `employees` via FK.

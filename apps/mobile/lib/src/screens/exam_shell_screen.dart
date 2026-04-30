@@ -613,6 +613,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     if (_isDegradedMode) {
       return 'Menurun';
     }
+    if (_lastContactIsStale) {
+      return 'Waspada';
+    }
     if (_errorMessage != null) {
       return 'Gangguan';
     }
@@ -625,6 +628,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   String _buildConnectionHealthDescription() {
     if (_isDegradedMode) {
       return 'Sinkron berulang kali gagal. Submit manual ditahan sampai koneksi membaik.';
+    }
+    if (_lastContactIsStale) {
+      return 'Perangkat sudah cukup lama tidak menyentuh server. Perbarui status agar pengawas tahu koneksi masih sehat.';
     }
     if (_errorMessage != null) {
       return 'Server belum merespons stabil. Pantau jaringan dan coba sinkron ulang.';
@@ -639,10 +645,18 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     if (_isDegradedMode || _errorMessage != null) {
       return _HealthTone.danger;
     }
-    if (_pendingAnswers.isNotEmpty) {
+    if (_lastContactIsStale || _pendingAnswers.isNotEmpty) {
       return _HealthTone.warning;
     }
     return _HealthTone.good;
+  }
+
+  bool get _lastContactIsStale {
+    final last = _lastServerContactAt;
+    if (last == null) {
+      return false;
+    }
+    return DateTime.now().difference(last).inSeconds >= 90;
   }
 
   String _formatClock(DateTime? value) {
@@ -1252,6 +1266,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     if (_isDegradedMode) {
       return 'Menurun';
     }
+    if (_lastContactIsStale) {
+      return 'Waspada';
+    }
     if (_isSavingAnswer || _isSyncingStatus) {
       return 'Sinkron';
     }
@@ -1268,7 +1285,10 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     if (_isDegradedMode || _errorMessage != null) {
       return _SyncTone.danger;
     }
-    if (_isResumingExam || _resumeCheckRequired || _pendingAnswers.isNotEmpty) {
+    if (_isResumingExam ||
+        _resumeCheckRequired ||
+        _pendingAnswers.isNotEmpty ||
+        _lastContactIsStale) {
       return _SyncTone.warning;
     }
     return _SyncTone.success;
