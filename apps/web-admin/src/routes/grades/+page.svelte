@@ -116,6 +116,7 @@
 	let publishBusy = $state<Record<string, boolean>>({});
 	let bulkSaveBusy = $state(false);
 	let finalizationBusy = $state(false);
+	let exportBusy = $state(false);
 	let editingComponentId = $state('');
 	let componentTitle = $state('');
 	let componentCategory = $state('assignment');
@@ -125,6 +126,7 @@
 	let quickFillNote = $state('');
 	let finalizeNotes = $state('');
 	let assignmentStatusFilter = $state<'all' | 'ready' | 'finalized' | 'attention'>('all');
+	let assignmentStatusQuery = $state('');
 
 	let scoreInput = $state<Record<string, string>>({});
 	let noteInput = $state<Record<string, string>>({});
@@ -158,16 +160,33 @@
 		assignmentStatuses.filter((item) => !item.ready && !item.is_finalized).length
 	);
 	const filteredAssignmentStatuses = $derived.by(() => {
-		switch (assignmentStatusFilter) {
-			case 'ready':
-				return assignmentStatuses.filter((item) => item.ready && !item.is_finalized);
-			case 'finalized':
-				return assignmentStatuses.filter((item) => item.is_finalized);
-			case 'attention':
-				return assignmentStatuses.filter((item) => !item.ready && !item.is_finalized);
-			default:
-				return assignmentStatuses;
-		}
+		const statusFiltered = (() => {
+			switch (assignmentStatusFilter) {
+				case 'ready':
+					return assignmentStatuses.filter((item) => item.ready && !item.is_finalized);
+				case 'finalized':
+					return assignmentStatuses.filter((item) => item.is_finalized);
+				case 'attention':
+					return assignmentStatuses.filter((item) => !item.ready && !item.is_finalized);
+				default:
+					return assignmentStatuses;
+			}
+		})();
+		const query = assignmentStatusQuery.trim().toLowerCase();
+		if (!query) return statusFiltered;
+		return statusFiltered.filter((item) =>
+			[
+				item.class_name,
+				item.class_code,
+				item.subject_name,
+				item.subject_code,
+				item.teacher_name,
+				assignmentStatusLabel(item)
+			]
+				.join(' ')
+				.toLowerCase()
+				.includes(query)
+		);
 	});
 	const nextReadyAssignment = $derived(
 		assignmentStatuses.find((item) => item.ready && !item.is_finalized) ?? null
@@ -257,6 +276,61 @@
 		componentId = '';
 		resetComponentForm();
 		await loadOverview();
+	}
+
+	function csvCell(value: string | number) {
+		const normalized = String(value ?? '').replaceAll('"', '""');
+		return `"${normalized}"`;
+	}
+
+	async function exportAssignmentStatusSummary() {
+		if (filteredAssignmentStatuses.length === 0) {
+			showError('Tidak ada data rekap yang bisa diekspor untuk filter ini.');
+			return;
+		}
+		exportBusy = true;
+		try {
+			const header = [
+				'Kode Kelas',
+				'Nama Kelas',
+				'Kode Mapel',
+				'Nama Mapel',
+				'Guru',
+				'Status',
+				'Komponen Terbit',
+				'Total Komponen',
+				'Siswa Siap',
+				'Total Siswa',
+				'Nilai Kosong'
+			];
+			const rows = filteredAssignmentStatuses.map((item) => [
+				item.class_code,
+				item.class_name,
+				item.subject_code,
+				item.subject_name,
+				item.teacher_name,
+				assignmentStatusLabel(item),
+				item.published_component_count,
+				item.component_count,
+				item.ready_student_count,
+				item.student_count,
+				item.missing_grade_count
+			]);
+			const csv = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\n');
+			const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			const filterSuffix = assignmentStatusFilter === 'all' ? 'semua' : assignmentStatusFilter;
+			anchor.href = url;
+			anchor.download = `rekap-finalisasi-grade-${filterSuffix}.csv`;
+			document.body.append(anchor);
+			anchor.click();
+			anchor.remove();
+			URL.revokeObjectURL(url);
+			showSuccess('Rekap finalisasi berhasil diekspor.');
+		} finally {
+			exportBusy = false;
+		}
 	}
 
 	function resetComponentForm() {
@@ -720,35 +794,62 @@
 						<Card.Description>Gunakan ringkasan ini untuk melihat assignment mana yang sudah siap dikunci, mana yang sudah final, dan mana yang masih butuh tindak lanjut.</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-4 p-4 pt-0">
-						<div class="flex flex-wrap gap-2">
-							<Button
-								variant={assignmentStatusFilter === 'all' ? 'default' : 'outline'}
-								size="sm"
-								onclick={() => { assignmentStatusFilter = 'all'; }}
-							>
-								Semua ({assignmentStatuses.length})
-							</Button>
-							<Button
-								variant={assignmentStatusFilter === 'ready' ? 'default' : 'outline'}
-								size="sm"
-								onclick={() => { assignmentStatusFilter = 'ready'; }}
-							>
-								Siap Difinalkan ({readyAssignmentCount})
-							</Button>
-							<Button
-								variant={assignmentStatusFilter === 'finalized' ? 'default' : 'outline'}
-								size="sm"
-								onclick={() => { assignmentStatusFilter = 'finalized'; }}
-							>
-								Sudah Final ({finalizedAssignmentCount})
-							</Button>
-							<Button
-								variant={assignmentStatusFilter === 'attention' ? 'default' : 'outline'}
-								size="sm"
-								onclick={() => { assignmentStatusFilter = 'attention'; }}
-							>
-								Perlu Dilengkapi ({needsAttentionAssignmentCount})
-							</Button>
+						<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+							<div class="flex flex-wrap gap-2">
+								<Button
+									variant={assignmentStatusFilter === 'all' ? 'default' : 'outline'}
+									size="sm"
+									onclick={() => { assignmentStatusFilter = 'all'; }}
+								>
+									Semua ({assignmentStatuses.length})
+								</Button>
+								<Button
+									variant={assignmentStatusFilter === 'ready' ? 'default' : 'outline'}
+									size="sm"
+									onclick={() => { assignmentStatusFilter = 'ready'; }}
+								>
+									Siap Difinalkan ({readyAssignmentCount})
+								</Button>
+								<Button
+									variant={assignmentStatusFilter === 'finalized' ? 'default' : 'outline'}
+									size="sm"
+									onclick={() => { assignmentStatusFilter = 'finalized'; }}
+								>
+									Sudah Final ({finalizedAssignmentCount})
+								</Button>
+								<Button
+									variant={assignmentStatusFilter === 'attention' ? 'default' : 'outline'}
+									size="sm"
+									onclick={() => { assignmentStatusFilter = 'attention'; }}
+								>
+									Perlu Dilengkapi ({needsAttentionAssignmentCount})
+								</Button>
+							</div>
+							<div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+								<div class="min-w-0 sm:w-72">
+									<label for="assignment-status-query" class="mb-1 block text-xs font-medium text-slate-500">Cari Kelas, Mapel, Guru</label>
+									<Input
+										id="assignment-status-query"
+										placeholder="Mis. VIIA, Matematika, Ibu Siti"
+										bind:value={assignmentStatusQuery}
+									/>
+								</div>
+								<LoadingButton
+									variant="outline"
+									loading={exportBusy}
+									loadingLabel="Mengekspor..."
+									disabled={filteredAssignmentStatuses.length === 0}
+									onclick={exportAssignmentStatusSummary}
+									label="Ekspor Rekap"
+								/>
+							</div>
+						</div>
+						<div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+							<Badge variant="outline">Filter: {assignmentFilterLabel(assignmentStatusFilter)}</Badge>
+							<Badge variant="outline">Hasil: {filteredAssignmentStatuses.length}</Badge>
+							{#if assignmentStatusQuery.trim()}
+								<Badge variant="outline">Pencarian: {assignmentStatusQuery.trim()}</Badge>
+							{/if}
 						</div>
 						<div class="overflow-x-auto">
 							<Table.Root>
