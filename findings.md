@@ -6,76 +6,19 @@ Dokumen ini merangkum backlog review yang **masih aktif** per 2026-05-01. Temuan
 
 ## Ringkasan prioritas aktif
 
-### High priority
-1. Review dan harden public serving untuk file asset CBT
-2. Kurangi blast radius `INTERNAL_API_KEY`
-
 ### Medium priority
-3. Pecah `services/pusaka-worker/src/index.ts` menjadi modul yang lebih kecil
-4. Refactor `apps/mobile/lib/src/screens/exam_shell_screen.dart`
-5. Hardening penyimpanan snapshot exam di mobile
-6. Jangan perlakukan fingerprint device mobile saat ini sebagai identitas kuat
+1. Pecah `services/pusaka-worker/src/index.ts` menjadi modul yang lebih kecil
+2. Refactor `apps/mobile/lib/src/screens/exam_shell_screen.dart`
+3. Hardening penyimpanan snapshot exam di mobile
+4. Jangan perlakukan fingerprint device mobile saat ini sebagai identitas kuat
 
 ### Low priority
-7. Evaluasi kebutuhan field API base URL yang bisa diubah siswa di mobile
-8. Bersihkan working tree dan pastikan file data sensitif tidak ikut commit
+5. Evaluasi kebutuhan field API base URL yang bisa diubah siswa di mobile
+6. Bersihkan working tree dan pastikan file data sensitif tidak ikut commit
 
 ---
 
-## 1) HIGH — File asset CBT masih bisa diakses lewat route file berbasis ID
-
-**Area:** `services/core-api`
-
-**Files:**
-- `services/core-api/cmd/api/main.go`
-- `services/core-api/internal/handler/cbt_question_asset.go`
-
-**Masalah:**
-Route `/api/cbt/assets/{id}/file` sekarang memang sudah tidak public polos, tetapi tetap perlu ditinjau sebagai boundary security khusus karena ia dipakai lintas konteks admin/guru dan peserta ujian.
-
-**Kenapa ini penting:**
-Asset soal adalah bagian dari boundary CBT. Akses file berbasis ID saja tetap perlu dipastikan hanya terbuka untuk konteks yang benar:
-- admin/guru terautentikasi
-- peserta ujian aktif dengan exam token valid
-
-**Arah patch:**
-- review kembali kontrak `ExamTokenOrJWT(...)` pada route file asset
-- pastikan tidak ada jalur bypass yang terlalu longgar
-- pertimbangkan signed URL atau tokenized file access kalau kebutuhan media makin kaya
-
-**Acceptance check:**
-- asset tidak bisa diakses di luar konteks admin/guru atau peserta ujian aktif
-- render media di UI authoring dan mobile exam tetap berjalan
-
----
-
-## 2) HIGH — `INTERNAL_API_KEY` masih punya blast radius besar
-
-**Area:** `services/core-api`
-
-**Files:**
-- `services/core-api/internal/middleware/auth.go`
-- `services/core-api/cmd/api/main.go`
-
-**Masalah:**
-`X-Internal-Key` masih dipakai sebagai bypass umum pada `InternalKeyOrJWT(...)` dan `RequireAdmin(...)`.
-
-**Kenapa ini bermasalah:**
-Satu shared secret masih membuka surface yang luas. Jika bocor, banyak route authenticated/admin ikut terbuka.
-
-**Arah patch:**
-- batasi internal key hanya pada route yang benar-benar perlu bypass internal
-- audit route yang sebenarnya sudah aman memakai JWT user biasa
-- pertimbangkan pemisahan scope/key bila bypass tetap diperlukan
-
-**Acceptance check:**
-- route user-facing biasa selalu mengandalkan JWT user
-- bypass internal hanya berlaku pada route yang eksplisit diizinkan
-- admin route tidak otomatis terbuka hanya karena shared internal key
-
----
-
-## 3) MEDIUM — Worker PUSAKA masih terlalu banyak tanggung jawab dalam satu file
+## 1) MEDIUM — Worker PUSAKA masih terlalu banyak tanggung jawab dalam satu file
 
 **Area:** `services/pusaka-worker`
 
@@ -86,7 +29,7 @@ Satu shared secret masih membuka surface yang luas. Jika bocor, banyak route aut
 Satu file besar masih memegang config, backend client, supervisor loop, Playwright flow, parsing, logging, dan shutdown.
 
 **Arah patch:**
-Pecah minimal menjadi:
+- Pecah minimal menjadi:
 - `config.ts`
 - `api-client.ts`
 - `worker-supervisor.ts`
@@ -100,7 +43,7 @@ Pecah minimal menjadi:
 
 ---
 
-## 4) MEDIUM — `ExamShellScreen` masih menjadi hotspot regresi mobile
+## 2) MEDIUM — `ExamShellScreen` masih menjadi hotspot regresi mobile
 
 **Area:** `apps/mobile`
 
@@ -122,7 +65,7 @@ Screen ini masih memegang lifecycle, timer, sync/degraded logic, persistence, su
 
 ---
 
-## 5) MEDIUM — Snapshot exam mobile masih disimpan plaintext di SharedPreferences
+## 3) MEDIUM — Snapshot exam mobile masih disimpan plaintext di SharedPreferences
 
 **Area:** `apps/mobile`
 
@@ -146,7 +89,7 @@ Pada skenario BYOD, data lokal lebih berisiko diakses, terutama pada device shar
 
 ---
 
-## 6) MEDIUM — Fingerprint device mobile saat ini masih lemah
+## 4) MEDIUM — Fingerprint device mobile saat ini masih lemah
 
 **Area:** `apps/mobile`
 
@@ -170,7 +113,7 @@ Ini cukup sebagai telemetry hint, tapi lemah jika diperlakukan sebagai identity 
 
 ---
 
-## 7) LOW — Field API base URL masih editable di mobile student app
+## 5) LOW — Field API base URL masih editable di mobile student app
 
 **Area:** `apps/mobile`
 
@@ -186,7 +129,7 @@ Siswa masih dapat mengubah `Alamat server API` langsung dari UI.
 
 ---
 
-## 8) LOW — Working tree dan runtime data perlu tetap dijaga dari commit
+## 6) LOW — Working tree dan runtime data perlu tetap dijaga dari commit
 
 **Area:** repo root / operational hygiene
 
@@ -210,23 +153,20 @@ Repo masih punya runtime/local data paths yang mudah ikut terseret ke commit jik
 - Rate limiting sekarang sudah thread-safe, memakai cleanup TTL, membaca forwarded IP, dan dipasang pada login/refresh/public registration/exam login.
 - Escape hatch `as any` pada auth locals SvelteKit sudah dihapus; auth user sekarang typed lewat shared `AuthUser`.
 - Metadata mobile dasar sudah dirapikan dari scaffold default (`pubspec` description dan Android app label).
+- Surface user-facing protected/admin route tidak lagi menerima bypass internal key; route CBT asset file sekarang menerima hanya JWT user nyata atau `exam_token` peserta aktif.
 
 ---
 
 ## Urutan patch yang disarankan sekarang
 
-### Batch 1 — security boundary
-- [ ] Review file-serving asset CBT
-- [ ] Kurangi blast radius `INTERNAL_API_KEY`
-
-### Batch 2 — mobile hardening
+### Batch 1 — mobile hardening
 - [ ] Review local snapshot strategy di mobile
 - [ ] Tegaskan role fingerprint sebagai telemetry hint
 - [ ] Evaluasi API base URL editable
 
-### Batch 3 — maintainability
+### Batch 2 — maintainability
 - [ ] Pecah worker `index.ts`
 - [ ] Refactor `ExamShellScreen`
 
-### Batch 4 — hygiene
+### Batch 3 — hygiene
 - [ ] Review `.gitignore` dan local runtime data hygiene

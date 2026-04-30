@@ -101,8 +101,6 @@ func main() {
 
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
-	internalKey := getEnv("INTERNAL_API_KEY", "")
-
 	examTokenMW := mw.ExamToken(examSvc.GetParticipantByToken)
 	authRateLimit := ratelimit.RateLimit(5, 1)
 	refreshRateLimit := ratelimit.RateLimit(10, 1)
@@ -132,7 +130,7 @@ func main() {
 	// CBT asset files are not public-by-obscurity. They may be accessed either by
 	// authenticated admin/guru requests or by active exam participants using the
 	// exam token attached to exam payload asset URLs.
-	r.With(mw.ExamTokenOrJWT(internalKey, jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession, examSvc.GetParticipantByToken)).Get("/api/cbt/assets/{id}/file", questionAssetH.File)
+	r.With(mw.ExamTokenOrJWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession, examSvc.GetParticipantByToken)).Get("/api/cbt/assets/{id}/file", questionAssetH.File)
 
 	// Exam endpoints — authenticated via X-Exam-Token (no JWT needed)
 	r.With(examLoginRateLimit).Post("/api/exam/login", examH.Login)
@@ -145,10 +143,10 @@ func main() {
 		r.Post("/api/exam/submit", examH.Submit)
 	})
 
-	requireAdmin := mw.RequireAdmin(internalKey)
+	requireAdmin := mw.RequireAdmin()
 
 	r.Group(func(r chi.Router) {
-		r.Use(mw.InternalKeyOrJWT(internalKey, jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession))
+		r.Use(mw.JWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession))
 		r.Use(mw.Audit(q))
 		r.Post("/api/auth/change-password", authH.ChangePassword)
 		r.Post("/api/auth/logout-all", authH.LogoutAll)

@@ -111,7 +111,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Users table** (`users`) dengan role enum `admin/guru` dan `employee_id` link.
 - **Audit log table** (`audit_logs`) — semua mutasi tercatat lewat middleware.
 - **SeedAdmin** lewat `service.Auth.SeedAdmin()` (single source of truth, bukan SQL seed).
-- **Backend role gate:** `mw.RequireAdmin(internalKey)` — JWT role check, internal-key bypass untuk BFF.
+- **Backend role gate:** `mw.RequireAdmin()` — admin-only access must be enforced from real JWT claims, not shared internal-key bypass.
 - **Audit middleware** (`mw.Audit`) — auto-log semua POST/PUT/PATCH/DELETE dengan `user_id`, `path`, `method`, `status`.
 - **BFF role gate:** SvelteKit `hooks.server.ts` block guru dari `/employees`, `/academic`, `/attendance`, `/settings`, `/api/users`, dst.
 - **Frontend:** halaman `/settings/users` (CRUD pengguna), `/settings/audit-logs` (view audit trail).
@@ -288,6 +288,6 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 3. **No Dockerfiles.** Services run bare-metal with PM2. No containerized deployment option.
 4. **Rate limiting is in-memory per-IP** — does not scale across backend instances.
 5. **Audit log entity_id is path, not real entity ID.** Middleware logs URL path (`/api/students/uuid`) into `entity_id`. Sufficient for forensics but not perfect. Future: per-handler structured audit emit.
-6. **BFF uses `X-Internal-Key` for all admin calls** — backend can't see real user. JWT claims propagated only when frontend forwards JWT (currently bypassed). For higher-fidelity audit, BFF should forward user JWT in `Authorization` header instead of internal key for non-public endpoints.
+6. **`INTERNAL_API_KEY` still exists as integration debt surface.** The main user-facing protected/admin routes and CBT asset file route should rely on real JWT or exam-token context, but the shared internal key still exists as a helper primitive in middleware and should stay tightly scoped.
 7. **CBT print artifacts are HTML-first.** Event cards and berita acara are printable browser views; no PDF rendering service yet.
 8. **Seat plan validation is still light.** Current backend stores `seat_no` and room assignment, but does not yet enforce uniqueness per `(room_id, seat_no)` at the database level.
