@@ -153,6 +153,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
           deviceFingerprint: deviceFingerprint,
           currentQuestionIndex: 0,
           answers: const <String, String>{},
+          pendingAnswers: const <String, String>{},
         ),
       );
       if (!mounted) {

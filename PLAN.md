@@ -107,6 +107,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Anti-cheat baseline via lifecycle/app-switch event logging, disabled back navigation, heartbeat, and server status sync
 - [x] Local session restore baseline via persisted token/base URL/current question/answer snapshot
 - [x] Android secure-screen baseline via `FLAG_SECURE`
+- [x] BYOD-aware resume gate and pending-answer sync queue to maximize deterrence and answer safety on student-owned Android devices
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

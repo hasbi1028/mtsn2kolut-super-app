@@ -31,6 +31,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     with WidgetsBindingObserver {
   final _sessionStore = ExamSessionStore();
   late final Map<String, String> _answers;
+  late final Map<String, String> _pendingAnswers;
   late final List<TextEditingController> _essayControllers;
 
   int _currentQuestionIndex = 0;
@@ -40,6 +41,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   bool _isSubmitting = false;
   bool _isSyncingStatus = false;
   bool _isSubmitted = false;
+  bool _resumeCheckRequired = false;
+  bool _isResumingExam = false;
   String? _statusMessage;
   String? _errorMessage;
   Timer? _countdownTimer;
@@ -50,6 +53,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _answers = Map<String, String>.from(widget.restoredSnapshot?.answers ?? {});
+    _pendingAnswers = Map<String, String>.from(
+      widget.restoredSnapshot?.pendingAnswers ?? {},
+    );
     _essayControllers = widget.initialPayload.questions
         .map((_) => TextEditingController())
         .toList();
@@ -84,6 +90,13 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
+      if (mounted) {
+        setState(() {
+          _resumeCheckRequired = true;
+          _statusMessage =
+              'Aplikasi meninggalkan mode ujian. Status akan dicek ulang saat kembali.';
+        });
+      }
       unawaited(
         widget.client.sendEvent(
           token: widget.examToken,
@@ -95,6 +108,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         ),
       );
       unawaited(_persistSnapshot());
+    } else if (state == AppLifecycleState.resumed && !_isSubmitted) {
+      unawaited(_handleResumeCheck());
     }
   }
 
@@ -124,6 +139,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       }
       try {
         await widget.client.sendHeartbeat(widget.examToken);
+        if (_pendingAnswers.isNotEmpty) {
+          await _flushPendingAnswers();
+        }
       } catch (_) {
         if (!mounted) {
           return;
@@ -149,6 +167,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _timeRemainingSeconds = status.timeRemainingSeconds;
         _isSubmitted = status.isSubmitted;
       });
+      if (_pendingAnswers.isNotEmpty) {
+        await _flushPendingAnswers();
+      }
     } catch (_) {
       if (!mounted) {
         return;
@@ -163,6 +184,73 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         });
       }
     }
+  }
+
+  Future<void> _handleResumeCheck() async {
+    if (_isResumingExam || _isSubmitted) {
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _isResumingExam = true;
+        _statusMessage =
+            'Memeriksa ulang status ujian setelah aplikasi dibuka kembali...';
+        _errorMessage = null;
+      });
+    }
+    await widget.client
+        .sendEvent(
+          token: widget.examToken,
+          eventType: 'warning',
+          data: const <String, Object?>{'reason': 'resume_exam'},
+        )
+        .catchError((_) {});
+    await _syncStatus();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isResumingExam = false;
+      _resumeCheckRequired = false;
+      _statusMessage = _pendingAnswers.isEmpty
+          ? 'Status ujian sudah diperbarui. Anda dapat melanjutkan.'
+          : 'Status ujian diperbarui, tetapi masih ada jawaban lokal yang menunggu sinkron.';
+    });
+  }
+
+  Future<void> _flushPendingAnswers() async {
+    if (_pendingAnswers.isEmpty || _isSubmitted) {
+      return;
+    }
+
+    final entries = Map<String, String>.from(_pendingAnswers).entries.toList();
+    var syncedCount = 0;
+
+    for (final entry in entries) {
+      try {
+        await widget.client.saveAnswer(
+          token: widget.examToken,
+          questionId: entry.key,
+          answer: entry.value,
+        );
+        _pendingAnswers.remove(entry.key);
+        syncedCount += 1;
+      } catch (_) {
+        break;
+      }
+    }
+
+    await _persistSnapshot();
+
+    if (!mounted || syncedCount == 0) {
+      return;
+    }
+
+    setState(() {
+      _statusMessage = _pendingAnswers.isEmpty
+          ? 'Semua jawaban lokal berhasil disinkronkan ke server.'
+          : '$syncedCount jawaban lokal berhasil disinkronkan. Sisanya akan dicoba lagi.';
+    });
   }
 
   Future<void> _selectOption(ExamQuestion question, String answer) async {
@@ -190,6 +278,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         return;
       }
       setState(() {
+        _pendingAnswers.remove(question.id);
         _statusMessage = 'Jawaban tersimpan ke server.';
       });
       await _persistSnapshot();
@@ -198,12 +287,12 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         return;
       }
       setState(() {
-        _errorMessage = error.message;
-        if (!wasAnswered) {
-          _answeredCount -= 1;
-          _answers.remove(question.id);
-        }
+        _pendingAnswers[question.id] = answer;
+        _errorMessage = null;
+        _statusMessage =
+            '${error.message} Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.';
       });
+      await _persistSnapshot();
     } finally {
       if (mounted) {
         setState(() {
@@ -235,6 +324,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         deviceFingerprint: widget.deviceFingerprint,
         currentQuestionIndex: _currentQuestionIndex,
         answers: Map<String, String>.from(_answers),
+        pendingAnswers: Map<String, String>.from(_pendingAnswers),
       ),
     );
   }
@@ -244,7 +334,22 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       return;
     }
 
+    if (_pendingAnswers.isNotEmpty) {
+      await _flushPendingAnswers();
+    }
+
+    if (!autoSubmit && _pendingAnswers.isNotEmpty) {
+      setState(() {
+        _errorMessage =
+            'Masih ada jawaban yang belum tersinkron ke server. Tunggu koneksi stabil lalu coba kirim lagi.';
+      });
+      return;
+    }
+
     if (!autoSubmit) {
+      if (!mounted) {
+        return;
+      }
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) {
@@ -369,32 +474,107 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           ],
         ),
         body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 1080;
-              final sidePanel = _buildSidePanel(theme, payload);
-              final content = _buildQuestionArea(theme, currentQuestion);
+          child: Stack(
+            children: [
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final wide = constraints.maxWidth >= 1080;
+                  final sidePanel = _buildSidePanel(theme, payload);
+                  final content = _buildQuestionArea(theme, currentQuestion);
 
-              return Padding(
-                padding: const EdgeInsets.all(16),
-                child: wide
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(width: 290, child: sidePanel),
-                          const SizedBox(width: 16),
-                          Expanded(child: content),
-                        ],
-                      )
-                    : Column(
-                        children: [
-                          sidePanel,
-                          const SizedBox(height: 16),
-                          Expanded(child: content),
-                        ],
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: wide
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(width: 290, child: sidePanel),
+                              const SizedBox(width: 16),
+                              Expanded(child: content),
+                            ],
+                          )
+                        : Column(
+                            children: [
+                              sidePanel,
+                              const SizedBox(height: 16),
+                              Expanded(child: content),
+                            ],
+                          ),
+                  );
+                },
+              ),
+              if (_resumeCheckRequired || _isResumingExam)
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Mode ujian diamankan',
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  _isResumingExam
+                                      ? 'Sistem sedang memeriksa ulang status peserta dan mencoba menyinkronkan jawaban lokal.'
+                                      : 'Aplikasi mendeteksi perpindahan dari mode ujian. Lanjutkan hanya jika pengawas mengizinkan.',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    height: 1.5,
+                                  ),
+                                ),
+                                if (_pendingAnswers.isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    '${_pendingAnswers.length} jawaban lokal menunggu sinkron.',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 18),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    onPressed: _isResumingExam
+                                        ? null
+                                        : _handleResumeCheck,
+                                    icon: _isResumingExam
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.verified_user_outlined,
+                                          ),
+                                    label: Text(
+                                      _isResumingExam
+                                          ? 'Memeriksa status...'
+                                          : 'Lanjutkan dengan pengecekan',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-              );
-            },
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -430,6 +610,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               value: '$_answeredCount / ${payload.totalQuestions}',
             ),
             const SizedBox(height: 20),
+            if (_pendingAnswers.isNotEmpty) ...[
+              _StatTile(
+                label: 'Jawaban lokal',
+                value: '${_pendingAnswers.length} menunggu sinkron',
+                accent: true,
+              ),
+              const SizedBox(height: 12),
+            ],
             if (_statusMessage != null)
               _InlineMessage(
                 tone: BannerTone.success,

@@ -9,6 +9,7 @@ class ExamSessionSnapshot {
     required this.deviceFingerprint,
     required this.currentQuestionIndex,
     required this.answers,
+    required this.pendingAnswers,
   });
 
   final String baseUrl;
@@ -16,6 +17,7 @@ class ExamSessionSnapshot {
   final String deviceFingerprint;
   final int currentQuestionIndex;
   final Map<String, String> answers;
+  final Map<String, String> pendingAnswers;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -24,6 +26,7 @@ class ExamSessionSnapshot {
       'device_fingerprint': deviceFingerprint,
       'current_question_index': currentQuestionIndex,
       'answers': answers,
+      'pending_answers': pendingAnswers,
     };
   }
 
@@ -36,6 +39,10 @@ class ExamSessionSnapshot {
       answers: ((json['answers'] as Map<String, dynamic>?) ?? const {}).map(
         (key, value) => MapEntry(key, value.toString()),
       ),
+      pendingAnswers:
+          ((json['pending_answers'] as Map<String, dynamic>?) ?? const {}).map(
+            (key, value) => MapEntry(key, value.toString()),
+          ),
     );
   }
 }
