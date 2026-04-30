@@ -239,7 +239,7 @@
 										</Table.Row>
 									</Table.Header>
 									<Table.Body>
-										{#each years as y}
+										{#each years as y (y.id)}
 											<Table.Row>
 												<Table.Cell class="font-medium">{y.name}</Table.Cell>
 												<Table.Cell class="text-slate-500">{y.start_date?.slice(0,10)}</Table.Cell>
@@ -318,7 +318,7 @@
 										</Table.Row>
 									</Table.Header>
 									<Table.Body>
-										{#each classes as c}
+											{#each classes as c (c.id)}
 											<Table.Row>
 												<Table.Cell class="font-mono text-sm">{c.code}</Table.Cell>
 												<Table.Cell class="font-medium">{c.name}</Table.Cell>
@@ -362,7 +362,7 @@
 								<label for="class-year-id" class="text-xs text-slate-500 mb-1 block">Tahun Ajaran</label>
 								<select id="class-year-id" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={classYearId}>
 									<option value="">-- Pilih --</option>
-									{#each years as y}
+										{#each years as y (y.id)}
 										<option value={y.id}>{y.name}</option>
 									{/each}
 								</select>
@@ -399,7 +399,7 @@
 										</Table.Row>
 									</Table.Header>
 									<Table.Body>
-										{#each subjects as s}
+											{#each subjects as s (s.id)}
 											<Table.Row>
 												<Table.Cell class="font-mono text-sm">{s.code}</Table.Cell>
 												<Table.Cell class="font-medium">{s.name}</Table.Cell>

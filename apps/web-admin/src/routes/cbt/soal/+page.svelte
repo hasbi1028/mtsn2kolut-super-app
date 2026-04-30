@@ -780,7 +780,7 @@
 							bind:value={fDifficulty}
 							class="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
 						>
-							{#each Object.entries(DIFFICULTY_LABEL) as [val, lbl]}
+								{#each Object.entries(DIFFICULTY_LABEL) as [val, lbl] (val)}
 								<option value={val}>{lbl}</option>
 							{/each}
 						</select>
@@ -830,7 +830,7 @@
 						</span>
 					</div>
 					<div class="space-y-2">
-						{#each fOptions as _, i}
+							{#each fOptions as _, i (ANSWER_LABELS[i])}
 							{@const label = ANSWER_LABELS[i]}
 							{@const isAnswer = fAnswerKey === label}
 							<div class="flex items-center gap-2">
@@ -897,7 +897,7 @@
 					</div>
 					{#if validationIssues.length > 0}
 						<ul class="mt-1.5 space-y-0.5">
-							{#each validationIssues as issue}
+								{#each validationIssues as issue (`validation-${issue}`)}
 								<li class="text-[10px] text-red-500">• {issue}</li>
 							{/each}
 						</ul>
@@ -912,7 +912,7 @@
 						Sinyal Kualitas
 					</p>
 					<div class="space-y-2">
-						{#each qualitySignals as sig}
+							{#each qualitySignals as sig (sig.label)}
 							<div class="flex items-start gap-2">
 								<span
 									class="mt-0.5 shrink-0 text-sm font-bold {sig.status === 'good'
@@ -951,7 +951,7 @@
 
 						{#if fOptions.some((o) => o.trim())}
 							<div class="space-y-1.5 border-t border-slate-100 pt-2">
-								{#each fOptions as opt, i}
+									{#each fOptions as opt, i (ANSWER_LABELS[i])}
 									{@const label = ANSWER_LABELS[i]}
 									{@const isAnswer = fAnswerKey === label}
 									<div

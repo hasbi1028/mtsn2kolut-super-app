@@ -140,7 +140,7 @@
 						<label for="package-subject-id" class="text-xs text-slate-500 mb-1 block">Mata Pelajaran <span class="text-red-500">*</span></label>
 						<select id="package-subject-id" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fSubjectId}>
 							<option value="">-- Pilih --</option>
-							{#each subjects as s}
+								{#each subjects as s (s.id)}
 								<option value={s.id}>{s.code} — {s.name}</option>
 							{/each}
 						</select>
@@ -184,7 +184,7 @@
 							</p>
 						{:else}
 							<div class="border rounded-md max-h-64 overflow-y-auto">
-								{#each questionPool as q}
+									{#each questionPool as q (q.id)}
 									<label class="flex items-start gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer border-b last:border-b-0">
 										<input type="checkbox" checked={fSelectedIds.has(q.id)} onchange={() => toggleQuestion(q.id)} class="mt-0.5 rounded" />
 										<div class="flex-1 min-w-0">
