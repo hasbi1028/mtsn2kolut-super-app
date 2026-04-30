@@ -1,4 +1,4 @@
-type JwtPayload = {
+export type JwtPayload = {
 	exp?: number;
 	type?: string;
 	sub?: string;
@@ -10,6 +10,17 @@ type JwtPayload = {
 	eid?: string;
 	sid?: string;
 	pid?: string;
+};
+
+export type AuthUser = {
+	id: string;
+	username: string;
+	role: string;
+	roles: string[];
+	session_id?: string;
+	employee_id?: string;
+	student_id?: string;
+	parent_id?: string;
 };
 
 function decodePayload(token: string): JwtPayload | null {
@@ -38,15 +49,18 @@ export function hasRefreshToken(token: string | undefined): boolean {
 	return !!payload && payload.type === 'refresh' && !!payload.exp && Date.now() < payload.exp * 1000;
 }
 
-export function getUserFromToken(token: string | undefined) {
+export function getUserFromToken(token: string | undefined): AuthUser | null {
 	if (!token) return null;
 	const p = decodePayload(token);
 	if (!p || p.type !== 'access') return null;
+	const id = p.uid ?? p.sub;
+	if (!id) return null;
+	const role = p.role ?? '';
 	return {
-		id: p.uid ?? p.sub,
-		username: p.usr,
-		role: p.role,
-		roles: p.roles || [p.role],
+		id,
+		username: p.usr ?? '',
+		role,
+		roles: p.roles ?? (role ? [role] : []),
 		session_id: p.ssid,
 		employee_id: p.eid,
 		student_id: p.sid,

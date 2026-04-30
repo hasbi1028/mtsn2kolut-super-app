@@ -74,6 +74,8 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Public shell boundary:** unauthenticated public pages (`/`, `/profil`, `/berita`, `/pengumuman`, `/ppdb`, `/kontak`) must render in the public website shell, while authenticated admin/guru pages continue to use the admin shell.
 - **Website editorial admin:** public content management lives under `/website/*` and proxies only to Go API content routes. Do not introduce a separate CMS runtime or client-side persistence.
 - **Error handling:** keep a global SvelteKit `+error.svelte` experience for public and admin routes. New pages should rely on centralized error UX before adding page-local fallback banners.
+- **Internal error hygiene:** backend 500 responses must return a generic client-safe message; raw internal error details belong in server logs, not API responses.
+- **Rate limiting baseline:** sensitive public/auth entrypoints such as login, refresh, public registration, and exam token login should be explicitly rate-limited with a concurrency-safe limiter implementation that respects forwarded client IPs.
 
 ## Worker Architecture Rules
 
@@ -169,6 +171,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Exam request-forwarding baseline** — exam handler tests should also verify that parsed login, answer, and telemetry request fields are forwarded correctly into the service layer (token, device fingerprint, forwarded IP, question ID, answer text, event type, event data), so backend handler refactors do not silently break the Flutter contract before response mapping even runs.
 - **Exam telemetry validation baseline** — exam telemetry handlers must reject empty `event_type` values with controlled `400` responses; malformed telemetry is not allowed to fall through into service-layer event recording.
 - **Exam error-semantics baseline** — handler tests should also lock the mobile-relevant error contract for exam login/status (`404` token missing, `403` session inactive, `409` device mismatch, `401` missing participant context) so restore/login flows do not silently drift.
+- **Typed auth-local baseline** — SvelteKit auth locals and page data should use shared explicit auth-user types, not `as any` escape hatches around decoded JWT user state.
 - **Answer/submit error baseline** — exam handler tests should also lock `answer` and `submit` conflict/forbidden semantics (`409` already submitted, `403` time window closed) because Flutter relies on those distinctions for retry, local-save, and final-submit guidance.
 - **Flutter exam-status UX baseline** — the mobile client should translate backend exam status codes into role-appropriate student/pengawas guidance, especially for login/restore (`404/403/409`) and answer/submit flows (`403/409`), instead of showing one generic server message for every failure.
 - **Flutter message-mapping baseline** — these exam status-code mappings should live in testable helper logic, not only inside widget state methods, so BYOD guidance copy can be verified with fast Flutter tests.

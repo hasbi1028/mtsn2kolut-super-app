@@ -16,6 +16,7 @@ import (
 
 	"mtsn2kolut-super-app/backend/internal/handler"
 	mw "mtsn2kolut-super-app/backend/internal/middleware"
+	ratelimit "mtsn2kolut-super-app/backend/internal/middleware/rate_limit"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
@@ -103,6 +104,10 @@ func main() {
 	internalKey := getEnv("INTERNAL_API_KEY", "")
 
 	examTokenMW := mw.ExamToken(examSvc.GetParticipantByToken)
+	authRateLimit := ratelimit.RateLimit(5, 1)
+	refreshRateLimit := ratelimit.RateLimit(10, 1)
+	publicRegisterRateLimit := ratelimit.RateLimit(3, 0.2)
+	examLoginRateLimit := ratelimit.RateLimit(8, 1)
 
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
@@ -112,10 +117,10 @@ func main() {
 
 	r.Get("/health", healthH.Get)
 
-	r.Post("/api/auth/login", authH.Login)
-	r.Post("/api/auth/refresh", authH.Refresh)
+	r.With(authRateLimit).Post("/api/auth/login", authH.Login)
+	r.With(refreshRateLimit).Post("/api/auth/refresh", authH.Refresh)
 	r.Post("/api/auth/logout", authH.Logout)
-	r.Post("/api/public/register-student", studentH.PublicRegister)
+	r.With(publicRegisterRateLimit).Post("/api/public/register-student", studentH.PublicRegister)
 	r.Get("/api/public/site/posts", websiteH.ListPublishedPosts)
 	r.Get("/api/public/site/posts/featured", websiteH.ListFeaturedPosts)
 	r.Get("/api/public/site/posts/{slug}", websiteH.GetPublishedPost)
@@ -130,7 +135,7 @@ func main() {
 	r.With(mw.ExamTokenOrJWT(internalKey, jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession, examSvc.GetParticipantByToken)).Get("/api/cbt/assets/{id}/file", questionAssetH.File)
 
 	// Exam endpoints — authenticated via X-Exam-Token (no JWT needed)
-	r.Post("/api/exam/login", examH.Login)
+	r.With(examLoginRateLimit).Post("/api/exam/login", examH.Login)
 	r.Group(func(r chi.Router) {
 		r.Use(examTokenMW)
 		r.Get("/api/exam/status", examH.Status)

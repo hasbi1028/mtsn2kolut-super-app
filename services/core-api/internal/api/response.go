@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -57,12 +58,17 @@ func Err(w http.ResponseWriter, status int, msg string) {
 	JSON(w, status, Response{Error: msg})
 }
 
-func BadRequest(w http.ResponseWriter, msg string)    { Err(w, http.StatusBadRequest, msg) }
-func Conflict(w http.ResponseWriter, msg string)      { Err(w, http.StatusConflict, msg) }
-func Unauthorized(w http.ResponseWriter)               { Err(w, http.StatusUnauthorized, "unauthorized") }
-func Forbidden(w http.ResponseWriter)                  { Err(w, http.StatusForbidden, "forbidden") }
-func NotFound(w http.ResponseWriter)                   { Err(w, http.StatusNotFound, "not found") }
-func Internal(w http.ResponseWriter, err error)        { Err(w, http.StatusInternalServerError, err.Error()) }
+func BadRequest(w http.ResponseWriter, msg string) { Err(w, http.StatusBadRequest, msg) }
+func Conflict(w http.ResponseWriter, msg string)   { Err(w, http.StatusConflict, msg) }
+func Unauthorized(w http.ResponseWriter)           { Err(w, http.StatusUnauthorized, "unauthorized") }
+func Forbidden(w http.ResponseWriter)              { Err(w, http.StatusForbidden, "forbidden") }
+func NotFound(w http.ResponseWriter)               { Err(w, http.StatusNotFound, "not found") }
+func Internal(w http.ResponseWriter, err error) {
+	if err != nil {
+		slog.Error("internal api error", "error", err)
+	}
+	Err(w, http.StatusInternalServerError, "internal server error")
+}
 
 // TooManyRequests responds with 429 Too Many Requests status.
 func TooManyRequests(w http.ResponseWriter) {

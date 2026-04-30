@@ -68,7 +68,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	event.locals.user = getUserFromToken(access) as any;
+	event.locals.user = getUserFromToken(access) ?? undefined;
 	event.locals.accessToken = access;
 
 	const isPublic = isPublicPath(event.url.pathname);

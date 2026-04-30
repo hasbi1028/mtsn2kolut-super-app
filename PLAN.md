@@ -199,6 +199,10 @@ Three runtime units deployed across 3 VPS:
 - [x] Grade quick-fill flow — guru can draft mass score/note fills for all rows or only still-empty rows before committing changes with bulk save
 - [x] Grade finalization checkpoint — persisted finalize/reopen flow per assignment, backend readiness enforcement, and mutation lock while finalized
 - [x] Grade finalization overview — gradebook now exposes a per-assignment recap for `Siap Difinalkan`, `Sudah Final`, and `Perlu Dilengkapi` so guru/admin can triage readiness across multiple kelas-mapel from one screen
+- [x] Backend internal-error hygiene — 500 responses now return a generic client-safe message while raw details stay in server logs
+- [x] Sensitive entrypoint rate limiting — login, refresh, public registration, and exam login now use a concurrency-safe per-IP limiter with forwarded-IP awareness
+- [x] Typed auth locals — web-admin auth locals/page data now use a shared explicit auth-user type instead of `as any`
+- [x] Mobile metadata cleanup — Flutter app description and Android app label no longer use default scaffold metadata
 - [x] Auth hardening baseline — explicit suspended/weak-password errors, backend password policy, non-destructive `SeedAdmin`
 - [x] BFF auth forwarding baseline — authenticated proxy helpers now require bearer JWT instead of silently falling back to internal key
 - [x] Refresh session baseline — session-backed refresh tokens with backend revoke on logout and rotation on refresh
