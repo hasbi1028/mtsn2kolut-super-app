@@ -248,7 +248,7 @@
 													{#if y.is_active}
 														<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
 													{:else}
-														<Badge variant="secondary">Tidak Aktif</Badge>
+														<Badge variant="secondary">Nonaktif</Badge>
 													{/if}
 												</Table.Cell>
 												<Table.Cell>
@@ -328,7 +328,7 @@
 													{#if c.is_active}
 														<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
 													{:else}
-														<Badge variant="secondary">Tidak Aktif</Badge>
+														<Badge variant="secondary">Nonaktif</Badge>
 													{/if}
 												</Table.Cell>
 												<Table.Cell>
@@ -407,7 +407,7 @@
 													{#if s.is_active}
 														<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
 													{:else}
-														<Badge variant="secondary">Tidak Aktif</Badge>
+														<Badge variant="secondary">Nonaktif</Badge>
 													{/if}
 												</Table.Cell>
 												<Table.Cell>

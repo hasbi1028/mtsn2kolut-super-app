@@ -250,7 +250,7 @@
 						<label for="s-active" class="text-xs text-slate-500 mb-1 block">Status Aktif</label>
 						<select id="s-active" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={formActive}>
 							<option value={true}>Aktif</option>
-							<option value={false}>Tidak Aktif</option>
+							<option value={false}>Nonaktif</option>
 						</select>
 					</div>
 					<div>
@@ -336,7 +336,7 @@
 									{#if s.is_active}
 										<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
 									{:else}
-										<Badge variant="secondary">Tidak Aktif</Badge>
+										<Badge variant="secondary">Nonaktif</Badge>
 									{/if}
 								</Table.Cell>
 								<Table.Cell>
@@ -389,7 +389,7 @@
 								{#if s.is_active}
 									<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
 								{:else}
-									<Badge variant="secondary">Tidak Aktif</Badge>
+									<Badge variant="secondary">Nonaktif</Badge>
 								{/if}
 							</div>
 							<div class="mt-3 flex flex-wrap items-center gap-2">

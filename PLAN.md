@@ -145,6 +145,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Form microcopy baseline — operator-facing placeholders and helper text in employee, student, user, and website editorial forms are now more directive and less generic
 - [x] Dashboard copy baseline — the shared `/` dashboard now uses more consistent role titles, stat labels, and empty-state copy across guru, siswa, orang tua, admin, and staf experiences
 - [x] CBT copy consistency baseline — bank soal, komposer soal, paket ujian, kegiatan ujian, serta daftar dan detail sesi now use more consistent institutional Indonesian wording for review flow, publication state, mode naming, scoring, token actions, coverage labels, and operator CTAs
+- [x] Status badge consistency baseline — key admin screens now prefer one visible passive-state term (`Nonaktif`) while preserving action verbs like `Nonaktifkan`, reducing mixed status wording across users, students, and academic master data
 - [x] Rapor print view — printable HTML layout at `/grades/rapor` using existing `/api/grades` endpoint, color-coded scores, school header, signature area, sidebar entry
 
 ### CBT Question Authoring UX

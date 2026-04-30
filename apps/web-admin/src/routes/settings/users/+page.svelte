@@ -157,7 +157,7 @@
 		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
 			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Akun Aktif</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{users.filter((item) => item.is_active).length}</p>
-			<p class="text-sm text-slate-600">akun yang saat ini tidak disuspend</p>
+			<p class="text-sm text-slate-600">akun yang saat ini masih aktif digunakan</p>
 		</div>
 		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
 			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Multi-Role</p>
@@ -295,7 +295,7 @@
 								<Table.Cell class="text-sm text-slate-600">{u.profile_nama || '—'}</Table.Cell>
 								<Table.Cell>
 									<Badge variant={u.is_active ? 'outline' : 'destructive'}>
-										{u.is_active ? 'Aktif' : 'Dinonaktifkan'}
+										{u.is_active ? 'Aktif' : 'Nonaktif'}
 									</Badge>
 								</Table.Cell>
 								<Table.Cell class="text-xs text-slate-400">{new Date(u.created_at).toLocaleDateString()}</Table.Cell>
@@ -341,7 +341,7 @@
 									</div>
 									<p class="mt-2 text-xs text-slate-500">{u.profile_nama || 'Tidak terhubung profil'}</p>
 								</div>
-								<Badge variant={u.is_active ? 'outline' : 'destructive'}>{u.is_active ? 'Aktif' : 'Dinonaktifkan'}</Badge>
+								<Badge variant={u.is_active ? 'outline' : 'destructive'}>{u.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
 							</div>
 							<div class="mt-4 flex gap-2">
 								<Button
