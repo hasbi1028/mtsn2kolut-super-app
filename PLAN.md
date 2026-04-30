@@ -194,6 +194,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Backend gradebook API foundation (`/api/grades`)
 - [x] Web admin gradebook page foundation (`/grades`)
 - [x] Grade component lifecycle — draft/publish toggle for rapor visibility, safe component editing, and backend guard against lowering `max_score` below existing student scores
+- [x] Grade readiness summary — gradebook now shows readiness to print rapor based on published components and filled student values, with direct navigation into the rapor print screen when the assignment is ready
 - [x] Auth hardening baseline — explicit suspended/weak-password errors, backend password policy, non-destructive `SeedAdmin`
 - [x] BFF auth forwarding baseline — authenticated proxy helpers now require bearer JWT instead of silently falling back to internal key
 - [x] Refresh session baseline — session-backed refresh tokens with backend revoke on logout and rotation on refresh

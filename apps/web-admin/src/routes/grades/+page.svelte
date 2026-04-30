@@ -89,6 +89,34 @@
 	const editingComponent = $derived(components.find((item) => item.id === editingComponentId) ?? null);
 	const completionRate = $derived(summary.length === 0 ? 0 : Math.round((summary.filter((row) => row.filled_count > 0).length / summary.length) * 100));
 	const publishedComponentCount = $derived(components.filter((item) => item.is_published).length);
+	const draftComponentCount = $derived(components.filter((item) => !item.is_published).length);
+	const readyStudentCount = $derived(summary.filter((row) => row.component_count > 0 && row.filled_count === row.component_count).length);
+	const incompleteStudentCount = $derived(summary.filter((row) => row.component_count === 0 || row.filled_count < row.component_count).length);
+	const missingGradeCount = $derived(summary.reduce((total, row) => total + Math.max(row.component_count - row.filled_count, 0), 0));
+	const readyForRapor = $derived(
+		components.length > 0 &&
+		draftComponentCount === 0 &&
+		summary.length > 0 &&
+		summary.every((row) => row.component_count > 0 && row.filled_count === row.component_count)
+	);
+	const readinessLabel = $derived(
+		readyForRapor
+			? 'Siap Rapor'
+			: components.length === 0
+				? 'Belum Siap'
+				: draftComponentCount > 0
+					? 'Masih Ada Draft'
+					: 'Nilai Belum Lengkap'
+	);
+	const readinessDescription = $derived(
+		readyForRapor
+			? 'Semua komponen sudah terbit dan seluruh siswa telah memiliki isian nilai lengkap.'
+			: components.length === 0
+				? 'Tambahkan komponen penilaian terlebih dahulu sebelum kelas-mapel ini dapat difinalisasi.'
+				: draftComponentCount > 0
+					? 'Masih ada komponen yang belum diterbitkan untuk rapor.'
+					: 'Masih ada siswa atau komponen yang belum terisi penuh.'
+	);
 
 	function showSuccess(message: string) {
 		toast.success(message);
@@ -359,6 +387,49 @@
 					</Card.Content>
 				</Card.Root>
 			</div>
+
+			<Card.Root class={readyForRapor ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'}>
+				<Card.Header class="pb-2">
+					<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+						<div>
+							<Card.Title class="text-base">Kesiapan Rapor</Card.Title>
+							<Card.Description>{readinessDescription}</Card.Description>
+						</div>
+						<Badge variant={readyForRapor ? 'default' : 'secondary'}>{readinessLabel}</Badge>
+					</div>
+				</Card.Header>
+				<Card.Content class="grid gap-4 md:grid-cols-4">
+					<div>
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Komponen Terbit</p>
+						<p class="mt-2 text-2xl font-semibold text-slate-900">{publishedComponentCount}</p>
+						<p class="text-sm text-slate-600">{draftComponentCount} masih draft</p>
+					</div>
+					<div>
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Siswa Siap</p>
+						<p class="mt-2 text-2xl font-semibold text-slate-900">{readyStudentCount}/{summary.length}</p>
+						<p class="text-sm text-slate-600">{incompleteStudentCount} siswa belum lengkap</p>
+					</div>
+					<div>
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Nilai Belum Masuk</p>
+						<p class="mt-2 text-2xl font-semibold text-slate-900">{missingGradeCount}</p>
+						<p class="text-sm text-slate-600">slot nilai yang masih perlu diisi</p>
+					</div>
+					<div class="flex items-end">
+						{#if readyForRapor}
+							<a
+								href={`/grades/rapor?assignment_id=${assignmentId}`}
+								class="inline-flex w-full items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+							>
+								Buka Cetak Rapor
+							</a>
+						{:else}
+							<div class="rounded-xl border border-dashed border-amber-300 bg-white/70 px-4 py-3 text-sm text-amber-900">
+								Selesaikan draft dan lengkapi semua nilai sebelum membuka rapor final.
+							</div>
+						{/if}
+					</div>
+				</Card.Content>
+			</Card.Root>
 
 			<div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
 				<Card.Root>

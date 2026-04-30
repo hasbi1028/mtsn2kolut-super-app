@@ -56,6 +56,12 @@
 			const res = await fetch('/api/grades');
 			const data = await res.json();
 			assignments = data?.data?.assignments ?? [];
+			if (!selectedId) {
+				const requestedId = new URL(window.location.href).searchParams.get('assignment_id') ?? '';
+				if (requestedId && assignments.some((item) => item.id === requestedId)) {
+					selectedId = requestedId;
+				}
+			}
 		} finally {
 			loading = false;
 		}
