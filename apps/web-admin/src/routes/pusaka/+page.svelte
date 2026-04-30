@@ -131,8 +131,8 @@
 			<p class="text-sm text-muted-foreground mt-1">Monitor dan kontrol sinkronisasi data kehadiran dari PUSAKA Kemenag</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			<LoadingButton variant="outline" size="sm" onclick={triggerSched} loading={busy.sched} loadingLabel="Memproses..." label="⚡ Trigger Scheduler" />
-			<LoadingButton size="sm" onclick={runRekap} loading={busy.rekap} loadingLabel="Memproses..." label="▶ Jalankan Rekap" />
+			<LoadingButton variant="outline" size="sm" onclick={triggerSched} loading={busy.sched} loadingLabel="Memproses..." label="⚡ Jalankan Scheduler" />
+			<LoadingButton size="sm" onclick={runRekap} loading={busy.rekap} loadingLabel="Memproses..." label="▶ Mulai Rekap" />
 			{#if confirmKey === 'cancel_all'}
 				<span class="self-center text-xs text-amber-700">Batalkan semua antrian?</span>
 				<LoadingButton size="sm" variant="destructive" onclick={cancelAll} loading={busy.cancel_all} loadingLabel="Membatalkan..." label="Ya" />
@@ -140,7 +140,7 @@
 			{:else}
 				<LoadingButton size="sm" variant="outline" onclick={() => (confirmKey = 'cancel_all')} loading={busy.cancel_all} loadingLabel="Memproses..." disabled={busy.cancel_all}
 					class="text-destructive border-destructive/40 hover:bg-destructive/10">
-					✕ Cancel All
+					✕ Batalkan Semua
 				</LoadingButton>
 			{/if}
 		</div>

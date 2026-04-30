@@ -295,7 +295,7 @@
 								<Table.Cell class="text-sm text-slate-600">{u.profile_nama || '—'}</Table.Cell>
 								<Table.Cell>
 									<Badge variant={u.is_active ? 'outline' : 'destructive'}>
-										{u.is_active ? 'Aktif' : 'Suspended'}
+										{u.is_active ? 'Aktif' : 'Dinonaktifkan'}
 									</Badge>
 								</Table.Cell>
 								<Table.Cell class="text-xs text-slate-400">{new Date(u.created_at).toLocaleDateString()}</Table.Cell>
@@ -341,7 +341,7 @@
 									</div>
 									<p class="mt-2 text-xs text-slate-500">{u.profile_nama || 'Tidak terhubung profil'}</p>
 								</div>
-								<Badge variant={u.is_active ? 'outline' : 'destructive'}>{u.is_active ? 'Aktif' : 'Suspended'}</Badge>
+								<Badge variant={u.is_active ? 'outline' : 'destructive'}>{u.is_active ? 'Aktif' : 'Dinonaktifkan'}</Badge>
 							</div>
 							<div class="mt-4 flex gap-2">
 								<Button

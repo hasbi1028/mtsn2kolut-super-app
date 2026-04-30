@@ -140,6 +140,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Website editorial polish baseline — news, announcement, and public-page management now share denser summary context, clearer search surfaces, and better empty/recovery states via the shared content manager
 - [x] Success-state inline baseline — major create/publish/link flows now surface contextual success panels in-page for employee creation, parent-child linking, and website editorial actions instead of relying only on transient toasts
 - [x] Ops-component polish baseline — `GeneralEmployeeList`, `EmployeeList`, and `ScheduleList` now use denser control surfaces, clearer internal empty states, and inline success feedback for day-to-day operator actions
+- [x] UI copy consistency baseline — the most visible mixed English/Indonesian admin copy in editorial, PUSAKA controls, and user-status badges is now normalized toward one institutional Indonesian tone
 - [x] Rapor print view — printable HTML layout at `/grades/rapor` using existing `/api/grades` endpoint, color-coded scores, school header, signature area, sidebar entry
 
 ### CBT Question Authoring UX

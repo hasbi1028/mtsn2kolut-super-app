@@ -186,7 +186,7 @@
 			toast.success(editingId ? 'Konten berhasil diperbarui.' : 'Konten berhasil dibuat.');
 			success = editingId
 				? `Konten "${form.title}" berhasil diperbarui. Periksa status publish-nya sebelum menutup sesi editorial ini.`
-				: `Konten "${form.title}" berhasil dibuat sebagai ${form.status === 'published' ? 'published' : 'draft'}.`;
+				: `Konten "${form.title}" berhasil dibuat sebagai ${form.status === 'published' ? 'terbit' : 'draft'}.`;
 			showDialog = false;
 			resetForm();
 			await load();
@@ -261,7 +261,7 @@
 			<p class="text-sm text-slate-600">seluruh item pada kategori ini</p>
 		</div>
 		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Published</p>
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Terbit</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{publishedCount}</p>
 			<p class="text-sm text-slate-600">konten yang sudah tampil di website publik</p>
 		</div>
@@ -341,7 +341,7 @@
 								<div class="flex flex-wrap items-center gap-2">
 									<h2 class="text-lg font-semibold text-slate-900">{item.title}</h2>
 									<Badge variant={item.status === 'published' ? 'outline' : 'secondary'} class={item.status === 'published' ? 'border-emerald-300 text-emerald-700' : ''}>
-										{item.status === 'published' ? 'Published' : 'Draft'}
+										{item.status === 'published' ? 'Terbit' : 'Draft'}
 									</Badge>
 									{#if item.is_featured}
 										<Badge variant="outline" class="border-amber-300 text-amber-700">Unggulan</Badge>
@@ -362,7 +362,7 @@
 								{/if}
 								<Button variant="outline" onclick={() => openEdit(item)}>Edit</Button>
 								<Button variant="outline" onclick={() => toggleStatus(item)}>
-									{item.status === 'published' ? 'Jadikan Draft' : 'Publish'}
+									{item.status === 'published' ? 'Kembalikan ke Draft' : 'Terbitkan'}
 								</Button>
 								<Button variant="ghost" class="text-destructive hover:text-destructive" onclick={() => remove(item)}>
 									Hapus
@@ -397,7 +397,7 @@
 					<label for="website-status" class="mb-1 block text-xs font-medium text-slate-600">Status</label>
 					<select id="website-status" bind:value={form.status} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 						<option value="draft">Draft</option>
-						<option value="published">Published</option>
+						<option value="published">Terbit</option>
 					</select>
 				</div>
 
