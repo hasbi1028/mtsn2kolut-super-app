@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
 type gradeStore interface {
 	ListClassSubjectAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
+	ListGradeAssignmentStatuses(ctx context.Context) ([]db.ListGradeAssignmentStatusesRow, error)
 	ListGradeComponents(ctx context.Context, arg db.ListGradeComponentsParams) ([]db.ListGradeComponentsRow, error)
 	GetGradeComponent(ctx context.Context, id pgtype.UUID) (db.GradeComponent, error)
 	GetGradeComponentHighestScore(ctx context.Context, componentID pgtype.UUID) (float64, error)
@@ -35,12 +36,32 @@ type Grade struct {
 func NewGrade(q *db.Queries) *Grade { return &Grade{q: q} }
 
 type GradeOverview struct {
-	Assignments  []db.ListClassSubjectAssignmentsRow `json:"assignments"`
-	Components   []db.ListGradeComponentsRow         `json:"components"`
-	Summary      []db.ListGradebookSummaryRow        `json:"summary"`
-	Entries      []db.ListGradeEntriesByComponentRow `json:"entries"`
-	Readiness    GradeReadiness                      `json:"readiness"`
-	Finalization *GradeFinalization                  `json:"finalization,omitempty"`
+	Assignments         []db.ListClassSubjectAssignmentsRow `json:"assignments"`
+	AssignmentStatuses  []GradeAssignmentStatus            `json:"assignment_statuses"`
+	Components          []db.ListGradeComponentsRow        `json:"components"`
+	Summary             []db.ListGradebookSummaryRow       `json:"summary"`
+	Entries             []db.ListGradeEntriesByComponentRow `json:"entries"`
+	Readiness           GradeReadiness                     `json:"readiness"`
+	Finalization        *GradeFinalization                 `json:"finalization,omitempty"`
+}
+
+type GradeAssignmentStatus struct {
+	AssignmentID            string             `json:"assignment_id"`
+	ClassName               string             `json:"class_name"`
+	ClassCode               string             `json:"class_code"`
+	SubjectName             string             `json:"subject_name"`
+	SubjectCode             string             `json:"subject_code"`
+	TeacherName             string             `json:"teacher_name"`
+	ComponentCount          int                `json:"component_count"`
+	PublishedComponentCount int                `json:"published_component_count"`
+	DraftComponentCount     int                `json:"draft_component_count"`
+	StudentCount            int                `json:"student_count"`
+	ReadyStudentCount       int                `json:"ready_student_count"`
+	IncompleteStudentCount  int                `json:"incomplete_student_count"`
+	MissingGradeCount       int                `json:"missing_grade_count"`
+	Ready                   bool               `json:"ready"`
+	IsFinalized             bool               `json:"is_finalized"`
+	Finalization            *GradeFinalization `json:"finalization,omitempty"`
 }
 
 type GradeReadiness struct {
@@ -64,7 +85,14 @@ func (s *Grade) Overview(ctx context.Context, assignmentID, componentID pgtype.U
 	if err != nil {
 		return GradeOverview{}, err
 	}
-	out := GradeOverview{Assignments: assignments}
+	statusRows, err := s.q.ListGradeAssignmentStatuses(ctx)
+	if err != nil {
+		return GradeOverview{}, err
+	}
+	out := GradeOverview{
+		Assignments:        assignments,
+		AssignmentStatuses: buildAssignmentStatuses(statusRows),
+	}
 	if assignmentID.Valid {
 		out.Components, err = s.q.ListGradeComponents(ctx, db.ListGradeComponentsParams{
 			AssignmentID:  assignmentID,
@@ -255,6 +283,44 @@ func buildGradeReadiness(components []db.ListGradeComponentsRow, summary []db.Li
 		len(summary) > 0 &&
 		readiness.IncompleteStudentCount == 0
 	return readiness
+}
+
+func buildAssignmentStatuses(rows []db.ListGradeAssignmentStatusesRow) []GradeAssignmentStatus {
+	statuses := make([]GradeAssignmentStatus, 0, len(rows))
+	for _, row := range rows {
+		ready := row.ComponentCount > 0 &&
+			row.DraftComponentCount == 0 &&
+			row.StudentCount > 0 &&
+			row.IncompleteStudentCount == 0
+
+		status := GradeAssignmentStatus{
+			AssignmentID:            row.AssignmentID.String(),
+			ClassName:               row.ClassName,
+			ClassCode:               row.ClassCode,
+			SubjectName:             row.SubjectName,
+			SubjectCode:             row.SubjectCode,
+			TeacherName:             row.TeacherName,
+			ComponentCount:          int(row.ComponentCount),
+			PublishedComponentCount: int(row.PublishedComponentCount),
+			DraftComponentCount:     int(row.DraftComponentCount),
+			StudentCount:            int(row.StudentCount),
+			ReadyStudentCount:       int(row.ReadyStudentCount),
+			IncompleteStudentCount:  int(row.IncompleteStudentCount),
+			MissingGradeCount:       int(row.MissingGradeCount),
+			Ready:                   ready,
+			IsFinalized:             row.IsFinalized,
+		}
+		if row.IsFinalized && row.FinalizedAt.Valid {
+			status.Finalization = &GradeFinalization{
+				AssignmentID: row.AssignmentID.String(),
+				FinalizedBy:  row.FinalizedBy.String,
+				Notes:        row.Notes.String,
+				FinalizedAt:  row.FinalizedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			}
+		}
+		statuses = append(statuses, status)
+	}
+	return statuses
 }
 
 func normalizeGradeCategory(v string) string {

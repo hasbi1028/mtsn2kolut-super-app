@@ -66,6 +66,25 @@
 		finalized_at: string;
 	};
 
+	type AssignmentStatus = {
+		assignment_id: string;
+		class_name: string;
+		class_code: string;
+		subject_name: string;
+		subject_code: string;
+		teacher_name: string;
+		component_count: number;
+		published_component_count: number;
+		draft_component_count: number;
+		student_count: number;
+		ready_student_count: number;
+		incomplete_student_count: number;
+		missing_grade_count: number;
+		ready: boolean;
+		is_finalized: boolean;
+		finalization?: GradeFinalization | null;
+	};
+
 	const categoryOptions = [
 		{ value: 'assignment', label: 'Tugas' },
 		{ value: 'quiz', label: 'Kuis' },
@@ -81,6 +100,7 @@
 	let loading = $state(true);
 	let error = $state('');
 	let assignments = $state<Assignment[]>([]);
+	let assignmentStatuses = $state<AssignmentStatus[]>([]);
 	let components = $state<GradeComponent[]>([]);
 	let summary = $state<GradeSummary[]>([]);
 	let entries = $state<GradeEntry[]>([]);
@@ -108,6 +128,9 @@
 	let noteInput = $state<Record<string, string>>({});
 
 	const selectedAssignment = $derived(assignments.find((item) => item.id === assignmentId) ?? null);
+	const selectedAssignmentStatus = $derived(
+		assignmentStatuses.find((item) => item.assignment_id === assignmentId) ?? null
+	);
 	const selectedComponent = $derived(components.find((item) => item.id === componentId) ?? null);
 	const editingComponent = $derived(components.find((item) => item.id === editingComponentId) ?? null);
 	const completionRate = $derived(
@@ -125,6 +148,13 @@
 	);
 	const readyForRapor = $derived(readiness?.ready ?? false);
 	const isFinalized = $derived(finalization !== null);
+	const finalizedAssignmentCount = $derived(assignmentStatuses.filter((item) => item.is_finalized).length);
+	const readyAssignmentCount = $derived(
+		assignmentStatuses.filter((item) => item.ready && !item.is_finalized).length
+	);
+	const needsAttentionAssignmentCount = $derived(
+		assignmentStatuses.filter((item) => !item.ready && !item.is_finalized).length
+	);
 	const readinessLabel = $derived(
 		isFinalized
 			? 'Sudah Difinalisasi'
@@ -158,6 +188,38 @@
 
 	function categoryLabel(value: string) {
 		return categoryOptions.find((item) => item.value === value)?.label ?? value;
+	}
+
+	function assignmentStatusLabel(item: AssignmentStatus) {
+		if (item.is_finalized) return 'Sudah Final';
+		if (item.ready) return 'Siap Difinalkan';
+		if (item.component_count === 0) return 'Belum Ada Komponen';
+		if (item.draft_component_count > 0) return 'Masih Ada Draft';
+		return 'Perlu Dilengkapi';
+	}
+
+	function assignmentStatusVariant(item: AssignmentStatus): 'default' | 'secondary' | 'outline' {
+		if (item.is_finalized || item.ready) return 'default';
+		if (item.component_count === 0) return 'outline';
+		return 'secondary';
+	}
+
+	function assignmentStatusDescription(item: AssignmentStatus) {
+		if (item.is_finalized) {
+			return item.finalization?.finalized_by
+				? `Difinalisasi oleh ${item.finalization.finalized_by}.`
+				: 'Assignment ini sudah difinalisasi.';
+		}
+		if (item.ready) {
+			return 'Semua komponen sudah terbit dan seluruh siswa sudah lengkap.';
+		}
+		if (item.component_count === 0) {
+			return 'Belum ada komponen nilai.';
+		}
+		if (item.draft_component_count > 0) {
+			return `${item.draft_component_count} komponen masih draft.`;
+		}
+		return `${item.missing_grade_count} slot nilai masih kosong.`;
 	}
 
 	function resetComponentForm() {
@@ -224,6 +286,7 @@
 			}
 			const data = json.data ?? json;
 			assignments = data.assignments ?? [];
+			assignmentStatuses = data.assignment_statuses ?? [];
 			components = data.components ?? [];
 			summary = data.summary ?? [];
 			entries = data.entries ?? [];
@@ -574,6 +637,85 @@
 			</div>
 		</div>
 	{:else}
+		{#if assignmentStatuses.length > 0}
+			<div class="grid gap-4 xl:grid-cols-[0.88fr_1.12fr]">
+				<div class="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+					<Card.Root class="border-emerald-100 bg-white">
+						<Card.Content class="pt-5">
+							<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Siap Difinalkan</p>
+							<p class="mt-2 text-3xl font-semibold text-slate-900">{readyAssignmentCount}</p>
+							<p class="text-sm text-slate-600">kelas-mapel yang siap masuk checkpoint finalisasi</p>
+						</Card.Content>
+					</Card.Root>
+					<Card.Root class="border-sky-100 bg-white">
+						<Card.Content class="pt-5">
+							<p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Sudah Final</p>
+							<p class="mt-2 text-3xl font-semibold text-slate-900">{finalizedAssignmentCount}</p>
+							<p class="text-sm text-slate-600">assignment yang sudah dikunci dan siap rapor</p>
+						</Card.Content>
+					</Card.Root>
+					<Card.Root class="border-amber-100 bg-white">
+						<Card.Content class="pt-5">
+							<p class="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Perlu Dilengkapi</p>
+							<p class="mt-2 text-3xl font-semibold text-slate-900">{needsAttentionAssignmentCount}</p>
+							<p class="text-sm text-slate-600">assignment yang masih perlu komponen, publish, atau isi nilai</p>
+						</Card.Content>
+					</Card.Root>
+				</div>
+
+				<Card.Root>
+					<Card.Header class="pb-2">
+						<Card.Title class="text-base">Rekap Finalisasi per Kelas-Mapel</Card.Title>
+						<Card.Description>Gunakan ringkasan ini untuk melihat assignment mana yang sudah siap dikunci, mana yang sudah final, dan mana yang masih butuh tindak lanjut.</Card.Description>
+					</Card.Header>
+					<Card.Content class="p-0">
+						<div class="overflow-x-auto">
+							<Table.Root>
+								<Table.Header>
+									<Table.Row>
+										<Table.Head>Kelas-Mapel</Table.Head>
+										<Table.Head>Status</Table.Head>
+										<Table.Head>Komponen</Table.Head>
+										<Table.Head>Siswa Siap</Table.Head>
+										<Table.Head>Nilai Kosong</Table.Head>
+									</Table.Row>
+								</Table.Header>
+								<Table.Body>
+									{#each assignmentStatuses as item (item.assignment_id)}
+										<Table.Row class={item.assignment_id === assignmentId ? 'bg-emerald-50/70' : ''}>
+											<Table.Cell>
+												<button
+													class="text-left"
+													onclick={async () => {
+														assignmentId = item.assignment_id;
+														componentId = '';
+														resetComponentForm();
+														await loadOverview();
+													}}
+												>
+													<div class="font-medium text-slate-900">{item.class_name} · {item.subject_name}</div>
+													<div class="text-xs text-slate-500">{item.class_code} · {item.subject_code} · {item.teacher_name}</div>
+												</button>
+											</Table.Cell>
+											<Table.Cell>
+												<div class="space-y-2">
+													<Badge variant={assignmentStatusVariant(item)}>{assignmentStatusLabel(item)}</Badge>
+													<p class="text-xs text-slate-500">{assignmentStatusDescription(item)}</p>
+												</div>
+											</Table.Cell>
+											<Table.Cell>{item.published_component_count}/{item.component_count}</Table.Cell>
+											<Table.Cell>{item.ready_student_count}/{item.student_count}</Table.Cell>
+											<Table.Cell>{item.missing_grade_count}</Table.Cell>
+										</Table.Row>
+									{/each}
+								</Table.Body>
+							</Table.Root>
+						</div>
+					</Card.Content>
+				</Card.Root>
+			</div>
+		{/if}
+
 		{#if selectedAssignment}
 			<div class="grid gap-4 md:grid-cols-3">
 				<Card.Root class="border-emerald-100 bg-white">
@@ -581,6 +723,14 @@
 						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Kelas & Mapel</p>
 						<p class="mt-2 text-lg font-semibold text-slate-900">{selectedAssignment.class_name}</p>
 						<p class="text-sm text-slate-600">{selectedAssignment.subject_name} · {selectedAssignment.subject_code}</p>
+						{#if selectedAssignmentStatus}
+							<div class="mt-3 flex flex-wrap gap-2">
+								<Badge variant={assignmentStatusVariant(selectedAssignmentStatus)}>
+									{assignmentStatusLabel(selectedAssignmentStatus)}
+								</Badge>
+								<Badge variant="outline">{selectedAssignment.teacher_name}</Badge>
+							</div>
+						{/if}
 					</Card.Content>
 				</Card.Root>
 				<Card.Root class="border-amber-100 bg-white">

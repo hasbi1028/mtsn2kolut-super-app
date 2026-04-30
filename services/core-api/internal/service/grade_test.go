@@ -16,6 +16,7 @@ type fakeGradeStore struct {
 	highestScore           float64
 	updateArg              db.UpdateGradeComponentParams
 	updateComponent        db.GradeComponent
+	assignmentStatuses     []db.ListGradeAssignmentStatusesRow
 	component              db.GradeComponent
 	listComponents         []db.ListGradeComponentsRow
 	listSummary            []db.ListGradebookSummaryRow
@@ -27,6 +28,10 @@ type fakeGradeStore struct {
 
 func (f *fakeGradeStore) ListClassSubjectAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error) {
 	return nil, nil
+}
+
+func (f *fakeGradeStore) ListGradeAssignmentStatuses(ctx context.Context) ([]db.ListGradeAssignmentStatusesRow, error) {
+	return f.assignmentStatuses, nil
 }
 
 func (f *fakeGradeStore) ListGradeComponents(ctx context.Context, arg db.ListGradeComponentsParams) ([]db.ListGradeComponentsRow, error) {
@@ -227,5 +232,50 @@ func TestGradeReopenAssignmentDeletesFinalization(t *testing.T) {
 	}
 	if store.finalizationDeleteID != assignmentID {
 		t.Fatal("delete finalization assignment id was not forwarded")
+	}
+}
+
+func TestGradeOverviewBuildsAssignmentStatuses(t *testing.T) {
+	assignmentID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
+	store := &fakeGradeStore{
+		assignmentStatuses: []db.ListGradeAssignmentStatusesRow{
+			{
+				AssignmentID:            assignmentID,
+				ClassName:               "VII A",
+				ClassCode:               "7A",
+				SubjectName:             "Matematika",
+				SubjectCode:             "MTK",
+				TeacherName:             "Ibu Guru",
+				ComponentCount:          2,
+				PublishedComponentCount: 2,
+				DraftComponentCount:     0,
+				StudentCount:            10,
+				ReadyStudentCount:       10,
+				IncompleteStudentCount:  0,
+				MissingGradeCount:       0,
+				IsFinalized:             true,
+				FinalizedBy:             pgtype.Text{String: "ibu.guru", Valid: true},
+				Notes:                   pgtype.Text{String: "siap cetak", Valid: true},
+				FinalizedAt:             pgtype.Timestamptz{Valid: true},
+			},
+		},
+	}
+	svc := &Grade{q: store}
+
+	overview, err := svc.Overview(context.Background(), pgtype.UUID{}, pgtype.UUID{}, false)
+	if err != nil {
+		t.Fatalf("Overview() error = %v", err)
+	}
+	if len(overview.AssignmentStatuses) != 1 {
+		t.Fatalf("assignment status count = %d, want 1", len(overview.AssignmentStatuses))
+	}
+	if !overview.AssignmentStatuses[0].Ready {
+		t.Fatal("expected assignment status to be ready")
+	}
+	if !overview.AssignmentStatuses[0].IsFinalized {
+		t.Fatal("expected assignment status to be finalized")
+	}
+	if overview.AssignmentStatuses[0].Finalization == nil || overview.AssignmentStatuses[0].Finalization.FinalizedBy != "ibu.guru" {
+		t.Fatal("expected finalization metadata to be mapped")
 	}
 }

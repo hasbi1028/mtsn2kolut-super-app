@@ -124,6 +124,134 @@ func (q *Queries) GetGradeComponentHighestScore(ctx context.Context, componentID
 	return max_score, err
 }
 
+const listGradeAssignmentStatuses = `-- name: ListGradeAssignmentStatuses :many
+WITH component_rollup AS (
+  SELECT csa.id AS assignment_id,
+         COUNT(gc.id)::int AS component_count,
+         COUNT(gc.id) FILTER (WHERE gc.is_published = TRUE)::int AS published_component_count,
+         COUNT(gc.id) FILTER (WHERE gc.is_published = FALSE)::int AS draft_component_count
+  FROM class_subject_assignments csa
+  LEFT JOIN grade_components gc ON gc.assignment_id = csa.id
+  GROUP BY csa.id
+),
+student_component_rollup AS (
+  SELECT csa.id AS assignment_id,
+         st.id AS student_id,
+         COALESCE(cr.component_count, 0)::int AS component_count,
+         COUNT(ge.score)::int AS filled_count
+  FROM class_subject_assignments csa
+  JOIN students st ON st.class_id = csa.class_id
+  LEFT JOIN component_rollup cr ON cr.assignment_id = csa.id
+  LEFT JOIN grade_components gc ON gc.assignment_id = csa.id
+  LEFT JOIN grade_entries ge ON ge.component_id = gc.id AND ge.student_id = st.id
+  WHERE st.is_active = TRUE
+  GROUP BY csa.id, st.id, cr.component_count
+)
+SELECT csa.id AS assignment_id,
+       csa.class_id,
+       c.name AS class_name,
+       c.code AS class_code,
+       csa.subject_id,
+       s.name AS subject_name,
+       s.code AS subject_code,
+       csa.teacher_employee_id,
+       e.nama AS teacher_name,
+       COALESCE(cr.component_count, 0)::int AS component_count,
+       COALESCE(cr.published_component_count, 0)::int AS published_component_count,
+       COALESCE(cr.draft_component_count, 0)::int AS draft_component_count,
+       COUNT(scr.student_id)::int AS student_count,
+       COUNT(scr.student_id) FILTER (
+         WHERE scr.component_count > 0
+           AND scr.filled_count = scr.component_count
+       )::int AS ready_student_count,
+       COUNT(scr.student_id) FILTER (
+         WHERE scr.component_count = 0
+           OR scr.filled_count < scr.component_count
+       )::int AS incomplete_student_count,
+       COALESCE(SUM(GREATEST(scr.component_count - scr.filled_count, 0)), 0)::int AS missing_grade_count,
+       (gaf.assignment_id IS NOT NULL)::boolean AS is_finalized,
+       gaf.finalized_by,
+       gaf.notes,
+       gaf.finalized_at
+FROM class_subject_assignments csa
+JOIN school_classes c ON c.id = csa.class_id
+JOIN subjects s ON s.id = csa.subject_id
+JOIN employees e ON e.id = csa.teacher_employee_id
+LEFT JOIN component_rollup cr ON cr.assignment_id = csa.id
+LEFT JOIN student_component_rollup scr ON scr.assignment_id = csa.id
+LEFT JOIN grade_assignment_finalizations gaf ON gaf.assignment_id = csa.id
+GROUP BY csa.id, csa.class_id, c.name, c.code, c.level,
+         csa.subject_id, s.name, s.code,
+         csa.teacher_employee_id, e.nama,
+         cr.component_count, cr.published_component_count, cr.draft_component_count,
+         gaf.assignment_id, gaf.finalized_by, gaf.notes, gaf.finalized_at
+ORDER BY c.level ASC, c.name ASC, s.name ASC
+`
+
+type ListGradeAssignmentStatusesRow struct {
+	AssignmentID            pgtype.UUID        `json:"assignment_id"`
+	ClassID                 pgtype.UUID        `json:"class_id"`
+	ClassName               string             `json:"class_name"`
+	ClassCode               string             `json:"class_code"`
+	SubjectID               pgtype.UUID        `json:"subject_id"`
+	SubjectName             string             `json:"subject_name"`
+	SubjectCode             string             `json:"subject_code"`
+	TeacherEmployeeID       pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName             string             `json:"teacher_name"`
+	ComponentCount          int32              `json:"component_count"`
+	PublishedComponentCount int32              `json:"published_component_count"`
+	DraftComponentCount     int32              `json:"draft_component_count"`
+	StudentCount            int32              `json:"student_count"`
+	ReadyStudentCount       int32              `json:"ready_student_count"`
+	IncompleteStudentCount  int32              `json:"incomplete_student_count"`
+	MissingGradeCount       int32              `json:"missing_grade_count"`
+	IsFinalized             bool               `json:"is_finalized"`
+	FinalizedBy             pgtype.Text        `json:"finalized_by"`
+	Notes                   pgtype.Text        `json:"notes"`
+	FinalizedAt             pgtype.Timestamptz `json:"finalized_at"`
+}
+
+func (q *Queries) ListGradeAssignmentStatuses(ctx context.Context) ([]ListGradeAssignmentStatusesRow, error) {
+	rows, err := q.db.Query(ctx, listGradeAssignmentStatuses)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGradeAssignmentStatusesRow{}
+	for rows.Next() {
+		var i ListGradeAssignmentStatusesRow
+		if err := rows.Scan(
+			&i.AssignmentID,
+			&i.ClassID,
+			&i.ClassName,
+			&i.ClassCode,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.TeacherEmployeeID,
+			&i.TeacherName,
+			&i.ComponentCount,
+			&i.PublishedComponentCount,
+			&i.DraftComponentCount,
+			&i.StudentCount,
+			&i.ReadyStudentCount,
+			&i.IncompleteStudentCount,
+			&i.MissingGradeCount,
+			&i.IsFinalized,
+			&i.FinalizedBy,
+			&i.Notes,
+			&i.FinalizedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGradeComponents = `-- name: ListGradeComponents :many
 SELECT gc.id, gc.assignment_id, gc.title, gc.category, gc.weight, gc.max_score,
        gc.is_published, gc.created_at, gc.updated_at,
