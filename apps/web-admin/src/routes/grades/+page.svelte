@@ -9,6 +9,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	type Assignment = {
 		id: string;
@@ -263,7 +264,7 @@
 	</div>
 
 	{#if error}
-		<div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+		<RecoveryPanel message={error} onRetry={loadOverview} />
 	{/if}
 
 	{#if loading}

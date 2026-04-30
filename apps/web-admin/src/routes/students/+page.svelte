@@ -9,6 +9,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	type Student = {
 		id: string; nis: string; nisn: string; nama: string; gender: string;
@@ -198,7 +199,7 @@
 	</div>
 
 	{#if error}
-		<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>
+		<RecoveryPanel message={error} onRetry={load} />
 	{/if}
 
 	{#if showForm}

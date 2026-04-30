@@ -8,6 +8,8 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import QueueMonitor from '$lib/components/QueueMonitor.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	interface QueueStats {
 		queued: number; running: number; success: number;
@@ -28,9 +30,11 @@
 	let recentJobs   = $state<any[]>([]);
 	let busy         = $state<Record<string, boolean>>({});
 	let confirmKey   = $state('');
+	let loadError    = $state('');
 
 	async function load() {
 		try {
+			loadError = '';
 			const [qRes, jRes, wRes] = await Promise.all([
 				fetch('/api/queue/stats'),
 				fetch('/api/pusaka/jobs?limit=5'),
@@ -42,7 +46,9 @@
 			if (!q.error) queueStats = q;
 			recentJobs = j.items ?? j.data ?? [];
 			workerStatus = w.data ?? null;
-		} catch { /* silent */ }
+		} catch {
+			loadError = 'Gagal memuat status worker, ringkasan antrian, atau job terbaru. Periksa backend dan worker PUSAKA, lalu coba lagi.';
+		}
 	}
 
 	async function act(key: string, fn: () => Promise<Response>, successMsg: string) {
@@ -140,6 +146,10 @@
 		</div>
 	</div>
 
+	{#if loadError}
+		<RecoveryPanel title="PUSAKA Belum Merespons Penuh" message={loadError} onRetry={load} />
+	{/if}
+
 	<!-- Worker status -->
 	<div class="grid gap-4 sm:grid-cols-3">
 		<Card.Root>
@@ -234,7 +244,13 @@
 						</Table.Row>
 					{:else}
 						<Table.Row>
-							<Table.Cell colspan={5} class="py-10 text-center text-muted-foreground">Belum ada job.</Table.Cell>
+							<Table.Cell colspan={5} class="p-4">
+								<EmptyStatePanel
+									compact
+									title="Belum ada job"
+									description="Jalankan rekap atau trigger scheduler untuk mulai membentuk antrean kerja PUSAKA di dashboard ini."
+								/>
+							</Table.Cell>
 						</Table.Row>
 					{/each}
 				</Table.Body>
@@ -257,9 +273,10 @@
 						</div>
 					</div>
 				{:else}
-					<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-						Belum ada job.
-					</div>
+					<EmptyStatePanel
+						title="Belum ada job"
+						description="Jalankan rekap atau trigger scheduler untuk mulai membentuk antrean kerja PUSAKA di dashboard ini."
+					/>
 				{/each}
 			</div>
 		</Card.Content>

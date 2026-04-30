@@ -5,6 +5,8 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	interface Stats {
 		total_judul: number;
@@ -34,6 +36,7 @@
 	let activeLoans = $state<LoanRow[]>([]);
 	let overdueLoans = $state<LoanRow[]>([]);
 	let loading = $state(true);
+	let error = $state('');
 
 	function formatDate(iso: string) {
 		if (!iso) return '-';
@@ -47,6 +50,7 @@
 	async function load() {
 		loading = true;
 		try {
+			error = '';
 			const [sRes, lRes] = await Promise.all([
 				fetch('/api/library/stats'),
 				fetch('/api/library/loans?status=active'),
@@ -59,6 +63,8 @@
 			overdueLoans = loans.filter((l: LoanRow) => l.is_overdue).sort((a: LoanRow, b: LoanRow) =>
 				new Date(a.jatuh_tempo).getTime() - new Date(b.jatuh_tempo).getTime()
 			);
+		} catch {
+			error = 'Gagal memuat ringkasan perpustakaan. Coba lagi untuk mengambil statistik dan daftar pinjaman terbaru.';
 		} finally {
 			loading = false;
 		}
@@ -80,6 +86,10 @@
 			<Button href="/library/loans" size="sm">Peminjaman</Button>
 		</div>
 	</div>
+
+	{#if error}
+		<RecoveryPanel title="Data Perpustakaan Belum Tersaji" message={error} onRetry={load} />
+	{/if}
 
 	<!-- Stats cards -->
 	<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -122,7 +132,13 @@
 						{/each}
 					</div>
 				{:else if activeLoans.length === 0}
-					<p class="px-4 pb-4 text-sm text-slate-400">Tidak ada pinjaman aktif.</p>
+					<div class="p-4">
+						<EmptyStatePanel
+							compact
+							title="Tidak ada pinjaman aktif"
+							description="Belum ada buku yang sedang dipinjam. Operasional pinjaman baru akan muncul di panel ini."
+						/>
+					</div>
 				{:else}
 					<Table.Root>
 						<Table.Header>
@@ -178,7 +194,13 @@
 						{/each}
 					</div>
 				{:else if overdueLoans.length === 0}
-					<p class="px-4 pb-4 text-sm text-slate-400">Tidak ada keterlambatan.</p>
+					<div class="p-4">
+						<EmptyStatePanel
+							compact
+							title="Tidak ada keterlambatan"
+							description="Semua pinjaman aktif masih dalam batas waktu. Panel ini akan menyorot denda dan jatuh tempo yang lewat."
+						/>
+					</div>
 				{:else}
 					<Table.Root>
 						<Table.Header>

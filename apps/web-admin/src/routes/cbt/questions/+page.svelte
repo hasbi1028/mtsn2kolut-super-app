@@ -13,6 +13,7 @@
 	import LatexBlock from '$lib/components/LatexBlock.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	type Subject = { id: string; name: string; code: string };
 	type OptionItem = { label: string; text?: string; html?: string; latex?: string; asset_id?: string };
@@ -584,7 +585,7 @@
 	</div>
 
 	{#if error}
-		<div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>
+		<RecoveryPanel message={error} onRetry={() => load(currentPage)} />
 	{/if}
 
 	{#if selectedDetail}
