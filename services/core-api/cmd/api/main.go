@@ -141,6 +141,7 @@ func main() {
 		r.Use(mw.InternalKeyOrJWT(internalKey, jwtSecret, authSvc.CurrentAuthVersion))
 		r.Use(mw.Audit(q))
 		r.Post("/api/auth/change-password", authH.ChangePassword)
+		r.Post("/api/auth/logout-all", authH.LogoutAll)
 
 		// Employees are admin-only
 		r.Group(func(r chi.Router) {

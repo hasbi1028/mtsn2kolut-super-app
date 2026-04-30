@@ -2,7 +2,7 @@
 SELECT 
     u.id, u.username, u.password_hash, 
     u.employee_id, u.student_id, u.parent_id,
-    u.is_active, u.created_at, u.updated_at,
+    u.is_active, u.auth_version, u.created_at, u.updated_at,
     (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
 FROM users u
 WHERE u.username = $1;
@@ -28,6 +28,13 @@ RETURNING *;
 UPDATE users
 SET password_hash = $2, updated_at = NOW()
 WHERE id = $1;
+
+-- name: IncrementUserAuthVersion :one
+UPDATE users
+SET auth_version = auth_version + 1,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING auth_version;
 
 -- name: UpdateUserStatus :exec
 UPDATE users SET is_active = $2, updated_at = NOW() WHERE id = $1;

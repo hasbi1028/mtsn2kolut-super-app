@@ -77,6 +77,33 @@ func (h *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]string{"message": "logged out"})
 }
 
+func (h *Auth) LogoutAll(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Username string `json:"username"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
+		if sub, _ := claims["sub"].(string); sub != "" {
+			body.Username = sub
+		}
+	}
+	if body.Username == "" {
+		api.BadRequest(w, "username required")
+		return
+	}
+
+	if err := h.svc.LogoutAll(r.Context(), body.Username); err != nil {
+		if errors.Is(err, domain.ErrUnauthorized) {
+			api.Unauthorized(w)
+			return
+		}
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]string{"message": "all sessions logged out"})
+}
+
 func (h *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username    string `json:"username"`

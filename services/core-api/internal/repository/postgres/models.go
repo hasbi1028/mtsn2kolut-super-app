@@ -967,6 +967,7 @@ type User struct {
 	StudentID    pgtype.UUID        `json:"student_id"`
 	ParentID     pgtype.UUID        `json:"parent_id"`
 	IsActive     bool               `json:"is_active"`
+	AuthVersion  int32              `json:"auth_version"`
 }
 
 type UserAccountRole struct {

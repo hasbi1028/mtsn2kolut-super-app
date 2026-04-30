@@ -24,7 +24,6 @@ import (
 const (
 	accessTokenTTL  = 1 * time.Hour
 	refreshTokenTTL = 7 * 24 * time.Hour
-	authVersionKey  = "auth_version"
 )
 
 // authStore defines the subset of db.Queries that Auth service needs.
@@ -32,14 +31,13 @@ type authStore interface {
 	GetUserByUsername(ctx context.Context, username string) (db.GetUserByUsernameRow, error)
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
-	GetSetting(ctx context.Context, key string) (db.AppSetting, error)
-	UpsertSetting(ctx context.Context, arg db.UpsertSettingParams) error
-	ListSettings(ctx context.Context) ([]db.AppSetting, error)
 	GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error)
 	AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error
+	IncrementUserAuthVersion(ctx context.Context, id pgtype.UUID) (int32, error)
 	CreateAuthSession(ctx context.Context, arg db.CreateAuthSessionParams) (db.AuthSession, error)
 	GetAuthSession(ctx context.Context, id pgtype.UUID) (db.AuthSession, error)
 	RevokeAuthSession(ctx context.Context, id pgtype.UUID) error
+	RevokeAllAuthSessionsForUser(ctx context.Context, userID pgtype.UUID) (int64, error)
 }
 
 type Auth struct {
@@ -132,6 +130,18 @@ func (s *Auth) Logout(ctx context.Context, refreshToken string) error {
 	return s.q.RevokeAuthSession(ctx, session.ID)
 }
 
+func (s *Auth) LogoutAll(ctx context.Context, username string) error {
+	user, err := s.q.GetUserByUsername(ctx, username)
+	if err != nil {
+		return domain.ErrUnauthorized
+	}
+	if _, err := s.q.RevokeAllAuthSessionsForUser(ctx, user.ID); err != nil {
+		return err
+	}
+	_, err = s.q.IncrementUserAuthVersion(ctx, user.ID)
+	return err
+}
+
 func (s *Auth) ChangePassword(ctx context.Context, username, oldPassword, newPassword string) error {
 	user, err := s.q.GetUserByUsername(ctx, username)
 	if err != nil {
@@ -161,15 +171,12 @@ func (s *Auth) ChangePassword(ctx context.Context, username, oldPassword, newPas
 	}); err != nil {
 		return err
 	}
-	return s.bumpAuthVersion(ctx)
+	_, err = s.q.IncrementUserAuthVersion(ctx, user.ID)
+	return err
 }
 
 func (s *Auth) issueTokenPair(ctx context.Context, user db.GetUserByUsernameRow) (domain.TokenPair, error) {
 	now := time.Now()
-	version, err := s.CurrentAuthVersion(ctx)
-	if err != nil {
-		return domain.TokenPair{}, err
-	}
 	sessionID, err := randomUUID()
 	if err != nil {
 		return domain.TokenPair{}, err
@@ -201,7 +208,7 @@ func (s *Auth) issueTokenPair(ctx context.Context, user db.GetUserByUsernameRow)
 		"role":  primaryRole, // backward compatibility
 		"roles": roleStrs,
 		"type":  "access",
-		"ver":   version,
+		"ver":   int64(user.AuthVersion),
 		"iat":   now.Unix(),
 		"exp":   now.Add(accessTokenTTL).Unix(),
 	}
@@ -226,7 +233,7 @@ func (s *Auth) issueTokenPair(ctx context.Context, user db.GetUserByUsernameRow)
 		"sub":  user.Username,
 		"sid":  pgUUIDString(sessionID),
 		"type": "refresh",
-		"ver":  version,
+		"ver":  int64(user.AuthVersion),
 		"iat":  now.Unix(),
 		"exp":  now.Add(refreshTokenTTL).Unix(),
 	})
@@ -288,31 +295,23 @@ func (s *Auth) SeedAdmin(ctx context.Context) error {
 	})
 }
 
-func (s *Auth) CurrentAuthVersion(ctx context.Context) (int64, error) {
-	row, err := s.q.GetSetting(ctx, authVersionKey)
+func (s *Auth) CurrentAuthVersion(ctx context.Context, username string) (int64, error) {
+	user, err := s.q.GetUserByUsername(ctx, username)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, nil
+			return 0, domain.ErrUnauthorized
 		}
 		return 0, err
 	}
-	v, err := strconv.ParseInt(row.Value, 10, 64)
-	if err != nil {
-		return 0, nil
-	}
-	return v, nil
-}
-
-func (s *Auth) bumpAuthVersion(ctx context.Context) error {
-	v, err := s.CurrentAuthVersion(ctx)
-	if err != nil {
-		return err
-	}
-	return s.q.UpsertSetting(ctx, db.UpsertSettingParams{Key: authVersionKey, Value: strconv.FormatInt(v+1, 10)})
+	return int64(user.AuthVersion), nil
 }
 
 func (s *Auth) validAuthVersion(ctx context.Context, claims jwt.MapClaims) bool {
-	current, err := s.CurrentAuthVersion(ctx)
+	username, _ := claims["sub"].(string)
+	if strings.TrimSpace(username) == "" {
+		return false
+	}
+	current, err := s.CurrentAuthVersion(ctx, username)
 	if err != nil {
 		return false
 	}

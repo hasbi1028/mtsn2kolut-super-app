@@ -68,6 +68,7 @@ func (f *fakeStore) GetUserByUsername(ctx context.Context, username string) (db.
 		StudentID:    u.StudentID,
 		ParentID:     u.ParentID,
 		IsActive:     u.IsActive,
+		AuthVersion:  u.AuthVersion,
 		CreatedAt:    u.CreatedAt,
 		UpdatedAt:    u.UpdatedAt,
 		Roles:        rolesJSON,
@@ -85,6 +86,7 @@ func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db
 		StudentID:    arg.StudentID,
 		ParentID:     arg.ParentID,
 		IsActive:     arg.IsActive,
+		AuthVersion:  0,
 	}
 	f.users[arg.Username] = u
 	return u, nil
@@ -108,6 +110,17 @@ func (f *fakeStore) GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.
 func (f *fakeStore) AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error {
 	f.userRoles[arg.UserID] = append(f.userRoles[arg.UserID], arg.Role)
 	return nil
+}
+
+func (f *fakeStore) IncrementUserAuthVersion(ctx context.Context, id pgtype.UUID) (int32, error) {
+	for key, user := range f.users {
+		if user.ID == id {
+			user.AuthVersion++
+			f.users[key] = user
+			return user.AuthVersion, nil
+		}
+	}
+	return 0, pgx.ErrNoRows
 }
 
 func (f *fakeStore) CreateAuthSession(ctx context.Context, arg db.CreateAuthSessionParams) (db.AuthSession, error) {
@@ -139,6 +152,20 @@ func (f *fakeStore) RevokeAuthSession(ctx context.Context, id pgtype.UUID) error
 	session.RevokedAt = now
 	f.authSessions[id] = session
 	return nil
+}
+
+func (f *fakeStore) RevokeAllAuthSessionsForUser(ctx context.Context, userID pgtype.UUID) (int64, error) {
+	var count int64
+	for key, session := range f.authSessions {
+		if session.UserID == userID && !session.RevokedAt.Valid {
+			now := pgtype.Timestamptz{}
+			_ = now.Scan(time.Now())
+			session.RevokedAt = now
+			f.authSessions[key] = session
+			count++
+		}
+	}
+	return count, nil
 }
 
 func TestAuthSeedAdminCreatesUser(t *testing.T) {
@@ -191,8 +218,8 @@ func TestAuthRefreshRejectsOldTokenAfterPasswordChange(t *testing.T) {
 	if err := svc.ChangePassword(context.Background(), "admin", "admin", "newpass123"); err != nil {
 		t.Fatalf("ChangePassword() error = %v", err)
 	}
-	if got := store.settings["auth_version"]; got != "1" {
-		t.Fatalf("auth_version after change = %q, want 1", got)
+	if got := store.users["admin"].AuthVersion; got != 1 {
+		t.Fatalf("auth_version after change = %d, want 1", got)
 	}
 	if _, err := svc.Refresh(context.Background(), pair.RefreshToken); err == nil {
 		t.Fatalf("Refresh() error = nil, want unauthorized")

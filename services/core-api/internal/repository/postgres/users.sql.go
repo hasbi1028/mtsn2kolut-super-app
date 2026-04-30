@@ -63,7 +63,7 @@ func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, password_hash, employee_id, student_id, parent_id, is_active)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, username, password_hash, employee_id, created_at, updated_at, student_id, parent_id, is_active
+RETURNING id, username, password_hash, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version
 `
 
 type CreateUserParams struct {
@@ -95,6 +95,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.StudentID,
 		&i.ParentID,
 		&i.IsActive,
+		&i.AuthVersion,
 	)
 	return i, err
 }
@@ -125,7 +126,7 @@ const getUserByUsername = `-- name: GetUserByUsername :one
 SELECT 
     u.id, u.username, u.password_hash, 
     u.employee_id, u.student_id, u.parent_id,
-    u.is_active, u.created_at, u.updated_at,
+    u.is_active, u.auth_version, u.created_at, u.updated_at,
     (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
 FROM users u
 WHERE u.username = $1
@@ -139,6 +140,7 @@ type GetUserByUsernameRow struct {
 	StudentID    pgtype.UUID        `json:"student_id"`
 	ParentID     pgtype.UUID        `json:"parent_id"`
 	IsActive     bool               `json:"is_active"`
+	AuthVersion  int32              `json:"auth_version"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	Roles        []byte             `json:"roles"`
@@ -155,6 +157,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUs
 		&i.StudentID,
 		&i.ParentID,
 		&i.IsActive,
+		&i.AuthVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Roles,
@@ -184,6 +187,21 @@ func (q *Queries) GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]UserR
 		return nil, err
 	}
 	return items, nil
+}
+
+const incrementUserAuthVersion = `-- name: IncrementUserAuthVersion :one
+UPDATE users
+SET auth_version = auth_version + 1,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING auth_version
+`
+
+func (q *Queries) IncrementUserAuthVersion(ctx context.Context, id pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, incrementUserAuthVersion, id)
+	var auth_version int32
+	err := row.Scan(&auth_version)
+	return auth_version, err
 }
 
 const listAuditLogs = `-- name: ListAuditLogs :many
@@ -363,15 +381,27 @@ WHERE employee_id = $1
 ORDER BY created_at ASC
 `
 
-func (q *Queries) ListUsersByEmployeeID(ctx context.Context, employeeID pgtype.UUID) ([]User, error) {
+type ListUsersByEmployeeIDRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	Username     string             `json:"username"`
+	PasswordHash string             `json:"password_hash"`
+	EmployeeID   pgtype.UUID        `json:"employee_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	StudentID    pgtype.UUID        `json:"student_id"`
+	ParentID     pgtype.UUID        `json:"parent_id"`
+	IsActive     bool               `json:"is_active"`
+}
+
+func (q *Queries) ListUsersByEmployeeID(ctx context.Context, employeeID pgtype.UUID) ([]ListUsersByEmployeeIDRow, error) {
 	rows, err := q.db.Query(ctx, listUsersByEmployeeID, employeeID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []User{}
+	items := []ListUsersByEmployeeIDRow{}
 	for rows.Next() {
-		var i User
+		var i ListUsersByEmployeeIDRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Username,
@@ -400,15 +430,27 @@ WHERE student_id = $1
 ORDER BY created_at ASC
 `
 
-func (q *Queries) ListUsersByStudentID(ctx context.Context, studentID pgtype.UUID) ([]User, error) {
+type ListUsersByStudentIDRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	Username     string             `json:"username"`
+	PasswordHash string             `json:"password_hash"`
+	EmployeeID   pgtype.UUID        `json:"employee_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	StudentID    pgtype.UUID        `json:"student_id"`
+	ParentID     pgtype.UUID        `json:"parent_id"`
+	IsActive     bool               `json:"is_active"`
+}
+
+func (q *Queries) ListUsersByStudentID(ctx context.Context, studentID pgtype.UUID) ([]ListUsersByStudentIDRow, error) {
 	rows, err := q.db.Query(ctx, listUsersByStudentID, studentID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []User{}
+	items := []ListUsersByStudentIDRow{}
 	for rows.Next() {
-		var i User
+		var i ListUsersByStudentIDRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Username,

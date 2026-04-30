@@ -12,6 +12,7 @@
   let pwForm      = $state({ current: '', next: '', confirm: '' });
   let pwError     = $state('');
   let pwLoading   = $state(false);
+  let logoutAllLoading = $state(false);
 
   async function load() {
     try {
@@ -62,6 +63,21 @@
       pwForm = { current: '', next: '', confirm: '' };
       showToast('Password berhasil diubah.');
     } finally { pwLoading = false; }
+  }
+
+  async function logoutAllSessions() {
+    logoutAllLoading = true;
+    try {
+      const res = await fetch('/api/auth/logout-all', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        pwError = data.error ?? 'Gagal mengakhiri semua sesi';
+        return;
+      }
+      window.location.href = '/login';
+    } finally {
+      logoutAllLoading = false;
+    }
   }
 
   function showToast(msg: string) {
@@ -115,6 +131,15 @@
       <Button class="mt-4" onclick={changePassword} disabled={pwLoading}>
         {pwLoading ? 'Menyimpan…' : 'Simpan Password'}
       </Button>
+      <div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+        <p class="text-sm font-medium text-amber-900">Keluar dari semua perangkat</p>
+        <p class="mt-1 text-xs text-amber-800">
+          Semua sesi login lain akan diakhiri, termasuk token akses yang masih aktif.
+        </p>
+        <Button class="mt-3" variant="outline" onclick={logoutAllSessions} disabled={logoutAllLoading}>
+          {logoutAllLoading ? 'Memproses…' : 'Keluar dari Semua Sesi'}
+        </Button>
+      </div>
     </Card.Content>
   </Card.Root>
 

@@ -65,6 +65,21 @@ func (q *Queries) GetAuthSession(ctx context.Context, id pgtype.UUID) (AuthSessi
 	return i, err
 }
 
+const revokeAllAuthSessionsForUser = `-- name: RevokeAllAuthSessionsForUser :execrows
+UPDATE auth_sessions
+SET revoked_at = NOW(), updated_at = NOW()
+WHERE user_id = $1
+  AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeAllAuthSessionsForUser(ctx context.Context, userID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeAllAuthSessionsForUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeAuthSession = `-- name: RevokeAuthSession :exec
 UPDATE auth_sessions
 SET revoked_at = NOW(), updated_at = NOW()

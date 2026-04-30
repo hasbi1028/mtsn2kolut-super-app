@@ -9,7 +9,7 @@ import (
 	"mtsn2kolut-super-app/backend/internal/api"
 )
 
-type authVersionProvider func(context.Context) (int64, error)
+type authVersionProvider func(context.Context, string) (int64, error)
 
 func JWT(secret string, currentVersion authVersionProvider) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -40,7 +40,12 @@ func JWT(secret string, currentVersion authVersionProvider) func(http.Handler) h
 					api.Unauthorized(w)
 					return
 				}
-				want, err := currentVersion(r.Context())
+				sub, _ := claims["sub"].(string)
+				if strings.TrimSpace(sub) == "" {
+					api.Unauthorized(w)
+					return
+				}
+				want, err := currentVersion(r.Context(), sub)
 				if err != nil || int64(ver) != want {
 					api.Unauthorized(w)
 					return
@@ -65,7 +70,7 @@ func InternalKeyOrJWT(internalKey, jwtSecret string, currentVersion authVersionP
 	}
 }
 
-// RequireAdmin enforces that the JWT claim "role" == "admin".
+// RequireAdmin enforces that the JWT claim "roles" includes "admin" or "role" == "admin".
 // Internal-key requests (BFF) bypass this check — the BFF is responsible for
 // gating admin-only routes via SvelteKit hooks before forwarding.
 func RequireAdmin(internalKey string) func(http.Handler) http.Handler {
@@ -80,6 +85,23 @@ func RequireAdmin(internalKey string) func(http.Handler) http.Handler {
 				api.Unauthorized(w)
 				return
 			}
+
+			// Check roles array
+			if rawRoles, ok := claims["roles"].([]any); ok {
+				hasAdmin := false
+				for _, r := range rawRoles {
+					if r == "admin" {
+						hasAdmin = true
+						break
+					}
+				}
+				if hasAdmin {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
+			// Fallback to single role
 			role, _ := claims["role"].(string)
 			if role != "admin" {
 				api.Forbidden(w)
