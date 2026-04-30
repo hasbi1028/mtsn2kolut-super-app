@@ -120,7 +120,7 @@ class ExamSessionStore {
     if (raw == null || raw.trim().isEmpty) {
       return null;
     }
-    final decoded = jsonDecode(raw);
+    final decoded = _tryDecodeSnapshot(raw);
     if (decoded is! Map<String, dynamic>) {
       return null;
     }
@@ -130,5 +130,13 @@ class ExamSessionStore {
   Future<void> clearSnapshot() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_snapshotKey);
+  }
+}
+
+Object? _tryDecodeSnapshot(String raw) {
+  try {
+    return jsonDecode(raw);
+  } on FormatException {
+    return null;
   }
 }

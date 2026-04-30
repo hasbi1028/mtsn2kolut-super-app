@@ -80,6 +80,17 @@ void main() {
       expect(restored, isNull);
     });
 
+    test('returns null for malformed snapshot json', () async {
+      SharedPreferences.setMockInitialValues({
+        'exam_active_snapshot': '{bukan-json-valid',
+      });
+      store = ExamSessionStore();
+
+      final restored = await store.loadSnapshot();
+
+      expect(restored, isNull);
+    });
+
     test('clears snapshot without removing remembered base url', () async {
       const snapshot = ExamSessionSnapshot(
         baseUrl: 'http://10.0.2.2:8080',
