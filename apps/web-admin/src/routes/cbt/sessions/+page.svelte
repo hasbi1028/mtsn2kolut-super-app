@@ -76,13 +76,13 @@
 	function scopeSummary(session: ExamSession) {
 		if (session.scope_type === 'grade') return `Tingkat ${session.scope_ref || '—'}`;
 		if (session.scope_type === 'school') return 'Seluruh sekolah';
-		if (session.scope_type === 'custom') return session.scope_ref || 'Cohort khusus';
+		if (session.scope_type === 'custom') return session.scope_ref || 'Peserta khusus';
 		return session.class_code || session.class_name || 'Per kelas';
 	}
 
 	function mixPolicyLabel(value: string) {
 		if (value === 'same_class') return 'Tetap per kelas';
-		if (value === 'mixed_scope') return 'Campur lintas scope';
+		if (value === 'mixed_scope') return 'Campur lintas cakupan';
 		return 'Campur dalam tingkat';
 	}
 
@@ -252,7 +252,7 @@
 						</select>
 					</div>
 					<div>
-						<label for="session-scope" class="text-xs text-slate-500 mb-1 block">Scope peserta <span class="text-red-500">*</span></label>
+						<label for="session-scope" class="text-xs text-slate-500 mb-1 block">Cakupan peserta <span class="text-red-500">*</span></label>
 						<select id="session-scope" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fScopeType}>
 							<option value="class">Per kelas</option>
 							<option value="grade">Per tingkat</option>
@@ -288,7 +288,7 @@
 						<select id="session-mix-policy" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fMixPolicy}>
 							<option value="same_class">Tetap per kelas</option>
 							<option value="same_grade">Campur dalam tingkat</option>
-							<option value="mixed_scope">Campur lintas scope</option>
+							<option value="mixed_scope">Campur lintas cakupan</option>
 						</select>
 					</div>
 					<div>
@@ -434,7 +434,7 @@
 						<Table.Row>
 							<Table.Head>Nama Sesi</Table.Head>
 							<Table.Head>Paket</Table.Head>
-							<Table.Head>Scope</Table.Head>
+							<Table.Head>Cakupan</Table.Head>
 							<Table.Head>Jadwal Mulai</Table.Head>
 							<Table.Head>Peserta</Table.Head>
 							<Table.Head>Status</Table.Head>
