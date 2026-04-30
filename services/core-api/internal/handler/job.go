@@ -11,13 +11,13 @@ import (
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
-type Job struct {
-	svc *service.Job
+type PusakaJob struct {
+	svc *service.PusakaJob
 }
 
-func NewJob(svc *service.Job) *Job { return &Job{svc: svc} }
+func NewPusakaJob(svc *service.PusakaJob) *PusakaJob { return &PusakaJob{svc: svc} }
 
-func (h *Job) List(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaJob) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	status := q.Get("status")
 	limit := int32(pageSize(q.Get("per_page"), 20))
@@ -35,7 +35,7 @@ func (h *Job) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Job) Create(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaJob) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		EmployeeID  string `json:"employee_id"`
 		RunType     string `json:"run_type"`
@@ -65,7 +65,7 @@ func (h *Job) Create(w http.ResponseWriter, r *http.Request) {
 	api.Created(w, job)
 }
 
-func (h *Job) Stats(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaJob) Stats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.svc.Stats(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -74,7 +74,7 @@ func (h *Job) Stats(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, stats)
 }
 
-func (h *Job) RunAll(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaJob) RunAll(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		RunType     string `json:"run_type"`
 		MaxAttempts int32  `json:"max_attempts"`
@@ -97,7 +97,7 @@ func (h *Job) RunAll(w http.ResponseWriter, r *http.Request) {
 	api.Created(w, map[string]any{"inserted": inserted, "skipped": skipped})
 }
 
-func (h *Job) CancelEmployee(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaJob) CancelEmployee(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		EmployeeID string `json:"employee_id"`
 	}
@@ -118,7 +118,7 @@ func (h *Job) CancelEmployee(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]any{"ok": true, "cancelled": cancelled})
 }
 
-func (h *Job) CancelAll(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaJob) CancelAll(w http.ResponseWriter, r *http.Request) {
 	cancelled, err := h.svc.CancelAll(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -127,7 +127,7 @@ func (h *Job) CancelAll(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]any{"ok": true, "cancelled": cancelled})
 }
 
-func (h *Job) SyncAttendance(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaJob) SyncAttendance(w http.ResponseWriter, r *http.Request) {
 	inserted, skipped, err := h.svc.RunAll(r.Context(), "scrape", 3)
 	if err != nil {
 		api.Internal(w, err)

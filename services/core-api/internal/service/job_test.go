@@ -13,7 +13,7 @@ import (
 )
 
 type fakeJobStore struct {
-	activeEmployees []db.Employee
+	activeEmployees []db.ListActiveEmployeesRow
 	createResults   []error
 	createCalls     int
 }
@@ -70,7 +70,7 @@ func (f *fakeJobStore) GetJob(ctx context.Context, id pgtype.UUID) (db.GetJobRow
 	return db.GetJobRow{}, nil
 }
 
-func (f *fakeJobStore) ListActiveEmployees(ctx context.Context) ([]db.Employee, error) {
+func (f *fakeJobStore) ListActiveEmployees(ctx context.Context) ([]db.ListActiveEmployeesRow, error) {
 	return f.activeEmployees, nil
 }
 
@@ -84,7 +84,7 @@ func (f *fakeJobStore) CancelAllJobs(ctx context.Context) (int64, error) {
 
 func TestJobCreateReturnsConflictWhenActiveJobExists(t *testing.T) {
 	store := &fakeJobStore{createResults: []error{pgx.ErrNoRows}}
-	svc := &Job{q: store}
+	svc := &PusakaJob{q: store}
 
 	_, err := svc.Create(context.Background(), pgtype.UUID{Valid: true}, "morning", 3)
 	if !errors.Is(err, domain.ErrConflict) {
@@ -94,14 +94,14 @@ func TestJobCreateReturnsConflictWhenActiveJobExists(t *testing.T) {
 
 func TestJobRunAllCountsInsertedAndSkipped(t *testing.T) {
 	store := &fakeJobStore{
-		activeEmployees: []db.Employee{
+		activeEmployees: []db.ListActiveEmployeesRow{
 			{ID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}},
 			{ID: pgtype.UUID{Bytes: [16]byte{2}, Valid: true}},
 			{ID: pgtype.UUID{Bytes: [16]byte{3}, Valid: true}},
 		},
 		createResults: []error{nil, pgx.ErrNoRows, nil},
 	}
-	svc := &Job{q: store}
+	svc := &PusakaJob{q: store}
 
 	inserted, skipped, err := svc.RunAll(context.Background(), "morning", 3)
 	if err != nil {
@@ -114,12 +114,12 @@ func TestJobRunAllCountsInsertedAndSkipped(t *testing.T) {
 
 func TestJobRunAllReturnsUnexpectedStoreError(t *testing.T) {
 	store := &fakeJobStore{
-		activeEmployees: []db.Employee{
+		activeEmployees: []db.ListActiveEmployeesRow{
 			{ID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}},
 		},
 		createResults: []error{errors.New("db down")},
 	}
-	svc := &Job{q: store}
+	svc := &PusakaJob{q: store}
 
 	_, _, err := svc.RunAll(context.Background(), "morning", 3)
 	if err == nil || err.Error() != "db down" {

@@ -6,7 +6,7 @@ interface GoStats { queued: number; running: number; success: number; failed: nu
 
 export const GET = async (event: RequestEvent) => {
 	try {
-		const s = await proxy(event).get<GoStats>('/api/jobs/stats');
+		const s = await proxy(event).get<GoStats>('/api/pusaka/jobs/stats');
 		return json({
 			queued:    s.queued,
 			running:   s.running,

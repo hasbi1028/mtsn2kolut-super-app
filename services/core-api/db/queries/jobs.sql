@@ -26,8 +26,8 @@ SELECT COUNT(*) FROM jobs;
 SELECT COUNT(*) FROM jobs WHERE status = $1;
 
 -- name: CreateJobIfAbsent :one
-INSERT INTO jobs (id, employee_id, run_type, status, max_attempts)
-VALUES (gen_random_uuid(), $1, $2, 'queued', $3)
+INSERT INTO jobs (id, employee_id, run_type, status, max_attempts, not_before)
+VALUES (gen_random_uuid(), $1, $2, 'queued', $3, $4)
 ON CONFLICT (employee_id, run_type)
   WHERE status IN ('queued', 'running')
 DO NOTHING
@@ -35,10 +35,17 @@ RETURNING *;
 
 -- name: ClaimJob :one
 WITH candidate AS (
-  SELECT id FROM jobs
-  WHERE (status = 'queued')
-     OR (status = 'failed' AND attempts < max_attempts AND next_retry_at <= NOW())
-  ORDER BY created_at ASC
+  SELECT j.id
+  FROM jobs j
+  JOIN pusaka_accounts pa ON pa.employee_id = j.employee_id
+  WHERE (
+      (j.status = 'queued' AND (j.not_before IS NULL OR j.not_before <= NOW()))
+      OR (j.status = 'failed' AND j.attempts < j.max_attempts AND j.next_retry_at <= NOW())
+    )
+    AND pa.is_enabled = TRUE
+    AND pa.pusaka_username <> ''
+    AND pa.pusaka_password <> ''
+  ORDER BY j.created_at ASC
   FOR UPDATE SKIP LOCKED
   LIMIT 1
 ),
@@ -54,9 +61,9 @@ updated AS (
   RETURNING jobs.id, jobs.employee_id, jobs.run_type, jobs.attempts, jobs.max_attempts
 )
 SELECT u.id, u.employee_id, u.run_type, u.attempts, u.max_attempts,
-       e.pusaka_username, e.pusaka_password
+       pa.pusaka_username, pa.pusaka_password
 FROM updated u
-JOIN employees e ON e.id = u.employee_id;
+JOIN pusaka_accounts pa ON pa.employee_id = u.employee_id;
 
 -- name: CompleteJob :exec
 UPDATE jobs

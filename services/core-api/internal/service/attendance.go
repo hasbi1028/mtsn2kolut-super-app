@@ -7,13 +7,13 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
-type Attendance struct {
+type PusakaAttendance struct {
 	q *db.Queries
 }
 
-func NewAttendance(q *db.Queries) *Attendance { return &Attendance{q: q} }
+func NewPusakaAttendance(q *db.Queries) *PusakaAttendance { return &PusakaAttendance{q: q} }
 
-func (s *Attendance) List(ctx context.Context, limit, offset int32) ([]db.ListAttendanceRow, int64, error) {
+func (s *PusakaAttendance) List(ctx context.Context, limit, offset int32) ([]db.ListAttendanceRow, int64, error) {
 	rows, err := s.q.ListAttendance(ctx, db.ListAttendanceParams{Limit: limit, Offset: offset})
 	if err != nil {
 		return nil, 0, err
@@ -22,18 +22,18 @@ func (s *Attendance) List(ctx context.Context, limit, offset int32) ([]db.ListAt
 	return rows, count, err
 }
 
-func (s *Attendance) ByDate(ctx context.Context, date pgtype.Date) ([]db.ListAttendanceByDateRow, error) {
+func (s *PusakaAttendance) ByDate(ctx context.Context, date pgtype.Date) ([]db.ListAttendanceByDateRow, error) {
 	return s.q.ListAttendanceByDate(ctx, date)
 }
 
-func (s *Attendance) ListInRange(ctx context.Context, start, end pgtype.Date) ([]db.ListAttendanceInRangeRow, error) {
+func (s *PusakaAttendance) ListInRange(ctx context.Context, start, end pgtype.Date) ([]db.ListAttendanceInRangeRow, error) {
 	return s.q.ListAttendanceInRange(ctx, db.ListAttendanceInRangeParams{
 		Tanggal:   start,
 		Tanggal_2: end,
 	})
 }
 
-func (s *Attendance) ByEmployee(ctx context.Context, empID pgtype.UUID, limit, offset int32) ([]db.ListAttendanceByEmployeeRow, error) {
+func (s *PusakaAttendance) ByEmployee(ctx context.Context, empID pgtype.UUID, limit, offset int32) ([]db.ListAttendanceByEmployeeRow, error) {
 	return s.q.ListAttendanceByEmployee(ctx, db.ListAttendanceByEmployeeParams{
 		EmployeeID: empID,
 		Limit:      limit,
@@ -41,13 +41,13 @@ func (s *Attendance) ByEmployee(ctx context.Context, empID pgtype.UUID, limit, o
 	})
 }
 
-func (s *Attendance) GetSummary(ctx context.Context, start, end pgtype.Date) ([]db.GetMonthlyAttendanceSummaryRow, error) {
+func (s *PusakaAttendance) GetSummary(ctx context.Context, start, end pgtype.Date) ([]db.GetMonthlyAttendanceSummaryRow, error) {
 	return s.q.GetMonthlyAttendanceSummary(ctx, db.GetMonthlyAttendanceSummaryParams{
 		Tanggal:   start,
 		Tanggal_2: end,
 	})
 }
 
-func (s *Attendance) Upsert(ctx context.Context, p db.UpsertAttendanceParams) (db.AttendanceRecord, error) {
+func (s *PusakaAttendance) Upsert(ctx context.Context, p db.UpsertAttendanceParams) (db.AttendanceRecord, error) {
 	return s.q.UpsertAttendance(ctx, p)
 }

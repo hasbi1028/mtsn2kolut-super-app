@@ -8,13 +8,13 @@ import (
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
-type Scheduler struct {
-	svc *service.Scheduler
+type PusakaScheduler struct {
+	svc *service.PusakaScheduler
 }
 
-func NewScheduler(svc *service.Scheduler) *Scheduler { return &Scheduler{svc: svc} }
+func NewPusakaScheduler(svc *service.PusakaScheduler) *PusakaScheduler { return &PusakaScheduler{svc: svc} }
 
-func (h *Scheduler) Tick(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaScheduler) Tick(w http.ResponseWriter, r *http.Request) {
 	result, err := h.svc.Tick(r.Context(), time.Now())
 	if err != nil {
 		api.Internal(w, err)

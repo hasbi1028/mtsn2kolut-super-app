@@ -9,6 +9,6 @@ export const POST = async (event: RequestEvent) => {
 		);
 		return json(result);
 	} catch (e) {
-		return handleRouteError(e, 'scheduler/tick');
+		return handleRouteError(e, 'pusaka/scheduler/tick');
 	}
 };

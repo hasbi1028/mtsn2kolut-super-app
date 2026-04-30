@@ -13,16 +13,30 @@ import (
 
 const claimDueEmployeeSchedules = `-- name: ClaimDueEmployeeSchedules :many
 WITH due AS (
-  UPDATE employee_schedules
+  UPDATE employee_schedules es
   SET last_enqueued_for_date = $1,
       updated_at = NOW()
-  WHERE is_enabled = TRUE
-    AND run_time <= $2
-    AND day_of_week = EXTRACT(DOW FROM $1::DATE)::SMALLINT
-    AND (last_enqueued_for_date IS NULL OR last_enqueued_for_date < $1)
-  RETURNING id, employee_id, run_type, run_time, is_enabled, last_enqueued_for_date, created_at, updated_at, random_window_minutes, day_of_week
+  FROM pusaka_accounts pa
+  WHERE es.employee_id = pa.employee_id
+    AND es.is_enabled = TRUE
+    AND es.run_time <= $2
+    AND es.day_of_week = EXTRACT(DOW FROM $1::DATE)::SMALLINT
+    AND (es.last_enqueued_for_date IS NULL OR es.last_enqueued_for_date < $1)
+    AND pa.is_enabled = TRUE
+    AND pa.pusaka_username <> ''
+    AND pa.pusaka_password <> ''
+  RETURNING es.id,
+            es.employee_id,
+            es.run_type,
+            es.run_time,
+            es.is_enabled,
+            es.random_window_minutes,
+            es.day_of_week,
+            es.last_enqueued_for_date,
+            es.created_at,
+            es.updated_at
 )
-SELECT id, employee_id, run_type, run_time, is_enabled, last_enqueued_for_date, created_at, updated_at, random_window_minutes, day_of_week FROM due ORDER BY run_time ASC
+SELECT id, employee_id, run_type, run_time, is_enabled, random_window_minutes, day_of_week, last_enqueued_for_date, created_at, updated_at FROM due ORDER BY run_time ASC
 `
 
 type ClaimDueEmployeeSchedulesParams struct {
@@ -36,11 +50,11 @@ type ClaimDueEmployeeSchedulesRow struct {
 	RunType             RunTypeEnum        `json:"run_type"`
 	RunTime             string             `json:"run_time"`
 	IsEnabled           bool               `json:"is_enabled"`
+	RandomWindowMinutes int16              `json:"random_window_minutes"`
+	DayOfWeek           int16              `json:"day_of_week"`
 	LastEnqueuedForDate pgtype.Date        `json:"last_enqueued_for_date"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
-	RandomWindowMinutes int16              `json:"random_window_minutes"`
-	DayOfWeek           int16              `json:"day_of_week"`
 }
 
 func (q *Queries) ClaimDueEmployeeSchedules(ctx context.Context, arg ClaimDueEmployeeSchedulesParams) ([]ClaimDueEmployeeSchedulesRow, error) {
@@ -58,11 +72,11 @@ func (q *Queries) ClaimDueEmployeeSchedules(ctx context.Context, arg ClaimDueEmp
 			&i.RunType,
 			&i.RunTime,
 			&i.IsEnabled,
+			&i.RandomWindowMinutes,
+			&i.DayOfWeek,
 			&i.LastEnqueuedForDate,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.RandomWindowMinutes,
-			&i.DayOfWeek,
 		); err != nil {
 			return nil, err
 		}

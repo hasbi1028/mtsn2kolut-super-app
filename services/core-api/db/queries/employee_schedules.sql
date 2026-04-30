@@ -20,14 +20,28 @@ DELETE FROM employee_schedules WHERE id = $1 AND employee_id = $2;
 
 -- name: ClaimDueEmployeeSchedules :many
 WITH due AS (
-  UPDATE employee_schedules
+  UPDATE employee_schedules es
   SET last_enqueued_for_date = $1,
       updated_at = NOW()
-  WHERE is_enabled = TRUE
-    AND run_time <= $2
-    AND day_of_week = EXTRACT(DOW FROM $1::DATE)::SMALLINT
-    AND (last_enqueued_for_date IS NULL OR last_enqueued_for_date < $1)
-  RETURNING *
+  FROM pusaka_accounts pa
+  WHERE es.employee_id = pa.employee_id
+    AND es.is_enabled = TRUE
+    AND es.run_time <= $2
+    AND es.day_of_week = EXTRACT(DOW FROM $1::DATE)::SMALLINT
+    AND (es.last_enqueued_for_date IS NULL OR es.last_enqueued_for_date < $1)
+    AND pa.is_enabled = TRUE
+    AND pa.pusaka_username <> ''
+    AND pa.pusaka_password <> ''
+  RETURNING es.id,
+            es.employee_id,
+            es.run_type,
+            es.run_time,
+            es.is_enabled,
+            es.random_window_minutes,
+            es.day_of_week,
+            es.last_enqueued_for_date,
+            es.created_at,
+            es.updated_at
 )
 SELECT * FROM due ORDER BY run_time ASC;
 

@@ -16,17 +16,17 @@ import (
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
-type Worker struct {
-	jobs *service.Job
-	att  *service.Attendance
+type PusakaWorker struct {
+	jobs *service.PusakaJob
+	att  *service.PusakaAttendance
 	sett *service.Setting
 }
 
-func NewWorker(jobs *service.Job, att *service.Attendance, sett *service.Setting) *Worker {
-	return &Worker{jobs: jobs, att: att, sett: sett}
+func NewPusakaWorker(jobs *service.PusakaJob, att *service.PusakaAttendance, sett *service.Setting) *PusakaWorker {
+	return &PusakaWorker{jobs: jobs, att: att, sett: sett}
 }
 
-func (h *Worker) Claim(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaWorker) Claim(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		WorkerID string `json:"worker_id"`
 	}
@@ -46,7 +46,7 @@ func (h *Worker) Claim(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, job)
 }
 
-func (h *Worker) Complete(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaWorker) Complete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -92,7 +92,7 @@ func (h *Worker) Complete(w http.ResponseWriter, r *http.Request) {
 	api.NoContent(w)
 }
 
-func (h *Worker) Fail(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaWorker) Fail(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -117,7 +117,7 @@ func (h *Worker) Fail(w http.ResponseWriter, r *http.Request) {
 	api.NoContent(w)
 }
 
-func (h *Worker) UpsertAttendance(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaWorker) UpsertAttendance(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		EmployeeID  string `json:"employee_id"`
 		Tanggal     string `json:"tanggal"`
@@ -160,7 +160,7 @@ func (h *Worker) UpsertAttendance(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, record)
 }
 
-func (h *Worker) Config(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaWorker) Config(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.sett.List(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -178,7 +178,7 @@ func (h *Worker) Config(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, cfg)
 }
 
-func (h *Worker) Heartbeat(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaWorker) Heartbeat(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		WorkerID         string `json:"worker_id"`
 		ActiveConsumers  int    `json:"active_consumers"`
@@ -211,7 +211,7 @@ func (h *Worker) Heartbeat(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]bool{"ok": true})
 }
 
-func (h *Worker) GetStatus(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaWorker) GetStatus(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.sett.List(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -250,4 +250,3 @@ func (h *Worker) GetStatus(w http.ResponseWriter, r *http.Request) {
 		"last_checked":   time.Now().UTC(),
 	})
 }
-

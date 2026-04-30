@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
@@ -30,7 +31,7 @@
 		if (!startDate || !endDate) return;
 		loading = true; error = '';
 		try {
-			const res = await fetch(`/api/attendance/summary?start_date=${startDate}&end_date=${endDate}`);
+			const res = await fetch(`/api/pusaka/attendance/summary?start_date=${startDate}&end_date=${endDate}`);
 			const data = await res.json();
 			summary = data.data ?? data ?? [];
 		} catch {
@@ -69,24 +70,24 @@
 <div class="space-y-6">
 
 	<div class="flex items-center gap-2 text-sm text-slate-500">
-		<a href="/pusaka" class="hover:text-slate-700">PUSAKA</a>
+		<a href={resolve('/pusaka')} class="hover:text-slate-700">PUSAKA</a>
 		<span>/</span>
 		<span class="text-slate-700 font-medium">Ringkasan Kehadiran</span>
 	</div>
 
-	<div class="flex flex-wrap items-end justify-between gap-4">
+	<div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
 		<div>
 			<h1 class="text-2xl font-semibold text-slate-800">Ringkasan Kehadiran</h1>
 			<p class="text-sm text-slate-500 mt-1">Akumulasi kehadiran pegawai dari PUSAKA Kemenag dalam periode tertentu</p>
 		</div>
-		<div class="flex flex-wrap items-center gap-3">
-			<div class="flex items-center gap-2">
-				<Input type="date" bind:value={startDate} class="w-auto h-9" />
-				<span class="text-muted-foreground text-sm">s/d</span>
-				<Input type="date" bind:value={endDate} class="w-auto h-9" />
+		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto] xl:items-end">
+			<div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+				<Input type="date" bind:value={startDate} class="h-10 min-w-0 bg-white" />
+				<span class="text-center text-sm text-muted-foreground">s/d</span>
+				<Input type="date" bind:value={endDate} class="h-10 min-w-0 bg-white" />
 			</div>
-			<Button onclick={load} disabled={loading}>{loading ? '...' : 'Tampilkan'}</Button>
-			<Button variant="outline" onclick={exportCSV} disabled={summary.length === 0}>↓ CSV</Button>
+			<Button class="h-10 w-full sm:w-auto" onclick={load} disabled={loading}>{loading ? '...' : 'Tampilkan'}</Button>
+			<Button class="h-10 w-full sm:w-auto" variant="outline" onclick={exportCSV} disabled={summary.length === 0}>↓ CSV</Button>
 		</div>
 	</div>
 
@@ -94,8 +95,9 @@
 		<div class="rounded-md bg-red-50 border border-red-200 p-4 text-sm text-red-800">{error}</div>
 	{/if}
 
-	<Card.Root>
-		<Card.Content class="p-0 overflow-x-auto">
+	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+		<Card.Content class="p-0">
+			<div class="hidden overflow-x-auto lg:block">
 			<Table.Root>
 				<Table.Header>
 					<Table.Row class="bg-slate-50">
@@ -109,7 +111,7 @@
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
-					{#each summary as r}
+					{#each summary as r (r.employee_id)}
 						{@const percent = r.total_days > 0 ? (r.complete_days / r.total_days) * 100 : 0}
 						<Table.Row>
 							<Table.Cell class="font-medium">{r.employee_nama}</Table.Cell>
@@ -139,6 +141,34 @@
 					{/each}
 				</Table.Body>
 			</Table.Root>
+			</div>
+
+			<div class="grid gap-3 p-4 lg:hidden">
+				{#each summary as r (r.employee_id)}
+					{@const percent = r.total_days > 0 ? (r.complete_days / r.total_days) * 100 : 0}
+					<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+						<div class="flex items-start justify-between gap-3">
+							<div class="min-w-0">
+								<p class="text-sm font-semibold text-slate-900">{r.employee_nama}</p>
+								<p class="mt-1 break-all font-mono text-xs text-slate-500">{r.employee_nip}</p>
+							</div>
+							<Badge variant={percent >= 80 ? 'default' : percent >= 50 ? 'outline' : 'destructive'} class={percent >= 80 ? 'bg-green-600' : ''}>
+								{percent.toFixed(0)}%
+							</Badge>
+						</div>
+						<div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+							<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-xs uppercase tracking-[0.16em] text-slate-400">Total</span><p class="mt-1 font-semibold text-slate-800">{r.total_days}</p></div>
+							<div class="rounded-xl border border-slate-200 bg-emerald-50 px-3 py-2"><span class="text-xs uppercase tracking-[0.16em] text-emerald-500">Lengkap</span><p class="mt-1 font-semibold text-emerald-700">{r.complete_days}</p></div>
+							<div class="rounded-xl border border-slate-200 bg-amber-50 px-3 py-2"><span class="text-xs uppercase tracking-[0.16em] text-amber-500">Tanpa Pulang</span><p class="mt-1 font-semibold text-amber-700">{r.missing_checkout}</p></div>
+							<div class="rounded-xl border border-slate-200 bg-red-50 px-3 py-2"><span class="text-xs uppercase tracking-[0.16em] text-red-500">Tanpa Masuk</span><p class="mt-1 font-semibold text-red-700">{r.missing_checkin}</p></div>
+						</div>
+					</div>
+				{:else}
+					<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+						{loading ? 'Memuat...' : 'Pilih rentang tanggal dan klik Tampilkan.'}
+					</div>
+				{/each}
+			</div>
 		</Card.Content>
 	</Card.Root>
 </div>

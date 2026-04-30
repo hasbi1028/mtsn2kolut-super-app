@@ -82,7 +82,7 @@ function workerHeaders(): Record<string, string> {
 }
 
 async function claimJob(): Promise<ClaimedJob | null> {
-	const res = await fetch(`${BACKEND_URL}/api/worker/claim`, {
+	const res = await fetch(`${BACKEND_URL}/api/pusaka/worker/claim`, {
 		method: 'POST',
 		headers: workerHeaders(),
 		body: JSON.stringify({ worker_id: WORKER_ID }),
@@ -94,7 +94,7 @@ async function claimJob(): Promise<ClaimedJob | null> {
 }
 
 async function fetchRuntimeConfig(): Promise<Partial<RuntimeConfig>> {
-	const res = await fetch(`${BACKEND_URL}/api/worker/config`, {
+	const res = await fetch(`${BACKEND_URL}/api/pusaka/worker/config`, {
 		method: 'GET',
 		headers: workerHeaders(),
 	});
@@ -116,7 +116,7 @@ async function fetchRuntimeConfig(): Promise<Partial<RuntimeConfig>> {
 }
 
 async function sendHeartbeat(): Promise<void> {
-	const res = await fetch(`${BACKEND_URL}/api/worker/heartbeat`, {
+	const res = await fetch(`${BACKEND_URL}/api/pusaka/worker/heartbeat`, {
 		method: 'POST',
 		headers: workerHeaders(),
 		body: JSON.stringify({
@@ -131,7 +131,7 @@ async function sendHeartbeat(): Promise<void> {
 }
 
 async function completeJob(jobId: string, record: AttendanceRecord): Promise<void> {
-	const res = await fetch(`${BACKEND_URL}/api/worker/jobs/${jobId}/complete`, {
+	const res = await fetch(`${BACKEND_URL}/api/pusaka/worker/jobs/${jobId}/complete`, {
 		method: 'POST',
 		headers: workerHeaders(),
 		body: JSON.stringify(record),
@@ -140,7 +140,7 @@ async function completeJob(jobId: string, record: AttendanceRecord): Promise<voi
 }
 
 async function failJob(jobId: string, error: string): Promise<void> {
-	const res = await fetch(`${BACKEND_URL}/api/worker/jobs/${jobId}/fail`, {
+	const res = await fetch(`${BACKEND_URL}/api/pusaka/worker/jobs/${jobId}/fail`, {
 		method: 'POST',
 		headers: workerHeaders(),
 		body: JSON.stringify({ error }),

@@ -11,13 +11,13 @@ import (
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
-type Schedule struct {
-	svc *service.Schedule
+type PusakaSchedule struct {
+	svc *service.PusakaSchedule
 }
 
-func NewSchedule(svc *service.Schedule) *Schedule { return &Schedule{svc: svc} }
+func NewPusakaSchedule(svc *service.PusakaSchedule) *PusakaSchedule { return &PusakaSchedule{svc: svc} }
 
-func (h *Schedule) List(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaSchedule) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.svc.List(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -26,7 +26,7 @@ func (h *Schedule) List(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, rows)
 }
 
-func (h *Schedule) Create(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaSchedule) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Label     string `json:"label"`
 		RunTime   string `json:"run_time"`
@@ -58,7 +58,7 @@ func (h *Schedule) Create(w http.ResponseWriter, r *http.Request) {
 	api.Created(w, sched)
 }
 
-func (h *Schedule) Update(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaSchedule) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -86,7 +86,7 @@ func (h *Schedule) Update(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, sched)
 }
 
-func (h *Schedule) Delete(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaSchedule) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")

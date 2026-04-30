@@ -10,13 +10,13 @@ import (
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
-type Attendance struct {
-	svc *service.Attendance
+type PusakaAttendance struct {
+	svc *service.PusakaAttendance
 }
 
-func NewAttendance(svc *service.Attendance) *Attendance { return &Attendance{svc: svc} }
+func NewPusakaAttendance(svc *service.PusakaAttendance) *PusakaAttendance { return &PusakaAttendance{svc: svc} }
 
-func (h *Attendance) List(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaAttendance) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	startStr := q.Get("start_date")
 	endStr := q.Get("end_date")
@@ -55,7 +55,7 @@ func (h *Attendance) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Attendance) ByDate(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaAttendance) ByDate(w http.ResponseWriter, r *http.Request) {
 	dateStr := chi.URLParam(r, "date")
 	var d pgtype.Date
 	if err := d.Scan(dateStr); err != nil {
@@ -70,7 +70,7 @@ func (h *Attendance) ByDate(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, rows)
 }
 
-func (h *Attendance) GetSummary(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaAttendance) GetSummary(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	startStr := q.Get("start_date")
 	endStr := q.Get("end_date")
@@ -98,7 +98,7 @@ func (h *Attendance) GetSummary(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, rows)
 }
 
-func (h *Attendance) ByEmployee(w http.ResponseWriter, r *http.Request) {
+func (h *PusakaAttendance) ByEmployee(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")

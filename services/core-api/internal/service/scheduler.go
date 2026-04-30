@@ -27,15 +27,15 @@ type schedulerStore interface {
 	GetSetting(ctx context.Context, key string) (db.AppSetting, error)
 }
 
-type schedulerJobRunner interface {
+type pusakaSchedulerJobRunner interface {
 	RunAll(ctx context.Context, runType string, maxAttempts int32) (inserted, skipped int, err error)
 	Create(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32) (db.Job, error)
 	CreateWithDelay(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32, notBefore pgtype.Timestamptz) (db.Job, error)
 }
 
-type Scheduler struct {
+type PusakaScheduler struct {
 	store       schedulerStore
-	jobs        schedulerJobRunner
+	jobs        pusakaSchedulerJobRunner
 	sett        *Setting
 	loc         *time.Location
 	audit       *Audit
@@ -43,22 +43,22 @@ type Scheduler struct {
 	cancel      context.CancelFunc
 }
 
-type SchedulerResult struct {
+type PusakaSchedulerResult struct {
 	CheckedAt string `json:"checked_at"`
 	Processed int    `json:"processed"`
 	Enqueued  int    `json:"enqueued"`
 	Skipped   int    `json:"skipped"`
 }
 
-func NewScheduler(store *db.Queries, jobs *Job, sett *Setting, audit *Audit) *Scheduler {
+func NewPusakaScheduler(store *db.Queries, jobs *PusakaJob, sett *Setting, audit *Audit) *PusakaScheduler {
 	loc, err := time.LoadLocation("Asia/Makassar")
 	if err != nil {
 		loc = time.FixedZone("WITA", 8*60*60)
 	}
-	return &Scheduler{store: store, jobs: jobs, sett: sett, loc: loc, audit: audit}
+	return &PusakaScheduler{store: store, jobs: jobs, sett: sett, loc: loc, audit: audit}
 }
 
-func (s *Scheduler) Start(ctx context.Context) {
+func (s *PusakaScheduler) Start(ctx context.Context) {
 	schedCtx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 	go func() {
@@ -77,13 +77,13 @@ func (s *Scheduler) Start(ctx context.Context) {
 	}()
 }
 
-func (s *Scheduler) Stop() {
+func (s *PusakaScheduler) Stop() {
 	if s.cancel != nil {
 		s.cancel()
 	}
 }
 
-func (s *Scheduler) Tick(ctx context.Context, now time.Time) (SchedulerResult, error) {
+func (s *PusakaScheduler) Tick(ctx context.Context, now time.Time) (PusakaSchedulerResult, error) {
 	localNow := now.In(s.loc)
 	_ = s.setStatus(ctx, map[string]string{
 		"scheduler_last_tick_at": localNow.Format(time.RFC3339),
@@ -92,7 +92,7 @@ func (s *Scheduler) Tick(ctx context.Context, now time.Time) (SchedulerResult, e
 
 	today := pgtype.Date{}
 	if err := today.Scan(localNow.Format("2006-01-02")); err != nil {
-		return SchedulerResult{}, err
+		return PusakaSchedulerResult{}, err
 	}
 
 	claimParams := db.ClaimDueSchedulesParams{
@@ -102,10 +102,10 @@ func (s *Scheduler) Tick(ctx context.Context, now time.Time) (SchedulerResult, e
 
 	schedules, err := s.store.ClaimDueSchedules(ctx, claimParams)
 	if err != nil {
-		return SchedulerResult{}, err
+		return PusakaSchedulerResult{}, err
 	}
 
-	result := SchedulerResult{
+	result := PusakaSchedulerResult{
 		CheckedAt: localNow.Format("2006-01-02 15:04:05 MST"),
 		Processed: len(schedules),
 	}
@@ -167,7 +167,7 @@ func (s *Scheduler) Tick(ctx context.Context, now time.Time) (SchedulerResult, e
 	return result, nil
 }
 
-func (s *Scheduler) defaultMaxAttempts(ctx context.Context) int32 {
+func (s *PusakaScheduler) defaultMaxAttempts(ctx context.Context) int32 {
 	row, err := s.store.GetSetting(ctx, "default_max_attempts")
 	if err != nil {
 		return defaultMaxAttempts
@@ -179,7 +179,7 @@ func (s *Scheduler) defaultMaxAttempts(ctx context.Context) int32 {
 	return int32(n)
 }
 
-func (s *Scheduler) runTick(ctx context.Context) {
+func (s *PusakaScheduler) runTick(ctx context.Context) {
 	result, err := s.Tick(ctx, time.Now())
 	if err != nil {
 		slog.Error("scheduler tick failed", "error", err)
@@ -192,7 +192,7 @@ func (s *Scheduler) runTick(ctx context.Context) {
 	s.maybeCleanupAudit(ctx)
 }
 
-func (s *Scheduler) maybeCleanupAudit(ctx context.Context) {
+func (s *PusakaScheduler) maybeCleanupAudit(ctx context.Context) {
 	if s.audit == nil || s.sett == nil {
 		return
 	}
@@ -229,7 +229,7 @@ func (s *Scheduler) maybeCleanupAudit(ctx context.Context) {
 	}
 }
 
-func (s *Scheduler) setStatus(ctx context.Context, values map[string]string) error {
+func (s *PusakaScheduler) setStatus(ctx context.Context, values map[string]string) error {
 	if s.sett == nil {
 		return nil
 	}

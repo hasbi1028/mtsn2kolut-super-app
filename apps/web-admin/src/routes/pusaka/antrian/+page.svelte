@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
@@ -64,7 +65,7 @@
 			const params = new URLSearchParams({ limit: '100' });
 			if (filterStatus) params.set('status', filterStatus);
 			if (filterType)   params.set('run_type', filterType);
-			const res  = await fetch(`/api/jobs?${params}`);
+			const res  = await fetch(`/api/pusaka/jobs?${params}`);
 			const data = await res.json();
 			if (data.error) { error = data.error; return; }
 			jobs = data.items ?? data.data ?? [];
@@ -87,7 +88,7 @@
 <div class="space-y-6">
 
 	<div class="flex items-center gap-2 text-sm text-slate-500">
-		<a href="/pusaka" class="hover:text-slate-700">PUSAKA</a>
+		<a href={resolve('/pusaka')} class="hover:text-slate-700">PUSAKA</a>
 		<span>/</span>
 		<span class="text-slate-700 font-medium">Antrian Job</span>
 	</div>
@@ -103,14 +104,14 @@
 	</div>
 
 	<!-- Filters -->
-	<Card.Root>
+	<Card.Root class="border-slate-200 shadow-sm">
 		<Card.Content class="pt-4 pb-3">
-			<div class="flex flex-wrap gap-3 items-center">
-				<span class="text-sm text-muted-foreground">Filter:</span>
+			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[auto_1fr_1fr_auto] xl:items-end">
+				<div class="text-sm text-muted-foreground">Filter</div>
 				<select
 					bind:value={filterStatus}
 					onchange={load}
-					class="h-9 rounded-md border border-input bg-background px-3 text-sm"
+					class="h-10 rounded-md border border-input bg-background px-3 text-sm"
 				>
 					{#each statusOptions as o}
 						<option value={o.value}>{o.label}</option>
@@ -119,13 +120,18 @@
 				<select
 					bind:value={filterType}
 					onchange={load}
-					class="h-9 rounded-md border border-input bg-background px-3 text-sm"
+					class="h-10 rounded-md border border-input bg-background px-3 text-sm"
 				>
 					{#each typeOptions as o}
 						<option value={o.value}>{o.label}</option>
 					{/each}
 				</select>
-				<span class="text-sm text-muted-foreground">{jobs.length} job</span>
+				<div class="flex items-center justify-between gap-3 sm:col-span-2 xl:col-span-1 xl:justify-end">
+					<Button variant="outline" size="sm" onclick={load} disabled={loading} class="h-10 sm:w-auto">
+						{loading ? 'Memuat...' : '↺ Refresh'}
+					</Button>
+					<span class="text-sm text-muted-foreground">{jobs.length} job</span>
+				</div>
 			</div>
 		</Card.Content>
 	</Card.Root>
@@ -134,8 +140,9 @@
 		<p class="text-sm text-destructive">{error}</p>
 	{/if}
 
-	<Card.Root>
-		<Card.Content class="p-0 overflow-x-auto">
+	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+		<Card.Content class="p-0">
+			<div class="hidden overflow-x-auto lg:block">
 			<Table.Root>
 				<Table.Header>
 					<Table.Row>
@@ -148,7 +155,7 @@
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
-					{#each jobs as job}
+					{#each jobs as job (job.id)}
 						<Table.Row>
 							<Table.Cell class="font-medium">{job.nama || job.nip || '—'}</Table.Cell>
 							<Table.Cell>
@@ -170,6 +177,30 @@
 					{/each}
 				</Table.Body>
 			</Table.Root>
+			</div>
+
+			<div class="grid gap-3 p-4 lg:hidden">
+				{#each jobs as job (job.id)}
+					<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+						<div class="flex items-start justify-between gap-3">
+							<div class="min-w-0">
+								<p class="text-sm font-semibold text-slate-900">{job.nama || job.nip || '—'}</p>
+								<p class="mt-1 text-xs text-slate-500">{fmtDt(job.created_at)}</p>
+							</div>
+							<Badge variant={statusVariant(job.status)}>{statusLabel(job.status)}</Badge>
+						</div>
+						<div class="mt-3 flex items-center gap-2">
+							<Badge variant="outline">{runTypeLabel(job.run_type)}</Badge>
+							<span class="text-xs text-slate-500">Percobaan {job.attempts}/{job.max_attempts}</span>
+						</div>
+						<p class="mt-3 text-xs text-slate-500">Diperbarui {fmtDt(job.updated_at)}</p>
+					</div>
+				{:else}
+					<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+						{loading ? 'Memuat...' : 'Tidak ada job ditemukan.'}
+					</div>
+				{/each}
+			</div>
 		</Card.Content>
 	</Card.Root>
 </div>

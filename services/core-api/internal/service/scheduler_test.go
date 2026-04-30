@@ -12,12 +12,15 @@ import (
 )
 
 type fakeSchedulerStore struct {
-	settings         map[string]string
-	claimedSchedules []db.ClaimDueSchedulesRow
-	claimErr         error
-	resetCalls       int
-	lastClaimRunTime string
-	lastClaimValid   bool
+	settings                 map[string]string
+	claimedSchedules         []db.ClaimDueSchedulesRow
+	claimErr                 error
+	claimedEmployeeSchedules []db.ClaimDueEmployeeSchedulesRow
+	claimEmployeeErr         error
+	resetCalls               int
+	resetEmployeeCalls       int
+	lastClaimRunTime         string
+	lastClaimValid           bool
 }
 
 func (f *fakeSchedulerStore) ClaimDueSchedules(ctx context.Context, arg db.ClaimDueSchedulesParams) ([]db.ClaimDueSchedulesRow, error) {
@@ -42,19 +45,25 @@ func (f *fakeSchedulerStore) GetSetting(ctx context.Context, key string) (db.App
 }
 
 func (f *fakeSchedulerStore) ClaimDueEmployeeSchedules(_ context.Context, _ db.ClaimDueEmployeeSchedulesParams) ([]db.ClaimDueEmployeeSchedulesRow, error) {
-	return nil, nil
+	if f.claimEmployeeErr != nil {
+		return nil, f.claimEmployeeErr
+	}
+	return f.claimedEmployeeSchedules, nil
 }
 
 func (f *fakeSchedulerStore) ResetEmployeeScheduleEnqueueState(_ context.Context, _ db.ResetEmployeeScheduleEnqueueStateParams) error {
+	f.resetEmployeeCalls++
 	return nil
 }
 
 type fakeJobRunner struct {
-	inserted int
-	skipped  int
-	err      error
-	calls    int
-	runTypes []string
+	inserted    int
+	skipped     int
+	err         error
+	calls       int
+	runTypes    []string
+	createCalls []createCall
+	createErr   error
 }
 
 func (f *fakeJobRunner) RunAll(ctx context.Context, runType string, maxAttempts int32) (inserted, skipped int, err error) {
@@ -63,11 +72,27 @@ func (f *fakeJobRunner) RunAll(ctx context.Context, runType string, maxAttempts 
 	return f.inserted, f.skipped, f.err
 }
 
+type createCall struct {
+	EmployeeID  pgtype.UUID
+	RunType     string
+	MaxAttempts int32
+	NotBefore   pgtype.Timestamptz
+}
+
 func (f *fakeJobRunner) Create(_ context.Context, _ pgtype.UUID, _ string, _ int32) (db.Job, error) {
 	return db.Job{}, nil
 }
 
-func (f *fakeJobRunner) CreateWithDelay(_ context.Context, _ pgtype.UUID, _ string, _ int32, _ pgtype.Timestamptz) (db.Job, error) {
+func (f *fakeJobRunner) CreateWithDelay(_ context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32, notBefore pgtype.Timestamptz) (db.Job, error) {
+	f.createCalls = append(f.createCalls, createCall{
+		EmployeeID:  employeeID,
+		RunType:     runType,
+		MaxAttempts: maxAttempts,
+		NotBefore:   notBefore,
+	})
+	if f.createErr != nil {
+		return db.Job{}, f.createErr
+	}
 	return db.Job{}, nil
 }
 
@@ -81,7 +106,7 @@ func TestSchedulerTickProcessesClaimedSchedules(t *testing.T) {
 	}
 	sett := &Setting{q: newFakeStore()}
 	jobs := &fakeJobRunner{inserted: 2, skipped: 1}
-	svc := &Scheduler{
+	svc := &PusakaScheduler{
 		store: store,
 		jobs:  jobs,
 		sett:  sett,
@@ -113,7 +138,7 @@ func TestSchedulerTickResetsClaimOnRunAllError(t *testing.T) {
 	}
 	sett := &Setting{q: newFakeStore()}
 	jobs := &fakeJobRunner{err: errors.New("run failed")}
-	svc := &Scheduler{
+	svc := &PusakaScheduler{
 		store: store,
 		jobs:  jobs,
 		sett:  sett,
@@ -126,5 +151,83 @@ func TestSchedulerTickResetsClaimOnRunAllError(t *testing.T) {
 	}
 	if store.resetCalls != 1 {
 		t.Fatalf("ResetScheduleEnqueueState() calls = %d, want 1", store.resetCalls)
+	}
+}
+
+func TestSchedulerTickEmployeeSchedulesWithoutRandomWindowStayImmediate(t *testing.T) {
+	store := &fakeSchedulerStore{
+		settings: map[string]string{"default_max_attempts": "3"},
+		claimedEmployeeSchedules: []db.ClaimDueEmployeeSchedulesRow{{
+			ID:                  pgtype.UUID{Bytes: [16]byte{9}, Valid: true},
+			EmployeeID:          pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
+			RunType:             db.RunTypeEnumCheckin,
+			RandomWindowMinutes: 0,
+		}},
+	}
+	sett := &Setting{q: newFakeStore()}
+	jobs := &fakeJobRunner{}
+	svc := &PusakaScheduler{
+		store: store,
+		jobs:  jobs,
+		sett:  sett,
+		loc:   time.FixedZone("WITA", 8*60*60),
+	}
+
+	now := time.Date(2026, 4, 28, 7, 0, 0, 0, time.UTC)
+	got, err := svc.Tick(context.Background(), now)
+	if err != nil {
+		t.Fatalf("Tick() error = %v", err)
+	}
+	if got.Processed != 1 || got.Enqueued != 1 || got.Skipped != 0 {
+		t.Fatalf("Tick() = %+v", got)
+	}
+	if len(jobs.createCalls) != 1 {
+		t.Fatalf("CreateWithDelay() calls = %d, want 1", len(jobs.createCalls))
+	}
+	if jobs.createCalls[0].NotBefore.Valid {
+		t.Fatalf("CreateWithDelay() not_before = %+v, want zero/invalid for immediate schedules", jobs.createCalls[0].NotBefore)
+	}
+	if store.resetEmployeeCalls != 0 {
+		t.Fatalf("ResetEmployeeScheduleEnqueueState() calls = %d, want 0", store.resetEmployeeCalls)
+	}
+}
+
+func TestSchedulerTickEmployeeSchedulesRandomWindowSetsNotBefore(t *testing.T) {
+	store := &fakeSchedulerStore{
+		settings: map[string]string{"default_max_attempts": "3"},
+		claimedEmployeeSchedules: []db.ClaimDueEmployeeSchedulesRow{{
+			ID:                  pgtype.UUID{Bytes: [16]byte{7}, Valid: true},
+			EmployeeID:          pgtype.UUID{Bytes: [16]byte{2}, Valid: true},
+			RunType:             db.RunTypeEnumCheckout,
+			RandomWindowMinutes: 15,
+		}},
+	}
+	sett := &Setting{q: newFakeStore()}
+	jobs := &fakeJobRunner{}
+	svc := &PusakaScheduler{
+		store: store,
+		jobs:  jobs,
+		sett:  sett,
+		loc:   time.FixedZone("WITA", 8*60*60),
+	}
+
+	now := time.Date(2026, 4, 28, 7, 0, 0, 0, time.UTC)
+	got, err := svc.Tick(context.Background(), now)
+	if err != nil {
+		t.Fatalf("Tick() error = %v", err)
+	}
+	if got.Processed != 1 || got.Enqueued != 1 || got.Skipped != 0 {
+		t.Fatalf("Tick() = %+v", got)
+	}
+	if len(jobs.createCalls) != 1 {
+		t.Fatalf("CreateWithDelay() calls = %d, want 1", len(jobs.createCalls))
+	}
+	call := jobs.createCalls[0]
+	if !call.NotBefore.Valid {
+		t.Fatalf("CreateWithDelay() not_before should be set when random window is enabled")
+	}
+	diff := call.NotBefore.Time.Sub(now)
+	if diff < 0 || diff > 15*time.Minute {
+		t.Fatalf("CreateWithDelay() not_before diff = %v, want 0..15m", diff)
 	}
 }

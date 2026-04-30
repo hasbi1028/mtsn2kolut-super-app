@@ -4,6 +4,7 @@
   import { Input } from '$lib/components/ui/input';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
+  import { toast } from '$lib/components/ui/sonner';
 
   interface Schedule {
     id: string;
@@ -22,18 +23,20 @@
   let newLabel = $state('');
   let adding   = $state(false);
   let saving   = $state(false);
-  let toast    = $state('');
 
   function showToast(msg: string) {
-    toast = msg;
-    setTimeout(() => (toast = ''), 3000);
+    toast.success(msg);
+  }
+
+  function showError(msg: string) {
+    toast.error(msg);
   }
 
   async function addSchedule() {
     if (!newTime) return;
     adding = true;
     try {
-      const res = await fetch('/api/schedules', {
+      const res = await fetch('/api/pusaka/schedules', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -45,34 +48,34 @@
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as { error?: string };
-        showToast(d.error ?? 'Gagal menambah jadwal');
+        showError(d.error ?? 'Gagal menambah jadwal');
         return;
       }
       newTime  = '';
       newLabel = '';
       onsave();
-    } catch { showToast('Gagal menambah jadwal'); }
+    } catch { showError('Gagal menambah jadwal'); }
     finally { adding = false; }
   }
 
   async function deleteSchedule(id: string) {
     try {
-      await fetch(`/api/schedules/${id}`, { method: 'DELETE' });
+      await fetch(`/api/pusaka/schedules/${id}`, { method: 'DELETE' });
       onsave();
-    } catch { showToast('Gagal menghapus jadwal'); }
+    } catch { showError('Gagal menghapus jadwal'); }
   }
 
   async function saveChanges() {
     saving = true;
     try {
-      const res = await fetch('/api/schedules', {
+      const res = await fetch('/api/pusaka/schedules', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ schedules: rekapSchedules }),
       });
       if (res.ok) { showToast('Jadwal disimpan'); onsave(); }
-      else showToast('Gagal menyimpan');
-    } catch { showToast('Gagal menyimpan'); }
+      else showError('Gagal menyimpan');
+    } catch { showError('Gagal menyimpan'); }
     finally { saving = false; }
   }
 </script>
@@ -89,12 +92,6 @@
       </Button>
     </div>
   </Card.Header>
-
-  {#if toast}
-    <div class="mx-6 mb-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-      {toast}
-    </div>
-  {/if}
 
   <Card.Content class="p-0 overflow-x-auto">
     <Table.Root>

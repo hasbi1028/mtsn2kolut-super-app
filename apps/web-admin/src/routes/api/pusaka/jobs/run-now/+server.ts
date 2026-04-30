@@ -6,14 +6,12 @@ export const POST = async (event: RequestEvent) => {
 	try {
 		const { employee_id, run_type = 'morning', max_attempts = 3 } =
 			await event.request.json() as { employee_id?: string; run_type?: string; max_attempts?: number };
-
 		if (!employee_id) return json({ error: 'employee_id wajib' }, { status: 400 });
-
-		await proxy(event).post('/api/jobs', { employee_id, run_type, max_attempts });
+		await proxy(event).post('/api/pusaka/jobs', { employee_id, run_type, max_attempts });
 		return json({ inserted: 1, skipped: 0 }, { status: 201 });
 	} catch (e) {
 		if (e instanceof ApiError && e.status === 409)
 			return json({ inserted: 0, skipped: 1, reason: 'job queued/running already exists' });
-		return handleRouteError(e, 'jobs/run-now');
+		return handleRouteError(e, 'pusaka/jobs/run-now');
 	}
 };

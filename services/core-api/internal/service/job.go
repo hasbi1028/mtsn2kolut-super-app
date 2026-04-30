@@ -11,7 +11,7 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
-type Job struct {
+type PusakaJob struct {
 	q jobStore
 }
 
@@ -26,14 +26,14 @@ type jobStore interface {
 	CompleteJob(ctx context.Context, id pgtype.UUID) error
 	FailJob(ctx context.Context, arg db.FailJobParams) error
 	GetJob(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error)
-	ListActiveEmployees(ctx context.Context) ([]db.Employee, error)
+	ListActiveEmployees(ctx context.Context) ([]db.ListActiveEmployeesRow, error)
 	CancelEmployeeJobs(ctx context.Context, employeeID pgtype.UUID) (int64, error)
 	CancelAllJobs(ctx context.Context) (int64, error)
 }
 
-func NewJob(q *db.Queries) *Job { return &Job{q: q} }
+func NewPusakaJob(q *db.Queries) *PusakaJob { return &PusakaJob{q: q} }
 
-func (s *Job) List(ctx context.Context, status string, limit, offset int32) ([]db.ListJobsRow, int64, error) {
+func (s *PusakaJob) List(ctx context.Context, status string, limit, offset int32) ([]db.ListJobsRow, int64, error) {
 	if status != "" {
 		rows, err := s.q.ListJobsByStatus(ctx, db.ListJobsByStatusParams{
 			Status: db.JobStatusEnum(status),
@@ -65,11 +65,11 @@ func (s *Job) List(ctx context.Context, status string, limit, offset int32) ([]d
 	return rows, count, err
 }
 
-func (s *Job) Create(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32) (db.Job, error) {
+func (s *PusakaJob) Create(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32) (db.Job, error) {
 	return s.CreateWithDelay(ctx, employeeID, runType, maxAttempts, pgtype.Timestamptz{})
 }
 
-func (s *Job) CreateWithDelay(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32, notBefore pgtype.Timestamptz) (db.Job, error) {
+func (s *PusakaJob) CreateWithDelay(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32, notBefore pgtype.Timestamptz) (db.Job, error) {
 	job, err := s.q.CreateJobIfAbsent(ctx, db.CreateJobIfAbsentParams{
 		EmployeeID:  employeeID,
 		RunType:     db.RunTypeEnum(runType),
@@ -82,11 +82,11 @@ func (s *Job) CreateWithDelay(ctx context.Context, employeeID pgtype.UUID, runTy
 	return job, err
 }
 
-func (s *Job) Stats(ctx context.Context) (db.GetJobStatsRow, error) {
+func (s *PusakaJob) Stats(ctx context.Context) (db.GetJobStatsRow, error) {
 	return s.q.GetJobStats(ctx)
 }
 
-func (s *Job) Claim(ctx context.Context, workerID string) (db.ClaimJobRow, error) {
+func (s *PusakaJob) Claim(ctx context.Context, workerID string) (db.ClaimJobRow, error) {
 	row, err := s.q.ClaimJob(ctx, workerID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return db.ClaimJobRow{}, domain.ErrNoJob
@@ -94,11 +94,11 @@ func (s *Job) Claim(ctx context.Context, workerID string) (db.ClaimJobRow, error
 	return row, err
 }
 
-func (s *Job) Complete(ctx context.Context, id pgtype.UUID) error {
+func (s *PusakaJob) Complete(ctx context.Context, id pgtype.UUID) error {
 	return s.q.CompleteJob(ctx, id)
 }
 
-func (s *Job) Fail(ctx context.Context, id pgtype.UUID, errMsg string, retryAfterSecs pgtype.Text) error {
+func (s *PusakaJob) Fail(ctx context.Context, id pgtype.UUID, errMsg string, retryAfterSecs pgtype.Text) error {
 	return s.q.FailJob(ctx, db.FailJobParams{
 		ID:           id,
 		ErrorMessage: errMsg,
@@ -106,11 +106,11 @@ func (s *Job) Fail(ctx context.Context, id pgtype.UUID, errMsg string, retryAfte
 	})
 }
 
-func (s *Job) Get(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error) {
+func (s *PusakaJob) Get(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error) {
 	return s.q.GetJob(ctx, id)
 }
 
-func (s *Job) RunAll(ctx context.Context, runType string, maxAttempts int32) (inserted, skipped int, err error) {
+func (s *PusakaJob) RunAll(ctx context.Context, runType string, maxAttempts int32) (inserted, skipped int, err error) {
 	emps, err := s.q.ListActiveEmployees(ctx)
 	if err != nil {
 		return 0, 0, err
@@ -133,10 +133,10 @@ func (s *Job) RunAll(ctx context.Context, runType string, maxAttempts int32) (in
 	return inserted, skipped, nil
 }
 
-func (s *Job) CancelEmployee(ctx context.Context, employeeID pgtype.UUID) (int64, error) {
+func (s *PusakaJob) CancelEmployee(ctx context.Context, employeeID pgtype.UUID) (int64, error) {
 	return s.q.CancelEmployeeJobs(ctx, employeeID)
 }
 
-func (s *Job) CancelAll(ctx context.Context) (int64, error) {
+func (s *PusakaJob) CancelAll(ctx context.Context) (int64, error) {
 	return s.q.CancelAllJobs(ctx)
 }
