@@ -62,6 +62,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   DateTime? _lastSyncFailureAt;
   String? _statusMessage;
   String? _errorMessage;
+  ExamGuidanceNotice? _serverNotice;
   Timer? _countdownTimer;
   Timer? _heartbeatTimer;
 
@@ -333,6 +334,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       setState(() {
         _pendingAnswers.remove(question.id);
         _statusMessage = 'Jawaban tersimpan ke server.';
+        _serverNotice = null;
       });
       _markServerContact();
       await _persistSnapshot();
@@ -346,6 +348,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _pendingAnswers[question.id] = answer;
         _errorMessage = null;
         _statusMessage = answerFailureMessage(error);
+        _serverNotice = answerFailureNotice(error);
       });
       await widget.client
           .sendEvent(
@@ -502,6 +505,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       setState(() {
         _isSubmitted = true;
         _statusMessage = 'Ujian berhasil dikirim.';
+        _serverNotice = null;
       });
       await _sessionStore.clearSnapshot();
       if (!mounted) {
@@ -543,6 +547,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _consecutiveSyncFailures += 1;
         _lastSyncFailureAt = DateTime.now();
         _errorMessage = submitFailureMessage(error, autoSubmit: autoSubmit);
+        _serverNotice = submitFailureNotice(error, autoSubmit: autoSubmit);
       });
       await _handleConnectionAttentionSignals();
     } finally {
@@ -570,6 +575,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       _lastServerContactAt = DateTime.now();
       _lastSyncFailureAt = null;
       _consecutiveSyncFailures = 0;
+      _serverNotice = null;
     });
     _hasReportedDegradedMode = false;
     _hasReportedStaleAttention = false;
@@ -1025,6 +1031,10 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                 value: '${_pendingAnswers.length} menunggu sinkron',
                 accent: true,
               ),
+              const SizedBox(height: 12),
+            ],
+            if (_serverNotice != null) ...[
+              _ExamGuidanceCard(notice: _serverNotice!),
               const SizedBox(height: 12),
             ],
             if (_statusMessage != null)
@@ -1883,6 +1893,73 @@ class _QuestionAudioStatusChip extends StatelessWidget {
             style: theme.textTheme.labelMedium?.copyWith(
               color: foreground,
               fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExamGuidanceCard extends StatelessWidget {
+  const _ExamGuidanceCard({required this.notice});
+
+  final ExamGuidanceNotice notice;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (background, border, foreground, icon) = switch (notice.tone) {
+      ExamGuidanceTone.info => (
+        const Color(0xFFE8F5EC),
+        const Color(0xFFA9D4B8),
+        const Color(0xFF0B7A3B),
+        Icons.task_alt,
+      ),
+      ExamGuidanceTone.warning => (
+        const Color(0xFFFFF3D8),
+        const Color(0xFFE5C172),
+        const Color(0xFF9A6700),
+        Icons.warning_amber_rounded,
+      ),
+      ExamGuidanceTone.danger => (
+        const Color(0xFFFDE7E9),
+        const Color(0xFFE8A5AB),
+        const Color(0xFFC03645),
+        Icons.sync_problem,
+      ),
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: foreground),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  notice.title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  notice.message,
+                  style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
+                ),
+              ],
             ),
           ),
         ],

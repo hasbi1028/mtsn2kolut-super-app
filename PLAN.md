@@ -145,6 +145,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Handler-level `answer` / `submit` error-semantics tests for `409` submitted and `403` exam-window-closed cases
 - [x] Flutter exam UX now maps backend `404/403/409` semantics into clearer login/restore/save/submit guidance for BYOD sessions
 - [x] Flutter exam guidance mappings extracted into testable helpers with dedicated unit coverage
+- [x] Persistent `403/409` guidance panel in Flutter exam shell with tested urgency mapping
 - [x] Handler-level unauthorized coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `heartbeat` and `event` telemetry routes
 

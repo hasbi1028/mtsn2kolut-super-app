@@ -1,5 +1,19 @@
 import 'exam_api.dart';
 
+enum ExamGuidanceTone { info, warning, danger }
+
+class ExamGuidanceNotice {
+  const ExamGuidanceNotice({
+    required this.title,
+    required this.message,
+    required this.tone,
+  });
+
+  final String title;
+  final String message;
+  final ExamGuidanceTone tone;
+}
+
 String loginFailureMessage(ExamApiException error) {
   switch (error.statusCode) {
     case 404:
@@ -37,6 +51,27 @@ String answerFailureMessage(ExamApiException error) {
   }
 }
 
+ExamGuidanceNotice? answerFailureNotice(ExamApiException error) {
+  switch (error.statusCode) {
+    case 403:
+      return const ExamGuidanceNotice(
+        title: 'Waktu ujian sudah berakhir',
+        message:
+            'Jawaban lokal masih aman di perangkat ini, tetapi pengawas perlu memastikan apakah sesi masih bisa dipulihkan atau harus diakhiri.',
+        tone: ExamGuidanceTone.warning,
+      );
+    case 409:
+      return const ExamGuidanceNotice(
+        title: 'Ujian sudah selesai di server',
+        message:
+            'Perangkat ini tidak dapat mengirim jawaban baru lagi. Pengawas sebaiknya mengecek apakah submit sebelumnya sudah final.',
+        tone: ExamGuidanceTone.danger,
+      );
+    default:
+      return null;
+  }
+}
+
 String submitFailureMessage(
   ExamApiException error, {
   required bool autoSubmit,
@@ -50,5 +85,32 @@ String submitFailureMessage(
       return 'Ujian ini sudah tercatat selesai di server. Tidak perlu menekan kirim lagi.';
     default:
       return error.message;
+  }
+}
+
+ExamGuidanceNotice? submitFailureNotice(
+  ExamApiException error, {
+  required bool autoSubmit,
+}) {
+  switch (error.statusCode) {
+    case 403:
+      return ExamGuidanceNotice(
+        title: autoSubmit
+            ? 'Submit otomatis belum diterima server'
+            : 'Waktu ujian sudah berakhir',
+        message: autoSubmit
+            ? 'Pengawas perlu segera memeriksa koneksi perangkat dan memastikan status sesi di server sebelum peserta meninggalkan ujian.'
+            : 'Server menilai waktu sesi sudah selesai. Pengawas perlu memastikan apakah ujian perlu ditutup manual atau cukup diverifikasi.',
+        tone: ExamGuidanceTone.warning,
+      );
+    case 409:
+      return const ExamGuidanceNotice(
+        title: 'Submit sudah tercatat',
+        message:
+            'Server sudah menganggap ujian ini selesai. Pengawas cukup memverifikasi status akhir, tidak perlu mengirim ulang.',
+        tone: ExamGuidanceTone.info,
+      );
+    default:
+      return null;
   }
 }

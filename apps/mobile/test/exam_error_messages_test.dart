@@ -71,6 +71,18 @@ void main() {
         ),
         'Pesan asli backend Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.',
       );
+
+      final warningNotice = answerFailureNotice(
+        const ExamApiException('backend', statusCode: 403),
+      );
+      expect(warningNotice?.title, 'Waktu ujian sudah berakhir');
+      expect(warningNotice?.tone, ExamGuidanceTone.warning);
+
+      final dangerNotice = answerFailureNotice(
+        const ExamApiException('backend', statusCode: 409),
+      );
+      expect(dangerNotice?.title, 'Ujian sudah selesai di server');
+      expect(dangerNotice?.tone, ExamGuidanceTone.danger);
     });
 
     test('submit failure maps common status codes', () {
@@ -102,6 +114,19 @@ void main() {
         ),
         'Pesan asli backend',
       );
+
+      final warningNotice = submitFailureNotice(
+        const ExamApiException('backend', statusCode: 403),
+        autoSubmit: true,
+      );
+      expect(warningNotice?.tone, ExamGuidanceTone.warning);
+
+      final infoNotice = submitFailureNotice(
+        const ExamApiException('backend', statusCode: 409),
+        autoSubmit: false,
+      );
+      expect(infoNotice?.title, 'Submit sudah tercatat');
+      expect(infoNotice?.tone, ExamGuidanceTone.info);
     });
   });
 }
