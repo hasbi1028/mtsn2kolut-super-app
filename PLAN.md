@@ -139,6 +139,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Web-admin `/cbt/byod/matrix` companion page for vendor/device comparison during BYOD field trials
 - [x] Web-admin `/cbt/byod/release` readiness page for backend/mobile/rollout release checks
 - [x] Backend exam payload/status hardening so Flutter-critical fields (`session.title`, `is_submitted`, rich content, media/audio URLs) are actually emitted and covered by backend contract tests
+- [x] Handler-level proxy URL tests for exam asset/media absolutization behind `X-Forwarded-*`
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck
