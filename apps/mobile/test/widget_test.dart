@@ -52,6 +52,34 @@ void main() {
     );
   });
 
+  testWidgets('login screen renders transport guidance notice', (tester) async {
+    await tester.pumpWidget(
+      const _TestApp(
+        child: ExamLoginScreen(
+          autoRestore: false,
+          initialErrorMessage:
+              'Perangkat belum bisa terhubung ke server ujian. Periksa alamat server dan koneksi yang sedang dipakai.',
+          initialErrorNotice: ExamGuidanceNotice(
+            title: 'Server ujian belum terjangkau',
+            message:
+                'Peserta tidak perlu terus menekan login. Periksa koneksi perangkat atau alamat server, lalu coba lagi setelah pengawas memastikan jaringan siap.',
+            tone: ExamGuidanceTone.warning,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Server ujian belum terjangkau'), findsOneWidget);
+    expect(
+      find.text(
+        'Peserta tidak perlu terus menekan login. Periksa koneksi perangkat atau alamat server, lalu coba lagi setelah pengawas memastikan jaringan siap.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('login screen renders cached restore snapshot card', (
     tester,
   ) async {
@@ -194,6 +222,41 @@ void main() {
     expect(find.text('Perlu perhatian koneksi'), findsOneWidget);
     expect(find.textContaining('Kontak server 08:44'), findsOneWidget);
     expect(find.textContaining('Gangguan 08:46'), findsOneWidget);
+  });
+
+  testWidgets('restore failed screen renders transport guidance notice', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamRestoreFailedScreen(
+          snapshot: _sampleSnapshot(),
+          message:
+              'Sesi lama belum bisa dipulihkan karena perangkat belum terhubung ke server ujian. Coba lagi setelah koneksi membaik atau hubungi pengawas.',
+          notice: const ExamGuidanceNotice(
+            title: 'Restore tertunda karena koneksi',
+            message:
+                'Pengawas perlu memastikan perangkat sudah kembali terhubung ke server sebelum peserta mencoba memulihkan sesi lama lagi.',
+            tone: ExamGuidanceTone.warning,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Restore tertunda karena koneksi'), findsOneWidget);
+    expect(
+      find.text(
+        'Pengawas perlu memastikan perangkat sudah kembali terhubung ke server sebelum peserta mencoba memulihkan sesi lama lagi.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('restore failed screen renders stable restore health label', (
@@ -395,6 +458,41 @@ void main() {
     expect(
       find.text(
         'Jawaban lokal masih aman di perangkat ini, tetapi pengawas perlu memastikan apakah sesi masih bisa dipulihkan atau harus diakhiri.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('exam shell renders transport guidance notice', (tester) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialServerNotice: const ExamGuidanceNotice(
+            title: 'Jawaban tersimpan lokal',
+            message:
+                'Perangkat belum bisa menjangkau server, tetapi jawaban peserta masih aman di perangkat ini. Pengawas perlu membantu memulihkan koneksi sebelum sinkron ulang.',
+            tone: ExamGuidanceTone.warning,
+          ),
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Jawaban tersimpan lokal'), findsOneWidget);
+    expect(
+      find.text(
+        'Perangkat belum bisa menjangkau server, tetapi jawaban peserta masih aman di perangkat ini. Pengawas perlu membantu memulihkan koneksi sebelum sinkron ulang.',
       ),
       findsOneWidget,
     );
