@@ -58,6 +58,20 @@
 						Baca Berita Madrasah
 					</a>
 				</div>
+				<div class="grid gap-3 sm:grid-cols-3">
+					<div class="rounded-2xl border border-white/70 bg-white/70 px-4 py-4 shadow-sm backdrop-blur">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Informasi Resmi</p>
+						<p class="mt-2 text-sm leading-7 text-slate-700">Berita, pengumuman, dan profil sekolah tersedia dalam satu alur publik yang rapi.</p>
+					</div>
+					<div class="rounded-2xl border border-white/70 bg-white/70 px-4 py-4 shadow-sm backdrop-blur">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Layanan Publik</p>
+						<p class="mt-2 text-sm leading-7 text-slate-700">PPDB awal bisa diakses langsung tanpa perlu masuk ke dashboard internal.</p>
+					</div>
+					<div class="rounded-2xl border border-white/70 bg-white/70 px-4 py-4 shadow-sm backdrop-blur">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Akses Mudah</p>
+						<p class="mt-2 text-sm leading-7 text-slate-700">Tampilan disusun agar nyaman dibaca di ponsel maupun layar desktop.</p>
+					</div>
+				</div>
 			</div>
 
 			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
@@ -110,10 +124,14 @@
 			<div class="mt-6 grid gap-4">
 				{#if home?.posts?.length}
 					{#each home.posts as post (post.id)}
-						<a href={`/berita/${post.slug}`} class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-emerald-200 hover:bg-emerald-50/40">
+						<a href={`/berita/${post.slug}`} class="group rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-emerald-200 hover:bg-emerald-50/40">
 							<p class="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">{fmtDate(post.published_at)}</p>
 							<h3 class="mt-2 text-lg font-semibold text-slate-900">{post.title}</h3>
 							<p class="mt-2 text-sm leading-7 text-slate-600">{post.excerpt || 'Belum ada ringkasan berita.'}</p>
+							<div class="mt-3 flex items-center justify-between gap-3">
+								<span class="text-sm font-semibold text-emerald-800">Lihat berita</span>
+								<span class="text-emerald-700 transition-transform group-hover:translate-x-1">→</span>
+							</div>
 						</a>
 					{/each}
 				{:else}
@@ -141,6 +159,7 @@
 								<div>
 									<h3 class="text-base font-semibold text-slate-900">{item.title}</h3>
 									<p class="mt-2 text-sm leading-7 text-slate-600">{item.excerpt || 'Belum ada ringkasan pengumuman.'}</p>
+									<p class="mt-3 text-sm font-semibold text-emerald-800">Buka pengumuman</p>
 								</div>
 								<span class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-800">
 									{fmtDate(item.published_at)}

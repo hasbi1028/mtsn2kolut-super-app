@@ -150,6 +150,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Public listing rhythm baseline — berita and pengumuman listing pages now use a stronger editorial header, more stable card rhythm, and a cleaner published-content grid for public visitors
 - [x] PPDB public landing baseline — `/ppdb` now has a fuller public-facing layout with clearer registration flow, preparation guidance, and post-submit expectations instead of a single bare form card
 - [x] Public static-page support baseline — `/profil` and `/kontak` now enrich the shared public detail template with page-specific side guidance instead of relying only on a generic article sidebar
+- [x] Public homepage polish baseline — homepage now has stronger hero support cards and clearer editorial CTA rhythm so its information density matches the refined public detail and listing pages
 - [x] Rapor print view — printable HTML layout at `/grades/rapor` using existing `/api/grades` endpoint, color-coded scores, school header, signature area, sidebar entry
 
 ### CBT Question Authoring UX
