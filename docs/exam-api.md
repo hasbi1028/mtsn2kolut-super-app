@@ -184,3 +184,7 @@ Gunakan daftar ini saat mengubah endpoint exam agar app Flutter tidak diam-diam 
 - [ ] nilai `time_remaining_seconds` tetap akurat untuk countdown dan auto-submit
 - [ ] perubahan event type/warning semantics tetap backward-compatible
 - [ ] perubahan error code login/status/submit sudah ditinjau dampaknya ke restore flow
+
+Untuk rilis yang lebih formal, gunakan template:
+
+- [docs/exam-payload-release-template.md](./exam-payload-release-template.md)
