@@ -118,6 +118,9 @@ Three runtime units deployed across 3 VPS:
 - [x] Human-readable connection freshness indicators (`kontak server terakhir`, `gangguan terakhir`)
 - [x] Lightweight in-app audio playback baseline for `stimulus_audio_url` and `stem_audio_url`
 - [x] Repeated connection-failure warning panel with explicit retry action
+- [x] Per-question audio playback state so audio-enabled questions can show `sudah diputar / belum diputar`
+- [x] Degraded-mode guard that holds manual submit when repeated sync failures cross the BYOD safety threshold
+- [x] Internal APK distribution README for local run, release build, and realistic BYOD trial guidance
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

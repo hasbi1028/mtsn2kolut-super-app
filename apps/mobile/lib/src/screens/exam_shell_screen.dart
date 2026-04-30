@@ -32,10 +32,13 @@ class ExamShellScreen extends StatefulWidget {
 
 class _ExamShellScreenState extends State<ExamShellScreen>
     with WidgetsBindingObserver {
+  static const int _degradedFailureThreshold = 3;
+
   final _sessionStore = ExamSessionStore();
   late final Map<String, String> _answers;
   late final Map<String, String> _pendingAnswers;
   late final List<TextEditingController> _essayControllers;
+  late final Set<String> _playedAudioQuestionIds;
 
   int _currentQuestionIndex = 0;
   int _answeredCount = 0;
@@ -46,6 +49,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   bool _isSubmitted = false;
   bool _resumeCheckRequired = false;
   bool _isResumingExam = false;
+  bool _hasReportedDegradedMode = false;
   int _resumeAttemptCount = 0;
   int _consecutiveSyncFailures = 0;
   DateTime? _lastServerContactAt;
@@ -62,6 +66,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     _answers = Map<String, String>.from(widget.restoredSnapshot?.answers ?? {});
     _pendingAnswers = Map<String, String>.from(
       widget.restoredSnapshot?.pendingAnswers ?? {},
+    );
+    _playedAudioQuestionIds = Set<String>.from(
+      widget.restoredSnapshot?.playedAudioQuestionIds ?? const <String>[],
     );
     _essayControllers = widget.initialPayload.questions
         .map((_) => TextEditingController())
@@ -159,6 +166,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           _lastSyncFailureAt = DateTime.now();
           _errorMessage = 'Koneksi ke server ujian sempat terputus.';
         });
+        _handlePotentialDegradedMode();
       }
     });
   }
@@ -190,6 +198,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _lastSyncFailureAt = DateTime.now();
         _errorMessage = 'Status server belum bisa diperbarui.';
       });
+      _handlePotentialDegradedMode();
     } finally {
       if (mounted) {
         setState(() {
@@ -272,6 +281,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             _lastSyncFailureAt = DateTime.now();
           });
         }
+        _handlePotentialDegradedMode();
         break;
       }
     }
@@ -341,6 +351,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             },
           )
           .catchError((_) {});
+      _handlePotentialDegradedMode();
       await _persistSnapshot();
     } finally {
       if (mounted) {
@@ -384,6 +395,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         currentQuestionIndex: _currentQuestionIndex,
         answers: Map<String, String>.from(_answers),
         pendingAnswers: Map<String, String>.from(_pendingAnswers),
+        playedAudioQuestionIds: _playedAudioQuestionIds.toList()..sort(),
       ),
     );
   }
@@ -409,6 +421,24 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             data: <String, Object?>{
               'reason': 'submit_blocked_pending_sync',
               'pending_count': _pendingAnswers.length,
+            },
+          )
+          .catchError((_) {});
+      return;
+    }
+
+    if (!autoSubmit && _isDegradedMode) {
+      setState(() {
+        _errorMessage =
+            'Mode koneksi menurun sedang aktif. Perbarui status dan tunggu sinkron pulih sebelum mengirim ujian.';
+      });
+      await widget.client
+          .sendEvent(
+            token: widget.examToken,
+            eventType: 'warning',
+            data: <String, Object?>{
+              'reason': 'submit_blocked_degraded_mode',
+              'failure_count': _consecutiveSyncFailures,
             },
           )
           .catchError((_) {});
@@ -505,6 +535,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _lastSyncFailureAt = DateTime.now();
         _errorMessage = error.message;
       });
+      _handlePotentialDegradedMode();
     } finally {
       if (mounted) {
         setState(() {
@@ -531,6 +562,47 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       _lastSyncFailureAt = null;
       _consecutiveSyncFailures = 0;
     });
+    _hasReportedDegradedMode = false;
+  }
+
+  bool get _isDegradedMode =>
+      !_isSubmitted && _consecutiveSyncFailures >= _degradedFailureThreshold;
+
+  Future<void> _handlePotentialDegradedMode() async {
+    if (!_isDegradedMode || _hasReportedDegradedMode) {
+      return;
+    }
+    _hasReportedDegradedMode = true;
+    await widget.client
+        .sendEvent(
+          token: widget.examToken,
+          eventType: 'warning',
+          data: <String, Object?>{
+            'reason': 'degraded_mode_entered',
+            'failure_count': _consecutiveSyncFailures,
+          },
+        )
+        .catchError((_) {});
+  }
+
+  void _markQuestionAudioPlayed(String questionId) {
+    if (_playedAudioQuestionIds.contains(questionId)) {
+      return;
+    }
+    setState(() {
+      _playedAudioQuestionIds.add(questionId);
+      _statusMessage = 'Audio soal telah diputar di perangkat ini.';
+    });
+    unawaited(_persistSnapshot());
+  }
+
+  bool _questionHasAudio(ExamQuestion question) {
+    return question.stimulusAudioUrl.trim().isNotEmpty ||
+        question.stemAudioUrl.trim().isNotEmpty;
+  }
+
+  bool _questionAudioPlayed(ExamQuestion question) {
+    return _playedAudioQuestionIds.contains(question.id);
   }
 
   String _formatClock(DateTime? value) {
@@ -757,6 +829,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               ),
               const SizedBox(height: 14),
             ],
+            if (_isDegradedMode) ...[
+              _DegradedModeCard(
+                pendingCount: _pendingAnswers.length,
+                failureCount: _consecutiveSyncFailures,
+                onRetry: _isSyncingStatus ? null : _syncStatus,
+              ),
+              const SizedBox(height: 14),
+            ],
             if (_pendingAnswers.isNotEmpty) ...[
               _StatTile(
                 label: 'Jawaban lokal',
@@ -795,6 +875,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                   final question = payload.questions[index];
                   final selected = index == _currentQuestionIndex;
                   final answered = _answers.containsKey(question.id);
+                  final hasAudio = _questionHasAudio(question);
+                  final audioPlayed = _questionAudioPlayed(question);
                   final background = selected
                       ? theme.colorScheme.primary
                       : answered
@@ -820,12 +902,27 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Center(
-                        child: Text(
-                          '${index + 1}',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: foreground,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '${index + 1}',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: foreground,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (hasAudio) ...[
+                              const SizedBox(height: 4),
+                              Icon(
+                                audioPlayed
+                                    ? Icons.headset_mic
+                                    : Icons.headset_off,
+                                size: 16,
+                                color: foreground,
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ),
@@ -837,15 +934,25 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _isSubmitting || _isSubmitted ? null : _submit,
+                onPressed: _isSubmitting || _isSubmitted || _isDegradedMode
+                    ? null
+                    : _submit,
                 icon: _isSubmitting
                     ? const SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.task_alt),
-                label: Text(_isSubmitted ? 'Ujian Terkirim' : 'Kirim Ujian'),
+                    : Icon(
+                        _isDegradedMode ? Icons.sync_problem : Icons.task_alt,
+                      ),
+                label: Text(
+                  _isSubmitted
+                      ? 'Ujian Terkirim'
+                      : _isDegradedMode
+                      ? 'Kirim ditahan saat koneksi menurun'
+                      : 'Kirim Ujian',
+                ),
               ),
             ),
           ],
@@ -855,6 +962,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   }
 
   Widget _buildQuestionArea(ThemeData theme, ExamQuestion question) {
+    final hasAudio = _questionHasAudio(question);
+    final audioPlayed = _questionAudioPlayed(question);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(22),
@@ -875,6 +985,10 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                 fontWeight: FontWeight.w800,
               ),
             ),
+            if (hasAudio) ...[
+              const SizedBox(height: 10),
+              _QuestionAudioStatusChip(hasPlayed: audioPlayed),
+            ],
             const SizedBox(height: 10),
             if (question.stimulusHtml.trim().isNotEmpty) ...[
               Container(
@@ -900,6 +1014,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               AudioPromptCard(
                 url: question.stimulusAudioUrl,
                 label: 'Audio stimulus',
+                hasBeenPlayed: audioPlayed,
+                onPlayed: () => _markQuestionAudioPlayed(question.id),
               ),
               const SizedBox(height: 16),
             ],
@@ -920,7 +1036,12 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             ],
             if (question.stemAudioUrl.trim().isNotEmpty) ...[
               const SizedBox(height: 16),
-              AudioPromptCard(url: question.stemAudioUrl, label: 'Audio soal'),
+              AudioPromptCard(
+                url: question.stemAudioUrl,
+                label: 'Audio soal',
+                hasBeenPlayed: audioPlayed,
+                onPlayed: () => _markQuestionAudioPlayed(question.id),
+              ),
             ],
             const SizedBox(height: 22),
             Expanded(
@@ -1071,6 +1192,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     if (_isResumingExam || _resumeCheckRequired) {
       return 'Cek Ulang';
     }
+    if (_isDegradedMode) {
+      return 'Menurun';
+    }
     if (_isSavingAnswer || _isSyncingStatus) {
       return 'Sinkron';
     }
@@ -1084,11 +1208,11 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   }
 
   _SyncTone _buildSyncStatusTone() {
+    if (_isDegradedMode || _errorMessage != null) {
+      return _SyncTone.danger;
+    }
     if (_isResumingExam || _resumeCheckRequired || _pendingAnswers.isNotEmpty) {
       return _SyncTone.warning;
-    }
-    if (_errorMessage != null) {
-      return _SyncTone.danger;
     }
     return _SyncTone.success;
   }
@@ -1312,6 +1436,100 @@ class _ConnectionWarningCard extends StatelessWidget {
             onPressed: onRetry,
             icon: const Icon(Icons.sync),
             label: const Text('Coba Sinkron Ulang'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DegradedModeCard extends StatelessWidget {
+  const _DegradedModeCard({
+    required this.pendingCount,
+    required this.failureCount,
+    required this.onRetry,
+  });
+
+  final int pendingCount;
+  final int failureCount;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDE7E9),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE8A5AB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Mode koneksi menurun aktif',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: Colors.red.shade700,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            pendingCount > 0
+                ? 'Sinkron gagal $failureCount kali berturut-turut dan masih ada $pendingCount jawaban lokal. Kirim ujian ditahan sampai koneksi minimal pulih.'
+                : 'Sinkron gagal $failureCount kali berturut-turut. Perbarui status dulu sebelum mengirim ujian.',
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.sync_problem),
+            label: const Text('Pulihkan Sinkron'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuestionAudioStatusChip extends StatelessWidget {
+  const _QuestionAudioStatusChip({required this.hasPlayed});
+
+  final bool hasPlayed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final background = hasPlayed
+        ? theme.colorScheme.primary.withValues(alpha: 0.12)
+        : const Color(0xFFFFF3D8);
+    final foreground = hasPlayed
+        ? theme.colorScheme.primary
+        : const Color(0xFF9A6700);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            hasPlayed ? Icons.headset_mic : Icons.hearing_outlined,
+            size: 16,
+            color: foreground,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            hasPlayed ? 'Audio soal sudah diputar' : 'Audio soal belum diputar',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),

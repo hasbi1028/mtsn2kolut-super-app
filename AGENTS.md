@@ -150,6 +150,9 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Restore failure UX baseline** — when a cached exam session can no longer be restored, mobile should show a dedicated explanation screen with the last known session metadata instead of dropping students into a generic login error.
 - **Connection freshness UX baseline** — exam shells should expose human-readable last-contact / last-failure timestamps so BYOD connectivity issues are easier for students and pengawas to interpret.
 - **Repeated-connection-failure UX baseline** — if heartbeat or sync fails repeatedly, mobile should escalate from passive status text to a visible warning panel with an explicit retry action.
+- **Degraded-mode UX baseline** — if repeated sync failures cross a BYOD risk threshold, manual submit should be held until status refresh or pending-answer sync recovers enough to trust the session again.
+- **Per-question audio state baseline** — when question audio URLs are present, the exam shell should show whether audio for that question has already been played so students and pengawas have clearer progress cues.
+- **Internal APK distribution baseline** — `apps/mobile/README.md` should document local run, analyze/test, release APK build, and realistic BYOD distribution guidance for internal school trials.
 
 ### ✅ Sprint 15 — Library System (Done)
 - **Library schema** — `library_books` and `library_loans` tables (migration 027). No separate member table; loans reference existing `students` and `employees` via FK.
@@ -179,7 +182,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 
 ### 📋 Planned Future Phases
 1. **Academic Foundation & RBAC Expansion** — Unified `users` table with many-to-many roles (`admin`, `teacher`, `student`, `staff`, `parent`). Student lifecycle (`active`, `alumni`, `prospective`) and Parent-child linking.
-2. **Flutter Student App Enhancements** — Build on top of the initialized CBT exam client in `apps/mobile` with stronger offline resilience, richer BYOD-aware anti-cheat telemetry, richer rich-content rendering, and production packaging.
+2. **Flutter Student App Enhancements** — Build on top of the initialized CBT exam client in `apps/mobile` with stronger offline resilience, richer BYOD-aware anti-cheat telemetry, richer rich-content rendering, and safer internal distribution / packaging.
 3. **Real-time Proctoring** — WebSocket-based live monitoring.
 4. **Notifications & Reminders** — WhatsApp/Telegram for exam schedules, attendance.
 5. **Raport / Grade Management** — Academic grading, report cards integrated with CBT scores.

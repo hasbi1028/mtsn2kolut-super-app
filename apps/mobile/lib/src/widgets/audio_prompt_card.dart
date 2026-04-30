@@ -2,10 +2,18 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 
 class AudioPromptCard extends StatefulWidget {
-  const AudioPromptCard({super.key, required this.url, required this.label});
+  const AudioPromptCard({
+    super.key,
+    required this.url,
+    required this.label,
+    this.hasBeenPlayed = false,
+    this.onPlayed,
+  });
 
   final String url;
   final String label;
+  final bool hasBeenPlayed;
+  final VoidCallback? onPlayed;
 
   @override
   State<AudioPromptCard> createState() => _AudioPromptCardState();
@@ -13,6 +21,7 @@ class AudioPromptCard extends StatefulWidget {
 
 class _AudioPromptCardState extends State<AudioPromptCard> {
   late final AudioPlayer _player;
+  bool _hasPlayedOnce = false;
   bool _isPlaying = false;
   bool _isLoading = false;
   String? _errorMessage;
@@ -62,7 +71,9 @@ class _AudioPromptCardState extends State<AudioPromptCard> {
       }
       setState(() {
         _isPlaying = true;
+        _hasPlayedOnce = true;
       });
+      widget.onPlayed?.call();
     } catch (_) {
       if (!mounted) {
         return;
@@ -101,6 +112,20 @@ class _AudioPromptCardState extends State<AudioPromptCard> {
               fontWeight: FontWeight.w800,
             ),
           ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _AudioStatusBadge(
+                icon: Icons.graphic_eq,
+                label: _effectivePlayedState
+                    ? 'Audio sudah diputar'
+                    : 'Audio belum diputar',
+                highlighted: _effectivePlayedState,
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -136,6 +161,53 @@ class _AudioPromptCardState extends State<AudioPromptCard> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  bool get _effectivePlayedState => widget.hasBeenPlayed || _hasPlayedOnce;
+}
+
+class _AudioStatusBadge extends StatelessWidget {
+  const _AudioStatusBadge({
+    required this.icon,
+    required this.label,
+    required this.highlighted,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool highlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final background = highlighted
+        ? theme.colorScheme.primary.withValues(alpha: 0.12)
+        : const Color(0xFFEAEFE3);
+    final foreground = highlighted
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: foreground),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: foreground,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );

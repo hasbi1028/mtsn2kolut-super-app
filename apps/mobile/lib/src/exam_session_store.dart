@@ -17,6 +17,7 @@ class ExamSessionSnapshot {
     required this.currentQuestionIndex,
     required this.answers,
     required this.pendingAnswers,
+    required this.playedAudioQuestionIds,
   });
 
   final String baseUrl;
@@ -32,6 +33,7 @@ class ExamSessionSnapshot {
   final int currentQuestionIndex;
   final Map<String, String> answers;
   final Map<String, String> pendingAnswers;
+  final List<String> playedAudioQuestionIds;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -48,6 +50,7 @@ class ExamSessionSnapshot {
       'current_question_index': currentQuestionIndex,
       'answers': answers,
       'pending_answers': pendingAnswers,
+      'played_audio_question_ids': playedAudioQuestionIds,
     };
   }
 
@@ -71,6 +74,10 @@ class ExamSessionSnapshot {
           ((json['pending_answers'] as Map<String, dynamic>?) ?? const {}).map(
             (key, value) => MapEntry(key, value.toString()),
           ),
+      playedAudioQuestionIds:
+          ((json['played_audio_question_ids'] as List<dynamic>?) ?? const [])
+              .map((value) => value.toString())
+              .toList(),
     );
   }
 }

@@ -175,6 +175,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
           currentQuestionIndex: 0,
           answers: const <String, String>{},
           pendingAnswers: const <String, String>{},
+          playedAudioQuestionIds: const <String>[],
         ),
       );
       if (!mounted) {
