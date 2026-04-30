@@ -7,6 +7,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type SessionInfo = {
 		id: string; title: string; package_title: string; duration_minutes: number;
@@ -339,7 +341,39 @@
 	{#if error}<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>{/if}
 
 	{#if loading}
-		<p class="text-sm text-slate-500">Memuat data...</p>
+		<div class="space-y-4">
+			<div class="space-y-2">
+				<Skeleton class="h-4 w-56" />
+				<Skeleton class="h-8 w-80" />
+				<Skeleton class="h-4 w-96" />
+			</div>
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+				{#each Array.from({ length: 4 }) as _, index (`cbt-session-detail-stat-${index}`)}
+					<Card.Root class="border-green-100">
+						<Card.Content class="space-y-2 px-4 pb-3 pt-4">
+							<Skeleton class="h-4 w-24" />
+							<Skeleton class="h-8 w-16" />
+						</Card.Content>
+					</Card.Root>
+				{/each}
+			</div>
+			<Card.Root>
+				<Card.Content class="space-y-3 p-6">
+					{#each Array.from({ length: 5 }) as _, index (`cbt-session-detail-row-${index}`)}
+						<div class="grid gap-3 lg:grid-cols-[1fr_0.8fr_0.8fr_0.8fr_0.6fr_0.6fr_0.7fr_auto] lg:items-center">
+							<Skeleton class="h-5 w-24" />
+							<Skeleton class="h-5 w-32" />
+							<Skeleton class="h-5 w-10" />
+							<Skeleton class="h-5 w-12" />
+							<Skeleton class="h-5 w-12" />
+							<Skeleton class="h-5 w-12" />
+							<Skeleton class="h-5 w-28" />
+							<Skeleton class="h-9 w-24 justify-self-end" />
+						</div>
+					{/each}
+				</Card.Content>
+			</Card.Root>
+		</div>
 	{:else if session}
 		<!-- Session header -->
 		<div class="flex items-start justify-between gap-4 flex-wrap">
@@ -355,9 +389,9 @@
 				<div class="flex items-center gap-2 flex-wrap">
 					<Badge class={statusClass(session.status)}>{statusLabel[session.status] ?? session.status}</Badge>
 				{#if session.status === 'finished' || session.status === 'active'}
-					<Button size="sm" variant="outline" disabled={scoreBusy} onclick={triggerScoring}>
-						{scoreBusy ? 'Menghitung...' : '⟳ Hitung Skor'}
-					</Button>
+					<LoadingButton size="sm" variant="outline" disabled={scoreBusy} onclick={triggerScoring} loading={scoreBusy} loadingLabel="Menghitung...">
+						⟳ Hitung Skor
+					</LoadingButton>
 				{/if}
 					{#if results.length > 0}
 						<Button size="sm" variant="outline" onclick={exportCSV}>↓ CSV</Button>
@@ -547,17 +581,17 @@
 							<label for="r-cap" class="block text-sm font-medium mb-1">Kapasitas</label>
 							<Input id="r-cap" type="number" bind:value={newRoomCap} min={1} max={100} class="w-24" />
 						</div>
-						<Button onclick={createRoom} disabled={roomBusy || !newRoomName.trim()}>
-							{roomBusy ? 'Menyimpan...' : '+ Tambah Ruangan'}
-						</Button>
+						<LoadingButton onclick={createRoom} loading={roomBusy} loadingLabel="Menyimpan..." disabled={roomBusy || !newRoomName.trim()}>
+							+ Tambah Ruangan
+						</LoadingButton>
 							{#if rooms.length > 0}
-								<Button variant="outline" disabled={shuffleBusy} onclick={shuffleRooms}
+								<LoadingButton variant="outline" loading={shuffleBusy} loadingLabel="Mengacak..." disabled={shuffleBusy} onclick={shuffleRooms}
 									class="border-amber-300 text-amber-700 hover:bg-amber-50">
-									{shuffleBusy ? 'Mengacak...' : '🔀 Acak Peserta ke Ruangan'}
-								</Button>
-								<Button variant="outline" disabled={seatBusy} onclick={autoAssignSeats}>
-									{seatBusy ? 'Mengatur...' : '🪑 Atur No Meja'}
-								</Button>
+									🔀 Acak Peserta ke Ruangan
+								</LoadingButton>
+								<LoadingButton variant="outline" loading={seatBusy} loadingLabel="Mengatur..." disabled={seatBusy} onclick={autoAssignSeats}>
+									🪑 Atur No Meja
+								</LoadingButton>
 							{/if}
 					</div>
 				</Card.Content>

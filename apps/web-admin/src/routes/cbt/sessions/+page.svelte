@@ -6,6 +6,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type ExamSession = {
 		id: string; package_id: string; package_title: string;
@@ -322,12 +324,14 @@
 					</div>
 				</div>
 				<div class="flex gap-2">
-					<Button
+					<LoadingButton
 						disabled={fBusy || !fPackageId || !fTitle || !fStart || !fEnd || (fScopeType === 'class' && !fClassId) || (fScopeType === 'grade' && !fGradeLevel)}
 						onclick={createSession}
+						loading={fBusy}
+						loadingLabel="Menyimpan..."
 					>
-						{fBusy ? 'Menyimpan...' : 'Buat Sesi'}
-					</Button>
+						Buat Sesi
+					</LoadingButton>
 					<Button variant="outline" onclick={() => (showForm = false)}>Batal</Button>
 				</div>
 			</Card.Content>
@@ -376,12 +380,14 @@
 					</div>
 				{/if}
 				<div class="flex gap-2">
-					<Button
+					<LoadingButton
 						disabled={enrollBusy || (enrollScopeType === 'class' && !enrollClassId) || (enrollScopeType === 'grade' && !enrollGradeLevel)}
 						onclick={enrollParticipants}
+						loading={enrollBusy}
+						loadingLabel="Mendaftarkan..."
 					>
-						{enrollBusy ? 'Mendaftarkan...' : 'Daftarkan Siswa'}
-					</Button>
+						Daftarkan Siswa
+					</LoadingButton>
 					<Button variant="outline" onclick={() => { enrollSession = null; enrollScopeType = 'class'; enrollClassId = ''; enrollGradeLevel = 'VII'; }}>Batal</Button>
 				</div>
 			</Card.Content>
@@ -389,7 +395,33 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-sm text-slate-500">Memuat data...</p>
+		<div class="space-y-4">
+			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+				{#each Array.from({ length: 4 }) as _, index (`cbt-session-stat-skeleton-${index}`)}
+					<Card.Root class="border-slate-200">
+						<Card.Content class="space-y-2 p-4">
+							<Skeleton class="h-4 w-24" />
+							<Skeleton class="h-7 w-16" />
+						</Card.Content>
+					</Card.Root>
+				{/each}
+			</div>
+			<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+				<Card.Content class="space-y-3 p-6">
+					{#each Array.from({ length: 5 }) as _, index (`cbt-session-row-skeleton-${index}`)}
+						<div class="grid gap-3 lg:grid-cols-[1.2fr_1fr_0.9fr_1fr_0.5fr_0.7fr_auto] lg:items-center">
+							<Skeleton class="h-5 w-40" />
+							<Skeleton class="h-5 w-32" />
+							<Skeleton class="h-5 w-28" />
+							<Skeleton class="h-5 w-36" />
+							<Skeleton class="h-5 w-12" />
+							<Skeleton class="h-6 w-20" />
+							<Skeleton class="h-9 w-36 justify-self-end" />
+						</div>
+					{/each}
+				</Card.Content>
+			</Card.Root>
+		</div>
 	{:else}
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Header class="pb-2">

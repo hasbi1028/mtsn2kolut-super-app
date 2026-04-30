@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { toast } from '$lib/components/ui/sonner';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	let nama = $state('');
 	let nis = $state('');
@@ -95,7 +96,7 @@
 				</div>
 
 				<div class="flex flex-wrap gap-2">
-					<Button onclick={submitRegistration} disabled={busy}>{busy ? 'Mengirim...' : 'Kirim Pendaftaran'}</Button>
+					<LoadingButton onclick={submitRegistration} loading={busy} loadingLabel="Mengirim..." label="Kirim Pendaftaran" />
 					<Button variant="outline" href="/login">Masuk Admin</Button>
 				</div>
 			</Card.Content>

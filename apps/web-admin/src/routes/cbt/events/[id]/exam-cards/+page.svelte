@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 
 	type ExamCard = {
 		event_id: string;
@@ -50,7 +51,35 @@
 </svelte:head>
 
 {#if loading}
-	<div class="p-6 text-sm text-slate-500">Memuat kartu ujian...</div>
+	<div class="mx-auto max-w-7xl space-y-6 p-6">
+		<div class="space-y-2">
+			<Skeleton class="h-8 w-56" />
+			<Skeleton class="h-4 w-80" />
+		</div>
+		<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+			{#each Array.from({ length: 6 }) as _, index (`exam-card-skeleton-${index}`)}
+				<div class="rounded-3xl border border-emerald-200 bg-white p-5 shadow-sm">
+					<div class="space-y-2 border-b border-dashed border-emerald-200 pb-3">
+						<Skeleton class="h-4 w-36" />
+						<Skeleton class="h-6 w-48" />
+						<Skeleton class="h-4 w-40" />
+					</div>
+					<div class="mt-4 space-y-2">
+						<Skeleton class="h-4 w-44" />
+						<Skeleton class="h-4 w-32" />
+						<Skeleton class="h-4 w-28" />
+						<Skeleton class="h-4 w-36" />
+						<Skeleton class="h-4 w-24" />
+						<Skeleton class="h-4 w-40" />
+					</div>
+					<div class="mt-5 rounded-2xl bg-emerald-50 px-4 py-3">
+						<Skeleton class="h-4 w-24" />
+						<Skeleton class="mt-2 h-8 w-40" />
+					</div>
+				</div>
+			{/each}
+		</div>
+	</div>
 {:else}
 	<div class="mx-auto max-w-7xl space-y-6 p-6 print:p-0">
 		<div class="flex items-center justify-between print:hidden">

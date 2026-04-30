@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 
 	type SessionInfo = {
 		title: string;
@@ -63,7 +64,20 @@
 </svelte:head>
 
 {#if loading}
-	<div class="p-6 text-sm text-slate-500">Memuat berita acara...</div>
+	<div class="mx-auto max-w-6xl space-y-6 p-6">
+		<div class="space-y-2">
+			<Skeleton class="h-8 w-56" />
+			<Skeleton class="h-4 w-80" />
+		</div>
+		<Skeleton class="h-32 w-full rounded-3xl" />
+		<div class="grid gap-4 md:grid-cols-3">
+			{#each Array.from({ length: 3 }) as _, index (`minutes-stat-skeleton-${index}`)}
+				<Skeleton class="h-28 w-full rounded-3xl" />
+			{/each}
+		</div>
+		<Skeleton class="h-64 w-full rounded-3xl" />
+		<Skeleton class="h-80 w-full rounded-3xl" />
+	</div>
 {:else if session}
 	<div class="mx-auto max-w-6xl space-y-6 p-6 print:p-0">
 		<div class="flex items-center justify-between print:hidden">

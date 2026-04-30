@@ -7,6 +7,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type ContentStatus = 'draft' | 'published';
 	type ContentKind = 'page' | 'post' | 'announcement';
@@ -237,7 +239,27 @@
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
 			{#if loading}
-				<div class="px-5 py-10 text-center text-sm text-slate-500">Memuat konten...</div>
+				<div class="space-y-4 px-5 py-6">
+					{#each Array.from({ length: 4 }) as _, index (`website-content-skeleton-${index}`)}
+						<div class="grid gap-4 lg:grid-cols-[1.3fr,0.7fr,0.8fr] lg:items-start">
+							<div class="space-y-2">
+								<Skeleton class="h-6 w-48" />
+								<Skeleton class="h-4 w-40" />
+								<Skeleton class="h-4 w-full max-w-xl" />
+								<Skeleton class="h-4 w-full max-w-lg" />
+							</div>
+							<div class="space-y-2">
+								<Skeleton class="h-4 w-28" />
+								<Skeleton class="h-4 w-28" />
+							</div>
+							<div class="flex flex-wrap justify-start gap-2 lg:justify-end">
+								<Skeleton class="h-9 w-20" />
+								<Skeleton class="h-9 w-20" />
+								<Skeleton class="h-9 w-28" />
+							</div>
+						</div>
+					{/each}
+				</div>
 			{:else if filteredItems.length === 0}
 				<div class="px-5 py-10 text-center text-sm text-slate-500">Belum ada konten untuk kategori ini.</div>
 			{:else}
@@ -316,10 +338,11 @@
 						<label class="flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-50 {uploadingCover ? 'opacity-60 pointer-events-none' : ''}">
 							{#if uploadingCover}
 								<span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"></span>
+								Mengunggah...
 							{:else}
 								<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+								Upload
 							{/if}
-							Upload
 							<input type="file" accept="image/*" class="sr-only" onchange={uploadCoverImage} />
 						</label>
 					</div>
@@ -375,7 +398,7 @@
 
 			<div class="flex justify-end gap-2">
 				<Button variant="outline" onclick={() => (showDialog = false)}>Batal</Button>
-				<Button onclick={save} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</Button>
+				<LoadingButton onclick={save} loading={saving} loadingLabel="Menyimpan..." label="Simpan" />
 			</div>
 		</div>
 	</Dialog.Content>

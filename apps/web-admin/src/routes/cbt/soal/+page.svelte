@@ -5,6 +5,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EditorWrapper from '$lib/components/EditorWrapper.svelte';
 	import { renderRichMathHtml } from '$lib/utils/render-rich-math';
 
@@ -578,11 +580,16 @@
 			</Table.Header>
 			<Table.Body>
 				{#if loading}
-					<Table.Row>
-						<Table.Cell colspan={6} class="py-10 text-center text-sm text-slate-400">
-							Memuat soal...
-						</Table.Cell>
-					</Table.Row>
+					{#each Array.from({ length: 6 }) as _, index (`composer-question-skeleton-${index}`)}
+						<Table.Row>
+							<Table.Cell><Skeleton class="h-4 w-4" /></Table.Cell>
+							<Table.Cell><Skeleton class="h-5 w-full max-w-sm" /></Table.Cell>
+							<Table.Cell><Skeleton class="h-5 w-24" /></Table.Cell>
+							<Table.Cell class="hidden sm:table-cell"><Skeleton class="h-6 w-20" /></Table.Cell>
+							<Table.Cell><Skeleton class="h-5 w-8" /></Table.Cell>
+							<Table.Cell class="text-right"><Skeleton class="ml-auto h-8 w-16" /></Table.Cell>
+						</Table.Row>
+					{/each}
 				{:else if pageError}
 					<Table.Row>
 						<Table.Cell colspan={6} class="py-10 text-center text-sm text-red-500">
@@ -988,17 +995,15 @@
 				>
 					Batalkan
 				</Button>
-				<Button
+				<LoadingButton
 					onclick={saveQuestion}
 					disabled={!canSave}
+					loading={composerBusy}
+					loadingLabel="Menyimpan..."
 					class="h-8 bg-green-700 text-sm text-white hover:bg-green-800 disabled:opacity-50"
 				>
-					{composerBusy
-						? 'Menyimpan...'
-						: editingId
-							? 'Simpan Perubahan'
-							: 'Simpan Soal'}
-				</Button>
+					{editingId ? 'Simpan Perubahan' : 'Simpan Soal'}
+				</LoadingButton>
 			</div>
 		</div>
 		</div>
