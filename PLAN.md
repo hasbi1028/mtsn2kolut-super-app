@@ -1,6 +1,6 @@
 # MTs Negeri 2 Kolaka Utara — Super App Strategic Plan
 
-> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Last Updated: 2026-04-30
+> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Last Updated: 2026-04-30
 > This file is the master roadmap. Update after each sprint completion.
 
 ---
@@ -132,7 +132,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Auth audit UX baseline — audit trail screen now has quick `Auth & Session` filtering for structured auth events
 - [x] Session rename baseline — users can update their own `device_label` from the settings screen
 - [x] Access-session validation baseline — access JWTs now require a still-active referenced auth session (`ssid`) in addition to per-user auth-version checks
-- [ ] Rapor PDF generation
+- [x] Rapor print view — printable HTML layout at `/grades/rapor` using existing `/api/grades` endpoint, color-coded scores, school header, signature area, sidebar entry
 
 ### CBT Question Authoring UX
 - [x] Beginner mode for quick teacher authoring with minimal required fields
@@ -182,11 +182,20 @@ Three runtime units deployed across 3 VPS:
 - [x] Global SvelteKit `+error.svelte` for shared 403/404/500-style error handling across public and admin pages
 - [x] `go test ./...` and `npm run check` green after integration
 
-### Next Recommendation — Sprint 16B Public Website Polish
-- [ ] Add cover-image upload/reuse instead of URL-only cover input for website content
-- [ ] Add publish scheduling and featured content flags for homepage curation
-- [ ] Add richer public SEO metadata per page/post/announcement
-- [ ] Add dedicated custom pages for `500` maintenance-style incidents if operational need appears
+### ✅ Sprint 16B — Public Website Polish (COMPLETE)
+- [x] Migration 033 — `is_featured`, `meta_title`, `meta_description` columns on `website_contents`
+- [x] `ListFeaturedWebsiteContents` query and handler (GET `/api/public/site/posts/featured`)
+- [x] `ListPublishedWebsiteContents` orders featured content first
+- [x] Cover image file upload via `WebsiteMedia` handler (POST `/api/website/media`, GET `/api/website/media/{filename}`) — md5-hashed filenames, MIME validation, path traversal protection
+- [x] BFF proxy at `/api/website/media` forwards JWT to Go backend
+- [x] `WebsiteContentManager`: featured badge, cover upload button, image preview, SEO section with character counter
+- [x] SEO meta tags on `/berita/[slug]` and `/pengumuman/[slug]` — `og:title`, `og:description`, `og:image`, `description`
+- [x] `go build ./...` and `npm run check` — 0 errors, 0 warnings
+
+### Next Recommendation — Sprint 17
+- [ ] Publish scheduling (deferred from 16B — low priority until editorial demand is proven)
+- [ ] Featured content homepage widget (pull from `/api/public/site/posts/featured`)
+- [ ] Flutter Student App — CBT exam client (API ready via `docs/exam-api.md`)
 
 ---
 

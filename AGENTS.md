@@ -146,6 +146,16 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Homepage aggregation** — public homepage highlights PPDB, school profile, latest posts, and recent announcements.
 - **Global error UX** — centralized SvelteKit `+error.svelte` for 403/404/500 style failures across public and admin shells.
 
+### ✅ Sprint 16B — Public Website Polish (Done)
+- **Featured flags** — `is_featured` on `website_contents` (migration 033); `ListFeaturedWebsiteContents` query + handler (GET `/api/public/site/posts/featured`); published list orders featured first.
+- **SEO metadata** — `meta_title` and `meta_description` columns; `og:title`, `og:description`, `og:image`, and `description` meta tags on `/berita/[slug]` and `/pengumuman/[slug]`.
+- **Cover image upload** — `WebsiteMedia` handler uploads images to `data/website-media/` (md5 filename, MIME validation, path-traversal guard); BFF proxy forwards JWT; `WebsiteContentManager` shows upload button, image preview, and file picker.
+- **Editorial UX** — featured badge in content list, SEO section with character counters.
+
+### ✅ Sprint 11C — Rapor Print View (Done)
+- **Printable report card** — `/grades/rapor` HTML-first print layout using existing `/api/grades` endpoint; assignment selector, school header, grade table with color-coded scores (green ≥80, amber ≥65, red <65), class average footer, signature area shown only on print.
+- **Sidebar entry** — "Cetak Rapor" under Akademik group, visible to `admin` and `guru`.
+
 ### 📋 Planned Future Phases
 1. **Academic Foundation & RBAC Expansion** — Unified `users` table with many-to-many roles (`admin`, `teacher`, `student`, `staff`, `parent`). Student lifecycle (`active`, `alumni`, `prospective`) and Parent-child linking.
 2. **Flutter Student App** — CBT exam client for students on tablet/phone (API sudah ready: `docs/exam-api.md`).
