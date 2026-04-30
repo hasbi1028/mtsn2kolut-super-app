@@ -6,6 +6,7 @@ import '../exam_api.dart';
 import '../exam_format.dart';
 import '../exam_session_store.dart';
 import 'exam_shell_screen.dart';
+import 'exam_restore_failed_screen.dart';
 
 class ExamLoginScreen extends StatefulWidget {
   const ExamLoginScreen({super.key});
@@ -93,18 +94,28 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _errorMessage =
-            'Sesi ujian terakhir tidak bisa dipulihkan. Silakan login ulang dengan token aktif.';
-      });
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ExamRestoreFailedScreen(
+            snapshot: snapshot,
+            message:
+                'Token lama kemungkinan sudah tidak aktif, sesi sudah berakhir, atau perangkat ini tidak lagi diizinkan melanjutkan.',
+          ),
+        ),
+      );
     } catch (_) {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _errorMessage =
-            'Tidak dapat memulihkan sesi terakhir karena koneksi ke server gagal.';
-      });
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ExamRestoreFailedScreen(
+            snapshot: snapshot,
+            message:
+                'Koneksi ke server gagal saat mencoba memulihkan sesi. Pastikan jaringan stabil lalu login ulang dengan token aktif jika diperlukan.',
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {

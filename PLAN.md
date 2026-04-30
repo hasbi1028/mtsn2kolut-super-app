@@ -114,6 +114,8 @@ Three runtime units deployed across 3 VPS:
 - [x] Dedicated exam-complete screen after submit / auto-submit
 - [x] Schedule-aware restore/completion metadata cache (`start`, `end`, `duration`)
 - [x] Lightweight remote image rendering baseline for question stimulus/stem media URLs
+- [x] Dedicated restore-failed screen with last known session metadata
+- [x] Human-readable connection freshness indicators (`kontak server terakhir`, `gangguan terakhir`)
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

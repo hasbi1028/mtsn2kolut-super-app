@@ -46,6 +46,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   bool _resumeCheckRequired = false;
   bool _isResumingExam = false;
   int _resumeAttemptCount = 0;
+  DateTime? _lastServerContactAt;
+  DateTime? _lastSyncFailureAt;
   String? _statusMessage;
   String? _errorMessage;
   Timer? _countdownTimer;
@@ -142,6 +144,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       }
       try {
         await widget.client.sendHeartbeat(widget.examToken);
+        _markServerContact();
         if (_pendingAnswers.isNotEmpty) {
           await _flushPendingAnswers();
         }
@@ -150,6 +153,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           return;
         }
         setState(() {
+          _lastSyncFailureAt = DateTime.now();
           _errorMessage = 'Koneksi ke server ujian sempat terputus.';
         });
       }
@@ -170,6 +174,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _timeRemainingSeconds = status.timeRemainingSeconds;
         _isSubmitted = status.isSubmitted;
       });
+      _markServerContact();
       if (_pendingAnswers.isNotEmpty) {
         await _flushPendingAnswers();
       }
@@ -178,6 +183,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         return;
       }
       setState(() {
+        _lastSyncFailureAt = DateTime.now();
         _errorMessage = 'Status server belum bisa diperbarui.';
       });
     } finally {
@@ -254,7 +260,13 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         );
         _pendingAnswers.remove(entry.key);
         syncedCount += 1;
+        _markServerContact();
       } catch (_) {
+        if (mounted) {
+          setState(() {
+            _lastSyncFailureAt = DateTime.now();
+          });
+        }
         break;
       }
     }
@@ -300,12 +312,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _pendingAnswers.remove(question.id);
         _statusMessage = 'Jawaban tersimpan ke server.';
       });
+      _markServerContact();
       await _persistSnapshot();
     } on ExamApiException catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
+        _lastSyncFailureAt = DateTime.now();
         _pendingAnswers[question.id] = answer;
         _errorMessage = null;
         _statusMessage =
@@ -481,6 +495,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         return;
       }
       setState(() {
+        _lastSyncFailureAt = DateTime.now();
         _errorMessage = error.message;
       });
     } finally {
@@ -498,6 +513,27 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     final minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
     final secs = (duration.inSeconds % 60).toString().padLeft(2, '0');
     return '$hours:$minutes:$secs';
+  }
+
+  void _markServerContact() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _lastServerContactAt = DateTime.now();
+      _lastSyncFailureAt = null;
+    });
+  }
+
+  String _formatClock(DateTime? value) {
+    if (value == null) {
+      return '-';
+    }
+    final local = value.toLocal();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    final second = local.second.toString().padLeft(2, '0');
+    return '$hour:$minute:$second';
   }
 
   @override
@@ -691,6 +727,19 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               label: 'Progres',
               value: '$_answeredCount / ${payload.totalQuestions}',
             ),
+            const SizedBox(height: 12),
+            _StatTile(
+              label: 'Kontak server terakhir',
+              value: _formatClock(_lastServerContactAt),
+            ),
+            if (_lastSyncFailureAt != null) ...[
+              const SizedBox(height: 12),
+              _StatTile(
+                label: 'Gangguan terakhir',
+                value: _formatClock(_lastSyncFailureAt),
+                accent: true,
+              ),
+            ],
             const SizedBox(height: 20),
             if (_pendingAnswers.isNotEmpty) ...[
               _StatTile(
