@@ -128,6 +128,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Logout-all baseline — per-user `auth_version` plus revoke-all refresh sessions without affecting other users
 - [x] Session management baseline — `sub=user_id`, `last_used_at` on auth sessions, active-session list and per-session revoke in settings
 - [x] Session metadata baseline — client IP, user-agent, and derived device label shown in active-session management
+- [x] Auth audit baseline — structured audit events for login, refresh, logout, logout-all, and per-session revoke
 - [ ] Rapor PDF generation
 
 ### CBT Question Authoring UX

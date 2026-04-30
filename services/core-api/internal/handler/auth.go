@@ -1,23 +1,31 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"mtsn2kolut-super-app/backend/internal/api"
 	"mtsn2kolut-super-app/backend/internal/domain"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
 type Auth struct {
-	svc *service.Auth
+	svc   *service.Auth
+	audit authAuditWriter
 }
 
-func NewAuth(svc *service.Auth) *Auth { return &Auth{svc: svc} }
+type authAuditWriter interface {
+	CreateAuditLog(ctx context.Context, arg db.CreateAuditLogParams) (db.AuditLog, error)
+}
+
+func NewAuth(svc *service.Auth, audit authAuditWriter) *Auth { return &Auth{svc: svc, audit: audit} }
 
 func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	var body struct {
@@ -41,6 +49,9 @@ func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	h.auditTokenPair(r.Context(), "AUTH_LOGIN", pair, map[string]any{
+		"username": body.Username,
+	})
 	api.OK(w, pair)
 }
 
@@ -65,6 +76,7 @@ func (h *Auth) Refresh(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	h.auditTokenPair(r.Context(), "AUTH_REFRESH", pair, nil)
 	api.OK(w, pair)
 }
 
@@ -77,6 +89,9 @@ func (h *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	h.auditClaimsEvent(r.Context(), "AUTH_LOGOUT", map[string]any{
+		"scope": "single_session",
+	})
 	api.OK(w, map[string]string{"message": "logged out"})
 }
 
@@ -100,6 +115,9 @@ func (h *Auth) LogoutAll(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	h.auditClaimsEvent(r.Context(), "AUTH_LOGOUT_ALL", map[string]any{
+		"scope": "all_sessions",
+	})
 	api.OK(w, map[string]string{"message": "all sessions logged out"})
 }
 
@@ -150,6 +168,9 @@ func (h *Auth) RevokeSession(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	h.auditClaimsEvent(r.Context(), "AUTH_SESSION_REVOKE", map[string]any{
+		"revoked_session_id": chi.URLParam(r, "id"),
+	})
 	api.OK(w, map[string]string{"message": "session revoked"})
 }
 
@@ -235,4 +256,68 @@ func sessionMetaFromRequest(r *http.Request) service.SessionMeta {
 		IPAddress: ipAddress,
 		UserAgent: userAgent,
 	}
+}
+
+func (h *Auth) auditTokenPair(ctx context.Context, action string, pair domain.TokenPair, extra map[string]any) {
+	if h.audit == nil {
+		return
+	}
+	claims := jwt.MapClaims{}
+	if _, _, err := new(jwt.Parser).ParseUnverified(pair.AccessToken, claims); err != nil {
+		return
+	}
+	h.auditWithClaims(ctx, action, claims, extra)
+}
+
+func (h *Auth) auditClaimsEvent(ctx context.Context, action string, extra map[string]any) {
+	if h.audit == nil {
+		return
+	}
+	claims, ok := api.ClaimsFromContext(ctx)
+	if !ok {
+		return
+	}
+	h.auditWithClaims(ctx, action, claims, extra)
+}
+
+func (h *Auth) auditWithClaims(ctx context.Context, action string, claims jwt.MapClaims, extra map[string]any) {
+	if h.audit == nil {
+		return
+	}
+
+	var userID pgtype.UUID
+	if uid, _ := claims["uid"].(string); uid != "" {
+		_ = userID.Scan(uid)
+	}
+
+	entityID := ""
+	if sid, _ := claims["ssid"].(string); sid != "" {
+		entityID = sid
+	}
+	if entityID == "" {
+		if uid, _ := claims["uid"].(string); uid != "" {
+			entityID = uid
+		}
+	}
+
+	meta := map[string]any{
+		"username":   claims["usr"],
+		"user_id":    claims["uid"],
+		"session_id": claims["ssid"],
+	}
+	for key, value := range extra {
+		meta[key] = value
+	}
+	rawMeta, err := json.Marshal(meta)
+	if err != nil {
+		return
+	}
+
+	_, _ = h.audit.CreateAuditLog(ctx, db.CreateAuditLogParams{
+		UserID:     userID,
+		Action:     action,
+		EntityType: "auth_session",
+		EntityID:   entityID,
+		Metadata:   rawMeta,
+	})
 }

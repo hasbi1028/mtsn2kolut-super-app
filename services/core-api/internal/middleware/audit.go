@@ -39,7 +39,10 @@ func Audit(q AuditWriter) func(http.Handler) http.Handler {
 				if raw, ok := claims["uid"].(string); ok {
 					_ = uid.Scan(raw)
 				}
-				actor, _ = claims["sub"].(string)
+				actor, _ = claims["usr"].(string)
+				if actor == "" {
+					actor, _ = claims["sub"].(string)
+				}
 			}
 
 			meta, _ := json.Marshal(map[string]any{
@@ -98,4 +101,3 @@ func entityFromPath(path string) string {
 	}
 	return path
 }
-

@@ -70,7 +70,7 @@ func main() {
 	}
 	pusakaSchedulerSvc.Start(mainCtx)
 
-	authH := handler.NewAuth(authSvc)
+	authH := handler.NewAuth(authSvc, q)
 	academicH := handler.NewAcademic(academicSvc)
 	gradeH := handler.NewGrade(gradeSvc)
 	empH := handler.NewEmployee(empSvc)
@@ -258,15 +258,15 @@ func main() {
 		r.Post("/api/cbt/sessions/{id}/answers/{aid}/grade-essay", sessionH.GradeEssay)
 
 		// Library — admin + staf
-		r.Get("/api/library/stats",              libraryH.Stats)
-		r.Get("/api/library/books",              libraryH.ListBooks)
-		r.Post("/api/library/books",             libraryH.CreateBook)
-		r.Put("/api/library/books/{id}",         libraryH.UpdateBook)
-		r.Delete("/api/library/books/{id}",      libraryH.DeleteBook)
-		r.Get("/api/library/loans",              libraryH.ListLoans)
-		r.Post("/api/library/loans",             libraryH.LoanBook)
+		r.Get("/api/library/stats", libraryH.Stats)
+		r.Get("/api/library/books", libraryH.ListBooks)
+		r.Post("/api/library/books", libraryH.CreateBook)
+		r.Put("/api/library/books/{id}", libraryH.UpdateBook)
+		r.Delete("/api/library/books/{id}", libraryH.DeleteBook)
+		r.Get("/api/library/loans", libraryH.ListLoans)
+		r.Post("/api/library/loans", libraryH.LoanBook)
 		r.Post("/api/library/loans/{id}/return", libraryH.ReturnBook)
-		r.Post("/api/library/loans/{id}/lunas",  libraryH.MarkDendaLunas)
+		r.Post("/api/library/loans/{id}/lunas", libraryH.MarkDendaLunas)
 
 		// Jobs / Attendance / Schedules / Settings / Users — admin-only
 		r.Group(func(r chi.Router) {

@@ -54,6 +54,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Per-user token invalidation:** user access/refresh tokens must carry a per-user auth version, not a global shared version. “Logout all sessions” should revoke all refresh sessions for that user and bump only that user's auth version.
 - **Session management UX:** authenticated users may list their own active sessions and revoke individual sessions from the settings screen. JWT `sub` is the user ID; human-readable username travels in a separate claim.
 - **Session metadata:** auth sessions should preserve human-useful client metadata (`device_label`, `ip_address`, `user_agent`) so the settings screen can show recognizable device entries instead of opaque token IDs.
+- **Auth audit events:** successful `login`, `refresh`, `logout`, `logout-all`, and per-session revoke should emit structured audit events with explicit auth-focused action names, not rely only on generic method/path middleware logs.
 - **Always run `npm run check` (a11y + types) before finalizing Svelte changes.**
 - **CBT UI direction:** educational, institutional, and operator-friendly for MTsN 2 Kolaka Utara. Avoid generic SaaS dashboards for exam operations and printable artifacts.
 - **Public site direction:** educational, institutional, and trustworthy for MTsN 2 Kolaka Utara. Public routes must feel like a real school website, not a reused admin dashboard shell.
