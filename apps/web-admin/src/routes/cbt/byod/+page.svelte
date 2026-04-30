@@ -1,0 +1,193 @@
+<script lang="ts">
+	import * as Card from '$lib/components/ui/card';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
+
+	type StatusTone = 'good' | 'warning' | 'danger';
+
+	type StatusGuide = {
+		label: string;
+		tone: StatusTone;
+		meaning: string;
+		intervention: string;
+	};
+
+	const statuses: StatusGuide[] = [
+		{
+			label: 'Tersambung',
+			tone: 'good',
+			meaning: 'Perangkat baru saja berkomunikasi baik dengan server dan tidak ada jawaban lokal yang tertahan.',
+			intervention: 'Siswa dapat lanjut mengerjakan soal seperti biasa.'
+		},
+		{
+			label: 'Lokal',
+			tone: 'warning',
+			meaning: 'Sebagian jawaban masih aman di perangkat dan menunggu sinkron ulang.',
+			intervention: 'Minta siswa tetap di layar ujian dan pantau sampai sinkron kembali normal.'
+		},
+		{
+			label: 'Waspada',
+			tone: 'warning',
+			meaning: 'Kontak server mulai lama. Belum tentu gagal, tetapi perangkat perlu refresh status.',
+			intervention: 'Minta siswa menekan sinkron ulang dan pastikan koneksi masih sehat.'
+		},
+		{
+			label: 'Gangguan',
+			tone: 'danger',
+			meaning: 'Aplikasi baru saja gagal menyimpan jawaban atau memperbarui status ke server.',
+			intervention: 'Pantau jaringan, jangan buru-buru submit, lalu coba sinkron ulang.'
+		},
+		{
+			label: 'Menurun',
+			tone: 'danger',
+			meaning: 'Gangguan sinkron sudah berulang. Submit manual memang ditahan sampai sesi cukup pulih.',
+			intervention: 'Pengawas harus intervensi. Siswa tetap di layar ujian sampai status membaik.'
+		}
+	];
+
+	const preSubmitChecklist = [
+		'Status bukan Menurun.',
+		'Tidak ada jawaban lokal yang masih menunggu sinkron.',
+		'Refresh status terakhir berhasil.',
+		'Perangkat yang dipakai masih sama dengan perangkat saat login.',
+		'Siswa tetap berada di layar ujian sebelum menekan Kirim Ujian.'
+	];
+
+	const trialFlow = [
+		'Sebelum sesi, pastikan APK terpasang dan API base URL yang dipakai benar.',
+		'Saat login, cek apakah ada kartu restore dan perhatikan label kesehatan sesi terakhir.',
+		'Selama ujian, pantau badge status app bar dan panel kesehatan koneksi di layar siswa.',
+		'Saat gangguan disimulasikan, minta siswa tetap berada di layar ujian sampai sinkron pulih.',
+		'Sebelum submit, ulangi checklist pengawas dan jangan izinkan kirim jika status masih Menurun.'
+	];
+
+	function badgeClass(tone: StatusTone) {
+		switch (tone) {
+			case 'good':
+				return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+			case 'warning':
+				return 'border-amber-200 bg-amber-50 text-amber-700';
+			case 'danger':
+				return 'border-rose-200 bg-rose-50 text-rose-700';
+		}
+	}
+</script>
+
+<svelte:head>
+	<title>Panduan BYOD CBT — MTsN 2 Kolaka Utara</title>
+</svelte:head>
+
+<div class="space-y-6">
+	<section class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-6 shadow-sm">
+		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+			<div class="max-w-3xl space-y-3">
+				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Panduan Pengawas CBT</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-slate-900">Ringkasan BYOD untuk Operator dan Pengawas</h1>
+				<p class="max-w-2xl text-sm leading-6 text-slate-600">
+					Halaman ini merangkum arti status koneksi mobile, titik intervensi pengawas, dan langkah cepat
+					sebelum siswa menekan kirim ujian di perangkat Android milik sendiri.
+				</p>
+			</div>
+			<div class="flex flex-wrap gap-3">
+				<Button href="/cbt/sessions">Buka Sesi Ujian</Button>
+				<Button href="/cbt/events" variant="outline">Lihat Kegiatan Ujian</Button>
+			</div>
+		</div>
+	</section>
+
+	<div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+		<Card.Root class="border-slate-200 shadow-sm">
+			<Card.Header>
+				<Card.Title class="text-lg text-slate-900">Arti Status Koneksi Mobile</Card.Title>
+				<Card.Description>
+					Gunakan arti status ini saat mendampingi siswa. Fokus utamanya adalah kapan pengawas cukup memantau dan kapan harus menahan submit.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content class="space-y-4">
+				{#each statuses as status (status.label)}
+					<div class="rounded-2xl border border-slate-200 bg-white p-4">
+						<div class="flex flex-wrap items-center gap-3">
+							<Badge class={badgeClass(status.tone)}>{status.label}</Badge>
+							<p class="text-sm font-medium text-slate-700">{status.meaning}</p>
+						</div>
+						<p class="mt-3 text-sm leading-6 text-slate-600">
+							<span class="font-semibold text-slate-800">Tindakan pengawas:</span> {status.intervention}
+						</p>
+					</div>
+				{/each}
+			</Card.Content>
+		</Card.Root>
+
+		<div class="space-y-6">
+			<Card.Root class="border-slate-200 shadow-sm">
+				<Card.Header>
+					<Card.Title class="text-lg text-slate-900">Checklist Sebelum Submit</Card.Title>
+					<Card.Description>
+						Lima pemeriksaan singkat ini sebaiknya selalu diulang sebelum pengawas mengizinkan siswa menekan kirim ujian.
+					</Card.Description>
+				</Card.Header>
+				<Card.Content>
+					<ul class="space-y-3">
+						{#each preSubmitChecklist as item (item)}
+							<li class="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700">OK</span>
+								<span>{item}</span>
+							</li>
+						{/each}
+					</ul>
+				</Card.Content>
+			</Card.Root>
+
+			<Card.Root class="border-slate-200 shadow-sm">
+				<Card.Header>
+					<Card.Title class="text-lg text-slate-900">Alur Trial BYOD</Card.Title>
+					<Card.Description>
+						Gunakan urutan ini saat uji coba perangkat siswa agar hasil antar pengawas tetap konsisten.
+					</Card.Description>
+				</Card.Header>
+				<Card.Content>
+					<ol class="space-y-3">
+						{#each trialFlow as item, index (item)}
+							<li class="flex gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
+								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">{index + 1}</span>
+								<span>{item}</span>
+							</li>
+						{/each}
+					</ol>
+				</Card.Content>
+			</Card.Root>
+		</div>
+	</div>
+
+	<Card.Root class="border-slate-200 shadow-sm">
+		<Card.Header>
+			<Card.Title class="text-lg text-slate-900">Artefak Operasional</Card.Title>
+			<Card.Description>
+				Gunakan dokumen ini di repo yang sama untuk trial lapangan dan review kompatibilitas backend-mobile.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="grid gap-4 lg:grid-cols-3">
+			<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+				<p class="text-sm font-semibold text-slate-900">Operator Quick Start</p>
+				<p class="mt-2 text-sm leading-6 text-slate-600">
+					Panduan singkat pengawas saat mendampingi siswa, termasuk arti status dan langkah saat koneksi mulai terganggu.
+				</p>
+				<p class="mt-3 font-mono text-xs text-slate-500">apps/mobile/OPERATOR_QUICKSTART.md</p>
+			</div>
+			<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+				<p class="text-sm font-semibold text-slate-900">BYOD Trial Procedure</p>
+				<p class="mt-2 text-sm leading-6 text-slate-600">
+					Prosedur end-to-end untuk operator, pengawas, siswa, simulasi gangguan, dan keputusan submit readiness.
+				</p>
+				<p class="mt-3 font-mono text-xs text-slate-500">apps/mobile/BYOD_TRIAL_PROCEDURE.md</p>
+			</div>
+			<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+				<p class="text-sm font-semibold text-slate-900">Device Test Matrix</p>
+				<p class="mt-2 text-sm leading-6 text-slate-600">
+					Matriks vendor dan model perangkat untuk mencatat hasil uji install, restore, audio, gambar, dan submit.
+				</p>
+				<p class="mt-3 font-mono text-xs text-slate-500">apps/mobile/DEVICE_TEST_MATRIX.md</p>
+			</div>
+		</Card.Content>
+	</Card.Root>
+</div>

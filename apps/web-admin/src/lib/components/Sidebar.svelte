@@ -35,6 +35,7 @@
 			group: 'CBT',
 			items: [
 				{ href: '/cbt/events',    label: 'Kegiatan Ujian', icon: 'calendar',  roles: ['admin'] },
+				{ href: '/cbt/byod',      label: 'Panduan BYOD',   icon: 'activity',  roles: ['admin', 'guru'] },
 				{ href: '/cbt/questions', label: 'Bank Soal',      icon: 'file-text' },
 				{ href: '/cbt/soal',      label: 'Komposer Soal',  icon: 'pen-tool'  },
 				{ href: '/cbt/packages',  label: 'Paket Ujian',    icon: 'package'   },
