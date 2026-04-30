@@ -344,8 +344,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _lastSyncFailureAt = DateTime.now();
         _pendingAnswers[question.id] = answer;
         _errorMessage = null;
-        _statusMessage =
-            '${error.message} Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.';
+        _statusMessage = _answerFailureMessage(error);
       });
       await widget.client
           .sendEvent(
@@ -542,7 +541,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       setState(() {
         _consecutiveSyncFailures += 1;
         _lastSyncFailureAt = DateTime.now();
-        _errorMessage = error.message;
+        _errorMessage = _submitFailureMessage(error, autoSubmit: autoSubmit);
       });
       await _handleConnectionAttentionSignals();
     } finally {
@@ -560,6 +559,33 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     final minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
     final secs = (duration.inSeconds % 60).toString().padLeft(2, '0');
     return '$hours:$minutes:$secs';
+  }
+
+  String _answerFailureMessage(ExamApiException error) {
+    switch (error.statusCode) {
+      case 403:
+        return 'Waktu ujian sudah berakhir. Jawaban tetap disimpan di perangkat ini, tetapi pengawas perlu memastikan apakah sesi masih bisa dipulihkan.';
+      case 409:
+        return 'Ujian ini sudah dinyatakan selesai di server. Jawaban baru tidak bisa dikirim lagi.';
+      default:
+        return '${error.message} Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.';
+    }
+  }
+
+  String _submitFailureMessage(
+    ExamApiException error, {
+    required bool autoSubmit,
+  }) {
+    switch (error.statusCode) {
+      case 403:
+        return autoSubmit
+            ? 'Waktu ujian sudah habis, tetapi server belum menerima submit otomatis. Segera minta pengawas memeriksa koneksi dan status sesi.'
+            : 'Waktu ujian sudah berakhir menurut server. Hubungi pengawas untuk memastikan status kirim ujian.';
+      case 409:
+        return 'Ujian ini sudah tercatat selesai di server. Tidak perlu menekan kirim lagi.';
+      default:
+        return error.message;
+    }
   }
 
   void _markServerContact() {
