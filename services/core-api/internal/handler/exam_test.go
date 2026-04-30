@@ -19,6 +19,8 @@ type fakeExamService struct {
 	loginErr     error
 	statusResult service.StatusResult
 	statusErr    error
+	heartbeatErr error
+	eventErr     error
 	answerErr    error
 	submitErr    error
 }
@@ -32,11 +34,11 @@ func (f *fakeExamService) GetStatus(ctx context.Context, p db.GetParticipantByTo
 }
 
 func (f *fakeExamService) Heartbeat(ctx context.Context, participantID pgtype.UUID) error {
-	return nil
+	return f.heartbeatErr
 }
 
 func (f *fakeExamService) RecordClientEvent(ctx context.Context, participantID pgtype.UUID, eventType string, data map[string]any) error {
-	return nil
+	return f.eventErr
 }
 
 func (f *fakeExamService) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, questionID pgtype.UUID, answer string) error {
@@ -650,6 +652,30 @@ func TestExamHeartbeatWritesWrappedSuccessJSON(t *testing.T) {
 	}
 }
 
+func TestExamHeartbeatMapsUnexpectedServiceError(t *testing.T) {
+	h := &Exam{svc: &fakeExamService{heartbeatErr: errors.New("heartbeat failed")}}
+	var participant db.GetParticipantByTokenRow
+	req := httptest.NewRequest("POST", "http://internal/api/exam/heartbeat", nil)
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.Heartbeat(rec, req)
+
+	if rec.Code != 500 {
+		t.Fatalf("status = %d, want 500; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "heartbeat failed" {
+		t.Fatalf("error = %q, want %q", payload.Error, "heartbeat failed")
+	}
+}
+
 func TestExamRecordEventWritesWrappedSuccessJSON(t *testing.T) {
 	h := &Exam{svc: &fakeExamService{}}
 	var participant db.GetParticipantByTokenRow
@@ -673,6 +699,32 @@ func TestExamRecordEventWritesWrappedSuccessJSON(t *testing.T) {
 	}
 	if payload.Data["status"] != "recorded" {
 		t.Fatalf("status = %q, want %q", payload.Data["status"], "recorded")
+	}
+}
+
+func TestExamRecordEventMapsUnexpectedServiceError(t *testing.T) {
+	h := &Exam{svc: &fakeExamService{eventErr: errors.New("event write failed")}}
+	var participant db.GetParticipantByTokenRow
+	body := bytes.NewBufferString(`{"event_type":"warning","data":{"reason":"test"}}`)
+	req := httptest.NewRequest("POST", "http://internal/api/exam/event", body)
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.RecordEvent(rec, req)
+
+	if rec.Code != 500 {
+		t.Fatalf("status = %d, want 500; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "event write failed" {
+		t.Fatalf("error = %q, want %q", payload.Error, "event write failed")
 	}
 }
 
