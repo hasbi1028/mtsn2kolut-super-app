@@ -41,6 +41,7 @@ type authStore interface {
 	RevokeAllAuthSessionsForUser(ctx context.Context, userID pgtype.UUID) (int64, error)
 	ListActiveAuthSessionsByUser(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error)
 	RevokeOwnedAuthSession(ctx context.Context, arg db.RevokeOwnedAuthSessionParams) (int64, error)
+	UpdateOwnedAuthSessionLabel(ctx context.Context, arg db.UpdateOwnedAuthSessionLabelParams) (int64, error)
 }
 
 type authUserRecord struct {
@@ -168,6 +169,26 @@ func (s *Auth) RevokeSession(ctx context.Context, userID, sessionID pgtype.UUID)
 	affected, err := s.q.RevokeOwnedAuthSession(ctx, db.RevokeOwnedAuthSessionParams{
 		UserID: userID,
 		ID:     sessionID,
+	})
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (s *Auth) UpdateSessionLabel(ctx context.Context, userID, sessionID pgtype.UUID, deviceLabel string) error {
+	deviceLabel = strings.TrimSpace(deviceLabel)
+	if deviceLabel == "" {
+		return domain.ErrBadRequest
+	}
+
+	affected, err := s.q.UpdateOwnedAuthSessionLabel(ctx, db.UpdateOwnedAuthSessionLabelParams{
+		UserID:      userID,
+		ID:          sessionID,
+		DeviceLabel: deviceLabel,
 	})
 	if err != nil {
 		return err
@@ -353,6 +374,37 @@ func (s *Auth) CurrentAuthVersion(ctx context.Context, subject string) (int64, e
 		return 0, err
 	}
 	return int64(user.AuthVersion), nil
+}
+
+func (s *Auth) ValidateAccessSession(ctx context.Context, subject, sessionRef string) (bool, error) {
+	var userID pgtype.UUID
+	if err := userID.Scan(subject); err != nil {
+		return false, domain.ErrUnauthorized
+	}
+
+	var sessionID pgtype.UUID
+	if err := sessionID.Scan(sessionRef); err != nil {
+		return false, domain.ErrUnauthorized
+	}
+
+	session, err := s.q.GetAuthSession(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, domain.ErrUnauthorized
+		}
+		return false, err
+	}
+
+	if !session.ExpiresAt.Valid || session.ExpiresAt.Time.Before(time.Now()) {
+		return false, nil
+	}
+	if session.RevokedAt.Valid {
+		return false, nil
+	}
+	if pgUUIDString(session.UserID) != pgUUIDString(userID) {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (s *Auth) validAuthVersion(ctx context.Context, claims jwt.MapClaims) bool {

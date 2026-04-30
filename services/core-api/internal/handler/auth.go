@@ -174,6 +174,53 @@ func (h *Auth) RevokeSession(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]string{"message": "session revoked"})
 }
 
+func (h *Auth) UpdateSessionLabel(w http.ResponseWriter, r *http.Request) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	userID, err := authUserID(claims)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+
+	var sessionID pgtype.UUID
+	if err := sessionID.Scan(chi.URLParam(r, "id")); err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+
+	var body struct {
+		DeviceLabel string `json:"device_label"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+
+	err = h.svc.UpdateSessionLabel(r.Context(), userID, sessionID, body.DeviceLabel)
+	if errors.Is(err, domain.ErrBadRequest) {
+		api.BadRequest(w, "device_label required")
+		return
+	}
+	if errors.Is(err, domain.ErrNotFound) {
+		api.NotFound(w)
+		return
+	}
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+
+	h.auditClaimsEvent(r.Context(), "AUTH_SESSION_RENAME", map[string]any{
+		"renamed_session_id": chi.URLParam(r, "id"),
+		"device_label":       strings.TrimSpace(body.DeviceLabel),
+	})
+	api.OK(w, map[string]string{"message": "session label updated"})
+}
+
 func (h *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username    string `json:"username"`

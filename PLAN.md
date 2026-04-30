@@ -129,6 +129,9 @@ Three runtime units deployed across 3 VPS:
 - [x] Session management baseline — `sub=user_id`, `last_used_at` on auth sessions, active-session list and per-session revoke in settings
 - [x] Session metadata baseline — client IP, user-agent, and derived device label shown in active-session management
 - [x] Auth audit baseline — structured audit events for login, refresh, logout, logout-all, and per-session revoke
+- [x] Auth audit UX baseline — audit trail screen now has quick `Auth & Session` filtering for structured auth events
+- [x] Session rename baseline — users can update their own `device_label` from the settings screen
+- [x] Access-session validation baseline — access JWTs now require a still-active referenced auth session (`ssid`) in addition to per-user auth-version checks
 - [ ] Rapor PDF generation
 
 ### CBT Question Authoring UX

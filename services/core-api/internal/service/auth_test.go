@@ -216,6 +216,16 @@ func (f *fakeStore) RevokeOwnedAuthSession(ctx context.Context, arg db.RevokeOwn
 	return 1, nil
 }
 
+func (f *fakeStore) UpdateOwnedAuthSessionLabel(ctx context.Context, arg db.UpdateOwnedAuthSessionLabelParams) (int64, error) {
+	session, ok := f.authSessions[arg.ID]
+	if !ok || session.UserID != arg.UserID || session.RevokedAt.Valid {
+		return 0, nil
+	}
+	session.DeviceLabel = arg.DeviceLabel
+	f.authSessions[arg.ID] = session
+	return 1, nil
+}
+
 func TestAuthSeedAdminCreatesUser(t *testing.T) {
 	store := newFakeStore()
 	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
@@ -418,5 +428,80 @@ func TestAuthLogoutAllRevokesUserSessionsAndBumpsVersion(t *testing.T) {
 	}
 	if _, err := svc.Refresh(context.Background(), second.RefreshToken, SessionMeta{}); err == nil {
 		t.Fatal("second Refresh() succeeded after LogoutAll")
+	}
+}
+
+func TestAuthUpdateSessionLabelUpdatesOwnedSession(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
+
+	if err := svc.SeedAdmin(context.Background()); err != nil {
+		t.Fatalf("SeedAdmin() error = %v", err)
+	}
+
+	pair, err := svc.Login(context.Background(), "admin", "admin", SessionMeta{})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+
+	claims := jwt.MapClaims{}
+	if _, _, err := new(jwt.Parser).ParseUnverified(pair.RefreshToken, claims); err != nil {
+		t.Fatalf("ParseUnverified(refresh) error = %v", err)
+	}
+	rawSID, _ := claims["ssid"].(string)
+	var sid pgtype.UUID
+	if err := sid.Scan(rawSID); err != nil {
+		t.Fatalf("sid Scan() error = %v", err)
+	}
+
+	admin := store.users["admin"]
+	if err := svc.UpdateSessionLabel(context.Background(), admin.ID, sid, "Laptop Ruang Guru"); err != nil {
+		t.Fatalf("UpdateSessionLabel() error = %v", err)
+	}
+
+	session, err := store.GetAuthSession(context.Background(), sid)
+	if err != nil {
+		t.Fatalf("GetAuthSession() error = %v", err)
+	}
+	if session.DeviceLabel != "Laptop Ruang Guru" {
+		t.Fatalf("session.DeviceLabel = %q, want %q", session.DeviceLabel, "Laptop Ruang Guru")
+	}
+}
+
+func TestAuthValidateAccessSessionRejectsRevokedSession(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
+
+	if err := svc.SeedAdmin(context.Background()); err != nil {
+		t.Fatalf("SeedAdmin() error = %v", err)
+	}
+
+	pair, err := svc.Login(context.Background(), "admin", "admin", SessionMeta{})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+
+	claims := jwt.MapClaims{}
+	if _, _, err := new(jwt.Parser).ParseUnverified(pair.AccessToken, claims); err != nil {
+		t.Fatalf("ParseUnverified(access) error = %v", err)
+	}
+	sub, _ := claims["sub"].(string)
+	ssid, _ := claims["ssid"].(string)
+
+	ok, err := svc.ValidateAccessSession(context.Background(), sub, ssid)
+	if err != nil || !ok {
+		t.Fatalf("ValidateAccessSession() before revoke = (%v, %v), want (true, nil)", ok, err)
+	}
+
+	if err := svc.Logout(context.Background(), pair.RefreshToken); err != nil {
+		t.Fatalf("Logout() error = %v", err)
+	}
+
+	ok, err = svc.ValidateAccessSession(context.Background(), sub, ssid)
+	if err != nil {
+		t.Fatalf("ValidateAccessSession() after revoke error = %v", err)
+	}
+	if ok {
+		t.Fatal("ValidateAccessSession() = true after revoke, want false")
 	}
 }

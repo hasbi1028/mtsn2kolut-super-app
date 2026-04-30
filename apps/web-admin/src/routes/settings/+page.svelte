@@ -29,6 +29,8 @@
   let logoutAllLoading = $state(false);
   let sessionsLoading = $state(false);
   let revokeSessionLoading = $state<string | null>(null);
+  let renameSessionLoading = $state<string | null>(null);
+  let labelDrafts = $state<Record<string, string>>({});
 
   const currentSessionId = $derived(page.data.user?.session_id ?? '');
 
@@ -45,7 +47,12 @@
       const sess = await sessRes.json().catch(() => []);
       if (!st.error) appSettings = st;
       if (!s.error)  schedules   = s.items ?? [];
-      if (!sess.error) sessions = Array.isArray(sess) ? sess : (sess.data ?? []);
+      if (!sess.error) {
+        sessions = Array.isArray(sess) ? sess : (sess.data ?? []);
+        labelDrafts = Object.fromEntries(
+          sessions.map((session) => [session.id, session.device_label || ''])
+        );
+      }
     } catch { /* silent */ }
     finally { sessionsLoading = false; }
   }
@@ -126,6 +133,35 @@
       showToast('Sesi berhasil diakhiri.');
     } finally {
       revokeSessionLoading = null;
+    }
+  }
+
+  async function renameSession(sessionId: string) {
+    const deviceLabel = (labelDrafts[sessionId] ?? '').trim();
+    if (!deviceLabel) {
+      showError('Nama perangkat tidak boleh kosong.');
+      return;
+    }
+
+    renameSessionLoading = sessionId;
+    try {
+      const res = await fetch(`/api/auth/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ device_label: deviceLabel })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showError(data.error ?? 'Gagal menyimpan nama perangkat');
+        return;
+      }
+
+      sessions = sessions.map((session) =>
+        session.id === sessionId ? { ...session, device_label: deviceLabel } : session
+      );
+      showToast('Nama perangkat berhasil disimpan.');
+    } finally {
+      renameSessionLoading = null;
     }
   }
 
@@ -214,7 +250,7 @@
         <p class="text-sm text-muted-foreground">Belum ada sesi aktif tercatat.</p>
       {:else}
         <div class="space-y-3">
-          {#each sessions as session}
+          {#each sessions as session (session.id)}
             <div class="rounded-lg border border-slate-200 px-4 py-3">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="space-y-1">
@@ -244,6 +280,27 @@
                       {session.user_agent}
                     </p>
                   {/if}
+                  <div class="pt-2">
+                    <label for={`session-label-${session.id}`} class="mb-1 block text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                      Nama perangkat
+                    </label>
+                    <div class="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        id={`session-label-${session.id}`}
+                        bind:value={labelDrafts[session.id]}
+                        maxlength={60}
+                        placeholder="Mis. Laptop Ruang Guru"
+                      />
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onclick={() => renameSession(session.id)}
+                        disabled={renameSessionLoading === session.id}
+                      >
+                        {renameSessionLoading === session.id ? 'Menyimpan…' : 'Simpan Nama'}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
                 <Button
                   variant="outline"

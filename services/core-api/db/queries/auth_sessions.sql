@@ -37,3 +37,12 @@ SET revoked_at = NOW(), updated_at = NOW()
 WHERE user_id = $1
   AND id = $2
   AND revoked_at IS NULL;
+
+-- name: UpdateOwnedAuthSessionLabel :execrows
+UPDATE auth_sessions
+SET device_label = $3,
+    updated_at = NOW()
+WHERE user_id = $1
+  AND id = $2
+  AND revoked_at IS NULL
+  AND expires_at > NOW();

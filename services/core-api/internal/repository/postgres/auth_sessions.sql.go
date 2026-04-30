@@ -170,3 +170,27 @@ func (q *Queries) RevokeOwnedAuthSession(ctx context.Context, arg RevokeOwnedAut
 	}
 	return result.RowsAffected(), nil
 }
+
+const updateOwnedAuthSessionLabel = `-- name: UpdateOwnedAuthSessionLabel :execrows
+UPDATE auth_sessions
+SET device_label = $3,
+    updated_at = NOW()
+WHERE user_id = $1
+  AND id = $2
+  AND revoked_at IS NULL
+  AND expires_at > NOW()
+`
+
+type UpdateOwnedAuthSessionLabelParams struct {
+	UserID      pgtype.UUID `json:"user_id"`
+	ID          pgtype.UUID `json:"id"`
+	DeviceLabel string      `json:"device_label"`
+}
+
+func (q *Queries) UpdateOwnedAuthSessionLabel(ctx context.Context, arg UpdateOwnedAuthSessionLabelParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateOwnedAuthSessionLabel, arg.UserID, arg.ID, arg.DeviceLabel)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

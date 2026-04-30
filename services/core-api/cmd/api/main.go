@@ -138,11 +138,12 @@ func main() {
 	requireAdmin := mw.RequireAdmin(internalKey)
 
 	r.Group(func(r chi.Router) {
-		r.Use(mw.InternalKeyOrJWT(internalKey, jwtSecret, authSvc.CurrentAuthVersion))
+		r.Use(mw.InternalKeyOrJWT(internalKey, jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession))
 		r.Use(mw.Audit(q))
 		r.Post("/api/auth/change-password", authH.ChangePassword)
 		r.Post("/api/auth/logout-all", authH.LogoutAll)
 		r.Get("/api/auth/sessions", authH.ListSessions)
+		r.Patch("/api/auth/sessions/{id}", authH.UpdateSessionLabel)
 		r.Delete("/api/auth/sessions/{id}", authH.RevokeSession)
 
 		// Employees are admin-only

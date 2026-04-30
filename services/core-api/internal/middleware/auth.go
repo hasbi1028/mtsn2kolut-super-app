@@ -10,8 +10,9 @@ import (
 )
 
 type authVersionProvider func(context.Context, string) (int64, error)
+type accessSessionValidator func(context.Context, string, string) (bool, error)
 
-func JWT(secret string, currentVersion authVersionProvider) func(http.Handler) http.Handler {
+func JWT(secret string, currentVersion authVersionProvider, validateSession accessSessionValidator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := bearerToken(r)
@@ -50,6 +51,18 @@ func JWT(secret string, currentVersion authVersionProvider) func(http.Handler) h
 					api.Unauthorized(w)
 					return
 				}
+				if validateSession != nil {
+					sessionID, _ := claims["ssid"].(string)
+					if strings.TrimSpace(sessionID) == "" {
+						api.Unauthorized(w)
+						return
+					}
+					ok, err := validateSession(r.Context(), sub, sessionID)
+					if err != nil || !ok {
+						api.Unauthorized(w)
+						return
+					}
+				}
 			}
 			ctx := context.WithValue(r.Context(), api.ClaimsKey, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -57,8 +70,8 @@ func JWT(secret string, currentVersion authVersionProvider) func(http.Handler) h
 	}
 }
 
-func InternalKeyOrJWT(internalKey, jwtSecret string, currentVersion authVersionProvider) func(http.Handler) http.Handler {
-	jwtMW := JWT(jwtSecret, currentVersion)
+func InternalKeyOrJWT(internalKey, jwtSecret string, currentVersion authVersionProvider, validateSession accessSessionValidator) func(http.Handler) http.Handler {
+	jwtMW := JWT(jwtSecret, currentVersion, validateSession)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if internalKey != "" && r.Header.Get("X-Internal-Key") == internalKey {
