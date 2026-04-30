@@ -6,6 +6,12 @@ void main() {
   group('exam error messages', () {
     test('login failure maps common status codes', () {
       expect(
+        loginFailureMessage(
+          const ExamApiException('transport', statusCode: null),
+        ),
+        'Perangkat belum bisa terhubung ke server ujian. Periksa alamat server dan koneksi yang sedang dipakai.',
+      );
+      expect(
         loginFailureMessage(const ExamApiException('backend', statusCode: 404)),
         'Token ujian tidak ditemukan. Periksa kembali token dari pengawas atau kartu ujian.',
       );
@@ -24,6 +30,12 @@ void main() {
         'Pesan asli backend',
       );
 
+      final transportNotice = loginFailureNotice(
+        const ExamApiException('transport', statusCode: null),
+      );
+      expect(transportNotice?.title, 'Server ujian belum terjangkau');
+      expect(transportNotice?.tone, ExamGuidanceTone.warning);
+
       final warningNotice = loginFailureNotice(
         const ExamApiException('backend', statusCode: 403),
       );
@@ -38,6 +50,12 @@ void main() {
     });
 
     test('restore failure maps common status codes', () {
+      expect(
+        restoreFailureMessage(
+          const ExamApiException('transport', statusCode: null),
+        ),
+        'Sesi lama belum bisa dipulihkan karena perangkat belum terhubung ke server ujian. Coba lagi setelah koneksi membaik atau hubungi pengawas.',
+      );
       expect(
         restoreFailureMessage(
           const ExamApiException('backend', statusCode: 404),
@@ -63,6 +81,12 @@ void main() {
         'Sesi lama tidak bisa dipulihkan. Pesan asli backend',
       );
 
+      final transportNotice = restoreFailureNotice(
+        const ExamApiException('transport', statusCode: null),
+      );
+      expect(transportNotice?.title, 'Restore tertunda karena koneksi');
+      expect(transportNotice?.tone, ExamGuidanceTone.warning);
+
       final warningNotice = restoreFailureNotice(
         const ExamApiException('backend', statusCode: 403),
       );
@@ -77,6 +101,12 @@ void main() {
     });
 
     test('answer failure maps common status codes', () {
+      expect(
+        answerFailureMessage(
+          const ExamApiException('transport', statusCode: null),
+        ),
+        'Perangkat sedang kehilangan koneksi ke server ujian. Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.',
+      );
       expect(
         answerFailureMessage(
           const ExamApiException('backend', statusCode: 403),
@@ -96,6 +126,12 @@ void main() {
         'Pesan asli backend Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.',
       );
 
+      final transportNotice = answerFailureNotice(
+        const ExamApiException('transport', statusCode: null),
+      );
+      expect(transportNotice?.title, 'Jawaban tersimpan lokal');
+      expect(transportNotice?.tone, ExamGuidanceTone.warning);
+
       final warningNotice = answerFailureNotice(
         const ExamApiException('backend', statusCode: 403),
       );
@@ -110,6 +146,20 @@ void main() {
     });
 
     test('submit failure maps common status codes', () {
+      expect(
+        submitFailureMessage(
+          const ExamApiException('transport', statusCode: null),
+          autoSubmit: false,
+        ),
+        'Perangkat belum bisa terhubung ke server ujian. Jangan tinggalkan layar ini sebelum pengawas memastikan koneksi kembali.',
+      );
+      expect(
+        submitFailureMessage(
+          const ExamApiException('transport', statusCode: null),
+          autoSubmit: true,
+        ),
+        'Submit otomatis belum bisa dikirim karena perangkat kehilangan koneksi ke server ujian. Segera minta pengawas memeriksa jaringan.',
+      );
       expect(
         submitFailureMessage(
           const ExamApiException('backend', statusCode: 403),
@@ -138,6 +188,13 @@ void main() {
         ),
         'Pesan asli backend',
       );
+
+      final transportNotice = submitFailureNotice(
+        const ExamApiException('transport', statusCode: null),
+        autoSubmit: true,
+      );
+      expect(transportNotice?.title, 'Submit otomatis tertunda karena koneksi');
+      expect(transportNotice?.tone, ExamGuidanceTone.warning);
 
       final warningNotice = submitFailureNotice(
         const ExamApiException('backend', statusCode: 403),

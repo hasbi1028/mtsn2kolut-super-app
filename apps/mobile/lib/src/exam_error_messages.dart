@@ -15,6 +15,10 @@ class ExamGuidanceNotice {
 }
 
 String loginFailureMessage(ExamApiException error) {
+  if (error.statusCode == null) {
+    return 'Perangkat belum bisa terhubung ke server ujian. Periksa alamat server dan koneksi yang sedang dipakai.';
+  }
+
   switch (error.statusCode) {
     case 404:
       return 'Token ujian tidak ditemukan. Periksa kembali token dari pengawas atau kartu ujian.';
@@ -28,6 +32,15 @@ String loginFailureMessage(ExamApiException error) {
 }
 
 ExamGuidanceNotice? loginFailureNotice(ExamApiException error) {
+  if (error.statusCode == null) {
+    return const ExamGuidanceNotice(
+      title: 'Server ujian belum terjangkau',
+      message:
+          'Peserta tidak perlu terus menekan login. Periksa koneksi perangkat atau alamat server, lalu coba lagi setelah pengawas memastikan jaringan siap.',
+      tone: ExamGuidanceTone.warning,
+    );
+  }
+
   switch (error.statusCode) {
     case 403:
       return const ExamGuidanceNotice(
@@ -49,6 +62,10 @@ ExamGuidanceNotice? loginFailureNotice(ExamApiException error) {
 }
 
 String restoreFailureMessage(ExamApiException error) {
+  if (error.statusCode == null) {
+    return 'Sesi lama belum bisa dipulihkan karena perangkat belum terhubung ke server ujian. Coba lagi setelah koneksi membaik atau hubungi pengawas.';
+  }
+
   switch (error.statusCode) {
     case 404:
       return 'Token sesi lama sudah tidak ditemukan lagi di server. Login ulang dengan token aktif dari pengawas jika sesi masih berlangsung.';
@@ -62,6 +79,15 @@ String restoreFailureMessage(ExamApiException error) {
 }
 
 ExamGuidanceNotice? restoreFailureNotice(ExamApiException error) {
+  if (error.statusCode == null) {
+    return const ExamGuidanceNotice(
+      title: 'Restore tertunda karena koneksi',
+      message:
+          'Pengawas perlu memastikan perangkat sudah kembali terhubung ke server sebelum peserta mencoba memulihkan sesi lama lagi.',
+      tone: ExamGuidanceTone.warning,
+    );
+  }
+
   switch (error.statusCode) {
     case 403:
       return const ExamGuidanceNotice(
@@ -83,6 +109,10 @@ ExamGuidanceNotice? restoreFailureNotice(ExamApiException error) {
 }
 
 String answerFailureMessage(ExamApiException error) {
+  if (error.statusCode == null) {
+    return 'Perangkat sedang kehilangan koneksi ke server ujian. Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.';
+  }
+
   switch (error.statusCode) {
     case 403:
       return 'Waktu ujian sudah berakhir. Jawaban tetap disimpan di perangkat ini, tetapi pengawas perlu memastikan apakah sesi masih bisa dipulihkan.';
@@ -94,6 +124,15 @@ String answerFailureMessage(ExamApiException error) {
 }
 
 ExamGuidanceNotice? answerFailureNotice(ExamApiException error) {
+  if (error.statusCode == null) {
+    return const ExamGuidanceNotice(
+      title: 'Jawaban tersimpan lokal',
+      message:
+          'Perangkat belum bisa menjangkau server, tetapi jawaban peserta masih aman di perangkat ini. Pengawas perlu membantu memulihkan koneksi sebelum sinkron ulang.',
+      tone: ExamGuidanceTone.warning,
+    );
+  }
+
   switch (error.statusCode) {
     case 403:
       return const ExamGuidanceNotice(
@@ -118,6 +157,12 @@ String submitFailureMessage(
   ExamApiException error, {
   required bool autoSubmit,
 }) {
+  if (error.statusCode == null) {
+    return autoSubmit
+        ? 'Submit otomatis belum bisa dikirim karena perangkat kehilangan koneksi ke server ujian. Segera minta pengawas memeriksa jaringan.'
+        : 'Perangkat belum bisa terhubung ke server ujian. Jangan tinggalkan layar ini sebelum pengawas memastikan koneksi kembali.';
+  }
+
   switch (error.statusCode) {
     case 403:
       return autoSubmit
@@ -134,6 +179,18 @@ ExamGuidanceNotice? submitFailureNotice(
   ExamApiException error, {
   required bool autoSubmit,
 }) {
+  if (error.statusCode == null) {
+    return ExamGuidanceNotice(
+      title: autoSubmit
+          ? 'Submit otomatis tertunda karena koneksi'
+          : 'Submit belum bisa dikirim',
+      message: autoSubmit
+          ? 'Pengawas perlu segera memeriksa jaringan perangkat dan memastikan server dapat dijangkau sebelum peserta meninggalkan sesi.'
+          : 'Koneksi ke server ujian belum tersedia. Pengawas perlu membantu memulihkan jaringan sebelum peserta menekan kirim lagi.',
+      tone: ExamGuidanceTone.warning,
+    );
+  }
+
   switch (error.statusCode) {
     case 403:
       return ExamGuidanceNotice(
