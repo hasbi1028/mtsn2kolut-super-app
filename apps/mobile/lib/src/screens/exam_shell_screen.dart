@@ -35,6 +35,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     with WidgetsBindingObserver {
   static const int _degradedFailureThreshold = 3;
   static const int _staleAttentionThresholdSeconds = 120;
+  static const int _staleEscalationThresholdSeconds = 240;
 
   final _sessionStore = ExamSessionStore();
   late final Map<String, String> _answers;
@@ -53,6 +54,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   bool _isResumingExam = false;
   bool _hasReportedDegradedMode = false;
   bool _hasReportedStaleAttention = false;
+  bool _hasReportedEscalatedStaleAttention = false;
   int _resumeAttemptCount = 0;
   int _consecutiveSyncFailures = 0;
   DateTime? _lastServerContactAt;
@@ -571,6 +573,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     });
     _hasReportedDegradedMode = false;
     _hasReportedStaleAttention = false;
+    _hasReportedEscalatedStaleAttention = false;
   }
 
   bool get _isDegradedMode =>
@@ -583,6 +586,15 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     }
     return DateTime.now().difference(last).inSeconds >=
         _staleAttentionThresholdSeconds;
+  }
+
+  bool get _needsEscalatedSupervisorAttention {
+    final last = _lastServerContactAt;
+    if (last == null || _isSubmitted || _isDegradedMode) {
+      return false;
+    }
+    return DateTime.now().difference(last).inSeconds >=
+        _staleEscalationThresholdSeconds;
   }
 
   String get _staleAttentionDurationLabel {
@@ -607,6 +619,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   Future<void> _handleConnectionAttentionSignals() async {
     await _handlePotentialDegradedMode();
     await _handlePotentialStaleAttention();
+    await _handlePotentialEscalatedStaleAttention();
   }
 
   Future<void> _handlePotentialDegradedMode() async {
@@ -637,6 +650,27 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           eventType: 'warning',
           data: <String, Object?>{
             'reason': 'stale_connection_attention',
+            'seconds_since_last_contact': DateTime.now()
+                .difference(_lastServerContactAt!)
+                .inSeconds,
+            'failure_count': _consecutiveSyncFailures,
+          },
+        )
+        .catchError((_) {});
+  }
+
+  Future<void> _handlePotentialEscalatedStaleAttention() async {
+    if (!_needsEscalatedSupervisorAttention ||
+        _hasReportedEscalatedStaleAttention) {
+      return;
+    }
+    _hasReportedEscalatedStaleAttention = true;
+    await widget.client
+        .sendEvent(
+          token: widget.examToken,
+          eventType: 'warning',
+          data: <String, Object?>{
+            'reason': 'stale_connection_escalated',
             'seconds_since_last_contact': DateTime.now()
                 .difference(_lastServerContactAt!)
                 .inSeconds,
@@ -961,6 +995,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               _SupervisorAttentionCard(
                 lastContactAt: _formatClock(_lastServerContactAt),
                 staleDuration: _staleAttentionDurationLabel,
+                escalated: _needsEscalatedSupervisorAttention,
                 onRetry: _isSyncingStatus ? null : _syncStatus,
               ),
               const SizedBox(height: 14),
@@ -1715,45 +1750,67 @@ class _SupervisorAttentionCard extends StatelessWidget {
   const _SupervisorAttentionCard({
     required this.lastContactAt,
     required this.staleDuration,
+    required this.escalated,
     required this.onRetry,
   });
 
   final String lastContactAt;
   final String staleDuration;
+  final bool escalated;
   final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final titleColor = escalated
+        ? Colors.red.shade700
+        : const Color(0xFF9A6700);
+    final background = escalated
+        ? const Color(0xFFFDE7E9)
+        : const Color(0xFFFFF3D8);
+    final border = escalated
+        ? const Color(0xFFE8A5AB)
+        : const Color(0xFFE5C172);
+    final action = escalated
+        ? FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.priority_high),
+            label: const Text('Intervensi dan Sinkron Ulang'),
+          )
+        : OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.support_agent),
+            label: const Text('Periksa dan Sinkron Ulang'),
+          );
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3D8),
+        color: background,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE5C172)),
+        border: Border.all(color: border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Perlu intervensi pengawas',
+            escalated
+                ? 'Pengawas harus segera intervensi'
+                : 'Perlu intervensi pengawas',
             style: theme.textTheme.titleMedium?.copyWith(
-              color: const Color(0xFF9A6700),
+              color: titleColor,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Status koneksi berada di level waspada selama $staleDuration sejak kontak server terakhir pukul $lastContactAt. Minta pengawas memeriksa jaringan perangkat lalu lakukan sinkron ulang.',
+            escalated
+                ? 'Status koneksi bertahan di level waspada selama $staleDuration sejak kontak server terakhir pukul $lastContactAt. Pengawas sebaiknya segera memeriksa perangkat, jaringan, dan memastikan sinkron ulang berhasil sebelum peserta melanjutkan tanpa pengawasan.'
+                : 'Status koneksi berada di level waspada selama $staleDuration sejak kontak server terakhir pukul $lastContactAt. Minta pengawas memeriksa jaringan perangkat lalu lakukan sinkron ulang.',
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.support_agent),
-            label: const Text('Periksa dan Sinkron Ulang'),
-          ),
+          action,
         ],
       ),
     );
