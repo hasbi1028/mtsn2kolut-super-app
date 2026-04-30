@@ -6,6 +6,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type User = {
 		id: string; username: string; roles: string[];
@@ -213,9 +215,9 @@
 					</div>
 				</div>
 				<div class="flex gap-2">
-					<Button onclick={createUser} disabled={fBusy || !fUsername || !fPassword || fRoles.length === 0}>
-						{fBusy ? 'Menyimpan...' : 'Simpan Pengguna'}
-					</Button>
+					<LoadingButton onclick={createUser} loading={fBusy} disabled={fBusy || !fUsername || !fPassword || fRoles.length === 0}>
+						Simpan Pengguna
+					</LoadingButton>
 					<Button variant="outline" onclick={() => (showForm = false)}>Batal</Button>
 				</div>
 			</Card.Content>
@@ -224,85 +226,110 @@
 
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
-			<div class="hidden overflow-x-auto lg:block">
-			<Table.Root>
-				<Table.Header>
-					<Table.Row class="bg-slate-50">
-						<Table.Head>Username</Table.Head>
-						<Table.Head>Roles</Table.Head>
-						<Table.Head>Profil Terhubung</Table.Head>
-						<Table.Head>Status</Table.Head>
-						<Table.Head>Dibuat</Table.Head>
-						<Table.Head></Table.Head>
-					</Table.Row>
-				</Table.Header>
-				<Table.Body>
-					{#each users as u (u.id)}
-						<Table.Row>
-							<Table.Cell class="font-medium">{u.username}</Table.Cell>
-							<Table.Cell>
-								<div class="flex flex-wrap gap-1">
-									{#each u.roles || [] as r}
-										<Badge variant={r === 'admin' ? 'default' : 'secondary'} class="text-[10px] uppercase">{r}</Badge>
-									{/each}
-								</div>
-							</Table.Cell>
-							<Table.Cell class="text-sm text-slate-600">{u.profile_nama || '—'}</Table.Cell>
-							<Table.Cell>
-								<Badge variant={u.is_active ? 'outline' : 'destructive'}>
-									{u.is_active ? 'Aktif' : 'Suspended'}
-								</Badge>
-							</Table.Cell>
-							<Table.Cell class="text-xs text-slate-400">{new Date(u.created_at).toLocaleDateString()}</Table.Cell>
-							<Table.Cell class="text-right">
-								<div class="flex justify-end gap-2">
-									<Button
-										variant="outline"
-										size="sm"
-										onclick={() => toggleUserStatus(u)}
-									>
-										{u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-									</Button>
-									<Button variant="ghost" size="sm" onclick={() => deleteUser(u.id, u.username)}
-										class="text-red-600 hover:text-red-700 hover:bg-red-50">Hapus</Button>
-								</div>
-							</Table.Cell>
-						</Table.Row>
+			{#if loading && users.length === 0}
+				<div class="space-y-3 p-6">
+					{#each Array.from({ length: 5 }) as _, index (`user-skeleton-${index}`)}
+						<div class="grid gap-3 md:grid-cols-[1fr_1.1fr_1fr_0.7fr_0.8fr_auto] md:items-center">
+							<Skeleton class="h-5 w-28" />
+							<Skeleton class="h-5 w-36" />
+							<Skeleton class="h-5 w-40" />
+							<Skeleton class="h-6 w-20" />
+							<Skeleton class="h-5 w-24" />
+							<Skeleton class="h-9 w-40 justify-self-end" />
+						</div>
 					{/each}
-				</Table.Body>
-			</Table.Root>
-			</div>
+				</div>
+			{:else}
+				<div class="hidden overflow-x-auto lg:block">
+				<Table.Root>
+					<Table.Header>
+						<Table.Row class="bg-slate-50">
+							<Table.Head>Username</Table.Head>
+							<Table.Head>Roles</Table.Head>
+							<Table.Head>Profil Terhubung</Table.Head>
+							<Table.Head>Status</Table.Head>
+							<Table.Head>Dibuat</Table.Head>
+							<Table.Head></Table.Head>
+						</Table.Row>
+					</Table.Header>
+					<Table.Body>
+						{#each users as u (u.id)}
+							<Table.Row>
+								<Table.Cell class="font-medium">{u.username}</Table.Cell>
+								<Table.Cell>
+									<div class="flex flex-wrap gap-1">
+										{#each u.roles || [] as r}
+											<Badge variant={r === 'admin' ? 'default' : 'secondary'} class="text-[10px] uppercase">{r}</Badge>
+										{/each}
+									</div>
+								</Table.Cell>
+								<Table.Cell class="text-sm text-slate-600">{u.profile_nama || '—'}</Table.Cell>
+								<Table.Cell>
+									<Badge variant={u.is_active ? 'outline' : 'destructive'}>
+										{u.is_active ? 'Aktif' : 'Suspended'}
+									</Badge>
+								</Table.Cell>
+								<Table.Cell class="text-xs text-slate-400">{new Date(u.created_at).toLocaleDateString()}</Table.Cell>
+								<Table.Cell class="text-right">
+									<div class="flex justify-end gap-2">
+										<Button
+											variant="outline"
+											size="sm"
+											onclick={() => toggleUserStatus(u)}
+										>
+											{u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+										</Button>
+										<Button variant="ghost" size="sm" onclick={() => deleteUser(u.id, u.username)}
+											class="text-red-600 hover:text-red-700 hover:bg-red-50">Hapus</Button>
+									</div>
+								</Table.Cell>
+							</Table.Row>
+						{:else}
+							<Table.Row>
+								<Table.Cell colspan={6} class="py-6 text-center text-sm text-slate-400">
+									Belum ada data pengguna.
+								</Table.Cell>
+							</Table.Row>
+						{/each}
+					</Table.Body>
+				</Table.Root>
+				</div>
 
-			<div class="grid gap-3 p-4 lg:hidden">
-				{#each users as u (u.id)}
-					<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-						<div class="flex items-start justify-between gap-3">
-							<div class="min-w-0">
-								<p class="text-sm font-semibold text-slate-900">{u.username}</p>
-								<div class="mt-1 flex flex-wrap gap-1">
-									{#each u.roles || [] as r}
-										<Badge variant={r === 'admin' ? 'default' : 'secondary'} class="text-[10px] capitalize">{r}</Badge>
-									{/each}
+				<div class="grid gap-3 p-4 lg:hidden">
+					{#each users as u (u.id)}
+						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									<p class="text-sm font-semibold text-slate-900">{u.username}</p>
+									<div class="mt-1 flex flex-wrap gap-1">
+										{#each u.roles || [] as r}
+											<Badge variant={r === 'admin' ? 'default' : 'secondary'} class="text-[10px] capitalize">{r}</Badge>
+										{/each}
+									</div>
+									<p class="mt-2 text-xs text-slate-500">{u.profile_nama || 'Tidak terhubung profil'}</p>
 								</div>
-								<p class="mt-2 text-xs text-slate-500">{u.profile_nama || 'Tidak terhubung profil'}</p>
+								<Badge variant={u.is_active ? 'outline' : 'destructive'}>{u.is_active ? 'Aktif' : 'Suspended'}</Badge>
 							</div>
-							<Badge variant={u.is_active ? 'outline' : 'destructive'}>{u.is_active ? 'Aktif' : 'Suspended'}</Badge>
+							<div class="mt-4 flex gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									class="flex-1 justify-center"
+									onclick={() => toggleUserStatus(u)}
+								>
+									{u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+								</Button>
+								<Button variant="ghost" size="sm" onclick={() => deleteUser(u.id, u.username)}
+									class="flex-1 justify-center text-red-600 hover:text-red-700 hover:bg-red-50">Hapus</Button>
+							</div>
 						</div>
-						<div class="mt-4 flex gap-2">
-							<Button
-								variant="outline"
-								size="sm"
-								class="flex-1 justify-center"
-								onclick={() => toggleUserStatus(u)}
-							>
-								{u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-							</Button>
-							<Button variant="ghost" size="sm" onclick={() => deleteUser(u.id, u.username)}
-								class="flex-1 justify-center text-red-600 hover:text-red-700 hover:bg-red-50">Hapus</Button>
+					{:else}
+						<div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">
+							Belum ada data pengguna.
 						</div>
-					</div>
-				{/each}
-			</div>
+					{/each}
+				</div>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 </div>

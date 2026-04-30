@@ -4,9 +4,10 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type Parent = {
 		id: string;
@@ -152,9 +153,9 @@
 					</div>
 				</div>
 				<div class="flex gap-2">
-					<Button onclick={saveParent} disabled={fBusy || !fNama}>
-						{fBusy ? 'Menyimpan...' : 'Simpan Data'}
-					</Button>
+					<LoadingButton onclick={saveParent} loading={fBusy} disabled={fBusy || !fNama}>
+						Simpan Data
+					</LoadingButton>
 					<Button variant="outline" onclick={() => (showForm = false)}>Batal</Button>
 				</div>
 			</Card.Content>
@@ -163,30 +164,49 @@
 
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
-			<Table.Root>
-				<Table.Header>
-					<Table.Row class="bg-slate-50">
-						<Table.Head>Nama Orang Tua</Table.Head>
-						<Table.Head>No. HP</Table.Head>
-						<Table.Head>Alamat</Table.Head>
-						<Table.Head class="text-right">Aksi</Table.Head>
-					</Table.Row>
-				</Table.Header>
-				<Table.Body>
-					{#each parents as p (p.id)}
-						<Table.Row>
-							<Table.Cell class="font-medium">{p.nama}</Table.Cell>
-							<Table.Cell class="text-sm">{p.phone || '—'}</Table.Cell>
-							<Table.Cell class="text-sm text-slate-600">{p.address || '—'}</Table.Cell>
-							<Table.Cell class="text-right">
-								<Button variant="outline" size="sm" onclick={() => openLinkDialog(p)}>
-									Lihat Anak
-								</Button>
-							</Table.Cell>
-						</Table.Row>
+			{#if loading && parents.length === 0}
+				<div class="space-y-3 p-6">
+					{#each Array.from({ length: 5 }) as _, index (`parent-skeleton-${index}`)}
+						<div class="grid gap-3 md:grid-cols-[1.4fr_1fr_1.4fr_auto] md:items-center">
+							<Skeleton class="h-5 w-40" />
+							<Skeleton class="h-5 w-28" />
+							<Skeleton class="h-5 w-full max-w-xs" />
+							<Skeleton class="h-9 w-28 justify-self-end" />
+						</div>
 					{/each}
-				</Table.Body>
-			</Table.Root>
+				</div>
+			{:else}
+				<Table.Root>
+					<Table.Header>
+						<Table.Row class="bg-slate-50">
+							<Table.Head>Nama Orang Tua</Table.Head>
+							<Table.Head>No. HP</Table.Head>
+							<Table.Head>Alamat</Table.Head>
+							<Table.Head class="text-right">Aksi</Table.Head>
+						</Table.Row>
+					</Table.Header>
+					<Table.Body>
+						{#each parents as p (p.id)}
+							<Table.Row>
+								<Table.Cell class="font-medium">{p.nama}</Table.Cell>
+								<Table.Cell class="text-sm">{p.phone || '—'}</Table.Cell>
+								<Table.Cell class="text-sm text-slate-600">{p.address || '—'}</Table.Cell>
+								<Table.Cell class="text-right">
+									<Button variant="outline" size="sm" onclick={() => openLinkDialog(p)}>
+										Lihat Anak
+									</Button>
+								</Table.Cell>
+							</Table.Row>
+						{:else}
+							<Table.Row>
+								<Table.Cell colspan={4} class="py-6 text-center text-sm text-slate-400">
+									Belum ada data orang tua.
+								</Table.Cell>
+							</Table.Row>
+						{/each}
+					</Table.Body>
+				</Table.Root>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 </div>
@@ -207,9 +227,9 @@
 						<option value={s.id}>{s.nama} ({s.nis})</option>
 					{/each}
 				</select>
-				<Button size="sm" onclick={linkStudent} disabled={fBusy || !fSelectedStudentId}>
+				<LoadingButton size="sm" onclick={linkStudent} loading={fBusy} disabled={fBusy || !fSelectedStudentId}>
 					Tautkan
-				</Button>
+				</LoadingButton>
 			</div>
 
 			<div class="rounded-md border border-slate-200">

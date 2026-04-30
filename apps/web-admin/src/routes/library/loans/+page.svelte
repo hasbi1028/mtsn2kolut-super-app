@@ -7,6 +7,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	interface LoanRow {
 		id: string;
@@ -219,7 +221,19 @@
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
 			{#if loading}
-				<p class="p-6 text-sm text-slate-400">Memuat data pinjaman…</p>
+				<div class="space-y-3 p-6">
+					{#each Array.from({ length: 6 }) as _, index (`loan-skeleton-${index}`)}
+						<div class="grid gap-3 md:grid-cols-[1.2fr_1fr_0.8fr_0.8fr_0.7fr_0.7fr_auto] md:items-center">
+							<Skeleton class="h-5 w-40" />
+							<Skeleton class="h-5 w-32" />
+							<Skeleton class="h-5 w-24" />
+							<Skeleton class="h-5 w-24" />
+							<Skeleton class="h-6 w-20" />
+							<Skeleton class="h-5 w-20" />
+							<Skeleton class="h-9 w-28 justify-self-end" />
+						</div>
+					{/each}
+				</div>
 			{:else if filteredLoans.length === 0}
 				<p class="p-6 text-sm text-slate-400">Tidak ada data pinjaman.</p>
 			{:else}
@@ -389,9 +403,9 @@
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (showLoanDialog = false)}>Batal</Button>
-			<Button onclick={submitLoan} disabled={busy || !fMemberId || !fBookId}>
-				{busy ? 'Memproses…' : 'Pinjamkan'}
-			</Button>
+			<LoadingButton onclick={submitLoan} loading={busy} disabled={busy || !fMemberId || !fBookId}>
+				Pinjamkan
+			</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
@@ -419,7 +433,7 @@
 		{/if}
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => { returnLoan = null; showReturnDialog = false; }}>Batal</Button>
-			<Button onclick={submitReturn} disabled={busy}>{busy ? 'Memproses…' : 'Konfirmasi Kembalikan'}</Button>
+			<LoadingButton onclick={submitReturn} loading={busy} disabled={busy}>Konfirmasi Kembalikan</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
@@ -433,7 +447,7 @@
 		</Dialog.Header>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => { lunasLoanId = null; showLunasDialog = false; }}>Batal</Button>
-			<Button onclick={submitLunas} disabled={busy}>{busy ? 'Menyimpan…' : 'Tandai Lunas'}</Button>
+			<LoadingButton onclick={submitLunas} loading={busy} disabled={busy}>Tandai Lunas</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

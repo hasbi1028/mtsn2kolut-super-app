@@ -4,8 +4,9 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	interface AttendanceRecord {
 		id: string;
@@ -155,16 +156,10 @@
 						<span class="text-center text-sm text-muted-foreground">s/d</span>
 						<Input type="date" bind:value={endDate} class="h-10 min-w-0 bg-white" />
 					</div>
-					<Button class="h-10 w-full sm:w-auto" size="sm" onclick={load} disabled={loading}>
-						{loading ? 'Memuat...' : 'Terapkan'}
-					</Button>
+					<LoadingButton class="h-10 w-full sm:w-auto" size="sm" onclick={load} loading={loading} loadingLabel="Memuat..." label="Terapkan" />
 					<div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-						<Button variant="outline" class="h-10 w-full bg-white sm:w-auto" size="sm" onclick={exportCSV} disabled={records.length === 0}>
-							↓ CSV
-						</Button>
-						<Button variant="outline" class="h-10 w-full bg-white sm:w-auto" size="sm" href="/pusaka/antrian">
-							Antrian →
-						</Button>
+						<LoadingButton variant="outline" class="h-10 w-full bg-white sm:w-auto" size="sm" onclick={exportCSV} disabled={records.length === 0} label="↓ CSV" />
+						<LoadingButton variant="outline" class="h-10 w-full bg-white sm:w-auto" size="sm" href="/pusaka/antrian" label="Antrian →" />
 					</div>
 				</div>
 			</div>
@@ -179,6 +174,14 @@
 		{/if}
 
 		<Card.Content class="p-0">
+			{#if loading && records.length === 0}
+				<div class="space-y-3 p-4">
+					<Skeleton class="h-12 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+				</div>
+			{:else}
 			<div class="hidden overflow-x-auto lg:block">
 			<Table.Root>
 				<Table.Header>
@@ -261,6 +264,7 @@
 					</div>
 				{/each}
 			</div>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 

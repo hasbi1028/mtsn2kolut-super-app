@@ -4,6 +4,7 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 
 	interface Stats {
 		total_judul: number;
@@ -93,7 +94,11 @@
 			<Card.Root class="border-slate-200">
 				<Card.Content class="p-4">
 					<p class="text-xs text-slate-500">{card.label}</p>
-					<p class="mt-1 text-2xl font-bold {card.color}">{loading ? '…' : card.value}</p>
+					{#if loading}
+						<Skeleton class="mt-2 h-8 w-16" />
+					{:else}
+						<p class="mt-1 text-2xl font-bold {card.color}">{card.value}</p>
+					{/if}
 				</Card.Content>
 			</Card.Root>
 		{/each}
@@ -107,7 +112,15 @@
 			</Card.Header>
 			<Card.Content class="p-0">
 				{#if loading}
-					<p class="px-4 pb-4 text-sm text-slate-400">Memuat…</p>
+					<div class="space-y-3 p-4">
+						{#each Array.from({ length: 5 }) as _, index (`active-loan-skeleton-${index}`)}
+							<div class="grid gap-3 sm:grid-cols-3 sm:items-center">
+								<Skeleton class="h-5 w-32" />
+								<Skeleton class="h-5 w-28" />
+								<Skeleton class="h-5 w-24" />
+							</div>
+						{/each}
+					</div>
 				{:else if activeLoans.length === 0}
 					<p class="px-4 pb-4 text-sm text-slate-400">Tidak ada pinjaman aktif.</p>
 				{:else}
@@ -155,7 +168,15 @@
 			</Card.Header>
 			<Card.Content class="p-0">
 				{#if loading}
-					<p class="px-4 pb-4 text-sm text-slate-400">Memuat…</p>
+					<div class="space-y-3 p-4">
+						{#each Array.from({ length: 5 }) as _, index (`overdue-loan-skeleton-${index}`)}
+							<div class="grid gap-3 sm:grid-cols-3 sm:items-center">
+								<Skeleton class="h-5 w-32" />
+								<Skeleton class="h-5 w-28" />
+								<Skeleton class="h-5 w-24" />
+							</div>
+						{/each}
+					</div>
 				{:else if overdueLoans.length === 0}
 					<p class="px-4 pb-4 text-sm text-slate-400">Tidak ada keterlambatan.</p>
 				{:else}

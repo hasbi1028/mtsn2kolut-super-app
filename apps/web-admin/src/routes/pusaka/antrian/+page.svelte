@@ -4,7 +4,8 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Button } from '$lib/components/ui/button';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	interface Job {
 		id: string; nama: string; nip: string;
@@ -98,9 +99,7 @@
 			<h1 class="text-2xl font-semibold text-slate-800">Antrian Job PUSAKA</h1>
 			<p class="text-sm text-muted-foreground mt-1">Auto-refresh setiap 10 detik</p>
 		</div>
-		<Button variant="outline" size="sm" onclick={load} disabled={loading}>
-			{loading ? 'Memuat...' : '↺ Refresh'}
-		</Button>
+		<LoadingButton variant="outline" size="sm" onclick={load} loading={loading} loadingLabel="Memuat..." label="↺ Refresh" />
 	</div>
 
 	<!-- Filters -->
@@ -127,9 +126,7 @@
 					{/each}
 				</select>
 				<div class="flex items-center justify-between gap-3 sm:col-span-2 xl:col-span-1 xl:justify-end">
-					<Button variant="outline" size="sm" onclick={load} disabled={loading} class="h-10 sm:w-auto">
-						{loading ? 'Memuat...' : '↺ Refresh'}
-					</Button>
+					<LoadingButton variant="outline" size="sm" onclick={load} loading={loading} loadingLabel="Memuat..." label="↺ Refresh" class="h-10 sm:w-auto" />
 					<span class="text-sm text-muted-foreground">{jobs.length} job</span>
 				</div>
 			</div>
@@ -142,6 +139,14 @@
 
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
+			{#if loading && jobs.length === 0}
+				<div class="space-y-3 p-4">
+					<Skeleton class="h-12 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+				</div>
+			{:else}
 			<div class="hidden overflow-x-auto lg:block">
 			<Table.Root>
 				<Table.Header>
@@ -201,6 +206,7 @@
 					</div>
 				{/each}
 			</div>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 </div>

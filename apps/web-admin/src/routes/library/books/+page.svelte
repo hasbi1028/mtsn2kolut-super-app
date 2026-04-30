@@ -7,6 +7,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	interface Book {
 		id: string;
@@ -158,7 +160,18 @@
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
 			{#if loading}
-				<p class="p-6 text-sm text-slate-400">Memuat katalog…</p>
+				<div class="space-y-3 p-6">
+					{#each Array.from({ length: 6 }) as _, index (`book-skeleton-${index}`)}
+						<div class="grid gap-3 md:grid-cols-[0.7fr_1.7fr_0.8fr_0.8fr_0.6fr_auto] md:items-center">
+							<Skeleton class="h-5 w-20" />
+							<Skeleton class="h-5 w-full max-w-sm" />
+							<Skeleton class="h-6 w-20" />
+							<Skeleton class="h-5 w-20 justify-self-center" />
+							<Skeleton class="h-5 w-16" />
+							<Skeleton class="h-9 w-28 justify-self-end" />
+						</div>
+					{/each}
+				</div>
 			{:else if filtered.length === 0}
 				<p class="p-6 text-sm text-slate-400">Tidak ada buku ditemukan.</p>
 			{:else}
@@ -282,7 +295,7 @@
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (showDialog = false)}>Batal</Button>
-			<Button onclick={save} disabled={busy}>{busy ? 'Menyimpan…' : 'Simpan'}</Button>
+			<LoadingButton onclick={save} loading={busy} disabled={busy}>Simpan</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
@@ -296,7 +309,7 @@
 		</Dialog.Header>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => { showDeleteDialog = false; confirmDeleteId = null; }}>Batal</Button>
-			<Button variant="destructive" onclick={deleteBook} disabled={busy}>{busy ? 'Menghapus…' : 'Hapus'}</Button>
+			<LoadingButton variant="destructive" onclick={deleteBook} loading={busy} disabled={busy}>Hapus</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

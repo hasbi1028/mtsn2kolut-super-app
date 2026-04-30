@@ -3,9 +3,10 @@
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
-	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type SummaryRow = {
 		employee_id: string; employee_nama: string; employee_nip: string;
@@ -86,8 +87,8 @@
 				<span class="text-center text-sm text-muted-foreground">s/d</span>
 				<Input type="date" bind:value={endDate} class="h-10 min-w-0 bg-white" />
 			</div>
-			<Button class="h-10 w-full sm:w-auto" onclick={load} disabled={loading}>{loading ? '...' : 'Tampilkan'}</Button>
-			<Button class="h-10 w-full sm:w-auto" variant="outline" onclick={exportCSV} disabled={summary.length === 0}>↓ CSV</Button>
+			<LoadingButton class="h-10 w-full sm:w-auto" onclick={load} loading={loading} loadingLabel="Memuat..." label="Tampilkan" />
+			<LoadingButton class="h-10 w-full sm:w-auto" variant="outline" onclick={exportCSV} disabled={summary.length === 0} label="↓ CSV" />
 		</div>
 	</div>
 
@@ -97,6 +98,14 @@
 
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
+			{#if loading && summary.length === 0}
+				<div class="space-y-3 p-4">
+					<Skeleton class="h-12 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+				</div>
+			{:else}
 			<div class="hidden overflow-x-auto lg:block">
 			<Table.Root>
 				<Table.Header>
@@ -169,6 +178,7 @@
 					</div>
 				{/each}
 			</div>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 </div>
