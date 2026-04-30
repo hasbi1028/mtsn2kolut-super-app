@@ -10,6 +10,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import SuccessPanel from '$lib/components/SuccessPanel.svelte';
 
 	type Parent = {
 		id: string;
@@ -30,6 +31,7 @@
 	let students = $state<Student[]>([]);
 	let loading = $state(true);
 	let error = $state('');
+	let success = $state('');
 	let showForm = $state(false);
 	let showLinkDialog = $state(false);
 	let selectedParent = $state<Parent | null>(null);
@@ -61,6 +63,7 @@
 		if (!fNama) return;
 		fBusy = true;
 		try {
+			success = '';
 			const res = await fetch('/api/parents', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -70,6 +73,7 @@
 			fNama = ''; fPhone = ''; fAddress = '';
 			showForm = false;
 			toast.success('Data orang tua berhasil disimpan');
+			success = 'Profil orang tua berhasil ditambahkan. Selanjutnya kamu bisa membuka relasi anak untuk mulai menautkan siswa.';
 			await load();
 		} catch {
 			toast.error('Gagal menyimpan data');
@@ -87,6 +91,7 @@
 		if (!selectedParent || !fSelectedStudentId) return;
 		fBusy = true;
 		try {
+			success = '';
 			const res = await fetch(`/api/parents/${selectedParent.id}/link`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -95,6 +100,7 @@
 			if (!res.ok) throw new Error();
 			toast.success('Siswa berhasil ditautkan');
 			fSelectedStudentId = '';
+			success = `Relasi keluarga berhasil diperbarui. ${selectedParent.nama} sekarang terhubung dengan siswa yang dipilih.`;
 			// Refresh children list
 			const cRes = await fetch(`/api/parents/${selectedParent.id}/children`);
 			children = await cRes.json();
@@ -108,6 +114,7 @@
 		if (!confirm(`Lepas tautan ${studentName} dari ${selectedParent.nama}?`)) return;
 		fBusy = true;
 		try {
+			success = '';
 			const res = await fetch(`/api/parents/${selectedParent.id}/unlink`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -115,6 +122,7 @@
 			});
 			if (!res.ok) throw new Error();
 			toast.success('Tautan siswa berhasil dilepas');
+			success = `Tautan ${studentName} berhasil dilepas dari ${selectedParent.nama}.`;
 			const cRes = await fetch(`/api/parents/${selectedParent.id}/children`);
 			children = await cRes.json();
 		} catch {
@@ -158,6 +166,10 @@
 
 	{#if error}
 		<RecoveryPanel title="Relasi Orang Tua Belum Tersaji" message={error} onRetry={load} />
+	{/if}
+
+	{#if success}
+		<SuccessPanel title="Relasi Berhasil Diperbarui" message={success} />
 	{/if}
 
 	{#if showForm}

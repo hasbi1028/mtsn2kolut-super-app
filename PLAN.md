@@ -138,6 +138,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Density & filter-bar polish baseline — library catalog and circulation screens now use denser summary cards, clearer filter surfaces, and more consistent header spacing with the rest of the admin panel
 - [x] Ops-admin route polish baseline — employees, parents, and user-management screens now have stronger route-level hierarchy, summary context, and clearer empty/recovery surfaces
 - [x] Website editorial polish baseline — news, announcement, and public-page management now share denser summary context, clearer search surfaces, and better empty/recovery states via the shared content manager
+- [x] Success-state inline baseline — major create/publish/link flows now surface contextual success panels in-page for employee creation, parent-child linking, and website editorial actions instead of relying only on transient toasts
 - [x] Rapor print view — printable HTML layout at `/grades/rapor` using existing `/api/grades` endpoint, color-coded scores, school header, signature area, sidebar entry
 
 ### CBT Question Authoring UX

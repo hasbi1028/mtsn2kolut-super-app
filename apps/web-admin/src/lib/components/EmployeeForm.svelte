@@ -2,6 +2,7 @@
   import * as Card from '$lib/components/ui/card';
   import { Input } from '$lib/components/ui/input';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
+  import SuccessPanel from '$lib/components/SuccessPanel.svelte';
 
   let { onadd }: { onadd?: () => void } = $props();
 
@@ -14,24 +15,29 @@
     pusaka_password: ''
   });
   let error   = $state('');
+  let success = $state('');
   let loading = $state(false);
   let pusakaEligible = $derived(form.employment_type === 'pns' || form.employment_type === 'pppk');
 
   async function submit() {
     if (!form.nip || !form.nama || !form.employment_type) {
       error = 'NIP, Nama, dan status kepegawaian wajib diisi.';
+      success = '';
       return;
     }
     if ((form.pusaka_username && !form.pusaka_password) || (!form.pusaka_username && form.pusaka_password)) {
       error = 'Username dan password PUSAKA harus diisi berpasangan.';
+      success = '';
       return;
     }
     if (!pusakaEligible && (form.pusaka_username || form.pusaka_password)) {
       error = 'Hanya pegawai PNS atau PPPK yang boleh memiliki akun PUSAKA.';
+      success = '';
       return;
     }
     loading = true;
     error = '';
+    success = '';
     const res = await fetch('/api/employees', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -44,6 +50,7 @@
       return;
     }
     form = { nip: '', nama: '', unit_kerja: '', employment_type: '', pusaka_username: '', pusaka_password: '' };
+    success = 'Pegawai baru berhasil ditambahkan ke master data. Jika pegawai eligible PUSAKA, akun integrasinya bisa dilengkapi sekarang atau nanti dari menu PUSAKA.';
     onadd?.();
   }
 </script>
@@ -54,6 +61,11 @@
     <Card.Description>Master data pegawai sekolah. Integrasi PUSAKA bersifat opsional dan hanya berlaku untuk pegawai PNS atau PPPK.</Card.Description>
   </Card.Header>
   <Card.Content>
+    {#if success}
+      <div class="mb-3">
+        <SuccessPanel title="Pegawai Berhasil Ditambahkan" message={success} compact />
+      </div>
+    {/if}
     {#if error}
       <p class="mb-3 text-sm text-destructive">{error}</p>
     {/if}

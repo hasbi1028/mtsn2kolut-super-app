@@ -11,6 +11,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import SuccessPanel from '$lib/components/SuccessPanel.svelte';
 
 	type ContentStatus = 'draft' | 'published';
 	type ContentKind = 'page' | 'post' | 'announcement';
@@ -45,6 +46,7 @@
 	let items = $state<WebsiteContent[]>([]);
 	let loading = $state(true);
 	let error = $state('');
+	let success = $state('');
 	let search = $state('');
 	let showDialog = $state(false);
 	let saving = $state(false);
@@ -169,6 +171,7 @@
 	async function save() {
 		saving = true;
 		try {
+			success = '';
 			const payload = { kind, ...form };
 			const res = await fetch(editingId ? `/api/website/content/${editingId}` : '/api/website/content', {
 				method: editingId ? 'PUT' : 'POST',
@@ -181,6 +184,9 @@
 				return;
 			}
 			toast.success(editingId ? 'Konten berhasil diperbarui.' : 'Konten berhasil dibuat.');
+			success = editingId
+				? `Konten "${form.title}" berhasil diperbarui. Periksa status publish-nya sebelum menutup sesi editorial ini.`
+				: `Konten "${form.title}" berhasil dibuat sebagai ${form.status === 'published' ? 'published' : 'draft'}.`;
 			showDialog = false;
 			resetForm();
 			await load();
@@ -197,6 +203,7 @@
 			return;
 		}
 		toast.success('Konten berhasil dihapus.');
+		success = `Konten "${item.title}" berhasil dihapus dari area editorial.`;
 		await load();
 	}
 
@@ -224,6 +231,9 @@
 			return;
 		}
 		toast.success(nextStatus === 'published' ? 'Konten dipublikasikan.' : 'Konten dikembalikan ke draft.');
+		success = nextStatus === 'published'
+			? `Konten "${item.title}" berhasil dipublikasikan dan sekarang tersedia di website publik.`
+			: `Konten "${item.title}" berhasil dikembalikan ke draft untuk revisi lebih lanjut.`;
 		await load();
 	}
 
@@ -269,6 +279,10 @@
 
 	{#if error}
 		<RecoveryPanel title="Konten Website Belum Tersaji" message={error} onRetry={load} />
+	{/if}
+
+	{#if success}
+		<SuccessPanel title="Aksi Editorial Berhasil" message={success} />
 	{/if}
 
 	<Card.Root class="border-slate-200 shadow-sm">
