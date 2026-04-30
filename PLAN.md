@@ -155,6 +155,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Widget-test coverage for cached restore card in login flow and lightweight media card in exam shell
 - [x] Widget-test coverage for `stimulus_html` and `stem_html` rendering in Flutter exam shell
 - [x] Widget-test coverage for sync-chip labels `Tersambung`, `Lokal`, `Waspada`, and `Menurun`
+- [x] Widget-test coverage for transient sync-chip labels `Sinkron` and `Cek Ulang`
 - [x] Handler-level unauthorized coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `answer` and `submit` routes
