@@ -147,6 +147,7 @@ Three runtime units deployed across 3 VPS:
 - [x] CBT copy consistency baseline — bank soal, komposer soal, paket ujian, kegiatan ujian, serta daftar dan detail sesi now use more consistent institutional Indonesian wording for review flow, publication state, mode naming, scoring, token actions, coverage labels, and operator CTAs
 - [x] Status badge consistency baseline — key admin screens now prefer one visible passive-state term (`Nonaktif`) while preserving action verbs like `Nonaktifkan`, reducing mixed status wording across users, students, and academic master data
 - [x] Public detail reading baseline — berita and pengumuman detail pages now use a calmer reading layout with stronger header hierarchy, cleaner content density, and a lightweight side summary instead of one long undecorated article column
+- [x] Public listing rhythm baseline — berita and pengumuman listing pages now use a stronger editorial header, more stable card rhythm, and a cleaner published-content grid for public visitors
 - [x] Rapor print view — printable HTML layout at `/grades/rapor` using existing `/api/grades` endpoint, color-coded scores, school header, signature area, sidebar entry
 
 ### CBT Question Authoring UX
