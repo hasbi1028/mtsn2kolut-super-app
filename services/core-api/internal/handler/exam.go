@@ -106,6 +106,10 @@ func (h *Exam) RecordEvent(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid json")
 		return
 	}
+	if strings.TrimSpace(body.EventType) == "" {
+		api.BadRequest(w, "event_type required")
+		return
+	}
 	if err := h.svc.RecordClientEvent(r.Context(), p.ID, body.EventType, body.Data); err != nil {
 		api.Internal(w, err)
 		return

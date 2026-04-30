@@ -818,3 +818,28 @@ func TestExamRecordEventRejectsInvalidJSON(t *testing.T) {
 		t.Fatalf("error = %q, want %q", payload.Error, "invalid json")
 	}
 }
+
+func TestExamRecordEventRequiresEventType(t *testing.T) {
+	h := &Exam{svc: &fakeExamService{}}
+	var participant db.GetParticipantByTokenRow
+	req := httptest.NewRequest("POST", "http://internal/api/exam/event", bytes.NewBufferString(`{"data":{"reason":"test"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.RecordEvent(rec, req)
+
+	if rec.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "event_type required" {
+		t.Fatalf("error = %q, want %q", payload.Error, "event_type required")
+	}
+}
