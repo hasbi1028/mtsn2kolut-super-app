@@ -2,12 +2,16 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
 	"mtsn2kolut-super-app/backend/internal/domain"
@@ -22,12 +26,14 @@ const (
 
 // authStore defines the subset of db.Queries that Auth service needs.
 type authStore interface {
-	GetUserByUsername(ctx context.Context, username string) (db.User, error)
+	GetUserByUsername(ctx context.Context, username string) (db.GetUserByUsernameRow, error)
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
 	GetSetting(ctx context.Context, key string) (db.AppSetting, error)
 	UpsertSetting(ctx context.Context, arg db.UpsertSettingParams) error
 	ListSettings(ctx context.Context) ([]db.AppSetting, error)
+	GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error)
+	AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error
 }
 
 type Auth struct {
@@ -47,6 +53,10 @@ func (s *Auth) Login(ctx context.Context, username, password string) (domain.Tok
 			return domain.TokenPair{}, domain.ErrUnauthorized
 		}
 		return domain.TokenPair{}, err
+	}
+
+	if !user.IsActive {
+		return domain.TokenPair{}, domain.ErrSuspended
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
@@ -80,6 +90,10 @@ func (s *Auth) Refresh(ctx context.Context, refreshToken string) (domain.TokenPa
 		return domain.TokenPair{}, domain.ErrUnauthorized
 	}
 
+	if !user.IsActive {
+		return domain.TokenPair{}, domain.ErrSuspended
+	}
+
 	if !s.validAuthVersion(ctx, claims) {
 		return domain.TokenPair{}, domain.ErrUnauthorized
 	}
@@ -92,8 +106,16 @@ func (s *Auth) ChangePassword(ctx context.Context, username, oldPassword, newPas
 		return domain.ErrUnauthorized
 	}
 
+	if !user.IsActive {
+		return domain.ErrSuspended
+	}
+
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPassword)); err != nil {
 		return domain.ErrUnauthorized
+	}
+
+	if err := validatePassword(username, newPassword); err != nil {
+		return err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
@@ -110,25 +132,52 @@ func (s *Auth) ChangePassword(ctx context.Context, username, oldPassword, newPas
 	return s.bumpAuthVersion(ctx)
 }
 
-func (s *Auth) issueTokenPair(ctx context.Context, user db.User) (domain.TokenPair, error) {
+func (s *Auth) issueTokenPair(ctx context.Context, user db.GetUserByUsernameRow) (domain.TokenPair, error) {
 	now := time.Now()
 	version, err := s.CurrentAuthVersion(ctx)
 	if err != nil {
 		return domain.TokenPair{}, err
 	}
 
-	claims := jwt.MapClaims{
-		"sub":  user.Username,
-		"uid":  pgUUIDString(user.ID),
-		"role": string(user.Role),
-		"type": "access",
-		"ver":  version,
-		"iat":  now.Unix(),
-		"exp":  now.Add(accessTokenTTL).Unix(),
+	var roleStrs []string
+	if len(user.Roles) > 0 {
+		_ = json.Unmarshal(user.Roles, &roleStrs)
 	}
-	
+
+	if len(roleStrs) == 0 {
+		// Fallback to fetch roles if not joined or empty
+		roles, err := s.q.GetUserRoles(ctx, user.ID)
+		if err == nil {
+			for _, r := range roles {
+				roleStrs = append(roleStrs, string(r))
+			}
+		}
+	}
+
+	primaryRole := ""
+	if len(roleStrs) > 0 {
+		primaryRole = roleStrs[0]
+	}
+
+	claims := jwt.MapClaims{
+		"sub":   user.Username,
+		"uid":   pgUUIDString(user.ID),
+		"role":  primaryRole, // backward compatibility
+		"roles": roleStrs,
+		"type":  "access",
+		"ver":   version,
+		"iat":   now.Unix(),
+		"exp":   now.Add(accessTokenTTL).Unix(),
+	}
+
 	if user.EmployeeID.Valid {
 		claims["eid"] = pgUUIDString(user.EmployeeID)
+	}
+	if user.StudentID.Valid {
+		claims["sid"] = pgUUIDString(user.StudentID)
+	}
+	if user.ParentID.Valid {
+		claims["pid"] = pgUUIDString(user.ParentID)
 	}
 
 	access := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -153,6 +202,10 @@ func (s *Auth) issueTokenPair(ctx context.Context, user db.User) (domain.TokenPa
 }
 
 func (s *Auth) SeedAdmin(ctx context.Context) error {
+	if strings.TrimSpace(s.adminPassword) == "" {
+		return fmt.Errorf("ADMIN_PASSWORD is required for initial admin bootstrap")
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(s.adminPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
@@ -164,18 +217,24 @@ func (s *Auth) SeedAdmin(ctx context.Context) error {
 			return err
 		}
 		// Admin doesn't exist yet — create
-		_, err = s.q.CreateUser(ctx, db.CreateUserParams{
+		user, err := s.q.CreateUser(ctx, db.CreateUserParams{
 			Username:     "admin",
 			PasswordHash: string(hash),
-			Role:         db.UserRoleAdmin,
+			IsActive:     true,
 		})
-		return err
+		if err != nil {
+			return err
+		}
+		return s.q.AddUserRole(ctx, db.AddUserRoleParams{
+			UserID: user.ID,
+			Role:   db.UserRoleAdmin,
+		})
 	}
 
-	// Admin exists — update password
-	return s.q.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
-		ID:           existing.ID,
-		PasswordHash: string(hash),
+	// Ensure admin has admin role
+	return s.q.AddUserRole(ctx, db.AddUserRoleParams{
+		UserID: existing.ID,
+		Role:   db.UserRoleAdmin,
 	})
 }
 
@@ -232,4 +291,30 @@ func asInt64(v any) (int64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func validatePassword(username, password string) error {
+	trimmed := strings.TrimSpace(password)
+	if len(trimmed) < 8 {
+		return domain.ErrWeakPassword
+	}
+
+	lowerPassword := strings.ToLower(trimmed)
+	lowerUsername := strings.ToLower(strings.TrimSpace(username))
+	if lowerUsername != "" && lowerPassword == lowerUsername {
+		return domain.ErrWeakPassword
+	}
+
+	allDigits := true
+	for _, r := range trimmed {
+		if r < '0' || r > '9' {
+			allDigits = false
+			break
+		}
+	}
+	if allDigits {
+		return domain.ErrWeakPassword
+	}
+
+	return nil
 }

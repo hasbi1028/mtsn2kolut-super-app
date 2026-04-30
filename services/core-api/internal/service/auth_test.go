@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -9,18 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
 type fakeStore struct {
 	settings map[string]string
 	users    map[string]db.User
+	userRoles map[pgtype.UUID][]db.UserRole
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		settings: map[string]string{},
-		users:    map[string]db.User{},
+		settings:  map[string]string{},
+		users:     map[string]db.User{},
+		userRoles: map[pgtype.UUID][]db.UserRole{},
 	}
 }
 
@@ -45,12 +50,25 @@ func (f *fakeStore) UpsertSetting(ctx context.Context, arg db.UpsertSettingParam
 	return nil
 }
 
-func (f *fakeStore) GetUserByUsername(ctx context.Context, username string) (db.User, error) {
+func (f *fakeStore) GetUserByUsername(ctx context.Context, username string) (db.GetUserByUsernameRow, error) {
 	u, ok := f.users[username]
 	if !ok {
-		return db.User{}, pgx.ErrNoRows
+		return db.GetUserByUsernameRow{}, pgx.ErrNoRows
 	}
-	return u, nil
+	roles := f.userRoles[u.ID]
+	rolesJSON, _ := json.Marshal(roles)
+	return db.GetUserByUsernameRow{
+		ID:           u.ID,
+		Username:     u.Username,
+		PasswordHash: u.PasswordHash,
+		EmployeeID:   u.EmployeeID,
+		StudentID:    u.StudentID,
+		ParentID:     u.ParentID,
+		IsActive:     u.IsActive,
+		CreatedAt:    u.CreatedAt,
+		UpdatedAt:    u.UpdatedAt,
+		Roles:        rolesJSON,
+	}, nil
 }
 
 func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error) {
@@ -60,8 +78,10 @@ func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db
 		ID:           id,
 		Username:     arg.Username,
 		PasswordHash: arg.PasswordHash,
-		Role:         arg.Role,
 		EmployeeID:   arg.EmployeeID,
+		StudentID:    arg.StudentID,
+		ParentID:     arg.ParentID,
+		IsActive:     arg.IsActive,
 	}
 	f.users[arg.Username] = u
 	return u, nil
@@ -78,6 +98,15 @@ func (f *fakeStore) UpdateUserPassword(ctx context.Context, arg db.UpdateUserPas
 	return pgx.ErrNoRows
 }
 
+func (f *fakeStore) GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error) {
+	return f.userRoles[userID], nil
+}
+
+func (f *fakeStore) AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error {
+	f.userRoles[arg.UserID] = append(f.userRoles[arg.UserID], arg.Role)
+	return nil
+}
+
 func TestAuthSeedAdminCreatesUser(t *testing.T) {
 	store := newFakeStore()
 	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
@@ -89,8 +118,16 @@ func TestAuthSeedAdminCreatesUser(t *testing.T) {
 	if !ok {
 		t.Fatal("admin user not created")
 	}
-	if u.Role != db.UserRoleAdmin {
-		t.Fatalf("admin role = %q, want admin", u.Role)
+	roles := store.userRoles[u.ID]
+	hasAdmin := false
+	for _, r := range roles {
+		if r == db.UserRoleAdmin {
+			hasAdmin = true
+			break
+		}
+	}
+	if !hasAdmin {
+		t.Fatal("admin role not assigned")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte("admin")); err != nil {
 		t.Fatalf("admin password hash mismatch: %v", err)
@@ -117,7 +154,7 @@ func TestAuthRefreshRejectsOldTokenAfterPasswordChange(t *testing.T) {
 		t.Fatalf("refresh ver = %v, want 0", got)
 	}
 
-	if err := svc.ChangePassword(context.Background(), "admin", "admin", "newpass"); err != nil {
+	if err := svc.ChangePassword(context.Background(), "admin", "admin", "newpass123"); err != nil {
 		t.Fatalf("ChangePassword() error = %v", err)
 	}
 	if got := store.settings["auth_version"]; got != "1" {
@@ -125,5 +162,81 @@ func TestAuthRefreshRejectsOldTokenAfterPasswordChange(t *testing.T) {
 	}
 	if _, err := svc.Refresh(context.Background(), pair.RefreshToken); err == nil {
 		t.Fatalf("Refresh() error = nil, want unauthorized")
+	}
+}
+
+func TestAuthLoginRejectsSuspendedAccount(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "adminpass123"}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("GenerateFromPassword() error = %v", err)
+	}
+
+	var id pgtype.UUID
+	_ = id.Scan("22222222-2222-2222-2222-222222222222")
+	store.users["guru"] = db.User{
+		ID:           id,
+		Username:     "guru",
+		PasswordHash: string(hash),
+		IsActive:     false,
+	}
+
+	_, err = svc.Login(context.Background(), "guru", "password123")
+	if !errors.Is(err, domain.ErrSuspended) {
+		t.Fatalf("Login() error = %v, want ErrSuspended", err)
+	}
+}
+
+func TestAuthChangePasswordRejectsWeakPassword(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "adminpass123"}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("GenerateFromPassword() error = %v", err)
+	}
+
+	var id pgtype.UUID
+	_ = id.Scan("33333333-3333-3333-3333-333333333333")
+	store.users["guru"] = db.User{
+		ID:           id,
+		Username:     "guru",
+		PasswordHash: string(hash),
+		IsActive:     true,
+	}
+
+	err = svc.ChangePassword(context.Background(), "guru", "password123", "12345678")
+	if !errors.Is(err, domain.ErrWeakPassword) {
+		t.Fatalf("ChangePassword() error = %v, want ErrWeakPassword", err)
+	}
+}
+
+func TestAuthSeedAdminDoesNotOverwriteExistingPassword(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "new-admin-password"}
+
+	oldHash, err := bcrypt.GenerateFromPassword([]byte("old-admin-password"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("GenerateFromPassword() error = %v", err)
+	}
+
+	var id pgtype.UUID
+	_ = id.Scan("44444444-4444-4444-4444-444444444444")
+	store.users["admin"] = db.User{
+		ID:           id,
+		Username:     "admin",
+		PasswordHash: string(oldHash),
+		IsActive:     true,
+	}
+
+	if err := svc.SeedAdmin(context.Background()); err != nil {
+		t.Fatalf("SeedAdmin() error = %v", err)
+	}
+
+	admin := store.users["admin"]
+	if err := bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte("old-admin-password")); err != nil {
+		t.Fatalf("admin password was unexpectedly changed: %v", err)
 	}
 }

@@ -3,19 +3,19 @@
   import * as Card from '$lib/components/ui/card';
   import { Input } from '$lib/components/ui/input';
   import { Button } from '$lib/components/ui/button';
+  import { toast } from '$lib/components/ui/sonner';
   import WorkerSettings from '$lib/components/WorkerSettings.svelte';
   import ScheduleList   from '$lib/components/ScheduleList.svelte';
 
   let appSettings = $state({ max_concurrent: 5, headless: false });
   let schedules   = $state<any[]>([]);
-  let toast       = $state('');
   let pwForm      = $state({ current: '', next: '', confirm: '' });
   let pwError     = $state('');
   let pwLoading   = $state(false);
 
   async function load() {
     try {
-      const [stRes, sRes] = await Promise.all([fetch('/api/settings'), fetch('/api/schedules')]);
+      const [stRes, sRes] = await Promise.all([fetch('/api/pusaka/settings'), fetch('/api/pusaka/schedules')]);
       const st = await stRes.json();
       const s  = await sRes.json();
       if (!st.error) appSettings = st;
@@ -25,32 +25,32 @@
 
   async function saveSettings() {
     try {
-      const res  = await fetch('/api/settings', {
+      const res  = await fetch('/api/pusaka/settings', {
         method: 'PUT', headers: { 'content-type': 'application/json' },
         body: JSON.stringify(appSettings),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { showToast('Gagal: ' + (data.error ?? res.status)); return; }
+      if (!res.ok) { showError('Gagal: ' + (data.error ?? res.status)); return; }
       showToast('Pengaturan worker disimpan.');
-    } catch { showToast('Gagal menyimpan pengaturan'); }
+    } catch { showError('Gagal menyimpan pengaturan'); }
   }
 
   async function saveSchedules() {
     try {
-      const res  = await fetch('/api/schedules', {
+      const res  = await fetch('/api/pusaka/schedules', {
         method: 'PUT', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ schedules }),
       });
-      if (!res.ok) { showToast('Gagal menyimpan jadwal'); return; }
+      if (!res.ok) { showError('Gagal menyimpan jadwal'); return; }
       showToast('Jadwal otomatis disimpan.');
       await load();
-    } catch { showToast('Gagal menyimpan jadwal'); }
+    } catch { showError('Gagal menyimpan jadwal'); }
   }
 
   async function changePassword() {
     pwError = '';
     if (pwForm.next !== pwForm.confirm) { pwError = 'Konfirmasi password tidak cocok'; return; }
-    if (pwForm.next.length < 6)         { pwError = 'Password baru minimal 6 karakter'; return; }
+    if (pwForm.next.length < 8)         { pwError = 'Password baru minimal 8 karakter'; return; }
     pwLoading = true;
     try {
       const res  = await fetch('/api/auth/change-password', {
@@ -65,8 +65,11 @@
   }
 
   function showToast(msg: string) {
-    toast = msg;
-    setTimeout(() => (toast = ''), 3500);
+    toast.success(msg);
+  }
+
+  function showError(msg: string) {
+    toast.error(msg);
   }
 
   onMount(load);
@@ -80,12 +83,6 @@
     <h1 class="text-2xl font-semibold text-slate-800">Pengaturan</h1>
     <p class="text-sm text-muted-foreground mt-1">Konfigurasi worker, jadwal absensi, dan akun admin</p>
   </div>
-
-  {#if toast}
-    <div class="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-      {toast}
-    </div>
-  {/if}
 
   <WorkerSettings bind:settings={appSettings} onsave={saveSettings} />
 

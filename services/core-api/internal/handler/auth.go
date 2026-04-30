@@ -30,6 +30,10 @@ func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		api.Unauthorized(w)
 		return
 	}
+	if errors.Is(err, domain.ErrSuspended) {
+		api.Err(w, http.StatusForbidden, "account is suspended")
+		return
+	}
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -48,6 +52,10 @@ func (h *Auth) Refresh(w http.ResponseWriter, r *http.Request) {
 	pair, err := h.svc.Refresh(r.Context(), body.RefreshToken)
 	if errors.Is(err, domain.ErrUnauthorized) {
 		api.Unauthorized(w)
+		return
+	}
+	if errors.Is(err, domain.ErrSuspended) {
+		api.Err(w, http.StatusForbidden, "account is suspended")
 		return
 	}
 	if err != nil {
@@ -87,6 +95,14 @@ func (h *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	err := h.svc.ChangePassword(r.Context(), body.Username, body.OldPassword, body.NewPassword)
 	if errors.Is(err, domain.ErrUnauthorized) {
 		api.Unauthorized(w)
+		return
+	}
+	if errors.Is(err, domain.ErrSuspended) {
+		api.Err(w, http.StatusForbidden, "account is suspended")
+		return
+	}
+	if errors.Is(err, domain.ErrWeakPassword) {
+		api.BadRequest(w, "password baru minimal 8 karakter, tidak boleh sama dengan username, dan tidak boleh hanya angka")
 		return
 	}
 	if err != nil {

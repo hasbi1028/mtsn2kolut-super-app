@@ -122,6 +122,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Grade schema foundation (`grade_components`, `grade_entries`)
 - [x] Backend gradebook API foundation (`/api/grades`)
 - [x] Web admin gradebook page foundation (`/grades`)
+- [x] Auth hardening baseline — explicit suspended/weak-password errors, backend password policy, non-destructive `SeedAdmin`
 - [ ] Rapor PDF generation
 
 ### CBT Question Authoring UX
