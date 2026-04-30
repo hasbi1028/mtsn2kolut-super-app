@@ -616,6 +616,16 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     return '$hours jam ${remainingMinutes.toString().padLeft(2, '0')} menit';
   }
 
+  String get _staleEscalationThresholdLabel {
+    final minutes = _staleEscalationThresholdSeconds ~/ 60;
+    if (minutes < 60) {
+      return '$minutes menit';
+    }
+    final hours = minutes ~/ 60;
+    final remainingMinutes = minutes % 60;
+    return '$hours jam ${remainingMinutes.toString().padLeft(2, '0')} menit';
+  }
+
   Future<void> _handleConnectionAttentionSignals() async {
     await _handlePotentialDegradedMode();
     await _handlePotentialStaleAttention();
@@ -995,6 +1005,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               _SupervisorAttentionCard(
                 lastContactAt: _formatClock(_lastServerContactAt),
                 staleDuration: _staleAttentionDurationLabel,
+                escalationThreshold: _staleEscalationThresholdLabel,
                 escalated: _needsEscalatedSupervisorAttention,
                 onRetry: _isSyncingStatus ? null : _syncStatus,
               ),
@@ -1750,12 +1761,14 @@ class _SupervisorAttentionCard extends StatelessWidget {
   const _SupervisorAttentionCard({
     required this.lastContactAt,
     required this.staleDuration,
+    required this.escalationThreshold,
     required this.escalated,
     required this.onRetry,
   });
 
   final String lastContactAt;
   final String staleDuration;
+  final String escalationThreshold;
   final bool escalated;
   final VoidCallback? onRetry;
 
@@ -1808,6 +1821,24 @@ class _SupervisorAttentionCard extends StatelessWidget {
                 ? 'Status koneksi bertahan di level waspada selama $staleDuration sejak kontak server terakhir pukul $lastContactAt. Pengawas sebaiknya segera memeriksa perangkat, jaringan, dan memastikan sinkron ulang berhasil sebelum peserta melanjutkan tanpa pengawasan.'
                 : 'Status koneksi berada di level waspada selama $staleDuration sejak kontak server terakhir pukul $lastContactAt. Minta pengawas memeriksa jaringan perangkat lalu lakukan sinkron ulang.',
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              escalated
+                  ? 'Ambang eskalasi keras sudah terlewati setelah $escalationThreshold tanpa kontak server baru.'
+                  : 'Jika kondisi ini bertahan sampai $escalationThreshold tanpa kontak server baru, panel ini akan naik ke mode intervensi keras.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                height: 1.45,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           const SizedBox(height: 12),
           action,
