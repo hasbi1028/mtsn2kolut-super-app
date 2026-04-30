@@ -388,3 +388,49 @@ func TestExamSubmitMapsKnownServiceErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestExamHeartbeatRequiresParticipantContext(t *testing.T) {
+	h := &Exam{svc: &fakeExamService{}}
+	req := httptest.NewRequest("POST", "http://internal/api/exam/heartbeat", nil)
+	rec := httptest.NewRecorder()
+
+	h.Heartbeat(rec, req)
+
+	if rec.Code != 401 {
+		t.Fatalf("status = %d, want 401; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "unauthorized" {
+		t.Fatalf("error = %q, want %q", payload.Error, "unauthorized")
+	}
+}
+
+func TestExamRecordEventRequiresParticipantContext(t *testing.T) {
+	h := &Exam{svc: &fakeExamService{}}
+	body := bytes.NewBufferString(`{"event_type":"warning","data":{"reason":"test"}}`)
+	req := httptest.NewRequest("POST", "http://internal/api/exam/event", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	h.RecordEvent(rec, req)
+
+	if rec.Code != 401 {
+		t.Fatalf("status = %d, want 401; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "unauthorized" {
+		t.Fatalf("error = %q, want %q", payload.Error, "unauthorized")
+	}
+}
