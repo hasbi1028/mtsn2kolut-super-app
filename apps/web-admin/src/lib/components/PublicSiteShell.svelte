@@ -17,6 +17,25 @@
 
 	let mobileOpen = $state(false);
 
+	const footerGroups = [
+		{
+			title: 'Jelajahi',
+			links: [
+				{ href: '/profil', label: 'Profil Madrasah' },
+				{ href: '/berita', label: 'Berita' },
+				{ href: '/pengumuman', label: 'Pengumuman' },
+			],
+		},
+		{
+			title: 'Layanan',
+			links: [
+				{ href: '/ppdb', label: 'PPDB' },
+				{ href: '/kontak', label: 'Kontak Resmi' },
+				{ href: '/login', label: 'Login Admin' },
+			],
+		},
+	];
+
 	function isActive(href: string) {
 		if (href === '/') return page.url.pathname === '/';
 		return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
@@ -118,16 +137,49 @@
 	</main>
 
 	<footer class="border-t border-emerald-100 bg-white">
-		<div class="mx-auto grid max-w-6xl gap-8 px-4 py-8 sm:grid-cols-[1.2fr,0.8fr] sm:px-6">
-			<div>
-				<p class="text-base font-semibold text-slate-900">MTs Negeri 2 Kolaka Utara</p>
-				<p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-					Website resmi madrasah untuk informasi sekolah, berita kegiatan, pengumuman, dan layanan PPDB.
-				</p>
+		<div class="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 sm:py-10">
+			<div class="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(135deg,rgba(236,253,245,0.92),rgba(255,255,255,1))] px-6 py-6 shadow-sm sm:px-8">
+				<div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+					<div class="max-w-3xl">
+						<p class="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">Layanan Publik Madrasah</p>
+						<h2 class="mt-2 text-2xl font-semibold text-slate-900">Akses informasi sekolah dan PPDB dari satu tempat</h2>
+						<p class="mt-2 text-sm leading-7 text-slate-600">
+							Gunakan website ini untuk membaca informasi resmi sekolah, mengikuti pengumuman terbaru, dan memulai proses pendaftaran calon siswa.
+						</p>
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<a href="/ppdb" class="rounded-full bg-[oklch(0.38_0.13_145)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-105">
+							Buka PPDB
+						</a>
+						<a href="/kontak" class="rounded-full border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">
+							Hubungi Sekolah
+						</a>
+					</div>
+				</div>
 			</div>
-			<div class="grid gap-2 text-sm text-slate-600">
-				<p><span class="font-medium text-slate-900">Navigasi cepat:</span> Berita, Pengumuman, Profil, PPDB</p>
-				<p><span class="font-medium text-slate-900">Kontak:</span> Lengkapi dari halaman Kontak sekolah</p>
+
+			<div class="grid gap-8 sm:grid-cols-[1.2fr,0.8fr,0.8fr]">
+				<div>
+					<p class="text-base font-semibold text-slate-900">MTs Negeri 2 Kolaka Utara</p>
+					<p class="mt-2 max-w-2xl text-sm leading-7 text-slate-600">
+						Website resmi madrasah untuk informasi sekolah, berita kegiatan, pengumuman, dan layanan PPDB yang mudah diakses masyarakat.
+					</p>
+				</div>
+
+				{#each footerGroups as group (group.title)}
+					<div class="space-y-3">
+						<p class="text-sm font-semibold text-slate-900">{group.title}</p>
+						<div class="grid gap-2 text-sm text-slate-600">
+							{#each group.links as link (link.href)}
+								<a href={link.href} class="hover:text-emerald-800">{link.label}</a>
+							{/each}
+						</div>
+					</div>
+				{/each}
+			</div>
+
+			<div class="border-t border-slate-200 pt-4 text-xs text-slate-500">
+				Informasi pada website ini dikelola oleh MTs Negeri 2 Kolaka Utara dan diperbarui melalui panel editorial sekolah.
 			</div>
 		</div>
 	</footer>
