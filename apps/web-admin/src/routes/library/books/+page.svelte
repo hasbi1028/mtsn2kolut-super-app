@@ -9,6 +9,8 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	interface Book {
 		id: string;
@@ -28,6 +30,7 @@
 
 	let books = $state<Book[]>([]);
 	let loading = $state(true);
+	let error = $state('');
 	let search = $state('');
 	let filterKategori = $state('');
 
@@ -60,9 +63,12 @@
 	async function load() {
 		loading = true;
 		try {
+			error = '';
 			const res = await fetch('/api/library/books');
 			const j = await res.json();
 			books = j.data ?? j ?? [];
+		} catch {
+			error = 'Gagal memuat katalog buku. Coba lagi untuk mengambil daftar buku terbaru.';
 		} finally {
 			loading = false;
 		}
@@ -135,27 +141,56 @@
 <svelte:head><title>Katalog Buku — Perpustakaan</title></svelte:head>
 
 <div class="space-y-4">
-	<div class="flex flex-wrap items-center justify-between gap-3">
+	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-lg font-semibold text-slate-800">Katalog Buku</h1>
-			<p class="text-sm text-slate-500">{books.length} judul terdaftar</p>
+			<h1 class="text-2xl font-semibold text-slate-800">Katalog Buku</h1>
+			<p class="text-sm text-slate-500">Kelola koleksi inti perpustakaan, stok eksemplar, dan klasifikasi rak.</p>
 		</div>
 		<Button onclick={openCreate} size="sm">+ Tambah Buku</Button>
 	</div>
 
-	<!-- Filters -->
-	<div class="flex flex-wrap gap-2">
-		<Input class="w-60" placeholder="Cari judul, pengarang, kode…" bind:value={search} />
-		<select
-			bind:value={filterKategori}
-			class="rounded-md border border-input bg-background px-3 py-2 text-sm"
-		>
-			<option value="">Semua Kategori</option>
-			{#each KATEGORI_LIST as k}
-				<option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>
-			{/each}
-		</select>
+	<div class="grid gap-3 md:grid-cols-3">
+		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Judul</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{books.length}</p>
+			<p class="text-sm text-slate-600">koleksi unik yang tercatat di katalog</p>
+		</div>
+		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Tersedia Dicari</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{filtered.length}</p>
+			<p class="text-sm text-slate-600">hasil koleksi berdasarkan filter saat ini</p>
+		</div>
+		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Stok Habis</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{books.filter((item) => item.tersedia === 0).length}</p>
+			<p class="text-sm text-slate-600">judul yang butuh penambahan atau pengembalian</p>
+		</div>
 	</div>
+
+	{#if error}
+		<RecoveryPanel title="Katalog Belum Tersaji" message={error} onRetry={load} />
+	{/if}
+
+	<Card.Root class="border-slate-200 shadow-sm">
+		<Card.Content class="grid gap-3 p-4 md:grid-cols-[1.2fr_0.8fr]">
+			<div>
+				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Cari Koleksi</p>
+				<Input class="w-full" placeholder="Cari judul, pengarang, atau kode buku…" bind:value={search} />
+			</div>
+			<div>
+				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Filter Kategori</p>
+				<select
+					bind:value={filterKategori}
+					class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+				>
+					<option value="">Semua Kategori</option>
+					{#each KATEGORI_LIST as k}
+						<option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>
+					{/each}
+				</select>
+			</div>
+		</Card.Content>
+	</Card.Root>
 
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
@@ -173,7 +208,15 @@
 					{/each}
 				</div>
 			{:else if filtered.length === 0}
-				<p class="p-6 text-sm text-slate-400">Tidak ada buku ditemukan.</p>
+				<div class="p-4">
+					<EmptyStatePanel
+						title={search || filterKategori ? 'Tidak ada buku yang cocok' : 'Katalog buku masih kosong'}
+						description={search || filterKategori
+							? 'Ubah kata kunci atau kategori untuk melihat koleksi lain yang sudah ada.'
+							: 'Tambahkan judul buku pertama agar perpustakaan bisa mulai dipakai untuk proses peminjaman.'}
+						compact
+					/>
+				</div>
 			{:else}
 				<Table.Root>
 					<Table.Header>

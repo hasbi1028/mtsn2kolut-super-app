@@ -9,6 +9,8 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	interface LoanRow {
 		id: string;
@@ -38,6 +40,7 @@
 	let employees = $state<Employee[]>([]);
 	let loading = $state(true);
 	let busy = $state(false);
+	let error = $state('');
 
 	let tabStatus = $state<'active' | 'returned' | ''>('active');
 
@@ -108,6 +111,7 @@
 	async function load() {
 		loading = true;
 		try {
+			error = '';
 			const [lRes, bRes, sRes, eRes] = await Promise.all([
 				fetch('/api/library/loans'),
 				fetch('/api/library/books'),
@@ -118,6 +122,8 @@
 			const bj = await bRes.json(); books = bj.data ?? bj ?? [];
 			const sj = await sRes.json(); students = sj.data ?? sj ?? [];
 			const ej = await eRes.json(); employees = ej.data ?? ej ?? [];
+		} catch {
+			error = 'Gagal memuat data peminjaman, anggota, atau stok buku. Coba lagi untuk memulihkan tampilan operasional.';
 		} finally {
 			loading = false;
 		}
@@ -200,23 +206,48 @@
 <svelte:head><title>Peminjaman — Perpustakaan</title></svelte:head>
 
 <div class="space-y-4">
-	<div class="flex flex-wrap items-center justify-between gap-3">
+	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-lg font-semibold text-slate-800">Peminjaman Buku</h1>
-			<p class="text-sm text-slate-500">{loans.filter(l => l.status === 'active').length} pinjaman aktif</p>
+			<h1 class="text-2xl font-semibold text-slate-800">Peminjaman Buku</h1>
+			<p class="text-sm text-slate-500">Kelola sirkulasi buku, pengembalian, dan status denda anggota perpustakaan.</p>
 		</div>
 		<Button onclick={() => { resetLoanForm(); showLoanDialog = true; }} size="sm">+ Pinjam Buku</Button>
 	</div>
 
-	<!-- Tab filter -->
-	<div class="flex gap-1 border-b border-slate-200">
-		{#each [['active', 'Aktif'], ['', 'Semua'], ['returned', 'Dikembalikan']] as [val, label]}
-			<button
-				class="px-4 py-2 text-sm font-medium transition-colors border-b-2 {tabStatus === val ? 'border-green-700 text-green-800' : 'border-transparent text-slate-500 hover:text-slate-700'}"
-				onclick={() => (tabStatus = val as 'active' | 'returned' | '')}
-			>{label}</button>
-		{/each}
+	<div class="grid gap-3 md:grid-cols-3">
+		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Pinjaman Aktif</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{loans.filter((item) => item.status === 'active').length}</p>
+			<p class="text-sm text-slate-600">transaksi yang masih berjalan saat ini</p>
+		</div>
+		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Terlambat</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{loans.filter((item) => item.is_overdue && item.status === 'active').length}</p>
+			<p class="text-sm text-slate-600">pinjaman aktif yang melewati jatuh tempo</p>
+		</div>
+		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Buku Siap Pinjam</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{books.filter((item) => item.tersedia > 0).length}</p>
+			<p class="text-sm text-slate-600">judul yang masih punya stok untuk dipinjam</p>
+		</div>
 	</div>
+
+	{#if error}
+		<RecoveryPanel title="Sirkulasi Belum Tersaji" message={error} onRetry={load} />
+	{/if}
+
+	<Card.Root class="border-slate-200 shadow-sm">
+		<Card.Content class="p-2">
+			<div class="flex flex-wrap gap-1">
+				{#each [['active', 'Aktif'], ['', 'Semua'], ['returned', 'Dikembalikan']] as [val, label]}
+					<button
+						class="rounded-full px-4 py-2 text-sm font-medium transition-colors {tabStatus === val ? 'bg-emerald-700 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'}"
+						onclick={() => (tabStatus = val as 'active' | 'returned' | '')}
+					>{label}</button>
+				{/each}
+			</div>
+		</Card.Content>
+	</Card.Root>
 
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
@@ -235,7 +266,17 @@
 					{/each}
 				</div>
 			{:else if filteredLoans.length === 0}
-				<p class="p-6 text-sm text-slate-400">Tidak ada data pinjaman.</p>
+				<div class="p-4">
+					<EmptyStatePanel
+						title={tabStatus === 'returned' ? 'Belum ada riwayat pengembalian' : tabStatus === 'active' ? 'Belum ada pinjaman aktif' : 'Belum ada data pinjaman'}
+						description={tabStatus === 'returned'
+							? 'Riwayat pengembalian akan muncul di sini setelah buku mulai diproses dan dikembalikan.'
+							: tabStatus === 'active'
+								? 'Belum ada transaksi pinjam yang sedang berjalan. Gunakan tombol pinjam untuk membuat transaksi pertama.'
+								: 'Belum ada transaksi sirkulasi yang tercatat pada perpustakaan ini.'}
+						compact
+					/>
+				</div>
 			{:else}
 				<Table.Root>
 					<Table.Header>

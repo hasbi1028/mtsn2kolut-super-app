@@ -135,6 +135,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Loading UX baseline — global route progress, reusable skeleton primitive, and reusable loading button applied across primary admin screens, key PUSAKA pages, parents/users management, library flows, website editorial, PPDB public form, CBT session operations, print views, question composer, and employee/PUSAKA operational components
 - [x] Empty-state UX baseline — academic, students, gradebook, and question-bank screens now use more guided empty states with clearer next-step cues instead of plain “data kosong” table fallbacks
 - [x] Recovery-state UX baseline — key admin, PUSAKA, and library overview screens now surface inline retry panels for failed fetches instead of relying only on toast messages
+- [x] Density & filter-bar polish baseline — library catalog and circulation screens now use denser summary cards, clearer filter surfaces, and more consistent header spacing with the rest of the admin panel
 - [x] Rapor print view — printable HTML layout at `/grades/rapor` using existing `/api/grades` endpoint, color-coded scores, school header, signature area, sidebar entry
 
 ### CBT Question Authoring UX
