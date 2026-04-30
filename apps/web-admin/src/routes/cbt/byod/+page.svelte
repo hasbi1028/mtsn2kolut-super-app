@@ -61,6 +61,30 @@
 		'Sebelum submit, ulangi checklist pengawas dan jangan izinkan kirim jika status masih Menurun.'
 	];
 
+	const hubAreas = [
+		{
+			title: 'Panduan Pengawas',
+			href: '/cbt/byod',
+			badge: 'Aktif',
+			description: 'Dipakai saat mendampingi siswa secara langsung, membaca arti status, dan memastikan submit readiness.',
+			phase: 'Saat ujian'
+		},
+		{
+			title: 'Matriks Perangkat',
+			href: '/cbt/byod/matrix',
+			badge: 'Aktif',
+			description: 'Dipakai saat membandingkan vendor, model, versi Android, dan kestabilan perangkat uji lapangan.',
+			phase: 'Uji perangkat'
+		},
+		{
+			title: 'Readiness Release',
+			href: '/cbt/byod/release',
+			badge: 'Aktif',
+			description: 'Dipakai sebelum merilis backend exam atau APK baru ke gelombang uji berikutnya.',
+			phase: 'Sebelum rilis'
+		}
+	];
+
 	function badgeClass(tone: StatusTone) {
 		switch (tone) {
 			case 'good':
@@ -96,6 +120,24 @@
 			</div>
 		</div>
 	</section>
+
+	<div class="grid gap-4 xl:grid-cols-3">
+		{#each hubAreas as area (area.href)}
+			<Card.Root class="border-slate-200 shadow-sm">
+				<Card.Content class="space-y-4 pt-6">
+					<div class="flex items-center justify-between gap-3">
+						<p class="text-sm font-semibold text-slate-900">{area.title}</p>
+						<Badge class="border-emerald-200 bg-emerald-50 text-emerald-700">{area.badge}</Badge>
+					</div>
+					<p class="text-sm leading-6 text-slate-600">{area.description}</p>
+					<div class="flex items-center justify-between gap-3">
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{area.phase}</p>
+						<Button href={area.href} variant="outline">Buka</Button>
+					</div>
+				</Card.Content>
+			</Card.Root>
+		{/each}
+	</div>
 
 	<div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
 		<Card.Root class="border-slate-200 shadow-sm">
