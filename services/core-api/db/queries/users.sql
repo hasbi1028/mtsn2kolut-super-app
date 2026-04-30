@@ -1,17 +1,27 @@
 -- name: GetUserByUsername :one
-SELECT id, username, password_hash, role, employee_id, created_at, updated_at
-FROM users
-WHERE username = $1;
+SELECT 
+    u.id, u.username, u.password_hash, 
+    u.employee_id, u.student_id, u.parent_id,
+    u.is_active, u.created_at, u.updated_at,
+    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+FROM users u
+WHERE u.username = $1;
 
 -- name: ListUsers :many
-SELECT u.id, u.username, u.role, u.employee_id, e.nama AS employee_nama, u.created_at
+SELECT 
+    u.id, u.username, u.employee_id, u.student_id, u.parent_id,
+    COALESCE(e.nama, s.nama, p.nama, '') AS profile_nama,
+    u.is_active, u.created_at,
+    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
 FROM users u
 LEFT JOIN employees e ON e.id = u.employee_id
+LEFT JOIN students s ON s.id = u.student_id
+LEFT JOIN parents p ON p.id = u.parent_id
 ORDER BY u.username ASC;
 
 -- name: CreateUser :one
-INSERT INTO users (username, password_hash, role, employee_id)
-VALUES ($1, $2, $3, $4)
+INSERT INTO users (username, password_hash, employee_id, student_id, parent_id, is_active)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: UpdateUserPassword :exec
@@ -19,8 +29,35 @@ UPDATE users
 SET password_hash = $2, updated_at = NOW()
 WHERE id = $1;
 
+-- name: UpdateUserStatus :exec
+UPDATE users SET is_active = $2, updated_at = NOW() WHERE id = $1;
+
 -- name: DeleteUser :exec
 DELETE FROM users WHERE id = $1;
+
+-- name: GetUserRoles :many
+SELECT role FROM user_account_roles WHERE user_id = $1;
+
+-- name: AddUserRole :exec
+INSERT INTO user_account_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING;
+
+-- name: ListUsersByStudentID :many
+SELECT id, username, password_hash, employee_id, created_at, updated_at, student_id, parent_id, is_active
+FROM users
+WHERE student_id = $1
+ORDER BY created_at ASC;
+
+-- name: ListUsersByEmployeeID :many
+SELECT id, username, password_hash, employee_id, created_at, updated_at, student_id, parent_id, is_active
+FROM users
+WHERE employee_id = $1
+ORDER BY created_at ASC;
+
+-- name: RemoveUserRole :exec
+DELETE FROM user_account_roles WHERE user_id = $1 AND role = $2;
+
+-- name: RemoveAllUserRoles :exec
+DELETE FROM user_account_roles WHERE user_id = $1;
 
 -- name: CreateAuditLog :one
 INSERT INTO audit_logs (user_id, action, entity_type, entity_id, metadata)
@@ -33,6 +70,15 @@ FROM audit_logs a
 LEFT JOIN users u ON u.id = a.user_id
 ORDER BY a.created_at DESC
 LIMIT $1 OFFSET $2;
+
+-- name: ListEntityAuditLogs :many
+SELECT a.id, a.user_id, u.username, a.action, a.entity_type, a.entity_id, a.metadata, a.created_at
+FROM audit_logs a
+LEFT JOIN users u ON u.id = a.user_id
+WHERE a.entity_type = $1
+  AND a.entity_id = $2
+ORDER BY a.created_at DESC
+LIMIT $3 OFFSET $4;
 
 -- name: DeleteOldAuditLogs :execrows
 DELETE FROM audit_logs

@@ -5,6 +5,7 @@
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import * as Dialog from '$lib/components/ui/dialog';
+  import { toast } from '$lib/components/ui/sonner';
 
   interface Employee {
     id: string;
@@ -30,6 +31,16 @@
     is_enabled: boolean;
     random_window_minutes: number;
     day_of_week: number;
+  }
+
+  interface AuditLog {
+    id: string;
+    username: string | null;
+    action: string;
+    entity_type: string;
+    entity_id: string;
+    metadata: unknown;
+    created_at: string;
   }
 
   type DayConfig = {
@@ -61,8 +72,13 @@
   let saving           = $state(false);
   let testing          = $state(false);
   let accountToggling  = $state(false);
+  let accountDeleting  = $state(false);
   let filterMode = $state<'all' | 'configured' | 'needs_setup' | 'disabled'>('all');
   let search = $state('');
+  let showAuditDialog = $state(false);
+  let auditLoading = $state(false);
+  let auditLogs = $state<AuditLog[]>([]);
+  let auditEmployee = $state<Employee | null>(null);
 
   // Run confirmation dialog
   let runConfirm = $state<{ emp: Employee; runType: RunType } | null>(null);
@@ -140,8 +156,17 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ pusaka_username: pusakaUsername, pusaka_password: pusakaPassword }),
       });
-      if (res.ok) { showPusakaDialog = false; ondelete?.(); }
-    } catch { /* ignore */ } finally { saving = false; }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || 'Gagal menyimpan kredensial PUSAKA');
+        return;
+      }
+      toast.success('Kredensial PUSAKA berhasil diperbarui.');
+      showPusakaDialog = false;
+      ondelete?.();
+    } catch {
+      toast.error('Gagal menyimpan kredensial PUSAKA');
+    } finally { saving = false; }
   }
 
   async function testPusakaCredentials(emp: Employee) {
@@ -149,8 +174,8 @@
     try {
       const res  = await fetch(`/api/pusaka/employees/${emp.id}/test-pusaka`, { method: 'POST' });
       const data = await res.json() as { message?: string };
-      alert(data.message || 'Test selesai');
-    } catch { alert('Test gagal'); } finally { testing = false; }
+      toast.success(data.message || 'Test selesai');
+    } catch { toast.error('Test gagal'); } finally { testing = false; }
   }
 
   async function togglePusakaAccount(emp: Employee, isEnabled: boolean) {
@@ -163,12 +188,85 @@
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        alert((data as { error?: string }).error || 'Gagal memperbarui status akun PUSAKA');
+        toast.error((data as { error?: string }).error || 'Gagal memperbarui status akun PUSAKA');
         return;
       }
+      toast.success(isEnabled ? 'Akun PUSAKA diaktifkan kembali.' : 'Akun PUSAKA dinonaktifkan.');
       ondelete?.();
     } finally {
       accountToggling = false;
+    }
+  }
+
+  async function deletePusakaAccount(emp: Employee) {
+    if (!confirm(`Hapus akun PUSAKA untuk ${emp.nama}? Jadwal tetap disimpan, tetapi akun integrasi akan dilepas.`)) return;
+    accountDeleting = true;
+    try {
+      const res = await fetch(`/api/pusaka/employees/${emp.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error((data as { error?: string }).error || 'Gagal menghapus akun PUSAKA');
+        return;
+      }
+      toast.success('Akun PUSAKA berhasil dihapus.');
+      ondelete?.();
+    } finally {
+      accountDeleting = false;
+    }
+  }
+
+  function formatAuditDate(iso: string) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleString('id-ID', {
+      timeZone: 'Asia/Makassar',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }) + ' WITA';
+  }
+
+  function auditActionLabel(action: string) {
+    return {
+      PUSAKA_ACCOUNT_UPDATE: 'Update akun',
+      PUSAKA_ACCOUNT_TOGGLE: 'Ubah status akun',
+      PUSAKA_ACCOUNT_DELETE: 'Hapus akun',
+    }[action] ?? action;
+  }
+
+  function auditMeta(log: AuditLog): Record<string, unknown> {
+    if (!log.metadata) return {};
+    if (typeof log.metadata === 'string') {
+      try {
+        return JSON.parse(log.metadata) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    }
+    if (typeof log.metadata === 'object') {
+      return log.metadata as Record<string, unknown>;
+    }
+    return {};
+  }
+
+  async function openAuditDialog(emp: Employee) {
+    auditEmployee = emp;
+    auditLogs = [];
+    showAuditDialog = true;
+    auditLoading = true;
+    try {
+      const res = await fetch(`/api/pusaka/employees/${emp.id}/audit-logs?per_page=10`);
+      if (!res.ok) {
+        toast.error('Gagal memuat riwayat akun PUSAKA');
+        return;
+      }
+      auditLogs = await res.json() as AuditLog[];
+    } catch {
+      toast.error('Gagal memuat riwayat akun PUSAKA');
+    } finally {
+      auditLoading = false;
     }
   }
 
@@ -394,7 +492,19 @@
                   >
                     {e.pusaka_is_enabled === false ? 'Aktifkan Akun' : 'Nonaktifkan Akun'}
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    class="text-destructive hover:text-destructive"
+                    onclick={() => deletePusakaAccount(e)}
+                    disabled={accountDeleting}
+                  >
+                    Hapus Akun
+                  </Button>
                 {/if}
+                <Button size="sm" variant="outline" onclick={() => openAuditDialog(e)}>
+                  Riwayat
+                </Button>
                 <Button size="sm" variant="ghost" onclick={() => testPusakaCredentials(e)} disabled={testing || !isPusakaConfigured(e)}>
                   Test
                 </Button>
@@ -506,6 +616,50 @@
       <Button onclick={savePusakaCredentials} disabled={saving}>
         {saving ? 'Menyimpan...' : 'Simpan'}
       </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showAuditDialog}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title>Riwayat Akun PUSAKA</Dialog.Title>
+      <Dialog.Description>
+        {auditEmployee ? `10 aktivitas terakhir untuk ${auditEmployee.nama}` : ''}
+      </Dialog.Description>
+    </Dialog.Header>
+
+    <div class="space-y-3 py-2">
+      {#if auditLoading}
+        <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">Memuat riwayat...</div>
+      {:else if auditLogs.length === 0}
+        <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">Belum ada riwayat akun PUSAKA untuk pegawai ini.</div>
+      {:else}
+        <div class="space-y-2">
+          {#each auditLogs as log (log.id)}
+            {@const meta = auditMeta(log)}
+            <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-sm font-semibold text-slate-900">{auditActionLabel(log.action)}</p>
+                  <p class="mt-1 text-xs text-slate-500">{formatAuditDate(log.created_at)}</p>
+                </div>
+                <Badge variant="outline" class="text-[11px]">{log.username ?? 'Sistem'}</Badge>
+              </div>
+              {#if meta.pusaka_username}
+                <p class="mt-2 text-xs text-slate-600">Username: <span class="font-mono">{String(meta.pusaka_username)}</span></p>
+              {/if}
+              {#if typeof meta.is_enabled === 'boolean'}
+                <p class="mt-1 text-xs text-slate-600">Status akun: {meta.is_enabled ? 'aktif' : 'dinonaktifkan'}</p>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+    <Dialog.Footer>
+      <Button variant="outline" onclick={() => (showAuditDialog = false)}>Tutup</Button>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>

@@ -41,3 +41,17 @@ export const PATCH = async (event: RequestEvent) => {
 		return handleRouteError(e, 'pusaka/employees/:id PATCH');
 	}
 };
+
+export const DELETE = async (event: RequestEvent) => {
+	try {
+		const { id } = event.params;
+		const result = await proxy(event).del(`/api/pusaka/employees/${id}/account`);
+		return json(result);
+	} catch (e) {
+		if (e instanceof ApiError && e.status === 404)
+			return json({ error: 'Pegawai tidak ditemukan' }, { status: 404 });
+		if (e instanceof ApiError && e.status === 400)
+			return json({ error: e.message }, { status: 400 });
+		return handleRouteError(e, 'pusaka/employees/:id DELETE');
+	}
+};

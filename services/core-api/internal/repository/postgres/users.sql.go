@@ -11,6 +11,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addUserRole = `-- name: AddUserRole :exec
+INSERT INTO user_account_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING
+`
+
+type AddUserRoleParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	Role   UserRole    `json:"role"`
+}
+
+func (q *Queries) AddUserRole(ctx context.Context, arg AddUserRoleParams) error {
+	_, err := q.db.Exec(ctx, addUserRole, arg.UserID, arg.Role)
+	return err
+}
+
 const createAuditLog = `-- name: CreateAuditLog :one
 INSERT INTO audit_logs (user_id, action, entity_type, entity_id, metadata)
 VALUES ($1, $2, $3, $4, $5)
@@ -47,34 +61,40 @@ func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) 
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (username, password_hash, role, employee_id)
-VALUES ($1, $2, $3, $4)
-RETURNING id, username, password_hash, role, employee_id, created_at, updated_at
+INSERT INTO users (username, password_hash, employee_id, student_id, parent_id, is_active)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, username, password_hash, employee_id, created_at, updated_at, student_id, parent_id, is_active
 `
 
 type CreateUserParams struct {
 	Username     string      `json:"username"`
 	PasswordHash string      `json:"password_hash"`
-	Role         UserRole    `json:"role"`
 	EmployeeID   pgtype.UUID `json:"employee_id"`
+	StudentID    pgtype.UUID `json:"student_id"`
+	ParentID     pgtype.UUID `json:"parent_id"`
+	IsActive     bool        `json:"is_active"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, createUser,
 		arg.Username,
 		arg.PasswordHash,
-		arg.Role,
 		arg.EmployeeID,
+		arg.StudentID,
+		arg.ParentID,
+		arg.IsActive,
 	)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Username,
 		&i.PasswordHash,
-		&i.Role,
 		&i.EmployeeID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StudentID,
+		&i.ParentID,
+		&i.IsActive,
 	)
 	return i, err
 }
@@ -102,24 +122,68 @@ func (q *Queries) DeleteUser(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, role, employee_id, created_at, updated_at
-FROM users
-WHERE username = $1
+SELECT 
+    u.id, u.username, u.password_hash, 
+    u.employee_id, u.student_id, u.parent_id,
+    u.is_active, u.created_at, u.updated_at,
+    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+FROM users u
+WHERE u.username = $1
 `
 
-func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
+type GetUserByUsernameRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	Username     string             `json:"username"`
+	PasswordHash string             `json:"password_hash"`
+	EmployeeID   pgtype.UUID        `json:"employee_id"`
+	StudentID    pgtype.UUID        `json:"student_id"`
+	ParentID     pgtype.UUID        `json:"parent_id"`
+	IsActive     bool               `json:"is_active"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	Roles        []byte             `json:"roles"`
+}
+
+func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUserByUsernameRow, error) {
 	row := q.db.QueryRow(ctx, getUserByUsername, username)
-	var i User
+	var i GetUserByUsernameRow
 	err := row.Scan(
 		&i.ID,
 		&i.Username,
 		&i.PasswordHash,
-		&i.Role,
 		&i.EmployeeID,
+		&i.StudentID,
+		&i.ParentID,
+		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Roles,
 	)
 	return i, err
+}
+
+const getUserRoles = `-- name: GetUserRoles :many
+SELECT role FROM user_account_roles WHERE user_id = $1
+`
+
+func (q *Queries) GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]UserRole, error) {
+	rows, err := q.db.Query(ctx, getUserRoles, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UserRole{}
+	for rows.Next() {
+		var role UserRole
+		if err := rows.Scan(&role); err != nil {
+			return nil, err
+		}
+		items = append(items, role)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAuditLogs = `-- name: ListAuditLogs :many
@@ -175,20 +239,91 @@ func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([
 	return items, nil
 }
 
+const listEntityAuditLogs = `-- name: ListEntityAuditLogs :many
+SELECT a.id, a.user_id, u.username, a.action, a.entity_type, a.entity_id, a.metadata, a.created_at
+FROM audit_logs a
+LEFT JOIN users u ON u.id = a.user_id
+WHERE a.entity_type = $1
+  AND a.entity_id = $2
+ORDER BY a.created_at DESC
+LIMIT $3 OFFSET $4
+`
+
+type ListEntityAuditLogsParams struct {
+	EntityType string `json:"entity_type"`
+	EntityID   string `json:"entity_id"`
+	Limit      int32  `json:"limit"`
+	Offset     int32  `json:"offset"`
+}
+
+type ListEntityAuditLogsRow struct {
+	ID         pgtype.UUID        `json:"id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	Username   pgtype.Text        `json:"username"`
+	Action     string             `json:"action"`
+	EntityType string             `json:"entity_type"`
+	EntityID   string             `json:"entity_id"`
+	Metadata   []byte             `json:"metadata"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListEntityAuditLogs(ctx context.Context, arg ListEntityAuditLogsParams) ([]ListEntityAuditLogsRow, error) {
+	rows, err := q.db.Query(ctx, listEntityAuditLogs,
+		arg.EntityType,
+		arg.EntityID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEntityAuditLogsRow{}
+	for rows.Next() {
+		var i ListEntityAuditLogsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Username,
+			&i.Action,
+			&i.EntityType,
+			&i.EntityID,
+			&i.Metadata,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
-SELECT u.id, u.username, u.role, u.employee_id, e.nama AS employee_nama, u.created_at
+SELECT 
+    u.id, u.username, u.employee_id, u.student_id, u.parent_id,
+    COALESCE(e.nama, s.nama, p.nama, '') AS profile_nama,
+    u.is_active, u.created_at,
+    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
 FROM users u
 LEFT JOIN employees e ON e.id = u.employee_id
+LEFT JOIN students s ON s.id = u.student_id
+LEFT JOIN parents p ON p.id = u.parent_id
 ORDER BY u.username ASC
 `
 
 type ListUsersRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	Username     string             `json:"username"`
-	Role         UserRole           `json:"role"`
-	EmployeeID   pgtype.UUID        `json:"employee_id"`
-	EmployeeNama pgtype.Text        `json:"employee_nama"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID          pgtype.UUID        `json:"id"`
+	Username    string             `json:"username"`
+	EmployeeID  pgtype.UUID        `json:"employee_id"`
+	StudentID   pgtype.UUID        `json:"student_id"`
+	ParentID    pgtype.UUID        `json:"parent_id"`
+	ProfileNama string             `json:"profile_nama"`
+	IsActive    bool               `json:"is_active"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Roles       []byte             `json:"roles"`
 }
 
 func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
@@ -203,10 +338,13 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.Username,
-			&i.Role,
 			&i.EmployeeID,
-			&i.EmployeeNama,
+			&i.StudentID,
+			&i.ParentID,
+			&i.ProfileNama,
+			&i.IsActive,
 			&i.CreatedAt,
+			&i.Roles,
 		); err != nil {
 			return nil, err
 		}
@@ -216,6 +354,103 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const listUsersByEmployeeID = `-- name: ListUsersByEmployeeID :many
+SELECT id, username, password_hash, employee_id, created_at, updated_at, student_id, parent_id, is_active
+FROM users
+WHERE employee_id = $1
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListUsersByEmployeeID(ctx context.Context, employeeID pgtype.UUID) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsersByEmployeeID, employeeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.PasswordHash,
+			&i.EmployeeID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.StudentID,
+			&i.ParentID,
+			&i.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsersByStudentID = `-- name: ListUsersByStudentID :many
+SELECT id, username, password_hash, employee_id, created_at, updated_at, student_id, parent_id, is_active
+FROM users
+WHERE student_id = $1
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListUsersByStudentID(ctx context.Context, studentID pgtype.UUID) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsersByStudentID, studentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.PasswordHash,
+			&i.EmployeeID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.StudentID,
+			&i.ParentID,
+			&i.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const removeAllUserRoles = `-- name: RemoveAllUserRoles :exec
+DELETE FROM user_account_roles WHERE user_id = $1
+`
+
+func (q *Queries) RemoveAllUserRoles(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, removeAllUserRoles, userID)
+	return err
+}
+
+const removeUserRole = `-- name: RemoveUserRole :exec
+DELETE FROM user_account_roles WHERE user_id = $1 AND role = $2
+`
+
+type RemoveUserRoleParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	Role   UserRole    `json:"role"`
+}
+
+func (q *Queries) RemoveUserRole(ctx context.Context, arg RemoveUserRoleParams) error {
+	_, err := q.db.Exec(ctx, removeUserRole, arg.UserID, arg.Role)
+	return err
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec
@@ -231,5 +466,19 @@ type UpdateUserPasswordParams struct {
 
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.Exec(ctx, updateUserPassword, arg.ID, arg.PasswordHash)
+	return err
+}
+
+const updateUserStatus = `-- name: UpdateUserStatus :exec
+UPDATE users SET is_active = $2, updated_at = NOW() WHERE id = $1
+`
+
+type UpdateUserStatusParams struct {
+	ID       pgtype.UUID `json:"id"`
+	IsActive bool        `json:"is_active"`
+}
+
+func (q *Queries) UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error {
+	_, err := q.db.Exec(ctx, updateUserStatus, arg.ID, arg.IsActive)
 	return err
 }

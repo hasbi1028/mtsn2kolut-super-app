@@ -125,6 +125,17 @@ func (s *Employee) SetPusakaAccountEnabled(ctx context.Context, employeeID pgtyp
 	return s.UpsertPusakaAccount(ctx, employeeID, employee.PusakaUsername, employee.PusakaPassword, isEnabled)
 }
 
+func (s *Employee) DeletePusakaAccount(ctx context.Context, employeeID pgtype.UUID) error {
+	employee, err := s.q.GetEmployee(ctx, employeeID)
+	if err != nil {
+		return err
+	}
+	if employee.PusakaUsername == "" {
+		return errors.New("pusaka account is not configured")
+	}
+	return s.q.DeletePusakaAccountByEmployeeID(ctx, employeeID)
+}
+
 func (s *Employee) CreateAuditLog(ctx context.Context, userID pgtype.UUID, action, entityType, entityID string, metadata []byte) error {
 	_, err := s.q.CreateAuditLog(ctx, db.CreateAuditLogParams{
 		UserID:     userID,
@@ -177,4 +188,13 @@ func (s *Employee) Delete(ctx context.Context, id pgtype.UUID) error {
 
 func (s *Employee) ListWithStatus(ctx context.Context) ([]db.ListEmployeesWithStatusRow, error) {
 	return s.q.ListEmployeesWithStatus(ctx)
+}
+
+func (s *Employee) ListPusakaAuditLogs(ctx context.Context, employeeID string, limit, offset int32) ([]db.ListEntityAuditLogsRow, error) {
+	return s.q.ListEntityAuditLogs(ctx, db.ListEntityAuditLogsParams{
+		EntityType: "pusaka_account",
+		EntityID:   employeeID,
+		Limit:      limit,
+		Offset:     offset,
+	})
 }

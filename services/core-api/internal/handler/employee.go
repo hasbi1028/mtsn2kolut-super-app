@@ -238,7 +238,11 @@ func (h *Employee) UpdatePusakaCredentials(w http.ResponseWriter, r *http.Reques
 		api.Internal(w, err)
 		return
 	}
-	if err := h.svc.UpsertPusakaAccount(r.Context(), id, body.PusakaUsername, body.PusakaPassword, emp.IsActive); err != nil {
+	isEnabled := emp.IsActive
+	if emp.PusakaUsername != "" {
+		isEnabled = emp.PusakaIsEnabled
+	}
+	if err := h.svc.UpsertPusakaAccount(r.Context(), id, body.PusakaUsername, body.PusakaPassword, isEnabled); err != nil {
 		api.Internal(w, err)
 		return
 	}
@@ -285,6 +289,49 @@ func (h *Employee) UpdatePusakaAccountStatus(w http.ResponseWriter, r *http.Requ
 		"employee_id": id,
 		"is_enabled":  body.IsEnabled,
 	})
+}
+
+func (h *Employee) DeletePusakaAccount(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	if err := h.svc.DeletePusakaAccount(r.Context(), id); err != nil {
+		if err.Error() == "pusaka account is not configured" {
+			api.BadRequest(w, err.Error())
+			return
+		}
+		api.Internal(w, err)
+		return
+	}
+	meta, _ := json.Marshal(map[string]any{
+		"employee_id": pgUUIDString(id),
+		"deleted":     true,
+	})
+	_ = h.svc.CreateAuditLog(r.Context(), auditUserID(r), "PUSAKA_ACCOUNT_DELETE", "pusaka_account", pgUUIDString(id), meta)
+	api.OK(w, map[string]any{
+		"employee_id": id,
+		"deleted":     true,
+	})
+}
+
+func (h *Employee) ListPusakaAuditLogs(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	q := r.URL.Query()
+	limit := int32(pageSize(q.Get("per_page"), 20))
+	page := pageNum(q.Get("page"), 1)
+	offset := int32((page - 1) * int(limit))
+	rows, err := h.svc.ListPusakaAuditLogs(r.Context(), pgUUIDString(id), limit, offset)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
 }
 
 func parseUUID(s string) (pgtype.UUID, error) {

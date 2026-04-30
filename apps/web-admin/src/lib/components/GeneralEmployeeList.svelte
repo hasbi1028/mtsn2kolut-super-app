@@ -26,6 +26,7 @@
   let confirmId = $state<string | null>(null);
   let busyId = $state<string | null>(null);
   let filterEmploymentType = $state('');
+  let filterUnitKerja = $state('');
   let showEditDialog = $state(false);
   let editBusy = $state(false);
   let editError = $state('');
@@ -38,11 +39,23 @@
     is_active: true,
   });
 
-  let filteredEmployees = $derived(
-    filterEmploymentType
-      ? employees.filter((employee) => employee.employment_type === filterEmploymentType)
-      : employees
+  let unitKerjaOptions = $derived(
+    [...new Set(
+      employees
+        .map((employee) => employee.unit_kerja.trim())
+        .filter((unit) => unit.length > 0)
+    )].sort((a, b) => a.localeCompare(b, 'id-ID'))
   );
+
+  let filteredEmployees = $derived.by(() => {
+    let scoped = filterEmploymentType
+      ? employees.filter((employee) => employee.employment_type === filterEmploymentType)
+      : employees;
+    if (filterUnitKerja) {
+      scoped = scoped.filter((employee) => employee.unit_kerja === filterUnitKerja);
+    }
+    return scoped;
+  });
 
   function employmentLabel(value: string) {
     return { pns: 'PNS', pppk: 'PPPK', honorer: 'Honorer', lainnya: 'Lainnya' }[value] ?? value;
@@ -124,6 +137,12 @@
         <Card.Description>Menampilkan seluruh pegawai sekolah. Operasional akun, jadwal, dan job PUSAKA dikelola dari menu PUSAKA.</Card.Description>
       </div>
       <div class="flex items-center gap-2">
+        <select bind:value={filterUnitKerja} class="rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <option value="">Semua unit</option>
+          {#each unitKerjaOptions as unit}
+            <option value={unit}>{unit}</option>
+          {/each}
+        </select>
         <select bind:value={filterEmploymentType} class="rounded-md border border-input bg-background px-3 py-2 text-sm">
           <option value="">Semua status</option>
           <option value="pns">PNS</option>
