@@ -153,6 +153,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Widget-test coverage for the secured resume overlay in both pre-check and in-progress resume states
 - [x] Widget-test coverage for restore-health chips and per-question audio state in Flutter exam surfaces
 - [x] Widget-test coverage for cached restore card in login flow and lightweight media card in exam shell
+- [x] Widget-test coverage for `stimulus_html` and `stem_html` rendering in Flutter exam shell
 - [x] Handler-level unauthorized coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `answer` and `submit` routes

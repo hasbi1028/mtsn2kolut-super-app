@@ -279,6 +279,37 @@ void main() {
     expect(find.text('Media soal'), findsOneWidget);
   });
 
+  testWidgets('exam shell renders rich stimulus and stem content', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleRichContentLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Bacalah teks berikut dengan saksama.'), findsOneWidget);
+    expect(find.textContaining('Kalimat pertama'), findsOneWidget);
+    expect(find.textContaining('Kalimat kedua'), findsOneWidget);
+    expect(
+      find.textContaining('Apa gagasan utama paragraf di atas?'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('exam shell renders stale supervisor attention panel', (
     tester,
   ) async {
@@ -576,6 +607,43 @@ ExamLoginPayload _sampleMediaLoginPayload() {
         stemHtml: '',
         stimulusHtml: '',
         stemMediaUrl: 'https://cdn.example.com/images/question-1.png',
+        stimulusMediaUrl: '',
+        stemAudioUrl: '',
+        stimulusAudioUrl: '',
+        options: [
+          ExamOption(label: 'A', text: 'Pilihan A'),
+          ExamOption(label: 'B', text: 'Pilihan B'),
+          ExamOption(label: 'C', text: 'Pilihan C'),
+          ExamOption(label: 'D', text: 'Pilihan D'),
+        ],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _sampleRichContentLoginPayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-rich-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'Bahasa Indonesia Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-rich-1',
+        questionText: '',
+        stemHtml: '<p>Apa gagasan utama paragraf di atas?</p>',
+        stimulusHtml:
+            '<p>Bacalah teks berikut dengan saksama.</p><ul><li>Kalimat pertama</li><li>Kalimat kedua</li></ul>',
+        stemMediaUrl: '',
         stimulusMediaUrl: '',
         stemAudioUrl: '',
         stimulusAudioUrl: '',
