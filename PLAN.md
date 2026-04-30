@@ -154,6 +154,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Handler-level unauthorized coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `answer` and `submit` routes
+- [x] Handler-level bad-request coverage for malformed exam login/event/answer requests (`invalid json`, missing token, invalid question_id`)
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

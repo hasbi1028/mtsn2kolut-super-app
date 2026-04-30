@@ -264,6 +264,52 @@ func TestExamLoginMapsKnownServiceErrors(t *testing.T) {
 	}
 }
 
+func TestExamLoginRejectsInvalidJSON(t *testing.T) {
+	h := &Exam{svc: &fakeExamService{}}
+	req := httptest.NewRequest("POST", "http://internal/api/exam/login", bytes.NewBufferString(`{"token":`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	h.Login(rec, req)
+
+	if rec.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "invalid json" {
+		t.Fatalf("error = %q, want %q", payload.Error, "invalid json")
+	}
+}
+
+func TestExamLoginRequiresToken(t *testing.T) {
+	h := &Exam{svc: &fakeExamService{}}
+	req := httptest.NewRequest("POST", "http://internal/api/exam/login", bytes.NewBufferString(`{"device_fingerprint":"device-1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	h.Login(rec, req)
+
+	if rec.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "token required" {
+		t.Fatalf("error = %q, want %q", payload.Error, "token required")
+	}
+}
+
 func TestExamStatusRequiresParticipantContext(t *testing.T) {
 	h := &Exam{svc: &fakeExamService{}}
 	req := httptest.NewRequest("GET", "http://internal/api/exam/status", nil)
@@ -339,6 +385,56 @@ func TestExamSubmitAnswerMapsKnownServiceErrors(t *testing.T) {
 				t.Fatalf("error = %q, want %q", payload.Error, tt.wantError)
 			}
 		})
+	}
+}
+
+func TestExamSubmitAnswerRejectsInvalidJSON(t *testing.T) {
+	participant := db.GetParticipantByTokenRow{}
+	h := &Exam{svc: &fakeExamService{}}
+	req := httptest.NewRequest("POST", "http://internal/api/exam/answer", bytes.NewBufferString(`{"question_id":`))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.SubmitAnswer(rec, req)
+
+	if rec.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "invalid json" {
+		t.Fatalf("error = %q, want %q", payload.Error, "invalid json")
+	}
+}
+
+func TestExamSubmitAnswerRejectsInvalidQuestionID(t *testing.T) {
+	participant := db.GetParticipantByTokenRow{}
+	h := &Exam{svc: &fakeExamService{}}
+	req := httptest.NewRequest("POST", "http://internal/api/exam/answer", bytes.NewBufferString(`{"question_id":"not-a-uuid","answer":"B"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.SubmitAnswer(rec, req)
+
+	if rec.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "question_id invalid" {
+		t.Fatalf("error = %q, want %q", payload.Error, "question_id invalid")
 	}
 }
 
@@ -532,5 +628,30 @@ func TestExamRecordEventWritesWrappedSuccessJSON(t *testing.T) {
 	}
 	if payload.Data["status"] != "recorded" {
 		t.Fatalf("status = %q, want %q", payload.Data["status"], "recorded")
+	}
+}
+
+func TestExamRecordEventRejectsInvalidJSON(t *testing.T) {
+	h := &Exam{svc: &fakeExamService{}}
+	var participant db.GetParticipantByTokenRow
+	req := httptest.NewRequest("POST", "http://internal/api/exam/event", bytes.NewBufferString(`{"event_type":`))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.RecordEvent(rec, req)
+
+	if rec.Code != 400 {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "invalid json" {
+		t.Fatalf("error = %q, want %q", payload.Error, "invalid json")
 	}
 }
