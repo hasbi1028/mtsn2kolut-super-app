@@ -142,6 +142,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Handler-level proxy URL tests for exam asset/media absolutization behind `X-Forwarded-*`
 - [x] Handler-level login/status JSON envelope tests so mobile contract is checked at the HTTP response layer too
 - [x] Handler-level exam error-semantics tests for mobile-critical `404/403/409/401` cases
+- [x] Handler-level `answer` / `submit` error-semantics tests for `409` submitted and `403` exam-window-closed cases
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

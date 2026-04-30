@@ -19,6 +19,8 @@ type fakeExamService struct {
 	loginErr     error
 	statusResult service.StatusResult
 	statusErr    error
+	answerErr    error
+	submitErr    error
 }
 
 func (f *fakeExamService) Login(ctx context.Context, token, deviceFingerprint, loginIP string) (service.LoginResult, error) {
@@ -38,11 +40,11 @@ func (f *fakeExamService) RecordClientEvent(ctx context.Context, participantID p
 }
 
 func (f *fakeExamService) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, questionID pgtype.UUID, answer string) error {
-	return nil
+	return f.answerErr
 }
 
 func (f *fakeExamService) Submit(ctx context.Context, p db.GetParticipantByTokenRow) error {
-	return nil
+	return f.submitErr
 }
 
 func TestAbsolutizeExamAssetURLHonorsForwardedHeaders(t *testing.T) {
@@ -281,5 +283,108 @@ func TestExamStatusRequiresParticipantContext(t *testing.T) {
 	}
 	if payload.Error != "unauthorized" {
 		t.Fatalf("error = %q, want %q", payload.Error, "unauthorized")
+	}
+}
+
+func TestExamSubmitAnswerMapsKnownServiceErrors(t *testing.T) {
+	participant := db.GetParticipantByTokenRow{}
+	questionID := "11111111-1111-1111-1111-111111111111"
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantError  string
+	}{
+		{
+			name:       "already submitted",
+			err:        service.ErrExamAlreadySubmit,
+			wantStatus: 409,
+			wantError:  "exam already submitted",
+		},
+		{
+			name:       "window closed",
+			err:        service.ErrExamWindowClosed,
+			wantStatus: 403,
+			wantError:  "exam window has closed",
+		},
+		{
+			name:       "unexpected error",
+			err:        errors.New("save failed"),
+			wantStatus: 500,
+			wantError:  "save failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &Exam{svc: &fakeExamService{answerErr: tt.err}}
+			body := bytes.NewBufferString(`{"question_id":"` + questionID + `","answer":"B"}`)
+			req := httptest.NewRequest("POST", "http://internal/api/exam/answer", body)
+			req.Header.Set("Content-Type", "application/json")
+			req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+			rec := httptest.NewRecorder()
+
+			h.SubmitAnswer(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			var payload struct {
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("json unmarshal failed: %v", err)
+			}
+			if payload.Error != tt.wantError {
+				t.Fatalf("error = %q, want %q", payload.Error, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestExamSubmitMapsKnownServiceErrors(t *testing.T) {
+	participant := db.GetParticipantByTokenRow{}
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantError  string
+	}{
+		{
+			name:       "already submitted",
+			err:        service.ErrExamAlreadySubmit,
+			wantStatus: 409,
+			wantError:  "exam already submitted",
+		},
+		{
+			name:       "unexpected error",
+			err:        errors.New("submit failed"),
+			wantStatus: 500,
+			wantError:  "submit failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &Exam{svc: &fakeExamService{submitErr: tt.err}}
+			req := httptest.NewRequest("POST", "http://internal/api/exam/submit", nil)
+			req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+			rec := httptest.NewRecorder()
+
+			h.Submit(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			var payload struct {
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("json unmarshal failed: %v", err)
+			}
+			if payload.Error != tt.wantError {
+				t.Fatalf("error = %q, want %q", payload.Error, tt.wantError)
+			}
+		})
 	}
 }
