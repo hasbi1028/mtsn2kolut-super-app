@@ -116,6 +116,8 @@ Three runtime units deployed across 3 VPS:
 - [x] Lightweight remote image rendering baseline for question stimulus/stem media URLs
 - [x] Dedicated restore-failed screen with last known session metadata
 - [x] Human-readable connection freshness indicators (`kontak server terakhir`, `gangguan terakhir`)
+- [x] Lightweight in-app audio playback baseline for `stimulus_audio_url` and `stem_audio_url`
+- [x] Repeated connection-failure warning panel with explicit retry action
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

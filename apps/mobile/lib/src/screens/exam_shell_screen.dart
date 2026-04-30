@@ -6,6 +6,7 @@ import '../exam_api.dart';
 import '../exam_session_store.dart';
 import '../models.dart';
 import 'exam_completed_screen.dart';
+import '../widgets/audio_prompt_card.dart';
 import '../widgets/rich_exam_text.dart';
 import 'exam_login_screen.dart';
 
@@ -46,6 +47,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   bool _resumeCheckRequired = false;
   bool _isResumingExam = false;
   int _resumeAttemptCount = 0;
+  int _consecutiveSyncFailures = 0;
   DateTime? _lastServerContactAt;
   DateTime? _lastSyncFailureAt;
   String? _statusMessage;
@@ -153,6 +155,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           return;
         }
         setState(() {
+          _consecutiveSyncFailures += 1;
           _lastSyncFailureAt = DateTime.now();
           _errorMessage = 'Koneksi ke server ujian sempat terputus.';
         });
@@ -183,6 +186,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         return;
       }
       setState(() {
+        _consecutiveSyncFailures += 1;
         _lastSyncFailureAt = DateTime.now();
         _errorMessage = 'Status server belum bisa diperbarui.';
       });
@@ -264,6 +268,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       } catch (_) {
         if (mounted) {
           setState(() {
+            _consecutiveSyncFailures += 1;
             _lastSyncFailureAt = DateTime.now();
           });
         }
@@ -319,6 +324,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         return;
       }
       setState(() {
+        _consecutiveSyncFailures += 1;
         _lastSyncFailureAt = DateTime.now();
         _pendingAnswers[question.id] = answer;
         _errorMessage = null;
@@ -495,6 +501,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         return;
       }
       setState(() {
+        _consecutiveSyncFailures += 1;
         _lastSyncFailureAt = DateTime.now();
         _errorMessage = error.message;
       });
@@ -522,6 +529,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     setState(() {
       _lastServerContactAt = DateTime.now();
       _lastSyncFailureAt = null;
+      _consecutiveSyncFailures = 0;
     });
   }
 
@@ -741,6 +749,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               ),
             ],
             const SizedBox(height: 20),
+            if (_consecutiveSyncFailures >= 2) ...[
+              _ConnectionWarningCard(
+                failureCount: _consecutiveSyncFailures,
+                lastFailureAt: _formatClock(_lastSyncFailureAt),
+                onRetry: _isSyncingStatus ? null : _syncStatus,
+              ),
+              const SizedBox(height: 14),
+            ],
             if (_pendingAnswers.isNotEmpty) ...[
               _StatTile(
                 label: 'Jawaban lokal',
@@ -880,6 +896,13 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               _QuestionMediaCard(url: question.stimulusMediaUrl),
               const SizedBox(height: 16),
             ],
+            if (question.stimulusAudioUrl.trim().isNotEmpty) ...[
+              AudioPromptCard(
+                url: question.stimulusAudioUrl,
+                label: 'Audio stimulus',
+              ),
+              const SizedBox(height: 16),
+            ],
             RichExamText(
               content: question.stemHtml.trim().isNotEmpty
                   ? question.stemHtml
@@ -894,6 +917,10 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             if (question.stemMediaUrl.trim().isNotEmpty) ...[
               const SizedBox(height: 16),
               _QuestionMediaCard(url: question.stemMediaUrl),
+            ],
+            if (question.stemAudioUrl.trim().isNotEmpty) ...[
+              const SizedBox(height: 16),
+              AudioPromptCard(url: question.stemAudioUrl, label: 'Audio soal'),
             ],
             const SizedBox(height: 22),
             Expanded(
@@ -1236,6 +1263,55 @@ class _QuestionMediaCard extends StatelessWidget {
                 );
               },
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConnectionWarningCard extends StatelessWidget {
+  const _ConnectionWarningCard({
+    required this.failureCount,
+    required this.lastFailureAt,
+    required this.onRetry,
+  });
+
+  final int failureCount;
+  final String lastFailureAt;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3D8),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5C172)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Koneksi perlu diperhatikan',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: const Color(0xFF9A6700),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Perangkat mengalami $failureCount gangguan sinkron berturut-turut. Terakhir tercatat pukul $lastFailureAt.',
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.sync),
+            label: const Text('Coba Sinkron Ulang'),
           ),
         ],
       ),

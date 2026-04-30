@@ -146,8 +146,10 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Session recovery UX baseline** — local exam snapshots should preserve human-readable metadata (student, session title, room) so restore flows remain understandable during reconnects, and completed exams should transition to a dedicated finish screen rather than leaving students on the active question shell.
 - **Session schedule UX baseline** — local exam snapshots should also preserve schedule metadata (start, end, duration) so restore and completion screens remain informative even while reconnecting.
 - **Lightweight media support baseline** — Flutter exam screens may render simple remote image media from the exam payload (`stimulus_media_url`, `stem_media_url`) without introducing a heavier media stack first.
+- **Lightweight audio support baseline** — Flutter exam screens may also play simple remote audio prompts from payload URLs (`stimulus_audio_url`, `stem_audio_url`) using an in-app player before considering richer media workflows.
 - **Restore failure UX baseline** — when a cached exam session can no longer be restored, mobile should show a dedicated explanation screen with the last known session metadata instead of dropping students into a generic login error.
 - **Connection freshness UX baseline** — exam shells should expose human-readable last-contact / last-failure timestamps so BYOD connectivity issues are easier for students and pengawas to interpret.
+- **Repeated-connection-failure UX baseline** — if heartbeat or sync fails repeatedly, mobile should escalate from passive status text to a visible warning panel with an explicit retry action.
 
 ### ✅ Sprint 15 — Library System (Done)
 - **Library schema** — `library_books` and `library_loans` tables (migration 027). No separate member table; loans reference existing `students` and `employees` via FK.
