@@ -58,3 +58,17 @@
   --radius: 0.5rem;
 }
 
+@keyframes route-progress {
+  0% {
+    transform: translateX(-100%);
+    width: 24%;
+  }
+  55% {
+    transform: translateX(120%);
+    width: 44%;
+  }
+  100% {
+    transform: translateX(360%);
+    width: 22%;
+  }
+}

@@ -7,6 +7,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type AcademicYear = {
 		id: string; name: string; start_date: string; end_date: string;
@@ -164,7 +166,29 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-sm text-slate-500">Memuat data...</p>
+		<div class="space-y-4">
+			<div class="overflow-x-auto pb-1">
+				<div class="flex min-w-max gap-2">
+					<Skeleton class="h-9 w-36 rounded-full" />
+					<Skeleton class="h-9 w-28 rounded-full" />
+					<Skeleton class="h-9 w-40 rounded-full" />
+				</div>
+			</div>
+			<div class="grid gap-4 lg:grid-cols-3">
+				<div class="space-y-4 lg:col-span-2">
+					<Skeleton class="h-12 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+				</div>
+				<div class="space-y-3">
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-9 w-full" />
+				</div>
+			</div>
+		</div>
 	{:else}
 		<Tabs.Root value="years">
 			<div class="overflow-x-auto pb-1">
@@ -240,9 +264,7 @@
 								<input type="checkbox" bind:checked={yearActive} class="rounded" />
 								Jadikan aktif
 							</label>
-							<Button class="w-full" disabled={yearBusy || !yearName || !yearStart || !yearEnd} onclick={createYear}>
-								{yearBusy ? 'Menyimpan...' : 'Simpan'}
-							</Button>
+							<LoadingButton class="w-full" loading={yearBusy} loadingLabel="Menyimpan..." disabled={!yearName || !yearStart || !yearEnd} onclick={createYear} label="Simpan" />
 						</Card.Content>
 					</Card.Root>
 				</div>
@@ -318,9 +340,7 @@
 								<input type="checkbox" bind:checked={classActive} class="rounded" />
 								Kelas aktif
 							</label>
-							<Button class="w-full" disabled={classBusy || !className || !classCode || !classLevel || !classYearId} onclick={createClass}>
-								{classBusy ? 'Menyimpan...' : 'Simpan'}
-							</Button>
+							<LoadingButton class="w-full" loading={classBusy} loadingLabel="Menyimpan..." disabled={!className || !classCode || !classLevel || !classYearId} onclick={createClass} label="Simpan" />
 						</Card.Content>
 					</Card.Root>
 				</div>
@@ -382,9 +402,7 @@
 								<input type="checkbox" bind:checked={subjectActive} class="rounded" />
 								Aktif
 							</label>
-							<Button class="w-full" disabled={subjectBusy || !subjectName || !subjectCode} onclick={createSubject}>
-								{subjectBusy ? 'Menyimpan...' : 'Simpan'}
-							</Button>
+							<LoadingButton class="w-full" loading={subjectBusy} loadingLabel="Menyimpan..." disabled={!subjectName || !subjectCode} onclick={createSubject} label="Simpan" />
 						</Card.Content>
 					</Card.Root>
 				</div>

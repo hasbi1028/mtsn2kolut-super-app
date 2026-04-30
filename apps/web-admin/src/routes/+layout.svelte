@@ -1,10 +1,11 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
 	import PublicSiteShell from '$lib/components/PublicSiteShell.svelte';
+	import RouteProgress from '$lib/components/RouteProgress.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { Sonner } from '$lib/components/ui/sonner';
 	import '../app.css';
-	import { page } from '$app/state';
+	import { navigating, page } from '$app/state';
 
 	let { children, data } = $props();
 	let isLogin = $derived(page.url.pathname === '/login');
@@ -23,6 +24,7 @@
 </svelte:head>
 
 <Sonner />
+<RouteProgress active={!!navigating.to} />
 
 {#if isLogin}
 	{@render children()}

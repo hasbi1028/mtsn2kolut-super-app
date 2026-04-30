@@ -6,6 +6,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type Student = {
 		id: string; nis: string; nisn: string; nama: string; gender: string;
@@ -241,9 +243,13 @@
 					</div>
 				</div>
 				<div class="mt-4 flex gap-2">
-					<Button disabled={formBusy || !formNis || !formNama} onclick={saveStudent}>
-						{formBusy ? 'Menyimpan...' : (editId ? 'Perbarui Siswa' : 'Simpan Siswa')}
-					</Button>
+					<LoadingButton
+						loading={formBusy}
+						loadingLabel="Menyimpan..."
+						disabled={!formNis || !formNama}
+						onclick={saveStudent}
+						label={editId ? 'Perbarui Siswa' : 'Simpan Siswa'}
+					/>
 					<Button variant="outline" onclick={resetForm}>Batal</Button>
 				</div>
 			</Card.Content>
@@ -251,7 +257,19 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-sm text-slate-500">Memuat data...</p>
+		<div class="space-y-4">
+			<div class="flex flex-wrap items-start justify-between gap-4">
+				<div class="space-y-2">
+					<Skeleton class="h-8 w-48" />
+					<Skeleton class="h-4 w-72" />
+				</div>
+				<Skeleton class="h-9 w-36" />
+			</div>
+			<Skeleton class="h-12 w-full" />
+			<Skeleton class="h-14 w-full" />
+			<Skeleton class="h-14 w-full" />
+			<Skeleton class="h-14 w-full" />
+		</div>
 	{:else}
 		<Card.Root>
 			<Card.Header class="pb-3">

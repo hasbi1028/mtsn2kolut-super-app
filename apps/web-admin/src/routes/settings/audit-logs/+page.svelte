@@ -5,6 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 
 	type AuditLog = {
 		id: string;
@@ -149,7 +150,12 @@
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
 			{#if loading}
-				<div class="p-8 text-center text-muted-foreground text-sm">Memuat...</div>
+				<div class="space-y-3 p-4">
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+				</div>
 			{:else if error}
 				<div class="p-8 text-center text-red-600 text-sm">{error}</div>
 			{:else if filteredLogs.length === 0}

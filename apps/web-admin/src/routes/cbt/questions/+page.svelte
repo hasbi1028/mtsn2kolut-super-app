@@ -7,9 +7,11 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { page } from '$app/state';
 	import EditorWrapper from '$lib/components/EditorWrapper.svelte';
 	import LatexBlock from '$lib/components/LatexBlock.svelte';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type Subject = { id: string; name: string; code: string };
 	type OptionItem = { label: string; text?: string; html?: string; latex?: string; asset_id?: string };
@@ -1024,7 +1026,7 @@
 									<option value="rubric">Rubrik</option>
 								</select>
 							</div>
-							<Button onclick={uploadAsset} disabled={assetBusy || !assetFile}>{assetBusy ? 'Uploading...' : 'Upload'}</Button>
+							<LoadingButton onclick={uploadAsset} loading={assetBusy} loadingLabel="Uploading..." disabled={!assetFile} label="Upload" />
 						</div>
 						{#if uploadedAssets.length > 0}
 							<div class="space-y-2">
@@ -1113,7 +1115,7 @@
 				</section>
 
 				<div class="flex flex-wrap gap-2 border-t pt-4">
-					<Button onclick={saveQuestion} disabled={fBusy}>{fBusy ? 'Menyimpan...' : editId ? 'Perbarui Item' : 'Simpan Item'}</Button>
+					<LoadingButton onclick={saveQuestion} loading={fBusy} loadingLabel="Menyimpan..." label={editId ? 'Perbarui Item' : 'Simpan Item'} />
 					<Button variant="outline" onclick={resetForm}>Batal</Button>
 				</div>
 			</Card.Content>
@@ -1121,7 +1123,32 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-sm text-slate-600">Memuat data bank soal...</p>
+		<div class="space-y-4">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+				<div class="space-y-2">
+					<Skeleton class="h-8 w-44" />
+					<Skeleton class="h-4 w-80" />
+				</div>
+				<div class="flex gap-2">
+					<Skeleton class="h-9 w-28" />
+					<Skeleton class="h-9 w-36" />
+				</div>
+			</div>
+			<div class="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+				<div class="space-y-3">
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-56 w-full" />
+				</div>
+				<div class="space-y-3">
+					<Skeleton class="h-12 w-full" />
+					<Skeleton class="h-16 w-full" />
+					<Skeleton class="h-16 w-full" />
+					<Skeleton class="h-16 w-full" />
+				</div>
+			</div>
+		</div>
 	{:else}
 		<Card.Root>
 			<Card.Header class="pb-3">

@@ -6,6 +6,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type Assignment = {
 		id: string;
@@ -257,7 +259,25 @@
 	{/if}
 
 	{#if loading}
-		<div class="rounded-xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">Memuat fondasi nilai...</div>
+		<div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+			<div class="grid gap-3 lg:grid-cols-[1.6fr,0.8fr]">
+				<Skeleton class="h-14 w-full" />
+				<Skeleton class="h-20 w-full" />
+			</div>
+			<div class="grid gap-4 xl:grid-cols-[0.95fr,1.05fr]">
+				<div class="space-y-3">
+					<Skeleton class="h-10 w-full" />
+					<Skeleton class="h-24 w-full" />
+					<Skeleton class="h-24 w-full" />
+				</div>
+				<div class="space-y-3">
+					<Skeleton class="h-12 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-14 w-full" />
+				</div>
+			</div>
+		</div>
 	{:else}
 		{#if selectedAssignment}
 			<div class="grid gap-4 md:grid-cols-3">
@@ -315,9 +335,14 @@
 								<Input id="component-max-score" type="number" min="1" step="0.1" bind:value={componentMaxScore} />
 							</div>
 							<div class="flex items-end">
-								<Button class="w-full md:w-auto" disabled={createBusy || !componentTitle} onclick={createComponent}>
-									{createBusy ? 'Menyimpan...' : 'Tambah Komponen'}
-								</Button>
+								<LoadingButton
+									class="w-full md:w-auto"
+									loading={createBusy}
+									loadingLabel="Menyimpan..."
+									disabled={!componentTitle}
+									onclick={createComponent}
+									label="Tambah Komponen"
+								/>
 							</div>
 						</div>
 
@@ -436,9 +461,13 @@
 												<Input placeholder="Catatan singkat" bind:value={noteInput[row.student_id]} />
 											</Table.Cell>
 											<Table.Cell class="text-right">
-												<Button size="sm" disabled={entryBusy[row.student_id]} onclick={() => saveEntry(row.student_id)}>
-													{entryBusy[row.student_id] ? 'Menyimpan...' : 'Simpan'}
-												</Button>
+												<LoadingButton
+													size="sm"
+													loading={entryBusy[row.student_id]}
+													loadingLabel="Menyimpan..."
+													onclick={() => saveEntry(row.student_id)}
+													label="Simpan"
+												/>
 											</Table.Cell>
 										</Table.Row>
 									{:else}

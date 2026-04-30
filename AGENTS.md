@@ -41,6 +41,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **SvelteKit is UI/BFF only.** No backend business logic leaks into frontend code.
 - **Use `shadcn-svelte` (bits-ui) for all new UI primitives.** Do not add one-off component patterns.
 - **Use `sonner` toast via the shared `ui/sonner` wrapper for notifications.** Do not add per-page local toast banners for new work.
+- **Loading UX baseline:** use a combination of global route progress, section/page skeletons, and explicit button loading states. Avoid falling back to plain loading text for new primary screens when a skeleton is practical.
 - **Tailwind CSS v4** via `@tailwindcss/vite`. Use utility classes, not custom CSS files.
 - **Type safety:** Always use `<script lang="ts">`. Explicit interfaces for props and state. No `any`.
 - **Accessibility:** All form labels use `for` + `id`. Run `npm run check` before finalizing.

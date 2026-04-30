@@ -7,6 +7,7 @@
   import { toast } from '$lib/components/ui/sonner';
   import WorkerSettings from '$lib/components/WorkerSettings.svelte';
   import ScheduleList   from '$lib/components/ScheduleList.svelte';
+  import LoadingButton from '$lib/components/LoadingButton.svelte';
 
   type AuthSession = {
     id: string;
@@ -221,17 +222,13 @@
           <Input id="pw-confirm" type="password" bind:value={pwForm.confirm} autocomplete="new-password" />
         </div>
       </div>
-      <Button class="mt-4" onclick={changePassword} disabled={pwLoading}>
-        {pwLoading ? 'Menyimpan…' : 'Simpan Password'}
-      </Button>
+      <LoadingButton class="mt-4" onclick={changePassword} loading={pwLoading} loadingLabel="Menyimpan..." label="Simpan Password" />
       <div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
         <p class="text-sm font-medium text-amber-900">Keluar dari semua perangkat</p>
         <p class="mt-1 text-xs text-amber-800">
           Semua sesi login lain akan diakhiri, termasuk token akses yang masih aktif.
         </p>
-        <Button class="mt-3" variant="outline" onclick={logoutAllSessions} disabled={logoutAllLoading}>
-          {logoutAllLoading ? 'Memproses…' : 'Keluar dari Semua Sesi'}
-        </Button>
+        <LoadingButton class="mt-3" variant="outline" onclick={logoutAllSessions} loading={logoutAllLoading} loadingLabel="Memproses..." label="Keluar dari Semua Sesi" />
       </div>
     </Card.Content>
   </Card.Root>
@@ -291,25 +288,25 @@
                         maxlength={60}
                         placeholder="Mis. Laptop Ruang Guru"
                       />
-                      <Button
+                      <LoadingButton
                         variant="secondary"
                         size="sm"
                         onclick={() => renameSession(session.id)}
-                        disabled={renameSessionLoading === session.id}
-                      >
-                        {renameSessionLoading === session.id ? 'Menyimpan…' : 'Simpan Nama'}
-                      </Button>
+                        loading={renameSessionLoading === session.id}
+                        loadingLabel="Menyimpan..."
+                        label="Simpan Nama"
+                      />
                     </div>
                   </div>
                 </div>
-                <Button
+                <LoadingButton
                   variant="outline"
                   size="sm"
                   onclick={() => revokeSession(session.id)}
-                  disabled={revokeSessionLoading === session.id}
-                >
-                  {revokeSessionLoading === session.id ? 'Memproses…' : 'Akhiri Sesi'}
-                </Button>
+                  loading={revokeSessionLoading === session.id}
+                  loadingLabel="Memproses..."
+                  label="Akhiri Sesi"
+                />
               </div>
             </div>
           {/each}
