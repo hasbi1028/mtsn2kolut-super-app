@@ -9,6 +9,8 @@ import 'package:mobile/src/exam_session_store.dart';
 import 'package:mobile/src/screens/exam_login_screen.dart';
 import 'package:mobile/src/screens/exam_restore_failed_screen.dart';
 import 'package:mobile/src/screens/exam_shell_screen.dart';
+import 'package:mobile/src/screens/exam_completed_screen.dart';
+import 'package:mobile/src/screens/exam_status_guide_screen.dart';
 
 void main() {
   testWidgets('login screen renders exam shell entry', (tester) async {
@@ -268,6 +270,99 @@ void main() {
     expect(find.text('Belum ada riwayat koneksi'), findsOneWidget);
     expect(find.textContaining('Kontak server '), findsNothing);
     expect(find.textContaining('Gangguan '), findsNothing);
+  });
+
+  testWidgets('completed screen renders manual submit summary', (tester) async {
+    tester.view.physicalSize = const Size(1440, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const _TestApp(
+        child: ExamCompletedScreen(
+          studentName: 'Siti Aminah',
+          studentNis: '24001',
+          sessionTitle: 'Matematika Kelas VIII',
+          roomName: 'Lab 1',
+          scheduledStartIso: '2026-05-01T08:00:00+08:00',
+          scheduledEndIso: '2026-05-01T09:30:00+08:00',
+          durationMinutes: 90,
+          answeredCount: 18,
+          totalQuestions: 20,
+          wasAutoSubmitted: false,
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Ujian berhasil dikirim.'), findsOneWidget);
+    expect(
+      find.text(
+        'Jawaban Anda sudah diterima server. Silakan menunggu arahan pengawas.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('18 / 20 soal'), findsOneWidget);
+    expect(find.text('Matematika Kelas VIII'), findsOneWidget);
+  });
+
+  testWidgets('completed screen renders auto submit summary', (tester) async {
+    tester.view.physicalSize = const Size(1440, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const _TestApp(
+        child: ExamCompletedScreen(
+          studentName: 'Siti Aminah',
+          studentNis: '24001',
+          sessionTitle: 'Bahasa Indonesia Kelas VIII',
+          roomName: 'Lab 2',
+          scheduledStartIso: '2026-05-01T10:00:00+08:00',
+          scheduledEndIso: '2026-05-01T11:30:00+08:00',
+          durationMinutes: 90,
+          answeredCount: 20,
+          totalQuestions: 20,
+          wasAutoSubmitted: true,
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Ujian ditutup otomatis.'), findsOneWidget);
+    expect(
+      find.text(
+        'Waktu ujian telah habis dan jawaban Anda sudah dikirim ke server.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('20 / 20 soal'), findsOneWidget);
+    expect(find.text('Bahasa Indonesia Kelas VIII'), findsOneWidget);
+  });
+
+  testWidgets('status guide screen renders all byod status cards', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const _TestApp(child: ExamStatusGuideScreen()));
+
+    await tester.pump();
+
+    expect(find.text('Panduan Status Ujian'), findsOneWidget);
+    expect(find.text('Tersambung'), findsOneWidget);
+    expect(find.text('Lokal'), findsOneWidget);
+    expect(find.text('Gangguan'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Menurun'), 200);
+    expect(find.text('Menurun'), findsOneWidget);
+    expect(find.text('Catatan untuk pengawas'), findsOneWidget);
   });
 
   testWidgets('exam shell renders warning guidance notice', (tester) async {

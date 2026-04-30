@@ -158,6 +158,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Widget-test coverage for transient sync-chip labels `Sinkron` and `Cek Ulang`
 - [x] Widget-test coverage for sync-chip error label `Gangguan`
 - [x] Widget-test coverage for restore-health labels across login and restore-failed entry surfaces (`Terakhir stabil`, `Pernah terganggu`, `Belum ada riwayat koneksi`, `Perlu perhatian koneksi`)
+- [x] Widget-test coverage for finish-screen variants and the in-app BYOD status-guide screen
 - [x] Handler-level unauthorized coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `answer` and `submit` routes
