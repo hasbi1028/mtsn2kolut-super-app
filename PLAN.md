@@ -131,6 +131,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Mobile payload compatibility checklist embedded in `docs/exam-api.md` for backend release discipline
 - [x] Per-device BYOD test matrix for vendor/model/Android-version comparison during field trials
 - [x] Web-admin `/cbt/byod` summary page for pengawas/operator with mobile status legend, submit checklist, and trial references
+- [x] Web-admin `/cbt/byod/matrix` companion page for vendor/device comparison during BYOD field trials
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

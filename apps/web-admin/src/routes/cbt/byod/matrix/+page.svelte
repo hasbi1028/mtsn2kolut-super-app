@@ -1,0 +1,202 @@
+<script lang="ts">
+	import * as Card from '$lib/components/ui/card';
+	import * as Table from '$lib/components/ui/table';
+	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
+
+	type DeviceRow = {
+		vendor: string;
+		model: string;
+		android: string;
+		ram: string;
+		connection: string;
+		install: string;
+		login: string;
+		restore: string;
+		audio: string;
+		submit: string;
+		note: string;
+	};
+
+	const sampleRows: DeviceRow[] = [
+		{
+			vendor: 'Samsung',
+			model: 'Galaxy A14',
+			android: '14',
+			ram: '4 GB',
+			connection: 'Wi-Fi',
+			install: 'Lulus',
+			login: 'Lulus',
+			restore: 'Lulus',
+			audio: 'Lulus',
+			submit: 'Lulus',
+			note: 'Stabil untuk baseline uji awal'
+		},
+		{
+			vendor: 'Xiaomi',
+			model: 'Redmi Note 11',
+			android: '13',
+			ram: '4 GB',
+			connection: 'Data',
+			install: 'Perlu perhatian',
+			login: 'Lulus',
+			restore: 'Perlu perhatian',
+			audio: 'Lulus',
+			submit: 'Lulus',
+			note: 'Perlu cek lagi saat app dibawa ke background'
+		},
+		{
+			vendor: 'Oppo',
+			model: 'A57',
+			android: '13',
+			ram: '4 GB',
+			connection: 'Wi-Fi',
+			install: 'Lulus',
+			login: 'Lulus',
+			restore: 'Lulus',
+			audio: 'Perlu perhatian',
+			submit: 'Lulus',
+			note: 'Audio perlu diuji ulang dengan file berbeda'
+		}
+	];
+
+	const focusChecks = [
+		'APK bisa dipasang tanpa langkah aneh tambahan.',
+		'Login token berhasil pada koneksi yang dipakai siswa.',
+		'Restore sesi tetap berjalan setelah app ditutup lalu dibuka lagi.',
+		'Status Waspada dan Menurun muncul sesuai simulasi gangguan.',
+		'Submit hanya dilakukan saat koneksi kembali sehat.'
+	];
+
+	function badgeClass(value: string) {
+		if (value === 'Lulus') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+		if (value === 'Perlu perhatian') return 'border-amber-200 bg-amber-50 text-amber-700';
+		return 'border-rose-200 bg-rose-50 text-rose-700';
+	}
+</script>
+
+<svelte:head>
+	<title>Matriks Perangkat BYOD — MTsN 2 Kolaka Utara</title>
+</svelte:head>
+
+<div class="space-y-6">
+	<section class="rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-6 shadow-sm">
+		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+			<div class="max-w-3xl space-y-3">
+				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">Matriks Uji Lapangan</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-slate-900">Perbandingan Perangkat BYOD</h1>
+				<p class="max-w-2xl text-sm leading-6 text-slate-600">
+					Gunakan halaman ini sebagai format acuan untuk mencatat hasil uji vendor, model, versi Android,
+					dan kestabilan fungsi inti mobile CBT sebelum dipakai lebih luas.
+				</p>
+			</div>
+			<div class="flex flex-wrap gap-3">
+				<Button href="/cbt/byod">Kembali ke Panduan BYOD</Button>
+				<Button href="/cbt/sessions" variant="outline">Buka Sesi Ujian</Button>
+			</div>
+		</div>
+	</section>
+
+	<div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+		<Card.Root class="border-slate-200 shadow-sm">
+			<Card.Header>
+				<Card.Title class="text-lg text-slate-900">Contoh Matriks Perangkat</Card.Title>
+				<Card.Description>
+					Tabel ini bisa dijadikan acuan saat operator memindahkan hasil uji dari catatan lapangan ke format yang lebih seragam.
+				</Card.Description>
+			</Card.Header>
+			<Card.Content class="space-y-4">
+				<div class="overflow-x-auto rounded-2xl border border-slate-200">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row>
+								<Table.Head>Vendor</Table.Head>
+								<Table.Head>Model</Table.Head>
+								<Table.Head>Android</Table.Head>
+								<Table.Head>RAM</Table.Head>
+								<Table.Head>Koneksi</Table.Head>
+								<Table.Head>Install</Table.Head>
+								<Table.Head>Login</Table.Head>
+								<Table.Head>Restore</Table.Head>
+								<Table.Head>Audio</Table.Head>
+								<Table.Head>Submit</Table.Head>
+								<Table.Head>Catatan</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each sampleRows as row (row.vendor + row.model)}
+								<Table.Row>
+									<Table.Cell class="font-medium text-slate-900">{row.vendor}</Table.Cell>
+									<Table.Cell>{row.model}</Table.Cell>
+									<Table.Cell>{row.android}</Table.Cell>
+									<Table.Cell>{row.ram}</Table.Cell>
+									<Table.Cell>{row.connection}</Table.Cell>
+									<Table.Cell><Badge class={badgeClass(row.install)}>{row.install}</Badge></Table.Cell>
+									<Table.Cell><Badge class={badgeClass(row.login)}>{row.login}</Badge></Table.Cell>
+									<Table.Cell><Badge class={badgeClass(row.restore)}>{row.restore}</Badge></Table.Cell>
+									<Table.Cell><Badge class={badgeClass(row.audio)}>{row.audio}</Badge></Table.Cell>
+									<Table.Cell><Badge class={badgeClass(row.submit)}>{row.submit}</Badge></Table.Cell>
+									<Table.Cell class="min-w-56 text-sm text-slate-600">{row.note}</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				</div>
+				<p class="text-xs leading-5 text-slate-500">
+					Format sumber resminya tetap ada di <span class="font-mono">apps/mobile/DEVICE_TEST_MATRIX.md</span>.
+					Halaman ini disediakan agar pengawas dan operator bisa membaca struktur penilaian tanpa keluar dari web admin.
+				</p>
+			</Card.Content>
+		</Card.Root>
+
+		<div class="space-y-6">
+			<Card.Root class="border-slate-200 shadow-sm">
+				<Card.Header>
+					<Card.Title class="text-lg text-slate-900">Fokus Uji Minimal</Card.Title>
+					<Card.Description>
+						Lima poin ini yang paling penting saat membandingkan perangkat siswa sebelum masuk uji yang lebih besar.
+					</Card.Description>
+				</Card.Header>
+				<Card.Content>
+					<ul class="space-y-3">
+						{#each focusChecks as item (item)}
+							<li class="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-semibold text-sky-700">UJI</span>
+								<span>{item}</span>
+							</li>
+						{/each}
+					</ul>
+				</Card.Content>
+			</Card.Root>
+
+			<Card.Root class="border-slate-200 shadow-sm">
+				<Card.Header>
+					<Card.Title class="text-lg text-slate-900">Interpretasi Hasil</Card.Title>
+					<Card.Description>
+						Gunakan klasifikasi ini agar keputusan perangkat yang layak dipakai tetap konsisten antar operator.
+					</Card.Description>
+				</Card.Header>
+				<Card.Content class="space-y-4">
+					<div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+						<p class="text-sm font-semibold text-emerald-800">Layak dipakai produksi awal</p>
+						<p class="mt-2 text-sm leading-6 text-emerald-900/80">
+							Fungsi inti lulus, restore stabil, submit sehat, dan perangkat tidak sering masuk status Menurun.
+						</p>
+					</div>
+					<div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+						<p class="text-sm font-semibold text-amber-800">Layak dengan catatan</p>
+						<p class="mt-2 text-sm leading-6 text-amber-900/80">
+							Fungsi inti jalan, tetapi ada issue minor seperti audio lambat atau perlu refresh manual sesekali.
+						</p>
+					</div>
+					<div class="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+						<p class="text-sm font-semibold text-rose-800">Tidak direkomendasikan</p>
+						<p class="mt-2 text-sm leading-6 text-rose-900/80">
+							Login, restore, atau submit sering gagal walau perangkat lain pada jaringan yang sama berjalan baik.
+						</p>
+					</div>
+				</Card.Content>
+			</Card.Root>
+		</div>
+	</div>
+</div>

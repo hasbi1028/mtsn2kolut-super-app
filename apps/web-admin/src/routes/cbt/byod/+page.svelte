@@ -90,6 +90,7 @@
 			</div>
 			<div class="flex flex-wrap gap-3">
 				<Button href="/cbt/sessions">Buka Sesi Ujian</Button>
+				<Button href="/cbt/byod/matrix" variant="outline">Lihat Matriks Perangkat</Button>
 				<Button href="/cbt/events" variant="outline">Lihat Kegiatan Ujian</Button>
 			</div>
 		</div>
@@ -166,7 +167,7 @@
 				Gunakan dokumen ini di repo yang sama untuk trial lapangan dan review kompatibilitas backend-mobile.
 			</Card.Description>
 		</Card.Header>
-		<Card.Content class="grid gap-4 lg:grid-cols-3">
+		<Card.Content class="grid gap-4 lg:grid-cols-4">
 			<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
 				<p class="text-sm font-semibold text-slate-900">Operator Quick Start</p>
 				<p class="mt-2 text-sm leading-6 text-slate-600">
@@ -187,6 +188,13 @@
 					Matriks vendor dan model perangkat untuk mencatat hasil uji install, restore, audio, gambar, dan submit.
 				</p>
 				<p class="mt-3 font-mono text-xs text-slate-500">apps/mobile/DEVICE_TEST_MATRIX.md</p>
+			</div>
+			<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+				<p class="text-sm font-semibold text-slate-900">Ringkasan Matriks di Admin</p>
+				<p class="mt-2 text-sm leading-6 text-slate-600">
+					Gunakan halaman matriks perangkat di admin untuk membaca struktur evaluasi vendor tanpa keluar dari dashboard.
+				</p>
+				<p class="mt-3 font-mono text-xs text-slate-500">/cbt/byod/matrix</p>
 			</div>
 		</Card.Content>
 	</Card.Root>
