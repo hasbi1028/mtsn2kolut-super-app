@@ -164,6 +164,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Device-matrix baseline** — `apps/mobile/DEVICE_TEST_MATRIX.md` should exist as the structured per-vendor/per-device scorecard for BYOD field trials so hardware issues are tracked systematically, not only via ad-hoc notes.
 - **Admin BYOD summary baseline** — `/cbt/byod` should exist in the web admin as a compact operator-facing summary of mobile status meanings, submit readiness, and trial references without requiring a new backend service.
 - **Admin BYOD matrix baseline** — `/cbt/byod/matrix` should exist in the web admin as a readable companion view for the per-device BYOD test matrix, again without requiring a backend feature or new persistence.
+- **Admin BYOD release baseline** — `/cbt/byod/release` should exist in the web admin as the operator-facing readiness summary for backend payload checks, mobile verification, and rollout preparation.
 
 ### ✅ Sprint 15 — Library System (Done)
 - **Library schema** — `library_books` and `library_loans` tables (migration 027). No separate member table; loans reference existing `students` and `employees` via FK.
