@@ -23,6 +23,12 @@ void main() {
         expect(request.uri.path, '/api/exam/login');
         expect(request.method, 'POST');
 
+        final rawBody = await utf8.decoder.bind(request).join();
+        expect(jsonDecode(rawBody), <String, dynamic>{
+          'token': 'token-1',
+          'device_fingerprint': 'android:test',
+        });
+
         request.response
           ..statusCode = 200
           ..headers.contentType = ContentType.json
@@ -58,6 +64,30 @@ void main() {
       expect(payload.participantId, 'participant-1');
       expect(payload.session.title, 'Matematika Kelas VIII');
       expect(payload.room?.roomName, 'Lab 1');
+    });
+
+    test('sendHeartbeat sends exam token and empty payload contract', () async {
+      server.listen((request) async {
+        expect(request.uri.path, '/api/exam/heartbeat');
+        expect(request.method, 'POST');
+        expect(request.headers.value('X-Exam-Token'), 'token-1');
+
+        final rawBody = await utf8.decoder.bind(request).join();
+        expect(jsonDecode(rawBody), <String, dynamic>{});
+
+        request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType.json
+          ..write(
+            jsonEncode({
+              'data': {'status': 'ok'},
+            }),
+          );
+        await request.response.close();
+      });
+
+      final client = ExamApiClient(baseUrl: baseUrl);
+      await client.sendHeartbeat('token-1');
     });
 
     test('maps socket transport failures into controlled exception', () async {
@@ -167,6 +197,30 @@ void main() {
         eventType: 'repeat_resume_attempt',
         data: const <String, Object?>{'count': 2, 'source': 'resume_gate'},
       );
+    });
+
+    test('submit sends exam token and empty payload contract', () async {
+      server.listen((request) async {
+        expect(request.uri.path, '/api/exam/submit');
+        expect(request.method, 'POST');
+        expect(request.headers.value('X-Exam-Token'), 'token-1');
+
+        final rawBody = await utf8.decoder.bind(request).join();
+        expect(jsonDecode(rawBody), <String, dynamic>{});
+
+        request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType.json
+          ..write(
+            jsonEncode({
+              'data': {'status': 'submitted'},
+            }),
+          );
+        await request.response.close();
+      });
+
+      final client = ExamApiClient(baseUrl: baseUrl);
+      await client.submit('token-1');
     });
 
     test('throws controlled exception when data envelope is missing', () async {
