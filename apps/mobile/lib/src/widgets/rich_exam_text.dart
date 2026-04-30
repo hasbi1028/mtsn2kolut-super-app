@@ -8,7 +8,7 @@ class RichExamText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cleaned = _normalizeExamText(content);
+    final cleaned = normalizeExamText(content);
     if (cleaned.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -31,7 +31,7 @@ class RichExamText extends StatelessWidget {
   }
 }
 
-String _normalizeExamText(String raw) {
+String normalizeExamText(String raw) {
   var text = raw.trim();
   if (text.isEmpty) {
     return '';
