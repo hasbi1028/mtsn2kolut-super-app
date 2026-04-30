@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
@@ -21,8 +22,24 @@ var (
 )
 
 type Exam struct {
-	q    *db.Queries
+	q    examStore
 	pool *pgxpool.Pool
+}
+
+type examStore interface {
+	GetParticipantByToken(ctx context.Context, token string) (db.GetParticipantByTokenRow, error)
+	UpdateParticipantLogin(ctx context.Context, arg db.UpdateParticipantLoginParams) error
+	InsertParticipantEvent(ctx context.Context, arg db.InsertParticipantEventParams) error
+	GetExamQuestions(ctx context.Context, packageID pgtype.UUID) ([]db.GetExamQuestionsRow, error)
+	UpdateParticipantQuestionOrder(ctx context.Context, arg db.UpdateParticipantQuestionOrderParams) error
+	GetParticipantAnswers(ctx context.Context, participantID pgtype.UUID) ([]db.GetParticipantAnswersRow, error)
+	GetCbtExamRoom(ctx context.Context, id pgtype.UUID) (db.CbtExamRoom, error)
+	UpdateParticipantHeartbeat(ctx context.Context, participantID pgtype.UUID) error
+	IncrementParticipantAppSwitch(ctx context.Context, participantID pgtype.UUID) error
+	IncrementParticipantScreenshot(ctx context.Context, participantID pgtype.UUID) error
+	UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) error
+	SubmitParticipantExam(ctx context.Context, id pgtype.UUID) (db.SubmitParticipantExamRow, error)
+	ListCbtQuestionAssetsByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error)
 }
 
 func NewExam(pool *pgxpool.Pool) *Exam {
@@ -34,19 +51,19 @@ func (s *Exam) GetParticipantByToken(ctx context.Context, token string) (db.GetP
 }
 
 type LoginResult struct {
-	ParticipantID      string                  `json:"participant_id"`
-	Student            StudentInfo             `json:"student"`
-	Session            SessionInfo             `json:"session"`
-	Room               *RoomInfo               `json:"room,omitempty"`
-	Questions          []ExamQuestion          `json:"questions"`
-	AnsweredCount      int                     `json:"answered_count"`
-	TotalQuestions     int                     `json:"total_questions"`
-	TimeRemainingSeconds int64                 `json:"time_remaining_seconds"`
+	ParticipantID        string         `json:"participant_id"`
+	Student              StudentInfo    `json:"student"`
+	Session              SessionInfo    `json:"session"`
+	Room                 *RoomInfo      `json:"room,omitempty"`
+	Questions            []ExamQuestion `json:"questions"`
+	AnsweredCount        int            `json:"answered_count"`
+	TotalQuestions       int            `json:"total_questions"`
+	TimeRemainingSeconds int64          `json:"time_remaining_seconds"`
 }
 
 type StudentInfo struct {
-	NIS   string `json:"nis"`
-	Nama  string `json:"nama"`
+	NIS  string `json:"nis"`
+	Nama string `json:"nama"`
 }
 
 type SessionInfo struct {
@@ -62,11 +79,17 @@ type RoomInfo struct {
 }
 
 type ExamQuestion struct {
-	ID           string          `json:"id"`
-	Code         string          `json:"code"`
-	QuestionText string          `json:"question_text"`
-	QuestionType string          `json:"question_type"`
-	Options      json.RawMessage `json:"options"`
+	ID               string          `json:"id"`
+	Code             string          `json:"code"`
+	QuestionText     string          `json:"question_text"`
+	QuestionType     string          `json:"question_type"`
+	Options          json.RawMessage `json:"options"`
+	StemHTML         string          `json:"stem_html"`
+	StimulusHTML     string          `json:"stimulus_html"`
+	StemMediaURL     string          `json:"stem_media_url"`
+	StimulusMediaURL string          `json:"stimulus_media_url"`
+	StemAudioURL     string          `json:"stem_audio_url"`
+	StimulusAudioURL string          `json:"stimulus_audio_url"`
 	// Legacy fields — included for backward compat, empty for new questions
 	OptionA string `json:"option_a,omitempty"`
 	OptionB string `json:"option_b,omitempty"`
@@ -142,12 +165,12 @@ func (s *Exam) Login(ctx context.Context, token, deviceFingerprint, loginIP stri
 		},
 		Session: SessionInfo{
 			ID:              pgUUIDString(p.SessionID),
-			Title:           "",
+			Title:           firstNonEmpty(p.SessionTitle, p.PackageTitle, "Sesi Ujian"),
 			ScheduledStart:  p.ScheduledStart.Time.Format(time.RFC3339),
 			ScheduledEnd:    p.ScheduledEnd.Time.Format(time.RFC3339),
 			DurationMinutes: p.DurationMinutes,
 		},
-		Questions:            toExamQuestions(ordered),
+		Questions:            toExamQuestions(s.q, ctx, ordered),
 		AnsweredCount:        len(answers),
 		TotalQuestions:       len(ordered),
 		TimeRemainingSeconds: remaining,
@@ -215,6 +238,7 @@ type StatusResult struct {
 	TotalQuestions       int    `json:"total_questions"`
 	SubmittedAt          string `json:"submitted_at,omitempty"`
 	TimeRemainingSeconds int64  `json:"time_remaining_seconds"`
+	IsSubmitted          bool   `json:"is_submitted"`
 }
 
 func (s *Exam) GetStatus(ctx context.Context, p db.GetParticipantByTokenRow) (StatusResult, error) {
@@ -228,6 +252,7 @@ func (s *Exam) GetStatus(ctx context.Context, p db.GetParticipantByTokenRow) (St
 		AnsweredCount:        len(answers),
 		TotalQuestions:       len(questions),
 		TimeRemainingSeconds: calcRemaining(p.ScheduledEnd, p.DurationMinutes, p.JoinedAt),
+		IsSubmitted:          p.SubmittedAt.Valid,
 	}
 	if p.SubmittedAt.Valid {
 		result.SubmittedAt = p.SubmittedAt.Time.Format(time.RFC3339)
@@ -319,27 +344,87 @@ func shuffleInts(n int) []int {
 	return idx
 }
 
-func toExamQuestions(rows []db.GetExamQuestionsRow) []ExamQuestion {
+func toExamQuestions(q examStore, ctx context.Context, rows []db.GetExamQuestionsRow) []ExamQuestion {
 	out := make([]ExamQuestion, len(rows))
 	for i, r := range rows {
 		opts := json.RawMessage(r.Options)
 		if len(opts) == 0 {
 			opts = json.RawMessage("[]")
 		}
+		stemMediaURL, stimulusMediaURL, stemAudioURL, stimulusAudioURL := resolveExamQuestionAssets(q, ctx, r.ID)
 		out[i] = ExamQuestion{
-			ID:           pgUUIDString(r.ID),
-			Code:         r.Code,
-			QuestionText: r.QuestionText,
-			QuestionType: r.QuestionType,
-			Options:      opts,
-			OptionA:      r.OptionA,
-			OptionB:      r.OptionB,
-			OptionC:      r.OptionC,
-			OptionD:      r.OptionD,
-			OptionE:      r.OptionE,
+			ID:               pgUUIDString(r.ID),
+			Code:             r.Code,
+			QuestionText:     r.QuestionText,
+			QuestionType:     r.QuestionType,
+			Options:          opts,
+			StemHTML:         r.StemHtml,
+			StimulusHTML:     r.StimulusHtml,
+			StemMediaURL:     stemMediaURL,
+			StimulusMediaURL: stimulusMediaURL,
+			StemAudioURL:     stemAudioURL,
+			StimulusAudioURL: stimulusAudioURL,
+			OptionA:          r.OptionA,
+			OptionB:          r.OptionB,
+			OptionC:          r.OptionC,
+			OptionD:          r.OptionD,
+			OptionE:          r.OptionE,
 		}
 	}
 	return out
+}
+
+func resolveExamQuestionAssets(q examStore, ctx context.Context, questionID pgtype.UUID) (string, string, string, string) {
+	if q == nil {
+		return "", "", "", ""
+	}
+	assets, err := q.ListCbtQuestionAssetsByQuestion(ctx, questionID)
+	if err != nil {
+		return "", "", "", ""
+	}
+
+	var stemMediaURL, stimulusMediaURL, stemAudioURL, stimulusAudioURL string
+	for _, asset := range assets {
+		url := "/api/cbt/assets/" + pgUUIDString(asset.ID) + "/file"
+		isStimulus := strings.EqualFold(asset.Purpose, "stimulus")
+		switch {
+		case strings.HasPrefix(asset.MimeType, "image/"):
+			if isStimulus && stimulusMediaURL == "" {
+				stimulusMediaURL = url
+				continue
+			}
+			if stemMediaURL == "" {
+				stemMediaURL = url
+				continue
+			}
+			if stimulusMediaURL == "" {
+				stimulusMediaURL = url
+			}
+		case strings.HasPrefix(asset.MimeType, "audio/"):
+			if isStimulus && stimulusAudioURL == "" {
+				stimulusAudioURL = url
+				continue
+			}
+			if stemAudioURL == "" {
+				stemAudioURL = url
+				continue
+			}
+			if stimulusAudioURL == "" {
+				stimulusAudioURL = url
+			}
+		}
+	}
+
+	return stemMediaURL, stimulusMediaURL, stemAudioURL, stimulusAudioURL
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func marshalJSON(v any) []byte {

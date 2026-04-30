@@ -25,14 +25,14 @@ var websiteStripDangerousURLs = regexp.MustCompile(`(?i)\s(href|src)\s*=\s*(['"]
 var websiteSlugNoise = regexp.MustCompile(`[^a-z0-9]+`)
 
 type websiteStore interface {
-	ListWebsiteContents(ctx context.Context, arg db.ListWebsiteContentsParams) ([]db.WebsiteContent, error)
-	GetWebsiteContent(ctx context.Context, id pgtype.UUID) (db.WebsiteContent, error)
+	ListWebsiteContents(ctx context.Context, arg db.ListWebsiteContentsParams) ([]db.ListWebsiteContentsRow, error)
+	GetWebsiteContent(ctx context.Context, id pgtype.UUID) (db.GetWebsiteContentRow, error)
 	CreateWebsiteContent(ctx context.Context, arg db.CreateWebsiteContentParams) (db.WebsiteContent, error)
 	UpdateWebsiteContent(ctx context.Context, arg db.UpdateWebsiteContentParams) (db.WebsiteContent, error)
 	DeleteWebsiteContent(ctx context.Context, id pgtype.UUID) error
-	ListPublishedWebsiteContents(ctx context.Context, arg db.ListPublishedWebsiteContentsParams) ([]db.WebsiteContent, error)
-	ListFeaturedWebsiteContents(ctx context.Context, arg db.ListFeaturedWebsiteContentsParams) ([]db.WebsiteContent, error)
-	GetPublishedWebsiteContentBySlug(ctx context.Context, arg db.GetPublishedWebsiteContentBySlugParams) (db.WebsiteContent, error)
+	ListPublishedWebsiteContents(ctx context.Context, arg db.ListPublishedWebsiteContentsParams) ([]db.ListPublishedWebsiteContentsRow, error)
+	ListFeaturedWebsiteContents(ctx context.Context, arg db.ListFeaturedWebsiteContentsParams) ([]db.ListFeaturedWebsiteContentsRow, error)
+	GetPublishedWebsiteContentBySlug(ctx context.Context, arg db.GetPublishedWebsiteContentBySlugParams) (db.GetPublishedWebsiteContentBySlugRow, error)
 }
 
 type Website struct{ q websiteStore }
@@ -55,15 +55,27 @@ type SaveWebsiteContentInput struct {
 }
 
 func (s *Website) List(ctx context.Context, kind, status, search string) ([]db.WebsiteContent, error) {
-	return s.q.ListWebsiteContents(ctx, db.ListWebsiteContentsParams{
+	rows, err := s.q.ListWebsiteContents(ctx, db.ListWebsiteContentsParams{
 		KindFilter:   strings.TrimSpace(kind),
 		StatusFilter: strings.TrimSpace(status),
 		SearchQuery:  strings.TrimSpace(search),
 	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]db.WebsiteContent, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, mapWebsiteContentFromList(row))
+	}
+	return items, nil
 }
 
 func (s *Website) Get(ctx context.Context, id pgtype.UUID) (db.WebsiteContent, error) {
-	return s.q.GetWebsiteContent(ctx, id)
+	row, err := s.q.GetWebsiteContent(ctx, id)
+	if err != nil {
+		return db.WebsiteContent{}, err
+	}
+	return mapWebsiteContentFromGet(row), nil
 }
 
 func (s *Website) Create(ctx context.Context, in SaveWebsiteContentInput) (db.WebsiteContent, error) {
@@ -79,7 +91,7 @@ func (s *Website) Update(ctx context.Context, in SaveWebsiteContentInput) (db.We
 	if err != nil {
 		return db.WebsiteContent{}, err
 	}
-	params, err := buildWebsiteUpdateParams(current, in)
+	params, err := buildWebsiteUpdateParams(mapWebsiteContentFromGet(current), in)
 	if err != nil {
 		return db.WebsiteContent{}, err
 	}
@@ -98,10 +110,18 @@ func (s *Website) ListPublished(ctx context.Context, kind string, limit int32) (
 	if kind == "" {
 		return nil, fmt.Errorf("jenis konten tidak valid")
 	}
-	return s.q.ListPublishedWebsiteContents(ctx, db.ListPublishedWebsiteContentsParams{
+	rows, err := s.q.ListPublishedWebsiteContents(ctx, db.ListPublishedWebsiteContentsParams{
 		KindFilter: db.WebsiteContentKind(kind),
 		LimitCount: limit,
 	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]db.WebsiteContent, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, mapWebsiteContentFromPublished(row))
+	}
+	return items, nil
 }
 
 func (s *Website) ListFeatured(ctx context.Context, kind string, limit int32) ([]db.WebsiteContent, error) {
@@ -112,10 +132,18 @@ func (s *Website) ListFeatured(ctx context.Context, kind string, limit int32) ([
 	if kind == "" {
 		return nil, fmt.Errorf("jenis konten tidak valid")
 	}
-	return s.q.ListFeaturedWebsiteContents(ctx, db.ListFeaturedWebsiteContentsParams{
+	rows, err := s.q.ListFeaturedWebsiteContents(ctx, db.ListFeaturedWebsiteContentsParams{
 		KindFilter: db.WebsiteContentKind(kind),
 		LimitCount: limit,
 	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]db.WebsiteContent, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, mapWebsiteContentFromFeatured(row))
+	}
+	return items, nil
 }
 
 func (s *Website) GetPublishedBySlug(ctx context.Context, kind, slug string) (db.WebsiteContent, error) {
@@ -127,10 +155,119 @@ func (s *Website) GetPublishedBySlug(ctx context.Context, kind, slug string) (db
 	if slug == "" {
 		return db.WebsiteContent{}, fmt.Errorf("slug tidak valid")
 	}
-	return s.q.GetPublishedWebsiteContentBySlug(ctx, db.GetPublishedWebsiteContentBySlugParams{
+	row, err := s.q.GetPublishedWebsiteContentBySlug(ctx, db.GetPublishedWebsiteContentBySlugParams{
 		KindFilter: db.WebsiteContentKind(kind),
 		SlugValue:  slug,
 	})
+	if err != nil {
+		return db.WebsiteContent{}, err
+	}
+	return mapWebsiteContentFromPublishedBySlug(row), nil
+}
+
+func mapWebsiteContentFromGet(row db.GetWebsiteContentRow) db.WebsiteContent {
+	return db.WebsiteContent{
+		ID:              row.ID,
+		Kind:            row.Kind,
+		Title:           row.Title,
+		Slug:            row.Slug,
+		Excerpt:         row.Excerpt,
+		ContentHtml:     row.ContentHtml,
+		CoverImageUrl:   row.CoverImageUrl,
+		IsFeatured:      row.IsFeatured,
+		MetaTitle:       row.MetaTitle,
+		MetaDescription: row.MetaDescription,
+		Status:          row.Status,
+		PublishedAt:     row.PublishedAt,
+		CreatedBy:       row.CreatedBy,
+		UpdatedBy:       row.UpdatedBy,
+		CreatedAt:       row.CreatedAt,
+		UpdatedAt:       row.UpdatedAt,
+	}
+}
+
+func mapWebsiteContentFromList(row db.ListWebsiteContentsRow) db.WebsiteContent {
+	return db.WebsiteContent{
+		ID:              row.ID,
+		Kind:            row.Kind,
+		Title:           row.Title,
+		Slug:            row.Slug,
+		Excerpt:         row.Excerpt,
+		ContentHtml:     row.ContentHtml,
+		CoverImageUrl:   row.CoverImageUrl,
+		IsFeatured:      row.IsFeatured,
+		MetaTitle:       row.MetaTitle,
+		MetaDescription: row.MetaDescription,
+		Status:          row.Status,
+		PublishedAt:     row.PublishedAt,
+		CreatedBy:       row.CreatedBy,
+		UpdatedBy:       row.UpdatedBy,
+		CreatedAt:       row.CreatedAt,
+		UpdatedAt:       row.UpdatedAt,
+	}
+}
+
+func mapWebsiteContentFromPublished(row db.ListPublishedWebsiteContentsRow) db.WebsiteContent {
+	return db.WebsiteContent{
+		ID:              row.ID,
+		Kind:            row.Kind,
+		Title:           row.Title,
+		Slug:            row.Slug,
+		Excerpt:         row.Excerpt,
+		ContentHtml:     row.ContentHtml,
+		CoverImageUrl:   row.CoverImageUrl,
+		IsFeatured:      row.IsFeatured,
+		MetaTitle:       row.MetaTitle,
+		MetaDescription: row.MetaDescription,
+		Status:          row.Status,
+		PublishedAt:     row.PublishedAt,
+		CreatedBy:       row.CreatedBy,
+		UpdatedBy:       row.UpdatedBy,
+		CreatedAt:       row.CreatedAt,
+		UpdatedAt:       row.UpdatedAt,
+	}
+}
+
+func mapWebsiteContentFromFeatured(row db.ListFeaturedWebsiteContentsRow) db.WebsiteContent {
+	return db.WebsiteContent{
+		ID:              row.ID,
+		Kind:            row.Kind,
+		Title:           row.Title,
+		Slug:            row.Slug,
+		Excerpt:         row.Excerpt,
+		ContentHtml:     row.ContentHtml,
+		CoverImageUrl:   row.CoverImageUrl,
+		IsFeatured:      row.IsFeatured,
+		MetaTitle:       row.MetaTitle,
+		MetaDescription: row.MetaDescription,
+		Status:          row.Status,
+		PublishedAt:     row.PublishedAt,
+		CreatedBy:       row.CreatedBy,
+		UpdatedBy:       row.UpdatedBy,
+		CreatedAt:       row.CreatedAt,
+		UpdatedAt:       row.UpdatedAt,
+	}
+}
+
+func mapWebsiteContentFromPublishedBySlug(row db.GetPublishedWebsiteContentBySlugRow) db.WebsiteContent {
+	return db.WebsiteContent{
+		ID:              row.ID,
+		Kind:            row.Kind,
+		Title:           row.Title,
+		Slug:            row.Slug,
+		Excerpt:         row.Excerpt,
+		ContentHtml:     row.ContentHtml,
+		CoverImageUrl:   row.CoverImageUrl,
+		IsFeatured:      row.IsFeatured,
+		MetaTitle:       row.MetaTitle,
+		MetaDescription: row.MetaDescription,
+		Status:          row.Status,
+		PublishedAt:     row.PublishedAt,
+		CreatedBy:       row.CreatedBy,
+		UpdatedBy:       row.UpdatedBy,
+		CreatedAt:       row.CreatedAt,
+		UpdatedAt:       row.UpdatedAt,
+	}
 }
 
 func normalizeWebsiteKind(value string) string {

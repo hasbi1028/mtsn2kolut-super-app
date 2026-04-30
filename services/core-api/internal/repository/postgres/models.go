@@ -274,6 +274,50 @@ func (ns NullJobStatusEnum) Value() (driver.Value, error) {
 	return string(ns.JobStatusEnum), nil
 }
 
+type JournalAttendanceStatus string
+
+const (
+	JournalAttendanceStatusHadir JournalAttendanceStatus = "hadir"
+	JournalAttendanceStatusSakit JournalAttendanceStatus = "sakit"
+	JournalAttendanceStatusIzin  JournalAttendanceStatus = "izin"
+	JournalAttendanceStatusAlpha JournalAttendanceStatus = "alpha"
+)
+
+func (e *JournalAttendanceStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = JournalAttendanceStatus(s)
+	case string:
+		*e = JournalAttendanceStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for JournalAttendanceStatus: %T", src)
+	}
+	return nil
+}
+
+type NullJournalAttendanceStatus struct {
+	JournalAttendanceStatus JournalAttendanceStatus `json:"journal_attendance_status"`
+	Valid                   bool                    `json:"valid"` // Valid is true if JournalAttendanceStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullJournalAttendanceStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.JournalAttendanceStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.JournalAttendanceStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullJournalAttendanceStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.JournalAttendanceStatus), nil
+}
+
 type LibraryMemberType string
 
 const (
@@ -782,6 +826,29 @@ type CbtStudentAnswer struct {
 	ManualScore   pgtype.Numeric     `json:"manual_score"`
 	GradedBy      pgtype.Text        `json:"graded_by"`
 	GradedAt      pgtype.Timestamptz `json:"graded_at"`
+}
+
+type ClassJournalAttendance struct {
+	ID        pgtype.UUID             `json:"id"`
+	SessionID pgtype.UUID             `json:"session_id"`
+	StudentID pgtype.UUID             `json:"student_id"`
+	Status    JournalAttendanceStatus `json:"status"`
+	Catatan   string                  `json:"catatan"`
+	CreatedAt pgtype.Timestamptz      `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz      `json:"updated_at"`
+}
+
+type ClassJournalSession struct {
+	ID           pgtype.UUID        `json:"id"`
+	AssignmentID pgtype.UUID        `json:"assignment_id"`
+	Tanggal      pgtype.Date        `json:"tanggal"`
+	PertemuanKe  int32              `json:"pertemuan_ke"`
+	Materi       string             `json:"materi"`
+	Kegiatan     string             `json:"kegiatan"`
+	Catatan      string             `json:"catatan"`
+	GuruHadir    bool               `json:"guru_hadir"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 type ClassSubjectAssignment struct {

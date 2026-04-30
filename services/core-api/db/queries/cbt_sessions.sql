@@ -67,8 +67,10 @@ SELECT
   ep.last_heartbeat,
   s.nis, s.nama, s.gender,
   cs.status AS session_status,
+  cs.title AS session_title,
   cs.scheduled_start, cs.scheduled_end,
   cs.package_id,
+  p.title AS package_title,
   p.duration_minutes
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
