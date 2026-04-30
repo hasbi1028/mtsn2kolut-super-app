@@ -96,19 +96,27 @@ class ExamQuestion {
   const ExamQuestion({
     required this.id,
     required this.questionText,
+    required this.stemHtml,
+    required this.stimulusHtml,
     required this.options,
   });
 
   final String id;
   final String questionText;
+  final String stemHtml;
+  final String stimulusHtml;
   final List<ExamOption> options;
 
   bool get isEssay => options.isEmpty;
+  bool get hasRichContent =>
+      stemHtml.trim().isNotEmpty || stimulusHtml.trim().isNotEmpty;
 
   factory ExamQuestion.fromJson(Map<String, dynamic> json) {
     return ExamQuestion(
       id: json['id'] as String? ?? '',
       questionText: json['question_text'] as String? ?? '',
+      stemHtml: json['stem_html'] as String? ?? '',
+      stimulusHtml: json['stimulus_html'] as String? ?? '',
       options: ((json['options'] as List<dynamic>?) ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(ExamOption.fromJson)

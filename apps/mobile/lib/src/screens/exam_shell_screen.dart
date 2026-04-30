@@ -3,8 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../exam_api.dart';
-import '../models.dart';
 import '../exam_session_store.dart';
+import '../models.dart';
+import '../widgets/rich_exam_text.dart';
 import 'exam_login_screen.dart';
 
 class ExamShellScreen extends StatefulWidget {
@@ -43,6 +44,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   bool _isSubmitted = false;
   bool _resumeCheckRequired = false;
   bool _isResumingExam = false;
+  int _resumeAttemptCount = 0;
   String? _statusMessage;
   String? _errorMessage;
   Timer? _countdownTimer;
@@ -202,9 +204,25 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         .sendEvent(
           token: widget.examToken,
           eventType: 'warning',
-          data: const <String, Object?>{'reason': 'resume_exam'},
+          data: <String, Object?>{
+            'reason': 'resume_exam',
+            'resume_attempt_count': _resumeAttemptCount + 1,
+          },
         )
         .catchError((_) {});
+    _resumeAttemptCount += 1;
+    if (_resumeAttemptCount > 1) {
+      await widget.client
+          .sendEvent(
+            token: widget.examToken,
+            eventType: 'warning',
+            data: <String, Object?>{
+              'reason': 'repeat_resume_attempt',
+              'resume_attempt_count': _resumeAttemptCount,
+            },
+          )
+          .catchError((_) {});
+    }
     await _syncStatus();
     if (!mounted) {
       return;
@@ -292,6 +310,16 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _statusMessage =
             '${error.message} Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.';
       });
+      await widget.client
+          .sendEvent(
+            token: widget.examToken,
+            eventType: 'warning',
+            data: <String, Object?>{
+              'reason': 'answer_saved_local_only',
+              'question_id': question.id,
+            },
+          )
+          .catchError((_) {});
       await _persistSnapshot();
     } finally {
       if (mounted) {
@@ -343,6 +371,16 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _errorMessage =
             'Masih ada jawaban yang belum tersinkron ke server. Tunggu koneksi stabil lalu coba kirim lagi.';
       });
+      await widget.client
+          .sendEvent(
+            token: widget.examToken,
+            eventType: 'warning',
+            data: <String, Object?>{
+              'reason': 'submit_blocked_pending_sync',
+              'pending_count': _pendingAnswers.length,
+            },
+          )
+          .catchError((_) {});
       return;
     }
 
@@ -460,6 +498,15 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         appBar: AppBar(
           title: Text(payload.session.title),
           actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Center(
+                child: _SyncStatusChip(
+                  label: _buildSyncStatusLabel(),
+                  tone: _buildSyncStatusTone(),
+                ),
+              ),
+            ),
             IconButton(
               onPressed: _isSyncingStatus ? null : _syncStatus,
               icon: _isSyncingStatus
@@ -714,6 +761,13 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_errorMessage != null) ...[
+              _InlineMessage(tone: BannerTone.error, message: _errorMessage!),
+              const SizedBox(height: 14),
+            ] else if (_statusMessage != null) ...[
+              _InlineMessage(tone: BannerTone.info, message: _statusMessage!),
+              const SizedBox(height: 14),
+            ],
             Text(
               'Soal ${_currentQuestionIndex + 1}',
               style: theme.textTheme.labelLarge?.copyWith(
@@ -722,8 +776,26 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               ),
             ),
             const SizedBox(height: 10),
-            Text(
-              question.questionText.isEmpty
+            if (question.stimulusHtml.trim().isNotEmpty) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF6F8F3),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: theme.colorScheme.outlineVariant),
+                ),
+                child: RichExamText(
+                  content: question.stimulusHtml,
+                  style: theme.textTheme.bodyLarge?.copyWith(height: 1.55),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            RichExamText(
+              content: question.stemHtml.trim().isNotEmpty
+                  ? question.stemHtml
+                  : question.questionText.isEmpty
                   ? 'Soal belum memiliki teks.'
                   : question.questionText,
               style: theme.textTheme.titleLarge?.copyWith(
@@ -828,8 +900,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                 ),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: Text(
-                    option.text,
+                  child: RichExamText(
+                    content: option.text,
                     style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
                   ),
                 ),
@@ -874,6 +946,32 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         ),
       ],
     );
+  }
+
+  String _buildSyncStatusLabel() {
+    if (_isResumingExam || _resumeCheckRequired) {
+      return 'Cek Ulang';
+    }
+    if (_isSavingAnswer || _isSyncingStatus) {
+      return 'Sinkron';
+    }
+    if (_pendingAnswers.isNotEmpty) {
+      return 'Lokal';
+    }
+    if (_errorMessage != null) {
+      return 'Gangguan';
+    }
+    return 'Tersambung';
+  }
+
+  _SyncTone _buildSyncStatusTone() {
+    if (_isResumingExam || _resumeCheckRequired || _pendingAnswers.isNotEmpty) {
+      return _SyncTone.warning;
+    }
+    if (_errorMessage != null) {
+      return _SyncTone.danger;
+    }
+    return _SyncTone.success;
   }
 }
 
@@ -944,6 +1042,40 @@ class _InlineMessage extends StatelessWidget {
         style: theme.textTheme.bodyMedium?.copyWith(
           color: color,
           fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+enum _SyncTone { success, warning, danger }
+
+class _SyncStatusChip extends StatelessWidget {
+  const _SyncStatusChip({required this.label, required this.tone});
+
+  final String label;
+  final _SyncTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (background, foreground) = switch (tone) {
+      _SyncTone.success => (const Color(0xFFE8F5EC), const Color(0xFF0B7A3B)),
+      _SyncTone.warning => (const Color(0xFFFFF3D8), const Color(0xFF9A6700)),
+      _SyncTone.danger => (const Color(0xFFFDE7E9), Colors.red.shade700),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: foreground,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );

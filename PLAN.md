@@ -108,6 +108,8 @@ Three runtime units deployed across 3 VPS:
 - [x] Local session restore baseline via persisted token/base URL/current question/answer snapshot
 - [x] Android secure-screen baseline via `FLAG_SECURE`
 - [x] BYOD-aware resume gate and pending-answer sync queue to maximize deterrence and answer safety on student-owned Android devices
+- [x] Visible sync-state chip plus warning-event telemetry for repeat resume, local-only answer saves, and blocked submit due to pending sync
+- [x] Rich-content-ready renderer baseline for `stimulus_html` and `stem_html` payloads with safe text normalization fallback
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck
