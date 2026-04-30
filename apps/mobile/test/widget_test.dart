@@ -421,6 +421,32 @@ void main() {
     expect(find.text('Cek Ulang'), findsOneWidget);
   });
 
+  testWidgets('exam shell shows sync chip gangguan for generic error state', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialErrorMessage: 'Status server belum bisa diperbarui.',
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Gangguan'), findsWidgets);
+  });
+
   testWidgets('exam shell renders media card when question has media url', (
     tester,
   ) async {

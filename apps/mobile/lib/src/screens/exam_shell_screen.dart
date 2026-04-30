@@ -26,6 +26,7 @@ class ExamShellScreen extends StatefulWidget {
     this.initialIsResumingExam = false,
     this.initialIsSyncingStatus = false,
     this.initialIsSavingAnswer = false,
+    this.initialErrorMessage,
   });
 
   final ExamApiClient client;
@@ -39,6 +40,7 @@ class ExamShellScreen extends StatefulWidget {
   final bool initialIsResumingExam;
   final bool initialIsSyncingStatus;
   final bool initialIsSavingAnswer;
+  final String? initialErrorMessage;
 
   @override
   State<ExamShellScreen> createState() => _ExamShellScreenState();
@@ -108,6 +110,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     _isResumingExam = widget.initialIsResumingExam;
     _isSyncingStatus = widget.initialIsSyncingStatus;
     _isSavingAnswer = widget.initialIsSavingAnswer;
+    _errorMessage = widget.initialErrorMessage;
     for (var i = 0; i < widget.initialPayload.questions.length; i++) {
       final question = widget.initialPayload.questions[i];
       if (question.isEssay) {
