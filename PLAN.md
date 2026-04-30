@@ -123,6 +123,8 @@ Three runtime units deployed across 3 VPS:
 - [x] Internal APK distribution README for local run, release build, and realistic BYOD trial guidance
 - [x] Restore-card health metadata snapshot (`last contact`, `last failure`, repeated-failure count) for clearer BYOD reconnect context
 - [x] Internal APK release checklist for operator verification and field trial preparation
+- [x] Visual connection-health card in exam shell for clearer BYOD sync interpretation
+- [x] Dedicated mobile status-guide screen explaining `Tersambung`, `Lokal`, `Gangguan`, and `Menurun`
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

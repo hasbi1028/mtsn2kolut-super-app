@@ -6,6 +6,7 @@ import '../exam_api.dart';
 import '../exam_session_store.dart';
 import '../models.dart';
 import 'exam_completed_screen.dart';
+import 'exam_status_guide_screen.dart';
 import '../widgets/audio_prompt_card.dart';
 import '../widgets/rich_exam_text.dart';
 import 'exam_login_screen.dart';
@@ -608,6 +609,42 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     return _playedAudioQuestionIds.contains(question.id);
   }
 
+  String _buildConnectionHealthTitle() {
+    if (_isDegradedMode) {
+      return 'Menurun';
+    }
+    if (_errorMessage != null) {
+      return 'Gangguan';
+    }
+    if (_pendingAnswers.isNotEmpty) {
+      return 'Lokal';
+    }
+    return 'Tersambung';
+  }
+
+  String _buildConnectionHealthDescription() {
+    if (_isDegradedMode) {
+      return 'Sinkron berulang kali gagal. Submit manual ditahan sampai koneksi membaik.';
+    }
+    if (_errorMessage != null) {
+      return 'Server belum merespons stabil. Pantau jaringan dan coba sinkron ulang.';
+    }
+    if (_pendingAnswers.isNotEmpty) {
+      return '${_pendingAnswers.length} jawaban masih aman di perangkat dan menunggu sinkron.';
+    }
+    return 'Perangkat terakhir berhasil terhubung ke server tanpa jawaban lokal tertahan.';
+  }
+
+  _HealthTone _buildConnectionHealthTone() {
+    if (_isDegradedMode || _errorMessage != null) {
+      return _HealthTone.danger;
+    }
+    if (_pendingAnswers.isNotEmpty) {
+      return _HealthTone.warning;
+    }
+    return _HealthTone.good;
+  }
+
   String _formatClock(DateTime? value) {
     if (value == null) {
       return '-';
@@ -660,6 +697,17 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                   tone: _buildSyncStatusTone(),
                 ),
               ),
+            ),
+            IconButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ExamStatusGuideScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.info_outline),
+              tooltip: 'Panduan status',
             ),
             IconButton(
               onPressed: _isSyncingStatus ? null : _syncStatus,
@@ -814,6 +862,12 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             _StatTile(
               label: 'Kontak server terakhir',
               value: _formatClock(_lastServerContactAt),
+            ),
+            const SizedBox(height: 12),
+            _ConnectionHealthCard(
+              label: _buildConnectionHealthTitle(),
+              description: _buildConnectionHealthDescription(),
+              tone: _buildConnectionHealthTone(),
             ),
             if (_lastSyncFailureAt != null) ...[
               const SizedBox(height: 12),
@@ -1439,6 +1493,81 @@ class _ConnectionWarningCard extends StatelessWidget {
             onPressed: onRetry,
             icon: const Icon(Icons.sync),
             label: const Text('Coba Sinkron Ulang'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _HealthTone { good, warning, danger }
+
+class _ConnectionHealthCard extends StatelessWidget {
+  const _ConnectionHealthCard({
+    required this.label,
+    required this.description,
+    required this.tone,
+  });
+
+  final String label;
+  final String description;
+  final _HealthTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (background, border, foreground, icon) = switch (tone) {
+      _HealthTone.good => (
+        const Color(0xFFE8F5EC),
+        const Color(0xFFA9D4B8),
+        const Color(0xFF0B7A3B),
+        Icons.cloud_done,
+      ),
+      _HealthTone.warning => (
+        const Color(0xFFFFF3D8),
+        const Color(0xFFE5C172),
+        const Color(0xFF9A6700),
+        Icons.save_outlined,
+      ),
+      _HealthTone.danger => (
+        const Color(0xFFFDE7E9),
+        const Color(0xFFE8A5AB),
+        const Color(0xFFC03645),
+        Icons.sync_problem,
+      ),
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: foreground),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  description,
+                  style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
+                ),
+              ],
+            ),
           ),
         ],
       ),

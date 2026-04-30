@@ -155,6 +155,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Internal APK distribution baseline** — `apps/mobile/README.md` should document local run, analyze/test, release APK build, and realistic BYOD distribution guidance for internal school trials.
 - **Restore health baseline** — persisted mobile exam snapshots should preserve lightweight connection-health metadata so restore cards and restore-failed screens can show whether the previous session was recently stable or repeatedly degraded.
 - **Internal release checklist baseline** — `apps/mobile/RELEASE_CHECKLIST.md` should exist for operator-facing APK trial preparation, verification, and BYOD field guidance.
+- **Connection-legend baseline** — the mobile exam shell should expose a more visual connection-health summary, and the app should provide a simple status-guide screen so students and pengawas can interpret `Tersambung`, `Lokal`, `Gangguan`, and `Menurun` consistently.
 
 ### ✅ Sprint 15 — Library System (Done)
 - **Library schema** — `library_books` and `library_loans` tables (migration 027). No separate member table; loans reference existing `students` and `employees` via FK.
