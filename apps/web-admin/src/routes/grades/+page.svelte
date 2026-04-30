@@ -75,6 +75,7 @@
 	let createBusy = $state(false);
 	let entryBusy = $state<Record<string, boolean>>({});
 	let publishBusy = $state<Record<string, boolean>>({});
+	let bulkSaveBusy = $state(false);
 	let editingComponentId = $state('');
 	let componentTitle = $state('');
 	let componentCategory = $state('assignment');
@@ -93,6 +94,11 @@
 	const readyStudentCount = $derived(summary.filter((row) => row.component_count > 0 && row.filled_count === row.component_count).length);
 	const incompleteStudentCount = $derived(summary.filter((row) => row.component_count === 0 || row.filled_count < row.component_count).length);
 	const missingGradeCount = $derived(summary.reduce((total, row) => total + Math.max(row.component_count - row.filled_count, 0), 0));
+	const dirtyEntryIds = $derived(
+		entries
+			.filter((row) => isEntryDirty(row.student_id))
+			.map((row) => row.student_id)
+	);
 	const readyForRapor = $derived(
 		components.length > 0 &&
 		draftComponentCount === 0 &&
@@ -140,6 +146,29 @@
 
 	function finalScoreLabel(value: number) {
 		return value < 0 ? '—' : value.toFixed(2);
+	}
+
+	function normalizedEntryScore(studentId: string) {
+		return (scoreInput[studentId] ?? '').trim();
+	}
+
+	function normalizedEntryNote(studentId: string) {
+		return (noteInput[studentId] ?? '').trim();
+	}
+
+	function originalEntryScore(studentId: string) {
+		const row = entries.find((item) => item.student_id === studentId);
+		if (!row || row.score < 0) return '';
+		return String(row.score);
+	}
+
+	function originalEntryNote(studentId: string) {
+		const row = entries.find((item) => item.student_id === studentId);
+		return (row?.notes ?? '').trim();
+	}
+
+	function isEntryDirty(studentId: string) {
+		return normalizedEntryScore(studentId) !== originalEntryScore(studentId) || normalizedEntryNote(studentId) !== originalEntryNote(studentId);
 	}
 
 	async function quickSelectFirstAssignment() {
@@ -264,17 +293,15 @@
 		}
 	}
 
-	async function saveEntry(studentId: string) {
+	async function persistEntry(studentId: string, silent = false) {
 		if (!componentId) return;
-		const rawScore = (scoreInput[studentId] ?? '').trim();
+		const rawScore = normalizedEntryScore(studentId);
 		if (rawScore === '') {
-			showError('Nilai wajib diisi');
-			return;
+			throw new Error('Nilai wajib diisi');
 		}
 		const score = Number(rawScore);
 		if (Number.isNaN(score)) {
-			showError('Nilai harus berupa angka');
-			return;
+			throw new Error('Nilai harus berupa angka');
 		}
 		entryBusy = { ...entryBusy, [studentId]: true };
 		try {
@@ -289,13 +316,46 @@
 			});
 			const json = await res.json().catch(() => ({}));
 			if (!res.ok) {
-				showError(json.error ?? 'Gagal menyimpan nilai');
-				return;
+				throw new Error(json.error ?? 'Gagal menyimpan nilai');
 			}
-			showSuccess('Nilai siswa diperbarui');
-			await loadOverview();
+			if (!silent) {
+				showSuccess('Nilai siswa diperbarui');
+			}
 		} finally {
 			entryBusy = { ...entryBusy, [studentId]: false };
+		}
+	}
+
+	async function saveEntry(studentId: string) {
+		try {
+			await persistEntry(studentId);
+			await loadOverview();
+		} catch (err) {
+			showError(err instanceof Error ? err.message : 'Gagal menyimpan nilai');
+		}
+	}
+
+	async function saveAllDirtyEntries() {
+		if (!selectedComponent || dirtyEntryIds.length === 0) return;
+		bulkSaveBusy = true;
+		const failedStudents: string[] = [];
+		try {
+			for (const studentId of dirtyEntryIds) {
+				try {
+					await persistEntry(studentId, true);
+				} catch {
+					const row = entries.find((item) => item.student_id === studentId);
+					failedStudents.push(row?.nama ?? 'Siswa tanpa nama');
+				}
+			}
+			if (failedStudents.length > 0) {
+				showError(`Sebagian nilai gagal disimpan: ${failedStudents.slice(0, 3).join(', ')}${failedStudents.length > 3 ? ' dan lainnya' : ''}.`);
+			} else {
+				showSuccess(`Semua perubahan untuk ${dirtyEntryIds.length} siswa berhasil disimpan.`);
+			}
+			await loadOverview();
+		} finally {
+			bulkSaveBusy = false;
 		}
 	}
 
@@ -593,7 +653,29 @@
 						{/if}
 					</Card.Description>
 				</Card.Header>
-				<Card.Content class="p-0">
+				<Card.Content class="space-y-4 p-0">
+					{#if selectedComponent}
+						<div class="mx-6 mt-6 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+							<div>
+								<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Bulk Input</p>
+								<p class="mt-2 text-lg font-semibold text-slate-900">{dirtyEntryIds.length} perubahan belum disimpan</p>
+								<p class="text-sm text-slate-600">Guru dapat mengubah banyak nilai terlebih dahulu, lalu menyimpan seluruh perubahan untuk komponen ini sekaligus.</p>
+							</div>
+							<div class="flex flex-wrap gap-2">
+								<Badge variant="outline">{entries.length} siswa</Badge>
+								<Badge variant={dirtyEntryIds.length > 0 ? 'secondary' : 'outline'}>
+									{dirtyEntryIds.length > 0 ? `${dirtyEntryIds.length} perlu disimpan` : 'Semua tersimpan'}
+								</Badge>
+								<LoadingButton
+									loading={bulkSaveBusy}
+									loadingLabel="Menyimpan semua..."
+									disabled={dirtyEntryIds.length === 0}
+									onclick={saveAllDirtyEntries}
+									label="Simpan Semua Perubahan"
+								/>
+							</div>
+						</div>
+					{/if}
 					<div class="overflow-x-auto">
 						<Table.Root>
 							<Table.Header>
