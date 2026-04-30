@@ -6,19 +6,27 @@ Dokumen ini merangkum backlog review yang **masih aktif** per 2026-05-01. Temuan
 
 ## Ringkasan prioritas aktif
 
-### Low priority
-1. Jaga hygiene working tree dan commit tetap fokus per-slice
+Tidak ada lagi temuan kode aktif yang perlu ditutup saat ini.
+
+Yang tersisa hanya catatan operasional:
+- jaga commit tetap fokus per-slice
+- jangan campur perubahan parallel worktree yang belum siap rilis
 
 ---
 
-## 1) LOW — Working tree dan runtime data perlu tetap dijaga dari commit
+## Catatan operasional — Working tree dan runtime data perlu tetap dijaga dari commit
 
 **Area:** repo root / operational hygiene
 
-**Masalah:**
-Walau folder runtime sensitif utama sekarang sudah di-ignore, repo masih bisa terlihat “dirty” karena slice kerja paralel atau artefak lokal yang memang belum siap rilis.
+**Status saat ini:**
+- runtime/local data utama sekarang sudah di-ignore:
+  - `services/core-api/data/`
+  - `services/logs/`
+  - root `logs/`
+  - file `*.db` dan `*.sqlite`
+- worktree masih bisa terlihat “dirty” bila ada slice kerja paralel yang memang belum siap dirilis bersama
 
-**Arah patch / housekeeping:**
+**Prinsip housekeeping:**
 - pertahankan `.gitignore` untuk runtime/local asset folders
 - pastikan file data lokal/sensitif tidak ikut commit
 - jaga commit tetap fokus per-slice
@@ -40,10 +48,13 @@ Walau folder runtime sensitif utama sekarang sudah di-ignore, repo masih bisa te
 - Worker PUSAKA tidak lagi menumpuk semua concern pada satu `index.ts`; config, logging, parser, HTTP client, Playwright runner, dan supervisor loop sekarang dipisah ke modul yang lebih kecil.
 - `ExamShellScreen` tidak lagi memegang semua widget support dan perhitungan state koneksi di satu file; connection view-model dan widget presentational sekarang dipisah ke unit terpisah, dan file screen utama turun signifikan.
 - `.gitignore` sekarang mencakup `services/core-api/data/` agar runtime data lokal tidak mudah ikut terseret ke commit.
+- `.gitignore` sekarang juga mencakup `services/logs/` agar output runtime lokal service tidak ikut terseret ke commit.
 
 ---
 
 ## Urutan patch yang disarankan sekarang
 
-### Batch 1 — hygiene
-- [ ] Jaga commit tetap fokus dan jangan ikut membawa perubahan parallel worktree yang belum siap rilis
+Tidak ada batch patch kode yang tersisa dari review ini.
+
+Tindak lanjut operasional:
+- jaga commit tetap fokus dan jangan ikut membawa perubahan parallel worktree yang belum siap rilis
