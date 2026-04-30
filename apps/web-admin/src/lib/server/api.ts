@@ -9,18 +9,30 @@ export class ApiError extends Error {
 	constructor(public status: number, message: string) { super(message); }
 }
 
-export function authHeaders(accessToken?: string): Record<string, string> {
-	const h: Record<string, string> = { 'Content-Type': 'application/json' };
-	if (accessToken) {
-		h['Authorization'] = `Bearer ${accessToken}`;
-	} else {
-		h['X-Internal-Key'] = INTERNAL_KEY;
+export function requireAuthHeaders(accessToken?: string): Record<string, string> {
+	if (!accessToken) {
+		throw new ApiError(401, 'unauthorized');
 	}
-	return h;
+	return {
+		'Content-Type': 'application/json',
+		Authorization: `Bearer ${accessToken}`,
+	};
+}
+
+export function publicHeaders(): Record<string, string> {
+	return { 'Content-Type': 'application/json' };
+}
+
+export function internalHeaders(): Record<string, string> {
+	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+	if (INTERNAL_KEY) {
+		headers['X-Internal-Key'] = INTERNAL_KEY;
+	}
+	return headers;
 }
 
 function headers(bearerToken?: string): Record<string, string> {
-	return authHeaders(bearerToken);
+	return bearerToken ? requireAuthHeaders(bearerToken) : publicHeaders();
 }
 
 async function unwrap<T>(res: Response): Promise<T> {
@@ -67,7 +79,10 @@ export async function apiDelete<T>(path: string, body?: unknown, accessToken?: s
 }
 
 export function proxy(event: RequestEvent) {
-	const accessToken = event.cookies.get('access_token');
+	const accessToken = event.locals.accessToken ?? event.cookies.get('access_token');
+	if (!accessToken) {
+		throw new ApiError(401, 'unauthorized');
+	}
 	return {
 		get: <T>(path: string) => apiGet<T>(path, accessToken),
 		post: <T>(path: string, body?: unknown) => apiPost<T>(path, body, accessToken),
@@ -75,7 +90,7 @@ export function proxy(event: RequestEvent) {
 		patch: <T>(path: string, body?: unknown) => apiPatch<T>(path, body, accessToken),
 		del: <T>(path: string, body?: unknown) => apiDelete<T>(path, body, accessToken),
 		fetch: (path: string, init?: RequestInit) => {
-			const headers = authHeaders(accessToken);
+			const headers = requireAuthHeaders(accessToken);
 			return fetch(`${BASE}${path}`, { ...init, headers: { ...headers, ...(init?.headers as Record<string, string>) } });
 		},
 	};

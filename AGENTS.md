@@ -49,6 +49,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **API proxy** renames fields where documented (e.g., `employee_nama` → `nama`, `employee_nip` → `nip` in Jobs API).
 - **Auth:** JWT access + refresh tokens stored as httpOnly cookies. Session handled via SvelteKit hooks.
 - **Auth hardening baseline:** backend is the source of truth for password policy. Minimum password length is 8, weak passwords are rejected server-side, suspended accounts must return controlled auth errors, and `SeedAdmin` must not overwrite an existing admin password during normal startup.
+- **BFF auth forwarding baseline:** authenticated SvelteKit proxy routes must forward the real user JWT to the Go API by default. `X-Internal-Key` is reserved for explicit internal/public helper use, not as a silent fallback for authenticated BFF traffic.
 - **Always run `npm run check` (a11y + types) before finalizing Svelte changes.**
 - **CBT UI direction:** educational, institutional, and operator-friendly for MTsN 2 Kolaka Utara. Avoid generic SaaS dashboards for exam operations and printable artifacts.
 - **Public site direction:** educational, institutional, and trustworthy for MTsN 2 Kolaka Utara. Public routes must feel like a real school website, not a reused admin dashboard shell.
