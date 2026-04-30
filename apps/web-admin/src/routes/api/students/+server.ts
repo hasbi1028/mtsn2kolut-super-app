@@ -38,3 +38,17 @@ export const DELETE = async (event: RequestEvent) => {
 		return handleRouteError(e, 'students DELETE');
 	}
 };
+
+export const PATCH = async (event: RequestEvent) => {
+	try {
+		const id = event.url.searchParams.get('id');
+		if (!id) return json({ error: 'id required' }, { status: 400 });
+		const body = await event.request.json() as Record<string, unknown>;
+		const status = body.status;
+		if (!status) return json({ error: 'status wajib diisi' }, { status: 400 });
+		const data = await proxy(event).patch(`/api/students/${id}/lifecycle`, { status });
+		return json(data);
+	} catch (e) {
+		return handleRouteError(e, 'students PATCH');
+	}
+};

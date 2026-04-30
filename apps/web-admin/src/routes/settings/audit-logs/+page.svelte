@@ -94,8 +94,8 @@
 		</div>
 	</div>
 
-	<Card.Root>
-		<Card.Content class="p-0 overflow-x-auto">
+	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+		<Card.Content class="p-0">
 			{#if loading}
 				<div class="p-8 text-center text-muted-foreground text-sm">Memuat...</div>
 			{:else if error}
@@ -103,6 +103,7 @@
 			{:else if logs.length === 0}
 				<div class="p-8 text-center text-muted-foreground text-sm">Belum ada audit log.</div>
 			{:else}
+				<div class="hidden overflow-x-auto lg:block">
 				<Table.Root>
 					<Table.Header>
 						<Table.Row class="bg-green-50">
@@ -115,7 +116,7 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each logs as log}
+						{#each logs as log (log.id)}
 							<Table.Row class="hover:bg-green-50/40">
 								<Table.Cell class="text-xs text-muted-foreground whitespace-nowrap">{fmtDt(log.created_at)}</Table.Cell>
 								<Table.Cell class="font-medium text-sm">{log.username ?? '—'}</Table.Cell>
@@ -133,6 +134,26 @@
 						{/each}
 					</Table.Body>
 				</Table.Root>
+				</div>
+
+				<div class="grid gap-3 p-4 lg:hidden">
+					{#each logs as log (log.id)}
+						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{fmtDt(log.created_at)}</p>
+									<p class="mt-1 text-sm font-semibold text-slate-900">{log.username ?? '—'}</p>
+									<p class="mt-1 text-sm text-slate-600">{log.entity_type}</p>
+								</div>
+								<Badge variant="outline" class="text-xs font-mono {methodColor(log.action)}">{log.action}</Badge>
+							</div>
+							<p class="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs font-mono text-slate-600 break-all">
+								{metaPath(log.metadata) || log.entity_id}
+							</p>
+							<p class="mt-3 text-xs text-slate-500">Status {metaStatus(log.metadata) ?? '—'}</p>
+						</div>
+					{/each}
+				</div>
 			{/if}
 		</Card.Content>
 	</Card.Root>

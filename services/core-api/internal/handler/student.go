@@ -62,6 +62,7 @@ func (h *Student) Create(w http.ResponseWriter, r *http.Request) {
 		ParentPhone string `json:"parent_phone"`
 		ClassID     string `json:"class_id"`
 		IsActive    bool   `json:"is_active"`
+		Status      string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -76,6 +77,12 @@ func (h *Student) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		classID = id
 	}
+
+	status := db.StudentStatusEnumActive
+	if body.Status != "" {
+		status = db.StudentStatusEnum(body.Status)
+	}
+
 	row, err := h.svc.Create(r.Context(), db.CreateStudentParams{
 		Nis:         body.Nis,
 		Nisn:        body.Nisn,
@@ -85,6 +92,7 @@ func (h *Student) Create(w http.ResponseWriter, r *http.Request) {
 		ParentPhone: body.ParentPhone,
 		ClassID:     classID,
 		IsActive:    body.IsActive,
+		Status:      status,
 	})
 	if err != nil {
 		api.Internal(w, err)
@@ -108,6 +116,7 @@ func (h *Student) Update(w http.ResponseWriter, r *http.Request) {
 		ParentPhone string `json:"parent_phone"`
 		ClassID     string `json:"class_id"`
 		IsActive    bool   `json:"is_active"`
+		Status      string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -122,6 +131,12 @@ func (h *Student) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		classID = cid
 	}
+
+	status := db.StudentStatusEnumActive
+	if body.Status != "" {
+		status = db.StudentStatusEnum(body.Status)
+	}
+
 	row, err := h.svc.Update(r.Context(), db.UpdateStudentParams{
 		ID:          id,
 		Nis:         body.Nis,
@@ -132,12 +147,46 @@ func (h *Student) Update(w http.ResponseWriter, r *http.Request) {
 		ParentPhone: body.ParentPhone,
 		ClassID:     classID,
 		IsActive:    body.IsActive,
+		Status:      status,
 	})
 	if err != nil {
 		api.Internal(w, err)
 		return
 	}
 	api.OK(w, row)
+}
+
+func (h *Student) PublicRegister(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Nis         string `json:"nis"`
+		Nama        string `json:"nama"`
+		Gender      string `json:"gender"`
+		ParentName  string `json:"parent_name"`
+		ParentPhone string `json:"parent_phone"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	if body.Nama == "" || body.Nis == "" {
+		api.BadRequest(w, "nama and nis required")
+		return
+	}
+
+	row, err := h.svc.Create(r.Context(), db.CreateStudentParams{
+		Nis:         body.Nis,
+		Nama:        body.Nama,
+		Gender:      db.GenderEnum(body.Gender),
+		ParentName:  body.ParentName,
+		ParentPhone: body.ParentPhone,
+		IsActive:    true,
+		Status:      db.StudentStatusEnumProspective,
+	})
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.Created(w, row)
 }
 
 func (h *Student) Delete(w http.ResponseWriter, r *http.Request) {
@@ -151,4 +200,34 @@ func (h *Student) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.NoContent(w)
+}
+
+func (h *Student) UpdateLifecycle(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	status := db.StudentStatusEnum(body.Status)
+	switch status {
+	case db.StudentStatusEnumProspective, db.StudentStatusEnumActive, db.StudentStatusEnumAlumni, db.StudentStatusEnumMutated:
+	default:
+		api.BadRequest(w, "status tidak didukung")
+		return
+	}
+	if err := h.svc.UpdateLifecycle(r.Context(), id, status); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{
+		"id":     id,
+		"status": status,
+	})
 }

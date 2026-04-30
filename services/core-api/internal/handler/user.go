@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -24,15 +25,46 @@ func (h *User) List(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
-	api.OK(w, rows)
+
+	type userResponse struct {
+		ID          pgtype.UUID `json:"id"`
+		Username    string      `json:"username"`
+		EmployeeID  pgtype.UUID `json:"employee_id"`
+		StudentID   pgtype.UUID `json:"student_id"`
+		ParentID    pgtype.UUID `json:"parent_id"`
+		ProfileNama string      `json:"profile_nama"`
+		CreatedAt   pgtype.Timestamptz `json:"created_at"`
+		Roles       []string    `json:"roles"`
+	}
+
+	res := make([]userResponse, len(rows))
+	for i, row := range rows {
+		var roles []string
+		if len(row.Roles) > 0 {
+			_ = json.Unmarshal(row.Roles, &roles)
+		}
+		res[i] = userResponse{
+			ID:          row.ID,
+			Username:    row.Username,
+			EmployeeID:  row.EmployeeID,
+			StudentID:   row.StudentID,
+			ParentID:    row.ParentID,
+			ProfileNama: row.ProfileNama,
+			CreatedAt:   row.CreatedAt,
+			Roles:       roles,
+		}
+	}
+	api.OK(w, res)
 }
 
 func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Username   string `json:"username"`
-		Password   string `json:"password"`
-		Role       string `json:"role"`
-		EmployeeID string `json:"employee_id"`
+		Username   string   `json:"username"`
+		Password   string   `json:"password"`
+		Roles      []string `json:"roles"`
+		EmployeeID string   `json:"employee_id"`
+		StudentID  string   `json:"student_id"`
+		ParentID   string   `json:"parent_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -42,6 +74,10 @@ func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "username and password required")
 		return
 	}
+	if len(body.Roles) == 0 {
+		api.BadRequest(w, "at least one role required")
+		return
+	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -49,28 +85,95 @@ func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var empID pgtype.UUID
+	var empID, stuID, parID pgtype.UUID
 	if body.EmployeeID != "" {
 		_ = empID.Scan(body.EmployeeID)
 	}
-
-	role := db.UserRole(body.Role)
-	if role == "" {
-		role = db.UserRoleGuru
+	if body.StudentID != "" {
+		_ = stuID.Scan(body.StudentID)
+	}
+	if body.ParentID != "" {
+		_ = parID.Scan(body.ParentID)
+	}
+	if err := validateUserCreate(body.Roles, empID, stuID, parID); err != nil {
+		api.BadRequest(w, err.Error())
+		return
 	}
 
 	row, err := h.q.CreateUser(r.Context(), db.CreateUserParams{
 		Username:     body.Username,
 		PasswordHash: string(hash),
-		Role:         role,
 		EmployeeID:   empID,
+		StudentID:    stuID,
+		ParentID:     parID,
+		IsActive:     true,
 	})
 	if err != nil {
 		api.Internal(w, err)
 		return
 	}
+
+	// Add roles
+	for _, rStr := range body.Roles {
+		_ = h.q.AddUserRole(r.Context(), db.AddUserRoleParams{
+			UserID: row.ID,
+			Role:   db.UserRole(rStr),
+		})
+	}
+
 	api.Created(w, row)
 }
+
+func validateUserCreate(roles []string, empID, stuID, parID pgtype.UUID) error {
+	validRoles := []string{"admin", "guru", "staf", "siswa", "ortu"}
+	for _, role := range roles {
+		if !slices.Contains(validRoles, role) {
+			return httpError("role tidak valid")
+		}
+	}
+
+	hasEmployeeRole := slices.Contains(roles, "guru") || slices.Contains(roles, "staf")
+	hasStudentRole := slices.Contains(roles, "siswa")
+	hasParentRole := slices.Contains(roles, "ortu")
+
+	if hasEmployeeRole && !empID.Valid {
+		return httpError("role guru/staf wajib ditautkan ke pegawai")
+	}
+	if hasStudentRole && !stuID.Valid {
+		return httpError("role siswa wajib ditautkan ke siswa")
+	}
+	if hasParentRole && !parID.Valid {
+		return httpError("role ortu wajib ditautkan ke orang tua")
+	}
+	if empID.Valid && !hasEmployeeRole {
+		return httpError("tautan pegawai hanya boleh untuk role guru/staf")
+	}
+	if stuID.Valid && !hasStudentRole {
+		return httpError("tautan siswa hanya boleh untuk role siswa")
+	}
+	if parID.Valid && !hasParentRole {
+		return httpError("tautan orang tua hanya boleh untuk role ortu")
+	}
+
+	linkedProfiles := 0
+	if empID.Valid {
+		linkedProfiles++
+	}
+	if stuID.Valid {
+		linkedProfiles++
+	}
+	if parID.Valid {
+		linkedProfiles++
+	}
+	if linkedProfiles > 1 {
+		return httpError("satu akun hanya boleh ditautkan ke satu jenis profil")
+	}
+	return nil
+}
+
+type httpError string
+
+func (e httpError) Error() string { return string(e) }
 
 func (h *User) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
@@ -83,6 +186,32 @@ func (h *User) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.NoContent(w)
+}
+
+func (h *User) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		IsActive bool `json:"is_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	if err := h.q.UpdateUserStatus(r.Context(), db.UpdateUserStatusParams{
+		ID:       id,
+		IsActive: body.IsActive,
+	}); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{
+		"id":        id,
+		"is_active": body.IsActive,
+	})
 }
 
 func (h *User) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
@@ -101,4 +230,3 @@ func (h *User) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	api.OK(w, rows)
 }
-

@@ -6,6 +6,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
+	import { toast } from '$lib/components/ui/sonner';
 
 	type AcademicYear = {
 		id: string; name: string; start_date: string; end_date: string;
@@ -28,7 +29,6 @@
 	let assignments = $state<Assignment[]>([]);
 	let loading = $state(true);
 	let error = $state('');
-	let toast = $state('');
 
 	// Year form
 	let yearName = $state('');
@@ -69,8 +69,11 @@
 	}
 
 	function showToast(msg: string) {
-		toast = msg;
-		setTimeout(() => (toast = ''), 3000);
+		toast.success(msg);
+	}
+
+	function showError(msg: string) {
+		toast.error(msg);
 	}
 
 	async function createYear() {
@@ -82,7 +85,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name: yearName, start_date: yearStart, end_date: yearEnd, is_active: yearActive }),
 			});
-			if (!res.ok) { const j = await res.json(); showToast(j.error ?? 'Gagal'); return; }
+			if (!res.ok) { const j = await res.json(); showError(j.error ?? 'Gagal'); return; }
 			yearName = ''; yearStart = ''; yearEnd = ''; yearActive = false;
 			showToast('Tahun ajaran berhasil ditambahkan');
 			await load();
@@ -108,7 +111,7 @@
 					academic_year_id: classYearId, is_active: classActive,
 				}),
 			});
-			if (!res.ok) { const j = await res.json(); showToast(j.error ?? 'Gagal'); return; }
+			if (!res.ok) { const j = await res.json(); showError(j.error ?? 'Gagal'); return; }
 			className = ''; classCode = ''; classLevel = ''; classYearId = ''; classActive = true;
 			showToast('Kelas berhasil ditambahkan');
 			await load();
@@ -131,7 +134,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name: subjectName, code: subjectCode, is_active: subjectActive }),
 			});
-			if (!res.ok) { const j = await res.json(); showToast(j.error ?? 'Gagal'); return; }
+			if (!res.ok) { const j = await res.json(); showError(j.error ?? 'Gagal'); return; }
 			subjectName = ''; subjectCode = ''; subjectActive = true;
 			showToast('Mata pelajaran berhasil ditambahkan');
 			await load();
@@ -155,10 +158,6 @@
 		<h1 class="text-2xl font-semibold text-slate-800">Data Akademik</h1>
 		<p class="text-sm text-slate-500 mt-1">Kelola tahun ajaran, kelas, dan mata pelajaran</p>
 	</div>
-
-	{#if toast}
-		<div class="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">{toast}</div>
-	{/if}
 
 	{#if error}
 		<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>
@@ -228,14 +227,14 @@
 							<Card.Title class="text-base">Tambah Tahun Ajaran</Card.Title>
 						</Card.Header>
 						<Card.Content class="space-y-3">
-							<Input placeholder="Contoh: 2025/2026" bind:value={yearName} />
+							<Input id="academic-year-name" placeholder="Contoh: 2025/2026" bind:value={yearName} />
 							<div>
-								<label class="text-xs text-slate-500 mb-1 block">Tanggal Mulai</label>
-								<Input type="date" bind:value={yearStart} />
+								<label for="academic-year-start" class="text-xs text-slate-500 mb-1 block">Tanggal Mulai</label>
+								<Input id="academic-year-start" type="date" bind:value={yearStart} />
 							</div>
 							<div>
-								<label class="text-xs text-slate-500 mb-1 block">Tanggal Selesai</label>
-								<Input type="date" bind:value={yearEnd} />
+								<label for="academic-year-end" class="text-xs text-slate-500 mb-1 block">Tanggal Selesai</label>
+								<Input id="academic-year-end" type="date" bind:value={yearEnd} />
 							</div>
 							<label class="flex items-center gap-2 text-sm">
 								<input type="checkbox" bind:checked={yearActive} class="rounded" />
@@ -304,17 +303,17 @@
 						</Card.Header>
 						<Card.Content class="space-y-3">
 							<div>
-								<label class="text-xs text-slate-500 mb-1 block">Tahun Ajaran</label>
-								<select class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={classYearId}>
+								<label for="class-year-id" class="text-xs text-slate-500 mb-1 block">Tahun Ajaran</label>
+								<select id="class-year-id" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={classYearId}>
 									<option value="">-- Pilih --</option>
 									{#each years as y}
 										<option value={y.id}>{y.name}</option>
 									{/each}
 								</select>
 							</div>
-							<Input placeholder="Kode, mis: 7A" bind:value={classCode} />
-							<Input placeholder="Nama kelas, mis: VII A" bind:value={className} />
-							<Input placeholder="Tingkat, mis: VII" bind:value={classLevel} />
+							<Input id="class-code" placeholder="Kode, mis: 7A" bind:value={classCode} />
+							<Input id="class-name" placeholder="Nama kelas, mis: VII A" bind:value={className} />
+							<Input id="class-level" placeholder="Tingkat, mis: VII" bind:value={classLevel} />
 							<label class="flex items-center gap-2 text-sm">
 								<input type="checkbox" bind:checked={classActive} class="rounded" />
 								Kelas aktif

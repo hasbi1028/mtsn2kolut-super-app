@@ -5,12 +5,14 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
+	import { toast } from '$lib/components/ui/sonner';
 
 	type Student = {
 		id: string; nis: string; nisn: string; nama: string; gender: string;
 		parent_name: string; parent_phone: string;
 		class_id: string; class_name: string; class_code: string;
-		is_active: boolean; created_at: string;
+		linked_parent_names: string; linked_parent_count: number;
+		is_active: boolean; status: string; created_at: string;
 	};
 	type SchoolClass = { id: string; name: string; code: string; level: string; };
 
@@ -18,7 +20,6 @@
 	let classes = $state<SchoolClass[]>([]);
 	let loading = $state(true);
 	let error = $state('');
-	let toast = $state('');
 	let search = $state('');
 
 	let formNis = $state('');
@@ -29,6 +30,7 @@
 	let formParentPhone = $state('');
 	let formClassId = $state('');
 	let formActive = $state(true);
+	let formStatus = $state('active');
 	let formBusy = $state(false);
 	let showForm = $state(false);
 	let editId = $state<string | null>(null);
@@ -62,13 +64,16 @@
 	}
 
 	function showToast(msg: string) {
-		toast = msg;
-		setTimeout(() => (toast = ''), 3000);
+		toast.success(msg);
+	}
+
+	function showError(msg: string) {
+		toast.error(msg);
 	}
 
 	function resetForm() {
 		formNis = ''; formNisn = ''; formNama = ''; formGender = 'L';
-		formParentName = ''; formParentPhone = ''; formClassId = ''; formActive = true;
+		formParentName = ''; formParentPhone = ''; formClassId = ''; formActive = true; formStatus = 'active';
 		editId = null;
 		showForm = false;
 	}
@@ -82,6 +87,7 @@
 		formParentPhone = s.parent_phone;
 		formClassId = s.class_id || '';
 		formActive = s.is_active;
+		formStatus = s.status || 'active';
 		editId = s.id;
 		showForm = true;
 		window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -99,10 +105,10 @@
 				body: JSON.stringify({
 					nis: formNis, nisn: formNisn, nama: formNama, gender: formGender,
 					parent_name: formParentName, parent_phone: formParentPhone,
-					class_id: formClassId, is_active: formActive,
+					class_id: formClassId, is_active: formActive, status: formStatus,
 				}),
 			});
-			if (!res.ok) { const j = await res.json(); showToast(j.error ?? 'Gagal'); return; }
+			if (!res.ok) { const j = await res.json(); showError(j.error ?? 'Gagal'); return; }
 			showToast(editId ? 'Data siswa diperbarui' : 'Siswa berhasil ditambahkan');
 			resetForm();
 			await load();
@@ -114,6 +120,44 @@
 		await fetch(`/api/students?id=${id}`, { method: 'DELETE' });
 		showToast('Siswa dihapus');
 		await load();
+	}
+
+	async function updateLifecycle(student: Student, status: string) {
+		const labels: Record<string, string> = {
+			prospective: 'Calon Siswa',
+			active: 'Aktif',
+			alumni: 'Alumni',
+			mutated: 'Mutasi',
+		};
+		if (!confirm(`Ubah status ${student.nama} menjadi ${labels[status] ?? status}?`)) return;
+		const res = await fetch(`/api/students?id=${student.id}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ status }),
+		});
+		if (!res.ok) {
+			const payload = await res.json().catch(() => ({}));
+			showError(payload.error ?? 'Gagal memperbarui lifecycle siswa');
+			return;
+		}
+		showToast('Lifecycle siswa diperbarui');
+		await load();
+	}
+
+	function lifecycleBadgeClass(status: string) {
+		if (status === 'prospective') return 'bg-sky-100 text-sky-700 border-sky-200';
+		if (status === 'alumni') return 'bg-violet-100 text-violet-700 border-violet-200';
+		if (status === 'mutated') return 'bg-amber-100 text-amber-700 border-amber-200';
+		return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+	}
+
+	function parentSummary(student: Student) {
+		if (student.linked_parent_count > 0) {
+			return student.linked_parent_count > 1
+				? `${student.linked_parent_names} (${student.linked_parent_count} relasi)`
+				: student.linked_parent_names;
+		}
+		return student.parent_name || 'Wali belum diisi';
 	}
 
 	onMount(load);
@@ -132,16 +176,12 @@
 		</Button>
 	</div>
 
-	{#if toast}
-		<div class="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">{toast}</div>
-	{/if}
-
 	{#if error}
 		<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>
 	{/if}
 
 	{#if showForm}
-		<Card.Root>
+		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Header class="pb-2">
 				<Card.Title class="text-base">{editId ? 'Edit Data Siswa' : 'Tambah Siswa Baru'}</Card.Title>
 			</Card.Header>
@@ -173,6 +213,15 @@
 							{#each classes as c}
 								<option value={c.id}>{c.code} — {c.name}</option>
 							{/each}
+						</select>
+					</div>
+					<div>
+						<label for="s-status" class="text-xs text-slate-500 mb-1 block">Lifecycle Siswa</label>
+						<select id="s-status" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={formStatus}>
+							<option value="prospective">Calon Siswa</option>
+							<option value="active">Aktif</option>
+							<option value="alumni">Alumni</option>
+							<option value="mutated">Mutasi</option>
 						</select>
 					</div>
 					<div>
@@ -211,7 +260,8 @@
 					<Input placeholder="Cari nama, NIS, NISN..." bind:value={search} class="w-full sm:max-w-xs sm:ml-auto" />
 				</div>
 			</Card.Header>
-			<Card.Content class="p-0 overflow-x-auto">
+			<Card.Content class="p-0">
+				<div class="hidden overflow-x-auto lg:block">
 				<Table.Root>
 					<Table.Header>
 						<Table.Row>
@@ -221,11 +271,12 @@
 							<Table.Head>Kelas</Table.Head>
 							<Table.Head>Wali</Table.Head>
 							<Table.Head>Status</Table.Head>
+							<Table.Head>Lifecycle</Table.Head>
 							<Table.Head class="text-right">Aksi</Table.Head>
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each filtered as s}
+						{#each filtered as s (s.id)}
 							<Table.Row>
 								<Table.Cell class="font-mono text-sm">{s.nis}</Table.Cell>
 								<Table.Cell class="font-medium">{s.nama}</Table.Cell>
@@ -235,7 +286,14 @@
 									</Badge>
 								</Table.Cell>
 								<Table.Cell class="text-slate-500">{s.class_code || '—'}</Table.Cell>
-								<Table.Cell class="text-slate-500 text-sm">{s.parent_name || '—'}</Table.Cell>
+								<Table.Cell class="text-slate-500 text-sm">
+									<div class="max-w-56">
+										<p class="truncate">{parentSummary(s)}</p>
+										{#if s.linked_parent_count > 0}
+											<p class="mt-1 text-[11px] text-emerald-700">Tautan akun orang tua aktif</p>
+										{/if}
+									</div>
+								</Table.Cell>
 								<Table.Cell>
 									{#if s.is_active}
 										<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
@@ -243,8 +301,14 @@
 										<Badge variant="secondary">Tidak Aktif</Badge>
 									{/if}
 								</Table.Cell>
+								<Table.Cell>
+									<Badge class={lifecycleBadgeClass(s.status)}>{s.status}</Badge>
+								</Table.Cell>
 								<Table.Cell class="text-right">
 									<div class="flex gap-2 justify-end">
+										<Button variant="outline" size="sm" onclick={() => updateLifecycle(s, 'active')}>Aktif</Button>
+										<Button variant="outline" size="sm" onclick={() => updateLifecycle(s, 'alumni')}>Alumni</Button>
+										<Button variant="outline" size="sm" onclick={() => updateLifecycle(s, 'mutated')}>Mutasi</Button>
 										<Button variant="outline" size="sm" onclick={() => openEdit(s)}>Edit</Button>
 										<Button variant="destructive" size="sm" onclick={() => deleteStudent(s.id, s.nama)}>Hapus</Button>
 									</div>
@@ -252,13 +316,52 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={7} class="text-center text-slate-400 py-8">
+								<Table.Cell colspan={8} class="text-center text-slate-400 py-8">
 									{search ? 'Tidak ada hasil pencarian' : 'Belum ada data siswa'}
 								</Table.Cell>
 							</Table.Row>
 						{/each}
 					</Table.Body>
 				</Table.Root>
+				</div>
+
+				<div class="grid gap-3 p-4 lg:hidden">
+					{#each filtered as s (s.id)}
+						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									<p class="text-sm font-semibold text-slate-900">{s.nama}</p>
+									<p class="mt-1 font-mono text-xs text-slate-500">NIS {s.nis}{s.nisn ? ` • NISN ${s.nisn}` : ''}</p>
+								</div>
+								{#if s.is_active}
+									<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
+								{:else}
+									<Badge variant="secondary">Tidak Aktif</Badge>
+								{/if}
+							</div>
+							<div class="mt-3 flex flex-wrap items-center gap-2">
+								<Badge variant="outline" class="text-xs">{s.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</Badge>
+								<Badge variant="outline" class="text-xs">{s.class_code || 'Belum ada kelas'}</Badge>
+								<Badge class={lifecycleBadgeClass(s.status)}>{s.status}</Badge>
+							</div>
+							<p class="mt-3 text-sm text-slate-600">{parentSummary(s)}</p>
+							{#if s.linked_parent_count > 0}
+								<p class="mt-1 text-xs text-emerald-700">Relasi orang tua terhubung ke akun portal</p>
+							{/if}
+							<div class="mt-4 grid grid-cols-2 gap-2">
+								<Button variant="outline" size="sm" onclick={() => updateLifecycle(s, 'active')}>Aktif</Button>
+								<Button variant="outline" size="sm" onclick={() => updateLifecycle(s, 'alumni')}>Alumni</Button>
+								<Button variant="outline" size="sm" onclick={() => updateLifecycle(s, 'mutated')}>Mutasi</Button>
+								<Button variant="outline" size="sm" onclick={() => openEdit(s)}>Edit</Button>
+								<Button variant="destructive" size="sm" onclick={() => deleteStudent(s.id, s.nama)}>Hapus</Button>
+							</div>
+						</div>
+					{:else}
+						<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+							{search ? 'Tidak ada hasil pencarian' : 'Belum ada data siswa'}
+						</div>
+					{/each}
+				</div>
 			</Card.Content>
 		</Card.Root>
 	{/if}
