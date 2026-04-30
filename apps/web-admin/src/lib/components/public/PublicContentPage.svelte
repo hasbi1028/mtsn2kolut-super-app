@@ -7,7 +7,22 @@
 		published_at: string | null;
 	};
 
-	let { content, eyebrow }: { content: WebsiteContent; eyebrow: string } = $props();
+	type SidePanel = {
+		eyebrow?: string;
+		title: string;
+		tone?: 'default' | 'emerald';
+		lines: string[];
+	};
+
+	let {
+		content,
+		eyebrow,
+		sidePanels = [],
+	}: {
+		content: WebsiteContent;
+		eyebrow: string;
+		sidePanels?: SidePanel[];
+	} = $props();
 
 	function fmtDate(value: string | null) {
 		if (!value) return '';
@@ -19,10 +34,29 @@
 		});
 	}
 
-	const readingTips = [
-		'Informasi ini disiapkan untuk warga madrasah dan masyarakat umum.',
-		'Jika memuat jadwal atau ketentuan, gunakan tanggal tayang sebagai acuan terbaru.',
-	];
+	const panels = $derived.by<SidePanel[]>(() => {
+		if (sidePanels.length > 0) return sidePanels;
+		return [
+			{
+				eyebrow: 'Ringkasan',
+				title: 'Informasi Utama',
+				lines: [
+					`Kategori: ${eyebrow}`,
+					content.published_at ? `Tanggal tayang: ${fmtDate(content.published_at)}` : '',
+					'Sumber: Website resmi MTsN 2 Kolaka Utara',
+				].filter(Boolean),
+			},
+			{
+				eyebrow: 'Catatan Baca',
+				title: 'Panduan Singkat',
+				tone: 'emerald',
+				lines: [
+					'Informasi ini disiapkan untuk warga madrasah dan masyarakat umum.',
+					'Jika memuat jadwal atau ketentuan, gunakan tanggal tayang sebagai acuan terbaru.',
+				],
+			},
+		];
+	});
 </script>
 
 <article class="mx-auto max-w-6xl space-y-8">
@@ -54,25 +88,25 @@
 		</div>
 
 		<aside class="space-y-4 lg:sticky lg:top-24">
-			<div class="rounded-[1.75rem] border border-slate-200 bg-white px-5 py-5 shadow-sm">
-				<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Ringkasan</p>
-				<div class="mt-4 space-y-3 text-sm text-slate-600">
-					<p><span class="font-medium text-slate-900">Kategori:</span> {eyebrow}</p>
-					{#if content.published_at}
-						<p><span class="font-medium text-slate-900">Tanggal tayang:</span> {fmtDate(content.published_at)}</p>
-					{/if}
-					<p><span class="font-medium text-slate-900">Sumber:</span> Website resmi MTsN 2 Kolaka Utara</p>
+			{#each panels as panel (panel.title)}
+				<div class={`rounded-[1.75rem] px-5 py-5 shadow-sm ${
+					panel.tone === 'emerald'
+						? 'border border-emerald-100 bg-emerald-50'
+						: 'border border-slate-200 bg-white'
+				}`}>
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">
+						{panel.eyebrow || 'Ringkasan'}
+					</p>
+					<h2 class="mt-2 text-base font-semibold text-slate-900">{panel.title}</h2>
+					<div class={`mt-4 space-y-3 text-sm leading-7 ${
+						panel.tone === 'emerald' ? 'text-slate-700' : 'text-slate-600'
+					}`}>
+						{#each panel.lines as line (line)}
+							<p>{line}</p>
+						{/each}
+					</div>
 				</div>
-			</div>
-
-			<div class="rounded-[1.75rem] border border-emerald-100 bg-emerald-50 px-5 py-5 shadow-sm">
-				<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Catatan Baca</p>
-				<div class="mt-4 space-y-3 text-sm leading-7 text-slate-700">
-					{#each readingTips as tip (tip)}
-						<p>{tip}</p>
-					{/each}
-				</div>
-			</div>
+			{/each}
 		</aside>
 	</div>
 </article>
