@@ -75,6 +75,67 @@ void main() {
     expect(find.textContaining('Gangguan 08:46'), findsOneWidget);
   });
 
+  testWidgets('login screen renders stable restore health label', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamLoginScreen(
+          autoRestore: false,
+          previewSnapshot: _sampleSnapshot(
+            lastServerContactIso: '2026-05-01T08:44:00+08:00',
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Terakhir stabil'), findsOneWidget);
+    expect(find.textContaining('Kontak server 08:44'), findsOneWidget);
+    expect(find.textContaining('Gangguan '), findsNothing);
+  });
+
+  testWidgets('login screen renders disturbed restore health label', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamLoginScreen(
+          autoRestore: false,
+          previewSnapshot: _sampleSnapshot(
+            lastSyncFailureIso: '2026-05-01T08:46:00+08:00',
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Pernah terganggu'), findsOneWidget);
+    expect(find.textContaining('Kontak server '), findsNothing);
+    expect(find.textContaining('Gangguan 08:46'), findsOneWidget);
+  });
+
+  testWidgets('login screen renders empty restore health label', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamLoginScreen(
+          autoRestore: false,
+          previewSnapshot: _sampleSnapshot(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Belum ada riwayat koneksi'), findsOneWidget);
+    expect(find.textContaining('Kontak server '), findsNothing);
+    expect(find.textContaining('Gangguan '), findsNothing);
+  });
+
   testWidgets('restore failed screen renders persistent guidance notice', (
     tester,
   ) async {
@@ -131,6 +192,82 @@ void main() {
     expect(find.text('Perlu perhatian koneksi'), findsOneWidget);
     expect(find.textContaining('Kontak server 08:44'), findsOneWidget);
     expect(find.textContaining('Gangguan 08:46'), findsOneWidget);
+  });
+
+  testWidgets('restore failed screen renders stable restore health label', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamRestoreFailedScreen(
+          snapshot: _sampleSnapshot(
+            lastServerContactIso: '2026-05-01T08:44:00+08:00',
+          ),
+          message: 'Sesi lama belum bisa dipulihkan.',
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Terakhir stabil'), findsOneWidget);
+    expect(find.textContaining('Kontak server 08:44'), findsOneWidget);
+    expect(find.textContaining('Gangguan '), findsNothing);
+  });
+
+  testWidgets('restore failed screen renders disturbed restore health label', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamRestoreFailedScreen(
+          snapshot: _sampleSnapshot(
+            lastSyncFailureIso: '2026-05-01T08:46:00+08:00',
+          ),
+          message: 'Sesi lama belum bisa dipulihkan.',
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Pernah terganggu'), findsOneWidget);
+    expect(find.textContaining('Kontak server '), findsNothing);
+    expect(find.textContaining('Gangguan 08:46'), findsOneWidget);
+  });
+
+  testWidgets('restore failed screen renders empty restore health label', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamRestoreFailedScreen(
+          snapshot: _sampleSnapshot(),
+          message: 'Sesi lama belum bisa dipulihkan.',
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Belum ada riwayat koneksi'), findsOneWidget);
+    expect(find.textContaining('Kontak server '), findsNothing);
+    expect(find.textContaining('Gangguan '), findsNothing);
   });
 
   testWidgets('exam shell renders warning guidance notice', (tester) async {
