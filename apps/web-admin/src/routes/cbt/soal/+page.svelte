@@ -50,7 +50,7 @@
 	const ANSWER_LABELS = ['A', 'B', 'C', 'D'] as const;
 	const WORKFLOW_LABEL: Record<string, string> = {
 		draft: 'Draft',
-		review: 'Review',
+		review: 'Ditinjau',
 		approved: 'Disetujui',
 		rejected: 'Revisi',
 	};
@@ -523,7 +523,7 @@
 		<div>
 			<h1 class="text-xl font-semibold text-slate-800">Komposer Soal</h1>
 			<p class="text-sm text-slate-500 mt-0.5">
-				Buat butir soal dengan template, preview live, dan autosave
+				Buat butir soal dengan template, preview langsung, dan simpan draft otomatis
 			</p>
 		</div>
 		<Button onclick={openCreate} class="bg-green-700 hover:bg-green-800 text-white shrink-0">
@@ -556,7 +556,7 @@
 		>
 			<option value="">Semua Status</option>
 			<option value="draft">Draft</option>
-			<option value="review">Review</option>
+			<option value="review">Ditinjau</option>
 			<option value="approved">Disetujui</option>
 			<option value="rejected">Revisi</option>
 		</select>

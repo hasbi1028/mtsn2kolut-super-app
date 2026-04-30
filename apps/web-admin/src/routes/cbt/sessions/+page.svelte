@@ -132,7 +132,7 @@
 		if (fScopeType === 'class' && !fClassId) return;
 		if (fScopeType === 'grade' && !fGradeLevel) return;
 		if (fAllowCrossGrade && !fIsSpecialEvent) {
-			showToast('Lintas tingkat hanya boleh untuk special event', false);
+			showToast('Lintas tingkat hanya boleh untuk sesi khusus', false);
 			return;
 		}
 		fBusy = true;
@@ -315,7 +315,7 @@
 					<div class="sm:col-span-2 grid gap-3 sm:grid-cols-2">
 						<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-slate-700">
 							<input type="checkbox" bind:checked={fIsSpecialEvent} class="size-4 accent-emerald-700" />
-							Tandai sebagai special event
+							Tandai sebagai sesi khusus
 						</label>
 						<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-slate-700">
 							<input type="checkbox" bind:checked={fAllowCrossGrade} class="size-4 accent-emerald-700" />
@@ -346,9 +346,9 @@
 				<p class="text-sm text-green-700 mt-0.5">{enrollSession.title}</p>
 			</Card.Header>
 			<Card.Content class="space-y-3">
-				<p class="text-sm text-slate-600">Tentukan cohort peserta untuk sesi ini. Ruangan tetap bisa diacak terpisah setelah peserta terdaftar.</p>
+				<p class="text-sm text-slate-600">Tentukan kelompok peserta untuk sesi ini. Ruangan tetap bisa diacak terpisah setelah peserta terdaftar.</p>
 				<div>
-					<label for="enroll-scope" class="text-xs text-slate-500 mb-1 block">Scope cohort</label>
+					<label for="enroll-scope" class="text-xs text-slate-500 mb-1 block">Cakupan peserta</label>
 					<select id="enroll-scope" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={enrollScopeType}>
 						<option value="class">Per kelas</option>
 						<option value="grade">Per tingkat</option>

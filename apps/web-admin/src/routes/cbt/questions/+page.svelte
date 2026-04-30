@@ -72,11 +72,11 @@
 		multiple_answer: 'Jawaban Ganda',
 		true_false: 'Benar / Salah',
 		short_answer: 'Isian Singkat',
-		essay: 'Uraian / Essay',
+		essay: 'Uraian',
 	};
 	const difficultyLabel: Record<string, string> = { easy: 'Mudah', medium: 'Sedang', hard: 'Sulit' };
-	const workflowLabel: Record<string, string> = { draft: 'Draft', review: 'Review', approved: 'Approved', rejected: 'Revisi' };
-	const statusLabel: Record<string, string> = { draft: 'Draft', published: 'Published', archived: 'Arsip' };
+	const workflowLabel: Record<string, string> = { draft: 'Draft', review: 'Ditinjau', approved: 'Disetujui', rejected: 'Revisi' };
+	const statusLabel: Record<string, string> = { draft: 'Draft', published: 'Terbit', archived: 'Arsip' };
 
 	let loading = $state(true);
 	let error = $state('');
@@ -140,14 +140,14 @@
 	let qualityWarnings = $derived.by(() => {
 		const warnings: string[] = [];
 		if (!isAdvanceMode) {
-			if (fQuestionType === 'essay' && !fRubricHTML.trim()) warnings.push('Rubrik essay belum diisi. Bisa dilengkapi nanti di mode advance.');
-			if (!fMaterialTopic.trim()) warnings.push('Topik materi belum diisi. Bisa dilengkapi nanti di mode advance.');
+			if (fQuestionType === 'essay' && !fRubricHTML.trim()) warnings.push('Rubrik uraian belum diisi. Bisa dilengkapi nanti di mode lanjutan.');
+			if (!fMaterialTopic.trim()) warnings.push('Topik materi belum diisi. Bisa dilengkapi nanti di mode lanjutan.');
 			return warnings;
 		}
 		if (!fMaterialTopic.trim()) warnings.push('Topik materi belum diisi. Penting untuk blueprint paket ujian.');
 		if (!fCPRef.trim() || !fKDRef.trim()) warnings.push('Acuan kurikulum belum lengkap. Minimal CP dan KD sebaiknya terisi.');
-		if (fQuestionType === 'essay' && !fRubricHTML.trim()) warnings.push('Soal essay sebaiknya memiliki rubrik HTML sebelum diajukan review.');
-		if (fStatus === 'published' && fWorkflowStatus !== 'approved') warnings.push('Item published idealnya berstatus workflow approved.');
+		if (fQuestionType === 'essay' && !fRubricHTML.trim()) warnings.push('Soal uraian sebaiknya memiliki rubrik HTML sebelum diajukan peninjauan.');
+		if (fStatus === 'published' && fWorkflowStatus !== 'approved') warnings.push('Item terbit idealnya berstatus review disetujui.');
 		if (fHotsFlag && !fCognitiveLevel.trim()) warnings.push('Item HOTS sebaiknya disertai level kognitif.');
 		if (objectiveType(fQuestionType) && fOptions.some((o) => !o.text?.trim() && !o.html?.trim() && !o.latex?.trim())) {
 			warnings.push('Masih ada opsi objektif yang kosong.');
@@ -555,7 +555,7 @@
 		<div class="space-y-1">
 			<h1 class="text-2xl font-semibold tracking-tight text-slate-900">Bank Soal CBT</h1>
 			<p class="max-w-3xl text-sm text-slate-600">
-				Bangun item asesmen dengan rich text, LaTeX, stimulus, workflow review, dan metadata kurikulum. Mode <strong>beginner</strong> untuk input cepat, mode <strong>advance</strong> untuk metadata blueprint lengkap.
+				Bangun item asesmen dengan rich text, LaTeX, stimulus, alur review, dan metadata kurikulum. Mode <strong>dasar</strong> untuk input cepat, mode <strong>lanjutan</strong> untuk metadata blueprint lengkap.
 			</p>
 		</div>
 		<Button onclick={openCreate}>{showForm ? 'Tutup Form' : '+ Tambah Item'}</Button>
@@ -565,20 +565,20 @@
 		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
 			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Item</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{totalItems}</p>
-			<p class="text-sm text-slate-600">soal terarsip, draft, atau published dalam bank soal</p>
+			<p class="text-sm text-slate-600">soal terarsip, draft, atau terbit dalam bank soal</p>
 		</div>
 		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
 			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Perlu Review</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{questions.filter((item) => item.workflow_status === 'review').length}</p>
-			<p class="text-sm text-slate-600">item pada halaman aktif yang menunggu approval</p>
+			<p class="text-sm text-slate-600">item pada halaman aktif yang menunggu persetujuan</p>
 		</div>
 		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Mode Beginner</p>
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Mode Dasar</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{questions.filter((item) => detectMode(item) === 'beginner').length}</p>
-			<p class="text-sm text-slate-600">item cepat yang masih bisa disempurnakan di advance</p>
+			<p class="text-sm text-slate-600">item cepat yang masih bisa disempurnakan di mode lanjutan</p>
 		</div>
 		<div class="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">Published</p>
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">Terbit</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{questions.filter((item) => item.status === 'published').length}</p>
 			<p class="text-sm text-slate-600">item siap dipakai dari halaman hasil filter saat ini</p>
 		</div>
@@ -600,7 +600,7 @@
 					</div>
 					<div class="flex flex-wrap gap-2">
 						{#if detectMode(selectedDetail) !== 'advance'}
-							<Button variant="outline" size="sm" onclick={() => selectedDetail && openEdit(selectedDetail, 'advance')}>Lengkapi di Advanced</Button>
+							<Button variant="outline" size="sm" onclick={() => selectedDetail && openEdit(selectedDetail, 'advance')}>Lengkapi di Mode Lanjutan</Button>
 						{/if}
 						<Button variant="outline" size="sm" onclick={() => selectedDetail && openEdit(selectedDetail)}>Edit</Button>
 						<Button variant="outline" size="sm" onclick={() => (selectedDetail = null)}>Tutup</Button>
@@ -631,14 +631,14 @@
 						<p class="text-slate-900">Kelas: {selectedDetail.grade_level ?? '—'}</p>
 					</div>
 					<div class="rounded-lg border bg-slate-50 p-3 text-sm">
-						<p class="text-xs uppercase tracking-[0.18em] text-slate-500">Review</p>
-						<p class="mt-2 text-slate-900">Reviewer: {selectedDetail.reviewer_username || '—'}</p>
-						<p class="text-slate-900">Approver: {selectedDetail.approver_username || '—'}</p>
+						<p class="text-xs uppercase tracking-[0.18em] text-slate-500">Peninjauan</p>
+						<p class="mt-2 text-slate-900">Peninjau: {selectedDetail.reviewer_username || '—'}</p>
+						<p class="text-slate-900">Penyetuju: {selectedDetail.approver_username || '—'}</p>
 					</div>
 					<div class="rounded-lg border bg-slate-50 p-3 text-sm">
 						<p class="text-xs uppercase tracking-[0.18em] text-slate-500">Asset</p>
 						<p class="mt-2 text-slate-900">{selectedDetail.media_asset_ids.length} asset direferensikan</p>
-						<p class="text-slate-900">Workflow: {workflowLabel[selectedDetail.workflow_status] ?? selectedDetail.workflow_status}</p>
+						<p class="text-slate-900">Alur review: {workflowLabel[selectedDetail.workflow_status] ?? selectedDetail.workflow_status}</p>
 					</div>
 				</div>
 				<div class="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
@@ -736,42 +736,42 @@
 				<Card.Title class="text-lg text-slate-900">{editId ? 'Edit Item Bank Soal' : 'Item Bank Soal Baru'}</Card.Title>
 				<Card.Description>
 					{#if isAdvanceMode}
-						Mode advance: rich text, LaTeX, stimulus, metadata kurikulum CP/TP/KD, asset, dan workflow review.
+						Mode lanjutan: rich text, LaTeX, stimulus, metadata kurikulum CP/TP/KD, asset, dan alur review.
 					{:else}
-						Mode beginner: isi soal, opsi, kunci jawaban. Metadata kurikulum dan fitur lanjutan bisa dilengkapi nanti di mode advance.
+						Mode dasar: isi soal, opsi, kunci jawaban. Metadata kurikulum dan fitur lanjutan bisa dilengkapi nanti di mode lanjutan.
 					{/if}
 				</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-6 pt-6">
 				<!-- Mode selector -->
 				<section class="space-y-3">
-					<h2 class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">Mode Authoring</h2>
+					<h2 class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">Mode Penulisan</h2>
 					<div class="grid gap-3 md:grid-cols-2">
 						<button
 							type="button"
 							class={`rounded-xl border p-4 text-left transition ${!isAdvanceMode ? 'border-emerald-300 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-emerald-200'}`}
 							onclick={() => (fAuthoringMode = 'beginner')}
 						>
-							<p class="text-sm font-semibold text-slate-900">Beginner</p>
-							<p class="mt-1 text-sm text-slate-600">Fokus pada mapel, isi soal, opsi, dan jawaban. Cocok untuk input cepat tanpa harus isi metadata.</p>
+							<p class="text-sm font-semibold text-slate-900">Mode Dasar</p>
+							<p class="mt-1 text-sm text-slate-600">Fokus pada mapel, isi soal, opsi, dan jawaban. Cocok untuk input cepat tanpa harus mengisi metadata lengkap.</p>
 						</button>
 						<button
 							type="button"
 							class={`rounded-xl border p-4 text-left transition ${isAdvanceMode ? 'border-emerald-300 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-emerald-200'}`}
 							onclick={() => (fAuthoringMode = 'advance')}
 						>
-							<p class="text-sm font-semibold text-slate-900">Advance</p>
-							<p class="mt-1 text-sm text-slate-600">Buka seluruh fitur: blueprint kurikulum, workflow review, asset reuse, rich text, dan LaTeX.</p>
+							<p class="text-sm font-semibold text-slate-900">Mode Lanjutan</p>
+							<p class="mt-1 text-sm text-slate-600">Buka seluruh fitur: blueprint kurikulum, alur review, asset reuse, rich text, dan LaTeX.</p>
 						</button>
 					</div>
 					{#if !isAdvanceMode}
 						<div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-							Soal mode beginner disimpan otomatis sebagai <strong>draft</strong>. KD, CP, TP, HOTS, dan metadata blueprint bisa dilengkapi nanti di mode advance.
+							Soal mode dasar disimpan otomatis sebagai <strong>draft</strong>. KD, CP, TP, HOTS, dan metadata blueprint bisa dilengkapi nanti di mode lanjutan.
 						</div>
 						<div class="flex flex-wrap gap-2">
-							<Button variant="outline" size="sm" onclick={() => (fAuthoringMode = 'advance')}>Lengkapi di Advanced</Button>
+							<Button variant="outline" size="sm" onclick={() => (fAuthoringMode = 'advance')}>Lengkapi di Mode Lanjutan</Button>
 							{#if canSubmitReview && editId}
-								<Button variant="outline" size="sm" onclick={async () => { await workflowAction(editId!, 'submit_review'); }}>Ajukan Review</Button>
+								<Button variant="outline" size="sm" onclick={async () => { await workflowAction(editId!, 'submit_review'); }}>Ajukan Peninjauan</Button>
 							{/if}
 						</div>
 					{/if}
@@ -816,7 +816,7 @@
 									<option value="true_false">Benar / Salah</option>
 									<option value="short_answer">Isian Singkat</option>
 								{/if}
-								<option value="essay">Essay</option>
+								<option value="essay">Uraian</option>
 							</select>
 						</div>
 						<div>
@@ -840,11 +840,11 @@
 								</select>
 							</div>
 							<div>
-								<label for="q-workflow" class="mb-1 block text-xs font-medium text-slate-600">Workflow</label>
+								<label for="q-workflow" class="mb-1 block text-xs font-medium text-slate-600">Alur Review</label>
 								<select id="q-workflow" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fWorkflowStatus}>
 									<option value="draft">Draft</option>
-									<option value="review">Review</option>
-									<option value="approved">Approved</option>
+									<option value="review">Ditinjau</option>
+									<option value="approved">Disetujui</option>
 									<option value="rejected">Perlu Revisi</option>
 								</select>
 							</div>
@@ -852,7 +852,7 @@
 								<label for="q-status" class="mb-1 block text-xs font-medium text-slate-600">Publikasi</label>
 								<select id="q-status" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fStatus}>
 									<option value="draft">Draft</option>
-									<option value="published">Published</option>
+									<option value="published">Terbit</option>
 									<option value="archived">Arsip</option>
 								</select>
 							</div>
@@ -1019,7 +1019,7 @@
 				<!-- Rubrik essay -->
 				{#if fQuestionType === 'essay'}
 					<section class="space-y-3">
-						<h2 class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">Rubrik Essay</h2>
+						<h2 class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">Rubrik Uraian</h2>
 						{#if isAdvanceMode}
 							<div>
 								<label for="q-rubric" class="mb-1 block text-xs font-medium text-slate-600">Rubrik HTML</label>
@@ -1027,7 +1027,7 @@
 							</div>
 						{:else}
 							<div class="rounded-lg border border-dashed border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-								Rubrik essay tidak wajib di mode beginner. Lengkapi nanti di mode advance setelah soal tersimpan.
+								Rubrik uraian tidak wajib di mode dasar. Lengkapi nanti di mode lanjutan setelah soal tersimpan.
 							</div>
 						{/if}
 					</section>
@@ -1078,14 +1078,14 @@
 					</section>
 
 					<section class="space-y-3">
-						<h2 class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">Catatan Penulis dan Reviewer</h2>
+						<h2 class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">Catatan Penulis dan Peninjau</h2>
 						<div class="grid gap-3 lg:grid-cols-2">
 							<div>
 								<label for="q-writer-notes" class="mb-1 block text-xs font-medium text-slate-600">Catatan Penulis</label>
 								<Textarea id="q-writer-notes" rows={3} bind:value={fWriterNotes} />
 							</div>
 							<div>
-								<label for="q-review-notes" class="mb-1 block text-xs font-medium text-slate-600">Catatan Review</label>
+								<label for="q-review-notes" class="mb-1 block text-xs font-medium text-slate-600">Catatan Peninjauan</label>
 								<Textarea id="q-review-notes" rows={3} bind:value={fReviewNotes} />
 							</div>
 						</div>
@@ -1094,7 +1094,7 @@
 					<section class="space-y-3">
 						<h2 class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">Gambar Sederhana</h2>
 						<div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-							Di mode beginner, gunakan tombol gambar pada editor untuk menyisipkan gambar langsung ke soal. Asset reuse, PDF, dan pengelolaan lampiran lanjutan tersedia di mode advance.
+							Di mode dasar, gunakan tombol gambar pada editor untuk menyisipkan gambar langsung ke soal. Asset reuse, PDF, dan pengelolaan lampiran lanjutan tersedia di mode lanjutan.
 						</div>
 					</section>
 				{/if}
@@ -1202,10 +1202,10 @@
 						{/each}
 					</select>
 					<select id="filter-workflow" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={filterWorkflow}>
-						<option value="">Semua workflow</option>
+						<option value="">Semua alur review</option>
 						<option value="draft">Draft</option>
-						<option value="review">Review</option>
-						<option value="approved">Approved</option>
+						<option value="review">Ditinjau</option>
+						<option value="approved">Disetujui</option>
 						<option value="rejected">Revisi</option>
 					</select>
 					<select id="filter-type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={filterType}>
@@ -1214,7 +1214,7 @@
 						<option value="multiple_answer">Jawaban Ganda</option>
 						<option value="true_false">Benar/Salah</option>
 						<option value="short_answer">Isian Singkat</option>
-						<option value="essay">Essay</option>
+						<option value="essay">Uraian</option>
 					</select>
 					<select id="filter-hots" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={filterHots}>
 						<option value="">Semua level</option>
@@ -1285,13 +1285,13 @@
 											<Button size="sm" variant="outline" onclick={() => openEdit(q, 'advance')}>Lengkapi</Button>
 										{/if}
 										{#if canSubmitReview && (q.workflow_status === 'draft' || q.workflow_status === 'rejected')}
-											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'submit_review')}>Review</Button>
+											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'submit_review')}>Tinjau</Button>
 										{/if}
 										{#if canApproveWorkflow && q.workflow_status === 'review'}
-											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'approve')}>Approve</Button>
+											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'approve')}>Setujui</Button>
 										{/if}
 										{#if canApproveWorkflow && q.workflow_status === 'approved' && q.status !== 'published'}
-											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'publish')}>Publish</Button>
+											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'publish')}>Terbitkan</Button>
 										{/if}
 										{#if canApproveWorkflow && q.status === 'published'}
 											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'archive')}>Arsip</Button>
