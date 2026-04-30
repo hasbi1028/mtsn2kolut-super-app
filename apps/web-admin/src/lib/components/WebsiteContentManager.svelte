@@ -9,6 +9,8 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	type ContentStatus = 'draft' | 'published';
 	type ContentKind = 'page' | 'post' | 'announcement';
@@ -42,6 +44,7 @@
 
 	let items = $state<WebsiteContent[]>([]);
 	let loading = $state(true);
+	let error = $state('');
 	let search = $state('');
 	let showDialog = $state(false);
 	let saving = $state(false);
@@ -123,14 +126,19 @@
 		return `${publicBasePath}/${item.slug}`;
 	}
 
+	const publishedCount = $derived(items.filter((item) => item.status === 'published').length);
+	const draftCount = $derived(items.filter((item) => item.status === 'draft').length);
+	const featuredCount = $derived(items.filter((item) => item.is_featured).length);
+
 	async function load() {
 		loading = true;
 		try {
+			error = '';
 			const res = await fetch(`/api/website/content?kind=${kind}`);
 			const data = await res.json();
 			items = data.items ?? [];
 		} catch {
-			toast.error(`Gagal memuat ${title.toLowerCase()}.`);
+			error = `Gagal memuat ${title.toLowerCase()}. Coba lagi untuk mengambil daftar konten terbaru.`;
 		} finally {
 			loading = false;
 		}
@@ -236,6 +244,47 @@
 		</div>
 	</div>
 
+	<div class="grid gap-3 md:grid-cols-4">
+		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Konten</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{items.length}</p>
+			<p class="text-sm text-slate-600">seluruh item pada kategori ini</p>
+		</div>
+		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Published</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{publishedCount}</p>
+			<p class="text-sm text-slate-600">konten yang sudah tampil di website publik</p>
+		</div>
+		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Draft</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{draftCount}</p>
+			<p class="text-sm text-slate-600">konten yang masih menunggu finalisasi</p>
+		</div>
+		<div class="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">Unggulan</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{featuredCount}</p>
+			<p class="text-sm text-slate-600">konten yang ditandai untuk sorotan publik</p>
+		</div>
+	</div>
+
+	{#if error}
+		<RecoveryPanel title="Konten Website Belum Tersaji" message={error} onRetry={load} />
+	{/if}
+
+	<Card.Root class="border-slate-200 shadow-sm">
+		<Card.Content class="grid gap-3 p-4 md:grid-cols-[1.2fr_auto]">
+			<div>
+				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Cari Konten</p>
+				<Input placeholder="Cari judul, slug, atau ringkasan..." bind:value={search} class="w-full" />
+			</div>
+			<div class="flex items-end">
+				<Button variant="outline" class="w-full md:w-auto" onclick={() => (search = '')} disabled={!search.trim()}>
+					Reset pencarian
+				</Button>
+			</div>
+		</Card.Content>
+	</Card.Root>
+
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
 			{#if loading}
@@ -261,7 +310,15 @@
 					{/each}
 				</div>
 			{:else if filteredItems.length === 0}
-				<div class="px-5 py-10 text-center text-sm text-slate-500">Belum ada konten untuk kategori ini.</div>
+				<div class="p-4">
+					<EmptyStatePanel
+						title={search.trim() ? 'Tidak ada konten yang cocok' : 'Belum ada konten untuk kategori ini'}
+						description={search.trim()
+							? 'Ubah kata kunci pencarian atau reset filter untuk melihat item lain yang sudah tersedia.'
+							: 'Tambahkan konten pertama agar area editorial ini mulai menampilkan berita, pengumuman, atau halaman publik sekolah.'}
+						compact
+					/>
+				</div>
 			{:else}
 				<div class="divide-y divide-slate-200">
 					{#each filteredItems as item (item.id)}
