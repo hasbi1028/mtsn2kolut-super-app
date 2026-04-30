@@ -11,7 +11,9 @@
     nip: string;
     nama: string;
     unit_kerja: string;
+    employment_type: string;
     pusaka_username: string;
+    pusaka_is_enabled?: boolean;
     is_active: boolean;
     active_status: string;
     active_run_type: string;
@@ -58,6 +60,8 @@
   let pusakaPassword   = $state('');
   let saving           = $state(false);
   let testing          = $state(false);
+  let accountToggling  = $state(false);
+  let filterMode = $state<'all' | 'configured' | 'needs_setup' | 'disabled'>('all');
 
   // Run confirmation dialog
   let runConfirm = $state<{ emp: Employee; runType: RunType } | null>(null);
@@ -75,6 +79,12 @@
     checkinEnabled: true, checkoutEnabled: true, randomWindow: 0,
   });
   let dayConfigs = $state<DayConfig[]>(Array.from({ length: 7 }, makeDayConfig));
+  let filteredEmployees = $derived.by(() => {
+    if (filterMode === 'configured') return employees.filter((employee) => !!employee.pusaka_username && employee.pusaka_is_enabled !== false);
+    if (filterMode === 'needs_setup') return employees.filter((employee) => !employee.pusaka_username);
+    if (filterMode === 'disabled') return employees.filter((employee) => !!employee.pusaka_username && employee.pusaka_is_enabled === false);
+    return employees;
+  });
 
   const runTypeLabel: Record<RunType, string> = {
     morning: 'Rekap', afternoon: 'Rekap', checkin: 'Masuk', checkout: 'Pulang',
@@ -131,6 +141,25 @@
       const data = await res.json() as { message?: string };
       alert(data.message || 'Test selesai');
     } catch { alert('Test gagal'); } finally { testing = false; }
+  }
+
+  async function togglePusakaAccount(emp: Employee, isEnabled: boolean) {
+    accountToggling = true;
+    try {
+      const res = await fetch(`/api/pusaka/employees/${emp.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ is_enabled: isEnabled }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert((data as { error?: string }).error || 'Gagal memperbarui status akun PUSAKA');
+        return;
+      }
+      ondelete?.();
+    } finally {
+      accountToggling = false;
+    }
   }
 
   async function doStop(id: string) {
@@ -249,6 +278,11 @@
     return !!(emp.pusaka_username);
   }
 
+  function pusakaStatusLabel(emp: Employee) {
+    if (!emp.pusaka_username) return 'Belum setup';
+    return emp.pusaka_is_enabled === false ? 'Dinonaktifkan' : 'Aktif';
+  }
+
   function scheduleButtonClass(emp: Employee): string {
     const ci = emp.has_checkin_schedule;
     const co = emp.has_checkout_schedule;
@@ -277,7 +311,15 @@
         <Card.Title class="text-base">Pegawai Eligible PUSAKA</Card.Title>
         <Card.Description>Hanya pegawai PNS dan PPPK yang dikelola di area ini untuk setup akun, jadwal, dan eksekusi job PUSAKA.</Card.Description>
       </div>
-      <Badge variant="secondary">{employees.length} pegawai</Badge>
+      <div class="flex items-center gap-2">
+        <select bind:value={filterMode} class="rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <option value="all">Semua</option>
+          <option value="configured">Akun aktif</option>
+          <option value="needs_setup">Belum setup</option>
+          <option value="disabled">Dinonaktifkan</option>
+        </select>
+        <Badge variant="secondary">{filteredEmployees.length} pegawai</Badge>
+      </div>
     </div>
   </Card.Header>
   <Card.Content class="p-0 overflow-x-auto">
@@ -292,7 +334,7 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each employees as e (e.id)}
+        {#each filteredEmployees as e (e.id)}
           {@const si = statusInfo(e)}
           <Table.Row class={e.active_status === 'running' ? 'bg-amber-50' : ''}>
             <Table.Cell>
@@ -311,7 +353,9 @@
             </Table.Cell>
             <Table.Cell class="text-center">
               {#if isPusakaConfigured(e)}
-                <Badge variant="outline" class="text-xs border-green-300 text-green-700">✓ Aktif</Badge>
+                <Badge variant={e.pusaka_is_enabled === false ? 'secondary' : 'outline'} class={e.pusaka_is_enabled === false ? 'text-xs' : 'text-xs border-green-300 text-green-700'}>
+                  {pusakaStatusLabel(e)}
+                </Badge>
               {:else}
                 <Badge variant="destructive" class="text-xs">Belum</Badge>
               {/if}
@@ -330,6 +374,16 @@
                 <Button size="sm" variant="outline" onclick={() => openPusakaDialog(e)}>
                   {isPusakaConfigured(e) ? 'Edit' : 'Setup'} Pusaka
                 </Button>
+                {#if isPusakaConfigured(e)}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onclick={() => togglePusakaAccount(e, e.pusaka_is_enabled === false)}
+                    disabled={accountToggling}
+                  >
+                    {e.pusaka_is_enabled === false ? 'Aktifkan Akun' : 'Nonaktifkan Akun'}
+                  </Button>
+                {/if}
                 <Button size="sm" variant="ghost" onclick={() => testPusakaCredentials(e)} disabled={testing || !isPusakaConfigured(e)}>
                   Test
                 </Button>

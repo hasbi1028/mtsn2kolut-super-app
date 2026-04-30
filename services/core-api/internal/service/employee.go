@@ -114,6 +114,17 @@ func (s *Employee) UpsertPusakaAccount(ctx context.Context, employeeID pgtype.UU
 	return err
 }
 
+func (s *Employee) SetPusakaAccountEnabled(ctx context.Context, employeeID pgtype.UUID, isEnabled bool) error {
+	employee, err := s.q.GetEmployee(ctx, employeeID)
+	if err != nil {
+		return err
+	}
+	if employee.PusakaUsername == "" {
+		return errors.New("pusaka account is not configured")
+	}
+	return s.UpsertPusakaAccount(ctx, employeeID, employee.PusakaUsername, employee.PusakaPassword, isEnabled)
+}
+
 func (s *Employee) SetActive(ctx context.Context, id pgtype.UUID, isActive bool) error {
 	emp, err := s.q.GetEmployee(ctx, id)
 	if err != nil {

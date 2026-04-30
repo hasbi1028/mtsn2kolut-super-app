@@ -25,6 +25,7 @@ type employeeResponse struct {
 	UnitKerja       string             `json:"unit_kerja"`
 	EmploymentType  string             `json:"employment_type"`
 	PusakaUsername  string             `json:"pusaka_username"`
+	PusakaIsEnabled bool               `json:"pusaka_is_enabled"`
 	PusakaEligible  bool               `json:"pusaka_eligible"`
 	HasPusakaAccount bool              `json:"has_pusaka_account"`
 	IsActive        bool               `json:"is_active"`
@@ -216,11 +217,12 @@ func (h *Employee) UpdatePusakaCredentials(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	updated, err := h.svc.Update(r.Context(), db.UpdateEmployeeParams{
-		ID:        emp.ID,
-		Nip:       emp.Nip,
-		Nama:      emp.Nama,
-		UnitKerja: emp.UnitKerja,
-		IsActive:  emp.IsActive,
+		ID:             emp.ID,
+		Nip:            emp.Nip,
+		Nama:           emp.Nama,
+		UnitKerja:      emp.UnitKerja,
+		EmploymentType: emp.EmploymentType,
+		IsActive:       emp.IsActive,
 	})
 	if err != nil {
 		api.Internal(w, err)
@@ -233,6 +235,33 @@ func (h *Employee) UpdatePusakaCredentials(w http.ResponseWriter, r *http.Reques
 	api.OK(w, map[string]any{
 		"status":     "success",
 		"configured": body.PusakaUsername != "" || updated.PusakaUsername != "",
+	})
+}
+
+func (h *Employee) UpdatePusakaAccountStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		IsEnabled bool `json:"is_enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	if err := h.svc.SetPusakaAccountEnabled(r.Context(), id, body.IsEnabled); err != nil {
+		if err.Error() == "pusaka account is not configured" {
+			api.BadRequest(w, err.Error())
+			return
+		}
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{
+		"employee_id": id,
+		"is_enabled":  body.IsEnabled,
 	})
 }
 
@@ -256,6 +285,7 @@ func sanitizeEmployee(emp db.GetEmployeeRow) employeeResponse {
 		UnitKerja:        emp.UnitKerja,
 		EmploymentType:   emp.EmploymentType,
 		PusakaUsername:   emp.PusakaUsername,
+		PusakaIsEnabled: emp.PusakaIsEnabled,
 		PusakaEligible:   emp.EmploymentType == "pns" || emp.EmploymentType == "pppk",
 		HasPusakaAccount: emp.PusakaUsername != "",
 		IsActive:         emp.IsActive,
@@ -274,6 +304,7 @@ func sanitizeEmployees(employees []db.ListEmployeesRow) []employeeResponse {
 			UnitKerja:        emp.UnitKerja,
 			EmploymentType:   emp.EmploymentType,
 			PusakaUsername:   emp.PusakaUsername,
+			PusakaIsEnabled: emp.PusakaIsEnabled,
 			PusakaEligible:   emp.EmploymentType == "pns" || emp.EmploymentType == "pppk",
 			HasPusakaAccount: emp.PusakaUsername != "",
 			IsActive:         emp.IsActive,

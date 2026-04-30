@@ -25,3 +25,19 @@ export const PUT = async (event: RequestEvent) => {
 		return handleRouteError(e, 'pusaka/employees/:id PUT');
 	}
 };
+
+export const PATCH = async (event: RequestEvent) => {
+	try {
+		const { id } = event.params;
+		const { is_enabled } = await event.request.json() as { is_enabled?: boolean };
+		if (typeof is_enabled !== 'boolean') return json({ error: 'is_enabled wajib boolean' }, { status: 400 });
+		const result = await proxy(event).patch(`/api/pusaka/employees/${id}/account-status`, { is_enabled });
+		return json(result);
+	} catch (e) {
+		if (e instanceof ApiError && e.status === 404)
+			return json({ error: 'Pegawai tidak ditemukan' }, { status: 404 });
+		if (e instanceof ApiError && e.status === 400)
+			return json({ error: e.message }, { status: 400 });
+		return handleRouteError(e, 'pusaka/employees/:id PATCH');
+	}
+};

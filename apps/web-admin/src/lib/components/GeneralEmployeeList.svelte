@@ -13,6 +13,7 @@
     employment_type: string;
     pusaka_eligible: boolean;
     has_pusaka_account: boolean;
+    pusaka_is_enabled: boolean;
     is_active: boolean;
   }
 
@@ -23,6 +24,13 @@
 
   let confirmId = $state<string | null>(null);
   let busyId = $state<string | null>(null);
+  let filterEmploymentType = $state('');
+
+  let filteredEmployees = $derived(
+    filterEmploymentType
+      ? employees.filter((employee) => employee.employment_type === filterEmploymentType)
+      : employees
+  );
 
   function employmentLabel(value: string) {
     return { pns: 'PNS', pppk: 'PPPK', honorer: 'Honorer', lainnya: 'Lainnya' }[value] ?? value;
@@ -68,7 +76,16 @@
         <Card.Title class="text-base">Master Pegawai Sekolah</Card.Title>
         <Card.Description>Menampilkan seluruh pegawai sekolah. Operasional akun, jadwal, dan job PUSAKA dikelola dari menu PUSAKA.</Card.Description>
       </div>
-      <Badge variant="secondary">{employees.length} pegawai</Badge>
+      <div class="flex items-center gap-2">
+        <select bind:value={filterEmploymentType} class="rounded-md border border-input bg-background px-3 py-2 text-sm">
+          <option value="">Semua status</option>
+          <option value="pns">PNS</option>
+          <option value="pppk">PPPK</option>
+          <option value="honorer">Honorer</option>
+          <option value="lainnya">Lainnya</option>
+        </select>
+        <Badge variant="secondary">{filteredEmployees.length} pegawai</Badge>
+      </div>
     </div>
   </Card.Header>
   <Card.Content class="overflow-x-auto p-0">
@@ -83,7 +100,7 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each employees as e (e.id)}
+        {#each filteredEmployees as e (e.id)}
           <Table.Row>
             <Table.Cell>
               <div class="font-medium">{e.nama}</div>
@@ -103,7 +120,11 @@
             <Table.Cell>
               {#if e.pusaka_eligible}
                 {#if e.has_pusaka_account}
-                  <Badge variant="outline" class="border-emerald-300 text-emerald-700">Terkonfigurasi</Badge>
+                  {#if e.pusaka_is_enabled}
+                    <Badge variant="outline" class="border-emerald-300 text-emerald-700">Terkonfigurasi & aktif</Badge>
+                  {:else}
+                    <Badge variant="secondary">Terkonfigurasi, dinonaktifkan</Badge>
+                  {/if}
                 {:else}
                   <Badge variant="secondary">Eligible, belum setup</Badge>
                 {/if}

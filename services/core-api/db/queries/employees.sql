@@ -2,6 +2,7 @@
 SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type,
        COALESCE(pa.pusaka_username, '') AS pusaka_username,
        COALESCE(pa.pusaka_password, '') AS pusaka_password,
+       COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled,
        e.is_active, e.created_at, e.updated_at
 FROM employees e
 LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
@@ -11,6 +12,7 @@ ORDER BY nama ASC;
 SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type,
        COALESCE(pa.pusaka_username, '') AS pusaka_username,
        COALESCE(pa.pusaka_password, '') AS pusaka_password,
+       COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled,
        e.is_active, e.created_at, e.updated_at
 FROM employees e
 JOIN pusaka_accounts pa ON pa.employee_id = e.id
@@ -24,6 +26,7 @@ ORDER BY nama ASC;
 SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type,
        COALESCE(pa.pusaka_username, '') AS pusaka_username,
        COALESCE(pa.pusaka_password, '') AS pusaka_password,
+       COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled,
        e.is_active, e.created_at, e.updated_at
 FROM employees e
 LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
@@ -52,7 +55,7 @@ DELETE FROM employees WHERE id = $1;
 SELECT COUNT(*) FROM employees;
 
 -- name: ListEmployeesWithStatus :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, COALESCE(pa.pusaka_username, '') AS pusaka_username, e.is_active, e.created_at,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
   COALESCE(
     (SELECT j.status::text FROM jobs j
      WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
@@ -84,7 +87,7 @@ LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
 ORDER BY e.created_at DESC;
 
 -- name: ListPusakaEligibleEmployeesWithStatus :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, COALESCE(pa.pusaka_username, '') AS pusaka_username, e.is_active, e.created_at,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
   COALESCE(
     (SELECT j.status::text FROM jobs j
      WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')

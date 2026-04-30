@@ -144,6 +144,7 @@ func main() {
 			r.Patch("/api/employees/{id}/status", empH.UpdateStatus)
 			r.Delete("/api/employees/{id}", empH.Delete)
 			r.Get("/api/pusaka/employees", empH.List)
+			r.Patch("/api/pusaka/employees/{id}/account-status", empH.UpdatePusakaAccountStatus)
 			r.Get("/api/pusaka/employees/{id}/schedules", empSchedH.List)
 			r.Post("/api/pusaka/employees/{id}/schedules", empSchedH.Upsert)
 			r.Delete("/api/pusaka/employees/{id}/schedules/{scheduleId}", empSchedH.Delete)
