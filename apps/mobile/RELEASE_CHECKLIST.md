@@ -44,6 +44,7 @@ build/app/outputs/flutter-apk/app-release.apk
 - [ ] restore sesi bekerja setelah app ditutup/buka lagi
 - [ ] submit berhasil saat koneksi stabil
 - [ ] panel warning muncul saat jaringan dimatikan sementara
+- [ ] hasil setiap perangkat dicatat di `DEVICE_TEST_MATRIX.md`
 
 ## Distribusi Internal
 

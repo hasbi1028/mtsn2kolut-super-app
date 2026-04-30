@@ -98,6 +98,8 @@ Catat:
 - apakah restore bekerja baik
 - apakah ada false positive yang terlalu sering membuat siswa tertahan
 
+Gunakan [DEVICE_TEST_MATRIX.md](./DEVICE_TEST_MATRIX.md) agar hasil antar perangkat tetap sebanding.
+
 ## 9. Kriteria Lulus Uji
 
 - login berhasil pada perangkat target utama

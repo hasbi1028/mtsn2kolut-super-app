@@ -160,6 +160,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Operator quick-start baseline** — `apps/mobile/OPERATOR_QUICKSTART.md` should exist as a short non-technical guide for pengawas/operator during BYOD field trials.
 - **BYOD trial-procedure baseline** — `apps/mobile/BYOD_TRIAL_PROCEDURE.md` should exist as the end-to-end school trial procedure covering operator, pengawas, siswa, disturbance simulation, and submit readiness.
 - **Backend payload-check baseline** — `docs/exam-api.md` should include a mobile compatibility checklist so exam-payload changes in the Go backend are reviewed against the live Flutter contract before release.
+- **Device-matrix baseline** — `apps/mobile/DEVICE_TEST_MATRIX.md` should exist as the structured per-vendor/per-device scorecard for BYOD field trials so hardware issues are tracked systematically, not only via ad-hoc notes.
 
 ### ✅ Sprint 15 — Library System (Done)
 - **Library schema** — `library_books` and `library_loans` tables (migration 027). No separate member table; loans reference existing `students` and `employees` via FK.
