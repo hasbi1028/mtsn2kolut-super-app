@@ -180,7 +180,7 @@
 						</div>
 						{#if questionPool.length === 0}
 							<p class="text-sm text-slate-400 py-4 text-center border rounded-md">
-								Belum ada soal berstatus "Aktif" untuk mata pelajaran ini
+								Belum ada soal berstatus "Terbit" untuk mata pelajaran ini
 							</p>
 						{:else}
 							<div class="border rounded-md max-h-64 overflow-y-auto">
@@ -193,7 +193,7 @@
 												{#if q.code}
 													<span class="text-xs text-slate-400 font-mono">{q.code}</span>
 												{/if}
-												<Badge variant="outline" class="text-xs py-0">{q.difficulty}</Badge>
+										<Badge variant="outline" class="text-xs py-0">{q.difficulty === 'easy' ? 'Mudah' : q.difficulty === 'medium' ? 'Sedang' : q.difficulty === 'hard' ? 'Sulit' : q.difficulty}</Badge>
 											</div>
 										</div>
 									</label>
@@ -270,7 +270,7 @@
 									{#if p.is_active}
 										<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
 									{:else}
-										<Badge variant="secondary">Tidak Aktif</Badge>
+										<Badge variant="secondary">Nonaktif</Badge>
 									{/if}
 								</Table.Cell>
 								<Table.Cell>
@@ -297,7 +297,7 @@
 								{#if p.is_active}
 									<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
 								{:else}
-									<Badge variant="secondary">Tidak Aktif</Badge>
+									<Badge variant="secondary">Nonaktif</Badge>
 								{/if}
 							</div>
 							<div class="mt-3 flex flex-wrap items-center gap-2">

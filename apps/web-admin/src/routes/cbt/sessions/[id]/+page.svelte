@@ -412,7 +412,7 @@
 			{#each [
 				{ label: 'Total Peserta', val: stats.total.toString() },
 				{ label: 'Sudah Submit', val: stats.submitted.toString() },
-				{ label: 'Rata-rata Skor', val: stats.total > 0 ? stats.avgScore.toFixed(1) : '—' },
+				{ label: 'Rata-rata Nilai', val: stats.total > 0 ? stats.avgScore.toFixed(1) : '—' },
 				{ label: 'Lulus (≥75)', val: `${stats.passing} / ${stats.submitted}` },
 			] as s}
 				<Card.Root class="border-green-100">
@@ -432,7 +432,7 @@
 					{ id: 'peserta', label: 'Peserta & Token' },
 					{ id: 'ruangan', label: 'Ruangan' },
 					{ id: 'proctoring', label: 'Proctoring' },
-					{ id: 'essay', label: 'Koreksi Essay' },
+					{ id: 'essay', label: 'Koreksi Uraian' },
 				] as tab}
 					<button
 						onclick={() => switchTab(tab.id as any)}
@@ -493,7 +493,7 @@
 		<!-- Tab: Peserta & Token -->
 		{:else if activeTab === 'peserta'}
 			<div class="flex gap-2 flex-wrap">
-				<Button variant="outline" size="sm" onclick={generateTokens}>⚡ Generate Token Massal</Button>
+				<Button variant="outline" size="sm" onclick={generateTokens}>⚡ Buat Token Massal</Button>
 				<Button variant="outline" size="sm" onclick={loadParticipants}>↻ Refresh</Button>
 			</div>
 			<Card.Root>
@@ -551,7 +551,7 @@
 												{#if p.token}
 													<Button variant="outline" size="sm" onclick={() => copyToken(p.token)}>Salin</Button>
 												{/if}
-											<Button variant="outline" size="sm" onclick={() => regenerateToken(p.id)}>Regenerate</Button>
+											<Button variant="outline" size="sm" onclick={() => regenerateToken(p.id)}>Buat Ulang</Button>
 										</div>
 									</Table.Cell>
 								</Table.Row>
@@ -590,7 +590,7 @@
 									🔀 Acak Peserta ke Ruangan
 								</LoadingButton>
 								<LoadingButton variant="outline" loading={seatBusy} loadingLabel="Mengatur..." disabled={seatBusy} onclick={autoAssignSeats}>
-									🪑 Atur No Meja
+									🪑 Atur Nomor Meja
 								</LoadingButton>
 							{/if}
 					</div>
@@ -674,7 +674,7 @@
 		<!-- Tab: Proctoring -->
 		{:else if activeTab === 'proctoring'}
 			<div class="flex items-center justify-between mb-4">
-				<p class="text-sm text-muted-foreground">Auto-refresh setiap 15 detik</p>
+				<p class="text-sm text-muted-foreground">Pembaruan otomatis setiap 15 detik</p>
 				<Button variant="outline" size="sm" onclick={loadProctoring}>↻ Refresh Sekarang</Button>
 			</div>
 			<Card.Root>
@@ -723,7 +723,7 @@
 												variant="outline" size="sm"
 												class={p.suspicious_flag ? 'border-red-400 text-red-700 bg-red-50' : 'border-slate-200 text-slate-500'}
 												onclick={() => flagParticipant(p.participant_id, !p.suspicious_flag)}>
-											{p.suspicious_flag ? '⚑ Unflag' : '⚐ Flag'}
+											{p.suspicious_flag ? '⚑ Hapus Tanda' : '⚐ Tandai'}
 										</Button>
 									</Table.Cell>
 								</Table.Row>
@@ -741,7 +741,7 @@
 		{:else if activeTab === 'essay'}
 			<Card.Root>
 				<Card.Header class="pb-2">
-					<Card.Title class="text-base">Koreksi Jawaban Essay ({essays.length} belum dinilai)</Card.Title>
+					<Card.Title class="text-base">Koreksi Jawaban Uraian ({essays.length} belum dinilai)</Card.Title>
 				</Card.Header>
 				<Card.Content class="p-0 overflow-x-auto">
 					<Table.Root>
@@ -775,7 +775,7 @@
 							{:else}
 								<Table.Row>
 									<Table.Cell colspan={5} class="text-center text-slate-400 py-12">
-										Tidak ada jawaban essay yang perlu dikoreksi.
+										Tidak ada jawaban uraian yang perlu dikoreksi.
 									</Table.Cell>
 								</Table.Row>
 							{/each}
