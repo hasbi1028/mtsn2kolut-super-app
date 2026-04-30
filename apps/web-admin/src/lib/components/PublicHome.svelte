@@ -19,7 +19,7 @@
 	} = $props();
 
 	function fmtDate(value: string | null) {
-		if (!value) return 'Belum dipublikasikan';
+		if (!value) return 'Belum tayang';
 		return new Date(value).toLocaleDateString('id-ID', {
 			timeZone: 'Asia/Makassar',
 			year: 'numeric',
@@ -52,10 +52,10 @@
 				</div>
 				<div class="flex flex-wrap gap-3">
 					<a href="/ppdb" class="rounded-full bg-[oklch(0.38_0.13_145)] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:brightness-105">
-						Daftar PPDB Sekarang
+						Lihat Info & Daftar PPDB
 					</a>
 					<a href="/berita" class="rounded-full border border-emerald-200 px-5 py-3 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">
-						Lihat Berita Madrasah
+						Baca Berita Madrasah
 					</a>
 				</div>
 			</div>
@@ -88,7 +88,7 @@
 		<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
 			<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Informasi Resmi</p>
 			<p class="mt-3 text-lg font-semibold text-slate-900">Berita dan Pengumuman</p>
-			<p class="mt-2 text-sm leading-7 text-slate-600">Semua informasi sekolah dikelola dari panel admin dan dipublikasikan melalui alur draft ke publish.</p>
+			<p class="mt-2 text-sm leading-7 text-slate-600">Semua informasi sekolah dikelola dari panel admin dan diterbitkan melalui alur editorial yang rapi.</p>
 		</div>
 		<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
 			<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Layanan</p>
@@ -118,7 +118,7 @@
 					{/each}
 				{:else}
 					<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-						Belum ada berita yang dipublikasikan.
+						Belum ada berita yang tayang.
 					</div>
 				{/if}
 			</div>
@@ -150,7 +150,7 @@
 					{/each}
 				{:else}
 					<div class="rounded-2xl border border-dashed border-amber-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
-						Belum ada pengumuman yang dipublikasikan.
+						Belum ada pengumuman yang tayang.
 					</div>
 				{/if}
 			</div>

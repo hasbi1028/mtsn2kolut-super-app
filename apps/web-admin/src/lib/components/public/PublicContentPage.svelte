@@ -28,7 +28,7 @@
 			<p class="max-w-3xl text-lg leading-8 text-slate-600">{content.excerpt}</p>
 		{/if}
 		{#if content.published_at}
-			<p class="text-sm text-slate-500">{fmtDate(content.published_at)}</p>
+			<p class="text-sm text-slate-500">Tayang {fmtDate(content.published_at)}</p>
 		{/if}
 	</header>
 

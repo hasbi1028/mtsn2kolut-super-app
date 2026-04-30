@@ -23,7 +23,7 @@
 	} = $props();
 
 	function fmtDate(value: string | null) {
-		if (!value) return 'Belum dipublikasikan';
+		if (!value) return 'Belum tayang';
 		return new Date(value).toLocaleDateString('id-ID', {
 			timeZone: 'Asia/Makassar',
 			year: 'numeric',
@@ -54,12 +54,12 @@
 					<p class="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">{fmtDate(item.published_at)}</p>
 					<h2 class="text-xl font-semibold leading-8 text-slate-900">{item.title}</h2>
 					<p class="text-sm leading-7 text-slate-600">{item.excerpt || 'Konten belum memiliki ringkasan.'}</p>
-					<p class="text-sm font-semibold text-emerald-800 group-hover:text-emerald-900">Baca selengkapnya →</p>
+					<p class="text-sm font-semibold text-emerald-800 group-hover:text-emerald-900">Lihat detail →</p>
 				</div>
 			</a>
 		{:else}
 			<div class="rounded-[1.75rem] border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500 md:col-span-2 xl:col-span-3">
-				Belum ada konten yang dipublikasikan.
+				Belum ada konten yang tayang.
 			</div>
 		{/each}
 	</div>
