@@ -3,6 +3,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 	import PublicHome from '$lib/components/PublicHome.svelte';
 
 	type WebsiteContent = {
@@ -75,6 +76,12 @@
 	const isParent = $derived(roles.includes('ortu'));
 	const isAdmin = $derived(roles.includes('admin'));
 	const isStaff = $derived(roles.includes('staf'));
+	const dashboardLoading = $derived(
+		(isGuru && !guruStats) ||
+		(isSiswa && !studentPortal) ||
+		(isParent && !parentPortal) ||
+		((isAdmin || isStaff) && !academicStats)
+	);
 
 	function parseData<T>(raw: unknown): T | null {
 		if (!raw || typeof raw !== 'object') return null;
@@ -169,7 +176,23 @@
 		{/if}
 	</div>
 
-	{#if isSiswa && studentPortal}
+	{#if isSiswa && dashboardLoading}
+		<div class="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
+			{#each Array.from({ length: 2 }) as _, index (`student-dashboard-skeleton-${index}`)}
+				<Card.Root class="border-slate-200">
+					<Card.Header class="space-y-2">
+						<Skeleton class="h-6 w-40" />
+						<Skeleton class="h-4 w-56" />
+					</Card.Header>
+					<Card.Content class="space-y-3">
+						<Skeleton class="h-6 w-32" />
+						<Skeleton class="h-4 w-full" />
+						<Skeleton class="h-16 w-full rounded-xl" />
+					</Card.Content>
+				</Card.Root>
+			{/each}
+		</div>
+	{:else if isSiswa && studentPortal}
 		<div class="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
 			<Card.Root class="border-emerald-100">
 				<Card.Header>
@@ -223,7 +246,23 @@
 		</div>
 	{/if}
 
-	{#if isParent && parentPortal}
+	{#if isParent && dashboardLoading}
+		<div class="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
+			{#each Array.from({ length: 2 }) as _, index (`parent-dashboard-skeleton-${index}`)}
+				<Card.Root class="border-slate-200">
+					<Card.Header class="space-y-2">
+						<Skeleton class="h-6 w-36" />
+						<Skeleton class="h-4 w-44" />
+					</Card.Header>
+					<Card.Content class="space-y-3">
+						<Skeleton class="h-4 w-full" />
+						<Skeleton class="h-4 w-4/5" />
+						<Skeleton class="h-16 w-full rounded-xl" />
+					</Card.Content>
+				</Card.Root>
+			{/each}
+		</div>
+	{:else if isParent && parentPortal}
 		<div class="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
 			<Card.Root class="border-emerald-100">
 				<Card.Header>
@@ -262,7 +301,18 @@
 		</div>
 	{/if}
 
-	{#if isGuru && guruStats}
+	{#if isGuru && dashboardLoading}
+		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			{#each Array.from({ length: 4 }) as _, index (`guru-stat-skeleton-${index}`)}
+				<Card.Root class="border-slate-200">
+					<Card.Content class="space-y-2 pt-4">
+						<Skeleton class="h-4 w-28" />
+						<Skeleton class="h-8 w-16" />
+					</Card.Content>
+				</Card.Root>
+			{/each}
+		</div>
+	{:else if isGuru && guruStats}
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sesi Ujian Aktif</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.active_sessions}</p></Card.Content></Card.Root>
 			<Card.Root class="border-amber-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Essay Belum Dikoreksi</p><p class="mt-1 text-3xl font-bold text-amber-700">{guruStats.ungraded_essays}</p></Card.Content></Card.Root>
@@ -271,7 +321,18 @@
 		</div>
 	{/if}
 
-	{#if isAdmin || isStaff}
+	{#if (isAdmin || isStaff) && dashboardLoading}
+		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			{#each Array.from({ length: 4 }) as _, index (`admin-stat-skeleton-${index}`)}
+				<Card.Root class="border-slate-200">
+					<Card.Content class="space-y-2 pt-4">
+						<Skeleton class="h-4 w-28" />
+						<Skeleton class="h-8 w-16" />
+					</Card.Content>
+				</Card.Root>
+			{/each}
+		</div>
+	{:else if isAdmin || isStaff}
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Siswa</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_students ?? '—'}</p></Card.Content></Card.Root>
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Kelas Aktif</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_classes ?? '—'}</p></Card.Content></Card.Root>

@@ -7,6 +7,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/components/ui/sonner';
 	import QueueMonitor from '$lib/components/QueueMonitor.svelte';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	interface QueueStats {
 		queued: number; running: number; success: number;
@@ -124,21 +125,17 @@
 			<p class="text-sm text-muted-foreground mt-1">Monitor dan kontrol sinkronisasi data kehadiran dari PUSAKA Kemenag</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			<Button variant="outline" size="sm" onclick={triggerSched} disabled={busy.sched}>
-				{busy.sched ? '...' : '⚡ Trigger Scheduler'}
-			</Button>
-			<Button size="sm" onclick={runRekap} disabled={busy.rekap}>
-				{busy.rekap ? '...' : '▶ Jalankan Rekap'}
-			</Button>
+			<LoadingButton variant="outline" size="sm" onclick={triggerSched} loading={busy.sched} loadingLabel="Memproses..." label="⚡ Trigger Scheduler" />
+			<LoadingButton size="sm" onclick={runRekap} loading={busy.rekap} loadingLabel="Memproses..." label="▶ Jalankan Rekap" />
 			{#if confirmKey === 'cancel_all'}
 				<span class="self-center text-xs text-amber-700">Batalkan semua antrian?</span>
-				<Button size="sm" variant="destructive" onclick={cancelAll}>Ya</Button>
+				<LoadingButton size="sm" variant="destructive" onclick={cancelAll} loading={busy.cancel_all} loadingLabel="Membatalkan..." label="Ya" />
 				<Button size="sm" variant="ghost" onclick={() => (confirmKey = '')}>Tidak</Button>
 			{:else}
-				<Button size="sm" variant="outline" onclick={() => (confirmKey = 'cancel_all')} disabled={busy.cancel_all}
+				<LoadingButton size="sm" variant="outline" onclick={() => (confirmKey = 'cancel_all')} loading={busy.cancel_all} loadingLabel="Memproses..." disabled={busy.cancel_all}
 					class="text-destructive border-destructive/40 hover:bg-destructive/10">
 					✕ Cancel All
-				</Button>
+				</LoadingButton>
 			{/if}
 		</div>
 	</div>

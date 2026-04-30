@@ -5,6 +5,7 @@
   import { Input } from '$lib/components/ui/input';
   import { Button } from '$lib/components/ui/button';
   import { toast } from '$lib/components/ui/sonner';
+  import { Skeleton } from '$lib/components/ui/skeleton';
   import WorkerSettings from '$lib/components/WorkerSettings.svelte';
   import ScheduleList   from '$lib/components/ScheduleList.svelte';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
@@ -242,7 +243,21 @@
     </Card.Header>
     <Card.Content>
       {#if sessionsLoading}
-        <p class="text-sm text-muted-foreground">Memuat sesi…</p>
+        <div class="space-y-3">
+          {#each Array.from({ length: 3 }) as _, index (`session-skeleton-${index}`)}
+            <div class="rounded-lg border border-slate-200 px-4 py-3">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="space-y-2">
+                  <Skeleton class="h-5 w-36" />
+                  <Skeleton class="h-4 w-28" />
+                  <Skeleton class="h-4 w-40" />
+                  <Skeleton class="h-4 w-48" />
+                </div>
+                <Skeleton class="h-9 w-24" />
+              </div>
+            </div>
+          {/each}
+        </div>
       {:else if sessions.length === 0}
         <p class="text-sm text-muted-foreground">Belum ada sesi aktif tercatat.</p>
       {:else}
