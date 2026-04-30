@@ -1,0 +1,733 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../exam_api.dart';
+import '../models.dart';
+import 'exam_login_screen.dart';
+
+class ExamShellScreen extends StatefulWidget {
+  const ExamShellScreen({
+    super.key,
+    required this.client,
+    required this.examToken,
+    required this.initialPayload,
+    required this.deviceFingerprint,
+  });
+
+  final ExamApiClient client;
+  final String examToken;
+  final ExamLoginPayload initialPayload;
+  final String deviceFingerprint;
+
+  @override
+  State<ExamShellScreen> createState() => _ExamShellScreenState();
+}
+
+class _ExamShellScreenState extends State<ExamShellScreen>
+    with WidgetsBindingObserver {
+  late final Map<String, String> _answers;
+  late final List<TextEditingController> _essayControllers;
+
+  int _currentQuestionIndex = 0;
+  int _answeredCount = 0;
+  int _timeRemainingSeconds = 0;
+  bool _isSavingAnswer = false;
+  bool _isSubmitting = false;
+  bool _isSyncingStatus = false;
+  bool _isSubmitted = false;
+  String? _statusMessage;
+  String? _errorMessage;
+  Timer? _countdownTimer;
+  Timer? _heartbeatTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _answers = <String, String>{};
+    _essayControllers = widget.initialPayload.questions
+        .map((_) => TextEditingController())
+        .toList();
+    _answeredCount = widget.initialPayload.answeredCount;
+    _timeRemainingSeconds = widget.initialPayload.timeRemainingSeconds;
+    _startCountdown();
+    _startHeartbeat();
+    _syncStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _countdownTimer?.cancel();
+    _heartbeatTimer?.cancel();
+    for (final controller in _essayControllers) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      unawaited(
+        widget.client.sendEvent(
+          token: widget.examToken,
+          eventType: 'app_switch',
+          data: <String, Object?>{
+            'state': state.name,
+            'device_fingerprint': widget.deviceFingerprint,
+          },
+        ),
+      );
+    }
+  }
+
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _isSubmitted) {
+        timer.cancel();
+        return;
+      }
+      if (_timeRemainingSeconds <= 0) {
+        timer.cancel();
+        _submit(autoSubmit: true);
+        return;
+      }
+      setState(() {
+        _timeRemainingSeconds -= 1;
+      });
+    });
+  }
+
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 45), (_) async {
+      if (_isSubmitted) {
+        return;
+      }
+      try {
+        await widget.client.sendHeartbeat(widget.examToken);
+      } catch (_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _errorMessage = 'Koneksi ke server ujian sempat terputus.';
+        });
+      }
+    });
+  }
+
+  Future<void> _syncStatus() async {
+    setState(() {
+      _isSyncingStatus = true;
+    });
+    try {
+      final status = await widget.client.getStatus(widget.examToken);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _answeredCount = status.answeredCount;
+        _timeRemainingSeconds = status.timeRemainingSeconds;
+        _isSubmitted = status.isSubmitted;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = 'Status server belum bisa diperbarui.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSyncingStatus = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _selectOption(ExamQuestion question, String answer) async {
+    if (_isSubmitted) {
+      return;
+    }
+    final wasAnswered = _answers.containsKey(question.id);
+    setState(() {
+      _answers[question.id] = answer;
+      if (!wasAnswered) {
+        _answeredCount += 1;
+      }
+      _isSavingAnswer = true;
+      _statusMessage = 'Jawaban sedang disimpan...';
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.client.saveAnswer(
+        token: widget.examToken,
+        questionId: question.id,
+        answer: answer,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _statusMessage = 'Jawaban tersimpan ke server.';
+      });
+    } on ExamApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+        if (!wasAnswered) {
+          _answeredCount -= 1;
+          _answers.remove(question.id);
+        }
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingAnswer = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveEssayAnswer() async {
+    final question = widget.initialPayload.questions[_currentQuestionIndex];
+    final answer = _essayControllers[_currentQuestionIndex].text.trim();
+
+    if (answer.isEmpty) {
+      setState(() {
+        _errorMessage = 'Isi jawaban uraian terlebih dahulu.';
+      });
+      return;
+    }
+
+    await _selectOption(question, answer);
+  }
+
+  Future<void> _submit({bool autoSubmit = false}) async {
+    if (_isSubmitting || _isSubmitted) {
+      return;
+    }
+
+    if (!autoSubmit) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('Kirim jawaban akhir?'),
+            content: Text(
+              'Jawaban yang sudah dikirim tidak bisa diubah lagi. '
+              'Anda sudah menjawab $_answeredCount dari ${widget.initialPayload.totalQuestions} soal.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Kirim Ujian'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirmed != true) {
+        return;
+      }
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _statusMessage = autoSubmit
+          ? 'Waktu habis. Jawaban sedang dikirim otomatis...'
+          : 'Jawaban akhir sedang dikirim...';
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.client.submit(widget.examToken);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isSubmitted = true;
+        _statusMessage = 'Ujian berhasil dikirim.';
+      });
+      if (!autoSubmit) {
+        await widget.client.sendEvent(
+          token: widget.examToken,
+          eventType: 'warning',
+          data: const <String, Object?>{'reason': 'manual_submit'},
+        );
+      }
+    } on ExamApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.message;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  String _formatDuration(int seconds) {
+    final duration = Duration(seconds: seconds.clamp(0, 999999));
+    final hours = duration.inHours.toString().padLeft(2, '0');
+    final minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
+    final secs = (duration.inSeconds % 60).toString().padLeft(2, '0');
+    return '$hours:$minutes:$secs';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final payload = widget.initialPayload;
+    final currentQuestion = payload.questions[_currentQuestionIndex];
+    final theme = Theme.of(context);
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop || _isSubmitted) {
+          return;
+        }
+        final messenger = ScaffoldMessenger.of(context);
+        await widget.client.sendEvent(
+          token: widget.examToken,
+          eventType: 'warning',
+          data: const <String, Object?>{'reason': 'back_button_attempt'},
+        );
+        if (!mounted) {
+          return;
+        }
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Tombol kembali dinonaktifkan selama ujian berlangsung.',
+            ),
+          ),
+        );
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(payload.session.title),
+          actions: [
+            IconButton(
+              onPressed: _isSyncingStatus ? null : _syncStatus,
+              icon: _isSyncingStatus
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.sync),
+              tooltip: 'Perbarui status',
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 1080;
+              final sidePanel = _buildSidePanel(theme, payload);
+              final content = _buildQuestionArea(theme, currentQuestion);
+
+              return Padding(
+                padding: const EdgeInsets.all(16),
+                child: wide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(width: 290, child: sidePanel),
+                          const SizedBox(width: 16),
+                          Expanded(child: content),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          sidePanel,
+                          const SizedBox(height: 16),
+                          Expanded(child: content),
+                        ],
+                      ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSidePanel(ThemeData theme, ExamLoginPayload payload) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              payload.student.nama,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text('NIS ${payload.student.nis}'),
+            const SizedBox(height: 4),
+            Text('Ruang ${payload.room?.roomName ?? '-'}'),
+            const SizedBox(height: 20),
+            _StatTile(
+              label: 'Sisa waktu',
+              value: _formatDuration(_timeRemainingSeconds),
+              accent: _timeRemainingSeconds <= 300,
+            ),
+            const SizedBox(height: 12),
+            _StatTile(
+              label: 'Progres',
+              value: '$_answeredCount / ${payload.totalQuestions}',
+            ),
+            const SizedBox(height: 20),
+            if (_statusMessage != null)
+              _InlineMessage(
+                tone: BannerTone.success,
+                message: _statusMessage!,
+              ),
+            if (_errorMessage != null) ...[
+              if (_statusMessage != null) const SizedBox(height: 10),
+              _InlineMessage(tone: BannerTone.error, message: _errorMessage!),
+            ],
+            const SizedBox(height: 20),
+            Text(
+              'Navigasi soal',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: GridView.builder(
+                itemCount: payload.questions.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 1,
+                ),
+                itemBuilder: (context, index) {
+                  final question = payload.questions[index];
+                  final selected = index == _currentQuestionIndex;
+                  final answered = _answers.containsKey(question.id);
+                  final background = selected
+                      ? theme.colorScheme.primary
+                      : answered
+                      ? theme.colorScheme.primary.withValues(alpha: 0.12)
+                      : const Color(0xFFF1F4ED);
+                  final foreground = selected
+                      ? theme.colorScheme.onPrimary
+                      : answered
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurface;
+
+                  return InkWell(
+                    onTap: () {
+                      setState(() {
+                        _currentQuestionIndex = index;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Ink(
+                      decoration: BoxDecoration(
+                        color: background,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${index + 1}',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: foreground,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _isSubmitting || _isSubmitted ? null : _submit,
+                icon: _isSubmitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.task_alt),
+                label: Text(_isSubmitted ? 'Ujian Terkirim' : 'Kirim Ujian'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuestionArea(ThemeData theme, ExamQuestion question) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Soal ${_currentQuestionIndex + 1}',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              question.questionText.isEmpty
+                  ? 'Soal belum memiliki teks.'
+                  : question.questionText,
+              style: theme.textTheme.titleLarge?.copyWith(
+                height: 1.45,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 22),
+            Expanded(
+              child: question.isEssay
+                  ? _buildEssayQuestion(theme, question)
+                  : _buildMultipleChoiceQuestion(theme, question),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _currentQuestionIndex == 0
+                      ? null
+                      : () {
+                          setState(() {
+                            _currentQuestionIndex -= 1;
+                          });
+                        },
+                  icon: const Icon(Icons.chevron_left),
+                  label: const Text('Sebelumnya'),
+                ),
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  onPressed:
+                      _currentQuestionIndex ==
+                          widget.initialPayload.questions.length - 1
+                      ? null
+                      : () {
+                          setState(() {
+                            _currentQuestionIndex += 1;
+                          });
+                        },
+                  icon: const Icon(Icons.chevron_right),
+                  label: const Text('Berikutnya'),
+                ),
+                const Spacer(),
+                if (_isSavingAnswer)
+                  Row(
+                    children: [
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('Menyimpan...', style: theme.textTheme.bodySmall),
+                    ],
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMultipleChoiceQuestion(ThemeData theme, ExamQuestion question) {
+    return ListView.separated(
+      itemCount: question.options.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final option = question.options[index];
+        final selectedAnswer = _answers[question.id];
+        final selected = selectedAnswer == option.label;
+
+        return InkWell(
+          onTap: () => _selectOption(question, option.label),
+          borderRadius: BorderRadius.circular(18),
+          child: Ink(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: selected
+                  ? theme.colorScheme.primary.withValues(alpha: 0.12)
+                  : const Color(0xFFF6F8F3),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: selected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outlineVariant,
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: selected
+                      ? theme.colorScheme.primary
+                      : Colors.white,
+                  foregroundColor: selected
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.primary,
+                  child: Text(option.label),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    option.text,
+                    style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEssayQuestion(ThemeData theme, ExamQuestion question) {
+    final controller = _essayControllers[_currentQuestionIndex];
+    final savedValue = _answers[question.id];
+    if (savedValue != null && controller.text != savedValue) {
+      controller.text = savedValue;
+      controller.selection = TextSelection.collapsed(
+        offset: controller.text.length,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: TextField(
+            controller: controller,
+            maxLines: null,
+            expands: true,
+            decoration: const InputDecoration(
+              alignLabelWithHint: true,
+              labelText: 'Jawaban uraian',
+              hintText: 'Tulis jawaban Anda di sini...',
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        FilledButton.icon(
+          onPressed: _isSavingAnswer || _isSubmitted ? null : _saveEssayAnswer,
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Simpan Jawaban'),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.label,
+    required this.value,
+    this.accent = false,
+  });
+
+  final String label;
+  final String value;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: accent ? Colors.red.shade50 : const Color(0xFFF6F8F3),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: theme.textTheme.bodySmall),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: accent ? Colors.red.shade700 : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineMessage extends StatelessWidget {
+  const _InlineMessage({required this.tone, required this.message});
+
+  final BannerTone tone;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = switch (tone) {
+      BannerTone.error => Colors.red.shade700,
+      BannerTone.success => const Color(0xFF0B7A3B),
+      BannerTone.info => theme.colorScheme.primary,
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Text(
+        message,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}

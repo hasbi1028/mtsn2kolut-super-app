@@ -11,7 +11,7 @@ Three runtime units deployed across 3 VPS:
 - **Web Admin** (SvelteKit) — admin & guru BFF
 - **Core API** (Go + sqlc + PostgreSQL) — backend, migrations, scheduler
 - **Pusaka Worker** (Playwright) — async PUSAKA attendance automation
-- **Flutter App** (planned) — student CBT client
+- **Flutter App** (initialized) — student CBT client
 
 ---
 
@@ -100,11 +100,11 @@ Three runtime units deployed across 3 VPS:
 - [x] Keep `/employees` as master pegawai umum and move PUSAKA account setup/operations to `/pusaka/employees`
 - [x] Remove legacy BFF aliases for employee-scoped PUSAKA actions under `/api/employees/{id}/*`
 
-### Sprint 7 — Flutter CBT App (MVP)
-- [ ] Initialize Flutter project
-- [ ] Student login screen
-- [ ] Question renderer
-- [ ] Anti-cheat
+### ✅ Sprint 7 — Flutter CBT App (MVP) (COMPLETE)
+- [x] Initialize Flutter project in `apps/mobile`
+- [x] Student login screen with token + configurable API base URL
+- [x] Question renderer for pilihan ganda and uraian with per-question save flow
+- [x] Anti-cheat baseline via lifecycle/app-switch event logging, disabled back navigation, heartbeat, and server status sync
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

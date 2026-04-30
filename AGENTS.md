@@ -9,7 +9,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 | **Web Admin** | `apps/web-admin` | SvelteKit 2 + Svelte 5 (runes) + Tailwind v4 + shadcn-svelte | Admin/guru BFF frontend, session/cookie owner |
 | **Core API** | `services/core-api` | Go 1.26 + Chi v5 + sqlc + pgx + PostgreSQL | Domain logic, database owner, scheduler, queue |
 | **Pusaka Worker** | `services/pusaka-worker` | TypeScript + Playwright (Chromium) | Async job consumer for PUSAKA attendance automation |
-| **Flutter App** *(planned)* | `apps/mobile` *(not yet created)* | Flutter + Serverpod *(not yet created)* | Student-facing CBT exam client |
+| **Flutter App** | `apps/mobile` | Flutter | Student-facing CBT exam client |
 
 ## Non-Negotiable Architecture Rules
 
@@ -163,7 +163,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 
 ### 📋 Planned Future Phases
 1. **Academic Foundation & RBAC Expansion** — Unified `users` table with many-to-many roles (`admin`, `teacher`, `student`, `staff`, `parent`). Student lifecycle (`active`, `alumni`, `prospective`) and Parent-child linking.
-2. **Flutter Student App** — CBT exam client for students on tablet/phone (API sudah ready: `docs/exam-api.md`).
+2. **Flutter Student App Enhancements** — Build on top of the initialized CBT exam client in `apps/mobile` with stronger offline resilience, richer anti-cheat, and production packaging.
 3. **Real-time Proctoring** — WebSocket-based live monitoring.
 4. **Notifications & Reminders** — WhatsApp/Telegram for exam schedules, attendance.
 5. **Raport / Grade Management** — Academic grading, report cards integrated with CBT scores.
