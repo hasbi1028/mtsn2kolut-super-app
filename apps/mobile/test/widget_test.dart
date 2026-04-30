@@ -103,6 +103,9 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Matematika Kelas VIII'), findsOneWidget);
+    expect(find.text('Perlu perhatian koneksi'), findsOneWidget);
+    expect(find.textContaining('Kontak server 08:44'), findsOneWidget);
+    expect(find.textContaining('Gangguan 08:46'), findsOneWidget);
   });
 
   testWidgets('exam shell renders warning guidance notice', (tester) async {
@@ -173,6 +176,57 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('exam shell shows audio not-played state', (tester) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleAudioLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Audio soal belum diputar'), findsOneWidget);
+  });
+
+  testWidgets('exam shell shows audio played state from restored snapshot', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          restoredSnapshot: _sampleSnapshot(
+            playedAudioQuestionIds: const <String>['question-audio-1'],
+          ),
+          initialPayload: _sampleAudioLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Audio soal sudah diputar'), findsOneWidget);
   });
 
   testWidgets('exam shell renders stale supervisor attention panel', (
@@ -417,11 +471,48 @@ ExamLoginPayload _sampleLoginPayload() {
   );
 }
 
+ExamLoginPayload _sampleAudioLoginPayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-audio-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'Bahasa Indonesia Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-audio-1',
+        questionText: 'Dengarkan audio berikut lalu pilih jawaban yang benar.',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: '',
+        stimulusMediaUrl: '',
+        stemAudioUrl: 'https://cdn.example.com/audio/question-1.mp3',
+        stimulusAudioUrl: '',
+        options: [
+          ExamOption(label: 'A', text: 'Pilihan A'),
+          ExamOption(label: 'B', text: 'Pilihan B'),
+          ExamOption(label: 'C', text: 'Pilihan C'),
+          ExamOption(label: 'D', text: 'Pilihan D'),
+        ],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
 ExamSessionSnapshot _sampleSnapshot({
   String lastServerContactIso = '',
   String lastSyncFailureIso = '',
   int consecutiveSyncFailures = 0,
   Map<String, String> pendingAnswers = const <String, String>{},
+  List<String> playedAudioQuestionIds = const <String>[],
 }) {
   return ExamSessionSnapshot(
     baseUrl: 'http://10.0.2.2:8080',
@@ -437,7 +528,7 @@ ExamSessionSnapshot _sampleSnapshot({
     currentQuestionIndex: 0,
     answers: const <String, String>{},
     pendingAnswers: pendingAnswers,
-    playedAudioQuestionIds: const <String>[],
+    playedAudioQuestionIds: playedAudioQuestionIds,
     lastServerContactIso: lastServerContactIso,
     lastSyncFailureIso: lastSyncFailureIso,
     consecutiveSyncFailures: consecutiveSyncFailures,

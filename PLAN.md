@@ -151,6 +151,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Widget-test coverage for rendered warning/danger guidance panels inside the running Flutter exam shell
 - [x] Widget-test coverage for shell-level BYOD connection panels (`Waspada`, repeated sync warning, and degraded mode`) driven from restored snapshot state
 - [x] Widget-test coverage for the secured resume overlay in both pre-check and in-progress resume states
+- [x] Widget-test coverage for restore-health chips and per-question audio state in Flutter exam surfaces
 - [x] Handler-level unauthorized coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `answer` and `submit` routes
