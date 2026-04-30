@@ -13,23 +13,26 @@ import (
 
 const createWebsiteContent = `-- name: CreateWebsiteContent :one
 INSERT INTO website_contents (
-    kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by
+    kind, title, slug, excerpt, content_html, cover_image_url, is_featured, meta_title, meta_description, status, published_at, created_by, updated_by
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+RETURNING id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at, is_featured, meta_title, meta_description
 `
 
 type CreateWebsiteContentParams struct {
-	Kind          WebsiteContentKind   `json:"kind"`
-	Title         string               `json:"title"`
-	Slug          string               `json:"slug"`
-	Excerpt       string               `json:"excerpt"`
-	ContentHtml   string               `json:"content_html"`
-	CoverImageUrl string               `json:"cover_image_url"`
-	Status        WebsiteContentStatus `json:"status"`
-	PublishedAt   pgtype.Timestamptz   `json:"published_at"`
-	CreatedBy     string               `json:"created_by"`
-	UpdatedBy     string               `json:"updated_by"`
+	Kind            WebsiteContentKind   `json:"kind"`
+	Title           string               `json:"title"`
+	Slug            string               `json:"slug"`
+	Excerpt         string               `json:"excerpt"`
+	ContentHtml     string               `json:"content_html"`
+	CoverImageUrl   string               `json:"cover_image_url"`
+	IsFeatured      bool                 `json:"is_featured"`
+	MetaTitle       string               `json:"meta_title"`
+	MetaDescription string               `json:"meta_description"`
+	Status          WebsiteContentStatus `json:"status"`
+	PublishedAt     pgtype.Timestamptz   `json:"published_at"`
+	CreatedBy       string               `json:"created_by"`
+	UpdatedBy       string               `json:"updated_by"`
 }
 
 func (q *Queries) CreateWebsiteContent(ctx context.Context, arg CreateWebsiteContentParams) (WebsiteContent, error) {
@@ -40,6 +43,9 @@ func (q *Queries) CreateWebsiteContent(ctx context.Context, arg CreateWebsiteCon
 		arg.Excerpt,
 		arg.ContentHtml,
 		arg.CoverImageUrl,
+		arg.IsFeatured,
+		arg.MetaTitle,
+		arg.MetaDescription,
 		arg.Status,
 		arg.PublishedAt,
 		arg.CreatedBy,
@@ -60,6 +66,9 @@ func (q *Queries) CreateWebsiteContent(ctx context.Context, arg CreateWebsiteCon
 		&i.UpdatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsFeatured,
+		&i.MetaTitle,
+		&i.MetaDescription,
 	)
 	return i, err
 }
@@ -75,7 +84,7 @@ func (q *Queries) DeleteWebsiteContent(ctx context.Context, id pgtype.UUID) erro
 }
 
 const getPublishedWebsiteContentBySlug = `-- name: GetPublishedWebsiteContentBySlug :one
-SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at
+SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at, is_featured, meta_title, meta_description
 FROM website_contents
 WHERE kind::TEXT = $1
   AND slug = $2
@@ -104,12 +113,15 @@ func (q *Queries) GetPublishedWebsiteContentBySlug(ctx context.Context, arg GetP
 		&i.UpdatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsFeatured,
+		&i.MetaTitle,
+		&i.MetaDescription,
 	)
 	return i, err
 }
 
 const getWebsiteContent = `-- name: GetWebsiteContent :one
-SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at
+SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at, is_featured, meta_title, meta_description
 FROM website_contents
 WHERE id = $1
 `
@@ -131,16 +143,71 @@ func (q *Queries) GetWebsiteContent(ctx context.Context, id pgtype.UUID) (Websit
 		&i.UpdatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsFeatured,
+		&i.MetaTitle,
+		&i.MetaDescription,
 	)
 	return i, err
 }
 
-const listPublishedWebsiteContents = `-- name: ListPublishedWebsiteContents :many
-SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at
+const listFeaturedWebsiteContents = `-- name: ListFeaturedWebsiteContents :many
+SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at, is_featured, meta_title, meta_description
 FROM website_contents
 WHERE kind::TEXT = $1
   AND status = 'published'
-ORDER BY COALESCE(published_at, created_at) DESC, created_at DESC
+  AND is_featured = TRUE
+ORDER BY COALESCE(published_at, created_at) DESC
+LIMIT $2
+`
+
+type ListFeaturedWebsiteContentsParams struct {
+	KindFilter WebsiteContentKind `json:"kind_filter"`
+	LimitCount int32              `json:"limit_count"`
+}
+
+func (q *Queries) ListFeaturedWebsiteContents(ctx context.Context, arg ListFeaturedWebsiteContentsParams) ([]WebsiteContent, error) {
+	rows, err := q.db.Query(ctx, listFeaturedWebsiteContents, arg.KindFilter, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WebsiteContent{}
+	for rows.Next() {
+		var i WebsiteContent
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.Title,
+			&i.Slug,
+			&i.Excerpt,
+			&i.ContentHtml,
+			&i.CoverImageUrl,
+			&i.Status,
+			&i.PublishedAt,
+			&i.CreatedBy,
+			&i.UpdatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.IsFeatured,
+			&i.MetaTitle,
+			&i.MetaDescription,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublishedWebsiteContents = `-- name: ListPublishedWebsiteContents :many
+SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at, is_featured, meta_title, meta_description
+FROM website_contents
+WHERE kind::TEXT = $1
+  AND status = 'published'
+ORDER BY is_featured DESC, COALESCE(published_at, created_at) DESC, created_at DESC
 LIMIT $2
 `
 
@@ -172,6 +239,9 @@ func (q *Queries) ListPublishedWebsiteContents(ctx context.Context, arg ListPubl
 			&i.UpdatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.IsFeatured,
+			&i.MetaTitle,
+			&i.MetaDescription,
 		); err != nil {
 			return nil, err
 		}
@@ -184,7 +254,7 @@ func (q *Queries) ListPublishedWebsiteContents(ctx context.Context, arg ListPubl
 }
 
 const listWebsiteContents = `-- name: ListWebsiteContents :many
-SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at
+SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at, is_featured, meta_title, meta_description
 FROM website_contents
 WHERE (
     $1::TEXT = '' OR kind::TEXT = $1
@@ -231,6 +301,9 @@ func (q *Queries) ListWebsiteContents(ctx context.Context, arg ListWebsiteConten
 			&i.UpdatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.IsFeatured,
+			&i.MetaTitle,
+			&i.MetaDescription,
 		); err != nil {
 			return nil, err
 		}
@@ -244,31 +317,37 @@ func (q *Queries) ListWebsiteContents(ctx context.Context, arg ListWebsiteConten
 
 const updateWebsiteContent = `-- name: UpdateWebsiteContent :one
 UPDATE website_contents
-SET kind            = $2,
-    title           = $3,
-    slug            = $4,
-    excerpt         = $5,
-    content_html    = $6,
-    cover_image_url = $7,
-    status          = $8,
-    published_at    = $9,
-    updated_by      = $10,
-    updated_at      = NOW()
+SET kind             = $2,
+    title            = $3,
+    slug             = $4,
+    excerpt          = $5,
+    content_html     = $6,
+    cover_image_url  = $7,
+    is_featured      = $8,
+    meta_title       = $9,
+    meta_description = $10,
+    status           = $11,
+    published_at     = $12,
+    updated_by       = $13,
+    updated_at       = NOW()
 WHERE id = $1
-RETURNING id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at
+RETURNING id, kind, title, slug, excerpt, content_html, cover_image_url, status, published_at, created_by, updated_by, created_at, updated_at, is_featured, meta_title, meta_description
 `
 
 type UpdateWebsiteContentParams struct {
-	ID            pgtype.UUID          `json:"id"`
-	Kind          WebsiteContentKind   `json:"kind"`
-	Title         string               `json:"title"`
-	Slug          string               `json:"slug"`
-	Excerpt       string               `json:"excerpt"`
-	ContentHtml   string               `json:"content_html"`
-	CoverImageUrl string               `json:"cover_image_url"`
-	Status        WebsiteContentStatus `json:"status"`
-	PublishedAt   pgtype.Timestamptz   `json:"published_at"`
-	UpdatedBy     string               `json:"updated_by"`
+	ID              pgtype.UUID          `json:"id"`
+	Kind            WebsiteContentKind   `json:"kind"`
+	Title           string               `json:"title"`
+	Slug            string               `json:"slug"`
+	Excerpt         string               `json:"excerpt"`
+	ContentHtml     string               `json:"content_html"`
+	CoverImageUrl   string               `json:"cover_image_url"`
+	IsFeatured      bool                 `json:"is_featured"`
+	MetaTitle       string               `json:"meta_title"`
+	MetaDescription string               `json:"meta_description"`
+	Status          WebsiteContentStatus `json:"status"`
+	PublishedAt     pgtype.Timestamptz   `json:"published_at"`
+	UpdatedBy       string               `json:"updated_by"`
 }
 
 func (q *Queries) UpdateWebsiteContent(ctx context.Context, arg UpdateWebsiteContentParams) (WebsiteContent, error) {
@@ -280,6 +359,9 @@ func (q *Queries) UpdateWebsiteContent(ctx context.Context, arg UpdateWebsiteCon
 		arg.Excerpt,
 		arg.ContentHtml,
 		arg.CoverImageUrl,
+		arg.IsFeatured,
+		arg.MetaTitle,
+		arg.MetaDescription,
 		arg.Status,
 		arg.PublishedAt,
 		arg.UpdatedBy,
@@ -299,6 +381,9 @@ func (q *Queries) UpdateWebsiteContent(ctx context.Context, arg UpdateWebsiteCon
 		&i.UpdatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsFeatured,
+		&i.MetaTitle,
+		&i.MetaDescription,
 	)
 	return i, err
 }

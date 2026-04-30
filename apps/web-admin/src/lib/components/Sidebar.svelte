@@ -25,7 +25,8 @@
 			group: 'Akademik',
 			items: [
 				{ href: '/academic',  label: 'Data Akademik', icon: 'book-open', roles: ['admin'] },
-				{ href: '/grades',    label: 'Nilai',         icon: 'clipboard', roles: ['admin', 'guru'] },
+				{ href: '/grades',        label: 'Nilai',        icon: 'clipboard', roles: ['admin', 'guru'] },
+				{ href: '/grades/rapor',  label: 'Cetak Rapor',  icon: 'printer',   roles: ['admin', 'guru'] },
 				{ href: '/students',  label: 'Siswa',         icon: 'users' },
 				{ href: '/parents',   label: 'Orang Tua',     icon: 'user-group', roles: ['admin', 'staf'] },
 			],

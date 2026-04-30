@@ -980,17 +980,20 @@ type UserAccountRole struct {
 }
 
 type WebsiteContent struct {
-	ID            pgtype.UUID          `json:"id"`
-	Kind          WebsiteContentKind   `json:"kind"`
-	Title         string               `json:"title"`
-	Slug          string               `json:"slug"`
-	Excerpt       string               `json:"excerpt"`
-	ContentHtml   string               `json:"content_html"`
-	CoverImageUrl string               `json:"cover_image_url"`
-	Status        WebsiteContentStatus `json:"status"`
-	PublishedAt   pgtype.Timestamptz   `json:"published_at"`
-	CreatedBy     string               `json:"created_by"`
-	UpdatedBy     string               `json:"updated_by"`
-	CreatedAt     pgtype.Timestamptz   `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz   `json:"updated_at"`
+	ID              pgtype.UUID          `json:"id"`
+	Kind            WebsiteContentKind   `json:"kind"`
+	Title           string               `json:"title"`
+	Slug            string               `json:"slug"`
+	Excerpt         string               `json:"excerpt"`
+	ContentHtml     string               `json:"content_html"`
+	CoverImageUrl   string               `json:"cover_image_url"`
+	Status          WebsiteContentStatus `json:"status"`
+	PublishedAt     pgtype.Timestamptz   `json:"published_at"`
+	CreatedBy       string               `json:"created_by"`
+	UpdatedBy       string               `json:"updated_by"`
+	CreatedAt       pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz   `json:"updated_at"`
+	IsFeatured      bool                 `json:"is_featured"`
+	MetaTitle       string               `json:"meta_title"`
+	MetaDescription string               `json:"meta_description"`
 }

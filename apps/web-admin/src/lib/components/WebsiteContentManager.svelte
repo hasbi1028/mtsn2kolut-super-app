@@ -18,6 +18,9 @@
 		excerpt: string;
 		content_html: string;
 		cover_image_url: string;
+		is_featured: boolean;
+		meta_title: string;
+		meta_description: string;
 		status: ContentStatus;
 		published_at: string | null;
 		updated_at: string;
@@ -40,6 +43,7 @@
 	let search = $state('');
 	let showDialog = $state(false);
 	let saving = $state(false);
+	let uploadingCover = $state(false);
 	let editingId = $state<string | null>(null);
 	let form = $state({
 		title: '',
@@ -47,6 +51,9 @@
 		excerpt: '',
 		content_html: '',
 		cover_image_url: '',
+		is_featured: false,
+		meta_title: '',
+		meta_description: '',
 		status: 'draft' as ContentStatus,
 	});
 
@@ -68,6 +75,9 @@
 			excerpt: '',
 			content_html: '',
 			cover_image_url: '',
+			is_featured: false,
+			meta_title: '',
+			meta_description: '',
 			status: 'draft',
 		};
 	}
@@ -85,6 +95,9 @@
 			excerpt: item.excerpt,
 			content_html: item.content_html,
 			cover_image_url: item.cover_image_url,
+			is_featured: item.is_featured ?? false,
+			meta_title: item.meta_title ?? '',
+			meta_description: item.meta_description ?? '',
 			status: item.status,
 		};
 		showDialog = true;
@@ -118,6 +131,28 @@
 			toast.error(`Gagal memuat ${title.toLowerCase()}.`);
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function uploadCoverImage(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		uploadingCover = true;
+		try {
+			const fd = new FormData();
+			fd.append('file', file);
+			const res = await fetch('/api/website/media', { method: 'POST', body: fd });
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error((data as { error?: string }).error || 'Gagal upload gambar.');
+				return;
+			}
+			form.cover_image_url = (data as { url: string }).url;
+			toast.success('Gambar berhasil diunggah.');
+		} finally {
+			uploadingCover = false;
+			input.value = '';
 		}
 	}
 
@@ -167,6 +202,9 @@
 				excerpt: item.excerpt,
 				content_html: item.content_html,
 				cover_image_url: item.cover_image_url,
+				is_featured: item.is_featured ?? false,
+				meta_title: item.meta_title ?? '',
+				meta_description: item.meta_description ?? '',
 				status: nextStatus,
 			}),
 		});
@@ -212,6 +250,9 @@
 									<Badge variant={item.status === 'published' ? 'outline' : 'secondary'} class={item.status === 'published' ? 'border-emerald-300 text-emerald-700' : ''}>
 										{item.status === 'published' ? 'Published' : 'Draft'}
 									</Badge>
+									{#if item.is_featured}
+										<Badge variant="outline" class="border-amber-300 text-amber-700">Unggulan</Badge>
+									{/if}
 								</div>
 								<p class="font-mono text-xs text-slate-500">{publicHref(item)}</p>
 								<p class="text-sm leading-7 text-slate-600">{item.excerpt || 'Belum ada ringkasan.'}</p>
@@ -266,10 +307,42 @@
 						<option value="published">Published</option>
 					</select>
 				</div>
+
+				<!-- Cover Image -->
 				<div class="sm:col-span-2">
-					<label for="website-cover" class="mb-1 block text-xs font-medium text-slate-600">Cover Image URL</label>
-					<Input id="website-cover" bind:value={form.cover_image_url} placeholder="https://..." />
+					<label for="website-cover" class="mb-1 block text-xs font-medium text-slate-600">Cover Image</label>
+					<div class="flex gap-2">
+						<Input id="website-cover" bind:value={form.cover_image_url} placeholder="https://... atau upload file di samping" class="flex-1" />
+						<label class="flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-50 {uploadingCover ? 'opacity-60 pointer-events-none' : ''}">
+							{#if uploadingCover}
+								<span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"></span>
+							{:else}
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+							{/if}
+							Upload
+							<input type="file" accept="image/*" class="sr-only" onchange={uploadCoverImage} />
+						</label>
+					</div>
+					{#if form.cover_image_url}
+						<div class="mt-2">
+							<img src={form.cover_image_url} alt="Cover preview" class="h-24 rounded-md border border-slate-200 object-cover" onerror={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+						</div>
+					{/if}
 				</div>
+
+				<!-- Featured Flag -->
+				<div class="sm:col-span-2 flex items-center gap-2">
+					<input
+						type="checkbox"
+						id="website-featured"
+						bind:checked={form.is_featured}
+						class="h-4 w-4 rounded border-input accent-emerald-700"
+					/>
+					<label for="website-featured" class="text-sm text-slate-700 cursor-pointer">
+						Tandai sebagai konten unggulan (ditampilkan di bagian utama homepage)
+					</label>
+				</div>
+
 				<div class="sm:col-span-2">
 					<label for="website-excerpt" class="mb-1 block text-xs font-medium text-slate-600">Ringkasan</label>
 					<Textarea id="website-excerpt" rows={3} bind:value={form.excerpt} />
@@ -277,6 +350,26 @@
 				<div class="sm:col-span-2">
 					<label for="website-content" class="mb-1 block text-xs font-medium text-slate-600">Konten HTML</label>
 					<Textarea id="website-content" rows={12} bind:value={form.content_html} />
+				</div>
+
+				<!-- SEO Section -->
+				<div class="sm:col-span-2">
+					<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Metadata SEO</p>
+					<div class="grid gap-3">
+						<div>
+							<label for="website-meta-title" class="mb-1 block text-xs font-medium text-slate-600">
+								Judul SEO <span class="text-slate-400">(kosongkan = pakai judul utama)</span>
+							</label>
+							<Input id="website-meta-title" bind:value={form.meta_title} placeholder="Judul untuk mesin pencari..." />
+						</div>
+						<div>
+							<label for="website-meta-desc" class="mb-1 block text-xs font-medium text-slate-600">
+								Deskripsi SEO <span class="text-slate-400">(150–160 karakter ideal)</span>
+							</label>
+							<Textarea id="website-meta-desc" rows={2} bind:value={form.meta_description} placeholder="Deskripsi singkat untuk mesin pencari dan media sosial..." />
+							<p class="mt-1 text-right text-xs text-slate-400">{form.meta_description.length} karakter</p>
+						</div>
+					</div>
 				</div>
 			</div>
 

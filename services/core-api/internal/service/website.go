@@ -31,6 +31,7 @@ type websiteStore interface {
 	UpdateWebsiteContent(ctx context.Context, arg db.UpdateWebsiteContentParams) (db.WebsiteContent, error)
 	DeleteWebsiteContent(ctx context.Context, id pgtype.UUID) error
 	ListPublishedWebsiteContents(ctx context.Context, arg db.ListPublishedWebsiteContentsParams) ([]db.WebsiteContent, error)
+	ListFeaturedWebsiteContents(ctx context.Context, arg db.ListFeaturedWebsiteContentsParams) ([]db.WebsiteContent, error)
 	GetPublishedWebsiteContentBySlug(ctx context.Context, arg db.GetPublishedWebsiteContentBySlugParams) (db.WebsiteContent, error)
 }
 
@@ -39,15 +40,18 @@ type Website struct{ q websiteStore }
 func NewWebsite(q *db.Queries) *Website { return &Website{q: q} }
 
 type SaveWebsiteContentInput struct {
-	ID            pgtype.UUID
-	Kind          string
-	Title         string
-	Slug          string
-	Excerpt       string
-	ContentHTML   string
-	CoverImageURL string
-	Status        string
-	ActorUsername string
+	ID              pgtype.UUID
+	Kind            string
+	Title           string
+	Slug            string
+	Excerpt         string
+	ContentHTML     string
+	CoverImageURL   string
+	IsFeatured      bool
+	MetaTitle       string
+	MetaDescription string
+	Status          string
+	ActorUsername   string
 }
 
 func (s *Website) List(ctx context.Context, kind, status, search string) ([]db.WebsiteContent, error) {
@@ -95,6 +99,20 @@ func (s *Website) ListPublished(ctx context.Context, kind string, limit int32) (
 		return nil, fmt.Errorf("jenis konten tidak valid")
 	}
 	return s.q.ListPublishedWebsiteContents(ctx, db.ListPublishedWebsiteContentsParams{
+		KindFilter: db.WebsiteContentKind(kind),
+		LimitCount: limit,
+	})
+}
+
+func (s *Website) ListFeatured(ctx context.Context, kind string, limit int32) ([]db.WebsiteContent, error) {
+	if limit <= 0 {
+		limit = 6
+	}
+	kind = normalizeWebsiteKind(kind)
+	if kind == "" {
+		return nil, fmt.Errorf("jenis konten tidak valid")
+	}
+	return s.q.ListFeaturedWebsiteContents(ctx, db.ListFeaturedWebsiteContentsParams{
 		KindFilter: db.WebsiteContentKind(kind),
 		LimitCount: limit,
 	})
@@ -199,16 +217,19 @@ func buildWebsiteCreateParams(in SaveWebsiteContentInput) (db.CreateWebsiteConte
 		excerpt = plainExcerpt(contentHTML)
 	}
 	return db.CreateWebsiteContentParams{
-		Kind:          db.WebsiteContentKind(kind),
-		Title:         title,
-		Slug:          slug,
-		Excerpt:       excerpt,
-		ContentHtml:   contentHTML,
-		CoverImageUrl: strings.TrimSpace(in.CoverImageURL),
-		Status:        db.WebsiteContentStatus(status),
-		PublishedAt:   publishTime(status, pgtype.Timestamptz{}),
-		CreatedBy:     strings.TrimSpace(in.ActorUsername),
-		UpdatedBy:     strings.TrimSpace(in.ActorUsername),
+		Kind:            db.WebsiteContentKind(kind),
+		Title:           title,
+		Slug:            slug,
+		Excerpt:         excerpt,
+		ContentHtml:     contentHTML,
+		CoverImageUrl:   strings.TrimSpace(in.CoverImageURL),
+		IsFeatured:      in.IsFeatured,
+		MetaTitle:       strings.TrimSpace(in.MetaTitle),
+		MetaDescription: strings.TrimSpace(in.MetaDescription),
+		Status:          db.WebsiteContentStatus(status),
+		PublishedAt:     publishTime(status, pgtype.Timestamptz{}),
+		CreatedBy:       strings.TrimSpace(in.ActorUsername),
+		UpdatedBy:       strings.TrimSpace(in.ActorUsername),
 	}, nil
 }
 
@@ -238,15 +259,18 @@ func buildWebsiteUpdateParams(current db.WebsiteContent, in SaveWebsiteContentIn
 		excerpt = plainExcerpt(contentHTML)
 	}
 	return db.UpdateWebsiteContentParams{
-		ID:            current.ID,
-		Kind:          db.WebsiteContentKind(kind),
-		Title:         title,
-		Slug:          slug,
-		Excerpt:       excerpt,
-		ContentHtml:   contentHTML,
-		CoverImageUrl: strings.TrimSpace(in.CoverImageURL),
-		Status:        db.WebsiteContentStatus(status),
-		PublishedAt:   publishTime(status, current.PublishedAt),
-		UpdatedBy:     strings.TrimSpace(in.ActorUsername),
+		ID:              current.ID,
+		Kind:            db.WebsiteContentKind(kind),
+		Title:           title,
+		Slug:            slug,
+		Excerpt:         excerpt,
+		ContentHtml:     contentHTML,
+		CoverImageUrl:   strings.TrimSpace(in.CoverImageURL),
+		IsFeatured:      in.IsFeatured,
+		MetaTitle:       strings.TrimSpace(in.MetaTitle),
+		MetaDescription: strings.TrimSpace(in.MetaDescription),
+		Status:          db.WebsiteContentStatus(status),
+		PublishedAt:     publishTime(status, current.PublishedAt),
+		UpdatedBy:       strings.TrimSpace(in.ActorUsername),
 	}, nil
 }

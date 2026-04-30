@@ -8,6 +8,8 @@ type WebsiteContent = {
 	excerpt: string;
 	content_html: string;
 	cover_image_url: string;
+	meta_title: string;
+	meta_description: string;
 	published_at: string | null;
 };
 

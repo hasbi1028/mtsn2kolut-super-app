@@ -59,6 +59,7 @@ func main() {
 	auditSvc := service.NewAudit(q)
 	pusakaSchedulerSvc := service.NewPusakaScheduler(q, pusakaJobSvc, settSvc, auditSvc)
 	librarySvc := service.NewLibrary(q)
+	websiteMediaH := handler.NewWebsiteMedia(getEnv("WEBSITE_MEDIA_DIR", "data/website-media"))
 
 	if err := authSvc.SeedAdmin(mainCtx); err != nil {
 		slog.Error("seed admin", "error", err)
@@ -114,10 +115,12 @@ func main() {
 	r.Post("/api/auth/logout", authH.Logout)
 	r.Post("/api/public/register-student", studentH.PublicRegister)
 	r.Get("/api/public/site/posts", websiteH.ListPublishedPosts)
+	r.Get("/api/public/site/posts/featured", websiteH.ListFeaturedPosts)
 	r.Get("/api/public/site/posts/{slug}", websiteH.GetPublishedPost)
 	r.Get("/api/public/site/announcements", websiteH.ListPublishedAnnouncements)
 	r.Get("/api/public/site/announcements/{slug}", websiteH.GetPublishedAnnouncement)
 	r.Get("/api/public/site/pages/{slug}", websiteH.GetPublishedPage)
+	r.Get("/api/website/media/{filename}", websiteMediaH.File)
 
 	// Asset file serving is intentionally public — UUID provides sufficient obscurity,
 	// and content (exam question images/PDFs) will be visible to students during exams anyway.
@@ -195,6 +198,7 @@ func main() {
 		r.With(requireAdmin).Post("/api/website/content", websiteH.Create)
 		r.With(requireAdmin).Put("/api/website/content/{id}", websiteH.Update)
 		r.With(requireAdmin).Delete("/api/website/content/{id}", websiteH.Delete)
+		r.With(requireAdmin).Post("/api/website/media", websiteMediaH.Upload)
 
 		r.Get("/api/cbt/questions", questionH.List)
 		r.Post("/api/cbt/questions", questionH.Create)
