@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"testing"
 
@@ -199,5 +200,86 @@ func TestExamStatusWritesWrappedJSON(t *testing.T) {
 	}
 	if payload.Data.SubmittedAt != "2026-05-01T08:30:00Z" {
 		t.Fatalf("SubmittedAt = %q", payload.Data.SubmittedAt)
+	}
+}
+
+func TestExamLoginMapsKnownServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantError  string
+	}{
+		{
+			name:       "token not found",
+			err:        service.ErrExamNotFound,
+			wantStatus: 404,
+			wantError:  "token not found",
+		},
+		{
+			name:       "session not active",
+			err:        service.ErrExamNotActive,
+			wantStatus: 403,
+			wantError:  "exam session is not active",
+		},
+		{
+			name:       "device mismatch",
+			err:        service.ErrDeviceMismatch,
+			wantStatus: 409,
+			wantError:  "token already bound to another device",
+		},
+		{
+			name:       "unexpected error",
+			err:        errors.New("database down"),
+			wantStatus: 500,
+			wantError:  "database down",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &Exam{svc: &fakeExamService{loginErr: tt.err}}
+			body := bytes.NewBufferString(`{"token":"a1b2c3d4","device_fingerprint":"device-1"}`)
+			req := httptest.NewRequest("POST", "http://internal/api/exam/login", body)
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			h.Login(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			var payload struct {
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("json unmarshal failed: %v", err)
+			}
+			if payload.Error != tt.wantError {
+				t.Fatalf("error = %q, want %q", payload.Error, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestExamStatusRequiresParticipantContext(t *testing.T) {
+	h := &Exam{svc: &fakeExamService{}}
+	req := httptest.NewRequest("GET", "http://internal/api/exam/status", nil)
+	rec := httptest.NewRecorder()
+
+	h.Status(rec, req)
+
+	if rec.Code != 401 {
+		t.Fatalf("status = %d, want 401; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "unauthorized" {
+		t.Fatalf("error = %q, want %q", payload.Error, "unauthorized")
 	}
 }
