@@ -3,8 +3,13 @@ type JwtPayload = {
 	type?: string;
 	sub?: string;
 	uid?: string;
-	role?: 'admin' | 'guru';
+	usr?: string;
+	role?: string;
+	roles?: string[];
+	ssid?: string;
 	eid?: string;
+	sid?: string;
+	pid?: string;
 };
 
 function decodePayload(token: string): JwtPayload | null {
@@ -38,9 +43,13 @@ export function getUserFromToken(token: string | undefined) {
 	const p = decodePayload(token);
 	if (!p || p.type !== 'access') return null;
 	return {
-		id: p.uid,
-		username: p.sub,
+		id: p.uid ?? p.sub,
+		username: p.usr,
 		role: p.role,
+		roles: p.roles || [p.role],
+		session_id: p.ssid,
 		employee_id: p.eid,
+		student_id: p.sid,
+		parent_id: p.pid,
 	};
 }

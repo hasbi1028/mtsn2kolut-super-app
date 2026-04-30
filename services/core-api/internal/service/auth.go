@@ -29,6 +29,7 @@ const (
 // authStore defines the subset of db.Queries that Auth service needs.
 type authStore interface {
 	GetUserByUsername(ctx context.Context, username string) (db.GetUserByUsernameRow, error)
+	GetUserByID(ctx context.Context, id pgtype.UUID) (db.GetUserByIDRow, error)
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
 	GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error)
@@ -38,6 +39,20 @@ type authStore interface {
 	GetAuthSession(ctx context.Context, id pgtype.UUID) (db.AuthSession, error)
 	RevokeAuthSession(ctx context.Context, id pgtype.UUID) error
 	RevokeAllAuthSessionsForUser(ctx context.Context, userID pgtype.UUID) (int64, error)
+	ListActiveAuthSessionsByUser(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error)
+	RevokeOwnedAuthSession(ctx context.Context, arg db.RevokeOwnedAuthSessionParams) (int64, error)
+}
+
+type authUserRecord struct {
+	ID           pgtype.UUID
+	Username     string
+	PasswordHash string
+	EmployeeID   pgtype.UUID
+	StudentID    pgtype.UUID
+	ParentID     pgtype.UUID
+	IsActive     bool
+	AuthVersion  int32
+	Roles        []byte
 }
 
 type Auth struct {
@@ -51,13 +66,14 @@ func NewAuth(q *db.Queries, jwtSecret, adminPassword string) *Auth {
 }
 
 func (s *Auth) Login(ctx context.Context, username, password string) (domain.TokenPair, error) {
-	user, err := s.q.GetUserByUsername(ctx, username)
+	row, err := s.q.GetUserByUsername(ctx, username)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.TokenPair{}, domain.ErrUnauthorized
 		}
 		return domain.TokenPair{}, err
 	}
+	user := authUserFromUsernameRow(row)
 
 	if !user.IsActive {
 		return domain.TokenPair{}, domain.ErrSuspended
@@ -82,15 +98,15 @@ func (s *Auth) Refresh(ctx context.Context, refreshToken string) (domain.TokenPa
 	if err != nil {
 		return domain.TokenPair{}, err
 	}
-	username, ok := claims["sub"].(string)
-	if !ok || username == "" {
-		return domain.TokenPair{}, domain.ErrUnauthorized
-	}
-
-	user, err := s.q.GetUserByUsername(ctx, username)
+	userID, err := userIDFromClaims(claims)
 	if err != nil {
 		return domain.TokenPair{}, domain.ErrUnauthorized
 	}
+	row, err := s.q.GetUserByID(ctx, userID)
+	if err != nil {
+		return domain.TokenPair{}, domain.ErrUnauthorized
+	}
+	user := authUserFromIDRow(row)
 
 	if !user.IsActive {
 		return domain.TokenPair{}, domain.ErrSuspended
@@ -130,23 +146,38 @@ func (s *Auth) Logout(ctx context.Context, refreshToken string) error {
 	return s.q.RevokeAuthSession(ctx, session.ID)
 }
 
-func (s *Auth) LogoutAll(ctx context.Context, username string) error {
-	user, err := s.q.GetUserByUsername(ctx, username)
-	if err != nil {
-		return domain.ErrUnauthorized
-	}
-	if _, err := s.q.RevokeAllAuthSessionsForUser(ctx, user.ID); err != nil {
+func (s *Auth) LogoutAll(ctx context.Context, userID pgtype.UUID) error {
+	if _, err := s.q.RevokeAllAuthSessionsForUser(ctx, userID); err != nil {
 		return err
 	}
-	_, err = s.q.IncrementUserAuthVersion(ctx, user.ID)
+	_, err := s.q.IncrementUserAuthVersion(ctx, userID)
 	return err
 }
 
+func (s *Auth) ListActiveSessions(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error) {
+	return s.q.ListActiveAuthSessionsByUser(ctx, userID)
+}
+
+func (s *Auth) RevokeSession(ctx context.Context, userID, sessionID pgtype.UUID) error {
+	affected, err := s.q.RevokeOwnedAuthSession(ctx, db.RevokeOwnedAuthSessionParams{
+		UserID: userID,
+		ID:     sessionID,
+	})
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 func (s *Auth) ChangePassword(ctx context.Context, username, oldPassword, newPassword string) error {
-	user, err := s.q.GetUserByUsername(ctx, username)
+	row, err := s.q.GetUserByUsername(ctx, username)
 	if err != nil {
 		return domain.ErrUnauthorized
 	}
+	user := authUserFromUsernameRow(row)
 
 	if !user.IsActive {
 		return domain.ErrSuspended
@@ -175,7 +206,7 @@ func (s *Auth) ChangePassword(ctx context.Context, username, oldPassword, newPas
 	return err
 }
 
-func (s *Auth) issueTokenPair(ctx context.Context, user db.GetUserByUsernameRow) (domain.TokenPair, error) {
+func (s *Auth) issueTokenPair(ctx context.Context, user authUserRecord) (domain.TokenPair, error) {
 	now := time.Now()
 	sessionID, err := randomUUID()
 	if err != nil {
@@ -202,9 +233,12 @@ func (s *Auth) issueTokenPair(ctx context.Context, user db.GetUserByUsernameRow)
 		primaryRole = roleStrs[0]
 	}
 
+	userID := pgUUIDString(user.ID)
 	claims := jwt.MapClaims{
-		"sub":   user.Username,
-		"uid":   pgUUIDString(user.ID),
+		"sub":   userID,
+		"uid":   userID,
+		"usr":   user.Username,
+		"ssid":  pgUUIDString(sessionID),
 		"role":  primaryRole, // backward compatibility
 		"roles": roleStrs,
 		"type":  "access",
@@ -230,8 +264,10 @@ func (s *Auth) issueTokenPair(ctx context.Context, user db.GetUserByUsernameRow)
 	}
 
 	refresh := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub":  user.Username,
-		"sid":  pgUUIDString(sessionID),
+		"sub":  userID,
+		"uid":  userID,
+		"usr":  user.Username,
+		"ssid": pgUUIDString(sessionID),
 		"type": "refresh",
 		"ver":  int64(user.AuthVersion),
 		"iat":  now.Unix(),
@@ -295,8 +331,12 @@ func (s *Auth) SeedAdmin(ctx context.Context) error {
 	})
 }
 
-func (s *Auth) CurrentAuthVersion(ctx context.Context, username string) (int64, error) {
-	user, err := s.q.GetUserByUsername(ctx, username)
+func (s *Auth) CurrentAuthVersion(ctx context.Context, subject string) (int64, error) {
+	var userID pgtype.UUID
+	if err := userID.Scan(subject); err != nil {
+		return 0, domain.ErrUnauthorized
+	}
+	user, err := s.q.GetUserByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return 0, domain.ErrUnauthorized
@@ -307,11 +347,11 @@ func (s *Auth) CurrentAuthVersion(ctx context.Context, username string) (int64, 
 }
 
 func (s *Auth) validAuthVersion(ctx context.Context, claims jwt.MapClaims) bool {
-	username, _ := claims["sub"].(string)
-	if strings.TrimSpace(username) == "" {
+	subject, _ := claims["sub"].(string)
+	if strings.TrimSpace(subject) == "" {
 		return false
 	}
-	current, err := s.CurrentAuthVersion(ctx, username)
+	current, err := s.CurrentAuthVersion(ctx, subject)
 	if err != nil {
 		return false
 	}
@@ -383,7 +423,7 @@ func (s *Auth) parseTokenClaims(token string) (jwt.MapClaims, error) {
 }
 
 func (s *Auth) validateRefreshSession(ctx context.Context, refreshToken string, claims jwt.MapClaims) (db.AuthSession, error) {
-	rawSID, _ := claims["sid"].(string)
+	rawSID, _ := claims["ssid"].(string)
 	if strings.TrimSpace(rawSID) == "" {
 		return db.AuthSession{}, domain.ErrUnauthorized
 	}
@@ -434,4 +474,44 @@ func randomUUID() (pgtype.UUID, error) {
 		return pgtype.UUID{}, err
 	}
 	return id, nil
+}
+
+func userIDFromClaims(claims jwt.MapClaims) (pgtype.UUID, error) {
+	subject, _ := claims["sub"].(string)
+	if strings.TrimSpace(subject) == "" {
+		return pgtype.UUID{}, domain.ErrUnauthorized
+	}
+	var userID pgtype.UUID
+	if err := userID.Scan(subject); err != nil {
+		return pgtype.UUID{}, domain.ErrUnauthorized
+	}
+	return userID, nil
+}
+
+func authUserFromUsernameRow(row db.GetUserByUsernameRow) authUserRecord {
+	return authUserRecord{
+		ID:           row.ID,
+		Username:     row.Username,
+		PasswordHash: row.PasswordHash,
+		EmployeeID:   row.EmployeeID,
+		StudentID:    row.StudentID,
+		ParentID:     row.ParentID,
+		IsActive:     row.IsActive,
+		AuthVersion:  row.AuthVersion,
+		Roles:        row.Roles,
+	}
+}
+
+func authUserFromIDRow(row db.GetUserByIDRow) authUserRecord {
+	return authUserRecord{
+		ID:           row.ID,
+		Username:     row.Username,
+		PasswordHash: row.PasswordHash,
+		EmployeeID:   row.EmployeeID,
+		StudentID:    row.StudentID,
+		ParentID:     row.ParentID,
+		IsActive:     row.IsActive,
+		AuthVersion:  row.AuthVersion,
+		Roles:        row.Roles,
+	}
 }

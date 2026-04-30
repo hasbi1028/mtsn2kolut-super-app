@@ -75,6 +75,29 @@ func (f *fakeStore) GetUserByUsername(ctx context.Context, username string) (db.
 	}, nil
 }
 
+func (f *fakeStore) GetUserByID(ctx context.Context, id pgtype.UUID) (db.GetUserByIDRow, error) {
+	for _, u := range f.users {
+		if u.ID == id {
+			roles := f.userRoles[u.ID]
+			rolesJSON, _ := json.Marshal(roles)
+			return db.GetUserByIDRow{
+				ID:           u.ID,
+				Username:     u.Username,
+				PasswordHash: u.PasswordHash,
+				EmployeeID:   u.EmployeeID,
+				StudentID:    u.StudentID,
+				ParentID:     u.ParentID,
+				IsActive:     u.IsActive,
+				AuthVersion:  u.AuthVersion,
+				CreatedAt:    u.CreatedAt,
+				UpdatedAt:    u.UpdatedAt,
+				Roles:        rolesJSON,
+			}, nil
+		}
+	}
+	return db.GetUserByIDRow{}, pgx.ErrNoRows
+}
+
 func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error) {
 	var id pgtype.UUID
 	_ = id.Scan("11111111-1111-1111-1111-111111111111")
@@ -124,11 +147,14 @@ func (f *fakeStore) IncrementUserAuthVersion(ctx context.Context, id pgtype.UUID
 }
 
 func (f *fakeStore) CreateAuthSession(ctx context.Context, arg db.CreateAuthSessionParams) (db.AuthSession, error) {
+	now := pgtype.Timestamptz{}
+	_ = now.Scan(time.Now())
 	session := db.AuthSession{
 		ID:               arg.ID,
 		UserID:           arg.UserID,
 		RefreshTokenHash: arg.RefreshTokenHash,
 		ExpiresAt:        arg.ExpiresAt,
+		LastUsedAt:       now,
 	}
 	f.authSessions[arg.ID] = session
 	return session, nil
@@ -166,6 +192,28 @@ func (f *fakeStore) RevokeAllAuthSessionsForUser(ctx context.Context, userID pgt
 		}
 	}
 	return count, nil
+}
+
+func (f *fakeStore) ListActiveAuthSessionsByUser(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error) {
+	items := make([]db.AuthSession, 0)
+	for _, session := range f.authSessions {
+		if session.UserID == userID && !session.RevokedAt.Valid {
+			items = append(items, session)
+		}
+	}
+	return items, nil
+}
+
+func (f *fakeStore) RevokeOwnedAuthSession(ctx context.Context, arg db.RevokeOwnedAuthSessionParams) (int64, error) {
+	session, ok := f.authSessions[arg.ID]
+	if !ok || session.UserID != arg.UserID || session.RevokedAt.Valid {
+		return 0, nil
+	}
+	now := pgtype.Timestamptz{}
+	_ = now.Scan(time.Now())
+	session.RevokedAt = now
+	f.authSessions[arg.ID] = session
+	return 1, nil
 }
 
 func TestAuthSeedAdminCreatesUser(t *testing.T) {
@@ -319,7 +367,7 @@ func TestAuthLogoutRevokesRefreshSession(t *testing.T) {
 	if _, _, err := new(jwt.Parser).ParseUnverified(pair.RefreshToken, claims); err != nil {
 		t.Fatalf("ParseUnverified(refresh) error = %v", err)
 	}
-	rawSID, _ := claims["sid"].(string)
+	rawSID, _ := claims["ssid"].(string)
 	var sid pgtype.UUID
 	if err := sid.Scan(rawSID); err != nil {
 		t.Fatalf("sid Scan() error = %v", err)
@@ -338,5 +386,37 @@ func TestAuthLogoutRevokesRefreshSession(t *testing.T) {
 	}
 	if _, err := svc.Refresh(context.Background(), pair.RefreshToken); err == nil {
 		t.Fatal("Refresh() succeeded after logout revoke")
+	}
+}
+
+func TestAuthLogoutAllRevokesUserSessionsAndBumpsVersion(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
+
+	if err := svc.SeedAdmin(context.Background()); err != nil {
+		t.Fatalf("SeedAdmin() error = %v", err)
+	}
+
+	first, err := svc.Login(context.Background(), "admin", "admin")
+	if err != nil {
+		t.Fatalf("first Login() error = %v", err)
+	}
+	second, err := svc.Login(context.Background(), "admin", "admin")
+	if err != nil {
+		t.Fatalf("second Login() error = %v", err)
+	}
+
+	admin := store.users["admin"]
+	if err := svc.LogoutAll(context.Background(), admin.ID); err != nil {
+		t.Fatalf("LogoutAll() error = %v", err)
+	}
+	if store.users["admin"].AuthVersion != 1 {
+		t.Fatalf("auth_version = %d, want 1", store.users["admin"].AuthVersion)
+	}
+	if _, err := svc.Refresh(context.Background(), first.RefreshToken); err == nil {
+		t.Fatal("first Refresh() succeeded after LogoutAll")
+	}
+	if _, err := svc.Refresh(context.Background(), second.RefreshToken); err == nil {
+		t.Fatal("second Refresh() succeeded after LogoutAll")
 	}
 }

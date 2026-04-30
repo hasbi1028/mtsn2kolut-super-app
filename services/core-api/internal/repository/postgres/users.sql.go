@@ -122,6 +122,49 @@ func (q *Queries) DeleteUser(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const getUserByID = `-- name: GetUserByID :one
+SELECT 
+    u.id, u.username, u.password_hash, 
+    u.employee_id, u.student_id, u.parent_id,
+    u.is_active, u.auth_version, u.created_at, u.updated_at,
+    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+FROM users u
+WHERE u.id = $1
+`
+
+type GetUserByIDRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	Username     string             `json:"username"`
+	PasswordHash string             `json:"password_hash"`
+	EmployeeID   pgtype.UUID        `json:"employee_id"`
+	StudentID    pgtype.UUID        `json:"student_id"`
+	ParentID     pgtype.UUID        `json:"parent_id"`
+	IsActive     bool               `json:"is_active"`
+	AuthVersion  int32              `json:"auth_version"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	Roles        []byte             `json:"roles"`
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i GetUserByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.EmployeeID,
+		&i.StudentID,
+		&i.ParentID,
+		&i.IsActive,
+		&i.AuthVersion,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Roles,
+	)
+	return i, err
+}
+
 const getUserByUsername = `-- name: GetUserByUsername :one
 SELECT 
     u.id, u.username, u.password_hash, 

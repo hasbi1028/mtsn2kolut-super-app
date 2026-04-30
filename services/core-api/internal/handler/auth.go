@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"mtsn2kolut-super-app/backend/internal/api"
 	"mtsn2kolut-super-app/backend/internal/domain"
 	"mtsn2kolut-super-app/backend/internal/service"
@@ -78,22 +80,18 @@ func (h *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Auth) LogoutAll(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Username string `json:"username"`
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
-
-	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
-		if sub, _ := claims["sub"].(string); sub != "" {
-			body.Username = sub
-		}
-	}
-	if body.Username == "" {
-		api.BadRequest(w, "username required")
+	userID, err := authUserID(claims)
+	if err != nil {
+		api.Unauthorized(w)
 		return
 	}
 
-	if err := h.svc.LogoutAll(r.Context(), body.Username); err != nil {
+	if err := h.svc.LogoutAll(r.Context(), userID); err != nil {
 		if errors.Is(err, domain.ErrUnauthorized) {
 			api.Unauthorized(w)
 			return
@@ -102,6 +100,56 @@ func (h *Auth) LogoutAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, map[string]string{"message": "all sessions logged out"})
+}
+
+func (h *Auth) ListSessions(w http.ResponseWriter, r *http.Request) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	userID, err := authUserID(claims)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+
+	sessions, err := h.svc.ListActiveSessions(r.Context(), userID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, sessions)
+}
+
+func (h *Auth) RevokeSession(w http.ResponseWriter, r *http.Request) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	userID, err := authUserID(claims)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+
+	var sessionID pgtype.UUID
+	if err := sessionID.Scan(chi.URLParam(r, "id")); err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+
+	err = h.svc.RevokeSession(r.Context(), userID, sessionID)
+	if errors.Is(err, domain.ErrNotFound) {
+		api.NotFound(w)
+		return
+	}
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]string{"message": "session revoked"})
 }
 
 func (h *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -117,8 +165,8 @@ func (h *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	// Username from JWT claims takes priority; body username is used for internal-key requests
 	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
-		if sub, _ := claims["sub"].(string); sub != "" {
-			body.Username = sub
+		if username, _ := claims["usr"].(string); username != "" {
+			body.Username = username
 		}
 	}
 
@@ -149,4 +197,19 @@ func (h *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, map[string]string{"message": "password changed"})
+}
+
+func authUserID(claims map[string]any) (pgtype.UUID, error) {
+	var userID pgtype.UUID
+	raw, _ := claims["sub"].(string)
+	if raw == "" {
+		raw, _ = claims["uid"].(string)
+	}
+	if raw == "" {
+		return pgtype.UUID{}, domain.ErrUnauthorized
+	}
+	if err := userID.Scan(raw); err != nil {
+		return pgtype.UUID{}, domain.ErrUnauthorized
+	}
+	return userID, nil
 }

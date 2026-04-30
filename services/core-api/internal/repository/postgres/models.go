@@ -621,6 +621,7 @@ type AuthSession struct {
 	RevokedAt        pgtype.Timestamptz `json:"revoked_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
 }
 
 type CbtExamEvent struct {

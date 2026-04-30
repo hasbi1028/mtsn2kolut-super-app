@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
   import * as Card from '$lib/components/ui/card';
   import { Input } from '$lib/components/ui/input';
   import { Button } from '$lib/components/ui/button';
@@ -7,21 +8,43 @@
   import WorkerSettings from '$lib/components/WorkerSettings.svelte';
   import ScheduleList   from '$lib/components/ScheduleList.svelte';
 
+  type AuthSession = {
+    id: string;
+    user_id: string;
+    expires_at: string;
+    last_used_at: string;
+    created_at: string;
+    updated_at: string;
+  };
+
   let appSettings = $state({ max_concurrent: 5, headless: false });
   let schedules   = $state<any[]>([]);
+  let sessions    = $state<AuthSession[]>([]);
   let pwForm      = $state({ current: '', next: '', confirm: '' });
   let pwError     = $state('');
   let pwLoading   = $state(false);
   let logoutAllLoading = $state(false);
+  let sessionsLoading = $state(false);
+  let revokeSessionLoading = $state<string | null>(null);
+
+  const currentSessionId = $derived(page.data.user?.session_id ?? '');
 
   async function load() {
     try {
-      const [stRes, sRes] = await Promise.all([fetch('/api/pusaka/settings'), fetch('/api/pusaka/schedules')]);
+      sessionsLoading = true;
+      const [stRes, sRes, sessRes] = await Promise.all([
+        fetch('/api/pusaka/settings'),
+        fetch('/api/pusaka/schedules'),
+        fetch('/api/auth/sessions')
+      ]);
       const st = await stRes.json();
       const s  = await sRes.json();
+      const sess = await sessRes.json().catch(() => []);
       if (!st.error) appSettings = st;
       if (!s.error)  schedules   = s.items ?? [];
+      if (!sess.error) sessions = Array.isArray(sess) ? sess : (sess.data ?? []);
     } catch { /* silent */ }
+    finally { sessionsLoading = false; }
   }
 
   async function saveSettings() {
@@ -78,6 +101,37 @@
     } finally {
       logoutAllLoading = false;
     }
+  }
+
+  async function revokeSession(sessionId: string) {
+    revokeSessionLoading = sessionId;
+    try {
+      const res = await fetch(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        pwError = data.error ?? 'Gagal mengakhiri sesi';
+        return;
+      }
+
+      if (sessionId === currentSessionId) {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        window.location.href = '/login';
+        return;
+      }
+
+      sessions = sessions.filter((session) => session.id !== sessionId);
+      showToast('Sesi berhasil diakhiri.');
+    } finally {
+      revokeSessionLoading = null;
+    }
+  }
+
+  function formatDate(value: string) {
+    return new Date(value).toLocaleString('id-ID', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Makassar'
+    });
   }
 
   function showToast(msg: string) {
@@ -140,6 +194,57 @@
           {logoutAllLoading ? 'Memproses…' : 'Keluar dari Semua Sesi'}
         </Button>
       </div>
+    </Card.Content>
+  </Card.Root>
+
+  <Card.Root>
+    <Card.Header class="pb-3">
+      <Card.Title class="text-base">Sesi Aktif</Card.Title>
+      <Card.Description>
+        Kelola sesi login yang masih aktif. Revoke sesi akan mencegah refresh token sesi itu dipakai lagi.
+      </Card.Description>
+    </Card.Header>
+    <Card.Content>
+      {#if sessionsLoading}
+        <p class="text-sm text-muted-foreground">Memuat sesi…</p>
+      {:else if sessions.length === 0}
+        <p class="text-sm text-muted-foreground">Belum ada sesi aktif tercatat.</p>
+      {:else}
+        <div class="space-y-3">
+          {#each sessions as session}
+            <div class="rounded-lg border border-slate-200 px-4 py-3">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="space-y-1">
+                  <div class="flex items-center gap-2">
+                    <p class="text-sm font-medium text-slate-800">
+                      Sesi {session.id.slice(0, 8)}
+                    </p>
+                    {#if session.id === currentSessionId}
+                      <span class="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800">
+                        Perangkat Ini
+                      </span>
+                    {/if}
+                  </div>
+                  <p class="text-xs text-muted-foreground">
+                    Terakhir aktif: {formatDate(session.last_used_at)}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    Berlaku sampai: {formatDate(session.expires_at)}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onclick={() => revokeSession(session.id)}
+                  disabled={revokeSessionLoading === session.id}
+                >
+                  {revokeSessionLoading === session.id ? 'Memproses…' : 'Akhiri Sesi'}
+                </Button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {/if}
     </Card.Content>
   </Card.Root>
 

@@ -12,9 +12,9 @@ import (
 )
 
 const createAuthSession = `-- name: CreateAuthSession :one
-INSERT INTO auth_sessions (id, user_id, refresh_token_hash, expires_at)
-VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, updated_at
+INSERT INTO auth_sessions (id, user_id, refresh_token_hash, expires_at, last_used_at)
+VALUES ($1, $2, $3, $4, NOW())
+RETURNING id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, updated_at, last_used_at
 `
 
 type CreateAuthSessionParams struct {
@@ -40,12 +40,13 @@ func (q *Queries) CreateAuthSession(ctx context.Context, arg CreateAuthSessionPa
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastUsedAt,
 	)
 	return i, err
 }
 
 const getAuthSession = `-- name: GetAuthSession :one
-SELECT id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, updated_at
+SELECT id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, updated_at, last_used_at
 FROM auth_sessions
 WHERE id = $1
 `
@@ -61,8 +62,47 @@ func (q *Queries) GetAuthSession(ctx context.Context, id pgtype.UUID) (AuthSessi
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastUsedAt,
 	)
 	return i, err
+}
+
+const listActiveAuthSessionsByUser = `-- name: ListActiveAuthSessionsByUser :many
+SELECT id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, updated_at, last_used_at
+FROM auth_sessions
+WHERE user_id = $1
+  AND revoked_at IS NULL
+  AND expires_at > NOW()
+ORDER BY last_used_at DESC, created_at DESC
+`
+
+func (q *Queries) ListActiveAuthSessionsByUser(ctx context.Context, userID pgtype.UUID) ([]AuthSession, error) {
+	rows, err := q.db.Query(ctx, listActiveAuthSessionsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuthSession{}
+	for rows.Next() {
+		var i AuthSession
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.RefreshTokenHash,
+			&i.ExpiresAt,
+			&i.RevokedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LastUsedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const revokeAllAuthSessionsForUser = `-- name: RevokeAllAuthSessionsForUser :execrows
@@ -90,4 +130,25 @@ WHERE id = $1
 func (q *Queries) RevokeAuthSession(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, revokeAuthSession, id)
 	return err
+}
+
+const revokeOwnedAuthSession = `-- name: RevokeOwnedAuthSession :execrows
+UPDATE auth_sessions
+SET revoked_at = NOW(), updated_at = NOW()
+WHERE user_id = $1
+  AND id = $2
+  AND revoked_at IS NULL
+`
+
+type RevokeOwnedAuthSessionParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	ID     pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) RevokeOwnedAuthSession(ctx context.Context, arg RevokeOwnedAuthSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeOwnedAuthSession, arg.UserID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

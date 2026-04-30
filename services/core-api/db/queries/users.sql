@@ -7,6 +7,15 @@ SELECT
 FROM users u
 WHERE u.username = $1;
 
+-- name: GetUserByID :one
+SELECT 
+    u.id, u.username, u.password_hash, 
+    u.employee_id, u.student_id, u.parent_id,
+    u.is_active, u.auth_version, u.created_at, u.updated_at,
+    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+FROM users u
+WHERE u.id = $1;
+
 -- name: ListUsers :many
 SELECT 
     u.id, u.username, u.employee_id, u.student_id, u.parent_id,
