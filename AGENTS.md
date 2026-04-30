@@ -135,6 +135,13 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Seat plan support** — participants can store `seat_no`; sessions support auto/manual seat assignment by room.
 - **Print operations** — event exam cards and session minutes/berita acara are printable HTML routes, not PDF generators.
 
+### ✅ Sprint 7 — Flutter CBT App MVP (Done)
+- **Initialized mobile client** — `apps/mobile` now exists as the Flutter student exam client baseline.
+- **Exam token login** — students can log in with token + API base URL against `docs/exam-api.md`.
+- **Question shell** — supports pilihan ganda and uraian flows with per-question save, countdown, heartbeat, status refresh, and final submit.
+- **Session restore baseline** — active exam snapshot (token, base URL, current question index, local answers) is persisted locally and can be restored on app reopen.
+- **Anti-cheat baseline** — Android secure screen (`FLAG_SECURE`), back-navigation blocking, and lifecycle-driven `app_switch` event logging.
+
 ### ✅ Sprint 15 — Library System (Done)
 - **Library schema** — `library_books` and `library_loans` tables (migration 027). No separate member table; loans reference existing `students` and `employees` via FK.
 - **Loan rules** — max 3 active loans per member enforced at service layer; `tersedia` decremented/incremented atomically around loan/return.

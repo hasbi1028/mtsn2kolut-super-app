@@ -105,6 +105,8 @@ Three runtime units deployed across 3 VPS:
 - [x] Student login screen with token + configurable API base URL
 - [x] Question renderer for pilihan ganda and uraian with per-question save flow
 - [x] Anti-cheat baseline via lifecycle/app-switch event logging, disabled back navigation, heartbeat, and server status sync
+- [x] Local session restore baseline via persisted token/base URL/current question/answer snapshot
+- [x] Android secure-screen baseline via `FLAG_SECURE`
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

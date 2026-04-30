@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../exam_api.dart';
 import '../models.dart';
+import '../exam_session_store.dart';
 import 'exam_login_screen.dart';
 
 class ExamShellScreen extends StatefulWidget {
@@ -13,12 +14,14 @@ class ExamShellScreen extends StatefulWidget {
     required this.examToken,
     required this.initialPayload,
     required this.deviceFingerprint,
+    this.restoredSnapshot,
   });
 
   final ExamApiClient client;
   final String examToken;
   final ExamLoginPayload initialPayload;
   final String deviceFingerprint;
+  final ExamSessionSnapshot? restoredSnapshot;
 
   @override
   State<ExamShellScreen> createState() => _ExamShellScreenState();
@@ -26,6 +29,7 @@ class ExamShellScreen extends StatefulWidget {
 
 class _ExamShellScreenState extends State<ExamShellScreen>
     with WidgetsBindingObserver {
+  final _sessionStore = ExamSessionStore();
   late final Map<String, String> _answers;
   late final List<TextEditingController> _essayControllers;
 
@@ -45,15 +49,23 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _answers = <String, String>{};
+    _answers = Map<String, String>.from(widget.restoredSnapshot?.answers ?? {});
     _essayControllers = widget.initialPayload.questions
         .map((_) => TextEditingController())
         .toList();
     _answeredCount = widget.initialPayload.answeredCount;
     _timeRemainingSeconds = widget.initialPayload.timeRemainingSeconds;
+    _currentQuestionIndex = widget.restoredSnapshot?.currentQuestionIndex ?? 0;
+    for (var i = 0; i < widget.initialPayload.questions.length; i++) {
+      final question = widget.initialPayload.questions[i];
+      if (question.isEssay) {
+        _essayControllers[i].text = _answers[question.id] ?? '';
+      }
+    }
     _startCountdown();
     _startHeartbeat();
     _syncStatus();
+    unawaited(_persistSnapshot());
   }
 
   @override
@@ -82,6 +94,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           },
         ),
       );
+      unawaited(_persistSnapshot());
     }
   }
 
@@ -179,6 +192,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       setState(() {
         _statusMessage = 'Jawaban tersimpan ke server.';
       });
+      await _persistSnapshot();
     } on ExamApiException catch (error) {
       if (!mounted) {
         return;
@@ -211,6 +225,18 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     }
 
     await _selectOption(question, answer);
+  }
+
+  Future<void> _persistSnapshot() async {
+    await _sessionStore.saveSnapshot(
+      ExamSessionSnapshot(
+        baseUrl: widget.client.baseUrl,
+        examToken: widget.examToken,
+        deviceFingerprint: widget.deviceFingerprint,
+        currentQuestionIndex: _currentQuestionIndex,
+        answers: Map<String, String>.from(_answers),
+      ),
+    );
   }
 
   Future<void> _submit({bool autoSubmit = false}) async {
@@ -264,6 +290,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _isSubmitted = true;
         _statusMessage = 'Ujian berhasil dikirim.';
       });
+      await _sessionStore.clearSnapshot();
       if (!autoSubmit) {
         await widget.client.sendEvent(
           token: widget.examToken,
@@ -449,6 +476,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                       setState(() {
                         _currentQuestionIndex = index;
                       });
+                      unawaited(_persistSnapshot());
                     },
                     borderRadius: BorderRadius.circular(16),
                     child: Ink(
@@ -531,6 +559,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                           setState(() {
                             _currentQuestionIndex -= 1;
                           });
+                          unawaited(_persistSnapshot());
                         },
                   icon: const Icon(Icons.chevron_left),
                   label: const Text('Sebelumnya'),
@@ -545,6 +574,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                           setState(() {
                             _currentQuestionIndex += 1;
                           });
+                          unawaited(_persistSnapshot());
                         },
                   icon: const Icon(Icons.chevron_right),
                   label: const Text('Berikutnya'),

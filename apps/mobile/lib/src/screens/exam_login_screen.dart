@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../exam_api.dart';
+import '../exam_session_store.dart';
 import 'exam_shell_screen.dart';
 
 class ExamLoginScreen extends StatefulWidget {
@@ -13,6 +14,7 @@ class ExamLoginScreen extends StatefulWidget {
 }
 
 class _ExamLoginScreenState extends State<ExamLoginScreen> {
+  final _sessionStore = ExamSessionStore();
   final _tokenController = TextEditingController();
   final _baseUrlController = TextEditingController(
     text: const String.fromEnvironment(
@@ -22,13 +24,94 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
   );
 
   bool _isSubmitting = false;
+  bool _isRestoring = true;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreExamSession();
+  }
 
   @override
   void dispose() {
     _tokenController.dispose();
     _baseUrlController.dispose();
     super.dispose();
+  }
+
+  Future<void> _restoreExamSession() async {
+    final storedBaseUrl = await _sessionStore.loadBaseUrl();
+    if (storedBaseUrl != null && storedBaseUrl.isNotEmpty) {
+      _baseUrlController.text = storedBaseUrl;
+    }
+
+    final snapshot = await _sessionStore.loadSnapshot();
+    if (!mounted) {
+      return;
+    }
+
+    if (snapshot == null) {
+      setState(() {
+        _isRestoring = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _isRestoring = true;
+      _errorMessage = null;
+    });
+
+    final client = ExamApiClient(baseUrl: snapshot.baseUrl);
+
+    try {
+      final payload = await client.login(
+        token: snapshot.examToken,
+        deviceFingerprint: snapshot.deviceFingerprint,
+      );
+      if (!mounted) {
+        return;
+      }
+      _baseUrlController.text = snapshot.baseUrl;
+      _tokenController.text = snapshot.examToken.toUpperCase();
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ExamShellScreen(
+            client: client,
+            examToken: snapshot.examToken,
+            initialPayload: payload,
+            deviceFingerprint: snapshot.deviceFingerprint,
+            restoredSnapshot: snapshot,
+          ),
+        ),
+      );
+    } on ExamApiException catch (_) {
+      await _sessionStore.clearSnapshot();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage =
+            'Sesi ujian terakhir tidak bisa dipulihkan. Silakan login ulang dengan token aktif.';
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage =
+            'Tidak dapat memulihkan sesi terakhir karena koneksi ke server gagal.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _isRestoring = false;
+        });
+      }
+    }
   }
 
   Future<void> _submit() async {
@@ -54,12 +137,23 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
       _errorMessage = null;
     });
 
+    await _sessionStore.saveBaseUrl(baseUrl);
     final client = ExamApiClient(baseUrl: baseUrl);
+    final deviceFingerprint = _deviceFingerprint();
 
     try {
       final payload = await client.login(
         token: token,
-        deviceFingerprint: _deviceFingerprint(),
+        deviceFingerprint: deviceFingerprint,
+      );
+      await _sessionStore.saveSnapshot(
+        ExamSessionSnapshot(
+          baseUrl: baseUrl,
+          examToken: token,
+          deviceFingerprint: deviceFingerprint,
+          currentQuestionIndex: 0,
+          answers: const <String, String>{},
+        ),
       );
       if (!mounted) {
         return;
@@ -70,7 +164,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
             client: client,
             examToken: token,
             initialPayload: payload,
-            deviceFingerprint: _deviceFingerprint(),
+            deviceFingerprint: deviceFingerprint,
           ),
         ),
       );
@@ -216,7 +310,9 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Masukkan token ujian dari kartu peserta atau pengawas.',
+              _isRestoring
+                  ? 'Memeriksa apakah ada sesi ujian yang masih bisa dipulihkan.'
+                  : 'Masukkan token ujian dari kartu peserta atau pengawas.',
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 20),
@@ -254,7 +350,11 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
                       )
                     : const Icon(Icons.login),
                 label: Text(
-                  _isSubmitting ? 'Memeriksa token...' : 'Masuk Ujian',
+                  _isRestoring
+                      ? 'Memulihkan sesi...'
+                      : _isSubmitting
+                      ? 'Memeriksa token...'
+                      : 'Masuk Ujian',
                 ),
               ),
             ),
