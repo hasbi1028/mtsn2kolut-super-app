@@ -6,6 +6,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Badge } from '$lib/components/ui/badge';
+	import { toast } from '$lib/components/ui/sonner';
 
 	type CbtPackage = {
 		id: string; subject_id: string; subject_name: string; subject_code: string;
@@ -24,7 +25,6 @@
 	let subjects = $state<Subject[]>([]);
 	let loading = $state(true);
 	let error = $state('');
-	let toast = $state('');
 	let showForm = $state(false);
 
 	let fSubjectId = $state('');
@@ -72,8 +72,11 @@
 	}
 
 	function showToast(msg: string) {
-		toast = msg;
-		setTimeout(() => (toast = ''), 3000);
+		toast.success(msg);
+	}
+
+	function showError(msg: string) {
+		toast.error(msg);
 	}
 
 	async function createPackage() {
@@ -89,7 +92,7 @@
 					is_active: fActive, question_ids: Array.from(fSelectedIds),
 				}),
 			});
-			if (!res.ok) { const j = await res.json(); showToast(j.error ?? 'Gagal'); return; }
+			if (!res.ok) { const j = await res.json(); showError(j.error ?? 'Gagal'); return; }
 			fSubjectId = ''; fTitle = ''; fDescription = ''; fDuration = 60;
 			fRandomize = false; fActive = true; fSelectedIds = new Set();
 			showForm = false;
@@ -121,9 +124,6 @@
 		</Button>
 	</div>
 
-	{#if toast}
-		<div class="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">{toast}</div>
-	{/if}
 	{#if error}
 		<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>
 	{/if}
@@ -136,8 +136,8 @@
 			<Card.Content class="space-y-4">
 				<div class="grid gap-3 sm:grid-cols-2">
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Mata Pelajaran <span class="text-red-500">*</span></label>
-						<select class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fSubjectId}>
+						<label for="package-subject-id" class="text-xs text-slate-500 mb-1 block">Mata Pelajaran <span class="text-red-500">*</span></label>
+						<select id="package-subject-id" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fSubjectId}>
 							<option value="">-- Pilih --</option>
 							{#each subjects as s}
 								<option value={s.id}>{s.code} — {s.name}</option>
@@ -145,12 +145,12 @@
 						</select>
 					</div>
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Nama Paket <span class="text-red-500">*</span></label>
-						<Input placeholder="mis: UTS Matematika Sem 1 2025" bind:value={fTitle} />
+						<label for="package-title" class="text-xs text-slate-500 mb-1 block">Nama Paket <span class="text-red-500">*</span></label>
+						<Input id="package-title" placeholder="mis: UTS Matematika Sem 1 2025" bind:value={fTitle} />
 					</div>
 					<div>
-						<label class="text-xs text-slate-500 mb-1 block">Durasi (menit) <span class="text-red-500">*</span></label>
-						<Input type="number" min={10} max={300} bind:value={fDuration} />
+						<label for="package-duration" class="text-xs text-slate-500 mb-1 block">Durasi (menit) <span class="text-red-500">*</span></label>
+						<Input id="package-duration" type="number" min={10} max={300} bind:value={fDuration} />
 					</div>
 					<div class="flex items-end gap-4 pb-1">
 						<label class="flex items-center gap-2 text-sm">
@@ -165,18 +165,18 @@
 				</div>
 
 				<div>
-					<label class="text-xs text-slate-500 mb-1 block">Deskripsi (opsional)</label>
-					<Textarea placeholder="Keterangan paket ujian..." rows={2} bind:value={fDescription} />
+					<label for="package-description" class="text-xs text-slate-500 mb-1 block">Deskripsi (opsional)</label>
+					<Textarea id="package-description" placeholder="Keterangan paket ujian..." rows={2} bind:value={fDescription} />
 				</div>
 
 				{#if fSubjectId}
 					<div>
-						<label class="text-xs text-slate-500 mb-2 block">
+						<div class="text-xs text-slate-500 mb-2 block">
 							Pilih Soal dari Bank ({questionPool.length} soal tersedia)
 							{#if fSelectedIds.size > 0}
 								— <span class="text-green-700 font-medium">{fSelectedIds.size} dipilih</span>
 							{/if}
-						</label>
+						</div>
 						{#if questionPool.length === 0}
 							<p class="text-sm text-slate-400 py-4 text-center border rounded-md">
 								Belum ada soal berstatus "Aktif" untuk mata pelajaran ini
@@ -215,11 +215,12 @@
 	{#if loading}
 		<p class="text-sm text-slate-500">Memuat data...</p>
 	{:else}
-		<Card.Root>
+		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Header class="pb-2">
 				<Card.Title class="text-base">Daftar Paket ({packages.length})</Card.Title>
 			</Card.Header>
-			<Card.Content class="p-0 overflow-x-auto">
+			<Card.Content class="p-0">
+				<div class="hidden overflow-x-auto lg:block">
 				<Table.Root>
 					<Table.Header>
 						<Table.Row>
@@ -233,7 +234,7 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each packages as p}
+						{#each packages as p (p.id)}
 							<Table.Row>
 								<Table.Cell class="font-medium">{p.title}</Table.Cell>
 								<Table.Cell>
@@ -268,6 +269,42 @@
 						{/each}
 					</Table.Body>
 				</Table.Root>
+				</div>
+
+				<div class="grid gap-3 p-4 lg:hidden">
+					{#each packages as p (p.id)}
+						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									<p class="text-sm font-semibold text-slate-900">{p.title}</p>
+									<p class="mt-1 text-xs text-slate-500">{p.subject_name} ({p.subject_code})</p>
+								</div>
+								{#if p.is_active}
+									<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
+								{:else}
+									<Badge variant="secondary">Tidak Aktif</Badge>
+								{/if}
+							</div>
+							<div class="mt-3 flex flex-wrap items-center gap-2">
+								<Badge variant="outline" class="text-xs">{p.duration_minutes} menit</Badge>
+								<Badge variant="secondary">{p.question_count} soal</Badge>
+								{#if p.randomize_questions}
+									<Badge class="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">Acak</Badge>
+								{/if}
+							</div>
+							{#if p.description}
+								<p class="mt-3 text-sm text-slate-600">{p.description}</p>
+							{/if}
+							<div class="mt-4">
+								<Button variant="destructive" size="sm" class="w-full" onclick={() => deletePackage(p.id, p.title)}>Hapus</Button>
+							</div>
+						</div>
+					{:else}
+						<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+							Belum ada paket ujian
+						</div>
+					{/each}
+				</div>
 			</Card.Content>
 		</Card.Root>
 	{/if}

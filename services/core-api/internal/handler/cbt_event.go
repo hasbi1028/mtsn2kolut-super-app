@@ -2,7 +2,10 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -55,11 +58,26 @@ func (h *CbtEvent) GetResults(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, rows)
 }
 
+func (h *CbtEvent) GetExamCards(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	rows, err := h.svc.GetExamCards(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
 func (h *CbtEvent) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Title          string `json:"title"`
 		ExamType       string `json:"exam_type"`
 		Scope          string `json:"scope"`
+		TargetLevels   []string `json:"target_levels"`
 		AcademicYearID string `json:"academic_year_id"`
 		Status         string `json:"status"`
 	}
@@ -79,6 +97,11 @@ func (h *CbtEvent) Create(w http.ResponseWriter, r *http.Request) {
 	if scope == "" {
 		scope = "class"
 	}
+	targetLevels := normalizeTargetLevels(body.TargetLevels)
+	if err := validateTargetLevels(targetLevels); err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
 
 	var ayID pgtype.UUID
 	if body.AcademicYearID != "" {
@@ -94,6 +117,7 @@ func (h *CbtEvent) Create(w http.ResponseWriter, r *http.Request) {
 		Title:          body.Title,
 		ExamType:       examType,
 		Scope:          scope,
+		TargetLevels:   targetLevels,
 		AcademicYearID: ayID,
 		Status:         body.Status,
 	})
@@ -114,10 +138,16 @@ func (h *CbtEvent) Update(w http.ResponseWriter, r *http.Request) {
 		Title          string `json:"title"`
 		ExamType       string `json:"exam_type"`
 		Scope          string `json:"scope"`
+		TargetLevels   []string `json:"target_levels"`
 		AcademicYearID string `json:"academic_year_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
+		return
+	}
+	targetLevels := normalizeTargetLevels(body.TargetLevels)
+	if err := validateTargetLevels(targetLevels); err != nil {
+		api.BadRequest(w, err.Error())
 		return
 	}
 	var ayID pgtype.UUID
@@ -132,6 +162,7 @@ func (h *CbtEvent) Update(w http.ResponseWriter, r *http.Request) {
 		Title:          body.Title,
 		ExamType:       db.CbtExamType(body.ExamType),
 		Scope:          body.Scope,
+		TargetLevels:   targetLevels,
 		AcademicYearID: ayID,
 	})
 	if err != nil {
@@ -173,4 +204,39 @@ func (h *CbtEvent) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.NoContent(w)
+}
+
+func normalizeTargetLevels(levels []string) []string {
+	if len(levels) == 0 {
+		return []string{}
+	}
+	out := make([]string, 0, len(levels))
+	seen := map[string]struct{}{}
+	for _, level := range levels {
+		normalized := strings.ToUpper(strings.TrimSpace(level))
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	slices.Sort(out)
+	return out
+}
+
+func validateTargetLevels(levels []string) error {
+	allowed := map[string]struct{}{
+		"VII":  {},
+		"VIII": {},
+		"IX":   {},
+	}
+	for _, level := range levels {
+		if _, ok := allowed[level]; !ok {
+			return errors.New("target_levels hanya boleh berisi VII, VIII, atau IX")
+		}
+	}
+	return nil
 }

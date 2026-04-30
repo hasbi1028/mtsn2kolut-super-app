@@ -12,15 +12,16 @@ import (
 )
 
 const createCbtExamEvent = `-- name: CreateCbtExamEvent :one
-INSERT INTO cbt_exam_events (title, exam_type, scope, academic_year_id, status)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at
+INSERT INTO cbt_exam_events (title, exam_type, scope, target_levels, academic_year_id, status)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels
 `
 
 type CreateCbtExamEventParams struct {
 	Title          string      `json:"title"`
 	ExamType       CbtExamType `json:"exam_type"`
 	Scope          string      `json:"scope"`
+	TargetLevels   []string    `json:"target_levels"`
 	AcademicYearID pgtype.UUID `json:"academic_year_id"`
 	Status         string      `json:"status"`
 }
@@ -30,6 +31,7 @@ func (q *Queries) CreateCbtExamEvent(ctx context.Context, arg CreateCbtExamEvent
 		arg.Title,
 		arg.ExamType,
 		arg.Scope,
+		arg.TargetLevels,
 		arg.AcademicYearID,
 		arg.Status,
 	)
@@ -43,6 +45,7 @@ func (q *Queries) CreateCbtExamEvent(ctx context.Context, arg CreateCbtExamEvent
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TargetLevels,
 	)
 	return i, err
 }
@@ -58,7 +61,7 @@ func (q *Queries) DeleteCbtExamEvent(ctx context.Context, id pgtype.UUID) error 
 
 const getCbtExamEvent = `-- name: GetCbtExamEvent :one
 SELECT
-  e.id, e.title, e.exam_type, e.scope, e.status,
+  e.id, e.title, e.exam_type, e.scope, e.target_levels, e.status,
   e.academic_year_id,
   ay.name AS academic_year_name,
   e.created_at, e.updated_at
@@ -72,6 +75,7 @@ type GetCbtExamEventRow struct {
 	Title            string             `json:"title"`
 	ExamType         CbtExamType        `json:"exam_type"`
 	Scope            string             `json:"scope"`
+	TargetLevels     []string           `json:"target_levels"`
 	Status           string             `json:"status"`
 	AcademicYearID   pgtype.UUID        `json:"academic_year_id"`
 	AcademicYearName pgtype.Text        `json:"academic_year_name"`
@@ -87,6 +91,7 @@ func (q *Queries) GetCbtExamEvent(ctx context.Context, id pgtype.UUID) (GetCbtEx
 		&i.Title,
 		&i.ExamType,
 		&i.Scope,
+		&i.TargetLevels,
 		&i.Status,
 		&i.AcademicYearID,
 		&i.AcademicYearName,
@@ -94,6 +99,94 @@ func (q *Queries) GetCbtExamEvent(ctx context.Context, id pgtype.UUID) (GetCbtEx
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getEventExamCards = `-- name: GetEventExamCards :many
+SELECT
+    e.id AS event_id,
+    e.title AS event_title,
+    e.exam_type,
+    e.scope AS event_scope,
+    e.target_levels,
+    COALESCE(ay.name, '') AS academic_year_name,
+    s.id AS session_id,
+    s.title AS session_title,
+    s.scheduled_start,
+    p.id AS participant_id,
+    p.token,
+    p.seat_no,
+    std.nis,
+    std.nama AS student_nama,
+    std.gender,
+    COALESCE(c.code, '') AS class_code,
+    COALESCE(r.room_name, '') AS room_name
+FROM cbt_exam_events e
+LEFT JOIN academic_years ay ON ay.id = e.academic_year_id
+JOIN cbt_exam_sessions s ON s.event_id = e.id
+JOIN cbt_exam_participants p ON p.session_id = s.id
+JOIN students std ON std.id = p.student_id
+LEFT JOIN school_classes c ON c.id = std.class_id
+LEFT JOIN cbt_exam_rooms r ON r.id = p.room_id
+WHERE e.id = $1
+ORDER BY s.scheduled_start ASC, c.code ASC, std.nama ASC
+`
+
+type GetEventExamCardsRow struct {
+	EventID          pgtype.UUID        `json:"event_id"`
+	EventTitle       string             `json:"event_title"`
+	ExamType         CbtExamType        `json:"exam_type"`
+	EventScope       string             `json:"event_scope"`
+	TargetLevels     []string           `json:"target_levels"`
+	AcademicYearName string             `json:"academic_year_name"`
+	SessionID        pgtype.UUID        `json:"session_id"`
+	SessionTitle     string             `json:"session_title"`
+	ScheduledStart   pgtype.Timestamptz `json:"scheduled_start"`
+	ParticipantID    pgtype.UUID        `json:"participant_id"`
+	Token            string             `json:"token"`
+	SeatNo           pgtype.Int4        `json:"seat_no"`
+	Nis              string             `json:"nis"`
+	StudentNama      string             `json:"student_nama"`
+	Gender           GenderEnum         `json:"gender"`
+	ClassCode        string             `json:"class_code"`
+	RoomName         string             `json:"room_name"`
+}
+
+func (q *Queries) GetEventExamCards(ctx context.Context, id pgtype.UUID) ([]GetEventExamCardsRow, error) {
+	rows, err := q.db.Query(ctx, getEventExamCards, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetEventExamCardsRow{}
+	for rows.Next() {
+		var i GetEventExamCardsRow
+		if err := rows.Scan(
+			&i.EventID,
+			&i.EventTitle,
+			&i.ExamType,
+			&i.EventScope,
+			&i.TargetLevels,
+			&i.AcademicYearName,
+			&i.SessionID,
+			&i.SessionTitle,
+			&i.ScheduledStart,
+			&i.ParticipantID,
+			&i.Token,
+			&i.SeatNo,
+			&i.Nis,
+			&i.StudentNama,
+			&i.Gender,
+			&i.ClassCode,
+			&i.RoomName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getEventResults = `-- name: GetEventResults :many
@@ -159,7 +252,7 @@ func (q *Queries) GetEventResults(ctx context.Context, eventID pgtype.UUID) ([]G
 
 const listCbtExamEvents = `-- name: ListCbtExamEvents :many
 SELECT
-  e.id, e.title, e.exam_type, e.scope, e.status,
+  e.id, e.title, e.exam_type, e.scope, e.target_levels, e.status,
   e.academic_year_id,
   ay.name AS academic_year_name,
   e.created_at, e.updated_at,
@@ -176,6 +269,7 @@ type ListCbtExamEventsRow struct {
 	Title            string             `json:"title"`
 	ExamType         CbtExamType        `json:"exam_type"`
 	Scope            string             `json:"scope"`
+	TargetLevels     []string           `json:"target_levels"`
 	Status           string             `json:"status"`
 	AcademicYearID   pgtype.UUID        `json:"academic_year_id"`
 	AcademicYearName pgtype.Text        `json:"academic_year_name"`
@@ -198,6 +292,7 @@ func (q *Queries) ListCbtExamEvents(ctx context.Context) ([]ListCbtExamEventsRow
 			&i.Title,
 			&i.ExamType,
 			&i.Scope,
+			&i.TargetLevels,
 			&i.Status,
 			&i.AcademicYearID,
 			&i.AcademicYearName,
@@ -217,9 +312,9 @@ func (q *Queries) ListCbtExamEvents(ctx context.Context) ([]ListCbtExamEventsRow
 
 const updateCbtExamEvent = `-- name: UpdateCbtExamEvent :one
 UPDATE cbt_exam_events
-SET title = $2, exam_type = $3, scope = $4, academic_year_id = $5, updated_at = NOW()
+SET title = $2, exam_type = $3, scope = $4, target_levels = $5, academic_year_id = $6, updated_at = NOW()
 WHERE id = $1
-RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at
+RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels
 `
 
 type UpdateCbtExamEventParams struct {
@@ -227,6 +322,7 @@ type UpdateCbtExamEventParams struct {
 	Title          string      `json:"title"`
 	ExamType       CbtExamType `json:"exam_type"`
 	Scope          string      `json:"scope"`
+	TargetLevels   []string    `json:"target_levels"`
 	AcademicYearID pgtype.UUID `json:"academic_year_id"`
 }
 
@@ -236,6 +332,7 @@ func (q *Queries) UpdateCbtExamEvent(ctx context.Context, arg UpdateCbtExamEvent
 		arg.Title,
 		arg.ExamType,
 		arg.Scope,
+		arg.TargetLevels,
 		arg.AcademicYearID,
 	)
 	var i CbtExamEvent
@@ -248,6 +345,7 @@ func (q *Queries) UpdateCbtExamEvent(ctx context.Context, arg UpdateCbtExamEvent
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TargetLevels,
 	)
 	return i, err
 }
@@ -256,7 +354,7 @@ const updateCbtExamEventStatus = `-- name: UpdateCbtExamEventStatus :one
 UPDATE cbt_exam_events
 SET status = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at
+RETURNING id, title, exam_type, scope, academic_year_id, status, created_at, updated_at, target_levels
 `
 
 type UpdateCbtExamEventStatusParams struct {
@@ -276,6 +374,7 @@ func (q *Queries) UpdateCbtExamEventStatus(ctx context.Context, arg UpdateCbtExa
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TargetLevels,
 	)
 	return i, err
 }

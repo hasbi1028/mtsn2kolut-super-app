@@ -44,13 +44,19 @@ func (h *CbtSession) Get(w http.ResponseWriter, r *http.Request) {
 
 func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		PackageID      string `json:"package_id"`
-		ClassID        string `json:"class_id"`
-		EventID        string `json:"event_id"`
-		Title          string `json:"title"`
-		ScheduledStart string `json:"scheduled_start"`
-		ScheduledEnd   string `json:"scheduled_end"`
-		Status         string `json:"status"`
+		PackageID       string `json:"package_id"`
+		ClassID         string `json:"class_id"`
+		EventID         string `json:"event_id"`
+		ScopeType       string `json:"scope_type"`
+		ScopeRef        string `json:"scope_ref"`
+		MixPolicy       string `json:"mix_policy"`
+		AssignmentMode  string `json:"assignment_mode"`
+		AllowCrossGrade bool   `json:"allow_cross_grade"`
+		IsSpecialEvent  bool   `json:"is_special_event"`
+		Title           string `json:"title"`
+		ScheduledStart  string `json:"scheduled_start"`
+		ScheduledEnd    string `json:"scheduled_end"`
+		Status          string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -63,6 +69,11 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	scopeType := body.ScopeType
+	if scopeType == "" {
+		scopeType = "class"
+	}
+
 	var classID pgtype.UUID
 	if body.ClassID != "" {
 		classID, err = parseUUID(body.ClassID)
@@ -70,6 +81,23 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 			api.BadRequest(w, "class_id invalid")
 			return
 		}
+	}
+	if scopeType == "class" && !classID.Valid {
+		api.BadRequest(w, "class_id wajib diisi untuk scope_type=class")
+		return
+	}
+	if body.AllowCrossGrade && !body.IsSpecialEvent {
+		api.BadRequest(w, "allow_cross_grade hanya boleh untuk special event")
+		return
+	}
+
+	scopeRef := body.ScopeRef
+	if scopeType == "class" && scopeRef == "" && classID.Valid {
+		scopeRef = classID.String()
+	}
+	if (scopeType == "grade" || scopeType == "custom") && scopeRef == "" {
+		api.BadRequest(w, "scope_ref wajib diisi untuk scope_type grade/custom")
+		return
 	}
 
 	var eventID pgtype.UUID
@@ -108,13 +136,19 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 	endTz.Valid = true
 
 	row, err := h.svc.Create(r.Context(), service.CreateCbtSessionInput{
-		PackageID:      packageID,
-		ClassID:        classID,
-		EventID:        eventID,
-		Title:          body.Title,
-		ScheduledStart: startTz,
-		ScheduledEnd:   endTz,
-		Status:         status,
+		PackageID:       packageID,
+		ClassID:         classID,
+		EventID:         eventID,
+		ScopeType:       scopeType,
+		ScopeRef:        scopeRef,
+		MixPolicy:       body.MixPolicy,
+		AssignmentMode:  body.AssignmentMode,
+		AllowCrossGrade: body.AllowCrossGrade,
+		IsSpecialEvent:  body.IsSpecialEvent,
+		Title:           body.Title,
+		ScheduledStart:  startTz,
+		ScheduledEnd:    endTz,
+		Status:          status,
 	})
 	if err != nil {
 		api.Internal(w, err)
@@ -173,29 +207,55 @@ func (h *CbtSession) ListParticipants(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, rows)
 }
 
-func (h *CbtSession) EnrollClass(w http.ResponseWriter, r *http.Request) {
+func (h *CbtSession) Enroll(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid session id")
 		return
 	}
 	var body struct {
-		ClassID string `json:"class_id"`
+		ScopeType string `json:"scope_type"`
+		ClassID   string `json:"class_id"`
+		Level     string `json:"level"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	classID, err := parseUUID(body.ClassID)
-	if err != nil {
-		api.BadRequest(w, "class_id invalid")
-		return
-	}
+	switch body.ScopeType {
+	case "", "class":
+		classID, err := parseUUID(body.ClassID)
+		if err != nil {
+			api.BadRequest(w, "class_id invalid")
+			return
+		}
 	if err := h.svc.EnrollClass(r.Context(), sessionID, classID); err != nil {
 		api.Internal(w, err)
 		return
 	}
+	case "grade":
+		if body.Level == "" {
+			api.BadRequest(w, "level required (e.g. VII, VIII, IX)")
+			return
+		}
+		if err := h.svc.EnrollGrade(r.Context(), sessionID, body.Level); err != nil {
+			api.Internal(w, err)
+			return
+		}
+	case "school":
+		if err := h.svc.EnrollSchool(r.Context(), sessionID); err != nil {
+			api.Internal(w, err)
+			return
+		}
+	default:
+		api.BadRequest(w, "scope_type harus class, grade, atau school")
+		return
+	}
 	api.OK(w, map[string]string{"status": "enrolled"})
+}
+
+func (h *CbtSession) EnrollClass(w http.ResponseWriter, r *http.Request) {
+	h.Enroll(w, r)
 }
 
 func (h *CbtSession) EnrollGrade(w http.ResponseWriter, r *http.Request) {
@@ -260,6 +320,49 @@ func (h *CbtSession) RegenerateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, row)
+}
+
+func (h *CbtSession) AssignSeat(w http.ResponseWriter, r *http.Request) {
+	pid, err := parseUUID(chi.URLParam(r, "pid"))
+	if err != nil {
+		api.BadRequest(w, "invalid participant id")
+		return
+	}
+	var body struct {
+		RoomID string `json:"room_id"`
+		SeatNo int32  `json:"seat_no"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	roomID, err := parseUUID(body.RoomID)
+	if err != nil {
+		api.BadRequest(w, "room_id invalid")
+		return
+	}
+	if body.SeatNo <= 0 {
+		api.BadRequest(w, "seat_no harus lebih dari 0")
+		return
+	}
+	if err := h.svc.AssignSeat(r.Context(), pid, roomID, body.SeatNo); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{"status": "assigned", "seat_no": body.SeatNo})
+}
+
+func (h *CbtSession) AutoAssignSeats(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	if err := h.svc.AutoAssignSeats(r.Context(), sessionID); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]string{"status": "auto_assigned"})
 }
 
 // --- Rooms ---
@@ -565,6 +668,34 @@ func (h *CbtSession) GetResults(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]any{
 		"session": session,
 		"results": results,
+	})
+}
+
+func (h *CbtSession) GetMinutes(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	session, err := h.svc.Get(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	participants, err := h.svc.ListParticipants(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	rooms, err := h.svc.ListRooms(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{
+		"session":      session,
+		"participants": participants,
+		"rooms":        rooms,
 	})
 }
 

@@ -14,14 +14,14 @@ export const GET = async (event: RequestEvent) => {
 export const POST = async (event: RequestEvent) => {
 	try {
 		const body = await event.request.json() as Record<string, unknown>;
-		const { package_id, class_id, title, scheduled_start, scheduled_end, status } = body;
-		if (!package_id || !class_id || !title || !scheduled_start || !scheduled_end) {
-			return json({ error: 'package_id, class_id, title, scheduled_start, scheduled_end wajib diisi' }, { status: 400 });
+		const { package_id, title, scheduled_start, scheduled_end, status, scope_type, class_id } = body;
+		if (!package_id || !title || !scheduled_start || !scheduled_end) {
+			return json({ error: 'package_id, title, scheduled_start, scheduled_end wajib diisi' }, { status: 400 });
 		}
-		const data = await proxy(event).post('/api/cbt/sessions', {
-			package_id, class_id, title, scheduled_start, scheduled_end,
-			status: status ?? 'draft',
-		});
+		if ((scope_type ?? 'class') === 'class' && !class_id) {
+			return json({ error: 'class_id wajib diisi untuk scope_type=class' }, { status: 400 });
+		}
+		const data = await proxy(event).post('/api/cbt/sessions', { ...body, status: status ?? 'draft' });
 		return json(data, { status: 201 });
 	} catch (e) {
 		return handleRouteError(e, 'cbt/sessions POST');

@@ -84,7 +84,8 @@ func (q *Queries) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) error {
 const getExamQuestions = `-- name: GetExamQuestions :many
 SELECT
   q.id, q.code, q.question_text, q.question_type, q.options,
-  q.option_a, q.option_b, q.option_c, q.option_d, q.option_e
+  q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
+  q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex, q.media_asset_ids
 FROM cbt_package_questions pq
 JOIN cbt_questions q ON q.id = pq.question_id
 WHERE pq.package_id = $1 AND q.status = 'published'
@@ -92,16 +93,21 @@ ORDER BY pq.position ASC
 `
 
 type GetExamQuestionsRow struct {
-	ID           pgtype.UUID `json:"id"`
-	Code         string      `json:"code"`
-	QuestionText string      `json:"question_text"`
-	QuestionType string      `json:"question_type"`
-	Options      []byte      `json:"options"`
-	OptionA      string      `json:"option_a"`
-	OptionB      string      `json:"option_b"`
-	OptionC      string      `json:"option_c"`
-	OptionD      string      `json:"option_d"`
-	OptionE      string      `json:"option_e"`
+	ID            pgtype.UUID `json:"id"`
+	Code          string      `json:"code"`
+	QuestionText  string      `json:"question_text"`
+	QuestionType  string      `json:"question_type"`
+	Options       []byte      `json:"options"`
+	OptionA       string      `json:"option_a"`
+	OptionB       string      `json:"option_b"`
+	OptionC       string      `json:"option_c"`
+	OptionD       string      `json:"option_d"`
+	OptionE       string      `json:"option_e"`
+	StemHtml      string      `json:"stem_html"`
+	StemLatex     string      `json:"stem_latex"`
+	StimulusHtml  string      `json:"stimulus_html"`
+	StimulusLatex string      `json:"stimulus_latex"`
+	MediaAssetIds []byte      `json:"media_asset_ids"`
 }
 
 func (q *Queries) GetExamQuestions(ctx context.Context, packageID pgtype.UUID) ([]GetExamQuestionsRow, error) {
@@ -124,6 +130,11 @@ func (q *Queries) GetExamQuestions(ctx context.Context, packageID pgtype.UUID) (
 			&i.OptionC,
 			&i.OptionD,
 			&i.OptionE,
+			&i.StemHtml,
+			&i.StemLatex,
+			&i.StimulusHtml,
+			&i.StimulusLatex,
+			&i.MediaAssetIds,
 		); err != nil {
 			return nil, err
 		}

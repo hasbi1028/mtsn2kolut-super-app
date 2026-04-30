@@ -6,20 +6,24 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
+	import { toast } from '$lib/components/ui/sonner';
 
 	type SessionInfo = {
 		id: string; title: string; package_title: string; duration_minutes: number;
 		class_name: string; class_code: string; event_id: string | null;
+		scope_type?: string; scope_ref?: string;
 		scheduled_start: string; scheduled_end: string; status: string;
 	};
 	type ResultRow = {
 		participant_id: string; nis: string; nama: string; gender: string;
 		submitted_at: string | null; score: string | null;
+		room_name?: string; seat_no?: number | null;
 		total_answers: number; correct_answers: number;
 	};
 	type Participant = {
 		id: string; nis: string; nama: string; gender: string;
 		token: string; room_name: string; room_id: string | null;
+		seat_no?: number | null;
 		submitted_at: string | null; score: string | null;
 		app_switch_count: number; screenshot_attempt: number; suspicious_flag: boolean;
 		last_heartbeat: string | null;
@@ -27,7 +31,7 @@
 	type Room = { id: string; room_name: string; capacity: number; participant_count: number; };
 	type ProctoringRow = {
 		participant_id: string; nis: string; nama: string;
-		token: string; room_name: string;
+		token: string; room_name: string; seat_no?: number | null;
 		submitted_at: string | null; last_heartbeat: string | null;
 		app_switch_count: number; screenshot_attempt: number;
 		suspicious_flag: boolean; answered_count: number; score: string | null;
@@ -48,14 +52,16 @@
 	let essays = $state<UngradedEssay[]>([]);
 	let loading = $state(true);
 	let error = $state('');
-	let toast = $state({ msg: '', ok: true });
 	let scoreBusy = $state(false);
 	let shuffleBusy = $state(false);
 	let newRoomName = $state('');
 	let newRoomCap = $state(30);
 	let roomBusy = $state(false);
+	let seatBusy = $state(false);
 	let procInterval: ReturnType<typeof setInterval> | null = null;
 	let gradeInput = $state<Record<string, number>>({});
+	let seatInput = $state<Record<string, number>>({});
+	let roomInput = $state<Record<string, string>>({});
 
 	const statusLabel: Record<string, string> = {
 		draft: 'Draft', scheduled: 'Terjadwal', active: 'Berlangsung',
@@ -110,8 +116,8 @@
 	});
 
 	function showToast(msg: string, ok = true) {
-		toast = { msg, ok };
-		setTimeout(() => (toast = { msg: '', ok: true }), 4000);
+		if (ok) toast.success(msg);
+		else toast.error(msg);
 	}
 
 	async function load() {
@@ -131,7 +137,11 @@
 
 	async function loadParticipants() {
 		const res = await fetch(`/api/cbt/sessions/${sessionId}/participants`);
-		if (res.ok) participants = await res.json();
+		if (res.ok) {
+			participants = await res.json();
+			seatInput = Object.fromEntries(participants.map((participant) => [participant.id, participant.seat_no ?? 0]));
+			roomInput = Object.fromEntries(participants.map((participant) => [participant.id, participant.room_id ?? '']));
+		}
 	}
 
 	async function loadRooms() {
@@ -154,7 +164,7 @@
 
 	async function switchTab(tab: typeof activeTab) {
 		activeTab = tab;
-		if (tab === 'peserta') await loadParticipants();
+		if (tab === 'peserta') { await loadRooms(); await loadParticipants(); }
 		if (tab === 'ruangan') { await loadRooms(); await loadParticipants(); }
 		if (tab === 'essay') await loadEssays();
 		if (tab === 'proctoring') {
@@ -225,6 +235,46 @@
 		shuffleBusy = false;
 	}
 
+	async function autoAssignSeats() {
+		seatBusy = true;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/seats/auto`, { method: 'POST' });
+			if (res.ok) {
+				showToast('Nomor meja berhasil diurutkan otomatis');
+				await loadParticipants();
+			} else {
+				showToast('Gagal mengatur nomor meja otomatis', false);
+			}
+		} finally {
+			seatBusy = false;
+		}
+	}
+
+	async function assignSeat(pid: string) {
+		const roomId = roomInput[pid];
+		const seatNo = seatInput[pid];
+		if (!roomId || !seatNo || seatNo <= 0) {
+			showToast('Pilih ruangan dan isi nomor meja yang valid', false);
+			return;
+		}
+		seatBusy = true;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/participants/${pid}/seat`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ room_id: roomId, seat_no: seatNo }),
+			});
+			if (res.ok) {
+				showToast('No meja peserta diperbarui');
+				await loadParticipants();
+			} else {
+				showToast('Gagal menyimpan nomor meja', false);
+			}
+		} finally {
+			seatBusy = false;
+		}
+	}
+
 	async function flagParticipant(pid: string, flag: boolean) {
 		await fetch(`/api/cbt/sessions/${sessionId}/participants/${pid}/flag`, {
 			method: 'POST',
@@ -286,11 +336,6 @@
 		<span class="text-slate-700 font-medium truncate max-w-xs">{session?.title ?? '...'}</span>
 	</div>
 
-	{#if toast.msg}
-		<div class="rounded-md px-4 py-3 text-sm {toast.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800'}">
-			{toast.msg}
-		</div>
-	{/if}
 	{#if error}<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>{/if}
 
 	{#if loading}
@@ -307,17 +352,25 @@
 					<span>· {fmtDt(session.scheduled_start)}</span>
 				</div>
 			</div>
-			<div class="flex items-center gap-2 flex-wrap">
-				<Badge class={statusClass(session.status)}>{statusLabel[session.status] ?? session.status}</Badge>
+				<div class="flex items-center gap-2 flex-wrap">
+					<Badge class={statusClass(session.status)}>{statusLabel[session.status] ?? session.status}</Badge>
 				{#if session.status === 'finished' || session.status === 'active'}
 					<Button size="sm" variant="outline" disabled={scoreBusy} onclick={triggerScoring}>
 						{scoreBusy ? 'Menghitung...' : '⟳ Hitung Skor'}
 					</Button>
 				{/if}
-				{#if results.length > 0}
-					<Button size="sm" variant="outline" onclick={exportCSV}>↓ CSV</Button>
-				{/if}
-			</div>
+					{#if results.length > 0}
+						<Button size="sm" variant="outline" onclick={exportCSV}>↓ CSV</Button>
+					{/if}
+					<a href={`/cbt/sessions/${sessionId}/minutes`} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
+						Berita Acara
+					</a>
+					{#if session.event_id}
+						<a href={`/cbt/events/${session.event_id}/exam-cards`} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
+							Kartu Ujian Event
+						</a>
+					{/if}
+				</div>
 		</div>
 
 		<!-- Stats -->
@@ -418,22 +471,24 @@
 								<Table.Head>Nama</Table.Head>
 								<Table.Head>L/P</Table.Head>
 								<Table.Head>Ruangan</Table.Head>
+								<Table.Head>No Meja</Table.Head>
 								<Table.Head>Token</Table.Head>
 								<Table.Head>Status</Table.Head>
 								<Table.Head class="text-right">Aksi</Table.Head>
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-							{#each participants as p}
-								<Table.Row class="{p.suspicious_flag ? 'bg-red-50' : 'hover:bg-green-50/30'}">
+								{#each participants as p}
+									<Table.Row class={p.suspicious_flag ? 'bg-red-50' : 'hover:bg-green-50/30'}>
 									<Table.Cell class="font-mono text-sm">{p.nis}</Table.Cell>
 									<Table.Cell class="font-medium">
 										{p.nama}
 										{#if p.suspicious_flag}<span class="ml-1 text-red-500 text-xs">⚑ Dicurigai</span>{/if}
 									</Table.Cell>
-									<Table.Cell><Badge variant="outline" class="text-xs">{p.gender}</Badge></Table.Cell>
-									<Table.Cell class="text-sm text-muted-foreground">{p.room_name || '—'}</Table.Cell>
-									<Table.Cell>
+										<Table.Cell><Badge variant="outline" class="text-xs">{p.gender}</Badge></Table.Cell>
+										<Table.Cell class="text-sm text-muted-foreground">{p.room_name || '—'}</Table.Cell>
+										<Table.Cell class="text-sm text-muted-foreground">{p.seat_no ?? '—'}</Table.Cell>
+										<Table.Cell>
 										{#if p.token}
 											<code class="bg-green-50 text-green-800 px-2 py-0.5 rounded text-xs font-mono border border-green-200">
 												{p.token}
@@ -449,20 +504,28 @@
 											<Badge variant="outline" class="text-xs bg-amber-50 text-amber-700 border-amber-200">Belum</Badge>
 										{/if}
 									</Table.Cell>
-									<Table.Cell class="text-right">
-										<div class="flex gap-1 justify-end">
-											{#if p.token}
-												<Button variant="outline" size="sm" onclick={() => copyToken(p.token)}>Salin</Button>
-											{/if}
+										<Table.Cell class="text-right">
+											<div class="flex items-center justify-end gap-1">
+												<select bind:value={roomInput[p.id]} class="h-8 rounded-md border border-input bg-background px-2 text-xs">
+													<option value="">Ruangan</option>
+													{#each rooms as room}
+														<option value={room.id}>{room.room_name}</option>
+													{/each}
+												</select>
+												<Input bind:value={seatInput[p.id]} type="number" min="1" class="h-8 w-16" />
+												<Button variant="outline" size="sm" onclick={() => assignSeat(p.id)} disabled={seatBusy}>Simpan</Button>
+												{#if p.token}
+													<Button variant="outline" size="sm" onclick={() => copyToken(p.token)}>Salin</Button>
+												{/if}
 											<Button variant="outline" size="sm" onclick={() => regenerateToken(p.id)}>Regenerate</Button>
 										</div>
 									</Table.Cell>
 								</Table.Row>
-							{:else}
-								<Table.Row>
-									<Table.Cell colspan={7} class="text-center text-slate-400 py-8">Belum ada peserta</Table.Cell>
-								</Table.Row>
-							{/each}
+								{:else}
+									<Table.Row>
+										<Table.Cell colspan={8} class="text-center text-slate-400 py-8">Belum ada peserta</Table.Cell>
+									</Table.Row>
+								{/each}
 						</Table.Body>
 					</Table.Root>
 				</Card.Content>
@@ -487,12 +550,15 @@
 						<Button onclick={createRoom} disabled={roomBusy || !newRoomName.trim()}>
 							{roomBusy ? 'Menyimpan...' : '+ Tambah Ruangan'}
 						</Button>
-						{#if rooms.length > 0}
-							<Button variant="outline" disabled={shuffleBusy} onclick={shuffleRooms}
-								class="border-amber-300 text-amber-700 hover:bg-amber-50">
-								{shuffleBusy ? 'Mengacak...' : '🔀 Acak Peserta ke Ruangan'}
-							</Button>
-						{/if}
+							{#if rooms.length > 0}
+								<Button variant="outline" disabled={shuffleBusy} onclick={shuffleRooms}
+									class="border-amber-300 text-amber-700 hover:bg-amber-50">
+									{shuffleBusy ? 'Mengacak...' : '🔀 Acak Peserta ke Ruangan'}
+								</Button>
+								<Button variant="outline" disabled={seatBusy} onclick={autoAssignSeats}>
+									{seatBusy ? 'Mengatur...' : '🪑 Atur No Meja'}
+								</Button>
+							{/if}
 					</div>
 				</Card.Content>
 			</Card.Root>
@@ -534,9 +600,10 @@
 								<Table.Row class="bg-green-50">
 									<Table.Head>NIS</Table.Head>
 									<Table.Head>Nama</Table.Head>
-									<Table.Head>L/P</Table.Head>
-									<Table.Head>Ruangan</Table.Head>
-									<Table.Head>Token</Table.Head>
+										<Table.Head>L/P</Table.Head>
+										<Table.Head>Ruangan</Table.Head>
+										<Table.Head>No Meja</Table.Head>
+										<Table.Head>Token</Table.Head>
 								</Table.Row>
 							</Table.Header>
 							<Table.Body>
@@ -547,10 +614,11 @@
 										<Table.Cell><Badge variant="outline" class="text-xs">{p.gender}</Badge></Table.Cell>
 										{#if p.room_name}
 											<Table.Cell class="text-sm">{p.room_name}</Table.Cell>
-										{:else}
-											<Table.Cell class="text-sm text-slate-400">Belum ditentukan</Table.Cell>
-										{/if}
-										<Table.Cell>
+											{:else}
+												<Table.Cell class="text-sm text-slate-400">Belum ditentukan</Table.Cell>
+											{/if}
+											<Table.Cell class="text-sm text-slate-600">{p.seat_no ?? '—'}</Table.Cell>
+											<Table.Cell>
 											{#if p.token}
 												<code class="bg-green-50 text-green-800 px-2 py-0.5 rounded text-xs font-mono border border-green-200">{p.token}</code>
 											{:else}
@@ -591,9 +659,9 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-							{#each proctoring as p}
-								{@const hb = heartbeatStatus(p.last_heartbeat)}
-								<Table.Row class="{p.suspicious_flag ? 'bg-red-50' : p.app_switch_count >= 3 ? 'bg-amber-50/50' : 'hover:bg-green-50/30'}">
+								{#each proctoring as p}
+									{@const hb = heartbeatStatus(p.last_heartbeat)}
+									<Table.Row class={p.suspicious_flag ? 'bg-red-50' : p.app_switch_count >= 3 ? 'bg-amber-50/50' : 'hover:bg-green-50/30'}>
 									<Table.Cell class="font-medium">
 										{p.nama}
 										<div class="text-xs text-muted-foreground font-mono">{p.nis}</div>
@@ -617,10 +685,10 @@
 										{p.submitted_at ? fmtDt(p.submitted_at) : '—'}
 									</Table.Cell>
 									<Table.Cell class="text-right">
-										<Button
-											variant="outline" size="sm"
-											class="{p.suspicious_flag ? 'border-red-400 text-red-700 bg-red-50' : 'border-slate-200 text-slate-500'}"
-											onclick={() => flagParticipant(p.participant_id, !p.suspicious_flag)}>
+											<Button
+												variant="outline" size="sm"
+												class={p.suspicious_flag ? 'border-red-400 text-red-700 bg-red-50' : 'border-slate-200 text-slate-500'}
+												onclick={() => flagParticipant(p.participant_id, !p.suspicious_flag)}>
 											{p.suspicious_flag ? '⚑ Unflag' : '⚐ Flag'}
 										</Button>
 									</Table.Cell>

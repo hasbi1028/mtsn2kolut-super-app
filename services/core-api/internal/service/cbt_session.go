@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"math/rand"
+	"sort"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
@@ -36,24 +37,40 @@ func (s *CbtSession) Get(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSess
 }
 
 type CreateCbtSessionInput struct {
-	PackageID      pgtype.UUID
-	ClassID        pgtype.UUID
-	EventID        pgtype.UUID
-	Title          string
-	ScheduledStart pgtype.Timestamptz
-	ScheduledEnd   pgtype.Timestamptz
-	Status         db.CbtSessionStatusEnum
+	PackageID       pgtype.UUID
+	ClassID         pgtype.UUID
+	EventID         pgtype.UUID
+	ScopeType       string
+	ScopeRef        string
+	MixPolicy       string
+	AssignmentMode  string
+	AllowCrossGrade bool
+	IsSpecialEvent  bool
+	Title           string
+	ScheduledStart  pgtype.Timestamptz
+	ScheduledEnd    pgtype.Timestamptz
+	Status          db.CbtSessionStatusEnum
 }
 
 func (s *CbtSession) Create(ctx context.Context, in CreateCbtSessionInput) (db.CbtExamSession, error) {
+	scopeType := normalizeScopeType(in.ScopeType)
+	mixPolicy := normalizeMixPolicy(in.MixPolicy, scopeType)
+	assignmentMode := normalizeAssignmentMode(in.AssignmentMode)
+
 	return s.q.CreateCbtExamSession(ctx, db.CreateCbtExamSessionParams{
-		PackageID:      in.PackageID,
-		ClassID:        in.ClassID,
-		EventID:        in.EventID,
-		Title:          in.Title,
-		ScheduledStart: in.ScheduledStart,
-		ScheduledEnd:   in.ScheduledEnd,
-		Status:         in.Status,
+		PackageID:       in.PackageID,
+		ClassID:         in.ClassID,
+		EventID:         in.EventID,
+		ScopeType:       scopeType,
+		ScopeRef:        in.ScopeRef,
+		MixPolicy:       mixPolicy,
+		AssignmentMode:  assignmentMode,
+		AllowCrossGrade: in.AllowCrossGrade,
+		IsSpecialEvent:  in.IsSpecialEvent,
+		Title:           in.Title,
+		ScheduledStart:  in.ScheduledStart,
+		ScheduledEnd:    in.ScheduledEnd,
+		Status:          in.Status,
 	})
 }
 
@@ -99,6 +116,42 @@ func (s *CbtSession) EnrollSchool(ctx context.Context, sessionID pgtype.UUID) er
 	return s.q.EnrollSchoolToSession(ctx, sessionID)
 }
 
+func normalizeScopeType(value string) string {
+	switch value {
+	case "class", "grade", "school", "custom":
+		return value
+	default:
+		return "class"
+	}
+}
+
+func normalizeMixPolicy(value string, scopeType string) string {
+	switch scopeType {
+	case "class":
+		return "same_class"
+	case "grade":
+		return "same_grade"
+	case "school", "custom":
+		return "mixed_scope"
+	default:
+		switch value {
+		case "same_class", "same_grade", "mixed_scope":
+			return value
+		default:
+			return "same_grade"
+		}
+	}
+}
+
+func normalizeAssignmentMode(value string) string {
+	switch value {
+	case "manual", "random_balanced", "random_by_gender", "random_by_accommodation":
+		return value
+	default:
+		return "random_balanced"
+	}
+}
+
 func (s *CbtSession) GenerateTokens(ctx context.Context, sessionID pgtype.UUID) error {
 	return s.q.GenerateTokensForSession(ctx, sessionID)
 }
@@ -135,6 +188,14 @@ func (s *CbtSession) CreateRoom(ctx context.Context, sessionID pgtype.UUID, room
 
 func (s *CbtSession) DeleteRoom(ctx context.Context, roomID pgtype.UUID) error {
 	return s.q.DeleteCbtExamRoom(ctx, roomID)
+}
+
+func (s *CbtSession) AssignSeat(ctx context.Context, participantID, roomID pgtype.UUID, seatNo int32) error {
+	return s.q.AssignParticipantSeat(ctx, db.AssignParticipantSeatParams{
+		ID:     participantID,
+		RoomID: roomID,
+		SeatNo: pgtype.Int4{Int32: seatNo, Valid: seatNo > 0},
+	})
 }
 
 // ShuffleRooms randomly assigns participants to rooms respecting capacity.
@@ -193,6 +254,35 @@ func (s *CbtSession) ShuffleRooms(ctx context.Context, sessionID pgtype.UUID) er
 	}
 
 	return tx.Commit(ctx)
+}
+
+func (s *CbtSession) AutoAssignSeats(ctx context.Context, sessionID pgtype.UUID) error {
+	participants, err := s.q.ListParticipantsByRoom(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	grouped := make(map[string][]db.ListParticipantsByRoomRow)
+	for _, participant := range participants {
+		if !participant.RoomID.Valid {
+			continue
+		}
+		key := participant.RoomID.String()
+		grouped[key] = append(grouped[key], participant)
+	}
+	for _, rows := range grouped {
+		sort.Slice(rows, func(i, j int) bool {
+			if rows[i].Nama == rows[j].Nama {
+				return rows[i].Nis < rows[j].Nis
+			}
+			return rows[i].Nama < rows[j].Nama
+		})
+		for idx, participant := range rows {
+			if err := s.AssignSeat(ctx, participant.ID, participant.RoomID, int32(idx+1)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // --- Proctoring ---
@@ -305,8 +395,8 @@ func (s *CbtSession) GetResultsByTeacher(ctx context.Context, sessionID, teacher
 
 func (s *CbtSession) CheckTeacherAccess(ctx context.Context, sessionID, teacherEmployeeID pgtype.UUID) (bool, error) {
 	return s.q.GetSessionTeacherAccess(ctx, db.GetSessionTeacherAccessParams{
-		ID:                 sessionID,
-		TeacherEmployeeID:  teacherEmployeeID,
+		ID:                sessionID,
+		TeacherEmployeeID: teacherEmployeeID,
 	})
 }
 

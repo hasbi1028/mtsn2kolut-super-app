@@ -8,6 +8,7 @@
 
 	type EventInfo = {
 		id: string; title: string; exam_type: string; scope: string;
+		target_levels?: string[];
 		academic_year_name: string; status: string;
 	};
 	type ResultRow = {
@@ -82,10 +83,18 @@
 				<p class="text-sm text-slate-500 mt-1">
 					Tahun Ajaran: {info.academic_year_name} · Tipe: <span class="capitalize">{info.exam_type}</span>
 				</p>
+				{#if info.target_levels?.length}
+					<p class="mt-2 text-sm text-slate-600">Tingkat yang diikutkan: <span class="font-medium">{info.target_levels.join(', ')}</span></p>
+				{/if}
 			</div>
-			<Button variant="outline" onclick={exportCSV} disabled={results.length === 0}>
-				↓ Export CSV (Rekap Semua Sesi)
-			</Button>
+			<div class="flex flex-wrap gap-2">
+				<a href={`/cbt/events/${eventId}/exam-cards`} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
+					Kartu Ujian
+				</a>
+				<Button variant="outline" onclick={exportCSV} disabled={results.length === 0}>
+					↓ Export CSV (Rekap Semua Sesi)
+				</Button>
+			</div>
 		</div>
 
 		<Card.Root>

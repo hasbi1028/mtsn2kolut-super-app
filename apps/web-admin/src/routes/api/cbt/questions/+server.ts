@@ -4,7 +4,8 @@ import { proxy, handleRouteError } from '$lib/server/api';
 
 export const GET = async (event: RequestEvent) => {
 	try {
-		const data = await proxy(event).get('/api/cbt/questions');
+		const qs = event.url.searchParams.toString();
+		const data = await proxy(event).get(`/api/cbt/questions${qs ? `?${qs}` : ''}`);
 		return json(data);
 	} catch (e) {
 		return handleRouteError(e, 'cbt/questions GET');
@@ -14,16 +15,11 @@ export const GET = async (event: RequestEvent) => {
 export const POST = async (event: RequestEvent) => {
 	try {
 		const body = await event.request.json() as Record<string, unknown>;
-		const { subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status } = body;
-		if (!subject_id || !question_text || !option_a || !option_b || !option_c || !option_d || !answer_key) {
-			return json({ error: 'subject_id, question_text, option A-D, dan answer_key wajib diisi' }, { status: 400 });
+		const { subject_id } = body;
+		if (!subject_id) {
+			return json({ error: 'subject_id wajib diisi' }, { status: 400 });
 		}
-		const data = await proxy(event).post('/api/cbt/questions', {
-			subject_id, code: code ?? '', question_text,
-			option_a, option_b, option_c, option_d, option_e: option_e ?? '',
-			answer_key, explanation: explanation ?? '',
-			difficulty: difficulty ?? 'medium', status: status ?? 'draft',
-		});
+		const data = await proxy(event).post('/api/cbt/questions', body);
 		return json(data, { status: 201 });
 	} catch (e) {
 		return handleRouteError(e, 'cbt/questions POST');

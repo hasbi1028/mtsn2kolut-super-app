@@ -3,6 +3,7 @@ SELECT
   s.id, s.package_id, p.title AS package_title,
   s.class_id, s.event_id,
   COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
+  s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
   s.title, s.scheduled_start, s.scheduled_end, s.status,
   s.created_at, s.updated_at,
   COUNT(ep.id)::int AS participant_count
@@ -18,6 +19,7 @@ SELECT
   s.id, s.package_id, p.title AS package_title, p.duration_minutes,
   s.class_id, s.event_id,
   COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
+  s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
   s.title, s.scheduled_start, s.scheduled_end, s.status,
   s.created_at, s.updated_at
 FROM cbt_exam_sessions s
@@ -26,8 +28,11 @@ LEFT JOIN school_classes c ON c.id = s.class_id
 WHERE s.id = $1;
 
 -- name: CreateCbtExamSession :one
-INSERT INTO cbt_exam_sessions (package_id, class_id, event_id, title, scheduled_start, scheduled_end, status)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO cbt_exam_sessions (
+  package_id, class_id, event_id, scope_type, scope_ref, mix_policy, assignment_mode,
+  allow_cross_grade, is_special_event, title, scheduled_start, scheduled_end, status
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 RETURNING *;
 
 -- name: UpdateCbtExamSessionStatus :one
@@ -43,7 +48,7 @@ DELETE FROM cbt_exam_sessions WHERE id = $1 AND status = 'draft';
 SELECT
   ep.id, ep.session_id, ep.student_id,
   s.nis, s.nama, s.gender,
-  ep.token, ep.room_id, ep.joined_at, ep.submitted_at, ep.score,
+  ep.token, ep.room_id, ep.seat_no, ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
   ep.last_heartbeat, ep.created_at,
   COALESCE(r.room_name, '') AS room_name
@@ -56,7 +61,7 @@ ORDER BY s.nama ASC;
 -- name: GetParticipantByToken :one
 SELECT
   ep.id, ep.session_id, ep.student_id,
-  ep.token, ep.room_id, ep.device_fingerprint, ep.question_order,
+  ep.token, ep.room_id, ep.seat_no, ep.device_fingerprint, ep.question_order,
   ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
   ep.last_heartbeat,
@@ -111,8 +116,14 @@ WHERE id = $1;
 
 -- name: ClearParticipantRooms :exec
 UPDATE cbt_exam_participants
-SET room_id = NULL
+SET room_id = NULL, seat_no = NULL
 WHERE session_id = $1;
+
+-- name: AssignParticipantSeat :exec
+UPDATE cbt_exam_participants
+SET room_id = $2,
+    seat_no = $3
+WHERE id = $1;
 
 -- name: UpdateParticipantQuestionOrder :exec
 UPDATE cbt_exam_participants
@@ -171,6 +182,7 @@ SELECT
   s.nis, s.nama,
   ep.token,
   COALESCE(r.room_name, '') AS room_name,
+  ep.seat_no,
   ep.submitted_at,
   ep.last_heartbeat,
   ep.app_switch_count,
@@ -188,14 +200,38 @@ ORDER BY s.nama ASC;
 
 -- name: ListParticipantsByRoom :many
 SELECT
-  ep.id, ep.student_id, ep.token, ep.room_id,
+  ep.id, ep.student_id, ep.token, ep.room_id, ep.seat_no,
   s.nis, s.nama, s.gender,
   COALESCE(r.room_name, '') AS room_name
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 WHERE ep.session_id = $1
-ORDER BY r.room_name ASC NULLS LAST, s.nama ASC;
+ORDER BY r.room_name ASC NULLS LAST, ep.seat_no ASC NULLS LAST, s.nama ASC;
+
+-- name: ListStudentExamSessions :many
+SELECT
+  ep.id AS participant_id,
+  ep.session_id,
+  ep.token,
+  ep.room_id,
+  ep.seat_no,
+  ep.joined_at,
+  ep.submitted_at,
+  ep.score,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(r.room_name, '') AS room_name
+FROM cbt_exam_participants ep
+JOIN cbt_exam_sessions s ON s.id = ep.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.student_id = $1
+ORDER BY s.scheduled_start DESC;
 
 -- name: GradeStudentEssay :exec
 UPDATE cbt_student_answers
@@ -266,13 +302,16 @@ SELECT
   ep.student_id,
   s.nis, s.nama, s.gender,
   ep.submitted_at, ep.score,
+  ep.room_id, ep.seat_no,
+  COALESCE(r.room_name, '') AS room_name,
   COUNT(sa.id)::int                                    AS total_answers,
   SUM(CASE WHEN sa.is_correct THEN 1 ELSE 0 END)::int AS correct_answers
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id
 WHERE ep.session_id = $1
-GROUP BY ep.id, s.nis, s.nama, s.gender
+GROUP BY ep.id, s.nis, s.nama, s.gender, ep.room_id, ep.seat_no, r.room_name
 ORDER BY ep.score DESC NULLS LAST, s.nama ASC;
 
 -- name: ListCbtExamSessionsByTeacher :many
@@ -280,6 +319,7 @@ SELECT
   s.id, s.package_id, p.title AS package_title,
   s.class_id, s.event_id,
   COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
+  s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
   s.title, s.scheduled_start, s.scheduled_end, s.status,
   s.created_at, s.updated_at,
   COUNT(ep.id)::int AS participant_count

@@ -5,6 +5,6 @@ import { defineConfig } from 'vite';
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	ssr: {
-		noExternal: ['lucide-svelte', 'bits-ui', 'tailwind-variants'],
+		noExternal: ['lucide-svelte', 'bits-ui', 'tailwind-variants', 'svelte-sonner', 'katex', '@tiptap/core', '@tiptap/pm', '@tiptap/starter-kit'],
 	},
 });

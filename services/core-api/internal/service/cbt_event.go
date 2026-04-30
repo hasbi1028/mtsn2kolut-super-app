@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
@@ -44,10 +44,22 @@ func (s *CbtEvent) GetResults(ctx context.Context, id pgtype.UUID) ([]db.GetEven
 	return rows, nil
 }
 
+func (s *CbtEvent) GetExamCards(ctx context.Context, id pgtype.UUID) ([]db.GetEventExamCardsRow, error) {
+	rows, err := s.q.GetEventExamCards(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.GetEventExamCardsRow{}, nil
+	}
+	return rows, nil
+}
+
 type CreateCbtEventInput struct {
 	Title          string
 	ExamType       db.CbtExamType
 	Scope          string
+	TargetLevels   []string
 	AcademicYearID pgtype.UUID
 	Status         string
 }
@@ -61,6 +73,7 @@ func (s *CbtEvent) Create(ctx context.Context, in CreateCbtEventInput) (db.CbtEx
 		Title:          in.Title,
 		ExamType:       in.ExamType,
 		Scope:          in.Scope,
+		TargetLevels:   in.TargetLevels,
 		AcademicYearID: in.AcademicYearID,
 		Status:         status,
 	})
@@ -79,6 +92,7 @@ func (s *CbtEvent) Update(ctx context.Context, id pgtype.UUID, in CreateCbtEvent
 		Title:          in.Title,
 		ExamType:       in.ExamType,
 		Scope:          in.Scope,
+		TargetLevels:   in.TargetLevels,
 		AcademicYearID: in.AcademicYearID,
 	})
 }
