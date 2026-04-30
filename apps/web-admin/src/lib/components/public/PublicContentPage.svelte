@@ -18,25 +18,61 @@
 			day: 'numeric',
 		});
 	}
+
+	const readingTips = [
+		'Informasi ini disiapkan untuk warga madrasah dan masyarakat umum.',
+		'Jika memuat jadwal atau ketentuan, gunakan tanggal tayang sebagai acuan terbaru.',
+	];
 </script>
 
-<article class="mx-auto max-w-4xl space-y-8">
-	<header class="space-y-4">
-		<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">{eyebrow}</p>
-		<h1 class="text-4xl font-bold leading-tight text-slate-900 sm:text-5xl">{content.title}</h1>
+<article class="mx-auto max-w-6xl space-y-8">
+	<header class="space-y-5 rounded-[2rem] border border-emerald-100 bg-[linear-gradient(180deg,rgba(236,253,245,0.92),rgba(255,255,255,1))] px-6 py-8 shadow-sm sm:px-8 sm:py-10">
+		<p class="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">{eyebrow}</p>
+		<h1 class="max-w-4xl text-3xl font-bold leading-tight text-slate-900 sm:text-5xl">{content.title}</h1>
 		{#if content.excerpt}
-			<p class="max-w-3xl text-lg leading-8 text-slate-600">{content.excerpt}</p>
+			<p class="max-w-3xl text-base leading-8 text-slate-600 sm:text-lg">{content.excerpt}</p>
 		{/if}
-		{#if content.published_at}
-			<p class="text-sm text-slate-500">Tayang {fmtDate(content.published_at)}</p>
-		{/if}
+		<div class="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+			{#if content.published_at}
+				<span class="rounded-full border border-emerald-200 bg-white px-3 py-1">Tayang {fmtDate(content.published_at)}</span>
+			{/if}
+			<span class="rounded-full border border-slate-200 bg-white px-3 py-1">Informasi resmi MTsN 2 Kolaka Utara</span>
+		</div>
 	</header>
 
 	{#if content.cover_image_url}
-		<img src={content.cover_image_url} alt={content.title} class="h-[260px] w-full rounded-[2rem] object-cover shadow-sm sm:h-[360px]" />
+		<div class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+			<img src={content.cover_image_url} alt={content.title} class="h-[240px] w-full object-cover sm:h-[360px] lg:h-[420px]" />
+		</div>
 	{/if}
 
-	<div class="max-w-none space-y-6 text-base leading-8 text-slate-700 [&_a]:font-medium [&_a]:text-emerald-800 [&_a]:underline-offset-4 hover:[&_a]:text-emerald-900 [&_a:hover]:underline [&_h1]:text-4xl [&_h1]:font-bold [&_h1]:text-slate-900 [&_h2]:text-3xl [&_h2]:font-semibold [&_h2]:text-slate-900 [&_h3]:text-2xl [&_h3]:font-semibold [&_h3]:text-slate-900 [&_img]:rounded-[1.5rem] [&_img]:shadow-sm [&_li]:leading-8 [&_p]:leading-8 [&_strong]:text-slate-900">
-		{@html content.content_html}
+	<div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
+		<div class="rounded-[2rem] border border-slate-200 bg-white px-6 py-6 shadow-sm sm:px-8 sm:py-8">
+			<div class="max-w-none space-y-6 text-base leading-8 text-slate-700 [&_a]:font-medium [&_a]:text-emerald-800 [&_a]:underline-offset-4 hover:[&_a]:text-emerald-900 [&_a:hover]:underline [&_blockquote]:rounded-2xl [&_blockquote]:border-l-4 [&_blockquote]:border-emerald-300 [&_blockquote]:bg-emerald-50 [&_blockquote]:px-5 [&_blockquote]:py-4 [&_blockquote]:text-slate-700 [&_h1]:text-4xl [&_h1]:font-bold [&_h1]:text-slate-900 [&_h2]:mt-10 [&_h2]:text-3xl [&_h2]:font-semibold [&_h2]:text-slate-900 [&_h3]:mt-8 [&_h3]:text-2xl [&_h3]:font-semibold [&_h3]:text-slate-900 [&_img]:rounded-[1.5rem] [&_img]:shadow-sm [&_li]:leading-8 [&_p]:leading-8 [&_strong]:text-slate-900">
+				{@html content.content_html}
+			</div>
+		</div>
+
+		<aside class="space-y-4 lg:sticky lg:top-24">
+			<div class="rounded-[1.75rem] border border-slate-200 bg-white px-5 py-5 shadow-sm">
+				<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Ringkasan</p>
+				<div class="mt-4 space-y-3 text-sm text-slate-600">
+					<p><span class="font-medium text-slate-900">Kategori:</span> {eyebrow}</p>
+					{#if content.published_at}
+						<p><span class="font-medium text-slate-900">Tanggal tayang:</span> {fmtDate(content.published_at)}</p>
+					{/if}
+					<p><span class="font-medium text-slate-900">Sumber:</span> Website resmi MTsN 2 Kolaka Utara</p>
+				</div>
+			</div>
+
+			<div class="rounded-[1.75rem] border border-emerald-100 bg-emerald-50 px-5 py-5 shadow-sm">
+				<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Catatan Baca</p>
+				<div class="mt-4 space-y-3 text-sm leading-7 text-slate-700">
+					{#each readingTips as tip (tip)}
+						<p>{tip}</p>
+					{/each}
+				</div>
+			</div>
+		</aside>
 	</div>
 </article>
