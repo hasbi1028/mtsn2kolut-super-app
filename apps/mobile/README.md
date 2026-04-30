@@ -34,6 +34,18 @@ Untuk device fisik Android di jaringan yang sama, ganti `API_BASE_URL` ke IP bac
 flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8080
 ```
 
+Untuk preview lokal di desktop Linux, gunakan:
+
+```bash
+flutter run -d linux --dart-define=API_BASE_URL=http://127.0.0.1:8080
+```
+
+Catatan:
+
+- target utama produksi tetap Android BYOD
+- Linux desktop hanya untuk preview lokal, demo operator, dan debugging cepat
+- desktop Linux membutuhkan dependency sistem GStreamer untuk plugin audio
+
 ## Quality Checks
 
 ```bash
