@@ -622,6 +622,9 @@ type AuthSession struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	IpAddress        string             `json:"ip_address"`
+	UserAgent        string             `json:"user_agent"`
+	DeviceLabel      string             `json:"device_label"`
 }
 
 type CbtExamEvent struct {

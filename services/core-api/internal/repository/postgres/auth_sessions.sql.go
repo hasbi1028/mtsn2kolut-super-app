@@ -12,9 +12,12 @@ import (
 )
 
 const createAuthSession = `-- name: CreateAuthSession :one
-INSERT INTO auth_sessions (id, user_id, refresh_token_hash, expires_at, last_used_at)
-VALUES ($1, $2, $3, $4, NOW())
-RETURNING id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, updated_at, last_used_at
+INSERT INTO auth_sessions (
+  id, user_id, refresh_token_hash, expires_at, last_used_at,
+  ip_address, user_agent, device_label
+)
+VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7)
+RETURNING id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, updated_at, last_used_at, ip_address, user_agent, device_label
 `
 
 type CreateAuthSessionParams struct {
@@ -22,6 +25,9 @@ type CreateAuthSessionParams struct {
 	UserID           pgtype.UUID        `json:"user_id"`
 	RefreshTokenHash string             `json:"refresh_token_hash"`
 	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
+	IpAddress        string             `json:"ip_address"`
+	UserAgent        string             `json:"user_agent"`
+	DeviceLabel      string             `json:"device_label"`
 }
 
 func (q *Queries) CreateAuthSession(ctx context.Context, arg CreateAuthSessionParams) (AuthSession, error) {
@@ -30,6 +36,9 @@ func (q *Queries) CreateAuthSession(ctx context.Context, arg CreateAuthSessionPa
 		arg.UserID,
 		arg.RefreshTokenHash,
 		arg.ExpiresAt,
+		arg.IpAddress,
+		arg.UserAgent,
+		arg.DeviceLabel,
 	)
 	var i AuthSession
 	err := row.Scan(
@@ -41,12 +50,15 @@ func (q *Queries) CreateAuthSession(ctx context.Context, arg CreateAuthSessionPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastUsedAt,
+		&i.IpAddress,
+		&i.UserAgent,
+		&i.DeviceLabel,
 	)
 	return i, err
 }
 
 const getAuthSession = `-- name: GetAuthSession :one
-SELECT id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, updated_at, last_used_at
+SELECT id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, updated_at, last_used_at, ip_address, user_agent, device_label
 FROM auth_sessions
 WHERE id = $1
 `
@@ -63,12 +75,15 @@ func (q *Queries) GetAuthSession(ctx context.Context, id pgtype.UUID) (AuthSessi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastUsedAt,
+		&i.IpAddress,
+		&i.UserAgent,
+		&i.DeviceLabel,
 	)
 	return i, err
 }
 
 const listActiveAuthSessionsByUser = `-- name: ListActiveAuthSessionsByUser :many
-SELECT id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, updated_at, last_used_at
+SELECT id, user_id, refresh_token_hash, expires_at, revoked_at, created_at, updated_at, last_used_at, ip_address, user_agent, device_label
 FROM auth_sessions
 WHERE user_id = $1
   AND revoked_at IS NULL
@@ -94,6 +109,9 @@ func (q *Queries) ListActiveAuthSessionsByUser(ctx context.Context, userID pgtyp
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastUsedAt,
+			&i.IpAddress,
+			&i.UserAgent,
+			&i.DeviceLabel,
 		); err != nil {
 			return nil, err
 		}

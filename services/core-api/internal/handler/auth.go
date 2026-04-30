@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -27,7 +28,7 @@ func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	pair, err := h.svc.Login(r.Context(), body.Username, body.Password)
+	pair, err := h.svc.Login(r.Context(), body.Username, body.Password, sessionMetaFromRequest(r))
 	if errors.Is(err, domain.ErrUnauthorized) {
 		api.Unauthorized(w)
 		return
@@ -51,7 +52,7 @@ func (h *Auth) Refresh(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "refresh_token required")
 		return
 	}
-	pair, err := h.svc.Refresh(r.Context(), body.RefreshToken)
+	pair, err := h.svc.Refresh(r.Context(), body.RefreshToken, sessionMetaFromRequest(r))
 	if errors.Is(err, domain.ErrUnauthorized) {
 		api.Unauthorized(w)
 		return
@@ -212,4 +213,26 @@ func authUserID(claims map[string]any) (pgtype.UUID, error) {
 		return pgtype.UUID{}, domain.ErrUnauthorized
 	}
 	return userID, nil
+}
+
+func sessionMetaFromRequest(r *http.Request) service.SessionMeta {
+	userAgent := strings.TrimSpace(r.Header.Get("X-Client-User-Agent"))
+	if userAgent == "" {
+		userAgent = strings.TrimSpace(r.UserAgent())
+	}
+
+	ipAddress := strings.TrimSpace(r.Header.Get("X-Client-IP"))
+	if ipAddress == "" {
+		if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
+			ipAddress = strings.TrimSpace(strings.Split(forwarded, ",")[0])
+		}
+	}
+	if ipAddress == "" {
+		ipAddress = strings.TrimSpace(r.RemoteAddr)
+	}
+
+	return service.SessionMeta{
+		IPAddress: ipAddress,
+		UserAgent: userAgent,
+	}
 }

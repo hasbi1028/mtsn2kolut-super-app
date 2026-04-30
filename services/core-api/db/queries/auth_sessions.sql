@@ -1,6 +1,9 @@
 -- name: CreateAuthSession :one
-INSERT INTO auth_sessions (id, user_id, refresh_token_hash, expires_at, last_used_at)
-VALUES ($1, $2, $3, $4, NOW())
+INSERT INTO auth_sessions (
+  id, user_id, refresh_token_hash, expires_at, last_used_at,
+  ip_address, user_agent, device_label
+)
+VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7)
 RETURNING *;
 
 -- name: GetAuthSession :one

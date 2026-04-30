@@ -101,11 +101,23 @@ export type TokenPair = {
 	refresh_token: string;
 };
 
+type ClientMeta = {
+	userAgent?: string;
+	ipAddress?: string;
+};
+
+function clientMetaHeaders(meta?: ClientMeta): Record<string, string> {
+	const headers: Record<string, string> = {};
+	if (meta?.userAgent) headers['X-Client-User-Agent'] = meta.userAgent;
+	if (meta?.ipAddress) headers['X-Client-IP'] = meta.ipAddress;
+	return headers;
+}
+
 // Public login endpoint — returns access + refresh JWT tokens
-export async function apiLogin(username: string, password: string): Promise<TokenPair> {
+export async function apiLogin(username: string, password: string, meta?: ClientMeta): Promise<TokenPair> {
 	const res = await fetch(`${BASE}/api/auth/login`, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		headers: { 'Content-Type': 'application/json', ...clientMetaHeaders(meta) },
 		body: JSON.stringify({ username, password }),
 	});
 	const json = await res.json() as { data?: TokenPair; error?: string };
@@ -113,10 +125,10 @@ export async function apiLogin(username: string, password: string): Promise<Toke
 	return json.data!;
 }
 
-export async function apiRefresh(refresh_token: string): Promise<TokenPair> {
+export async function apiRefresh(refresh_token: string, meta?: ClientMeta): Promise<TokenPair> {
 	const res = await fetch(`${BASE}/api/auth/refresh`, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		headers: { 'Content-Type': 'application/json', ...clientMetaHeaders(meta) },
 		body: JSON.stringify({ refresh_token }),
 	});
 	const json = await res.json() as { data?: TokenPair; error?: string };

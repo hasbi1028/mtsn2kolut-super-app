@@ -15,6 +15,9 @@
     last_used_at: string;
     created_at: string;
     updated_at: string;
+    ip_address: string;
+    user_agent: string;
+    device_label: string;
   };
 
   let appSettings = $state({ max_concurrent: 5, headless: false });
@@ -217,7 +220,7 @@
                 <div class="space-y-1">
                   <div class="flex items-center gap-2">
                     <p class="text-sm font-medium text-slate-800">
-                      Sesi {session.id.slice(0, 8)}
+                      {session.device_label || `Sesi ${session.id.slice(0, 8)}`}
                     </p>
                     {#if session.id === currentSessionId}
                       <span class="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800">
@@ -225,12 +228,22 @@
                       </span>
                     {/if}
                   </div>
+                  {#if session.ip_address}
+                    <p class="text-xs text-muted-foreground">
+                      IP: {session.ip_address}
+                    </p>
+                  {/if}
                   <p class="text-xs text-muted-foreground">
                     Terakhir aktif: {formatDate(session.last_used_at)}
                   </p>
                   <p class="text-xs text-muted-foreground">
                     Berlaku sampai: {formatDate(session.expires_at)}
                   </p>
+                  {#if session.user_agent}
+                    <p class="line-clamp-2 text-[11px] text-slate-400">
+                      {session.user_agent}
+                    </p>
+                  {/if}
                 </div>
                 <Button
                   variant="outline"

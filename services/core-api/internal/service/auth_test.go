@@ -251,7 +251,7 @@ func TestAuthRefreshRejectsOldTokenAfterPasswordChange(t *testing.T) {
 		t.Fatalf("SeedAdmin() error = %v", err)
 	}
 
-	pair, err := svc.Login(context.Background(), "admin", "admin")
+	pair, err := svc.Login(context.Background(), "admin", "admin", SessionMeta{})
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
 	}
@@ -269,7 +269,7 @@ func TestAuthRefreshRejectsOldTokenAfterPasswordChange(t *testing.T) {
 	if got := store.users["admin"].AuthVersion; got != 1 {
 		t.Fatalf("auth_version after change = %d, want 1", got)
 	}
-	if _, err := svc.Refresh(context.Background(), pair.RefreshToken); err == nil {
+	if _, err := svc.Refresh(context.Background(), pair.RefreshToken, SessionMeta{}); err == nil {
 		t.Fatalf("Refresh() error = nil, want unauthorized")
 	}
 }
@@ -292,7 +292,7 @@ func TestAuthLoginRejectsSuspendedAccount(t *testing.T) {
 		IsActive:     false,
 	}
 
-	_, err = svc.Login(context.Background(), "guru", "password123")
+	_, err = svc.Login(context.Background(), "guru", "password123", SessionMeta{})
 	if !errors.Is(err, domain.ErrSuspended) {
 		t.Fatalf("Login() error = %v, want ErrSuspended", err)
 	}
@@ -358,7 +358,7 @@ func TestAuthLogoutRevokesRefreshSession(t *testing.T) {
 		t.Fatalf("SeedAdmin() error = %v", err)
 	}
 
-	pair, err := svc.Login(context.Background(), "admin", "admin")
+	pair, err := svc.Login(context.Background(), "admin", "admin", SessionMeta{})
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
 	}
@@ -384,7 +384,7 @@ func TestAuthLogoutRevokesRefreshSession(t *testing.T) {
 	if !session.RevokedAt.Valid {
 		t.Fatal("session was not revoked")
 	}
-	if _, err := svc.Refresh(context.Background(), pair.RefreshToken); err == nil {
+	if _, err := svc.Refresh(context.Background(), pair.RefreshToken, SessionMeta{}); err == nil {
 		t.Fatal("Refresh() succeeded after logout revoke")
 	}
 }
@@ -397,11 +397,11 @@ func TestAuthLogoutAllRevokesUserSessionsAndBumpsVersion(t *testing.T) {
 		t.Fatalf("SeedAdmin() error = %v", err)
 	}
 
-	first, err := svc.Login(context.Background(), "admin", "admin")
+	first, err := svc.Login(context.Background(), "admin", "admin", SessionMeta{})
 	if err != nil {
 		t.Fatalf("first Login() error = %v", err)
 	}
-	second, err := svc.Login(context.Background(), "admin", "admin")
+	second, err := svc.Login(context.Background(), "admin", "admin", SessionMeta{})
 	if err != nil {
 		t.Fatalf("second Login() error = %v", err)
 	}
@@ -413,10 +413,10 @@ func TestAuthLogoutAllRevokesUserSessionsAndBumpsVersion(t *testing.T) {
 	if store.users["admin"].AuthVersion != 1 {
 		t.Fatalf("auth_version = %d, want 1", store.users["admin"].AuthVersion)
 	}
-	if _, err := svc.Refresh(context.Background(), first.RefreshToken); err == nil {
+	if _, err := svc.Refresh(context.Background(), first.RefreshToken, SessionMeta{}); err == nil {
 		t.Fatal("first Refresh() succeeded after LogoutAll")
 	}
-	if _, err := svc.Refresh(context.Background(), second.RefreshToken); err == nil {
+	if _, err := svc.Refresh(context.Background(), second.RefreshToken, SessionMeta{}); err == nil {
 		t.Fatal("second Refresh() succeeded after LogoutAll")
 	}
 }

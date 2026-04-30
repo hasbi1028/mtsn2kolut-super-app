@@ -61,11 +61,17 @@ type Auth struct {
 	adminPassword string
 }
 
+type SessionMeta struct {
+	IPAddress   string
+	UserAgent   string
+	DeviceLabel string
+}
+
 func NewAuth(q *db.Queries, jwtSecret, adminPassword string) *Auth {
 	return &Auth{q: q, jwtSecret: []byte(jwtSecret), adminPassword: adminPassword}
 }
 
-func (s *Auth) Login(ctx context.Context, username, password string) (domain.TokenPair, error) {
+func (s *Auth) Login(ctx context.Context, username, password string, meta SessionMeta) (domain.TokenPair, error) {
 	row, err := s.q.GetUserByUsername(ctx, username)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -83,10 +89,10 @@ func (s *Auth) Login(ctx context.Context, username, password string) (domain.Tok
 		return domain.TokenPair{}, domain.ErrUnauthorized
 	}
 
-	return s.issueTokenPair(ctx, user)
+	return s.issueTokenPair(ctx, user, normalizeSessionMeta(meta))
 }
 
-func (s *Auth) Refresh(ctx context.Context, refreshToken string) (domain.TokenPair, error) {
+func (s *Auth) Refresh(ctx context.Context, refreshToken string, meta SessionMeta) (domain.TokenPair, error) {
 	claims, err := s.parseTokenClaims(refreshToken)
 	if err != nil {
 		return domain.TokenPair{}, domain.ErrUnauthorized
@@ -119,7 +125,7 @@ func (s *Auth) Refresh(ctx context.Context, refreshToken string) (domain.TokenPa
 	if err := s.q.RevokeAuthSession(ctx, session.ID); err != nil {
 		return domain.TokenPair{}, err
 	}
-	return s.issueTokenPair(ctx, user)
+	return s.issueTokenPair(ctx, user, normalizeSessionMeta(meta))
 }
 
 func (s *Auth) Logout(ctx context.Context, refreshToken string) error {
@@ -206,7 +212,7 @@ func (s *Auth) ChangePassword(ctx context.Context, username, oldPassword, newPas
 	return err
 }
 
-func (s *Auth) issueTokenPair(ctx context.Context, user authUserRecord) (domain.TokenPair, error) {
+func (s *Auth) issueTokenPair(ctx context.Context, user authUserRecord, meta SessionMeta) (domain.TokenPair, error) {
 	now := time.Now()
 	sessionID, err := randomUUID()
 	if err != nil {
@@ -287,6 +293,9 @@ func (s *Auth) issueTokenPair(ctx context.Context, user authUserRecord) (domain.
 		UserID:           user.ID,
 		RefreshTokenHash: hashToken(refreshSigned),
 		ExpiresAt:        expiresAt,
+		IpAddress:        meta.IPAddress,
+		UserAgent:        meta.UserAgent,
+		DeviceLabel:      meta.DeviceLabel,
 	}); err != nil {
 		return domain.TokenPair{}, err
 	}
@@ -514,4 +523,46 @@ func authUserFromIDRow(row db.GetUserByIDRow) authUserRecord {
 		AuthVersion:  row.AuthVersion,
 		Roles:        row.Roles,
 	}
+}
+
+func normalizeSessionMeta(meta SessionMeta) SessionMeta {
+	meta.IPAddress = strings.TrimSpace(meta.IPAddress)
+	meta.UserAgent = strings.TrimSpace(meta.UserAgent)
+	meta.DeviceLabel = strings.TrimSpace(meta.DeviceLabel)
+	if meta.DeviceLabel == "" {
+		meta.DeviceLabel = deriveDeviceLabel(meta.UserAgent)
+	}
+	return meta
+}
+
+func deriveDeviceLabel(userAgent string) string {
+	ua := strings.ToLower(userAgent)
+
+	osLabel := "Perangkat Tidak Dikenal"
+	switch {
+	case strings.Contains(ua, "android"):
+		osLabel = "Android"
+	case strings.Contains(ua, "iphone"), strings.Contains(ua, "ipad"), strings.Contains(ua, "ios"):
+		osLabel = "iPhone/iPad"
+	case strings.Contains(ua, "windows"):
+		osLabel = "Windows"
+	case strings.Contains(ua, "mac os"), strings.Contains(ua, "macintosh"):
+		osLabel = "Mac"
+	case strings.Contains(ua, "linux"):
+		osLabel = "Linux"
+	}
+
+	browserLabel := "Browser"
+	switch {
+	case strings.Contains(ua, "edg/"):
+		browserLabel = "Edge"
+	case strings.Contains(ua, "firefox/"):
+		browserLabel = "Firefox"
+	case strings.Contains(ua, "chrome/") && !strings.Contains(ua, "edg/"):
+		browserLabel = "Chrome"
+	case strings.Contains(ua, "safari/") && !strings.Contains(ua, "chrome/"):
+		browserLabel = "Safari"
+	}
+
+	return browserLabel + " di " + osLabel
 }

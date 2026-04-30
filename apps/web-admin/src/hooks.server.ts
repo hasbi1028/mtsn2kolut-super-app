@@ -51,7 +51,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	if (!isAccessTokenValid(access) && hasRefreshToken(refresh)) {
 		try {
-			const tokens = await apiRefresh(refresh!);
+			const tokens = await apiRefresh(refresh!, {
+				userAgent: event.request.headers.get('user-agent') ?? '',
+				ipAddress: event.getClientAddress(),
+			});
 			event.cookies.set('access_token', tokens.access_token, {
 				path: '/', httpOnly: true, sameSite: 'lax', maxAge: 3600, secure: !dev
 			});
@@ -105,7 +108,10 @@ export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
 	if (!refresh || !hasRefreshToken(refresh)) return response;
 
 	try {
-		const tokens = await apiRefresh(refresh);
+		const tokens = await apiRefresh(refresh, {
+			userAgent: event.request.headers.get('user-agent') ?? '',
+			ipAddress: event.getClientAddress(),
+		});
 		event.cookies.set('access_token', tokens.access_token, {
 			path: '/', httpOnly: true, sameSite: 'lax', maxAge: 3600, secure: !dev
 		});

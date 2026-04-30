@@ -9,13 +9,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies, url }) => {
+	default: async ({ request, cookies, url, getClientAddress }) => {
 		const data     = await request.formData();
 		const username = String(data.get('username') ?? '').trim();
 		const password = String(data.get('password') ?? '');
 
 		try {
-			const pair = await apiLogin(username, password);
+			const pair = await apiLogin(username, password, {
+				userAgent: request.headers.get('user-agent') ?? '',
+				ipAddress: getClientAddress(),
+			});
 			cookies.set('access_token', pair.access_token, {
 				path: '/', httpOnly: true, sameSite: 'lax',
 				secure: !dev,
