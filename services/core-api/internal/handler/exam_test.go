@@ -207,6 +207,35 @@ func TestExamStatusWritesWrappedJSON(t *testing.T) {
 	}
 }
 
+func TestExamStatusMapsUnexpectedServiceError(t *testing.T) {
+	h := &Exam{
+		svc: &fakeExamService{
+			statusErr: errors.New("status lookup failed"),
+		},
+	}
+
+	req := httptest.NewRequest("GET", "http://internal/api/exam/status", nil)
+	var participant db.GetParticipantByTokenRow
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.Status(rec, req)
+
+	if rec.Code != 500 {
+		t.Fatalf("status = %d, want 500; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Error != "status lookup failed" {
+		t.Fatalf("error = %q, want %q", payload.Error, "status lookup failed")
+	}
+}
+
 func TestExamLoginMapsKnownServiceErrors(t *testing.T) {
 	tests := []struct {
 		name       string
