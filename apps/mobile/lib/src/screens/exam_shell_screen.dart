@@ -355,6 +355,12 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         studentNis: widget.initialPayload.student.nis,
         sessionTitle: widget.initialPayload.session.title,
         roomName: widget.initialPayload.room?.roomName ?? '-',
+        scheduledStartIso:
+            widget.initialPayload.session.scheduledStart?.toIso8601String() ??
+            '',
+        scheduledEndIso:
+            widget.initialPayload.session.scheduledEnd?.toIso8601String() ?? '',
+        durationMinutes: widget.initialPayload.session.durationMinutes,
         currentQuestionIndex: _currentQuestionIndex,
         answers: Map<String, String>.from(_answers),
         pendingAnswers: Map<String, String>.from(_pendingAnswers),
@@ -449,6 +455,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             studentNis: widget.initialPayload.student.nis,
             sessionTitle: widget.initialPayload.session.title,
             roomName: widget.initialPayload.room?.roomName ?? '-',
+            scheduledStartIso:
+                widget.initialPayload.session.scheduledStart
+                    ?.toIso8601String() ??
+                '',
+            scheduledEndIso:
+                widget.initialPayload.session.scheduledEnd?.toIso8601String() ??
+                '',
+            durationMinutes: widget.initialPayload.session.durationMinutes,
             answeredCount: _answeredCount,
             totalQuestions: widget.initialPayload.totalQuestions,
             wasAutoSubmitted: autoSubmit,
@@ -813,6 +827,10 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               ),
               const SizedBox(height: 16),
             ],
+            if (question.stimulusMediaUrl.trim().isNotEmpty) ...[
+              _QuestionMediaCard(url: question.stimulusMediaUrl),
+              const SizedBox(height: 16),
+            ],
             RichExamText(
               content: question.stemHtml.trim().isNotEmpty
                   ? question.stemHtml
@@ -824,6 +842,10 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                 fontWeight: FontWeight.w700,
               ),
             ),
+            if (question.stemMediaUrl.trim().isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _QuestionMediaCard(url: question.stemMediaUrl),
+            ],
             const SizedBox(height: 22),
             Expanded(
               child: question.isEssay
@@ -1098,6 +1120,75 @@ class _SyncStatusChip extends StatelessWidget {
           color: foreground,
           fontWeight: FontWeight.w800,
         ),
+      ),
+    );
+  }
+}
+
+class _QuestionMediaCard extends StatelessWidget {
+  const _QuestionMediaCard({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F8F3),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Media soal',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.primary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.network(
+              url,
+              fit: BoxFit.contain,
+              errorBuilder: (context, _, _) {
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  color: Colors.white,
+                  child: Text(
+                    'Media tidak dapat dimuat.\n$url',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                );
+              },
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) {
+                  return child;
+                }
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  color: Colors.white,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(strokeWidth: 2),
+                      const SizedBox(height: 10),
+                      Text('Memuat media...', style: theme.textTheme.bodySmall),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

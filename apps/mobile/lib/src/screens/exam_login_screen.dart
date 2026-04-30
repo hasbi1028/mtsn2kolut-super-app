@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../exam_api.dart';
+import '../exam_format.dart';
 import '../exam_session_store.dart';
 import 'exam_shell_screen.dart';
 
@@ -155,6 +156,11 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
           studentNis: payload.student.nis,
           sessionTitle: payload.session.title,
           roomName: payload.room?.roomName ?? '-',
+          scheduledStartIso:
+              payload.session.scheduledStart?.toIso8601String() ?? '',
+          scheduledEndIso:
+              payload.session.scheduledEnd?.toIso8601String() ?? '',
+          durationMinutes: payload.session.durationMinutes,
           currentQuestionIndex: 0,
           answers: const <String, String>{},
           pendingAnswers: const <String, String>{},
@@ -415,7 +421,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
           Text(
             cached == null
                 ? 'Jika sebelumnya ujian terputus, aplikasi akan mencoba memulihkannya otomatis.'
-                : '${cached.sessionTitle}\n${cached.studentName} • ${cached.studentNis} • Ruang ${cached.roomName}',
+                : '${cached.sessionTitle}\n${cached.studentName} • ${cached.studentNis} • Ruang ${cached.roomName}\n${formatExamSchedule(scheduledStartIso: cached.scheduledStartIso, scheduledEndIso: cached.scheduledEndIso, durationMinutes: cached.durationMinutes)}',
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
         ],

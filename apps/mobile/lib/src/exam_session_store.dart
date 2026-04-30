@@ -11,6 +11,9 @@ class ExamSessionSnapshot {
     required this.studentNis,
     required this.sessionTitle,
     required this.roomName,
+    required this.scheduledStartIso,
+    required this.scheduledEndIso,
+    required this.durationMinutes,
     required this.currentQuestionIndex,
     required this.answers,
     required this.pendingAnswers,
@@ -23,6 +26,9 @@ class ExamSessionSnapshot {
   final String studentNis;
   final String sessionTitle;
   final String roomName;
+  final String scheduledStartIso;
+  final String scheduledEndIso;
+  final int durationMinutes;
   final int currentQuestionIndex;
   final Map<String, String> answers;
   final Map<String, String> pendingAnswers;
@@ -36,6 +42,9 @@ class ExamSessionSnapshot {
       'student_nis': studentNis,
       'session_title': sessionTitle,
       'room_name': roomName,
+      'scheduled_start_iso': scheduledStartIso,
+      'scheduled_end_iso': scheduledEndIso,
+      'duration_minutes': durationMinutes,
       'current_question_index': currentQuestionIndex,
       'answers': answers,
       'pending_answers': pendingAnswers,
@@ -51,6 +60,9 @@ class ExamSessionSnapshot {
       studentNis: json['student_nis'] as String? ?? '-',
       sessionTitle: json['session_title'] as String? ?? 'Sesi Ujian',
       roomName: json['room_name'] as String? ?? '-',
+      scheduledStartIso: json['scheduled_start_iso'] as String? ?? '',
+      scheduledEndIso: json['scheduled_end_iso'] as String? ?? '',
+      durationMinutes: json['duration_minutes'] as int? ?? 0,
       currentQuestionIndex: json['current_question_index'] as int? ?? 0,
       answers: ((json['answers'] as Map<String, dynamic>?) ?? const {}).map(
         (key, value) => MapEntry(key, value.toString()),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../exam_format.dart';
+
 class ExamCompletedScreen extends StatelessWidget {
   const ExamCompletedScreen({
     super.key,
@@ -7,6 +9,9 @@ class ExamCompletedScreen extends StatelessWidget {
     required this.studentNis,
     required this.sessionTitle,
     required this.roomName,
+    required this.scheduledStartIso,
+    required this.scheduledEndIso,
+    required this.durationMinutes,
     required this.answeredCount,
     required this.totalQuestions,
     required this.wasAutoSubmitted,
@@ -16,6 +21,9 @@ class ExamCompletedScreen extends StatelessWidget {
   final String studentNis;
   final String sessionTitle;
   final String roomName;
+  final String scheduledStartIso;
+  final String scheduledEndIso;
+  final int durationMinutes;
   final int answeredCount;
   final int totalQuestions;
   final bool wasAutoSubmitted;
@@ -110,6 +118,18 @@ class ExamCompletedScreen extends StatelessWidget {
                                 sessionTitle,
                                 style: theme.textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                formatExamSchedule(
+                                  scheduledStartIso: scheduledStartIso,
+                                  scheduledEndIso: scheduledEndIso,
+                                  durationMinutes: durationMinutes,
+                                ),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               const SizedBox(height: 8),

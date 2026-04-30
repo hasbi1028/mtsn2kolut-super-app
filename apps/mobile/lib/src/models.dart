@@ -98,6 +98,8 @@ class ExamQuestion {
     required this.questionText,
     required this.stemHtml,
     required this.stimulusHtml,
+    required this.stemMediaUrl,
+    required this.stimulusMediaUrl,
     required this.options,
   });
 
@@ -105,6 +107,8 @@ class ExamQuestion {
   final String questionText;
   final String stemHtml;
   final String stimulusHtml;
+  final String stemMediaUrl;
+  final String stimulusMediaUrl;
   final List<ExamOption> options;
 
   bool get isEssay => options.isEmpty;
@@ -117,6 +121,8 @@ class ExamQuestion {
       questionText: json['question_text'] as String? ?? '',
       stemHtml: json['stem_html'] as String? ?? '',
       stimulusHtml: json['stimulus_html'] as String? ?? '',
+      stemMediaUrl: json['stem_media_url'] as String? ?? '',
+      stimulusMediaUrl: json['stimulus_media_url'] as String? ?? '',
       options: ((json['options'] as List<dynamic>?) ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(ExamOption.fromJson)

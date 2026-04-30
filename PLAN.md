@@ -112,6 +112,8 @@ Three runtime units deployed across 3 VPS:
 - [x] Rich-content-ready renderer baseline for `stimulus_html` and `stem_html` payloads with safe text normalization fallback
 - [x] Human-readable session snapshot metadata cache for clearer restore UX
 - [x] Dedicated exam-complete screen after submit / auto-submit
+- [x] Schedule-aware restore/completion metadata cache (`start`, `end`, `duration`)
+- [x] Lightweight remote image rendering baseline for question stimulus/stem media URLs
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

@@ -144,6 +144,8 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Anti-cheat baseline** — BYOD-aware deterrence via Android secure screen (`FLAG_SECURE`), back-navigation blocking, lifecycle-driven `app_switch` event logging, resume re-check gating, visible sync-state chips, local pending-answer sync protection, and explicit warning events for repeat resume / blocked submit conditions.
 - **Question rendering baseline** — mobile renderer is ready for richer payloads (`stimulus_html`, `stem_html`) with safe text normalization instead of assuming only plain `question_text`.
 - **Session recovery UX baseline** — local exam snapshots should preserve human-readable metadata (student, session title, room) so restore flows remain understandable during reconnects, and completed exams should transition to a dedicated finish screen rather than leaving students on the active question shell.
+- **Session schedule UX baseline** — local exam snapshots should also preserve schedule metadata (start, end, duration) so restore and completion screens remain informative even while reconnecting.
+- **Lightweight media support baseline** — Flutter exam screens may render simple remote image media from the exam payload (`stimulus_media_url`, `stem_media_url`) without introducing a heavier media stack first.
 
 ### ✅ Sprint 15 — Library System (Done)
 - **Library schema** — `library_books` and `library_loans` tables (migration 027). No separate member table; loans reference existing `students` and `employees` via FK.
