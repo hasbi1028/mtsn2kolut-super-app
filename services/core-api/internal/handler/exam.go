@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -61,7 +62,7 @@ func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	absolutizeExamLoginResult(r, &result)
+	absolutizeExamLoginResult(r, body.Token, &result)
 	api.OK(w, result)
 }
 
@@ -168,39 +169,52 @@ func (h *Exam) Submit(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]string{"status": "submitted"})
 }
 
-func absolutizeExamLoginResult(r *http.Request, result *service.LoginResult) {
+func absolutizeExamLoginResult(r *http.Request, examToken string, result *service.LoginResult) {
 	for i := range result.Questions {
-		result.Questions[i].StemMediaURL = absolutizeExamAssetURL(r, result.Questions[i].StemMediaURL)
-		result.Questions[i].StimulusMediaURL = absolutizeExamAssetURL(r, result.Questions[i].StimulusMediaURL)
-		result.Questions[i].StemAudioURL = absolutizeExamAssetURL(r, result.Questions[i].StemAudioURL)
-		result.Questions[i].StimulusAudioURL = absolutizeExamAssetURL(r, result.Questions[i].StimulusAudioURL)
+		result.Questions[i].StemMediaURL = absolutizeExamAssetURL(r, examToken, result.Questions[i].StemMediaURL)
+		result.Questions[i].StimulusMediaURL = absolutizeExamAssetURL(r, examToken, result.Questions[i].StimulusMediaURL)
+		result.Questions[i].StemAudioURL = absolutizeExamAssetURL(r, examToken, result.Questions[i].StemAudioURL)
+		result.Questions[i].StimulusAudioURL = absolutizeExamAssetURL(r, examToken, result.Questions[i].StimulusAudioURL)
 	}
 }
 
-func absolutizeExamAssetURL(r *http.Request, value string) string {
+func absolutizeExamAssetURL(r *http.Request, examToken, value string) string {
 	if value == "" {
 		return ""
 	}
-	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
-		return value
-	}
-	scheme := r.Header.Get("X-Forwarded-Proto")
-	if scheme == "" {
-		if r.TLS != nil {
-			scheme = "https"
+	if !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
+		scheme := r.Header.Get("X-Forwarded-Proto")
+		if scheme == "" {
+			if r.TLS != nil {
+				scheme = "https"
+			} else {
+				scheme = "http"
+			}
+		}
+		host := r.Header.Get("X-Forwarded-Host")
+		if host == "" {
+			host = r.Host
+		}
+		if host == "" {
+			return value
+		}
+		if strings.HasPrefix(value, "/") {
+			value = scheme + "://" + host + value
 		} else {
-			scheme = "http"
+			value = scheme + "://" + host + "/" + value
 		}
 	}
-	host := r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Host
-	}
-	if host == "" {
+	if strings.TrimSpace(examToken) == "" {
 		return value
 	}
-	if strings.HasPrefix(value, "/") {
-		return scheme + "://" + host + value
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return value
 	}
-	return scheme + "://" + host + "/" + value
+	query := parsed.Query()
+	if query.Get("exam_token") == "" {
+		query.Set("exam_token", examToken)
+		parsed.RawQuery = query.Encode()
+	}
+	return parsed.String()
 }

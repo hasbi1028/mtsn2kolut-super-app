@@ -21,6 +21,7 @@ type cbtQuestionAssetStore interface {
 	CreateCbtQuestionAsset(ctx context.Context, arg db.CreateCbtQuestionAssetParams) (db.CbtQuestionAsset, error)
 	GetCbtQuestionAsset(ctx context.Context, id pgtype.UUID) (db.CbtQuestionAsset, error)
 	ListCbtQuestionAssetsByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error)
+	GetExamQuestions(ctx context.Context, packageID pgtype.UUID) ([]db.GetExamQuestionsRow, error)
 }
 
 type CbtQuestionAsset struct {
@@ -90,6 +91,22 @@ func (s *CbtQuestionAsset) Get(ctx context.Context, id pgtype.UUID) (db.CbtQuest
 
 func (s *CbtQuestionAsset) ListByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error) {
 	return s.q.ListCbtQuestionAssetsByQuestion(ctx, questionID)
+}
+
+func (s *CbtQuestionAsset) AccessibleByPackage(ctx context.Context, questionID, packageID pgtype.UUID) (bool, error) {
+	if !questionID.Valid || !packageID.Valid {
+		return false, nil
+	}
+	questions, err := s.q.GetExamQuestions(ctx, packageID)
+	if err != nil {
+		return false, err
+	}
+	for _, question := range questions {
+		if question.ID == questionID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func validateAssetInput(input UploadCbtQuestionAssetInput) error {

@@ -217,6 +217,11 @@ func (h *PusakaWorker) GetStatus(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	stats, err := h.jobs.Stats(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
 
 	activeWorkers := make([]map[string]any, 0)
 	cutoff := time.Now().UTC().Add(-2 * time.Minute)
@@ -247,6 +252,12 @@ func (h *PusakaWorker) GetStatus(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]any{
 		"active_workers": activeWorkers,
 		"total":          len(activeWorkers),
-		"last_checked":   time.Now().UTC(),
+		"queue": map[string]int64{
+			"queued":  stats.Queued,
+			"running": stats.Running,
+			"success": stats.Success,
+			"failed":  stats.Failed,
+		},
+		"last_checked": time.Now().UTC(),
 	})
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	mw "mtsn2kolut-super-app/backend/internal/middleware"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
@@ -110,6 +111,17 @@ func (h *CbtQuestionAsset) File(w http.ResponseWriter, r *http.Request) {
 		api.NotFound(w)
 		return
 	}
+	if participant, ok := mw.ParticipantFromContext(r.Context()); ok {
+		allowed, err := h.svc.AccessibleByPackage(r.Context(), asset.QuestionID, participant.PackageID)
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		if !allowed {
+			api.Forbidden(w)
+			return
+		}
+	}
 	f, err := os.Open(asset.StoragePath)
 	if err != nil {
 		api.NotFound(w)
@@ -120,6 +132,7 @@ func (h *CbtQuestionAsset) File(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", asset.MimeType)
 	w.Header().Set("Content-Length", strconv.FormatInt(asset.FileSize, 10))
 	w.Header().Set("Content-Disposition", `inline; filename="`+asset.StoredName+`"`)
+	w.Header().Set("Cache-Control", "private, max-age=300")
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, f)
 }

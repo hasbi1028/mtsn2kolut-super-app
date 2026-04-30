@@ -1,25 +1,28 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { requireAuthHeaders, handleRouteError } from '$lib/server/api';
+import { proxy, handleRouteError } from '$lib/server/api';
+
+type WorkerStatusPayload = {
+	active_workers: Record<string, unknown>[];
+	total: number;
+	queue?: {
+		queued: number;
+		running: number;
+		success: number;
+		failed: number;
+	};
+	last_checked: string;
+};
 
 export const GET = async (event: RequestEvent) => {
 	try {
-		const accessToken = event.locals.accessToken ?? event.cookies.get('access_token');
-		const res = await fetch(`${event.url.origin}/health`, {
-			headers: requireAuthHeaders(accessToken),
-		});
-		if (!res.ok) throw new Error(`health check HTTP ${res.status}`);
-		const data = await res.json();
-		const workersRaw: Record<string, string> = data.workers ?? {};
-		const active_workers = Object.values(workersRaw)
-			.map((v) => { try { return JSON.parse(v); } catch { return null; } })
-			.filter(Boolean);
+		const data = await proxy(event).get<WorkerStatusPayload>('/api/pusaka/worker/status');
 		return json({
 			data: {
-				active_workers,
-				total: active_workers.length,
-				queue: data.queue ?? {},
-				last_checked: new Date().toISOString(),
+				active_workers: data.active_workers,
+				total: data.total,
+				queue: data.queue ?? { queued: 0, running: 0, success: 0, failed: 0 },
+				last_checked: data.last_checked,
 			},
 		});
 	} catch (e) {

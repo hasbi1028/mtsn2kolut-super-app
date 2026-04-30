@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import type { RequestEvent } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
-import { handleRouteError, requireAuthHeaders } from '$lib/server/api';
+import { handleRouteError, requireAuthHeaders, requireAuthorizationHeader } from '$lib/server/api';
 
 const BASE = (env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 
@@ -27,7 +27,7 @@ export const POST = async (event: RequestEvent) => {
 		const accessToken = event.locals.accessToken ?? event.cookies.get('access_token');
 		const res = await fetch(`${BASE}/api/cbt/assets`, {
 			method: 'POST',
-			headers: requireAuthHeaders(accessToken),
+			headers: requireAuthorizationHeader(accessToken),
 			body: form,
 		});
 		const data = await res.json().catch(() => ({}));

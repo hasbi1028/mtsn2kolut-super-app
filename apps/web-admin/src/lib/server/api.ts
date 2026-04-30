@@ -9,13 +9,19 @@ export class ApiError extends Error {
 	constructor(public status: number, message: string) { super(message); }
 }
 
-export function requireAuthHeaders(accessToken?: string): Record<string, string> {
+export function requireAuthorizationHeader(accessToken?: string): Record<string, string> {
 	if (!accessToken) {
 		throw new ApiError(401, 'unauthorized');
 	}
 	return {
-		'Content-Type': 'application/json',
 		Authorization: `Bearer ${accessToken}`,
+	};
+}
+
+export function requireAuthHeaders(accessToken?: string): Record<string, string> {
+	return {
+		'Content-Type': 'application/json',
+		...requireAuthorizationHeader(accessToken),
 	};
 }
 
@@ -90,7 +96,7 @@ export function proxy(event: RequestEvent) {
 		patch: <T>(path: string, body?: unknown) => apiPatch<T>(path, body, accessToken),
 		del: <T>(path: string, body?: unknown) => apiDelete<T>(path, body, accessToken),
 		fetch: (path: string, init?: RequestInit) => {
-			const headers = requireAuthHeaders(accessToken);
+			const headers = requireAuthorizationHeader(accessToken);
 			return fetch(`${BASE}${path}`, { ...init, headers: { ...headers, ...(init?.headers as Record<string, string>) } });
 		},
 	};

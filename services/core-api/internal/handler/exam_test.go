@@ -69,7 +69,7 @@ func TestAbsolutizeExamAssetURLHonorsForwardedHeaders(t *testing.T) {
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-Host", "cbt.mtsn2kolut.sch.id")
 
-	got := absolutizeExamAssetURL(req, "/api/cbt/assets/asset-1/file")
+	got := absolutizeExamAssetURL(req, "", "/api/cbt/assets/asset-1/file")
 	want := "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/asset-1/file"
 	if got != want {
 		t.Fatalf("absolutizeExamAssetURL() = %q, want %q", got, want)
@@ -80,7 +80,7 @@ func TestAbsolutizeExamAssetURLFallsBackToRequestHost(t *testing.T) {
 	req := httptest.NewRequest("POST", "http://localhost:8080/api/exam/login", nil)
 	req.Host = "localhost:8080"
 
-	got := absolutizeExamAssetURL(req, "api/cbt/assets/asset-2/file")
+	got := absolutizeExamAssetURL(req, "", "api/cbt/assets/asset-2/file")
 	want := "http://localhost:8080/api/cbt/assets/asset-2/file"
 	if got != want {
 		t.Fatalf("absolutizeExamAssetURL() = %q, want %q", got, want)
@@ -90,7 +90,7 @@ func TestAbsolutizeExamAssetURLFallsBackToRequestHost(t *testing.T) {
 func TestAbsolutizeExamAssetURLLeavesAbsoluteURLUntouched(t *testing.T) {
 	req := httptest.NewRequest("POST", "http://localhost:8080/api/exam/login", nil)
 
-	got := absolutizeExamAssetURL(req, "https://cdn.example.com/file.png")
+	got := absolutizeExamAssetURL(req, "", "https://cdn.example.com/file.png")
 	want := "https://cdn.example.com/file.png"
 	if got != want {
 		t.Fatalf("absolutizeExamAssetURL() = %q, want %q", got, want)
@@ -113,19 +113,19 @@ func TestAbsolutizeExamLoginResultRewritesAllMediaFields(t *testing.T) {
 		},
 	}
 
-	absolutizeExamLoginResult(req, &result)
+	absolutizeExamLoginResult(req, "exam-token-123", &result)
 
 	question := result.Questions[0]
-	if question.StemMediaURL != "https://mobile-api.example.sch.id/api/cbt/assets/image-1/file" {
+	if question.StemMediaURL != "https://mobile-api.example.sch.id/api/cbt/assets/image-1/file?exam_token=exam-token-123" {
 		t.Fatalf("StemMediaURL = %q", question.StemMediaURL)
 	}
-	if question.StimulusMediaURL != "https://mobile-api.example.sch.id/api/cbt/assets/image-2/file" {
+	if question.StimulusMediaURL != "https://mobile-api.example.sch.id/api/cbt/assets/image-2/file?exam_token=exam-token-123" {
 		t.Fatalf("StimulusMediaURL = %q", question.StimulusMediaURL)
 	}
-	if question.StemAudioURL != "https://mobile-api.example.sch.id/api/cbt/assets/audio-1/file" {
+	if question.StemAudioURL != "https://mobile-api.example.sch.id/api/cbt/assets/audio-1/file?exam_token=exam-token-123" {
 		t.Fatalf("StemAudioURL = %q", question.StemAudioURL)
 	}
-	if question.StimulusAudioURL != "https://mobile-api.example.sch.id/api/cbt/assets/audio-2/file" {
+	if question.StimulusAudioURL != "https://mobile-api.example.sch.id/api/cbt/assets/audio-2/file?exam_token=exam-token-123" {
 		t.Fatalf("StimulusAudioURL = %q", question.StimulusAudioURL)
 	}
 }
@@ -175,10 +175,10 @@ func TestExamLoginWritesWrappedJSONWithAbsoluteMediaURLs(t *testing.T) {
 	if len(payload.Data.Questions) != 1 {
 		t.Fatalf("len(Questions) = %d, want 1", len(payload.Data.Questions))
 	}
-	if payload.Data.Questions[0].StemMediaURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/image-1/file" {
+	if payload.Data.Questions[0].StemMediaURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/image-1/file?exam_token=a1b2c3d4" {
 		t.Fatalf("StemMediaURL = %q", payload.Data.Questions[0].StemMediaURL)
 	}
-	if payload.Data.Questions[0].StimulusAudioURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/audio-1/file" {
+	if payload.Data.Questions[0].StimulusAudioURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/audio-1/file?exam_token=a1b2c3d4" {
 		t.Fatalf("StimulusAudioURL = %q", payload.Data.Questions[0].StimulusAudioURL)
 	}
 	if svc.lastLoginToken != "a1b2c3d4" {
@@ -254,8 +254,8 @@ func TestExamStatusMapsUnexpectedServiceError(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json unmarshal failed: %v", err)
 	}
-	if payload.Error != "status lookup failed" {
-		t.Fatalf("error = %q, want %q", payload.Error, "status lookup failed")
+	if payload.Error != "internal server error" {
+		t.Fatalf("error = %q, want %q", payload.Error, "internal server error")
 	}
 }
 
@@ -288,7 +288,7 @@ func TestExamLoginMapsKnownServiceErrors(t *testing.T) {
 			name:       "unexpected error",
 			err:        errors.New("database down"),
 			wantStatus: 500,
-			wantError:  "database down",
+			wantError:  "internal server error",
 		},
 	}
 
@@ -434,7 +434,7 @@ func TestExamSubmitAnswerMapsKnownServiceErrors(t *testing.T) {
 			name:       "unexpected error",
 			err:        errors.New("save failed"),
 			wantStatus: 500,
-			wantError:  "save failed",
+			wantError:  "internal server error",
 		},
 	}
 
@@ -566,7 +566,7 @@ func TestExamSubmitMapsKnownServiceErrors(t *testing.T) {
 			name:       "unexpected error",
 			err:        errors.New("submit failed"),
 			wantStatus: 500,
-			wantError:  "submit failed",
+			wantError:  "internal server error",
 		},
 	}
 
@@ -730,8 +730,8 @@ func TestExamHeartbeatMapsUnexpectedServiceError(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json unmarshal failed: %v", err)
 	}
-	if payload.Error != "heartbeat failed" {
-		t.Fatalf("error = %q, want %q", payload.Error, "heartbeat failed")
+	if payload.Error != "internal server error" {
+		t.Fatalf("error = %q, want %q", payload.Error, "internal server error")
 	}
 }
 
@@ -789,8 +789,8 @@ func TestExamRecordEventMapsUnexpectedServiceError(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("json unmarshal failed: %v", err)
 	}
-	if payload.Error != "event write failed" {
-		t.Fatalf("error = %q, want %q", payload.Error, "event write failed")
+	if payload.Error != "internal server error" {
+		t.Fatalf("error = %q, want %q", payload.Error, "internal server error")
 	}
 }
 
