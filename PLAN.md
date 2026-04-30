@@ -197,6 +197,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Grade readiness summary — gradebook now shows readiness to print rapor based on published components and filled student values, with direct navigation into the rapor print screen when the assignment is ready
 - [x] Grade bulk-save flow — guru can now accumulate multiple score/note edits within one component and save all pending row changes in one action
 - [x] Grade quick-fill flow — guru can draft mass score/note fills for all rows or only still-empty rows before committing changes with bulk save
+- [x] Grade finalization checkpoint — persisted finalize/reopen flow per assignment, backend readiness enforcement, and mutation lock while finalized
 - [x] Auth hardening baseline — explicit suspended/weak-password errors, backend password policy, non-destructive `SeedAdmin`
 - [x] BFF auth forwarding baseline — authenticated proxy helpers now require bearer JWT instead of silently falling back to internal key
 - [x] Refresh session baseline — session-backed refresh tokens with backend revoke on logout and rotation on refresh

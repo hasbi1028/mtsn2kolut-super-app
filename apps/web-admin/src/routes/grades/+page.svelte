@@ -50,6 +50,22 @@
 		notes?: string;
 	};
 
+	type GradeReadiness = {
+		ready: boolean;
+		published_component_count: number;
+		draft_component_count: number;
+		ready_student_count: number;
+		incomplete_student_count: number;
+		missing_grade_count: number;
+	};
+
+	type GradeFinalization = {
+		assignment_id: string;
+		finalized_by: string;
+		notes: string;
+		finalized_at: string;
+	};
+
 	const categoryOptions = [
 		{ value: 'assignment', label: 'Tugas' },
 		{ value: 'quiz', label: 'Kuis' },
@@ -68,6 +84,8 @@
 	let components = $state<GradeComponent[]>([]);
 	let summary = $state<GradeSummary[]>([]);
 	let entries = $state<GradeEntry[]>([]);
+	let readiness = $state<GradeReadiness | null>(null);
+	let finalization = $state<GradeFinalization | null>(null);
 
 	let assignmentId = $state('');
 	let componentId = $state('');
@@ -76,6 +94,7 @@
 	let entryBusy = $state<Record<string, boolean>>({});
 	let publishBusy = $state<Record<string, boolean>>({});
 	let bulkSaveBusy = $state(false);
+	let finalizationBusy = $state(false);
 	let editingComponentId = $state('');
 	let componentTitle = $state('');
 	let componentCategory = $state('assignment');
@@ -83,6 +102,7 @@
 	let componentMaxScore = $state(100);
 	let quickFillScore = $state('');
 	let quickFillNote = $state('');
+	let finalizeNotes = $state('');
 
 	let scoreInput = $state<Record<string, string>>({});
 	let noteInput = $state<Record<string, string>>({});
@@ -90,25 +110,25 @@
 	const selectedAssignment = $derived(assignments.find((item) => item.id === assignmentId) ?? null);
 	const selectedComponent = $derived(components.find((item) => item.id === componentId) ?? null);
 	const editingComponent = $derived(components.find((item) => item.id === editingComponentId) ?? null);
-	const completionRate = $derived(summary.length === 0 ? 0 : Math.round((summary.filter((row) => row.filled_count > 0).length / summary.length) * 100));
-	const publishedComponentCount = $derived(components.filter((item) => item.is_published).length);
-	const draftComponentCount = $derived(components.filter((item) => !item.is_published).length);
-	const readyStudentCount = $derived(summary.filter((row) => row.component_count > 0 && row.filled_count === row.component_count).length);
-	const incompleteStudentCount = $derived(summary.filter((row) => row.component_count === 0 || row.filled_count < row.component_count).length);
-	const missingGradeCount = $derived(summary.reduce((total, row) => total + Math.max(row.component_count - row.filled_count, 0), 0));
+	const completionRate = $derived(
+		readiness ? (summary.length === 0 ? 0 : Math.round((readiness.ready_student_count / summary.length) * 100)) : 0
+	);
+	const publishedComponentCount = $derived(readiness?.published_component_count ?? components.filter((item) => item.is_published).length);
+	const draftComponentCount = $derived(readiness?.draft_component_count ?? components.filter((item) => !item.is_published).length);
+	const readyStudentCount = $derived(readiness?.ready_student_count ?? summary.filter((row) => row.component_count > 0 && row.filled_count === row.component_count).length);
+	const incompleteStudentCount = $derived(readiness?.incomplete_student_count ?? summary.filter((row) => row.component_count === 0 || row.filled_count < row.component_count).length);
+	const missingGradeCount = $derived(readiness?.missing_grade_count ?? summary.reduce((total, row) => total + Math.max(row.component_count - row.filled_count, 0), 0));
 	const dirtyEntryIds = $derived(
 		entries
 			.filter((row) => isEntryDirty(row.student_id))
 			.map((row) => row.student_id)
 	);
-	const readyForRapor = $derived(
-		components.length > 0 &&
-		draftComponentCount === 0 &&
-		summary.length > 0 &&
-		summary.every((row) => row.component_count > 0 && row.filled_count === row.component_count)
-	);
+	const readyForRapor = $derived(readiness?.ready ?? false);
+	const isFinalized = $derived(finalization !== null);
 	const readinessLabel = $derived(
-		readyForRapor
+		isFinalized
+			? 'Sudah Difinalisasi'
+			: readyForRapor
 			? 'Siap Rapor'
 			: components.length === 0
 				? 'Belum Siap'
@@ -117,7 +137,9 @@
 					: 'Nilai Belum Lengkap'
 	);
 	const readinessDescription = $derived(
-		readyForRapor
+		isFinalized
+			? 'Assignment ini sudah difinalisasi. Buka finalisasi terlebih dahulu jika ingin mengubah komponen atau nilai.'
+			: readyForRapor
 			? 'Semua komponen sudah terbit dan seluruh siswa telah memiliki isian nilai lengkap.'
 			: components.length === 0
 				? 'Tambahkan komponen penilaian terlebih dahulu sebelum kelas-mapel ini dapat difinalisasi.'
@@ -205,6 +227,9 @@
 			components = data.components ?? [];
 			summary = data.summary ?? [];
 			entries = data.entries ?? [];
+			readiness = data.readiness ?? null;
+			finalization = data.finalization ?? null;
+			finalizeNotes = data.finalization?.notes ?? '';
 
 			const nextScores: Record<string, string> = {};
 			const nextNotes: Record<string, string> = {};
@@ -223,6 +248,10 @@
 	}
 
 	function beginEditComponent(component: GradeComponent) {
+		if (isFinalized) {
+			showError('Assignment sudah difinalisasi. Buka finalisasi terlebih dahulu untuk mengubah komponen.');
+			return;
+		}
 		editingComponentId = component.id;
 		componentTitle = component.title;
 		componentCategory = component.category;
@@ -231,6 +260,10 @@
 	}
 
 	async function saveComponent() {
+		if (isFinalized) {
+			showError('Assignment sudah difinalisasi. Buka finalisasi terlebih dahulu untuk mengubah komponen.');
+			return;
+		}
 		if ((!assignmentId && !editingComponentId) || !componentTitle) return;
 		createBusy = true;
 		try {
@@ -266,6 +299,10 @@
 	}
 
 	async function deleteComponent(id: string) {
+		if (isFinalized) {
+			showError('Assignment sudah difinalisasi. Buka finalisasi terlebih dahulu untuk mengubah komponen.');
+			return;
+		}
 		if (!confirm('Hapus komponen nilai ini?')) return;
 		const res = await fetch(`/api/grades/components/${id}`, { method: 'DELETE' });
 		if (!res.ok) {
@@ -280,6 +317,10 @@
 	}
 
 	async function togglePublish(component: GradeComponent) {
+		if (isFinalized) {
+			showError('Assignment sudah difinalisasi. Buka finalisasi terlebih dahulu untuk mengubah komponen.');
+			return;
+		}
 		publishBusy = { ...publishBusy, [component.id]: true };
 		try {
 			const res = await fetch(`/api/grades/components/${component.id}/publish`, {
@@ -302,6 +343,9 @@
 	}
 
 	async function persistEntry(studentId: string, silent = false) {
+		if (isFinalized) {
+			throw new Error('Assignment sudah difinalisasi. Buka finalisasi terlebih dahulu untuk mengubah nilai.');
+		}
 		if (!componentId) return;
 		const rawScore = normalizedEntryScore(studentId);
 		if (rawScore === '') {
@@ -368,6 +412,10 @@
 	}
 
 	function applyQuickFill(mode: 'all' | 'empty') {
+		if (isFinalized) {
+			showError('Assignment sudah difinalisasi. Buka finalisasi terlebih dahulu untuk mengubah nilai.');
+			return;
+		}
 		if (!selectedComponent) return;
 		const normalizedScore = quickFillScore.trim();
 		const normalizedNote = quickFillNote.trim();
@@ -420,6 +468,46 @@
 			return;
 		}
 		showSuccess(mode === 'all' ? `Quick fill diterapkan ke ${changedCount} siswa` : `Quick fill diterapkan ke ${changedCount} siswa yang masih kosong`);
+	}
+
+	async function finalizeAssignment() {
+		if (!selectedAssignment || !readyForRapor) return;
+		finalizationBusy = true;
+		try {
+			const res = await fetch(`/api/grades/assignments/${selectedAssignment.id}/finalize`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ notes: finalizeNotes })
+			});
+			const json = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				showError(json.error ?? 'Gagal memfinalisasi assignment');
+				return;
+			}
+			showSuccess('Assignment siap rapor sudah difinalisasi');
+			await loadOverview();
+		} finally {
+			finalizationBusy = false;
+		}
+	}
+
+	async function reopenFinalization() {
+		if (!selectedAssignment) return;
+		finalizationBusy = true;
+		try {
+			const res = await fetch(`/api/grades/assignments/${selectedAssignment.id}/finalize`, {
+				method: 'DELETE'
+			});
+			if (!res.ok) {
+				const json = await res.json().catch(() => ({}));
+				showError(json.error ?? 'Gagal membuka finalisasi assignment');
+				return;
+			}
+			showSuccess('Finalisasi assignment dibuka kembali');
+			await loadOverview();
+		} finally {
+			finalizationBusy = false;
+		}
 	}
 
 	onMount(async () => {
@@ -538,18 +626,55 @@
 						<p class="text-sm text-slate-600">slot nilai yang masih perlu diisi</p>
 					</div>
 					<div class="flex items-end">
-						{#if readyForRapor}
-							<a
-								href={`/grades/rapor?assignment_id=${assignmentId}`}
-								class="inline-flex w-full items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
-							>
-								Buka Cetak Rapor
-							</a>
-						{:else}
-							<div class="rounded-xl border border-dashed border-amber-300 bg-white/70 px-4 py-3 text-sm text-amber-900">
-								Selesaikan draft dan lengkapi semua nilai sebelum membuka rapor final.
+						<div class="w-full space-y-3">
+							{#if readyForRapor}
+								<a
+									href={`/grades/rapor?assignment_id=${assignmentId}`}
+									class="inline-flex w-full items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+								>
+									Buka Cetak Rapor
+								</a>
+							{:else}
+								<div class="rounded-xl border border-dashed border-amber-300 bg-white/70 px-4 py-3 text-sm text-amber-900">
+									Selesaikan draft dan lengkapi semua nilai sebelum membuka rapor final.
+								</div>
+							{/if}
+							<div class="space-y-2">
+								<label for="finalize-notes" class="block text-xs font-medium text-slate-500">Catatan Finalisasi</label>
+								<Input
+									id="finalize-notes"
+									placeholder="Opsional: catatan verifikasi guru atau wali kelas"
+									bind:value={finalizeNotes}
+									disabled={isFinalized}
+								/>
 							</div>
-						{/if}
+							{#if isFinalized}
+								<div class="rounded-xl border border-emerald-200 bg-white/80 px-4 py-3 text-sm text-emerald-900">
+									<p class="font-medium">Difinalisasi oleh {finalization?.finalized_by || 'operator'}.</p>
+									<p class="mt-1 text-emerald-800">{new Date(finalization?.finalized_at ?? '').toLocaleString('id-ID')}</p>
+									{#if finalization?.notes}
+										<p class="mt-2 text-slate-700">{finalization.notes}</p>
+									{/if}
+								</div>
+								<LoadingButton
+									class="w-full"
+									variant="outline"
+									loading={finalizationBusy}
+									loadingLabel="Membuka..."
+									onclick={reopenFinalization}
+									label="Buka Finalisasi"
+								/>
+							{:else}
+								<LoadingButton
+									class="w-full"
+									loading={finalizationBusy}
+									loadingLabel="Memfinalisasi..."
+									disabled={!readyForRapor}
+									onclick={finalizeAssignment}
+									label="Finalisasi Assignment"
+								/>
+							{/if}
+						</div>
 					</div>
 				</Card.Content>
 			</Card.Root>

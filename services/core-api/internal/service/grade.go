@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
@@ -15,6 +16,9 @@ type gradeStore interface {
 	ListGradeComponents(ctx context.Context, arg db.ListGradeComponentsParams) ([]db.ListGradeComponentsRow, error)
 	GetGradeComponent(ctx context.Context, id pgtype.UUID) (db.GradeComponent, error)
 	GetGradeComponentHighestScore(ctx context.Context, componentID pgtype.UUID) (float64, error)
+	GetGradeAssignmentFinalization(ctx context.Context, assignmentID pgtype.UUID) (db.GradeAssignmentFinalization, error)
+	UpsertGradeAssignmentFinalization(ctx context.Context, arg db.UpsertGradeAssignmentFinalizationParams) (db.GradeAssignmentFinalization, error)
+	DeleteGradeAssignmentFinalization(ctx context.Context, assignmentID pgtype.UUID) error
 	CreateGradeComponent(ctx context.Context, arg db.CreateGradeComponentParams) (db.GradeComponent, error)
 	UpdateGradeComponent(ctx context.Context, arg db.UpdateGradeComponentParams) (db.GradeComponent, error)
 	UpdateGradeComponentPublishState(ctx context.Context, arg db.UpdateGradeComponentPublishStateParams) (db.GradeComponent, error)
@@ -31,10 +35,28 @@ type Grade struct {
 func NewGrade(q *db.Queries) *Grade { return &Grade{q: q} }
 
 type GradeOverview struct {
-	Assignments []db.ListClassSubjectAssignmentsRow `json:"assignments"`
-	Components  []db.ListGradeComponentsRow         `json:"components"`
-	Summary     []db.ListGradebookSummaryRow        `json:"summary"`
-	Entries     []db.ListGradeEntriesByComponentRow `json:"entries"`
+	Assignments  []db.ListClassSubjectAssignmentsRow `json:"assignments"`
+	Components   []db.ListGradeComponentsRow         `json:"components"`
+	Summary      []db.ListGradebookSummaryRow        `json:"summary"`
+	Entries      []db.ListGradeEntriesByComponentRow `json:"entries"`
+	Readiness    GradeReadiness                      `json:"readiness"`
+	Finalization *GradeFinalization                  `json:"finalization,omitempty"`
+}
+
+type GradeReadiness struct {
+	Ready                bool `json:"ready"`
+	PublishedComponentCount int `json:"published_component_count"`
+	DraftComponentCount  int  `json:"draft_component_count"`
+	ReadyStudentCount    int  `json:"ready_student_count"`
+	IncompleteStudentCount int `json:"incomplete_student_count"`
+	MissingGradeCount    int  `json:"missing_grade_count"`
+}
+
+type GradeFinalization struct {
+	AssignmentID string `json:"assignment_id"`
+	FinalizedBy  string `json:"finalized_by"`
+	Notes        string `json:"notes"`
+	FinalizedAt  string `json:"finalized_at"`
 }
 
 func (s *Grade) Overview(ctx context.Context, assignmentID, componentID pgtype.UUID, publishedOnly bool) (GradeOverview, error) {
@@ -58,6 +80,18 @@ func (s *Grade) Overview(ctx context.Context, assignmentID, componentID pgtype.U
 		if err != nil {
 			return GradeOverview{}, err
 		}
+		out.Readiness = buildGradeReadiness(out.Components, out.Summary)
+		finalization, err := s.q.GetGradeAssignmentFinalization(ctx, assignmentID)
+		if err == nil {
+			out.Finalization = &GradeFinalization{
+				AssignmentID: finalization.AssignmentID.String(),
+				FinalizedBy:  finalization.FinalizedBy,
+				Notes:        finalization.Notes,
+				FinalizedAt:  finalization.FinalizedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+			}
+		} else if err != pgx.ErrNoRows {
+			return GradeOverview{}, err
+		}
 	}
 	if componentID.Valid {
 		out.Entries, err = s.q.ListGradeEntriesByComponent(ctx, componentID)
@@ -69,6 +103,9 @@ func (s *Grade) Overview(ctx context.Context, assignmentID, componentID pgtype.U
 }
 
 func (s *Grade) CreateComponent(ctx context.Context, arg db.CreateGradeComponentParams) (db.GradeComponent, error) {
+	if err := s.ensureAssignmentEditable(ctx, arg.AssignmentID); err != nil {
+		return db.GradeComponent{}, err
+	}
 	arg.Title = strings.TrimSpace(arg.Title)
 	arg.Category = normalizeGradeCategory(arg.Category)
 	if arg.Title == "" {
@@ -84,6 +121,13 @@ func (s *Grade) CreateComponent(ctx context.Context, arg db.CreateGradeComponent
 }
 
 func (s *Grade) UpdateComponent(ctx context.Context, arg db.UpdateGradeComponentParams) (db.GradeComponent, error) {
+	component, err := s.q.GetGradeComponent(ctx, arg.ID)
+	if err != nil {
+		return db.GradeComponent{}, err
+	}
+	if err := s.ensureAssignmentEditable(ctx, component.AssignmentID); err != nil {
+		return db.GradeComponent{}, err
+	}
 	arg.Title = strings.TrimSpace(arg.Title)
 	arg.Category = normalizeGradeCategory(arg.Category)
 	if arg.Title == "" {
@@ -106,6 +150,13 @@ func (s *Grade) UpdateComponent(ctx context.Context, arg db.UpdateGradeComponent
 }
 
 func (s *Grade) SetComponentPublished(ctx context.Context, id pgtype.UUID, isPublished bool) (db.GradeComponent, error) {
+	component, err := s.q.GetGradeComponent(ctx, id)
+	if err != nil {
+		return db.GradeComponent{}, err
+	}
+	if err := s.ensureAssignmentEditable(ctx, component.AssignmentID); err != nil {
+		return db.GradeComponent{}, err
+	}
 	return s.q.UpdateGradeComponentPublishState(ctx, db.UpdateGradeComponentPublishStateParams{
 		ID:          id,
 		IsPublished: isPublished,
@@ -113,12 +164,22 @@ func (s *Grade) SetComponentPublished(ctx context.Context, id pgtype.UUID, isPub
 }
 
 func (s *Grade) DeleteComponent(ctx context.Context, id pgtype.UUID) error {
+	component, err := s.q.GetGradeComponent(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := s.ensureAssignmentEditable(ctx, component.AssignmentID); err != nil {
+		return err
+	}
 	return s.q.DeleteGradeComponent(ctx, id)
 }
 
 func (s *Grade) UpsertEntry(ctx context.Context, componentID, studentID pgtype.UUID, score float64, notes, gradedBy string) (db.GradeEntry, error) {
 	component, err := s.q.GetGradeComponent(ctx, componentID)
 	if err != nil {
+		return db.GradeEntry{}, err
+	}
+	if err := s.ensureAssignmentEditable(ctx, component.AssignmentID); err != nil {
 		return db.GradeEntry{}, err
 	}
 	if score < 0 {
@@ -134,6 +195,66 @@ func (s *Grade) UpsertEntry(ctx context.Context, componentID, studentID pgtype.U
 		Notes:       strings.TrimSpace(notes),
 		GradedBy:    strings.TrimSpace(gradedBy),
 	})
+}
+
+func (s *Grade) FinalizeAssignment(ctx context.Context, assignmentID pgtype.UUID, finalizedBy, notes string) (db.GradeAssignmentFinalization, error) {
+	overview, err := s.Overview(ctx, assignmentID, pgtype.UUID{}, false)
+	if err != nil {
+		return db.GradeAssignmentFinalization{}, err
+	}
+	if !overview.Readiness.Ready {
+		return db.GradeAssignmentFinalization{}, fmt.Errorf("assignment belum siap difinalisasi")
+	}
+	return s.q.UpsertGradeAssignmentFinalization(ctx, db.UpsertGradeAssignmentFinalizationParams{
+		AssignmentID: assignmentID,
+		FinalizedBy:  strings.TrimSpace(finalizedBy),
+		Notes:        strings.TrimSpace(notes),
+	})
+}
+
+func (s *Grade) ReopenAssignment(ctx context.Context, assignmentID pgtype.UUID) error {
+	return s.q.DeleteGradeAssignmentFinalization(ctx, assignmentID)
+}
+
+func (s *Grade) ensureAssignmentEditable(ctx context.Context, assignmentID pgtype.UUID) error {
+	_, err := s.q.GetGradeAssignmentFinalization(ctx, assignmentID)
+	if err == nil {
+		return fmt.Errorf("assignment sudah difinalisasi, buka finalisasi terlebih dahulu")
+	}
+	if err == pgx.ErrNoRows {
+		return nil
+	}
+	return err
+}
+
+func buildGradeReadiness(components []db.ListGradeComponentsRow, summary []db.ListGradebookSummaryRow) GradeReadiness {
+	readiness := GradeReadiness{}
+	readiness.PublishedComponentCount = 0
+	readiness.DraftComponentCount = 0
+	for _, component := range components {
+		if component.IsPublished {
+			readiness.PublishedComponentCount += 1
+		} else {
+			readiness.DraftComponentCount += 1
+		}
+	}
+	for _, row := range summary {
+		missing := int(row.ComponentCount - row.FilledCount)
+		if missing < 0 {
+			missing = 0
+		}
+		readiness.MissingGradeCount += missing
+		if row.ComponentCount > 0 && row.FilledCount == row.ComponentCount {
+			readiness.ReadyStudentCount += 1
+		} else {
+			readiness.IncompleteStudentCount += 1
+		}
+	}
+	readiness.Ready = len(components) > 0 &&
+		readiness.DraftComponentCount == 0 &&
+		len(summary) > 0 &&
+		readiness.IncompleteStudentCount == 0
+	return readiness
 }
 
 func normalizeGradeCategory(v string) string {

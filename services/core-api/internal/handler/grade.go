@@ -139,6 +139,48 @@ func (h *Grade) SetComponentPublished(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, row)
 }
 
+func (h *Grade) FinalizeAssignment(w http.ResponseWriter, r *http.Request) {
+	if !gradeAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	assignmentID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		Notes string `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	row, err := h.svc.FinalizeAssignment(r.Context(), assignmentID, currentGradeUsername(r), body.Notes)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Grade) ReopenAssignment(w http.ResponseWriter, r *http.Request) {
+	if !gradeAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	assignmentID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	if err := h.svc.ReopenAssignment(r.Context(), assignmentID); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.NoContent(w)
+}
+
 func (h *Grade) DeleteComponent(w http.ResponseWriter, r *http.Request) {
 	if !gradeAccessAllowed(r) {
 		api.Forbidden(w)
@@ -208,6 +250,9 @@ func gradeAccessAllowed(r *http.Request) bool {
 
 func currentGradeUsername(r *http.Request) string {
 	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
+		if usr, _ := claims["usr"].(string); usr != "" {
+			return usr
+		}
 		if sub, _ := claims["sub"].(string); sub != "" {
 			return sub
 		}

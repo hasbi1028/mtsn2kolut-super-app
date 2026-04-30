@@ -236,6 +236,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Grade readiness baseline** — gradebook screens should expose a clear “Siap Rapor” readiness summary per class-mapel based on published components and filled student scores, and should link directly into the rapor print view when that readiness condition is satisfied.
 - **Grade bulk-save baseline** — component-level grade entry screens should support bulk save for unsaved student edits, so guru can adjust a class worth of scores first and then commit the changed rows in one action instead of one-by-one saves only.
 - **Grade quick-fill baseline** — grade entry screens may offer teacher-friendly quick-fill helpers for mass score/note drafting (all rows or only still-empty rows), but those helpers should remain local client-side until the operator explicitly saves the pending edits.
+- **Grade finalization baseline** — assignment-level gradebooks should support a persisted finalization checkpoint. Backend may finalize only when the readiness rules are satisfied, and once finalized, grade/komponen mutations must be blocked until the assignment is explicitly reopened.
 
 ### 📋 Planned Future Phases
 1. **Academic Foundation & RBAC Expansion** — Unified `users` table with many-to-many roles (`admin`, `teacher`, `student`, `staff`, `parent`). Student lifecycle (`active`, `alumni`, `prospective`) and Parent-child linking.

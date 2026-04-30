@@ -50,6 +50,15 @@ func (q *Queries) CreateGradeComponent(ctx context.Context, arg CreateGradeCompo
 	return i, err
 }
 
+const deleteGradeAssignmentFinalization = `-- name: DeleteGradeAssignmentFinalization :exec
+DELETE FROM grade_assignment_finalizations WHERE assignment_id = $1
+`
+
+func (q *Queries) DeleteGradeAssignmentFinalization(ctx context.Context, assignmentID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteGradeAssignmentFinalization, assignmentID)
+	return err
+}
+
 const deleteGradeComponent = `-- name: DeleteGradeComponent :exec
 DELETE FROM grade_components WHERE id = $1
 `
@@ -57,6 +66,25 @@ DELETE FROM grade_components WHERE id = $1
 func (q *Queries) DeleteGradeComponent(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteGradeComponent, id)
 	return err
+}
+
+const getGradeAssignmentFinalization = `-- name: GetGradeAssignmentFinalization :one
+SELECT assignment_id, finalized_by, notes, finalized_at, updated_at
+FROM grade_assignment_finalizations
+WHERE assignment_id = $1
+`
+
+func (q *Queries) GetGradeAssignmentFinalization(ctx context.Context, assignmentID pgtype.UUID) (GradeAssignmentFinalization, error) {
+	row := q.db.QueryRow(ctx, getGradeAssignmentFinalization, assignmentID)
+	var i GradeAssignmentFinalization
+	err := row.Scan(
+		&i.AssignmentID,
+		&i.FinalizedBy,
+		&i.Notes,
+		&i.FinalizedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getGradeComponent = `-- name: GetGradeComponent :one
@@ -389,6 +417,36 @@ func (q *Queries) UpdateGradeComponentPublishState(ctx context.Context, arg Upda
 		&i.MaxScore,
 		&i.IsPublished,
 		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertGradeAssignmentFinalization = `-- name: UpsertGradeAssignmentFinalization :one
+INSERT INTO grade_assignment_finalizations (assignment_id, finalized_by, notes, finalized_at, updated_at)
+VALUES ($1, $2, $3, NOW(), NOW())
+ON CONFLICT (assignment_id) DO UPDATE
+SET finalized_by = EXCLUDED.finalized_by,
+    notes = EXCLUDED.notes,
+    finalized_at = NOW(),
+    updated_at = NOW()
+RETURNING assignment_id, finalized_by, notes, finalized_at, updated_at
+`
+
+type UpsertGradeAssignmentFinalizationParams struct {
+	AssignmentID pgtype.UUID `json:"assignment_id"`
+	FinalizedBy  string      `json:"finalized_by"`
+	Notes        string      `json:"notes"`
+}
+
+func (q *Queries) UpsertGradeAssignmentFinalization(ctx context.Context, arg UpsertGradeAssignmentFinalizationParams) (GradeAssignmentFinalization, error) {
+	row := q.db.QueryRow(ctx, upsertGradeAssignmentFinalization, arg.AssignmentID, arg.FinalizedBy, arg.Notes)
+	var i GradeAssignmentFinalization
+	err := row.Scan(
+		&i.AssignmentID,
+		&i.FinalizedBy,
+		&i.Notes,
+		&i.FinalizedAt,
 		&i.UpdatedAt,
 	)
 	return i, err

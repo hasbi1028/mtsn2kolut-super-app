@@ -884,6 +884,14 @@ type EmployeeSchedule struct {
 	DayOfWeek           int16              `json:"day_of_week"`
 }
 
+type GradeAssignmentFinalization struct {
+	AssignmentID pgtype.UUID        `json:"assignment_id"`
+	FinalizedBy  string             `json:"finalized_by"`
+	Notes        string             `json:"notes"`
+	FinalizedAt  pgtype.Timestamptz `json:"finalized_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type GradeComponent struct {
 	ID           pgtype.UUID        `json:"id"`
 	AssignmentID pgtype.UUID        `json:"assignment_id"`

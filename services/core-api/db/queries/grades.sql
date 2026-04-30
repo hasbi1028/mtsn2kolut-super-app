@@ -29,6 +29,24 @@ INSERT INTO grade_components (assignment_id, title, category, weight, max_score,
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
+-- name: GetGradeAssignmentFinalization :one
+SELECT assignment_id, finalized_by, notes, finalized_at, updated_at
+FROM grade_assignment_finalizations
+WHERE assignment_id = $1;
+
+-- name: UpsertGradeAssignmentFinalization :one
+INSERT INTO grade_assignment_finalizations (assignment_id, finalized_by, notes, finalized_at, updated_at)
+VALUES ($1, $2, $3, NOW(), NOW())
+ON CONFLICT (assignment_id) DO UPDATE
+SET finalized_by = EXCLUDED.finalized_by,
+    notes = EXCLUDED.notes,
+    finalized_at = NOW(),
+    updated_at = NOW()
+RETURNING *;
+
+-- name: DeleteGradeAssignmentFinalization :exec
+DELETE FROM grade_assignment_finalizations WHERE assignment_id = $1;
+
 -- name: UpdateGradeComponent :one
 UPDATE grade_components
 SET title = $2,
