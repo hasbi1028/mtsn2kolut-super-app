@@ -146,6 +146,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Flutter exam UX now maps backend `404/403/409` semantics into clearer login/restore/save/submit guidance for BYOD sessions
 - [x] Flutter exam guidance mappings extracted into testable helpers with dedicated unit coverage
 - [x] Handler-level unauthorized coverage for exam `heartbeat` and `event` telemetry routes
+- [x] Handler-level success-envelope coverage for exam `heartbeat` and `event` telemetry routes
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

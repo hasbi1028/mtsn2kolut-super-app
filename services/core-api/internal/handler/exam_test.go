@@ -434,3 +434,53 @@ func TestExamRecordEventRequiresParticipantContext(t *testing.T) {
 		t.Fatalf("error = %q, want %q", payload.Error, "unauthorized")
 	}
 }
+
+func TestExamHeartbeatWritesWrappedSuccessJSON(t *testing.T) {
+	h := &Exam{svc: &fakeExamService{}}
+	var participant db.GetParticipantByTokenRow
+	req := httptest.NewRequest("POST", "http://internal/api/exam/heartbeat", nil)
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.Heartbeat(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Data["status"] != "ok" {
+		t.Fatalf("status = %q, want %q", payload.Data["status"], "ok")
+	}
+}
+
+func TestExamRecordEventWritesWrappedSuccessJSON(t *testing.T) {
+	h := &Exam{svc: &fakeExamService{}}
+	var participant db.GetParticipantByTokenRow
+	body := bytes.NewBufferString(`{"event_type":"warning","data":{"reason":"test"}}`)
+	req := httptest.NewRequest("POST", "http://internal/api/exam/event", body)
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.RecordEvent(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Data["status"] != "recorded" {
+		t.Fatalf("status = %q, want %q", payload.Data["status"], "recorded")
+	}
+}
