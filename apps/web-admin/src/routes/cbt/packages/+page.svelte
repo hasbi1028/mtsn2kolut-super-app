@@ -2,7 +2,6 @@
 	import { onMount } from 'svelte';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
-	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Badge } from '$lib/components/ui/badge';
@@ -121,9 +120,9 @@
 			<h1 class="text-2xl font-semibold text-slate-800">Paket Ujian CBT</h1>
 			<p class="text-sm text-slate-500 mt-1">Buat dan kelola paket soal untuk sesi ujian</p>
 		</div>
-		<Button onclick={() => (showForm = !showForm)}>
+		<LoadingButton onclick={() => (showForm = !showForm)}>
 			{showForm ? 'Batal' : '+ Buat Paket'}
-		</Button>
+		</LoadingButton>
 	</div>
 
 	{#if error}
@@ -208,7 +207,7 @@
 					<LoadingButton disabled={fBusy || !fSubjectId || !fTitle || !fDuration} onclick={createPackage} loading={fBusy} loadingLabel="Menyimpan...">
 						{`Buat Paket${fSelectedIds.size > 0 ? ` (${fSelectedIds.size} soal)` : ''}`}
 					</LoadingButton>
-					<Button variant="outline" onclick={() => (showForm = false)}>Batal</Button>
+					<LoadingButton variant="outline" onclick={() => (showForm = false)}>Batal</LoadingButton>
 				</div>
 			</Card.Content>
 		</Card.Root>
@@ -275,7 +274,7 @@
 									{/if}
 								</Table.Cell>
 								<Table.Cell>
-									<Button variant="destructive" size="xs" onclick={() => deletePackage(p.id, p.title)}>Hapus</Button>
+									<LoadingButton variant="destructive" size="xs" onclick={() => deletePackage(p.id, p.title)}>Hapus</LoadingButton>
 								</Table.Cell>
 							</Table.Row>
 						{:else}
@@ -312,7 +311,7 @@
 								<p class="mt-3 text-sm text-slate-600">{p.description}</p>
 							{/if}
 							<div class="mt-4">
-								<Button variant="destructive" size="sm" class="w-full" onclick={() => deletePackage(p.id, p.title)}>Hapus</Button>
+								<LoadingButton variant="destructive" size="sm" class="w-full" onclick={() => deletePackage(p.id, p.title)}>Hapus</LoadingButton>
 							</div>
 						</div>
 					{:else}

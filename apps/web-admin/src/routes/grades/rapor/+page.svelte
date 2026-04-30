@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type Assignment = {
 		id: string;
@@ -122,7 +122,7 @@
 			<p class="mt-1 text-sm text-muted-foreground">Pilih mata pelajaran dan kelas, lalu cetak daftar nilai siswa.</p>
 		</div>
 		{#if selectedId && summary.length > 0}
-			<Button onclick={() => window.print()}>Cetak / Simpan PDF</Button>
+			<LoadingButton onclick={() => window.print()} label="Cetak / Simpan PDF" />
 		{/if}
 	</div>
 

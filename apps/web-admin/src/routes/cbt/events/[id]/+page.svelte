@@ -3,9 +3,9 @@
 	import { page } from '$app/state';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
-	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type EventInfo = {
 		id: string; title: string; exam_type: string; scope: string;
@@ -112,9 +112,7 @@
 				<a href={`/cbt/events/${eventId}/exam-cards`} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
 					Kartu Ujian
 				</a>
-				<Button variant="outline" onclick={exportCSV} disabled={results.length === 0}>
-					↓ Export CSV (Rekap Semua Sesi)
-				</Button>
+				<LoadingButton variant="outline" onclick={exportCSV} disabled={results.length === 0} label="↓ Export CSV (Rekap Semua Sesi)" />
 			</div>
 		</div>
 

@@ -2,7 +2,6 @@
 	import { onMount } from 'svelte';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
-	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
@@ -132,9 +131,9 @@
 			<h1 class="text-2xl font-semibold text-slate-800">Kegiatan Ujian (Events)</h1>
 			<p class="text-sm text-slate-500 mt-1">Grup besar untuk sesi-sesi ujian (mis: UTS, UAS)</p>
 		</div>
-		<Button onclick={() => { if (showForm) resetForm(); else showForm = true; }}>
+		<LoadingButton onclick={() => { if (showForm) resetForm(); else showForm = true; }}>
 			{showForm ? 'Batal' : '+ Buat Kegiatan'}
-		</Button>
+		</LoadingButton>
 	</div>
 
 	{#if showForm}
@@ -205,7 +204,7 @@
 					<LoadingButton disabled={fBusy || !fTitle || !fYearId} onclick={saveEvent} loading={fBusy} loadingLabel="Menyimpan...">
 						{editId ? 'Perbarui' : 'Simpan Kegiatan'}
 					</LoadingButton>
-					<Button variant="outline" onclick={resetForm}>Batal</Button>
+					<LoadingButton variant="outline" onclick={resetForm}>Batal</LoadingButton>
 				</div>
 			</Card.Content>
 		</Card.Root>
@@ -265,8 +264,8 @@
 								</Table.Cell>
 								<Table.Cell class="text-right">
 									<div class="flex gap-2 justify-end">
-										<Button variant="outline" size="sm" onclick={() => openEdit(e)}>Edit</Button>
-										<Button variant="destructive" size="sm" onclick={() => deleteEvent(e.id)}>Hapus</Button>
+										<LoadingButton variant="outline" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
+										<LoadingButton variant="destructive" size="sm" onclick={() => deleteEvent(e.id)}>Hapus</LoadingButton>
 									</div>
 								</Table.Cell>
 							</Table.Row>
@@ -302,8 +301,8 @@
 								<Badge variant="secondary">{e.session_count} Sesi</Badge>
 							</div>
 							<div class="mt-4 grid grid-cols-2 gap-2">
-								<Button variant="outline" size="sm" onclick={() => openEdit(e)}>Edit</Button>
-								<Button variant="destructive" size="sm" onclick={() => deleteEvent(e.id)}>Hapus</Button>
+								<LoadingButton variant="outline" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
+								<LoadingButton variant="destructive" size="sm" onclick={() => deleteEvent(e.id)}>Hapus</LoadingButton>
 							</div>
 						</div>
 					{:else}
