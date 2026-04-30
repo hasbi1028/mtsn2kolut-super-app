@@ -81,6 +81,8 @@
 	let componentCategory = $state('assignment');
 	let componentWeight = $state(1);
 	let componentMaxScore = $state(100);
+	let quickFillScore = $state('');
+	let quickFillNote = $state('');
 
 	let scoreInput = $state<Record<string, string>>({});
 	let noteInput = $state<Record<string, string>>({});
@@ -171,6 +173,11 @@
 		return normalizedEntryScore(studentId) !== originalEntryScore(studentId) || normalizedEntryNote(studentId) !== originalEntryNote(studentId);
 	}
 
+	function resetQuickFill() {
+		quickFillScore = '';
+		quickFillNote = '';
+	}
+
 	async function quickSelectFirstAssignment() {
 		if (assignments.length === 0) return;
 		assignmentId = assignments[0]?.id ?? '';
@@ -207,6 +214,7 @@
 			}
 			scoreInput = nextScores;
 			noteInput = nextNotes;
+			resetQuickFill();
 		} catch {
 			error = 'Gagal memuat data nilai';
 		} finally {
@@ -357,6 +365,61 @@
 		} finally {
 			bulkSaveBusy = false;
 		}
+	}
+
+	function applyQuickFill(mode: 'all' | 'empty') {
+		if (!selectedComponent) return;
+		const normalizedScore = quickFillScore.trim();
+		const normalizedNote = quickFillNote.trim();
+		if (normalizedScore === '' && normalizedNote === '') {
+			showError('Isi nilai atau catatan massal terlebih dahulu');
+			return;
+		}
+		if (normalizedScore !== '') {
+			const score = Number(normalizedScore);
+			if (Number.isNaN(score)) {
+				showError('Nilai massal harus berupa angka');
+				return;
+			}
+			if (score < 0) {
+				showError('Nilai massal tidak boleh negatif');
+				return;
+			}
+			if (score > selectedComponent.max_score) {
+				showError(`Nilai massal melebihi skor maksimum ${selectedComponent.max_score}`);
+				return;
+			}
+		}
+
+		const nextScores = { ...scoreInput };
+		const nextNotes = { ...noteInput };
+		let changedCount = 0;
+
+		for (const row of entries) {
+			const currentScore = normalizedEntryScore(row.student_id);
+			const currentNote = normalizedEntryNote(row.student_id);
+			const shouldApply = mode === 'all' || (currentScore === '' && currentNote === '');
+			if (!shouldApply) continue;
+
+			let changed = false;
+			if (normalizedScore !== '' && currentScore !== normalizedScore) {
+				nextScores[row.student_id] = normalizedScore;
+				changed = true;
+			}
+			if (normalizedNote !== '' && currentNote !== normalizedNote) {
+				nextNotes[row.student_id] = normalizedNote;
+				changed = true;
+			}
+			if (changed) changedCount += 1;
+		}
+
+		scoreInput = nextScores;
+		noteInput = nextNotes;
+		if (changedCount === 0) {
+			showError(mode === 'all' ? 'Tidak ada baris yang berubah dari quick fill' : 'Tidak ada baris kosong yang bisa diisi');
+			return;
+		}
+		showSuccess(mode === 'all' ? `Quick fill diterapkan ke ${changedCount} siswa` : `Quick fill diterapkan ke ${changedCount} siswa yang masih kosong`);
 	}
 
 	onMount(async () => {
@@ -673,6 +736,27 @@
 									onclick={saveAllDirtyEntries}
 									label="Simpan Semua Perubahan"
 								/>
+							</div>
+						</div>
+						<div class="mx-6 flex flex-col gap-3 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-4">
+							<div>
+								<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Quick Fill</p>
+								<p class="mt-2 text-sm text-slate-700">Isi nilai atau catatan massal sebelum melakukan bulk save. Guru bisa menerapkan ke semua siswa atau hanya ke baris yang masih kosong.</p>
+							</div>
+							<div class="grid gap-3 lg:grid-cols-[12rem_1fr_auto]">
+								<div>
+									<label for="quick-fill-score" class="mb-1 block text-xs font-medium text-slate-500">Nilai Massal</label>
+									<Input id="quick-fill-score" type="number" min="0" max={selectedComponent.max_score} step="0.1" bind:value={quickFillScore} />
+								</div>
+								<div>
+									<label for="quick-fill-note" class="mb-1 block text-xs font-medium text-slate-500">Catatan Massal</label>
+									<Input id="quick-fill-note" placeholder="Mis: remedial, observasi, atau catatan umum" bind:value={quickFillNote} />
+								</div>
+								<div class="flex items-end gap-2">
+									<Button variant="outline" onclick={() => applyQuickFill('empty')}>Isi yang Kosong</Button>
+									<Button variant="outline" onclick={() => applyQuickFill('all')}>Terapkan ke Semua</Button>
+									<Button variant="ghost" onclick={resetQuickFill}>Reset</Button>
+								</div>
 							</div>
 						</div>
 					{/if}

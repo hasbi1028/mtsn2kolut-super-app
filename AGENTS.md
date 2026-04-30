@@ -235,6 +235,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Grade component lifecycle** — grade components now support `Draft/Terbit` lifecycle and safe editing. Gradebook operators can update title/category/weight/max-score, but backend must reject lowering `max_score` below existing student scores. Rapor views should use only published components.
 - **Grade readiness baseline** — gradebook screens should expose a clear “Siap Rapor” readiness summary per class-mapel based on published components and filled student scores, and should link directly into the rapor print view when that readiness condition is satisfied.
 - **Grade bulk-save baseline** — component-level grade entry screens should support bulk save for unsaved student edits, so guru can adjust a class worth of scores first and then commit the changed rows in one action instead of one-by-one saves only.
+- **Grade quick-fill baseline** — grade entry screens may offer teacher-friendly quick-fill helpers for mass score/note drafting (all rows or only still-empty rows), but those helpers should remain local client-side until the operator explicitly saves the pending edits.
 
 ### 📋 Planned Future Phases
 1. **Academic Foundation & RBAC Expansion** — Unified `users` table with many-to-many roles (`admin`, `teacher`, `student`, `staff`, `parent`). Student lifecycle (`active`, `alumni`, `prospective`) and Parent-child linking.
