@@ -35,7 +35,7 @@
 			info = iJson;
 			results = rJson.data ?? rJson ?? [];
 		} catch {
-			error = 'Gagal memuat rekap nilai event';
+			error = 'Gagal memuat rekap nilai kegiatan';
 		} finally {
 			loading = false;
 		}
@@ -66,7 +66,7 @@
 	onMount(load);
 </script>
 
-<svelte:head><title>Rekap Nilai — {info?.title ?? 'Event'}</title></svelte:head>
+<svelte:head><title>Rekap Nilai — {info?.title ?? 'Kegiatan Ujian'}</title></svelte:head>
 
 <div class="space-y-6 p-6">
 	<div class="flex items-center gap-2 text-sm text-slate-500">
@@ -112,7 +112,7 @@
 				<a href={`/cbt/events/${eventId}/exam-cards`} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
 					Kartu Ujian
 				</a>
-				<LoadingButton variant="outline" onclick={exportCSV} disabled={results.length === 0} label="↓ Export CSV (Rekap Semua Sesi)" />
+				<LoadingButton variant="outline" onclick={exportCSV} disabled={results.length === 0} label="↓ Ekspor CSV (Rekap Semua Sesi)" />
 			</div>
 		</div>
 

@@ -52,7 +52,7 @@
 				fYearId = years.find(y => y.is_active)?.id || years[0].id;
 			}
 		} catch {
-			error = 'Gagal memuat data event';
+			error = 'Gagal memuat data kegiatan ujian';
 		} finally {
 			loading = false;
 		}
@@ -107,7 +107,7 @@
 				}),
 			});
 			if (!res.ok) { const j = await res.json(); showError(j.error ?? 'Gagal'); return; }
-			showToast(editId ? 'Event diperbarui' : 'Event berhasil dibuat');
+			showToast(editId ? 'Kegiatan diperbarui' : 'Kegiatan berhasil dibuat');
 			resetForm();
 			await load();
 		} finally { fBusy = false; }
@@ -116,19 +116,19 @@
 	async function deleteEvent(id: string) {
 		if (!confirm('Hapus kegiatan ini? Sesi di dalamnya tidak akan terhapus tapi relasinya dilepas.')) return;
 		await fetch(`/api/cbt/events/${id}`, { method: 'DELETE' });
-		showToast('Event dihapus');
+		showToast('Kegiatan dihapus');
 		await load();
 	}
 
 	onMount(load);
 </script>
 
-<svelte:head><title>Kegiatan Ujian (Events) — MTSN 2 Kolut</title></svelte:head>
+<svelte:head><title>Kegiatan Ujian — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Kegiatan Ujian (Events)</h1>
+			<h1 class="text-2xl font-semibold text-slate-800">Kegiatan Ujian</h1>
 			<p class="text-sm text-slate-500 mt-1">Grup besar untuk sesi-sesi ujian (mis: UTS, UAS)</p>
 		</div>
 		<LoadingButton onclick={() => { if (showForm) resetForm(); else showForm = true; }}>
@@ -164,7 +164,7 @@
 						</select>
 					</div>
 					<div>
-						<label for="e-scope" class="text-xs text-slate-500 mb-1 block">Cakupan (Scope)</label>
+						<label for="e-scope" class="text-xs text-slate-500 mb-1 block">Cakupan</label>
 						<select id="e-scope" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fScope}>
 							{#each Object.entries(scopeLabel) as [val, label]}
 								<option value={val}>{label}</option>
@@ -187,7 +187,7 @@
 							{/each}
 						</div>
 						<p class="mt-2 text-xs text-slate-500">
-							Kosong berarti mengikuti scope biasa. Isi ini untuk kasus seperti UAS genap yang hanya berlaku bagi tingkat tertentu.
+							Kosong berarti mengikuti cakupan biasa. Isi ini untuk kasus seperti UAS genap yang hanya berlaku bagi tingkat tertentu.
 						</p>
 					</fieldset>
 					<div>
@@ -235,7 +235,7 @@
 						<Table.Row>
 							<Table.Head>Judul Kegiatan</Table.Head>
 							<Table.Head>Tipe</Table.Head>
-							<Table.Head>Scope</Table.Head>
+								<Table.Head>Cakupan</Table.Head>
 							<Table.Head>Tingkat</Table.Head>
 							<Table.Head class="text-center">Sesi</Table.Head>
 							<Table.Head>Status</Table.Head>
@@ -253,7 +253,7 @@
 									<Badge variant="outline" class="text-xs capitalize">{typeLabel[e.exam_type] ?? e.exam_type}</Badge>
 								</Table.Cell>
 								<Table.Cell class="text-sm text-slate-600">{scopeLabel[e.scope] ?? e.scope}</Table.Cell>
-								<Table.Cell class="text-sm text-slate-600">{e.target_levels?.length ? e.target_levels.join(', ') : 'Semua sesuai scope'}</Table.Cell>
+								<Table.Cell class="text-sm text-slate-600">{e.target_levels?.length ? e.target_levels.join(', ') : 'Semua sesuai cakupan'}</Table.Cell>
 								<Table.Cell class="text-center">
 									<Badge variant="secondary">{e.session_count} Sesi</Badge>
 								</Table.Cell>
