@@ -10,6 +10,7 @@ JOIN school_classes c ON c.id = csa.class_id
 JOIN subjects s ON s.id = csa.subject_id
 JOIN employees e ON e.id = csa.teacher_employee_id
 WHERE (sqlc.arg(assignment_id)::uuid IS NULL OR gc.assignment_id = sqlc.arg(assignment_id)::uuid)
+  AND (NOT sqlc.arg(published_only)::boolean OR gc.is_published = TRUE)
 ORDER BY c.level ASC, c.name ASC, s.name ASC, gc.created_at DESC;
 
 -- name: GetGradeComponent :one
@@ -23,6 +24,13 @@ INSERT INTO grade_components (assignment_id, title, category, weight, max_score,
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
+-- name: UpdateGradeComponentPublishState :one
+UPDATE grade_components
+SET is_published = $2,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
 -- name: DeleteGradeComponent :exec
 DELETE FROM grade_components WHERE id = $1;
 
@@ -31,6 +39,7 @@ WITH component_set AS (
   SELECT gc.id, gc.weight, gc.max_score
   FROM grade_components gc
   WHERE gc.assignment_id = $1
+    AND (NOT sqlc.arg(published_only)::boolean OR gc.is_published = TRUE)
 ),
 score_rows AS (
   SELECT st.id AS student_id,

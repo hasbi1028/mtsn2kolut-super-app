@@ -175,6 +175,7 @@ func main() {
 		r.With(requireAdmin).Delete("/api/academic/{entity}/{id}", academicH.Delete)
 		r.Get("/api/grades", gradeH.Overview)
 		r.Post("/api/grades/components", gradeH.CreateComponent)
+		r.Patch("/api/grades/components/{id}/publish", gradeH.SetComponentPublished)
 		r.Delete("/api/grades/components/{id}", gradeH.DeleteComponent)
 		r.Post("/api/grades/components/{id}/entries", gradeH.UpsertEntry)
 

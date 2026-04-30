@@ -34,7 +34,8 @@ func (h *Grade) Overview(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "component_id invalid")
 		return
 	}
-	data, err := h.svc.Overview(r.Context(), assignmentID, componentID)
+	publishedOnly := parseGradePublishedOnly(r.URL.Query().Get("published_only"))
+	data, err := h.svc.Overview(r.Context(), assignmentID, componentID, publishedOnly)
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -77,6 +78,31 @@ func (h *Grade) CreateComponent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.Created(w, row)
+}
+
+func (h *Grade) SetComponentPublished(w http.ResponseWriter, r *http.Request) {
+	if !gradeAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		IsPublished bool `json:"is_published"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	row, err := h.svc.SetComponentPublished(r.Context(), id, body.IsPublished)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
 }
 
 func (h *Grade) DeleteComponent(w http.ResponseWriter, r *http.Request) {
@@ -160,4 +186,13 @@ func optionalUUID(raw string) (pgtype.UUID, error) {
 		return pgtype.UUID{}, nil
 	}
 	return parseUUID(raw)
+}
+
+func parseGradePublishedOnly(raw string) bool {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "1", "true", "yes", "published":
+		return true
+	default:
+		return false
+	}
 }

@@ -74,6 +74,7 @@
 
 	let createBusy = $state(false);
 	let entryBusy = $state<Record<string, boolean>>({});
+	let publishBusy = $state<Record<string, boolean>>({});
 	let componentTitle = $state('');
 	let componentCategory = $state('assignment');
 	let componentWeight = $state(1);
@@ -85,6 +86,7 @@
 	const selectedAssignment = $derived(assignments.find((item) => item.id === assignmentId) ?? null);
 	const selectedComponent = $derived(components.find((item) => item.id === componentId) ?? null);
 	const completionRate = $derived(summary.length === 0 ? 0 : Math.round((summary.filter((row) => row.filled_count > 0).length / summary.length) * 100));
+	const publishedComponentCount = $derived(components.filter((item) => item.is_published).length);
 
 	function showSuccess(message: string) {
 		toast.success(message);
@@ -187,6 +189,28 @@
 		if (componentId === id) componentId = '';
 		showSuccess('Komponen nilai dihapus');
 		await loadOverview();
+	}
+
+	async function togglePublish(component: GradeComponent) {
+		publishBusy = { ...publishBusy, [component.id]: true };
+		try {
+			const res = await fetch(`/api/grades/components/${component.id}/publish`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					is_published: !component.is_published
+				})
+			});
+			const json = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				showError(json.error ?? 'Gagal memperbarui status komponen');
+				return;
+			}
+			showSuccess(component.is_published ? 'Komponen dikembalikan ke draft' : 'Komponen diterbitkan untuk rapor');
+			await loadOverview();
+		} finally {
+			publishBusy = { ...publishBusy, [component.id]: false };
+		}
 	}
 
 	async function saveEntry(studentId: string) {
@@ -299,9 +323,9 @@
 				</Card.Root>
 				<Card.Root class="border-amber-100 bg-white">
 					<Card.Content class="pt-5">
-						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Komponen Aktif</p>
-						<p class="mt-2 text-3xl font-semibold text-slate-900">{components.length}</p>
-						<p class="text-sm text-slate-600">tugas, kuis, UTS, UAS, atau praktik</p>
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Komponen Nilai</p>
+						<p class="mt-2 text-3xl font-semibold text-slate-900">{publishedComponentCount}/{components.length}</p>
+						<p class="text-sm text-slate-600">sudah terbit untuk rapor dari total komponen yang disusun</p>
 					</Card.Content>
 				</Card.Root>
 				<Card.Root class="border-sky-100 bg-white">
@@ -374,11 +398,28 @@
 													{item.title}
 												</button>
 											</Table.Cell>
-											<Table.Cell><Badge variant="outline">{categoryLabel(item.category)}</Badge></Table.Cell>
+											<Table.Cell>
+												<div class="flex flex-wrap gap-2">
+													<Badge variant="outline">{categoryLabel(item.category)}</Badge>
+													<Badge variant={item.is_published ? 'default' : 'secondary'}>
+														{item.is_published ? 'Terbit' : 'Draft'}
+													</Badge>
+												</div>
+											</Table.Cell>
 											<Table.Cell>{item.weight}</Table.Cell>
 											<Table.Cell>{item.max_score}</Table.Cell>
 											<Table.Cell class="text-right">
-												<Button variant="destructive" size="xs" onclick={() => deleteComponent(item.id)}>Hapus</Button>
+												<div class="flex justify-end gap-2">
+													<LoadingButton
+														size="sm"
+														variant={item.is_published ? 'outline' : 'default'}
+														loading={publishBusy[item.id]}
+														loadingLabel="Menyimpan..."
+														onclick={() => togglePublish(item)}
+														label={item.is_published ? 'Kembalikan ke Draft' : 'Terbitkan'}
+													/>
+													<Button variant="destructive" size="xs" onclick={() => deleteComponent(item.id)}>Hapus</Button>
+												</div>
 											</Table.Cell>
 										</Table.Row>
 										{:else}
@@ -521,17 +562,15 @@
 		{:else}
 			<Card.Root class="border-dashed border-slate-300 bg-white">
 				<Card.Content class="py-10 text-center">
-					<EmptyStatePanel
-						eyebrow="Buka Gradebook"
-						title="Pilih penugasan kelas-mapel untuk membuka gradebook"
-						description="Setelah konteks kelas dan mapel dipilih, komponen nilai, rekap sementara, dan lembar input siswa akan muncul dalam satu alur kerja."
-					>
-						{#snippet children()}
+						<EmptyStatePanel
+							eyebrow="Buka Gradebook"
+							title="Pilih penugasan kelas-mapel untuk membuka gradebook"
+							description="Setelah konteks kelas dan mapel dipilih, komponen nilai, rekap sementara, dan lembar input siswa akan muncul dalam satu alur kerja."
+						>
 							{#if assignments.length > 0}
 								<Button size="sm" onclick={quickSelectFirstAssignment}>Pilih penugasan pertama</Button>
 							{/if}
-						{/snippet}
-					</EmptyStatePanel>
+						</EmptyStatePanel>
 				</Card.Content>
 			</Card.Root>
 		{/if}

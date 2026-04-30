@@ -19,6 +19,7 @@
 		category: string;
 		weight: number;
 		max_score: number;
+		is_published: boolean;
 	};
 	type GradeSummary = {
 		student_id: string;
@@ -63,7 +64,7 @@
 	async function loadRapor(assignmentId: string) {
 		loading = true;
 		try {
-			const res = await fetch(`/api/grades?assignment_id=${assignmentId}`);
+			const res = await fetch(`/api/grades?assignment_id=${assignmentId}&published_only=true`);
 			const data = await res.json();
 			const overview = data?.data ?? {};
 			components = overview.components ?? [];
@@ -152,7 +153,7 @@
 		</Card.Root>
 	</div>
 
-	{#if selectedAssignment && (summary.length > 0 || loading)}
+	{#if selectedAssignment}
 		<!-- Print content -->
 		<div class="print-page space-y-4">
 			<!-- School header -->
@@ -207,8 +208,10 @@
 						</div>
 					{/each}
 				</div>
+			{:else if components.length === 0}
+				<p class="py-6 text-center text-sm text-slate-500">Belum ada komponen nilai yang diterbitkan untuk rapor pada kelas dan mata pelajaran ini.</p>
 			{:else if summary.length === 0}
-				<p class="py-6 text-center text-sm text-slate-500">Belum ada data nilai untuk kelas dan mata pelajaran ini.</p>
+				<p class="py-6 text-center text-sm text-slate-500">Belum ada data nilai dari komponen yang sudah diterbitkan.</p>
 			{:else}
 				<div class="overflow-x-auto">
 					<table class="min-w-full border border-slate-200 text-sm">

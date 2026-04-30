@@ -95,8 +95,14 @@ JOIN school_classes c ON c.id = csa.class_id
 JOIN subjects s ON s.id = csa.subject_id
 JOIN employees e ON e.id = csa.teacher_employee_id
 WHERE ($1::uuid IS NULL OR gc.assignment_id = $1::uuid)
+  AND (NOT $2::boolean OR gc.is_published = TRUE)
 ORDER BY c.level ASC, c.name ASC, s.name ASC, gc.created_at DESC
 `
+
+type ListGradeComponentsParams struct {
+	AssignmentID  pgtype.UUID `json:"assignment_id"`
+	PublishedOnly bool        `json:"published_only"`
+}
 
 type ListGradeComponentsRow struct {
 	ID                pgtype.UUID        `json:"id"`
@@ -118,8 +124,8 @@ type ListGradeComponentsRow struct {
 	TeacherName       string             `json:"teacher_name"`
 }
 
-func (q *Queries) ListGradeComponents(ctx context.Context, assignmentID pgtype.UUID) ([]ListGradeComponentsRow, error) {
-	rows, err := q.db.Query(ctx, listGradeComponents, assignmentID)
+func (q *Queries) ListGradeComponents(ctx context.Context, arg ListGradeComponentsParams) ([]ListGradeComponentsRow, error) {
+	rows, err := q.db.Query(ctx, listGradeComponents, arg.AssignmentID, arg.PublishedOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -222,6 +228,7 @@ WITH component_set AS (
   SELECT gc.id, gc.weight, gc.max_score
   FROM grade_components gc
   WHERE gc.assignment_id = $1
+    AND (NOT $2::boolean OR gc.is_published = TRUE)
 ),
 score_rows AS (
   SELECT st.id AS student_id,
@@ -259,6 +266,11 @@ GROUP BY student_id, nis, nisn, nama
 ORDER BY nama ASC
 `
 
+type ListGradebookSummaryParams struct {
+	AssignmentID  pgtype.UUID `json:"assignment_id"`
+	PublishedOnly bool        `json:"published_only"`
+}
+
 type ListGradebookSummaryRow struct {
 	StudentID      pgtype.UUID `json:"student_id"`
 	Nis            string      `json:"nis"`
@@ -269,8 +281,8 @@ type ListGradebookSummaryRow struct {
 	FinalScore     float64     `json:"final_score"`
 }
 
-func (q *Queries) ListGradebookSummary(ctx context.Context, assignmentID pgtype.UUID) ([]ListGradebookSummaryRow, error) {
-	rows, err := q.db.Query(ctx, listGradebookSummary, assignmentID)
+func (q *Queries) ListGradebookSummary(ctx context.Context, arg ListGradebookSummaryParams) ([]ListGradebookSummaryRow, error) {
+	rows, err := q.db.Query(ctx, listGradebookSummary, arg.AssignmentID, arg.PublishedOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -295,6 +307,36 @@ func (q *Queries) ListGradebookSummary(ctx context.Context, assignmentID pgtype.
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateGradeComponentPublishState = `-- name: UpdateGradeComponentPublishState :one
+UPDATE grade_components
+SET is_published = $2,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, assignment_id, title, category, weight, max_score, is_published, created_at, updated_at
+`
+
+type UpdateGradeComponentPublishStateParams struct {
+	ID          pgtype.UUID `json:"id"`
+	IsPublished bool        `json:"is_published"`
+}
+
+func (q *Queries) UpdateGradeComponentPublishState(ctx context.Context, arg UpdateGradeComponentPublishStateParams) (GradeComponent, error) {
+	row := q.db.QueryRow(ctx, updateGradeComponentPublishState, arg.ID, arg.IsPublished)
+	var i GradeComponent
+	err := row.Scan(
+		&i.ID,
+		&i.AssignmentID,
+		&i.Title,
+		&i.Category,
+		&i.Weight,
+		&i.MaxScore,
+		&i.IsPublished,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const upsertGradeEntry = `-- name: UpsertGradeEntry :one

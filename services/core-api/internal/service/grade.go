@@ -12,11 +12,12 @@ import (
 
 type gradeStore interface {
 	ListClassSubjectAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
-	ListGradeComponents(ctx context.Context, assignmentID pgtype.UUID) ([]db.ListGradeComponentsRow, error)
+	ListGradeComponents(ctx context.Context, arg db.ListGradeComponentsParams) ([]db.ListGradeComponentsRow, error)
 	GetGradeComponent(ctx context.Context, id pgtype.UUID) (db.GradeComponent, error)
 	CreateGradeComponent(ctx context.Context, arg db.CreateGradeComponentParams) (db.GradeComponent, error)
+	UpdateGradeComponentPublishState(ctx context.Context, arg db.UpdateGradeComponentPublishStateParams) (db.GradeComponent, error)
 	DeleteGradeComponent(ctx context.Context, id pgtype.UUID) error
-	ListGradebookSummary(ctx context.Context, assignmentID pgtype.UUID) ([]db.ListGradebookSummaryRow, error)
+	ListGradebookSummary(ctx context.Context, arg db.ListGradebookSummaryParams) ([]db.ListGradebookSummaryRow, error)
 	ListGradeEntriesByComponent(ctx context.Context, componentID pgtype.UUID) ([]db.ListGradeEntriesByComponentRow, error)
 	UpsertGradeEntry(ctx context.Context, arg db.UpsertGradeEntryParams) (db.GradeEntry, error)
 }
@@ -34,18 +35,24 @@ type GradeOverview struct {
 	Entries     []db.ListGradeEntriesByComponentRow `json:"entries"`
 }
 
-func (s *Grade) Overview(ctx context.Context, assignmentID, componentID pgtype.UUID) (GradeOverview, error) {
+func (s *Grade) Overview(ctx context.Context, assignmentID, componentID pgtype.UUID, publishedOnly bool) (GradeOverview, error) {
 	assignments, err := s.q.ListClassSubjectAssignments(ctx)
 	if err != nil {
 		return GradeOverview{}, err
 	}
 	out := GradeOverview{Assignments: assignments}
 	if assignmentID.Valid {
-		out.Components, err = s.q.ListGradeComponents(ctx, assignmentID)
+		out.Components, err = s.q.ListGradeComponents(ctx, db.ListGradeComponentsParams{
+			AssignmentID:  assignmentID,
+			PublishedOnly: publishedOnly,
+		})
 		if err != nil {
 			return GradeOverview{}, err
 		}
-		out.Summary, err = s.q.ListGradebookSummary(ctx, assignmentID)
+		out.Summary, err = s.q.ListGradebookSummary(ctx, db.ListGradebookSummaryParams{
+			AssignmentID:  assignmentID,
+			PublishedOnly: publishedOnly,
+		})
 		if err != nil {
 			return GradeOverview{}, err
 		}
@@ -72,6 +79,13 @@ func (s *Grade) CreateComponent(ctx context.Context, arg db.CreateGradeComponent
 		return db.GradeComponent{}, fmt.Errorf("skor maksimum harus lebih dari 0")
 	}
 	return s.q.CreateGradeComponent(ctx, arg)
+}
+
+func (s *Grade) SetComponentPublished(ctx context.Context, id pgtype.UUID, isPublished bool) (db.GradeComponent, error) {
+	return s.q.UpdateGradeComponentPublishState(ctx, db.UpdateGradeComponentPublishStateParams{
+		ID:          id,
+		IsPublished: isPublished,
+	})
 }
 
 func (s *Grade) DeleteComponent(ctx context.Context, id pgtype.UUID) error {
