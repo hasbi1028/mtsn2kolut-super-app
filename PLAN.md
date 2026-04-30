@@ -199,6 +199,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Grade quick-fill flow — guru can draft mass score/note fills for all rows or only still-empty rows before committing changes with bulk save
 - [x] Grade finalization checkpoint — persisted finalize/reopen flow per assignment, backend readiness enforcement, and mutation lock while finalized
 - [x] Grade finalization overview — gradebook now exposes a per-assignment recap for `Siap Difinalkan`, `Sudah Final`, and `Perlu Dilengkapi` so guru/admin can triage readiness across multiple kelas-mapel from one screen
+- [x] Grade finalization triage flow — gradebook now adds recap filters plus a quick shortcut into the next `Siap Difinalkan` assignment so operator review can move through readiness checkpoints faster
 - [x] Backend internal-error hygiene — 500 responses now return a generic client-safe message while raw details stay in server logs
 - [x] Sensitive entrypoint rate limiting — login, refresh, public registration, and exam login now use a concurrency-safe per-IP limiter with forwarded-IP awareness
 - [x] Typed auth locals — web-admin auth locals/page data now use a shared explicit auth-user type instead of `as any`

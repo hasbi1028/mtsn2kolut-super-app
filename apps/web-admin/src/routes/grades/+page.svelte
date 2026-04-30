@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
@@ -123,6 +124,7 @@
 	let quickFillScore = $state('');
 	let quickFillNote = $state('');
 	let finalizeNotes = $state('');
+	let assignmentStatusFilter = $state<'all' | 'ready' | 'finalized' | 'attention'>('all');
 
 	let scoreInput = $state<Record<string, string>>({});
 	let noteInput = $state<Record<string, string>>({});
@@ -154,6 +156,21 @@
 	);
 	const needsAttentionAssignmentCount = $derived(
 		assignmentStatuses.filter((item) => !item.ready && !item.is_finalized).length
+	);
+	const filteredAssignmentStatuses = $derived.by(() => {
+		switch (assignmentStatusFilter) {
+			case 'ready':
+				return assignmentStatuses.filter((item) => item.ready && !item.is_finalized);
+			case 'finalized':
+				return assignmentStatuses.filter((item) => item.is_finalized);
+			case 'attention':
+				return assignmentStatuses.filter((item) => !item.ready && !item.is_finalized);
+			default:
+				return assignmentStatuses;
+		}
+	});
+	const nextReadyAssignment = $derived(
+		assignmentStatuses.find((item) => item.ready && !item.is_finalized) ?? null
 	);
 	const readinessLabel = $derived(
 		isFinalized
@@ -220,6 +237,26 @@
 			return `${item.draft_component_count} komponen masih draft.`;
 		}
 		return `${item.missing_grade_count} slot nilai masih kosong.`;
+	}
+
+	function assignmentFilterLabel(value: 'all' | 'ready' | 'finalized' | 'attention') {
+		switch (value) {
+			case 'ready':
+				return 'Siap Difinalkan';
+			case 'finalized':
+				return 'Sudah Final';
+			case 'attention':
+				return 'Perlu Dilengkapi';
+			default:
+				return 'Semua';
+		}
+	}
+
+	async function focusAssignment(nextAssignmentId: string) {
+		assignmentId = nextAssignmentId;
+		componentId = '';
+		resetComponentForm();
+		await loadOverview();
 	}
 
 	function resetComponentForm() {
@@ -661,6 +698,20 @@
 							<p class="text-sm text-slate-600">assignment yang masih perlu komponen, publish, atau isi nilai</p>
 						</Card.Content>
 					</Card.Root>
+					{#if nextReadyAssignment}
+						<Card.Root class="border-slate-200 bg-slate-50/80">
+							<Card.Content class="space-y-3 pt-5">
+								<div>
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Langkah Cepat</p>
+									<p class="mt-2 text-sm font-medium text-slate-900">{nextReadyAssignment.class_code} · {nextReadyAssignment.subject_code}</p>
+									<p class="text-sm text-slate-600">Buka assignment siap-final berikutnya agar operator bisa lanjut checkpoint tanpa mencari manual.</p>
+								</div>
+								<Button variant="outline" onclick={() => focusAssignment(nextReadyAssignment.assignment_id)}>
+									Buka Assignment Siap Final
+								</Button>
+							</Card.Content>
+						</Card.Root>
+					{/if}
 				</div>
 
 				<Card.Root>
@@ -668,7 +719,37 @@
 						<Card.Title class="text-base">Rekap Finalisasi per Kelas-Mapel</Card.Title>
 						<Card.Description>Gunakan ringkasan ini untuk melihat assignment mana yang sudah siap dikunci, mana yang sudah final, dan mana yang masih butuh tindak lanjut.</Card.Description>
 					</Card.Header>
-					<Card.Content class="p-0">
+					<Card.Content class="space-y-4 p-4 pt-0">
+						<div class="flex flex-wrap gap-2">
+							<Button
+								variant={assignmentStatusFilter === 'all' ? 'default' : 'outline'}
+								size="sm"
+								onclick={() => { assignmentStatusFilter = 'all'; }}
+							>
+								Semua ({assignmentStatuses.length})
+							</Button>
+							<Button
+								variant={assignmentStatusFilter === 'ready' ? 'default' : 'outline'}
+								size="sm"
+								onclick={() => { assignmentStatusFilter = 'ready'; }}
+							>
+								Siap Difinalkan ({readyAssignmentCount})
+							</Button>
+							<Button
+								variant={assignmentStatusFilter === 'finalized' ? 'default' : 'outline'}
+								size="sm"
+								onclick={() => { assignmentStatusFilter = 'finalized'; }}
+							>
+								Sudah Final ({finalizedAssignmentCount})
+							</Button>
+							<Button
+								variant={assignmentStatusFilter === 'attention' ? 'default' : 'outline'}
+								size="sm"
+								onclick={() => { assignmentStatusFilter = 'attention'; }}
+							>
+								Perlu Dilengkapi ({needsAttentionAssignmentCount})
+							</Button>
+						</div>
 						<div class="overflow-x-auto">
 							<Table.Root>
 								<Table.Header>
@@ -681,17 +762,12 @@
 									</Table.Row>
 								</Table.Header>
 								<Table.Body>
-									{#each assignmentStatuses as item (item.assignment_id)}
+									{#each filteredAssignmentStatuses as item (item.assignment_id)}
 										<Table.Row class={item.assignment_id === assignmentId ? 'bg-emerald-50/70' : ''}>
 											<Table.Cell>
 												<button
 													class="text-left"
-													onclick={async () => {
-														assignmentId = item.assignment_id;
-														componentId = '';
-														resetComponentForm();
-														await loadOverview();
-													}}
+													onclick={() => focusAssignment(item.assignment_id)}
 												>
 													<div class="font-medium text-slate-900">{item.class_name} · {item.subject_name}</div>
 													<div class="text-xs text-slate-500">{item.class_code} · {item.subject_code} · {item.teacher_name}</div>
@@ -706,6 +782,17 @@
 											<Table.Cell>{item.published_component_count}/{item.component_count}</Table.Cell>
 											<Table.Cell>{item.ready_student_count}/{item.student_count}</Table.Cell>
 											<Table.Cell>{item.missing_grade_count}</Table.Cell>
+										</Table.Row>
+									{:else}
+										<Table.Row>
+											<Table.Cell colspan={5} class="p-4">
+												<EmptyStatePanel
+													compact
+													eyebrow="Filter Triase"
+													title={`Tidak ada assignment pada kategori ${assignmentFilterLabel(assignmentStatusFilter)}`}
+													description="Ubah filter rekap untuk melihat assignment lain yang sudah final, siap difinalkan, atau masih perlu dilengkapi."
+												/>
+											</Table.Cell>
 										</Table.Row>
 									{/each}
 								</Table.Body>
@@ -778,10 +865,10 @@
 					<div class="flex items-end">
 						<div class="w-full space-y-3">
 							{#if readyForRapor}
-								<a
-									href={`/grades/rapor?assignment_id=${assignmentId}`}
-									class="inline-flex w-full items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
-								>
+									<a
+										href={resolve(`/grades/rapor?assignment_id=${assignmentId}`)}
+										class="inline-flex w-full items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+									>
 									Buka Cetak Rapor
 								</a>
 							{:else}
