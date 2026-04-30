@@ -5,6 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import PublicHome from '$lib/components/PublicHome.svelte';
+	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 
 	type WebsiteContent = {
 		id: string;
@@ -159,20 +160,20 @@
 <div class="space-y-6">
 	<div>
 		{#if isGuru}
-			<h1 class="text-2xl font-semibold text-slate-800">Dashboard Guru</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Mata pelajaran yang Anda ampu dan aktivitas CBT.</p>
+			<h1 class="text-2xl font-semibold text-slate-800">Dasbor Guru</h1>
+			<p class="mt-1 text-sm text-muted-foreground">Ringkasan kelas, aktivitas CBT, dan pekerjaan koreksi yang perlu diperhatikan hari ini.</p>
 		{:else if isSiswa}
-			<h1 class="text-2xl font-semibold text-slate-800">Portal Siswa</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Jadwal ujian, status belajar, dan profil akademik Anda.</p>
+			<h1 class="text-2xl font-semibold text-slate-800">Dasbor Siswa</h1>
+			<p class="mt-1 text-sm text-muted-foreground">Lihat identitas akademik, sesi ujian yang terdaftar, dan informasi wali yang terhubung.</p>
 		{:else if isParent}
-			<h1 class="text-2xl font-semibold text-slate-800">Portal Orang Tua</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Pantau data dasar putra-putri dan jalur komunikasi wali.</p>
+			<h1 class="text-2xl font-semibold text-slate-800">Dasbor Orang Tua</h1>
+			<p class="mt-1 text-sm text-muted-foreground">Pantau data putra-putri yang terhubung dan informasi dasar wali dari satu tempat.</p>
 		{:else if isStaff}
-			<h1 class="text-2xl font-semibold text-slate-800">Dashboard Staf</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Akses cepat ke data operasional yang mendukung layanan sekolah.</p>
+			<h1 class="text-2xl font-semibold text-slate-800">Dasbor Staf</h1>
+			<p class="mt-1 text-sm text-muted-foreground">Akses cepat ke data operasional yang paling sering dipakai untuk layanan sekolah.</p>
 		{:else}
-			<h1 class="text-2xl font-semibold text-slate-800">Dashboard</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Ringkasan operasional MTs Negeri 2 Kolaka Utara.</p>
+			<h1 class="text-2xl font-semibold text-slate-800">Dasbor Utama</h1>
+			<p class="mt-1 text-sm text-muted-foreground">Ringkasan akademik dan operasional MTs Negeri 2 Kolaka Utara.</p>
 		{/if}
 	</div>
 
@@ -239,7 +240,11 @@
 							</div>
 						{/each}
 					{:else}
-						<p class="text-sm text-slate-500">Belum ada sesi ujian yang terdaftar.</p>
+						<EmptyStatePanel
+							compact
+							title="Belum ada sesi ujian"
+							description="Sesi ujian yang terhubung ke akun siswa akan tampil di sini setelah peserta didaftarkan."
+						/>
 					{/if}
 				</Card.Content>
 			</Card.Root>
@@ -294,7 +299,11 @@
 							</div>
 						{/each}
 					{:else}
-						<p class="text-sm text-slate-500">Belum ada anak yang ditautkan ke akun ini.</p>
+						<EmptyStatePanel
+							compact
+							title="Belum ada anak yang terhubung"
+							description="Minta admin sekolah menautkan akun orang tua ini ke data siswa agar informasi anak bisa tampil di dasbor."
+						/>
 					{/if}
 				</Card.Content>
 			</Card.Root>
@@ -314,10 +323,10 @@
 		</div>
 	{:else if isGuru && guruStats}
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sesi Ujian Aktif</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.active_sessions}</p></Card.Content></Card.Root>
-			<Card.Root class="border-amber-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Essay Belum Dikoreksi</p><p class="mt-1 text-3xl font-bold text-amber-700">{guruStats.ungraded_essays}</p></Card.Content></Card.Root>
-			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Siswa Saya</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.my_students}</p></Card.Content></Card.Root>
-			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mata Pelajaran</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.my_subjects}</p></Card.Content></Card.Root>
+			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sesi CBT Berjalan</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.active_sessions}</p></Card.Content></Card.Root>
+			<Card.Root class="border-amber-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Esai Belum Dikoreksi</p><p class="mt-1 text-3xl font-bold text-amber-700">{guruStats.ungraded_essays}</p></Card.Content></Card.Root>
+			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Siswa Terpantau</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.my_students}</p></Card.Content></Card.Root>
+			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Diampu</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.my_subjects}</p></Card.Content></Card.Root>
 		</div>
 	{/if}
 
@@ -336,7 +345,7 @@
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Siswa</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_students ?? '—'}</p></Card.Content></Card.Root>
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Kelas Aktif</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_classes ?? '—'}</p></Card.Content></Card.Root>
-			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mata Pelajaran</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_subjects ?? '—'}</p></Card.Content></Card.Root>
+			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Aktif</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_subjects ?? '—'}</p></Card.Content></Card.Root>
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tahun Ajaran</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_years ?? '—'}</p></Card.Content></Card.Root>
 		</div>
 	{/if}

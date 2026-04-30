@@ -143,6 +143,7 @@ Three runtime units deployed across 3 VPS:
 - [x] UI copy consistency baseline — the most visible mixed English/Indonesian admin copy in editorial, PUSAKA controls, and user-status badges is now normalized toward one institutional Indonesian tone
 - [x] Public-site copy consistency baseline — homepage, list, and detail content screens now use a more consistent institutional Indonesian tone for publishing states, CTAs, and public-facing helper text
 - [x] Form microcopy baseline — operator-facing placeholders and helper text in employee, student, user, and website editorial forms are now more directive and less generic
+- [x] Dashboard copy baseline — the shared `/` dashboard now uses more consistent role titles, stat labels, and empty-state copy across guru, siswa, orang tua, admin, and staf experiences
 - [x] Rapor print view — printable HTML layout at `/grades/rapor` using existing `/api/grades` endpoint, color-coded scores, school header, signature area, sidebar entry
 
 ### CBT Question Authoring UX
