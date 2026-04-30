@@ -107,6 +107,68 @@ void main() {
       expect(payload.isSubmitted, isTrue);
     });
 
+    test('saveAnswer sends exam token and answer payload contract', () async {
+      server.listen((request) async {
+        expect(request.uri.path, '/api/exam/answer');
+        expect(request.method, 'POST');
+        expect(request.headers.value('X-Exam-Token'), 'token-1');
+
+        final rawBody = await utf8.decoder.bind(request).join();
+        expect(jsonDecode(rawBody), <String, dynamic>{
+          'question_id': 'question-7',
+          'answer': 'Pilihan B',
+        });
+
+        request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType.json
+          ..write(
+            jsonEncode({
+              'data': {'status': 'recorded'},
+            }),
+          );
+        await request.response.close();
+      });
+
+      final client = ExamApiClient(baseUrl: baseUrl);
+      await client.saveAnswer(
+        token: 'token-1',
+        questionId: 'question-7',
+        answer: 'Pilihan B',
+      );
+    });
+
+    test('sendEvent sends event type and data payload contract', () async {
+      server.listen((request) async {
+        expect(request.uri.path, '/api/exam/event');
+        expect(request.method, 'POST');
+        expect(request.headers.value('X-Exam-Token'), 'token-1');
+
+        final rawBody = await utf8.decoder.bind(request).join();
+        expect(jsonDecode(rawBody), <String, dynamic>{
+          'event_type': 'repeat_resume_attempt',
+          'data': <String, dynamic>{'count': 2, 'source': 'resume_gate'},
+        });
+
+        request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType.json
+          ..write(
+            jsonEncode({
+              'data': {'status': 'recorded'},
+            }),
+          );
+        await request.response.close();
+      });
+
+      final client = ExamApiClient(baseUrl: baseUrl);
+      await client.sendEvent(
+        token: 'token-1',
+        eventType: 'repeat_resume_attempt',
+        data: const <String, Object?>{'count': 2, 'source': 'resume_gate'},
+      );
+    });
+
     test('throws controlled exception when data envelope is missing', () async {
       server.listen((request) async {
         request.response
