@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 
 	type Assignment = {
 		id: string;
@@ -131,7 +132,10 @@
 			<Card.Content class="p-4">
 				<label for="rapor-assignment" class="mb-1 block text-xs font-medium text-slate-600">Pilih Mata Pelajaran / Kelas</label>
 				{#if loading && assignments.length === 0}
-					<p class="text-sm text-slate-500">Memuat data...</p>
+					<div class="space-y-2">
+						<Skeleton class="h-4 w-40" />
+						<Skeleton class="h-10 w-full max-w-xl" />
+					</div>
 				{:else}
 					<select
 						id="rapor-assignment"
@@ -190,7 +194,19 @@
 
 			<!-- Grade table -->
 			{#if loading}
-				<p class="py-6 text-center text-sm text-slate-500">Memuat nilai...</p>
+				<div class="space-y-3 py-4">
+					{#each Array.from({ length: 6 }) as _, index (`rapor-row-skeleton-${index}`)}
+						<div class="grid gap-3 md:grid-cols-[0.3fr_0.8fr_0.8fr_1.4fr_0.6fr_0.6fr_0.8fr] md:items-center">
+							<Skeleton class="h-5 w-6" />
+							<Skeleton class="h-5 w-20" />
+							<Skeleton class="h-5 w-24" />
+							<Skeleton class="h-5 w-full max-w-xs" />
+							<Skeleton class="h-5 w-16" />
+							<Skeleton class="h-5 w-14" />
+							<Skeleton class="h-5 w-20" />
+						</div>
+					{/each}
+				</div>
 			{:else if summary.length === 0}
 				<p class="py-6 text-center text-sm text-slate-500">Belum ada data nilai untuk kelas dan mata pelajaran ini.</p>
 			{:else}

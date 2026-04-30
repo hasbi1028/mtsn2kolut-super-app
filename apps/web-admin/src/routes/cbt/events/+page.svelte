@@ -6,6 +6,8 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type CbtEvent = {
 		id: string; title: string; exam_type: string; scope: string;
@@ -200,9 +202,9 @@
 				</div>
 
 				<div class="flex gap-2">
-					<Button disabled={fBusy || !fTitle || !fYearId} onclick={saveEvent}>
-						{fBusy ? 'Menyimpan...' : (editId ? 'Perbarui' : 'Simpan Kegiatan')}
-					</Button>
+					<LoadingButton disabled={fBusy || !fTitle || !fYearId} onclick={saveEvent} loading={fBusy} loadingLabel="Menyimpan...">
+						{editId ? 'Perbarui' : 'Simpan Kegiatan'}
+					</LoadingButton>
 					<Button variant="outline" onclick={resetForm}>Batal</Button>
 				</div>
 			</Card.Content>
@@ -210,7 +212,21 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-sm text-slate-500">Memuat data...</p>
+		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+			<Card.Content class="space-y-3 p-6">
+				{#each Array.from({ length: 5 }) as _, index (`event-row-skeleton-${index}`)}
+					<div class="grid gap-3 lg:grid-cols-[1.2fr_0.7fr_0.8fr_0.8fr_0.5fr_0.6fr_auto] lg:items-center">
+						<Skeleton class="h-5 w-40" />
+						<Skeleton class="h-6 w-20" />
+						<Skeleton class="h-5 w-20" />
+						<Skeleton class="h-5 w-28" />
+						<Skeleton class="h-6 w-16" />
+						<Skeleton class="h-6 w-16" />
+						<Skeleton class="h-9 w-28 justify-self-end" />
+					</div>
+				{/each}
+			</Card.Content>
+		</Card.Root>
 	{:else}
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Content class="p-0 overflow-x-auto">

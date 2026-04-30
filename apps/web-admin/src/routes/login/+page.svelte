@@ -2,7 +2,7 @@
 	import type { ActionData } from './$types';
 	import * as Card from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
-	import { Button } from '$lib/components/ui/button';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import { navigating } from '$app/state';
 
 	let { form }: { form: ActionData } = $props();
@@ -47,9 +47,7 @@
 							placeholder="••••••••" required />
 					</div>
 
-					<Button type="submit" class="w-full" disabled={pending}>
-						{pending ? 'Memproses…' : 'Masuk'}
-					</Button>
+					<LoadingButton type="submit" class="w-full" loading={pending} loadingLabel="Memproses..." label="Masuk" />
 				</form>
 			</Card.Content>
 		</Card.Root>

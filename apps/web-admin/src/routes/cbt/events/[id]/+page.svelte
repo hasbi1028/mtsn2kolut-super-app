@@ -5,6 +5,7 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 
 	type EventInfo = {
 		id: string; title: string; exam_type: string; scope: string;
@@ -75,7 +76,27 @@
 	</div>
 
 	{#if loading}
-		<p class="text-sm text-slate-500">Memuat rekap nilai...</p>
+		<div class="space-y-4">
+			<div class="space-y-2">
+				<Skeleton class="h-4 w-48" />
+				<Skeleton class="h-8 w-72" />
+				<Skeleton class="h-4 w-64" />
+			</div>
+			<Card.Root>
+				<Card.Content class="space-y-3 p-6">
+					{#each Array.from({ length: 6 }) as _, index (`event-result-skeleton-${index}`)}
+						<div class="grid gap-3 lg:grid-cols-[0.8fr_1.4fr_0.6fr_1.2fr_0.5fr_0.6fr] lg:items-center">
+							<Skeleton class="h-5 w-20" />
+							<Skeleton class="h-5 w-full max-w-xs" />
+							<Skeleton class="h-6 w-16" />
+							<Skeleton class="h-5 w-36" />
+							<Skeleton class="h-5 w-14" />
+							<Skeleton class="h-6 w-16" />
+						</div>
+					{/each}
+				</Card.Content>
+			</Card.Root>
+		</div>
 	{:else if info}
 		<div class="flex items-start justify-between gap-4 flex-wrap">
 			<div>

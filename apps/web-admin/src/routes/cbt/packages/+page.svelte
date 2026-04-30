@@ -7,6 +7,8 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 
 	type CbtPackage = {
 		id: string; subject_id: string; subject_name: string; subject_code: string;
@@ -203,9 +205,9 @@
 				{/if}
 
 				<div class="flex gap-2">
-					<Button disabled={fBusy || !fSubjectId || !fTitle || !fDuration} onclick={createPackage}>
-						{fBusy ? 'Menyimpan...' : `Buat Paket${fSelectedIds.size > 0 ? ` (${fSelectedIds.size} soal)` : ''}`}
-					</Button>
+					<LoadingButton disabled={fBusy || !fSubjectId || !fTitle || !fDuration} onclick={createPackage} loading={fBusy} loadingLabel="Menyimpan...">
+						{`Buat Paket${fSelectedIds.size > 0 ? ` (${fSelectedIds.size} soal)` : ''}`}
+					</LoadingButton>
 					<Button variant="outline" onclick={() => (showForm = false)}>Batal</Button>
 				</div>
 			</Card.Content>
@@ -213,7 +215,21 @@
 	{/if}
 
 	{#if loading}
-		<p class="text-sm text-slate-500">Memuat data...</p>
+		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+			<Card.Content class="space-y-3 p-6">
+				{#each Array.from({ length: 5 }) as _, index (`package-row-skeleton-${index}`)}
+					<div class="grid gap-3 lg:grid-cols-[1.2fr_0.6fr_0.5fr_0.5fr_0.5fr_0.6fr_auto] lg:items-center">
+						<Skeleton class="h-5 w-40" />
+						<Skeleton class="h-6 w-16" />
+						<Skeleton class="h-5 w-14" />
+						<Skeleton class="h-5 w-12" />
+						<Skeleton class="h-6 w-12" />
+						<Skeleton class="h-6 w-16" />
+						<Skeleton class="h-9 w-20 justify-self-end" />
+					</div>
+				{/each}
+			</Card.Content>
+		</Card.Root>
 	{:else}
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Header class="pb-2">
