@@ -14,6 +14,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 
 	type Subject = { id: string; name: string; code: string };
 	type OptionItem = { label: string; text?: string; html?: string; latex?: string; asset_id?: string };
@@ -129,6 +130,10 @@
 	let fMediaAssetIds = $state<string[]>([]);
 	let fBusy = $state(false);
 	let assetBusy = $state(false);
+	let deleteBusyId = $state('');
+	let workflowBusyId = $state('');
+	let workflowBusyAction = $state('');
+	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 
 	let isAdvanceMode = $derived(fAuthoringMode === 'advance');
 	let userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
@@ -175,6 +180,26 @@
 
 	function showToast(message: string) { toast.success(message); }
 	function showError(message: string) { toast.error(message); }
+
+	function setOperationState(
+		tone: 'success' | 'error' | 'warning' | 'info',
+		title: string,
+		message: string,
+	) {
+		operationState = { tone, title, message };
+	}
+
+	function confirmPhrase(title: string, detail: string, challenge: string) {
+		const input = prompt(`${title}\n\n${detail}\n\nKetik ${challenge} untuk melanjutkan.`);
+		return input === challenge;
+	}
+
+	function actionLabel(action: 'submit_review' | 'approve' | 'publish' | 'archive') {
+		if (action === 'submit_review') return 'Ajukan Peninjauan';
+		if (action === 'approve') return 'Setujui Item';
+		if (action === 'publish') return 'Terbitkan Item';
+		return 'Arsipkan Item';
+	}
 
 	function detectMode(q: Question): 'beginner' | 'advance' {
 		if (q.authoring_mode === 'advance' || q.suggested_mode === 'advance') return 'advance';
@@ -453,6 +478,7 @@
 			});
 			const payload = await res.json().catch(() => ({}));
 			if (!res.ok) { showError(payload.error ?? 'Gagal menyimpan soal'); return; }
+			setOperationState('success', editId ? 'Item Bank Soal Diperbarui' : 'Item Bank Soal Ditambahkan', editId ? 'Perubahan item sudah tersimpan. Tinjau kembali workflow dan status terbit bila diperlukan.' : 'Item baru sudah tersimpan sebagai draft dan siap dilengkapi atau diajukan peninjauan.');
 			showToast(editId ? 'Item bank soal diperbarui' : 'Item bank soal ditambahkan');
 			resetForm();
 			await load(editId && currentPage > pageCount ? pageCount : currentPage);
@@ -462,16 +488,23 @@
 	}
 
 	async function deleteQuestion(id: string) {
-		if (!confirm('Hapus item bank soal ini?')) return;
-		const res = await fetch(`/api/cbt/questions/${id}`, { method: 'DELETE' });
-		if (!res.ok) {
-			const payload = await res.json().catch(() => ({}));
-			showError(payload.error ?? 'Gagal menghapus');
-			return;
+		if (!confirmPhrase('Hapus Item Bank Soal', 'Item yang dihapus akan keluar dari katalog dan tidak bisa dipulihkan dari layar operator. Pastikan item ini memang tidak lagi diperlukan.', 'HAPUS')) return;
+		deleteBusyId = id;
+		try {
+			const res = await fetch(`/api/cbt/questions/${id}`, { method: 'DELETE' });
+			if (!res.ok) {
+				const payload = await res.json().catch(() => ({}));
+				setOperationState('error', 'Item Gagal Dihapus', 'Penghapusan item belum berhasil. Periksa apakah item masih dipakai oleh paket atau ulangi beberapa saat lagi.');
+				showError(payload.error ?? 'Gagal menghapus');
+				return;
+			}
+			if (selectedDetail?.id === id) selectedDetail = null;
+			setOperationState('warning', 'Item Dihapus', 'Item bank soal sudah dihapus dari katalog aktif.');
+			showToast('Item bank soal dihapus');
+			await load(currentPage);
+		} finally {
+			deleteBusyId = '';
 		}
-		if (selectedDetail?.id === id) selectedDetail = null;
-		showToast('Item bank soal dihapus');
-		await load(currentPage);
 	}
 
 	async function duplicateQuestion(id: string) {
@@ -503,16 +536,42 @@
 	}
 
 	async function workflowAction(id: string, action: 'submit_review' | 'approve' | 'publish' | 'archive') {
-		const res = await fetch(`/api/cbt/questions/${id}/workflow`, {
-			method: 'PATCH',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ action }),
-		});
-		const payload = await res.json().catch(() => ({}));
-		if (!res.ok) { showError(payload.error ?? 'Aksi workflow gagal'); return; }
-		showToast('Status item diperbarui');
-		await load(currentPage);
-		if (selectedDetail?.id === id) await loadDetail(id);
+		const requiresHardConfirm = action === 'publish' || action === 'archive';
+		const confirmed = requiresHardConfirm
+			? confirmPhrase(actionLabel(action), action === 'publish'
+				? 'Item akan dinyatakan siap dipakai di paket dan sesi ujian. Pastikan isi, kunci, dan alur review sudah final.'
+				: 'Item terbit akan dipindahkan ke status arsip. Gunakan hanya bila item sudah tidak layak dipakai lagi pada operasional aktif.', action === 'publish' ? 'TERBIT' : 'ARSIP')
+			: confirm(`${actionLabel(action)} untuk item ini?`);
+		if (!confirmed) return;
+		workflowBusyId = id;
+		workflowBusyAction = action;
+		try {
+			const res = await fetch(`/api/cbt/questions/${id}/workflow`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ action }),
+			});
+			const payload = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				setOperationState('error', 'Workflow Gagal Diperbarui', 'Perubahan alur review belum berhasil. Periksa hak akses atau status item saat ini, lalu coba lagi.');
+				showError(payload.error ?? 'Aksi workflow gagal');
+				return;
+			}
+			const tone = action === 'archive' ? 'warning' : 'success';
+			const messageMap = {
+				submit_review: 'Item masuk ke alur peninjauan. Lanjutkan pemantauan sampai reviewer menyetujui atau mengembalikan item.',
+				approve: 'Item dinyatakan lolos peninjauan. Langkah berikutnya adalah menerbitkan item bila sudah siap dipakai.',
+				publish: 'Item sudah berstatus terbit dan siap dipilih pada paket ujian sesuai filter mapel.',
+				archive: 'Item dipindahkan ke arsip dan tidak lagi dianggap aktif untuk operasional bank soal.',
+			} as const;
+			setOperationState(tone, 'Status Item Diperbarui', messageMap[action]);
+			showToast('Status item diperbarui');
+			await load(currentPage);
+			if (selectedDetail?.id === id) await loadDetail(id);
+		} finally {
+			workflowBusyId = '';
+			workflowBusyAction = '';
+		}
 	}
 
 	async function applyFilters() {
@@ -586,6 +645,10 @@
 
 	{#if error}
 		<RecoveryPanel message={error} onRetry={() => load(currentPage)} />
+	{/if}
+
+	{#if operationState}
+		<OperationStatusPanel {...operationState} />
 	{/if}
 
 	{#if selectedDetail}
@@ -769,12 +832,21 @@
 							Soal mode dasar disimpan otomatis sebagai <strong>draft</strong>. KD, CP, TP, HOTS, dan metadata blueprint bisa dilengkapi nanti di mode lanjutan.
 						</div>
 						<div class="flex flex-wrap gap-2">
-							<Button variant="outline" size="sm" onclick={() => (fAuthoringMode = 'advance')}>Lengkapi di Mode Lanjutan</Button>
-							{#if canSubmitReview && editId}
-								<Button variant="outline" size="sm" onclick={async () => { await workflowAction(editId!, 'submit_review'); }}>Ajukan Peninjauan</Button>
-							{/if}
-						</div>
-					{/if}
+								<Button variant="outline" size="sm" onclick={() => (fAuthoringMode = 'advance')}>Lengkapi di Mode Lanjutan</Button>
+								{#if canSubmitReview && editId}
+									<LoadingButton
+										variant="outline"
+										size="sm"
+										onclick={async () => { await workflowAction(editId!, 'submit_review'); }}
+										loading={workflowBusyId === editId && workflowBusyAction === 'submit_review'}
+										disabled={workflowBusyId !== '' && workflowBusyId !== editId}
+										loadingLabel="Memproses..."
+									>
+										Ajukan Peninjauan
+									</LoadingButton>
+								{/if}
+							</div>
+						{/if}
 				</section>
 
 				{#if qualityWarnings.length > 0}
@@ -1285,18 +1357,63 @@
 											<Button size="sm" variant="outline" onclick={() => openEdit(q, 'advance')}>Lengkapi</Button>
 										{/if}
 										{#if canSubmitReview && (q.workflow_status === 'draft' || q.workflow_status === 'rejected')}
-											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'submit_review')}>Tinjau</Button>
+											<LoadingButton
+												size="sm"
+												variant="outline"
+												onclick={() => workflowAction(q.id, 'submit_review')}
+												loading={workflowBusyId === q.id && workflowBusyAction === 'submit_review'}
+												disabled={workflowBusyId !== '' && workflowBusyId !== q.id}
+												loadingLabel="Memproses..."
+											>
+												Tinjau
+											</LoadingButton>
 										{/if}
 										{#if canApproveWorkflow && q.workflow_status === 'review'}
-											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'approve')}>Setujui</Button>
+											<LoadingButton
+												size="sm"
+												variant="outline"
+												onclick={() => workflowAction(q.id, 'approve')}
+												loading={workflowBusyId === q.id && workflowBusyAction === 'approve'}
+												disabled={workflowBusyId !== '' && workflowBusyId !== q.id}
+												loadingLabel="Memproses..."
+											>
+												Setujui
+											</LoadingButton>
 										{/if}
 										{#if canApproveWorkflow && q.workflow_status === 'approved' && q.status !== 'published'}
-											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'publish')}>Terbitkan</Button>
+											<LoadingButton
+												size="sm"
+												variant="outline"
+												onclick={() => workflowAction(q.id, 'publish')}
+												loading={workflowBusyId === q.id && workflowBusyAction === 'publish'}
+												disabled={workflowBusyId !== '' && workflowBusyId !== q.id}
+												loadingLabel="Memproses..."
+											>
+												Terbitkan
+											</LoadingButton>
 										{/if}
 										{#if canApproveWorkflow && q.status === 'published'}
-											<Button size="sm" variant="outline" onclick={() => workflowAction(q.id, 'archive')}>Arsip</Button>
+											<LoadingButton
+												size="sm"
+												variant="outline"
+												onclick={() => workflowAction(q.id, 'archive')}
+												loading={workflowBusyId === q.id && workflowBusyAction === 'archive'}
+												disabled={workflowBusyId !== '' && workflowBusyId !== q.id}
+												loadingLabel="Memproses..."
+											>
+												Arsip
+											</LoadingButton>
 										{/if}
-										<Button size="sm" variant="destructive" onclick={() => deleteQuestion(q.id)}>Hapus</Button>
+										<LoadingButton
+											size="sm"
+											variant="destructive"
+											onclick={() => deleteQuestion(q.id)}
+											loading={deleteBusyId === q.id}
+											disabled={deleteBusyId !== '' && deleteBusyId !== q.id}
+											loadingLabel="Menghapus..."
+										>
+											Hapus
+										</LoadingButton>
 									</div>
 								</Table.Cell>
 							</Table.Row>
@@ -1304,22 +1421,20 @@
 						{#if questions.length === 0}
 							<Table.Row>
 								<Table.Cell colspan={7} class="p-4">
-									<EmptyStatePanel
-										compact
-										eyebrow={search || filterSubject || filterWorkflow || filterType || filterHots ? 'Filter Tidak Menemukan Hasil' : 'Mulai Bank Soal'}
-										title={search || filterSubject || filterWorkflow || filterType || filterHots ? 'Belum ada item yang cocok' : 'Bank soal masih kosong'}
-										description={search || filterSubject || filterWorkflow || filterType || filterHots
-											? 'Ubah kombinasi filter atau reset pencarian untuk melihat item lain yang sudah tersedia.'
-											: 'Tambahkan item pertama lewat mode beginner untuk input cepat, lalu lengkapi di advance bila dibutuhkan.'}
-									>
-										{#snippet children()}
+										<EmptyStatePanel
+											compact
+											eyebrow={search || filterSubject || filterWorkflow || filterType || filterHots ? 'Filter Tidak Menemukan Hasil' : 'Mulai Bank Soal'}
+											title={search || filterSubject || filterWorkflow || filterType || filterHots ? 'Belum ada item yang cocok' : 'Bank soal masih kosong'}
+											description={search || filterSubject || filterWorkflow || filterType || filterHots
+												? 'Ubah kombinasi filter atau reset pencarian untuk melihat item lain yang sudah tersedia.'
+												: 'Tambahkan item pertama lewat mode beginner untuk input cepat, lalu lengkapi di advance bila dibutuhkan.'}
+										>
 											{#if search || filterSubject || filterWorkflow || filterType || filterHots}
 												<Button variant="outline" size="sm" onclick={clearQuestionFilters}>Reset filter</Button>
 											{:else}
 												<Button size="sm" onclick={openCreate}>Tambah item pertama</Button>
 											{/if}
-										{/snippet}
-									</EmptyStatePanel>
+										</EmptyStatePanel>
 								</Table.Cell>
 							</Table.Row>
 						{/if}
