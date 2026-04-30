@@ -176,6 +176,9 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
           answers: const <String, String>{},
           pendingAnswers: const <String, String>{},
           playedAudioQuestionIds: const <String>[],
+          lastServerContactIso: '',
+          lastSyncFailureIso: '',
+          consecutiveSyncFailures: 0,
         ),
       );
       if (!mounted) {
@@ -436,7 +439,68 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
                 : '${cached.sessionTitle}\n${cached.studentName} • ${cached.studentNis} • Ruang ${cached.roomName}\n${formatExamSchedule(scheduledStartIso: cached.scheduledStartIso, scheduledEndIso: cached.scheduledEndIso, durationMinutes: cached.durationMinutes)}',
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
+          if (cached != null) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _RestoreMetaChip(
+                  label: formatRestoreHealthLabel(
+                    lastServerContactIso: cached.lastServerContactIso,
+                    lastSyncFailureIso: cached.lastSyncFailureIso,
+                    consecutiveSyncFailures: cached.consecutiveSyncFailures,
+                  ),
+                  warning: cached.consecutiveSyncFailures >= 3,
+                ),
+                if (cached.lastServerContactIso.trim().isNotEmpty)
+                  _RestoreMetaChip(
+                    label:
+                        'Kontak server ${formatRestoreClock(cached.lastServerContactIso)}',
+                  ),
+                if (cached.lastSyncFailureIso.trim().isNotEmpty)
+                  _RestoreMetaChip(
+                    label:
+                        'Gangguan ${formatRestoreClock(cached.lastSyncFailureIso)}',
+                    warning: true,
+                  ),
+              ],
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _RestoreMetaChip extends StatelessWidget {
+  const _RestoreMetaChip({required this.label, this.warning = false});
+
+  final String label;
+  final bool warning;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final background = warning
+        ? const Color(0xFFFFF3D8)
+        : theme.colorScheme.primary.withValues(alpha: 0.12);
+    final foreground = warning
+        ? const Color(0xFF9A6700)
+        : theme.colorScheme.primary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: foreground,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

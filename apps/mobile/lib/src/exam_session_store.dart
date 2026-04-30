@@ -18,6 +18,9 @@ class ExamSessionSnapshot {
     required this.answers,
     required this.pendingAnswers,
     required this.playedAudioQuestionIds,
+    required this.lastServerContactIso,
+    required this.lastSyncFailureIso,
+    required this.consecutiveSyncFailures,
   });
 
   final String baseUrl;
@@ -34,6 +37,9 @@ class ExamSessionSnapshot {
   final Map<String, String> answers;
   final Map<String, String> pendingAnswers;
   final List<String> playedAudioQuestionIds;
+  final String lastServerContactIso;
+  final String lastSyncFailureIso;
+  final int consecutiveSyncFailures;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -51,6 +57,9 @@ class ExamSessionSnapshot {
       'answers': answers,
       'pending_answers': pendingAnswers,
       'played_audio_question_ids': playedAudioQuestionIds,
+      'last_server_contact_iso': lastServerContactIso,
+      'last_sync_failure_iso': lastSyncFailureIso,
+      'consecutive_sync_failures': consecutiveSyncFailures,
     };
   }
 
@@ -78,6 +87,9 @@ class ExamSessionSnapshot {
           ((json['played_audio_question_ids'] as List<dynamic>?) ?? const [])
               .map((value) => value.toString())
               .toList(),
+      lastServerContactIso: json['last_server_contact_iso'] as String? ?? '',
+      lastSyncFailureIso: json['last_sync_failure_iso'] as String? ?? '',
+      consecutiveSyncFailures: json['consecutive_sync_failures'] as int? ?? 0,
     );
   }
 }

@@ -84,6 +84,40 @@ class ExamRestoreFailedScreen extends StatelessWidget {
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _RestoreStatusChip(
+                                  label: formatRestoreHealthLabel(
+                                    lastServerContactIso:
+                                        snapshot.lastServerContactIso,
+                                    lastSyncFailureIso:
+                                        snapshot.lastSyncFailureIso,
+                                    consecutiveSyncFailures:
+                                        snapshot.consecutiveSyncFailures,
+                                  ),
+                                  warning:
+                                      snapshot.consecutiveSyncFailures >= 3,
+                                ),
+                                if (snapshot.lastServerContactIso
+                                    .trim()
+                                    .isNotEmpty)
+                                  _RestoreStatusChip(
+                                    label:
+                                        'Kontak server ${formatRestoreClock(snapshot.lastServerContactIso)}',
+                                  ),
+                                if (snapshot.lastSyncFailureIso
+                                    .trim()
+                                    .isNotEmpty)
+                                  _RestoreStatusChip(
+                                    label:
+                                        'Gangguan ${formatRestoreClock(snapshot.lastSyncFailureIso)}',
+                                    warning: true,
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -101,6 +135,39 @@ class ExamRestoreFailedScreen extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RestoreStatusChip extends StatelessWidget {
+  const _RestoreStatusChip({required this.label, this.warning = false});
+
+  final String label;
+  final bool warning;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final background = warning
+        ? const Color(0xFFFFF3D8)
+        : theme.colorScheme.primary.withValues(alpha: 0.12);
+    final foreground = warning
+        ? const Color(0xFF9A6700)
+        : theme.colorScheme.primary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: foreground,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

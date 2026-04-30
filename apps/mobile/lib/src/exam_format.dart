@@ -20,6 +20,32 @@ String formatExamSchedule({
   return parts.isEmpty ? 'Jadwal belum tersedia' : parts.join(' • ');
 }
 
+String formatRestoreHealthLabel({
+  required String lastServerContactIso,
+  required String lastSyncFailureIso,
+  required int consecutiveSyncFailures,
+}) {
+  if (consecutiveSyncFailures >= 3) {
+    return 'Perlu perhatian koneksi';
+  }
+  if (lastServerContactIso.trim().isNotEmpty &&
+      lastSyncFailureIso.trim().isEmpty) {
+    return 'Terakhir stabil';
+  }
+  if (lastSyncFailureIso.trim().isNotEmpty) {
+    return 'Pernah terganggu';
+  }
+  return 'Belum ada riwayat koneksi';
+}
+
+String formatRestoreClock(String rawIso) {
+  final parsed = _tryParse(rawIso);
+  if (parsed == null) {
+    return '-';
+  }
+  return _formatTime(parsed);
+}
+
 DateTime? _tryParse(String raw) {
   if (raw.trim().isEmpty) {
     return null;

@@ -396,6 +396,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         answers: Map<String, String>.from(_answers),
         pendingAnswers: Map<String, String>.from(_pendingAnswers),
         playedAudioQuestionIds: _playedAudioQuestionIds.toList()..sort(),
+        lastServerContactIso: _lastServerContactAt?.toIso8601String() ?? '',
+        lastSyncFailureIso: _lastSyncFailureAt?.toIso8601String() ?? '',
+        consecutiveSyncFailures: _consecutiveSyncFailures,
       ),
     );
   }

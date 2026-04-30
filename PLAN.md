@@ -121,6 +121,8 @@ Three runtime units deployed across 3 VPS:
 - [x] Per-question audio playback state so audio-enabled questions can show `sudah diputar / belum diputar`
 - [x] Degraded-mode guard that holds manual submit when repeated sync failures cross the BYOD safety threshold
 - [x] Internal APK distribution README for local run, release build, and realistic BYOD trial guidance
+- [x] Restore-card health metadata snapshot (`last contact`, `last failure`, repeated-failure count) for clearer BYOD reconnect context
+- [x] Internal APK release checklist for operator verification and field trial preparation
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck
