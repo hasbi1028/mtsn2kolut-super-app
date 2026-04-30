@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Input } from '$lib/components/ui/input';
@@ -34,7 +35,7 @@
 	let fDuration = $state(60);
 	let fRandomize = $state(false);
 	let fActive = $state(true);
-	let fSelectedIds = $state<Set<string>>(new Set());
+	let fSelectedIds = new SvelteSet<string>();
 	let fBusy = $state(false);
 
 	let questionPool = $derived(
@@ -44,10 +45,8 @@
 	);
 
 	function toggleQuestion(id: string) {
-		const next = new Set(fSelectedIds);
-		if (next.has(id)) next.delete(id);
-		else next.add(id);
-		fSelectedIds = next;
+		if (fSelectedIds.has(id)) fSelectedIds.delete(id);
+		else fSelectedIds.add(id);
 	}
 
 	async function load() {
@@ -95,7 +94,7 @@
 			});
 			if (!res.ok) { const j = await res.json(); showError(j.error ?? 'Gagal'); return; }
 			fSubjectId = ''; fTitle = ''; fDescription = ''; fDuration = 60;
-			fRandomize = false; fActive = true; fSelectedIds = new Set();
+			fRandomize = false; fActive = true; fSelectedIds.clear();
 			showForm = false;
 			showToast('Paket ujian berhasil dibuat');
 			await load();
