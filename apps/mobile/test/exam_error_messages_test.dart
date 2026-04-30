@@ -23,6 +23,18 @@ void main() {
         ),
         'Pesan asli backend',
       );
+
+      final warningNotice = loginFailureNotice(
+        const ExamApiException('backend', statusCode: 403),
+      );
+      expect(warningNotice?.title, 'Sesi belum bisa dimasuki');
+      expect(warningNotice?.tone, ExamGuidanceTone.warning);
+
+      final dangerNotice = loginFailureNotice(
+        const ExamApiException('backend', statusCode: 409),
+      );
+      expect(dangerNotice?.title, 'Token sudah terikat ke perangkat lain');
+      expect(dangerNotice?.tone, ExamGuidanceTone.danger);
     });
 
     test('restore failure maps common status codes', () {
@@ -50,6 +62,18 @@ void main() {
         ),
         'Sesi lama tidak bisa dipulihkan. Pesan asli backend',
       );
+
+      final warningNotice = restoreFailureNotice(
+        const ExamApiException('backend', statusCode: 403),
+      );
+      expect(warningNotice?.title, 'Sesi lama belum bisa dipulihkan');
+      expect(warningNotice?.tone, ExamGuidanceTone.warning);
+
+      final dangerNotice = restoreFailureNotice(
+        const ExamApiException('backend', statusCode: 409),
+      );
+      expect(dangerNotice?.title, 'Sesi lama aktif di perangkat lain');
+      expect(dangerNotice?.tone, ExamGuidanceTone.danger);
     });
 
     test('answer failure maps common status codes', () {

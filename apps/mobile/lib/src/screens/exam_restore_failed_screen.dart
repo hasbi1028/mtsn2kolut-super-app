@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../exam_error_messages.dart';
 import '../exam_format.dart';
 import '../exam_session_store.dart';
 
@@ -8,10 +9,12 @@ class ExamRestoreFailedScreen extends StatelessWidget {
     super.key,
     required this.snapshot,
     required this.message,
+    this.notice,
   });
 
   final ExamSessionSnapshot snapshot;
   final String message;
+  final ExamGuidanceNotice? notice;
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +48,10 @@ class ExamRestoreFailedScreen extends StatelessWidget {
                           height: 1.55,
                         ),
                       ),
+                      if (notice != null) ...[
+                        const SizedBox(height: 18),
+                        _GuidancePanel(notice: notice!),
+                      ],
                       const SizedBox(height: 24),
                       Container(
                         width: double.infinity,
@@ -136,6 +143,76 @@ class ExamRestoreFailedScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _GuidancePanel extends StatelessWidget {
+  const _GuidancePanel({required this.notice});
+
+  final ExamGuidanceNotice notice;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (background, border, foreground, icon) = switch (notice.tone) {
+      ExamGuidanceTone.info => (
+        const Color(0xFFEAF4EB),
+        const Color(0xFF7FB08A),
+        const Color(0xFF1E5B2F),
+        Icons.info_outline,
+      ),
+      ExamGuidanceTone.warning => (
+        const Color(0xFFFFF3D8),
+        const Color(0xFFF2C46D),
+        const Color(0xFF9A6700),
+        Icons.warning_amber_rounded,
+      ),
+      ExamGuidanceTone.danger => (
+        const Color(0xFFFDE8E8),
+        const Color(0xFFE8A4A4),
+        const Color(0xFF9F2F2F),
+        Icons.gpp_bad_outlined,
+      ),
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: foreground),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  notice.title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  notice.message,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: foreground,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

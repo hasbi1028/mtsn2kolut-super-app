@@ -27,6 +27,27 @@ String loginFailureMessage(ExamApiException error) {
   }
 }
 
+ExamGuidanceNotice? loginFailureNotice(ExamApiException error) {
+  switch (error.statusCode) {
+    case 403:
+      return const ExamGuidanceNotice(
+        title: 'Sesi belum bisa dimasuki',
+        message:
+            'Peserta sebaiknya menunggu arahan pengawas. Login ulang hanya perlu dilakukan setelah jadwal sesi dipastikan aktif.',
+        tone: ExamGuidanceTone.warning,
+      );
+    case 409:
+      return const ExamGuidanceNotice(
+        title: 'Token sudah terikat ke perangkat lain',
+        message:
+            'Jangan terus mencoba login dari perangkat ini. Gunakan perangkat yang sama seperti sebelumnya atau minta pengawas memverifikasi token.',
+        tone: ExamGuidanceTone.danger,
+      );
+    default:
+      return null;
+  }
+}
+
 String restoreFailureMessage(ExamApiException error) {
   switch (error.statusCode) {
     case 404:
@@ -37,6 +58,27 @@ String restoreFailureMessage(ExamApiException error) {
       return 'Sesi lama terikat ke perangkat lain. Gunakan perangkat yang sama seperti sebelumnya atau minta bantuan pengawas.';
     default:
       return 'Sesi lama tidak bisa dipulihkan. ${error.message}';
+  }
+}
+
+ExamGuidanceNotice? restoreFailureNotice(ExamApiException error) {
+  switch (error.statusCode) {
+    case 403:
+      return const ExamGuidanceNotice(
+        title: 'Sesi lama belum bisa dipulihkan',
+        message:
+            'Pengawas perlu memastikan apakah ujian memang belum aktif lagi atau sudah resmi ditutup sebelum peserta mencoba masuk ulang.',
+        tone: ExamGuidanceTone.warning,
+      );
+    case 409:
+      return const ExamGuidanceNotice(
+        title: 'Sesi lama aktif di perangkat lain',
+        message:
+            'Peserta tidak perlu terus mencoba restore di perangkat ini. Pengawas sebaiknya mengarahkan peserta kembali ke perangkat awal atau memeriksa status token.',
+        tone: ExamGuidanceTone.danger,
+      );
+    default:
+      return null;
   }
 }
 
