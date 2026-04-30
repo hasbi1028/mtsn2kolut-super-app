@@ -81,5 +81,37 @@ void main() {
       expect(restored.lastSyncFailureIso, '');
       expect(restored.consecutiveSyncFailures, 0);
     });
+
+    test('splits metadata and sensitive payloads predictably', () {
+      const snapshot = ExamSessionSnapshot(
+        baseUrl: 'http://10.0.2.2:8080',
+        examToken: 'token-1',
+        deviceFingerprint: 'android:test',
+        studentName: 'Siti Aminah',
+        studentNis: '24001',
+        sessionTitle: 'Matematika Kelas VIII',
+        roomName: 'Lab 1',
+        scheduledStartIso: '2026-05-01T08:00:00+08:00',
+        scheduledEndIso: '2026-05-01T09:30:00+08:00',
+        durationMinutes: 90,
+        currentQuestionIndex: 4,
+        answers: {'question-1': 'B'},
+        pendingAnswers: {'essay-1': 'Jawaban lokal'},
+        playedAudioQuestionIds: ['audio-1'],
+        lastServerContactIso: '2026-05-01T08:44:00+08:00',
+        lastSyncFailureIso: '2026-05-01T08:46:00+08:00',
+        consecutiveSyncFailures: 2,
+      );
+
+      final metadata = snapshot.toMetadataJson();
+      final sensitive = snapshot.toSensitiveJson();
+
+      expect(metadata.containsKey('exam_token'), isFalse);
+      expect(metadata.containsKey('answers'), isFalse);
+      expect(metadata.containsKey('pending_answers'), isFalse);
+      expect(sensitive['exam_token'], 'token-1');
+      expect(sensitive['answers'], {'question-1': 'B'});
+      expect(sensitive['pending_answers'], {'essay-1': 'Jawaban lokal'});
+    });
   });
 }

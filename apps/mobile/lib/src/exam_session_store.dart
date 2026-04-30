@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ExamSessionSnapshot {
@@ -42,10 +43,12 @@ class ExamSessionSnapshot {
   final int consecutiveSyncFailures;
 
   Map<String, Object?> toJson() {
+    return <String, Object?>{...toMetadataJson(), ...toSensitiveJson()};
+  }
+
+  Map<String, Object?> toMetadataJson() {
     return <String, Object?>{
       'base_url': baseUrl,
-      'exam_token': examToken,
-      'device_fingerprint': deviceFingerprint,
       'student_name': studentName,
       'student_nis': studentNis,
       'session_title': sessionTitle,
@@ -54,12 +57,19 @@ class ExamSessionSnapshot {
       'scheduled_end_iso': scheduledEndIso,
       'duration_minutes': durationMinutes,
       'current_question_index': currentQuestionIndex,
-      'answers': answers,
-      'pending_answers': pendingAnswers,
       'played_audio_question_ids': playedAudioQuestionIds,
       'last_server_contact_iso': lastServerContactIso,
       'last_sync_failure_iso': lastSyncFailureIso,
       'consecutive_sync_failures': consecutiveSyncFailures,
+    };
+  }
+
+  Map<String, Object?> toSensitiveJson() {
+    return <String, Object?>{
+      'exam_token': examToken,
+      'device_fingerprint': deviceFingerprint,
+      'answers': answers,
+      'pending_answers': pendingAnswers,
     };
   }
 
@@ -94,43 +104,126 @@ class ExamSessionSnapshot {
   }
 }
 
+abstract class SnapshotValueStore {
+  Future<void> write(String key, String value);
+  Future<String?> read(String key);
+  Future<void> delete(String key);
+}
+
+class SharedPreferencesValueStore implements SnapshotValueStore {
+  const SharedPreferencesValueStore();
+
+  @override
+  Future<void> delete(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(key);
+  }
+
+  @override
+  Future<String?> read(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(key);
+  }
+
+  @override
+  Future<void> write(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, value);
+  }
+}
+
+class SecureSnapshotValueStore implements SnapshotValueStore {
+  const SecureSnapshotValueStore([
+    this._storage = const FlutterSecureStorage(),
+  ]);
+
+  final FlutterSecureStorage _storage;
+
+  @override
+  Future<void> delete(String key) => _storage.delete(key: key);
+
+  @override
+  Future<String?> read(String key) => _storage.read(key: key);
+
+  @override
+  Future<void> write(String key, String value) =>
+      _storage.write(key: key, value: value);
+}
+
 class ExamSessionStore {
   static const _baseUrlKey = 'exam_last_base_url';
-  static const _snapshotKey = 'exam_active_snapshot';
+  static const _snapshotMetadataKey = 'exam_active_snapshot';
+  static const _snapshotSensitiveKey = 'exam_active_snapshot_secure';
+
+  ExamSessionStore({
+    SnapshotValueStore? metadataStore,
+    SnapshotValueStore? secureStore,
+  }) : _metadataStore = metadataStore ?? const SharedPreferencesValueStore(),
+       _secureStore = secureStore ?? const SecureSnapshotValueStore();
+
+  final SnapshotValueStore _metadataStore;
+  final SnapshotValueStore _secureStore;
 
   Future<void> saveBaseUrl(String baseUrl) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_baseUrlKey, baseUrl);
+    await _metadataStore.write(_baseUrlKey, baseUrl);
   }
 
   Future<String?> loadBaseUrl() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_baseUrlKey);
+    return _metadataStore.read(_baseUrlKey);
   }
 
   Future<void> saveSnapshot(ExamSessionSnapshot snapshot) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_snapshotKey, jsonEncode(snapshot.toJson()));
-    await prefs.setString(_baseUrlKey, snapshot.baseUrl);
+    await _metadataStore.write(
+      _snapshotMetadataKey,
+      jsonEncode(snapshot.toMetadataJson()),
+    );
+    await _secureStore.write(
+      _snapshotSensitiveKey,
+      jsonEncode(snapshot.toSensitiveJson()),
+    );
+    await _metadataStore.write(_baseUrlKey, snapshot.baseUrl);
   }
 
   Future<ExamSessionSnapshot?> loadSnapshot() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_snapshotKey);
-    if (raw == null || raw.trim().isEmpty) {
+    final rawMetadata = await _metadataStore.read(_snapshotMetadataKey);
+    if (rawMetadata == null || rawMetadata.trim().isEmpty) {
       return null;
     }
-    final decoded = _tryDecodeSnapshot(raw);
-    if (decoded is! Map<String, dynamic>) {
+    final decodedMetadata = _tryDecodeSnapshot(rawMetadata);
+    if (decodedMetadata is! Map<String, dynamic>) {
       return null;
     }
-    return ExamSessionSnapshot.fromJson(decoded);
+
+    if (_isLegacySnapshot(decodedMetadata)) {
+      return ExamSessionSnapshot.fromJson(decodedMetadata);
+    }
+
+    final rawSensitive = await _secureStore.read(_snapshotSensitiveKey);
+    if (rawSensitive == null || rawSensitive.trim().isEmpty) {
+      return null;
+    }
+    final decodedSensitive = _tryDecodeSnapshot(rawSensitive);
+    if (decodedSensitive is! Map<String, dynamic>) {
+      return null;
+    }
+
+    return ExamSessionSnapshot.fromJson(<String, dynamic>{
+      ...decodedMetadata,
+      ...decodedSensitive,
+    });
   }
 
   Future<void> clearSnapshot() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_snapshotKey);
+    await _metadataStore.delete(_snapshotMetadataKey);
+    await _secureStore.delete(_snapshotSensitiveKey);
   }
+}
+
+bool _isLegacySnapshot(Map<String, dynamic> json) {
+  return json.containsKey('exam_token') ||
+      json.containsKey('answers') ||
+      json.containsKey('pending_answers') ||
+      json.containsKey('device_fingerprint');
 }
 
 Object? _tryDecodeSnapshot(String raw) {
