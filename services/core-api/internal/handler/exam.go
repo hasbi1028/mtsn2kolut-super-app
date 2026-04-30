@@ -1,20 +1,32 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"mtsn2kolut-super-app/backend/internal/api"
 	mw "mtsn2kolut-super-app/backend/internal/middleware"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
 type Exam struct {
-	svc *service.Exam
+	svc examService
 }
 
 func NewExam(svc *service.Exam) *Exam { return &Exam{svc: svc} }
+
+type examService interface {
+	Login(ctx context.Context, token, deviceFingerprint, loginIP string) (service.LoginResult, error)
+	GetStatus(ctx context.Context, p db.GetParticipantByTokenRow) (service.StatusResult, error)
+	Heartbeat(ctx context.Context, participantID pgtype.UUID) error
+	RecordClientEvent(ctx context.Context, participantID pgtype.UUID, eventType string, data map[string]any) error
+	SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, questionID pgtype.UUID, answer string) error
+	Submit(ctx context.Context, p db.GetParticipantByTokenRow) error
+}
 
 func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 	var body struct {

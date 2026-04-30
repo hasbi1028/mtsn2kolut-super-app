@@ -1,11 +1,48 @@
 package handler
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgtype"
+	mw "mtsn2kolut-super-app/backend/internal/middleware"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
+
+type fakeExamService struct {
+	loginResult  service.LoginResult
+	loginErr     error
+	statusResult service.StatusResult
+	statusErr    error
+}
+
+func (f *fakeExamService) Login(ctx context.Context, token, deviceFingerprint, loginIP string) (service.LoginResult, error) {
+	return f.loginResult, f.loginErr
+}
+
+func (f *fakeExamService) GetStatus(ctx context.Context, p db.GetParticipantByTokenRow) (service.StatusResult, error) {
+	return f.statusResult, f.statusErr
+}
+
+func (f *fakeExamService) Heartbeat(ctx context.Context, participantID pgtype.UUID) error {
+	return nil
+}
+
+func (f *fakeExamService) RecordClientEvent(ctx context.Context, participantID pgtype.UUID, eventType string, data map[string]any) error {
+	return nil
+}
+
+func (f *fakeExamService) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, questionID pgtype.UUID, answer string) error {
+	return nil
+}
+
+func (f *fakeExamService) Submit(ctx context.Context, p db.GetParticipantByTokenRow) error {
+	return nil
+}
 
 func TestAbsolutizeExamAssetURLHonorsForwardedHeaders(t *testing.T) {
 	req := httptest.NewRequest("POST", "http://internal/api/exam/login", nil)
@@ -71,5 +108,96 @@ func TestAbsolutizeExamLoginResultRewritesAllMediaFields(t *testing.T) {
 	}
 	if question.StimulusAudioURL != "https://mobile-api.example.sch.id/api/cbt/assets/audio-2/file" {
 		t.Fatalf("StimulusAudioURL = %q", question.StimulusAudioURL)
+	}
+}
+
+func TestExamLoginWritesWrappedJSONWithAbsoluteMediaURLs(t *testing.T) {
+	h := &Exam{
+		svc: &fakeExamService{
+			loginResult: service.LoginResult{
+				ParticipantID: "participant-1",
+				Student:       service.StudentInfo{NIS: "12345", Nama: "Ahmad"},
+				Session:       service.SessionInfo{ID: "session-1", Title: "Ujian IPA"},
+				Questions: []service.ExamQuestion{
+					{
+						ID:               "q-1",
+						QuestionText:     "Soal 1",
+						StemMediaURL:     "/api/cbt/assets/image-1/file",
+						StimulusAudioURL: "/api/cbt/assets/audio-1/file",
+					},
+				},
+			},
+		},
+	}
+
+	body := bytes.NewBufferString(`{"token":"a1b2c3d4","device_fingerprint":"device-1"}`)
+	req := httptest.NewRequest("POST", "http://internal/api/exam/login", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Host", "cbt.mtsn2kolut.sch.id")
+	rec := httptest.NewRecorder()
+
+	h.Login(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Data service.LoginResult `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+
+	if payload.Data.Session.Title != "Ujian IPA" {
+		t.Fatalf("Session.Title = %q", payload.Data.Session.Title)
+	}
+	if len(payload.Data.Questions) != 1 {
+		t.Fatalf("len(Questions) = %d, want 1", len(payload.Data.Questions))
+	}
+	if payload.Data.Questions[0].StemMediaURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/image-1/file" {
+		t.Fatalf("StemMediaURL = %q", payload.Data.Questions[0].StemMediaURL)
+	}
+	if payload.Data.Questions[0].StimulusAudioURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/audio-1/file" {
+		t.Fatalf("StimulusAudioURL = %q", payload.Data.Questions[0].StimulusAudioURL)
+	}
+}
+
+func TestExamStatusWritesWrappedJSON(t *testing.T) {
+	h := &Exam{
+		svc: &fakeExamService{
+			statusResult: service.StatusResult{
+				AnsweredCount:        7,
+				TotalQuestions:       20,
+				TimeRemainingSeconds: 1800,
+				IsSubmitted:          true,
+				SubmittedAt:          "2026-05-01T08:30:00Z",
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "http://internal/api/exam/status", nil)
+	var participant db.GetParticipantByTokenRow
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.Status(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Data service.StatusResult `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if !payload.Data.IsSubmitted {
+		t.Fatal("IsSubmitted = false, want true")
+	}
+	if payload.Data.SubmittedAt != "2026-05-01T08:30:00Z" {
+		t.Fatalf("SubmittedAt = %q", payload.Data.SubmittedAt)
 	}
 }
