@@ -8,6 +8,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 
 	type ExamSession = {
 		id: string; package_id: string; package_title: string;
@@ -39,6 +40,9 @@
 	let fStart = $state('');
 	let fEnd = $state('');
 	let fBusy = $state(false);
+	let statusBusyId = $state('');
+	let deleteBusyId = $state('');
+	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 
 	// Enroll modal
 	let enrollSession = $state<ExamSession | null>(null);
@@ -127,6 +131,19 @@
 		else toast.error(msg);
 	}
 
+	function setOperationState(
+		tone: 'success' | 'error' | 'warning' | 'info',
+		title: string,
+		message: string,
+	) {
+		operationState = { tone, title, message };
+	}
+
+	function confirmPhrase(title: string, detail: string, challenge: string) {
+		const input = prompt(`${title}\n\n${detail}\n\nKetik ${challenge} untuk melanjutkan.`);
+		return input === challenge;
+	}
+
 	async function createSession() {
 		if (!fPackageId || !fTitle || !fStart || !fEnd) return;
 		if (fScopeType === 'class' && !fClassId) return;
@@ -161,31 +178,53 @@
 			fAllowCrossGrade = false; fIsSpecialEvent = false;
 			fTitle = ''; fStart = ''; fEnd = '';
 			showForm = false;
+			setOperationState('success', 'Sesi Tersimpan Sebagai Draft', 'Sesi baru sudah dibuat. Daftarkan peserta dan cek ruang sebelum menjadwalkan atau memulai sesi.');
 			showToast('Sesi ujian berhasil dibuat');
 			await load();
 		} finally { fBusy = false; }
 	}
 
 	async function deleteSession(id: string, title: string) {
-		if (!confirm(`Hapus sesi "${title}"? Hanya sesi berstatus Draft yang dapat dihapus.`)) return;
-		const res = await fetch(`/api/cbt/sessions?id=${id}`, { method: 'DELETE' });
-		if (!res.ok && res.status !== 204) {
-			showToast('Gagal menghapus — hanya sesi Draft yang dapat dihapus', false);
-		} else {
-			showToast('Sesi dihapus');
-			await load();
+		if (!confirmPhrase('Hapus Sesi Ujian', `Sesi "${title}" hanya boleh dihapus jika masih Draft. Penghapusan akan membuang konfigurasi sesi dari daftar operator.`, 'HAPUS')) return;
+		deleteBusyId = id;
+		try {
+			const res = await fetch(`/api/cbt/sessions?id=${id}`, { method: 'DELETE' });
+			if (!res.ok && res.status !== 204) {
+				setOperationState('error', 'Sesi Gagal Dihapus', 'Hanya sesi berstatus Draft yang dapat dihapus. Ubah alur kerja sesi atau periksa statusnya terlebih dahulu.');
+				showToast('Gagal menghapus — hanya sesi Draft yang dapat dihapus', false);
+			} else {
+				setOperationState('warning', 'Sesi Dihapus', `Sesi "${title}" sudah dihapus dari daftar sesi ujian.`);
+				showToast('Sesi dihapus');
+				await load();
+			}
+		} finally {
+			deleteBusyId = '';
 		}
 	}
 
 	async function updateStatus(id: string, status: string) {
-		const res = await fetch(`/api/cbt/sessions/${id}/status`, {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ status }),
-		});
-		if (!res.ok) { showToast('Gagal mengubah status', false); return; }
-		showToast('Status diperbarui');
-		await load();
+		const challenge = status === 'cancelled' ? 'BATALKAN' : status === 'finished' ? 'SELESAI' : '';
+		if (challenge && !confirmPhrase('Konfirmasi Perubahan Status', `Perubahan ini akan mengubah status sesi menjadi "${statusLabel[status] ?? status}" dan memengaruhi operasi ujian berikutnya.`, challenge)) {
+			return;
+		}
+		statusBusyId = id;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${id}/status`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ status }),
+			});
+			if (!res.ok) {
+				setOperationState('error', 'Status Gagal Diperbarui', 'Perubahan status tidak tersimpan. Coba ulang setelah memeriksa koneksi atau status sesi saat ini.');
+				showToast('Gagal mengubah status', false);
+				return;
+			}
+			setOperationState('success', 'Status Sesi Diperbarui', `Sesi sekarang berstatus "${statusLabel[status] ?? status}". Pastikan langkah operator berikutnya sudah sesuai.`);
+			showToast('Status diperbarui');
+			await load();
+		} finally {
+			statusBusyId = '';
+		}
 	}
 
 	async function enrollParticipants() {
@@ -206,6 +245,7 @@
 				body: JSON.stringify(payload),
 			});
 			if (!res.ok) { showToast('Gagal mendaftarkan siswa', false); return; }
+			setOperationState('success', 'Peserta Berhasil Didaftarkan', `Kelompok peserta untuk sesi "${enrollSession.title}" sudah masuk. Lanjutkan ke pengaturan ruangan jika diperlukan.`);
 			showToast(`Peserta berhasil didaftarkan ke sesi "${enrollSession.title}"`);
 			enrollSession = null;
 			enrollScopeType = 'class';
@@ -233,6 +273,10 @@
 
 	{#if error}
 		<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>
+	{/if}
+
+	{#if operationState}
+		<OperationStatusPanel {...operationState} />
 	{/if}
 
 	{#if showForm}
@@ -476,17 +520,17 @@
 											>
 												Daftarkan Siswa
 											</Button>
-											<Button size="xs" onclick={() => updateStatus(s.id, 'scheduled')}>
+											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">
 												Jadwalkan
-											</Button>
-											<Button size="xs" variant="destructive" onclick={() => deleteSession(s.id, s.title)}>
+											</LoadingButton>
+											<LoadingButton size="xs" variant="destructive" onclick={() => deleteSession(s.id, s.title)} loading={deleteBusyId === s.id} disabled={deleteBusyId !== '' && deleteBusyId !== s.id} loadingLabel="Menghapus...">
 												Hapus
-											</Button>
+											</LoadingButton>
 										{:else if s.status === 'scheduled'}
-											<Button size="xs" onclick={() => updateStatus(s.id, 'active')}>Mulai</Button>
-											<Button size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')}>Batalkan</Button>
+											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Mulai</LoadingButton>
+											<LoadingButton size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Batalkan</LoadingButton>
 										{:else if s.status === 'active'}
-											<Button size="xs" onclick={() => updateStatus(s.id, 'finished')}>Selesaikan</Button>
+											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
 										{/if}
 										{#if s.status === 'finished' || s.status === 'active'}
 											<a href="/cbt/sessions/{s.id}" class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-slate-700 transition-colors">
@@ -535,17 +579,13 @@
 									>
 										Daftarkan
 									</Button>
-									<Button size="sm" onclick={() => updateStatus(s.id, 'scheduled')}>
-										Jadwalkan
-									</Button>
-									<Button size="sm" variant="destructive" onclick={() => deleteSession(s.id, s.title)}>
-										Hapus
-									</Button>
+									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Jadwalkan</LoadingButton>
+									<LoadingButton size="sm" variant="destructive" onclick={() => deleteSession(s.id, s.title)} loading={deleteBusyId === s.id} disabled={deleteBusyId !== '' && deleteBusyId !== s.id} loadingLabel="Menghapus...">Hapus</LoadingButton>
 								{:else if s.status === 'scheduled'}
-									<Button size="sm" onclick={() => updateStatus(s.id, 'active')}>Mulai</Button>
-									<Button size="sm" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')}>Batalkan</Button>
+									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Mulai</LoadingButton>
+									<LoadingButton size="sm" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Batalkan</LoadingButton>
 								{:else if s.status === 'active'}
-									<Button size="sm" onclick={() => updateStatus(s.id, 'finished')}>Selesaikan</Button>
+									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
 								{/if}
 								{#if s.status === 'finished' || s.status === 'active'}
 									<a href="/cbt/sessions/{s.id}" class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-slate-700 transition-colors">

@@ -9,6 +9,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 
 	type SessionInfo = {
 		id: string; title: string; package_title: string; duration_minutes: number;
@@ -60,10 +61,17 @@
 	let newRoomCap = $state(30);
 	let roomBusy = $state(false);
 	let seatBusy = $state(false);
+	let tokenBusy = $state(false);
+	let regenBusyId = $state('');
+	let roomDeleteBusyId = $state('');
+	let seatSaveBusyId = $state('');
+	let gradeBusyId = $state('');
+	let flagBusyId = $state('');
 	let procInterval: ReturnType<typeof setInterval> | null = null;
 	let gradeInput = $state<Record<string, number>>({});
 	let seatInput = $state<Record<string, number>>({});
 	let roomInput = $state<Record<string, string>>({});
+	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 
 	const statusLabel: Record<string, string> = {
 		draft: 'Draft', scheduled: 'Terjadwal', active: 'Berlangsung',
@@ -120,6 +128,19 @@
 	function showToast(msg: string, ok = true) {
 		if (ok) toast.success(msg);
 		else toast.error(msg);
+	}
+
+	function setOperationState(
+		tone: 'success' | 'error' | 'warning' | 'info',
+		title: string,
+		message: string,
+	) {
+		operationState = { tone, title, message };
+	}
+
+	function confirmPhrase(title: string, detail: string, challenge: string) {
+		const input = prompt(`${title}\n\n${detail}\n\nKetik ${challenge} untuk melanjutkan.`);
+		return input === challenge;
 	}
 
 	async function load() {
@@ -180,26 +201,55 @@
 	}
 
 	async function triggerScoring() {
-		if (!confirm('Hitung ulang skor semua peserta?')) return;
+		if (!confirmPhrase('Hitung Ulang Skor', 'Sistem akan menghitung ulang skor seluruh peserta berdasarkan jawaban yang masuk. Gunakan setelah koreksi uraian atau sinkronisasi nilai.', 'NILAI ULANG')) return;
 		scoreBusy = true;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/score`, { method: 'POST' });
-			if (!res.ok) { showToast('Gagal menghitung skor', false); return; }
+			if (!res.ok) {
+				setOperationState('error', 'Skor Gagal Dihitung Ulang', 'Perhitungan ulang belum berhasil. Periksa data jawaban atau ulangi beberapa saat lagi.');
+				showToast('Gagal menghitung skor', false);
+				return;
+			}
+			setOperationState('success', 'Skor Diperbarui', 'Perhitungan nilai sesi sudah disegarkan. Tinjau kembali hasil akhir sebelum menutup sesi.');
 			showToast('Penilaian selesai — skor diperbarui');
 			await load();
 		} finally { scoreBusy = false; }
 	}
 
 	async function generateTokens() {
-		const res = await fetch(`/api/cbt/sessions/${sessionId}/generate-tokens`, { method: 'POST' });
-		if (res.ok) { showToast('Token berhasil digenerate'); await loadParticipants(); }
-		else showToast('Gagal generate token', false);
+		if (!confirmPhrase('Buat Token Massal', 'Token baru akan dibuat untuk seluruh peserta sesi ini. Gunakan hanya saat token awal belum dibagikan atau harus direset terkontrol.', 'TOKEN')) return;
+		tokenBusy = true;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/generate-tokens`, { method: 'POST' });
+			if (res.ok) {
+				setOperationState('success', 'Token Massal Berhasil Dibuat', 'Token peserta sudah diperbarui. Bagikan ulang token hanya ke pengawas atau peserta yang berwenang.');
+				showToast('Token berhasil digenerate');
+				await loadParticipants();
+			} else {
+				setOperationState('error', 'Token Gagal Dibuat', 'Pembuatan token massal belum berhasil. Ulangi setelah memeriksa daftar peserta sesi ini.');
+				showToast('Gagal generate token', false);
+			}
+		} finally {
+			tokenBusy = false;
+		}
 	}
 
 	async function regenerateToken(pid: string) {
-		const res = await fetch(`/api/cbt/sessions/${sessionId}/participants/${pid}/regenerate-token`, { method: 'POST' });
-		if (res.ok) { showToast('Token diperbarui'); await loadParticipants(); }
-		else showToast('Gagal regenerate token', false);
+		if (!confirm('Buat ulang token peserta ini? Token lama tidak sebaiknya dipakai lagi setelah tindakan ini.')) return;
+		regenBusyId = pid;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/participants/${pid}/regenerate-token`, { method: 'POST' });
+			if (res.ok) {
+				setOperationState('warning', 'Token Peserta Diperbarui', 'Token lama untuk peserta terkait sebaiknya tidak dipakai lagi. Pastikan pengawas membagikan token terbaru.');
+				showToast('Token diperbarui');
+				await loadParticipants();
+			} else {
+				setOperationState('error', 'Token Gagal Diperbarui', 'Pembuatan ulang token peserta belum berhasil. Coba ulang beberapa saat lagi.');
+				showToast('Gagal regenerate token', false);
+			}
+		} finally {
+			regenBusyId = '';
+		}
 	}
 
 	function copyToken(token: string) {
@@ -209,42 +259,71 @@
 	async function createRoom() {
 		if (!newRoomName.trim()) return;
 		roomBusy = true;
-		const res = await fetch(`/api/cbt/sessions/${sessionId}/rooms`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ room_name: newRoomName.trim(), capacity: newRoomCap }),
-		});
-		if (res.ok) {
-			showToast(`Ruangan "${newRoomName}" ditambahkan`);
-			newRoomName = ''; newRoomCap = 30;
-			await loadRooms();
-		} else showToast('Gagal tambah ruangan', false);
-		roomBusy = false;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/rooms`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ room_name: newRoomName.trim(), capacity: newRoomCap }),
+			});
+			if (res.ok) {
+				setOperationState('success', 'Ruangan Ditambahkan', `Ruangan "${newRoomName}" sudah tersimpan. Pastikan kapasitasnya sesuai sebelum peserta diacak.`);
+				showToast(`Ruangan "${newRoomName}" ditambahkan`);
+				newRoomName = ''; newRoomCap = 30;
+				await loadRooms();
+			} else {
+				setOperationState('error', 'Ruangan Gagal Ditambahkan', 'Ruangan baru belum berhasil disimpan. Periksa nama atau kapasitas lalu coba lagi.');
+				showToast('Gagal tambah ruangan', false);
+			}
+		} finally {
+			roomBusy = false;
+		}
 	}
 
-	async function deleteRoom(rid: string) {
-		if (!confirm('Hapus ruangan ini? Peserta di ruangan ini akan dilepas.')) return;
-		await fetch(`/api/cbt/sessions/${sessionId}/rooms/${rid}`, { method: 'DELETE' });
-		await loadRooms(); await loadParticipants();
+	async function deleteRoom(rid: string, roomName: string) {
+		if (!confirmPhrase('Hapus Ruangan Sesi', `Ruangan "${roomName}" akan dihapus dari sesi dan peserta di dalamnya akan dilepas dari alokasi ruangan.`, 'RUANGAN')) return;
+		roomDeleteBusyId = rid;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/rooms/${rid}`, { method: 'DELETE' });
+			if (!res.ok) {
+				setOperationState('error', 'Ruangan Gagal Dihapus', 'Ruangan belum berhasil dihapus. Pastikan sesi masih bisa diubah lalu coba lagi.');
+				return;
+			}
+			setOperationState('warning', 'Ruangan Dihapus', `Ruangan "${roomName}" dihapus dan peserta yang terkait perlu dialokasikan ulang.`);
+			await loadRooms(); await loadParticipants();
+		} finally {
+			roomDeleteBusyId = '';
+		}
 	}
 
 	async function shuffleRooms() {
-		if (!confirm('Acak peserta ke ruangan secara random? Assignment ruangan sebelumnya akan direset.')) return;
+		if (!confirmPhrase('Acak Peserta ke Ruangan', 'Sistem akan menghapus alokasi ruangan sebelumnya dan membagikan ulang peserta secara otomatis. Pastikan daftar ruangan dan kapasitas sudah final.', 'ACAK')) return;
 		shuffleBusy = true;
-		const res = await fetch(`/api/cbt/sessions/${sessionId}/shuffle-rooms`, { method: 'POST' });
-		if (res.ok) { showToast('Peserta berhasil diacak ke ruangan'); await loadRooms(); await loadParticipants(); }
-		else showToast('Gagal mengacak ruangan', false);
-		shuffleBusy = false;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/shuffle-rooms`, { method: 'POST' });
+			if (res.ok) {
+				setOperationState('warning', 'Alokasi Ruangan Diperbarui', 'Peserta sudah diacak ulang ke ruangan. Periksa kembali pembagian sebelum ujian dimulai.');
+				showToast('Peserta berhasil diacak ke ruangan');
+				await loadRooms(); await loadParticipants();
+			} else {
+				setOperationState('error', 'Pengacakan Ruangan Gagal', 'Sistem belum berhasil mengacak peserta ke ruangan. Cek kapasitas ruangan atau ulangi lagi.');
+				showToast('Gagal mengacak ruangan', false);
+			}
+		} finally {
+			shuffleBusy = false;
+		}
 	}
 
 	async function autoAssignSeats() {
+		if (!confirmPhrase('Atur Nomor Meja Otomatis', 'Nomor meja peserta akan diurutkan ulang per ruangan. Gunakan setelah alokasi ruangan sudah final.', 'MEJA')) return;
 		seatBusy = true;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/seats/auto`, { method: 'POST' });
 			if (res.ok) {
+				setOperationState('success', 'Nomor Meja Diatur Otomatis', 'Nomor meja peserta sudah diperbarui. Lanjutkan ke pengecekan akhir per ruangan jika diperlukan.');
 				showToast('Nomor meja berhasil diurutkan otomatis');
 				await loadParticipants();
 			} else {
+				setOperationState('error', 'Nomor Meja Gagal Diatur', 'Pengaturan otomatis belum berhasil. Pastikan peserta sudah punya ruangan lalu coba lagi.');
 				showToast('Gagal mengatur nomor meja otomatis', false);
 			}
 		} finally {
@@ -259,7 +338,7 @@
 			showToast('Pilih ruangan dan isi nomor meja yang valid', false);
 			return;
 		}
-		seatBusy = true;
+		seatSaveBusyId = pid;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/participants/${pid}/seat`, {
 				method: 'POST',
@@ -267,23 +346,41 @@
 				body: JSON.stringify({ room_id: roomId, seat_no: seatNo }),
 			});
 			if (res.ok) {
+				setOperationState('success', 'Nomor Meja Peserta Disimpan', 'Ruangan dan nomor meja peserta sudah diperbarui sesuai pengaturan operator.');
 				showToast('No meja peserta diperbarui');
 				await loadParticipants();
 			} else {
+				setOperationState('error', 'Nomor Meja Gagal Disimpan', 'Perubahan ruangan atau nomor meja belum berhasil. Periksa input dan ulangi lagi.');
 				showToast('Gagal menyimpan nomor meja', false);
 			}
 		} finally {
-			seatBusy = false;
+			seatSaveBusyId = '';
 		}
 	}
 
 	async function flagParticipant(pid: string, flag: boolean) {
-		await fetch(`/api/cbt/sessions/${sessionId}/participants/${pid}/flag`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ flag }),
-		});
-		await loadProctoring();
+		flagBusyId = pid;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/participants/${pid}/flag`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ flag }),
+			});
+			if (!res.ok) {
+				setOperationState('error', 'Tanda Peserta Gagal Diperbarui', 'Perubahan tanda proctoring belum berhasil. Coba ulang beberapa saat lagi.');
+				return;
+			}
+			setOperationState(
+				flag ? 'warning' : 'success',
+				flag ? 'Peserta Diberi Tanda' : 'Tanda Peserta Dihapus',
+				flag
+					? 'Peserta ditandai untuk perhatian pengawas. Tinjau kembali aktivitas proctoring sebelum mengambil langkah lanjutan.'
+					: 'Tanda kecurigaan pada peserta sudah dibersihkan dari daftar proctoring.',
+			);
+			await loadProctoring();
+		} finally {
+			flagBusyId = '';
+		}
 	}
 
 	async function submitGrade(aid: string) {
@@ -292,16 +389,23 @@
 			showToast('Nilai harus 0-100', false);
 			return;
 		}
-		const res = await fetch(`/api/cbt/sessions/${sessionId}/answers/${aid}/grade-essay`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ manual_score: score }),
-		});
-		if (res.ok) {
-			showToast('Nilai berhasil disimpan');
-			await loadEssays();
-		} else {
-			showToast('Gagal menyimpan nilai', false);
+		gradeBusyId = aid;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/answers/${aid}/grade-essay`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ manual_score: score }),
+			});
+			if (res.ok) {
+				setOperationState('success', 'Nilai Uraian Tersimpan', 'Koreksi uraian sudah masuk ke sistem. Lanjutkan ke jawaban uraian berikutnya bila masih ada.');
+				showToast('Nilai berhasil disimpan');
+				await loadEssays();
+			} else {
+				setOperationState('error', 'Nilai Uraian Gagal Disimpan', 'Koreksi belum berhasil tersimpan. Ulangi setelah memastikan skor sudah valid.');
+				showToast('Gagal menyimpan nilai', false);
+			}
+		} finally {
+			gradeBusyId = '';
 		}
 	}
 
@@ -339,6 +443,10 @@
 	</div>
 
 	{#if error}<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>{/if}
+
+	{#if operationState}
+		<OperationStatusPanel {...operationState} />
+	{/if}
 
 	{#if loading}
 		<div class="space-y-4">
@@ -493,9 +601,15 @@
 		<!-- Tab: Peserta & Token -->
 		{:else if activeTab === 'peserta'}
 			<div class="flex gap-2 flex-wrap">
-				<Button variant="outline" size="sm" onclick={generateTokens}>⚡ Buat Token Massal</Button>
+				<LoadingButton variant="outline" size="sm" onclick={generateTokens} loading={tokenBusy} disabled={tokenBusy} loadingLabel="Membuat token...">⚡ Buat Token Massal</LoadingButton>
 				<Button variant="outline" size="sm" onclick={loadParticipants}>↻ Refresh</Button>
 			</div>
+			<OperationStatusPanel
+				tone="warning"
+				compact
+				title="Aksi Sensitif Peserta"
+				message="Pembuatan token massal, ubah token, dan simpan nomor meja akan langsung mengubah data operasional ujian. Pastikan pengawas sudah siap menerima perubahan terbaru."
+			/>
 			<Card.Root>
 				<Card.Content class="p-0 overflow-x-auto">
 					<Table.Root>
@@ -547,11 +661,11 @@
 													{/each}
 												</select>
 												<Input bind:value={seatInput[p.id]} type="number" min="1" class="h-8 w-16" />
-												<Button variant="outline" size="sm" onclick={() => assignSeat(p.id)} disabled={seatBusy}>Simpan</Button>
+												<LoadingButton variant="outline" size="sm" onclick={() => assignSeat(p.id)} loading={seatSaveBusyId === p.id} disabled={(seatSaveBusyId !== '' && seatSaveBusyId !== p.id) || seatBusy} loadingLabel="Menyimpan...">Simpan</LoadingButton>
 												{#if p.token}
 													<Button variant="outline" size="sm" onclick={() => copyToken(p.token)}>Salin</Button>
 												{/if}
-											<Button variant="outline" size="sm" onclick={() => regenerateToken(p.id)}>Buat Ulang</Button>
+											<LoadingButton variant="outline" size="sm" onclick={() => regenerateToken(p.id)} loading={regenBusyId === p.id} disabled={regenBusyId !== '' && regenBusyId !== p.id} loadingLabel="Membuat ulang...">Buat Ulang</LoadingButton>
 										</div>
 									</Table.Cell>
 								</Table.Row>
@@ -596,6 +710,12 @@
 					</div>
 				</Card.Content>
 			</Card.Root>
+			<OperationStatusPanel
+				tone="warning"
+				compact
+				title="Aksi Sensitif Ruangan"
+				message="Pengacakan ruangan dan pengaturan nomor meja otomatis akan menimpa penempatan sebelumnya. Gunakan hanya setelah kapasitas dan daftar ruangan sudah final."
+			/>
 
 			{#if rooms.length > 0}
 				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
@@ -614,9 +734,12 @@
 											</div>
 										</div>
 									</div>
-									<Button variant="outline" size="sm"
+									<LoadingButton variant="outline" size="sm"
 										class="border-red-200 text-red-600 hover:bg-red-50 ml-3"
-										onclick={() => deleteRoom(room.id)}>Hapus</Button>
+										onclick={() => deleteRoom(room.id, room.room_name)}
+										loading={roomDeleteBusyId === room.id}
+										disabled={roomDeleteBusyId !== '' && roomDeleteBusyId !== room.id}
+										loadingLabel="Menghapus...">Hapus</LoadingButton>
 								</div>
 							</Card.Content>
 						</Card.Root>
@@ -722,7 +845,8 @@
 											<Button
 												variant="outline" size="sm"
 												class={p.suspicious_flag ? 'border-red-400 text-red-700 bg-red-50' : 'border-slate-200 text-slate-500'}
-												onclick={() => flagParticipant(p.participant_id, !p.suspicious_flag)}>
+												onclick={() => flagParticipant(p.participant_id, !p.suspicious_flag)}
+												disabled={flagBusyId === p.participant_id}>
 											{p.suspicious_flag ? '⚑ Hapus Tanda' : '⚐ Tandai'}
 										</Button>
 									</Table.Cell>
@@ -769,7 +893,7 @@
 										<Input type="number" min="0" max="100" bind:value={gradeInput[e.id]} placeholder="0-100" class="w-24 h-8" />
 									</Table.Cell>
 									<Table.Cell>
-										<Button size="sm" onclick={() => submitGrade(e.id)}>Simpan</Button>
+										<LoadingButton size="sm" onclick={() => submitGrade(e.id)} loading={gradeBusyId === e.id} disabled={gradeBusyId !== '' && gradeBusyId !== e.id} loadingLabel="Menyimpan...">Simpan</LoadingButton>
 									</Table.Cell>
 								</Table.Row>
 							{:else}

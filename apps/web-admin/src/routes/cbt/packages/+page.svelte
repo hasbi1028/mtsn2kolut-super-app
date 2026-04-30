@@ -9,6 +9,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 
 	type CbtPackage = {
 		id: string; subject_id: string; subject_name: string; subject_code: string;
@@ -37,6 +38,8 @@
 	let fActive = $state(true);
 	let fSelectedIds = new SvelteSet<string>();
 	let fBusy = $state(false);
+	let deleteBusyId = $state('');
+	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 
 	let questionPool = $derived(
 		fSubjectId
@@ -79,6 +82,19 @@
 		toast.error(msg);
 	}
 
+	function setOperationState(
+		tone: 'success' | 'error' | 'warning' | 'info',
+		title: string,
+		message: string,
+	) {
+		operationState = { tone, title, message };
+	}
+
+	function confirmPhrase(title: string, detail: string, challenge: string) {
+		const input = prompt(`${title}\n\n${detail}\n\nKetik ${challenge} untuk melanjutkan.`);
+		return input === challenge;
+	}
+
 	async function createPackage() {
 		if (!fSubjectId || !fTitle || !fDuration) return;
 		fBusy = true;
@@ -96,16 +112,28 @@
 			fSubjectId = ''; fTitle = ''; fDescription = ''; fDuration = 60;
 			fRandomize = false; fActive = true; fSelectedIds.clear();
 			showForm = false;
+			setOperationState('success', 'Paket Berhasil Dibuat', 'Paket ujian baru sudah tersimpan dan siap dipakai untuk sesi ujian.');
 			showToast('Paket ujian berhasil dibuat');
 			await load();
 		} finally { fBusy = false; }
 	}
 
 	async function deletePackage(id: string, title: string) {
-		if (!confirm(`Hapus paket "${title}"?`)) return;
-		await fetch(`/api/cbt/packages?id=${id}`, { method: 'DELETE' });
-		showToast('Paket dihapus');
-		await load();
+		if (!confirmPhrase('Hapus Paket Ujian', `Paket "${title}" akan dihapus dari daftar. Tindakan ini tidak bisa dibatalkan dari layar operator.`, 'HAPUS')) return;
+		deleteBusyId = id;
+		try {
+			const res = await fetch(`/api/cbt/packages?id=${id}`, { method: 'DELETE' });
+			if (!res.ok) {
+				setOperationState('error', 'Paket Gagal Dihapus', 'Periksa kembali apakah paket masih dipakai oleh sesi aktif atau coba ulang beberapa saat lagi.');
+				showError('Gagal menghapus paket');
+				return;
+			}
+			setOperationState('warning', 'Paket Dihapus', `Paket "${title}" sudah dihapus dari daftar paket ujian.`);
+			showToast('Paket dihapus');
+			await load();
+		} finally {
+			deleteBusyId = '';
+		}
 	}
 
 	onMount(load);
@@ -126,6 +154,10 @@
 
 	{#if error}
 		<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>
+	{/if}
+
+	{#if operationState}
+		<OperationStatusPanel {...operationState} />
 	{/if}
 
 	{#if showForm}
@@ -273,7 +305,16 @@
 									{/if}
 								</Table.Cell>
 								<Table.Cell>
-									<LoadingButton variant="destructive" size="xs" onclick={() => deletePackage(p.id, p.title)}>Hapus</LoadingButton>
+									<LoadingButton
+										variant="destructive"
+										size="xs"
+										onclick={() => deletePackage(p.id, p.title)}
+										loading={deleteBusyId === p.id}
+										disabled={deleteBusyId !== '' && deleteBusyId !== p.id}
+										loadingLabel="Menghapus..."
+									>
+										Hapus
+									</LoadingButton>
 								</Table.Cell>
 							</Table.Row>
 						{:else}
@@ -310,7 +351,17 @@
 								<p class="mt-3 text-sm text-slate-600">{p.description}</p>
 							{/if}
 							<div class="mt-4">
-								<LoadingButton variant="destructive" size="sm" class="w-full" onclick={() => deletePackage(p.id, p.title)}>Hapus</LoadingButton>
+								<LoadingButton
+									variant="destructive"
+									size="sm"
+									class="w-full"
+									onclick={() => deletePackage(p.id, p.title)}
+									loading={deleteBusyId === p.id}
+									disabled={deleteBusyId !== '' && deleteBusyId !== p.id}
+									loadingLabel="Menghapus..."
+								>
+									Hapus
+								</LoadingButton>
 							</div>
 						</div>
 					{:else}
