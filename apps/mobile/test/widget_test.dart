@@ -50,6 +50,31 @@ void main() {
     );
   });
 
+  testWidgets('login screen renders cached restore snapshot card', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamLoginScreen(
+          autoRestore: false,
+          previewSnapshot: _sampleSnapshot(
+            lastServerContactIso: '2026-05-01T08:44:00+08:00',
+            lastSyncFailureIso: '2026-05-01T08:46:00+08:00',
+            consecutiveSyncFailures: 3,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Sesi terakhir terdeteksi'), findsOneWidget);
+    expect(find.textContaining('Matematika Kelas VIII'), findsOneWidget);
+    expect(find.text('Perlu perhatian koneksi'), findsOneWidget);
+    expect(find.textContaining('Kontak server 08:44'), findsOneWidget);
+    expect(find.textContaining('Gangguan 08:46'), findsOneWidget);
+  });
+
   testWidgets('restore failed screen renders persistent guidance notice', (
     tester,
   ) async {
@@ -227,6 +252,31 @@ void main() {
     await tester.pump();
 
     expect(find.text('Audio soal sudah diputar'), findsOneWidget);
+  });
+
+  testWidgets('exam shell renders media card when question has media url', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleMediaLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Media soal'), findsOneWidget);
   });
 
   testWidgets('exam shell renders stale supervisor attention panel', (
@@ -492,6 +542,42 @@ ExamLoginPayload _sampleAudioLoginPayload() {
         stemMediaUrl: '',
         stimulusMediaUrl: '',
         stemAudioUrl: 'https://cdn.example.com/audio/question-1.mp3',
+        stimulusAudioUrl: '',
+        options: [
+          ExamOption(label: 'A', text: 'Pilihan A'),
+          ExamOption(label: 'B', text: 'Pilihan B'),
+          ExamOption(label: 'C', text: 'Pilihan C'),
+          ExamOption(label: 'D', text: 'Pilihan D'),
+        ],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _sampleMediaLoginPayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-media-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'IPA Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-media-1',
+        questionText: 'Perhatikan gambar berikut.',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: 'https://cdn.example.com/images/question-1.png',
+        stimulusMediaUrl: '',
+        stemAudioUrl: '',
         stimulusAudioUrl: '',
         options: [
           ExamOption(label: 'A', text: 'Pilihan A'),

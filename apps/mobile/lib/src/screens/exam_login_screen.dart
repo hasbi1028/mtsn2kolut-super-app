@@ -15,11 +15,13 @@ class ExamLoginScreen extends StatefulWidget {
     this.autoRestore = true,
     this.initialErrorMessage,
     this.initialErrorNotice,
+    this.previewSnapshot,
   });
 
   final bool autoRestore;
   final String? initialErrorMessage;
   final ExamGuidanceNotice? initialErrorNotice;
+  final ExamSessionSnapshot? previewSnapshot;
 
   @override
   State<ExamLoginScreen> createState() => _ExamLoginScreenState();
@@ -367,6 +369,14 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
             const SizedBox(height: 20),
             if (_isRestoring)
               _buildRestoreHintCard(theme)
+            else if (widget.previewSnapshot != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: _buildRestoreHintCard(
+                  theme,
+                  cached: widget.previewSnapshot,
+                ),
+              )
             else
               FutureBuilder<ExamSessionSnapshot?>(
                 future: _sessionStore.loadSnapshot(),
