@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../exam_api.dart';
+import '../exam_error_messages.dart';
 import '../exam_format.dart';
 import '../exam_session_store.dart';
 import 'exam_shell_screen.dart';
@@ -98,7 +99,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
         MaterialPageRoute<void>(
           builder: (_) => ExamRestoreFailedScreen(
             snapshot: snapshot,
-            message: _restoreFailureMessage(error),
+            message: restoreFailureMessage(error),
           ),
         ),
       );
@@ -195,7 +196,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
       );
     } on ExamApiException catch (error) {
       setState(() {
-        _errorMessage = _loginFailureMessage(error);
+        _errorMessage = loginFailureMessage(error);
       });
     } catch (_) {
       setState(() {
@@ -213,32 +214,6 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
   String _deviceFingerprint() {
     final host = Platform.localHostname;
     return '${Platform.operatingSystem}:$host';
-  }
-
-  String _loginFailureMessage(ExamApiException error) {
-    switch (error.statusCode) {
-      case 404:
-        return 'Token ujian tidak ditemukan. Periksa kembali token dari pengawas atau kartu ujian.';
-      case 403:
-        return 'Sesi ujian belum aktif atau sudah berakhir. Hubungi pengawas untuk memastikan jadwal sesi.';
-      case 409:
-        return 'Token ini sudah terhubung dengan perangkat lain. Gunakan perangkat yang sama atau minta bantuan pengawas.';
-      default:
-        return error.message;
-    }
-  }
-
-  String _restoreFailureMessage(ExamApiException error) {
-    switch (error.statusCode) {
-      case 404:
-        return 'Token sesi lama sudah tidak ditemukan lagi di server. Login ulang dengan token aktif dari pengawas jika sesi masih berlangsung.';
-      case 403:
-        return 'Sesi lama tidak bisa dipulihkan karena ujian belum aktif lagi atau sudah ditutup. Periksa status sesi dengan pengawas.';
-      case 409:
-        return 'Sesi lama terikat ke perangkat lain. Gunakan perangkat yang sama seperti sebelumnya atau minta bantuan pengawas.';
-      default:
-        return 'Sesi lama tidak bisa dipulihkan. ${error.message}';
-    }
   }
 
   @override

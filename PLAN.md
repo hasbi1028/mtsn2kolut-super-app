@@ -144,6 +144,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Handler-level exam error-semantics tests for mobile-critical `404/403/409/401` cases
 - [x] Handler-level `answer` / `submit` error-semantics tests for `409` submitted and `403` exam-window-closed cases
 - [x] Flutter exam UX now maps backend `404/403/409` semantics into clearer login/restore/save/submit guidance for BYOD sessions
+- [x] Flutter exam guidance mappings extracted into testable helpers with dedicated unit coverage
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck
