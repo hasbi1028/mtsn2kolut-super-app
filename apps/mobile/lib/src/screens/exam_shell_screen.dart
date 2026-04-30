@@ -20,6 +20,8 @@ class ExamShellScreen extends StatefulWidget {
     required this.initialPayload,
     required this.deviceFingerprint,
     this.restoredSnapshot,
+    this.autoStartRuntime = true,
+    this.initialServerNotice,
   });
 
   final ExamApiClient client;
@@ -27,6 +29,8 @@ class ExamShellScreen extends StatefulWidget {
   final ExamLoginPayload initialPayload;
   final String deviceFingerprint;
   final ExamSessionSnapshot? restoredSnapshot;
+  final bool autoStartRuntime;
+  final ExamGuidanceNotice? initialServerNotice;
 
   @override
   State<ExamShellScreen> createState() => _ExamShellScreenState();
@@ -83,15 +87,18 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     _answeredCount = widget.initialPayload.answeredCount;
     _timeRemainingSeconds = widget.initialPayload.timeRemainingSeconds;
     _currentQuestionIndex = widget.restoredSnapshot?.currentQuestionIndex ?? 0;
+    _serverNotice = widget.initialServerNotice;
     for (var i = 0; i < widget.initialPayload.questions.length; i++) {
       final question = widget.initialPayload.questions[i];
       if (question.isEssay) {
         _essayControllers[i].text = _answers[question.id] ?? '';
       }
     }
-    _startCountdown();
-    _startHeartbeat();
-    _syncStatus();
+    if (widget.autoStartRuntime) {
+      _startCountdown();
+      _startHeartbeat();
+      _syncStatus();
+    }
     unawaited(_persistSnapshot());
   }
 

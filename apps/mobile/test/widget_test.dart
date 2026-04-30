@@ -3,9 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mobile/src/app.dart';
 import 'package:mobile/src/exam_error_messages.dart';
+import 'package:mobile/src/exam_api.dart';
+import 'package:mobile/src/models.dart';
 import 'package:mobile/src/exam_session_store.dart';
 import 'package:mobile/src/screens/exam_login_screen.dart';
 import 'package:mobile/src/screens/exam_restore_failed_screen.dart';
+import 'package:mobile/src/screens/exam_shell_screen.dart';
 
 void main() {
   testWidgets('login screen renders exam shell entry', (tester) async {
@@ -101,6 +104,76 @@ void main() {
     );
     expect(find.text('Matematika Kelas VIII'), findsOneWidget);
   });
+
+  testWidgets('exam shell renders warning guidance notice', (tester) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialServerNotice: const ExamGuidanceNotice(
+            title: 'Waktu ujian sudah berakhir',
+            message:
+                'Jawaban lokal masih aman di perangkat ini, tetapi pengawas perlu memastikan apakah sesi masih bisa dipulihkan atau harus diakhiri.',
+            tone: ExamGuidanceTone.warning,
+          ),
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Waktu ujian sudah berakhir'), findsOneWidget);
+    expect(
+      find.text(
+        'Jawaban lokal masih aman di perangkat ini, tetapi pengawas perlu memastikan apakah sesi masih bisa dipulihkan atau harus diakhiri.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('exam shell renders danger guidance notice', (tester) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialServerNotice: const ExamGuidanceNotice(
+            title: 'Ujian sudah selesai di server',
+            message:
+                'Perangkat ini tidak dapat mengirim jawaban baru lagi. Pengawas sebaiknya mengecek apakah submit sebelumnya sudah final.',
+            tone: ExamGuidanceTone.danger,
+          ),
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ujian sudah selesai di server'), findsOneWidget);
+    expect(
+      find.text(
+        'Perangkat ini tidak dapat mengirim jawaban baru lagi. Pengawas sebaiknya mengecek apakah submit sebelumnya sudah final.',
+      ),
+      findsOneWidget,
+    );
+  });
 }
 
 class _TestApp extends StatelessWidget {
@@ -112,4 +185,40 @@ class _TestApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(home: child);
   }
+}
+
+ExamLoginPayload _sampleLoginPayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'Matematika Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-1',
+        questionText: '2 + 2 = ...',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: '',
+        stimulusMediaUrl: '',
+        stemAudioUrl: '',
+        stimulusAudioUrl: '',
+        options: [
+          ExamOption(label: 'A', text: '3'),
+          ExamOption(label: 'B', text: '4'),
+          ExamOption(label: 'C', text: '5'),
+          ExamOption(label: 'D', text: '6'),
+        ],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
 }
