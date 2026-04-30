@@ -124,6 +124,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Web admin gradebook page foundation (`/grades`)
 - [x] Auth hardening baseline — explicit suspended/weak-password errors, backend password policy, non-destructive `SeedAdmin`
 - [x] BFF auth forwarding baseline — authenticated proxy helpers now require bearer JWT instead of silently falling back to internal key
+- [x] Refresh session baseline — session-backed refresh tokens with backend revoke on logout and rotation on refresh
 - [ ] Rapor PDF generation
 
 ### CBT Question Authoring UX

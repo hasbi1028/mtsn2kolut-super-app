@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
@@ -16,16 +17,18 @@ import (
 )
 
 type fakeStore struct {
-	settings map[string]string
-	users    map[string]db.User
-	userRoles map[pgtype.UUID][]db.UserRole
+	settings     map[string]string
+	users        map[string]db.User
+	userRoles    map[pgtype.UUID][]db.UserRole
+	authSessions map[pgtype.UUID]db.AuthSession
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		settings:  map[string]string{},
-		users:     map[string]db.User{},
-		userRoles: map[pgtype.UUID][]db.UserRole{},
+		settings:     map[string]string{},
+		users:        map[string]db.User{},
+		userRoles:    map[pgtype.UUID][]db.UserRole{},
+		authSessions: map[pgtype.UUID]db.AuthSession{},
 	}
 }
 
@@ -104,6 +107,37 @@ func (f *fakeStore) GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.
 
 func (f *fakeStore) AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error {
 	f.userRoles[arg.UserID] = append(f.userRoles[arg.UserID], arg.Role)
+	return nil
+}
+
+func (f *fakeStore) CreateAuthSession(ctx context.Context, arg db.CreateAuthSessionParams) (db.AuthSession, error) {
+	session := db.AuthSession{
+		ID:               arg.ID,
+		UserID:           arg.UserID,
+		RefreshTokenHash: arg.RefreshTokenHash,
+		ExpiresAt:        arg.ExpiresAt,
+	}
+	f.authSessions[arg.ID] = session
+	return session, nil
+}
+
+func (f *fakeStore) GetAuthSession(ctx context.Context, id pgtype.UUID) (db.AuthSession, error) {
+	session, ok := f.authSessions[id]
+	if !ok {
+		return db.AuthSession{}, pgx.ErrNoRows
+	}
+	return session, nil
+}
+
+func (f *fakeStore) RevokeAuthSession(ctx context.Context, id pgtype.UUID) error {
+	session, ok := f.authSessions[id]
+	if !ok {
+		return pgx.ErrNoRows
+	}
+	now := pgtype.Timestamptz{}
+	_ = now.Scan(time.Now())
+	session.RevokedAt = now
+	f.authSessions[id] = session
 	return nil
 }
 
@@ -238,5 +272,44 @@ func TestAuthSeedAdminDoesNotOverwriteExistingPassword(t *testing.T) {
 	admin := store.users["admin"]
 	if err := bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte("old-admin-password")); err != nil {
 		t.Fatalf("admin password was unexpectedly changed: %v", err)
+	}
+}
+
+func TestAuthLogoutRevokesRefreshSession(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
+
+	if err := svc.SeedAdmin(context.Background()); err != nil {
+		t.Fatalf("SeedAdmin() error = %v", err)
+	}
+
+	pair, err := svc.Login(context.Background(), "admin", "admin")
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+
+	claims := jwt.MapClaims{}
+	if _, _, err := new(jwt.Parser).ParseUnverified(pair.RefreshToken, claims); err != nil {
+		t.Fatalf("ParseUnverified(refresh) error = %v", err)
+	}
+	rawSID, _ := claims["sid"].(string)
+	var sid pgtype.UUID
+	if err := sid.Scan(rawSID); err != nil {
+		t.Fatalf("sid Scan() error = %v", err)
+	}
+
+	if err := svc.Logout(context.Background(), pair.RefreshToken); err != nil {
+		t.Fatalf("Logout() error = %v", err)
+	}
+
+	session, err := store.GetAuthSession(context.Background(), sid)
+	if err != nil {
+		t.Fatalf("GetAuthSession() error = %v", err)
+	}
+	if !session.RevokedAt.Valid {
+		t.Fatal("session was not revoked")
+	}
+	if _, err := svc.Refresh(context.Background(), pair.RefreshToken); err == nil {
+		t.Fatal("Refresh() succeeded after logout revoke")
 	}
 }

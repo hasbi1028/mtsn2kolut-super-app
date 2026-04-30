@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,6 +37,9 @@ type authStore interface {
 	ListSettings(ctx context.Context) ([]db.AppSetting, error)
 	GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error)
 	AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error
+	CreateAuthSession(ctx context.Context, arg db.CreateAuthSessionParams) (db.AuthSession, error)
+	GetAuthSession(ctx context.Context, id pgtype.UUID) (db.AuthSession, error)
+	RevokeAuthSession(ctx context.Context, id pgtype.UUID) error
 }
 
 type Auth struct {
@@ -67,18 +73,16 @@ func (s *Auth) Login(ctx context.Context, username, password string) (domain.Tok
 }
 
 func (s *Auth) Refresh(ctx context.Context, refreshToken string) (domain.TokenPair, error) {
-	claims := jwt.MapClaims{}
-	_, err := jwt.ParseWithClaims(refreshToken, claims, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, jwt.ErrSignatureInvalid
-		}
-		return s.jwtSecret, nil
-	})
+	claims, err := s.parseTokenClaims(refreshToken)
 	if err != nil {
 		return domain.TokenPair{}, domain.ErrUnauthorized
 	}
 	if tokenType, _ := claims["type"].(string); tokenType != "refresh" {
 		return domain.TokenPair{}, domain.ErrUnauthorized
+	}
+	session, err := s.validateRefreshSession(ctx, refreshToken, claims)
+	if err != nil {
+		return domain.TokenPair{}, err
 	}
 	username, ok := claims["sub"].(string)
 	if !ok || username == "" {
@@ -97,7 +101,35 @@ func (s *Auth) Refresh(ctx context.Context, refreshToken string) (domain.TokenPa
 	if !s.validAuthVersion(ctx, claims) {
 		return domain.TokenPair{}, domain.ErrUnauthorized
 	}
+
+	if err := s.q.RevokeAuthSession(ctx, session.ID); err != nil {
+		return domain.TokenPair{}, err
+	}
 	return s.issueTokenPair(ctx, user)
+}
+
+func (s *Auth) Logout(ctx context.Context, refreshToken string) error {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return nil
+	}
+
+	claims, err := s.parseTokenClaims(refreshToken)
+	if err != nil {
+		return nil
+	}
+	if tokenType, _ := claims["type"].(string); tokenType != "refresh" {
+		return nil
+	}
+
+	session, err := s.validateRefreshSession(ctx, refreshToken, claims)
+	if err != nil {
+		if errors.Is(err, domain.ErrUnauthorized) {
+			return nil
+		}
+		return err
+	}
+	return s.q.RevokeAuthSession(ctx, session.ID)
 }
 
 func (s *Auth) ChangePassword(ctx context.Context, username, oldPassword, newPassword string) error {
@@ -135,6 +167,10 @@ func (s *Auth) ChangePassword(ctx context.Context, username, oldPassword, newPas
 func (s *Auth) issueTokenPair(ctx context.Context, user db.GetUserByUsernameRow) (domain.TokenPair, error) {
 	now := time.Now()
 	version, err := s.CurrentAuthVersion(ctx)
+	if err != nil {
+		return domain.TokenPair{}, err
+	}
+	sessionID, err := randomUUID()
 	if err != nil {
 		return domain.TokenPair{}, err
 	}
@@ -188,6 +224,7 @@ func (s *Auth) issueTokenPair(ctx context.Context, user db.GetUserByUsernameRow)
 
 	refresh := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub":  user.Username,
+		"sid":  pgUUIDString(sessionID),
 		"type": "refresh",
 		"ver":  version,
 		"iat":  now.Unix(),
@@ -195,6 +232,19 @@ func (s *Auth) issueTokenPair(ctx context.Context, user db.GetUserByUsernameRow)
 	})
 	refreshSigned, err := refresh.SignedString(s.jwtSecret)
 	if err != nil {
+		return domain.TokenPair{}, err
+	}
+
+	expiresAt := pgtype.Timestamptz{}
+	if err := expiresAt.Scan(now.Add(refreshTokenTTL)); err != nil {
+		return domain.TokenPair{}, err
+	}
+	if _, err := s.q.CreateAuthSession(ctx, db.CreateAuthSessionParams{
+		ID:               sessionID,
+		UserID:           user.ID,
+		RefreshTokenHash: hashToken(refreshSigned),
+		ExpiresAt:        expiresAt,
+	}); err != nil {
 		return domain.TokenPair{}, err
 	}
 
@@ -317,4 +367,72 @@ func validatePassword(username, password string) error {
 	}
 
 	return nil
+}
+
+func (s *Auth) parseTokenClaims(token string) (jwt.MapClaims, error) {
+	claims := jwt.MapClaims{}
+	_, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return s.jwtSecret, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return claims, nil
+}
+
+func (s *Auth) validateRefreshSession(ctx context.Context, refreshToken string, claims jwt.MapClaims) (db.AuthSession, error) {
+	rawSID, _ := claims["sid"].(string)
+	if strings.TrimSpace(rawSID) == "" {
+		return db.AuthSession{}, domain.ErrUnauthorized
+	}
+	var sessionID pgtype.UUID
+	if err := sessionID.Scan(rawSID); err != nil {
+		return db.AuthSession{}, domain.ErrUnauthorized
+	}
+
+	session, err := s.q.GetAuthSession(ctx, sessionID)
+	if err != nil {
+		return db.AuthSession{}, domain.ErrUnauthorized
+	}
+	if session.RevokedAt.Valid {
+		return db.AuthSession{}, domain.ErrUnauthorized
+	}
+	if !session.ExpiresAt.Valid || session.ExpiresAt.Time.Before(time.Now()) {
+		return db.AuthSession{}, domain.ErrUnauthorized
+	}
+	if session.RefreshTokenHash != hashToken(refreshToken) {
+		return db.AuthSession{}, domain.ErrUnauthorized
+	}
+	return session, nil
+}
+
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func randomUUID() (pgtype.UUID, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return pgtype.UUID{}, err
+	}
+	buf[6] = (buf[6] & 0x0f) | 0x40
+	buf[8] = (buf[8] & 0x3f) | 0x80
+
+	hexValue := hex.EncodeToString(buf)
+	uuidValue := fmt.Sprintf("%s-%s-%s-%s-%s",
+		hexValue[0:8],
+		hexValue[8:12],
+		hexValue[12:16],
+		hexValue[16:20],
+		hexValue[20:32],
+	)
+	var id pgtype.UUID
+	if err := id.Scan(uuidValue); err != nil {
+		return pgtype.UUID{}, err
+	}
+	return id, nil
 }

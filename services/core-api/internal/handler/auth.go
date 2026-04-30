@@ -65,6 +65,18 @@ func (h *Auth) Refresh(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, pair)
 }
 
+func (h *Auth) Logout(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := h.svc.Logout(r.Context(), body.RefreshToken); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]string{"message": "logged out"})
+}
+
 func (h *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username    string `json:"username"`

@@ -613,6 +613,16 @@ type AuditLog struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
+type AuthSession struct {
+	ID               pgtype.UUID        `json:"id"`
+	UserID           pgtype.UUID        `json:"user_id"`
+	RefreshTokenHash string             `json:"refresh_token_hash"`
+	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt        pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CbtExamEvent struct {
 	ID             pgtype.UUID        `json:"id"`
 	Title          string             `json:"title"`

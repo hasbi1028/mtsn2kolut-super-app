@@ -111,6 +111,7 @@ func main() {
 
 	r.Post("/api/auth/login", authH.Login)
 	r.Post("/api/auth/refresh", authH.Refresh)
+	r.Post("/api/auth/logout", authH.Logout)
 	r.Post("/api/public/register-student", studentH.PublicRegister)
 	r.Get("/api/public/site/posts", websiteH.ListPublishedPosts)
 	r.Get("/api/public/site/posts/{slug}", websiteH.GetPublishedPost)
