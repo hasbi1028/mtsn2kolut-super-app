@@ -8,6 +8,8 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	type Parent = {
 		id: string;
@@ -27,6 +29,7 @@
 	let parents = $state<Parent[]>([]);
 	let students = $state<Student[]>([]);
 	let loading = $state(true);
+	let error = $state('');
 	let showForm = $state(false);
 	let showLinkDialog = $state(false);
 	let selectedParent = $state<Parent | null>(null);
@@ -40,6 +43,7 @@
 
 	async function load() {
 		try {
+			error = '';
 			const [pRes, sRes] = await Promise.all([
 				fetch('/api/parents'),
 				fetch('/api/students')
@@ -47,7 +51,7 @@
 			parents = await pRes.json();
 			students = await sRes.json();
 		} catch {
-			toast.error('Gagal memuat data');
+			error = 'Gagal memuat data orang tua dan daftar siswa. Coba lagi untuk melanjutkan pengelolaan relasi keluarga.';
 		} finally {
 			loading = false;
 		}
@@ -124,7 +128,7 @@
 <svelte:head><title>Manajemen Orang Tua — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6 p-6">
-	<div class="flex items-center justify-between">
+	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<h1 class="text-2xl font-semibold text-slate-800">Manajemen Orang Tua</h1>
 			<p class="text-sm text-slate-500 mt-1">Kelola data wali murid dan relasi dengan siswa</p>
@@ -133,6 +137,28 @@
 			{showForm ? 'Batal' : '+ Tambah Orang Tua'}
 		</Button>
 	</div>
+
+	<div class="grid gap-3 md:grid-cols-3">
+		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Data Orang Tua</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{parents.length}</p>
+			<p class="text-sm text-slate-600">profil wali murid yang sudah tercatat</p>
+		</div>
+		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Siswa Tersedia</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{students.length}</p>
+			<p class="text-sm text-slate-600">daftar siswa yang bisa ditautkan ke akun orang tua</p>
+		</div>
+		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Relasi Keluarga</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{children.length}</p>
+			<p class="text-sm text-slate-600">anak yang sedang tampil pada panel relasi aktif</p>
+		</div>
+	</div>
+
+	{#if error}
+		<RecoveryPanel title="Relasi Orang Tua Belum Tersaji" message={error} onRetry={load} />
+	{/if}
 
 	{#if showForm}
 		<Card.Root>
@@ -199,8 +225,12 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={4} class="py-6 text-center text-sm text-slate-400">
-									Belum ada data orang tua.
+								<Table.Cell colspan={4} class="p-4">
+									<EmptyStatePanel
+										compact
+										title="Belum ada data orang tua"
+										description="Tambahkan wali murid pertama agar relasi keluarga, portal orang tua, dan komunikasi sekolah bisa mulai dibangun."
+									/>
 								</Table.Cell>
 							</Table.Row>
 						{/each}
@@ -254,8 +284,12 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={3} class="text-center py-4 text-slate-400 text-sm italic">
-									Belum ada siswa yang ditautkan
+								<Table.Cell colspan={3} class="p-4">
+									<EmptyStatePanel
+										compact
+										title="Belum ada siswa yang ditautkan"
+										description="Pilih siswa dari dropdown di atas untuk mulai membangun relasi orang tua dan anak."
+									/>
 								</Table.Cell>
 							</Table.Row>
 						{/each}

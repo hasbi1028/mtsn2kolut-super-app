@@ -8,6 +8,8 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	type User = {
 		id: string; username: string; roles: string[];
@@ -136,7 +138,7 @@
 <svelte:head><title>Manajemen Pengguna — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6 p-6">
-	<div class="flex items-center justify-between">
+	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<h1 class="text-2xl font-semibold text-slate-800">Manajemen Pengguna</h1>
 			<p class="text-sm text-slate-500 mt-1">Kelola akun akses sistem dengan RBAC terpadu</p>
@@ -145,6 +147,33 @@
 			{showForm ? 'Batal' : '+ Tambah Pengguna'}
 		</Button>
 	</div>
+
+	<div class="grid gap-3 md:grid-cols-4">
+		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Akun</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{users.length}</p>
+			<p class="text-sm text-slate-600">akun yang sudah dapat masuk ke sistem</p>
+		</div>
+		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Akun Aktif</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{users.filter((item) => item.is_active).length}</p>
+			<p class="text-sm text-slate-600">akun yang saat ini tidak disuspend</p>
+		</div>
+		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Multi-Role</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{users.filter((item) => (item.roles ?? []).length > 1).length}</p>
+			<p class="text-sm text-slate-600">akun yang memegang lebih dari satu role</p>
+		</div>
+		<div class="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">Terhubung Profil</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{users.filter((item) => item.profile_nama).length}</p>
+			<p class="text-sm text-slate-600">akun yang sudah terkait dengan entitas sekolah</p>
+		</div>
+	</div>
+
+	{#if error}
+		<RecoveryPanel title="Data Pengguna Belum Tersaji" message={error} onRetry={load} />
+	{/if}
 
 	{#if showForm}
 		<Card.Root>
@@ -286,8 +315,12 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={6} class="py-6 text-center text-sm text-slate-400">
-									Belum ada data pengguna.
+								<Table.Cell colspan={6} class="p-4">
+									<EmptyStatePanel
+										compact
+										title="Belum ada data pengguna"
+										description="Tambahkan akun pertama untuk mulai menghubungkan pegawai, siswa, atau orang tua ke akses sistem."
+									/>
 								</Table.Cell>
 							</Table.Row>
 						{/each}
@@ -324,9 +357,10 @@
 							</div>
 						</div>
 					{:else}
-						<div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">
-							Belum ada data pengguna.
-						</div>
+						<EmptyStatePanel
+							title="Belum ada data pengguna"
+							description="Tambahkan akun pertama agar role sekolah dan akses portal bisa mulai dikelola dari panel ini."
+						/>
 					{/each}
 				</div>
 			{/if}
