@@ -77,15 +77,28 @@ async function migrate() {
       try {
         await client.query(
           `INSERT INTO employees
-             (id, nip, nama, unit_kerja, pusaka_username, pusaka_password,
-              is_active, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+             (id, nip, nama, unit_kerja, is_active, created_at, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)
            ON CONFLICT (id) DO NOTHING`,
           [newId, e.nip, e.nama, e.unit_kerja,
-           e.pusaka_username, e.pusaka_password,
            e.is_active === 1,
            toDate(e.created_at), toDate(e.updated_at)]
         );
+        if (e.pusaka_username || e.pusaka_password) {
+          await client.query(
+            `INSERT INTO pusaka_accounts
+               (employee_id, pusaka_username, pusaka_password, is_enabled, created_at, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6)
+             ON CONFLICT (employee_id) DO UPDATE
+               SET pusaka_username = EXCLUDED.pusaka_username,
+                   pusaka_password = EXCLUDED.pusaka_password,
+                   is_enabled      = EXCLUDED.is_enabled,
+                   updated_at      = EXCLUDED.updated_at`,
+            [newId, e.pusaka_username ?? '', e.pusaka_password ?? '',
+             e.is_active === 1,
+             toDate(e.created_at), toDate(e.updated_at)]
+          );
+        }
         empOk++;
       } catch (err) {
         console.warn(`  skip employee ${e.nip}: ${err.message}`);

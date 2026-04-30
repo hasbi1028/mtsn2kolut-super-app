@@ -14,11 +14,11 @@ import (
 
 type Health struct {
 	pool *pgxpool.Pool
-	jobs *service.Job
+	jobs *service.PusakaJob
 	sett *service.Setting
 }
 
-func NewHealth(pool *pgxpool.Pool, jobs *service.Job, sett *service.Setting) *Health {
+func NewHealth(pool *pgxpool.Pool, jobs *service.PusakaJob, sett *service.Setting) *Health {
 	return &Health{pool: pool, jobs: jobs, sett: sett}
 }
 
