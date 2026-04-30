@@ -12,6 +12,7 @@
 	import EditorWrapper from '$lib/components/EditorWrapper.svelte';
 	import LatexBlock from '$lib/components/LatexBlock.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 
 	type Subject = { id: string; name: string; code: string };
 	type OptionItem = { label: string; text?: string; html?: string; latex?: string; asset_id?: string };
@@ -528,6 +529,10 @@
 		await load(1);
 	}
 
+	function clearQuestionFilters() {
+		void resetFilters();
+	}
+
 	async function goToPage(p: number) {
 		if (p < 1 || p > pageCount || p === currentPage) return;
 		await load(p);
@@ -553,6 +558,29 @@
 			</p>
 		</div>
 		<Button onclick={openCreate}>{showForm ? 'Tutup Form' : '+ Tambah Item'}</Button>
+	</div>
+
+	<div class="grid gap-3 md:grid-cols-4">
+		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Item</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{totalItems}</p>
+			<p class="text-sm text-slate-600">soal terarsip, draft, atau published dalam bank soal</p>
+		</div>
+		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Perlu Review</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{questions.filter((item) => item.workflow_status === 'review').length}</p>
+			<p class="text-sm text-slate-600">item pada halaman aktif yang menunggu approval</p>
+		</div>
+		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Mode Beginner</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{questions.filter((item) => detectMode(item) === 'beginner').length}</p>
+			<p class="text-sm text-slate-600">item cepat yang masih bisa disempurnakan di advance</p>
+		</div>
+		<div class="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">Published</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{questions.filter((item) => item.status === 'published').length}</p>
+			<p class="text-sm text-slate-600">item siap dipakai dari halaman hasil filter saat ini</p>
+		</div>
 	</div>
 
 	{#if error}
@@ -1274,7 +1302,24 @@
 						{/each}
 						{#if questions.length === 0}
 							<Table.Row>
-								<Table.Cell colspan={7} class="py-10 text-center text-sm text-slate-500">Belum ada item yang cocok dengan filter.</Table.Cell>
+								<Table.Cell colspan={7} class="p-4">
+									<EmptyStatePanel
+										compact
+										eyebrow={search || filterSubject || filterWorkflow || filterType || filterHots ? 'Filter Tidak Menemukan Hasil' : 'Mulai Bank Soal'}
+										title={search || filterSubject || filterWorkflow || filterType || filterHots ? 'Belum ada item yang cocok' : 'Bank soal masih kosong'}
+										description={search || filterSubject || filterWorkflow || filterType || filterHots
+											? 'Ubah kombinasi filter atau reset pencarian untuk melihat item lain yang sudah tersedia.'
+											: 'Tambahkan item pertama lewat mode beginner untuk input cepat, lalu lengkapi di advance bila dibutuhkan.'}
+									>
+										{#snippet children()}
+											{#if search || filterSubject || filterWorkflow || filterType || filterHots}
+												<Button variant="outline" size="sm" onclick={clearQuestionFilters}>Reset filter</Button>
+											{:else}
+												<Button size="sm" onclick={openCreate}>Tambah item pertama</Button>
+											{/if}
+										{/snippet}
+									</EmptyStatePanel>
+								</Table.Cell>
 							</Table.Row>
 						{/if}
 					</Table.Body>

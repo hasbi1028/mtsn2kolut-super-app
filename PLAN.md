@@ -133,6 +133,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Session rename baseline — users can update their own `device_label` from the settings screen
 - [x] Access-session validation baseline — access JWTs now require a still-active referenced auth session (`ssid`) in addition to per-user auth-version checks
 - [x] Loading UX baseline — global route progress, reusable skeleton primitive, and reusable loading button applied across primary admin screens, key PUSAKA pages, parents/users management, library flows, website editorial, PPDB public form, CBT session operations, print views, question composer, and employee/PUSAKA operational components
+- [x] Empty-state UX baseline — academic, students, gradebook, and question-bank screens now use more guided empty states with clearer next-step cues instead of plain “data kosong” table fallbacks
 - [x] Rapor print view — printable HTML layout at `/grades/rapor` using existing `/api/grades` endpoint, color-coded scores, school header, signature area, sidebar entry
 
 ### CBT Question Authoring UX

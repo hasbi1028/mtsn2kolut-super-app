@@ -8,6 +8,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 
 	type Student = {
 		id: string; nis: string; nisn: string; nama: string; gender: string;
@@ -178,6 +179,24 @@
 		</Button>
 	</div>
 
+	<div class="grid gap-3 md:grid-cols-3">
+		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Siswa</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{students.length}</p>
+			<p class="text-sm text-slate-600">seluruh entitas siswa yang sudah tersimpan</p>
+		</div>
+		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Siswa Aktif</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{students.filter((item) => item.status === 'active').length}</p>
+			<p class="text-sm text-slate-600">siap dipakai untuk kelas, nilai, dan CBT</p>
+		</div>
+		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Relasi Ortu</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{students.filter((item) => item.linked_parent_count > 0).length}</p>
+			<p class="text-sm text-slate-600">siswa yang sudah terhubung ke akun orang tua</p>
+		</div>
+	</div>
+
 	{#if error}
 		<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>
 	{/if}
@@ -334,8 +353,23 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={8} class="text-center text-slate-400 py-8">
-									{search ? 'Tidak ada hasil pencarian' : 'Belum ada data siswa'}
+								<Table.Cell colspan={8} class="p-4">
+									<EmptyStatePanel
+										compact
+										eyebrow={search ? 'Filter Tidak Menemukan Hasil' : 'Mulai Data Pokok'}
+										title={search ? 'Tidak ada siswa yang cocok' : 'Belum ada data siswa'}
+										description={search
+											? 'Coba ganti kata kunci pencarian, atau kosongkan filter untuk melihat seluruh daftar siswa.'
+											: 'Tambahkan siswa pertama agar modul kelas, orang tua, nilai, dan CBT bisa mulai terhubung.'}
+									>
+										{#snippet children()}
+											{#if search}
+												<Button variant="outline" size="sm" onclick={() => (search = '')}>Reset pencarian</Button>
+											{:else}
+												<Button size="sm" onclick={() => (showForm = true)}>Tambah siswa pertama</Button>
+											{/if}
+										{/snippet}
+									</EmptyStatePanel>
 								</Table.Cell>
 							</Table.Row>
 						{/each}
@@ -375,9 +409,21 @@
 							</div>
 						</div>
 					{:else}
-						<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-							{search ? 'Tidak ada hasil pencarian' : 'Belum ada data siswa'}
-						</div>
+						<EmptyStatePanel
+							eyebrow={search ? 'Filter Tidak Menemukan Hasil' : 'Mulai Data Pokok'}
+							title={search ? 'Tidak ada siswa yang cocok' : 'Belum ada data siswa'}
+							description={search
+								? 'Ubah kata kunci pencarian atau reset filter untuk melihat kembali seluruh daftar siswa.'
+								: 'Tambahkan siswa pertama dari form di atas agar data akademik dan portal orang tua bisa mulai berjalan.'}
+						>
+							{#snippet children()}
+								{#if search}
+									<Button variant="outline" size="sm" onclick={() => (search = '')}>Reset pencarian</Button>
+								{:else}
+									<Button size="sm" onclick={() => (showForm = true)}>Tambah siswa pertama</Button>
+								{/if}
+							{/snippet}
+						</EmptyStatePanel>
 					{/each}
 				</div>
 			</Card.Content>

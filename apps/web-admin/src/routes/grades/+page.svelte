@@ -8,6 +8,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 
 	type Assignment = {
 		id: string;
@@ -98,6 +99,13 @@
 
 	function finalScoreLabel(value: number) {
 		return value < 0 ? '—' : value.toFixed(2);
+	}
+
+	async function quickSelectFirstAssignment() {
+		if (assignments.length === 0) return;
+		assignmentId = assignments[0]?.id ?? '';
+		componentId = '';
+		await loadOverview();
 	}
 
 	async function loadOverview() {
@@ -372,11 +380,18 @@
 												<Button variant="destructive" size="xs" onclick={() => deleteComponent(item.id)}>Hapus</Button>
 											</Table.Cell>
 										</Table.Row>
-									{:else}
-										<Table.Row>
-											<Table.Cell colspan={5} class="py-8 text-center text-slate-400">Belum ada komponen penilaian</Table.Cell>
-										</Table.Row>
-									{/each}
+										{:else}
+											<Table.Row>
+												<Table.Cell colspan={5} class="p-4">
+													<EmptyStatePanel
+														compact
+														eyebrow="Bangun Struktur Nilai"
+														title="Belum ada komponen penilaian"
+														description="Tambahkan komponen seperti tugas, kuis, UTS, atau praktik agar guru bisa mulai mengisi capaian siswa."
+													/>
+												</Table.Cell>
+											</Table.Row>
+										{/each}
 								</Table.Body>
 							</Table.Root>
 						</div>
@@ -408,11 +423,18 @@
 											<Table.Cell>{row.filled_count}/{row.component_count}</Table.Cell>
 											<Table.Cell class="font-semibold text-slate-900">{finalScoreLabel(row.final_score)}</Table.Cell>
 										</Table.Row>
-									{:else}
-										<Table.Row>
-											<Table.Cell colspan={3} class="py-8 text-center text-slate-400">Belum ada siswa pada gradebook ini</Table.Cell>
-										</Table.Row>
-									{/each}
+										{:else}
+											<Table.Row>
+												<Table.Cell colspan={3} class="p-4">
+													<EmptyStatePanel
+														compact
+														eyebrow="Belum Ada Peserta"
+														title="Gradebook ini belum memiliki siswa"
+														description="Periksa penugasan kelas-mapel dan pastikan kelas terkait sudah berisi siswa aktif."
+													/>
+												</Table.Cell>
+											</Table.Row>
+										{/each}
 								</Table.Body>
 							</Table.Root>
 						</div>
@@ -445,7 +467,14 @@
 							<Table.Body>
 								{#if !selectedComponent}
 									<Table.Row>
-										<Table.Cell colspan={4} class="py-10 text-center text-slate-400">Pilih komponen untuk membuka lembar input nilai</Table.Cell>
+										<Table.Cell colspan={4} class="p-4">
+											<EmptyStatePanel
+												compact
+												eyebrow="Siapkan Komponen"
+												title="Pilih komponen penilaian"
+												description="Pilih salah satu komponen di panel kiri agar lembar input nilai siswa terbuka."
+											/>
+										</Table.Cell>
 									</Table.Row>
 								{:else}
 									{#each entries as row (row.student_id)}
@@ -472,7 +501,14 @@
 										</Table.Row>
 									{:else}
 										<Table.Row>
-											<Table.Cell colspan={4} class="py-10 text-center text-slate-400">Belum ada siswa aktif di kelas ini</Table.Cell>
+											<Table.Cell colspan={4} class="p-4">
+												<EmptyStatePanel
+													compact
+													eyebrow="Kelas Masih Kosong"
+													title="Belum ada siswa aktif di kelas ini"
+													description="Tambahkan atau aktifkan siswa pada kelas terkait supaya lembar input nilai bisa digunakan."
+												/>
+											</Table.Cell>
 										</Table.Row>
 									{/each}
 								{/if}
@@ -484,8 +520,17 @@
 		{:else}
 			<Card.Root class="border-dashed border-slate-300 bg-white">
 				<Card.Content class="py-10 text-center">
-					<p class="text-lg font-medium text-slate-900">Pilih penugasan kelas-mapel untuk membuka gradebook.</p>
-					<p class="mt-2 text-sm text-slate-500">Slice pertama Sprint 11 fokus pada fondasi komponen nilai dan input capaian siswa sebelum rapor final dibentuk.</p>
+					<EmptyStatePanel
+						eyebrow="Buka Gradebook"
+						title="Pilih penugasan kelas-mapel untuk membuka gradebook"
+						description="Setelah konteks kelas dan mapel dipilih, komponen nilai, rekap sementara, dan lembar input siswa akan muncul dalam satu alur kerja."
+					>
+						{#snippet children()}
+							{#if assignments.length > 0}
+								<Button size="sm" onclick={quickSelectFirstAssignment}>Pilih penugasan pertama</Button>
+							{/if}
+						{/snippet}
+					</EmptyStatePanel>
 				</Card.Content>
 			</Card.Root>
 		{/if}

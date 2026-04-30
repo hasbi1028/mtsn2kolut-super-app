@@ -9,6 +9,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 
 	type AcademicYear = {
 		id: string; name: string; start_date: string; end_date: string;
@@ -161,6 +162,24 @@
 		<p class="text-sm text-slate-500 mt-1">Kelola tahun ajaran, kelas, dan mata pelajaran</p>
 	</div>
 
+	<div class="grid gap-3 md:grid-cols-3">
+		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Tahun Ajaran</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{years.length}</p>
+			<p class="text-sm text-slate-600">periode akademik yang sudah tersusun</p>
+		</div>
+		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Kelas</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{classes.length}</p>
+			<p class="text-sm text-slate-600">rombel aktif yang siap dipakai modul lain</p>
+		</div>
+		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Mata Pelajaran</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{subjects.length}</p>
+			<p class="text-sm text-slate-600">mapel inti untuk jadwal, nilai, dan CBT</p>
+		</div>
+	</div>
+
 	{#if error}
 		<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>
 	{/if}
@@ -237,7 +256,14 @@
 											</Table.Row>
 										{:else}
 											<Table.Row>
-												<Table.Cell colspan={5} class="text-center text-slate-400 py-8">Belum ada tahun ajaran</Table.Cell>
+												<Table.Cell colspan={5} class="p-4">
+													<EmptyStatePanel
+														compact
+														eyebrow="Mulai Dari Fondasi"
+														title="Belum ada tahun ajaran"
+														description="Tambahkan periode akademik terlebih dahulu agar kelas dan modul turunan bisa dihubungkan dengan rapi."
+													/>
+												</Table.Cell>
 											</Table.Row>
 										{/each}
 									</Table.Body>
@@ -310,7 +336,14 @@
 											</Table.Row>
 										{:else}
 											<Table.Row>
-												<Table.Cell colspan={6} class="text-center text-slate-400 py-8">Belum ada kelas</Table.Cell>
+												<Table.Cell colspan={6} class="p-4">
+													<EmptyStatePanel
+														compact
+														eyebrow="Struktur Akademik"
+														title="Belum ada kelas"
+														description="Setelah tahun ajaran dibuat, tambahkan kelas atau rombel agar siswa, jadwal, dan nilai punya wadah yang jelas."
+													/>
+												</Table.Cell>
 											</Table.Row>
 										{/each}
 									</Table.Body>
@@ -382,7 +415,14 @@
 											</Table.Row>
 										{:else}
 											<Table.Row>
-												<Table.Cell colspan={4} class="text-center text-slate-400 py-8">Belum ada mata pelajaran</Table.Cell>
+												<Table.Cell colspan={4} class="p-4">
+													<EmptyStatePanel
+														compact
+														eyebrow="Kurikulum"
+														title="Belum ada mata pelajaran"
+														description="Buat daftar mapel inti lebih dulu supaya assignment guru, gradebook, dan bank soal bisa memakai referensi yang sama."
+													/>
+												</Table.Cell>
 											</Table.Row>
 										{/each}
 									</Table.Body>
