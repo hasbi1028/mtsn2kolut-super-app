@@ -50,8 +50,15 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Auth:** JWT access + refresh tokens stored as httpOnly cookies. Session handled via SvelteKit hooks.
 - **Always run `npm run check` (a11y + types) before finalizing Svelte changes.**
 - **CBT UI direction:** educational, institutional, and operator-friendly for MTsN 2 Kolaka Utara. Avoid generic SaaS dashboards for exam operations and printable artifacts.
+- **Public site direction:** educational, institutional, and trustworthy for MTsN 2 Kolaka Utara. Public routes must feel like a real school website, not a reused admin dashboard shell.
 - **Question bank experimentation:** `/cbt/questions` is the experiment hub for multiple frontend authoring routes. Variants may differ in UX, but they must keep the same backend contract, validation rules, beginner/advance semantics, workflow semantics, and storage model.
 - **Question bank authoring uses two UX modes:** `beginner` for quick teacher input with minimal required fields, and `advance` for full blueprint/workflow authoring. Both modes must write to the same backend model and API contract.
+- **`/cbt/soal` is the Komposer Soal route** — a dedicated question composer with template quick-start, real-time readiness scoring, quality signals, split preview with KaTeX rendering, RTL toggle for Arabic questions, and localStorage draft autosave. It proxies all data through the existing Go API BFF; no direct DB access, no new backend routes.
+- **`/library/*` is the library module** — accessible to `admin` and `staf` roles only. Member data reuses existing `students` and `employees` tables; no separate member table. All forms use beginner/advance mode toggles consistent with the CBT question bank UX pattern.
+- **Custom local Dialog component** — `Dialog.Root` accepts only `open: $bindable(bool)` and `children`. `Dialog.Content` and `Dialog.Description` do not accept a `class` prop. Use `bind:open={boolState}` with separate bool state variables; no `onOpenChange` callback.
+- **Public shell boundary:** unauthenticated public pages (`/`, `/profil`, `/berita`, `/pengumuman`, `/ppdb`, `/kontak`) must render in the public website shell, while authenticated admin/guru pages continue to use the admin shell.
+- **Website editorial admin:** public content management lives under `/website/*` and proxies only to Go API content routes. Do not introduce a separate CMS runtime or client-side persistence.
+- **Error handling:** keep a global SvelteKit `+error.svelte` experience for public and admin routes. New pages should rely on centralized error UX before adding page-local fallback banners.
 
 ## Worker Architecture Rules
 
@@ -113,6 +120,22 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Adaptive mix policy rule** — `class -> same_class`, `grade -> same_grade`, `school/custom -> mixed_scope`.
 - **Seat plan support** — participants can store `seat_no`; sessions support auto/manual seat assignment by room.
 - **Print operations** — event exam cards and session minutes/berita acara are printable HTML routes, not PDF generators.
+
+### ✅ Sprint 15 — Library System (Done)
+- **Library schema** — `library_books` and `library_loans` tables (migration 027). No separate member table; loans reference existing `students` and `employees` via FK.
+- **Loan rules** — max 3 active loans per member enforced at service layer; `tersedia` decremented/incremented atomically around loan/return.
+- **Denda calculation** — computed at return time in Go service (`ceil(overdue_hours/24) × denda_per_hari`), stored in `denda_total`. `denda_lunas` tracks cash settlement separately.
+- **RBAC** — `/library/*` and `/api/library/*` accessible to `admin` and `staf` roles only.
+- **Beginner/advance mode** — both book catalog form and loan form have mode toggles consistent with CBT question bank UX pattern.
+- **Frontend** — Dashboard `/library`, Katalog `/library/books`, Peminjaman `/library/loans`. Sidebar "Perpustakaan" group visible to `admin` + `staf`.
+
+### ✅ Sprint 16 — Public Website Foundation (Done)
+- **Public website shell** — unauthenticated routes for `/`, `/profil`, `/berita`, `/pengumuman`, `/ppdb`, and `/kontak` use a dedicated public shell while authenticated users keep the admin dashboard experience on `/`.
+- **Website content domain** — `website_contents` table with `page`, `post`, and `announcement` content kinds, plus published/draft lifecycle, slugging, and backend HTML sanitization.
+- **Public endpoints** — canonical read-only routes under `/api/public/site/*` for posts, announcements, and pages.
+- **Editorial admin** — admin-only management screens under `/website`, `/website/posts`, `/website/announcements`, and `/website/pages`.
+- **Homepage aggregation** — public homepage highlights PPDB, school profile, latest posts, and recent announcements.
+- **Global error UX** — centralized SvelteKit `+error.svelte` for 403/404/500 style failures across public and admin shells.
 
 ### 📋 Planned Future Phases
 1. **Academic Foundation & RBAC Expansion** — Unified `users` table with many-to-many roles (`admin`, `teacher`, `student`, `staff`, `parent`). Student lifecycle (`active`, `alumni`, `prospective`) and Parent-child linking.

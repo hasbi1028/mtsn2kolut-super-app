@@ -1,6 +1,6 @@
 # MTs Negeri 2 Kolaka Utara — Super App Strategic Plan
 
-> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Last Updated: 2026-04-29
+> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Last Updated: 2026-04-30
 > This file is the master roadmap. Update after each sprint completion.
 
 ---
@@ -133,10 +133,50 @@ Three runtime units deployed across 3 VPS:
 - [x] Six-route frontend experiment for `/cbt/questions` (`studio`, `wizard`, `grid`, `document`, `review`, `package-fit`) with one shared backend contract
 - [x] Local browser-based teacher evaluation notes per variant for manual UX comparison
 
+### ✅ Sprint 6B — Komposer Soal `/cbt/soal` (COMPLETE)
+- [x] New route `/cbt/soal` — dedicated question composer with richer authoring UX
+- [x] 9 pre-built question templates by mata pelajaran (Standar, Stimulus, Matematika, Cerita Hitung, Grafik, Arab Mufradat, Arab Qiraah, Dalil, Sains Analisis)
+- [x] Readiness score — real-time 0–100% progress bar (8 checks: subject, stem, options A-D, answerKey, weight)
+- [x] Quality signals — 4 UX heuristics (stem length, distraktor variety, option balance, media support)
+- [x] Split preview Dialog — large modal with form left + live KaTeX-rendered preview right
+- [x] RTL toggle — Arabic/Quran question preview mode (`dir="rtl"`)
+- [x] Draft autosave — localStorage, 700ms debounce, auto-restore on open
+- [x] KaTeX two-pass renderer utility (`src/lib/utils/render-rich-math.ts`)
+- [x] All data via existing Go API BFF (no new backend routes, no SQLite/Drizzle)
+- [x] Sidebar "Komposer Soal" entry under CBT group with pen-tool icon
+
 ### Sprint 12 — Schedule & Timetable
 ### Sprint 13 — Inventory & Asset Management
 ### Sprint 14 — Fee & Payment Management
-### Sprint 15 — Library System
+### ✅ Sprint 15 — Library System (COMPLETE)
+- [x] Migration 027 — `library_books`, `library_loans` tables with FK to existing `students` and `employees`
+- [x] sqlc queries — ListBooks, GetBook, CreateBook, UpdateBook, DeleteBook, Decrement/IncrementTersedia, ListLoans, GetLoan, CreateLoan, UpdateLoanReturn, MarkLoanDendaLunas, CountActiveLoansForMember, GetLibraryStats
+- [x] Go service — `LoanBook` (availability + max 3 loan check), `ReturnBook` (denda calculation), `MarkDendaLunas`, `GetStats`
+- [x] Go handler — Stats, ListBooks, CreateBook, UpdateBook, DeleteBook, ListLoans, LoanBook, ReturnBook, MarkDendaLunas (admin + staf RBAC)
+- [x] Router registration in `cmd/api/main.go` (`/api/library/*` routes)
+- [x] BFF proxy routes — stats, books, books/[id], loans, loans/[id]/return, loans/[id]/lunas
+- [x] Dashboard `/library` — 6 stat cards, active loans table, overdue loans table
+- [x] Katalog Buku `/library/books` — search, kategori filter, table, beginner/advance form dialog, delete confirm
+- [x] Peminjaman `/library/loans` — tab filter, autocomplete member/book search, beginner/advance loan dialog, return confirm with denda estimate, lunas confirm
+- [x] Beginner/advance mode on all forms (consistent with CBT question bank UX)
+- [x] Sidebar "Perpustakaan" group (Dashboard, Katalog Buku, Peminjaman) — admin + staf only
+- [x] `npm run check` — 0 errors, 0 warnings
+
+### ✅ Sprint 16 — Public Website Foundation (COMPLETE)
+- [x] Backend website content domain via migration 028 (`website_contents` for `page`, `post`, `announcement`)
+- [x] sqlc queries and Go service/handler for admin CRUD and public published reads
+- [x] Public routes `/`, `/profil`, `/berita`, `/berita/[slug]`, `/pengumuman`, `/pengumuman/[slug]`, `/ppdb`, `/kontak`
+- [x] Dedicated public shell for unauthenticated visitors while keeping admin dashboard behavior on `/` for logged-in users
+- [x] Editorial admin screens under `/website`, `/website/posts`, `/website/announcements`, `/website/pages`
+- [x] Public homepage aggregation for profile, PPDB information, latest posts, and recent announcements
+- [x] Global SvelteKit `+error.svelte` for shared 403/404/500-style error handling across public and admin pages
+- [x] `go test ./...` and `npm run check` green after integration
+
+### Next Recommendation — Sprint 16B Public Website Polish
+- [ ] Add cover-image upload/reuse instead of URL-only cover input for website content
+- [ ] Add publish scheduling and featured content flags for homepage curation
+- [ ] Add richer public SEO metadata per page/post/announcement
+- [ ] Add dedicated custom pages for `500` maintenance-style incidents if operational need appears
 
 ---
 

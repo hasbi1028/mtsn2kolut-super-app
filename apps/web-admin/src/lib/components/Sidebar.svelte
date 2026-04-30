@@ -35,6 +35,7 @@
 			items: [
 				{ href: '/cbt/events',    label: 'Kegiatan Ujian', icon: 'calendar',  roles: ['admin'] },
 				{ href: '/cbt/questions', label: 'Bank Soal',      icon: 'file-text' },
+				{ href: '/cbt/soal',      label: 'Komposer Soal',  icon: 'pen-tool'  },
 				{ href: '/cbt/packages',  label: 'Paket Ujian',    icon: 'package'   },
 				{ href: '/cbt/sessions',  label: 'Sesi Ujian',     icon: 'play'      },
 			],
@@ -43,6 +44,23 @@
 			group: 'Operasional',
 			items: [
 				{ href: '/employees', label: 'Master Pegawai', icon: 'user-check', roles: ['admin'] },
+			],
+		},
+		{
+			group: 'Perpustakaan',
+			items: [
+				{ href: '/library',       label: 'Dashboard',    icon: 'book-open', roles: ['admin', 'staf'] },
+				{ href: '/library/books', label: 'Katalog Buku', icon: 'book',      roles: ['admin', 'staf'] },
+				{ href: '/library/loans', label: 'Peminjaman',   icon: 'repeat',    roles: ['admin', 'staf'] },
+			],
+		},
+		{
+			group: 'Website',
+			items: [
+				{ href: '/website',               label: 'Website Publik', icon: 'globe', roles: ['admin'] },
+				{ href: '/website/posts',         label: 'Berita',         icon: 'file-text', roles: ['admin'] },
+				{ href: '/website/announcements', label: 'Pengumuman',     icon: 'clipboard', roles: ['admin'] },
+				{ href: '/website/pages',         label: 'Halaman Publik', icon: 'book-open', roles: ['admin'] },
 			],
 		},
 		{
@@ -239,6 +257,19 @@
 		{:else if name === 'clipboard'}
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
 			<rect x="9" y="3" width="6" height="4" rx="1" ry="1" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+		{:else if name === 'pen-tool'}
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+		{:else if name === 'book'}
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+		{:else if name === 'globe'}
+			<circle cx="12" cy="12" r="10" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+		{:else if name === 'repeat'}
+			<polyline points="17 1 21 5 17 9" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11V9a4 4 0 014-4h14" />
+			<polyline points="7 23 3 19 7 15" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13v2a4 4 0 01-4 4H3" />
 		{/if}
 	</svg>
 {/snippet}

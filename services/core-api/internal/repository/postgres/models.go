@@ -274,6 +274,90 @@ func (ns NullJobStatusEnum) Value() (driver.Value, error) {
 	return string(ns.JobStatusEnum), nil
 }
 
+type LibraryMemberType string
+
+const (
+	LibraryMemberTypeStudent  LibraryMemberType = "student"
+	LibraryMemberTypeEmployee LibraryMemberType = "employee"
+)
+
+func (e *LibraryMemberType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LibraryMemberType(s)
+	case string:
+		*e = LibraryMemberType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LibraryMemberType: %T", src)
+	}
+	return nil
+}
+
+type NullLibraryMemberType struct {
+	LibraryMemberType LibraryMemberType `json:"library_member_type"`
+	Valid             bool              `json:"valid"` // Valid is true if LibraryMemberType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLibraryMemberType) Scan(value interface{}) error {
+	if value == nil {
+		ns.LibraryMemberType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LibraryMemberType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLibraryMemberType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LibraryMemberType), nil
+}
+
+type LoanStatusEnum string
+
+const (
+	LoanStatusEnumActive   LoanStatusEnum = "active"
+	LoanStatusEnumReturned LoanStatusEnum = "returned"
+)
+
+func (e *LoanStatusEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LoanStatusEnum(s)
+	case string:
+		*e = LoanStatusEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LoanStatusEnum: %T", src)
+	}
+	return nil
+}
+
+type NullLoanStatusEnum struct {
+	LoanStatusEnum LoanStatusEnum `json:"loan_status_enum"`
+	Valid          bool           `json:"valid"` // Valid is true if LoanStatusEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLoanStatusEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.LoanStatusEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LoanStatusEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLoanStatusEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LoanStatusEnum), nil
+}
+
 type RunTypeEnum string
 
 const (
@@ -405,6 +489,91 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.UserRole), nil
+}
+
+type WebsiteContentKind string
+
+const (
+	WebsiteContentKindPage         WebsiteContentKind = "page"
+	WebsiteContentKindPost         WebsiteContentKind = "post"
+	WebsiteContentKindAnnouncement WebsiteContentKind = "announcement"
+)
+
+func (e *WebsiteContentKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = WebsiteContentKind(s)
+	case string:
+		*e = WebsiteContentKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for WebsiteContentKind: %T", src)
+	}
+	return nil
+}
+
+type NullWebsiteContentKind struct {
+	WebsiteContentKind WebsiteContentKind `json:"website_content_kind"`
+	Valid              bool               `json:"valid"` // Valid is true if WebsiteContentKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullWebsiteContentKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.WebsiteContentKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.WebsiteContentKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullWebsiteContentKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.WebsiteContentKind), nil
+}
+
+type WebsiteContentStatus string
+
+const (
+	WebsiteContentStatusDraft     WebsiteContentStatus = "draft"
+	WebsiteContentStatusPublished WebsiteContentStatus = "published"
+)
+
+func (e *WebsiteContentStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = WebsiteContentStatus(s)
+	case string:
+		*e = WebsiteContentStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for WebsiteContentStatus: %T", src)
+	}
+	return nil
+}
+
+type NullWebsiteContentStatus struct {
+	WebsiteContentStatus WebsiteContentStatus `json:"website_content_status"`
+	Valid                bool                 `json:"valid"` // Valid is true if WebsiteContentStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullWebsiteContentStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.WebsiteContentStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.WebsiteContentStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullWebsiteContentStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.WebsiteContentStatus), nil
 }
 
 type AcademicYear struct {
@@ -674,6 +843,40 @@ type Job struct {
 	NotBefore    pgtype.Timestamptz `json:"not_before"`
 }
 
+type LibraryBook struct {
+	ID             pgtype.UUID        `json:"id"`
+	Kode           string             `json:"kode"`
+	Judul          string             `json:"judul"`
+	Pengarang      string             `json:"pengarang"`
+	Isbn           string             `json:"isbn"`
+	Kategori       string             `json:"kategori"`
+	Penerbit       string             `json:"penerbit"`
+	TahunTerbit    pgtype.Int4        `json:"tahun_terbit"`
+	TotalEksemplar int32              `json:"total_eksemplar"`
+	Tersedia       int32              `json:"tersedia"`
+	LokasiRak      string             `json:"lokasi_rak"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type LibraryLoan struct {
+	ID             pgtype.UUID        `json:"id"`
+	BookID         pgtype.UUID        `json:"book_id"`
+	MemberType     LibraryMemberType  `json:"member_type"`
+	StudentID      pgtype.UUID        `json:"student_id"`
+	EmployeeID     pgtype.UUID        `json:"employee_id"`
+	DipinjamAt     pgtype.Timestamptz `json:"dipinjam_at"`
+	JatuhTempo     pgtype.Timestamptz `json:"jatuh_tempo"`
+	DikembalikanAt pgtype.Timestamptz `json:"dikembalikan_at"`
+	DendaPerHari   int32              `json:"denda_per_hari"`
+	DendaTotal     int32              `json:"denda_total"`
+	DendaLunas     bool               `json:"denda_lunas"`
+	Status         LoanStatusEnum     `json:"status"`
+	Catatan        string             `json:"catatan"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Parent struct {
 	ID        pgtype.UUID        `json:"id"`
 	Nama      string             `json:"nama"`
@@ -759,4 +962,20 @@ type User struct {
 type UserAccountRole struct {
 	UserID pgtype.UUID `json:"user_id"`
 	Role   UserRole    `json:"role"`
+}
+
+type WebsiteContent struct {
+	ID            pgtype.UUID          `json:"id"`
+	Kind          WebsiteContentKind   `json:"kind"`
+	Title         string               `json:"title"`
+	Slug          string               `json:"slug"`
+	Excerpt       string               `json:"excerpt"`
+	ContentHtml   string               `json:"content_html"`
+	CoverImageUrl string               `json:"cover_image_url"`
+	Status        WebsiteContentStatus `json:"status"`
+	PublishedAt   pgtype.Timestamptz   `json:"published_at"`
+	CreatedBy     string               `json:"created_by"`
+	UpdatedBy     string               `json:"updated_by"`
+	CreatedAt     pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz   `json:"updated_at"`
 }

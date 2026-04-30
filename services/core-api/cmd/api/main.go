@@ -44,6 +44,7 @@ func main() {
 	studentSvc := service.NewStudent(q)
 	parentSvc := service.NewParent(q)
 	portalSvc := service.NewPortal(q)
+	websiteSvc := service.NewWebsite(q)
 	pusakaJobSvc := service.NewPusakaJob(q)
 	pusakaAttendanceSvc := service.NewPusakaAttendance(q)
 	questionSvc := service.NewCbtQuestion(q)
@@ -79,6 +80,7 @@ func main() {
 	studentH := handler.NewStudent(studentSvc)
 	parentH := handler.NewParent(parentSvc)
 	portalH := handler.NewPortal(portalSvc)
+	websiteH := handler.NewWebsite(websiteSvc)
 	questionH := handler.NewCbtQuestion(questionSvc)
 	questionAssetH := handler.NewCbtQuestionAsset(questionAssetSvc)
 	packageH := handler.NewCbtPackage(packageSvc)
@@ -110,6 +112,11 @@ func main() {
 	r.Post("/api/auth/login", authH.Login)
 	r.Post("/api/auth/refresh", authH.Refresh)
 	r.Post("/api/public/register-student", studentH.PublicRegister)
+	r.Get("/api/public/site/posts", websiteH.ListPublishedPosts)
+	r.Get("/api/public/site/posts/{slug}", websiteH.GetPublishedPost)
+	r.Get("/api/public/site/announcements", websiteH.ListPublishedAnnouncements)
+	r.Get("/api/public/site/announcements/{slug}", websiteH.GetPublishedAnnouncement)
+	r.Get("/api/public/site/pages/{slug}", websiteH.GetPublishedPage)
 
 	// Asset file serving is intentionally public — UUID provides sufficient obscurity,
 	// and content (exam question images/PDFs) will be visible to students during exams anyway.
@@ -179,6 +186,10 @@ func main() {
 		r.With(requireAdmin).Post("/api/parents/{id}/unlink", parentH.UnlinkStudent)
 		r.Get("/api/portal/student/me", portalH.StudentMe)
 		r.Get("/api/portal/parent/me", portalH.ParentMe)
+		r.With(requireAdmin).Get("/api/website/content", websiteH.List)
+		r.With(requireAdmin).Post("/api/website/content", websiteH.Create)
+		r.With(requireAdmin).Put("/api/website/content/{id}", websiteH.Update)
+		r.With(requireAdmin).Delete("/api/website/content/{id}", websiteH.Delete)
 
 		r.Get("/api/cbt/questions", questionH.List)
 		r.Post("/api/cbt/questions", questionH.Create)
