@@ -38,7 +38,7 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('Masuk Ujian'), findsWidgets);
     expect(find.text('Token sudah terikat ke perangkat lain'), findsOneWidget);
@@ -92,7 +92,7 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('Sesi lama tidak bisa dipulihkan'), findsOneWidget);
     expect(find.text('Sesi lama aktif di perangkat lain'), findsOneWidget);
@@ -129,7 +129,7 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('Waktu ujian sudah berakhir'), findsOneWidget);
     expect(
@@ -164,7 +164,7 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('Ujian sudah selesai di server'), findsOneWidget);
     expect(
@@ -202,7 +202,7 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('Perlu intervensi pengawas'), findsOneWidget);
     expect(
@@ -243,7 +243,7 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('Mode koneksi menurun aktif'), findsOneWidget);
     expect(
@@ -292,6 +292,81 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Coba Sinkron Ulang'), findsOneWidget);
+  });
+
+  testWidgets('exam shell renders secured mode overlay before resume check', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialResumeCheckRequired: true,
+          restoredSnapshot: _sampleSnapshot(
+            pendingAnswers: const <String, String>{'question-1': 'B'},
+          ),
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Mode ujian diamankan'), findsOneWidget);
+    expect(
+      find.text(
+        'Aplikasi mendeteksi perpindahan dari mode ujian. Lanjutkan hanya jika pengawas mengizinkan.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('1 jawaban lokal menunggu sinkron.'), findsOneWidget);
+    expect(find.text('Lanjutkan dengan pengecekan'), findsOneWidget);
+  });
+
+  testWidgets('exam shell renders secured mode overlay while resuming', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialResumeCheckRequired: true,
+          initialIsResumingExam: true,
+          restoredSnapshot: _sampleSnapshot(
+            pendingAnswers: const <String, String>{'question-1': 'B'},
+          ),
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Mode ujian diamankan'), findsOneWidget);
+    expect(
+      find.text(
+        'Sistem sedang memeriksa ulang status peserta dan mencoba menyinkronkan jawaban lokal.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('1 jawaban lokal menunggu sinkron.'), findsOneWidget);
+    expect(find.text('Memeriksa status...'), findsOneWidget);
   });
 }
 
