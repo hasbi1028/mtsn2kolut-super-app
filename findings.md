@@ -6,73 +6,20 @@ Dokumen ini merangkum backlog review yang **masih aktif** per 2026-05-01. Temuan
 
 ## Ringkasan prioritas aktif
 
-### Medium priority
-1. Pecah `services/pusaka-worker/src/index.ts` menjadi modul yang lebih kecil
-2. Refactor `apps/mobile/lib/src/screens/exam_shell_screen.dart`
-
 ### Low priority
-3. Bersihkan working tree dan pastikan file data sensitif tidak ikut commit
+1. Jaga hygiene working tree dan commit tetap fokus per-slice
 
 ---
 
-## 1) MEDIUM — Worker PUSAKA masih terlalu banyak tanggung jawab dalam satu file
-
-**Area:** `services/pusaka-worker`
-
-**File:**
-- `services/pusaka-worker/src/index.ts`
-
-**Masalah:**
-Satu file besar masih memegang config, backend client, supervisor loop, Playwright flow, parsing, logging, dan shutdown.
-
-**Arah patch:**
-- Pecah minimal menjadi:
-- `config.ts`
-- `api-client.ts`
-- `worker-supervisor.ts`
-- `pusaka-runner.ts`
-- `parsers.ts`
-- `logger.ts`
-
-**Acceptance check:**
-- `index.ts` menjadi entrypoint tipis
-- concern worker lebih modular dan mudah dites
-
----
-
-## 2) MEDIUM — `ExamShellScreen` masih menjadi hotspot regresi mobile
-
-**Area:** `apps/mobile`
-
-**File:**
-- `apps/mobile/lib/src/screens/exam_shell_screen.dart`
-
-**Masalah:**
-Screen ini masih memegang lifecycle, timer, sync/degraded logic, persistence, submit rules, telemetry, dan UI tree sekaligus.
-
-**Arah patch:**
-- extract sync/degraded state logic
-- extract persistence/session orchestration
-- extract presentational widgets
-- pertimbangkan controller/service yang lebih tipis dan testable
-
-**Acceptance check:**
-- file screen utama berkurang signifikan
-- logic penting pindah ke unit yang bisa diuji terpisah
-
----
-
-## 3) LOW — Working tree dan runtime data perlu tetap dijaga dari commit
+## 1) LOW — Working tree dan runtime data perlu tetap dijaga dari commit
 
 **Area:** repo root / operational hygiene
 
 **Masalah:**
-Repo masih punya runtime/local data paths yang mudah ikut terseret ke commit jika tidak disiplin, terutama:
-- `services/core-api/data/`
-- migrasi/artefak lokal yang belum siap rilis
+Walau folder runtime sensitif utama sekarang sudah di-ignore, repo masih bisa terlihat “dirty” karena slice kerja paralel atau artefak lokal yang memang belum siap rilis.
 
 **Arah patch / housekeeping:**
-- review `.gitignore` untuk runtime/local asset folders
+- pertahankan `.gitignore` untuk runtime/local asset folders
 - pastikan file data lokal/sensitif tidak ikut commit
 - jaga commit tetap fokus per-slice
 
@@ -90,16 +37,13 @@ Repo masih punya runtime/local data paths yang mudah ikut terseret ke commit jik
 - Snapshot exam mobile tidak lagi menyimpan payload sensitif bersama metadata restore di `SharedPreferences`; token, fingerprint, jawaban, dan pending answers sekarang dipisah ke secure storage, dengan fallback baca snapshot legacy untuk migrasi mulus.
 - Fingerprint mobile sekarang diposisikan eksplisit sebagai telemetry hint BYOD, bukan identitas kuat perangkat.
 - Field `Alamat server API` tidak lagi menjadi input utama siswa; sekarang tersembunyi di panel `Pengaturan Operator` yang dibuka hanya saat diperlukan.
+- Worker PUSAKA tidak lagi menumpuk semua concern pada satu `index.ts`; config, logging, parser, HTTP client, Playwright runner, dan supervisor loop sekarang dipisah ke modul yang lebih kecil.
+- `ExamShellScreen` tidak lagi memegang semua widget support dan perhitungan state koneksi di satu file; connection view-model dan widget presentational sekarang dipisah ke unit terpisah, dan file screen utama turun signifikan.
+- `.gitignore` sekarang mencakup `services/core-api/data/` agar runtime data lokal tidak mudah ikut terseret ke commit.
 
 ---
 
 ## Urutan patch yang disarankan sekarang
 
-### Batch 1 — mobile hardening
-
-### Batch 2 — maintainability
-- [ ] Pecah worker `index.ts`
-- [ ] Refactor `ExamShellScreen`
-
-### Batch 3 — hygiene
-- [ ] Review `.gitignore` dan local runtime data hygiene
+### Batch 1 — hygiene
+- [ ] Jaga commit tetap fokus dan jangan ikut membawa perubahan parallel worktree yang belum siap rilis

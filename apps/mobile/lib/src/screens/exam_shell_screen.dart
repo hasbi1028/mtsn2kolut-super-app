@@ -7,10 +7,11 @@ import '../exam_error_messages.dart';
 import '../exam_session_store.dart';
 import '../models.dart';
 import 'exam_completed_screen.dart';
+import 'exam_shell_connection.dart';
 import 'exam_status_guide_screen.dart';
+import 'exam_shell_widgets.dart';
 import '../widgets/audio_prompt_card.dart';
 import '../widgets/rich_exam_text.dart';
-import 'exam_login_screen.dart';
 
 class ExamShellScreen extends StatefulWidget {
   const ExamShellScreen({
@@ -48,10 +49,6 @@ class ExamShellScreen extends StatefulWidget {
 
 class _ExamShellScreenState extends State<ExamShellScreen>
     with WidgetsBindingObserver {
-  static const int _degradedFailureThreshold = 3;
-  static const int _staleAttentionThresholdSeconds = 120;
-  static const int _staleEscalationThresholdSeconds = 240;
-
   final _sessionStore = ExamSessionStore();
   late final Map<String, String> _answers;
   late final Map<String, String> _pendingAnswers;
@@ -79,6 +76,20 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   ExamGuidanceNotice? _serverNotice;
   Timer? _countdownTimer;
   Timer? _heartbeatTimer;
+
+  ExamShellConnectionViewModel get _connectionState =>
+      ExamShellConnectionViewModel(
+        isSubmitted: _isSubmitted,
+        pendingAnswerCount: _pendingAnswers.length,
+        consecutiveSyncFailures: _consecutiveSyncFailures,
+        hasError: _errorMessage != null,
+        lastServerContactAt: _lastServerContactAt,
+        lastSyncFailureAt: _lastSyncFailureAt,
+        isSavingAnswer: _isSavingAnswer,
+        isSyncingStatus: _isSyncingStatus,
+        isResumingExam: _isResumingExam,
+        resumeCheckRequired: _resumeCheckRequired,
+      );
 
   @override
   void initState() {
@@ -589,14 +600,6 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     }
   }
 
-  String _formatDuration(int seconds) {
-    final duration = Duration(seconds: seconds.clamp(0, 999999));
-    final hours = duration.inHours.toString().padLeft(2, '0');
-    final minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
-    final secs = (duration.inSeconds % 60).toString().padLeft(2, '0');
-    return '$hours:$minutes:$secs';
-  }
-
   void _markServerContact() {
     if (!mounted) {
       return;
@@ -612,55 +615,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     _hasReportedEscalatedStaleAttention = false;
   }
 
-  bool get _isDegradedMode =>
-      !_isSubmitted && _consecutiveSyncFailures >= _degradedFailureThreshold;
-
-  bool get _needsSupervisorAttention {
-    final last = _lastServerContactAt;
-    if (last == null || _isSubmitted || _isDegradedMode) {
-      return false;
-    }
-    return DateTime.now().difference(last).inSeconds >=
-        _staleAttentionThresholdSeconds;
-  }
-
-  bool get _needsEscalatedSupervisorAttention {
-    final last = _lastServerContactAt;
-    if (last == null || _isSubmitted || _isDegradedMode) {
-      return false;
-    }
-    return DateTime.now().difference(last).inSeconds >=
-        _staleEscalationThresholdSeconds;
-  }
-
-  String get _staleAttentionDurationLabel {
-    final last = _lastServerContactAt;
-    if (last == null) {
-      return '-';
-    }
-    final seconds = DateTime.now().difference(last).inSeconds;
-    if (seconds < 60) {
-      return '$seconds detik';
-    }
-    final minutes = seconds ~/ 60;
-    final remainingSeconds = seconds % 60;
-    if (minutes < 60) {
-      return '$minutes menit ${remainingSeconds.toString().padLeft(2, '0')} detik';
-    }
-    final hours = minutes ~/ 60;
-    final remainingMinutes = minutes % 60;
-    return '$hours jam ${remainingMinutes.toString().padLeft(2, '0')} menit';
-  }
-
-  String get _staleEscalationThresholdLabel {
-    final minutes = _staleEscalationThresholdSeconds ~/ 60;
-    if (minutes < 60) {
-      return '$minutes menit';
-    }
-    final hours = minutes ~/ 60;
-    final remainingMinutes = minutes % 60;
-    return '$hours jam ${remainingMinutes.toString().padLeft(2, '0')} menit';
-  }
+  bool get _isDegradedMode => _connectionState.isDegradedMode;
 
   Future<void> _handleConnectionAttentionSignals() async {
     await _handlePotentialDegradedMode();
@@ -686,7 +641,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   }
 
   Future<void> _handlePotentialStaleAttention() async {
-    if (!_needsSupervisorAttention || _hasReportedStaleAttention) {
+    if (!_connectionState.needsSupervisorAttention ||
+        _hasReportedStaleAttention) {
       return;
     }
     _hasReportedStaleAttention = true;
@@ -706,7 +662,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   }
 
   Future<void> _handlePotentialEscalatedStaleAttention() async {
-    if (!_needsEscalatedSupervisorAttention ||
+    if (!_connectionState.needsEscalatedSupervisorAttention ||
         _hasReportedEscalatedStaleAttention) {
       return;
     }
@@ -746,72 +702,12 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     return _playedAudioQuestionIds.contains(question.id);
   }
 
-  String _buildConnectionHealthTitle() {
-    if (_isDegradedMode) {
-      return 'Menurun';
-    }
-    if (_lastContactIsStale) {
-      return 'Waspada';
-    }
-    if (_errorMessage != null) {
-      return 'Gangguan';
-    }
-    if (_pendingAnswers.isNotEmpty) {
-      return 'Lokal';
-    }
-    return 'Tersambung';
-  }
-
-  String _buildConnectionHealthDescription() {
-    if (_isDegradedMode) {
-      return 'Sinkron berulang kali gagal. Submit manual ditahan sampai koneksi membaik.';
-    }
-    if (_lastContactIsStale) {
-      return 'Perangkat sudah cukup lama tidak menyentuh server. Perbarui status agar pengawas tahu koneksi masih sehat.';
-    }
-    if (_errorMessage != null) {
-      return 'Server belum merespons stabil. Pantau jaringan dan coba sinkron ulang.';
-    }
-    if (_pendingAnswers.isNotEmpty) {
-      return '${_pendingAnswers.length} jawaban masih aman di perangkat dan menunggu sinkron.';
-    }
-    return 'Perangkat terakhir berhasil terhubung ke server tanpa jawaban lokal tertahan.';
-  }
-
-  _HealthTone _buildConnectionHealthTone() {
-    if (_isDegradedMode || _errorMessage != null) {
-      return _HealthTone.danger;
-    }
-    if (_lastContactIsStale || _pendingAnswers.isNotEmpty) {
-      return _HealthTone.warning;
-    }
-    return _HealthTone.good;
-  }
-
-  bool get _lastContactIsStale {
-    final last = _lastServerContactAt;
-    if (last == null) {
-      return false;
-    }
-    return DateTime.now().difference(last).inSeconds >= 90;
-  }
-
-  String _formatClock(DateTime? value) {
-    if (value == null) {
-      return '-';
-    }
-    final local = value.toLocal();
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    final second = local.second.toString().padLeft(2, '0');
-    return '$hour:$minute:$second';
-  }
-
   @override
   Widget build(BuildContext context) {
     final payload = widget.initialPayload;
     final currentQuestion = payload.questions[_currentQuestionIndex];
     final theme = Theme.of(context);
+    final connection = _connectionState;
 
     return PopScope(
       canPop: false,
@@ -843,9 +739,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Center(
-                child: _SyncStatusChip(
-                  label: _buildSyncStatusLabel(),
-                  tone: _buildSyncStatusTone(),
+                child: SyncStatusChip(
+                  label: connection.syncStatusLabel,
+                  tone: connection.syncStatusTone,
                 ),
               ),
             ),
@@ -982,6 +878,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   }
 
   Widget _buildSidePanel(ThemeData theme, ExamLoginPayload payload) {
+    final connection = _connectionState;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -999,56 +897,58 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             const SizedBox(height: 4),
             Text('Ruang ${payload.room?.roomName ?? '-'}'),
             const SizedBox(height: 20),
-            _StatTile(
+            StatTile(
               label: 'Sisa waktu',
-              value: _formatDuration(_timeRemainingSeconds),
+              value: ExamShellConnectionViewModel.formatDuration(
+                _timeRemainingSeconds,
+              ),
               accent: _timeRemainingSeconds <= 300,
             ),
             const SizedBox(height: 12),
-            _StatTile(
+            StatTile(
               label: 'Progres',
               value: '$_answeredCount / ${payload.totalQuestions}',
             ),
             const SizedBox(height: 12),
-            _StatTile(
+            StatTile(
               label: 'Kontak server terakhir',
-              value: _formatClock(_lastServerContactAt),
+              value: connection.formatClock(_lastServerContactAt),
             ),
             const SizedBox(height: 12),
-            _ConnectionHealthCard(
-              label: _buildConnectionHealthTitle(),
-              description: _buildConnectionHealthDescription(),
-              tone: _buildConnectionHealthTone(),
+            ConnectionHealthCard(
+              label: connection.connectionHealthTitle,
+              description: connection.connectionHealthDescription,
+              tone: connection.connectionHealthTone,
             ),
             if (_lastSyncFailureAt != null) ...[
               const SizedBox(height: 12),
-              _StatTile(
+              StatTile(
                 label: 'Gangguan terakhir',
-                value: _formatClock(_lastSyncFailureAt),
+                value: connection.formatClock(_lastSyncFailureAt),
                 accent: true,
               ),
             ],
             const SizedBox(height: 20),
             if (_consecutiveSyncFailures >= 2) ...[
-              _ConnectionWarningCard(
+              ConnectionWarningCard(
                 failureCount: _consecutiveSyncFailures,
-                lastFailureAt: _formatClock(_lastSyncFailureAt),
+                lastFailureAt: connection.formatClock(_lastSyncFailureAt),
                 onRetry: _isSyncingStatus ? null : _syncStatus,
               ),
               const SizedBox(height: 14),
             ],
-            if (_needsSupervisorAttention) ...[
-              _SupervisorAttentionCard(
-                lastContactAt: _formatClock(_lastServerContactAt),
-                staleDuration: _staleAttentionDurationLabel,
-                escalationThreshold: _staleEscalationThresholdLabel,
-                escalated: _needsEscalatedSupervisorAttention,
+            if (connection.needsSupervisorAttention) ...[
+              SupervisorAttentionCard(
+                lastContactAt: connection.formatClock(_lastServerContactAt),
+                staleDuration: connection.staleAttentionDurationLabel,
+                escalationThreshold: connection.staleEscalationThresholdLabel,
+                escalated: connection.needsEscalatedSupervisorAttention,
                 onRetry: _isSyncingStatus ? null : _syncStatus,
               ),
               const SizedBox(height: 14),
             ],
             if (_isDegradedMode) ...[
-              _DegradedModeCard(
+              DegradedModeCard(
                 pendingCount: _pendingAnswers.length,
                 failureCount: _consecutiveSyncFailures,
                 onRetry: _isSyncingStatus ? null : _syncStatus,
@@ -1056,7 +956,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               const SizedBox(height: 14),
             ],
             if (_pendingAnswers.isNotEmpty) ...[
-              _StatTile(
+              StatTile(
                 label: 'Jawaban lokal',
                 value: '${_pendingAnswers.length} menunggu sinkron',
                 accent: true,
@@ -1064,17 +964,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               const SizedBox(height: 12),
             ],
             if (_serverNotice != null) ...[
-              _ExamGuidanceCard(notice: _serverNotice!),
+              ExamGuidanceCard(notice: _serverNotice!),
               const SizedBox(height: 12),
             ],
             if (_statusMessage != null)
-              _InlineMessage(
-                tone: BannerTone.success,
-                message: _statusMessage!,
-              ),
+              InlineMessage(tone: BannerTone.success, message: _statusMessage!),
             if (_errorMessage != null) ...[
               if (_statusMessage != null) const SizedBox(height: 10),
-              _InlineMessage(tone: BannerTone.error, message: _errorMessage!),
+              InlineMessage(tone: BannerTone.error, message: _errorMessage!),
             ],
             const SizedBox(height: 20),
             Text(
@@ -1194,10 +1091,10 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (_errorMessage != null) ...[
-              _InlineMessage(tone: BannerTone.error, message: _errorMessage!),
+              InlineMessage(tone: BannerTone.error, message: _errorMessage!),
               const SizedBox(height: 14),
             ] else if (_statusMessage != null) ...[
-              _InlineMessage(tone: BannerTone.info, message: _statusMessage!),
+              InlineMessage(tone: BannerTone.info, message: _statusMessage!),
               const SizedBox(height: 14),
             ],
             Text(
@@ -1209,7 +1106,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             ),
             if (hasAudio) ...[
               const SizedBox(height: 10),
-              _QuestionAudioStatusChip(hasPlayed: audioPlayed),
+              QuestionAudioStatusChip(hasPlayed: audioPlayed),
             ],
             const SizedBox(height: 10),
             if (question.stimulusHtml.trim().isNotEmpty) ...[
@@ -1229,7 +1126,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               const SizedBox(height: 16),
             ],
             if (question.stimulusMediaUrl.trim().isNotEmpty) ...[
-              _QuestionMediaCard(url: question.stimulusMediaUrl),
+              QuestionMediaCard(url: question.stimulusMediaUrl),
               const SizedBox(height: 16),
             ],
             if (question.stimulusAudioUrl.trim().isNotEmpty) ...[
@@ -1254,7 +1151,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             ),
             if (question.stemMediaUrl.trim().isNotEmpty) ...[
               const SizedBox(height: 16),
-              _QuestionMediaCard(url: question.stemMediaUrl),
+              QuestionMediaCard(url: question.stemMediaUrl),
             ],
             if (question.stemAudioUrl.trim().isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -1407,593 +1304,6 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           label: const Text('Simpan Jawaban'),
         ),
       ],
-    );
-  }
-
-  String _buildSyncStatusLabel() {
-    if (_isResumingExam || _resumeCheckRequired) {
-      return 'Cek Ulang';
-    }
-    if (_isDegradedMode) {
-      return 'Menurun';
-    }
-    if (_lastContactIsStale) {
-      return 'Waspada';
-    }
-    if (_isSavingAnswer || _isSyncingStatus) {
-      return 'Sinkron';
-    }
-    if (_pendingAnswers.isNotEmpty) {
-      return 'Lokal';
-    }
-    if (_errorMessage != null) {
-      return 'Gangguan';
-    }
-    return 'Tersambung';
-  }
-
-  _SyncTone _buildSyncStatusTone() {
-    if (_isDegradedMode || _errorMessage != null) {
-      return _SyncTone.danger;
-    }
-    if (_isResumingExam ||
-        _resumeCheckRequired ||
-        _pendingAnswers.isNotEmpty ||
-        _lastContactIsStale) {
-      return _SyncTone.warning;
-    }
-    return _SyncTone.success;
-  }
-}
-
-class _StatTile extends StatelessWidget {
-  const _StatTile({
-    required this.label,
-    required this.value,
-    this.accent = false,
-  });
-
-  final String label;
-  final String value;
-  final bool accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: accent ? Colors.red.shade50 : const Color(0xFFF6F8F3),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: theme.textTheme.bodySmall),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: accent ? Colors.red.shade700 : null,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InlineMessage extends StatelessWidget {
-  const _InlineMessage({required this.tone, required this.message});
-
-  final BannerTone tone;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = switch (tone) {
-      BannerTone.error => Colors.red.shade700,
-      BannerTone.success => const Color(0xFF0B7A3B),
-      BannerTone.info => theme.colorScheme.primary,
-    };
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
-      ),
-      child: Text(
-        message,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-enum _SyncTone { success, warning, danger }
-
-class _SyncStatusChip extends StatelessWidget {
-  const _SyncStatusChip({required this.label, required this.tone});
-
-  final String label;
-  final _SyncTone tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final (background, foreground) = switch (tone) {
-      _SyncTone.success => (const Color(0xFFE8F5EC), const Color(0xFF0B7A3B)),
-      _SyncTone.warning => (const Color(0xFFFFF3D8), const Color(0xFF9A6700)),
-      _SyncTone.danger => (const Color(0xFFFDE7E9), Colors.red.shade700),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _QuestionMediaCard extends StatelessWidget {
-  const _QuestionMediaCard({required this.url});
-
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF6F8F3),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Media soal',
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: Image.network(
-              url,
-              fit: BoxFit.contain,
-              errorBuilder: (context, _, _) {
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  color: Colors.white,
-                  child: Text(
-                    'Media tidak dapat dimuat.\n$url',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                );
-              },
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) {
-                  return child;
-                }
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  color: Colors.white,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(strokeWidth: 2),
-                      const SizedBox(height: 10),
-                      Text('Memuat media...', style: theme.textTheme.bodySmall),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConnectionWarningCard extends StatelessWidget {
-  const _ConnectionWarningCard({
-    required this.failureCount,
-    required this.lastFailureAt,
-    required this.onRetry,
-  });
-
-  final int failureCount;
-  final String lastFailureAt;
-  final VoidCallback? onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF3D8),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE5C172)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Koneksi perlu diperhatikan',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: const Color(0xFF9A6700),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Perangkat mengalami $failureCount gangguan sinkron berturut-turut. Terakhir tercatat pukul $lastFailureAt.',
-            style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.sync),
-            label: const Text('Coba Sinkron Ulang'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-enum _HealthTone { good, warning, danger }
-
-class _ConnectionHealthCard extends StatelessWidget {
-  const _ConnectionHealthCard({
-    required this.label,
-    required this.description,
-    required this.tone,
-  });
-
-  final String label;
-  final String description;
-  final _HealthTone tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final (background, border, foreground, icon) = switch (tone) {
-      _HealthTone.good => (
-        const Color(0xFFE8F5EC),
-        const Color(0xFFA9D4B8),
-        const Color(0xFF0B7A3B),
-        Icons.cloud_done,
-      ),
-      _HealthTone.warning => (
-        const Color(0xFFFFF3D8),
-        const Color(0xFFE5C172),
-        const Color(0xFF9A6700),
-        Icons.save_outlined,
-      ),
-      _HealthTone.danger => (
-        const Color(0xFFFDE7E9),
-        const Color(0xFFE8A5AB),
-        const Color(0xFFC03645),
-        Icons.sync_problem,
-      ),
-    };
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: foreground),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  description,
-                  style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DegradedModeCard extends StatelessWidget {
-  const _DegradedModeCard({
-    required this.pendingCount,
-    required this.failureCount,
-    required this.onRetry,
-  });
-
-  final int pendingCount;
-  final int failureCount;
-  final VoidCallback? onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFDE7E9),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE8A5AB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Mode koneksi menurun aktif',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: Colors.red.shade700,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            pendingCount > 0
-                ? 'Sinkron gagal $failureCount kali berturut-turut dan masih ada $pendingCount jawaban lokal. Kirim ujian ditahan sampai koneksi minimal pulih.'
-                : 'Sinkron gagal $failureCount kali berturut-turut. Perbarui status dulu sebelum mengirim ujian.',
-            style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.sync_problem),
-            label: const Text('Pulihkan Sinkron'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SupervisorAttentionCard extends StatelessWidget {
-  const _SupervisorAttentionCard({
-    required this.lastContactAt,
-    required this.staleDuration,
-    required this.escalationThreshold,
-    required this.escalated,
-    required this.onRetry,
-  });
-
-  final String lastContactAt;
-  final String staleDuration;
-  final String escalationThreshold;
-  final bool escalated;
-  final VoidCallback? onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final titleColor = escalated
-        ? Colors.red.shade700
-        : const Color(0xFF9A6700);
-    final background = escalated
-        ? const Color(0xFFFDE7E9)
-        : const Color(0xFFFFF3D8);
-    final border = escalated
-        ? const Color(0xFFE8A5AB)
-        : const Color(0xFFE5C172);
-    final action = escalated
-        ? FilledButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.priority_high),
-            label: const Text('Intervensi dan Sinkron Ulang'),
-          )
-        : OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.support_agent),
-            label: const Text('Periksa dan Sinkron Ulang'),
-          );
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            escalated
-                ? 'Pengawas harus segera intervensi'
-                : 'Perlu intervensi pengawas',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: titleColor,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            escalated
-                ? 'Status koneksi bertahan di level waspada selama $staleDuration sejak kontak server terakhir pukul $lastContactAt. Pengawas sebaiknya segera memeriksa perangkat, jaringan, dan memastikan sinkron ulang berhasil sebelum peserta melanjutkan tanpa pengawasan.'
-                : 'Status koneksi berada di level waspada selama $staleDuration sejak kontak server terakhir pukul $lastContactAt. Minta pengawas memeriksa jaringan perangkat lalu lakukan sinkron ulang.',
-            style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.7),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Text(
-              escalated
-                  ? 'Ambang eskalasi keras sudah terlewati setelah $escalationThreshold tanpa kontak server baru.'
-                  : 'Jika kondisi ini bertahan sampai $escalationThreshold tanpa kontak server baru, panel ini akan naik ke mode intervensi keras.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                height: 1.45,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          action,
-        ],
-      ),
-    );
-  }
-}
-
-class _QuestionAudioStatusChip extends StatelessWidget {
-  const _QuestionAudioStatusChip({required this.hasPlayed});
-
-  final bool hasPlayed;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final background = hasPlayed
-        ? theme.colorScheme.primary.withValues(alpha: 0.12)
-        : const Color(0xFFFFF3D8);
-    final foreground = hasPlayed
-        ? theme.colorScheme.primary
-        : const Color(0xFF9A6700);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            hasPlayed ? Icons.headset_mic : Icons.hearing_outlined,
-            size: 16,
-            color: foreground,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            hasPlayed ? 'Audio soal sudah diputar' : 'Audio soal belum diputar',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: foreground,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ExamGuidanceCard extends StatelessWidget {
-  const _ExamGuidanceCard({required this.notice});
-
-  final ExamGuidanceNotice notice;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final (background, border, foreground, icon) = switch (notice.tone) {
-      ExamGuidanceTone.info => (
-        const Color(0xFFE8F5EC),
-        const Color(0xFFA9D4B8),
-        const Color(0xFF0B7A3B),
-        Icons.task_alt,
-      ),
-      ExamGuidanceTone.warning => (
-        const Color(0xFFFFF3D8),
-        const Color(0xFFE5C172),
-        const Color(0xFF9A6700),
-        Icons.warning_amber_rounded,
-      ),
-      ExamGuidanceTone.danger => (
-        const Color(0xFFFDE7E9),
-        const Color(0xFFE8A5AB),
-        const Color(0xFFC03645),
-        Icons.sync_problem,
-      ),
-    };
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: foreground),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  notice.title,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  notice.message,
-                  style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

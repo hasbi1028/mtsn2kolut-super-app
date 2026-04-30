@@ -10,6 +10,7 @@ services/core-api/postgres_data/
 
 # Database & data (sensitive)
 apps/web-admin/data/
+services/core-api/data/
 *.db
 *.sqlite
 
