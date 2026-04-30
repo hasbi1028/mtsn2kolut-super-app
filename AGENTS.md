@@ -232,6 +232,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 ### ✅ Sprint 11C — Rapor Print View (Done)
 - **Printable report card** — `/grades/rapor` HTML-first print layout using existing `/api/grades` endpoint; assignment selector, school header, grade table with color-coded scores (green ≥80, amber ≥65, red <65), class average footer, signature area shown only on print.
 - **Sidebar entry** — "Cetak Rapor" under Akademik group, visible to `admin` and `guru`.
+- **Grade component lifecycle** — grade components now support `Draft/Terbit` lifecycle and safe editing. Gradebook operators can update title/category/weight/max-score, but backend must reject lowering `max_score` below existing student scores. Rapor views should use only published components.
 
 ### 📋 Planned Future Phases
 1. **Academic Foundation & RBAC Expansion** — Unified `users` table with many-to-many roles (`admin`, `teacher`, `student`, `staff`, `parent`). Student lifecycle (`active`, `alumni`, `prospective`) and Parent-child linking.

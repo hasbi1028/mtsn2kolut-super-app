@@ -19,9 +19,24 @@ SELECT gc.id, gc.assignment_id, gc.title, gc.category, gc.weight, gc.max_score,
 FROM grade_components gc
 WHERE gc.id = $1;
 
+-- name: GetGradeComponentHighestScore :one
+SELECT COALESCE(MAX(ge.score), -1)::double precision AS max_score
+FROM grade_entries ge
+WHERE ge.component_id = $1;
+
 -- name: CreateGradeComponent :one
 INSERT INTO grade_components (assignment_id, title, category, weight, max_score, is_published)
 VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING *;
+
+-- name: UpdateGradeComponent :one
+UPDATE grade_components
+SET title = $2,
+    category = $3,
+    weight = $4,
+    max_score = $5,
+    updated_at = NOW()
+WHERE id = $1
 RETURNING *;
 
 -- name: UpdateGradeComponentPublishState :one

@@ -17,3 +17,15 @@ export const DELETE = async (event: RequestEvent) => {
 		return handleRouteError(e, 'grades/components/[id] DELETE');
 	}
 };
+
+export const PUT = async (event: RequestEvent) => {
+	if (!canManageGrades(event)) return json({ error: 'forbidden' }, { status: 403 });
+	try {
+		const id = event.params.id;
+		const body = await event.request.json() as Record<string, unknown>;
+		const data = await proxy(event).put(`/api/grades/components/${id}`, body);
+		return json(data);
+	} catch (e) {
+		return handleRouteError(e, 'grades/components/[id] PUT');
+	}
+};

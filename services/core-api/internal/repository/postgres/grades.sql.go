@@ -83,6 +83,19 @@ func (q *Queries) GetGradeComponent(ctx context.Context, id pgtype.UUID) (GradeC
 	return i, err
 }
 
+const getGradeComponentHighestScore = `-- name: GetGradeComponentHighestScore :one
+SELECT COALESCE(MAX(ge.score), -1)::double precision AS max_score
+FROM grade_entries ge
+WHERE ge.component_id = $1
+`
+
+func (q *Queries) GetGradeComponentHighestScore(ctx context.Context, componentID pgtype.UUID) (float64, error) {
+	row := q.db.QueryRow(ctx, getGradeComponentHighestScore, componentID)
+	var max_score float64
+	err := row.Scan(&max_score)
+	return max_score, err
+}
+
 const listGradeComponents = `-- name: ListGradeComponents :many
 SELECT gc.id, gc.assignment_id, gc.title, gc.category, gc.weight, gc.max_score,
        gc.is_published, gc.created_at, gc.updated_at,
@@ -307,6 +320,48 @@ func (q *Queries) ListGradebookSummary(ctx context.Context, arg ListGradebookSum
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateGradeComponent = `-- name: UpdateGradeComponent :one
+UPDATE grade_components
+SET title = $2,
+    category = $3,
+    weight = $4,
+    max_score = $5,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, assignment_id, title, category, weight, max_score, is_published, created_at, updated_at
+`
+
+type UpdateGradeComponentParams struct {
+	ID       pgtype.UUID `json:"id"`
+	Title    string      `json:"title"`
+	Category string      `json:"category"`
+	Weight   float64     `json:"weight"`
+	MaxScore float64     `json:"max_score"`
+}
+
+func (q *Queries) UpdateGradeComponent(ctx context.Context, arg UpdateGradeComponentParams) (GradeComponent, error) {
+	row := q.db.QueryRow(ctx, updateGradeComponent,
+		arg.ID,
+		arg.Title,
+		arg.Category,
+		arg.Weight,
+		arg.MaxScore,
+	)
+	var i GradeComponent
+	err := row.Scan(
+		&i.ID,
+		&i.AssignmentID,
+		&i.Title,
+		&i.Category,
+		&i.Weight,
+		&i.MaxScore,
+		&i.IsPublished,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateGradeComponentPublishState = `-- name: UpdateGradeComponentPublishState :one

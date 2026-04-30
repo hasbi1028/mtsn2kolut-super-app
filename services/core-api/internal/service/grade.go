@@ -14,7 +14,9 @@ type gradeStore interface {
 	ListClassSubjectAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
 	ListGradeComponents(ctx context.Context, arg db.ListGradeComponentsParams) ([]db.ListGradeComponentsRow, error)
 	GetGradeComponent(ctx context.Context, id pgtype.UUID) (db.GradeComponent, error)
+	GetGradeComponentHighestScore(ctx context.Context, componentID pgtype.UUID) (float64, error)
 	CreateGradeComponent(ctx context.Context, arg db.CreateGradeComponentParams) (db.GradeComponent, error)
+	UpdateGradeComponent(ctx context.Context, arg db.UpdateGradeComponentParams) (db.GradeComponent, error)
 	UpdateGradeComponentPublishState(ctx context.Context, arg db.UpdateGradeComponentPublishStateParams) (db.GradeComponent, error)
 	DeleteGradeComponent(ctx context.Context, id pgtype.UUID) error
 	ListGradebookSummary(ctx context.Context, arg db.ListGradebookSummaryParams) ([]db.ListGradebookSummaryRow, error)
@@ -79,6 +81,28 @@ func (s *Grade) CreateComponent(ctx context.Context, arg db.CreateGradeComponent
 		return db.GradeComponent{}, fmt.Errorf("skor maksimum harus lebih dari 0")
 	}
 	return s.q.CreateGradeComponent(ctx, arg)
+}
+
+func (s *Grade) UpdateComponent(ctx context.Context, arg db.UpdateGradeComponentParams) (db.GradeComponent, error) {
+	arg.Title = strings.TrimSpace(arg.Title)
+	arg.Category = normalizeGradeCategory(arg.Category)
+	if arg.Title == "" {
+		return db.GradeComponent{}, fmt.Errorf("judul komponen wajib diisi")
+	}
+	if arg.Weight < 0 {
+		return db.GradeComponent{}, fmt.Errorf("bobot tidak boleh negatif")
+	}
+	if arg.MaxScore <= 0 {
+		return db.GradeComponent{}, fmt.Errorf("skor maksimum harus lebih dari 0")
+	}
+	highestScore, err := s.q.GetGradeComponentHighestScore(ctx, arg.ID)
+	if err != nil {
+		return db.GradeComponent{}, err
+	}
+	if highestScore >= 0 && arg.MaxScore < highestScore {
+		return db.GradeComponent{}, fmt.Errorf("skor maksimum tidak boleh lebih kecil dari nilai tertinggi %.2f", highestScore)
+	}
+	return s.q.UpdateGradeComponent(ctx, arg)
 }
 
 func (s *Grade) SetComponentPublished(ctx context.Context, id pgtype.UUID, isPublished bool) (db.GradeComponent, error) {

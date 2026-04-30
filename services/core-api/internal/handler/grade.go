@@ -80,6 +80,40 @@ func (h *Grade) CreateComponent(w http.ResponseWriter, r *http.Request) {
 	api.Created(w, row)
 }
 
+func (h *Grade) UpdateComponent(w http.ResponseWriter, r *http.Request) {
+	if !gradeAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		Title    string  `json:"title"`
+		Category string  `json:"category"`
+		Weight   float64 `json:"weight"`
+		MaxScore float64 `json:"max_score"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	row, err := h.svc.UpdateComponent(r.Context(), db.UpdateGradeComponentParams{
+		ID:       id,
+		Title:    body.Title,
+		Category: body.Category,
+		Weight:   body.Weight,
+		MaxScore: body.MaxScore,
+	})
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+	api.OK(w, row)
+}
+
 func (h *Grade) SetComponentPublished(w http.ResponseWriter, r *http.Request) {
 	if !gradeAccessAllowed(r) {
 		api.Forbidden(w)

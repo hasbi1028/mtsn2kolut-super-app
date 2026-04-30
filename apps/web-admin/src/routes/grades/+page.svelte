@@ -75,6 +75,7 @@
 	let createBusy = $state(false);
 	let entryBusy = $state<Record<string, boolean>>({});
 	let publishBusy = $state<Record<string, boolean>>({});
+	let editingComponentId = $state('');
 	let componentTitle = $state('');
 	let componentCategory = $state('assignment');
 	let componentWeight = $state(1);
@@ -85,6 +86,7 @@
 
 	const selectedAssignment = $derived(assignments.find((item) => item.id === assignmentId) ?? null);
 	const selectedComponent = $derived(components.find((item) => item.id === componentId) ?? null);
+	const editingComponent = $derived(components.find((item) => item.id === editingComponentId) ?? null);
 	const completionRate = $derived(summary.length === 0 ? 0 : Math.round((summary.filter((row) => row.filled_count > 0).length / summary.length) * 100));
 	const publishedComponentCount = $derived(components.filter((item) => item.is_published).length);
 
@@ -100,6 +102,14 @@
 		return categoryOptions.find((item) => item.value === value)?.label ?? value;
 	}
 
+	function resetComponentForm() {
+		editingComponentId = '';
+		componentTitle = '';
+		componentCategory = 'assignment';
+		componentWeight = 1;
+		componentMaxScore = 100;
+	}
+
 	function finalScoreLabel(value: number) {
 		return value < 0 ? '—' : value.toFixed(2);
 	}
@@ -108,6 +118,7 @@
 		if (assignments.length === 0) return;
 		assignmentId = assignments[0]?.id ?? '';
 		componentId = '';
+		resetComponentForm();
 		await loadOverview();
 	}
 
@@ -146,32 +157,43 @@
 		}
 	}
 
-	async function createComponent() {
-		if (!assignmentId || !componentTitle) return;
+	function beginEditComponent(component: GradeComponent) {
+		editingComponentId = component.id;
+		componentTitle = component.title;
+		componentCategory = component.category;
+		componentWeight = component.weight;
+		componentMaxScore = component.max_score;
+	}
+
+	async function saveComponent() {
+		if ((!assignmentId && !editingComponentId) || !componentTitle) return;
 		createBusy = true;
 		try {
-			const res = await fetch('/api/grades/components', {
-				method: 'POST',
+			const path = editingComponentId ? `/api/grades/components/${editingComponentId}` : '/api/grades/components';
+			const method = editingComponentId ? 'PUT' : 'POST';
+			const payload: Record<string, unknown> = {
+				title: componentTitle,
+				category: componentCategory,
+				weight: componentWeight,
+				max_score: componentMaxScore
+			};
+			if (!editingComponentId) {
+				payload.assignment_id = assignmentId;
+				payload.is_published = false;
+			}
+			const res = await fetch(path, {
+				method,
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					assignment_id: assignmentId,
-					title: componentTitle,
-					category: componentCategory,
-					weight: componentWeight,
-					max_score: componentMaxScore,
-					is_published: false
-				})
+				body: JSON.stringify(payload)
 			});
 			const json = await res.json().catch(() => ({}));
 			if (!res.ok) {
-				showError(json.error ?? 'Gagal menambah komponen nilai');
+				showError(json.error ?? (editingComponentId ? 'Gagal memperbarui komponen nilai' : 'Gagal menambah komponen nilai'));
 				return;
 			}
-			componentTitle = '';
-			componentCategory = 'assignment';
-			componentWeight = 1;
-			componentMaxScore = 100;
-			showSuccess('Komponen nilai ditambahkan');
+			const wasEditing = editingComponentId !== '';
+			resetComponentForm();
+			showSuccess(wasEditing ? 'Komponen nilai diperbarui' : 'Komponen nilai ditambahkan');
 			await loadOverview();
 		} finally {
 			createBusy = false;
@@ -186,6 +208,7 @@
 			showError(json.error ?? 'Gagal menghapus komponen');
 			return;
 		}
+		if (editingComponentId === id) resetComponentForm();
 		if (componentId === id) componentId = '';
 		showSuccess('Komponen nilai dihapus');
 		await loadOverview();
@@ -271,7 +294,7 @@
 					id="assignment-id"
 					class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 					bind:value={assignmentId}
-					onchange={async () => { componentId = ''; await loadOverview(); }}
+					onchange={async () => { componentId = ''; resetComponentForm(); await loadOverview(); }}
 				>
 					<option value="">Pilih penugasan kelas-mapel</option>
 					{#each assignments as item (item.id)}
@@ -367,15 +390,18 @@
 								<label for="component-max-score" class="mb-1 block text-xs font-medium text-slate-500">Skor Maksimum</label>
 								<Input id="component-max-score" type="number" min="1" step="0.1" bind:value={componentMaxScore} />
 							</div>
-							<div class="flex items-end">
+							<div class="flex items-end gap-2">
 								<LoadingButton
 									class="w-full md:w-auto"
 									loading={createBusy}
 									loadingLabel="Menyimpan..."
 									disabled={!componentTitle}
-									onclick={createComponent}
-									label="Tambah Komponen"
+									onclick={saveComponent}
+									label={editingComponent ? 'Simpan Perubahan' : 'Tambah Komponen'}
 								/>
+								{#if editingComponent}
+									<Button variant="outline" onclick={resetComponentForm}>Batal Edit</Button>
+								{/if}
 							</div>
 						</div>
 
@@ -410,6 +436,7 @@
 											<Table.Cell>{item.max_score}</Table.Cell>
 											<Table.Cell class="text-right">
 												<div class="flex justify-end gap-2">
+													<Button variant="outline" size="sm" onclick={() => beginEditComponent(item)}>Edit</Button>
 													<LoadingButton
 														size="sm"
 														variant={item.is_published ? 'outline' : 'default'}
