@@ -22,6 +22,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 7. **Safe deploy order:** backend code → migrations → backend restart + health check → frontend → worker.
 8. **PUSAKA is a bounded subsystem.** Canonical contracts use `/api/pusaka/*`; legacy runtime aliases such as `/api/jobs`, `/api/attendance`, `/api/schedules`, `/api/settings`, and `/api/worker` are retired.
 9. **`employees` stays general.** Employee master data covers all school staff; PUSAKA only manages the eligible subset (`PNS`/`PPPK`) via `pusaka_accounts` and `/pusaka/*` screens.
+10. **No employee-scoped PUSAKA aliases in the BFF.** PUSAKA employee operations must proxy only through `/api/pusaka/employees/*`, not `/api/employees/{id}/*`.
 
 ## Backend Architecture Rules
 

@@ -45,6 +45,7 @@ The monorepo is for source organization, not for collapsing runtime topology.
 - `employees` remains the master data table for all school staff.
 - Only eligible employment types (`pns`, `pppk`) should appear in PUSAKA account setup and operations.
 - `/employees` is the master employee screen; `/pusaka/employees` is the PUSAKA operator screen.
+- BFF proxies for PUSAKA employee operations live only under `/api/pusaka/employees/*`.
 - PUSAKA credentials now live in `pusaka_accounts` as the integration-owned source of truth.
 - Legacy `employees.pusaka_*` columns have been removed; employee identity and PUSAKA integration credentials are now explicitly separated.
 - Internal code uses explicit `Pusaka*` ownership naming. A deeper package split is intentionally deferred until it would reduce, not increase, maintenance churn.
