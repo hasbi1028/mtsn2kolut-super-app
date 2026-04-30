@@ -153,6 +153,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Widget-test coverage for the secured resume overlay in both pre-check and in-progress resume states
 - [x] Handler-level unauthorized coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `heartbeat` and `event` telemetry routes
+- [x] Handler-level success-envelope coverage for exam `answer` and `submit` routes
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

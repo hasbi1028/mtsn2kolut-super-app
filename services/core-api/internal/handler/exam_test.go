@@ -342,6 +342,32 @@ func TestExamSubmitAnswerMapsKnownServiceErrors(t *testing.T) {
 	}
 }
 
+func TestExamSubmitAnswerWritesWrappedJSON(t *testing.T) {
+	participant := db.GetParticipantByTokenRow{}
+	h := &Exam{svc: &fakeExamService{}}
+	body := bytes.NewBufferString(`{"question_id":"11111111-1111-1111-1111-111111111111","answer":"B"}`)
+	req := httptest.NewRequest("POST", "http://internal/api/exam/answer", body)
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.SubmitAnswer(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Data["status"] != "recorded" {
+		t.Fatalf("status = %q, want %q", payload.Data["status"], "recorded")
+	}
+}
+
 func TestExamSubmitMapsKnownServiceErrors(t *testing.T) {
 	participant := db.GetParticipantByTokenRow{}
 	tests := []struct {
@@ -386,6 +412,30 @@ func TestExamSubmitMapsKnownServiceErrors(t *testing.T) {
 				t.Fatalf("error = %q, want %q", payload.Error, tt.wantError)
 			}
 		})
+	}
+}
+
+func TestExamSubmitWritesWrappedJSON(t *testing.T) {
+	participant := db.GetParticipantByTokenRow{}
+	h := &Exam{svc: &fakeExamService{}}
+	req := httptest.NewRequest("POST", "http://internal/api/exam/submit", nil)
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.Submit(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if payload.Data["status"] != "submitted" {
+		t.Fatalf("status = %q, want %q", payload.Data["status"], "submitted")
 	}
 }
 
