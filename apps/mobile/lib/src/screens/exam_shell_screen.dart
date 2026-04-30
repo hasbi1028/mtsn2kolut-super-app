@@ -585,6 +585,25 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _staleAttentionThresholdSeconds;
   }
 
+  String get _staleAttentionDurationLabel {
+    final last = _lastServerContactAt;
+    if (last == null) {
+      return '-';
+    }
+    final seconds = DateTime.now().difference(last).inSeconds;
+    if (seconds < 60) {
+      return '$seconds detik';
+    }
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    if (minutes < 60) {
+      return '$minutes menit ${remainingSeconds.toString().padLeft(2, '0')} detik';
+    }
+    final hours = minutes ~/ 60;
+    final remainingMinutes = minutes % 60;
+    return '$hours jam ${remainingMinutes.toString().padLeft(2, '0')} menit';
+  }
+
   Future<void> _handleConnectionAttentionSignals() async {
     await _handlePotentialDegradedMode();
     await _handlePotentialStaleAttention();
@@ -941,6 +960,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             if (_needsSupervisorAttention) ...[
               _SupervisorAttentionCard(
                 lastContactAt: _formatClock(_lastServerContactAt),
+                staleDuration: _staleAttentionDurationLabel,
                 onRetry: _isSyncingStatus ? null : _syncStatus,
               ),
               const SizedBox(height: 14),
@@ -1694,10 +1714,12 @@ class _DegradedModeCard extends StatelessWidget {
 class _SupervisorAttentionCard extends StatelessWidget {
   const _SupervisorAttentionCard({
     required this.lastContactAt,
+    required this.staleDuration,
     required this.onRetry,
   });
 
   final String lastContactAt;
+  final String staleDuration;
   final VoidCallback? onRetry;
 
   @override
@@ -1723,7 +1745,7 @@ class _SupervisorAttentionCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Status koneksi berada di level waspada cukup lama sejak kontak server terakhir pukul $lastContactAt. Minta pengawas memeriksa jaringan perangkat lalu lakukan sinkron ulang.',
+            'Status koneksi berada di level waspada selama $staleDuration sejak kontak server terakhir pukul $lastContactAt. Minta pengawas memeriksa jaringan perangkat lalu lakukan sinkron ulang.',
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
           const SizedBox(height: 12),
