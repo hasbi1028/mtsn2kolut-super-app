@@ -87,6 +87,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     _answeredCount = widget.initialPayload.answeredCount;
     _timeRemainingSeconds = widget.initialPayload.timeRemainingSeconds;
     _currentQuestionIndex = widget.restoredSnapshot?.currentQuestionIndex ?? 0;
+    _lastServerContactAt = DateTime.tryParse(
+      widget.restoredSnapshot?.lastServerContactIso ?? '',
+    );
+    _lastSyncFailureAt = DateTime.tryParse(
+      widget.restoredSnapshot?.lastSyncFailureIso ?? '',
+    );
+    _consecutiveSyncFailures =
+        widget.restoredSnapshot?.consecutiveSyncFailures ?? 0;
     _serverNotice = widget.initialServerNotice;
     for (var i = 0; i < widget.initialPayload.questions.length; i++) {
       final question = widget.initialPayload.questions[i];

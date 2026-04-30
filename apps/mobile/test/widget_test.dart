@@ -174,6 +174,125 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('exam shell renders stale supervisor attention panel', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final now = DateTime.now();
+    final staleContact = now.subtract(const Duration(minutes: 3));
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          restoredSnapshot: _sampleSnapshot(
+            lastServerContactIso: staleContact.toIso8601String(),
+            consecutiveSyncFailures: 0,
+          ),
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Perlu intervensi pengawas'), findsOneWidget);
+    expect(
+      find.textContaining('Status koneksi berada di level waspada'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Jika kondisi ini bertahan sampai 4 menit'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('exam shell renders degraded mode panel', (tester) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final now = DateTime.now();
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          restoredSnapshot: _sampleSnapshot(
+            lastServerContactIso: now
+                .subtract(const Duration(minutes: 1))
+                .toIso8601String(),
+            lastSyncFailureIso: now.toIso8601String(),
+            consecutiveSyncFailures: 3,
+            pendingAnswers: const <String, String>{'question-1': 'B'},
+          ),
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mode koneksi menurun aktif'), findsOneWidget);
+    expect(
+      find.textContaining('Sinkron gagal 3 kali berturut-turut'),
+      findsOneWidget,
+    );
+    expect(find.text('Pulihkan Sinkron'), findsOneWidget);
+  });
+
+  testWidgets('exam shell renders repeated connection warning panel', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final now = DateTime.now();
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          restoredSnapshot: _sampleSnapshot(
+            lastServerContactIso: now
+                .subtract(const Duration(seconds: 30))
+                .toIso8601String(),
+            lastSyncFailureIso: now.toIso8601String(),
+            consecutiveSyncFailures: 2,
+          ),
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Koneksi perlu diperhatikan'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Perangkat mengalami 2 gangguan sinkron berturut-turut',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Coba Sinkron Ulang'), findsOneWidget);
+  });
 }
 
 class _TestApp extends StatelessWidget {
@@ -220,5 +339,32 @@ ExamLoginPayload _sampleLoginPayload() {
     answeredCount: 0,
     totalQuestions: 1,
     timeRemainingSeconds: 1800,
+  );
+}
+
+ExamSessionSnapshot _sampleSnapshot({
+  String lastServerContactIso = '',
+  String lastSyncFailureIso = '',
+  int consecutiveSyncFailures = 0,
+  Map<String, String> pendingAnswers = const <String, String>{},
+}) {
+  return ExamSessionSnapshot(
+    baseUrl: 'http://10.0.2.2:8080',
+    examToken: 'abc12345',
+    deviceFingerprint: 'android:test',
+    studentName: 'Siti Aminah',
+    studentNis: '24001',
+    sessionTitle: 'Matematika Kelas VIII',
+    roomName: 'Lab 1',
+    scheduledStartIso: '2026-05-01T08:00:00+08:00',
+    scheduledEndIso: '2026-05-01T09:30:00+08:00',
+    durationMinutes: 90,
+    currentQuestionIndex: 0,
+    answers: const <String, String>{},
+    pendingAnswers: pendingAnswers,
+    playedAudioQuestionIds: const <String>[],
+    lastServerContactIso: lastServerContactIso,
+    lastSyncFailureIso: lastSyncFailureIso,
+    consecutiveSyncFailures: consecutiveSyncFailures,
   );
 }

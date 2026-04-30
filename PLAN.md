@@ -149,6 +149,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Persistent `403/409` guidance panel extended to Flutter token-login and restore-failed flows with tested notice mapping
 - [x] Widget-test coverage for rendered login and restore-failed guidance panels so entry-flow BYOD UX is locked at the UI layer too
 - [x] Widget-test coverage for rendered warning/danger guidance panels inside the running Flutter exam shell
+- [x] Widget-test coverage for shell-level BYOD connection panels (`Waspada`, repeated sync warning, and degraded mode`) driven from restored snapshot state
 - [x] Handler-level unauthorized coverage for exam `heartbeat` and `event` telemetry routes
 - [x] Handler-level success-envelope coverage for exam `heartbeat` and `event` telemetry routes
 
