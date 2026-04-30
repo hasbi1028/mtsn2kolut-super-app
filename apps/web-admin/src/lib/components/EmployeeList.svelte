@@ -8,6 +8,8 @@
   import { toast } from '$lib/components/ui/sonner';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
+  import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+  import SuccessPanel from '$lib/components/SuccessPanel.svelte';
 
   interface Employee {
     id: string;
@@ -77,6 +79,7 @@
   let accountDeleting  = $state(false);
   let filterMode = $state<'all' | 'configured' | 'needs_setup' | 'disabled'>('all');
   let search = $state('');
+  let success = $state('');
   let showAuditDialog = $state(false);
   let auditLoading = $state(false);
   let auditLogs = $state<AuditLog[]>([]);
@@ -152,6 +155,7 @@
   async function savePusakaCredentials() {
     if (!selectedEmployee) return;
     saving = true;
+    success = '';
     try {
       const res = await fetch(`/api/pusaka/employees/${selectedEmployee.id}`, {
         method: 'PUT',
@@ -164,6 +168,7 @@
         return;
       }
       toast.success('Kredensial PUSAKA berhasil diperbarui.');
+      success = `Kredensial PUSAKA untuk ${selectedEmployee.nama} berhasil diperbarui.`;
       showPusakaDialog = false;
       ondelete?.();
     } catch {
@@ -182,6 +187,7 @@
 
   async function togglePusakaAccount(emp: Employee, isEnabled: boolean) {
     accountToggling = true;
+    success = '';
     try {
       const res = await fetch(`/api/pusaka/employees/${emp.id}`, {
         method: 'PATCH',
@@ -194,6 +200,7 @@
         return;
       }
       toast.success(isEnabled ? 'Akun PUSAKA diaktifkan kembali.' : 'Akun PUSAKA dinonaktifkan.');
+      success = `Akun PUSAKA ${emp.nama} berhasil ${isEnabled ? 'diaktifkan kembali' : 'dinonaktifkan'}.`;
       ondelete?.();
     } finally {
       accountToggling = false;
@@ -203,6 +210,7 @@
   async function deletePusakaAccount(emp: Employee) {
     if (!confirm(`Hapus akun PUSAKA untuk ${emp.nama}? Jadwal tetap disimpan, tetapi akun integrasi akan dilepas.`)) return;
     accountDeleting = true;
+    success = '';
     try {
       const res = await fetch(`/api/pusaka/employees/${emp.id}`, { method: 'DELETE' });
       if (!res.ok) {
@@ -211,6 +219,7 @@
         return;
       }
       toast.success('Akun PUSAKA berhasil dihapus.');
+      success = `Akun PUSAKA ${emp.nama} berhasil dihapus dari integrasi.`;
       ondelete?.();
     } finally {
       accountDeleting = false;
@@ -320,6 +329,7 @@
     if (!scheduleEmployee) return;
     const cfg = dayConfigs[dow];
     scheduleSaving = true;
+    success = '';
     try {
       if (cfg.checkinTime) {
         await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules`, {
@@ -346,6 +356,7 @@
       const res  = await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules`);
       const data = await res.json().catch(() => []) as EmployeeSchedule[];
       if (Array.isArray(data)) dayConfigs = populateDayConfigs(data);
+      success = `Jadwal ${scheduleEmployee.nama} untuk ${dayLabels[dow]} berhasil diperbarui.`;
       ondelete?.();
     } catch { /* silent */ }
     finally { scheduleSaving = false; }
@@ -411,29 +422,44 @@
     return '📅 Jadwal';
   }
 
+  const dayLabels = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   const canConfirmRun = $derived(runConfirmInput.trim() === 'SURE');
 </script>
 
 <Card.Root>
   <Card.Header class="pb-3">
-    <div class="flex items-center justify-between">
+    <div class="flex flex-col gap-4">
       <div>
         <Card.Title class="text-base">Pegawai Eligible PUSAKA</Card.Title>
         <Card.Description>Hanya pegawai PNS dan PPPK yang dikelola di area ini untuk setup akun, jadwal, dan eksekusi job PUSAKA.</Card.Description>
       </div>
-      <div class="flex items-center gap-2">
-        <Input placeholder="Cari nama / NIP..." bind:value={search} class="w-44" />
-        <select bind:value={filterMode} class="rounded-md border border-input bg-background px-3 py-2 text-sm">
-          <option value="all">Semua</option>
-          <option value="configured">Akun aktif</option>
-          <option value="needs_setup">Belum setup</option>
-          <option value="disabled">Dinonaktifkan</option>
-        </select>
-        <Badge variant="secondary">{filteredEmployees.length} pegawai</Badge>
+      <div class="grid gap-3 md:grid-cols-[1.2fr_0.8fr_auto]">
+        <div>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Cari Pegawai</p>
+          <Input placeholder="Cari nama / NIP..." bind:value={search} class="w-full" />
+        </div>
+        <div>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status Integrasi</p>
+          <select bind:value={filterMode} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <option value="all">Semua</option>
+            <option value="configured">Akun aktif</option>
+            <option value="needs_setup">Belum setup</option>
+            <option value="disabled">Dinonaktifkan</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <Badge variant="secondary" class="h-10 px-3">{filteredEmployees.length} pegawai</Badge>
+        </div>
       </div>
     </div>
   </Card.Header>
-  <Card.Content class="p-0 overflow-x-auto">
+  <Card.Content class="space-y-4 p-0">
+    {#if success}
+      <div class="px-6 pt-1">
+        <SuccessPanel title="Operasi PUSAKA Berhasil" message={success} compact />
+      </div>
+    {/if}
+    <div class="overflow-x-auto">
     <Table.Root>
       <Table.Header>
         <Table.Row>
@@ -544,12 +570,17 @@
         {:else}
           <Table.Row>
             <Table.Cell colspan={5} class="py-12 text-center text-muted-foreground">
-              Belum ada data pegawai.
+              <EmptyStatePanel
+                compact
+                title="Belum ada pegawai eligible PUSAKA"
+                description="Pastikan pegawai PNS atau PPPK sudah tersimpan di master pegawai, lalu kembali ke area ini untuk setup akun dan jadwal."
+              />
             </Table.Cell>
           </Table.Row>
         {/each}
       </Table.Body>
     </Table.Root>
+    </div>
   </Card.Content>
 </Card.Root>
 
@@ -711,7 +742,6 @@
         {/each}
       </div>
     {:else}
-      {@const dayLabels = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']}
       <div class="space-y-2 max-h-[65vh] overflow-y-auto py-1 pr-1">
         {#each dayConfigs as cfg, dow (`${dow}-${cfg.checkinId ?? 'ci'}-${cfg.checkoutId ?? 'co'}`)}
           <div class="rounded-lg border bg-card px-3 py-2.5 space-y-2">

@@ -6,6 +6,8 @@
   import { resolve } from '$app/paths';
   import * as Dialog from '$lib/components/ui/dialog';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
+  import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+  import SuccessPanel from '$lib/components/SuccessPanel.svelte';
 
   interface Employee {
     id: string;
@@ -31,6 +33,7 @@
   let showEditDialog = $state(false);
   let editBusy = $state(false);
   let editError = $state('');
+  let success = $state('');
   let editingEmployee = $state<Employee | null>(null);
   let editForm = $state({
     nip: '',
@@ -79,6 +82,7 @@
     if (!editingEmployee) return;
     editBusy = true;
     editError = '';
+    success = '';
     try {
       const res = await fetch(`/api/employees/${editingEmployee.id}`, {
         method: 'PUT',
@@ -91,6 +95,7 @@
         return;
       }
       showEditDialog = false;
+      success = `Data pegawai ${editForm.nama} berhasil diperbarui.`;
       onreload();
     } finally {
       editBusy = false;
@@ -101,6 +106,7 @@
     const next = !emp.is_active;
     if (!confirm(`${next ? 'Aktifkan' : 'Nonaktifkan'} pegawai ${emp.nama}?`)) return;
     busyId = emp.id;
+    success = '';
     try {
       const res = await fetch(`/api/employees/${emp.id}/status`, {
         method: 'PATCH',
@@ -111,6 +117,7 @@
         alert('Gagal memperbarui status pegawai');
         return;
       }
+      success = `Status pegawai ${emp.nama} berhasil diubah menjadi ${next ? 'aktif' : 'nonaktif'}.`;
       onreload();
     } finally {
       busyId = null;
@@ -119,6 +126,7 @@
 
   async function doDelete(id: string) {
     busyId = id;
+    success = '';
     await fetch('/api/employees', {
       method: 'DELETE',
       headers: { 'content-type': 'application/json' },
@@ -126,36 +134,51 @@
     });
     busyId = null;
     confirmId = null;
+    success = 'Data pegawai berhasil dihapus dari master.';
     onreload();
   }
 </script>
 
 <Card.Root>
   <Card.Header class="pb-3">
-    <div class="flex items-center justify-between gap-3">
+    <div class="flex flex-col gap-4">
       <div>
         <Card.Title class="text-base">Master Pegawai Sekolah</Card.Title>
         <Card.Description>Menampilkan seluruh pegawai sekolah. Operasional akun, jadwal, dan job PUSAKA dikelola dari menu PUSAKA.</Card.Description>
       </div>
-      <div class="flex items-center gap-2">
-        <select bind:value={filterUnitKerja} class="rounded-md border border-input bg-background px-3 py-2 text-sm">
-          <option value="">Semua unit</option>
-          {#each unitKerjaOptions as unit}
-            <option value={unit}>{unit}</option>
-          {/each}
-        </select>
-        <select bind:value={filterEmploymentType} class="rounded-md border border-input bg-background px-3 py-2 text-sm">
-          <option value="">Semua status</option>
-          <option value="pns">PNS</option>
-          <option value="pppk">PPPK</option>
-          <option value="honorer">Honorer</option>
-          <option value="lainnya">Lainnya</option>
-        </select>
-        <Badge variant="secondary">{filteredEmployees.length} pegawai</Badge>
+      <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+        <div>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Filter Unit Kerja</p>
+          <select bind:value={filterUnitKerja} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <option value="">Semua unit</option>
+            {#each unitKerjaOptions as unit}
+              <option value={unit}>{unit}</option>
+            {/each}
+          </select>
+        </div>
+        <div>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status Kepegawaian</p>
+          <select bind:value={filterEmploymentType} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+            <option value="">Semua status</option>
+            <option value="pns">PNS</option>
+            <option value="pppk">PPPK</option>
+            <option value="honorer">Honorer</option>
+            <option value="lainnya">Lainnya</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <Badge variant="secondary" class="h-10 px-3">{filteredEmployees.length} pegawai</Badge>
+        </div>
       </div>
     </div>
   </Card.Header>
-  <Card.Content class="overflow-x-auto p-0">
+  <Card.Content class="space-y-4 p-0">
+    {#if success}
+      <div class="px-6 pt-1">
+        <SuccessPanel title="Master Pegawai Diperbarui" message={success} compact />
+      </div>
+    {/if}
+    <div class="overflow-x-auto">
     <Table.Root>
       <Table.Header>
         <Table.Row>
@@ -230,11 +253,18 @@
           </Table.Row>
         {:else}
           <Table.Row>
-            <Table.Cell colspan={5} class="py-12 text-center text-muted-foreground">Belum ada data pegawai.</Table.Cell>
+            <Table.Cell colspan={5} class="p-4">
+              <EmptyStatePanel
+                compact
+                title="Belum ada data pegawai"
+                description="Tambahkan pegawai pertama dari form di atas agar master pegawai dan alur operasional sekolah mulai terbangun."
+              />
+            </Table.Cell>
           </Table.Row>
         {/each}
       </Table.Body>
     </Table.Root>
+    </div>
   </Card.Content>
 </Card.Root>
 

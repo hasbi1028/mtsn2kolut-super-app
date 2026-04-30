@@ -6,6 +6,8 @@
   import { Badge } from '$lib/components/ui/badge';
   import { toast } from '$lib/components/ui/sonner';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
+  import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+  import SuccessPanel from '$lib/components/SuccessPanel.svelte';
 
   interface Schedule {
     id: string;
@@ -24,6 +26,7 @@
   let newLabel = $state('');
   let adding   = $state(false);
   let saving   = $state(false);
+  let success  = $state('');
 
   function showToast(msg: string) {
     toast.success(msg);
@@ -36,6 +39,7 @@
   async function addSchedule() {
     if (!newTime) return;
     adding = true;
+    success = '';
     try {
       const res = await fetch('/api/pusaka/schedules', {
         method: 'POST',
@@ -54,6 +58,7 @@
       }
       newTime  = '';
       newLabel = '';
+      success = 'Jadwal rekap baru berhasil ditambahkan. Jangan lupa simpan perubahan utama bila masih ada penyesuaian label atau status.';
       onsave();
     } catch { showError('Gagal menambah jadwal'); }
     finally { adding = false; }
@@ -61,20 +66,23 @@
 
   async function deleteSchedule(id: string) {
     try {
+      success = '';
       await fetch(`/api/pusaka/schedules/${id}`, { method: 'DELETE' });
+      success = 'Jadwal rekap berhasil dihapus.';
       onsave();
     } catch { showError('Gagal menghapus jadwal'); }
   }
 
   async function saveChanges() {
     saving = true;
+    success = '';
     try {
       const res = await fetch('/api/pusaka/schedules', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ schedules: rekapSchedules }),
       });
-      if (res.ok) { showToast('Jadwal disimpan'); onsave(); }
+      if (res.ok) { showToast('Jadwal disimpan'); success = 'Perubahan jadwal rekap otomatis berhasil disimpan.'; onsave(); }
       else showError('Gagal menyimpan');
     } catch { showError('Gagal menyimpan'); }
     finally { saving = false; }
@@ -83,18 +91,42 @@
 
 <Card.Root>
   <Card.Header class="pb-3">
-    <div class="flex items-center justify-between">
+    <div class="flex flex-col gap-4">
       <div>
         <Card.Title class="text-base">Jadwal Rekap Otomatis</Card.Title>
         <Card.Description>Scrape kehadiran PUSAKA Kemenag — bisa tambah beberapa waktu per hari</Card.Description>
       </div>
-      <LoadingButton onclick={saveChanges} size="sm" loading={saving} loadingLabel="Menyimpan..." disabled={saving}>
-        Simpan
-      </LoadingButton>
+      <div class="grid gap-3 md:grid-cols-[1.2fr_0.8fr_auto]">
+        <div>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Nama Jadwal Baru</p>
+          <Input class="h-10 text-sm" bind:value={newLabel} placeholder="Nama jadwal (opsional)" />
+        </div>
+        <div>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Jam Rekap</p>
+          <Input class="h-10 font-mono text-sm" bind:value={newTime} placeholder="HH:MM" type="time" />
+        </div>
+        <div class="flex items-end gap-2">
+          <LoadingButton size="sm" variant="outline" onclick={addSchedule}
+            loading={adding}
+            loadingLabel="Menambah..."
+            disabled={adding || !newTime} class="h-10">
+            + Tambah
+          </LoadingButton>
+          <LoadingButton onclick={saveChanges} size="sm" loading={saving} loadingLabel="Menyimpan..." disabled={saving} class="h-10">
+            Simpan
+          </LoadingButton>
+        </div>
+      </div>
     </div>
   </Card.Header>
 
-  <Card.Content class="p-0 overflow-x-auto">
+  <Card.Content class="space-y-4 p-0">
+    {#if success}
+      <div class="px-6 pt-1">
+        <SuccessPanel title="Jadwal Rekap Diperbarui" message={success} compact />
+      </div>
+    {/if}
+    <div class="overflow-x-auto">
     <Table.Root>
       <Table.Header>
         <Table.Row>
@@ -127,33 +159,17 @@
           </Table.Row>
         {:else}
           <Table.Row>
-            <Table.Cell colspan={4} class="py-6 text-center text-muted-foreground text-sm">
-              Belum ada jadwal rekap.
+            <Table.Cell colspan={4} class="p-4">
+              <EmptyStatePanel
+                compact
+                title="Belum ada jadwal rekap"
+                description="Tambahkan jam rekap pertama agar sinkronisasi kehadiran otomatis mulai berjalan dari panel ini."
+              />
             </Table.Cell>
           </Table.Row>
         {/each}
-
-        <!-- Add new schedule row -->
-        <Table.Row class="bg-slate-50/60">
-          <Table.Cell>
-            <Input class="h-8 text-sm" bind:value={newLabel} placeholder="Nama jadwal (opsional)" />
-          </Table.Cell>
-          <Table.Cell>
-            <Input class="w-24 font-mono h-8" bind:value={newTime} placeholder="HH:MM" type="time" />
-          </Table.Cell>
-          <Table.Cell class="text-center">
-            <Badge variant="outline" class="text-xs">Aktif</Badge>
-          </Table.Cell>
-          <Table.Cell>
-            <LoadingButton size="sm" variant="outline" onclick={addSchedule}
-              loading={adding}
-              loadingLabel="Menambah..."
-              disabled={adding || !newTime} class="h-8">
-              + Tambah
-            </LoadingButton>
-          </Table.Cell>
-        </Table.Row>
       </Table.Body>
     </Table.Root>
+    </div>
   </Card.Content>
 </Card.Root>
