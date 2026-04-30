@@ -15,17 +15,27 @@ import (
 )
 
 type fakeExamService struct {
-	loginResult  service.LoginResult
-	loginErr     error
-	statusResult service.StatusResult
-	statusErr    error
-	heartbeatErr error
-	eventErr     error
-	answerErr    error
-	submitErr    error
+	loginResult                service.LoginResult
+	loginErr                   error
+	statusResult               service.StatusResult
+	statusErr                  error
+	heartbeatErr               error
+	eventErr                   error
+	answerErr                  error
+	submitErr                  error
+	lastLoginToken             string
+	lastLoginDeviceFingerprint string
+	lastLoginIP                string
+	lastEventType              string
+	lastEventData              map[string]any
+	lastAnswerQuestionID       pgtype.UUID
+	lastAnswerText             string
 }
 
 func (f *fakeExamService) Login(ctx context.Context, token, deviceFingerprint, loginIP string) (service.LoginResult, error) {
+	f.lastLoginToken = token
+	f.lastLoginDeviceFingerprint = deviceFingerprint
+	f.lastLoginIP = loginIP
 	return f.loginResult, f.loginErr
 }
 
@@ -38,10 +48,14 @@ func (f *fakeExamService) Heartbeat(ctx context.Context, participantID pgtype.UU
 }
 
 func (f *fakeExamService) RecordClientEvent(ctx context.Context, participantID pgtype.UUID, eventType string, data map[string]any) error {
+	f.lastEventType = eventType
+	f.lastEventData = data
 	return f.eventErr
 }
 
 func (f *fakeExamService) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, questionID pgtype.UUID, answer string) error {
+	f.lastAnswerQuestionID = questionID
+	f.lastAnswerText = answer
 	return f.answerErr
 }
 
@@ -117,29 +131,29 @@ func TestAbsolutizeExamLoginResultRewritesAllMediaFields(t *testing.T) {
 }
 
 func TestExamLoginWritesWrappedJSONWithAbsoluteMediaURLs(t *testing.T) {
-	h := &Exam{
-		svc: &fakeExamService{
-			loginResult: service.LoginResult{
-				ParticipantID: "participant-1",
-				Student:       service.StudentInfo{NIS: "12345", Nama: "Ahmad"},
-				Session:       service.SessionInfo{ID: "session-1", Title: "Ujian IPA"},
-				Questions: []service.ExamQuestion{
-					{
-						ID:               "q-1",
-						QuestionText:     "Soal 1",
-						StemMediaURL:     "/api/cbt/assets/image-1/file",
-						StimulusAudioURL: "/api/cbt/assets/audio-1/file",
-					},
+	svc := &fakeExamService{
+		loginResult: service.LoginResult{
+			ParticipantID: "participant-1",
+			Student:       service.StudentInfo{NIS: "12345", Nama: "Ahmad"},
+			Session:       service.SessionInfo{ID: "session-1", Title: "Ujian IPA"},
+			Questions: []service.ExamQuestion{
+				{
+					ID:               "q-1",
+					QuestionText:     "Soal 1",
+					StemMediaURL:     "/api/cbt/assets/image-1/file",
+					StimulusAudioURL: "/api/cbt/assets/audio-1/file",
 				},
 			},
 		},
 	}
+	h := &Exam{svc: svc}
 
 	body := bytes.NewBufferString(`{"token":"a1b2c3d4","device_fingerprint":"device-1"}`)
 	req := httptest.NewRequest("POST", "http://internal/api/exam/login", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-Host", "cbt.mtsn2kolut.sch.id")
+	req.Header.Set("X-Forwarded-For", "203.0.113.10")
 	rec := httptest.NewRecorder()
 
 	h.Login(rec, req)
@@ -166,6 +180,15 @@ func TestExamLoginWritesWrappedJSONWithAbsoluteMediaURLs(t *testing.T) {
 	}
 	if payload.Data.Questions[0].StimulusAudioURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/audio-1/file" {
 		t.Fatalf("StimulusAudioURL = %q", payload.Data.Questions[0].StimulusAudioURL)
+	}
+	if svc.lastLoginToken != "a1b2c3d4" {
+		t.Fatalf("login token = %q, want %q", svc.lastLoginToken, "a1b2c3d4")
+	}
+	if svc.lastLoginDeviceFingerprint != "device-1" {
+		t.Fatalf("device fingerprint = %q, want %q", svc.lastLoginDeviceFingerprint, "device-1")
+	}
+	if svc.lastLoginIP != "203.0.113.10" {
+		t.Fatalf("login ip = %q, want %q", svc.lastLoginIP, "203.0.113.10")
 	}
 }
 
@@ -494,7 +517,8 @@ func TestExamSubmitAnswerRejectsInvalidQuestionID(t *testing.T) {
 
 func TestExamSubmitAnswerWritesWrappedJSON(t *testing.T) {
 	participant := db.GetParticipantByTokenRow{}
-	h := &Exam{svc: &fakeExamService{}}
+	svc := &fakeExamService{}
+	h := &Exam{svc: svc}
 	body := bytes.NewBufferString(`{"question_id":"11111111-1111-1111-1111-111111111111","answer":"B"}`)
 	req := httptest.NewRequest("POST", "http://internal/api/exam/answer", body)
 	req.Header.Set("Content-Type", "application/json")
@@ -515,6 +539,12 @@ func TestExamSubmitAnswerWritesWrappedJSON(t *testing.T) {
 	}
 	if payload.Data["status"] != "recorded" {
 		t.Fatalf("status = %q, want %q", payload.Data["status"], "recorded")
+	}
+	if svc.lastAnswerQuestionID.String() != "11111111-1111-1111-1111-111111111111" {
+		t.Fatalf("question id = %q, want %q", svc.lastAnswerQuestionID.String(), "11111111-1111-1111-1111-111111111111")
+	}
+	if svc.lastAnswerText != "B" {
+		t.Fatalf("answer = %q, want %q", svc.lastAnswerText, "B")
 	}
 }
 
@@ -706,7 +736,8 @@ func TestExamHeartbeatMapsUnexpectedServiceError(t *testing.T) {
 }
 
 func TestExamRecordEventWritesWrappedSuccessJSON(t *testing.T) {
-	h := &Exam{svc: &fakeExamService{}}
+	svc := &fakeExamService{}
+	h := &Exam{svc: svc}
 	var participant db.GetParticipantByTokenRow
 	body := bytes.NewBufferString(`{"event_type":"warning","data":{"reason":"test"}}`)
 	req := httptest.NewRequest("POST", "http://internal/api/exam/event", body)
@@ -728,6 +759,12 @@ func TestExamRecordEventWritesWrappedSuccessJSON(t *testing.T) {
 	}
 	if payload.Data["status"] != "recorded" {
 		t.Fatalf("status = %q, want %q", payload.Data["status"], "recorded")
+	}
+	if svc.lastEventType != "warning" {
+		t.Fatalf("event type = %q, want %q", svc.lastEventType, "warning")
+	}
+	if reason, _ := svc.lastEventData["reason"].(string); reason != "test" {
+		t.Fatalf("event data reason = %v, want test", svc.lastEventData["reason"])
 	}
 }
 

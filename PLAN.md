@@ -141,6 +141,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Backend exam payload/status hardening so Flutter-critical fields (`session.title`, `is_submitted`, rich content, media/audio URLs) are actually emitted and covered by backend contract tests
 - [x] Handler-level proxy URL tests for exam asset/media absolutization behind `X-Forwarded-*`
 - [x] Handler-level login/status JSON envelope tests so mobile contract is checked at the HTTP response layer too
+- [x] Handler-level request-forwarding tests for exam login/answer/event parsing into service arguments (token, device fingerprint, forwarded IP, question ID, answer text, event type, event data)
 - [x] Handler-level exam error-semantics tests for mobile-critical `404/403/409/401` cases
 - [x] Handler-level `answer` / `submit` error-semantics tests for `409` submitted and `403` exam-window-closed cases
 - [x] Flutter exam UX now maps backend `404/403/409` semantics into clearer login/restore/save/submit guidance for BYOD sessions
