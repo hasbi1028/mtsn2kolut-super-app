@@ -10,7 +10,16 @@ import 'exam_shell_screen.dart';
 import 'exam_restore_failed_screen.dart';
 
 class ExamLoginScreen extends StatefulWidget {
-  const ExamLoginScreen({super.key});
+  const ExamLoginScreen({
+    super.key,
+    this.autoRestore = true,
+    this.initialErrorMessage,
+    this.initialErrorNotice,
+  });
+
+  final bool autoRestore;
+  final String? initialErrorMessage;
+  final ExamGuidanceNotice? initialErrorNotice;
 
   @override
   State<ExamLoginScreen> createState() => _ExamLoginScreenState();
@@ -34,7 +43,13 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
   @override
   void initState() {
     super.initState();
-    _restoreExamSession();
+    _errorMessage = widget.initialErrorMessage;
+    _errorNotice = widget.initialErrorNotice;
+    if (widget.autoRestore) {
+      _restoreExamSession();
+    } else {
+      _isRestoring = false;
+    }
   }
 
   @override
