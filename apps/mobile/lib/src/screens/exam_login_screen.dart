@@ -39,6 +39,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
 
   bool _isSubmitting = false;
   bool _isRestoring = true;
+  bool _showOperatorSettings = false;
   String? _errorMessage;
   ExamGuidanceNotice? _errorNotice;
 
@@ -238,6 +239,8 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
 
   String _deviceFingerprint() {
     final host = Platform.localHostname;
+    // BYOD note: this is only a lightweight telemetry hint for resume/sync
+    // correlation, not a strong device identity proof.
     return '${Platform.operatingSystem}:$host';
   }
 
@@ -402,13 +405,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
               ),
             ),
             const SizedBox(height: 14),
-            TextField(
-              controller: _baseUrlController,
-              decoration: const InputDecoration(
-                labelText: 'Alamat server API',
-                hintText: 'Contoh: http://10.0.2.2:8080',
-              ),
-            ),
+            _buildOperatorSettings(theme),
             const SizedBox(height: 16),
             if (_errorMessage != null)
               _MessageBanner(tone: BannerTone.error, message: _errorMessage!),
@@ -443,6 +440,85 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
               'Perpindahan aplikasi akan tercatat ke server.',
               style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
             ),
+            const SizedBox(height: 8),
+            Text(
+              'Penanda perangkat dipakai sebagai petunjuk teknis untuk sinkronisasi dan pemulihan sesi, '
+              'bukan sebagai bukti identitas kuat perangkat.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                height: 1.45,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOperatorSettings(ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAF7),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Pengaturan Operator',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _showOperatorSettings
+                            ? 'Alamat server hanya perlu diubah bila operator sekolah memang memakai endpoint yang berbeda.'
+                            : 'Disembunyikan saat mode siswa biasa agar peserta tidak mudah salah mengubah alamat server.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _showOperatorSettings = !_showOperatorSettings;
+                    });
+                  },
+                  icon: Icon(
+                    _showOperatorSettings
+                        ? Icons.expand_less
+                        : Icons.tune_outlined,
+                  ),
+                  label: Text(
+                    _showOperatorSettings ? 'Sembunyikan' : 'Tampilkan',
+                  ),
+                ),
+              ],
+            ),
+            if (_showOperatorSettings) ...[
+              const SizedBox(height: 14),
+              TextField(
+                controller: _baseUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'Alamat server API',
+                  hintText: 'Contoh: http://10.0.2.2:8080',
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -18,6 +18,29 @@ void main() {
 
     expect(find.text('Masuk Ujian'), findsWidgets);
     expect(find.text('Token ujian'), findsOneWidget);
+    expect(find.text('Pengaturan Operator'), findsOneWidget);
+    expect(find.text('Alamat server API'), findsNothing);
+  });
+
+  testWidgets('login screen reveals operator server field on demand', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const _TestApp(child: ExamLoginScreen(autoRestore: false)),
+    );
+
+    await tester.pump();
+    expect(find.text('Alamat server API'), findsNothing);
+
+    await tester.ensureVisible(find.text('Tampilkan'));
+    await tester.tap(find.text('Tampilkan'));
+    await tester.pumpAndSettle();
+
     expect(find.text('Alamat server API'), findsOneWidget);
   });
 

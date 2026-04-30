@@ -205,6 +205,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Mobile metadata cleanup — Flutter app description and Android app label no longer use default scaffold metadata
 - [x] Reduce internal-key blast radius — main protected/admin backend routes now require real JWT context, and CBT asset file access is limited to real JWT users or active exam participants via `exam_token`
 - [x] Mobile snapshot hardening — sensitive exam snapshot fields now live in secure storage while SharedPreferences retains only lightweight restore metadata, with legacy snapshot compatibility kept for existing installs
+- [x] Mobile BYOD login hardening — device fingerprint is now documented and surfaced only as a telemetry hint, while API base URL override is moved behind an operator-facing panel instead of staying as a primary student input
 - [x] Auth hardening baseline — explicit suspended/weak-password errors, backend password policy, non-destructive `SeedAdmin`
 - [x] BFF auth forwarding baseline — authenticated proxy helpers now require bearer JWT instead of silently falling back to internal key
 - [x] Refresh session baseline — session-backed refresh tokens with backend revoke on logout and rotation on refresh

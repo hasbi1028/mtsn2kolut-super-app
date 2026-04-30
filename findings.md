@@ -9,11 +9,9 @@ Dokumen ini merangkum backlog review yang **masih aktif** per 2026-05-01. Temuan
 ### Medium priority
 1. Pecah `services/pusaka-worker/src/index.ts` menjadi modul yang lebih kecil
 2. Refactor `apps/mobile/lib/src/screens/exam_shell_screen.dart`
-3. Jangan perlakukan fingerprint device mobile saat ini sebagai identitas kuat
 
 ### Low priority
-4. Evaluasi kebutuhan field API base URL yang bisa diubah siswa di mobile
-5. Bersihkan working tree dan pastikan file data sensitif tidak ikut commit
+3. Bersihkan working tree dan pastikan file data sensitif tidak ikut commit
 
 ---
 
@@ -64,47 +62,7 @@ Screen ini masih memegang lifecycle, timer, sync/degraded logic, persistence, su
 
 ---
 
-## 3) MEDIUM — Fingerprint device mobile saat ini masih lemah
-
-**Area:** `apps/mobile`
-
-**File:**
-- `apps/mobile/lib/src/screens/exam_login_screen.dart`
-
-**Masalah:**
-Fingerprint masih dibuat dari `Platform.operatingSystem` dan `Platform.localHostname`.
-
-**Kenapa ini bermasalah:**
-Ini cukup sebagai telemetry hint, tapi lemah jika diperlakukan sebagai identity binding yang kuat.
-
-**Arah patch:**
-- dokumentasikan jelas bahwa fingerprint ini hanya hint
-- pastikan backend/client tidak membuat keputusan security penting yang bergantung hanya pada fingerprint ini
-- jika butuh device identity yang lebih baik, definisikan strategi BYOD yang realistis
-
-**Acceptance check:**
-- role fingerprint di arsitektur jelas
-- tidak ada keputusan security penting yang bergantung hanya pada fingerprint saat ini
-
----
-
-## 4) LOW — Field API base URL masih editable di mobile student app
-
-**Area:** `apps/mobile`
-
-**File:**
-- `apps/mobile/lib/src/screens/exam_login_screen.dart`
-
-**Masalah:**
-Siswa masih dapat mengubah `Alamat server API` langsung dari UI.
-
-**Arah patch:**
-- jika ini hanya untuk trial internal, pertimbangkan mode operator/debug saja
-- untuk rilis sekolah, pertimbangkan base URL fixed atau tersembunyi di mode admin/operator
-
----
-
-## 5) LOW — Working tree dan runtime data perlu tetap dijaga dari commit
+## 3) LOW — Working tree dan runtime data perlu tetap dijaga dari commit
 
 **Area:** repo root / operational hygiene
 
@@ -130,14 +88,14 @@ Repo masih punya runtime/local data paths yang mudah ikut terseret ke commit jik
 - Metadata mobile dasar sudah dirapikan dari scaffold default (`pubspec` description dan Android app label).
 - Surface user-facing protected/admin route tidak lagi menerima bypass internal key; route CBT asset file sekarang menerima hanya JWT user nyata atau `exam_token` peserta aktif.
 - Snapshot exam mobile tidak lagi menyimpan payload sensitif bersama metadata restore di `SharedPreferences`; token, fingerprint, jawaban, dan pending answers sekarang dipisah ke secure storage, dengan fallback baca snapshot legacy untuk migrasi mulus.
+- Fingerprint mobile sekarang diposisikan eksplisit sebagai telemetry hint BYOD, bukan identitas kuat perangkat.
+- Field `Alamat server API` tidak lagi menjadi input utama siswa; sekarang tersembunyi di panel `Pengaturan Operator` yang dibuka hanya saat diperlukan.
 
 ---
 
 ## Urutan patch yang disarankan sekarang
 
 ### Batch 1 — mobile hardening
-- [ ] Tegaskan role fingerprint sebagai telemetry hint
-- [ ] Evaluasi API base URL editable
 
 ### Batch 2 — maintainability
 - [ ] Pecah worker `index.ts`
