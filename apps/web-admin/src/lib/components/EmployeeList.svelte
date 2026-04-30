@@ -10,6 +10,7 @@
   import LoadingButton from '$lib/components/LoadingButton.svelte';
   import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
   import SuccessPanel from '$lib/components/SuccessPanel.svelte';
+  import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 
   interface Employee {
     id: string;
@@ -80,6 +81,7 @@
   let filterMode = $state<'all' | 'configured' | 'needs_setup' | 'disabled'>('all');
   let search = $state('');
   let success = $state('');
+  let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
   let showAuditDialog = $state(false);
   let auditLoading = $state(false);
   let auditLogs = $state<AuditLog[]>([]);
@@ -136,6 +138,7 @@
   function submitRunConfirm() {
     if (!runConfirm || runConfirmInput.trim() !== 'SURE') return;
     onrun(runConfirm.emp.id, runConfirm.runType);
+    success = `Job ${runTypeLabel[runConfirm.runType]} untuk ${runConfirm.emp.nama} berhasil diantrekan. Pantau statusnya di kolom operasi atau riwayat job terbaru.`;
     runConfirm = null;
     runConfirmInput = '';
   }
@@ -152,6 +155,11 @@
     showPusakaDialog = true;
   }
 
+  function confirmPhrase(title: string, detail: string, challenge: string) {
+    const input = prompt(`${title}\n\n${detail}\n\nKetik ${challenge} untuk melanjutkan.`);
+    return input === challenge;
+  }
+
   async function savePusakaCredentials() {
     if (!selectedEmployee) return;
     saving = true;
@@ -164,6 +172,11 @@
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        operationState = {
+          tone: 'error',
+          title: 'Kredensial Gagal Diperbarui',
+          message: (data as { error?: string }).error || 'Gagal menyimpan kredensial PUSAKA',
+        };
         toast.error((data as { error?: string }).error || 'Gagal menyimpan kredensial PUSAKA');
         return;
       }
@@ -172,6 +185,11 @@
       showPusakaDialog = false;
       ondelete?.();
     } catch {
+      operationState = {
+        tone: 'error',
+        title: 'Kredensial Gagal Diperbarui',
+        message: 'Gagal menyimpan kredensial PUSAKA',
+      };
       toast.error('Gagal menyimpan kredensial PUSAKA');
     } finally { saving = false; }
   }
@@ -186,6 +204,14 @@
   }
 
   async function togglePusakaAccount(emp: Employee, isEnabled: boolean) {
+    const challenge = isEnabled ? 'AKTIFKAN' : 'NONAKTIFKAN';
+    if (!confirmPhrase(
+      isEnabled ? 'Aktifkan Akun PUSAKA' : 'Nonaktifkan Akun PUSAKA',
+      isEnabled
+        ? `Akun PUSAKA ${emp.nama} akan diaktifkan kembali dan bisa dipakai untuk job otomatis maupun manual.`
+        : `Akun PUSAKA ${emp.nama} akan dinonaktifkan dari integrasi. Job otomatis sebaiknya tidak lagi dijalankan sampai akun diaktifkan kembali.`,
+      challenge,
+    )) return;
     accountToggling = true;
     success = '';
     try {
@@ -196,6 +222,11 @@
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        operationState = {
+          tone: 'error',
+          title: 'Status Akun Gagal Diperbarui',
+          message: (data as { error?: string }).error || 'Gagal memperbarui status akun PUSAKA',
+        };
         toast.error((data as { error?: string }).error || 'Gagal memperbarui status akun PUSAKA');
         return;
       }
@@ -208,13 +239,18 @@
   }
 
   async function deletePusakaAccount(emp: Employee) {
-    if (!confirm(`Hapus akun PUSAKA untuk ${emp.nama}? Jadwal tetap disimpan, tetapi akun integrasi akan dilepas.`)) return;
+    if (!confirmPhrase('Hapus Akun PUSAKA', `Akun PUSAKA untuk ${emp.nama} akan dilepas dari integrasi. Jadwal tetap tersimpan, tetapi kredensial dan status akun integrasi akan hilang dari pegawai ini.`, 'HAPUS')) return;
     accountDeleting = true;
     success = '';
     try {
       const res = await fetch(`/api/pusaka/employees/${emp.id}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        operationState = {
+          tone: 'error',
+          title: 'Akun Gagal Dihapus',
+          message: (data as { error?: string }).error || 'Gagal menghapus akun PUSAKA',
+        };
         toast.error((data as { error?: string }).error || 'Gagal menghapus akun PUSAKA');
         return;
       }
@@ -282,6 +318,7 @@
   }
 
   async function doStop(id: string) {
+    if (!confirm('Stop akan mencoba membatalkan job aktif untuk pegawai ini. Lanjutkan?')) return;
     busyId = id;
     const res  = await fetch('/api/pusaka/jobs/cancel', {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -289,6 +326,9 @@
     });
     const data = await res.json().catch(() => ({})) as { cancelled?: number };
     busyId = null;
+    success = data.cancelled && data.cancelled > 0
+      ? `${data.cancelled} job untuk pegawai ini berhasil dibatalkan.`
+      : 'Tidak ada job aktif yang perlu dibatalkan untuk pegawai ini.';
     onstop?.(id, data.cancelled ?? 0);
   }
 
@@ -459,6 +499,11 @@
         <SuccessPanel title="Operasi PUSAKA Berhasil" message={success} compact />
       </div>
     {/if}
+    {#if operationState}
+      <div class="px-6 pt-1">
+        <OperationStatusPanel {...operationState} compact />
+      </div>
+    {/if}
     <div class="overflow-x-auto">
     <Table.Root>
       <Table.Header>
@@ -540,7 +585,7 @@
                 <LoadingButton size="sm" variant="ghost" onclick={() => testPusakaCredentials(e)} loading={testing} loadingLabel="Testing..." disabled={testing || !isPusakaConfigured(e)}>
                   Test
                 </LoadingButton>
-                <LoadingButton size="sm" variant="outline" onclick={() => onrun(e.id, 'morning')} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id}>
+                <LoadingButton size="sm" variant="outline" onclick={() => openRunConfirm(e, 'morning')} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id}>
                   Rekap
                 </LoadingButton>
                 <Button size="sm" variant="outline"

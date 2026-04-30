@@ -10,6 +10,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 
 	interface QueueStats {
 		queued: number; running: number; success: number;
@@ -31,6 +32,7 @@
 	let busy         = $state<Record<string, boolean>>({});
 	let confirmKey   = $state('');
 	let loadError    = $state('');
+	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 
 	async function load() {
 		try {
@@ -57,8 +59,18 @@
 			const res  = await fn();
 			const data = await res.json().catch(() => ({}));
 			if (!res.ok) throw new Error((data as any).error || 'Gagal');
+			operationState = {
+				tone: key === 'cancel_all' ? 'warning' : 'success',
+				title: key === 'cancel_all' ? 'Antrian Dibatalkan' : 'Operasi PUSAKA Berhasil',
+				message: successMsg + ((data as any).cancelled != null ? ` (${(data as any).cancelled} job)` : ''),
+			};
 			showToast(successMsg + ((data as any).cancelled != null ? ` (${(data as any).cancelled} job)` : ''), 'ok');
 		} catch (e: any) {
+			operationState = {
+				tone: 'error',
+				title: 'Operasi PUSAKA Gagal',
+				message: e.message,
+			};
 			showToast(e.message, 'err');
 		} finally {
 			busy = { ...busy, [key]: false };
@@ -68,13 +80,24 @@
 	}
 
 	async function runRekap() {
+		if (prompt('Rekap massal akan membuat job untuk seluruh akun PUSAKA yang aktif. Ketik REKAP untuk melanjutkan.') !== 'REKAP') return;
 		busy = { ...busy, rekap: true };
 		try {
 			const res  = await fetch('/api/pusaka/jobs/run-all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ run_type: 'morning' }) });
 			const data = await res.json().catch(() => ({}));
 			if (!res.ok) throw new Error((data as any).error || 'Gagal');
+			operationState = {
+				tone: 'warning',
+				title: 'Rekap Massal Diantrekan',
+				message: `Sistem menambahkan ${(data as any).inserted ?? 0} job baru. Pantau hasilnya di antrian dan worker status sebelum mengulangi operasi ini.`,
+			};
 			showToast(`Rekap di-queue: ${(data as any).inserted ?? 0} job baru`, 'ok');
 		} catch (e: any) {
+			operationState = {
+				tone: 'error',
+				title: 'Rekap Massal Gagal',
+				message: e.message,
+			};
 			showToast(e.message, 'err');
 		} finally {
 			busy = { ...busy, rekap: false };
@@ -148,6 +171,10 @@
 
 	{#if loadError}
 		<RecoveryPanel title="PUSAKA Belum Merespons Penuh" message={loadError} onRetry={load} />
+	{/if}
+
+	{#if operationState}
+		<OperationStatusPanel {...operationState} />
 	{/if}
 
 	<!-- Worker status -->
