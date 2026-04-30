@@ -107,9 +107,7 @@ class ExamApiClient {
 
     final response = await request.close();
     final raw = await utf8.decoder.bind(response).join();
-    final parsed = raw.isEmpty
-        ? <String, dynamic>{}
-        : jsonDecode(raw) as Map<String, dynamic>;
+    final parsed = _parseJsonResponse(raw, statusCode: response.statusCode);
 
     if (response.statusCode >= 400) {
       throw ExamApiException(
@@ -141,5 +139,35 @@ class ExamApiClient {
     }
 
     return null;
+  }
+
+  Map<String, dynamic> _parseJsonResponse(
+    String raw, {
+    required int statusCode,
+  }) {
+    if (raw.isEmpty) {
+      return <String, dynamic>{};
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+    } on FormatException {
+      throw ExamApiException(
+        statusCode >= 400
+            ? 'Respons error server ujian tidak valid.'
+            : 'Respons server ujian tidak valid.',
+        statusCode: statusCode,
+      );
+    }
+
+    throw ExamApiException(
+      statusCode >= 400
+          ? 'Respons error server ujian tidak valid.'
+          : 'Respons server ujian tidak valid.',
+      statusCode: statusCode,
+    );
   }
 }
