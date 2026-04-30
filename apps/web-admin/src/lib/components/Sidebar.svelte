@@ -27,6 +27,7 @@
 				{ href: '/academic',  label: 'Data Akademik', icon: 'book-open', roles: ['admin'] },
 				{ href: '/grades',        label: 'Nilai',        icon: 'clipboard', roles: ['admin', 'guru'] },
 				{ href: '/grades/rapor',  label: 'Cetak Rapor',  icon: 'printer',   roles: ['admin', 'guru'] },
+				{ href: '/journal',       label: 'Jurnal Kelas', icon: 'journal',   roles: ['admin', 'guru'] },
 				{ href: '/students',  label: 'Siswa',         icon: 'users' },
 				{ href: '/parents',   label: 'Orang Tua',     icon: 'user-group', roles: ['admin', 'staf'] },
 			],
@@ -272,6 +273,8 @@
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11V9a4 4 0 014-4h14" />
 			<polyline points="7 23 3 19 7 15" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13v2a4 4 0 01-4 4H3" />
+		{:else if name === 'journal'}
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253z" />
 		{/if}
 	</svg>
 {/snippet}

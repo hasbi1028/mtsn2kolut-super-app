@@ -59,6 +59,7 @@ func main() {
 	auditSvc := service.NewAudit(q)
 	pusakaSchedulerSvc := service.NewPusakaScheduler(q, pusakaJobSvc, settSvc, auditSvc)
 	librarySvc := service.NewLibrary(q)
+	journalSvc := service.NewClassJournal(q)
 	websiteMediaH := handler.NewWebsiteMedia(getEnv("WEBSITE_MEDIA_DIR", "data/website-media"))
 
 	if err := authSvc.SeedAdmin(mainCtx); err != nil {
@@ -95,6 +96,7 @@ func main() {
 	pusakaSchedulerH := handler.NewPusakaScheduler(pusakaSchedulerSvc)
 	pusakaWorkerH := handler.NewPusakaWorker(pusakaJobSvc, pusakaAttendanceSvc, settSvc)
 	libraryH := handler.NewLibrary(librarySvc)
+	journalH := handler.NewClassJournal(journalSvc)
 
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
@@ -122,10 +124,10 @@ func main() {
 	r.Get("/api/public/site/pages/{slug}", websiteH.GetPublishedPage)
 	r.Get("/api/website/media/{filename}", websiteMediaH.File)
 
-	// Asset file serving is intentionally public — UUID provides sufficient obscurity,
-	// and content (exam question images/PDFs) will be visible to students during exams anyway.
-	// Removing the auth requirement allows <img src="..."> tags to load directly in browsers.
-	r.Get("/api/cbt/assets/{id}/file", questionAssetH.File)
+	// CBT asset files are not public-by-obscurity. They may be accessed either by
+	// authenticated admin/guru requests or by active exam participants using the
+	// exam token attached to exam payload asset URLs.
+	r.With(mw.ExamTokenOrJWT(internalKey, jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession, examSvc.GetParticipantByToken)).Get("/api/cbt/assets/{id}/file", questionAssetH.File)
 
 	// Exam endpoints — authenticated via X-Exam-Token (no JWT needed)
 	r.Post("/api/exam/login", examH.Login)
@@ -181,6 +183,13 @@ func main() {
 		r.Patch("/api/grades/components/{id}/publish", gradeH.SetComponentPublished)
 		r.Delete("/api/grades/components/{id}", gradeH.DeleteComponent)
 		r.Post("/api/grades/components/{id}/entries", gradeH.UpsertEntry)
+
+		r.Get("/api/journal", journalH.Overview)
+		r.Post("/api/journal/sessions", journalH.CreateSession)
+		r.Get("/api/journal/sessions/{id}", journalH.GetSession)
+		r.Put("/api/journal/sessions/{id}", journalH.UpdateSession)
+		r.With(requireAdmin).Delete("/api/journal/sessions/{id}", journalH.DeleteSession)
+		r.Post("/api/journal/sessions/{id}/attendances", journalH.BulkUpsertAttendances)
 
 		r.Get("/api/students", studentH.GuruAwareList)
 		r.With(requireAdmin).Post("/api/students", studentH.Create)
@@ -309,6 +318,7 @@ func main() {
 			r.Delete("/api/pusaka/employees/{id}/schedules/{scheduleId}", empSchedH.Delete)
 
 			r.Post("/api/pusaka/scheduler/tick", pusakaSchedulerH.Tick)
+			r.Get("/api/pusaka/worker/status", pusakaWorkerH.GetStatus)
 
 			r.Get("/api/users", userH.List)
 			r.Get("/api/users/audit-logs", userH.ListAuditLogs)
@@ -323,7 +333,6 @@ func main() {
 		r.Use(mw.WorkerKey(workerKey))
 		r.Post("/api/pusaka/worker/claim", pusakaWorkerH.Claim)
 		r.Get("/api/pusaka/worker/config", pusakaWorkerH.Config)
-		r.Get("/api/pusaka/worker/status", pusakaWorkerH.GetStatus)
 		r.Post("/api/pusaka/worker/heartbeat", pusakaWorkerH.Heartbeat)
 		r.Post("/api/pusaka/worker/jobs/{id}/complete", pusakaWorkerH.Complete)
 		r.Post("/api/pusaka/worker/jobs/{id}/fail", pusakaWorkerH.Fail)

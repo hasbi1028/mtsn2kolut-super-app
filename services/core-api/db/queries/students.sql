@@ -77,3 +77,9 @@ SET status = $2,
     is_active = $3,
     updated_at = NOW()
 WHERE id = $1;
+
+-- name: ListActiveStudentsByClassID :many
+SELECT id, nis, nisn, nama, gender
+FROM students
+WHERE class_id = $1 AND is_active = TRUE
+ORDER BY nama ASC;

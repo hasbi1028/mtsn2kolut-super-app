@@ -129,6 +129,47 @@ func (q *Queries) GetStudentByID(ctx context.Context, id pgtype.UUID) (GetStuden
 	return i, err
 }
 
+const listActiveStudentsByClassID = `-- name: ListActiveStudentsByClassID :many
+SELECT id, nis, nisn, nama, gender
+FROM students
+WHERE class_id = $1 AND is_active = TRUE
+ORDER BY nama ASC
+`
+
+type ListActiveStudentsByClassIDRow struct {
+	ID     pgtype.UUID `json:"id"`
+	Nis    string      `json:"nis"`
+	Nisn   string      `json:"nisn"`
+	Nama   string      `json:"nama"`
+	Gender GenderEnum  `json:"gender"`
+}
+
+func (q *Queries) ListActiveStudentsByClassID(ctx context.Context, classID pgtype.UUID) ([]ListActiveStudentsByClassIDRow, error) {
+	rows, err := q.db.Query(ctx, listActiveStudentsByClassID, classID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveStudentsByClassIDRow{}
+	for rows.Next() {
+		var i ListActiveStudentsByClassIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nis,
+			&i.Nisn,
+			&i.Nama,
+			&i.Gender,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStudents = `-- name: ListStudents :many
 SELECT s.id, s.nis, s.nisn, s.nama, s.gender, s.parent_name, s.parent_phone,
        s.class_id, c.name AS class_name, c.code AS class_code,

@@ -369,3 +369,34 @@ func (q *Queries) ListSubjects(ctx context.Context) ([]Subject, error) {
 	}
 	return items, nil
 }
+
+const getClassSubjectAssignment = `-- name: GetClassSubjectAssignment :one
+SELECT a.id, a.class_id, c.name AS class_name, c.code AS class_code,
+       a.subject_id, s.name AS subject_name, s.code AS subject_code,
+       a.teacher_employee_id, e.nama AS teacher_name,
+       a.created_at, a.updated_at
+FROM class_subject_assignments a
+JOIN school_classes c ON c.id = a.class_id
+JOIN subjects s ON s.id = a.subject_id
+JOIN employees e ON e.id = a.teacher_employee_id
+WHERE a.id = $1
+`
+
+func (q *Queries) GetClassSubjectAssignment(ctx context.Context, id pgtype.UUID) (ListClassSubjectAssignmentsRow, error) {
+	row := q.db.QueryRow(ctx, getClassSubjectAssignment, id)
+	var i ListClassSubjectAssignmentsRow
+	err := row.Scan(
+		&i.ID,
+		&i.ClassID,
+		&i.ClassName,
+		&i.ClassCode,
+		&i.SubjectID,
+		&i.SubjectName,
+		&i.SubjectCode,
+		&i.TeacherEmployeeID,
+		&i.TeacherName,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

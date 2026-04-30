@@ -64,3 +64,14 @@ RETURNING *;
 
 -- name: DeleteClassSubjectAssignment :exec
 DELETE FROM class_subject_assignments WHERE id = $1;
+
+-- name: GetClassSubjectAssignment :one
+SELECT a.id, a.class_id, c.name AS class_name, c.code AS class_code,
+       a.subject_id, s.name AS subject_name, s.code AS subject_code,
+       a.teacher_employee_id, e.nama AS teacher_name,
+       a.created_at, a.updated_at
+FROM class_subject_assignments a
+JOIN school_classes c ON c.id = a.class_id
+JOIN subjects s ON s.id = a.subject_id
+JOIN employees e ON e.id = a.teacher_employee_id
+WHERE a.id = $1;
