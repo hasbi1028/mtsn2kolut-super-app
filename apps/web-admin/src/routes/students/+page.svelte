@@ -232,7 +232,7 @@
 						<label for="s-class" class="text-xs text-slate-500 mb-1 block">Kelas</label>
 						<select id="s-class" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={formClassId}>
 							<option value="">-- Belum ada kelas --</option>
-							{#each classes as c}
+							{#each classes as c (c.id)}
 								<option value={c.id}>{c.code} — {c.name}</option>
 							{/each}
 						</select>
@@ -355,22 +355,20 @@
 						{:else}
 							<Table.Row>
 								<Table.Cell colspan={8} class="p-4">
-									<EmptyStatePanel
-										compact
-										eyebrow={search ? 'Filter Tidak Menemukan Hasil' : 'Mulai Data Pokok'}
-										title={search ? 'Tidak ada siswa yang cocok' : 'Belum ada data siswa'}
-										description={search
-											? 'Coba ganti kata kunci pencarian, atau kosongkan filter untuk melihat seluruh daftar siswa.'
-											: 'Tambahkan siswa pertama agar modul kelas, orang tua, nilai, dan CBT bisa mulai terhubung.'}
-									>
-										{#snippet children()}
+										<EmptyStatePanel
+											compact
+											eyebrow={search ? 'Filter Tidak Menemukan Hasil' : 'Mulai Data Pokok'}
+											title={search ? 'Tidak ada siswa yang cocok' : 'Belum ada data siswa'}
+											description={search
+												? 'Coba ganti kata kunci pencarian, atau kosongkan filter untuk melihat seluruh daftar siswa.'
+												: 'Tambahkan siswa pertama agar modul kelas, orang tua, nilai, dan CBT bisa mulai terhubung.'}
+										>
 											{#if search}
 												<Button variant="outline" size="sm" onclick={() => (search = '')}>Reset pencarian</Button>
 											{:else}
 												<Button size="sm" onclick={() => (showForm = true)}>Tambah siswa pertama</Button>
 											{/if}
-										{/snippet}
-									</EmptyStatePanel>
+										</EmptyStatePanel>
 								</Table.Cell>
 							</Table.Row>
 						{/each}
@@ -410,21 +408,19 @@
 							</div>
 						</div>
 					{:else}
-						<EmptyStatePanel
-							eyebrow={search ? 'Filter Tidak Menemukan Hasil' : 'Mulai Data Pokok'}
-							title={search ? 'Tidak ada siswa yang cocok' : 'Belum ada data siswa'}
-							description={search
-								? 'Ubah kata kunci pencarian atau reset filter untuk melihat kembali seluruh daftar siswa.'
-								: 'Tambahkan siswa pertama dari form di atas agar data akademik dan portal orang tua bisa mulai berjalan.'}
-						>
-							{#snippet children()}
+							<EmptyStatePanel
+								eyebrow={search ? 'Filter Tidak Menemukan Hasil' : 'Mulai Data Pokok'}
+								title={search ? 'Tidak ada siswa yang cocok' : 'Belum ada data siswa'}
+								description={search
+									? 'Ubah kata kunci pencarian atau reset filter untuk melihat kembali seluruh daftar siswa.'
+									: 'Tambahkan siswa pertama dari form di atas agar data akademik dan portal orang tua bisa mulai berjalan.'}
+							>
 								{#if search}
 									<Button variant="outline" size="sm" onclick={() => (search = '')}>Reset pencarian</Button>
 								{:else}
 									<Button size="sm" onclick={() => (showForm = true)}>Tambah siswa pertama</Button>
 								{/if}
-							{/snippet}
-						</EmptyStatePanel>
+							</EmptyStatePanel>
 					{/each}
 				</div>
 			</Card.Content>

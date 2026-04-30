@@ -246,7 +246,7 @@
 						<label for="session-package" class="text-xs text-slate-500 mb-1 block">Paket Soal <span class="text-red-500">*</span></label>
 						<select id="session-package" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fPackageId}>
 							<option value="">-- Pilih Paket --</option>
-							{#each packages as p}
+							{#each packages as p (p.id)}
 								<option value={p.id}>{p.title} ({p.subject_code})</option>
 							{/each}
 						</select>
@@ -264,7 +264,7 @@
 							<label for="session-class" class="text-xs text-slate-500 mb-1 block">Kelas <span class="text-red-500">*</span></label>
 							<select id="session-class" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fClassId}>
 								<option value="">-- Pilih Kelas --</option>
-								{#each classes as c}
+								{#each classes as c (c.id)}
 									<option value={c.id}>{c.code} — {c.name}</option>
 								{/each}
 							</select>
@@ -360,7 +360,7 @@
 						<label for="enroll-class" class="text-xs text-slate-500 mb-1 block">Pilih Kelas</label>
 						<select id="enroll-class" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={enrollClassId}>
 							<option value="">-- Pilih Kelas --</option>
-							{#each classes as c}
+							{#each classes as c (c.id)}
 								<option value={c.id}>{c.code} — {c.name}</option>
 							{/each}
 						</select>

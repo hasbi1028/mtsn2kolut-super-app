@@ -192,7 +192,7 @@
 						<div>
 							<p class="mb-2 block text-xs text-slate-500">Peran Akses (boleh pilih lebih dari satu)</p>
 							<div class="flex flex-wrap gap-2">
-								{#each availableRoles as r}
+								{#each availableRoles as r (r.value)}
 									<button 
 										class={`px-3 py-1 text-xs rounded-full border transition-colors ${fRoles.includes(r.value) ? 'bg-green-700 text-white border-green-700' : 'bg-white text-slate-600 border-slate-200'}`}
 										onclick={() => toggleRole(r.value)}
@@ -211,7 +211,7 @@
 								<label for="u-emp" class="text-xs text-slate-500 mb-1 block">Hubungkan ke Pegawai</label>
 								<select id="u-emp" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fEmpId}>
 									<option value="">-- Pilih Pegawai --</option>
-									{#each employees as e}
+									{#each employees as e (e.id)}
 										<option value={e.id}>{e.nama} ({e.nip})</option>
 									{/each}
 								</select>
@@ -223,7 +223,7 @@
 								<label for="u-stu" class="text-xs text-slate-500 mb-1 block">Hubungkan ke Siswa</label>
 								<select id="u-stu" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fStuId}>
 									<option value="">-- Pilih Siswa --</option>
-									{#each students as s}
+									{#each students as s (s.id)}
 										<option value={s.id}>{s.nama} ({s.nis})</option>
 									{/each}
 								</select>
@@ -235,7 +235,7 @@
 								<label for="u-par" class="text-xs text-slate-500 mb-1 block">Hubungkan ke Orang Tua</label>
 								<select id="u-par" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fParId}>
 									<option value="">-- Pilih Orang Tua --</option>
-									{#each parents as p}
+									{#each parents as p (p.id)}
 										<option value={p.id}>{p.nama} ({p.phone})</option>
 									{/each}
 								</select>
@@ -287,7 +287,7 @@
 								<Table.Cell class="font-medium">{u.username}</Table.Cell>
 								<Table.Cell>
 									<div class="flex flex-wrap gap-1">
-										{#each u.roles || [] as r}
+										{#each u.roles || [] as r (r)}
 											<Badge variant={r === 'admin' ? 'default' : 'secondary'} class="text-[10px] uppercase">{r}</Badge>
 										{/each}
 									</div>
@@ -335,7 +335,7 @@
 								<div class="min-w-0">
 									<p class="text-sm font-semibold text-slate-900">{u.username}</p>
 									<div class="mt-1 flex flex-wrap gap-1">
-										{#each u.roles || [] as r}
+										{#each u.roles || [] as r (r)}
 											<Badge variant={r === 'admin' ? 'default' : 'secondary'} class="text-[10px] capitalize">{r}</Badge>
 										{/each}
 									</div>

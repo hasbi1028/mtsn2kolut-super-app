@@ -150,7 +150,7 @@
 					<div>
 						<label for="e-year" class="text-xs text-slate-500 mb-1 block">Tahun Ajaran <span class="text-red-500">*</span></label>
 						<select id="e-year" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fYearId}>
-							{#each years as y}
+							{#each years as y (y.id)}
 								<option value={y.id}>{y.name} {y.is_active ? '(Aktif)' : ''}</option>
 							{/each}
 						</select>
@@ -158,7 +158,7 @@
 					<div>
 						<label for="e-type" class="text-xs text-slate-500 mb-1 block">Jenis Ujian</label>
 						<select id="e-type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fType}>
-							{#each Object.entries(typeLabel) as [val, label]}
+							{#each Object.entries(typeLabel) as [val, label] (val)}
 								<option value={val}>{label}</option>
 							{/each}
 						</select>
@@ -166,7 +166,7 @@
 					<div>
 						<label for="e-scope" class="text-xs text-slate-500 mb-1 block">Cakupan</label>
 						<select id="e-scope" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fScope}>
-							{#each Object.entries(scopeLabel) as [val, label]}
+							{#each Object.entries(scopeLabel) as [val, label] (val)}
 								<option value={val}>{label}</option>
 							{/each}
 						</select>
@@ -193,7 +193,7 @@
 					<div>
 						<label for="e-status" class="text-xs text-slate-500 mb-1 block">Status</label>
 						<select id="e-status" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fStatus}>
-							{#each Object.entries(statusLabel) as [val, label]}
+							{#each Object.entries(statusLabel) as [val, label] (val)}
 								<option value={val}>{label}</option>
 							{/each}
 						</select>

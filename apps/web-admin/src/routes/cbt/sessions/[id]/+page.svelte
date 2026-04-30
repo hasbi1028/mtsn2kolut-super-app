@@ -414,7 +414,7 @@
 				{ label: 'Sudah Submit', val: stats.submitted.toString() },
 				{ label: 'Rata-rata Nilai', val: stats.total > 0 ? stats.avgScore.toFixed(1) : '—' },
 				{ label: 'Lulus (≥75)', val: `${stats.passing} / ${stats.submitted}` },
-			] as s}
+			] as s (s.label)}
 				<Card.Root class="border-green-100">
 					<Card.Content class="pt-4 pb-3 px-4">
 						<p class="text-xs text-slate-500 mb-1">{s.label}</p>
@@ -433,7 +433,7 @@
 					{ id: 'ruangan', label: 'Ruangan' },
 					{ id: 'proctoring', label: 'Proctoring' },
 					{ id: 'essay', label: 'Koreksi Uraian' },
-				] as tab}
+				] as tab (tab.id)}
 					<button
 						onclick={() => switchTab(tab.id as any)}
 						class="px-4 py-2 text-sm font-medium border-b-2 transition-colors {activeTab === tab.id
@@ -467,7 +467,7 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-							{#each results as r, i}
+							{#each results as r, i (r.participant_id)}
 								<Table.Row>
 									<Table.Cell class="text-slate-400 text-xs">{i + 1}</Table.Cell>
 									<Table.Cell class="font-mono text-sm">{r.nis}</Table.Cell>
@@ -512,7 +512,7 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-								{#each participants as p}
+								{#each participants as p (p.id)}
 									<Table.Row class={p.suspicious_flag ? 'bg-red-50' : 'hover:bg-green-50/30'}>
 									<Table.Cell class="font-mono text-sm">{p.nis}</Table.Cell>
 									<Table.Cell class="font-medium">
@@ -542,7 +542,7 @@
 											<div class="flex items-center justify-end gap-1">
 												<select bind:value={roomInput[p.id]} class="h-8 rounded-md border border-input bg-background px-2 text-xs">
 													<option value="">Ruangan</option>
-													{#each rooms as room}
+													{#each rooms as room (room.id)}
 														<option value={room.id}>{room.room_name}</option>
 													{/each}
 												</select>
@@ -599,7 +599,7 @@
 
 			{#if rooms.length > 0}
 				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-					{#each rooms as room}
+					{#each rooms as room (room.id)}
 						<Card.Root class="border-green-100">
 							<Card.Content class="p-4">
 								<div class="flex items-start justify-between">
@@ -641,7 +641,7 @@
 								</Table.Row>
 							</Table.Header>
 							<Table.Body>
-								{#each participants as p}
+								{#each participants as p (p.id)}
 									<Table.Row>
 										<Table.Cell class="font-mono text-sm">{p.nis}</Table.Cell>
 										<Table.Cell class="font-medium">{p.nama}</Table.Cell>
@@ -693,7 +693,7 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-								{#each proctoring as p}
+								{#each proctoring as p (p.participant_id)}
 									{@const hb = heartbeatStatus(p.last_heartbeat)}
 									<Table.Row class={p.suspicious_flag ? 'bg-red-50' : p.app_switch_count >= 3 ? 'bg-amber-50/50' : 'hover:bg-green-50/30'}>
 									<Table.Cell class="font-medium">
@@ -755,7 +755,7 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-							{#each essays as e}
+							{#each essays as e (e.id)}
 								<Table.Row>
 									<Table.Cell>
 										<div class="font-medium">{e.nama}</div>

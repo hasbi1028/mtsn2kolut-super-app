@@ -152,6 +152,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Public static-page support baseline — `/profil` and `/kontak` now enrich the shared public detail template with page-specific side guidance instead of relying only on a generic article sidebar
 - [x] Public homepage polish baseline — homepage now has stronger hero support cards and clearer editorial CTA rhythm so its information density matches the refined public detail and listing pages
 - [x] Public shell polish baseline — shared header and footer now provide stronger school-facing navigation, clearer service CTAs, and a more complete institutional frame for all public pages
+- [x] Svelte key hygiene baseline — high-traffic admin screens now key their dynamic `#each` blocks more consistently, reducing autofixer noise and improving DOM stability in sessions, events, users, and students screens
 - [x] Rapor print view — printable HTML layout at `/grades/rapor` using existing `/api/grades` endpoint, color-coded scores, school header, signature area, sidebar entry
 
 ### CBT Question Authoring UX
