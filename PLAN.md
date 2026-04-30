@@ -142,6 +142,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Ops-component polish baseline — `GeneralEmployeeList`, `EmployeeList`, and `ScheduleList` now use denser control surfaces, clearer internal empty states, and inline success feedback for day-to-day operator actions
 - [x] UI copy consistency baseline — the most visible mixed English/Indonesian admin copy in editorial, PUSAKA controls, and user-status badges is now normalized toward one institutional Indonesian tone
 - [x] Public-site copy consistency baseline — homepage, list, and detail content screens now use a more consistent institutional Indonesian tone for publishing states, CTAs, and public-facing helper text
+- [x] Form microcopy baseline — operator-facing placeholders and helper text in employee, student, user, and website editorial forms are now more directive and less generic
 - [x] Rapor print view — printable HTML layout at `/grades/rapor` using existing `/api/grades` endpoint, color-coded scores, school header, signature area, sidebar entry
 
 ### CBT Question Authoring UX

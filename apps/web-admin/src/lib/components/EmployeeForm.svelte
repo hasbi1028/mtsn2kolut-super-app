@@ -72,15 +72,15 @@
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <div>
         <label for="f-nip" class="mb-1 block text-xs font-medium text-muted-foreground">NIP <span class="text-destructive">*</span></label>
-        <Input id="f-nip" placeholder="NIP Pegawai" bind:value={form.nip} />
+        <Input id="f-nip" placeholder="Masukkan NIP pegawai" bind:value={form.nip} />
       </div>
       <div>
         <label for="f-nama" class="mb-1 block text-xs font-medium text-muted-foreground">Nama <span class="text-destructive">*</span></label>
-        <Input id="f-nama" placeholder="Nama Lengkap" bind:value={form.nama} />
+        <Input id="f-nama" placeholder="Masukkan nama lengkap pegawai" bind:value={form.nama} />
       </div>
       <div>
         <label for="f-unit" class="mb-1 block text-xs font-medium text-muted-foreground">Unit Kerja</label>
-        <Input id="f-unit" placeholder="Unit Kerja" bind:value={form.unit_kerja} />
+        <Input id="f-unit" placeholder="Contoh: Tata Usaha atau Kurikulum" bind:value={form.unit_kerja} />
       </div>
       <div>
         <label for="f-employment-type" class="mb-1 block text-xs font-medium text-muted-foreground">Status Kepegawaian <span class="text-destructive">*</span></label>
@@ -104,11 +104,11 @@
         <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label for="f-user" class="mb-1 block text-xs font-medium text-muted-foreground">Username PUSAKA</label>
-            <Input id="f-user" placeholder="Username PUSAKA" bind:value={form.pusaka_username} />
+            <Input id="f-user" placeholder="Isi jika akun PUSAKA sudah tersedia" bind:value={form.pusaka_username} />
           </div>
           <div>
             <label for="f-pass" class="mb-1 block text-xs font-medium text-muted-foreground">Password PUSAKA</label>
-            <Input id="f-pass" type="password" placeholder="Password PUSAKA" bind:value={form.pusaka_password} />
+            <Input id="f-pass" type="password" placeholder="Isi bersama username PUSAKA" bind:value={form.pusaka_password} />
           </div>
         </div>
       {:else}

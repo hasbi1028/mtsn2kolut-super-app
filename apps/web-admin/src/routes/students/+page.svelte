@@ -211,15 +211,15 @@
 				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 					<div>
 						<label for="s-nis" class="text-xs text-slate-500 mb-1 block">NIS <span class="text-red-500">*</span></label>
-						<Input id="s-nis" placeholder="Nomor Induk Siswa" bind:value={formNis} />
+						<Input id="s-nis" placeholder="Masukkan NIS siswa" bind:value={formNis} />
 					</div>
 					<div>
 						<label for="s-nisn" class="text-xs text-slate-500 mb-1 block">NISN</label>
-						<Input id="s-nisn" placeholder="Nomor Induk Nasional" bind:value={formNisn} />
+						<Input id="s-nisn" placeholder="Isi jika sudah tersedia" bind:value={formNisn} />
 					</div>
 					<div>
 						<label for="s-nama" class="text-xs text-slate-500 mb-1 block">Nama Lengkap <span class="text-red-500">*</span></label>
-						<Input id="s-nama" placeholder="Nama siswa" bind:value={formNama} />
+						<Input id="s-nama" placeholder="Masukkan nama lengkap siswa" bind:value={formNama} />
 					</div>
 					<div>
 						<label for="s-gender" class="text-xs text-slate-500 mb-1 block">Jenis Kelamin <span class="text-red-500">*</span></label>
@@ -255,11 +255,11 @@
 					</div>
 					<div>
 						<label for="s-wali" class="text-xs text-slate-500 mb-1 block">Nama Wali</label>
-						<Input id="s-wali" placeholder="Nama orang tua/wali" bind:value={formParentName} />
+						<Input id="s-wali" placeholder="Nama orang tua atau wali utama" bind:value={formParentName} />
 					</div>
 					<div>
 						<label for="s-hp" class="text-xs text-slate-500 mb-1 block">HP Wali</label>
-						<Input id="s-hp" placeholder="No. HP orang tua" bind:value={formParentPhone} />
+						<Input id="s-hp" placeholder="Nomor WhatsApp yang aktif" bind:value={formParentPhone} />
 					</div>
 				</div>
 				<div class="mt-4 flex gap-2">
@@ -295,7 +295,7 @@
 			<Card.Header class="pb-3">
 				<div class="flex flex-col sm:flex-row sm:items-center gap-3">
 					<Card.Title class="text-base shrink-0">Daftar Siswa ({students.length} total)</Card.Title>
-					<Input placeholder="Cari nama, NIS, NISN..." bind:value={search} class="w-full sm:max-w-xs sm:ml-auto" />
+					<Input placeholder="Cari siswa berdasarkan nama, NIS, atau NISN..." bind:value={search} class="w-full sm:max-w-xs sm:ml-auto" />
 				</div>
 			</Card.Header>
 			<Card.Content class="p-0">

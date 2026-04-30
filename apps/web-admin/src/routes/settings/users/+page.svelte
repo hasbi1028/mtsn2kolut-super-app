@@ -183,14 +183,14 @@
 					<div class="space-y-3">
 						<div>
 							<label for="u-name" class="text-xs text-slate-500 mb-1 block">Username</label>
-							<Input id="u-name" bind:value={fUsername} placeholder="nama_pengguna" />
+							<Input id="u-name" bind:value={fUsername} placeholder="Gunakan nama akun yang mudah dikenali" />
 						</div>
 						<div>
 							<label for="u-pass" class="text-xs text-slate-500 mb-1 block">Password</label>
-							<Input id="u-pass" type="password" bind:value={fPassword} placeholder="********" />
+							<Input id="u-pass" type="password" bind:value={fPassword} placeholder="Minimal 8 karakter" />
 						</div>
 						<div>
-							<p class="mb-2 block text-xs text-slate-500">Roles (Pilih satu atau lebih)</p>
+							<p class="mb-2 block text-xs text-slate-500">Peran Akses (boleh pilih lebih dari satu)</p>
 							<div class="flex flex-wrap gap-2">
 								{#each availableRoles as r}
 									<button 

@@ -381,7 +381,7 @@
 		<div class="space-y-4">
 			<div>
 				<h2 class="text-base font-semibold text-slate-900">{editingId ? 'Edit Konten' : 'Tambah Konten'}</h2>
-				<p class="mt-1 text-sm text-slate-500">Kelola konten {title.toLowerCase()} dengan workflow draft ke publish.</p>
+				<p class="mt-1 text-sm text-slate-500">Kelola konten {title.toLowerCase()} dengan alur draft hingga terbit.</p>
 			</div>
 
 			<div class="grid gap-3 sm:grid-cols-2">
@@ -391,7 +391,7 @@
 				</div>
 				<div>
 					<label for="website-slug" class="mb-1 block text-xs font-medium text-slate-600">Slug</label>
-					<Input id="website-slug" bind:value={form.slug} placeholder="otomatis jika dikosongkan" />
+					<Input id="website-slug" bind:value={form.slug} placeholder="Biarkan kosong jika ingin dibuat otomatis" />
 				</div>
 				<div>
 					<label for="website-status" class="mb-1 block text-xs font-medium text-slate-600">Status</label>
@@ -405,7 +405,7 @@
 				<div class="sm:col-span-2">
 					<label for="website-cover" class="mb-1 block text-xs font-medium text-slate-600">Cover Image</label>
 					<div class="flex gap-2">
-						<Input id="website-cover" bind:value={form.cover_image_url} placeholder="https://... atau upload file di samping" class="flex-1" />
+						<Input id="website-cover" bind:value={form.cover_image_url} placeholder="Tempel URL gambar atau unggah file di samping" class="flex-1" />
 						<label class="flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-50 {uploadingCover ? 'opacity-60 pointer-events-none' : ''}">
 							{#if uploadingCover}
 								<span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"></span>
@@ -439,10 +439,12 @@
 
 				<div class="sm:col-span-2">
 					<label for="website-excerpt" class="mb-1 block text-xs font-medium text-slate-600">Ringkasan</label>
+					<p class="mb-1 text-xs text-slate-500">Ringkasan singkat ini dipakai pada daftar konten dan pratinjau publik.</p>
 					<Textarea id="website-excerpt" rows={3} bind:value={form.excerpt} />
 				</div>
 				<div class="sm:col-span-2">
 					<label for="website-content" class="mb-1 block text-xs font-medium text-slate-600">Konten HTML</label>
+					<p class="mb-1 text-xs text-slate-500">Gunakan HTML yang rapi agar tampilan halaman publik tetap nyaman dibaca.</p>
 					<Textarea id="website-content" rows={12} bind:value={form.content_html} />
 				</div>
 
