@@ -6,6 +6,8 @@
   import { Input } from '$lib/components/ui/input';
   import * as Dialog from '$lib/components/ui/dialog';
   import { toast } from '$lib/components/ui/sonner';
+  import { Skeleton } from '$lib/components/ui/skeleton';
+  import LoadingButton from '$lib/components/LoadingButton.svelte';
 
   interface Employee {
     id: string;
@@ -484,33 +486,37 @@
                   {isPusakaConfigured(e) ? 'Edit' : 'Setup'} Pusaka
                 </Button>
                 {#if isPusakaConfigured(e)}
-                  <Button
+                  <LoadingButton
                     size="sm"
                     variant="outline"
                     onclick={() => togglePusakaAccount(e, e.pusaka_is_enabled === false)}
+                    loading={accountToggling}
+                    loadingLabel="Memproses..."
                     disabled={accountToggling}
                   >
                     {e.pusaka_is_enabled === false ? 'Aktifkan Akun' : 'Nonaktifkan Akun'}
-                  </Button>
-                  <Button
+                  </LoadingButton>
+                  <LoadingButton
                     size="sm"
                     variant="ghost"
                     class="text-destructive hover:text-destructive"
                     onclick={() => deletePusakaAccount(e)}
+                    loading={accountDeleting}
+                    loadingLabel="Menghapus..."
                     disabled={accountDeleting}
                   >
                     Hapus Akun
-                  </Button>
+                  </LoadingButton>
                 {/if}
                 <Button size="sm" variant="outline" onclick={() => openAuditDialog(e)}>
                   Riwayat
                 </Button>
-                <Button size="sm" variant="ghost" onclick={() => testPusakaCredentials(e)} disabled={testing || !isPusakaConfigured(e)}>
+                <LoadingButton size="sm" variant="ghost" onclick={() => testPusakaCredentials(e)} loading={testing} loadingLabel="Testing..." disabled={testing || !isPusakaConfigured(e)}>
                   Test
-                </Button>
-                <Button size="sm" variant="outline" onclick={() => onrun(e.id, 'morning')} disabled={busyId === e.id}>
+                </LoadingButton>
+                <LoadingButton size="sm" variant="outline" onclick={() => onrun(e.id, 'morning')} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id}>
                   Rekap
-                </Button>
+                </LoadingButton>
                 <Button size="sm" variant="outline"
                   onclick={() => openRunConfirm(e, 'checkin')}
                   disabled={busyId === e.id}
@@ -528,10 +534,10 @@
                   class={scheduleButtonClass(e)}>
                   {scheduleButtonLabel(e)}
                 </Button>
-                <Button size="sm" variant="ghost" onclick={() => doStop(e.id)} disabled={busyId === e.id || !e.active_status}
+                <LoadingButton size="sm" variant="ghost" onclick={() => doStop(e.id)} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id || !e.active_status}
                   class="text-amber-700 hover:text-amber-800">
                   ■ Stop
-                </Button>
+                </LoadingButton>
               </div>
             </Table.Cell>
           </Table.Row>
@@ -613,9 +619,7 @@
     </div>
     <Dialog.Footer>
       <Button variant="outline" onclick={() => (showPusakaDialog = false)}>Batal</Button>
-      <Button onclick={savePusakaCredentials} disabled={saving}>
-        {saving ? 'Menyimpan...' : 'Simpan'}
-      </Button>
+      <LoadingButton onclick={savePusakaCredentials} loading={saving} loadingLabel="Menyimpan..." disabled={saving}>Simpan</LoadingButton>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>
@@ -631,7 +635,23 @@
 
     <div class="space-y-3 py-2">
       {#if auditLoading}
-        <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">Memuat riwayat...</div>
+        <div class="space-y-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-4">
+          {#each Array.from({ length: 3 }) as _, index (`audit-skeleton-${index}`)}
+            <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+              <div class="flex items-start justify-between gap-3">
+                <div class="space-y-2">
+                  <Skeleton class="h-5 w-28" />
+                  <Skeleton class="h-4 w-36" />
+                </div>
+                <Skeleton class="h-6 w-16" />
+              </div>
+              <div class="mt-3 space-y-2">
+                <Skeleton class="h-4 w-40" />
+                <Skeleton class="h-4 w-28" />
+              </div>
+            </div>
+          {/each}
+        </div>
       {:else if auditLogs.length === 0}
         <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">Belum ada riwayat akun PUSAKA untuk pegawai ini.</div>
       {:else}
@@ -673,7 +693,23 @@
     </Dialog.Header>
 
     {#if scheduleLoading}
-      <div class="py-8 text-center text-sm text-muted-foreground">Memuat...</div>
+      <div class="space-y-3 py-2">
+        {#each Array.from({ length: 4 }) as _, index (`schedule-skeleton-${index}`)}
+          <div class="rounded-lg border bg-card px-3 py-3 space-y-3">
+            <div class="flex items-center justify-between">
+              <Skeleton class="h-5 w-20" />
+              <Skeleton class="h-6 w-24" />
+            </div>
+            <div class="space-y-2">
+              <Skeleton class="h-8 w-full" />
+              <Skeleton class="h-8 w-full" />
+            </div>
+            <div class="flex justify-end">
+              <Skeleton class="h-7 w-20" />
+            </div>
+          </div>
+        {/each}
+      </div>
     {:else}
       {@const dayLabels = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']}
       <div class="space-y-2 max-h-[65vh] overflow-y-auto py-1 pr-1">
@@ -729,12 +765,14 @@
 
             <!-- Tombol simpan -->
             <div class="flex justify-end">
-              <Button size="sm" variant="outline"
+              <LoadingButton size="sm" variant="outline"
                 onclick={() => saveDayRow(dow)}
+                loading={scheduleSaving}
+                loadingLabel="Menyimpan..."
                 disabled={scheduleSaving || (!cfg.checkinTime && !cfg.checkoutTime)}
                 class="h-7 px-3 text-xs">
-                {scheduleSaving ? 'Menyimpan...' : 'Simpan'}
-              </Button>
+                Simpan
+              </LoadingButton>
             </div>
 
           </div>

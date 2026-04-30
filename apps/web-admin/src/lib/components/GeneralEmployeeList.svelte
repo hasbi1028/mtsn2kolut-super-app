@@ -5,6 +5,7 @@
   import { Button } from '$lib/components/ui/button';
   import { resolve } from '$app/paths';
   import * as Dialog from '$lib/components/ui/dialog';
+  import LoadingButton from '$lib/components/LoadingButton.svelte';
 
   interface Employee {
     id: string;
@@ -202,9 +203,9 @@
               {#if confirmId === e.id}
                 <div class="flex flex-wrap items-center justify-end gap-2">
                   <span class="text-xs text-amber-700">Hapus pegawai ini?</span>
-                  <Button size="sm" variant="destructive" onclick={() => doDelete(e.id)} disabled={busyId === e.id}>
-                    {busyId === e.id ? '...' : 'Ya, Hapus'}
-                  </Button>
+                  <LoadingButton size="sm" variant="destructive" onclick={() => doDelete(e.id)} loading={busyId === e.id} loadingLabel="Menghapus..." disabled={busyId === e.id}>
+                    Ya, Hapus
+                  </LoadingButton>
                   <Button size="sm" variant="ghost" onclick={() => (confirmId = null)}>Batal</Button>
                 </div>
               {:else}
@@ -217,9 +218,9 @@
                   <Button size="sm" variant="outline" onclick={() => openEditDialog(e)}>
                     Edit
                   </Button>
-                  <Button size="sm" variant="outline" onclick={() => toggleEmployeeStatus(e)} disabled={busyId === e.id}>
+                  <LoadingButton size="sm" variant="outline" onclick={() => toggleEmployeeStatus(e)} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id}>
                     {e.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-                  </Button>
+                  </LoadingButton>
                   <Button size="sm" variant="ghost" class="text-destructive hover:text-destructive" onclick={() => (confirmId = e.id)}>
                     Hapus
                   </Button>
@@ -280,7 +281,7 @@
 
       <div class="flex justify-end gap-2">
         <Button variant="outline" onclick={() => (showEditDialog = false)}>Batal</Button>
-        <Button onclick={saveEdit} disabled={editBusy}>{editBusy ? 'Menyimpan...' : 'Simpan Perubahan'}</Button>
+        <LoadingButton onclick={saveEdit} loading={editBusy} loadingLabel="Menyimpan..." disabled={editBusy}>Simpan Perubahan</LoadingButton>
       </div>
     </div>
   </Dialog.Content>

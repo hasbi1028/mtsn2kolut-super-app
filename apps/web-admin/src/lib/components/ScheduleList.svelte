@@ -5,6 +5,7 @@
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { toast } from '$lib/components/ui/sonner';
+  import LoadingButton from '$lib/components/LoadingButton.svelte';
 
   interface Schedule {
     id: string;
@@ -87,9 +88,9 @@
         <Card.Title class="text-base">Jadwal Rekap Otomatis</Card.Title>
         <Card.Description>Scrape kehadiran PUSAKA Kemenag — bisa tambah beberapa waktu per hari</Card.Description>
       </div>
-      <Button onclick={saveChanges} size="sm" disabled={saving}>
-        {saving ? 'Menyimpan...' : 'Simpan'}
-      </Button>
+      <LoadingButton onclick={saveChanges} size="sm" loading={saving} loadingLabel="Menyimpan..." disabled={saving}>
+        Simpan
+      </LoadingButton>
     </div>
   </Card.Header>
 
@@ -144,10 +145,12 @@
             <Badge variant="outline" class="text-xs">Aktif</Badge>
           </Table.Cell>
           <Table.Cell>
-            <Button size="sm" variant="outline" onclick={addSchedule}
+            <LoadingButton size="sm" variant="outline" onclick={addSchedule}
+              loading={adding}
+              loadingLabel="Menambah..."
               disabled={adding || !newTime} class="h-8">
-              {adding ? '...' : '+ Tambah'}
-            </Button>
+              + Tambah
+            </LoadingButton>
           </Table.Cell>
         </Table.Row>
       </Table.Body>

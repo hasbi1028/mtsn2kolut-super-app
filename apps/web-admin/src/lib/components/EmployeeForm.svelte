@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card';
   import { Input } from '$lib/components/ui/input';
-  import { Button } from '$lib/components/ui/button';
+  import LoadingButton from '$lib/components/LoadingButton.svelte';
 
   let { onadd }: { onadd?: () => void } = $props();
 
@@ -107,9 +107,9 @@
     </div>
 
     <div class="mt-4 flex justify-end">
-      <Button class="min-w-36" onclick={submit} disabled={loading}>
-        {loading ? 'Menyimpan...' : 'Simpan Pegawai'}
-      </Button>
+      <LoadingButton class="min-w-36" onclick={submit} loading={loading} loadingLabel="Menyimpan..." disabled={loading}>
+        Simpan Pegawai
+      </LoadingButton>
     </div>
   </Card.Content>
 </Card.Root>
