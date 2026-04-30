@@ -34,6 +34,7 @@ class ExamShellScreen extends StatefulWidget {
 class _ExamShellScreenState extends State<ExamShellScreen>
     with WidgetsBindingObserver {
   static const int _degradedFailureThreshold = 3;
+  static const int _staleAttentionThresholdSeconds = 120;
 
   final _sessionStore = ExamSessionStore();
   late final Map<String, String> _answers;
@@ -51,6 +52,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   bool _resumeCheckRequired = false;
   bool _isResumingExam = false;
   bool _hasReportedDegradedMode = false;
+  bool _hasReportedStaleAttention = false;
   int _resumeAttemptCount = 0;
   int _consecutiveSyncFailures = 0;
   DateTime? _lastServerContactAt;
@@ -143,6 +145,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       setState(() {
         _timeRemainingSeconds -= 1;
       });
+      unawaited(_handleConnectionAttentionSignals());
     });
   }
 
@@ -167,7 +170,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           _lastSyncFailureAt = DateTime.now();
           _errorMessage = 'Koneksi ke server ujian sempat terputus.';
         });
-        _handlePotentialDegradedMode();
+        unawaited(_handleConnectionAttentionSignals());
       }
     });
   }
@@ -199,7 +202,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _lastSyncFailureAt = DateTime.now();
         _errorMessage = 'Status server belum bisa diperbarui.';
       });
-      _handlePotentialDegradedMode();
+      unawaited(_handleConnectionAttentionSignals());
     } finally {
       if (mounted) {
         setState(() {
@@ -282,7 +285,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             _lastSyncFailureAt = DateTime.now();
           });
         }
-        _handlePotentialDegradedMode();
+        await _handleConnectionAttentionSignals();
         break;
       }
     }
@@ -352,7 +355,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             },
           )
           .catchError((_) {});
-      _handlePotentialDegradedMode();
+      await _handleConnectionAttentionSignals();
       await _persistSnapshot();
     } finally {
       if (mounted) {
@@ -539,7 +542,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _lastSyncFailureAt = DateTime.now();
         _errorMessage = error.message;
       });
-      _handlePotentialDegradedMode();
+      await _handleConnectionAttentionSignals();
     } finally {
       if (mounted) {
         setState(() {
@@ -567,10 +570,25 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       _consecutiveSyncFailures = 0;
     });
     _hasReportedDegradedMode = false;
+    _hasReportedStaleAttention = false;
   }
 
   bool get _isDegradedMode =>
       !_isSubmitted && _consecutiveSyncFailures >= _degradedFailureThreshold;
+
+  bool get _needsSupervisorAttention {
+    final last = _lastServerContactAt;
+    if (last == null || _isSubmitted || _isDegradedMode) {
+      return false;
+    }
+    return DateTime.now().difference(last).inSeconds >=
+        _staleAttentionThresholdSeconds;
+  }
+
+  Future<void> _handleConnectionAttentionSignals() async {
+    await _handlePotentialDegradedMode();
+    await _handlePotentialStaleAttention();
+  }
 
   Future<void> _handlePotentialDegradedMode() async {
     if (!_isDegradedMode || _hasReportedDegradedMode) {
@@ -583,6 +601,26 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           eventType: 'warning',
           data: <String, Object?>{
             'reason': 'degraded_mode_entered',
+            'failure_count': _consecutiveSyncFailures,
+          },
+        )
+        .catchError((_) {});
+  }
+
+  Future<void> _handlePotentialStaleAttention() async {
+    if (!_needsSupervisorAttention || _hasReportedStaleAttention) {
+      return;
+    }
+    _hasReportedStaleAttention = true;
+    await widget.client
+        .sendEvent(
+          token: widget.examToken,
+          eventType: 'warning',
+          data: <String, Object?>{
+            'reason': 'stale_connection_attention',
+            'seconds_since_last_contact': DateTime.now()
+                .difference(_lastServerContactAt!)
+                .inSeconds,
             'failure_count': _consecutiveSyncFailures,
           },
         )
@@ -896,6 +934,13 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               _ConnectionWarningCard(
                 failureCount: _consecutiveSyncFailures,
                 lastFailureAt: _formatClock(_lastSyncFailureAt),
+                onRetry: _isSyncingStatus ? null : _syncStatus,
+              ),
+              const SizedBox(height: 14),
+            ],
+            if (_needsSupervisorAttention) ...[
+              _SupervisorAttentionCard(
+                lastContactAt: _formatClock(_lastServerContactAt),
                 onRetry: _isSyncingStatus ? null : _syncStatus,
               ),
               const SizedBox(height: 14),
@@ -1639,6 +1684,53 @@ class _DegradedModeCard extends StatelessWidget {
             onPressed: onRetry,
             icon: const Icon(Icons.sync_problem),
             label: const Text('Pulihkan Sinkron'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SupervisorAttentionCard extends StatelessWidget {
+  const _SupervisorAttentionCard({
+    required this.lastContactAt,
+    required this.onRetry,
+  });
+
+  final String lastContactAt;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3D8),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5C172)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Perlu intervensi pengawas',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: const Color(0xFF9A6700),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Status koneksi berada di level waspada cukup lama sejak kontak server terakhir pukul $lastContactAt. Minta pengawas memeriksa jaringan perangkat lalu lakukan sinkron ulang.',
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.support_agent),
+            label: const Text('Periksa dan Sinkron Ulang'),
           ),
         ],
       ),
