@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -13,24 +15,138 @@ type Employee struct {
 
 func NewEmployee(q *db.Queries) *Employee { return &Employee{q: q} }
 
-func (s *Employee) List(ctx context.Context) ([]db.Employee, error) {
+func normalizeEmploymentType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "pns", "pppk", "honorer":
+		return strings.ToLower(strings.TrimSpace(value))
+	case "", "lainnya":
+		return "lainnya"
+	default:
+		return ""
+	}
+}
+
+func pusakaEligible(employmentType string) bool {
+	return employmentType == "pns" || employmentType == "pppk"
+}
+
+func (s *Employee) List(ctx context.Context) ([]db.ListEmployeesRow, error) {
 	return s.q.ListEmployees(ctx)
 }
 
-func (s *Employee) ListActive(ctx context.Context) ([]db.Employee, error) {
+func (s *Employee) ListActive(ctx context.Context) ([]db.ListActiveEmployeesRow, error) {
 	return s.q.ListActiveEmployees(ctx)
 }
 
-func (s *Employee) Get(ctx context.Context, id pgtype.UUID) (db.Employee, error) {
+func (s *Employee) ListPusakaEligibleWithStatus(ctx context.Context) ([]db.ListPusakaEligibleEmployeesWithStatusRow, error) {
+	return s.q.ListPusakaEligibleEmployeesWithStatus(ctx)
+}
+
+func (s *Employee) Get(ctx context.Context, id pgtype.UUID) (db.GetEmployeeRow, error) {
 	return s.q.GetEmployee(ctx, id)
 }
 
-func (s *Employee) Create(ctx context.Context, p db.CreateEmployeeParams) (db.Employee, error) {
-	return s.q.CreateEmployee(ctx, p)
+func (s *Employee) Create(ctx context.Context, nip, nama, unitKerja, employmentType, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error) {
+	normalizedType := normalizeEmploymentType(employmentType)
+	if normalizedType == "" {
+		return db.GetEmployeeRow{}, errors.New("invalid employment type")
+	}
+	if (pusakaUsername != "" || pusakaPassword != "") && !pusakaEligible(normalizedType) {
+		return db.GetEmployeeRow{}, errors.New("only pns or pppk employees can have pusaka accounts")
+	}
+	emp, err := s.q.CreateEmployee(ctx, db.CreateEmployeeParams{
+		Nip:            nip,
+		Nama:           nama,
+		UnitKerja:      unitKerja,
+		EmploymentType: normalizedType,
+		IsActive:       isActive,
+	})
+	if err != nil {
+		return db.GetEmployeeRow{}, err
+	}
+	if pusakaUsername != "" || pusakaPassword != "" {
+		if _, err := s.q.UpsertPusakaAccount(ctx, db.UpsertPusakaAccountParams{
+			EmployeeID:     emp.ID,
+			PusakaUsername: pusakaUsername,
+			PusakaPassword: pusakaPassword,
+			IsEnabled:      true,
+		}); err != nil {
+			return db.GetEmployeeRow{}, err
+		}
+		return s.q.GetEmployee(ctx, emp.ID)
+	}
+	return s.q.GetEmployee(ctx, emp.ID)
 }
 
-func (s *Employee) Update(ctx context.Context, p db.UpdateEmployeeParams) (db.Employee, error) {
-	return s.q.UpdateEmployee(ctx, p)
+func (s *Employee) Update(ctx context.Context, p db.UpdateEmployeeParams) (db.GetEmployeeRow, error) {
+	p.EmploymentType = normalizeEmploymentType(p.EmploymentType)
+	if p.EmploymentType == "" {
+		return db.GetEmployeeRow{}, errors.New("invalid employment type")
+	}
+	existing, err := s.q.GetEmployee(ctx, p.ID)
+	if err != nil {
+		return db.GetEmployeeRow{}, err
+	}
+	if !pusakaEligible(p.EmploymentType) && existing.PusakaUsername != "" {
+		return db.GetEmployeeRow{}, errors.New("disable or remove the pusaka account before changing employee type")
+	}
+	emp, err := s.q.UpdateEmployee(ctx, p)
+	if err != nil {
+		return db.GetEmployeeRow{}, err
+	}
+	return s.q.GetEmployee(ctx, emp.ID)
+}
+
+func (s *Employee) UpsertPusakaAccount(ctx context.Context, employeeID pgtype.UUID, username, password string, isEnabled bool) error {
+	employee, err := s.q.GetEmployee(ctx, employeeID)
+	if err != nil {
+		return err
+	}
+	if !pusakaEligible(employee.EmploymentType) {
+		return errors.New("only pns or pppk employees can have pusaka accounts")
+	}
+	_, err = s.q.UpsertPusakaAccount(ctx, db.UpsertPusakaAccountParams{
+		EmployeeID:     employeeID,
+		PusakaUsername: username,
+		PusakaPassword: password,
+		IsEnabled:      isEnabled,
+	})
+	return err
+}
+
+func (s *Employee) SetActive(ctx context.Context, id pgtype.UUID, isActive bool) error {
+	emp, err := s.q.GetEmployee(ctx, id)
+	if err != nil {
+		return err
+	}
+	if _, err := s.q.UpdateEmployee(ctx, db.UpdateEmployeeParams{
+		ID:             emp.ID,
+		Nip:            emp.Nip,
+		Nama:           emp.Nama,
+		UnitKerja:      emp.UnitKerja,
+		EmploymentType: emp.EmploymentType,
+		IsActive:       isActive,
+	}); err != nil {
+		return err
+	}
+	if emp.PusakaUsername != "" || emp.PusakaPassword != "" {
+		if err := s.UpsertPusakaAccount(ctx, id, emp.PusakaUsername, emp.PusakaPassword, isActive); err != nil {
+			return err
+		}
+	}
+	users, err := s.q.ListUsersByEmployeeID(ctx, id)
+	if err != nil {
+		return err
+	}
+	for _, user := range users {
+		if err := s.q.UpdateUserStatus(ctx, db.UpdateUserStatusParams{
+			ID:       user.ID,
+			IsActive: isActive,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Employee) Delete(ctx context.Context, id pgtype.UUID) error {

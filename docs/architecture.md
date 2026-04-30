@@ -42,6 +42,9 @@ The monorepo is for source organization, not for collapsing runtime topology.
 - Legacy runtime aliases for `/api/jobs`, `/api/attendance`, `/api/schedules`, and `/api/worker` have been retired.
 - Only legacy UI entry paths such as `/attendance` and `/jobs` remain, and they redirect to canonical `/pusaka/*` pages.
 - PUSAKA operational UI should live under `/pusaka/*`; legacy `/attendance` and `/jobs` surfaces should redirect there.
+- `employees` remains the master data table for all school staff.
+- Only eligible employment types (`pns`, `pppk`) should appear in PUSAKA account setup and operations.
+- `/employees` is the master employee screen; `/pusaka/employees` is the PUSAKA operator screen.
 - PUSAKA credentials now live in `pusaka_accounts` as the integration-owned source of truth.
 - Legacy `employees.pusaka_*` columns have been removed; employee identity and PUSAKA integration credentials are now explicitly separated.
 - Internal code uses explicit `Pusaka*` ownership naming. A deeper package split is intentionally deferred until it would reduce, not increase, maintenance churn.

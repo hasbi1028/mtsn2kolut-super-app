@@ -23,17 +23,16 @@ func (q *Queries) CountEmployees(ctx context.Context) (int64, error) {
 }
 
 const createEmployee = `-- name: CreateEmployee :one
-INSERT INTO employees (id, nip, nama, unit_kerja, pusaka_username, pusaka_password, is_active)
-VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
-RETURNING id, nip, nama, unit_kerja, pusaka_username, pusaka_password, is_active, created_at, updated_at
+INSERT INTO employees (id, nip, nama, unit_kerja, employment_type, is_active)
+VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
+RETURNING id, nip, nama, unit_kerja, is_active, created_at, updated_at, employment_type
 `
 
 type CreateEmployeeParams struct {
 	Nip            string `json:"nip"`
 	Nama           string `json:"nama"`
 	UnitKerja      string `json:"unit_kerja"`
-	PusakaUsername string `json:"pusaka_username"`
-	PusakaPassword string `json:"pusaka_password"`
+	EmploymentType string `json:"employment_type"`
 	IsActive       bool   `json:"is_active"`
 }
 
@@ -42,8 +41,7 @@ func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) 
 		arg.Nip,
 		arg.Nama,
 		arg.UnitKerja,
-		arg.PusakaUsername,
-		arg.PusakaPassword,
+		arg.EmploymentType,
 		arg.IsActive,
 	)
 	var i Employee
@@ -52,11 +50,10 @@ func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) 
 		&i.Nip,
 		&i.Nama,
 		&i.UnitKerja,
-		&i.PusakaUsername,
-		&i.PusakaPassword,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EmploymentType,
 	)
 	return i, err
 }
@@ -71,19 +68,37 @@ func (q *Queries) DeleteEmployee(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getEmployee = `-- name: GetEmployee :one
-SELECT id, nip, nama, unit_kerja, pusaka_username, pusaka_password, is_active, created_at, updated_at
-FROM employees
-WHERE id = $1
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type,
+       COALESCE(pa.pusaka_username, '') AS pusaka_username,
+       COALESCE(pa.pusaka_password, '') AS pusaka_password,
+       e.is_active, e.created_at, e.updated_at
+FROM employees e
+LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
+WHERE e.id = $1
 `
 
-func (q *Queries) GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, error) {
+type GetEmployeeRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	Nip            string             `json:"nip"`
+	Nama           string             `json:"nama"`
+	UnitKerja      string             `json:"unit_kerja"`
+	EmploymentType string             `json:"employment_type"`
+	PusakaUsername string             `json:"pusaka_username"`
+	PusakaPassword string             `json:"pusaka_password"`
+	IsActive       bool               `json:"is_active"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetEmployee(ctx context.Context, id pgtype.UUID) (GetEmployeeRow, error) {
 	row := q.db.QueryRow(ctx, getEmployee, id)
-	var i Employee
+	var i GetEmployeeRow
 	err := row.Scan(
 		&i.ID,
 		&i.Nip,
 		&i.Nama,
 		&i.UnitKerja,
+		&i.EmploymentType,
 		&i.PusakaUsername,
 		&i.PusakaPassword,
 		&i.IsActive,
@@ -94,26 +109,47 @@ func (q *Queries) GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, er
 }
 
 const listActiveEmployees = `-- name: ListActiveEmployees :many
-SELECT id, nip, nama, unit_kerja, pusaka_username, pusaka_password, is_active, created_at, updated_at
-FROM employees
-WHERE is_active = TRUE
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type,
+       COALESCE(pa.pusaka_username, '') AS pusaka_username,
+       COALESCE(pa.pusaka_password, '') AS pusaka_password,
+       e.is_active, e.created_at, e.updated_at
+FROM employees e
+JOIN pusaka_accounts pa ON pa.employee_id = e.id
+WHERE e.is_active = TRUE
+  AND pa.is_enabled = TRUE
+  AND pa.pusaka_username <> ''
+  AND pa.pusaka_password <> ''
 ORDER BY nama ASC
 `
 
-func (q *Queries) ListActiveEmployees(ctx context.Context) ([]Employee, error) {
+type ListActiveEmployeesRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	Nip            string             `json:"nip"`
+	Nama           string             `json:"nama"`
+	UnitKerja      string             `json:"unit_kerja"`
+	EmploymentType string             `json:"employment_type"`
+	PusakaUsername string             `json:"pusaka_username"`
+	PusakaPassword string             `json:"pusaka_password"`
+	IsActive       bool               `json:"is_active"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListActiveEmployees(ctx context.Context) ([]ListActiveEmployeesRow, error) {
 	rows, err := q.db.Query(ctx, listActiveEmployees)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Employee{}
+	items := []ListActiveEmployeesRow{}
 	for rows.Next() {
-		var i Employee
+		var i ListActiveEmployeesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Nip,
 			&i.Nama,
 			&i.UnitKerja,
+			&i.EmploymentType,
 			&i.PusakaUsername,
 			&i.PusakaPassword,
 			&i.IsActive,
@@ -131,25 +167,43 @@ func (q *Queries) ListActiveEmployees(ctx context.Context) ([]Employee, error) {
 }
 
 const listEmployees = `-- name: ListEmployees :many
-SELECT id, nip, nama, unit_kerja, pusaka_username, pusaka_password, is_active, created_at, updated_at
-FROM employees
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type,
+       COALESCE(pa.pusaka_username, '') AS pusaka_username,
+       COALESCE(pa.pusaka_password, '') AS pusaka_password,
+       e.is_active, e.created_at, e.updated_at
+FROM employees e
+LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
 ORDER BY nama ASC
 `
 
-func (q *Queries) ListEmployees(ctx context.Context) ([]Employee, error) {
+type ListEmployeesRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	Nip            string             `json:"nip"`
+	Nama           string             `json:"nama"`
+	UnitKerja      string             `json:"unit_kerja"`
+	EmploymentType string             `json:"employment_type"`
+	PusakaUsername string             `json:"pusaka_username"`
+	PusakaPassword string             `json:"pusaka_password"`
+	IsActive       bool               `json:"is_active"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListEmployees(ctx context.Context) ([]ListEmployeesRow, error) {
 	rows, err := q.db.Query(ctx, listEmployees)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Employee{}
+	items := []ListEmployeesRow{}
 	for rows.Next() {
-		var i Employee
+		var i ListEmployeesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Nip,
 			&i.Nama,
 			&i.UnitKerja,
+			&i.EmploymentType,
 			&i.PusakaUsername,
 			&i.PusakaPassword,
 			&i.IsActive,
@@ -167,7 +221,7 @@ func (q *Queries) ListEmployees(ctx context.Context) ([]Employee, error) {
 }
 
 const listEmployeesWithStatus = `-- name: ListEmployeesWithStatus :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.pusaka_username, e.is_active, e.created_at,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, COALESCE(pa.pusaka_username, '') AS pusaka_username, e.is_active, e.created_at,
   COALESCE(
     (SELECT j.status::text FROM jobs j
      WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
@@ -191,8 +245,11 @@ SELECT e.id, e.nip, e.nama, e.unit_kerja, e.pusaka_username, e.is_active, e.crea
   EXISTS(
     SELECT 1 FROM employee_schedules es
     WHERE es.employee_id = e.id AND es.run_type = 'checkout' AND es.is_enabled = TRUE
-  ) AS has_checkout_schedule
+  ) AS has_checkout_schedule,
+  (e.employment_type IN ('pns', 'pppk')) AS pusaka_eligible,
+  COALESCE((pa.employee_id IS NOT NULL AND pa.pusaka_username <> ''), FALSE) AS has_pusaka_account
 FROM employees e
+LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
 ORDER BY e.created_at DESC
 `
 
@@ -201,6 +258,7 @@ type ListEmployeesWithStatusRow struct {
 	Nip                 string             `json:"nip"`
 	Nama                string             `json:"nama"`
 	UnitKerja           string             `json:"unit_kerja"`
+	EmploymentType      string             `json:"employment_type"`
 	PusakaUsername      string             `json:"pusaka_username"`
 	IsActive            bool               `json:"is_active"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
@@ -210,6 +268,8 @@ type ListEmployeesWithStatusRow struct {
 	LastRunType         interface{}        `json:"last_run_type"`
 	HasCheckinSchedule  bool               `json:"has_checkin_schedule"`
 	HasCheckoutSchedule bool               `json:"has_checkout_schedule"`
+	PusakaEligible      bool               `json:"pusaka_eligible"`
+	HasPusakaAccount    interface{}        `json:"has_pusaka_account"`
 }
 
 func (q *Queries) ListEmployeesWithStatus(ctx context.Context) ([]ListEmployeesWithStatusRow, error) {
@@ -226,6 +286,7 @@ func (q *Queries) ListEmployeesWithStatus(ctx context.Context) ([]ListEmployeesW
 			&i.Nip,
 			&i.Nama,
 			&i.UnitKerja,
+			&i.EmploymentType,
 			&i.PusakaUsername,
 			&i.IsActive,
 			&i.CreatedAt,
@@ -235,6 +296,98 @@ func (q *Queries) ListEmployeesWithStatus(ctx context.Context) ([]ListEmployeesW
 			&i.LastRunType,
 			&i.HasCheckinSchedule,
 			&i.HasCheckoutSchedule,
+			&i.PusakaEligible,
+			&i.HasPusakaAccount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPusakaEligibleEmployeesWithStatus = `-- name: ListPusakaEligibleEmployeesWithStatus :many
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, COALESCE(pa.pusaka_username, '') AS pusaka_username, e.is_active, e.created_at,
+  COALESCE(
+    (SELECT j.status::text FROM jobs j
+     WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
+     ORDER BY CASE j.status::text WHEN 'running' THEN 0 ELSE 1 END, j.created_at DESC
+     LIMIT 1), '') AS active_status,
+  COALESCE(
+    (SELECT j.run_type::text FROM jobs j
+     WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
+     ORDER BY CASE j.status::text WHEN 'running' THEN 0 ELSE 1 END, j.created_at DESC
+     LIMIT 1), '') AS active_run_type,
+  COALESCE(
+    (SELECT j.status::text FROM jobs j
+     WHERE j.employee_id = e.id ORDER BY j.created_at DESC LIMIT 1), '') AS last_status,
+  COALESCE(
+    (SELECT j.run_type::text FROM jobs j
+     WHERE j.employee_id = e.id ORDER BY j.created_at DESC LIMIT 1), '') AS last_run_type,
+  EXISTS(
+    SELECT 1 FROM employee_schedules es
+    WHERE es.employee_id = e.id AND es.run_type = 'checkin' AND es.is_enabled = TRUE
+  ) AS has_checkin_schedule,
+  EXISTS(
+    SELECT 1 FROM employee_schedules es
+    WHERE es.employee_id = e.id AND es.run_type = 'checkout' AND es.is_enabled = TRUE
+  ) AS has_checkout_schedule,
+  TRUE AS pusaka_eligible,
+  COALESCE((pa.employee_id IS NOT NULL AND pa.pusaka_username <> ''), FALSE) AS has_pusaka_account
+FROM employees e
+LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
+WHERE e.employment_type IN ('pns', 'pppk')
+ORDER BY e.created_at DESC
+`
+
+type ListPusakaEligibleEmployeesWithStatusRow struct {
+	ID                  pgtype.UUID        `json:"id"`
+	Nip                 string             `json:"nip"`
+	Nama                string             `json:"nama"`
+	UnitKerja           string             `json:"unit_kerja"`
+	EmploymentType      string             `json:"employment_type"`
+	PusakaUsername      string             `json:"pusaka_username"`
+	IsActive            bool               `json:"is_active"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	ActiveStatus        interface{}        `json:"active_status"`
+	ActiveRunType       interface{}        `json:"active_run_type"`
+	LastStatus          interface{}        `json:"last_status"`
+	LastRunType         interface{}        `json:"last_run_type"`
+	HasCheckinSchedule  bool               `json:"has_checkin_schedule"`
+	HasCheckoutSchedule bool               `json:"has_checkout_schedule"`
+	PusakaEligible      bool               `json:"pusaka_eligible"`
+	HasPusakaAccount    interface{}        `json:"has_pusaka_account"`
+}
+
+func (q *Queries) ListPusakaEligibleEmployeesWithStatus(ctx context.Context) ([]ListPusakaEligibleEmployeesWithStatusRow, error) {
+	rows, err := q.db.Query(ctx, listPusakaEligibleEmployeesWithStatus)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPusakaEligibleEmployeesWithStatusRow{}
+	for rows.Next() {
+		var i ListPusakaEligibleEmployeesWithStatusRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nip,
+			&i.Nama,
+			&i.UnitKerja,
+			&i.EmploymentType,
+			&i.PusakaUsername,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.ActiveStatus,
+			&i.ActiveRunType,
+			&i.LastStatus,
+			&i.LastRunType,
+			&i.HasCheckinSchedule,
+			&i.HasCheckoutSchedule,
+			&i.PusakaEligible,
+			&i.HasPusakaAccount,
 		); err != nil {
 			return nil, err
 		}
@@ -251,12 +404,11 @@ UPDATE employees
 SET nip             = $2,
     nama            = $3,
     unit_kerja      = $4,
-    pusaka_username = $5,
-    pusaka_password = $6,
-    is_active       = $7,
+    employment_type = $5,
+    is_active       = $6,
     updated_at      = NOW()
 WHERE id = $1
-RETURNING id, nip, nama, unit_kerja, pusaka_username, pusaka_password, is_active, created_at, updated_at
+RETURNING id, nip, nama, unit_kerja, is_active, created_at, updated_at, employment_type
 `
 
 type UpdateEmployeeParams struct {
@@ -264,8 +416,7 @@ type UpdateEmployeeParams struct {
 	Nip            string      `json:"nip"`
 	Nama           string      `json:"nama"`
 	UnitKerja      string      `json:"unit_kerja"`
-	PusakaUsername string      `json:"pusaka_username"`
-	PusakaPassword string      `json:"pusaka_password"`
+	EmploymentType string      `json:"employment_type"`
 	IsActive       bool        `json:"is_active"`
 }
 
@@ -275,8 +426,7 @@ func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) 
 		arg.Nip,
 		arg.Nama,
 		arg.UnitKerja,
-		arg.PusakaUsername,
-		arg.PusakaPassword,
+		arg.EmploymentType,
 		arg.IsActive,
 	)
 	var i Employee
@@ -285,11 +435,10 @@ func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) 
 		&i.Nip,
 		&i.Nama,
 		&i.UnitKerja,
-		&i.PusakaUsername,
-		&i.PusakaPassword,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EmploymentType,
 	)
 	return i, err
 }

@@ -318,11 +318,58 @@ func (ns NullRunTypeEnum) Value() (driver.Value, error) {
 	return string(ns.RunTypeEnum), nil
 }
 
+type StudentStatusEnum string
+
+const (
+	StudentStatusEnumProspective StudentStatusEnum = "prospective"
+	StudentStatusEnumActive      StudentStatusEnum = "active"
+	StudentStatusEnumAlumni      StudentStatusEnum = "alumni"
+	StudentStatusEnumMutated     StudentStatusEnum = "mutated"
+)
+
+func (e *StudentStatusEnum) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = StudentStatusEnum(s)
+	case string:
+		*e = StudentStatusEnum(s)
+	default:
+		return fmt.Errorf("unsupported scan type for StudentStatusEnum: %T", src)
+	}
+	return nil
+}
+
+type NullStudentStatusEnum struct {
+	StudentStatusEnum StudentStatusEnum `json:"student_status_enum"`
+	Valid             bool              `json:"valid"` // Valid is true if StudentStatusEnum is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullStudentStatusEnum) Scan(value interface{}) error {
+	if value == nil {
+		ns.StudentStatusEnum, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.StudentStatusEnum.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullStudentStatusEnum) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.StudentStatusEnum), nil
+}
+
 type UserRole string
 
 const (
 	UserRoleAdmin UserRole = "admin"
 	UserRoleGuru  UserRole = "guru"
+	UserRoleSiswa UserRole = "siswa"
+	UserRoleStaf  UserRole = "staf"
+	UserRoleOrtu  UserRole = "ortu"
 )
 
 func (e *UserRole) Scan(src interface{}) error {
@@ -406,6 +453,7 @@ type CbtExamEvent struct {
 	Status         string             `json:"status"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	TargetLevels   []string           `json:"target_levels"`
 }
 
 type CbtExamParticipant struct {
@@ -425,6 +473,7 @@ type CbtExamParticipant struct {
 	ScreenshotAttempt int32              `json:"screenshot_attempt"`
 	LoginIp           pgtype.Text        `json:"login_ip"`
 	SuspiciousFlag    bool               `json:"suspicious_flag"`
+	SeatNo            pgtype.Int4        `json:"seat_no"`
 }
 
 type CbtExamRoom struct {
@@ -436,16 +485,22 @@ type CbtExamRoom struct {
 }
 
 type CbtExamSession struct {
-	ID             pgtype.UUID          `json:"id"`
-	PackageID      pgtype.UUID          `json:"package_id"`
-	ClassID        pgtype.UUID          `json:"class_id"`
-	Title          string               `json:"title"`
-	ScheduledStart pgtype.Timestamptz   `json:"scheduled_start"`
-	ScheduledEnd   pgtype.Timestamptz   `json:"scheduled_end"`
-	Status         CbtSessionStatusEnum `json:"status"`
-	CreatedAt      pgtype.Timestamptz   `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz   `json:"updated_at"`
-	EventID        pgtype.UUID          `json:"event_id"`
+	ID              pgtype.UUID          `json:"id"`
+	PackageID       pgtype.UUID          `json:"package_id"`
+	ClassID         pgtype.UUID          `json:"class_id"`
+	Title           string               `json:"title"`
+	ScheduledStart  pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd    pgtype.Timestamptz   `json:"scheduled_end"`
+	Status          CbtSessionStatusEnum `json:"status"`
+	CreatedAt       pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz   `json:"updated_at"`
+	EventID         pgtype.UUID          `json:"event_id"`
+	ScopeType       string               `json:"scope_type"`
+	ScopeRef        string               `json:"scope_ref"`
+	MixPolicy       string               `json:"mix_policy"`
+	AssignmentMode  string               `json:"assignment_mode"`
+	AllowCrossGrade bool                 `json:"allow_cross_grade"`
+	IsSpecialEvent  bool                 `json:"is_special_event"`
 }
 
 type CbtPackage struct {
@@ -477,23 +532,61 @@ type CbtParticipantEvent struct {
 }
 
 type CbtQuestion struct {
-	ID           pgtype.UUID               `json:"id"`
-	SubjectID    pgtype.UUID               `json:"subject_id"`
-	Code         string                    `json:"code"`
-	QuestionText string                    `json:"question_text"`
-	OptionA      string                    `json:"option_a"`
-	OptionB      string                    `json:"option_b"`
-	OptionC      string                    `json:"option_c"`
-	OptionD      string                    `json:"option_d"`
-	OptionE      string                    `json:"option_e"`
-	AnswerKey    string                    `json:"answer_key"`
-	Explanation  string                    `json:"explanation"`
-	Difficulty   CbtQuestionDifficultyEnum `json:"difficulty"`
-	Status       CbtQuestionStatusEnum     `json:"status"`
-	CreatedAt    pgtype.Timestamptz        `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz        `json:"updated_at"`
-	QuestionType string                    `json:"question_type"`
-	Options      []byte                    `json:"options"`
+	ID               pgtype.UUID               `json:"id"`
+	SubjectID        pgtype.UUID               `json:"subject_id"`
+	Code             string                    `json:"code"`
+	QuestionText     string                    `json:"question_text"`
+	OptionA          string                    `json:"option_a"`
+	OptionB          string                    `json:"option_b"`
+	OptionC          string                    `json:"option_c"`
+	OptionD          string                    `json:"option_d"`
+	OptionE          string                    `json:"option_e"`
+	AnswerKey        string                    `json:"answer_key"`
+	Explanation      string                    `json:"explanation"`
+	Difficulty       CbtQuestionDifficultyEnum `json:"difficulty"`
+	Status           CbtQuestionStatusEnum     `json:"status"`
+	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`
+	QuestionType     string                    `json:"question_type"`
+	Options          []byte                    `json:"options"`
+	StemHtml         string                    `json:"stem_html"`
+	StemLatex        string                    `json:"stem_latex"`
+	StimulusHtml     string                    `json:"stimulus_html"`
+	StimulusLatex    string                    `json:"stimulus_latex"`
+	ExplanationHtml  string                    `json:"explanation_html"`
+	RubricHtml       string                    `json:"rubric_html"`
+	AcademicPhase    string                    `json:"academic_phase"`
+	GradeLevel       pgtype.Int2               `json:"grade_level"`
+	CpRef            string                    `json:"cp_ref"`
+	TpRef            string                    `json:"tp_ref"`
+	KdRef            string                    `json:"kd_ref"`
+	IndicatorRef     string                    `json:"indicator_ref"`
+	MaterialTopic    string                    `json:"material_topic"`
+	CognitiveLevel   string                    `json:"cognitive_level"`
+	HotsFlag         bool                      `json:"hots_flag"`
+	MediaAssetIds    []byte                    `json:"media_asset_ids"`
+	WorkflowStatus   string                    `json:"workflow_status"`
+	Version          int32                     `json:"version"`
+	AuthorUsername   string                    `json:"author_username"`
+	ReviewerUsername string                    `json:"reviewer_username"`
+	ReviewedAt       pgtype.Timestamptz        `json:"reviewed_at"`
+	ApproverUsername string                    `json:"approver_username"`
+	ApprovedAt       pgtype.Timestamptz        `json:"approved_at"`
+	WriterNotes      string                    `json:"writer_notes"`
+	ReviewNotes      string                    `json:"review_notes"`
+}
+
+type CbtQuestionAsset struct {
+	ID           pgtype.UUID        `json:"id"`
+	QuestionID   pgtype.UUID        `json:"question_id"`
+	OriginalName string             `json:"original_name"`
+	StoredName   string             `json:"stored_name"`
+	MimeType     string             `json:"mime_type"`
+	FileSize     int64              `json:"file_size"`
+	StoragePath  string             `json:"storage_path"`
+	Purpose      string             `json:"purpose"`
+	UploadedBy   string             `json:"uploaded_by"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 type CbtStudentAnswer struct {
@@ -522,11 +615,10 @@ type Employee struct {
 	Nip            string             `json:"nip"`
 	Nama           string             `json:"nama"`
 	UnitKerja      string             `json:"unit_kerja"`
-	PusakaUsername string             `json:"pusaka_username"`
-	PusakaPassword string             `json:"pusaka_password"`
 	IsActive       bool               `json:"is_active"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	EmploymentType string             `json:"employment_type"`
 }
 
 type EmployeeSchedule struct {
@@ -540,6 +632,30 @@ type EmployeeSchedule struct {
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	RandomWindowMinutes int16              `json:"random_window_minutes"`
 	DayOfWeek           int16              `json:"day_of_week"`
+}
+
+type GradeComponent struct {
+	ID           pgtype.UUID        `json:"id"`
+	AssignmentID pgtype.UUID        `json:"assignment_id"`
+	Title        string             `json:"title"`
+	Category     string             `json:"category"`
+	Weight       float64            `json:"weight"`
+	MaxScore     float64            `json:"max_score"`
+	IsPublished  bool               `json:"is_published"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GradeEntry struct {
+	ID          pgtype.UUID        `json:"id"`
+	ComponentID pgtype.UUID        `json:"component_id"`
+	StudentID   pgtype.UUID        `json:"student_id"`
+	Score       pgtype.Float8      `json:"score"`
+	Notes       string             `json:"notes"`
+	GradedBy    string             `json:"graded_by"`
+	GradedAt    pgtype.Timestamptz `json:"graded_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Job struct {
@@ -556,6 +672,30 @@ type Job struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	NotBefore    pgtype.Timestamptz `json:"not_before"`
+}
+
+type Parent struct {
+	ID        pgtype.UUID        `json:"id"`
+	Nama      string             `json:"nama"`
+	Phone     string             `json:"phone"`
+	Address   string             `json:"address"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ParentStudent struct {
+	ParentID  pgtype.UUID `json:"parent_id"`
+	StudentID pgtype.UUID `json:"student_id"`
+}
+
+type PusakaAccount struct {
+	ID             pgtype.UUID        `json:"id"`
+	EmployeeID     pgtype.UUID        `json:"employee_id"`
+	PusakaUsername string             `json:"pusaka_username"`
+	PusakaPassword string             `json:"pusaka_password"`
+	IsEnabled      bool               `json:"is_enabled"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Schedule struct {
@@ -592,6 +732,7 @@ type Student struct {
 	IsActive    bool               `json:"is_active"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	Status      StudentStatusEnum  `json:"status"`
 }
 
 type Subject struct {
@@ -607,8 +748,15 @@ type User struct {
 	ID           pgtype.UUID        `json:"id"`
 	Username     string             `json:"username"`
 	PasswordHash string             `json:"password_hash"`
-	Role         UserRole           `json:"role"`
 	EmployeeID   pgtype.UUID        `json:"employee_id"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	StudentID    pgtype.UUID        `json:"student_id"`
+	ParentID     pgtype.UUID        `json:"parent_id"`
+	IsActive     bool               `json:"is_active"`
+}
+
+type UserAccountRole struct {
+	UserID pgtype.UUID `json:"user_id"`
+	Role   UserRole    `json:"role"`
 }

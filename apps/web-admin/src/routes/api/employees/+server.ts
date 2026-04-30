@@ -4,7 +4,9 @@ import { proxy, ApiError, handleRouteError } from '$lib/server/api';
 
 interface GoEmployee {
 	id: string; nip: string; nama: string; unit_kerja: string;
-	pusaka_username: string; is_active: boolean; created_at: string;
+	employment_type: string;
+	pusaka_username: string; pusaka_eligible: boolean; has_pusaka_account: boolean;
+	is_active: boolean; created_at: string;
 	active_status: string; active_run_type: string;
 	last_status: string; last_run_type: string;
 	has_checkin_schedule: boolean; has_checkout_schedule: boolean;
@@ -22,16 +24,22 @@ export const GET = async (event: RequestEvent) => {
 export const POST = async (event: RequestEvent) => {
 	try {
 		const body = await event.request.json() as Record<string, unknown>;
-		const { nip, nama, unit_kerja = '', pusaka_username, pusaka_password } = body;
+		const { nip, nama, unit_kerja = '', employment_type = 'lainnya', pusaka_username, pusaka_password } = body;
 
-		if (!nip || !nama || !pusaka_username || !pusaka_password)
-			return json({ error: 'nip, nama, pusaka_username, pusaka_password wajib diisi' }, { status: 400 });
+		if (!nip || !nama)
+			return json({ error: 'nip dan nama wajib diisi' }, { status: 400 });
+		if ((pusaka_username && !pusaka_password) || (!pusaka_username && pusaka_password))
+			return json({ error: 'username dan password PUSAKA harus diisi berpasangan' }, { status: 400 });
+		if (!['pns', 'pppk', 'honorer', 'lainnya'].includes(String(employment_type)))
+			return json({ error: 'employment_type tidak valid' }, { status: 400 });
 
-		await proxy(event).post('/api/employees', { nip, nama, unit_kerja, pusaka_username, pusaka_password, is_active: true });
+		await proxy(event).post('/api/employees', { nip, nama, unit_kerja, employment_type, pusaka_username, pusaka_password, is_active: true });
 		return json({ ok: true }, { status: 201 });
 	} catch (e) {
 		if (e instanceof ApiError && e.status === 409)
 			return json({ error: 'Gagal menambah pegawai (NIP sudah terdaftar)' }, { status: 409 });
+		if (e instanceof ApiError && e.status === 400)
+			return json({ error: e.message }, { status: 400 });
 		return handleRouteError(e, 'employees POST');
 	}
 };

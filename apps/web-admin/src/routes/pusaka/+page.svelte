@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { toast } from '$lib/components/ui/sonner';
 	import QueueMonitor from '$lib/components/QueueMonitor.svelte';
 
 	interface QueueStats {
@@ -24,15 +26,14 @@
 	let workerStatus = $state<WorkerStatus | null>(null);
 	let recentJobs   = $state<any[]>([]);
 	let busy         = $state<Record<string, boolean>>({});
-	let toast        = $state({ msg: '', type: 'ok' as 'ok' | 'err' });
 	let confirmKey   = $state('');
 
 	async function load() {
 		try {
 			const [qRes, jRes, wRes] = await Promise.all([
 				fetch('/api/queue/stats'),
-				fetch('/api/jobs?limit=5'),
-				fetch('/api/worker/status'),
+				fetch('/api/pusaka/jobs?limit=5'),
+				fetch('/api/pusaka/worker/status'),
 			]);
 			const q = await qRes.json().catch(() => ({}));
 			const j = await jRes.json().catch(() => ({}));
@@ -62,7 +63,7 @@
 	async function runRekap() {
 		busy = { ...busy, rekap: true };
 		try {
-			const res  = await fetch('/api/jobs/run-all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ run_type: 'morning' }) });
+			const res  = await fetch('/api/pusaka/jobs/run-all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ run_type: 'morning' }) });
 			const data = await res.json().catch(() => ({}));
 			if (!res.ok) throw new Error((data as any).error || 'Gagal');
 			showToast(`Rekap di-queue: ${(data as any).inserted ?? 0} job baru`, 'ok');
@@ -74,12 +75,12 @@
 		}
 	}
 
-	const triggerSched  = ()          => act('sched',      () => fetch('/api/scheduler/tick', { method: 'POST' }), 'Scheduler tick dijalankan');
-	const cancelAll     = ()          => act('cancel_all', () => fetch('/api/jobs/cancel-all',{ method: 'POST' }), 'Semua antrian dibatalkan');
+	const triggerSched  = ()          => act('sched',      () => fetch('/api/pusaka/scheduler/tick', { method: 'POST' }), 'Scheduler tick dijalankan');
+	const cancelAll     = ()          => act('cancel_all', () => fetch('/api/pusaka/jobs/cancel-all',{ method: 'POST' }), 'Semua antrian dibatalkan');
 
 	function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
-		toast = { msg, type };
-		setTimeout(() => (toast = { msg: '', type: 'ok' }), 3500);
+		if (type === 'ok') toast.success(msg);
+		else toast.error(msg);
 	}
 
 	function statusVariant(s: string): 'default' | 'destructive' | 'outline' | 'secondary' {
@@ -141,16 +142,6 @@
 			{/if}
 		</div>
 	</div>
-
-	<!-- Toast -->
-	{#if toast.msg}
-		<div class="rounded-md px-4 py-3 text-sm
-			{toast.type === 'ok'
-				? 'border border-green-200 bg-green-50 text-green-800'
-				: 'border border-red-200 bg-red-50 text-destructive'}">
-			{toast.msg}
-		</div>
-	{/if}
 
 	<!-- Worker status -->
 	<div class="grid gap-4 sm:grid-cols-3">
@@ -216,14 +207,15 @@
 	<QueueMonitor stats={queueStats} />
 
 	<!-- Recent jobs -->
-	<Card.Root>
+	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Header class="pb-3">
 			<div class="flex items-center justify-between">
 				<Card.Title class="text-base">Job Terbaru</Card.Title>
-				<Button variant="ghost" size="sm" href="/pusaka/antrian">Lihat semua →</Button>
+			<Button variant="ghost" size="sm" href={resolve('/pusaka/antrian')}>Lihat semua →</Button>
 			</div>
 		</Card.Header>
-		<Card.Content class="p-0 overflow-x-auto">
+		<Card.Content class="p-0">
+			<div class="hidden overflow-x-auto lg:block">
 			<Table.Root>
 				<Table.Header>
 					<Table.Row>
@@ -235,7 +227,7 @@
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
-					{#each recentJobs as j}
+					{#each recentJobs as j (j.id)}
 						<Table.Row>
 							<Table.Cell class="text-xs text-muted-foreground whitespace-nowrap">{fmtDt(j.created_at)}</Table.Cell>
 							<Table.Cell class="font-medium">{j.nama || j.employee_nama || '—'}</Table.Cell>
@@ -250,16 +242,43 @@
 					{/each}
 				</Table.Body>
 			</Table.Root>
+			</div>
+
+			<div class="grid gap-3 p-4 lg:hidden">
+				{#each recentJobs as j (j.id)}
+					<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+						<div class="flex items-start justify-between gap-3">
+							<div class="min-w-0">
+								<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{fmtDt(j.created_at)}</p>
+								<p class="mt-1 text-sm font-semibold text-slate-900">{j.nama || j.employee_nama || '—'}</p>
+								<p class="mt-1 text-xs text-slate-500">{j.claimed_by || 'Belum diklaim worker'}</p>
+							</div>
+							<Badge variant={statusVariant(j.status)}>{statusLabel(j.status)}</Badge>
+						</div>
+						<div class="mt-3 flex items-center gap-2">
+							<Badge variant="outline">{runTypeLabel(j.run_type)}</Badge>
+						</div>
+					</div>
+				{:else}
+					<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+						Belum ada job.
+					</div>
+				{/each}
+			</div>
 		</Card.Content>
 	</Card.Root>
 
 	<!-- Quick navigation -->
 	<div class="grid gap-3 sm:grid-cols-2">
-		<Button variant="outline" href="/pusaka/kehadiran" class="h-auto py-4 flex-col items-start text-left gap-1">
+		<Button variant="outline" href={resolve('/pusaka/employees')} class="h-auto py-4 flex-col items-start text-left gap-1">
+			<span class="font-semibold">Pegawai PUSAKA</span>
+			<span class="text-xs text-muted-foreground font-normal">Setup akun, jadwal, dan job untuk pegawai eligible</span>
+		</Button>
+		<Button variant="outline" href={resolve('/pusaka/kehadiran')} class="h-auto py-4 flex-col items-start text-left gap-1">
 			<span class="font-semibold">Data Kehadiran</span>
 			<span class="text-xs text-muted-foreground font-normal">Rekap harian dari PUSAKA Kemenag</span>
 		</Button>
-		<Button variant="outline" href="/pusaka/summary" class="h-auto py-4 flex-col items-start text-left gap-1">
+		<Button variant="outline" href={resolve('/pusaka/summary')} class="h-auto py-4 flex-col items-start text-left gap-1">
 			<span class="font-semibold">Ringkasan Kehadiran</span>
 			<span class="text-xs text-muted-foreground font-normal">Akumulasi per periode / bulan</span>
 		</Button>

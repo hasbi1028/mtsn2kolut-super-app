@@ -97,6 +97,7 @@ Three runtime units deployed across 3 VPS:
 ### ✅ PUSAKA Isolation Phase 3 (COMPLETE)
 - [x] Drop legacy `employees.pusaka_*` columns after the migration window by moving integration ownership fully to `pusaka_accounts`
 - [x] Keep package layout stable for now; explicit `Pusaka*` ownership naming is sufficient until real churn justifies a deeper package split
+- [x] Keep `/employees` as master pegawai umum and move PUSAKA account setup/operations to `/pusaka/employees`
 
 ### Sprint 7 — Flutter CBT App (MVP)
 - [ ] Initialize Flutter project

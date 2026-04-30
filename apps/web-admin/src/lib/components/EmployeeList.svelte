@@ -12,6 +12,7 @@
     nama: string;
     unit_kerja: string;
     pusaka_username: string;
+    is_active: boolean;
     active_status: string;
     active_run_type: string;
     last_status: string;
@@ -48,7 +49,6 @@
     ondelete: () => void;
   } = $props();
 
-  let confirmId        = $state<string | null>(null);
   let busyId           = $state<string | null>(null);
   let selectedEmployee = $state<Employee | null>(null);
 
@@ -72,7 +72,7 @@
   const makeDayConfig = (): DayConfig => ({
     checkinId: null, checkoutId: null,
     checkinTime: '', checkoutTime: '',
-    checkinEnabled: true, checkoutEnabled: true, randomWindow: 15,
+    checkinEnabled: true, checkoutEnabled: true, randomWindow: 0,
   });
   let dayConfigs = $state<DayConfig[]>(Array.from({ length: 7 }, makeDayConfig));
 
@@ -115,7 +115,7 @@
     if (!selectedEmployee) return;
     saving = true;
     try {
-      const res = await fetch(`/api/employees/${selectedEmployee.id}`, {
+      const res = await fetch(`/api/pusaka/employees/${selectedEmployee.id}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ pusaka_username: pusakaUsername, pusaka_password: pusakaPassword }),
@@ -127,7 +127,7 @@
   async function testPusakaCredentials(emp: Employee) {
     testing = true;
     try {
-      const res  = await fetch(`/api/employees/${emp.id}/test-pusaka`, { method: 'POST' });
+      const res  = await fetch(`/api/pusaka/employees/${emp.id}/test-pusaka`, { method: 'POST' });
       const data = await res.json() as { message?: string };
       alert(data.message || 'Test selesai');
     } catch { alert('Test gagal'); } finally { testing = false; }
@@ -135,24 +135,13 @@
 
   async function doStop(id: string) {
     busyId = id;
-    const res  = await fetch('/api/jobs/cancel', {
+    const res  = await fetch('/api/pusaka/jobs/cancel', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ employee_id: id }),
     });
     const data = await res.json().catch(() => ({})) as { cancelled?: number };
     busyId = null;
     onstop?.(id, data.cancelled ?? 0);
-  }
-
-  async function doDelete(id: string) {
-    busyId = id;
-    await fetch('/api/employees', {
-      method: 'DELETE', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id }),
-    });
-    busyId = null;
-    confirmId = null;
-    ondelete?.();
   }
 
   function populateDayConfigs(data: EmployeeSchedule[]): DayConfig[] {
@@ -164,12 +153,12 @@
         configs[d].checkinId      = s.id;
         configs[d].checkinTime    = s.run_time;
         configs[d].checkinEnabled = s.is_enabled;
-        configs[d].randomWindow   = s.random_window_minutes ?? 15;
+        configs[d].randomWindow   = s.random_window_minutes ?? 0;
       } else {
         configs[d].checkoutId      = s.id;
         configs[d].checkoutTime    = s.run_time;
         configs[d].checkoutEnabled = s.is_enabled;
-        if (!configs[d].checkinId) configs[d].randomWindow = s.random_window_minutes ?? 15;
+        if (!configs[d].checkinId) configs[d].randomWindow = s.random_window_minutes ?? 0;
       }
     }
     return configs;
@@ -181,7 +170,7 @@
     scheduleLoading    = true;
     dayConfigs         = Array.from({ length: 7 }, makeDayConfig);
     try {
-      const res  = await fetch(`/api/employees/${emp.id}/schedules`);
+      const res  = await fetch(`/api/pusaka/employees/${emp.id}/schedules`);
       const data = await res.json().catch(() => []) as EmployeeSchedule[];
       if (Array.isArray(data)) dayConfigs = populateDayConfigs(data);
     } catch { /* silent */ }
@@ -194,7 +183,7 @@
     scheduleSaving = true;
     try {
       if (cfg.checkinTime) {
-        await fetch(`/api/employees/${scheduleEmployee.id}/schedules`, {
+        await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules`, {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             run_type: 'checkin', run_time: cfg.checkinTime,
@@ -205,7 +194,7 @@
         });
       }
       if (cfg.checkoutTime) {
-        await fetch(`/api/employees/${scheduleEmployee.id}/schedules`, {
+        await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules`, {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             run_type: 'checkout', run_time: cfg.checkoutTime,
@@ -215,7 +204,7 @@
           }),
         });
       }
-      const res  = await fetch(`/api/employees/${scheduleEmployee.id}/schedules`);
+      const res  = await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules`);
       const data = await res.json().catch(() => []) as EmployeeSchedule[];
       if (Array.isArray(data)) dayConfigs = populateDayConfigs(data);
       ondelete?.();
@@ -229,7 +218,7 @@
     const schedId = runType === 'checkin' ? cfg.checkinId : cfg.checkoutId;
     if (!schedId) return;
     try {
-      await fetch(`/api/employees/${scheduleEmployee.id}/schedules/${schedId}`, { method: 'DELETE' });
+      await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules/${schedId}`, { method: 'DELETE' });
       if (runType === 'checkin') { cfg.checkinId = null; cfg.checkinTime = ''; }
       else                       { cfg.checkoutId = null; cfg.checkoutTime = ''; }
       ondelete?.();
@@ -284,7 +273,10 @@
 <Card.Root>
   <Card.Header class="pb-3">
     <div class="flex items-center justify-between">
-      <Card.Title class="text-base">Daftar Pegawai</Card.Title>
+      <div>
+        <Card.Title class="text-base">Pegawai Eligible PUSAKA</Card.Title>
+        <Card.Description>Hanya pegawai PNS dan PPPK yang dikelola di area ini untuk setup akun, jadwal, dan eksekusi job PUSAKA.</Card.Description>
+      </div>
       <Badge variant="secondary">{employees.length} pegawai</Badge>
     </div>
   </Card.Header>
@@ -300,12 +292,19 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each employees as e}
+        {#each employees as e (e.id)}
           {@const si = statusInfo(e)}
           <Table.Row class={e.active_status === 'running' ? 'bg-amber-50' : ''}>
             <Table.Cell>
               <div class="font-medium">{e.nama}</div>
               <div class="text-xs text-muted-foreground font-mono">{e.nip}</div>
+              <div class="mt-1">
+                {#if e.is_active}
+                  <Badge variant="outline" class="text-[11px] border-emerald-300 text-emerald-700">Pegawai aktif</Badge>
+                {:else}
+                  <Badge variant="secondary" class="text-[11px]">Nonaktif / rotasi</Badge>
+                {/if}
+              </div>
             </Table.Cell>
             <Table.Cell class="hidden sm:table-cell text-sm text-muted-foreground">
               {e.unit_kerja || '—'}
@@ -327,52 +326,38 @@
               {/if}
             </Table.Cell>
             <Table.Cell class="text-right">
-              {#if confirmId === e.id}
-                <div class="flex items-center justify-end gap-2 flex-wrap">
-                  <span class="text-xs text-amber-700">Hapus beserta semua data?</span>
-                  <Button size="sm" variant="destructive" onclick={() => doDelete(e.id)} disabled={busyId === e.id}>
-                    {busyId === e.id ? '...' : 'Ya, Hapus'}
-                  </Button>
-                  <Button size="sm" variant="ghost" onclick={() => (confirmId = null)}>Batal</Button>
-                </div>
-              {:else}
-                <div class="flex items-center justify-end gap-1.5 flex-wrap">
-                  <Button size="sm" variant="outline" onclick={() => openPusakaDialog(e)}>
-                    {isPusakaConfigured(e) ? 'Edit' : 'Setup'} Pusaka
-                  </Button>
-                  <Button size="sm" variant="ghost" onclick={() => testPusakaCredentials(e)} disabled={testing || !isPusakaConfigured(e)}>
-                    Test
-                  </Button>
-                  <Button size="sm" variant="outline" onclick={() => onrun(e.id, 'morning')} disabled={busyId === e.id}>
-                    Rekap
-                  </Button>
-                  <Button size="sm" variant="outline"
-                    onclick={() => openRunConfirm(e, 'checkin')}
-                    disabled={busyId === e.id}
-                    class="border-amber-300 text-amber-700 hover:bg-amber-50">
-                    ☀ Masuk
-                  </Button>
-                  <Button size="sm" variant="outline"
-                    onclick={() => openRunConfirm(e, 'checkout')}
-                    disabled={busyId === e.id}
-                    class="border-amber-300 text-amber-700 hover:bg-amber-50">
-                    🌙 Pulang
-                  </Button>
-                  <Button size="sm" variant="outline"
-                    onclick={() => openScheduleDialog(e)}
-                    class={scheduleButtonClass(e)}>
-                    {scheduleButtonLabel(e)}
-                  </Button>
-                  <Button size="sm" variant="ghost" onclick={() => doStop(e.id)} disabled={busyId === e.id || !e.active_status}
-                    class="text-amber-700 hover:text-amber-800">
-                    ■ Stop
-                  </Button>
-                  <Button size="sm" variant="ghost" onclick={() => (confirmId = e.id)}
-                    class="text-destructive hover:text-destructive">
-                    Hapus
-                  </Button>
-                </div>
-              {/if}
+              <div class="flex items-center justify-end gap-1.5 flex-wrap">
+                <Button size="sm" variant="outline" onclick={() => openPusakaDialog(e)}>
+                  {isPusakaConfigured(e) ? 'Edit' : 'Setup'} Pusaka
+                </Button>
+                <Button size="sm" variant="ghost" onclick={() => testPusakaCredentials(e)} disabled={testing || !isPusakaConfigured(e)}>
+                  Test
+                </Button>
+                <Button size="sm" variant="outline" onclick={() => onrun(e.id, 'morning')} disabled={busyId === e.id}>
+                  Rekap
+                </Button>
+                <Button size="sm" variant="outline"
+                  onclick={() => openRunConfirm(e, 'checkin')}
+                  disabled={busyId === e.id}
+                  class="border-amber-300 text-amber-700 hover:bg-amber-50">
+                  ☀ Masuk
+                </Button>
+                <Button size="sm" variant="outline"
+                  onclick={() => openRunConfirm(e, 'checkout')}
+                  disabled={busyId === e.id}
+                  class="border-amber-300 text-amber-700 hover:bg-amber-50">
+                  🌙 Pulang
+                </Button>
+                <Button size="sm" variant="outline"
+                  onclick={() => openScheduleDialog(e)}
+                  class={scheduleButtonClass(e)}>
+                  {scheduleButtonLabel(e)}
+                </Button>
+                <Button size="sm" variant="ghost" onclick={() => doStop(e.id)} disabled={busyId === e.id || !e.active_status}
+                  class="text-amber-700 hover:text-amber-800">
+                  ■ Stop
+                </Button>
+              </div>
             </Table.Cell>
           </Table.Row>
         {:else}
@@ -473,7 +458,7 @@
     {:else}
       {@const dayLabels = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']}
       <div class="space-y-2 max-h-[65vh] overflow-y-auto py-1 pr-1">
-        {#each dayConfigs as cfg, dow}
+        {#each dayConfigs as cfg, dow (`${dow}-${cfg.checkinId ?? 'ci'}-${cfg.checkoutId ?? 'co'}`)}
           <div class="rounded-lg border bg-card px-3 py-2.5 space-y-2">
 
             <!-- Header baris hari -->

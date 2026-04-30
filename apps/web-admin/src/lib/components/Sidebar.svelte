@@ -1,7 +1,14 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 
-	let { user }: { user?: { id: string; username: string; role: string; employee_id?: string } } = $props();
+	let {
+		user,
+		desktopExpanded = $bindable(true)
+	}: {
+		user?: { id: string; username: string; role: string; roles?: string[]; employee_id?: string };
+		desktopExpanded?: boolean;
+	} = $props();
 	let open = $state(false);
 
 	type NavItem = { href: string; label: string; icon: string; roles?: string[] };
@@ -18,7 +25,9 @@
 			group: 'Akademik',
 			items: [
 				{ href: '/academic',  label: 'Data Akademik', icon: 'book-open', roles: ['admin'] },
+				{ href: '/grades',    label: 'Nilai',         icon: 'clipboard', roles: ['admin', 'guru'] },
 				{ href: '/students',  label: 'Siswa',         icon: 'users' },
+				{ href: '/parents',   label: 'Orang Tua',     icon: 'user-group', roles: ['admin', 'staf'] },
 			],
 		},
 		{
@@ -33,13 +42,14 @@
 		{
 			group: 'Operasional',
 			items: [
-				{ href: '/employees', label: 'Pegawai', icon: 'user-check', roles: ['admin'] },
+				{ href: '/employees', label: 'Master Pegawai', icon: 'user-check', roles: ['admin'] },
 			],
 		},
 		{
 			group: 'PUSAKA',
 			items: [
 				{ href: '/pusaka',           label: 'Kontrol & Monitor',   icon: 'server',  roles: ['admin'] },
+				{ href: '/pusaka/employees', label: 'Pegawai PUSAKA',      icon: 'user-check', roles: ['admin'] },
 				{ href: '/pusaka/kehadiran', label: 'Data Kehadiran',       icon: 'clock',   roles: ['admin'] },
 				{ href: '/pusaka/summary',   label: 'Ringkasan Kehadiran',  icon: 'layers',  roles: ['admin'] },
 				{ href: '/pusaka/antrian',   label: 'Antrian Job',          icon: 'activity',roles: ['admin'] },
@@ -58,9 +68,15 @@
 	const nav = $derived(
 		allNav.map(g => ({
 			...g,
-			items: g.items.filter(i => !i.roles || (user?.role && i.roles.includes(user.role)))
+			items: g.items.filter(i => {
+				if (!i.roles) return true;
+				const userRoles = user?.roles || (user?.role ? [user.role] : []);
+				return i.roles.some(r => userRoles.includes(r));
+			})
 		})).filter(g => g.items.length > 0)
 	);
+
+	const resolveNavHref = resolve as unknown as (href: string) => string;
 
 	function isActive(href: string) {
 		if (href === '/') return page.url.pathname === '/';
@@ -86,7 +102,7 @@
 {/if}
 
 <!-- Mobile topbar -->
-<header class="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-slate-200 bg-white px-4 lg:hidden">
+<header class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-3 border-b border-slate-200 bg-white px-4 lg:hidden">
 	<button
 		class="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"
 		onclick={() => (open = !open)}
@@ -101,42 +117,60 @@
 
 <!-- Sidebar -->
 <aside
-	class="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-slate-200 bg-white
+	class={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-slate-200 bg-white
 	       transition-transform duration-200
-	       {open ? 'translate-x-0' : '-translate-x-full'}
-	       lg:translate-x-0"
+	       ${open ? 'translate-x-0' : '-translate-x-full'}
+	       ${desktopExpanded ? 'lg:w-60' : 'lg:w-[5.5rem]'}
+	       lg:translate-x-0`}
 >
 	<!-- Brand -->
-	<div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-slate-200 px-4">
+	<div class={`flex h-14 shrink-0 items-center border-b border-slate-200 ${desktopExpanded ? 'gap-2.5 px-4' : 'justify-center px-3'}`}>
 		<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-green-700 text-white text-xs font-bold shrink-0">
 			MTs
 		</div>
-		<div class="min-w-0">
-			<p class="truncate text-sm font-semibold text-slate-800">MTSN 2 Kolut</p>
-			<p class="truncate text-xs text-slate-400">Kolaka Utara</p>
-		</div>
+		{#if desktopExpanded}
+			<div class="min-w-0">
+				<p class="truncate text-sm font-semibold text-slate-800">MTSN 2 Kolut</p>
+				<p class="truncate text-xs text-slate-400">Kolaka Utara</p>
+			</div>
+		{/if}
+		<button
+			class={`ml-auto hidden rounded-md p-1.5 text-slate-500 hover:bg-slate-100 lg:inline-flex ${desktopExpanded ? '' : 'ml-0'}`}
+			onclick={() => (desktopExpanded = !desktopExpanded)}
+			aria-label={desktopExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+		>
+			<svg class={`h-4 w-4 transition-transform ${desktopExpanded ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+			</svg>
+		</button>
 	</div>
 
 	<!-- Nav -->
-	<nav class="flex-1 overflow-y-auto py-3 px-3 space-y-4">
-		{#each nav as section}
+	<nav class={`flex-1 overflow-y-auto py-3 ${desktopExpanded ? 'px-3' : 'px-2'} space-y-4`}>
+		{#each nav as section (section.group)}
 			<div>
-				<p class="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-					{section.group}
-				</p>
+				{#if desktopExpanded}
+					<p class="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+						{section.group}
+					</p>
+				{/if}
 				<ul class="space-y-0.5">
-					{#each section.items as item}
+					{#each section.items as item (item.href)}
 						<li>
 							<a
-								href={item.href}
+								href={resolveNavHref(item.href)}
 								onclick={() => (open = false)}
-								class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors
+								title={!desktopExpanded ? item.label : undefined}
+								class={`flex items-center rounded-md py-1.5 text-sm font-medium transition-colors
+								       ${desktopExpanded ? 'gap-2.5 px-2' : 'justify-center px-0'}
 								       {isActive(item.href)
 								         ? 'bg-green-50 text-green-800'
-								         : 'text-slate-600 hover:bg-green-50/60 hover:text-slate-800'}"
+								         : 'text-slate-600 hover:bg-green-50/60 hover:text-slate-800'}`}
 							>
 								{@render SidebarIcon({ name: item.icon, active: isActive(item.href) })}
-								{item.label}
+								{#if desktopExpanded}
+									<span class="truncate">{item.label}</span>
+								{/if}
 							</a>
 						</li>
 					{/each}
@@ -150,14 +184,17 @@
 		{#if user}
 			<button
 				onclick={logout}
-				class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-500
-				       hover:bg-red-50 hover:text-red-600 transition-colors"
+				title={!desktopExpanded ? 'Keluar' : undefined}
+				class={`flex w-full items-center rounded-md py-1.5 text-sm text-slate-500 transition-colors
+				       hover:bg-red-50 hover:text-red-600 ${desktopExpanded ? 'gap-2 px-2' : 'justify-center px-0'}`}
 			>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
 						d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
 				</svg>
-				Keluar
+				{#if desktopExpanded}
+					Keluar
+				{/if}
 			</button>
 		{/if}
 	</div>
@@ -174,6 +211,8 @@
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
 		{:else if name === 'users'}
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+		{:else if name === 'user-group'}
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
 		{:else if name === 'file-text'}
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 		{:else if name === 'package'}
@@ -197,6 +236,9 @@
 			<line x1="6" y1="18" x2="6.01" y2="18" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
 		{:else if name === 'activity'}
 			<polyline points="22 12 18 12 15 21 9 3 6 12 2 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+		{:else if name === 'clipboard'}
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+			<rect x="9" y="3" width="6" height="4" rx="1" ry="1" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
 		{/if}
 	</svg>
 {/snippet}

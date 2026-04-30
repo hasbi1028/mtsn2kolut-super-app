@@ -19,14 +19,17 @@ type Employee struct {
 }
 
 type employeeResponse struct {
-	ID             pgtype.UUID        `json:"id"`
-	Nip            string             `json:"nip"`
-	Nama           string             `json:"nama"`
-	UnitKerja      string             `json:"unit_kerja"`
-	PusakaUsername string             `json:"pusaka_username"`
-	IsActive       bool               `json:"is_active"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	ID              pgtype.UUID        `json:"id"`
+	Nip             string             `json:"nip"`
+	Nama            string             `json:"nama"`
+	UnitKerja       string             `json:"unit_kerja"`
+	EmploymentType  string             `json:"employment_type"`
+	PusakaUsername  string             `json:"pusaka_username"`
+	PusakaEligible  bool               `json:"pusaka_eligible"`
+	HasPusakaAccount bool              `json:"has_pusaka_account"`
+	IsActive        bool               `json:"is_active"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 func NewEmployee(svc *service.Employee) *Employee { return &Employee{svc: svc} }
@@ -45,7 +48,20 @@ func (h *Employee) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Employee) listWithStatus(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("scope") == "pusaka" {
+		h.listPusakaEligibleWithStatus(w, r)
+		return
+	}
 	rows, err := h.svc.ListWithStatus(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *Employee) listPusakaEligibleWithStatus(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.svc.ListPusakaEligibleWithStatus(r.Context())
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -72,13 +88,25 @@ func (h *Employee) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Employee) Create(w http.ResponseWriter, r *http.Request) {
-	var p db.CreateEmployeeParams
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+	var body struct {
+		Nip            string `json:"nip"`
+		Nama           string `json:"nama"`
+		UnitKerja      string `json:"unit_kerja"`
+		EmploymentType string `json:"employment_type"`
+		PusakaUsername string `json:"pusaka_username"`
+		PusakaPassword string `json:"pusaka_password"`
+		IsActive       bool   `json:"is_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	emp, err := h.svc.Create(r.Context(), p)
+	emp, err := h.svc.Create(r.Context(), body.Nip, body.Nama, body.UnitKerja, body.EmploymentType, body.PusakaUsername, body.PusakaPassword, body.IsActive)
 	if err != nil {
+		if err.Error() == "only pns or pppk employees can have pusaka accounts" || err.Error() == "invalid employment type" {
+			api.BadRequest(w, err.Error())
+			return
+		}
 		api.Internal(w, err)
 		return
 	}
@@ -103,6 +131,10 @@ func (h *Employee) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		if err.Error() == "invalid employment type" || err.Error() == "disable or remove the pusaka account before changing employee type" {
+			api.BadRequest(w, err.Error())
+			return
+		}
 		api.Internal(w, err)
 		return
 	}
@@ -122,6 +154,29 @@ func (h *Employee) Delete(w http.ResponseWriter, r *http.Request) {
 	api.NoContent(w)
 }
 
+func (h *Employee) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		IsActive bool `json:"is_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	if err := h.svc.SetActive(r.Context(), id, body.IsActive); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{
+		"id":        id,
+		"is_active": body.IsActive,
+	})
+}
+
 func (h *Employee) GetPusakaStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
@@ -135,9 +190,9 @@ func (h *Employee) GetPusakaStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	configured := emp.PusakaUsername != "" && emp.PusakaPassword != ""
 	api.OK(w, map[string]any{
-		"employee_id":    id,
+		"employee_id":     id,
 		"pusaka_username": emp.PusakaUsername,
-		"configured":     configured,
+		"configured":      configured,
 	})
 }
 
@@ -161,21 +216,23 @@ func (h *Employee) UpdatePusakaCredentials(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	updated, err := h.svc.Update(r.Context(), db.UpdateEmployeeParams{
-		ID:            emp.ID,
-		Nip:           emp.Nip,
-		Nama:          emp.Nama,
-		UnitKerja:     emp.UnitKerja,
-		PusakaUsername: body.PusakaUsername,
-		PusakaPassword: body.PusakaPassword,
-		IsActive:      emp.IsActive,
+		ID:        emp.ID,
+		Nip:       emp.Nip,
+		Nama:      emp.Nama,
+		UnitKerja: emp.UnitKerja,
+		IsActive:  emp.IsActive,
 	})
 	if err != nil {
 		api.Internal(w, err)
 		return
 	}
+	if err := h.svc.UpsertPusakaAccount(r.Context(), id, body.PusakaUsername, body.PusakaPassword, emp.IsActive); err != nil {
+		api.Internal(w, err)
+		return
+	}
 	api.OK(w, map[string]any{
-		"status":    "success",
-		"configured": updated.PusakaUsername != "",
+		"status":     "success",
+		"configured": body.PusakaUsername != "" || updated.PusakaUsername != "",
 	})
 }
 
@@ -184,23 +241,45 @@ func parseUUID(s string) (pgtype.UUID, error) {
 	return u, u.Scan(s)
 }
 
-func sanitizeEmployee(emp db.Employee) employeeResponse {
+func pgUUIDString(u pgtype.UUID) string {
+	if !u.Valid {
+		return ""
+	}
+	return u.String()
+}
+
+func sanitizeEmployee(emp db.GetEmployeeRow) employeeResponse {
 	return employeeResponse{
-		ID:             emp.ID,
-		Nip:            emp.Nip,
-		Nama:           emp.Nama,
-		UnitKerja:      emp.UnitKerja,
-		PusakaUsername: emp.PusakaUsername,
-		IsActive:       emp.IsActive,
-		CreatedAt:      emp.CreatedAt,
-		UpdatedAt:      emp.UpdatedAt,
+		ID:               emp.ID,
+		Nip:              emp.Nip,
+		Nama:             emp.Nama,
+		UnitKerja:        emp.UnitKerja,
+		EmploymentType:   emp.EmploymentType,
+		PusakaUsername:   emp.PusakaUsername,
+		PusakaEligible:   emp.EmploymentType == "pns" || emp.EmploymentType == "pppk",
+		HasPusakaAccount: emp.PusakaUsername != "",
+		IsActive:         emp.IsActive,
+		CreatedAt:        emp.CreatedAt,
+		UpdatedAt:        emp.UpdatedAt,
 	}
 }
 
-func sanitizeEmployees(employees []db.Employee) []employeeResponse {
+func sanitizeEmployees(employees []db.ListEmployeesRow) []employeeResponse {
 	items := make([]employeeResponse, 0, len(employees))
 	for _, emp := range employees {
-		items = append(items, sanitizeEmployee(emp))
+		items = append(items, employeeResponse{
+			ID:               emp.ID,
+			Nip:              emp.Nip,
+			Nama:             emp.Nama,
+			UnitKerja:        emp.UnitKerja,
+			EmploymentType:   emp.EmploymentType,
+			PusakaUsername:   emp.PusakaUsername,
+			PusakaEligible:   emp.EmploymentType == "pns" || emp.EmploymentType == "pppk",
+			HasPusakaAccount: emp.PusakaUsername != "",
+			IsActive:         emp.IsActive,
+			CreatedAt:        emp.CreatedAt,
+			UpdatedAt:        emp.UpdatedAt,
+		})
 	}
 	return items
 }
