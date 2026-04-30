@@ -127,6 +127,8 @@ Three runtime units deployed across 3 VPS:
 - [x] Dedicated mobile status-guide screen explaining `Tersambung`, `Lokal`, `Gangguan`, and `Menurun`
 - [x] Heartbeat-quality `Waspada` state when last server contact becomes stale even before full degraded mode
 - [x] Operator quick-start guide for pengawas during BYOD field trials
+- [x] End-to-end BYOD trial procedure covering operator, pengawas, siswa, disturbance simulation, and submit readiness
+- [x] Mobile payload compatibility checklist embedded in `docs/exam-api.md` for backend release discipline
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

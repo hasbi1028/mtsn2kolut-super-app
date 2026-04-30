@@ -61,6 +61,46 @@ Mendaftarkan perangkat dan mendapatkan data soal.
   - `403 Forbidden`: Sesi ujian belum aktif atau sudah berakhir.
   - `409 Conflict`: Token sudah terikat dengan perangkat lain.
 
+### Payload Kompatibilitas Mobile
+
+Backend sebaiknya menjaga kontrak payload login ini tetap stabil untuk aplikasi Flutter.
+
+Field yang saat ini dipakai mobile:
+
+- `student.nis`
+- `student.nama`
+- `session.id`
+- `session.title`
+- `session.scheduled_start`
+- `session.scheduled_end`
+- `session.duration_minutes`
+- `room.room_name`
+- `answered_count`
+- `total_questions`
+- `time_remaining_seconds`
+
+Field soal yang saat ini aman dipakai mobile:
+
+- `id`
+- `question_text`
+- `stem_html`
+- `stimulus_html`
+- `stem_media_url`
+- `stimulus_media_url`
+- `stem_audio_url`
+- `stimulus_audio_url`
+- `options[].label`
+- `options[].text`
+
+Checklist sebelum backend mengubah payload:
+
+1. Jangan hapus field yang sudah dipakai mobile tanpa migration contract yang jelas.
+2. Untuk field rich content baru, tetap sediakan fallback plain text bila memungkinkan.
+3. URL media harus absolut atau konsisten dapat di-resolve oleh app.
+4. Untuk soal tanpa media/audio, kirim string kosong atau omit dengan bentuk yang tetap aman diparse.
+5. Jangan ubah arti `answered_count`, `total_questions`, dan `time_remaining_seconds` karena dipakai untuk restore, progress, dan submit guard.
+6. Jika menambah jenis media baru, dokumentasikan dulu sebelum dianggap wajib didukung mobile.
+
 ---
 
 ## 2. Status Progres
@@ -131,3 +171,16 @@ Finalisasi pengerjaan. Setelah ini, token tidak bisa digunakan lagi untuk menjaw
 - **Endpoint:** `POST /api/exam/submit`
 - **Headers:** `X-Exam-Token`
 - **Response:** `200 OK`
+
+---
+
+## Checklist Backend Sebelum Rilis ke Mobile
+
+Gunakan daftar ini saat mengubah endpoint exam agar app Flutter tidak diam-diam rusak:
+
+- [ ] response `POST /api/exam/login` masih memuat field dasar siswa, sesi, ruang, dan progres
+- [ ] bentuk `questions[]` tetap kompatibel dengan renderer PG/uraian
+- [ ] media/image/audio baru tidak membuat app wajib mengunduh format yang belum didukung
+- [ ] nilai `time_remaining_seconds` tetap akurat untuk countdown dan auto-submit
+- [ ] perubahan event type/warning semantics tetap backward-compatible
+- [ ] perubahan error code login/status/submit sudah ditinjau dampaknya ke restore flow

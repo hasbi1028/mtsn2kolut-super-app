@@ -158,6 +158,8 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Connection-legend baseline** — the mobile exam shell should expose a more visual connection-health summary, and the app should provide a simple status-guide screen so students and pengawas can interpret `Tersambung`, `Lokal`, `Gangguan`, and `Menurun` consistently.
 - **Heartbeat-quality baseline** — mobile connection status should not rely only on the latest error flag; it should also consider stale last-contact timing so the shell can surface a softer `Waspada` state before a session is fully degraded.
 - **Operator quick-start baseline** — `apps/mobile/OPERATOR_QUICKSTART.md` should exist as a short non-technical guide for pengawas/operator during BYOD field trials.
+- **BYOD trial-procedure baseline** — `apps/mobile/BYOD_TRIAL_PROCEDURE.md` should exist as the end-to-end school trial procedure covering operator, pengawas, siswa, disturbance simulation, and submit readiness.
+- **Backend payload-check baseline** — `docs/exam-api.md` should include a mobile compatibility checklist so exam-payload changes in the Go backend are reviewed against the live Flutter contract before release.
 
 ### ✅ Sprint 15 — Library System (Done)
 - **Library schema** — `library_books` and `library_loans` tables (migration 027). No separate member table; loans reference existing `students` and `employees` via FK.
