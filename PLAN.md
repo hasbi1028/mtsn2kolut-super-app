@@ -162,7 +162,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Unit-test coverage for exam formatting helpers (`formatExamSchedule`, `formatRestoreHealthLabel`, `formatRestoreClock`)
 - [x] Unit-test coverage for rich exam text normalization (`normalizeExamText`) including paragraphs, bullets, entities, and whitespace cleanup
 - [x] Unit-test coverage for exam model parsers (`ExamLoginPayload`, `ExamQuestion`, `ExamStatusPayload`) including rich fields, media/audio URLs, defaults, and `is_submitted`
-- [x] Unit-test coverage for `ExamApiClient` envelope unwrap, token-header transport, missing-data failure, malformed JSON mapping, transport-failure mapping, and backend message extraction precedence
+- [x] Unit-test coverage for `ExamApiClient` envelope unwrap, token-header transport, missing-data failure, malformed/non-object JSON mapping, transport-failure mapping, and backend message extraction precedence
 - [x] Unit-test coverage for transport-level guidance copy (`statusCode == null`) across login, restore, answer, and submit flows
 - [x] Widget-test coverage for transport-level warning panels on login, restore-failed, and exam shell surfaces
 - [x] Unit-test coverage for `ExamSessionStore` base URL persistence, snapshot roundtrip, invalid/malformed snapshot fallback, and clear-snapshot behavior

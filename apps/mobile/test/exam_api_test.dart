@@ -188,6 +188,34 @@ void main() {
     });
 
     test(
+      'throws controlled exception when success response json is not an object',
+      () async {
+        server.listen((request) async {
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType.json
+            ..write(jsonEncode(['bukan-object']));
+          await request.response.close();
+        });
+
+        final client = ExamApiClient(baseUrl: baseUrl);
+
+        await expectLater(
+          () => client.getStatus('token-1'),
+          throwsA(
+            isA<ExamApiException>()
+                .having((error) => error.statusCode, 'statusCode', 200)
+                .having(
+                  (error) => error.message,
+                  'message',
+                  'Respons server ujian tidak valid.',
+                ),
+          ),
+        );
+      },
+    );
+
+    test(
       'throws controlled exception when error response json is malformed',
       () async {
         server.listen((request) async {
@@ -261,6 +289,34 @@ void main() {
               'message',
               'Permintaan ke server ujian gagal.',
             ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'throws controlled exception when error response json is not an object',
+      () async {
+        server.listen((request) async {
+          request.response
+            ..statusCode = 500
+            ..headers.contentType = ContentType.json
+            ..write(jsonEncode(['bukan-object']));
+          await request.response.close();
+        });
+
+        final client = ExamApiClient(baseUrl: baseUrl);
+
+        await expectLater(
+          () => client.submit('token-1'),
+          throwsA(
+            isA<ExamApiException>()
+                .having((error) => error.statusCode, 'statusCode', 500)
+                .having(
+                  (error) => error.message,
+                  'message',
+                  'Respons error server ujian tidak valid.',
+                ),
           ),
         );
       },
