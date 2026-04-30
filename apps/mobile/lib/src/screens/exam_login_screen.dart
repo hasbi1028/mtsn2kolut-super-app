@@ -151,6 +151,10 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
           baseUrl: baseUrl,
           examToken: token,
           deviceFingerprint: deviceFingerprint,
+          studentName: payload.student.nama,
+          studentNis: payload.student.nis,
+          sessionTitle: payload.session.title,
+          roomName: payload.room?.roomName ?? '-',
           currentQuestionIndex: 0,
           answers: const <String, String>{},
           pendingAnswers: const <String, String>{},
@@ -317,6 +321,22 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 20),
+            if (_isRestoring)
+              _buildRestoreHintCard(theme)
+            else
+              FutureBuilder<ExamSessionSnapshot?>(
+                future: _sessionStore.loadSnapshot(),
+                builder: (context, snapshot) {
+                  final cached = snapshot.data;
+                  if (cached == null) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: _buildRestoreHintCard(theme, cached: cached),
+                  );
+                },
+              ),
             TextField(
               controller: _tokenController,
               maxLength: 8,
@@ -367,6 +387,38 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRestoreHintCard(ThemeData theme, {ExamSessionSnapshot? cached}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F8F3),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _isRestoring
+                ? 'Memeriksa sesi terakhir...'
+                : 'Sesi terakhir terdeteksi',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            cached == null
+                ? 'Jika sebelumnya ujian terputus, aplikasi akan mencoba memulihkannya otomatis.'
+                : '${cached.sessionTitle}\n${cached.studentName} • ${cached.studentNis} • Ruang ${cached.roomName}',
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+          ),
+        ],
       ),
     );
   }

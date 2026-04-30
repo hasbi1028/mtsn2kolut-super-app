@@ -110,6 +110,8 @@ Three runtime units deployed across 3 VPS:
 - [x] BYOD-aware resume gate and pending-answer sync queue to maximize deterrence and answer safety on student-owned Android devices
 - [x] Visible sync-state chip plus warning-event telemetry for repeat resume, local-only answer saves, and blocked submit due to pending sync
 - [x] Rich-content-ready renderer baseline for `stimulus_html` and `stem_html` payloads with safe text normalization fallback
+- [x] Human-readable session snapshot metadata cache for clearer restore UX
+- [x] Dedicated exam-complete screen after submit / auto-submit
 
 ### ✅ Lightweight Ops Hardening (COMPLETE)
 - [x] Basic CI for `go test ./...`, `npm run check`, and worker typecheck

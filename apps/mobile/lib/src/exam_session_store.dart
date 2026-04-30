@@ -7,6 +7,10 @@ class ExamSessionSnapshot {
     required this.baseUrl,
     required this.examToken,
     required this.deviceFingerprint,
+    required this.studentName,
+    required this.studentNis,
+    required this.sessionTitle,
+    required this.roomName,
     required this.currentQuestionIndex,
     required this.answers,
     required this.pendingAnswers,
@@ -15,6 +19,10 @@ class ExamSessionSnapshot {
   final String baseUrl;
   final String examToken;
   final String deviceFingerprint;
+  final String studentName;
+  final String studentNis;
+  final String sessionTitle;
+  final String roomName;
   final int currentQuestionIndex;
   final Map<String, String> answers;
   final Map<String, String> pendingAnswers;
@@ -24,6 +32,10 @@ class ExamSessionSnapshot {
       'base_url': baseUrl,
       'exam_token': examToken,
       'device_fingerprint': deviceFingerprint,
+      'student_name': studentName,
+      'student_nis': studentNis,
+      'session_title': sessionTitle,
+      'room_name': roomName,
       'current_question_index': currentQuestionIndex,
       'answers': answers,
       'pending_answers': pendingAnswers,
@@ -35,6 +47,10 @@ class ExamSessionSnapshot {
       baseUrl: json['base_url'] as String? ?? '',
       examToken: json['exam_token'] as String? ?? '',
       deviceFingerprint: json['device_fingerprint'] as String? ?? '',
+      studentName: json['student_name'] as String? ?? 'Siswa',
+      studentNis: json['student_nis'] as String? ?? '-',
+      sessionTitle: json['session_title'] as String? ?? 'Sesi Ujian',
+      roomName: json['room_name'] as String? ?? '-',
       currentQuestionIndex: json['current_question_index'] as int? ?? 0,
       answers: ((json['answers'] as Map<String, dynamic>?) ?? const {}).map(
         (key, value) => MapEntry(key, value.toString()),

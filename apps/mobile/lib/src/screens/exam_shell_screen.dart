@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../exam_api.dart';
 import '../exam_session_store.dart';
 import '../models.dart';
+import 'exam_completed_screen.dart';
 import '../widgets/rich_exam_text.dart';
 import 'exam_login_screen.dart';
 
@@ -350,6 +351,10 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         baseUrl: widget.client.baseUrl,
         examToken: widget.examToken,
         deviceFingerprint: widget.deviceFingerprint,
+        studentName: widget.initialPayload.student.nama,
+        studentNis: widget.initialPayload.student.nis,
+        sessionTitle: widget.initialPayload.session.title,
+        roomName: widget.initialPayload.room?.roomName ?? '-',
         currentQuestionIndex: _currentQuestionIndex,
         answers: Map<String, String>.from(_answers),
         pendingAnswers: Map<String, String>.from(_pendingAnswers),
@@ -434,6 +439,22 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _statusMessage = 'Ujian berhasil dikirim.';
       });
       await _sessionStore.clearSnapshot();
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => ExamCompletedScreen(
+            studentName: widget.initialPayload.student.nama,
+            studentNis: widget.initialPayload.student.nis,
+            sessionTitle: widget.initialPayload.session.title,
+            roomName: widget.initialPayload.room?.roomName ?? '-',
+            answeredCount: _answeredCount,
+            totalQuestions: widget.initialPayload.totalQuestions,
+            wasAutoSubmitted: autoSubmit,
+          ),
+        ),
+      );
       if (!autoSubmit) {
         await widget.client.sendEvent(
           token: widget.examToken,
