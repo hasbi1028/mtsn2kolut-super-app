@@ -94,29 +94,35 @@ class ExamApiClient {
     String? examToken,
     Map<String, Object?>? body,
   }) async {
-    final uri = Uri.parse('$baseUrl$path');
-    final request = await _httpClient.openUrl(method, uri);
-    request.headers.contentType = ContentType.json;
-    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-    if (examToken != null && examToken.isNotEmpty) {
-      request.headers.set('X-Exam-Token', examToken);
-    }
-    if (body != null) {
-      request.write(jsonEncode(body));
-    }
+    try {
+      final uri = Uri.parse('$baseUrl$path');
+      final request = await _httpClient.openUrl(method, uri);
+      request.headers.contentType = ContentType.json;
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      if (examToken != null && examToken.isNotEmpty) {
+        request.headers.set('X-Exam-Token', examToken);
+      }
+      if (body != null) {
+        request.write(jsonEncode(body));
+      }
 
-    final response = await request.close();
-    final raw = await utf8.decoder.bind(response).join();
-    final parsed = _parseJsonResponse(raw, statusCode: response.statusCode);
+      final response = await request.close();
+      final raw = await utf8.decoder.bind(response).join();
+      final parsed = _parseJsonResponse(raw, statusCode: response.statusCode);
 
-    if (response.statusCode >= 400) {
-      throw ExamApiException(
-        _extractMessage(parsed) ?? 'Permintaan ke server ujian gagal.',
-        statusCode: response.statusCode,
-      );
+      if (response.statusCode >= 400) {
+        throw ExamApiException(
+          _extractMessage(parsed) ?? 'Permintaan ke server ujian gagal.',
+          statusCode: response.statusCode,
+        );
+      }
+
+      return parsed;
+    } on SocketException {
+      throw const ExamApiException('Tidak bisa terhubung ke server ujian.');
+    } on HttpException {
+      throw const ExamApiException('Koneksi ke server ujian tidak valid.');
     }
-
-    return parsed;
   }
 
   Map<String, dynamic> _unwrapData(Map<String, dynamic> payload) {

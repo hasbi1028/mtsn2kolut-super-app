@@ -60,6 +60,23 @@ void main() {
       expect(payload.room?.roomName, 'Lab 1');
     });
 
+    test('maps socket transport failures into controlled exception', () async {
+      final client = ExamApiClient(baseUrl: 'http://127.0.0.1:1');
+
+      await expectLater(
+        () => client.getStatus('token-1'),
+        throwsA(
+          isA<ExamApiException>()
+              .having((error) => error.statusCode, 'statusCode', isNull)
+              .having(
+                (error) => error.message,
+                'message',
+                'Tidak bisa terhubung ke server ujian.',
+              ),
+        ),
+      );
+    });
+
     test('getStatus unwraps submission status from data envelope', () async {
       server.listen((request) async {
         expect(request.uri.path, '/api/exam/status');
