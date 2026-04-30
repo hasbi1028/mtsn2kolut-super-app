@@ -57,6 +57,7 @@ func main() {
 	settSvc := service.NewSetting(q)
 	auditSvc := service.NewAudit(q)
 	pusakaSchedulerSvc := service.NewPusakaScheduler(q, pusakaJobSvc, settSvc, auditSvc)
+	librarySvc := service.NewLibrary(q)
 
 	if err := authSvc.SeedAdmin(mainCtx); err != nil {
 		slog.Error("seed admin", "error", err)
@@ -90,6 +91,7 @@ func main() {
 	settH := handler.NewSetting(settSvc)
 	pusakaSchedulerH := handler.NewPusakaScheduler(pusakaSchedulerSvc)
 	pusakaWorkerH := handler.NewPusakaWorker(pusakaJobSvc, pusakaAttendanceSvc, settSvc)
+	libraryH := handler.NewLibrary(librarySvc)
 
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
@@ -143,7 +145,7 @@ func main() {
 			r.Put("/api/employees/{id}", empH.Update)
 			r.Patch("/api/employees/{id}/status", empH.UpdateStatus)
 			r.Delete("/api/employees/{id}", empH.Delete)
-			r.Get("/api/pusaka/employees", empH.List)
+			r.Get("/api/pusaka/employees", empH.ListPusakaEligibleWithStatus)
 			r.Patch("/api/pusaka/employees/{id}/account-status", empH.UpdatePusakaAccountStatus)
 			r.Delete("/api/pusaka/employees/{id}/account", empH.DeletePusakaAccount)
 			r.Get("/api/pusaka/employees/{id}/audit-logs", empH.ListPusakaAuditLogs)
@@ -239,6 +241,17 @@ func main() {
 		// Essay Grading
 		r.Get("/api/cbt/sessions/{id}/ungraded-essays", sessionH.ListUngradedEssays)
 		r.Post("/api/cbt/sessions/{id}/answers/{aid}/grade-essay", sessionH.GradeEssay)
+
+		// Library — admin + staf
+		r.Get("/api/library/stats",              libraryH.Stats)
+		r.Get("/api/library/books",              libraryH.ListBooks)
+		r.Post("/api/library/books",             libraryH.CreateBook)
+		r.Put("/api/library/books/{id}",         libraryH.UpdateBook)
+		r.Delete("/api/library/books/{id}",      libraryH.DeleteBook)
+		r.Get("/api/library/loans",              libraryH.ListLoans)
+		r.Post("/api/library/loans",             libraryH.LoanBook)
+		r.Post("/api/library/loans/{id}/return", libraryH.ReturnBook)
+		r.Post("/api/library/loans/{id}/lunas",  libraryH.MarkDendaLunas)
 
 		// Jobs / Attendance / Schedules / Settings / Users — admin-only
 		r.Group(func(r chi.Router) {

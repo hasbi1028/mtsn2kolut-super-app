@@ -47,7 +47,7 @@ func auditUserID(r *http.Request) pgtype.UUID {
 
 func (h *Employee) List(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("with_status") == "1" {
-		h.listWithStatus(w, r)
+		h.ListWithStatus(w, r)
 		return
 	}
 	employees, err := h.svc.List(r.Context())
@@ -58,11 +58,7 @@ func (h *Employee) List(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, sanitizeEmployees(employees))
 }
 
-func (h *Employee) listWithStatus(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Query().Get("scope") == "pusaka" {
-		h.listPusakaEligibleWithStatus(w, r)
-		return
-	}
+func (h *Employee) ListWithStatus(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.svc.ListWithStatus(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -71,7 +67,7 @@ func (h *Employee) listWithStatus(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, rows)
 }
 
-func (h *Employee) listPusakaEligibleWithStatus(w http.ResponseWriter, r *http.Request) {
+func (h *Employee) ListPusakaEligibleWithStatus(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.svc.ListPusakaEligibleWithStatus(r.Context())
 	if err != nil {
 		api.Internal(w, err)

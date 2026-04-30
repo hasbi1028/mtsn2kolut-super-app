@@ -4,7 +4,7 @@ import { handleRouteError, proxy } from '$lib/server/api';
 
 export const GET = async (event: RequestEvent) => {
 	try {
-		const items = await proxy(event).get('/api/employees?with_status=1&scope=pusaka');
+		const items = await proxy(event).get('/api/pusaka/employees');
 		return json({ items });
 	} catch (e) {
 		return handleRouteError(e, 'pusaka/employees GET');
