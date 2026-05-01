@@ -25,6 +25,7 @@
 			group: 'Akademik',
 			items: [
 				{ href: '/academic',  label: 'Data Akademik', icon: 'book-open', roles: ['admin'] },
+				{ href: '/jadwal',        label: 'Jadwal',       icon: 'calendar', roles: ['guru', 'siswa', 'ortu'] },
 				{ href: '/grades',        label: 'Nilai',        icon: 'clipboard', roles: ['admin', 'guru'] },
 				{ href: '/grades/rapor',  label: 'Cetak Rapor',  icon: 'printer',   roles: ['admin', 'guru'] },
 				{ href: '/journal',       label: 'Jurnal Kelas', icon: 'journal',   roles: ['admin', 'guru'] },
@@ -178,9 +179,9 @@
 				<ul class="space-y-0.5">
 					{#each section.items as item (item.href)}
 						<li>
-							<a
-								href={resolveNavHref(item.href)}
-								onclick={() => (open = false)}
+								<a
+									href={resolveNavHref(item.href)}
+									onclick={() => (open = false)}
 								title={!desktopExpanded ? item.label : undefined}
 								class={`flex items-center rounded-md py-1.5 text-sm font-medium transition-colors
 								       ${desktopExpanded ? 'gap-2.5 px-2' : 'justify-center px-0'}

@@ -289,6 +289,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Timetable class export — operator dapat mengekspor CSV dari kelas fokus pada matriks mingguan
 - [x] Timetable room conflict guard — backend sekarang juga menolak bentrok ruang pada hari/jam yang sama bila room label dipakai ganda
 - [x] Parent timetable visibility — dashboard orang tua sekarang juga menampilkan ringkasan jadwal setiap anak yang terhubung
+- [x] Portal timetable page — route `/jadwal` sekarang memberi tampilan penuh untuk guru, siswa, dan orang tua di luar card dashboard ringkas
 
 ### Sprint 13 — Inventory & Asset Management
 ### Sprint 14 — Fee & Payment Management
