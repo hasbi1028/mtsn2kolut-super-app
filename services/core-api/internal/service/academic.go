@@ -56,7 +56,7 @@ func (s *Academic) CreateAssignment(ctx context.Context, p db.CreateClassSubject
 }
 
 func (s *Academic) CreateTimetableSlot(ctx context.Context, p db.CreateTimetableSlotParams) (db.TimetableSlot, error) {
-	if err := s.ensureTimetableSlotAvailable(ctx, p.AssignmentID, p.DayOfWeek, p.StartTime, p.EndTime, pgtype.UUID{}); err != nil {
+	if err := s.ensureTimetableSlotAvailable(ctx, p.AssignmentID, p.DayOfWeek, p.StartTime, p.EndTime, p.RoomLabel, pgtype.UUID{}); err != nil {
 		return db.TimetableSlot{}, err
 	}
 	return s.q.CreateTimetableSlot(ctx, p)
@@ -66,7 +66,7 @@ func (s *Academic) UpdateTimetableSlot(ctx context.Context, p db.UpdateTimetable
 	if _, err := s.q.GetTimetableSlot(ctx, p.ID); err != nil {
 		return db.TimetableSlot{}, err
 	}
-	if err := s.ensureTimetableSlotAvailable(ctx, p.AssignmentID, p.DayOfWeek, p.StartTime, p.EndTime, p.ID); err != nil {
+	if err := s.ensureTimetableSlotAvailable(ctx, p.AssignmentID, p.DayOfWeek, p.StartTime, p.EndTime, p.RoomLabel, p.ID); err != nil {
 		return db.TimetableSlot{}, err
 	}
 	return s.q.UpdateTimetableSlot(ctx, p)
@@ -92,7 +92,7 @@ func (s *Academic) DeleteTimetableSlot(ctx context.Context, id pgtype.UUID) erro
 	return s.q.DeleteTimetableSlot(ctx, id)
 }
 
-func (s *Academic) ensureTimetableSlotAvailable(ctx context.Context, assignmentID pgtype.UUID, dayOfWeek int16, startTime, endTime pgtype.Time, excludeSlotID pgtype.UUID) error {
+func (s *Academic) ensureTimetableSlotAvailable(ctx context.Context, assignmentID pgtype.UUID, dayOfWeek int16, startTime, endTime pgtype.Time, roomLabel string, excludeSlotID pgtype.UUID) error {
 	assignment, err := s.q.GetClassSubjectAssignment(ctx, assignmentID)
 	if err != nil {
 		return fmt.Errorf("assignment tidak ditemukan")
@@ -110,6 +110,19 @@ func (s *Academic) ensureTimetableSlotAvailable(ctx context.Context, assignmentI
 	}
 	if conflicts > 0 {
 		return fmt.Errorf("slot bentrok dengan jadwal kelas atau guru pada waktu yang sama")
+	}
+	roomConflicts, err := s.q.CountTimetableRoomConflicts(ctx, db.CountTimetableRoomConflictsParams{
+		DayOfWeek:     dayOfWeek,
+		StartTime:     startTime,
+		EndTime:       endTime,
+		RoomLabel:     strings.TrimSpace(roomLabel),
+		ExcludeSlotID: excludeSlotID,
+	})
+	if err != nil {
+		return err
+	}
+	if roomConflicts > 0 {
+		return fmt.Errorf("slot bentrok dengan penggunaan ruang pada waktu yang sama")
 	}
 	return nil
 }

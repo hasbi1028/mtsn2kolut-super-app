@@ -287,6 +287,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Timetable ops filters and weekly matrix — operator can filter by kelas/guru/search and inspect one class in a weekly matrix view
 - [x] Portal timetable read baseline — dashboard guru dan siswa sekarang menampilkan jadwal mengajar / jadwal pelajaran dari slot timetable yang tersusun
 - [x] Timetable class export — operator dapat mengekspor CSV dari kelas fokus pada matriks mingguan
+- [x] Timetable room conflict guard — backend sekarang juga menolak bentrok ruang pada hari/jam yang sama bila room label dipakai ganda
 
 ### Sprint 13 — Inventory & Asset Management
 ### Sprint 14 — Fee & Payment Management

@@ -78,6 +78,19 @@ WHERE ts.day_of_week = sqlc.arg(day_of_week)
     OR ts.id <> sqlc.arg(exclude_slot_id)
   );
 
+-- name: CountTimetableRoomConflicts :one
+SELECT COUNT(*)::int
+FROM timetable_slots ts
+WHERE ts.day_of_week = sqlc.arg(day_of_week)
+  AND ts.start_time < sqlc.arg(end_time)
+  AND ts.end_time > sqlc.arg(start_time)
+  AND LOWER(TRIM(ts.room_label)) = LOWER(TRIM(sqlc.arg(room_label)))
+  AND TRIM(sqlc.arg(room_label)) <> ''
+  AND (
+    sqlc.arg(exclude_slot_id)::uuid IS NULL
+    OR ts.id <> sqlc.arg(exclude_slot_id)
+  );
+
 -- name: DeleteTimetableSlot :exec
 DELETE FROM timetable_slots
 WHERE id = $1;

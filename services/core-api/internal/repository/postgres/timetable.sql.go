@@ -51,6 +51,41 @@ func (q *Queries) CountTimetableConflicts(ctx context.Context, arg CountTimetabl
 	return column_1, err
 }
 
+const countTimetableRoomConflicts = `-- name: CountTimetableRoomConflicts :one
+SELECT COUNT(*)::int
+FROM timetable_slots ts
+WHERE ts.day_of_week = $1
+  AND ts.start_time < $2
+  AND ts.end_time > $3
+  AND LOWER(TRIM(ts.room_label)) = LOWER(TRIM($4))
+  AND TRIM($4) <> ''
+  AND (
+    $5::uuid IS NULL
+    OR ts.id <> $5
+  )
+`
+
+type CountTimetableRoomConflictsParams struct {
+	DayOfWeek     int16       `json:"day_of_week"`
+	EndTime       pgtype.Time `json:"end_time"`
+	StartTime     pgtype.Time `json:"start_time"`
+	RoomLabel     string      `json:"room_label"`
+	ExcludeSlotID pgtype.UUID `json:"exclude_slot_id"`
+}
+
+func (q *Queries) CountTimetableRoomConflicts(ctx context.Context, arg CountTimetableRoomConflictsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countTimetableRoomConflicts,
+		arg.DayOfWeek,
+		arg.EndTime,
+		arg.StartTime,
+		arg.RoomLabel,
+		arg.ExcludeSlotID,
+	)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createTimetableSlot = `-- name: CreateTimetableSlot :one
 INSERT INTO timetable_slots (
     assignment_id, day_of_week, start_time, end_time, room_label, notes
