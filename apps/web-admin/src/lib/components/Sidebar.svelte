@@ -3,8 +3,12 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import * as Dialog from '$lib/components/ui/dialog';
-	import { Input } from '$lib/components/ui/input';
+	import SidebarCommandPalette from '$lib/components/sidebar/SidebarCommandPalette.svelte';
+	import {
+		defaultPinnedByRole,
+		sidebarNavGroups,
+		type SidebarNavItem
+	} from '$lib/components/sidebar/sidebar-config';
 
 	let {
 		user,
@@ -15,102 +19,17 @@
 	} = $props();
 	let open = $state(false);
 	let commandOpen = $state(false);
-	let commandQuery = $state('');
-	let commandInputRef = $state<HTMLInputElement | null>(null);
 	let inventoryAttention = $state(0);
 	let libraryAttention = $state(0);
 	let pusakaAttention = $state(0);
 	let attentionRefreshInFlight = $state<Promise<void> | null>(null);
 	let lastAttentionLoadedAt = $state(0);
 
-	type NavItem = { href: string; label: string; icon: string; roles?: string[]; pinnable?: boolean };
-	type NavGroup = { group: string; items: NavItem[] };
-
-	const allNav: NavGroup[] = [
-		{
-			group: 'Utama',
-			items: [
-				{ href: '/',         label: 'Dashboard',    icon: 'grid', pinnable: false },
-			],
-		},
-		{
-			group: 'Akademik',
-			items: [
-				{ href: '/academic',  label: 'Data Akademik', icon: 'book-open', roles: ['admin'] },
-				{ href: '/jadwal',        label: 'Jadwal',       icon: 'calendar', roles: ['guru', 'siswa', 'ortu'] },
-				{ href: '/grades',        label: 'Nilai',        icon: 'clipboard', roles: ['admin', 'guru'] },
-				{ href: '/grades/rapor',  label: 'Cetak Rapor',  icon: 'printer',   roles: ['admin', 'guru'] },
-				{ href: '/journal',       label: 'Jurnal Kelas', icon: 'journal',   roles: ['admin', 'guru'] },
-				{ href: '/students',  label: 'Siswa',         icon: 'users' },
-				{ href: '/parents',   label: 'Orang Tua',     icon: 'user-group', roles: ['admin', 'staf'] },
-			],
-		},
-		{
-			group: 'CBT',
-			items: [
-				{ href: '/cbt/events',    label: 'Kegiatan Ujian', icon: 'calendar',  roles: ['admin'] },
-				{ href: '/cbt/byod',      label: 'Panduan BYOD',   icon: 'activity',  roles: ['admin', 'guru'] },
-				{ href: '/cbt/questions', label: 'Bank Soal',      icon: 'file-text' },
-				{ href: '/cbt/soal',      label: 'Komposer Soal',  icon: 'pen-tool'  },
-				{ href: '/cbt/packages',  label: 'Paket Ujian',    icon: 'package'   },
-				{ href: '/cbt/sessions',  label: 'Sesi Ujian',     icon: 'play'      },
-			],
-		},
-		{
-			group: 'Operasional',
-			items: [
-				{ href: '/employees', label: 'Master Pegawai', icon: 'user-check', roles: ['admin'] },
-			],
-		},
-		{
-			group: 'Perpustakaan',
-			items: [
-				{ href: '/library',       label: 'Dashboard',    icon: 'book-open', roles: ['admin', 'staf'] },
-				{ href: '/library/books', label: 'Katalog Buku', icon: 'book',      roles: ['admin', 'staf'] },
-				{ href: '/library/loans', label: 'Peminjaman',   icon: 'repeat',    roles: ['admin', 'staf'] },
-			],
-		},
-		{
-			group: 'Inventaris',
-			items: [
-				{ href: '/inventory',       label: 'Dashboard',        icon: 'package', roles: ['admin', 'staf'] },
-				{ href: '/inventory/items', label: 'Daftar Barang',    icon: 'layers',  roles: ['admin', 'staf'] },
-			],
-		},
-		{
-			group: 'Website',
-			items: [
-				{ href: '/website',               label: 'Website Publik', icon: 'globe', roles: ['admin'] },
-				{ href: '/website/posts',         label: 'Berita',         icon: 'file-text', roles: ['admin'] },
-				{ href: '/website/announcements', label: 'Pengumuman',     icon: 'clipboard', roles: ['admin'] },
-				{ href: '/website/pages',         label: 'Halaman Publik', icon: 'book-open', roles: ['admin'] },
-			],
-		},
-		{
-			group: 'PUSAKA',
-			items: [
-				{ href: '/pusaka',           label: 'Kontrol & Monitor',   icon: 'server',  roles: ['admin'] },
-				{ href: '/pusaka/employees', label: 'Pegawai PUSAKA',      icon: 'user-check', roles: ['admin'] },
-				{ href: '/pusaka/kehadiran', label: 'Data Kehadiran',       icon: 'clock',   roles: ['admin'] },
-				{ href: '/pusaka/summary',   label: 'Ringkasan Kehadiran',  icon: 'layers',  roles: ['admin'] },
-				{ href: '/pusaka/antrian',   label: 'Antrian Job',          icon: 'activity',roles: ['admin'] },
-			],
-		},
-		{
-			group: 'Sistem',
-			items: [
-				{ href: '/settings/users', label: 'Manajemen User', icon: 'users', roles: ['admin'] },
-				{ href: '/settings/audit-logs', label: 'Audit Trail', icon: 'file-text', roles: ['admin'] },
-				{ href: '/settings', label: 'Pengaturan', icon: 'settings', roles: ['admin'] },
-			],
-		},
-	];
-
 	const userRoles = $derived(user?.roles || (user?.role ? [user.role] : []));
 	const resolveNavHref = resolve as unknown as (href: string) => string;
 
 	const nav = $derived(
-		allNav
+		sidebarNavGroups
 			.map((g) => ({
 				...g,
 				items: g.items.filter((i) => {
@@ -129,12 +48,6 @@
 	let pinnedItems = $state<string[]>([]);
 	let recentItems = $state<string[]>([]);
 	let pinnedLoaded = false;
-
-	const defaultPinnedByRole: Record<string, string[]> = {
-		admin: ['/cbt/sessions', '/grades', '/settings'],
-		guru: ['/cbt/questions', '/grades', '/jadwal'],
-		staf: ['/inventory', '/library']
-	};
 
 	const activeGroup = $derived(
 		nav.find((section) => section.items.some((item) => isActive(item.href)))?.group ?? 'Utama'
@@ -175,47 +88,6 @@
 		);
 	});
 
-	const filteredCommandItems = $derived.by(() => {
-		const normalizedQuery = commandQuery.trim().toLowerCase();
-		const base = commandItems.filter((item) => {
-			if (!normalizedQuery) return true;
-			return (
-				item.label.toLowerCase().includes(normalizedQuery) ||
-				item.group.toLowerCase().includes(normalizedQuery) ||
-				item.href.toLowerCase().includes(normalizedQuery)
-			);
-		});
-		return [...base].sort((left, right) => {
-			const leftScore = Number(left.pinned) + Number(isActive(left.href)) * 3;
-			const rightScore = Number(right.pinned) + Number(isActive(right.href)) * 3;
-			if (leftScore !== rightScore) return rightScore - leftScore;
-			return left.label.localeCompare(right.label, 'id');
-		});
-	});
-
-	const recentCommandItems = $derived.by(() => {
-		return recentItems
-			.map((href) => commandItems.find((item) => item.href === href))
-			.filter((item): item is (typeof commandItems)[number] => !!item && !isActive(item.href));
-	});
-
-	const commandPinnedItems = $derived.by(() => {
-		return filteredCommandItems.filter((item) => item.pinned);
-	});
-
-	const commandRecentMatches = $derived.by(() => {
-		const recentSet = new Set(recentCommandItems.map((item) => item.href));
-		return filteredCommandItems.filter((item) => recentSet.has(item.href) && !item.pinned);
-	});
-
-	const commandAllMenuItems = $derived.by(() => {
-		const excluded = new Set<string>([
-			...commandPinnedItems.map((item) => item.href),
-			...commandRecentMatches.map((item) => item.href),
-		]);
-		return filteredCommandItems.filter((item) => !excluded.has(item.href));
-	});
-
 	function isActive(href: string) {
 		if (href === '/') return page.url.pathname === '/';
 		return page.url.pathname.startsWith(href);
@@ -251,7 +123,7 @@
 		pinnedItems = [...pinnedItems, href];
 	}
 
-	function pinButtonLabel(item: NavItem) {
+	function pinButtonLabel(item: SidebarNavItem) {
 		return isPinned(item.href) ? `Lepas ${item.label} dari akses cepat` : `Pin ${item.label} ke akses cepat`;
 	}
 
@@ -273,7 +145,7 @@
 		pinnedItems = next;
 	}
 
-	function railTooltip(item: NavItem, group: string) {
+	function railTooltip(item: SidebarNavItem, group: string) {
 		return `${group} · ${item.label}`;
 	}
 
@@ -410,7 +282,6 @@
 	}
 
 	function openCommandPalette() {
-		commandQuery = '';
 		commandOpen = true;
 	}
 
@@ -420,7 +291,6 @@
 
 	async function runCommand(href: string) {
 		commandOpen = false;
-		commandQuery = '';
 		open = false;
 		rememberRecent(href);
 		await goto(resolveNavHref(href));
@@ -522,11 +392,6 @@
 	$effect(() => {
 		if (!pinnedLoaded || typeof window === 'undefined') return;
 		window.localStorage.setItem(recentStorageKey(), JSON.stringify(normalizeRecentHrefs(recentItems)));
-	});
-
-	$effect(() => {
-		if (!commandOpen || !commandInputRef) return;
-		queueMicrotask(() => commandInputRef?.focus());
 	});
 
 	async function logout() {
@@ -773,172 +638,17 @@
 	</div>
 </aside>
 
-<Dialog.Root bind:open={commandOpen}>
-	{#if commandOpen}
-		<Dialog.Content>
-			<Dialog.Header>
-				<Dialog.Title>Cari Menu</Dialog.Title>
-				<Dialog.Description>Ketik nama menu, grup, atau path. Pintasan: Ctrl/Cmd + K atau /</Dialog.Description>
-			</Dialog.Header>
-
-			<div class="space-y-3">
-				<Input
-					bind:ref={commandInputRef}
-					bind:value={commandQuery}
-					placeholder="Mis. Nilai, Sesi Ujian, Inventaris, atau PUSAKA"
-				/>
-
-				{#if commandPinnedItems.length > 0}
-					<div class="space-y-2">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Akses Cepat</p>
-						<div class="space-y-2">
-							{#each commandPinnedItems as item (item.href)}
-								<button
-									type="button"
-									class={`flex w-full items-start justify-between rounded-xl border px-3 py-3 text-left transition-colors ${
-										isActive(item.href)
-											? 'border-green-200 bg-green-50 text-green-900'
-											: 'border-slate-200 bg-white hover:bg-slate-50'
-									}`}
-									onclick={() => runCommand(item.href)}
-								>
-									<div class="min-w-0">
-										<div class="flex items-center gap-2">
-											<span class="text-sm font-semibold">{item.label}</span>
-											<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700">
-												Cepat
-											</span>
-										</div>
-										<p class="mt-1 text-xs text-slate-500">{item.group} · {item.href}</p>
-									</div>
-									<svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-									</svg>
-								</button>
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-				{#if recentCommandItems.length > 0 && !commandQuery.trim()}
-					<div class="space-y-2">
-						<div class="flex items-center justify-between">
-							<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Terakhir Dibuka</p>
-							<button
-								type="button"
-								class="text-xs font-medium text-slate-500 hover:text-slate-700"
-								onclick={() => (recentItems = [])}
-							>
-								Bersihkan
-							</button>
-						</div>
-						<div class="space-y-2">
-							{#each recentCommandItems as item (item.href)}
-								<button
-									type="button"
-									class={`flex w-full items-start justify-between rounded-xl border px-3 py-3 text-left transition-colors ${
-										isActive(item.href)
-											? 'border-green-200 bg-green-50 text-green-900'
-											: 'border-slate-200 bg-white hover:bg-slate-50'
-									}`}
-									onclick={() => runCommand(item.href)}
-								>
-									<div class="min-w-0">
-										<div class="flex items-center gap-2">
-											<span class="text-sm font-semibold">{item.label}</span>
-											<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
-												Baru
-											</span>
-										</div>
-										<p class="mt-1 text-xs text-slate-500">{item.group} · {item.href}</p>
-									</div>
-									<svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-									</svg>
-								</button>
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-				{#if filteredCommandItems.length === 0}
-					<div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-						Tidak ada menu yang cocok dengan pencarian.
-					</div>
-				{:else if commandAllMenuItems.length > 0}
-					<div class="space-y-2">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Semua Menu</p>
-						<div class="max-h-[420px] space-y-2 overflow-y-auto pr-1">
-							{#each commandAllMenuItems as item (item.href)}
-								<button
-									type="button"
-									class={`flex w-full items-start justify-between rounded-xl border px-3 py-3 text-left transition-colors ${
-										isActive(item.href)
-											? 'border-green-200 bg-green-50 text-green-900'
-											: 'border-slate-200 bg-white hover:bg-slate-50'
-									}`}
-									onclick={() => runCommand(item.href)}
-								>
-									<div class="min-w-0">
-										<div class="flex items-center gap-2">
-											<span class="text-sm font-semibold">{item.label}</span>
-											{#if isActive(item.href)}
-												<span class="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-green-700">
-													Aktif
-												</span>
-											{/if}
-										</div>
-										<p class="mt-1 text-xs text-slate-500">{item.group} · {item.href}</p>
-									</div>
-									<svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-									</svg>
-								</button>
-							{/each}
-						</div>
-					</div>
-				{:else}
-					<div class="max-h-[420px] space-y-2 overflow-y-auto pr-1">
-						{#each filteredCommandItems as item (item.href)}
-							<button
-								type="button"
-								class={`flex w-full items-start justify-between rounded-xl border px-3 py-3 text-left transition-colors ${
-									isActive(item.href)
-										? 'border-green-200 bg-green-50 text-green-900'
-										: 'border-slate-200 bg-white hover:bg-slate-50'
-								}`}
-								onclick={() => runCommand(item.href)}
-							>
-								<div class="min-w-0">
-									<div class="flex items-center gap-2">
-										<span class="text-sm font-semibold">{item.label}</span>
-										{#if item.pinned}
-											<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700">
-												Cepat
-											</span>
-										{/if}
-										{#if isActive(item.href)}
-											<span class="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-green-700">
-												Aktif
-											</span>
-										{/if}
-									</div>
-									<p class="mt-1 text-xs text-slate-500">{item.group} · {item.href}</p>
-								</div>
-								<svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-								</svg>
-							</button>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		</Dialog.Content>
-	{/if}
-</Dialog.Root>
+<SidebarCommandPalette
+	bind:open={commandOpen}
+	items={commandItems}
+	recentHrefs={recentItems}
+	runCommand={runCommand}
+	clearRecent={() => (recentItems = [])}
+	{isActive}
+/>
 
 <!-- Icon helper snippet -->
-{#snippet SidebarIcon({ name, active }: { name: string; active: boolean })}
+{#snippet SidebarIcon({ name, active }: { name: SidebarNavItem['icon']; active: boolean })}
 	<svg class="h-4 w-4 shrink-0 {active ? 'text-green-700' : 'text-slate-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 		{#if name === 'grid'}
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
