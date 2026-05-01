@@ -291,6 +291,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Parent timetable visibility — dashboard orang tua sekarang juga menampilkan ringkasan jadwal setiap anak yang terhubung
 - [x] Portal timetable page — route `/jadwal` sekarang memberi tampilan penuh untuk guru, siswa, dan orang tua di luar card dashboard ringkas
 - [x] Portal timetable export — route `/jadwal` sekarang mendukung ekspor CSV sesuai konteks guru, siswa, dan orang tua tanpa kontrak backend baru
+- [x] Portal timetable day filter — route `/jadwal` sekarang bisa difokuskan ke hari tertentu dan ekspor mengikuti filter aktif
 
 ### Sprint 13 — Inventory & Asset Management
 ### Sprint 14 — Fee & Payment Management

@@ -49,6 +49,7 @@
 	let studentPortal = $state<StudentPortalData | null>(null);
 	let parentPortal = $state<ParentPortalData | null>(null);
 	let guruTimetable = $state<TimetableEntry[]>([]);
+	let selectedDay = $state('all');
 
 	const roles = $derived(data.user?.roles || (data.user?.role ? [data.user.role] : []));
 	const isGuru = $derived(roles.includes('guru'));
@@ -101,14 +102,24 @@
 		}));
 	}
 
-	const guruGroups = $derived.by(() => groupByDay(guruTimetable));
-	const studentGroups = $derived.by(() => groupByDay(studentPortal?.timetable ?? []));
+	function applyDayFilter<T extends { day_of_week: number }>(items: T[]) {
+		if (selectedDay === 'all') return items;
+		const day = Number(selectedDay);
+		return items.filter((item) => item.day_of_week === day);
+	}
+
+	const visibleGuruTimetable = $derived.by(() => applyDayFilter(guruTimetable));
+	const visibleStudentTimetable = $derived.by(() => applyDayFilter(studentPortal?.timetable ?? []));
+	const visibleParentTimetable = $derived.by(() => applyDayFilter(parentPortal?.timetable ?? []));
+
+	const guruGroups = $derived.by(() => groupByDay(visibleGuruTimetable));
+	const studentGroups = $derived.by(() => groupByDay(visibleStudentTimetable));
 	const parentGroups = $derived.by(() => {
 		const portal = parentPortal;
 		if (!portal) return [];
 		return portal.children.map((child) => ({
 			child,
-			days: groupByDay(portal.timetable.filter((slot) => slot.student_id === child.id)),
+			days: groupByDay(visibleParentTimetable.filter((slot) => slot.student_id === child.id)),
 		}));
 	});
 
@@ -161,7 +172,7 @@
 	function exportGuruTimetable() {
 		downloadCsv('jadwal-guru.csv', [
 			['Hari', 'Mulai', 'Selesai', 'Kelas', 'Mapel', 'Guru', 'Ruang', 'Catatan'],
-			...guruTimetable.map((slot) => [
+			...visibleGuruTimetable.map((slot) => [
 				dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`,
 				fmtTime(slot.start_time),
 				fmtTime(slot.end_time),
@@ -175,7 +186,7 @@
 	}
 
 	function exportStudentTimetable() {
-		const timetable = studentPortal?.timetable ?? [];
+		const timetable = visibleStudentTimetable;
 		downloadCsv('jadwal-siswa.csv', [
 			['Hari', 'Mulai', 'Selesai', 'Kelas', 'Mapel', 'Guru', 'Ruang', 'Catatan'],
 			...timetable.map((slot) => [
@@ -192,7 +203,7 @@
 	}
 
 	function exportParentTimetable() {
-		const timetable = parentPortal?.timetable ?? [];
+		const timetable = visibleParentTimetable;
 		downloadCsv('jadwal-anak.csv', [
 			['Nama Anak', 'Hari', 'Mulai', 'Selesai', 'Kelas', 'Mapel', 'Guru', 'Ruang', 'Catatan'],
 			...timetable.map((slot) => [
@@ -237,6 +248,24 @@
 		{/if}
 	</div>
 
+	<Card.Root class="border-slate-200">
+		<Card.Content class="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:justify-between">
+			<div>
+				<p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Filter Hari</p>
+				<p class="mt-1 text-sm text-slate-500">Fokuskan tampilan dan ekspor ke satu hari tertentu bila diperlukan.</p>
+			</div>
+			<div class="w-full sm:w-56">
+				<label for="day-filter" class="mb-1 block text-xs font-medium text-slate-600">Hari</label>
+				<select id="day-filter" bind:value={selectedDay} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+					<option value="all">Semua Hari</option>
+					{#each Object.entries(dayLabels) as [day, label] (`day-option-${day}`)}
+						<option value={day}>{label}</option>
+					{/each}
+				</select>
+			</div>
+		</Card.Content>
+	</Card.Root>
+
 	{#if loading}
 		<div class="grid gap-4 md:grid-cols-3">
 			{#each Array.from({ length: 3 }) as _, i (`loading-summary-${i}`)}
@@ -276,7 +305,7 @@
 				<Card.Description>Disusun per hari agar lebih cepat dipindai saat mempersiapkan pembelajaran.</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-5">
-				{#if guruTimetable.length > 0}
+				{#if visibleGuruTimetable.length > 0}
 					{#each guruGroups as group (group.day)}
 						<div class="space-y-3">
 							<div class="flex items-center justify-between gap-3">
@@ -331,7 +360,7 @@
 				<Card.Description>Jadwal pelajaran disusun per hari untuk memudahkan persiapan belajar.</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-5">
-				{#if (studentPortal?.timetable.length ?? 0) > 0}
+				{#if visibleStudentTimetable.length > 0}
 					{#each studentGroups as group (group.day)}
 						<div class="space-y-3">
 							<div class="flex items-center justify-between gap-3">
@@ -379,7 +408,7 @@
 				<Card.Description>Setiap anak ditampilkan terpisah agar wali lebih mudah memeriksa ritme belajar mingguan.</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-5">
-				{#if parentGroups.length > 0}
+				{#if visibleParentTimetable.length > 0 && parentGroups.length > 0}
 					{#each parentGroups as group (`child-${group.child.id}`)}
 						<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
 							<div class="flex items-start justify-between gap-3">
