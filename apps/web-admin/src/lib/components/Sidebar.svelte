@@ -184,6 +184,23 @@
 			.filter((item): item is (typeof commandItems)[number] => !!item && !isActive(item.href));
 	});
 
+	const commandPinnedItems = $derived.by(() => {
+		return filteredCommandItems.filter((item) => item.pinned);
+	});
+
+	const commandRecentMatches = $derived.by(() => {
+		const recentSet = new Set(recentCommandItems.map((item) => item.href));
+		return filteredCommandItems.filter((item) => recentSet.has(item.href) && !item.pinned);
+	});
+
+	const commandAllMenuItems = $derived.by(() => {
+		const excluded = new Set<string>([
+			...commandPinnedItems.map((item) => item.href),
+			...commandRecentMatches.map((item) => item.href),
+		]);
+		return filteredCommandItems.filter((item) => !excluded.has(item.href));
+	});
+
 	function isActive(href: string) {
 		if (href === '/') return page.url.pathname === '/';
 		return page.url.pathname.startsWith(href);
@@ -596,7 +613,39 @@
 					placeholder="Mis. Nilai, Sesi Ujian, Inventaris, atau PUSAKA"
 				/>
 
-				{#if !commandQuery.trim() && recentCommandItems.length > 0}
+				{#if commandPinnedItems.length > 0}
+					<div class="space-y-2">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Akses Cepat</p>
+						<div class="space-y-2">
+							{#each commandPinnedItems as item (item.href)}
+								<button
+									type="button"
+									class={`flex w-full items-start justify-between rounded-xl border px-3 py-3 text-left transition-colors ${
+										isActive(item.href)
+											? 'border-green-200 bg-green-50 text-green-900'
+											: 'border-slate-200 bg-white hover:bg-slate-50'
+									}`}
+									onclick={() => runCommand(item.href)}
+								>
+									<div class="min-w-0">
+										<div class="flex items-center gap-2">
+											<span class="text-sm font-semibold">{item.label}</span>
+											<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700">
+												Cepat
+											</span>
+										</div>
+										<p class="mt-1 text-xs text-slate-500">{item.group} · {item.href}</p>
+									</div>
+									<svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+									</svg>
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				{#if recentCommandItems.length > 0 && !commandQuery.trim()}
 					<div class="space-y-2">
 						<div class="flex items-center justify-between">
 							<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Terakhir Dibuka</p>
@@ -640,6 +689,38 @@
 				{#if filteredCommandItems.length === 0}
 					<div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
 						Tidak ada menu yang cocok dengan pencarian.
+					</div>
+				{:else if commandAllMenuItems.length > 0}
+					<div class="space-y-2">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Semua Menu</p>
+						<div class="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+							{#each commandAllMenuItems as item (item.href)}
+								<button
+									type="button"
+									class={`flex w-full items-start justify-between rounded-xl border px-3 py-3 text-left transition-colors ${
+										isActive(item.href)
+											? 'border-green-200 bg-green-50 text-green-900'
+											: 'border-slate-200 bg-white hover:bg-slate-50'
+									}`}
+									onclick={() => runCommand(item.href)}
+								>
+									<div class="min-w-0">
+										<div class="flex items-center gap-2">
+											<span class="text-sm font-semibold">{item.label}</span>
+											{#if isActive(item.href)}
+												<span class="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-green-700">
+													Aktif
+												</span>
+											{/if}
+										</div>
+										<p class="mt-1 text-xs text-slate-500">{item.group} · {item.href}</p>
+									</div>
+									<svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+									</svg>
+								</button>
+							{/each}
+						</div>
 					</div>
 				{:else}
 					<div class="max-h-[420px] space-y-2 overflow-y-auto pr-1">
