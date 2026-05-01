@@ -186,6 +186,10 @@
 			<p class="text-sm text-slate-500">Kontrol harian surat, disposisi, arsip, inventaris, dan bukti kerja madrasah.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
+			<Button href={`${resolve('/document-cycles')}?domain_area=tu`} variant="outline" size="sm">
+				<ClipboardListIcon class="mr-2 size-4" />
+				Siklus Dokumen
+			</Button>
 			<Button href="/tu/compliance-pack" variant="outline" size="sm">
 				<PrinterIcon class="mr-2 size-4" />
 				Paket Kepatuhan

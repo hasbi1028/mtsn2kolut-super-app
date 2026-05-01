@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Table from '$lib/components/ui/table';
@@ -492,9 +493,14 @@
 <svelte:head><title>Data Akademik — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
-	<div>
-		<h1 class="text-2xl font-semibold text-slate-800">Data Akademik</h1>
-		<p class="text-sm text-slate-500 mt-1">Kelola tahun ajaran, kelas, dan mata pelajaran</p>
+	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+		<div>
+			<h1 class="text-2xl font-semibold text-slate-800">Data Akademik</h1>
+			<p class="mt-1 text-sm text-slate-500">Kelola tahun ajaran, kelas, dan mata pelajaran</p>
+		</div>
+		<Button href={`${resolve('/document-cycles')}?domain_area=kurikulum`} variant="outline" size="sm">
+			Siklus Kurikulum
+		</Button>
 	</div>
 
 	<div class="grid gap-3 md:grid-cols-4">

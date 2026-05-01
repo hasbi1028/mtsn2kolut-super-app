@@ -1351,6 +1351,10 @@
 			<Button size="sm" variant="outline" onclick={() => openCreate('workplan')}>Tambah RKT</Button>
 			<Button size="sm" variant="outline" onclick={() => openCreate('performance')}>Tambah Target</Button>
 			<Button size="sm" variant="outline" onclick={() => openCreate('evidence')}>Tambah Bukti</Button>
+			<Button href={`${resolve('/document-cycles')}?domain_area=governance&tab=connections`} size="sm" variant="outline">
+				<FileTextIcon class="mr-2 size-4" />
+				Siklus Dokumen
+			</Button>
 			<Button href={resolve('/governance/print-pack')} size="sm" variant="outline">
 				<PrinterIcon class="mr-2 size-4" />
 				Paket Cetak

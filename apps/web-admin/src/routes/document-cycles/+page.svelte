@@ -4,8 +4,12 @@
 	import CalendarClockIcon from '@lucide/svelte/icons/calendar-clock';
 	import CheckCircle2Icon from '@lucide/svelte/icons/check-circle-2';
 	import ClipboardListIcon from '@lucide/svelte/icons/clipboard-list';
+	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
 	import FileCheck2Icon from '@lucide/svelte/icons/file-check-2';
 	import FileWarningIcon from '@lucide/svelte/icons/file-warning';
+	import FolderArchiveIcon from '@lucide/svelte/icons/folder-archive';
+	import Link2Icon from '@lucide/svelte/icons/link-2';
+	import NetworkIcon from '@lucide/svelte/icons/network';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import RefreshCcwIcon from '@lucide/svelte/icons/refresh-ccw';
@@ -38,6 +42,11 @@
 		overdue_obligations: number;
 		due_soon_obligations: number;
 		no_pic_obligations: number;
+		linked_archive_obligations: number;
+		linked_evidence_obligations: number;
+		linked_governance_document_obligations: number;
+		linked_compliance_action_obligations: number;
+		external_tracker_obligations: number;
 	}
 
 	interface UnitOption {
@@ -72,11 +81,35 @@
 		archive_number?: string;
 	}
 
+	interface WorkPlanOption {
+		id: string;
+		activity_code: string;
+		activity_name: string;
+		status: string;
+	}
+
+	interface PerformanceTargetOption {
+		id: string;
+		title: string;
+		employee_name: string;
+		status: string;
+	}
+
+	interface ComplianceActionOption {
+		id: string;
+		title: string;
+		status: string;
+		priority: string;
+		due_date?: string;
+	}
+
 	interface DocumentCycleCatalog {
 		id: string;
 		code: string;
 		title: string;
 		frequency: string;
+		domain_area: string;
+		external_system: string;
 		snp_standard: string;
 		regulation_ref: string;
 		default_owner_unit_id?: string;
@@ -100,6 +133,8 @@
 		catalog_code: string;
 		catalog_title: string;
 		frequency: string;
+		domain_area: string;
+		external_system: string;
 		snp_standard: string;
 		regulation_ref: string;
 		period_year: number;
@@ -119,8 +154,15 @@
 		status: string;
 		governance_document_id?: string;
 		governance_document_title: string;
+		work_plan_item_id?: string;
+		work_plan_item_code: string;
+		work_plan_item_name: string;
+		performance_target_id?: string;
+		performance_target_title: string;
 		evidence_item_id?: string;
 		evidence_item_title: string;
+		compliance_action_id?: string;
+		compliance_action_title: string;
 		archive_document_id?: string;
 		archive_document_title: string;
 		notes: string;
@@ -128,6 +170,17 @@
 		completed_at?: string;
 		is_overdue: boolean;
 		is_due_soon: boolean;
+	}
+
+	interface DocumentCycleEvent {
+		id: string;
+		obligation_id: string;
+		event_type: string;
+		from_status: string;
+		to_status: string;
+		notes: string;
+		actor_username: string;
+		created_at: string;
 	}
 
 	interface DashboardData {
@@ -139,12 +192,17 @@
 		documents: DocumentOption[];
 		evidenceItems: EvidenceOption[];
 		archiveDocuments: ArchiveOption[];
+		workPlanItems: WorkPlanOption[];
+		performanceTargets: PerformanceTargetOption[];
+		complianceActions: ComplianceActionOption[];
 	}
 
 	interface CatalogForm {
 		code: string;
 		title: string;
 		frequency: string;
+		domain_area: string;
+		external_system: string;
 		snp_standard: string;
 		regulation_ref: string;
 		default_owner_unit_id: string;
@@ -160,11 +218,16 @@
 	interface ObligationForm {
 		due_date: string;
 		reminder_date: string;
+		domain_area: string;
+		external_system: string;
 		owner_unit_id: string;
 		responsible_employee_id: string;
 		verifier_employee_id: string;
 		governance_document_id: string;
+		work_plan_item_id: string;
+		performance_target_id: string;
 		evidence_item_id: string;
+		compliance_action_id: string;
 		archive_document_id: string;
 		notes: string;
 		verification_notes: string;
@@ -172,6 +235,24 @@
 
 	interface ApiErrorPayload {
 		error?: string;
+	}
+
+	interface ExternalTrackerRow {
+		system: string;
+		label: string;
+		total: number;
+		completed: number;
+		waiting: number;
+		draft: number;
+		overdue: number;
+		linkedEvidence: number;
+		linkedArchive: number;
+		status: string;
+	}
+
+	interface ConnectionScore {
+		done: number;
+		total: number;
 	}
 
 	const FREQUENCIES: Array<[string, string]> = [
@@ -187,6 +268,34 @@
 	];
 
 	const CATALOG_FREQUENCIES = FREQUENCIES.filter(([value]) => value !== '');
+
+	const DOMAIN_AREAS: Array<[string, string]> = [
+		['', 'Semua bidang'],
+		['tu', 'TU'],
+		['kesiswaan', 'Kesiswaan'],
+		['kurikulum', 'Kurikulum'],
+		['sarpras', 'Sarpras'],
+		['governance', 'Governance'],
+		['keuangan', 'Keuangan'],
+		['eksternal', 'Eksternal']
+	];
+
+	const CATALOG_DOMAIN_AREAS = DOMAIN_AREAS.filter(([value]) => value !== '');
+
+	const EXTERNAL_SYSTEMS: Array<[string, string]> = [
+		['', 'Tidak terkait portal eksternal'],
+		['skp_bkn', 'SKP BKN / e-Kinerja'],
+		['emis', 'EMIS'],
+		['sipka', 'SIPKA'],
+		['simak_bmn', 'SIMAK-BMN'],
+		['rkam_bos', 'RKAM / BOS'],
+		['perkin', 'Perkin'],
+		['iku', 'IKU'],
+		['lakip_lkj', 'LAKIP / LKj'],
+		['edm', 'EDM']
+	];
+
+	const EXTERNAL_TRACKERS = EXTERNAL_SYSTEMS.filter(([value]) => value !== '');
 
 	const STATUSES: Array<[string, string]> = [
 		['', 'Semua status'],
@@ -212,6 +321,8 @@
 	let periodYear = $state(new Date().getFullYear());
 	let statusFilter = $state('');
 	let frequencyFilter = $state('');
+	let domainAreaFilter = $state('');
+	let externalSystemFilter = $state('');
 	let search = $state('');
 	let reminderOnly = $state(false);
 	let refreshBusy = $state(false);
@@ -220,9 +331,11 @@
 	let obligationBusy = $state(false);
 	let actionBusyId = $state('');
 	let dashboardPromise = $state<Promise<DashboardData> | null>(null);
+	let eventsPromise = $state<Promise<DocumentCycleEvent[]> | null>(null);
 	let snapshot = $state<DashboardData | null>(null);
 	let editingCatalogId = $state('');
 	let selectedObligationId = $state('');
+	let initialSelectedObligationId = $state('');
 	let catalogForm = $state<CatalogForm>(emptyCatalogForm());
 	let obligationForm = $state<ObligationForm>(emptyObligationForm());
 
@@ -235,6 +348,8 @@
 			code: '',
 			title: '',
 			frequency: 'monthly',
+			domain_area: 'governance',
+			external_system: '',
 			snp_standard: '',
 			regulation_ref: '',
 			default_owner_unit_id: '',
@@ -252,11 +367,16 @@
 		return {
 			due_date: '',
 			reminder_date: '',
+			domain_area: '',
+			external_system: '',
 			owner_unit_id: '',
 			responsible_employee_id: '',
 			verifier_employee_id: '',
 			governance_document_id: '',
+			work_plan_item_id: '',
+			performance_target_id: '',
 			evidence_item_id: '',
+			compliance_action_id: '',
 			archive_document_id: '',
 			notes: '',
 			verification_notes: ''
@@ -269,6 +389,7 @@
 		dashboardPromise = next
 			.then((data) => {
 				snapshot = data;
+				selectInitialObligation(data);
 				return data;
 			})
 			.finally(() => {
@@ -280,11 +401,13 @@
 		const obligationParams = new URLSearchParams({ period_year: String(periodYear) });
 		if (statusFilter) obligationParams.set('status', statusFilter);
 		if (frequencyFilter) obligationParams.set('frequency', frequencyFilter);
+		if (domainAreaFilter) obligationParams.set('domain_area', domainAreaFilter);
+		if (externalSystemFilter) obligationParams.set('external_system', externalSystemFilter);
 		if (search.trim()) obligationParams.set('search', search.trim());
 		if (reminderOnly) obligationParams.set('reminder_only', 'true');
 
 		const commonYear = new URLSearchParams({ period_year: String(periodYear) });
-		const [stats, catalogs, obligations, units, employees, documents, evidenceItems, archiveDocuments] = await Promise.all([
+		const [stats, catalogs, obligations, units, employees, documents, evidenceItems, archiveDocuments, workPlanItems, performanceTargets, complianceActions] = await Promise.all([
 			fetchJson<DocumentCycleStats>(`/api/document-cycles/stats?period_year=${periodYear}`),
 			fetchJson<DocumentCycleCatalog[]>('/api/document-cycles/catalogs?active_only=true'),
 			fetchJson<DocumentCycleObligation[]>(`/api/document-cycles/obligations?${obligationParams.toString()}`),
@@ -292,10 +415,13 @@
 			fetchJson<EmployeeOption[]>('/api/governance/employee-options'),
 			fetchJson<DocumentOption[]>(`/api/governance/documents?${commonYear.toString()}`),
 			fetchJson<EvidenceOption[]>(`/api/governance/evidence-items?${commonYear.toString()}`),
-			fetchJson<ArchiveOption[]>('/api/tu/archives/documents')
+			fetchJson<ArchiveOption[]>('/api/tu/archives/documents'),
+			fetchJson<WorkPlanOption[]>(`/api/governance/work-plan-items?${commonYear.toString()}`),
+			fetchJson<PerformanceTargetOption[]>(`/api/governance/performance-targets?${commonYear.toString()}`),
+			fetchJson<ComplianceActionOption[]>(`/api/governance/compliance-actions?${commonYear.toString()}`)
 		]);
 
-		return { stats, catalogs, obligations, units, employees, documents, evidenceItems, archiveDocuments };
+		return { stats, catalogs, obligations, units, employees, documents, evidenceItems, archiveDocuments, workPlanItems, performanceTargets, complianceActions };
 	}
 
 	async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -311,6 +437,15 @@
 			throw new Error(message);
 		}
 		return (await response.json()) as T;
+	}
+
+	function loadEvents(obligationId: string) {
+		eventsPromise = fetchJson<DocumentCycleEvent[]>(`/api/document-cycles/obligations/${obligationId}/events`);
+	}
+
+	function retryEvents(reset?: () => void) {
+		reset?.();
+		if (selectedObligationId) loadEvents(selectedObligationId);
 	}
 
 	async function generateYear() {
@@ -389,6 +524,7 @@
 				body: JSON.stringify(obligationForm)
 			});
 			toast.success('Monitoring dokumen diperbarui');
+			loadEvents(selectedObligation.id);
 			refreshData();
 		} catch (error) {
 			toast.error(errorMessage(error));
@@ -398,6 +534,11 @@
 	}
 
 	async function updateObligationStatus(obligation: DocumentCycleObligation, status: string) {
+		const gaps = status === 'completed' ? completionIssues(obligation) : [];
+		if (gaps.length > 0) {
+			toast.error(`Belum bisa diselesaikan. Lengkapi ${gaps.join(', ')}.`);
+			return;
+		}
 		actionBusyId = `${obligation.id}:${status}`;
 		try {
 			await fetchJson<DocumentCycleObligation>(`/api/document-cycles/obligations/${obligation.id}/status`, {
@@ -406,6 +547,7 @@
 				body: JSON.stringify({ status, notes: statusNote(status) })
 			});
 			toast.success(`Status ${obligation.catalog_code} menjadi ${statusLabel(status)}`);
+			if (selectedObligationId === obligation.id) loadEvents(obligation.id);
 			refreshData();
 		} catch (error) {
 			toast.error(errorMessage(error));
@@ -420,6 +562,8 @@
 			code: catalog.code,
 			title: catalog.title,
 			frequency: catalog.frequency,
+			domain_area: catalog.domain_area,
+			external_system: catalog.external_system,
 			snp_standard: catalog.snp_standard,
 			regulation_ref: catalog.regulation_ref,
 			default_owner_unit_id: catalog.default_owner_unit_id ?? '',
@@ -440,18 +584,48 @@
 
 	function editObligation(obligation: DocumentCycleObligation) {
 		selectedObligationId = obligation.id;
+		loadEvents(obligation.id);
 		obligationForm = {
 			due_date: dateInput(obligation.due_date),
 			reminder_date: dateInput(obligation.reminder_date),
+			domain_area: obligation.domain_area,
+			external_system: obligation.external_system,
 			owner_unit_id: obligation.owner_unit_id ?? '',
 			responsible_employee_id: obligation.responsible_employee_id ?? '',
 			verifier_employee_id: obligation.verifier_employee_id ?? '',
 			governance_document_id: obligation.governance_document_id ?? '',
+			work_plan_item_id: obligation.work_plan_item_id ?? '',
+			performance_target_id: obligation.performance_target_id ?? '',
 			evidence_item_id: obligation.evidence_item_id ?? '',
+			compliance_action_id: obligation.compliance_action_id ?? '',
 			archive_document_id: obligation.archive_document_id ?? '',
 			notes: obligation.notes,
 			verification_notes: obligation.verification_notes
 		};
+	}
+
+	function selectObligation(obligation: DocumentCycleObligation, focusDetail = true) {
+		editObligation(obligation);
+		updateSelectedObligationUrl(obligation.id);
+		if (focusDetail) {
+			window.setTimeout(() => {
+				document.getElementById('document-cycle-detail-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			}, 0);
+		}
+	}
+
+	function selectInitialObligation(data: DashboardData) {
+		if (!initialSelectedObligationId || selectedObligationId) return;
+		const requested = data.obligations.find((item) => item.id === initialSelectedObligationId);
+		if (!requested) return;
+		initialSelectedObligationId = '';
+		editObligation(requested);
+	}
+
+	function updateSelectedObligationUrl(obligationId: string) {
+		const url = new URL(window.location.href);
+		url.searchParams.set('selected_obligation', obligationId);
+		window.history.replaceState({}, '', url);
 	}
 
 	function attentionItems(data: DashboardData) {
@@ -465,7 +639,7 @@
 			{
 				label: 'Katalog Aktif',
 				value: data.stats.active_catalogs,
-				detail: 'Template siklus dokumen',
+				detail: `${data.stats.external_tracker_obligations} jadwal eksternal`,
 				icon: ClipboardListIcon,
 				className: 'text-emerald-700'
 			},
@@ -493,7 +667,7 @@
 			{
 				label: 'Selesai',
 				value: data.stats.completed_obligations,
-				detail: 'Dokumen sudah ditutup',
+				detail: `${data.stats.linked_archive_obligations} sudah berarsip`,
 				icon: CheckCircle2Icon,
 				className: 'text-emerald-700'
 			},
@@ -514,7 +688,7 @@
 			{
 				label: 'Belum Ada PIC',
 				value: data.stats.no_pic_obligations,
-				detail: 'Perlu penanggung jawab',
+				detail: `${data.stats.linked_evidence_obligations} punya bukti SNP`,
 				icon: FileCheck2Icon,
 				className: 'text-slate-700'
 			}
@@ -526,6 +700,11 @@
 		if (status === 'waiting_verification') return 'Dokumen diajukan untuk verifikasi kepala madrasah.';
 		if (status === 'completed') return 'Dokumen selesai dan siap diarsipkan.';
 		return 'Status monitoring dokumen diperbarui.';
+	}
+
+	function draftActionLabel(status: string): string {
+		if (status === 'not_started') return 'Mulai Draft';
+		return 'Koreksi Draft';
 	}
 
 	function statusLabel(status: string): string {
@@ -540,11 +719,101 @@
 		return SNP_STANDARDS.find(([value]) => value === snp)?.[1] ?? 'Tidak dipetakan';
 	}
 
+	function domainAreaLabel(area: string): string {
+		return DOMAIN_AREAS.find(([value]) => value === area)?.[1] ?? area;
+	}
+
+	function externalSystemLabel(system: string): string {
+		return EXTERNAL_SYSTEMS.find(([value]) => value === system)?.[1] ?? 'Tidak terkait portal eksternal';
+	}
+
 	function statusVariant(status: string): BadgeVariant {
 		if (status === 'completed') return 'default';
 		if (status === 'waiting_verification') return 'secondary';
 		if (status === 'draft') return 'outline';
 		return 'ghost';
+	}
+
+	function trackerStatusLabel(status: string): string {
+		if (status === 'not_input') return 'Belum input';
+		if (status === 'in_progress') return 'Sedang proses';
+		if (status === 'submitted') return 'Sudah input';
+		if (status === 'needs_revision') return 'Perlu revisi';
+		return 'Selesai';
+	}
+
+	function trackerStatusVariant(status: string): BadgeVariant {
+		if (status === 'done') return 'default';
+		if (status === 'needs_revision') return 'destructive';
+		if (status === 'submitted') return 'secondary';
+		if (status === 'in_progress') return 'outline';
+		return 'ghost';
+	}
+
+	function eventTypeLabel(type: string): string {
+		if (type === 'generated') return 'Dibuat Generator';
+		if (type === 'updated') return 'Detail Diperbarui';
+		if (type === 'status_changed') return 'Status Berubah';
+		if (type === 'monitoring_note') return 'Catatan Monitoring';
+		if (type === 'created') return 'Dibuat';
+		return type;
+	}
+
+	function eventVariant(type: string): BadgeVariant {
+		if (type === 'status_changed') return 'secondary';
+		if (type === 'generated' || type === 'created') return 'outline';
+		return 'default';
+	}
+
+	function completionIssues(item: DocumentCycleObligation): string[] {
+		const issues: string[] = [];
+		if (!item.responsible_employee_id) issues.push('PIC penyusun');
+		if (!item.verifier_employee_id) issues.push('verifikator');
+		if (!item.archive_document_id) issues.push('arsip digital');
+		return issues;
+	}
+
+	function canTransitionStatus(item: DocumentCycleObligation, status: string): boolean {
+		if (item.status === status) return false;
+		if (item.status === 'not_started') return status === 'draft';
+		if (item.status === 'draft') return status === 'not_started' || status === 'waiting_verification';
+		if (item.status === 'waiting_verification') return status === 'draft' || status === 'completed';
+		if (item.status === 'completed') return status === 'draft';
+		return false;
+	}
+
+	function connectionScore(item: DocumentCycleObligation): ConnectionScore {
+		const checks = [
+			Boolean(item.governance_document_id),
+			Boolean(item.work_plan_item_id),
+			Boolean(item.performance_target_id),
+			Boolean(item.evidence_item_id),
+			Boolean(item.compliance_action_id),
+			Boolean(item.archive_document_id)
+		];
+		return { done: checks.filter(Boolean).length, total: checks.length };
+	}
+
+	function linkedEvidenceCount(data: DashboardData): number {
+		return data.obligations.filter((item) => item.evidence_item_id || item.archive_document_id).length;
+	}
+
+	function externalTrackerRows(data: DashboardData): ExternalTrackerRow[] {
+		return EXTERNAL_TRACKERS.map(([system, label]) => {
+			const items = data.obligations.filter((item) => item.external_system === system);
+			const completed = items.filter((item) => item.status === 'completed').length;
+			const waiting = items.filter((item) => item.status === 'waiting_verification').length;
+			const draft = items.filter((item) => item.status === 'draft').length;
+			const overdue = items.filter((item) => item.is_overdue).length;
+			const linkedEvidence = items.filter((item) => item.evidence_item_id).length;
+			const linkedArchive = items.filter((item) => item.archive_document_id).length;
+			let status = 'not_input';
+			if (items.length > 0 && completed === items.length) status = 'done';
+			else if (overdue > 0) status = 'needs_revision';
+			else if (waiting > 0) status = 'submitted';
+			else if (draft > 0 || linkedEvidence > 0 || linkedArchive > 0) status = 'in_progress';
+			return { system, label, total: items.length, completed, waiting, draft, overdue, linkedEvidence, linkedArchive, status };
+		});
 	}
 
 	function attentionLabel(item: DocumentCycleObligation): string {
@@ -567,6 +836,20 @@
 		}).format(date);
 	}
 
+	function formatDateTime(value?: string): string {
+		if (!value) return '-';
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return value;
+		return new Intl.DateTimeFormat('id-ID', {
+			day: '2-digit',
+			month: 'short',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+			timeZone: 'Asia/Makassar'
+		}).format(date);
+	}
+
 	function dateInput(value?: string): string {
 		if (!value) return '';
 		return value.slice(0, 10);
@@ -585,7 +868,39 @@
 		refreshData();
 	}
 
+	function applyInitialFiltersFromUrl() {
+		const params = new URLSearchParams(window.location.search);
+		const requestedYear = Number(params.get('period_year'));
+		if (Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= 2100) {
+			periodYear = requestedYear;
+		}
+
+		const requestedStatus = params.get('status') ?? '';
+		if (STATUSES.some(([value]) => value === requestedStatus)) statusFilter = requestedStatus;
+
+		const requestedFrequency = params.get('frequency') ?? '';
+		if (FREQUENCIES.some(([value]) => value === requestedFrequency)) frequencyFilter = requestedFrequency;
+
+		const requestedDomain = params.get('domain_area') ?? '';
+		if (DOMAIN_AREAS.some(([value]) => value === requestedDomain)) domainAreaFilter = requestedDomain;
+
+		const requestedExternal = params.get('external_system') ?? '';
+		if (EXTERNAL_SYSTEMS.some(([value]) => value === requestedExternal)) externalSystemFilter = requestedExternal;
+
+		const requestedTab = params.get('tab') ?? '';
+		if (['monitoring', 'connections', 'catalog'].includes(requestedTab)) activeTab = requestedTab;
+
+		const requestedSearch = params.get('search')?.trim() ?? '';
+		if (requestedSearch) search = requestedSearch;
+
+		const requestedReminderOnly = (params.get('reminder_only') ?? '').toLowerCase();
+		reminderOnly = requestedReminderOnly === 'true' || requestedReminderOnly === '1';
+
+		initialSelectedObligationId = params.get('selected_obligation') ?? '';
+	}
+
 	onMount(() => {
+		applyInitialFiltersFromUrl();
 		refreshData();
 	});
 </script>
@@ -597,9 +912,9 @@
 		<div>
 			<div class="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
 				<CalendarClockIcon class="size-3.5" />
-				Modul Mandiri
+				Radar Dokumen
 			</div>
-			<h1 class="text-xl font-semibold text-slate-900">Siklus Dokumen</h1>
+			<h1 class="text-xl font-semibold text-slate-900">Siklus Dokumen Madrasah</h1>
 			<p class="mt-1 max-w-3xl text-sm text-slate-500">
 				Monitoring dokumen harian, mingguan, bulanan, SKP, Perkin, IKU, RKT, RKJM, Renstra, dan bukti 8 SNP.
 			</p>
@@ -678,7 +993,7 @@
 									<Card.Description>Status penyusunan, verifikasi, pengingat, dan arsip dokumen periodik.</Card.Description>
 								</div>
 								<div class="flex flex-wrap gap-2">
-									<Input class="w-full sm:w-64" placeholder="Cari kode, nama, periode, catatan" bind:value={search} />
+									<Input class="w-full sm:w-64" aria-label="Cari dokumen siklus" placeholder="Cari kode, nama, periode, catatan" bind:value={search} />
 									<select id="status-filter" bind:value={statusFilter} class="h-9 rounded-md border border-input bg-background px-3 text-sm">
 										{#each STATUSES as [value, label] (value)}
 											<option {value}>{label}</option>
@@ -686,6 +1001,17 @@
 									</select>
 									<select id="frequency-filter" bind:value={frequencyFilter} class="h-9 rounded-md border border-input bg-background px-3 text-sm">
 										{#each FREQUENCIES as [value, label] (value)}
+											<option {value}>{label}</option>
+										{/each}
+									</select>
+									<select id="domain-filter" bind:value={domainAreaFilter} class="h-9 rounded-md border border-input bg-background px-3 text-sm">
+										{#each DOMAIN_AREAS as [value, label] (value)}
+											<option {value}>{label}</option>
+										{/each}
+									</select>
+									<select id="external-filter" bind:value={externalSystemFilter} class="h-9 rounded-md border border-input bg-background px-3 text-sm">
+										<option value="">Semua tracker</option>
+										{#each EXTERNAL_TRACKERS as [value, label] (value)}
 											<option {value}>{label}</option>
 										{/each}
 									</select>
@@ -715,6 +1041,7 @@
 									</Table.Header>
 									<Table.Body>
 										{#each data.obligations as item (item.id)}
+											{@const completionGaps = completionIssues(item)}
 											<Table.Row>
 												<Table.Cell class="min-w-72">
 													<div class="flex items-start gap-3">
@@ -723,9 +1050,12 @@
 														</div>
 														<div>
 															<p class="text-sm font-medium text-slate-900">{item.catalog_title}</p>
-															<p class="text-xs text-slate-500">{item.catalog_code} · {frequencyLabel(item.frequency)} · {snpLabel(item.snp_standard)}</p>
+															<p class="text-xs text-slate-500">{item.catalog_code} · {domainAreaLabel(item.domain_area)} · {frequencyLabel(item.frequency)} · {snpLabel(item.snp_standard)}</p>
 															{#if item.regulation_ref}
 																<p class="mt-1 text-xs text-slate-500">{item.regulation_ref}</p>
+															{/if}
+															{#if item.external_system}
+																<Badge variant="outline" class="mt-2">{externalSystemLabel(item.external_system)}</Badge>
 															{/if}
 														</div>
 													</div>
@@ -752,13 +1082,18 @@
 												</Table.Cell>
 												<Table.Cell>
 													<div class="flex min-w-72 flex-wrap gap-1.5">
-														<Button size="sm" variant="outline" onclick={() => editObligation(item)}>
+														<Button size="sm" variant="outline" onclick={() => selectObligation(item)}>
 															<PencilIcon class="mr-2 size-3.5" />
 															Detail
 														</Button>
-														<Button size="sm" variant="outline" disabled={actionBusyId === `${item.id}:draft`} onclick={() => void updateObligationStatus(item, 'draft')}>Draft</Button>
-														<Button size="sm" variant="outline" disabled={actionBusyId === `${item.id}:waiting_verification`} onclick={() => void updateObligationStatus(item, 'waiting_verification')}>Verifikasi</Button>
-														<Button size="sm" disabled={actionBusyId === `${item.id}:completed`} onclick={() => void updateObligationStatus(item, 'completed')}>Selesai</Button>
+														<Button size="sm" variant="outline" disabled={actionBusyId === `${item.id}:draft` || !canTransitionStatus(item, 'draft')} onclick={() => void updateObligationStatus(item, 'draft')}>Draft</Button>
+														<Button size="sm" variant="outline" disabled={actionBusyId === `${item.id}:waiting_verification` || !canTransitionStatus(item, 'waiting_verification')} onclick={() => void updateObligationStatus(item, 'waiting_verification')}>Verifikasi</Button>
+														<Button
+															size="sm"
+															disabled={actionBusyId === `${item.id}:completed` || !canTransitionStatus(item, 'completed') || completionGaps.length > 0}
+															title={completionGaps.length > 0 ? `Lengkapi ${completionGaps.join(', ')}` : 'Tandai selesai'}
+															onclick={() => void updateObligationStatus(item, 'completed')}
+														>Selesai</Button>
 													</div>
 												</Table.Cell>
 											</Table.Row>
@@ -787,7 +1122,7 @@
 						</Card.Header>
 						<Card.Content class="space-y-3">
 							{#each attention.slice(0, 8) as item (item.id)}
-								<button type="button" class="w-full rounded-md border border-amber-100 bg-white p-3 text-left shadow-sm transition hover:border-amber-300" onclick={() => editObligation(item)}>
+								<button type="button" class="w-full rounded-md border border-amber-100 bg-white p-3 text-left shadow-sm transition hover:border-amber-300" onclick={() => selectObligation(item)}>
 									<div class="flex items-start justify-between gap-3">
 										<div>
 											<p class="text-sm font-medium text-slate-900">{item.catalog_title}</p>
@@ -807,16 +1142,85 @@
 
 					<Card.Root class="border-slate-200">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-base">Detail Monitoring</Card.Title>
-							<Card.Description>Pilih dokumen dari tabel untuk mengatur PIC, pengingat, tautan bukti, dan catatan verifikasi.</Card.Description>
+							<div class="flex items-center gap-2">
+								<ExternalLinkIcon class="size-4 text-emerald-700" />
+								<Card.Title class="text-base">Tracker Kepatuhan Eksternal</Card.Title>
+							</div>
+							<Card.Description>Checklist internal untuk portal resmi; status dan bukti disimpan di madrasah.</Card.Description>
 						</Card.Header>
-						<Card.Content>
+						<Card.Content class="space-y-3">
+							{#each externalTrackerRows(data) as tracker (tracker.system)}
+								<div class="rounded-md border border-slate-200 bg-white p-3">
+									<div class="flex items-start justify-between gap-3">
+										<div>
+											<p class="text-sm font-medium text-slate-900">{tracker.label}</p>
+											<p class="text-xs text-slate-500">
+												{tracker.total} jadwal · {tracker.completed} selesai · {tracker.linkedEvidence + tracker.linkedArchive} bukti
+											</p>
+										</div>
+										<Badge variant={trackerStatusVariant(tracker.status)}>{trackerStatusLabel(tracker.status)}</Badge>
+									</div>
+									{#if tracker.overdue > 0}
+										<p class="mt-2 text-xs font-medium text-red-700">{tracker.overdue} lewat tempo/perlu revisi</p>
+									{/if}
+								</div>
+							{/each}
+						</Card.Content>
+					</Card.Root>
+
+					<div id="document-cycle-detail-panel">
+						<Card.Root class="border-slate-200">
+							<Card.Header class="pb-2">
+								<Card.Title class="text-base">Detail Monitoring</Card.Title>
+								<Card.Description>Pilih dokumen dari tabel untuk mengatur PIC, pengingat, tautan bukti, dan catatan verifikasi.</Card.Description>
+							</Card.Header>
+							<Card.Content>
 							{#if selectedObligation}
 								<form class="space-y-3" onsubmit={(event) => { event.preventDefault(); void saveObligation(); }}>
 									<div>
 										<p class="text-sm font-medium text-slate-900">{selectedObligation.catalog_title}</p>
 										<p class="text-xs text-slate-500">{selectedObligation.period_label}</p>
 									</div>
+									<div class="grid gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm sm:grid-cols-2">
+										<div>
+											<p class="text-xs font-medium text-slate-500">Status</p>
+											<Badge variant={statusVariant(selectedObligation.status)} class="mt-1">{statusLabel(selectedObligation.status)}</Badge>
+										</div>
+										<div>
+											<p class="text-xs font-medium text-slate-500">Periode</p>
+											<p class="mt-1 text-slate-800">{selectedObligation.period_label} · {formatDate(selectedObligation.period_start)} - {formatDate(selectedObligation.period_end)}</p>
+										</div>
+										<div>
+											<p class="text-xs font-medium text-slate-500">PIC Penyusun</p>
+											<p class="mt-1 text-slate-800">{selectedObligation.responsible_employee_name || 'Belum ditentukan'}</p>
+										</div>
+										<div>
+											<p class="text-xs font-medium text-slate-500">Verifikator</p>
+											<p class="mt-1 text-slate-800">{selectedObligation.verifier_employee_name || 'Belum ditentukan'}</p>
+										</div>
+										<div>
+											<p class="text-xs font-medium text-slate-500">SNP / Regulasi</p>
+											<p class="mt-1 text-slate-800">{snpLabel(selectedObligation.snp_standard)} · {selectedObligation.regulation_ref || 'Tanpa rujukan khusus'}</p>
+										</div>
+										<div>
+											<p class="text-xs font-medium text-slate-500">Arsip Resmi</p>
+											<p class="mt-1 text-slate-800">{selectedObligation.archive_document_title || 'Belum ditautkan'}</p>
+										</div>
+										<div class="sm:col-span-2">
+											<p class="text-xs font-medium text-slate-500">Catatan Verifikasi</p>
+											<p class="mt-1 text-slate-800">{selectedObligation.verification_notes || 'Belum ada catatan verifikasi'}</p>
+										</div>
+									</div>
+									{#if completionIssues(selectedObligation).length > 0}
+										<div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+											<p class="font-medium">Belum siap ditandai selesai.</p>
+											<p class="mt-1">Lengkapi {completionIssues(selectedObligation).join(', ')} lalu simpan detail sebelum finalisasi.</p>
+										</div>
+									{:else}
+										<div class="rounded-md border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
+											Dokumen sudah memiliki PIC, verifikator, dan tautan bukti yang bisa ditelusuri.
+										</div>
+									{/if}
 									<div class="grid gap-3 sm:grid-cols-2">
 										<div>
 											<label for="obligation-reminder" class="text-sm font-medium">Tanggal Pengingat</label>
@@ -825,6 +1229,24 @@
 										<div>
 											<label for="obligation-due" class="text-sm font-medium">Jatuh Tempo</label>
 											<Input id="obligation-due" type="date" bind:value={obligationForm.due_date} />
+										</div>
+									</div>
+									<div class="grid gap-3 sm:grid-cols-2">
+										<div>
+											<label for="obligation-domain" class="text-sm font-medium">Bidang</label>
+											<select id="obligation-domain" bind:value={obligationForm.domain_area} class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+												{#each CATALOG_DOMAIN_AREAS as [value, label] (value)}
+													<option {value}>{label}</option>
+												{/each}
+											</select>
+										</div>
+										<div>
+											<label for="obligation-external-system" class="text-sm font-medium">Tracker Eksternal</label>
+											<select id="obligation-external-system" bind:value={obligationForm.external_system} class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+												{#each EXTERNAL_SYSTEMS as [value, label] (value)}
+													<option {value}>{label}</option>
+												{/each}
+											</select>
 										</div>
 									</div>
 									<div>
@@ -866,11 +1288,38 @@
 										</select>
 									</div>
 									<div>
+										<label for="obligation-work-plan" class="text-sm font-medium">RKT/RKJM/RKAM</label>
+										<select id="obligation-work-plan" bind:value={obligationForm.work_plan_item_id} class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+											<option value="">Belum ditautkan</option>
+											{#each data.workPlanItems as item (item.id)}
+												<option value={item.id}>{item.activity_code} - {item.activity_name}</option>
+											{/each}
+										</select>
+									</div>
+									<div>
+										<label for="obligation-performance" class="text-sm font-medium">SKP / Target Kinerja</label>
+										<select id="obligation-performance" bind:value={obligationForm.performance_target_id} class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+											<option value="">Belum ditautkan</option>
+											{#each data.performanceTargets as target (target.id)}
+												<option value={target.id}>{target.title} · {target.employee_name}</option>
+											{/each}
+										</select>
+									</div>
+									<div>
 										<label for="obligation-evidence" class="text-sm font-medium">Evidence 8 SNP</label>
 										<select id="obligation-evidence" bind:value={obligationForm.evidence_item_id} class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
 											<option value="">Belum ditautkan</option>
 											{#each data.evidenceItems as evidence (evidence.id)}
 												<option value={evidence.id}>{evidence.title}</option>
+											{/each}
+										</select>
+									</div>
+									<div>
+										<label for="obligation-compliance-action" class="text-sm font-medium">Tindak Lanjut Kepatuhan</label>
+										<select id="obligation-compliance-action" bind:value={obligationForm.compliance_action_id} class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+											<option value="">Belum ditautkan</option>
+											{#each data.complianceActions as action (action.id)}
+												<option value={action.id}>{action.title}</option>
 											{/each}
 										</select>
 									</div>
@@ -891,6 +1340,120 @@
 										<label for="obligation-verification-notes" class="text-sm font-medium">Catatan Verifikasi</label>
 										<Textarea id="obligation-verification-notes" rows={3} bind:value={obligationForm.verification_notes} />
 									</div>
+									<div class="rounded-md border border-emerald-100 bg-emerald-50/50 p-3">
+										<div class="mb-3">
+											<p class="text-xs font-medium text-emerald-900">Aksi Cepat</p>
+											<p class="text-xs text-emerald-800">Status saat ini: {statusLabel(selectedObligation.status)}</p>
+										</div>
+										<div class="flex flex-wrap gap-2">
+											<Button href="/governance" variant="outline" size="sm">
+												<Link2Icon class="mr-2 size-3.5" />
+												Tambah Bukti
+											</Button>
+											<Button href="/tu/arsip" variant="outline" size="sm">
+												<FolderArchiveIcon class="mr-2 size-3.5" />
+												Tautkan Arsip
+											</Button>
+											{#if canTransitionStatus(selectedObligation, 'not_started')}
+												<Button
+													type="button"
+													variant="outline"
+													size="sm"
+													disabled={actionBusyId === `${selectedObligation.id}:not_started`}
+													onclick={() => void updateObligationStatus(selectedObligation, 'not_started')}
+												>
+													<RotateCwIcon class="mr-2 size-3.5" />
+													Kembalikan Belum Mulai
+												</Button>
+											{/if}
+											{#if canTransitionStatus(selectedObligation, 'draft')}
+												<Button
+													type="button"
+													variant="outline"
+													size="sm"
+													disabled={actionBusyId === `${selectedObligation.id}:draft`}
+													onclick={() => void updateObligationStatus(selectedObligation, 'draft')}
+												>
+													<FileWarningIcon class="mr-2 size-3.5" />
+													{draftActionLabel(selectedObligation.status)}
+												</Button>
+											{/if}
+											{#if canTransitionStatus(selectedObligation, 'waiting_verification')}
+												<Button
+													type="button"
+													variant="outline"
+													size="sm"
+													disabled={actionBusyId === `${selectedObligation.id}:waiting_verification`}
+													onclick={() => void updateObligationStatus(selectedObligation, 'waiting_verification')}
+												>
+													<BellIcon class="mr-2 size-3.5" />
+													Ajukan Verifikasi
+												</Button>
+											{/if}
+											{#if canTransitionStatus(selectedObligation, 'completed')}
+												<Button
+													type="button"
+													size="sm"
+													disabled={actionBusyId === `${selectedObligation.id}:completed` || completionIssues(selectedObligation).length > 0}
+													title={completionIssues(selectedObligation).length > 0 ? `Lengkapi ${completionIssues(selectedObligation).join(', ')}` : 'Tandai selesai'}
+													onclick={() => void updateObligationStatus(selectedObligation, 'completed')}
+												>
+													<CheckCircle2Icon class="mr-2 size-3.5" />
+													Tandai Selesai
+												</Button>
+											{/if}
+										</div>
+									</div>
+									<div class="rounded-md border border-slate-200 bg-slate-50/70 p-3">
+										<div class="mb-3 flex items-center justify-between gap-3">
+											<div>
+												<p class="text-sm font-medium text-slate-900">Riwayat Audit</p>
+												<p class="text-xs text-slate-500">Jejak perubahan status, update detail, dan generator dokumen.</p>
+											</div>
+											<Button type="button" variant="outline" size="sm" onclick={() => loadEvents(selectedObligation.id)}>Refresh</Button>
+										</div>
+										<AsyncContent promise={eventsPromise} onerror={handleRenderError}>
+											{#snippet pending()}
+												<div class="space-y-2">
+													{#each Array.from({ length: 3 }) as _, index (`document-cycle-event-skeleton-${index}`)}
+														<div class="rounded-md border border-slate-200 bg-white p-3">
+															<Skeleton class="h-4 w-32" />
+															<Skeleton class="mt-2 h-3 w-full" />
+														</div>
+													{/each}
+												</div>
+											{/snippet}
+											{#snippet failed(error, reset)}
+												<RecoveryPanel compact title="Riwayat Audit Belum Tersaji" message={errorMessage(error)} onRetry={() => retryEvents(reset)} />
+											{/snippet}
+											{#snippet children(events)}
+												{@const currentEvents = events as DocumentCycleEvent[]}
+												{#if currentEvents.length === 0}
+													<div class="rounded-md border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-500">
+														Belum ada riwayat audit untuk dokumen ini.
+													</div>
+												{:else}
+													<div class="max-h-80 space-y-2 overflow-y-auto pr-1">
+														{#each currentEvents as event (event.id)}
+															<div class="rounded-md border border-slate-200 bg-white p-3">
+																<div class="flex items-start justify-between gap-3">
+																	<Badge variant={eventVariant(event.event_type)}>{eventTypeLabel(event.event_type)}</Badge>
+																	<p class="text-xs text-slate-500">{formatDateTime(event.created_at)}</p>
+																</div>
+																{#if event.from_status || event.to_status}
+																	<p class="mt-2 text-xs text-slate-600">
+																		{event.from_status ? statusLabel(event.from_status) : '-'} -> {event.to_status ? statusLabel(event.to_status) : '-'}
+																	</p>
+																{/if}
+																<p class="mt-2 text-sm text-slate-700">{event.notes || 'Tanpa catatan.'}</p>
+																<p class="mt-2 text-xs text-slate-500">{event.actor_username ? `oleh ${event.actor_username}` : 'oleh sistem'}</p>
+															</div>
+														{/each}
+													</div>
+												{/if}
+											{/snippet}
+										</AsyncContent>
+									</div>
 									<LoadingButton type="submit" loading={obligationBusy} loadingLabel="Menyimpan">
 										Simpan Detail
 									</LoadingButton>
@@ -900,20 +1463,115 @@
 									Pilih dokumen dari tabel monitoring untuk mengubah jadwal, PIC, atau tautan bukti.
 								</div>
 							{/if}
-						</Card.Content>
-					</Card.Root>
+							</Card.Content>
+						</Card.Root>
+					</div>
 				</div>
 			</div>
 
 			<Tabs.Root bind:value={activeTab} class="space-y-4">
 				<Tabs.List>
 					<Tabs.Trigger value="monitoring">Monitoring</Tabs.Trigger>
+					<Tabs.Trigger value="connections">Peta Keterhubungan</Tabs.Trigger>
 					<Tabs.Trigger value="catalog">Katalog</Tabs.Trigger>
 				</Tabs.List>
 				<Tabs.Content value="monitoring">
 					<div class="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600">
-						Alur status modul: Belum Mulai -> Sedang Dibuat -> Menunggu Verifikasi -> Selesai. Pengingat dihitung dari tanggal pengingat dan jatuh tempo setiap kewajiban dokumen.
+						Alur status modul: Belum Mulai -> Sedang Dibuat -> Menunggu Verifikasi -> Selesai. Tahun {periodYear} memiliki {linkedEvidenceCount(data)} jadwal dengan bukti atau arsip tertaut.
 					</div>
+				</Tabs.Content>
+				<Tabs.Content value="connections" class="space-y-4">
+					<div class="grid gap-3 md:grid-cols-4">
+						<Card.Root class="border-slate-200">
+							<Card.Content class="p-4">
+								<p class="text-xs text-slate-500">Dokumen Tata Kelola</p>
+								<p class="mt-2 text-2xl font-semibold text-slate-900">{data.stats.linked_governance_document_obligations}</p>
+							</Card.Content>
+						</Card.Root>
+						<Card.Root class="border-slate-200">
+							<Card.Content class="p-4">
+								<p class="text-xs text-slate-500">Evidence 8 SNP</p>
+								<p class="mt-2 text-2xl font-semibold text-slate-900">{data.stats.linked_evidence_obligations}</p>
+							</Card.Content>
+						</Card.Root>
+						<Card.Root class="border-slate-200">
+							<Card.Content class="p-4">
+								<p class="text-xs text-slate-500">Arsip Digital</p>
+								<p class="mt-2 text-2xl font-semibold text-slate-900">{data.stats.linked_archive_obligations}</p>
+							</Card.Content>
+						</Card.Root>
+						<Card.Root class="border-slate-200">
+							<Card.Content class="p-4">
+								<p class="text-xs text-slate-500">Tindak Lanjut</p>
+								<p class="mt-2 text-2xl font-semibold text-slate-900">{data.stats.linked_compliance_action_obligations}</p>
+							</Card.Content>
+						</Card.Root>
+					</div>
+					<Card.Root class="border-slate-200">
+						<Card.Header class="pb-2">
+							<div class="flex items-center gap-2">
+								<NetworkIcon class="size-4 text-emerald-700" />
+								<Card.Title class="text-base">Peta Keterhubungan Dokumen</Card.Title>
+							</div>
+							<Card.Description>Jejak dari siklus dokumen ke arsip, evidence, RKT/RKJM, SKP, dan tindak lanjut.</Card.Description>
+						</Card.Header>
+						<Card.Content class="p-0">
+							<div class="overflow-x-auto">
+								<Table.Root>
+									<Table.Header>
+										<Table.Row>
+											<Table.Head>Dokumen</Table.Head>
+											<Table.Head>Bidang</Table.Head>
+											<Table.Head>Keterhubungan</Table.Head>
+											<Table.Head>Jejak Utama</Table.Head>
+											<Table.Head>Aksi</Table.Head>
+										</Table.Row>
+									</Table.Header>
+									<Table.Body>
+										{#each data.obligations as item (item.id)}
+											{@const score = connectionScore(item)}
+											<Table.Row>
+												<Table.Cell class="min-w-72">
+													<p class="text-sm font-medium text-slate-900">{item.catalog_title}</p>
+													<p class="text-xs text-slate-500">{item.period_label} · {item.catalog_code}</p>
+												</Table.Cell>
+												<Table.Cell>
+													<Badge variant="outline">{domainAreaLabel(item.domain_area)}</Badge>
+													{#if item.external_system}
+														<Badge variant="secondary" class="mt-1">{externalSystemLabel(item.external_system)}</Badge>
+													{/if}
+												</Table.Cell>
+												<Table.Cell class="min-w-72">
+													<div class="flex flex-wrap gap-1.5">
+														<Badge variant={item.governance_document_id ? 'default' : 'outline'}>Dokumen</Badge>
+														<Badge variant={item.work_plan_item_id ? 'default' : 'outline'}>RKT/RKJM</Badge>
+														<Badge variant={item.performance_target_id ? 'default' : 'outline'}>SKP</Badge>
+														<Badge variant={item.evidence_item_id ? 'default' : 'outline'}>Evidence</Badge>
+														<Badge variant={item.compliance_action_id ? 'default' : 'outline'}>Aksi</Badge>
+														<Badge variant={item.archive_document_id ? 'default' : 'outline'}>Arsip</Badge>
+													</div>
+													<p class="mt-2 text-xs text-slate-500">{score.done}/{score.total} tautan terisi</p>
+												</Table.Cell>
+												<Table.Cell class="min-w-80 text-xs text-slate-600">
+													<p>Dokumen: {item.governance_document_title || '-'}</p>
+													<p>RKT/RKJM: {item.work_plan_item_name || '-'}</p>
+													<p>SKP: {item.performance_target_title || '-'}</p>
+													<p>Evidence: {item.evidence_item_title || '-'}</p>
+													<p>Arsip: {item.archive_document_title || '-'}</p>
+												</Table.Cell>
+												<Table.Cell>
+													<Button size="sm" variant="outline" onclick={() => selectObligation(item)}>
+														<PencilIcon class="mr-2 size-3.5" />
+														Detail
+													</Button>
+												</Table.Cell>
+											</Table.Row>
+										{/each}
+									</Table.Body>
+								</Table.Root>
+							</div>
+						</Card.Content>
+					</Card.Root>
 				</Tabs.Content>
 				<Tabs.Content value="catalog" class="space-y-6">
 					<Card.Root class="border-slate-200">
@@ -936,6 +1594,22 @@
 										<label for="catalog-frequency" class="text-sm font-medium">Frekuensi</label>
 										<select id="catalog-frequency" bind:value={catalogForm.frequency} class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
 											{#each CATALOG_FREQUENCIES as [value, label] (value)}
+												<option {value}>{label}</option>
+											{/each}
+										</select>
+									</div>
+									<div>
+										<label for="catalog-domain" class="text-sm font-medium">Bidang</label>
+										<select id="catalog-domain" bind:value={catalogForm.domain_area} class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+											{#each CATALOG_DOMAIN_AREAS as [value, label] (value)}
+												<option {value}>{label}</option>
+											{/each}
+										</select>
+									</div>
+									<div>
+										<label for="catalog-external-system" class="text-sm font-medium">Tracker Eksternal</label>
+										<select id="catalog-external-system" bind:value={catalogForm.external_system} class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+											{#each EXTERNAL_SYSTEMS as [value, label] (value)}
 												<option {value}>{label}</option>
 											{/each}
 										</select>
@@ -1037,7 +1711,10 @@
 												<Table.Cell class="font-medium">{catalog.code}</Table.Cell>
 												<Table.Cell class="min-w-80">
 													<p class="text-sm font-medium text-slate-900">{catalog.title}</p>
-													<p class="text-xs text-slate-500">{snpLabel(catalog.snp_standard)} · {catalog.regulation_ref || 'Tanpa rujukan khusus'}</p>
+													<p class="text-xs text-slate-500">{domainAreaLabel(catalog.domain_area)} · {snpLabel(catalog.snp_standard)} · {catalog.regulation_ref || 'Tanpa rujukan khusus'}</p>
+													{#if catalog.external_system}
+														<Badge variant="outline" class="mt-2">{externalSystemLabel(catalog.external_system)}</Badge>
+													{/if}
 												</Table.Cell>
 												<Table.Cell>
 													<Badge variant="outline">{frequencyLabel(catalog.frequency)}</Badge>

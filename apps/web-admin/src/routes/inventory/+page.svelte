@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
@@ -172,6 +173,7 @@
 			<p class="text-sm text-slate-500">Ringkasan barang sekolah, stok layak pakai, dan item yang butuh perhatian.</p>
 		</div>
 		<div class="flex gap-2">
+			<Button href={`${resolve('/document-cycles')}?domain_area=sarpras&external_system=simak_bmn`} variant="outline" size="sm">Siklus Sarpras</Button>
 			<Button href="/inventory/items" size="sm">Kelola Barang</Button>
 		</div>
 	</div>

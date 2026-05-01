@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { PageData } from './$types';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Table from '$lib/components/ui/table';
@@ -308,6 +309,7 @@
 	] as const;
 
 	let pagePromise = $state<Promise<KesiswaanData> | null>(null);
+	const canOpenDocumentCycles = $derived(data.roles.includes('admin') || data.roles.includes('staf'));
 	let snapshot = $state<KesiswaanData>(emptyData());
 	let activeTab = $state('siswa');
 	let studentSearch = $state('');
@@ -830,6 +832,9 @@
 				<Button size="sm" variant="outline" onclick={() => openCreate('member')}>Anggota Ekskul</Button>
 				<Button size="sm" variant="outline" onclick={() => openCreate('transfer')}>Mutasi Siswa</Button>
 				<Button size="sm" variant="outline" onclick={() => openCreate('category')}>Kategori Poin</Button>
+				{#if canOpenDocumentCycles}
+					<Button href={`${resolve('/document-cycles')}?domain_area=kesiswaan`} size="sm" variant="outline">Siklus Kesiswaan</Button>
+				{/if}
 			</div>
 		{/if}
 	</div>
