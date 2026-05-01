@@ -1,6 +1,6 @@
 # MTs Negeri 2 Kolaka Utara — Super App Strategic Plan
 
-> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Jurnal Kelas Complete | Sprint 17 Persuratan Complete | Sprint 18 Tata Kelola Madrasah Complete | Sprint 19 SKP Mirror Complete | Sprint 20 Bukti Mutu Complete | Sprint 21 Kesiswaan Foundation Complete | Sprint 22 Surat Keterangan Complete | Sprint 23 Kesiswaan Engagement Complete | Sprint 24 Arsip TU Complete | Sprint 25 RKT/RKJM Execution Complete | Sprint 26 TU Dashboard Complete | Sprint 27 Renstra/IKU Alignment Complete | Sprint 28 Governance Print Pack Complete | Sprint 29 School Profile Complete | Sprint 30 Print Surface Letterhead Complete | Sprint 31 Compliance Actions Complete | Sprint 32 Compliance Print/Export Complete | Sprint 33 Compliance Escalation Board Complete | Sprint 34 Compliance Quick Status Complete | Sprint 35 Compliance Evidence Capture Complete | Sprint 36 Compliance Meeting Pack Complete | Sprint 37 Compliance Deadline Calendar Complete | Sprint 38 Governance Control Center Complete | Sprint 39 Compliance Advanced Filters Complete | Sprint 40 PIC Briefing Pack Complete | Sprint 41 8 SNP Briefing Pack Complete | Sprint 42 Evidence Briefing Pack Complete | Sprint 43 Siklus Dokumen Module Complete | Last Updated: 2026-05-01
+> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Jurnal Kelas Complete | Sprint 17 Persuratan Complete | Sprint 18 Tata Kelola Madrasah Complete | Sprint 19 SKP Mirror Complete | Sprint 20 Bukti Mutu Complete | Sprint 21 Kesiswaan Foundation Complete | Sprint 22 Surat Keterangan Complete | Sprint 23 Kesiswaan Engagement Complete | Sprint 24 Arsip TU Complete | Sprint 25 RKT/RKJM Execution Complete | Sprint 26 TU Dashboard Complete | Sprint 27 Renstra/IKU Alignment Complete | Sprint 28 Governance Print Pack Complete | Sprint 29 School Profile Complete | Sprint 30 Print Surface Letterhead Complete | Sprint 31 Compliance Actions Complete | Sprint 32 Compliance Print/Export Complete | Sprint 33 Compliance Escalation Board Complete | Sprint 34 Compliance Quick Status Complete | Sprint 35 Compliance Evidence Capture Complete | Sprint 36 Compliance Meeting Pack Complete | Sprint 37 Compliance Deadline Calendar Complete | Sprint 38 Governance Control Center Complete | Sprint 39 Compliance Advanced Filters Complete | Sprint 40 PIC Briefing Pack Complete | Sprint 41 8 SNP Briefing Pack Complete | Sprint 42 Evidence Briefing Pack Complete | Sprint 43 Siklus Dokumen Module Complete | Sprint 44 Dokumen Integration Control Center Complete | Sprint 45 Cross-Module Document Shortcuts Complete | Sprint 46 Document Cycle Audit Timeline Complete | Sprint 47 Document Cycle Audit Test Coverage Complete | Sprint 48 BFF Staff Operations Gate Complete | Sprint 49 Backend Staff Gate Claim Hardening Complete | Sprint 50 Document Cycle Completion Readiness Complete | Sprint 51 Final Archive Requirement Complete | Sprint 52 Document Cycle Status Transition Lock Complete | Sprint 53 Document Cycle Detail Status Actions Complete | Sprint 54 Document Cycle Traceability Detail Complete | Last Updated: 2026-05-01
 > This file is the master roadmap. Update after each sprint completion.
 
 ---
@@ -579,6 +579,85 @@ Three runtime units deployed across 3 VPS:
 - [x] Migration `051_document_cycles.sql` sudah dijalankan; tabel siklus dokumen aktif dengan 30 katalog awal, termasuk RKJM dan Renstra dengan tenggat panjang.
 - [x] Jadwal siklus dokumen tahun 2026 sudah digenerate: 374 kewajiban aktif, 374 status `Belum Mulai`, 101 lewat tempo, dan 10 masuk pengingat awal.
 - [x] Verification: `make db-sqlc`, `make db-migrate`, `go test ./...`, `go vet ./...`, API health/generator/stats check, Svelte autofixer membaca file dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, dan `git diff --check`.
+
+### ✅ Sprint 44 — Dokumen Integration Control Center (COMPLETE)
+- [x] Tutup temuan akses Library/Inventory dengan role gate backend handler dan BFF hook untuk `admin`/`staf`.
+- [x] Tambahkan recovery job PUSAKA `running` yang stale ke flow `failed`/retry agar unique active-job guard tidak memblokir pegawai permanen setelah worker crash.
+- [x] Scope file foto siswa Kesiswaan mengikuti scope data siswa; guru hanya bisa membaca foto siswa di kelas ajarnya.
+- [x] Migration `052_document_cycle_integrations.sql` menambahkan bidang dokumen, tracker sistem eksternal, link RKT/RKJM/RKAM, SKP/target kinerja, compliance action, evidence, dan arsip ke siklus dokumen.
+- [x] Katalog siklus dokumen dipetakan ke bidang TU, Kesiswaan, Kurikulum, Sarpras, Governance, Keuangan, dan Eksternal; tracker SKP BKN/e-Kinerja, EMIS, SIPKA, SIMAK-BMN, RKAM/BOS, Perkin, IKU, LAKIP/LKj, dan EDM tercatat sebagai checklist internal, bukan pengganti portal resmi.
+- [x] `/document-cycles` diperkuat menjadi radar dokumen kepala madrasah dengan filter bidang/tracker eksternal, panel perhatian, tracker kepatuhan eksternal, quick action bukti/arsip/verifikasi, dan tab `Peta Keterhubungan`.
+- [x] Peta keterhubungan menampilkan jejak dokumen ke arsip TU, evidence 8 SNP, dokumen tata kelola, RKT/RKJM/RKAM, SKP, dan compliance action.
+
+### ✅ Sprint 45 — Cross-Module Document Shortcuts (COMPLETE)
+- [x] `/document-cycles` membaca deep link query untuk `period_year`, `status`, `frequency`, `domain_area`, `external_system`, `tab`, `search`, dan `reminder_only`.
+- [x] Dashboard TU menambahkan pintasan ke siklus dokumen bidang TU.
+- [x] Dashboard Governance menambahkan pintasan ke siklus dokumen bidang Governance langsung ke tab `Peta Keterhubungan`.
+- [x] Kesiswaan menambahkan pintasan domain Kesiswaan untuk role yang memang boleh membuka pusat siklus dokumen.
+- [x] Akademik/Kurikulum menambahkan pintasan domain Kurikulum.
+- [x] Inventory/Sarpras menambahkan pintasan domain Sarpras dengan filter tracker SIMAK-BMN.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` / `suggestions: []` meskipun proses MCP exit 1 karena timeout fetch eksternal, `npm run check`, `git diff --check`, dan root `make check`.
+
+### ✅ Sprint 46 — Document Cycle Audit Timeline (COMPLETE)
+- [x] Tambahkan query `ListDocumentCycleEventsByObligation` untuk membaca riwayat event siklus dokumen beserta username aktor.
+- [x] Status-change event sekarang menyimpan `from_status` dan `to_status`, bukan hanya status tujuan.
+- [x] Backend expose `GET /api/document-cycles/obligations/{id}/events` dengan role gate yang sama seperti modul Governance/Siklus Dokumen.
+- [x] BFF menambahkan proxy `/api/document-cycles/obligations/[id]/events` tanpa akses database langsung dari SvelteKit.
+- [x] Panel detail `/document-cycles` menampilkan `Riwayat Audit` dengan skeleton, retry, empty state, waktu WITA, aktor, catatan, dan transisi status.
+- [x] Verification: `make db-sqlc`, `go test ./...`, Svelte autofixer membaca file dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch eksternal, `npm run check`, `git diff --check`, dan root `make check`.
+
+### ✅ Sprint 47 — Document Cycle Audit Test Coverage (COMPLETE)
+- [x] Tambahkan unit test service untuk memastikan perubahan status siklus dokumen membaca status lama sebelum update.
+- [x] Test mengunci payload event audit `status_changed`, termasuk `from_status`, `to_status`, catatan yang sudah dinormalisasi, dan `actor_user_id`.
+- [x] Test memastikan status update berhenti bila lookup status lama gagal, sehingga event audit tidak dibuat dari data transisi yang tidak diketahui.
+- [x] Test memastikan `ListEvents` meneruskan obligation ID ke store dan mengembalikan event timeline.
+- [x] Verification: `go test ./...`, `git diff --check`, dan root `make check`.
+
+### ✅ Sprint 48 — BFF Staff Operations Gate (COMPLETE)
+- [x] BFF `hooks.server.ts` sekarang eksplisit menutup `/document-cycles` dan `/api/document-cycles` untuk role `admin`/`staf`.
+- [x] Namespace Governance dan TU juga masuk gate operasi staf di BFF (`/governance`, `/api/governance`, `/tu`, `/api/tu`) agar konsisten dengan page guard dan backend role gate.
+- [x] Role resolver hook memakai fallback `role` tunggal ketika `roles` array tidak ada, konsisten dengan page-level guards yang sudah ada.
+- [x] Verification: `npm run check`, `git diff --check`, dan root `make check`.
+
+### ✅ Sprint 49 — Backend Staff Gate Claim Hardening (COMPLETE)
+- [x] Helper backend `libraryAccessAllowed`, `inventoryAccessAllowed`, `governanceAccessAllowed`, dan `tuAccessAllowed` sekarang menolak request tanpa JWT claims, bukan fallback allow.
+- [x] Test akses staf diperluas untuk mengunci `admin`/`staf` diterima, `guru` ditolak, dan request tanpa claims ditolak di Library, Inventory, Governance, dan TU.
+- [x] Hardening ini menjaga Document Cycles, Governance, TU, Library, dan Inventory tetap eksplisit bergantung pada JWT context meskipun route saat ini sudah berada dalam JWT middleware group.
+- [x] Verification: `go test ./...`, `git diff --check`, dan root `make check`.
+
+### ✅ Sprint 50 — Document Cycle Completion Readiness (COMPLETE)
+- [x] Tambahkan query readiness finalisasi siklus dokumen untuk mengecek PIC, verifikator, dan tautan bukti utama.
+- [x] Service `UpdateObligationStatus` sekarang menolak status `completed` bila dokumen belum punya PIC penyusun, verifikator, dan minimal satu tautan dokumen/evidence/tindak lanjut/arsip.
+- [x] Test service mengunci finalisasi lengkap berhasil, finalisasi tidak lengkap ditolak tanpa update/event audit, dan status selain `completed` tidak memaksa readiness finalisasi.
+- [x] UI `/document-cycles` menampilkan readiness finalisasi di panel detail dan menonaktifkan tombol `Selesai` pada baris yang belum lengkap.
+- [x] Verification: `make db-sqlc`, `go test ./...`, Svelte autofixer membaca file dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch eksternal, `npm run check`, `git diff --check`, dan root `make check`.
+
+### ✅ Sprint 51 — Final Archive Requirement (COMPLETE)
+- [x] Finalisasi siklus dokumen sekarang wajib memiliki `archive_document_id`, bukan cukup dengan evidence/dokumen tata kelola saja.
+- [x] Service readiness error dan UI readiness copy disederhanakan ke syarat final utama: PIC penyusun, verifikator, dan arsip digital.
+- [x] Test service menambahkan kasus evidence tanpa arsip tetap ditolak untuk status `completed`.
+- [x] Verification: `go test ./...`, Svelte autofixer membaca file dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch eksternal, `npm run check`, `git diff --check`, dan root `make check`.
+
+### ✅ Sprint 52 — Document Cycle Status Transition Lock (COMPLETE)
+- [x] Backend service mengunci alur status siklus dokumen: `Belum Mulai -> Draft -> Menunggu Verifikasi -> Selesai`, dengan koreksi dari `Menunggu Verifikasi/Selesai` kembali ke `Draft`.
+- [x] Finalisasi `completed` hanya bisa dilakukan dari `waiting_verification`, sehingga loncatan `draft -> completed` ditolak sebelum readiness/arsip dicek.
+- [x] Test service mengunci invalid transition tidak melakukan readiness lookup, update status, atau event audit.
+- [x] UI `/document-cycles` menonaktifkan tombol status yang tidak valid untuk status saat ini.
+- [x] Verification: `go test ./...`, Svelte autofixer membaca file dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch eksternal, `npm run check`, `git diff --check`, dan root `make check`.
+
+### ✅ Sprint 53 — Document Cycle Detail Status Actions (COMPLETE)
+- [x] Panel detail `/document-cycles` sekarang menampilkan aksi cepat status sesuai alur backend yang terkunci.
+- [x] Aksi `Mulai Draft`, `Koreksi Draft`, `Kembalikan Belum Mulai`, `Ajukan Verifikasi`, dan `Tandai Selesai` hanya muncul pada status yang relevan.
+- [x] Aksi finalisasi di detail ikut memakai readiness PIC, verifikator, dan arsip digital sehingga tidak menawarkan finalisasi yang belum siap.
+- [x] Shortcut `Tambah Bukti` dan `Tautkan Arsip` tetap tersedia sebagai jalur operasional untuk melengkapi syarat finalisasi.
+- [x] Verification: Svelte autofixer membaca file dengan `issues: []` / `suggestions: []`, `npm run check`, `git diff --check`, dan root `make check`.
+
+### ✅ Sprint 54 — Document Cycle Traceability Detail (COMPLETE)
+- [x] `/document-cycles` mendukung deep link `selected_obligation` untuk membuka detail kewajiban dokumen tertentu setelah data dashboard dimuat.
+- [x] Tombol `Detail` dari tabel monitoring, panel perhatian, dan tab `Peta Keterhubungan` memilih dokumen yang sama, memperbarui URL, lalu memfokuskan panel detail.
+- [x] Panel detail menambahkan ringkasan jejak dokumen: status, periode, PIC, verifikator, SNP/regulasi, arsip resmi, dan catatan verifikasi.
+- [x] Peta keterhubungan sekarang punya aksi langsung menuju detail sehingga kepala madrasah bisa menelusuri bukti dan arsip tanpa kembali ke tabel utama.
+- [x] Verification: Svelte autofixer membaca file dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch eksternal, `npm run check`, `git diff --check`, dan root `make check`.
 
 ### ✅ Repository Hygiene Checkpoint — Source Commit Discipline (COMPLETE)
 - [x] Pisahkan artefak runtime SQLite sidecar (`*.db-shm`, `*.db-wal`, `*.sqlite-shm`, `*.sqlite-wal`) dari source control sesuai aturan legacy SQLite hanya sebagai artefak impor.
