@@ -116,6 +116,7 @@
 	let publishBusy = $state<Record<string, boolean>>({});
 	let bulkSaveBusy = $state(false);
 	let finalizationBusy = $state(false);
+	let batchFinalizationBusy = $state(false);
 	let exportBusy = $state(false);
 	let editingComponentId = $state('');
 	let componentTitle = $state('');
@@ -190,6 +191,9 @@
 	});
 	const nextReadyAssignment = $derived(
 		assignmentStatuses.find((item) => item.ready && !item.is_finalized) ?? null
+	);
+	const filteredReadyAssignments = $derived(
+		filteredAssignmentStatuses.filter((item) => item.ready && !item.is_finalized)
 	);
 	const readinessLabel = $derived(
 		isFinalized
@@ -330,6 +334,18 @@
 			showSuccess('Rekap finalisasi berhasil diekspor.');
 		} finally {
 			exportBusy = false;
+		}
+	}
+
+	async function finalizeAssignmentById(targetAssignmentId: string, notes: string) {
+		const res = await fetch(`/api/grades/assignments/${targetAssignmentId}/finalize`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ notes })
+		});
+		const json = await res.json().catch(() => ({}));
+		if (!res.ok) {
+			throw new Error(json.error ?? 'Gagal memfinalisasi assignment');
 		}
 	}
 
@@ -648,20 +664,41 @@
 		if (!selectedAssignment || !readyForRapor) return;
 		finalizationBusy = true;
 		try {
-			const res = await fetch(`/api/grades/assignments/${selectedAssignment.id}/finalize`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ notes: finalizeNotes })
-			});
-			const json = await res.json().catch(() => ({}));
-			if (!res.ok) {
-				showError(json.error ?? 'Gagal memfinalisasi assignment');
-				return;
-			}
+			await finalizeAssignmentById(selectedAssignment.id, finalizeNotes);
 			showSuccess('Assignment siap rapor sudah difinalisasi');
 			await loadOverview();
 		} finally {
 			finalizationBusy = false;
+		}
+	}
+
+	async function finalizeFilteredReadyAssignments() {
+		if (filteredReadyAssignments.length === 0) {
+			showError('Tidak ada assignment siap-final pada filter aktif.');
+			return;
+		}
+		if (!confirm(`Finalisasi ${filteredReadyAssignments.length} assignment siap-final dari hasil filter saat ini?`)) {
+			return;
+		}
+
+		batchFinalizationBusy = true;
+		const failedAssignments: string[] = [];
+		try {
+			for (const item of filteredReadyAssignments) {
+				try {
+					await finalizeAssignmentById(item.assignment_id, finalizeNotes);
+				} catch {
+					failedAssignments.push(`${item.class_code} · ${item.subject_code}`);
+				}
+			}
+			if (failedAssignments.length > 0) {
+				showError(`Sebagian finalisasi gagal: ${failedAssignments.slice(0, 3).join(', ')}${failedAssignments.length > 3 ? ' dan lainnya' : ''}.`);
+			} else {
+				showSuccess(`${filteredReadyAssignments.length} assignment siap-final berhasil difinalisasi.`);
+			}
+			await loadOverview();
+		} finally {
+			batchFinalizationBusy = false;
 		}
 	}
 
@@ -847,10 +884,26 @@
 						<div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
 							<Badge variant="outline">Filter: {assignmentFilterLabel(assignmentStatusFilter)}</Badge>
 							<Badge variant="outline">Hasil: {filteredAssignmentStatuses.length}</Badge>
+							<Badge variant="outline">Siap Final: {filteredReadyAssignments.length}</Badge>
 							{#if assignmentStatusQuery.trim()}
 								<Badge variant="outline">Pencarian: {assignmentStatusQuery.trim()}</Badge>
 							{/if}
 						</div>
+						{#if filteredReadyAssignments.length > 0}
+							<div class="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+								<div>
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Finalisasi Batch</p>
+									<p class="mt-2 text-sm font-medium text-slate-900">{filteredReadyAssignments.length} assignment siap-final ada di hasil filter aktif.</p>
+									<p class="text-sm text-slate-600">Gunakan catatan finalisasi yang sama bila operator ingin menutup checkpoint rapor untuk beberapa kelas-mapel sekaligus.</p>
+								</div>
+								<LoadingButton
+									loading={batchFinalizationBusy}
+									loadingLabel="Memfinalisasi batch..."
+									onclick={finalizeFilteredReadyAssignments}
+									label="Finalisasi Semua yang Siap"
+								/>
+							</div>
+						{/if}
 						<div class="overflow-x-auto">
 							<Table.Root>
 								<Table.Header>
