@@ -128,6 +128,7 @@
 	let finalizationBusy = $state(false);
 	let batchFinalizationBusy = $state(false);
 	let exportBusy = $state(false);
+	let classExportBusy = $state(false);
 	let editingComponentId = $state('');
 	let componentTitle = $state('');
 	let componentCategory = $state('assignment');
@@ -388,6 +389,51 @@
 			showSuccess('Rekap finalisasi berhasil diekspor.');
 		} finally {
 			exportBusy = false;
+		}
+	}
+
+	async function exportFocusedClassReport() {
+		if (!focusedClassSummary || focusedClassAssignments.length === 0) {
+			showError('Tidak ada data kelas fokus yang bisa diekspor.');
+			return;
+		}
+		classExportBusy = true;
+		try {
+			const header = [
+				'Kode Kelas',
+				'Nama Kelas',
+				'Kode Mapel',
+				'Nama Mapel',
+				'Guru',
+				'Status',
+				'Komponen Terbit',
+				'Total Komponen',
+				'Nilai Kosong'
+			];
+			const rows = focusedClassAssignments.map((item) => [
+				item.class_code,
+				item.class_name,
+				item.subject_code,
+				item.subject_name,
+				item.teacher_name,
+				assignmentStatusLabel(item),
+				item.published_component_count,
+				item.component_count,
+				item.missing_grade_count
+			]);
+			const csv = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\n');
+			const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = url;
+			anchor.download = `report-kesiapan-${focusedClassSummary.class_code.toLowerCase()}.csv`;
+			document.body.append(anchor);
+			anchor.click();
+			anchor.remove();
+			URL.revokeObjectURL(url);
+			showSuccess(`Report wali kelas ${focusedClassSummary.class_code} berhasil diekspor.`);
+		} finally {
+			classExportBusy = false;
 		}
 	}
 
@@ -1031,6 +1077,13 @@
 										<Badge variant="outline">{focusedClassSummary.ready_count} siap</Badge>
 										<Badge variant="outline">{focusedClassSummary.finalized_count} final</Badge>
 										<Badge variant="outline">{focusedClassSummary.attention_count} perlu dilengkapi</Badge>
+										<LoadingButton
+											variant="outline"
+											loading={classExportBusy}
+											loadingLabel="Mengekspor..."
+											onclick={exportFocusedClassReport}
+											label="Ekspor Report Kelas"
+										/>
 									</div>
 								</div>
 								<div class="overflow-x-auto">
