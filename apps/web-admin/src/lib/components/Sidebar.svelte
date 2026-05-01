@@ -19,7 +19,7 @@
 		{
 			group: 'Utama',
 			items: [
-				{ href: '/',         label: 'Dashboard',    icon: 'grid' },
+				{ href: '/',         label: 'Dashboard',    icon: 'grid', pinnable: false },
 			],
 		},
 		{
@@ -116,9 +116,9 @@
 	let pinnedLoaded = false;
 
 	const defaultPinnedByRole: Record<string, string[]> = {
-		admin: ['/', '/cbt/sessions', '/grades', '/settings'],
-		guru: ['/', '/cbt/questions', '/grades', '/jadwal'],
-		staf: ['/', '/inventory', '/library']
+		admin: ['/cbt/sessions', '/grades', '/settings'],
+		guru: ['/cbt/questions', '/grades', '/jadwal'],
+		staf: ['/inventory', '/library']
 	};
 
 	const activeGroup = $derived(
@@ -126,14 +126,16 @@
 	);
 
 	const quickAccess = $derived.by(() => {
-		const hrefs = new Set<string>(['/', ...pinnedItems]);
 		const flattened = nav.flatMap((section) =>
 			section.items.map((item) => ({
 				...item,
 				group: section.group,
 			}))
 		);
-		return flattened.filter((item, index) => hrefs.has(item.href) && flattened.findIndex((candidate) => candidate.href === item.href) === index);
+		const orderedHrefs = Array.from(new Set(['/', ...pinnedItems.filter((href) => href !== '/')]));
+		return orderedHrefs
+			.map((href) => flattened.find((item) => item.href === href))
+			.filter((item): item is (typeof flattened)[number] => !!item);
 	});
 
 	function isActive(href: string) {
@@ -161,6 +163,9 @@
 	}
 
 	function togglePin(href: string) {
+		if (href === '/') {
+			return;
+		}
 		if (isPinned(href)) {
 			pinnedItems = pinnedItems.filter((value) => value !== href);
 			return;
@@ -170,6 +175,24 @@
 
 	function pinButtonLabel(item: NavItem) {
 		return isPinned(item.href) ? `Lepas ${item.label} dari akses cepat` : `Pin ${item.label} ke akses cepat`;
+	}
+
+	function canMovePinned(href: string, direction: -1 | 1) {
+		const index = pinnedItems.indexOf(href);
+		if (index === -1) return false;
+		const nextIndex = index + direction;
+		return nextIndex >= 0 && nextIndex < pinnedItems.length;
+	}
+
+	function movePinned(href: string, direction: -1 | 1) {
+		const index = pinnedItems.indexOf(href);
+		if (index === -1) return;
+		const nextIndex = index + direction;
+		if (nextIndex < 0 || nextIndex >= pinnedItems.length) return;
+		const next = [...pinnedItems];
+		const [value] = next.splice(index, 1);
+		next.splice(nextIndex, 0, value);
+		pinnedItems = next;
 	}
 
 	function railTooltip(item: NavItem, group: string) {
@@ -183,7 +206,7 @@
 			try {
 				const parsed = JSON.parse(raw);
 				if (Array.isArray(parsed)) {
-					pinnedItems = parsed.filter((value): value is string => typeof value === 'string');
+					pinnedItems = parsed.filter((value): value is string => typeof value === 'string' && value !== '/');
 				}
 			} catch {
 				pinnedItems = [];
@@ -297,6 +320,32 @@
 									<span class={`truncate ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{item.label}</span>
 								</a>
 								{#if item.pinnable !== false}
+									{#if desktopExpanded && isPinned(item.href)}
+										<div class="flex items-center gap-0.5">
+											<button
+												type="button"
+												class="inline-flex rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+												onclick={() => movePinned(item.href, -1)}
+												disabled={!canMovePinned(item.href, -1)}
+												aria-label={`Naikkan ${item.label} dalam akses cepat`}
+											>
+												<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+												</svg>
+											</button>
+											<button
+												type="button"
+												class="inline-flex rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+												onclick={() => movePinned(item.href, 1)}
+												disabled={!canMovePinned(item.href, 1)}
+												aria-label={`Turunkan ${item.label} dalam akses cepat`}
+											>
+												<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+												</svg>
+											</button>
+										</div>
+									{/if}
 									<button
 										type="button"
 										class={`shrink-0 rounded-md p-1 text-amber-500 hover:bg-amber-50 hover:text-amber-600 ${desktopExpanded ? 'inline-flex' : 'inline-flex lg:hidden'}`}
