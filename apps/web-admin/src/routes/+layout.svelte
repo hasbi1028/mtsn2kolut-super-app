@@ -18,17 +18,21 @@
 		return publicExactPaths.has(pathname) || publicPrefixPaths.some((prefix) => pathname.startsWith(prefix));
 	});
 	let desktopSidebarExpanded = $state(true);
-	const SIDEBAR_EXPANDED_STORAGE_KEY = 'sidebar:desktop-expanded';
+	const SIDEBAR_EXPANDED_STORAGE_KEY_PREFIX = 'sidebar:desktop-expanded';
+
+	function sidebarExpandedStorageKey() {
+		return `${SIDEBAR_EXPANDED_STORAGE_KEY_PREFIX}:${data.user?.id ?? 'anon'}`;
+	}
 
 	onMount(() => {
-		const raw = window.localStorage.getItem(SIDEBAR_EXPANDED_STORAGE_KEY);
+		const raw = window.localStorage.getItem(sidebarExpandedStorageKey());
 		if (raw === '0') desktopSidebarExpanded = false;
 		if (raw === '1') desktopSidebarExpanded = true;
 	});
 
 	$effect(() => {
 		if (typeof window === 'undefined') return;
-		window.localStorage.setItem(SIDEBAR_EXPANDED_STORAGE_KEY, desktopSidebarExpanded ? '1' : '0');
+		window.localStorage.setItem(sidebarExpandedStorageKey(), desktopSidebarExpanded ? '1' : '0');
 	});
 </script>
 

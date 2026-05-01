@@ -119,8 +119,8 @@
 			.filter((g) => g.items.length > 0)
 	);
 
-	const PINNED_STORAGE_KEY = 'sidebar:pinned-items';
-	const RECENT_STORAGE_KEY = 'sidebar:recent-items';
+	const PINNED_STORAGE_KEY_PREFIX = 'sidebar:pinned-items';
+	const RECENT_STORAGE_KEY_PREFIX = 'sidebar:recent-items';
 	const RECENT_LIMIT = 6;
 	let openGroups = $state<string[]>([]);
 	let pinnedItems = $state<string[]>([]);
@@ -137,27 +137,36 @@
 		nav.find((section) => section.items.some((item) => isActive(item.href)))?.group ?? 'Utama'
 	);
 
-	const quickAccess = $derived.by(() => {
-		const flattened = nav.flatMap((section) =>
+	const visibleNavItems = $derived(
+		nav.flatMap((section) =>
 			section.items.map((item) => ({
 				...item,
 				group: section.group,
 			}))
-		);
+		)
+	);
+
+	const visibleNavHrefSet = $derived(new Set(visibleNavItems.map((item) => item.href)));
+	const pinnableNavHrefSet = $derived(
+		new Set(
+			visibleNavItems
+				.filter((item) => item.href !== '/' && item.pinnable !== false)
+				.map((item) => item.href)
+		)
+	);
+
+	const quickAccess = $derived.by(() => {
 		const orderedHrefs = Array.from(new Set(['/', ...pinnedItems.filter((href) => href !== '/')]));
 		return orderedHrefs
-			.map((href) => flattened.find((item) => item.href === href))
-			.filter((item): item is (typeof flattened)[number] => !!item);
+			.map((href) => visibleNavItems.find((item) => item.href === href))
+			.filter((item): item is (typeof visibleNavItems)[number] => !!item);
 	});
 
 	const commandItems = $derived.by(() => {
-		const flattened = nav.flatMap((section) =>
-			section.items.map((item) => ({
-				...item,
-				group: section.group,
-				pinned: item.href === '/' || pinnedItems.includes(item.href),
-			}))
-		);
+		const flattened = visibleNavItems.map((item) => ({
+			...item,
+			pinned: item.href === '/' || pinnedItems.includes(item.href),
+		}));
 		return flattened.filter(
 			(item, index) => flattened.findIndex((candidate) => candidate.href === item.href) === index
 		);
@@ -265,6 +274,51 @@
 		return `${group} · ${item.label}`;
 	}
 
+	function storageScope() {
+		return user?.id?.trim() || 'anon';
+	}
+
+	function pinnedStorageKey() {
+		return `${PINNED_STORAGE_KEY_PREFIX}:${storageScope()}`;
+	}
+
+	function recentStorageKey() {
+		return `${RECENT_STORAGE_KEY_PREFIX}:${storageScope()}`;
+	}
+
+	function dedupeHrefs(values: string[]) {
+		return Array.from(new Set(values));
+	}
+
+	function normalizePinnedHrefs(values: unknown) {
+		if (!Array.isArray(values)) return [];
+		return dedupeHrefs(
+			values.filter(
+				(value): value is string =>
+					typeof value === 'string' && value !== '/' && pinnableNavHrefSet.has(value)
+			)
+		);
+	}
+
+	function normalizeRecentHrefs(values: unknown) {
+		if (!Array.isArray(values)) return [];
+		return dedupeHrefs(
+			values.filter(
+				(value): value is string => typeof value === 'string' && visibleNavHrefSet.has(value)
+			)
+		).slice(0, RECENT_LIMIT);
+	}
+
+	function defaultPinnedItemsForUser() {
+		for (const role of userRoles) {
+			const defaults = normalizePinnedHrefs(defaultPinnedByRole[role] ?? []);
+			if (defaults.length > 0) {
+				return defaults;
+			}
+		}
+		return [];
+	}
+
 	function navBadge(href: string) {
 		if (href === '/inventory/items') return inventoryAttention;
 		if (href === '/library/loans') return libraryAttention;
@@ -342,40 +396,35 @@
 
 	function loadPinnedItems() {
 		if (typeof window === 'undefined') return;
-		const raw = window.localStorage.getItem(PINNED_STORAGE_KEY);
+		const raw = window.localStorage.getItem(pinnedStorageKey());
+		let nextPinnedItems: string[] = [];
 		if (raw) {
 			try {
 				const parsed = JSON.parse(raw);
-				if (Array.isArray(parsed)) {
-					pinnedItems = parsed.filter((value): value is string => typeof value === 'string' && value !== '/');
-				}
+				nextPinnedItems = normalizePinnedHrefs(parsed);
 			} catch {
-				pinnedItems = [];
+				nextPinnedItems = [];
 			}
 		}
 
-		if (pinnedItems.length === 0) {
-			for (const role of userRoles) {
-				const defaults = defaultPinnedByRole[role];
-				if (defaults?.length) {
-					pinnedItems = defaults;
-					break;
-				}
-			}
+		if (nextPinnedItems.length === 0) {
+			nextPinnedItems = defaultPinnedItemsForUser();
 		}
 
+		pinnedItems = nextPinnedItems;
 		pinnedLoaded = true;
 	}
 
 	function loadRecentItems() {
 		if (typeof window === 'undefined') return;
-		const raw = window.localStorage.getItem(RECENT_STORAGE_KEY);
-		if (!raw) return;
+		const raw = window.localStorage.getItem(recentStorageKey());
+		if (!raw) {
+			recentItems = [];
+			return;
+		}
 		try {
 			const parsed = JSON.parse(raw);
-			if (Array.isArray(parsed)) {
-				recentItems = parsed.filter((value): value is string => typeof value === 'string');
-			}
+			recentItems = normalizeRecentHrefs(parsed);
 		} catch {
 			recentItems = [];
 		}
@@ -413,12 +462,12 @@
 
 	$effect(() => {
 		if (!pinnedLoaded || typeof window === 'undefined') return;
-		window.localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pinnedItems));
+		window.localStorage.setItem(pinnedStorageKey(), JSON.stringify(normalizePinnedHrefs(pinnedItems)));
 	});
 
 	$effect(() => {
 		if (!pinnedLoaded || typeof window === 'undefined') return;
-		window.localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(recentItems));
+		window.localStorage.setItem(recentStorageKey(), JSON.stringify(normalizeRecentHrefs(recentItems)));
 	});
 
 	$effect(() => {
