@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -14,7 +15,27 @@ import (
 )
 
 type Academic struct {
-	svc *service.Academic
+	svc academicService
+}
+
+type academicService interface {
+	ListYears(ctx context.Context) ([]db.AcademicYear, error)
+	ListClasses(ctx context.Context) ([]db.ListSchoolClassesRow, error)
+	ListSubjects(ctx context.Context) ([]db.Subject, error)
+	ListAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
+	ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error)
+	GetStats(ctx context.Context) (db.GetAcademicStatsRow, error)
+	CreateYear(ctx context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error)
+	CreateClass(ctx context.Context, p db.CreateSchoolClassParams) (db.SchoolClass, error)
+	CreateSubject(ctx context.Context, p db.CreateSubjectParams) (db.Subject, error)
+	CreateAssignment(ctx context.Context, p db.CreateClassSubjectAssignmentParams) (db.ClassSubjectAssignment, error)
+	CreateTimetableSlot(ctx context.Context, p db.CreateTimetableSlotParams) (db.TimetableSlot, error)
+	UpdateTimetableSlot(ctx context.Context, p db.UpdateTimetableSlotParams) (db.TimetableSlot, error)
+	DeleteYear(ctx context.Context, id pgtype.UUID) error
+	DeleteClass(ctx context.Context, id pgtype.UUID) error
+	DeleteSubject(ctx context.Context, id pgtype.UUID) error
+	DeleteAssignment(ctx context.Context, id pgtype.UUID) error
+	DeleteTimetableSlot(ctx context.Context, id pgtype.UUID) error
 }
 
 func NewAcademic(svc *service.Academic) *Academic { return &Academic{svc: svc} }
@@ -64,6 +85,10 @@ func (h *Academic) GetStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	entity := chi.URLParam(r, "entity")
 	switch entity {
 	case "years":
@@ -236,70 +261,83 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Academic) Update(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	entity := chi.URLParam(r, "entity")
+	if entity != "timetables" {
+		api.NotFound(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
 		return
 	}
-	switch entity {
-	case "timetables":
-		var body struct {
-			AssignmentID string `json:"assignment_id"`
-			DayOfWeek    int16  `json:"day_of_week"`
-			StartTime    string `json:"start_time"`
-			EndTime      string `json:"end_time"`
-			RoomLabel    string `json:"room_label"`
-			Notes        string `json:"notes"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			api.BadRequest(w, "invalid json")
-			return
-		}
-		assignmentID, err := parseUUID(body.AssignmentID)
-		if err != nil {
-			api.BadRequest(w, "assignment_id invalid")
-			return
-		}
-		if body.DayOfWeek < 1 || body.DayOfWeek > 6 {
-			api.BadRequest(w, "day_of_week harus 1-6")
-			return
-		}
-		startTime, err := service.ParseAcademicTimeInput(body.StartTime)
-		if err != nil {
-			api.BadRequest(w, "start_time invalid")
-			return
-		}
-		endTime, err := service.ParseAcademicTimeInput(body.EndTime)
-		if err != nil {
-			api.BadRequest(w, "end_time invalid")
-			return
-		}
-		if startTime.Microseconds >= endTime.Microseconds {
-			api.BadRequest(w, "rentang waktu tidak valid")
-			return
-		}
-		row, err := h.svc.UpdateTimetableSlot(r.Context(), db.UpdateTimetableSlotParams{
-			ID:           id,
-			AssignmentID: assignmentID,
-			DayOfWeek:    body.DayOfWeek,
-			StartTime:    startTime,
-			EndTime:      endTime,
-			RoomLabel:    strings.TrimSpace(body.RoomLabel),
-			Notes:        strings.TrimSpace(body.Notes),
-		})
-		if err != nil {
-			api.BadRequest(w, err.Error())
-			return
-		}
-		api.OK(w, row)
-	default:
-		api.NotFound(w)
+	var body struct {
+		AssignmentID string `json:"assignment_id"`
+		DayOfWeek    int16  `json:"day_of_week"`
+		StartTime    string `json:"start_time"`
+		EndTime      string `json:"end_time"`
+		RoomLabel    string `json:"room_label"`
+		Notes        string `json:"notes"`
 	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	assignmentID, err := parseUUID(body.AssignmentID)
+	if err != nil {
+		api.BadRequest(w, "assignment_id invalid")
+		return
+	}
+	if body.DayOfWeek < 1 || body.DayOfWeek > 6 {
+		api.BadRequest(w, "day_of_week harus 1-6")
+		return
+	}
+	startTime, err := service.ParseAcademicTimeInput(body.StartTime)
+	if err != nil {
+		api.BadRequest(w, "start_time invalid")
+		return
+	}
+	endTime, err := service.ParseAcademicTimeInput(body.EndTime)
+	if err != nil {
+		api.BadRequest(w, "end_time invalid")
+		return
+	}
+	if startTime.Microseconds >= endTime.Microseconds {
+		api.BadRequest(w, "rentang waktu tidak valid")
+		return
+	}
+	row, err := h.svc.UpdateTimetableSlot(r.Context(), db.UpdateTimetableSlotParams{
+		ID:           id,
+		AssignmentID: assignmentID,
+		DayOfWeek:    body.DayOfWeek,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		RoomLabel:    strings.TrimSpace(body.RoomLabel),
+		Notes:        strings.TrimSpace(body.Notes),
+	})
+	if err != nil {
+		writeClientError(w, err, "Perubahan jadwal akademik tidak valid")
+		return
+	}
+	api.OK(w, row)
 }
 
 func (h *Academic) Delete(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	entity := chi.URLParam(r, "entity")
+	switch entity {
+	case "years", "classes", "subjects", "assignments", "timetables":
+	default:
+		api.NotFound(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -316,9 +354,6 @@ func (h *Academic) Delete(w http.ResponseWriter, r *http.Request) {
 		err = h.svc.DeleteAssignment(r.Context(), id)
 	case "timetables":
 		err = h.svc.DeleteTimetableSlot(r.Context(), id)
-	default:
-		api.NotFound(w)
-		return
 	}
 	if err != nil {
 		api.Internal(w, err)

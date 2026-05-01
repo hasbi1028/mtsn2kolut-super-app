@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, handleRouteError } from '$lib/server/api';
+import { handleRouteError, proxy, readRequestJson } from '$lib/server/api';
 
 export const GET = async (event: RequestEvent) => {
 	try {
@@ -13,7 +13,7 @@ export const GET = async (event: RequestEvent) => {
 
 export const POST = async (event: RequestEvent) => {
 	try {
-		const body = await event.request.json() as Record<string, unknown>;
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
 		const { nama, phone, address } = body;
 		if (!nama) {
 			return json({ error: 'nama wajib diisi' }, { status: 400 });

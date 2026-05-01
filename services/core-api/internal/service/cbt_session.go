@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"math/rand"
 	"sort"
+	"strconv"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -13,8 +15,53 @@ import (
 )
 
 type CbtSession struct {
-	q    *db.Queries
+	q    cbtSessionStore
 	pool *pgxpool.Pool
+}
+
+type cbtSessionStore interface {
+	ListCbtExamSessions(ctx context.Context) ([]db.ListCbtExamSessionsRow, error)
+	GetCbtExamSession(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSessionRow, error)
+	CreateCbtExamSession(ctx context.Context, arg db.CreateCbtExamSessionParams) (db.CbtExamSession, error)
+	UpdateCbtExamSessionStatus(ctx context.Context, arg db.UpdateCbtExamSessionStatusParams) (db.CbtExamSession, error)
+	DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) error
+	ListCbtExamParticipants(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error)
+	EnrollClassToSession(ctx context.Context, arg db.EnrollClassToSessionParams) error
+	EnrollGradeToSession(ctx context.Context, arg db.EnrollGradeToSessionParams) error
+	EnrollSchoolToSession(ctx context.Context, sessionID pgtype.UUID) error
+	GenerateTokensForSession(ctx context.Context, sessionID pgtype.UUID) error
+	RegenerateParticipantToken(ctx context.Context, id pgtype.UUID) (db.RegenerateParticipantTokenRow, error)
+	ListCbtExamRooms(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamRoomsRow, error)
+	CreateCbtExamRoom(ctx context.Context, arg db.CreateCbtExamRoomParams) (db.CbtExamRoom, error)
+	DeleteCbtExamRoom(ctx context.Context, id pgtype.UUID) error
+	AssignParticipantSeat(ctx context.Context, arg db.AssignParticipantSeatParams) error
+	ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]db.ListParticipantsByRoomRow, error)
+	GetSessionProctoringStatus(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error)
+	SetParticipantSuspiciousFlag(ctx context.Context, arg db.SetParticipantSuspiciousFlagParams) error
+	GradeStudentEssay(ctx context.Context, arg db.GradeStudentEssayParams) error
+	ListUngradedEssays(ctx context.Context, sessionID pgtype.UUID) ([]db.ListUngradedEssaysRow, error)
+	UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) error
+	ListCbtExamSessionsByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]db.ListCbtExamSessionsByTeacherRow, error)
+	GetSessionResultsByTeacher(ctx context.Context, arg db.GetSessionResultsByTeacherParams) ([]db.GetSessionResultsByTeacherRow, error)
+	GetSessionTeacherAccess(ctx context.Context, arg db.GetSessionTeacherAccessParams) (bool, error)
+	HasSessionParticipant(ctx context.Context, arg db.HasSessionParticipantParams) (bool, error)
+	HasSessionRoom(ctx context.Context, arg db.HasSessionRoomParams) (bool, error)
+	HasSessionAnswer(ctx context.Context, arg db.HasSessionAnswerParams) (bool, error)
+	GetSessionResults(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionResultsRow, error)
+	GetParticipantAnswers(ctx context.Context, participantID pgtype.UUID) ([]db.GetParticipantAnswersRow, error)
+	WithTx(tx pgx.Tx) *db.Queries
+}
+
+type cbtRoomShuffleStore interface {
+	ClearParticipantRooms(ctx context.Context, sessionID pgtype.UUID) error
+	ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]db.ListParticipantsByRoomRow, error)
+	ListCbtExamRooms(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamRoomsRow, error)
+	AssignParticipantRoom(ctx context.Context, arg db.AssignParticipantRoomParams) error
+}
+
+type cbtScoreStore interface {
+	UpdateAnswerCorrectness(ctx context.Context, sessionID pgtype.UUID) error
+	UpdateParticipantScores(ctx context.Context, sessionID pgtype.UUID) error
 }
 
 func NewCbtSession(pool *pgxpool.Pool) *CbtSession {
@@ -165,6 +212,27 @@ func (s *CbtSession) RegenerateToken(ctx context.Context, participantID pgtype.U
 	return s.q.RegenerateParticipantToken(ctx, participantID)
 }
 
+func (s *CbtSession) HasParticipant(ctx context.Context, sessionID, participantID pgtype.UUID) (bool, error) {
+	return s.q.HasSessionParticipant(ctx, db.HasSessionParticipantParams{
+		SessionID: sessionID,
+		ID:        participantID,
+	})
+}
+
+func (s *CbtSession) HasRoom(ctx context.Context, sessionID, roomID pgtype.UUID) (bool, error) {
+	return s.q.HasSessionRoom(ctx, db.HasSessionRoomParams{
+		SessionID: sessionID,
+		ID:        roomID,
+	})
+}
+
+func (s *CbtSession) HasAnswer(ctx context.Context, sessionID, answerID pgtype.UUID) (bool, error) {
+	return s.q.HasSessionAnswer(ctx, db.HasSessionAnswerParams{
+		SessionID: sessionID,
+		ID:        answerID,
+	})
+}
+
 // --- Rooms ---
 
 func (s *CbtSession) ListRooms(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamRoomsRow, error) {
@@ -215,25 +283,30 @@ func (s *CbtSession) ShuffleRooms(ctx context.Context, sessionID pgtype.UUID) er
 
 	qtx := s.q.WithTx(tx)
 
-	// Clear existing room assignments
-	if err := qtx.ClearParticipantRooms(ctx, sessionID); err != nil {
+	if err := shuffleRooms(ctx, qtx, sessionID); err != nil {
 		return err
 	}
 
-	// Load participants and rooms
-	participants, err := qtx.ListParticipantsByRoom(ctx, sessionID)
+	return tx.Commit(ctx)
+}
+
+func shuffleRooms(ctx context.Context, q cbtRoomShuffleStore, sessionID pgtype.UUID) error {
+	if err := q.ClearParticipantRooms(ctx, sessionID); err != nil {
+		return err
+	}
+
+	participants, err := q.ListParticipantsByRoom(ctx, sessionID)
 	if err != nil {
 		return err
 	}
-	rooms, err := qtx.ListCbtExamRooms(ctx, sessionID)
+	rooms, err := q.ListCbtExamRooms(ctx, sessionID)
 	if err != nil {
 		return err
 	}
 	if len(rooms) == 0 || len(participants) == 0 {
-		return tx.Commit(ctx)
+		return nil
 	}
 
-	// Shuffle participants randomly
 	indices := rand.Perm(len(participants))
 
 	slot := 0
@@ -243,7 +316,7 @@ func (s *CbtSession) ShuffleRooms(ctx context.Context, sessionID pgtype.UUID) er
 				break
 			}
 			p := participants[indices[slot]]
-			if err := qtx.AssignParticipantRoom(ctx, db.AssignParticipantRoomParams{
+			if err := q.AssignParticipantRoom(ctx, db.AssignParticipantRoomParams{
 				ID:     p.ID,
 				RoomID: room.ID,
 			}); err != nil {
@@ -253,7 +326,7 @@ func (s *CbtSession) ShuffleRooms(ctx context.Context, sessionID pgtype.UUID) er
 		}
 	}
 
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (s *CbtSession) AutoAssignSeats(ctx context.Context, sessionID pgtype.UUID) error {
@@ -317,7 +390,7 @@ func (s *CbtSession) GradeEssay(ctx context.Context, answerID pgtype.UUID, manua
 
 func pgNumeric(f float64) pgtype.Numeric {
 	var n pgtype.Numeric
-	_ = n.Scan(f)
+	_ = n.Scan(strconv.FormatFloat(f, 'f', -1, 64))
 	return n
 }
 
@@ -358,14 +431,21 @@ func (s *CbtSession) ScoreSession(ctx context.Context, sessionID pgtype.UUID) er
 
 	qtx := s.q.WithTx(tx)
 
-	if err := qtx.UpdateAnswerCorrectness(ctx, sessionID); err != nil {
-		return err
-	}
-	if err := qtx.UpdateParticipantScores(ctx, sessionID); err != nil {
+	if err := scoreSession(ctx, qtx, sessionID); err != nil {
 		return err
 	}
 
 	return tx.Commit(ctx)
+}
+
+func scoreSession(ctx context.Context, q cbtScoreStore, sessionID pgtype.UUID) error {
+	if err := q.UpdateAnswerCorrectness(ctx, sessionID); err != nil {
+		return err
+	}
+	if err := q.UpdateParticipantScores(ctx, sessionID); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *CbtSession) ListByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]db.ListCbtExamSessionsByTeacherRow, error) {

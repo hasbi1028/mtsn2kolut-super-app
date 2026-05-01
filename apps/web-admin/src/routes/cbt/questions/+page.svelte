@@ -18,6 +18,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
+	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 
 	type Subject = { id: string; name: string; code: string };
 	type OptionItem = { label: string; text?: string; html?: string; latex?: string; asset_id?: string };
@@ -77,11 +78,6 @@
 	};
 	type AcademicPayload = {
 		subjects?: Subject[];
-		error?: string;
-		message?: string;
-	};
-	type ApiEnvelope<T> = {
-		data?: T;
 		error?: string;
 		message?: string;
 	};
@@ -155,6 +151,9 @@
 	let workflowBusyId = $state('');
 	let workflowBusyAction = $state('');
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
+	let questionsRequestId = 0;
+	let detailRequestId = 0;
+	let assetsRequestId = 0;
 
 	let isAdvanceMode = $derived(fAuthoringMode === 'advance');
 	let userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
@@ -242,46 +241,17 @@
 		if (filterWorkflow) params.set('workflow_status', filterWorkflow);
 		if (filterType) params.set('question_type', filterType);
 		if (filterHots) params.set('hots', filterHots);
-		return params.toString();
-	}
-
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
+		return params;
 	}
 
 	async function fetchOverview(page = currentPage): Promise<QuestionsOverview> {
 		const query = buildListQuery(page);
 		const [questionPayload, academicPayload] = await Promise.all([
-			fetch(`/api/cbt/questions?${query}`).then((response) =>
-				readApi<QuestionListResponse>(response, 'Gagal memuat bank soal')
+			fetch(clientApiPathWithQuery('/api/cbt/questions', query)).then((response) =>
+				readClientApiData<QuestionListResponse>(response, 'Gagal memuat bank soal')
 			),
 			fetch('/api/academic').then((response) =>
-				readApi<AcademicPayload>(response, 'Gagal memuat data akademik')
+				readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')
 			),
 		]);
 		const loadedQuestions = questionPayload.items ?? [];
@@ -301,9 +271,14 @@
 	}
 
 	function load(page = currentPage) {
+		const requestId = ++questionsRequestId;
 		questionsPromise = fetchOverview(page).then((overview) => {
+			if (requestId !== questionsRequestId) return { questions, subjects, totalItems, page: currentPage };
 			applyOverview(overview);
 			return overview;
+		}).catch((error: unknown) => {
+			if (requestId === questionsRequestId) throw error;
+			return { questions, subjects, totalItems, page: currentPage };
 		});
 		return questionsPromise;
 	}
@@ -317,13 +292,17 @@
 			}
 			return;
 		}
+		const requestId = ++questionsRequestId;
 		try {
 			const overview = await fetchOverview(page);
+			if (requestId !== questionsRequestId) return;
 			applyOverview(overview);
 			questionsPromise = Promise.resolve(overview);
 		} catch (error) {
-			questionsPromise = Promise.resolve({ questions, subjects, totalItems, page: currentPage });
-			showError(overviewErrorMessage(error));
+			if (requestId === questionsRequestId) {
+				questionsPromise = Promise.resolve({ questions, subjects, totalItems, page: currentPage });
+				showError(overviewErrorMessage(error));
+			}
 		}
 	}
 
@@ -343,27 +322,37 @@
 		reset();
 	}
 
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
+	}
+
 	async function loadDetail(id: string) {
+		const requestId = ++detailRequestId;
 		detailBusy = true;
 		try {
-			const res = await fetch(`/api/cbt/questions/${id}`);
-			const payload = (await res.json().catch(() => ({}))) as Question & { error?: string };
-			if (!res.ok) { showError(payload.error ?? 'Gagal memuat detail soal'); return null; }
+			const res = await fetch(clientApiPath`/api/cbt/questions/${id}`);
+			const payload = await readClientApiData<Question>(res, 'Gagal memuat detail soal');
+			if (requestId !== detailRequestId) return selectedDetail;
 			selectedDetail = payload;
 			return payload;
+		} catch (error) {
+			if (requestId === detailRequestId) showError(mutationErrorMessage(error, 'Gagal memuat detail soal'));
+			return null;
 		} finally {
-			detailBusy = false;
+			if (requestId === detailRequestId) detailBusy = false;
 		}
 	}
 
 	async function loadAssets(questionId: string) {
+		const requestId = ++assetsRequestId;
 		try {
-			const res = await fetch(`/api/cbt/assets?question_id=${encodeURIComponent(questionId)}`);
-			const payload = (await res.json().catch(() => ([]))) as UploadedAsset[] | { error?: string };
-			if (!res.ok) { showError((payload as { error?: string }).error ?? 'Gagal memuat asset'); return; }
+			const res = await fetch(clientApiPathWithQuery('/api/cbt/assets', new URLSearchParams({ question_id: questionId })));
+			const payload = await readClientApiData<UploadedAsset[]>(res, 'Gagal memuat asset');
+			if (requestId !== assetsRequestId) return;
 			uploadedAssets = Array.isArray(payload) ? payload : [];
-		} catch (err) {
-			showError((err as Error).message || 'Gagal memuat asset');
+		} catch (error) {
+			if (requestId === assetsRequestId) showError(mutationErrorMessage(error, 'Gagal memuat asset'));
 		}
 	}
 
@@ -515,12 +504,13 @@
 			form.set('purpose', assetPurpose);
 			if (editId) form.set('question_id', editId);
 			const res = await fetch('/api/cbt/assets', { method: 'POST', body: form });
-			const payload = (await res.json().catch(() => ({}))) as UploadedAsset & { error?: string };
-			if (!res.ok) { showError(payload.error ?? 'Upload asset gagal'); return; }
+			const payload = await readClientApiData<UploadedAsset>(res, 'Upload asset gagal');
 			uploadedAssets = [payload, ...uploadedAssets];
 			fMediaAssetIds = Array.from(new Set([...fMediaAssetIds, payload.id]));
 			assetFile = null;
 			showToast('Asset berhasil diupload');
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Upload asset gagal'));
 		} finally {
 			assetBusy = false;
 		}
@@ -532,8 +522,7 @@
 		form.set('purpose', 'general');
 		if (editId) form.set('question_id', editId);
 		const res = await fetch('/api/cbt/assets', { method: 'POST', body: form });
-		const payload = (await res.json().catch(() => ({}))) as UploadedAsset & { error?: string };
-		if (!res.ok) throw new Error(payload.error ?? 'Upload gambar gagal');
+		const payload = await readClientApiData<UploadedAsset>(res, 'Upload gambar gagal');
 		uploadedAssets = [payload, ...uploadedAssets];
 		fMediaAssetIds = Array.from(new Set([...fMediaAssetIds, payload.id]));
 		return payload.url;
@@ -584,18 +573,19 @@
 		}
 		fBusy = true;
 		try {
-			const res = await fetch(editId ? `/api/cbt/questions/${editId}` : '/api/cbt/questions', {
+			const res = await fetch(editId ? clientApiPath`/api/cbt/questions/${editId}` : '/api/cbt/questions', {
 				method: editId ? 'PUT' : 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(buildPayload()),
 			});
-			const payload = await res.json().catch(() => ({}));
-			if (!res.ok) { showError(payload.error ?? 'Gagal menyimpan soal'); return; }
+			await readClientJson<unknown>(res);
 			setOperationState('success', editId ? 'Item Bank Soal Diperbarui' : 'Item Bank Soal Ditambahkan', editId ? 'Perubahan item sudah tersimpan. Tinjau kembali workflow dan status terbit bila diperlukan.' : 'Item baru sudah tersimpan sebagai draft dan siap dilengkapi atau diajukan peninjauan.');
 			showToast(editId ? 'Item bank soal diperbarui' : 'Item bank soal ditambahkan');
 			const targetPage = editId && currentPage > pageCount ? pageCount : currentPage;
 			resetForm();
 			await refreshOverview(targetPage);
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menyimpan soal'));
 		} finally {
 			fBusy = false;
 		}
@@ -605,29 +595,30 @@
 		if (!(await confirmPhrase('Hapus Item Bank Soal', 'Item yang dihapus akan keluar dari katalog dan tidak bisa dipulihkan dari layar operator. Pastikan item ini memang tidak lagi diperlukan.', 'HAPUS'))) return;
 		deleteBusyId = id;
 		try {
-			const res = await fetch(`/api/cbt/questions/${id}`, { method: 'DELETE' });
-			if (!res.ok) {
-				const payload = await res.json().catch(() => ({}));
-				setOperationState('error', 'Item Gagal Dihapus', 'Penghapusan item belum berhasil. Periksa apakah item masih dipakai oleh paket atau ulangi beberapa saat lagi.');
-				showError(payload.error ?? 'Gagal menghapus');
-				return;
-			}
+			const res = await fetch(clientApiPath`/api/cbt/questions/${id}`, { method: 'DELETE' });
+			await readClientJson<unknown>(res);
 			if (selectedDetail?.id === id) selectedDetail = null;
 			setOperationState('warning', 'Item Dihapus', 'Item bank soal sudah dihapus dari katalog aktif.');
 			showToast('Item bank soal dihapus');
 			await refreshOverview(currentPage);
+		} catch (error) {
+			setOperationState('error', 'Item Gagal Dihapus', 'Penghapusan item belum berhasil. Periksa apakah item masih dipakai oleh paket atau ulangi beberapa saat lagi.');
+			showError(mutationErrorMessage(error, 'Gagal menghapus'));
 		} finally {
 			deleteBusyId = '';
 		}
 	}
 
 	async function duplicateQuestion(id: string) {
-		const res = await fetch(`/api/cbt/questions/${id}/duplicate`, { method: 'POST' });
-		const payload = (await res.json().catch(() => ({}))) as Question & { error?: string };
-		if (!res.ok) { showError(payload.error ?? 'Gagal menggandakan item'); return; }
-		showToast('Draft hasil duplikasi berhasil dibuat');
-		await refreshOverview(1);
-		await openEdit(payload);
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/questions/${id}/duplicate`, { method: 'POST' });
+			const payload = await readClientApiData<Question>(res, 'Gagal menggandakan item');
+			showToast('Draft hasil duplikasi berhasil dibuat');
+			await refreshOverview(1);
+			await openEdit(payload);
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menggandakan item'));
+		}
 	}
 
 	function workflowBadgeClass(value: string) {
@@ -665,17 +656,12 @@
 		workflowBusyId = id;
 		workflowBusyAction = action;
 		try {
-			const res = await fetch(`/api/cbt/questions/${id}/workflow`, {
+			const res = await fetch(clientApiPath`/api/cbt/questions/${id}/workflow`, {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ action }),
 			});
-			const payload = await res.json().catch(() => ({}));
-			if (!res.ok) {
-				setOperationState('error', 'Workflow Gagal Diperbarui', 'Perubahan alur review belum berhasil. Periksa hak akses atau status item saat ini, lalu coba lagi.');
-				showError(payload.error ?? 'Aksi workflow gagal');
-				return;
-			}
+			await readClientJson<unknown>(res);
 			const tone = action === 'archive' ? 'warning' : 'success';
 			const messageMap = {
 				submit_review: 'Item masuk ke alur peninjauan. Lanjutkan pemantauan sampai reviewer menyetujui atau mengembalikan item.',
@@ -687,6 +673,9 @@
 			showToast('Status item diperbarui');
 			await refreshOverview(currentPage);
 			if (selectedDetail?.id === id) await loadDetail(id);
+		} catch (error) {
+			setOperationState('error', 'Workflow Gagal Diperbarui', 'Perubahan alur review belum berhasil. Periksa hak akses atau status item saat ini, lalu coba lagi.');
+			showError(mutationErrorMessage(error, 'Aksi workflow gagal'));
 		} finally {
 			workflowBusyId = '';
 			workflowBusyAction = '';

@@ -5,8 +5,10 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { toast } from '$lib/components/ui/sonner';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import { readClientJson } from '$lib/client/api';
 
 	interface Job {
 		id: string; nama: string; nip: string;
@@ -26,6 +28,8 @@
 	let refreshing   = $state(false);
 	let filterStatus = $state('');
 	let filterType   = $state('');
+	let loadedFilterKey = $state('');
+	let jobsRequestId = 0;
 
 	const statusOptions = [
 		{ value: '', label: 'Semua Status' },
@@ -73,33 +77,58 @@
 		return params;
 	}
 
+	function filterKey() {
+		return `${filterStatus}:${filterType}`;
+	}
+
 	async function fetchJobs(): Promise<Job[]> {
 		const res = await fetch(`/api/pusaka/jobs?${buildJobParams()}`);
-		const payload = (await res.json().catch(() => null)) as JobsResponse | null;
-		if (!res.ok || payload?.error) {
-			throw new Error(payload?.error || 'Gagal memuat antrian job');
-		}
+		const payload = await readClientJson<JobsResponse>(res);
+		if (payload.error) throw new Error(payload.error);
 		return payload?.items ?? payload?.data ?? [];
 	}
 
 	function load() {
+		const requestId = ++jobsRequestId;
+		const nextFilterKey = filterKey();
 		jobs = [];
-		jobsPromise = fetchJobs().then((nextJobs) => {
-			jobs = nextJobs;
-			return nextJobs;
-		});
+		jobsPromise = fetchJobs()
+			.then((nextJobs) => {
+				if (requestId === jobsRequestId) {
+					jobs = nextJobs;
+					loadedFilterKey = nextFilterKey;
+				}
+				return requestId === jobsRequestId ? nextJobs : jobs;
+			})
+			.catch((error: unknown) => {
+				if (requestId === jobsRequestId) throw error;
+				return jobs;
+			});
 	}
 
-	async function refreshJobs() {
+	async function refreshJobs(showFailureToast = false) {
+		const requestId = ++jobsRequestId;
+		const nextFilterKey = filterKey();
 		refreshing = true;
 		try {
 			const nextJobs = await fetchJobs();
-			jobs = nextJobs;
-			jobsPromise = Promise.resolve(nextJobs);
+			if (requestId === jobsRequestId) {
+				jobs = nextJobs;
+				loadedFilterKey = nextFilterKey;
+				jobsPromise = Promise.resolve(nextJobs);
+			}
 		} catch (error) {
-			jobsPromise = Promise.reject(error);
+			if (requestId !== jobsRequestId) return;
+			if (loadedFilterKey === nextFilterKey) {
+				jobsPromise = Promise.resolve(jobs);
+				if (showFailureToast) toast.error(jobErrorMessage(error));
+			} else {
+				jobsPromise = Promise.reject(error);
+			}
 		} finally {
-			refreshing = false;
+			if (requestId === jobsRequestId) {
+				refreshing = false;
+			}
 		}
 	}
 
@@ -118,7 +147,7 @@
 
 	onMount(() => {
 		load();
-		const interval = setInterval(refreshJobs, 10_000);
+		const interval = setInterval(() => void refreshJobs(false), 10_000);
 		return () => clearInterval(interval);
 	});
 </script>
@@ -138,7 +167,7 @@
 			<h1 class="text-2xl font-semibold text-slate-800">Antrian Job PUSAKA</h1>
 			<p class="text-sm text-muted-foreground mt-1">Auto-refresh setiap 10 detik</p>
 		</div>
-		<LoadingButton variant="outline" size="sm" onclick={() => void refreshJobs()} loading={refreshing} loadingLabel="Memuat..." label="↺ Refresh" />
+		<LoadingButton variant="outline" size="sm" onclick={() => void refreshJobs(true)} loading={refreshing} loadingLabel="Memuat..." label="↺ Refresh" />
 	</div>
 
 	<!-- Filters -->
@@ -165,7 +194,7 @@
 					{/each}
 				</select>
 				<div class="flex items-center justify-between gap-3 sm:col-span-2 xl:col-span-1 xl:justify-end">
-					<LoadingButton variant="outline" size="sm" onclick={() => void refreshJobs()} loading={refreshing} loadingLabel="Memuat..." label="↺ Refresh" class="h-10 sm:w-auto" />
+					<LoadingButton variant="outline" size="sm" onclick={() => void refreshJobs(true)} loading={refreshing} loadingLabel="Memuat..." label="↺ Refresh" class="h-10 sm:w-auto" />
 					<span class="text-sm text-muted-foreground">{jobs.length} job</span>
 				</div>
 			</div>

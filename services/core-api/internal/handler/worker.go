@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -16,10 +17,22 @@ import (
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
+type pusakaWorkerJobService interface {
+	Claim(ctx context.Context, workerID string) (db.ClaimJobRow, error)
+	Get(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error)
+	Complete(ctx context.Context, id pgtype.UUID) error
+	Fail(ctx context.Context, id pgtype.UUID, errorMessage string, retryAfter pgtype.Text) error
+	Stats(ctx context.Context) (db.GetJobStatsRow, error)
+}
+
+type pusakaWorkerAttendanceService interface {
+	Upsert(ctx context.Context, p db.UpsertAttendanceParams) (db.AttendanceRecord, error)
+}
+
 type PusakaWorker struct {
-	jobs *service.PusakaJob
-	att  *service.PusakaAttendance
-	sett *service.Setting
+	jobs pusakaWorkerJobService
+	att  pusakaWorkerAttendanceService
+	sett settingService
 }
 
 func NewPusakaWorker(jobs *service.PusakaJob, att *service.PusakaAttendance, sett *service.Setting) *PusakaWorker {
@@ -212,6 +225,10 @@ func (h *PusakaWorker) Heartbeat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PusakaWorker) GetStatus(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	rows, err := h.sett.List(r.Context())
 	if err != nil {
 		api.Internal(w, err)

@@ -1,4 +1,4 @@
-import { apiGet } from '$lib/server/api';
+import { apiPublicGetWithFetch } from '$lib/server/api';
 import type { PageServerLoad } from './$types';
 
 type WebsiteContent = {
@@ -13,7 +13,7 @@ type WebsiteContent = {
 	published_at: string | null;
 };
 
-export const load: PageServerLoad = async ({ params }) => {
-	const post = await apiGet<WebsiteContent>(`/api/public/site/posts/${params.slug}`);
+export const load: PageServerLoad = async ({ fetch, params }) => {
+	const post = await apiPublicGetWithFetch<WebsiteContent>(fetch, `/api/public/site/posts/${params.slug}`);
 	return { post };
 };

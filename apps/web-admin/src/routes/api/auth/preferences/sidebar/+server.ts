@@ -1,7 +1,8 @@
 import { json } from '@sveltejs/kit';
-import { proxy, handleRouteError } from '$lib/server/api';
+import type { RequestHandler } from './$types';
+import { proxy, handleRouteError, readRequestJson } from '$lib/server/api';
 
-export async function GET(event) {
+export const GET: RequestHandler = async (event) => {
 	if (!event.locals.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
@@ -11,17 +12,17 @@ export async function GET(event) {
 	} catch (e) {
 		return handleRouteError(e, 'auth/preferences/sidebar GET');
 	}
-}
+};
 
-export async function PATCH(event) {
+export const PATCH: RequestHandler = async (event) => {
 	if (!event.locals.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 	try {
-		const body = await event.request.json();
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
 		const data = await proxy(event).patch('/api/auth/preferences/sidebar', body);
 		return json(data);
 	} catch (e) {
 		return handleRouteError(e, 'auth/preferences/sidebar PATCH');
 	}
-}
+};

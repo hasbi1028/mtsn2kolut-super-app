@@ -223,7 +223,10 @@ export function renderRichMathHtml(html: string): string {
 		const rendered = renderInline(t.textContent ?? '');
 		if (rendered !== t.textContent) {
 			const span = doc.createElement('span');
-			span.innerHTML = rendered;
+			const renderedDoc = parser.parseFromString(rendered, 'text/html');
+			for (const child of Array.from(renderedDoc.body.childNodes)) {
+				span.appendChild(doc.importNode(child, true));
+			}
 			t.parentNode?.replaceChild(span, t);
 		}
 	}

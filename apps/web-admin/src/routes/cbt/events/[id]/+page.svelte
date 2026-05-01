@@ -9,6 +9,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { clientApiPath, readClientApiData } from '$lib/client/api';
 
 	type EventInfo = {
 		id: string; title: string; exam_type: string; scope: string;
@@ -24,48 +25,17 @@
 		info: EventInfo;
 		results: ResultRow[];
 	};
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
 
-	const eventId = page.params.id;
+	const eventId = page.params.id ?? '';
 	let info = $state<EventInfo | null>(null);
 	let results = $state<ResultRow[]>([]);
 	let detailPromise = $state<Promise<EventResultsDetail> | null>(null);
-
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
+	let detailRequestId = 0;
 
 	async function fetchDetail(): Promise<EventResultsDetail> {
 		const [nextInfo, nextResults] = await Promise.all([
-			fetch(`/api/cbt/events/${eventId}`).then((response) => readApi<EventInfo>(response, 'Gagal memuat kegiatan ujian')),
-			fetch(`/api/cbt/events/${eventId}/results`).then((response) => readApi<ResultRow[]>(response, 'Gagal memuat rekap nilai kegiatan')),
+			fetch(clientApiPath`/api/cbt/events/${eventId}`).then((response) => readClientApiData<EventInfo>(response, 'Gagal memuat kegiatan ujian')),
+			fetch(clientApiPath`/api/cbt/events/${eventId}/results`).then((response) => readClientApiData<ResultRow[]>(response, 'Gagal memuat rekap nilai kegiatan')),
 		]);
 		return {
 			info: nextInfo,
@@ -79,11 +49,19 @@
 	}
 
 	function loadInitial() {
+		const requestId = ++detailRequestId;
 		info = null;
 		results = [];
 		detailPromise = fetchDetail().then((detail) => {
+			if (requestId !== detailRequestId) {
+				if (!info) throw new Error('Permintaan rekap nilai dibatalkan');
+				return { info, results };
+			}
 			applyDetail(detail);
 			return detail;
+		}).catch((error: unknown) => {
+			if (requestId === detailRequestId || !info) throw error;
+			return { info, results };
 		});
 	}
 

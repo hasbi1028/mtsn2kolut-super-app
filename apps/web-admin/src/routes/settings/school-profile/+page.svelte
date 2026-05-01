@@ -12,6 +12,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from '$lib/components/ui/sonner';
+	import { readClientApiData } from '$lib/client/api';
 	import {
 		defaultSchoolProfile,
 		fetchSchoolProfile,
@@ -27,19 +28,6 @@
 	let profile = $state<SchoolProfile>(emptyProfile());
 	let saving = $state(false);
 	let refreshBusy = $state(false);
-
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
 
 	function normalizeProfile(value: Partial<SchoolProfile> | null | undefined): SchoolProfile {
 		return { ...emptyProfile(), ...(value ?? {}) };
@@ -107,14 +95,12 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(profile),
 			});
-			const data = (await res.json().catch(() => null)) as Partial<SchoolProfile> & { error?: string } | null;
-			if (!res.ok) {
-				toast.error(apiErrorMessage(data) || 'Profil madrasah gagal disimpan.');
-				return;
-			}
+			const data = await readClientApiData<Partial<SchoolProfile>>(res, 'Profil madrasah gagal disimpan.');
 			profile = normalizeProfile(data);
 			profilePromise = Promise.resolve(profile);
 			toast.success('Profil madrasah disimpan.');
+		} catch (error) {
+			toast.error(profileErrorMessage(error));
 		} finally {
 			saving = false;
 		}

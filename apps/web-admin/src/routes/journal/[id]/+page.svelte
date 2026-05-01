@@ -13,6 +13,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
+	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
 
 	type SessionDetail = {
 		id: string;
@@ -47,15 +48,10 @@
 		attendances: Attendance[];
 	};
 
-	const sessionId = $derived($page.params.id);
-
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
+	const sessionId = $derived($page.params.id ?? '');
 
 	let detailPromise = $state<Promise<JournalDetail> | null>(null);
+	let detailRequestId = 0;
 	let detail = $state<JournalDetail | null>(null);
 
 	let editMode = $state(false);
@@ -74,29 +70,6 @@
 		return typeof value === 'object' && value !== null;
 	}
 
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function applyDetail(data: JournalDetail) {
 		detail = data;
 		editMateri = data.session.materi;
@@ -111,15 +84,25 @@
 	}
 
 	async function fetchDetail(): Promise<JournalDetail> {
-		const res = await fetch(`/api/journal/sessions/${sessionId}`);
-		return readApi<JournalDetail>(res, 'Gagal memuat detail sesi');
+		const res = await fetch(clientApiPath`/api/journal/sessions/${sessionId}`);
+		return readClientApiData<JournalDetail>(res, 'Gagal memuat detail sesi');
 	}
 
 	function loadDetail() {
-		detailPromise = fetchDetail().then((data) => {
-			applyDetail(data);
-			return data;
-		});
+		const requestId = ++detailRequestId;
+		detailPromise = fetchDetail()
+			.then((data) => {
+				if (requestId === detailRequestId) {
+					applyDetail(data);
+					return data;
+				}
+				return detail ?? data;
+			})
+			.catch((error: unknown) => {
+				if (requestId === detailRequestId) throw error;
+				if (detail) return detail;
+				throw error;
+			});
 	}
 
 	function retryDetail(reset?: () => void) {
@@ -141,11 +124,6 @@
 		return fallback;
 	}
 
-	function payloadData<T>(payload: unknown, fallback: T): T {
-		if (isRecord(payload) && 'data' in payload) return (payload.data ?? fallback) as T;
-		return (payload ?? fallback) as T;
-	}
-
 	onMount(() => {
 		loadDetail();
 	});
@@ -154,7 +132,7 @@
 		if (!detail) return;
 		editBusy = true;
 		try {
-			const res = await fetch(`/api/journal/sessions/${sessionId}`, {
+			const res = await fetch(clientApiPath`/api/journal/sessions/${sessionId}`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -164,9 +142,9 @@
 					guru_hadir: editGuruHadir
 				})
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal menyimpan'); return; }
-			const savedSession = payloadData<Partial<SessionDetail>>(payload, {});
+			const payload = await readClientApiData<Partial<SessionDetail> | { session?: Partial<SessionDetail> }>(res, 'Gagal menyimpan');
+			const payloadRecord = isRecord(payload) ? payload as Record<string, unknown> : null;
+			const savedSession = payloadRecord && isRecord(payloadRecord.session) ? payloadRecord.session as Partial<SessionDetail> : payload as Partial<SessionDetail>;
 			detail = { ...detail, session: { ...detail.session, ...savedSession } };
 			detailPromise = Promise.resolve(detail);
 			editMode = false;
@@ -186,13 +164,12 @@
 				status: v.status,
 				catatan: v.catatan
 			}));
-			const res = await fetch(`/api/journal/sessions/${sessionId}/attendances`, {
+			const res = await fetch(clientApiPath`/api/journal/sessions/${sessionId}/attendances`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ entries })
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal menyimpan kehadiran'); return; }
+			await readClientJson<unknown>(res);
 			toast.success('Kehadiran berhasil disimpan');
 		} catch (error) {
 			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));

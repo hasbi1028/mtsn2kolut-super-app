@@ -1,0 +1,460 @@
+package handler
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgtype"
+
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
+)
+
+type fakeAcademicService struct {
+	listYearsCalled     bool
+	listClassesCalled   bool
+	listSubjectsCalled  bool
+	listAssignsCalled   bool
+	listTimetableCalled bool
+	listErr             error
+	listYearsErr        error
+	listClassesErr      error
+	listSubjectsErr     error
+	listAssignsErr      error
+	listTimetableErr    error
+
+	statsCalled bool
+	statsErr    error
+
+	createYearArg      db.CreateAcademicYearParams
+	createClassArg     db.CreateSchoolClassParams
+	createSubjectArg   db.CreateSubjectParams
+	createAssignArg    db.CreateClassSubjectAssignmentParams
+	createTimetableArg db.CreateTimetableSlotParams
+	createErr          error
+
+	updateTimetableArg db.UpdateTimetableSlotParams
+	updateErr          error
+
+	deleteYearID      pgtype.UUID
+	deleteClassID     pgtype.UUID
+	deleteSubjectID   pgtype.UUID
+	deleteAssignID    pgtype.UUID
+	deleteTimetableID pgtype.UUID
+	deleteErr         error
+}
+
+func (f *fakeAcademicService) ListYears(context.Context) ([]db.AcademicYear, error) {
+	f.listYearsCalled = true
+	if f.listYearsErr != nil {
+		return nil, f.listYearsErr
+	}
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return []db.AcademicYear{{Name: "2026/2027"}}, nil
+}
+
+func (f *fakeAcademicService) ListClasses(context.Context) ([]db.ListSchoolClassesRow, error) {
+	f.listClassesCalled = true
+	if f.listClassesErr != nil {
+		return nil, f.listClassesErr
+	}
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return []db.ListSchoolClassesRow{{Name: "VII A"}}, nil
+}
+
+func (f *fakeAcademicService) ListSubjects(context.Context) ([]db.Subject, error) {
+	f.listSubjectsCalled = true
+	if f.listSubjectsErr != nil {
+		return nil, f.listSubjectsErr
+	}
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return []db.Subject{{Name: "IPA"}}, nil
+}
+
+func (f *fakeAcademicService) ListAssignments(context.Context) ([]db.ListClassSubjectAssignmentsRow, error) {
+	f.listAssignsCalled = true
+	if f.listAssignsErr != nil {
+		return nil, f.listAssignsErr
+	}
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return []db.ListClassSubjectAssignmentsRow{}, nil
+}
+
+func (f *fakeAcademicService) ListTimetableSlots(context.Context) ([]db.ListTimetableSlotsRow, error) {
+	f.listTimetableCalled = true
+	if f.listTimetableErr != nil {
+		return nil, f.listTimetableErr
+	}
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return []db.ListTimetableSlotsRow{}, nil
+}
+
+func (f *fakeAcademicService) GetStats(context.Context) (db.GetAcademicStatsRow, error) {
+	f.statsCalled = true
+	if f.statsErr != nil {
+		return db.GetAcademicStatsRow{}, f.statsErr
+	}
+	return db.GetAcademicStatsRow{TotalYears: 1, TotalClasses: 2, TotalSubjects: 3}, nil
+}
+
+func (f *fakeAcademicService) CreateYear(_ context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error) {
+	f.createYearArg = p
+	if f.createErr != nil {
+		return db.AcademicYear{}, f.createErr
+	}
+	return db.AcademicYear{ID: handlerTestUUID(120), Name: p.Name}, nil
+}
+
+func (f *fakeAcademicService) CreateClass(_ context.Context, p db.CreateSchoolClassParams) (db.SchoolClass, error) {
+	f.createClassArg = p
+	if f.createErr != nil {
+		return db.SchoolClass{}, f.createErr
+	}
+	return db.SchoolClass{ID: handlerTestUUID(121), Name: p.Name}, nil
+}
+
+func (f *fakeAcademicService) CreateSubject(_ context.Context, p db.CreateSubjectParams) (db.Subject, error) {
+	f.createSubjectArg = p
+	if f.createErr != nil {
+		return db.Subject{}, f.createErr
+	}
+	return db.Subject{ID: handlerTestUUID(122), Name: p.Name}, nil
+}
+
+func (f *fakeAcademicService) CreateAssignment(_ context.Context, p db.CreateClassSubjectAssignmentParams) (db.ClassSubjectAssignment, error) {
+	f.createAssignArg = p
+	if f.createErr != nil {
+		return db.ClassSubjectAssignment{}, f.createErr
+	}
+	return db.ClassSubjectAssignment{ID: handlerTestUUID(123), ClassID: p.ClassID, SubjectID: p.SubjectID}, nil
+}
+
+func (f *fakeAcademicService) CreateTimetableSlot(_ context.Context, p db.CreateTimetableSlotParams) (db.TimetableSlot, error) {
+	f.createTimetableArg = p
+	if f.createErr != nil {
+		return db.TimetableSlot{}, f.createErr
+	}
+	return db.TimetableSlot{ID: handlerTestUUID(124), AssignmentID: p.AssignmentID}, nil
+}
+
+func (f *fakeAcademicService) UpdateTimetableSlot(_ context.Context, p db.UpdateTimetableSlotParams) (db.TimetableSlot, error) {
+	f.updateTimetableArg = p
+	if f.updateErr != nil {
+		return db.TimetableSlot{}, f.updateErr
+	}
+	return db.TimetableSlot{ID: p.ID, AssignmentID: p.AssignmentID}, nil
+}
+
+func (f *fakeAcademicService) DeleteYear(_ context.Context, id pgtype.UUID) error {
+	f.deleteYearID = id
+	return f.deleteErr
+}
+
+func (f *fakeAcademicService) DeleteClass(_ context.Context, id pgtype.UUID) error {
+	f.deleteClassID = id
+	return f.deleteErr
+}
+
+func (f *fakeAcademicService) DeleteSubject(_ context.Context, id pgtype.UUID) error {
+	f.deleteSubjectID = id
+	return f.deleteErr
+}
+
+func (f *fakeAcademicService) DeleteAssignment(_ context.Context, id pgtype.UUID) error {
+	f.deleteAssignID = id
+	return f.deleteErr
+}
+
+func (f *fakeAcademicService) DeleteTimetableSlot(_ context.Context, id pgtype.UUID) error {
+	f.deleteTimetableID = id
+	return f.deleteErr
+}
+
+func TestAcademicOverviewAndStatsSuccess(t *testing.T) {
+	fake := &fakeAcademicService{}
+	h := &Academic{svc: fake}
+
+	rec := httptest.NewRecorder()
+	h.Overview(rec, httptest.NewRequest(http.MethodGet, "/api/academic", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Overview() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if !fake.listYearsCalled || !fake.listClassesCalled || !fake.listSubjectsCalled || !fake.listAssignsCalled || !fake.listTimetableCalled {
+		t.Fatalf("Overview calls years/classes/subjects/assigns/timetable = %v/%v/%v/%v/%v, want all true", fake.listYearsCalled, fake.listClassesCalled, fake.listSubjectsCalled, fake.listAssignsCalled, fake.listTimetableCalled)
+	}
+	if !strings.Contains(rec.Body.String(), "timetableSlots") {
+		t.Fatalf("Overview() body missing timetableSlots: %s", rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.GetStats(rec, httptest.NewRequest(http.MethodGet, "/api/academic/stats", nil))
+	if rec.Code != http.StatusOK || !fake.statsCalled {
+		t.Fatalf("GetStats() status/called = %d/%v, want 200/true; body=%s", rec.Code, fake.statsCalled, rec.Body.String())
+	}
+}
+
+func TestAcademicAdditionalValidationBranches(t *testing.T) {
+	errDB := errors.New("db down")
+	yearID := handlerTestUUID(142)
+	classID := handlerTestUUID(143)
+	subjectID := handlerTestUUID(144)
+	teacherID := handlerTestUUID(145)
+	assignmentID := handlerTestUUID(146)
+	slotID := handlerTestUUID(147)
+	validTimetableBody := `{"assignment_id":"` + assignmentID.String() + `","day_of_week":2,"start_time":"07:30","end_time":"08:50"}`
+
+	plainRequest := func(method, target, body string) *http.Request {
+		return httptest.NewRequest(method, target, strings.NewReader(body))
+	}
+	tests := []struct {
+		name       string
+		fn         func(*Academic, http.ResponseWriter, *http.Request)
+		svc        *fakeAcademicService
+		req        *http.Request
+		wantStatus int
+	}{
+		{name: "overview class error", fn: (*Academic).Overview, svc: &fakeAcademicService{listClassesErr: errDB}, req: httptest.NewRequest(http.MethodGet, "/api/academic", nil), wantStatus: http.StatusInternalServerError},
+		{name: "overview subject error", fn: (*Academic).Overview, svc: &fakeAcademicService{listSubjectsErr: errDB}, req: httptest.NewRequest(http.MethodGet, "/api/academic", nil), wantStatus: http.StatusInternalServerError},
+		{name: "overview assignment error", fn: (*Academic).Overview, svc: &fakeAcademicService{listAssignsErr: errDB}, req: httptest.NewRequest(http.MethodGet, "/api/academic", nil), wantStatus: http.StatusInternalServerError},
+		{name: "overview timetable error", fn: (*Academic).Overview, svc: &fakeAcademicService{listTimetableErr: errDB}, req: httptest.NewRequest(http.MethodGet, "/api/academic", nil), wantStatus: http.StatusInternalServerError},
+		{name: "create forbidden", fn: (*Academic).Create, req: withRouteParam(plainRequest(http.MethodPost, "/api/academic/subjects", `{}`), "entity", "subjects"), wantStatus: http.StatusForbidden},
+		{name: "create year invalid end", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/years", `{"name":"2026","start_date":"2026-07-01","end_date":"bad"}`), "entity", "years"), wantStatus: http.StatusBadRequest},
+		{name: "create class invalid json", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/classes", `{`), "entity", "classes"), wantStatus: http.StatusBadRequest},
+		{name: "create subject invalid json", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/subjects", `{`), "entity", "subjects"), wantStatus: http.StatusBadRequest},
+		{name: "create assignment invalid json", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/assignments", `{`), "entity", "assignments"), wantStatus: http.StatusBadRequest},
+		{name: "create assignment invalid subject", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/assignments", `{"class_id":"`+classID.String()+`","subject_id":"bad"}`), "entity", "assignments"), wantStatus: http.StatusBadRequest},
+		{name: "create assignment invalid teacher", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/assignments", `{"class_id":"`+classID.String()+`","subject_id":"`+subjectID.String()+`","teacher_employee_id":"bad"}`), "entity", "assignments"), wantStatus: http.StatusBadRequest},
+		{name: "create timetable invalid assignment", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/timetables", `{"assignment_id":"bad"}`), "entity", "timetables"), wantStatus: http.StatusBadRequest},
+		{name: "create timetable invalid start", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/timetables", `{"assignment_id":"`+assignmentID.String()+`","day_of_week":2,"start_time":"bad","end_time":"08:50"}`), "entity", "timetables"), wantStatus: http.StatusBadRequest},
+		{name: "create timetable invalid end", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/timetables", `{"assignment_id":"`+assignmentID.String()+`","day_of_week":2,"start_time":"07:30","end_time":"bad"}`), "entity", "timetables"), wantStatus: http.StatusBadRequest},
+		{name: "create timetable invalid range", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/timetables", `{"assignment_id":"`+assignmentID.String()+`","day_of_week":2,"start_time":"08:50","end_time":"07:30"}`), "entity", "timetables"), wantStatus: http.StatusBadRequest},
+		{name: "create year service error", fn: (*Academic).Create, svc: &fakeAcademicService{createErr: errDB}, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/years", `{"name":"2026","start_date":"2026-07-01","end_date":"2027-06-30"}`), "entity", "years"), wantStatus: http.StatusInternalServerError},
+		{name: "create class service error", fn: (*Academic).Create, svc: &fakeAcademicService{createErr: errDB}, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/classes", `{"academic_year_id":"`+yearID.String()+`","code":"VII-A"}`), "entity", "classes"), wantStatus: http.StatusInternalServerError},
+		{name: "create assignment service error", fn: (*Academic).Create, svc: &fakeAcademicService{createErr: errDB}, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/assignments", `{"class_id":"`+classID.String()+`","subject_id":"`+subjectID.String()+`","teacher_employee_id":"`+teacherID.String()+`"}`), "entity", "assignments"), wantStatus: http.StatusInternalServerError},
+		{name: "create timetable service error", fn: (*Academic).Create, svc: &fakeAcademicService{createErr: errDB}, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/timetables", validTimetableBody), "entity", "timetables"), wantStatus: http.StatusInternalServerError},
+		{name: "update forbidden", fn: (*Academic).Update, req: withRouteParams(plainRequest(http.MethodPatch, "/api/academic/timetables/"+slotID.String(), validTimetableBody), "entity", "timetables", "id", slotID.String()), wantStatus: http.StatusForbidden},
+		{name: "update invalid json", fn: (*Academic).Update, req: withRouteParams(adminRequest(http.MethodPatch, "/api/academic/timetables/"+slotID.String(), `{`), "entity", "timetables", "id", slotID.String()), wantStatus: http.StatusBadRequest},
+		{name: "update invalid assignment", fn: (*Academic).Update, req: withRouteParams(adminRequest(http.MethodPatch, "/api/academic/timetables/"+slotID.String(), `{"assignment_id":"bad"}`), "entity", "timetables", "id", slotID.String()), wantStatus: http.StatusBadRequest},
+		{name: "update invalid day", fn: (*Academic).Update, req: withRouteParams(adminRequest(http.MethodPatch, "/api/academic/timetables/"+slotID.String(), `{"assignment_id":"`+assignmentID.String()+`","day_of_week":7}`), "entity", "timetables", "id", slotID.String()), wantStatus: http.StatusBadRequest},
+		{name: "update invalid start", fn: (*Academic).Update, req: withRouteParams(adminRequest(http.MethodPatch, "/api/academic/timetables/"+slotID.String(), `{"assignment_id":"`+assignmentID.String()+`","day_of_week":2,"start_time":"bad","end_time":"08:50"}`), "entity", "timetables", "id", slotID.String()), wantStatus: http.StatusBadRequest},
+		{name: "update invalid end", fn: (*Academic).Update, req: withRouteParams(adminRequest(http.MethodPatch, "/api/academic/timetables/"+slotID.String(), `{"assignment_id":"`+assignmentID.String()+`","day_of_week":2,"start_time":"07:30","end_time":"bad"}`), "entity", "timetables", "id", slotID.String()), wantStatus: http.StatusBadRequest},
+		{name: "update invalid range", fn: (*Academic).Update, req: withRouteParams(adminRequest(http.MethodPatch, "/api/academic/timetables/"+slotID.String(), `{"assignment_id":"`+assignmentID.String()+`","day_of_week":2,"start_time":"08:50","end_time":"07:30"}`), "entity", "timetables", "id", slotID.String()), wantStatus: http.StatusBadRequest},
+		{name: "delete forbidden", fn: (*Academic).Delete, req: withRouteParams(plainRequest(http.MethodDelete, "/api/academic/subjects/"+slotID.String(), ""), "entity", "subjects", "id", slotID.String()), wantStatus: http.StatusForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := tt.svc
+			if svc == nil {
+				svc = &fakeAcademicService{}
+			}
+			rec := httptest.NewRecorder()
+			tt.fn(&Academic{svc: svc}, rec, tt.req)
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestAcademicCreateUpdateAndDeleteSuccess(t *testing.T) {
+	yearID := handlerTestUUID(130)
+	classID := handlerTestUUID(131)
+	subjectID := handlerTestUUID(132)
+	teacherID := handlerTestUUID(133)
+	assignmentID := handlerTestUUID(134)
+	slotID := handlerTestUUID(135)
+	fake := &fakeAcademicService{}
+	h := &Academic{svc: fake}
+
+	createCases := []struct {
+		entity string
+		body   string
+		check  func(t *testing.T)
+	}{
+		{
+			entity: "years",
+			body:   `{"name":"2026/2027","start_date":"2026-07-01","end_date":"2027-06-30","is_active":true}`,
+			check: func(t *testing.T) {
+				t.Helper()
+				if fake.createYearArg.Name != "2026/2027" || !fake.createYearArg.StartDate.Valid || !fake.createYearArg.EndDate.Valid || !fake.createYearArg.IsActive {
+					t.Fatalf("CreateYear arg = %+v, want mapped year", fake.createYearArg)
+				}
+			},
+		},
+		{
+			entity: "classes",
+			body:   `{"academic_year_id":"` + yearID.String() + `","code":"VII-A","name":"VII A","level":"VII","is_active":true}`,
+			check: func(t *testing.T) {
+				t.Helper()
+				if fake.createClassArg.AcademicYearID != yearID || fake.createClassArg.Code != "VII-A" || fake.createClassArg.Level != "VII" {
+					t.Fatalf("CreateClass arg = %+v, want mapped class", fake.createClassArg)
+				}
+			},
+		},
+		{
+			entity: "subjects",
+			body:   `{"code":"IPA","name":"Ilmu Pengetahuan Alam","is_active":true}`,
+			check: func(t *testing.T) {
+				t.Helper()
+				if fake.createSubjectArg.Code != "IPA" || fake.createSubjectArg.Name != "Ilmu Pengetahuan Alam" || !fake.createSubjectArg.IsActive {
+					t.Fatalf("CreateSubject arg = %+v, want mapped subject", fake.createSubjectArg)
+				}
+			},
+		},
+		{
+			entity: "assignments",
+			body:   `{"class_id":"` + classID.String() + `","subject_id":"` + subjectID.String() + `","teacher_employee_id":"` + teacherID.String() + `"}`,
+			check: func(t *testing.T) {
+				t.Helper()
+				if fake.createAssignArg.ClassID != classID || fake.createAssignArg.SubjectID != subjectID || fake.createAssignArg.TeacherEmployeeID != teacherID {
+					t.Fatalf("CreateAssignment arg = %+v, want mapped ids", fake.createAssignArg)
+				}
+			},
+		},
+		{
+			entity: "timetables",
+			body:   `{"assignment_id":"` + assignmentID.String() + `","day_of_week":2,"start_time":"07:30","end_time":"08:50","room_label":" Lab IPA ","notes":" Praktikum "}`,
+			check: func(t *testing.T) {
+				t.Helper()
+				if fake.createTimetableArg.AssignmentID != assignmentID || fake.createTimetableArg.DayOfWeek != 2 || fake.createTimetableArg.RoomLabel != "Lab IPA" || fake.createTimetableArg.Notes != "Praktikum" {
+					t.Fatalf("CreateTimetableSlot arg = %+v, want mapped timetable", fake.createTimetableArg)
+				}
+				if fake.createTimetableArg.StartTime.Microseconds >= fake.createTimetableArg.EndTime.Microseconds {
+					t.Fatalf("CreateTimetableSlot times = %+v/%+v, want increasing range", fake.createTimetableArg.StartTime, fake.createTimetableArg.EndTime)
+				}
+			},
+		},
+	}
+
+	for _, tt := range createCases {
+		t.Run("create "+tt.entity, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.Create(rec, withRouteParam(adminRequest(http.MethodPost, "/api/academic/"+tt.entity, tt.body), "entity", tt.entity))
+			if rec.Code != http.StatusCreated {
+				t.Fatalf("Create(%s) status = %d, want 201; body=%s", tt.entity, rec.Code, rec.Body.String())
+			}
+			tt.check(t)
+		})
+	}
+
+	rec := httptest.NewRecorder()
+	updateReq := withRouteParams(adminRequest(http.MethodPatch, "/api/academic/timetables/"+slotID.String(), `{"assignment_id":"`+assignmentID.String()+`","day_of_week":3,"start_time":"09:00","end_time":"10:20","room_label":"Ruang 2","notes":"Ulangan"}`), "entity", "timetables", "id", slotID.String())
+	h.Update(rec, updateReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Update(timetables) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.updateTimetableArg.ID != slotID || fake.updateTimetableArg.AssignmentID != assignmentID || fake.updateTimetableArg.DayOfWeek != 3 || fake.updateTimetableArg.RoomLabel != "Ruang 2" {
+		t.Fatalf("UpdateTimetableSlot arg = %+v, want mapped update", fake.updateTimetableArg)
+	}
+
+	deleteCases := []struct {
+		entity string
+		check  func(t *testing.T)
+	}{
+		{entity: "years", check: func(t *testing.T) {
+			t.Helper()
+			if fake.deleteYearID != slotID {
+				t.Fatalf("DeleteYear id = %v, want %v", fake.deleteYearID, slotID)
+			}
+		}},
+		{entity: "classes", check: func(t *testing.T) {
+			t.Helper()
+			if fake.deleteClassID != slotID {
+				t.Fatalf("DeleteClass id = %v, want %v", fake.deleteClassID, slotID)
+			}
+		}},
+		{entity: "subjects", check: func(t *testing.T) {
+			t.Helper()
+			if fake.deleteSubjectID != slotID {
+				t.Fatalf("DeleteSubject id = %v, want %v", fake.deleteSubjectID, slotID)
+			}
+		}},
+		{entity: "assignments", check: func(t *testing.T) {
+			t.Helper()
+			if fake.deleteAssignID != slotID {
+				t.Fatalf("DeleteAssignment id = %v, want %v", fake.deleteAssignID, slotID)
+			}
+		}},
+		{entity: "timetables", check: func(t *testing.T) {
+			t.Helper()
+			if fake.deleteTimetableID != slotID {
+				t.Fatalf("DeleteTimetableSlot id = %v, want %v", fake.deleteTimetableID, slotID)
+			}
+		}},
+	}
+	for _, tt := range deleteCases {
+		t.Run("delete "+tt.entity, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.Delete(rec, withRouteParams(adminRequest(http.MethodDelete, "/api/academic/"+tt.entity+"/"+slotID.String(), ""), "entity", tt.entity, "id", slotID.String()))
+			if rec.Code != http.StatusNoContent {
+				t.Fatalf("Delete(%s) status = %d, want 204; body=%s", tt.entity, rec.Code, rec.Body.String())
+			}
+			tt.check(t)
+		})
+	}
+}
+
+func TestAcademicHandlersMapServiceErrors(t *testing.T) {
+	slotID := handlerTestUUID(140)
+	assignmentID := handlerTestUUID(141)
+	tests := []struct {
+		name string
+		fn   func(http.ResponseWriter, *http.Request)
+		req  *http.Request
+		want int
+	}{
+		{
+			name: "overview internal",
+			fn:   (&Academic{svc: &fakeAcademicService{listErr: errors.New("db down")}}).Overview,
+			req:  httptest.NewRequest(http.MethodGet, "/api/academic", nil),
+			want: http.StatusInternalServerError,
+		},
+		{
+			name: "stats internal",
+			fn:   (&Academic{svc: &fakeAcademicService{statsErr: errors.New("db down")}}).GetStats,
+			req:  httptest.NewRequest(http.MethodGet, "/api/academic/stats", nil),
+			want: http.StatusInternalServerError,
+		},
+		{
+			name: "create internal",
+			fn:   (&Academic{svc: &fakeAcademicService{createErr: errors.New("db down")}}).Create,
+			req:  withRouteParam(adminRequest(http.MethodPost, "/api/academic/subjects", `{"code":"IPA","name":"IPA"}`), "entity", "subjects"),
+			want: http.StatusInternalServerError,
+		},
+		{
+			name: "update client error",
+			fn:   (&Academic{svc: &fakeAcademicService{updateErr: errors.New("slot bentrok")}}).Update,
+			req:  withRouteParams(adminRequest(http.MethodPatch, "/api/academic/timetables/"+slotID.String(), `{"assignment_id":"`+assignmentID.String()+`","day_of_week":2,"start_time":"07:30","end_time":"08:50"}`), "entity", "timetables", "id", slotID.String()),
+			want: http.StatusBadRequest,
+		},
+		{
+			name: "delete internal",
+			fn:   (&Academic{svc: &fakeAcademicService{deleteErr: errors.New("db down")}}).Delete,
+			req:  withRouteParams(adminRequest(http.MethodDelete, "/api/academic/subjects/"+slotID.String(), ""), "entity", "subjects", "id", slotID.String()),
+			want: http.StatusInternalServerError,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			tt.fn(rec, tt.req)
+			if rec.Code != tt.want {
+				t.Fatalf("%s status = %d, want %d; body=%s", tt.name, rec.Code, tt.want, rec.Body.String())
+			}
+		})
+	}
+}

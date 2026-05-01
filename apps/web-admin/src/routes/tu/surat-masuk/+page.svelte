@@ -13,6 +13,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	type IncomingLetter = {
 		id: string;
@@ -41,13 +42,8 @@
 		letter_perihal: string;
 	};
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	let lettersPromise = $state<Promise<IncomingLetter[]> | null>(null);
+	let lettersRequestId = 0;
 	let search = $state('');
 	let filterStatus = $state('');
 
@@ -73,52 +69,35 @@
 	let disposisiLetter = $state<IncomingLetter | null>(null);
 	let disposisiList = $state<DispositionRow[]>([]);
 	let disposisiPromise = $state<Promise<DispositionRow[]> | null>(null);
+	let disposisiRequestId = 0;
 	let newDisposisiAssignee = $state('');
 	let newDisposisiInstruksi = $state('');
 	let disposisiBusy = $state(false);
-
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
 
 	async function fetchLetters(): Promise<IncomingLetter[]> {
 		const params = new URLSearchParams();
 		if (search) params.set('search', search);
 		if (filterStatus) params.set('status', filterStatus);
 		const res = await fetch(`/api/tu/surat/incoming?${params}`);
-		return readApi<IncomingLetter[]>(res, 'Gagal memuat surat masuk');
+		return readClientApiData<IncomingLetter[]>(res, 'Gagal memuat surat masuk');
 	}
 
 	function loadLetters() {
-		lettersPromise = fetchLetters();
+		const requestId = ++lettersRequestId;
+		lettersPromise = fetchLetters()
+			.then((rows) => (requestId === lettersRequestId ? (rows ?? []) : []))
+			.catch((error: unknown) => {
+				if (requestId === lettersRequestId) throw error;
+				return [];
+			});
 	}
 
 	async function refreshLetters() {
+		const requestId = ++lettersRequestId;
 		const rows = await fetchLetters();
-		lettersPromise = Promise.resolve(rows ?? []);
+		if (requestId === lettersRequestId) {
+			lettersPromise = Promise.resolve(rows ?? []);
+		}
 	}
 
 	function retryLetters(reset?: () => void) {
@@ -142,11 +121,6 @@
 
 	function handleDisposisiRenderError(error: unknown) {
 		console.error('TU incoming letter dispositions render failed', error);
-	}
-
-	async function responseErrorMessage(response: Response, fallback: string) {
-		const payload = await response.json().catch(() => null);
-		return apiErrorMessage(payload) || fallback;
 	}
 
 	function mutationErrorMessage(error: unknown, fallback: string) {
@@ -187,8 +161,7 @@
 					catatan: newCatatan
 				})
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal mencatat surat'); return; }
+			await readClientJson<unknown>(res);
 			createOpen = false;
 			newNomor = ''; newTglSurat = ''; newTglTerima = ''; newAsal = ''; newPerihal = ''; newSifat = 'biasa'; newCatatan = '';
 			toast.success('Surat masuk berhasil dicatat');
@@ -209,7 +182,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ status: newStatus })
 			});
-			if (!res.ok) { toast.error(await responseErrorMessage(res, 'Gagal mengubah status')); return; }
+			await readClientJson<unknown>(res);
 			await refreshLettersAfterMutation();
 			toast.success('Status diperbarui');
 		} catch (error) {
@@ -229,7 +202,7 @@
 		deleteBusy = { ...deleteBusy, [id]: true };
 		try {
 			const res = await fetch(`/api/tu/surat/incoming/${id}`, { method: 'DELETE' });
-			if (!res.ok && res.status !== 204) { toast.error(await responseErrorMessage(res, 'Gagal menghapus')); return; }
+			await readClientJson<unknown>(res);
 			toast.success('Surat dihapus');
 			await refreshLettersAfterMutation();
 		} catch (error) {
@@ -241,15 +214,24 @@
 
 	async function fetchDisposisi(letterId: string): Promise<DispositionRow[]> {
 		const res = await fetch(`/api/tu/surat/disposisi?incoming_letter_id=${letterId}`);
-		return readApi<DispositionRow[]>(res, 'Gagal memuat disposisi');
+		return readClientApiData<DispositionRow[]>(res, 'Gagal memuat disposisi');
 	}
 
 	function setDisposisiPromise(letter: IncomingLetter) {
+		const requestId = ++disposisiRequestId;
 		disposisiList = [];
-		disposisiPromise = fetchDisposisi(letter.id).then((rows) => {
-			disposisiList = rows ?? [];
-			return disposisiList;
-		});
+		disposisiPromise = fetchDisposisi(letter.id)
+			.then((rows) => {
+				if (requestId === disposisiRequestId && disposisiLetter?.id === letter.id) {
+					disposisiList = rows ?? [];
+					return disposisiList;
+				}
+				return disposisiList;
+			})
+			.catch((error: unknown) => {
+				if (requestId === disposisiRequestId && disposisiLetter?.id === letter.id) throw error;
+				return disposisiList;
+			});
 	}
 
 	function openDisposisi(letter: IncomingLetter) {
@@ -266,9 +248,13 @@
 
 	async function refreshDisposisiList() {
 		if (!disposisiLetter) return;
+		const requestId = ++disposisiRequestId;
+		const letterId = disposisiLetter.id;
 		const rows = await fetchDisposisi(disposisiLetter.id);
-		disposisiList = rows ?? [];
-		disposisiPromise = Promise.resolve(disposisiList);
+		if (requestId === disposisiRequestId && disposisiLetter?.id === letterId) {
+			disposisiList = rows ?? [];
+			disposisiPromise = Promise.resolve(disposisiList);
+		}
 	}
 
 	async function createDisposisi() {
@@ -285,8 +271,7 @@
 					instruksi: newDisposisiInstruksi
 				})
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal mendisposisi'); return; }
+			await readClientJson<unknown>(res);
 			newDisposisiAssignee = '';
 			newDisposisiInstruksi = '';
 			toast.success('Disposisi berhasil dibuat');

@@ -13,6 +13,7 @@
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmChallenge } from '$lib/confirm-dialog';
+	import { clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 
 	type CbtPackage = {
 		id: string; subject_id: string; subject_name: string; subject_code: string;
@@ -41,11 +42,6 @@
 		error?: string;
 		message?: string;
 	};
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
 
 	let packages = $state<CbtPackage[]>([]);
 	let allQuestions = $state<Question[]>([]);
@@ -63,6 +59,7 @@
 	let fBusy = $state(false);
 	let deleteBusyId = $state('');
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
+	let packagesRequestId = 0;
 
 	let questionPool = $derived(
 		fSubjectId
@@ -79,29 +76,6 @@
 		return typeof value === 'object' && value !== null;
 	}
 
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function parseQuestions(payload: unknown) {
 		return Array.isArray(payload) ? (payload as Question[]) : [];
 	}
@@ -112,9 +86,9 @@
 
 	async function fetchOverview(): Promise<PackagesOverview> {
 		const [packagesPayload, questionsPayload, academicPayload] = await Promise.all([
-			fetch('/api/cbt/packages').then((response) => readApi<CbtPackagesPayload>(response, 'Gagal memuat data paket')),
-			fetch('/api/cbt/questions').then((response) => readApi<unknown>(response, 'Gagal memuat bank soal')),
-			fetch('/api/academic').then((response) => readApi<AcademicPayload>(response, 'Gagal memuat data akademik')),
+			fetch('/api/cbt/packages').then((response) => readClientApiData<CbtPackagesPayload>(response, 'Gagal memuat data paket')),
+			fetch('/api/cbt/questions').then((response) => readClientApiData<unknown>(response, 'Gagal memuat bank soal')),
+			fetch('/api/academic').then((response) => readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')),
 		]);
 		return {
 			packages: packagesPayload.packages ?? [],
@@ -130,12 +104,17 @@
 	}
 
 	function load() {
+		const requestId = ++packagesRequestId;
 		packages = [];
 		allQuestions = [];
 		subjects = [];
 		packagesPromise = fetchOverview().then((overview) => {
+			if (requestId !== packagesRequestId) return { packages, allQuestions, subjects };
 			applyOverview(overview);
 			return overview;
+		}).catch((error: unknown) => {
+			if (requestId === packagesRequestId) throw error;
+			return { packages, allQuestions, subjects };
 		});
 	}
 
@@ -144,13 +123,17 @@
 			load();
 			return;
 		}
+		const requestId = ++packagesRequestId;
 		try {
 			const overview = await fetchOverview();
+			if (requestId !== packagesRequestId) return;
 			applyOverview(overview);
 			packagesPromise = Promise.resolve(overview);
 		} catch (error) {
-			packagesPromise = Promise.resolve({ packages, allQuestions, subjects });
-			toast.error(packagesErrorMessage(error));
+			if (requestId === packagesRequestId) {
+				packagesPromise = Promise.resolve({ packages, allQuestions, subjects });
+				toast.error(packagesErrorMessage(error));
+			}
 		}
 	}
 
@@ -176,11 +159,6 @@
 		toast.error(msg);
 	}
 
-	async function responseErrorMessage(response: Response, fallback: string) {
-		const payload = await response.json().catch(() => null);
-		return apiErrorMessage(payload) || fallback;
-	}
-
 	function mutationErrorMessage(error: unknown, fallback: string) {
 		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
 		return fallback;
@@ -204,6 +182,10 @@
 		});
 	}
 
+	function packageLegacyMutationPath(id: string) {
+		return clientApiPathWithQuery('/api/cbt/packages', new URLSearchParams({ id }));
+	}
+
 	async function createPackage() {
 		if (!fSubjectId || !fTitle || !fDuration) return;
 		fBusy = true;
@@ -217,7 +199,7 @@
 					is_active: fActive, question_ids: Array.from(fSelectedIds),
 				}),
 			});
-			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal membuat paket')); return; }
+			await readClientJson<unknown>(res);
 			fSubjectId = ''; fTitle = ''; fDescription = ''; fDuration = 60;
 			fRandomize = false; fActive = true; fSelectedIds.clear();
 			showForm = false;
@@ -233,16 +215,13 @@
 		if (!(await confirmPhrase('Hapus Paket Ujian', `Paket "${title}" akan dihapus dari daftar. Tindakan ini tidak bisa dibatalkan dari layar operator.`, 'HAPUS'))) return;
 		deleteBusyId = id;
 		try {
-			const res = await fetch(`/api/cbt/packages?id=${id}`, { method: 'DELETE' });
-			if (!res.ok) {
-				setOperationState('error', 'Paket Gagal Dihapus', 'Periksa kembali apakah paket masih dipakai oleh sesi aktif atau coba ulang beberapa saat lagi.');
-				showError('Gagal menghapus paket');
-				return;
-			}
+			const res = await fetch(packageLegacyMutationPath(id), { method: 'DELETE' });
+			await readClientJson<unknown>(res);
 			setOperationState('warning', 'Paket Dihapus', `Paket "${title}" sudah dihapus dari daftar paket ujian.`);
 			showToast('Paket dihapus');
 			await refreshPackages();
 		} catch (error) {
+			setOperationState('error', 'Paket Gagal Dihapus', 'Periksa kembali apakah paket masih dipakai oleh sesi aktif atau coba ulang beberapa saat lagi.');
 			showError(mutationErrorMessage(error, 'Gagal menghapus paket. Periksa koneksi lalu coba lagi.'));
 		} finally {
 			deleteBusyId = '';

@@ -1,11 +1,10 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { handleRouteError, proxy } from '$lib/server/api';
+import { apiPathWithQuery, handleRouteError, proxy } from '$lib/server/api';
 
 export const GET: RequestHandler = async (event) => {
 	try {
-		const params = new URLSearchParams(event.url.searchParams);
-		const data = await proxy(event).get(`/api/document-cycles/stats?${params.toString()}`);
+		const data = await proxy(event).get(apiPathWithQuery('/api/document-cycles/stats', event.url.searchParams));
 		return json(data);
 	} catch (e) {
 		return handleRouteError(e, 'document-cycles/stats GET');

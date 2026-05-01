@@ -37,47 +37,48 @@
 	<meta name="description" content="Website resmi MTs Negeri 2 Kolaka Utara untuk informasi sekolah, berita kegiatan, pengumuman, dan PPDB." />
 </svelte:head>
 
-<div class="space-y-10">
-	<section class="relative overflow-hidden rounded-[2rem] border border-emerald-100 bg-[linear-gradient(135deg,oklch(0.98_0.02_145)_0%,white_55%,oklch(0.95_0.05_145)_100%)] px-6 py-10 shadow-sm sm:px-10 sm:py-14">
-		<div class="absolute inset-y-0 right-0 hidden w-1/3 bg-[radial-gradient(circle_at_top,rgba(19,106,67,0.12),transparent_60%)] lg:block"></div>
-		<div class="relative grid gap-8 lg:grid-cols-[1.15fr,0.85fr]">
-			<div class="space-y-5">
-				<p class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800">
-					Website Resmi Madrasah
-				</p>
-				<div class="space-y-3">
-					<h1 class="max-w-3xl text-4xl font-bold leading-tight text-slate-900 sm:text-5xl">
-						Belajar, bertumbuh, dan berprestasi bersama MTs Negeri 2 Kolaka Utara.
-					</h1>
-					<p class="max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-						Pusat informasi sekolah untuk profil madrasah, berita kegiatan, pengumuman resmi, dan layanan PPDB yang terhubung langsung dengan sistem.
+	<div class="space-y-10">
+		<section class="relative overflow-hidden rounded-[1.75rem] border border-emerald-100 bg-[linear-gradient(135deg,oklch(0.98_0.02_145)_0%,white_55%,oklch(0.95_0.05_145)_100%)] px-5 py-7 shadow-sm sm:rounded-[2rem] sm:px-10 sm:py-14">
+			<div class="absolute inset-y-0 right-0 hidden w-1/3 bg-[radial-gradient(circle_at_top,rgba(19,106,67,0.12),transparent_60%)] lg:block"></div>
+			<div class="relative grid gap-6 lg:grid-cols-[1.15fr,0.85fr] lg:gap-8">
+				<div class="space-y-4 sm:space-y-5">
+					<p class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800 sm:text-xs">
+						Website Resmi Madrasah
 					</p>
-				</div>
-				<div class="flex flex-wrap gap-3">
-					<a href={resolve('/ppdb')} class="rounded-full bg-[oklch(0.38_0.13_145)] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:brightness-105">
-						Lihat Info & Daftar PPDB
-					</a>
-					<a href={resolve('/berita')} class="rounded-full border border-emerald-200 px-5 py-3 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">
-						Baca Berita Madrasah
-					</a>
-				</div>
-				<div class="grid gap-3 sm:grid-cols-3">
-					<div class="rounded-2xl border border-white/70 bg-white/70 px-4 py-4 shadow-sm backdrop-blur">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Informasi Resmi</p>
-						<p class="mt-2 text-sm leading-7 text-slate-700">Berita, pengumuman, dan profil sekolah tersedia dalam satu alur publik yang rapi.</p>
+					<div class="space-y-3">
+						<h1 class="max-w-3xl text-3xl font-bold leading-[1.08] text-slate-900 sm:text-5xl sm:leading-tight">
+							<span class="sm:hidden">Belajar, bertumbuh, dan berprestasi.</span>
+							<span class="hidden sm:inline">Belajar, bertumbuh, dan berprestasi bersama MTs Negeri 2 Kolaka Utara.</span>
+						</h1>
+						<p class="max-w-2xl text-sm leading-7 text-slate-600 sm:text-lg">
+							Pusat informasi sekolah untuk profil madrasah, berita kegiatan, pengumuman resmi, dan layanan PPDB yang terhubung langsung dengan sistem.
+						</p>
 					</div>
-					<div class="rounded-2xl border border-white/70 bg-white/70 px-4 py-4 shadow-sm backdrop-blur">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Layanan Publik</p>
-						<p class="mt-2 text-sm leading-7 text-slate-700">PPDB awal bisa diakses langsung tanpa perlu masuk ke dashboard internal.</p>
+					<div class="flex flex-wrap gap-3">
+						<a href={resolve('/ppdb')} class="inline-flex w-full justify-center rounded-full bg-[oklch(0.38_0.13_145)] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:brightness-105 sm:w-auto">
+							Lihat Info & Daftar PPDB
+						</a>
+						<a href={resolve('/berita')} class="inline-flex w-full justify-center rounded-full border border-emerald-200 px-5 py-3 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 sm:w-auto">
+							Baca Berita Madrasah
+						</a>
 					</div>
-					<div class="rounded-2xl border border-white/70 bg-white/70 px-4 py-4 shadow-sm backdrop-blur">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Akses Mudah</p>
-						<p class="mt-2 text-sm leading-7 text-slate-700">Tampilan disusun agar nyaman dibaca di ponsel maupun layar desktop.</p>
+					<div class="grid gap-3 sm:grid-cols-3">
+						<div class="rounded-2xl border border-white/70 bg-white/70 px-4 py-3 shadow-sm backdrop-blur sm:py-4">
+							<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Informasi Resmi</p>
+							<p class="mt-2 hidden text-sm leading-7 text-slate-700 sm:block">Berita, pengumuman, dan profil sekolah tersedia dalam satu alur publik yang rapi.</p>
+						</div>
+						<div class="rounded-2xl border border-white/70 bg-white/70 px-4 py-3 shadow-sm backdrop-blur sm:py-4">
+							<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Layanan Publik</p>
+							<p class="mt-2 hidden text-sm leading-7 text-slate-700 sm:block">PPDB awal bisa diakses langsung tanpa perlu masuk ke dashboard internal.</p>
+						</div>
+						<div class="rounded-2xl border border-white/70 bg-white/70 px-4 py-3 shadow-sm backdrop-blur sm:py-4">
+							<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Akses Mudah</p>
+							<p class="mt-2 hidden text-sm leading-7 text-slate-700 sm:block">Tampilan disusun agar nyaman dibaca di ponsel maupun layar desktop.</p>
+						</div>
 					</div>
 				</div>
-			</div>
 
-			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
 				<div class="rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm backdrop-blur">
 					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Profil Singkat</p>
 					<p class="mt-3 text-sm leading-7 text-slate-600">

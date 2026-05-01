@@ -1,23 +1,36 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
+type pusakaScheduleService interface {
+	List(ctx context.Context) ([]db.Schedule, error)
+	Create(ctx context.Context, p db.CreateScheduleParams) (db.Schedule, error)
+	UpdateByID(ctx context.Context, p db.UpdateScheduleByIDParams) (db.Schedule, error)
+	DeleteByID(ctx context.Context, id pgtype.UUID) error
+}
+
 type PusakaSchedule struct {
-	svc *service.PusakaSchedule
+	svc pusakaScheduleService
 }
 
 func NewPusakaSchedule(svc *service.PusakaSchedule) *PusakaSchedule { return &PusakaSchedule{svc: svc} }
 
 func (h *PusakaSchedule) List(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	rows, err := h.svc.List(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -27,6 +40,10 @@ func (h *PusakaSchedule) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PusakaSchedule) Create(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	var body struct {
 		Label     string `json:"label"`
 		RunTime   string `json:"run_time"`
@@ -59,6 +76,10 @@ func (h *PusakaSchedule) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PusakaSchedule) Update(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -87,6 +108,10 @@ func (h *PusakaSchedule) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PusakaSchedule) Delete(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")

@@ -651,6 +651,67 @@ func (q *Queries) GradeStudentEssay(ctx context.Context, arg GradeStudentEssayPa
 	return err
 }
 
+const hasSessionAnswer = `-- name: HasSessionAnswer :one
+SELECT EXISTS(
+  SELECT 1
+  FROM cbt_student_answers sa
+  JOIN cbt_exam_participants ep ON ep.id = sa.participant_id
+  WHERE ep.session_id = $1 AND sa.id = $2
+) AS has_answer
+`
+
+type HasSessionAnswerParams struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	ID        pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) HasSessionAnswer(ctx context.Context, arg HasSessionAnswerParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasSessionAnswer, arg.SessionID, arg.ID)
+	var has_answer bool
+	err := row.Scan(&has_answer)
+	return has_answer, err
+}
+
+const hasSessionParticipant = `-- name: HasSessionParticipant :one
+SELECT EXISTS(
+  SELECT 1
+  FROM cbt_exam_participants
+  WHERE session_id = $1 AND id = $2
+) AS has_participant
+`
+
+type HasSessionParticipantParams struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	ID        pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) HasSessionParticipant(ctx context.Context, arg HasSessionParticipantParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasSessionParticipant, arg.SessionID, arg.ID)
+	var has_participant bool
+	err := row.Scan(&has_participant)
+	return has_participant, err
+}
+
+const hasSessionRoom = `-- name: HasSessionRoom :one
+SELECT EXISTS(
+  SELECT 1
+  FROM cbt_exam_rooms
+  WHERE session_id = $1 AND id = $2
+) AS has_room
+`
+
+type HasSessionRoomParams struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	ID        pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) HasSessionRoom(ctx context.Context, arg HasSessionRoomParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasSessionRoom, arg.SessionID, arg.ID)
+	var has_room bool
+	err := row.Scan(&has_room)
+	return has_room, err
+}
+
 const incrementParticipantAppSwitch = `-- name: IncrementParticipantAppSwitch :exec
 UPDATE cbt_exam_participants
 SET app_switch_count = app_switch_count + 1

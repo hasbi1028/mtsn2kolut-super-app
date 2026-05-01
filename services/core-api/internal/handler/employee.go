@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,25 +16,63 @@ import (
 )
 
 type Employee struct {
-	svc *service.Employee
+	svc employeeService
+}
+
+type employeeService interface {
+	List(ctx context.Context) ([]db.ListEmployeesRow, error)
+	ListWithStatus(ctx context.Context) ([]db.ListEmployeesWithStatusRow, error)
+	ListPusakaEligibleWithStatus(ctx context.Context) ([]db.ListPusakaEligibleEmployeesWithStatusRow, error)
+	Get(ctx context.Context, id pgtype.UUID) (db.GetEmployeeRow, error)
+	Create(ctx context.Context, nip, nama, unitKerja, employmentType, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error)
+	Update(ctx context.Context, p db.UpdateEmployeeParams) (db.GetEmployeeRow, error)
+	Delete(ctx context.Context, id pgtype.UUID) error
+	SetActive(ctx context.Context, id pgtype.UUID, isActive bool) error
+	UpsertPusakaAccount(ctx context.Context, employeeID pgtype.UUID, username, password string, isEnabled bool) error
+	SetPusakaAccountEnabled(ctx context.Context, employeeID pgtype.UUID, isEnabled bool) error
+	DeletePusakaAccount(ctx context.Context, employeeID pgtype.UUID) error
+	CreateAuditLog(ctx context.Context, userID pgtype.UUID, action, entityType, entityID string, metadata []byte) error
+	ListPusakaAuditLogs(ctx context.Context, employeeID string, limit, offset int32) ([]db.ListEntityAuditLogsRow, error)
 }
 
 type employeeResponse struct {
-	ID              pgtype.UUID        `json:"id"`
-	Nip             string             `json:"nip"`
-	Nama            string             `json:"nama"`
-	UnitKerja       string             `json:"unit_kerja"`
-	EmploymentType  string             `json:"employment_type"`
-	PusakaUsername  string             `json:"pusaka_username"`
-	PusakaIsEnabled bool               `json:"pusaka_is_enabled"`
-	PusakaEligible  bool               `json:"pusaka_eligible"`
-	HasPusakaAccount bool              `json:"has_pusaka_account"`
-	IsActive        bool               `json:"is_active"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ID               pgtype.UUID        `json:"id"`
+	Nip              string             `json:"nip"`
+	Nama             string             `json:"nama"`
+	UnitKerja        string             `json:"unit_kerja"`
+	EmploymentType   string             `json:"employment_type"`
+	PusakaUsername   string             `json:"pusaka_username"`
+	PusakaIsEnabled  bool               `json:"pusaka_is_enabled"`
+	PusakaEligible   bool               `json:"pusaka_eligible"`
+	HasPusakaAccount bool               `json:"has_pusaka_account"`
+	IsActive         bool               `json:"is_active"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
 func NewEmployee(svc *service.Employee) *Employee { return &Employee{svc: svc} }
+
+func employeeClientMessage(err error, fallback string) string {
+	if err == nil {
+		return fallback
+	}
+	switch err.Error() {
+	case "only pns or pppk employees can have pusaka accounts":
+		return "akun PUSAKA hanya untuk pegawai PNS atau PPPK"
+	case "invalid employment type":
+		return "jenis kepegawaian tidak valid"
+	case "disable or remove the pusaka account before changing employee type":
+		return "nonaktifkan atau hapus akun PUSAKA sebelum mengubah jenis kepegawaian"
+	case "pusaka account is not configured":
+		return "akun PUSAKA belum dikonfigurasi"
+	default:
+		return safeClientMessage(err, fallback)
+	}
+}
+
+func writeEmployeeClientError(w http.ResponseWriter, err error, fallback string) {
+	api.BadRequest(w, employeeClientMessage(err, fallback))
+}
 
 func auditUserID(r *http.Request) pgtype.UUID {
 	var uid pgtype.UUID
@@ -46,6 +85,10 @@ func auditUserID(r *http.Request) pgtype.UUID {
 }
 
 func (h *Employee) List(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	if r.URL.Query().Get("with_status") == "1" {
 		h.ListWithStatus(w, r)
 		return
@@ -59,6 +102,10 @@ func (h *Employee) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Employee) ListWithStatus(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	rows, err := h.svc.ListWithStatus(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -68,6 +115,10 @@ func (h *Employee) ListWithStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Employee) ListPusakaEligibleWithStatus(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	rows, err := h.svc.ListPusakaEligibleWithStatus(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -77,6 +128,10 @@ func (h *Employee) ListPusakaEligibleWithStatus(w http.ResponseWriter, r *http.R
 }
 
 func (h *Employee) Get(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -95,6 +150,10 @@ func (h *Employee) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Employee) Create(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	var body struct {
 		Nip            string `json:"nip"`
 		Nama           string `json:"nama"`
@@ -110,17 +169,17 @@ func (h *Employee) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	emp, err := h.svc.Create(r.Context(), body.Nip, body.Nama, body.UnitKerja, body.EmploymentType, body.PusakaUsername, body.PusakaPassword, body.IsActive)
 	if err != nil {
-		if err.Error() == "only pns or pppk employees can have pusaka accounts" || err.Error() == "invalid employment type" {
-			api.BadRequest(w, err.Error())
-			return
-		}
-		api.Internal(w, err)
+		writeEmployeeClientError(w, err, "Data pegawai tidak valid")
 		return
 	}
 	api.Created(w, sanitizeEmployee(emp))
 }
 
 func (h *Employee) Update(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -138,17 +197,17 @@ func (h *Employee) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		if err.Error() == "invalid employment type" || err.Error() == "disable or remove the pusaka account before changing employee type" {
-			api.BadRequest(w, err.Error())
-			return
-		}
-		api.Internal(w, err)
+		writeEmployeeClientError(w, err, "Perubahan data pegawai tidak valid")
 		return
 	}
 	api.OK(w, sanitizeEmployee(emp))
 }
 
 func (h *Employee) Delete(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -162,6 +221,10 @@ func (h *Employee) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Employee) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -185,6 +248,10 @@ func (h *Employee) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Employee) GetPusakaStatus(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -204,6 +271,10 @@ func (h *Employee) GetPusakaStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Employee) UpdatePusakaCredentials(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -243,10 +314,10 @@ func (h *Employee) UpdatePusakaCredentials(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	meta, _ := json.Marshal(map[string]any{
-		"employee_id":      pgUUIDString(id),
-		"employment_type":  emp.EmploymentType,
-		"pusaka_username":  body.PusakaUsername,
-		"configured":       body.PusakaUsername != "",
+		"employee_id":     pgUUIDString(id),
+		"employment_type": emp.EmploymentType,
+		"pusaka_username": body.PusakaUsername,
+		"configured":      body.PusakaUsername != "",
 	})
 	_ = h.svc.CreateAuditLog(r.Context(), auditUserID(r), "PUSAKA_ACCOUNT_UPDATE", "pusaka_account", pgUUIDString(id), meta)
 	api.OK(w, map[string]any{
@@ -256,6 +327,10 @@ func (h *Employee) UpdatePusakaCredentials(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *Employee) UpdatePusakaAccountStatus(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -269,11 +344,7 @@ func (h *Employee) UpdatePusakaAccountStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err := h.svc.SetPusakaAccountEnabled(r.Context(), id, body.IsEnabled); err != nil {
-		if err.Error() == "pusaka account is not configured" {
-			api.BadRequest(w, err.Error())
-			return
-		}
-		api.Internal(w, err)
+		writeEmployeeClientError(w, err, "Perubahan status akun PUSAKA tidak valid")
 		return
 	}
 	meta, _ := json.Marshal(map[string]any{
@@ -288,17 +359,17 @@ func (h *Employee) UpdatePusakaAccountStatus(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *Employee) DeletePusakaAccount(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
 		return
 	}
 	if err := h.svc.DeletePusakaAccount(r.Context(), id); err != nil {
-		if err.Error() == "pusaka account is not configured" {
-			api.BadRequest(w, err.Error())
-			return
-		}
-		api.Internal(w, err)
+		writeEmployeeClientError(w, err, "Penghapusan akun PUSAKA tidak valid")
 		return
 	}
 	meta, _ := json.Marshal(map[string]any{
@@ -313,6 +384,10 @@ func (h *Employee) DeletePusakaAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Employee) ListPusakaAuditLogs(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -350,7 +425,7 @@ func sanitizeEmployee(emp db.GetEmployeeRow) employeeResponse {
 		UnitKerja:        emp.UnitKerja,
 		EmploymentType:   emp.EmploymentType,
 		PusakaUsername:   emp.PusakaUsername,
-		PusakaIsEnabled: emp.PusakaIsEnabled,
+		PusakaIsEnabled:  emp.PusakaIsEnabled,
 		PusakaEligible:   emp.EmploymentType == "pns" || emp.EmploymentType == "pppk",
 		HasPusakaAccount: emp.PusakaUsername != "",
 		IsActive:         emp.IsActive,
@@ -369,7 +444,7 @@ func sanitizeEmployees(employees []db.ListEmployeesRow) []employeeResponse {
 			UnitKerja:        emp.UnitKerja,
 			EmploymentType:   emp.EmploymentType,
 			PusakaUsername:   emp.PusakaUsername,
-			PusakaIsEnabled: emp.PusakaIsEnabled,
+			PusakaIsEnabled:  emp.PusakaIsEnabled,
 			PusakaEligible:   emp.EmploymentType == "pns" || emp.EmploymentType == "pppk",
 			HasPusakaAccount: emp.PusakaUsername != "",
 			IsActive:         emp.IsActive,

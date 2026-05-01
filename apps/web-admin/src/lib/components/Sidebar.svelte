@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import SidebarCommandPalette from '$lib/components/sidebar/SidebarCommandPalette.svelte';
@@ -8,6 +8,7 @@
 	import SidebarNavSection from '$lib/components/sidebar/SidebarNavSection.svelte';
 	import SidebarQuickAccess from '$lib/components/sidebar/SidebarQuickAccess.svelte';
 	import { fetchSidebarAttention } from '$lib/components/sidebar/sidebar-attention';
+	import { readClientJson } from '$lib/client/api';
 	import {
 		defaultPinnedByRole,
 		sidebarNavGroups,
@@ -26,11 +27,18 @@
 	let inventoryAttention = $state(0);
 	let libraryAttention = $state(0);
 	let pusakaAttention = $state(0);
-	let attentionRefreshInFlight = $state<Promise<void> | null>(null);
-	let lastAttentionLoadedAt = $state(0);
-	let remotePrefsLoaded = $state(false);
-	let sidebarPrefsSyncInFlight = $state<Promise<void> | null>(null);
-	let lastSyncedSidebarPrefs = $state('');
+	let attentionRefreshInFlight: Promise<void> | null = null;
+	let lastAttentionLoadedAt = 0;
+	let remotePrefsLoaded = false;
+	let sidebarPrefsSyncInFlight: Promise<void> | null = null;
+	let lastSyncedSidebarPrefs = '';
+	let sidebarPrefsLocalVersion = 0;
+
+	type SidebarPreferencesPayload = {
+		data?: unknown;
+		pinned_items?: unknown;
+		recent_items?: unknown;
+	};
 
 	const userRoles = $derived(user?.roles || (user?.role ? [user.role] : []));
 	const nav = $derived(
@@ -52,7 +60,7 @@
 	let openGroups = $state<string[]>([]);
 	let pinnedItems = $state<string[]>([]);
 	let recentItems = $state<string[]>([]);
-	let pinnedLoaded = false;
+	let pinnedLoaded = $state(false);
 
 	const activeGroup = $derived(
 		nav.find((section) => section.items.some((item) => isActive(item.href)))?.group ?? 'Utama'
@@ -75,6 +83,14 @@
 				.map((item) => item.href)
 		)
 	);
+	const pinnedStorageKeyValue = $derived(`${PINNED_STORAGE_KEY_PREFIX}:${storageScope()}`);
+	const recentStorageKeyValue = $derived(`${RECENT_STORAGE_KEY_PREFIX}:${storageScope()}`);
+	const normalizedPinnedItems = $derived(normalizePinnedHrefs(pinnedItems));
+	const normalizedRecentItems = $derived(normalizeRecentHrefs(recentItems));
+	const sidebarPrefsSignatureValue = $derived(JSON.stringify({
+		pinned_items: normalizedPinnedItems,
+		recent_items: normalizedRecentItems
+	}));
 
 	const quickAccess = $derived.by(() => {
 		const orderedHrefs = Array.from(new Set(['/', ...pinnedItems.filter((href) => href !== '/')]));
@@ -123,9 +139,11 @@
 		}
 		if (isPinned(href)) {
 			pinnedItems = pinnedItems.filter((value) => value !== href);
+			markSidebarPrefsChanged();
 			return;
 		}
 		pinnedItems = [...pinnedItems, href];
+		markSidebarPrefsChanged();
 	}
 
 	function pinButtonLabel(item: SidebarNavItem) {
@@ -148,6 +166,7 @@
 		const [value] = next.splice(index, 1);
 		next.splice(nextIndex, 0, value);
 		pinnedItems = next;
+		markSidebarPrefsChanged();
 	}
 
 	function railTooltip(item: SidebarNavItem, group: string) {
@@ -158,12 +177,8 @@
 		return user?.id?.trim() || 'anon';
 	}
 
-	function pinnedStorageKey() {
-		return `${PINNED_STORAGE_KEY_PREFIX}:${storageScope()}`;
-	}
-
-	function recentStorageKey() {
-		return `${RECENT_STORAGE_KEY_PREFIX}:${storageScope()}`;
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
 	}
 
 	function dedupeHrefs(values: string[]) {
@@ -187,17 +202,6 @@
 				(value): value is string => typeof value === 'string' && visibleNavHrefSet.has(value)
 			)
 		).slice(0, RECENT_LIMIT);
-	}
-
-	function sidebarPrefsPayload() {
-		return {
-			pinned_items: normalizePinnedHrefs(pinnedItems),
-			recent_items: normalizeRecentHrefs(recentItems)
-		};
-	}
-
-	function sidebarPrefsSignature() {
-		return JSON.stringify(sidebarPrefsPayload());
 	}
 
 	function defaultPinnedItemsForUser() {
@@ -252,6 +256,7 @@
 
 	function rememberRecent(href: string) {
 		recentItems = [href, ...recentItems.filter((value) => value !== href)].slice(0, RECENT_LIMIT);
+		markSidebarPrefsChanged();
 	}
 
 	async function runCommand(href: string) {
@@ -263,7 +268,7 @@
 
 	function loadPinnedItems() {
 		if (typeof window === 'undefined') return;
-		const raw = window.localStorage.getItem(pinnedStorageKey());
+		const raw = window.localStorage.getItem(pinnedStorageKeyValue);
 		let nextPinnedItems: string[] = [];
 		if (raw) {
 			try {
@@ -280,11 +285,12 @@
 
 		pinnedItems = nextPinnedItems;
 		pinnedLoaded = true;
+		persistSidebarCache();
 	}
 
 	function loadRecentItems() {
 		if (typeof window === 'undefined') return;
-		const raw = window.localStorage.getItem(recentStorageKey());
+		const raw = window.localStorage.getItem(recentStorageKeyValue);
 		if (!raw) {
 			recentItems = [];
 			return;
@@ -292,43 +298,72 @@
 		try {
 			const parsed = JSON.parse(raw);
 			recentItems = normalizeRecentHrefs(parsed);
+			persistSidebarCache();
 		} catch {
 			recentItems = [];
+			persistSidebarCache();
 		}
+	}
+
+	function persistSidebarCache() {
+		if (!pinnedLoaded || typeof window === 'undefined') return;
+		window.localStorage.setItem(pinnedStorageKeyValue, JSON.stringify(normalizePinnedHrefs(pinnedItems)));
+		window.localStorage.setItem(recentStorageKeyValue, JSON.stringify(normalizeRecentHrefs(recentItems)));
+	}
+
+	function markSidebarPrefsChanged() {
+		sidebarPrefsLocalVersion += 1;
+		persistSidebarCache();
+		void queueRemoteSidebarPreferences();
+	}
+
+	function sidebarPrefsSource(payload: SidebarPreferencesPayload | null): Record<string, unknown> {
+		if (!payload || typeof payload !== 'object') return {};
+		if (isRecord(payload.data)) return payload.data;
+		return payload as Record<string, unknown>;
 	}
 
 	async function loadRemoteSidebarPreferences() {
 		if (typeof window === 'undefined') return;
+		const versionAtStart = sidebarPrefsLocalVersion;
 		try {
 			const res = await fetch('/api/auth/preferences/sidebar');
-			if (!res.ok) return;
-			const payload = await res.json().catch(() => null);
-			const remotePinned = normalizePinnedHrefs(payload?.data?.pinned_items ?? payload?.pinned_items ?? []);
-			const remoteRecent = normalizeRecentHrefs(payload?.data?.recent_items ?? payload?.recent_items ?? []);
+			const payload = await readClientJson<SidebarPreferencesPayload | null>(res);
+			const source = sidebarPrefsSource(payload);
+			const remotePinned = normalizePinnedHrefs(source.pinned_items ?? []);
+			const remoteRecent = normalizeRecentHrefs(source.recent_items ?? []);
 
-			if (remotePinned.length > 0) {
-				pinnedItems = remotePinned;
-			} else if (pinnedItems.length === 0) {
-				pinnedItems = defaultPinnedItemsForUser();
+			if (versionAtStart === sidebarPrefsLocalVersion) {
+				if (remotePinned.length > 0) {
+					pinnedItems = remotePinned;
+				} else if (pinnedItems.length === 0) {
+					pinnedItems = defaultPinnedItemsForUser();
+				}
+				recentItems = remoteRecent;
+				persistSidebarCache();
+				lastSyncedSidebarPrefs = JSON.stringify({
+					pinned_items: remotePinned,
+					recent_items: remoteRecent
+				});
 			}
-			recentItems = remoteRecent;
-			lastSyncedSidebarPrefs = JSON.stringify({
-				pinned_items: remotePinned,
-				recent_items: remoteRecent
-			});
 		} catch {
 			// Keep local cache as fallback for sidebar personalization.
 		} finally {
 			remotePrefsLoaded = true;
+			if (versionAtStart !== sidebarPrefsLocalVersion) {
+				void queueRemoteSidebarPreferences();
+			}
 		}
 	}
 
-	async function syncRemoteSidebarPreferences(force = false) {
+	async function queueRemoteSidebarPreferences() {
 		if (typeof window === 'undefined' || !remotePrefsLoaded) return;
-		const signature = sidebarPrefsSignature();
-		if (!force && signature === lastSyncedSidebarPrefs) return;
+		const signature = sidebarPrefsSignatureValue;
+		if (signature === lastSyncedSidebarPrefs) return;
 		if (sidebarPrefsSyncInFlight) return sidebarPrefsSyncInFlight;
 
+		const versionAtStart = sidebarPrefsLocalVersion;
+		let shouldResyncAfterFlight = false;
 		sidebarPrefsSyncInFlight = fetch('/api/auth/preferences/sidebar', {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
@@ -338,16 +373,27 @@
 				if (!res.ok) {
 					return;
 				}
-				const payload = await res.json().catch(() => null);
-				const syncedPinned = normalizePinnedHrefs(payload?.data?.pinned_items ?? payload?.pinned_items ?? pinnedItems);
-				const syncedRecent = normalizeRecentHrefs(payload?.data?.recent_items ?? payload?.recent_items ?? recentItems);
-				lastSyncedSidebarPrefs = JSON.stringify({
-					pinned_items: syncedPinned,
-					recent_items: syncedRecent
-				});
+				const payload = await readClientJson<SidebarPreferencesPayload | null>(res);
+				const source = sidebarPrefsSource(payload);
+				if (versionAtStart === sidebarPrefsLocalVersion) {
+					const syncedPinned = normalizePinnedHrefs(source.pinned_items ?? pinnedItems);
+					const syncedRecent = normalizeRecentHrefs(source.recent_items ?? recentItems);
+					lastSyncedSidebarPrefs = JSON.stringify({
+						pinned_items: syncedPinned,
+						recent_items: syncedRecent
+					});
+				} else {
+					shouldResyncAfterFlight = true;
+				}
+			})
+			.catch(() => {
+				// Keep local cache; the next sidebar change or visibility refresh will retry.
 			})
 			.finally(() => {
 				sidebarPrefsSyncInFlight = null;
+				if (shouldResyncAfterFlight && sidebarPrefsSignatureValue !== lastSyncedSidebarPrefs) {
+					void queueRemoteSidebarPreferences();
+				}
 			});
 		return sidebarPrefsSyncInFlight;
 	}
@@ -399,30 +445,18 @@
 		};
 	});
 
-	$effect(() => {
-		page.url.pathname;
-		if (typeof window === 'undefined') return;
-		void refreshSidebarAttention();
-	});
-
-	$effect(() => {
-		if (!pinnedLoaded || typeof window === 'undefined') return;
-		window.localStorage.setItem(pinnedStorageKey(), JSON.stringify(normalizePinnedHrefs(pinnedItems)));
-	});
-
-	$effect(() => {
-		if (!pinnedLoaded || typeof window === 'undefined') return;
-		window.localStorage.setItem(recentStorageKey(), JSON.stringify(normalizeRecentHrefs(recentItems)));
-	});
-
-	$effect(() => {
-		if (!pinnedLoaded || !remotePrefsLoaded || typeof window === 'undefined') return;
-		void syncRemoteSidebarPreferences();
+	afterNavigate(() => {
+		if (typeof window !== 'undefined') {
+			void refreshSidebarAttention();
+		}
 	});
 
 	async function logout() {
-		await fetch('/api/auth/logout', { method: 'POST' });
-		location.href = '/login';
+		try {
+			await fetch('/api/auth/logout', { method: 'POST' });
+		} finally {
+			location.href = '/login';
+		}
 	}
 </script>
 

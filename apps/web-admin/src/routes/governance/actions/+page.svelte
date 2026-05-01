@@ -22,12 +22,7 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from '$lib/components/ui/sonner';
 	import { confirmAction } from '$lib/confirm-dialog';
-
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	interface Stats {
 		compliance_actions?: number;
@@ -254,6 +249,7 @@
 	] as const;
 
 	let overviewPromise = $state<Promise<ComplianceOverview> | null>(null);
+	let overviewRequestId = 0;
 	let actions = $state<ComplianceActionRow[]>([]);
 	let programs = $state<ProgramRow[]>([]);
 	let documents = $state<DocumentRow[]>([]);
@@ -362,45 +358,18 @@
 		};
 	}
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function fetchOverview(): Promise<ComplianceOverview> {
 		const [statsData, actionData, programData, documentData, workPlanData, performanceData, evidenceData, unitData, employeeData] =
 			await Promise.all([
-				fetch('/api/governance/stats').then((response) => readApi<Stats>(response, 'Gagal memuat statistik.')),
-				fetch('/api/governance/compliance-actions').then((response) => readApi<ComplianceActionRow[]>(response, 'Gagal memuat tindak lanjut.')),
-				fetch('/api/governance/programs').then((response) => readApi<ProgramRow[]>(response, 'Gagal memuat program.')),
-				fetch('/api/governance/documents').then((response) => readApi<DocumentRow[]>(response, 'Gagal memuat dokumen.')),
-				fetch('/api/governance/work-plan-items').then((response) => readApi<WorkPlanItemRow[]>(response, 'Gagal memuat RKT/RKJM.')),
-				fetch('/api/governance/performance-targets').then((response) => readApi<PerformanceTargetRow[]>(response, 'Gagal memuat SKP.')),
-				fetch('/api/governance/evidence-items').then((response) => readApi<EvidenceItemRow[]>(response, 'Gagal memuat bukti mutu.')),
-				fetch('/api/governance/units').then((response) => readApi<UnitRow[]>(response, 'Gagal memuat unit kerja.')),
-				fetch('/api/governance/employee-options').then((response) => readApi<EmployeeOption[]>(response, 'Gagal memuat pegawai.')),
+				fetch('/api/governance/stats').then((response) => readClientApiData<Stats>(response, 'Gagal memuat statistik.')),
+				fetch('/api/governance/compliance-actions').then((response) => readClientApiData<ComplianceActionRow[]>(response, 'Gagal memuat tindak lanjut.')),
+				fetch('/api/governance/programs').then((response) => readClientApiData<ProgramRow[]>(response, 'Gagal memuat program.')),
+				fetch('/api/governance/documents').then((response) => readClientApiData<DocumentRow[]>(response, 'Gagal memuat dokumen.')),
+				fetch('/api/governance/work-plan-items').then((response) => readClientApiData<WorkPlanItemRow[]>(response, 'Gagal memuat RKT/RKJM.')),
+				fetch('/api/governance/performance-targets').then((response) => readClientApiData<PerformanceTargetRow[]>(response, 'Gagal memuat SKP.')),
+				fetch('/api/governance/evidence-items').then((response) => readClientApiData<EvidenceItemRow[]>(response, 'Gagal memuat bukti mutu.')),
+				fetch('/api/governance/units').then((response) => readClientApiData<UnitRow[]>(response, 'Gagal memuat unit kerja.')),
+				fetch('/api/governance/employee-options').then((response) => readClientApiData<EmployeeOption[]>(response, 'Gagal memuat pegawai.')),
 			]);
 		return {
 			stats: statsData ?? {},
@@ -432,19 +401,32 @@
 	}
 
 	function loadOverview() {
-		overviewPromise = fetchOverview().then((next) => {
-			applyOverview(next);
-			return next;
-		});
+		const requestId = ++overviewRequestId;
+		overviewPromise = fetchOverview()
+			.then((next) => {
+				if (requestId === overviewRequestId) {
+					applyOverview(next);
+					return next;
+				}
+				return currentOverview();
+			})
+			.catch((error: unknown) => {
+				if (requestId === overviewRequestId) throw error;
+				return currentOverview();
+			});
 		return overviewPromise;
 	}
 
 	async function refreshOverview() {
+		const requestId = ++overviewRequestId;
 		try {
 			const next = await fetchOverview();
-			applyOverview(next);
-			overviewPromise = Promise.resolve(next);
+			if (requestId === overviewRequestId) {
+				applyOverview(next);
+				overviewPromise = Promise.resolve(next);
+			}
 		} catch (error) {
+			if (requestId !== overviewRequestId) return;
 			overviewPromise = Promise.resolve(currentOverview());
 			toast.error(errorMessage(error));
 		}
@@ -452,10 +434,11 @@
 
 	async function refreshOverviewAction() {
 		refreshBusy = true;
+		const requestId = overviewRequestId + 1;
 		try {
 			await refreshOverview();
 		} finally {
-			refreshBusy = false;
+			if (requestId === overviewRequestId) refreshBusy = false;
 		}
 	}
 
@@ -467,6 +450,12 @@
 	function errorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
 		return 'Data tindak lanjut belum dapat dimuat.';
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		if (typeof error === 'string' && error.trim()) return error;
+		return fallback;
 	}
 
 	function handleRenderError(error: unknown, reset: () => void) {
@@ -523,14 +512,12 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(actionForm),
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) {
-				toast.error(apiErrorMessage(payload) || 'Gagal menyimpan tindak lanjut.');
-				return;
-			}
+			await readClientJson<unknown>(res);
 			toast.success(editingId ? 'Tindak lanjut diperbarui.' : 'Tindak lanjut ditambahkan.');
 			dialogOpen = false;
 			await refreshOverview();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menyimpan tindak lanjut.'));
 		} finally {
 			busy = false;
 		}
@@ -544,9 +531,10 @@
 			tone: 'danger'
 		}))) return;
 		const res = await fetch(`/api/governance/compliance-actions/${action.id}`, { method: 'DELETE' });
-		if (!res.ok) {
-			const payload = await res.json().catch(() => null);
-			toast.error(apiErrorMessage(payload) || 'Gagal menghapus tindak lanjut.');
+		try {
+			await readClientJson<unknown>(res);
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menghapus tindak lanjut.'));
 			return;
 		}
 		toast.success('Tindak lanjut dihapus.');
@@ -608,13 +596,11 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(body),
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) {
-				toast.error(apiErrorMessage(payload) || 'Gagal memperbarui status tindak lanjut.');
-				return;
-			}
+			await readClientJson<unknown>(res);
 			toast.success(`Status diperbarui menjadi ${statusLabel(nextStatus)}.`);
 			await refreshOverview();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal memperbarui status tindak lanjut.'));
 		} finally {
 			quickStatusBusy = { ...quickStatusBusy, [action.id]: false };
 		}
@@ -640,16 +626,14 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(body),
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) {
-				toast.error(apiErrorMessage(payload) || 'Gagal menyimpan bukti tindak lanjut.');
-				return;
-			}
+			await readClientJson<unknown>(res);
 			toast.success(markDone ? 'Bukti dicatat dan tindak lanjut diselesaikan.' : 'Bukti tindak lanjut dicatat.');
 			evidenceDialogOpen = false;
 			evidenceAction = null;
 			evidenceForm = emptyEvidenceForm();
 			await refreshOverview();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menyimpan bukti tindak lanjut.'));
 		} finally {
 			evidenceBusy = false;
 		}

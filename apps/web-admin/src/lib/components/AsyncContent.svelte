@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	let {
 		promise,
@@ -14,6 +15,10 @@
 		children: Snippet<[value: unknown]>;
 		onerror?: (error: unknown, reset: () => void) => void;
 	} = $props();
+
+	function errorMessage(error: unknown) {
+		return error instanceof Error ? error.message : String(error);
+	}
 </script>
 
 {#if promise}
@@ -23,11 +28,19 @@
 		<svelte:boundary {onerror}>
 			{@render children(value)}
 			{#snippet failed(error, reset)}
-				{@render failedSnippet?.(error, reset)}
+				{#if failedSnippet}
+					{@render failedSnippet(error, reset)}
+				{:else}
+					<RecoveryPanel compact message={errorMessage(error)} onRetry={reset} />
+				{/if}
 			{/snippet}
 		</svelte:boundary>
 	{:catch error}
-		{@render failedSnippet?.(error, undefined)}
+		{#if failedSnippet}
+			{@render failedSnippet(error, undefined)}
+		{:else}
+			<RecoveryPanel compact message={errorMessage(error)} />
+		{/if}
 	{/await}
 {:else}
 	{@render pending?.()}

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"slices"
@@ -13,13 +14,26 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
+type userStore interface {
+	ListUsers(ctx context.Context) ([]db.ListUsersRow, error)
+	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
+	AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error
+	DeleteUser(ctx context.Context, id pgtype.UUID) error
+	UpdateUserStatus(ctx context.Context, arg db.UpdateUserStatusParams) error
+	ListAuditLogs(ctx context.Context, arg db.ListAuditLogsParams) ([]db.ListAuditLogsRow, error)
+}
+
 type User struct {
-	q *db.Queries
+	q userStore
 }
 
 func NewUser(q *db.Queries) *User { return &User{q: q} }
 
 func (h *User) List(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	rows, err := h.q.ListUsers(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -58,6 +72,10 @@ func (h *User) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *User) Create(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	var body struct {
 		Username   string   `json:"username"`
 		Password   string   `json:"password"`
@@ -96,7 +114,7 @@ func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 		_ = parID.Scan(body.ParentID)
 	}
 	if err := validateUserCreate(body.Roles, empID, stuID, parID); err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data pengguna tidak valid")
 		return
 	}
 
@@ -176,6 +194,10 @@ type httpError string
 func (e httpError) Error() string { return string(e) }
 
 func (h *User) Delete(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -189,6 +211,10 @@ func (h *User) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *User) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -215,6 +241,10 @@ func (h *User) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *User) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	q := r.URL.Query()
 	limit := int32(pageSize(q.Get("per_page"), 100))
 	page := pageNum(q.Get("page"), 1)

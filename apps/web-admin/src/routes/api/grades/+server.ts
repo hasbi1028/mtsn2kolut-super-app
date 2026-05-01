@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, handleRouteError } from '$lib/server/api';
+import { apiPathWithQuery, proxy, handleRouteError } from '$lib/server/api';
 
 function canManageGrades(event: RequestEvent) {
 	const roles = event.locals.user?.roles ?? (event.locals.user?.role ? [event.locals.user.role] : []);
@@ -10,9 +10,7 @@ function canManageGrades(event: RequestEvent) {
 export const GET = async (event: RequestEvent) => {
 	if (!canManageGrades(event)) return json({ error: 'forbidden' }, { status: 403 });
 	try {
-		const params = event.url.searchParams.toString();
-		const path = params ? `/api/grades?${params}` : '/api/grades';
-		const data = await proxy(event).get(path);
+		const data = await proxy(event).get(apiPathWithQuery('/api/grades', event.url.searchParams));
 		return json(data);
 	} catch (e) {
 		return handleRouteError(e, 'grades GET');

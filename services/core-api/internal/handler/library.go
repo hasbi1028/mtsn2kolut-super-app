@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -9,13 +10,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	mw "mtsn2kolut-super-app/backend/internal/middleware"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
-type Library struct{ svc *service.Library }
+type Library struct {
+	svc   libraryService
+	audit cbtAuthoringAuditWriter
+}
 
-func NewLibrary(svc *service.Library) *Library { return &Library{svc: svc} }
+type libraryService interface {
+	Stats(ctx context.Context) (db.GetLibraryStatsRow, error)
+	ListBooks(ctx context.Context, search, kategori string) ([]db.LibraryBook, error)
+	CreateBook(ctx context.Context, arg db.CreateBookParams) (db.LibraryBook, error)
+	UpdateBook(ctx context.Context, arg db.UpdateBookParams) (db.LibraryBook, error)
+	DeleteBook(ctx context.Context, id pgtype.UUID) error
+	ListLoans(ctx context.Context, filterStatus string) ([]db.ListLoansRow, error)
+	LoanBook(ctx context.Context, bookID, memberType, memberID string, dueDays int) (db.LibraryLoan, error)
+	ReturnBook(ctx context.Context, loanID string) (db.LibraryLoan, error)
+	MarkDendaLunas(ctx context.Context, loanID string) (db.LibraryLoan, error)
+}
+
+func NewLibrary(svc *service.Library, audit ...cbtAuthoringAuditWriter) *Library {
+	var writer cbtAuthoringAuditWriter
+	if len(audit) > 0 {
+		writer = audit[0]
+	}
+	return &Library{svc: svc, audit: writer}
+}
 
 func (h *Library) Stats(w http.ResponseWriter, r *http.Request) {
 	if !libraryAccessAllowed(r) {
@@ -69,7 +92,7 @@ func (h *Library) CreateBook(w http.ResponseWriter, r *http.Request) {
 	}
 	tahun := pgtype.Int4{}
 	if body.TahunTerbit > 0 {
-		_ = tahun.Scan(int32(body.TahunTerbit))
+		tahun = pgtype.Int4{Int32: int32(body.TahunTerbit), Valid: true}
 	}
 	book, err := h.svc.CreateBook(r.Context(), db.CreateBookParams{
 		Kode:           strings.TrimSpace(body.Kode),
@@ -83,9 +106,14 @@ func (h *Library) CreateBook(w http.ResponseWriter, r *http.Request) {
 		LokasiRak:      strings.TrimSpace(body.LokasiRak),
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data buku tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LIBRARY_BOOK_CREATE", "library_book", pgUUIDString(book.ID), map[string]any{
+		"kode":     book.Kode,
+		"judul":    book.Judul,
+		"kategori": book.Kategori,
+	})
 	api.Created(w, book)
 }
 
@@ -116,7 +144,7 @@ func (h *Library) UpdateBook(w http.ResponseWriter, r *http.Request) {
 	}
 	tahun := pgtype.Int4{}
 	if body.TahunTerbit > 0 {
-		_ = tahun.Scan(int32(body.TahunTerbit))
+		tahun = pgtype.Int4{Int32: int32(body.TahunTerbit), Valid: true}
 	}
 	book, err := h.svc.UpdateBook(r.Context(), db.UpdateBookParams{
 		ID:             id,
@@ -131,9 +159,14 @@ func (h *Library) UpdateBook(w http.ResponseWriter, r *http.Request) {
 		LokasiRak:      strings.TrimSpace(body.LokasiRak),
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Perubahan buku tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LIBRARY_BOOK_UPDATE", "library_book", pgUUIDString(book.ID), map[string]any{
+		"kode":     book.Kode,
+		"judul":    book.Judul,
+		"kategori": book.Kategori,
+	})
 	api.OK(w, book)
 }
 
@@ -148,9 +181,12 @@ func (h *Library) DeleteBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.DeleteBook(r.Context(), id); err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Penghapusan buku tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LIBRARY_BOOK_DELETE", "library_book", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
 	api.NoContent(w)
 }
 
@@ -190,9 +226,15 @@ func (h *Library) LoanBook(w http.ResponseWriter, r *http.Request) {
 	}
 	loan, err := h.svc.LoanBook(r.Context(), body.BookID, body.MemberType, body.MemberID, body.DueDays)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Peminjaman buku tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LIBRARY_LOAN_CREATE", "library_loan", pgUUIDString(loan.ID), map[string]any{
+		"book_id":     pgUUIDString(loan.BookID),
+		"member_type": loan.MemberType,
+		"member_id":   strings.TrimSpace(body.MemberID),
+		"due_days":    body.DueDays,
+	})
 	api.Created(w, loan)
 }
 
@@ -204,9 +246,13 @@ func (h *Library) ReturnBook(w http.ResponseWriter, r *http.Request) {
 	loanID := chi.URLParam(r, "id")
 	loan, err := h.svc.ReturnBook(r.Context(), loanID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Pengembalian buku tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LIBRARY_LOAN_RETURN", "library_loan", pgUUIDString(loan.ID), map[string]any{
+		"book_id":     pgUUIDString(loan.BookID),
+		"returned_by": currentUsername(r),
+	})
 	api.OK(w, loan)
 }
 
@@ -218,26 +264,20 @@ func (h *Library) MarkDendaLunas(w http.ResponseWriter, r *http.Request) {
 	loanID := chi.URLParam(r, "id")
 	loan, err := h.svc.MarkDendaLunas(r.Context(), loanID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Pelunasan denda tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LIBRARY_LOAN_DENDA_LUNAS", "library_loan", pgUUIDString(loan.ID), map[string]any{
+		"book_id":    pgUUIDString(loan.BookID),
+		"updated_by": currentUsername(r),
+	})
 	api.OK(w, loan)
 }
 
 // libraryAccessAllowed checks admin or staf role.
 func libraryAccessAllowed(r *http.Request) bool {
 	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
-		if rawRoles, ok := claims["roles"].([]any); ok {
-			for _, role := range rawRoles {
-				if role == "admin" || role == "staf" {
-					return true
-				}
-			}
-		}
-		if role, _ := claims["role"].(string); role == "admin" || role == "staf" {
-			return true
-		}
-		return false
+		return mw.HasAnyRole(claims, "admin", "staf")
 	}
 	return false
 }

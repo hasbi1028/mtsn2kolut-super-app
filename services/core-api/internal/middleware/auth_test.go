@@ -45,3 +45,41 @@ func TestRequireAdminAllowsAdminRole(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
 	}
 }
+
+func TestRequireAnyRoleAllowsMatchingRoleFromArray(t *testing.T) {
+	middleware := RequireAnyRole("admin", "staf")
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/library", nil)
+	req = req.WithContext(context.WithValue(req.Context(), api.ClaimsKey, jwt.MapClaims{
+		"roles": []any{"guru", "staf"},
+	}))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestRequireAnyRoleRejectsNonMatchingRole(t *testing.T) {
+	middleware := RequireAnyRole("admin", "staf")
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/library", nil)
+	req = req.WithContext(context.WithValue(req.Context(), api.ClaimsKey, jwt.MapClaims{
+		"role": "guru",
+	}))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}

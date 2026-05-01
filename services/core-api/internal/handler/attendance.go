@@ -1,22 +1,38 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
 type PusakaAttendance struct {
-	svc *service.PusakaAttendance
+	svc pusakaAttendanceService
 }
 
-func NewPusakaAttendance(svc *service.PusakaAttendance) *PusakaAttendance { return &PusakaAttendance{svc: svc} }
+func NewPusakaAttendance(svc *service.PusakaAttendance) *PusakaAttendance {
+	return &PusakaAttendance{svc: svc}
+}
+
+type pusakaAttendanceService interface {
+	List(ctx context.Context, limit, offset int32) ([]db.ListAttendanceRow, int64, error)
+	ListInRange(ctx context.Context, start, end pgtype.Date) ([]db.ListAttendanceInRangeRow, error)
+	ByDate(ctx context.Context, date pgtype.Date) ([]db.ListAttendanceByDateRow, error)
+	GetSummary(ctx context.Context, start, end pgtype.Date) ([]db.GetMonthlyAttendanceSummaryRow, error)
+	ByEmployee(ctx context.Context, empID pgtype.UUID, limit, offset int32) ([]db.ListAttendanceByEmployeeRow, error)
+}
 
 func (h *PusakaAttendance) List(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	q := r.URL.Query()
 	startStr := q.Get("start_date")
 	endStr := q.Get("end_date")
@@ -56,6 +72,10 @@ func (h *PusakaAttendance) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PusakaAttendance) ByDate(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	dateStr := chi.URLParam(r, "date")
 	var d pgtype.Date
 	if err := d.Scan(dateStr); err != nil {
@@ -71,6 +91,10 @@ func (h *PusakaAttendance) ByDate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PusakaAttendance) GetSummary(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	q := r.URL.Query()
 	startStr := q.Get("start_date")
 	endStr := q.Get("end_date")
@@ -99,6 +123,10 @@ func (h *PusakaAttendance) GetSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PusakaAttendance) ByEmployee(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")

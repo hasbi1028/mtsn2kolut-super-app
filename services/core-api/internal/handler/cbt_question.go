@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,15 +11,40 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	mw "mtsn2kolut-super-app/backend/internal/middleware"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
 type CbtQuestion struct {
-	svc *service.CbtQuestion
+	svc   cbtQuestionService
+	audit cbtAuthoringAuditWriter
 }
 
-func NewCbtQuestion(svc *service.CbtQuestion) *CbtQuestion { return &CbtQuestion{svc: svc} }
+type cbtAuthoringAuditWriter interface {
+	CreateAuditLog(ctx context.Context, arg db.CreateAuditLogParams) (db.AuditLog, error)
+}
+
+type cbtQuestionService interface {
+	ListFiltered(ctx context.Context, in service.ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error)
+	GetDetail(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionDetailRow, error)
+	Create(ctx context.Context, input service.SaveCbtQuestionInput) (db.CbtQuestion, error)
+	Update(ctx context.Context, input service.SaveCbtQuestionInput) (db.CbtQuestion, error)
+	Delete(ctx context.Context, id pgtype.UUID) error
+	SubmitReview(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error)
+	Approve(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error)
+	Publish(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
+	Archive(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
+	DuplicateAsDraft(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
+}
+
+func NewCbtQuestion(svc *service.CbtQuestion, audit ...cbtAuthoringAuditWriter) *CbtQuestion {
+	var writer cbtAuthoringAuditWriter
+	if len(audit) > 0 {
+		writer = audit[0]
+	}
+	return &CbtQuestion{svc: svc, audit: writer}
+}
 
 type cbtQuestionBody struct {
 	SubjectID       string                   `json:"subject_id"`
@@ -58,6 +84,10 @@ type cbtQuestionBody struct {
 }
 
 func (h *CbtQuestion) List(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	subjectID := pgtype.UUID{}
 	if raw := strings.TrimSpace(r.URL.Query().Get("subject_id")); raw != "" {
 		parsed, err := parseUUID(raw)
@@ -101,14 +131,18 @@ func (h *CbtQuestion) List(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]any{
 		"items": items,
 		"meta": map[string]any{
-			"total": total,
-			"limit": limit,
+			"total":  total,
+			"limit":  limit,
 			"offset": offset,
 		},
 	})
 }
 
 func (h *CbtQuestion) Get(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -123,62 +157,97 @@ func (h *CbtQuestion) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtQuestion) Create(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	body, err := decodeQuestionBody(r)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data soal CBT tidak valid")
 		return
 	}
 	input, err := questionInputFromBody(r, body, pgtype.UUID{})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data soal CBT tidak valid")
 		return
 	}
 	row, err := h.svc.Create(r.Context(), input)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Pembuatan soal CBT tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_CREATE", "cbt_question", pgUUIDString(row.ID), map[string]any{
+		"subject_id":      pgUUIDString(row.SubjectID),
+		"question_type":   row.QuestionType,
+		"workflow_status": row.WorkflowStatus,
+		"author_username": row.AuthorUsername,
+	})
 	api.Created(w, serializeQuestionModel(row))
 }
 
 func (h *CbtQuestion) Update(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
+		return
+	}
+	if !h.requireQuestionAuthorOrAdmin(w, r, id) {
 		return
 	}
 	body, err := decodeQuestionBody(r)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data soal CBT tidak valid")
 		return
 	}
 	input, err := questionInputFromBody(r, body, id)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data soal CBT tidak valid")
 		return
 	}
 	row, err := h.svc.Update(r.Context(), input)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Perubahan soal CBT tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_UPDATE", "cbt_question", pgUUIDString(row.ID), map[string]any{
+		"subject_id":      pgUUIDString(row.SubjectID),
+		"question_type":   row.QuestionType,
+		"workflow_status": row.WorkflowStatus,
+		"author_username": row.AuthorUsername,
+	})
 	api.OK(w, serializeQuestionModel(row))
 }
 
 func (h *CbtQuestion) Delete(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
+		return
+	}
+	if !h.requireQuestionAuthorOrAdmin(w, r, id) {
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		api.Internal(w, err)
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_DELETE", "cbt_question", pgUUIDString(id), nil)
 	api.NoContent(w)
 }
 
 func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -199,11 +268,18 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 			api.Forbidden(w)
 			return
 		}
-		row, err := h.svc.SubmitReview(r.Context(), id, username, body.Notes)
-		if err != nil {
-			api.BadRequest(w, err.Error())
+		if !h.requireQuestionAuthorOrAdmin(w, r, id) {
 			return
 		}
+		row, err := h.svc.SubmitReview(r.Context(), id, username, body.Notes)
+		if err != nil {
+			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
+			return
+		}
+		cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_SUBMIT_REVIEW", "cbt_question", pgUUIDString(row.ID), map[string]any{
+			"workflow_status": row.WorkflowStatus,
+			"review_notes":    body.Notes,
+		})
 		api.OK(w, serializeQuestionModel(row))
 	case "approve":
 		if !hasAnyRole(r, "admin") {
@@ -212,9 +288,13 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		}
 		row, err := h.svc.Approve(r.Context(), id, username, body.Notes)
 		if err != nil {
-			api.BadRequest(w, err.Error())
+			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
 			return
 		}
+		cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_APPROVE", "cbt_question", pgUUIDString(row.ID), map[string]any{
+			"workflow_status": row.WorkflowStatus,
+			"review_notes":    body.Notes,
+		})
 		api.OK(w, serializeQuestionModel(row))
 	case "publish":
 		if !hasAnyRole(r, "admin") {
@@ -223,9 +303,12 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		}
 		row, err := h.svc.Publish(r.Context(), id, username)
 		if err != nil {
-			api.BadRequest(w, err.Error())
+			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
 			return
 		}
+		cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_PUBLISH", "cbt_question", pgUUIDString(row.ID), map[string]any{
+			"status": row.Status,
+		})
 		api.OK(w, serializeQuestionModel(row))
 	case "archive":
 		if !hasAnyRole(r, "admin") {
@@ -234,9 +317,12 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		}
 		row, err := h.svc.Archive(r.Context(), id, username)
 		if err != nil {
-			api.BadRequest(w, err.Error())
+			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
 			return
 		}
+		cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_ARCHIVE", "cbt_question", pgUUIDString(row.ID), map[string]any{
+			"status": row.Status,
+		})
 		api.OK(w, serializeQuestionModel(row))
 	default:
 		api.BadRequest(w, "action tidak didukung")
@@ -244,6 +330,10 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtQuestion) Duplicate(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -251,9 +341,14 @@ func (h *CbtQuestion) Duplicate(w http.ResponseWriter, r *http.Request) {
 	}
 	row, err := h.svc.DuplicateAsDraft(r.Context(), id, currentUsername(r))
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Duplikasi soal CBT tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_DUPLICATE", "cbt_question", pgUUIDString(row.ID), map[string]any{
+		"source_question_id": pgUUIDString(id),
+		"workflow_status":    row.WorkflowStatus,
+		"author_username":    row.AuthorUsername,
+	})
 	api.Created(w, serializeQuestionModel(row))
 }
 
@@ -324,21 +419,38 @@ func currentUsername(r *http.Request) string {
 	if !ok {
 		return ""
 	}
+	if usr, _ := claims["usr"].(string); usr != "" {
+		return usr
+	}
 	if sub, _ := claims["sub"].(string); sub != "" {
 		return sub
 	}
 	return ""
 }
 
-func currentRole(r *http.Request) string {
-	claims, ok := api.ClaimsFromContext(r.Context())
-	if !ok {
-		return ""
+func (h *CbtQuestion) requireQuestionAuthorOrAdmin(w http.ResponseWriter, r *http.Request, id pgtype.UUID) bool {
+	if hasAnyRole(r, "admin") {
+		return true
 	}
-	if role, _ := claims["role"].(string); role != "" {
-		return role
+	if !hasAnyRole(r, "guru") {
+		api.Forbidden(w)
+		return false
 	}
-	return ""
+	username := currentUsername(r)
+	if strings.TrimSpace(username) == "" {
+		api.Forbidden(w)
+		return false
+	}
+	row, err := h.svc.GetDetail(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return false
+	}
+	if strings.TrimSpace(row.AuthorUsername) != username {
+		api.Forbidden(w)
+		return false
+	}
+	return true
 }
 
 func hasAnyRole(r *http.Request, allowed ...string) bool {
@@ -346,24 +458,40 @@ func hasAnyRole(r *http.Request, allowed ...string) bool {
 	if !ok {
 		return false
 	}
-	if rawRoles, ok := claims["roles"].([]any); ok {
-		for _, role := range rawRoles {
-			roleStr, _ := role.(string)
-			for _, allowedRole := range allowed {
-				if roleStr == allowedRole {
-					return true
-				}
-			}
-		}
+	return mw.HasAnyRole(claims, allowed...)
+}
+
+func cbtAuditAuthoringEvent(audit cbtAuthoringAuditWriter, ctx context.Context, action, entityType, entityID string, extra map[string]any) {
+	if audit == nil {
+		return
 	}
-	if role, _ := claims["role"].(string); role != "" {
-		for _, allowedRole := range allowed {
-			if role == allowedRole {
-				return true
-			}
-		}
+	claims, ok := api.ClaimsFromContext(ctx)
+	if !ok {
+		return
 	}
-	return false
+	userID, err := authUserID(claims)
+	if err != nil {
+		return
+	}
+	meta := map[string]any{
+		"username":   claims["usr"],
+		"user_id":    claims["uid"],
+		"session_id": claims["ssid"],
+	}
+	for key, value := range extra {
+		meta[key] = value
+	}
+	rawMeta, err := json.Marshal(meta)
+	if err != nil {
+		return
+	}
+	_, _ = audit.CreateAuditLog(ctx, db.CreateAuditLogParams{
+		UserID:     userID,
+		Action:     action,
+		EntityType: entityType,
+		EntityID:   entityID,
+		Metadata:   rawMeta,
+	})
 }
 
 func serializeQuestionListRow(row db.ListCbtQuestionsFilteredRow) map[string]any {

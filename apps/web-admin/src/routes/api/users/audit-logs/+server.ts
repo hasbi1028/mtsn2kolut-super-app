@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, handleRouteError } from '$lib/server/api';
+import { apiPathWithQuery, handleRouteError, proxy } from '$lib/server/api';
 
 export const GET = async (event: RequestEvent) => {
 	try {
@@ -10,7 +10,7 @@ export const GET = async (event: RequestEvent) => {
 		if (page) qs.set('page', page);
 		if (perPage) qs.set('per_page', perPage);
 
-		const res = await proxy(event).get(`/api/users/audit-logs?${qs}`);
+		const res = await proxy(event).get(apiPathWithQuery('/api/users/audit-logs', qs));
 		return json(res);
 	} catch (e) {
 		return handleRouteError(e, 'audit-logs GET');

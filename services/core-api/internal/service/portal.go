@@ -7,8 +7,19 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
+type portalStore interface {
+	GetStudentByID(ctx context.Context, id pgtype.UUID) (db.GetStudentByIDRow, error)
+	ListStudentParents(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentParentsRow, error)
+	ListStudentExamSessions(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentExamSessionsRow, error)
+	ListStudentTimetable(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentTimetableRow, error)
+	ListTeacherTimetable(ctx context.Context, employeeID pgtype.UUID) ([]db.ListTeacherTimetableRow, error)
+	ListParentChildrenTimetable(ctx context.Context, parentID pgtype.UUID) ([]db.ListParentChildrenTimetableRow, error)
+	GetParent(ctx context.Context, id pgtype.UUID) (db.Parent, error)
+	ListParentChildren(ctx context.Context, parentID pgtype.UUID) ([]db.ListParentChildrenRow, error)
+}
+
 type Portal struct {
-	q *db.Queries
+	q portalStore
 }
 
 func NewPortal(q *db.Queries) *Portal { return &Portal{q: q} }

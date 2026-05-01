@@ -7,6 +7,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { fetchSchoolProfile, schoolAddressLine, type SchoolProfile } from '$lib/school-profile';
+	import { readClientApiData } from '$lib/client/api';
 
 	type SessionInfo = {
 		title: string;
@@ -44,11 +45,6 @@
 		participants: Participant[];
 		rooms: Room[];
 	};
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
 	type MinutesPrintData = {
 		schoolProfile: SchoolProfile;
 		detail: MinutesDetail;
@@ -57,36 +53,9 @@
 	const sessionId = page.params.id;
 	let minutesPromise = $state<Promise<MinutesPrintData> | null>(null);
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function fetchMinutes(): Promise<MinutesDetail> {
 		const response = await fetch(`/api/cbt/sessions/${sessionId}/minutes`);
-		const payload = await readApi<MinutesPayload>(response, 'Gagal memuat berita acara sesi');
+		const payload = await readClientApiData<MinutesPayload>(response, 'Gagal memuat berita acara sesi');
 		if (!payload.session) throw new Error('Data sesi tidak ditemukan');
 		return {
 			session: payload.session,

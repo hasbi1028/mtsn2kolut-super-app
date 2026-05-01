@@ -17,6 +17,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	let { data }: { data: PageData } = $props();
 
@@ -309,6 +310,7 @@
 	] as const;
 
 	let pagePromise = $state<Promise<KesiswaanData> | null>(null);
+	let pageRequestId = 0;
 	const canOpenDocumentCycles = $derived(data.roles.includes('admin') || data.roles.includes('staf'));
 	let snapshot = $state<KesiswaanData>(emptyData());
 	let activeTab = $state('siswa');
@@ -508,58 +510,64 @@
 		};
 	}
 
-	function readApi<T>(response: Response, fallback: string): Promise<T> {
-		return response.json().then((payload: unknown) => {
-			if (!response.ok) {
-				const message = typeof payload === 'object' && payload !== null && 'error' in payload ? String((payload as { error?: unknown }).error) : fallback;
-				throw new Error(message || fallback);
-			}
-			return payload as T;
-		});
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		if (typeof error === 'string' && error.trim()) return error;
+		return fallback;
 	}
 
 	async function fetchData(): Promise<KesiswaanData> {
 		const [
-			statsRes,
-			classesRes,
-			studentsRes,
-			categoriesRes,
-			violationsRes,
-			achievementsRes,
-			extracurricularsRes,
-			membersRes,
-			counselingRes,
-			transfersRes,
+			stats,
+			classes,
+			students,
+			categories,
+			violations,
+			achievements,
+			extracurriculars,
+			extracurricularMembers,
+			counselingSessions,
+			transfers,
 		] = await Promise.all([
-			fetch('/api/kesiswaan/stats'),
-			fetch('/api/kesiswaan/classes'),
-			fetch('/api/kesiswaan/students'),
-			fetch('/api/kesiswaan/violation-categories'),
-			fetch('/api/kesiswaan/violations'),
-			fetch('/api/kesiswaan/achievements'),
-			fetch('/api/kesiswaan/extracurriculars'),
-			fetch('/api/kesiswaan/extracurricular-members'),
-			fetch('/api/kesiswaan/counseling-sessions'),
-			fetch('/api/kesiswaan/student-transfers'),
+			fetch('/api/kesiswaan/stats').then((response) => readClientApiData<Stats>(response, 'Gagal memuat statistik kesiswaan.')),
+			fetch('/api/kesiswaan/classes').then((response) => readClientApiData<ClassOption[]>(response, 'Gagal memuat kelas.')),
+			fetch('/api/kesiswaan/students').then((response) => readClientApiData<StudentRow[]>(response, 'Gagal memuat siswa.')),
+			fetch('/api/kesiswaan/violation-categories').then((response) => readClientApiData<CategoryRow[]>(response, 'Gagal memuat kategori pelanggaran.')),
+			fetch('/api/kesiswaan/violations').then((response) => readClientApiData<ViolationRow[]>(response, 'Gagal memuat pelanggaran.')),
+			fetch('/api/kesiswaan/achievements').then((response) => readClientApiData<AchievementRow[]>(response, 'Gagal memuat prestasi.')),
+			fetch('/api/kesiswaan/extracurriculars').then((response) => readClientApiData<ExtracurricularRow[]>(response, 'Gagal memuat ekskul.')),
+			fetch('/api/kesiswaan/extracurricular-members').then((response) => readClientApiData<ExtracurricularMemberRow[]>(response, 'Gagal memuat anggota ekskul.')),
+			fetch('/api/kesiswaan/counseling-sessions').then((response) => readClientApiData<CounselingRow[]>(response, 'Gagal memuat catatan BK.')),
+			fetch('/api/kesiswaan/student-transfers').then((response) => readClientApiData<TransferRow[]>(response, 'Gagal memuat mutasi siswa.')),
 		]);
-		const next = {
-			stats: await readApi<Stats>(statsRes, 'Gagal memuat statistik kesiswaan.'),
-			classes: await readApi<ClassOption[]>(classesRes, 'Gagal memuat kelas.'),
-			students: await readApi<StudentRow[]>(studentsRes, 'Gagal memuat siswa.'),
-			categories: await readApi<CategoryRow[]>(categoriesRes, 'Gagal memuat kategori pelanggaran.'),
-			violations: await readApi<ViolationRow[]>(violationsRes, 'Gagal memuat pelanggaran.'),
-			achievements: await readApi<AchievementRow[]>(achievementsRes, 'Gagal memuat prestasi.'),
-			extracurriculars: await readApi<ExtracurricularRow[]>(extracurricularsRes, 'Gagal memuat ekskul.'),
-			extracurricularMembers: await readApi<ExtracurricularMemberRow[]>(membersRes, 'Gagal memuat anggota ekskul.'),
-			counselingSessions: await readApi<CounselingRow[]>(counselingRes, 'Gagal memuat catatan BK.'),
-			transfers: await readApi<TransferRow[]>(transfersRes, 'Gagal memuat mutasi siswa.'),
+		return {
+			stats,
+			classes,
+			students,
+			categories,
+			violations,
+			achievements,
+			extracurriculars,
+			extracurricularMembers,
+			counselingSessions,
+			transfers,
 		};
-		snapshot = next;
-		return next;
 	}
 
 	function load() {
-		pagePromise = fetchData();
+		const requestId = ++pageRequestId;
+		pagePromise = fetchData()
+			.then((next) => {
+				if (requestId === pageRequestId) {
+					snapshot = next;
+					return next;
+				}
+				return snapshot;
+			})
+			.catch((error: unknown) => {
+				if (requestId === pageRequestId) throw error;
+				return snapshot;
+			});
 	}
 
 	function retry(reset?: () => void) {
@@ -744,9 +752,10 @@
 			const form = new FormData();
 			form.set('file', selectedPhotoFile);
 			const res = await fetch(`/api/kesiswaan/students/${id}/photo`, { method: 'POST', body: form });
-			if (!res.ok) {
-				const j = await res.json().catch(() => ({ error: 'Gagal mengunggah foto siswa' })) as { error?: string };
-				toast.error(j.error ?? 'Gagal mengunggah foto siswa');
+			try {
+				await readClientJson<unknown>(res);
+			} catch (error) {
+				toast.error(mutationErrorMessage(error, 'Gagal mengunggah foto siswa'));
 				return false;
 			}
 		}
@@ -765,9 +774,10 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(payload),
 		});
-		if (!res.ok) {
-			const j = await res.json().catch(() => ({ error: 'Gagal menyimpan data' })) as { error?: string };
-			toast.error(j.error ?? 'Gagal menyimpan data');
+		try {
+			await readClientJson<unknown>(res);
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menyimpan data'));
 			return false;
 		}
 		return true;
@@ -782,9 +792,10 @@
 			tone: 'danger'
 		}))) return;
 		const res = await fetch(`/api/kesiswaan/${kind}/${id}`, { method: 'DELETE' });
-		if (!res.ok) {
-			const j = await res.json().catch(() => ({ error: 'Gagal menghapus data' })) as { error?: string };
-			toast.error(j.error ?? 'Gagal menghapus data');
+		try {
+			await readClientJson<unknown>(res);
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menghapus data'));
 			return;
 		}
 		toast.success('Data kesiswaan dihapus');

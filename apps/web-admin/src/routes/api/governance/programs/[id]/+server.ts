@@ -1,11 +1,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { proxy, handleRouteError } from '$lib/server/api';
+import { apiPath, handleRouteError, proxy, readRequestJson, requiredRouteParam } from '$lib/server/api';
 
 export const PUT: RequestHandler = async (event) => {
 	try {
-		const body = await event.request.json();
-		const data = await proxy(event).put(`/api/governance/programs/${event.params.id}`, body);
+		const id = requiredRouteParam(event.params.id, 'id');
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
+		const data = await proxy(event).put(apiPath`/api/governance/programs/${id}`, body);
 		return json(data);
 	} catch (e) {
 		return handleRouteError(e, 'governance/programs/[id] PUT');
@@ -14,7 +15,8 @@ export const PUT: RequestHandler = async (event) => {
 
 export const DELETE: RequestHandler = async (event) => {
 	try {
-		await proxy(event).del(`/api/governance/programs/${event.params.id}`);
+		const id = requiredRouteParam(event.params.id, 'id');
+		await proxy(event).del(apiPath`/api/governance/programs/${id}`);
 		return new Response(null, { status: 204 });
 	} catch (e) {
 		return handleRouteError(e, 'governance/programs/[id] DELETE');

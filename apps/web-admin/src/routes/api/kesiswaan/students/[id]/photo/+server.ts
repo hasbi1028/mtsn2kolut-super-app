@@ -1,19 +1,18 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { proxy, handleRouteError } from '$lib/server/api';
+import { apiPath, proxy, handleRouteError, jsonProxyResponse, requiredRouteParam } from '$lib/server/api';
 
 export const POST: RequestHandler = async (event) => {
 	try {
+		const id = requiredRouteParam(event.params.id, 'id');
 		const form = await event.request.formData();
-		const response = await proxy(event).fetch(`/api/kesiswaan/students/${event.params.id}/photo`, {
+		const response = await proxy(event).fetch(apiPath`/api/kesiswaan/students/${id}/photo`, {
 			method: 'POST',
 			body: form,
 		});
-		const payload = await response.json();
-		if (!response.ok) {
-			return json(payload, { status: response.status });
-		}
-		return json(payload.data ?? payload);
+		return await jsonProxyResponse<{ data?: unknown }, unknown>(response, {
+			fallbackMessage: 'Gagal mengunggah foto siswa.',
+			map: (payload) => payload.data ?? payload
+		});
 	} catch (e) {
 		return handleRouteError(e, 'kesiswaan/students/[id]/photo POST');
 	}

@@ -1,0 +1,976 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
+)
+
+type fakeAttendanceStore struct {
+	listRows      []db.ListAttendanceRow
+	listErr       error
+	listArg       db.ListAttendanceParams
+	count         int64
+	countErr      error
+	byDateArg     pgtype.Date
+	rangeArg      db.ListAttendanceInRangeParams
+	byEmployeeArg db.ListAttendanceByEmployeeParams
+	summaryArg    db.GetMonthlyAttendanceSummaryParams
+	upsertArg     db.UpsertAttendanceParams
+}
+
+func (f *fakeAttendanceStore) ListAttendance(ctx context.Context, arg db.ListAttendanceParams) ([]db.ListAttendanceRow, error) {
+	f.listArg = arg
+	return f.listRows, f.listErr
+}
+
+func (f *fakeAttendanceStore) CountAttendance(ctx context.Context) (int64, error) {
+	return f.count, f.countErr
+}
+
+func (f *fakeAttendanceStore) ListAttendanceByDate(ctx context.Context, tanggal pgtype.Date) ([]db.ListAttendanceByDateRow, error) {
+	f.byDateArg = tanggal
+	return []db.ListAttendanceByDateRow{{EmployeeNama: "Guru"}}, nil
+}
+
+func (f *fakeAttendanceStore) ListAttendanceInRange(ctx context.Context, arg db.ListAttendanceInRangeParams) ([]db.ListAttendanceInRangeRow, error) {
+	f.rangeArg = arg
+	return []db.ListAttendanceInRangeRow{{EmployeeNama: "Guru"}}, nil
+}
+
+func (f *fakeAttendanceStore) ListAttendanceByEmployee(ctx context.Context, arg db.ListAttendanceByEmployeeParams) ([]db.ListAttendanceByEmployeeRow, error) {
+	f.byEmployeeArg = arg
+	return []db.ListAttendanceByEmployeeRow{{EmployeeID: arg.EmployeeID, EmployeeNama: "Guru"}}, nil
+}
+
+func (f *fakeAttendanceStore) GetMonthlyAttendanceSummary(ctx context.Context, arg db.GetMonthlyAttendanceSummaryParams) ([]db.GetMonthlyAttendanceSummaryRow, error) {
+	f.summaryArg = arg
+	return []db.GetMonthlyAttendanceSummaryRow{{EmployeeNama: "Guru", TotalDays: 2}}, nil
+}
+
+func (f *fakeAttendanceStore) UpsertAttendance(ctx context.Context, arg db.UpsertAttendanceParams) (db.AttendanceRecord, error) {
+	f.upsertArg = arg
+	return db.AttendanceRecord{EmployeeID: arg.EmployeeID, Tanggal: arg.Tanggal, JamMasuk: arg.JamMasuk}, nil
+}
+
+func TestPusakaAttendanceServiceForwardsStoreCalls(t *testing.T) {
+	employeeID := documentCycleTestUUID(181)
+	start := pgtype.Date{Valid: true}
+	end := pgtype.Date{Valid: true}
+	store := &fakeAttendanceStore{
+		listRows: []db.ListAttendanceRow{{EmployeeID: employeeID, EmployeeNama: "Guru"}},
+		count:    3,
+	}
+	svc := &PusakaAttendance{q: store}
+	if NewPusakaAttendance(nil) == nil {
+		t.Fatal("NewPusakaAttendance(nil) = nil, want service")
+	}
+
+	rows, count, err := svc.List(context.Background(), 20, 5)
+	if err != nil || len(rows) != 1 || count != 3 {
+		t.Fatalf("List() = %d rows/%d/%v, want 1/3/nil", len(rows), count, err)
+	}
+	if store.listArg.Limit != 20 || store.listArg.Offset != 5 {
+		t.Fatalf("List() arg = %+v, want limit/offset", store.listArg)
+	}
+	if rows, err := svc.ByDate(context.Background(), start); err != nil || len(rows) != 1 || store.byDateArg != start {
+		t.Fatalf("ByDate() = %d rows/%v date=%v, want 1/nil/%v", len(rows), err, store.byDateArg, start)
+	}
+	if rows, err := svc.ListInRange(context.Background(), start, end); err != nil || len(rows) != 1 || store.rangeArg.Tanggal != start || store.rangeArg.Tanggal_2 != end {
+		t.Fatalf("ListInRange() = %d rows/%v arg=%+v, want range", len(rows), err, store.rangeArg)
+	}
+	if rows, err := svc.ByEmployee(context.Background(), employeeID, 10, 2); err != nil || len(rows) != 1 || store.byEmployeeArg.EmployeeID != employeeID || store.byEmployeeArg.Limit != 10 {
+		t.Fatalf("ByEmployee() = %d rows/%v arg=%+v, want employee paging", len(rows), err, store.byEmployeeArg)
+	}
+	if rows, err := svc.GetSummary(context.Background(), start, end); err != nil || len(rows) != 1 || store.summaryArg.Tanggal != start || store.summaryArg.Tanggal_2 != end {
+		t.Fatalf("GetSummary() = %d rows/%v arg=%+v, want range", len(rows), err, store.summaryArg)
+	}
+	if _, err := svc.Upsert(context.Background(), db.UpsertAttendanceParams{EmployeeID: employeeID, Tanggal: start, JamMasuk: "07:00"}); err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+	if store.upsertArg.EmployeeID != employeeID || store.upsertArg.JamMasuk != "07:00" {
+		t.Fatalf("Upsert() arg = %+v, want forwarded attendance", store.upsertArg)
+	}
+}
+
+func TestPusakaAttendanceListPropagatesErrors(t *testing.T) {
+	svc := &PusakaAttendance{q: &fakeAttendanceStore{listErr: errors.New("list failed")}}
+	if _, _, err := svc.List(context.Background(), 1, 0); err == nil || err.Error() != "list failed" {
+		t.Fatalf("List(list error) = %v, want list failed", err)
+	}
+	svc = &PusakaAttendance{q: &fakeAttendanceStore{countErr: errors.New("count failed")}}
+	if _, _, err := svc.List(context.Background(), 1, 0); err == nil || err.Error() != "count failed" {
+		t.Fatalf("List(count error) = %v, want count failed", err)
+	}
+}
+
+type fakeCbtEventStore struct {
+	listRows        []db.ListCbtExamEventsRow
+	listErr         error
+	getID           pgtype.UUID
+	resultsRows     []db.GetEventResultsRow
+	resultsErr      error
+	resultsID       pgtype.UUID
+	cardsRows       []db.GetEventExamCardsRow
+	cardsErr        error
+	cardsID         pgtype.UUID
+	createArg       db.CreateCbtExamEventParams
+	updateStatusArg db.UpdateCbtExamEventStatusParams
+	updateArg       db.UpdateCbtExamEventParams
+	deleteID        pgtype.UUID
+}
+
+func (f *fakeCbtEventStore) ListCbtExamEvents(ctx context.Context) ([]db.ListCbtExamEventsRow, error) {
+	return f.listRows, f.listErr
+}
+
+func (f *fakeCbtEventStore) GetCbtExamEvent(ctx context.Context, id pgtype.UUID) (db.GetCbtExamEventRow, error) {
+	f.getID = id
+	return db.GetCbtExamEventRow{ID: id, Title: "PAT"}, nil
+}
+
+func (f *fakeCbtEventStore) GetEventResults(ctx context.Context, eventID pgtype.UUID) ([]db.GetEventResultsRow, error) {
+	f.resultsID = eventID
+	return f.resultsRows, f.resultsErr
+}
+
+func (f *fakeCbtEventStore) GetEventExamCards(ctx context.Context, eventID pgtype.UUID) ([]db.GetEventExamCardsRow, error) {
+	f.cardsID = eventID
+	return f.cardsRows, f.cardsErr
+}
+
+func (f *fakeCbtEventStore) CreateCbtExamEvent(ctx context.Context, arg db.CreateCbtExamEventParams) (db.CbtExamEvent, error) {
+	f.createArg = arg
+	return db.CbtExamEvent{Title: arg.Title, ExamType: arg.ExamType, Scope: arg.Scope, Status: arg.Status, TargetLevels: arg.TargetLevels}, nil
+}
+
+func (f *fakeCbtEventStore) UpdateCbtExamEventStatus(ctx context.Context, arg db.UpdateCbtExamEventStatusParams) (db.CbtExamEvent, error) {
+	f.updateStatusArg = arg
+	return db.CbtExamEvent{ID: arg.ID, Status: arg.Status}, nil
+}
+
+func (f *fakeCbtEventStore) UpdateCbtExamEvent(ctx context.Context, arg db.UpdateCbtExamEventParams) (db.CbtExamEvent, error) {
+	f.updateArg = arg
+	return db.CbtExamEvent{ID: arg.ID, Title: arg.Title, ExamType: arg.ExamType, Scope: arg.Scope, TargetLevels: arg.TargetLevels}, nil
+}
+
+func (f *fakeCbtEventStore) DeleteCbtExamEvent(ctx context.Context, id pgtype.UUID) error {
+	f.deleteID = id
+	return nil
+}
+
+func TestCbtEventServiceForwardsStoreCalls(t *testing.T) {
+	eventID := documentCycleTestUUID(191)
+	yearID := documentCycleTestUUID(192)
+	store := &fakeCbtEventStore{
+		listRows:    []db.ListCbtExamEventsRow{{ID: eventID, Title: "PAT"}},
+		resultsRows: []db.GetEventResultsRow{{SessionTitle: "Sesi 1"}},
+		cardsRows:   []db.GetEventExamCardsRow{{SessionTitle: "Sesi 1"}},
+	}
+	svc := &CbtEvent{q: store}
+	if NewCbtEvent(nil) == nil {
+		t.Fatal("NewCbtEvent(nil) = nil, want service")
+	}
+
+	if rows, err := svc.List(context.Background()); err != nil || len(rows) != 1 {
+		t.Fatalf("List() = %d rows/%v, want 1 nil", len(rows), err)
+	}
+	store.listRows = nil
+	if rows, err := svc.List(context.Background()); err != nil || len(rows) != 0 {
+		t.Fatalf("List(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+	if got, err := svc.Get(context.Background(), eventID); err != nil || got.ID != eventID || store.getID != eventID {
+		t.Fatalf("Get() = %+v/%v id=%v, want event", got, err, store.getID)
+	}
+	if rows, err := svc.GetResults(context.Background(), eventID); err != nil || len(rows) != 1 || store.resultsID != eventID {
+		t.Fatalf("GetResults() = %d rows/%v id=%v, want results", len(rows), err, store.resultsID)
+	}
+	store.resultsRows = nil
+	if rows, err := svc.GetResults(context.Background(), eventID); err != nil || len(rows) != 0 {
+		t.Fatalf("GetResults(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+	if rows, err := svc.GetExamCards(context.Background(), eventID); err != nil || len(rows) != 1 || store.cardsID != eventID {
+		t.Fatalf("GetExamCards() = %d rows/%v id=%v, want cards", len(rows), err, store.cardsID)
+	}
+	store.cardsRows = nil
+	if rows, err := svc.GetExamCards(context.Background(), eventID); err != nil || len(rows) != 0 {
+		t.Fatalf("GetExamCards(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+	if _, err := svc.Create(context.Background(), CreateCbtEventInput{Title: "PAT", ExamType: db.CbtExamTypeUas, Scope: "grade", TargetLevels: []string{"9"}, AcademicYearID: yearID}); err != nil {
+		t.Fatalf("Create(default status) error = %v", err)
+	}
+	if store.createArg.Status != "draft" || store.createArg.AcademicYearID != yearID {
+		t.Fatalf("Create(default status) arg = %+v, want draft/year", store.createArg)
+	}
+	if _, err := svc.Create(context.Background(), CreateCbtEventInput{Title: "PAT", ExamType: db.CbtExamTypeUts, Scope: "school", Status: "published"}); err != nil {
+		t.Fatalf("Create(status) error = %v", err)
+	}
+	if store.createArg.Status != "published" {
+		t.Fatalf("Create(status) arg = %+v, want published", store.createArg)
+	}
+	if _, err := svc.UpdateStatus(context.Background(), eventID, "archived"); err != nil {
+		t.Fatalf("UpdateStatus() error = %v", err)
+	}
+	if store.updateStatusArg.ID != eventID || store.updateStatusArg.Status != "archived" {
+		t.Fatalf("UpdateStatus() arg = %+v, want status", store.updateStatusArg)
+	}
+	if _, err := svc.Update(context.Background(), eventID, CreateCbtEventInput{Title: "PAS", ExamType: db.CbtExamTypeUas, Scope: "school", AcademicYearID: yearID}); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if store.updateArg.ID != eventID || store.updateArg.Title != "PAS" {
+		t.Fatalf("Update() arg = %+v, want update", store.updateArg)
+	}
+	if err := svc.Delete(context.Background(), eventID); err != nil || store.deleteID != eventID {
+		t.Fatalf("Delete() = %v id=%v, want nil/%v", err, store.deleteID, eventID)
+	}
+}
+
+func TestCbtEventListPropagatesErrors(t *testing.T) {
+	eventID := documentCycleTestUUID(193)
+	svc := &CbtEvent{q: &fakeCbtEventStore{listErr: errors.New("list failed")}}
+	if _, err := svc.List(context.Background()); err == nil || err.Error() != "list failed" {
+		t.Fatalf("List(error) = %v, want list failed", err)
+	}
+	svc = &CbtEvent{q: &fakeCbtEventStore{resultsErr: errors.New("results failed")}}
+	if _, err := svc.GetResults(context.Background(), eventID); err == nil || err.Error() != "results failed" {
+		t.Fatalf("GetResults(error) = %v, want results failed", err)
+	}
+	svc = &CbtEvent{q: &fakeCbtEventStore{cardsErr: errors.New("cards failed")}}
+	if _, err := svc.GetExamCards(context.Background(), eventID); err == nil || err.Error() != "cards failed" {
+		t.Fatalf("GetExamCards(error) = %v, want cards failed", err)
+	}
+}
+
+type fakeCbtPackageStore struct {
+	packagesRows  []db.ListCbtPackagesRow
+	packagesErr   error
+	questionsRows []db.ListCbtPackageQuestionsRow
+	questionsErr  error
+	deleteID      pgtype.UUID
+	createArg     db.CreateCbtPackageParams
+	createErr     error
+	packageRow    db.CbtPackage
+	questionRow   db.GetCbtQuestionRow
+	questionErr   error
+	addArgs       []db.AddCbtPackageQuestionParams
+	addErr        error
+}
+
+func (f *fakeCbtPackageStore) ListCbtPackages(ctx context.Context) ([]db.ListCbtPackagesRow, error) {
+	return f.packagesRows, f.packagesErr
+}
+
+func (f *fakeCbtPackageStore) ListCbtPackageQuestions(ctx context.Context) ([]db.ListCbtPackageQuestionsRow, error) {
+	return f.questionsRows, f.questionsErr
+}
+
+func (f *fakeCbtPackageStore) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) error {
+	f.deleteID = id
+	return nil
+}
+
+func (f *fakeCbtPackageStore) CreateCbtPackage(ctx context.Context, arg db.CreateCbtPackageParams) (db.CbtPackage, error) {
+	f.createArg = arg
+	if f.packageRow.ID.Valid {
+		return f.packageRow, f.createErr
+	}
+	return db.CbtPackage{ID: documentCycleTestUUID(203), SubjectID: arg.SubjectID, Title: arg.Title}, f.createErr
+}
+
+func (f *fakeCbtPackageStore) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error) {
+	if f.questionRow.ID.Valid {
+		f.questionRow.ID = id
+		return f.questionRow, f.questionErr
+	}
+	return db.GetCbtQuestionRow{ID: id, SubjectID: f.createArg.SubjectID}, f.questionErr
+}
+
+func (f *fakeCbtPackageStore) AddCbtPackageQuestion(ctx context.Context, arg db.AddCbtPackageQuestionParams) error {
+	f.addArgs = append(f.addArgs, arg)
+	return f.addErr
+}
+
+func (f *fakeCbtPackageStore) WithTx(tx pgx.Tx) *db.Queries {
+	return nil
+}
+
+func TestCbtPackageServiceListDeleteAndValidation(t *testing.T) {
+	packageID := documentCycleTestUUID(201)
+	questionID := documentCycleTestUUID(202)
+	store := &fakeCbtPackageStore{
+		packagesRows:  []db.ListCbtPackagesRow{{ID: packageID, Title: "Paket"}},
+		questionsRows: []db.ListCbtPackageQuestionsRow{{PackageID: packageID, QuestionID: questionID}},
+	}
+	svc := &CbtPackage{q: store}
+	if NewCbtPackage(nil) == nil {
+		t.Fatal("NewCbtPackage(nil) = nil, want service")
+	}
+
+	packages, questions, err := svc.List(context.Background())
+	if err != nil || len(packages) != 1 || len(questions) != 1 {
+		t.Fatalf("List() = %d packages/%d questions/%v, want 1/1/nil", len(packages), len(questions), err)
+	}
+	if err := svc.Delete(context.Background(), packageID); err != nil || store.deleteID != packageID {
+		t.Fatalf("Delete() = %v id=%v, want nil/%v", err, store.deleteID, packageID)
+	}
+	if _, err := svc.Create(context.Background(), CreateCbtPackageInput{Title: "Kosong"}); err == nil || err.Error() != "question_ids wajib diisi" {
+		t.Fatalf("Create(no questions) = %v, want validation error", err)
+	}
+}
+
+func TestCbtPackageListPropagatesErrors(t *testing.T) {
+	svc := &CbtPackage{q: &fakeCbtPackageStore{packagesErr: errors.New("packages failed")}}
+	if _, _, err := svc.List(context.Background()); err == nil || err.Error() != "packages failed" {
+		t.Fatalf("List(package error) = %v, want packages failed", err)
+	}
+	svc = &CbtPackage{q: &fakeCbtPackageStore{questionsErr: errors.New("questions failed")}}
+	if _, _, err := svc.List(context.Background()); err == nil || err.Error() != "questions failed" {
+		t.Fatalf("List(question error) = %v, want questions failed", err)
+	}
+}
+
+func TestCreateCbtPackageHelperValidatesQuestionsAndPositions(t *testing.T) {
+	subjectID := documentCycleTestUUID(204)
+	packageID := documentCycleTestUUID(205)
+	firstQuestionID := documentCycleTestUUID(206)
+	secondQuestionID := documentCycleTestUUID(207)
+	store := &fakeCbtPackageStore{
+		packageRow:  db.CbtPackage{ID: packageID, SubjectID: subjectID, Title: "Paket"},
+		questionRow: db.GetCbtQuestionRow{ID: firstQuestionID, SubjectID: subjectID},
+	}
+
+	got, err := createCbtPackage(context.Background(), store, CreateCbtPackageInput{
+		SubjectID:          subjectID,
+		Title:              "Paket PAT",
+		Description:        "Soal akhir tahun",
+		DurationMinutes:    90,
+		RandomizeQuestions: true,
+		IsActive:           true,
+		QuestionIDs:        []pgtype.UUID{firstQuestionID, secondQuestionID},
+	})
+	if err != nil {
+		t.Fatalf("createCbtPackage() error = %v", err)
+	}
+	if got.ID != packageID || store.createArg.SubjectID != subjectID || store.createArg.Title != "Paket PAT" || !store.createArg.RandomizeQuestions {
+		t.Fatalf("createCbtPackage() got/createArg = %+v/%+v, want created package", got, store.createArg)
+	}
+	if len(store.addArgs) != 2 {
+		t.Fatalf("AddCbtPackageQuestion calls = %d, want 2", len(store.addArgs))
+	}
+	if store.addArgs[0].QuestionID != firstQuestionID || store.addArgs[0].Position != 1 || store.addArgs[1].QuestionID != secondQuestionID || store.addArgs[1].Position != 2 {
+		t.Fatalf("AddCbtPackageQuestion args = %+v, want ordered positions", store.addArgs)
+	}
+}
+
+func TestCreateCbtPackageHelperPropagatesStoreErrors(t *testing.T) {
+	subjectID := documentCycleTestUUID(208)
+	questionID := documentCycleTestUUID(209)
+	baseInput := CreateCbtPackageInput{
+		SubjectID:   subjectID,
+		Title:       "Paket",
+		QuestionIDs: []pgtype.UUID{questionID},
+	}
+
+	tests := []struct {
+		name    string
+		store   *fakeCbtPackageStore
+		wantErr string
+	}{
+		{name: "create error", store: &fakeCbtPackageStore{createErr: errors.New("create failed")}, wantErr: "create failed"},
+		{name: "question error", store: &fakeCbtPackageStore{questionErr: errors.New("question failed")}, wantErr: "question failed"},
+		{name: "subject mismatch", store: &fakeCbtPackageStore{questionRow: db.GetCbtQuestionRow{ID: questionID, SubjectID: documentCycleTestUUID(210)}}, wantErr: "semua soal harus dari mapel yang sama"},
+		{name: "add error", store: &fakeCbtPackageStore{addErr: errors.New("add failed")}, wantErr: "add failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := createCbtPackage(context.Background(), tt.store, baseInput)
+			if err == nil || err.Error() != tt.wantErr {
+				t.Fatalf("createCbtPackage() error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+type fakeCbtSessionStore struct {
+	listRows              []db.ListCbtExamSessionsRow
+	listErr               error
+	getID                 pgtype.UUID
+	createArg             db.CreateCbtExamSessionParams
+	updateStatusArg       db.UpdateCbtExamSessionStatusParams
+	deleteID              pgtype.UUID
+	participantRows       []db.ListCbtExamParticipantsRow
+	participantsErr       error
+	enrollClassArg        db.EnrollClassToSessionParams
+	enrollGradeArg        db.EnrollGradeToSessionParams
+	enrollSchoolID        pgtype.UUID
+	generateID            pgtype.UUID
+	regenerateID          pgtype.UUID
+	roomRows              []db.ListCbtExamRoomsRow
+	roomsErr              error
+	createRoomArg         db.CreateCbtExamRoomParams
+	deleteRoomID          pgtype.UUID
+	clearRoomID           pgtype.UUID
+	clearRoomErr          error
+	assignRoomArgs        []db.AssignParticipantRoomParams
+	assignRoomErr         error
+	assignSeatArgs        []db.AssignParticipantSeatParams
+	byRoomRows            []db.ListParticipantsByRoomRow
+	byRoomErr             error
+	proctorRows           []db.GetSessionProctoringStatusRow
+	proctorErr            error
+	flagArg               db.SetParticipantSuspiciousFlagParams
+	gradeArg              db.GradeStudentEssayParams
+	ungradedRows          []db.ListUngradedEssaysRow
+	ungradedErr           error
+	answerArg             db.UpsertStudentAnswerParams
+	teacherRows           []db.ListCbtExamSessionsByTeacherRow
+	teacherRowsErr        error
+	teacherID             pgtype.UUID
+	resultsTeacherArg     db.GetSessionResultsByTeacherParams
+	resultsTeacherErr     error
+	teacherAccess         bool
+	teacherAccessArg      db.GetSessionTeacherAccessParams
+	sessionParticipantArg db.HasSessionParticipantParams
+	sessionParticipant    bool
+	sessionRoomArg        db.HasSessionRoomParams
+	sessionRoom           bool
+	sessionAnswerArg      db.HasSessionAnswerParams
+	sessionAnswer         bool
+	resultsRows           []db.GetSessionResultsRow
+	resultsErr            error
+	resultsID             pgtype.UUID
+	answersRows           []db.GetParticipantAnswersRow
+	answersErr            error
+	answersID             pgtype.UUID
+	correctnessID         pgtype.UUID
+	correctnessErr        error
+	scoresID              pgtype.UUID
+	scoresErr             error
+}
+
+func (f *fakeCbtSessionStore) ListCbtExamSessions(ctx context.Context) ([]db.ListCbtExamSessionsRow, error) {
+	return f.listRows, f.listErr
+}
+
+func (f *fakeCbtSessionStore) GetCbtExamSession(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSessionRow, error) {
+	f.getID = id
+	return db.GetCbtExamSessionRow{ID: id, Title: "Sesi"}, nil
+}
+
+func (f *fakeCbtSessionStore) CreateCbtExamSession(ctx context.Context, arg db.CreateCbtExamSessionParams) (db.CbtExamSession, error) {
+	f.createArg = arg
+	return db.CbtExamSession{PackageID: arg.PackageID, ClassID: arg.ClassID, Title: arg.Title, ScopeType: arg.ScopeType, MixPolicy: arg.MixPolicy, AssignmentMode: arg.AssignmentMode}, nil
+}
+
+func (f *fakeCbtSessionStore) UpdateCbtExamSessionStatus(ctx context.Context, arg db.UpdateCbtExamSessionStatusParams) (db.CbtExamSession, error) {
+	f.updateStatusArg = arg
+	return db.CbtExamSession{ID: arg.ID, Status: arg.Status}, nil
+}
+
+func (f *fakeCbtSessionStore) DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) error {
+	f.deleteID = id
+	return nil
+}
+
+func (f *fakeCbtSessionStore) ListCbtExamParticipants(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error) {
+	return f.participantRows, f.participantsErr
+}
+
+func (f *fakeCbtSessionStore) EnrollClassToSession(ctx context.Context, arg db.EnrollClassToSessionParams) error {
+	f.enrollClassArg = arg
+	return nil
+}
+
+func (f *fakeCbtSessionStore) EnrollGradeToSession(ctx context.Context, arg db.EnrollGradeToSessionParams) error {
+	f.enrollGradeArg = arg
+	return nil
+}
+
+func (f *fakeCbtSessionStore) EnrollSchoolToSession(ctx context.Context, sessionID pgtype.UUID) error {
+	f.enrollSchoolID = sessionID
+	return nil
+}
+
+func (f *fakeCbtSessionStore) GenerateTokensForSession(ctx context.Context, sessionID pgtype.UUID) error {
+	f.generateID = sessionID
+	return nil
+}
+
+func (f *fakeCbtSessionStore) RegenerateParticipantToken(ctx context.Context, id pgtype.UUID) (db.RegenerateParticipantTokenRow, error) {
+	f.regenerateID = id
+	return db.RegenerateParticipantTokenRow{ID: id, Token: "ABC123"}, nil
+}
+
+func (f *fakeCbtSessionStore) ListCbtExamRooms(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamRoomsRow, error) {
+	return f.roomRows, f.roomsErr
+}
+
+func (f *fakeCbtSessionStore) CreateCbtExamRoom(ctx context.Context, arg db.CreateCbtExamRoomParams) (db.CbtExamRoom, error) {
+	f.createRoomArg = arg
+	return db.CbtExamRoom{SessionID: arg.SessionID, RoomName: arg.RoomName, Capacity: arg.Capacity}, nil
+}
+
+func (f *fakeCbtSessionStore) DeleteCbtExamRoom(ctx context.Context, id pgtype.UUID) error {
+	f.deleteRoomID = id
+	return nil
+}
+
+func (f *fakeCbtSessionStore) ClearParticipantRooms(ctx context.Context, sessionID pgtype.UUID) error {
+	f.clearRoomID = sessionID
+	return f.clearRoomErr
+}
+
+func (f *fakeCbtSessionStore) AssignParticipantRoom(ctx context.Context, arg db.AssignParticipantRoomParams) error {
+	f.assignRoomArgs = append(f.assignRoomArgs, arg)
+	return f.assignRoomErr
+}
+
+func (f *fakeCbtSessionStore) AssignParticipantSeat(ctx context.Context, arg db.AssignParticipantSeatParams) error {
+	f.assignSeatArgs = append(f.assignSeatArgs, arg)
+	return nil
+}
+
+func (f *fakeCbtSessionStore) ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]db.ListParticipantsByRoomRow, error) {
+	return f.byRoomRows, f.byRoomErr
+}
+
+func (f *fakeCbtSessionStore) GetSessionProctoringStatus(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error) {
+	return f.proctorRows, f.proctorErr
+}
+
+func (f *fakeCbtSessionStore) SetParticipantSuspiciousFlag(ctx context.Context, arg db.SetParticipantSuspiciousFlagParams) error {
+	f.flagArg = arg
+	return nil
+}
+
+func (f *fakeCbtSessionStore) GradeStudentEssay(ctx context.Context, arg db.GradeStudentEssayParams) error {
+	f.gradeArg = arg
+	return nil
+}
+
+func (f *fakeCbtSessionStore) ListUngradedEssays(ctx context.Context, sessionID pgtype.UUID) ([]db.ListUngradedEssaysRow, error) {
+	return f.ungradedRows, f.ungradedErr
+}
+
+func (f *fakeCbtSessionStore) UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) error {
+	f.answerArg = arg
+	return nil
+}
+
+func (f *fakeCbtSessionStore) ListCbtExamSessionsByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]db.ListCbtExamSessionsByTeacherRow, error) {
+	f.teacherID = teacherEmployeeID
+	return f.teacherRows, f.teacherRowsErr
+}
+
+func (f *fakeCbtSessionStore) GetSessionResultsByTeacher(ctx context.Context, arg db.GetSessionResultsByTeacherParams) ([]db.GetSessionResultsByTeacherRow, error) {
+	f.resultsTeacherArg = arg
+	return nil, f.resultsTeacherErr
+}
+
+func (f *fakeCbtSessionStore) GetSessionTeacherAccess(ctx context.Context, arg db.GetSessionTeacherAccessParams) (bool, error) {
+	f.teacherAccessArg = arg
+	return f.teacherAccess, nil
+}
+
+func (f *fakeCbtSessionStore) HasSessionParticipant(ctx context.Context, arg db.HasSessionParticipantParams) (bool, error) {
+	f.sessionParticipantArg = arg
+	return f.sessionParticipant, nil
+}
+
+func (f *fakeCbtSessionStore) HasSessionRoom(ctx context.Context, arg db.HasSessionRoomParams) (bool, error) {
+	f.sessionRoomArg = arg
+	return f.sessionRoom, nil
+}
+
+func (f *fakeCbtSessionStore) HasSessionAnswer(ctx context.Context, arg db.HasSessionAnswerParams) (bool, error) {
+	f.sessionAnswerArg = arg
+	return f.sessionAnswer, nil
+}
+
+func (f *fakeCbtSessionStore) GetSessionResults(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionResultsRow, error) {
+	f.resultsID = sessionID
+	return f.resultsRows, f.resultsErr
+}
+
+func (f *fakeCbtSessionStore) GetParticipantAnswers(ctx context.Context, participantID pgtype.UUID) ([]db.GetParticipantAnswersRow, error) {
+	f.answersID = participantID
+	return f.answersRows, f.answersErr
+}
+
+func (f *fakeCbtSessionStore) WithTx(tx pgx.Tx) *db.Queries {
+	return nil
+}
+
+func (f *fakeCbtSessionStore) UpdateAnswerCorrectness(ctx context.Context, sessionID pgtype.UUID) error {
+	f.correctnessID = sessionID
+	return f.correctnessErr
+}
+
+func (f *fakeCbtSessionStore) UpdateParticipantScores(ctx context.Context, sessionID pgtype.UUID) error {
+	f.scoresID = sessionID
+	return f.scoresErr
+}
+
+func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
+	sessionID := documentCycleTestUUID(211)
+	packageID := documentCycleTestUUID(212)
+	classID := documentCycleTestUUID(213)
+	eventID := documentCycleTestUUID(214)
+	participantID := documentCycleTestUUID(215)
+	questionID := documentCycleTestUUID(216)
+	roomID := documentCycleTestUUID(217)
+	answerID := documentCycleTestUUID(218)
+	teacherID := documentCycleTestUUID(219)
+	store := &fakeCbtSessionStore{
+		listRows:           []db.ListCbtExamSessionsRow{{ID: sessionID, Title: "Sesi"}},
+		participantRows:    []db.ListCbtExamParticipantsRow{{ID: participantID}},
+		roomRows:           []db.ListCbtExamRoomsRow{{ID: roomID, RoomName: "R1"}},
+		proctorRows:        []db.GetSessionProctoringStatusRow{{ParticipantID: participantID}},
+		ungradedRows:       []db.ListUngradedEssaysRow{{AnswerID: answerID}},
+		teacherRows:        []db.ListCbtExamSessionsByTeacherRow{{ID: sessionID}},
+		resultsRows:        []db.GetSessionResultsRow{{ParticipantID: participantID}},
+		answersRows:        []db.GetParticipantAnswersRow{{ID: answerID}},
+		teacherAccess:      true,
+		sessionParticipant: true,
+		sessionRoom:        true,
+		sessionAnswer:      true,
+	}
+	svc := &CbtSession{q: store}
+	if NewCbtSession(nil) == nil {
+		t.Fatal("NewCbtSession(nil) = nil, want service")
+	}
+
+	if rows, err := svc.List(context.Background()); err != nil || len(rows) != 1 {
+		t.Fatalf("List() = %d rows/%v, want 1 nil", len(rows), err)
+	}
+	store.listRows = nil
+	if rows, err := svc.List(context.Background()); err != nil || len(rows) != 0 {
+		t.Fatalf("List(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+	if got, err := svc.Get(context.Background(), sessionID); err != nil || got.ID != sessionID || store.getID != sessionID {
+		t.Fatalf("Get() = %+v/%v id=%v, want session", got, err, store.getID)
+	}
+	if _, err := svc.Create(context.Background(), CreateCbtSessionInput{
+		PackageID:       packageID,
+		ClassID:         classID,
+		EventID:         eventID,
+		ScopeType:       "grade",
+		ScopeRef:        "9",
+		MixPolicy:       "ignored",
+		AssignmentMode:  "manual",
+		AllowCrossGrade: true,
+		IsSpecialEvent:  true,
+		Title:           "Sesi",
+		Status:          db.CbtSessionStatusEnumDraft,
+	}); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if store.createArg.PackageID != packageID || store.createArg.ScopeType != "grade" || store.createArg.MixPolicy != "same_grade" || store.createArg.AssignmentMode != "manual" {
+		t.Fatalf("Create() arg = %+v, want normalized session", store.createArg)
+	}
+	if _, err := svc.UpdateStatus(context.Background(), sessionID, db.CbtSessionStatusEnumActive); err != nil {
+		t.Fatalf("UpdateStatus() error = %v", err)
+	}
+	if store.updateStatusArg.ID != sessionID || store.updateStatusArg.Status != db.CbtSessionStatusEnumActive {
+		t.Fatalf("UpdateStatus() arg = %+v, want active status", store.updateStatusArg)
+	}
+	if err := svc.Delete(context.Background(), sessionID); err != nil || store.deleteID != sessionID {
+		t.Fatalf("Delete() = %v id=%v, want nil/%v", err, store.deleteID, sessionID)
+	}
+	if rows, err := svc.ListParticipants(context.Background(), sessionID); err != nil || len(rows) != 1 {
+		t.Fatalf("ListParticipants() = %d rows/%v, want 1 nil", len(rows), err)
+	}
+	store.participantRows = nil
+	if rows, err := svc.ListParticipants(context.Background(), sessionID); err != nil || len(rows) != 0 {
+		t.Fatalf("ListParticipants(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+	if err := svc.EnrollClass(context.Background(), sessionID, classID); err != nil || store.enrollClassArg.SessionID != sessionID || store.enrollClassArg.ClassID != classID {
+		t.Fatalf("EnrollClass() = %v arg=%+v, want ids", err, store.enrollClassArg)
+	}
+	if err := svc.EnrollGrade(context.Background(), sessionID, "9"); err != nil || store.enrollGradeArg.SessionID != sessionID || store.enrollGradeArg.Level != "9" {
+		t.Fatalf("EnrollGrade() = %v arg=%+v, want level", err, store.enrollGradeArg)
+	}
+	if err := svc.EnrollSchool(context.Background(), sessionID); err != nil || store.enrollSchoolID != sessionID {
+		t.Fatalf("EnrollSchool() = %v id=%v, want %v", err, store.enrollSchoolID, sessionID)
+	}
+	if err := svc.GenerateTokens(context.Background(), sessionID); err != nil || store.generateID != sessionID {
+		t.Fatalf("GenerateTokens() = %v id=%v, want %v", err, store.generateID, sessionID)
+	}
+	if got, err := svc.RegenerateToken(context.Background(), participantID); err != nil || got.ID != participantID || got.Token != "ABC123" || store.regenerateID != participantID {
+		t.Fatalf("RegenerateToken() = %+v/%v id=%v, want token", got, err, store.regenerateID)
+	}
+	if ok, err := svc.HasParticipant(context.Background(), sessionID, participantID); err != nil || !ok || store.sessionParticipantArg.SessionID != sessionID || store.sessionParticipantArg.ID != participantID {
+		t.Fatalf("HasParticipant() = %v/%v arg=%+v, want true session/participant", ok, err, store.sessionParticipantArg)
+	}
+	if rows, err := svc.ListRooms(context.Background(), sessionID); err != nil || len(rows) != 1 {
+		t.Fatalf("ListRooms() = %d rows/%v, want 1 nil", len(rows), err)
+	}
+	store.roomRows = nil
+	if rows, err := svc.ListRooms(context.Background(), sessionID); err != nil || len(rows) != 0 {
+		t.Fatalf("ListRooms(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+	if _, err := svc.CreateRoom(context.Background(), sessionID, "R1", 30); err != nil {
+		t.Fatalf("CreateRoom() error = %v", err)
+	}
+	if store.createRoomArg.SessionID != sessionID || store.createRoomArg.RoomName != "R1" || store.createRoomArg.Capacity != 30 {
+		t.Fatalf("CreateRoom() arg = %+v, want room", store.createRoomArg)
+	}
+	if err := svc.DeleteRoom(context.Background(), roomID); err != nil || store.deleteRoomID != roomID {
+		t.Fatalf("DeleteRoom() = %v id=%v, want nil/%v", err, store.deleteRoomID, roomID)
+	}
+	if ok, err := svc.HasRoom(context.Background(), sessionID, roomID); err != nil || !ok || store.sessionRoomArg.SessionID != sessionID || store.sessionRoomArg.ID != roomID {
+		t.Fatalf("HasRoom() = %v/%v arg=%+v, want true session/room", ok, err, store.sessionRoomArg)
+	}
+	if err := svc.AssignSeat(context.Background(), participantID, roomID, 12); err != nil {
+		t.Fatalf("AssignSeat() error = %v", err)
+	}
+	if got := store.assignSeatArgs[len(store.assignSeatArgs)-1]; got.ID != participantID || got.RoomID != roomID || got.SeatNo.Int32 != 12 || !got.SeatNo.Valid {
+		t.Fatalf("AssignSeat() arg = %+v, want seat 12", got)
+	}
+	if rows, err := svc.GetProctoringStatus(context.Background(), sessionID); err != nil || len(rows) != 1 {
+		t.Fatalf("GetProctoringStatus() = %d rows/%v, want 1 nil", len(rows), err)
+	}
+	store.proctorRows = nil
+	if rows, err := svc.GetProctoringStatus(context.Background(), sessionID); err != nil || len(rows) != 0 {
+		t.Fatalf("GetProctoringStatus(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+	if err := svc.SetSuspiciousFlag(context.Background(), participantID, true); err != nil || store.flagArg.ID != participantID || !store.flagArg.SuspiciousFlag {
+		t.Fatalf("SetSuspiciousFlag() = %v arg=%+v, want true flag", err, store.flagArg)
+	}
+	if err := svc.GradeEssay(context.Background(), answerID, 87.5, "guru"); err != nil || store.gradeArg.ID != answerID || store.gradeArg.GradedBy.String != "guru" {
+		t.Fatalf("GradeEssay() = %v arg=%+v, want graded answer", err, store.gradeArg)
+	}
+	if ok, err := svc.HasAnswer(context.Background(), sessionID, answerID); err != nil || !ok || store.sessionAnswerArg.SessionID != sessionID || store.sessionAnswerArg.ID != answerID {
+		t.Fatalf("HasAnswer() = %v/%v arg=%+v, want true session/answer", ok, err, store.sessionAnswerArg)
+	}
+	if rows, err := svc.ListUngradedEssays(context.Background(), sessionID); err != nil || len(rows) != 1 {
+		t.Fatalf("ListUngradedEssays() = %d rows/%v, want 1 nil", len(rows), err)
+	}
+	store.ungradedRows = nil
+	if rows, err := svc.ListUngradedEssays(context.Background(), sessionID); err != nil || len(rows) != 0 {
+		t.Fatalf("ListUngradedEssays(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+	if err := svc.RecordAnswer(context.Background(), participantID, questionID, "A"); err != nil || store.answerArg.ParticipantID != participantID || store.answerArg.QuestionID != questionID || store.answerArg.Answer != "A" {
+		t.Fatalf("RecordAnswer() = %v arg=%+v, want answer", err, store.answerArg)
+	}
+	if rows, err := svc.ListByTeacher(context.Background(), teacherID); err != nil || len(rows) != 1 || store.teacherID != teacherID {
+		t.Fatalf("ListByTeacher() = %d rows/%v id=%v, want teacher rows", len(rows), err, store.teacherID)
+	}
+	store.teacherRows = nil
+	if rows, err := svc.ListByTeacher(context.Background(), teacherID); err != nil || len(rows) != 0 {
+		t.Fatalf("ListByTeacher(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+	if rows, err := svc.GetResultsByTeacher(context.Background(), sessionID, teacherID); err != nil || len(rows) != 0 || store.resultsTeacherArg.SessionID != sessionID || store.resultsTeacherArg.TeacherEmployeeID != teacherID {
+		t.Fatalf("GetResultsByTeacher() = %d rows/%v arg=%+v, want args", len(rows), err, store.resultsTeacherArg)
+	}
+	if ok, err := svc.CheckTeacherAccess(context.Background(), sessionID, teacherID); err != nil || !ok || store.teacherAccessArg.ID != sessionID || store.teacherAccessArg.TeacherEmployeeID != teacherID {
+		t.Fatalf("CheckTeacherAccess() = %v/%v arg=%+v, want access", ok, err, store.teacherAccessArg)
+	}
+	if rows, err := svc.GetResults(context.Background(), sessionID); err != nil || len(rows) != 1 || store.resultsID != sessionID {
+		t.Fatalf("GetResults() = %d rows/%v id=%v, want results", len(rows), err, store.resultsID)
+	}
+	store.resultsRows = nil
+	if rows, err := svc.GetResults(context.Background(), sessionID); err != nil || len(rows) != 0 {
+		t.Fatalf("GetResults(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+	if rows, err := svc.GetParticipantAnswers(context.Background(), participantID); err != nil || len(rows) != 1 || store.answersID != participantID {
+		t.Fatalf("GetParticipantAnswers() = %d rows/%v id=%v, want answers", len(rows), err, store.answersID)
+	}
+	store.answersRows = nil
+	if rows, err := svc.GetParticipantAnswers(context.Background(), participantID); err != nil || len(rows) != 0 {
+		t.Fatalf("GetParticipantAnswers(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+}
+
+func TestCbtSessionShuffleRoomsHelperAssignsByCapacity(t *testing.T) {
+	sessionID := documentCycleTestUUID(230)
+	roomOneID := documentCycleTestUUID(231)
+	roomTwoID := documentCycleTestUUID(232)
+	participantOneID := documentCycleTestUUID(233)
+	participantTwoID := documentCycleTestUUID(234)
+	participantThreeID := documentCycleTestUUID(235)
+	store := &fakeCbtSessionStore{
+		byRoomRows: []db.ListParticipantsByRoomRow{
+			{ID: participantOneID, Nama: "A"},
+			{ID: participantTwoID, Nama: "B"},
+			{ID: participantThreeID, Nama: "C"},
+		},
+		roomRows: []db.ListCbtExamRoomsRow{
+			{ID: roomOneID, Capacity: 1},
+			{ID: roomTwoID, Capacity: 5},
+		},
+	}
+
+	if err := shuffleRooms(context.Background(), store, sessionID); err != nil {
+		t.Fatalf("shuffleRooms() error = %v", err)
+	}
+	if store.clearRoomID != sessionID {
+		t.Fatalf("ClearParticipantRooms id = %v, want %v", store.clearRoomID, sessionID)
+	}
+	if len(store.assignRoomArgs) != 3 {
+		t.Fatalf("assigned rooms = %d, want 3", len(store.assignRoomArgs))
+	}
+	seen := map[pgtype.UUID]bool{}
+	for _, arg := range store.assignRoomArgs {
+		seen[arg.ID] = true
+		if arg.RoomID != roomOneID && arg.RoomID != roomTwoID {
+			t.Fatalf("AssignParticipantRoom arg = %+v, want one of test rooms", arg)
+		}
+	}
+	for _, id := range []pgtype.UUID{participantOneID, participantTwoID, participantThreeID} {
+		if !seen[id] {
+			t.Fatalf("participant %v was not assigned; args=%+v", id, store.assignRoomArgs)
+		}
+	}
+}
+
+func TestCbtSessionShuffleRoomsHelperHandlesEmptyAndErrors(t *testing.T) {
+	sessionID := documentCycleTestUUID(236)
+	expectedErr := errors.New("clear failed")
+	if err := shuffleRooms(context.Background(), &fakeCbtSessionStore{clearRoomErr: expectedErr}, sessionID); !errors.Is(err, expectedErr) {
+		t.Fatalf("shuffleRooms(clear error) = %v, want %v", err, expectedErr)
+	}
+
+	expectedErr = errors.New("participants failed")
+	if err := shuffleRooms(context.Background(), &fakeCbtSessionStore{byRoomErr: expectedErr}, sessionID); !errors.Is(err, expectedErr) {
+		t.Fatalf("shuffleRooms(participants error) = %v, want %v", err, expectedErr)
+	}
+
+	expectedErr = errors.New("rooms failed")
+	if err := shuffleRooms(context.Background(), &fakeCbtSessionStore{
+		byRoomRows: []db.ListParticipantsByRoomRow{{ID: documentCycleTestUUID(237)}},
+		roomsErr:   expectedErr,
+	}, sessionID); !errors.Is(err, expectedErr) {
+		t.Fatalf("shuffleRooms(rooms error) = %v, want %v", err, expectedErr)
+	}
+
+	store := &fakeCbtSessionStore{roomRows: []db.ListCbtExamRoomsRow{{ID: documentCycleTestUUID(238), Capacity: 1}}}
+	if err := shuffleRooms(context.Background(), store, sessionID); err != nil {
+		t.Fatalf("shuffleRooms(empty participants) error = %v", err)
+	}
+	if len(store.assignRoomArgs) != 0 {
+		t.Fatalf("shuffleRooms(empty participants) assigned %+v, want none", store.assignRoomArgs)
+	}
+
+	expectedErr = errors.New("assign failed")
+	store = &fakeCbtSessionStore{
+		byRoomRows:    []db.ListParticipantsByRoomRow{{ID: documentCycleTestUUID(239)}},
+		roomRows:      []db.ListCbtExamRoomsRow{{ID: documentCycleTestUUID(240), Capacity: 1}},
+		assignRoomErr: expectedErr,
+	}
+	if err := shuffleRooms(context.Background(), store, sessionID); !errors.Is(err, expectedErr) {
+		t.Fatalf("shuffleRooms(assign error) = %v, want %v", err, expectedErr)
+	}
+}
+
+func TestCbtSessionScoreSessionHelperPropagatesSteps(t *testing.T) {
+	sessionID := documentCycleTestUUID(241)
+	expectedErr := errors.New("correctness failed")
+	if err := scoreSession(context.Background(), &fakeCbtSessionStore{correctnessErr: expectedErr}, sessionID); !errors.Is(err, expectedErr) {
+		t.Fatalf("scoreSession(correctness error) = %v, want %v", err, expectedErr)
+	}
+
+	expectedErr = errors.New("scores failed")
+	if err := scoreSession(context.Background(), &fakeCbtSessionStore{scoresErr: expectedErr}, sessionID); !errors.Is(err, expectedErr) {
+		t.Fatalf("scoreSession(scores error) = %v, want %v", err, expectedErr)
+	}
+
+	store := &fakeCbtSessionStore{}
+	if err := scoreSession(context.Background(), store, sessionID); err != nil {
+		t.Fatalf("scoreSession() error = %v", err)
+	}
+	if store.correctnessID != sessionID || store.scoresID != sessionID {
+		t.Fatalf("scoreSession ids = correctness %v scores %v, want %v", store.correctnessID, store.scoresID, sessionID)
+	}
+}
+
+func TestCbtSessionAutoAssignSeatsSortsWithinRooms(t *testing.T) {
+	sessionID := documentCycleTestUUID(221)
+	roomID := documentCycleTestUUID(222)
+	otherRoomID := documentCycleTestUUID(223)
+	anaID := documentCycleTestUUID(224)
+	budiID := documentCycleTestUUID(225)
+	ciciID := documentCycleTestUUID(226)
+	unassignedID := documentCycleTestUUID(227)
+	store := &fakeCbtSessionStore{
+		byRoomRows: []db.ListParticipantsByRoomRow{
+			{ID: budiID, RoomID: roomID, Nama: "Budi", Nis: "002"},
+			{ID: unassignedID, Nama: "Tanpa Ruang", Nis: "004"},
+			{ID: anaID, RoomID: roomID, Nama: "Ana", Nis: "001"},
+			{ID: ciciID, RoomID: otherRoomID, Nama: "Cici", Nis: "003"},
+		},
+	}
+	svc := &CbtSession{q: store}
+
+	if err := svc.AutoAssignSeats(context.Background(), sessionID); err != nil {
+		t.Fatalf("AutoAssignSeats() error = %v", err)
+	}
+	if len(store.assignSeatArgs) != 3 {
+		t.Fatalf("AutoAssignSeats() assigned %d seats, want 3", len(store.assignSeatArgs))
+	}
+	seats := map[pgtype.UUID]db.AssignParticipantSeatParams{}
+	for _, arg := range store.assignSeatArgs {
+		seats[arg.ID] = arg
+	}
+	if got := seats[anaID]; got.RoomID != roomID || got.SeatNo.Int32 != 1 {
+		t.Fatalf("Ana seat = %+v, want room one seat 1", got)
+	}
+	if got := seats[budiID]; got.RoomID != roomID || got.SeatNo.Int32 != 2 {
+		t.Fatalf("Budi seat = %+v, want room one seat 2", got)
+	}
+	if got := seats[ciciID]; got.RoomID != otherRoomID || got.SeatNo.Int32 != 1 {
+		t.Fatalf("Cici seat = %+v, want other room seat 1", got)
+	}
+}
+
+func TestCbtSessionListMethodsPropagateErrors(t *testing.T) {
+	sessionID := documentCycleTestUUID(231)
+	participantID := documentCycleTestUUID(232)
+	teacherID := documentCycleTestUUID(233)
+
+	svc := &CbtSession{q: &fakeCbtSessionStore{listErr: errors.New("sessions failed")}}
+	if _, err := svc.List(context.Background()); err == nil || err.Error() != "sessions failed" {
+		t.Fatalf("List(error) = %v, want sessions failed", err)
+	}
+	svc = &CbtSession{q: &fakeCbtSessionStore{participantsErr: errors.New("participants failed")}}
+	if _, err := svc.ListParticipants(context.Background(), sessionID); err == nil || err.Error() != "participants failed" {
+		t.Fatalf("ListParticipants(error) = %v, want participants failed", err)
+	}
+	svc = &CbtSession{q: &fakeCbtSessionStore{roomsErr: errors.New("rooms failed")}}
+	if _, err := svc.ListRooms(context.Background(), sessionID); err == nil || err.Error() != "rooms failed" {
+		t.Fatalf("ListRooms(error) = %v, want rooms failed", err)
+	}
+	svc = &CbtSession{q: &fakeCbtSessionStore{byRoomErr: errors.New("by-room failed")}}
+	if err := svc.AutoAssignSeats(context.Background(), sessionID); err == nil || err.Error() != "by-room failed" {
+		t.Fatalf("AutoAssignSeats(error) = %v, want by-room failed", err)
+	}
+	svc = &CbtSession{q: &fakeCbtSessionStore{proctorErr: errors.New("proctor failed")}}
+	if _, err := svc.GetProctoringStatus(context.Background(), sessionID); err == nil || err.Error() != "proctor failed" {
+		t.Fatalf("GetProctoringStatus(error) = %v, want proctor failed", err)
+	}
+	svc = &CbtSession{q: &fakeCbtSessionStore{ungradedErr: errors.New("ungraded failed")}}
+	if _, err := svc.ListUngradedEssays(context.Background(), sessionID); err == nil || err.Error() != "ungraded failed" {
+		t.Fatalf("ListUngradedEssays(error) = %v, want ungraded failed", err)
+	}
+	svc = &CbtSession{q: &fakeCbtSessionStore{teacherRowsErr: errors.New("teacher failed")}}
+	if _, err := svc.ListByTeacher(context.Background(), teacherID); err == nil || err.Error() != "teacher failed" {
+		t.Fatalf("ListByTeacher(error) = %v, want teacher failed", err)
+	}
+	svc = &CbtSession{q: &fakeCbtSessionStore{resultsTeacherErr: errors.New("teacher results failed")}}
+	if _, err := svc.GetResultsByTeacher(context.Background(), sessionID, teacherID); err == nil || err.Error() != "teacher results failed" {
+		t.Fatalf("GetResultsByTeacher(error) = %v, want teacher results failed", err)
+	}
+	svc = &CbtSession{q: &fakeCbtSessionStore{resultsErr: errors.New("results failed")}}
+	if _, err := svc.GetResults(context.Background(), sessionID); err == nil || err.Error() != "results failed" {
+		t.Fatalf("GetResults(error) = %v, want results failed", err)
+	}
+	svc = &CbtSession{q: &fakeCbtSessionStore{answersErr: errors.New("answers failed")}}
+	if _, err := svc.GetParticipantAnswers(context.Background(), participantID); err == nil || err.Error() != "answers failed" {
+		t.Fatalf("GetParticipantAnswers(error) = %v, want answers failed", err)
+	}
+}

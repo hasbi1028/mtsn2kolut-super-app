@@ -159,6 +159,61 @@ func (q *Queries) CreateDocumentCycleEvent(ctx context.Context, arg CreateDocume
 	return i, err
 }
 
+const createDocumentCycleReminderEvents = `-- name: CreateDocumentCycleReminderEvents :execrows
+INSERT INTO document_cycle_events (
+    obligation_id,
+    event_type,
+    from_status,
+    to_status,
+    notes,
+    actor_user_id
+)
+SELECT
+    o.id,
+    'reminder_sent',
+    '',
+    o.status,
+    CASE
+        WHEN o.due_date < $1::DATE THEN
+            FORMAT(
+                'Pengingat terlambat untuk PIC %s: %s jatuh tempo pada %s.',
+                COALESCE(NULLIF(re.nama, ''), 'penyusun'),
+                c.title,
+                TO_CHAR(o.due_date, 'DD Mon YYYY')
+            )
+        ELSE
+            FORMAT(
+                'Pengingat PIC %s: %s jatuh tempo pada %s.',
+                COALESCE(NULLIF(re.nama, ''), 'penyusun'),
+                c.title,
+                TO_CHAR(o.due_date, 'DD Mon YYYY')
+            )
+    END,
+    NULL
+FROM document_cycle_obligations o
+JOIN document_cycle_catalogs c ON c.id = o.catalog_id
+LEFT JOIN employees re ON re.id = o.responsible_employee_id
+WHERE o.status <> 'completed'
+  AND o.responsible_employee_id IS NOT NULL
+  AND o.reminder_date <= $1::DATE
+  AND NOT EXISTS (
+      SELECT 1
+      FROM document_cycle_events e
+      WHERE e.obligation_id = o.id
+        AND e.event_type = 'reminder_sent'
+        AND e.created_at >= $1::DATE
+        AND e.created_at < ($1::DATE + INTERVAL '1 day')
+  )
+`
+
+func (q *Queries) CreateDocumentCycleReminderEvents(ctx context.Context, today pgtype.Date) (int64, error) {
+	result, err := q.db.Exec(ctx, createDocumentCycleReminderEvents, today)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteDocumentCycleCatalog = `-- name: DeleteDocumentCycleCatalog :exec
 DELETE FROM document_cycle_catalogs WHERE id = $1
 `
@@ -834,8 +889,22 @@ SELECT
 FROM document_cycle_events e
 LEFT JOIN users u ON u.id = e.actor_user_id
 WHERE e.obligation_id = $1
+  AND (
+      $2::TEXT = '' OR e.event_type = $2
+  )
+  AND (
+      $3::TEXT = '' OR
+      ($3::TEXT = 'system' AND e.actor_user_id IS NULL) OR
+      u.username ILIKE '%' || $3 || '%'
+  )
 ORDER BY e.created_at DESC
 `
+
+type ListDocumentCycleEventsByObligationParams struct {
+	ObligationID pgtype.UUID `json:"obligation_id"`
+	EventType    string      `json:"event_type"`
+	Actor        string      `json:"actor"`
+}
 
 type ListDocumentCycleEventsByObligationRow struct {
 	ID            pgtype.UUID        `json:"id"`
@@ -849,8 +918,8 @@ type ListDocumentCycleEventsByObligationRow struct {
 	ActorUsername string             `json:"actor_username"`
 }
 
-func (q *Queries) ListDocumentCycleEventsByObligation(ctx context.Context, obligationID pgtype.UUID) ([]ListDocumentCycleEventsByObligationRow, error) {
-	rows, err := q.db.Query(ctx, listDocumentCycleEventsByObligation, obligationID)
+func (q *Queries) ListDocumentCycleEventsByObligation(ctx context.Context, arg ListDocumentCycleEventsByObligationParams) ([]ListDocumentCycleEventsByObligationRow, error) {
+	rows, err := q.db.Query(ctx, listDocumentCycleEventsByObligation, arg.ObligationID, arg.EventType, arg.Actor)
 	if err != nil {
 		return nil, err
 	}
@@ -958,7 +1027,9 @@ WHERE (
 ) AND (
     $8::UUID IS NULL OR o.responsible_employee_id = $8::UUID
 ) AND (
-    $9::BOOLEAN = FALSE OR (
+    $9::UUID IS NULL OR o.verifier_employee_id = $9::UUID
+) AND (
+    $10::BOOLEAN = FALSE OR (
         o.status <> 'completed'
         AND o.reminder_date <= CURRENT_DATE
     )
@@ -986,6 +1057,7 @@ type ListDocumentCycleObligationsParams struct {
 	PeriodYear            int32       `json:"period_year"`
 	OwnerUnitID           pgtype.UUID `json:"owner_unit_id"`
 	ResponsibleEmployeeID pgtype.UUID `json:"responsible_employee_id"`
+	VerifierEmployeeID    pgtype.UUID `json:"verifier_employee_id"`
 	ReminderOnly          bool        `json:"reminder_only"`
 }
 
@@ -1047,6 +1119,7 @@ func (q *Queries) ListDocumentCycleObligations(ctx context.Context, arg ListDocu
 		arg.PeriodYear,
 		arg.OwnerUnitID,
 		arg.ResponsibleEmployeeID,
+		arg.VerifierEmployeeID,
 		arg.ReminderOnly,
 	)
 	if err != nil {

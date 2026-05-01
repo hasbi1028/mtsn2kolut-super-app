@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -8,13 +9,24 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
+type studentCertificateService interface {
+	ListTemplates(ctx context.Context, activeOnly bool) ([]db.CertificateTemplate, error)
+	ListStudents(ctx context.Context, search, status string) ([]db.ListStudentCertificateOptionsRow, error)
+	List(ctx context.Context, search, status, templateCode string) ([]db.ListStudentCertificatesRow, error)
+	Create(ctx context.Context, input service.CreateStudentCertificateInput) (db.GetStudentCertificateRow, error)
+	Get(ctx context.Context, id pgtype.UUID) (db.GetStudentCertificateRow, error)
+	Cancel(ctx context.Context, id pgtype.UUID, remarks string) (db.StudentCertificate, error)
+}
+
 type StudentCertificate struct {
-	svc *service.StudentCertificate
+	svc studentCertificateService
 }
 
 func NewStudentCertificate(svc *service.StudentCertificate) *StudentCertificate {
@@ -43,7 +55,7 @@ func (h *StudentCertificate) ListStudents(w http.ResponseWriter, r *http.Request
 	}
 	data, err := h.svc.ListStudents(r.Context(), r.URL.Query().Get("search"), r.URL.Query().Get("status"))
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data siswa surat keterangan tidak valid")
 		return
 	}
 	api.OK(w, data)
@@ -62,7 +74,7 @@ func (h *StudentCertificate) List(w http.ResponseWriter, r *http.Request) {
 		r.URL.Query().Get("template_code"),
 	)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Filter surat keterangan tidak valid")
 		return
 	}
 	api.OK(w, data)
@@ -105,7 +117,7 @@ func (h *StudentCertificate) Create(w http.ResponseWriter, r *http.Request) {
 			api.NotFound(w)
 			return
 		}
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data surat keterangan tidak valid")
 		return
 	}
 	api.Created(w, data)
@@ -158,7 +170,7 @@ func (h *StudentCertificate) Cancel(w http.ResponseWriter, r *http.Request) {
 			api.NotFound(w)
 			return
 		}
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Pembatalan surat keterangan tidak valid")
 		return
 	}
 	api.OK(w, data)

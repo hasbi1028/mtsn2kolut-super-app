@@ -7,8 +7,14 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
+type employeeScheduleStore interface {
+	ListEmployeeSchedules(ctx context.Context, employeeID pgtype.UUID) ([]db.ListEmployeeSchedulesRow, error)
+	UpsertEmployeeSchedule(ctx context.Context, arg db.UpsertEmployeeScheduleParams) (db.EmployeeSchedule, error)
+	DeleteEmployeeSchedule(ctx context.Context, arg db.DeleteEmployeeScheduleParams) error
+}
+
 type EmployeeSchedule struct {
-	q *db.Queries
+	q employeeScheduleStore
 }
 
 func NewEmployeeSchedule(q *db.Queries) *EmployeeSchedule { return &EmployeeSchedule{q: q} }

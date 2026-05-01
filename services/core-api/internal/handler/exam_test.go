@@ -3,8 +3,10 @@ package handler
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -94,6 +96,33 @@ func TestAbsolutizeExamAssetURLLeavesAbsoluteURLUntouched(t *testing.T) {
 	want := "https://cdn.example.com/file.png"
 	if got != want {
 		t.Fatalf("absolutizeExamAssetURL() = %q, want %q", got, want)
+	}
+}
+
+func TestAbsolutizeExamAssetURLCoversEdgeBranches(t *testing.T) {
+	req := httptest.NewRequest("POST", "https://localhost:8443/api/exam/login", nil)
+	req.TLS = &tls.ConnectionState{}
+	got := absolutizeExamAssetURL(req, "tok-1", "/api/cbt/assets/secure/file")
+	want := "https://localhost:8443/api/cbt/assets/secure/file?exam_token=tok-1"
+	if got != want {
+		t.Fatalf("absolutizeExamAssetURL(https fallback) = %q, want %q", got, want)
+	}
+
+	req = &http.Request{Header: http.Header{}}
+	if got := absolutizeExamAssetURL(req, "tok-1", "api/cbt/assets/no-host/file"); got != "api/cbt/assets/no-host/file" {
+		t.Fatalf("absolutizeExamAssetURL(no host) = %q, want original relative path", got)
+	}
+
+	req = httptest.NewRequest("POST", "http://localhost:8080/api/exam/login", nil)
+	if got := absolutizeExamAssetURL(req, "tok-1", ""); got != "" {
+		t.Fatalf("absolutizeExamAssetURL(empty) = %q, want empty", got)
+	}
+	if got := absolutizeExamAssetURL(req, "tok-1", "http://%zz"); got != "http://%zz" {
+		t.Fatalf("absolutizeExamAssetURL(malformed absolute) = %q, want original malformed URL", got)
+	}
+	got = absolutizeExamAssetURL(req, "tok-2", "https://cdn.example.com/file.png?exam_token=existing")
+	if got != "https://cdn.example.com/file.png?exam_token=existing" {
+		t.Fatalf("absolutizeExamAssetURL(existing token) = %q, want unchanged token", got)
 	}
 }
 

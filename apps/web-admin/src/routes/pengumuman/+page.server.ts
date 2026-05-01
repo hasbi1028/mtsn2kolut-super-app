@@ -1,4 +1,4 @@
-import { apiGet } from '$lib/server/api';
+import { apiPublicGetWithFetch } from '$lib/server/api';
 import type { PageServerLoad } from './$types';
 
 type WebsiteContent = {
@@ -11,7 +11,7 @@ type WebsiteContent = {
 	published_at: string | null;
 };
 
-export const load: PageServerLoad = async () => {
-	const items = await apiGet<WebsiteContent[]>('/api/public/site/announcements?limit=24');
+export const load: PageServerLoad = async ({ fetch }) => {
+	const items = await apiPublicGetWithFetch<WebsiteContent[]>(fetch, '/api/public/site/announcements?limit=24');
 	return { items };
 };

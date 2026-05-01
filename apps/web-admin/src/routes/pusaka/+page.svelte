@@ -14,6 +14,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import { confirmChallenge } from '$lib/confirm-dialog';
+	import { readClientApiData } from '$lib/client/api';
 
 	interface QueueStats {
 		queued: number; running: number; success: number;
@@ -45,12 +46,6 @@
 		recentJobs: RecentJob[];
 	}
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	type JobListPayload = {
 		items?: RecentJob[];
 		data?: RecentJob[];
@@ -72,38 +67,10 @@
 	let busy         = $state<Record<string, boolean>>({});
 	let confirmKey   = $state('');
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
+	let overviewRequestId = 0;
 
 	function emptyQueueStats(): QueueStats {
 		return { queued: 0, running: 0, success: 0, failed: 0, retry_due: 0, total: 0 };
-	}
-
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
 	}
 
 	function normalizeQueueStats(value: Partial<QueueStats> | null | undefined): QueueStats {
@@ -130,9 +97,9 @@
 
 	async function fetchOverview(): Promise<PusakaOverview> {
 		const [queueData, jobsData, workerData] = await Promise.all([
-			fetch('/api/queue/stats').then((response) => readApi<Partial<QueueStats>>(response, 'Gagal memuat ringkasan antrian PUSAKA')),
-			fetch('/api/pusaka/jobs?limit=5').then((response) => readApi<JobListPayload | RecentJob[]>(response, 'Gagal memuat job terbaru PUSAKA')),
-			fetch('/api/pusaka/worker/status').then((response) => readApi<WorkerStatus | null>(response, 'Gagal memuat status worker PUSAKA')),
+			fetch('/api/pusaka/jobs/stats').then((response) => readClientApiData<Partial<QueueStats>>(response, 'Gagal memuat ringkasan antrian PUSAKA')),
+			fetch('/api/pusaka/jobs?limit=5').then((response) => readClientApiData<JobListPayload | RecentJob[]>(response, 'Gagal memuat job terbaru PUSAKA')),
+			fetch('/api/pusaka/worker/status').then((response) => readClientApiData<WorkerStatus | null>(response, 'Gagal memuat status worker PUSAKA')),
 		]);
 
 		return {
@@ -143,10 +110,19 @@
 	}
 
 	function loadOverview() {
-		overviewPromise = fetchOverview().then((overview) => {
-			applyOverview(overview);
-			return overview;
-		});
+		const requestId = ++overviewRequestId;
+		overviewPromise = fetchOverview()
+			.then((overview) => {
+				if (requestId === overviewRequestId) {
+					applyOverview(overview);
+					return overview;
+				}
+				return currentOverview();
+			})
+			.catch((error: unknown) => {
+				if (requestId === overviewRequestId) throw error;
+				return currentOverview();
+			});
 		return overviewPromise;
 	}
 
@@ -155,11 +131,15 @@
 			await loadOverview();
 			return;
 		}
+		const requestId = ++overviewRequestId;
 		try {
 			const overview = await fetchOverview();
-			applyOverview(overview);
-			overviewPromise = Promise.resolve(overview);
+			if (requestId === overviewRequestId) {
+				applyOverview(overview);
+				overviewPromise = Promise.resolve(overview);
+			}
 		} catch (error) {
+			if (requestId !== overviewRequestId) return;
 			overviewPromise = Promise.resolve(currentOverview());
 			if (showFailureToast) toast.error(overviewErrorMessage(error));
 		}
@@ -185,8 +165,7 @@
 		busy = { ...busy, [key]: true };
 		try {
 			const res  = await fn();
-			const data = (await res.json().catch(() => ({}))) as PusakaActionResponse;
-			if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal');
+			const data = await readClientApiData<PusakaActionResponse>(res, 'Gagal menjalankan operasi PUSAKA');
 			operationState = {
 				tone: key === 'cancel_all' ? 'warning' : 'success',
 				title: key === 'cancel_all' ? 'Antrian Dibatalkan' : 'Operasi PUSAKA Berhasil',
@@ -218,8 +197,7 @@
 		busy = { ...busy, rekap: true };
 		try {
 			const res  = await fetch('/api/pusaka/jobs/run-all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ run_type: 'morning' }) });
-			const data = (await res.json().catch(() => ({}))) as PusakaActionResponse;
-			if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal');
+			const data = await readClientApiData<PusakaActionResponse>(res, 'Gagal menjalankan rekap massal');
 			operationState = {
 				tone: 'warning',
 				title: 'Rekap Massal Diantrekan',

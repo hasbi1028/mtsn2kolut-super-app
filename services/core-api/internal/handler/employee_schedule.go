@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -12,7 +14,13 @@ import (
 )
 
 type EmployeeSchedule struct {
-	svc *service.EmployeeSchedule
+	svc employeeScheduleService
+}
+
+type employeeScheduleService interface {
+	List(ctx context.Context, employeeID pgtype.UUID) ([]db.ListEmployeeSchedulesRow, error)
+	Upsert(ctx context.Context, p db.UpsertEmployeeScheduleParams) (db.EmployeeSchedule, error)
+	Delete(ctx context.Context, id, employeeID pgtype.UUID) error
 }
 
 func NewEmployeeSchedule(svc *service.EmployeeSchedule) *EmployeeSchedule {
@@ -20,6 +28,10 @@ func NewEmployeeSchedule(svc *service.EmployeeSchedule) *EmployeeSchedule {
 }
 
 func (h *EmployeeSchedule) List(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	empID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid employee id")
@@ -34,6 +46,10 @@ func (h *EmployeeSchedule) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *EmployeeSchedule) Upsert(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	empID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid employee id")
@@ -81,6 +97,10 @@ func (h *EmployeeSchedule) Upsert(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *EmployeeSchedule) Delete(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	empID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid employee id")

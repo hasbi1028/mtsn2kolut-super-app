@@ -9,8 +9,25 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
+type employeeStore interface {
+	ListEmployees(ctx context.Context) ([]db.ListEmployeesRow, error)
+	ListActiveEmployees(ctx context.Context) ([]db.ListActiveEmployeesRow, error)
+	ListPusakaEligibleEmployeesWithStatus(ctx context.Context) ([]db.ListPusakaEligibleEmployeesWithStatusRow, error)
+	GetEmployee(ctx context.Context, id pgtype.UUID) (db.GetEmployeeRow, error)
+	CreateEmployee(ctx context.Context, arg db.CreateEmployeeParams) (db.Employee, error)
+	UpsertPusakaAccount(ctx context.Context, arg db.UpsertPusakaAccountParams) (db.PusakaAccount, error)
+	UpdateEmployee(ctx context.Context, arg db.UpdateEmployeeParams) (db.Employee, error)
+	DeletePusakaAccountByEmployeeID(ctx context.Context, employeeID pgtype.UUID) error
+	CreateAuditLog(ctx context.Context, arg db.CreateAuditLogParams) (db.AuditLog, error)
+	ListUsersByEmployeeID(ctx context.Context, employeeID pgtype.UUID) ([]db.ListUsersByEmployeeIDRow, error)
+	UpdateUserStatus(ctx context.Context, arg db.UpdateUserStatusParams) error
+	DeleteEmployee(ctx context.Context, id pgtype.UUID) error
+	ListEmployeesWithStatus(ctx context.Context) ([]db.ListEmployeesWithStatusRow, error)
+	ListEntityAuditLogs(ctx context.Context, arg db.ListEntityAuditLogsParams) ([]db.ListEntityAuditLogsRow, error)
+}
+
 type Employee struct {
-	q *db.Queries
+	q employeeStore
 }
 
 func NewEmployee(q *db.Queries) *Employee { return &Employee{q: q} }

@@ -10,8 +10,19 @@ import (
 )
 
 type CbtEvent struct {
-	q    *db.Queries
+	q    cbtEventStore
 	pool *pgxpool.Pool
+}
+
+type cbtEventStore interface {
+	ListCbtExamEvents(ctx context.Context) ([]db.ListCbtExamEventsRow, error)
+	GetCbtExamEvent(ctx context.Context, id pgtype.UUID) (db.GetCbtExamEventRow, error)
+	GetEventResults(ctx context.Context, eventID pgtype.UUID) ([]db.GetEventResultsRow, error)
+	GetEventExamCards(ctx context.Context, eventID pgtype.UUID) ([]db.GetEventExamCardsRow, error)
+	CreateCbtExamEvent(ctx context.Context, arg db.CreateCbtExamEventParams) (db.CbtExamEvent, error)
+	UpdateCbtExamEventStatus(ctx context.Context, arg db.UpdateCbtExamEventStatusParams) (db.CbtExamEvent, error)
+	UpdateCbtExamEvent(ctx context.Context, arg db.UpdateCbtExamEventParams) (db.CbtExamEvent, error)
+	DeleteCbtExamEvent(ctx context.Context, id pgtype.UUID) error
 }
 
 func NewCbtEvent(pool *pgxpool.Pool) *CbtEvent {

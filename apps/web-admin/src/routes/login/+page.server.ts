@@ -1,7 +1,7 @@
 import { dev } from '$app/environment';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { apiLogin, ApiError } from '$lib/server/api';
+import { ApiError, apiLoginWithFetch } from '$lib/server/api';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (locals.user) throw redirect(302, url.searchParams.get('from') ?? '/');
@@ -9,13 +9,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies, url, getClientAddress }) => {
-		const data     = await request.formData();
+	default: async ({ request, cookies, url, getClientAddress, fetch }) => {
+		const data = await request.formData();
 		const username = String(data.get('username') ?? '').trim();
 		const password = String(data.get('password') ?? '');
 
 		try {
-			const pair = await apiLogin(username, password, {
+			const pair = await apiLoginWithFetch(fetch, username, password, {
 				userAgent: request.headers.get('user-agent') ?? '',
 				ipAddress: getClientAddress(),
 			});

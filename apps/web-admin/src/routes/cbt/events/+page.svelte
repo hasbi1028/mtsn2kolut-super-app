@@ -10,6 +10,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
 
 	type CbtEvent = {
 		id: string; title: string; exam_type: string; scope: string;
@@ -21,11 +22,6 @@
 	type EventsOverview = {
 		events: CbtEvent[];
 		years: AcademicYear[];
-	};
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
 	};
 
 	let events = $state<CbtEvent[]>([]);
@@ -42,6 +38,7 @@
 	let fStatus = $state('draft');
 	let fTargetLevels = $state<string[]>([]);
 	let fBusy = $state(false);
+	let eventsRequestId = 0;
 	const gradeOptions = ['VII', 'VIII', 'IX'];
 
 	const typeLabel: Record<string, string> = {
@@ -54,29 +51,6 @@
 		return typeof value === 'object' && value !== null;
 	}
 
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function parseAcademicYears(payload: unknown) {
 		if (!isRecord(payload)) return [];
 		if (Array.isArray(payload.years)) return payload.years as AcademicYear[];
@@ -85,8 +59,8 @@
 
 	async function fetchOverview(): Promise<EventsOverview> {
 		const [eventsData, academicData] = await Promise.all([
-			fetch('/api/cbt/events').then((response) => readApi<CbtEvent[]>(response, 'Gagal memuat data kegiatan ujian')),
-			fetch('/api/academic').then((response) => readApi<unknown>(response, 'Gagal memuat data akademik')),
+			fetch('/api/cbt/events').then((response) => readClientApiData<CbtEvent[]>(response, 'Gagal memuat data kegiatan ujian')),
+			fetch('/api/academic').then((response) => readClientApiData<unknown>(response, 'Gagal memuat data akademik')),
 		]);
 		return {
 			events: Array.isArray(eventsData) ? eventsData : [],
@@ -103,11 +77,16 @@
 	}
 
 	function loadInitial() {
+		const requestId = ++eventsRequestId;
 		events = [];
 		years = [];
 		eventsPromise = fetchOverview().then((overview) => {
+			if (requestId !== eventsRequestId) return { events, years };
 			applyOverview(overview);
 			return overview;
+		}).catch((error: unknown) => {
+			if (requestId === eventsRequestId) throw error;
+			return { events, years };
 		});
 	}
 
@@ -116,13 +95,17 @@
 			loadInitial();
 			return;
 		}
+		const requestId = ++eventsRequestId;
 		try {
 			const overview = await fetchOverview();
+			if (requestId !== eventsRequestId) return;
 			applyOverview(overview);
 			eventsPromise = Promise.resolve(overview);
 		} catch (error) {
-			eventsPromise = Promise.resolve({ events, years });
-			toast.error(overviewErrorMessage(error));
+			if (requestId === eventsRequestId) {
+				eventsPromise = Promise.resolve({ events, years });
+				toast.error(overviewErrorMessage(error));
+			}
 		}
 	}
 
@@ -146,11 +129,6 @@
 
 	function showError(msg: string) {
 		toast.error(msg);
-	}
-
-	async function responseErrorMessage(response: Response, fallback: string) {
-		const payload = await response.json().catch(() => null);
-		return apiErrorMessage(payload) || fallback;
 	}
 
 	function mutationErrorMessage(error: unknown, fallback: string) {
@@ -188,7 +166,7 @@
 		fBusy = true;
 		try {
 			const method = editId ? 'PUT' : 'POST';
-			const path = editId ? `/api/cbt/events/${editId}` : '/api/cbt/events';
+			const path = editId ? clientApiPath`/api/cbt/events/${editId}` : '/api/cbt/events';
 			const res = await fetch(path, {
 				method,
 				headers: { 'Content-Type': 'application/json' },
@@ -198,7 +176,7 @@
 					academic_year_id: fYearId, status: fStatus,
 				}),
 			});
-			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menyimpan kegiatan ujian')); return; }
+			await readClientJson<unknown>(res);
 			showToast(editId ? 'Kegiatan diperbarui' : 'Kegiatan berhasil dibuat');
 			resetForm();
 			await refreshOverview();
@@ -216,8 +194,8 @@
 		}))) return;
 		deleteBusyId = id;
 		try {
-			const res = await fetch(`/api/cbt/events/${id}`, { method: 'DELETE' });
-			if (!res.ok && res.status !== 204) { showError(await responseErrorMessage(res, 'Gagal menghapus kegiatan ujian')); return; }
+			const res = await fetch(clientApiPath`/api/cbt/events/${id}`, { method: 'DELETE' });
+			await readClientJson<unknown>(res);
 			showToast('Kegiatan dihapus');
 			await refreshOverview();
 		} catch (error) {

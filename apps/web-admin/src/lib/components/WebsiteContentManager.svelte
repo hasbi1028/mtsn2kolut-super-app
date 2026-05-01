@@ -13,6 +13,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 	import SuccessPanel from '$lib/components/SuccessPanel.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
 
@@ -40,11 +41,6 @@
 		error?: string;
 		message?: string;
 	};
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
 
 	let {
 		kind,
@@ -59,6 +55,7 @@
 	} = $props();
 
 	let contentPromise = $state<Promise<WebsiteContent[]> | null>(null);
+	let contentRequestId = 0;
 	let items = $state<WebsiteContent[]>([]);
 	let success = $state('');
 	let search = $state('');
@@ -192,35 +189,6 @@
 	const draftCount = $derived(items.filter((item) => item.status === 'draft').length);
 	const featuredCount = $derived(items.filter((item) => item.is_featured).length);
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function normalizeItems(value: ContentListPayload | WebsiteContent[] | null | undefined): WebsiteContent[] {
 		if (Array.isArray(value)) return value;
 		if (!value) return [];
@@ -242,16 +210,25 @@
 
 	async function fetchContentItems() {
 		const payload = await fetch(`/api/website/content?kind=${kind}`).then((response) =>
-			readApi<ContentListPayload | WebsiteContent[]>(response, `Gagal memuat ${title.toLowerCase()}`)
+			readClientApiData<ContentListPayload | WebsiteContent[]>(response, `Gagal memuat ${title.toLowerCase()}`)
 		);
 		return normalizeItems(payload);
 	}
 
 	function loadContent() {
-		contentPromise = fetchContentItems().then((nextItems) => {
-			items = nextItems;
-			return nextItems;
-		});
+		const requestId = ++contentRequestId;
+		contentPromise = fetchContentItems()
+			.then((nextItems) => {
+				if (requestId === contentRequestId) {
+					items = nextItems;
+					return nextItems;
+				}
+				return items;
+			})
+			.catch((error: unknown) => {
+				if (requestId === contentRequestId) throw error;
+				return items;
+			});
 		return contentPromise;
 	}
 
@@ -260,11 +237,15 @@
 			await loadContent();
 			return;
 		}
+		const requestId = ++contentRequestId;
 		try {
 			const nextItems = await fetchContentItems();
-			items = nextItems;
-			contentPromise = Promise.resolve(nextItems);
+			if (requestId === contentRequestId) {
+				items = nextItems;
+				contentPromise = Promise.resolve(nextItems);
+			}
 		} catch (error) {
+			if (requestId !== contentRequestId) return;
 			contentPromise = Promise.resolve(items);
 			toast.error(contentErrorMessage(error));
 		}
@@ -289,9 +270,8 @@
 			const fd = new FormData();
 			fd.append('file', file);
 			const res = await fetch('/api/website/media', { method: 'POST', body: fd });
-			const data = await res.json().catch(() => null);
-			if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal upload gambar.');
-			const url = isRecord(data) && typeof data.url === 'string' ? data.url : '';
+			const data = await readClientApiData<{ url?: string }>(res, 'Gagal upload gambar.');
+			const url = typeof data.url === 'string' ? data.url : '';
 			if (!url) throw new Error('Upload berhasil tetapi URL gambar tidak dikembalikan.');
 			form.cover_image_url = url;
 			toast.success('Gambar berhasil diunggah.');
@@ -313,8 +293,7 @@
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(payload),
 			});
-			const data = await res.json().catch(() => null);
-			if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal menyimpan konten.');
+			await readClientJson<unknown>(res);
 			toast.success(editingId ? 'Konten berhasil diperbarui.' : 'Konten berhasil dibuat.');
 			const scheduled = form.status === 'published' && !!form.published_at.trim();
 			success = editingId
@@ -340,8 +319,7 @@
 		deleteBusyId = item.id;
 		try {
 			const res = await fetch(`/api/website/content/${item.id}`, { method: 'DELETE' });
-			const data = await res.json().catch(() => null);
-			if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal menghapus konten.');
+			await readClientJson<unknown>(res);
 			toast.success('Konten berhasil dihapus.');
 			success = `Konten "${item.title}" berhasil dihapus dari area editorial.`;
 			await refreshContent();
@@ -373,8 +351,7 @@
 					published_at: nextStatus === 'published' ? '' : '',
 				}),
 			});
-			const data = await res.json().catch(() => null);
-			if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal mengubah status konten.');
+			await readClientJson<unknown>(res);
 			toast.success(nextStatus === 'published' ? 'Konten diterbitkan.' : 'Konten dikembalikan ke draft.');
 			success = nextStatus === 'published'
 				? `Konten "${item.title}" berhasil dipublikasikan dan sekarang tersedia di website publik.`

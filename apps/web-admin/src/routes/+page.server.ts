@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { apiGet } from '$lib/server/api';
+import { apiPublicGetWithFetch } from '$lib/server/api';
 
 type WebsiteContent = {
 	id: string;
@@ -12,15 +12,15 @@ type WebsiteContent = {
 	published_at: string | null;
 };
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ fetch, locals }) => {
 	if (locals.user) return {};
 
 	const [posts, featuredPosts, announcements, profil, ppdbInfo] = await Promise.all([
-		apiGet<WebsiteContent[]>('/api/public/site/posts?limit=3'),
-		apiGet<WebsiteContent[]>('/api/public/site/posts/featured?limit=2').catch(() => []),
-		apiGet<WebsiteContent[]>('/api/public/site/announcements?limit=4'),
-		apiGet<WebsiteContent>('/api/public/site/pages/profil').catch(() => null),
-		apiGet<WebsiteContent>('/api/public/site/pages/ppdb-info').catch(() => null),
+		apiPublicGetWithFetch<WebsiteContent[]>(fetch, '/api/public/site/posts?limit=3'),
+		apiPublicGetWithFetch<WebsiteContent[]>(fetch, '/api/public/site/posts/featured?limit=2').catch(() => []),
+		apiPublicGetWithFetch<WebsiteContent[]>(fetch, '/api/public/site/announcements?limit=4'),
+		apiPublicGetWithFetch<WebsiteContent>(fetch, '/api/public/site/pages/profil').catch(() => null),
+		apiPublicGetWithFetch<WebsiteContent>(fetch, '/api/public/site/pages/ppdb-info').catch(() => null),
 	]);
 
 	return {

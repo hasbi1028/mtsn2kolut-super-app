@@ -47,4 +47,33 @@ describe('AsyncContent', () => {
 		expect((await screen.findByRole('alert')).textContent).toContain('render failed');
 		expect(onerror).toHaveBeenCalledTimes(1);
 	});
+
+	it('renders a default recovery panel when no failed snippet is provided for rejected promises', async () => {
+		render(AsyncContentHarness, {
+			props: {
+				promise: Promise.reject(new Error('server gagal')),
+				withFailed: false
+			}
+		});
+
+		expect((await screen.findByText('Terjadi Kendala')).textContent).toContain('Terjadi Kendala');
+		expect(screen.getByText('server gagal')).toBeTruthy();
+	});
+
+	it('renders a default recovery panel when no failed snippet is provided for render errors', async () => {
+		const onerror = vi.fn();
+
+		render(AsyncContentHarness, {
+			props: {
+				promise: Promise.resolve('siap'),
+				shouldThrow: true,
+				withFailed: false,
+				onerror
+			}
+		});
+
+		expect(await screen.findByText('render failed')).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Coba Lagi' })).toBeTruthy();
+		expect(onerror).toHaveBeenCalledTimes(1);
+	});
 });

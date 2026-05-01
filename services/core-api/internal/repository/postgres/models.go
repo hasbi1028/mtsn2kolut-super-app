@@ -763,6 +763,20 @@ type AcademicYear struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+type AppNotification struct {
+	ID         pgtype.UUID        `json:"id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	Category   string             `json:"category"`
+	Title      string             `json:"title"`
+	Body       string             `json:"body"`
+	EntityType string             `json:"entity_type"`
+	EntityID   string             `json:"entity_id"`
+	LinkPath   string             `json:"link_path"`
+	DedupeKey  string             `json:"dedupe_key"`
+	ReadAt     pgtype.Timestamptz `json:"read_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type AppSetting struct {
 	Key       string             `json:"key"`
 	Value     string             `json:"value"`

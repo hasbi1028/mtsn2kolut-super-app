@@ -1,15 +1,14 @@
 import type { RequestHandler } from '@sveltejs/kit';
-import { proxy, handleRouteError } from '$lib/server/api';
+import { apiPath, proxy, handleRouteError, requiredRouteParam, streamProxyResponse } from '$lib/server/api';
 
 export const GET: RequestHandler = async (event) => {
 	try {
-		const response = await proxy(event).fetch(`/api/kesiswaan/student-photos/${event.params.filename}`);
-		if (!response.ok) return new Response(null, { status: response.status });
-		return new Response(response.body, {
-			headers: {
-				'content-type': response.headers.get('content-type') ?? 'application/octet-stream',
-				'cache-control': 'private, max-age=3600',
-			},
+		const filename = requiredRouteParam(event.params.filename, 'filename');
+		const response = await proxy(event).fetch(apiPath`/api/kesiswaan/student-photos/${filename}`);
+		return await streamProxyResponse(response, {
+			fallbackMessage: 'Gagal mengambil foto siswa.',
+			defaultCacheControl: 'private, max-age=3600',
+			headers: ['content-type', 'cache-control']
 		});
 	} catch (e) {
 		return handleRouteError(e, 'kesiswaan/student-photos/[filename] GET');

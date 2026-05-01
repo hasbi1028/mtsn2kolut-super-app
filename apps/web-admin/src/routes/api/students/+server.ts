@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, handleRouteError } from '$lib/server/api';
+import { apiPath, handleRouteError, proxy, readRequestJson, requiredRouteParam } from '$lib/server/api';
 
 export const GET = async (event: RequestEvent) => {
 	try {
@@ -13,7 +13,7 @@ export const GET = async (event: RequestEvent) => {
 
 export const POST = async (event: RequestEvent) => {
 	try {
-		const body = await event.request.json() as Record<string, unknown>;
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
 		const { nis, nisn, nama, gender, parent_name, parent_phone, class_id, is_active } = body;
 		if (!nis || !nama || !gender) {
 			return json({ error: 'nis, nama, gender wajib diisi' }, { status: 400 });
@@ -28,11 +28,21 @@ export const POST = async (event: RequestEvent) => {
 	}
 };
 
+export const PUT = async (event: RequestEvent) => {
+	try {
+		const id = requiredRouteParam(event.url.searchParams.get('id') ?? undefined, 'id');
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
+		const data = await proxy(event).put(apiPath`/api/students/${id}`, body);
+		return json(data);
+	} catch (e) {
+		return handleRouteError(e, 'students PUT');
+	}
+};
+
 export const DELETE = async (event: RequestEvent) => {
 	try {
-		const id = event.url.searchParams.get('id');
-		if (!id) return json({ error: 'id required' }, { status: 400 });
-		await proxy(event).del(`/api/students/${id}`);
+		const id = requiredRouteParam(event.url.searchParams.get('id') ?? undefined, 'id');
+		await proxy(event).del(apiPath`/api/students/${id}`);
 		return new Response(null, { status: 204 });
 	} catch (e) {
 		return handleRouteError(e, 'students DELETE');
@@ -41,12 +51,11 @@ export const DELETE = async (event: RequestEvent) => {
 
 export const PATCH = async (event: RequestEvent) => {
 	try {
-		const id = event.url.searchParams.get('id');
-		if (!id) return json({ error: 'id required' }, { status: 400 });
-		const body = await event.request.json() as Record<string, unknown>;
+		const id = requiredRouteParam(event.url.searchParams.get('id') ?? undefined, 'id');
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
 		const status = body.status;
 		if (!status) return json({ error: 'status wajib diisi' }, { status: 400 });
-		const data = await proxy(event).patch(`/api/students/${id}/lifecycle`, { status });
+		const data = await proxy(event).patch(apiPath`/api/students/${id}/lifecycle`, { status });
 		return json(data);
 	} catch (e) {
 		return handleRouteError(e, 'students PATCH');

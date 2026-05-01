@@ -16,6 +16,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	type CertificateTemplate = {
 		id: string;
@@ -60,12 +61,6 @@
 		certificates: StudentCertificate[];
 	};
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	type CertificateForm = {
 		template_id: string;
 		student_id: string;
@@ -84,6 +79,8 @@
 	] as const;
 
 	let overviewPromise = $state<Promise<Overview> | null>(null);
+	let overviewRequestId = 0;
+	let studentRequestId = 0;
 	let templates = $state<CertificateTemplate[]>([]);
 	let students = $state<StudentOption[]>([]);
 	let search = $state('');
@@ -108,33 +105,6 @@
 	let selectedTemplate = $derived(templates.find((template) => template.id === form.template_id));
 	let selectedStudent = $derived(students.find((student) => student.id === form.student_id));
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function applyOverview(overview: Overview) {
 		templates = overview.templates ?? [];
 		students = overview.students ?? [];
@@ -156,46 +126,65 @@
 			fetch(`/api/tu/surat-keterangan/students?${studentParams.toString()}`),
 			fetch(`/api/tu/surat-keterangan?${certificateParams.toString()}`)
 		]);
+		const [nextTemplates, nextStudents, nextCertificates] = await Promise.all([
+			readClientApiData<CertificateTemplate[]>(templatesRes, 'Gagal memuat template surat'),
+			readClientApiData<StudentOption[]>(studentsRes, 'Gagal memuat data siswa'),
+			readClientApiData<StudentCertificate[]>(certificatesRes, 'Gagal memuat arsip surat')
+		]);
 		return {
-			templates: await readApi<CertificateTemplate[]>(templatesRes, 'Gagal memuat template surat'),
-			students: await readApi<StudentOption[]>(studentsRes, 'Gagal memuat data siswa'),
-			certificates: await readApi<StudentCertificate[]>(certificatesRes, 'Gagal memuat arsip surat')
+			templates: nextTemplates,
+			students: nextStudents,
+			certificates: nextCertificates
 		};
 	}
 
 	function loadOverview() {
-		overviewPromise = fetchOverview().then((overview) => {
-			applyOverview(overview);
-			return overview;
-		});
+		const requestId = ++overviewRequestId;
+		overviewPromise = fetchOverview()
+			.then((overview) => {
+				if (requestId === overviewRequestId) {
+					applyOverview(overview);
+					return overview;
+				}
+				return { templates, students, certificates: [] };
+			})
+			.catch((error: unknown) => {
+				if (requestId === overviewRequestId) throw error;
+				return { templates, students, certificates: [] };
+			});
 		return overviewPromise;
 	}
 
 	async function refreshOverview() {
+		const requestId = ++overviewRequestId;
 		const overview = await fetchOverview();
-		applyOverview(overview);
-		overviewPromise = Promise.resolve(overview);
+		if (requestId === overviewRequestId) {
+			applyOverview(overview);
+			overviewPromise = Promise.resolve(overview);
+		}
 	}
 
 	async function refreshOverviewAction() {
 		refreshBusy = true;
+		const requestId = overviewRequestId + 1;
 		try {
 			await refreshOverview();
 		} catch (error) {
 			toast.error(overviewErrorMessage(error));
 		} finally {
-			refreshBusy = false;
+			if (requestId === overviewRequestId) refreshBusy = false;
 		}
 	}
 
 	async function applyCertificateFilters() {
 		filterBusy = true;
+		const requestId = overviewRequestId + 1;
 		try {
 			await refreshOverview();
 		} catch (error) {
 			toast.error(overviewErrorMessage(error));
 		} finally {
-			filterBusy = false;
+			if (requestId === overviewRequestId) filterBusy = false;
 		}
 	}
 
@@ -231,17 +220,21 @@
 	}
 
 	async function loadStudents() {
+		const requestId = ++studentRequestId;
 		studentBusy = true;
 		try {
 			const params = new URLSearchParams();
 			if (studentSearch.trim()) params.set('search', studentSearch.trim());
 			if (studentStatus) params.set('status', studentStatus);
 			const res = await fetch(`/api/tu/surat-keterangan/students?${params.toString()}`);
-			students = await readApi<StudentOption[]>(res, 'Gagal memuat data siswa');
+			const rows = await readClientApiData<StudentOption[]>(res, 'Gagal memuat data siswa');
+			if (requestId === studentRequestId) students = rows;
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal memuat data siswa');
+			if (requestId === studentRequestId) {
+				toast.error(error instanceof Error ? error.message : 'Gagal memuat data siswa');
+			}
 		} finally {
-			studentBusy = false;
+			if (requestId === studentRequestId) studentBusy = false;
 		}
 	}
 
@@ -257,7 +250,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(form)
 			});
-			const created = await readApi<StudentCertificate>(res, 'Gagal membuat surat keterangan');
+			const created = await readClientApiData<StudentCertificate>(res, 'Gagal membuat surat keterangan');
 			toast.success(`Surat ${created.nomor_surat} berhasil diterbitkan`);
 			resetForm();
 			await refreshOverview();
@@ -283,7 +276,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ remarks: 'Dibatalkan dari halaman Tata Usaha' })
 			});
-			await readApi<unknown>(res, 'Gagal membatalkan surat');
+			await readClientJson<unknown>(res);
 			toast.success('Surat keterangan dibatalkan');
 			await refreshOverview();
 		} catch (error) {

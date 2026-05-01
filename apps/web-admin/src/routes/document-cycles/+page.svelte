@@ -4,6 +4,7 @@
 	import CalendarClockIcon from '@lucide/svelte/icons/calendar-clock';
 	import CheckCircle2Icon from '@lucide/svelte/icons/check-circle-2';
 	import ClipboardListIcon from '@lucide/svelte/icons/clipboard-list';
+	import DownloadIcon from '@lucide/svelte/icons/download';
 	import ExternalLinkIcon from '@lucide/svelte/icons/external-link';
 	import FileCheck2Icon from '@lucide/svelte/icons/file-check-2';
 	import FileWarningIcon from '@lucide/svelte/icons/file-warning';
@@ -31,6 +32,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
+	import { readClientJson } from '$lib/client/api';
 
 	interface DocumentCycleStats {
 		active_catalogs: number;
@@ -233,10 +235,6 @@
 		verification_notes: string;
 	}
 
-	interface ApiErrorPayload {
-		error?: string;
-	}
-
 	interface ExternalTrackerRow {
 		system: string;
 		label: string;
@@ -305,6 +303,25 @@
 		['completed', 'Selesai']
 	];
 
+	const AUDIT_EVENT_TYPES: Array<[string, string]> = [
+		['', 'Semua event'],
+		['generated', 'Dibuat Generator'],
+		['updated', 'Detail Diperbarui'],
+		['status_changed', 'Status Berubah'],
+		['monitoring_note', 'Catatan Monitoring'],
+		['reminder_sent', 'Reminder PIC'],
+		['created', 'Dibuat']
+	];
+
+	const EXTERNAL_CHECKLIST_STATUSES: Array<[string, string]> = [
+		['', 'Semua checklist'],
+		['not_input', 'Belum input'],
+		['in_progress', 'Sedang proses'],
+		['submitted', 'Sudah input'],
+		['needs_revision', 'Perlu revisi'],
+		['done', 'Selesai']
+	];
+
 	const SNP_STANDARDS: Array<[string, string]> = [
 		['', 'Tidak dipetakan'],
 		['skl', 'SKL'],
@@ -323,6 +340,9 @@
 	let frequencyFilter = $state('');
 	let domainAreaFilter = $state('');
 	let externalSystemFilter = $state('');
+	let externalChecklistStatusFilter = $state('');
+	let auditEventTypeFilter = $state('');
+	let auditActorFilter = $state('');
 	let search = $state('');
 	let reminderOnly = $state(false);
 	let refreshBusy = $state(false);
@@ -333,6 +353,7 @@
 	let dashboardPromise = $state<Promise<DashboardData> | null>(null);
 	let eventsPromise = $state<Promise<DocumentCycleEvent[]> | null>(null);
 	let snapshot = $state<DashboardData | null>(null);
+	let dashboardRequestId = 0;
 	let editingCatalogId = $state('');
 	let selectedObligationId = $state('');
 	let initialSelectedObligationId = $state('');
@@ -384,16 +405,21 @@
 	}
 
 	function refreshData() {
+		const requestId = ++dashboardRequestId;
 		refreshBusy = true;
 		const next = loadDashboard();
 		dashboardPromise = next
 			.then((data) => {
-				snapshot = data;
-				selectInitialObligation(data);
+				if (requestId === dashboardRequestId) {
+					snapshot = data;
+					selectInitialObligation(data);
+				}
 				return data;
 			})
 			.finally(() => {
-				refreshBusy = false;
+				if (requestId === dashboardRequestId) {
+					refreshBusy = false;
+				}
 			});
 	}
 
@@ -407,18 +433,21 @@
 		if (reminderOnly) obligationParams.set('reminder_only', 'true');
 
 		const commonYear = new URLSearchParams({ period_year: String(periodYear) });
-		const [stats, catalogs, obligations, units, employees, documents, evidenceItems, archiveDocuments, workPlanItems, performanceTargets, complianceActions] = await Promise.all([
+		const [stats, catalogs, obligations] = await Promise.all([
 			fetchJson<DocumentCycleStats>(`/api/document-cycles/stats?period_year=${periodYear}`),
 			fetchJson<DocumentCycleCatalog[]>('/api/document-cycles/catalogs?active_only=true'),
-			fetchJson<DocumentCycleObligation[]>(`/api/document-cycles/obligations?${obligationParams.toString()}`),
-			fetchJson<UnitOption[]>('/api/governance/units'),
-			fetchJson<EmployeeOption[]>('/api/governance/employee-options'),
-			fetchJson<DocumentOption[]>(`/api/governance/documents?${commonYear.toString()}`),
-			fetchJson<EvidenceOption[]>(`/api/governance/evidence-items?${commonYear.toString()}`),
-			fetchJson<ArchiveOption[]>('/api/tu/archives/documents'),
-			fetchJson<WorkPlanOption[]>(`/api/governance/work-plan-items?${commonYear.toString()}`),
-			fetchJson<PerformanceTargetOption[]>(`/api/governance/performance-targets?${commonYear.toString()}`),
-			fetchJson<ComplianceActionOption[]>(`/api/governance/compliance-actions?${commonYear.toString()}`)
+			fetchJson<DocumentCycleObligation[]>(`/api/document-cycles/obligations?${obligationParams.toString()}`)
+		]);
+
+		const [units, employees, documents, evidenceItems, archiveDocuments, workPlanItems, performanceTargets, complianceActions] = await Promise.all([
+			fetchOptionalJson<UnitOption[]>('/api/governance/units', [], 'unit governance'),
+			fetchOptionalJson<EmployeeOption[]>('/api/governance/employee-options', [], 'opsi pegawai'),
+			fetchOptionalJson<DocumentOption[]>(`/api/governance/documents?${commonYear.toString()}`, [], 'dokumen governance'),
+			fetchOptionalJson<EvidenceOption[]>(`/api/governance/evidence-items?${commonYear.toString()}`, [], 'evidence governance'),
+			fetchOptionalJson<ArchiveOption[]>('/api/tu/archives/documents', [], 'arsip TU'),
+			fetchOptionalJson<WorkPlanOption[]>(`/api/governance/work-plan-items?${commonYear.toString()}`, [], 'RKT/RKJM'),
+			fetchOptionalJson<PerformanceTargetOption[]>(`/api/governance/performance-targets?${commonYear.toString()}`, [], 'IKU/Perkin/SKP'),
+			fetchOptionalJson<ComplianceActionOption[]>(`/api/governance/compliance-actions?${commonYear.toString()}`, [], 'tindak lanjut kepatuhan')
 		]);
 
 		return { stats, catalogs, obligations, units, employees, documents, evidenceItems, archiveDocuments, workPlanItems, performanceTargets, complianceActions };
@@ -426,24 +455,32 @@
 
 	async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
 		const response = await fetch(`${base}${path}`, init);
-		if (!response.ok) {
-			let message = `HTTP ${response.status}`;
-			try {
-				const payload = (await response.json()) as ApiErrorPayload;
-				message = payload.error ?? message;
-			} catch {
-				message = 'Backend tidak dapat dihubungi';
-			}
-			throw new Error(message);
+		return readClientJson<T>(response);
+	}
+
+	async function fetchOptionalJson<T>(path: string, fallback: T, label: string): Promise<T> {
+		try {
+			return await fetchJson<T>(path);
+		} catch (error) {
+			console.warn(`Data opsional siklus dokumen gagal dimuat: ${label}`, error);
+			return fallback;
 		}
-		return (await response.json()) as T;
 	}
 
 	function loadEvents(obligationId: string) {
-		eventsPromise = fetchJson<DocumentCycleEvent[]>(`/api/document-cycles/obligations/${obligationId}/events`);
+		const params = new URLSearchParams();
+		if (auditEventTypeFilter) params.set('event_type', auditEventTypeFilter);
+		if (auditActorFilter.trim()) params.set('actor', auditActorFilter.trim());
+		const suffix = params.toString() ? `?${params.toString()}` : '';
+		eventsPromise = fetchJson<DocumentCycleEvent[]>(`/api/document-cycles/obligations/${obligationId}/events${suffix}`);
 	}
 
 	function retryEvents(reset?: () => void) {
+		reset?.();
+		if (selectedObligationId) loadEvents(selectedObligationId);
+	}
+
+	function applyAuditFilters(reset?: () => void) {
 		reset?.();
 		if (selectedObligationId) loadEvents(selectedObligationId);
 	}
@@ -755,13 +792,14 @@
 		if (type === 'updated') return 'Detail Diperbarui';
 		if (type === 'status_changed') return 'Status Berubah';
 		if (type === 'monitoring_note') return 'Catatan Monitoring';
+		if (type === 'reminder_sent') return 'Reminder PIC';
 		if (type === 'created') return 'Dibuat';
 		return type;
 	}
 
 	function eventVariant(type: string): BadgeVariant {
 		if (type === 'status_changed') return 'secondary';
-		if (type === 'generated' || type === 'created') return 'outline';
+		if (type === 'generated' || type === 'created' || type === 'reminder_sent') return 'outline';
 		return 'default';
 	}
 
@@ -814,6 +852,112 @@
 			else if (draft > 0 || linkedEvidence > 0 || linkedArchive > 0) status = 'in_progress';
 			return { system, label, total: items.length, completed, waiting, draft, overdue, linkedEvidence, linkedArchive, status };
 		});
+	}
+
+	function externalChecklistItems(data: DashboardData): DocumentCycleObligation[] {
+		return data.obligations.filter((item) => item.external_system);
+	}
+
+	function filteredExternalChecklistItems(data: DashboardData): DocumentCycleObligation[] {
+		const items = externalChecklistItems(data);
+		if (!externalChecklistStatusFilter) return items;
+		return items.filter((item) => obligationTrackerStatus(item) === externalChecklistStatusFilter);
+	}
+
+	function obligationTrackerStatus(item: DocumentCycleObligation): string {
+		if (item.status === 'completed') return 'done';
+		if (item.is_overdue) return 'needs_revision';
+		if (item.status === 'waiting_verification') return 'submitted';
+		if (item.status === 'draft' || item.evidence_item_id || item.archive_document_id || item.compliance_action_id) return 'in_progress';
+		return 'not_input';
+	}
+
+	function focusExternalTracker(system: string) {
+		externalSystemFilter = system;
+		externalChecklistStatusFilter = '';
+		activeTab = 'external';
+		refreshData();
+	}
+
+	function csvEscape(value: string | number | boolean | null | undefined) {
+		const text = String(value ?? '');
+		if (/[",\n]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
+		return text;
+	}
+
+	function downloadCsv(filename: string, rows: Array<Array<string | number | boolean | null | undefined>>) {
+		const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n');
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = filename;
+		link.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function exportExternalChecklistCsv(items: DocumentCycleObligation[]) {
+		const rows = [
+			[
+				'Portal',
+				'Status Checklist',
+				'Status Siklus Dokumen',
+				'Kode Dokumen',
+				'Nama Dokumen',
+				'Periode',
+				'Bidang',
+				'SNP',
+				'Regulasi',
+				'PIC',
+				'Verifikator',
+				'Jatuh Tempo',
+				'Evidence',
+				'Arsip',
+				'Tindak Lanjut',
+				'Catatan Verifikasi'
+			],
+			...items.map((item) => [
+				externalSystemLabel(item.external_system),
+				trackerStatusLabel(obligationTrackerStatus(item)),
+				statusLabel(item.status),
+				item.catalog_code,
+				item.catalog_title,
+				item.period_label,
+				domainAreaLabel(item.domain_area),
+				snpLabel(item.snp_standard),
+				item.regulation_ref,
+				item.responsible_employee_name || 'Belum ada PIC',
+				item.verifier_employee_name || 'Belum ada verifikator',
+				formatDate(item.due_date),
+				item.evidence_item_title,
+				item.archive_document_title,
+				item.compliance_action_title,
+				item.verification_notes
+			])
+		];
+		downloadCsv(`checklist-kepatuhan-eksternal-${periodYear}.csv`, rows);
+		toast.success('Checklist kepatuhan eksternal diekspor');
+	}
+
+	function exportAuditCsv(obligation: DocumentCycleObligation, events: DocumentCycleEvent[]) {
+		const rows = [
+			['Waktu', 'Jenis Event', 'Aktor', 'Status Awal', 'Status Akhir', 'Catatan'],
+			...events.map((event) => [
+				formatDateTime(event.created_at),
+				eventTypeLabel(event.event_type),
+				event.actor_username || 'Sistem',
+				event.from_status ? statusLabel(event.from_status) : '',
+				event.to_status ? statusLabel(event.to_status) : '',
+				event.notes
+			])
+		];
+		downloadCsv(`audit-siklus-${obligation.catalog_code}-${obligation.period_year}.csv`, rows);
+		toast.success('Riwayat audit diekspor');
+	}
+
+	function exportSelectedAuditCsv(events: DocumentCycleEvent[]) {
+		if (!selectedObligation) return;
+		exportAuditCsv(selectedObligation, events);
 	}
 
 	function attentionLabel(item: DocumentCycleObligation): string {
@@ -887,8 +1031,11 @@
 		const requestedExternal = params.get('external_system') ?? '';
 		if (EXTERNAL_SYSTEMS.some(([value]) => value === requestedExternal)) externalSystemFilter = requestedExternal;
 
+		const requestedExternalStatus = params.get('external_status') ?? '';
+		if (EXTERNAL_CHECKLIST_STATUSES.some(([value]) => value === requestedExternalStatus)) externalChecklistStatusFilter = requestedExternalStatus;
+
 		const requestedTab = params.get('tab') ?? '';
-		if (['monitoring', 'connections', 'catalog'].includes(requestedTab)) activeTab = requestedTab;
+		if (['monitoring', 'external', 'connections', 'catalog'].includes(requestedTab)) activeTab = requestedTab;
 
 		const requestedSearch = params.get('search')?.trim() ?? '';
 		if (requestedSearch) search = requestedSearch;
@@ -1163,6 +1310,10 @@
 									{#if tracker.overdue > 0}
 										<p class="mt-2 text-xs font-medium text-red-700">{tracker.overdue} lewat tempo/perlu revisi</p>
 									{/if}
+									<Button class="mt-3" type="button" variant="outline" size="sm" disabled={tracker.total === 0} onclick={() => focusExternalTracker(tracker.system)}>
+										<ClipboardListIcon class="mr-2 size-3.5" />
+										Checklist
+									</Button>
 								</div>
 							{/each}
 						</Card.Content>
@@ -1405,12 +1556,32 @@
 										</div>
 									</div>
 									<div class="rounded-md border border-slate-200 bg-slate-50/70 p-3">
-										<div class="mb-3 flex items-center justify-between gap-3">
+										<div class="mb-3 flex flex-col gap-3">
 											<div>
 												<p class="text-sm font-medium text-slate-900">Riwayat Audit</p>
-												<p class="text-xs text-slate-500">Jejak perubahan status, update detail, dan generator dokumen.</p>
+												<p class="text-xs text-slate-500">Jejak perubahan status, update detail, generator, dan reminder PIC.</p>
 											</div>
-											<Button type="button" variant="outline" size="sm" onclick={() => loadEvents(selectedObligation.id)}>Refresh</Button>
+											<div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-end">
+												<div>
+													<label for="audit-event-type-filter" class="text-xs font-medium text-slate-600">Jenis Event</label>
+													<select id="audit-event-type-filter" bind:value={auditEventTypeFilter} class="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+														{#each AUDIT_EVENT_TYPES as [value, label] (value)}
+															<option {value}>{label}</option>
+														{/each}
+													</select>
+												</div>
+												<div>
+													<label for="audit-actor-filter" class="text-xs font-medium text-slate-600">Aktor</label>
+													<Input id="audit-actor-filter" class="mt-1" placeholder="username atau system" bind:value={auditActorFilter} />
+												</div>
+												<Button type="button" variant="outline" size="sm" onclick={() => applyAuditFilters()}>
+													<RefreshCcwIcon class="mr-2 size-3.5" />
+													Terapkan
+												</Button>
+												<Button type="button" variant="outline" size="sm" onclick={() => { auditEventTypeFilter = ''; auditActorFilter = ''; applyAuditFilters(); }}>
+													Reset
+												</Button>
+											</div>
 										</div>
 										<AsyncContent promise={eventsPromise} onerror={handleRenderError}>
 											{#snippet pending()}
@@ -1428,6 +1599,13 @@
 											{/snippet}
 											{#snippet children(events)}
 												{@const currentEvents = events as DocumentCycleEvent[]}
+												<div class="mb-3 flex items-center justify-between gap-3">
+													<p class="text-xs text-slate-500">{currentEvents.length} event audit ditampilkan</p>
+													<Button type="button" variant="outline" size="sm" disabled={currentEvents.length === 0} onclick={() => exportSelectedAuditCsv(currentEvents)}>
+														<DownloadIcon class="mr-2 size-3.5" />
+														Export CSV
+													</Button>
+												</div>
 												{#if currentEvents.length === 0}
 													<div class="rounded-md border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-500">
 														Belum ada riwayat audit untuk dokumen ini.
@@ -1472,6 +1650,7 @@
 			<Tabs.Root bind:value={activeTab} class="space-y-4">
 				<Tabs.List>
 					<Tabs.Trigger value="monitoring">Monitoring</Tabs.Trigger>
+					<Tabs.Trigger value="external">Kepatuhan Eksternal</Tabs.Trigger>
 					<Tabs.Trigger value="connections">Peta Keterhubungan</Tabs.Trigger>
 					<Tabs.Trigger value="catalog">Katalog</Tabs.Trigger>
 				</Tabs.List>
@@ -1479,6 +1658,126 @@
 					<div class="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600">
 						Alur status modul: Belum Mulai -> Sedang Dibuat -> Menunggu Verifikasi -> Selesai. Tahun {periodYear} memiliki {linkedEvidenceCount(data)} jadwal dengan bukti atau arsip tertaut.
 					</div>
+				</Tabs.Content>
+				<Tabs.Content value="external" class="space-y-4">
+					{@const allExternalItems = externalChecklistItems(data)}
+					{@const externalItems = filteredExternalChecklistItems(data)}
+					<div class="grid gap-3 md:grid-cols-4">
+						<Card.Root class="border-slate-200">
+							<Card.Content class="p-4">
+								<p class="text-xs text-slate-500">Ditampilkan</p>
+								<p class="mt-2 text-2xl font-semibold text-slate-900">{externalItems.length}</p>
+								<p class="mt-1 text-xs text-slate-500">dari {allExternalItems.length} checklist</p>
+							</Card.Content>
+						</Card.Root>
+						<Card.Root class="border-slate-200">
+							<Card.Content class="p-4">
+								<p class="text-xs text-slate-500">Selesai</p>
+								<p class="mt-2 text-2xl font-semibold text-slate-900">{externalItems.filter((item) => obligationTrackerStatus(item) === 'done').length}</p>
+							</Card.Content>
+						</Card.Root>
+						<Card.Root class="border-slate-200">
+							<Card.Content class="p-4">
+								<p class="text-xs text-slate-500">Perlu Revisi</p>
+								<p class="mt-2 text-2xl font-semibold text-slate-900">{externalItems.filter((item) => obligationTrackerStatus(item) === 'needs_revision').length}</p>
+							</Card.Content>
+						</Card.Root>
+						<Card.Root class="border-slate-200">
+							<Card.Content class="p-4">
+								<p class="text-xs text-slate-500">Ada Bukti</p>
+								<p class="mt-2 text-2xl font-semibold text-slate-900">{externalItems.filter((item) => item.evidence_item_id || item.archive_document_id).length}</p>
+							</Card.Content>
+						</Card.Root>
+					</div>
+					<div class="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-white p-3">
+						<label for="external-checklist-status" class="text-sm font-medium text-slate-700">Status checklist</label>
+						<select id="external-checklist-status" bind:value={externalChecklistStatusFilter} class="h-9 rounded-md border border-input bg-background px-3 text-sm">
+							{#each EXTERNAL_CHECKLIST_STATUSES as [value, label] (value)}
+								<option {value}>{label}</option>
+							{/each}
+						</select>
+						{#if externalChecklistStatusFilter}
+							<Button type="button" variant="outline" size="sm" onclick={() => { externalChecklistStatusFilter = ''; }}>
+								Reset Status
+							</Button>
+						{/if}
+					</div>
+					<Card.Root class="border-slate-200">
+						<Card.Header class="pb-2">
+							<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+								<div>
+									<div class="flex items-center gap-2">
+										<ExternalLinkIcon class="size-4 text-emerald-700" />
+										<Card.Title class="text-base">Checklist Kepatuhan Eksternal</Card.Title>
+									</div>
+									<Card.Description>Status internal untuk SKP, EMIS, SIPKA, SIMAK-BMN, RKAM/BOS, Perkin, IKU, LAKIP/LKj, dan EDM.</Card.Description>
+								</div>
+								<Button type="button" variant="outline" size="sm" disabled={externalItems.length === 0} onclick={() => exportExternalChecklistCsv(externalItems)}>
+									<DownloadIcon class="mr-2 size-3.5" />
+									Export CSV
+								</Button>
+							</div>
+						</Card.Header>
+						<Card.Content class="p-0">
+							<div class="overflow-x-auto">
+								<Table.Root>
+									<Table.Header>
+										<Table.Row>
+											<Table.Head>Portal</Table.Head>
+											<Table.Head>Dokumen</Table.Head>
+											<Table.Head>Status Checklist</Table.Head>
+											<Table.Head>PIC & Tenggat</Table.Head>
+											<Table.Head>Bukti Dukung</Table.Head>
+											<Table.Head>Aksi</Table.Head>
+										</Table.Row>
+									</Table.Header>
+									<Table.Body>
+										{#each externalItems as item (item.id)}
+											{@const trackerStatus = obligationTrackerStatus(item)}
+											<Table.Row>
+												<Table.Cell class="min-w-52">
+													<Badge variant="outline">{externalSystemLabel(item.external_system)}</Badge>
+													<p class="mt-2 text-xs text-slate-500">{domainAreaLabel(item.domain_area)}</p>
+												</Table.Cell>
+												<Table.Cell class="min-w-72">
+													<p class="text-sm font-medium text-slate-900">{item.catalog_title}</p>
+													<p class="text-xs text-slate-500">{item.period_label} · {item.catalog_code}</p>
+												</Table.Cell>
+												<Table.Cell>
+													<Badge variant={trackerStatusVariant(trackerStatus)}>{trackerStatusLabel(trackerStatus)}</Badge>
+													<p class="mt-2 text-xs text-slate-500">Alur dokumen: {statusLabel(item.status)}</p>
+												</Table.Cell>
+												<Table.Cell class="min-w-56">
+													<p class="text-sm text-slate-900">{item.responsible_employee_name || 'Belum ada PIC'}</p>
+													<p class={item.is_overdue ? 'mt-1 text-xs font-medium text-red-700' : 'mt-1 text-xs text-slate-500'}>Jatuh tempo {formatDate(item.due_date)}</p>
+												</Table.Cell>
+												<Table.Cell class="min-w-64">
+													<div class="flex flex-wrap gap-1.5">
+														<Badge variant={item.evidence_item_id ? 'default' : 'outline'}>Evidence</Badge>
+														<Badge variant={item.archive_document_id ? 'default' : 'outline'}>Arsip</Badge>
+														<Badge variant={item.compliance_action_id ? 'default' : 'outline'}>Aksi</Badge>
+													</div>
+													<p class="mt-2 text-xs text-slate-500">{item.archive_document_title || item.evidence_item_title || item.compliance_action_title || 'Belum ada bukti tertaut'}</p>
+												</Table.Cell>
+												<Table.Cell>
+													<Button size="sm" variant="outline" onclick={() => selectObligation(item)}>
+														<PencilIcon class="mr-2 size-3.5" />
+														Detail
+													</Button>
+												</Table.Cell>
+											</Table.Row>
+										{:else}
+											<Table.Row>
+												<Table.Cell colspan={6} class="py-10 text-center text-sm text-slate-500">
+													Belum ada checklist eksternal pada filter saat ini.
+												</Table.Cell>
+											</Table.Row>
+										{/each}
+									</Table.Body>
+								</Table.Root>
+							</div>
+						</Card.Content>
+					</Card.Root>
 				</Tabs.Content>
 				<Tabs.Content value="connections" class="space-y-4">
 					<div class="grid gap-3 md:grid-cols-4">

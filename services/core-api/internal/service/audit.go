@@ -7,8 +7,12 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
+type auditStore interface {
+	DeleteOldAuditLogs(ctx context.Context) (int64, error)
+}
+
 type Audit struct {
-	q *db.Queries
+	q auditStore
 }
 
 func NewAudit(q *db.Queries) *Audit {

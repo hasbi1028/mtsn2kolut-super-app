@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -8,17 +9,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	mw "mtsn2kolut-super-app/backend/internal/middleware"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
+type studentService interface {
+	List(ctx context.Context) ([]db.ListStudentsRow, error)
+	ListByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]db.ListStudentsByTeacherRow, error)
+	Create(ctx context.Context, p db.CreateStudentParams) (db.Student, error)
+	Update(ctx context.Context, p db.UpdateStudentParams) (db.Student, error)
+	Delete(ctx context.Context, id pgtype.UUID) error
+	UpdateLifecycle(ctx context.Context, id pgtype.UUID, status db.StudentStatusEnum) error
+}
+
 type Student struct {
-	svc *service.Student
+	svc studentService
 }
 
 func NewStudent(svc *service.Student) *Student { return &Student{svc: svc} }
 
 func (h *Student) List(w http.ResponseWriter, r *http.Request) {
+	if !studentAdminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	rows, err := h.svc.List(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -29,8 +44,11 @@ func (h *Student) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *Student) GuruAwareList(w http.ResponseWriter, r *http.Request) {
 	claims, ok := api.ClaimsFromContext(r.Context())
-	role, _ := claims["role"].(string)
-	if ok && role == "guru" {
+	if ok && mw.HasAnyRole(claims, "admin") {
+		h.List(w, r)
+		return
+	}
+	if ok && mw.HasAnyRole(claims, "guru") {
 		eidRaw, _ := claims["eid"].(string)
 		if eidRaw == "" {
 			api.Forbidden(w)
@@ -49,10 +67,14 @@ func (h *Student) GuruAwareList(w http.ResponseWriter, r *http.Request) {
 		api.OK(w, rows)
 		return
 	}
-	h.List(w, r)
+	api.Forbidden(w)
 }
 
 func (h *Student) Create(w http.ResponseWriter, r *http.Request) {
+	if !studentAdminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	var body struct {
 		Nis         string `json:"nis"`
 		Nisn        string `json:"nisn"`
@@ -102,6 +124,10 @@ func (h *Student) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Student) Update(w http.ResponseWriter, r *http.Request) {
+	if !studentAdminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -190,6 +216,10 @@ func (h *Student) PublicRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Student) Delete(w http.ResponseWriter, r *http.Request) {
+	if !studentAdminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -203,6 +233,10 @@ func (h *Student) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Student) UpdateLifecycle(w http.ResponseWriter, r *http.Request) {
+	if !studentAdminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -230,4 +264,12 @@ func (h *Student) UpdateLifecycle(w http.ResponseWriter, r *http.Request) {
 		"id":     id,
 		"status": status,
 	})
+}
+
+func studentAdminAccessAllowed(r *http.Request) bool {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		return false
+	}
+	return mw.HasAnyRole(claims, "admin")
 }

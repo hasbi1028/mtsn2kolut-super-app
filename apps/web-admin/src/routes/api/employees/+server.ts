@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, ApiError, handleRouteError } from '$lib/server/api';
+import { ApiError, apiPath, handleRouteError, proxy, readRequestJson } from '$lib/server/api';
 
 interface GoEmployee {
 	id: string; nip: string; nama: string; unit_kerja: string;
@@ -23,7 +23,7 @@ export const GET = async (event: RequestEvent) => {
 
 export const POST = async (event: RequestEvent) => {
 	try {
-		const body = await event.request.json() as Record<string, unknown>;
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
 		const { nip, nama, unit_kerja = '', employment_type = 'lainnya', pusaka_username, pusaka_password } = body;
 
 		if (!nip || !nama)
@@ -46,10 +46,10 @@ export const POST = async (event: RequestEvent) => {
 
 export const DELETE = async (event: RequestEvent) => {
 	try {
-		const { id } = await event.request.json() as { id?: string };
+		const { id } = await readRequestJson<{ id?: string }>(event.request);
 		if (!id) return json({ error: 'id wajib diisi' }, { status: 400 });
 
-		await proxy(event).del(`/api/employees/${id}`);
+		await proxy(event).del(apiPath`/api/employees/${id}`);
 		return json({ ok: true });
 	} catch (e) {
 		if (e instanceof ApiError && e.status === 404)

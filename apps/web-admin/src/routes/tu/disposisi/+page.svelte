@@ -8,6 +8,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	type DispositionRow = {
 		id: string;
@@ -25,69 +26,48 @@
 	};
 
 	let dispositionsPromise = $state<Promise<DispositionRow[]> | null>(null);
+	let dispositionsRequestId = 0;
 	let filterStatus = $state('');
 	let updateBusy = $state<Record<string, boolean>>({});
 	let refreshBusy = $state(false);
-
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
 
 	async function fetchDispositions(): Promise<DispositionRow[]> {
 		const params = new URLSearchParams();
 		if (filterStatus) params.set('status', filterStatus);
 		const res = await fetch(`/api/tu/surat/disposisi?${params}`);
-		return readApi<DispositionRow[]>(res, 'Gagal memuat disposisi');
+		return readClientApiData<DispositionRow[]>(res, 'Gagal memuat disposisi');
 	}
 
 	function loadDispositions() {
-		dispositionsPromise = fetchDispositions();
+		const requestId = ++dispositionsRequestId;
+		dispositionsPromise = fetchDispositions()
+			.then((rows) => (requestId === dispositionsRequestId ? (rows ?? []) : []))
+			.catch((error: unknown) => {
+				if (requestId === dispositionsRequestId) throw error;
+				return [];
+			});
 		return dispositionsPromise;
 	}
 
 	async function refreshDispositionsList() {
 		refreshBusy = true;
+		const promise = loadDispositions();
+		const requestId = dispositionsRequestId;
 		try {
-			await loadDispositions();
+			await promise;
 		} catch {
 			// AsyncContent owns the visible error state for the table body.
 		} finally {
-			refreshBusy = false;
+			if (requestId === dispositionsRequestId) refreshBusy = false;
 		}
 	}
 
 	async function refreshDispositions() {
+		const requestId = ++dispositionsRequestId;
 		const rows = await fetchDispositions();
-		dispositionsPromise = Promise.resolve(rows ?? []);
+		if (requestId === dispositionsRequestId) {
+			dispositionsPromise = Promise.resolve(rows ?? []);
+		}
 	}
 
 	function retryDispositions(reset?: () => void) {
@@ -102,11 +82,6 @@
 
 	function handleDispositionsRenderError(error: unknown) {
 		console.error('TU dispositions render failed', error);
-	}
-
-	async function responseErrorMessage(response: Response, fallback: string) {
-		const payload = await response.json().catch(() => null);
-		return apiErrorMessage(payload) || fallback;
 	}
 
 	function mutationErrorMessage(error: unknown, fallback: string) {
@@ -139,7 +114,7 @@
 					status: newStatus
 				})
 			});
-			if (!res.ok) { toast.error(await responseErrorMessage(res, 'Gagal mengubah status')); return; }
+			await readClientJson<unknown>(res);
 			await refreshDispositionsAfterMutation();
 			toast.success('Status disposisi diperbarui');
 		} catch (error) {

@@ -1,21 +1,32 @@
 package handler
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
 	mw "mtsn2kolut-super-app/backend/internal/middleware"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
 type CbtQuestionAsset struct {
-	svc *service.CbtQuestionAsset
+	svc cbtQuestionAssetService
+}
+
+type cbtQuestionAssetService interface {
+	Save(ctx context.Context, input service.UploadCbtQuestionAssetInput) (db.CbtQuestionAsset, error)
+	ListByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error)
+	GetQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error)
+	Get(ctx context.Context, id pgtype.UUID) (db.CbtQuestionAsset, error)
+	AccessibleByPackage(ctx context.Context, questionID, packageID pgtype.UUID) (bool, error)
 }
 
 func NewCbtQuestionAsset(svc *service.CbtQuestionAsset) *CbtQuestionAsset {
@@ -23,6 +34,10 @@ func NewCbtQuestionAsset(svc *service.CbtQuestionAsset) *CbtQuestionAsset {
 }
 
 func (h *CbtQuestionAsset) Upload(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	if err := r.ParseMultipartForm(12 << 20); err != nil {
 		api.BadRequest(w, "multipart form invalid")
 		return
@@ -43,6 +58,9 @@ func (h *CbtQuestionAsset) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 		questionID = parsed
 	}
+	if !h.requireQuestionAssetScope(w, r, questionID) {
+		return
+	}
 
 	row, err := h.svc.Save(r.Context(), service.UploadCbtQuestionAssetInput{
 		QuestionID:   questionID,
@@ -54,7 +72,7 @@ func (h *CbtQuestionAsset) Upload(w http.ResponseWriter, r *http.Request) {
 		File:         file,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Upload aset soal CBT tidak valid")
 		return
 	}
 
@@ -70,6 +88,10 @@ func (h *CbtQuestionAsset) Upload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtQuestionAsset) List(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	rawID := r.URL.Query().Get("question_id")
 	if rawID == "" {
 		api.BadRequest(w, "question_id wajib diisi")
@@ -78,6 +100,9 @@ func (h *CbtQuestionAsset) List(w http.ResponseWriter, r *http.Request) {
 	questionID, err := parseUUID(rawID)
 	if err != nil {
 		api.BadRequest(w, "question_id invalid")
+		return
+	}
+	if !h.requireQuestionAssetScope(w, r, questionID) {
 		return
 	}
 	rows, err := h.svc.ListByQuestion(r.Context(), questionID)
@@ -98,6 +123,35 @@ func (h *CbtQuestionAsset) List(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	api.OK(w, items)
+}
+
+func (h *CbtQuestionAsset) requireQuestionAssetScope(w http.ResponseWriter, r *http.Request, questionID pgtype.UUID) bool {
+	if hasAnyRole(r, "admin") {
+		return true
+	}
+	if !hasAnyRole(r, "guru") {
+		api.Forbidden(w)
+		return false
+	}
+	if !questionID.Valid {
+		api.Forbidden(w)
+		return false
+	}
+	username := currentUsername(r)
+	if strings.TrimSpace(username) == "" {
+		api.Forbidden(w)
+		return false
+	}
+	question, err := h.svc.GetQuestion(r.Context(), questionID)
+	if err != nil {
+		api.Internal(w, err)
+		return false
+	}
+	if strings.TrimSpace(question.AuthorUsername) != username {
+		api.Forbidden(w)
+		return false
+	}
+	return true
 }
 
 func (h *CbtQuestionAsset) File(w http.ResponseWriter, r *http.Request) {

@@ -8,6 +8,7 @@
  */
 
 import fs from 'fs';
+import crypto from 'crypto';
 import path from 'path';
 import pg from 'pg';
 import { fileURLToPath } from 'url';
@@ -40,46 +41,64 @@ async function applyMigrations() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         version TEXT PRIMARY KEY,
+        checksum TEXT NOT NULL DEFAULT '',
         applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+    await client.query(`
+      ALTER TABLE schema_migrations
+      ADD COLUMN IF NOT EXISTS checksum TEXT NOT NULL DEFAULT ''
     `);
 
     const files = fs.readdirSync(MIGRATIONS_DIR)
       .filter((name) => name.endsWith('.sql'))
       .sort();
+    validateMigrationOrder(files);
 
     let baselinePending = BASELINE_ON_EXISTING_SCHEMA && await hasExistingSchema(client);
 
     for (const file of files) {
       const version = file.replace(/\.sql$/, '');
+      const acceptableVersions = [version, ...legacyMigrationVersions(version)];
+      const fullPath = path.join(MIGRATIONS_DIR, file);
+      const sql = fs.readFileSync(fullPath, 'utf8');
+      const checksum = checksumFor(sql);
       const exists = await client.query(
-        'SELECT 1 FROM schema_migrations WHERE version = $1',
-        [version],
+        'SELECT version, checksum FROM schema_migrations WHERE version = ANY($1::text[])',
+        [acceptableVersions],
       );
       if (exists.rowCount > 0) {
+        const appliedVersion = exists.rows[0]?.version ?? version;
+        const appliedChecksum = exists.rows[0]?.checksum ?? '';
+        if (appliedChecksum && appliedChecksum !== checksum) {
+          throw new Error(`checksum mismatch for ${file} (applied as ${appliedVersion})`);
+        }
+        if (!appliedChecksum) {
+          await client.query(
+            'UPDATE schema_migrations SET checksum = $2 WHERE version = $1',
+            [appliedVersion, checksum],
+          );
+        }
         console.log(`skip ${file}`);
         continue;
       }
 
       if (baselinePending && version === '001_initial_schema') {
         await client.query(
-          'INSERT INTO schema_migrations (version) VALUES ($1)',
-          [version],
+          'INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)',
+          [version, checksum],
         );
         console.log(`baseline ${file}`);
         baselinePending = false;
         continue;
       }
 
-      const fullPath = path.join(MIGRATIONS_DIR, file);
-      const sql = fs.readFileSync(fullPath, 'utf8');
-
       await client.query('BEGIN');
       try {
         await client.query(sql);
         await client.query(
-          'INSERT INTO schema_migrations (version) VALUES ($1)',
-          [version],
+          'INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)',
+          [version, checksum],
         );
         await client.query('COMMIT');
         console.log(`applied ${file}`);
@@ -95,6 +114,33 @@ async function applyMigrations() {
     client.release();
     await pool.end();
   }
+}
+
+function checksumFor(sql) {
+  return crypto.createHash('sha256').update(sql).digest('hex');
+}
+
+function validateMigrationOrder(files) {
+  const seenNumericPrefixes = new Map();
+  for (const file of files) {
+    const match = file.match(/^(\d+)_/);
+    if (!match) {
+      continue;
+    }
+    const prefix = match[1];
+    const existing = seenNumericPrefixes.get(prefix);
+    if (existing) {
+      throw new Error(`duplicate migration prefix ${prefix}: ${existing}, ${file}`);
+    }
+    seenNumericPrefixes.set(prefix, file);
+  }
+}
+
+function legacyMigrationVersions(version) {
+  if (version === '027a_library_foundation') {
+    return ['027_library_foundation'];
+  }
+  return [];
 }
 
 applyMigrations().catch((err) => {

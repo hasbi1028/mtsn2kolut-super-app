@@ -11,6 +11,7 @@
   import ScheduleList   from '$lib/components/ScheduleList.svelte';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
   import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+  import { readClientApiData, readClientJson } from '$lib/client/api';
 
   type WorkerSettingState = {
     max_concurrent: number;
@@ -43,12 +44,6 @@
     sessions: AuthSession[];
   };
 
-  type ApiEnvelope<T> = {
-    data?: T;
-    error?: string;
-    message?: string;
-  };
-
   type SchedulePayload = {
     items?: Schedule[];
     data?: Schedule[];
@@ -68,38 +63,12 @@
   let labelDrafts = $state<Record<string, string>>({});
 
   const currentSessionId = $derived(page.data.user?.session_id ?? '');
+  const isAdmin = $derived(
+    Boolean(page.data.user?.roles?.includes('admin') || page.data.user?.role === 'admin')
+  );
 
   function emptyWorkerSettings(): WorkerSettingState {
     return { max_concurrent: 5, headless: false };
-  }
-
-  function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-  }
-
-  function apiErrorMessage(payload: unknown) {
-    if (!isRecord(payload)) return '';
-    const error = payload.error;
-    if (typeof error === 'string' && error.trim()) return error;
-    const message = payload.message;
-    if (typeof message === 'string' && message.trim()) return message;
-    return '';
-  }
-
-  async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-    const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-    const message = apiErrorMessage(payload);
-    if (!response.ok) throw new Error(message || fallbackMessage);
-    if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-      throw new Error(payload.error);
-    }
-    if (isRecord(payload) && 'data' in payload) {
-      const envelope = payload as ApiEnvelope<T>;
-      if (envelope.data === undefined) throw new Error(fallbackMessage);
-      return envelope.data;
-    }
-    if (payload === null) throw new Error(fallbackMessage);
-    return payload as T;
   }
 
   function normalizeSchedules(value: SchedulePayload | Schedule[] | null | undefined): Schedule[] {
@@ -128,16 +97,33 @@
   }
 
   async function fetchSettingsOverview(): Promise<SettingsOverview> {
-    const [settingsData, scheduleData, sessionData] = await Promise.all([
-      fetch('/api/pusaka/settings').then((response) => readApi<Partial<WorkerSettingState>>(response, 'Gagal memuat pengaturan worker')),
-      fetch('/api/pusaka/schedules').then((response) => readApi<SchedulePayload | Schedule[]>(response, 'Gagal memuat jadwal PUSAKA')),
-      fetch('/api/auth/sessions').then((response) => readApi<AuthSession[]>(response, 'Gagal memuat sesi aktif')),
+    if (!isAdmin) {
+      const sessionData = await fetch('/api/auth/sessions').then((response) =>
+        readClientApiData<AuthSession[]>(response, 'Gagal memuat sesi aktif')
+      );
+      return {
+        appSettings: emptyWorkerSettings(),
+        schedules: [],
+        sessions: normalizeSessions(sessionData)
+      };
+    }
+
+    const [sessionData, settingsData, scheduleData] = await Promise.all([
+      fetch('/api/auth/sessions').then((response) =>
+        readClientApiData<AuthSession[]>(response, 'Gagal memuat sesi aktif')
+      ),
+      fetch('/api/pusaka/settings').then((response) =>
+        readClientApiData<Partial<WorkerSettingState>>(response, 'Gagal memuat pengaturan worker')
+      ),
+      fetch('/api/pusaka/schedules').then((response) =>
+        readClientApiData<SchedulePayload | Schedule[]>(response, 'Gagal memuat jadwal PUSAKA')
+      )
     ]);
 
     return {
       appSettings: { ...emptyWorkerSettings(), ...(settingsData ?? {}) },
       schedules: normalizeSchedules(scheduleData),
-      sessions: normalizeSessions(sessionData),
+      sessions: normalizeSessions(sessionData)
     };
   }
 
@@ -191,8 +177,7 @@
         method: 'PUT', headers: { 'content-type': 'application/json' },
         body: JSON.stringify(appSettings),
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(apiErrorMessage(data) || `Gagal: ${res.status}`);
+      await readClientJson<unknown>(res);
       showToast('Pengaturan worker disimpan.');
     } catch (error) { showError(mutationErrorMessage(error, 'Gagal menyimpan pengaturan')); }
   }
@@ -203,8 +188,7 @@
         method: 'PUT', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ schedules }),
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal menyimpan jadwal');
+      await readClientJson<unknown>(res);
       showToast('Jadwal otomatis disimpan.');
       await refreshSettings(true);
     } catch (error) { showError(mutationErrorMessage(error, 'Gagal menyimpan jadwal')); }
@@ -219,8 +203,7 @@
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ current_password: pwForm.current, new_password: pwForm.next }),
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) { showError(apiErrorMessage(data) || 'Gagal mengubah password'); return; }
+      await readClientJson<unknown>(res);
       pwForm = { current: '', next: '', confirm: '' };
       showToast('Password berhasil diubah.');
     } catch (error) {
@@ -232,11 +215,7 @@
     logoutAllLoading = true;
     try {
       const res = await fetch('/api/auth/logout-all', { method: 'POST' });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        showError(apiErrorMessage(data) || 'Gagal mengakhiri semua sesi');
-        return;
-      }
+      await readClientJson<unknown>(res);
       window.location.href = '/login';
     } catch (error) {
       showError(mutationErrorMessage(error, 'Gagal mengakhiri semua sesi'));
@@ -249,14 +228,10 @@
     revokeSessionLoading = sessionId;
     try {
       const res = await fetch(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        showError(apiErrorMessage(data) || 'Gagal mengakhiri sesi');
-        return;
-      }
+      await readClientJson<unknown>(res);
 
       if (sessionId === currentSessionId) {
-        await fetch('/api/auth/logout', { method: 'POST' });
+        await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
         window.location.href = '/login';
         return;
       }
@@ -285,11 +260,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ device_label: deviceLabel })
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        showError(apiErrorMessage(data) || 'Gagal menyimpan nama perangkat');
-        return;
-      }
+      await readClientJson<unknown>(res);
 
       sessions = sessions.map((session) =>
         session.id === sessionId ? { ...session, device_label: deviceLabel } : session
@@ -330,7 +301,13 @@
 
   <div>
     <h1 class="text-2xl font-semibold text-slate-800">Pengaturan</h1>
-    <p class="text-sm text-muted-foreground mt-1">Konfigurasi worker, jadwal absensi, dan akun admin</p>
+    <p class="text-sm text-muted-foreground mt-1">
+      {#if isAdmin}
+        Konfigurasi worker, jadwal absensi, dan keamanan akun.
+      {:else}
+        Keamanan akun dan pengelolaan sesi perangkat.
+      {/if}
+    </p>
   </div>
 
   <AsyncContent promise={settingsPromise} onerror={handleSettingsRenderError}>
@@ -376,16 +353,24 @@
     {/snippet}
     {#snippet children(_value)}
 
-  <WorkerSettings bind:settings={appSettings} onsave={saveSettings} />
+  {#if isAdmin}
+    <WorkerSettings bind:settings={appSettings} onsave={saveSettings} />
 
-  <ScheduleList bind:schedules onsave={saveSchedules} />
+    <ScheduleList bind:schedules onsave={saveSchedules} />
+  {/if}
 
   <!-- Ubah Password -->
   <Card.Root>
-    <Card.Header class="pb-3">
-      <Card.Title class="text-base">Ubah Password Admin</Card.Title>
-      <Card.Description>Ganti password login akun administrator</Card.Description>
-    </Card.Header>
+      <Card.Header class="pb-3">
+      <Card.Title class="text-base">Ubah Password</Card.Title>
+      <Card.Description>
+        {#if isAdmin}
+          Ganti password login akun administrator.
+        {:else}
+          Ganti password akun Anda.
+        {/if}
+      </Card.Description>
+      </Card.Header>
     <Card.Content>
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>

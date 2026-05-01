@@ -25,6 +25,8 @@ type schedulerStore interface {
 	ClaimDueEmployeeSchedules(ctx context.Context, arg db.ClaimDueEmployeeSchedulesParams) ([]db.ClaimDueEmployeeSchedulesRow, error)
 	ResetEmployeeScheduleEnqueueState(ctx context.Context, arg db.ResetEmployeeScheduleEnqueueStateParams) error
 	GetSetting(ctx context.Context, key string) (db.AppSetting, error)
+	CreateDocumentCycleReminderEvents(ctx context.Context, today pgtype.Date) (int64, error)
+	CreateDocumentCycleReminderNotifications(ctx context.Context, today pgtype.Date) (int64, error)
 }
 
 type pusakaSchedulerJobRunner interface {
@@ -34,21 +36,27 @@ type pusakaSchedulerJobRunner interface {
 	RecoverStaleRunning(ctx context.Context, olderThan time.Duration) (int64, error)
 }
 
+type auditCleaner interface {
+	CleanupOld(ctx context.Context) (int64, error)
+}
+
 type PusakaScheduler struct {
 	store       schedulerStore
 	jobs        pusakaSchedulerJobRunner
 	sett        *Setting
 	loc         *time.Location
-	audit       *Audit
+	audit       auditCleaner
 	lastCleanup time.Time
 	cancel      context.CancelFunc
 }
 
 type PusakaSchedulerResult struct {
-	CheckedAt string `json:"checked_at"`
-	Processed int    `json:"processed"`
-	Enqueued  int    `json:"enqueued"`
-	Skipped   int    `json:"skipped"`
+	CheckedAt             string `json:"checked_at"`
+	Processed             int    `json:"processed"`
+	Enqueued              int    `json:"enqueued"`
+	Skipped               int    `json:"skipped"`
+	DocumentReminders     int64  `json:"document_reminders"`
+	DocumentNotifications int64  `json:"document_notifications"`
 }
 
 func NewPusakaScheduler(store *db.Queries, jobs *PusakaJob, sett *Setting, audit *Audit) *PusakaScheduler {
@@ -145,9 +153,7 @@ func (s *PusakaScheduler) Tick(ctx context.Context, now time.Time) (PusakaSchedu
 			notBefore := pgtype.Timestamptz{}
 			if es.RandomWindowMinutes > 0 {
 				delayMinutes := rand.Int31n(int32(es.RandomWindowMinutes) + 1)
-				if delayMinutes > 0 {
-					_ = notBefore.Scan(now.Add(time.Duration(delayMinutes) * time.Minute))
-				}
+				_ = notBefore.Scan(now.Add(time.Duration(delayMinutes) * time.Minute))
 			}
 			_, createErr := s.jobs.CreateWithDelay(ctx, es.EmployeeID, string(es.RunType), maxAttempts, notBefore)
 			if createErr != nil {
@@ -160,6 +166,34 @@ func (s *PusakaScheduler) Tick(ctx context.Context, now time.Time) (PusakaSchedu
 			}
 			result.Enqueued++
 		}
+	}
+
+	reminders, err := s.store.CreateDocumentCycleReminderEvents(ctx, today)
+	if err != nil {
+		slog.Error("scheduler: failed to create document-cycle reminder events", "error", err)
+		_ = s.setStatus(ctx, map[string]string{
+			"scheduler_document_cycle_reminder_error": err.Error(),
+		})
+	} else {
+		result.DocumentReminders = reminders
+		_ = s.setStatus(ctx, map[string]string{
+			"scheduler_document_cycle_reminders":      strconv.FormatInt(reminders, 10),
+			"scheduler_document_cycle_reminder_error": "",
+		})
+	}
+
+	notifications, err := s.store.CreateDocumentCycleReminderNotifications(ctx, today)
+	if err != nil {
+		slog.Error("scheduler: failed to create document-cycle reminder notifications", "error", err)
+		_ = s.setStatus(ctx, map[string]string{
+			"scheduler_document_cycle_notification_error": err.Error(),
+		})
+	} else {
+		result.DocumentNotifications = notifications
+		_ = s.setStatus(ctx, map[string]string{
+			"scheduler_document_cycle_notifications":      strconv.FormatInt(notifications, 10),
+			"scheduler_document_cycle_notification_error": "",
+		})
 	}
 
 	_ = s.setStatus(ctx, map[string]string{

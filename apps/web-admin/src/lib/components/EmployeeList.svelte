@@ -14,6 +14,7 @@
   import SuccessPanel from '$lib/components/SuccessPanel.svelte';
   import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
   import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
+  import { readClientApiData, readClientJson } from '$lib/client/api';
 
   interface Employee {
     id: string;
@@ -62,13 +63,6 @@
   };
 
   type RunType = 'morning' | 'afternoon' | 'checkin' | 'checkout';
-
-  type ApiEnvelope<T> = {
-    data?: T;
-    items?: T;
-    error?: string;
-    message?: string;
-  };
 
   let { employees, onrun, onstop, ondelete }: {
     employees: Employee[];
@@ -182,9 +176,11 @@
   }
 
   async function ensureMutationOk(response: Response, fallbackMessage: string) {
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(apiErrorMessage(payload) || fallbackMessage);
-    return payload;
+    try {
+      return await readClientJson<unknown>(response);
+    } catch (error) {
+      throw new Error(employeeListErrorMessage(error, fallbackMessage));
+    }
   }
 
   async function savePusakaCredentials() {
@@ -214,11 +210,7 @@
     testingId = emp.id;
     try {
       const res  = await fetch(`/api/pusaka/employees/${emp.id}/test-pusaka`, { method: 'POST' });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        toast.error(apiErrorMessage(data) || 'Test gagal');
-        return;
-      }
+      const data = await readClientApiData<{ message?: string }>(res, 'Test gagal');
       const message = isRecord(data) && typeof data.message === 'string' ? data.message : '';
       toast.success(message || 'Test selesai');
     } catch (error) {
@@ -317,36 +309,6 @@
     return typeof value === 'object' && value !== null;
   }
 
-  function apiErrorMessage(payload: unknown) {
-    if (!isRecord(payload)) return '';
-    const error = payload.error;
-    if (typeof error === 'string' && error.trim()) return error;
-    const message = payload.message;
-    if (typeof message === 'string' && message.trim()) return message;
-    return '';
-  }
-
-  async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-    const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-    const message = apiErrorMessage(payload);
-    if (!response.ok) throw new Error(message || fallbackMessage);
-    if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-      throw new Error(payload.error);
-    }
-    if (isRecord(payload) && 'data' in payload) {
-      const envelope = payload as ApiEnvelope<T>;
-      if (envelope.data === undefined) throw new Error(fallbackMessage);
-      return envelope.data;
-    }
-    if (isRecord(payload) && 'items' in payload) {
-      const envelope = payload as ApiEnvelope<T>;
-      if (envelope.items === undefined) throw new Error(fallbackMessage);
-      return envelope.items;
-    }
-    if (payload === null) throw new Error(fallbackMessage);
-    return payload as T;
-  }
-
   function normalizeRows<T>(value: T[] | null | undefined): T[] {
     return Array.isArray(value) ? value : [];
   }
@@ -359,7 +321,7 @@
 
   async function fetchAuditLogs(emp: Employee): Promise<AuditLog[]> {
     const logs = await fetch(`/api/pusaka/employees/${emp.id}/audit-logs?per_page=10`).then((response) =>
-      readApi<AuditLog[]>(response, 'Gagal memuat riwayat akun PUSAKA')
+      readClientApiData<AuditLog[]>(response, 'Gagal memuat riwayat akun PUSAKA')
     );
     return normalizeRows(logs);
   }
@@ -402,7 +364,7 @@
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ employee_id: id }),
       });
-      const data = await readApi<{ cancelled?: number }>(res, 'Gagal membatalkan job aktif pegawai');
+      const data = await readClientApiData<{ cancelled?: number }>(res, 'Gagal membatalkan job aktif pegawai');
       const cancelled = data.cancelled ?? 0;
       success = cancelled > 0
         ? `${cancelled} job untuk pegawai ini berhasil dibatalkan.`
@@ -440,7 +402,7 @@
 
   async function fetchScheduleConfigs(emp: Employee): Promise<DayConfig[]> {
     const schedules = await fetch(`/api/pusaka/employees/${emp.id}/schedules`).then((response) =>
-      readApi<EmployeeSchedule[]>(response, 'Gagal memuat jadwal absensi pegawai')
+      readClientApiData<EmployeeSchedule[]>(response, 'Gagal memuat jadwal absensi pegawai')
     );
     return populateDayConfigs(normalizeRows(schedules));
   }

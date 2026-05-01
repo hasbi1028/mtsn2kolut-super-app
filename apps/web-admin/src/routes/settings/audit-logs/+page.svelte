@@ -9,6 +9,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { readClientApiData } from '$lib/client/api';
 
 	type AuditLog = {
 		id: string;
@@ -21,14 +22,9 @@
 		created_at: string;
 	};
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	let logs = $state<AuditLog[]>([]);
 	let logsPromise = $state<Promise<AuditLog[]> | null>(null);
+	let logsRequestId = 0;
 	let fetching = $state(false);
 	let fetchingAction = $state<'previous' | 'next' | null>(null);
 	let page = $state(1);
@@ -78,15 +74,6 @@
 		return typeof value === 'object' && value !== null;
 	}
 
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
 	function parseMetadata(meta: unknown): Record<string, unknown> | null {
 		if (!meta) return null;
 		try {
@@ -128,42 +115,33 @@
 			.join(' • ');
 	}
 
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) {
-			throw new Error(message || fallbackMessage);
-		}
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function fetchLogs(pageNumber: number): Promise<AuditLog[]> {
 		const res = await fetch(`/api/users/audit-logs?page=${pageNumber}&per_page=${perPage}`);
-		return readApi<AuditLog[]>(res, 'Gagal memuat audit logs');
+		return readClientApiData<AuditLog[]>(res, 'Gagal memuat audit logs');
 	}
 
 	function load(pageNumber = page, action: 'previous' | 'next' | null = null) {
+		const requestId = ++logsRequestId;
 		page = pageNumber;
 		logs = [];
 		fetching = true;
 		fetchingAction = action;
 		logsPromise = fetchLogs(pageNumber)
 			.then((nextLogs) => {
-				logs = nextLogs ?? [];
+				if (requestId === logsRequestId) {
+					logs = nextLogs ?? [];
+				}
+				return logs;
+			})
+			.catch((error: unknown) => {
+				if (requestId === logsRequestId) throw error;
 				return logs;
 			})
 			.finally(() => {
-				fetching = false;
-				fetchingAction = null;
+				if (requestId === logsRequestId) {
+					fetching = false;
+					fetchingAction = null;
+				}
 			});
 	}
 

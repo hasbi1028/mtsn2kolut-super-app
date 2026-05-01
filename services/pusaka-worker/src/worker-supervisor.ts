@@ -13,6 +13,38 @@ import { log } from './logger.js';
 import { processClaimedJob } from './pusaka-runner.js';
 import type { ConsumerState, RuntimeConfig } from './types.js';
 
+type WorkerSupervisorDeps = {
+  claimJob: typeof claimJob;
+  completeJob: typeof completeJob;
+  failJob: typeof failJob;
+  fetchRuntimeConfig: typeof fetchRuntimeConfig;
+  sendHeartbeat: typeof sendHeartbeat;
+  processClaimedJob: typeof processClaimedJob;
+  log: typeof log;
+  delay: typeof delay;
+  setInterval: typeof globalThis.setInterval;
+  clearInterval: typeof globalThis.clearInterval;
+  now: typeof Date.now;
+  processOn: typeof process.on;
+  processExit: typeof process.exit;
+};
+
+const defaultDeps: WorkerSupervisorDeps = {
+  claimJob,
+  completeJob,
+  failJob,
+  fetchRuntimeConfig,
+  sendHeartbeat,
+  processClaimedJob,
+  log,
+  delay,
+  setInterval: globalThis.setInterval,
+  clearInterval: globalThis.clearInterval,
+  now: Date.now,
+  processOn: process.on.bind(process),
+  processExit: process.exit.bind(process),
+};
+
 export class WorkerSupervisor {
   private readonly consumers = new Map<number, ConsumerState>();
   private configTimer?: NodeJS.Timeout;
@@ -21,14 +53,17 @@ export class WorkerSupervisor {
   private lastConfigSyncAt = '';
   private shuttingDown = false;
 
-  constructor(private readonly runtimeConfig: RuntimeConfig) {}
+  constructor(
+    private readonly runtimeConfig: RuntimeConfig,
+    private readonly deps: WorkerSupervisorDeps = defaultDeps,
+  ) {}
 
   start(): void {
     void this.syncRuntimeConfig();
-    this.configTimer = setInterval(() => {
+    this.configTimer = this.deps.setInterval(() => {
       void this.syncRuntimeConfig();
     }, CONFIG_SYNC_MS);
-    this.heartbeatTimer = setInterval(() => {
+    this.heartbeatTimer = this.deps.setInterval(() => {
       void this.heartbeatLoop();
     }, CONFIG_SYNC_MS);
     this.reconcileConsumers();
@@ -36,16 +71,16 @@ export class WorkerSupervisor {
   }
 
   private async consumerLoop(state: ConsumerState): Promise<void> {
-    log('INFO', 'consumer started', { consumerId: state.consumerId });
+    this.deps.log('INFO', 'consumer started', { consumerId: state.consumerId });
     while (!state.stopRequested) {
       try {
-        const job = await claimJob();
+        const job = await this.deps.claimJob();
         if (!job) {
           await this.sleep(POLL_MS);
           continue;
         }
 
-        log('INFO', 'job claimed', {
+        this.deps.log('INFO', 'job claimed', {
           consumerId: state.consumerId,
           job_id: job.id,
           run_type: job.run_type,
@@ -53,31 +88,31 @@ export class WorkerSupervisor {
         });
 
         try {
-          const record = await processClaimedJob(job, this.runtimeConfig);
-          await completeJob(job.id, record);
-          log('INFO', 'job success', {
+          const record = await this.deps.processClaimedJob(job, this.runtimeConfig);
+          await this.deps.completeJob(job.id, record);
+          this.deps.log('INFO', 'job success', {
             consumerId: state.consumerId,
             job_id: job.id,
             record,
           });
         } catch (error) {
           const errorMessage = String((error as Error)?.message ?? error);
-          await failJob(job.id, errorMessage);
-          log('WARN', 'job failed — reported to frontend', {
+          await this.deps.failJob(job.id, errorMessage);
+          this.deps.log('WARN', 'job failed — reported to frontend', {
             consumerId: state.consumerId,
             job_id: job.id,
             error: errorMessage,
           });
         }
       } catch (error) {
-        log('ERROR', 'consumer loop error', {
+        this.deps.log('ERROR', 'consumer loop error', {
           consumerId: state.consumerId,
           error: (error as Error)?.message ?? String(error),
         });
         await this.sleep(Math.max(1000, Math.floor(POLL_MS / 2)));
       }
     }
-    log('INFO', 'consumer stopped', { consumerId: state.consumerId });
+    this.deps.log('INFO', 'consumer stopped', { consumerId: state.consumerId });
   }
 
   private async syncRuntimeConfig(): Promise<void> {
@@ -85,7 +120,7 @@ export class WorkerSupervisor {
       return;
     }
     try {
-      const next = await fetchRuntimeConfig();
+      const next = await this.deps.fetchRuntimeConfig();
       const previous = { ...this.runtimeConfig };
 
       if (typeof next.maxConcurrent === 'number') {
@@ -99,15 +134,15 @@ export class WorkerSupervisor {
         previous.maxConcurrent !== this.runtimeConfig.maxConcurrent ||
         previous.headless !== this.runtimeConfig.headless
       ) {
-        log('INFO', 'runtime config updated', {
+        this.deps.log('INFO', 'runtime config updated', {
           previous,
           current: this.runtimeConfig,
         });
       }
-      this.lastConfigSyncAt = new Date().toISOString();
+      this.lastConfigSyncAt = new Date(this.deps.now()).toISOString();
       this.reconcileConsumers();
     } catch (error) {
-      log('WARN', 'runtime config sync failed', {
+      this.deps.log('WARN', 'runtime config sync failed', {
         error: (error as Error)?.message ?? String(error),
       });
     }
@@ -128,7 +163,7 @@ export class WorkerSupervisor {
       this.consumers.set(id, state);
       this.consumerLoop(state)
         .catch((error) => {
-          log('ERROR', 'consumer crashed', {
+          this.deps.log('ERROR', 'consumer crashed', {
             consumerId: state.consumerId,
             error: (error as Error)?.message ?? String(error),
           });
@@ -154,7 +189,7 @@ export class WorkerSupervisor {
       }
       state.stopRequested = true;
       activeCount -= 1;
-      log('INFO', 'consumer stop requested', {
+      this.deps.log('INFO', 'consumer stop requested', {
         consumerId: state.consumerId,
         targetConcurrency: this.runtimeConfig.maxConcurrent,
       });
@@ -166,7 +201,7 @@ export class WorkerSupervisor {
       return;
     }
     try {
-      await sendHeartbeat({
+      await this.deps.sendHeartbeat({
         consumerCount: Array.from(this.consumers.values()).filter(
           (state) => !state.stopRequested,
         ).length,
@@ -175,7 +210,7 @@ export class WorkerSupervisor {
         lastSyncAt: this.lastConfigSyncAt,
       });
     } catch (error) {
-      log('WARN', 'worker heartbeat failed', {
+      this.deps.log('WARN', 'worker heartbeat failed', {
         error: (error as Error)?.message ?? String(error),
       });
     }
@@ -183,7 +218,7 @@ export class WorkerSupervisor {
 
   private installSignalHandlers(): void {
     for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-      process.on(signal, () => {
+      this.deps.processOn(signal, () => {
         void this.gracefulShutdown(signal);
       });
     }
@@ -195,13 +230,13 @@ export class WorkerSupervisor {
     }
     this.shuttingDown = true;
     if (this.configTimer) {
-      clearInterval(this.configTimer);
+      this.deps.clearInterval(this.configTimer);
     }
     if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
+      this.deps.clearInterval(this.heartbeatTimer);
     }
 
-    log('INFO', 'shutdown requested', {
+    this.deps.log('INFO', 'shutdown requested', {
       signal,
       activeConsumers: this.consumers.size,
     });
@@ -210,19 +245,19 @@ export class WorkerSupervisor {
       state.stopRequested = true;
     }
 
-    const deadline = Date.now() + 15_000;
-    while (this.consumers.size > 0 && Date.now() < deadline) {
-      await delay(250);
+    const deadline = this.deps.now() + 15_000;
+    while (this.consumers.size > 0 && this.deps.now() < deadline) {
+      await this.deps.delay(250);
     }
 
     if (this.consumers.size > 0) {
-      log('WARN', 'shutdown timeout reached', {
+      this.deps.log('WARN', 'shutdown timeout reached', {
         remainingConsumers: this.consumers.size,
       });
     }
 
     try {
-      await sendHeartbeat({
+      await this.deps.sendHeartbeat({
         consumerCount: 0,
         targetConcurrency: this.runtimeConfig.maxConcurrent,
         headless: this.runtimeConfig.headless,
@@ -232,10 +267,10 @@ export class WorkerSupervisor {
       // best-effort
     }
 
-    log('INFO', 'worker shutdown complete', {
+    this.deps.log('INFO', 'worker shutdown complete', {
       remainingConsumers: this.consumers.size,
     });
-    process.exit(0);
+    this.deps.processExit(0);
   }
 
   private sleep(ms: number): Promise<void> {

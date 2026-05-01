@@ -360,6 +360,28 @@ SELECT EXISTS(
   WHERE s.id = $1 AND csa.teacher_employee_id = $2
 ) AS has_access;
 
+-- name: HasSessionParticipant :one
+SELECT EXISTS(
+  SELECT 1
+  FROM cbt_exam_participants
+  WHERE session_id = $1 AND id = $2
+) AS has_participant;
+
+-- name: HasSessionRoom :one
+SELECT EXISTS(
+  SELECT 1
+  FROM cbt_exam_rooms
+  WHERE session_id = $1 AND id = $2
+) AS has_room;
+
+-- name: HasSessionAnswer :one
+SELECT EXISTS(
+  SELECT 1
+  FROM cbt_student_answers sa
+  JOIN cbt_exam_participants ep ON ep.id = sa.participant_id
+  WHERE ep.session_id = $1 AND sa.id = $2
+) AS has_answer;
+
 -- name: GetParticipantAnswers :many
 SELECT
    sa.id, sa.participant_id, sa.question_id,

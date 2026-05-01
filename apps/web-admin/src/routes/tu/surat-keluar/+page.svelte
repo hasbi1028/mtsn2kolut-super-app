@@ -13,6 +13,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	type Classification = {
 		code: string;
@@ -36,14 +37,9 @@
 		classifications: Classification[];
 	};
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	let classifications = $state<Classification[]>([]);
 	let lettersPromise = $state<Promise<OutgoingLettersOverview> | null>(null);
+	let lettersRequestId = 0;
 	let search = $state('');
 
 	// Create dialog
@@ -70,33 +66,6 @@
 
 	let deleteBusy = $state<Record<string, boolean>>({});
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function applyOverview(overview: OutgoingLettersOverview) {
 		classifications = overview.classifications ?? [];
 	}
@@ -106,10 +75,12 @@
 			fetch(`/api/tu/surat/outgoing?search=${encodeURIComponent(search)}`),
 			classifications.length === 0 ? fetch('/api/tu/surat/klasifikasi') : Promise.resolve(null)
 		]);
-		const nextLetters = await readApi<OutgoingLetter[]>(lettersRes, 'Gagal memuat surat keluar');
-		const nextClassifications = classificationsRes
-			? await readApi<Classification[]>(classificationsRes, 'Gagal memuat kode klasifikasi')
-			: classifications;
+		const [nextLetters, nextClassifications] = await Promise.all([
+			readClientApiData<OutgoingLetter[]>(lettersRes, 'Gagal memuat surat keluar'),
+			classificationsRes
+				? readClientApiData<Classification[]>(classificationsRes, 'Gagal memuat kode klasifikasi')
+				: Promise.resolve(classifications)
+		]);
 		return {
 			letters: nextLetters ?? [],
 			classifications: nextClassifications ?? []
@@ -117,18 +88,30 @@
 	}
 
 	function loadLetters() {
+		const requestId = ++lettersRequestId;
 		const emptyOverview: OutgoingLettersOverview = { letters: [], classifications };
 		applyOverview(emptyOverview);
-		lettersPromise = fetchOverview().then((overview) => {
-			applyOverview(overview);
-			return overview;
-		});
+		lettersPromise = fetchOverview()
+			.then((overview) => {
+				if (requestId === lettersRequestId) {
+					applyOverview(overview);
+					return overview;
+				}
+				return { letters: [], classifications };
+			})
+			.catch((error: unknown) => {
+				if (requestId === lettersRequestId) throw error;
+				return { letters: [], classifications };
+			});
 	}
 
 	async function refreshLetters() {
+		const requestId = ++lettersRequestId;
 		const overview = await fetchOverview();
-		applyOverview(overview);
-		lettersPromise = Promise.resolve(overview);
+		if (requestId === lettersRequestId) {
+			applyOverview(overview);
+			lettersPromise = Promise.resolve(overview);
+		}
 	}
 
 	function retryLetters(reset?: () => void) {
@@ -143,11 +126,6 @@
 
 	function handleLettersRenderError(error: unknown) {
 		console.error('TU outgoing letters render failed', error);
-	}
-
-	async function responseErrorMessage(response: Response, fallback: string) {
-		const payload = await response.json().catch(() => null);
-		return apiErrorMessage(payload) || fallback;
 	}
 
 	function mutationErrorMessage(error: unknown, fallback: string) {
@@ -176,10 +154,8 @@
 			const res = await fetch(
 				`/api/tu/surat/outgoing/preview-number?classification_code=${encodeURIComponent(newKlasifikasi)}&tanggal=${encodeURIComponent(newTglSurat)}`
 			);
-			if (res.ok) {
-				const payload = await res.json().catch(() => null);
-				nomorPreview = isRecord(payload) && typeof payload.preview === 'string' ? payload.preview : '';
-			}
+			const payload = await readClientApiData<{ preview?: string }>(res, 'Gagal memuat pratinjau nomor');
+			nomorPreview = typeof payload.preview === 'string' ? payload.preview : '';
 		} catch {
 			nomorPreview = '';
 		}
@@ -205,8 +181,7 @@
 					manual_nomor: newManualNomor
 				})
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal mencatat surat'); return; }
+			await readClientJson<unknown>(res);
 			createOpen = false;
 			newKlasifikasi = ''; newTglSurat = ''; newTujuan = ''; newPerihal = ''; newSifat = 'biasa'; newCatatan = ''; newManualNomor = ''; nomorPreview = '';
 			toast.success('Surat keluar berhasil dicatat');
@@ -244,8 +219,7 @@
 					catatan: editCatatan
 				})
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal menyimpan'); return; }
+			await readClientJson<unknown>(res);
 			editOpen = false;
 			toast.success('Surat keluar diperbarui');
 			await refreshLettersAfterMutation();
@@ -266,7 +240,7 @@
 		deleteBusy = { ...deleteBusy, [id]: true };
 		try {
 			const res = await fetch(`/api/tu/surat/outgoing/${id}`, { method: 'DELETE' });
-			if (!res.ok && res.status !== 204) { toast.error(await responseErrorMessage(res, 'Gagal menghapus')); return; }
+			await readClientJson<unknown>(res);
 			toast.success('Surat dihapus');
 			await refreshLettersAfterMutation();
 		} catch (error) {

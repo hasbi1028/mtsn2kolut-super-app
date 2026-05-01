@@ -12,6 +12,7 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	type User = {
 		id: string; username: string; roles: string[];
@@ -31,17 +32,12 @@
 		parents: Parent[];
 	};
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	let users = $state<User[]>([]);
 	let employees = $state<Employee[]>([]);
 	let students = $state<Student[]>([]);
 	let parents = $state<Parent[]>([]);
 	let usersPromise = $state<Promise<UsersOverview> | null>(null);
+	let usersRequestId = 0;
 	let showForm = $state(false);
 
 	let fUsername = $state('');
@@ -67,37 +63,6 @@
 		{ value: 'ortu', label: 'Orang Tua' },
 	];
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) {
-			throw new Error(message || fallbackMessage);
-		}
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function applyOverview(overview: UsersOverview) {
 		users = overview.users;
 		employees = overview.employees;
@@ -114,10 +79,10 @@
 			fetch('/api/parents'),
 		]);
 		const [nextUsers, nextEmployees, nextStudents, nextParents] = await Promise.all([
-			readApi<User[]>(usersRes, 'Gagal memuat data pengguna.'),
-			readApi<Employee[]>(employeesRes, 'Gagal memuat data pegawai.'),
-			readApi<Student[]>(studentsRes, 'Gagal memuat data siswa.'),
-			readApi<Parent[]>(parentsRes, 'Gagal memuat data orang tua.'),
+			readClientApiData<User[]>(usersRes, 'Gagal memuat data pengguna.'),
+			readClientApiData<Employee[]>(employeesRes, 'Gagal memuat data pegawai.'),
+			readClientApiData<Student[]>(studentsRes, 'Gagal memuat data siswa.'),
+			readClientApiData<Parent[]>(parentsRes, 'Gagal memuat data orang tua.'),
 		]);
 		return {
 			users: nextUsers ?? [],
@@ -128,19 +93,32 @@
 	}
 
 	function load() {
+		const requestId = ++usersRequestId;
 		users = [];
 		employees = [];
 		students = [];
 		parents = [];
-		usersPromise = fetchOverview().then(applyOverview);
+		usersPromise = fetchOverview()
+			.then((overview) => {
+				if (requestId === usersRequestId) return applyOverview(overview);
+				return { users, employees, students, parents };
+			})
+			.catch((error: unknown) => {
+				if (requestId === usersRequestId) throw error;
+				return { users, employees, students, parents };
+			});
 	}
 
 	async function refreshOverview() {
+		const requestId = ++usersRequestId;
 		try {
 			const overview = await fetchOverview();
-			applyOverview(overview);
-			usersPromise = Promise.resolve(overview);
+			if (requestId === usersRequestId) {
+				applyOverview(overview);
+				usersPromise = Promise.resolve(overview);
+			}
 		} catch (error) {
+			if (requestId !== usersRequestId) return;
 			usersPromise = Promise.resolve({ users, employees, students, parents });
 			toast.error(overviewErrorMessage(error));
 		}
@@ -178,15 +156,13 @@
 					parent_id: fParId || null,
 				}),
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) {
-				toast.error(apiErrorMessage(payload) || 'Gagal membuat pengguna');
-				return;
-			}
+			await readClientJson<unknown>(res);
 			fUsername = ''; fPassword = ''; fRoles = ['guru']; fEmpId = ''; fStuId = ''; fParId = '';
 			showForm = false;
 			toast.success('Pengguna berhasil dibuat');
 			await refreshOverview();
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
 		} finally { fBusy = false; }
 	}
 
@@ -202,9 +178,10 @@
 			tone: 'danger'
 		}))) return;
 		const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
-		const payload = await res.json().catch(() => null);
-		if (!res.ok) {
-			toast.error(apiErrorMessage(payload) || 'Gagal menghapus pengguna');
+		try {
+			await readClientJson<unknown>(res);
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
 			return;
 		}
 		toast.success('Pengguna berhasil dihapus');
@@ -229,9 +206,10 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ is_active: next }),
 		});
-		if (!res.ok) {
-			const payload = await res.json().catch(() => null);
-			toast.error(apiErrorMessage(payload) || 'Gagal memperbarui status akun');
+		try {
+			await readClientJson<unknown>(res);
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
 			return;
 		}
 		toast.success(next ? 'Akun diaktifkan' : 'Akun dinonaktifkan');

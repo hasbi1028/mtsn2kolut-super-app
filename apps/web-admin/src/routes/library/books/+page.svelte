@@ -12,6 +12,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	interface Book {
 		id: string;
@@ -29,14 +30,9 @@
 
 	const KATEGORI_LIST = ['pelajaran', 'fiksi', 'referensi', 'agama', 'umum'];
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	let books = $state<Book[]>([]);
 	let booksPromise = $state<Promise<Book[]> | null>(null);
+	let booksRequestId = 0;
 	let search = $state('');
 	let filterKategori = $state('');
 
@@ -66,54 +62,35 @@
 		});
 	}
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) {
-			throw new Error(message || fallbackMessage);
-		}
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function fetchBooks(): Promise<Book[]> {
 		const res = await fetch('/api/library/books');
-		return readApi<Book[]>(res, 'Gagal memuat katalog buku.');
+		return readClientApiData<Book[]>(res, 'Gagal memuat katalog buku.');
 	}
 
 	function load() {
+		const requestId = ++booksRequestId;
 		books = [];
-		booksPromise = fetchBooks().then((nextBooks) => {
-			books = nextBooks ?? [];
-			return books;
-		});
+		booksPromise = fetchBooks()
+			.then((nextBooks) => {
+				if (requestId === booksRequestId) {
+					books = nextBooks ?? [];
+					return books;
+				}
+				return books;
+			})
+			.catch((error: unknown) => {
+				if (requestId === booksRequestId) throw error;
+				return books;
+			});
 	}
 
 	async function refreshBooks() {
+		const requestId = ++booksRequestId;
 		const nextBooks = await fetchBooks();
-		books = nextBooks ?? [];
-		booksPromise = Promise.resolve(books);
+		if (requestId === booksRequestId) {
+			books = nextBooks ?? [];
+			booksPromise = Promise.resolve(books);
+		}
 	}
 
 	function retryBooks(reset?: () => void) {
@@ -176,8 +153,7 @@
 			const res = editingId
 				? await fetch(`/api/library/books/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 				: await fetch('/api/library/books', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal menyimpan'); return; }
+			await readClientJson<unknown>(res);
 			toast.success(editingId ? 'Buku diperbarui' : 'Buku ditambahkan');
 			showDialog = false;
 			await refreshBooksAfterMutation();
@@ -193,15 +169,11 @@
 		busy = true;
 		try {
 			const res = await fetch(`/api/library/books/${confirmDeleteId}`, { method: 'DELETE' });
-			if (!res.ok) {
-				const payload = await res.json().catch(() => null);
-				toast.error(apiErrorMessage(payload) || 'Gagal menghapus');
-			} else {
-				toast.success('Buku dihapus');
-				confirmDeleteId = null;
-				showDeleteDialog = false;
-				await refreshBooksAfterMutation();
-			}
+			await readClientJson<unknown>(res);
+			toast.success('Buku dihapus');
+			confirmDeleteId = null;
+			showDeleteDialog = false;
+			await refreshBooksAfterMutation();
 		} catch (error) {
 			toast.error(mutationErrorMessage(error, 'Gagal menghapus katalog buku. Periksa koneksi lalu coba lagi.'));
 		} finally {

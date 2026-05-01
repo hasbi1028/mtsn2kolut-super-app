@@ -13,6 +13,7 @@
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmChallenge } from '$lib/confirm-dialog';
+	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 
 	type ExamSession = {
 		id: string; package_id: string; package_title: string;
@@ -39,11 +40,6 @@
 		error?: string;
 		message?: string;
 	};
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
 
 	let sessions = $state<ExamSession[]>([]);
 	let packages = $state<CbtPackage[]>([]);
@@ -66,6 +62,7 @@
 	let statusBusyId = $state('');
 	let deleteBusyId = $state('');
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
+	let sessionsRequestId = 0;
 
 	// Enroll modal
 	let enrollSession = $state<ExamSession | null>(null);
@@ -127,38 +124,11 @@
 		return 'Dibatalkan';
 	}
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function fetchOverview(): Promise<SessionsOverview> {
 		const [nextSessions, packagePayload, academicPayload] = await Promise.all([
-			fetch('/api/cbt/sessions').then((response) => readApi<ExamSession[]>(response, 'Gagal memuat data sesi')),
-			fetch('/api/cbt/packages').then((response) => readApi<CbtPackagesPayload>(response, 'Gagal memuat paket ujian')),
-			fetch('/api/academic').then((response) => readApi<AcademicPayload>(response, 'Gagal memuat data akademik')),
+			fetch('/api/cbt/sessions').then((response) => readClientApiData<ExamSession[]>(response, 'Gagal memuat data sesi')),
+			fetch('/api/cbt/packages').then((response) => readClientApiData<CbtPackagesPayload>(response, 'Gagal memuat paket ujian')),
+			fetch('/api/academic').then((response) => readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')),
 		]);
 		return {
 			sessions: Array.isArray(nextSessions) ? nextSessions : [],
@@ -174,12 +144,17 @@
 	}
 
 	function loadInitial() {
+		const requestId = ++sessionsRequestId;
 		sessions = [];
 		packages = [];
 		classes = [];
 		sessionsPromise = fetchOverview().then((overview) => {
+			if (requestId !== sessionsRequestId) return { sessions, packages, classes };
 			applyOverview(overview);
 			return overview;
+		}).catch((error: unknown) => {
+			if (requestId === sessionsRequestId) throw error;
+			return { sessions, packages, classes };
 		});
 	}
 
@@ -188,13 +163,17 @@
 			loadInitial();
 			return;
 		}
+		const requestId = ++sessionsRequestId;
 		try {
 			const overview = await fetchOverview();
+			if (requestId !== sessionsRequestId) return;
 			applyOverview(overview);
 			sessionsPromise = Promise.resolve(overview);
 		} catch (error) {
-			sessionsPromise = Promise.resolve({ sessions, packages, classes });
-			toast.error(sessionsErrorMessage(error));
+			if (requestId === sessionsRequestId) {
+				sessionsPromise = Promise.resolve({ sessions, packages, classes });
+				toast.error(sessionsErrorMessage(error));
+			}
 		}
 	}
 
@@ -215,11 +194,6 @@
 	function showToast(msg: string, ok = true) {
 		if (ok) toast.success(msg);
 		else toast.error(msg);
-	}
-
-	async function responseErrorMessage(response: Response, fallback: string) {
-		const payload = await response.json().catch(() => null);
-		return apiErrorMessage(payload) || fallback;
 	}
 
 	function mutationErrorMessage(error: unknown, fallback: string) {
@@ -243,6 +217,10 @@
 			confirmLabel: 'Konfirmasi',
 			tone: 'danger'
 		});
+	}
+
+	function sessionLegacyMutationPath(id: string) {
+		return clientApiPathWithQuery('/api/cbt/sessions', new URLSearchParams({ id }));
 	}
 
 	async function createSession() {
@@ -273,7 +251,7 @@
 					status: 'draft',
 				}),
 			});
-			if (!res.ok) { showToast(await responseErrorMessage(res, 'Gagal membuat sesi ujian'), false); return; }
+			await readClientJson<unknown>(res);
 			fPackageId = ''; fScopeType = 'class'; fClassId = ''; fGradeLevel = 'VII';
 			fMixPolicy = 'same_class'; fAssignmentMode = 'random_balanced';
 			fAllowCrossGrade = false; fIsSpecialEvent = false;
@@ -291,16 +269,13 @@
 		if (!(await confirmPhrase('Hapus Sesi Ujian', `Sesi "${title}" hanya boleh dihapus jika masih Draft. Penghapusan akan membuang konfigurasi sesi dari daftar operator.`, 'HAPUS'))) return;
 		deleteBusyId = id;
 		try {
-			const res = await fetch(`/api/cbt/sessions?id=${id}`, { method: 'DELETE' });
-			if (!res.ok && res.status !== 204) {
-				setOperationState('error', 'Sesi Gagal Dihapus', 'Hanya sesi berstatus Draft yang dapat dihapus. Ubah alur kerja sesi atau periksa statusnya terlebih dahulu.');
-				showToast('Gagal menghapus — hanya sesi Draft yang dapat dihapus', false);
-			} else {
-				setOperationState('warning', 'Sesi Dihapus', `Sesi "${title}" sudah dihapus dari daftar sesi ujian.`);
-				showToast('Sesi dihapus');
-				await refreshSessions();
-			}
+			const res = await fetch(sessionLegacyMutationPath(id), { method: 'DELETE' });
+			await readClientJson<unknown>(res);
+			setOperationState('warning', 'Sesi Dihapus', `Sesi "${title}" sudah dihapus dari daftar sesi ujian.`);
+			showToast('Sesi dihapus');
+			await refreshSessions();
 		} catch (error) {
+			setOperationState('error', 'Sesi Gagal Dihapus', 'Hanya sesi berstatus Draft yang dapat dihapus. Ubah alur kerja sesi atau periksa statusnya terlebih dahulu.');
 			showToast(mutationErrorMessage(error, 'Gagal menghapus sesi ujian. Periksa koneksi lalu coba lagi.'), false);
 		} finally {
 			deleteBusyId = '';
@@ -314,20 +289,17 @@
 		}
 		statusBusyId = id;
 		try {
-			const res = await fetch(`/api/cbt/sessions/${id}/status`, {
+			const res = await fetch(clientApiPath`/api/cbt/sessions/${id}/status`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ status }),
 			});
-			if (!res.ok) {
-				setOperationState('error', 'Status Gagal Diperbarui', 'Perubahan status tidak tersimpan. Coba ulang setelah memeriksa koneksi atau status sesi saat ini.');
-				showToast('Gagal mengubah status', false);
-				return;
-			}
+			await readClientJson<unknown>(res);
 			setOperationState('success', 'Status Sesi Diperbarui', `Sesi sekarang berstatus "${statusLabel[status] ?? status}". Pastikan langkah operator berikutnya sudah sesuai.`);
 			showToast('Status diperbarui');
 			await refreshSessions();
 		} catch (error) {
+			setOperationState('error', 'Status Gagal Diperbarui', 'Perubahan status tidak tersimpan. Coba ulang setelah memeriksa koneksi atau status sesi saat ini.');
 			showToast(mutationErrorMessage(error, 'Gagal mengubah status sesi. Periksa koneksi lalu coba lagi.'), false);
 		} finally {
 			statusBusyId = '';
@@ -346,12 +318,12 @@
 					: enrollScopeType === 'grade'
 						? { scope_type: 'grade', level: enrollGradeLevel }
 						: { scope_type: 'school' };
-			const res = await fetch(`/api/cbt/sessions/${enrollSession.id}/enroll`, {
+			const res = await fetch(clientApiPath`/api/cbt/sessions/${enrollSession.id}/enroll`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload),
 			});
-			if (!res.ok) { showToast('Gagal mendaftarkan siswa', false); return; }
+			await readClientJson<unknown>(res);
 			setOperationState('success', 'Peserta Berhasil Didaftarkan', `Kelompok peserta untuk sesi "${enrollSession.title}" sudah masuk. Lanjutkan ke pengaturan ruangan jika diperlukan.`);
 			showToast(`Peserta berhasil didaftarkan ke sesi "${enrollSession.title}"`);
 			enrollSession = null;

@@ -6,6 +6,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
 	import {
 		defaultSchoolProfile,
 		fetchSchoolProfile,
@@ -50,11 +51,6 @@
 		error?: string;
 		message?: string;
 	};
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
 
 	const categoryLabel: Record<string, string> = {
 		assignment: 'Tugas', quiz: 'Kuis', midterm: 'UTS', final: 'UAS',
@@ -69,6 +65,8 @@
 	let summary = $state<GradeSummary[]>([]);
 	let raporPromise = $state<Promise<RaporDetail> | null>(null);
 	let schoolProfile = $state<SchoolProfile | null>(null);
+	let assignmentsRequestId = 0;
+	let raporRequestId = 0;
 
 	let selectedAssignment = $derived(assignments.find(a => a.id === selectedId) ?? null);
 	let activeSchoolProfile = $derived(schoolProfile ?? defaultSchoolProfile);
@@ -78,41 +76,17 @@
 		validScores.length > 0 ? (validScores.reduce((a, b) => a + b, 0) / validScores.length).toFixed(1) : '—'
 	);
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function fetchAssignments() {
-		const overview = await fetch('/api/grades').then((response) => readApi<GradeOverview>(response, 'Gagal memuat daftar kelas dan mata pelajaran'));
+		const overview = await fetch('/api/grades').then((response) => readClientApiData<GradeOverview>(response, 'Gagal memuat daftar kelas dan mata pelajaran'));
 		return overview.assignments ?? [];
 	}
 
 	async function fetchRapor(assignmentId: string): Promise<RaporDetail> {
-		const overview = await fetch(`/api/grades?assignment_id=${assignmentId}&published_only=true`)
-			.then((response) => readApi<GradeOverview>(response, 'Gagal memuat data rapor'));
+		const overview = await fetch(clientApiPathWithQuery('/api/grades', new URLSearchParams({
+			assignment_id: assignmentId,
+			published_only: 'true'
+		})))
+			.then((response) => readClientApiData<GradeOverview>(response, 'Gagal memuat data rapor'));
 		return {
 			assignmentId,
 			components: overview.components ?? [],
@@ -121,20 +95,30 @@
 	}
 
 	function loadRapor(assignmentId: string) {
+		const requestId = ++raporRequestId;
 		components = [];
 		summary = [];
 		raporPromise = fetchRapor(assignmentId).then((detail) => {
-			if (selectedId === assignmentId) {
+			if (requestId === raporRequestId && selectedId === assignmentId) {
 				components = detail.components;
 				summary = detail.summary;
 			}
 			return detail;
+		}).catch((error: unknown) => {
+			if (requestId === raporRequestId && selectedId === assignmentId) throw error;
+			return {
+				assignmentId: selectedId,
+				components,
+				summary,
+			};
 		});
 	}
 
 	function loadAssignments() {
+		const requestId = ++assignmentsRequestId;
 		assignments = [];
 		assignmentsPromise = fetchAssignments().then((rows) => {
+			if (requestId !== assignmentsRequestId) return assignments;
 			assignments = rows;
 			if (!selectedId) {
 				const requestedId = new URL(window.location.href).searchParams.get('assignment_id') ?? '';
@@ -144,6 +128,9 @@
 				}
 			}
 			return rows;
+		}).catch((error: unknown) => {
+			if (requestId === assignmentsRequestId) throw error;
+			return assignments;
 		});
 	}
 

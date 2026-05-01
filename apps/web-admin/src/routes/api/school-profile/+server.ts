@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
-import { handleRouteError, proxy } from '$lib/server/api';
+import { handleRouteError, proxy, readRequestJson } from '$lib/server/api';
 
 export const GET: RequestHandler = async (event) => {
 	try {
@@ -13,7 +13,7 @@ export const GET: RequestHandler = async (event) => {
 
 export const PUT: RequestHandler = async (event) => {
 	try {
-		const body = await event.request.json();
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
 		const data = await proxy(event).put('/api/school-profile', body);
 		return json(data);
 	} catch (e) {

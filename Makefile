@@ -37,20 +37,35 @@ dev-backend:
 
 # ── Check / Test ─────────────────────────────────────────────────────────────
 
-.PHONY: check check-web check-worker test-backend vet-backend audit-web lint-backend lint ci-check
+.PHONY: check check-web check-worker test-web test-worker test-mobile test-backend coverage-backend-unit coverage-backend-unit-88 vet-backend audit-web lint-backend lint ci-check
 .PHONY: ops-health ops-health-backend ops-health-frontend ops-health-worker ops-backup
 
 check-web:
 	cd $(WEB_DIR) && npm run check
 
+test-web:
+	cd $(WEB_DIR) && npm run test:unit
+
 check-worker:
 	cd $(WORKER_DIR) && ./node_modules/.bin/tsc --noEmit
 
+test-worker:
+	cd $(WORKER_DIR) && npm run test
+
+test-mobile:
+	cd apps/mobile && flutter test
+
 test-backend:
-	cd $(BACKEND_DIR) && go test ./...
+	./$(BACKEND_DIR)/run-go-test.sh
+
+coverage-backend-unit:
+	./$(BACKEND_DIR)/run-go-unit-coverage.sh
+
+coverage-backend-unit-88:
+	COVERAGE_THRESHOLD=88 ./$(BACKEND_DIR)/run-go-unit-coverage.sh
 
 vet-backend:
-	cd $(BACKEND_DIR) && go vet ./...
+	./$(BACKEND_DIR)/run-go-vet.sh
 
 audit-web:
 	cd $(WEB_DIR) && npm audit --audit-level=high
@@ -60,9 +75,9 @@ lint-backend:
 
 lint: lint-backend
 
-ci-check: check-web check-worker test-backend
+ci-check: check-web test-web check-worker test-worker test-backend test-mobile
 
-check: check-web check-worker test-backend vet-backend audit-web
+check: check-web test-web check-worker test-worker test-backend test-mobile vet-backend audit-web
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
@@ -206,8 +221,10 @@ help:
 	@echo "  dev-worker             npm run dev"
 	@echo ""
 	@echo "Verify:"
-	@echo "  check                  web check + worker typecheck + backend tests + vet + npm audit"
-	@echo "  ci-check               web check + worker typecheck + backend tests"
+	@echo "  check                  web check + web unit + worker typecheck + worker tests + backend tests + mobile tests + vet + npm audit"
+	@echo "  ci-check               web check + web unit + worker typecheck + worker tests + backend tests + mobile tests"
+	@echo "  coverage-backend-unit  Go unit coverage excluding cmd/api and generated sqlc"
+	@echo "  coverage-backend-unit-88  same coverage scope with 88% threshold"
 	@echo "  lint                   golangci-lint run (falls back if not installed)"
 	@echo "  db-sqlc                regenerate sqlc code"
 	@echo "  db-migrate             apply PostgreSQL migrations"

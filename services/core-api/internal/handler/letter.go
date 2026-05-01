@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -9,28 +10,48 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	mw "mtsn2kolut-super-app/backend/internal/middleware"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
 type Letter struct {
-	svc *service.Letter
+	svc   letterService
+	audit cbtAuthoringAuditWriter
 }
 
-func NewLetter(svc *service.Letter) *Letter { return &Letter{svc: svc} }
+type letterService interface {
+	ListClassifications(ctx context.Context) ([]db.LetterClassification, error)
+	ListIncoming(ctx context.Context, search, filterStatus string) ([]db.ListIncomingLettersRow, error)
+	CreateIncoming(ctx context.Context, p service.CreateIncomingParams) (db.IncomingLetter, error)
+	GetIncoming(ctx context.Context, id pgtype.UUID) (db.GetIncomingLetterRow, error)
+	UpdateIncoming(ctx context.Context, p service.UpdateIncomingParams) (db.IncomingLetter, error)
+	UpdateIncomingStatus(ctx context.Context, id pgtype.UUID, status string) (db.IncomingLetter, error)
+	DeleteIncoming(ctx context.Context, id pgtype.UUID) error
+	ListOutgoing(ctx context.Context, search string) ([]db.ListOutgoingLettersRow, error)
+	CreateOutgoing(ctx context.Context, p service.CreateOutgoingParams) (db.OutgoingLetter, error)
+	GetOutgoing(ctx context.Context, id pgtype.UUID) (db.GetOutgoingLetterRow, error)
+	UpdateOutgoing(ctx context.Context, p service.UpdateOutgoingParams) (db.OutgoingLetter, error)
+	DeleteOutgoing(ctx context.Context, id pgtype.UUID) error
+	PreviewOutgoingNumber(classificationCode, tanggalSurat string) (string, error)
+	ListDispositions(ctx context.Context, incomingLetterID, filterStatus string) ([]db.ListDispositionsRow, error)
+	CreateDisposition(ctx context.Context, p service.CreateDispositionParams) (db.LetterDisposition, error)
+	GetDisposition(ctx context.Context, id pgtype.UUID) (db.GetDispositionRow, error)
+	UpdateDisposition(ctx context.Context, p service.UpdateDispositionParams) (db.LetterDisposition, error)
+	DeleteDisposition(ctx context.Context, id pgtype.UUID) error
+}
+
+func NewLetter(svc *service.Letter, audit ...cbtAuthoringAuditWriter) *Letter {
+	var writer cbtAuthoringAuditWriter
+	if len(audit) > 0 {
+		writer = audit[0]
+	}
+	return &Letter{svc: svc, audit: writer}
+}
 
 func tuAccessAllowed(r *http.Request) bool {
 	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
-		if rawRoles, ok := claims["roles"].([]any); ok {
-			for _, role := range rawRoles {
-				if role == "admin" || role == "staf" {
-					return true
-				}
-			}
-		}
-		if role, _ := claims["role"].(string); role == "admin" || role == "staf" {
-			return true
-		}
-		return false
+		return mw.HasAnyRole(claims, "admin", "staf")
 	}
 	return false
 }
@@ -112,9 +133,14 @@ func (h *Letter) CreateIncoming(w http.ResponseWriter, r *http.Request) {
 		ReceivedByEmployeeID: body.ReceivedByEmployeeID,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data surat masuk tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LETTER_INCOMING_CREATE", "incoming_letter", pgUUIDString(letter.ID), map[string]any{
+		"nomor_surat": letter.NomorSurat,
+		"perihal":     letter.Perihal,
+		"asal":        letter.Asal,
+	})
 	api.Created(w, letter)
 }
 
@@ -168,9 +194,14 @@ func (h *Letter) UpdateIncoming(w http.ResponseWriter, r *http.Request) {
 		Catatan:       body.Catatan,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Perubahan surat masuk tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LETTER_INCOMING_UPDATE", "incoming_letter", pgUUIDString(row.ID), map[string]any{
+		"nomor_surat": row.NomorSurat,
+		"perihal":     row.Perihal,
+		"asal":        row.Asal,
+	})
 	api.OK(w, row)
 }
 
@@ -194,9 +225,12 @@ func (h *Letter) UpdateIncomingStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	row, err := h.svc.UpdateIncomingStatus(r.Context(), id, body.Status)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Status surat masuk tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LETTER_INCOMING_STATUS_UPDATE", "incoming_letter", pgUUIDString(row.ID), map[string]any{
+		"status": row.Status,
+	})
 	api.OK(w, row)
 }
 
@@ -215,6 +249,9 @@ func (h *Letter) DeleteIncoming(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LETTER_INCOMING_DELETE", "incoming_letter", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
 	api.NoContent(w)
 }
 
@@ -271,13 +308,14 @@ func (h *Letter) CreateOutgoing(w http.ResponseWriter, r *http.Request) {
 		ManualNomor:        body.ManualNomor,
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "uq_outgoing") {
-			api.Conflict(w, "nomor surat sudah digunakan")
-			return
-		}
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data surat keluar tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LETTER_OUTGOING_CREATE", "outgoing_letter", pgUUIDString(letter.ID), map[string]any{
+		"nomor_surat": letter.NomorSurat,
+		"perihal":     letter.Perihal,
+		"tujuan":      letter.Tujuan,
+	})
 	api.Created(w, letter)
 }
 
@@ -323,9 +361,14 @@ func (h *Letter) UpdateOutgoing(w http.ResponseWriter, r *http.Request) {
 		Perihal: body.Perihal, Sifat: body.Sifat, Catatan: body.Catatan,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Perubahan surat keluar tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LETTER_OUTGOING_UPDATE", "outgoing_letter", pgUUIDString(row.ID), map[string]any{
+		"nomor_surat": row.NomorSurat,
+		"perihal":     row.Perihal,
+		"tujuan":      row.Tujuan,
+	})
 	api.OK(w, row)
 }
 
@@ -344,6 +387,9 @@ func (h *Letter) DeleteOutgoing(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LETTER_OUTGOING_DELETE", "outgoing_letter", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
 	api.NoContent(w)
 }
 
@@ -357,7 +403,7 @@ func (h *Letter) PreviewOutgoingNumber(w http.ResponseWriter, r *http.Request) {
 	tanggal := r.URL.Query().Get("tanggal")
 	preview, err := h.svc.PreviewOutgoingNumber(code, tanggal)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Preview nomor surat tidak valid")
 		return
 	}
 	api.OK(w, map[string]string{"preview": preview})
@@ -377,7 +423,7 @@ func (h *Letter) ListDispositions(w http.ResponseWriter, r *http.Request) {
 	filterStatus := r.URL.Query().Get("status")
 	data, err := h.svc.ListDispositions(r.Context(), letterID, filterStatus)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Filter disposisi tidak valid")
 		return
 	}
 	api.OK(w, data)
@@ -410,9 +456,13 @@ func (h *Letter) CreateDisposition(w http.ResponseWriter, r *http.Request) {
 		DisposedByEmployeeID: eidStr,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data disposisi tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LETTER_DISPOSITION_CREATE", "letter_disposition", pgUUIDString(disp.ID), map[string]any{
+		"incoming_letter_id":   pgUUIDString(disp.IncomingLetterID),
+		"assignee_employee_id": pgUUIDString(disp.AssigneeEmployeeID),
+	})
 	api.Created(w, disp)
 }
 
@@ -458,9 +508,12 @@ func (h *Letter) UpdateDisposition(w http.ResponseWriter, r *http.Request) {
 		Status:              body.Status,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Perubahan disposisi tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LETTER_DISPOSITION_UPDATE", "letter_disposition", pgUUIDString(row.ID), map[string]any{
+		"status": row.Status,
+	})
 	api.OK(w, row)
 }
 
@@ -479,5 +532,8 @@ func (h *Letter) DeleteDisposition(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "LETTER_DISPOSITION_DELETE", "letter_disposition", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
 	api.NoContent(w)
 }

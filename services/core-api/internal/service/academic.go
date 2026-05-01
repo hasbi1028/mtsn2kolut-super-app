@@ -9,8 +9,32 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
+type academicStore interface {
+	ListAcademicYears(ctx context.Context) ([]db.AcademicYear, error)
+	ListSchoolClasses(ctx context.Context) ([]db.ListSchoolClassesRow, error)
+	ListSubjects(ctx context.Context) ([]db.Subject, error)
+	ListClassSubjectAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
+	ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error)
+	GetAcademicStats(ctx context.Context) (db.GetAcademicStatsRow, error)
+	CreateAcademicYear(ctx context.Context, arg db.CreateAcademicYearParams) (db.AcademicYear, error)
+	CreateSchoolClass(ctx context.Context, arg db.CreateSchoolClassParams) (db.SchoolClass, error)
+	CreateSubject(ctx context.Context, arg db.CreateSubjectParams) (db.Subject, error)
+	CreateClassSubjectAssignment(ctx context.Context, arg db.CreateClassSubjectAssignmentParams) (db.ClassSubjectAssignment, error)
+	CreateTimetableSlot(ctx context.Context, arg db.CreateTimetableSlotParams) (db.TimetableSlot, error)
+	GetTimetableSlot(ctx context.Context, id pgtype.UUID) (db.TimetableSlot, error)
+	UpdateTimetableSlot(ctx context.Context, arg db.UpdateTimetableSlotParams) (db.TimetableSlot, error)
+	DeleteAcademicYear(ctx context.Context, id pgtype.UUID) error
+	DeleteSchoolClass(ctx context.Context, id pgtype.UUID) error
+	DeleteSubject(ctx context.Context, id pgtype.UUID) error
+	DeleteClassSubjectAssignment(ctx context.Context, id pgtype.UUID) error
+	DeleteTimetableSlot(ctx context.Context, id pgtype.UUID) error
+	GetClassSubjectAssignment(ctx context.Context, id pgtype.UUID) (db.GetClassSubjectAssignmentRow, error)
+	CountTimetableConflicts(ctx context.Context, arg db.CountTimetableConflictsParams) (int32, error)
+	CountTimetableRoomConflicts(ctx context.Context, arg db.CountTimetableRoomConflictsParams) (int32, error)
+}
+
 type Academic struct {
-	q *db.Queries
+	q academicStore
 }
 
 func NewAcademic(q *db.Queries) *Academic { return &Academic{q: q} }

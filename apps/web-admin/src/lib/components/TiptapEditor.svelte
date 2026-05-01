@@ -298,11 +298,9 @@
 				class="toolbar-btn"
 			>A<span class="ml-0.5 inline-block h-1.5 w-4 rounded-sm bg-current"></span></button>
 			{#if showColorPicker}
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
 					class="absolute left-0 top-full z-20 mt-1 flex flex-wrap gap-1 rounded-md border bg-white p-2 shadow-lg"
 					style="width:130px"
-					onmouseleave={() => (showColorPicker = false)}
 				>
 					{#each colors as color (color)}
 						<button
@@ -310,6 +308,7 @@
 							class="h-5 w-5 rounded border border-slate-200"
 							style="background:{color}"
 							title={color}
+							aria-label={`Pilih warna ${color}`}
 							onclick={() => {
 								editor?.chain().focus().setColor(color).run();
 								showColorPicker = false;

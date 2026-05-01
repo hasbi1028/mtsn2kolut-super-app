@@ -102,7 +102,7 @@ func (h *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
-	h.auditClaimsEvent(r.Context(), "AUTH_LOGOUT", map[string]any{
+	h.auditRefreshTokenEvent(r.Context(), "AUTH_LOGOUT", body.RefreshToken, map[string]any{
 		"scope": "single_session",
 	})
 	api.OK(w, map[string]string{"message": "logged out"})
@@ -333,6 +333,9 @@ func (h *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	h.auditClaimsEvent(r.Context(), "AUTH_PASSWORD_CHANGE", map[string]any{
+		"scope": "current_user",
+	})
 	api.OK(w, map[string]string{"message": "password changed"})
 }
 
@@ -390,6 +393,24 @@ func (h *Auth) auditClaimsEvent(ctx context.Context, action string, extra map[st
 	}
 	claims, ok := api.ClaimsFromContext(ctx)
 	if !ok {
+		return
+	}
+	h.auditWithClaims(ctx, action, claims, extra)
+}
+
+func (h *Auth) auditRefreshTokenEvent(ctx context.Context, action, refreshToken string, extra map[string]any) {
+	if h.audit == nil {
+		return
+	}
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return
+	}
+	claims := jwt.MapClaims{}
+	if _, _, err := new(jwt.Parser).ParseUnverified(refreshToken, claims); err != nil {
+		return
+	}
+	if tokenType, _ := claims["type"].(string); tokenType != "refresh" {
 		return
 	}
 	h.auditWithClaims(ctx, action, claims, extra)

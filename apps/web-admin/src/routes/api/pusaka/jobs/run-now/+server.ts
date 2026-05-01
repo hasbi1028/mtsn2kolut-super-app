@@ -1,11 +1,11 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, ApiError, handleRouteError } from '$lib/server/api';
+import { ApiError, handleRouteError, proxy, readRequestJson } from '$lib/server/api';
 
 export const POST = async (event: RequestEvent) => {
 	try {
 		const { employee_id, run_type = 'morning', max_attempts = 3 } =
-			await event.request.json() as { employee_id?: string; run_type?: string; max_attempts?: number };
+			await readRequestJson<{ employee_id?: string; run_type?: string; max_attempts?: number }>(event.request);
 		if (!employee_id) return json({ error: 'employee_id wajib' }, { status: 400 });
 		await proxy(event).post('/api/pusaka/jobs', { employee_id, run_type, max_attempts });
 		return json({ inserted: 1, skipped: 0 }, { status: 201 });

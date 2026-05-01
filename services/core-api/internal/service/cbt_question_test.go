@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -11,21 +13,38 @@ import (
 )
 
 type fakeQuestionStore struct {
-	current      db.GetCbtQuestionRow
+	current db.GetCbtQuestionRow
+	detail  db.GetCbtQuestionDetailRow
+
+	listRows      []db.ListCbtQuestionsRow
+	filteredRows  []db.ListCbtQuestionsFilteredRow
+	listFilterArg db.ListCbtQuestionsFilteredParams
+	countArg      db.CountCbtQuestionsFilteredParams
+	count         int64
+
+	createParams db.CreateCbtQuestionParams
+	createCalls  int
+	createRow    db.CbtQuestion
+
 	updateParams db.UpdateCbtQuestionParams
 	updateCalls  int
+
+	deleteID    pgtype.UUID
+	deleteCalls int
 }
 
 func (f *fakeQuestionStore) ListCbtQuestions(ctx context.Context) ([]db.ListCbtQuestionsRow, error) {
-	return nil, nil
+	return f.listRows, nil
 }
 
 func (f *fakeQuestionStore) ListCbtQuestionsFiltered(ctx context.Context, arg db.ListCbtQuestionsFilteredParams) ([]db.ListCbtQuestionsFilteredRow, error) {
-	return nil, nil
+	f.listFilterArg = arg
+	return f.filteredRows, nil
 }
 
 func (f *fakeQuestionStore) CountCbtQuestionsFiltered(ctx context.Context, arg db.CountCbtQuestionsFilteredParams) (int64, error) {
-	return 0, nil
+	f.countArg = arg
+	return f.count, nil
 }
 
 func (f *fakeQuestionStore) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error) {
@@ -36,11 +55,13 @@ func (f *fakeQuestionStore) GetCbtQuestion(ctx context.Context, id pgtype.UUID) 
 }
 
 func (f *fakeQuestionStore) GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionDetailRow, error) {
-	return db.GetCbtQuestionDetailRow{}, nil
+	return f.detail, nil
 }
 
 func (f *fakeQuestionStore) CreateCbtQuestion(ctx context.Context, arg db.CreateCbtQuestionParams) (db.CbtQuestion, error) {
-	return db.CbtQuestion{}, nil
+	f.createParams = arg
+	f.createCalls++
+	return f.createRow, nil
 }
 
 func (f *fakeQuestionStore) UpdateCbtQuestion(ctx context.Context, arg db.UpdateCbtQuestionParams) (db.CbtQuestion, error) {
@@ -57,7 +78,115 @@ func (f *fakeQuestionStore) UpdateCbtQuestion(ctx context.Context, arg db.Update
 }
 
 func (f *fakeQuestionStore) DeleteCbtQuestion(ctx context.Context, id pgtype.UUID) error {
+	f.deleteID = id
+	f.deleteCalls++
 	return nil
+}
+
+func TestNewCbtQuestionAndReadDelegation(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
+	store := &fakeQuestionStore{
+		listRows: []db.ListCbtQuestionsRow{{ID: questionID, Code: "Q-1"}},
+		current:  db.GetCbtQuestionRow{ID: questionID, Code: "Q-1", QuestionText: "Soal"},
+		detail:   db.GetCbtQuestionDetailRow{ID: questionID, Code: "Q-1", QuestionText: "Soal detail"},
+	}
+	svc := NewCbtQuestion(nil)
+	svc.q = store
+
+	rows, err := svc.List(context.Background())
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].Code != "Q-1" {
+		t.Fatalf("List() = %+v, want one Q-1 row", rows)
+	}
+
+	got, err := svc.Get(context.Background(), questionID)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if got.ID != questionID || got.QuestionText != "Soal" {
+		t.Fatalf("Get() = %+v, want current row", got)
+	}
+
+	detail, err := svc.GetDetail(context.Background(), questionID)
+	if err != nil {
+		t.Fatalf("GetDetail() error = %v", err)
+	}
+	if detail.ID != questionID || detail.QuestionText != "Soal detail" {
+		t.Fatalf("GetDetail() = %+v, want detail row", detail)
+	}
+}
+
+func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
+	store := &fakeQuestionStore{
+		filteredRows: []db.ListCbtQuestionsFilteredRow{{ID: pgtype.UUID{Valid: true}, Code: "Q-1"}},
+		count:        7,
+		createRow: db.CbtQuestion{
+			ID:           pgtype.UUID{Valid: true},
+			QuestionText: "Soal mudah",
+		},
+	}
+	svc := &CbtQuestion{q: store}
+
+	rows, total, err := svc.ListFiltered(context.Background(), ListCbtQuestionsInput{
+		SubjectID:      pgtype.UUID{Valid: true},
+		WorkflowStatus: " draft ",
+		QuestionType:   " multiple_choice ",
+		HotsFilter:     " true ",
+		SearchQuery:    " aljabar ",
+		Limit:          25,
+		Offset:         5,
+	})
+	if err != nil {
+		t.Fatalf("ListFiltered() error = %v", err)
+	}
+	if len(rows) != 1 || total != 7 {
+		t.Fatalf("ListFiltered() rows/total = %d/%d, want 1/7", len(rows), total)
+	}
+	if store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.SearchQuery != "aljabar" {
+		t.Fatalf("ListFiltered() arg = %+v, want trimmed filters", store.listFilterArg)
+	}
+	if store.countArg.WorkflowStatus != store.listFilterArg.WorkflowStatus || store.countArg.SearchQuery != store.listFilterArg.SearchQuery {
+		t.Fatalf("ListFiltered() count arg = %+v, want same trimmed filters", store.countArg)
+	}
+
+	created, err := svc.Create(context.Background(), SaveCbtQuestionInput{
+		SubjectID:      pgtype.UUID{Valid: true},
+		AuthoringMode:  "beginner",
+		QuestionType:   "single_choice",
+		QuestionText:   " Soal mudah ",
+		OptionA:        " A ",
+		OptionB:        " B ",
+		OptionC:        " C ",
+		OptionD:        " D ",
+		AnswerKey:      " b ",
+		MediaAssetIDs:  []string{"asset-1"},
+		AuthorUsername: " guru ",
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if !created.ID.Valid || store.createCalls != 1 {
+		t.Fatalf("Create() row/calls = %+v/%d, want store row and one call", created, store.createCalls)
+	}
+	if store.createParams.QuestionType != "multiple_choice" || store.createParams.QuestionText != "Soal mudah" || store.createParams.AnswerKey != "B" {
+		t.Fatalf("Create() params = %+v, want normalized type/text/answer", store.createParams)
+	}
+	if store.createParams.OptionA != "A" || store.createParams.OptionD != "D" || store.createParams.Version != 1 || store.createParams.AuthorUsername != "guru" {
+		t.Fatalf("Create() params = %+v, want legacy options/version/author", store.createParams)
+	}
+	if string(store.createParams.MediaAssetIds) != `["asset-1"]` {
+		t.Fatalf("Create() media_asset_ids = %s, want asset JSON", string(store.createParams.MediaAssetIds))
+	}
+
+	deleteID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
+	if err := svc.Delete(context.Background(), deleteID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if store.deleteID != deleteID || store.deleteCalls != 1 {
+		t.Fatalf("Delete() id/calls = %v/%d, want %v/1", store.deleteID, store.deleteCalls, deleteID)
+	}
 }
 
 func TestNormalizeQuestionInputSanitizesDangerousHTML(t *testing.T) {
@@ -136,6 +265,92 @@ func TestSubmitReviewUpdatesWorkflowAndReviewer(t *testing.T) {
 	}
 }
 
+func TestCbtQuestionWorkflowActions(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
+	subjectID := pgtype.UUID{Bytes: [16]byte{3}, Valid: true}
+	current := db.GetCbtQuestionRow{
+		ID:             questionID,
+		SubjectID:      subjectID,
+		Code:           "Q-1",
+		QuestionText:   "Soal",
+		QuestionType:   "multiple_choice",
+		Options:        []byte(`[{"label":"A","text":"A"},{"label":"B","text":"B"},{"label":"C","text":"C"},{"label":"D","text":"D"}]`),
+		OptionA:        "A",
+		OptionB:        "B",
+		OptionC:        "C",
+		OptionD:        "D",
+		AnswerKey:      "A",
+		Difficulty:     db.CbtQuestionDifficultyEnumMedium,
+		Status:         db.CbtQuestionStatusEnumDraft,
+		WorkflowStatus: "approved",
+		ReviewNotes:    "catatan lama",
+	}
+
+	t.Run("approve updates workflow and notes", func(t *testing.T) {
+		store := &fakeQuestionStore{current: current}
+		svc := &CbtQuestion{q: store}
+
+		_, err := svc.Approve(context.Background(), questionID, "waka", "siap")
+		if err != nil {
+			t.Fatalf("Approve() error = %v", err)
+		}
+		if store.updateParams.WorkflowStatus != "approved" || store.updateParams.ReviewerUsername != "waka" {
+			t.Fatalf("Approve() params = %+v, want approved reviewer waka", store.updateParams)
+		}
+		if !store.updateParams.ReviewedAt.Valid || store.updateParams.ReviewNotes != "siap" {
+			t.Fatalf("Approve() review timestamp/notes = %v/%q, want valid/siap", store.updateParams.ReviewedAt, store.updateParams.ReviewNotes)
+		}
+	})
+
+	t.Run("publish sets published status and approver", func(t *testing.T) {
+		store := &fakeQuestionStore{current: current}
+		svc := &CbtQuestion{q: store}
+
+		_, err := svc.Publish(context.Background(), questionID, "kepala")
+		if err != nil {
+			t.Fatalf("Publish() error = %v", err)
+		}
+		if store.updateParams.Status != db.CbtQuestionStatusEnumPublished || store.updateParams.WorkflowStatus != "approved" {
+			t.Fatalf("Publish() params = %+v, want published approved", store.updateParams)
+		}
+		if store.updateParams.ApproverUsername != "kepala" || !store.updateParams.ApprovedAt.Valid {
+			t.Fatalf("Publish() approver = %q/%v, want kepala with timestamp", store.updateParams.ApproverUsername, store.updateParams.ApprovedAt)
+		}
+	})
+
+	t.Run("archive sets archived status", func(t *testing.T) {
+		store := &fakeQuestionStore{current: current}
+		svc := &CbtQuestion{q: store}
+
+		_, err := svc.Archive(context.Background(), questionID, "admin")
+		if err != nil {
+			t.Fatalf("Archive() error = %v", err)
+		}
+		if store.updateParams.Status != db.CbtQuestionStatusEnumArchived {
+			t.Fatalf("Archive() status = %q, want archived", store.updateParams.Status)
+		}
+	})
+
+	t.Run("duplicate creates clean draft copy", func(t *testing.T) {
+		store := &fakeQuestionStore{current: current}
+		svc := &CbtQuestion{q: store}
+
+		_, err := svc.DuplicateAsDraft(context.Background(), questionID, "guru")
+		if err != nil {
+			t.Fatalf("DuplicateAsDraft() error = %v", err)
+		}
+		if store.createCalls != 1 {
+			t.Fatalf("CreateCbtQuestion() calls = %d, want 1", store.createCalls)
+		}
+		if store.createParams.Code != "Q-1-COPY" || store.createParams.Status != db.CbtQuestionStatusEnumDraft || store.createParams.WorkflowStatus != "draft" {
+			t.Fatalf("DuplicateAsDraft() create params = %+v, want clean draft copy", store.createParams)
+		}
+		if store.createParams.ReviewerUsername != "" || store.createParams.ApproverUsername != "" || store.createParams.ReviewNotes != "" {
+			t.Fatalf("DuplicateAsDraft() reviewer/approver/notes = %q/%q/%q, want cleared", store.createParams.ReviewerUsername, store.createParams.ApproverUsername, store.createParams.ReviewNotes)
+		}
+	})
+}
+
 func TestNormalizeQuestionInputBeginnerDefaultsToDraft(t *testing.T) {
 	input := SaveCbtQuestionInput{
 		SubjectID:      pgtype.UUID{Valid: true},
@@ -184,4 +399,260 @@ func TestNormalizeQuestionInputBeginnerRejectsAdvancedType(t *testing.T) {
 	if err == nil {
 		t.Fatal("normalizeQuestionInput() error = nil, want beginner type rejection")
 	}
+}
+
+func TestCbtQuestionBuildUpdatePublishedParams(t *testing.T) {
+	currentReviewedAt := pgtype.Timestamptz{Valid: true}
+	currentApprovedAt := pgtype.Timestamptz{Valid: true}
+	current := db.GetCbtQuestionRow{
+		ID:               pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
+		ReviewerUsername: "old-reviewer",
+		ReviewedAt:       currentReviewedAt,
+		ApproverUsername: "old-approver",
+		ApprovedAt:       currentApprovedAt,
+	}
+
+	params, err := buildUpdateQuestionParams(current, SaveCbtQuestionInput{
+		ID:               current.ID,
+		SubjectID:        pgtype.UUID{Bytes: [16]byte{2}, Valid: true},
+		AuthoringMode:    "advance",
+		QuestionType:     "essay",
+		QuestionText:     "Uraikan proses fotosintesis",
+		Status:           db.CbtQuestionStatusEnumPublished,
+		WorkflowStatus:   "approved",
+		RubricHTML:       "<p>Rubrik lengkap</p>",
+		ReviewerUsername: "reviewer-baru",
+		ApproverUsername: "approver-baru",
+		ReviewNotes:      " siap ",
+	})
+	if err != nil {
+		t.Fatalf("buildUpdateQuestionParams() error = %v", err)
+	}
+	if params.ID != current.ID || params.QuestionType != "essay" || params.Status != db.CbtQuestionStatusEnumPublished || params.WorkflowStatus != "approved" {
+		t.Fatalf("buildUpdateQuestionParams() identity/status = %+v, want published approved essay", params)
+	}
+	if params.ReviewerUsername != "reviewer-baru" || !params.ReviewedAt.Valid {
+		t.Fatalf("buildUpdateQuestionParams() reviewer = %q/%v, want reviewer-baru with timestamp", params.ReviewerUsername, params.ReviewedAt)
+	}
+	if params.ApproverUsername != "approver-baru" || !params.ApprovedAt.Valid {
+		t.Fatalf("buildUpdateQuestionParams() approver = %q/%v, want approver-baru with timestamp", params.ApproverUsername, params.ApprovedAt)
+	}
+	if params.ReviewNotes != "siap" || params.RubricHtml != "<p>Rubrik lengkap</p>" {
+		t.Fatalf("buildUpdateQuestionParams() notes/rubric = %q/%q, want trimmed sanitized fields", params.ReviewNotes, params.RubricHtml)
+	}
+}
+
+func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   SaveCbtQuestionInput
+		wantErr string
+	}{
+		{
+			name:    "missing question text",
+			input:   SaveCbtQuestionInput{SubjectID: pgtype.UUID{Valid: true}, AuthoringMode: "advance", QuestionType: "essay"},
+			wantErr: "question_text atau stem_html/stem_latex wajib diisi",
+		},
+		{
+			name: "objective requires two options",
+			input: SaveCbtQuestionInput{
+				SubjectID:     pgtype.UUID{Valid: true},
+				AuthoringMode: "advance",
+				QuestionType:  "multiple_answer",
+				QuestionText:  "Pilih",
+				Options:       []QuestionOption{{Label: "A", Text: "A"}},
+				AnswerKey:     "A",
+			},
+			wantErr: "opsi jawaban minimal 2 untuk tipe soal objektif",
+		},
+		{
+			name: "beginner multiple choice requires four options",
+			input: SaveCbtQuestionInput{
+				SubjectID:     pgtype.UUID{Valid: true},
+				AuthoringMode: "beginner",
+				QuestionType:  "multiple_choice",
+				QuestionText:  "Pilih",
+				Options:       []QuestionOption{{Label: "A", Text: "A"}, {Label: "B", Text: "B"}},
+				AnswerKey:     "A",
+			},
+			wantErr: "mode beginner membutuhkan minimal 4 opsi untuk pilihan ganda",
+		},
+		{
+			name: "short answer requires key",
+			input: SaveCbtQuestionInput{
+				SubjectID:     pgtype.UUID{Valid: true},
+				AuthoringMode: "advance",
+				QuestionType:  "short_answer",
+				QuestionText:  "Jawab",
+			},
+			wantErr: "answer_key wajib diisi untuk short_answer",
+		},
+		{
+			name: "approved essay requires rubric",
+			input: SaveCbtQuestionInput{
+				SubjectID:      pgtype.UUID{Valid: true},
+				AuthoringMode:  "advance",
+				QuestionType:   "essay",
+				QuestionText:   "Uraikan",
+				WorkflowStatus: "approved",
+			},
+			wantErr: "rubric_html wajib diisi untuk essay yang di-approve atau dipublish",
+		},
+		{
+			name: "unsupported type",
+			input: SaveCbtQuestionInput{
+				SubjectID:     pgtype.UUID{Valid: true},
+				AuthoringMode: "advance",
+				QuestionType:  "matching",
+				QuestionText:  "Cocokkan",
+			},
+			wantErr: "question_type tidak didukung",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := normalizeQuestionInput(tt.input)
+			if err == nil || err.Error() != tt.wantErr {
+				t.Fatalf("normalizeQuestionInput() error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
+	trueFalse, err := normalizeQuestionInput(SaveCbtQuestionInput{
+		SubjectID:     pgtype.UUID{Valid: true},
+		AuthoringMode: "advance",
+		QuestionType:  "true_false",
+		QuestionText:  "MTsN 2 berada di Kolaka Utara",
+		AnswerKey:     "A",
+	})
+	if err != nil {
+		t.Fatalf("normalizeQuestionInput(true_false) error = %v", err)
+	}
+	if len(trueFalse.Options) != 2 || trueFalse.Options[0].Text != "Benar" || trueFalse.Options[1].Text != "Salah" {
+		t.Fatalf("normalizeQuestionInput(true_false) options = %+v, want Benar/Salah", trueFalse.Options)
+	}
+
+	fromStem, err := normalizeQuestionInput(SaveCbtQuestionInput{
+		SubjectID:     pgtype.UUID{Valid: true},
+		AuthoringMode: "advance",
+		QuestionType:  "essay",
+		StemHTML:      "<p>Jelaskan&nbsp;EDM</p>",
+	})
+	if err != nil {
+		t.Fatalf("normalizeQuestionInput(stem) error = %v", err)
+	}
+	if fromStem.QuestionText != "Jelaskan EDM" {
+		t.Fatalf("normalizeQuestionInput(stem) QuestionText = %q, want derived plain text", fromStem.QuestionText)
+	}
+
+	if got := normalizeQuestionType(" SINGLE_CHOICE "); got != "multiple_choice" {
+		t.Fatalf("normalizeQuestionType(single_choice) = %q, want multiple_choice", got)
+	}
+	if got := normalizeQuestionType("matching"); got != "matching" {
+		t.Fatalf("normalizeQuestionType(unknown) = %q, want matching passthrough", got)
+	}
+	if got := normalizeAuthoringMode("ADVANCE"); got != "advance" {
+		t.Fatalf("normalizeAuthoringMode() = %q, want advance", got)
+	}
+	if got := normalizeWorkflowStatus("approved"); got != "approved" {
+		t.Fatalf("normalizeWorkflowStatus(approved) = %q, want approved", got)
+	}
+	if got := normalizeWorkflowStatus("published"); got != "draft" {
+		t.Fatalf("normalizeWorkflowStatus(invalid) = %q, want draft", got)
+	}
+
+	a, b, c, d, e := legacyOptionColumns([]QuestionOption{
+		{Text: "teks"},
+		{HTML: "<b>html</b>"},
+		{Latex: "x^2"},
+	})
+	if a != "teks" || b != "html" || c != "x^2" || d != "" || e != "" {
+		t.Fatalf("legacyOptionColumns() = %q/%q/%q/%q/%q, want text/html/latex/empty/empty", a, b, c, d, e)
+	}
+
+	optionsJSON, err := EncodeQuestionOptions([]QuestionOption{{Label: "A", Text: "Satu"}})
+	if err != nil {
+		t.Fatalf("EncodeQuestionOptions() error = %v", err)
+	}
+	var decodedOptions []QuestionOption
+	if err := json.Unmarshal(optionsJSON, &decodedOptions); err != nil || len(decodedOptions) != 1 || decodedOptions[0].Label != "A" {
+		t.Fatalf("EncodeQuestionOptions() json = %s decoded=%+v err=%v, want one option", string(optionsJSON), decodedOptions, err)
+	}
+	emptyOptionsJSON, err := EncodeQuestionOptions(nil)
+	if string(mustBytes(t, emptyOptionsJSON, err)) != "[]" {
+		t.Fatalf("EncodeQuestionOptions(nil) = %s, want []", string(emptyOptionsJSON))
+	}
+	assetJSON, err := EncodeStringArray([]string{"asset-1"})
+	if string(mustBytes(t, assetJSON, err)) != `["asset-1"]` {
+		t.Fatalf("EncodeStringArray() = %s, want asset JSON", string(assetJSON))
+	}
+	if got := decodeQuestionOptions([]byte(`[{"label":"B","text":"Dua"}]`)); len(got) != 1 || got[0].Label != "B" {
+		t.Fatalf("decodeQuestionOptions(valid) = %+v, want one B option", got)
+	}
+	if got := decodeQuestionOptions([]byte(`bad`)); got != nil {
+		t.Fatalf("decodeQuestionOptions(invalid) = %+v, want nil", got)
+	}
+	if got := decodeStringArray([]byte(`["a","b"]`)); strings.Join(got, ",") != "a,b" {
+		t.Fatalf("decodeStringArray(valid) = %+v, want a,b", got)
+	}
+	if got := decodeStringArray([]byte(`bad`)); got != nil {
+		t.Fatalf("decodeStringArray(invalid) = %+v, want nil", got)
+	}
+	if got := mergeNotes("lama", " baru "); got != "baru" {
+		t.Fatalf("mergeNotes() = %q, want incoming note only", got)
+	}
+	if got := mergeNotes("lama", " "); got != "lama" {
+		t.Fatalf("mergeNotes(empty incoming) = %q, want existing", got)
+	}
+}
+
+func TestCbtQuestionSuggestAuthoringMode(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		hots bool
+		want string
+	}{
+		{name: "beginner", args: []string{"multiple_choice", "", "", "", "", "", "", "", "", "", "draft", "", "", ""}, want: "beginner"},
+		{name: "type advance", args: []string{"short_answer", "", "", "", "", "", "", "", "", "", "draft", "", "", ""}, want: "advance"},
+		{name: "latex advance", args: []string{"essay", "", " y ", "", "", "", "", "", "", "", "draft", "", "", ""}, want: "advance"},
+		{name: "metadata advance", args: []string{"essay", "", "", "", "", "TP", "", "", "", "", "draft", "", "", ""}, want: "advance"},
+		{name: "hots advance", args: []string{"essay", "", "", "", "", "", "", "", "", "", "draft", "", "", ""}, hots: true, want: "advance"},
+		{name: "workflow advance", args: []string{"essay", "", "", "", "", "", "", "", "", "", "review", "", "", ""}, want: "advance"},
+		{name: "notes advance", args: []string{"essay", "", "", "", "", "", "", "", "", "", "draft", "", "review", ""}, want: "advance"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := suggestQuestionAuthoringMode(
+				tt.args[0],
+				tt.args[1],
+				tt.args[2],
+				tt.args[3],
+				tt.args[4],
+				tt.args[5],
+				tt.args[6],
+				tt.args[7],
+				tt.args[8],
+				tt.args[9],
+				tt.hots,
+				tt.args[10],
+				tt.args[11],
+				tt.args[12],
+				tt.args[13],
+			)
+			if got != tt.want {
+				t.Fatalf("suggestQuestionAuthoringMode() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func mustBytes(t *testing.T, value []byte, err error) []byte {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("unexpected encode error: %v", err)
+	}
+	return value
 }

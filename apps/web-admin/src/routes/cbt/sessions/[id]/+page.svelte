@@ -14,6 +14,7 @@
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	type SessionInfo = {
 		id: string; title: string; package_title: string; duration_minutes: number;
@@ -57,15 +58,11 @@
 		error?: string;
 		message?: string;
 	};
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
 
 	const sessionId = page.params.id;
+	type ActiveTab = 'hasil' | 'peserta' | 'ruangan' | 'proctoring' | 'essay';
 
-	let activeTab = $state<'hasil' | 'peserta' | 'ruangan' | 'proctoring' | 'essay'>('hasil');
+	let activeTab = $state<ActiveTab>('hasil');
 	let session = $state<SessionInfo | null>(null);
 	let results = $state<ResultRow[]>([]);
 	let participants = $state<Participant[]>([]);
@@ -92,11 +89,23 @@
 	let seatInput = $state<Record<string, number>>({});
 	let roomInput = $state<Record<string, string>>({});
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
+	let detailRequestId = 0;
+	let participantsRequestId = 0;
+	let roomsRequestId = 0;
+	let proctoringRequestId = 0;
+	let essaysRequestId = 0;
 
 	const statusLabel: Record<string, string> = {
 		draft: 'Draft', scheduled: 'Terjadwal', active: 'Berlangsung',
 		finished: 'Selesai', cancelled: 'Dibatalkan',
 	};
+	const detailTabs: { id: ActiveTab; label: string }[] = [
+		{ id: 'hasil', label: 'Hasil Ujian' },
+		{ id: 'peserta', label: 'Peserta & Token' },
+		{ id: 'ruangan', label: 'Ruangan' },
+		{ id: 'proctoring', label: 'Proctoring' },
+		{ id: 'essay', label: 'Koreksi Uraian' },
+	];
 
 	function statusClass(s: string) {
 		if (s === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -168,36 +177,9 @@
 		});
 	}
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function fetchSessionDetail(): Promise<SessionResultsDetail> {
 		const payload = await fetch(`/api/cbt/sessions/${sessionId}/results`)
-			.then((response) => readApi<ResultsPayload>(response, 'Gagal memuat hasil ujian'));
+			.then((response) => readClientApiData<ResultsPayload>(response, 'Gagal memuat hasil ujian'));
 		if (!payload.session) throw new Error('Data sesi tidak ditemukan');
 		return {
 			session: payload.session,
@@ -211,11 +193,19 @@
 	}
 
 	function loadInitial() {
+		const requestId = ++detailRequestId;
 		session = null;
 		results = [];
 		detailPromise = fetchSessionDetail().then((detail) => {
+			if (requestId !== detailRequestId) {
+				if (!session) throw new Error('Permintaan detail sesi dibatalkan');
+				return { session, results };
+			}
 			applySessionDetail(detail);
 			return detail;
+		}).catch((error: unknown) => {
+			if (requestId === detailRequestId || !session) throw error;
+			return { session, results };
 		});
 	}
 
@@ -224,11 +214,14 @@
 			loadInitial();
 			return;
 		}
+		const requestId = ++detailRequestId;
 		try {
 			const detail = await fetchSessionDetail();
+			if (requestId !== detailRequestId) return;
 			applySessionDetail(detail);
 			detailPromise = Promise.resolve(detail);
 		} catch (error) {
+			if (requestId !== detailRequestId) return;
 			if (session) {
 				detailPromise = Promise.resolve({ session, results });
 				toast.error(detailErrorMessage(error));
@@ -252,24 +245,47 @@
 		console.error('CBT session detail render failed', error);
 	}
 
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
+	}
+
 	async function loadParticipants() {
-		const res = await fetch(`/api/cbt/sessions/${sessionId}/participants`);
-		const rows = await readApi<Participant[]>(res, 'Gagal memuat peserta');
-		participants = Array.isArray(rows) ? rows : [];
-		seatInput = Object.fromEntries(participants.map((participant) => [participant.id, participant.seat_no ?? 0]));
-		roomInput = Object.fromEntries(participants.map((participant) => [participant.id, participant.room_id ?? '']));
+		const requestId = ++participantsRequestId;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/participants`);
+			const rows = await readClientApiData<Participant[]>(res, 'Gagal memuat peserta');
+			if (requestId !== participantsRequestId) return;
+			participants = Array.isArray(rows) ? rows : [];
+			seatInput = Object.fromEntries(participants.map((participant) => [participant.id, participant.seat_no ?? 0]));
+			roomInput = Object.fromEntries(participants.map((participant) => [participant.id, participant.room_id ?? '']));
+		} catch (error) {
+			if (requestId === participantsRequestId) throw error;
+		}
 	}
 
 	async function loadRooms() {
-		const res = await fetch(`/api/cbt/sessions/${sessionId}/rooms`);
-		const rows = await readApi<Room[]>(res, 'Gagal memuat ruangan');
-		rooms = Array.isArray(rows) ? rows : [];
+		const requestId = ++roomsRequestId;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/rooms`);
+			const rows = await readClientApiData<Room[]>(res, 'Gagal memuat ruangan');
+			if (requestId !== roomsRequestId) return;
+			rooms = Array.isArray(rows) ? rows : [];
+		} catch (error) {
+			if (requestId === roomsRequestId) throw error;
+		}
 	}
 
 	async function loadProctoring() {
-		const res = await fetch(`/api/cbt/sessions/${sessionId}/proctoring`);
-		const rows = await readApi<ProctoringRow[]>(res, 'Gagal memuat proctoring');
-		proctoring = Array.isArray(rows) ? rows : [];
+		const requestId = ++proctoringRequestId;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/proctoring`);
+			const rows = await readClientApiData<ProctoringRow[]>(res, 'Gagal memuat proctoring');
+			if (requestId !== proctoringRequestId) return;
+			proctoring = Array.isArray(rows) ? rows : [];
+		} catch (error) {
+			if (requestId === proctoringRequestId) throw error;
+		}
 	}
 
 	async function refreshParticipants() {
@@ -295,12 +311,18 @@
 	}
 
 	async function loadEssays() {
-		const res = await fetch(`/api/cbt/sessions/${sessionId}/ungraded-essays`);
-		const rows = await readApi<UngradedEssay[]>(res, 'Gagal memuat esai belum dinilai');
-		essays = Array.isArray(rows) ? rows : [];
+		const requestId = ++essaysRequestId;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/ungraded-essays`);
+			const rows = await readClientApiData<UngradedEssay[]>(res, 'Gagal memuat esai belum dinilai');
+			if (requestId !== essaysRequestId) return;
+			essays = Array.isArray(rows) ? rows : [];
+		} catch (error) {
+			if (requestId === essaysRequestId) throw error;
+		}
 	}
 
-	async function switchTab(tab: typeof activeTab) {
+	async function switchTab(tab: ActiveTab) {
 		activeTab = tab;
 		try {
 			if (tab === 'peserta') { await loadRooms(); await loadParticipants(); }
@@ -326,14 +348,13 @@
 		scoreBusy = true;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/score`, { method: 'POST' });
-			if (!res.ok) {
-				setOperationState('error', 'Skor Gagal Dihitung Ulang', 'Perhitungan ulang belum berhasil. Periksa data jawaban atau ulangi beberapa saat lagi.');
-				showToast('Gagal menghitung skor', false);
-				return;
-			}
+			await readClientJson<unknown>(res);
 			setOperationState('success', 'Skor Diperbarui', 'Perhitungan nilai sesi sudah disegarkan. Tinjau kembali hasil akhir sebelum menutup sesi.');
 			showToast('Penilaian selesai — skor diperbarui');
 			await refreshSessionDetail();
+		} catch (error) {
+			setOperationState('error', 'Skor Gagal Dihitung Ulang', 'Perhitungan ulang belum berhasil. Periksa data jawaban atau ulangi beberapa saat lagi.');
+			showToast(mutationErrorMessage(error, 'Gagal menghitung skor'), false);
 		} finally { scoreBusy = false; }
 	}
 
@@ -342,14 +363,13 @@
 		tokenBusy = true;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/generate-tokens`, { method: 'POST' });
-			if (res.ok) {
-				setOperationState('success', 'Token Massal Berhasil Dibuat', 'Token peserta sudah diperbarui. Bagikan ulang token hanya ke pengawas atau peserta yang berwenang.');
-				showToast('Token berhasil digenerate');
-				await loadParticipants();
-			} else {
-				setOperationState('error', 'Token Gagal Dibuat', 'Pembuatan token massal belum berhasil. Ulangi setelah memeriksa daftar peserta sesi ini.');
-				showToast('Gagal generate token', false);
-			}
+			await readClientJson<unknown>(res);
+			setOperationState('success', 'Token Massal Berhasil Dibuat', 'Token peserta sudah diperbarui. Bagikan ulang token hanya ke pengawas atau peserta yang berwenang.');
+			showToast('Token berhasil digenerate');
+			await loadParticipants();
+		} catch (error) {
+			setOperationState('error', 'Token Gagal Dibuat', 'Pembuatan token massal belum berhasil. Ulangi setelah memeriksa daftar peserta sesi ini.');
+			showToast(mutationErrorMessage(error, 'Gagal generate token'), false);
 		} finally {
 			tokenBusy = false;
 		}
@@ -365,14 +385,13 @@
 		regenBusyId = pid;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/participants/${pid}/regenerate-token`, { method: 'POST' });
-			if (res.ok) {
-				setOperationState('warning', 'Token Peserta Diperbarui', 'Token lama untuk peserta terkait sebaiknya tidak dipakai lagi. Pastikan pengawas membagikan token terbaru.');
-				showToast('Token diperbarui');
-				await loadParticipants();
-			} else {
-				setOperationState('error', 'Token Gagal Diperbarui', 'Pembuatan ulang token peserta belum berhasil. Coba ulang beberapa saat lagi.');
-				showToast('Gagal regenerate token', false);
-			}
+			await readClientJson<unknown>(res);
+			setOperationState('warning', 'Token Peserta Diperbarui', 'Token lama untuk peserta terkait sebaiknya tidak dipakai lagi. Pastikan pengawas membagikan token terbaru.');
+			showToast('Token diperbarui');
+			await loadParticipants();
+		} catch (error) {
+			setOperationState('error', 'Token Gagal Diperbarui', 'Pembuatan ulang token peserta belum berhasil. Coba ulang beberapa saat lagi.');
+			showToast(mutationErrorMessage(error, 'Gagal regenerate token'), false);
 		} finally {
 			regenBusyId = '';
 		}
@@ -391,15 +410,14 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ room_name: newRoomName.trim(), capacity: newRoomCap }),
 			});
-			if (res.ok) {
-				setOperationState('success', 'Ruangan Ditambahkan', `Ruangan "${newRoomName}" sudah tersimpan. Pastikan kapasitasnya sesuai sebelum peserta diacak.`);
-				showToast(`Ruangan "${newRoomName}" ditambahkan`);
-				newRoomName = ''; newRoomCap = 30;
-				await loadRooms();
-			} else {
-				setOperationState('error', 'Ruangan Gagal Ditambahkan', 'Ruangan baru belum berhasil disimpan. Periksa nama atau kapasitas lalu coba lagi.');
-				showToast('Gagal tambah ruangan', false);
-			}
+			await readClientJson<unknown>(res);
+			setOperationState('success', 'Ruangan Ditambahkan', `Ruangan "${newRoomName}" sudah tersimpan. Pastikan kapasitasnya sesuai sebelum peserta diacak.`);
+			showToast(`Ruangan "${newRoomName}" ditambahkan`);
+			newRoomName = ''; newRoomCap = 30;
+			await loadRooms();
+		} catch (error) {
+			setOperationState('error', 'Ruangan Gagal Ditambahkan', 'Ruangan baru belum berhasil disimpan. Periksa nama atau kapasitas lalu coba lagi.');
+			showToast(mutationErrorMessage(error, 'Gagal tambah ruangan'), false);
 		} finally {
 			roomBusy = false;
 		}
@@ -410,12 +428,12 @@
 		roomDeleteBusyId = rid;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/rooms/${rid}`, { method: 'DELETE' });
-			if (!res.ok) {
-				setOperationState('error', 'Ruangan Gagal Dihapus', 'Ruangan belum berhasil dihapus. Pastikan sesi masih bisa diubah lalu coba lagi.');
-				return;
-			}
+			await readClientJson<unknown>(res);
 			setOperationState('warning', 'Ruangan Dihapus', `Ruangan "${roomName}" dihapus dan peserta yang terkait perlu dialokasikan ulang.`);
 			await loadRooms(); await loadParticipants();
+		} catch (error) {
+			setOperationState('error', 'Ruangan Gagal Dihapus', 'Ruangan belum berhasil dihapus. Pastikan sesi masih bisa diubah lalu coba lagi.');
+			showToast(mutationErrorMessage(error, 'Gagal menghapus ruangan'), false);
 		} finally {
 			roomDeleteBusyId = '';
 		}
@@ -426,14 +444,13 @@
 		shuffleBusy = true;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/shuffle-rooms`, { method: 'POST' });
-			if (res.ok) {
-				setOperationState('warning', 'Alokasi Ruangan Diperbarui', 'Peserta sudah diacak ulang ke ruangan. Periksa kembali pembagian sebelum ujian dimulai.');
-				showToast('Peserta berhasil diacak ke ruangan');
-				await loadRooms(); await loadParticipants();
-			} else {
-				setOperationState('error', 'Pengacakan Ruangan Gagal', 'Sistem belum berhasil mengacak peserta ke ruangan. Cek kapasitas ruangan atau ulangi lagi.');
-				showToast('Gagal mengacak ruangan', false);
-			}
+			await readClientJson<unknown>(res);
+			setOperationState('warning', 'Alokasi Ruangan Diperbarui', 'Peserta sudah diacak ulang ke ruangan. Periksa kembali pembagian sebelum ujian dimulai.');
+			showToast('Peserta berhasil diacak ke ruangan');
+			await loadRooms(); await loadParticipants();
+		} catch (error) {
+			setOperationState('error', 'Pengacakan Ruangan Gagal', 'Sistem belum berhasil mengacak peserta ke ruangan. Cek kapasitas ruangan atau ulangi lagi.');
+			showToast(mutationErrorMessage(error, 'Gagal mengacak ruangan'), false);
 		} finally {
 			shuffleBusy = false;
 		}
@@ -444,14 +461,13 @@
 		seatBusy = true;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/seats/auto`, { method: 'POST' });
-			if (res.ok) {
-				setOperationState('success', 'Nomor Meja Diatur Otomatis', 'Nomor meja peserta sudah diperbarui. Lanjutkan ke pengecekan akhir per ruangan jika diperlukan.');
-				showToast('Nomor meja berhasil diurutkan otomatis');
-				await loadParticipants();
-			} else {
-				setOperationState('error', 'Nomor Meja Gagal Diatur', 'Pengaturan otomatis belum berhasil. Pastikan peserta sudah punya ruangan lalu coba lagi.');
-				showToast('Gagal mengatur nomor meja otomatis', false);
-			}
+			await readClientJson<unknown>(res);
+			setOperationState('success', 'Nomor Meja Diatur Otomatis', 'Nomor meja peserta sudah diperbarui. Lanjutkan ke pengecekan akhir per ruangan jika diperlukan.');
+			showToast('Nomor meja berhasil diurutkan otomatis');
+			await loadParticipants();
+		} catch (error) {
+			setOperationState('error', 'Nomor Meja Gagal Diatur', 'Pengaturan otomatis belum berhasil. Pastikan peserta sudah punya ruangan lalu coba lagi.');
+			showToast(mutationErrorMessage(error, 'Gagal mengatur nomor meja otomatis'), false);
 		} finally {
 			seatBusy = false;
 		}
@@ -471,14 +487,13 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ room_id: roomId, seat_no: seatNo }),
 			});
-			if (res.ok) {
-				setOperationState('success', 'Nomor Meja Peserta Disimpan', 'Ruangan dan nomor meja peserta sudah diperbarui sesuai pengaturan operator.');
-				showToast('No meja peserta diperbarui');
-				await loadParticipants();
-			} else {
-				setOperationState('error', 'Nomor Meja Gagal Disimpan', 'Perubahan ruangan atau nomor meja belum berhasil. Periksa input dan ulangi lagi.');
-				showToast('Gagal menyimpan nomor meja', false);
-			}
+			await readClientJson<unknown>(res);
+			setOperationState('success', 'Nomor Meja Peserta Disimpan', 'Ruangan dan nomor meja peserta sudah diperbarui sesuai pengaturan operator.');
+			showToast('No meja peserta diperbarui');
+			await loadParticipants();
+		} catch (error) {
+			setOperationState('error', 'Nomor Meja Gagal Disimpan', 'Perubahan ruangan atau nomor meja belum berhasil. Periksa input dan ulangi lagi.');
+			showToast(mutationErrorMessage(error, 'Gagal menyimpan nomor meja'), false);
 		} finally {
 			seatSaveBusyId = '';
 		}
@@ -492,10 +507,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ flag }),
 			});
-			if (!res.ok) {
-				setOperationState('error', 'Tanda Peserta Gagal Diperbarui', 'Perubahan tanda proctoring belum berhasil. Coba ulang beberapa saat lagi.');
-				return;
-			}
+			await readClientJson<unknown>(res);
 			setOperationState(
 				flag ? 'warning' : 'success',
 				flag ? 'Peserta Diberi Tanda' : 'Tanda Peserta Dihapus',
@@ -504,6 +516,9 @@
 					: 'Tanda kecurigaan pada peserta sudah dibersihkan dari daftar proctoring.',
 			);
 			await loadProctoring();
+		} catch (error) {
+			setOperationState('error', 'Tanda Peserta Gagal Diperbarui', 'Perubahan tanda proctoring belum berhasil. Coba ulang beberapa saat lagi.');
+			showToast(mutationErrorMessage(error, 'Gagal memperbarui tanda peserta'), false);
 		} finally {
 			flagBusyId = '';
 		}
@@ -522,14 +537,13 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ manual_score: score }),
 			});
-			if (res.ok) {
-				setOperationState('success', 'Nilai Uraian Tersimpan', 'Koreksi uraian sudah masuk ke sistem. Lanjutkan ke jawaban uraian berikutnya bila masih ada.');
-				showToast('Nilai berhasil disimpan');
-				await loadEssays();
-			} else {
-				setOperationState('error', 'Nilai Uraian Gagal Disimpan', 'Koreksi belum berhasil tersimpan. Ulangi setelah memastikan skor sudah valid.');
-				showToast('Gagal menyimpan nilai', false);
-			}
+			await readClientJson<unknown>(res);
+			setOperationState('success', 'Nilai Uraian Tersimpan', 'Koreksi uraian sudah masuk ke sistem. Lanjutkan ke jawaban uraian berikutnya bila masih ada.');
+			showToast('Nilai berhasil disimpan');
+			await loadEssays();
+		} catch (error) {
+			setOperationState('error', 'Nilai Uraian Gagal Disimpan', 'Koreksi belum berhasil tersimpan. Ulangi setelah memastikan skor sudah valid.');
+			showToast(mutationErrorMessage(error, 'Gagal menyimpan nilai'), false);
 		} finally {
 			gradeBusyId = '';
 		}
@@ -675,15 +689,9 @@
 		<!-- Tabs -->
 		<div class="border-b border-green-100">
 			<nav class="flex gap-1">
-				{#each [
-					{ id: 'hasil', label: 'Hasil Ujian' },
-					{ id: 'peserta', label: 'Peserta & Token' },
-					{ id: 'ruangan', label: 'Ruangan' },
-					{ id: 'proctoring', label: 'Proctoring' },
-					{ id: 'essay', label: 'Koreksi Uraian' },
-				] as tab (tab.id)}
+				{#each detailTabs as tab (tab.id)}
 					<button
-						onclick={() => switchTab(tab.id as any)}
+						onclick={() => switchTab(tab.id)}
 						class="px-4 py-2 text-sm font-medium border-b-2 transition-colors {activeTab === tab.id
 							? 'border-[oklch(0.38_0.13_145)] text-[oklch(0.38_0.13_145)]'
 							: 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}"

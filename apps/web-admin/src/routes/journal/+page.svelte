@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
@@ -15,6 +14,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 
 	type Assignment = {
 		id: string;
@@ -57,13 +57,10 @@
 		summary: AttendanceSummary[];
 	};
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
+	type CreateSessionResponse = { session?: { id?: string }; id?: string };
 
 	let overviewPromise = $state<Promise<Overview> | null>(null);
+	let overviewRequestId = 0;
 	let assignments = $state<Assignment[]>([]);
 	let assignmentId = $state('');
 	let activeTab = $state<'sessions' | 'rekap'>('sessions');
@@ -82,50 +79,40 @@
 		return typeof value === 'object' && value !== null;
 	}
 
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function applyOverview(data: Overview) {
 		assignments = data.assignments ?? [];
 	}
 
 	async function fetchOverview(selectedAssignmentId: string): Promise<Overview> {
-		const params = selectedAssignmentId ? `?assignment_id=${selectedAssignmentId}` : '';
-		const res = await fetch(`/api/journal${params}`);
-		return readApi<Overview>(res, 'Gagal memuat data jurnal');
+		const params = new URLSearchParams();
+		if (selectedAssignmentId) params.set('assignment_id', selectedAssignmentId);
+		const res = await fetch(clientApiPathWithQuery('/api/journal', params));
+		return readClientApiData<Overview>(res, 'Gagal memuat data jurnal');
 	}
 
 	function loadOverview(selectedAssignmentId: string) {
-		overviewPromise = fetchOverview(selectedAssignmentId).then((data) => {
-			applyOverview(data);
-			return data;
-		});
+		const requestId = ++overviewRequestId;
+		overviewPromise = fetchOverview(selectedAssignmentId)
+			.then((data) => {
+				if (requestId === overviewRequestId) {
+					applyOverview(data);
+					return data;
+				}
+				return { assignments, sessions: [], summary: [] };
+			})
+			.catch((error: unknown) => {
+				if (requestId === overviewRequestId) throw error;
+				return { assignments, sessions: [], summary: [] };
+			});
 	}
 
 	async function refreshOverview() {
+		const requestId = ++overviewRequestId;
 		const data = await fetchOverview(assignmentId);
-		applyOverview(data);
-		overviewPromise = Promise.resolve(data);
+		if (requestId === overviewRequestId) {
+			applyOverview(data);
+			overviewPromise = Promise.resolve(data);
+		}
 	}
 
 	function retryOverview(reset?: () => void) {
@@ -140,11 +127,6 @@
 
 	function handleOverviewRenderError(error: unknown) {
 		console.error('Journal overview render failed', error);
-	}
-
-	async function responseErrorMessage(response: Response, fallback: string) {
-		const payload = await response.json().catch(() => null);
-		return apiErrorMessage(payload) || fallback;
 	}
 
 	function mutationErrorMessage(error: unknown, fallback: string) {
@@ -181,15 +163,9 @@
 					guru_hadir: newGuruHadir
 				})
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) {
-				if (res.status === 409) toast.error('Pertemuan pada tanggal ini sudah ada');
-				else toast.error(apiErrorMessage(payload) || 'Gagal membuat pertemuan');
-				return;
-			}
-			const payloadBody = isRecord(payload) && isRecord(payload.data) ? payload.data : payload;
+			const payloadBody = await readClientApiData<CreateSessionResponse>(res, res.status === 409 ? 'Pertemuan pada tanggal ini sudah ada' : 'Gagal membuat pertemuan');
 			const session = isRecord(payloadBody) && isRecord(payloadBody.session) ? payloadBody.session : null;
-			const sessionId = typeof session?.id === 'string' ? session.id : '';
+			const sessionId = typeof session?.id === 'string' ? session.id : typeof payloadBody.id === 'string' ? payloadBody.id : '';
 			if (!sessionId) throw new Error('Respons sesi baru tidak lengkap');
 			createOpen = false;
 			newTanggal = '';
@@ -198,7 +174,7 @@
 			newCatatan = '';
 			newGuruHadir = true;
 			toast.success('Sesi berhasil dibuat');
-			goto(resolve(`/journal/${sessionId}`));
+			goto(clientApiPath`/journal/${sessionId}`);
 		} catch (error) {
 			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
@@ -215,11 +191,8 @@
 		}))) return;
 		deleteBusy = { ...deleteBusy, [id]: true };
 		try {
-			const res = await fetch(`/api/journal/sessions/${id}`, { method: 'DELETE' });
-			if (!res.ok && res.status !== 204) {
-				toast.error(await responseErrorMessage(res, 'Gagal menghapus sesi'));
-				return;
-			}
+			const res = await fetch(clientApiPath`/api/journal/sessions/${id}`, { method: 'DELETE' });
+			await readClientJson<unknown>(res);
 			toast.success('Sesi dihapus');
 			await refreshOverviewAfterMutation();
 		} catch (error) {
@@ -360,7 +333,7 @@
 												</Table.Cell>
 												<Table.Cell>
 													<div class="flex gap-1">
-														<Button variant="outline" size="sm" onclick={() => goto(resolve(`/journal/${s.id}`))}>
+														<Button variant="outline" size="sm" onclick={() => goto(clientApiPath`/journal/${s.id}`)}>
 															Lihat
 														</Button>
 														<LoadingButton

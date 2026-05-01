@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, handleRouteError } from '$lib/server/api';
+import { handleRouteError, proxy, readRequestJson } from '$lib/server/api';
 
 export const GET = async (event: RequestEvent) => {
 	try {
@@ -13,7 +13,7 @@ export const GET = async (event: RequestEvent) => {
 
 export const POST = async (event: RequestEvent) => {
 	try {
-		const body = await event.request.json();
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
 		const data = await proxy(event).post('/api/cbt/events', body);
 		return json(data, { status: 201 });
 	} catch (e) {

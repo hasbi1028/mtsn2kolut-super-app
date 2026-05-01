@@ -1,11 +1,11 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, ApiError, handleRouteError } from '$lib/server/api';
+import { ApiError, apiPath, handleRouteError, proxy, readRequestJson, requiredRouteParam } from '$lib/server/api';
 
 export const PUT = async (event: RequestEvent) => {
 	try {
-		const { id } = event.params;
-		const body = await event.request.json() as Record<string, unknown>;
+		const id = requiredRouteParam(event.params.id, 'id');
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
 		const { nip, nama, unit_kerja = '', employment_type, is_active } = body;
 
 		if (!nip || !nama || !employment_type) {
@@ -15,7 +15,7 @@ export const PUT = async (event: RequestEvent) => {
 			return json({ error: 'is_active wajib boolean' }, { status: 400 });
 		}
 
-		const result = await proxy(event).put(`/api/employees/${id}`, {
+		const result = await proxy(event).put(apiPath`/api/employees/${id}`, {
 			nip,
 			nama,
 			unit_kerja,

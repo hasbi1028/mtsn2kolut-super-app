@@ -1,11 +1,11 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, ApiError, handleRouteError } from '$lib/server/api';
+import { ApiError, apiPath, handleRouteError, proxy, requiredRouteParam } from '$lib/server/api';
 
 export const POST = async (event: RequestEvent) => {
 	try {
-		const { id } = event.params;
-		const data = await proxy(event).get<{ configured: boolean; pusaka_username: string }>(`/api/pusaka/employees/${id}/pusaka-status`);
+		const id = requiredRouteParam(event.params.id, 'id');
+		const data = await proxy(event).get<{ configured: boolean; pusaka_username: string }>(apiPath`/api/pusaka/employees/${id}/pusaka-status`);
 
 		if (!data.configured) {
 			return json({ message: `Kredensial belum dikonfigurasi untuk pegawai ini.` }, { status: 200 });

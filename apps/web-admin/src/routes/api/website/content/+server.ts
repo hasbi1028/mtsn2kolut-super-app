@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { handleRouteError, proxy } from '$lib/server/api';
+import { apiPathWithQuery, handleRouteError, proxy, readRequestJson } from '$lib/server/api';
 
 export const GET = async (event: RequestEvent) => {
 	try {
@@ -9,7 +9,7 @@ export const GET = async (event: RequestEvent) => {
 			const value = event.url.searchParams.get(key);
 			if (value) qs.set(key, value);
 		}
-		const items = await proxy(event).get(`/api/website/content?${qs}`);
+		const items = await proxy(event).get(apiPathWithQuery('/api/website/content', qs));
 		return json({ items });
 	} catch (e) {
 		return handleRouteError(e, 'website/content GET');
@@ -18,7 +18,7 @@ export const GET = async (event: RequestEvent) => {
 
 export const POST = async (event: RequestEvent) => {
 	try {
-		const body = await event.request.json();
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
 		const item = await proxy(event).post('/api/website/content', body);
 		return json(item, { status: 201 });
 	} catch (e) {

@@ -88,6 +88,9 @@ func (s *StudentCertificate) Create(ctx context.Context, input CreateStudentCert
 	if err != nil {
 		return db.GetStudentCertificateRow{}, err
 	}
+	if s.pool == nil {
+		return db.GetStudentCertificateRow{}, fmt.Errorf("layanan surat keterangan siswa belum siap")
+	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -96,6 +99,17 @@ func (s *StudentCertificate) Create(ctx context.Context, input CreateStudentCert
 	defer tx.Rollback(ctx)
 	q := db.New(tx)
 
+	detail, err := createStudentCertificate(ctx, q, arg)
+	if err != nil {
+		return db.GetStudentCertificateRow{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return db.GetStudentCertificateRow{}, err
+	}
+	return detail, nil
+}
+
+func createStudentCertificate(ctx context.Context, q studentCertificateStore, arg normalizedStudentCertificateInput) (db.GetStudentCertificateRow, error) {
 	template, err := q.GetCertificateTemplateByID(ctx, arg.TemplateID)
 	if err != nil {
 		return db.GetStudentCertificateRow{}, err
@@ -147,9 +161,6 @@ func (s *StudentCertificate) Create(ctx context.Context, input CreateStudentCert
 	}
 	detail, err := q.GetStudentCertificate(ctx, certificate.ID)
 	if err != nil {
-		return db.GetStudentCertificateRow{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return db.GetStudentCertificateRow{}, err
 	}
 	return detail, nil

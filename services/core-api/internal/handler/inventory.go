@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -13,9 +14,28 @@ import (
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
-type Inventory struct{ svc *service.Inventory }
+type Inventory struct {
+	svc   inventoryService
+	audit cbtAuthoringAuditWriter
+}
 
-func NewInventory(svc *service.Inventory) *Inventory { return &Inventory{svc: svc} }
+type inventoryService interface {
+	Stats(ctx context.Context) (db.GetInventoryStatsRow, error)
+	ListItems(ctx context.Context, search, kategori, kondisi string) ([]db.InventoryItem, error)
+	ListItemEvents(ctx context.Context, itemID pgtype.UUID) ([]db.ListInventoryItemEventsByItemRow, error)
+	CreateItem(ctx context.Context, actorUserID pgtype.UUID, arg db.CreateInventoryItemParams) (db.InventoryItem, error)
+	BatchUpdateItems(ctx context.Context, actorUserID pgtype.UUID, ids []pgtype.UUID, lokasi *string, kondisi *string) (int, error)
+	UpdateItem(ctx context.Context, actorUserID pgtype.UUID, arg db.UpdateInventoryItemParams) (db.InventoryItem, error)
+	DeleteItem(ctx context.Context, actorUserID pgtype.UUID, id pgtype.UUID) error
+}
+
+func NewInventory(svc *service.Inventory, audit ...cbtAuthoringAuditWriter) *Inventory {
+	var writer cbtAuthoringAuditWriter
+	if len(audit) > 0 {
+		writer = audit[0]
+	}
+	return &Inventory{svc: svc, audit: writer}
+}
 
 func inventoryActorUserID(r *http.Request) pgtype.UUID {
 	var uid pgtype.UUID
@@ -112,9 +132,16 @@ func (h *Inventory) CreateItem(w http.ResponseWriter, r *http.Request) {
 		Catatan:     strings.TrimSpace(body.Catatan),
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data inventaris tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "INVENTORY_ITEM_CREATE", "inventory_item", pgUUIDString(item.ID), map[string]any{
+		"kode":     item.Kode,
+		"nama":     item.Nama,
+		"kategori": item.Kategori,
+		"lokasi":   item.Lokasi,
+		"kondisi":  item.Kondisi,
+	})
 	api.Created(w, item)
 }
 
@@ -143,9 +170,20 @@ func (h *Inventory) BatchUpdateItems(w http.ResponseWriter, r *http.Request) {
 	}
 	updated, err := h.svc.BatchUpdateItems(r.Context(), inventoryActorUserID(r), ids, body.Lokasi, body.Kondisi)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Perubahan inventaris tidak valid")
 		return
 	}
+	meta := map[string]any{
+		"updated_count": updated,
+		"item_ids":      body.ItemIDs,
+	}
+	if body.Lokasi != nil {
+		meta["lokasi"] = strings.TrimSpace(*body.Lokasi)
+	}
+	if body.Kondisi != nil {
+		meta["kondisi"] = strings.TrimSpace(*body.Kondisi)
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "INVENTORY_ITEM_BATCH_UPDATE", "inventory_item", "", meta)
 	api.OK(w, map[string]any{"updated": updated})
 }
 
@@ -189,9 +227,16 @@ func (h *Inventory) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		Catatan:     strings.TrimSpace(body.Catatan),
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Perubahan inventaris tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "INVENTORY_ITEM_UPDATE", "inventory_item", pgUUIDString(item.ID), map[string]any{
+		"kode":     item.Kode,
+		"nama":     item.Nama,
+		"kategori": item.Kategori,
+		"lokasi":   item.Lokasi,
+		"kondisi":  item.Kondisi,
+	})
 	api.OK(w, item)
 }
 
@@ -206,8 +251,11 @@ func (h *Inventory) DeleteItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.DeleteItem(r.Context(), inventoryActorUserID(r), id); err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Penghapusan inventaris tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "INVENTORY_ITEM_DELETE", "inventory_item", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
 	api.NoContent(w)
 }

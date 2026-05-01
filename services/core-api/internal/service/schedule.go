@@ -7,8 +7,16 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
+type pusakaScheduleStore interface {
+	ListSchedules(ctx context.Context) ([]db.Schedule, error)
+	GetSchedule(ctx context.Context, id pgtype.UUID) (db.Schedule, error)
+	CreateSchedule(ctx context.Context, arg db.CreateScheduleParams) (db.Schedule, error)
+	UpdateScheduleByID(ctx context.Context, arg db.UpdateScheduleByIDParams) (db.Schedule, error)
+	DeleteScheduleByID(ctx context.Context, id pgtype.UUID) error
+}
+
 type PusakaSchedule struct {
-	q *db.Queries
+	q pusakaScheduleStore
 }
 
 func NewPusakaSchedule(q *db.Queries) *PusakaSchedule { return &PusakaSchedule{q: q} }

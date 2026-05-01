@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -8,10 +9,10 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -19,10 +20,31 @@ import (
 )
 
 type Archive struct {
-	svc *service.Archive
+	svc   archiveService
+	audit cbtAuthoringAuditWriter
 }
 
-func NewArchive(svc *service.Archive) *Archive { return &Archive{svc: svc} }
+type archiveService interface {
+	Stats(ctx context.Context) (db.GetArchiveStatsRow, error)
+	ListCategories(ctx context.Context, search string, activeOnly bool) ([]db.ListArchiveCategoriesRow, error)
+	CreateCategory(ctx context.Context, arg db.CreateArchiveCategoryParams) (db.ArchiveCategory, error)
+	UpdateCategory(ctx context.Context, arg db.UpdateArchiveCategoryParams) (db.ArchiveCategory, error)
+	DeleteCategory(ctx context.Context, id pgtype.UUID) error
+	ListDocuments(ctx context.Context, search string, categoryID pgtype.UUID, status, classificationCode string) ([]db.ListArchiveDocumentsRow, error)
+	SaveDocument(ctx context.Context, input service.UploadArchiveDocumentInput) (db.ArchiveDocument, error)
+	GetDocument(ctx context.Context, id pgtype.UUID) (db.GetArchiveDocumentDetailRow, error)
+	UpdateDocument(ctx context.Context, arg db.UpdateArchiveDocumentParams) (db.ArchiveDocument, error)
+	DeleteDocument(ctx context.Context, id pgtype.UUID) error
+	GetDocumentFile(ctx context.Context, id pgtype.UUID) (db.ArchiveDocument, error)
+}
+
+func NewArchive(svc *service.Archive, audit ...cbtAuthoringAuditWriter) *Archive {
+	var writer cbtAuthoringAuditWriter
+	if len(audit) > 0 {
+		writer = audit[0]
+	}
+	return &Archive{svc: svc, audit: writer}
+}
 
 func (h *Archive) Stats(w http.ResponseWriter, r *http.Request) {
 	if !tuAccessAllowed(r) {
@@ -77,6 +99,10 @@ func (h *Archive) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, archiveClientMessage(err))
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "ARCHIVE_CATEGORY_CREATE", "archive_category", pgUUIDString(row.ID), map[string]any{
+		"code": row.Code,
+		"name": row.Name,
+	})
 	api.Created(w, row)
 }
 
@@ -112,6 +138,10 @@ func (h *Archive) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, archiveClientMessage(err))
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "ARCHIVE_CATEGORY_UPDATE", "archive_category", pgUUIDString(row.ID), map[string]any{
+		"code": row.Code,
+		"name": row.Name,
+	})
 	api.OK(w, row)
 }
 
@@ -129,6 +159,9 @@ func (h *Archive) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, archiveClientMessage(err))
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "ARCHIVE_CATEGORY_DELETE", "archive_category", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
 	api.NoContent(w)
 }
 
@@ -139,7 +172,7 @@ func (h *Archive) ListDocuments(w http.ResponseWriter, r *http.Request) {
 	}
 	categoryID, err := service.ParseArchiveOptionalUUID(r.URL.Query().Get("category_id"))
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Filter arsip tidak valid")
 		return
 	}
 	data, err := h.svc.ListDocuments(
@@ -174,22 +207,22 @@ func (h *Archive) UploadDocument(w http.ResponseWriter, r *http.Request) {
 
 	categoryID, err := service.ParseArchiveOptionalUUID(r.FormValue("category_id"))
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data arsip tidak valid")
 		return
 	}
 	documentDate, err := service.ParseArchiveOptionalDate(r.FormValue("document_date"))
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data arsip tidak valid")
 		return
 	}
 	receivedDate, err := service.ParseArchiveOptionalDate(r.FormValue("received_date"))
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data arsip tidak valid")
 		return
 	}
 	retentionUntil, err := service.ParseArchiveOptionalDate(r.FormValue("retention_until"))
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data arsip tidak valid")
 		return
 	}
 
@@ -214,6 +247,11 @@ func (h *Archive) UploadDocument(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, archiveClientMessage(err))
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "ARCHIVE_DOCUMENT_UPLOAD", "archive_document", pgUUIDString(row.ID), map[string]any{
+		"title":          row.Title,
+		"archive_number": row.ArchiveNumber,
+		"original_name":  row.OriginalName,
+	})
 	api.Created(w, row)
 }
 
@@ -256,22 +294,22 @@ func (h *Archive) UpdateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	categoryID, err := service.ParseArchiveOptionalUUID(body.CategoryID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data arsip tidak valid")
 		return
 	}
 	documentDate, err := service.ParseArchiveOptionalDate(body.DocumentDate)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data arsip tidak valid")
 		return
 	}
 	receivedDate, err := service.ParseArchiveOptionalDate(body.ReceivedDate)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data arsip tidak valid")
 		return
 	}
 	retentionUntil, err := service.ParseArchiveOptionalDate(body.RetentionUntil)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data arsip tidak valid")
 		return
 	}
 	row, err := h.svc.UpdateDocument(r.Context(), db.UpdateArchiveDocumentParams{
@@ -295,6 +333,11 @@ func (h *Archive) UpdateDocument(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, archiveClientMessage(err))
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "ARCHIVE_DOCUMENT_UPDATE", "archive_document", pgUUIDString(row.ID), map[string]any{
+		"title":          row.Title,
+		"archive_number": row.ArchiveNumber,
+		"status":         row.Status,
+	})
 	api.OK(w, row)
 }
 
@@ -316,6 +359,9 @@ func (h *Archive) DeleteDocument(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, archiveClientMessage(err))
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "ARCHIVE_DOCUMENT_DELETE", "archive_document", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
 	api.NoContent(w)
 }
 
@@ -372,15 +418,5 @@ type archiveDocumentRequest struct {
 }
 
 func archiveClientMessage(err error) string {
-	message := strings.TrimSpace(err.Error())
-	if message == "" {
-		return "data arsip tidak valid"
-	}
-	if strings.Contains(message, "duplicate key") {
-		return "kode kategori atau nomor arsip sudah digunakan"
-	}
-	if strings.Contains(message, "violates foreign key constraint") {
-		return "relasi data arsip tidak valid"
-	}
-	return message
+	return safeClientMessage(err, "data arsip tidak valid")
 }

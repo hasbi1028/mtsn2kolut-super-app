@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, ApiError, handleRouteError } from '$lib/server/api';
+import { proxy, ApiError, handleRouteError, readRequestJson } from '$lib/server/api';
 
 interface Body { current_password: string; new_password: string }
 
@@ -8,7 +8,7 @@ export const POST = async (event: RequestEvent) => {
 	if (!event.locals.user) return json({ error: 'Unauthorized' }, { status: 401 });
 
 	try {
-		const { current_password, new_password } = await event.request.json() as Body;
+		const { current_password, new_password } = await readRequestJson<Body>(event.request);
 
 		if (!current_password || !new_password)
 			return json({ error: 'Field tidak boleh kosong' }, { status: 400 });

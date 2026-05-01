@@ -25,6 +25,10 @@ func NewWebsiteMedia(storageDir string) *WebsiteMedia {
 }
 
 func (h *WebsiteMedia) Upload(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
 		api.BadRequest(w, "multipart form tidak valid (maks 8 MB)")
 		return

@@ -5,6 +5,7 @@
   import { Skeleton } from '$lib/components/ui/skeleton';
   import { toast } from '$lib/components/ui/sonner';
   import EmployeeList from '$lib/components/EmployeeList.svelte';
+  import { readClientApiData } from '$lib/client/api';
 
   type Employee = {
     id: string;
@@ -23,12 +24,6 @@
     has_checkout_schedule: boolean;
   };
 
-  type ApiEnvelope<T> = {
-    data?: T;
-    error?: string;
-    message?: string;
-  };
-
   type EmployeeListPayload = {
     items?: Employee[];
     data?: Employee[];
@@ -38,35 +33,7 @@
 
   let employeesPromise = $state<Promise<Employee[]> | null>(null);
   let employees = $state<Employee[]>([]);
-
-  function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-  }
-
-  function apiErrorMessage(payload: unknown) {
-    if (!isRecord(payload)) return '';
-    const error = payload.error;
-    if (typeof error === 'string' && error.trim()) return error;
-    const message = payload.message;
-    if (typeof message === 'string' && message.trim()) return message;
-    return '';
-  }
-
-  async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-    const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-    const message = apiErrorMessage(payload);
-    if (!response.ok) throw new Error(message || fallbackMessage);
-    if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-      throw new Error(payload.error);
-    }
-    if (isRecord(payload) && 'data' in payload) {
-      const envelope = payload as ApiEnvelope<T>;
-      if (envelope.data === undefined) throw new Error(fallbackMessage);
-      return envelope.data;
-    }
-    if (payload === null) throw new Error(fallbackMessage);
-    return payload as T;
-  }
+  let employeesRequestId = 0;
 
   function normalizeEmployees(payload: EmployeeListPayload | Employee[] | null | undefined): Employee[] {
     if (Array.isArray(payload)) return payload;
@@ -78,16 +45,25 @@
 
   async function fetchEmployees(): Promise<Employee[]> {
     const payload = await fetch('/api/pusaka/employees').then((response) =>
-      readApi<EmployeeListPayload | Employee[]>(response, 'Gagal memuat pegawai PUSAKA')
+      readClientApiData<EmployeeListPayload | Employee[]>(response, 'Gagal memuat pegawai PUSAKA')
     );
     return normalizeEmployees(payload);
   }
 
   function loadEmployees() {
-    employeesPromise = fetchEmployees().then((nextEmployees) => {
-      employees = nextEmployees;
-      return nextEmployees;
-    });
+    const requestId = ++employeesRequestId;
+    employeesPromise = fetchEmployees()
+      .then((nextEmployees) => {
+        if (requestId === employeesRequestId) {
+          employees = nextEmployees;
+          return nextEmployees;
+        }
+        return employees;
+      })
+      .catch((error: unknown) => {
+        if (requestId === employeesRequestId) throw error;
+        return employees;
+      });
     return employeesPromise;
   }
 
@@ -96,11 +72,15 @@
       await loadEmployees();
       return;
     }
+    const requestId = ++employeesRequestId;
     try {
       const nextEmployees = await fetchEmployees();
-      employees = nextEmployees;
-      employeesPromise = Promise.resolve(nextEmployees);
+      if (requestId === employeesRequestId) {
+        employees = nextEmployees;
+        employeesPromise = Promise.resolve(nextEmployees);
+      }
     } catch (error) {
+      if (requestId !== employeesRequestId) return;
       employeesPromise = Promise.resolve(employees);
       if (showFailureToast) toast.error(employeeErrorMessage(error));
     }
@@ -129,11 +109,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ employee_id, run_type }),
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        toast.error(apiErrorMessage(data) || 'Gagal mengantrekan job PUSAKA.');
-        return;
-      }
+      await readClientApiData<unknown>(res, 'Gagal mengantrekan job PUSAKA.');
     } catch (error) {
       toast.error(employeeErrorMessage(error));
       return;

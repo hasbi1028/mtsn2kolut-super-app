@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, handleRouteError } from '$lib/server/api';
+import { handleRouteError, proxy, readOptionalRequestJson } from '$lib/server/api';
 
 interface GoSetting { key: string; value: string }
 
@@ -24,7 +24,7 @@ export const GET = async (event: RequestEvent) => {
 
 export const PUT = async (event: RequestEvent) => {
 	try {
-		const payload = await event.request.json().catch(() => ({})) as Record<string, unknown>;
+		const payload = await readOptionalRequestJson<Record<string, unknown>>(event.request, {});
 		const p = proxy(event);
 		await Promise.all(
 			Object.entries(payload).map(([key, val]) =>

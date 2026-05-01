@@ -7,6 +7,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { readClientApiData } from '$lib/client/api';
 
 	type UserData = {
 		role?: string;
@@ -51,15 +52,10 @@
 		| { kind: 'ortu'; portal: ParentPortalData | null }
 		| { kind: 'empty' };
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	let { data }: { data: { user?: UserData } } = $props();
 
 	let schedulePromise = $state<Promise<ScheduleViewData> | null>(null);
+	let scheduleRequestId = 0;
 	let studentPortal = $state<StudentPortalData | null>(null);
 	let parentPortal = $state<ParentPortalData | null>(null);
 	let guruTimetable = $state<TimetableEntry[]>([]);
@@ -83,33 +79,6 @@
 
 	function fmtTime(value: string) {
 		return value?.slice(0, 5) || '—';
-	}
-
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
 	}
 
 	function csvEscape(value: string | number | null | undefined) {
@@ -217,22 +186,26 @@
 		parentPortal = null;
 	}
 
+	function emptySchedule(): ScheduleViewData {
+		return { kind: 'empty' };
+	}
+
 	async function fetchSchedule(): Promise<ScheduleViewData> {
 		if (isGuru) {
 			const res = await fetch('/api/portal/guru/timetable');
-			const payload = await readApi<{ timetable: TimetableEntry[] }>(res, 'Gagal memuat jadwal mengajar.');
+			const payload = await readClientApiData<{ timetable: TimetableEntry[] }>(res, 'Gagal memuat jadwal mengajar.');
 			return { kind: 'guru', timetable: payload.timetable ?? [] };
 		}
 
 		if (isSiswa) {
 			const res = await fetch('/api/portal/student/me');
-			const portal = await readApi<StudentPortalData>(res, 'Gagal memuat jadwal pelajaran.');
+			const portal = await readClientApiData<StudentPortalData>(res, 'Gagal memuat jadwal pelajaran.');
 			return { kind: 'siswa', portal };
 		}
 
 		if (isParent) {
 			const res = await fetch('/api/portal/parent/me');
-			const portal = await readApi<ParentPortalData>(res, 'Gagal memuat jadwal anak.');
+			const portal = await readClientApiData<ParentPortalData>(res, 'Gagal memuat jadwal anak.');
 			return { kind: 'ortu', portal };
 		}
 
@@ -240,10 +213,19 @@
 	}
 
 	function load() {
-		schedulePromise = fetchSchedule().then((schedule) => {
-			applySchedule(schedule);
-			return schedule;
-		});
+		const requestId = ++scheduleRequestId;
+		schedulePromise = fetchSchedule()
+			.then((schedule): ScheduleViewData => {
+				if (requestId === scheduleRequestId) {
+					applySchedule(schedule);
+					return schedule;
+				}
+				return emptySchedule();
+			})
+			.catch((error: unknown): ScheduleViewData => {
+				if (requestId === scheduleRequestId) throw error;
+				return emptySchedule();
+			});
 	}
 
 	function retrySchedule(reset?: () => void) {

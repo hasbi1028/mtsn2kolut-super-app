@@ -51,6 +51,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 			{ href: '/governance', label: 'Tata Kelola', icon: 'layers', roles: ['admin', 'staf'] },
 			{ href: '/governance/actions', label: 'Tindak Lanjut', icon: 'clipboard', roles: ['admin', 'staf'] },
 			{ href: '/document-cycles', label: 'Monitoring Dokumen', icon: 'calendar', roles: ['admin', 'staf'] },
+			{ href: '/document-cycles/verifikasi', label: 'Verifikasi Dokumen', icon: 'user-check', roles: ['admin', 'staf'] },
 			{ href: '/tu', label: 'Dashboard TU', icon: 'clipboard', roles: ['admin', 'staf'] },
 			{ href: '/tu/surat-masuk', label: 'Surat Masuk', icon: 'inbox', roles: ['admin', 'staf'] },
 			{ href: '/tu/surat-keluar', label: 'Surat Keluar', icon: 'mail', roles: ['admin', 'staf'] },
@@ -90,16 +91,17 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 			{ href: '/pusaka/antrian', label: 'Antrian Job', icon: 'activity', roles: ['admin'] }
 		]
 	},
-	{
-		group: 'Sistem',
-		items: [
-			{ href: '/settings/users', label: 'Manajemen User', icon: 'users', roles: ['admin'] },
-			{ href: '/settings/audit-logs', label: 'Audit Trail', icon: 'file-text', roles: ['admin'] },
-			{ href: '/settings/school-profile', label: 'Profil Madrasah', icon: 'settings', roles: ['admin'] },
-			{ href: '/settings', label: 'Pengaturan', icon: 'settings', roles: ['admin'] }
-		]
-	}
-];
+		{
+			group: 'Sistem',
+			items: [
+				{ href: '/notifications', label: 'Notifikasi', icon: 'activity' },
+				{ href: '/settings', label: 'Pengaturan Akun', icon: 'settings' },
+				{ href: '/settings/users', label: 'Manajemen User', icon: 'users', roles: ['admin'] },
+				{ href: '/settings/audit-logs', label: 'Audit Trail', icon: 'file-text', roles: ['admin'] },
+				{ href: '/settings/school-profile', label: 'Profil Madrasah', icon: 'settings', roles: ['admin'] }
+			]
+		}
+	];
 
 export const defaultPinnedByRole: Record<string, string[]> = {
 	admin: ['/cbt/sessions', '/grades', '/settings'],

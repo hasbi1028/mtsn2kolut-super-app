@@ -1,3 +1,5 @@
+import { readClientJson } from '$lib/client/api';
+
 export type SidebarAttention = {
 	inventory: number;
 	library: number;
@@ -10,12 +12,32 @@ const zeroAttention: SidebarAttention = {
 	pusaka: 0
 };
 
+type JsonRecord = Record<string, unknown>;
+
 function canSeeInventoryAttention(roles: string[]) {
 	return roles.includes('admin') || roles.includes('staf');
 }
 
 function canSeePusakaAttention(roles: string[]) {
 	return roles.includes('admin');
+}
+
+function isRecord(value: unknown): value is JsonRecord {
+	return typeof value === 'object' && value !== null;
+}
+
+async function readStatsPayload(response: Response): Promise<JsonRecord | null> {
+	if (!response.ok) return null;
+	const payload = await readClientJson<unknown>(response).catch(() => null);
+	return isRecord(payload) ? payload : null;
+}
+
+function numericStat(payload: JsonRecord | null, key: string): number {
+	if (!payload) return 0;
+	const data = isRecord(payload.data) ? payload.data : {};
+	const value = data[key] ?? payload[key] ?? 0;
+	const parsed = Number(value);
+	return Number.isFinite(parsed) ? parsed : 0;
 }
 
 export async function fetchSidebarAttention(
@@ -28,9 +50,9 @@ export async function fetchSidebarAttention(
 	if (canSeeInventoryAttention(roles)) {
 		requests.push(
 			fetchImpl('/api/inventory/stats')
-				.then((res) => (res.ok ? res.json() : null))
+				.then(readStatsPayload)
 				.then((payload) => {
-					nextAttention.inventory = Number(payload?.data?.perlu_restok ?? payload?.perlu_restok ?? 0);
+					nextAttention.inventory = numericStat(payload, 'perlu_restok');
 				})
 				.catch(() => {
 					nextAttention.inventory = 0;
@@ -38,10 +60,10 @@ export async function fetchSidebarAttention(
 		);
 		requests.push(
 			fetchImpl('/api/library/stats')
-				.then((res) => (res.ok ? res.json() : null))
+				.then(readStatsPayload)
 				.then((payload) => {
-					const overdue = Number(payload?.data?.terlambat ?? payload?.terlambat ?? 0);
-					const unpaid = Number(payload?.data?.denda_belum_lunas ?? payload?.denda_belum_lunas ?? 0);
+					const overdue = numericStat(payload, 'terlambat');
+					const unpaid = numericStat(payload, 'denda_belum_lunas');
 					nextAttention.library = overdue + unpaid;
 				})
 				.catch(() => {
@@ -52,10 +74,10 @@ export async function fetchSidebarAttention(
 
 	if (canSeePusakaAttention(roles)) {
 		requests.push(
-			fetchImpl('/api/queue/stats')
-				.then((res) => (res.ok ? res.json() : null))
+			fetchImpl('/api/pusaka/jobs/stats')
+				.then(readStatsPayload)
 				.then((payload) => {
-					nextAttention.pusaka = Number(payload?.failed ?? payload?.data?.failed ?? 0);
+					nextAttention.pusaka = numericStat(payload, 'failed');
 				})
 				.catch(() => {
 					nextAttention.pusaka = 0;

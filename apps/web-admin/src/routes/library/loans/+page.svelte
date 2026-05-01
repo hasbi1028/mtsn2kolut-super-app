@@ -12,6 +12,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	interface LoanRow {
 		id: string;
@@ -42,17 +43,12 @@
 		employees: Employee[];
 	}
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	let loans = $state<LoanRow[]>([]);
 	let books = $state<Book[]>([]);
 	let students = $state<Student[]>([]);
 	let employees = $state<Employee[]>([]);
 	let loansPromise = $state<Promise<LoansOverview> | null>(null);
+	let loansRequestId = 0;
 	let busy = $state(false);
 
 	let tabStatus = $state<'active' | 'returned' | ''>('active');
@@ -121,37 +117,6 @@
 		return loanRows.filter((l) => !tabStatus || l.status === tabStatus);
 	}
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) {
-			throw new Error(message || fallbackMessage);
-		}
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function applyOverview(overview: LoansOverview) {
 		loans = overview.loans ?? [];
 		books = overview.books ?? [];
@@ -166,27 +131,45 @@
 			fetch('/api/students'),
 			fetch('/api/employees'),
 		]);
+		const [nextLoans, nextBooks, nextStudents, nextEmployees] = await Promise.all([
+			readClientApiData<LoanRow[]>(lRes, 'Gagal memuat data peminjaman.'),
+			readClientApiData<Book[]>(bRes, 'Gagal memuat stok buku.'),
+			readClientApiData<Student[]>(sRes, 'Gagal memuat data siswa.'),
+			readClientApiData<Employee[]>(eRes, 'Gagal memuat data pegawai.'),
+		]);
 		return {
-			loans: await readApi<LoanRow[]>(lRes, 'Gagal memuat data peminjaman.'),
-			books: await readApi<Book[]>(bRes, 'Gagal memuat stok buku.'),
-			students: await readApi<Student[]>(sRes, 'Gagal memuat data siswa.'),
-			employees: await readApi<Employee[]>(eRes, 'Gagal memuat data pegawai.'),
+			loans: nextLoans,
+			books: nextBooks,
+			students: nextStudents,
+			employees: nextEmployees,
 		};
 	}
 
 	function load() {
+		const requestId = ++loansRequestId;
 		const emptyOverview: LoansOverview = { loans: [], books: [], students: [], employees: [] };
 		applyOverview(emptyOverview);
-		loansPromise = fetchOverview().then((overview) => {
-			applyOverview(overview);
-			return overview;
-		});
+		loansPromise = fetchOverview()
+			.then((overview) => {
+				if (requestId === loansRequestId) {
+					applyOverview(overview);
+					return overview;
+				}
+				return { loans, books, students, employees };
+			})
+			.catch((error: unknown) => {
+				if (requestId === loansRequestId) throw error;
+				return { loans, books, students, employees };
+			});
 	}
 
 	async function refreshOverview() {
+		const requestId = ++loansRequestId;
 		const overview = await fetchOverview();
-		applyOverview(overview);
-		loansPromise = Promise.resolve(overview);
+		if (requestId === loansRequestId) {
+			applyOverview(overview);
+			loansPromise = Promise.resolve(overview);
+		}
 	}
 
 	function retryLoans(reset?: () => void) {
@@ -245,8 +228,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ book_id: fBookId, member_type: fMemberType, member_id: fMemberId, due_days: fDueDays }),
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal meminjamkan buku'); return; }
+			await readClientJson<unknown>(res);
 			toast.success('Buku berhasil dipinjamkan');
 			showLoanDialog = false;
 			resetLoanForm();
@@ -263,8 +245,7 @@
 		busy = true;
 		try {
 			const res = await fetch(`/api/library/loans/${returnLoan.id}/return`, { method: 'POST' });
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal mengembalikan'); return; }
+			await readClientJson<unknown>(res);
 			toast.success('Buku berhasil dikembalikan');
 			returnLoan = null;
 			showReturnDialog = false;
@@ -281,8 +262,7 @@
 		busy = true;
 		try {
 			const res = await fetch(`/api/library/loans/${lunasLoanId}/lunas`, { method: 'POST' });
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal'); return; }
+			await readClientJson<unknown>(res);
 			toast.success('Denda ditandai lunas');
 			lunasLoanId = null;
 			showLunasDialog = false;

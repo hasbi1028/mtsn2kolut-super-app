@@ -14,6 +14,7 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 
 	type AcademicYear = {
 		id: string; name: string; start_date: string; end_date: string;
@@ -53,18 +54,13 @@
 		assignments: Assignment[];
 		timetableSlots: TimetableSlot[];
 	};
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	let years = $state<AcademicYear[]>([]);
 	let classes = $state<SchoolClass[]>([]);
 	let subjects = $state<Subject[]>([]);
 	let assignments = $state<Assignment[]>([]);
 	let timetableSlots = $state<TimetableSlot[]>([]);
 	let academicPromise = $state<Promise<AcademicOverview> | null>(null);
+	let academicRequestId = 0;
 
 	// Year form
 	let yearName = $state('');
@@ -169,35 +165,8 @@
 			})
 	);
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function fetchAcademic(): Promise<AcademicOverview> {
-		const data = await fetch('/api/academic').then((response) => readApi<Partial<AcademicOverview>>(response, 'Gagal memuat data akademik'));
+		const data = await fetch('/api/academic').then((response) => readClientApiData<Partial<AcademicOverview>>(response, 'Gagal memuat data akademik'));
 		return {
 			years: data.years ?? [],
 			classes: data.classes ?? [],
@@ -219,15 +188,24 @@
 	}
 
 	function loadInitial() {
+		const requestId = ++academicRequestId;
 		years = [];
 		classes = [];
 		subjects = [];
 		assignments = [];
 		timetableSlots = [];
-		academicPromise = fetchAcademic().then((overview) => {
-			applyOverview(overview);
-			return overview;
-		});
+		academicPromise = fetchAcademic()
+			.then((overview) => {
+				if (requestId === academicRequestId) {
+					applyOverview(overview);
+					return overview;
+				}
+				return { years, classes, subjects, assignments, timetableSlots };
+			})
+			.catch((error: unknown) => {
+				if (requestId === academicRequestId) throw error;
+				return { years, classes, subjects, assignments, timetableSlots };
+			});
 	}
 
 	async function refreshAcademic() {
@@ -235,11 +213,15 @@
 			loadInitial();
 			return;
 		}
+		const requestId = ++academicRequestId;
 		try {
 			const overview = await fetchAcademic();
-			applyOverview(overview);
-			academicPromise = Promise.resolve(overview);
+			if (requestId === academicRequestId) {
+				applyOverview(overview);
+				academicPromise = Promise.resolve(overview);
+			}
 		} catch (error) {
+			if (requestId !== academicRequestId) return;
 			academicPromise = Promise.resolve({ years, classes, subjects, assignments, timetableSlots });
 			toast.error(academicErrorMessage(error));
 		}
@@ -267,14 +249,23 @@
 		toast.error(msg);
 	}
 
-	async function responseErrorMessage(response: Response, fallback: string) {
-		const payload = await response.json().catch(() => null);
-		return apiErrorMessage(payload) || fallback;
-	}
-
 	function mutationErrorMessage(error: unknown, fallback: string) {
 		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
 		return fallback;
+	}
+
+	async function ensureMutationOk(response: Response, fallback: string) {
+		try {
+			await readClientJson<unknown>(response);
+		} catch (error) {
+			throw new Error(mutationErrorMessage(error, fallback));
+		}
+	}
+
+	function academicEntityPath(entity: string, id?: string) {
+		const params = new URLSearchParams({ entity });
+		if (id) params.set('id', id);
+		return clientApiPathWithQuery('/api/academic', params);
 	}
 
 	async function refreshAcademicAfterMutation() {
@@ -290,12 +281,12 @@
 		if (!yearName || !yearStart || !yearEnd) return;
 		yearBusy = true;
 		try {
-			const res = await fetch('/api/academic?entity=years', {
+			const res = await fetch(academicEntityPath('years'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name: yearName, start_date: yearStart, end_date: yearEnd, is_active: yearActive }),
 			});
-			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menambahkan tahun ajaran')); return; }
+			await ensureMutationOk(res, 'Gagal menambahkan tahun ajaran');
 			yearName = ''; yearStart = ''; yearEnd = ''; yearActive = false;
 			showToast('Tahun ajaran berhasil ditambahkan');
 			await refreshAcademicAfterMutation();
@@ -307,8 +298,8 @@
 	async function deleteYear(id: string) {
 		if (!(await confirmAction({ title: 'Hapus Tahun Ajaran', message: 'Hapus tahun ajaran ini?', confirmLabel: 'Hapus', tone: 'danger' }))) return;
 		try {
-			const res = await fetch(`/api/academic?entity=years&id=${id}`, { method: 'DELETE' });
-			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menghapus tahun ajaran')); return; }
+			const res = await fetch(academicEntityPath('years', id), { method: 'DELETE' });
+			await ensureMutationOk(res, 'Gagal menghapus tahun ajaran');
 			showToast('Tahun ajaran dihapus');
 			await refreshAcademicAfterMutation();
 		} catch (error) {
@@ -320,7 +311,7 @@
 		if (!className || !classCode || !classLevel || !classYearId) return;
 		classBusy = true;
 		try {
-			const res = await fetch('/api/academic?entity=classes', {
+			const res = await fetch(academicEntityPath('classes'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -328,7 +319,7 @@
 					academic_year_id: classYearId, is_active: classActive,
 				}),
 			});
-			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menambahkan kelas')); return; }
+			await ensureMutationOk(res, 'Gagal menambahkan kelas');
 			className = ''; classCode = ''; classLevel = ''; classYearId = ''; classActive = true;
 			showToast('Kelas berhasil ditambahkan');
 			await refreshAcademicAfterMutation();
@@ -340,8 +331,8 @@
 	async function deleteClass(id: string) {
 		if (!(await confirmAction({ title: 'Hapus Kelas', message: 'Hapus kelas ini?', confirmLabel: 'Hapus', tone: 'danger' }))) return;
 		try {
-			const res = await fetch(`/api/academic?entity=classes&id=${id}`, { method: 'DELETE' });
-			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menghapus kelas')); return; }
+			const res = await fetch(academicEntityPath('classes', id), { method: 'DELETE' });
+			await ensureMutationOk(res, 'Gagal menghapus kelas');
 			showToast('Kelas dihapus');
 			await refreshAcademicAfterMutation();
 		} catch (error) {
@@ -353,12 +344,12 @@
 		if (!subjectName || !subjectCode) return;
 		subjectBusy = true;
 		try {
-			const res = await fetch('/api/academic?entity=subjects', {
+			const res = await fetch(academicEntityPath('subjects'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name: subjectName, code: subjectCode, is_active: subjectActive }),
 			});
-			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menambahkan mata pelajaran')); return; }
+			await ensureMutationOk(res, 'Gagal menambahkan mata pelajaran');
 			subjectName = ''; subjectCode = ''; subjectActive = true;
 			showToast('Mata pelajaran berhasil ditambahkan');
 			await refreshAcademicAfterMutation();
@@ -370,8 +361,8 @@
 	async function deleteSubject(id: string) {
 		if (!(await confirmAction({ title: 'Hapus Mata Pelajaran', message: 'Hapus mata pelajaran ini?', confirmLabel: 'Hapus', tone: 'danger' }))) return;
 		try {
-			const res = await fetch(`/api/academic?entity=subjects&id=${id}`, { method: 'DELETE' });
-			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menghapus mata pelajaran')); return; }
+			const res = await fetch(academicEntityPath('subjects', id), { method: 'DELETE' });
+			await ensureMutationOk(res, 'Gagal menghapus mata pelajaran');
 			showToast('Mata pelajaran dihapus');
 			await refreshAcademicAfterMutation();
 		} catch (error) {
@@ -384,7 +375,7 @@
 		timetableBusy = true;
 		try {
 			const isEditing = Boolean(editingTimetableId);
-			const res = await fetch(editingTimetableId ? `/api/academic?entity=timetables&id=${editingTimetableId}` : '/api/academic?entity=timetables', {
+			const res = await fetch(academicEntityPath('timetables', editingTimetableId || undefined), {
 				method: editingTimetableId ? 'PUT' : 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -396,11 +387,7 @@
 					notes: timetableNotes,
 				}),
 			});
-			if (!res.ok) {
-				const j = await res.json().catch(() => ({}));
-				showError((j as { error?: string }).error ?? 'Gagal menyimpan jadwal');
-				return;
-			}
+			await ensureMutationOk(res, 'Gagal menyimpan jadwal');
 			resetTimetableForm();
 			showToast(isEditing ? 'Slot jadwal pelajaran berhasil diperbarui' : 'Slot jadwal pelajaran berhasil ditambahkan');
 			await refreshAcademicAfterMutation();
@@ -434,8 +421,8 @@
 	async function deleteTimetableSlot(id: string) {
 		if (!(await confirmAction({ title: 'Hapus Slot Jadwal', message: 'Hapus slot jadwal ini?', confirmLabel: 'Hapus', tone: 'danger' }))) return;
 		try {
-			const res = await fetch(`/api/academic?entity=timetables&id=${id}`, { method: 'DELETE' });
-			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menghapus slot jadwal')); return; }
+			const res = await fetch(academicEntityPath('timetables', id), { method: 'DELETE' });
+			await ensureMutationOk(res, 'Gagal menghapus slot jadwal');
 			showToast('Slot jadwal pelajaran dihapus');
 			await refreshAcademicAfterMutation();
 		} catch (error) {

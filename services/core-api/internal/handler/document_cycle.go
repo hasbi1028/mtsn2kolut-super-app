@@ -1,21 +1,70 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	mw "mtsn2kolut-super-app/backend/internal/middleware"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
-type DocumentCycle struct{ svc *service.DocumentCycle }
+type documentCycleService interface {
+	Stats(ctx context.Context, periodYear int32) (db.GetDocumentCycleStatsRow, error)
+	ListCatalogs(ctx context.Context, search, frequency string, activeOnly bool) ([]db.ListDocumentCycleCatalogsRow, error)
+	CreateCatalog(ctx context.Context, arg db.CreateDocumentCycleCatalogParams) (db.DocumentCycleCatalog, error)
+	UpdateCatalog(ctx context.Context, arg db.UpdateDocumentCycleCatalogParams) (db.DocumentCycleCatalog, error)
+	DeleteCatalog(ctx context.Context, id pgtype.UUID) error
+	ListObligations(ctx context.Context, arg db.ListDocumentCycleObligationsParams) ([]db.ListDocumentCycleObligationsRow, error)
+	ListVerificationQueue(ctx context.Context, verifierEmployeeID pgtype.UUID, periodYear int32) ([]db.ListDocumentCycleObligationsRow, error)
+	GenerateYear(ctx context.Context, actorUserID pgtype.UUID, periodYear int32) (service.DocumentCycleGenerateResult, error)
+	UpdateObligation(ctx context.Context, actorUserID pgtype.UUID, arg db.UpdateDocumentCycleObligationParams) (db.DocumentCycleObligation, error)
+	ListEvents(ctx context.Context, obligationID pgtype.UUID, eventType, actor string) ([]db.ListDocumentCycleEventsByObligationRow, error)
+	UpdateObligationStatus(ctx context.Context, actorUserID pgtype.UUID, id pgtype.UUID, status, notes string) (db.DocumentCycleObligation, error)
+	DeleteObligation(ctx context.Context, id pgtype.UUID) error
+}
 
-func NewDocumentCycle(svc *service.DocumentCycle) *DocumentCycle {
-	return &DocumentCycle{svc: svc}
+type DocumentCycle struct {
+	svc   documentCycleService
+	audit cbtAuthoringAuditWriter
+}
+
+func NewDocumentCycle(svc *service.DocumentCycle, audit ...cbtAuthoringAuditWriter) *DocumentCycle {
+	var writer cbtAuthoringAuditWriter
+	if len(audit) > 0 {
+		writer = audit[0]
+	}
+	return &DocumentCycle{svc: svc, audit: writer}
+}
+
+func documentCycleHasRole(r *http.Request, want string) bool {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		return false
+	}
+	return mw.HasAnyRole(jwt.MapClaims(claims), want)
+}
+
+func documentCycleEmployeeID(r *http.Request) (pgtype.UUID, bool) {
+	var id pgtype.UUID
+	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
+		if mw.HasAnyRole(jwt.MapClaims(claims), "admin") {
+			return id, false
+		}
+		if raw, _ := claims["eid"].(string); raw != "" {
+			if err := id.Scan(raw); err == nil && id.Valid {
+				return id, true
+			}
+		}
+	}
+	return id, false
 }
 
 func (h *DocumentCycle) Stats(w http.ResponseWriter, r *http.Request) {
@@ -76,9 +125,16 @@ func (h *DocumentCycle) CreateCatalog(w http.ResponseWriter, r *http.Request) {
 		SortOrder:                    params.SortOrder,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data katalog siklus dokumen tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "DOCUMENT_CYCLE_CATALOG_CREATE", "document_cycle_catalog", pgUUIDString(row.ID), map[string]any{
+		"code":            row.Code,
+		"title":           row.Title,
+		"frequency":       row.Frequency,
+		"domain_area":     row.DomainArea,
+		"external_system": row.ExternalSystem,
+	})
 	api.Created(w, row)
 }
 
@@ -115,9 +171,16 @@ func (h *DocumentCycle) UpdateCatalog(w http.ResponseWriter, r *http.Request) {
 		SortOrder:                    params.SortOrder,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Perubahan katalog siklus dokumen tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "DOCUMENT_CYCLE_CATALOG_UPDATE", "document_cycle_catalog", pgUUIDString(row.ID), map[string]any{
+		"code":            row.Code,
+		"title":           row.Title,
+		"frequency":       row.Frequency,
+		"domain_area":     row.DomainArea,
+		"external_system": row.ExternalSystem,
+	})
 	api.OK(w, row)
 }
 
@@ -132,9 +195,12 @@ func (h *DocumentCycle) DeleteCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.DeleteCatalog(r.Context(), id); err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Penghapusan katalog siklus dokumen tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "DOCUMENT_CYCLE_CATALOG_DELETE", "document_cycle_catalog", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
 	api.NoContent(w)
 }
 
@@ -145,12 +211,17 @@ func (h *DocumentCycle) ListObligations(w http.ResponseWriter, r *http.Request) 
 	}
 	ownerUnitID, err := service.ParseGovernanceOptionalUUID(r.URL.Query().Get("owner_unit_id"))
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Filter siklus dokumen tidak valid")
 		return
 	}
 	responsibleEmployeeID, err := service.ParseGovernanceOptionalUUID(r.URL.Query().Get("responsible_employee_id"))
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Filter siklus dokumen tidak valid")
+		return
+	}
+	verifierEmployeeID, err := service.ParseGovernanceOptionalUUID(r.URL.Query().Get("verifier_employee_id"))
+	if err != nil {
+		writeClientError(w, err, "Filter siklus dokumen tidak valid")
 		return
 	}
 	data, err := h.svc.ListObligations(r.Context(), db.ListDocumentCycleObligationsParams{
@@ -162,8 +233,53 @@ func (h *DocumentCycle) ListObligations(w http.ResponseWriter, r *http.Request) 
 		PeriodYear:            int32Query(r.URL.Query().Get("period_year")),
 		OwnerUnitID:           ownerUnitID,
 		ResponsibleEmployeeID: responsibleEmployeeID,
+		VerifierEmployeeID:    verifierEmployeeID,
 		ReminderOnly:          boolQuery(r.URL.Query().Get("reminder_only")),
 	})
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, data)
+}
+
+func (h *DocumentCycle) ListVerificationQueue(w http.ResponseWriter, r *http.Request) {
+	if !governanceAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+
+	verifierEmployeeID, hasEmployeeID := documentCycleEmployeeID(r)
+	if boolQuery(r.URL.Query().Get("all")) {
+		if !documentCycleHasRole(r, "admin") {
+			api.Forbidden(w)
+			return
+		}
+		verifierEmployeeID = pgtype.UUID{}
+		hasEmployeeID = true
+	}
+	if requestedVerifier := r.URL.Query().Get("verifier_employee_id"); requestedVerifier != "" {
+		if !documentCycleHasRole(r, "admin") {
+			api.Forbidden(w)
+			return
+		}
+		parsed, err := service.ParseGovernanceOptionalUUID(requestedVerifier)
+		if err != nil {
+			writeClientError(w, err, "Filter antrian verifikasi tidak valid")
+			return
+		}
+		verifierEmployeeID = parsed
+		hasEmployeeID = true
+	}
+	if !hasEmployeeID {
+		if !documentCycleHasRole(r, "admin") {
+			api.Forbidden(w)
+			return
+		}
+		verifierEmployeeID = pgtype.UUID{}
+	}
+
+	data, err := h.svc.ListVerificationQueue(r.Context(), verifierEmployeeID, int32Query(r.URL.Query().Get("period_year")))
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -183,9 +299,14 @@ func (h *DocumentCycle) GenerateYear(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := h.svc.GenerateYear(r.Context(), inventoryActorUserID(r), body.PeriodYear)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Pembuatan siklus dokumen tahunan tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "DOCUMENT_CYCLE_YEAR_GENERATE", "document_cycle_generation", strconv.FormatInt(int64(data.PeriodYear), 10), map[string]any{
+		"period_year": data.PeriodYear,
+		"generated":   data.Generated,
+		"inserted":    data.Inserted,
+	})
 	api.Created(w, data)
 }
 
@@ -205,9 +326,15 @@ func (h *DocumentCycle) UpdateObligation(w http.ResponseWriter, r *http.Request)
 	}
 	row, err := h.svc.UpdateObligation(r.Context(), inventoryActorUserID(r), params)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Perubahan kewajiban siklus dokumen tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "DOCUMENT_CYCLE_OBLIGATION_UPDATE", "document_cycle_obligation", pgUUIDString(row.ID), map[string]any{
+		"period_year":     row.PeriodYear,
+		"status":          row.Status,
+		"domain_area":     row.DomainArea,
+		"external_system": row.ExternalSystem,
+	})
 	api.OK(w, row)
 }
 
@@ -221,9 +348,9 @@ func (h *DocumentCycle) ListEvents(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "id tidak valid")
 		return
 	}
-	data, err := h.svc.ListEvents(r.Context(), id)
+	data, err := h.svc.ListEvents(r.Context(), id, r.URL.Query().Get("event_type"), r.URL.Query().Get("actor"))
 	if err != nil {
-		api.Internal(w, err)
+		writeClientError(w, err, "Filter audit siklus dokumen tidak valid")
 		return
 	}
 	api.OK(w, data)
@@ -246,9 +373,14 @@ func (h *DocumentCycle) UpdateObligationStatus(w http.ResponseWriter, r *http.Re
 	}
 	row, err := h.svc.UpdateObligationStatus(r.Context(), inventoryActorUserID(r), id, body.Status, body.Notes)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Perubahan status kewajiban tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "DOCUMENT_CYCLE_OBLIGATION_STATUS_UPDATE", "document_cycle_obligation", pgUUIDString(row.ID), map[string]any{
+		"period_year": row.PeriodYear,
+		"status":      row.Status,
+		"notes":       body.Notes,
+	})
 	api.OK(w, row)
 }
 
@@ -263,9 +395,12 @@ func (h *DocumentCycle) DeleteObligation(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := h.svc.DeleteObligation(r.Context(), id); err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Penghapusan kewajiban siklus dokumen tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "DOCUMENT_CYCLE_OBLIGATION_DELETE", "document_cycle_obligation", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
 	api.NoContent(w)
 }
 
@@ -277,17 +412,17 @@ func (h *DocumentCycle) parseCatalogRequest(w http.ResponseWriter, r *http.Reque
 	}
 	defaultOwnerUnitID, err := service.ParseGovernanceOptionalUUID(body.DefaultOwnerUnitID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data katalog siklus dokumen tidak valid")
 		return documentCycleCatalogParsedRequest{}, false
 	}
 	defaultResponsibleEmployeeID, err := service.ParseGovernanceOptionalUUID(body.DefaultResponsibleEmployeeID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data katalog siklus dokumen tidak valid")
 		return documentCycleCatalogParsedRequest{}, false
 	}
 	defaultVerifierEmployeeID, err := service.ParseGovernanceOptionalUUID(body.DefaultVerifierEmployeeID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data katalog siklus dokumen tidak valid")
 		return documentCycleCatalogParsedRequest{}, false
 	}
 	deadlineDays := body.DeadlineDaysAfterPeriod
@@ -327,57 +462,57 @@ func (h *DocumentCycle) parseObligationRequest(w http.ResponseWriter, r *http.Re
 	}
 	dueDate, err := service.ParseGovernanceDate(body.DueDate)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data kewajiban siklus dokumen tidak valid")
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
 	reminderDate, err := service.ParseGovernanceDate(body.ReminderDate)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data kewajiban siklus dokumen tidak valid")
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
 	ownerUnitID, err := service.ParseGovernanceOptionalUUID(body.OwnerUnitID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data kewajiban siklus dokumen tidak valid")
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
 	responsibleEmployeeID, err := service.ParseGovernanceOptionalUUID(body.ResponsibleEmployeeID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data kewajiban siklus dokumen tidak valid")
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
 	verifierEmployeeID, err := service.ParseGovernanceOptionalUUID(body.VerifierEmployeeID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data kewajiban siklus dokumen tidak valid")
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
 	governanceDocumentID, err := service.ParseGovernanceOptionalUUID(body.GovernanceDocumentID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data kewajiban siklus dokumen tidak valid")
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
 	workPlanItemID, err := service.ParseGovernanceOptionalUUID(body.WorkPlanItemID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data kewajiban siklus dokumen tidak valid")
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
 	performanceTargetID, err := service.ParseGovernanceOptionalUUID(body.PerformanceTargetID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data kewajiban siklus dokumen tidak valid")
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
 	evidenceItemID, err := service.ParseGovernanceOptionalUUID(body.EvidenceItemID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data kewajiban siklus dokumen tidak valid")
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
 	complianceActionID, err := service.ParseGovernanceOptionalUUID(body.ComplianceActionID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data kewajiban siklus dokumen tidak valid")
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
 	archiveDocumentID, err := service.ParseGovernanceOptionalUUID(body.ArchiveDocumentID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data kewajiban siklus dokumen tidak valid")
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
 	return db.UpdateDocumentCycleObligationParams{

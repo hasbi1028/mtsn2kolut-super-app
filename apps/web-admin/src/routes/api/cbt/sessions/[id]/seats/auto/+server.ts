@@ -1,10 +1,11 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, handleRouteError } from '$lib/server/api';
+import { apiPath, proxy, handleRouteError, requiredRouteParam } from '$lib/server/api';
 
 export const POST = async (event: RequestEvent) => {
 	try {
-		const data = await proxy(event).post(`/api/cbt/sessions/${event.params.id}/seats/auto`, {});
+		const id = requiredRouteParam(event.params.id, 'id');
+		const data = await proxy(event).post(apiPath`/api/cbt/sessions/${id}/seats/auto`, {});
 		return json(data);
 	} catch (e) {
 		return handleRouteError(e, 'cbt/sessions/[id]/seats/auto POST');

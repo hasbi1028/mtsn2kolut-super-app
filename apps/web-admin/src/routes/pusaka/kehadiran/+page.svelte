@@ -10,6 +10,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { readClientJson } from '$lib/client/api';
 
 	interface AttendanceRecord {
 		id: string;
@@ -32,6 +33,7 @@
 	let recordsPromise = $state<Promise<AttendanceOverview> | null>(null);
 	let refreshing = $state(false);
 	let loadedRangeKey = $state('');
+	let attendanceRequestId = 0;
 
 	function todayWita() {
 		return new Intl.DateTimeFormat('en-CA', {
@@ -59,15 +61,6 @@
 		return typeof value === 'object' && value !== null;
 	}
 
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
 	function parseAttendancePayload(payload: unknown): AttendanceOverview {
 		if (Array.isArray(payload)) {
 			const nextRecords = payload as AttendanceRecord[];
@@ -87,9 +80,11 @@
 		params.set('end_date', endDate || startDate);
 
 		const res = await fetch(`/api/pusaka/attendance?${params}`);
-		const payload = await res.json().catch(() => null);
-		const message = apiErrorMessage(payload);
-		if (!res.ok || message) throw new Error(message || `Error ${res.status}`);
+		const payload = await readClientJson<unknown>(res);
+		if (isRecord(payload)) {
+			const error = payload.error;
+			if (typeof error === 'string' && error.trim()) throw new Error(error);
+		}
 		return parseAttendancePayload(payload);
 	}
 
@@ -100,14 +95,23 @@
 
 	function loadInitial() {
 		if (!startDate) return;
+		const requestId = ++attendanceRequestId;
 		const nextRangeKey = rangeKey();
 		records = [];
 		total = null;
-		recordsPromise = fetchAttendance().then((overview) => {
-			applyOverview(overview);
-			loadedRangeKey = nextRangeKey;
-			return overview;
-		});
+		recordsPromise = fetchAttendance()
+			.then((overview) => {
+				if (requestId === attendanceRequestId) {
+					applyOverview(overview);
+					loadedRangeKey = nextRangeKey;
+					return overview;
+				}
+				return { records, total: total ?? records.length };
+			})
+			.catch((error: unknown) => {
+				if (requestId === attendanceRequestId) throw error;
+				return { records, total: total ?? records.length };
+			});
 	}
 
 	async function load() {
@@ -116,14 +120,18 @@
 			loadInitial();
 			return;
 		}
+		const requestId = ++attendanceRequestId;
 		const nextRangeKey = rangeKey();
 		refreshing = true;
 		try {
 			const overview = await fetchAttendance();
-			applyOverview(overview);
-			loadedRangeKey = nextRangeKey;
-			recordsPromise = Promise.resolve(overview);
+			if (requestId === attendanceRequestId) {
+				applyOverview(overview);
+				loadedRangeKey = nextRangeKey;
+				recordsPromise = Promise.resolve(overview);
+			}
 		} catch (error) {
+			if (requestId !== attendanceRequestId) return;
 			if (loadedRangeKey === nextRangeKey) {
 				recordsPromise = Promise.resolve({ records, total: total ?? records.length });
 				toast.error(attendanceErrorMessage(error));
@@ -131,7 +139,9 @@
 				recordsPromise = Promise.reject(error);
 			}
 		} finally {
-			refreshing = false;
+			if (requestId === attendanceRequestId) {
+				refreshing = false;
+			}
 		}
 	}
 

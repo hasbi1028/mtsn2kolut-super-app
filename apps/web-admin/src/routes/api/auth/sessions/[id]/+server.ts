@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { proxy, ApiError, handleRouteError } from '$lib/server/api';
+import { apiPath, proxy, ApiError, handleRouteError, readRequestJson, requiredRouteParam } from '$lib/server/api';
 
 export const DELETE: RequestHandler = async (event) => {
 	if (!event.locals.user) {
@@ -8,7 +8,8 @@ export const DELETE: RequestHandler = async (event) => {
 	}
 
 	try {
-		await proxy(event).del(`/api/auth/sessions/${event.params.id}`);
+		const id = requiredRouteParam(event.params.id, 'id');
+		await proxy(event).del(apiPath`/api/auth/sessions/${id}`);
 		return json({ ok: true });
 	} catch (e) {
 		if (e instanceof ApiError && e.status === 401) {
@@ -24,8 +25,9 @@ export const PATCH: RequestHandler = async (event) => {
 	}
 
 	try {
-		const body = await event.request.json();
-		await proxy(event).patch(`/api/auth/sessions/${event.params.id}`, body);
+		const id = requiredRouteParam(event.params.id, 'id');
+		const body = await readRequestJson<Record<string, unknown>>(event.request);
+		await proxy(event).patch(apiPath`/api/auth/sessions/${id}`, body);
 		return json({ ok: true });
 	} catch (e) {
 		if (e instanceof ApiError && e.status === 401) {

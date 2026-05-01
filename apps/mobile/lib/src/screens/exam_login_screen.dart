@@ -16,19 +16,21 @@ class ExamLoginScreen extends StatefulWidget {
     this.initialErrorMessage,
     this.initialErrorNotice,
     this.previewSnapshot,
+    this.sessionStore,
   });
 
   final bool autoRestore;
   final String? initialErrorMessage;
   final ExamGuidanceNotice? initialErrorNotice;
   final ExamSessionSnapshot? previewSnapshot;
+  final ExamSessionStore? sessionStore;
 
   @override
   State<ExamLoginScreen> createState() => _ExamLoginScreenState();
 }
 
 class _ExamLoginScreenState extends State<ExamLoginScreen> {
-  final _sessionStore = ExamSessionStore();
+  late final ExamSessionStore _sessionStore;
   final _tokenController = TextEditingController();
   final _baseUrlController = TextEditingController(
     text: const String.fromEnvironment(
@@ -46,6 +48,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
   @override
   void initState() {
     super.initState();
+    _sessionStore = widget.sessionStore ?? ExamSessionStore();
     _errorMessage = widget.initialErrorMessage;
     _errorNotice = widget.initialErrorNotice;
     if (widget.autoRestore) {
@@ -107,6 +110,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
             initialPayload: payload,
             deviceFingerprint: snapshot.deviceFingerprint,
             restoredSnapshot: snapshot,
+            sessionStore: _sessionStore,
           ),
         ),
       );
@@ -215,6 +219,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
             examToken: token,
             initialPayload: payload,
             deviceFingerprint: deviceFingerprint,
+            sessionStore: _sessionStore,
           ),
         ),
       );

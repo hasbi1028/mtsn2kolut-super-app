@@ -58,6 +58,11 @@ type kesiswaanStore interface {
 	ListStudentTransfers(ctx context.Context, arg db.ListStudentTransfersParams) ([]db.ListStudentTransfersRow, error)
 }
 
+type kesiswaanTransferStore interface {
+	CreateStudentTransfer(ctx context.Context, arg db.CreateStudentTransferParams) (db.StudentTransfer, error)
+	UpdateKesiswaanStudentLifecycle(ctx context.Context, arg db.UpdateKesiswaanStudentLifecycleParams) (db.Student, error)
+}
+
 type Kesiswaan struct {
 	pool     *pgxpool.Pool
 	q        kesiswaanStore
@@ -456,6 +461,17 @@ func (s *Kesiswaan) CreateStudentTransfer(ctx context.Context, arg db.CreateStud
 	defer tx.Rollback(ctx)
 	q := db.New(tx)
 
+	row, err := createStudentTransfer(ctx, q, arg)
+	if err != nil {
+		return db.StudentTransfer{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return db.StudentTransfer{}, err
+	}
+	return row, nil
+}
+
+func createStudentTransfer(ctx context.Context, q kesiswaanTransferStore, arg db.CreateStudentTransferParams) (db.StudentTransfer, error) {
 	row, err := q.CreateStudentTransfer(ctx, arg)
 	if err != nil {
 		return db.StudentTransfer{}, err
@@ -471,9 +487,6 @@ func (s *Kesiswaan) CreateStudentTransfer(ctx context.Context, arg db.CreateStud
 		Status:   status,
 		IsActive: isActive,
 	}); err != nil {
-		return db.StudentTransfer{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return db.StudentTransfer{}, err
 	}
 	return row, nil

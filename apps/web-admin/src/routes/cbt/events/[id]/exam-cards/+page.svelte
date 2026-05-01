@@ -7,6 +7,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { fetchSchoolProfile, schoolAddressLine, type SchoolProfile } from '$lib/school-profile';
+	import { clientApiPath, readClientApiData } from '$lib/client/api';
 
 	type ExamCard = {
 		event_id: string;
@@ -26,49 +27,17 @@
 		class_code: string;
 		room_name: string;
 	};
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
 	type ExamCardPrintData = {
 		schoolProfile: SchoolProfile;
 		cards: ExamCard[];
 	};
 
-	const eventId = page.params.id;
+	const eventId = page.params.id ?? '';
 	let cardsPromise = $state<Promise<ExamCardPrintData> | null>(null);
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function fetchCardRows() {
-		const response = await fetch(`/api/cbt/events/${eventId}/exam-cards`);
-		const rows = await readApi<ExamCard[]>(response, 'Gagal memuat kartu ujian');
+		const response = await fetch(clientApiPath`/api/cbt/events/${eventId}/exam-cards`);
+		const rows = await readClientApiData<ExamCard[]>(response, 'Gagal memuat kartu ujian');
 		return Array.isArray(rows) ? rows : [];
 	}
 

@@ -7,8 +7,19 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
+type parentStore interface {
+	ListParents(ctx context.Context) ([]db.Parent, error)
+	GetParent(ctx context.Context, id pgtype.UUID) (db.Parent, error)
+	CreateParent(ctx context.Context, arg db.CreateParentParams) (db.Parent, error)
+	UpdateParent(ctx context.Context, arg db.UpdateParentParams) (db.Parent, error)
+	DeleteParent(ctx context.Context, id pgtype.UUID) error
+	LinkParentStudent(ctx context.Context, arg db.LinkParentStudentParams) error
+	UnlinkParentStudent(ctx context.Context, arg db.UnlinkParentStudentParams) error
+	ListParentChildren(ctx context.Context, parentID pgtype.UUID) ([]db.ListParentChildrenRow, error)
+}
+
 type Parent struct {
-	q *db.Queries
+	q parentStore
 }
 
 func NewParent(q *db.Queries) *Parent { return &Parent{q: q} }

@@ -19,6 +19,7 @@ var nonSafeFilename = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
 type cbtQuestionAssetStore interface {
 	CreateCbtQuestionAsset(ctx context.Context, arg db.CreateCbtQuestionAssetParams) (db.CbtQuestionAsset, error)
+	GetCbtQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error)
 	GetCbtQuestionAsset(ctx context.Context, id pgtype.UUID) (db.CbtQuestionAsset, error)
 	ListCbtQuestionAssetsByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error)
 	GetExamQuestions(ctx context.Context, packageID pgtype.UUID) ([]db.GetExamQuestionsRow, error)
@@ -87,6 +88,10 @@ func (s *CbtQuestionAsset) Save(ctx context.Context, input UploadCbtQuestionAsse
 
 func (s *CbtQuestionAsset) Get(ctx context.Context, id pgtype.UUID) (db.CbtQuestionAsset, error) {
 	return s.q.GetCbtQuestionAsset(ctx, id)
+}
+
+func (s *CbtQuestionAsset) GetQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error) {
+	return s.q.GetCbtQuestion(ctx, id)
 }
 
 func (s *CbtQuestionAsset) ListByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error) {

@@ -8,6 +8,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import PublicHome from '$lib/components/PublicHome.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import { readClientApiData } from '$lib/client/api';
 
 	type WebsiteContent = {
 		id: string;
@@ -137,27 +138,9 @@
 	});
 	const dashboardRoleLabel = $derived(roles.length > 0 ? roles.join(' / ') : 'pengguna');
 
-	function parseData<T>(raw: unknown): T | null {
-		if (!raw || typeof raw !== 'object') return null;
-		const wrapper = raw as { data?: T };
-		return (wrapper.data ?? raw) as T;
-	}
-
 	async function fetchJSON<T>(path: string): Promise<T> {
 		const res = await fetch(path);
-		const raw = await res.json().catch(() => null);
-		if (!res.ok) {
-			const message =
-				raw && typeof raw === 'object' && 'error' in raw && typeof raw.error === 'string'
-					? raw.error
-					: `Gagal memuat ${path}`;
-			throw new Error(message);
-		}
-		const parsed = parseData<T>(raw);
-		if (parsed == null) {
-			throw new Error(`Respons ${path} tidak valid.`);
-		}
-		return parsed;
+		return readClientApiData<T>(res, `Respons ${path} tidak valid.`);
 	}
 
 	function fmtDateTime(iso: string) {

@@ -25,7 +25,7 @@ type documentCycleStore interface {
 	GetDocumentCycleObligationCompletionReadiness(ctx context.Context, id pgtype.UUID) (db.GetDocumentCycleObligationCompletionReadinessRow, error)
 	DeleteDocumentCycleObligation(ctx context.Context, id pgtype.UUID) error
 	CreateDocumentCycleEvent(ctx context.Context, arg db.CreateDocumentCycleEventParams) (db.DocumentCycleEvent, error)
-	ListDocumentCycleEventsByObligation(ctx context.Context, obligationID pgtype.UUID) ([]db.ListDocumentCycleEventsByObligationRow, error)
+	ListDocumentCycleEventsByObligation(ctx context.Context, arg db.ListDocumentCycleEventsByObligationParams) ([]db.ListDocumentCycleEventsByObligationRow, error)
 }
 
 type DocumentCycle struct{ q documentCycleStore }
@@ -78,6 +78,14 @@ func (s *DocumentCycle) ListObligations(ctx context.Context, arg db.ListDocument
 	arg.ExternalSystem = normalizeDocumentCycleExternalSystemFilter(arg.ExternalSystem)
 	arg.PeriodYear = normalizeDocumentCycleYear(arg.PeriodYear)
 	return s.q.ListDocumentCycleObligations(ctx, arg)
+}
+
+func (s *DocumentCycle) ListVerificationQueue(ctx context.Context, verifierEmployeeID pgtype.UUID, periodYear int32) ([]db.ListDocumentCycleObligationsRow, error) {
+	return s.ListObligations(ctx, db.ListDocumentCycleObligationsParams{
+		Status:             "waiting_verification",
+		PeriodYear:         normalizeDocumentCycleYear(periodYear),
+		VerifierEmployeeID: verifierEmployeeID,
+	})
 }
 
 func (s *DocumentCycle) UpdateObligation(ctx context.Context, actorUserID pgtype.UUID, arg db.UpdateDocumentCycleObligationParams) (db.DocumentCycleObligation, error) {
@@ -155,8 +163,16 @@ func (s *DocumentCycle) DeleteObligation(ctx context.Context, id pgtype.UUID) er
 	return s.q.DeleteDocumentCycleObligation(ctx, id)
 }
 
-func (s *DocumentCycle) ListEvents(ctx context.Context, obligationID pgtype.UUID) ([]db.ListDocumentCycleEventsByObligationRow, error) {
-	return s.q.ListDocumentCycleEventsByObligation(ctx, obligationID)
+func (s *DocumentCycle) ListEvents(ctx context.Context, obligationID pgtype.UUID, eventType, actor string) ([]db.ListDocumentCycleEventsByObligationRow, error) {
+	eventType = normalizeDocumentCycleEventTypeFilter(eventType)
+	if eventType != "" && !validDocumentCycleEventTypes[eventType] {
+		return nil, fmt.Errorf("jenis audit dokumen tidak valid")
+	}
+	return s.q.ListDocumentCycleEventsByObligation(ctx, db.ListDocumentCycleEventsByObligationParams{
+		ObligationID: obligationID,
+		EventType:    eventType,
+		Actor:        strings.TrimSpace(actor),
+	})
 }
 
 func (s *DocumentCycle) GenerateYear(ctx context.Context, actorUserID pgtype.UUID, periodYear int32) (DocumentCycleGenerateResult, error) {
@@ -247,6 +263,10 @@ func normalizeDocumentCycleStatusFilter(value string) string {
 		return ""
 	}
 	return status
+}
+
+func normalizeDocumentCycleEventTypeFilter(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func validateDocumentCycleCatalog(code, title, frequency, domainArea, externalSystem, snpStandard string, deadlineDays, reminderDays int32) error {
@@ -369,4 +389,13 @@ var validDocumentCycleStatuses = map[string]bool{
 	"draft":                true,
 	"waiting_verification": true,
 	"completed":            true,
+}
+
+var validDocumentCycleEventTypes = map[string]bool{
+	"created":         true,
+	"updated":         true,
+	"status_changed":  true,
+	"generated":       true,
+	"monitoring_note": true,
+	"reminder_sent":   true,
 }

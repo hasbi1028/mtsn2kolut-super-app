@@ -7,8 +7,21 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
+type studentStore interface {
+	ListStudents(ctx context.Context) ([]db.ListStudentsRow, error)
+	ListStudentsByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]db.ListStudentsByTeacherRow, error)
+	CreateStudent(ctx context.Context, arg db.CreateStudentParams) (db.Student, error)
+	UpdateStudent(ctx context.Context, arg db.UpdateStudentParams) (db.Student, error)
+	DeleteStudent(ctx context.Context, id pgtype.UUID) error
+	UpdateStudentStatus(ctx context.Context, arg db.UpdateStudentStatusParams) error
+	GetStudentByID(ctx context.Context, id pgtype.UUID) (db.GetStudentByIDRow, error)
+	UpdateStudentLifecycle(ctx context.Context, arg db.UpdateStudentLifecycleParams) error
+	ListUsersByStudentID(ctx context.Context, studentID pgtype.UUID) ([]db.ListUsersByStudentIDRow, error)
+	UpdateUserStatus(ctx context.Context, arg db.UpdateUserStatusParams) error
+}
+
 type Student struct {
-	q *db.Queries
+	q studentStore
 }
 
 func NewStudent(q *db.Queries) *Student { return &Student{q: q} }

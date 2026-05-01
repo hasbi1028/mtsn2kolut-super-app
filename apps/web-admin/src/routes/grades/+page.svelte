@@ -13,6 +13,7 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 
 	type Assignment = {
 		id: string;
@@ -131,12 +132,6 @@
 
 	type GradeWorkspace = 'triage' | 'gradebook' | 'finalization';
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	const categoryOptions = [
 		{ value: 'assignment', label: 'Tugas' },
 		{ value: 'quiz', label: 'Kuis' },
@@ -184,6 +179,7 @@
 	let assignmentTeacherFilter = $state('');
 	let classFocusKey = $state('');
 	let gradeWorkspace = $state<GradeWorkspace>('triage');
+	let overviewRequestId = 0;
 
 	let scoreInput = $state<Record<string, string>>({});
 	let noteInput = $state<Record<string, string>>({});
@@ -558,25 +554,19 @@
 	}
 
 	async function finalizeAssignmentById(targetAssignmentId: string, notes: string) {
-		const res = await fetch(`/api/grades/assignments/${targetAssignmentId}/finalize`, {
+		const res = await fetch(clientApiPath`/api/grades/assignments/${targetAssignmentId}/finalize`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ notes })
 		});
-		const json = await res.json().catch(() => ({}));
-		if (!res.ok) {
-			throw new Error(json.error ?? 'Gagal memfinalisasi assignment');
-		}
+		await readClientJson<unknown>(res);
 	}
 
 	async function reopenAssignmentById(targetAssignmentId: string) {
-		const res = await fetch(`/api/grades/assignments/${targetAssignmentId}/finalize`, {
+		const res = await fetch(clientApiPath`/api/grades/assignments/${targetAssignmentId}/finalize`, {
 			method: 'DELETE'
 		});
-		const json = await res.json().catch(() => ({}));
-		if (!res.ok) {
-			throw new Error(json.error ?? 'Gagal membuka finalisasi assignment');
-		}
+		await readClientJson<unknown>(res);
 	}
 
 	function resetComponentForm() {
@@ -614,40 +604,11 @@
 		return normalizedEntryScore(studentId) !== originalEntryScore(studentId) || normalizedEntryNote(studentId) !== originalEntryNote(studentId);
 	}
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function buildOverviewPath() {
 		const params = new URLSearchParams();
 		if (assignmentId) params.set('assignment_id', assignmentId);
 		if (componentId) params.set('component_id', componentId);
-		return params.size > 0 ? `/api/grades?${params.toString()}` : '/api/grades';
+		return clientApiPathWithQuery('/api/grades', params);
 	}
 
 	function applyGradeInputs(nextEntries: GradeEntry[]) {
@@ -700,15 +661,20 @@
 
 	async function fetchOverview(): Promise<GradesOverview> {
 		const payload = await fetch(buildOverviewPath()).then((response) =>
-			readApi<GradesPayload>(response, 'Gagal memuat data nilai')
+			readClientApiData<GradesPayload>(response, 'Gagal memuat data nilai')
 		);
 		return normalizeOverview(payload);
 	}
 
 	function loadOverview() {
+		const requestId = ++overviewRequestId;
 		overviewPromise = fetchOverview().then((overview) => {
+			if (requestId !== overviewRequestId) return currentOverview();
 			applyOverview(overview);
 			return overview;
+		}).catch((error: unknown) => {
+			if (requestId === overviewRequestId) throw error;
+			return currentOverview();
 		});
 		return overviewPromise;
 	}
@@ -718,13 +684,17 @@
 			await loadOverview();
 			return;
 		}
+		const requestId = ++overviewRequestId;
 		try {
 			const overview = await fetchOverview();
+			if (requestId !== overviewRequestId) return;
 			applyOverview(overview);
 			overviewPromise = Promise.resolve(overview);
 		} catch (error) {
-			overviewPromise = Promise.resolve(currentOverview());
-			showError(overviewErrorMessage(error));
+			if (requestId === overviewRequestId) {
+				overviewPromise = Promise.resolve(currentOverview());
+				showError(overviewErrorMessage(error));
+			}
 		}
 	}
 
@@ -778,7 +748,7 @@
 		if ((!assignmentId && !editingComponentId) || !componentTitle) return;
 		createBusy = true;
 		try {
-			const path = editingComponentId ? `/api/grades/components/${editingComponentId}` : '/api/grades/components';
+			const path = editingComponentId ? clientApiPath`/api/grades/components/${editingComponentId}` : '/api/grades/components';
 			const method = editingComponentId ? 'PUT' : 'POST';
 			const payload: Record<string, unknown> = {
 				title: componentTitle,
@@ -795,9 +765,10 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload)
 			});
-			const json = await res.json().catch(() => ({}));
-			if (!res.ok) {
-				showError(json.error ?? (editingComponentId ? 'Gagal memperbarui komponen nilai' : 'Gagal menambah komponen nilai'));
+			try {
+				await readClientJson<unknown>(res);
+			} catch (error) {
+				showError(overviewErrorMessage(error));
 				return;
 			}
 			const wasEditing = editingComponentId !== '';
@@ -820,10 +791,11 @@
 			confirmLabel: 'Hapus Komponen',
 			tone: 'danger'
 		}))) return;
-		const res = await fetch(`/api/grades/components/${id}`, { method: 'DELETE' });
-		if (!res.ok) {
-			const json = await res.json().catch(() => ({}));
-			showError(json.error ?? 'Gagal menghapus komponen');
+		const res = await fetch(clientApiPath`/api/grades/components/${id}`, { method: 'DELETE' });
+		try {
+			await readClientJson<unknown>(res);
+		} catch (error) {
+			showError(overviewErrorMessage(error));
 			return;
 		}
 		if (editingComponentId === id) resetComponentForm();
@@ -839,16 +811,17 @@
 		}
 		publishBusy = { ...publishBusy, [component.id]: true };
 		try {
-			const res = await fetch(`/api/grades/components/${component.id}/publish`, {
+			const res = await fetch(clientApiPath`/api/grades/components/${component.id}/publish`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					is_published: !component.is_published
 				})
 			});
-			const json = await res.json().catch(() => ({}));
-			if (!res.ok) {
-				showError(json.error ?? 'Gagal memperbarui status komponen');
+			try {
+				await readClientJson<unknown>(res);
+			} catch (error) {
+				showError(overviewErrorMessage(error));
 				return;
 			}
 			showSuccess(component.is_published ? 'Komponen dikembalikan ke draft' : 'Komponen diterbitkan untuk rapor');
@@ -873,7 +846,7 @@
 		}
 		entryBusy = { ...entryBusy, [studentId]: true };
 		try {
-			const res = await fetch(`/api/grades/components/${componentId}/entries`, {
+			const res = await fetch(clientApiPath`/api/grades/components/${componentId}/entries`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -882,10 +855,7 @@
 					notes: noteInput[studentId] ?? ''
 				})
 			});
-			const json = await res.json().catch(() => ({}));
-			if (!res.ok) {
-				throw new Error(json.error ?? 'Gagal menyimpan nilai');
-			}
+			await readClientJson<unknown>(res);
 			if (!silent) {
 				showSuccess('Nilai siswa diperbarui');
 			}

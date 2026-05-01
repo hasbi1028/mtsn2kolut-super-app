@@ -1,18 +1,18 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { proxy, ApiError, handleRouteError } from '$lib/server/api';
+import { ApiError, apiPath, handleRouteError, proxy, readRequestJson, requiredRouteParam } from '$lib/server/api';
 
 export const PUT = async (event: RequestEvent) => {
 	try {
-		const { id } = event.params;
-		const { pusaka_username, pusaka_password } = await event.request.json() as {
+		const id = requiredRouteParam(event.params.id, 'id');
+		const { pusaka_username, pusaka_password } = await readRequestJson<{
 			pusaka_username?: string;
 			pusaka_password?: string;
-		};
+		}>(event.request);
 
 		if (!pusaka_username) return json({ error: 'pusaka_username wajib diisi' }, { status: 400 });
 
-		const result = await proxy(event).post(`/api/pusaka/employees/${id}/update-pusaka`, {
+		const result = await proxy(event).post(apiPath`/api/pusaka/employees/${id}/update-pusaka`, {
 			pusaka_username,
 			pusaka_password: pusaka_password ?? '',
 		});
@@ -28,10 +28,10 @@ export const PUT = async (event: RequestEvent) => {
 
 export const PATCH = async (event: RequestEvent) => {
 	try {
-		const { id } = event.params;
-		const { is_enabled } = await event.request.json() as { is_enabled?: boolean };
+		const id = requiredRouteParam(event.params.id, 'id');
+		const { is_enabled } = await readRequestJson<{ is_enabled?: boolean }>(event.request);
 		if (typeof is_enabled !== 'boolean') return json({ error: 'is_enabled wajib boolean' }, { status: 400 });
-		const result = await proxy(event).patch(`/api/pusaka/employees/${id}/account-status`, { is_enabled });
+		const result = await proxy(event).patch(apiPath`/api/pusaka/employees/${id}/account-status`, { is_enabled });
 		return json(result);
 	} catch (e) {
 		if (e instanceof ApiError && e.status === 404)
@@ -44,8 +44,8 @@ export const PATCH = async (event: RequestEvent) => {
 
 export const DELETE = async (event: RequestEvent) => {
 	try {
-		const { id } = event.params;
-		const result = await proxy(event).del(`/api/pusaka/employees/${id}/account`);
+		const id = requiredRouteParam(event.params.id, 'id');
+		const result = await proxy(event).del(apiPath`/api/pusaka/employees/${id}/account`);
 		return json(result);
 	} catch (e) {
 		if (e instanceof ApiError && e.status === 404)

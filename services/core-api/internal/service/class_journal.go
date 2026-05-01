@@ -61,6 +61,15 @@ func (s *ClassJournal) Overview(ctx context.Context, assignmentID, employeeID pg
 		Summary:     []db.ListJournalAttendanceSummaryRow{},
 	}
 	if assignmentID.Valid {
+		if employeeID.Valid {
+			assignment, err := s.q.GetClassSubjectAssignment(ctx, assignmentID)
+			if err != nil {
+				return JournalOverview{}, err
+			}
+			if assignment.TeacherEmployeeID != employeeID {
+				return JournalOverview{}, fmt.Errorf("akses ditolak")
+			}
+		}
 		out.Sessions, err = s.q.ListJournalSessions(ctx, assignmentID)
 		if err != nil {
 			return JournalOverview{}, err
@@ -73,10 +82,13 @@ func (s *ClassJournal) Overview(ctx context.Context, assignmentID, employeeID pg
 	return out, nil
 }
 
-func (s *ClassJournal) GetSession(ctx context.Context, id pgtype.UUID) (JournalSessionDetail, error) {
+func (s *ClassJournal) GetSession(ctx context.Context, id, employeeID pgtype.UUID) (JournalSessionDetail, error) {
 	session, err := s.q.GetJournalSession(ctx, id)
 	if err != nil {
 		return JournalSessionDetail{}, err
+	}
+	if employeeID.Valid && session.TeacherEmployeeID != employeeID {
+		return JournalSessionDetail{}, fmt.Errorf("akses ditolak")
 	}
 	attendances, err := s.q.ListJournalAttendances(ctx, id)
 	if err != nil {
@@ -128,7 +140,7 @@ func (s *ClassJournal) CreateSession(ctx context.Context, assignmentID pgtype.UU
 		})
 	}
 
-	return s.GetSession(ctx, session.ID)
+	return s.GetSession(ctx, session.ID, employeeID)
 }
 
 func (s *ClassJournal) UpdateSession(ctx context.Context, id pgtype.UUID, materi, kegiatan, catatan string, guruHadir bool, employeeID pgtype.UUID) (db.ClassJournalSession, error) {
@@ -148,7 +160,16 @@ func (s *ClassJournal) UpdateSession(ctx context.Context, id pgtype.UUID, materi
 	})
 }
 
-func (s *ClassJournal) DeleteSession(ctx context.Context, id pgtype.UUID) error {
+func (s *ClassJournal) DeleteSession(ctx context.Context, id, employeeID pgtype.UUID) error {
+	if employeeID.Valid {
+		session, err := s.q.GetJournalSession(ctx, id)
+		if err != nil {
+			return fmt.Errorf("sesi tidak ditemukan")
+		}
+		if session.TeacherEmployeeID != employeeID {
+			return fmt.Errorf("akses ditolak")
+		}
+	}
 	return s.q.DeleteJournalSession(ctx, id)
 }
 

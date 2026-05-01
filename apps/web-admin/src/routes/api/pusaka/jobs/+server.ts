@@ -1,7 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
-import { requireAuthHeaders, toWITA, handleRouteError, ApiError } from '$lib/server/api';
+import { apiPathWithQuery, handleRouteError, proxy, readProxyJson, toWITA } from '$lib/server/api';
 
 interface GoJob {
 	id: string; employee_id: string;
@@ -19,21 +18,13 @@ interface GoJobsResponse {
 
 export const GET = async (event: RequestEvent) => {
 	try {
-		const accessToken = event.locals.accessToken ?? event.cookies.get('access_token');
 		const limit  = Math.min(500, Math.max(1, Number(event.url.searchParams.get('limit') ?? 50)));
 		const status = event.url.searchParams.get('status') ?? '';
 		const params = new URLSearchParams({ per_page: String(limit), page: '1' });
 		if (status) params.set('status', status);
 
-		const raw = await fetch(
-			`${env.API_BASE_URL ?? 'http://localhost:8080'}/api/pusaka/jobs?${params}`,
-			{ headers: requireAuthHeaders(accessToken) }
-		);
-		if (!raw.ok) {
-			const err = await raw.json().catch(() => ({})) as { error?: string };
-			throw new ApiError(raw.status, err.error ?? `HTTP ${raw.status}`);
-		}
-		const res = await raw.json() as GoJobsResponse;
+		const raw = await proxy(event).fetch(apiPathWithQuery('/api/pusaka/jobs', params));
+		const res = await readProxyJson<GoJobsResponse>(raw);
 		const items = (res.data ?? []).map((j) => ({
 			id: j.id, run_type: j.run_type, status: j.status,
 			error_message: j.error_message, attempts: j.attempts,

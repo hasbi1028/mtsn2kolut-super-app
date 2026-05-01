@@ -12,6 +12,7 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 
 	type Student = {
 		id: string; nis: string; nisn: string; nama: string; gender: string;
@@ -29,15 +30,10 @@
 
 	type StudentFormStep = 'identity' | 'class' | 'guardian' | 'status';
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	let students = $state<Student[]>([]);
 	let classes = $state<SchoolClass[]>([]);
 	let studentsPromise = $state<Promise<StudentsOverview> | null>(null);
+	let studentsRequestId = 0;
 	let search = $state('');
 
 	let formNis = $state('');
@@ -79,33 +75,6 @@
 		return typeof value === 'object' && value !== null;
 	}
 
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) {
-			throw new Error(message || fallbackMessage);
-		}
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function extractClasses(payload: unknown) {
 		if (!isRecord(payload)) return [];
 		const maybeClasses = payload.classes;
@@ -124,8 +93,8 @@
 			fetch('/api/academic'),
 		]);
 		const [nextStudents, academic] = await Promise.all([
-			readApi<Student[]>(studentsRes, 'Gagal memuat data siswa.'),
-			readApi<unknown>(academicRes, 'Gagal memuat data akademik.'),
+			readClientApiData<Student[]>(studentsRes, 'Gagal memuat data siswa.'),
+			readClientApiData<unknown>(academicRes, 'Gagal memuat data akademik.'),
 		]);
 		return {
 			students: nextStudents ?? [],
@@ -134,15 +103,27 @@
 	}
 
 	function load() {
+		const requestId = ++studentsRequestId;
 		students = [];
 		classes = [];
-		studentsPromise = fetchOverview().then(applyOverview);
+		studentsPromise = fetchOverview()
+			.then((overview) => {
+				if (requestId === studentsRequestId) return applyOverview(overview);
+				return { students, classes };
+			})
+			.catch((error: unknown) => {
+				if (requestId === studentsRequestId) throw error;
+				return { students, classes };
+			});
 	}
 
 	async function refreshOverview() {
+		const requestId = ++studentsRequestId;
 		const overview = await fetchOverview();
-		applyOverview(overview);
-		studentsPromise = Promise.resolve(overview);
+		if (requestId === studentsRequestId) {
+			applyOverview(overview);
+			studentsPromise = Promise.resolve(overview);
+		}
 	}
 
 	function retryOverview(reset?: () => void) {
@@ -165,11 +146,6 @@
 
 	function showError(msg: string) {
 		toast.error(msg);
-	}
-
-	async function responseErrorMessage(response: Response, fallback: string) {
-		const payload = await response.json().catch(() => null);
-		return apiErrorMessage(payload) || fallback;
 	}
 
 	function mutationErrorMessage(error: unknown, fallback: string) {
@@ -224,12 +200,16 @@
 		return `${studentId}:${status}`;
 	}
 
+	function studentMutationPath(id: string) {
+		return clientApiPathWithQuery('/api/students', new URLSearchParams({ id }));
+	}
+
 	async function saveStudent() {
 		if (!formNis || !formNama || !formGender) return;
 		formBusy = true;
 		try {
 			const method = editId ? 'PUT' : 'POST';
-			const path = editId ? `/api/students/${editId}` : '/api/students';
+			const path = editId ? studentMutationPath(editId) : '/api/students';
 			const res = await fetch(path, {
 				method,
 				headers: { 'Content-Type': 'application/json' },
@@ -239,7 +219,7 @@
 					class_id: formClassId, is_active: formActive, status: formStatus,
 				}),
 			});
-			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menyimpan data siswa')); return; }
+			await readClientJson<unknown>(res);
 			showToast(editId ? 'Data siswa diperbarui' : 'Siswa berhasil ditambahkan');
 			resetForm();
 			await refreshOverviewAfterMutation();
@@ -257,8 +237,8 @@
 		}))) return;
 		deleteBusyId = id;
 		try {
-			const res = await fetch(`/api/students?id=${id}`, { method: 'DELETE' });
-			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menghapus siswa')); return; }
+			const res = await fetch(studentMutationPath(id), { method: 'DELETE' });
+			await readClientJson<unknown>(res);
 			showToast('Siswa dihapus');
 			await refreshOverviewAfterMutation();
 		} catch (error) {
@@ -284,15 +264,12 @@
 		const busyKey = lifecycleKey(student.id, status);
 		lifecycleBusyKey = busyKey;
 		try {
-			const res = await fetch(`/api/students?id=${student.id}`, {
+			const res = await fetch(studentMutationPath(student.id), {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ status }),
 			});
-			if (!res.ok) {
-				showError(await responseErrorMessage(res, 'Gagal memperbarui lifecycle siswa'));
-				return;
-			}
+			await readClientJson<unknown>(res);
 			showToast('Lifecycle siswa diperbarui');
 			await refreshOverviewAfterMutation();
 		} catch (error) {

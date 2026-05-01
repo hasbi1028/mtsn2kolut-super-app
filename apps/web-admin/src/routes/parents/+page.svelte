@@ -13,6 +13,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import SuccessPanel from '$lib/components/SuccessPanel.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	type Parent = {
 		id: string;
@@ -34,21 +35,17 @@
 		students: Student[];
 	};
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	let parents = $state<Parent[]>([]);
 	let students = $state<Student[]>([]);
 	let parentsPromise = $state<Promise<ParentsOverview> | null>(null);
+	let parentsRequestId = 0;
 	let success = $state('');
 	let showForm = $state(false);
 	let showLinkDialog = $state(false);
 	let selectedParent = $state<Parent | null>(null);
 	let linkedStudents = $state<Student[]>([]);
 	let linkedStudentsPromise = $state<Promise<Student[]> | null>(null);
+	let linkedStudentsRequestId = 0;
 
 	let fNama = $state('');
 	let fPhone = $state('');
@@ -58,40 +55,12 @@
 	let linkBusy = $state(false);
 	let unlinkBusyId = $state<string | null>(null);
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) {
-			throw new Error(message || fallbackMessage);
-		}
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function ensureMutationOk(response: Response, fallbackMessage: string) {
-		const payload = await response.json().catch(() => null);
-		if (!response.ok) throw new Error(apiErrorMessage(payload) || fallbackMessage);
+		try {
+			await readClientJson<unknown>(response);
+		} catch (error) {
+			throw new Error(mutationErrorMessage(error, fallbackMessage));
+		}
 	}
 
 	function mutationErrorMessage(error: unknown, fallbackMessage: string) {
@@ -111,8 +80,8 @@
 			fetch('/api/students')
 		]);
 		const [nextParents, nextStudents] = await Promise.all([
-			readApi<Parent[]>(parentsRes, 'Gagal memuat data orang tua.'),
-			readApi<Student[]>(studentsRes, 'Gagal memuat daftar siswa.')
+			readClientApiData<Parent[]>(parentsRes, 'Gagal memuat data orang tua.'),
+			readClientApiData<Student[]>(studentsRes, 'Gagal memuat daftar siswa.')
 		]);
 		return {
 			parents: nextParents ?? [],
@@ -121,15 +90,27 @@
 	}
 
 	function load() {
+		const requestId = ++parentsRequestId;
 		parents = [];
 		students = [];
-		parentsPromise = fetchParentsOverview().then(applyOverview);
+		parentsPromise = fetchParentsOverview()
+			.then((overview) => {
+				if (requestId === parentsRequestId) return applyOverview(overview);
+				return { parents, students };
+			})
+			.catch((error: unknown) => {
+				if (requestId === parentsRequestId) throw error;
+				return { parents, students };
+			});
 	}
 
 	async function refreshOverview() {
+		const requestId = ++parentsRequestId;
 		const overview = await fetchParentsOverview();
-		applyOverview(overview);
-		parentsPromise = Promise.resolve(overview);
+		if (requestId === parentsRequestId) {
+			applyOverview(overview);
+			parentsPromise = Promise.resolve(overview);
+		}
 	}
 
 	function retryOverview(reset?: () => void) {
@@ -139,22 +120,34 @@
 
 	async function fetchLinkedStudents(parentId: string) {
 		const res = await fetch(`/api/parents/${parentId}/children`);
-		return readApi<Student[]>(res, 'Gagal memuat daftar anak.');
+		return readClientApiData<Student[]>(res, 'Gagal memuat daftar anak.');
 	}
 
 	function loadLinkedStudents(parentId: string) {
+		const requestId = ++linkedStudentsRequestId;
 		linkedStudents = [];
-		linkedStudentsPromise = fetchLinkedStudents(parentId).then((nextStudents) => {
-			linkedStudents = nextStudents ?? [];
-			return linkedStudents;
-		});
+		linkedStudentsPromise = fetchLinkedStudents(parentId)
+			.then((nextStudents) => {
+				if (requestId === linkedStudentsRequestId && selectedParent?.id === parentId) {
+					linkedStudents = nextStudents ?? [];
+				}
+				return linkedStudents;
+			})
+			.catch((error: unknown) => {
+				if (requestId === linkedStudentsRequestId && selectedParent?.id === parentId) throw error;
+				return linkedStudents;
+			});
 	}
 
 	async function refreshLinkedStudents() {
 		if (!selectedParent) return;
-		const nextStudents = await fetchLinkedStudents(selectedParent.id);
-		linkedStudents = nextStudents ?? [];
-		linkedStudentsPromise = Promise.resolve(linkedStudents);
+		const requestId = ++linkedStudentsRequestId;
+		const parentId = selectedParent.id;
+		const nextStudents = await fetchLinkedStudents(parentId);
+		if (requestId === linkedStudentsRequestId && selectedParent?.id === parentId) {
+			linkedStudents = nextStudents ?? [];
+			linkedStudentsPromise = Promise.resolve(linkedStudents);
+		}
 	}
 
 	function retryLinkedStudents(reset?: () => void) {

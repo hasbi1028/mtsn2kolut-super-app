@@ -4,10 +4,12 @@
 	let {
 		promise,
 		shouldThrow = false,
+		withFailed = true,
 		onerror,
 	}: {
 		promise: Promise<unknown> | null;
 		shouldThrow?: boolean;
+		withFailed?: boolean;
 		onerror?: (error: unknown, reset: () => void) => void;
 	} = $props();
 
@@ -23,21 +25,33 @@
 	}
 </script>
 
-<AsyncContent {promise} {onerror}>
-	{#snippet pending()}
-		<p>Memuat data...</p>
-	{/snippet}
+{#if withFailed}
+	<AsyncContent {promise} {onerror}>
+		{#snippet pending()}
+			<p>Memuat data...</p>
+		{/snippet}
 
-	{#snippet failed(error, reset)}
-		<div role="alert">
-			<p>{message(error)}</p>
-			{#if reset}
-				<button type="button" onclick={reset}>Reset</button>
-			{/if}
-		</div>
-	{/snippet}
+		{#snippet failed(error, reset)}
+			<div role="alert">
+				<p>{message(error)}</p>
+				{#if reset}
+					<button type="button" onclick={reset}>Reset</button>
+				{/if}
+			</div>
+		{/snippet}
 
-	{#snippet children(value)}
-		<p>Nilai: {renderValue(value)}</p>
-	{/snippet}
-</AsyncContent>
+		{#snippet children(value)}
+			<p>Nilai: {renderValue(value)}</p>
+		{/snippet}
+	</AsyncContent>
+{:else}
+	<AsyncContent {promise} {onerror}>
+		{#snippet pending()}
+			<p>Memuat data...</p>
+		{/snippet}
+
+		{#snippet children(value)}
+			<p>Nilai: {renderValue(value)}</p>
+		{/snippet}
+	</AsyncContent>
+{/if}

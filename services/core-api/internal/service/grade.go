@@ -36,13 +36,13 @@ type Grade struct {
 func NewGrade(q *db.Queries) *Grade { return &Grade{q: q} }
 
 type GradeOverview struct {
-	Assignments         []db.ListClassSubjectAssignmentsRow `json:"assignments"`
-	AssignmentStatuses  []GradeAssignmentStatus            `json:"assignment_statuses"`
-	Components          []db.ListGradeComponentsRow        `json:"components"`
-	Summary             []db.ListGradebookSummaryRow       `json:"summary"`
-	Entries             []db.ListGradeEntriesByComponentRow `json:"entries"`
-	Readiness           GradeReadiness                     `json:"readiness"`
-	Finalization        *GradeFinalization                 `json:"finalization,omitempty"`
+	Assignments        []db.ListClassSubjectAssignmentsRow `json:"assignments"`
+	AssignmentStatuses []GradeAssignmentStatus             `json:"assignment_statuses"`
+	Components         []db.ListGradeComponentsRow         `json:"components"`
+	Summary            []db.ListGradebookSummaryRow        `json:"summary"`
+	Entries            []db.ListGradeEntriesByComponentRow `json:"entries"`
+	Readiness          GradeReadiness                      `json:"readiness"`
+	Finalization       *GradeFinalization                  `json:"finalization,omitempty"`
 }
 
 type GradeAssignmentStatus struct {
@@ -65,12 +65,12 @@ type GradeAssignmentStatus struct {
 }
 
 type GradeReadiness struct {
-	Ready                bool `json:"ready"`
-	PublishedComponentCount int `json:"published_component_count"`
-	DraftComponentCount  int  `json:"draft_component_count"`
-	ReadyStudentCount    int  `json:"ready_student_count"`
-	IncompleteStudentCount int `json:"incomplete_student_count"`
-	MissingGradeCount    int  `json:"missing_grade_count"`
+	Ready                   bool `json:"ready"`
+	PublishedComponentCount int  `json:"published_component_count"`
+	DraftComponentCount     int  `json:"draft_component_count"`
+	ReadyStudentCount       int  `json:"ready_student_count"`
+	IncompleteStudentCount  int  `json:"incomplete_student_count"`
+	MissingGradeCount       int  `json:"missing_grade_count"`
 }
 
 type GradeFinalization struct {
@@ -80,20 +80,29 @@ type GradeFinalization struct {
 	FinalizedAt  string `json:"finalized_at"`
 }
 
-func (s *Grade) Overview(ctx context.Context, assignmentID, componentID pgtype.UUID, publishedOnly bool) (GradeOverview, error) {
+func (s *Grade) Overview(ctx context.Context, assignmentID, componentID pgtype.UUID, publishedOnly bool, teacherEmployeeID pgtype.UUID) (GradeOverview, error) {
 	assignments, err := s.q.ListClassSubjectAssignments(ctx)
 	if err != nil {
 		return GradeOverview{}, err
 	}
+	if teacherEmployeeID.Valid {
+		assignments = filterGradeAssignmentsByTeacher(assignments, teacherEmployeeID)
+	}
 	statusRows, err := s.q.ListGradeAssignmentStatuses(ctx)
 	if err != nil {
 		return GradeOverview{}, err
+	}
+	if teacherEmployeeID.Valid {
+		statusRows = filterGradeAssignmentStatusesByTeacher(statusRows, teacherEmployeeID)
 	}
 	out := GradeOverview{
 		Assignments:        assignments,
 		AssignmentStatuses: buildAssignmentStatuses(statusRows),
 	}
 	if assignmentID.Valid {
+		if err := s.ensureAssignmentAccess(ctx, assignmentID, teacherEmployeeID); err != nil {
+			return GradeOverview{}, err
+		}
 		out.Components, err = s.q.ListGradeComponents(ctx, db.ListGradeComponentsParams{
 			AssignmentID:  assignmentID,
 			PublishedOnly: publishedOnly,
@@ -122,6 +131,9 @@ func (s *Grade) Overview(ctx context.Context, assignmentID, componentID pgtype.U
 		}
 	}
 	if componentID.Valid {
+		if err := s.ensureComponentAccess(ctx, componentID, teacherEmployeeID); err != nil {
+			return GradeOverview{}, err
+		}
 		out.Entries, err = s.q.ListGradeEntriesByComponent(ctx, componentID)
 		if err != nil {
 			return GradeOverview{}, err
@@ -130,7 +142,10 @@ func (s *Grade) Overview(ctx context.Context, assignmentID, componentID pgtype.U
 	return out, nil
 }
 
-func (s *Grade) CreateComponent(ctx context.Context, arg db.CreateGradeComponentParams) (db.GradeComponent, error) {
+func (s *Grade) CreateComponent(ctx context.Context, arg db.CreateGradeComponentParams, teacherEmployeeID pgtype.UUID) (db.GradeComponent, error) {
+	if err := s.ensureAssignmentAccess(ctx, arg.AssignmentID, teacherEmployeeID); err != nil {
+		return db.GradeComponent{}, err
+	}
 	if err := s.ensureAssignmentEditable(ctx, arg.AssignmentID); err != nil {
 		return db.GradeComponent{}, err
 	}
@@ -148,9 +163,12 @@ func (s *Grade) CreateComponent(ctx context.Context, arg db.CreateGradeComponent
 	return s.q.CreateGradeComponent(ctx, arg)
 }
 
-func (s *Grade) UpdateComponent(ctx context.Context, arg db.UpdateGradeComponentParams) (db.GradeComponent, error) {
+func (s *Grade) UpdateComponent(ctx context.Context, arg db.UpdateGradeComponentParams, teacherEmployeeID pgtype.UUID) (db.GradeComponent, error) {
 	component, err := s.q.GetGradeComponent(ctx, arg.ID)
 	if err != nil {
+		return db.GradeComponent{}, err
+	}
+	if err := s.ensureAssignmentAccess(ctx, component.AssignmentID, teacherEmployeeID); err != nil {
 		return db.GradeComponent{}, err
 	}
 	if err := s.ensureAssignmentEditable(ctx, component.AssignmentID); err != nil {
@@ -177,9 +195,12 @@ func (s *Grade) UpdateComponent(ctx context.Context, arg db.UpdateGradeComponent
 	return s.q.UpdateGradeComponent(ctx, arg)
 }
 
-func (s *Grade) SetComponentPublished(ctx context.Context, id pgtype.UUID, isPublished bool) (db.GradeComponent, error) {
+func (s *Grade) SetComponentPublished(ctx context.Context, id pgtype.UUID, isPublished bool, teacherEmployeeID pgtype.UUID) (db.GradeComponent, error) {
 	component, err := s.q.GetGradeComponent(ctx, id)
 	if err != nil {
+		return db.GradeComponent{}, err
+	}
+	if err := s.ensureAssignmentAccess(ctx, component.AssignmentID, teacherEmployeeID); err != nil {
 		return db.GradeComponent{}, err
 	}
 	if err := s.ensureAssignmentEditable(ctx, component.AssignmentID); err != nil {
@@ -191,9 +212,12 @@ func (s *Grade) SetComponentPublished(ctx context.Context, id pgtype.UUID, isPub
 	})
 }
 
-func (s *Grade) DeleteComponent(ctx context.Context, id pgtype.UUID) error {
+func (s *Grade) DeleteComponent(ctx context.Context, id pgtype.UUID, teacherEmployeeID pgtype.UUID) error {
 	component, err := s.q.GetGradeComponent(ctx, id)
 	if err != nil {
+		return err
+	}
+	if err := s.ensureAssignmentAccess(ctx, component.AssignmentID, teacherEmployeeID); err != nil {
 		return err
 	}
 	if err := s.ensureAssignmentEditable(ctx, component.AssignmentID); err != nil {
@@ -202,9 +226,12 @@ func (s *Grade) DeleteComponent(ctx context.Context, id pgtype.UUID) error {
 	return s.q.DeleteGradeComponent(ctx, id)
 }
 
-func (s *Grade) UpsertEntry(ctx context.Context, componentID, studentID pgtype.UUID, score float64, notes, gradedBy string) (db.GradeEntry, error) {
+func (s *Grade) UpsertEntry(ctx context.Context, componentID, studentID, teacherEmployeeID pgtype.UUID, score float64, notes, gradedBy string) (db.GradeEntry, error) {
 	component, err := s.q.GetGradeComponent(ctx, componentID)
 	if err != nil {
+		return db.GradeEntry{}, err
+	}
+	if err := s.ensureAssignmentAccess(ctx, component.AssignmentID, teacherEmployeeID); err != nil {
 		return db.GradeEntry{}, err
 	}
 	if err := s.ensureAssignmentEditable(ctx, component.AssignmentID); err != nil {
@@ -225,8 +252,11 @@ func (s *Grade) UpsertEntry(ctx context.Context, componentID, studentID pgtype.U
 	})
 }
 
-func (s *Grade) FinalizeAssignment(ctx context.Context, assignmentID pgtype.UUID, finalizedBy, notes string) (db.GradeAssignmentFinalization, error) {
-	overview, err := s.Overview(ctx, assignmentID, pgtype.UUID{}, false)
+func (s *Grade) FinalizeAssignment(ctx context.Context, assignmentID pgtype.UUID, finalizedBy, notes string, teacherEmployeeID pgtype.UUID) (db.GradeAssignmentFinalization, error) {
+	if err := s.ensureAssignmentAccess(ctx, assignmentID, teacherEmployeeID); err != nil {
+		return db.GradeAssignmentFinalization{}, err
+	}
+	overview, err := s.Overview(ctx, assignmentID, pgtype.UUID{}, false, teacherEmployeeID)
 	if err != nil {
 		return db.GradeAssignmentFinalization{}, err
 	}
@@ -240,8 +270,41 @@ func (s *Grade) FinalizeAssignment(ctx context.Context, assignmentID pgtype.UUID
 	})
 }
 
-func (s *Grade) ReopenAssignment(ctx context.Context, assignmentID pgtype.UUID) error {
+func (s *Grade) ReopenAssignment(ctx context.Context, assignmentID, teacherEmployeeID pgtype.UUID) error {
+	if err := s.ensureAssignmentAccess(ctx, assignmentID, teacherEmployeeID); err != nil {
+		return err
+	}
 	return s.q.DeleteGradeAssignmentFinalization(ctx, assignmentID)
+}
+
+func (s *Grade) ensureAssignmentAccess(ctx context.Context, assignmentID, teacherEmployeeID pgtype.UUID) error {
+	if !teacherEmployeeID.Valid {
+		return nil
+	}
+	assignments, err := s.q.ListClassSubjectAssignments(ctx)
+	if err != nil {
+		return err
+	}
+	for _, assignment := range assignments {
+		if assignment.ID == assignmentID {
+			if assignment.TeacherEmployeeID == teacherEmployeeID {
+				return nil
+			}
+			return fmt.Errorf("akses ditolak")
+		}
+	}
+	return fmt.Errorf("assignment tidak ditemukan")
+}
+
+func (s *Grade) ensureComponentAccess(ctx context.Context, componentID, teacherEmployeeID pgtype.UUID) error {
+	if !teacherEmployeeID.Valid {
+		return nil
+	}
+	component, err := s.q.GetGradeComponent(ctx, componentID)
+	if err != nil {
+		return err
+	}
+	return s.ensureAssignmentAccess(ctx, component.AssignmentID, teacherEmployeeID)
 }
 
 func (s *Grade) ensureAssignmentEditable(ctx context.Context, assignmentID pgtype.UUID) error {
@@ -321,6 +384,26 @@ func buildAssignmentStatuses(rows []db.ListGradeAssignmentStatusesRow) []GradeAs
 		statuses = append(statuses, status)
 	}
 	return statuses
+}
+
+func filterGradeAssignmentsByTeacher(all []db.ListClassSubjectAssignmentsRow, teacherEmployeeID pgtype.UUID) []db.ListClassSubjectAssignmentsRow {
+	out := make([]db.ListClassSubjectAssignmentsRow, 0, len(all))
+	for _, assignment := range all {
+		if assignment.TeacherEmployeeID == teacherEmployeeID {
+			out = append(out, assignment)
+		}
+	}
+	return out
+}
+
+func filterGradeAssignmentStatusesByTeacher(all []db.ListGradeAssignmentStatusesRow, teacherEmployeeID pgtype.UUID) []db.ListGradeAssignmentStatusesRow {
+	out := make([]db.ListGradeAssignmentStatusesRow, 0, len(all))
+	for _, row := range all {
+		if row.TeacherEmployeeID == teacherEmployeeID {
+			out = append(out, row)
+		}
+	}
+	return out
 }
 
 func normalizeGradeCategory(v string) string {

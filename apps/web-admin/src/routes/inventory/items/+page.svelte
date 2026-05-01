@@ -12,6 +12,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	interface Item {
 		id: string;
@@ -38,14 +39,9 @@
 	const KATEGORI_LIST = ['umum', 'kelas', 'laboratorium', 'kantor', 'kebersihan', 'elektronik'];
 	const KONDISI_LIST = ['baik', 'perlu-perawatan', 'rusak'];
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	let items = $state<Item[]>([]);
 	let itemsPromise = $state<Promise<Item[]> | null>(null);
+	let itemsRequestId = 0;
 	let search = $state('');
 	let filterKategori = $state('');
 	let filterKondisi = $state('');
@@ -59,6 +55,7 @@
 	let showBatchDialog = $state(false);
 	let formMode = $state<'beginner' | 'advance'>('beginner');
 	let historyPromise = $state<Promise<ItemEvent[]> | null>(null);
+	let historyRequestId = 0;
 	let historyItem = $state<Item | null>(null);
 	let historyEvents = $state<ItemEvent[]>([]);
 	let selectedIds = $state<string[]>([]);
@@ -184,54 +181,35 @@
 		});
 	}
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) {
-			throw new Error(message || fallbackMessage);
-		}
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function fetchItems(): Promise<Item[]> {
 		const res = await fetch('/api/inventory/items');
-		return readApi<Item[]>(res, 'Gagal memuat daftar inventaris.');
+		return readClientApiData<Item[]>(res, 'Gagal memuat daftar inventaris.');
 	}
 
 	function load() {
+		const requestId = ++itemsRequestId;
 		items = [];
-		itemsPromise = fetchItems().then((nextItems) => {
-			items = nextItems ?? [];
-			return items;
-		});
+		itemsPromise = fetchItems()
+			.then((nextItems) => {
+				if (requestId === itemsRequestId) {
+					items = nextItems ?? [];
+					return items;
+				}
+				return items;
+			})
+			.catch((error: unknown) => {
+				if (requestId === itemsRequestId) throw error;
+				return items;
+			});
 	}
 
 	async function refreshItems() {
+		const requestId = ++itemsRequestId;
 		const nextItems = await fetchItems();
-		items = nextItems ?? [];
-		itemsPromise = Promise.resolve(items);
+		if (requestId === itemsRequestId) {
+			items = nextItems ?? [];
+			itemsPromise = Promise.resolve(items);
+		}
 	}
 
 	function retryItems(reset?: () => void) {
@@ -261,11 +239,6 @@
 			itemsPromise = Promise.resolve(items);
 			toast.error(itemsErrorMessage(error));
 		}
-	}
-
-	function payloadData<T>(payload: unknown, fallback: T): T {
-		if (isRecord(payload) && 'data' in payload) return (payload.data ?? fallback) as T;
-		return (payload ?? fallback) as T;
 	}
 
 	function handleItemsRenderError(error: unknown) {
@@ -339,11 +312,7 @@
 			const res = editingId
 				? await fetch(`/api/inventory/items/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 				: await fetch('/api/inventory/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) {
-				toast.error(apiErrorMessage(payload) || 'Gagal menyimpan barang');
-				return;
-			}
+			await readClientJson<unknown>(res);
 			toast.success(editingId ? 'Barang diperbarui' : 'Barang ditambahkan');
 			showDialog = false;
 			await refreshItemsAfterMutation();
@@ -359,11 +328,7 @@
 		busy = true;
 		try {
 			const res = await fetch(`/api/inventory/items/${confirmDeleteId}`, { method: 'DELETE' });
-			if (!res.ok) {
-				const payload = await res.json().catch(() => null);
-				toast.error(apiErrorMessage(payload) || 'Gagal menghapus barang');
-				return;
-			}
+			await readClientJson<unknown>(res);
 			toast.success('Barang dihapus');
 			confirmDeleteId = null;
 			showDeleteDialog = false;
@@ -398,12 +363,7 @@
 					kondisi: kondisi || undefined,
 				}),
 			});
-			const payload = await res.json().catch(() => null);
-			if (!res.ok) {
-				toast.error(apiErrorMessage(payload) || 'Gagal memproses mutasi batch');
-				return;
-			}
-			const data = isRecord(payload) && isRecord(payload.data) ? payload.data : null;
+			const data = await readClientApiData<{ updated?: number }>(res, 'Gagal memproses mutasi batch');
 			const updated = typeof data?.updated === 'number' ? data.updated : selectedIds.length;
 			toast.success(`${updated} barang berhasil diperbarui`);
 			showBatchDialog = false;
@@ -418,15 +378,24 @@
 
 	async function fetchHistory(itemId: string): Promise<ItemEvent[]> {
 		const res = await fetch(`/api/inventory/items/${itemId}/history`);
-		return readApi<ItemEvent[]>(res, 'Gagal memuat riwayat inventaris');
+		return readClientApiData<ItemEvent[]>(res, 'Gagal memuat riwayat inventaris');
 	}
 
 	function setHistoryPromise(item: Item) {
+		const requestId = ++historyRequestId;
 		historyEvents = [];
-		historyPromise = fetchHistory(item.id).then((events) => {
-			historyEvents = events ?? [];
-			return historyEvents;
-		});
+		historyPromise = fetchHistory(item.id)
+			.then((events) => {
+				if (requestId === historyRequestId && historyItem?.id === item.id) {
+					historyEvents = events ?? [];
+					return historyEvents;
+				}
+				return historyEvents;
+			})
+			.catch((error: unknown) => {
+				if (requestId === historyRequestId && historyItem?.id === item.id) throw error;
+				return historyEvents;
+			});
 	}
 
 	function openHistory(item: Item) {

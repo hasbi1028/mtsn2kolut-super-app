@@ -28,6 +28,7 @@ class ExamShellScreen extends StatefulWidget {
     this.initialIsSyncingStatus = false,
     this.initialIsSavingAnswer = false,
     this.initialErrorMessage,
+    this.sessionStore,
   });
 
   final ExamApiClient client;
@@ -42,6 +43,7 @@ class ExamShellScreen extends StatefulWidget {
   final bool initialIsSyncingStatus;
   final bool initialIsSavingAnswer;
   final String? initialErrorMessage;
+  final ExamSessionStore? sessionStore;
 
   @override
   State<ExamShellScreen> createState() => _ExamShellScreenState();
@@ -49,7 +51,7 @@ class ExamShellScreen extends StatefulWidget {
 
 class _ExamShellScreenState extends State<ExamShellScreen>
     with WidgetsBindingObserver {
-  final _sessionStore = ExamSessionStore();
+  late final ExamSessionStore _sessionStore;
   late final Map<String, String> _answers;
   late final Map<String, String> _pendingAnswers;
   late final List<TextEditingController> _essayControllers;
@@ -94,6 +96,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   @override
   void initState() {
     super.initState();
+    _sessionStore = widget.sessionStore ?? ExamSessionStore();
     WidgetsBinding.instance.addObserver(this);
     _answers = Map<String, String>.from(widget.restoredSnapshot?.answers ?? {});
     _pendingAnswers = Map<String, String>.from(
@@ -775,7 +778,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               LayoutBuilder(
                 builder: (context, constraints) {
                   final wide = constraints.maxWidth >= 1080;
-                  final sidePanel = _buildSidePanel(theme, payload);
+                  final sidePanel = _buildSidePanel(theme, payload, wide: wide);
                   final content = _buildQuestionArea(theme, currentQuestion);
 
                   return Padding(
@@ -789,12 +792,17 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                               Expanded(child: content),
                             ],
                           )
-                        : Column(
-                            children: [
-                              sidePanel,
-                              const SizedBox(height: 16),
-                              Expanded(child: content),
-                            ],
+                        : SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                sidePanel,
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  height: constraints.maxHeight * 0.82,
+                                  child: content,
+                                ),
+                              ],
+                            ),
                           ),
                   );
                 },
@@ -877,204 +885,210 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     );
   }
 
-  Widget _buildSidePanel(ThemeData theme, ExamLoginPayload payload) {
+  Widget _buildSidePanel(
+    ThemeData theme,
+    ExamLoginPayload payload, {
+    required bool wide,
+  }) {
     final connection = _connectionState;
+    final questionGrid = GridView.builder(
+      itemCount: payload.questions.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1,
+      ),
+      itemBuilder: (context, index) {
+        final question = payload.questions[index];
+        final selected = index == _currentQuestionIndex;
+        final answered = _answers.containsKey(question.id);
+        final hasAudio = _questionHasAudio(question);
+        final audioPlayed = _questionAudioPlayed(question);
+        final background = selected
+            ? theme.colorScheme.primary
+            : answered
+            ? theme.colorScheme.primary.withValues(alpha: 0.12)
+            : const Color(0xFFF1F4ED);
+        final foreground = selected
+            ? theme.colorScheme.onPrimary
+            : answered
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurface;
+
+        return InkWell(
+          onTap: () {
+            setState(() {
+              _currentQuestionIndex = index;
+            });
+            unawaited(_persistSnapshot());
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '${index + 1}',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (hasAudio) ...[
+                    const SizedBox(height: 4),
+                    Icon(
+                      audioPlayed ? Icons.headset_mic : Icons.headset_off,
+                      size: 16,
+                      color: foreground,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              payload.student.nama,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text('NIS ${payload.student.nis}'),
-            const SizedBox(height: 4),
-            Text('Ruang ${payload.room?.roomName ?? '-'}'),
-            const SizedBox(height: 20),
-            StatTile(
-              label: 'Sisa waktu',
-              value: ExamShellConnectionViewModel.formatDuration(
-                _timeRemainingSeconds,
-              ),
-              accent: _timeRemainingSeconds <= 300,
-            ),
-            const SizedBox(height: 12),
-            StatTile(
-              label: 'Progres',
-              value: '$_answeredCount / ${payload.totalQuestions}',
-            ),
-            const SizedBox(height: 12),
-            StatTile(
-              label: 'Kontak server terakhir',
-              value: connection.formatClock(_lastServerContactAt),
-            ),
-            const SizedBox(height: 12),
-            ConnectionHealthCard(
-              label: connection.connectionHealthTitle,
-              description: connection.connectionHealthDescription,
-              tone: connection.connectionHealthTone,
-            ),
-            if (_lastSyncFailureAt != null) ...[
-              const SizedBox(height: 12),
-              StatTile(
-                label: 'Gangguan terakhir',
-                value: connection.formatClock(_lastSyncFailureAt),
-                accent: true,
-              ),
-            ],
-            const SizedBox(height: 20),
-            if (_consecutiveSyncFailures >= 2) ...[
-              ConnectionWarningCard(
-                failureCount: _consecutiveSyncFailures,
-                lastFailureAt: connection.formatClock(_lastSyncFailureAt),
-                onRetry: _isSyncingStatus ? null : _syncStatus,
-              ),
-              const SizedBox(height: 14),
-            ],
-            if (connection.needsSupervisorAttention) ...[
-              SupervisorAttentionCard(
-                lastContactAt: connection.formatClock(_lastServerContactAt),
-                staleDuration: connection.staleAttentionDurationLabel,
-                escalationThreshold: connection.staleEscalationThresholdLabel,
-                escalated: connection.needsEscalatedSupervisorAttention,
-                onRetry: _isSyncingStatus ? null : _syncStatus,
-              ),
-              const SizedBox(height: 14),
-            ],
-            if (_isDegradedMode) ...[
-              DegradedModeCard(
-                pendingCount: _pendingAnswers.length,
-                failureCount: _consecutiveSyncFailures,
-                onRetry: _isSyncingStatus ? null : _syncStatus,
-              ),
-              const SizedBox(height: 14),
-            ],
-            if (_pendingAnswers.isNotEmpty) ...[
-              StatTile(
-                label: 'Jawaban lokal',
-                value: '${_pendingAnswers.length} menunggu sinkron',
-                accent: true,
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (_serverNotice != null) ...[
-              ExamGuidanceCard(notice: _serverNotice!),
-              const SizedBox(height: 12),
-            ],
-            if (_statusMessage != null)
-              InlineMessage(tone: BannerTone.success, message: _statusMessage!),
-            if (_errorMessage != null) ...[
-              if (_statusMessage != null) const SizedBox(height: 10),
-              InlineMessage(tone: BannerTone.error, message: _errorMessage!),
-            ],
-            const SizedBox(height: 20),
-            Text(
-              'Navigasi soal',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: GridView.builder(
-                itemCount: payload.questions.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  childAspectRatio: 1,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                payload.student.nama,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
                 ),
-                itemBuilder: (context, index) {
-                  final question = payload.questions[index];
-                  final selected = index == _currentQuestionIndex;
-                  final answered = _answers.containsKey(question.id);
-                  final hasAudio = _questionHasAudio(question);
-                  final audioPlayed = _questionAudioPlayed(question);
-                  final background = selected
-                      ? theme.colorScheme.primary
-                      : answered
-                      ? theme.colorScheme.primary.withValues(alpha: 0.12)
-                      : const Color(0xFFF1F4ED);
-                  final foreground = selected
-                      ? theme.colorScheme.onPrimary
-                      : answered
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurface;
-
-                  return InkWell(
-                    onTap: () {
-                      setState(() {
-                        _currentQuestionIndex = index;
-                      });
-                      unawaited(_persistSnapshot());
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Ink(
-                      decoration: BoxDecoration(
-                        color: background,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              '${index + 1}',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: foreground,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            if (hasAudio) ...[
-                              const SizedBox(height: 4),
-                              Icon(
-                                audioPlayed
-                                    ? Icons.headset_mic
-                                    : Icons.headset_off,
-                                size: 16,
-                                color: foreground,
-                              ),
-                            ],
-                          ],
+              ),
+              const SizedBox(height: 4),
+              Text('NIS ${payload.student.nis}'),
+              const SizedBox(height: 4),
+              Text('Ruang ${payload.room?.roomName ?? '-'}'),
+              const SizedBox(height: 20),
+              StatTile(
+                label: 'Sisa waktu',
+                value: ExamShellConnectionViewModel.formatDuration(
+                  _timeRemainingSeconds,
+                ),
+                accent: _timeRemainingSeconds <= 300,
+              ),
+              const SizedBox(height: 12),
+              StatTile(
+                label: 'Progres',
+                value: '$_answeredCount / ${payload.totalQuestions}',
+              ),
+              const SizedBox(height: 12),
+              StatTile(
+                label: 'Kontak server terakhir',
+                value: connection.formatClock(_lastServerContactAt),
+              ),
+              const SizedBox(height: 12),
+              ConnectionHealthCard(
+                label: connection.connectionHealthTitle,
+                description: connection.connectionHealthDescription,
+                tone: connection.connectionHealthTone,
+              ),
+              if (_lastSyncFailureAt != null) ...[
+                const SizedBox(height: 12),
+                StatTile(
+                  label: 'Gangguan terakhir',
+                  value: connection.formatClock(_lastSyncFailureAt),
+                  accent: true,
+                ),
+              ],
+              const SizedBox(height: 20),
+              if (_consecutiveSyncFailures >= 2) ...[
+                ConnectionWarningCard(
+                  failureCount: _consecutiveSyncFailures,
+                  lastFailureAt: connection.formatClock(_lastSyncFailureAt),
+                  onRetry: _isSyncingStatus ? null : _syncStatus,
+                ),
+                const SizedBox(height: 14),
+              ],
+              if (connection.needsSupervisorAttention) ...[
+                SupervisorAttentionCard(
+                  lastContactAt: connection.formatClock(_lastServerContactAt),
+                  staleDuration: connection.staleAttentionDurationLabel,
+                  escalationThreshold: connection.staleEscalationThresholdLabel,
+                  escalated: connection.needsEscalatedSupervisorAttention,
+                  onRetry: _isSyncingStatus ? null : _syncStatus,
+                ),
+                const SizedBox(height: 14),
+              ],
+              if (_isDegradedMode) ...[
+                DegradedModeCard(
+                  pendingCount: _pendingAnswers.length,
+                  failureCount: _consecutiveSyncFailures,
+                  onRetry: _isSyncingStatus ? null : _syncStatus,
+                ),
+                const SizedBox(height: 14),
+              ],
+              if (_pendingAnswers.isNotEmpty) ...[
+                StatTile(
+                  label: 'Jawaban lokal',
+                  value: '${_pendingAnswers.length} menunggu sinkron',
+                  accent: true,
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (_serverNotice != null) ...[
+                ExamGuidanceCard(notice: _serverNotice!),
+                const SizedBox(height: 12),
+              ],
+              if (_statusMessage != null)
+                InlineMessage(
+                  tone: BannerTone.success,
+                  message: _statusMessage!,
+                ),
+              if (_errorMessage != null) ...[
+                if (_statusMessage != null) const SizedBox(height: 10),
+                InlineMessage(tone: BannerTone.error, message: _errorMessage!),
+              ],
+              const SizedBox(height: 20),
+              Text(
+                'Navigasi soal',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(height: wide ? 156 : 88, child: questionGrid),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _isSubmitting || _isSubmitted || _isDegradedMode
+                      ? null
+                      : _submit,
+                  icon: _isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          _isDegradedMode ? Icons.sync_problem : Icons.task_alt,
                         ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _isSubmitting || _isSubmitted || _isDegradedMode
-                    ? null
-                    : _submit,
-                icon: _isSubmitting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(
-                        _isDegradedMode ? Icons.sync_problem : Icons.task_alt,
-                      ),
-                label: Text(
-                  _isSubmitted
-                      ? 'Ujian Terkirim'
-                      : _isDegradedMode
-                      ? 'Kirim ditahan saat koneksi menurun'
-                      : 'Kirim Ujian',
+                  label: Text(
+                    _isSubmitted
+                        ? 'Ujian Terkirim'
+                        : _isDegradedMode
+                        ? 'Kirim ditahan saat koneksi menurun'
+                        : 'Kirim Ujian',
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

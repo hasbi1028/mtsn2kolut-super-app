@@ -1,21 +1,36 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	mw "mtsn2kolut-super-app/backend/internal/middleware"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
+type portalService interface {
+	StudentOverview(ctx context.Context, studentID pgtype.UUID) (db.GetStudentByIDRow, []db.ListStudentParentsRow, []db.ListStudentExamSessionsRow, error)
+	StudentTimetable(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentTimetableRow, error)
+	TeacherTimetable(ctx context.Context, employeeID pgtype.UUID) ([]db.ListTeacherTimetableRow, error)
+	ParentChildrenTimetable(ctx context.Context, parentID pgtype.UUID) ([]db.ListParentChildrenTimetableRow, error)
+	ParentOverview(ctx context.Context, parentID pgtype.UUID) (db.Parent, []db.ListParentChildrenRow, error)
+}
+
 type Portal struct {
-	svc *service.Portal
+	svc portalService
 }
 
 func NewPortal(svc *service.Portal) *Portal { return &Portal{svc: svc} }
 
 func (h *Portal) StudentMe(w http.ResponseWriter, r *http.Request) {
+	if !portalHasAnyRole(r, "siswa") {
+		api.Forbidden(w)
+		return
+	}
 	claims, ok := api.ClaimsFromContext(r.Context())
 	if !ok {
 		api.Unauthorized(w)
@@ -50,6 +65,10 @@ func (h *Portal) StudentMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Portal) TeacherTimetable(w http.ResponseWriter, r *http.Request) {
+	if !portalHasAnyRole(r, "guru") {
+		api.Forbidden(w)
+		return
+	}
 	claims, ok := api.ClaimsFromContext(r.Context())
 	if !ok {
 		api.Unauthorized(w)
@@ -76,6 +95,10 @@ func (h *Portal) TeacherTimetable(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Portal) ParentMe(w http.ResponseWriter, r *http.Request) {
+	if !portalHasAnyRole(r, "ortu") {
+		api.Forbidden(w)
+		return
+	}
 	claims, ok := api.ClaimsFromContext(r.Context())
 	if !ok {
 		api.Unauthorized(w)
@@ -106,4 +129,12 @@ func (h *Portal) ParentMe(w http.ResponseWriter, r *http.Request) {
 		"children":  children,
 		"timetable": timetable,
 	})
+}
+
+func portalHasAnyRole(r *http.Request, roles ...string) bool {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		return false
+	}
+	return mw.HasAnyRole(claims, roles...)
 }

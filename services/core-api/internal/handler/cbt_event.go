@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -16,12 +17,27 @@ import (
 )
 
 type CbtEvent struct {
-	svc *service.CbtEvent
+	svc cbtEventService
+}
+
+type cbtEventService interface {
+	List(ctx context.Context) ([]db.ListCbtExamEventsRow, error)
+	Get(ctx context.Context, id pgtype.UUID) (db.GetCbtExamEventRow, error)
+	GetResults(ctx context.Context, id pgtype.UUID) ([]db.GetEventResultsRow, error)
+	GetExamCards(ctx context.Context, id pgtype.UUID) ([]db.GetEventExamCardsRow, error)
+	Create(ctx context.Context, in service.CreateCbtEventInput) (db.CbtExamEvent, error)
+	Update(ctx context.Context, id pgtype.UUID, in service.CreateCbtEventInput) (db.CbtExamEvent, error)
+	UpdateStatus(ctx context.Context, id pgtype.UUID, status string) (db.CbtExamEvent, error)
+	Delete(ctx context.Context, id pgtype.UUID) error
 }
 
 func NewCbtEvent(svc *service.CbtEvent) *CbtEvent { return &CbtEvent{svc: svc} }
 
 func (h *CbtEvent) List(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	rows, err := h.svc.List(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -31,6 +47,10 @@ func (h *CbtEvent) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtEvent) Get(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -45,6 +65,10 @@ func (h *CbtEvent) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtEvent) GetResults(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -59,6 +83,10 @@ func (h *CbtEvent) GetResults(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtEvent) GetExamCards(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -73,13 +101,17 @@ func (h *CbtEvent) GetExamCards(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtEvent) Create(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	var body struct {
-		Title          string `json:"title"`
-		ExamType       string `json:"exam_type"`
-		Scope          string `json:"scope"`
+		Title          string   `json:"title"`
+		ExamType       string   `json:"exam_type"`
+		Scope          string   `json:"scope"`
 		TargetLevels   []string `json:"target_levels"`
-		AcademicYearID string `json:"academic_year_id"`
-		Status         string `json:"status"`
+		AcademicYearID string   `json:"academic_year_id"`
+		Status         string   `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -99,7 +131,7 @@ func (h *CbtEvent) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	targetLevels := normalizeTargetLevels(body.TargetLevels)
 	if err := validateTargetLevels(targetLevels); err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data event CBT tidak valid")
 		return
 	}
 
@@ -129,17 +161,21 @@ func (h *CbtEvent) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtEvent) Update(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
 		return
 	}
 	var body struct {
-		Title          string `json:"title"`
-		ExamType       string `json:"exam_type"`
-		Scope          string `json:"scope"`
+		Title          string   `json:"title"`
+		ExamType       string   `json:"exam_type"`
+		Scope          string   `json:"scope"`
 		TargetLevels   []string `json:"target_levels"`
-		AcademicYearID string `json:"academic_year_id"`
+		AcademicYearID string   `json:"academic_year_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -147,7 +183,7 @@ func (h *CbtEvent) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	targetLevels := normalizeTargetLevels(body.TargetLevels)
 	if err := validateTargetLevels(targetLevels); err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data event CBT tidak valid")
 		return
 	}
 	var ayID pgtype.UUID
@@ -173,6 +209,10 @@ func (h *CbtEvent) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtEvent) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -194,6 +234,10 @@ func (h *CbtEvent) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtEvent) Delete(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")

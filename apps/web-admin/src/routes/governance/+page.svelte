@@ -20,6 +20,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	interface Stats {
 		total_units: number;
@@ -264,12 +265,6 @@
 		employees: EmployeeOption[];
 	}
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	interface UnitForm {
 		code: string;
 		name: string;
@@ -451,6 +446,7 @@
 	const STRATEGIC_DOCUMENT_TYPES = new Set(STRATEGIC_DOCUMENT_ORDER);
 
 	let governancePromise = $state<Promise<GovernanceOverview> | null>(null);
+	let governanceRequestId = 0;
 	let stats = $state<Stats>(emptyStats());
 	let units = $state<UnitRow[]>([]);
 	let positions = $state<PositionRow[]>([]);
@@ -753,35 +749,6 @@
 		};
 	}
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function normalizeStats(value: Partial<Stats> | null | undefined): Stats {
 		return { ...emptyStats(), ...(value ?? {}) };
 	}
@@ -823,17 +790,17 @@
 	async function fetchGovernanceOverview(): Promise<GovernanceOverview> {
 		const [statsData, unitsData, positionsData, assignmentsData, documentsData, programsData, workPlanData, performanceData, evidenceData, snpData, employeesData] =
 			await Promise.all([
-				fetch('/api/governance/stats').then((response) => readApi<Partial<Stats>>(response, 'Gagal memuat statistik tata kelola')),
-				fetch('/api/governance/units').then((response) => readApi<UnitRow[]>(response, 'Gagal memuat unit kerja')),
-				fetch('/api/governance/positions').then((response) => readApi<PositionRow[]>(response, 'Gagal memuat jabatan')),
-				fetch('/api/governance/assignments?active_only=true').then((response) => readApi<AssignmentRow[]>(response, 'Gagal memuat pejabat aktif')),
-				fetch('/api/governance/documents').then((response) => readApi<DocumentRow[]>(response, 'Gagal memuat dokumen tata kelola')),
-				fetch('/api/governance/programs').then((response) => readApi<ProgramRow[]>(response, 'Gagal memuat program tata kelola')),
-				fetch('/api/governance/work-plan-items').then((response) => readApi<WorkPlanItemRow[]>(response, 'Gagal memuat RKT/RKJM')),
-				fetch('/api/governance/performance-targets').then((response) => readApi<PerformanceTargetRow[]>(response, 'Gagal memuat target kinerja')),
-				fetch('/api/governance/evidence-items').then((response) => readApi<EvidenceItemRow[]>(response, 'Gagal memuat bukti mutu')),
-				fetch('/api/governance/snp-matrix').then((response) => readApi<SNPRow[]>(response, 'Gagal memuat matriks 8 SNP')),
-				fetch('/api/governance/employee-options').then((response) => readApi<EmployeeOption[]>(response, 'Gagal memuat opsi pegawai')),
+				fetch('/api/governance/stats').then((response) => readClientApiData<Partial<Stats>>(response, 'Gagal memuat statistik tata kelola')),
+				fetch('/api/governance/units').then((response) => readClientApiData<UnitRow[]>(response, 'Gagal memuat unit kerja')),
+				fetch('/api/governance/positions').then((response) => readClientApiData<PositionRow[]>(response, 'Gagal memuat jabatan')),
+				fetch('/api/governance/assignments?active_only=true').then((response) => readClientApiData<AssignmentRow[]>(response, 'Gagal memuat pejabat aktif')),
+				fetch('/api/governance/documents').then((response) => readClientApiData<DocumentRow[]>(response, 'Gagal memuat dokumen tata kelola')),
+				fetch('/api/governance/programs').then((response) => readClientApiData<ProgramRow[]>(response, 'Gagal memuat program tata kelola')),
+				fetch('/api/governance/work-plan-items').then((response) => readClientApiData<WorkPlanItemRow[]>(response, 'Gagal memuat RKT/RKJM')),
+				fetch('/api/governance/performance-targets').then((response) => readClientApiData<PerformanceTargetRow[]>(response, 'Gagal memuat target kinerja')),
+				fetch('/api/governance/evidence-items').then((response) => readClientApiData<EvidenceItemRow[]>(response, 'Gagal memuat bukti mutu')),
+				fetch('/api/governance/snp-matrix').then((response) => readClientApiData<SNPRow[]>(response, 'Gagal memuat matriks 8 SNP')),
+				fetch('/api/governance/employee-options').then((response) => readClientApiData<EmployeeOption[]>(response, 'Gagal memuat opsi pegawai')),
 			]);
 
 		return {
@@ -852,10 +819,19 @@
 	}
 
 	function loadGovernance() {
-		governancePromise = fetchGovernanceOverview().then((overview) => {
-			applyGovernanceOverview(overview);
-			return overview;
-		});
+		const requestId = ++governanceRequestId;
+		governancePromise = fetchGovernanceOverview()
+			.then((overview) => {
+				if (requestId === governanceRequestId) {
+					applyGovernanceOverview(overview);
+					return overview;
+				}
+				return currentGovernanceOverview();
+			})
+			.catch((error: unknown) => {
+				if (requestId === governanceRequestId) throw error;
+				return currentGovernanceOverview();
+			});
 		return governancePromise;
 	}
 
@@ -864,11 +840,15 @@
 			await loadGovernance();
 			return;
 		}
+		const requestId = ++governanceRequestId;
 		try {
 			const overview = await fetchGovernanceOverview();
-			applyGovernanceOverview(overview);
-			governancePromise = Promise.resolve(overview);
+			if (requestId === governanceRequestId) {
+				applyGovernanceOverview(overview);
+				governancePromise = Promise.resolve(overview);
+			}
 		} catch (error) {
+			if (requestId !== governanceRequestId) return;
 			governancePromise = Promise.resolve(currentGovernanceOverview());
 			toast.error(governanceErrorMessage(error));
 		}
@@ -883,6 +863,12 @@
 		if (error instanceof Error && error.message.trim()) return error.message;
 		if (typeof error === 'string' && error.trim()) return error;
 		return 'Data tata kelola belum dapat dimuat. Periksa koneksi backend lalu coba lagi.';
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		if (typeof error === 'string' && error.trim()) return error;
+		return fallback;
 	}
 
 	function handleGovernanceRenderError(error: unknown, reset: () => void) {
@@ -1096,9 +1082,10 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(payload),
 		});
-		if (!res.ok) {
-			const payload = await res.json().catch(() => null);
-			toast.error(apiErrorMessage(payload) || 'Gagal menyimpan data tata kelola');
+		try {
+			await readClientJson<unknown>(res);
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menyimpan data tata kelola'));
 			return false;
 		}
 		return true;
@@ -1111,12 +1098,13 @@
 			confirmLabel: 'Hapus Data',
 			tone: 'danger'
 		}))) return;
-	const res = await fetch(`/api/governance/${kind}/${id}`, { method: 'DELETE' });
-	if (!res.ok) {
-		const payload = await res.json().catch(() => null);
-		toast.error(apiErrorMessage(payload) || 'Gagal menghapus data');
-		return;
-	}
+		const res = await fetch(`/api/governance/${kind}/${id}`, { method: 'DELETE' });
+		try {
+			await readClientJson<unknown>(res);
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menghapus data'));
+			return;
+		}
 		toast.success('Data tata kelola dihapus');
 		await refreshGovernance();
 	}

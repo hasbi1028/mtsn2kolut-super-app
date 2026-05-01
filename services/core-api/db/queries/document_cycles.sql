@@ -202,6 +202,8 @@ WHERE (
 ) AND (
     sqlc.arg(responsible_employee_id)::UUID IS NULL OR o.responsible_employee_id = sqlc.arg(responsible_employee_id)::UUID
 ) AND (
+    sqlc.arg(verifier_employee_id)::UUID IS NULL OR o.verifier_employee_id = sqlc.arg(verifier_employee_id)::UUID
+) AND (
     sqlc.arg(reminder_only)::BOOLEAN = FALSE OR (
         o.status <> 'completed'
         AND o.reminder_date <= CURRENT_DATE
@@ -636,5 +638,59 @@ SELECT
     COALESCE(u.username, '')::TEXT AS actor_username
 FROM document_cycle_events e
 LEFT JOIN users u ON u.id = e.actor_user_id
-WHERE e.obligation_id = $1
+WHERE e.obligation_id = sqlc.arg(obligation_id)
+  AND (
+      sqlc.arg(event_type)::TEXT = '' OR e.event_type = sqlc.arg(event_type)
+  )
+  AND (
+      sqlc.arg(actor)::TEXT = '' OR
+      (sqlc.arg(actor)::TEXT = 'system' AND e.actor_user_id IS NULL) OR
+      u.username ILIKE '%' || sqlc.arg(actor) || '%'
+  )
 ORDER BY e.created_at DESC;
+
+-- name: CreateDocumentCycleReminderEvents :execrows
+INSERT INTO document_cycle_events (
+    obligation_id,
+    event_type,
+    from_status,
+    to_status,
+    notes,
+    actor_user_id
+)
+SELECT
+    o.id,
+    'reminder_sent',
+    '',
+    o.status,
+    CASE
+        WHEN o.due_date < sqlc.arg(today)::DATE THEN
+            FORMAT(
+                'Pengingat terlambat untuk PIC %s: %s jatuh tempo pada %s.',
+                COALESCE(NULLIF(re.nama, ''), 'penyusun'),
+                c.title,
+                TO_CHAR(o.due_date, 'DD Mon YYYY')
+            )
+        ELSE
+            FORMAT(
+                'Pengingat PIC %s: %s jatuh tempo pada %s.',
+                COALESCE(NULLIF(re.nama, ''), 'penyusun'),
+                c.title,
+                TO_CHAR(o.due_date, 'DD Mon YYYY')
+            )
+    END,
+    NULL
+FROM document_cycle_obligations o
+JOIN document_cycle_catalogs c ON c.id = o.catalog_id
+LEFT JOIN employees re ON re.id = o.responsible_employee_id
+WHERE o.status <> 'completed'
+  AND o.responsible_employee_id IS NOT NULL
+  AND o.reminder_date <= sqlc.arg(today)::DATE
+  AND NOT EXISTS (
+      SELECT 1
+      FROM document_cycle_events e
+      WHERE e.obligation_id = o.id
+        AND e.event_type = 'reminder_sent'
+        AND e.created_at >= sqlc.arg(today)::DATE
+        AND e.created_at < (sqlc.arg(today)::DATE + INTERVAL '1 day')
+  );

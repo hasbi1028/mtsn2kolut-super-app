@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -8,16 +9,31 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"mtsn2kolut-super-app/backend/internal/api"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
-type Website struct{ svc *service.Website }
+type Website struct{ svc websiteService }
+
+type websiteService interface {
+	List(ctx context.Context, kind, status, search string) ([]db.WebsiteContent, error)
+	Create(ctx context.Context, in service.SaveWebsiteContentInput) (db.WebsiteContent, error)
+	Update(ctx context.Context, in service.SaveWebsiteContentInput) (db.WebsiteContent, error)
+	Delete(ctx context.Context, id pgtype.UUID) error
+	ListFeatured(ctx context.Context, kind string, limit int32) ([]db.WebsiteContent, error)
+	ListPublished(ctx context.Context, kind string, limit int32) ([]db.WebsiteContent, error)
+	GetPublishedBySlug(ctx context.Context, kind, slug string) (db.WebsiteContent, error)
+}
 
 func NewWebsite(svc *service.Website) *Website { return &Website{svc: svc} }
 
 func websiteActorUsername(r *http.Request) string {
 	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
+		if usr, ok := claims["usr"].(string); ok && usr != "" {
+			return usr
+		}
 		if sub, ok := claims["sub"].(string); ok {
 			return sub
 		}
@@ -26,6 +42,10 @@ func websiteActorUsername(r *http.Request) string {
 }
 
 func (h *Website) List(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	rows, err := h.svc.List(
 		r.Context(),
 		r.URL.Query().Get("kind"),
@@ -40,6 +60,10 @@ func (h *Website) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Website) Create(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	var body struct {
 		Kind            string `json:"kind"`
 		Title           string `json:"title"`
@@ -72,13 +96,17 @@ func (h *Website) Create(w http.ResponseWriter, r *http.Request) {
 		ActorUsername:   websiteActorUsername(r),
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Konten website tidak valid")
 		return
 	}
 	api.Created(w, row)
 }
 
 func (h *Website) Update(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -121,13 +149,17 @@ func (h *Website) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Perubahan konten website tidak valid")
 		return
 	}
 	api.OK(w, row)
 }
 
 func (h *Website) Delete(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -177,7 +209,7 @@ func (h *Website) GetPublishedPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Konten website publik tidak valid")
 		return
 	}
 	api.OK(w, row)
@@ -205,7 +237,7 @@ func (h *Website) GetPublishedAnnouncement(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Pengumuman publik tidak valid")
 		return
 	}
 	api.OK(w, row)
@@ -218,7 +250,7 @@ func (h *Website) GetPublishedPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Halaman publik tidak valid")
 		return
 	}
 	api.OK(w, row)

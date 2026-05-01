@@ -7,8 +7,18 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
+type pusakaAttendanceStore interface {
+	ListAttendance(ctx context.Context, arg db.ListAttendanceParams) ([]db.ListAttendanceRow, error)
+	CountAttendance(ctx context.Context) (int64, error)
+	ListAttendanceByDate(ctx context.Context, tanggal pgtype.Date) ([]db.ListAttendanceByDateRow, error)
+	ListAttendanceInRange(ctx context.Context, arg db.ListAttendanceInRangeParams) ([]db.ListAttendanceInRangeRow, error)
+	ListAttendanceByEmployee(ctx context.Context, arg db.ListAttendanceByEmployeeParams) ([]db.ListAttendanceByEmployeeRow, error)
+	GetMonthlyAttendanceSummary(ctx context.Context, arg db.GetMonthlyAttendanceSummaryParams) ([]db.GetMonthlyAttendanceSummaryRow, error)
+	UpsertAttendance(ctx context.Context, arg db.UpsertAttendanceParams) (db.AttendanceRecord, error)
+}
+
 type PusakaAttendance struct {
-	q *db.Queries
+	q pusakaAttendanceStore
 }
 
 func NewPusakaAttendance(q *db.Queries) *PusakaAttendance { return &PusakaAttendance{q: q} }

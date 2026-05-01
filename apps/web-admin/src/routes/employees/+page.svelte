@@ -6,6 +6,7 @@
   import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import { toast } from '$lib/components/ui/sonner';
+  import { readClientApiData } from '$lib/client/api';
 
   type Employee = {
     id: string;
@@ -29,40 +30,34 @@
 
   let employees = $state<Employee[]>([]);
   let employeesPromise = $state<Promise<Employee[]> | null>(null);
-
-  function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-  }
+  let employeesRequestId = 0;
 
   function employeeRows(payload: EmployeesPayload | Employee[]) {
     if (Array.isArray(payload)) return payload;
     return payload.items ?? payload.data?.items ?? [];
   }
 
-  function apiErrorMessage(payload: unknown) {
-    if (!isRecord(payload)) return '';
-    const error = payload.error;
-    if (typeof error === 'string' && error.trim()) return error;
-    const message = payload.message;
-    if (typeof message === 'string' && message.trim()) return message;
-    return '';
-  }
-
   async function fetchEmployees() {
     const res = await fetch('/api/employees');
-    const payload = (await res.json().catch(() => null)) as EmployeesPayload | Employee[] | null;
-    const message = apiErrorMessage(payload);
-    if (!res.ok || message) throw new Error(message || 'Gagal memuat data pegawai');
-    if (payload === null) throw new Error('Gagal memuat data pegawai');
+    const payload = await readClientApiData<EmployeesPayload | Employee[]>(res, 'Gagal memuat data pegawai');
     return employeeRows(payload);
   }
 
   function load() {
+    const requestId = ++employeesRequestId;
     employees = [];
-    employeesPromise = fetchEmployees().then((rows) => {
-      employees = rows;
-      return rows;
-    });
+    employeesPromise = fetchEmployees()
+      .then((rows) => {
+        if (requestId === employeesRequestId) {
+          employees = rows;
+          return rows;
+        }
+        return employees;
+      })
+      .catch((error: unknown) => {
+        if (requestId === employeesRequestId) throw error;
+        return employees;
+      });
   }
 
   async function refreshEmployees() {
@@ -71,9 +66,12 @@
       return;
     }
     try {
+      const requestId = ++employeesRequestId;
       const rows = await fetchEmployees();
-      employees = rows;
-      employeesPromise = Promise.resolve(rows);
+      if (requestId === employeesRequestId) {
+        employees = rows;
+        employeesPromise = Promise.resolve(rows);
+      }
     } catch (error) {
       employeesPromise = Promise.resolve(employees);
       toast.error(employeeErrorMessage(error));

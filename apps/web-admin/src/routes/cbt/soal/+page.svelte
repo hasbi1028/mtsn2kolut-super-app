@@ -12,6 +12,8 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import RichContent from '$lib/components/RichContent.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
+	import { htmlToPlainText } from '$lib/utils/html-text';
 
 	// ── Types ─────────────────────────────────────────────────────────────────
 	type Subject = { id: string; name: string; code: string };
@@ -49,10 +51,15 @@
 		error?: string;
 		message?: string;
 	};
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
+	type DraftPayload = {
+		subjectId: string;
+		stem: string;
+		options: string[];
+		answerKey: string;
+		weight: number;
+		difficulty: string;
+		isRtl: boolean;
+		savedAt: string;
 	};
 	type Template = {
 		id: string;
@@ -173,6 +180,7 @@
 	let showTemplates = $state(true);
 	let composerMobilePanel = $state<'write' | 'preview'>('write');
 	let lastDraftSig = '';
+	let questionsRequestId = 0;
 
 	// ── Form fields ────────────────────────────────────────────────────────────
 	let fSubjectId = $state('');
@@ -182,19 +190,21 @@
 	let fWeight = $state(1);
 	let fDifficulty = $state('medium');
 	let fIsRtl = $state(false);
+	let activeDraftKey = $derived(DRAFT_KEY(editingId));
+	let draftSignature = $derived(JSON.stringify({
+		fSubjectId,
+		fStem,
+		opts: fOptions,
+		fAnswerKey,
+		fWeight,
+		fDifficulty,
+		fIsRtl,
+	}));
 
 	// ── Derived ────────────────────────────────────────────────────────────────
 	let pageCount = $derived(Math.max(1, Math.ceil(totalItems / PAGE_SIZE)));
 
-	function getPlainText(html: string): string {
-		if (!html) return '';
-		if (typeof document === 'undefined') return html.replace(/<[^>]+>/g, '');
-		const d = document.createElement('div');
-		d.innerHTML = html;
-		return (d.textContent ?? '').replace(/\s+/g, ' ').trim();
-	}
-
-	let stemText = $derived(getPlainText(fStem));
+	let stemText = $derived(htmlToPlainText(fStem));
 	let hasImage = $derived(fStem.includes('<img'));
 
 	let readinessChecks = $derived({
@@ -255,21 +265,8 @@
 	});
 
 	// ── Draft autosave ─────────────────────────────────────────────────────────
-	$effect(() => {
-		if (!showComposer) return;
-		const sig = JSON.stringify({
-			fSubjectId,
-			fStem,
-			opts: fOptions.map((o) => o),
-			fAnswerKey,
-			fWeight,
-			fDifficulty,
-			fIsRtl,
-		});
-		if (sig === lastDraftSig) return;
-
-		const draftKey = DRAFT_KEY(editingId);
-		const draftPayload = {
+	function buildDraftPayload(): DraftPayload {
+		return {
 			subjectId: fSubjectId,
 			stem: fStem,
 			options: [...fOptions],
@@ -279,14 +276,30 @@
 			isRtl: fIsRtl,
 			savedAt: new Date().toISOString(),
 		};
+	}
+
+	function markDraftAutosaved() {
+		draftStatus = 'Draft tersimpan otomatis';
+	}
+
+	function saveDraftSnapshot(draftKey: string, signature: string) {
+		lastDraftSig = signature;
+		try {
+			localStorage.setItem(draftKey, JSON.stringify(buildDraftPayload()));
+			markDraftAutosaved();
+		} catch {
+			/* ignore storage errors */
+		}
+	}
+
+	$effect(() => {
+		if (!showComposer) return;
+		const sig = draftSignature;
+		if (sig === lastDraftSig) return;
+
+		const draftKey = activeDraftKey;
 		const timer = setTimeout(() => {
-			lastDraftSig = sig;
-			try {
-				localStorage.setItem(draftKey, JSON.stringify(draftPayload));
-				draftStatus = 'Draft tersimpan otomatis';
-			} catch {
-				/* ignore storage errors */
-			}
+			saveDraftSnapshot(draftKey, sig);
 		}, 700);
 		return () => {
 			clearTimeout(timer);
@@ -295,7 +308,7 @@
 
 	function restoreDraft(): boolean {
 		try {
-			const raw = localStorage.getItem(DRAFT_KEY(editingId));
+			const raw = localStorage.getItem(activeDraftKey);
 			if (!raw) return false;
 			const d = JSON.parse(raw) as {
 				subjectId?: string;
@@ -323,7 +336,7 @@
 
 	function clearDraft() {
 		try {
-			localStorage.removeItem(DRAFT_KEY(editingId));
+			localStorage.removeItem(activeDraftKey);
 		} catch {
 			/* ignore */
 		}
@@ -332,35 +345,6 @@
 	}
 
 	// ── API ────────────────────────────────────────────────────────────────────
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
-			throw new Error(payload.error);
-		}
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	function buildQuestionParams(page: number) {
 		const params = new URLSearchParams();
 		params.set('limit', String(PAGE_SIZE));
@@ -374,11 +358,11 @@
 	async function fetchOverview(page = currentPage): Promise<SoalOverview> {
 		const params = buildQuestionParams(page);
 		const [questionPayload, academicPayload] = await Promise.all([
-			fetch(`/api/cbt/questions?${params.toString()}`).then((response) =>
-				readApi<QuestionListResponse>(response, 'Gagal memuat soal')
+			fetch(clientApiPathWithQuery('/api/cbt/questions', params)).then((response) =>
+				readClientApiData<QuestionListResponse>(response, 'Gagal memuat soal')
 			),
 			fetch('/api/academic').then((response) =>
-				readApi<AcademicPayload>(response, 'Gagal memuat data akademik')
+				readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')
 			),
 		]);
 		const loadedQuestions = questionPayload.items ?? [];
@@ -398,9 +382,14 @@
 	}
 
 	function load(page = currentPage) {
+		const requestId = ++questionsRequestId;
 		questionsPromise = fetchOverview(page).then((overview) => {
+			if (requestId !== questionsRequestId) return { questions, subjects, totalItems, page: currentPage };
 			applyOverview(overview);
 			return overview;
+		}).catch((error: unknown) => {
+			if (requestId === questionsRequestId) throw error;
+			return { questions, subjects, totalItems, page: currentPage };
 		});
 	}
 
@@ -409,13 +398,17 @@
 			load(page);
 			return;
 		}
+		const requestId = ++questionsRequestId;
 		try {
 			const overview = await fetchOverview(page);
+			if (requestId !== questionsRequestId) return;
 			applyOverview(overview);
 			questionsPromise = Promise.resolve(overview);
 		} catch (error) {
-			questionsPromise = Promise.resolve({ questions, subjects, totalItems, page: currentPage });
-			toast.error(soalErrorMessage(error));
+			if (requestId === questionsRequestId) {
+				questionsPromise = Promise.resolve({ questions, subjects, totalItems, page: currentPage });
+				toast.error(soalErrorMessage(error));
+			}
 		}
 	}
 
@@ -433,6 +426,11 @@
 	function handleQuestionsRenderError(error: unknown, reset: () => void) {
 		console.error('Question composer render failed', error);
 		reset();
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
 	}
 
 	function resetForm() {
@@ -462,9 +460,8 @@
 	async function openEdit(q: Question) {
 		composerBusy = true;
 		try {
-			const res = await fetch(`/api/cbt/questions/${q.id}`);
-			const detail = (await res.json().catch(() => q)) as Question;
-			const d = res.ok ? detail : q;
+			const res = await fetch(clientApiPath`/api/cbt/questions/${q.id}`);
+			const d = await readClientApiData<Question>(res, 'Gagal memuat detail soal');
 
 			editingId = d.id;
 			resetForm();
@@ -480,7 +477,8 @@
 			showTemplates = false;
 			composerMobilePanel = 'write';
 			showComposer = true;
-		} catch {
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal memuat detail soal. Form memakai data ringkas dari daftar.'));
 			editingId = q.id;
 			resetForm();
 			fSubjectId = q.subject_id;
@@ -515,7 +513,7 @@
 			const payload = {
 				authoring_mode: 'beginner',
 				subject_id: fSubjectId,
-				question_text: getPlainText(fStem),
+				question_text: htmlToPlainText(fStem),
 				question_type: 'multiple_choice',
 				stem_html: fStem,
 				options: fOptions.map((text, i) => ({ label: ANSWER_LABELS[i], text })),
@@ -525,26 +523,21 @@
 				workflow_status: 'draft',
 			};
 
-			const url = editingId ? `/api/cbt/questions/${editingId}` : '/api/cbt/questions';
+			const url = editingId ? clientApiPath`/api/cbt/questions/${editingId}` : '/api/cbt/questions';
 			const method = editingId ? 'PUT' : 'POST';
 			const res = await fetch(url, {
 				method,
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload),
 			});
-			const data = (await res.json().catch(() => ({}))) as { error?: string };
-
-			if (!res.ok) {
-				toast.error(data.error ?? 'Gagal menyimpan soal');
-				return;
-			}
+			await readClientJson<unknown>(res);
 
 			clearDraft();
 			toast.success(editingId ? 'Soal berhasil diperbarui' : 'Soal berhasil dibuat');
 			closeComposer();
 			await refreshOverview(1);
 		} catch (e) {
-			toast.error((e as Error).message || 'Gagal menyimpan soal');
+			toast.error(mutationErrorMessage(e, 'Gagal menyimpan soal'));
 		} finally {
 			composerBusy = false;
 		}
@@ -556,18 +549,14 @@
 			message: 'Hapus soal ini? Tindakan tidak bisa dibatalkan dari layar operator.',
 			confirmLabel: 'Hapus Soal',
 			tone: 'danger'
-		}))) return;
+	}))) return;
 		try {
-			const res = await fetch(`/api/cbt/questions?id=${id}`, { method: 'DELETE' });
-			if (!res.ok) {
-				const d = (await res.json().catch(() => ({}))) as { error?: string };
-				toast.error(d.error ?? 'Gagal menghapus soal');
-				return;
-			}
+			const res = await fetch(clientApiPathWithQuery('/api/cbt/questions', new URLSearchParams({ id })), { method: 'DELETE' });
+			await readClientJson<unknown>(res);
 			toast.success('Soal dihapus');
 			await refreshOverview(currentPage);
 		} catch (e) {
-			toast.error((e as Error).message || 'Gagal menghapus soal');
+			toast.error(mutationErrorMessage(e, 'Gagal menghapus soal'));
 		}
 	}
 
@@ -576,8 +565,7 @@
 		form.set('file', file);
 		form.set('purpose', 'general');
 		const res = await fetch('/api/cbt/assets', { method: 'POST', body: form });
-		const payload = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-		if (!res.ok) throw new Error(payload.error ?? 'Upload gambar gagal');
+		const payload = await readClientApiData<{ url?: string }>(res, 'Upload gambar gagal');
 		return payload.url ?? '';
 	}
 
@@ -589,7 +577,7 @@
 	}
 
 	function stemPreview(q: Question): string {
-		const t = getPlainText(q.stem_html || q.question_text || '');
+		const t = htmlToPlainText(q.stem_html || q.question_text || '');
 		return t.length > 90 ? t.slice(0, 90) + '…' : t || '(kosong)';
 	}
 

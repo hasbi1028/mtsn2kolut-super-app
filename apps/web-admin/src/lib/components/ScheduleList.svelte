@@ -7,6 +7,7 @@
   import LoadingButton from '$lib/components/LoadingButton.svelte';
   import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
   import SuccessPanel from '$lib/components/SuccessPanel.svelte';
+  import { readClientJson } from '$lib/client/api';
 
   interface Schedule {
     id: string;
@@ -36,19 +37,6 @@
     toast.error(msg);
   }
 
-  function apiErrorMessage(payload: unknown) {
-    if (typeof payload !== 'object' || payload === null) return '';
-    if ('error' in payload) {
-      const error = payload.error;
-      if (typeof error === 'string' && error.trim()) return error;
-    }
-    if ('message' in payload) {
-      const message = payload.message;
-      if (typeof message === 'string' && message.trim()) return message;
-    }
-    return '';
-  }
-
   function mutationErrorMessage(error: unknown, fallbackMessage: string) {
     if (error instanceof Error && error.message.trim()) return error.message;
     return fallbackMessage;
@@ -69,10 +57,7 @@
           is_enabled: true,
         }),
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(apiErrorMessage(data) || 'Gagal menambah jadwal');
-      }
+      await readClientJson<unknown>(res);
       newTime  = '';
       newLabel = '';
       success = 'Jadwal rekap baru berhasil ditambahkan. Jangan lupa simpan perubahan utama bila masih ada penyesuaian label atau status.';
@@ -86,10 +71,7 @@
     try {
       success = '';
       const res = await fetch(`/api/pusaka/schedules/${id}`, { method: 'DELETE' });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(apiErrorMessage(data) || 'Gagal menghapus jadwal');
-      }
+      await readClientJson<unknown>(res);
       success = 'Jadwal rekap berhasil dihapus.';
       await onsave();
     } catch (error) { showError(mutationErrorMessage(error, 'Gagal menghapus jadwal')); }
@@ -103,16 +85,12 @@
       const res = await fetch('/api/pusaka/schedules', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ schedules: rekapSchedules }),
+          body: JSON.stringify({ schedules: rekapSchedules }),
       });
-      const data = await res.json().catch(() => null);
-      if (res.ok) {
-        showToast('Jadwal disimpan');
-        success = 'Perubahan jadwal rekap otomatis berhasil disimpan.';
-        await onsave();
-      } else {
-        throw new Error(apiErrorMessage(data) || 'Gagal menyimpan');
-      }
+      await readClientJson<unknown>(res);
+      showToast('Jadwal disimpan');
+      success = 'Perubahan jadwal rekap otomatis berhasil disimpan.';
+      await onsave();
     } catch (error) { showError(mutationErrorMessage(error, 'Gagal menyimpan')); }
     finally { saving = false; }
   }

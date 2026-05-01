@@ -10,6 +10,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { readClientApiData } from '$lib/client/api';
 
 	type SummaryRow = {
 		employee_id: string; employee_nama: string; employee_nip: string;
@@ -23,12 +24,7 @@
 	let summaryPromise = $state<Promise<SummaryRow[]> | null>(null);
 	let refreshing = $state(false);
 	let loadedRangeKey = $state('');
-
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
+	let summaryRequestId = 0;
 
 	function getDefaultDates() {
 		const now = new Date();
@@ -42,48 +38,30 @@
 		return `${startDate}:${endDate}`;
 	}
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function fetchSummary() {
 		if (!startDate || !endDate) return [];
 		const res = await fetch(`/api/pusaka/attendance/summary?start_date=${startDate}&end_date=${endDate}`);
-		return readApi<SummaryRow[]>(res, 'Gagal memuat ringkasan kehadiran');
+		return readClientApiData<SummaryRow[]>(res, 'Gagal memuat ringkasan kehadiran');
 	}
 
 	function loadInitial() {
 		if (!startDate || !endDate) return;
+		const requestId = ++summaryRequestId;
 		const nextRangeKey = rangeKey();
 		summary = [];
-		summaryPromise = fetchSummary().then((rows) => {
-			summary = rows ?? [];
-			loadedRangeKey = nextRangeKey;
-			return summary;
-		});
+		summaryPromise = fetchSummary()
+			.then((rows) => {
+				if (requestId === summaryRequestId) {
+					summary = rows ?? [];
+					loadedRangeKey = nextRangeKey;
+					return summary;
+				}
+				return summary;
+			})
+			.catch((error: unknown) => {
+				if (requestId === summaryRequestId) throw error;
+				return summary;
+			});
 	}
 
 	async function load() {
@@ -92,14 +70,18 @@
 			loadInitial();
 			return;
 		}
+		const requestId = ++summaryRequestId;
 		const nextRangeKey = rangeKey();
 		refreshing = true;
 		try {
 			const rows = await fetchSummary();
-			summary = rows ?? [];
-			loadedRangeKey = nextRangeKey;
-			summaryPromise = Promise.resolve(summary);
+			if (requestId === summaryRequestId) {
+				summary = rows ?? [];
+				loadedRangeKey = nextRangeKey;
+				summaryPromise = Promise.resolve(summary);
+			}
 		} catch (error) {
+			if (requestId !== summaryRequestId) return;
 			if (loadedRangeKey === nextRangeKey) {
 				summaryPromise = Promise.resolve(summary);
 				toast.error(summaryErrorMessage(error));
@@ -107,7 +89,9 @@
 				summaryPromise = Promise.reject(error);
 			}
 		} finally {
-			refreshing = false;
+			if (requestId === summaryRequestId) {
+				refreshing = false;
+			}
 		}
 	}
 

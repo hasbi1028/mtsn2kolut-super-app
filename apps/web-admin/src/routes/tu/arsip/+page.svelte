@@ -20,6 +20,7 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from '$lib/components/ui/sonner';
 	import { confirmAction } from '$lib/confirm-dialog';
+	import { readClientApiData, readClientJson } from '$lib/client/api';
 
 	type ArchiveStats = {
 		active_categories: number;
@@ -71,12 +72,6 @@
 		documents: ArchiveDocument[];
 	};
 
-	type ApiEnvelope<T> = {
-		data?: T;
-		error?: string;
-		message?: string;
-	};
-
 	type CategoryForm = {
 		code: string;
 		name: string;
@@ -118,8 +113,18 @@
 	] as const;
 
 	const today = new Date().toISOString().slice(0, 10);
+	const emptyStats: ArchiveStats = {
+		active_categories: 0,
+		total_documents: 0,
+		active_documents: 0,
+		borrowed_documents: 0,
+		disposed_documents: 0,
+		documents_this_year: 0,
+		total_file_size: 0
+	};
 
 	let archivePromise = $state<Promise<ArchiveOverview> | null>(null);
+	let archiveRequestId = 0;
 	let categories = $state<ArchiveCategory[]>([]);
 	let documents = $state<ArchiveDocument[]>([]);
 	let search = $state('');
@@ -158,33 +163,6 @@
 
 	let activeCategories = $derived(categories.filter((category) => category.is_active || category.id === documentForm.category_id));
 
-	function isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null;
-	}
-
-	function apiErrorMessage(payload: unknown) {
-		if (!isRecord(payload)) return '';
-		const error = payload.error;
-		if (typeof error === 'string' && error.trim()) return error;
-		const message = payload.message;
-		if (typeof message === 'string' && message.trim()) return message;
-		return '';
-	}
-
-	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
-		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
-		const message = apiErrorMessage(payload);
-		if (!response.ok) throw new Error(message || fallbackMessage);
-		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
-		if (isRecord(payload) && 'data' in payload) {
-			const envelope = payload as ApiEnvelope<T>;
-			if (envelope.data === undefined) throw new Error(fallbackMessage);
-			return envelope.data;
-		}
-		if (payload === null) throw new Error(fallbackMessage);
-		return payload as T;
-	}
-
 	async function fetchArchiveOverview(): Promise<ArchiveOverview> {
 		const params = new URLSearchParams();
 		if (search.trim()) params.set('search', search.trim());
@@ -198,9 +176,9 @@
 			fetch(`/api/tu/archives/documents${suffix}`)
 		]);
 		const [stats, categoryRows, documentRows] = await Promise.all([
-			readApi<ArchiveStats>(statsRes, 'Gagal memuat statistik arsip.'),
-			readApi<ArchiveCategory[]>(categoriesRes, 'Gagal memuat kategori arsip.'),
-			readApi<ArchiveDocument[]>(documentsRes, 'Gagal memuat register arsip.')
+			readClientApiData<ArchiveStats>(statsRes, 'Gagal memuat statistik arsip.'),
+			readClientApiData<ArchiveCategory[]>(categoriesRes, 'Gagal memuat kategori arsip.'),
+			readClientApiData<ArchiveDocument[]>(documentsRes, 'Gagal memuat register arsip.')
 		]);
 		return { stats, categories: categoryRows ?? [], documents: documentRows ?? [] };
 	}
@@ -215,31 +193,45 @@
 	}
 
 	function load() {
-		const promise = fetchArchiveOverview();
-		archivePromise = promise;
-		promise.then(applyOverview).catch(() => {});
-		return promise;
+		const requestId = ++archiveRequestId;
+		archivePromise = fetchArchiveOverview()
+			.then((overview) => {
+				if (requestId === archiveRequestId) {
+					applyOverview(overview);
+					return overview;
+				}
+				return { stats: emptyStats, categories, documents };
+			})
+			.catch((error: unknown) => {
+				if (requestId === archiveRequestId) throw error;
+				return { stats: emptyStats, categories, documents };
+			});
+		return archivePromise;
 	}
 
 	async function refreshArchive() {
 		refreshBusy = true;
+		const promise = load();
+		const requestId = archiveRequestId;
 		try {
-			await load();
+			await promise;
 		} catch (error) {
 			toast.error(archiveErrorMessage(error));
 		} finally {
-			refreshBusy = false;
+			if (requestId === archiveRequestId) refreshBusy = false;
 		}
 	}
 
 	async function applyArchiveFilters() {
 		filterBusy = true;
+		const promise = load();
+		const requestId = archiveRequestId;
 		try {
-			await load();
+			await promise;
 		} catch (error) {
 			toast.error(archiveErrorMessage(error));
 		} finally {
-			filterBusy = false;
+			if (requestId === archiveRequestId) filterBusy = false;
 		}
 	}
 
@@ -349,7 +341,7 @@
 					body: JSON.stringify(categoryPayload())
 				}
 			);
-			await readApi<ArchiveCategory>(response, 'Gagal menyimpan kategori arsip.');
+			await readClientApiData<ArchiveCategory>(response, 'Gagal menyimpan kategori arsip.');
 			toast.success(editingCategoryId ? 'Kategori arsip diperbarui' : 'Kategori arsip ditambahkan');
 			resetCategoryForm();
 			load();
@@ -419,7 +411,7 @@
 					body: formData
 				});
 			}
-			await readApi<ArchiveDocument>(response, 'Gagal menyimpan arsip.');
+			await readClientApiData<ArchiveDocument>(response, 'Gagal menyimpan arsip.');
 			toast.success(editingDocumentId ? 'Metadata arsip diperbarui' : 'Dokumen arsip diunggah');
 			resetDocumentForm();
 			load();
@@ -440,9 +432,7 @@
 		deleteBusy[id] = true;
 		try {
 			const response = await fetch(`/api/tu/archives/categories/${id}`, { method: 'DELETE' });
-			if (!response.ok && response.status !== 204) {
-				await readApi<unknown>(response, 'Gagal menghapus kategori arsip.');
-			}
+			await readClientJson<unknown>(response);
 			toast.success('Kategori arsip dihapus');
 			load();
 		} catch (error) {
@@ -462,9 +452,7 @@
 		deleteBusy[id] = true;
 		try {
 			const response = await fetch(`/api/tu/archives/documents/${id}`, { method: 'DELETE' });
-			if (!response.ok && response.status !== 204) {
-				await readApi<unknown>(response, 'Gagal menghapus arsip.');
-			}
+			await readClientJson<unknown>(response);
 			toast.success('Arsip dihapus');
 			load();
 		} catch (error) {

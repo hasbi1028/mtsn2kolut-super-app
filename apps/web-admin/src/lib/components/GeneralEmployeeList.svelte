@@ -10,6 +10,7 @@
   import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
   import SuccessPanel from '$lib/components/SuccessPanel.svelte';
   import { confirmAction } from '$lib/confirm-dialog';
+  import { readClientJson } from '$lib/client/api';
 
   interface Employee {
     id: string;
@@ -66,19 +67,6 @@
     return { pns: 'PNS', pppk: 'PPPK', honorer: 'Honorer', lainnya: 'Lainnya' }[value] ?? value;
   }
 
-  function apiErrorMessage(payload: unknown) {
-    if (typeof payload !== 'object' || payload === null) return '';
-    if ('error' in payload) {
-      const error = payload.error;
-      if (typeof error === 'string' && error.trim()) return error;
-    }
-    if ('message' in payload) {
-      const message = payload.message;
-      if (typeof message === 'string' && message.trim()) return message;
-    }
-    return '';
-  }
-
   function showError(message: string) {
     toast.error(message);
   }
@@ -86,10 +74,6 @@
   function mutationErrorMessage(error: unknown, fallbackMessage: string) {
     if (error instanceof Error && error.message.trim()) return error.message;
     return fallbackMessage;
-  }
-
-  function throwApiError(payload: unknown, fallbackMessage: string): never {
-    throw new Error(apiErrorMessage(payload) || fallbackMessage);
   }
 
   function openEditDialog(employee: Employee) {
@@ -114,10 +98,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(editForm),
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throwApiError(data, 'Gagal memperbarui pegawai');
-      }
+      await readClientJson<unknown>(res);
       showEditDialog = false;
       success = `Data pegawai ${editForm.nama} berhasil diperbarui.`;
       await onreload();
@@ -144,10 +125,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ is_active: next }),
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throwApiError(data, 'Gagal memperbarui status pegawai');
-      }
+      await readClientJson<unknown>(res);
       success = `Status pegawai ${emp.nama} berhasil diubah menjadi ${next ? 'aktif' : 'nonaktif'}.`;
       await onreload();
     } catch (error) {
@@ -166,10 +144,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id }),
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throwApiError(data, 'Gagal menghapus pegawai');
-      }
+      await readClientJson<unknown>(res);
       confirmId = null;
       success = 'Data pegawai berhasil dihapus dari master.';
       await onreload();

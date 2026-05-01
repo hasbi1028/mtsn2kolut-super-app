@@ -11,27 +11,69 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	mw "mtsn2kolut-super-app/backend/internal/middleware"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
-type Governance struct{ svc *service.Governance }
+type Governance struct {
+	svc   governanceService
+	audit cbtAuthoringAuditWriter
+}
 
-func NewGovernance(svc *service.Governance) *Governance { return &Governance{svc: svc} }
+type governanceService interface {
+	Stats(ctx context.Context) (db.GetGovernanceStatsRow, error)
+	SNPMatrix(ctx context.Context) ([]db.ListGovernanceSNPMatrixRow, error)
+	EmployeeOptions(ctx context.Context) ([]db.ListGovernanceEmployeeOptionsRow, error)
+	ListUnits(ctx context.Context, search string) ([]db.ListGovernanceUnitsRow, error)
+	CreateUnit(ctx context.Context, arg db.CreateGovernanceUnitParams) (db.GovernanceUnit, error)
+	UpdateUnit(ctx context.Context, arg db.UpdateGovernanceUnitParams) (db.GovernanceUnit, error)
+	DeleteUnit(ctx context.Context, id pgtype.UUID) error
+	ListPositions(ctx context.Context, search string) ([]db.ListGovernancePositionsRow, error)
+	CreatePosition(ctx context.Context, arg db.CreateGovernancePositionParams) (db.GovernancePosition, error)
+	UpdatePosition(ctx context.Context, arg db.UpdateGovernancePositionParams) (db.GovernancePosition, error)
+	DeletePosition(ctx context.Context, id pgtype.UUID) error
+	ListAssignments(ctx context.Context, search string, activeOnly bool) ([]db.ListGovernanceAssignmentsRow, error)
+	CreateAssignment(ctx context.Context, arg db.CreateGovernanceAssignmentParams) (db.GovernanceAssignment, error)
+	UpdateAssignment(ctx context.Context, arg db.UpdateGovernanceAssignmentParams) (db.GovernanceAssignment, error)
+	DeleteAssignment(ctx context.Context, id pgtype.UUID) error
+	ListDocuments(ctx context.Context, search, docType, snpStandard string, periodYear int32) ([]db.ListGovernanceDocumentsRow, error)
+	CreateDocument(ctx context.Context, arg db.CreateGovernanceDocumentParams) (db.GovernanceDocument, error)
+	UpdateDocument(ctx context.Context, arg db.UpdateGovernanceDocumentParams) (db.GovernanceDocument, error)
+	DeleteDocument(ctx context.Context, id pgtype.UUID) error
+	ListPrograms(ctx context.Context, search, status, snpStandard string, periodYear int32) ([]db.ListGovernanceProgramsRow, error)
+	CreateProgram(ctx context.Context, arg db.CreateGovernanceProgramParams) (db.GovernanceProgram, error)
+	UpdateProgram(ctx context.Context, arg db.UpdateGovernanceProgramParams) (db.GovernanceProgram, error)
+	DeleteProgram(ctx context.Context, id pgtype.UUID) error
+	ListWorkPlanItems(ctx context.Context, search, programID, status string, periodYear int32) ([]db.ListGovernanceWorkPlanItemsRow, error)
+	CreateWorkPlanItem(ctx context.Context, arg db.CreateGovernanceWorkPlanItemParams) (db.GovernanceWorkPlanItem, error)
+	UpdateWorkPlanItem(ctx context.Context, arg db.UpdateGovernanceWorkPlanItemParams) (db.GovernanceWorkPlanItem, error)
+	DeleteWorkPlanItem(ctx context.Context, id pgtype.UUID) error
+	ListPerformanceTargets(ctx context.Context, search, status, employeeID string, periodYear int32) ([]db.ListGovernancePerformanceTargetsRow, error)
+	CreatePerformanceTarget(ctx context.Context, arg db.CreateGovernancePerformanceTargetParams) (db.GovernancePerformanceTarget, error)
+	UpdatePerformanceTarget(ctx context.Context, arg db.UpdateGovernancePerformanceTargetParams) (db.GovernancePerformanceTarget, error)
+	DeletePerformanceTarget(ctx context.Context, id pgtype.UUID) error
+	ListEvidenceItems(ctx context.Context, search, status, snpStandard string, periodYear int32) ([]db.ListGovernanceEvidenceItemsRow, error)
+	CreateEvidenceItem(ctx context.Context, arg db.CreateGovernanceEvidenceItemParams) (db.GovernanceEvidenceItem, error)
+	UpdateEvidenceItem(ctx context.Context, arg db.UpdateGovernanceEvidenceItemParams) (db.GovernanceEvidenceItem, error)
+	DeleteEvidenceItem(ctx context.Context, id pgtype.UUID) error
+	ListComplianceActions(ctx context.Context, search, status, priority, sourceType, snpStandard, responsibleEmployeeID string, periodYear int32) ([]db.ListGovernanceComplianceActionsRow, error)
+	CreateComplianceAction(ctx context.Context, arg db.CreateGovernanceComplianceActionParams) (db.GovernanceComplianceAction, error)
+	UpdateComplianceAction(ctx context.Context, arg db.UpdateGovernanceComplianceActionParams) (db.GovernanceComplianceAction, error)
+	DeleteComplianceAction(ctx context.Context, id pgtype.UUID) error
+}
+
+func NewGovernance(svc *service.Governance, audit ...cbtAuthoringAuditWriter) *Governance {
+	var writer cbtAuthoringAuditWriter
+	if len(audit) > 0 {
+		writer = audit[0]
+	}
+	return &Governance{svc: svc, audit: writer}
+}
 
 func governanceAccessAllowed(r *http.Request) bool {
 	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
-		if rawRoles, ok := claims["roles"].([]any); ok {
-			for _, role := range rawRoles {
-				if role == "admin" || role == "staf" {
-					return true
-				}
-			}
-		}
-		if role, _ := claims["role"].(string); role == "admin" || role == "staf" {
-			return true
-		}
-		return false
+		return mw.HasAnyRole(claims, "admin", "staf")
 	}
 	return false
 }
@@ -100,7 +142,7 @@ func (h *Governance) CreateUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	parentID, err := service.ParseGovernanceOptionalUUID(body.ParentID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	row, err := h.svc.CreateUnit(r.Context(), db.CreateGovernanceUnitParams{
@@ -113,9 +155,14 @@ func (h *Governance) CreateUnit(w http.ResponseWriter, r *http.Request) {
 		SortOrder:   body.SortOrder,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_UNIT_CREATE", "governance_unit", pgUUIDString(row.ID), map[string]any{
+		"code":      row.Code,
+		"name":      row.Name,
+		"unit_type": row.UnitType,
+	})
 	api.Created(w, row)
 }
 
@@ -136,7 +183,7 @@ func (h *Governance) UpdateUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	parentID, err := service.ParseGovernanceOptionalUUID(body.ParentID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	row, err := h.svc.UpdateUnit(r.Context(), db.UpdateGovernanceUnitParams{
@@ -150,14 +197,35 @@ func (h *Governance) UpdateUnit(w http.ResponseWriter, r *http.Request) {
 		SortOrder:   body.SortOrder,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_UNIT_UPDATE", "governance_unit", pgUUIDString(row.ID), map[string]any{
+		"code":      row.Code,
+		"name":      row.Name,
+		"unit_type": row.UnitType,
+	})
 	api.OK(w, row)
 }
 
 func (h *Governance) DeleteUnit(w http.ResponseWriter, r *http.Request) {
-	h.deleteByID(w, r, h.svc.DeleteUnit)
+	if !governanceAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "id tidak valid")
+		return
+	}
+	if err := h.svc.DeleteUnit(r.Context(), id); err != nil {
+		writeClientError(w, err, "Data tata kelola tidak valid")
+		return
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_UNIT_DELETE", "governance_unit", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
+	api.NoContent(w)
 }
 
 func (h *Governance) ListPositions(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +266,7 @@ func (h *Governance) CreatePosition(w http.ResponseWriter, r *http.Request) {
 		SortOrder:        body.SortOrder,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.Created(w, row)
@@ -235,14 +303,16 @@ func (h *Governance) UpdatePosition(w http.ResponseWriter, r *http.Request) {
 		SortOrder:        body.SortOrder,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.OK(w, row)
 }
 
 func (h *Governance) DeletePosition(w http.ResponseWriter, r *http.Request) {
-	h.deleteByID(w, r, h.svc.DeletePosition)
+	h.deleteByID(w, r, func(ctx context.Context, id pgtype.UUID) error {
+		return h.svc.DeletePosition(ctx, id)
+	})
 }
 
 func (h *Governance) ListAssignments(w http.ResponseWriter, r *http.Request) {
@@ -275,7 +345,7 @@ func (h *Governance) CreateAssignment(w http.ResponseWriter, r *http.Request) {
 	}
 	row, err := h.svc.CreateAssignment(r.Context(), arg)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.Created(w, row)
@@ -310,14 +380,16 @@ func (h *Governance) UpdateAssignment(w http.ResponseWriter, r *http.Request) {
 		Notes:                  createArg.Notes,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.OK(w, row)
 }
 
 func (h *Governance) DeleteAssignment(w http.ResponseWriter, r *http.Request) {
-	h.deleteByID(w, r, h.svc.DeleteAssignment)
+	h.deleteByID(w, r, func(ctx context.Context, id pgtype.UUID) error {
+		return h.svc.DeleteAssignment(ctx, id)
+	})
 }
 
 func (h *Governance) ListDocuments(w http.ResponseWriter, r *http.Request) {
@@ -357,9 +429,14 @@ func (h *Governance) CreateDocument(w http.ResponseWriter, r *http.Request) {
 	arg.CreatedByUserID = inventoryActorUserID(r)
 	row, err := h.svc.CreateDocument(r.Context(), arg)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_TARGET_CREATE", "governance_performance_target", pgUUIDString(row.ID), map[string]any{
+		"title":       row.Title,
+		"period_year": row.PeriodYear,
+		"status":      row.Status,
+	})
 	api.Created(w, row)
 }
 
@@ -396,14 +473,16 @@ func (h *Governance) UpdateDocument(w http.ResponseWriter, r *http.Request) {
 		Summary:          createArg.Summary,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.OK(w, row)
 }
 
 func (h *Governance) DeleteDocument(w http.ResponseWriter, r *http.Request) {
-	h.deleteByID(w, r, h.svc.DeleteDocument)
+	h.deleteByID(w, r, func(ctx context.Context, id pgtype.UUID) error {
+		return h.svc.DeleteDocument(ctx, id)
+	})
 }
 
 func (h *Governance) ListPrograms(w http.ResponseWriter, r *http.Request) {
@@ -442,9 +521,15 @@ func (h *Governance) CreateProgram(w http.ResponseWriter, r *http.Request) {
 	}
 	row, err := h.svc.CreateProgram(r.Context(), arg)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_PROGRAM_CREATE", "governance_program", pgUUIDString(row.ID), map[string]any{
+		"code":        row.Code,
+		"name":        row.Name,
+		"period_year": row.PeriodYear,
+		"status":      row.Status,
+	})
 	api.Created(w, row)
 }
 
@@ -488,14 +573,36 @@ func (h *Governance) UpdateProgram(w http.ResponseWriter, r *http.Request) {
 		DueDate:               createArg.DueDate,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_PROGRAM_UPDATE", "governance_program", pgUUIDString(row.ID), map[string]any{
+		"code":        row.Code,
+		"name":        row.Name,
+		"period_year": row.PeriodYear,
+		"status":      row.Status,
+	})
 	api.OK(w, row)
 }
 
 func (h *Governance) DeleteProgram(w http.ResponseWriter, r *http.Request) {
-	h.deleteByID(w, r, h.svc.DeleteProgram)
+	if !governanceAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "id tidak valid")
+		return
+	}
+	if err := h.svc.DeleteProgram(r.Context(), id); err != nil {
+		writeClientError(w, err, "Data tata kelola tidak valid")
+		return
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_PROGRAM_DELETE", "governance_program", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
+	api.NoContent(w)
 }
 
 func (h *Governance) ListWorkPlanItems(w http.ResponseWriter, r *http.Request) {
@@ -512,7 +619,7 @@ func (h *Governance) ListWorkPlanItems(w http.ResponseWriter, r *http.Request) {
 		int32Query(q.Get("period_year")),
 	)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.OK(w, data)
@@ -534,9 +641,14 @@ func (h *Governance) CreateWorkPlanItem(w http.ResponseWriter, r *http.Request) 
 	}
 	row, err := h.svc.CreateWorkPlanItem(r.Context(), arg)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_WORK_PLAN_CREATE", "governance_work_plan_item", pgUUIDString(row.ID), map[string]any{
+		"activity_name": row.ActivityName,
+		"period_year":   row.PeriodYear,
+		"status":        row.Status,
+	})
 	api.Created(w, row)
 }
 
@@ -583,14 +695,35 @@ func (h *Governance) UpdateWorkPlanItem(w http.ResponseWriter, r *http.Request) 
 		Notes:                 createArg.Notes,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_WORK_PLAN_UPDATE", "governance_work_plan_item", pgUUIDString(row.ID), map[string]any{
+		"activity_name": row.ActivityName,
+		"period_year":   row.PeriodYear,
+		"status":        row.Status,
+	})
 	api.OK(w, row)
 }
 
 func (h *Governance) DeleteWorkPlanItem(w http.ResponseWriter, r *http.Request) {
-	h.deleteByID(w, r, h.svc.DeleteWorkPlanItem)
+	if !governanceAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "id tidak valid")
+		return
+	}
+	if err := h.svc.DeleteWorkPlanItem(r.Context(), id); err != nil {
+		writeClientError(w, err, "Data tata kelola tidak valid")
+		return
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_WORK_PLAN_DELETE", "governance_work_plan_item", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
+	api.NoContent(w)
 }
 
 func (h *Governance) ListPerformanceTargets(w http.ResponseWriter, r *http.Request) {
@@ -607,7 +740,7 @@ func (h *Governance) ListPerformanceTargets(w http.ResponseWriter, r *http.Reque
 		int32Query(q.Get("period_year")),
 	)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.OK(w, data)
@@ -630,9 +763,14 @@ func (h *Governance) CreatePerformanceTarget(w http.ResponseWriter, r *http.Requ
 	arg.CreatedByUserID = inventoryActorUserID(r)
 	row, err := h.svc.CreatePerformanceTarget(r.Context(), arg)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_TARGET_CREATE", "governance_performance_target", pgUUIDString(row.ID), map[string]any{
+		"title":       row.Title,
+		"period_year": row.PeriodYear,
+		"status":      row.Status,
+	})
 	api.Created(w, row)
 }
 
@@ -674,14 +812,35 @@ func (h *Governance) UpdatePerformanceTarget(w http.ResponseWriter, r *http.Requ
 		DueDate:         createArg.DueDate,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_TARGET_UPDATE", "governance_performance_target", pgUUIDString(row.ID), map[string]any{
+		"title":       row.Title,
+		"period_year": row.PeriodYear,
+		"status":      row.Status,
+	})
 	api.OK(w, row)
 }
 
 func (h *Governance) DeletePerformanceTarget(w http.ResponseWriter, r *http.Request) {
-	h.deleteByID(w, r, h.svc.DeletePerformanceTarget)
+	if !governanceAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "id tidak valid")
+		return
+	}
+	if err := h.svc.DeletePerformanceTarget(r.Context(), id); err != nil {
+		writeClientError(w, err, "Data tata kelola tidak valid")
+		return
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "GOVERNANCE_TARGET_DELETE", "governance_performance_target", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
+	api.NoContent(w)
 }
 
 func (h *Governance) ListEvidenceItems(w http.ResponseWriter, r *http.Request) {
@@ -698,7 +857,7 @@ func (h *Governance) ListEvidenceItems(w http.ResponseWriter, r *http.Request) {
 		int32Query(q.Get("period_year")),
 	)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.OK(w, data)
@@ -721,7 +880,7 @@ func (h *Governance) CreateEvidenceItem(w http.ResponseWriter, r *http.Request) 
 	arg.CreatedByUserID = inventoryActorUserID(r)
 	row, err := h.svc.CreateEvidenceItem(r.Context(), arg)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.Created(w, row)
@@ -762,14 +921,16 @@ func (h *Governance) UpdateEvidenceItem(w http.ResponseWriter, r *http.Request) 
 		Notes:               createArg.Notes,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.OK(w, row)
 }
 
 func (h *Governance) DeleteEvidenceItem(w http.ResponseWriter, r *http.Request) {
-	h.deleteByID(w, r, h.svc.DeleteEvidenceItem)
+	h.deleteByID(w, r, func(ctx context.Context, id pgtype.UUID) error {
+		return h.svc.DeleteEvidenceItem(ctx, id)
+	})
 }
 
 func (h *Governance) ListComplianceActions(w http.ResponseWriter, r *http.Request) {
@@ -789,7 +950,7 @@ func (h *Governance) ListComplianceActions(w http.ResponseWriter, r *http.Reques
 		int32Query(q.Get("period_year")),
 	)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.OK(w, data)
@@ -812,7 +973,7 @@ func (h *Governance) CreateComplianceAction(w http.ResponseWriter, r *http.Reque
 	arg.CreatedByUserID = inventoryActorUserID(r)
 	row, err := h.svc.CreateComplianceAction(r.Context(), arg)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.Created(w, row)
@@ -859,14 +1020,16 @@ func (h *Governance) UpdateComplianceAction(w http.ResponseWriter, r *http.Reque
 		EvidenceUrl:           createArg.EvidenceUrl,
 	})
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.OK(w, row)
 }
 
 func (h *Governance) DeleteComplianceAction(w http.ResponseWriter, r *http.Request) {
-	h.deleteByID(w, r, h.svc.DeleteComplianceAction)
+	h.deleteByID(w, r, func(ctx context.Context, id pgtype.UUID) error {
+		return h.svc.DeleteComplianceAction(ctx, id)
+	})
 }
 
 func (h *Governance) deleteByID(w http.ResponseWriter, r *http.Request, deleteFn func(context.Context, pgtype.UUID) error) {
@@ -880,7 +1043,7 @@ func (h *Governance) deleteByID(w http.ResponseWriter, r *http.Request, deleteFn
 		return
 	}
 	if err := deleteFn(r.Context(), id); err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return
 	}
 	api.NoContent(w)
@@ -1029,12 +1192,12 @@ type governanceComplianceActionRequest struct {
 func parsePositionIDs(w http.ResponseWriter, body governancePositionRequest) (unitID, parentPositionID pgtype.UUID, ok bool) {
 	parsedUnitID, err := service.ParseGovernanceOptionalUUID(body.UnitID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return unitID, parentPositionID, false
 	}
 	parsedParentID, err := service.ParseGovernanceOptionalUUID(body.ParentPositionID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return unitID, parentPositionID, false
 	}
 	return parsedUnitID, parsedParentID, true
@@ -1043,27 +1206,27 @@ func parsePositionIDs(w http.ResponseWriter, body governancePositionRequest) (un
 func parseAssignmentRequest(w http.ResponseWriter, body governanceAssignmentRequest) (db.CreateGovernanceAssignmentParams, bool) {
 	positionID, err := service.ParseGovernanceOptionalUUID(body.PositionID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceAssignmentParams{}, false
 	}
 	employeeID, err := service.ParseGovernanceOptionalUUID(body.EmployeeID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceAssignmentParams{}, false
 	}
 	startDate, err := service.ParseGovernanceDate(body.StartDate)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceAssignmentParams{}, false
 	}
 	endDate, err := service.ParseGovernanceOptionalDate(body.EndDate)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceAssignmentParams{}, false
 	}
 	decreeID, err := service.ParseGovernanceOptionalUUID(body.DecreeOutgoingLetterID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceAssignmentParams{}, false
 	}
 	return db.CreateGovernanceAssignmentParams{
@@ -1079,12 +1242,12 @@ func parseAssignmentRequest(w http.ResponseWriter, body governanceAssignmentRequ
 func parseDocumentRequest(w http.ResponseWriter, body governanceDocumentRequest) (db.CreateGovernanceDocumentParams, bool) {
 	ownerUnitID, err := service.ParseGovernanceOptionalUUID(body.OwnerUnitID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceDocumentParams{}, false
 	}
 	outgoingLetterID, err := service.ParseGovernanceOptionalUUID(body.OutgoingLetterID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceDocumentParams{}, false
 	}
 	return db.CreateGovernanceDocumentParams{
@@ -1104,27 +1267,27 @@ func parseDocumentRequest(w http.ResponseWriter, body governanceDocumentRequest)
 func parseProgramRequest(w http.ResponseWriter, body governanceProgramRequest) (db.CreateGovernanceProgramParams, bool) {
 	sourceDocumentID, err := service.ParseGovernanceOptionalUUID(body.SourceDocumentID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceProgramParams{}, false
 	}
 	ownerUnitID, err := service.ParseGovernanceOptionalUUID(body.OwnerUnitID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceProgramParams{}, false
 	}
 	responsiblePositionID, err := service.ParseGovernanceOptionalUUID(body.ResponsiblePositionID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceProgramParams{}, false
 	}
 	responsibleEmployeeID, err := service.ParseGovernanceOptionalUUID(body.ResponsibleEmployeeID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceProgramParams{}, false
 	}
 	dueDate, err := service.ParseGovernanceOptionalDate(body.DueDate)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceProgramParams{}, false
 	}
 	return db.CreateGovernanceProgramParams{
@@ -1151,37 +1314,37 @@ func parseProgramRequest(w http.ResponseWriter, body governanceProgramRequest) (
 func parseWorkPlanItemRequest(w http.ResponseWriter, body governanceWorkPlanItemRequest) (db.CreateGovernanceWorkPlanItemParams, bool) {
 	programID, err := service.ParseGovernanceOptionalUUID(body.ProgramID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceWorkPlanItemParams{}, false
 	}
 	sourceDocumentID, err := service.ParseGovernanceOptionalUUID(body.SourceDocumentID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceWorkPlanItemParams{}, false
 	}
 	ownerUnitID, err := service.ParseGovernanceOptionalUUID(body.OwnerUnitID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceWorkPlanItemParams{}, false
 	}
 	responsibleEmployeeID, err := service.ParseGovernanceOptionalUUID(body.ResponsibleEmployeeID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceWorkPlanItemParams{}, false
 	}
 	evidenceItemID, err := service.ParseGovernanceOptionalUUID(body.EvidenceItemID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceWorkPlanItemParams{}, false
 	}
 	startDate, err := service.ParseGovernanceOptionalDate(body.StartDate)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceWorkPlanItemParams{}, false
 	}
 	endDate, err := service.ParseGovernanceOptionalDate(body.EndDate)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceWorkPlanItemParams{}, false
 	}
 	return db.CreateGovernanceWorkPlanItemParams{
@@ -1211,27 +1374,27 @@ func parseWorkPlanItemRequest(w http.ResponseWriter, body governanceWorkPlanItem
 func parsePerformanceTargetRequest(w http.ResponseWriter, body governancePerformanceTargetRequest) (db.CreateGovernancePerformanceTargetParams, bool) {
 	employeeID, err := service.ParseGovernanceOptionalUUID(body.EmployeeID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernancePerformanceTargetParams{}, false
 	}
 	positionID, err := service.ParseGovernanceOptionalUUID(body.PositionID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernancePerformanceTargetParams{}, false
 	}
 	programID, err := service.ParseGovernanceOptionalUUID(body.ProgramID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernancePerformanceTargetParams{}, false
 	}
 	parentTargetID, err := service.ParseGovernanceOptionalUUID(body.ParentTargetID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernancePerformanceTargetParams{}, false
 	}
 	dueDate, err := service.ParseGovernanceOptionalDate(body.DueDate)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernancePerformanceTargetParams{}, false
 	}
 	return db.CreateGovernancePerformanceTargetParams{
@@ -1256,22 +1419,22 @@ func parsePerformanceTargetRequest(w http.ResponseWriter, body governancePerform
 func parseEvidenceItemRequest(w http.ResponseWriter, body governanceEvidenceItemRequest) (db.CreateGovernanceEvidenceItemParams, bool) {
 	ownerUnitID, err := service.ParseGovernanceOptionalUUID(body.OwnerUnitID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceEvidenceItemParams{}, false
 	}
 	documentID, err := service.ParseGovernanceOptionalUUID(body.DocumentID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceEvidenceItemParams{}, false
 	}
 	programID, err := service.ParseGovernanceOptionalUUID(body.ProgramID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceEvidenceItemParams{}, false
 	}
 	performanceTargetID, err := service.ParseGovernanceOptionalUUID(body.PerformanceTargetID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceEvidenceItemParams{}, false
 	}
 	return db.CreateGovernanceEvidenceItemParams{
@@ -1293,47 +1456,47 @@ func parseEvidenceItemRequest(w http.ResponseWriter, body governanceEvidenceItem
 func parseComplianceActionRequest(w http.ResponseWriter, body governanceComplianceActionRequest) (db.CreateGovernanceComplianceActionParams, bool) {
 	sourceRefID, err := service.ParseGovernanceOptionalUUID(body.SourceRefID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceComplianceActionParams{}, false
 	}
 	programID, err := service.ParseGovernanceOptionalUUID(body.ProgramID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceComplianceActionParams{}, false
 	}
 	documentID, err := service.ParseGovernanceOptionalUUID(body.DocumentID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceComplianceActionParams{}, false
 	}
 	performanceTargetID, err := service.ParseGovernanceOptionalUUID(body.PerformanceTargetID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceComplianceActionParams{}, false
 	}
 	evidenceItemID, err := service.ParseGovernanceOptionalUUID(body.EvidenceItemID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceComplianceActionParams{}, false
 	}
 	ownerUnitID, err := service.ParseGovernanceOptionalUUID(body.OwnerUnitID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceComplianceActionParams{}, false
 	}
 	responsibleEmployeeID, err := service.ParseGovernanceOptionalUUID(body.ResponsibleEmployeeID)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceComplianceActionParams{}, false
 	}
 	dueDate, err := service.ParseGovernanceOptionalDate(body.DueDate)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceComplianceActionParams{}, false
 	}
 	completedAt, err := service.ParseGovernanceOptionalTimestamp(body.CompletedAt)
 	if err != nil {
-		api.BadRequest(w, err.Error())
+		writeClientError(w, err, "Data tata kelola tidak valid")
 		return db.CreateGovernanceComplianceActionParams{}, false
 	}
 	return db.CreateGovernanceComplianceActionParams{

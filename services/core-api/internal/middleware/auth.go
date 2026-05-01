@@ -87,6 +87,10 @@ func InternalKeyOrJWT(internalKey, jwtSecret string, currentVersion authVersionP
 // Internal-key requests (BFF) bypass this check — the BFF is responsible for
 // gating admin-only routes via SvelteKit hooks before forwarding.
 func RequireAdmin() func(http.Handler) http.Handler {
+	return RequireAnyRole("admin")
+}
+
+func RequireAnyRole(roles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims, ok := api.ClaimsFromContext(r.Context())
@@ -94,31 +98,36 @@ func RequireAdmin() func(http.Handler) http.Handler {
 				api.Unauthorized(w)
 				return
 			}
-
-			// Check roles array
-			if rawRoles, ok := claims["roles"].([]any); ok {
-				hasAdmin := false
-				for _, r := range rawRoles {
-					if r == "admin" {
-						hasAdmin = true
-						break
-					}
-				}
-				if hasAdmin {
-					next.ServeHTTP(w, r)
-					return
-				}
-			}
-
-			// Fallback to single role
-			role, _ := claims["role"].(string)
-			if role != "admin" {
+			if !HasAnyRole(claims, roles...) {
 				api.Forbidden(w)
 				return
 			}
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func HasAnyRole(claims jwt.MapClaims, roles ...string) bool {
+	for _, expected := range roles {
+		if rawRoles, ok := claims["roles"].([]any); ok {
+			for _, role := range rawRoles {
+				if value, ok := role.(string); ok && value == expected {
+					return true
+				}
+			}
+		}
+		if rawRoles, ok := claims["roles"].([]string); ok {
+			for _, role := range rawRoles {
+				if role == expected {
+					return true
+				}
+			}
+		}
+		if role, _ := claims["role"].(string); role == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func WorkerKey(key string) func(http.Handler) http.Handler {

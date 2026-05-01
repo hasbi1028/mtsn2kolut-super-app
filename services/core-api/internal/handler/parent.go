@@ -1,22 +1,41 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	mw "mtsn2kolut-super-app/backend/internal/middleware"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
+type parentService interface {
+	List(ctx context.Context) ([]db.Parent, error)
+	Get(ctx context.Context, id pgtype.UUID) (db.Parent, error)
+	Create(ctx context.Context, nama, phone, address string) (db.Parent, error)
+	Update(ctx context.Context, id pgtype.UUID, nama, phone, address string) (db.Parent, error)
+	Delete(ctx context.Context, id pgtype.UUID) error
+	LinkStudent(ctx context.Context, parentID, studentID pgtype.UUID) error
+	UnlinkStudent(ctx context.Context, parentID, studentID pgtype.UUID) error
+	ListChildren(ctx context.Context, parentID pgtype.UUID) ([]db.ListParentChildrenRow, error)
+}
+
 type Parent struct {
-	svc *service.Parent
+	svc parentService
 }
 
 func NewParent(svc *service.Parent) *Parent { return &Parent{svc: svc} }
 
 func (h *Parent) List(w http.ResponseWriter, r *http.Request) {
+	if !parentAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	rows, err := h.svc.List(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -26,6 +45,10 @@ func (h *Parent) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Parent) Get(w http.ResponseWriter, r *http.Request) {
+	if !parentAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -40,6 +63,10 @@ func (h *Parent) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Parent) Create(w http.ResponseWriter, r *http.Request) {
+	if !parentAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	var body struct {
 		Nama    string `json:"nama"`
 		Phone   string `json:"phone"`
@@ -58,6 +85,10 @@ func (h *Parent) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Parent) Update(w http.ResponseWriter, r *http.Request) {
+	if !parentAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -81,6 +112,10 @@ func (h *Parent) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Parent) Delete(w http.ResponseWriter, r *http.Request) {
+	if !parentAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -94,6 +129,10 @@ func (h *Parent) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Parent) LinkStudent(w http.ResponseWriter, r *http.Request) {
+	if !parentAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	parentID, _ := parseUUID(chi.URLParam(r, "id"))
 	var body struct {
 		StudentID string `json:"student_id"`
@@ -115,6 +154,10 @@ func (h *Parent) LinkStudent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Parent) UnlinkStudent(w http.ResponseWriter, r *http.Request) {
+	if !parentAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	parentID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -139,7 +182,19 @@ func (h *Parent) UnlinkStudent(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]string{"status": "unlinked"})
 }
 
+func parentAccessAllowed(r *http.Request) bool {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		return false
+	}
+	return mw.HasAnyRole(claims, "admin")
+}
+
 func (h *Parent) ListChildren(w http.ResponseWriter, r *http.Request) {
+	if !parentAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")

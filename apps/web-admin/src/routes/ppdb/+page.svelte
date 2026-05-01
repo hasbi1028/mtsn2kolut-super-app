@@ -4,6 +4,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { toast } from '$lib/components/ui/sonner';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import { readClientJson } from '$lib/client/api';
 
 	let nama = $state('');
 	let nis = $state('');
@@ -11,13 +12,6 @@
 	let parentName = $state('');
 	let parentPhone = $state('');
 	let busy = $state(false);
-
-	function apiErrorMessage(payload: unknown, fallback: string) {
-		if (!payload || typeof payload !== 'object') return fallback;
-		if ('error' in payload && typeof payload.error === 'string' && payload.error) return payload.error;
-		if ('message' in payload && typeof payload.message === 'string' && payload.message) return payload.message;
-		return fallback;
-	}
 
 	async function submitRegistration() {
 		if (!nama || !nis || !gender) {
@@ -37,19 +31,15 @@
 					parent_phone: parentPhone,
 				}),
 			});
-			const payload = await res.json().catch(() => ({}));
-			if (!res.ok) {
-				toast.error(apiErrorMessage(payload, 'Pendaftaran gagal'));
-				return;
-			}
+			await readClientJson<unknown>(res);
 			toast.success('Pendaftaran berhasil dikirim. Status awal sebagai calon siswa.');
 			nama = '';
 			nis = '';
 			gender = 'L';
 			parentName = '';
 			parentPhone = '';
-		} catch {
-			toast.error('Pendaftaran gagal dikirim. Periksa koneksi lalu coba lagi.');
+		} catch (error) {
+			toast.error(error instanceof Error && error.message.trim() ? error.message : 'Pendaftaran gagal dikirim. Periksa koneksi lalu coba lagi.');
 		} finally {
 			busy = false;
 		}

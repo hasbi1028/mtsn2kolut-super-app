@@ -4,6 +4,7 @@
   import { toast } from '$lib/components/ui/sonner';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
   import SuccessPanel from '$lib/components/SuccessPanel.svelte';
+  import { readClientJson } from '$lib/client/api';
 
   let { onadd }: { onadd?: () => void } = $props();
 
@@ -21,19 +22,6 @@
 
   function showError(message: string) {
     toast.error(message);
-  }
-
-  function apiErrorMessage(payload: unknown) {
-    if (typeof payload !== 'object' || payload === null) return '';
-    if ('error' in payload) {
-      const error = payload.error;
-      if (typeof error === 'string' && error.trim()) return error;
-    }
-    if ('message' in payload) {
-      const message = payload.message;
-      if (typeof message === 'string' && message.trim()) return message;
-    }
-    return '';
   }
 
   function mutationErrorMessage(error: unknown, fallbackMessage: string) {
@@ -65,10 +53,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(form),
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(apiErrorMessage(data) || 'Gagal menyimpan pegawai.');
-      }
+      await readClientJson<unknown>(res);
       form = { nip: '', nama: '', unit_kerja: '', employment_type: '', pusaka_username: '', pusaka_password: '' };
       success = 'Pegawai baru berhasil ditambahkan ke master data. Jika pegawai eligible PUSAKA, akun integrasinya bisa dilengkapi sekarang atau nanti dari menu PUSAKA.';
       onadd?.();
