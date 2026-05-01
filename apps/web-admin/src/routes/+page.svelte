@@ -4,6 +4,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import PublicHome from '$lib/components/PublicHome.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 
@@ -82,11 +83,15 @@
 		timetable: Array<TimetableEntry & { student_id: string; student_name: string }>;
 	}
 
-	let academicStats = $state<AcademicStats | null>(null);
-	let guruStats = $state<GuruStats | null>(null);
-	let guruTimetable = $state<TimetableEntry[]>([]);
-	let studentPortal = $state<StudentPortalData | null>(null);
-	let parentPortal = $state<ParentPortalData | null>(null);
+	interface DashboardPayload {
+		academicStats: AcademicStats | null;
+		guruStats: GuruStats | null;
+		guruTimetable: TimetableEntry[];
+		studentPortal: StudentPortalData | null;
+		parentPortal: ParentPortalData | null;
+	}
+
+	let dashboardPromise = $state<Promise<DashboardPayload> | null>(null);
 
 	const roles = $derived(data.user?.roles || (data.user?.role ? [data.user.role] : []));
 	const isGuru = $derived(roles.includes('guru'));
@@ -94,25 +99,28 @@
 	const isParent = $derived(roles.includes('ortu'));
 	const isAdmin = $derived(roles.includes('admin'));
 	const isStaff = $derived(roles.includes('staf'));
-	const dashboardLoading = $derived(
-		(isGuru && !guruStats) ||
-		(isSiswa && !studentPortal) ||
-		(isParent && !parentPortal) ||
-		((isAdmin || isStaff) && !academicStats)
-	);
-	const parentTimetableByChild = $derived.by(() => {
-		const portal = parentPortal;
-		if (!portal) return [];
-		return portal.children.map((child) => ({
-			child,
-			slots: portal.timetable.filter((slot) => slot.student_id === child.id),
-		}));
-	});
 
 	function parseData<T>(raw: unknown): T | null {
 		if (!raw || typeof raw !== 'object') return null;
 		const wrapper = raw as { data?: T };
 		return (wrapper.data ?? raw) as T;
+	}
+
+	async function fetchJSON<T>(path: string): Promise<T> {
+		const res = await fetch(path);
+		const raw = await res.json().catch(() => null);
+		if (!res.ok) {
+			const message =
+				raw && typeof raw === 'object' && 'error' in raw && typeof raw.error === 'string'
+					? raw.error
+					: `Gagal memuat ${path}`;
+			throw new Error(message);
+		}
+		const parsed = parseData<T>(raw);
+		if (parsed == null) {
+			throw new Error(`Respons ${path} tidak valid.`);
+		}
+		return parsed;
 	}
 
 	function fmtDateTime(iso: string) {
@@ -140,54 +148,84 @@
 		return value.slice(0, 5);
 	}
 
-	async function load() {
-		try {
-			if (isGuru) {
-				const [sessRes, essaysRes, studentsRes, timetableRes] = await Promise.all([
-					fetch('/api/cbt/sessions'),
-					fetch('/api/cbt/sessions/my-essays'),
-					fetch('/api/students'),
-					fetch('/api/portal/guru/timetable'),
-				]);
-				const sessions = parseData<any[]>(await sessRes.json().catch(() => null)) ?? [];
-				const essays = parseData<any[]>(await essaysRes.json().catch(() => null)) ?? [];
-				const students = parseData<any[]>(await studentsRes.json().catch(() => null)) ?? [];
-				guruTimetable = parseData<{ timetable: TimetableEntry[] }>(await timetableRes.json().catch(() => null))?.timetable ?? [];
-				const activeSessions = sessions.filter((session) => session.status === 'active' || session.status === 'scheduled');
-				const subjects = new Set(activeSessions.map((session) => session.package_title));
-				guruStats = {
+	async function loadDashboard(): Promise<DashboardPayload> {
+		if (isGuru) {
+			const [sessions, essays, students, timetable] = await Promise.all([
+				fetchJSON<any[]>('/api/cbt/sessions'),
+				fetchJSON<any[]>('/api/cbt/sessions/my-essays'),
+				fetchJSON<any[]>('/api/students'),
+				fetchJSON<{ timetable: TimetableEntry[] }>('/api/portal/guru/timetable'),
+			]);
+			const activeSessions = sessions.filter((session) => session.status === 'active' || session.status === 'scheduled');
+			const subjects = new Set(activeSessions.map((session) => session.package_title));
+			return {
+				academicStats: null,
+				guruTimetable: timetable.timetable ?? [],
+				guruStats: {
 					active_sessions: activeSessions.length,
 					ungraded_essays: essays.length,
 					my_students: students.length,
 					my_subjects: subjects.size,
-				};
-				return;
-			}
-
-			if (isSiswa) {
-				const res = await fetch('/api/portal/student/me');
-				studentPortal = parseData<StudentPortalData>(await res.json().catch(() => null));
-				return;
-			}
-
-			if (isParent) {
-				const res = await fetch('/api/portal/parent/me');
-				parentPortal = parseData<ParentPortalData>(await res.json().catch(() => null));
-				return;
-			}
-
-			if (isAdmin || isStaff) {
-				const res = await fetch('/api/academic/stats');
-				academicStats = parseData<AcademicStats>(await res.json().catch(() => null));
-			}
-		} catch {
-			// Keep dashboard resilient; individual cards can stay empty.
+				},
+				studentPortal: null,
+				parentPortal: null,
+			};
 		}
+
+		if (isSiswa) {
+			return {
+				academicStats: null,
+				guruStats: null,
+				guruTimetable: [],
+				studentPortal: await fetchJSON<StudentPortalData>('/api/portal/student/me'),
+				parentPortal: null,
+			};
+		}
+
+		if (isParent) {
+			return {
+				academicStats: null,
+				guruStats: null,
+				guruTimetable: [],
+				studentPortal: null,
+				parentPortal: await fetchJSON<ParentPortalData>('/api/portal/parent/me'),
+			};
+		}
+
+		if (isAdmin || isStaff) {
+			return {
+				academicStats: await fetchJSON<AcademicStats>('/api/academic/stats'),
+				guruStats: null,
+				guruTimetable: [],
+				studentPortal: null,
+				parentPortal: null,
+			};
+		}
+
+		return {
+			academicStats: null,
+			guruStats: null,
+			guruTimetable: [],
+			studentPortal: null,
+			parentPortal: null,
+		};
+	}
+
+	function refreshDashboard() {
+		dashboardPromise = loadDashboard();
+	}
+
+	function dashboardErrorMessage(error: unknown) {
+		return error instanceof Error ? error.message : 'Terjadi gangguan saat memuat dashboard.';
+	}
+
+	function handleDashboardRenderError(error: unknown) {
+		console.error('Dashboard boundary error', error);
 	}
 
 	onMount(() => {
 		if (data.user) {
-			void load();
+			refreshDashboard();
 		}
 	});
 </script>
@@ -217,24 +255,98 @@
 		{/if}
 	</div>
 
-	{#if isSiswa && dashboardLoading}
-		<div class="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
-			{#each Array.from({ length: 2 }) as _, index (`student-dashboard-skeleton-${index}`)}
-				<Card.Root class="border-slate-200">
-					<Card.Header class="space-y-2">
-						<Skeleton class="h-6 w-40" />
-						<Skeleton class="h-4 w-56" />
-					</Card.Header>
-					<Card.Content class="space-y-3">
-						<Skeleton class="h-6 w-32" />
-						<Skeleton class="h-4 w-full" />
-						<Skeleton class="h-16 w-full rounded-xl" />
-					</Card.Content>
-				</Card.Root>
-			{/each}
-		</div>
-	{:else if isSiswa && studentPortal}
-		<div class="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
+	<AsyncContent promise={dashboardPromise} onerror={handleDashboardRenderError}>
+		{#snippet pending()}
+			{#if isSiswa}
+				<div class="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
+					{#each Array.from({ length: 2 }) as _, index (`student-dashboard-skeleton-${index}`)}
+						<Card.Root class="border-slate-200">
+							<Card.Header class="space-y-2">
+								<Skeleton class="h-6 w-40" />
+								<Skeleton class="h-4 w-56" />
+							</Card.Header>
+							<Card.Content class="space-y-3">
+								<Skeleton class="h-6 w-32" />
+								<Skeleton class="h-4 w-full" />
+								<Skeleton class="h-16 w-full rounded-xl" />
+							</Card.Content>
+						</Card.Root>
+					{/each}
+				</div>
+			{:else if isParent}
+				<div class="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
+					{#each Array.from({ length: 2 }) as _, index (`parent-dashboard-skeleton-${index}`)}
+						<Card.Root class="border-slate-200">
+							<Card.Header class="space-y-2">
+								<Skeleton class="h-6 w-36" />
+								<Skeleton class="h-4 w-44" />
+							</Card.Header>
+							<Card.Content class="space-y-3">
+								<Skeleton class="h-4 w-full" />
+								<Skeleton class="h-4 w-4/5" />
+								<Skeleton class="h-16 w-full rounded-xl" />
+							</Card.Content>
+						</Card.Root>
+					{/each}
+				</div>
+			{:else if isGuru}
+				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+					{#each Array.from({ length: 4 }) as _, index (`guru-stat-skeleton-${index}`)}
+						<Card.Root class="border-slate-200">
+							<Card.Content class="space-y-2 pt-4">
+								<Skeleton class="h-4 w-28" />
+								<Skeleton class="h-8 w-16" />
+							</Card.Content>
+						</Card.Root>
+					{/each}
+				</div>
+			{:else if isAdmin || isStaff}
+				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+					{#each Array.from({ length: 4 }) as _, index (`admin-stat-skeleton-${index}`)}
+						<Card.Root class="border-slate-200">
+							<Card.Content class="space-y-2 pt-4">
+								<Skeleton class="h-4 w-28" />
+								<Skeleton class="h-8 w-16" />
+							</Card.Content>
+						</Card.Root>
+					{/each}
+				</div>
+			{/if}
+		{/snippet}
+
+		{#snippet failed(error, reset)}
+			<Card.Root class="border-amber-200 bg-amber-50/60">
+				<Card.Header>
+					<Card.Title class="text-base text-amber-900">Dashboard belum berhasil dimuat</Card.Title>
+					<Card.Description class="text-amber-800">
+						{dashboardErrorMessage(error)}
+					</Card.Description>
+				</Card.Header>
+				<Card.Content class="flex flex-wrap gap-2">
+					<Button onclick={refreshDashboard}>Coba Lagi</Button>
+					{#if reset}
+						<Button variant="outline" onclick={reset}>Muat Ulang Tampilan</Button>
+					{/if}
+				</Card.Content>
+			</Card.Root>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const dashboard = value as DashboardPayload}
+			{@const studentPortal = dashboard.studentPortal}
+			{@const parentPortal = dashboard.parentPortal}
+			{@const guruStats = dashboard.guruStats}
+			{@const guruTimetable = dashboard.guruTimetable}
+			{@const academicStats = dashboard.academicStats}
+			{@const parentTimetableByChild = parentPortal
+				? parentPortal.children.map((child) => ({
+						child,
+						slots: parentPortal.timetable.filter((slot) => slot.student_id === child.id),
+					}))
+				: []}
+
+			{#if isSiswa && studentPortal}
+				<div class="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
 			<Card.Root class="border-emerald-100">
 				<Card.Header>
 					<Card.Title class="text-base">Profil Akademik</Card.Title>
@@ -288,9 +400,9 @@
 					{/if}
 				</Card.Content>
 			</Card.Root>
-		</div>
+				</div>
 
-		<Card.Root class="border-slate-200">
+				<Card.Root class="border-slate-200">
 			<Card.Header>
 				<Card.Title class="text-base">Jadwal Pelajaran Minggu Ini</Card.Title>
 				<Card.Description>Slot belajar yang tersusun untuk kelas {studentPortal.student.class_code || studentPortal.student.class_name || 'aktif'}.</Card.Description>
@@ -322,27 +434,11 @@
 					/>
 				{/if}
 			</Card.Content>
-		</Card.Root>
-	{/if}
-
-	{#if isParent && dashboardLoading}
-		<div class="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
-			{#each Array.from({ length: 2 }) as _, index (`parent-dashboard-skeleton-${index}`)}
-				<Card.Root class="border-slate-200">
-					<Card.Header class="space-y-2">
-						<Skeleton class="h-6 w-36" />
-						<Skeleton class="h-4 w-44" />
-					</Card.Header>
-					<Card.Content class="space-y-3">
-						<Skeleton class="h-4 w-full" />
-						<Skeleton class="h-4 w-4/5" />
-						<Skeleton class="h-16 w-full rounded-xl" />
-					</Card.Content>
 				</Card.Root>
-			{/each}
-		</div>
-	{:else if isParent && parentPortal}
-		<div class="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
+			{/if}
+
+			{#if isParent && parentPortal}
+				<div class="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
 			<Card.Root class="border-emerald-100">
 				<Card.Header>
 					<Card.Title class="text-base">Profil Wali</Card.Title>
@@ -381,9 +477,9 @@
 					{/if}
 				</Card.Content>
 			</Card.Root>
-		</div>
+				</div>
 
-		<Card.Root class="border-slate-200">
+				<Card.Root class="border-slate-200">
 			<Card.Header>
 				<Card.Title class="text-base">Jadwal Anak</Card.Title>
 				<Card.Description>Ringkasan slot pelajaran untuk setiap anak yang sudah terhubung ke akun orang tua ini.</Card.Description>
@@ -433,29 +529,18 @@
 					/>
 				{/if}
 			</Card.Content>
-		</Card.Root>
-	{/if}
-
-	{#if isGuru && dashboardLoading}
-		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			{#each Array.from({ length: 4 }) as _, index (`guru-stat-skeleton-${index}`)}
-				<Card.Root class="border-slate-200">
-					<Card.Content class="space-y-2 pt-4">
-						<Skeleton class="h-4 w-28" />
-						<Skeleton class="h-8 w-16" />
-					</Card.Content>
 				</Card.Root>
-			{/each}
-		</div>
-	{:else if isGuru && guruStats}
-		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			{/if}
+
+			{#if isGuru && guruStats}
+				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sesi CBT Berjalan</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.active_sessions}</p></Card.Content></Card.Root>
 			<Card.Root class="border-amber-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Esai Belum Dikoreksi</p><p class="mt-1 text-3xl font-bold text-amber-700">{guruStats.ungraded_essays}</p></Card.Content></Card.Root>
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Siswa Terpantau</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.my_students}</p></Card.Content></Card.Root>
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Diampu</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.my_subjects}</p></Card.Content></Card.Root>
-		</div>
+				</div>
 
-		<Card.Root class="border-slate-200">
+				<Card.Root class="border-slate-200">
 			<Card.Header>
 				<Card.Title class="text-base">Jadwal Mengajar</Card.Title>
 				<Card.Description>Ringkasan slot kelas-mapel yang sudah dijadwalkan untuk guru pada minggu berjalan.</Card.Description>
@@ -487,31 +572,20 @@
 					/>
 				{/if}
 			</Card.Content>
-		</Card.Root>
-	{/if}
-
-	{#if (isAdmin || isStaff) && dashboardLoading}
-		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			{#each Array.from({ length: 4 }) as _, index (`admin-stat-skeleton-${index}`)}
-				<Card.Root class="border-slate-200">
-					<Card.Content class="space-y-2 pt-4">
-						<Skeleton class="h-4 w-28" />
-						<Skeleton class="h-8 w-16" />
-					</Card.Content>
 				</Card.Root>
-			{/each}
-		</div>
-	{:else if isAdmin || isStaff}
-		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			{/if}
+
+			{#if isAdmin || isStaff}
+				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Siswa</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_students ?? '—'}</p></Card.Content></Card.Root>
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Kelas Aktif</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_classes ?? '—'}</p></Card.Content></Card.Root>
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Aktif</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_subjects ?? '—'}</p></Card.Content></Card.Root>
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tahun Ajaran</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_years ?? '—'}</p></Card.Content></Card.Root>
-		</div>
-	{/if}
+				</div>
+			{/if}
 
-	{#if isStaff}
-		<Card.Root class="border-slate-200">
+			{#if isStaff}
+				<Card.Root class="border-slate-200">
 			<Card.Header>
 				<Card.Title class="text-base">Akses Cepat Staf</Card.Title>
 				<Card.Description>Menu yang paling sering dipakai untuk layanan data orang tua dan siswa.</Card.Description>
@@ -522,11 +596,11 @@
 					<Button variant="outline" size="sm" href="/students">Data Siswa</Button>
 				</div>
 			</Card.Content>
-		</Card.Root>
-	{/if}
+				</Card.Root>
+			{/if}
 
-	{#if isAdmin}
-		<Card.Root class="border-slate-200">
+			{#if isAdmin}
+				<Card.Root class="border-slate-200">
 			<Card.Header class="pb-3">
 				<div class="flex items-center justify-between">
 					<div>
@@ -544,7 +618,9 @@
 					<Button variant="outline" size="sm" href="/pusaka/antrian">Antrian Job</Button>
 				</div>
 			</Card.Content>
-		</Card.Root>
-	{/if}
+				</Card.Root>
+			{/if}
+		{/snippet}
+	</AsyncContent>
 </div>
 {/if}
