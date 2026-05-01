@@ -1099,6 +1099,124 @@ type UserUiPreference struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
+// =====================
+// Letter enums and models (Sprint 17)
+// =====================
+
+type LetterSifat string
+
+const (
+	LetterSifatBiasa  LetterSifat = "biasa"
+	LetterSifatPenting LetterSifat = "penting"
+	LetterSifatSegera  LetterSifat = "segera"
+	LetterSifatRahasia LetterSifat = "rahasia"
+)
+
+func (e *LetterSifat) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LetterSifat(s)
+	case string:
+		*e = LetterSifat(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LetterSifat: %T", src)
+	}
+	return nil
+}
+
+type LetterStatus string
+
+const (
+	LetterStatusBaru        LetterStatus = "baru"
+	LetterStatusDidisposisi LetterStatus = "didisposisi"
+	LetterStatusSelesai     LetterStatus = "selesai"
+	LetterStatusArsip       LetterStatus = "arsip"
+)
+
+func (e *LetterStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LetterStatus(s)
+	case string:
+		*e = LetterStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LetterStatus: %T", src)
+	}
+	return nil
+}
+
+type DispositionStatus string
+
+const (
+	DispositionStatusTerkirim        DispositionStatus = "terkirim"
+	DispositionStatusDibaca          DispositionStatus = "dibaca"
+	DispositionStatusDitindaklanjuti DispositionStatus = "ditindaklanjuti"
+	DispositionStatusSelesai         DispositionStatus = "selesai"
+)
+
+func (e *DispositionStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DispositionStatus(s)
+	case string:
+		*e = DispositionStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DispositionStatus: %T", src)
+	}
+	return nil
+}
+
+type LetterClassification struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	IsActive    bool   `json:"is_active"`
+}
+
+type IncomingLetter struct {
+	ID                   pgtype.UUID        `json:"id"`
+	NomorSurat           string             `json:"nomor_surat"`
+	NomorAgenda          string             `json:"nomor_agenda"`
+	TanggalSurat         pgtype.Date        `json:"tanggal_surat"`
+	TanggalTerima        pgtype.Date        `json:"tanggal_terima"`
+	Asal                 string             `json:"asal"`
+	Perihal              string             `json:"perihal"`
+	Sifat                LetterSifat        `json:"sifat"`
+	FilePath             string             `json:"file_path"`
+	Catatan              string             `json:"catatan"`
+	Status               LetterStatus       `json:"status"`
+	ReceivedByEmployeeID pgtype.UUID        `json:"received_by_employee_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OutgoingLetter struct {
+	ID                 pgtype.UUID        `json:"id"`
+	NomorSurat         string             `json:"nomor_surat"`
+	ClassificationCode string             `json:"classification_code"`
+	TanggalSurat       pgtype.Date        `json:"tanggal_surat"`
+	Tujuan             string             `json:"tujuan"`
+	Perihal            string             `json:"perihal"`
+	Sifat              LetterSifat        `json:"sifat"`
+	FilePath           string             `json:"file_path"`
+	Catatan            string             `json:"catatan"`
+	IssuedByEmployeeID pgtype.UUID        `json:"issued_by_employee_id"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type LetterDisposition struct {
+	ID                    pgtype.UUID        `json:"id"`
+	IncomingLetterID      pgtype.UUID        `json:"incoming_letter_id"`
+	AssigneeEmployeeID    pgtype.UUID        `json:"assignee_employee_id"`
+	Instruksi             string             `json:"instruksi"`
+	CatatanTindakLanjut   string             `json:"catatan_tindak_lanjut"`
+	Status                DispositionStatus  `json:"status"`
+	DisposedByEmployeeID  pgtype.UUID        `json:"disposed_by_employee_id"`
+	DisposedAt            pgtype.Timestamptz `json:"disposed_at"`
+	CompletedAt           pgtype.Timestamptz `json:"completed_at"`
+}
+
 type WebsiteContent struct {
 	ID              pgtype.UUID          `json:"id"`
 	Kind            WebsiteContentKind   `json:"kind"`

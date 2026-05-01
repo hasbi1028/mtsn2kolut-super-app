@@ -62,6 +62,7 @@ func main() {
 	librarySvc := service.NewLibrary(q)
 	inventorySvc := service.NewInventory(q)
 	journalSvc := service.NewClassJournal(q)
+	letterSvc := service.NewLetter(q)
 	websiteMediaH := handler.NewWebsiteMedia(getEnv("WEBSITE_MEDIA_DIR", "data/website-media"))
 
 	if err := authSvc.SeedAdmin(mainCtx); err != nil {
@@ -100,6 +101,7 @@ func main() {
 	libraryH := handler.NewLibrary(librarySvc)
 	inventoryH := handler.NewInventory(inventorySvc)
 	journalH := handler.NewClassJournal(journalSvc)
+	letterH := handler.NewLetter(letterSvc)
 
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
@@ -303,6 +305,26 @@ func main() {
 		r.Get("/api/inventory/items/{id}/history", inventoryH.ListItemEvents)
 		r.Put("/api/inventory/items/{id}", inventoryH.UpdateItem)
 		r.Delete("/api/inventory/items/{id}", inventoryH.DeleteItem)
+
+		// Tata Usaha — admin + staf
+		r.Get("/api/tu/surat/klasifikasi", letterH.ListClassifications)
+		r.Get("/api/tu/surat/outgoing/preview-number", letterH.PreviewOutgoingNumber)
+		r.Get("/api/tu/surat/incoming", letterH.ListIncoming)
+		r.Post("/api/tu/surat/incoming", letterH.CreateIncoming)
+		r.Get("/api/tu/surat/incoming/{id}", letterH.GetIncoming)
+		r.Put("/api/tu/surat/incoming/{id}", letterH.UpdateIncoming)
+		r.Patch("/api/tu/surat/incoming/{id}/status", letterH.UpdateIncomingStatus)
+		r.Delete("/api/tu/surat/incoming/{id}", letterH.DeleteIncoming)
+		r.Get("/api/tu/surat/outgoing", letterH.ListOutgoing)
+		r.Post("/api/tu/surat/outgoing", letterH.CreateOutgoing)
+		r.Get("/api/tu/surat/outgoing/{id}", letterH.GetOutgoing)
+		r.Put("/api/tu/surat/outgoing/{id}", letterH.UpdateOutgoing)
+		r.Delete("/api/tu/surat/outgoing/{id}", letterH.DeleteOutgoing)
+		r.Get("/api/tu/surat/disposisi", letterH.ListDispositions)
+		r.Post("/api/tu/surat/disposisi", letterH.CreateDisposition)
+		r.Get("/api/tu/surat/disposisi/{id}", letterH.GetDisposition)
+		r.Put("/api/tu/surat/disposisi/{id}", letterH.UpdateDisposition)
+		r.Delete("/api/tu/surat/disposisi/{id}", letterH.DeleteDisposition)
 
 		// Jobs / Attendance / Schedules / Settings / Users — admin-only
 		r.Group(func(r chi.Router) {

@@ -1,6 +1,6 @@
 # MTs Negeri 2 Kolaka Utara — Super App Strategic Plan
 
-> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Last Updated: 2026-05-01
+> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Jurnal Kelas Complete | Sprint 17 Persuratan Complete | Sprint 18–21 Planned | Last Updated: 2026-05-01
 > This file is the master roadmap. Update after each sprint completion.
 
 ---
@@ -336,10 +336,61 @@ Three runtime units deployed across 3 VPS:
 - [x] SEO meta tags on `/berita/[slug]` and `/pengumuman/[slug]` — `og:title`, `og:description`, `og:image`, `description`
 - [x] `go build ./...` and `npm run check` — 0 errors, 0 warnings
 
-### Next Recommendation — Sprint 17
+### Cross-Sprint Backlog
 - [x] Publish scheduling (deferred from 16B — low priority until editorial demand is proven)
 - [x] Featured content homepage widget (pull from `/api/public/site/posts/featured`)
 - [ ] Flutter Student App — CBT exam client (API ready via `docs/exam-api.md`)
+
+### ✅ Jurnal Kelas (COMPLETE)
+- [x] Migration 034 — `class_journal_sessions`, `class_journal_attendances` + enum `journal_attendance_status`
+- [x] sqlc queries — count/create/get/list/update/delete sesi, upsert/list kehadiran, rekap per assignment, list active students per kelas, get class-subject assignment
+- [x] Service `ClassJournal` — pre-populate kehadiran 'hadir' saat sesi dibuat, ownership check via JWT `eid`, normalize status, filter assignment per guru
+- [x] Handler `ClassJournal` — overview/create/get/update/delete sesi + bulk upsert kehadiran (admin/guru, delete admin-only, 409 untuk tanggal duplikat)
+- [x] Routes `/api/journal/*` di `cmd/api/main.go`
+- [x] BFF proxy `/api/journal`, `/api/journal/sessions`, `/api/journal/sessions/[id]`, `/api/journal/sessions/[id]/attendances`
+- [x] Halaman `/journal` — assignment selector, tab Daftar Pertemuan + Rekap Kehadiran, dialog tambah pertemuan
+- [x] Halaman `/journal/[id]` — detail sesi + edit, grid kehadiran siswa dengan toggle H/S/I/A per baris dan catatan
+- [x] Sidebar group "Akademik" — item "Jurnal Kelas" (admin/guru) + ikon `journal`
+
+### ✅ Sprint 17 — Tata Usaha: Persuratan Core (COMPLETE)
+- [x] Migration 040 — `letter_classifications`, `incoming_letters`, `outgoing_letters`, `letter_dispositions`, `incoming_letter_sequences`, `outgoing_letter_sequences` (3 ENUMs + 6 tables)
+- [x] Migration 041 — seed 31 kode klasifikasi Kemenag (PP/KP/KU/KS/HM/HK/OT/TI)
+- [x] `db/queries/letters.sql` + `internal/repository/postgres/letters.sql.go` (manual generated-style)
+- [x] Service `IssueOutgoingLetterNumber` — auto-number per (tahun, klasifikasi) dengan UNIQUE safety net; `IssueIncomingLetterSequence` untuk nomor agenda `AGD/{year}/{seq}`
+- [x] `data/letters/.gitkeep` — storage directory for letter attachments
+- [x] Lifecycle surat masuk: `baru → didisposisi → selesai → arsip`; disposisi auto-transitions to `didisposisi`
+- [x] Backend: `internal/service/letter.go` + `internal/handler/letter.go` + 19 routes `/api/tu/surat/*` (admin/staf)
+- [x] BFF proxy routes: `/api/tu/surat/incoming/`, `/api/tu/surat/outgoing/`, `/api/tu/surat/disposisi/`, `/api/tu/surat/klasifikasi`
+- [x] Frontend pages: `/tu/surat-masuk`, `/tu/surat-keluar` (auto-number preview), `/tu/disposisi`
+- [x] Sidebar group "Tata Usaha" + ikon `mail`, `inbox`, `mail-forward`
+
+### Sprint 18 — Kesiswaan: Foundation
+- [ ] Migration extend `students` (NIK, tanggal/tempat lahir, alamat, agama, anak-ke, foto, no telp)
+- [ ] Tambah enum `kesiswaan` ke `user_role` + sidebar role guard
+- [ ] Migration `violation_categories`, `student_violations`, `student_achievements`
+- [ ] Auto-calc total poin pelanggaran per siswa
+- [ ] Form prestasi dengan tingkat sekolah/kab/prov/nasional/internasional
+- [ ] Upload foto siswa ke `data/student-photos/`
+- [ ] Sidebar group "Kesiswaan" + ikon `shield-check`
+- [ ] Guru read-only untuk siswa di kelasnya saja (data scoping seperti pattern grades)
+
+### Sprint 19 — Tata Usaha: Surat Keterangan Siswa
+- [ ] Migration `certificate_templates`, `student_certificates` (dengan `snapshot_data` JSONB)
+- [ ] Seed template: aktif, lulus, pindah, kehilangan dokumen, mengikuti kegiatan
+- [ ] Reuse `IssueOutgoingLetterNumber` (klasifikasi default `PP.00.4` siswa)
+- [ ] Render HTML print (reuse pattern `/grades/rapor`)
+- [ ] Halaman `/tu/surat-keterangan` dengan generator + history
+
+### Sprint 20 — Kesiswaan: Engagement
+- [ ] Migration `extracurriculars`, `extracurricular_members`
+- [ ] Migration `counseling_sessions` (dengan `is_confidential BOOLEAN`)
+- [ ] Migration `student_transfers` (mutasi keluar/masuk dengan transaksi update `students.status`)
+- [ ] BK confidentiality guard: hanya `admin` & `kesiswaan` lihat catatan rahasia
+
+### Sprint 21 — Tata Usaha: Aset & Arsip
+- [ ] Migration `archive_categories`, `archive_documents`
+- [ ] Upload file arsip ke `data/archives/` dengan klasifikasi
+- [ ] Catatan: Inventaris foundation sudah ada di Sprint 13 — di sprint ini cukup polish (kondisi ekstra, ekspor, riwayat lebih lengkap) jika dibutuhkan
 
 ---
 

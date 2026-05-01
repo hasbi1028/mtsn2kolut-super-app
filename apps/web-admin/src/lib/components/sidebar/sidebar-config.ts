@@ -59,6 +59,14 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		]
 	},
 	{
+		group: 'Tata Usaha',
+		items: [
+			{ href: '/tu/surat-masuk', label: 'Surat Masuk', icon: 'inbox', roles: ['admin', 'staf'] },
+			{ href: '/tu/surat-keluar', label: 'Surat Keluar', icon: 'mail', roles: ['admin', 'staf'] },
+			{ href: '/tu/disposisi', label: 'Disposisi', icon: 'mail-forward', roles: ['admin', 'staf'] }
+		]
+	},
+	{
 		group: 'Website',
 		items: [
 			{ href: '/website', label: 'Website Publik', icon: 'globe', roles: ['admin'] },

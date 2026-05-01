@@ -1,0 +1,36 @@
+-- Sprint 17: Seed kode klasifikasi surat Kemenag
+-- Based on Peraturan Menteri Agama and Kemenag classification codes
+
+INSERT INTO letter_classifications (code, name, description) VALUES
+    ('PP.00',   'Pendidikan & Pengajaran Umum',       'Kebijakan dan administrasi umum bidang pendidikan'),
+    ('PP.00.1', 'Kurikulum',                          'Pengembangan dan pelaksanaan kurikulum'),
+    ('PP.00.2', 'Kesiswaan',                          'Administrasi dan kegiatan kesiswaan'),
+    ('PP.00.3', 'Sarana Prasarana Pendidikan',        'Pengadaan dan pengelolaan sarana prasarana'),
+    ('PP.00.4', 'Surat Keterangan Siswa',             'Surat keterangan aktif, lulus, pindah, dll'),
+    ('PP.00.5', 'Pendidikan & Pengajaran Lainnya',    'Hal-hal lain terkait pendidikan dan pengajaran'),
+    ('KP.00',   'Kepegawaian Umum',                   'Administrasi kepegawaian umum'),
+    ('KP.01',   'Formasi & Pengadaan',                'Formasi jabatan dan pengadaan pegawai'),
+    ('KP.02',   'Pengangkatan & Penempatan',          'Pengangkatan, penempatan, dan rotasi pegawai'),
+    ('KP.03',   'Kenaikan Pangkat & Golongan',        'Proses kenaikan pangkat dan golongan'),
+    ('KP.04',   'Pemindahan & Mutasi',                'Pemindahan dan mutasi pegawai'),
+    ('KP.05',   'Pembinaan & Disiplin',               'Pembinaan dan penegakan disiplin pegawai'),
+    ('KP.06',   'Pensiun & Pemberhentian',            'Pensiun dan pemberhentian pegawai'),
+    ('KP.07',   'Kesejahteraan Pegawai',              'Tunjangan, reward, dan kesejahteraan'),
+    ('KP.08',   'Cuti',                               'Pengajuan dan persetujuan cuti'),
+    ('KU.00',   'Keuangan Umum',                      'Administrasi keuangan umum'),
+    ('KU.01',   'Anggaran',                           'Perencanaan dan pelaksanaan anggaran'),
+    ('KU.02',   'Perbendaharaan',                     'Pengelolaan kas dan perbendaharaan'),
+    ('KU.03',   'Gaji & Tunjangan',                   'Penggajian dan tunjangan pegawai'),
+    ('KU.04',   'Verifikasi & Pembukuan',             'Verifikasi keuangan dan pembukuan'),
+    ('KU.05',   'Perjalanan Dinas',                   'Administrasi perjalanan dinas'),
+    ('KS.00',   'Kerumahtanggaan & Sarana',           'Administrasi kerumahtanggaan'),
+    ('KS.01',   'Inventarisasi Barang',               'Inventarisasi dan pengelolaan barang milik negara'),
+    ('KS.02',   'Pemeliharaan',                       'Pemeliharaan gedung dan fasilitas'),
+    ('KS.03',   'Pengadaan Barang & Jasa',            'Proses pengadaan barang dan jasa'),
+    ('HM.00',   'Hubungan Masyarakat',                'Humas dan keprotokolan'),
+    ('HM.01',   'Kerjasama & Kemitraan',              'Nota kesepahaman dan kerjasama'),
+    ('HM.02',   'Penerimaan Tamu',                    'Kunjungan, audiensi, dan penerimaan tamu'),
+    ('HK.00',   'Hukum & Peraturan',                  'Administrasi hukum dan peraturan perundangan'),
+    ('OT.00',   'Organisasi & Tata Laksana',          'Organisasi, tupoksi, dan tata laksana'),
+    ('TI.00',   'Teknologi Informasi',                'Administrasi teknologi informasi dan sistem')
+ON CONFLICT (code) DO NOTHING;
