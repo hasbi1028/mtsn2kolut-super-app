@@ -13,6 +13,10 @@ apps/web-admin/data/
 services/core-api/data/
 *.db
 *.sqlite
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
 
 # Logs & screenshots
 logs/
