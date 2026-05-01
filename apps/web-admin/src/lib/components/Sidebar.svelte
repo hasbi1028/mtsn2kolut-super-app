@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import SidebarCommandPalette from '$lib/components/sidebar/SidebarCommandPalette.svelte';
+	import { fetchSidebarAttention } from '$lib/components/sidebar/sidebar-attention';
 	import {
 		defaultPinnedByRole,
 		sidebarNavGroups,
@@ -208,61 +209,11 @@
 		return 0;
 	}
 
-	function shouldLoadInventoryAttention() {
-		return userRoles.includes('admin') || userRoles.includes('staf');
-	}
-
-	function shouldLoadPusakaAttention() {
-		return userRoles.includes('admin');
-	}
-
 	async function loadSidebarAttention() {
-		const requests: Promise<void>[] = [];
-
-		if (shouldLoadInventoryAttention()) {
-			requests.push(
-				fetch('/api/inventory/stats')
-					.then((res) => (res.ok ? res.json() : null))
-					.then((payload) => {
-						inventoryAttention = Number(payload?.data?.perlu_restok ?? payload?.perlu_restok ?? 0);
-					})
-					.catch(() => {
-						inventoryAttention = 0;
-					})
-			);
-			requests.push(
-				fetch('/api/library/stats')
-					.then((res) => (res.ok ? res.json() : null))
-					.then((payload) => {
-						const overdue = Number(payload?.data?.terlambat ?? payload?.terlambat ?? 0);
-						const unpaid = Number(payload?.data?.denda_belum_lunas ?? payload?.denda_belum_lunas ?? 0);
-						libraryAttention = overdue + unpaid;
-					})
-					.catch(() => {
-						libraryAttention = 0;
-					})
-			);
-		} else {
-			inventoryAttention = 0;
-			libraryAttention = 0;
-		}
-
-		if (shouldLoadPusakaAttention()) {
-			requests.push(
-				fetch('/api/queue/stats')
-					.then((res) => (res.ok ? res.json() : null))
-					.then((payload) => {
-						pusakaAttention = Number(payload?.failed ?? payload?.data?.failed ?? 0);
-					})
-					.catch(() => {
-						pusakaAttention = 0;
-					})
-			);
-		} else {
-			pusakaAttention = 0;
-		}
-
-		await Promise.allSettled(requests);
+		const attention = await fetchSidebarAttention(fetch, userRoles);
+		inventoryAttention = attention.inventory;
+		libraryAttention = attention.library;
+		pusakaAttention = attention.pusaka;
 	}
 
 	async function refreshSidebarAttention(force = false) {
