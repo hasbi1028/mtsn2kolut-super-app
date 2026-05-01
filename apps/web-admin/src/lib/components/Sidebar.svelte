@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import * as Dialog from '$lib/components/ui/dialog';
+	import { Input } from '$lib/components/ui/input';
 
 	let {
 		user,
@@ -11,6 +14,9 @@
 		desktopExpanded?: boolean;
 	} = $props();
 	let open = $state(false);
+	let commandOpen = $state(false);
+	let commandQuery = $state('');
+	let commandInputRef = $state<HTMLInputElement | null>(null);
 
 	type NavItem = { href: string; label: string; icon: string; roles?: string[]; pinnable?: boolean };
 	type NavGroup = { group: string; items: NavItem[] };
@@ -138,6 +144,37 @@
 			.filter((item): item is (typeof flattened)[number] => !!item);
 	});
 
+	const commandItems = $derived.by(() => {
+		const flattened = nav.flatMap((section) =>
+			section.items.map((item) => ({
+				...item,
+				group: section.group,
+				pinned: item.href === '/' || pinnedItems.includes(item.href),
+			}))
+		);
+		return flattened.filter(
+			(item, index) => flattened.findIndex((candidate) => candidate.href === item.href) === index
+		);
+	});
+
+	const filteredCommandItems = $derived.by(() => {
+		const normalizedQuery = commandQuery.trim().toLowerCase();
+		const base = commandItems.filter((item) => {
+			if (!normalizedQuery) return true;
+			return (
+				item.label.toLowerCase().includes(normalizedQuery) ||
+				item.group.toLowerCase().includes(normalizedQuery) ||
+				item.href.toLowerCase().includes(normalizedQuery)
+			);
+		});
+		return [...base].sort((left, right) => {
+			const leftScore = Number(left.pinned) + Number(isActive(left.href)) * 3;
+			const rightScore = Number(right.pinned) + Number(isActive(right.href)) * 3;
+			if (leftScore !== rightScore) return rightScore - leftScore;
+			return left.label.localeCompare(right.label, 'id');
+		});
+	});
+
 	function isActive(href: string) {
 		if (href === '/') return page.url.pathname === '/';
 		return page.url.pathname.startsWith(href);
@@ -199,6 +236,18 @@
 		return `${group} · ${item.label}`;
 	}
 
+	function openCommandPalette() {
+		commandQuery = '';
+		commandOpen = true;
+	}
+
+	async function runCommand(href: string) {
+		commandOpen = false;
+		commandQuery = '';
+		open = false;
+		await goto(resolveNavHref(href));
+	}
+
 	function loadPinnedItems() {
 		if (typeof window === 'undefined') return;
 		const raw = window.localStorage.getItem(PINNED_STORAGE_KEY);
@@ -228,11 +277,40 @@
 
 	onMount(() => {
 		loadPinnedItems();
+		const handleKeydown = (event: KeyboardEvent) => {
+			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+				event.preventDefault();
+				openCommandPalette();
+				return;
+			}
+			if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+				const target = event.target;
+				if (
+					target instanceof HTMLInputElement ||
+					target instanceof HTMLTextAreaElement ||
+					target instanceof HTMLSelectElement ||
+					(target instanceof HTMLElement && target.isContentEditable)
+				) {
+					return;
+				}
+				event.preventDefault();
+				openCommandPalette();
+			}
+		};
+		window.addEventListener('keydown', handleKeydown);
+		return () => {
+			window.removeEventListener('keydown', handleKeydown);
+		};
 	});
 
 	$effect(() => {
 		if (!pinnedLoaded || typeof window === 'undefined') return;
 		window.localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pinnedItems));
+	});
+
+	$effect(() => {
+		if (!commandOpen || !commandInputRef) return;
+		queueMicrotask(() => commandInputRef?.focus());
 	});
 
 	async function logout() {
@@ -263,6 +341,13 @@
 		<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
 		</svg>
+	</button>
+	<button
+		type="button"
+		class="inline-flex h-8 items-center rounded-lg border border-slate-200 px-3 text-xs font-medium text-slate-500 hover:bg-slate-50"
+		onclick={openCommandPalette}
+	>
+		Cari menu
 	</button>
 	<span class="text-sm font-semibold text-slate-700">MTSN 2 Kolaka Utara</span>
 </header>
@@ -297,6 +382,17 @@
 
 	<!-- Nav -->
 	<nav class={`flex-1 overflow-y-auto py-3 ${desktopExpanded ? 'px-3' : 'px-2'} space-y-4`}>
+		<div class={desktopExpanded ? 'block' : 'block lg:hidden'}>
+			<button
+				type="button"
+				class="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-600 transition-colors hover:bg-white hover:text-slate-800"
+				onclick={openCommandPalette}
+				aria-label="Buka pencarian menu"
+			>
+				<span>Cari menu atau modul…</span>
+				<span class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">Ctrl K</span>
+			</button>
+		</div>
 		{#if quickAccess.length > 0}
 			<div>
 				<p class={`mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 ${desktopExpanded ? 'block' : 'block lg:hidden'}`}>
@@ -444,6 +540,65 @@
 		{/if}
 	</div>
 </aside>
+
+<Dialog.Root bind:open={commandOpen}>
+	{#if commandOpen}
+		<Dialog.Content>
+			<Dialog.Header>
+				<Dialog.Title>Cari Menu</Dialog.Title>
+				<Dialog.Description>Ketik nama menu, grup, atau path. Pintasan: Ctrl/Cmd + K atau /</Dialog.Description>
+			</Dialog.Header>
+
+			<div class="space-y-3">
+				<Input
+					bind:ref={commandInputRef}
+					bind:value={commandQuery}
+					placeholder="Mis. Nilai, Sesi Ujian, Inventaris, atau PUSAKA"
+				/>
+
+				{#if filteredCommandItems.length === 0}
+					<div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+						Tidak ada menu yang cocok dengan pencarian.
+					</div>
+				{:else}
+					<div class="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+						{#each filteredCommandItems as item (item.href)}
+							<button
+								type="button"
+								class={`flex w-full items-start justify-between rounded-xl border px-3 py-3 text-left transition-colors ${
+									isActive(item.href)
+										? 'border-green-200 bg-green-50 text-green-900'
+										: 'border-slate-200 bg-white hover:bg-slate-50'
+								}`}
+								onclick={() => runCommand(item.href)}
+							>
+								<div class="min-w-0">
+									<div class="flex items-center gap-2">
+										<span class="text-sm font-semibold">{item.label}</span>
+										{#if item.pinned}
+											<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700">
+												Cepat
+											</span>
+										{/if}
+										{#if isActive(item.href)}
+											<span class="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-green-700">
+												Aktif
+											</span>
+										{/if}
+									</div>
+									<p class="mt-1 text-xs text-slate-500">{item.group} · {item.href}</p>
+								</div>
+								<svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+								</svg>
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		</Dialog.Content>
+	{/if}
+</Dialog.Root>
 
 <!-- Icon helper snippet -->
 {#snippet SidebarIcon({ name, active }: { name: string; active: boolean })}
