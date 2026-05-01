@@ -177,6 +177,7 @@ func main() {
 		r.Get("/api/academic", academicH.Overview)
 		r.Get("/api/academic/stats", academicH.GetStats)
 		r.With(requireAdmin).Post("/api/academic/{entity}", academicH.Create)
+		r.With(requireAdmin).Put("/api/academic/{entity}/{id}", academicH.Update)
 		r.With(requireAdmin).Delete("/api/academic/{entity}/{id}", academicH.Delete)
 		r.Get("/api/grades", gradeH.Overview)
 		r.Post("/api/grades/components", gradeH.CreateComponent)

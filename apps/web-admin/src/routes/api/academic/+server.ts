@@ -34,3 +34,16 @@ export const DELETE = async (event: RequestEvent) => {
 		return handleRouteError(e, 'academic DELETE');
 	}
 };
+
+export const PUT = async (event: RequestEvent) => {
+	try {
+		const entity = event.url.searchParams.get('entity');
+		const id = event.url.searchParams.get('id');
+		if (!entity || !id) return json({ error: 'entity and id required' }, { status: 400 });
+		const body = await event.request.json() as Record<string, unknown>;
+		const data = await proxy(event).put(`/api/academic/${entity}/${id}`, body);
+		return json(data);
+	} catch (e) {
+		return handleRouteError(e, 'academic PUT');
+	}
+};

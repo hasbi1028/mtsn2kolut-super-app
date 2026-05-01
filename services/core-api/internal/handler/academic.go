@@ -203,16 +203,17 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 			api.BadRequest(w, "day_of_week harus 1-6")
 			return
 		}
-		var startTime, endTime pgtype.Time
-		if err := startTime.Scan(body.StartTime); err != nil {
+		startTime, err := service.ParseAcademicTimeInput(body.StartTime)
+		if err != nil {
 			api.BadRequest(w, "start_time invalid")
 			return
 		}
-		if err := endTime.Scan(body.EndTime); err != nil {
+		endTime, err := service.ParseAcademicTimeInput(body.EndTime)
+		if err != nil {
 			api.BadRequest(w, "end_time invalid")
 			return
 		}
-		if strings.TrimSpace(body.StartTime) >= strings.TrimSpace(body.EndTime) {
+		if startTime.Microseconds >= endTime.Microseconds {
 			api.BadRequest(w, "rentang waktu tidak valid")
 			return
 		}
@@ -229,6 +230,69 @@ func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		api.Created(w, row)
+	default:
+		api.NotFound(w)
+	}
+}
+
+func (h *Academic) Update(w http.ResponseWriter, r *http.Request) {
+	entity := chi.URLParam(r, "entity")
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	switch entity {
+	case "timetables":
+		var body struct {
+			AssignmentID string `json:"assignment_id"`
+			DayOfWeek    int16  `json:"day_of_week"`
+			StartTime    string `json:"start_time"`
+			EndTime      string `json:"end_time"`
+			RoomLabel    string `json:"room_label"`
+			Notes        string `json:"notes"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			api.BadRequest(w, "invalid json")
+			return
+		}
+		assignmentID, err := parseUUID(body.AssignmentID)
+		if err != nil {
+			api.BadRequest(w, "assignment_id invalid")
+			return
+		}
+		if body.DayOfWeek < 1 || body.DayOfWeek > 6 {
+			api.BadRequest(w, "day_of_week harus 1-6")
+			return
+		}
+		startTime, err := service.ParseAcademicTimeInput(body.StartTime)
+		if err != nil {
+			api.BadRequest(w, "start_time invalid")
+			return
+		}
+		endTime, err := service.ParseAcademicTimeInput(body.EndTime)
+		if err != nil {
+			api.BadRequest(w, "end_time invalid")
+			return
+		}
+		if startTime.Microseconds >= endTime.Microseconds {
+			api.BadRequest(w, "rentang waktu tidak valid")
+			return
+		}
+		row, err := h.svc.UpdateTimetableSlot(r.Context(), db.UpdateTimetableSlotParams{
+			ID:           id,
+			AssignmentID: assignmentID,
+			DayOfWeek:    body.DayOfWeek,
+			StartTime:    startTime,
+			EndTime:      endTime,
+			RoomLabel:    strings.TrimSpace(body.RoomLabel),
+			Notes:        strings.TrimSpace(body.Notes),
+		})
+		if err != nil {
+			api.BadRequest(w, err.Error())
+			return
+		}
+		api.OK(w, row)
 	default:
 		api.NotFound(w)
 	}

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -54,7 +56,20 @@ func (s *Academic) CreateAssignment(ctx context.Context, p db.CreateClassSubject
 }
 
 func (s *Academic) CreateTimetableSlot(ctx context.Context, p db.CreateTimetableSlotParams) (db.TimetableSlot, error) {
+	if err := s.ensureTimetableSlotAvailable(ctx, p.AssignmentID, p.DayOfWeek, p.StartTime, p.EndTime, pgtype.UUID{}); err != nil {
+		return db.TimetableSlot{}, err
+	}
 	return s.q.CreateTimetableSlot(ctx, p)
+}
+
+func (s *Academic) UpdateTimetableSlot(ctx context.Context, p db.UpdateTimetableSlotParams) (db.TimetableSlot, error) {
+	if _, err := s.q.GetTimetableSlot(ctx, p.ID); err != nil {
+		return db.TimetableSlot{}, err
+	}
+	if err := s.ensureTimetableSlotAvailable(ctx, p.AssignmentID, p.DayOfWeek, p.StartTime, p.EndTime, p.ID); err != nil {
+		return db.TimetableSlot{}, err
+	}
+	return s.q.UpdateTimetableSlot(ctx, p)
 }
 
 func (s *Academic) DeleteYear(ctx context.Context, id pgtype.UUID) error {
@@ -75,4 +90,41 @@ func (s *Academic) DeleteAssignment(ctx context.Context, id pgtype.UUID) error {
 
 func (s *Academic) DeleteTimetableSlot(ctx context.Context, id pgtype.UUID) error {
 	return s.q.DeleteTimetableSlot(ctx, id)
+}
+
+func (s *Academic) ensureTimetableSlotAvailable(ctx context.Context, assignmentID pgtype.UUID, dayOfWeek int16, startTime, endTime pgtype.Time, excludeSlotID pgtype.UUID) error {
+	assignment, err := s.q.GetClassSubjectAssignment(ctx, assignmentID)
+	if err != nil {
+		return fmt.Errorf("assignment tidak ditemukan")
+	}
+	conflicts, err := s.q.CountTimetableConflicts(ctx, db.CountTimetableConflictsParams{
+		DayOfWeek:         dayOfWeek,
+		StartTime:         startTime,
+		EndTime:           endTime,
+		ClassID:           assignment.ClassID,
+		TeacherEmployeeID: assignment.TeacherEmployeeID,
+		ExcludeSlotID:     excludeSlotID,
+	})
+	if err != nil {
+		return err
+	}
+	if conflicts > 0 {
+		return fmt.Errorf("slot bentrok dengan jadwal kelas atau guru pada waktu yang sama")
+	}
+	return nil
+}
+
+func ParseAcademicTimeInput(value string) (pgtype.Time, error) {
+	var out pgtype.Time
+	raw := strings.TrimSpace(value)
+	if raw == "" {
+		return out, fmt.Errorf("waktu wajib diisi")
+	}
+	if len(raw) == 5 {
+		raw += ":00"
+	}
+	if err := out.Scan(raw); err != nil {
+		return out, fmt.Errorf("format waktu tidak valid")
+	}
+	return out, nil
 }

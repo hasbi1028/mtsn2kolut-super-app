@@ -11,6 +11,46 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countTimetableConflicts = `-- name: CountTimetableConflicts :one
+SELECT COUNT(*)::int
+FROM timetable_slots ts
+JOIN class_subject_assignments a ON a.id = ts.assignment_id
+WHERE ts.day_of_week = $1
+  AND ts.start_time < $2
+  AND ts.end_time > $3
+  AND (
+    a.class_id = $4
+    OR a.teacher_employee_id = $5
+  )
+  AND (
+    $6::uuid IS NULL
+    OR ts.id <> $6
+  )
+`
+
+type CountTimetableConflictsParams struct {
+	DayOfWeek         int16       `json:"day_of_week"`
+	EndTime           pgtype.Time `json:"end_time"`
+	StartTime         pgtype.Time `json:"start_time"`
+	ClassID           pgtype.UUID `json:"class_id"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+	ExcludeSlotID     pgtype.UUID `json:"exclude_slot_id"`
+}
+
+func (q *Queries) CountTimetableConflicts(ctx context.Context, arg CountTimetableConflictsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countTimetableConflicts,
+		arg.DayOfWeek,
+		arg.EndTime,
+		arg.StartTime,
+		arg.ClassID,
+		arg.TeacherEmployeeID,
+		arg.ExcludeSlotID,
+	)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createTimetableSlot = `-- name: CreateTimetableSlot :one
 INSERT INTO timetable_slots (
     assignment_id, day_of_week, start_time, end_time, room_label, notes
@@ -60,6 +100,29 @@ WHERE id = $1
 func (q *Queries) DeleteTimetableSlot(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteTimetableSlot, id)
 	return err
+}
+
+const getTimetableSlot = `-- name: GetTimetableSlot :one
+SELECT id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at
+FROM timetable_slots
+WHERE id = $1
+`
+
+func (q *Queries) GetTimetableSlot(ctx context.Context, id pgtype.UUID) (TimetableSlot, error) {
+	row := q.db.QueryRow(ctx, getTimetableSlot, id)
+	var i TimetableSlot
+	err := row.Scan(
+		&i.ID,
+		&i.AssignmentID,
+		&i.DayOfWeek,
+		&i.StartTime,
+		&i.EndTime,
+		&i.RoomLabel,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const listTimetableSlots = `-- name: ListTimetableSlots :many
@@ -132,4 +195,52 @@ func (q *Queries) ListTimetableSlots(ctx context.Context) ([]ListTimetableSlotsR
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateTimetableSlot = `-- name: UpdateTimetableSlot :one
+UPDATE timetable_slots
+SET assignment_id = $2,
+    day_of_week = $3,
+    start_time = $4,
+    end_time = $5,
+    room_label = $6,
+    notes = $7,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at
+`
+
+type UpdateTimetableSlotParams struct {
+	ID           pgtype.UUID `json:"id"`
+	AssignmentID pgtype.UUID `json:"assignment_id"`
+	DayOfWeek    int16       `json:"day_of_week"`
+	StartTime    pgtype.Time `json:"start_time"`
+	EndTime      pgtype.Time `json:"end_time"`
+	RoomLabel    string      `json:"room_label"`
+	Notes        string      `json:"notes"`
+}
+
+func (q *Queries) UpdateTimetableSlot(ctx context.Context, arg UpdateTimetableSlotParams) (TimetableSlot, error) {
+	row := q.db.QueryRow(ctx, updateTimetableSlot,
+		arg.ID,
+		arg.AssignmentID,
+		arg.DayOfWeek,
+		arg.StartTime,
+		arg.EndTime,
+		arg.RoomLabel,
+		arg.Notes,
+	)
+	var i TimetableSlot
+	err := row.Scan(
+		&i.ID,
+		&i.AssignmentID,
+		&i.DayOfWeek,
+		&i.StartTime,
+		&i.EndTime,
+		&i.RoomLabel,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

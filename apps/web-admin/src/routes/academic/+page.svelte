@@ -81,6 +81,7 @@
 	let timetableRoom = $state('');
 	let timetableNotes = $state('');
 	let timetableBusy = $state(false);
+	let editingTimetableId = $state('');
 
 	const dayLabels: Record<number, string> = {
 		1: 'Senin',
@@ -202,8 +203,9 @@
 		if (!timetableAssignmentId || !timetableStart || !timetableEnd) return;
 		timetableBusy = true;
 		try {
-			const res = await fetch('/api/academic?entity=timetables', {
-				method: 'POST',
+			const isEditing = Boolean(editingTimetableId);
+			const res = await fetch(editingTimetableId ? `/api/academic?entity=timetables&id=${editingTimetableId}` : '/api/academic?entity=timetables', {
+				method: editingTimetableId ? 'PUT' : 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					assignment_id: timetableAssignmentId,
@@ -219,17 +221,32 @@
 				showError((j as { error?: string }).error ?? 'Gagal menyimpan jadwal');
 				return;
 			}
-			timetableAssignmentId = '';
-			timetableDay = '1';
-			timetableStart = '';
-			timetableEnd = '';
-			timetableRoom = '';
-			timetableNotes = '';
-			showToast('Slot jadwal pelajaran berhasil ditambahkan');
+			resetTimetableForm();
+			showToast(isEditing ? 'Slot jadwal pelajaran berhasil diperbarui' : 'Slot jadwal pelajaran berhasil ditambahkan');
 			await load();
 		} finally {
 			timetableBusy = false;
 		}
+	}
+
+	function editTimetableSlot(slot: TimetableSlot) {
+		editingTimetableId = slot.id;
+		timetableAssignmentId = slot.assignment_id;
+		timetableDay = String(slot.day_of_week);
+		timetableStart = fmtTime(slot.start_time);
+		timetableEnd = fmtTime(slot.end_time);
+		timetableRoom = slot.room_label ?? '';
+		timetableNotes = slot.notes ?? '';
+	}
+
+	function resetTimetableForm() {
+		editingTimetableId = '';
+		timetableAssignmentId = '';
+		timetableDay = '1';
+		timetableStart = '';
+		timetableEnd = '';
+		timetableRoom = '';
+		timetableNotes = '';
 	}
 
 	async function deleteTimetableSlot(id: string) {
@@ -454,7 +471,10 @@
 													<Table.Cell class="text-slate-600">{slot.teacher_name}</Table.Cell>
 													<Table.Cell class="text-slate-600">{slot.room_label || '—'}</Table.Cell>
 													<Table.Cell>
-														<Button variant="destructive" size="xs" onclick={() => deleteTimetableSlot(slot.id)}>Hapus</Button>
+														<div class="flex gap-2">
+															<Button variant="outline" size="xs" onclick={() => editTimetableSlot(slot)}>Edit</Button>
+															<Button variant="destructive" size="xs" onclick={() => deleteTimetableSlot(slot.id)}>Hapus</Button>
+														</div>
 													</Table.Cell>
 												</Table.Row>
 											{:else}
@@ -476,7 +496,10 @@
 
 						<Card.Root>
 							<Card.Header class="pb-2">
-								<Card.Title class="text-base">Tambah Slot Jadwal</Card.Title>
+								<Card.Title class="text-base">{editingTimetableId ? 'Edit Slot Jadwal' : 'Tambah Slot Jadwal'}</Card.Title>
+								{#if editingTimetableId}
+									<Card.Description>Perbarui assignment, hari, atau jam pelajaran. Sistem akan menolak bentrok dasar kelas/guru di waktu yang sama.</Card.Description>
+								{/if}
 							</Card.Header>
 							<Card.Content class="space-y-3">
 								<div>
@@ -516,7 +539,12 @@
 									<label for="timetable-notes" class="mb-1 block text-xs font-medium text-slate-600">Catatan</label>
 									<Input id="timetable-notes" bind:value={timetableNotes} placeholder="Opsional, mis. blok bergantian dengan kelas lain" />
 								</div>
-								<LoadingButton onclick={createTimetableSlot} loading={timetableBusy} loadingLabel="Menyimpan..." label="Tambah Slot" disabled={!timetableAssignmentId || !timetableStart || !timetableEnd} />
+								<div class="flex flex-wrap gap-2">
+									<LoadingButton onclick={createTimetableSlot} loading={timetableBusy} loadingLabel="Menyimpan..." label={editingTimetableId ? 'Simpan Perubahan' : 'Tambah Slot'} disabled={!timetableAssignmentId || !timetableStart || !timetableEnd} />
+									{#if editingTimetableId}
+										<Button variant="outline" onclick={resetTimetableForm}>Batal Edit</Button>
+									{/if}
+								</div>
 							</Card.Content>
 						</Card.Root>
 					</div>
