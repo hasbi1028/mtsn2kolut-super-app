@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -39,24 +40,30 @@ func (h *Academic) Overview(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
-	api.OK(w, map[string]any{
-		"years":       years,
-		"classes":     classes,
-		"subjects":    subjects,
-		"assignments": assigns,
-	})
+	timetableSlots, err := h.svc.ListTimetableSlots(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
 	}
+	api.OK(w, map[string]any{
+		"years":          years,
+		"classes":        classes,
+		"subjects":       subjects,
+		"assignments":    assigns,
+		"timetableSlots": timetableSlots,
+	})
+}
 
-	func (h *Academic) GetStats(w http.ResponseWriter, r *http.Request) {
+func (h *Academic) GetStats(w http.ResponseWriter, r *http.Request) {
 	row, err := h.svc.GetStats(r.Context())
 	if err != nil {
 		api.Internal(w, err)
 		return
 	}
 	api.OK(w, row)
-	}
+}
 
-	func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
+func (h *Academic) Create(w http.ResponseWriter, r *http.Request) {
 	entity := chi.URLParam(r, "entity")
 	switch entity {
 	case "years":
@@ -174,6 +181,54 @@ func (h *Academic) Overview(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		api.Created(w, row)
+	case "timetables":
+		var body struct {
+			AssignmentID string `json:"assignment_id"`
+			DayOfWeek    int16  `json:"day_of_week"`
+			StartTime    string `json:"start_time"`
+			EndTime      string `json:"end_time"`
+			RoomLabel    string `json:"room_label"`
+			Notes        string `json:"notes"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			api.BadRequest(w, "invalid json")
+			return
+		}
+		assignmentID, err := parseUUID(body.AssignmentID)
+		if err != nil {
+			api.BadRequest(w, "assignment_id invalid")
+			return
+		}
+		if body.DayOfWeek < 1 || body.DayOfWeek > 6 {
+			api.BadRequest(w, "day_of_week harus 1-6")
+			return
+		}
+		var startTime, endTime pgtype.Time
+		if err := startTime.Scan(body.StartTime); err != nil {
+			api.BadRequest(w, "start_time invalid")
+			return
+		}
+		if err := endTime.Scan(body.EndTime); err != nil {
+			api.BadRequest(w, "end_time invalid")
+			return
+		}
+		if strings.TrimSpace(body.StartTime) >= strings.TrimSpace(body.EndTime) {
+			api.BadRequest(w, "rentang waktu tidak valid")
+			return
+		}
+		row, err := h.svc.CreateTimetableSlot(r.Context(), db.CreateTimetableSlotParams{
+			AssignmentID: assignmentID,
+			DayOfWeek:    body.DayOfWeek,
+			StartTime:    startTime,
+			EndTime:      endTime,
+			RoomLabel:    strings.TrimSpace(body.RoomLabel),
+			Notes:        strings.TrimSpace(body.Notes),
+		})
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		api.Created(w, row)
 	default:
 		api.NotFound(w)
 	}
@@ -195,6 +250,8 @@ func (h *Academic) Delete(w http.ResponseWriter, r *http.Request) {
 		err = h.svc.DeleteSubject(r.Context(), id)
 	case "assignments":
 		err = h.svc.DeleteAssignment(r.Context(), id)
+	case "timetables":
+		err = h.svc.DeleteTimetableSlot(r.Context(), id)
 	default:
 		api.NotFound(w)
 		return

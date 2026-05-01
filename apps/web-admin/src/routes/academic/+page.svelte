@@ -26,11 +26,29 @@
 		subject_id: string; subject_name: string; subject_code: string;
 		teacher_employee_id: string; teacher_name: string;
 	};
+	type TimetableSlot = {
+		id: string;
+		assignment_id: string;
+		day_of_week: number;
+		start_time: string;
+		end_time: string;
+		room_label: string;
+		notes: string;
+		class_id: string;
+		class_name: string;
+		class_code: string;
+		subject_id: string;
+		subject_name: string;
+		subject_code: string;
+		teacher_employee_id: string;
+		teacher_name: string;
+	};
 
 	let years = $state<AcademicYear[]>([]);
 	let classes = $state<SchoolClass[]>([]);
 	let subjects = $state<Subject[]>([]);
 	let assignments = $state<Assignment[]>([]);
+	let timetableSlots = $state<TimetableSlot[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 
@@ -55,6 +73,33 @@
 	let subjectActive = $state(true);
 	let subjectBusy = $state(false);
 
+	// Timetable form
+	let timetableAssignmentId = $state('');
+	let timetableDay = $state('1');
+	let timetableStart = $state('');
+	let timetableEnd = $state('');
+	let timetableRoom = $state('');
+	let timetableNotes = $state('');
+	let timetableBusy = $state(false);
+
+	const dayLabels: Record<number, string> = {
+		1: 'Senin',
+		2: 'Selasa',
+		3: 'Rabu',
+		4: 'Kamis',
+		5: 'Jumat',
+		6: 'Sabtu',
+	};
+
+	const timetableSummary = $derived.by(() => {
+		const classesCovered = new Set(timetableSlots.map((slot) => slot.class_id)).size;
+		const teachersCovered = new Set(timetableSlots.map((slot) => slot.teacher_employee_id)).size;
+		return {
+			classesCovered,
+			teachersCovered,
+		};
+	});
+
 	async function load() {
 		try {
 			const res = await fetch('/api/academic');
@@ -65,6 +110,7 @@
 			classes = d.classes ?? [];
 			subjects = d.subjects ?? [];
 			assignments = d.assignments ?? [];
+			timetableSlots = d.timetableSlots ?? [];
 		} catch (e) {
 			error = 'Gagal memuat data akademik';
 		} finally {
@@ -152,6 +198,51 @@
 		await load();
 	}
 
+	async function createTimetableSlot() {
+		if (!timetableAssignmentId || !timetableStart || !timetableEnd) return;
+		timetableBusy = true;
+		try {
+			const res = await fetch('/api/academic?entity=timetables', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					assignment_id: timetableAssignmentId,
+					day_of_week: Number(timetableDay),
+					start_time: timetableStart,
+					end_time: timetableEnd,
+					room_label: timetableRoom,
+					notes: timetableNotes,
+				}),
+			});
+			if (!res.ok) {
+				const j = await res.json().catch(() => ({}));
+				showError((j as { error?: string }).error ?? 'Gagal menyimpan jadwal');
+				return;
+			}
+			timetableAssignmentId = '';
+			timetableDay = '1';
+			timetableStart = '';
+			timetableEnd = '';
+			timetableRoom = '';
+			timetableNotes = '';
+			showToast('Slot jadwal pelajaran berhasil ditambahkan');
+			await load();
+		} finally {
+			timetableBusy = false;
+		}
+	}
+
+	async function deleteTimetableSlot(id: string) {
+		if (!confirm('Hapus slot jadwal ini?')) return;
+		await fetch(`/api/academic?entity=timetables&id=${id}`, { method: 'DELETE' });
+		showToast('Slot jadwal pelajaran dihapus');
+		await load();
+	}
+
+	function fmtTime(value: string) {
+		return value.slice(0, 5);
+	}
+
 	onMount(load);
 </script>
 
@@ -163,7 +254,7 @@
 		<p class="text-sm text-slate-500 mt-1">Kelola tahun ajaran, kelas, dan mata pelajaran</p>
 	</div>
 
-	<div class="grid gap-3 md:grid-cols-3">
+	<div class="grid gap-3 md:grid-cols-4">
 		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
 			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Tahun Ajaran</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{years.length}</p>
@@ -178,6 +269,11 @@
 			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Mata Pelajaran</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{subjects.length}</p>
 			<p class="text-sm text-slate-600">mapel inti untuk jadwal, nilai, dan CBT</p>
+		</div>
+		<div class="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">Slot Jadwal</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{timetableSlots.length}</p>
+			<p class="text-sm text-slate-600">jam pelajaran yang sudah disusun per kelas-mapel</p>
 		</div>
 	</div>
 
@@ -216,6 +312,7 @@
 				<Tabs.Trigger value="years">Tahun Ajaran ({years.length})</Tabs.Trigger>
 				<Tabs.Trigger value="classes">Kelas ({classes.length})</Tabs.Trigger>
 				<Tabs.Trigger value="subjects">Mata Pelajaran ({subjects.length})</Tabs.Trigger>
+				<Tabs.Trigger value="timetable">Jadwal ({timetableSlots.length})</Tabs.Trigger>
 			</Tabs.List>
 			</div>
 
@@ -294,6 +391,135 @@
 							<LoadingButton class="w-full" loading={yearBusy} loadingLabel="Menyimpan..." disabled={!yearName || !yearStart || !yearEnd} onclick={createYear} label="Simpan" />
 						</Card.Content>
 					</Card.Root>
+				</div>
+			</Tabs.Content>
+
+			<Tabs.Content value="timetable">
+				<div class="space-y-4">
+					<div class="grid gap-3 md:grid-cols-3">
+						<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+							<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Slot</p>
+							<p class="mt-2 text-2xl font-semibold text-slate-900">{timetableSlots.length}</p>
+							<p class="text-sm text-slate-600">seluruh jam pelajaran yang sudah dimasukkan</p>
+						</div>
+						<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+							<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Kelas Tercakup</p>
+							<p class="mt-2 text-2xl font-semibold text-slate-900">{timetableSummary.classesCovered}</p>
+							<p class="text-sm text-slate-600">kelas yang sudah punya slot jadwal</p>
+						</div>
+						<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+							<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Guru Tercakup</p>
+							<p class="mt-2 text-2xl font-semibold text-slate-900">{timetableSummary.teachersCovered}</p>
+							<p class="text-sm text-slate-600">guru yang sudah masuk ke jadwal pelajaran</p>
+						</div>
+					</div>
+
+					<div class="grid gap-4 lg:grid-cols-3">
+						<div class="lg:col-span-2">
+							<Card.Root>
+								<Card.Header class="pb-2">
+									<Card.Title class="text-base">Daftar Slot Jadwal</Card.Title>
+									<Card.Description>Kelola jam pelajaran berdasarkan assignment kelas, mapel, dan guru yang sudah aktif di sistem.</Card.Description>
+								</Card.Header>
+								<Card.Content class="overflow-x-auto p-0">
+									<Table.Root>
+										<Table.Header>
+											<Table.Row>
+												<Table.Head>Hari</Table.Head>
+												<Table.Head>Waktu</Table.Head>
+												<Table.Head>Kelas</Table.Head>
+												<Table.Head>Mata Pelajaran</Table.Head>
+												<Table.Head>Guru</Table.Head>
+												<Table.Head>Ruang</Table.Head>
+												<Table.Head></Table.Head>
+											</Table.Row>
+										</Table.Header>
+										<Table.Body>
+											{#each timetableSlots as slot (slot.id)}
+												<Table.Row>
+													<Table.Cell class="font-medium">{dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`}</Table.Cell>
+													<Table.Cell class="text-slate-600">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)}</Table.Cell>
+													<Table.Cell>
+														<div class="space-y-0.5">
+															<p class="font-medium text-slate-900">{slot.class_name}</p>
+															<p class="text-xs text-slate-500">{slot.class_code}</p>
+														</div>
+													</Table.Cell>
+													<Table.Cell>
+														<div class="space-y-0.5">
+															<p class="font-medium text-slate-900">{slot.subject_name}</p>
+															<p class="text-xs text-slate-500">{slot.subject_code}</p>
+														</div>
+													</Table.Cell>
+													<Table.Cell class="text-slate-600">{slot.teacher_name}</Table.Cell>
+													<Table.Cell class="text-slate-600">{slot.room_label || '—'}</Table.Cell>
+													<Table.Cell>
+														<Button variant="destructive" size="xs" onclick={() => deleteTimetableSlot(slot.id)}>Hapus</Button>
+													</Table.Cell>
+												</Table.Row>
+											{:else}
+												<Table.Row>
+													<Table.Cell colspan={7} class="p-4">
+														<EmptyStatePanel
+															title="Belum ada slot jadwal pelajaran"
+															description="Tambahkan slot pertama agar kelas dan mapel mulai tersusun dalam jadwal mingguan."
+															compact
+														/>
+													</Table.Cell>
+												</Table.Row>
+											{/each}
+										</Table.Body>
+									</Table.Root>
+								</Card.Content>
+							</Card.Root>
+						</div>
+
+						<Card.Root>
+							<Card.Header class="pb-2">
+								<Card.Title class="text-base">Tambah Slot Jadwal</Card.Title>
+							</Card.Header>
+							<Card.Content class="space-y-3">
+								<div>
+									<label for="timetable-assignment" class="mb-1 block text-xs font-medium text-slate-600">Assignment Kelas-Mapel-Guru</label>
+									<select id="timetable-assignment" bind:value={timetableAssignmentId} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+										<option value="">Pilih assignment...</option>
+										{#each assignments as assignment (assignment.id)}
+											<option value={assignment.id}>{assignment.class_code} · {assignment.subject_name} · {assignment.teacher_name}</option>
+										{/each}
+									</select>
+								</div>
+								<div class="grid gap-3 sm:grid-cols-2">
+									<div>
+										<label for="timetable-day" class="mb-1 block text-xs font-medium text-slate-600">Hari</label>
+										<select id="timetable-day" bind:value={timetableDay} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+											{#each Object.entries(dayLabels) as [day, label] (`day-${day}`)}
+												<option value={day}>{label}</option>
+											{/each}
+										</select>
+									</div>
+									<div>
+										<label for="timetable-room" class="mb-1 block text-xs font-medium text-slate-600">Ruang</label>
+										<Input id="timetable-room" bind:value={timetableRoom} placeholder="Opsional, mis. Lab IPA" />
+									</div>
+								</div>
+								<div class="grid gap-3 sm:grid-cols-2">
+									<div>
+										<label for="timetable-start" class="mb-1 block text-xs font-medium text-slate-600">Mulai</label>
+										<Input id="timetable-start" type="time" bind:value={timetableStart} />
+									</div>
+									<div>
+										<label for="timetable-end" class="mb-1 block text-xs font-medium text-slate-600">Selesai</label>
+										<Input id="timetable-end" type="time" bind:value={timetableEnd} />
+									</div>
+								</div>
+								<div>
+									<label for="timetable-notes" class="mb-1 block text-xs font-medium text-slate-600">Catatan</label>
+									<Input id="timetable-notes" bind:value={timetableNotes} placeholder="Opsional, mis. blok bergantian dengan kelas lain" />
+								</div>
+								<LoadingButton onclick={createTimetableSlot} loading={timetableBusy} loadingLabel="Menyimpan..." label="Tambah Slot" disabled={!timetableAssignmentId || !timetableStart || !timetableEnd} />
+							</Card.Content>
+						</Card.Root>
+					</div>
 				</div>
 			</Tabs.Content>
 

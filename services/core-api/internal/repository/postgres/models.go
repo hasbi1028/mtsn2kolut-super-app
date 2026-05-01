@@ -1036,6 +1036,18 @@ type Subject struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+type TimetableSlot struct {
+	ID           pgtype.UUID        `json:"id"`
+	AssignmentID pgtype.UUID        `json:"assignment_id"`
+	DayOfWeek    int16              `json:"day_of_week"`
+	StartTime    pgtype.Time        `json:"start_time"`
+	EndTime      pgtype.Time        `json:"end_time"`
+	RoomLabel    string             `json:"room_label"`
+	Notes        string             `json:"notes"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type User struct {
 	ID           pgtype.UUID        `json:"id"`
 	Username     string             `json:"username"`

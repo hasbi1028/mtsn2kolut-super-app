@@ -29,6 +29,10 @@ func (s *Academic) ListAssignments(ctx context.Context) ([]db.ListClassSubjectAs
 	return s.q.ListClassSubjectAssignments(ctx)
 }
 
+func (s *Academic) ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error) {
+	return s.q.ListTimetableSlots(ctx)
+}
+
 func (s *Academic) GetStats(ctx context.Context) (db.GetAcademicStatsRow, error) {
 	return s.q.GetAcademicStats(ctx)
 }
@@ -49,6 +53,10 @@ func (s *Academic) CreateAssignment(ctx context.Context, p db.CreateClassSubject
 	return s.q.CreateClassSubjectAssignment(ctx, p)
 }
 
+func (s *Academic) CreateTimetableSlot(ctx context.Context, p db.CreateTimetableSlotParams) (db.TimetableSlot, error) {
+	return s.q.CreateTimetableSlot(ctx, p)
+}
+
 func (s *Academic) DeleteYear(ctx context.Context, id pgtype.UUID) error {
 	return s.q.DeleteAcademicYear(ctx, id)
 }
@@ -63,4 +71,8 @@ func (s *Academic) DeleteSubject(ctx context.Context, id pgtype.UUID) error {
 
 func (s *Academic) DeleteAssignment(ctx context.Context, id pgtype.UUID) error {
 	return s.q.DeleteClassSubjectAssignment(ctx, id)
+}
+
+func (s *Academic) DeleteTimetableSlot(ctx context.Context, id pgtype.UUID) error {
+	return s.q.DeleteTimetableSlot(ctx, id)
 }
