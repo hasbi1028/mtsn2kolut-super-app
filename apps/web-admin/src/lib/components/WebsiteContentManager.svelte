@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Badge } from '$lib/components/ui/badge';
@@ -14,6 +15,7 @@
 	import SuccessPanel from '$lib/components/SuccessPanel.svelte';
 
 	type ContentStatus = 'draft' | 'published';
+	type ContentPresentationStatus = 'draft' | 'published' | 'scheduled';
 	type ContentKind = 'page' | 'post' | 'announcement';
 	type WebsiteContent = {
 		id: string;
@@ -62,6 +64,7 @@
 		meta_title: '',
 		meta_description: '',
 		status: 'draft' as ContentStatus,
+		published_at: '',
 	});
 
 	let filteredItems = $derived.by(() => {
@@ -86,6 +89,7 @@
 			meta_title: '',
 			meta_description: '',
 			status: 'draft',
+			published_at: '',
 		};
 	}
 
@@ -106,21 +110,62 @@
 			meta_title: item.meta_title ?? '',
 			meta_description: item.meta_description ?? '',
 			status: item.status,
+			published_at: toInputDateTime(item.published_at),
 		};
 		showDialog = true;
 	}
 
 	function fmtDate(value: string | null) {
 		if (!value) return 'Draft';
-		return new Date(value).toLocaleDateString('id-ID', {
+		return new Date(value).toLocaleString('id-ID', {
 			timeZone: 'Asia/Makassar',
 			year: 'numeric',
 			month: 'short',
 			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
 		});
 	}
 
-	function publicHref(item: WebsiteContent) {
+	function toInputDateTime(value: string | null) {
+		if (!value) return '';
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return '';
+		const year = date.getFullYear();
+		const month = `${date.getMonth() + 1}`.padStart(2, '0');
+		const day = `${date.getDate()}`.padStart(2, '0');
+		const hours = `${date.getHours()}`.padStart(2, '0');
+		const minutes = `${date.getMinutes()}`.padStart(2, '0');
+		return `${year}-${month}-${day}T${hours}:${minutes}`;
+	}
+
+	function publishAtPayloadValue(value: string) {
+		const trimmed = value.trim();
+		if (!trimmed) return '';
+		const date = new Date(trimmed);
+		return Number.isNaN(date.getTime()) ? trimmed : date.toISOString();
+	}
+
+	function itemPresentationStatus(item: WebsiteContent): ContentPresentationStatus {
+		if (item.status !== 'published') return 'draft';
+		if (item.published_at && new Date(item.published_at).getTime() > Date.now()) return 'scheduled';
+		return 'published';
+	}
+
+	function statusLabel(item: WebsiteContent) {
+		const state = itemPresentationStatus(item);
+		if (state === 'scheduled') return 'Terjadwal';
+		return state === 'published' ? 'Terbit' : 'Draft';
+	}
+
+	function statusBadgeClass(item: WebsiteContent) {
+		const state = itemPresentationStatus(item);
+		if (state === 'published') return 'border-emerald-300 text-emerald-700';
+		if (state === 'scheduled') return 'border-sky-300 text-sky-700';
+		return '';
+	}
+
+	function publicPath(item: WebsiteContent) {
 		if (kind === 'page') {
 			if (item.slug === 'ppdb-info') return '/ppdb';
 			return `/${item.slug}`;
@@ -128,7 +173,8 @@
 		return `${publicBasePath}/${item.slug}`;
 	}
 
-	const publishedCount = $derived(items.filter((item) => item.status === 'published').length);
+	const publishedCount = $derived(items.filter((item) => itemPresentationStatus(item) === 'published').length);
+	const scheduledCount = $derived(items.filter((item) => itemPresentationStatus(item) === 'scheduled').length);
 	const draftCount = $derived(items.filter((item) => item.status === 'draft').length);
 	const featuredCount = $derived(items.filter((item) => item.is_featured).length);
 
@@ -172,7 +218,7 @@
 		saving = true;
 		try {
 			success = '';
-			const payload = { kind, ...form };
+			const payload = { kind, ...form, published_at: publishAtPayloadValue(form.published_at) };
 			const res = await fetch(editingId ? `/api/website/content/${editingId}` : '/api/website/content', {
 				method: editingId ? 'PUT' : 'POST',
 				headers: { 'content-type': 'application/json' },
@@ -184,9 +230,10 @@
 				return;
 			}
 			toast.success(editingId ? 'Konten berhasil diperbarui.' : 'Konten berhasil dibuat.');
+			const scheduled = form.status === 'published' && !!form.published_at.trim();
 			success = editingId
-				? `Konten "${form.title}" berhasil diperbarui. Periksa status publish-nya sebelum menutup sesi editorial ini.`
-				: `Konten "${form.title}" berhasil dibuat sebagai ${form.status === 'published' ? 'terbit' : 'draft'}.`;
+				? `Konten "${form.title}" berhasil diperbarui. ${scheduled ? 'Jadwal tayangnya juga sudah diperbarui.' : 'Periksa status publish-nya sebelum menutup sesi editorial ini.'}`
+				: `Konten "${form.title}" berhasil dibuat sebagai ${form.status === 'published' ? (scheduled ? 'konten terjadwal' : 'terbit') : 'draft'}.`;
 			showDialog = false;
 			resetForm();
 			await load();
@@ -223,6 +270,7 @@
 				meta_title: item.meta_title ?? '',
 				meta_description: item.meta_description ?? '',
 				status: nextStatus,
+				published_at: nextStatus === 'published' ? '' : '',
 			}),
 		});
 		const data = await res.json().catch(() => ({}));
@@ -230,7 +278,7 @@
 			toast.error((data as { error?: string }).error || 'Gagal mengubah status konten.');
 			return;
 		}
-		toast.success(nextStatus === 'published' ? 'Konten dipublikasikan.' : 'Konten dikembalikan ke draft.');
+		toast.success(nextStatus === 'published' ? 'Konten diterbitkan.' : 'Konten dikembalikan ke draft.');
 		success = nextStatus === 'published'
 			? `Konten "${item.title}" berhasil dipublikasikan dan sekarang tersedia di website publik.`
 			: `Konten "${item.title}" berhasil dikembalikan ke draft untuk revisi lebih lanjut.`;
@@ -254,7 +302,7 @@
 		</div>
 	</div>
 
-	<div class="grid gap-3 md:grid-cols-4">
+	<div class="grid gap-3 md:grid-cols-5">
 		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
 			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Konten</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{items.length}</p>
@@ -264,6 +312,11 @@
 			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Terbit</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{publishedCount}</p>
 			<p class="text-sm text-slate-600">konten yang sudah tampil di website publik</p>
+		</div>
+		<div class="rounded-2xl border border-cyan-100 bg-cyan-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-700">Terjadwal</p>
+			<p class="mt-2 text-2xl font-semibold text-slate-900">{scheduledCount}</p>
+			<p class="text-sm text-slate-600">konten yang akan tayang otomatis sesuai jadwal</p>
 		</div>
 		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
 			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Draft</p>
@@ -340,26 +393,44 @@
 							<div class="space-y-2">
 								<div class="flex flex-wrap items-center gap-2">
 									<h2 class="text-lg font-semibold text-slate-900">{item.title}</h2>
-									<Badge variant={item.status === 'published' ? 'outline' : 'secondary'} class={item.status === 'published' ? 'border-emerald-300 text-emerald-700' : ''}>
-										{item.status === 'published' ? 'Terbit' : 'Draft'}
+									<Badge variant={item.status === 'draft' ? 'secondary' : 'outline'} class={statusBadgeClass(item)}>
+										{statusLabel(item)}
 									</Badge>
 									{#if item.is_featured}
 										<Badge variant="outline" class="border-amber-300 text-amber-700">Unggulan</Badge>
 									{/if}
 								</div>
-								<p class="font-mono text-xs text-slate-500">{publicHref(item)}</p>
+								<p class="font-mono text-xs text-slate-500">{publicPath(item)}</p>
 								<p class="text-sm leading-7 text-slate-600">{item.excerpt || 'Belum ada ringkasan.'}</p>
 							</div>
 							<div class="space-y-2 text-sm text-slate-600">
-								<p><span class="font-medium text-slate-900">Tayang:</span> {fmtDate(item.published_at)}</p>
+								<p><span class="font-medium text-slate-900">{itemPresentationStatus(item) === 'scheduled' ? 'Jadwal tayang:' : 'Tayang:'}</span> {fmtDate(item.published_at)}</p>
 								<p><span class="font-medium text-slate-900">Update:</span> {fmtDate(item.updated_at)}</p>
 							</div>
 							<div class="flex flex-wrap justify-start gap-2 lg:justify-end">
-								{#if item.status === 'published'}
-									<a href={publicHref(item)} target="_blank" rel="noreferrer">
-										<Button variant="outline">Lihat</Button>
-									</a>
-								{/if}
+									{#if item.status === 'published'}
+										{#if item.kind === 'post'}
+											<a href={resolve('/berita/[slug]', { slug: item.slug })} target="_blank" rel="noreferrer">
+												<Button variant="outline">Lihat</Button>
+											</a>
+										{:else if item.kind === 'announcement'}
+											<a href={resolve('/pengumuman/[slug]', { slug: item.slug })} target="_blank" rel="noreferrer">
+												<Button variant="outline">Lihat</Button>
+											</a>
+										{:else if item.slug === 'profil'}
+											<a href={resolve('/profil')} target="_blank" rel="noreferrer">
+												<Button variant="outline">Lihat</Button>
+											</a>
+										{:else if item.slug === 'kontak'}
+											<a href={resolve('/kontak')} target="_blank" rel="noreferrer">
+												<Button variant="outline">Lihat</Button>
+											</a>
+										{:else if item.slug === 'ppdb-info'}
+											<a href={resolve('/ppdb')} target="_blank" rel="noreferrer">
+												<Button variant="outline">Lihat</Button>
+											</a>
+										{/if}
+									{/if}
 								<Button variant="outline" onclick={() => openEdit(item)}>Edit</Button>
 								<Button variant="outline" onclick={() => toggleStatus(item)}>
 									{item.status === 'published' ? 'Kembalikan ke Draft' : 'Terbitkan'}
@@ -399,6 +470,11 @@
 						<option value="draft">Draft</option>
 						<option value="published">Terbit</option>
 					</select>
+				</div>
+				<div class="sm:col-span-2">
+					<label for="website-published-at" class="mb-1 block text-xs font-medium text-slate-600">Jadwal Tayang</label>
+					<Input id="website-published-at" type="datetime-local" bind:value={form.published_at} />
+					<p class="mt-1 text-xs text-slate-500">Kosongkan untuk tayang segera saat status diubah ke terbit. Isi jadwal jika konten ingin tayang otomatis di waktu tertentu.</p>
 				</div>
 
 				<!-- Cover Image -->

@@ -316,7 +316,7 @@ Three runtime units deployed across 3 VPS:
 - [x] `go build ./...` and `npm run check` — 0 errors, 0 warnings
 
 ### Next Recommendation — Sprint 17
-- [ ] Publish scheduling (deferred from 16B — low priority until editorial demand is proven)
+- [x] Publish scheduling (deferred from 16B — low priority until editorial demand is proven)
 - [x] Featured content homepage widget (pull from `/api/public/site/posts/featured`)
 - [ ] Flutter Student App — CBT exam client (API ready via `docs/exam-api.md`)
 

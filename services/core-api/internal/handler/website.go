@@ -51,6 +51,7 @@ func (h *Website) Create(w http.ResponseWriter, r *http.Request) {
 		MetaTitle       string `json:"meta_title"`
 		MetaDescription string `json:"meta_description"`
 		Status          string `json:"status"`
+		PublishedAt     string `json:"published_at"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -67,6 +68,7 @@ func (h *Website) Create(w http.ResponseWriter, r *http.Request) {
 		MetaTitle:       body.MetaTitle,
 		MetaDescription: body.MetaDescription,
 		Status:          body.Status,
+		PublishedAt:     body.PublishedAt,
 		ActorUsername:   websiteActorUsername(r),
 	})
 	if err != nil {
@@ -93,6 +95,7 @@ func (h *Website) Update(w http.ResponseWriter, r *http.Request) {
 		MetaTitle       string `json:"meta_title"`
 		MetaDescription string `json:"meta_description"`
 		Status          string `json:"status"`
+		PublishedAt     string `json:"published_at"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -110,6 +113,7 @@ func (h *Website) Update(w http.ResponseWriter, r *http.Request) {
 		MetaTitle:       body.MetaTitle,
 		MetaDescription: body.MetaDescription,
 		Status:          body.Status,
+		PublishedAt:     body.PublishedAt,
 		ActorUsername:   websiteActorUsername(r),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {

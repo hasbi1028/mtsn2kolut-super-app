@@ -89,6 +89,8 @@ FROM website_contents
 WHERE kind::TEXT = $1
   AND slug = $2
   AND status = 'published'
+  AND published_at IS NOT NULL
+  AND published_at <= NOW()
 `
 
 type GetPublishedWebsiteContentBySlugParams struct {
@@ -194,6 +196,8 @@ FROM website_contents
 WHERE kind::TEXT = $1
   AND status = 'published'
   AND is_featured = TRUE
+  AND published_at IS NOT NULL
+  AND published_at <= NOW()
 ORDER BY COALESCE(published_at, created_at) DESC
 LIMIT $2
 `
@@ -264,6 +268,8 @@ SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, is_feature
 FROM website_contents
 WHERE kind::TEXT = $1
   AND status = 'published'
+  AND published_at IS NOT NULL
+  AND published_at <= NOW()
 ORDER BY is_featured DESC, COALESCE(published_at, created_at) DESC, created_at DESC
 LIMIT $2
 `

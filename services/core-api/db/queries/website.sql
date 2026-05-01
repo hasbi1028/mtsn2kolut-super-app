@@ -55,6 +55,8 @@ SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, is_feature
 FROM website_contents
 WHERE kind::TEXT = sqlc.arg(kind_filter)
   AND status = 'published'
+  AND published_at IS NOT NULL
+  AND published_at <= NOW()
 ORDER BY is_featured DESC, COALESCE(published_at, created_at) DESC, created_at DESC
 LIMIT sqlc.arg(limit_count);
 
@@ -63,7 +65,9 @@ SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, is_feature
 FROM website_contents
 WHERE kind::TEXT = sqlc.arg(kind_filter)
   AND slug = sqlc.arg(slug_value)
-  AND status = 'published';
+  AND status = 'published'
+  AND published_at IS NOT NULL
+  AND published_at <= NOW();
 
 -- name: ListFeaturedWebsiteContents :many
 SELECT id, kind, title, slug, excerpt, content_html, cover_image_url, is_featured, meta_title, meta_description, status, published_at, created_by, updated_by, created_at, updated_at
@@ -71,5 +75,7 @@ FROM website_contents
 WHERE kind::TEXT = sqlc.arg(kind_filter)
   AND status = 'published'
   AND is_featured = TRUE
+  AND published_at IS NOT NULL
+  AND published_at <= NOW()
 ORDER BY COALESCE(published_at, created_at) DESC
 LIMIT sqlc.arg(limit_count);

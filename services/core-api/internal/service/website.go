@@ -51,6 +51,7 @@ type SaveWebsiteContentInput struct {
 	MetaTitle       string
 	MetaDescription string
 	Status          string
+	PublishedAt     string
 	ActorUsername   string
 }
 
@@ -290,6 +291,33 @@ func normalizeWebsiteStatus(value string) string {
 	}
 }
 
+func parseWebsitePublishedAt(raw string) (pgtype.Timestamptz, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return pgtype.Timestamptz{}, nil
+	}
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04",
+		"2006-01-02 15:04",
+	}
+	for _, format := range formats {
+		var parsed time.Time
+		var err error
+		if format == time.RFC3339 {
+			parsed, err = time.Parse(format, value)
+		} else {
+			parsed, err = time.ParseInLocation(format, value, time.Local)
+		}
+		if err == nil {
+			var ts pgtype.Timestamptz
+			_ = ts.Scan(parsed)
+			return ts, nil
+		}
+	}
+	return pgtype.Timestamptz{}, fmt.Errorf("jadwal terbit tidak valid")
+}
+
 func sanitizeWebsiteHTML(raw string) string {
 	cleaned := strings.TrimSpace(raw)
 	for _, pattern := range websiteStripDangerousBlocks {
@@ -328,6 +356,16 @@ func publishTime(status string, existing pgtype.Timestamptz) pgtype.Timestamptz 
 	return ts
 }
 
+func publishTimeFromInput(status string, requested, existing pgtype.Timestamptz) pgtype.Timestamptz {
+	if status != "published" {
+		return pgtype.Timestamptz{}
+	}
+	if requested.Valid {
+		return requested
+	}
+	return publishTime(status, existing)
+}
+
 func buildWebsiteCreateParams(in SaveWebsiteContentInput) (db.CreateWebsiteContentParams, error) {
 	kind := normalizeWebsiteKind(in.Kind)
 	if kind == "" {
@@ -348,6 +386,10 @@ func buildWebsiteCreateParams(in SaveWebsiteContentInput) (db.CreateWebsiteConte
 	if status == "" {
 		return db.CreateWebsiteContentParams{}, fmt.Errorf("status konten tidak valid")
 	}
+	publishedAt, err := parseWebsitePublishedAt(in.PublishedAt)
+	if err != nil {
+		return db.CreateWebsiteContentParams{}, err
+	}
 	contentHTML := sanitizeWebsiteHTML(in.ContentHTML)
 	excerpt := strings.TrimSpace(in.Excerpt)
 	if excerpt == "" {
@@ -364,7 +406,7 @@ func buildWebsiteCreateParams(in SaveWebsiteContentInput) (db.CreateWebsiteConte
 		MetaTitle:       strings.TrimSpace(in.MetaTitle),
 		MetaDescription: strings.TrimSpace(in.MetaDescription),
 		Status:          db.WebsiteContentStatus(status),
-		PublishedAt:     publishTime(status, pgtype.Timestamptz{}),
+		PublishedAt:     publishTimeFromInput(status, publishedAt, pgtype.Timestamptz{}),
 		CreatedBy:       strings.TrimSpace(in.ActorUsername),
 		UpdatedBy:       strings.TrimSpace(in.ActorUsername),
 	}, nil
@@ -390,6 +432,10 @@ func buildWebsiteUpdateParams(current db.WebsiteContent, in SaveWebsiteContentIn
 	if status == "" {
 		return db.UpdateWebsiteContentParams{}, fmt.Errorf("status konten tidak valid")
 	}
+	publishedAt, err := parseWebsitePublishedAt(in.PublishedAt)
+	if err != nil {
+		return db.UpdateWebsiteContentParams{}, err
+	}
 	contentHTML := sanitizeWebsiteHTML(in.ContentHTML)
 	excerpt := strings.TrimSpace(in.Excerpt)
 	if excerpt == "" {
@@ -407,7 +453,7 @@ func buildWebsiteUpdateParams(current db.WebsiteContent, in SaveWebsiteContentIn
 		MetaTitle:       strings.TrimSpace(in.MetaTitle),
 		MetaDescription: strings.TrimSpace(in.MetaDescription),
 		Status:          db.WebsiteContentStatus(status),
-		PublishedAt:     publishTime(status, current.PublishedAt),
+		PublishedAt:     publishTimeFromInput(status, publishedAt, current.PublishedAt),
 		UpdatedBy:       strings.TrimSpace(in.ActorUsername),
 	}, nil
 }

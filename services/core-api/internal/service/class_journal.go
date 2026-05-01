@@ -22,7 +22,7 @@ type classJournalStore interface {
 	ListJournalAttendanceSummary(ctx context.Context, assignmentID pgtype.UUID) ([]db.ListJournalAttendanceSummaryRow, error)
 	ListActiveStudentsByClassID(ctx context.Context, classID pgtype.UUID) ([]db.ListActiveStudentsByClassIDRow, error)
 	ListClassSubjectAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
-	GetClassSubjectAssignment(ctx context.Context, id pgtype.UUID) (db.ListClassSubjectAssignmentsRow, error)
+	GetClassSubjectAssignment(ctx context.Context, id pgtype.UUID) (db.GetClassSubjectAssignmentRow, error)
 }
 
 type ClassJournal struct{ q classJournalStore }
@@ -36,8 +36,8 @@ type JournalSessionDetail struct {
 
 type JournalOverview struct {
 	Assignments []db.ListClassSubjectAssignmentsRow  `json:"assignments"`
-	Sessions    []db.ListJournalSessionsRow           `json:"sessions"`
-	Summary     []db.ListJournalAttendanceSummaryRow  `json:"summary"`
+	Sessions    []db.ListJournalSessionsRow          `json:"sessions"`
+	Summary     []db.ListJournalAttendanceSummaryRow `json:"summary"`
 }
 
 type JournalAttendanceEntry struct {
