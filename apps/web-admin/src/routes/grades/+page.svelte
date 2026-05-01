@@ -139,6 +139,7 @@
 	let assignmentStatusFilter = $state<'all' | 'ready' | 'finalized' | 'attention'>('all');
 	let assignmentStatusQuery = $state('');
 	let assignmentTeacherFilter = $state('');
+	let classFocusKey = $state('');
 
 	let scoreInput = $state<Record<string, string>>({});
 	let noteInput = $state<Record<string, string>>({});
@@ -238,6 +239,16 @@
 		}
 		return Object.values(grouped).sort((a, b) => a.class_code.localeCompare(b.class_code, 'id'));
 	});
+	const focusedClassSummary = $derived(
+		filteredClassSummaries.find((item) => `${item.class_code}::${item.class_name}` === classFocusKey) ?? filteredClassSummaries[0] ?? null
+	);
+	const focusedClassAssignments = $derived(
+		focusedClassSummary
+			? filteredAssignmentStatuses.filter((item) =>
+				item.class_code === focusedClassSummary.class_code && item.class_name === focusedClassSummary.class_name
+			)
+			: []
+	);
 	const readinessLabel = $derived(
 		isFinalized
 			? 'Sudah Difinalisasi'
@@ -983,15 +994,68 @@
 										</Table.Header>
 										<Table.Body>
 											{#each filteredClassSummaries as item (`${item.class_code}-${item.class_name}`)}
-												<Table.Row>
+												<Table.Row class={`${focusedClassSummary && focusedClassSummary.class_code === item.class_code && focusedClassSummary.class_name === item.class_name ? 'bg-emerald-50/70' : ''}`}>
 													<Table.Cell>
-														<div class="font-medium text-slate-900">{item.class_name}</div>
-														<div class="text-xs text-slate-500">{item.class_code}</div>
+														<button
+															class="text-left"
+															onclick={() => {
+																classFocusKey = `${item.class_code}::${item.class_name}`;
+															}}
+														>
+															<div class="font-medium text-slate-900">{item.class_name}</div>
+															<div class="text-xs text-slate-500">{item.class_code}</div>
+														</button>
 													</Table.Cell>
 													<Table.Cell>{item.assignment_count}</Table.Cell>
 													<Table.Cell>{item.ready_count}</Table.Cell>
 													<Table.Cell>{item.finalized_count}</Table.Cell>
 													<Table.Cell>{item.attention_count}</Table.Cell>
+													<Table.Cell>{item.missing_grade_count}</Table.Cell>
+												</Table.Row>
+											{/each}
+										</Table.Body>
+									</Table.Root>
+								</div>
+							</div>
+						{/if}
+						{#if focusedClassSummary}
+							<div class="rounded-xl border border-emerald-200 bg-white p-4">
+								<div class="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+									<div>
+										<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Fokus Wali Kelas</p>
+										<h3 class="mt-1 text-base font-semibold text-slate-900">{focusedClassSummary.class_name} · {focusedClassSummary.class_code}</h3>
+										<p class="text-sm text-slate-600">Ringkasan cepat semua mapel pada kelas aktif dari hasil filter saat ini.</p>
+									</div>
+									<div class="flex flex-wrap gap-2">
+										<Badge variant="outline">{focusedClassSummary.assignment_count} mapel</Badge>
+										<Badge variant="outline">{focusedClassSummary.ready_count} siap</Badge>
+										<Badge variant="outline">{focusedClassSummary.finalized_count} final</Badge>
+										<Badge variant="outline">{focusedClassSummary.attention_count} perlu dilengkapi</Badge>
+									</div>
+								</div>
+								<div class="overflow-x-auto">
+									<Table.Root>
+										<Table.Header>
+											<Table.Row>
+												<Table.Head>Mapel</Table.Head>
+												<Table.Head>Guru</Table.Head>
+												<Table.Head>Status</Table.Head>
+												<Table.Head>Komponen</Table.Head>
+												<Table.Head>Nilai Kosong</Table.Head>
+											</Table.Row>
+										</Table.Header>
+										<Table.Body>
+											{#each focusedClassAssignments as item (item.assignment_id)}
+												<Table.Row class={item.assignment_id === assignmentId ? 'bg-emerald-50/70' : ''}>
+													<Table.Cell>
+														<button class="text-left" onclick={() => focusAssignment(item.assignment_id)}>
+															<div class="font-medium text-slate-900">{item.subject_name}</div>
+															<div class="text-xs text-slate-500">{item.subject_code}</div>
+														</button>
+													</Table.Cell>
+													<Table.Cell>{item.teacher_name}</Table.Cell>
+													<Table.Cell><Badge variant={assignmentStatusVariant(item)}>{assignmentStatusLabel(item)}</Badge></Table.Cell>
+													<Table.Cell>{item.published_component_count}/{item.component_count}</Table.Cell>
 													<Table.Cell>{item.missing_grade_count}</Table.Cell>
 												</Table.Row>
 											{/each}
