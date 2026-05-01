@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 
@@ -11,7 +12,7 @@
 	} = $props();
 	let open = $state(false);
 
-	type NavItem = { href: string; label: string; icon: string; roles?: string[] };
+	type NavItem = { href: string; label: string; icon: string; roles?: string[]; pinnable?: boolean };
 	type NavGroup = { group: string; items: NavItem[] };
 
 	const allNav: NavGroup[] = [
@@ -94,23 +95,121 @@
 		},
 	];
 
+	const userRoles = $derived(user?.roles || (user?.role ? [user.role] : []));
+
 	const nav = $derived(
-		allNav.map(g => ({
-			...g,
-			items: g.items.filter(i => {
-				if (!i.roles) return true;
-				const userRoles = user?.roles || (user?.role ? [user.role] : []);
-				return i.roles.some(r => userRoles.includes(r));
-			})
-		})).filter(g => g.items.length > 0)
+		allNav
+			.map((g) => ({
+				...g,
+				items: g.items.filter((i) => {
+					if (!i.roles) return true;
+					return i.roles.some((r) => userRoles.includes(r));
+				}),
+			}))
+			.filter((g) => g.items.length > 0)
 	);
 
-	const resolveNavHref = resolve as unknown as (href: string) => string;
+	const PINNED_STORAGE_KEY = 'sidebar:pinned-items';
+	let openGroups = $state<string[]>([]);
+	let pinnedItems = $state<string[]>([]);
+	let pinnedLoaded = false;
+
+	const defaultPinnedByRole: Record<string, string[]> = {
+		admin: ['/', '/cbt/sessions', '/grades', '/settings'],
+		guru: ['/', '/cbt/questions', '/grades', '/jadwal'],
+		staf: ['/', '/inventory', '/library']
+	};
+
+	const activeGroup = $derived(
+		nav.find((section) => section.items.some((item) => isActive(item.href)))?.group ?? 'Utama'
+	);
+
+	const quickAccess = $derived.by(() => {
+		const hrefs = new Set<string>(['/', ...pinnedItems]);
+		const flattened = nav.flatMap((section) =>
+			section.items.map((item) => ({
+				...item,
+				group: section.group,
+			}))
+		);
+		return flattened.filter((item, index) => hrefs.has(item.href) && flattened.findIndex((candidate) => candidate.href === item.href) === index);
+	});
 
 	function isActive(href: string) {
 		if (href === '/') return page.url.pathname === '/';
 		return page.url.pathname.startsWith(href);
 	}
+
+	function isGroupOpen(group: string) {
+		return group === 'Utama' || group === activeGroup || openGroups.includes(group);
+	}
+
+	function toggleGroup(group: string) {
+		if (group === 'Utama' || group === activeGroup) {
+			return;
+		}
+		if (isGroupOpen(group)) {
+			openGroups = openGroups.filter((value) => value !== group);
+			return;
+		}
+		openGroups = [...openGroups, group];
+	}
+
+	function isPinned(href: string) {
+		return pinnedItems.includes(href);
+	}
+
+	function togglePin(href: string) {
+		if (isPinned(href)) {
+			pinnedItems = pinnedItems.filter((value) => value !== href);
+			return;
+		}
+		pinnedItems = [...pinnedItems, href];
+	}
+
+	function pinButtonLabel(item: NavItem) {
+		return isPinned(item.href) ? `Lepas ${item.label} dari akses cepat` : `Pin ${item.label} ke akses cepat`;
+	}
+
+	function railTooltip(item: NavItem, group: string) {
+		return `${group} · ${item.label}`;
+	}
+
+	function loadPinnedItems() {
+		if (typeof window === 'undefined') return;
+		const raw = window.localStorage.getItem(PINNED_STORAGE_KEY);
+		if (raw) {
+			try {
+				const parsed = JSON.parse(raw);
+				if (Array.isArray(parsed)) {
+					pinnedItems = parsed.filter((value): value is string => typeof value === 'string');
+				}
+			} catch {
+				pinnedItems = [];
+			}
+		}
+
+		if (pinnedItems.length === 0) {
+			for (const role of userRoles) {
+				const defaults = defaultPinnedByRole[role];
+				if (defaults?.length) {
+					pinnedItems = defaults;
+					break;
+				}
+			}
+		}
+
+		pinnedLoaded = true;
+	}
+
+	onMount(() => {
+		loadPinnedItems();
+	});
+
+	$effect(() => {
+		if (!pinnedLoaded || typeof window === 'undefined') return;
+		window.localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pinnedItems));
+	});
 
 	async function logout() {
 		await fetch('/api/auth/logout', { method: 'POST' });
@@ -157,12 +256,10 @@
 		<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-green-700 text-white text-xs font-bold shrink-0">
 			MTs
 		</div>
-		{#if desktopExpanded}
-			<div class="min-w-0">
-				<p class="truncate text-sm font-semibold text-slate-800">MTSN 2 Kolut</p>
-				<p class="truncate text-xs text-slate-400">Kolaka Utara</p>
-			</div>
-		{/if}
+		<div class={`min-w-0 ${desktopExpanded ? 'block' : 'block lg:hidden'}`}>
+			<p class="truncate text-sm font-semibold text-slate-800">MTSN 2 Kolut</p>
+			<p class="truncate text-xs text-slate-400">Kolaka Utara</p>
+		</div>
 		<button
 			class={`ml-auto hidden rounded-md p-1.5 text-slate-500 hover:bg-slate-100 lg:inline-flex ${desktopExpanded ? '' : 'ml-0'}`}
 			onclick={() => (desktopExpanded = !desktopExpanded)}
@@ -176,34 +273,105 @@
 
 	<!-- Nav -->
 	<nav class={`flex-1 overflow-y-auto py-3 ${desktopExpanded ? 'px-3' : 'px-2'} space-y-4`}>
-		{#each nav as section (section.group)}
+		{#if quickAccess.length > 0}
 			<div>
-				{#if desktopExpanded}
-					<p class="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-						{section.group}
-					</p>
-				{/if}
+				<p class={`mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 ${desktopExpanded ? 'block' : 'block lg:hidden'}`}>
+					Akses Cepat
+				</p>
 				<ul class="space-y-0.5">
-					{#each section.items as item (item.href)}
+					{#each quickAccess as item (item.href)}
 						<li>
+							<div class={`group relative flex items-center ${desktopExpanded ? 'gap-1' : 'gap-0 lg:justify-center'}`}>
 								<a
-									href={resolveNavHref(item.href)}
+									href={resolve(item.href)}
 									onclick={() => (open = false)}
-								title={!desktopExpanded ? item.label : undefined}
-								class={`flex items-center rounded-md py-1.5 text-sm font-medium transition-colors
-								       ${desktopExpanded ? 'gap-2.5 px-2' : 'justify-center px-0'}
-								       {isActive(item.href)
-								         ? 'bg-green-50 text-green-800'
-								         : 'text-slate-600 hover:bg-green-50/60 hover:text-slate-800'}`}
-							>
-								{@render SidebarIcon({ name: item.icon, active: isActive(item.href) })}
-								{#if desktopExpanded}
-									<span class="truncate">{item.label}</span>
+									title={!desktopExpanded ? railTooltip(item, item.group) : undefined}
+									class={`flex min-w-0 flex-1 items-center rounded-md py-1.5 text-sm font-medium transition-colors
+										${desktopExpanded ? 'gap-2.5 px-2' : 'gap-2.5 px-2 lg:justify-center lg:px-0'}
+										${isActive(item.href)
+											? 'bg-green-50 text-green-800'
+											: 'text-slate-600 hover:bg-green-50/60 hover:text-slate-800'}`}
+								>
+									{@render SidebarIcon({ name: item.icon, active: isActive(item.href) })}
+									<span class={`truncate ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{item.label}</span>
+								</a>
+								{#if item.pinnable !== false}
+									<button
+										type="button"
+										class={`shrink-0 rounded-md p-1 text-amber-500 hover:bg-amber-50 hover:text-amber-600 ${desktopExpanded ? 'inline-flex' : 'inline-flex lg:hidden'}`}
+										onclick={() => togglePin(item.href)}
+										aria-label={pinButtonLabel(item)}
+									>
+										<svg class="h-3.5 w-3.5" fill={isPinned(item.href) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17.75l-6.172 3.245 1.179-6.872L2 9.38l6.914-1.005L12 2.11l3.086 6.265L22 9.38l-5.007 4.743 1.18 6.872z" />
+										</svg>
+									</button>
 								{/if}
-							</a>
+								{#if !desktopExpanded}
+									<div class="pointer-events-none absolute left-full top-1/2 z-40 ml-3 hidden -translate-y-1/2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm lg:group-hover:block">
+										{railTooltip(item, item.group)}
+									</div>
+								{/if}
+							</div>
 						</li>
 					{/each}
 				</ul>
+			</div>
+		{/if}
+
+		{#each nav as section (section.group)}
+			<div>
+				<button
+					type="button"
+					class={`mb-1 flex w-full items-center rounded-md px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 transition-colors hover:bg-slate-50 ${desktopExpanded ? 'flex' : 'flex lg:hidden'}`}
+					onclick={() => toggleGroup(section.group)}
+					aria-expanded={isGroupOpen(section.group)}
+				>
+					<span class="truncate">{section.group}</span>
+					<svg class={`ml-auto h-3.5 w-3.5 transition-transform ${isGroupOpen(section.group) ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+					</svg>
+				</button>
+				{#if !desktopExpanded || isGroupOpen(section.group)}
+					<ul class="space-y-0.5">
+						{#each section.items as item (item.href)}
+							<li>
+								<div class={`group relative flex items-center ${desktopExpanded ? 'gap-1' : 'gap-0 lg:justify-center'}`}>
+									<a
+										href={resolve(item.href)}
+										onclick={() => (open = false)}
+										title={!desktopExpanded ? railTooltip(item, section.group) : undefined}
+										class={`flex min-w-0 flex-1 items-center rounded-md py-1.5 text-sm font-medium transition-colors
+											${desktopExpanded ? 'gap-2.5 px-2' : 'gap-2.5 px-2 lg:justify-center lg:px-0'}
+											${isActive(item.href)
+												? 'bg-green-50 text-green-800'
+												: 'text-slate-600 hover:bg-green-50/60 hover:text-slate-800'}`}
+									>
+										{@render SidebarIcon({ name: item.icon, active: isActive(item.href) })}
+										<span class={`truncate ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{item.label}</span>
+									</a>
+									{#if item.pinnable !== false}
+										<button
+											type="button"
+											class={`shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-600 ${desktopExpanded ? 'inline-flex' : 'inline-flex lg:hidden'}`}
+											onclick={() => togglePin(item.href)}
+											aria-label={pinButtonLabel(item)}
+										>
+											<svg class="h-3.5 w-3.5" fill={isPinned(item.href) ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17.75l-6.172 3.245 1.179-6.872L2 9.38l6.914-1.005L12 2.11l3.086 6.265L22 9.38l-5.007 4.743 1.18 6.872z" />
+											</svg>
+										</button>
+									{/if}
+									{#if !desktopExpanded}
+										<div class="pointer-events-none absolute left-full top-1/2 z-40 hidden -translate-y-1/2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm lg:group-hover:block lg:ml-3">
+											{railTooltip(item, section.group)}
+										</div>
+									{/if}
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			</div>
 		{/each}
 	</nav>
@@ -221,9 +389,7 @@
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
 						d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
 				</svg>
-				{#if desktopExpanded}
-					Keluar
-				{/if}
+				<span class={desktopExpanded ? 'inline' : 'inline lg:hidden'}>Keluar</span>
 			</button>
 		{/if}
 	</div>

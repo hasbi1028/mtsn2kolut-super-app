@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import favicon from '$lib/assets/favicon.svg';
 	import PublicSiteShell from '$lib/components/PublicSiteShell.svelte';
 	import RouteProgress from '$lib/components/RouteProgress.svelte';
@@ -17,6 +18,18 @@
 		return publicExactPaths.has(pathname) || publicPrefixPaths.some((prefix) => pathname.startsWith(prefix));
 	});
 	let desktopSidebarExpanded = $state(true);
+	const SIDEBAR_EXPANDED_STORAGE_KEY = 'sidebar:desktop-expanded';
+
+	onMount(() => {
+		const raw = window.localStorage.getItem(SIDEBAR_EXPANDED_STORAGE_KEY);
+		if (raw === '0') desktopSidebarExpanded = false;
+		if (raw === '1') desktopSidebarExpanded = true;
+	});
+
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		window.localStorage.setItem(SIDEBAR_EXPANDED_STORAGE_KEY, desktopSidebarExpanded ? '1' : '0');
+	});
 </script>
 
 <svelte:head>
