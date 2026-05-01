@@ -321,6 +321,40 @@
 		return focusClassTimetableSlots.filter((slot) => slot.day_of_week === day);
 	}
 
+	function exportFocusedClassTimetable() {
+		const focusClass = visibleFocusClassOptions.find((item) => item.id === effectiveFocusClassId);
+		if (!focusClass || focusClassTimetableSlots.length === 0) {
+			showError('Tidak ada jadwal kelas yang bisa diekspor.');
+			return;
+		}
+		const rows = [
+			['Hari', 'Mulai', 'Selesai', 'Kelas', 'Mata Pelajaran', 'Guru', 'Ruang', 'Catatan'],
+			...focusClassTimetableSlots.map((slot) => [
+				dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`,
+				fmtTime(slot.start_time),
+				fmtTime(slot.end_time),
+				slot.class_name,
+				slot.subject_name,
+				slot.teacher_name,
+				slot.room_label || '',
+				slot.notes || '',
+			]),
+		];
+		const csv = rows
+			.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(','))
+			.join('\n');
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `jadwal-${focusClass.code.toLowerCase().replaceAll(/\s+/g, '-')}.csv`;
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+		URL.revokeObjectURL(url);
+		showToast(`Jadwal kelas ${focusClass.code} berhasil diekspor`);
+	}
+
 	onMount(load);
 </script>
 
@@ -659,7 +693,12 @@
 									</select>
 								</div>
 								{#if effectiveFocusClassId}
-									<p class="text-sm text-slate-500">Menampilkan {focusClassTimetableSlots.length} slot untuk kelas terpilih pada hasil filter aktif.</p>
+									<div class="flex flex-wrap items-center gap-2 md:justify-end">
+										<p class="text-sm text-slate-500">Menampilkan {focusClassTimetableSlots.length} slot untuk kelas terpilih pada hasil filter aktif.</p>
+										<Button variant="outline" size="sm" onclick={exportFocusedClassTimetable} disabled={focusClassTimetableSlots.length === 0}>
+											Ekspor Jadwal Kelas
+										</Button>
+									</div>
 								{/if}
 							</div>
 
