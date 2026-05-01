@@ -12,7 +12,12 @@ SELECT
           AND reminder_date <= CURRENT_DATE
           AND due_date >= CURRENT_DATE
     )::BIGINT AS due_soon_obligations,
-    COUNT(*) FILTER (WHERE responsible_employee_id IS NULL)::BIGINT AS no_pic_obligations
+    COUNT(*) FILTER (WHERE responsible_employee_id IS NULL)::BIGINT AS no_pic_obligations,
+    COUNT(*) FILTER (WHERE archive_document_id IS NOT NULL)::BIGINT AS linked_archive_obligations,
+    COUNT(*) FILTER (WHERE evidence_item_id IS NOT NULL)::BIGINT AS linked_evidence_obligations,
+    COUNT(*) FILTER (WHERE governance_document_id IS NOT NULL)::BIGINT AS linked_governance_document_obligations,
+    COUNT(*) FILTER (WHERE compliance_action_id IS NOT NULL)::BIGINT AS linked_compliance_action_obligations,
+    COUNT(*) FILTER (WHERE external_system <> '')::BIGINT AS external_tracker_obligations
 FROM document_cycle_obligations
 WHERE sqlc.arg(period_year)::INT = 0 OR period_year = sqlc.arg(period_year)::INT;
 
@@ -22,6 +27,8 @@ SELECT
     c.code,
     c.title,
     c.frequency,
+    c.domain_area,
+    c.external_system,
     c.snp_standard,
     c.regulation_ref,
     c.default_owner_unit_id,
@@ -61,6 +68,8 @@ INSERT INTO document_cycle_catalogs (
     code,
     title,
     frequency,
+    domain_area,
+    external_system,
     snp_standard,
     regulation_ref,
     default_owner_unit_id,
@@ -75,6 +84,8 @@ INSERT INTO document_cycle_catalogs (
     sqlc.arg(code),
     sqlc.arg(title),
     sqlc.arg(frequency),
+    sqlc.arg(domain_area),
+    sqlc.arg(external_system),
     sqlc.arg(snp_standard),
     sqlc.arg(regulation_ref),
     sqlc.arg(default_owner_unit_id),
@@ -93,6 +104,8 @@ UPDATE document_cycle_catalogs
 SET code = sqlc.arg(code),
     title = sqlc.arg(title),
     frequency = sqlc.arg(frequency),
+    domain_area = sqlc.arg(domain_area),
+    external_system = sqlc.arg(external_system),
     snp_standard = sqlc.arg(snp_standard),
     regulation_ref = sqlc.arg(regulation_ref),
     default_owner_unit_id = sqlc.arg(default_owner_unit_id),
@@ -117,6 +130,8 @@ SELECT
     c.code AS catalog_code,
     c.title AS catalog_title,
     c.frequency,
+    o.domain_area,
+    o.external_system,
     c.snp_standard,
     c.regulation_ref,
     o.period_year,
@@ -136,8 +151,15 @@ SELECT
     o.status,
     o.governance_document_id,
     COALESCE(gd.title, '')::TEXT AS governance_document_title,
+    o.work_plan_item_id,
+    COALESCE(gwpi.activity_code, '')::TEXT AS work_plan_item_code,
+    COALESCE(gwpi.activity_name, '')::TEXT AS work_plan_item_name,
+    o.performance_target_id,
+    COALESCE(gpt.title, '')::TEXT AS performance_target_title,
     o.evidence_item_id,
     COALESCE(ge.title, '')::TEXT AS evidence_item_title,
+    o.compliance_action_id,
+    COALESCE(gca.title, '')::TEXT AS compliance_action_title,
     o.archive_document_id,
     COALESCE(ad.title, '')::TEXT AS archive_document_title,
     o.notes,
@@ -154,7 +176,10 @@ LEFT JOIN governance_units ou ON ou.id = o.owner_unit_id
 LEFT JOIN employees re ON re.id = o.responsible_employee_id
 LEFT JOIN employees ve ON ve.id = o.verifier_employee_id
 LEFT JOIN governance_documents gd ON gd.id = o.governance_document_id
+LEFT JOIN governance_work_plan_items gwpi ON gwpi.id = o.work_plan_item_id
+LEFT JOIN governance_performance_targets gpt ON gpt.id = o.performance_target_id
 LEFT JOIN governance_evidence_items ge ON ge.id = o.evidence_item_id
+LEFT JOIN governance_compliance_actions gca ON gca.id = o.compliance_action_id
 LEFT JOIN archive_documents ad ON ad.id = o.archive_document_id
 WHERE (
     sqlc.arg(search)::TEXT = '' OR
@@ -166,6 +191,10 @@ WHERE (
     sqlc.arg(status)::TEXT = '' OR o.status = sqlc.arg(status)
 ) AND (
     sqlc.arg(frequency)::TEXT = '' OR c.frequency = sqlc.arg(frequency)
+) AND (
+    sqlc.arg(domain_area)::TEXT = '' OR o.domain_area = sqlc.arg(domain_area)
+) AND (
+    sqlc.arg(external_system)::TEXT = '' OR o.external_system = sqlc.arg(external_system)
 ) AND (
     sqlc.arg(period_year)::INT = 0 OR o.period_year = sqlc.arg(period_year)::INT
 ) AND (
@@ -265,6 +294,8 @@ raw_periods AS (
         FORMAT('Bundel Harian %s %s', mn.month_name, p.period_year)::TEXT AS period_label,
         MAKE_DATE(p.period_year, mn.month_no, 1)::DATE AS period_start,
         (MAKE_DATE(p.period_year, mn.month_no, 1) + INTERVAL '1 month - 1 day')::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -284,6 +315,8 @@ raw_periods AS (
         FORMAT('Minggu %s %s', LPAD(w.week_no::TEXT, 2, '0'), p.period_year)::TEXT AS period_label,
         w.period_start,
         w.period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -313,6 +346,8 @@ raw_periods AS (
         FORMAT('Bulanan %s %s', mn.month_name, p.period_year)::TEXT AS period_label,
         MAKE_DATE(p.period_year, mn.month_no, 1)::DATE AS period_start,
         (MAKE_DATE(p.period_year, mn.month_no, 1) + INTERVAL '1 month - 1 day')::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -332,6 +367,8 @@ raw_periods AS (
         FORMAT('%s %s', qp.label, p.period_year)::TEXT AS period_label,
         MAKE_DATE(p.period_year, qp.start_month, 1)::DATE AS period_start,
         (MAKE_DATE(p.period_year, qp.end_month, 1) + INTERVAL '1 month - 1 day')::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -351,6 +388,8 @@ raw_periods AS (
         FORMAT('%s %s', sp.label, p.period_year)::TEXT AS period_label,
         MAKE_DATE(p.period_year, sp.start_month, 1)::DATE AS period_start,
         (MAKE_DATE(p.period_year, sp.end_month, 1) + INTERVAL '1 month - 1 day')::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -370,6 +409,8 @@ raw_periods AS (
         FORMAT('Tahunan %s', p.period_year)::TEXT AS period_label,
         MAKE_DATE(p.period_year, 1, 1)::DATE AS period_start,
         MAKE_DATE(p.period_year, 12, 31)::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -388,6 +429,8 @@ raw_periods AS (
         FORMAT('Periode %s-%s', p.period_year, p.period_year + 3)::TEXT AS period_label,
         MAKE_DATE(p.period_year, 1, 1)::DATE AS period_start,
         MAKE_DATE(p.period_year + 3, 12, 31)::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -406,6 +449,8 @@ raw_periods AS (
         FORMAT('Periode %s-%s', p.period_year, p.period_year + 4)::TEXT AS period_label,
         MAKE_DATE(p.period_year, 1, 1)::DATE AS period_start,
         MAKE_DATE(p.period_year + 4, 12, 31)::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -423,6 +468,8 @@ periods AS (
         period_label,
         period_start,
         period_end,
+        domain_area,
+        external_system,
         (period_end + deadline_days_after_period::INT)::DATE AS due_date,
         ((period_end + deadline_days_after_period::INT)::DATE - reminder_days_before_due::INT)::DATE AS reminder_date,
         default_owner_unit_id AS owner_unit_id,
@@ -440,6 +487,8 @@ inserted AS (
         period_label,
         period_start,
         period_end,
+        domain_area,
+        external_system,
         due_date,
         reminder_date,
         owner_unit_id,
@@ -455,6 +504,8 @@ inserted AS (
         period_label,
         period_start,
         period_end,
+        domain_area,
+        external_system,
         due_date,
         reminder_date,
         owner_unit_id,
@@ -495,11 +546,19 @@ SELECT
 UPDATE document_cycle_obligations
 SET due_date = sqlc.arg(due_date),
     reminder_date = sqlc.arg(reminder_date),
+    domain_area = CASE
+        WHEN sqlc.arg(domain_area)::TEXT = '' THEN domain_area
+        ELSE sqlc.arg(domain_area)
+    END,
+    external_system = sqlc.arg(external_system),
     owner_unit_id = sqlc.arg(owner_unit_id),
     responsible_employee_id = sqlc.arg(responsible_employee_id),
     verifier_employee_id = sqlc.arg(verifier_employee_id),
     governance_document_id = sqlc.arg(governance_document_id),
+    work_plan_item_id = sqlc.arg(work_plan_item_id),
+    performance_target_id = sqlc.arg(performance_target_id),
     evidence_item_id = sqlc.arg(evidence_item_id),
+    compliance_action_id = sqlc.arg(compliance_action_id),
     archive_document_id = sqlc.arg(archive_document_id),
     notes = sqlc.arg(notes),
     verification_notes = sqlc.arg(verification_notes),
@@ -526,6 +585,23 @@ SET status = sqlc.arg(status),
 WHERE id = sqlc.arg(id)
 RETURNING *;
 
+-- name: GetDocumentCycleObligationStatus :one
+SELECT status FROM document_cycle_obligations WHERE id = $1;
+
+-- name: GetDocumentCycleObligationCompletionReadiness :one
+SELECT
+    id,
+    responsible_employee_id,
+    verifier_employee_id,
+    governance_document_id,
+    work_plan_item_id,
+    performance_target_id,
+    evidence_item_id,
+    compliance_action_id,
+    archive_document_id
+FROM document_cycle_obligations
+WHERE id = $1;
+
 -- name: DeleteDocumentCycleObligation :exec
 DELETE FROM document_cycle_obligations WHERE id = $1;
 
@@ -546,3 +622,19 @@ INSERT INTO document_cycle_events (
     sqlc.arg(actor_user_id)
 )
 RETURNING *;
+
+-- name: ListDocumentCycleEventsByObligation :many
+SELECT
+    e.id,
+    e.obligation_id,
+    e.event_type,
+    e.from_status,
+    e.to_status,
+    e.notes,
+    e.actor_user_id,
+    e.created_at,
+    COALESCE(u.username, '')::TEXT AS actor_username
+FROM document_cycle_events e
+LEFT JOIN users u ON u.id = e.actor_user_id
+WHERE e.obligation_id = $1
+ORDER BY e.created_at DESC;

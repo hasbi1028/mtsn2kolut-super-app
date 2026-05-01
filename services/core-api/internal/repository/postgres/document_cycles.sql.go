@@ -16,6 +16,8 @@ INSERT INTO document_cycle_catalogs (
     code,
     title,
     frequency,
+    domain_area,
+    external_system,
     snp_standard,
     regulation_ref,
     default_owner_unit_id,
@@ -39,15 +41,19 @@ INSERT INTO document_cycle_catalogs (
     $10,
     $11,
     $12,
-    $13
+    $13,
+    $14,
+    $15
 )
-RETURNING id, code, title, frequency, snp_standard, regulation_ref, default_owner_unit_id, default_responsible_employee_id, default_verifier_employee_id, deadline_days_after_period, reminder_days_before_due, description, is_active, sort_order, created_at, updated_at
+RETURNING id, code, title, frequency, snp_standard, regulation_ref, default_owner_unit_id, default_responsible_employee_id, default_verifier_employee_id, deadline_days_after_period, reminder_days_before_due, description, is_active, sort_order, created_at, updated_at, domain_area, external_system
 `
 
 type CreateDocumentCycleCatalogParams struct {
 	Code                         string      `json:"code"`
 	Title                        string      `json:"title"`
 	Frequency                    string      `json:"frequency"`
+	DomainArea                   string      `json:"domain_area"`
+	ExternalSystem               string      `json:"external_system"`
 	SnpStandard                  string      `json:"snp_standard"`
 	RegulationRef                string      `json:"regulation_ref"`
 	DefaultOwnerUnitID           pgtype.UUID `json:"default_owner_unit_id"`
@@ -65,6 +71,8 @@ func (q *Queries) CreateDocumentCycleCatalog(ctx context.Context, arg CreateDocu
 		arg.Code,
 		arg.Title,
 		arg.Frequency,
+		arg.DomainArea,
+		arg.ExternalSystem,
 		arg.SnpStandard,
 		arg.RegulationRef,
 		arg.DefaultOwnerUnitID,
@@ -94,6 +102,8 @@ func (q *Queries) CreateDocumentCycleCatalog(ctx context.Context, arg CreateDocu
 		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DomainArea,
+		&i.ExternalSystem,
 	)
 	return i, err
 }
@@ -199,7 +209,7 @@ INSERT INTO document_cycle_obligations (
 )
 ON CONFLICT (catalog_id, period_year, period_label) DO UPDATE
 SET updated_at = document_cycle_obligations.updated_at
-RETURNING id, catalog_id, period_year, period_label, period_start, period_end, due_date, reminder_date, owner_unit_id, responsible_employee_id, verifier_employee_id, status, governance_document_id, evidence_item_id, archive_document_id, notes, verification_notes, completed_at, created_by_user_id, created_at, updated_at
+RETURNING id, catalog_id, period_year, period_label, period_start, period_end, due_date, reminder_date, owner_unit_id, responsible_employee_id, verifier_employee_id, status, governance_document_id, evidence_item_id, archive_document_id, notes, verification_notes, completed_at, created_by_user_id, created_at, updated_at, domain_area, external_system, work_plan_item_id, performance_target_id, compliance_action_id
 `
 
 type EnsureDocumentCycleObligationParams struct {
@@ -257,6 +267,11 @@ func (q *Queries) EnsureDocumentCycleObligation(ctx context.Context, arg EnsureD
 		&i.CreatedByUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DomainArea,
+		&i.ExternalSystem,
+		&i.WorkPlanItemID,
+		&i.PerformanceTargetID,
+		&i.ComplianceActionID,
 	)
 	return i, err
 }
@@ -301,6 +316,8 @@ raw_periods AS (
         FORMAT('Bundel Harian %s %s', mn.month_name, p.period_year)::TEXT AS period_label,
         MAKE_DATE(p.period_year, mn.month_no, 1)::DATE AS period_start,
         (MAKE_DATE(p.period_year, mn.month_no, 1) + INTERVAL '1 month - 1 day')::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -320,6 +337,8 @@ raw_periods AS (
         FORMAT('Minggu %s %s', LPAD(w.week_no::TEXT, 2, '0'), p.period_year)::TEXT AS period_label,
         w.period_start,
         w.period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -349,6 +368,8 @@ raw_periods AS (
         FORMAT('Bulanan %s %s', mn.month_name, p.period_year)::TEXT AS period_label,
         MAKE_DATE(p.period_year, mn.month_no, 1)::DATE AS period_start,
         (MAKE_DATE(p.period_year, mn.month_no, 1) + INTERVAL '1 month - 1 day')::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -368,6 +389,8 @@ raw_periods AS (
         FORMAT('%s %s', qp.label, p.period_year)::TEXT AS period_label,
         MAKE_DATE(p.period_year, qp.start_month, 1)::DATE AS period_start,
         (MAKE_DATE(p.period_year, qp.end_month, 1) + INTERVAL '1 month - 1 day')::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -387,6 +410,8 @@ raw_periods AS (
         FORMAT('%s %s', sp.label, p.period_year)::TEXT AS period_label,
         MAKE_DATE(p.period_year, sp.start_month, 1)::DATE AS period_start,
         (MAKE_DATE(p.period_year, sp.end_month, 1) + INTERVAL '1 month - 1 day')::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -406,6 +431,8 @@ raw_periods AS (
         FORMAT('Tahunan %s', p.period_year)::TEXT AS period_label,
         MAKE_DATE(p.period_year, 1, 1)::DATE AS period_start,
         MAKE_DATE(p.period_year, 12, 31)::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -424,6 +451,8 @@ raw_periods AS (
         FORMAT('Periode %s-%s', p.period_year, p.period_year + 3)::TEXT AS period_label,
         MAKE_DATE(p.period_year, 1, 1)::DATE AS period_start,
         MAKE_DATE(p.period_year + 3, 12, 31)::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -442,6 +471,8 @@ raw_periods AS (
         FORMAT('Periode %s-%s', p.period_year, p.period_year + 4)::TEXT AS period_label,
         MAKE_DATE(p.period_year, 1, 1)::DATE AS period_start,
         MAKE_DATE(p.period_year + 4, 12, 31)::DATE AS period_end,
+        c.domain_area,
+        c.external_system,
         c.default_owner_unit_id,
         c.default_responsible_employee_id,
         c.default_verifier_employee_id,
@@ -459,6 +490,8 @@ periods AS (
         period_label,
         period_start,
         period_end,
+        domain_area,
+        external_system,
         (period_end + deadline_days_after_period::INT)::DATE AS due_date,
         ((period_end + deadline_days_after_period::INT)::DATE - reminder_days_before_due::INT)::DATE AS reminder_date,
         default_owner_unit_id AS owner_unit_id,
@@ -476,6 +509,8 @@ inserted AS (
         period_label,
         period_start,
         period_end,
+        domain_area,
+        external_system,
         due_date,
         reminder_date,
         owner_unit_id,
@@ -491,6 +526,8 @@ inserted AS (
         period_label,
         period_start,
         period_end,
+        domain_area,
+        external_system,
         due_date,
         reminder_date,
         owner_unit_id,
@@ -546,6 +583,61 @@ func (q *Queries) GenerateDocumentCycleYearObligations(ctx context.Context, arg 
 	return i, err
 }
 
+const getDocumentCycleObligationCompletionReadiness = `-- name: GetDocumentCycleObligationCompletionReadiness :one
+SELECT
+    id,
+    responsible_employee_id,
+    verifier_employee_id,
+    governance_document_id,
+    work_plan_item_id,
+    performance_target_id,
+    evidence_item_id,
+    compliance_action_id,
+    archive_document_id
+FROM document_cycle_obligations
+WHERE id = $1
+`
+
+type GetDocumentCycleObligationCompletionReadinessRow struct {
+	ID                    pgtype.UUID `json:"id"`
+	ResponsibleEmployeeID pgtype.UUID `json:"responsible_employee_id"`
+	VerifierEmployeeID    pgtype.UUID `json:"verifier_employee_id"`
+	GovernanceDocumentID  pgtype.UUID `json:"governance_document_id"`
+	WorkPlanItemID        pgtype.UUID `json:"work_plan_item_id"`
+	PerformanceTargetID   pgtype.UUID `json:"performance_target_id"`
+	EvidenceItemID        pgtype.UUID `json:"evidence_item_id"`
+	ComplianceActionID    pgtype.UUID `json:"compliance_action_id"`
+	ArchiveDocumentID     pgtype.UUID `json:"archive_document_id"`
+}
+
+func (q *Queries) GetDocumentCycleObligationCompletionReadiness(ctx context.Context, id pgtype.UUID) (GetDocumentCycleObligationCompletionReadinessRow, error) {
+	row := q.db.QueryRow(ctx, getDocumentCycleObligationCompletionReadiness, id)
+	var i GetDocumentCycleObligationCompletionReadinessRow
+	err := row.Scan(
+		&i.ID,
+		&i.ResponsibleEmployeeID,
+		&i.VerifierEmployeeID,
+		&i.GovernanceDocumentID,
+		&i.WorkPlanItemID,
+		&i.PerformanceTargetID,
+		&i.EvidenceItemID,
+		&i.ComplianceActionID,
+		&i.ArchiveDocumentID,
+	)
+	return i, err
+}
+
+const getDocumentCycleObligationStatus = `-- name: GetDocumentCycleObligationStatus :one
+SELECT status FROM document_cycle_obligations WHERE id = $1
+`
+
+func (q *Queries) GetDocumentCycleObligationStatus(ctx context.Context, id pgtype.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getDocumentCycleObligationStatus, id)
+	var status string
+	err := row.Scan(&status)
+	return status, err
+}
+
 const getDocumentCycleStats = `-- name: GetDocumentCycleStats :one
 SELECT
     (SELECT COUNT(*) FROM document_cycle_catalogs WHERE is_active)::BIGINT AS active_catalogs,
@@ -560,21 +652,31 @@ SELECT
           AND reminder_date <= CURRENT_DATE
           AND due_date >= CURRENT_DATE
     )::BIGINT AS due_soon_obligations,
-    COUNT(*) FILTER (WHERE responsible_employee_id IS NULL)::BIGINT AS no_pic_obligations
+    COUNT(*) FILTER (WHERE responsible_employee_id IS NULL)::BIGINT AS no_pic_obligations,
+    COUNT(*) FILTER (WHERE archive_document_id IS NOT NULL)::BIGINT AS linked_archive_obligations,
+    COUNT(*) FILTER (WHERE evidence_item_id IS NOT NULL)::BIGINT AS linked_evidence_obligations,
+    COUNT(*) FILTER (WHERE governance_document_id IS NOT NULL)::BIGINT AS linked_governance_document_obligations,
+    COUNT(*) FILTER (WHERE compliance_action_id IS NOT NULL)::BIGINT AS linked_compliance_action_obligations,
+    COUNT(*) FILTER (WHERE external_system <> '')::BIGINT AS external_tracker_obligations
 FROM document_cycle_obligations
 WHERE $1::INT = 0 OR period_year = $1::INT
 `
 
 type GetDocumentCycleStatsRow struct {
-	ActiveCatalogs                 int64 `json:"active_catalogs"`
-	TotalObligations               int64 `json:"total_obligations"`
-	NotStartedObligations          int64 `json:"not_started_obligations"`
-	DraftObligations               int64 `json:"draft_obligations"`
-	WaitingVerificationObligations int64 `json:"waiting_verification_obligations"`
-	CompletedObligations           int64 `json:"completed_obligations"`
-	OverdueObligations             int64 `json:"overdue_obligations"`
-	DueSoonObligations             int64 `json:"due_soon_obligations"`
-	NoPicObligations               int64 `json:"no_pic_obligations"`
+	ActiveCatalogs                      int64 `json:"active_catalogs"`
+	TotalObligations                    int64 `json:"total_obligations"`
+	NotStartedObligations               int64 `json:"not_started_obligations"`
+	DraftObligations                    int64 `json:"draft_obligations"`
+	WaitingVerificationObligations      int64 `json:"waiting_verification_obligations"`
+	CompletedObligations                int64 `json:"completed_obligations"`
+	OverdueObligations                  int64 `json:"overdue_obligations"`
+	DueSoonObligations                  int64 `json:"due_soon_obligations"`
+	NoPicObligations                    int64 `json:"no_pic_obligations"`
+	LinkedArchiveObligations            int64 `json:"linked_archive_obligations"`
+	LinkedEvidenceObligations           int64 `json:"linked_evidence_obligations"`
+	LinkedGovernanceDocumentObligations int64 `json:"linked_governance_document_obligations"`
+	LinkedComplianceActionObligations   int64 `json:"linked_compliance_action_obligations"`
+	ExternalTrackerObligations          int64 `json:"external_tracker_obligations"`
 }
 
 func (q *Queries) GetDocumentCycleStats(ctx context.Context, periodYear int32) (GetDocumentCycleStatsRow, error) {
@@ -590,6 +692,11 @@ func (q *Queries) GetDocumentCycleStats(ctx context.Context, periodYear int32) (
 		&i.OverdueObligations,
 		&i.DueSoonObligations,
 		&i.NoPicObligations,
+		&i.LinkedArchiveObligations,
+		&i.LinkedEvidenceObligations,
+		&i.LinkedGovernanceDocumentObligations,
+		&i.LinkedComplianceActionObligations,
+		&i.ExternalTrackerObligations,
 	)
 	return i, err
 }
@@ -600,6 +707,8 @@ SELECT
     c.code,
     c.title,
     c.frequency,
+    c.domain_area,
+    c.external_system,
     c.snp_standard,
     c.regulation_ref,
     c.default_owner_unit_id,
@@ -646,6 +755,8 @@ type ListDocumentCycleCatalogsRow struct {
 	Code                           string             `json:"code"`
 	Title                          string             `json:"title"`
 	Frequency                      string             `json:"frequency"`
+	DomainArea                     string             `json:"domain_area"`
+	ExternalSystem                 string             `json:"external_system"`
 	SnpStandard                    string             `json:"snp_standard"`
 	RegulationRef                  string             `json:"regulation_ref"`
 	DefaultOwnerUnitID             pgtype.UUID        `json:"default_owner_unit_id"`
@@ -679,6 +790,8 @@ func (q *Queries) ListDocumentCycleCatalogs(ctx context.Context, arg ListDocumen
 			&i.Code,
 			&i.Title,
 			&i.Frequency,
+			&i.DomainArea,
+			&i.ExternalSystem,
 			&i.SnpStandard,
 			&i.RegulationRef,
 			&i.DefaultOwnerUnitID,
@@ -707,6 +820,65 @@ func (q *Queries) ListDocumentCycleCatalogs(ctx context.Context, arg ListDocumen
 	return items, nil
 }
 
+const listDocumentCycleEventsByObligation = `-- name: ListDocumentCycleEventsByObligation :many
+SELECT
+    e.id,
+    e.obligation_id,
+    e.event_type,
+    e.from_status,
+    e.to_status,
+    e.notes,
+    e.actor_user_id,
+    e.created_at,
+    COALESCE(u.username, '')::TEXT AS actor_username
+FROM document_cycle_events e
+LEFT JOIN users u ON u.id = e.actor_user_id
+WHERE e.obligation_id = $1
+ORDER BY e.created_at DESC
+`
+
+type ListDocumentCycleEventsByObligationRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	ObligationID  pgtype.UUID        `json:"obligation_id"`
+	EventType     string             `json:"event_type"`
+	FromStatus    string             `json:"from_status"`
+	ToStatus      string             `json:"to_status"`
+	Notes         string             `json:"notes"`
+	ActorUserID   pgtype.UUID        `json:"actor_user_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ActorUsername string             `json:"actor_username"`
+}
+
+func (q *Queries) ListDocumentCycleEventsByObligation(ctx context.Context, obligationID pgtype.UUID) ([]ListDocumentCycleEventsByObligationRow, error) {
+	rows, err := q.db.Query(ctx, listDocumentCycleEventsByObligation, obligationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDocumentCycleEventsByObligationRow{}
+	for rows.Next() {
+		var i ListDocumentCycleEventsByObligationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ObligationID,
+			&i.EventType,
+			&i.FromStatus,
+			&i.ToStatus,
+			&i.Notes,
+			&i.ActorUserID,
+			&i.CreatedAt,
+			&i.ActorUsername,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDocumentCycleObligations = `-- name: ListDocumentCycleObligations :many
 SELECT
     o.id,
@@ -714,6 +886,8 @@ SELECT
     c.code AS catalog_code,
     c.title AS catalog_title,
     c.frequency,
+    o.domain_area,
+    o.external_system,
     c.snp_standard,
     c.regulation_ref,
     o.period_year,
@@ -733,8 +907,15 @@ SELECT
     o.status,
     o.governance_document_id,
     COALESCE(gd.title, '')::TEXT AS governance_document_title,
+    o.work_plan_item_id,
+    COALESCE(gwpi.activity_code, '')::TEXT AS work_plan_item_code,
+    COALESCE(gwpi.activity_name, '')::TEXT AS work_plan_item_name,
+    o.performance_target_id,
+    COALESCE(gpt.title, '')::TEXT AS performance_target_title,
     o.evidence_item_id,
     COALESCE(ge.title, '')::TEXT AS evidence_item_title,
+    o.compliance_action_id,
+    COALESCE(gca.title, '')::TEXT AS compliance_action_title,
     o.archive_document_id,
     COALESCE(ad.title, '')::TEXT AS archive_document_title,
     o.notes,
@@ -751,7 +932,10 @@ LEFT JOIN governance_units ou ON ou.id = o.owner_unit_id
 LEFT JOIN employees re ON re.id = o.responsible_employee_id
 LEFT JOIN employees ve ON ve.id = o.verifier_employee_id
 LEFT JOIN governance_documents gd ON gd.id = o.governance_document_id
+LEFT JOIN governance_work_plan_items gwpi ON gwpi.id = o.work_plan_item_id
+LEFT JOIN governance_performance_targets gpt ON gpt.id = o.performance_target_id
 LEFT JOIN governance_evidence_items ge ON ge.id = o.evidence_item_id
+LEFT JOIN governance_compliance_actions gca ON gca.id = o.compliance_action_id
 LEFT JOIN archive_documents ad ON ad.id = o.archive_document_id
 WHERE (
     $1::TEXT = '' OR
@@ -764,13 +948,17 @@ WHERE (
 ) AND (
     $3::TEXT = '' OR c.frequency = $3
 ) AND (
-    $4::INT = 0 OR o.period_year = $4::INT
+    $4::TEXT = '' OR o.domain_area = $4
 ) AND (
-    $5::UUID IS NULL OR o.owner_unit_id = $5::UUID
+    $5::TEXT = '' OR o.external_system = $5
 ) AND (
-    $6::UUID IS NULL OR o.responsible_employee_id = $6::UUID
+    $6::INT = 0 OR o.period_year = $6::INT
 ) AND (
-    $7::BOOLEAN = FALSE OR (
+    $7::UUID IS NULL OR o.owner_unit_id = $7::UUID
+) AND (
+    $8::UUID IS NULL OR o.responsible_employee_id = $8::UUID
+) AND (
+    $9::BOOLEAN = FALSE OR (
         o.status <> 'completed'
         AND o.reminder_date <= CURRENT_DATE
     )
@@ -793,6 +981,8 @@ type ListDocumentCycleObligationsParams struct {
 	Search                string      `json:"search"`
 	Status                string      `json:"status"`
 	Frequency             string      `json:"frequency"`
+	DomainArea            string      `json:"domain_area"`
+	ExternalSystem        string      `json:"external_system"`
 	PeriodYear            int32       `json:"period_year"`
 	OwnerUnitID           pgtype.UUID `json:"owner_unit_id"`
 	ResponsibleEmployeeID pgtype.UUID `json:"responsible_employee_id"`
@@ -805,6 +995,8 @@ type ListDocumentCycleObligationsRow struct {
 	CatalogCode             string             `json:"catalog_code"`
 	CatalogTitle            string             `json:"catalog_title"`
 	Frequency               string             `json:"frequency"`
+	DomainArea              string             `json:"domain_area"`
+	ExternalSystem          string             `json:"external_system"`
 	SnpStandard             string             `json:"snp_standard"`
 	RegulationRef           string             `json:"regulation_ref"`
 	PeriodYear              int32              `json:"period_year"`
@@ -824,8 +1016,15 @@ type ListDocumentCycleObligationsRow struct {
 	Status                  string             `json:"status"`
 	GovernanceDocumentID    pgtype.UUID        `json:"governance_document_id"`
 	GovernanceDocumentTitle string             `json:"governance_document_title"`
+	WorkPlanItemID          pgtype.UUID        `json:"work_plan_item_id"`
+	WorkPlanItemCode        string             `json:"work_plan_item_code"`
+	WorkPlanItemName        string             `json:"work_plan_item_name"`
+	PerformanceTargetID     pgtype.UUID        `json:"performance_target_id"`
+	PerformanceTargetTitle  string             `json:"performance_target_title"`
 	EvidenceItemID          pgtype.UUID        `json:"evidence_item_id"`
 	EvidenceItemTitle       string             `json:"evidence_item_title"`
+	ComplianceActionID      pgtype.UUID        `json:"compliance_action_id"`
+	ComplianceActionTitle   string             `json:"compliance_action_title"`
 	ArchiveDocumentID       pgtype.UUID        `json:"archive_document_id"`
 	ArchiveDocumentTitle    string             `json:"archive_document_title"`
 	Notes                   string             `json:"notes"`
@@ -843,6 +1042,8 @@ func (q *Queries) ListDocumentCycleObligations(ctx context.Context, arg ListDocu
 		arg.Search,
 		arg.Status,
 		arg.Frequency,
+		arg.DomainArea,
+		arg.ExternalSystem,
 		arg.PeriodYear,
 		arg.OwnerUnitID,
 		arg.ResponsibleEmployeeID,
@@ -861,6 +1062,8 @@ func (q *Queries) ListDocumentCycleObligations(ctx context.Context, arg ListDocu
 			&i.CatalogCode,
 			&i.CatalogTitle,
 			&i.Frequency,
+			&i.DomainArea,
+			&i.ExternalSystem,
 			&i.SnpStandard,
 			&i.RegulationRef,
 			&i.PeriodYear,
@@ -880,8 +1083,15 @@ func (q *Queries) ListDocumentCycleObligations(ctx context.Context, arg ListDocu
 			&i.Status,
 			&i.GovernanceDocumentID,
 			&i.GovernanceDocumentTitle,
+			&i.WorkPlanItemID,
+			&i.WorkPlanItemCode,
+			&i.WorkPlanItemName,
+			&i.PerformanceTargetID,
+			&i.PerformanceTargetTitle,
 			&i.EvidenceItemID,
 			&i.EvidenceItemTitle,
+			&i.ComplianceActionID,
+			&i.ComplianceActionTitle,
 			&i.ArchiveDocumentID,
 			&i.ArchiveDocumentTitle,
 			&i.Notes,
@@ -908,25 +1118,29 @@ UPDATE document_cycle_catalogs
 SET code = $1,
     title = $2,
     frequency = $3,
-    snp_standard = $4,
-    regulation_ref = $5,
-    default_owner_unit_id = $6,
-    default_responsible_employee_id = $7,
-    default_verifier_employee_id = $8,
-    deadline_days_after_period = $9,
-    reminder_days_before_due = $10,
-    description = $11,
-    is_active = $12,
-    sort_order = $13,
+    domain_area = $4,
+    external_system = $5,
+    snp_standard = $6,
+    regulation_ref = $7,
+    default_owner_unit_id = $8,
+    default_responsible_employee_id = $9,
+    default_verifier_employee_id = $10,
+    deadline_days_after_period = $11,
+    reminder_days_before_due = $12,
+    description = $13,
+    is_active = $14,
+    sort_order = $15,
     updated_at = NOW()
-WHERE id = $14
-RETURNING id, code, title, frequency, snp_standard, regulation_ref, default_owner_unit_id, default_responsible_employee_id, default_verifier_employee_id, deadline_days_after_period, reminder_days_before_due, description, is_active, sort_order, created_at, updated_at
+WHERE id = $16
+RETURNING id, code, title, frequency, snp_standard, regulation_ref, default_owner_unit_id, default_responsible_employee_id, default_verifier_employee_id, deadline_days_after_period, reminder_days_before_due, description, is_active, sort_order, created_at, updated_at, domain_area, external_system
 `
 
 type UpdateDocumentCycleCatalogParams struct {
 	Code                         string      `json:"code"`
 	Title                        string      `json:"title"`
 	Frequency                    string      `json:"frequency"`
+	DomainArea                   string      `json:"domain_area"`
+	ExternalSystem               string      `json:"external_system"`
 	SnpStandard                  string      `json:"snp_standard"`
 	RegulationRef                string      `json:"regulation_ref"`
 	DefaultOwnerUnitID           pgtype.UUID `json:"default_owner_unit_id"`
@@ -945,6 +1159,8 @@ func (q *Queries) UpdateDocumentCycleCatalog(ctx context.Context, arg UpdateDocu
 		arg.Code,
 		arg.Title,
 		arg.Frequency,
+		arg.DomainArea,
+		arg.ExternalSystem,
 		arg.SnpStandard,
 		arg.RegulationRef,
 		arg.DefaultOwnerUnitID,
@@ -975,6 +1191,8 @@ func (q *Queries) UpdateDocumentCycleCatalog(ctx context.Context, arg UpdateDocu
 		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DomainArea,
+		&i.ExternalSystem,
 	)
 	return i, err
 }
@@ -983,27 +1201,40 @@ const updateDocumentCycleObligation = `-- name: UpdateDocumentCycleObligation :o
 UPDATE document_cycle_obligations
 SET due_date = $1,
     reminder_date = $2,
-    owner_unit_id = $3,
-    responsible_employee_id = $4,
-    verifier_employee_id = $5,
-    governance_document_id = $6,
-    evidence_item_id = $7,
-    archive_document_id = $8,
-    notes = $9,
-    verification_notes = $10,
+    domain_area = CASE
+        WHEN $3::TEXT = '' THEN domain_area
+        ELSE $3
+    END,
+    external_system = $4,
+    owner_unit_id = $5,
+    responsible_employee_id = $6,
+    verifier_employee_id = $7,
+    governance_document_id = $8,
+    work_plan_item_id = $9,
+    performance_target_id = $10,
+    evidence_item_id = $11,
+    compliance_action_id = $12,
+    archive_document_id = $13,
+    notes = $14,
+    verification_notes = $15,
     updated_at = NOW()
-WHERE id = $11
-RETURNING id, catalog_id, period_year, period_label, period_start, period_end, due_date, reminder_date, owner_unit_id, responsible_employee_id, verifier_employee_id, status, governance_document_id, evidence_item_id, archive_document_id, notes, verification_notes, completed_at, created_by_user_id, created_at, updated_at
+WHERE id = $16
+RETURNING id, catalog_id, period_year, period_label, period_start, period_end, due_date, reminder_date, owner_unit_id, responsible_employee_id, verifier_employee_id, status, governance_document_id, evidence_item_id, archive_document_id, notes, verification_notes, completed_at, created_by_user_id, created_at, updated_at, domain_area, external_system, work_plan_item_id, performance_target_id, compliance_action_id
 `
 
 type UpdateDocumentCycleObligationParams struct {
 	DueDate               pgtype.Date `json:"due_date"`
 	ReminderDate          pgtype.Date `json:"reminder_date"`
+	DomainArea            string      `json:"domain_area"`
+	ExternalSystem        string      `json:"external_system"`
 	OwnerUnitID           pgtype.UUID `json:"owner_unit_id"`
 	ResponsibleEmployeeID pgtype.UUID `json:"responsible_employee_id"`
 	VerifierEmployeeID    pgtype.UUID `json:"verifier_employee_id"`
 	GovernanceDocumentID  pgtype.UUID `json:"governance_document_id"`
+	WorkPlanItemID        pgtype.UUID `json:"work_plan_item_id"`
+	PerformanceTargetID   pgtype.UUID `json:"performance_target_id"`
 	EvidenceItemID        pgtype.UUID `json:"evidence_item_id"`
+	ComplianceActionID    pgtype.UUID `json:"compliance_action_id"`
 	ArchiveDocumentID     pgtype.UUID `json:"archive_document_id"`
 	Notes                 string      `json:"notes"`
 	VerificationNotes     string      `json:"verification_notes"`
@@ -1014,11 +1245,16 @@ func (q *Queries) UpdateDocumentCycleObligation(ctx context.Context, arg UpdateD
 	row := q.db.QueryRow(ctx, updateDocumentCycleObligation,
 		arg.DueDate,
 		arg.ReminderDate,
+		arg.DomainArea,
+		arg.ExternalSystem,
 		arg.OwnerUnitID,
 		arg.ResponsibleEmployeeID,
 		arg.VerifierEmployeeID,
 		arg.GovernanceDocumentID,
+		arg.WorkPlanItemID,
+		arg.PerformanceTargetID,
 		arg.EvidenceItemID,
+		arg.ComplianceActionID,
 		arg.ArchiveDocumentID,
 		arg.Notes,
 		arg.VerificationNotes,
@@ -1047,6 +1283,11 @@ func (q *Queries) UpdateDocumentCycleObligation(ctx context.Context, arg UpdateD
 		&i.CreatedByUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DomainArea,
+		&i.ExternalSystem,
+		&i.WorkPlanItemID,
+		&i.PerformanceTargetID,
+		&i.ComplianceActionID,
 	)
 	return i, err
 }
@@ -1068,7 +1309,7 @@ SET status = $1,
     END,
     updated_at = NOW()
 WHERE id = $3
-RETURNING id, catalog_id, period_year, period_label, period_start, period_end, due_date, reminder_date, owner_unit_id, responsible_employee_id, verifier_employee_id, status, governance_document_id, evidence_item_id, archive_document_id, notes, verification_notes, completed_at, created_by_user_id, created_at, updated_at
+RETURNING id, catalog_id, period_year, period_label, period_start, period_end, due_date, reminder_date, owner_unit_id, responsible_employee_id, verifier_employee_id, status, governance_document_id, evidence_item_id, archive_document_id, notes, verification_notes, completed_at, created_by_user_id, created_at, updated_at, domain_area, external_system, work_plan_item_id, performance_target_id, compliance_action_id
 `
 
 type UpdateDocumentCycleObligationStatusParams struct {
@@ -1102,6 +1343,11 @@ func (q *Queries) UpdateDocumentCycleObligationStatus(ctx context.Context, arg U
 		&i.CreatedByUserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DomainArea,
+		&i.ExternalSystem,
+		&i.WorkPlanItemID,
+		&i.PerformanceTargetID,
+		&i.ComplianceActionID,
 	)
 	return i, err
 }

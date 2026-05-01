@@ -62,6 +62,8 @@ func (h *DocumentCycle) CreateCatalog(w http.ResponseWriter, r *http.Request) {
 		Code:                         params.Code,
 		Title:                        params.Title,
 		Frequency:                    params.Frequency,
+		DomainArea:                   params.DomainArea,
+		ExternalSystem:               params.ExternalSystem,
 		SnpStandard:                  params.SnpStandard,
 		RegulationRef:                params.RegulationRef,
 		DefaultOwnerUnitID:           params.DefaultOwnerUnitID,
@@ -99,6 +101,8 @@ func (h *DocumentCycle) UpdateCatalog(w http.ResponseWriter, r *http.Request) {
 		Code:                         params.Code,
 		Title:                        params.Title,
 		Frequency:                    params.Frequency,
+		DomainArea:                   params.DomainArea,
+		ExternalSystem:               params.ExternalSystem,
 		SnpStandard:                  params.SnpStandard,
 		RegulationRef:                params.RegulationRef,
 		DefaultOwnerUnitID:           params.DefaultOwnerUnitID,
@@ -153,6 +157,8 @@ func (h *DocumentCycle) ListObligations(w http.ResponseWriter, r *http.Request) 
 		Search:                r.URL.Query().Get("search"),
 		Status:                r.URL.Query().Get("status"),
 		Frequency:             r.URL.Query().Get("frequency"),
+		DomainArea:            r.URL.Query().Get("domain_area"),
+		ExternalSystem:        r.URL.Query().Get("external_system"),
 		PeriodYear:            int32Query(r.URL.Query().Get("period_year")),
 		OwnerUnitID:           ownerUnitID,
 		ResponsibleEmployeeID: responsibleEmployeeID,
@@ -203,6 +209,24 @@ func (h *DocumentCycle) UpdateObligation(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	api.OK(w, row)
+}
+
+func (h *DocumentCycle) ListEvents(w http.ResponseWriter, r *http.Request) {
+	if !governanceAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "id tidak valid")
+		return
+	}
+	data, err := h.svc.ListEvents(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, data)
 }
 
 func (h *DocumentCycle) UpdateObligationStatus(w http.ResponseWriter, r *http.Request) {
@@ -280,6 +304,8 @@ func (h *DocumentCycle) parseCatalogRequest(w http.ResponseWriter, r *http.Reque
 		Code:                         body.Code,
 		Title:                        body.Title,
 		Frequency:                    body.Frequency,
+		DomainArea:                   body.DomainArea,
+		ExternalSystem:               body.ExternalSystem,
 		SnpStandard:                  body.SnpStandard,
 		RegulationRef:                body.RegulationRef,
 		DefaultOwnerUnitID:           defaultOwnerUnitID,
@@ -329,7 +355,22 @@ func (h *DocumentCycle) parseObligationRequest(w http.ResponseWriter, r *http.Re
 		api.BadRequest(w, err.Error())
 		return db.UpdateDocumentCycleObligationParams{}, false
 	}
+	workPlanItemID, err := service.ParseGovernanceOptionalUUID(body.WorkPlanItemID)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return db.UpdateDocumentCycleObligationParams{}, false
+	}
+	performanceTargetID, err := service.ParseGovernanceOptionalUUID(body.PerformanceTargetID)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return db.UpdateDocumentCycleObligationParams{}, false
+	}
 	evidenceItemID, err := service.ParseGovernanceOptionalUUID(body.EvidenceItemID)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return db.UpdateDocumentCycleObligationParams{}, false
+	}
+	complianceActionID, err := service.ParseGovernanceOptionalUUID(body.ComplianceActionID)
 	if err != nil {
 		api.BadRequest(w, err.Error())
 		return db.UpdateDocumentCycleObligationParams{}, false
@@ -343,11 +384,16 @@ func (h *DocumentCycle) parseObligationRequest(w http.ResponseWriter, r *http.Re
 		ID:                    id,
 		DueDate:               dueDate,
 		ReminderDate:          reminderDate,
+		DomainArea:            body.DomainArea,
+		ExternalSystem:        body.ExternalSystem,
 		OwnerUnitID:           ownerUnitID,
 		ResponsibleEmployeeID: responsibleEmployeeID,
 		VerifierEmployeeID:    verifierEmployeeID,
 		GovernanceDocumentID:  governanceDocumentID,
+		WorkPlanItemID:        workPlanItemID,
+		PerformanceTargetID:   performanceTargetID,
 		EvidenceItemID:        evidenceItemID,
+		ComplianceActionID:    complianceActionID,
 		ArchiveDocumentID:     archiveDocumentID,
 		Notes:                 body.Notes,
 		VerificationNotes:     body.VerificationNotes,
@@ -358,6 +404,8 @@ type documentCycleCatalogRequest struct {
 	Code                         string `json:"code"`
 	Title                        string `json:"title"`
 	Frequency                    string `json:"frequency"`
+	DomainArea                   string `json:"domain_area"`
+	ExternalSystem               string `json:"external_system"`
 	SnpStandard                  string `json:"snp_standard"`
 	RegulationRef                string `json:"regulation_ref"`
 	DefaultOwnerUnitID           string `json:"default_owner_unit_id"`
@@ -374,6 +422,8 @@ type documentCycleCatalogParsedRequest struct {
 	Code                         string
 	Title                        string
 	Frequency                    string
+	DomainArea                   string
+	ExternalSystem               string
 	SnpStandard                  string
 	RegulationRef                string
 	DefaultOwnerUnitID           pgtype.UUID
@@ -389,11 +439,16 @@ type documentCycleCatalogParsedRequest struct {
 type documentCycleObligationRequest struct {
 	DueDate               string `json:"due_date"`
 	ReminderDate          string `json:"reminder_date"`
+	DomainArea            string `json:"domain_area"`
+	ExternalSystem        string `json:"external_system"`
 	OwnerUnitID           string `json:"owner_unit_id"`
 	ResponsibleEmployeeID string `json:"responsible_employee_id"`
 	VerifierEmployeeID    string `json:"verifier_employee_id"`
 	GovernanceDocumentID  string `json:"governance_document_id"`
+	WorkPlanItemID        string `json:"work_plan_item_id"`
+	PerformanceTargetID   string `json:"performance_target_id"`
 	EvidenceItemID        string `json:"evidence_item_id"`
+	ComplianceActionID    string `json:"compliance_action_id"`
 	ArchiveDocumentID     string `json:"archive_document_id"`
 	Notes                 string `json:"notes"`
 	VerificationNotes     string `json:"verification_notes"`

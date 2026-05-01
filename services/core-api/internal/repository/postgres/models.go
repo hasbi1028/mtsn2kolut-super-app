@@ -1072,6 +1072,8 @@ type DocumentCycleCatalog struct {
 	SortOrder                    int32              `json:"sort_order"`
 	CreatedAt                    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                    pgtype.Timestamptz `json:"updated_at"`
+	DomainArea                   string             `json:"domain_area"`
+	ExternalSystem               string             `json:"external_system"`
 }
 
 type DocumentCycleEvent struct {
@@ -1107,6 +1109,11 @@ type DocumentCycleObligation struct {
 	CreatedByUserID       pgtype.UUID        `json:"created_by_user_id"`
 	CreatedAt             pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	DomainArea            string             `json:"domain_area"`
+	ExternalSystem        string             `json:"external_system"`
+	WorkPlanItemID        pgtype.UUID        `json:"work_plan_item_id"`
+	PerformanceTargetID   pgtype.UUID        `json:"performance_target_id"`
+	ComplianceActionID    pgtype.UUID        `json:"compliance_action_id"`
 }
 
 type Employee struct {

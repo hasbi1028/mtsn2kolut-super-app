@@ -405,6 +405,7 @@ func main() {
 		r.Get("/api/document-cycles/obligations", documentCycleH.ListObligations)
 		r.Post("/api/document-cycles/obligations/generate-year", documentCycleH.GenerateYear)
 		r.Put("/api/document-cycles/obligations/{id}", documentCycleH.UpdateObligation)
+		r.Get("/api/document-cycles/obligations/{id}/events", documentCycleH.ListEvents)
 		r.Patch("/api/document-cycles/obligations/{id}/status", documentCycleH.UpdateObligationStatus)
 		r.Delete("/api/document-cycles/obligations/{id}", documentCycleH.DeleteObligation)
 

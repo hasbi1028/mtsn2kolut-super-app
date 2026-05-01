@@ -21,8 +21,11 @@ type documentCycleStore interface {
 	GenerateDocumentCycleYearObligations(ctx context.Context, arg db.GenerateDocumentCycleYearObligationsParams) (db.GenerateDocumentCycleYearObligationsRow, error)
 	UpdateDocumentCycleObligation(ctx context.Context, arg db.UpdateDocumentCycleObligationParams) (db.DocumentCycleObligation, error)
 	UpdateDocumentCycleObligationStatus(ctx context.Context, arg db.UpdateDocumentCycleObligationStatusParams) (db.DocumentCycleObligation, error)
+	GetDocumentCycleObligationStatus(ctx context.Context, id pgtype.UUID) (string, error)
+	GetDocumentCycleObligationCompletionReadiness(ctx context.Context, id pgtype.UUID) (db.GetDocumentCycleObligationCompletionReadinessRow, error)
 	DeleteDocumentCycleObligation(ctx context.Context, id pgtype.UUID) error
 	CreateDocumentCycleEvent(ctx context.Context, arg db.CreateDocumentCycleEventParams) (db.DocumentCycleEvent, error)
+	ListDocumentCycleEventsByObligation(ctx context.Context, obligationID pgtype.UUID) ([]db.ListDocumentCycleEventsByObligationRow, error)
 }
 
 type DocumentCycle struct{ q documentCycleStore }
@@ -49,7 +52,7 @@ func (s *DocumentCycle) ListCatalogs(ctx context.Context, search, frequency stri
 
 func (s *DocumentCycle) CreateCatalog(ctx context.Context, arg db.CreateDocumentCycleCatalogParams) (db.DocumentCycleCatalog, error) {
 	arg = normalizeDocumentCycleCatalogCreate(arg)
-	if err := validateDocumentCycleCatalog(arg.Code, arg.Title, arg.Frequency, arg.SnpStandard, arg.DeadlineDaysAfterPeriod, arg.ReminderDaysBeforeDue); err != nil {
+	if err := validateDocumentCycleCatalog(arg.Code, arg.Title, arg.Frequency, arg.DomainArea, arg.ExternalSystem, arg.SnpStandard, arg.DeadlineDaysAfterPeriod, arg.ReminderDaysBeforeDue); err != nil {
 		return db.DocumentCycleCatalog{}, err
 	}
 	return s.q.CreateDocumentCycleCatalog(ctx, arg)
@@ -57,7 +60,7 @@ func (s *DocumentCycle) CreateCatalog(ctx context.Context, arg db.CreateDocument
 
 func (s *DocumentCycle) UpdateCatalog(ctx context.Context, arg db.UpdateDocumentCycleCatalogParams) (db.DocumentCycleCatalog, error) {
 	arg = normalizeDocumentCycleCatalogUpdate(arg)
-	if err := validateDocumentCycleCatalog(arg.Code, arg.Title, arg.Frequency, arg.SnpStandard, arg.DeadlineDaysAfterPeriod, arg.ReminderDaysBeforeDue); err != nil {
+	if err := validateDocumentCycleCatalog(arg.Code, arg.Title, arg.Frequency, arg.DomainArea, arg.ExternalSystem, arg.SnpStandard, arg.DeadlineDaysAfterPeriod, arg.ReminderDaysBeforeDue); err != nil {
 		return db.DocumentCycleCatalog{}, err
 	}
 	return s.q.UpdateDocumentCycleCatalog(ctx, arg)
@@ -71,13 +74,23 @@ func (s *DocumentCycle) ListObligations(ctx context.Context, arg db.ListDocument
 	arg.Search = strings.TrimSpace(arg.Search)
 	arg.Status = normalizeDocumentCycleStatusFilter(arg.Status)
 	arg.Frequency = normalizeDocumentCycleFrequencyFilter(arg.Frequency)
+	arg.DomainArea = normalizeDocumentCycleDomainAreaFilter(arg.DomainArea)
+	arg.ExternalSystem = normalizeDocumentCycleExternalSystemFilter(arg.ExternalSystem)
 	arg.PeriodYear = normalizeDocumentCycleYear(arg.PeriodYear)
 	return s.q.ListDocumentCycleObligations(ctx, arg)
 }
 
 func (s *DocumentCycle) UpdateObligation(ctx context.Context, actorUserID pgtype.UUID, arg db.UpdateDocumentCycleObligationParams) (db.DocumentCycleObligation, error) {
+	arg.DomainArea = normalizeDocumentCycleDomainAreaFilter(arg.DomainArea)
+	arg.ExternalSystem = normalizeDocumentCycleExternalSystem(arg.ExternalSystem)
 	arg.Notes = strings.TrimSpace(arg.Notes)
 	arg.VerificationNotes = strings.TrimSpace(arg.VerificationNotes)
+	if arg.DomainArea != "" && !validDocumentCycleDomainAreas[arg.DomainArea] {
+		return db.DocumentCycleObligation{}, fmt.Errorf("bidang dokumen tidak valid")
+	}
+	if !validDocumentCycleExternalSystems[arg.ExternalSystem] {
+		return db.DocumentCycleObligation{}, fmt.Errorf("sistem eksternal dokumen tidak valid")
+	}
 	if !arg.DueDate.Valid || !arg.ReminderDate.Valid {
 		return db.DocumentCycleObligation{}, fmt.Errorf("tanggal pengingat dan jatuh tempo wajib diisi")
 	}
@@ -103,6 +116,22 @@ func (s *DocumentCycle) UpdateObligationStatus(ctx context.Context, actorUserID 
 	if !validDocumentCycleStatuses[status] {
 		return db.DocumentCycleObligation{}, fmt.Errorf("status dokumen tidak valid")
 	}
+	fromStatus, err := s.q.GetDocumentCycleObligationStatus(ctx, id)
+	if err != nil {
+		return db.DocumentCycleObligation{}, err
+	}
+	if err := validateDocumentCycleStatusTransition(fromStatus, status); err != nil {
+		return db.DocumentCycleObligation{}, err
+	}
+	if status == "completed" {
+		readiness, err := s.q.GetDocumentCycleObligationCompletionReadiness(ctx, id)
+		if err != nil {
+			return db.DocumentCycleObligation{}, err
+		}
+		if err := validateDocumentCycleCompletionReadiness(readiness); err != nil {
+			return db.DocumentCycleObligation{}, err
+		}
+	}
 	row, err := s.q.UpdateDocumentCycleObligationStatus(ctx, db.UpdateDocumentCycleObligationStatusParams{
 		ID:     id,
 		Status: status,
@@ -114,6 +143,7 @@ func (s *DocumentCycle) UpdateObligationStatus(ctx context.Context, actorUserID 
 	_, _ = s.q.CreateDocumentCycleEvent(ctx, db.CreateDocumentCycleEventParams{
 		ObligationID: row.ID,
 		EventType:    "status_changed",
+		FromStatus:   fromStatus,
 		ToStatus:     status,
 		Notes:        notes,
 		ActorUserID:  actorUserID,
@@ -123,6 +153,10 @@ func (s *DocumentCycle) UpdateObligationStatus(ctx context.Context, actorUserID 
 
 func (s *DocumentCycle) DeleteObligation(ctx context.Context, id pgtype.UUID) error {
 	return s.q.DeleteDocumentCycleObligation(ctx, id)
+}
+
+func (s *DocumentCycle) ListEvents(ctx context.Context, obligationID pgtype.UUID) ([]db.ListDocumentCycleEventsByObligationRow, error) {
+	return s.q.ListDocumentCycleEventsByObligation(ctx, obligationID)
 }
 
 func (s *DocumentCycle) GenerateYear(ctx context.Context, actorUserID pgtype.UUID, periodYear int32) (DocumentCycleGenerateResult, error) {
@@ -155,6 +189,8 @@ func normalizeDocumentCycleCatalogCreate(arg db.CreateDocumentCycleCatalogParams
 	arg.Code = strings.ToUpper(strings.TrimSpace(arg.Code))
 	arg.Title = strings.TrimSpace(arg.Title)
 	arg.Frequency = normalizeDocumentCycleFrequency(arg.Frequency)
+	arg.DomainArea = normalizeDocumentCycleDomainArea(arg.DomainArea)
+	arg.ExternalSystem = normalizeDocumentCycleExternalSystem(arg.ExternalSystem)
 	arg.SnpStandard = normalizeSNPStandard(arg.SnpStandard)
 	arg.RegulationRef = strings.TrimSpace(arg.RegulationRef)
 	arg.Description = strings.TrimSpace(arg.Description)
@@ -165,6 +201,8 @@ func normalizeDocumentCycleCatalogUpdate(arg db.UpdateDocumentCycleCatalogParams
 	arg.Code = strings.ToUpper(strings.TrimSpace(arg.Code))
 	arg.Title = strings.TrimSpace(arg.Title)
 	arg.Frequency = normalizeDocumentCycleFrequency(arg.Frequency)
+	arg.DomainArea = normalizeDocumentCycleDomainArea(arg.DomainArea)
+	arg.ExternalSystem = normalizeDocumentCycleExternalSystem(arg.ExternalSystem)
 	arg.SnpStandard = normalizeSNPStandard(arg.SnpStandard)
 	arg.RegulationRef = strings.TrimSpace(arg.RegulationRef)
 	arg.Description = strings.TrimSpace(arg.Description)
@@ -183,6 +221,22 @@ func normalizeDocumentCycleFrequencyFilter(value string) string {
 	return frequency
 }
 
+func normalizeDocumentCycleDomainArea(value string) string {
+	return normalizeGovernanceText(strings.ToLower(strings.TrimSpace(value)), "governance")
+}
+
+func normalizeDocumentCycleDomainAreaFilter(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func normalizeDocumentCycleExternalSystem(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func normalizeDocumentCycleExternalSystemFilter(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
 func normalizeDocumentCycleStatus(value string) string {
 	return normalizeGovernanceText(strings.ToLower(strings.TrimSpace(value)), "not_started")
 }
@@ -195,7 +249,7 @@ func normalizeDocumentCycleStatusFilter(value string) string {
 	return status
 }
 
-func validateDocumentCycleCatalog(code, title, frequency, snpStandard string, deadlineDays, reminderDays int32) error {
+func validateDocumentCycleCatalog(code, title, frequency, domainArea, externalSystem, snpStandard string, deadlineDays, reminderDays int32) error {
 	if strings.TrimSpace(code) == "" {
 		return fmt.Errorf("kode dokumen wajib diisi")
 	}
@@ -204,6 +258,12 @@ func validateDocumentCycleCatalog(code, title, frequency, snpStandard string, de
 	}
 	if !validDocumentCycleFrequencies[frequency] {
 		return fmt.Errorf("frekuensi dokumen tidak valid")
+	}
+	if !validDocumentCycleDomainAreas[domainArea] {
+		return fmt.Errorf("bidang dokumen tidak valid")
+	}
+	if !validDocumentCycleExternalSystems[externalSystem] {
+		return fmt.Errorf("sistem eksternal dokumen tidak valid")
 	}
 	if !validGovernanceSNPStandards[snpStandard] {
 		return fmt.Errorf("standar SNP tidak valid")
@@ -217,6 +277,59 @@ func validateDocumentCycleCatalog(code, title, frequency, snpStandard string, de
 	return nil
 }
 
+func validateDocumentCycleCompletionReadiness(row db.GetDocumentCycleObligationCompletionReadinessRow) error {
+	var missing []string
+	if !row.ResponsibleEmployeeID.Valid {
+		missing = append(missing, "PIC penyusun")
+	}
+	if !row.VerifierEmployeeID.Valid {
+		missing = append(missing, "verifikator")
+	}
+	if !row.ArchiveDocumentID.Valid {
+		missing = append(missing, "arsip digital")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("dokumen belum siap diselesaikan: lengkapi %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func validateDocumentCycleStatusTransition(fromStatus, toStatus string) error {
+	if fromStatus == toStatus {
+		return nil
+	}
+	allowed := false
+	switch fromStatus {
+	case "not_started":
+		allowed = toStatus == "draft"
+	case "draft":
+		allowed = toStatus == "not_started" || toStatus == "waiting_verification"
+	case "waiting_verification":
+		allowed = toStatus == "draft" || toStatus == "completed"
+	case "completed":
+		allowed = toStatus == "draft"
+	}
+	if !allowed {
+		return fmt.Errorf("alur status dokumen tidak valid: %s -> %s", documentCycleStatusLabel(fromStatus), documentCycleStatusLabel(toStatus))
+	}
+	return nil
+}
+
+func documentCycleStatusLabel(status string) string {
+	switch status {
+	case "not_started":
+		return "Belum Mulai"
+	case "draft":
+		return "Sedang Dibuat"
+	case "waiting_verification":
+		return "Menunggu Verifikasi"
+	case "completed":
+		return "Selesai"
+	default:
+		return status
+	}
+}
+
 var validDocumentCycleFrequencies = map[string]bool{
 	"daily":     true,
 	"weekly":    true,
@@ -226,6 +339,29 @@ var validDocumentCycleFrequencies = map[string]bool{
 	"annual":    true,
 	"four_year": true,
 	"five_year": true,
+}
+
+var validDocumentCycleDomainAreas = map[string]bool{
+	"tu":         true,
+	"kesiswaan":  true,
+	"kurikulum":  true,
+	"sarpras":    true,
+	"governance": true,
+	"keuangan":   true,
+	"eksternal":  true,
+}
+
+var validDocumentCycleExternalSystems = map[string]bool{
+	"":          true,
+	"skp_bkn":   true,
+	"emis":      true,
+	"sipka":     true,
+	"simak_bmn": true,
+	"rkam_bos":  true,
+	"perkin":    true,
+	"iku":       true,
+	"lakip_lkj": true,
+	"edm":       true,
 }
 
 var validDocumentCycleStatuses = map[string]bool{
