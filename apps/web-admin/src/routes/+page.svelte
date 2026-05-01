@@ -84,6 +84,19 @@
 		timetable: Array<TimetableEntry & { student_id: string; student_name: string }>;
 	}
 
+	interface CbtSessionSummary {
+		status: string;
+		package_title?: string;
+	}
+
+	interface EssayQueueItem {
+		id?: string;
+	}
+
+	interface StudentSummary {
+		id?: string;
+	}
+
 	interface DashboardPayload {
 		academicStats: AcademicStats | null;
 		guruStats: GuruStats | null;
@@ -101,6 +114,28 @@
 	const isParent = $derived(roles.includes('ortu'));
 	const isAdmin = $derived(roles.includes('admin'));
 	const isStaff = $derived(roles.includes('staf'));
+	const dashboardEyebrow = $derived.by(() => {
+		if (isGuru) return 'Ruang Kerja Guru';
+		if (isSiswa) return 'Portal Siswa';
+		if (isParent) return 'Portal Orang Tua';
+		if (isStaff) return 'Ruang Kerja Staf';
+		return 'Pusat Operasi Madrasah';
+	});
+	const dashboardTitle = $derived.by(() => {
+		if (isGuru) return 'Dasbor Guru';
+		if (isSiswa) return 'Dasbor Siswa';
+		if (isParent) return 'Dasbor Orang Tua';
+		if (isStaff) return 'Dasbor Staf';
+		return 'Dasbor Utama';
+	});
+	const dashboardDescription = $derived.by(() => {
+		if (isGuru) return 'Ringkasan kelas, aktivitas CBT, jadwal mengajar, dan pekerjaan koreksi yang perlu diperhatikan hari ini.';
+		if (isSiswa) return 'Lihat identitas akademik, sesi ujian yang terdaftar, jadwal belajar, dan informasi wali yang terhubung.';
+		if (isParent) return 'Pantau data putra-putri yang terhubung, jadwal anak, dan informasi dasar wali dari satu tempat.';
+		if (isStaff) return 'Akses cepat ke layanan operasional sekolah, dokumen, arsip, perpustakaan, dan data akademik pendukung.';
+		return 'Ringkasan akademik dan operasional MTs Negeri 2 Kolaka Utara untuk pengambilan keputusan harian.';
+	});
+	const dashboardRoleLabel = $derived(roles.length > 0 ? roles.join(' / ') : 'pengguna');
 
 	function parseData<T>(raw: unknown): T | null {
 		if (!raw || typeof raw !== 'object') return null;
@@ -153,9 +188,9 @@
 	async function loadDashboard(): Promise<DashboardPayload> {
 		if (isGuru) {
 			const [sessions, essays, students, timetable] = await Promise.all([
-				fetchJSON<any[]>('/api/cbt/sessions'),
-				fetchJSON<any[]>('/api/cbt/sessions/my-essays'),
-				fetchJSON<any[]>('/api/students'),
+				fetchJSON<CbtSessionSummary[]>('/api/cbt/sessions'),
+				fetchJSON<EssayQueueItem[]>('/api/cbt/sessions/my-essays'),
+				fetchJSON<StudentSummary[]>('/api/students'),
 				fetchJSON<{ timetable: TimetableEntry[] }>('/api/portal/guru/timetable'),
 			]);
 			const activeSessions = sessions.filter((session) => session.status === 'active' || session.status === 'scheduled');
@@ -247,27 +282,32 @@
 {#if !data.user}
 	<PublicHome home={data.publicHome} />
 {:else}
-<div class="space-y-6">
-	<div>
-		{#if isGuru}
-			<h1 class="text-2xl font-semibold text-slate-800">Dasbor Guru</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Ringkasan kelas, aktivitas CBT, dan pekerjaan koreksi yang perlu diperhatikan hari ini.</p>
-		{:else if isSiswa}
-			<h1 class="text-2xl font-semibold text-slate-800">Dasbor Siswa</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Lihat identitas akademik, sesi ujian yang terdaftar, dan informasi wali yang terhubung.</p>
-		{:else if isParent}
-			<h1 class="text-2xl font-semibold text-slate-800">Dasbor Orang Tua</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Pantau data putra-putri yang terhubung dan informasi dasar wali dari satu tempat.</p>
-		{:else if isStaff}
-			<h1 class="text-2xl font-semibold text-slate-800">Dasbor Staf</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Akses cepat ke data operasional yang paling sering dipakai untuk layanan sekolah.</p>
-		{:else}
-			<h1 class="text-2xl font-semibold text-slate-800">Dasbor Utama</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Ringkasan akademik dan operasional MTs Negeri 2 Kolaka Utara.</p>
-		{/if}
-	</div>
+	<div class="space-y-6">
+		<div class="overflow-hidden rounded-[1.75rem] border border-emerald-100 bg-[linear-gradient(135deg,_#f0fdf4_0%,_#ffffff_52%,_#fff7ed_100%)] shadow-sm">
+			<div class="grid gap-5 p-5 md:grid-cols-[1fr_auto] md:p-6">
+				<div>
+					<p class="text-xs font-semibold uppercase tracking-[0.26em] text-emerald-700">{dashboardEyebrow}</p>
+					<h1 class="mt-3 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">{dashboardTitle}</h1>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{dashboardDescription}</p>
+					<div class="mt-4 flex flex-wrap gap-2">
+						<Badge class="border-emerald-200 bg-emerald-50 text-emerald-800">Role: {dashboardRoleLabel}</Badge>
+						<Badge variant="outline">MTsN 2 Kolaka Utara</Badge>
+						<Badge variant="outline">WITA</Badge>
+					</div>
+				</div>
+				<div class="flex items-end md:min-w-48 md:justify-end">
+					<LoadingButton
+						variant="outline"
+						loading={dashboardRefreshBusy}
+						loadingLabel="Memuat..."
+						onclick={() => void retryDashboard()}
+						label="Refresh Dashboard"
+					/>
+				</div>
+			</div>
+		</div>
 
-	<AsyncContent promise={dashboardPromise} onerror={handleDashboardRenderError}>
+		<AsyncContent promise={dashboardPromise} onerror={handleDashboardRenderError}>
 		{#snippet pending()}
 			{#if isSiswa}
 				<div class="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
