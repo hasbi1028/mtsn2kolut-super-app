@@ -292,6 +292,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Portal timetable page — route `/jadwal` sekarang memberi tampilan penuh untuk guru, siswa, dan orang tua di luar card dashboard ringkas
 - [x] Portal timetable export — route `/jadwal` sekarang mendukung ekspor CSV sesuai konteks guru, siswa, dan orang tua tanpa kontrak backend baru
 - [x] Portal timetable day filter — route `/jadwal` sekarang bisa difokuskan ke hari tertentu dan ekspor mengikuti filter aktif
+- [x] Portal timetable guru filters — route `/jadwal` sekarang punya filter kelas dan mapel ringan untuk guru agar slot mengajar lebih cepat ditriase
 
 ### Sprint 13 — Inventory & Asset Management
 ### Sprint 14 — Fee & Payment Management

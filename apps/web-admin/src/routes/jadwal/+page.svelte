@@ -50,6 +50,8 @@
 	let parentPortal = $state<ParentPortalData | null>(null);
 	let guruTimetable = $state<TimetableEntry[]>([]);
 	let selectedDay = $state('all');
+	let selectedGuruClass = $state('all');
+	let selectedGuruSubject = $state('all');
 
 	const roles = $derived(data.user?.roles || (data.user?.role ? [data.user.role] : []));
 	const isGuru = $derived(roles.includes('guru'));
@@ -108,7 +110,22 @@
 		return items.filter((item) => item.day_of_week === day);
 	}
 
-	const visibleGuruTimetable = $derived.by(() => applyDayFilter(guruTimetable));
+	const guruClassOptions = $derived.by(() =>
+		Array.from(new Map(guruTimetable.map((slot) => [slot.class_code, { code: slot.class_code, name: slot.class_name }])).values())
+	);
+
+	const guruSubjectOptions = $derived.by(() =>
+		Array.from(new Map(guruTimetable.map((slot) => [slot.subject_code, { code: slot.subject_code, name: slot.subject_name }])).values())
+	);
+
+	const visibleGuruTimetable = $derived.by(() => {
+		const dayFiltered = applyDayFilter(guruTimetable);
+		return dayFiltered.filter((slot) => {
+			if (selectedGuruClass !== 'all' && slot.class_code !== selectedGuruClass) return false;
+			if (selectedGuruSubject !== 'all' && slot.subject_code !== selectedGuruSubject) return false;
+			return true;
+		});
+	});
 	const visibleStudentTimetable = $derived.by(() => applyDayFilter(studentPortal?.timetable ?? []));
 	const visibleParentTimetable = $derived.by(() => applyDayFilter(parentPortal?.timetable ?? []));
 
@@ -254,14 +271,36 @@
 				<p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Filter Hari</p>
 				<p class="mt-1 text-sm text-slate-500">Fokuskan tampilan dan ekspor ke satu hari tertentu bila diperlukan.</p>
 			</div>
-			<div class="w-full sm:w-56">
-				<label for="day-filter" class="mb-1 block text-xs font-medium text-slate-600">Hari</label>
-				<select id="day-filter" bind:value={selectedDay} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-					<option value="all">Semua Hari</option>
-					{#each Object.entries(dayLabels) as [day, label] (`day-option-${day}`)}
-						<option value={day}>{label}</option>
-					{/each}
-				</select>
+			<div class="grid w-full gap-3 sm:w-auto sm:grid-cols-2 lg:grid-cols-3">
+				<div class="w-full sm:w-56">
+					<label for="day-filter" class="mb-1 block text-xs font-medium text-slate-600">Hari</label>
+					<select id="day-filter" bind:value={selectedDay} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+						<option value="all">Semua Hari</option>
+						{#each Object.entries(dayLabels) as [day, label] (`day-option-${day}`)}
+							<option value={day}>{label}</option>
+						{/each}
+					</select>
+				</div>
+				{#if isGuru}
+					<div class="w-full sm:w-56">
+						<label for="guru-class-filter" class="mb-1 block text-xs font-medium text-slate-600">Kelas</label>
+						<select id="guru-class-filter" bind:value={selectedGuruClass} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+							<option value="all">Semua Kelas</option>
+							{#each guruClassOptions as option (option.code)}
+								<option value={option.code}>{option.name}</option>
+							{/each}
+						</select>
+					</div>
+					<div class="w-full sm:w-56">
+						<label for="guru-subject-filter" class="mb-1 block text-xs font-medium text-slate-600">Mapel</label>
+						<select id="guru-subject-filter" bind:value={selectedGuruSubject} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+							<option value="all">Semua Mapel</option>
+							{#each guruSubjectOptions as option (option.code)}
+								<option value={option.code}>{option.name}</option>
+							{/each}
+						</select>
+					</div>
+				{/if}
 			</div>
 		</Card.Content>
 	</Card.Root>
