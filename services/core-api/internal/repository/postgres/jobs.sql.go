@@ -410,3 +410,30 @@ func (q *Queries) ListJobsByStatus(ctx context.Context, arg ListJobsByStatusPara
 	}
 	return items, nil
 }
+
+const recoverStaleRunningJobs = `-- name: RecoverStaleRunningJobs :one
+WITH updated AS (
+  UPDATE jobs
+  SET status        = 'failed',
+      error_message = 'Job running melewati batas waktu pemulihan; akan dicoba ulang jika jatah percobaan masih ada.',
+      claimed_by    = '',
+      claimed_at    = NULL,
+      next_retry_at = CASE
+        WHEN attempts < max_attempts THEN NOW()
+        ELSE NULL
+      END,
+      updated_at    = NOW()
+  WHERE status = 'running'
+    AND claimed_at IS NOT NULL
+    AND claimed_at < NOW() - ($1::INT || ' seconds')::INTERVAL
+  RETURNING 1
+)
+SELECT COUNT(*)::BIGINT FROM updated
+`
+
+func (q *Queries) RecoverStaleRunningJobs(ctx context.Context, staleAfterSeconds int32) (int64, error) {
+	row := q.db.QueryRow(ctx, recoverStaleRunningJobs, staleAfterSeconds)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}

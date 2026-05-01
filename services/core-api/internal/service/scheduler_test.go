@@ -64,6 +64,8 @@ type fakeJobRunner struct {
 	runTypes    []string
 	createCalls []createCall
 	createErr   error
+	recovered   int64
+	recoverErr  error
 }
 
 func (f *fakeJobRunner) RunAll(ctx context.Context, runType string, maxAttempts int32) (inserted, skipped int, err error) {
@@ -96,6 +98,10 @@ func (f *fakeJobRunner) CreateWithDelay(_ context.Context, employeeID pgtype.UUI
 	return db.Job{}, nil
 }
 
+func (f *fakeJobRunner) RecoverStaleRunning(_ context.Context, _ time.Duration) (int64, error) {
+	return f.recovered, f.recoverErr
+}
+
 func TestSchedulerTickProcessesClaimedSchedules(t *testing.T) {
 	store := &fakeSchedulerStore{
 		settings: map[string]string{"default_max_attempts": "4"},
@@ -126,6 +132,24 @@ func TestSchedulerTickProcessesClaimedSchedules(t *testing.T) {
 	}
 	if store.lastClaimRunTime == "" || !store.lastClaimValid {
 		t.Fatalf("ClaimDueSchedules not called with runtime/date")
+	}
+}
+
+func TestSchedulerTickRecoversStaleRunningJobsBeforeScheduleClaim(t *testing.T) {
+	store := &fakeSchedulerStore{settings: map[string]string{}}
+	jobs := &fakeJobRunner{recoverErr: errors.New("recover failed")}
+	svc := &PusakaScheduler{
+		store: store,
+		jobs:  jobs,
+		loc:   time.FixedZone("WITA", 8*60*60),
+	}
+
+	_, err := svc.Tick(context.Background(), time.Date(2026, 4, 28, 7, 5, 0, 0, time.UTC))
+	if err == nil || err.Error() != "recover failed" {
+		t.Fatalf("Tick() error = %v, want recover failed", err)
+	}
+	if store.lastClaimRunTime != "" {
+		t.Fatalf("ClaimDueSchedules ran before stale recovery succeeded")
 	}
 }
 

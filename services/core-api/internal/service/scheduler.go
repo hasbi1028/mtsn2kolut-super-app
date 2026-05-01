@@ -31,6 +31,7 @@ type pusakaSchedulerJobRunner interface {
 	RunAll(ctx context.Context, runType string, maxAttempts int32) (inserted, skipped int, err error)
 	Create(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32) (db.Job, error)
 	CreateWithDelay(ctx context.Context, employeeID pgtype.UUID, runType string, maxAttempts int32, notBefore pgtype.Timestamptz) (db.Job, error)
+	RecoverStaleRunning(ctx context.Context, olderThan time.Duration) (int64, error)
 }
 
 type PusakaScheduler struct {
@@ -98,6 +99,10 @@ func (s *PusakaScheduler) Tick(ctx context.Context, now time.Time) (PusakaSchedu
 	claimParams := db.ClaimDueSchedulesParams{
 		LastEnqueuedForDate: today,
 		RunTime:             localNow.Format("15:04"),
+	}
+
+	if _, err := s.jobs.RecoverStaleRunning(ctx, defaultRunningJobStaleAfter); err != nil {
+		return PusakaSchedulerResult{}, err
 	}
 
 	schedules, err := s.store.ClaimDueSchedules(ctx, claimParams)

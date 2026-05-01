@@ -32,7 +32,7 @@ func tuAccessAllowed(r *http.Request) bool {
 		}
 		return false
 	}
-	return true
+	return false
 }
 
 func tuEmployeeID(r *http.Request) pgtype.UUID {

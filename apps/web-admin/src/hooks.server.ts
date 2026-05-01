@@ -45,6 +45,19 @@ const KESISWAAN_PREFIXES = [
 	'/api/kesiswaan',
 ];
 
+const STAFF_OPERATION_PREFIXES = [
+	'/document-cycles',
+	'/api/document-cycles',
+	'/governance',
+	'/api/governance',
+	'/tu',
+	'/api/tu',
+	'/library',
+	'/api/library',
+	'/inventory',
+	'/api/inventory',
+];
+
 function isPublicPath(pathname: string) {
 	if (PUBLIC_EXACT_PATHS.has(pathname)) return true;
 	return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
@@ -84,7 +97,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Role gate: check if user has admin role in roles array
 	if (event.locals.user) {
-		const roles = event.locals.user.roles || [];
+		const roles = event.locals.user.roles ?? (event.locals.user.role ? [event.locals.user.role] : []);
 		const isAdmin = roles.includes('admin');
 		
 		if (!isAdmin) {
@@ -92,6 +105,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 			if (isAdminPath) {
 				if (event.url.pathname.startsWith('/api/')) {
 					throw error(403, 'forbidden: admin role required');
+				}
+				throw redirect(302, '/');
+			}
+		}
+
+		const isStaffOperationPath = STAFF_OPERATION_PREFIXES.some((p) => event.url.pathname.startsWith(p));
+		if (isStaffOperationPath) {
+			const allowed = isAdmin || roles.includes('staf');
+			if (!allowed) {
+				if (event.url.pathname.startsWith('/api/')) {
+					throw error(403, 'forbidden: staf role required');
 				}
 				throw redirect(302, '/');
 			}

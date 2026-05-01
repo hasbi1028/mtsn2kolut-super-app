@@ -11,6 +11,34 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const canReadKesiswaanStudentPhoto = `-- name: CanReadKesiswaanStudentPhoto :one
+SELECT EXISTS (
+    SELECT 1
+    FROM students s
+    WHERE s.photo_url = $1::TEXT
+      AND (
+          $2::UUID IS NULL OR EXISTS (
+              SELECT 1
+              FROM class_subject_assignments csa
+              WHERE csa.class_id = s.class_id
+                AND csa.teacher_employee_id = $2::UUID
+          )
+      )
+)::BOOLEAN AS can_read
+`
+
+type CanReadKesiswaanStudentPhotoParams struct {
+	PhotoUrl          string      `json:"photo_url"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+}
+
+func (q *Queries) CanReadKesiswaanStudentPhoto(ctx context.Context, arg CanReadKesiswaanStudentPhotoParams) (bool, error) {
+	row := q.db.QueryRow(ctx, canReadKesiswaanStudentPhoto, arg.PhotoUrl, arg.TeacherEmployeeID)
+	var can_read bool
+	err := row.Scan(&can_read)
+	return can_read, err
+}
+
 const createCounselingSession = `-- name: CreateCounselingSession :one
 INSERT INTO counseling_sessions (
     student_id, session_date, topic, summary, follow_up, status,

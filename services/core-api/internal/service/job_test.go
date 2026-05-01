@@ -16,6 +16,9 @@ type fakeJobStore struct {
 	activeEmployees []db.ListActiveEmployeesRow
 	createResults   []error
 	createCalls     int
+	recoverCalls    int
+	recoverErr      error
+	claimCalls      int
 }
 
 func (f *fakeJobStore) ListJobsByStatus(ctx context.Context, arg db.ListJobsByStatusParams) ([]db.ListJobsByStatusRow, error) {
@@ -55,7 +58,13 @@ func (f *fakeJobStore) GetJobStats(ctx context.Context) (db.GetJobStatsRow, erro
 }
 
 func (f *fakeJobStore) ClaimJob(ctx context.Context, workerID string) (db.ClaimJobRow, error) {
+	f.claimCalls++
 	return db.ClaimJobRow{}, nil
+}
+
+func (f *fakeJobStore) RecoverStaleRunningJobs(ctx context.Context, staleAfterSeconds int32) (int64, error) {
+	f.recoverCalls++
+	return 0, f.recoverErr
 }
 
 func (f *fakeJobStore) CompleteJob(ctx context.Context, id pgtype.UUID) error {
@@ -124,5 +133,33 @@ func TestJobRunAllReturnsUnexpectedStoreError(t *testing.T) {
 	_, _, err := svc.RunAll(context.Background(), "morning", 3)
 	if err == nil || err.Error() != "db down" {
 		t.Fatalf("RunAll() error = %v, want db down", err)
+	}
+}
+
+func TestJobClaimRecoversStaleRunningBeforeClaim(t *testing.T) {
+	store := &fakeJobStore{}
+	svc := &PusakaJob{q: store}
+
+	if _, err := svc.Claim(context.Background(), "worker-1"); err != nil {
+		t.Fatalf("Claim() error = %v", err)
+	}
+	if store.recoverCalls != 1 {
+		t.Fatalf("RecoverStaleRunningJobs() calls = %d, want 1", store.recoverCalls)
+	}
+	if store.claimCalls != 1 {
+		t.Fatalf("ClaimJob() calls = %d, want 1", store.claimCalls)
+	}
+}
+
+func TestJobClaimStopsWhenStaleRecoveryFails(t *testing.T) {
+	store := &fakeJobStore{recoverErr: errors.New("recover failed")}
+	svc := &PusakaJob{q: store}
+
+	_, err := svc.Claim(context.Background(), "worker-1")
+	if err == nil || err.Error() != "recover failed" {
+		t.Fatalf("Claim() error = %v, want recover failed", err)
+	}
+	if store.claimCalls != 0 {
+		t.Fatalf("ClaimJob() calls = %d, want 0", store.claimCalls)
 	}
 }

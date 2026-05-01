@@ -196,7 +196,17 @@ func (h *Kesiswaan) StudentPhotoFile(w http.ResponseWriter, r *http.Request) {
 		api.Forbidden(w)
 		return
 	}
-	path, ok := h.svc.StudentPhotoPath(chi.URLParam(r, "filename"))
+	filename := chi.URLParam(r, "filename")
+	canRead, err := h.svc.CanReadStudentPhoto(r.Context(), filename, access.teacherEmployeeID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	if !canRead {
+		api.NotFound(w)
+		return
+	}
+	path, ok := h.svc.StudentPhotoPath(filename)
 	if !ok {
 		api.NotFound(w)
 		return

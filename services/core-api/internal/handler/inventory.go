@@ -27,7 +27,15 @@ func inventoryActorUserID(r *http.Request) pgtype.UUID {
 	return uid
 }
 
+func inventoryAccessAllowed(r *http.Request) bool {
+	return libraryAccessAllowed(r)
+}
+
 func (h *Inventory) Stats(w http.ResponseWriter, r *http.Request) {
+	if !inventoryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	data, err := h.svc.Stats(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -37,6 +45,10 @@ func (h *Inventory) Stats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Inventory) ListItems(w http.ResponseWriter, r *http.Request) {
+	if !inventoryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	search := r.URL.Query().Get("search")
 	kategori := r.URL.Query().Get("kategori")
 	kondisi := r.URL.Query().Get("kondisi")
@@ -49,6 +61,10 @@ func (h *Inventory) ListItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Inventory) ListItemEvents(w http.ResponseWriter, r *http.Request) {
+	if !inventoryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -63,6 +79,10 @@ func (h *Inventory) ListItemEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Inventory) CreateItem(w http.ResponseWriter, r *http.Request) {
+	if !inventoryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	var body struct {
 		Kode        string `json:"kode"`
 		Nama        string `json:"nama"`
@@ -99,6 +119,10 @@ func (h *Inventory) CreateItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Inventory) BatchUpdateItems(w http.ResponseWriter, r *http.Request) {
+	if !inventoryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	var body struct {
 		ItemIDs []string `json:"item_ids"`
 		Lokasi  *string  `json:"lokasi"`
@@ -126,6 +150,10 @@ func (h *Inventory) BatchUpdateItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Inventory) UpdateItem(w http.ResponseWriter, r *http.Request) {
+	if !inventoryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -168,6 +196,10 @@ func (h *Inventory) UpdateItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Inventory) DeleteItem(w http.ResponseWriter, r *http.Request) {
+	if !inventoryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")

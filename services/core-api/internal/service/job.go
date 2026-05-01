@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -10,6 +11,8 @@ import (
 	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
+
+const defaultRunningJobStaleAfter = 30 * time.Minute
 
 type PusakaJob struct {
 	q jobStore
@@ -23,6 +26,7 @@ type jobStore interface {
 	CreateJobIfAbsent(ctx context.Context, arg db.CreateJobIfAbsentParams) (db.Job, error)
 	GetJobStats(ctx context.Context) (db.GetJobStatsRow, error)
 	ClaimJob(ctx context.Context, workerID string) (db.ClaimJobRow, error)
+	RecoverStaleRunningJobs(ctx context.Context, staleAfterSeconds int32) (int64, error)
 	CompleteJob(ctx context.Context, id pgtype.UUID) error
 	FailJob(ctx context.Context, arg db.FailJobParams) error
 	GetJob(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error)
@@ -86,7 +90,17 @@ func (s *PusakaJob) Stats(ctx context.Context) (db.GetJobStatsRow, error) {
 	return s.q.GetJobStats(ctx)
 }
 
+func (s *PusakaJob) RecoverStaleRunning(ctx context.Context, olderThan time.Duration) (int64, error) {
+	if olderThan <= 0 {
+		olderThan = defaultRunningJobStaleAfter
+	}
+	return s.q.RecoverStaleRunningJobs(ctx, int32(olderThan.Seconds()))
+}
+
 func (s *PusakaJob) Claim(ctx context.Context, workerID string) (db.ClaimJobRow, error) {
+	if _, err := s.RecoverStaleRunning(ctx, defaultRunningJobStaleAfter); err != nil {
+		return db.ClaimJobRow{}, err
+	}
 	row, err := s.q.ClaimJob(ctx, workerID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return db.ClaimJobRow{}, domain.ErrNoJob

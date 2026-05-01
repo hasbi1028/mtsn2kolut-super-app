@@ -18,6 +18,10 @@ type Library struct{ svc *service.Library }
 func NewLibrary(svc *service.Library) *Library { return &Library{svc: svc} }
 
 func (h *Library) Stats(w http.ResponseWriter, r *http.Request) {
+	if !libraryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	data, err := h.svc.Stats(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -29,6 +33,10 @@ func (h *Library) Stats(w http.ResponseWriter, r *http.Request) {
 // ---- Books ----
 
 func (h *Library) ListBooks(w http.ResponseWriter, r *http.Request) {
+	if !libraryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	search := r.URL.Query().Get("search")
 	kategori := r.URL.Query().Get("kategori")
 	books, err := h.svc.ListBooks(r.Context(), search, kategori)
@@ -40,6 +48,10 @@ func (h *Library) ListBooks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Library) CreateBook(w http.ResponseWriter, r *http.Request) {
+	if !libraryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	var body struct {
 		Kode           string `json:"kode"`
 		Judul          string `json:"judul"`
@@ -78,6 +90,10 @@ func (h *Library) CreateBook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Library) UpdateBook(w http.ResponseWriter, r *http.Request) {
+	if !libraryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -122,6 +138,10 @@ func (h *Library) UpdateBook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Library) DeleteBook(w http.ResponseWriter, r *http.Request) {
+	if !libraryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
@@ -137,6 +157,10 @@ func (h *Library) DeleteBook(w http.ResponseWriter, r *http.Request) {
 // ---- Loans ----
 
 func (h *Library) ListLoans(w http.ResponseWriter, r *http.Request) {
+	if !libraryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	status := r.URL.Query().Get("status")
 	loans, err := h.svc.ListLoans(r.Context(), status)
 	if err != nil {
@@ -147,6 +171,10 @@ func (h *Library) ListLoans(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Library) LoanBook(w http.ResponseWriter, r *http.Request) {
+	if !libraryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	var body struct {
 		BookID     string `json:"book_id"`
 		MemberType string `json:"member_type"`
@@ -169,6 +197,10 @@ func (h *Library) LoanBook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Library) ReturnBook(w http.ResponseWriter, r *http.Request) {
+	if !libraryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	loanID := chi.URLParam(r, "id")
 	loan, err := h.svc.ReturnBook(r.Context(), loanID)
 	if err != nil {
@@ -179,6 +211,10 @@ func (h *Library) ReturnBook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Library) MarkDendaLunas(w http.ResponseWriter, r *http.Request) {
+	if !libraryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	loanID := chi.URLParam(r, "id")
 	loan, err := h.svc.MarkDendaLunas(r.Context(), loanID)
 	if err != nil {
@@ -203,6 +239,5 @@ func libraryAccessAllowed(r *http.Request) bool {
 		}
 		return false
 	}
-	return true
+	return false
 }
-

@@ -23,6 +23,7 @@ type kesiswaanStore interface {
 	ListKesiswaanStudents(ctx context.Context, arg db.ListKesiswaanStudentsParams) ([]db.ListKesiswaanStudentsRow, error)
 	UpdateKesiswaanStudentProfile(ctx context.Context, arg db.UpdateKesiswaanStudentProfileParams) (db.Student, error)
 	UpdateKesiswaanStudentPhoto(ctx context.Context, arg db.UpdateKesiswaanStudentPhotoParams) (db.Student, error)
+	CanReadKesiswaanStudentPhoto(ctx context.Context, arg db.CanReadKesiswaanStudentPhotoParams) (bool, error)
 
 	ListViolationCategories(ctx context.Context, search string) ([]db.ViolationCategory, error)
 	CreateViolationCategory(ctx context.Context, arg db.CreateViolationCategoryParams) (db.ViolationCategory, error)
@@ -185,6 +186,17 @@ func (s *Kesiswaan) StudentPhotoPath(filename string) (string, bool) {
 		return "", false
 	}
 	return filepath.Join(s.photoDir, filename), true
+}
+
+func (s *Kesiswaan) CanReadStudentPhoto(ctx context.Context, filename string, teacherEmployeeID pgtype.UUID) (bool, error) {
+	filename = strings.TrimSpace(filename)
+	if filename == "" || strings.Contains(filename, "/") || strings.Contains(filename, "..") {
+		return false, nil
+	}
+	return s.q.CanReadKesiswaanStudentPhoto(ctx, db.CanReadKesiswaanStudentPhotoParams{
+		PhotoUrl:          "/api/kesiswaan/student-photos/" + filename,
+		TeacherEmployeeID: teacherEmployeeID,
+	})
 }
 
 func (s *Kesiswaan) ListCategories(ctx context.Context, search string) ([]db.ViolationCategory, error) {

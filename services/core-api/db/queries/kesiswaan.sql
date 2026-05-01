@@ -149,6 +149,21 @@ SET photo_url = $2,
 WHERE id = $1
 RETURNING *;
 
+-- name: CanReadKesiswaanStudentPhoto :one
+SELECT EXISTS (
+    SELECT 1
+    FROM students s
+    WHERE s.photo_url = sqlc.arg(photo_url)::TEXT
+      AND (
+          sqlc.arg(teacher_employee_id)::UUID IS NULL OR EXISTS (
+              SELECT 1
+              FROM class_subject_assignments csa
+              WHERE csa.class_id = s.class_id
+                AND csa.teacher_employee_id = sqlc.arg(teacher_employee_id)::UUID
+          )
+      )
+)::BOOLEAN AS can_read;
+
 -- name: ListViolationCategories :many
 SELECT *
 FROM violation_categories

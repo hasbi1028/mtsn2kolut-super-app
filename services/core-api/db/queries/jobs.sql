@@ -65,6 +65,25 @@ SELECT u.id, u.employee_id, u.run_type, u.attempts, u.max_attempts,
 FROM updated u
 JOIN pusaka_accounts pa ON pa.employee_id = u.employee_id;
 
+-- name: RecoverStaleRunningJobs :one
+WITH updated AS (
+  UPDATE jobs
+  SET status        = 'failed',
+      error_message = 'Job running melewati batas waktu pemulihan; akan dicoba ulang jika jatah percobaan masih ada.',
+      claimed_by    = '',
+      claimed_at    = NULL,
+      next_retry_at = CASE
+        WHEN attempts < max_attempts THEN NOW()
+        ELSE NULL
+      END,
+      updated_at    = NOW()
+  WHERE status = 'running'
+    AND claimed_at IS NOT NULL
+    AND claimed_at < NOW() - (sqlc.arg(stale_after_seconds)::INT || ' seconds')::INTERVAL
+  RETURNING 1
+)
+SELECT COUNT(*)::BIGINT FROM updated;
+
 -- name: CompleteJob :exec
 UPDATE jobs
 SET status        = 'success',

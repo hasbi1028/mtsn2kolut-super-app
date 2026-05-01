@@ -33,7 +33,7 @@ func governanceAccessAllowed(r *http.Request) bool {
 		}
 		return false
 	}
-	return true
+	return false
 }
 
 func (h *Governance) Stats(w http.ResponseWriter, r *http.Request) {
