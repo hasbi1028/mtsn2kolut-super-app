@@ -28,6 +28,9 @@
 	let pusakaAttention = $state(0);
 	let attentionRefreshInFlight = $state<Promise<void> | null>(null);
 	let lastAttentionLoadedAt = $state(0);
+	let remotePrefsLoaded = $state(false);
+	let sidebarPrefsSyncInFlight = $state<Promise<void> | null>(null);
+	let lastSyncedSidebarPrefs = $state('');
 
 	const userRoles = $derived(user?.roles || (user?.role ? [user.role] : []));
 	const resolveNavHref = resolve as unknown as (href: string) => string;
@@ -188,6 +191,17 @@
 		).slice(0, RECENT_LIMIT);
 	}
 
+	function sidebarPrefsPayload() {
+		return {
+			pinned_items: normalizePinnedHrefs(pinnedItems),
+			recent_items: normalizeRecentHrefs(recentItems)
+		};
+	}
+
+	function sidebarPrefsSignature() {
+		return JSON.stringify(sidebarPrefsPayload());
+	}
+
 	function defaultPinnedItemsForUser() {
 		for (const role of userRoles) {
 			const defaults = normalizePinnedHrefs(defaultPinnedByRole[role] ?? []);
@@ -286,9 +300,65 @@
 		}
 	}
 
+	async function loadRemoteSidebarPreferences() {
+		if (typeof window === 'undefined') return;
+		try {
+			const res = await fetch('/api/auth/preferences/sidebar');
+			if (!res.ok) return;
+			const payload = await res.json().catch(() => null);
+			const remotePinned = normalizePinnedHrefs(payload?.data?.pinned_items ?? payload?.pinned_items ?? []);
+			const remoteRecent = normalizeRecentHrefs(payload?.data?.recent_items ?? payload?.recent_items ?? []);
+
+			if (remotePinned.length > 0) {
+				pinnedItems = remotePinned;
+			} else if (pinnedItems.length === 0) {
+				pinnedItems = defaultPinnedItemsForUser();
+			}
+			recentItems = remoteRecent;
+			lastSyncedSidebarPrefs = JSON.stringify({
+				pinned_items: remotePinned,
+				recent_items: remoteRecent
+			});
+		} catch {
+			// Keep local cache as fallback for sidebar personalization.
+		} finally {
+			remotePrefsLoaded = true;
+		}
+	}
+
+	async function syncRemoteSidebarPreferences(force = false) {
+		if (typeof window === 'undefined' || !remotePrefsLoaded) return;
+		const signature = sidebarPrefsSignature();
+		if (!force && signature === lastSyncedSidebarPrefs) return;
+		if (sidebarPrefsSyncInFlight) return sidebarPrefsSyncInFlight;
+
+		sidebarPrefsSyncInFlight = fetch('/api/auth/preferences/sidebar', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: signature
+		})
+			.then(async (res) => {
+				if (!res.ok) {
+					return;
+				}
+				const payload = await res.json().catch(() => null);
+				const syncedPinned = normalizePinnedHrefs(payload?.data?.pinned_items ?? payload?.pinned_items ?? pinnedItems);
+				const syncedRecent = normalizeRecentHrefs(payload?.data?.recent_items ?? payload?.recent_items ?? recentItems);
+				lastSyncedSidebarPrefs = JSON.stringify({
+					pinned_items: syncedPinned,
+					recent_items: syncedRecent
+				});
+			})
+			.finally(() => {
+				sidebarPrefsSyncInFlight = null;
+			});
+		return sidebarPrefsSyncInFlight;
+	}
+
 	onMount(() => {
 		loadPinnedItems();
 		loadRecentItems();
+		void loadRemoteSidebarPreferences();
 		void refreshSidebarAttention(true);
 		const handleKeydown = (event: KeyboardEvent) => {
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -346,6 +416,11 @@
 	$effect(() => {
 		if (!pinnedLoaded || typeof window === 'undefined') return;
 		window.localStorage.setItem(recentStorageKey(), JSON.stringify(normalizeRecentHrefs(recentItems)));
+	});
+
+	$effect(() => {
+		if (!pinnedLoaded || !remotePrefsLoaded || typeof window === 'undefined') return;
+		void syncRemoteSidebarPreferences();
 	});
 
 	async function logout() {

@@ -42,6 +42,8 @@ type authStore interface {
 	ListActiveAuthSessionsByUser(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error)
 	RevokeOwnedAuthSession(ctx context.Context, arg db.RevokeOwnedAuthSessionParams) (int64, error)
 	UpdateOwnedAuthSessionLabel(ctx context.Context, arg db.UpdateOwnedAuthSessionLabelParams) (int64, error)
+	GetUserUIPreferences(ctx context.Context, userID pgtype.UUID) (db.UserUiPreference, error)
+	UpsertUserUIPreferences(ctx context.Context, arg db.UpsertUserUIPreferencesParams) (db.UserUiPreference, error)
 }
 
 type authUserRecord struct {
@@ -66,6 +68,11 @@ type SessionMeta struct {
 	IPAddress   string
 	UserAgent   string
 	DeviceLabel string
+}
+
+type SidebarPreferences struct {
+	PinnedItems []string `json:"pinned_items"`
+	RecentItems []string `json:"recent_items"`
 }
 
 func NewAuth(q *db.Queries, jwtSecret, adminPassword string) *Auth {
@@ -199,6 +206,41 @@ func (s *Auth) UpdateSessionLabel(ctx context.Context, userID, sessionID pgtype.
 	return nil
 }
 
+func (s *Auth) GetSidebarPreferences(ctx context.Context, userID pgtype.UUID) (SidebarPreferences, error) {
+	row, err := s.q.GetUserUIPreferences(ctx, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return SidebarPreferences{}, nil
+		}
+		return SidebarPreferences{}, err
+	}
+	return decodeSidebarPreferences(row.SidebarPinned, row.SidebarRecent)
+}
+
+func (s *Auth) UpdateSidebarPreferences(ctx context.Context, userID pgtype.UUID, prefs SidebarPreferences) (SidebarPreferences, error) {
+	normalized, err := normalizeSidebarPreferences(prefs)
+	if err != nil {
+		return SidebarPreferences{}, err
+	}
+	pinnedJSON, err := json.Marshal(normalized.PinnedItems)
+	if err != nil {
+		return SidebarPreferences{}, err
+	}
+	recentJSON, err := json.Marshal(normalized.RecentItems)
+	if err != nil {
+		return SidebarPreferences{}, err
+	}
+	row, err := s.q.UpsertUserUIPreferences(ctx, db.UpsertUserUIPreferencesParams{
+		UserID:        userID,
+		SidebarPinned: pinnedJSON,
+		SidebarRecent: recentJSON,
+	})
+	if err != nil {
+		return SidebarPreferences{}, err
+	}
+	return decodeSidebarPreferences(row.SidebarPinned, row.SidebarRecent)
+}
+
 func (s *Auth) ChangePassword(ctx context.Context, username, oldPassword, newPassword string) error {
 	row, err := s.q.GetUserByUsername(ctx, username)
 	if err != nil {
@@ -322,6 +364,62 @@ func (s *Auth) issueTokenPair(ctx context.Context, user authUserRecord, meta Ses
 	}
 
 	return domain.TokenPair{AccessToken: accessSigned, RefreshToken: refreshSigned}, nil
+}
+
+func decodeSidebarPreferences(pinnedJSON, recentJSON []byte) (SidebarPreferences, error) {
+	var prefs SidebarPreferences
+	if len(pinnedJSON) > 0 {
+		if err := json.Unmarshal(pinnedJSON, &prefs.PinnedItems); err != nil {
+			return SidebarPreferences{}, err
+		}
+	}
+	if len(recentJSON) > 0 {
+		if err := json.Unmarshal(recentJSON, &prefs.RecentItems); err != nil {
+			return SidebarPreferences{}, err
+		}
+	}
+	return normalizeSidebarPreferences(prefs)
+}
+
+func normalizeSidebarPreferences(prefs SidebarPreferences) (SidebarPreferences, error) {
+	const maxPinned = 8
+	const maxRecent = 12
+
+	normalize := func(items []string, maxCount int, allowRoot bool) ([]string, error) {
+		seen := make(map[string]struct{}, len(items))
+		normalized := make([]string, 0, len(items))
+		for _, item := range items {
+			item = strings.TrimSpace(item)
+			if item == "" {
+				continue
+			}
+			if !strings.HasPrefix(item, "/") {
+				return nil, domain.ErrBadRequest
+			}
+			if !allowRoot && item == "/" {
+				continue
+			}
+			if _, ok := seen[item]; ok {
+				continue
+			}
+			seen[item] = struct{}{}
+			normalized = append(normalized, item)
+			if len(normalized) == maxCount {
+				break
+			}
+		}
+		return normalized, nil
+	}
+
+	pinned, err := normalize(prefs.PinnedItems, maxPinned, false)
+	if err != nil {
+		return SidebarPreferences{}, err
+	}
+	recent, err := normalize(prefs.RecentItems, maxRecent, true)
+	if err != nil {
+		return SidebarPreferences{}, err
+	}
+	return SidebarPreferences{PinnedItems: pinned, RecentItems: recent}, nil
 }
 
 func (s *Auth) SeedAdmin(ctx context.Context) error {

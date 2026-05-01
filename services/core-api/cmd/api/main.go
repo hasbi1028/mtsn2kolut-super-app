@@ -153,6 +153,8 @@ func main() {
 		r.Post("/api/auth/change-password", authH.ChangePassword)
 		r.Post("/api/auth/logout-all", authH.LogoutAll)
 		r.Get("/api/auth/sessions", authH.ListSessions)
+		r.Get("/api/auth/preferences/sidebar", authH.GetSidebarPreferences)
+		r.Patch("/api/auth/preferences/sidebar", authH.UpdateSidebarPreferences)
 		r.Patch("/api/auth/sessions/{id}", authH.UpdateSessionLabel)
 		r.Delete("/api/auth/sessions/{id}", authH.RevokeSession)
 

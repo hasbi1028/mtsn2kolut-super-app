@@ -21,6 +21,7 @@ type fakeStore struct {
 	users        map[string]db.User
 	userRoles    map[pgtype.UUID][]db.UserRole
 	authSessions map[pgtype.UUID]db.AuthSession
+	uiPrefs      map[pgtype.UUID]db.UserUiPreference
 }
 
 func newFakeStore() *fakeStore {
@@ -29,6 +30,7 @@ func newFakeStore() *fakeStore {
 		users:        map[string]db.User{},
 		userRoles:    map[pgtype.UUID][]db.UserRole{},
 		authSessions: map[pgtype.UUID]db.AuthSession{},
+		uiPrefs:      map[pgtype.UUID]db.UserUiPreference{},
 	}
 }
 
@@ -226,6 +228,31 @@ func (f *fakeStore) UpdateOwnedAuthSessionLabel(ctx context.Context, arg db.Upda
 	return 1, nil
 }
 
+func (f *fakeStore) GetUserUIPreferences(ctx context.Context, userID pgtype.UUID) (db.UserUiPreference, error) {
+	prefs, ok := f.uiPrefs[userID]
+	if !ok {
+		return db.UserUiPreference{}, pgx.ErrNoRows
+	}
+	return prefs, nil
+}
+
+func (f *fakeStore) UpsertUserUIPreferences(ctx context.Context, arg db.UpsertUserUIPreferencesParams) (db.UserUiPreference, error) {
+	now := pgtype.Timestamptz{}
+	_ = now.Scan(time.Now())
+	prefs, ok := f.uiPrefs[arg.UserID]
+	if !ok {
+		prefs = db.UserUiPreference{
+			UserID:    arg.UserID,
+			CreatedAt: now,
+		}
+	}
+	prefs.SidebarPinned = arg.SidebarPinned
+	prefs.SidebarRecent = arg.SidebarRecent
+	prefs.UpdatedAt = now
+	f.uiPrefs[arg.UserID] = prefs
+	return prefs, nil
+}
+
 func TestAuthSeedAdminCreatesUser(t *testing.T) {
 	store := newFakeStore()
 	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
@@ -281,6 +308,55 @@ func TestAuthRefreshRejectsOldTokenAfterPasswordChange(t *testing.T) {
 	}
 	if _, err := svc.Refresh(context.Background(), pair.RefreshToken, SessionMeta{}); err == nil {
 		t.Fatalf("Refresh() error = nil, want unauthorized")
+	}
+}
+
+func TestAuthSidebarPreferencesRoundTrip(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
+
+	if err := svc.SeedAdmin(context.Background()); err != nil {
+		t.Fatalf("SeedAdmin() error = %v", err)
+	}
+	user := store.users["admin"]
+
+	got, err := svc.UpdateSidebarPreferences(context.Background(), user.ID, SidebarPreferences{
+		PinnedItems: []string{"/grades", "/grades", "/", "/settings"},
+		RecentItems: []string{"/", "/inventory", "/inventory", "/grades"},
+	})
+	if err != nil {
+		t.Fatalf("UpdateSidebarPreferences() error = %v", err)
+	}
+	if len(got.PinnedItems) != 2 || got.PinnedItems[0] != "/grades" || got.PinnedItems[1] != "/settings" {
+		t.Fatalf("unexpected pinned items: %#v", got.PinnedItems)
+	}
+	if len(got.RecentItems) != 3 || got.RecentItems[0] != "/" || got.RecentItems[1] != "/inventory" || got.RecentItems[2] != "/grades" {
+		t.Fatalf("unexpected recent items: %#v", got.RecentItems)
+	}
+
+	loaded, err := svc.GetSidebarPreferences(context.Background(), user.ID)
+	if err != nil {
+		t.Fatalf("GetSidebarPreferences() error = %v", err)
+	}
+	if len(loaded.PinnedItems) != 2 || loaded.PinnedItems[0] != "/grades" || loaded.PinnedItems[1] != "/settings" {
+		t.Fatalf("unexpected loaded pinned items: %#v", loaded.PinnedItems)
+	}
+}
+
+func TestAuthSidebarPreferencesRejectInvalidPath(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
+
+	if err := svc.SeedAdmin(context.Background()); err != nil {
+		t.Fatalf("SeedAdmin() error = %v", err)
+	}
+	user := store.users["admin"]
+
+	_, err := svc.UpdateSidebarPreferences(context.Background(), user.ID, SidebarPreferences{
+		PinnedItems: []string{"grades"},
+	})
+	if !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("expected ErrBadRequest, got %v", err)
 	}
 }
 

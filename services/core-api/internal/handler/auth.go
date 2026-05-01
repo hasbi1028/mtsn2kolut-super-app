@@ -221,6 +221,61 @@ func (h *Auth) UpdateSessionLabel(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]string{"message": "session label updated"})
 }
 
+func (h *Auth) GetSidebarPreferences(w http.ResponseWriter, r *http.Request) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	userID, err := authUserID(claims)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+
+	prefs, err := h.svc.GetSidebarPreferences(r.Context(), userID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, prefs)
+}
+
+func (h *Auth) UpdateSidebarPreferences(w http.ResponseWriter, r *http.Request) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	userID, err := authUserID(claims)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+
+	var body service.SidebarPreferences
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+
+	prefs, err := h.svc.UpdateSidebarPreferences(r.Context(), userID, body)
+	if errors.Is(err, domain.ErrBadRequest) {
+		api.BadRequest(w, "invalid sidebar preferences")
+		return
+	}
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+
+	h.auditClaimsEvent(r.Context(), "AUTH_SIDEBAR_PREFS_UPDATE", map[string]any{
+		"pinned_count": len(prefs.PinnedItems),
+		"recent_count": len(prefs.RecentItems),
+	})
+	api.OK(w, prefs)
+}
+
 func (h *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username    string `json:"username"`
