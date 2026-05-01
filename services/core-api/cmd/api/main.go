@@ -297,6 +297,7 @@ func main() {
 		r.Get("/api/inventory/stats", inventoryH.Stats)
 		r.Get("/api/inventory/items", inventoryH.ListItems)
 		r.Post("/api/inventory/items", inventoryH.CreateItem)
+		r.Get("/api/inventory/items/{id}/history", inventoryH.ListItemEvents)
 		r.Put("/api/inventory/items/{id}", inventoryH.UpdateItem)
 		r.Delete("/api/inventory/items/{id}", inventoryH.DeleteItem)
 

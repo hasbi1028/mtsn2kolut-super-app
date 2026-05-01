@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -15,6 +16,16 @@ import (
 type Inventory struct{ svc *service.Inventory }
 
 func NewInventory(svc *service.Inventory) *Inventory { return &Inventory{svc: svc} }
+
+func inventoryActorUserID(r *http.Request) pgtype.UUID {
+	var uid pgtype.UUID
+	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
+		if raw, ok := claims["uid"].(string); ok {
+			_ = uid.Scan(raw)
+		}
+	}
+	return uid
+}
 
 func (h *Inventory) Stats(w http.ResponseWriter, r *http.Request) {
 	data, err := h.svc.Stats(r.Context())
@@ -37,6 +48,20 @@ func (h *Inventory) ListItems(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, items)
 }
 
+func (h *Inventory) ListItemEvents(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	events, err := h.svc.ListItemEvents(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, events)
+}
+
 func (h *Inventory) CreateItem(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Kode        string `json:"kode"`
@@ -54,7 +79,7 @@ func (h *Inventory) CreateItem(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	item, err := h.svc.CreateItem(r.Context(), db.CreateInventoryItemParams{
+	item, err := h.svc.CreateItem(r.Context(), inventoryActorUserID(r), db.CreateInventoryItemParams{
 		Kode:        strings.TrimSpace(body.Kode),
 		Nama:        strings.TrimSpace(body.Nama),
 		Kategori:    strings.TrimSpace(body.Kategori),
@@ -95,7 +120,7 @@ func (h *Inventory) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	item, err := h.svc.UpdateItem(r.Context(), db.UpdateInventoryItemParams{
+	item, err := h.svc.UpdateItem(r.Context(), inventoryActorUserID(r), db.UpdateInventoryItemParams{
 		ID:          id,
 		Kode:        strings.TrimSpace(body.Kode),
 		Nama:        strings.TrimSpace(body.Nama),
@@ -121,7 +146,7 @@ func (h *Inventory) DeleteItem(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid id")
 		return
 	}
-	if err := h.svc.DeleteItem(r.Context(), id); err != nil {
+	if err := h.svc.DeleteItem(r.Context(), inventoryActorUserID(r), id); err != nil {
 		api.BadRequest(w, err.Error())
 		return
 	}

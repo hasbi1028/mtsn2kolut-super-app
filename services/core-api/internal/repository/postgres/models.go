@@ -932,6 +932,15 @@ type InventoryItem struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type InventoryItemEvent struct {
+	ID          pgtype.UUID        `json:"id"`
+	ItemID      pgtype.UUID        `json:"item_id"`
+	ActorUserID pgtype.UUID        `json:"actor_user_id"`
+	Action      string             `json:"action"`
+	Summary     string             `json:"summary"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type Job struct {
 	ID           pgtype.UUID        `json:"id"`
 	EmployeeID   pgtype.UUID        `json:"employee_id"`

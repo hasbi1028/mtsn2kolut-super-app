@@ -26,6 +26,14 @@
 		catatan: string;
 	}
 
+	interface ItemEvent {
+		id: string;
+		action: string;
+		summary: string;
+		actor_username: string;
+		created_at: string;
+	}
+
 	const KATEGORI_LIST = ['umum', 'kelas', 'laboratorium', 'kantor', 'kebersihan', 'elektronik'];
 	const KONDISI_LIST = ['baik', 'perlu-perawatan', 'rusak'];
 
@@ -41,7 +49,11 @@
 	let busy = $state(false);
 	let confirmDeleteId = $state<string | null>(null);
 	let showDeleteDialog = $state(false);
+	let showHistoryDialog = $state(false);
 	let formMode = $state<'beginner' | 'advance'>('beginner');
+	let historyLoading = $state(false);
+	let historyItem = $state<Item | null>(null);
+	let historyEvents = $state<ItemEvent[]>([]);
 
 	let fKode = $state('');
 	let fNama = $state('');
@@ -107,6 +119,24 @@
 		if (value === 'perlu-perawatan') return 'Perlu Perawatan';
 		if (value === 'rusak') return 'Rusak';
 		return 'Baik';
+	}
+
+	function actionLabel(value: string) {
+		if (value === 'create') return 'Dibuat';
+		if (value === 'delete') return 'Dihapus';
+		return 'Diperbarui';
+	}
+
+	function formatDateTime(value: string) {
+		if (!value) return '—';
+		return new Date(value).toLocaleString('id-ID', {
+			timeZone: 'Asia/Makassar',
+			day: '2-digit',
+			month: 'short',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+		}) + ' WITA';
 	}
 
 	async function load() {
@@ -215,6 +245,22 @@
 			await load();
 		} finally {
 			busy = false;
+		}
+	}
+
+	async function openHistory(item: Item) {
+		historyItem = item;
+		historyEvents = [];
+		historyLoading = true;
+		showHistoryDialog = true;
+		try {
+			const res = await fetch(`/api/inventory/items/${item.id}/history`);
+			const j = await res.json();
+			historyEvents = j.data ?? j ?? [];
+		} catch {
+			toast.error('Gagal memuat riwayat inventaris');
+		} finally {
+			historyLoading = false;
 		}
 	}
 
@@ -341,6 +387,7 @@
 								<Table.Cell>{item.lokasi || '—'}</Table.Cell>
 								<Table.Cell class="text-right">
 									<div class="flex justify-end gap-2">
+										<Button variant="outline" size="sm" onclick={() => openHistory(item)}>Riwayat</Button>
 										<Button variant="outline" size="sm" onclick={() => openEdit(item)}>Edit</Button>
 										<Button variant="destructive" size="sm" onclick={() => { confirmDeleteId = item.id; showDeleteDialog = true; }}>Hapus</Button>
 									</div>
@@ -439,6 +486,52 @@
 					<Button variant="outline" onclick={() => (showDialog = false)}>Batal</Button>
 					<LoadingButton onclick={save} loading={busy} loadingLabel="Menyimpan..." label={editingId ? 'Simpan Perubahan' : 'Tambah Barang'} />
 				</div>
+			</div>
+		</Dialog.Content>
+	{/if}
+</Dialog.Root>
+
+<Dialog.Root bind:open={showHistoryDialog}>
+	{#if showHistoryDialog}
+		<Dialog.Content>
+			<Dialog.Header>
+				<Dialog.Title>Riwayat Inventaris</Dialog.Title>
+				<Dialog.Description>
+					{#if historyItem}
+						{historyItem.nama} · {historyItem.kode}
+					{/if}
+				</Dialog.Description>
+			</Dialog.Header>
+
+			<div class="space-y-3">
+				{#if historyLoading}
+					<div class="space-y-3">
+						{#each Array.from({ length: 4 }) as _, index (`inventory-history-skeleton-${index}`)}
+							<div class="rounded-xl border border-slate-200 p-3">
+								<Skeleton class="h-4 w-24" />
+								<Skeleton class="mt-2 h-4 w-full" />
+								<Skeleton class="mt-2 h-3 w-36" />
+							</div>
+						{/each}
+					</div>
+				{:else if historyEvents.length === 0}
+					<EmptyStatePanel compact title="Belum ada riwayat" description="Riwayat perubahan akan muncul setelah barang ini dibuat, diperbarui, atau dihapus." />
+				{:else}
+					<div class="max-h-[420px] space-y-3 overflow-y-auto pr-1">
+						{#each historyEvents as event (event.id)}
+							<div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+								<div class="flex items-start justify-between gap-3">
+									<Badge variant="outline">{actionLabel(event.action)}</Badge>
+									<p class="text-xs text-slate-500">{formatDateTime(event.created_at)}</p>
+								</div>
+								<p class="mt-2 text-sm text-slate-700">{event.summary}</p>
+								<p class="mt-2 text-xs text-slate-500">
+									{event.actor_username ? `oleh ${event.actor_username}` : 'oleh sistem'}
+								</p>
+							</div>
+						{/each}
+					</div>
+				{/if}
 			</div>
 		</Dialog.Content>
 	{/if}

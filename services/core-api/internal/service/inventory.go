@@ -16,6 +16,8 @@ type inventoryStore interface {
 	CreateInventoryItem(ctx context.Context, arg db.CreateInventoryItemParams) (db.InventoryItem, error)
 	UpdateInventoryItem(ctx context.Context, arg db.UpdateInventoryItemParams) (db.InventoryItem, error)
 	DeleteInventoryItem(ctx context.Context, id pgtype.UUID) error
+	CreateInventoryItemEvent(ctx context.Context, arg db.CreateInventoryItemEventParams) (db.InventoryItemEvent, error)
+	ListInventoryItemEventsByItem(ctx context.Context, itemID pgtype.UUID) ([]db.ListInventoryItemEventsByItemRow, error)
 	GetInventoryStats(ctx context.Context) (db.GetInventoryStatsRow, error)
 }
 
@@ -35,7 +37,7 @@ func (s *Inventory) GetItem(ctx context.Context, id pgtype.UUID) (db.InventoryIt
 	return s.q.GetInventoryItem(ctx, id)
 }
 
-func (s *Inventory) CreateItem(ctx context.Context, arg db.CreateInventoryItemParams) (db.InventoryItem, error) {
+func (s *Inventory) CreateItem(ctx context.Context, actorUserID pgtype.UUID, arg db.CreateInventoryItemParams) (db.InventoryItem, error) {
 	if err := validateInventoryPayload(arg.Kode, arg.Nama, arg.Kondisi, arg.JumlahTotal, arg.JumlahBaik, arg.MinStock); err != nil {
 		return db.InventoryItem{}, err
 	}
@@ -46,11 +48,25 @@ func (s *Inventory) CreateItem(ctx context.Context, arg db.CreateInventoryItemPa
 	arg.Kondisi = normalizeInventoryText(arg.Kondisi, "baik")
 	arg.Satuan = normalizeInventoryText(arg.Satuan, "unit")
 	arg.Catatan = strings.TrimSpace(arg.Catatan)
-	return s.q.CreateInventoryItem(ctx, arg)
+	item, err := s.q.CreateInventoryItem(ctx, arg)
+	if err != nil {
+		return db.InventoryItem{}, err
+	}
+	_, _ = s.q.CreateInventoryItemEvent(ctx, db.CreateInventoryItemEventParams{
+		ItemID:      item.ID,
+		ActorUserID: actorUserID,
+		Action:      "create",
+		Summary:     fmt.Sprintf("Barang dibuat dengan lokasi '%s', kondisi '%s', dan stok layak %d/%d.", fallbackInventoryText(item.Lokasi), item.Kondisi, item.JumlahBaik, item.JumlahTotal),
+	})
+	return item, nil
 }
 
-func (s *Inventory) UpdateItem(ctx context.Context, arg db.UpdateInventoryItemParams) (db.InventoryItem, error) {
+func (s *Inventory) UpdateItem(ctx context.Context, actorUserID pgtype.UUID, arg db.UpdateInventoryItemParams) (db.InventoryItem, error) {
 	if err := validateInventoryPayload(arg.Kode, arg.Nama, arg.Kondisi, arg.JumlahTotal, arg.JumlahBaik, arg.MinStock); err != nil {
+		return db.InventoryItem{}, err
+	}
+	before, err := s.q.GetInventoryItem(ctx, arg.ID)
+	if err != nil {
 		return db.InventoryItem{}, err
 	}
 	arg.Kode = strings.TrimSpace(arg.Kode)
@@ -60,15 +76,39 @@ func (s *Inventory) UpdateItem(ctx context.Context, arg db.UpdateInventoryItemPa
 	arg.Kondisi = normalizeInventoryText(arg.Kondisi, "baik")
 	arg.Satuan = normalizeInventoryText(arg.Satuan, "unit")
 	arg.Catatan = strings.TrimSpace(arg.Catatan)
-	return s.q.UpdateInventoryItem(ctx, arg)
+	item, err := s.q.UpdateInventoryItem(ctx, arg)
+	if err != nil {
+		return db.InventoryItem{}, err
+	}
+	_, _ = s.q.CreateInventoryItemEvent(ctx, db.CreateInventoryItemEventParams{
+		ItemID:      item.ID,
+		ActorUserID: actorUserID,
+		Action:      "update",
+		Summary:     summarizeInventoryChange(before, item),
+	})
+	return item, nil
 }
 
-func (s *Inventory) DeleteItem(ctx context.Context, id pgtype.UUID) error {
+func (s *Inventory) DeleteItem(ctx context.Context, actorUserID pgtype.UUID, id pgtype.UUID) error {
+	item, err := s.q.GetInventoryItem(ctx, id)
+	if err != nil {
+		return err
+	}
+	_, _ = s.q.CreateInventoryItemEvent(ctx, db.CreateInventoryItemEventParams{
+		ItemID:      id,
+		ActorUserID: actorUserID,
+		Action:      "delete",
+		Summary:     fmt.Sprintf("Barang dihapus dari inventaris. Lokasi terakhir '%s', kondisi '%s', stok layak %d/%d.", fallbackInventoryText(item.Lokasi), item.Kondisi, item.JumlahBaik, item.JumlahTotal),
+	})
 	return s.q.DeleteInventoryItem(ctx, id)
 }
 
 func (s *Inventory) Stats(ctx context.Context) (db.GetInventoryStatsRow, error) {
 	return s.q.GetInventoryStats(ctx)
+}
+
+func (s *Inventory) ListItemEvents(ctx context.Context, itemID pgtype.UUID) ([]db.ListInventoryItemEventsByItemRow, error) {
+	return s.q.ListInventoryItemEventsByItem(ctx, itemID)
 }
 
 func validateInventoryPayload(kode, nama, kondisi string, jumlahTotal, jumlahBaik, minStock int32) error {
@@ -100,4 +140,35 @@ func normalizeInventoryText(value, fallback string) string {
 		return fallback
 	}
 	return trimmed
+}
+
+func fallbackInventoryText(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "Belum diatur"
+	}
+	return trimmed
+}
+
+func summarizeInventoryChange(before, after db.InventoryItem) string {
+	changes := make([]string, 0, 5)
+	if before.Lokasi != after.Lokasi {
+		changes = append(changes, fmt.Sprintf("lokasi '%s' -> '%s'", fallbackInventoryText(before.Lokasi), fallbackInventoryText(after.Lokasi)))
+	}
+	if before.Kondisi != after.Kondisi {
+		changes = append(changes, fmt.Sprintf("kondisi '%s' -> '%s'", before.Kondisi, after.Kondisi))
+	}
+	if before.JumlahBaik != after.JumlahBaik || before.JumlahTotal != after.JumlahTotal {
+		changes = append(changes, fmt.Sprintf("stok layak %d/%d -> %d/%d", before.JumlahBaik, before.JumlahTotal, after.JumlahBaik, after.JumlahTotal))
+	}
+	if before.MinStock != after.MinStock {
+		changes = append(changes, fmt.Sprintf("batas restok %d -> %d", before.MinStock, after.MinStock))
+	}
+	if before.Catatan != after.Catatan && strings.TrimSpace(after.Catatan) != "" {
+		changes = append(changes, "catatan diperbarui")
+	}
+	if len(changes) == 0 {
+		return "Data barang diperbarui tanpa perubahan lokasi, kondisi, atau stok utama."
+	}
+	return "Perubahan inventaris: " + strings.Join(changes, "; ") + "."
 }
