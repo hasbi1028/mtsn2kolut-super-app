@@ -21,6 +21,9 @@ services/core-api/data/
 # Logs & screenshots
 logs/
 services/logs/
+/.playwright-mcp/
+/login-*.png
+/public-home-*.png
 
 # Environment files
 .env
