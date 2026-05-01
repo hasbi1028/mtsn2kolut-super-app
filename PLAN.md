@@ -203,6 +203,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Grade finalization ops filter/export — rekap finalisasi now supports quick search by kelas/mapel/guru and CSV export of the currently filtered readiness list for operator follow-up
 - [x] Grade batch finalization flow — operator can now finalize all currently filtered `Siap Difinalkan` assignments in one guarded pass while backend readiness checks still apply per assignment
 - [x] Grade teacher filter flow — rekap finalisasi now supports narrowing triage, export, and batch-finalize actions by guru without adding a new backend contract
+- [x] Grade class rollup report — filtered readiness triage now also rolls up per kelas so wali kelas/operator can see how many mapel are ready, final, or still blocked before scanning detailed assignment rows
 - [x] Backend internal-error hygiene — 500 responses now return a generic client-safe message while raw details stay in server logs
 - [x] Sensitive entrypoint rate limiting — login, refresh, public registration, and exam login now use a concurrency-safe per-IP limiter with forwarded-IP awareness
 - [x] Typed auth locals — web-admin auth locals/page data now use a shared explicit auth-user type instead of `as any`

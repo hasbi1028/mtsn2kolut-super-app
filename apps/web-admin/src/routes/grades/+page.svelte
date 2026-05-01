@@ -86,6 +86,16 @@
 		finalization?: GradeFinalization | null;
 	};
 
+	type ClassReadinessSummary = {
+		class_name: string;
+		class_code: string;
+		assignment_count: number;
+		ready_count: number;
+		finalized_count: number;
+		attention_count: number;
+		missing_grade_count: number;
+	};
+
 	const categoryOptions = [
 		{ value: 'assignment', label: 'Tugas' },
 		{ value: 'quiz', label: 'Kuis' },
@@ -202,6 +212,32 @@
 	const filteredReadyAssignments = $derived(
 		filteredAssignmentStatuses.filter((item) => item.ready && !item.is_finalized)
 	);
+	const filteredClassSummaries = $derived.by(() => {
+		const grouped: Record<string, ClassReadinessSummary> = {};
+		for (const item of filteredAssignmentStatuses) {
+			const key = `${item.class_code}::${item.class_name}`;
+			const current = grouped[key] ?? {
+				class_name: item.class_name,
+				class_code: item.class_code,
+				assignment_count: 0,
+				ready_count: 0,
+				finalized_count: 0,
+				attention_count: 0,
+				missing_grade_count: 0
+			};
+			current.assignment_count += 1;
+			current.missing_grade_count += item.missing_grade_count;
+			if (item.is_finalized) {
+				current.finalized_count += 1;
+			} else if (item.ready) {
+				current.ready_count += 1;
+			} else {
+				current.attention_count += 1;
+			}
+			grouped[key] = current;
+		}
+		return Object.values(grouped).sort((a, b) => a.class_code.localeCompare(b.class_code, 'id'));
+	});
 	const readinessLabel = $derived(
 		isFinalized
 			? 'Sudah Difinalisasi'
@@ -925,6 +961,43 @@
 									onclick={finalizeFilteredReadyAssignments}
 									label="Finalisasi Semua yang Siap"
 								/>
+							</div>
+						{/if}
+						{#if filteredClassSummaries.length > 0}
+							<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+								<div class="mb-3">
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Ringkasan per Kelas</p>
+									<p class="mt-1 text-sm text-slate-600">Gunakan rollup ini untuk membaca kelas mana yang sudah hampir siap rapor dan mana yang masih tertahan di beberapa mapel.</p>
+								</div>
+								<div class="overflow-x-auto">
+									<Table.Root>
+										<Table.Header>
+											<Table.Row>
+												<Table.Head>Kelas</Table.Head>
+												<Table.Head>Mapel</Table.Head>
+												<Table.Head>Siap</Table.Head>
+												<Table.Head>Final</Table.Head>
+												<Table.Head>Perlu Dilengkapi</Table.Head>
+												<Table.Head>Nilai Kosong</Table.Head>
+											</Table.Row>
+										</Table.Header>
+										<Table.Body>
+											{#each filteredClassSummaries as item (`${item.class_code}-${item.class_name}`)}
+												<Table.Row>
+													<Table.Cell>
+														<div class="font-medium text-slate-900">{item.class_name}</div>
+														<div class="text-xs text-slate-500">{item.class_code}</div>
+													</Table.Cell>
+													<Table.Cell>{item.assignment_count}</Table.Cell>
+													<Table.Cell>{item.ready_count}</Table.Cell>
+													<Table.Cell>{item.finalized_count}</Table.Cell>
+													<Table.Cell>{item.attention_count}</Table.Cell>
+													<Table.Cell>{item.missing_grade_count}</Table.Cell>
+												</Table.Row>
+											{/each}
+										</Table.Body>
+									</Table.Root>
+								</div>
 							</div>
 						{/if}
 						<div class="overflow-x-auto">
