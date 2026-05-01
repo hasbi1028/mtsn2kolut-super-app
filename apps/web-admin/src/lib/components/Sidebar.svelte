@@ -20,6 +20,8 @@
 	let inventoryAttention = $state(0);
 	let libraryAttention = $state(0);
 	let pusakaAttention = $state(0);
+	let attentionRefreshInFlight = $state<Promise<void> | null>(null);
+	let lastAttentionLoadedAt = $state(0);
 
 	type NavItem = { href: string; label: string; icon: string; roles?: string[]; pinnable?: boolean };
 	type NavGroup = { group: string; items: NavItem[] };
@@ -122,6 +124,7 @@
 	const PINNED_STORAGE_KEY_PREFIX = 'sidebar:pinned-items';
 	const RECENT_STORAGE_KEY_PREFIX = 'sidebar:recent-items';
 	const RECENT_LIMIT = 6;
+	const ATTENTION_REFRESH_INTERVAL_MS = 60_000;
 	let openGroups = $state<string[]>([]);
 	let pinnedItems = $state<string[]>([]);
 	let recentItems = $state<string[]>([]);
@@ -333,10 +336,18 @@
 		return 0;
 	}
 
+	function shouldLoadInventoryAttention() {
+		return userRoles.includes('admin') || userRoles.includes('staf');
+	}
+
+	function shouldLoadPusakaAttention() {
+		return userRoles.includes('admin');
+	}
+
 	async function loadSidebarAttention() {
 		const requests: Promise<void>[] = [];
 
-		if (userRoles.includes('admin') || userRoles.includes('staf')) {
+		if (shouldLoadInventoryAttention()) {
 			requests.push(
 				fetch('/api/inventory/stats')
 					.then((res) => (res.ok ? res.json() : null))
@@ -359,9 +370,12 @@
 						libraryAttention = 0;
 					})
 			);
+		} else {
+			inventoryAttention = 0;
+			libraryAttention = 0;
 		}
 
-		if (userRoles.includes('admin')) {
+		if (shouldLoadPusakaAttention()) {
 			requests.push(
 				fetch('/api/queue/stats')
 					.then((res) => (res.ok ? res.json() : null))
@@ -372,9 +386,27 @@
 						pusakaAttention = 0;
 					})
 			);
+		} else {
+			pusakaAttention = 0;
 		}
 
 		await Promise.allSettled(requests);
+	}
+
+	async function refreshSidebarAttention(force = false) {
+		if (attentionRefreshInFlight) {
+			return attentionRefreshInFlight;
+		}
+		if (!force && Date.now() - lastAttentionLoadedAt < ATTENTION_REFRESH_INTERVAL_MS) {
+			return;
+		}
+		attentionRefreshInFlight = (async () => {
+			await loadSidebarAttention();
+			lastAttentionLoadedAt = Date.now();
+		})().finally(() => {
+			attentionRefreshInFlight = null;
+		});
+		return attentionRefreshInFlight;
 	}
 
 	function openCommandPalette() {
@@ -433,7 +465,7 @@
 	onMount(() => {
 		loadPinnedItems();
 		loadRecentItems();
-		void loadSidebarAttention();
+		void refreshSidebarAttention(true);
 		const handleKeydown = (event: KeyboardEvent) => {
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
 				event.preventDefault();
@@ -454,10 +486,32 @@
 				openCommandPalette();
 			}
 		};
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === 'visible') {
+				void refreshSidebarAttention();
+			}
+		};
+		const handleWindowFocus = () => {
+			void refreshSidebarAttention();
+		};
 		window.addEventListener('keydown', handleKeydown);
+		window.addEventListener('focus', handleWindowFocus);
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+		const interval = window.setInterval(() => {
+			void refreshSidebarAttention();
+		}, ATTENTION_REFRESH_INTERVAL_MS);
 		return () => {
 			window.removeEventListener('keydown', handleKeydown);
+			window.removeEventListener('focus', handleWindowFocus);
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+			window.clearInterval(interval);
 		};
+	});
+
+	$effect(() => {
+		page.url.pathname;
+		if (typeof window === 'undefined') return;
+		void refreshSidebarAttention();
 	});
 
 	$effect(() => {
