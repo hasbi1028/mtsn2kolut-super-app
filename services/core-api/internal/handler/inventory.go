@@ -98,6 +98,33 @@ func (h *Inventory) CreateItem(w http.ResponseWriter, r *http.Request) {
 	api.Created(w, item)
 }
 
+func (h *Inventory) BatchUpdateItems(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ItemIDs []string `json:"item_ids"`
+		Lokasi  *string  `json:"lokasi"`
+		Kondisi *string  `json:"kondisi"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	ids := make([]pgtype.UUID, 0, len(body.ItemIDs))
+	for _, rawID := range body.ItemIDs {
+		id, err := parseUUID(rawID)
+		if err != nil {
+			api.BadRequest(w, "item_ids invalid")
+			return
+		}
+		ids = append(ids, id)
+	}
+	updated, err := h.svc.BatchUpdateItems(r.Context(), inventoryActorUserID(r), ids, body.Lokasi, body.Kondisi)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+	api.OK(w, map[string]any{"updated": updated})
+}
+
 func (h *Inventory) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {

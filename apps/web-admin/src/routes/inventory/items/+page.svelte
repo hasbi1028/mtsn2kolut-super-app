@@ -50,10 +50,15 @@
 	let confirmDeleteId = $state<string | null>(null);
 	let showDeleteDialog = $state(false);
 	let showHistoryDialog = $state(false);
+	let showBatchDialog = $state(false);
 	let formMode = $state<'beginner' | 'advance'>('beginner');
 	let historyLoading = $state(false);
 	let historyItem = $state<Item | null>(null);
 	let historyEvents = $state<ItemEvent[]>([]);
+	let selectedIds = $state<string[]>([]);
+	let batchBusy = $state(false);
+	let batchLokasi = $state('');
+	let batchKondisi = $state('');
 
 	let fKode = $state('');
 	let fNama = $state('');
@@ -79,6 +84,8 @@
 			return matchSearch && matchKategori && matchKondisi;
 		})
 	);
+
+	const selectedItems = $derived.by(() => items.filter((item) => selectedIds.includes(item.id)));
 
 	function csvEscape(value: string | number | null | undefined) {
 		const text = String(value ?? '');
@@ -119,6 +126,36 @@
 		if (value === 'perlu-perawatan') return 'Perlu Perawatan';
 		if (value === 'rusak') return 'Rusak';
 		return 'Baik';
+	}
+
+	function isSelected(id: string) {
+		return selectedIds.includes(id);
+	}
+
+	function toggleSelected(id: string, checked: boolean) {
+		if (checked) {
+			if (!selectedIds.includes(id)) selectedIds = [...selectedIds, id];
+			return;
+		}
+		selectedIds = selectedIds.filter((value) => value !== id);
+	}
+
+	function toggleSelectAllVisible(checked: boolean) {
+		if (!checked) {
+			selectedIds = selectedIds.filter((id) => !filtered.some((item) => item.id === id));
+			return;
+		}
+		selectedIds = Array.from(new Set([...selectedIds, ...filtered.map((item) => item.id)]));
+	}
+
+	function openBatchDialog() {
+		if (selectedIds.length === 0) {
+			toast.error('Pilih minimal satu barang untuk mutasi batch');
+			return;
+		}
+		batchLokasi = '';
+		batchKondisi = '';
+		showBatchDialog = true;
 	}
 
 	function actionLabel(value: string) {
@@ -248,6 +285,43 @@
 		}
 	}
 
+	async function submitBatchUpdate() {
+		if (selectedIds.length === 0) {
+			toast.error('Pilih minimal satu barang untuk dimutasi');
+			return;
+		}
+		const lokasi = batchLokasi.trim();
+		const kondisi = batchKondisi.trim();
+		if (!lokasi && !kondisi) {
+			toast.error('Isi lokasi baru atau pilih kondisi baru');
+			return;
+		}
+
+		batchBusy = true;
+		try {
+			const res = await fetch('/api/inventory/items', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					item_ids: selectedIds,
+					lokasi: lokasi || undefined,
+					kondisi: kondisi || undefined,
+				}),
+			});
+			const j = await res.json();
+			if (!res.ok) {
+				toast.error(j.error ?? 'Gagal memproses mutasi batch');
+				return;
+			}
+			toast.success(`${j.data?.updated ?? selectedIds.length} barang berhasil diperbarui`);
+			showBatchDialog = false;
+			selectedIds = [];
+			await load();
+		} finally {
+			batchBusy = false;
+		}
+	}
+
 	async function openHistory(item: Item) {
 		historyItem = item;
 		historyEvents = [];
@@ -277,9 +351,25 @@
 		</div>
 		<div class="flex gap-2">
 			<Button variant="outline" onclick={exportCsv} size="sm" disabled={filtered.length === 0}>Ekspor CSV</Button>
+			<Button variant="outline" onclick={openBatchDialog} size="sm" disabled={selectedIds.length === 0}>Mutasi Batch</Button>
 			<Button onclick={openCreate} size="sm">+ Tambah Barang</Button>
 		</div>
 	</div>
+
+	{#if selectedIds.length > 0}
+		<Card.Root class="border-sky-200 bg-sky-50 shadow-sm">
+			<Card.Content class="flex flex-wrap items-center justify-between gap-3 p-4">
+				<div>
+					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Seleksi Batch Aktif</p>
+					<p class="mt-1 text-sm text-slate-700">{selectedIds.length} barang dipilih untuk mutasi lokasi atau kondisi.</p>
+				</div>
+				<div class="flex gap-2">
+					<Button variant="outline" size="sm" onclick={() => (selectedIds = [])}>Kosongkan Pilihan</Button>
+					<Button size="sm" onclick={openBatchDialog}>Lanjut Mutasi Batch</Button>
+				</div>
+			</Card.Content>
+		</Card.Root>
+	{/if}
 
 	<div class="grid gap-3 md:grid-cols-3">
 		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
@@ -359,6 +449,14 @@
 				<Table.Root>
 					<Table.Header>
 						<Table.Row class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+							<Table.Head class="w-12">
+								<input
+									type="checkbox"
+									class="h-4 w-4 rounded border-slate-300"
+									checked={filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.id))}
+									onchange={(event) => toggleSelectAllVisible((event.currentTarget as HTMLInputElement).checked)}
+								/>
+							</Table.Head>
 							<Table.Head>Kode</Table.Head>
 							<Table.Head>Barang</Table.Head>
 							<Table.Head>Kondisi</Table.Head>
@@ -370,6 +468,14 @@
 					<Table.Body>
 						{#each filtered as item (item.id)}
 							<Table.Row class="text-sm">
+								<Table.Cell>
+									<input
+										type="checkbox"
+										class="h-4 w-4 rounded border-slate-300"
+										checked={isSelected(item.id)}
+										onchange={(event) => toggleSelected(item.id, (event.currentTarget as HTMLInputElement).checked)}
+									/>
+								</Table.Cell>
 								<Table.Cell class="font-mono text-xs text-slate-600">{item.kode}</Table.Cell>
 								<Table.Cell>
 									<p class="font-medium text-slate-900">{item.nama}</p>
@@ -485,6 +591,56 @@
 				<div class="flex justify-end gap-2">
 					<Button variant="outline" onclick={() => (showDialog = false)}>Batal</Button>
 					<LoadingButton onclick={save} loading={busy} loadingLabel="Menyimpan..." label={editingId ? 'Simpan Perubahan' : 'Tambah Barang'} />
+				</div>
+			</div>
+		</Dialog.Content>
+	{/if}
+</Dialog.Root>
+
+<Dialog.Root bind:open={showBatchDialog}>
+	{#if showBatchDialog}
+		<Dialog.Content>
+			<Dialog.Header>
+				<Dialog.Title>Mutasi Inventaris Batch</Dialog.Title>
+				<Dialog.Description>
+					Perbarui lokasi atau kondisi untuk {selectedIds.length} barang terpilih sekaligus. Setiap barang tetap akan mencatat riwayat perubahan masing-masing.
+				</Dialog.Description>
+			</Dialog.Header>
+
+			<div class="space-y-4">
+				<div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Barang Terpilih</p>
+					<p class="mt-1 text-sm text-slate-700">
+						{selectedItems.slice(0, 4).map((item) => item.nama).join(', ')}
+						{#if selectedItems.length > 4}
+							, dan {selectedItems.length - 4} barang lainnya
+						{/if}
+					</p>
+				</div>
+
+				<div class="grid gap-4 md:grid-cols-2">
+					<div>
+						<label for="batch-lokasi" class="mb-1 block text-xs font-medium text-slate-600">Lokasi Baru</label>
+						<Input id="batch-lokasi" bind:value={batchLokasi} placeholder="Kosongkan jika lokasi tidak diubah" />
+					</div>
+					<div>
+						<label for="batch-kondisi" class="mb-1 block text-xs font-medium text-slate-600">Kondisi Baru</label>
+						<select id="batch-kondisi" bind:value={batchKondisi} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+							<option value="">Tidak diubah</option>
+							{#each KONDISI_LIST as kondisi (kondisi)}
+								<option value={kondisi}>{conditionLabel(kondisi)}</option>
+							{/each}
+						</select>
+					</div>
+				</div>
+
+				<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-slate-700">
+					Mutasi batch ini cocok untuk perpindahan antarruang atau penyamaan status kondisi setelah pengecekan lapangan. Jika hanya satu barang yang berubah, tetap lebih aman memakai tombol edit per barang.
+				</div>
+
+				<div class="flex justify-end gap-2">
+					<Button variant="outline" onclick={() => (showBatchDialog = false)}>Batal</Button>
+					<LoadingButton onclick={submitBatchUpdate} loading={batchBusy} loadingLabel="Memproses..." label="Terapkan Mutasi Batch" />
 				</div>
 			</div>
 		</Dialog.Content>

@@ -111,6 +111,53 @@ func (s *Inventory) ListItemEvents(ctx context.Context, itemID pgtype.UUID) ([]d
 	return s.q.ListInventoryItemEventsByItem(ctx, itemID)
 }
 
+func (s *Inventory) BatchUpdateItems(ctx context.Context, actorUserID pgtype.UUID, ids []pgtype.UUID, lokasi *string, kondisi *string) (int, error) {
+	if len(ids) == 0 {
+		return 0, fmt.Errorf("pilih minimal satu barang")
+	}
+	if lokasi == nil && kondisi == nil {
+		return 0, fmt.Errorf("perubahan batch belum diisi")
+	}
+
+	updated := 0
+	for _, id := range ids {
+		current, err := s.q.GetInventoryItem(ctx, id)
+		if err != nil {
+			return updated, err
+		}
+
+		nextLokasi := current.Lokasi
+		if lokasi != nil {
+			nextLokasi = strings.TrimSpace(*lokasi)
+		}
+
+		nextKondisi := current.Kondisi
+		if kondisi != nil {
+			nextKondisi = normalizeInventoryText(*kondisi, current.Kondisi)
+		}
+
+		_, err = s.UpdateItem(ctx, actorUserID, db.UpdateInventoryItemParams{
+			ID:          current.ID,
+			Kode:        current.Kode,
+			Nama:        current.Nama,
+			Kategori:    current.Kategori,
+			Lokasi:      nextLokasi,
+			Kondisi:     nextKondisi,
+			Satuan:      current.Satuan,
+			JumlahTotal: current.JumlahTotal,
+			JumlahBaik:  current.JumlahBaik,
+			MinStock:    current.MinStock,
+			Catatan:     current.Catatan,
+		})
+		if err != nil {
+			return updated, err
+		}
+		updated++
+	}
+
+	return updated, nil
+}
+
 func validateInventoryPayload(kode, nama, kondisi string, jumlahTotal, jumlahBaik, minStock int32) error {
 	if strings.TrimSpace(kode) == "" {
 		return fmt.Errorf("kode inventaris wajib diisi")

@@ -300,6 +300,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Web-admin inventory baseline — dashboard `/inventory` dan master data `/inventory/items` untuk admin/staf
 - [x] Inventory ops reporting — dashboard inventaris sekarang punya ringkasan per lokasi dan daftar barang mendukung ekspor CSV berdasarkan filter aktif
 - [x] Inventory history baseline — perubahan create/update/delete barang sekarang tercatat dan bisa dilihat dari dialog riwayat di daftar inventaris
+- [x] Inventory batch mutation baseline — operator sekarang bisa memilih banyak barang lalu memindahkan lokasi atau menyamakan kondisi sekaligus dari daftar inventaris
 ### Sprint 14 — Fee & Payment Management
 ### ✅ Sprint 15 — Library System (COMPLETE)
 - [x] Migration 027 — `library_books`, `library_loans` tables with FK to existing `students` and `employees`

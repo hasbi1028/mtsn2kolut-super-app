@@ -25,3 +25,13 @@ export const POST: RequestHandler = async (event) => {
 		return handleRouteError(e, 'inventory/items POST');
 	}
 };
+
+export const PATCH: RequestHandler = async (event) => {
+	try {
+		const body = await event.request.json();
+		const data = await proxy(event).patch('/api/inventory/items', body);
+		return json(data);
+	} catch (e) {
+		return handleRouteError(e, 'inventory/items PATCH');
+	}
+};
