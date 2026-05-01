@@ -128,6 +128,7 @@
 	let finalizeNotes = $state('');
 	let assignmentStatusFilter = $state<'all' | 'ready' | 'finalized' | 'attention'>('all');
 	let assignmentStatusQuery = $state('');
+	let assignmentTeacherFilter = $state('');
 
 	let scoreInput = $state<Record<string, string>>({});
 	let noteInput = $state<Record<string, string>>({});
@@ -160,6 +161,9 @@
 	const needsAttentionAssignmentCount = $derived(
 		assignmentStatuses.filter((item) => !item.ready && !item.is_finalized).length
 	);
+	const teacherOptions = $derived(
+		Array.from(new Set(assignmentStatuses.map((item) => item.teacher_name).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'id'))
+	);
 	const filteredAssignmentStatuses = $derived.by(() => {
 		const statusFiltered = (() => {
 			switch (assignmentStatusFilter) {
@@ -173,9 +177,12 @@
 					return assignmentStatuses;
 			}
 		})();
+		const teacherFiltered = assignmentTeacherFilter
+			? statusFiltered.filter((item) => item.teacher_name === assignmentTeacherFilter)
+			: statusFiltered;
 		const query = assignmentStatusQuery.trim().toLowerCase();
-		if (!query) return statusFiltered;
-		return statusFiltered.filter((item) =>
+		if (!query) return teacherFiltered;
+		return teacherFiltered.filter((item) =>
 			[
 				item.class_name,
 				item.class_code,
@@ -863,6 +870,19 @@
 								</Button>
 							</div>
 							<div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+								<div class="min-w-0 sm:w-56">
+									<label for="assignment-teacher-filter" class="mb-1 block text-xs font-medium text-slate-500">Filter Guru</label>
+									<select
+										id="assignment-teacher-filter"
+										class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+										bind:value={assignmentTeacherFilter}
+									>
+										<option value="">Semua guru</option>
+										{#each teacherOptions as teacher (teacher)}
+											<option value={teacher}>{teacher}</option>
+										{/each}
+									</select>
+								</div>
 								<div class="min-w-0 sm:w-72">
 									<label for="assignment-status-query" class="mb-1 block text-xs font-medium text-slate-500">Cari Kelas, Mapel, Guru</label>
 									<Input
@@ -881,13 +901,16 @@
 								/>
 							</div>
 						</div>
-						<div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-							<Badge variant="outline">Filter: {assignmentFilterLabel(assignmentStatusFilter)}</Badge>
-							<Badge variant="outline">Hasil: {filteredAssignmentStatuses.length}</Badge>
-							<Badge variant="outline">Siap Final: {filteredReadyAssignments.length}</Badge>
-							{#if assignmentStatusQuery.trim()}
-								<Badge variant="outline">Pencarian: {assignmentStatusQuery.trim()}</Badge>
-							{/if}
+							<div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+								<Badge variant="outline">Filter: {assignmentFilterLabel(assignmentStatusFilter)}</Badge>
+								<Badge variant="outline">Hasil: {filteredAssignmentStatuses.length}</Badge>
+								<Badge variant="outline">Siap Final: {filteredReadyAssignments.length}</Badge>
+								{#if assignmentTeacherFilter}
+									<Badge variant="outline">Guru: {assignmentTeacherFilter}</Badge>
+								{/if}
+								{#if assignmentStatusQuery.trim()}
+									<Badge variant="outline">Pencarian: {assignmentStatusQuery.trim()}</Badge>
+								{/if}
 						</div>
 						{#if filteredReadyAssignments.length > 0}
 							<div class="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
