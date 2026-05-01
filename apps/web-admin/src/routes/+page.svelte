@@ -42,6 +42,19 @@
 		my_students: number;
 		my_subjects: number;
 	}
+	interface TimetableEntry {
+		id: string;
+		day_of_week: number;
+		start_time: string;
+		end_time: string;
+		room_label: string;
+		notes: string;
+		class_name: string;
+		class_code: string;
+		subject_name: string;
+		subject_code: string;
+		teacher_name: string;
+	}
 	interface StudentPortalData {
 		student: {
 			nama: string;
@@ -61,6 +74,7 @@
 			seat_no: number | null;
 			score: string | number | null;
 		}>;
+		timetable: TimetableEntry[];
 	}
 	interface ParentPortalData {
 		parent: { nama: string; phone: string; address: string };
@@ -69,6 +83,7 @@
 
 	let academicStats = $state<AcademicStats | null>(null);
 	let guruStats = $state<GuruStats | null>(null);
+	let guruTimetable = $state<TimetableEntry[]>([]);
 	let studentPortal = $state<StudentPortalData | null>(null);
 	let parentPortal = $state<ParentPortalData | null>(null);
 
@@ -103,17 +118,32 @@
 		}) + ' WITA';
 	}
 
+	const dayLabels: Record<number, string> = {
+		1: 'Senin',
+		2: 'Selasa',
+		3: 'Rabu',
+		4: 'Kamis',
+		5: 'Jumat',
+		6: 'Sabtu',
+	};
+
+	function fmtTime(value: string) {
+		return value.slice(0, 5);
+	}
+
 	async function load() {
 		try {
 			if (isGuru) {
-				const [sessRes, essaysRes, studentsRes] = await Promise.all([
+				const [sessRes, essaysRes, studentsRes, timetableRes] = await Promise.all([
 					fetch('/api/cbt/sessions'),
 					fetch('/api/cbt/sessions/my-essays'),
 					fetch('/api/students'),
+					fetch('/api/portal/guru/timetable'),
 				]);
 				const sessions = parseData<any[]>(await sessRes.json().catch(() => null)) ?? [];
 				const essays = parseData<any[]>(await essaysRes.json().catch(() => null)) ?? [];
 				const students = parseData<any[]>(await studentsRes.json().catch(() => null)) ?? [];
+				guruTimetable = parseData<{ timetable: TimetableEntry[] }>(await timetableRes.json().catch(() => null))?.timetable ?? [];
 				const activeSessions = sessions.filter((session) => session.status === 'active' || session.status === 'scheduled');
 				const subjects = new Set(activeSessions.map((session) => session.package_title));
 				guruStats = {
@@ -250,6 +280,40 @@
 				</Card.Content>
 			</Card.Root>
 		</div>
+
+		<Card.Root class="border-slate-200">
+			<Card.Header>
+				<Card.Title class="text-base">Jadwal Pelajaran Minggu Ini</Card.Title>
+				<Card.Description>Slot belajar yang tersusun untuk kelas {studentPortal.student.class_code || studentPortal.student.class_name || 'aktif'}.</Card.Description>
+			</Card.Header>
+			<Card.Content class="space-y-3">
+				{#if studentPortal.timetable.length > 0}
+					<div class="grid gap-3 lg:grid-cols-2">
+						{#each studentPortal.timetable as slot (slot.id)}
+							<div class="rounded-xl border border-slate-200 bg-white p-3">
+								<div class="flex items-start justify-between gap-3">
+									<div>
+										<p class="text-sm font-medium text-slate-900">{slot.subject_name}</p>
+										<p class="mt-1 text-xs text-slate-500">{slot.teacher_name}</p>
+									</div>
+									<Badge variant="outline">{dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`}</Badge>
+								</div>
+								<p class="mt-2 text-xs text-slate-500">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
+								{#if slot.notes}
+									<p class="mt-1 text-xs text-slate-500">{slot.notes}</p>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<EmptyStatePanel
+						compact
+						title="Jadwal pelajaran belum tersedia"
+						description="Jadwal mingguan akan tampil di sini setelah operator akademik menyusun slot kelas untuk siswa ini."
+					/>
+				{/if}
+			</Card.Content>
+		</Card.Root>
 	{/if}
 
 	{#if isParent && dashboardLoading}
@@ -329,6 +393,40 @@
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Siswa Terpantau</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.my_students}</p></Card.Content></Card.Root>
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Diampu</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.my_subjects}</p></Card.Content></Card.Root>
 		</div>
+
+		<Card.Root class="border-slate-200">
+			<Card.Header>
+				<Card.Title class="text-base">Jadwal Mengajar</Card.Title>
+				<Card.Description>Ringkasan slot kelas-mapel yang sudah dijadwalkan untuk guru pada minggu berjalan.</Card.Description>
+			</Card.Header>
+			<Card.Content class="space-y-3">
+				{#if guruTimetable.length > 0}
+					<div class="grid gap-3 lg:grid-cols-2">
+						{#each guruTimetable as slot (slot.id)}
+							<div class="rounded-xl border border-slate-200 bg-white p-3">
+								<div class="flex items-start justify-between gap-3">
+									<div>
+										<p class="text-sm font-medium text-slate-900">{slot.subject_name}</p>
+										<p class="mt-1 text-xs text-slate-500">{slot.class_code} · {slot.class_name}</p>
+									</div>
+									<Badge variant="outline">{dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`}</Badge>
+								</div>
+								<p class="mt-2 text-xs text-slate-500">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
+								{#if slot.notes}
+									<p class="mt-1 text-xs text-slate-500">{slot.notes}</p>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<EmptyStatePanel
+						compact
+						title="Jadwal mengajar belum tersedia"
+						description="Slot jadwal guru akan tampil di sini setelah operator akademik menyusun jadwal pada assignment kelas-mapel yang diampu."
+					/>
+				{/if}
+			</Card.Content>
+		</Card.Root>
 	{/if}
 
 	{#if (isAdmin || isStaff) && dashboardLoading}

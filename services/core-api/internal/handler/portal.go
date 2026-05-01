@@ -36,10 +36,42 @@ func (h *Portal) StudentMe(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	timetable, err := h.svc.StudentTimetable(r.Context(), studentID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
 	api.OK(w, map[string]any{
-		"student":  student,
-		"parents":  parents,
-		"sessions": sessions,
+		"student":   student,
+		"parents":   parents,
+		"sessions":  sessions,
+		"timetable": timetable,
+	})
+}
+
+func (h *Portal) TeacherTimetable(w http.ResponseWriter, r *http.Request) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	rawID, _ := claims["eid"].(string)
+	if rawID == "" {
+		api.Forbidden(w)
+		return
+	}
+	var employeeID pgtype.UUID
+	if err := employeeID.Scan(rawID); err != nil {
+		api.Forbidden(w)
+		return
+	}
+	timetable, err := h.svc.TeacherTimetable(r.Context(), employeeID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{
+		"timetable": timetable,
 	})
 }
 

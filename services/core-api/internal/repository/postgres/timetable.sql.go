@@ -125,6 +125,143 @@ func (q *Queries) GetTimetableSlot(ctx context.Context, id pgtype.UUID) (Timetab
 	return i, err
 }
 
+const listStudentTimetable = `-- name: ListStudentTimetable :many
+SELECT ts.id, ts.assignment_id, ts.day_of_week, ts.start_time, ts.end_time, ts.room_label, ts.notes,
+       c.id AS class_id, c.name AS class_name, c.code AS class_code,
+       s.id AS subject_id, s.name AS subject_name, s.code AS subject_code,
+       e.id AS teacher_employee_id, e.nama AS teacher_name
+FROM timetable_slots ts
+JOIN class_subject_assignments a ON a.id = ts.assignment_id
+JOIN school_classes c ON c.id = a.class_id
+JOIN subjects s ON s.id = a.subject_id
+JOIN employees e ON e.id = a.teacher_employee_id
+JOIN students st ON st.class_id = c.id
+WHERE st.id = $1
+ORDER BY ts.day_of_week ASC, ts.start_time ASC, s.name ASC
+`
+
+type ListStudentTimetableRow struct {
+	ID                pgtype.UUID `json:"id"`
+	AssignmentID      pgtype.UUID `json:"assignment_id"`
+	DayOfWeek         int16       `json:"day_of_week"`
+	StartTime         pgtype.Time `json:"start_time"`
+	EndTime           pgtype.Time `json:"end_time"`
+	RoomLabel         string      `json:"room_label"`
+	Notes             string      `json:"notes"`
+	ClassID           pgtype.UUID `json:"class_id"`
+	ClassName         string      `json:"class_name"`
+	ClassCode         string      `json:"class_code"`
+	SubjectID         pgtype.UUID `json:"subject_id"`
+	SubjectName       string      `json:"subject_name"`
+	SubjectCode       string      `json:"subject_code"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+	TeacherName       string      `json:"teacher_name"`
+}
+
+func (q *Queries) ListStudentTimetable(ctx context.Context, id pgtype.UUID) ([]ListStudentTimetableRow, error) {
+	rows, err := q.db.Query(ctx, listStudentTimetable, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStudentTimetableRow{}
+	for rows.Next() {
+		var i ListStudentTimetableRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AssignmentID,
+			&i.DayOfWeek,
+			&i.StartTime,
+			&i.EndTime,
+			&i.RoomLabel,
+			&i.Notes,
+			&i.ClassID,
+			&i.ClassName,
+			&i.ClassCode,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.TeacherEmployeeID,
+			&i.TeacherName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeacherTimetable = `-- name: ListTeacherTimetable :many
+SELECT ts.id, ts.assignment_id, ts.day_of_week, ts.start_time, ts.end_time, ts.room_label, ts.notes,
+       c.id AS class_id, c.name AS class_name, c.code AS class_code,
+       s.id AS subject_id, s.name AS subject_name, s.code AS subject_code,
+       e.id AS teacher_employee_id, e.nama AS teacher_name
+FROM timetable_slots ts
+JOIN class_subject_assignments a ON a.id = ts.assignment_id
+JOIN school_classes c ON c.id = a.class_id
+JOIN subjects s ON s.id = a.subject_id
+JOIN employees e ON e.id = a.teacher_employee_id
+WHERE a.teacher_employee_id = $1
+ORDER BY ts.day_of_week ASC, ts.start_time ASC, c.name ASC, s.name ASC
+`
+
+type ListTeacherTimetableRow struct {
+	ID                pgtype.UUID `json:"id"`
+	AssignmentID      pgtype.UUID `json:"assignment_id"`
+	DayOfWeek         int16       `json:"day_of_week"`
+	StartTime         pgtype.Time `json:"start_time"`
+	EndTime           pgtype.Time `json:"end_time"`
+	RoomLabel         string      `json:"room_label"`
+	Notes             string      `json:"notes"`
+	ClassID           pgtype.UUID `json:"class_id"`
+	ClassName         string      `json:"class_name"`
+	ClassCode         string      `json:"class_code"`
+	SubjectID         pgtype.UUID `json:"subject_id"`
+	SubjectName       string      `json:"subject_name"`
+	SubjectCode       string      `json:"subject_code"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+	TeacherName       string      `json:"teacher_name"`
+}
+
+func (q *Queries) ListTeacherTimetable(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]ListTeacherTimetableRow, error) {
+	rows, err := q.db.Query(ctx, listTeacherTimetable, teacherEmployeeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTeacherTimetableRow{}
+	for rows.Next() {
+		var i ListTeacherTimetableRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AssignmentID,
+			&i.DayOfWeek,
+			&i.StartTime,
+			&i.EndTime,
+			&i.RoomLabel,
+			&i.Notes,
+			&i.ClassID,
+			&i.ClassName,
+			&i.ClassCode,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.TeacherEmployeeID,
+			&i.TeacherName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTimetableSlots = `-- name: ListTimetableSlots :many
 SELECT ts.id, ts.assignment_id, ts.day_of_week, ts.start_time, ts.end_time, ts.room_label, ts.notes,
        ts.created_at, ts.updated_at,

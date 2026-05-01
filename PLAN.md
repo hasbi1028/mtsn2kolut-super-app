@@ -285,6 +285,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Web-admin academic page now has a `Jadwal` tab for listing and adding timetable slots
 - [x] Timetable edit flow and basic conflict guard — operator can update slots and backend rejects overlapping class/guru schedules on the same day/time
 - [x] Timetable ops filters and weekly matrix — operator can filter by kelas/guru/search and inspect one class in a weekly matrix view
+- [x] Portal timetable read baseline — dashboard guru dan siswa sekarang menampilkan jadwal mengajar / jadwal pelajaran dari slot timetable yang tersusun
 
 ### Sprint 13 — Inventory & Asset Management
 ### Sprint 14 — Fee & Payment Management

@@ -11,6 +11,33 @@ JOIN subjects s ON s.id = a.subject_id
 JOIN employees e ON e.id = a.teacher_employee_id
 ORDER BY ts.day_of_week ASC, ts.start_time ASC, c.name ASC, s.name ASC;
 
+-- name: ListStudentTimetable :many
+SELECT ts.id, ts.assignment_id, ts.day_of_week, ts.start_time, ts.end_time, ts.room_label, ts.notes,
+       c.id AS class_id, c.name AS class_name, c.code AS class_code,
+       s.id AS subject_id, s.name AS subject_name, s.code AS subject_code,
+       e.id AS teacher_employee_id, e.nama AS teacher_name
+FROM timetable_slots ts
+JOIN class_subject_assignments a ON a.id = ts.assignment_id
+JOIN school_classes c ON c.id = a.class_id
+JOIN subjects s ON s.id = a.subject_id
+JOIN employees e ON e.id = a.teacher_employee_id
+JOIN students st ON st.class_id = c.id
+WHERE st.id = $1
+ORDER BY ts.day_of_week ASC, ts.start_time ASC, s.name ASC;
+
+-- name: ListTeacherTimetable :many
+SELECT ts.id, ts.assignment_id, ts.day_of_week, ts.start_time, ts.end_time, ts.room_label, ts.notes,
+       c.id AS class_id, c.name AS class_name, c.code AS class_code,
+       s.id AS subject_id, s.name AS subject_name, s.code AS subject_code,
+       e.id AS teacher_employee_id, e.nama AS teacher_name
+FROM timetable_slots ts
+JOIN class_subject_assignments a ON a.id = ts.assignment_id
+JOIN school_classes c ON c.id = a.class_id
+JOIN subjects s ON s.id = a.subject_id
+JOIN employees e ON e.id = a.teacher_employee_id
+WHERE a.teacher_employee_id = $1
+ORDER BY ts.day_of_week ASC, ts.start_time ASC, c.name ASC, s.name ASC;
+
 -- name: GetTimetableSlot :one
 SELECT id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at
 FROM timetable_slots

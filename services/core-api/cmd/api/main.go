@@ -210,6 +210,7 @@ func main() {
 		r.With(requireAdmin).Post("/api/parents/{id}/link", parentH.LinkStudent)
 		r.With(requireAdmin).Post("/api/parents/{id}/unlink", parentH.UnlinkStudent)
 		r.Get("/api/portal/student/me", portalH.StudentMe)
+		r.Get("/api/portal/guru/timetable", portalH.TeacherTimetable)
 		r.Get("/api/portal/parent/me", portalH.ParentMe)
 		r.With(requireAdmin).Get("/api/website/content", websiteH.List)
 		r.With(requireAdmin).Post("/api/website/content", websiteH.Create)
