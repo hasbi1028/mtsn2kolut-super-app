@@ -82,6 +82,10 @@
 	let timetableNotes = $state('');
 	let timetableBusy = $state(false);
 	let editingTimetableId = $state('');
+	let timetableClassFilter = $state('');
+	let timetableTeacherFilter = $state('');
+	let timetableSearch = $state('');
+	let timetableFocusClassId = $state('');
 
 	const dayLabels: Record<number, string> = {
 		1: 'Senin',
@@ -101,6 +105,56 @@
 		};
 	});
 
+	const timetableClassOptions = $derived.by(() =>
+		Array.from(new Map(timetableSlots.map((slot) => [slot.class_id, { id: slot.class_id, name: slot.class_name, code: slot.class_code }])).values())
+			.sort((a, b) => a.name.localeCompare(b.name, 'id-ID'))
+	);
+
+	const timetableTeacherOptions = $derived.by(() =>
+		Array.from(new Map(timetableSlots.map((slot) => [slot.teacher_employee_id, { id: slot.teacher_employee_id, name: slot.teacher_name }])).values())
+			.sort((a, b) => a.name.localeCompare(b.name, 'id-ID'))
+	);
+
+	const filteredTimetableSlots = $derived.by(() => {
+		const query = timetableSearch.trim().toLowerCase();
+		return timetableSlots.filter((slot) => {
+			if (timetableClassFilter && slot.class_id !== timetableClassFilter) return false;
+			if (timetableTeacherFilter && slot.teacher_employee_id !== timetableTeacherFilter) return false;
+			if (!query) return true;
+			return [
+				slot.class_name,
+				slot.class_code,
+				slot.subject_name,
+				slot.subject_code,
+				slot.teacher_name,
+				slot.room_label,
+				slot.notes,
+				dayLabels[slot.day_of_week] ?? '',
+			].some((value) => value.toLowerCase().includes(query));
+		});
+	});
+
+	const visibleFocusClassOptions = $derived.by(() =>
+		Array.from(new Map(filteredTimetableSlots.map((slot) => [slot.class_id, { id: slot.class_id, name: slot.class_name, code: slot.class_code }])).values())
+			.sort((a, b) => a.name.localeCompare(b.name, 'id-ID'))
+	);
+
+	const effectiveFocusClassId = $derived.by(() => {
+		if (timetableFocusClassId && visibleFocusClassOptions.some((item) => item.id === timetableFocusClassId)) {
+			return timetableFocusClassId;
+		}
+		return visibleFocusClassOptions[0]?.id ?? '';
+	});
+
+	const focusClassTimetableSlots = $derived.by(() =>
+		filteredTimetableSlots
+			.filter((slot) => slot.class_id === effectiveFocusClassId)
+			.sort((a, b) => {
+				if (a.day_of_week !== b.day_of_week) return a.day_of_week - b.day_of_week;
+				return a.start_time.localeCompare(b.start_time);
+			})
+	);
+
 	async function load() {
 		try {
 			const res = await fetch('/api/academic');
@@ -112,6 +166,9 @@
 			subjects = d.subjects ?? [];
 			assignments = d.assignments ?? [];
 			timetableSlots = d.timetableSlots ?? [];
+			if (!timetableFocusClassId && (d.timetableSlots?.length ?? 0) > 0) {
+				timetableFocusClassId = d.timetableSlots[0].class_id;
+			}
 		} catch (e) {
 			error = 'Gagal memuat data akademik';
 		} finally {
@@ -258,6 +315,10 @@
 
 	function fmtTime(value: string) {
 		return value.slice(0, 5);
+	}
+
+	function groupedFocusSlots(day: number) {
+		return focusClassTimetableSlots.filter((slot) => slot.day_of_week === day);
 	}
 
 	onMount(load);
@@ -438,7 +499,33 @@
 									<Card.Title class="text-base">Daftar Slot Jadwal</Card.Title>
 									<Card.Description>Kelola jam pelajaran berdasarkan assignment kelas, mapel, dan guru yang sudah aktif di sistem.</Card.Description>
 								</Card.Header>
-								<Card.Content class="overflow-x-auto p-0">
+								<Card.Content class="space-y-4 p-4">
+									<div class="grid gap-3 md:grid-cols-[1fr_1fr_1.2fr]">
+										<div>
+											<label for="timetable-class-filter" class="mb-1 block text-xs font-medium text-slate-600">Filter Kelas</label>
+											<select id="timetable-class-filter" bind:value={timetableClassFilter} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+												<option value="">Semua kelas</option>
+												{#each timetableClassOptions as option (option.id)}
+													<option value={option.id}>{option.code} · {option.name}</option>
+												{/each}
+											</select>
+										</div>
+										<div>
+											<label for="timetable-teacher-filter" class="mb-1 block text-xs font-medium text-slate-600">Filter Guru</label>
+											<select id="timetable-teacher-filter" bind:value={timetableTeacherFilter} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+												<option value="">Semua guru</option>
+												{#each timetableTeacherOptions as option (option.id)}
+													<option value={option.id}>{option.name}</option>
+												{/each}
+											</select>
+										</div>
+										<div>
+											<label for="timetable-search" class="mb-1 block text-xs font-medium text-slate-600">Cari Cepat</label>
+											<Input id="timetable-search" bind:value={timetableSearch} placeholder="Cari mapel, ruang, catatan, atau hari..." />
+										</div>
+									</div>
+
+									<div class="overflow-x-auto">
 									<Table.Root>
 										<Table.Header>
 											<Table.Row>
@@ -452,7 +539,7 @@
 											</Table.Row>
 										</Table.Header>
 										<Table.Body>
-											{#each timetableSlots as slot (slot.id)}
+											{#each filteredTimetableSlots as slot (slot.id)}
 												<Table.Row>
 													<Table.Cell class="font-medium">{dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`}</Table.Cell>
 													<Table.Cell class="text-slate-600">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)}</Table.Cell>
@@ -481,8 +568,10 @@
 												<Table.Row>
 													<Table.Cell colspan={7} class="p-4">
 														<EmptyStatePanel
-															title="Belum ada slot jadwal pelajaran"
-															description="Tambahkan slot pertama agar kelas dan mapel mulai tersusun dalam jadwal mingguan."
+															title={timetableClassFilter || timetableTeacherFilter || timetableSearch.trim() ? 'Tidak ada slot yang cocok' : 'Belum ada slot jadwal pelajaran'}
+															description={timetableClassFilter || timetableTeacherFilter || timetableSearch.trim()
+																? 'Ubah filter atau kata kunci pencarian untuk melihat slot jadwal lain yang sudah ada.'
+																: 'Tambahkan slot pertama agar kelas dan mapel mulai tersusun dalam jadwal mingguan.'}
 															compact
 														/>
 													</Table.Cell>
@@ -490,6 +579,7 @@
 											{/each}
 										</Table.Body>
 									</Table.Root>
+									</div>
 								</Card.Content>
 							</Card.Root>
 						</div>
@@ -548,6 +638,76 @@
 							</Card.Content>
 						</Card.Root>
 					</div>
+
+					<Card.Root>
+						<Card.Header class="pb-2">
+							<Card.Title class="text-base">Matriks Mingguan per Kelas</Card.Title>
+							<Card.Description>Pilih satu kelas untuk melihat ritme jadwal per hari tanpa harus memindai tabel panjang.</Card.Description>
+						</Card.Header>
+						<Card.Content class="space-y-4">
+							<div class="grid gap-3 md:grid-cols-[minmax(0,18rem)_auto] md:items-end">
+								<div>
+									<label for="timetable-focus-class" class="mb-1 block text-xs font-medium text-slate-600">Kelas Fokus</label>
+									<select id="timetable-focus-class" bind:value={timetableFocusClassId} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" disabled={visibleFocusClassOptions.length === 0}>
+										{#if visibleFocusClassOptions.length === 0}
+											<option value="">Tidak ada kelas pada hasil filter</option>
+										{:else}
+											{#each visibleFocusClassOptions as option (option.id)}
+												<option value={option.id}>{option.code} · {option.name}</option>
+											{/each}
+										{/if}
+									</select>
+								</div>
+								{#if effectiveFocusClassId}
+									<p class="text-sm text-slate-500">Menampilkan {focusClassTimetableSlots.length} slot untuk kelas terpilih pada hasil filter aktif.</p>
+								{/if}
+							</div>
+
+							{#if !effectiveFocusClassId}
+								<EmptyStatePanel
+									title="Belum ada kelas untuk ditinjau"
+									description="Isi jadwal terlebih dahulu atau longgarkan filter agar matriks mingguan bisa ditampilkan."
+									compact
+								/>
+							{:else}
+								<div class="grid gap-3 lg:grid-cols-3">
+									{#each Object.entries(dayLabels) as [dayKey, label] (`matrix-${dayKey}`)}
+										{@const day = Number(dayKey)}
+										<Card.Root class="border-slate-200 shadow-none">
+											<Card.Header class="pb-2">
+												<Card.Title class="text-sm">{label}</Card.Title>
+											</Card.Header>
+											<Card.Content class="space-y-2">
+												{#if groupedFocusSlots(day).length === 0}
+													<div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+														Belum ada slot untuk hari ini.
+													</div>
+												{:else}
+													{#each groupedFocusSlots(day) as slot (slot.id)}
+														<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+															<div class="flex items-start justify-between gap-3">
+																<div>
+																	<p class="font-semibold text-slate-900">{slot.subject_name}</p>
+																	<p class="text-xs text-slate-500">{slot.teacher_name}</p>
+																</div>
+																<Badge variant="outline" class="border-emerald-200 text-emerald-700">
+																	{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)}
+																</Badge>
+															</div>
+															<p class="mt-2 text-sm text-slate-600">{slot.room_label || 'Ruang belum diisi'}</p>
+															{#if slot.notes}
+																<p class="mt-1 text-xs leading-6 text-slate-500">{slot.notes}</p>
+															{/if}
+														</div>
+													{/each}
+												{/if}
+											</Card.Content>
+										</Card.Root>
+									{/each}
+								</div>
+							{/if}
+						</Card.Content>
+					</Card.Root>
 				</div>
 			</Tabs.Content>
 
