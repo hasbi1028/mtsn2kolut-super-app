@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 
@@ -73,6 +74,25 @@
 		return value?.slice(0, 5) || '—';
 	}
 
+	function csvEscape(value: string | number | null | undefined) {
+		const text = String(value ?? '');
+		if (text.includes('"') || text.includes(',') || text.includes('\n')) {
+			return `"${text.replaceAll('"', '""')}"`;
+		}
+		return text;
+	}
+
+	function downloadCsv(filename: string, rows: Array<Array<string | number | null | undefined>>) {
+		const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n');
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+		const href = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = href;
+		link.download = filename;
+		link.click();
+		URL.revokeObjectURL(href);
+	}
+
 	function groupByDay<T extends { day_of_week: number }>(items: T[]) {
 		return Object.entries(dayLabels).map(([day, label]) => ({
 			day: Number(day),
@@ -137,6 +157,57 @@
 	onMount(() => {
 		void load();
 	});
+
+	function exportGuruTimetable() {
+		downloadCsv('jadwal-guru.csv', [
+			['Hari', 'Mulai', 'Selesai', 'Kelas', 'Mapel', 'Guru', 'Ruang', 'Catatan'],
+			...guruTimetable.map((slot) => [
+				dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`,
+				fmtTime(slot.start_time),
+				fmtTime(slot.end_time),
+				slot.class_name,
+				slot.subject_name,
+				slot.teacher_name,
+				slot.room_label,
+				slot.notes,
+			]),
+		]);
+	}
+
+	function exportStudentTimetable() {
+		const timetable = studentPortal?.timetable ?? [];
+		downloadCsv('jadwal-siswa.csv', [
+			['Hari', 'Mulai', 'Selesai', 'Kelas', 'Mapel', 'Guru', 'Ruang', 'Catatan'],
+			...timetable.map((slot) => [
+				dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`,
+				fmtTime(slot.start_time),
+				fmtTime(slot.end_time),
+				slot.class_name,
+				slot.subject_name,
+				slot.teacher_name,
+				slot.room_label,
+				slot.notes,
+			]),
+		]);
+	}
+
+	function exportParentTimetable() {
+		const timetable = parentPortal?.timetable ?? [];
+		downloadCsv('jadwal-anak.csv', [
+			['Nama Anak', 'Hari', 'Mulai', 'Selesai', 'Kelas', 'Mapel', 'Guru', 'Ruang', 'Catatan'],
+			...timetable.map((slot) => [
+				slot.student_name,
+				dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`,
+				fmtTime(slot.start_time),
+				fmtTime(slot.end_time),
+				slot.class_name,
+				slot.subject_name,
+				slot.teacher_name,
+				slot.room_label,
+				slot.notes,
+			]),
+		]);
+	}
 </script>
 
 <svelte:head>
@@ -144,16 +215,25 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<div>
+	<div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
 		{#if isGuru}
-			<h1 class="text-2xl font-semibold text-slate-800">Jadwal Mengajar</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Lihat slot mengajar mingguan Anda dalam tampilan yang lebih penuh daripada ringkasan dashboard.</p>
+			<div>
+				<h1 class="text-2xl font-semibold text-slate-800">Jadwal Mengajar</h1>
+				<p class="mt-1 text-sm text-muted-foreground">Lihat slot mengajar mingguan Anda dalam tampilan yang lebih penuh daripada ringkasan dashboard.</p>
+			</div>
+			<Button variant="outline" onclick={exportGuruTimetable} disabled={loading || guruTimetable.length === 0}>Ekspor CSV</Button>
 		{:else if isSiswa}
-			<h1 class="text-2xl font-semibold text-slate-800">Jadwal Pelajaran</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Pantau jadwal pelajaran mingguan berdasarkan kelas yang sedang aktif.</p>
+			<div>
+				<h1 class="text-2xl font-semibold text-slate-800">Jadwal Pelajaran</h1>
+				<p class="mt-1 text-sm text-muted-foreground">Pantau jadwal pelajaran mingguan berdasarkan kelas yang sedang aktif.</p>
+			</div>
+			<Button variant="outline" onclick={exportStudentTimetable} disabled={loading || (studentPortal?.timetable.length ?? 0) === 0}>Ekspor CSV</Button>
 		{:else}
-			<h1 class="text-2xl font-semibold text-slate-800">Jadwal Anak</h1>
-			<p class="mt-1 text-sm text-muted-foreground">Lihat ringkasan jadwal pelajaran setiap anak yang sudah terhubung ke akun orang tua ini.</p>
+			<div>
+				<h1 class="text-2xl font-semibold text-slate-800">Jadwal Anak</h1>
+				<p class="mt-1 text-sm text-muted-foreground">Lihat ringkasan jadwal pelajaran setiap anak yang sudah terhubung ke akun orang tua ini.</p>
+			</div>
+			<Button variant="outline" onclick={exportParentTimetable} disabled={loading || (parentPortal?.timetable.length ?? 0) === 0}>Ekspor CSV</Button>
 		{/if}
 	</div>
 
