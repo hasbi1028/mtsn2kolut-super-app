@@ -96,6 +96,7 @@
 	];
 
 	const userRoles = $derived(user?.roles || (user?.role ? [user.role] : []));
+	const resolveNavHref = resolve as unknown as (href: string) => string;
 
 	const nav = $derived(
 		allNav
@@ -283,7 +284,7 @@
 						<li>
 							<div class={`group relative flex items-center ${desktopExpanded ? 'gap-1' : 'gap-0 lg:justify-center'}`}>
 								<a
-									href={resolve(item.href)}
+									href={resolveNavHref(item.href)}
 									onclick={() => (open = false)}
 									title={!desktopExpanded ? railTooltip(item, item.group) : undefined}
 									class={`flex min-w-0 flex-1 items-center rounded-md py-1.5 text-sm font-medium transition-colors
@@ -338,7 +339,7 @@
 							<li>
 								<div class={`group relative flex items-center ${desktopExpanded ? 'gap-1' : 'gap-0 lg:justify-center'}`}>
 									<a
-										href={resolve(item.href)}
+										href={resolveNavHref(item.href)}
 										onclick={() => (open = false)}
 										title={!desktopExpanded ? railTooltip(item, section.group) : undefined}
 										class={`flex min-w-0 flex-1 items-center rounded-md py-1.5 text-sm font-medium transition-colors
