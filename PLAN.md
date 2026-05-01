@@ -1,6 +1,6 @@
 # MTs Negeri 2 Kolaka Utara — Super App Strategic Plan
 
-> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Last Updated: 2026-04-30
+> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Last Updated: 2026-05-01
 > This file is the master roadmap. Update after each sprint completion.
 
 ---
@@ -288,6 +288,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Portal timetable read baseline — dashboard guru dan siswa sekarang menampilkan jadwal mengajar / jadwal pelajaran dari slot timetable yang tersusun
 - [x] Timetable class export — operator dapat mengekspor CSV dari kelas fokus pada matriks mingguan
 - [x] Timetable room conflict guard — backend sekarang juga menolak bentrok ruang pada hari/jam yang sama bila room label dipakai ganda
+- [x] Parent timetable visibility — dashboard orang tua sekarang juga menampilkan ringkasan jadwal setiap anak yang terhubung
 
 ### Sprint 13 — Inventory & Asset Management
 ### Sprint 14 — Fee & Payment Management

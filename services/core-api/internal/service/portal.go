@@ -37,6 +37,10 @@ func (s *Portal) TeacherTimetable(ctx context.Context, employeeID pgtype.UUID) (
 	return s.q.ListTeacherTimetable(ctx, employeeID)
 }
 
+func (s *Portal) ParentChildrenTimetable(ctx context.Context, parentID pgtype.UUID) ([]db.ListParentChildrenTimetableRow, error) {
+	return s.q.ListParentChildrenTimetable(ctx, parentID)
+}
+
 func (s *Portal) ParentOverview(ctx context.Context, parentID pgtype.UUID) (db.Parent, []db.ListParentChildrenRow, error) {
 	parent, err := s.q.GetParent(ctx, parentID)
 	if err != nil {

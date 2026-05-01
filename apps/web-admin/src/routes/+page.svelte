@@ -79,6 +79,7 @@
 	interface ParentPortalData {
 		parent: { nama: string; phone: string; address: string };
 		children: Array<{ id: string; nama: string; nis: string; class_name: string }>;
+		timetable: Array<TimetableEntry & { student_id: string; student_name: string }>;
 	}
 
 	let academicStats = $state<AcademicStats | null>(null);
@@ -99,6 +100,14 @@
 		(isParent && !parentPortal) ||
 		((isAdmin || isStaff) && !academicStats)
 	);
+	const parentTimetableByChild = $derived.by(() => {
+		const portal = parentPortal;
+		if (!portal) return [];
+		return portal.children.map((child) => ({
+			child,
+			slots: portal.timetable.filter((slot) => slot.student_id === child.id),
+		}));
+	});
 
 	function parseData<T>(raw: unknown): T | null {
 		if (!raw || typeof raw !== 'object') return null;
@@ -373,6 +382,58 @@
 				</Card.Content>
 			</Card.Root>
 		</div>
+
+		<Card.Root class="border-slate-200">
+			<Card.Header>
+				<Card.Title class="text-base">Jadwal Anak</Card.Title>
+				<Card.Description>Ringkasan slot pelajaran untuk setiap anak yang sudah terhubung ke akun orang tua ini.</Card.Description>
+			</Card.Header>
+			<Card.Content class="space-y-4">
+				{#if parentTimetableByChild.length > 0}
+					{#each parentTimetableByChild as item (`parent-timetable-${item.child.id}`)}
+						<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+							<div class="flex items-start justify-between gap-3">
+								<div>
+									<p class="text-sm font-semibold text-slate-900">{item.child.nama}</p>
+									<p class="mt-1 text-xs text-slate-500">{item.child.class_name || 'Belum ada kelas'}</p>
+								</div>
+								<Badge variant="outline">{item.slots.length} slot</Badge>
+							</div>
+
+							{#if item.slots.length > 0}
+								<div class="mt-3 grid gap-3 lg:grid-cols-2">
+									{#each item.slots as slot (slot.id)}
+										<div class="rounded-xl border border-slate-200 bg-white p-3">
+											<div class="flex items-start justify-between gap-3">
+												<div>
+													<p class="text-sm font-medium text-slate-900">{slot.subject_name}</p>
+													<p class="mt-1 text-xs text-slate-500">{slot.teacher_name}</p>
+												</div>
+												<Badge variant="outline">{dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`}</Badge>
+											</div>
+											<p class="mt-2 text-xs text-slate-500">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
+											{#if slot.notes}
+												<p class="mt-1 text-xs text-slate-500">{slot.notes}</p>
+											{/if}
+										</div>
+									{/each}
+								</div>
+							{:else}
+								<div class="mt-3 rounded-xl border border-dashed border-slate-300 bg-white px-3 py-4 text-sm text-slate-500">
+									Jadwal untuk anak ini belum tersedia.
+								</div>
+							{/if}
+						</div>
+					{/each}
+				{:else}
+					<EmptyStatePanel
+						compact
+						title="Jadwal anak belum tersedia"
+						description="Jadwal akan muncul di sini setelah data anak terhubung dan operator akademik menyusun slot kelasnya."
+					/>
+				{/if}
+			</Card.Content>
+		</Card.Root>
 	{/if}
 
 	{#if isGuru && dashboardLoading}

@@ -96,8 +96,14 @@ func (h *Portal) ParentMe(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
+	timetable, err := h.svc.ParentChildrenTimetable(r.Context(), parentID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
 	api.OK(w, map[string]any{
-		"parent":   parent,
-		"children": children,
+		"parent":    parent,
+		"children":  children,
+		"timetable": timetable,
 	})
 }

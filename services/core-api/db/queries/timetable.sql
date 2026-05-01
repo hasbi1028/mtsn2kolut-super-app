@@ -38,6 +38,22 @@ JOIN employees e ON e.id = a.teacher_employee_id
 WHERE a.teacher_employee_id = $1
 ORDER BY ts.day_of_week ASC, ts.start_time ASC, c.name ASC, s.name ASC;
 
+-- name: ListParentChildrenTimetable :many
+SELECT st.id AS student_id, st.nama AS student_name,
+       ts.id, ts.assignment_id, ts.day_of_week, ts.start_time, ts.end_time, ts.room_label, ts.notes,
+       c.id AS class_id, c.name AS class_name, c.code AS class_code,
+       s.id AS subject_id, s.name AS subject_name, s.code AS subject_code,
+       e.id AS teacher_employee_id, e.nama AS teacher_name
+FROM parent_students ps
+JOIN students st ON st.id = ps.student_id
+JOIN school_classes c ON c.id = st.class_id
+JOIN class_subject_assignments a ON a.class_id = c.id
+JOIN timetable_slots ts ON ts.assignment_id = a.id
+JOIN subjects s ON s.id = a.subject_id
+JOIN employees e ON e.id = a.teacher_employee_id
+WHERE ps.parent_id = $1
+ORDER BY st.nama ASC, ts.day_of_week ASC, ts.start_time ASC, s.name ASC;
+
 -- name: GetTimetableSlot :one
 SELECT id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at
 FROM timetable_slots
