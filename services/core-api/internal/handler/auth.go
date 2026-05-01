@@ -17,15 +17,28 @@ import (
 )
 
 type Auth struct {
-	svc   *service.Auth
+	svc   authService
 	audit authAuditWriter
+}
+
+type authService interface {
+	Login(ctx context.Context, username, password string, meta service.SessionMeta) (domain.TokenPair, error)
+	Refresh(ctx context.Context, refreshToken string, meta service.SessionMeta) (domain.TokenPair, error)
+	Logout(ctx context.Context, refreshToken string) error
+	LogoutAll(ctx context.Context, userID pgtype.UUID) error
+	ListActiveSessions(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error)
+	RevokeSession(ctx context.Context, userID, sessionID pgtype.UUID) error
+	UpdateSessionLabel(ctx context.Context, userID, sessionID pgtype.UUID, deviceLabel string) error
+	GetSidebarPreferences(ctx context.Context, userID pgtype.UUID) (service.SidebarPreferences, error)
+	UpdateSidebarPreferences(ctx context.Context, userID pgtype.UUID, prefs service.SidebarPreferences) (service.SidebarPreferences, error)
+	ChangePassword(ctx context.Context, username, oldPassword, newPassword string) error
 }
 
 type authAuditWriter interface {
 	CreateAuditLog(ctx context.Context, arg db.CreateAuditLogParams) (db.AuditLog, error)
 }
 
-func NewAuth(svc *service.Auth, audit authAuditWriter) *Auth { return &Auth{svc: svc, audit: audit} }
+func NewAuth(svc authService, audit authAuditWriter) *Auth { return &Auth{svc: svc, audit: audit} }
 
 func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	var body struct {
