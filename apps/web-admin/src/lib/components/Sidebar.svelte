@@ -17,6 +17,9 @@
 	let commandOpen = $state(false);
 	let commandQuery = $state('');
 	let commandInputRef = $state<HTMLInputElement | null>(null);
+	let inventoryAttention = $state(0);
+	let libraryAttention = $state(0);
+	let pusakaAttention = $state(0);
 
 	type NavItem = { href: string; label: string; icon: string; roles?: string[]; pinnable?: boolean };
 	type NavGroup = { group: string; items: NavItem[] };
@@ -262,6 +265,64 @@
 		return `${group} · ${item.label}`;
 	}
 
+	function navBadge(href: string) {
+		if (href === '/inventory/items') return inventoryAttention;
+		if (href === '/library/loans') return libraryAttention;
+		if (href === '/pusaka/antrian') return pusakaAttention;
+		return 0;
+	}
+
+	function groupBadge(group: string) {
+		if (group === 'Inventaris') return inventoryAttention;
+		if (group === 'Perpustakaan') return libraryAttention;
+		if (group === 'PUSAKA') return pusakaAttention;
+		return 0;
+	}
+
+	async function loadSidebarAttention() {
+		const requests: Promise<void>[] = [];
+
+		if (userRoles.includes('admin') || userRoles.includes('staf')) {
+			requests.push(
+				fetch('/api/inventory/stats')
+					.then((res) => (res.ok ? res.json() : null))
+					.then((payload) => {
+						inventoryAttention = Number(payload?.data?.perlu_restok ?? payload?.perlu_restok ?? 0);
+					})
+					.catch(() => {
+						inventoryAttention = 0;
+					})
+			);
+			requests.push(
+				fetch('/api/library/stats')
+					.then((res) => (res.ok ? res.json() : null))
+					.then((payload) => {
+						const overdue = Number(payload?.data?.terlambat ?? payload?.terlambat ?? 0);
+						const unpaid = Number(payload?.data?.denda_belum_lunas ?? payload?.denda_belum_lunas ?? 0);
+						libraryAttention = overdue + unpaid;
+					})
+					.catch(() => {
+						libraryAttention = 0;
+					})
+			);
+		}
+
+		if (userRoles.includes('admin')) {
+			requests.push(
+				fetch('/api/queue/stats')
+					.then((res) => (res.ok ? res.json() : null))
+					.then((payload) => {
+						pusakaAttention = Number(payload?.failed ?? payload?.data?.failed ?? 0);
+					})
+					.catch(() => {
+						pusakaAttention = 0;
+					})
+			);
+		}
+
+		await Promise.allSettled(requests);
+	}
+
 	function openCommandPalette() {
 		commandQuery = '';
 		commandOpen = true;
@@ -323,6 +384,7 @@
 	onMount(() => {
 		loadPinnedItems();
 		loadRecentItems();
+		void loadSidebarAttention();
 		const handleKeydown = (event: KeyboardEvent) => {
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
 				event.preventDefault();
@@ -528,6 +590,11 @@
 					aria-expanded={isGroupOpen(section.group)}
 				>
 					<span class="truncate">{section.group}</span>
+					{#if groupBadge(section.group) > 0 && desktopExpanded}
+						<span class="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-amber-700">
+							{groupBadge(section.group)}
+						</span>
+					{/if}
 					<svg class={`ml-auto h-3.5 w-3.5 transition-transform ${isGroupOpen(section.group) ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 					</svg>
@@ -552,6 +619,11 @@
 									>
 										{@render SidebarIcon({ name: item.icon, active: isActive(item.href) })}
 										<span class={`truncate ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{item.label}</span>
+										{#if navBadge(item.href) > 0 && desktopExpanded}
+											<span class="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+												{navBadge(item.href)}
+											</span>
+										{/if}
 									</a>
 									{#if item.pinnable !== false}
 										<button
