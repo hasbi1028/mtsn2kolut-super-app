@@ -136,6 +136,7 @@
 	let bulkSaveBusy = $state(false);
 	let finalizationBusy = $state(false);
 	let batchFinalizationBusy = $state(false);
+	let batchReopenBusy = $state(false);
 	let exportBusy = $state(false);
 	let classExportBusy = $state(false);
 	let editingComponentId = $state('');
@@ -222,6 +223,9 @@
 	);
 	const filteredReadyAssignments = $derived(
 		filteredAssignmentStatuses.filter((item) => item.ready && !item.is_finalized)
+	);
+	const filteredFinalizedAssignments = $derived(
+		filteredAssignmentStatuses.filter((item) => item.is_finalized)
 	);
 	const filteredTeacherSummaries = $derived.by(() => {
 		const grouped: Record<string, TeacherReadinessSummary> = {};
@@ -480,6 +484,16 @@
 		const json = await res.json().catch(() => ({}));
 		if (!res.ok) {
 			throw new Error(json.error ?? 'Gagal memfinalisasi assignment');
+		}
+	}
+
+	async function reopenAssignmentById(targetAssignmentId: string) {
+		const res = await fetch(`/api/grades/assignments/${targetAssignmentId}/finalize`, {
+			method: 'DELETE'
+		});
+		const json = await res.json().catch(() => ({}));
+		if (!res.ok) {
+			throw new Error(json.error ?? 'Gagal membuka finalisasi assignment');
 		}
 	}
 
@@ -836,18 +850,41 @@
 		}
 	}
 
+	async function reopenFilteredFinalizedAssignments() {
+		if (filteredFinalizedAssignments.length === 0) {
+			showError('Tidak ada assignment final pada filter aktif.');
+			return;
+		}
+		if (!confirm(`Buka kembali ${filteredFinalizedAssignments.length} assignment final dari hasil filter saat ini?`)) {
+			return;
+		}
+
+		batchReopenBusy = true;
+		const failedAssignments: string[] = [];
+		try {
+			for (const item of filteredFinalizedAssignments) {
+				try {
+					await reopenAssignmentById(item.assignment_id);
+				} catch {
+					failedAssignments.push(`${item.class_code} · ${item.subject_code}`);
+				}
+			}
+			if (failedAssignments.length > 0) {
+				showError(`Sebagian pembukaan finalisasi gagal: ${failedAssignments.slice(0, 3).join(', ')}${failedAssignments.length > 3 ? ' dan lainnya' : ''}.`);
+			} else {
+				showSuccess(`${filteredFinalizedAssignments.length} assignment final berhasil dibuka kembali.`);
+			}
+			await loadOverview();
+		} finally {
+			batchReopenBusy = false;
+		}
+	}
+
 	async function reopenFinalization() {
 		if (!selectedAssignment) return;
 		finalizationBusy = true;
 		try {
-			const res = await fetch(`/api/grades/assignments/${selectedAssignment.id}/finalize`, {
-				method: 'DELETE'
-			});
-			if (!res.ok) {
-				const json = await res.json().catch(() => ({}));
-				showError(json.error ?? 'Gagal membuka finalisasi assignment');
-				return;
-			}
+			await reopenAssignmentById(selectedAssignment.id);
 			showSuccess('Finalisasi assignment dibuka kembali');
 			await loadOverview();
 		} finally {
@@ -1032,6 +1069,7 @@
 								<Badge variant="outline">Filter: {assignmentFilterLabel(assignmentStatusFilter)}</Badge>
 								<Badge variant="outline">Hasil: {filteredAssignmentStatuses.length}</Badge>
 								<Badge variant="outline">Siap Final: {filteredReadyAssignments.length}</Badge>
+								<Badge variant="outline">Sudah Final: {filteredFinalizedAssignments.length}</Badge>
 								{#if assignmentTeacherFilter}
 									<Badge variant="outline">Guru: {assignmentTeacherFilter}</Badge>
 								{/if}
@@ -1051,6 +1089,22 @@
 									loadingLabel="Memfinalisasi batch..."
 									onclick={finalizeFilteredReadyAssignments}
 									label="Finalisasi Semua yang Siap"
+								/>
+							</div>
+						{/if}
+						{#if filteredFinalizedAssignments.length > 0}
+							<div class="flex flex-col gap-3 rounded-xl border border-sky-200 bg-sky-50/60 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+								<div>
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Buka Finalisasi Batch</p>
+									<p class="mt-2 text-sm font-medium text-slate-900">{filteredFinalizedAssignments.length} assignment final ada di hasil filter aktif.</p>
+									<p class="text-sm text-slate-600">Gunakan flow ini saat operator perlu membuka kembali beberapa assignment final untuk koreksi terkontrol.</p>
+								</div>
+								<LoadingButton
+									variant="outline"
+									loading={batchReopenBusy}
+									loadingLabel="Membuka batch..."
+									onclick={reopenFilteredFinalizedAssignments}
+									label="Buka Semua yang Final"
 								/>
 							</div>
 						{/if}
