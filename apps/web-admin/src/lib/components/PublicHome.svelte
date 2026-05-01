@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+
 	type WebsiteContent = {
 		id: string;
 		title: string;
@@ -12,6 +14,7 @@
 	let { home }: {
 		home?: {
 			posts: WebsiteContent[];
+			featuredPosts: WebsiteContent[];
 			announcements: WebsiteContent[];
 			profil: WebsiteContent | null;
 			ppdbInfo: WebsiteContent | null;
@@ -51,10 +54,10 @@
 					</p>
 				</div>
 				<div class="flex flex-wrap gap-3">
-					<a href="/ppdb" class="rounded-full bg-[oklch(0.38_0.13_145)] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:brightness-105">
+					<a href={resolve('/ppdb')} class="rounded-full bg-[oklch(0.38_0.13_145)] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:brightness-105">
 						Lihat Info & Daftar PPDB
 					</a>
-					<a href="/berita" class="rounded-full border border-emerald-200 px-5 py-3 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">
+					<a href={resolve('/berita')} class="rounded-full border border-emerald-200 px-5 py-3 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">
 						Baca Berita Madrasah
 					</a>
 				</div>
@@ -80,14 +83,14 @@
 					<p class="mt-3 text-sm leading-7 text-slate-600">
 						{home?.profil?.excerpt || 'Lengkapi profil sekolah untuk menampilkan sejarah singkat, visi, misi, dan identitas madrasah di sini.'}
 					</p>
-					<a href="/profil" class="mt-4 inline-flex text-sm font-semibold text-emerald-800 hover:text-emerald-900">Buka profil →</a>
+					<a href={resolve('/profil')} class="mt-4 inline-flex text-sm font-semibold text-emerald-800 hover:text-emerald-900">Buka profil →</a>
 				</div>
 				<div class="rounded-3xl border border-white/80 bg-white/80 p-5 shadow-sm backdrop-blur">
 					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Info PPDB</p>
 					<p class="mt-3 text-sm leading-7 text-slate-600">
 						{home?.ppdbInfo?.excerpt || 'Gunakan website ini untuk menampilkan jalur pendaftaran, jadwal, syarat, dan FAQ PPDB dengan lebih jelas.'}
 					</p>
-					<a href="/ppdb" class="mt-4 inline-flex text-sm font-semibold text-emerald-800 hover:text-emerald-900">Buka PPDB →</a>
+					<a href={resolve('/ppdb')} class="mt-4 inline-flex text-sm font-semibold text-emerald-800 hover:text-emerald-900">Buka PPDB →</a>
 				</div>
 			</div>
 		</div>
@@ -111,6 +114,45 @@
 		</div>
 	</section>
 
+	{#if home?.featuredPosts?.length}
+		<section class="rounded-[2rem] border border-emerald-100 bg-[linear-gradient(135deg,white_0%,oklch(0.98_0.02_145)_45%,oklch(0.95_0.05_145)_100%)] p-6 shadow-sm">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+				<div>
+					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Sorotan Utama</p>
+					<h2 class="mt-2 text-2xl font-semibold text-slate-900">Berita pilihan dari madrasah</h2>
+					<p class="mt-2 max-w-2xl text-sm leading-7 text-slate-600">Konten unggulan ini dipilih untuk menonjolkan capaian, agenda, atau informasi yang paling layak dibaca pengunjung terlebih dahulu.</p>
+				</div>
+				<a href={resolve('/berita')} class="text-sm font-semibold text-emerald-800 hover:text-emerald-900">Jelajahi semua berita →</a>
+			</div>
+
+			<div class="mt-6 grid gap-4 lg:grid-cols-2">
+				{#each home.featuredPosts as post (post.id)}
+					<a href={resolve(`/berita/${post.slug}`)} class="group overflow-hidden rounded-[1.75rem] border border-emerald-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300">
+						{#if post.cover_image_url}
+							<div class="aspect-[16/9] overflow-hidden bg-emerald-50">
+								<img src={post.cover_image_url} alt={post.title} class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
+							</div>
+						{/if}
+						<div class="space-y-3 p-5">
+							<div class="flex items-center justify-between gap-3">
+								<span class="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-800">
+									Unggulan
+								</span>
+								<span class="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">{fmtDate(post.published_at)}</span>
+							</div>
+							<h3 class="text-xl font-semibold text-slate-900">{post.title}</h3>
+							<p class="text-sm leading-7 text-slate-600">{post.excerpt || 'Konten unggulan ini belum memiliki ringkasan singkat.'}</p>
+							<div class="flex items-center justify-between gap-3 pt-1">
+								<span class="text-sm font-semibold text-emerald-800">Baca sorotan ini</span>
+								<span class="text-emerald-700 transition-transform group-hover:translate-x-1">→</span>
+							</div>
+						</div>
+					</a>
+				{/each}
+			</div>
+		</section>
+	{/if}
+
 	<section class="grid gap-6 lg:grid-cols-[1.1fr,0.9fr]">
 		<div class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
 			<div class="flex items-center justify-between gap-3">
@@ -118,13 +160,13 @@
 					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Berita Terbaru</p>
 					<h2 class="mt-2 text-2xl font-semibold text-slate-900">Kegiatan dan kabar madrasah</h2>
 				</div>
-				<a href="/berita" class="text-sm font-semibold text-emerald-800 hover:text-emerald-900">Semua berita →</a>
+				<a href={resolve('/berita')} class="text-sm font-semibold text-emerald-800 hover:text-emerald-900">Semua berita →</a>
 			</div>
 
 			<div class="mt-6 grid gap-4">
 				{#if home?.posts?.length}
 					{#each home.posts as post (post.id)}
-						<a href={`/berita/${post.slug}`} class="group rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-emerald-200 hover:bg-emerald-50/40">
+						<a href={resolve(`/berita/${post.slug}`)} class="group rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-emerald-200 hover:bg-emerald-50/40">
 							<p class="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">{fmtDate(post.published_at)}</p>
 							<h3 class="mt-2 text-lg font-semibold text-slate-900">{post.title}</h3>
 							<p class="mt-2 text-sm leading-7 text-slate-600">{post.excerpt || 'Belum ada ringkasan berita.'}</p>
@@ -148,13 +190,13 @@
 					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Pengumuman</p>
 					<h2 class="mt-2 text-2xl font-semibold text-slate-900">Info penting sekolah</h2>
 				</div>
-				<a href="/pengumuman" class="text-sm font-semibold text-emerald-800 hover:text-emerald-900">Semua pengumuman →</a>
+				<a href={resolve('/pengumuman')} class="text-sm font-semibold text-emerald-800 hover:text-emerald-900">Semua pengumuman →</a>
 			</div>
 
 			<div class="mt-6 space-y-3">
 				{#if home?.announcements?.length}
 					{#each home.announcements as item (item.id)}
-						<a href={`/pengumuman/${item.slug}`} class="block rounded-2xl border border-amber-100 bg-white p-4 transition hover:border-amber-200 hover:bg-amber-50/50">
+						<a href={resolve(`/pengumuman/${item.slug}`)} class="block rounded-2xl border border-amber-100 bg-white p-4 transition hover:border-amber-200 hover:bg-amber-50/50">
 							<div class="flex items-start justify-between gap-3">
 								<div>
 									<h3 class="text-base font-semibold text-slate-900">{item.title}</h3>

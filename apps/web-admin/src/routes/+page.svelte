@@ -22,6 +22,7 @@
 			user?: { role?: string; roles?: string[]; employee_id?: string; student_id?: string; parent_id?: string };
 			publicHome?: {
 				posts: WebsiteContent[];
+				featuredPosts: WebsiteContent[];
 				announcements: WebsiteContent[];
 				profil: WebsiteContent | null;
 				ppdbInfo: WebsiteContent | null;

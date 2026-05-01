@@ -15,8 +15,9 @@ type WebsiteContent = {
 export const load: PageServerLoad = async ({ locals }) => {
 	if (locals.user) return {};
 
-	const [posts, announcements, profil, ppdbInfo] = await Promise.all([
+	const [posts, featuredPosts, announcements, profil, ppdbInfo] = await Promise.all([
 		apiGet<WebsiteContent[]>('/api/public/site/posts?limit=3'),
+		apiGet<WebsiteContent[]>('/api/public/site/posts/featured?limit=2').catch(() => []),
 		apiGet<WebsiteContent[]>('/api/public/site/announcements?limit=4'),
 		apiGet<WebsiteContent>('/api/public/site/pages/profil').catch(() => null),
 		apiGet<WebsiteContent>('/api/public/site/pages/ppdb-info').catch(() => null),
@@ -25,6 +26,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return {
 		publicHome: {
 			posts,
+			featuredPosts,
 			announcements,
 			profil,
 			ppdbInfo,
