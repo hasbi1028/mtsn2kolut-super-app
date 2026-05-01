@@ -298,6 +298,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Inventory foundation — migration 037 `inventory_items` dengan kode, kategori, lokasi, kondisi, satuan, jumlah total/baik, batas restok, dan catatan
 - [x] Backend inventory baseline — stats + CRUD item inventaris melalui `/api/inventory/*`
 - [x] Web-admin inventory baseline — dashboard `/inventory` dan master data `/inventory/items` untuk admin/staf
+- [x] Inventory ops reporting — dashboard inventaris sekarang punya ringkasan per lokasi dan daftar barang mendukung ekspor CSV berdasarkan filter aktif
 ### Sprint 14 — Fee & Payment Management
 ### ✅ Sprint 15 — Library System (COMPLETE)
 - [x] Migration 027 — `library_books`, `library_loans` tables with FK to existing `students` and `employees`

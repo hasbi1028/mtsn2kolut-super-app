@@ -68,6 +68,41 @@
 		})
 	);
 
+	function csvEscape(value: string | number | null | undefined) {
+		const text = String(value ?? '');
+		if (text.includes('"') || text.includes(',') || text.includes('\n')) {
+			return `"${text.replaceAll('"', '""')}"`;
+		}
+		return text;
+	}
+
+	function exportCsv() {
+		const rows = [
+			['Kode', 'Nama', 'Kategori', 'Lokasi', 'Kondisi', 'Satuan', 'Jumlah Total', 'Jumlah Baik', 'Min Stock', 'Catatan'],
+			...filtered.map((item) => [
+				item.kode,
+				item.nama,
+				item.kategori,
+				item.lokasi,
+				conditionLabel(item.kondisi),
+				item.satuan,
+				item.jumlah_total,
+				item.jumlah_baik,
+				item.min_stock,
+				item.catatan,
+			]),
+		];
+		const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n');
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+		const href = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = href;
+		link.download = 'inventaris-filtered.csv';
+		link.click();
+		URL.revokeObjectURL(href);
+		toast.success('Rekap inventaris berhasil diekspor');
+	}
+
 	function conditionLabel(value: string) {
 		if (value === 'perlu-perawatan') return 'Perlu Perawatan';
 		if (value === 'rusak') return 'Rusak';
@@ -194,7 +229,10 @@
 			<h1 class="text-2xl font-semibold text-slate-800">Daftar Barang</h1>
 			<p class="text-sm text-slate-500">Kelola master inventaris sekolah, lokasi penyimpanan, kondisi, dan batas restok.</p>
 		</div>
-		<Button onclick={openCreate} size="sm">+ Tambah Barang</Button>
+		<div class="flex gap-2">
+			<Button variant="outline" onclick={exportCsv} size="sm" disabled={filtered.length === 0}>Ekspor CSV</Button>
+			<Button onclick={openCreate} size="sm">+ Tambah Barang</Button>
+		</div>
 	</div>
 
 	<div class="grid gap-3 md:grid-cols-3">

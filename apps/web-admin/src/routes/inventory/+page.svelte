@@ -49,6 +49,25 @@
 			.slice(0, 8)
 	);
 
+	const locationRollup = $derived.by(() =>
+		Array.from(
+			items.reduce(
+				(map, item) => {
+					const key = item.lokasi.trim() || 'Belum diatur';
+					const current = map.get(key) ?? { lokasi: key, totalJenis: 0, totalUnit: 0, totalLayak: 0 };
+					current.totalJenis += 1;
+					current.totalUnit += item.jumlah_total;
+					current.totalLayak += item.jumlah_baik;
+					map.set(key, current);
+					return map;
+				},
+				new Map<string, { lokasi: string; totalJenis: number; totalUnit: number; totalLayak: number }>()
+			).values()
+		)
+			.sort((a, b) => b.totalUnit - a.totalUnit)
+			.slice(0, 8)
+	);
+
 	function conditionLabel(value: string) {
 		if (value === 'perlu-perawatan') return 'Perlu Perawatan';
 		if (value === 'rusak') return 'Rusak';
@@ -213,4 +232,49 @@
 			</Card.Content>
 		</Card.Root>
 	</div>
+
+	<Card.Root class="border-slate-200">
+		<Card.Header class="pb-2">
+			<Card.Title class="text-sm font-medium text-slate-700">Ringkasan per Lokasi</Card.Title>
+		</Card.Header>
+		<Card.Content class="p-0">
+			{#if loading}
+				<div class="space-y-3 p-4">
+					{#each Array.from({ length: 5 }) as _, index (`inventory-location-skeleton-${index}`)}
+						<div class="grid gap-3 sm:grid-cols-4 sm:items-center">
+							<Skeleton class="h-5 w-32" />
+							<Skeleton class="h-5 w-20" />
+							<Skeleton class="h-5 w-20" />
+							<Skeleton class="h-5 w-20" />
+						</div>
+					{/each}
+				</div>
+			{:else if locationRollup.length === 0}
+				<div class="p-4">
+					<EmptyStatePanel compact title="Belum ada ringkasan lokasi" description="Ringkasan per lokasi akan muncul setelah ada barang inventaris yang tercatat." />
+				</div>
+			{:else}
+				<Table.Root>
+					<Table.Header>
+						<Table.Row class="bg-slate-50 text-xs">
+							<Table.Head>Lokasi</Table.Head>
+							<Table.Head>Jenis Barang</Table.Head>
+							<Table.Head>Total Unit</Table.Head>
+							<Table.Head>Unit Layak</Table.Head>
+						</Table.Row>
+					</Table.Header>
+					<Table.Body>
+						{#each locationRollup as row (row.lokasi)}
+							<Table.Row class="text-sm">
+								<Table.Cell class="font-medium">{row.lokasi}</Table.Cell>
+								<Table.Cell>{row.totalJenis}</Table.Cell>
+								<Table.Cell>{row.totalUnit}</Table.Cell>
+								<Table.Cell>{row.totalLayak}</Table.Cell>
+							</Table.Row>
+						{/each}
+					</Table.Body>
+				</Table.Root>
+			{/if}
+		</Card.Content>
+	</Card.Root>
 </div>
