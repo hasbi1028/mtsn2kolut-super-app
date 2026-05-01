@@ -295,6 +295,9 @@ Three runtime units deployed across 3 VPS:
 - [x] Portal timetable guru filters — route `/jadwal` sekarang punya filter kelas dan mapel ringan untuk guru agar slot mengajar lebih cepat ditriase
 
 ### Sprint 13 — Inventory & Asset Management
+- [x] Inventory foundation — migration 037 `inventory_items` dengan kode, kategori, lokasi, kondisi, satuan, jumlah total/baik, batas restok, dan catatan
+- [x] Backend inventory baseline — stats + CRUD item inventaris melalui `/api/inventory/*`
+- [x] Web-admin inventory baseline — dashboard `/inventory` dan master data `/inventory/items` untuk admin/staf
 ### Sprint 14 — Fee & Payment Management
 ### ✅ Sprint 15 — Library System (COMPLETE)
 - [x] Migration 027 — `library_books`, `library_loans` tables with FK to existing `students` and `employees`

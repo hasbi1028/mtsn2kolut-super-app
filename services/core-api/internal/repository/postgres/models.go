@@ -916,6 +916,22 @@ type GradeEntry struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type InventoryItem struct {
+	ID          pgtype.UUID        `json:"id"`
+	Kode        string             `json:"kode"`
+	Nama        string             `json:"nama"`
+	Kategori    string             `json:"kategori"`
+	Lokasi      string             `json:"lokasi"`
+	Kondisi     string             `json:"kondisi"`
+	Satuan      string             `json:"satuan"`
+	JumlahTotal int32              `json:"jumlah_total"`
+	JumlahBaik  int32              `json:"jumlah_baik"`
+	MinStock    int32              `json:"min_stock"`
+	Catatan     string             `json:"catatan"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Job struct {
 	ID           pgtype.UUID        `json:"id"`
 	EmployeeID   pgtype.UUID        `json:"employee_id"`

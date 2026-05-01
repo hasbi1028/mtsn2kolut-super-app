@@ -59,6 +59,13 @@
 			],
 		},
 		{
+			group: 'Inventaris',
+			items: [
+				{ href: '/inventory',       label: 'Dashboard',        icon: 'package', roles: ['admin', 'staf'] },
+				{ href: '/inventory/items', label: 'Daftar Barang',    icon: 'layers',  roles: ['admin', 'staf'] },
+			],
+		},
+		{
 			group: 'Website',
 			items: [
 				{ href: '/website',               label: 'Website Publik', icon: 'globe', roles: ['admin'] },

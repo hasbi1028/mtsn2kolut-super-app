@@ -60,6 +60,7 @@ func main() {
 	auditSvc := service.NewAudit(q)
 	pusakaSchedulerSvc := service.NewPusakaScheduler(q, pusakaJobSvc, settSvc, auditSvc)
 	librarySvc := service.NewLibrary(q)
+	inventorySvc := service.NewInventory(q)
 	journalSvc := service.NewClassJournal(q)
 	websiteMediaH := handler.NewWebsiteMedia(getEnv("WEBSITE_MEDIA_DIR", "data/website-media"))
 
@@ -97,6 +98,7 @@ func main() {
 	pusakaSchedulerH := handler.NewPusakaScheduler(pusakaSchedulerSvc)
 	pusakaWorkerH := handler.NewPusakaWorker(pusakaJobSvc, pusakaAttendanceSvc, settSvc)
 	libraryH := handler.NewLibrary(librarySvc)
+	inventoryH := handler.NewInventory(inventorySvc)
 	journalH := handler.NewClassJournal(journalSvc)
 
 	jwtSecret := mustEnv("JWT_SECRET")
@@ -290,6 +292,13 @@ func main() {
 		r.Post("/api/library/loans", libraryH.LoanBook)
 		r.Post("/api/library/loans/{id}/return", libraryH.ReturnBook)
 		r.Post("/api/library/loans/{id}/lunas", libraryH.MarkDendaLunas)
+
+		// Inventory — admin + staf
+		r.Get("/api/inventory/stats", inventoryH.Stats)
+		r.Get("/api/inventory/items", inventoryH.ListItems)
+		r.Post("/api/inventory/items", inventoryH.CreateItem)
+		r.Put("/api/inventory/items/{id}", inventoryH.UpdateItem)
+		r.Delete("/api/inventory/items/{id}", inventoryH.DeleteItem)
 
 		// Jobs / Attendance / Schedules / Settings / Users — admin-only
 		r.Group(func(r chi.Router) {
