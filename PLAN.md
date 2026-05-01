@@ -206,6 +206,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Grade class rollup report — filtered readiness triage now also rolls up per kelas so wali kelas/operator can see how many mapel are ready, final, or still blocked before scanning detailed assignment rows
 - [x] Grade homeroom focus panel — operator can now select one rolled-up kelas and immediately inspect all filtered mapel statuses for that class in a wali-kelas-friendly summary panel
 - [x] Grade homeroom export flow — the focused class panel can now export a wali-kelas-friendly CSV report for the currently selected class and active filters
+- [x] Grade teacher dashboard rollup — filtered readiness triage now also summarizes readiness per guru so operator can spot whose kelas-mapel sets are already ready or still blocked before drilling into detail
 - [x] Backend internal-error hygiene — 500 responses now return a generic client-safe message while raw details stay in server logs
 - [x] Sensitive entrypoint rate limiting — login, refresh, public registration, and exam login now use a concurrency-safe per-IP limiter with forwarded-IP awareness
 - [x] Typed auth locals — web-admin auth locals/page data now use a shared explicit auth-user type instead of `as any`

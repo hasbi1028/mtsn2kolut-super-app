@@ -96,6 +96,15 @@
 		missing_grade_count: number;
 	};
 
+	type TeacherReadinessSummary = {
+		teacher_name: string;
+		assignment_count: number;
+		ready_count: number;
+		finalized_count: number;
+		attention_count: number;
+		missing_grade_count: number;
+	};
+
 	const categoryOptions = [
 		{ value: 'assignment', label: 'Tugas' },
 		{ value: 'quiz', label: 'Kuis' },
@@ -214,6 +223,31 @@
 	const filteredReadyAssignments = $derived(
 		filteredAssignmentStatuses.filter((item) => item.ready && !item.is_finalized)
 	);
+	const filteredTeacherSummaries = $derived.by(() => {
+		const grouped: Record<string, TeacherReadinessSummary> = {};
+		for (const item of filteredAssignmentStatuses) {
+			const key = item.teacher_name || 'Tanpa Guru';
+			const current = grouped[key] ?? {
+				teacher_name: key,
+				assignment_count: 0,
+				ready_count: 0,
+				finalized_count: 0,
+				attention_count: 0,
+				missing_grade_count: 0
+			};
+			current.assignment_count += 1;
+			current.missing_grade_count += item.missing_grade_count;
+			if (item.is_finalized) {
+				current.finalized_count += 1;
+			} else if (item.ready) {
+				current.ready_count += 1;
+			} else {
+				current.attention_count += 1;
+			}
+			grouped[key] = current;
+		}
+		return Object.values(grouped).sort((a, b) => a.teacher_name.localeCompare(b.teacher_name, 'id'));
+	});
 	const filteredClassSummaries = $derived.by(() => {
 		const grouped: Record<string, ClassReadinessSummary> = {};
 		for (const item of filteredAssignmentStatuses) {
@@ -1052,6 +1086,40 @@
 															<div class="text-xs text-slate-500">{item.class_code}</div>
 														</button>
 													</Table.Cell>
+													<Table.Cell>{item.assignment_count}</Table.Cell>
+													<Table.Cell>{item.ready_count}</Table.Cell>
+													<Table.Cell>{item.finalized_count}</Table.Cell>
+													<Table.Cell>{item.attention_count}</Table.Cell>
+													<Table.Cell>{item.missing_grade_count}</Table.Cell>
+												</Table.Row>
+											{/each}
+										</Table.Body>
+									</Table.Root>
+								</div>
+							</div>
+						{/if}
+						{#if filteredTeacherSummaries.length > 0}
+							<div class="rounded-xl border border-sky-200 bg-sky-50/50 p-4">
+								<div class="mb-3">
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Dashboard Lintas Guru</p>
+									<p class="mt-1 text-sm text-slate-600">Pantau distribusi kesiapan rapor per guru dari hasil filter aktif sebelum turun ke assignment atau kelas tertentu.</p>
+								</div>
+								<div class="overflow-x-auto">
+									<Table.Root>
+										<Table.Header>
+											<Table.Row>
+												<Table.Head>Guru</Table.Head>
+												<Table.Head>Mapel/Kelas</Table.Head>
+												<Table.Head>Siap</Table.Head>
+												<Table.Head>Final</Table.Head>
+												<Table.Head>Perlu Dilengkapi</Table.Head>
+												<Table.Head>Nilai Kosong</Table.Head>
+											</Table.Row>
+										</Table.Header>
+										<Table.Body>
+											{#each filteredTeacherSummaries as item (item.teacher_name)}
+												<Table.Row>
+													<Table.Cell class="font-medium text-slate-900">{item.teacher_name}</Table.Cell>
 													<Table.Cell>{item.assignment_count}</Table.Cell>
 													<Table.Cell>{item.ready_count}</Table.Cell>
 													<Table.Cell>{item.finalized_count}</Table.Cell>
