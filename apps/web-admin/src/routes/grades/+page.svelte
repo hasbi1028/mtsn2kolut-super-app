@@ -139,6 +139,7 @@
 	let batchReopenBusy = $state(false);
 	let exportBusy = $state(false);
 	let classExportBusy = $state(false);
+	let teacherExportBusy = $state(false);
 	let editingComponentId = $state('');
 	let componentTitle = $state('');
 	let componentCategory = $state('assignment');
@@ -472,6 +473,45 @@
 			showSuccess(`Report wali kelas ${focusedClassSummary.class_code} berhasil diekspor.`);
 		} finally {
 			classExportBusy = false;
+		}
+	}
+
+	async function exportTeacherReadinessReport() {
+		if (filteredTeacherSummaries.length === 0) {
+			showError('Tidak ada data dashboard guru yang bisa diekspor.');
+			return;
+		}
+		teacherExportBusy = true;
+		try {
+			const header = [
+				'Guru',
+				'Jumlah Kelas-Mapel',
+				'Siap',
+				'Final',
+				'Perlu Dilengkapi',
+				'Nilai Kosong'
+			];
+			const rows = filteredTeacherSummaries.map((item) => [
+				item.teacher_name,
+				item.assignment_count,
+				item.ready_count,
+				item.finalized_count,
+				item.attention_count,
+				item.missing_grade_count
+			]);
+			const csv = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\n');
+			const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = url;
+			anchor.download = 'dashboard-kesiapan-guru.csv';
+			document.body.append(anchor);
+			anchor.click();
+			anchor.remove();
+			URL.revokeObjectURL(url);
+			showSuccess('Dashboard kesiapan guru berhasil diekspor.');
+		} finally {
+			teacherExportBusy = false;
 		}
 	}
 
@@ -1154,9 +1194,18 @@
 						{/if}
 						{#if filteredTeacherSummaries.length > 0}
 							<div class="rounded-xl border border-sky-200 bg-sky-50/50 p-4">
-								<div class="mb-3">
-									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Dashboard Lintas Guru</p>
-									<p class="mt-1 text-sm text-slate-600">Pantau distribusi kesiapan rapor per guru dari hasil filter aktif sebelum turun ke assignment atau kelas tertentu.</p>
+								<div class="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+									<div>
+										<p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Dashboard Lintas Guru</p>
+										<p class="mt-1 text-sm text-slate-600">Pantau distribusi kesiapan rapor per guru dari hasil filter aktif sebelum turun ke assignment atau kelas tertentu.</p>
+									</div>
+									<LoadingButton
+										variant="outline"
+										loading={teacherExportBusy}
+										loadingLabel="Mengekspor..."
+										onclick={exportTeacherReadinessReport}
+										label="Ekspor Dashboard Guru"
+									/>
 								</div>
 								<div class="overflow-x-auto">
 									<Table.Root>
