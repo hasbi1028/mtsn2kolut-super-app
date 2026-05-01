@@ -117,8 +117,11 @@
 	);
 
 	const PINNED_STORAGE_KEY = 'sidebar:pinned-items';
+	const RECENT_STORAGE_KEY = 'sidebar:recent-items';
+	const RECENT_LIMIT = 6;
 	let openGroups = $state<string[]>([]);
 	let pinnedItems = $state<string[]>([]);
+	let recentItems = $state<string[]>([]);
 	let pinnedLoaded = false;
 
 	const defaultPinnedByRole: Record<string, string[]> = {
@@ -173,6 +176,12 @@
 			if (leftScore !== rightScore) return rightScore - leftScore;
 			return left.label.localeCompare(right.label, 'id');
 		});
+	});
+
+	const recentCommandItems = $derived.by(() => {
+		return recentItems
+			.map((href) => commandItems.find((item) => item.href === href))
+			.filter((item): item is (typeof commandItems)[number] => !!item && !isActive(item.href));
 	});
 
 	function isActive(href: string) {
@@ -241,10 +250,15 @@
 		commandOpen = true;
 	}
 
+	function rememberRecent(href: string) {
+		recentItems = [href, ...recentItems.filter((value) => value !== href)].slice(0, RECENT_LIMIT);
+	}
+
 	async function runCommand(href: string) {
 		commandOpen = false;
 		commandQuery = '';
 		open = false;
+		rememberRecent(href);
 		await goto(resolveNavHref(href));
 	}
 
@@ -275,8 +289,23 @@
 		pinnedLoaded = true;
 	}
 
+	function loadRecentItems() {
+		if (typeof window === 'undefined') return;
+		const raw = window.localStorage.getItem(RECENT_STORAGE_KEY);
+		if (!raw) return;
+		try {
+			const parsed = JSON.parse(raw);
+			if (Array.isArray(parsed)) {
+				recentItems = parsed.filter((value): value is string => typeof value === 'string');
+			}
+		} catch {
+			recentItems = [];
+		}
+	}
+
 	onMount(() => {
 		loadPinnedItems();
+		loadRecentItems();
 		const handleKeydown = (event: KeyboardEvent) => {
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
 				event.preventDefault();
@@ -306,6 +335,11 @@
 	$effect(() => {
 		if (!pinnedLoaded || typeof window === 'undefined') return;
 		window.localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify(pinnedItems));
+	});
+
+	$effect(() => {
+		if (!pinnedLoaded || typeof window === 'undefined') return;
+		window.localStorage.setItem(RECENT_STORAGE_KEY, JSON.stringify(recentItems));
 	});
 
 	$effect(() => {
@@ -404,7 +438,10 @@
 							<div class={`group relative flex items-center ${desktopExpanded ? 'gap-1' : 'gap-0 lg:justify-center'}`}>
 								<a
 									href={resolveNavHref(item.href)}
-									onclick={() => (open = false)}
+									onclick={() => {
+										rememberRecent(item.href);
+										open = false;
+									}}
 									title={!desktopExpanded ? railTooltip(item, item.group) : undefined}
 									class={`flex min-w-0 flex-1 items-center rounded-md py-1.5 text-sm font-medium transition-colors
 										${desktopExpanded ? 'gap-2.5 px-2' : 'gap-2.5 px-2 lg:justify-center lg:px-0'}
@@ -485,7 +522,10 @@
 								<div class={`group relative flex items-center ${desktopExpanded ? 'gap-1' : 'gap-0 lg:justify-center'}`}>
 									<a
 										href={resolveNavHref(item.href)}
-										onclick={() => (open = false)}
+										onclick={() => {
+											rememberRecent(item.href);
+											open = false;
+										}}
 										title={!desktopExpanded ? railTooltip(item, section.group) : undefined}
 										class={`flex min-w-0 flex-1 items-center rounded-md py-1.5 text-sm font-medium transition-colors
 											${desktopExpanded ? 'gap-2.5 px-2' : 'gap-2.5 px-2 lg:justify-center lg:px-0'}
@@ -555,6 +595,47 @@
 					bind:value={commandQuery}
 					placeholder="Mis. Nilai, Sesi Ujian, Inventaris, atau PUSAKA"
 				/>
+
+				{#if !commandQuery.trim() && recentCommandItems.length > 0}
+					<div class="space-y-2">
+						<div class="flex items-center justify-between">
+							<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Terakhir Dibuka</p>
+							<button
+								type="button"
+								class="text-xs font-medium text-slate-500 hover:text-slate-700"
+								onclick={() => (recentItems = [])}
+							>
+								Bersihkan
+							</button>
+						</div>
+						<div class="space-y-2">
+							{#each recentCommandItems as item (item.href)}
+								<button
+									type="button"
+									class={`flex w-full items-start justify-between rounded-xl border px-3 py-3 text-left transition-colors ${
+										isActive(item.href)
+											? 'border-green-200 bg-green-50 text-green-900'
+											: 'border-slate-200 bg-white hover:bg-slate-50'
+									}`}
+									onclick={() => runCommand(item.href)}
+								>
+									<div class="min-w-0">
+										<div class="flex items-center gap-2">
+											<span class="text-sm font-semibold">{item.label}</span>
+											<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+												Baru
+											</span>
+										</div>
+										<p class="mt-1 text-xs text-slate-500">{item.group} · {item.href}</p>
+									</div>
+									<svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+									</svg>
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
 
 				{#if filteredCommandItems.length === 0}
 					<div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
