@@ -2,7 +2,6 @@
   import * as Card from '$lib/components/ui/card';
   import * as Table from '$lib/components/ui/table';
   import { Input } from '$lib/components/ui/input';
-  import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { toast } from '$lib/components/ui/sonner';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
@@ -17,7 +16,7 @@
     is_enabled: boolean;
   }
 
-  let { schedules = $bindable(), onsave }: { schedules: Schedule[]; onsave: () => void } = $props();
+  let { schedules = $bindable(), onsave }: { schedules: Schedule[]; onsave: () => void | Promise<void> } = $props();
 
   // Only show morning (rekap) schedules in this component
   const rekapSchedules = $derived(schedules.filter(s => s.run_type === 'morning'));
@@ -26,6 +25,7 @@
   let newLabel = $state('');
   let adding   = $state(false);
   let saving   = $state(false);
+  let deleteBusyId = $state<string | null>(null);
   let success  = $state('');
 
   function showToast(msg: string) {
@@ -34,6 +34,24 @@
 
   function showError(msg: string) {
     toast.error(msg);
+  }
+
+  function apiErrorMessage(payload: unknown) {
+    if (typeof payload !== 'object' || payload === null) return '';
+    if ('error' in payload) {
+      const error = payload.error;
+      if (typeof error === 'string' && error.trim()) return error;
+    }
+    if ('message' in payload) {
+      const message = payload.message;
+      if (typeof message === 'string' && message.trim()) return message;
+    }
+    return '';
+  }
+
+  function mutationErrorMessage(error: unknown, fallbackMessage: string) {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    return fallbackMessage;
   }
 
   async function addSchedule() {
@@ -51,26 +69,31 @@
           is_enabled: true,
         }),
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const d = await res.json().catch(() => ({})) as { error?: string };
-        showError(d.error ?? 'Gagal menambah jadwal');
-        return;
+        throw new Error(apiErrorMessage(data) || 'Gagal menambah jadwal');
       }
       newTime  = '';
       newLabel = '';
       success = 'Jadwal rekap baru berhasil ditambahkan. Jangan lupa simpan perubahan utama bila masih ada penyesuaian label atau status.';
-      onsave();
-    } catch { showError('Gagal menambah jadwal'); }
+      await onsave();
+    } catch (error) { showError(mutationErrorMessage(error, 'Gagal menambah jadwal')); }
     finally { adding = false; }
   }
 
   async function deleteSchedule(id: string) {
+    deleteBusyId = id;
     try {
       success = '';
-      await fetch(`/api/pusaka/schedules/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/pusaka/schedules/${id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(apiErrorMessage(data) || 'Gagal menghapus jadwal');
+      }
       success = 'Jadwal rekap berhasil dihapus.';
-      onsave();
-    } catch { showError('Gagal menghapus jadwal'); }
+      await onsave();
+    } catch (error) { showError(mutationErrorMessage(error, 'Gagal menghapus jadwal')); }
+    finally { deleteBusyId = null; }
   }
 
   async function saveChanges() {
@@ -82,9 +105,15 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ schedules: rekapSchedules }),
       });
-      if (res.ok) { showToast('Jadwal disimpan'); success = 'Perubahan jadwal rekap otomatis berhasil disimpan.'; onsave(); }
-      else showError('Gagal menyimpan');
-    } catch { showError('Gagal menyimpan'); }
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        showToast('Jadwal disimpan');
+        success = 'Perubahan jadwal rekap otomatis berhasil disimpan.';
+        await onsave();
+      } else {
+        throw new Error(apiErrorMessage(data) || 'Gagal menyimpan');
+      }
+    } catch (error) { showError(mutationErrorMessage(error, 'Gagal menyimpan')); }
     finally { saving = false; }
   }
 </script>
@@ -112,7 +141,7 @@
             disabled={adding || !newTime} class="h-10">
             + Tambah
           </LoadingButton>
-          <LoadingButton onclick={saveChanges} size="sm" loading={saving} loadingLabel="Menyimpan..." disabled={saving} class="h-10">
+          <LoadingButton onclick={() => void saveChanges()} size="sm" loading={saving} loadingLabel="Menyimpan..." disabled={saving} class="h-10">
             Simpan
           </LoadingButton>
         </div>
@@ -151,10 +180,17 @@
                 class="h-4 w-4 rounded border-input accent-green-700" />
             </Table.Cell>
             <Table.Cell>
-              <Button size="sm" variant="ghost" class="text-destructive hover:text-destructive h-8"
-                onclick={() => deleteSchedule(s.id)}>
+              <LoadingButton
+                size="sm"
+                variant="ghost"
+                class="text-destructive hover:text-destructive h-8"
+                onclick={() => deleteSchedule(s.id)}
+                loading={deleteBusyId === s.id}
+                loadingLabel="Menghapus..."
+                disabled={deleteBusyId !== null && deleteBusyId !== s.id}
+              >
                 Hapus
-              </Button>
+              </LoadingButton>
             </Table.Cell>
           </Table.Row>
         {:else}

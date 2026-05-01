@@ -8,9 +8,11 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { confirmAction } from '$lib/confirm-dialog';
 
 	type Assignment = {
 		id: string;
@@ -105,6 +107,36 @@
 		missing_grade_count: number;
 	};
 
+	type GradesPayload = {
+		assignments?: Assignment[];
+		assignment_statuses?: AssignmentStatus[];
+		components?: GradeComponent[];
+		summary?: GradeSummary[];
+		entries?: GradeEntry[];
+		readiness?: GradeReadiness | null;
+		finalization?: GradeFinalization | null;
+		error?: string;
+		message?: string;
+	};
+
+	type GradesOverview = {
+		assignments: Assignment[];
+		assignmentStatuses: AssignmentStatus[];
+		components: GradeComponent[];
+		summary: GradeSummary[];
+		entries: GradeEntry[];
+		readiness: GradeReadiness | null;
+		finalization: GradeFinalization | null;
+	};
+
+	type GradeWorkspace = 'triage' | 'gradebook' | 'finalization';
+
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
 	const categoryOptions = [
 		{ value: 'assignment', label: 'Tugas' },
 		{ value: 'quiz', label: 'Kuis' },
@@ -117,8 +149,7 @@
 		{ value: 'other', label: 'Lainnya' }
 	];
 
-	let loading = $state(true);
-	let error = $state('');
+	let overviewPromise = $state<Promise<GradesOverview> | null>(null);
 	let assignments = $state<Assignment[]>([]);
 	let assignmentStatuses = $state<AssignmentStatus[]>([]);
 	let components = $state<GradeComponent[]>([]);
@@ -152,6 +183,7 @@
 	let assignmentStatusQuery = $state('');
 	let assignmentTeacherFilter = $state('');
 	let classFocusKey = $state('');
+	let gradeWorkspace = $state<GradeWorkspace>('triage');
 
 	let scoreInput = $state<Record<string, string>>({});
 	let noteInput = $state<Record<string, string>>({});
@@ -372,6 +404,16 @@
 	async function focusAssignment(nextAssignmentId: string) {
 		assignmentId = nextAssignmentId;
 		componentId = '';
+		gradeWorkspace = 'gradebook';
+		resetComponentForm();
+		await loadOverview();
+	}
+
+	async function selectAssignmentContext() {
+		componentId = '';
+		if (assignmentId && gradeWorkspace === 'triage') {
+			gradeWorkspace = 'gradebook';
+		}
 		resetComponentForm();
 		await loadOverview();
 	}
@@ -572,6 +614,136 @@
 		return normalizedEntryScore(studentId) !== originalEntryScore(studentId) || normalizedEntryNote(studentId) !== originalEntryNote(studentId);
 	}
 
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
+			throw new Error(payload.error);
+		}
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	function buildOverviewPath() {
+		const params = new URLSearchParams();
+		if (assignmentId) params.set('assignment_id', assignmentId);
+		if (componentId) params.set('component_id', componentId);
+		return params.size > 0 ? `/api/grades?${params.toString()}` : '/api/grades';
+	}
+
+	function applyGradeInputs(nextEntries: GradeEntry[]) {
+		const nextScores: Record<string, string> = {};
+		const nextNotes: Record<string, string> = {};
+		for (const row of nextEntries) {
+			nextScores[row.student_id] = row.score >= 0 ? String(row.score) : '';
+			nextNotes[row.student_id] = row.notes ?? '';
+		}
+		scoreInput = nextScores;
+		noteInput = nextNotes;
+		resetQuickFill();
+	}
+
+	function normalizeOverview(payload: GradesPayload): GradesOverview {
+		return {
+			assignments: payload.assignments ?? [],
+			assignmentStatuses: payload.assignment_statuses ?? [],
+			components: payload.components ?? [],
+			summary: payload.summary ?? [],
+			entries: payload.entries ?? [],
+			readiness: payload.readiness ?? null,
+			finalization: payload.finalization ?? null
+		};
+	}
+
+	function applyOverview(overview: GradesOverview) {
+		assignments = overview.assignments;
+		assignmentStatuses = overview.assignmentStatuses;
+		components = overview.components;
+		summary = overview.summary;
+		entries = overview.entries;
+		readiness = overview.readiness;
+		finalization = overview.finalization;
+		finalizeNotes = overview.finalization?.notes ?? '';
+		applyGradeInputs(overview.entries);
+	}
+
+	function currentOverview(): GradesOverview {
+		return {
+			assignments,
+			assignmentStatuses,
+			components,
+			summary,
+			entries,
+			readiness,
+			finalization
+		};
+	}
+
+	async function fetchOverview(): Promise<GradesOverview> {
+		const payload = await fetch(buildOverviewPath()).then((response) =>
+			readApi<GradesPayload>(response, 'Gagal memuat data nilai')
+		);
+		return normalizeOverview(payload);
+	}
+
+	function loadOverview() {
+		overviewPromise = fetchOverview().then((overview) => {
+			applyOverview(overview);
+			return overview;
+		});
+		return overviewPromise;
+	}
+
+	async function refreshOverview() {
+		if (!overviewPromise) {
+			await loadOverview();
+			return;
+		}
+		try {
+			const overview = await fetchOverview();
+			applyOverview(overview);
+			overviewPromise = Promise.resolve(overview);
+		} catch (error) {
+			overviewPromise = Promise.resolve(currentOverview());
+			showError(overviewErrorMessage(error));
+		}
+	}
+
+	function retryOverview(reset?: () => void) {
+		reset?.();
+		loadOverview();
+	}
+
+	function overviewErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		if (typeof error === 'string' && error.trim()) return error;
+		return 'Gagal memuat data nilai';
+	}
+
+	function handleOverviewRenderError(error: unknown, reset: () => void) {
+		console.error('Grade overview render failed', error);
+		reset();
+	}
+
 	function resetQuickFill() {
 		quickFillScore = '';
 		quickFillNote = '';
@@ -581,48 +753,9 @@
 		if (assignments.length === 0) return;
 		assignmentId = assignments[0]?.id ?? '';
 		componentId = '';
+		gradeWorkspace = 'gradebook';
 		resetComponentForm();
 		await loadOverview();
-	}
-
-	async function loadOverview() {
-		loading = true;
-		error = '';
-		try {
-			const params = new URLSearchParams();
-			if (assignmentId) params.set('assignment_id', assignmentId);
-			if (componentId) params.set('component_id', componentId);
-			const url = params.size > 0 ? `/api/grades?${params.toString()}` : '/api/grades';
-			const res = await fetch(url);
-			const json = await res.json();
-			if (!res.ok || json.error) {
-				error = json.error ?? 'Gagal memuat data nilai';
-				return;
-			}
-			const data = json.data ?? json;
-			assignments = data.assignments ?? [];
-			assignmentStatuses = data.assignment_statuses ?? [];
-			components = data.components ?? [];
-			summary = data.summary ?? [];
-			entries = data.entries ?? [];
-			readiness = data.readiness ?? null;
-			finalization = data.finalization ?? null;
-			finalizeNotes = data.finalization?.notes ?? '';
-
-			const nextScores: Record<string, string> = {};
-			const nextNotes: Record<string, string> = {};
-			for (const row of entries) {
-				nextScores[row.student_id] = row.score >= 0 ? String(row.score) : '';
-				nextNotes[row.student_id] = row.notes ?? '';
-			}
-			scoreInput = nextScores;
-			noteInput = nextNotes;
-			resetQuickFill();
-		} catch {
-			error = 'Gagal memuat data nilai';
-		} finally {
-			loading = false;
-		}
 	}
 
 	function beginEditComponent(component: GradeComponent) {
@@ -670,7 +803,7 @@
 			const wasEditing = editingComponentId !== '';
 			resetComponentForm();
 			showSuccess(wasEditing ? 'Komponen nilai diperbarui' : 'Komponen nilai ditambahkan');
-			await loadOverview();
+			await refreshOverview();
 		} finally {
 			createBusy = false;
 		}
@@ -681,7 +814,12 @@
 			showError('Assignment sudah difinalisasi. Buka finalisasi terlebih dahulu untuk mengubah komponen.');
 			return;
 		}
-		if (!confirm('Hapus komponen nilai ini?')) return;
+		if (!(await confirmAction({
+			title: 'Hapus Komponen Nilai',
+			message: 'Hapus komponen nilai ini? Nilai terkait komponen ini tidak dapat dipakai lagi.',
+			confirmLabel: 'Hapus Komponen',
+			tone: 'danger'
+		}))) return;
 		const res = await fetch(`/api/grades/components/${id}`, { method: 'DELETE' });
 		if (!res.ok) {
 			const json = await res.json().catch(() => ({}));
@@ -691,7 +829,7 @@
 		if (editingComponentId === id) resetComponentForm();
 		if (componentId === id) componentId = '';
 		showSuccess('Komponen nilai dihapus');
-		await loadOverview();
+		await refreshOverview();
 	}
 
 	async function togglePublish(component: GradeComponent) {
@@ -714,7 +852,7 @@
 				return;
 			}
 			showSuccess(component.is_published ? 'Komponen dikembalikan ke draft' : 'Komponen diterbitkan untuk rapor');
-			await loadOverview();
+			await refreshOverview();
 		} finally {
 			publishBusy = { ...publishBusy, [component.id]: false };
 		}
@@ -759,7 +897,7 @@
 	async function saveEntry(studentId: string) {
 		try {
 			await persistEntry(studentId);
-			await loadOverview();
+			await refreshOverview();
 		} catch (err) {
 			showError(err instanceof Error ? err.message : 'Gagal menyimpan nilai');
 		}
@@ -783,7 +921,7 @@
 			} else {
 				showSuccess(`Semua perubahan untuk ${dirtyEntryIds.length} siswa berhasil disimpan.`);
 			}
-			await loadOverview();
+			await refreshOverview();
 		} finally {
 			bulkSaveBusy = false;
 		}
@@ -854,7 +992,7 @@
 		try {
 			await finalizeAssignmentById(selectedAssignment.id, finalizeNotes);
 			showSuccess('Assignment siap rapor sudah difinalisasi');
-			await loadOverview();
+			await refreshOverview();
 		} finally {
 			finalizationBusy = false;
 		}
@@ -865,7 +1003,12 @@
 			showError('Tidak ada assignment siap-final pada filter aktif.');
 			return;
 		}
-		if (!confirm(`Finalisasi ${filteredReadyAssignments.length} assignment siap-final dari hasil filter saat ini?`)) {
+		if (!(await confirmAction({
+			title: 'Finalisasi Batch Nilai',
+			message: `Finalisasi ${filteredReadyAssignments.length} assignment siap-final dari hasil filter saat ini? Assignment yang difinalisasi akan masuk checkpoint rapor.`,
+			confirmLabel: 'Finalisasi Batch',
+			tone: 'warning'
+		}))) {
 			return;
 		}
 
@@ -884,7 +1027,7 @@
 			} else {
 				showSuccess(`${filteredReadyAssignments.length} assignment siap-final berhasil difinalisasi.`);
 			}
-			await loadOverview();
+			await refreshOverview();
 		} finally {
 			batchFinalizationBusy = false;
 		}
@@ -895,7 +1038,12 @@
 			showError('Tidak ada assignment final pada filter aktif.');
 			return;
 		}
-		if (!confirm(`Buka kembali ${filteredFinalizedAssignments.length} assignment final dari hasil filter saat ini?`)) {
+		if (!(await confirmAction({
+			title: 'Buka Finalisasi Batch',
+			message: `Buka kembali ${filteredFinalizedAssignments.length} assignment final dari hasil filter saat ini? Gunakan hanya untuk koreksi terkontrol.`,
+			confirmLabel: 'Buka Finalisasi',
+			tone: 'warning'
+		}))) {
 			return;
 		}
 
@@ -914,7 +1062,7 @@
 			} else {
 				showSuccess(`${filteredFinalizedAssignments.length} assignment final berhasil dibuka kembali.`);
 			}
-			await loadOverview();
+			await refreshOverview();
 		} finally {
 			batchReopenBusy = false;
 		}
@@ -926,14 +1074,14 @@
 		try {
 			await reopenAssignmentById(selectedAssignment.id);
 			showSuccess('Finalisasi assignment dibuka kembali');
-			await loadOverview();
+			await refreshOverview();
 		} finally {
 			finalizationBusy = false;
 		}
 	}
 
-	onMount(async () => {
-		await loadOverview();
+	onMount(() => {
+		void loadOverview();
 	});
 </script>
 
@@ -951,12 +1099,12 @@
 		<div class="grid gap-2 sm:grid-cols-2 lg:w-[32rem]">
 			<div>
 				<label for="assignment-id" class="mb-1 block text-xs font-medium text-slate-500">Pilih Kelas-Mapel</label>
-				<select
-					id="assignment-id"
-					class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-					bind:value={assignmentId}
-					onchange={async () => { componentId = ''; resetComponentForm(); await loadOverview(); }}
-				>
+					<select
+						id="assignment-id"
+						class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+						bind:value={assignmentId}
+						onchange={() => void selectAssignmentContext()}
+					>
 					<option value="">Pilih penugasan kelas-mapel</option>
 					{#each assignments as item (item.id)}
 						<option value={item.id}>{item.class_code} · {item.subject_code} · {item.teacher_name}</option>
@@ -971,32 +1119,58 @@
 		</div>
 	</div>
 
-	{#if error}
-		<RecoveryPanel message={error} onRetry={loadOverview} />
-	{/if}
+	<div class="grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm sm:grid-cols-3">
+		{#each [
+			{ id: 'triage', label: 'Triase Rapor', desc: 'Pantau kesiapan lintas kelas-mapel' },
+			{ id: 'gradebook', label: 'Gradebook', desc: 'Kelola komponen dan input nilai' },
+			{ id: 'finalization', label: 'Finalisasi', desc: 'Kunci atau buka checkpoint rapor' }
+		] as item (item.id)}
+			<button
+				type="button"
+				class={`rounded-xl px-4 py-3 text-left transition-colors ${gradeWorkspace === item.id
+					? 'bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200'
+					: 'text-slate-600 hover:bg-slate-50'}`}
+				onclick={() => (gradeWorkspace = item.id as GradeWorkspace)}
+			>
+				<span class="block text-sm font-semibold">{item.label}</span>
+				<span class="mt-1 block text-xs leading-5">{item.desc}</span>
+			</button>
+		{/each}
+	</div>
 
-	{#if loading}
-		<div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
-			<div class="grid gap-3 lg:grid-cols-[1.6fr,0.8fr]">
-				<Skeleton class="h-14 w-full" />
-				<Skeleton class="h-20 w-full" />
-			</div>
-			<div class="grid gap-4 xl:grid-cols-[0.95fr,1.05fr]">
-				<div class="space-y-3">
-					<Skeleton class="h-10 w-full" />
-					<Skeleton class="h-24 w-full" />
-					<Skeleton class="h-24 w-full" />
+	<AsyncContent promise={overviewPromise} onerror={handleOverviewRenderError}>
+		{#snippet pending()}
+			<div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+				<div class="grid gap-3 lg:grid-cols-[1.6fr,0.8fr]">
+					<Skeleton class="h-14 w-full" />
+					<Skeleton class="h-20 w-full" />
 				</div>
-				<div class="space-y-3">
-					<Skeleton class="h-12 w-full" />
-					<Skeleton class="h-14 w-full" />
-					<Skeleton class="h-14 w-full" />
-					<Skeleton class="h-14 w-full" />
+				<div class="grid gap-4 xl:grid-cols-[0.95fr,1.05fr]">
+					<div class="space-y-3">
+						<Skeleton class="h-10 w-full" />
+						<Skeleton class="h-24 w-full" />
+						<Skeleton class="h-24 w-full" />
+					</div>
+					<div class="space-y-3">
+						<Skeleton class="h-12 w-full" />
+						<Skeleton class="h-14 w-full" />
+						<Skeleton class="h-14 w-full" />
+						<Skeleton class="h-14 w-full" />
+					</div>
 				</div>
 			</div>
-		</div>
-	{:else}
-		{#if assignmentStatuses.length > 0}
+		{/snippet}
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Data Nilai Belum Tersaji"
+				message={overviewErrorMessage(error)}
+				onRetry={() => retryOverview(reset)}
+			/>
+		{/snippet}
+		{#snippet children(value)}
+			{@const overview = value as GradesOverview}
+			{@const currentAssignmentStatuses = overview.assignmentStatuses}
+		{#if currentAssignmentStatuses.length > 0 && gradeWorkspace === 'triage'}
 			<div class="grid gap-4 xl:grid-cols-[0.88fr_1.12fr]">
 				<div class="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
 					<Card.Root class="border-emerald-100 bg-white">
@@ -1100,7 +1274,7 @@
 									loading={exportBusy}
 									loadingLabel="Mengekspor..."
 									disabled={filteredAssignmentStatuses.length === 0}
-									onclick={exportAssignmentStatusSummary}
+									onclick={() => void exportAssignmentStatusSummary()}
 									label="Ekspor Rekap"
 								/>
 							</div>
@@ -1127,7 +1301,7 @@
 								<LoadingButton
 									loading={batchFinalizationBusy}
 									loadingLabel="Memfinalisasi batch..."
-									onclick={finalizeFilteredReadyAssignments}
+									onclick={() => void finalizeFilteredReadyAssignments()}
 									label="Finalisasi Semua yang Siap"
 								/>
 							</div>
@@ -1143,7 +1317,7 @@
 									variant="outline"
 									loading={batchReopenBusy}
 									loadingLabel="Membuka batch..."
-									onclick={reopenFilteredFinalizedAssignments}
+									onclick={() => void reopenFilteredFinalizedAssignments()}
 									label="Buka Semua yang Final"
 								/>
 							</div>
@@ -1203,7 +1377,7 @@
 										variant="outline"
 										loading={teacherExportBusy}
 										loadingLabel="Mengekspor..."
-										onclick={exportTeacherReadinessReport}
+										onclick={() => void exportTeacherReadinessReport()}
 										label="Ekspor Dashboard Guru"
 									/>
 								</div>
@@ -1252,7 +1426,7 @@
 											variant="outline"
 											loading={classExportBusy}
 											loadingLabel="Mengekspor..."
-											onclick={exportFocusedClassReport}
+											onclick={() => void exportFocusedClassReport()}
 											label="Ekspor Report Kelas"
 										/>
 									</div>
@@ -1341,7 +1515,7 @@
 			</div>
 		{/if}
 
-		{#if selectedAssignment}
+		{#if selectedAssignment && gradeWorkspace !== 'triage'}
 			<div class="grid gap-4 md:grid-cols-3">
 				<Card.Root class="border-emerald-100 bg-white">
 					<Card.Content class="pt-5">
@@ -1436,7 +1610,7 @@
 									variant="outline"
 									loading={finalizationBusy}
 									loadingLabel="Membuka..."
-									onclick={reopenFinalization}
+									onclick={() => void reopenFinalization()}
 									label="Buka Finalisasi"
 								/>
 							{:else}
@@ -1445,7 +1619,7 @@
 									loading={finalizationBusy}
 									loadingLabel="Memfinalisasi..."
 									disabled={!readyForRapor}
-									onclick={finalizeAssignment}
+									onclick={() => void finalizeAssignment()}
 									label="Finalisasi Assignment"
 								/>
 							{/if}
@@ -1454,6 +1628,7 @@
 				</Card.Content>
 			</Card.Root>
 
+			{#if gradeWorkspace === 'gradebook'}
 			<div class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
 				<Card.Root>
 					<Card.Header class="pb-2">
@@ -1490,7 +1665,7 @@
 									loading={createBusy}
 									loadingLabel="Menyimpan..."
 									disabled={!componentTitle}
-									onclick={saveComponent}
+									onclick={() => void saveComponent()}
 									label={editingComponent ? 'Simpan Perubahan' : 'Tambah Komponen'}
 								/>
 								{#if editingComponent}
@@ -1633,7 +1808,7 @@
 									loading={bulkSaveBusy}
 									loadingLabel="Menyimpan semua..."
 									disabled={dirtyEntryIds.length === 0}
-									onclick={saveAllDirtyEntries}
+									onclick={() => void saveAllDirtyEntries()}
 									label="Simpan Semua Perubahan"
 								/>
 							</div>
@@ -1723,7 +1898,8 @@
 					</div>
 				</Card.Content>
 			</Card.Root>
-		{:else}
+			{/if}
+		{:else if gradeWorkspace !== 'triage'}
 			<Card.Root class="border-dashed border-slate-300 bg-white">
 				<Card.Content class="py-10 text-center">
 						<EmptyStatePanel
@@ -1738,5 +1914,6 @@
 				</Card.Content>
 			</Card.Root>
 		{/if}
-	{/if}
+		{/snippet}
+	</AsyncContent>
 </div>

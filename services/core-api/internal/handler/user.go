@@ -27,14 +27,14 @@ func (h *User) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type userResponse struct {
-		ID          pgtype.UUID `json:"id"`
-		Username    string      `json:"username"`
-		EmployeeID  pgtype.UUID `json:"employee_id"`
-		StudentID   pgtype.UUID `json:"student_id"`
-		ParentID    pgtype.UUID `json:"parent_id"`
-		ProfileNama string      `json:"profile_nama"`
+		ID          pgtype.UUID        `json:"id"`
+		Username    string             `json:"username"`
+		EmployeeID  pgtype.UUID        `json:"employee_id"`
+		StudentID   pgtype.UUID        `json:"student_id"`
+		ParentID    pgtype.UUID        `json:"parent_id"`
+		ProfileNama string             `json:"profile_nama"`
 		CreatedAt   pgtype.Timestamptz `json:"created_at"`
-		Roles       []string    `json:"roles"`
+		Roles       []string           `json:"roles"`
 	}
 
 	res := make([]userResponse, len(rows))
@@ -125,19 +125,19 @@ func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateUserCreate(roles []string, empID, stuID, parID pgtype.UUID) error {
-	validRoles := []string{"admin", "guru", "staf", "siswa", "ortu"}
+	validRoles := []string{"admin", "guru", "staf", "kesiswaan", "siswa", "ortu"}
 	for _, role := range roles {
 		if !slices.Contains(validRoles, role) {
 			return httpError("role tidak valid")
 		}
 	}
 
-	hasEmployeeRole := slices.Contains(roles, "guru") || slices.Contains(roles, "staf")
+	hasEmployeeRole := slices.Contains(roles, "guru") || slices.Contains(roles, "staf") || slices.Contains(roles, "kesiswaan")
 	hasStudentRole := slices.Contains(roles, "siswa")
 	hasParentRole := slices.Contains(roles, "ortu")
 
 	if hasEmployeeRole && !empID.Valid {
-		return httpError("role guru/staf wajib ditautkan ke pegawai")
+		return httpError("role guru/staf/kesiswaan wajib ditautkan ke pegawai")
 	}
 	if hasStudentRole && !stuID.Valid {
 		return httpError("role siswa wajib ditautkan ke siswa")
@@ -146,7 +146,7 @@ func validateUserCreate(roles []string, empID, stuID, parID pgtype.UUID) error {
 		return httpError("role ortu wajib ditautkan ke orang tua")
 	}
 	if empID.Valid && !hasEmployeeRole {
-		return httpError("tautan pegawai hanya boleh untuk role guru/staf")
+		return httpError("tautan pegawai hanya boleh untuk role guru/staf/kesiswaan")
 	}
 	if stuID.Valid && !hasStudentRole {
 		return httpError("tautan siswa hanya boleh untuk role siswa")

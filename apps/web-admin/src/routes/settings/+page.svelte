@@ -6,9 +6,24 @@
   import { Button } from '$lib/components/ui/button';
   import { toast } from '$lib/components/ui/sonner';
   import { Skeleton } from '$lib/components/ui/skeleton';
+  import AsyncContent from '$lib/components/AsyncContent.svelte';
   import WorkerSettings from '$lib/components/WorkerSettings.svelte';
   import ScheduleList   from '$lib/components/ScheduleList.svelte';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
+  import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+
+  type WorkerSettingState = {
+    max_concurrent: number;
+    headless: boolean;
+  };
+
+  type Schedule = {
+    id: string;
+    label: string;
+    run_time: string;
+    run_type: string;
+    is_enabled: boolean;
+  };
 
   type AuthSession = {
     id: string;
@@ -22,41 +37,152 @@
     device_label: string;
   };
 
-  let appSettings = $state({ max_concurrent: 5, headless: false });
-  let schedules   = $state<any[]>([]);
+  type SettingsOverview = {
+    appSettings: WorkerSettingState;
+    schedules: Schedule[];
+    sessions: AuthSession[];
+  };
+
+  type ApiEnvelope<T> = {
+    data?: T;
+    error?: string;
+    message?: string;
+  };
+
+  type SchedulePayload = {
+    items?: Schedule[];
+    data?: Schedule[];
+    error?: string;
+    message?: string;
+  };
+
+  let settingsPromise = $state<Promise<SettingsOverview> | null>(null);
+  let appSettings = $state<WorkerSettingState>(emptyWorkerSettings());
+  let schedules   = $state<Schedule[]>([]);
   let sessions    = $state<AuthSession[]>([]);
   let pwForm      = $state({ current: '', next: '', confirm: '' });
-  let pwError     = $state('');
   let pwLoading   = $state(false);
   let logoutAllLoading = $state(false);
-  let sessionsLoading = $state(false);
   let revokeSessionLoading = $state<string | null>(null);
   let renameSessionLoading = $state<string | null>(null);
   let labelDrafts = $state<Record<string, string>>({});
 
   const currentSessionId = $derived(page.data.user?.session_id ?? '');
 
-  async function load() {
+  function emptyWorkerSettings(): WorkerSettingState {
+    return { max_concurrent: 5, headless: false };
+  }
+
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+  }
+
+  function apiErrorMessage(payload: unknown) {
+    if (!isRecord(payload)) return '';
+    const error = payload.error;
+    if (typeof error === 'string' && error.trim()) return error;
+    const message = payload.message;
+    if (typeof message === 'string' && message.trim()) return message;
+    return '';
+  }
+
+  async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+    const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+    const message = apiErrorMessage(payload);
+    if (!response.ok) throw new Error(message || fallbackMessage);
+    if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
+      throw new Error(payload.error);
+    }
+    if (isRecord(payload) && 'data' in payload) {
+      const envelope = payload as ApiEnvelope<T>;
+      if (envelope.data === undefined) throw new Error(fallbackMessage);
+      return envelope.data;
+    }
+    if (payload === null) throw new Error(fallbackMessage);
+    return payload as T;
+  }
+
+  function normalizeSchedules(value: SchedulePayload | Schedule[] | null | undefined): Schedule[] {
+    if (Array.isArray(value)) return value;
+    if (!value) return [];
+    if (Array.isArray(value.items)) return value.items;
+    if (Array.isArray(value.data)) return value.data;
+    return [];
+  }
+
+  function normalizeSessions(value: AuthSession[] | null | undefined): AuthSession[] {
+    return Array.isArray(value) ? value : [];
+  }
+
+  function applySettingsOverview(overview: SettingsOverview) {
+    appSettings = overview.appSettings;
+    schedules = overview.schedules;
+    sessions = overview.sessions;
+    labelDrafts = Object.fromEntries(
+      overview.sessions.map((session) => [session.id, session.device_label || ''])
+    );
+  }
+
+  function currentSettingsOverview(): SettingsOverview {
+    return { appSettings, schedules, sessions };
+  }
+
+  async function fetchSettingsOverview(): Promise<SettingsOverview> {
+    const [settingsData, scheduleData, sessionData] = await Promise.all([
+      fetch('/api/pusaka/settings').then((response) => readApi<Partial<WorkerSettingState>>(response, 'Gagal memuat pengaturan worker')),
+      fetch('/api/pusaka/schedules').then((response) => readApi<SchedulePayload | Schedule[]>(response, 'Gagal memuat jadwal PUSAKA')),
+      fetch('/api/auth/sessions').then((response) => readApi<AuthSession[]>(response, 'Gagal memuat sesi aktif')),
+    ]);
+
+    return {
+      appSettings: { ...emptyWorkerSettings(), ...(settingsData ?? {}) },
+      schedules: normalizeSchedules(scheduleData),
+      sessions: normalizeSessions(sessionData),
+    };
+  }
+
+  function loadSettings() {
+    settingsPromise = fetchSettingsOverview().then((overview) => {
+      applySettingsOverview(overview);
+      return overview;
+    });
+    return settingsPromise;
+  }
+
+  async function refreshSettings(showFailureToast = false) {
+    if (!settingsPromise) {
+      await loadSettings();
+      return;
+    }
     try {
-      sessionsLoading = true;
-      const [stRes, sRes, sessRes] = await Promise.all([
-        fetch('/api/pusaka/settings'),
-        fetch('/api/pusaka/schedules'),
-        fetch('/api/auth/sessions')
-      ]);
-      const st = await stRes.json();
-      const s  = await sRes.json();
-      const sess = await sessRes.json().catch(() => []);
-      if (!st.error) appSettings = st;
-      if (!s.error)  schedules   = s.items ?? [];
-      if (!sess.error) {
-        sessions = Array.isArray(sess) ? sess : (sess.data ?? []);
-        labelDrafts = Object.fromEntries(
-          sessions.map((session) => [session.id, session.device_label || ''])
-        );
-      }
-    } catch { /* silent */ }
-    finally { sessionsLoading = false; }
+      const overview = await fetchSettingsOverview();
+      applySettingsOverview(overview);
+      settingsPromise = Promise.resolve(overview);
+    } catch (error) {
+      settingsPromise = Promise.resolve(currentSettingsOverview());
+      if (showFailureToast) showError(settingsErrorMessage(error));
+    }
+  }
+
+  function retrySettings(reset?: () => void) {
+    reset?.();
+    loadSettings();
+  }
+
+  function settingsErrorMessage(error: unknown) {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    if (typeof error === 'string' && error.trim()) return error;
+    return 'Data pengaturan belum dapat dimuat. Periksa koneksi backend lalu coba lagi.';
+  }
+
+  function mutationErrorMessage(error: unknown, fallbackMessage: string) {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    return fallbackMessage;
+  }
+
+  function handleSettingsRenderError(error: unknown, reset: () => void) {
+    console.error('Settings overview render failed', error);
+    reset();
   }
 
   async function saveSettings() {
@@ -65,10 +191,10 @@
         method: 'PUT', headers: { 'content-type': 'application/json' },
         body: JSON.stringify(appSettings),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { showError('Gagal: ' + (data.error ?? res.status)); return; }
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(apiErrorMessage(data) || `Gagal: ${res.status}`);
       showToast('Pengaturan worker disimpan.');
-    } catch { showError('Gagal menyimpan pengaturan'); }
+    } catch (error) { showError(mutationErrorMessage(error, 'Gagal menyimpan pengaturan')); }
   }
 
   async function saveSchedules() {
@@ -77,26 +203,28 @@
         method: 'PUT', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ schedules }),
       });
-      if (!res.ok) { showError('Gagal menyimpan jadwal'); return; }
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal menyimpan jadwal');
       showToast('Jadwal otomatis disimpan.');
-      await load();
-    } catch { showError('Gagal menyimpan jadwal'); }
+      await refreshSettings(true);
+    } catch (error) { showError(mutationErrorMessage(error, 'Gagal menyimpan jadwal')); }
   }
 
   async function changePassword() {
-    pwError = '';
-    if (pwForm.next !== pwForm.confirm) { pwError = 'Konfirmasi password tidak cocok'; return; }
-    if (pwForm.next.length < 8)         { pwError = 'Password baru minimal 8 karakter'; return; }
+    if (pwForm.next !== pwForm.confirm) { showError('Konfirmasi password tidak cocok'); return; }
+    if (pwForm.next.length < 8)         { showError('Password baru minimal 8 karakter'); return; }
     pwLoading = true;
     try {
       const res  = await fetch('/api/auth/change-password', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ current_password: pwForm.current, new_password: pwForm.next }),
       });
-      const data = await res.json();
-      if (!res.ok) { pwError = data.error ?? 'Gagal mengubah password'; return; }
+      const data = await res.json().catch(() => null);
+      if (!res.ok) { showError(apiErrorMessage(data) || 'Gagal mengubah password'); return; }
       pwForm = { current: '', next: '', confirm: '' };
       showToast('Password berhasil diubah.');
+    } catch (error) {
+      showError(mutationErrorMessage(error, 'Gagal mengubah password'));
     } finally { pwLoading = false; }
   }
 
@@ -104,12 +232,14 @@
     logoutAllLoading = true;
     try {
       const res = await fetch('/api/auth/logout-all', { method: 'POST' });
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        pwError = data.error ?? 'Gagal mengakhiri semua sesi';
+        showError(apiErrorMessage(data) || 'Gagal mengakhiri semua sesi');
         return;
       }
       window.location.href = '/login';
+    } catch (error) {
+      showError(mutationErrorMessage(error, 'Gagal mengakhiri semua sesi'));
     } finally {
       logoutAllLoading = false;
     }
@@ -119,9 +249,9 @@
     revokeSessionLoading = sessionId;
     try {
       const res = await fetch(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' });
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        pwError = data.error ?? 'Gagal mengakhiri sesi';
+        showError(apiErrorMessage(data) || 'Gagal mengakhiri sesi');
         return;
       }
 
@@ -132,7 +262,10 @@
       }
 
       sessions = sessions.filter((session) => session.id !== sessionId);
+      settingsPromise = Promise.resolve(currentSettingsOverview());
       showToast('Sesi berhasil diakhiri.');
+    } catch (error) {
+      showError(mutationErrorMessage(error, 'Gagal mengakhiri sesi'));
     } finally {
       revokeSessionLoading = null;
     }
@@ -152,16 +285,19 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ device_label: deviceLabel })
       });
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        showError(data.error ?? 'Gagal menyimpan nama perangkat');
+        showError(apiErrorMessage(data) || 'Gagal menyimpan nama perangkat');
         return;
       }
 
       sessions = sessions.map((session) =>
         session.id === sessionId ? { ...session, device_label: deviceLabel } : session
       );
+      settingsPromise = Promise.resolve(currentSettingsOverview());
       showToast('Nama perangkat berhasil disimpan.');
+    } catch (error) {
+      showError(mutationErrorMessage(error, 'Gagal menyimpan nama perangkat'));
     } finally {
       renameSessionLoading = null;
     }
@@ -183,7 +319,9 @@
     toast.error(msg);
   }
 
-  onMount(load);
+  onMount(() => {
+    void loadSettings();
+  });
 </script>
 
 <svelte:head><title>Pengaturan — MTSN 2 Kolut</title></svelte:head>
@@ -194,6 +332,49 @@
     <h1 class="text-2xl font-semibold text-slate-800">Pengaturan</h1>
     <p class="text-sm text-muted-foreground mt-1">Konfigurasi worker, jadwal absensi, dan akun admin</p>
   </div>
+
+  <AsyncContent promise={settingsPromise} onerror={handleSettingsRenderError}>
+    {#snippet pending()}
+      <div class="space-y-4">
+        <Card.Root>
+          <Card.Header class="pb-3">
+            <Skeleton class="h-5 w-40" />
+            <Skeleton class="h-4 w-72" />
+          </Card.Header>
+          <Card.Content>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Skeleton class="h-10 w-full" />
+              <Skeleton class="h-10 w-full" />
+              <Skeleton class="h-10 w-36" />
+            </div>
+          </Card.Content>
+        </Card.Root>
+        <Card.Root>
+          <Card.Header class="pb-3">
+            <Skeleton class="h-5 w-44" />
+            <Skeleton class="h-4 w-80" />
+          </Card.Header>
+          <Card.Content class="space-y-3">
+            {#each Array.from({ length: 3 }) as _, index (`settings-session-skeleton-${index}`)}
+              <div class="rounded-lg border border-slate-200 px-4 py-3">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div class="space-y-2">
+                    <Skeleton class="h-5 w-36" />
+                    <Skeleton class="h-4 w-28" />
+                    <Skeleton class="h-4 w-40" />
+                  </div>
+                  <Skeleton class="h-9 w-24" />
+                </div>
+              </div>
+            {/each}
+          </Card.Content>
+        </Card.Root>
+      </div>
+    {/snippet}
+    {#snippet failed(error, reset)}
+      <RecoveryPanel title="Pengaturan Belum Tersaji" message={settingsErrorMessage(error)} onRetry={() => retrySettings(reset)} />
+    {/snippet}
+    {#snippet children(_value)}
 
   <WorkerSettings bind:settings={appSettings} onsave={saveSettings} />
 
@@ -206,9 +387,6 @@
       <Card.Description>Ganti password login akun administrator</Card.Description>
     </Card.Header>
     <Card.Content>
-      {#if pwError}
-        <p class="mb-3 text-sm text-destructive">{pwError}</p>
-      {/if}
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
           <label for="pw-current" class="mb-1.5 block text-sm font-medium">Password Saat Ini</label>
@@ -223,13 +401,13 @@
           <Input id="pw-confirm" type="password" bind:value={pwForm.confirm} autocomplete="new-password" />
         </div>
       </div>
-      <LoadingButton class="mt-4" onclick={changePassword} loading={pwLoading} loadingLabel="Menyimpan..." label="Simpan Password" />
+      <LoadingButton class="mt-4" onclick={() => void changePassword()} loading={pwLoading} loadingLabel="Menyimpan..." label="Simpan Password" />
       <div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
         <p class="text-sm font-medium text-amber-900">Keluar dari semua perangkat</p>
         <p class="mt-1 text-xs text-amber-800">
           Semua sesi login lain akan diakhiri, termasuk token akses yang masih aktif.
         </p>
-        <LoadingButton class="mt-3" variant="outline" onclick={logoutAllSessions} loading={logoutAllLoading} loadingLabel="Memproses..." label="Keluar dari Semua Sesi" />
+        <LoadingButton class="mt-3" variant="outline" onclick={() => void logoutAllSessions()} loading={logoutAllLoading} loadingLabel="Memproses..." label="Keluar dari Semua Sesi" />
       </div>
     </Card.Content>
   </Card.Root>
@@ -242,23 +420,7 @@
       </Card.Description>
     </Card.Header>
     <Card.Content>
-      {#if sessionsLoading}
-        <div class="space-y-3">
-          {#each Array.from({ length: 3 }) as _, index (`session-skeleton-${index}`)}
-            <div class="rounded-lg border border-slate-200 px-4 py-3">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div class="space-y-2">
-                  <Skeleton class="h-5 w-36" />
-                  <Skeleton class="h-4 w-28" />
-                  <Skeleton class="h-4 w-40" />
-                  <Skeleton class="h-4 w-48" />
-                </div>
-                <Skeleton class="h-9 w-24" />
-              </div>
-            </div>
-          {/each}
-        </div>
-      {:else if sessions.length === 0}
+      {#if sessions.length === 0}
         <p class="text-sm text-muted-foreground">Belum ada sesi aktif tercatat.</p>
       {:else}
         <div class="space-y-3">
@@ -329,5 +491,7 @@
       {/if}
     </Card.Content>
   </Card.Root>
+    {/snippet}
+  </AsyncContent>
 
 </div>

@@ -33,7 +33,7 @@ dev-worker:
 	cd $(WORKER_DIR) && npm run dev
 
 dev-backend:
-	cd $(BACKEND_DIR) && go run ./cmd/api
+	cd $(BACKEND_DIR) && ./start-dev.sh
 
 # ── Check / Test ─────────────────────────────────────────────────────────────
 

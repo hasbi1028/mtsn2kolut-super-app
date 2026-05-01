@@ -5,6 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import PublicHome from '$lib/components/PublicHome.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 
@@ -92,6 +93,7 @@
 	}
 
 	let dashboardPromise = $state<Promise<DashboardPayload> | null>(null);
+	let dashboardRefreshBusy = $state(false);
 
 	const roles = $derived(data.user?.roles || (data.user?.role ? [data.user.role] : []));
 	const isGuru = $derived(roles.includes('guru'));
@@ -213,6 +215,16 @@
 
 	function refreshDashboard() {
 		dashboardPromise = loadDashboard();
+		return dashboardPromise;
+	}
+
+	async function retryDashboard() {
+		dashboardRefreshBusy = true;
+		try {
+			await refreshDashboard();
+		} finally {
+			dashboardRefreshBusy = false;
+		}
 	}
 
 	function dashboardErrorMessage(error: unknown) {
@@ -323,7 +335,7 @@
 					</Card.Description>
 				</Card.Header>
 				<Card.Content class="flex flex-wrap gap-2">
-					<Button onclick={refreshDashboard}>Coba Lagi</Button>
+					<LoadingButton onclick={() => void retryDashboard()} loading={dashboardRefreshBusy} loadingLabel="Memuat...">Coba Lagi</LoadingButton>
 					{#if reset}
 						<Button variant="outline" onclick={reset}>Muat Ulang Tampilan</Button>
 					{/if}

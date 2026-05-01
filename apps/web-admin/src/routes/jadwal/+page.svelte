@@ -4,7 +4,9 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	type UserData = {
 		role?: string;
@@ -43,9 +45,21 @@
 		timetable: Array<TimetableEntry & { student_id: string; student_name: string }>;
 	};
 
+	type ScheduleViewData =
+		| { kind: 'guru'; timetable: TimetableEntry[] }
+		| { kind: 'siswa'; portal: StudentPortalData | null }
+		| { kind: 'ortu'; portal: ParentPortalData | null }
+		| { kind: 'empty' };
+
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
 	let { data }: { data: { user?: UserData } } = $props();
 
-	let loading = $state(true);
+	let schedulePromise = $state<Promise<ScheduleViewData> | null>(null);
 	let studentPortal = $state<StudentPortalData | null>(null);
 	let parentPortal = $state<ParentPortalData | null>(null);
 	let guruTimetable = $state<TimetableEntry[]>([]);
@@ -67,14 +81,35 @@
 		6: 'Sabtu',
 	};
 
-	function parseData<T>(raw: unknown): T | null {
-		if (!raw || typeof raw !== 'object') return null;
-		const wrapper = raw as { data?: T };
-		return (wrapper.data ?? raw) as T;
-	}
-
 	function fmtTime(value: string) {
 		return value?.slice(0, 5) || '—';
+	}
+
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
 	}
 
 	function csvEscape(value: string | number | null | undefined) {
@@ -158,28 +193,71 @@
 		activeChildren: parentGroups.filter((group) => group.days.some((day) => day.slots.length > 0)).length,
 	}));
 
-	async function load() {
-		loading = true;
-		try {
-			if (isGuru) {
-				const res = await fetch('/api/portal/guru/timetable');
-				guruTimetable = parseData<{ timetable: TimetableEntry[] }>(await res.json().catch(() => null))?.timetable ?? [];
-				return;
-			}
-
-			if (isSiswa) {
-				const res = await fetch('/api/portal/student/me');
-				studentPortal = parseData<StudentPortalData>(await res.json().catch(() => null));
-				return;
-			}
-
-			if (isParent) {
-				const res = await fetch('/api/portal/parent/me');
-				parentPortal = parseData<ParentPortalData>(await res.json().catch(() => null));
-			}
-		} finally {
-			loading = false;
+	function applySchedule(schedule: ScheduleViewData) {
+		if (schedule.kind === 'guru') {
+			guruTimetable = schedule.timetable ?? [];
+			studentPortal = null;
+			parentPortal = null;
+			return;
 		}
+		if (schedule.kind === 'siswa') {
+			studentPortal = schedule.portal;
+			guruTimetable = [];
+			parentPortal = null;
+			return;
+		}
+		if (schedule.kind === 'ortu') {
+			parentPortal = schedule.portal;
+			guruTimetable = [];
+			studentPortal = null;
+			return;
+		}
+		guruTimetable = [];
+		studentPortal = null;
+		parentPortal = null;
+	}
+
+	async function fetchSchedule(): Promise<ScheduleViewData> {
+		if (isGuru) {
+			const res = await fetch('/api/portal/guru/timetable');
+			const payload = await readApi<{ timetable: TimetableEntry[] }>(res, 'Gagal memuat jadwal mengajar.');
+			return { kind: 'guru', timetable: payload.timetable ?? [] };
+		}
+
+		if (isSiswa) {
+			const res = await fetch('/api/portal/student/me');
+			const portal = await readApi<StudentPortalData>(res, 'Gagal memuat jadwal pelajaran.');
+			return { kind: 'siswa', portal };
+		}
+
+		if (isParent) {
+			const res = await fetch('/api/portal/parent/me');
+			const portal = await readApi<ParentPortalData>(res, 'Gagal memuat jadwal anak.');
+			return { kind: 'ortu', portal };
+		}
+
+		return { kind: 'empty' };
+	}
+
+	function load() {
+		schedulePromise = fetchSchedule().then((schedule) => {
+			applySchedule(schedule);
+			return schedule;
+		});
+	}
+
+	function retrySchedule(reset?: () => void) {
+		reset?.();
+		load();
+	}
+
+	function scheduleErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat jadwal. Coba lagi untuk mengambil data terbaru.';
+	}
+
+	function handleScheduleRenderError(error: unknown) {
+		console.error('Schedule render failed', error);
 	}
 
 	onMount(() => {
@@ -249,19 +327,19 @@
 				<h1 class="text-2xl font-semibold text-slate-800">Jadwal Mengajar</h1>
 				<p class="mt-1 text-sm text-muted-foreground">Lihat slot mengajar mingguan Anda dalam tampilan yang lebih penuh daripada ringkasan dashboard.</p>
 			</div>
-			<Button variant="outline" onclick={exportGuruTimetable} disabled={loading || guruTimetable.length === 0}>Ekspor CSV</Button>
+			<Button variant="outline" onclick={exportGuruTimetable} disabled={guruTimetable.length === 0}>Ekspor CSV</Button>
 		{:else if isSiswa}
 			<div>
 				<h1 class="text-2xl font-semibold text-slate-800">Jadwal Pelajaran</h1>
 				<p class="mt-1 text-sm text-muted-foreground">Pantau jadwal pelajaran mingguan berdasarkan kelas yang sedang aktif.</p>
 			</div>
-			<Button variant="outline" onclick={exportStudentTimetable} disabled={loading || (studentPortal?.timetable.length ?? 0) === 0}>Ekspor CSV</Button>
+			<Button variant="outline" onclick={exportStudentTimetable} disabled={(studentPortal?.timetable.length ?? 0) === 0}>Ekspor CSV</Button>
 		{:else}
 			<div>
 				<h1 class="text-2xl font-semibold text-slate-800">Jadwal Anak</h1>
 				<p class="mt-1 text-sm text-muted-foreground">Lihat ringkasan jadwal pelajaran setiap anak yang sudah terhubung ke akun orang tua ini.</p>
 			</div>
-			<Button variant="outline" onclick={exportParentTimetable} disabled={loading || (parentPortal?.timetable.length ?? 0) === 0}>Ekspor CSV</Button>
+			<Button variant="outline" onclick={exportParentTimetable} disabled={(parentPortal?.timetable.length ?? 0) === 0}>Ekspor CSV</Button>
 		{/if}
 	</div>
 
@@ -305,33 +383,48 @@
 		</Card.Content>
 	</Card.Root>
 
-	{#if loading}
-		<div class="grid gap-4 md:grid-cols-3">
-			{#each Array.from({ length: 3 }) as _, i (`loading-summary-${i}`)}
-				<Card.Root class="border-slate-200">
-					<Card.Content class="space-y-3 p-5">
-						<Skeleton class="h-4 w-24" />
-						<Skeleton class="h-8 w-16" />
-						<Skeleton class="h-3 w-32" />
-					</Card.Content>
-				</Card.Root>
-			{/each}
-		</div>
-
-		<Card.Root class="border-slate-200">
-			<Card.Content class="space-y-4 p-5">
-				{#each Array.from({ length: 4 }) as _, i (`loading-day-${i}`)}
-					<div class="space-y-3">
-						<Skeleton class="h-5 w-32" />
-						<div class="grid gap-3 lg:grid-cols-2">
-							<Skeleton class="h-28 w-full" />
-							<Skeleton class="h-28 w-full" />
-						</div>
-					</div>
+	<AsyncContent promise={schedulePromise} onerror={handleScheduleRenderError}>
+		{#snippet pending()}
+			<div class="grid gap-4 md:grid-cols-3">
+				{#each Array.from({ length: 3 }) as _, i (`loading-summary-${i}`)}
+					<Card.Root class="border-slate-200">
+						<Card.Content class="space-y-3 p-5">
+							<Skeleton class="h-4 w-24" />
+							<Skeleton class="h-8 w-16" />
+							<Skeleton class="h-3 w-32" />
+						</Card.Content>
+					</Card.Root>
 				{/each}
-			</Card.Content>
-		</Card.Root>
-	{:else if isGuru}
+			</div>
+
+			<Card.Root class="border-slate-200">
+				<Card.Content class="space-y-4 p-5">
+					{#each Array.from({ length: 4 }) as _, i (`loading-day-${i}`)}
+						<div class="space-y-3">
+							<Skeleton class="h-5 w-32" />
+							<div class="grid gap-3 lg:grid-cols-2">
+								<Skeleton class="h-28 w-full" />
+								<Skeleton class="h-28 w-full" />
+							</div>
+						</div>
+					{/each}
+				</Card.Content>
+			</Card.Root>
+		{/snippet}
+
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Jadwal Belum Tersaji"
+				message={scheduleErrorMessage(error)}
+				onRetry={() => retrySchedule(reset)}
+			/>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const loadedSchedule = value as ScheduleViewData}
+			{#if loadedSchedule.kind === 'empty'}
+				<EmptyStatePanel compact title="Jadwal belum tersedia" description="Akun ini belum memiliki peran portal jadwal yang aktif." />
+			{:else if isGuru}
 		<div class="grid gap-4 md:grid-cols-3">
 			<Card.Root class="border-slate-200"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Total Slot</p><p class="mt-2 text-3xl font-semibold text-slate-900">{guruSummary.totalSlots}</p></Card.Content></Card.Root>
 			<Card.Root class="border-slate-200"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Kelas Diajar</p><p class="mt-2 text-3xl font-semibold text-slate-900">{guruSummary.totalClasses}</p></Card.Content></Card.Root>
@@ -491,5 +584,7 @@
 				{/if}
 			</Card.Content>
 		</Card.Root>
-	{/if}
+			{/if}
+		{/snippet}
+	</AsyncContent>
 </div>

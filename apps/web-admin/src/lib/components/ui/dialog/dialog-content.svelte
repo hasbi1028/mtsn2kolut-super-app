@@ -12,8 +12,9 @@
     border: 1px solid oklch(0.88 0.012 145);
     border-radius: 0.75rem;
     padding: 24px;
-    max-width: 500px;
-    width: 90%;
+    min-width: min(90vw, 500px);
+    max-width: 96vw;
+    width: fit-content;
     max-height: 85vh;
     overflow-y: auto;
     color: oklch(0.18 0.02 145);

@@ -8,6 +8,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
@@ -28,9 +29,14 @@
 
 	const KATEGORI_LIST = ['pelajaran', 'fiksi', 'referensi', 'agama', 'umum'];
 
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
 	let books = $state<Book[]>([]);
-	let loading = $state(true);
-	let error = $state('');
+	let booksPromise = $state<Promise<Book[]> | null>(null);
 	let search = $state('');
 	let filterKategori = $state('');
 
@@ -51,27 +57,91 @@
 	let fEksemplar = $state(1);
 	let fRak = $state('');
 
-	const filtered = $derived(
-		books.filter((b) => {
+	function filterBooks(bookRows: Book[]) {
+		return bookRows.filter((b) => {
 			const q = search.toLowerCase();
 			const matchSearch = !q || b.judul.toLowerCase().includes(q) || b.pengarang.toLowerCase().includes(q) || b.kode.toLowerCase().includes(q);
 			const matchKat = !filterKategori || b.kategori === filterKategori;
 			return matchSearch && matchKat;
-		})
-	);
+		});
+	}
 
-	async function load() {
-		loading = true;
-		try {
-			error = '';
-			const res = await fetch('/api/library/books');
-			const j = await res.json();
-			books = j.data ?? j ?? [];
-		} catch {
-			error = 'Gagal memuat katalog buku. Coba lagi untuk mengambil daftar buku terbaru.';
-		} finally {
-			loading = false;
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) {
+			throw new Error(message || fallbackMessage);
 		}
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
+			throw new Error(payload.error);
+		}
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	async function fetchBooks(): Promise<Book[]> {
+		const res = await fetch('/api/library/books');
+		return readApi<Book[]>(res, 'Gagal memuat katalog buku.');
+	}
+
+	function load() {
+		books = [];
+		booksPromise = fetchBooks().then((nextBooks) => {
+			books = nextBooks ?? [];
+			return books;
+		});
+	}
+
+	async function refreshBooks() {
+		const nextBooks = await fetchBooks();
+		books = nextBooks ?? [];
+		booksPromise = Promise.resolve(books);
+	}
+
+	function retryBooks(reset?: () => void) {
+		reset?.();
+		load();
+	}
+
+	function booksErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat katalog buku. Coba lagi untuk mengambil daftar buku terbaru.';
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
+	}
+
+	async function refreshBooksAfterMutation() {
+		try {
+			await refreshBooks();
+		} catch (error) {
+			booksPromise = Promise.resolve(books);
+			toast.error(booksErrorMessage(error));
+		}
+	}
+
+	function handleBooksRenderError(error: unknown) {
+		console.error('Library books render failed', error);
 	}
 
 	function openCreate() {
@@ -106,11 +176,13 @@
 			const res = editingId
 				? await fetch(`/api/library/books/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 				: await fetch('/api/library/books', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-			const j = await res.json();
-			if (!res.ok) { toast.error(j.error ?? 'Gagal menyimpan'); return; }
+			const payload = await res.json().catch(() => null);
+			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal menyimpan'); return; }
 			toast.success(editingId ? 'Buku diperbarui' : 'Buku ditambahkan');
 			showDialog = false;
-			await load();
+			await refreshBooksAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menyimpan katalog buku. Periksa koneksi lalu coba lagi.'));
 		} finally {
 			busy = false;
 		}
@@ -122,20 +194,24 @@
 		try {
 			const res = await fetch(`/api/library/books/${confirmDeleteId}`, { method: 'DELETE' });
 			if (!res.ok) {
-				const j = await res.json();
-				toast.error(j.error ?? 'Gagal menghapus');
+				const payload = await res.json().catch(() => null);
+				toast.error(apiErrorMessage(payload) || 'Gagal menghapus');
 			} else {
 				toast.success('Buku dihapus');
 				confirmDeleteId = null;
 				showDeleteDialog = false;
-				await load();
+				await refreshBooksAfterMutation();
 			}
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menghapus katalog buku. Periksa koneksi lalu coba lagi.'));
 		} finally {
 			busy = false;
 		}
 	}
 
-	onMount(load);
+	onMount(() => {
+		void load();
+	});
 </script>
 
 <svelte:head><title>Katalog Buku — Perpustakaan</title></svelte:head>
@@ -149,27 +225,49 @@
 		<Button onclick={openCreate} size="sm">+ Tambah Buku</Button>
 	</div>
 
-	<div class="grid gap-3 md:grid-cols-3">
-		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Judul</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{books.length}</p>
-			<p class="text-sm text-slate-600">koleksi unik yang tercatat di katalog</p>
-		</div>
-		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Tersedia Dicari</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{filtered.length}</p>
-			<p class="text-sm text-slate-600">hasil koleksi berdasarkan filter saat ini</p>
-		</div>
-		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Stok Habis</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{books.filter((item) => item.tersedia === 0).length}</p>
-			<p class="text-sm text-slate-600">judul yang butuh penambahan atau pengembalian</p>
-		</div>
-	</div>
+	<AsyncContent promise={booksPromise} onerror={handleBooksRenderError}>
+		{#snippet pending()}
+			<div class="grid gap-3 md:grid-cols-3">
+				{#each ['Total Judul', 'Tersedia Dicari', 'Stok Habis'] as label (label)}
+					<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+						<Skeleton class="mt-3 h-8 w-16" />
+						<Skeleton class="mt-2 h-4 w-48" />
+					</div>
+				{/each}
+			</div>
+		{/snippet}
 
-	{#if error}
-		<RecoveryPanel title="Katalog Belum Tersaji" message={error} onRetry={load} />
-	{/if}
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Katalog Belum Tersaji"
+				message={booksErrorMessage(error)}
+				onRetry={() => retryBooks(reset)}
+			/>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const currentBooks = value as Book[]}
+			{@const currentFiltered = filterBooks(currentBooks)}
+			<div class="grid gap-3 md:grid-cols-3">
+				<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Judul</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{currentBooks.length}</p>
+					<p class="text-sm text-slate-600">koleksi unik yang tercatat di katalog</p>
+				</div>
+				<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Tersedia Dicari</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{currentFiltered.length}</p>
+					<p class="text-sm text-slate-600">hasil koleksi berdasarkan filter saat ini</p>
+				</div>
+				<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Stok Habis</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{currentBooks.filter((item) => item.tersedia === 0).length}</p>
+					<p class="text-sm text-slate-600">judul yang butuh penambahan atau pengembalian</p>
+				</div>
+			</div>
+		{/snippet}
+	</AsyncContent>
 
 	<Card.Root class="border-slate-200 shadow-sm">
 		<Card.Content class="grid gap-3 p-4 md:grid-cols-[1.2fr_0.8fr]">
@@ -184,7 +282,7 @@
 					class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 				>
 					<option value="">Semua Kategori</option>
-					{#each KATEGORI_LIST as k}
+					{#each KATEGORI_LIST as k (k)}
 						<option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>
 					{/each}
 				</select>
@@ -194,69 +292,87 @@
 
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
-			{#if loading}
-				<div class="space-y-3 p-6">
-					{#each Array.from({ length: 6 }) as _, index (`book-skeleton-${index}`)}
-						<div class="grid gap-3 md:grid-cols-[0.7fr_1.7fr_0.8fr_0.8fr_0.6fr_auto] md:items-center">
-							<Skeleton class="h-5 w-20" />
-							<Skeleton class="h-5 w-full max-w-sm" />
-							<Skeleton class="h-6 w-20" />
-							<Skeleton class="h-5 w-20 justify-self-center" />
-							<Skeleton class="h-5 w-16" />
-							<Skeleton class="h-9 w-28 justify-self-end" />
-						</div>
-					{/each}
-				</div>
-			{:else if filtered.length === 0}
-				<div class="p-4">
-					<EmptyStatePanel
-						title={search || filterKategori ? 'Tidak ada buku yang cocok' : 'Katalog buku masih kosong'}
-						description={search || filterKategori
-							? 'Ubah kata kunci atau kategori untuk melihat koleksi lain yang sudah ada.'
-							: 'Tambahkan judul buku pertama agar perpustakaan bisa mulai dipakai untuk proses peminjaman.'}
-						compact
-					/>
-				</div>
-			{:else}
-				<Table.Root>
-					<Table.Header>
-						<Table.Row class="bg-slate-50 text-xs">
-							<Table.Head>Kode</Table.Head>
-							<Table.Head>Judul & Pengarang</Table.Head>
-							<Table.Head>Kategori</Table.Head>
-							<Table.Head class="text-center">Tersedia</Table.Head>
-							<Table.Head>Rak</Table.Head>
-							<Table.Head class="text-right">Aksi</Table.Head>
-						</Table.Row>
-					</Table.Header>
-					<Table.Body>
-						{#each filtered as b (b.id)}
-							<Table.Row class="text-sm">
-								<Table.Cell class="font-mono text-xs">{b.kode}</Table.Cell>
-								<Table.Cell>
-									<p class="font-medium text-slate-800">{b.judul}</p>
-									{#if b.pengarang}<p class="text-xs text-slate-500">{b.pengarang}</p>{/if}
-								</Table.Cell>
-								<Table.Cell>
-									<Badge variant="secondary" class="text-xs capitalize">{b.kategori}</Badge>
-								</Table.Cell>
-								<Table.Cell class="text-center">
-									<span class={b.tersedia === 0 ? 'text-red-600 font-semibold' : 'text-green-700 font-semibold'}>
-										{b.tersedia}
-									</span>
-									<span class="text-slate-400">/{b.total_eksemplar}</span>
-								</Table.Cell>
-								<Table.Cell class="text-xs text-slate-500">{b.lokasi_rak || '-'}</Table.Cell>
-								<Table.Cell class="text-right">
-									<Button variant="ghost" size="sm" onclick={() => openEdit(b)}>Edit</Button>
-									<Button variant="ghost" size="sm" class="text-red-600 hover:text-red-700"
-										onclick={() => { confirmDeleteId = b.id; showDeleteDialog = true; }}>Hapus</Button>
-								</Table.Cell>
-							</Table.Row>
+			<AsyncContent promise={booksPromise} onerror={handleBooksRenderError}>
+				{#snippet pending()}
+					<div class="space-y-3 p-6">
+						{#each Array.from({ length: 6 }) as _, index (`book-skeleton-${index}`)}
+							<div class="grid gap-3 md:grid-cols-[0.7fr_1.7fr_0.8fr_0.8fr_0.6fr_auto] md:items-center">
+								<Skeleton class="h-5 w-20" />
+								<Skeleton class="h-5 w-full max-w-sm" />
+								<Skeleton class="h-6 w-20" />
+								<Skeleton class="h-5 w-20 justify-self-center" />
+								<Skeleton class="h-5 w-16" />
+								<Skeleton class="h-9 w-28 justify-self-end" />
+							</div>
 						{/each}
-					</Table.Body>
-				</Table.Root>
-			{/if}
+					</div>
+				{/snippet}
+
+				{#snippet failed(error, reset)}
+					<div class="p-4">
+						<RecoveryPanel
+							compact
+							title="Katalog Belum Tersaji"
+							message={booksErrorMessage(error)}
+							onRetry={() => retryBooks(reset)}
+						/>
+					</div>
+				{/snippet}
+
+				{#snippet children(value)}
+					{@const currentFiltered = filterBooks(value as Book[])}
+					{#if currentFiltered.length === 0}
+						<div class="p-4">
+							<EmptyStatePanel
+								title={search || filterKategori ? 'Tidak ada buku yang cocok' : 'Katalog buku masih kosong'}
+								description={search || filterKategori
+									? 'Ubah kata kunci atau kategori untuk melihat koleksi lain yang sudah ada.'
+									: 'Tambahkan judul buku pertama agar perpustakaan bisa mulai dipakai untuk proses peminjaman.'}
+								compact
+							/>
+						</div>
+					{:else}
+						<Table.Root>
+							<Table.Header>
+								<Table.Row class="bg-slate-50 text-xs">
+									<Table.Head>Kode</Table.Head>
+									<Table.Head>Judul & Pengarang</Table.Head>
+									<Table.Head>Kategori</Table.Head>
+									<Table.Head class="text-center">Tersedia</Table.Head>
+									<Table.Head>Rak</Table.Head>
+									<Table.Head class="text-right">Aksi</Table.Head>
+								</Table.Row>
+							</Table.Header>
+							<Table.Body>
+								{#each currentFiltered as b (b.id)}
+									<Table.Row class="text-sm">
+										<Table.Cell class="font-mono text-xs">{b.kode}</Table.Cell>
+										<Table.Cell>
+											<p class="font-medium text-slate-800">{b.judul}</p>
+											{#if b.pengarang}<p class="text-xs text-slate-500">{b.pengarang}</p>{/if}
+										</Table.Cell>
+										<Table.Cell>
+											<Badge variant="secondary" class="text-xs capitalize">{b.kategori}</Badge>
+										</Table.Cell>
+										<Table.Cell class="text-center">
+											<span class={b.tersedia === 0 ? 'text-red-600 font-semibold' : 'text-green-700 font-semibold'}>
+												{b.tersedia}
+											</span>
+											<span class="text-slate-400">/{b.total_eksemplar}</span>
+										</Table.Cell>
+										<Table.Cell class="text-xs text-slate-500">{b.lokasi_rak || '-'}</Table.Cell>
+										<Table.Cell class="text-right">
+											<Button variant="ghost" size="sm" onclick={() => openEdit(b)}>Edit</Button>
+											<Button variant="ghost" size="sm" class="text-red-600 hover:text-red-700"
+												onclick={() => { confirmDeleteId = b.id; showDeleteDialog = true; }}>Hapus</Button>
+										</Table.Cell>
+									</Table.Row>
+								{/each}
+							</Table.Body>
+						</Table.Root>
+					{/if}
+				{/snippet}
+			</AsyncContent>
 		</Card.Content>
 	</Card.Root>
 </div>
@@ -270,7 +386,7 @@
 		<!-- Mode toggle -->
 		<div class="flex items-center gap-2 border-b border-slate-100 pb-3">
 			<span class="text-xs text-slate-500">Mode:</span>
-			{#each [['beginner', 'Cepat'], ['advance', 'Lengkap']] as [val, label]}
+			{#each [['beginner', 'Cepat'], ['advance', 'Lengkap']] as [val, label] (val)}
 				<button
 					class="rounded-full border px-3 py-1 text-xs transition-colors {formMode === val ? 'bg-green-700 text-white border-green-700' : 'border-slate-300 text-slate-600 hover:border-slate-400'}"
 					onclick={() => (formMode = val as 'beginner' | 'advance')}
@@ -314,7 +430,7 @@
 					<div class="space-y-1">
 						<label for="b-kat" class="block text-sm font-medium">Kategori</label>
 						<select id="b-kat" bind:value={fKategori} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-							{#each KATEGORI_LIST as k}
+							{#each KATEGORI_LIST as k (k)}
 								<option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>
 							{/each}
 						</select>
@@ -338,7 +454,7 @@
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (showDialog = false)}>Batal</Button>
-			<LoadingButton onclick={save} loading={busy} disabled={busy}>Simpan</LoadingButton>
+			<LoadingButton onclick={() => void save()} loading={busy} disabled={busy}>Simpan</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
@@ -352,7 +468,7 @@
 		</Dialog.Header>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => { showDeleteDialog = false; confirmDeleteId = null; }}>Batal</Button>
-			<LoadingButton variant="destructive" onclick={deleteBook} loading={busy} disabled={busy}>Hapus</LoadingButton>
+			<LoadingButton variant="destructive" onclick={() => void deleteBook()} loading={busy} disabled={busy}>Hapus</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

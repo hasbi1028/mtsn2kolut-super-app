@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	type EventInfo = {
 		id: string; title: string; exam_type: string; scope: string;
@@ -17,28 +20,85 @@
 		nis: string; student_nama: string; gender: string;
 		class_code: string; score: string | null; submitted_at: string | null;
 	};
+	type EventResultsDetail = {
+		info: EventInfo;
+		results: ResultRow[];
+	};
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
 
 	const eventId = page.params.id;
 	let info = $state<EventInfo | null>(null);
 	let results = $state<ResultRow[]>([]);
-	let loading = $state(true);
-	let error = $state('');
+	let detailPromise = $state<Promise<EventResultsDetail> | null>(null);
 
-	async function load() {
-		try {
-			const [iRes, rRes] = await Promise.all([
-				fetch(`/api/cbt/events/${eventId}`),
-				fetch(`/api/cbt/events/${eventId}/results`),
-			]);
-			const iJson = await iRes.json();
-			const rJson = await rRes.json();
-			info = iJson;
-			results = rJson.data ?? rJson ?? [];
-		} catch {
-			error = 'Gagal memuat rekap nilai kegiatan';
-		} finally {
-			loading = false;
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
 		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	async function fetchDetail(): Promise<EventResultsDetail> {
+		const [nextInfo, nextResults] = await Promise.all([
+			fetch(`/api/cbt/events/${eventId}`).then((response) => readApi<EventInfo>(response, 'Gagal memuat kegiatan ujian')),
+			fetch(`/api/cbt/events/${eventId}/results`).then((response) => readApi<ResultRow[]>(response, 'Gagal memuat rekap nilai kegiatan')),
+		]);
+		return {
+			info: nextInfo,
+			results: Array.isArray(nextResults) ? nextResults : [],
+		};
+	}
+
+	function applyDetail(detail: EventResultsDetail) {
+		info = detail.info;
+		results = detail.results;
+	}
+
+	function loadInitial() {
+		info = null;
+		results = [];
+		detailPromise = fetchDetail().then((detail) => {
+			applyDetail(detail);
+			return detail;
+		});
+	}
+
+	function retryDetail(reset?: () => void) {
+		reset?.();
+		loadInitial();
+	}
+
+	function detailErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat rekap nilai kegiatan';
+	}
+
+	function handleDetailRenderError(error: unknown) {
+		console.error('CBT event detail render failed', error);
 	}
 
 	function fmtScore(score: string | null) {
@@ -63,56 +123,72 @@
 		URL.revokeObjectURL(url);
 	}
 
-	onMount(load);
+	onMount(() => {
+		void loadInitial();
+	});
 </script>
 
 <svelte:head><title>Rekap Nilai — {info?.title ?? 'Kegiatan Ujian'}</title></svelte:head>
 
 <div class="space-y-6 p-6">
 	<div class="flex items-center gap-2 text-sm text-slate-500">
-		<a href="/cbt/events" class="hover:text-slate-700">Kegiatan Ujian</a>
+		<a href={resolve('/cbt/events')} class="hover:text-slate-700">Kegiatan Ujian</a>
 		<span>/</span>
 		<span class="text-slate-700 font-medium truncate max-w-xs">{info?.title ?? '...'}</span>
 	</div>
 
-	{#if loading}
-		<div class="space-y-4">
-			<div class="space-y-2">
-				<Skeleton class="h-4 w-48" />
-				<Skeleton class="h-8 w-72" />
-				<Skeleton class="h-4 w-64" />
+	<AsyncContent promise={detailPromise} onerror={handleDetailRenderError}>
+		{#snippet pending()}
+			<div class="space-y-4">
+				<div class="space-y-2">
+					<Skeleton class="h-4 w-48" />
+					<Skeleton class="h-8 w-72" />
+					<Skeleton class="h-4 w-64" />
+				</div>
+				<Card.Root>
+					<Card.Content class="space-y-3 p-6">
+						{#each Array.from({ length: 6 }) as _, index (`event-result-skeleton-${index}`)}
+							<div class="grid gap-3 lg:grid-cols-[0.8fr_1.4fr_0.6fr_1.2fr_0.5fr_0.6fr] lg:items-center">
+								<Skeleton class="h-5 w-20" />
+								<Skeleton class="h-5 w-full max-w-xs" />
+								<Skeleton class="h-6 w-16" />
+								<Skeleton class="h-5 w-36" />
+								<Skeleton class="h-5 w-14" />
+								<Skeleton class="h-6 w-16" />
+							</div>
+						{/each}
+					</Card.Content>
+				</Card.Root>
 			</div>
-			<Card.Root>
-				<Card.Content class="space-y-3 p-6">
-					{#each Array.from({ length: 6 }) as _, index (`event-result-skeleton-${index}`)}
-						<div class="grid gap-3 lg:grid-cols-[0.8fr_1.4fr_0.6fr_1.2fr_0.5fr_0.6fr] lg:items-center">
-							<Skeleton class="h-5 w-20" />
-							<Skeleton class="h-5 w-full max-w-xs" />
-							<Skeleton class="h-6 w-16" />
-							<Skeleton class="h-5 w-36" />
-							<Skeleton class="h-5 w-14" />
-							<Skeleton class="h-6 w-16" />
-						</div>
-					{/each}
-				</Card.Content>
-			</Card.Root>
-		</div>
-	{:else if info}
+		{/snippet}
+
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Rekap Nilai Belum Tersaji"
+				message={detailErrorMessage(error)}
+				onRetry={() => retryDetail(reset)}
+			/>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const detail = value as EventResultsDetail}
+			{@const currentInfo = detail.info}
+			{@const currentResults = detail.results}
 		<div class="flex items-start justify-between gap-4 flex-wrap">
 			<div>
-				<h1 class="text-2xl font-semibold text-slate-800">{info.title}</h1>
+				<h1 class="text-2xl font-semibold text-slate-800">{currentInfo.title}</h1>
 				<p class="text-sm text-slate-500 mt-1">
-					Tahun Ajaran: {info.academic_year_name} · Tipe: <span class="capitalize">{info.exam_type}</span>
+					Tahun Ajaran: {currentInfo.academic_year_name} · Tipe: <span class="capitalize">{currentInfo.exam_type}</span>
 				</p>
-				{#if info.target_levels?.length}
-					<p class="mt-2 text-sm text-slate-600">Tingkat yang diikutkan: <span class="font-medium">{info.target_levels.join(', ')}</span></p>
+				{#if currentInfo.target_levels?.length}
+					<p class="mt-2 text-sm text-slate-600">Tingkat yang diikutkan: <span class="font-medium">{currentInfo.target_levels.join(', ')}</span></p>
 				{/if}
 			</div>
 			<div class="flex flex-wrap gap-2">
-				<a href={`/cbt/events/${eventId}/exam-cards`} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
+				<a href={resolve(`/cbt/events/${eventId}/exam-cards`)} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
 					Kartu Ujian
 				</a>
-				<LoadingButton variant="outline" onclick={exportCSV} disabled={results.length === 0} label="↓ Ekspor CSV (Rekap Semua Sesi)" />
+				<LoadingButton variant="outline" onclick={exportCSV} disabled={currentResults.length === 0} label="↓ Ekspor CSV (Rekap Semua Sesi)" />
 			</div>
 		</div>
 
@@ -134,7 +210,7 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each results as r}
+						{#each currentResults as r (r.participant_id)}
 							<Table.Row>
 								<Table.Cell class="font-mono text-sm">{r.nis}</Table.Cell>
 								<Table.Cell class="font-medium">{r.student_nama}</Table.Cell>
@@ -160,5 +236,6 @@
 				</Table.Root>
 			</Card.Content>
 		</Card.Root>
-	{/if}
+		{/snippet}
+	</AsyncContent>
 </div>

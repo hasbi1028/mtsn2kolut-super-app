@@ -57,10 +57,10 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<section class="rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-emerald-50 p-6 shadow-sm">
+	<section class="rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-violet-700">Readiness Release Mobile</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">Readiness Release Mobile</p>
 				<h1 class="text-3xl font-semibold tracking-tight text-slate-900">Checklist Rilis CBT Mobile BYOD</h1>
 				<p class="max-w-2xl text-sm leading-6 text-slate-600">
 					Gunakan halaman ini sebelum backend exam atau APK mobile dirilis ke gelombang uji berikutnya.
@@ -86,7 +86,7 @@
 				<ul class="space-y-3">
 					{#each backendChecks as item (item)}
 						<li class="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
-							<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-semibold text-violet-700">API</span>
+							<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-semibold text-sky-700">API</span>
 							<span>{item}</span>
 						</li>
 					{/each}
@@ -144,7 +144,7 @@
 			{#each releaseArtifacts as item (item.path)}
 				<div class="rounded-2xl border border-slate-200 bg-white p-4">
 					<div class="flex items-center gap-3">
-						<Badge class="border-violet-200 bg-violet-50 text-violet-700">Dokumen</Badge>
+						<Badge class="border-sky-200 bg-sky-50 text-sky-700">Dokumen</Badge>
 						<p class="text-sm font-semibold text-slate-900">{item.title}</p>
 					</div>
 					<p class="mt-3 text-sm leading-6 text-slate-600">{item.description}</p>

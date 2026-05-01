@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
@@ -7,8 +8,11 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { confirmChallenge } from '$lib/confirm-dialog';
 
 	type ExamSession = {
 		id: string; package_id: string; package_title: string;
@@ -20,12 +24,31 @@
 	};
 	type CbtPackage = { id: string; title: string; subject_code: string; subject_name: string; };
 	type SchoolClass = { id: string; name: string; code: string; level: string; };
+	type SessionsOverview = {
+		sessions: ExamSession[];
+		packages: CbtPackage[];
+		classes: SchoolClass[];
+	};
+	type CbtPackagesPayload = {
+		packages?: CbtPackage[];
+		error?: string;
+		message?: string;
+	};
+	type AcademicPayload = {
+		classes?: SchoolClass[];
+		error?: string;
+		message?: string;
+	};
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
 
 	let sessions = $state<ExamSession[]>([]);
 	let packages = $state<CbtPackage[]>([]);
 	let classes = $state<SchoolClass[]>([]);
-	let loading = $state(true);
-	let error = $state('');
+	let sessionsPromise = $state<Promise<SessionsOverview> | null>(null);
 	let showForm = $state(false);
 
 	let fPackageId = $state('');
@@ -104,31 +127,104 @@
 		return 'Dibatalkan';
 	}
 
-	async function load() {
-		try {
-			const [sRes, pRes, aRes] = await Promise.all([
-				fetch('/api/cbt/sessions'),
-				fetch('/api/cbt/packages'),
-				fetch('/api/academic'),
-			]);
-			const sJson = await sRes.json();
-			const pJson = await pRes.json();
-			const aJson = await aRes.json();
-			if (sJson.error) { error = sJson.error; return; }
-			sessions = sJson.data ?? sJson ?? [];
-			const pd = pJson.data ?? pJson;
-			packages = pd.packages ?? [];
-			classes = (aJson.data ?? aJson)?.classes ?? [];
-		} catch {
-			error = 'Gagal memuat data sesi';
-		} finally {
-			loading = false;
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
 		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	async function fetchOverview(): Promise<SessionsOverview> {
+		const [nextSessions, packagePayload, academicPayload] = await Promise.all([
+			fetch('/api/cbt/sessions').then((response) => readApi<ExamSession[]>(response, 'Gagal memuat data sesi')),
+			fetch('/api/cbt/packages').then((response) => readApi<CbtPackagesPayload>(response, 'Gagal memuat paket ujian')),
+			fetch('/api/academic').then((response) => readApi<AcademicPayload>(response, 'Gagal memuat data akademik')),
+		]);
+		return {
+			sessions: Array.isArray(nextSessions) ? nextSessions : [],
+			packages: packagePayload.packages ?? [],
+			classes: academicPayload.classes ?? [],
+		};
+	}
+
+	function applyOverview(overview: SessionsOverview) {
+		sessions = overview.sessions;
+		packages = overview.packages;
+		classes = overview.classes;
+	}
+
+	function loadInitial() {
+		sessions = [];
+		packages = [];
+		classes = [];
+		sessionsPromise = fetchOverview().then((overview) => {
+			applyOverview(overview);
+			return overview;
+		});
+	}
+
+	async function refreshSessions() {
+		if (!sessionsPromise) {
+			loadInitial();
+			return;
+		}
+		try {
+			const overview = await fetchOverview();
+			applyOverview(overview);
+			sessionsPromise = Promise.resolve(overview);
+		} catch (error) {
+			sessionsPromise = Promise.resolve({ sessions, packages, classes });
+			toast.error(sessionsErrorMessage(error));
+		}
+	}
+
+	function retrySessions(reset?: () => void) {
+		reset?.();
+		loadInitial();
+	}
+
+	function sessionsErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat data sesi';
+	}
+
+	function handleSessionsRenderError(error: unknown) {
+		console.error('CBT sessions render failed', error);
 	}
 
 	function showToast(msg: string, ok = true) {
 		if (ok) toast.success(msg);
 		else toast.error(msg);
+	}
+
+	async function responseErrorMessage(response: Response, fallback: string) {
+		const payload = await response.json().catch(() => null);
+		return apiErrorMessage(payload) || fallback;
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
 	}
 
 	function setOperationState(
@@ -140,8 +236,13 @@
 	}
 
 	function confirmPhrase(title: string, detail: string, challenge: string) {
-		const input = prompt(`${title}\n\n${detail}\n\nKetik ${challenge} untuk melanjutkan.`);
-		return input === challenge;
+		return confirmChallenge({
+			title,
+			message: detail,
+			challenge,
+			confirmLabel: 'Konfirmasi',
+			tone: 'danger'
+		});
 	}
 
 	async function createSession() {
@@ -172,7 +273,7 @@
 					status: 'draft',
 				}),
 			});
-			if (!res.ok) { const j = await res.json(); showToast(j.error ?? 'Gagal', false); return; }
+			if (!res.ok) { showToast(await responseErrorMessage(res, 'Gagal membuat sesi ujian'), false); return; }
 			fPackageId = ''; fScopeType = 'class'; fClassId = ''; fGradeLevel = 'VII';
 			fMixPolicy = 'same_class'; fAssignmentMode = 'random_balanced';
 			fAllowCrossGrade = false; fIsSpecialEvent = false;
@@ -180,12 +281,14 @@
 			showForm = false;
 			setOperationState('success', 'Sesi Tersimpan Sebagai Draft', 'Sesi baru sudah dibuat. Daftarkan peserta dan cek ruang sebelum menjadwalkan atau memulai sesi.');
 			showToast('Sesi ujian berhasil dibuat');
-			await load();
+			await refreshSessions();
+		} catch (error) {
+			showToast(mutationErrorMessage(error, 'Gagal membuat sesi ujian. Periksa koneksi lalu coba lagi.'), false);
 		} finally { fBusy = false; }
 	}
 
 	async function deleteSession(id: string, title: string) {
-		if (!confirmPhrase('Hapus Sesi Ujian', `Sesi "${title}" hanya boleh dihapus jika masih Draft. Penghapusan akan membuang konfigurasi sesi dari daftar operator.`, 'HAPUS')) return;
+		if (!(await confirmPhrase('Hapus Sesi Ujian', `Sesi "${title}" hanya boleh dihapus jika masih Draft. Penghapusan akan membuang konfigurasi sesi dari daftar operator.`, 'HAPUS'))) return;
 		deleteBusyId = id;
 		try {
 			const res = await fetch(`/api/cbt/sessions?id=${id}`, { method: 'DELETE' });
@@ -195,8 +298,10 @@
 			} else {
 				setOperationState('warning', 'Sesi Dihapus', `Sesi "${title}" sudah dihapus dari daftar sesi ujian.`);
 				showToast('Sesi dihapus');
-				await load();
+				await refreshSessions();
 			}
+		} catch (error) {
+			showToast(mutationErrorMessage(error, 'Gagal menghapus sesi ujian. Periksa koneksi lalu coba lagi.'), false);
 		} finally {
 			deleteBusyId = '';
 		}
@@ -204,7 +309,7 @@
 
 	async function updateStatus(id: string, status: string) {
 		const challenge = status === 'cancelled' ? 'BATALKAN' : status === 'finished' ? 'SELESAI' : '';
-		if (challenge && !confirmPhrase('Konfirmasi Perubahan Status', `Perubahan ini akan mengubah status sesi menjadi "${statusLabel[status] ?? status}" dan memengaruhi operasi ujian berikutnya.`, challenge)) {
+		if (challenge && !(await confirmPhrase('Konfirmasi Perubahan Status', `Perubahan ini akan mengubah status sesi menjadi "${statusLabel[status] ?? status}" dan memengaruhi operasi ujian berikutnya.`, challenge))) {
 			return;
 		}
 		statusBusyId = id;
@@ -221,7 +326,9 @@
 			}
 			setOperationState('success', 'Status Sesi Diperbarui', `Sesi sekarang berstatus "${statusLabel[status] ?? status}". Pastikan langkah operator berikutnya sudah sesuai.`);
 			showToast('Status diperbarui');
-			await load();
+			await refreshSessions();
+		} catch (error) {
+			showToast(mutationErrorMessage(error, 'Gagal mengubah status sesi. Periksa koneksi lalu coba lagi.'), false);
 		} finally {
 			statusBusyId = '';
 		}
@@ -251,11 +358,15 @@
 			enrollScopeType = 'class';
 			enrollClassId = '';
 			enrollGradeLevel = 'VII';
-			await load();
+			await refreshSessions();
+		} catch (error) {
+			showToast(mutationErrorMessage(error, 'Gagal mendaftarkan siswa. Periksa koneksi lalu coba lagi.'), false);
 		} finally { enrollBusy = false; }
 	}
 
-	onMount(load);
+	onMount(() => {
+		void loadInitial();
+	});
 </script>
 
 <svelte:head><title>Sesi Ujian CBT — MTSN 2 Kolut</title></svelte:head>
@@ -270,10 +381,6 @@
 			{showForm ? 'Batal' : '+ Buat Sesi'}
 		</Button>
 	</div>
-
-	{#if error}
-		<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>
-	{/if}
 
 	{#if operationState}
 		<OperationStatusPanel {...operationState} />
@@ -370,7 +477,7 @@
 				<div class="flex gap-2">
 					<LoadingButton
 						disabled={fBusy || !fPackageId || !fTitle || !fStart || !fEnd || (fScopeType === 'class' && !fClassId) || (fScopeType === 'grade' && !fGradeLevel)}
-						onclick={createSession}
+						onclick={() => void createSession()}
 						loading={fBusy}
 						loadingLabel="Menyimpan..."
 					>
@@ -426,7 +533,7 @@
 				<div class="flex gap-2">
 					<LoadingButton
 						disabled={enrollBusy || (enrollScopeType === 'class' && !enrollClassId) || (enrollScopeType === 'grade' && !enrollGradeLevel)}
-						onclick={enrollParticipants}
+						onclick={() => void enrollParticipants()}
 						loading={enrollBusy}
 						loadingLabel="Mendaftarkan..."
 					>
@@ -438,38 +545,51 @@
 		</Card.Root>
 	{/if}
 
-	{#if loading}
-		<div class="space-y-4">
-			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-				{#each Array.from({ length: 4 }) as _, index (`cbt-session-stat-skeleton-${index}`)}
-					<Card.Root class="border-slate-200">
-						<Card.Content class="space-y-2 p-4">
-							<Skeleton class="h-4 w-24" />
-							<Skeleton class="h-7 w-16" />
-						</Card.Content>
-					</Card.Root>
-				{/each}
-			</div>
-			<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
-				<Card.Content class="space-y-3 p-6">
-					{#each Array.from({ length: 5 }) as _, index (`cbt-session-row-skeleton-${index}`)}
-						<div class="grid gap-3 lg:grid-cols-[1.2fr_1fr_0.9fr_1fr_0.5fr_0.7fr_auto] lg:items-center">
-							<Skeleton class="h-5 w-40" />
-							<Skeleton class="h-5 w-32" />
-							<Skeleton class="h-5 w-28" />
-							<Skeleton class="h-5 w-36" />
-							<Skeleton class="h-5 w-12" />
-							<Skeleton class="h-6 w-20" />
-							<Skeleton class="h-9 w-36 justify-self-end" />
-						</div>
+	<AsyncContent promise={sessionsPromise} onerror={handleSessionsRenderError}>
+		{#snippet pending()}
+			<div class="space-y-4">
+				<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+					{#each Array.from({ length: 4 }) as _, index (`cbt-session-stat-skeleton-${index}`)}
+						<Card.Root class="border-slate-200">
+							<Card.Content class="space-y-2 p-4">
+								<Skeleton class="h-4 w-24" />
+								<Skeleton class="h-7 w-16" />
+							</Card.Content>
+						</Card.Root>
 					{/each}
-				</Card.Content>
-			</Card.Root>
-		</div>
-	{:else}
+				</div>
+				<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+					<Card.Content class="space-y-3 p-6">
+						{#each Array.from({ length: 5 }) as _, index (`cbt-session-row-skeleton-${index}`)}
+							<div class="grid gap-3 lg:grid-cols-[1.2fr_1fr_0.9fr_1fr_0.5fr_0.7fr_auto] lg:items-center">
+								<Skeleton class="h-5 w-40" />
+								<Skeleton class="h-5 w-32" />
+								<Skeleton class="h-5 w-28" />
+								<Skeleton class="h-5 w-36" />
+								<Skeleton class="h-5 w-12" />
+								<Skeleton class="h-6 w-20" />
+								<Skeleton class="h-9 w-36 justify-self-end" />
+							</div>
+						{/each}
+					</Card.Content>
+				</Card.Root>
+			</div>
+		{/snippet}
+
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Sesi Ujian Belum Tersaji"
+				message={sessionsErrorMessage(error)}
+				onRetry={() => retrySessions(reset)}
+			/>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const overview = value as SessionsOverview}
+			{@const currentSessions = overview.sessions}
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Header class="pb-2">
-				<Card.Title class="text-base">Daftar Sesi ({sessions.length})</Card.Title>
+				<Card.Title class="text-base">Daftar Sesi ({currentSessions.length})</Card.Title>
 			</Card.Header>
 			<Card.Content class="p-0">
 				<div class="hidden overflow-x-auto lg:block">
@@ -486,7 +606,7 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each sessions as s (s.id)}
+						{#each currentSessions as s (s.id)}
 							<Table.Row>
 								<Table.Cell class="font-medium max-w-48">
 									<p class="truncate">{s.title}</p>
@@ -533,7 +653,7 @@
 											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
 										{/if}
 										{#if s.status === 'finished' || s.status === 'active'}
-											<a href="/cbt/sessions/{s.id}" class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-slate-700 transition-colors">
+											<a href={resolve(`/cbt/sessions/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-slate-700 transition-colors">
 												Lihat Hasil
 											</a>
 										{/if}
@@ -550,7 +670,7 @@
 				</div>
 
 				<div class="grid gap-3 p-4 lg:hidden">
-					{#each sessions as s (s.id)}
+					{#each currentSessions as s (s.id)}
 						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
@@ -588,7 +708,7 @@
 									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
 								{/if}
 								{#if s.status === 'finished' || s.status === 'active'}
-									<a href="/cbt/sessions/{s.id}" class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-slate-700 transition-colors">
+									<a href={resolve(`/cbt/sessions/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-slate-700 transition-colors">
 										Lihat Hasil
 									</a>
 								{/if}
@@ -602,5 +722,6 @@
 				</div>
 			</Card.Content>
 		</Card.Root>
-	{/if}
+		{/snippet}
+	</AsyncContent>
 </div>

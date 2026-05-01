@@ -7,9 +7,12 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
+	import { confirmAction } from '$lib/confirm-dialog';
 
 	type IncomingLetter = {
 		id: string;
@@ -38,9 +41,13 @@
 		letter_perihal: string;
 	};
 
-	let loading = $state(true);
-	let error = $state('');
-	let letters = $state<IncomingLetter[]>([]);
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
+	let lettersPromise = $state<Promise<IncomingLetter[]> | null>(null);
 	let search = $state('');
 	let filterStatus = $state('');
 
@@ -65,25 +72,93 @@
 	let disposisiOpen = $state(false);
 	let disposisiLetter = $state<IncomingLetter | null>(null);
 	let disposisiList = $state<DispositionRow[]>([]);
-	let disposisiLoading = $state(false);
+	let disposisiPromise = $state<Promise<DispositionRow[]> | null>(null);
 	let newDisposisiAssignee = $state('');
 	let newDisposisiInstruksi = $state('');
 	let disposisiBusy = $state(false);
 
-	async function loadLetters() {
-		loading = true;
-		error = '';
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	async function fetchLetters(): Promise<IncomingLetter[]> {
+		const params = new URLSearchParams();
+		if (search) params.set('search', search);
+		if (filterStatus) params.set('status', filterStatus);
+		const res = await fetch(`/api/tu/surat/incoming?${params}`);
+		return readApi<IncomingLetter[]>(res, 'Gagal memuat surat masuk');
+	}
+
+	function loadLetters() {
+		lettersPromise = fetchLetters();
+	}
+
+	async function refreshLetters() {
+		const rows = await fetchLetters();
+		lettersPromise = Promise.resolve(rows ?? []);
+	}
+
+	function retryLetters(reset?: () => void) {
+		reset?.();
+		loadLetters();
+	}
+
+	function lettersErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat surat masuk';
+	}
+
+	function disposisiErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat disposisi surat. Periksa koneksi lalu coba lagi.';
+	}
+
+	function handleLettersRenderError(error: unknown) {
+		console.error('TU incoming letters render failed', error);
+	}
+
+	function handleDisposisiRenderError(error: unknown) {
+		console.error('TU incoming letter dispositions render failed', error);
+	}
+
+	async function responseErrorMessage(response: Response, fallback: string) {
+		const payload = await response.json().catch(() => null);
+		return apiErrorMessage(payload) || fallback;
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
+	}
+
+	async function refreshLettersAfterMutation() {
 		try {
-			const params = new URLSearchParams();
-			if (search) params.set('search', search);
-			if (filterStatus) params.set('status', filterStatus);
-			const res = await fetch(`/api/tu/surat/incoming?${params}`);
-			if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
-			letters = (await res.json()) as IncomingLetter[];
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Gagal memuat surat masuk';
-		} finally {
-			loading = false;
+			await refreshLetters();
+		} catch (error) {
+			toast.error(lettersErrorMessage(error));
 		}
 	}
 
@@ -112,14 +187,14 @@
 					catatan: newCatatan
 				})
 			});
-			const json = await res.json();
-			if (!res.ok) { toast.error(json.error ?? 'Gagal mencatat surat'); return; }
+			const payload = await res.json().catch(() => null);
+			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal mencatat surat'); return; }
 			createOpen = false;
 			newNomor = ''; newTglSurat = ''; newTglTerima = ''; newAsal = ''; newPerihal = ''; newSifat = 'biasa'; newCatatan = '';
 			toast.success('Surat masuk berhasil dicatat');
-			await loadLetters();
-		} catch {
-			toast.error('Terjadi kesalahan jaringan');
+			await refreshLettersAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
 			createBusy = false;
 		}
@@ -134,44 +209,66 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ status: newStatus })
 			});
-			if (!res.ok) { toast.error((await res.json()).error ?? 'Gagal mengubah status'); return; }
-			await loadLetters();
+			if (!res.ok) { toast.error(await responseErrorMessage(res, 'Gagal mengubah status')); return; }
+			await refreshLettersAfterMutation();
 			toast.success('Status diperbarui');
-		} catch {
-			toast.error('Terjadi kesalahan jaringan');
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
 			statusBusy = { ...statusBusy, [letter.id]: false };
 		}
 	}
 
 	async function deleteLetter(id: string) {
-		if (!confirm('Hapus surat masuk ini? Semua disposisi akan ikut terhapus.')) return;
+		if (!(await confirmAction({
+			title: 'Hapus Surat Masuk',
+			message: 'Hapus surat masuk ini? Semua disposisi akan ikut terhapus.',
+			confirmLabel: 'Hapus Surat',
+			tone: 'danger'
+		}))) return;
 		deleteBusy = { ...deleteBusy, [id]: true };
 		try {
 			const res = await fetch(`/api/tu/surat/incoming/${id}`, { method: 'DELETE' });
-			if (!res.ok && res.status !== 204) { toast.error((await res.json()).error ?? 'Gagal menghapus'); return; }
+			if (!res.ok && res.status !== 204) { toast.error(await responseErrorMessage(res, 'Gagal menghapus')); return; }
 			toast.success('Surat dihapus');
-			await loadLetters();
-		} catch {
-			toast.error('Terjadi kesalahan jaringan');
+			await refreshLettersAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
 			deleteBusy = { ...deleteBusy, [id]: false };
 		}
 	}
 
-	async function openDisposisi(letter: IncomingLetter) {
+	async function fetchDisposisi(letterId: string): Promise<DispositionRow[]> {
+		const res = await fetch(`/api/tu/surat/disposisi?incoming_letter_id=${letterId}`);
+		return readApi<DispositionRow[]>(res, 'Gagal memuat disposisi');
+	}
+
+	function setDisposisiPromise(letter: IncomingLetter) {
+		disposisiList = [];
+		disposisiPromise = fetchDisposisi(letter.id).then((rows) => {
+			disposisiList = rows ?? [];
+			return disposisiList;
+		});
+	}
+
+	function openDisposisi(letter: IncomingLetter) {
 		disposisiLetter = letter;
 		disposisiOpen = true;
-		disposisiLoading = true;
-		try {
-			const res = await fetch(`/api/tu/surat/disposisi?incoming_letter_id=${letter.id}`);
-			if (!res.ok) throw new Error((await res.json()).error ?? 'Gagal');
-			disposisiList = (await res.json()) as DispositionRow[];
-		} catch {
-			disposisiList = [];
-		} finally {
-			disposisiLoading = false;
-		}
+		setDisposisiPromise(letter);
+	}
+
+	function retryDisposisi(reset?: () => void) {
+		if (!disposisiLetter) return;
+		reset?.();
+		setDisposisiPromise(disposisiLetter);
+	}
+
+	async function refreshDisposisiList() {
+		if (!disposisiLetter) return;
+		const rows = await fetchDisposisi(disposisiLetter.id);
+		disposisiList = rows ?? [];
+		disposisiPromise = Promise.resolve(disposisiList);
 	}
 
 	async function createDisposisi() {
@@ -188,15 +285,15 @@
 					instruksi: newDisposisiInstruksi
 				})
 			});
-			const json = await res.json();
-			if (!res.ok) { toast.error(json.error ?? 'Gagal mendisposisi'); return; }
+			const payload = await res.json().catch(() => null);
+			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal mendisposisi'); return; }
 			newDisposisiAssignee = '';
 			newDisposisiInstruksi = '';
 			toast.success('Disposisi berhasil dibuat');
-			await openDisposisi(disposisiLetter);
-			await loadLetters();
-		} catch {
-			toast.error('Terjadi kesalahan jaringan');
+			await refreshDisposisiList();
+			await refreshLettersAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
 			disposisiBusy = false;
 		}
@@ -215,16 +312,9 @@
 		rahasia: 'bg-red-100 text-red-800 hover:bg-red-100'
 	};
 
-	const statusColors: Record<string, string> = {
-		baru: 'bg-sky-100 text-sky-800 hover:bg-sky-100',
-		didisposisi: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100',
-		selesai: 'bg-green-100 text-green-800 hover:bg-green-100',
-		arsip: 'bg-gray-100 text-gray-600 hover:bg-gray-100'
-	};
-
 	const disposisiStatusColors: Record<string, string> = {
 		terkirim: 'bg-sky-100 text-sky-800 hover:bg-sky-100',
-		dibaca: 'bg-purple-100 text-purple-800 hover:bg-purple-100',
+		dibaca: 'bg-sky-100 text-sky-800 hover:bg-sky-100',
 		ditindaklanjuti: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100',
 		selesai: 'bg-green-100 text-green-800 hover:bg-green-100'
 	};
@@ -264,89 +354,103 @@
 		</Card.Content>
 	</Card.Root>
 
-	{#if error}
-		<div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-	{/if}
-
 	<Card.Root>
 		<Card.Content class="p-0">
-			{#if loading}
-				<div class="space-y-2 p-4">
-					{#each [1, 2, 3] as _}
-						<Skeleton class="h-12 w-full" />
-					{/each}
-				</div>
-			{:else if letters.length === 0}
-				<div class="p-8 text-center text-sm text-gray-500">
-					{search || filterStatus ? 'Tidak ada surat yang sesuai filter.' : 'Belum ada surat masuk yang dicatat.'}
-				</div>
-			{:else}
-				<Table.Root>
-					<Table.Header>
-						<Table.Row>
-							<Table.Head class="w-12">No</Table.Head>
-							<Table.Head class="w-32">No. Agenda</Table.Head>
-							<Table.Head>No. Surat</Table.Head>
-							<Table.Head>Asal / Perihal</Table.Head>
-							<Table.Head class="w-28">Tgl Terima</Table.Head>
-							<Table.Head class="w-20">Sifat</Table.Head>
-							<Table.Head class="w-28">Status</Table.Head>
-							<Table.Head class="w-40">Aksi</Table.Head>
-						</Table.Row>
-					</Table.Header>
-					<Table.Body>
-						{#each letters as letter, i}
-							<Table.Row>
-								<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
-								<Table.Cell class="font-mono text-xs font-medium text-gray-700">{letter.nomor_agenda}</Table.Cell>
-								<Table.Cell class="max-w-[180px] truncate text-xs text-gray-600">{letter.nomor_surat}</Table.Cell>
-								<Table.Cell>
-									<p class="text-sm font-medium text-gray-800">{letter.asal}</p>
-									<p class="max-w-xs truncate text-xs text-gray-500">{letter.perihal}</p>
-								</Table.Cell>
-								<Table.Cell class="text-sm text-gray-600">{formatDate(letter.tanggal_terima)}</Table.Cell>
-								<Table.Cell>
-									<Badge class={sifatColors[letter.sifat] ?? 'bg-gray-100 text-gray-700 hover:bg-gray-100'}>
-										{letter.sifat}
-									</Badge>
-								</Table.Cell>
-								<Table.Cell>
-									<select
-										value={letter.status}
-										onchange={(e) => updateStatus(letter, (e.target as HTMLSelectElement).value)}
-										disabled={statusBusy[letter.id]}
-										class="rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-600"
-									>
-										<option value="baru">Baru</option>
-										<option value="didisposisi">Didisposisi</option>
-										<option value="selesai">Selesai</option>
-										<option value="arsip">Arsip</option>
-									</select>
-								</Table.Cell>
-								<Table.Cell>
-									<div class="flex gap-1">
-										<Button
-											variant="outline"
-											size="sm"
-											onclick={() => openDisposisi(letter)}
-										>
-											Disposisi {#if letter.disposisi_count > 0}({letter.disposisi_count}){/if}
-										</Button>
-										<LoadingButton
-											variant="destructive"
-											size="sm"
-											loading={deleteBusy[letter.id] ?? false}
-											onclick={() => deleteLetter(letter.id)}
-										>
-											Hapus
-										</LoadingButton>
-									</div>
-								</Table.Cell>
-							</Table.Row>
+			<AsyncContent promise={lettersPromise} onerror={handleLettersRenderError}>
+				{#snippet pending()}
+					<div class="space-y-2 p-4">
+						{#each [1, 2, 3] as row (row)}
+							<Skeleton class="h-12 w-full" />
 						{/each}
-					</Table.Body>
-				</Table.Root>
-			{/if}
+					</div>
+				{/snippet}
+
+				{#snippet failed(error, reset)}
+					<div class="p-4">
+						<RecoveryPanel
+							compact
+							title="Surat Masuk Belum Tersaji"
+							message={lettersErrorMessage(error)}
+							onRetry={() => retryLetters(reset)}
+						/>
+					</div>
+				{/snippet}
+
+				{#snippet children(value)}
+					{@const currentLetters = value as IncomingLetter[]}
+					{#if currentLetters.length === 0}
+						<div class="p-8 text-center text-sm text-gray-500">
+							{search || filterStatus ? 'Tidak ada surat yang sesuai filter.' : 'Belum ada surat masuk yang dicatat.'}
+						</div>
+					{:else}
+						<Table.Root>
+							<Table.Header>
+								<Table.Row>
+									<Table.Head class="w-12">No</Table.Head>
+									<Table.Head class="w-32">No. Agenda</Table.Head>
+									<Table.Head>No. Surat</Table.Head>
+									<Table.Head>Asal / Perihal</Table.Head>
+									<Table.Head class="w-28">Tgl Terima</Table.Head>
+									<Table.Head class="w-20">Sifat</Table.Head>
+									<Table.Head class="w-28">Status</Table.Head>
+									<Table.Head class="w-40">Aksi</Table.Head>
+								</Table.Row>
+							</Table.Header>
+							<Table.Body>
+								{#each currentLetters as letter, i (letter.id)}
+									<Table.Row>
+										<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
+										<Table.Cell class="font-mono text-xs font-medium text-gray-700">{letter.nomor_agenda}</Table.Cell>
+										<Table.Cell class="max-w-[180px] truncate text-xs text-gray-600">{letter.nomor_surat}</Table.Cell>
+										<Table.Cell>
+											<p class="text-sm font-medium text-gray-800">{letter.asal}</p>
+											<p class="max-w-xs truncate text-xs text-gray-500">{letter.perihal}</p>
+										</Table.Cell>
+										<Table.Cell class="text-sm text-gray-600">{formatDate(letter.tanggal_terima)}</Table.Cell>
+										<Table.Cell>
+											<Badge class={sifatColors[letter.sifat] ?? 'bg-gray-100 text-gray-700 hover:bg-gray-100'}>
+												{letter.sifat}
+											</Badge>
+										</Table.Cell>
+										<Table.Cell>
+											<select
+												value={letter.status}
+												onchange={(e) => updateStatus(letter, (e.target as HTMLSelectElement).value)}
+												disabled={statusBusy[letter.id]}
+												class="rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-600"
+											>
+												<option value="baru">Baru</option>
+												<option value="didisposisi">Didisposisi</option>
+												<option value="selesai">Selesai</option>
+												<option value="arsip">Arsip</option>
+											</select>
+										</Table.Cell>
+										<Table.Cell>
+											<div class="flex gap-1">
+												<Button
+													variant="outline"
+													size="sm"
+													onclick={() => openDisposisi(letter)}
+												>
+													Disposisi {#if letter.disposisi_count > 0}({letter.disposisi_count}){/if}
+												</Button>
+												<LoadingButton
+													variant="destructive"
+													size="sm"
+													loading={deleteBusy[letter.id] ?? false}
+													onclick={() => deleteLetter(letter.id)}
+												>
+													Hapus
+												</LoadingButton>
+											</div>
+										</Table.Cell>
+									</Table.Row>
+								{/each}
+							</Table.Body>
+						</Table.Root>
+					{/if}
+				{/snippet}
+			</AsyncContent>
 		</Card.Content>
 	</Card.Root>
 </div>
@@ -401,7 +505,7 @@
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (createOpen = false)}>Batal</Button>
-			<LoadingButton loading={createBusy} onclick={createLetter}>Simpan</LoadingButton>
+			<LoadingButton loading={createBusy} onclick={() => void createLetter()}>Simpan</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
@@ -419,27 +523,39 @@
 		</Dialog.Header>
 		<div class="space-y-4 py-2">
 			<!-- Existing dispositions -->
-			{#if disposisiLoading}
-				<Skeleton class="h-16 w-full" />
-			{:else if disposisiList.length > 0}
-				<div class="space-y-2">
-					<p class="text-sm font-medium text-gray-700">Disposisi sebelumnya</p>
-					{#each disposisiList as d}
-						<div class="rounded-md border border-gray-100 bg-gray-50 p-3 text-sm">
-							<div class="flex items-center justify-between">
-								<span class="font-medium text-gray-800">{d.assignee_name || '–'}</span>
-								<Badge class={disposisiStatusColors[d.status] ?? ''} >{d.status}</Badge>
-							</div>
-							{#if d.instruksi}
-								<p class="mt-1 text-gray-600">{d.instruksi}</p>
-							{/if}
-							{#if d.catatan_tindak_lanjut}
-								<p class="mt-1 text-gray-500 italic">Tindak lanjut: {d.catatan_tindak_lanjut}</p>
-							{/if}
+			<AsyncContent promise={disposisiPromise} onerror={handleDisposisiRenderError}>
+				{#snippet pending()}
+					<div class="space-y-2">
+						<Skeleton class="h-16 w-full" />
+						<Skeleton class="h-16 w-full" />
+					</div>
+				{/snippet}
+				{#snippet failed(error, reset)}
+					<RecoveryPanel compact title="Disposisi Belum Tersaji" message={disposisiErrorMessage(error)} onRetry={() => retryDisposisi(reset)} />
+				{/snippet}
+				{#snippet children(rows)}
+					{@const currentDisposisi = rows as DispositionRow[]}
+					{#if currentDisposisi.length > 0}
+						<div class="space-y-2">
+							<p class="text-sm font-medium text-gray-700">Disposisi sebelumnya</p>
+							{#each currentDisposisi as d (d.id)}
+								<div class="rounded-md border border-gray-100 bg-gray-50 p-3 text-sm">
+									<div class="flex items-center justify-between">
+										<span class="font-medium text-gray-800">{d.assignee_name || '–'}</span>
+										<Badge class={disposisiStatusColors[d.status] ?? ''} >{d.status}</Badge>
+									</div>
+									{#if d.instruksi}
+										<p class="mt-1 text-gray-600">{d.instruksi}</p>
+									{/if}
+									{#if d.catatan_tindak_lanjut}
+										<p class="mt-1 text-gray-500 italic">Tindak lanjut: {d.catatan_tindak_lanjut}</p>
+									{/if}
+								</div>
+							{/each}
 						</div>
-					{/each}
-				</div>
-			{/if}
+					{/if}
+				{/snippet}
+			</AsyncContent>
 
 			<!-- New disposition form -->
 			<div class="space-y-2 border-t border-gray-100 pt-3">
@@ -456,7 +572,7 @@
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (disposisiOpen = false)}>Tutup</Button>
-			<LoadingButton loading={disposisiBusy} onclick={createDisposisi}>Disposisi</LoadingButton>
+			<LoadingButton loading={disposisiBusy} onclick={() => void createDisposisi()}>Disposisi</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

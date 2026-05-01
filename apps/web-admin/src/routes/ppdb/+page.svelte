@@ -12,6 +12,13 @@
 	let parentPhone = $state('');
 	let busy = $state(false);
 
+	function apiErrorMessage(payload: unknown, fallback: string) {
+		if (!payload || typeof payload !== 'object') return fallback;
+		if ('error' in payload && typeof payload.error === 'string' && payload.error) return payload.error;
+		if ('message' in payload && typeof payload.message === 'string' && payload.message) return payload.message;
+		return fallback;
+	}
+
 	async function submitRegistration() {
 		if (!nama || !nis || !gender) {
 			toast.error('Nama, NIS, dan jenis kelamin wajib diisi');
@@ -32,7 +39,7 @@
 			});
 			const payload = await res.json().catch(() => ({}));
 			if (!res.ok) {
-				toast.error(payload.error ?? 'Pendaftaran gagal');
+				toast.error(apiErrorMessage(payload, 'Pendaftaran gagal'));
 				return;
 			}
 			toast.success('Pendaftaran berhasil dikirim. Status awal sebagai calon siswa.');
@@ -41,6 +48,8 @@
 			gender = 'L';
 			parentName = '';
 			parentPhone = '';
+		} catch {
+			toast.error('Pendaftaran gagal dikirim. Periksa koneksi lalu coba lagi.');
 		} finally {
 			busy = false;
 		}
@@ -111,7 +120,7 @@
 					</div>
 
 					<div class="flex flex-wrap gap-2">
-						<LoadingButton onclick={submitRegistration} loading={busy} loadingLabel="Mengirim..." label="Kirim Pendaftaran" />
+						<LoadingButton onclick={() => void submitRegistration()} loading={busy} loadingLabel="Mengirim..." label="Kirim Pendaftaran" />
 						<Button variant="outline" href="/login">Masuk Admin</Button>
 					</div>
 				</Card.Content>

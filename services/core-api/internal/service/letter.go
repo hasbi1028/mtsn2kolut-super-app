@@ -197,14 +197,14 @@ func (s *Letter) GetOutgoing(ctx context.Context, id pgtype.UUID) (db.GetOutgoin
 }
 
 type CreateOutgoingParams struct {
-	ClassificationCode   string
-	TanggalSurat         string
-	Tujuan               string
-	Perihal              string
-	Sifat                string
-	Catatan              string
-	IssuedByEmployeeID   string
-	ManualNomor          string
+	ClassificationCode string
+	TanggalSurat       string
+	Tujuan             string
+	Perihal            string
+	Sifat              string
+	Catatan            string
+	IssuedByEmployeeID string
+	ManualNomor        string
 }
 
 func (s *Letter) IssueOutgoingLetterNumber(ctx context.Context, classificationCode, tanggalSurat string) (string, error) {
@@ -212,19 +212,7 @@ func (s *Letter) IssueOutgoingLetterNumber(ctx context.Context, classificationCo
 	if err := tgl.Scan(tanggalSurat); err != nil {
 		return "", fmt.Errorf("tanggal tidak valid")
 	}
-	t := tgl.Time
-	year := int32(t.Year())
-	month := t.Month()
-
-	seq, err := s.q.IssueOutgoingLetterSequence(ctx, db.IssueOutgoingLetterSequenceParams{
-		Year:               year,
-		ClassificationCode: classificationCode,
-	})
-	if err != nil {
-		return "", fmt.Errorf("gagal generate nomor surat: %w", err)
-	}
-	roman := romanMonths[month]
-	return fmt.Sprintf("%03d/%s/MTs.20.05/%s/%d", seq, classificationCode, roman, year), nil
+	return issueOutgoingLetterNumber(ctx, s.q, classificationCode, tgl)
 }
 
 func (s *Letter) CreateOutgoing(ctx context.Context, p CreateOutgoingParams) (db.OutgoingLetter, error) {
@@ -249,17 +237,11 @@ func (s *Letter) CreateOutgoing(ctx context.Context, p CreateOutgoingParams) (db
 	if strings.TrimSpace(p.ManualNomor) != "" {
 		nomor = strings.TrimSpace(p.ManualNomor)
 	} else {
-		t := tglSurat.Time
-		year := int32(t.Year())
-		month := t.Month()
-		seq, err := s.q.IssueOutgoingLetterSequence(ctx, db.IssueOutgoingLetterSequenceParams{
-			Year:               year,
-			ClassificationCode: p.ClassificationCode,
-		})
+		var err error
+		nomor, err = issueOutgoingLetterNumber(ctx, s.q, p.ClassificationCode, tglSurat)
 		if err != nil {
-			return db.OutgoingLetter{}, fmt.Errorf("gagal generate nomor surat: %w", err)
+			return db.OutgoingLetter{}, err
 		}
-		nomor = fmt.Sprintf("%03d/%s/MTs.20.05/%s/%d", seq, p.ClassificationCode, romanMonths[month], year)
 	}
 
 	sifat := db.LetterSifat(p.Sifat)
@@ -439,4 +421,33 @@ func (s *Letter) PreviewOutgoingNumber(classificationCode, tanggalSurat string) 
 func parseLetterUUID(s string) (pgtype.UUID, error) {
 	var u pgtype.UUID
 	return u, u.Scan(s)
+}
+
+type outgoingLetterNumberStore interface {
+	IssueOutgoingLetterSequence(ctx context.Context, arg db.IssueOutgoingLetterSequenceParams) (int32, error)
+}
+
+func issueOutgoingLetterNumber(ctx context.Context, q outgoingLetterNumberStore, classificationCode string, tanggalSurat pgtype.Date) (string, error) {
+	classificationCode = strings.TrimSpace(classificationCode)
+	if classificationCode == "" {
+		return "", fmt.Errorf("kode klasifikasi wajib diisi")
+	}
+	if !tanggalSurat.Valid {
+		return "", fmt.Errorf("tanggal tidak valid")
+	}
+	t := tanggalSurat.Time
+	year := int32(t.Year())
+	month := int(t.Month())
+	if month < 1 || month >= len(romanMonths) {
+		return "", fmt.Errorf("bulan surat tidak valid")
+	}
+
+	seq, err := q.IssueOutgoingLetterSequence(ctx, db.IssueOutgoingLetterSequenceParams{
+		Year:               year,
+		ClassificationCode: classificationCode,
+	})
+	if err != nil {
+		return "", fmt.Errorf("gagal generate nomor surat: %w", err)
+	}
+	return fmt.Sprintf("%03d/%s/MTs.20.05/%s/%d", seq, classificationCode, romanMonths[month], year), nil
 }

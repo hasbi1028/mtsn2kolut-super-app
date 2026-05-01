@@ -1,10 +1,11 @@
 <script lang="ts">
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
-	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
 
@@ -23,25 +24,101 @@
 		letter_asal: string;
 	};
 
-	let loading = $state(true);
-	let error = $state('');
-	let dispositions = $state<DispositionRow[]>([]);
+	let dispositionsPromise = $state<Promise<DispositionRow[]> | null>(null);
 	let filterStatus = $state('');
 	let updateBusy = $state<Record<string, boolean>>({});
+	let refreshBusy = $state(false);
 
-	async function loadDispositions() {
-		loading = true;
-		error = '';
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	async function fetchDispositions(): Promise<DispositionRow[]> {
+		const params = new URLSearchParams();
+		if (filterStatus) params.set('status', filterStatus);
+		const res = await fetch(`/api/tu/surat/disposisi?${params}`);
+		return readApi<DispositionRow[]>(res, 'Gagal memuat disposisi');
+	}
+
+	function loadDispositions() {
+		dispositionsPromise = fetchDispositions();
+		return dispositionsPromise;
+	}
+
+	async function refreshDispositionsList() {
+		refreshBusy = true;
 		try {
-			const params = new URLSearchParams();
-			if (filterStatus) params.set('status', filterStatus);
-			const res = await fetch(`/api/tu/surat/disposisi?${params}`);
-			if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
-			dispositions = (await res.json()) as DispositionRow[];
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Gagal memuat disposisi';
+			await loadDispositions();
+		} catch {
+			// AsyncContent owns the visible error state for the table body.
 		} finally {
-			loading = false;
+			refreshBusy = false;
+		}
+	}
+
+	async function refreshDispositions() {
+		const rows = await fetchDispositions();
+		dispositionsPromise = Promise.resolve(rows ?? []);
+	}
+
+	function retryDispositions(reset?: () => void) {
+		reset?.();
+		loadDispositions();
+	}
+
+	function dispositionsErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat disposisi';
+	}
+
+	function handleDispositionsRenderError(error: unknown) {
+		console.error('TU dispositions render failed', error);
+	}
+
+	async function responseErrorMessage(response: Response, fallback: string) {
+		const payload = await response.json().catch(() => null);
+		return apiErrorMessage(payload) || fallback;
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
+	}
+
+	async function refreshDispositionsAfterMutation() {
+		try {
+			await refreshDispositions();
+		} catch (error) {
+			toast.error(dispositionsErrorMessage(error));
 		}
 	}
 
@@ -62,11 +139,11 @@
 					status: newStatus
 				})
 			});
-			if (!res.ok) { toast.error((await res.json()).error ?? 'Gagal mengubah status'); return; }
-			await loadDispositions();
+			if (!res.ok) { toast.error(await responseErrorMessage(res, 'Gagal mengubah status')); return; }
+			await refreshDispositionsAfterMutation();
 			toast.success('Status disposisi diperbarui');
-		} catch {
-			toast.error('Terjadi kesalahan jaringan');
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
 			updateBusy = { ...updateBusy, [disp.id]: false };
 		}
@@ -77,13 +154,6 @@
 		const d = new Date(raw);
 		return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 	}
-
-	const statusColors: Record<string, string> = {
-		terkirim: 'bg-sky-100 text-sky-800 hover:bg-sky-100',
-		dibaca: 'bg-purple-100 text-purple-800 hover:bg-purple-100',
-		ditindaklanjuti: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100',
-		selesai: 'bg-green-100 text-green-800 hover:bg-green-100'
-	};
 </script>
 
 <div class="container mx-auto max-w-7xl space-y-6 p-6">
@@ -92,7 +162,7 @@
 			<h1 class="text-2xl font-bold text-gray-900">Disposisi Surat</h1>
 			<p class="text-sm text-gray-500">Daftar semua disposisi surat masuk</p>
 		</div>
-		<Button variant="outline" onclick={() => loadDispositions()}>Refresh</Button>
+		<LoadingButton variant="outline" onclick={() => void refreshDispositionsList()} loading={refreshBusy} loadingLabel="Memuat...">Refresh</LoadingButton>
 	</div>
 
 	<!-- Filter -->
@@ -116,67 +186,81 @@
 		</Card.Content>
 	</Card.Root>
 
-	{#if error}
-		<div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-	{/if}
-
 	<Card.Root>
 		<Card.Content class="p-0">
-			{#if loading}
-				<div class="space-y-2 p-4">
-					{#each [1, 2, 3] as _}
-						<Skeleton class="h-12 w-full" />
-					{/each}
-				</div>
-			{:else if dispositions.length === 0}
-				<div class="p-8 text-center text-sm text-gray-500">
-					{filterStatus ? 'Tidak ada disposisi dengan status ini.' : 'Belum ada disposisi.'}
-				</div>
-			{:else}
-				<Table.Root>
-					<Table.Header>
-						<Table.Row>
-							<Table.Head class="w-12">No</Table.Head>
-							<Table.Head class="w-28">No. Agenda</Table.Head>
-							<Table.Head>Perihal Surat</Table.Head>
-							<Table.Head>Penerima</Table.Head>
-							<Table.Head>Instruksi</Table.Head>
-							<Table.Head class="w-28">Tanggal</Table.Head>
-							<Table.Head class="w-36">Status</Table.Head>
-						</Table.Row>
-					</Table.Header>
-					<Table.Body>
-						{#each dispositions as d, i}
-							<Table.Row>
-								<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
-								<Table.Cell class="font-mono text-xs font-medium text-gray-700">{d.nomor_agenda}</Table.Cell>
-								<Table.Cell>
-									<p class="text-sm font-medium text-gray-800 max-w-xs truncate">{d.letter_perihal}</p>
-									<p class="text-xs text-gray-400">{d.letter_asal}</p>
-								</Table.Cell>
-								<Table.Cell class="text-sm text-gray-700">{d.assignee_name || '–'}</Table.Cell>
-								<Table.Cell class="max-w-xs truncate text-sm text-gray-600">
-									{#if d.instruksi}{d.instruksi}{:else}<span class="italic text-gray-400">–</span>{/if}
-								</Table.Cell>
-								<Table.Cell class="text-sm text-gray-600">{formatDate(d.disposed_at)}</Table.Cell>
-								<Table.Cell>
-									<select
-										value={d.status}
-										onchange={(e) => updateStatus(d, (e.target as HTMLSelectElement).value)}
-										disabled={updateBusy[d.id]}
-										class="rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-600"
-									>
-										<option value="terkirim">Terkirim</option>
-										<option value="dibaca">Dibaca</option>
-										<option value="ditindaklanjuti">Ditindaklanjuti</option>
-										<option value="selesai">Selesai</option>
-									</select>
-								</Table.Cell>
-							</Table.Row>
+			<AsyncContent promise={dispositionsPromise} onerror={handleDispositionsRenderError}>
+				{#snippet pending()}
+					<div class="space-y-2 p-4">
+						{#each [1, 2, 3] as row (row)}
+							<Skeleton class="h-12 w-full" />
 						{/each}
-					</Table.Body>
-				</Table.Root>
-			{/if}
+					</div>
+				{/snippet}
+
+				{#snippet failed(error, reset)}
+					<div class="p-4">
+						<RecoveryPanel
+							compact
+							title="Disposisi Belum Tersaji"
+							message={dispositionsErrorMessage(error)}
+							onRetry={() => retryDispositions(reset)}
+						/>
+					</div>
+				{/snippet}
+
+				{#snippet children(value)}
+					{@const currentDispositions = value as DispositionRow[]}
+					{#if currentDispositions.length === 0}
+						<div class="p-8 text-center text-sm text-gray-500">
+							{filterStatus ? 'Tidak ada disposisi dengan status ini.' : 'Belum ada disposisi.'}
+						</div>
+					{:else}
+						<Table.Root>
+							<Table.Header>
+								<Table.Row>
+									<Table.Head class="w-12">No</Table.Head>
+									<Table.Head class="w-28">No. Agenda</Table.Head>
+									<Table.Head>Perihal Surat</Table.Head>
+									<Table.Head>Penerima</Table.Head>
+									<Table.Head>Instruksi</Table.Head>
+									<Table.Head class="w-28">Tanggal</Table.Head>
+									<Table.Head class="w-36">Status</Table.Head>
+								</Table.Row>
+							</Table.Header>
+							<Table.Body>
+								{#each currentDispositions as d, i (d.id)}
+									<Table.Row>
+										<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
+										<Table.Cell class="font-mono text-xs font-medium text-gray-700">{d.nomor_agenda}</Table.Cell>
+										<Table.Cell>
+											<p class="text-sm font-medium text-gray-800 max-w-xs truncate">{d.letter_perihal}</p>
+											<p class="text-xs text-gray-400">{d.letter_asal}</p>
+										</Table.Cell>
+										<Table.Cell class="text-sm text-gray-700">{d.assignee_name || '–'}</Table.Cell>
+										<Table.Cell class="max-w-xs truncate text-sm text-gray-600">
+											{#if d.instruksi}{d.instruksi}{:else}<span class="italic text-gray-400">–</span>{/if}
+										</Table.Cell>
+										<Table.Cell class="text-sm text-gray-600">{formatDate(d.disposed_at)}</Table.Cell>
+										<Table.Cell>
+											<select
+												value={d.status}
+												onchange={(e) => updateStatus(d, (e.target as HTMLSelectElement).value)}
+												disabled={updateBusy[d.id]}
+												class="rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-600"
+											>
+												<option value="terkirim">Terkirim</option>
+												<option value="dibaca">Dibaca</option>
+												<option value="ditindaklanjuti">Ditindaklanjuti</option>
+												<option value="selesai">Selesai</option>
+											</select>
+										</Table.Cell>
+									</Table.Row>
+								{/each}
+							</Table.Body>
+						</Table.Root>
+					{/if}
+				{/snippet}
+			</AsyncContent>
 		</Card.Content>
 	</Card.Root>
 </div>

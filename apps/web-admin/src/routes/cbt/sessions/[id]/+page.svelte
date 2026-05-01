@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
@@ -8,8 +9,11 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
 
 	type SessionInfo = {
 		id: string; title: string; package_title: string; duration_minutes: number;
@@ -43,6 +47,21 @@
 		id: string; nis: string; nama: string;
 		question_text: string; answer: string;
 	};
+	type SessionResultsDetail = {
+		session: SessionInfo;
+		results: ResultRow[];
+	};
+	type ResultsPayload = {
+		session?: SessionInfo | null;
+		results?: ResultRow[];
+		error?: string;
+		message?: string;
+	};
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
 
 	const sessionId = page.params.id;
 
@@ -53,8 +72,7 @@
 	let rooms = $state<Room[]>([]);
 	let proctoring = $state<ProctoringRow[]>([]);
 	let essays = $state<UngradedEssay[]>([]);
-	let loading = $state(true);
-	let error = $state('');
+	let detailPromise = $state<Promise<SessionResultsDetail> | null>(null);
 	let scoreBusy = $state(false);
 	let shuffleBusy = $state(false);
 	let newRoomName = $state('');
@@ -62,6 +80,8 @@
 	let roomBusy = $state(false);
 	let seatBusy = $state(false);
 	let tokenBusy = $state(false);
+	let participantRefreshBusy = $state(false);
+	let proctoringRefreshBusy = $state(false);
 	let regenBusyId = $state('');
 	let roomDeleteBusyId = $state('');
 	let seatSaveBusyId = $state('');
@@ -139,69 +159,170 @@
 	}
 
 	function confirmPhrase(title: string, detail: string, challenge: string) {
-		const input = prompt(`${title}\n\n${detail}\n\nKetik ${challenge} untuk melanjutkan.`);
-		return input === challenge;
+		return confirmChallenge({
+			title,
+			message: detail,
+			challenge,
+			confirmLabel: 'Konfirmasi',
+			tone: 'danger'
+		});
 	}
 
-	async function load() {
-		loading = true; error = '';
-		try {
-			const res = await fetch(`/api/cbt/sessions/${sessionId}/results`);
-			const json = await res.json();
-			const d = json.data ?? json;
-			session = d.session ?? null;
-			results = d.results ?? [];
-		} catch {
-			error = 'Gagal memuat hasil ujian';
-		} finally {
-			loading = false;
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
 		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	async function fetchSessionDetail(): Promise<SessionResultsDetail> {
+		const payload = await fetch(`/api/cbt/sessions/${sessionId}/results`)
+			.then((response) => readApi<ResultsPayload>(response, 'Gagal memuat hasil ujian'));
+		if (!payload.session) throw new Error('Data sesi tidak ditemukan');
+		return {
+			session: payload.session,
+			results: payload.results ?? [],
+		};
+	}
+
+	function applySessionDetail(detail: SessionResultsDetail) {
+		session = detail.session;
+		results = detail.results;
+	}
+
+	function loadInitial() {
+		session = null;
+		results = [];
+		detailPromise = fetchSessionDetail().then((detail) => {
+			applySessionDetail(detail);
+			return detail;
+		});
+	}
+
+	async function refreshSessionDetail() {
+		if (!detailPromise) {
+			loadInitial();
+			return;
+		}
+		try {
+			const detail = await fetchSessionDetail();
+			applySessionDetail(detail);
+			detailPromise = Promise.resolve(detail);
+		} catch (error) {
+			if (session) {
+				detailPromise = Promise.resolve({ session, results });
+				toast.error(detailErrorMessage(error));
+			} else {
+				detailPromise = Promise.reject(error);
+			}
+		}
+	}
+
+	function retryDetail(reset?: () => void) {
+		reset?.();
+		loadInitial();
+	}
+
+	function detailErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat hasil ujian';
+	}
+
+	function handleDetailRenderError(error: unknown) {
+		console.error('CBT session detail render failed', error);
 	}
 
 	async function loadParticipants() {
 		const res = await fetch(`/api/cbt/sessions/${sessionId}/participants`);
-		if (res.ok) {
-			participants = await res.json();
-			seatInput = Object.fromEntries(participants.map((participant) => [participant.id, participant.seat_no ?? 0]));
-			roomInput = Object.fromEntries(participants.map((participant) => [participant.id, participant.room_id ?? '']));
-		}
+		const rows = await readApi<Participant[]>(res, 'Gagal memuat peserta');
+		participants = Array.isArray(rows) ? rows : [];
+		seatInput = Object.fromEntries(participants.map((participant) => [participant.id, participant.seat_no ?? 0]));
+		roomInput = Object.fromEntries(participants.map((participant) => [participant.id, participant.room_id ?? '']));
 	}
 
 	async function loadRooms() {
 		const res = await fetch(`/api/cbt/sessions/${sessionId}/rooms`);
-		if (res.ok) rooms = await res.json();
+		const rows = await readApi<Room[]>(res, 'Gagal memuat ruangan');
+		rooms = Array.isArray(rows) ? rows : [];
 	}
 
 	async function loadProctoring() {
 		const res = await fetch(`/api/cbt/sessions/${sessionId}/proctoring`);
-		if (res.ok) proctoring = await res.json();
+		const rows = await readApi<ProctoringRow[]>(res, 'Gagal memuat proctoring');
+		proctoring = Array.isArray(rows) ? rows : [];
+	}
+
+	async function refreshParticipants() {
+		participantRefreshBusy = true;
+		try {
+			await loadParticipants();
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			participantRefreshBusy = false;
+		}
+	}
+
+	async function refreshProctoring() {
+		proctoringRefreshBusy = true;
+		try {
+			await loadProctoring();
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			proctoringRefreshBusy = false;
+		}
 	}
 
 	async function loadEssays() {
 		const res = await fetch(`/api/cbt/sessions/${sessionId}/ungraded-essays`);
-		if (res.ok) {
-			const data = await res.json();
-			essays = data.data ?? data;
-		}
+		const rows = await readApi<UngradedEssay[]>(res, 'Gagal memuat esai belum dinilai');
+		essays = Array.isArray(rows) ? rows : [];
 	}
 
 	async function switchTab(tab: typeof activeTab) {
 		activeTab = tab;
-		if (tab === 'peserta') { await loadRooms(); await loadParticipants(); }
-		if (tab === 'ruangan') { await loadRooms(); await loadParticipants(); }
-		if (tab === 'essay') await loadEssays();
-		if (tab === 'proctoring') {
-			await loadProctoring();
-			if (!procInterval) {
-				procInterval = setInterval(loadProctoring, 15000);
+		try {
+			if (tab === 'peserta') { await loadRooms(); await loadParticipants(); }
+			if (tab === 'ruangan') { await loadRooms(); await loadParticipants(); }
+			if (tab === 'essay') await loadEssays();
+			if (tab === 'proctoring') {
+				await loadProctoring();
+				if (!procInterval) {
+					procInterval = setInterval(() => {
+						void loadProctoring().catch((error) => toast.error(detailErrorMessage(error)));
+					}, 15000);
+				}
+			} else {
+				if (procInterval) { clearInterval(procInterval); procInterval = null; }
 			}
-		} else {
-			if (procInterval) { clearInterval(procInterval); procInterval = null; }
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
 		}
 	}
 
 	async function triggerScoring() {
-		if (!confirmPhrase('Hitung Ulang Skor', 'Sistem akan menghitung ulang skor seluruh peserta berdasarkan jawaban yang masuk. Gunakan setelah koreksi uraian atau sinkronisasi nilai.', 'NILAI ULANG')) return;
+		if (!(await confirmPhrase('Hitung Ulang Skor', 'Sistem akan menghitung ulang skor seluruh peserta berdasarkan jawaban yang masuk. Gunakan setelah koreksi uraian atau sinkronisasi nilai.', 'NILAI ULANG'))) return;
 		scoreBusy = true;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/score`, { method: 'POST' });
@@ -212,12 +333,12 @@
 			}
 			setOperationState('success', 'Skor Diperbarui', 'Perhitungan nilai sesi sudah disegarkan. Tinjau kembali hasil akhir sebelum menutup sesi.');
 			showToast('Penilaian selesai — skor diperbarui');
-			await load();
+			await refreshSessionDetail();
 		} finally { scoreBusy = false; }
 	}
 
 	async function generateTokens() {
-		if (!confirmPhrase('Buat Token Massal', 'Token baru akan dibuat untuk seluruh peserta sesi ini. Gunakan hanya saat token awal belum dibagikan atau harus direset terkontrol.', 'TOKEN')) return;
+		if (!(await confirmPhrase('Buat Token Massal', 'Token baru akan dibuat untuk seluruh peserta sesi ini. Gunakan hanya saat token awal belum dibagikan atau harus direset terkontrol.', 'TOKEN'))) return;
 		tokenBusy = true;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/generate-tokens`, { method: 'POST' });
@@ -235,7 +356,12 @@
 	}
 
 	async function regenerateToken(pid: string) {
-		if (!confirm('Buat ulang token peserta ini? Token lama tidak sebaiknya dipakai lagi setelah tindakan ini.')) return;
+		if (!(await confirmAction({
+			title: 'Buat Ulang Token Peserta',
+			message: 'Buat ulang token peserta ini? Token lama tidak sebaiknya dipakai lagi setelah tindakan ini.',
+			confirmLabel: 'Buat Ulang Token',
+			tone: 'warning'
+		}))) return;
 		regenBusyId = pid;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/participants/${pid}/regenerate-token`, { method: 'POST' });
@@ -280,7 +406,7 @@
 	}
 
 	async function deleteRoom(rid: string, roomName: string) {
-		if (!confirmPhrase('Hapus Ruangan Sesi', `Ruangan "${roomName}" akan dihapus dari sesi dan peserta di dalamnya akan dilepas dari alokasi ruangan.`, 'RUANGAN')) return;
+		if (!(await confirmPhrase('Hapus Ruangan Sesi', `Ruangan "${roomName}" akan dihapus dari sesi dan peserta di dalamnya akan dilepas dari alokasi ruangan.`, 'RUANGAN'))) return;
 		roomDeleteBusyId = rid;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/rooms/${rid}`, { method: 'DELETE' });
@@ -296,7 +422,7 @@
 	}
 
 	async function shuffleRooms() {
-		if (!confirmPhrase('Acak Peserta ke Ruangan', 'Sistem akan menghapus alokasi ruangan sebelumnya dan membagikan ulang peserta secara otomatis. Pastikan daftar ruangan dan kapasitas sudah final.', 'ACAK')) return;
+		if (!(await confirmPhrase('Acak Peserta ke Ruangan', 'Sistem akan menghapus alokasi ruangan sebelumnya dan membagikan ulang peserta secara otomatis. Pastikan daftar ruangan dan kapasitas sudah final.', 'ACAK'))) return;
 		shuffleBusy = true;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/shuffle-rooms`, { method: 'POST' });
@@ -314,7 +440,7 @@
 	}
 
 	async function autoAssignSeats() {
-		if (!confirmPhrase('Atur Nomor Meja Otomatis', 'Nomor meja peserta akan diurutkan ulang per ruangan. Gunakan setelah alokasi ruangan sudah final.', 'MEJA')) return;
+		if (!(await confirmPhrase('Atur Nomor Meja Otomatis', 'Nomor meja peserta akan diurutkan ulang per ruangan. Gunakan setelah alokasi ruangan sudah final.', 'MEJA'))) return;
 		seatBusy = true;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/seats/auto`, { method: 'POST' });
@@ -426,7 +552,9 @@
 		URL.revokeObjectURL(url);
 	}
 
-	onMount(load);
+	onMount(() => {
+		void loadInitial();
+	});
 	onDestroy(() => { if (procInterval) clearInterval(procInterval); });
 </script>
 
@@ -437,78 +565,90 @@
 <div class="space-y-5 p-6">
 	<!-- Breadcrumb -->
 	<div class="flex items-center gap-2 text-sm text-slate-500">
-		<a href="/cbt/sessions" class="hover:text-slate-700">Sesi Ujian</a>
+		<a href={resolve('/cbt/sessions')} class="hover:text-slate-700">Sesi Ujian</a>
 		<span>/</span>
 		<span class="text-slate-700 font-medium truncate max-w-xs">{session?.title ?? '...'}</span>
 	</div>
-
-	{#if error}<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>{/if}
 
 	{#if operationState}
 		<OperationStatusPanel {...operationState} />
 	{/if}
 
-	{#if loading}
-		<div class="space-y-4">
-			<div class="space-y-2">
-				<Skeleton class="h-4 w-56" />
-				<Skeleton class="h-8 w-80" />
-				<Skeleton class="h-4 w-96" />
-			</div>
-			<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-				{#each Array.from({ length: 4 }) as _, index (`cbt-session-detail-stat-${index}`)}
-					<Card.Root class="border-green-100">
-						<Card.Content class="space-y-2 px-4 pb-3 pt-4">
-							<Skeleton class="h-4 w-24" />
-							<Skeleton class="h-8 w-16" />
-						</Card.Content>
-					</Card.Root>
-				{/each}
-			</div>
-			<Card.Root>
-				<Card.Content class="space-y-3 p-6">
-					{#each Array.from({ length: 5 }) as _, index (`cbt-session-detail-row-${index}`)}
-						<div class="grid gap-3 lg:grid-cols-[1fr_0.8fr_0.8fr_0.8fr_0.6fr_0.6fr_0.7fr_auto] lg:items-center">
-							<Skeleton class="h-5 w-24" />
-							<Skeleton class="h-5 w-32" />
-							<Skeleton class="h-5 w-10" />
-							<Skeleton class="h-5 w-12" />
-							<Skeleton class="h-5 w-12" />
-							<Skeleton class="h-5 w-12" />
-							<Skeleton class="h-5 w-28" />
-							<Skeleton class="h-9 w-24 justify-self-end" />
-						</div>
+	<AsyncContent promise={detailPromise} onerror={handleDetailRenderError}>
+		{#snippet pending()}
+			<div class="space-y-4">
+				<div class="space-y-2">
+					<Skeleton class="h-4 w-56" />
+					<Skeleton class="h-8 w-80" />
+					<Skeleton class="h-4 w-96" />
+				</div>
+				<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+					{#each Array.from({ length: 4 }) as _, index (`cbt-session-detail-stat-${index}`)}
+						<Card.Root class="border-green-100">
+							<Card.Content class="space-y-2 px-4 pb-3 pt-4">
+								<Skeleton class="h-4 w-24" />
+								<Skeleton class="h-8 w-16" />
+							</Card.Content>
+						</Card.Root>
 					{/each}
-				</Card.Content>
-			</Card.Root>
-		</div>
-	{:else if session}
+				</div>
+				<Card.Root>
+					<Card.Content class="space-y-3 p-6">
+						{#each Array.from({ length: 5 }) as _, index (`cbt-session-detail-row-${index}`)}
+							<div class="grid gap-3 lg:grid-cols-[1fr_0.8fr_0.8fr_0.8fr_0.6fr_0.6fr_0.7fr_auto] lg:items-center">
+								<Skeleton class="h-5 w-24" />
+								<Skeleton class="h-5 w-32" />
+								<Skeleton class="h-5 w-10" />
+								<Skeleton class="h-5 w-12" />
+								<Skeleton class="h-5 w-12" />
+								<Skeleton class="h-5 w-12" />
+								<Skeleton class="h-5 w-28" />
+								<Skeleton class="h-9 w-24 justify-self-end" />
+							</div>
+						{/each}
+					</Card.Content>
+				</Card.Root>
+			</div>
+		{/snippet}
+
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Detail Sesi Belum Tersaji"
+				message={detailErrorMessage(error)}
+				onRetry={() => retryDetail(reset)}
+			/>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const detail = value as SessionResultsDetail}
+			{@const currentSession = detail.session}
+			{@const currentResults = detail.results}
 		<!-- Session header -->
 		<div class="flex items-start justify-between gap-4 flex-wrap">
 			<div>
-				<h1 class="text-2xl font-semibold text-[oklch(0.38_0.13_145)]">{session.title}</h1>
+				<h1 class="text-2xl font-semibold text-[oklch(0.38_0.13_145)]">{currentSession.title}</h1>
 				<div class="flex flex-wrap gap-2 mt-2 text-sm text-slate-500">
-					<span>{session.package_title}</span>
-					{#if session.class_code}<span>· Kelas {session.class_code}</span>{/if}
-					<span>· {session.duration_minutes} menit</span>
-					<span>· {fmtDt(session.scheduled_start)}</span>
+					<span>{currentSession.package_title}</span>
+					{#if currentSession.class_code}<span>· Kelas {currentSession.class_code}</span>{/if}
+					<span>· {currentSession.duration_minutes} menit</span>
+					<span>· {fmtDt(currentSession.scheduled_start)}</span>
 				</div>
 			</div>
 				<div class="flex items-center gap-2 flex-wrap">
-					<Badge class={statusClass(session.status)}>{statusLabel[session.status] ?? session.status}</Badge>
-				{#if session.status === 'finished' || session.status === 'active'}
+					<Badge class={statusClass(currentSession.status)}>{statusLabel[currentSession.status] ?? currentSession.status}</Badge>
+				{#if currentSession.status === 'finished' || currentSession.status === 'active'}
 					<LoadingButton size="sm" variant="outline" disabled={scoreBusy} onclick={triggerScoring} loading={scoreBusy} loadingLabel="Menghitung...">
 						⟳ Hitung Skor
 					</LoadingButton>
 				{/if}
-					{#if results.length > 0}
+					{#if currentResults.length > 0}
 						<Button size="sm" variant="outline" onclick={exportCSV}>↓ CSV</Button>
 					{/if}
-					<a href={`/cbt/sessions/${sessionId}/minutes`} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
+					<a href={resolve(`/cbt/sessions/${sessionId}/minutes`)} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
 						Berita Acara
 					</a>
-					{#if session.event_id}
-						<a href={`/cbt/events/${session.event_id}/exam-cards`} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
+					{#if currentSession.event_id}
+						<a href={resolve(`/cbt/events/${currentSession.event_id}/exam-cards`)} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
 							Kartu Ujian Event
 						</a>
 					{/if}
@@ -558,7 +698,7 @@
 		{#if activeTab === 'hasil'}
 			<Card.Root>
 				<Card.Header class="pb-2">
-					<Card.Title class="text-base">Daftar Nilai ({results.length} peserta)</Card.Title>
+				<Card.Title class="text-base">Daftar Nilai ({results.length} peserta)</Card.Title>
 				</Card.Header>
 				<Card.Content class="p-0 overflow-x-auto">
 					<Table.Root>
@@ -575,7 +715,7 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-							{#each results as r, i (r.participant_id)}
+							{#each currentResults as r, i (r.participant_id)}
 								<Table.Row>
 									<Table.Cell class="text-slate-400 text-xs">{i + 1}</Table.Cell>
 									<Table.Cell class="font-mono text-sm">{r.nis}</Table.Cell>
@@ -601,8 +741,8 @@
 		<!-- Tab: Peserta & Token -->
 		{:else if activeTab === 'peserta'}
 			<div class="flex gap-2 flex-wrap">
-				<LoadingButton variant="outline" size="sm" onclick={generateTokens} loading={tokenBusy} disabled={tokenBusy} loadingLabel="Membuat token...">⚡ Buat Token Massal</LoadingButton>
-				<Button variant="outline" size="sm" onclick={loadParticipants}>↻ Refresh</Button>
+				<LoadingButton variant="outline" size="sm" onclick={() => void generateTokens()} loading={tokenBusy} disabled={tokenBusy} loadingLabel="Membuat token...">⚡ Buat Token Massal</LoadingButton>
+				<LoadingButton variant="outline" size="sm" onclick={() => void refreshParticipants()} loading={participantRefreshBusy} loadingLabel="Memuat..." disabled={participantRefreshBusy}>↻ Refresh</LoadingButton>
 			</div>
 			<OperationStatusPanel
 				tone="warning"
@@ -695,7 +835,7 @@
 							<label for="r-cap" class="block text-sm font-medium mb-1">Kapasitas</label>
 							<Input id="r-cap" type="number" bind:value={newRoomCap} min={1} max={100} class="w-24" />
 						</div>
-						<LoadingButton onclick={createRoom} loading={roomBusy} loadingLabel="Menyimpan..." disabled={roomBusy || !newRoomName.trim()}>
+						<LoadingButton onclick={() => void createRoom()} loading={roomBusy} loadingLabel="Menyimpan..." disabled={roomBusy || !newRoomName.trim()}>
 							+ Tambah Ruangan
 						</LoadingButton>
 							{#if rooms.length > 0}
@@ -798,7 +938,7 @@
 		{:else if activeTab === 'proctoring'}
 			<div class="flex items-center justify-between mb-4">
 				<p class="text-sm text-muted-foreground">Pembaruan otomatis setiap 15 detik</p>
-				<Button variant="outline" size="sm" onclick={loadProctoring}>↻ Refresh Sekarang</Button>
+				<LoadingButton variant="outline" size="sm" onclick={() => void refreshProctoring()} loading={proctoringRefreshBusy} loadingLabel="Memuat..." disabled={proctoringRefreshBusy}>↻ Refresh Sekarang</LoadingButton>
 			</div>
 			<Card.Root>
 				<Card.Content class="p-0 overflow-x-auto">
@@ -908,5 +1048,6 @@
 				</Card.Content>
 			</Card.Root>
 		{/if}
-	{/if}
+		{/snippet}
+	</AsyncContent>
 </div>

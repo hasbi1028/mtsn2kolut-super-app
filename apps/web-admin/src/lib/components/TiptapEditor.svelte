@@ -15,6 +15,7 @@
 	import Color from '@tiptap/extension-color';
 	import { TextStyle } from '@tiptap/extension-text-style';
 	import Mathematics from '@tiptap/extension-mathematics';
+	import { toast } from '$lib/components/ui/sonner';
 
 	let {
 		value = $bindable(''),
@@ -37,7 +38,6 @@
 	let showMathDialog = $state(false);
 	let mathMode = $state<'inline' | 'block'>('inline');
 	let imageUploading = $state(false);
-	let uploadError = $state('');
 	let fileInputEl = $state<HTMLInputElement | null>(null);
 	let showColorPicker = $state(false);
 
@@ -121,6 +121,10 @@
 		mathInput = '';
 	}
 
+	function uploadErrorMessage(error: unknown) {
+		return error instanceof Error && error.message ? error.message : 'Upload gambar gagal';
+	}
+
 	async function handleImageFile(file: File) {
 		if (!file || !editor) return;
 		imageUploading = true;
@@ -138,7 +142,7 @@
 				});
 			}
 		} catch (err) {
-			uploadError = (err as Error).message || 'Upload gambar gagal';
+			toast.error(uploadErrorMessage(err));
 			return;
 		} finally {
 			imageUploading = false;
@@ -150,7 +154,6 @@
 
 	function onFileChange(e: Event) {
 		const file = (e.target as HTMLInputElement).files?.[0];
-		uploadError = '';
 		if (file) void handleImageFile(file);
 		if (fileInputEl) fileInputEl.value = '';
 	}
@@ -378,10 +381,6 @@
 		style="min-height:{minHeight}"
 	></div>
 </div>
-
-{#if uploadError}
-	<p class="mt-1 text-xs text-rose-600">{uploadError}</p>
-{/if}
 
 <!-- Math input dialog -->
 {#if showMathDialog}

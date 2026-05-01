@@ -6,6 +6,9 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	type AuditLog = {
 		id: string;
@@ -14,21 +17,30 @@
 		action: string;
 		entity_type: string;
 		entity_id: string;
-		metadata: any;
+		metadata: unknown;
 		created_at: string;
 	};
 
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
 	let logs = $state<AuditLog[]>([]);
-	let loading = $state(true);
-	let error = $state('');
+	let logsPromise = $state<Promise<AuditLog[]> | null>(null);
+	let fetching = $state(false);
+	let fetchingAction = $state<'previous' | 'next' | null>(null);
 	let page = $state(1);
 	let scopeFilter = $state<'all' | 'auth'>('all');
 	let search = $state('');
 	const perPage = 50;
 
-	const filteredLogs = $derived.by(() => {
+	const filteredLogs = $derived.by(() => filterAuditLogs(logs));
+
+	function filterAuditLogs(logRows: AuditLog[]) {
 		const q = search.trim().toLowerCase();
-		return logs.filter((log) => {
+		return logRows.filter((log) => {
 			if (scopeFilter === 'auth' && !isAuthLog(log)) return false;
 			if (!q) return true;
 			return [
@@ -43,7 +55,7 @@
 				.toLowerCase()
 				.includes(q);
 		});
-	});
+	}
 
 	function methodColor(action: string) {
 		if (action.startsWith('AUTH_')) return 'bg-amber-100 text-amber-800 border-amber-200';
@@ -62,24 +74,39 @@
 		}) + ' WITA';
 	}
 
-	function metaStatus(meta: any): number | null {
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	function parseMetadata(meta: unknown): Record<string, unknown> | null {
 		if (!meta) return null;
 		try {
-			const m = typeof meta === 'string' ? JSON.parse(meta) : meta;
-			return m?.status ?? null;
+			const parsed = typeof meta === 'string' ? JSON.parse(meta) : meta;
+			return isRecord(parsed) ? parsed : null;
 		} catch {
 			return null;
 		}
 	}
 
-	function metaPath(meta: any): string {
-		if (!meta) return '';
-		try {
-			const m = typeof meta === 'string' ? JSON.parse(meta) : meta;
-			return m?.path ?? '';
-		} catch {
-			return '';
-		}
+	function metaStatus(meta: unknown): number | null {
+		const parsed = parseMetadata(meta);
+		const status = parsed?.status;
+		return typeof status === 'number' ? status : null;
+	}
+
+	function metaPath(meta: unknown): string {
+		const parsed = parseMetadata(meta);
+		const path = parsed?.path;
+		return typeof path === 'string' ? path : '';
 	}
 
 	function isAuthLog(log: AuditLog): boolean {
@@ -88,37 +115,75 @@
 
 	function authSummary(log: AuditLog): string {
 		if (!isAuthLog(log)) return '';
-		try {
-			const m = typeof log.metadata === 'string' ? JSON.parse(log.metadata) : log.metadata;
-			return [
-				m?.device_label,
-				m?.scope,
-				m?.revoked_session_id,
-				m?.renamed_session_id,
-				m?.username
-			]
-				.filter(Boolean)
-				.join(' • ');
-		} catch {
-			return '';
-		}
+		const parsed = parseMetadata(log.metadata);
+		if (!parsed) return '';
+		return [
+			parsed.device_label,
+			parsed.scope,
+			parsed.revoked_session_id,
+			parsed.renamed_session_id,
+			parsed.username
+		]
+			.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+			.join(' • ');
 	}
 
-	async function load() {
-		loading = true;
-		error = '';
-		try {
-			const res = await fetch(`/api/users/audit-logs?page=${page}&per_page=${perPage}`);
-			if (!res.ok) throw new Error('Gagal memuat audit logs');
-			logs = await res.json();
-		} catch (e: any) {
-			error = e.message;
-		} finally {
-			loading = false;
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) {
+			throw new Error(message || fallbackMessage);
 		}
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
+			throw new Error(payload.error);
+		}
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
 	}
 
-	onMount(load);
+	async function fetchLogs(pageNumber: number): Promise<AuditLog[]> {
+		const res = await fetch(`/api/users/audit-logs?page=${pageNumber}&per_page=${perPage}`);
+		return readApi<AuditLog[]>(res, 'Gagal memuat audit logs');
+	}
+
+	function load(pageNumber = page, action: 'previous' | 'next' | null = null) {
+		page = pageNumber;
+		logs = [];
+		fetching = true;
+		fetchingAction = action;
+		logsPromise = fetchLogs(pageNumber)
+			.then((nextLogs) => {
+				logs = nextLogs ?? [];
+				return logs;
+			})
+			.finally(() => {
+				fetching = false;
+				fetchingAction = null;
+			});
+	}
+
+	function retryLogs(reset?: () => void) {
+		reset?.();
+		load(page);
+	}
+
+	function auditErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat audit logs';
+	}
+
+	function handleLogsRenderError(error: unknown) {
+		console.error('Audit logs render failed', error);
+	}
+
+	onMount(() => {
+		void load();
+	});
 </script>
 
 <svelte:head><title>Audit Trail — MTSN 2 Kolut</title></svelte:head>
@@ -139,80 +204,108 @@
 				Auth & Session
 			</Button>
 			<Input bind:value={search} placeholder="Cari aksi, user, sesi..." class="w-full sm:w-64" />
-			<Button variant="outline" size="sm" disabled={page === 1 || loading}
-				onclick={() => { page = Math.max(1, page - 1); load(); }}>← Sebelumnya</Button>
+			<LoadingButton
+				variant="outline"
+				size="sm"
+				disabled={page === 1 || fetching}
+				loading={fetchingAction === 'previous'}
+				loadingLabel="Memuat..."
+				onclick={() => load(Math.max(1, page - 1), 'previous')}
+			>← Sebelumnya</LoadingButton>
 			<span class="text-sm text-muted-foreground">Hal. {page}</span>
-			<Button variant="outline" size="sm" disabled={loading || logs.length < perPage}
-				onclick={() => { page = page + 1; load(); }}>Berikutnya →</Button>
+			<LoadingButton
+				variant="outline"
+				size="sm"
+				disabled={fetching || logs.length < perPage}
+				loading={fetchingAction === 'next'}
+				loadingLabel="Memuat..."
+				onclick={() => load(page + 1, 'next')}
+			>Berikutnya →</LoadingButton>
 		</div>
 	</div>
 
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
-			{#if loading}
-				<div class="space-y-3 p-4">
-					<Skeleton class="h-10 w-full" />
-					<Skeleton class="h-14 w-full" />
-					<Skeleton class="h-14 w-full" />
-					<Skeleton class="h-14 w-full" />
-				</div>
-			{:else if error}
-				<div class="p-8 text-center text-red-600 text-sm">{error}</div>
-			{:else if filteredLogs.length === 0}
-				<div class="p-8 text-center text-muted-foreground text-sm">Belum ada audit log.</div>
-			{:else}
-				<div class="hidden overflow-x-auto lg:block">
-				<Table.Root>
-					<Table.Header>
-						<Table.Row class="bg-green-50">
-							<Table.Head>Waktu</Table.Head>
-							<Table.Head>Pengguna</Table.Head>
-							<Table.Head>Aksi</Table.Head>
-							<Table.Head>Entitas</Table.Head>
-							<Table.Head>Path</Table.Head>
-							<Table.Head class="text-center">Status</Table.Head>
-						</Table.Row>
-					</Table.Header>
-					<Table.Body>
-						{#each filteredLogs as log (log.id)}
-							<Table.Row class="hover:bg-green-50/40">
-								<Table.Cell class="text-xs text-muted-foreground whitespace-nowrap">{fmtDt(log.created_at)}</Table.Cell>
-								<Table.Cell class="font-medium text-sm">{log.username ?? '—'}</Table.Cell>
-								<Table.Cell>
-									<Badge variant="outline" class="text-xs font-mono {methodColor(log.action)}">{log.action}</Badge>
-								</Table.Cell>
-								<Table.Cell class="text-sm">{log.entity_type}</Table.Cell>
-								<Table.Cell class="text-xs text-muted-foreground font-mono truncate max-w-[300px]" title={authSummary(log) || metaPath(log.metadata) || log.entity_id}>
-									{authSummary(log) || metaPath(log.metadata) || log.entity_id}
-								</Table.Cell>
-								<Table.Cell class="text-center text-xs font-mono">
-									{metaStatus(log.metadata) ?? '—'}
-								</Table.Cell>
-							</Table.Row>
-						{/each}
-					</Table.Body>
-				</Table.Root>
-				</div>
+			<AsyncContent promise={logsPromise} onerror={handleLogsRenderError}>
+				{#snippet pending()}
+					<div class="space-y-3 p-4">
+						<Skeleton class="h-10 w-full" />
+						<Skeleton class="h-14 w-full" />
+						<Skeleton class="h-14 w-full" />
+						<Skeleton class="h-14 w-full" />
+					</div>
+				{/snippet}
 
-				<div class="grid gap-3 p-4 lg:hidden">
-					{#each filteredLogs as log (log.id)}
-						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-							<div class="flex items-start justify-between gap-3">
-								<div class="min-w-0">
-									<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{fmtDt(log.created_at)}</p>
-									<p class="mt-1 text-sm font-semibold text-slate-900">{log.username ?? '—'}</p>
-									<p class="mt-1 text-sm text-slate-600">{log.entity_type}</p>
+				{#snippet failed(error, reset)}
+					<div class="p-4">
+						<RecoveryPanel
+							compact
+							title="Audit Trail Belum Tersaji"
+							message={auditErrorMessage(error)}
+							onRetry={() => retryLogs(reset)}
+						/>
+					</div>
+				{/snippet}
+
+				{#snippet children(value)}
+					{@const currentLogs = filterAuditLogs(value as AuditLog[])}
+					{#if currentLogs.length === 0}
+						<div class="p-8 text-center text-muted-foreground text-sm">Belum ada audit log.</div>
+					{:else}
+					<div class="hidden overflow-x-auto lg:block">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row class="bg-green-50">
+								<Table.Head>Waktu</Table.Head>
+								<Table.Head>Pengguna</Table.Head>
+								<Table.Head>Aksi</Table.Head>
+								<Table.Head>Entitas</Table.Head>
+								<Table.Head>Path</Table.Head>
+								<Table.Head class="text-center">Status</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each currentLogs as log (log.id)}
+								<Table.Row class="hover:bg-green-50/40">
+									<Table.Cell class="text-xs text-muted-foreground whitespace-nowrap">{fmtDt(log.created_at)}</Table.Cell>
+									<Table.Cell class="font-medium text-sm">{log.username ?? '—'}</Table.Cell>
+									<Table.Cell>
+										<Badge variant="outline" class="text-xs font-mono {methodColor(log.action)}">{log.action}</Badge>
+									</Table.Cell>
+									<Table.Cell class="text-sm">{log.entity_type}</Table.Cell>
+									<Table.Cell class="text-xs text-muted-foreground font-mono truncate max-w-[300px]" title={authSummary(log) || metaPath(log.metadata) || log.entity_id}>
+										{authSummary(log) || metaPath(log.metadata) || log.entity_id}
+									</Table.Cell>
+									<Table.Cell class="text-center text-xs font-mono">
+										{metaStatus(log.metadata) ?? '—'}
+									</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+					</div>
+
+					<div class="grid gap-3 p-4 lg:hidden">
+						{#each currentLogs as log (log.id)}
+							<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+								<div class="flex items-start justify-between gap-3">
+									<div class="min-w-0">
+										<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{fmtDt(log.created_at)}</p>
+										<p class="mt-1 text-sm font-semibold text-slate-900">{log.username ?? '—'}</p>
+										<p class="mt-1 text-sm text-slate-600">{log.entity_type}</p>
+									</div>
+									<Badge variant="outline" class="text-xs font-mono {methodColor(log.action)}">{log.action}</Badge>
 								</div>
-								<Badge variant="outline" class="text-xs font-mono {methodColor(log.action)}">{log.action}</Badge>
+								<p class="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs font-mono text-slate-600 break-all">
+									{authSummary(log) || metaPath(log.metadata) || log.entity_id}
+								</p>
+								<p class="mt-3 text-xs text-slate-500">Status {metaStatus(log.metadata) ?? '—'}</p>
 							</div>
-							<p class="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs font-mono text-slate-600 break-all">
-								{authSummary(log) || metaPath(log.metadata) || log.entity_id}
-							</p>
-							<p class="mt-3 text-xs text-slate-500">Status {metaStatus(log.metadata) ?? '—'}</p>
-						</div>
-					{/each}
-				</div>
-			{/if}
+						{/each}
+					</div>
+					{/if}
+				{/snippet}
+			</AsyncContent>
 		</Card.Content>
 	</Card.Root>
 </div>

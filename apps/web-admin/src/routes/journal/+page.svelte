@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { onMount } from 'svelte';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -8,8 +10,11 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
+	import { confirmAction } from '$lib/confirm-dialog';
 
 	type Assignment = {
 		id: string;
@@ -52,11 +57,14 @@
 		summary: AttendanceSummary[];
 	};
 
-	let loading = $state(true);
-	let error = $state('');
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
+	let overviewPromise = $state<Promise<Overview> | null>(null);
 	let assignments = $state<Assignment[]>([]);
-	let sessions = $state<Session[]>([]);
-	let summary = $state<AttendanceSummary[]>([]);
 	let assignmentId = $state('');
 	let activeTab = $state<'sessions' | 'rekap'>('sessions');
 
@@ -70,28 +78,90 @@
 	let newCatatan = $state('');
 	let newGuruHadir = $state(true);
 
-	async function loadOverview() {
-		loading = true;
-		error = '';
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	function applyOverview(data: Overview) {
+		assignments = data.assignments ?? [];
+	}
+
+	async function fetchOverview(selectedAssignmentId: string): Promise<Overview> {
+		const params = selectedAssignmentId ? `?assignment_id=${selectedAssignmentId}` : '';
+		const res = await fetch(`/api/journal${params}`);
+		return readApi<Overview>(res, 'Gagal memuat data jurnal');
+	}
+
+	function loadOverview(selectedAssignmentId: string) {
+		overviewPromise = fetchOverview(selectedAssignmentId).then((data) => {
+			applyOverview(data);
+			return data;
+		});
+	}
+
+	async function refreshOverview() {
+		const data = await fetchOverview(assignmentId);
+		applyOverview(data);
+		overviewPromise = Promise.resolve(data);
+	}
+
+	function retryOverview(reset?: () => void) {
+		reset?.();
+		loadOverview(assignmentId);
+	}
+
+	function overviewErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat data jurnal';
+	}
+
+	function handleOverviewRenderError(error: unknown) {
+		console.error('Journal overview render failed', error);
+	}
+
+	async function responseErrorMessage(response: Response, fallback: string) {
+		const payload = await response.json().catch(() => null);
+		return apiErrorMessage(payload) || fallback;
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
+	}
+
+	async function refreshOverviewAfterMutation() {
 		try {
-			const params = assignmentId ? `?assignment_id=${assignmentId}` : '';
-			const res = await fetch(`/api/journal${params}`);
-			if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
-			const data = (await res.json()) as Overview;
-			assignments = data.assignments ?? [];
-			sessions = data.sessions ?? [];
-			summary = data.summary ?? [];
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Gagal memuat data jurnal';
-		} finally {
-			loading = false;
+			await refreshOverview();
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
 		}
 	}
 
-	$effect(() => {
-		// Track assignmentId to re-fetch on change
-		const _ = assignmentId;
-		loadOverview();
+	onMount(() => {
+		loadOverview(assignmentId);
 	});
 
 	async function createSession() {
@@ -111,12 +181,16 @@
 					guru_hadir: newGuruHadir
 				})
 			});
-			const json = await res.json();
+			const payload = await res.json().catch(() => null);
 			if (!res.ok) {
 				if (res.status === 409) toast.error('Pertemuan pada tanggal ini sudah ada');
-				else toast.error(json.error ?? 'Gagal membuat pertemuan');
+				else toast.error(apiErrorMessage(payload) || 'Gagal membuat pertemuan');
 				return;
 			}
+			const payloadBody = isRecord(payload) && isRecord(payload.data) ? payload.data : payload;
+			const session = isRecord(payloadBody) && isRecord(payloadBody.session) ? payloadBody.session : null;
+			const sessionId = typeof session?.id === 'string' ? session.id : '';
+			if (!sessionId) throw new Error('Respons sesi baru tidak lengkap');
 			createOpen = false;
 			newTanggal = '';
 			newMateri = '';
@@ -124,28 +198,32 @@
 			newCatatan = '';
 			newGuruHadir = true;
 			toast.success('Sesi berhasil dibuat');
-			goto(`/journal/${json.session.id}`);
-		} catch {
-			toast.error('Terjadi kesalahan jaringan');
+			goto(resolve(`/journal/${sessionId}`));
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
 			createBusy = false;
 		}
 	}
 
 	async function deleteSession(id: string) {
-		if (!confirm('Hapus pertemuan ini? Semua data kehadiran akan ikut terhapus.')) return;
+		if (!(await confirmAction({
+			title: 'Hapus Pertemuan Jurnal',
+			message: 'Hapus pertemuan ini? Semua data kehadiran akan ikut terhapus.',
+			confirmLabel: 'Hapus Pertemuan',
+			tone: 'danger'
+		}))) return;
 		deleteBusy = { ...deleteBusy, [id]: true };
 		try {
 			const res = await fetch(`/api/journal/sessions/${id}`, { method: 'DELETE' });
 			if (!res.ok && res.status !== 204) {
-				const json = await res.json();
-				toast.error(json.error ?? 'Gagal menghapus sesi');
+				toast.error(await responseErrorMessage(res, 'Gagal menghapus sesi'));
 				return;
 			}
 			toast.success('Sesi dihapus');
-			await loadOverview();
-		} catch {
-			toast.error('Terjadi kesalahan jaringan');
+			await refreshOverviewAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
 			deleteBusy = { ...deleteBusy, [id]: false };
 		}
@@ -174,16 +252,20 @@
 		<Card.Content class="pt-4">
 			<div class="flex items-center gap-4">
 				<label for="assignment-select" class="w-32 shrink-0 text-sm font-medium text-gray-700">Kelas – Mapel</label>
-				{#if loading && assignments.length === 0}
+				{#if !overviewPromise && assignments.length === 0}
 					<Skeleton class="h-9 w-72" />
 				{:else}
 					<select
 						id="assignment-select"
-						bind:value={assignmentId}
+						value={assignmentId}
+						onchange={(event) => {
+							assignmentId = (event.currentTarget as HTMLSelectElement).value;
+							loadOverview(assignmentId);
+						}}
 						class="w-72 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
 					>
 						<option value="">-- Pilih kelas & mata pelajaran --</option>
-						{#each assignments as a}
+						{#each assignments as a (a.id)}
 							<option value={a.id}>{a.class_name} – {a.subject_name} ({a.teacher_name})</option>
 						{/each}
 					</select>
@@ -192,159 +274,165 @@
 		</Card.Content>
 	</Card.Root>
 
-	{#if error}
-		<div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-	{/if}
+	<AsyncContent promise={overviewPromise} onerror={handleOverviewRenderError}>
+		{#snippet pending()}
+			{#if assignmentId}
+				<Card.Root>
+					<Card.Content class="space-y-2 p-4">
+						{#each [1, 2, 3] as row (row)}
+							<Skeleton class="h-12 w-full" />
+						{/each}
+					</Card.Content>
+				</Card.Root>
+			{/if}
+		{/snippet}
 
-	{#if assignmentId}
-		<!-- Tabs -->
-		<div class="flex gap-1 border-b border-gray-200">
-			<button
-				class="px-4 py-2 text-sm font-medium transition-colors {activeTab === 'sessions'
-					? 'border-b-2 border-green-600 text-green-700'
-					: 'text-gray-500 hover:text-gray-700'}"
-				onclick={() => (activeTab = 'sessions')}
-			>
-				Daftar Pertemuan
-			</button>
-			<button
-				class="px-4 py-2 text-sm font-medium transition-colors {activeTab === 'rekap'
-					? 'border-b-2 border-green-600 text-green-700'
-					: 'text-gray-500 hover:text-gray-700'}"
-				onclick={() => (activeTab = 'rekap')}
-			>
-				Rekap Kehadiran
-			</button>
-		</div>
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Jurnal Belum Tersaji"
+				message={overviewErrorMessage(error)}
+				onRetry={() => retryOverview(reset)}
+			/>
+		{/snippet}
 
-		<!-- Daftar Pertemuan Tab -->
-		{#if activeTab === 'sessions'}
-			<Card.Root>
-				<Card.Content class="p-0">
-					{#if loading}
-						<div class="space-y-2 p-4">
-							{#each [1, 2, 3] as _}
-								<Skeleton class="h-12 w-full" />
-							{/each}
-						</div>
-					{:else if sessions.length === 0}
-						<div class="p-8 text-center text-sm text-gray-500">
-							Belum ada pertemuan. Klik "Tambah Pertemuan" untuk mulai.
-						</div>
-					{:else}
-						<Table.Root>
-							<Table.Header>
-								<Table.Row>
-									<Table.Head class="w-12">No</Table.Head>
-									<Table.Head class="w-20">Ke-</Table.Head>
-									<Table.Head>Tanggal</Table.Head>
-									<Table.Head>Materi</Table.Head>
-									<Table.Head class="w-28">Guru</Table.Head>
-									<Table.Head class="w-32">Aksi</Table.Head>
-								</Table.Row>
-							</Table.Header>
-							<Table.Body>
-								{#each sessions as s, i}
-									<Table.Row>
-										<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
-										<Table.Cell>
-											<Badge variant="outline">P-{s.pertemuan_ke}</Badge>
-										</Table.Cell>
-										<Table.Cell class="text-sm">{formatTanggal(s.tanggal)}</Table.Cell>
-										<Table.Cell class="max-w-xs truncate text-sm text-gray-700">
-											{#if s.materi}
-												{s.materi}
-											{:else}
-												<span class="italic text-gray-400">–</span>
-											{/if}
-										</Table.Cell>
-										<Table.Cell>
-											{#if s.guru_hadir}
-												<Badge class="bg-green-100 text-green-800 hover:bg-green-100">Hadir</Badge>
-											{:else}
-												<Badge class="bg-red-100 text-red-800 hover:bg-red-100">Tidak Hadir</Badge>
-											{/if}
-										</Table.Cell>
-										<Table.Cell>
-											<div class="flex gap-1">
-												<Button variant="outline" size="sm" onclick={() => goto(`/journal/${s.id}`)}>
-													Lihat
-												</Button>
-												<LoadingButton
-													variant="destructive"
-													size="sm"
-													loading={deleteBusy[s.id] ?? false}
-													onclick={() => deleteSession(s.id)}
-												>
-													Hapus
-												</LoadingButton>
-											</div>
-										</Table.Cell>
-									</Table.Row>
-								{/each}
-							</Table.Body>
-						</Table.Root>
-					{/if}
-				</Card.Content>
-			</Card.Root>
-		{/if}
+		{#snippet children(value)}
+			{@const currentOverview = value as Overview}
+			{#if assignmentId}
+				<div class="flex gap-1 border-b border-gray-200">
+					<button
+						class="px-4 py-2 text-sm font-medium transition-colors {activeTab === 'sessions'
+							? 'border-b-2 border-green-600 text-green-700'
+							: 'text-gray-500 hover:text-gray-700'}"
+						onclick={() => (activeTab = 'sessions')}
+					>
+						Daftar Pertemuan
+					</button>
+					<button
+						class="px-4 py-2 text-sm font-medium transition-colors {activeTab === 'rekap'
+							? 'border-b-2 border-green-600 text-green-700'
+							: 'text-gray-500 hover:text-gray-700'}"
+						onclick={() => (activeTab = 'rekap')}
+					>
+						Rekap Kehadiran
+					</button>
+				</div>
 
-		<!-- Rekap Kehadiran Tab -->
-		{#if activeTab === 'rekap'}
-			<Card.Root>
-				<Card.Content class="p-0">
-					{#if loading}
-						<div class="space-y-2 p-4">
-							{#each [1, 2, 3] as _}
-								<Skeleton class="h-12 w-full" />
-							{/each}
-						</div>
-					{:else if summary.length === 0}
-						<div class="p-8 text-center text-sm text-gray-500">
-							Belum ada data rekap kehadiran.
-						</div>
-					{:else}
-						<Table.Root>
-							<Table.Header>
-								<Table.Row>
-									<Table.Head class="w-12">No</Table.Head>
-									<Table.Head>Nama Siswa</Table.Head>
-									<Table.Head class="w-24">NIS</Table.Head>
-									<Table.Head class="w-16 text-center">H</Table.Head>
-									<Table.Head class="w-16 text-center">S</Table.Head>
-									<Table.Head class="w-16 text-center">I</Table.Head>
-									<Table.Head class="w-16 text-center">A</Table.Head>
-									<Table.Head class="w-20 text-center">Total</Table.Head>
-								</Table.Row>
-							</Table.Header>
-							<Table.Body>
-								{#each summary as st, i}
-									<Table.Row>
-										<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
-										<Table.Cell class="font-medium">{st.nama}</Table.Cell>
-										<Table.Cell class="text-sm text-gray-500">{st.nis}</Table.Cell>
-										<Table.Cell class="text-center">
-											<Badge class="bg-green-100 text-green-800 hover:bg-green-100">{st.hadir}</Badge>
-										</Table.Cell>
-										<Table.Cell class="text-center">
-											<Badge class="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">{st.sakit}</Badge>
-										</Table.Cell>
-										<Table.Cell class="text-center">
-											<Badge class="bg-sky-100 text-sky-800 hover:bg-sky-100">{st.izin}</Badge>
-										</Table.Cell>
-										<Table.Cell class="text-center">
-											<Badge class="bg-red-100 text-red-800 hover:bg-red-100">{st.alpha}</Badge>
-										</Table.Cell>
-										<Table.Cell class="text-center text-sm text-gray-600">{st.total_pertemuan}</Table.Cell>
-									</Table.Row>
-								{/each}
-							</Table.Body>
-						</Table.Root>
-					{/if}
-				</Card.Content>
-			</Card.Root>
-		{/if}
-	{/if}
+				{#if activeTab === 'sessions'}
+					<Card.Root>
+						<Card.Content class="p-0">
+							{#if currentOverview.sessions.length === 0}
+								<div class="p-8 text-center text-sm text-gray-500">
+									Belum ada pertemuan. Klik "Tambah Pertemuan" untuk mulai.
+								</div>
+							{:else}
+								<Table.Root>
+									<Table.Header>
+										<Table.Row>
+											<Table.Head class="w-12">No</Table.Head>
+											<Table.Head class="w-20">Ke-</Table.Head>
+											<Table.Head>Tanggal</Table.Head>
+											<Table.Head>Materi</Table.Head>
+											<Table.Head class="w-28">Guru</Table.Head>
+											<Table.Head class="w-32">Aksi</Table.Head>
+										</Table.Row>
+									</Table.Header>
+									<Table.Body>
+										{#each currentOverview.sessions as s, i (s.id)}
+											<Table.Row>
+												<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
+												<Table.Cell>
+													<Badge variant="outline">P-{s.pertemuan_ke}</Badge>
+												</Table.Cell>
+												<Table.Cell class="text-sm">{formatTanggal(s.tanggal)}</Table.Cell>
+												<Table.Cell class="max-w-xs truncate text-sm text-gray-700">
+													{#if s.materi}
+														{s.materi}
+													{:else}
+														<span class="italic text-gray-400">–</span>
+													{/if}
+												</Table.Cell>
+												<Table.Cell>
+													{#if s.guru_hadir}
+														<Badge class="bg-green-100 text-green-800 hover:bg-green-100">Hadir</Badge>
+													{:else}
+														<Badge class="bg-red-100 text-red-800 hover:bg-red-100">Tidak Hadir</Badge>
+													{/if}
+												</Table.Cell>
+												<Table.Cell>
+													<div class="flex gap-1">
+														<Button variant="outline" size="sm" onclick={() => goto(resolve(`/journal/${s.id}`))}>
+															Lihat
+														</Button>
+														<LoadingButton
+															variant="destructive"
+															size="sm"
+															loading={deleteBusy[s.id] ?? false}
+															onclick={() => deleteSession(s.id)}
+														>
+															Hapus
+														</LoadingButton>
+													</div>
+												</Table.Cell>
+											</Table.Row>
+										{/each}
+									</Table.Body>
+								</Table.Root>
+							{/if}
+						</Card.Content>
+					</Card.Root>
+				{/if}
+
+				{#if activeTab === 'rekap'}
+					<Card.Root>
+						<Card.Content class="p-0">
+							{#if currentOverview.summary.length === 0}
+								<div class="p-8 text-center text-sm text-gray-500">
+									Belum ada data rekap kehadiran.
+								</div>
+							{:else}
+								<Table.Root>
+									<Table.Header>
+										<Table.Row>
+											<Table.Head class="w-12">No</Table.Head>
+											<Table.Head>Nama Siswa</Table.Head>
+											<Table.Head class="w-24">NIS</Table.Head>
+											<Table.Head class="w-16 text-center">H</Table.Head>
+											<Table.Head class="w-16 text-center">S</Table.Head>
+											<Table.Head class="w-16 text-center">I</Table.Head>
+											<Table.Head class="w-16 text-center">A</Table.Head>
+											<Table.Head class="w-20 text-center">Total</Table.Head>
+										</Table.Row>
+									</Table.Header>
+									<Table.Body>
+										{#each currentOverview.summary as st, i (st.student_id)}
+											<Table.Row>
+												<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
+												<Table.Cell class="font-medium">{st.nama}</Table.Cell>
+												<Table.Cell class="text-sm text-gray-500">{st.nis}</Table.Cell>
+												<Table.Cell class="text-center">
+													<Badge class="bg-green-100 text-green-800 hover:bg-green-100">{st.hadir}</Badge>
+												</Table.Cell>
+												<Table.Cell class="text-center">
+													<Badge class="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">{st.sakit}</Badge>
+												</Table.Cell>
+												<Table.Cell class="text-center">
+													<Badge class="bg-sky-100 text-sky-800 hover:bg-sky-100">{st.izin}</Badge>
+												</Table.Cell>
+												<Table.Cell class="text-center">
+													<Badge class="bg-red-100 text-red-800 hover:bg-red-100">{st.alpha}</Badge>
+												</Table.Cell>
+												<Table.Cell class="text-center text-sm text-gray-600">{st.total_pertemuan}</Table.Cell>
+											</Table.Row>
+										{/each}
+									</Table.Body>
+								</Table.Root>
+							{/if}
+						</Card.Content>
+					</Card.Root>
+				{/if}
+			{/if}
+		{/snippet}
+	</AsyncContent>
 </div>
 
 <!-- Create Session Dialog -->
@@ -385,7 +473,7 @@
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (createOpen = false)}>Batal</Button>
-			<LoadingButton loading={createBusy} onclick={createSession}>Simpan & Buka</LoadingButton>
+			<LoadingButton loading={createBusy} onclick={() => void createSession()}>Simpan & Buka</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

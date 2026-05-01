@@ -40,6 +40,11 @@ const ADMIN_PREFIXES = [
 	'/api/website',
 ];
 
+const KESISWAAN_PREFIXES = [
+	'/kesiswaan',
+	'/api/kesiswaan',
+];
+
 function isPublicPath(pathname: string) {
 	if (PUBLIC_EXACT_PATHS.has(pathname)) return true;
 	return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
@@ -87,6 +92,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 			if (isAdminPath) {
 				if (event.url.pathname.startsWith('/api/')) {
 					throw error(403, 'forbidden: admin role required');
+				}
+				throw redirect(302, '/');
+			}
+		}
+
+		const isKesiswaanPath = KESISWAAN_PREFIXES.some((p) => event.url.pathname.startsWith(p));
+		if (isKesiswaanPath) {
+			const allowed = isAdmin || roles.includes('kesiswaan') || roles.includes('guru');
+			if (!allowed) {
+				if (event.url.pathname.startsWith('/api/')) {
+					throw error(403, 'forbidden: kesiswaan role required');
 				}
 				throw redirect(302, '/');
 			}

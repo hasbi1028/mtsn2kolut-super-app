@@ -6,9 +6,12 @@
 	import { Input } from '$lib/components/ui/input';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EditorWrapper from '$lib/components/EditorWrapper.svelte';
-	import { renderRichMathHtml } from '$lib/utils/render-rich-math';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import RichContent from '$lib/components/RichContent.svelte';
+	import { confirmAction } from '$lib/confirm-dialog';
 
 	// ── Types ─────────────────────────────────────────────────────────────────
 	type Subject = { id: string; name: string; code: string };
@@ -34,6 +37,22 @@
 	type QuestionListResponse = {
 		items: Question[];
 		meta?: { total: number; limit: number; offset: number };
+	};
+	type SoalOverview = {
+		questions: Question[];
+		subjects: Subject[];
+		totalItems: number;
+		page: number;
+	};
+	type AcademicPayload = {
+		subjects?: Subject[];
+		error?: string;
+		message?: string;
+	};
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
 	};
 	type Template = {
 		id: string;
@@ -136,8 +155,7 @@
 	];
 
 	// ── Page state ─────────────────────────────────────────────────────────────
-	let loading = $state(true);
-	let pageError = $state('');
+	let questionsPromise = $state<Promise<SoalOverview> | null>(null);
 	let questions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
 	let totalItems = $state(0);
@@ -153,7 +171,7 @@
 	let composerBusy = $state(false);
 	let draftStatus = $state('');
 	let showTemplates = $state(true);
-	let draftTimer: ReturnType<typeof setTimeout> | null = null;
+	let composerMobilePanel = $state<'write' | 'preview'>('write');
 	let lastDraftSig = '';
 
 	// ── Form fields ────────────────────────────────────────────────────────────
@@ -236,9 +254,6 @@
 		return issues;
 	});
 
-	let previewStem = $derived(renderRichMathHtml(fStem));
-	let previewOptions = $derived(fOptions.map((o) => (o ? renderRichMathHtml(o) : '')));
-
 	// ── Draft autosave ─────────────────────────────────────────────────────────
 	$effect(() => {
 		if (!showComposer) return;
@@ -251,31 +266,30 @@
 			fDifficulty,
 			fIsRtl,
 		});
-		if (draftTimer) clearTimeout(draftTimer);
-		draftTimer = setTimeout(() => {
-			if (sig === lastDraftSig) return;
+		if (sig === lastDraftSig) return;
+
+		const draftKey = DRAFT_KEY(editingId);
+		const draftPayload = {
+			subjectId: fSubjectId,
+			stem: fStem,
+			options: [...fOptions],
+			answerKey: fAnswerKey,
+			weight: fWeight,
+			difficulty: fDifficulty,
+			isRtl: fIsRtl,
+			savedAt: new Date().toISOString(),
+		};
+		const timer = setTimeout(() => {
 			lastDraftSig = sig;
 			try {
-				localStorage.setItem(
-					DRAFT_KEY(editingId),
-					JSON.stringify({
-						subjectId: fSubjectId,
-						stem: fStem,
-						options: [...fOptions],
-						answerKey: fAnswerKey,
-						weight: fWeight,
-						difficulty: fDifficulty,
-						isRtl: fIsRtl,
-						savedAt: new Date().toISOString(),
-					})
-				);
+				localStorage.setItem(draftKey, JSON.stringify(draftPayload));
 				draftStatus = 'Draft tersimpan otomatis';
 			} catch {
 				/* ignore storage errors */
 			}
 		}, 700);
 		return () => {
-			if (draftTimer) clearTimeout(draftTimer);
+			clearTimeout(timer);
 		};
 	});
 
@@ -318,39 +332,107 @@
 	}
 
 	// ── API ────────────────────────────────────────────────────────────────────
-	async function load(page = currentPage) {
-		loading = true;
-		pageError = '';
-		try {
-			const params = new URLSearchParams();
-			params.set('limit', String(PAGE_SIZE));
-			params.set('offset', String((page - 1) * PAGE_SIZE));
-			if (search.trim()) params.set('q', search.trim());
-			if (filterSubject) params.set('subject_id', filterSubject);
-			if (filterWorkflow) params.set('workflow_status', filterWorkflow);
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
 
-			const [qRes, aRes] = await Promise.all([
-				fetch(`/api/cbt/questions?${params.toString()}`),
-				fetch('/api/academic'),
-			]);
-			const qJson = (await qRes.json().catch(() => ({}))) as QuestionListResponse & {
-				error?: string;
-			};
-			const aJson = await aRes.json().catch(() => ({}));
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
 
-			if (!qRes.ok) {
-				pageError = qJson.error ?? 'Gagal memuat soal';
-				return;
-			}
-			questions = qJson.items ?? [];
-			totalItems = qJson.meta?.total ?? questions.length;
-			currentPage = page;
-			subjects = ((aJson.data ?? aJson)?.subjects ?? []) as Subject[];
-		} catch (e) {
-			pageError = (e as Error).message || 'Gagal memuat soal';
-		} finally {
-			loading = false;
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
+			throw new Error(payload.error);
 		}
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	function buildQuestionParams(page: number) {
+		const params = new URLSearchParams();
+		params.set('limit', String(PAGE_SIZE));
+		params.set('offset', String((page - 1) * PAGE_SIZE));
+		if (search.trim()) params.set('q', search.trim());
+		if (filterSubject) params.set('subject_id', filterSubject);
+		if (filterWorkflow) params.set('workflow_status', filterWorkflow);
+		return params;
+	}
+
+	async function fetchOverview(page = currentPage): Promise<SoalOverview> {
+		const params = buildQuestionParams(page);
+		const [questionPayload, academicPayload] = await Promise.all([
+			fetch(`/api/cbt/questions?${params.toString()}`).then((response) =>
+				readApi<QuestionListResponse>(response, 'Gagal memuat soal')
+			),
+			fetch('/api/academic').then((response) =>
+				readApi<AcademicPayload>(response, 'Gagal memuat data akademik')
+			),
+		]);
+		const loadedQuestions = questionPayload.items ?? [];
+		return {
+			questions: loadedQuestions,
+			subjects: academicPayload.subjects ?? [],
+			totalItems: questionPayload.meta?.total ?? loadedQuestions.length,
+			page,
+		};
+	}
+
+	function applyOverview(overview: SoalOverview) {
+		questions = overview.questions;
+		subjects = overview.subjects;
+		totalItems = overview.totalItems;
+		currentPage = overview.page;
+	}
+
+	function load(page = currentPage) {
+		questionsPromise = fetchOverview(page).then((overview) => {
+			applyOverview(overview);
+			return overview;
+		});
+	}
+
+	async function refreshOverview(page = currentPage) {
+		if (!questionsPromise) {
+			load(page);
+			return;
+		}
+		try {
+			const overview = await fetchOverview(page);
+			applyOverview(overview);
+			questionsPromise = Promise.resolve(overview);
+		} catch (error) {
+			questionsPromise = Promise.resolve({ questions, subjects, totalItems, page: currentPage });
+			toast.error(soalErrorMessage(error));
+		}
+	}
+
+	function retryQuestions(reset?: () => void) {
+		reset?.();
+		load(currentPage);
+	}
+
+	function soalErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		if (typeof error === 'string' && error.trim()) return error;
+		return 'Gagal memuat soal';
+	}
+
+	function handleQuestionsRenderError(error: unknown, reset: () => void) {
+		console.error('Question composer render failed', error);
+		reset();
 	}
 
 	function resetForm() {
@@ -369,6 +451,7 @@
 		editingId = null;
 		resetForm();
 		showTemplates = true;
+		composerMobilePanel = 'write';
 		showComposer = true;
 		// Delay to let state settle before restoring
 		setTimeout(() => {
@@ -395,6 +478,7 @@
 			fAnswerKey = d.answer_key || 'A';
 			fDifficulty = d.difficulty || 'medium';
 			showTemplates = false;
+			composerMobilePanel = 'write';
 			showComposer = true;
 		} catch {
 			editingId = q.id;
@@ -402,6 +486,7 @@
 			fSubjectId = q.subject_id;
 			fStem = q.stem_html || q.question_text || '';
 			fAnswerKey = q.answer_key || 'A';
+			composerMobilePanel = 'write';
 			showComposer = true;
 		} finally {
 			composerBusy = false;
@@ -457,7 +542,7 @@
 			clearDraft();
 			toast.success(editingId ? 'Soal berhasil diperbarui' : 'Soal berhasil dibuat');
 			closeComposer();
-			await load(1);
+			await refreshOverview(1);
 		} catch (e) {
 			toast.error((e as Error).message || 'Gagal menyimpan soal');
 		} finally {
@@ -466,7 +551,12 @@
 	}
 
 	async function deleteQuestion(id: string) {
-		if (!confirm('Hapus soal ini? Tindakan tidak bisa dibatalkan.')) return;
+		if (!(await confirmAction({
+			title: 'Hapus Soal',
+			message: 'Hapus soal ini? Tindakan tidak bisa dibatalkan dari layar operator.',
+			confirmLabel: 'Hapus Soal',
+			tone: 'danger'
+		}))) return;
 		try {
 			const res = await fetch(`/api/cbt/questions?id=${id}`, { method: 'DELETE' });
 			if (!res.ok) {
@@ -475,7 +565,7 @@
 				return;
 			}
 			toast.success('Soal dihapus');
-			await load(currentPage);
+			await refreshOverview(currentPage);
 		} catch (e) {
 			toast.error((e as Error).message || 'Gagal menghapus soal');
 		}
@@ -513,11 +603,13 @@
 		return map[status] ?? 'bg-slate-100 text-slate-500';
 	}
 
-	onMount(() => load());
+	onMount(() => {
+		load();
+	});
 </script>
 
 <!-- ── Main page ──────────────────────────────────────────────────────────── -->
-<div class="pt-14 lg:pt-0 p-4 lg:p-6 space-y-4">
+<div class="space-y-4">
 	<!-- Header -->
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
@@ -579,74 +671,87 @@
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
-				{#if loading}
-					{#each Array.from({ length: 6 }) as _, index (`composer-question-skeleton-${index}`)}
+				<AsyncContent promise={questionsPromise} onerror={handleQuestionsRenderError}>
+					{#snippet pending()}
+						{#each Array.from({ length: 6 }) as _, index (`composer-question-skeleton-${index}`)}
+							<Table.Row>
+								<Table.Cell><Skeleton class="h-4 w-4" /></Table.Cell>
+								<Table.Cell><Skeleton class="h-5 w-full max-w-sm" /></Table.Cell>
+								<Table.Cell><Skeleton class="h-5 w-24" /></Table.Cell>
+								<Table.Cell class="hidden sm:table-cell"><Skeleton class="h-6 w-20" /></Table.Cell>
+								<Table.Cell><Skeleton class="h-5 w-8" /></Table.Cell>
+								<Table.Cell class="text-right"><Skeleton class="ml-auto h-8 w-16" /></Table.Cell>
+							</Table.Row>
+						{/each}
+					{/snippet}
+					{#snippet failed(error, reset)}
 						<Table.Row>
-							<Table.Cell><Skeleton class="h-4 w-4" /></Table.Cell>
-							<Table.Cell><Skeleton class="h-5 w-full max-w-sm" /></Table.Cell>
-							<Table.Cell><Skeleton class="h-5 w-24" /></Table.Cell>
-							<Table.Cell class="hidden sm:table-cell"><Skeleton class="h-6 w-20" /></Table.Cell>
-							<Table.Cell><Skeleton class="h-5 w-8" /></Table.Cell>
-							<Table.Cell class="text-right"><Skeleton class="ml-auto h-8 w-16" /></Table.Cell>
-						</Table.Row>
-					{/each}
-				{:else if pageError}
-					<Table.Row>
-						<Table.Cell colspan={6} class="py-10 text-center text-sm text-red-500">
-							{pageError}
-						</Table.Cell>
-					</Table.Row>
-				{:else if questions.length === 0}
-					<Table.Row>
-						<Table.Cell colspan={6} class="py-10 text-center text-sm text-slate-400">
-							Belum ada soal.
-							<button onclick={openCreate} class="text-green-700 underline ml-1"
-								>Buat soal pertama →</button
-							>
-						</Table.Cell>
-					</Table.Row>
-				{:else}
-					{#each questions as q, i (q.id)}
-						<Table.Row
-							class="hover:bg-slate-50 cursor-pointer"
-							onclick={() => openEdit(q)}
-						>
-							<Table.Cell class="text-xs text-slate-400">
-								{(currentPage - 1) * PAGE_SIZE + i + 1}
-							</Table.Cell>
-							<Table.Cell class="text-sm text-slate-700 max-w-xs">
-								<div class="truncate">{stemPreview(q)}</div>
-								{#if q.author_username}
-									<div class="text-[10px] text-slate-400 mt-0.5">{q.author_username}</div>
-								{/if}
-							</Table.Cell>
-							<Table.Cell class="text-xs text-slate-500 truncate max-w-[8rem]">
-								{q.subject_name || q.subject_code || '-'}
-							</Table.Cell>
-							<Table.Cell class="hidden sm:table-cell">
-								<span
-									class="inline-block rounded px-1.5 py-0.5 text-[10px] font-medium {workflowClass(q.workflow_status)}"
-								>
-									{WORKFLOW_LABEL[q.workflow_status] ?? q.workflow_status ?? '-'}
-								</span>
-							</Table.Cell>
-							<Table.Cell class="text-sm font-bold text-green-700">
-								{q.answer_key || '-'}
-							</Table.Cell>
-							<Table.Cell class="text-right">
-								<button
-									onclick={(e) => {
-										e.stopPropagation();
-										deleteQuestion(q.id);
-									}}
-									class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 transition-colors"
-								>
-									Hapus
-								</button>
+							<Table.Cell colspan={6} class="py-6">
+								<RecoveryPanel
+									compact
+									title="Soal Belum Tersaji"
+									message={soalErrorMessage(error)}
+									onRetry={() => retryQuestions(reset)}
+								/>
 							</Table.Cell>
 						</Table.Row>
-					{/each}
-				{/if}
+					{/snippet}
+					{#snippet children(value)}
+						{@const overview = value as SoalOverview}
+						{@const currentQuestions = overview.questions}
+						{#if currentQuestions.length === 0}
+							<Table.Row>
+								<Table.Cell colspan={6} class="py-10 text-center text-sm text-slate-400">
+									Belum ada soal.
+									<button onclick={openCreate} class="text-green-700 underline ml-1"
+										>Buat soal pertama →</button
+									>
+								</Table.Cell>
+							</Table.Row>
+						{:else}
+							{#each currentQuestions as q, i (q.id)}
+								<Table.Row
+									class="hover:bg-slate-50 cursor-pointer"
+									onclick={() => openEdit(q)}
+								>
+									<Table.Cell class="text-xs text-slate-400">
+										{(overview.page - 1) * PAGE_SIZE + i + 1}
+									</Table.Cell>
+									<Table.Cell class="text-sm text-slate-700 max-w-xs">
+										<div class="truncate">{stemPreview(q)}</div>
+										{#if q.author_username}
+											<div class="text-[10px] text-slate-400 mt-0.5">{q.author_username}</div>
+										{/if}
+									</Table.Cell>
+									<Table.Cell class="text-xs text-slate-500 truncate max-w-[8rem]">
+										{q.subject_name || q.subject_code || '-'}
+									</Table.Cell>
+									<Table.Cell class="hidden sm:table-cell">
+										<span
+											class="inline-block rounded px-1.5 py-0.5 text-[10px] font-medium {workflowClass(q.workflow_status)}"
+										>
+											{WORKFLOW_LABEL[q.workflow_status] ?? q.workflow_status ?? '-'}
+										</span>
+									</Table.Cell>
+									<Table.Cell class="text-sm font-bold text-green-700">
+										{q.answer_key || '-'}
+									</Table.Cell>
+									<Table.Cell class="text-right">
+										<button
+											onclick={(e) => {
+												e.stopPropagation();
+												deleteQuestion(q.id);
+											}}
+											class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 transition-colors"
+										>
+											Hapus
+										</button>
+									</Table.Cell>
+								</Table.Row>
+							{/each}
+						{/if}
+					{/snippet}
+				</AsyncContent>
 			</Table.Body>
 		</Table.Root>
 	</div>
@@ -678,10 +783,103 @@
 	{/if}
 </div>
 
+{#snippet composerPreview()}
+	<div class="mb-4">
+		<div class="mb-1 flex items-center justify-between">
+			<span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Kesiapan Soal</span>
+			<span
+				class="text-sm font-bold {readinessScore === 100
+					? 'text-green-700'
+					: readinessScore >= 50
+						? 'text-amber-600'
+						: 'text-red-500'}"
+			>
+				{readinessScore}%
+			</span>
+		</div>
+		<div class="h-2 overflow-hidden rounded-full bg-slate-200">
+			<div
+				class="h-2 rounded-full transition-all duration-300 {readinessScore === 100
+					? 'bg-green-600'
+					: readinessScore >= 50
+						? 'bg-amber-400'
+						: 'bg-red-400'}"
+				style="width: {readinessScore}%"
+			></div>
+		</div>
+		{#if validationIssues.length > 0}
+			<ul class="mt-1.5 space-y-0.5">
+				{#each validationIssues as issue (`validation-${issue}`)}
+					<li class="text-[10px] text-red-500">• {issue}</li>
+				{/each}
+			</ul>
+		{:else}
+			<p class="mt-1 text-[10px] text-green-600">Soal siap disimpan!</p>
+		{/if}
+	</div>
+
+	<div class="mb-4">
+		<p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+			Sinyal Kualitas
+		</p>
+		<div class="space-y-2">
+			{#each qualitySignals as sig (sig.label)}
+				<div class="flex items-start gap-2">
+					<span class="mt-0.5 shrink-0 text-sm font-bold {sig.status === 'good' ? 'text-green-600' : 'text-amber-500'}">
+						{sig.status === 'good' ? '✓' : '!'}
+					</span>
+					<div>
+						<div class="text-xs font-medium text-slate-700">{sig.label}</div>
+						<div class="text-[10px] text-slate-400">{sig.desc}</div>
+					</div>
+				</div>
+			{/each}
+		</div>
+	</div>
+
+	<div class="my-3 border-t border-slate-200"></div>
+
+	<div>
+		<p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+			Preview Siswa
+		</p>
+		<div class="rounded-lg border border-slate-200 bg-white p-3 space-y-3" dir={fIsRtl ? 'rtl' : undefined}>
+			{#if fStem}
+				<RichContent
+					html={fStem}
+					class="prose prose-sm max-w-none text-slate-800 latex-preview text-sm"
+				/>
+			{:else}
+				<p class="text-xs text-slate-400 italic">Isi soal belum dimasukkan</p>
+			{/if}
+
+			{#if fOptions.some((o) => o.trim())}
+				<div class="space-y-1.5 border-t border-slate-100 pt-2">
+					{#each fOptions as opt, i (ANSWER_LABELS[i])}
+						{@const label = ANSWER_LABELS[i]}
+						{@const isAnswer = fAnswerKey === label}
+						<div class="flex items-baseline gap-2 text-sm {isAnswer ? 'text-green-700 font-medium' : 'text-slate-700'}">
+							<span class="shrink-0 font-bold">{label}.</span>
+							{#if opt.trim()}
+								<RichContent tag="span" html={opt} class="latex-preview" />
+							{:else}
+								<span class="italic text-slate-300">(kosong)</span>
+							{/if}
+							{#if isAnswer}
+								<span class="ml-auto shrink-0 text-xs text-green-500">✓</span>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	</div>
+{/snippet}
+
 <!-- ── Composer Dialog ─────────────────────────────────────────────────────── -->
 <Dialog.Root bind:open={showComposer}>
 	<Dialog.Content>
-		<div class="sm:max-w-[min(94vw,88rem)] max-h-[93vh] h-[93vh] flex flex-col gap-0 p-0 overflow-hidden">
+		<div class="w-[min(94vw,88rem)] max-h-[93vh] h-[93vh] flex flex-col gap-0 p-0 overflow-hidden">
 		<!-- Dialog header -->
 		<div class="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
 			<div>
@@ -708,10 +906,27 @@
 			</button>
 		</div>
 
+		<div class="grid grid-cols-2 gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 lg:hidden">
+			<button
+				type="button"
+				class={`rounded-lg px-3 py-2 text-sm font-medium ${composerMobilePanel === 'write' ? 'bg-white text-green-800 shadow-sm' : 'text-slate-500'}`}
+				onclick={() => (composerMobilePanel = 'write')}
+			>
+				Tulis Soal
+			</button>
+			<button
+				type="button"
+				class={`rounded-lg px-3 py-2 text-sm font-medium ${composerMobilePanel === 'preview' ? 'bg-white text-green-800 shadow-sm' : 'text-slate-500'}`}
+				onclick={() => (composerMobilePanel = 'preview')}
+			>
+				Preview & Kualitas
+			</button>
+		</div>
+
 		<!-- Dialog body: split layout -->
 		<div class="flex flex-1 overflow-hidden min-h-0">
 			<!-- Left: form -->
-			<div class="flex-1 overflow-y-auto p-5 space-y-5 min-w-0">
+			<div class={`flex-1 overflow-y-auto p-5 space-y-5 min-w-0 ${composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
 				<!-- Template strip -->
 				<div>
 					<div class="flex items-center justify-between mb-1.5">
@@ -796,13 +1011,13 @@
 							bind:value={fWeight}
 							class="h-8 text-sm"
 						/>
-					</div>
-					<div class="flex items-end pb-1">
-						<label class="flex cursor-pointer items-center gap-2">
-							<input type="checkbox" bind:checked={fIsRtl} class="rounded" />
-							<span class="text-xs text-slate-600">Mode Arab (RTL)</span>
-						</label>
-					</div>
+						</div>
+						<div class="flex items-end pb-1">
+							<label for="f-rtl" class="flex cursor-pointer items-center gap-2">
+								<input id="f-rtl" type="checkbox" bind:checked={fIsRtl} class="rounded" />
+								<span class="text-xs text-slate-600">Mode Arab (RTL)</span>
+							</label>
+						</div>
 				</div>
 
 				<!-- Stem editor -->
@@ -865,115 +1080,17 @@
 				<div class="h-4"></div>
 			</div>
 
+			{#if composerMobilePanel === 'preview'}
+				<div class="block flex-1 overflow-y-auto bg-slate-50 p-4 lg:hidden">
+					{@render composerPreview()}
+				</div>
+			{/if}
+
 			<!-- Right: preview panel (desktop only) -->
 			<div
 				class="hidden w-72 shrink-0 overflow-y-auto border-l border-slate-100 bg-slate-50 p-4 lg:block xl:w-80"
 			>
-				<!-- Readiness score -->
-				<div class="mb-4">
-					<div class="mb-1 flex items-center justify-between">
-						<span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400"
-							>Kesiapan Soal</span
-						>
-						<span
-							class="text-sm font-bold {readinessScore === 100
-								? 'text-green-700'
-								: readinessScore >= 50
-									? 'text-amber-600'
-									: 'text-red-500'}"
-						>
-							{readinessScore}%
-						</span>
-					</div>
-					<div class="h-2 overflow-hidden rounded-full bg-slate-200">
-						<div
-							class="h-2 rounded-full transition-all duration-300 {readinessScore === 100
-								? 'bg-green-600'
-								: readinessScore >= 50
-									? 'bg-amber-400'
-									: 'bg-red-400'}"
-							style="width: {readinessScore}%"
-						></div>
-					</div>
-					{#if validationIssues.length > 0}
-						<ul class="mt-1.5 space-y-0.5">
-								{#each validationIssues as issue (`validation-${issue}`)}
-								<li class="text-[10px] text-red-500">• {issue}</li>
-							{/each}
-						</ul>
-					{:else}
-						<p class="mt-1 text-[10px] text-green-600">Soal siap disimpan!</p>
-					{/if}
-				</div>
-
-				<!-- Quality signals -->
-				<div class="mb-4">
-					<p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-						Sinyal Kualitas
-					</p>
-					<div class="space-y-2">
-							{#each qualitySignals as sig (sig.label)}
-							<div class="flex items-start gap-2">
-								<span
-									class="mt-0.5 shrink-0 text-sm font-bold {sig.status === 'good'
-										? 'text-green-600'
-										: 'text-amber-500'}"
-								>
-									{sig.status === 'good' ? '✓' : '!'}
-								</span>
-								<div>
-									<div class="text-xs font-medium text-slate-700">{sig.label}</div>
-									<div class="text-[10px] text-slate-400">{sig.desc}</div>
-								</div>
-							</div>
-						{/each}
-					</div>
-				</div>
-
-				<div class="my-3 border-t border-slate-200"></div>
-
-				<!-- Student preview -->
-				<div>
-					<p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-						Preview Siswa
-					</p>
-					<div
-						class="rounded-lg border border-slate-200 bg-white p-3 space-y-3"
-						dir={fIsRtl ? 'rtl' : undefined}
-					>
-						{#if fStem}
-							<div class="prose prose-sm max-w-none text-slate-800 latex-preview text-sm">
-								{@html previewStem}
-							</div>
-						{:else}
-							<p class="text-xs text-slate-400 italic">Isi soal belum dimasukkan</p>
-						{/if}
-
-						{#if fOptions.some((o) => o.trim())}
-							<div class="space-y-1.5 border-t border-slate-100 pt-2">
-									{#each fOptions as opt, i (ANSWER_LABELS[i])}
-									{@const label = ANSWER_LABELS[i]}
-									{@const isAnswer = fAnswerKey === label}
-									<div
-										class="flex items-baseline gap-2 text-sm {isAnswer
-											? 'text-green-700 font-medium'
-											: 'text-slate-700'}"
-									>
-										<span class="shrink-0 font-bold">{label}.</span>
-										{#if opt.trim()}
-											<span class="latex-preview">{@html previewOptions[i]}</span>
-										{:else}
-											<span class="italic text-slate-300">(kosong)</span>
-										{/if}
-										{#if isAnswer}
-											<span class="ml-auto shrink-0 text-xs text-green-500">✓</span>
-										{/if}
-									</div>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				</div>
+				{@render composerPreview()}
 			</div>
 		</div>
 
@@ -996,7 +1113,7 @@
 					Batalkan
 				</Button>
 				<LoadingButton
-					onclick={saveQuestion}
+					onclick={() => void saveQuestion()}
 					disabled={!canSave}
 					loading={composerBusy}
 					loadingLabel="Menyimpan..."

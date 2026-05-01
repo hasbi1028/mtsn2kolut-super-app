@@ -23,6 +23,9 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 8. **PUSAKA is a bounded subsystem.** Canonical contracts use `/api/pusaka/*`; legacy runtime aliases such as `/api/jobs`, `/api/attendance`, `/api/schedules`, `/api/settings`, and `/api/worker` are retired.
 9. **`employees` stays general.** Employee master data covers all school staff; PUSAKA only manages the eligible subset (`PNS`/`PPPK`) via `pusaka_accounts` and `/pusaka/*` screens.
 10. **No employee-scoped PUSAKA aliases in the BFF.** PUSAKA employee operations must proxy only through `/api/pusaka/employees/*`, not `/api/employees/{id}/*`.
+11. **Kesiswaan & Tata Usaha modules are role-scoped.** `/api/kesiswaan/*` is owned by `admin` and `kesiswaan`; `guru` may only read kesiswaan data for siswa di kelasnya. `/api/tu/*` is owned by `admin` and `staf`. Cross-role access requires explicit handler-level allow rules, not implicit fallthrough.
+12. **Letter numbering is centrally issued.** Outgoing letter numbers must be allocated through the backend `IssueOutgoingLetterNumber` service to preserve `(year, classification)` sequence integrity. Manual override is allowed for legacy import / surat balasan, but must still respect `UNIQUE (nomor_surat)`.
+13. **Confidential BK records are role-gated.** Counseling rows flagged `is_confidential = true` must only be readable by `admin` and `kesiswaan`. Guru biasa (tanpa role kesiswaan) tidak boleh melihat catatan rahasia bahkan untuk siswa di kelasnya.
 
 ## Backend Architecture Rules
 
@@ -46,6 +49,9 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
   - skeletons for initial section/page data fetching,
   - loading buttons for submit/refresh/export/mutation actions.
   Avoid falling back to plain loading text on primary screens when a skeleton is practical.
+- **Async data-fetching baseline:** new or revised Svelte screens that fetch client-side data should model read operations as `Promise<T>` and render them with the shared `AsyncContent` pattern or direct `{#await promise}` blocks. Avoid scattered `loading`/`error` booleans when pending/fulfilled/rejected UI can be represented by the promise lifecycle.
+- **Svelte boundary baseline:** async sections that render remote data should use `<svelte:boundary onerror={handler}>` through `AsyncContent` or an equivalent local boundary so render-time failures get a controlled fallback, retry path, and server/client log context instead of breaking the whole page.
+- **Background refresh UX:** auto-refresh screens should avoid blanking already-rendered data on every poll. Keep a small refresh/loading indicator for background fetches, use skeletons for the first load or filter changes, and show retryable error fallback only when the active data request fails.
 - **Tailwind CSS v4** via `@tailwindcss/vite`. Use utility classes, not custom CSS files.
 - **Type safety:** Always use `<script lang="ts">`. Explicit interfaces for props and state. No `any`.
 - **Accessibility:** All form labels use `for` + `id`. Run `npm run check` before finalizing.
@@ -246,13 +252,14 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Grade finalization overview baseline** — the gradebook screen should also expose an operator-facing per-assignment finalization recap (`Siap Difinalkan`, `Sudah Final`, `Perlu Dilengkapi`) so guru/admin can triage multiple kelas-mapel without opening each gradebook blindly.
 
 ### 📋 Planned Future Phases
-1. **Academic Foundation & RBAC Expansion** — Unified `users` table with many-to-many roles (`admin`, `teacher`, `student`, `staff`, `parent`). Student lifecycle (`active`, `alumni`, `prospective`) and Parent-child linking.
-2. **Flutter Student App Enhancements** — Build on top of the initialized CBT exam client in `apps/mobile` with stronger offline resilience, richer BYOD-aware anti-cheat telemetry, richer rich-content rendering, and safer internal distribution / packaging.
-3. **Real-time Proctoring** — WebSocket-based live monitoring.
-4. **Notifications & Reminders** — WhatsApp/Telegram for exam schedules, attendance.
-5. **Raport / Grade Management** — Academic grading, report cards integrated with CBT scores.
-6. **Schedule & Timetable** — Class schedules, teacher assignments UI.
-7. **PUSAKA Isolation** — completed through Phase 3 for current scope: canonical `/api/pusaka/*`, `pusaka_accounts` as integration owner, and legacy `employees.pusaka_*` columns removed. Deeper package extraction is deferred until code churn justifies it.
+1. **Kesiswaan & Tata Usaha (Sprint 17–21)** — Persuratan core (surat masuk/keluar/disposisi dengan nomor Kemenag auto-generate), profil siswa diperluas (NIK, foto, alamat, tanggal lahir), pelanggaran/prestasi siswa, surat keterangan siswa berbasis template, ekstrakurikuler/BK/mutasi, arsip dokumen. Role baru: `kesiswaan` (Wakasek Kesiswaan / Tim BK). Sidebar group baru: "Kesiswaan" dan "Tata Usaha".
+2. **Academic Foundation & RBAC Expansion** — Unified `users` table with many-to-many roles (`admin`, `teacher`, `student`, `staff`, `parent`). Student lifecycle (`active`, `alumni`, `prospective`) and Parent-child linking.
+3. **Flutter Student App Enhancements** — Build on top of the initialized CBT exam client in `apps/mobile` with stronger offline resilience, richer BYOD-aware anti-cheat telemetry, richer rich-content rendering, and safer internal distribution / packaging.
+4. **Real-time Proctoring** — WebSocket-based live monitoring.
+5. **Notifications & Reminders** — WhatsApp/Telegram for exam schedules, attendance, dan disposisi surat masuk.
+6. **Raport / Grade Management** — Academic grading, report cards integrated with CBT scores.
+7. **Schedule & Timetable** — Class schedules, teacher assignments UI.
+8. **PUSAKA Isolation** — completed through Phase 3 for current scope: canonical `/api/pusaka/*`, `pusaka_accounts` as integration owner, and legacy `employees.pusaka_*` columns removed. Deeper package extraction is deferred until code churn justifies it.
 
 ## RBAC & User Lifecycle Policy
 

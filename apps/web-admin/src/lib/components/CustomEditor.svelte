@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import katex from 'katex';
+	import { toast } from '$lib/components/ui/sonner';
 
 	let {
 		value = $bindable(''),
@@ -20,7 +21,6 @@
 	let fileInputEl = $state<HTMLInputElement | null>(null);
 	let internalUpdate = false;
 	let imageUploading = $state(false);
-	let uploadError = $state('');
 	let showColorPicker = $state(false);
 
 	// Math dialog
@@ -65,6 +65,10 @@
 
 	function escapeAttr(str: string) {
 		return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	}
+
+	function uploadErrorMessage(error: unknown) {
+		return error instanceof Error && error.message ? error.message : 'Upload gambar gagal';
 	}
 
 	// ── Toolbar state refresh ─────────────────────────────────────────────────
@@ -246,7 +250,6 @@
 	async function handleImageFile(file: File) {
 		if (!file || !editorEl) return;
 		imageUploading = true;
-		uploadError = '';
 		try {
 			let url = '';
 			if (onImageUpload) {
@@ -261,7 +264,7 @@
 			}
 			if (url) exec('insertHTML', `<img src="${url}" alt="${escapeAttr(file.name)}" class="custom-editor-img" />`);
 		} catch (err) {
-			uploadError = (err as Error).message || 'Upload gambar gagal';
+			toast.error(uploadErrorMessage(err));
 		} finally {
 			imageUploading = false;
 		}
@@ -269,7 +272,6 @@
 
 	function onFileChange(e: Event) {
 		const file = (e.target as HTMLInputElement).files?.[0];
-		uploadError = '';
 		if (file) void handleImageFile(file);
 		if (fileInputEl) fileInputEl.value = '';
 	}
@@ -398,10 +400,6 @@
 		onclick={handleEditorClick}
 	></div>
 </div>
-
-{#if uploadError}
-	<p class="mt-1 text-xs text-rose-600">{uploadError}</p>
-{/if}
 
 <!-- Math input dialog -->
 {#if showMathDialog}

@@ -31,7 +31,6 @@
 		closeMobile: () => void;
 	} = $props();
 
-	const resolveNavHref = resolve as unknown as (href: string) => string;
 </script>
 
 {#if items.length > 0}
@@ -44,7 +43,7 @@
 				<li>
 					<div class={`group relative flex items-center ${desktopExpanded ? 'gap-1' : 'gap-0 lg:justify-center'}`}>
 						<a
-							href={resolveNavHref(item.href)}
+							href={resolve(item.href as '/')}
 							onclick={() => {
 								rememberRecent(item.href);
 								closeMobile();

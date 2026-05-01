@@ -6,7 +6,10 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { confirmAction } from '$lib/confirm-dialog';
 
 	type CbtEvent = {
 		id: string; title: string; exam_type: string; scope: string;
@@ -15,13 +18,22 @@
 		status: string; created_at: string; session_count: number;
 	};
 	type AcademicYear = { id: string; name: string; is_active: boolean; };
+	type EventsOverview = {
+		events: CbtEvent[];
+		years: AcademicYear[];
+	};
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
 
 	let events = $state<CbtEvent[]>([]);
 	let years = $state<AcademicYear[]>([]);
-	let loading = $state(true);
-	let error = $state('');
+	let eventsPromise = $state<Promise<EventsOverview> | null>(null);
 	let showForm = $state(false);
 	let editId = $state<string | null>(null);
+	let deleteBusyId = $state('');
 
 	let fTitle = $state('');
 	let fType = $state('uts');
@@ -38,24 +50,94 @@
 	const scopeLabel: Record<string, string> = { class: 'Per Kelas', grade: 'Per Tingkat', school: 'Seluruh Sekolah' };
 	const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Aktif', finished: 'Selesai' };
 
-	async function load() {
-		try {
-			const [eRes, aRes] = await Promise.all([
-				fetch('/api/cbt/events'),
-				fetch('/api/academic'),
-			]);
-			const eJson = await eRes.json();
-			const aJson = await aRes.json();
-			events = eJson.data ?? eJson ?? [];
-			years = (aJson.data ?? aJson)?.years ?? [];
-			if (years.length > 0 && !fYearId) {
-				fYearId = years.find(y => y.is_active)?.id || years[0].id;
-			}
-		} catch {
-			error = 'Gagal memuat data kegiatan ujian';
-		} finally {
-			loading = false;
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
 		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	function parseAcademicYears(payload: unknown) {
+		if (!isRecord(payload)) return [];
+		if (Array.isArray(payload.years)) return payload.years as AcademicYear[];
+		return [];
+	}
+
+	async function fetchOverview(): Promise<EventsOverview> {
+		const [eventsData, academicData] = await Promise.all([
+			fetch('/api/cbt/events').then((response) => readApi<CbtEvent[]>(response, 'Gagal memuat data kegiatan ujian')),
+			fetch('/api/academic').then((response) => readApi<unknown>(response, 'Gagal memuat data akademik')),
+		]);
+		return {
+			events: Array.isArray(eventsData) ? eventsData : [],
+			years: parseAcademicYears(academicData),
+		};
+	}
+
+	function applyOverview(overview: EventsOverview) {
+		events = overview.events;
+		years = overview.years;
+		if (years.length > 0 && !fYearId) {
+			fYearId = years.find((year) => year.is_active)?.id || years[0].id;
+		}
+	}
+
+	function loadInitial() {
+		events = [];
+		years = [];
+		eventsPromise = fetchOverview().then((overview) => {
+			applyOverview(overview);
+			return overview;
+		});
+	}
+
+	async function refreshOverview() {
+		if (!eventsPromise) {
+			loadInitial();
+			return;
+		}
+		try {
+			const overview = await fetchOverview();
+			applyOverview(overview);
+			eventsPromise = Promise.resolve(overview);
+		} catch (error) {
+			eventsPromise = Promise.resolve({ events, years });
+			toast.error(overviewErrorMessage(error));
+		}
+	}
+
+	function retryOverview(reset?: () => void) {
+		reset?.();
+		loadInitial();
+	}
+
+	function overviewErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat data kegiatan ujian';
+	}
+
+	function handleOverviewRenderError(error: unknown) {
+		console.error('CBT events render failed', error);
 	}
 
 	function showToast(msg: string) {
@@ -64,6 +146,16 @@
 
 	function showError(msg: string) {
 		toast.error(msg);
+	}
+
+	async function responseErrorMessage(response: Response, fallback: string) {
+		const payload = await response.json().catch(() => null);
+		return apiErrorMessage(payload) || fallback;
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
 	}
 
 	function resetForm() {
@@ -106,21 +198,38 @@
 					academic_year_id: fYearId, status: fStatus,
 				}),
 			});
-			if (!res.ok) { const j = await res.json(); showError(j.error ?? 'Gagal'); return; }
+			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menyimpan kegiatan ujian')); return; }
 			showToast(editId ? 'Kegiatan diperbarui' : 'Kegiatan berhasil dibuat');
 			resetForm();
-			await load();
+			await refreshOverview();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menyimpan kegiatan ujian. Periksa koneksi lalu coba lagi.'));
 		} finally { fBusy = false; }
 	}
 
 	async function deleteEvent(id: string) {
-		if (!confirm('Hapus kegiatan ini? Sesi di dalamnya tidak akan terhapus tapi relasinya dilepas.')) return;
-		await fetch(`/api/cbt/events/${id}`, { method: 'DELETE' });
-		showToast('Kegiatan dihapus');
-		await load();
+		if (!(await confirmAction({
+			title: 'Hapus Kegiatan Ujian',
+			message: 'Hapus kegiatan ini? Sesi di dalamnya tidak akan terhapus, tetapi relasinya akan dilepas.',
+			confirmLabel: 'Hapus Kegiatan',
+			tone: 'danger'
+		}))) return;
+		deleteBusyId = id;
+		try {
+			const res = await fetch(`/api/cbt/events/${id}`, { method: 'DELETE' });
+			if (!res.ok && res.status !== 204) { showError(await responseErrorMessage(res, 'Gagal menghapus kegiatan ujian')); return; }
+			showToast('Kegiatan dihapus');
+			await refreshOverview();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menghapus kegiatan ujian. Periksa koneksi lalu coba lagi.'));
+		} finally {
+			deleteBusyId = '';
+		}
 	}
 
-	onMount(load);
+	onMount(() => {
+		void loadInitial();
+	});
 </script>
 
 <svelte:head><title>Kegiatan Ujian — MTSN 2 Kolut</title></svelte:head>
@@ -201,7 +310,7 @@
 				</div>
 
 				<div class="flex gap-2">
-					<LoadingButton disabled={fBusy || !fTitle || !fYearId} onclick={saveEvent} loading={fBusy} loadingLabel="Menyimpan...">
+					<LoadingButton disabled={fBusy || !fTitle || !fYearId} onclick={() => void saveEvent()} loading={fBusy} loadingLabel="Menyimpan...">
 						{editId ? 'Perbarui' : 'Simpan Kegiatan'}
 					</LoadingButton>
 					<LoadingButton variant="outline" onclick={resetForm}>Batal</LoadingButton>
@@ -210,23 +319,35 @@
 		</Card.Root>
 	{/if}
 
-	{#if loading}
-		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
-			<Card.Content class="space-y-3 p-6">
-				{#each Array.from({ length: 5 }) as _, index (`event-row-skeleton-${index}`)}
-					<div class="grid gap-3 lg:grid-cols-[1.2fr_0.7fr_0.8fr_0.8fr_0.5fr_0.6fr_auto] lg:items-center">
-						<Skeleton class="h-5 w-40" />
-						<Skeleton class="h-6 w-20" />
-						<Skeleton class="h-5 w-20" />
-						<Skeleton class="h-5 w-28" />
-						<Skeleton class="h-6 w-16" />
-						<Skeleton class="h-6 w-16" />
-						<Skeleton class="h-9 w-28 justify-self-end" />
-					</div>
-				{/each}
-			</Card.Content>
-		</Card.Root>
-	{:else}
+	<AsyncContent promise={eventsPromise} onerror={handleOverviewRenderError}>
+		{#snippet pending()}
+			<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+				<Card.Content class="space-y-3 p-6">
+					{#each Array.from({ length: 5 }) as _, index (`event-row-skeleton-${index}`)}
+						<div class="grid gap-3 lg:grid-cols-[1.2fr_0.7fr_0.8fr_0.8fr_0.5fr_0.6fr_auto] lg:items-center">
+							<Skeleton class="h-5 w-40" />
+							<Skeleton class="h-6 w-20" />
+							<Skeleton class="h-5 w-20" />
+							<Skeleton class="h-5 w-28" />
+							<Skeleton class="h-6 w-16" />
+							<Skeleton class="h-6 w-16" />
+							<Skeleton class="h-9 w-28 justify-self-end" />
+						</div>
+					{/each}
+				</Card.Content>
+			</Card.Root>
+		{/snippet}
+
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Kegiatan Ujian Belum Tersaji"
+				message={overviewErrorMessage(error)}
+				onRetry={() => retryOverview(reset)}
+			/>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const overview = value as EventsOverview}
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Content class="p-0 overflow-x-auto">
 				<div class="hidden overflow-x-auto lg:block">
@@ -243,7 +364,7 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each events as e (e.id)}
+						{#each overview.events as e (e.id)}
 							<Table.Row>
 								<Table.Cell>
 									<div class="font-medium text-slate-800">{e.title}</div>
@@ -265,7 +386,14 @@
 								<Table.Cell class="text-right">
 									<div class="flex gap-2 justify-end">
 										<LoadingButton variant="outline" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
-										<LoadingButton variant="destructive" size="sm" onclick={() => deleteEvent(e.id)}>Hapus</LoadingButton>
+										<LoadingButton
+											variant="destructive"
+											size="sm"
+											onclick={() => deleteEvent(e.id)}
+											loading={deleteBusyId === e.id}
+											loadingLabel="Menghapus..."
+											disabled={deleteBusyId !== '' && deleteBusyId !== e.id}
+										>Hapus</LoadingButton>
 									</div>
 								</Table.Cell>
 							</Table.Row>
@@ -281,7 +409,7 @@
 				</div>
 
 				<div class="grid gap-3 p-4 lg:hidden">
-					{#each events as e (e.id)}
+					{#each overview.events as e (e.id)}
 						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
@@ -302,7 +430,14 @@
 							</div>
 							<div class="mt-4 grid grid-cols-2 gap-2">
 								<LoadingButton variant="outline" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
-								<LoadingButton variant="destructive" size="sm" onclick={() => deleteEvent(e.id)}>Hapus</LoadingButton>
+								<LoadingButton
+									variant="destructive"
+									size="sm"
+									onclick={() => deleteEvent(e.id)}
+									loading={deleteBusyId === e.id}
+									loadingLabel="Menghapus..."
+									disabled={deleteBusyId !== '' && deleteBusyId !== e.id}
+								>Hapus</LoadingButton>
 							</div>
 						</div>
 					{:else}
@@ -313,5 +448,6 @@
 				</div>
 			</Card.Content>
 		</Card.Root>
-	{/if}
+		{/snippet}
+	</AsyncContent>
 </div>

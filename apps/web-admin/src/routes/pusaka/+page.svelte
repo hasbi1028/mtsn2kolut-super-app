@@ -5,12 +5,15 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { toast } from '$lib/components/ui/sonner';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import QueueMonitor from '$lib/components/QueueMonitor.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
+	import { confirmChallenge } from '$lib/confirm-dialog';
 
 	interface QueueStats {
 		queued: number; running: number; success: number;
@@ -26,82 +29,213 @@
 		queue: { queued: number; running: number; success: number; failed: number };
 	}
 
-	let queueStats   = $state<QueueStats>({ queued: 0, running: 0, success: 0, failed: 0, retry_due: 0, total: 0 });
+	interface RecentJob {
+		id: string;
+		created_at: string;
+		nama?: string;
+		employee_nama?: string;
+		run_type: string;
+		status: string;
+		claimed_by?: string;
+	}
+
+	interface PusakaOverview {
+		queueStats: QueueStats;
+		workerStatus: WorkerStatus | null;
+		recentJobs: RecentJob[];
+	}
+
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
+	type JobListPayload = {
+		items?: RecentJob[];
+		data?: RecentJob[];
+		error?: string;
+		message?: string;
+	};
+
+	type PusakaActionResponse = {
+		cancelled?: number;
+		inserted?: number;
+		error?: string;
+		message?: string;
+	};
+
+	let overviewPromise = $state<Promise<PusakaOverview> | null>(null);
+	let queueStats   = $state<QueueStats>(emptyQueueStats());
 	let workerStatus = $state<WorkerStatus | null>(null);
-	let recentJobs   = $state<any[]>([]);
+	let recentJobs   = $state<RecentJob[]>([]);
 	let busy         = $state<Record<string, boolean>>({});
 	let confirmKey   = $state('');
-	let loadError    = $state('');
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 
-	async function load() {
-		try {
-			loadError = '';
-			const [qRes, jRes, wRes] = await Promise.all([
-				fetch('/api/queue/stats'),
-				fetch('/api/pusaka/jobs?limit=5'),
-				fetch('/api/pusaka/worker/status'),
-			]);
-			const q = await qRes.json().catch(() => ({}));
-			const j = await jRes.json().catch(() => ({}));
-			const w = await wRes.json().catch(() => ({}));
-			if (!q.error) queueStats = q;
-			recentJobs = j.items ?? j.data ?? [];
-			workerStatus = w.data ?? null;
-		} catch {
-			loadError = 'Gagal memuat status worker, ringkasan antrian, atau job terbaru. Periksa backend dan worker PUSAKA, lalu coba lagi.';
+	function emptyQueueStats(): QueueStats {
+		return { queued: 0, running: 0, success: 0, failed: 0, retry_due: 0, total: 0 };
+	}
+
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
+			throw new Error(payload.error);
 		}
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	function normalizeQueueStats(value: Partial<QueueStats> | null | undefined): QueueStats {
+		return { ...emptyQueueStats(), ...(value ?? {}) };
+	}
+
+	function normalizeJobs(value: JobListPayload | RecentJob[] | null | undefined): RecentJob[] {
+		if (Array.isArray(value)) return value;
+		if (!value) return [];
+		if (Array.isArray(value.items)) return value.items;
+		if (Array.isArray(value.data)) return value.data;
+		return [];
+	}
+
+	function applyOverview(overview: PusakaOverview) {
+		queueStats = overview.queueStats;
+		workerStatus = overview.workerStatus;
+		recentJobs = overview.recentJobs;
+	}
+
+	function currentOverview(): PusakaOverview {
+		return { queueStats, workerStatus, recentJobs };
+	}
+
+	async function fetchOverview(): Promise<PusakaOverview> {
+		const [queueData, jobsData, workerData] = await Promise.all([
+			fetch('/api/queue/stats').then((response) => readApi<Partial<QueueStats>>(response, 'Gagal memuat ringkasan antrian PUSAKA')),
+			fetch('/api/pusaka/jobs?limit=5').then((response) => readApi<JobListPayload | RecentJob[]>(response, 'Gagal memuat job terbaru PUSAKA')),
+			fetch('/api/pusaka/worker/status').then((response) => readApi<WorkerStatus | null>(response, 'Gagal memuat status worker PUSAKA')),
+		]);
+
+		return {
+			queueStats: normalizeQueueStats(queueData),
+			recentJobs: normalizeJobs(jobsData),
+			workerStatus: workerData ?? null,
+		};
+	}
+
+	function loadOverview() {
+		overviewPromise = fetchOverview().then((overview) => {
+			applyOverview(overview);
+			return overview;
+		});
+		return overviewPromise;
+	}
+
+	async function refreshOverview(showFailureToast = false) {
+		if (!overviewPromise) {
+			await loadOverview();
+			return;
+		}
+		try {
+			const overview = await fetchOverview();
+			applyOverview(overview);
+			overviewPromise = Promise.resolve(overview);
+		} catch (error) {
+			overviewPromise = Promise.resolve(currentOverview());
+			if (showFailureToast) toast.error(overviewErrorMessage(error));
+		}
+	}
+
+	function retryOverview(reset?: () => void) {
+		reset?.();
+		loadOverview();
+	}
+
+	function overviewErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		if (typeof error === 'string' && error.trim()) return error;
+		return 'Gagal memuat status worker, ringkasan antrian, atau job terbaru. Periksa backend dan worker PUSAKA, lalu coba lagi.';
+	}
+
+	function handleOverviewRenderError(error: unknown, reset: () => void) {
+		console.error('PUSAKA overview render failed', error);
+		reset();
 	}
 
 	async function act(key: string, fn: () => Promise<Response>, successMsg: string) {
 		busy = { ...busy, [key]: true };
 		try {
 			const res  = await fn();
-			const data = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error((data as any).error || 'Gagal');
+			const data = (await res.json().catch(() => ({}))) as PusakaActionResponse;
+			if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal');
 			operationState = {
 				tone: key === 'cancel_all' ? 'warning' : 'success',
 				title: key === 'cancel_all' ? 'Antrian Dibatalkan' : 'Operasi PUSAKA Berhasil',
-				message: successMsg + ((data as any).cancelled != null ? ` (${(data as any).cancelled} job)` : ''),
+				message: successMsg + (data.cancelled != null ? ` (${data.cancelled} job)` : ''),
 			};
-			showToast(successMsg + ((data as any).cancelled != null ? ` (${(data as any).cancelled} job)` : ''), 'ok');
-		} catch (e: any) {
+			showToast(successMsg + (data.cancelled != null ? ` (${data.cancelled} job)` : ''), 'ok');
+		} catch (error) {
 			operationState = {
 				tone: 'error',
 				title: 'Operasi PUSAKA Gagal',
-				message: e.message,
+				message: overviewErrorMessage(error),
 			};
-			showToast(e.message, 'err');
+			showToast(overviewErrorMessage(error), 'err');
 		} finally {
 			busy = { ...busy, [key]: false };
 			confirmKey = '';
-			await load();
+			await refreshOverview(true);
 		}
 	}
 
 	async function runRekap() {
-		if (prompt('Rekap massal akan membuat job untuk seluruh akun PUSAKA yang aktif. Ketik REKAP untuk melanjutkan.') !== 'REKAP') return;
+		if (!(await confirmChallenge({
+			title: 'Mulai Rekap Massal PUSAKA',
+			message: 'Rekap massal akan membuat job untuk seluruh akun PUSAKA yang aktif. Gunakan hanya saat operator siap memantau antrian.',
+			challenge: 'REKAP',
+			confirmLabel: 'Mulai Rekap',
+			tone: 'warning'
+		}))) return;
 		busy = { ...busy, rekap: true };
 		try {
 			const res  = await fetch('/api/pusaka/jobs/run-all', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ run_type: 'morning' }) });
-			const data = await res.json().catch(() => ({}));
-			if (!res.ok) throw new Error((data as any).error || 'Gagal');
+			const data = (await res.json().catch(() => ({}))) as PusakaActionResponse;
+			if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal');
 			operationState = {
 				tone: 'warning',
 				title: 'Rekap Massal Diantrekan',
-				message: `Sistem menambahkan ${(data as any).inserted ?? 0} job baru. Pantau hasilnya di antrian dan worker status sebelum mengulangi operasi ini.`,
+				message: `Sistem menambahkan ${data.inserted ?? 0} job baru. Pantau hasilnya di antrian dan worker status sebelum mengulangi operasi ini.`,
 			};
-			showToast(`Rekap di-queue: ${(data as any).inserted ?? 0} job baru`, 'ok');
-		} catch (e: any) {
+			showToast(`Rekap di-queue: ${data.inserted ?? 0} job baru`, 'ok');
+		} catch (error) {
 			operationState = {
 				tone: 'error',
 				title: 'Rekap Massal Gagal',
-				message: e.message,
+				message: overviewErrorMessage(error),
 			};
-			showToast(e.message, 'err');
+			showToast(overviewErrorMessage(error), 'err');
 		} finally {
 			busy = { ...busy, rekap: false };
-			await load();
+			await refreshOverview(true);
 		}
 	}
 
@@ -137,8 +271,8 @@
 	}
 
 	onMount(() => {
-		load();
-		const itv = setInterval(load, 10_000);
+		void loadOverview();
+		const itv = setInterval(() => void refreshOverview(false), 10_000);
 		return () => clearInterval(itv);
 	});
 </script>
@@ -154,11 +288,11 @@
 			<p class="text-sm text-muted-foreground mt-1">Monitor dan kontrol sinkronisasi data kehadiran dari PUSAKA Kemenag</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			<LoadingButton variant="outline" size="sm" onclick={triggerSched} loading={busy.sched} loadingLabel="Memproses..." label="⚡ Jalankan Scheduler" />
-			<LoadingButton size="sm" onclick={runRekap} loading={busy.rekap} loadingLabel="Memproses..." label="▶ Mulai Rekap" />
+			<LoadingButton variant="outline" size="sm" onclick={() => void triggerSched()} loading={busy.sched} loadingLabel="Memproses..." label="⚡ Jalankan Scheduler" />
+			<LoadingButton size="sm" onclick={() => void runRekap()} loading={busy.rekap} loadingLabel="Memproses..." label="▶ Mulai Rekap" />
 			{#if confirmKey === 'cancel_all'}
 				<span class="self-center text-xs text-amber-700">Batalkan semua antrian?</span>
-				<LoadingButton size="sm" variant="destructive" onclick={cancelAll} loading={busy.cancel_all} loadingLabel="Membatalkan..." label="Ya" />
+				<LoadingButton size="sm" variant="destructive" onclick={() => void cancelAll()} loading={busy.cancel_all} loadingLabel="Membatalkan..." label="Ya" />
 				<Button size="sm" variant="ghost" onclick={() => (confirmKey = '')}>Tidak</Button>
 			{:else}
 				<LoadingButton size="sm" variant="outline" onclick={() => (confirmKey = 'cancel_all')} loading={busy.cancel_all} loadingLabel="Memproses..." disabled={busy.cancel_all}
@@ -169,13 +303,38 @@
 		</div>
 	</div>
 
-	{#if loadError}
-		<RecoveryPanel title="PUSAKA Belum Merespons Penuh" message={loadError} onRetry={load} />
-	{/if}
-
 	{#if operationState}
 		<OperationStatusPanel {...operationState} />
 	{/if}
+
+	<AsyncContent promise={overviewPromise} onerror={handleOverviewRenderError}>
+		{#snippet pending()}
+			<div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+				<div class="grid gap-4 sm:grid-cols-3">
+					{#each Array.from({ length: 3 }) as _, index (`pusaka-worker-skeleton-${index}`)}
+						<div class="space-y-3 rounded-xl border border-slate-100 p-4">
+							<Skeleton class="h-4 w-28" />
+							<Skeleton class="h-8 w-20" />
+						</div>
+					{/each}
+				</div>
+				<Skeleton class="h-28 w-full" />
+				<div class="space-y-3">
+					<Skeleton class="h-10 w-40" />
+					{#each Array.from({ length: 5 }) as _, index (`pusaka-job-skeleton-${index}`)}
+						<Skeleton class="h-11 w-full" />
+					{/each}
+				</div>
+			</div>
+		{/snippet}
+		{#snippet failed(error, reset)}
+			<RecoveryPanel title="PUSAKA Belum Merespons Penuh" message={overviewErrorMessage(error)} onRetry={() => retryOverview(reset)} />
+		{/snippet}
+		{#snippet children(value)}
+			{@const overview = value as PusakaOverview}
+			{@const currentQueueStats = overview.queueStats}
+			{@const currentWorkerStatus = overview.workerStatus}
+			{@const currentRecentJobs = overview.recentJobs}
 
 	<!-- Worker status -->
 	<div class="grid gap-4 sm:grid-cols-3">
@@ -185,10 +344,10 @@
 			</Card.Header>
 			<Card.Content class="pt-0">
 				<div class="flex items-center gap-2">
-					<span class="text-2xl font-bold">{workerStatus?.total ?? '—'}</span>
-					{#if workerStatus}
-						<Badge variant={workerStatus.total > 0 ? 'default' : 'destructive'}>
-							{workerStatus.total > 0 ? 'Online' : 'Offline'}
+					<span class="text-2xl font-bold">{currentWorkerStatus?.total ?? '—'}</span>
+					{#if currentWorkerStatus}
+						<Badge variant={currentWorkerStatus.total > 0 ? 'default' : 'destructive'}>
+							{currentWorkerStatus.total > 0 ? 'Online' : 'Offline'}
 						</Badge>
 					{/if}
 				</div>
@@ -201,11 +360,11 @@
 			</Card.Header>
 			<Card.Content class="pt-0">
 				<span class="text-2xl font-bold">
-					{workerStatus?.active_workers?.reduce((s, w) => s + w.active_consumers, 0) ?? '—'}
+					{currentWorkerStatus?.active_workers?.reduce((s, w) => s + w.active_consumers, 0) ?? '—'}
 				</span>
-				{#if workerStatus}
+				{#if currentWorkerStatus}
 					<span class="text-sm text-muted-foreground ml-1">
-						/ {workerStatus.active_workers?.reduce((s, w) => s + w.target_concurrency, 0)} kapasitas
+						/ {currentWorkerStatus.active_workers?.reduce((s, w) => s + w.target_concurrency, 0)} kapasitas
 					</span>
 				{/if}
 			</Card.Content>
@@ -213,11 +372,11 @@
 
 		<Card.Root>
 			<Card.Header class="pb-2">
-				<Card.Description>Antrian Job</Card.Description>
+			<Card.Description>Antrian Job</Card.Description>
 			</Card.Header>
 			<Card.Content class="pt-0">
-				{#if workerStatus?.queue}
-					{@const q = workerStatus.queue}
+				{#if currentWorkerStatus?.queue}
+					{@const q = currentWorkerStatus.queue}
 					<div class="flex flex-wrap gap-2">
 						{#if q.running > 0}
 							<Badge variant="default">{q.running} berjalan</Badge>
@@ -238,7 +397,7 @@
 	</div>
 
 	<!-- Queue monitor -->
-	<QueueMonitor stats={queueStats} />
+	<QueueMonitor stats={currentQueueStats} />
 
 	<!-- Recent jobs -->
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
@@ -261,7 +420,7 @@
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
-					{#each recentJobs as j (j.id)}
+					{#each currentRecentJobs as j (j.id)}
 						<Table.Row>
 							<Table.Cell class="text-xs text-muted-foreground whitespace-nowrap">{fmtDt(j.created_at)}</Table.Cell>
 							<Table.Cell class="font-medium">{j.nama || j.employee_nama || '—'}</Table.Cell>
@@ -285,7 +444,7 @@
 			</div>
 
 			<div class="grid gap-3 p-4 lg:hidden">
-				{#each recentJobs as j (j.id)}
+				{#each currentRecentJobs as j (j.id)}
 					<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 						<div class="flex items-start justify-between gap-3">
 							<div class="min-w-0">
@@ -324,5 +483,7 @@
 			<span class="text-xs text-muted-foreground font-normal">Akumulasi per periode / bulan</span>
 		</Button>
 	</div>
+		{/snippet}
+	</AsyncContent>
 
 </div>

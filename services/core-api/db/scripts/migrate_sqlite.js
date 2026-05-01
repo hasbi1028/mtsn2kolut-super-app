@@ -118,7 +118,7 @@ async function migrate() {
           `INSERT INTO schedules
              (id, label, run_time, run_type, is_enabled, created_at, updated_at)
            VALUES ($1,$2,$3,$4,$5,$6,$7)
-           ON CONFLICT (run_type) DO UPDATE
+           ON CONFLICT (run_type, run_time) DO UPDATE
              SET label      = EXCLUDED.label,
                  run_time   = EXCLUDED.run_time,
                  is_enabled = EXCLUDED.is_enabled,

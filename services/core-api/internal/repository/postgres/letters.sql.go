@@ -11,39 +11,351 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// =====================
-// Letter Classifications
-// =====================
-
-const listLetterClassifications = `-- name: ListLetterClassifications :many
-SELECT code, name, description, is_active
-FROM letter_classifications
-WHERE is_active = TRUE
-ORDER BY code ASC
+const countDispositionsForLetter = `-- name: CountDispositionsForLetter :one
+SELECT COUNT(*) FROM letter_dispositions WHERE incoming_letter_id = $1
 `
 
-func (q *Queries) ListLetterClassifications(ctx context.Context) ([]LetterClassification, error) {
-	rows, err := q.db.Query(ctx, listLetterClassifications)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []LetterClassification{}
-	for rows.Next() {
-		var i LetterClassification
-		if err := rows.Scan(&i.Code, &i.Name, &i.Description, &i.IsActive); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	return items, rows.Err()
+func (q *Queries) CountDispositionsForLetter(ctx context.Context, incomingLetterID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countDispositionsForLetter, incomingLetterID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
-// =====================
-// Sequences
-// =====================
+const createDisposition = `-- name: CreateDisposition :one
+INSERT INTO letter_dispositions (
+    incoming_letter_id, assignee_employee_id, instruksi,
+    disposed_by_employee_id
+) VALUES ($1, $2, $3, $4)
+RETURNING id, incoming_letter_id, assignee_employee_id, instruksi,
+          catatan_tindak_lanjut, status, disposed_by_employee_id,
+          disposed_at, completed_at
+`
+
+type CreateDispositionParams struct {
+	IncomingLetterID     pgtype.UUID `json:"incoming_letter_id"`
+	AssigneeEmployeeID   pgtype.UUID `json:"assignee_employee_id"`
+	Instruksi            string      `json:"instruksi"`
+	DisposedByEmployeeID pgtype.UUID `json:"disposed_by_employee_id"`
+}
+
+func (q *Queries) CreateDisposition(ctx context.Context, arg CreateDispositionParams) (LetterDisposition, error) {
+	row := q.db.QueryRow(ctx, createDisposition,
+		arg.IncomingLetterID,
+		arg.AssigneeEmployeeID,
+		arg.Instruksi,
+		arg.DisposedByEmployeeID,
+	)
+	var i LetterDisposition
+	err := row.Scan(
+		&i.ID,
+		&i.IncomingLetterID,
+		&i.AssigneeEmployeeID,
+		&i.Instruksi,
+		&i.CatatanTindakLanjut,
+		&i.Status,
+		&i.DisposedByEmployeeID,
+		&i.DisposedAt,
+		&i.CompletedAt,
+	)
+	return i, err
+}
+
+const createIncomingLetter = `-- name: CreateIncomingLetter :one
+INSERT INTO incoming_letters (
+    nomor_surat, nomor_agenda, tanggal_surat, tanggal_terima,
+    asal, perihal, sifat, file_path, catatan, received_by_employee_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, nomor_surat, nomor_agenda, tanggal_surat, tanggal_terima,
+          asal, perihal, sifat, file_path, catatan, status,
+          received_by_employee_id, created_at, updated_at
+`
+
+type CreateIncomingLetterParams struct {
+	NomorSurat           string      `json:"nomor_surat"`
+	NomorAgenda          string      `json:"nomor_agenda"`
+	TanggalSurat         pgtype.Date `json:"tanggal_surat"`
+	TanggalTerima        pgtype.Date `json:"tanggal_terima"`
+	Asal                 string      `json:"asal"`
+	Perihal              string      `json:"perihal"`
+	Sifat                LetterSifat `json:"sifat"`
+	FilePath             string      `json:"file_path"`
+	Catatan              string      `json:"catatan"`
+	ReceivedByEmployeeID pgtype.UUID `json:"received_by_employee_id"`
+}
+
+func (q *Queries) CreateIncomingLetter(ctx context.Context, arg CreateIncomingLetterParams) (IncomingLetter, error) {
+	row := q.db.QueryRow(ctx, createIncomingLetter,
+		arg.NomorSurat,
+		arg.NomorAgenda,
+		arg.TanggalSurat,
+		arg.TanggalTerima,
+		arg.Asal,
+		arg.Perihal,
+		arg.Sifat,
+		arg.FilePath,
+		arg.Catatan,
+		arg.ReceivedByEmployeeID,
+	)
+	var i IncomingLetter
+	err := row.Scan(
+		&i.ID,
+		&i.NomorSurat,
+		&i.NomorAgenda,
+		&i.TanggalSurat,
+		&i.TanggalTerima,
+		&i.Asal,
+		&i.Perihal,
+		&i.Sifat,
+		&i.FilePath,
+		&i.Catatan,
+		&i.Status,
+		&i.ReceivedByEmployeeID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createOutgoingLetter = `-- name: CreateOutgoingLetter :one
+INSERT INTO outgoing_letters (
+    nomor_surat, classification_code, tanggal_surat,
+    tujuan, perihal, sifat, file_path, catatan, issued_by_employee_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, nomor_surat, classification_code, tanggal_surat,
+          tujuan, perihal, sifat, file_path, catatan,
+          issued_by_employee_id, created_at, updated_at
+`
+
+type CreateOutgoingLetterParams struct {
+	NomorSurat         string      `json:"nomor_surat"`
+	ClassificationCode string      `json:"classification_code"`
+	TanggalSurat       pgtype.Date `json:"tanggal_surat"`
+	Tujuan             string      `json:"tujuan"`
+	Perihal            string      `json:"perihal"`
+	Sifat              LetterSifat `json:"sifat"`
+	FilePath           string      `json:"file_path"`
+	Catatan            string      `json:"catatan"`
+	IssuedByEmployeeID pgtype.UUID `json:"issued_by_employee_id"`
+}
+
+func (q *Queries) CreateOutgoingLetter(ctx context.Context, arg CreateOutgoingLetterParams) (OutgoingLetter, error) {
+	row := q.db.QueryRow(ctx, createOutgoingLetter,
+		arg.NomorSurat,
+		arg.ClassificationCode,
+		arg.TanggalSurat,
+		arg.Tujuan,
+		arg.Perihal,
+		arg.Sifat,
+		arg.FilePath,
+		arg.Catatan,
+		arg.IssuedByEmployeeID,
+	)
+	var i OutgoingLetter
+	err := row.Scan(
+		&i.ID,
+		&i.NomorSurat,
+		&i.ClassificationCode,
+		&i.TanggalSurat,
+		&i.Tujuan,
+		&i.Perihal,
+		&i.Sifat,
+		&i.FilePath,
+		&i.Catatan,
+		&i.IssuedByEmployeeID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deleteDisposition = `-- name: DeleteDisposition :exec
+DELETE FROM letter_dispositions WHERE id = $1
+`
+
+func (q *Queries) DeleteDisposition(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteDisposition, id)
+	return err
+}
+
+const deleteIncomingLetter = `-- name: DeleteIncomingLetter :exec
+DELETE FROM incoming_letters WHERE id = $1
+`
+
+func (q *Queries) DeleteIncomingLetter(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteIncomingLetter, id)
+	return err
+}
+
+const deleteOutgoingLetter = `-- name: DeleteOutgoingLetter :exec
+DELETE FROM outgoing_letters WHERE id = $1
+`
+
+func (q *Queries) DeleteOutgoingLetter(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOutgoingLetter, id)
+	return err
+}
+
+const getDisposition = `-- name: GetDisposition :one
+SELECT
+    ld.id, ld.incoming_letter_id, ld.assignee_employee_id,
+    ld.instruksi, ld.catatan_tindak_lanjut, ld.status,
+    ld.disposed_by_employee_id, ld.disposed_at, ld.completed_at,
+    COALESCE(ae.nama, '') AS assignee_name,
+    COALESCE(de.nama, '') AS disposed_by_name,
+    il.nomor_agenda, il.perihal AS letter_perihal, il.asal AS letter_asal
+FROM letter_dispositions ld
+LEFT JOIN employees ae ON ae.id = ld.assignee_employee_id
+LEFT JOIN employees de ON de.id = ld.disposed_by_employee_id
+JOIN incoming_letters il ON il.id = ld.incoming_letter_id
+WHERE ld.id = $1
+`
+
+type GetDispositionRow struct {
+	ID                   pgtype.UUID        `json:"id"`
+	IncomingLetterID     pgtype.UUID        `json:"incoming_letter_id"`
+	AssigneeEmployeeID   pgtype.UUID        `json:"assignee_employee_id"`
+	Instruksi            string             `json:"instruksi"`
+	CatatanTindakLanjut  string             `json:"catatan_tindak_lanjut"`
+	Status               DispositionStatus  `json:"status"`
+	DisposedByEmployeeID pgtype.UUID        `json:"disposed_by_employee_id"`
+	DisposedAt           pgtype.Timestamptz `json:"disposed_at"`
+	CompletedAt          pgtype.Timestamptz `json:"completed_at"`
+	AssigneeName         string             `json:"assignee_name"`
+	DisposedByName       string             `json:"disposed_by_name"`
+	NomorAgenda          string             `json:"nomor_agenda"`
+	LetterPerihal        string             `json:"letter_perihal"`
+	LetterAsal           string             `json:"letter_asal"`
+}
+
+func (q *Queries) GetDisposition(ctx context.Context, id pgtype.UUID) (GetDispositionRow, error) {
+	row := q.db.QueryRow(ctx, getDisposition, id)
+	var i GetDispositionRow
+	err := row.Scan(
+		&i.ID,
+		&i.IncomingLetterID,
+		&i.AssigneeEmployeeID,
+		&i.Instruksi,
+		&i.CatatanTindakLanjut,
+		&i.Status,
+		&i.DisposedByEmployeeID,
+		&i.DisposedAt,
+		&i.CompletedAt,
+		&i.AssigneeName,
+		&i.DisposedByName,
+		&i.NomorAgenda,
+		&i.LetterPerihal,
+		&i.LetterAsal,
+	)
+	return i, err
+}
+
+const getIncomingLetter = `-- name: GetIncomingLetter :one
+SELECT
+    il.id, il.nomor_surat, il.nomor_agenda, il.tanggal_surat, il.tanggal_terima,
+    il.asal, il.perihal, il.sifat, il.file_path, il.catatan,
+    il.status, il.received_by_employee_id, il.created_at, il.updated_at,
+    COALESCE(e.nama, '') AS received_by_name
+FROM incoming_letters il
+LEFT JOIN employees e ON e.id = il.received_by_employee_id
+WHERE il.id = $1
+`
+
+type GetIncomingLetterRow struct {
+	ID                   pgtype.UUID        `json:"id"`
+	NomorSurat           string             `json:"nomor_surat"`
+	NomorAgenda          string             `json:"nomor_agenda"`
+	TanggalSurat         pgtype.Date        `json:"tanggal_surat"`
+	TanggalTerima        pgtype.Date        `json:"tanggal_terima"`
+	Asal                 string             `json:"asal"`
+	Perihal              string             `json:"perihal"`
+	Sifat                LetterSifat        `json:"sifat"`
+	FilePath             string             `json:"file_path"`
+	Catatan              string             `json:"catatan"`
+	Status               LetterStatus       `json:"status"`
+	ReceivedByEmployeeID pgtype.UUID        `json:"received_by_employee_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	ReceivedByName       string             `json:"received_by_name"`
+}
+
+func (q *Queries) GetIncomingLetter(ctx context.Context, id pgtype.UUID) (GetIncomingLetterRow, error) {
+	row := q.db.QueryRow(ctx, getIncomingLetter, id)
+	var i GetIncomingLetterRow
+	err := row.Scan(
+		&i.ID,
+		&i.NomorSurat,
+		&i.NomorAgenda,
+		&i.TanggalSurat,
+		&i.TanggalTerima,
+		&i.Asal,
+		&i.Perihal,
+		&i.Sifat,
+		&i.FilePath,
+		&i.Catatan,
+		&i.Status,
+		&i.ReceivedByEmployeeID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ReceivedByName,
+	)
+	return i, err
+}
+
+const getOutgoingLetter = `-- name: GetOutgoingLetter :one
+SELECT
+    ol.id, ol.nomor_surat, ol.classification_code, ol.tanggal_surat,
+    ol.tujuan, ol.perihal, ol.sifat, ol.file_path, ol.catatan,
+    ol.issued_by_employee_id, ol.created_at, ol.updated_at,
+    COALESCE(e.nama, '')  AS issued_by_name,
+    COALESCE(lc.name, '') AS classification_name
+FROM outgoing_letters ol
+LEFT JOIN employees e ON e.id = ol.issued_by_employee_id
+LEFT JOIN letter_classifications lc ON lc.code = ol.classification_code
+WHERE ol.id = $1
+`
+
+type GetOutgoingLetterRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	NomorSurat         string             `json:"nomor_surat"`
+	ClassificationCode string             `json:"classification_code"`
+	TanggalSurat       pgtype.Date        `json:"tanggal_surat"`
+	Tujuan             string             `json:"tujuan"`
+	Perihal            string             `json:"perihal"`
+	Sifat              LetterSifat        `json:"sifat"`
+	FilePath           string             `json:"file_path"`
+	Catatan            string             `json:"catatan"`
+	IssuedByEmployeeID pgtype.UUID        `json:"issued_by_employee_id"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	IssuedByName       string             `json:"issued_by_name"`
+	ClassificationName string             `json:"classification_name"`
+}
+
+func (q *Queries) GetOutgoingLetter(ctx context.Context, id pgtype.UUID) (GetOutgoingLetterRow, error) {
+	row := q.db.QueryRow(ctx, getOutgoingLetter, id)
+	var i GetOutgoingLetterRow
+	err := row.Scan(
+		&i.ID,
+		&i.NomorSurat,
+		&i.ClassificationCode,
+		&i.TanggalSurat,
+		&i.Tujuan,
+		&i.Perihal,
+		&i.Sifat,
+		&i.FilePath,
+		&i.Catatan,
+		&i.IssuedByEmployeeID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IssuedByName,
+		&i.ClassificationName,
+	)
+	return i, err
+}
 
 const issueIncomingLetterSequence = `-- name: IssueIncomingLetterSequence :one
+
 INSERT INTO incoming_letter_sequences (year, last_seq)
 VALUES ($1, 1)
 ON CONFLICT (year) DO UPDATE
@@ -51,13 +363,18 @@ ON CONFLICT (year) DO UPDATE
 RETURNING last_seq
 `
 
+// =====================
+// Incoming Letter Sequences
+// =====================
 func (q *Queries) IssueIncomingLetterSequence(ctx context.Context, year int32) (int32, error) {
 	row := q.db.QueryRow(ctx, issueIncomingLetterSequence, year)
-	var lastSeq int32
-	return lastSeq, row.Scan(&lastSeq)
+	var last_seq int32
+	err := row.Scan(&last_seq)
+	return last_seq, err
 }
 
 const issueOutgoingLetterSequence = `-- name: IssueOutgoingLetterSequence :one
+
 INSERT INTO outgoing_letter_sequences (year, classification_code, last_seq)
 VALUES ($1, $2, 1)
 ON CONFLICT (year, classification_code) DO UPDATE
@@ -70,17 +387,96 @@ type IssueOutgoingLetterSequenceParams struct {
 	ClassificationCode string `json:"classification_code"`
 }
 
+// =====================
+// Outgoing Letter Sequences
+// =====================
 func (q *Queries) IssueOutgoingLetterSequence(ctx context.Context, arg IssueOutgoingLetterSequenceParams) (int32, error) {
 	row := q.db.QueryRow(ctx, issueOutgoingLetterSequence, arg.Year, arg.ClassificationCode)
-	var lastSeq int32
-	return lastSeq, row.Scan(&lastSeq)
+	var last_seq int32
+	err := row.Scan(&last_seq)
+	return last_seq, err
+}
+
+const listDispositions = `-- name: ListDispositions :many
+
+SELECT
+    ld.id, ld.incoming_letter_id, ld.assignee_employee_id,
+    ld.instruksi, ld.catatan_tindak_lanjut, ld.status,
+    ld.disposed_by_employee_id, ld.disposed_at, ld.completed_at,
+    COALESCE(ae.nama, '') AS assignee_name,
+    COALESCE(de.nama, '') AS disposed_by_name,
+    il.nomor_agenda, il.perihal AS letter_perihal, il.asal AS letter_asal
+FROM letter_dispositions ld
+LEFT JOIN employees ae ON ae.id = ld.assignee_employee_id
+LEFT JOIN employees de ON de.id = ld.disposed_by_employee_id
+JOIN incoming_letters il ON il.id = ld.incoming_letter_id
+WHERE ($1::UUID IS NULL OR ld.incoming_letter_id = $1)
+  AND ($2::TEXT = '' OR ld.status::TEXT = $2)
+ORDER BY ld.disposed_at DESC
+`
+
+type ListDispositionsParams struct {
+	IncomingLetterID pgtype.UUID `json:"incoming_letter_id"`
+	FilterStatus     string      `json:"filter_status"`
+}
+
+type ListDispositionsRow struct {
+	ID                   pgtype.UUID        `json:"id"`
+	IncomingLetterID     pgtype.UUID        `json:"incoming_letter_id"`
+	AssigneeEmployeeID   pgtype.UUID        `json:"assignee_employee_id"`
+	Instruksi            string             `json:"instruksi"`
+	CatatanTindakLanjut  string             `json:"catatan_tindak_lanjut"`
+	Status               DispositionStatus  `json:"status"`
+	DisposedByEmployeeID pgtype.UUID        `json:"disposed_by_employee_id"`
+	DisposedAt           pgtype.Timestamptz `json:"disposed_at"`
+	CompletedAt          pgtype.Timestamptz `json:"completed_at"`
+	AssigneeName         string             `json:"assignee_name"`
+	DisposedByName       string             `json:"disposed_by_name"`
+	NomorAgenda          string             `json:"nomor_agenda"`
+	LetterPerihal        string             `json:"letter_perihal"`
+	LetterAsal           string             `json:"letter_asal"`
 }
 
 // =====================
-// Incoming Letters
+// Dispositions
 // =====================
+func (q *Queries) ListDispositions(ctx context.Context, arg ListDispositionsParams) ([]ListDispositionsRow, error) {
+	rows, err := q.db.Query(ctx, listDispositions, arg.IncomingLetterID, arg.FilterStatus)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDispositionsRow{}
+	for rows.Next() {
+		var i ListDispositionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.IncomingLetterID,
+			&i.AssigneeEmployeeID,
+			&i.Instruksi,
+			&i.CatatanTindakLanjut,
+			&i.Status,
+			&i.DisposedByEmployeeID,
+			&i.DisposedAt,
+			&i.CompletedAt,
+			&i.AssigneeName,
+			&i.DisposedByName,
+			&i.NomorAgenda,
+			&i.LetterPerihal,
+			&i.LetterAsal,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const listIncomingLetters = `-- name: ListIncomingLetters :many
+
 SELECT
     il.id, il.nomor_surat, il.nomor_agenda, il.tanggal_surat, il.tanggal_terima,
     il.asal, il.perihal, il.sifat, il.file_path, il.catatan,
@@ -125,6 +521,9 @@ type ListIncomingLettersRow struct {
 	DisposisiCount       int32              `json:"disposisi_count"`
 }
 
+// =====================
+// Incoming Letters
+// =====================
 func (q *Queries) ListIncomingLetters(ctx context.Context, arg ListIncomingLettersParams) ([]ListIncomingLettersRow, error) {
 	rows, err := q.db.Query(ctx, listIncomingLetters, arg.Search, arg.FilterStatus)
 	if err != nil {
@@ -135,176 +534,71 @@ func (q *Queries) ListIncomingLetters(ctx context.Context, arg ListIncomingLette
 	for rows.Next() {
 		var i ListIncomingLettersRow
 		if err := rows.Scan(
-			&i.ID, &i.NomorSurat, &i.NomorAgenda, &i.TanggalSurat, &i.TanggalTerima,
-			&i.Asal, &i.Perihal, &i.Sifat, &i.FilePath, &i.Catatan,
-			&i.Status, &i.ReceivedByEmployeeID, &i.CreatedAt, &i.UpdatedAt,
-			&i.ReceivedByName, &i.DisposisiCount,
+			&i.ID,
+			&i.NomorSurat,
+			&i.NomorAgenda,
+			&i.TanggalSurat,
+			&i.TanggalTerima,
+			&i.Asal,
+			&i.Perihal,
+			&i.Sifat,
+			&i.FilePath,
+			&i.Catatan,
+			&i.Status,
+			&i.ReceivedByEmployeeID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ReceivedByName,
+			&i.DisposisiCount,
 		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const getIncomingLetter = `-- name: GetIncomingLetter :one
-SELECT
-    il.id, il.nomor_surat, il.nomor_agenda, il.tanggal_surat, il.tanggal_terima,
-    il.asal, il.perihal, il.sifat, il.file_path, il.catatan,
-    il.status, il.received_by_employee_id, il.created_at, il.updated_at,
-    COALESCE(e.nama, '') AS received_by_name
-FROM incoming_letters il
-LEFT JOIN employees e ON e.id = il.received_by_employee_id
-WHERE il.id = $1
+const listLetterClassifications = `-- name: ListLetterClassifications :many
+
+SELECT code, name, description, is_active
+FROM letter_classifications
+WHERE is_active = TRUE
+ORDER BY code ASC
 `
-
-type GetIncomingLetterRow struct {
-	ID                   pgtype.UUID        `json:"id"`
-	NomorSurat           string             `json:"nomor_surat"`
-	NomorAgenda          string             `json:"nomor_agenda"`
-	TanggalSurat         pgtype.Date        `json:"tanggal_surat"`
-	TanggalTerima        pgtype.Date        `json:"tanggal_terima"`
-	Asal                 string             `json:"asal"`
-	Perihal              string             `json:"perihal"`
-	Sifat                LetterSifat        `json:"sifat"`
-	FilePath             string             `json:"file_path"`
-	Catatan              string             `json:"catatan"`
-	Status               LetterStatus       `json:"status"`
-	ReceivedByEmployeeID pgtype.UUID        `json:"received_by_employee_id"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
-	ReceivedByName       string             `json:"received_by_name"`
-}
-
-func (q *Queries) GetIncomingLetter(ctx context.Context, id pgtype.UUID) (GetIncomingLetterRow, error) {
-	row := q.db.QueryRow(ctx, getIncomingLetter, id)
-	var i GetIncomingLetterRow
-	err := row.Scan(
-		&i.ID, &i.NomorSurat, &i.NomorAgenda, &i.TanggalSurat, &i.TanggalTerima,
-		&i.Asal, &i.Perihal, &i.Sifat, &i.FilePath, &i.Catatan,
-		&i.Status, &i.ReceivedByEmployeeID, &i.CreatedAt, &i.UpdatedAt,
-		&i.ReceivedByName,
-	)
-	return i, err
-}
-
-const createIncomingLetter = `-- name: CreateIncomingLetter :one
-INSERT INTO incoming_letters (
-    nomor_surat, nomor_agenda, tanggal_surat, tanggal_terima,
-    asal, perihal, sifat, file_path, catatan, received_by_employee_id
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, nomor_surat, nomor_agenda, tanggal_surat, tanggal_terima,
-          asal, perihal, sifat, file_path, catatan, status,
-          received_by_employee_id, created_at, updated_at
-`
-
-type CreateIncomingLetterParams struct {
-	NomorSurat           string      `json:"nomor_surat"`
-	NomorAgenda          string      `json:"nomor_agenda"`
-	TanggalSurat         pgtype.Date `json:"tanggal_surat"`
-	TanggalTerima        pgtype.Date `json:"tanggal_terima"`
-	Asal                 string      `json:"asal"`
-	Perihal              string      `json:"perihal"`
-	Sifat                LetterSifat `json:"sifat"`
-	FilePath             string      `json:"file_path"`
-	Catatan              string      `json:"catatan"`
-	ReceivedByEmployeeID pgtype.UUID `json:"received_by_employee_id"`
-}
-
-func (q *Queries) CreateIncomingLetter(ctx context.Context, arg CreateIncomingLetterParams) (IncomingLetter, error) {
-	row := q.db.QueryRow(ctx, createIncomingLetter,
-		arg.NomorSurat, arg.NomorAgenda, arg.TanggalSurat, arg.TanggalTerima,
-		arg.Asal, arg.Perihal, arg.Sifat, arg.FilePath, arg.Catatan, arg.ReceivedByEmployeeID,
-	)
-	var i IncomingLetter
-	err := row.Scan(
-		&i.ID, &i.NomorSurat, &i.NomorAgenda, &i.TanggalSurat, &i.TanggalTerima,
-		&i.Asal, &i.Perihal, &i.Sifat, &i.FilePath, &i.Catatan, &i.Status,
-		&i.ReceivedByEmployeeID, &i.CreatedAt, &i.UpdatedAt,
-	)
-	return i, err
-}
-
-const updateIncomingLetter = `-- name: UpdateIncomingLetter :one
-UPDATE incoming_letters
-SET nomor_surat     = $2,
-    tanggal_surat   = $3,
-    tanggal_terima  = $4,
-    asal            = $5,
-    perihal         = $6,
-    sifat           = $7,
-    catatan         = $8,
-    updated_at      = NOW()
-WHERE id = $1
-RETURNING id, nomor_surat, nomor_agenda, tanggal_surat, tanggal_terima,
-          asal, perihal, sifat, file_path, catatan, status,
-          received_by_employee_id, created_at, updated_at
-`
-
-type UpdateIncomingLetterParams struct {
-	ID            pgtype.UUID `json:"id"`
-	NomorSurat    string      `json:"nomor_surat"`
-	TanggalSurat  pgtype.Date `json:"tanggal_surat"`
-	TanggalTerima pgtype.Date `json:"tanggal_terima"`
-	Asal          string      `json:"asal"`
-	Perihal       string      `json:"perihal"`
-	Sifat         LetterSifat `json:"sifat"`
-	Catatan       string      `json:"catatan"`
-}
-
-func (q *Queries) UpdateIncomingLetter(ctx context.Context, arg UpdateIncomingLetterParams) (IncomingLetter, error) {
-	row := q.db.QueryRow(ctx, updateIncomingLetter,
-		arg.ID, arg.NomorSurat, arg.TanggalSurat, arg.TanggalTerima,
-		arg.Asal, arg.Perihal, arg.Sifat, arg.Catatan,
-	)
-	var i IncomingLetter
-	err := row.Scan(
-		&i.ID, &i.NomorSurat, &i.NomorAgenda, &i.TanggalSurat, &i.TanggalTerima,
-		&i.Asal, &i.Perihal, &i.Sifat, &i.FilePath, &i.Catatan, &i.Status,
-		&i.ReceivedByEmployeeID, &i.CreatedAt, &i.UpdatedAt,
-	)
-	return i, err
-}
-
-const updateIncomingLetterStatus = `-- name: UpdateIncomingLetterStatus :one
-UPDATE incoming_letters
-SET status = $2, updated_at = NOW()
-WHERE id = $1
-RETURNING id, nomor_surat, nomor_agenda, tanggal_surat, tanggal_terima,
-          asal, perihal, sifat, file_path, catatan, status,
-          received_by_employee_id, created_at, updated_at
-`
-
-type UpdateIncomingLetterStatusParams struct {
-	ID     pgtype.UUID  `json:"id"`
-	Status LetterStatus `json:"status"`
-}
-
-func (q *Queries) UpdateIncomingLetterStatus(ctx context.Context, arg UpdateIncomingLetterStatusParams) (IncomingLetter, error) {
-	row := q.db.QueryRow(ctx, updateIncomingLetterStatus, arg.ID, arg.Status)
-	var i IncomingLetter
-	err := row.Scan(
-		&i.ID, &i.NomorSurat, &i.NomorAgenda, &i.TanggalSurat, &i.TanggalTerima,
-		&i.Asal, &i.Perihal, &i.Sifat, &i.FilePath, &i.Catatan, &i.Status,
-		&i.ReceivedByEmployeeID, &i.CreatedAt, &i.UpdatedAt,
-	)
-	return i, err
-}
-
-const deleteIncomingLetter = `-- name: DeleteIncomingLetter :exec
-DELETE FROM incoming_letters WHERE id = $1
-`
-
-func (q *Queries) DeleteIncomingLetter(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteIncomingLetter, id)
-	return err
-}
 
 // =====================
-// Outgoing Letters
+// Letter Classifications
 // =====================
+func (q *Queries) ListLetterClassifications(ctx context.Context) ([]LetterClassification, error) {
+	rows, err := q.db.Query(ctx, listLetterClassifications)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LetterClassification{}
+	for rows.Next() {
+		var i LetterClassification
+		if err := rows.Scan(
+			&i.Code,
+			&i.Name,
+			&i.Description,
+			&i.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const listOutgoingLetters = `-- name: ListOutgoingLetters :many
+
 SELECT
     ol.id, ol.nomor_surat, ol.classification_code, ol.tanggal_surat,
     ol.tujuan, ol.perihal, ol.sifat, ol.file_path, ol.catatan,
@@ -339,6 +633,9 @@ type ListOutgoingLettersRow struct {
 	ClassificationName string             `json:"classification_name"`
 }
 
+// =====================
+// Outgoing Letters
+// =====================
 func (q *Queries) ListOutgoingLetters(ctx context.Context, search string) ([]ListOutgoingLettersRow, error) {
 	rows, err := q.db.Query(ctx, listOutgoingLetters, search)
 	if err != nil {
@@ -349,92 +646,162 @@ func (q *Queries) ListOutgoingLetters(ctx context.Context, search string) ([]Lis
 	for rows.Next() {
 		var i ListOutgoingLettersRow
 		if err := rows.Scan(
-			&i.ID, &i.NomorSurat, &i.ClassificationCode, &i.TanggalSurat,
-			&i.Tujuan, &i.Perihal, &i.Sifat, &i.FilePath, &i.Catatan,
-			&i.IssuedByEmployeeID, &i.CreatedAt, &i.UpdatedAt,
-			&i.IssuedByName, &i.ClassificationName,
+			&i.ID,
+			&i.NomorSurat,
+			&i.ClassificationCode,
+			&i.TanggalSurat,
+			&i.Tujuan,
+			&i.Perihal,
+			&i.Sifat,
+			&i.FilePath,
+			&i.Catatan,
+			&i.IssuedByEmployeeID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.IssuedByName,
+			&i.ClassificationName,
 		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const getOutgoingLetter = `-- name: GetOutgoingLetter :one
-SELECT
-    ol.id, ol.nomor_surat, ol.classification_code, ol.tanggal_surat,
-    ol.tujuan, ol.perihal, ol.sifat, ol.file_path, ol.catatan,
-    ol.issued_by_employee_id, ol.created_at, ol.updated_at,
-    COALESCE(e.nama, '')  AS issued_by_name,
-    COALESCE(lc.name, '') AS classification_name
-FROM outgoing_letters ol
-LEFT JOIN employees e ON e.id = ol.issued_by_employee_id
-LEFT JOIN letter_classifications lc ON lc.code = ol.classification_code
-WHERE ol.id = $1
+const updateDisposition = `-- name: UpdateDisposition :one
+UPDATE letter_dispositions
+SET instruksi               = $2,
+    catatan_tindak_lanjut   = $3,
+    status                  = $4,
+    completed_at            = CASE WHEN $4::disposition_status = 'selesai' THEN NOW() ELSE completed_at END
+WHERE id = $1
+RETURNING id, incoming_letter_id, assignee_employee_id, instruksi,
+          catatan_tindak_lanjut, status, disposed_by_employee_id,
+          disposed_at, completed_at
 `
 
-type GetOutgoingLetterRow struct {
-	ID                 pgtype.UUID        `json:"id"`
-	NomorSurat         string             `json:"nomor_surat"`
-	ClassificationCode string             `json:"classification_code"`
-	TanggalSurat       pgtype.Date        `json:"tanggal_surat"`
-	Tujuan             string             `json:"tujuan"`
-	Perihal            string             `json:"perihal"`
-	Sifat              LetterSifat        `json:"sifat"`
-	FilePath           string             `json:"file_path"`
-	Catatan            string             `json:"catatan"`
-	IssuedByEmployeeID pgtype.UUID        `json:"issued_by_employee_id"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	IssuedByName       string             `json:"issued_by_name"`
-	ClassificationName string             `json:"classification_name"`
+type UpdateDispositionParams struct {
+	ID                  pgtype.UUID       `json:"id"`
+	Instruksi           string            `json:"instruksi"`
+	CatatanTindakLanjut string            `json:"catatan_tindak_lanjut"`
+	Status              DispositionStatus `json:"status"`
 }
 
-func (q *Queries) GetOutgoingLetter(ctx context.Context, id pgtype.UUID) (GetOutgoingLetterRow, error) {
-	row := q.db.QueryRow(ctx, getOutgoingLetter, id)
-	var i GetOutgoingLetterRow
+func (q *Queries) UpdateDisposition(ctx context.Context, arg UpdateDispositionParams) (LetterDisposition, error) {
+	row := q.db.QueryRow(ctx, updateDisposition,
+		arg.ID,
+		arg.Instruksi,
+		arg.CatatanTindakLanjut,
+		arg.Status,
+	)
+	var i LetterDisposition
 	err := row.Scan(
-		&i.ID, &i.NomorSurat, &i.ClassificationCode, &i.TanggalSurat,
-		&i.Tujuan, &i.Perihal, &i.Sifat, &i.FilePath, &i.Catatan,
-		&i.IssuedByEmployeeID, &i.CreatedAt, &i.UpdatedAt,
-		&i.IssuedByName, &i.ClassificationName,
+		&i.ID,
+		&i.IncomingLetterID,
+		&i.AssigneeEmployeeID,
+		&i.Instruksi,
+		&i.CatatanTindakLanjut,
+		&i.Status,
+		&i.DisposedByEmployeeID,
+		&i.DisposedAt,
+		&i.CompletedAt,
 	)
 	return i, err
 }
 
-const createOutgoingLetter = `-- name: CreateOutgoingLetter :one
-INSERT INTO outgoing_letters (
-    nomor_surat, classification_code, tanggal_surat,
-    tujuan, perihal, sifat, file_path, catatan, issued_by_employee_id
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, nomor_surat, classification_code, tanggal_surat,
-          tujuan, perihal, sifat, file_path, catatan,
-          issued_by_employee_id, created_at, updated_at
+const updateIncomingLetter = `-- name: UpdateIncomingLetter :one
+UPDATE incoming_letters
+SET nomor_surat             = $2,
+    tanggal_surat           = $3,
+    tanggal_terima          = $4,
+    asal                    = $5,
+    perihal                 = $6,
+    sifat                   = $7,
+    catatan                 = $8,
+    updated_at              = NOW()
+WHERE id = $1
+RETURNING id, nomor_surat, nomor_agenda, tanggal_surat, tanggal_terima,
+          asal, perihal, sifat, file_path, catatan, status,
+          received_by_employee_id, created_at, updated_at
 `
 
-type CreateOutgoingLetterParams struct {
-	NomorSurat         string      `json:"nomor_surat"`
-	ClassificationCode string      `json:"classification_code"`
-	TanggalSurat       pgtype.Date `json:"tanggal_surat"`
-	Tujuan             string      `json:"tujuan"`
-	Perihal            string      `json:"perihal"`
-	Sifat              LetterSifat `json:"sifat"`
-	FilePath           string      `json:"file_path"`
-	Catatan            string      `json:"catatan"`
-	IssuedByEmployeeID pgtype.UUID `json:"issued_by_employee_id"`
+type UpdateIncomingLetterParams struct {
+	ID            pgtype.UUID `json:"id"`
+	NomorSurat    string      `json:"nomor_surat"`
+	TanggalSurat  pgtype.Date `json:"tanggal_surat"`
+	TanggalTerima pgtype.Date `json:"tanggal_terima"`
+	Asal          string      `json:"asal"`
+	Perihal       string      `json:"perihal"`
+	Sifat         LetterSifat `json:"sifat"`
+	Catatan       string      `json:"catatan"`
 }
 
-func (q *Queries) CreateOutgoingLetter(ctx context.Context, arg CreateOutgoingLetterParams) (OutgoingLetter, error) {
-	row := q.db.QueryRow(ctx, createOutgoingLetter,
-		arg.NomorSurat, arg.ClassificationCode, arg.TanggalSurat,
-		arg.Tujuan, arg.Perihal, arg.Sifat, arg.FilePath, arg.Catatan, arg.IssuedByEmployeeID,
+func (q *Queries) UpdateIncomingLetter(ctx context.Context, arg UpdateIncomingLetterParams) (IncomingLetter, error) {
+	row := q.db.QueryRow(ctx, updateIncomingLetter,
+		arg.ID,
+		arg.NomorSurat,
+		arg.TanggalSurat,
+		arg.TanggalTerima,
+		arg.Asal,
+		arg.Perihal,
+		arg.Sifat,
+		arg.Catatan,
 	)
-	var i OutgoingLetter
+	var i IncomingLetter
 	err := row.Scan(
-		&i.ID, &i.NomorSurat, &i.ClassificationCode, &i.TanggalSurat,
-		&i.Tujuan, &i.Perihal, &i.Sifat, &i.FilePath, &i.Catatan,
-		&i.IssuedByEmployeeID, &i.CreatedAt, &i.UpdatedAt,
+		&i.ID,
+		&i.NomorSurat,
+		&i.NomorAgenda,
+		&i.TanggalSurat,
+		&i.TanggalTerima,
+		&i.Asal,
+		&i.Perihal,
+		&i.Sifat,
+		&i.FilePath,
+		&i.Catatan,
+		&i.Status,
+		&i.ReceivedByEmployeeID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateIncomingLetterStatus = `-- name: UpdateIncomingLetterStatus :one
+UPDATE incoming_letters
+SET status = $2, updated_at = NOW()
+WHERE id = $1
+RETURNING id, nomor_surat, nomor_agenda, tanggal_surat, tanggal_terima,
+          asal, perihal, sifat, file_path, catatan, status,
+          received_by_employee_id, created_at, updated_at
+`
+
+type UpdateIncomingLetterStatusParams struct {
+	ID     pgtype.UUID  `json:"id"`
+	Status LetterStatus `json:"status"`
+}
+
+func (q *Queries) UpdateIncomingLetterStatus(ctx context.Context, arg UpdateIncomingLetterStatusParams) (IncomingLetter, error) {
+	row := q.db.QueryRow(ctx, updateIncomingLetterStatus, arg.ID, arg.Status)
+	var i IncomingLetter
+	err := row.Scan(
+		&i.ID,
+		&i.NomorSurat,
+		&i.NomorAgenda,
+		&i.TanggalSurat,
+		&i.TanggalTerima,
+		&i.Asal,
+		&i.Perihal,
+		&i.Sifat,
+		&i.FilePath,
+		&i.Catatan,
+		&i.Status,
+		&i.ReceivedByEmployeeID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -464,214 +831,27 @@ type UpdateOutgoingLetterParams struct {
 
 func (q *Queries) UpdateOutgoingLetter(ctx context.Context, arg UpdateOutgoingLetterParams) (OutgoingLetter, error) {
 	row := q.db.QueryRow(ctx, updateOutgoingLetter,
-		arg.ID, arg.TanggalSurat, arg.Tujuan, arg.Perihal, arg.Sifat, arg.Catatan,
+		arg.ID,
+		arg.TanggalSurat,
+		arg.Tujuan,
+		arg.Perihal,
+		arg.Sifat,
+		arg.Catatan,
 	)
 	var i OutgoingLetter
 	err := row.Scan(
-		&i.ID, &i.NomorSurat, &i.ClassificationCode, &i.TanggalSurat,
-		&i.Tujuan, &i.Perihal, &i.Sifat, &i.FilePath, &i.Catatan,
-		&i.IssuedByEmployeeID, &i.CreatedAt, &i.UpdatedAt,
+		&i.ID,
+		&i.NomorSurat,
+		&i.ClassificationCode,
+		&i.TanggalSurat,
+		&i.Tujuan,
+		&i.Perihal,
+		&i.Sifat,
+		&i.FilePath,
+		&i.Catatan,
+		&i.IssuedByEmployeeID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const deleteOutgoingLetter = `-- name: DeleteOutgoingLetter :exec
-DELETE FROM outgoing_letters WHERE id = $1
-`
-
-func (q *Queries) DeleteOutgoingLetter(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteOutgoingLetter, id)
-	return err
-}
-
-// =====================
-// Dispositions
-// =====================
-
-const listDispositions = `-- name: ListDispositions :many
-SELECT
-    ld.id, ld.incoming_letter_id, ld.assignee_employee_id,
-    ld.instruksi, ld.catatan_tindak_lanjut, ld.status,
-    ld.disposed_by_employee_id, ld.disposed_at, ld.completed_at,
-    COALESCE(ae.nama, '') AS assignee_name,
-    COALESCE(de.nama, '') AS disposed_by_name,
-    il.nomor_agenda, il.perihal AS letter_perihal, il.asal AS letter_asal
-FROM letter_dispositions ld
-LEFT JOIN employees ae ON ae.id = ld.assignee_employee_id
-LEFT JOIN employees de ON de.id = ld.disposed_by_employee_id
-JOIN incoming_letters il ON il.id = ld.incoming_letter_id
-WHERE ($1::UUID IS NULL OR ld.incoming_letter_id = $1)
-  AND ($2::TEXT = '' OR ld.status::TEXT = $2)
-ORDER BY ld.disposed_at DESC
-`
-
-type ListDispositionsParams struct {
-	IncomingLetterID pgtype.UUID `json:"incoming_letter_id"`
-	FilterStatus     string      `json:"filter_status"`
-}
-
-type ListDispositionsRow struct {
-	ID                    pgtype.UUID        `json:"id"`
-	IncomingLetterID      pgtype.UUID        `json:"incoming_letter_id"`
-	AssigneeEmployeeID    pgtype.UUID        `json:"assignee_employee_id"`
-	Instruksi             string             `json:"instruksi"`
-	CatatanTindakLanjut   string             `json:"catatan_tindak_lanjut"`
-	Status                DispositionStatus  `json:"status"`
-	DisposedByEmployeeID  pgtype.UUID        `json:"disposed_by_employee_id"`
-	DisposedAt            pgtype.Timestamptz `json:"disposed_at"`
-	CompletedAt           pgtype.Timestamptz `json:"completed_at"`
-	AssigneeName          string             `json:"assignee_name"`
-	DisposedByName        string             `json:"disposed_by_name"`
-	NomorAgenda           string             `json:"nomor_agenda"`
-	LetterPerihal         string             `json:"letter_perihal"`
-	LetterAsal            string             `json:"letter_asal"`
-}
-
-func (q *Queries) ListDispositions(ctx context.Context, arg ListDispositionsParams) ([]ListDispositionsRow, error) {
-	rows, err := q.db.Query(ctx, listDispositions, arg.IncomingLetterID, arg.FilterStatus)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListDispositionsRow{}
-	for rows.Next() {
-		var i ListDispositionsRow
-		if err := rows.Scan(
-			&i.ID, &i.IncomingLetterID, &i.AssigneeEmployeeID,
-			&i.Instruksi, &i.CatatanTindakLanjut, &i.Status,
-			&i.DisposedByEmployeeID, &i.DisposedAt, &i.CompletedAt,
-			&i.AssigneeName, &i.DisposedByName,
-			&i.NomorAgenda, &i.LetterPerihal, &i.LetterAsal,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	return items, rows.Err()
-}
-
-const getDisposition = `-- name: GetDisposition :one
-SELECT
-    ld.id, ld.incoming_letter_id, ld.assignee_employee_id,
-    ld.instruksi, ld.catatan_tindak_lanjut, ld.status,
-    ld.disposed_by_employee_id, ld.disposed_at, ld.completed_at,
-    COALESCE(ae.nama, '') AS assignee_name,
-    COALESCE(de.nama, '') AS disposed_by_name,
-    il.nomor_agenda, il.perihal AS letter_perihal, il.asal AS letter_asal
-FROM letter_dispositions ld
-LEFT JOIN employees ae ON ae.id = ld.assignee_employee_id
-LEFT JOIN employees de ON de.id = ld.disposed_by_employee_id
-JOIN incoming_letters il ON il.id = ld.incoming_letter_id
-WHERE ld.id = $1
-`
-
-type GetDispositionRow struct {
-	ID                    pgtype.UUID        `json:"id"`
-	IncomingLetterID      pgtype.UUID        `json:"incoming_letter_id"`
-	AssigneeEmployeeID    pgtype.UUID        `json:"assignee_employee_id"`
-	Instruksi             string             `json:"instruksi"`
-	CatatanTindakLanjut   string             `json:"catatan_tindak_lanjut"`
-	Status                DispositionStatus  `json:"status"`
-	DisposedByEmployeeID  pgtype.UUID        `json:"disposed_by_employee_id"`
-	DisposedAt            pgtype.Timestamptz `json:"disposed_at"`
-	CompletedAt           pgtype.Timestamptz `json:"completed_at"`
-	AssigneeName          string             `json:"assignee_name"`
-	DisposedByName        string             `json:"disposed_by_name"`
-	NomorAgenda           string             `json:"nomor_agenda"`
-	LetterPerihal         string             `json:"letter_perihal"`
-	LetterAsal            string             `json:"letter_asal"`
-}
-
-func (q *Queries) GetDisposition(ctx context.Context, id pgtype.UUID) (GetDispositionRow, error) {
-	row := q.db.QueryRow(ctx, getDisposition, id)
-	var i GetDispositionRow
-	err := row.Scan(
-		&i.ID, &i.IncomingLetterID, &i.AssigneeEmployeeID,
-		&i.Instruksi, &i.CatatanTindakLanjut, &i.Status,
-		&i.DisposedByEmployeeID, &i.DisposedAt, &i.CompletedAt,
-		&i.AssigneeName, &i.DisposedByName,
-		&i.NomorAgenda, &i.LetterPerihal, &i.LetterAsal,
-	)
-	return i, err
-}
-
-const createDisposition = `-- name: CreateDisposition :one
-INSERT INTO letter_dispositions (
-    incoming_letter_id, assignee_employee_id, instruksi,
-    disposed_by_employee_id
-) VALUES ($1, $2, $3, $4)
-RETURNING id, incoming_letter_id, assignee_employee_id, instruksi,
-          catatan_tindak_lanjut, status, disposed_by_employee_id,
-          disposed_at, completed_at
-`
-
-type CreateDispositionParams struct {
-	IncomingLetterID      pgtype.UUID `json:"incoming_letter_id"`
-	AssigneeEmployeeID    pgtype.UUID `json:"assignee_employee_id"`
-	Instruksi             string      `json:"instruksi"`
-	DisposedByEmployeeID  pgtype.UUID `json:"disposed_by_employee_id"`
-}
-
-func (q *Queries) CreateDisposition(ctx context.Context, arg CreateDispositionParams) (LetterDisposition, error) {
-	row := q.db.QueryRow(ctx, createDisposition,
-		arg.IncomingLetterID, arg.AssigneeEmployeeID, arg.Instruksi, arg.DisposedByEmployeeID,
-	)
-	var i LetterDisposition
-	err := row.Scan(
-		&i.ID, &i.IncomingLetterID, &i.AssigneeEmployeeID,
-		&i.Instruksi, &i.CatatanTindakLanjut, &i.Status,
-		&i.DisposedByEmployeeID, &i.DisposedAt, &i.CompletedAt,
-	)
-	return i, err
-}
-
-const updateDisposition = `-- name: UpdateDisposition :one
-UPDATE letter_dispositions
-SET instruksi             = $2,
-    catatan_tindak_lanjut = $3,
-    status                = $4,
-    completed_at          = CASE WHEN $4::disposition_status = 'selesai' THEN NOW() ELSE completed_at END
-WHERE id = $1
-RETURNING id, incoming_letter_id, assignee_employee_id, instruksi,
-          catatan_tindak_lanjut, status, disposed_by_employee_id,
-          disposed_at, completed_at
-`
-
-type UpdateDispositionParams struct {
-	ID                  pgtype.UUID       `json:"id"`
-	Instruksi           string            `json:"instruksi"`
-	CatatanTindakLanjut string            `json:"catatan_tindak_lanjut"`
-	Status              DispositionStatus `json:"status"`
-}
-
-func (q *Queries) UpdateDisposition(ctx context.Context, arg UpdateDispositionParams) (LetterDisposition, error) {
-	row := q.db.QueryRow(ctx, updateDisposition,
-		arg.ID, arg.Instruksi, arg.CatatanTindakLanjut, arg.Status,
-	)
-	var i LetterDisposition
-	err := row.Scan(
-		&i.ID, &i.IncomingLetterID, &i.AssigneeEmployeeID,
-		&i.Instruksi, &i.CatatanTindakLanjut, &i.Status,
-		&i.DisposedByEmployeeID, &i.DisposedAt, &i.CompletedAt,
-	)
-	return i, err
-}
-
-const deleteDisposition = `-- name: DeleteDisposition :exec
-DELETE FROM letter_dispositions WHERE id = $1
-`
-
-func (q *Queries) DeleteDisposition(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteDisposition, id)
-	return err
-}
-
-const countDispositionsForLetter = `-- name: CountDispositionsForLetter :one
-SELECT COUNT(*) FROM letter_dispositions WHERE incoming_letter_id = $1
-`
-
-func (q *Queries) CountDispositionsForLetter(ctx context.Context, incomingLetterID pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countDispositionsForLetter, incomingLetterID)
-	var count int64
-	return count, row.Scan(&count)
 }

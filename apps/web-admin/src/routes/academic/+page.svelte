@@ -8,9 +8,11 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { confirmAction } from '$lib/confirm-dialog';
 
 	type AcademicYear = {
 		id: string; name: string; start_date: string; end_date: string;
@@ -43,14 +45,25 @@
 		teacher_employee_id: string;
 		teacher_name: string;
 	};
+	type AcademicOverview = {
+		years: AcademicYear[];
+		classes: SchoolClass[];
+		subjects: Subject[];
+		assignments: Assignment[];
+		timetableSlots: TimetableSlot[];
+	};
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
 
 	let years = $state<AcademicYear[]>([]);
 	let classes = $state<SchoolClass[]>([]);
 	let subjects = $state<Subject[]>([]);
 	let assignments = $state<Assignment[]>([]);
 	let timetableSlots = $state<TimetableSlot[]>([]);
-	let loading = $state(true);
-	let error = $state('');
+	let academicPromise = $state<Promise<AcademicOverview> | null>(null);
 
 	// Year form
 	let yearName = $state('');
@@ -155,25 +168,94 @@
 			})
 	);
 
-	async function load() {
-		try {
-			const res = await fetch('/api/academic');
-			const json = await res.json();
-			if (json.error) { error = json.error; return; }
-			const d = json.data ?? json;
-			years = d.years ?? [];
-			classes = d.classes ?? [];
-			subjects = d.subjects ?? [];
-			assignments = d.assignments ?? [];
-			timetableSlots = d.timetableSlots ?? [];
-			if (!timetableFocusClassId && (d.timetableSlots?.length ?? 0) > 0) {
-				timetableFocusClassId = d.timetableSlots[0].class_id;
-			}
-		} catch (e) {
-			error = 'Gagal memuat data akademik';
-		} finally {
-			loading = false;
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
 		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	async function fetchAcademic(): Promise<AcademicOverview> {
+		const data = await fetch('/api/academic').then((response) => readApi<Partial<AcademicOverview>>(response, 'Gagal memuat data akademik'));
+		return {
+			years: data.years ?? [],
+			classes: data.classes ?? [],
+			subjects: data.subjects ?? [],
+			assignments: data.assignments ?? [],
+			timetableSlots: data.timetableSlots ?? [],
+		};
+	}
+
+	function applyOverview(overview: AcademicOverview) {
+		years = overview.years;
+		classes = overview.classes;
+		subjects = overview.subjects;
+		assignments = overview.assignments;
+		timetableSlots = overview.timetableSlots;
+		if (!timetableFocusClassId && overview.timetableSlots.length > 0) {
+			timetableFocusClassId = overview.timetableSlots[0].class_id;
+		}
+	}
+
+	function loadInitial() {
+		years = [];
+		classes = [];
+		subjects = [];
+		assignments = [];
+		timetableSlots = [];
+		academicPromise = fetchAcademic().then((overview) => {
+			applyOverview(overview);
+			return overview;
+		});
+	}
+
+	async function refreshAcademic() {
+		if (!academicPromise) {
+			loadInitial();
+			return;
+		}
+		try {
+			const overview = await fetchAcademic();
+			applyOverview(overview);
+			academicPromise = Promise.resolve(overview);
+		} catch (error) {
+			academicPromise = Promise.resolve({ years, classes, subjects, assignments, timetableSlots });
+			toast.error(academicErrorMessage(error));
+		}
+	}
+
+	function retryAcademic(reset?: () => void) {
+		reset?.();
+		loadInitial();
+	}
+
+	function academicErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Data tata akademik belum dapat dimuat. Periksa koneksi backend lalu coba lagi.';
+	}
+
+	function handleAcademicRenderError(error: unknown) {
+		console.error('Academic render failed', error);
 	}
 
 	function showToast(msg: string) {
@@ -182,6 +264,25 @@
 
 	function showError(msg: string) {
 		toast.error(msg);
+	}
+
+	async function responseErrorMessage(response: Response, fallback: string) {
+		const payload = await response.json().catch(() => null);
+		return apiErrorMessage(payload) || fallback;
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
+	}
+
+	async function refreshAcademicAfterMutation() {
+		try {
+			await refreshAcademic();
+		} catch (error) {
+			academicPromise = Promise.resolve({ years, classes, subjects, assignments, timetableSlots });
+			toast.error(academicErrorMessage(error));
+		}
 	}
 
 	async function createYear() {
@@ -193,18 +294,25 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name: yearName, start_date: yearStart, end_date: yearEnd, is_active: yearActive }),
 			});
-			if (!res.ok) { const j = await res.json(); showError(j.error ?? 'Gagal'); return; }
+			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menambahkan tahun ajaran')); return; }
 			yearName = ''; yearStart = ''; yearEnd = ''; yearActive = false;
 			showToast('Tahun ajaran berhasil ditambahkan');
-			await load();
+			await refreshAcademicAfterMutation();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menambahkan tahun ajaran. Periksa koneksi lalu coba lagi.'));
 		} finally { yearBusy = false; }
 	}
 
 	async function deleteYear(id: string) {
-		if (!confirm('Hapus tahun ajaran ini?')) return;
-		await fetch(`/api/academic?entity=years&id=${id}`, { method: 'DELETE' });
-		showToast('Tahun ajaran dihapus');
-		await load();
+		if (!(await confirmAction({ title: 'Hapus Tahun Ajaran', message: 'Hapus tahun ajaran ini?', confirmLabel: 'Hapus', tone: 'danger' }))) return;
+		try {
+			const res = await fetch(`/api/academic?entity=years&id=${id}`, { method: 'DELETE' });
+			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menghapus tahun ajaran')); return; }
+			showToast('Tahun ajaran dihapus');
+			await refreshAcademicAfterMutation();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menghapus tahun ajaran. Periksa koneksi lalu coba lagi.'));
+		}
 	}
 
 	async function createClass() {
@@ -219,18 +327,25 @@
 					academic_year_id: classYearId, is_active: classActive,
 				}),
 			});
-			if (!res.ok) { const j = await res.json(); showError(j.error ?? 'Gagal'); return; }
+			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menambahkan kelas')); return; }
 			className = ''; classCode = ''; classLevel = ''; classYearId = ''; classActive = true;
 			showToast('Kelas berhasil ditambahkan');
-			await load();
+			await refreshAcademicAfterMutation();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menambahkan kelas. Periksa koneksi lalu coba lagi.'));
 		} finally { classBusy = false; }
 	}
 
 	async function deleteClass(id: string) {
-		if (!confirm('Hapus kelas ini?')) return;
-		await fetch(`/api/academic?entity=classes&id=${id}`, { method: 'DELETE' });
-		showToast('Kelas dihapus');
-		await load();
+		if (!(await confirmAction({ title: 'Hapus Kelas', message: 'Hapus kelas ini?', confirmLabel: 'Hapus', tone: 'danger' }))) return;
+		try {
+			const res = await fetch(`/api/academic?entity=classes&id=${id}`, { method: 'DELETE' });
+			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menghapus kelas')); return; }
+			showToast('Kelas dihapus');
+			await refreshAcademicAfterMutation();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menghapus kelas. Periksa koneksi lalu coba lagi.'));
+		}
 	}
 
 	async function createSubject() {
@@ -242,18 +357,25 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name: subjectName, code: subjectCode, is_active: subjectActive }),
 			});
-			if (!res.ok) { const j = await res.json(); showError(j.error ?? 'Gagal'); return; }
+			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menambahkan mata pelajaran')); return; }
 			subjectName = ''; subjectCode = ''; subjectActive = true;
 			showToast('Mata pelajaran berhasil ditambahkan');
-			await load();
+			await refreshAcademicAfterMutation();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menambahkan mata pelajaran. Periksa koneksi lalu coba lagi.'));
 		} finally { subjectBusy = false; }
 	}
 
 	async function deleteSubject(id: string) {
-		if (!confirm('Hapus mata pelajaran ini?')) return;
-		await fetch(`/api/academic?entity=subjects&id=${id}`, { method: 'DELETE' });
-		showToast('Mata pelajaran dihapus');
-		await load();
+		if (!(await confirmAction({ title: 'Hapus Mata Pelajaran', message: 'Hapus mata pelajaran ini?', confirmLabel: 'Hapus', tone: 'danger' }))) return;
+		try {
+			const res = await fetch(`/api/academic?entity=subjects&id=${id}`, { method: 'DELETE' });
+			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menghapus mata pelajaran')); return; }
+			showToast('Mata pelajaran dihapus');
+			await refreshAcademicAfterMutation();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menghapus mata pelajaran. Periksa koneksi lalu coba lagi.'));
+		}
 	}
 
 	async function createTimetableSlot() {
@@ -280,7 +402,9 @@
 			}
 			resetTimetableForm();
 			showToast(isEditing ? 'Slot jadwal pelajaran berhasil diperbarui' : 'Slot jadwal pelajaran berhasil ditambahkan');
-			await load();
+			await refreshAcademicAfterMutation();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menyimpan jadwal pelajaran. Periksa koneksi lalu coba lagi.'));
 		} finally {
 			timetableBusy = false;
 		}
@@ -307,10 +431,15 @@
 	}
 
 	async function deleteTimetableSlot(id: string) {
-		if (!confirm('Hapus slot jadwal ini?')) return;
-		await fetch(`/api/academic?entity=timetables&id=${id}`, { method: 'DELETE' });
-		showToast('Slot jadwal pelajaran dihapus');
-		await load();
+		if (!(await confirmAction({ title: 'Hapus Slot Jadwal', message: 'Hapus slot jadwal ini?', confirmLabel: 'Hapus', tone: 'danger' }))) return;
+		try {
+			const res = await fetch(`/api/academic?entity=timetables&id=${id}`, { method: 'DELETE' });
+			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal menghapus slot jadwal')); return; }
+			showToast('Slot jadwal pelajaran dihapus');
+			await refreshAcademicAfterMutation();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menghapus slot jadwal. Periksa koneksi lalu coba lagi.'));
+		}
 	}
 
 	function fmtTime(value: string) {
@@ -355,7 +484,9 @@
 		showToast(`Jadwal kelas ${focusClass.code} berhasil diekspor`);
 	}
 
-	onMount(load);
+	onMount(() => {
+		void loadInitial();
+	});
 </script>
 
 <svelte:head><title>Data Akademik — MTSN 2 Kolut</title></svelte:head>
@@ -382,42 +513,48 @@
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{subjects.length}</p>
 			<p class="text-sm text-slate-600">mapel inti untuk jadwal, nilai, dan CBT</p>
 		</div>
-		<div class="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">Slot Jadwal</p>
+		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Slot Jadwal</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{timetableSlots.length}</p>
 			<p class="text-sm text-slate-600">jam pelajaran yang sudah disusun per kelas-mapel</p>
 		</div>
 	</div>
 
-	{#if error}
-		<RecoveryPanel message={error} onRetry={load} />
-	{/if}
+	<AsyncContent promise={academicPromise} onerror={handleAcademicRenderError}>
+		{#snippet pending()}
+			<div class="space-y-4">
+				<div class="overflow-x-auto pb-1">
+					<div class="flex min-w-max gap-2">
+						<Skeleton class="h-9 w-36 rounded-full" />
+						<Skeleton class="h-9 w-28 rounded-full" />
+						<Skeleton class="h-9 w-40 rounded-full" />
+					</div>
+				</div>
+				<div class="grid gap-4 lg:grid-cols-3">
+					<div class="space-y-4 lg:col-span-2">
+						<Skeleton class="h-12 w-full" />
+						<Skeleton class="h-14 w-full" />
+						<Skeleton class="h-14 w-full" />
+						<Skeleton class="h-14 w-full" />
+					</div>
+					<div class="space-y-3">
+						<Skeleton class="h-10 w-full" />
+						<Skeleton class="h-10 w-full" />
+						<Skeleton class="h-10 w-full" />
+						<Skeleton class="h-9 w-full" />
+					</div>
+				</div>
+			</div>
+		{/snippet}
 
-	{#if loading}
-		<div class="space-y-4">
-			<div class="overflow-x-auto pb-1">
-				<div class="flex min-w-max gap-2">
-					<Skeleton class="h-9 w-36 rounded-full" />
-					<Skeleton class="h-9 w-28 rounded-full" />
-					<Skeleton class="h-9 w-40 rounded-full" />
-				</div>
-			</div>
-			<div class="grid gap-4 lg:grid-cols-3">
-				<div class="space-y-4 lg:col-span-2">
-					<Skeleton class="h-12 w-full" />
-					<Skeleton class="h-14 w-full" />
-					<Skeleton class="h-14 w-full" />
-					<Skeleton class="h-14 w-full" />
-				</div>
-				<div class="space-y-3">
-					<Skeleton class="h-10 w-full" />
-					<Skeleton class="h-10 w-full" />
-					<Skeleton class="h-10 w-full" />
-					<Skeleton class="h-9 w-full" />
-				</div>
-			</div>
-		</div>
-	{:else}
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Data Akademik Belum Tersaji"
+				message={academicErrorMessage(error)}
+				onRetry={() => retryAcademic(reset)}
+			/>
+		{/snippet}
+
 		<Tabs.Root value="years">
 			<div class="overflow-x-auto pb-1">
 				<Tabs.List class="mb-4 min-w-max">
@@ -500,7 +637,7 @@
 								<input type="checkbox" bind:checked={yearActive} class="rounded" />
 								Jadikan aktif
 							</label>
-							<LoadingButton class="w-full" loading={yearBusy} loadingLabel="Menyimpan..." disabled={!yearName || !yearStart || !yearEnd} onclick={createYear} label="Simpan" />
+							<LoadingButton class="w-full" loading={yearBusy} loadingLabel="Menyimpan..." disabled={!yearName || !yearStart || !yearEnd} onclick={() => void createYear()} label="Simpan" />
 						</Card.Content>
 					</Card.Root>
 				</div>
@@ -664,7 +801,7 @@
 									<Input id="timetable-notes" bind:value={timetableNotes} placeholder="Opsional, mis. blok bergantian dengan kelas lain" />
 								</div>
 								<div class="flex flex-wrap gap-2">
-									<LoadingButton onclick={createTimetableSlot} loading={timetableBusy} loadingLabel="Menyimpan..." label={editingTimetableId ? 'Simpan Perubahan' : 'Tambah Slot'} disabled={!timetableAssignmentId || !timetableStart || !timetableEnd} />
+									<LoadingButton onclick={() => void createTimetableSlot()} loading={timetableBusy} loadingLabel="Menyimpan..." label={editingTimetableId ? 'Simpan Perubahan' : 'Tambah Slot'} disabled={!timetableAssignmentId || !timetableStart || !timetableEnd} />
 									{#if editingTimetableId}
 										<Button variant="outline" onclick={resetTimetableForm}>Batal Edit</Button>
 									{/if}
@@ -827,7 +964,7 @@
 								<input type="checkbox" bind:checked={classActive} class="rounded" />
 								Kelas aktif
 							</label>
-							<LoadingButton class="w-full" loading={classBusy} loadingLabel="Menyimpan..." disabled={!className || !classCode || !classLevel || !classYearId} onclick={createClass} label="Simpan" />
+							<LoadingButton class="w-full" loading={classBusy} loadingLabel="Menyimpan..." disabled={!className || !classCode || !classLevel || !classYearId} onclick={() => void createClass()} label="Simpan" />
 						</Card.Content>
 					</Card.Root>
 				</div>
@@ -896,11 +1033,11 @@
 								<input type="checkbox" bind:checked={subjectActive} class="rounded" />
 								Aktif
 							</label>
-							<LoadingButton class="w-full" loading={subjectBusy} loadingLabel="Menyimpan..." disabled={!subjectName || !subjectCode} onclick={createSubject} label="Simpan" />
+							<LoadingButton class="w-full" loading={subjectBusy} loadingLabel="Menyimpan..." disabled={!subjectName || !subjectCode} onclick={() => void createSubject()} label="Simpan" />
 						</Card.Content>
 					</Card.Root>
 				</div>
 			</Tabs.Content>
 		</Tabs.Root>
-	{/if}
+	</AsyncContent>
 </div>

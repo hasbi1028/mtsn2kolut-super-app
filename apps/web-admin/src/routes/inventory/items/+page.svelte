@@ -8,6 +8,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
@@ -37,9 +38,14 @@
 	const KATEGORI_LIST = ['umum', 'kelas', 'laboratorium', 'kantor', 'kebersihan', 'elektronik'];
 	const KONDISI_LIST = ['baik', 'perlu-perawatan', 'rusak'];
 
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
 	let items = $state<Item[]>([]);
-	let loading = $state(true);
-	let error = $state('');
+	let itemsPromise = $state<Promise<Item[]> | null>(null);
 	let search = $state('');
 	let filterKategori = $state('');
 	let filterKondisi = $state('');
@@ -52,7 +58,7 @@
 	let showHistoryDialog = $state(false);
 	let showBatchDialog = $state(false);
 	let formMode = $state<'beginner' | 'advance'>('beginner');
-	let historyLoading = $state(false);
+	let historyPromise = $state<Promise<ItemEvent[]> | null>(null);
 	let historyItem = $state<Item | null>(null);
 	let historyEvents = $state<ItemEvent[]>([]);
 	let selectedIds = $state<string[]>([]);
@@ -71,19 +77,7 @@
 	let fMinStock = $state(0);
 	let fCatatan = $state('');
 
-	const filtered = $derived.by(() =>
-		items.filter((item) => {
-			const q = search.toLowerCase();
-			const matchSearch =
-				!q ||
-				item.nama.toLowerCase().includes(q) ||
-				item.kode.toLowerCase().includes(q) ||
-				item.lokasi.toLowerCase().includes(q);
-			const matchKategori = !filterKategori || item.kategori === filterKategori;
-			const matchKondisi = !filterKondisi || item.kondisi === filterKondisi;
-			return matchSearch && matchKategori && matchKondisi;
-		})
-	);
+	const filtered = $derived.by(() => filterItems(items));
 
 	const selectedItems = $derived.by(() => items.filter((item) => selectedIds.includes(item.id)));
 
@@ -176,18 +170,110 @@
 		}) + ' WITA';
 	}
 
-	async function load() {
-		loading = true;
-		try {
-			error = '';
-			const res = await fetch('/api/inventory/items');
-			const j = await res.json();
-			items = j.data ?? j ?? [];
-		} catch {
-			error = 'Gagal memuat daftar inventaris. Coba lagi untuk mengambil data barang terbaru.';
-		} finally {
-			loading = false;
+	function filterItems(itemRows: Item[]) {
+		return itemRows.filter((item) => {
+			const q = search.toLowerCase();
+			const matchSearch =
+				!q ||
+				item.nama.toLowerCase().includes(q) ||
+				item.kode.toLowerCase().includes(q) ||
+				item.lokasi.toLowerCase().includes(q);
+			const matchKategori = !filterKategori || item.kategori === filterKategori;
+			const matchKondisi = !filterKondisi || item.kondisi === filterKondisi;
+			return matchSearch && matchKategori && matchKondisi;
+		});
+	}
+
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) {
+			throw new Error(message || fallbackMessage);
 		}
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
+			throw new Error(payload.error);
+		}
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	async function fetchItems(): Promise<Item[]> {
+		const res = await fetch('/api/inventory/items');
+		return readApi<Item[]>(res, 'Gagal memuat daftar inventaris.');
+	}
+
+	function load() {
+		items = [];
+		itemsPromise = fetchItems().then((nextItems) => {
+			items = nextItems ?? [];
+			return items;
+		});
+	}
+
+	async function refreshItems() {
+		const nextItems = await fetchItems();
+		items = nextItems ?? [];
+		itemsPromise = Promise.resolve(items);
+	}
+
+	function retryItems(reset?: () => void) {
+		reset?.();
+		load();
+	}
+
+	function itemsErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat daftar inventaris. Coba lagi untuk mengambil data barang terbaru.';
+	}
+
+	function historyErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat riwayat inventaris. Periksa koneksi lalu coba lagi.';
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
+	}
+
+	async function refreshItemsAfterMutation() {
+		try {
+			await refreshItems();
+		} catch (error) {
+			itemsPromise = Promise.resolve(items);
+			toast.error(itemsErrorMessage(error));
+		}
+	}
+
+	function payloadData<T>(payload: unknown, fallback: T): T {
+		if (isRecord(payload) && 'data' in payload) return (payload.data ?? fallback) as T;
+		return (payload ?? fallback) as T;
+	}
+
+	function handleItemsRenderError(error: unknown) {
+		console.error('Inventory items render failed', error);
+	}
+
+	function handleHistoryRenderError(error: unknown) {
+		console.error('Inventory history render failed', error);
 	}
 
 	function openCreate() {
@@ -253,14 +339,16 @@
 			const res = editingId
 				? await fetch(`/api/inventory/items/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 				: await fetch('/api/inventory/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-			const j = await res.json();
+			const payload = await res.json().catch(() => null);
 			if (!res.ok) {
-				toast.error(j.error ?? 'Gagal menyimpan barang');
+				toast.error(apiErrorMessage(payload) || 'Gagal menyimpan barang');
 				return;
 			}
 			toast.success(editingId ? 'Barang diperbarui' : 'Barang ditambahkan');
 			showDialog = false;
-			await load();
+			await refreshItemsAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menyimpan barang. Periksa koneksi lalu coba lagi.'));
 		} finally {
 			busy = false;
 		}
@@ -272,14 +360,16 @@
 		try {
 			const res = await fetch(`/api/inventory/items/${confirmDeleteId}`, { method: 'DELETE' });
 			if (!res.ok) {
-				const j = await res.json();
-				toast.error(j.error ?? 'Gagal menghapus barang');
+				const payload = await res.json().catch(() => null);
+				toast.error(apiErrorMessage(payload) || 'Gagal menghapus barang');
 				return;
 			}
 			toast.success('Barang dihapus');
 			confirmDeleteId = null;
 			showDeleteDialog = false;
-			await load();
+			await refreshItemsAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menghapus barang. Periksa koneksi lalu coba lagi.'));
 		} finally {
 			busy = false;
 		}
@@ -308,37 +398,52 @@
 					kondisi: kondisi || undefined,
 				}),
 			});
-			const j = await res.json();
+			const payload = await res.json().catch(() => null);
 			if (!res.ok) {
-				toast.error(j.error ?? 'Gagal memproses mutasi batch');
+				toast.error(apiErrorMessage(payload) || 'Gagal memproses mutasi batch');
 				return;
 			}
-			toast.success(`${j.data?.updated ?? selectedIds.length} barang berhasil diperbarui`);
+			const data = isRecord(payload) && isRecord(payload.data) ? payload.data : null;
+			const updated = typeof data?.updated === 'number' ? data.updated : selectedIds.length;
+			toast.success(`${updated} barang berhasil diperbarui`);
 			showBatchDialog = false;
 			selectedIds = [];
-			await load();
+			await refreshItemsAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal memproses mutasi batch. Periksa koneksi lalu coba lagi.'));
 		} finally {
 			batchBusy = false;
 		}
 	}
 
-	async function openHistory(item: Item) {
-		historyItem = item;
-		historyEvents = [];
-		historyLoading = true;
-		showHistoryDialog = true;
-		try {
-			const res = await fetch(`/api/inventory/items/${item.id}/history`);
-			const j = await res.json();
-			historyEvents = j.data ?? j ?? [];
-		} catch {
-			toast.error('Gagal memuat riwayat inventaris');
-		} finally {
-			historyLoading = false;
-		}
+	async function fetchHistory(itemId: string): Promise<ItemEvent[]> {
+		const res = await fetch(`/api/inventory/items/${itemId}/history`);
+		return readApi<ItemEvent[]>(res, 'Gagal memuat riwayat inventaris');
 	}
 
-	onMount(load);
+	function setHistoryPromise(item: Item) {
+		historyEvents = [];
+		historyPromise = fetchHistory(item.id).then((events) => {
+			historyEvents = events ?? [];
+			return historyEvents;
+		});
+	}
+
+	function openHistory(item: Item) {
+		historyItem = item;
+		showHistoryDialog = true;
+		setHistoryPromise(item);
+	}
+
+	function retryHistory(reset?: () => void) {
+		if (!historyItem) return;
+		reset?.();
+		setHistoryPromise(historyItem);
+	}
+
+	onMount(() => {
+		void load();
+	});
 </script>
 
 <svelte:head><title>Daftar Barang — Inventaris</title></svelte:head>
@@ -371,27 +476,49 @@
 		</Card.Root>
 	{/if}
 
-	<div class="grid gap-3 md:grid-cols-3">
-		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Jenis</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{items.length}</p>
-			<p class="text-sm text-slate-600">barang inventaris yang sudah tercatat</p>
-		</div>
-		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Hasil Filter</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{filtered.length}</p>
-			<p class="text-sm text-slate-600">barang yang cocok dengan filter aktif</p>
-		</div>
-		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Perlu Restok</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{items.filter((item) => item.jumlah_baik <= item.min_stock).length}</p>
-			<p class="text-sm text-slate-600">barang yang sudah menyentuh batas minimum</p>
-		</div>
-	</div>
+	<AsyncContent promise={itemsPromise} onerror={handleItemsRenderError}>
+		{#snippet pending()}
+			<div class="grid gap-3 md:grid-cols-3">
+				{#each ['Total Jenis', 'Hasil Filter', 'Perlu Restok'] as label (label)}
+					<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+						<Skeleton class="mt-3 h-8 w-16" />
+						<Skeleton class="mt-2 h-4 w-52" />
+					</div>
+				{/each}
+			</div>
+		{/snippet}
 
-	{#if error}
-		<RecoveryPanel title="Daftar Inventaris Belum Tersaji" message={error} onRetry={load} />
-	{/if}
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Daftar Inventaris Belum Tersaji"
+				message={itemsErrorMessage(error)}
+				onRetry={() => retryItems(reset)}
+			/>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const currentItems = value as Item[]}
+			{@const currentFiltered = filterItems(currentItems)}
+			<div class="grid gap-3 md:grid-cols-3">
+				<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Jenis</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{currentItems.length}</p>
+					<p class="text-sm text-slate-600">barang inventaris yang sudah tercatat</p>
+				</div>
+				<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Hasil Filter</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{currentFiltered.length}</p>
+					<p class="text-sm text-slate-600">barang yang cocok dengan filter aktif</p>
+				</div>
+				<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Perlu Restok</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{currentItems.filter((item) => item.jumlah_baik <= item.min_stock).length}</p>
+					<p class="text-sm text-slate-600">barang yang sudah menyentuh batas minimum</p>
+				</div>
+			</div>
+		{/snippet}
+	</AsyncContent>
 
 	<Card.Root class="border-slate-200 shadow-sm">
 		<Card.Content class="grid gap-3 p-4 md:grid-cols-3">
@@ -422,87 +549,105 @@
 
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
-			{#if loading}
-				<div class="space-y-3 p-6">
-					{#each Array.from({ length: 6 }) as _, index (`inventory-item-skeleton-${index}`)}
-						<div class="grid gap-3 md:grid-cols-[0.8fr_1.5fr_0.8fr_0.8fr_0.8fr_auto] md:items-center">
-							<Skeleton class="h-5 w-20" />
-							<Skeleton class="h-5 w-full max-w-sm" />
-							<Skeleton class="h-6 w-24" />
-							<Skeleton class="h-5 w-20" />
-							<Skeleton class="h-5 w-20" />
-							<Skeleton class="h-9 w-28 justify-self-end" />
-						</div>
-					{/each}
-				</div>
-			{:else if filtered.length === 0}
-				<div class="p-4">
-					<EmptyStatePanel
-						title={search || filterKategori || filterKondisi ? 'Tidak ada barang yang cocok' : 'Daftar inventaris masih kosong'}
-						description={search || filterKategori || filterKondisi
-							? 'Ubah kata kunci, kategori, atau kondisi untuk melihat barang lain yang sudah tercatat.'
-							: 'Tambahkan barang inventaris pertama agar sekolah bisa mulai memantau stok, lokasi, dan kondisi.'}
-						compact
-					/>
-				</div>
-			{:else}
-				<Table.Root>
-					<Table.Header>
-						<Table.Row class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-							<Table.Head class="w-12">
-								<input
-									type="checkbox"
-									class="h-4 w-4 rounded border-slate-300"
-									checked={filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.id))}
-									onchange={(event) => toggleSelectAllVisible((event.currentTarget as HTMLInputElement).checked)}
-								/>
-							</Table.Head>
-							<Table.Head>Kode</Table.Head>
-							<Table.Head>Barang</Table.Head>
-							<Table.Head>Kondisi</Table.Head>
-							<Table.Head>Stok</Table.Head>
-							<Table.Head>Lokasi</Table.Head>
-							<Table.Head class="text-right">Aksi</Table.Head>
-						</Table.Row>
-					</Table.Header>
-					<Table.Body>
-						{#each filtered as item (item.id)}
-							<Table.Row class="text-sm">
-								<Table.Cell>
-									<input
-										type="checkbox"
-										class="h-4 w-4 rounded border-slate-300"
-										checked={isSelected(item.id)}
-										onchange={(event) => toggleSelected(item.id, (event.currentTarget as HTMLInputElement).checked)}
-									/>
-								</Table.Cell>
-								<Table.Cell class="font-mono text-xs text-slate-600">{item.kode}</Table.Cell>
-								<Table.Cell>
-									<p class="font-medium text-slate-900">{item.nama}</p>
-									<p class="text-xs text-slate-500">{item.kategori} · {item.satuan}</p>
-								</Table.Cell>
-								<Table.Cell>
-									<Badge variant={item.kondisi === 'rusak' ? 'destructive' : 'outline'}>
-										{conditionLabel(item.kondisi)}
-									</Badge>
-								</Table.Cell>
-								<Table.Cell>
-									<p class="font-medium text-slate-900">{item.jumlah_baik} / {item.jumlah_total}</p>
-									<p class="text-xs text-slate-500">min. {item.min_stock}</p>
-								</Table.Cell>
-								<Table.Cell>{item.lokasi || '—'}</Table.Cell>
-								<Table.Cell class="text-right">
-									<div class="flex justify-end gap-2">
-										<Button variant="outline" size="sm" onclick={() => openHistory(item)}>Riwayat</Button>
-										<Button variant="outline" size="sm" onclick={() => openEdit(item)}>Edit</Button>
-										<Button variant="destructive" size="sm" onclick={() => { confirmDeleteId = item.id; showDeleteDialog = true; }}>Hapus</Button>
-									</div>
-								</Table.Cell>
-							</Table.Row>
+			<AsyncContent promise={itemsPromise} onerror={handleItemsRenderError}>
+				{#snippet pending()}
+					<div class="space-y-3 p-6">
+						{#each Array.from({ length: 6 }) as _, index (`inventory-item-skeleton-${index}`)}
+							<div class="grid gap-3 md:grid-cols-[0.8fr_1.5fr_0.8fr_0.8fr_0.8fr_auto] md:items-center">
+								<Skeleton class="h-5 w-20" />
+								<Skeleton class="h-5 w-full max-w-sm" />
+								<Skeleton class="h-6 w-24" />
+								<Skeleton class="h-5 w-20" />
+								<Skeleton class="h-5 w-20" />
+								<Skeleton class="h-9 w-28 justify-self-end" />
+							</div>
 						{/each}
-					</Table.Body>
-				</Table.Root>
-			{/if}
+					</div>
+				{/snippet}
+
+				{#snippet failed(error, reset)}
+					<div class="p-4">
+						<RecoveryPanel
+							compact
+							title="Daftar Inventaris Belum Tersaji"
+							message={itemsErrorMessage(error)}
+							onRetry={() => retryItems(reset)}
+						/>
+					</div>
+				{/snippet}
+
+				{#snippet children(value)}
+					{@const currentFiltered = filterItems(value as Item[])}
+					{#if currentFiltered.length === 0}
+						<div class="p-4">
+							<EmptyStatePanel
+								title={search || filterKategori || filterKondisi ? 'Tidak ada barang yang cocok' : 'Daftar inventaris masih kosong'}
+								description={search || filterKategori || filterKondisi
+									? 'Ubah kata kunci, kategori, atau kondisi untuk melihat barang lain yang sudah tercatat.'
+									: 'Tambahkan barang inventaris pertama agar sekolah bisa mulai memantau stok, lokasi, dan kondisi.'}
+								compact
+							/>
+						</div>
+					{:else}
+						<Table.Root>
+							<Table.Header>
+								<Table.Row class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+									<Table.Head class="w-12">
+										<input
+											type="checkbox"
+											class="h-4 w-4 rounded border-slate-300"
+											checked={currentFiltered.length > 0 && currentFiltered.every((item) => selectedIds.includes(item.id))}
+											onchange={(event) => toggleSelectAllVisible((event.currentTarget as HTMLInputElement).checked)}
+										/>
+									</Table.Head>
+									<Table.Head>Kode</Table.Head>
+									<Table.Head>Barang</Table.Head>
+									<Table.Head>Kondisi</Table.Head>
+									<Table.Head>Stok</Table.Head>
+									<Table.Head>Lokasi</Table.Head>
+									<Table.Head class="text-right">Aksi</Table.Head>
+								</Table.Row>
+							</Table.Header>
+							<Table.Body>
+								{#each currentFiltered as item (item.id)}
+									<Table.Row class="text-sm">
+										<Table.Cell>
+											<input
+												type="checkbox"
+												class="h-4 w-4 rounded border-slate-300"
+												checked={isSelected(item.id)}
+												onchange={(event) => toggleSelected(item.id, (event.currentTarget as HTMLInputElement).checked)}
+											/>
+										</Table.Cell>
+										<Table.Cell class="font-mono text-xs text-slate-600">{item.kode}</Table.Cell>
+										<Table.Cell>
+											<p class="font-medium text-slate-900">{item.nama}</p>
+											<p class="text-xs text-slate-500">{item.kategori} · {item.satuan}</p>
+										</Table.Cell>
+										<Table.Cell>
+											<Badge variant={item.kondisi === 'rusak' ? 'destructive' : 'outline'}>
+												{conditionLabel(item.kondisi)}
+											</Badge>
+										</Table.Cell>
+										<Table.Cell>
+											<p class="font-medium text-slate-900">{item.jumlah_baik} / {item.jumlah_total}</p>
+											<p class="text-xs text-slate-500">min. {item.min_stock}</p>
+										</Table.Cell>
+										<Table.Cell>{item.lokasi || '—'}</Table.Cell>
+										<Table.Cell class="text-right">
+											<div class="flex justify-end gap-2">
+												<Button variant="outline" size="sm" onclick={() => openHistory(item)}>Riwayat</Button>
+												<Button variant="outline" size="sm" onclick={() => openEdit(item)}>Edit</Button>
+												<Button variant="destructive" size="sm" onclick={() => { confirmDeleteId = item.id; showDeleteDialog = true; }}>Hapus</Button>
+											</div>
+										</Table.Cell>
+									</Table.Row>
+								{/each}
+							</Table.Body>
+						</Table.Root>
+					{/if}
+				{/snippet}
+			</AsyncContent>
 		</Card.Content>
 	</Card.Root>
 </div>
@@ -590,7 +735,7 @@
 
 				<div class="flex justify-end gap-2">
 					<Button variant="outline" onclick={() => (showDialog = false)}>Batal</Button>
-					<LoadingButton onclick={save} loading={busy} loadingLabel="Menyimpan..." label={editingId ? 'Simpan Perubahan' : 'Tambah Barang'} />
+					<LoadingButton onclick={() => void save()} loading={busy} loadingLabel="Menyimpan..." label={editingId ? 'Simpan Perubahan' : 'Tambah Barang'} />
 				</div>
 			</div>
 		</Dialog.Content>
@@ -640,7 +785,7 @@
 
 				<div class="flex justify-end gap-2">
 					<Button variant="outline" onclick={() => (showBatchDialog = false)}>Batal</Button>
-					<LoadingButton onclick={submitBatchUpdate} loading={batchBusy} loadingLabel="Memproses..." label="Terapkan Mutasi Batch" />
+					<LoadingButton onclick={() => void submitBatchUpdate()} loading={batchBusy} loadingLabel="Memproses..." label="Terapkan Mutasi Batch" />
 				</div>
 			</div>
 		</Dialog.Content>
@@ -660,34 +805,43 @@
 			</Dialog.Header>
 
 			<div class="space-y-3">
-				{#if historyLoading}
-					<div class="space-y-3">
-						{#each Array.from({ length: 4 }) as _, index (`inventory-history-skeleton-${index}`)}
-							<div class="rounded-xl border border-slate-200 p-3">
-								<Skeleton class="h-4 w-24" />
-								<Skeleton class="mt-2 h-4 w-full" />
-								<Skeleton class="mt-2 h-3 w-36" />
-							</div>
-						{/each}
-					</div>
-				{:else if historyEvents.length === 0}
-					<EmptyStatePanel compact title="Belum ada riwayat" description="Riwayat perubahan akan muncul setelah barang ini dibuat, diperbarui, atau dihapus." />
-				{:else}
-					<div class="max-h-[420px] space-y-3 overflow-y-auto pr-1">
-						{#each historyEvents as event (event.id)}
-							<div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-								<div class="flex items-start justify-between gap-3">
-									<Badge variant="outline">{actionLabel(event.action)}</Badge>
-									<p class="text-xs text-slate-500">{formatDateTime(event.created_at)}</p>
+				<AsyncContent promise={historyPromise} onerror={handleHistoryRenderError}>
+					{#snippet pending()}
+						<div class="space-y-3">
+							{#each Array.from({ length: 4 }) as _, index (`inventory-history-skeleton-${index}`)}
+								<div class="rounded-xl border border-slate-200 p-3">
+									<Skeleton class="h-4 w-24" />
+									<Skeleton class="mt-2 h-4 w-full" />
+									<Skeleton class="mt-2 h-3 w-36" />
 								</div>
-								<p class="mt-2 text-sm text-slate-700">{event.summary}</p>
-								<p class="mt-2 text-xs text-slate-500">
-									{event.actor_username ? `oleh ${event.actor_username}` : 'oleh sistem'}
-								</p>
+							{/each}
+						</div>
+					{/snippet}
+					{#snippet failed(error, reset)}
+						<RecoveryPanel compact title="Riwayat Inventaris Belum Tersaji" message={historyErrorMessage(error)} onRetry={() => retryHistory(reset)} />
+					{/snippet}
+					{#snippet children(events)}
+						{@const currentEvents = events as ItemEvent[]}
+						{#if currentEvents.length === 0}
+							<EmptyStatePanel compact title="Belum ada riwayat" description="Riwayat perubahan akan muncul setelah barang ini dibuat, diperbarui, atau dihapus." />
+						{:else}
+							<div class="max-h-[420px] space-y-3 overflow-y-auto pr-1">
+								{#each currentEvents as event (event.id)}
+									<div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+										<div class="flex items-start justify-between gap-3">
+											<Badge variant="outline">{actionLabel(event.action)}</Badge>
+											<p class="text-xs text-slate-500">{formatDateTime(event.created_at)}</p>
+										</div>
+										<p class="mt-2 text-sm text-slate-700">{event.summary}</p>
+										<p class="mt-2 text-xs text-slate-500">
+											{event.actor_username ? `oleh ${event.actor_username}` : 'oleh sistem'}
+										</p>
+									</div>
+								{/each}
 							</div>
-						{/each}
-					</div>
-				{/if}
+						{/if}
+					{/snippet}
+				</AsyncContent>
 			</div>
 		</Dialog.Content>
 	{/if}
@@ -702,7 +856,7 @@
 			</Dialog.Header>
 			<div class="flex justify-end gap-2">
 				<Button variant="outline" onclick={() => (showDeleteDialog = false)}>Batal</Button>
-				<LoadingButton onclick={deleteItem} loading={busy} loadingLabel="Menghapus..." label="Hapus" variant="destructive" />
+				<LoadingButton onclick={() => void deleteItem()} loading={busy} loadingLabel="Menghapus..." label="Hapus" variant="destructive" />
 			</div>
 		</Dialog.Content>
 	{/if}

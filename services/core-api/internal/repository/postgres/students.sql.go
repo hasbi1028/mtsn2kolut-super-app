@@ -14,7 +14,7 @@ import (
 const createStudent = `-- name: CreateStudent :one
 INSERT INTO students (nis, nisn, nama, gender, parent_name, parent_phone, class_id, is_active, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, nis, nisn, nama, gender, parent_name, parent_phone, class_id, is_active, created_at, updated_at, status
+RETURNING id, nis, nisn, nama, gender, parent_name, parent_phone, class_id, is_active, created_at, updated_at, status, nik, tempat_lahir, tanggal_lahir, alamat, agama, anak_ke, phone, photo_url, total_violation_points
 `
 
 type CreateStudentParams struct {
@@ -55,6 +55,15 @@ func (q *Queries) CreateStudent(ctx context.Context, arg CreateStudentParams) (S
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Status,
+		&i.Nik,
+		&i.TempatLahir,
+		&i.TanggalLahir,
+		&i.Alamat,
+		&i.Agama,
+		&i.AnakKe,
+		&i.Phone,
+		&i.PhotoUrl,
+		&i.TotalViolationPoints,
 	)
 	return i, err
 }
@@ -327,7 +336,7 @@ SET nis = $2, nisn = $3, nama = $4, gender = $5,
     parent_name = $6, parent_phone = $7, class_id = $8, 
     is_active = $9, status = $10, updated_at = NOW()
 WHERE id = $1
-RETURNING id, nis, nisn, nama, gender, parent_name, parent_phone, class_id, is_active, created_at, updated_at, status
+RETURNING id, nis, nisn, nama, gender, parent_name, parent_phone, class_id, is_active, created_at, updated_at, status, nik, tempat_lahir, tanggal_lahir, alamat, agama, anak_ke, phone, photo_url, total_violation_points
 `
 
 type UpdateStudentParams struct {
@@ -370,6 +379,15 @@ func (q *Queries) UpdateStudent(ctx context.Context, arg UpdateStudentParams) (S
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Status,
+		&i.Nik,
+		&i.TempatLahir,
+		&i.TanggalLahir,
+		&i.Alamat,
+		&i.Agama,
+		&i.AnakKe,
+		&i.Phone,
+		&i.PhotoUrl,
+		&i.TotalViolationPoints,
 	)
 	return i, err
 }

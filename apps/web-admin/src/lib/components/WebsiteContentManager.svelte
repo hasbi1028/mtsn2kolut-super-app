@@ -9,10 +9,12 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import SuccessPanel from '$lib/components/SuccessPanel.svelte';
+	import { confirmAction } from '$lib/confirm-dialog';
 
 	type ContentStatus = 'draft' | 'published';
 	type ContentPresentationStatus = 'draft' | 'published' | 'scheduled';
@@ -32,6 +34,17 @@
 		published_at: string | null;
 		updated_at: string;
 	};
+	type ContentListPayload = {
+		items?: WebsiteContent[];
+		data?: WebsiteContent[];
+		error?: string;
+		message?: string;
+	};
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
 
 	let {
 		kind,
@@ -45,14 +58,15 @@
 		publicBasePath: string;
 	} = $props();
 
+	let contentPromise = $state<Promise<WebsiteContent[]> | null>(null);
 	let items = $state<WebsiteContent[]>([]);
-	let loading = $state(true);
-	let error = $state('');
 	let success = $state('');
 	let search = $state('');
 	let showDialog = $state(false);
 	let saving = $state(false);
 	let uploadingCover = $state(false);
+	let toggleBusyId = $state<string | null>(null);
+	let deleteBusyId = $state<string | null>(null);
 	let editingId = $state<string | null>(null);
 	let form = $state({
 		title: '',
@@ -178,18 +192,92 @@
 	const draftCount = $derived(items.filter((item) => item.status === 'draft').length);
 	const featuredCount = $derived(items.filter((item) => item.is_featured).length);
 
-	async function load() {
-		loading = true;
-		try {
-			error = '';
-			const res = await fetch(`/api/website/content?kind=${kind}`);
-			const data = await res.json();
-			items = data.items ?? [];
-		} catch {
-			error = `Gagal memuat ${title.toLowerCase()}. Coba lagi untuk mengambil daftar konten terbaru.`;
-		} finally {
-			loading = false;
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
+			throw new Error(payload.error);
 		}
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	function normalizeItems(value: ContentListPayload | WebsiteContent[] | null | undefined): WebsiteContent[] {
+		if (Array.isArray(value)) return value;
+		if (!value) return [];
+		if (Array.isArray(value.items)) return value.items;
+		if (Array.isArray(value.data)) return value.data;
+		return [];
+	}
+
+	function contentErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		if (typeof error === 'string' && error.trim()) return error;
+		return `Gagal memuat ${title.toLowerCase()}. Coba lagi untuk mengambil daftar konten terbaru.`;
+	}
+
+	function mutationErrorMessage(error: unknown, fallbackMessage: string) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return fallbackMessage;
+	}
+
+	async function fetchContentItems() {
+		const payload = await fetch(`/api/website/content?kind=${kind}`).then((response) =>
+			readApi<ContentListPayload | WebsiteContent[]>(response, `Gagal memuat ${title.toLowerCase()}`)
+		);
+		return normalizeItems(payload);
+	}
+
+	function loadContent() {
+		contentPromise = fetchContentItems().then((nextItems) => {
+			items = nextItems;
+			return nextItems;
+		});
+		return contentPromise;
+	}
+
+	async function refreshContent() {
+		if (!contentPromise) {
+			await loadContent();
+			return;
+		}
+		try {
+			const nextItems = await fetchContentItems();
+			items = nextItems;
+			contentPromise = Promise.resolve(nextItems);
+		} catch (error) {
+			contentPromise = Promise.resolve(items);
+			toast.error(contentErrorMessage(error));
+		}
+	}
+
+	function retryContent(reset?: () => void) {
+		reset?.();
+		loadContent();
+	}
+
+	function handleContentRenderError(error: unknown, reset: () => void) {
+		console.error('Website content manager render failed', error);
+		reset();
 	}
 
 	async function uploadCoverImage(e: Event) {
@@ -201,13 +289,14 @@
 			const fd = new FormData();
 			fd.append('file', file);
 			const res = await fetch('/api/website/media', { method: 'POST', body: fd });
-			const data = await res.json().catch(() => ({}));
-			if (!res.ok) {
-				toast.error((data as { error?: string }).error || 'Gagal upload gambar.');
-				return;
-			}
-			form.cover_image_url = (data as { url: string }).url;
+			const data = await res.json().catch(() => null);
+			if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal upload gambar.');
+			const url = isRecord(data) && typeof data.url === 'string' ? data.url : '';
+			if (!url) throw new Error('Upload berhasil tetapi URL gambar tidak dikembalikan.');
+			form.cover_image_url = url;
 			toast.success('Gambar berhasil diunggah.');
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal upload gambar.'));
 		} finally {
 			uploadingCover = false;
 			input.value = '';
@@ -224,11 +313,8 @@
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(payload),
 			});
-			const data = await res.json().catch(() => ({}));
-			if (!res.ok) {
-				toast.error((data as { error?: string }).error || 'Gagal menyimpan konten.');
-				return;
-			}
+			const data = await res.json().catch(() => null);
+			if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal menyimpan konten.');
 			toast.success(editingId ? 'Konten berhasil diperbarui.' : 'Konten berhasil dibuat.');
 			const scheduled = form.status === 'published' && !!form.published_at.trim();
 			success = editingId
@@ -236,57 +322,73 @@
 				: `Konten "${form.title}" berhasil dibuat sebagai ${form.status === 'published' ? (scheduled ? 'konten terjadwal' : 'terbit') : 'draft'}.`;
 			showDialog = false;
 			resetForm();
-			await load();
+			await refreshContent();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menyimpan konten.'));
 		} finally {
 			saving = false;
 		}
 	}
 
 	async function remove(item: WebsiteContent) {
-		if (!confirm(`Hapus konten "${item.title}"?`)) return;
-		const res = await fetch(`/api/website/content/${item.id}`, { method: 'DELETE' });
-		if (!res.ok) {
-			toast.error('Gagal menghapus konten.');
-			return;
+		if (!(await confirmAction({
+			title: 'Hapus Konten Website',
+			message: `Hapus konten "${item.title}"?`,
+			confirmLabel: 'Hapus Konten',
+			tone: 'danger'
+		}))) return;
+		deleteBusyId = item.id;
+		try {
+			const res = await fetch(`/api/website/content/${item.id}`, { method: 'DELETE' });
+			const data = await res.json().catch(() => null);
+			if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal menghapus konten.');
+			toast.success('Konten berhasil dihapus.');
+			success = `Konten "${item.title}" berhasil dihapus dari area editorial.`;
+			await refreshContent();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menghapus konten.'));
+		} finally {
+			deleteBusyId = null;
 		}
-		toast.success('Konten berhasil dihapus.');
-		success = `Konten "${item.title}" berhasil dihapus dari area editorial.`;
-		await load();
 	}
 
 	async function toggleStatus(item: WebsiteContent) {
 		const nextStatus: ContentStatus = item.status === 'published' ? 'draft' : 'published';
-		const res = await fetch(`/api/website/content/${item.id}`, {
-			method: 'PUT',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({
-				kind,
-				title: item.title,
-				slug: item.slug,
-				excerpt: item.excerpt,
-				content_html: item.content_html,
-				cover_image_url: item.cover_image_url,
-				is_featured: item.is_featured ?? false,
-				meta_title: item.meta_title ?? '',
-				meta_description: item.meta_description ?? '',
-				status: nextStatus,
-				published_at: nextStatus === 'published' ? '' : '',
-			}),
-		});
-		const data = await res.json().catch(() => ({}));
-		if (!res.ok) {
-			toast.error((data as { error?: string }).error || 'Gagal mengubah status konten.');
-			return;
+		toggleBusyId = item.id;
+		try {
+			const res = await fetch(`/api/website/content/${item.id}`, {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					kind,
+					title: item.title,
+					slug: item.slug,
+					excerpt: item.excerpt,
+					content_html: item.content_html,
+					cover_image_url: item.cover_image_url,
+					is_featured: item.is_featured ?? false,
+					meta_title: item.meta_title ?? '',
+					meta_description: item.meta_description ?? '',
+					status: nextStatus,
+					published_at: nextStatus === 'published' ? '' : '',
+				}),
+			});
+			const data = await res.json().catch(() => null);
+			if (!res.ok) throw new Error(apiErrorMessage(data) || 'Gagal mengubah status konten.');
+			toast.success(nextStatus === 'published' ? 'Konten diterbitkan.' : 'Konten dikembalikan ke draft.');
+			success = nextStatus === 'published'
+				? `Konten "${item.title}" berhasil dipublikasikan dan sekarang tersedia di website publik.`
+				: `Konten "${item.title}" berhasil dikembalikan ke draft untuk revisi lebih lanjut.`;
+			await refreshContent();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal mengubah status konten.'));
+		} finally {
+			toggleBusyId = null;
 		}
-		toast.success(nextStatus === 'published' ? 'Konten diterbitkan.' : 'Konten dikembalikan ke draft.');
-		success = nextStatus === 'published'
-			? `Konten "${item.title}" berhasil dipublikasikan dan sekarang tersedia di website publik.`
-			: `Konten "${item.title}" berhasil dikembalikan ke draft untuk revisi lebih lanjut.`;
-		await load();
 	}
 
 	onMount(() => {
-		void load();
+		void loadContent();
 	});
 </script>
 
@@ -301,6 +403,63 @@
 			<Button onclick={openCreate}>Tambah Konten</Button>
 		</div>
 	</div>
+
+	{#if success}
+		<SuccessPanel title="Aksi Editorial Berhasil" message={success} />
+	{/if}
+
+	<AsyncContent promise={contentPromise} onerror={handleContentRenderError}>
+		{#snippet pending()}
+			<div class="space-y-4">
+				<div class="grid gap-3 md:grid-cols-5">
+					{#each Array.from({ length: 5 }) as _, index (`website-stat-skeleton-${index}`)}
+						<div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+							<Skeleton class="h-3 w-24" />
+							<Skeleton class="mt-3 h-8 w-14" />
+							<Skeleton class="mt-2 h-4 w-32" />
+						</div>
+					{/each}
+				</div>
+				<Card.Root class="border-slate-200 shadow-sm">
+					<Card.Content class="grid gap-3 p-4 md:grid-cols-[1.2fr_auto]">
+						<div class="space-y-2">
+							<Skeleton class="h-3 w-28" />
+							<Skeleton class="h-10 w-full" />
+						</div>
+						<div class="flex items-end">
+							<Skeleton class="h-10 w-full md:w-36" />
+						</div>
+					</Card.Content>
+				</Card.Root>
+				<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+					<Card.Content class="space-y-4 px-5 py-6">
+						{#each Array.from({ length: 4 }) as _, index (`website-content-skeleton-${index}`)}
+							<div class="grid gap-4 lg:grid-cols-[1.3fr,0.7fr,0.8fr] lg:items-start">
+								<div class="space-y-2">
+									<Skeleton class="h-6 w-48" />
+									<Skeleton class="h-4 w-40" />
+									<Skeleton class="h-4 w-full max-w-xl" />
+									<Skeleton class="h-4 w-full max-w-lg" />
+								</div>
+								<div class="space-y-2">
+									<Skeleton class="h-4 w-28" />
+									<Skeleton class="h-4 w-28" />
+								</div>
+								<div class="flex flex-wrap justify-start gap-2 lg:justify-end">
+									<Skeleton class="h-9 w-20" />
+									<Skeleton class="h-9 w-20" />
+									<Skeleton class="h-9 w-28" />
+								</div>
+							</div>
+						{/each}
+					</Card.Content>
+				</Card.Root>
+			</div>
+		{/snippet}
+		{#snippet failed(error, reset)}
+			<RecoveryPanel title="Konten Website Belum Tersaji" message={contentErrorMessage(error)} onRetry={() => retryContent(reset)} />
+		{/snippet}
+		{#snippet children(_items)}
 
 	<div class="grid gap-3 md:grid-cols-5">
 		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
@@ -323,20 +482,12 @@
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{draftCount}</p>
 			<p class="text-sm text-slate-600">konten yang masih menunggu finalisasi</p>
 		</div>
-		<div class="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">Unggulan</p>
+		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Unggulan</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{featuredCount}</p>
 			<p class="text-sm text-slate-600">konten yang ditandai untuk sorotan publik</p>
 		</div>
 	</div>
-
-	{#if error}
-		<RecoveryPanel title="Konten Website Belum Tersaji" message={error} onRetry={load} />
-	{/if}
-
-	{#if success}
-		<SuccessPanel title="Aksi Editorial Berhasil" message={success} />
-	{/if}
 
 	<Card.Root class="border-slate-200 shadow-sm">
 		<Card.Content class="grid gap-3 p-4 md:grid-cols-[1.2fr_auto]">
@@ -354,29 +505,7 @@
 
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
-			{#if loading}
-				<div class="space-y-4 px-5 py-6">
-					{#each Array.from({ length: 4 }) as _, index (`website-content-skeleton-${index}`)}
-						<div class="grid gap-4 lg:grid-cols-[1.3fr,0.7fr,0.8fr] lg:items-start">
-							<div class="space-y-2">
-								<Skeleton class="h-6 w-48" />
-								<Skeleton class="h-4 w-40" />
-								<Skeleton class="h-4 w-full max-w-xl" />
-								<Skeleton class="h-4 w-full max-w-lg" />
-							</div>
-							<div class="space-y-2">
-								<Skeleton class="h-4 w-28" />
-								<Skeleton class="h-4 w-28" />
-							</div>
-							<div class="flex flex-wrap justify-start gap-2 lg:justify-end">
-								<Skeleton class="h-9 w-20" />
-								<Skeleton class="h-9 w-20" />
-								<Skeleton class="h-9 w-28" />
-							</div>
-						</div>
-					{/each}
-				</div>
-			{:else if filteredItems.length === 0}
+			{#if filteredItems.length === 0}
 				<div class="p-4">
 					<EmptyStatePanel
 						title={search.trim() ? 'Tidak ada konten yang cocok' : 'Belum ada konten untuk kategori ini'}
@@ -432,12 +561,25 @@
 										{/if}
 									{/if}
 								<Button variant="outline" onclick={() => openEdit(item)}>Edit</Button>
-								<Button variant="outline" onclick={() => toggleStatus(item)}>
+								<LoadingButton
+									variant="outline"
+									onclick={() => toggleStatus(item)}
+									loading={toggleBusyId === item.id}
+									loadingLabel="Memproses..."
+									disabled={(toggleBusyId !== null && toggleBusyId !== item.id) || deleteBusyId !== null}
+								>
 									{item.status === 'published' ? 'Kembalikan ke Draft' : 'Terbitkan'}
-								</Button>
-								<Button variant="ghost" class="text-destructive hover:text-destructive" onclick={() => remove(item)}>
+								</LoadingButton>
+								<LoadingButton
+									variant="ghost"
+									class="text-destructive hover:text-destructive"
+									onclick={() => remove(item)}
+									loading={deleteBusyId === item.id}
+									loadingLabel="Menghapus..."
+									disabled={(deleteBusyId !== null && deleteBusyId !== item.id) || toggleBusyId !== null}
+								>
 									Hapus
-								</Button>
+								</LoadingButton>
 							</div>
 						</div>
 					{/each}
@@ -445,6 +587,8 @@
 			{/if}
 		</Card.Content>
 	</Card.Root>
+		{/snippet}
+	</AsyncContent>
 </div>
 
 <Dialog.Root bind:open={showDialog}>
@@ -547,7 +691,7 @@
 
 			<div class="flex justify-end gap-2">
 				<Button variant="outline" onclick={() => (showDialog = false)}>Batal</Button>
-				<LoadingButton onclick={save} loading={saving} loadingLabel="Menyimpan..." label="Simpan" />
+				<LoadingButton onclick={() => void save()} loading={saving} loadingLabel="Menyimpan..." label="Simpan" />
 			</div>
 		</div>
 	</Dialog.Content>

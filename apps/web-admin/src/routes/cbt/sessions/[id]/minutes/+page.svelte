@@ -1,7 +1,12 @@
 <script lang="ts">
+	import PrinterIcon from '@lucide/svelte/icons/printer';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { fetchSchoolProfile, schoolAddressLine, type SchoolProfile } from '$lib/school-profile';
 
 	type SessionInfo = {
 		title: string;
@@ -29,12 +34,89 @@
 		capacity: number;
 		participant_count: number;
 	};
+	type MinutesPayload = {
+		session?: SessionInfo | null;
+		participants?: Participant[];
+		rooms?: Room[];
+	};
+	type MinutesDetail = {
+		session: SessionInfo;
+		participants: Participant[];
+		rooms: Room[];
+	};
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+	type MinutesPrintData = {
+		schoolProfile: SchoolProfile;
+		detail: MinutesDetail;
+	};
 
 	const sessionId = page.params.id;
-	let session = $state<SessionInfo | null>(null);
-	let participants = $state<Participant[]>([]);
-	let rooms = $state<Room[]>([]);
-	let loading = $state(true);
+	let minutesPromise = $state<Promise<MinutesPrintData> | null>(null);
+
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	async function fetchMinutes(): Promise<MinutesDetail> {
+		const response = await fetch(`/api/cbt/sessions/${sessionId}/minutes`);
+		const payload = await readApi<MinutesPayload>(response, 'Gagal memuat berita acara sesi');
+		if (!payload.session) throw new Error('Data sesi tidak ditemukan');
+		return {
+			session: payload.session,
+			participants: payload.participants ?? [],
+			rooms: payload.rooms ?? [],
+		};
+	}
+
+	async function fetchMinutesPrintData(): Promise<MinutesPrintData> {
+		const [schoolProfile, detail] = await Promise.all([fetchSchoolProfile(), fetchMinutes()]);
+		return { schoolProfile, detail };
+	}
+
+	function loadMinutes() {
+		minutesPromise = fetchMinutesPrintData();
+	}
+
+	function retryMinutes(reset?: () => void) {
+		reset?.();
+		loadMinutes();
+	}
+
+	function minutesErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat berita acara sesi';
+	}
+
+	function handleMinutesRenderError(error: unknown) {
+		console.error('CBT session minutes render failed', error);
+	}
 
 	function fmtDt(value: string) {
 		return new Date(value).toLocaleString('id-ID', {
@@ -47,15 +129,8 @@
 		}) + ' WITA';
 	}
 
-	onMount(async () => {
-		const res = await fetch(`/api/cbt/sessions/${sessionId}/minutes`);
-		if (res.ok) {
-			const data = await res.json();
-			session = data.session;
-			participants = data.participants ?? [];
-			rooms = data.rooms ?? [];
-		}
-		loading = false;
+	onMount(() => {
+		void loadMinutes();
 	});
 </script>
 
@@ -63,59 +138,93 @@
 	<title>Berita Acara Sesi</title>
 </svelte:head>
 
-{#if loading}
-	<div class="mx-auto max-w-6xl space-y-6 p-6">
-		<div class="space-y-2">
-			<Skeleton class="h-8 w-56" />
-			<Skeleton class="h-4 w-80" />
+<AsyncContent promise={minutesPromise} onerror={handleMinutesRenderError}>
+	{#snippet pending()}
+		<div class="mx-auto max-w-6xl space-y-6 p-6">
+			<div class="space-y-2">
+				<Skeleton class="h-8 w-56" />
+				<Skeleton class="h-4 w-80" />
+			</div>
+			<Skeleton class="h-32 w-full rounded-lg" />
+			<div class="grid gap-4 md:grid-cols-3">
+				{#each Array.from({ length: 3 }) as _, index (`minutes-stat-skeleton-${index}`)}
+					<Skeleton class="h-28 w-full rounded-lg" />
+				{/each}
+			</div>
+			<Skeleton class="h-64 w-full rounded-lg" />
+			<Skeleton class="h-80 w-full rounded-lg" />
 		</div>
-		<Skeleton class="h-32 w-full rounded-3xl" />
-		<div class="grid gap-4 md:grid-cols-3">
-			{#each Array.from({ length: 3 }) as _, index (`minutes-stat-skeleton-${index}`)}
-				<Skeleton class="h-28 w-full rounded-3xl" />
-			{/each}
+	{/snippet}
+
+	{#snippet failed(error, reset)}
+		<div class="mx-auto max-w-6xl p-6">
+			<RecoveryPanel
+				title="Berita Acara Belum Tersaji"
+				message={minutesErrorMessage(error)}
+				onRetry={() => retryMinutes(reset)}
+			/>
 		</div>
-		<Skeleton class="h-64 w-full rounded-3xl" />
-		<Skeleton class="h-80 w-full rounded-3xl" />
-	</div>
-{:else if session}
+	{/snippet}
+
+	{#snippet children(value)}
+		{@const printData = value as MinutesPrintData}
+		{@const detail = printData.detail}
+		{@const schoolProfile = printData.schoolProfile}
+		{@const currentSession = detail.session}
+		{@const currentParticipants = detail.participants}
+		{@const currentRooms = detail.rooms}
 	<div class="mx-auto max-w-6xl space-y-6 p-6 print:p-0">
 		<div class="flex items-center justify-between print:hidden">
 			<div>
 				<h1 class="text-2xl font-semibold text-slate-900">Berita Acara Sesi Ujian</h1>
 				<p class="text-sm text-slate-500">Siap dicetak untuk pengawas dan arsip madrasah.</p>
 			</div>
-			<button class="rounded-md border border-input px-3 py-2 text-sm font-medium" onclick={() => window.print()}>
+			<Button onclick={() => window.print()}>
+				<PrinterIcon class="mr-2 size-4" />
 				Cetak
-			</button>
+			</Button>
 		</div>
 
-		<section class="rounded-3xl border border-emerald-200 bg-white p-6 shadow-sm">
-			<h2 class="text-xl font-semibold text-slate-900">{session.title}</h2>
+		<section class="rounded-lg border border-emerald-200 bg-white p-6 text-center shadow-sm">
+			<p class="text-sm font-semibold uppercase text-slate-900">{schoolProfile.ministry_line}</p>
+			<p class="text-sm font-semibold uppercase text-slate-900">{schoolProfile.office_line}</p>
+			<h1 class="mt-1 text-xl font-bold uppercase text-slate-950">{schoolProfile.name}</h1>
+			<p class="mt-1 text-xs leading-5 text-slate-600">{schoolAddressLine(schoolProfile) || 'Alamat madrasah belum diisi'}</p>
+			{#if schoolProfile.nsm || schoolProfile.npsn}
+				<p class="text-xs text-slate-600">
+					{#if schoolProfile.nsm}NSM {schoolProfile.nsm}{/if}
+					{#if schoolProfile.nsm && schoolProfile.npsn} · {/if}
+					{#if schoolProfile.npsn}NPSN {schoolProfile.npsn}{/if}
+				</p>
+			{/if}
+		</section>
+
+		<section class="rounded-lg border border-emerald-200 bg-white p-6 shadow-sm">
+			<h2 class="text-xl font-semibold text-slate-900">{currentSession.title}</h2>
 			<div class="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
-				<p><span class="font-medium">Paket:</span> {session.package_title}</p>
-				<p><span class="font-medium">Kelas/Scope:</span> {session.class_code || session.scope_ref || session.scope_type || '—'}</p>
-				<p><span class="font-medium">Mulai:</span> {fmtDt(session.scheduled_start)}</p>
-				<p><span class="font-medium">Selesai:</span> {fmtDt(session.scheduled_end)}</p>
+				<p><span class="font-medium">Paket:</span> {currentSession.package_title}</p>
+				<p><span class="font-medium">Kelas/Scope:</span> {currentSession.class_code || currentSession.scope_ref || currentSession.scope_type || '—'}</p>
+				<p><span class="font-medium">Mulai:</span> {fmtDt(currentSession.scheduled_start)}</p>
+				<p><span class="font-medium">Selesai:</span> {fmtDt(currentSession.scheduled_end)}</p>
 			</div>
 		</section>
 
 		<section class="grid gap-4 md:grid-cols-3">
-			<div class="rounded-3xl border border-emerald-200 bg-white p-5 shadow-sm">
+			<div class="rounded-lg border border-emerald-200 bg-white p-5 shadow-sm">
 				<p class="text-sm text-slate-500">Total peserta</p>
-				<p class="mt-2 text-3xl font-bold text-emerald-950">{participants.length}</p>
+				<p class="mt-2 text-3xl font-bold text-emerald-950">{currentParticipants.length}</p>
 			</div>
-			<div class="rounded-3xl border border-emerald-200 bg-white p-5 shadow-sm">
+			<div class="rounded-lg border border-emerald-200 bg-white p-5 shadow-sm">
 				<p class="text-sm text-slate-500">Sudah submit</p>
-				<p class="mt-2 text-3xl font-bold text-emerald-950">{participants.filter((p) => p.submitted_at).length}</p>
+				<p class="mt-2 text-3xl font-bold text-emerald-950">{currentParticipants.filter((p) => p.submitted_at).length}</p>
 			</div>
-			<div class="rounded-3xl border border-emerald-200 bg-white p-5 shadow-sm">
+			<div class="rounded-lg border border-emerald-200 bg-white p-5 shadow-sm">
 				<p class="text-sm text-slate-500">Ruangan aktif</p>
-				<p class="mt-2 text-3xl font-bold text-emerald-950">{rooms.length}</p>
+				<p class="mt-2 text-3xl font-bold text-emerald-950">{currentRooms.length}</p>
 			</div>
 		</section>
 
-		<section class="rounded-3xl border border-emerald-200 bg-white p-6 shadow-sm">
+		<section class="rounded-lg border border-emerald-200 bg-white p-6 shadow-sm">
 			<h3 class="text-lg font-semibold text-slate-900">Distribusi Ruangan</h3>
 			<div class="mt-4 overflow-x-auto">
 				<table class="min-w-full text-sm">
@@ -127,7 +236,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each rooms as room}
+						{#each currentRooms as room (room.id)}
 							<tr class="border-t">
 								<td class="px-3 py-2">{room.room_name}</td>
 								<td class="px-3 py-2">{room.capacity}</td>
@@ -139,7 +248,7 @@
 			</div>
 		</section>
 
-		<section class="rounded-3xl border border-emerald-200 bg-white p-6 shadow-sm">
+		<section class="rounded-lg border border-emerald-200 bg-white p-6 shadow-sm">
 			<h3 class="text-lg font-semibold text-slate-900">Daftar Hadir dan Token</h3>
 			<div class="mt-4 overflow-x-auto">
 				<table class="min-w-full text-sm">
@@ -154,7 +263,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each participants as participant}
+						{#each currentParticipants as participant (participant.id)}
 							<tr class="border-t">
 								<td class="px-3 py-2 font-mono">{participant.nis}</td>
 								<td class="px-3 py-2">{participant.nama}</td>
@@ -168,5 +277,25 @@
 				</table>
 			</div>
 		</section>
+
+		<section class="grid gap-8 rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-700 md:grid-cols-2">
+			<div class="text-center">
+				<p>Mengetahui,</p>
+				<p>Kepala Madrasah</p>
+				<div class="mt-16 border-t border-slate-700 pt-2">
+					<p class="font-semibold">{schoolProfile.head_name || '........................................'}</p>
+					<p>NIP. {schoolProfile.head_nip || '................................'}</p>
+				</div>
+			</div>
+			<div class="text-center">
+				<p>Pengawas Ruang,</p>
+				<p>{currentSession.class_code || currentSession.scope_ref || '................................'}</p>
+				<div class="mt-16 border-t border-slate-700 pt-2">
+					<p class="font-semibold">........................................</p>
+					<p>NIP. ................................</p>
+				</div>
+			</div>
+		</section>
 	</div>
-{/if}
+	{/snippet}
+</AsyncContent>

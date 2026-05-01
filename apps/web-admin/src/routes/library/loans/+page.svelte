@@ -8,6 +8,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
@@ -34,13 +35,25 @@
 	interface Student { id: string; nis: string; nama: string; }
 	interface Employee { id: string; nip: string; nama: string; }
 
+	interface LoansOverview {
+		loans: LoanRow[];
+		books: Book[];
+		students: Student[];
+		employees: Employee[];
+	}
+
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
 	let loans = $state<LoanRow[]>([]);
 	let books = $state<Book[]>([]);
 	let students = $state<Student[]>([]);
 	let employees = $state<Employee[]>([]);
-	let loading = $state(true);
+	let loansPromise = $state<Promise<LoansOverview> | null>(null);
 	let busy = $state(false);
-	let error = $state('');
 
 	let tabStatus = $state<'active' | 'returned' | ''>('active');
 
@@ -63,10 +76,6 @@
 	// Denda lunas confirm
 	let lunasLoanId = $state<string | null>(null);
 	let showLunasDialog = $state(false);
-
-	const filteredLoans = $derived(
-		loans.filter((l) => !tabStatus || l.status === tabStatus)
-	);
 
 	const filteredStudents = $derived(
 		students.filter((s) => {
@@ -108,25 +117,104 @@
 		return `Rp ${n.toLocaleString('id-ID')}`;
 	}
 
-	async function load() {
-		loading = true;
-		try {
-			error = '';
-			const [lRes, bRes, sRes, eRes] = await Promise.all([
-				fetch('/api/library/loans'),
-				fetch('/api/library/books'),
-				fetch('/api/students'),
-				fetch('/api/employees'),
-			]);
-			const lj = await lRes.json(); loans = lj.data ?? lj ?? [];
-			const bj = await bRes.json(); books = bj.data ?? bj ?? [];
-			const sj = await sRes.json(); students = sj.data ?? sj ?? [];
-			const ej = await eRes.json(); employees = ej.data ?? ej ?? [];
-		} catch {
-			error = 'Gagal memuat data peminjaman, anggota, atau stok buku. Coba lagi untuk memulihkan tampilan operasional.';
-		} finally {
-			loading = false;
+	function filterLoans(loanRows: LoanRow[]) {
+		return loanRows.filter((l) => !tabStatus || l.status === tabStatus);
+	}
+
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) {
+			throw new Error(message || fallbackMessage);
 		}
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
+			throw new Error(payload.error);
+		}
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	function applyOverview(overview: LoansOverview) {
+		loans = overview.loans ?? [];
+		books = overview.books ?? [];
+		students = overview.students ?? [];
+		employees = overview.employees ?? [];
+	}
+
+	async function fetchOverview(): Promise<LoansOverview> {
+		const [lRes, bRes, sRes, eRes] = await Promise.all([
+			fetch('/api/library/loans'),
+			fetch('/api/library/books'),
+			fetch('/api/students'),
+			fetch('/api/employees'),
+		]);
+		return {
+			loans: await readApi<LoanRow[]>(lRes, 'Gagal memuat data peminjaman.'),
+			books: await readApi<Book[]>(bRes, 'Gagal memuat stok buku.'),
+			students: await readApi<Student[]>(sRes, 'Gagal memuat data siswa.'),
+			employees: await readApi<Employee[]>(eRes, 'Gagal memuat data pegawai.'),
+		};
+	}
+
+	function load() {
+		const emptyOverview: LoansOverview = { loans: [], books: [], students: [], employees: [] };
+		applyOverview(emptyOverview);
+		loansPromise = fetchOverview().then((overview) => {
+			applyOverview(overview);
+			return overview;
+		});
+	}
+
+	async function refreshOverview() {
+		const overview = await fetchOverview();
+		applyOverview(overview);
+		loansPromise = Promise.resolve(overview);
+	}
+
+	function retryLoans(reset?: () => void) {
+		reset?.();
+		load();
+	}
+
+	function loansErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat data peminjaman, anggota, atau stok buku. Coba lagi untuk memulihkan tampilan operasional.';
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
+	}
+
+	async function refreshLoansAfterMutation() {
+		try {
+			await refreshOverview();
+		} catch (error) {
+			loansPromise = Promise.resolve({ loans, books, students, employees });
+			toast.error(loansErrorMessage(error));
+		}
+	}
+
+	function handleLoansRenderError(error: unknown) {
+		console.error('Library loans render failed', error);
 	}
 
 	function selectMember(id: string, nama: string, nip_nis: string) {
@@ -157,12 +245,14 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ book_id: fBookId, member_type: fMemberType, member_id: fMemberId, due_days: fDueDays }),
 			});
-			const j = await res.json();
-			if (!res.ok) { toast.error(j.error ?? 'Gagal meminjamkan buku'); return; }
+			const payload = await res.json().catch(() => null);
+			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal meminjamkan buku'); return; }
 			toast.success('Buku berhasil dipinjamkan');
 			showLoanDialog = false;
 			resetLoanForm();
-			await load();
+			await refreshLoansAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal meminjamkan buku. Periksa koneksi lalu coba lagi.'));
 		} finally {
 			busy = false;
 		}
@@ -173,12 +263,14 @@
 		busy = true;
 		try {
 			const res = await fetch(`/api/library/loans/${returnLoan.id}/return`, { method: 'POST' });
-			const j = await res.json();
-			if (!res.ok) { toast.error(j.error ?? 'Gagal mengembalikan'); return; }
+			const payload = await res.json().catch(() => null);
+			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal mengembalikan'); return; }
 			toast.success('Buku berhasil dikembalikan');
 			returnLoan = null;
 			showReturnDialog = false;
-			await load();
+			await refreshLoansAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal mengembalikan buku. Periksa koneksi lalu coba lagi.'));
 		} finally {
 			busy = false;
 		}
@@ -189,18 +281,22 @@
 		busy = true;
 		try {
 			const res = await fetch(`/api/library/loans/${lunasLoanId}/lunas`, { method: 'POST' });
-			const j = await res.json();
-			if (!res.ok) { toast.error(j.error ?? 'Gagal'); return; }
+			const payload = await res.json().catch(() => null);
+			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal'); return; }
 			toast.success('Denda ditandai lunas');
 			lunasLoanId = null;
 			showLunasDialog = false;
-			await load();
+			await refreshLoansAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal memperbarui status denda. Periksa koneksi lalu coba lagi.'));
 		} finally {
 			busy = false;
 		}
 	}
 
-	onMount(load);
+	onMount(() => {
+		void load();
+	});
 </script>
 
 <svelte:head><title>Peminjaman — Perpustakaan</title></svelte:head>
@@ -214,32 +310,53 @@
 		<Button onclick={() => { resetLoanForm(); showLoanDialog = true; }} size="sm">+ Pinjam Buku</Button>
 	</div>
 
-	<div class="grid gap-3 md:grid-cols-3">
-		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Pinjaman Aktif</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{loans.filter((item) => item.status === 'active').length}</p>
-			<p class="text-sm text-slate-600">transaksi yang masih berjalan saat ini</p>
-		</div>
-		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Terlambat</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{loans.filter((item) => item.is_overdue && item.status === 'active').length}</p>
-			<p class="text-sm text-slate-600">pinjaman aktif yang melewati jatuh tempo</p>
-		</div>
-		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Buku Siap Pinjam</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{books.filter((item) => item.tersedia > 0).length}</p>
-			<p class="text-sm text-slate-600">judul yang masih punya stok untuk dipinjam</p>
-		</div>
-	</div>
+	<AsyncContent promise={loansPromise} onerror={handleLoansRenderError}>
+		{#snippet pending()}
+			<div class="grid gap-3 md:grid-cols-3">
+				{#each ['Pinjaman Aktif', 'Terlambat', 'Buku Siap Pinjam'] as label (label)}
+					<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+						<Skeleton class="mt-3 h-8 w-16" />
+						<Skeleton class="mt-2 h-4 w-52" />
+					</div>
+				{/each}
+			</div>
+		{/snippet}
 
-	{#if error}
-		<RecoveryPanel title="Sirkulasi Belum Tersaji" message={error} onRetry={load} />
-	{/if}
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Sirkulasi Belum Tersaji"
+				message={loansErrorMessage(error)}
+				onRetry={() => retryLoans(reset)}
+			/>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const overview = value as LoansOverview}
+			<div class="grid gap-3 md:grid-cols-3">
+				<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Pinjaman Aktif</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.loans.filter((item) => item.status === 'active').length}</p>
+					<p class="text-sm text-slate-600">transaksi yang masih berjalan saat ini</p>
+				</div>
+				<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Terlambat</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.loans.filter((item) => item.is_overdue && item.status === 'active').length}</p>
+					<p class="text-sm text-slate-600">pinjaman aktif yang melewati jatuh tempo</p>
+				</div>
+				<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Buku Siap Pinjam</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.books.filter((item) => item.tersedia > 0).length}</p>
+					<p class="text-sm text-slate-600">judul yang masih punya stok untuk dipinjam</p>
+				</div>
+			</div>
+		{/snippet}
+	</AsyncContent>
 
 	<Card.Root class="border-slate-200 shadow-sm">
 		<Card.Content class="p-2">
 			<div class="flex flex-wrap gap-1">
-				{#each [['active', 'Aktif'], ['', 'Semua'], ['returned', 'Dikembalikan']] as [val, label]}
+				{#each [['active', 'Aktif'], ['', 'Semua'], ['returned', 'Dikembalikan']] as [val, label] (val)}
 					<button
 						class="rounded-full px-4 py-2 text-sm font-medium transition-colors {tabStatus === val ? 'bg-emerald-700 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'}"
 						onclick={() => (tabStatus = val as 'active' | 'returned' | '')}
@@ -251,97 +368,115 @@
 
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
-			{#if loading}
-				<div class="space-y-3 p-6">
-					{#each Array.from({ length: 6 }) as _, index (`loan-skeleton-${index}`)}
-						<div class="grid gap-3 md:grid-cols-[1.2fr_1fr_0.8fr_0.8fr_0.7fr_0.7fr_auto] md:items-center">
-							<Skeleton class="h-5 w-40" />
-							<Skeleton class="h-5 w-32" />
-							<Skeleton class="h-5 w-24" />
-							<Skeleton class="h-5 w-24" />
-							<Skeleton class="h-6 w-20" />
-							<Skeleton class="h-5 w-20" />
-							<Skeleton class="h-9 w-28 justify-self-end" />
-						</div>
-					{/each}
-				</div>
-			{:else if filteredLoans.length === 0}
-				<div class="p-4">
-					<EmptyStatePanel
-						title={tabStatus === 'returned' ? 'Belum ada riwayat pengembalian' : tabStatus === 'active' ? 'Belum ada pinjaman aktif' : 'Belum ada data pinjaman'}
-						description={tabStatus === 'returned'
-							? 'Riwayat pengembalian akan muncul di sini setelah buku mulai diproses dan dikembalikan.'
-							: tabStatus === 'active'
-								? 'Belum ada transaksi pinjam yang sedang berjalan. Gunakan tombol pinjam untuk membuat transaksi pertama.'
-								: 'Belum ada transaksi sirkulasi yang tercatat pada perpustakaan ini.'}
-						compact
-					/>
-				</div>
-			{:else}
-				<Table.Root>
-					<Table.Header>
-						<Table.Row class="bg-slate-50 text-xs">
-							<Table.Head>Buku</Table.Head>
-							<Table.Head>Anggota</Table.Head>
-							<Table.Head>Dipinjam</Table.Head>
-							<Table.Head>Jatuh Tempo</Table.Head>
-							<Table.Head>Status</Table.Head>
-							<Table.Head>Denda</Table.Head>
-							<Table.Head class="text-right">Aksi</Table.Head>
-						</Table.Row>
-					</Table.Header>
-					<Table.Body>
-						{#each filteredLoans as loan (loan.id)}
-							<Table.Row class="text-sm">
-								<Table.Cell>
-									<p class="font-medium max-w-[140px] truncate" title={loan.book_judul}>{loan.book_judul}</p>
-									<p class="text-xs text-slate-400 font-mono">{loan.book_kode}</p>
-								</Table.Cell>
-								<Table.Cell>
-									<p class="max-w-[120px] truncate" title={loan.member_nama}>{loan.member_nama}</p>
-									<p class="text-xs text-slate-400">{loan.member_nip_nis}</p>
-								</Table.Cell>
-								<Table.Cell class="text-xs text-slate-600">{formatDate(loan.dipinjam_at)}</Table.Cell>
-								<Table.Cell>
-									<span class={loan.is_overdue ? 'text-red-600 font-semibold' : 'text-slate-700'}>
-										{formatDate(loan.jatuh_tempo)}
-									</span>
-								</Table.Cell>
-								<Table.Cell>
-									{#if loan.status === 'returned'}
-										<Badge variant="secondary" class="text-xs">Dikembalikan</Badge>
-									{:else if loan.is_overdue}
-										<Badge variant="destructive" class="text-xs">Terlambat</Badge>
-									{:else}
-										<Badge class="bg-blue-100 text-blue-800 text-xs hover:bg-blue-100">Aktif</Badge>
-									{/if}
-								</Table.Cell>
-								<Table.Cell class="text-xs">
-									{#if loan.denda_total > 0}
-										<span class={loan.denda_lunas ? 'text-slate-400 line-through' : 'text-orange-600 font-medium'}>
-											{formatRupiah(loan.denda_total)}
-										</span>
-										{#if loan.denda_lunas}
-											<span class="ml-1 text-green-600">✓</span>
-										{/if}
-									{:else}
-										<span class="text-slate-400">-</span>
-									{/if}
-								</Table.Cell>
-								<Table.Cell class="text-right">
-									{#if loan.status === 'active'}
-										<Button size="sm" variant="outline" onclick={() => { returnLoan = loan; showReturnDialog = true; }}>Kembalikan</Button>
-									{:else if loan.denda_total > 0 && !loan.denda_lunas}
-										<Button size="sm" variant="outline" onclick={() => { lunasLoanId = loan.id; showLunasDialog = true; }}>
-											Tandai Lunas
-										</Button>
-									{/if}
-								</Table.Cell>
-							</Table.Row>
+			<AsyncContent promise={loansPromise} onerror={handleLoansRenderError}>
+				{#snippet pending()}
+					<div class="space-y-3 p-6">
+						{#each Array.from({ length: 6 }) as _, index (`loan-skeleton-${index}`)}
+							<div class="grid gap-3 md:grid-cols-[1.2fr_1fr_0.8fr_0.8fr_0.7fr_0.7fr_auto] md:items-center">
+								<Skeleton class="h-5 w-40" />
+								<Skeleton class="h-5 w-32" />
+								<Skeleton class="h-5 w-24" />
+								<Skeleton class="h-5 w-24" />
+								<Skeleton class="h-6 w-20" />
+								<Skeleton class="h-5 w-20" />
+								<Skeleton class="h-9 w-28 justify-self-end" />
+							</div>
 						{/each}
-					</Table.Body>
-				</Table.Root>
-			{/if}
+					</div>
+				{/snippet}
+
+				{#snippet failed(error, reset)}
+					<div class="p-4">
+						<RecoveryPanel
+							compact
+							title="Sirkulasi Belum Tersaji"
+							message={loansErrorMessage(error)}
+							onRetry={() => retryLoans(reset)}
+						/>
+					</div>
+				{/snippet}
+
+				{#snippet children(value)}
+					{@const currentLoans = filterLoans((value as LoansOverview).loans)}
+					{#if currentLoans.length === 0}
+						<div class="p-4">
+							<EmptyStatePanel
+								title={tabStatus === 'returned' ? 'Belum ada riwayat pengembalian' : tabStatus === 'active' ? 'Belum ada pinjaman aktif' : 'Belum ada data pinjaman'}
+								description={tabStatus === 'returned'
+									? 'Riwayat pengembalian akan muncul di sini setelah buku mulai diproses dan dikembalikan.'
+									: tabStatus === 'active'
+										? 'Belum ada transaksi pinjam yang sedang berjalan. Gunakan tombol pinjam untuk membuat transaksi pertama.'
+										: 'Belum ada transaksi sirkulasi yang tercatat pada perpustakaan ini.'}
+								compact
+							/>
+						</div>
+					{:else}
+						<Table.Root>
+							<Table.Header>
+								<Table.Row class="bg-slate-50 text-xs">
+									<Table.Head>Buku</Table.Head>
+									<Table.Head>Anggota</Table.Head>
+									<Table.Head>Dipinjam</Table.Head>
+									<Table.Head>Jatuh Tempo</Table.Head>
+									<Table.Head>Status</Table.Head>
+									<Table.Head>Denda</Table.Head>
+									<Table.Head class="text-right">Aksi</Table.Head>
+								</Table.Row>
+							</Table.Header>
+							<Table.Body>
+								{#each currentLoans as loan (loan.id)}
+									<Table.Row class="text-sm">
+										<Table.Cell>
+											<p class="font-medium max-w-[140px] truncate" title={loan.book_judul}>{loan.book_judul}</p>
+											<p class="text-xs text-slate-400 font-mono">{loan.book_kode}</p>
+										</Table.Cell>
+										<Table.Cell>
+											<p class="max-w-[120px] truncate" title={loan.member_nama}>{loan.member_nama}</p>
+											<p class="text-xs text-slate-400">{loan.member_nip_nis}</p>
+										</Table.Cell>
+										<Table.Cell class="text-xs text-slate-600">{formatDate(loan.dipinjam_at)}</Table.Cell>
+										<Table.Cell>
+											<span class={loan.is_overdue ? 'text-red-600 font-semibold' : 'text-slate-700'}>
+												{formatDate(loan.jatuh_tempo)}
+											</span>
+										</Table.Cell>
+										<Table.Cell>
+											{#if loan.status === 'returned'}
+												<Badge variant="secondary" class="text-xs">Dikembalikan</Badge>
+											{:else if loan.is_overdue}
+												<Badge variant="destructive" class="text-xs">Terlambat</Badge>
+											{:else}
+												<Badge class="bg-blue-100 text-blue-800 text-xs hover:bg-blue-100">Aktif</Badge>
+											{/if}
+										</Table.Cell>
+										<Table.Cell class="text-xs">
+											{#if loan.denda_total > 0}
+												<span class={loan.denda_lunas ? 'text-slate-400 line-through' : 'text-orange-600 font-medium'}>
+													{formatRupiah(loan.denda_total)}
+												</span>
+												{#if loan.denda_lunas}
+													<span class="ml-1 text-green-600">✓</span>
+												{/if}
+											{:else}
+												<span class="text-slate-400">-</span>
+											{/if}
+										</Table.Cell>
+										<Table.Cell class="text-right">
+											{#if loan.status === 'active'}
+												<Button size="sm" variant="outline" onclick={() => { returnLoan = loan; showReturnDialog = true; }}>Kembalikan</Button>
+											{:else if loan.denda_total > 0 && !loan.denda_lunas}
+												<Button size="sm" variant="outline" onclick={() => { lunasLoanId = loan.id; showLunasDialog = true; }}>
+													Tandai Lunas
+												</Button>
+											{/if}
+										</Table.Cell>
+									</Table.Row>
+								{/each}
+							</Table.Body>
+						</Table.Root>
+					{/if}
+				{/snippet}
+			</AsyncContent>
 		</Card.Content>
 	</Card.Root>
 </div>
@@ -355,7 +490,7 @@
 		<!-- Mode toggle -->
 		<div class="flex items-center gap-2 border-b border-slate-100 pb-3">
 			<span class="text-xs text-slate-500">Mode:</span>
-			{#each [['beginner', 'Cepat'], ['advance', 'Lengkap']] as [val, label]}
+			{#each [['beginner', 'Cepat'], ['advance', 'Lengkap']] as [val, label] (val)}
 				<button
 					class="rounded-full border px-3 py-1 text-xs transition-colors {loanFormMode === val ? 'bg-green-700 text-white border-green-700' : 'border-slate-300 text-slate-600 hover:border-slate-400'}"
 					onclick={() => (loanFormMode = val as 'beginner' | 'advance')}
@@ -373,7 +508,7 @@
 			<div class="space-y-2">
 				<p class="text-sm font-medium">Jenis Anggota</p>
 				<div class="flex gap-2">
-					{#each [['student', 'Siswa'], ['employee', 'Pegawai']] as [val, label]}
+					{#each [['student', 'Siswa'], ['employee', 'Pegawai']] as [val, label] (val)}
 						<button
 							class="rounded-full border px-3 py-1 text-xs transition-colors {fMemberType === val ? 'bg-green-700 text-white border-green-700' : 'bg-white text-slate-600 border-slate-300'}"
 							onclick={() => { fMemberType = val as 'student' | 'employee'; fMemberId = ''; fMemberLabel = ''; fMemberSearch = ''; }}
@@ -388,7 +523,7 @@
 				<Input id="m-search" bind:value={fMemberSearch} placeholder={fMemberType === 'student' ? 'Nama atau NIS siswa…' : 'Nama atau NIP pegawai…'} />
 				{#if fMemberSearch && !fMemberId}
 					<div class="mt-1 rounded-md border border-slate-200 bg-white shadow-sm">
-						{#each (fMemberType === 'student' ? filteredStudents : filteredEmployees) as m}
+						{#each (fMemberType === 'student' ? filteredStudents : filteredEmployees) as m (m.id)}
 							<button
 								class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 text-left"
 								onclick={() => selectMember(m.id, m.nama, (m as Student).nis ?? (m as Employee).nip)}
@@ -412,7 +547,7 @@
 				<Input id="b-search" bind:value={fBookSearch} placeholder="Judul atau kode buku (hanya yang tersedia)…" />
 				{#if fBookSearch && !fBookId}
 					<div class="mt-1 rounded-md border border-slate-200 bg-white shadow-sm">
-						{#each availableBooks as b}
+						{#each availableBooks as b (b.id)}
 							<button
 								class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 text-left"
 								onclick={() => selectBook(b.id, b.kode, b.judul)}
@@ -444,7 +579,7 @@
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (showLoanDialog = false)}>Batal</Button>
-			<LoadingButton onclick={submitLoan} loading={busy} disabled={busy || !fMemberId || !fBookId}>
+			<LoadingButton onclick={() => void submitLoan()} loading={busy} disabled={busy || !fMemberId || !fBookId}>
 				Pinjamkan
 			</LoadingButton>
 		</Dialog.Footer>
@@ -474,7 +609,7 @@
 		{/if}
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => { returnLoan = null; showReturnDialog = false; }}>Batal</Button>
-			<LoadingButton onclick={submitReturn} loading={busy} disabled={busy}>Konfirmasi Kembalikan</LoadingButton>
+			<LoadingButton onclick={() => void submitReturn()} loading={busy} disabled={busy}>Konfirmasi Kembalikan</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
@@ -488,7 +623,7 @@
 		</Dialog.Header>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => { lunasLoanId = null; showLunasDialog = false; }}>Batal</Button>
-			<LoadingButton onclick={submitLunas} loading={busy} disabled={busy}>Tandai Lunas</LoadingButton>
+			<LoadingButton onclick={() => void submitLunas()} loading={busy} disabled={busy}>Tandai Lunas</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

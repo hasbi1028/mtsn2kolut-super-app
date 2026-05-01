@@ -1,6 +1,6 @@
 # MTs Negeri 2 Kolaka Utara — Super App Strategic Plan
 
-> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Jurnal Kelas Complete | Sprint 17 Persuratan Complete | Sprint 18–21 Planned | Last Updated: 2026-05-01
+> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Jurnal Kelas Complete | Sprint 17 Persuratan Complete | Sprint 18 Tata Kelola Madrasah Complete | Sprint 19 SKP Mirror Complete | Sprint 20 Bukti Mutu Complete | Sprint 21 Kesiswaan Foundation Complete | Sprint 22 Surat Keterangan Complete | Sprint 23 Kesiswaan Engagement Complete | Sprint 24 Arsip TU Complete | Sprint 25 RKT/RKJM Execution Complete | Sprint 26 TU Dashboard Complete | Sprint 27 Renstra/IKU Alignment Complete | Sprint 28 Governance Print Pack Complete | Sprint 29 School Profile Complete | Sprint 30 Print Surface Letterhead Complete | Sprint 31 Compliance Actions Complete | Sprint 32 Compliance Print/Export Complete | Sprint 33 Compliance Escalation Board Complete | Sprint 34 Compliance Quick Status Complete | Sprint 35 Compliance Evidence Capture Complete | Sprint 36 Compliance Meeting Pack Complete | Sprint 37 Compliance Deadline Calendar Complete | Sprint 38 Governance Control Center Complete | Sprint 39 Compliance Advanced Filters Complete | Sprint 40 PIC Briefing Pack Complete | Sprint 41 8 SNP Briefing Pack Complete | Sprint 42 Evidence Briefing Pack Complete | Sprint 43 Siklus Dokumen Module Complete | Last Updated: 2026-05-01
 > This file is the master roadmap. Update after each sprint completion.
 
 ---
@@ -364,33 +364,227 @@ Three runtime units deployed across 3 VPS:
 - [x] Frontend pages: `/tu/surat-masuk`, `/tu/surat-keluar` (auto-number preview), `/tu/disposisi`
 - [x] Sidebar group "Tata Usaha" + ikon `mail`, `inbox`, `mail-forward`
 
-### Sprint 18 — Kesiswaan: Foundation
-- [ ] Migration extend `students` (NIK, tanggal/tempat lahir, alamat, agama, anak-ke, foto, no telp)
-- [ ] Tambah enum `kesiswaan` ke `user_role` + sidebar role guard
-- [ ] Migration `violation_categories`, `student_violations`, `student_achievements`
-- [ ] Auto-calc total poin pelanggaran per siswa
-- [ ] Form prestasi dengan tingkat sekolah/kab/prov/nasional/internasional
-- [ ] Upload foto siswa ke `data/student-photos/`
-- [ ] Sidebar group "Kesiswaan" + ikon `shield-check`
-- [ ] Guru read-only untuk siswa di kelasnya saja (data scoping seperti pattern grades)
+### ✅ Sprint 18 — Tata Kelola Madrasah (COMPLETE)
+- [x] Governance schema foundation for organizational units, positions, active assignments, governance documents, and program indicators.
+- [x] Backend `/api/governance/*` contract owned by `services/core-api` with sqlc queries, thin handlers, service validation, and `admin`/`staf` access rules.
+- [x] Web-admin BFF proxies under `/api/governance/*` that forward the real user JWT and do not access PostgreSQL directly.
+- [x] `/governance` operator screen for struktur organisasi, dokumen tata kelola, program/indikator, and 8 SNP evidence matrix.
+- [x] Sidebar entry and route-level role guard for `admin` and `staf`.
+- [x] Verification: sqlc generation, Go tests/build, Svelte autofixer, and `npm run check`.
 
-### Sprint 19 — Tata Usaha: Surat Keterangan Siswa
-- [ ] Migration `certificate_templates`, `student_certificates` (dengan `snapshot_data` JSONB)
-- [ ] Seed template: aktif, lulus, pindah, kehilangan dokumen, mengikuti kegiatan
-- [ ] Reuse `IssueOutgoingLetterNumber` (klasifikasi default `PP.00.4` siswa)
-- [ ] Render HTML print (reuse pattern `/grades/rapor`)
-- [ ] Halaman `/tu/surat-keterangan` dengan generator + history
+### ✅ Sprint 19 — SKP Mirror & Cascading Kinerja (COMPLETE)
+- [x] Internal performance target table linked to employees, governance positions, and governance programs.
+- [x] Backend `/api/governance/performance-targets/*` contract for target list/create/update/delete with service validation.
+- [x] Web-admin BFF proxy for performance targets that forwards JWT to Go API.
+- [x] `/governance` SKP/Kinerja tab for target kerja pegawai, indikator, progres, evidence URL, and review notes.
+- [x] Verification: sqlc generation, Go tests/vet/build, Svelte autofixer, and `npm run check`.
 
-### Sprint 20 — Kesiswaan: Engagement
-- [ ] Migration `extracurriculars`, `extracurricular_members`
-- [ ] Migration `counseling_sessions` (dengan `is_confidential BOOLEAN`)
-- [ ] Migration `student_transfers` (mutasi keluar/masuk dengan transaksi update `students.status`)
-- [ ] BK confidentiality guard: hanya `admin` & `kesiswaan` lihat catatan rahasia
+### ✅ Sprint 20 — Register Bukti Mutu & 8 SNP (COMPLETE)
+- [x] Dedicated evidence-item table linked to documents, programs, performance targets, units, and SNP standards.
+- [x] Backend `/api/governance/evidence-items/*` contract for evidence list/create/update/delete with validation.
+- [x] 8 SNP matrix and governance stats include dedicated evidence readiness counts.
+- [x] Web-admin BFF proxy for evidence items.
+- [x] `/governance` Bukti Mutu tab for evidence status, owner unit, linked program/target, file URL, and review notes.
+- [x] Verification: sqlc generation, Go tests/vet/build, Svelte check, and focused autofixer where available.
 
-### Sprint 21 — Tata Usaha: Aset & Arsip
-- [ ] Migration `archive_categories`, `archive_documents`
-- [ ] Upload file arsip ke `data/archives/` dengan klasifikasi
-- [ ] Catatan: Inventaris foundation sudah ada di Sprint 13 — di sprint ini cukup polish (kondisi ekstra, ekspor, riwayat lebih lengkap) jika dibutuhkan
+### ✅ Sprint 21 — Kesiswaan: Foundation (COMPLETE)
+- [x] Migration extend `students` (NIK, tanggal/tempat lahir, alamat, agama, anak-ke, foto, no telp)
+- [x] Tambah enum `kesiswaan` ke `user_role` + sidebar role guard
+- [x] Migration `violation_categories`, `student_violations`, `student_achievements`
+- [x] Auto-calc total poin pelanggaran per siswa
+- [x] Form prestasi dengan tingkat sekolah/kab/prov/nasional/internasional
+- [x] Upload foto siswa ke `data/student-photos/`
+- [x] Sidebar group "Kesiswaan" + protected `/kesiswaan` entry
+- [x] Guru read-only untuk siswa di kelasnya saja (data scoping seperti pattern grades)
+- [x] Verification: sqlc generation, Go tests/vet/build, Svelte autofixer, and `npm run check`.
+
+### ✅ Sprint 22 — Tata Usaha: Surat Keterangan Siswa (COMPLETE)
+- [x] Migration `certificate_templates`, `student_certificates` (dengan `snapshot_data` JSONB)
+- [x] Seed template: aktif, lulus, pindah, kehilangan dokumen, mengikuti kegiatan
+- [x] Reuse `IssueOutgoingLetterNumber` helper path via outgoing-letter sequence (klasifikasi default `PP.00.4` siswa)
+- [x] Backend `/api/tu/surat-keterangan/*` contract with templates, student options, issue, detail, cancel
+- [x] BFF proxy `/api/tu/surat-keterangan/*` that forwards JWT to Go API
+- [x] Render HTML print route `/tu/surat-keterangan/[id]/print`
+- [x] Halaman `/tu/surat-keterangan` dengan generator + history
+- [x] Verification: sqlc generation, Go tests/vet/build, Svelte autofixer, and `npm run check`.
+
+### ✅ Sprint 23 — Kesiswaan: Engagement (COMPLETE)
+- [x] Migration `extracurriculars`, `extracurricular_members`
+- [x] Migration `counseling_sessions` (dengan `is_confidential BOOLEAN`)
+- [x] Migration `student_transfers` (mutasi keluar/masuk dengan transaksi update `students.status`)
+- [x] BK confidentiality guard: hanya `admin` & `kesiswaan` lihat catatan rahasia; guru hanya menerima catatan non-rahasia yang scoped ke kelasnya
+- [x] Backend `/api/kesiswaan/*` contract for ekskul, anggota ekskul, BK, and mutasi siswa
+- [x] BFF proxy routes that forward JWT to Go API without direct DB access
+- [x] `/kesiswaan` tabs for Ekskul, BK, and Mutasi with operator forms and history tables
+- [x] Verification: sqlc generation, Go tests/vet/build, Svelte autofixer, and `npm run check`.
+
+### ✅ Sprint 24 — Tata Usaha: Aset & Arsip (COMPLETE)
+- [x] Migration `048_tu_archives.sql` untuk `archive_categories` dan `archive_documents` dengan kategori awal, status arsip, retensi, checksum, dan metadata file.
+- [x] Backend `/api/tu/archives/*` contract untuk statistik, kategori, register dokumen, unggah file, edit metadata, hapus, dan stream file arsip.
+- [x] File arsip tersimpan di `data/archives/` melalui backend Go; web-admin tetap BFF/proxy tanpa direct DB atau client persistence.
+- [x] BFF proxy `/api/tu/archives/*` meneruskan JWT pengguna asli, termasuk multipart upload dan file streaming.
+- [x] Halaman `/tu/arsip` dengan statistik, filter register, form unggah/edit metadata, kategori arsip, dan akses file.
+- [x] Sidebar Tata Usaha menambahkan entry `Arsip` untuk `admin` dan `staf`.
+- [x] Verification: sqlc generation, Go tests/vet/build, Svelte autofixer, and `npm run check`.
+
+### ✅ Sprint 25 — RKT/RKJM Program Execution (COMPLETE)
+- [x] Migration `049_governance_work_plan_items.sql` untuk item pelaksanaan RKT/RKJM tahunan yang link ke program, dokumen sumber, unit, pegawai penanggung jawab, dan bukti mutu.
+- [x] Backend `/api/governance/work-plan-items/*` contract untuk list/create/update/delete dengan validasi program, jadwal, status, progres, anggaran, dan realisasi.
+- [x] Governance stats menambahkan total item RKT/RKJM, item selesai/terkendala, total anggaran, dan realisasi.
+- [x] BFF proxy `/api/governance/work-plan-items/*` meneruskan JWT pengguna asli ke Go API.
+- [x] Halaman `/governance` menambahkan tab `RKT/RKJM` dengan ringkasan anggaran, tabel kegiatan, export CSV, print, dan form item pelaksanaan.
+- [x] Jalur dokumen → program → RKT/RKJM → SKP/bukti mutu tetap satu peta di modul tata kelola.
+- [x] Verification: sqlc generation, Go tests/vet/build, Svelte autofixer, `npm run check`, and `git diff --check`.
+
+### ✅ Sprint 26 — TU Dashboard & Compliance Print Pack (COMPLETE)
+- [x] Tambahkan ringkasan dashboard TU lintas surat masuk/keluar, surat keterangan, disposisi, arsip, inventaris, dan RKT/RKJM.
+- [x] Tambahkan printable compliance pack untuk kepala/staf: register surat, status disposisi, arsip/retensi, inventaris perhatian, dan bukti RKT/RKJM terpilih.
+- [x] Siapkan export CSV/print yang konsisten untuk kebutuhan administrasi audit madrasah.
+- [x] Sidebar Tata Usaha menambahkan entry `Dashboard TU` dan `Paket Kepatuhan` untuk `admin` dan `staf`.
+- [x] Verification: Svelte autofixer reported `issues: []` for both TU pages, `npm run check`, and `git diff --check`.
+
+### ✅ Sprint 27 — Renstra/IKU Alignment Map (COMPLETE)
+- [x] Tambahkan peta Visi/Misi, Renstra/RKJM, Perkin/IKU, RKT/RKJM, SKP, dan bukti mutu pada modul tata kelola.
+- [x] Tampilkan gap pemetaan: program tanpa IKU, tanpa dokumen sumber, tanpa RKT, tanpa SKP, atau tanpa bukti.
+- [x] Sediakan export CSV dan print untuk bahan rapat kepala/staf serta review administrasi Kemenag/SIPKA internal.
+- [x] Verification: Svelte autofixer reported `issues: []`, `npm run check`, and `git diff --check`.
+
+### ✅ Sprint 28 — Governance Print Pack (COMPLETE)
+- [x] Tambahkan paket cetak tata kelola formal: struktur organisasi, jalur komando, pejabat aktif, tupoksi, dokumen strategis, peta IKU/RKT/SKP, dan 8 SNP.
+- [x] Sediakan export CSV ringkas untuk lampiran rapat/review administrasi kepala dan staf.
+- [x] Hubungkan paket cetak dari halaman `/governance` tanpa menambah akses database di frontend.
+- [x] Verification: Svelte autofixer reported `issues: []` and `suggestions: []` for the print-pack page, `npm run check`, and `git diff --check`.
+
+### ✅ Sprint 29 — School Profile & Letterhead Foundation (COMPLETE)
+- [x] Tambahkan API profil madrasah resmi berbasis `app_settings` untuk kop surat, identitas satuan kerja, dan tanda tangan kepala madrasah.
+- [x] Tambahkan halaman admin `/settings/school-profile` untuk mengelola nama madrasah, NSM/NPSN, alamat, kontak, dan kepala madrasah.
+- [x] Pakai profil resmi pada permukaan cetak utama agar tidak lagi bergantung pada placeholder kop surat.
+- [x] Sidebar Sistem menambahkan entry `Profil Madrasah` untuk admin.
+- [x] Verification: Go tests/vet/build, Svelte autofixer on touched components, `npm run check`, and `git diff --check`.
+
+### ✅ Sprint 30 — Print Surface Letterhead Standardization (COMPLETE)
+- [x] Tambahkan helper frontend bersama `$lib/school-profile` untuk tipe profil madrasah, default resmi, fetch via BFF `/api/school-profile`, dan format alamat kop.
+- [x] Reuse helper profil pada Governance Print Pack dan TU Compliance Pack agar paket cetak memakai identitas madrasah yang sama.
+- [x] Kartu ujian CBT dan berita acara sesi CBT sekarang memakai kop resmi dari profil madrasah, termasuk blok tanda tangan kepala madrasah pada berita acara.
+- [x] Cetak rapor dan surat keterangan memakai nama/kop/tanda tangan kepala madrasah dari profil resmi, bukan hardcoded placeholder.
+- [x] Verification: Svelte autofixer membaca komponen tersentuh dan melaporkan `issues: []` / `suggestions: []` meskipun proses MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, `git diff --check`, dan `git diff --no-index --check` untuk file baru/untracked.
+
+### ✅ Sprint 31 — Governance Compliance Action Tracker (COMPLETE)
+- [x] Migration `050_governance_compliance_actions.sql` menambahkan register tindak lanjut kepatuhan untuk gap Renstra/IKU/RKT/RKJM/SKP/8 SNP dengan PIC, prioritas, tenggat, status, dan bukti.
+- [x] Backend `/api/governance/compliance-actions/*` contract untuk list/create/update/delete dengan validasi service, sqlc typed queries, dan statistik dashboard tata kelola.
+- [x] BFF proxy `/api/governance/compliance-actions/*` meneruskan JWT pengguna asli ke Go API tanpa akses database langsung dari SvelteKit.
+- [x] Halaman `/governance/actions` menyediakan ringkasan risiko, filter register, CRUD tindak lanjut, serta saran otomatis dari gap pemetaan dokumen/program/RKT/SKP/bukti mutu.
+- [x] Navigasi tata kelola menambahkan akses `Tindak Lanjut` dari halaman `/governance` dan sidebar untuk `admin`/`staf`.
+- [x] Verification: `make db-sqlc`, Go tests/vet/build, Svelte autofixer dengan `issues: []` meskipun MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, `git diff --check`, dan whitespace check untuk file baru/untracked.
+
+### ✅ Sprint 32 — Governance Compliance Print & Export (COMPLETE)
+- [x] Helper paket cetak tata kelola sekarang ikut memuat register tindak lanjut kepatuhan dari `/api/governance/compliance-actions`.
+- [x] Paket cetak `/governance/print-pack` menambahkan metrik tindak lanjut, aksi kritis, serta tabel formal PIC/status/tenggat/bukti untuk kebutuhan rapat, audit, dan review Kemenag.
+- [x] Export CSV paket tata kelola sekarang mencakup tindak lanjut kepatuhan beserta kaitan program/dokumen/SKP/bukti.
+- [x] Halaman `/governance/actions` menambahkan export CSV sesuai filter aktif dan pintasan ke paket cetak formal.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` meskipun MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, `git diff --check`, dan whitespace check untuk file baru/untracked.
+
+### ✅ Sprint 33 — Governance Compliance Escalation Board (COMPLETE)
+- [x] Halaman `/governance/actions` menambahkan filter cepat untuk `Lewat Tenggat`, `Prioritas Tinggi`, `Tanpa PIC`, dan `Menunggu Bukti`.
+- [x] Register tindak lanjut sekarang bisa difokuskan dari panel eskalasi tanpa mengubah kontrak backend atau akses database frontend.
+- [x] Panel `Eskalasi PIC/Unit` mengurutkan beban tindak lanjut aktif berdasarkan lewat tenggat, prioritas, jumlah terbuka, dan tenggat terdekat.
+- [x] Panel `Sebaran 8 SNP` menunjukkan standar yang masih punya tindak lanjut aktif beserta jumlah prioritas tinggi, lewat tenggat, dan menunggu bukti.
+- [x] Export CSV tindak lanjut tetap mengikuti filter aktif sehingga hasil rapat bisa langsung diekspor sesuai fokus eskalasi.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, `git diff --check`, dan whitespace check untuk file baru/untracked.
+
+### ✅ Sprint 34 — Governance Compliance Quick Status Workflow (COMPLETE)
+- [x] Register `/governance/actions` menambahkan aksi cepat status langsung dari tabel: `Mulai`, `Bukti`, `Selesai`, `Buka Ulang`, dan `Aktifkan`.
+- [x] Aksi cepat memakai kontrak PUT `/api/governance/compliance-actions/{id}` melalui BFF, tidak menambah akses database frontend atau route backend baru.
+- [x] Quick status memakai button loading state per baris agar rapat tindak lanjut tidak memicu submit ganda saat jaringan lambat.
+- [x] Penyelesaian tanpa bukti meminta konfirmasi eksplisit supaya administrasi 8 SNP/Renstra/SKP tetap sadar bukti.
+- [x] Helper form update direuse untuk modal edit dan quick status agar payload tetap konsisten.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, `git diff --check`, dan whitespace check untuk file baru/untracked.
+
+### ✅ Sprint 35 — Governance Compliance Evidence Capture (COMPLETE)
+- [x] Register `/governance/actions` menambahkan aksi `Catat Bukti` untuk membuka dialog ringkas bukti/catatan tindak lanjut.
+- [x] Dialog bukti dapat mengaitkan item bukti mutu, menyimpan URL/lokasi bukti, dan menulis catatan tindak lanjut tanpa membuka form lengkap.
+- [x] Operator dapat memilih `Simpan Bukti` atau `Simpan & Selesai`; penyelesaian tetap mewajibkan minimal URL/lokasi bukti atau item bukti.
+- [x] Mutasi bukti tetap memakai kontrak PUT `/api/governance/compliance-actions/{id}` melalui BFF dan helper payload yang sama dengan edit/quick status.
+- [x] Loading state dialog mencegah submit ganda saat pencatatan bukti dilakukan di rapat atau review administrasi.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` / `suggestions: []`, `npm run check`, `git diff --check`, dan whitespace check untuk file baru/untracked.
+
+### ✅ Sprint 36 — Governance Compliance Meeting Pack (COMPLETE)
+- [x] Tambahkan route `/governance/actions/meeting-pack` untuk paket rapat tindak lanjut kepatuhan yang bisa dicetak dan diekspor CSV.
+- [x] Paket rapat menyajikan ringkasan total/terbuka/prioritas tinggi/lewat tenggat/menunggu bukti/tanpa PIC dengan kop profil madrasah resmi.
+- [x] Agenda keputusan otomatis memecah isu rapat: lewat tenggat, prioritas tinggi, validasi bukti, dan penetapan PIC kosong.
+- [x] Tabel prioritas pembahasan, beban PIC/unit, sebaran 8 SNP, ruang keputusan rapat, dan tanda tangan disediakan untuk rapat kepala/staf.
+- [x] Halaman `/governance/actions` menambahkan pintasan `Paket Rapat` tanpa menambah backend route atau akses database frontend.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, `git diff --check`, dan whitespace check untuk file baru/untracked.
+
+### ✅ Sprint 37 — Governance Compliance Deadline Calendar (COMPLETE)
+- [x] Tambahkan route `/governance/actions/calendar` untuk kalender/timeline tenggat tindak lanjut kepatuhan.
+- [x] Kalender mengelompokkan action aktif ke bucket `Lewat Tenggat`, `Hari Ini`, `7 Hari ke Depan`, `30 Hari ke Depan`, `Setelah 30 Hari`, dan `Tanpa Tenggat`.
+- [x] Halaman kalender menyediakan ringkasan timeline, kartu bucket, tabel detail, print view, dan export CSV.
+- [x] Halaman `/governance/actions` menambahkan pintasan `Kalender` tanpa menambah backend route atau akses database frontend.
+- [x] Kalender memakai kop profil madrasah resmi dan data dari BFF governance yang sudah ada.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` / `suggestions: []` meskipun salah satu proses MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, `git diff --check`, dan whitespace check untuk file baru/untracked.
+
+### ✅ Sprint 38 — Governance Control Center (COMPLETE)
+- [x] Halaman utama `/governance` menampilkan statistik tindak lanjut kepatuhan: total, terbuka, kritis, dan selesai.
+- [x] Control strip `Kendali Tindak Lanjut Kepatuhan` menampilkan ringkasan terbuka/kritis/selesai di dashboard tata kelola utama.
+- [x] Quick links dari `/governance` menuju register tindak lanjut, kalender tenggat, paket rapat, dan paket cetak.
+- [x] Statistik memakai field `GetGovernanceStats` yang sudah ada, tanpa menambah backend route atau akses database frontend.
+- [x] Link internal memakai `resolve()` agar aman terhadap base path SvelteKit.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, `git diff --check`, dan whitespace check.
+
+### ✅ Sprint 39 — Governance Compliance Advanced Filters (COMPLETE)
+- [x] Register `/governance/actions` menambahkan filter lanjutan untuk tahun, sumber tindak lanjut, standar 8 SNP, dan PIC/unit.
+- [x] Filter lanjutan bekerja bersama pencarian, status, prioritas, dan filter cepat eskalasi tanpa menambah backend route atau akses database frontend.
+- [x] Opsi tahun dan PIC/unit dibangun dari data register yang sudah dimuat sehingga tetap konsisten dengan data BFF governance.
+- [x] Export CSV tindak lanjut tetap memakai `filteredActions`, sehingga hasil ekspor mengikuti semua filter aktif.
+- [x] Tombol `Reset Filter` mengosongkan pencarian, filter lanjutan, dan fokus eskalasi dalam satu aksi.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, `git diff --check`, dan whitespace check untuk file untracked/tersentuh.
+
+### ✅ Sprint 40 — Governance PIC Briefing Pack (COMPLETE)
+- [x] Tambahkan route `/governance/actions/owner-briefing` untuk lembar briefing tindak lanjut per PIC/unit.
+- [x] Briefing mengelompokkan action aktif per PIC/unit, menampilkan prioritas, status, tenggat, bukti, kaitan program/dokumen/SKP, serta ruang arahan/paraf.
+- [x] Halaman briefing menyediakan filter PIC/unit, print view, dan export CSV sesuai pilihan filter.
+- [x] Ringkasan briefing menampilkan jumlah PIC/unit, tugas terbuka, prioritas tinggi, lewat tenggat, menunggu bukti, dan tanpa bukti.
+- [x] Halaman `/governance/actions` menambahkan pintasan `Briefing PIC` tanpa menambah backend route atau akses database frontend.
+- [x] Data briefing memakai helper `fetchGovernancePrintPackData()` dan kontrak BFF governance yang sudah ada.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` / `suggestions: []`, `npm run check`, `git diff --check`, dan whitespace check untuk file baru/untracked.
+
+### ✅ Sprint 41 — Governance 8 SNP Briefing Pack (COMPLETE)
+- [x] Tambahkan route `/governance/actions/snp-briefing` untuk lembar briefing tindak lanjut per standar 8 SNP.
+- [x] Briefing mengelompokkan action aktif berdasarkan SNP, menampilkan PIC/unit, prioritas, status, tenggat, bukti, kaitan program/dokumen/SKP, dan ruang keputusan review.
+- [x] Halaman briefing menyediakan filter standar SNP, print view, dan export CSV sesuai pilihan filter.
+- [x] Ringkasan briefing menampilkan jumlah standar aktif, tugas terbuka, PIC/unit terlibat, prioritas tinggi, lewat tenggat, menunggu bukti, dan tanpa bukti.
+- [x] Halaman `/governance/actions` menambahkan pintasan `Briefing SNP` tanpa menambah backend route atau akses database frontend.
+- [x] Data briefing memakai helper `fetchGovernancePrintPackData()` dan kontrak BFF governance yang sudah ada.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, `git diff --check`, dan whitespace check untuk file baru/untracked.
+
+### ✅ Sprint 42 — Governance Evidence Briefing Pack (COMPLETE)
+- [x] Tambahkan route `/governance/actions/evidence-briefing` untuk lembar validasi bukti tindak lanjut.
+- [x] Briefing mengelompokkan action aktif ke fokus `Menunggu Bukti`, `Lewat Tenggat Tanpa Bukti`, `Prioritas Tinggi Tanpa Bukti`, `Tanpa Bukti`, dan `Bukti Tercatat`.
+- [x] Halaman briefing menyediakan filter fokus bukti, print view, export CSV, kartu ringkasan, dan tabel validasi bukti.
+- [x] Tabel validasi menampilkan PIC/unit, status, prioritas, tenggat, kaitan program/dokumen/SKP, bukti, dan ruang validasi.
+- [x] Halaman `/governance/actions` menambahkan pintasan `Briefing Bukti` tanpa menambah backend route atau akses database frontend.
+- [x] Data briefing memakai helper `fetchGovernancePrintPackData()` dan kontrak BFF governance yang sudah ada.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` / `suggestions: []` meskipun salah satu proses MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, `git diff --check`, dan whitespace check untuk file baru/untracked.
+
+### ✅ Sprint 43 — Siklus Dokumen Module (COMPLETE)
+- [x] Tambahkan modul mandiri `Siklus Dokumen` dengan namespace backend `/api/document-cycles/*`, bukan sebagai submenu kecil di Governance.
+- [x] Migration `051_document_cycles.sql` menambahkan `document_cycle_catalogs`, `document_cycle_obligations`, dan `document_cycle_events` untuk katalog, jadwal, pengingat, status, dan audit ringan progres dokumen.
+- [x] Seed katalog awal dari siklus dokumen MTsN: harian, mingguan, bulanan, triwulan, semester, tahunan, RKJM 4 tahunan, dan Renstra 5 tahunan, termasuk SKP BKN, Perkin, IKU, RKT/RKAM, LAKIP, EDM, dan pemetaan 8 SNP.
+- [x] Backend service menambahkan generator kewajiban tahunan idempotent, status workflow `not_started -> draft -> waiting_verification -> completed`, tanggal pengingat, jatuh tempo, PIC, verifikator, dan tautan ke dokumen tata kelola/evidence/arsip.
+- [x] Generator kewajiban tahunan dioptimalkan menjadi bulk SQL satu round-trip agar tombol Generate Tahun tidak melewati write-timeout API saat membuat ratusan jadwal periodik.
+- [x] BFF proxy `/api/document-cycles/*` meneruskan JWT pengguna asli ke Go API tanpa akses database langsung dari SvelteKit.
+- [x] Halaman standalone `/document-cycles` menyediakan dashboard kepala madrasah, panel perhatian, filter pengingat/status/frekuensi, quick status, detail monitoring, dan manajemen katalog.
+- [x] Sidebar menambahkan grup `Siklus Dokumen` dengan entry `Monitoring Dokumen`, serta default pin untuk role `staf`.
+- [x] Migration `051_document_cycles.sql` sudah dijalankan; tabel siklus dokumen aktif dengan 30 katalog awal, termasuk RKJM dan Renstra dengan tenggat panjang.
+- [x] Jadwal siklus dokumen tahun 2026 sudah digenerate: 374 kewajiban aktif, 374 status `Belum Mulai`, 101 lewat tempo, dan 10 masuk pengingat awal.
+- [x] Verification: `make db-sqlc`, `make db-migrate`, `go test ./...`, `go vet ./...`, API health/generator/stats check, Svelte autofixer membaca file dengan `issues: []` / `suggestions: []` meskipun MCP exit 1 karena timeout fetch dokumentasi eksternal, `npm run check`, dan `git diff --check`.
+
+### ✅ Repository Hygiene Checkpoint — Source Commit Discipline (COMPLETE)
+- [x] Pisahkan artefak runtime SQLite sidecar (`*.db-shm`, `*.db-wal`, `*.sqlite-shm`, `*.sqlite-wal`) dari source control sesuai aturan legacy SQLite hanya sebagai artefak impor.
+- [x] Exclude lokal dokumen review `Siklus_Dokumen_MTsN_Lengkap*.docx` agar tidak ikut commit fitur.
+- [x] Commit dibuat bertahap: hygiene repository, dokumentasi temuan, lalu fitur aplikasi.
+- [x] Verification: staged diff dicek dengan `git diff --cached --check` dan status git dirapikan setelah commit.
 
 ---
 

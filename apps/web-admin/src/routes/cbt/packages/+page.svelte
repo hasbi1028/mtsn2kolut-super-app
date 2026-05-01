@@ -8,8 +8,11 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { confirmChallenge } from '$lib/confirm-dialog';
 
 	type CbtPackage = {
 		id: string; subject_id: string; subject_name: string; subject_code: string;
@@ -22,12 +25,32 @@
 		code: string; question_text: string; difficulty: string; status: string;
 	};
 	type Subject = { id: string; name: string; code: string; };
+	type PackagesOverview = {
+		packages: CbtPackage[];
+		allQuestions: Question[];
+		subjects: Subject[];
+	};
+	type CbtPackagesPayload = {
+		packages?: CbtPackage[];
+		questions?: unknown[];
+		error?: string;
+		message?: string;
+	};
+	type AcademicPayload = {
+		subjects?: Subject[];
+		error?: string;
+		message?: string;
+	};
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
 
 	let packages = $state<CbtPackage[]>([]);
 	let allQuestions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
-	let loading = $state(true);
-	let error = $state('');
+	let packagesPromise = $state<Promise<PackagesOverview> | null>(null);
 	let showForm = $state(false);
 
 	let fSubjectId = $state('');
@@ -52,26 +75,97 @@
 		else fSelectedIds.add(id);
 	}
 
-	async function load() {
-		try {
-			const [pRes, qRes, aRes] = await Promise.all([
-				fetch('/api/cbt/packages'),
-				fetch('/api/cbt/questions'),
-				fetch('/api/academic'),
-			]);
-			const pJson = await pRes.json();
-			const qJson = await qRes.json();
-			const aJson = await aRes.json();
-			if (pJson.error) { error = pJson.error; return; }
-			const pd = pJson.data ?? pJson;
-			packages = pd.packages ?? [];
-			allQuestions = qJson.data ?? qJson ?? [];
-			subjects = (aJson.data ?? aJson)?.subjects ?? [];
-		} catch {
-			error = 'Gagal memuat data paket';
-		} finally {
-			loading = false;
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
 		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	function parseQuestions(payload: unknown) {
+		return Array.isArray(payload) ? (payload as Question[]) : [];
+	}
+
+	function parseSubjects(payload: AcademicPayload | unknown) {
+		return isRecord(payload) && Array.isArray(payload.subjects) ? (payload.subjects as Subject[]) : [];
+	}
+
+	async function fetchOverview(): Promise<PackagesOverview> {
+		const [packagesPayload, questionsPayload, academicPayload] = await Promise.all([
+			fetch('/api/cbt/packages').then((response) => readApi<CbtPackagesPayload>(response, 'Gagal memuat data paket')),
+			fetch('/api/cbt/questions').then((response) => readApi<unknown>(response, 'Gagal memuat bank soal')),
+			fetch('/api/academic').then((response) => readApi<AcademicPayload>(response, 'Gagal memuat data akademik')),
+		]);
+		return {
+			packages: packagesPayload.packages ?? [],
+			allQuestions: parseQuestions(questionsPayload),
+			subjects: parseSubjects(academicPayload),
+		};
+	}
+
+	function applyOverview(overview: PackagesOverview) {
+		packages = overview.packages;
+		allQuestions = overview.allQuestions;
+		subjects = overview.subjects;
+	}
+
+	function load() {
+		packages = [];
+		allQuestions = [];
+		subjects = [];
+		packagesPromise = fetchOverview().then((overview) => {
+			applyOverview(overview);
+			return overview;
+		});
+	}
+
+	async function refreshPackages() {
+		if (!packagesPromise) {
+			load();
+			return;
+		}
+		try {
+			const overview = await fetchOverview();
+			applyOverview(overview);
+			packagesPromise = Promise.resolve(overview);
+		} catch (error) {
+			packagesPromise = Promise.resolve({ packages, allQuestions, subjects });
+			toast.error(packagesErrorMessage(error));
+		}
+	}
+
+	function retryPackages(reset?: () => void) {
+		reset?.();
+		load();
+	}
+
+	function packagesErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat data paket';
+	}
+
+	function handlePackagesRenderError(error: unknown) {
+		console.error('CBT packages render failed', error);
 	}
 
 	function showToast(msg: string) {
@@ -80,6 +174,16 @@
 
 	function showError(msg: string) {
 		toast.error(msg);
+	}
+
+	async function responseErrorMessage(response: Response, fallback: string) {
+		const payload = await response.json().catch(() => null);
+		return apiErrorMessage(payload) || fallback;
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
 	}
 
 	function setOperationState(
@@ -91,8 +195,13 @@
 	}
 
 	function confirmPhrase(title: string, detail: string, challenge: string) {
-		const input = prompt(`${title}\n\n${detail}\n\nKetik ${challenge} untuk melanjutkan.`);
-		return input === challenge;
+		return confirmChallenge({
+			title,
+			message: detail,
+			challenge,
+			confirmLabel: 'Konfirmasi',
+			tone: 'danger'
+		});
 	}
 
 	async function createPackage() {
@@ -108,18 +217,20 @@
 					is_active: fActive, question_ids: Array.from(fSelectedIds),
 				}),
 			});
-			if (!res.ok) { const j = await res.json(); showError(j.error ?? 'Gagal'); return; }
+			if (!res.ok) { showError(await responseErrorMessage(res, 'Gagal membuat paket')); return; }
 			fSubjectId = ''; fTitle = ''; fDescription = ''; fDuration = 60;
 			fRandomize = false; fActive = true; fSelectedIds.clear();
 			showForm = false;
 			setOperationState('success', 'Paket Berhasil Dibuat', 'Paket ujian baru sudah tersimpan dan siap dipakai untuk sesi ujian.');
 			showToast('Paket ujian berhasil dibuat');
-			await load();
+			await refreshPackages();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal membuat paket. Periksa koneksi lalu coba lagi.'));
 		} finally { fBusy = false; }
 	}
 
 	async function deletePackage(id: string, title: string) {
-		if (!confirmPhrase('Hapus Paket Ujian', `Paket "${title}" akan dihapus dari daftar. Tindakan ini tidak bisa dibatalkan dari layar operator.`, 'HAPUS')) return;
+		if (!(await confirmPhrase('Hapus Paket Ujian', `Paket "${title}" akan dihapus dari daftar. Tindakan ini tidak bisa dibatalkan dari layar operator.`, 'HAPUS'))) return;
 		deleteBusyId = id;
 		try {
 			const res = await fetch(`/api/cbt/packages?id=${id}`, { method: 'DELETE' });
@@ -130,13 +241,17 @@
 			}
 			setOperationState('warning', 'Paket Dihapus', `Paket "${title}" sudah dihapus dari daftar paket ujian.`);
 			showToast('Paket dihapus');
-			await load();
+			await refreshPackages();
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal menghapus paket. Periksa koneksi lalu coba lagi.'));
 		} finally {
 			deleteBusyId = '';
 		}
 	}
 
-	onMount(load);
+	onMount(() => {
+		void load();
+	});
 </script>
 
 <svelte:head><title>Paket Ujian CBT — MTSN 2 Kolut</title></svelte:head>
@@ -151,10 +266,6 @@
 			{showForm ? 'Batal' : '+ Buat Paket'}
 		</LoadingButton>
 	</div>
-
-	{#if error}
-		<div class="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">{error}</div>
-	{/if}
 
 	{#if operationState}
 		<OperationStatusPanel {...operationState} />
@@ -235,7 +346,7 @@
 				{/if}
 
 				<div class="flex gap-2">
-					<LoadingButton disabled={fBusy || !fSubjectId || !fTitle || !fDuration} onclick={createPackage} loading={fBusy} loadingLabel="Menyimpan...">
+					<LoadingButton disabled={fBusy || !fSubjectId || !fTitle || !fDuration} onclick={() => void createPackage()} loading={fBusy} loadingLabel="Menyimpan...">
 						{`Buat Paket${fSelectedIds.size > 0 ? ` (${fSelectedIds.size} soal)` : ''}`}
 					</LoadingButton>
 					<LoadingButton variant="outline" onclick={() => (showForm = false)}>Batal</LoadingButton>
@@ -244,26 +355,39 @@
 		</Card.Root>
 	{/if}
 
-	{#if loading}
-		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
-			<Card.Content class="space-y-3 p-6">
-				{#each Array.from({ length: 5 }) as _, index (`package-row-skeleton-${index}`)}
-					<div class="grid gap-3 lg:grid-cols-[1.2fr_0.6fr_0.5fr_0.5fr_0.5fr_0.6fr_auto] lg:items-center">
-						<Skeleton class="h-5 w-40" />
-						<Skeleton class="h-6 w-16" />
-						<Skeleton class="h-5 w-14" />
-						<Skeleton class="h-5 w-12" />
-						<Skeleton class="h-6 w-12" />
-						<Skeleton class="h-6 w-16" />
-						<Skeleton class="h-9 w-20 justify-self-end" />
-					</div>
-				{/each}
-			</Card.Content>
-		</Card.Root>
-	{:else}
+	<AsyncContent promise={packagesPromise} onerror={handlePackagesRenderError}>
+		{#snippet pending()}
+			<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+				<Card.Content class="space-y-3 p-6">
+					{#each Array.from({ length: 5 }) as _, index (`package-row-skeleton-${index}`)}
+						<div class="grid gap-3 lg:grid-cols-[1.2fr_0.6fr_0.5fr_0.5fr_0.5fr_0.6fr_auto] lg:items-center">
+							<Skeleton class="h-5 w-40" />
+							<Skeleton class="h-6 w-16" />
+							<Skeleton class="h-5 w-14" />
+							<Skeleton class="h-5 w-12" />
+							<Skeleton class="h-6 w-12" />
+							<Skeleton class="h-6 w-16" />
+							<Skeleton class="h-9 w-20 justify-self-end" />
+						</div>
+					{/each}
+				</Card.Content>
+			</Card.Root>
+		{/snippet}
+
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Paket Ujian Belum Tersaji"
+				message={packagesErrorMessage(error)}
+				onRetry={() => retryPackages(reset)}
+			/>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const overview = value as PackagesOverview}
+			{@const currentPackages = overview.packages}
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Header class="pb-2">
-				<Card.Title class="text-base">Daftar Paket ({packages.length})</Card.Title>
+				<Card.Title class="text-base">Daftar Paket ({currentPackages.length})</Card.Title>
 			</Card.Header>
 			<Card.Content class="p-0">
 				<div class="hidden overflow-x-auto lg:block">
@@ -280,7 +404,7 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each packages as p (p.id)}
+						{#each currentPackages as p (p.id)}
 							<Table.Row>
 								<Table.Cell class="font-medium">{p.title}</Table.Cell>
 								<Table.Cell>
@@ -292,7 +416,7 @@
 								</Table.Cell>
 								<Table.Cell>
 									{#if p.randomize_questions}
-										<Badge class="bg-purple-100 text-purple-700 border-purple-200 text-xs">Ya</Badge>
+										<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">Ya</Badge>
 									{:else}
 										<Badge variant="secondary" class="text-xs">Tidak</Badge>
 									{/if}
@@ -327,7 +451,7 @@
 				</div>
 
 				<div class="grid gap-3 p-4 lg:hidden">
-					{#each packages as p (p.id)}
+					{#each currentPackages as p (p.id)}
 						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
@@ -372,5 +496,6 @@
 				</div>
 			</Card.Content>
 		</Card.Root>
-	{/if}
+		{/snippet}
+	</AsyncContent>
 </div>

@@ -1,13 +1,16 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
 
@@ -46,8 +49,13 @@
 
 	const sessionId = $derived($page.params.id);
 
-	let loading = $state(true);
-	let error = $state('');
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
+	let detailPromise = $state<Promise<JournalDetail> | null>(null);
 	let detail = $state<JournalDetail | null>(null);
 
 	let editMode = $state(false);
@@ -62,29 +70,80 @@
 	// attendance state: student_id -> {status, catatan}
 	let attendanceState = $state<Record<string, { status: string; catatan: string }>>({});
 
-	async function loadDetail() {
-		loading = true;
-		error = '';
-		try {
-			const res = await fetch(`/api/journal/sessions/${sessionId}`);
-			if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
-			const data = (await res.json()) as JournalDetail;
-			detail = data;
-			editMateri = data.session.materi;
-			editKegiatan = data.session.kegiatan;
-			editCatatan = data.session.catatan;
-			editGuruHadir = data.session.guru_hadir;
-			// Initialize attendance state from response
-			const map: Record<string, { status: string; catatan: string }> = {};
-			for (const a of data.attendances) {
-				map[a.student_id] = { status: a.status, catatan: a.catatan };
-			}
-			attendanceState = map;
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Gagal memuat detail sesi';
-		} finally {
-			loading = false;
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
 		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	function applyDetail(data: JournalDetail) {
+		detail = data;
+		editMateri = data.session.materi;
+		editKegiatan = data.session.kegiatan;
+		editCatatan = data.session.catatan;
+		editGuruHadir = data.session.guru_hadir;
+		const map: Record<string, { status: string; catatan: string }> = {};
+		for (const a of data.attendances) {
+			map[a.student_id] = { status: a.status, catatan: a.catatan };
+		}
+		attendanceState = map;
+	}
+
+	async function fetchDetail(): Promise<JournalDetail> {
+		const res = await fetch(`/api/journal/sessions/${sessionId}`);
+		return readApi<JournalDetail>(res, 'Gagal memuat detail sesi');
+	}
+
+	function loadDetail() {
+		detailPromise = fetchDetail().then((data) => {
+			applyDetail(data);
+			return data;
+		});
+	}
+
+	function retryDetail(reset?: () => void) {
+		reset?.();
+		loadDetail();
+	}
+
+	function detailErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat detail sesi';
+	}
+
+	function handleDetailRenderError(error: unknown) {
+		console.error('Journal detail render failed', error);
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
+	}
+
+	function payloadData<T>(payload: unknown, fallback: T): T {
+		if (isRecord(payload) && 'data' in payload) return (payload.data ?? fallback) as T;
+		return (payload ?? fallback) as T;
 	}
 
 	onMount(() => {
@@ -105,13 +164,15 @@
 					guru_hadir: editGuruHadir
 				})
 			});
-			const json = await res.json();
-			if (!res.ok) { toast.error(json.error ?? 'Gagal menyimpan'); return; }
-			detail = { ...detail, session: { ...detail.session, ...json } };
+			const payload = await res.json().catch(() => null);
+			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal menyimpan'); return; }
+			const savedSession = payloadData<Partial<SessionDetail>>(payload, {});
+			detail = { ...detail, session: { ...detail.session, ...savedSession } };
+			detailPromise = Promise.resolve(detail);
 			editMode = false;
 			toast.success('Sesi berhasil diperbarui');
-		} catch {
-			toast.error('Terjadi kesalahan jaringan');
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
 			editBusy = false;
 		}
@@ -130,11 +191,11 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ entries })
 			});
-			const json = await res.json();
-			if (!res.ok) { toast.error(json.error ?? 'Gagal menyimpan kehadiran'); return; }
+			const payload = await res.json().catch(() => null);
+			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal menyimpan kehadiran'); return; }
 			toast.success('Kehadiran berhasil disimpan');
-		} catch {
-			toast.error('Terjadi kesalahan jaringan');
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
 			saveBusy = false;
 		}
@@ -165,36 +226,46 @@
 
 <div class="container mx-auto max-w-5xl space-y-6 p-6">
 	<!-- Back button -->
-	<Button variant="ghost" size="sm" onclick={() => goto('/journal')}>
+	<Button variant="ghost" size="sm" onclick={() => goto(resolve('/journal'))}>
 		← Kembali ke Jurnal
 	</Button>
 
-	{#if loading}
-		<div class="space-y-4">
-			<Skeleton class="h-32 w-full" />
-			<Skeleton class="h-64 w-full" />
-		</div>
-	{:else if error}
-		<div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-	{:else if detail}
+	<AsyncContent promise={detailPromise} onerror={handleDetailRenderError}>
+		{#snippet pending()}
+			<div class="space-y-4">
+				<Skeleton class="h-32 w-full" />
+				<Skeleton class="h-64 w-full" />
+			</div>
+		{/snippet}
+
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Detail Jurnal Belum Tersaji"
+				message={detailErrorMessage(error)}
+				onRetry={() => retryDetail(reset)}
+			/>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const currentDetail = detail ?? (value as JournalDetail)}
 		<!-- Session Header Card -->
 		<Card.Root>
 			<Card.Header>
 				<div class="flex items-start justify-between">
 					<div class="space-y-1">
 						<div class="flex items-center gap-2">
-							<Badge variant="outline" class="text-base font-semibold">Pertemuan ke-{detail.session.pertemuan_ke}</Badge>
-							{#if detail.session.guru_hadir}
+							<Badge variant="outline" class="text-base font-semibold">Pertemuan ke-{currentDetail.session.pertemuan_ke}</Badge>
+							{#if currentDetail.session.guru_hadir}
 								<Badge class="bg-green-100 text-green-800 hover:bg-green-100">Guru Hadir</Badge>
 							{:else}
 								<Badge class="bg-red-100 text-red-800 hover:bg-red-100">Guru Tidak Hadir</Badge>
 							{/if}
 						</div>
-						<p class="text-lg font-medium text-gray-800">{formatTanggal(detail.session.tanggal)}</p>
+						<p class="text-lg font-medium text-gray-800">{formatTanggal(currentDetail.session.tanggal)}</p>
 						<p class="text-sm text-gray-500">
-							{detail.session.class_name} ({detail.session.class_code}) &nbsp;·&nbsp;
-							{detail.session.subject_name} &nbsp;·&nbsp;
-							{detail.session.teacher_name}
+							{currentDetail.session.class_name} ({currentDetail.session.class_code}) &nbsp;·&nbsp;
+							{currentDetail.session.subject_name} &nbsp;·&nbsp;
+							{currentDetail.session.teacher_name}
 						</p>
 					</div>
 					<Button variant="outline" size="sm" onclick={() => (editMode = !editMode)}>
@@ -227,23 +298,23 @@
 							<label for="edit-guru-hadir" class="text-sm font-medium text-gray-700">Guru hadir mengajar</label>
 						</div>
 						<div class="flex justify-end">
-							<LoadingButton loading={editBusy} onclick={saveSession}>Simpan Perubahan</LoadingButton>
+							<LoadingButton loading={editBusy} onclick={() => void saveSession()}>Simpan Perubahan</LoadingButton>
 						</div>
 					</div>
 				{:else}
 					<div class="grid gap-3 text-sm">
 						<div>
 							<p class="font-medium text-gray-700">Materi</p>
-							<p class="text-gray-600 whitespace-pre-wrap">{detail.session.materi || '–'}</p>
+							<p class="text-gray-600 whitespace-pre-wrap">{currentDetail.session.materi || '–'}</p>
 						</div>
 						<div>
 							<p class="font-medium text-gray-700">Kegiatan</p>
-							<p class="text-gray-600 whitespace-pre-wrap">{detail.session.kegiatan || '–'}</p>
+							<p class="text-gray-600 whitespace-pre-wrap">{currentDetail.session.kegiatan || '–'}</p>
 						</div>
-						{#if detail.session.catatan}
+						{#if currentDetail.session.catatan}
 							<div>
 								<p class="font-medium text-gray-700">Catatan</p>
-								<p class="text-gray-600 whitespace-pre-wrap">{detail.session.catatan}</p>
+								<p class="text-gray-600 whitespace-pre-wrap">{currentDetail.session.catatan}</p>
 							</div>
 						{/if}
 					</div>
@@ -256,11 +327,11 @@
 			<Card.Header>
 				<Card.Title class="text-base">Kehadiran Siswa</Card.Title>
 				<Card.Description>
-					{detail.attendances.length} siswa · Klik status untuk mengubah
+					{currentDetail.attendances.length} siswa · Klik status untuk mengubah
 				</Card.Description>
 			</Card.Header>
 			<Card.Content class="p-0">
-				{#if detail.attendances.length === 0}
+				{#if currentDetail.attendances.length === 0}
 					<div class="p-8 text-center text-sm text-gray-500">Tidak ada siswa yang terdaftar.</div>
 				{:else}
 					<Table.Root>
@@ -274,7 +345,7 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-							{#each detail.attendances as att, i}
+							{#each currentDetail.attendances as att, i (att.student_id)}
 								{@const cur = attendanceState[att.student_id] ?? { status: att.status, catatan: att.catatan }}
 								<Table.Row>
 									<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
@@ -282,7 +353,7 @@
 									<Table.Cell class="text-sm text-gray-500">{att.nis}</Table.Cell>
 									<Table.Cell>
 										<div class="flex gap-1">
-											{#each ['hadir', 'sakit', 'izin', 'alpha'] as s}
+											{#each ['hadir', 'sakit', 'izin', 'alpha'] as s (s)}
 												<button
 													class="rounded px-2 py-0.5 text-xs font-medium transition-colors {cur.status === s ? statusColors[s] : statusInactive}"
 													onclick={() => setStatus(att.student_id, s)}
@@ -312,11 +383,12 @@
 					</Table.Root>
 				{/if}
 			</Card.Content>
-			{#if detail.attendances.length > 0}
+			{#if currentDetail.attendances.length > 0}
 				<div class="flex justify-end border-t border-gray-100 p-4">
-					<LoadingButton loading={saveBusy} onclick={saveAttendances}>Simpan Kehadiran</LoadingButton>
+					<LoadingButton loading={saveBusy} onclick={() => void saveAttendances()}>Simpan Kehadiran</LoadingButton>
 				</div>
 			{/if}
 		</Card.Root>
-	{/if}
+		{/snippet}
+	</AsyncContent>
 </div>

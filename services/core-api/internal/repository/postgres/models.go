@@ -188,6 +188,50 @@ func (ns NullCbtSessionStatusEnum) Value() (driver.Value, error) {
 	return string(ns.CbtSessionStatusEnum), nil
 }
 
+type DispositionStatus string
+
+const (
+	DispositionStatusTerkirim        DispositionStatus = "terkirim"
+	DispositionStatusDibaca          DispositionStatus = "dibaca"
+	DispositionStatusDitindaklanjuti DispositionStatus = "ditindaklanjuti"
+	DispositionStatusSelesai         DispositionStatus = "selesai"
+)
+
+func (e *DispositionStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DispositionStatus(s)
+	case string:
+		*e = DispositionStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DispositionStatus: %T", src)
+	}
+	return nil
+}
+
+type NullDispositionStatus struct {
+	DispositionStatus DispositionStatus `json:"disposition_status"`
+	Valid             bool              `json:"valid"` // Valid is true if DispositionStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDispositionStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.DispositionStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DispositionStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDispositionStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DispositionStatus), nil
+}
+
 type GenderEnum string
 
 const (
@@ -316,6 +360,94 @@ func (ns NullJournalAttendanceStatus) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.JournalAttendanceStatus), nil
+}
+
+type LetterSifat string
+
+const (
+	LetterSifatBiasa   LetterSifat = "biasa"
+	LetterSifatPenting LetterSifat = "penting"
+	LetterSifatSegera  LetterSifat = "segera"
+	LetterSifatRahasia LetterSifat = "rahasia"
+)
+
+func (e *LetterSifat) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LetterSifat(s)
+	case string:
+		*e = LetterSifat(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LetterSifat: %T", src)
+	}
+	return nil
+}
+
+type NullLetterSifat struct {
+	LetterSifat LetterSifat `json:"letter_sifat"`
+	Valid       bool        `json:"valid"` // Valid is true if LetterSifat is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLetterSifat) Scan(value interface{}) error {
+	if value == nil {
+		ns.LetterSifat, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LetterSifat.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLetterSifat) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LetterSifat), nil
+}
+
+type LetterStatus string
+
+const (
+	LetterStatusBaru        LetterStatus = "baru"
+	LetterStatusDidisposisi LetterStatus = "didisposisi"
+	LetterStatusSelesai     LetterStatus = "selesai"
+	LetterStatusArsip       LetterStatus = "arsip"
+)
+
+func (e *LetterStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LetterStatus(s)
+	case string:
+		*e = LetterStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LetterStatus: %T", src)
+	}
+	return nil
+}
+
+type NullLetterStatus struct {
+	LetterStatus LetterStatus `json:"letter_status"`
+	Valid        bool         `json:"valid"` // Valid is true if LetterStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLetterStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.LetterStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LetterStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLetterStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LetterStatus), nil
 }
 
 type LibraryMemberType string
@@ -493,11 +625,12 @@ func (ns NullStudentStatusEnum) Value() (driver.Value, error) {
 type UserRole string
 
 const (
-	UserRoleAdmin UserRole = "admin"
-	UserRoleGuru  UserRole = "guru"
-	UserRoleSiswa UserRole = "siswa"
-	UserRoleStaf  UserRole = "staf"
-	UserRoleOrtu  UserRole = "ortu"
+	UserRoleAdmin     UserRole = "admin"
+	UserRoleGuru      UserRole = "guru"
+	UserRoleSiswa     UserRole = "siswa"
+	UserRoleStaf      UserRole = "staf"
+	UserRoleOrtu      UserRole = "ortu"
+	UserRoleKesiswaan UserRole = "kesiswaan"
 )
 
 func (e *UserRole) Scan(src interface{}) error {
@@ -634,6 +767,41 @@ type AppSetting struct {
 	Key       string             `json:"key"`
 	Value     string             `json:"value"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ArchiveCategory struct {
+	ID                 pgtype.UUID        `json:"id"`
+	Code               string             `json:"code"`
+	Name               string             `json:"name"`
+	ClassificationCode pgtype.Text        `json:"classification_code"`
+	Description        string             `json:"description"`
+	RetentionYears     int32              `json:"retention_years"`
+	IsActive           bool               `json:"is_active"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ArchiveDocument struct {
+	ID               pgtype.UUID        `json:"id"`
+	CategoryID       pgtype.UUID        `json:"category_id"`
+	Title            string             `json:"title"`
+	ArchiveNumber    string             `json:"archive_number"`
+	DocumentDate     pgtype.Date        `json:"document_date"`
+	ReceivedDate     pgtype.Date        `json:"received_date"`
+	Summary          string             `json:"summary"`
+	Tags             string             `json:"tags"`
+	Status           string             `json:"status"`
+	StorageLocation  string             `json:"storage_location"`
+	RetentionUntil   pgtype.Date        `json:"retention_until"`
+	OriginalName     string             `json:"original_name"`
+	StoredName       string             `json:"stored_name"`
+	FilePath         string             `json:"file_path"`
+	MimeType         string             `json:"mime_type"`
+	FileSize         int64              `json:"file_size"`
+	ChecksumSha256   string             `json:"checksum_sha256"`
+	UploadedByUserID pgtype.UUID        `json:"uploaded_by_user_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
 type AttendanceRecord struct {
@@ -828,6 +996,18 @@ type CbtStudentAnswer struct {
 	GradedAt      pgtype.Timestamptz `json:"graded_at"`
 }
 
+type CertificateTemplate struct {
+	ID             pgtype.UUID        `json:"id"`
+	Code           string             `json:"code"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	DefaultPurpose string             `json:"default_purpose"`
+	BodyTemplate   string             `json:"body_template"`
+	IsActive       bool               `json:"is_active"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ClassJournalAttendance struct {
 	ID        pgtype.UUID             `json:"id"`
 	SessionID pgtype.UUID             `json:"session_id"`
@@ -860,6 +1040,75 @@ type ClassSubjectAssignment struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CounselingSession struct {
+	ID                  pgtype.UUID        `json:"id"`
+	StudentID           pgtype.UUID        `json:"student_id"`
+	SessionDate         pgtype.Date        `json:"session_date"`
+	Topic               string             `json:"topic"`
+	Summary             string             `json:"summary"`
+	FollowUp            string             `json:"follow_up"`
+	Status              string             `json:"status"`
+	IsConfidential      bool               `json:"is_confidential"`
+	CounselorEmployeeID pgtype.UUID        `json:"counselor_employee_id"`
+	RecordedByUserID    pgtype.UUID        `json:"recorded_by_user_id"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+type DocumentCycleCatalog struct {
+	ID                           pgtype.UUID        `json:"id"`
+	Code                         string             `json:"code"`
+	Title                        string             `json:"title"`
+	Frequency                    string             `json:"frequency"`
+	SnpStandard                  string             `json:"snp_standard"`
+	RegulationRef                string             `json:"regulation_ref"`
+	DefaultOwnerUnitID           pgtype.UUID        `json:"default_owner_unit_id"`
+	DefaultResponsibleEmployeeID pgtype.UUID        `json:"default_responsible_employee_id"`
+	DefaultVerifierEmployeeID    pgtype.UUID        `json:"default_verifier_employee_id"`
+	DeadlineDaysAfterPeriod      int32              `json:"deadline_days_after_period"`
+	ReminderDaysBeforeDue        int32              `json:"reminder_days_before_due"`
+	Description                  string             `json:"description"`
+	IsActive                     bool               `json:"is_active"`
+	SortOrder                    int32              `json:"sort_order"`
+	CreatedAt                    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type DocumentCycleEvent struct {
+	ID           pgtype.UUID        `json:"id"`
+	ObligationID pgtype.UUID        `json:"obligation_id"`
+	EventType    string             `json:"event_type"`
+	FromStatus   string             `json:"from_status"`
+	ToStatus     string             `json:"to_status"`
+	Notes        string             `json:"notes"`
+	ActorUserID  pgtype.UUID        `json:"actor_user_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type DocumentCycleObligation struct {
+	ID                    pgtype.UUID        `json:"id"`
+	CatalogID             pgtype.UUID        `json:"catalog_id"`
+	PeriodYear            int32              `json:"period_year"`
+	PeriodLabel           string             `json:"period_label"`
+	PeriodStart           pgtype.Date        `json:"period_start"`
+	PeriodEnd             pgtype.Date        `json:"period_end"`
+	DueDate               pgtype.Date        `json:"due_date"`
+	ReminderDate          pgtype.Date        `json:"reminder_date"`
+	OwnerUnitID           pgtype.UUID        `json:"owner_unit_id"`
+	ResponsibleEmployeeID pgtype.UUID        `json:"responsible_employee_id"`
+	VerifierEmployeeID    pgtype.UUID        `json:"verifier_employee_id"`
+	Status                string             `json:"status"`
+	GovernanceDocumentID  pgtype.UUID        `json:"governance_document_id"`
+	EvidenceItemID        pgtype.UUID        `json:"evidence_item_id"`
+	ArchiveDocumentID     pgtype.UUID        `json:"archive_document_id"`
+	Notes                 string             `json:"notes"`
+	VerificationNotes     string             `json:"verification_notes"`
+	CompletedAt           pgtype.Timestamptz `json:"completed_at"`
+	CreatedByUserID       pgtype.UUID        `json:"created_by_user_id"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Employee struct {
 	ID             pgtype.UUID        `json:"id"`
 	Nip            string             `json:"nip"`
@@ -882,6 +1131,205 @@ type EmployeeSchedule struct {
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	RandomWindowMinutes int16              `json:"random_window_minutes"`
 	DayOfWeek           int16              `json:"day_of_week"`
+}
+
+type Extracurricular struct {
+	ID                   pgtype.UUID        `json:"id"`
+	Code                 string             `json:"code"`
+	Name                 string             `json:"name"`
+	Category             string             `json:"category"`
+	Description          string             `json:"description"`
+	SupervisorEmployeeID pgtype.UUID        `json:"supervisor_employee_id"`
+	ScheduleText         string             `json:"schedule_text"`
+	IsActive             bool               `json:"is_active"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ExtracurricularMember struct {
+	ID                pgtype.UUID        `json:"id"`
+	ExtracurricularID pgtype.UUID        `json:"extracurricular_id"`
+	StudentID         pgtype.UUID        `json:"student_id"`
+	JoinedAt          pgtype.Date        `json:"joined_at"`
+	Role              string             `json:"role"`
+	Status            string             `json:"status"`
+	Notes             string             `json:"notes"`
+	RecordedByUserID  pgtype.UUID        `json:"recorded_by_user_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GovernanceAssignment struct {
+	ID                     pgtype.UUID        `json:"id"`
+	PositionID             pgtype.UUID        `json:"position_id"`
+	EmployeeID             pgtype.UUID        `json:"employee_id"`
+	StartDate              pgtype.Date        `json:"start_date"`
+	EndDate                pgtype.Date        `json:"end_date"`
+	DecreeOutgoingLetterID pgtype.UUID        `json:"decree_outgoing_letter_id"`
+	Notes                  string             `json:"notes"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GovernanceComplianceAction struct {
+	ID                    pgtype.UUID        `json:"id"`
+	PeriodYear            int32              `json:"period_year"`
+	SourceType            string             `json:"source_type"`
+	SourceRefID           pgtype.UUID        `json:"source_ref_id"`
+	SnpStandard           string             `json:"snp_standard"`
+	ProgramID             pgtype.UUID        `json:"program_id"`
+	DocumentID            pgtype.UUID        `json:"document_id"`
+	PerformanceTargetID   pgtype.UUID        `json:"performance_target_id"`
+	EvidenceItemID        pgtype.UUID        `json:"evidence_item_id"`
+	OwnerUnitID           pgtype.UUID        `json:"owner_unit_id"`
+	ResponsibleEmployeeID pgtype.UUID        `json:"responsible_employee_id"`
+	Title                 string             `json:"title"`
+	Description           string             `json:"description"`
+	Priority              string             `json:"priority"`
+	Status                string             `json:"status"`
+	DueDate               pgtype.Date        `json:"due_date"`
+	CompletedAt           pgtype.Timestamptz `json:"completed_at"`
+	FollowUpNotes         string             `json:"follow_up_notes"`
+	EvidenceUrl           string             `json:"evidence_url"`
+	CreatedByUserID       pgtype.UUID        `json:"created_by_user_id"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GovernanceDocument struct {
+	ID               pgtype.UUID        `json:"id"`
+	DocType          string             `json:"doc_type"`
+	Title            string             `json:"title"`
+	PeriodYear       int32              `json:"period_year"`
+	PeriodLabel      string             `json:"period_label"`
+	OwnerUnitID      pgtype.UUID        `json:"owner_unit_id"`
+	SnpStandard      string             `json:"snp_standard"`
+	Status           string             `json:"status"`
+	DocumentUrl      string             `json:"document_url"`
+	OutgoingLetterID pgtype.UUID        `json:"outgoing_letter_id"`
+	Summary          string             `json:"summary"`
+	CreatedByUserID  pgtype.UUID        `json:"created_by_user_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GovernanceEvidenceItem struct {
+	ID                  pgtype.UUID        `json:"id"`
+	PeriodYear          int32              `json:"period_year"`
+	Title               string             `json:"title"`
+	EvidenceType        string             `json:"evidence_type"`
+	SnpStandard         string             `json:"snp_standard"`
+	OwnerUnitID         pgtype.UUID        `json:"owner_unit_id"`
+	DocumentID          pgtype.UUID        `json:"document_id"`
+	ProgramID           pgtype.UUID        `json:"program_id"`
+	PerformanceTargetID pgtype.UUID        `json:"performance_target_id"`
+	SourceModule        string             `json:"source_module"`
+	EvidenceUrl         string             `json:"evidence_url"`
+	Status              string             `json:"status"`
+	Notes               string             `json:"notes"`
+	VerifiedByUserID    pgtype.UUID        `json:"verified_by_user_id"`
+	VerifiedAt          pgtype.Timestamptz `json:"verified_at"`
+	CreatedByUserID     pgtype.UUID        `json:"created_by_user_id"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GovernancePerformanceTarget struct {
+	ID              pgtype.UUID        `json:"id"`
+	PeriodYear      int32              `json:"period_year"`
+	EmployeeID      pgtype.UUID        `json:"employee_id"`
+	PositionID      pgtype.UUID        `json:"position_id"`
+	ProgramID       pgtype.UUID        `json:"program_id"`
+	ParentTargetID  pgtype.UUID        `json:"parent_target_id"`
+	Aspect          string             `json:"aspect"`
+	Title           string             `json:"title"`
+	Indicator       string             `json:"indicator"`
+	TargetValue     string             `json:"target_value"`
+	TargetUnit      string             `json:"target_unit"`
+	Status          string             `json:"status"`
+	ProgressPercent int32              `json:"progress_percent"`
+	EvidenceUrl     string             `json:"evidence_url"`
+	ReviewNotes     string             `json:"review_notes"`
+	DueDate         pgtype.Date        `json:"due_date"`
+	CreatedByUserID pgtype.UUID        `json:"created_by_user_id"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GovernancePosition struct {
+	ID               pgtype.UUID        `json:"id"`
+	UnitID           pgtype.UUID        `json:"unit_id"`
+	Title            string             `json:"title"`
+	PositionType     string             `json:"position_type"`
+	ParentPositionID pgtype.UUID        `json:"parent_position_id"`
+	Description      string             `json:"description"`
+	Tupoksi          string             `json:"tupoksi"`
+	IsActive         bool               `json:"is_active"`
+	SortOrder        int32              `json:"sort_order"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GovernanceProgram struct {
+	ID                    pgtype.UUID        `json:"id"`
+	PeriodYear            int32              `json:"period_year"`
+	Code                  string             `json:"code"`
+	Name                  string             `json:"name"`
+	SourceDocumentID      pgtype.UUID        `json:"source_document_id"`
+	OwnerUnitID           pgtype.UUID        `json:"owner_unit_id"`
+	ResponsiblePositionID pgtype.UUID        `json:"responsible_position_id"`
+	ResponsibleEmployeeID pgtype.UUID        `json:"responsible_employee_id"`
+	SnpStandard           string             `json:"snp_standard"`
+	IkuCode               string             `json:"iku_code"`
+	Indicator             string             `json:"indicator"`
+	TargetValue           string             `json:"target_value"`
+	TargetUnit            string             `json:"target_unit"`
+	Status                string             `json:"status"`
+	ProgressPercent       int32              `json:"progress_percent"`
+	RealizationSummary    string             `json:"realization_summary"`
+	EvidenceUrl           string             `json:"evidence_url"`
+	DueDate               pgtype.Date        `json:"due_date"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GovernanceUnit struct {
+	ID          pgtype.UUID        `json:"id"`
+	Code        string             `json:"code"`
+	Name        string             `json:"name"`
+	UnitType    string             `json:"unit_type"`
+	ParentID    pgtype.UUID        `json:"parent_id"`
+	Description string             `json:"description"`
+	IsActive    bool               `json:"is_active"`
+	SortOrder   int32              `json:"sort_order"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type GovernanceWorkPlanItem struct {
+	ID                    pgtype.UUID        `json:"id"`
+	PeriodYear            int32              `json:"period_year"`
+	ProgramID             pgtype.UUID        `json:"program_id"`
+	SourceDocumentID      pgtype.UUID        `json:"source_document_id"`
+	OwnerUnitID           pgtype.UUID        `json:"owner_unit_id"`
+	ResponsibleEmployeeID pgtype.UUID        `json:"responsible_employee_id"`
+	EvidenceItemID        pgtype.UUID        `json:"evidence_item_id"`
+	ActivityCode          string             `json:"activity_code"`
+	ActivityName          string             `json:"activity_name"`
+	OutputIndicator       string             `json:"output_indicator"`
+	TargetVolume          string             `json:"target_volume"`
+	TargetUnit            string             `json:"target_unit"`
+	BudgetSource          string             `json:"budget_source"`
+	BudgetAmount          int64              `json:"budget_amount"`
+	RealizationAmount     int64              `json:"realization_amount"`
+	Status                string             `json:"status"`
+	ProgressPercent       int32              `json:"progress_percent"`
+	StartDate             pgtype.Date        `json:"start_date"`
+	EndDate               pgtype.Date        `json:"end_date"`
+	EvidenceUrl           string             `json:"evidence_url"`
+	Notes                 string             `json:"notes"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 type GradeAssignmentFinalization struct {
@@ -914,6 +1362,28 @@ type GradeEntry struct {
 	GradedAt    pgtype.Timestamptz `json:"graded_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IncomingLetter struct {
+	ID                   pgtype.UUID        `json:"id"`
+	NomorSurat           string             `json:"nomor_surat"`
+	NomorAgenda          string             `json:"nomor_agenda"`
+	TanggalSurat         pgtype.Date        `json:"tanggal_surat"`
+	TanggalTerima        pgtype.Date        `json:"tanggal_terima"`
+	Asal                 string             `json:"asal"`
+	Perihal              string             `json:"perihal"`
+	Sifat                LetterSifat        `json:"sifat"`
+	FilePath             string             `json:"file_path"`
+	Catatan              string             `json:"catatan"`
+	Status               LetterStatus       `json:"status"`
+	ReceivedByEmployeeID pgtype.UUID        `json:"received_by_employee_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IncomingLetterSequence struct {
+	Year    int32 `json:"year"`
+	LastSeq int32 `json:"last_seq"`
 }
 
 type InventoryItem struct {
@@ -957,6 +1427,25 @@ type Job struct {
 	NotBefore    pgtype.Timestamptz `json:"not_before"`
 }
 
+type LetterClassification struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	IsActive    bool   `json:"is_active"`
+}
+
+type LetterDisposition struct {
+	ID                   pgtype.UUID        `json:"id"`
+	IncomingLetterID     pgtype.UUID        `json:"incoming_letter_id"`
+	AssigneeEmployeeID   pgtype.UUID        `json:"assignee_employee_id"`
+	Instruksi            string             `json:"instruksi"`
+	CatatanTindakLanjut  string             `json:"catatan_tindak_lanjut"`
+	Status               DispositionStatus  `json:"status"`
+	DisposedByEmployeeID pgtype.UUID        `json:"disposed_by_employee_id"`
+	DisposedAt           pgtype.Timestamptz `json:"disposed_at"`
+	CompletedAt          pgtype.Timestamptz `json:"completed_at"`
+}
+
 type LibraryBook struct {
 	ID             pgtype.UUID        `json:"id"`
 	Kode           string             `json:"kode"`
@@ -989,6 +1478,27 @@ type LibraryLoan struct {
 	Catatan        string             `json:"catatan"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OutgoingLetter struct {
+	ID                 pgtype.UUID        `json:"id"`
+	NomorSurat         string             `json:"nomor_surat"`
+	ClassificationCode string             `json:"classification_code"`
+	TanggalSurat       pgtype.Date        `json:"tanggal_surat"`
+	Tujuan             string             `json:"tujuan"`
+	Perihal            string             `json:"perihal"`
+	Sifat              LetterSifat        `json:"sifat"`
+	FilePath           string             `json:"file_path"`
+	Catatan            string             `json:"catatan"`
+	IssuedByEmployeeID pgtype.UUID        `json:"issued_by_employee_id"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type OutgoingLetterSequence struct {
+	Year               int32  `json:"year"`
+	ClassificationCode string `json:"classification_code"`
+	LastSeq            int32  `json:"last_seq"`
 }
 
 type Parent struct {
@@ -1038,18 +1548,89 @@ type SchoolClass struct {
 }
 
 type Student struct {
-	ID          pgtype.UUID        `json:"id"`
-	Nis         string             `json:"nis"`
-	Nisn        string             `json:"nisn"`
-	Nama        string             `json:"nama"`
-	Gender      GenderEnum         `json:"gender"`
-	ParentName  string             `json:"parent_name"`
-	ParentPhone string             `json:"parent_phone"`
-	ClassID     pgtype.UUID        `json:"class_id"`
-	IsActive    bool               `json:"is_active"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
-	Status      StudentStatusEnum  `json:"status"`
+	ID                   pgtype.UUID        `json:"id"`
+	Nis                  string             `json:"nis"`
+	Nisn                 string             `json:"nisn"`
+	Nama                 string             `json:"nama"`
+	Gender               GenderEnum         `json:"gender"`
+	ParentName           string             `json:"parent_name"`
+	ParentPhone          string             `json:"parent_phone"`
+	ClassID              pgtype.UUID        `json:"class_id"`
+	IsActive             bool               `json:"is_active"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	Status               StudentStatusEnum  `json:"status"`
+	Nik                  string             `json:"nik"`
+	TempatLahir          string             `json:"tempat_lahir"`
+	TanggalLahir         pgtype.Date        `json:"tanggal_lahir"`
+	Alamat               string             `json:"alamat"`
+	Agama                string             `json:"agama"`
+	AnakKe               pgtype.Int4        `json:"anak_ke"`
+	Phone                string             `json:"phone"`
+	PhotoUrl             string             `json:"photo_url"`
+	TotalViolationPoints int32              `json:"total_violation_points"`
+}
+
+type StudentAchievement struct {
+	ID               pgtype.UUID        `json:"id"`
+	StudentID        pgtype.UUID        `json:"student_id"`
+	AchievementDate  pgtype.Date        `json:"achievement_date"`
+	Title            string             `json:"title"`
+	Level            string             `json:"level"`
+	Category         string             `json:"category"`
+	Organizer        string             `json:"organizer"`
+	Description      string             `json:"description"`
+	DocumentUrl      string             `json:"document_url"`
+	RecordedByUserID pgtype.UUID        `json:"recorded_by_user_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StudentCertificate struct {
+	ID               pgtype.UUID        `json:"id"`
+	TemplateID       pgtype.UUID        `json:"template_id"`
+	StudentID        pgtype.UUID        `json:"student_id"`
+	OutgoingLetterID pgtype.UUID        `json:"outgoing_letter_id"`
+	TanggalSurat     pgtype.Date        `json:"tanggal_surat"`
+	Purpose          string             `json:"purpose"`
+	Recipient        string             `json:"recipient"`
+	Remarks          string             `json:"remarks"`
+	SnapshotData     []byte             `json:"snapshot_data"`
+	Status           string             `json:"status"`
+	CreatedByUserID  pgtype.UUID        `json:"created_by_user_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StudentTransfer struct {
+	ID                pgtype.UUID        `json:"id"`
+	StudentID         pgtype.UUID        `json:"student_id"`
+	TransferDate      pgtype.Date        `json:"transfer_date"`
+	TransferType      string             `json:"transfer_type"`
+	PreviousSchool    string             `json:"previous_school"`
+	DestinationSchool string             `json:"destination_school"`
+	Reason            string             `json:"reason"`
+	DocumentRef       string             `json:"document_ref"`
+	Notes             string             `json:"notes"`
+	Status            string             `json:"status"`
+	RecordedByUserID  pgtype.UUID        `json:"recorded_by_user_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type StudentViolation struct {
+	ID                   pgtype.UUID        `json:"id"`
+	StudentID            pgtype.UUID        `json:"student_id"`
+	CategoryID           pgtype.UUID        `json:"category_id"`
+	IncidentDate         pgtype.Date        `json:"incident_date"`
+	Points               int32              `json:"points"`
+	Description          string             `json:"description"`
+	ActionTaken          string             `json:"action_taken"`
+	Status               string             `json:"status"`
+	ReportedByEmployeeID pgtype.UUID        `json:"reported_by_employee_id"`
+	RecordedByUserID     pgtype.UUID        `json:"recorded_by_user_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Subject struct {
@@ -1099,122 +1680,16 @@ type UserUiPreference struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
-// =====================
-// Letter enums and models (Sprint 17)
-// =====================
-
-type LetterSifat string
-
-const (
-	LetterSifatBiasa  LetterSifat = "biasa"
-	LetterSifatPenting LetterSifat = "penting"
-	LetterSifatSegera  LetterSifat = "segera"
-	LetterSifatRahasia LetterSifat = "rahasia"
-)
-
-func (e *LetterSifat) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = LetterSifat(s)
-	case string:
-		*e = LetterSifat(s)
-	default:
-		return fmt.Errorf("unsupported scan type for LetterSifat: %T", src)
-	}
-	return nil
-}
-
-type LetterStatus string
-
-const (
-	LetterStatusBaru        LetterStatus = "baru"
-	LetterStatusDidisposisi LetterStatus = "didisposisi"
-	LetterStatusSelesai     LetterStatus = "selesai"
-	LetterStatusArsip       LetterStatus = "arsip"
-)
-
-func (e *LetterStatus) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = LetterStatus(s)
-	case string:
-		*e = LetterStatus(s)
-	default:
-		return fmt.Errorf("unsupported scan type for LetterStatus: %T", src)
-	}
-	return nil
-}
-
-type DispositionStatus string
-
-const (
-	DispositionStatusTerkirim        DispositionStatus = "terkirim"
-	DispositionStatusDibaca          DispositionStatus = "dibaca"
-	DispositionStatusDitindaklanjuti DispositionStatus = "ditindaklanjuti"
-	DispositionStatusSelesai         DispositionStatus = "selesai"
-)
-
-func (e *DispositionStatus) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = DispositionStatus(s)
-	case string:
-		*e = DispositionStatus(s)
-	default:
-		return fmt.Errorf("unsupported scan type for DispositionStatus: %T", src)
-	}
-	return nil
-}
-
-type LetterClassification struct {
-	Code        string `json:"code"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	IsActive    bool   `json:"is_active"`
-}
-
-type IncomingLetter struct {
-	ID                   pgtype.UUID        `json:"id"`
-	NomorSurat           string             `json:"nomor_surat"`
-	NomorAgenda          string             `json:"nomor_agenda"`
-	TanggalSurat         pgtype.Date        `json:"tanggal_surat"`
-	TanggalTerima        pgtype.Date        `json:"tanggal_terima"`
-	Asal                 string             `json:"asal"`
-	Perihal              string             `json:"perihal"`
-	Sifat                LetterSifat        `json:"sifat"`
-	FilePath             string             `json:"file_path"`
-	Catatan              string             `json:"catatan"`
-	Status               LetterStatus       `json:"status"`
-	ReceivedByEmployeeID pgtype.UUID        `json:"received_by_employee_id"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
-}
-
-type OutgoingLetter struct {
-	ID                 pgtype.UUID        `json:"id"`
-	NomorSurat         string             `json:"nomor_surat"`
-	ClassificationCode string             `json:"classification_code"`
-	TanggalSurat       pgtype.Date        `json:"tanggal_surat"`
-	Tujuan             string             `json:"tujuan"`
-	Perihal            string             `json:"perihal"`
-	Sifat              LetterSifat        `json:"sifat"`
-	FilePath           string             `json:"file_path"`
-	Catatan            string             `json:"catatan"`
-	IssuedByEmployeeID pgtype.UUID        `json:"issued_by_employee_id"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-}
-
-type LetterDisposition struct {
-	ID                    pgtype.UUID        `json:"id"`
-	IncomingLetterID      pgtype.UUID        `json:"incoming_letter_id"`
-	AssigneeEmployeeID    pgtype.UUID        `json:"assignee_employee_id"`
-	Instruksi             string             `json:"instruksi"`
-	CatatanTindakLanjut   string             `json:"catatan_tindak_lanjut"`
-	Status                DispositionStatus  `json:"status"`
-	DisposedByEmployeeID  pgtype.UUID        `json:"disposed_by_employee_id"`
-	DisposedAt            pgtype.Timestamptz `json:"disposed_at"`
-	CompletedAt           pgtype.Timestamptz `json:"completed_at"`
+type ViolationCategory struct {
+	ID          pgtype.UUID        `json:"id"`
+	Code        string             `json:"code"`
+	Name        string             `json:"name"`
+	Point       int32              `json:"point"`
+	Severity    string             `json:"severity"`
+	Description string             `json:"description"`
+	IsActive    bool               `json:"is_active"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type WebsiteContent struct {

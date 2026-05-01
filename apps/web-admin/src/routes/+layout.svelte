@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import favicon from '$lib/assets/favicon.svg';
 	import PublicSiteShell from '$lib/components/PublicSiteShell.svelte';
+	import GlobalConfirmDialog from '$lib/components/GlobalConfirmDialog.svelte';
 	import RouteProgress from '$lib/components/RouteProgress.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { Sonner } from '$lib/components/ui/sonner';
@@ -41,6 +42,7 @@
 </svelte:head>
 
 <Sonner />
+<GlobalConfirmDialog />
 <RouteProgress active={!!navigating.to} />
 
 {#if isLogin}

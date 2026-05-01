@@ -44,3 +44,26 @@ func (h *Setting) Upsert(w http.ResponseWriter, r *http.Request) {
 	}
 	api.OK(w, map[string]string{"key": key, "value": body.Value})
 }
+
+func (h *Setting) SchoolProfile(w http.ResponseWriter, r *http.Request) {
+	profile, err := h.svc.SchoolProfile(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, profile)
+}
+
+func (h *Setting) UpdateSchoolProfile(w http.ResponseWriter, r *http.Request) {
+	var body service.SchoolProfile
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	profile, err := h.svc.UpdateSchoolProfile(r.Context(), body)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+	api.OK(w, profile)
+}

@@ -5,9 +5,11 @@
   import { Button } from '$lib/components/ui/button';
   import { resolve } from '$app/paths';
   import * as Dialog from '$lib/components/ui/dialog';
+  import { toast } from '$lib/components/ui/sonner';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
   import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
   import SuccessPanel from '$lib/components/SuccessPanel.svelte';
+  import { confirmAction } from '$lib/confirm-dialog';
 
   interface Employee {
     id: string;
@@ -23,7 +25,7 @@
 
   let { employees, onreload }: {
     employees: Employee[];
-    onreload: () => void;
+    onreload: () => void | Promise<void>;
   } = $props();
 
   let confirmId = $state<string | null>(null);
@@ -32,7 +34,6 @@
   let filterUnitKerja = $state('');
   let showEditDialog = $state(false);
   let editBusy = $state(false);
-  let editError = $state('');
   let success = $state('');
   let editingEmployee = $state<Employee | null>(null);
   let editForm = $state({
@@ -65,9 +66,34 @@
     return { pns: 'PNS', pppk: 'PPPK', honorer: 'Honorer', lainnya: 'Lainnya' }[value] ?? value;
   }
 
+  function apiErrorMessage(payload: unknown) {
+    if (typeof payload !== 'object' || payload === null) return '';
+    if ('error' in payload) {
+      const error = payload.error;
+      if (typeof error === 'string' && error.trim()) return error;
+    }
+    if ('message' in payload) {
+      const message = payload.message;
+      if (typeof message === 'string' && message.trim()) return message;
+    }
+    return '';
+  }
+
+  function showError(message: string) {
+    toast.error(message);
+  }
+
+  function mutationErrorMessage(error: unknown, fallbackMessage: string) {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    return fallbackMessage;
+  }
+
+  function throwApiError(payload: unknown, fallbackMessage: string): never {
+    throw new Error(apiErrorMessage(payload) || fallbackMessage);
+  }
+
   function openEditDialog(employee: Employee) {
     editingEmployee = employee;
-    editError = '';
     editForm = {
       nip: employee.nip,
       nama: employee.nama,
@@ -81,7 +107,6 @@
   async function saveEdit() {
     if (!editingEmployee) return;
     editBusy = true;
-    editError = '';
     success = '';
     try {
       const res = await fetch(`/api/employees/${editingEmployee.id}`, {
@@ -89,14 +114,15 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(editForm),
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        editError = (data as { error?: string }).error || 'Gagal memperbarui pegawai';
-        return;
+        throwApiError(data, 'Gagal memperbarui pegawai');
       }
       showEditDialog = false;
       success = `Data pegawai ${editForm.nama} berhasil diperbarui.`;
-      onreload();
+      await onreload();
+    } catch (error) {
+      showError(mutationErrorMessage(error, 'Gagal memperbarui pegawai'));
     } finally {
       editBusy = false;
     }
@@ -104,7 +130,12 @@
 
   async function toggleEmployeeStatus(emp: Employee) {
     const next = !emp.is_active;
-    if (!confirm(`${next ? 'Aktifkan' : 'Nonaktifkan'} pegawai ${emp.nama}?`)) return;
+    if (!(await confirmAction({
+      title: next ? 'Aktifkan Pegawai' : 'Nonaktifkan Pegawai',
+      message: `${next ? 'Aktifkan' : 'Nonaktifkan'} pegawai ${emp.nama}?`,
+      confirmLabel: next ? 'Aktifkan' : 'Nonaktifkan',
+      tone: 'warning'
+    }))) return;
     busyId = emp.id;
     success = '';
     try {
@@ -113,12 +144,14 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ is_active: next }),
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        alert('Gagal memperbarui status pegawai');
-        return;
+        throwApiError(data, 'Gagal memperbarui status pegawai');
       }
       success = `Status pegawai ${emp.nama} berhasil diubah menjadi ${next ? 'aktif' : 'nonaktif'}.`;
-      onreload();
+      await onreload();
+    } catch (error) {
+      showError(mutationErrorMessage(error, 'Gagal memperbarui status pegawai'));
     } finally {
       busyId = null;
     }
@@ -127,15 +160,24 @@
   async function doDelete(id: string) {
     busyId = id;
     success = '';
-    await fetch('/api/employees', {
-      method: 'DELETE',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id }),
-    });
-    busyId = null;
-    confirmId = null;
-    success = 'Data pegawai berhasil dihapus dari master.';
-    onreload();
+    try {
+      const res = await fetch('/api/employees', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throwApiError(data, 'Gagal menghapus pegawai');
+      }
+      confirmId = null;
+      success = 'Data pegawai berhasil dihapus dari master.';
+      await onreload();
+    } catch (error) {
+      showError(mutationErrorMessage(error, 'Gagal menghapus pegawai'));
+    } finally {
+      busyId = null;
+    }
   }
 </script>
 
@@ -151,7 +193,7 @@
           <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Filter Unit Kerja</p>
           <select bind:value={filterUnitKerja} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
             <option value="">Semua unit</option>
-            {#each unitKerjaOptions as unit}
+            {#each unitKerjaOptions as unit (unit)}
               <option value={unit}>{unit}</option>
             {/each}
           </select>
@@ -276,10 +318,6 @@
         <p class="mt-1 text-sm text-slate-500">Perbarui data umum pegawai tanpa masuk ke area operasional PUSAKA.</p>
       </div>
 
-      {#if editError}
-        <div class="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{editError}</div>
-      {/if}
-
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label for="edit-nip" class="mb-1 block text-xs font-medium text-slate-600">NIP</label>
@@ -311,7 +349,7 @@
 
       <div class="flex justify-end gap-2">
         <Button variant="outline" onclick={() => (showEditDialog = false)}>Batal</Button>
-        <LoadingButton onclick={saveEdit} loading={editBusy} loadingLabel="Menyimpan..." disabled={editBusy}>Simpan Perubahan</LoadingButton>
+        <LoadingButton onclick={() => void saveEdit()} loading={editBusy} loadingLabel="Menyimpan..." disabled={editBusy}>Simpan Perubahan</LoadingButton>
       </div>
     </div>
   </Dialog.Content>

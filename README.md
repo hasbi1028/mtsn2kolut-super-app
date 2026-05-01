@@ -47,7 +47,7 @@ Jalankan database lokal:
 
 ```bash
 cd services/core-api
-docker compose up -d
+podman compose up -d
 ```
 
 Apply migration ke database existing:
@@ -70,8 +70,22 @@ Catatan:
 
 - `apps/web-admin/data/pusaka.sqlite` diperlakukan sebagai artefak legacy untuk import data lama
 - runtime aktif tidak boleh menulis business state ke SQLite frontend
+- file [services/core-api/docker-compose.yml](/home/hasbiopm/mtsn2kolut-super-app/services/core-api/docker-compose.yml) tetap kompatibel dipakai lewat Podman Compose
 
 ## Jalankan
+
+Backend dev:
+
+```bash
+make dev-backend
+```
+
+Catatan:
+
+- target ini sekarang melakukan preflight koneksi PostgreSQL ke `localhost:5432`
+- jika PostgreSQL belum aktif dan Podman tersedia, script akan mencoba `podman compose up -d` otomatis dari `services/core-api`
+- jika Podman tidak tersedia, script akan fallback ke Docker bila daemon Docker aktif
+- jika tetap tidak ada listener PostgreSQL, target akan berhenti dengan pesan aksi yang lebih jelas
 
 Backend Go:
 

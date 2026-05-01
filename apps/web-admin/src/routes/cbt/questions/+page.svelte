@@ -11,10 +11,13 @@
 	import { page } from '$app/state';
 	import EditorWrapper from '$lib/components/EditorWrapper.svelte';
 	import LatexBlock from '$lib/components/LatexBlock.svelte';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import RichContent from '$lib/components/RichContent.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
+	import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
 
 	type Subject = { id: string; name: string; code: string };
 	type OptionItem = { label: string; text?: string; html?: string; latex?: string; asset_id?: string };
@@ -66,6 +69,22 @@
 		items: Question[];
 		meta?: { total: number; limit: number; offset: number };
 	};
+	type QuestionsOverview = {
+		questions: Question[];
+		subjects: Subject[];
+		totalItems: number;
+		page: number;
+	};
+	type AcademicPayload = {
+		subjects?: Subject[];
+		error?: string;
+		message?: string;
+	};
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
 
 	const pageSize = 10;
 	const questionTypeLabel: Record<string, string> = {
@@ -79,8 +98,7 @@
 	const workflowLabel: Record<string, string> = { draft: 'Draft', review: 'Ditinjau', approved: 'Disetujui', rejected: 'Revisi' };
 	const statusLabel: Record<string, string> = { draft: 'Draft', published: 'Terbit', archived: 'Arsip' };
 
-	let loading = $state(true);
-	let error = $state('');
+	let questionsPromise = $state<Promise<QuestionsOverview> | null>(null);
 	let questions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
 	let uploadedAssets = $state<UploadedAsset[]>([]);
@@ -130,6 +148,9 @@
 	let fMediaAssetIds = $state<string[]>([]);
 	let fBusy = $state(false);
 	let assetBusy = $state(false);
+	let filterBusy = $state(false);
+	let paginationBusy = $state<'previous' | 'next' | ''>('');
+	let resetBusy = $state(false);
 	let deleteBusyId = $state('');
 	let workflowBusyId = $state('');
 	let workflowBusyAction = $state('');
@@ -190,8 +211,13 @@
 	}
 
 	function confirmPhrase(title: string, detail: string, challenge: string) {
-		const input = prompt(`${title}\n\n${detail}\n\nKetik ${challenge} untuk melanjutkan.`);
-		return input === challenge;
+		return confirmChallenge({
+			title,
+			message: detail,
+			challenge,
+			confirmLabel: 'Konfirmasi',
+			tone: 'danger'
+		});
 	}
 
 	function actionLabel(action: 'submit_review' | 'approve' | 'publish' | 'archive') {
@@ -219,24 +245,102 @@
 		return params.toString();
 	}
 
-	async function load(page = currentPage) {
-		loading = true;
-		error = '';
-		try {
-			const query = buildListQuery(page);
-			const [qRes, aRes] = await Promise.all([fetch(`/api/cbt/questions?${query}`), fetch('/api/academic')]);
-			const qJson = (await qRes.json().catch(() => ({}))) as QuestionListResponse & { error?: string };
-			const aJson = await aRes.json();
-			if (!qRes.ok || qJson.error) { error = qJson.error ?? 'Gagal memuat bank soal'; return; }
-			questions = qJson.items ?? [];
-			totalItems = qJson.meta?.total ?? questions.length;
-			currentPage = page;
-			subjects = ((aJson.data ?? aJson)?.subjects ?? []) as Subject[];
-		} catch (err) {
-			error = (err as Error).message || 'Gagal memuat bank soal';
-		} finally {
-			loading = false;
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
+			throw new Error(payload.error);
 		}
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	async function fetchOverview(page = currentPage): Promise<QuestionsOverview> {
+		const query = buildListQuery(page);
+		const [questionPayload, academicPayload] = await Promise.all([
+			fetch(`/api/cbt/questions?${query}`).then((response) =>
+				readApi<QuestionListResponse>(response, 'Gagal memuat bank soal')
+			),
+			fetch('/api/academic').then((response) =>
+				readApi<AcademicPayload>(response, 'Gagal memuat data akademik')
+			),
+		]);
+		const loadedQuestions = questionPayload.items ?? [];
+		return {
+			questions: loadedQuestions,
+			subjects: academicPayload.subjects ?? [],
+			totalItems: questionPayload.meta?.total ?? loadedQuestions.length,
+			page,
+		};
+	}
+
+	function applyOverview(overview: QuestionsOverview) {
+		questions = overview.questions;
+		subjects = overview.subjects;
+		totalItems = overview.totalItems;
+		currentPage = overview.page;
+	}
+
+	function load(page = currentPage) {
+		questionsPromise = fetchOverview(page).then((overview) => {
+			applyOverview(overview);
+			return overview;
+		});
+		return questionsPromise;
+	}
+
+	async function refreshOverview(page = currentPage) {
+		if (!questionsPromise) {
+			try {
+				await load(page);
+			} catch (error) {
+				showError(overviewErrorMessage(error));
+			}
+			return;
+		}
+		try {
+			const overview = await fetchOverview(page);
+			applyOverview(overview);
+			questionsPromise = Promise.resolve(overview);
+		} catch (error) {
+			questionsPromise = Promise.resolve({ questions, subjects, totalItems, page: currentPage });
+			showError(overviewErrorMessage(error));
+		}
+	}
+
+	function retryQuestions(reset?: () => void) {
+		reset?.();
+		load(currentPage);
+	}
+
+	function overviewErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		if (typeof error === 'string' && error.trim()) return error;
+		return 'Gagal memuat bank soal';
+	}
+
+	function handleQuestionsRenderError(error: unknown, reset: () => void) {
+		console.error('Question bank render failed', error);
+		reset();
 	}
 
 	async function loadDetail(id: string) {
@@ -312,6 +416,7 @@
 		fQuestionType = question.question_type || 'multiple_choice';
 		fOptions = question.options?.length ? question.options.map((item) => ({ ...item })) : defaultOptions();
 		fAnswerKey = question.answer_key || 'A';
+		applyQuestionType(fQuestionType);
 		fExplanation = question.explanation;
 		fDifficulty = question.difficulty;
 		fStatus = question.status;
@@ -345,7 +450,7 @@
 	async function openEdit(question: Question, forceMode?: 'beginner' | 'advance') {
 		const detail = (await loadDetail(question.id)) ?? question;
 		applyQuestionToForm(detail);
-		if (forceMode) fAuthoringMode = forceMode;
+		if (forceMode) setAuthoringMode(forceMode);
 		await loadAssets(question.id);
 		window.scrollTo({ top: 0, behavior: 'smooth' });
 	}
@@ -373,18 +478,26 @@
 		fAnswerKey = 'A';
 	}
 
-	$effect(() => {
-		const type = fQuestionType;
-		if (!isAdvanceMode && type !== 'multiple_choice' && type !== 'essay') {
-			fQuestionType = 'multiple_choice';
-		}
+	function normalizedQuestionType(mode: 'beginner' | 'advance', type: string) {
+		if (mode === 'beginner' && type !== 'multiple_choice' && type !== 'essay') return 'multiple_choice';
+		return type;
+	}
+
+	function applyQuestionType(nextType: string) {
+		const type = normalizedQuestionType(fAuthoringMode, nextType);
+		fQuestionType = type;
 		if (type === 'true_false') {
 			setTrueFalseTemplate();
 		} else if (objectiveType(type) && fOptions.length < 4) {
 			fOptions = defaultOptions();
 		}
 		if (type === 'essay') fAnswerKey = '';
-	});
+	}
+
+	function setAuthoringMode(mode: 'beginner' | 'advance') {
+		fAuthoringMode = mode;
+		applyQuestionType(fQuestionType);
+	}
 
 	function insertAsset(tag: string, field: 'stem' | 'stimulus' | 'explanation' | 'rubric') {
 		if (field === 'stem') fStemHTML += `${fStemHTML ? '\n' : ''}${tag}`;
@@ -480,15 +593,16 @@
 			if (!res.ok) { showError(payload.error ?? 'Gagal menyimpan soal'); return; }
 			setOperationState('success', editId ? 'Item Bank Soal Diperbarui' : 'Item Bank Soal Ditambahkan', editId ? 'Perubahan item sudah tersimpan. Tinjau kembali workflow dan status terbit bila diperlukan.' : 'Item baru sudah tersimpan sebagai draft dan siap dilengkapi atau diajukan peninjauan.');
 			showToast(editId ? 'Item bank soal diperbarui' : 'Item bank soal ditambahkan');
+			const targetPage = editId && currentPage > pageCount ? pageCount : currentPage;
 			resetForm();
-			await load(editId && currentPage > pageCount ? pageCount : currentPage);
+			await refreshOverview(targetPage);
 		} finally {
 			fBusy = false;
 		}
 	}
 
 	async function deleteQuestion(id: string) {
-		if (!confirmPhrase('Hapus Item Bank Soal', 'Item yang dihapus akan keluar dari katalog dan tidak bisa dipulihkan dari layar operator. Pastikan item ini memang tidak lagi diperlukan.', 'HAPUS')) return;
+		if (!(await confirmPhrase('Hapus Item Bank Soal', 'Item yang dihapus akan keluar dari katalog dan tidak bisa dipulihkan dari layar operator. Pastikan item ini memang tidak lagi diperlukan.', 'HAPUS'))) return;
 		deleteBusyId = id;
 		try {
 			const res = await fetch(`/api/cbt/questions/${id}`, { method: 'DELETE' });
@@ -501,7 +615,7 @@
 			if (selectedDetail?.id === id) selectedDetail = null;
 			setOperationState('warning', 'Item Dihapus', 'Item bank soal sudah dihapus dari katalog aktif.');
 			showToast('Item bank soal dihapus');
-			await load(currentPage);
+			await refreshOverview(currentPage);
 		} finally {
 			deleteBusyId = '';
 		}
@@ -512,7 +626,7 @@
 		const payload = (await res.json().catch(() => ({}))) as Question & { error?: string };
 		if (!res.ok) { showError(payload.error ?? 'Gagal menggandakan item'); return; }
 		showToast('Draft hasil duplikasi berhasil dibuat');
-		await load(1);
+		await refreshOverview(1);
 		await openEdit(payload);
 	}
 
@@ -538,10 +652,15 @@
 	async function workflowAction(id: string, action: 'submit_review' | 'approve' | 'publish' | 'archive') {
 		const requiresHardConfirm = action === 'publish' || action === 'archive';
 		const confirmed = requiresHardConfirm
-			? confirmPhrase(actionLabel(action), action === 'publish'
+			? await confirmPhrase(actionLabel(action), action === 'publish'
 				? 'Item akan dinyatakan siap dipakai di paket dan sesi ujian. Pastikan isi, kunci, dan alur review sudah final.'
 				: 'Item terbit akan dipindahkan ke status arsip. Gunakan hanya bila item sudah tidak layak dipakai lagi pada operasional aktif.', action === 'publish' ? 'TERBIT' : 'ARSIP')
-			: confirm(`${actionLabel(action)} untuk item ini?`);
+			: await confirmAction({
+				title: actionLabel(action),
+				message: `${actionLabel(action)} untuk item ini?`,
+				confirmLabel: actionLabel(action),
+				tone: 'warning'
+			});
 		if (!confirmed) return;
 		workflowBusyId = id;
 		workflowBusyAction = action;
@@ -566,7 +685,7 @@
 			} as const;
 			setOperationState(tone, 'Status Item Diperbarui', messageMap[action]);
 			showToast('Status item diperbarui');
-			await load(currentPage);
+			await refreshOverview(currentPage);
 			if (selectedDetail?.id === id) await loadDetail(id);
 		} finally {
 			workflowBusyId = '';
@@ -575,18 +694,32 @@
 	}
 
 	async function applyFilters() {
-		selectedDetail = null;
-		await load(1);
+		filterBusy = true;
+		try {
+			selectedDetail = null;
+			await load(1);
+		} catch (error) {
+			showError(overviewErrorMessage(error));
+		} finally {
+			filterBusy = false;
+		}
 	}
 
 	async function resetFilters() {
-		search = '';
-		filterSubject = '';
-		filterWorkflow = '';
-		filterType = '';
-		filterHots = '';
-		selectedDetail = null;
-		await load(1);
+		resetBusy = true;
+		try {
+			search = '';
+			filterSubject = '';
+			filterWorkflow = '';
+			filterType = '';
+			filterHots = '';
+			selectedDetail = null;
+			await load(1);
+		} catch (error) {
+			showError(overviewErrorMessage(error));
+		} finally {
+			resetBusy = false;
+		}
 	}
 
 	function clearQuestionFilters() {
@@ -595,7 +728,14 @@
 
 	async function goToPage(p: number) {
 		if (p < 1 || p > pageCount || p === currentPage) return;
-		await load(p);
+		paginationBusy = p < currentPage ? 'previous' : 'next';
+		try {
+			await load(p);
+		} catch (error) {
+			showError(overviewErrorMessage(error));
+		} finally {
+			paginationBusy = '';
+		}
 	}
 
 	function handleSearchKeydown(event: KeyboardEvent) {
@@ -636,16 +776,12 @@
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{questions.filter((item) => detectMode(item) === 'beginner').length}</p>
 			<p class="text-sm text-slate-600">item cepat yang masih bisa disempurnakan di mode lanjutan</p>
 		</div>
-		<div class="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">Terbit</p>
+		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Terbit</p>
 			<p class="mt-2 text-2xl font-semibold text-slate-900">{questions.filter((item) => item.status === 'published').length}</p>
 			<p class="text-sm text-slate-600">item siap dipakai dari halaman hasil filter saat ini</p>
 		</div>
 	</div>
-
-	{#if error}
-		<RecoveryPanel message={error} onRetry={() => load(currentPage)} />
-	{/if}
 
 	{#if operationState}
 		<OperationStatusPanel {...operationState} />
@@ -706,13 +842,13 @@
 				</div>
 				<div class="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
 					{#if selectedDetail.stimulus_html}
-						<div class="prose prose-sm max-w-none rounded-lg border bg-slate-50 p-3">{@html selectedDetail.stimulus_html}</div>
+						<RichContent html={selectedDetail.stimulus_html} class="prose prose-sm max-w-none rounded-lg border bg-slate-50 p-3" />
 					{/if}
 					{#if selectedDetail.stimulus_latex}
 						<LatexBlock src={selectedDetail.stimulus_latex} class="mt-3" />
 					{/if}
 					{#if selectedDetail.stem_html}
-						<div class="prose prose-sm mt-4 max-w-none text-slate-900">{@html selectedDetail.stem_html}</div>
+						<RichContent html={selectedDetail.stem_html} class="prose prose-sm mt-4 max-w-none text-slate-900" />
 					{:else}
 						<p class="mt-4 text-sm text-slate-900">{selectedDetail.question_text || 'Tanpa ringkasan teks'}</p>
 					{/if}
@@ -725,7 +861,7 @@
 								<div class="rounded-lg border px-3 py-2 text-sm">
 									<span class="mr-2 font-semibold text-emerald-800">{option.label}.</span>
 									{#if option.html}
-										<span>{@html option.html}</span>
+										<RichContent tag="span" html={option.html} />
 									{:else if option.latex}
 										<LatexBlock src={option.latex} display={false} class="inline-block" />
 									{:else}
@@ -749,14 +885,14 @@
 					</div>
 					<div class="mt-4 space-y-4">
 						{#if selectedDetail.stimulus_html}
-							<div class="rounded-xl border border-slate-800 bg-slate-900 p-4 text-slate-100">{@html selectedDetail.stimulus_html}</div>
+							<RichContent html={selectedDetail.stimulus_html} class="rounded-xl border border-slate-800 bg-slate-900 p-4 text-slate-100" />
 						{/if}
 						{#if selectedDetail.stimulus_latex}
 							<div class="rounded-xl border border-slate-800 bg-slate-900 p-4"><LatexBlock src={selectedDetail.stimulus_latex} class="text-white" /></div>
 						{/if}
 						<div class="rounded-xl border border-slate-800 bg-slate-900 p-4">
 							{#if selectedDetail.stem_html}
-								<div class="prose prose-invert max-w-none text-slate-100">{@html selectedDetail.stem_html}</div>
+								<RichContent html={selectedDetail.stem_html} class="prose prose-invert max-w-none text-slate-100" />
 							{:else}
 								<p class="text-sm text-slate-100">{selectedDetail.question_text || 'Tanpa ringkasan teks'}</p>
 							{/if}
@@ -772,7 +908,7 @@
 										<div class="text-sm text-slate-100">
 											<span class="mr-2 font-semibold text-emerald-300">{option.label}.</span>
 											{#if option.html}
-												<span>{@html option.html}</span>
+												<RichContent tag="span" html={option.html} />
 											{:else if option.latex}
 												<LatexBlock src={option.latex} display={false} class="inline-block text-white" />
 											{:else}
@@ -813,7 +949,7 @@
 						<button
 							type="button"
 							class={`rounded-xl border p-4 text-left transition ${!isAdvanceMode ? 'border-emerald-300 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-emerald-200'}`}
-							onclick={() => (fAuthoringMode = 'beginner')}
+							onclick={() => setAuthoringMode('beginner')}
 						>
 							<p class="text-sm font-semibold text-slate-900">Mode Dasar</p>
 							<p class="mt-1 text-sm text-slate-600">Fokus pada mapel, isi soal, opsi, dan jawaban. Cocok untuk input cepat tanpa harus mengisi metadata lengkap.</p>
@@ -821,7 +957,7 @@
 						<button
 							type="button"
 							class={`rounded-xl border p-4 text-left transition ${isAdvanceMode ? 'border-emerald-300 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-emerald-200'}`}
-							onclick={() => (fAuthoringMode = 'advance')}
+							onclick={() => setAuthoringMode('advance')}
 						>
 							<p class="text-sm font-semibold text-slate-900">Mode Lanjutan</p>
 							<p class="mt-1 text-sm text-slate-600">Buka seluruh fitur: blueprint kurikulum, alur review, asset reuse, rich text, dan LaTeX.</p>
@@ -832,7 +968,7 @@
 							Soal mode dasar disimpan otomatis sebagai <strong>draft</strong>. KD, CP, TP, HOTS, dan metadata blueprint bisa dilengkapi nanti di mode lanjutan.
 						</div>
 						<div class="flex flex-wrap gap-2">
-								<Button variant="outline" size="sm" onclick={() => (fAuthoringMode = 'advance')}>Lengkapi di Mode Lanjutan</Button>
+								<Button variant="outline" size="sm" onclick={() => setAuthoringMode('advance')}>Lengkapi di Mode Lanjutan</Button>
 								{#if canSubmitReview && editId}
 									<LoadingButton
 										variant="outline"
@@ -881,7 +1017,12 @@
 						{/if}
 						<div>
 							<label for="q-type" class="mb-1 block text-xs font-medium text-slate-600">Tipe Soal</label>
-							<select id="q-type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fQuestionType}>
+							<select
+								id="q-type"
+								class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+								value={fQuestionType}
+								onchange={(event) => applyQuestionType((event.currentTarget as HTMLSelectElement).value)}
+							>
 								<option value="multiple_choice">Pilihan Ganda</option>
 								{#if isAdvanceMode}
 									<option value="multiple_answer">Jawaban Ganda</option>
@@ -1127,7 +1268,7 @@
 									<option value="rubric">Rubrik</option>
 								</select>
 							</div>
-							<LoadingButton onclick={uploadAsset} loading={assetBusy} loadingLabel="Uploading..." disabled={!assetFile} label="Upload" />
+							<LoadingButton onclick={() => void uploadAsset()} loading={assetBusy} loadingLabel="Uploading..." disabled={!assetFile} label="Upload" />
 						</div>
 						{#if uploadedAssets.length > 0}
 							<div class="space-y-2">
@@ -1183,13 +1324,13 @@
 							{#if fHotsFlag}<Badge class="border-emerald-200 bg-emerald-100 text-emerald-800">HOTS</Badge>{/if}
 						</div>
 						{#if fStimulusHTML}
-							<div class="prose prose-sm max-w-none rounded-lg border bg-slate-50 p-3">{@html fStimulusHTML}</div>
+							<RichContent html={fStimulusHTML} class="prose prose-sm max-w-none rounded-lg border bg-slate-50 p-3" />
 						{/if}
 						{#if fStimulusLatex}
 							<LatexBlock src={fStimulusLatex} class="mt-3" />
 						{/if}
 						{#if fStemHTML}
-							<div class="prose prose-sm mt-4 max-w-none text-slate-900">{@html fStemHTML}</div>
+							<RichContent html={fStemHTML} class="prose prose-sm mt-4 max-w-none text-slate-900" />
 						{:else}
 							<p class="mt-4 text-sm text-slate-900">{fQuestionText}</p>
 						{/if}
@@ -1202,7 +1343,7 @@
 									<div class="rounded-lg border px-3 py-2 text-sm">
 										<span class="mr-2 font-semibold text-emerald-800">{option.label}.</span>
 										{#if option.html}
-											<span>{@html option.html}</span>
+											<RichContent tag="span" html={option.html} />
 										{:else if option.latex}
 											<LatexBlock src={option.latex} display={false} class="inline-block" />
 										{:else}
@@ -1216,41 +1357,52 @@
 				</section>
 
 				<div class="flex flex-wrap gap-2 border-t pt-4">
-					<LoadingButton onclick={saveQuestion} loading={fBusy} loadingLabel="Menyimpan..." label={editId ? 'Perbarui Item' : 'Simpan Item'} />
+					<LoadingButton onclick={() => void saveQuestion()} loading={fBusy} loadingLabel="Menyimpan..." label={editId ? 'Perbarui Item' : 'Simpan Item'} />
 					<Button variant="outline" onclick={resetForm}>Batal</Button>
 				</div>
 			</Card.Content>
 		</Card.Root>
 	{/if}
 
-	{#if loading}
-		<div class="space-y-4">
-			<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-				<div class="space-y-2">
-					<Skeleton class="h-8 w-44" />
-					<Skeleton class="h-4 w-80" />
+	<AsyncContent promise={questionsPromise} onerror={handleQuestionsRenderError}>
+		{#snippet pending()}
+			<div class="space-y-4">
+				<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+					<div class="space-y-2">
+						<Skeleton class="h-8 w-44" />
+						<Skeleton class="h-4 w-80" />
+					</div>
+					<div class="flex gap-2">
+						<Skeleton class="h-9 w-28" />
+						<Skeleton class="h-9 w-36" />
+					</div>
 				</div>
-				<div class="flex gap-2">
-					<Skeleton class="h-9 w-28" />
-					<Skeleton class="h-9 w-36" />
+				<div class="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+					<div class="space-y-3">
+						<Skeleton class="h-10 w-full" />
+						<Skeleton class="h-10 w-full" />
+						<Skeleton class="h-10 w-full" />
+						<Skeleton class="h-56 w-full" />
+					</div>
+					<div class="space-y-3">
+						<Skeleton class="h-12 w-full" />
+						<Skeleton class="h-16 w-full" />
+						<Skeleton class="h-16 w-full" />
+						<Skeleton class="h-16 w-full" />
+					</div>
 				</div>
 			</div>
-			<div class="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-				<div class="space-y-3">
-					<Skeleton class="h-10 w-full" />
-					<Skeleton class="h-10 w-full" />
-					<Skeleton class="h-10 w-full" />
-					<Skeleton class="h-56 w-full" />
-				</div>
-				<div class="space-y-3">
-					<Skeleton class="h-12 w-full" />
-					<Skeleton class="h-16 w-full" />
-					<Skeleton class="h-16 w-full" />
-					<Skeleton class="h-16 w-full" />
-				</div>
-			</div>
-		</div>
-	{:else}
+		{/snippet}
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Bank Soal Belum Tersaji"
+				message={overviewErrorMessage(error)}
+				onRetry={() => retryQuestions(reset)}
+			/>
+		{/snippet}
+		{#snippet children(value)}
+			{@const overview = value as QuestionsOverview}
+			{@const currentQuestions = overview.questions}
 		<Card.Root>
 			<Card.Header class="pb-3">
 				<div class="flex flex-wrap items-center justify-between gap-3">
@@ -1261,8 +1413,8 @@
 						</Card.Description>
 					</div>
 					<div class="flex flex-wrap gap-2">
-						<Button variant="outline" onclick={resetFilters}>Reset</Button>
-						<Button onclick={applyFilters}>Terapkan Filter</Button>
+						<LoadingButton variant="outline" loading={resetBusy} loadingLabel="Reset..." onclick={() => void resetFilters()}>Reset</LoadingButton>
+						<LoadingButton loading={filterBusy} loadingLabel="Menerapkan..." onclick={() => void applyFilters()}>Terapkan Filter</LoadingButton>
 					</div>
 				</div>
 				<div class="grid gap-3 pt-3 lg:grid-cols-[minmax(0,2fr),repeat(4,minmax(0,1fr))]">
@@ -1309,7 +1461,7 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each questions as q (q.id)}
+						{#each currentQuestions as q (q.id)}
 							<Table.Row>
 								<Table.Cell class="align-top">
 									<div class="font-mono text-xs text-slate-600">{q.code || '—'}</div>
@@ -1418,7 +1570,7 @@
 								</Table.Cell>
 							</Table.Row>
 						{/each}
-						{#if questions.length === 0}
+						{#if currentQuestions.length === 0}
 							<Table.Row>
 								<Table.Cell colspan={7} class="p-4">
 										<EmptyStatePanel
@@ -1444,10 +1596,29 @@
 			<div class="flex flex-wrap items-center justify-between gap-3 border-t px-6 py-4 text-sm text-slate-600">
 				<p>Halaman {currentPage} dari {pageCount}</p>
 				<div class="flex gap-2">
-					<Button variant="outline" size="sm" onclick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1}>Sebelumnya</Button>
-					<Button variant="outline" size="sm" onclick={() => goToPage(currentPage + 1)} disabled={currentPage >= pageCount}>Berikutnya</Button>
+					<LoadingButton
+						variant="outline"
+						size="sm"
+						loading={paginationBusy === 'previous'}
+						loadingLabel="Memuat..."
+						onclick={() => void goToPage(currentPage - 1)}
+						disabled={currentPage <= 1 || paginationBusy !== ''}
+					>
+						Sebelumnya
+					</LoadingButton>
+					<LoadingButton
+						variant="outline"
+						size="sm"
+						loading={paginationBusy === 'next'}
+						loadingLabel="Memuat..."
+						onclick={() => void goToPage(currentPage + 1)}
+						disabled={currentPage >= pageCount || paginationBusy !== ''}
+					>
+						Berikutnya
+					</LoadingButton>
 				</div>
 			</div>
 		</Card.Root>
-	{/if}
+		{/snippet}
+	</AsyncContent>
 </div>

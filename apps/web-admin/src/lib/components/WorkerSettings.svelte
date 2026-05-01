@@ -5,7 +5,7 @@
 
   let { settings = $bindable(), onsave }: {
     settings: { max_concurrent: number; headless: boolean };
-    onsave: () => void;
+    onsave: () => void | Promise<void>;
   } = $props();
 
   let saving = $state(false);
@@ -37,7 +37,7 @@
         <label for="headless-mode" class="text-sm font-medium cursor-pointer">Headless Mode</label>
       </div>
       <div>
-        <LoadingButton onclick={handleSave} loading={saving} loadingLabel="Menyimpan..." class="w-full sm:w-auto" label="Simpan Setting" />
+        <LoadingButton onclick={() => void handleSave()} loading={saving} loadingLabel="Menyimpan..." class="w-full sm:w-auto" label="Simpan Setting" />
         <p class="mt-1.5 text-xs text-muted-foreground">Worker sinkron otomatis ~30 detik.</p>
       </div>
     </div>

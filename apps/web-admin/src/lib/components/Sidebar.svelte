@@ -33,8 +33,6 @@
 	let lastSyncedSidebarPrefs = $state('');
 
 	const userRoles = $derived(user?.roles || (user?.role ? [user.role] : []));
-	const resolveNavHref = resolve as unknown as (href: string) => string;
-
 	const nav = $derived(
 		sidebarNavGroups
 			.map((g) => ({
@@ -220,9 +218,8 @@
 	}
 
 	function groupBadge(group: string) {
-		if (group === 'Inventaris') return inventoryAttention;
-		if (group === 'Perpustakaan') return libraryAttention;
-		if (group === 'PUSAKA') return pusakaAttention;
+		if (group === 'Aset & Layanan') return inventoryAttention + libraryAttention;
+		if (group === 'Pegawai & PUSAKA') return pusakaAttention;
 		return 0;
 	}
 
@@ -261,7 +258,7 @@
 		commandOpen = false;
 		open = false;
 		rememberRecent(href);
-		await goto(resolveNavHref(href));
+		await goto(resolve(href as '/'));
 	}
 
 	function loadPinnedItems() {

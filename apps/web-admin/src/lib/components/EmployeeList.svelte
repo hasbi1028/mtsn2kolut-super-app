@@ -7,10 +7,13 @@
   import * as Dialog from '$lib/components/ui/dialog';
   import { toast } from '$lib/components/ui/sonner';
   import { Skeleton } from '$lib/components/ui/skeleton';
+  import AsyncContent from '$lib/components/AsyncContent.svelte';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
   import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+  import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
   import SuccessPanel from '$lib/components/SuccessPanel.svelte';
   import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
+  import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
 
   interface Employee {
     id: string;
@@ -60,11 +63,18 @@
 
   type RunType = 'morning' | 'afternoon' | 'checkin' | 'checkout';
 
+  type ApiEnvelope<T> = {
+    data?: T;
+    items?: T;
+    error?: string;
+    message?: string;
+  };
+
   let { employees, onrun, onstop, ondelete }: {
     employees: Employee[];
-    onrun: (id: string, type: string) => void;
-    onstop: (id: string, cancelled: number) => void;
-    ondelete: () => void;
+    onrun: (id: string, type: string) => void | Promise<void>;
+    onstop: (id: string, cancelled: number) => void | Promise<void>;
+    ondelete: () => void | Promise<void>;
   } = $props();
 
   let busyId           = $state<string | null>(null);
@@ -75,15 +85,15 @@
   let pusakaUsername   = $state('');
   let pusakaPassword   = $state('');
   let saving           = $state(false);
-  let testing          = $state(false);
-  let accountToggling  = $state(false);
-  let accountDeleting  = $state(false);
+  let testingId        = $state<string | null>(null);
+  let accountTogglingId = $state<string | null>(null);
+  let accountDeletingId = $state<string | null>(null);
   let filterMode = $state<'all' | 'configured' | 'needs_setup' | 'disabled'>('all');
   let search = $state('');
   let success = $state('');
   let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
   let showAuditDialog = $state(false);
-  let auditLoading = $state(false);
+  let auditPromise = $state<Promise<AuditLog[]> | null>(null);
   let auditLogs = $state<AuditLog[]>([]);
   let auditEmployee = $state<Employee | null>(null);
 
@@ -94,8 +104,9 @@
   // Per-employee schedule dialog
   let showScheduleDialog = $state(false);
   let scheduleEmployee   = $state<Employee | null>(null);
-  let scheduleLoading    = $state(false);
+  let schedulePromise    = $state<Promise<DayConfig[]> | null>(null);
   let scheduleSaving     = $state(false);
+  let scheduleDeletingKey = $state<string | null>(null);
 
   const makeDayConfig = (): DayConfig => ({
     checkinId: null, checkoutId: null,
@@ -156,8 +167,24 @@
   }
 
   function confirmPhrase(title: string, detail: string, challenge: string) {
-    const input = prompt(`${title}\n\n${detail}\n\nKetik ${challenge} untuk melanjutkan.`);
-    return input === challenge;
+    return confirmChallenge({
+      title,
+      message: detail,
+      challenge,
+      confirmLabel: 'Konfirmasi',
+      tone: 'danger'
+    });
+  }
+
+  function showOperationError(title: string, message: string) {
+    operationState = { tone: 'error', title, message };
+    toast.error(message);
+  }
+
+  async function ensureMutationOk(response: Response, fallbackMessage: string) {
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(apiErrorMessage(payload) || fallbackMessage);
+    return payload;
   }
 
   async function savePusakaCredentials() {
@@ -170,49 +197,45 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ pusaka_username: pusakaUsername, pusaka_password: pusakaPassword }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        operationState = {
-          tone: 'error',
-          title: 'Kredensial Gagal Diperbarui',
-          message: (data as { error?: string }).error || 'Gagal menyimpan kredensial PUSAKA',
-        };
-        toast.error((data as { error?: string }).error || 'Gagal menyimpan kredensial PUSAKA');
-        return;
-      }
+      await ensureMutationOk(res, 'Gagal menyimpan kredensial PUSAKA');
       toast.success('Kredensial PUSAKA berhasil diperbarui.');
       success = `Kredensial PUSAKA untuk ${selectedEmployee.nama} berhasil diperbarui.`;
       showPusakaDialog = false;
-      ondelete?.();
-    } catch {
-      operationState = {
-        tone: 'error',
-        title: 'Kredensial Gagal Diperbarui',
-        message: 'Gagal menyimpan kredensial PUSAKA',
-      };
-      toast.error('Gagal menyimpan kredensial PUSAKA');
+      await ondelete?.();
+    } catch (error) {
+      showOperationError(
+        'Kredensial Gagal Diperbarui',
+        employeeListErrorMessage(error, 'Gagal menyimpan kredensial PUSAKA')
+      );
     } finally { saving = false; }
   }
 
   async function testPusakaCredentials(emp: Employee) {
-    testing = true;
+    testingId = emp.id;
     try {
       const res  = await fetch(`/api/pusaka/employees/${emp.id}/test-pusaka`, { method: 'POST' });
-      const data = await res.json() as { message?: string };
-      toast.success(data.message || 'Test selesai');
-    } catch { toast.error('Test gagal'); } finally { testing = false; }
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(apiErrorMessage(data) || 'Test gagal');
+        return;
+      }
+      const message = isRecord(data) && typeof data.message === 'string' ? data.message : '';
+      toast.success(message || 'Test selesai');
+    } catch (error) {
+      toast.error(employeeListErrorMessage(error, 'Test gagal'));
+    } finally { testingId = null; }
   }
 
   async function togglePusakaAccount(emp: Employee, isEnabled: boolean) {
     const challenge = isEnabled ? 'AKTIFKAN' : 'NONAKTIFKAN';
-    if (!confirmPhrase(
+    if (!(await confirmPhrase(
       isEnabled ? 'Aktifkan Akun PUSAKA' : 'Nonaktifkan Akun PUSAKA',
       isEnabled
         ? `Akun PUSAKA ${emp.nama} akan diaktifkan kembali dan bisa dipakai untuk job otomatis maupun manual.`
         : `Akun PUSAKA ${emp.nama} akan dinonaktifkan dari integrasi. Job otomatis sebaiknya tidak lagi dijalankan sampai akun diaktifkan kembali.`,
       challenge,
-    )) return;
-    accountToggling = true;
+    ))) return;
+    accountTogglingId = emp.id;
     success = '';
     try {
       const res = await fetch(`/api/pusaka/employees/${emp.id}`, {
@@ -220,45 +243,37 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ is_enabled: isEnabled }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        operationState = {
-          tone: 'error',
-          title: 'Status Akun Gagal Diperbarui',
-          message: (data as { error?: string }).error || 'Gagal memperbarui status akun PUSAKA',
-        };
-        toast.error((data as { error?: string }).error || 'Gagal memperbarui status akun PUSAKA');
-        return;
-      }
+      await ensureMutationOk(res, 'Gagal memperbarui status akun PUSAKA');
       toast.success(isEnabled ? 'Akun PUSAKA diaktifkan kembali.' : 'Akun PUSAKA dinonaktifkan.');
       success = `Akun PUSAKA ${emp.nama} berhasil ${isEnabled ? 'diaktifkan kembali' : 'dinonaktifkan'}.`;
-      ondelete?.();
+      await ondelete?.();
+    } catch (error) {
+      showOperationError(
+        'Status Akun Gagal Diperbarui',
+        employeeListErrorMessage(error, 'Gagal memperbarui status akun PUSAKA')
+      );
     } finally {
-      accountToggling = false;
+      accountTogglingId = null;
     }
   }
 
   async function deletePusakaAccount(emp: Employee) {
-    if (!confirmPhrase('Hapus Akun PUSAKA', `Akun PUSAKA untuk ${emp.nama} akan dilepas dari integrasi. Jadwal tetap tersimpan, tetapi kredensial dan status akun integrasi akan hilang dari pegawai ini.`, 'HAPUS')) return;
-    accountDeleting = true;
+    if (!(await confirmPhrase('Hapus Akun PUSAKA', `Akun PUSAKA untuk ${emp.nama} akan dilepas dari integrasi. Jadwal tetap tersimpan, tetapi kredensial dan status akun integrasi akan hilang dari pegawai ini.`, 'HAPUS'))) return;
+    accountDeletingId = emp.id;
     success = '';
     try {
       const res = await fetch(`/api/pusaka/employees/${emp.id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        operationState = {
-          tone: 'error',
-          title: 'Akun Gagal Dihapus',
-          message: (data as { error?: string }).error || 'Gagal menghapus akun PUSAKA',
-        };
-        toast.error((data as { error?: string }).error || 'Gagal menghapus akun PUSAKA');
-        return;
-      }
+      await ensureMutationOk(res, 'Gagal menghapus akun PUSAKA');
       toast.success('Akun PUSAKA berhasil dihapus.');
       success = `Akun PUSAKA ${emp.nama} berhasil dihapus dari integrasi.`;
-      ondelete?.();
+      await ondelete?.();
+    } catch (error) {
+      showOperationError(
+        'Akun Gagal Dihapus',
+        employeeListErrorMessage(error, 'Gagal menghapus akun PUSAKA')
+      );
     } finally {
-      accountDeleting = false;
+      accountDeletingId = null;
     }
   }
 
@@ -298,38 +313,109 @@
     return {};
   }
 
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+  }
+
+  function apiErrorMessage(payload: unknown) {
+    if (!isRecord(payload)) return '';
+    const error = payload.error;
+    if (typeof error === 'string' && error.trim()) return error;
+    const message = payload.message;
+    if (typeof message === 'string' && message.trim()) return message;
+    return '';
+  }
+
+  async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+    const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+    const message = apiErrorMessage(payload);
+    if (!response.ok) throw new Error(message || fallbackMessage);
+    if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
+      throw new Error(payload.error);
+    }
+    if (isRecord(payload) && 'data' in payload) {
+      const envelope = payload as ApiEnvelope<T>;
+      if (envelope.data === undefined) throw new Error(fallbackMessage);
+      return envelope.data;
+    }
+    if (isRecord(payload) && 'items' in payload) {
+      const envelope = payload as ApiEnvelope<T>;
+      if (envelope.items === undefined) throw new Error(fallbackMessage);
+      return envelope.items;
+    }
+    if (payload === null) throw new Error(fallbackMessage);
+    return payload as T;
+  }
+
+  function normalizeRows<T>(value: T[] | null | undefined): T[] {
+    return Array.isArray(value) ? value : [];
+  }
+
+  function employeeListErrorMessage(error: unknown, fallbackMessage: string) {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    if (typeof error === 'string' && error.trim()) return error;
+    return fallbackMessage;
+  }
+
+  async function fetchAuditLogs(emp: Employee): Promise<AuditLog[]> {
+    const logs = await fetch(`/api/pusaka/employees/${emp.id}/audit-logs?per_page=10`).then((response) =>
+      readApi<AuditLog[]>(response, 'Gagal memuat riwayat akun PUSAKA')
+    );
+    return normalizeRows(logs);
+  }
+
   async function openAuditDialog(emp: Employee) {
     auditEmployee = emp;
     auditLogs = [];
     showAuditDialog = true;
-    auditLoading = true;
-    try {
-      const res = await fetch(`/api/pusaka/employees/${emp.id}/audit-logs?per_page=10`);
-      if (!res.ok) {
-        toast.error('Gagal memuat riwayat akun PUSAKA');
-        return;
-      }
-      auditLogs = await res.json() as AuditLog[];
-    } catch {
-      toast.error('Gagal memuat riwayat akun PUSAKA');
-    } finally {
-      auditLoading = false;
-    }
+    auditPromise = fetchAuditLogs(emp).then((logs) => {
+      auditLogs = logs;
+      return logs;
+    });
+  }
+
+  function retryAudit(reset?: () => void) {
+    if (!auditEmployee) return;
+    reset?.();
+    auditPromise = fetchAuditLogs(auditEmployee).then((logs) => {
+      auditLogs = logs;
+      return logs;
+    });
+  }
+
+  function handleAuditRenderError(error: unknown, reset: () => void) {
+    console.error('PUSAKA audit dialog render failed', error);
+    reset();
   }
 
   async function doStop(id: string) {
-    if (!confirm('Stop akan mencoba membatalkan job aktif untuk pegawai ini. Lanjutkan?')) return;
+    if (!(await confirmAction({
+      title: 'Batalkan Job Aktif',
+      message: 'Stop akan mencoba membatalkan job aktif untuk pegawai ini. Lanjutkan?',
+      confirmLabel: 'Batalkan Job',
+      tone: 'warning'
+    }))) return;
     busyId = id;
-    const res  = await fetch('/api/pusaka/jobs/cancel', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ employee_id: id }),
-    });
-    const data = await res.json().catch(() => ({})) as { cancelled?: number };
-    busyId = null;
-    success = data.cancelled && data.cancelled > 0
-      ? `${data.cancelled} job untuk pegawai ini berhasil dibatalkan.`
-      : 'Tidak ada job aktif yang perlu dibatalkan untuk pegawai ini.';
-    onstop?.(id, data.cancelled ?? 0);
+    success = '';
+    try {
+      const res  = await fetch('/api/pusaka/jobs/cancel', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ employee_id: id }),
+      });
+      const data = await readApi<{ cancelled?: number }>(res, 'Gagal membatalkan job aktif pegawai');
+      const cancelled = data.cancelled ?? 0;
+      success = cancelled > 0
+        ? `${cancelled} job untuk pegawai ini berhasil dibatalkan.`
+        : 'Tidak ada job aktif yang perlu dibatalkan untuk pegawai ini.';
+      await onstop?.(id, cancelled);
+    } catch (error) {
+      showOperationError(
+        'Job Gagal Dibatalkan',
+        employeeListErrorMessage(error, 'Gagal membatalkan job aktif pegawai')
+      );
+    } finally {
+      busyId = null;
+    }
   }
 
   function populateDayConfigs(data: EmployeeSchedule[]): DayConfig[] {
@@ -352,17 +438,35 @@
     return configs;
   }
 
+  async function fetchScheduleConfigs(emp: Employee): Promise<DayConfig[]> {
+    const schedules = await fetch(`/api/pusaka/employees/${emp.id}/schedules`).then((response) =>
+      readApi<EmployeeSchedule[]>(response, 'Gagal memuat jadwal absensi pegawai')
+    );
+    return populateDayConfigs(normalizeRows(schedules));
+  }
+
   async function openScheduleDialog(emp: Employee) {
     scheduleEmployee   = emp;
     showScheduleDialog = true;
-    scheduleLoading    = true;
     dayConfigs         = Array.from({ length: 7 }, makeDayConfig);
-    try {
-      const res  = await fetch(`/api/pusaka/employees/${emp.id}/schedules`);
-      const data = await res.json().catch(() => []) as EmployeeSchedule[];
-      if (Array.isArray(data)) dayConfigs = populateDayConfigs(data);
-    } catch { /* silent */ }
-    finally { scheduleLoading = false; }
+    schedulePromise = fetchScheduleConfigs(emp).then((configs) => {
+      dayConfigs = configs;
+      return configs;
+    });
+  }
+
+  function retrySchedule(reset?: () => void) {
+    if (!scheduleEmployee) return;
+    reset?.();
+    schedulePromise = fetchScheduleConfigs(scheduleEmployee).then((configs) => {
+      dayConfigs = configs;
+      return configs;
+    });
+  }
+
+  function handleScheduleRenderError(error: unknown, reset: () => void) {
+    console.error('PUSAKA schedule dialog render failed', error);
+    reset();
   }
 
   async function saveDayRow(dow: number) {
@@ -372,7 +476,7 @@
     success = '';
     try {
       if (cfg.checkinTime) {
-        await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules`, {
+        const res = await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules`, {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             run_type: 'checkin', run_time: cfg.checkinTime,
@@ -381,9 +485,10 @@
             day_of_week: dow,
           }),
         });
+        await ensureMutationOk(res, 'Gagal menyimpan jadwal masuk pegawai');
       }
       if (cfg.checkoutTime) {
-        await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules`, {
+        const res = await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules`, {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             run_type: 'checkout', run_time: cfg.checkoutTime,
@@ -392,13 +497,16 @@
             day_of_week: dow,
           }),
         });
+        await ensureMutationOk(res, 'Gagal menyimpan jadwal pulang pegawai');
       }
-      const res  = await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules`);
-      const data = await res.json().catch(() => []) as EmployeeSchedule[];
-      if (Array.isArray(data)) dayConfigs = populateDayConfigs(data);
+      const configs = await fetchScheduleConfigs(scheduleEmployee);
+      dayConfigs = configs;
+      schedulePromise = Promise.resolve(configs);
       success = `Jadwal ${scheduleEmployee.nama} untuk ${dayLabels[dow]} berhasil diperbarui.`;
-      ondelete?.();
-    } catch { /* silent */ }
+      await ondelete?.();
+    } catch (error) {
+      toast.error(employeeListErrorMessage(error, 'Gagal menyimpan jadwal absensi pegawai'));
+    }
     finally { scheduleSaving = false; }
   }
 
@@ -407,12 +515,19 @@
     const cfg    = dayConfigs[dow];
     const schedId = runType === 'checkin' ? cfg.checkinId : cfg.checkoutId;
     if (!schedId) return;
+    scheduleDeletingKey = `${dow}:${runType}`;
     try {
-      await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules/${schedId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/pusaka/employees/${scheduleEmployee.id}/schedules/${schedId}`, { method: 'DELETE' });
+      await ensureMutationOk(res, 'Gagal menghapus jadwal absensi pegawai');
       if (runType === 'checkin') { cfg.checkinId = null; cfg.checkinTime = ''; }
       else                       { cfg.checkoutId = null; cfg.checkoutTime = ''; }
-      ondelete?.();
-    } catch { /* silent */ }
+      schedulePromise = Promise.resolve(dayConfigs);
+      await ondelete?.();
+    } catch (error) {
+      toast.error(employeeListErrorMessage(error, 'Gagal menghapus jadwal absensi pegawai'));
+    } finally {
+      scheduleDeletingKey = null;
+    }
   }
 
   function statusInfo(e: Employee) {
@@ -561,9 +676,9 @@
                     size="sm"
                     variant="outline"
                     onclick={() => togglePusakaAccount(e, e.pusaka_is_enabled === false)}
-                    loading={accountToggling}
+                    loading={accountTogglingId === e.id}
                     loadingLabel="Memproses..."
-                    disabled={accountToggling}
+                    disabled={(accountTogglingId !== null && accountTogglingId !== e.id) || accountDeletingId !== null}
                   >
                     {e.pusaka_is_enabled === false ? 'Aktifkan Akun' : 'Nonaktifkan Akun'}
                   </LoadingButton>
@@ -572,9 +687,9 @@
                     variant="ghost"
                     class="text-destructive hover:text-destructive"
                     onclick={() => deletePusakaAccount(e)}
-                    loading={accountDeleting}
+                    loading={accountDeletingId === e.id}
                     loadingLabel="Menghapus..."
-                    disabled={accountDeleting}
+                    disabled={(accountDeletingId !== null && accountDeletingId !== e.id) || accountTogglingId !== null}
                   >
                     Hapus Akun
                   </LoadingButton>
@@ -582,7 +697,7 @@
                 <Button size="sm" variant="outline" onclick={() => openAuditDialog(e)}>
                   Riwayat
                 </Button>
-                <LoadingButton size="sm" variant="ghost" onclick={() => testPusakaCredentials(e)} loading={testing} loadingLabel="Testing..." disabled={testing || !isPusakaConfigured(e)}>
+                <LoadingButton size="sm" variant="ghost" onclick={() => testPusakaCredentials(e)} loading={testingId === e.id} loadingLabel="Testing..." disabled={(testingId !== null && testingId !== e.id) || !isPusakaConfigured(e)}>
                   Test
                 </LoadingButton>
                 <LoadingButton size="sm" variant="outline" onclick={() => openRunConfirm(e, 'morning')} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id}>
@@ -695,7 +810,7 @@
     </div>
     <Dialog.Footer>
       <Button variant="outline" onclick={() => (showPusakaDialog = false)}>Batal</Button>
-      <LoadingButton onclick={savePusakaCredentials} loading={saving} loadingLabel="Menyimpan..." disabled={saving}>Simpan</LoadingButton>
+      <LoadingButton onclick={() => void savePusakaCredentials()} loading={saving} loadingLabel="Menyimpan..." disabled={saving}>Simpan</LoadingButton>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>
@@ -710,48 +825,61 @@
     </Dialog.Header>
 
     <div class="space-y-3 py-2">
-      {#if auditLoading}
-        <div class="space-y-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-4">
-          {#each Array.from({ length: 3 }) as _, index (`audit-skeleton-${index}`)}
-            <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
-              <div class="flex items-start justify-between gap-3">
-                <div class="space-y-2">
-                  <Skeleton class="h-5 w-28" />
-                  <Skeleton class="h-4 w-36" />
+      <AsyncContent promise={auditPromise} onerror={handleAuditRenderError}>
+        {#snippet pending()}
+          <div class="space-y-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-4">
+            {#each Array.from({ length: 3 }) as _, index (`audit-skeleton-${index}`)}
+              <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="space-y-2">
+                    <Skeleton class="h-5 w-28" />
+                    <Skeleton class="h-4 w-36" />
+                  </div>
+                  <Skeleton class="h-6 w-16" />
                 </div>
-                <Skeleton class="h-6 w-16" />
-              </div>
-              <div class="mt-3 space-y-2">
-                <Skeleton class="h-4 w-40" />
-                <Skeleton class="h-4 w-28" />
-              </div>
-            </div>
-          {/each}
-        </div>
-      {:else if auditLogs.length === 0}
-        <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">Belum ada riwayat akun PUSAKA untuk pegawai ini.</div>
-      {:else}
-        <div class="space-y-2">
-          {#each auditLogs as log (log.id)}
-            {@const meta = auditMeta(log)}
-            <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <p class="text-sm font-semibold text-slate-900">{auditActionLabel(log.action)}</p>
-                  <p class="mt-1 text-xs text-slate-500">{formatAuditDate(log.created_at)}</p>
+                <div class="mt-3 space-y-2">
+                  <Skeleton class="h-4 w-40" />
+                  <Skeleton class="h-4 w-28" />
                 </div>
-                <Badge variant="outline" class="text-[11px]">{log.username ?? 'Sistem'}</Badge>
               </div>
-              {#if meta.pusaka_username}
-                <p class="mt-2 text-xs text-slate-600">Username: <span class="font-mono">{String(meta.pusaka_username)}</span></p>
-              {/if}
-              {#if typeof meta.is_enabled === 'boolean'}
-                <p class="mt-1 text-xs text-slate-600">Status akun: {meta.is_enabled ? 'aktif' : 'dinonaktifkan'}</p>
-              {/if}
+            {/each}
+          </div>
+        {/snippet}
+        {#snippet failed(error, reset)}
+          <RecoveryPanel
+            compact
+            title="Riwayat PUSAKA Belum Tersaji"
+            message={employeeListErrorMessage(error, 'Gagal memuat riwayat akun PUSAKA')}
+            onRetry={() => retryAudit(reset)}
+          />
+        {/snippet}
+        {#snippet children(_logs)}
+          {#if auditLogs.length === 0}
+            <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">Belum ada riwayat akun PUSAKA untuk pegawai ini.</div>
+          {:else}
+            <div class="space-y-2">
+              {#each auditLogs as log (log.id)}
+                {@const meta = auditMeta(log)}
+                <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-semibold text-slate-900">{auditActionLabel(log.action)}</p>
+                      <p class="mt-1 text-xs text-slate-500">{formatAuditDate(log.created_at)}</p>
+                    </div>
+                    <Badge variant="outline" class="text-[11px]">{log.username ?? 'Sistem'}</Badge>
+                  </div>
+                  {#if meta.pusaka_username}
+                    <p class="mt-2 text-xs text-slate-600">Username: <span class="font-mono">{String(meta.pusaka_username)}</span></p>
+                  {/if}
+                  {#if typeof meta.is_enabled === 'boolean'}
+                    <p class="mt-1 text-xs text-slate-600">Status akun: {meta.is_enabled ? 'aktif' : 'dinonaktifkan'}</p>
+                  {/if}
+                </div>
+              {/each}
             </div>
-          {/each}
-        </div>
-      {/if}
+          {/if}
+        {/snippet}
+      </AsyncContent>
     </div>
 
     <Dialog.Footer>
@@ -768,92 +896,117 @@
       <Dialog.Description>{scheduleEmployee?.nama ?? ''}</Dialog.Description>
     </Dialog.Header>
 
-    {#if scheduleLoading}
-      <div class="space-y-3 py-2">
-        {#each Array.from({ length: 4 }) as _, index (`schedule-skeleton-${index}`)}
-          <div class="rounded-lg border bg-card px-3 py-3 space-y-3">
-            <div class="flex items-center justify-between">
-              <Skeleton class="h-5 w-20" />
-              <Skeleton class="h-6 w-24" />
-            </div>
-            <div class="space-y-2">
-              <Skeleton class="h-8 w-full" />
-              <Skeleton class="h-8 w-full" />
-            </div>
-            <div class="flex justify-end">
-              <Skeleton class="h-7 w-20" />
-            </div>
-          </div>
-        {/each}
-      </div>
-    {:else}
-      <div class="space-y-2 max-h-[65vh] overflow-y-auto py-1 pr-1">
-        {#each dayConfigs as cfg, dow (`${dow}-${cfg.checkinId ?? 'ci'}-${cfg.checkoutId ?? 'co'}`)}
-          <div class="rounded-lg border bg-card px-3 py-2.5 space-y-2">
-
-            <!-- Header baris hari -->
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-semibold">{dayLabels[dow]}</span>
-              <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span>Acak ±</span>
-                <input type="number" min="0" max="60" bind:value={cfg.randomWindow}
-                  class="w-12 rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center" />
-                <span>mnt</span>
+    <AsyncContent promise={schedulePromise} onerror={handleScheduleRenderError}>
+      {#snippet pending()}
+        <div class="space-y-3 py-2">
+          {#each Array.from({ length: 4 }) as _, index (`schedule-skeleton-${index}`)}
+            <div class="rounded-lg border bg-card px-3 py-3 space-y-3">
+              <div class="flex items-center justify-between">
+                <Skeleton class="h-5 w-20" />
+                <Skeleton class="h-6 w-24" />
+              </div>
+              <div class="space-y-2">
+                <Skeleton class="h-8 w-full" />
+                <Skeleton class="h-8 w-full" />
+              </div>
+              <div class="flex justify-end">
+                <Skeleton class="h-7 w-20" />
               </div>
             </div>
+          {/each}
+        </div>
+      {/snippet}
+      {#snippet failed(error, reset)}
+        <div class="py-2">
+          <RecoveryPanel
+            compact
+            title="Jadwal Absensi Belum Tersaji"
+            message={employeeListErrorMessage(error, 'Gagal memuat jadwal absensi pegawai')}
+            onRetry={() => retrySchedule(reset)}
+          />
+        </div>
+      {/snippet}
+      {#snippet children(_configs)}
+        <div class="space-y-2 max-h-[65vh] overflow-y-auto py-1 pr-1">
+          {#each dayConfigs as cfg, dow (`${dow}-${cfg.checkinId ?? 'ci'}-${cfg.checkoutId ?? 'co'}`)}
+            <div class="rounded-lg border bg-card px-3 py-2.5 space-y-2">
 
-            <!-- Baris masuk + pulang -->
-            <div class="space-y-1.5">
-              <div class="flex items-center gap-2">
-                <span class="w-14 shrink-0 text-xs text-muted-foreground">☀ Masuk</span>
-                <input type="time" bind:value={cfg.checkinTime}
-                  class="flex-1 min-w-0 rounded border border-input bg-background px-2 py-1 font-mono text-xs" />
-                <label class="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer shrink-0">
-                  <input type="checkbox" id="ci-{dow}" bind:checked={cfg.checkinEnabled}
-                    class="h-3.5 w-3.5 rounded accent-green-700" />
-                  Aktif
-                </label>
-                {#if cfg.checkinId}
-                  <button type="button"
-                    class="text-xs text-destructive hover:text-destructive/80 shrink-0"
-                    onclick={() => deleteDaySchedule(dow, 'checkin')}
-                    title="Hapus jadwal masuk">✕</button>
-                {/if}
+              <!-- Header baris hari -->
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-semibold">{dayLabels[dow]}</span>
+                <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span>Acak ±</span>
+                  <input type="number" min="0" max="60" bind:value={cfg.randomWindow}
+                    class="w-12 rounded border border-input bg-background px-1.5 py-0.5 text-xs text-center" />
+                  <span>mnt</span>
+                </div>
               </div>
-              <div class="flex items-center gap-2">
-                <span class="w-14 shrink-0 text-xs text-muted-foreground">🌙 Pulang</span>
-                <input type="time" bind:value={cfg.checkoutTime}
-                  class="flex-1 min-w-0 rounded border border-input bg-background px-2 py-1 font-mono text-xs" />
-                <label class="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer shrink-0">
-                  <input type="checkbox" id="co-{dow}" bind:checked={cfg.checkoutEnabled}
-                    class="h-3.5 w-3.5 rounded accent-green-700" />
-                  Aktif
-                </label>
-                {#if cfg.checkoutId}
-                  <button type="button"
-                    class="text-xs text-destructive hover:text-destructive/80 shrink-0"
-                    onclick={() => deleteDaySchedule(dow, 'checkout')}
-                    title="Hapus jadwal pulang">✕</button>
-                {/if}
+
+              <!-- Baris masuk + pulang -->
+              <div class="space-y-1.5">
+                <div class="flex items-center gap-2">
+                  <span class="w-14 shrink-0 text-xs text-muted-foreground">☀ Masuk</span>
+                  <input type="time" bind:value={cfg.checkinTime}
+                    class="flex-1 min-w-0 rounded border border-input bg-background px-2 py-1 font-mono text-xs" />
+                  <label class="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer shrink-0">
+                    <input type="checkbox" id="ci-{dow}" bind:checked={cfg.checkinEnabled}
+                      class="h-3.5 w-3.5 rounded accent-green-700" />
+                    Aktif
+                  </label>
+                  {#if cfg.checkinId}
+                    <LoadingButton
+                      size="xs"
+                      variant="ghost"
+                      class="text-xs text-destructive hover:text-destructive/80 shrink-0"
+                      onclick={() => deleteDaySchedule(dow, 'checkin')}
+                      loading={scheduleDeletingKey === `${dow}:checkin`}
+                      loadingLabel="..."
+                      disabled={scheduleDeletingKey !== null && scheduleDeletingKey !== `${dow}:checkin`}
+                      title="Hapus jadwal masuk"
+                    >✕</LoadingButton>
+                  {/if}
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="w-14 shrink-0 text-xs text-muted-foreground">🌙 Pulang</span>
+                  <input type="time" bind:value={cfg.checkoutTime}
+                    class="flex-1 min-w-0 rounded border border-input bg-background px-2 py-1 font-mono text-xs" />
+                  <label class="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer shrink-0">
+                    <input type="checkbox" id="co-{dow}" bind:checked={cfg.checkoutEnabled}
+                      class="h-3.5 w-3.5 rounded accent-green-700" />
+                    Aktif
+                  </label>
+                  {#if cfg.checkoutId}
+                    <LoadingButton
+                      size="xs"
+                      variant="ghost"
+                      class="text-xs text-destructive hover:text-destructive/80 shrink-0"
+                      onclick={() => deleteDaySchedule(dow, 'checkout')}
+                      loading={scheduleDeletingKey === `${dow}:checkout`}
+                      loadingLabel="..."
+                      disabled={scheduleDeletingKey !== null && scheduleDeletingKey !== `${dow}:checkout`}
+                      title="Hapus jadwal pulang"
+                    >✕</LoadingButton>
+                  {/if}
+                </div>
               </div>
-            </div>
 
-            <!-- Tombol simpan -->
-            <div class="flex justify-end">
-              <LoadingButton size="sm" variant="outline"
-                onclick={() => saveDayRow(dow)}
-                loading={scheduleSaving}
-                loadingLabel="Menyimpan..."
-                disabled={scheduleSaving || (!cfg.checkinTime && !cfg.checkoutTime)}
-                class="h-7 px-3 text-xs">
-                Simpan
-              </LoadingButton>
-            </div>
+              <!-- Tombol simpan -->
+              <div class="flex justify-end">
+                <LoadingButton size="sm" variant="outline"
+                  onclick={() => saveDayRow(dow)}
+                  loading={scheduleSaving}
+                  loadingLabel="Menyimpan..."
+                  disabled={scheduleSaving || (!cfg.checkinTime && !cfg.checkoutTime)}
+                  class="h-7 px-3 text-xs">
+                  Simpan
+                </LoadingButton>
+              </div>
 
-          </div>
-        {/each}
-      </div>
-    {/if}
+            </div>
+          {/each}
+        </div>
+      {/snippet}
+    </AsyncContent>
 
     <Dialog.Footer>
       <Button variant="outline" onclick={() => (showScheduleDialog = false)}>Tutup</Button>

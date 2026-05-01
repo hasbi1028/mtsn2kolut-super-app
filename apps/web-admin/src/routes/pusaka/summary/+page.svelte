@@ -6,7 +6,10 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { toast } from '$lib/components/ui/sonner';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 
 	type SummaryRow = {
 		employee_id: string; employee_nama: string; employee_nip: string;
@@ -17,8 +20,15 @@
 	let startDate = $state('');
 	let endDate   = $state('');
 	let summary   = $state<SummaryRow[]>([]);
-	let loading   = $state(false);
-	let error     = $state('');
+	let summaryPromise = $state<Promise<SummaryRow[]> | null>(null);
+	let refreshing = $state(false);
+	let loadedRangeKey = $state('');
+
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
 
 	function getDefaultDates() {
 		const now = new Date();
@@ -28,18 +38,91 @@
 		return { start: fmt(start), end: fmt(end) };
 	}
 
+	function rangeKey() {
+		return `${startDate}:${endDate}`;
+	}
+
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	async function fetchSummary() {
+		if (!startDate || !endDate) return [];
+		const res = await fetch(`/api/pusaka/attendance/summary?start_date=${startDate}&end_date=${endDate}`);
+		return readApi<SummaryRow[]>(res, 'Gagal memuat ringkasan kehadiran');
+	}
+
+	function loadInitial() {
+		if (!startDate || !endDate) return;
+		const nextRangeKey = rangeKey();
+		summary = [];
+		summaryPromise = fetchSummary().then((rows) => {
+			summary = rows ?? [];
+			loadedRangeKey = nextRangeKey;
+			return summary;
+		});
+	}
+
 	async function load() {
 		if (!startDate || !endDate) return;
-		loading = true; error = '';
-		try {
-			const res = await fetch(`/api/pusaka/attendance/summary?start_date=${startDate}&end_date=${endDate}`);
-			const data = await res.json();
-			summary = data.data ?? data ?? [];
-		} catch {
-			error = 'Gagal memuat ringkasan kehadiran';
-		} finally {
-			loading = false;
+		if (!summaryPromise) {
+			loadInitial();
+			return;
 		}
+		const nextRangeKey = rangeKey();
+		refreshing = true;
+		try {
+			const rows = await fetchSummary();
+			summary = rows ?? [];
+			loadedRangeKey = nextRangeKey;
+			summaryPromise = Promise.resolve(summary);
+		} catch (error) {
+			if (loadedRangeKey === nextRangeKey) {
+				summaryPromise = Promise.resolve(summary);
+				toast.error(summaryErrorMessage(error));
+			} else {
+				summaryPromise = Promise.reject(error);
+			}
+		} finally {
+			refreshing = false;
+		}
+	}
+
+	function retrySummary(reset?: () => void) {
+		reset?.();
+		loadInitial();
+	}
+
+	function summaryErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat ringkasan kehadiran';
+	}
+
+	function handleSummaryRenderError(error: unknown) {
+		console.error('PUSAKA attendance summary render failed', error);
 	}
 
 	function exportCSV() {
@@ -62,7 +145,7 @@
 		const d = getDefaultDates();
 		startDate = d.start;
 		endDate = d.end;
-		load();
+		loadInitial();
 	});
 </script>
 
@@ -87,25 +170,36 @@
 				<span class="text-center text-sm text-muted-foreground">s/d</span>
 				<Input type="date" bind:value={endDate} class="h-10 min-w-0 bg-white" />
 			</div>
-			<LoadingButton class="h-10 w-full sm:w-auto" onclick={load} loading={loading} loadingLabel="Memuat..." label="Tampilkan" />
+			<LoadingButton class="h-10 w-full sm:w-auto" onclick={() => void load()} loading={refreshing} loadingLabel="Memuat..." label="Tampilkan" />
 			<LoadingButton class="h-10 w-full sm:w-auto" variant="outline" onclick={exportCSV} disabled={summary.length === 0} label="↓ CSV" />
 		</div>
 	</div>
 
-	{#if error}
-		<div class="rounded-md bg-red-50 border border-red-200 p-4 text-sm text-red-800">{error}</div>
-	{/if}
-
 	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 		<Card.Content class="p-0">
-			{#if loading && summary.length === 0}
+			<AsyncContent promise={summaryPromise} onerror={handleSummaryRenderError}>
+				{#snippet pending()}
 				<div class="space-y-3 p-4">
 					<Skeleton class="h-12 w-full" />
 					<Skeleton class="h-14 w-full" />
 					<Skeleton class="h-14 w-full" />
 					<Skeleton class="h-14 w-full" />
 				</div>
-			{:else}
+				{/snippet}
+
+				{#snippet failed(error, reset)}
+					<div class="p-4">
+						<RecoveryPanel
+							compact
+							title="Ringkasan Belum Tersaji"
+							message={summaryErrorMessage(error)}
+							onRetry={() => retrySummary(reset)}
+						/>
+					</div>
+				{/snippet}
+
+				{#snippet children(value)}
+					{@const currentSummary = value as SummaryRow[]}
 			<div class="hidden overflow-x-auto lg:block">
 			<Table.Root>
 				<Table.Header>
@@ -120,7 +214,7 @@
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
-					{#each summary as r (r.employee_id)}
+					{#each currentSummary as r (r.employee_id)}
 						{@const percent = r.total_days > 0 ? (r.complete_days / r.total_days) * 100 : 0}
 						<Table.Row>
 							<Table.Cell class="font-medium">{r.employee_nama}</Table.Cell>
@@ -144,7 +238,7 @@
 					{:else}
 						<Table.Row>
 							<Table.Cell colspan={7} class="py-12 text-center text-muted-foreground">
-								{loading ? 'Memuat...' : 'Pilih rentang tanggal dan klik Tampilkan.'}
+								Pilih rentang tanggal dan klik Tampilkan.
 							</Table.Cell>
 						</Table.Row>
 					{/each}
@@ -153,7 +247,7 @@
 			</div>
 
 			<div class="grid gap-3 p-4 lg:hidden">
-				{#each summary as r (r.employee_id)}
+				{#each currentSummary as r (r.employee_id)}
 					{@const percent = r.total_days > 0 ? (r.complete_days / r.total_days) * 100 : 0}
 					<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 						<div class="flex items-start justify-between gap-3">
@@ -174,11 +268,12 @@
 					</div>
 				{:else}
 					<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-						{loading ? 'Memuat...' : 'Pilih rentang tanggal dan klik Tampilkan.'}
+						Pilih rentang tanggal dan klik Tampilkan.
 					</div>
 				{/each}
 			</div>
-			{/if}
+				{/snippet}
+			</AsyncContent>
 		</Card.Content>
 	</Card.Root>
 </div>

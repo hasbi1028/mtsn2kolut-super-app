@@ -7,9 +7,12 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { onMount } from 'svelte';
+	import { confirmAction } from '$lib/confirm-dialog';
 
 	type Classification = {
 		code: string;
@@ -28,10 +31,19 @@
 		issued_by_name: string;
 	};
 
-	let loading = $state(true);
-	let error = $state('');
-	let letters = $state<OutgoingLetter[]>([]);
+	type OutgoingLettersOverview = {
+		letters: OutgoingLetter[];
+		classifications: Classification[];
+	};
+
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
 	let classifications = $state<Classification[]>([]);
+	let lettersPromise = $state<Promise<OutgoingLettersOverview> | null>(null);
 	let search = $state('');
 
 	// Create dialog
@@ -58,23 +70,96 @@
 
 	let deleteBusy = $state<Record<string, boolean>>({});
 
-	async function loadLetters() {
-		loading = true;
-		error = '';
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) throw new Error(message || fallbackMessage);
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) throw new Error(payload.error);
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	function applyOverview(overview: OutgoingLettersOverview) {
+		classifications = overview.classifications ?? [];
+	}
+
+	async function fetchOverview(): Promise<OutgoingLettersOverview> {
+		const [lettersRes, classificationsRes] = await Promise.all([
+			fetch(`/api/tu/surat/outgoing?search=${encodeURIComponent(search)}`),
+			classifications.length === 0 ? fetch('/api/tu/surat/klasifikasi') : Promise.resolve(null)
+		]);
+		const nextLetters = await readApi<OutgoingLetter[]>(lettersRes, 'Gagal memuat surat keluar');
+		const nextClassifications = classificationsRes
+			? await readApi<Classification[]>(classificationsRes, 'Gagal memuat kode klasifikasi')
+			: classifications;
+		return {
+			letters: nextLetters ?? [],
+			classifications: nextClassifications ?? []
+		};
+	}
+
+	function loadLetters() {
+		const emptyOverview: OutgoingLettersOverview = { letters: [], classifications };
+		applyOverview(emptyOverview);
+		lettersPromise = fetchOverview().then((overview) => {
+			applyOverview(overview);
+			return overview;
+		});
+	}
+
+	async function refreshLetters() {
+		const overview = await fetchOverview();
+		applyOverview(overview);
+		lettersPromise = Promise.resolve(overview);
+	}
+
+	function retryLetters(reset?: () => void) {
+		reset?.();
+		loadLetters();
+	}
+
+	function lettersErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat surat keluar';
+	}
+
+	function handleLettersRenderError(error: unknown) {
+		console.error('TU outgoing letters render failed', error);
+	}
+
+	async function responseErrorMessage(response: Response, fallback: string) {
+		const payload = await response.json().catch(() => null);
+		return apiErrorMessage(payload) || fallback;
+	}
+
+	function mutationErrorMessage(error: unknown, fallback: string) {
+		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
+		return fallback;
+	}
+
+	async function refreshLettersAfterMutation() {
 		try {
-			const [letRes, klasRes] = await Promise.all([
-				fetch(`/api/tu/surat/outgoing?search=${encodeURIComponent(search)}`),
-				classifications.length === 0 ? fetch('/api/tu/surat/klasifikasi') : null
-			]);
-			if (!letRes.ok) throw new Error((await letRes.json()).error ?? `HTTP ${letRes.status}`);
-			letters = (await letRes.json()) as OutgoingLetter[];
-			if (klasRes && klasRes.ok) {
-				classifications = (await klasRes.json()) as Classification[];
-			}
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Gagal memuat surat keluar';
-		} finally {
-			loading = false;
+			await refreshLetters();
+		} catch (error) {
+			toast.error(lettersErrorMessage(error));
 		}
 	}
 
@@ -92,8 +177,8 @@
 				`/api/tu/surat/outgoing/preview-number?classification_code=${encodeURIComponent(newKlasifikasi)}&tanggal=${encodeURIComponent(newTglSurat)}`
 			);
 			if (res.ok) {
-				const json = await res.json() as { preview: string };
-				nomorPreview = json.preview;
+				const payload = await res.json().catch(() => null);
+				nomorPreview = isRecord(payload) && typeof payload.preview === 'string' ? payload.preview : '';
 			}
 		} catch {
 			nomorPreview = '';
@@ -120,14 +205,14 @@
 					manual_nomor: newManualNomor
 				})
 			});
-			const json = await res.json();
-			if (!res.ok) { toast.error(json.error ?? 'Gagal mencatat surat'); return; }
+			const payload = await res.json().catch(() => null);
+			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal mencatat surat'); return; }
 			createOpen = false;
 			newKlasifikasi = ''; newTglSurat = ''; newTujuan = ''; newPerihal = ''; newSifat = 'biasa'; newCatatan = ''; newManualNomor = ''; nomorPreview = '';
 			toast.success('Surat keluar berhasil dicatat');
-			await loadLetters();
-		} catch {
-			toast.error('Terjadi kesalahan jaringan');
+			await refreshLettersAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
 			createBusy = false;
 		}
@@ -159,28 +244,33 @@
 					catatan: editCatatan
 				})
 			});
-			const json = await res.json();
-			if (!res.ok) { toast.error(json.error ?? 'Gagal menyimpan'); return; }
+			const payload = await res.json().catch(() => null);
+			if (!res.ok) { toast.error(apiErrorMessage(payload) || 'Gagal menyimpan'); return; }
 			editOpen = false;
 			toast.success('Surat keluar diperbarui');
-			await loadLetters();
-		} catch {
-			toast.error('Terjadi kesalahan jaringan');
+			await refreshLettersAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
 			editBusy = false;
 		}
 	}
 
 	async function deleteLetter(id: string) {
-		if (!confirm('Hapus surat keluar ini?')) return;
+		if (!(await confirmAction({
+			title: 'Hapus Surat Keluar',
+			message: 'Hapus surat keluar ini?',
+			confirmLabel: 'Hapus Surat',
+			tone: 'danger'
+		}))) return;
 		deleteBusy = { ...deleteBusy, [id]: true };
 		try {
 			const res = await fetch(`/api/tu/surat/outgoing/${id}`, { method: 'DELETE' });
-			if (!res.ok && res.status !== 204) { toast.error((await res.json()).error ?? 'Gagal menghapus'); return; }
+			if (!res.ok && res.status !== 204) { toast.error(await responseErrorMessage(res, 'Gagal menghapus')); return; }
 			toast.success('Surat dihapus');
-			await loadLetters();
-		} catch {
-			toast.error('Terjadi kesalahan jaringan');
+			await refreshLettersAfterMutation();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Terjadi kesalahan jaringan'));
 		} finally {
 			deleteBusy = { ...deleteBusy, [id]: false };
 		}
@@ -221,70 +311,84 @@
 		</Card.Content>
 	</Card.Root>
 
-	{#if error}
-		<div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-	{/if}
-
 	<Card.Root>
 		<Card.Content class="p-0">
-			{#if loading}
-				<div class="space-y-2 p-4">
-					{#each [1, 2, 3] as _}
-						<Skeleton class="h-12 w-full" />
-					{/each}
-				</div>
-			{:else if letters.length === 0}
-				<div class="p-8 text-center text-sm text-gray-500">
-					{search ? 'Tidak ada surat yang sesuai pencarian.' : 'Belum ada surat keluar yang dicatat.'}
-				</div>
-			{:else}
-				<Table.Root>
-					<Table.Header>
-						<Table.Row>
-							<Table.Head class="w-12">No</Table.Head>
-							<Table.Head>No. Surat</Table.Head>
-							<Table.Head>Tujuan / Perihal</Table.Head>
-							<Table.Head class="w-28">Tanggal</Table.Head>
-							<Table.Head class="w-20">Sifat</Table.Head>
-							<Table.Head class="w-32">Aksi</Table.Head>
-						</Table.Row>
-					</Table.Header>
-					<Table.Body>
-						{#each letters as letter, i}
-							<Table.Row>
-								<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
-								<Table.Cell>
-									<p class="font-mono text-xs font-medium text-gray-800">{letter.nomor_surat}</p>
-									<p class="text-xs text-gray-400">{letter.classification_name || letter.classification_code}</p>
-								</Table.Cell>
-								<Table.Cell>
-									<p class="text-sm font-medium text-gray-800">{letter.tujuan}</p>
-									<p class="max-w-xs truncate text-xs text-gray-500">{letter.perihal}</p>
-								</Table.Cell>
-								<Table.Cell class="text-sm text-gray-600">{formatDate(letter.tanggal_surat)}</Table.Cell>
-								<Table.Cell>
-									<Badge class={sifatColors[letter.sifat] ?? 'bg-gray-100 text-gray-700 hover:bg-gray-100'}>
-										{letter.sifat}
-									</Badge>
-								</Table.Cell>
-								<Table.Cell>
-									<div class="flex gap-1">
-										<Button variant="outline" size="sm" onclick={() => openEdit(letter)}>Edit</Button>
-										<LoadingButton
-											variant="destructive"
-											size="sm"
-											loading={deleteBusy[letter.id] ?? false}
-											onclick={() => deleteLetter(letter.id)}
-										>
-											Hapus
-										</LoadingButton>
-									</div>
-								</Table.Cell>
-							</Table.Row>
+			<AsyncContent promise={lettersPromise} onerror={handleLettersRenderError}>
+				{#snippet pending()}
+					<div class="space-y-2 p-4">
+						{#each [1, 2, 3] as row (row)}
+							<Skeleton class="h-12 w-full" />
 						{/each}
-					</Table.Body>
-				</Table.Root>
-			{/if}
+					</div>
+				{/snippet}
+
+				{#snippet failed(error, reset)}
+					<div class="p-4">
+						<RecoveryPanel
+							compact
+							title="Surat Keluar Belum Tersaji"
+							message={lettersErrorMessage(error)}
+							onRetry={() => retryLetters(reset)}
+						/>
+					</div>
+				{/snippet}
+
+				{#snippet children(value)}
+					{@const currentLetters = (value as OutgoingLettersOverview).letters}
+					{#if currentLetters.length === 0}
+						<div class="p-8 text-center text-sm text-gray-500">
+							{search ? 'Tidak ada surat yang sesuai pencarian.' : 'Belum ada surat keluar yang dicatat.'}
+						</div>
+					{:else}
+						<Table.Root>
+							<Table.Header>
+								<Table.Row>
+									<Table.Head class="w-12">No</Table.Head>
+									<Table.Head>No. Surat</Table.Head>
+									<Table.Head>Tujuan / Perihal</Table.Head>
+									<Table.Head class="w-28">Tanggal</Table.Head>
+									<Table.Head class="w-20">Sifat</Table.Head>
+									<Table.Head class="w-32">Aksi</Table.Head>
+								</Table.Row>
+							</Table.Header>
+							<Table.Body>
+								{#each currentLetters as letter, i (letter.id)}
+									<Table.Row>
+										<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
+										<Table.Cell>
+											<p class="font-mono text-xs font-medium text-gray-800">{letter.nomor_surat}</p>
+											<p class="text-xs text-gray-400">{letter.classification_name || letter.classification_code}</p>
+										</Table.Cell>
+										<Table.Cell>
+											<p class="text-sm font-medium text-gray-800">{letter.tujuan}</p>
+											<p class="max-w-xs truncate text-xs text-gray-500">{letter.perihal}</p>
+										</Table.Cell>
+										<Table.Cell class="text-sm text-gray-600">{formatDate(letter.tanggal_surat)}</Table.Cell>
+										<Table.Cell>
+											<Badge class={sifatColors[letter.sifat] ?? 'bg-gray-100 text-gray-700 hover:bg-gray-100'}>
+												{letter.sifat}
+											</Badge>
+										</Table.Cell>
+										<Table.Cell>
+											<div class="flex gap-1">
+												<Button variant="outline" size="sm" onclick={() => openEdit(letter)}>Edit</Button>
+												<LoadingButton
+													variant="destructive"
+													size="sm"
+													loading={deleteBusy[letter.id] ?? false}
+													onclick={() => deleteLetter(letter.id)}
+												>
+													Hapus
+												</LoadingButton>
+											</div>
+										</Table.Cell>
+									</Table.Row>
+								{/each}
+							</Table.Body>
+						</Table.Root>
+					{/if}
+				{/snippet}
+			</AsyncContent>
 		</Card.Content>
 	</Card.Root>
 </div>
@@ -306,7 +410,7 @@
 					class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
 				>
 					<option value="">-- Pilih kode klasifikasi --</option>
-					{#each classifications as c}
+					{#each classifications as c (c.code)}
 						<option value={c.code}>{c.code} — {c.name}</option>
 					{/each}
 				</select>
@@ -354,7 +458,7 @@
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (createOpen = false)}>Batal</Button>
-			<LoadingButton loading={createBusy} onclick={createLetter}>Simpan</LoadingButton>
+			<LoadingButton loading={createBusy} onclick={() => void createLetter()}>Simpan</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
@@ -399,7 +503,7 @@
 		</div>
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (editOpen = false)}>Batal</Button>
-			<LoadingButton loading={editBusy} onclick={saveEdit}>Simpan</LoadingButton>
+			<LoadingButton loading={editBusy} onclick={() => void saveEdit()}>Simpan</LoadingButton>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

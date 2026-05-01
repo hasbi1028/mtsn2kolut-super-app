@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card';
   import { Input } from '$lib/components/ui/input';
+  import { toast } from '$lib/components/ui/sonner';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
   import SuccessPanel from '$lib/components/SuccessPanel.svelte';
 
@@ -14,44 +15,68 @@
     pusaka_username: '',
     pusaka_password: ''
   });
-  let error   = $state('');
   let success = $state('');
-  let loading = $state(false);
+  let saving = $state(false);
   let pusakaEligible = $derived(form.employment_type === 'pns' || form.employment_type === 'pppk');
+
+  function showError(message: string) {
+    toast.error(message);
+  }
+
+  function apiErrorMessage(payload: unknown) {
+    if (typeof payload !== 'object' || payload === null) return '';
+    if ('error' in payload) {
+      const error = payload.error;
+      if (typeof error === 'string' && error.trim()) return error;
+    }
+    if ('message' in payload) {
+      const message = payload.message;
+      if (typeof message === 'string' && message.trim()) return message;
+    }
+    return '';
+  }
+
+  function mutationErrorMessage(error: unknown, fallbackMessage: string) {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    return fallbackMessage;
+  }
 
   async function submit() {
     if (!form.nip || !form.nama || !form.employment_type) {
-      error = 'NIP, Nama, dan status kepegawaian wajib diisi.';
       success = '';
+      showError('NIP, Nama, dan status kepegawaian wajib diisi.');
       return;
     }
     if ((form.pusaka_username && !form.pusaka_password) || (!form.pusaka_username && form.pusaka_password)) {
-      error = 'Username dan password PUSAKA harus diisi berpasangan.';
       success = '';
+      showError('Username dan password PUSAKA harus diisi berpasangan.');
       return;
     }
     if (!pusakaEligible && (form.pusaka_username || form.pusaka_password)) {
-      error = 'Hanya pegawai PNS atau PPPK yang boleh memiliki akun PUSAKA.';
       success = '';
+      showError('Hanya pegawai PNS atau PPPK yang boleh memiliki akun PUSAKA.');
       return;
     }
-    loading = true;
-    error = '';
+    saving = true;
     success = '';
-    const res = await fetch('/api/employees', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(form),
-    });
-    loading = false;
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      error = data.error || 'Gagal menyimpan pegawai.';
-      return;
+    try {
+      const res = await fetch('/api/employees', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(apiErrorMessage(data) || 'Gagal menyimpan pegawai.');
+      }
+      form = { nip: '', nama: '', unit_kerja: '', employment_type: '', pusaka_username: '', pusaka_password: '' };
+      success = 'Pegawai baru berhasil ditambahkan ke master data. Jika pegawai eligible PUSAKA, akun integrasinya bisa dilengkapi sekarang atau nanti dari menu PUSAKA.';
+      onadd?.();
+    } catch (error) {
+      showError(mutationErrorMessage(error, 'Gagal menyimpan pegawai.'));
+    } finally {
+      saving = false;
     }
-    form = { nip: '', nama: '', unit_kerja: '', employment_type: '', pusaka_username: '', pusaka_password: '' };
-    success = 'Pegawai baru berhasil ditambahkan ke master data. Jika pegawai eligible PUSAKA, akun integrasinya bisa dilengkapi sekarang atau nanti dari menu PUSAKA.';
-    onadd?.();
   }
 </script>
 
@@ -65,9 +90,6 @@
       <div class="mb-3">
         <SuccessPanel title="Pegawai Berhasil Ditambahkan" message={success} compact />
       </div>
-    {/if}
-    {#if error}
-      <p class="mb-3 text-sm text-destructive">{error}</p>
     {/if}
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <div>
@@ -119,7 +141,7 @@
     </div>
 
     <div class="mt-4 flex justify-end">
-      <LoadingButton class="min-w-36" onclick={submit} loading={loading} loadingLabel="Menyimpan..." disabled={loading}>
+      <LoadingButton class="min-w-36" onclick={() => void submit()} loading={saving} loadingLabel="Menyimpan..." disabled={saving}>
         Simpan Pegawai
       </LoadingButton>
     </div>

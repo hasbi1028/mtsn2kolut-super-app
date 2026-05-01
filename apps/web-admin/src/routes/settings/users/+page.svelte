@@ -7,9 +7,11 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { confirmAction } from '$lib/confirm-dialog';
 
 	type User = {
 		id: string; username: string; roles: string[];
@@ -22,12 +24,24 @@
 	type Student = { id: string; nama: string; nis: string; };
 	type Parent = { id: string; nama: string; phone: string; };
 
+	type UsersOverview = {
+		users: User[];
+		employees: Employee[];
+		students: Student[];
+		parents: Parent[];
+	};
+
+	type ApiEnvelope<T> = {
+		data?: T;
+		error?: string;
+		message?: string;
+	};
+
 	let users = $state<User[]>([]);
 	let employees = $state<Employee[]>([]);
 	let students = $state<Student[]>([]);
 	let parents = $state<Parent[]>([]);
-	let loading = $state(true);
-	let error = $state('');
+	let usersPromise = $state<Promise<UsersOverview> | null>(null);
 	let showForm = $state(false);
 
 	let fUsername = $state('');
@@ -40,7 +54,7 @@
 	let formHint = $derived.by(() => {
 		if (fRoles.includes('siswa')) return 'Akun siswa wajib ditautkan ke satu profil siswa.';
 		if (fRoles.includes('ortu')) return 'Akun orang tua wajib ditautkan ke satu profil orang tua.';
-		if (fRoles.includes('guru') || fRoles.includes('staf')) return 'Akun guru/staf wajib ditautkan ke satu profil pegawai.';
+		if (fRoles.includes('guru') || fRoles.includes('staf') || fRoles.includes('kesiswaan')) return 'Akun guru/staf/kesiswaan wajib ditautkan ke satu profil pegawai.';
 		return 'Akun admin murni boleh tanpa tautan profil.';
 	});
 
@@ -48,32 +62,109 @@
 		{ value: 'admin', label: 'Administrator' },
 		{ value: 'guru', label: 'Guru' },
 		{ value: 'staf', label: 'Staf' },
+		{ value: 'kesiswaan', label: 'Kesiswaan' },
 		{ value: 'siswa', label: 'Siswa' },
 		{ value: 'ortu', label: 'Orang Tua' },
 	];
 
-	async function load() {
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function apiErrorMessage(payload: unknown) {
+		if (!isRecord(payload)) return '';
+		const error = payload.error;
+		if (typeof error === 'string' && error.trim()) return error;
+		const message = payload.message;
+		if (typeof message === 'string' && message.trim()) return message;
+		return '';
+	}
+
+	async function readApi<T>(response: Response, fallbackMessage: string): Promise<T> {
+		const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
+		const message = apiErrorMessage(payload);
+		if (!response.ok) {
+			throw new Error(message || fallbackMessage);
+		}
+		if (isRecord(payload) && typeof payload.error === 'string' && payload.error.trim()) {
+			throw new Error(payload.error);
+		}
+		if (isRecord(payload) && 'data' in payload) {
+			const envelope = payload as ApiEnvelope<T>;
+			if (envelope.data === undefined) throw new Error(fallbackMessage);
+			return envelope.data;
+		}
+		if (payload === null) throw new Error(fallbackMessage);
+		return payload as T;
+	}
+
+	function applyOverview(overview: UsersOverview) {
+		users = overview.users;
+		employees = overview.employees;
+		students = overview.students;
+		parents = overview.parents;
+		return overview;
+	}
+
+	async function fetchOverview(): Promise<UsersOverview> {
+		const [usersRes, employeesRes, studentsRes, parentsRes] = await Promise.all([
+			fetch('/api/users'),
+			fetch('/api/employees'),
+			fetch('/api/students'),
+			fetch('/api/parents'),
+		]);
+		const [nextUsers, nextEmployees, nextStudents, nextParents] = await Promise.all([
+			readApi<User[]>(usersRes, 'Gagal memuat data pengguna.'),
+			readApi<Employee[]>(employeesRes, 'Gagal memuat data pegawai.'),
+			readApi<Student[]>(studentsRes, 'Gagal memuat data siswa.'),
+			readApi<Parent[]>(parentsRes, 'Gagal memuat data orang tua.'),
+		]);
+		return {
+			users: nextUsers ?? [],
+			employees: nextEmployees ?? [],
+			students: nextStudents ?? [],
+			parents: nextParents ?? [],
+		};
+	}
+
+	function load() {
+		users = [];
+		employees = [];
+		students = [];
+		parents = [];
+		usersPromise = fetchOverview().then(applyOverview);
+	}
+
+	async function refreshOverview() {
 		try {
-			const [uRes, eRes, sRes, pRes] = await Promise.all([
-				fetch('/api/users'),
-				fetch('/api/employees'),
-				fetch('/api/students'),
-				fetch('/api/parents'),
-			]);
-			users = await uRes.json();
-			const eJson = await eRes.json();
-			employees = eJson.data ?? eJson ?? [];
-			students = await sRes.json();
-			parents = await pRes.json();
-		} catch {
-			error = 'Gagal memuat data';
-		} finally {
-			loading = false;
+			const overview = await fetchOverview();
+			applyOverview(overview);
+			usersPromise = Promise.resolve(overview);
+		} catch (error) {
+			usersPromise = Promise.resolve({ users, employees, students, parents });
+			toast.error(overviewErrorMessage(error));
 		}
 	}
 
+	function retryOverview(reset?: () => void) {
+		reset?.();
+		load();
+	}
+
+	function overviewErrorMessage(error: unknown) {
+		if (error instanceof Error && error.message.trim()) return error.message;
+		return 'Gagal memuat data pengguna.';
+	}
+
+	function handleOverviewRenderError(error: unknown) {
+		console.error('Users overview render failed', error);
+	}
+
 	async function createUser() {
-		if (!fUsername || !fPassword || fRoles.length === 0) return;
+		if (!fUsername || !fPassword || fRoles.length === 0) {
+			toast.error('Username, password, dan minimal satu role wajib diisi');
+			return;
+		}
 		fBusy = true;
 		try {
 			const res = await fetch('/api/users', {
@@ -81,25 +172,43 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					username: fUsername, password: fPassword,
-					roles: fRoles, 
+					roles: fRoles,
 					employee_id: fEmpId || null,
 					student_id: fStuId || null,
 					parent_id: fParId || null,
 				}),
 			});
-			if (!res.ok) { const j = await res.json(); toast.error(j.error ?? 'Gagal'); return; }
+			const payload = await res.json().catch(() => null);
+			if (!res.ok) {
+				toast.error(apiErrorMessage(payload) || 'Gagal membuat pengguna');
+				return;
+			}
 			fUsername = ''; fPassword = ''; fRoles = ['guru']; fEmpId = ''; fStuId = ''; fParId = '';
 			showForm = false;
 			toast.success('Pengguna berhasil dibuat');
-			await load();
+			await refreshOverview();
 		} finally { fBusy = false; }
 	}
 
 	async function deleteUser(id: string, name: string) {
-		if (name === 'admin') return alert('User admin utama tidak bisa dihapus');
-		if (!confirm(`Hapus pengguna "${name}"?`)) return;
-		await fetch(`/api/users/${id}`, { method: 'DELETE' });
-		await load();
+		if (name === 'admin') {
+			toast.error('User admin utama tidak bisa dihapus');
+			return;
+		}
+		if (!(await confirmAction({
+			title: 'Hapus Pengguna',
+			message: `Hapus pengguna "${name}"?`,
+			confirmLabel: 'Hapus Pengguna',
+			tone: 'danger'
+		}))) return;
+		const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+		const payload = await res.json().catch(() => null);
+		if (!res.ok) {
+			toast.error(apiErrorMessage(payload) || 'Gagal menghapus pengguna');
+			return;
+		}
+		toast.success('Pengguna berhasil dihapus');
+		await refreshOverview();
 	}
 
 	async function toggleUserStatus(user: User) {
@@ -109,19 +218,24 @@
 		}
 		const next = !user.is_active;
 		const actionLabel = next ? 'mengaktifkan' : 'menonaktifkan';
-		if (!confirm(`${actionLabel} akun "${user.username}"?`)) return;
+		if (!(await confirmAction({
+			title: `${actionLabel} Akun`,
+			message: `${actionLabel} akun "${user.username}"?`,
+			confirmLabel: actionLabel,
+			tone: 'warning'
+		}))) return;
 		const res = await fetch(`/api/users/${user.id}/status`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ is_active: next }),
 		});
 		if (!res.ok) {
-			const payload = await res.json().catch(() => ({}));
-			toast.error(payload.error ?? 'Gagal memperbarui status akun');
+			const payload = await res.json().catch(() => null);
+			toast.error(apiErrorMessage(payload) || 'Gagal memperbarui status akun');
 			return;
 		}
 		toast.success(next ? 'Akun diaktifkan' : 'Akun dinonaktifkan');
-		await load();
+		await refreshOverview();
 	}
 
 	function toggleRole(role: string) {
@@ -132,7 +246,9 @@
 		}
 	}
 
-	onMount(load);
+	onMount(() => {
+		void load();
+	});
 </script>
 
 <svelte:head><title>Manajemen Pengguna — MTSN 2 Kolut</title></svelte:head>
@@ -148,32 +264,53 @@
 		</Button>
 	</div>
 
-	<div class="grid gap-3 md:grid-cols-4">
-		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Akun</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{users.length}</p>
-			<p class="text-sm text-slate-600">akun yang sudah dapat masuk ke sistem</p>
-		</div>
-		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Akun Aktif</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{users.filter((item) => item.is_active).length}</p>
-			<p class="text-sm text-slate-600">akun yang saat ini masih aktif digunakan</p>
-		</div>
-		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Multi-Role</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{users.filter((item) => (item.roles ?? []).length > 1).length}</p>
-			<p class="text-sm text-slate-600">akun yang memegang lebih dari satu role</p>
-		</div>
-		<div class="rounded-2xl border border-violet-100 bg-violet-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">Terhubung Profil</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{users.filter((item) => item.profile_nama).length}</p>
-			<p class="text-sm text-slate-600">akun yang sudah terkait dengan entitas sekolah</p>
-		</div>
-	</div>
+	<AsyncContent promise={usersPromise} onerror={handleOverviewRenderError}>
+		{#snippet pending()}
+			<div class="grid gap-3 md:grid-cols-4">
+				{#each ['Total Akun', 'Akun Aktif', 'Multi-Role', 'Terhubung Profil'] as label (label)}
+					<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+						<Skeleton class="mt-3 h-8 w-16" />
+						<Skeleton class="mt-2 h-4 w-44" />
+					</div>
+				{/each}
+			</div>
+		{/snippet}
 
-	{#if error}
-		<RecoveryPanel title="Data Pengguna Belum Tersaji" message={error} onRetry={load} />
-	{/if}
+		{#snippet failed(error, reset)}
+			<RecoveryPanel
+				title="Data Pengguna Belum Tersaji"
+				message={overviewErrorMessage(error)}
+				onRetry={() => retryOverview(reset)}
+			/>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const overview = value as UsersOverview}
+			<div class="grid gap-3 md:grid-cols-4">
+				<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Akun</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.users.length}</p>
+					<p class="text-sm text-slate-600">akun yang sudah dapat masuk ke sistem</p>
+				</div>
+				<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Akun Aktif</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.users.filter((item) => item.is_active).length}</p>
+					<p class="text-sm text-slate-600">akun yang saat ini masih aktif digunakan</p>
+				</div>
+				<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Multi-Role</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.users.filter((item) => (item.roles ?? []).length > 1).length}</p>
+					<p class="text-sm text-slate-600">akun yang memegang lebih dari satu role</p>
+				</div>
+				<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Terhubung Profil</p>
+					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.users.filter((item) => item.profile_nama).length}</p>
+					<p class="text-sm text-slate-600">akun yang sudah terkait dengan entitas sekolah</p>
+				</div>
+			</div>
+		{/snippet}
+	</AsyncContent>
 
 	{#if showForm}
 		<Card.Root>
@@ -193,7 +330,7 @@
 							<p class="mb-2 block text-xs text-slate-500">Peran Akses (boleh pilih lebih dari satu)</p>
 							<div class="flex flex-wrap gap-2">
 								{#each availableRoles as r (r.value)}
-									<button 
+									<button
 										class={`px-3 py-1 text-xs rounded-full border transition-colors ${fRoles.includes(r.value) ? 'bg-green-700 text-white border-green-700' : 'bg-white text-slate-600 border-slate-200'}`}
 										onclick={() => toggleRole(r.value)}
 									>
@@ -204,9 +341,9 @@
 							<p class="mt-2 text-xs text-slate-500">{formHint}</p>
 						</div>
 					</div>
-					
+
 					<div class="space-y-3">
-						{#if fRoles.includes('guru') || fRoles.includes('staf')}
+						{#if fRoles.includes('guru') || fRoles.includes('staf') || fRoles.includes('kesiswaan')}
 							<div>
 								<label for="u-emp" class="text-xs text-slate-500 mb-1 block">Hubungkan ke Pegawai</label>
 								<select id="u-emp" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fEmpId}>
@@ -244,7 +381,7 @@
 					</div>
 				</div>
 				<div class="flex gap-2">
-					<LoadingButton onclick={createUser} loading={fBusy} disabled={fBusy || !fUsername || !fPassword || fRoles.length === 0}>
+					<LoadingButton onclick={() => void createUser()} loading={fBusy} disabled={fBusy || !fUsername || !fPassword || fRoles.length === 0}>
 						Simpan Pengguna
 					</LoadingButton>
 					<Button variant="outline" onclick={() => (showForm = false)}>Batal</Button>
@@ -253,9 +390,10 @@
 		</Card.Root>
 	{/if}
 
-	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
-		<Card.Content class="p-0">
-			{#if loading && users.length === 0}
+	<AsyncContent promise={usersPromise} onerror={handleOverviewRenderError}>
+		{#snippet pending()}
+			<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+				<Card.Content class="p-0">
 				<div class="space-y-3 p-6">
 					{#each Array.from({ length: 5 }) as _, index (`user-skeleton-${index}`)}
 						<div class="grid gap-3 md:grid-cols-[1fr_1.1fr_1fr_0.7fr_0.8fr_auto] md:items-center">
@@ -268,7 +406,14 @@
 						</div>
 					{/each}
 				</div>
-			{:else}
+				</Card.Content>
+			</Card.Root>
+		{/snippet}
+
+		{#snippet children(value)}
+			{@const overview = value as UsersOverview}
+	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+		<Card.Content class="p-0">
 				<div class="hidden overflow-x-auto lg:block">
 				<Table.Root>
 					<Table.Header>
@@ -282,7 +427,7 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each users as u (u.id)}
+						{#each overview.users as u (u.id)}
 							<Table.Row>
 								<Table.Cell class="font-medium">{u.username}</Table.Cell>
 								<Table.Cell>
@@ -329,7 +474,7 @@
 				</div>
 
 				<div class="grid gap-3 p-4 lg:hidden">
-					{#each users as u (u.id)}
+					{#each overview.users as u (u.id)}
 						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
@@ -363,7 +508,8 @@
 						/>
 					{/each}
 				</div>
-			{/if}
 		</Card.Content>
 	</Card.Root>
+		{/snippet}
+	</AsyncContent>
 </div>
