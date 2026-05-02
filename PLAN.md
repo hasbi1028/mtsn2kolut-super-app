@@ -1,6 +1,6 @@
 # MTs Negeri 2 Kolaka Utara — Super App Strategic Plan
 
-> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Jurnal Kelas Complete | Sprint 17 Persuratan Complete | Sprint 18 Tata Kelola Madrasah Complete | Sprint 19 SKP Mirror Complete | Sprint 20 Bukti Mutu Complete | Sprint 21 Kesiswaan Foundation Complete | Sprint 22 Surat Keterangan Complete | Sprint 23 Kesiswaan Engagement Complete | Sprint 24 Arsip TU Complete | Sprint 25 RKT/RKJM Execution Complete | Sprint 26 TU Dashboard Complete | Sprint 27 Renstra/IKU Alignment Complete | Sprint 28 Governance Print Pack Complete | Sprint 29 School Profile Complete | Sprint 30 Print Surface Letterhead Complete | Sprint 31 Compliance Actions Complete | Sprint 32 Compliance Print/Export Complete | Sprint 33 Compliance Escalation Board Complete | Sprint 34 Compliance Quick Status Complete | Sprint 35 Compliance Evidence Capture Complete | Sprint 36 Compliance Meeting Pack Complete | Sprint 37 Compliance Deadline Calendar Complete | Sprint 38 Governance Control Center Complete | Sprint 39 Compliance Advanced Filters Complete | Sprint 40 PIC Briefing Pack Complete | Sprint 41 8 SNP Briefing Pack Complete | Sprint 42 Evidence Briefing Pack Complete | Sprint 43 Siklus Dokumen Module Complete | Sprint 44 Dokumen Integration Control Center Complete | Sprint 45 Cross-Module Document Shortcuts Complete | Sprint 46 Document Cycle Audit Timeline Complete | Sprint 47 Document Cycle Audit Test Coverage Complete | Sprint 48 BFF Staff Operations Gate Complete | Sprint 49 Backend Staff Gate Claim Hardening Complete | Sprint 50 Document Cycle Completion Readiness Complete | Sprint 51 Final Archive Requirement Complete | Sprint 52 Document Cycle Status Transition Lock Complete | Sprint 53 Document Cycle Detail Status Actions Complete | Sprint 54 Document Cycle Traceability Detail Complete | Sprint 55 External Compliance Checklist Complete | Sprint 56 External Checklist CSV Export Complete | Sprint 57 SvelteKit BFF Async Boundary Hardening Complete | Last Updated: 2026-05-02
+> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Jurnal Kelas Complete | Sprint 17 Persuratan Complete | Sprint 18 Tata Kelola Madrasah Complete | Sprint 19 SKP Mirror Complete | Sprint 20 Bukti Mutu Complete | Sprint 21 Kesiswaan Foundation Complete | Sprint 22 Surat Keterangan Complete | Sprint 23 Kesiswaan Engagement Complete | Sprint 24 Arsip TU Complete | Sprint 25 RKT/RKJM Execution Complete | Sprint 26 TU Dashboard Complete | Sprint 27 Renstra/IKU Alignment Complete | Sprint 28 Governance Print Pack Complete | Sprint 29 School Profile Complete | Sprint 30 Print Surface Letterhead Complete | Sprint 31 Compliance Actions Complete | Sprint 32 Compliance Print/Export Complete | Sprint 33 Compliance Escalation Board Complete | Sprint 34 Compliance Quick Status Complete | Sprint 35 Compliance Evidence Capture Complete | Sprint 36 Compliance Meeting Pack Complete | Sprint 37 Compliance Deadline Calendar Complete | Sprint 38 Governance Control Center Complete | Sprint 39 Compliance Advanced Filters Complete | Sprint 40 PIC Briefing Pack Complete | Sprint 41 8 SNP Briefing Pack Complete | Sprint 42 Evidence Briefing Pack Complete | Sprint 43 Siklus Dokumen Module Complete | Sprint 44 Dokumen Integration Control Center Complete | Sprint 45 Cross-Module Document Shortcuts Complete | Sprint 46 Document Cycle Audit Timeline Complete | Sprint 47 Document Cycle Audit Test Coverage Complete | Sprint 48 BFF Staff Operations Gate Complete | Sprint 49 Backend Staff Gate Claim Hardening Complete | Sprint 50 Document Cycle Completion Readiness Complete | Sprint 51 Final Archive Requirement Complete | Sprint 52 Document Cycle Status Transition Lock Complete | Sprint 53 Document Cycle Detail Status Actions Complete | Sprint 54 Document Cycle Traceability Detail Complete | Sprint 55 External Compliance Checklist Complete | Sprint 56 External Checklist CSV Export Complete | Sprint 57 SvelteKit BFF Async Boundary Hardening Complete | Sprint 58 CBT Legacy Proctoring & Bank Soal Migration Complete | Sprint 59 CBT Soal Legacy Full Modal Complete | Last Updated: 2026-05-03
 > This file is the master roadmap. Update after each sprint completion.
 
 ---
@@ -747,11 +747,222 @@ Three runtime units deployed across 3 VPS:
 - [x] Unit test BFF ditambahkan untuk auth forwarding, refresh retry `handleFetch`, JSON body helper wajib/opsional, non-JSON error, 5xx masking, fallback `AsyncContent`, dan hardening restart worker.
 - [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []` pada blocker yang diperiksa, `npm run test:unit`, `npm run check`, dan `git diff --check`.
 
+### ✅ Sprint 58 — CBT Legacy Proctoring & Bank Soal Migration (COMPLETE)
+- [x] Ambil perilaku proctoring terbaik dari aplikasi CBT lama tanpa membawa stack SQLite/Drizzle ke runtime monorepo.
+- [x] Perkuat `/cbt/sessions/[id]` sebagai pusat proctoring: event log peserta, reset akses perangkat, force submit, flag pengawas, heartbeat, dan ringkasan jawaban.
+- [x] Tambahkan backend proctor-control endpoints untuk log event sesi, reset akses peserta, dan force-submit dengan audit event dan guard guru/admin sesi.
+- [x] Perkuat `/cbt/soal` sebagai komposer utama: import CSV legacy, template, readiness, quality signals, RTL, rich preview, duplicate-as-draft, dan workflow tetap memakai kontrak Go API.
+- [x] Tambahkan import CSV legacy di Go API dengan parsing delimiter comma/semicolon, mapping gambar legacy, deteksi duplikat dalam file, ringkasan error, dan test service pengunci.
+- [x] Semua perubahan backend tetap lewat `services/core-api`, SQL eksplisit di `db/queries`, regenerate `sqlc`, dan SvelteKit hanya BFF/proxy.
+- [x] Verification: `make db-sqlc`, `go test ./...`, `go vet ./...`, Svelte autofixer untuk file tersentuh, `npm run check:web`, dan `git diff --check`.
+
+### ✅ Sprint 59 — CBT Soal Legacy Full Modal (COMPLETE)
+- [x] Tambahkan komponen `LegacyRichTextEditor` berbasis Quill dari aplikasi CBT lama dengan toolbar heading, align, bold/italic/underline, formula KaTeX, image upload, list, clean, dan kontrol ukuran gambar.
+- [x] Route `/cbt/soal` memakai satu modal penuh ala legacy untuk create/edit: header, template cepat, metadata, rich text stem, kartu opsi A-D, kunci jawaban, preview, readiness, dan footer aksi dalam satu kotak besar.
+- [x] Stem dan seluruh opsi A-D memakai rich text legacy, bukan textarea/TipTap untuk komposer utama.
+- [x] Upload gambar editor tetap melalui callback asset CBT monorepo (`/api/cbt/assets`) dan tidak memakai endpoint legacy `/api/upload`.
+- [x] Payload simpan soal menjaga kontrak backend: plain text tetap dikirim untuk pencarian/kolom legacy, HTML rich text masuk ke `stem_html` dan `options[].html`.
+- [x] Verification: Svelte autofixer membaca file tersentuh dengan `issues: []`, dan `npm run check:web`.
+
 ### ✅ Repository Hygiene Checkpoint — Source Commit Discipline (COMPLETE)
 - [x] Pisahkan artefak runtime SQLite sidecar (`*.db-shm`, `*.db-wal`, `*.sqlite-shm`, `*.sqlite-wal`) dari source control sesuai aturan legacy SQLite hanya sebagai artefak impor.
 - [x] Exclude lokal dokumen review `Siklus_Dokumen_MTsN_Lengkap*.docx` agar tidak ikut commit fitur.
 - [x] Commit dibuat bertahap: hygiene repository, dokumentasi temuan, lalu fitur aplikasi.
 - [x] Verification: staged diff dicek dengan `git diff --cached --check` dan status git dirapikan setelah commit.
+
+---
+
+## 📋 Proposed Architecture Plan — Dedicated CBT Engine For Exam Runtime
+
+### Recommendation
+- [ ] Split only the live exam runtime into `services/cbt-engine`; do not microservice the whole application.
+- [ ] Use a separate VPS for `services/cbt-engine` because the current VPS capacity is considered weak for around 200 concurrent students.
+- [ ] Keep `services/core-api` as the main school-domain backend and owner of the main PostgreSQL database.
+- [ ] Add a controlled architecture exception: `services/cbt-engine` may own a narrow CBT runtime PostgreSQL database/schema only for live exam state.
+- [ ] Treat the live exam path as the critical core: token login, payload delivery, answer save, final submit, heartbeat, telemetry, status, resume, and recovery.
+- [ ] Add cache only as a read-path accelerator for immutable or short-lived runtime data; do not make cache the source of truth for answers, submit state, or audit-critical telemetry.
+- [ ] Preserve Flutter-facing response envelopes, HTTP status semantics, and BYOD guidance contracts during the extraction.
+
+### Target Topology
+```text
+Web Admin       -> Core API      -> Main PostgreSQL
+PUSAKA Worker   -> Core API      -> Main PostgreSQL
+
+Flutter CBT App -> CBT Engine    -> CBT Runtime PostgreSQL
+                       ^
+                       |
+                 published exam snapshot / result sync
+                       |
+                    Core API
+```
+
+- [ ] Count this as four application runtimes: `web-admin`, `core-api`, `pusaka-worker`, and `cbt-engine`.
+- [ ] Count databases separately: main PostgreSQL remains for school/admin domains; CBT runtime PostgreSQL is narrow and exam-only.
+- [ ] If hardware is limited, CBT runtime PostgreSQL may start on the same exam VPS as `cbt-engine`, but it must stay logically separate from the main database.
+
+### Current Phase and Target
+- **Current phase:** Backend separation already exists: SvelteKit is BFF/UI, Go API owns domain logic and PostgreSQL, Flutter is the CBT client.
+- **Target phase now:** Dedicated critical-core service for live CBT runtime, not broad microservices.
+- **Reason for moving now:** VPS capacity concern for around 200 concurrent students is a real operational pain signal.
+- **Non-target:** Do not split bank soal, academic master data, PUSAKA, website, library, TU, kesiswaan, governance, or reporting into separate services.
+
+### Observed / Expected Pain Signals To Validate
+- [ ] Current VPS is not expected to comfortably handle admin/backend load plus around 200 concurrent exam clients.
+- [ ] Live exam endpoints receive bursty concurrent traffic from many student devices.
+- [ ] Answer-save, submit, heartbeat, and resume flows carry higher correctness risk than normal admin CRUD.
+- [ ] BYOD connectivity creates repeated retry, stale-session, and local-sync edge cases.
+- [ ] Operator/admin pages should not be degraded by live exam load during exam windows.
+- [ ] The exam service still needs load testing to size CPU/RAM, DB pool, cache, and polling intervals before exam season.
+
+### Boundary Assessment
+- **Clean boundary:** Flutter already talks through the documented exam API contract; SvelteKit remains BFF-only; PostgreSQL access is backend-owned.
+- **Boundary to split:** Admin CBT authoring/scheduling/reporting stays in Core API; live exam runtime moves to CBT Engine.
+- **Boundary to avoid leaking:** Do not move general school data ownership into CBT Engine. CBT Engine receives published snapshots and writes runtime exam records only.
+- **Policy update needed:** Existing rule "PostgreSQL is owned only by `services/core-api`" must be revised narrowly to "Core API owns the main school database; CBT Engine owns only the CBT runtime database."
+
+### Decision Outcome
+- [ ] Extract `services/cbt-engine` as the only new service boundary.
+- [ ] Deploy `services/cbt-engine` to a separate VPS before using it in real exams.
+- [ ] Keep all non-runtime CBT features in `services/core-api`.
+- [ ] Keep PUSAKA worker unchanged as an API client of Core API.
+
+### Incremental Migration Steps
+- [ ] Define the `services/cbt-engine` API contract for:
+  - exam token login
+  - status/payload retrieval
+  - answer recording
+  - final submit
+  - heartbeat
+  - telemetry event recording
+  - resume/session validation
+- [ ] Add a publish/snapshot flow from Core API to CBT Engine:
+  - published session metadata
+  - participant/token runtime records
+  - frozen question payload and options
+  - media/audio URL references
+  - runtime rules and schedule window
+- [ ] Add idempotent result sync from CBT Engine back to Core API:
+  - final submit records
+  - answers or scored answer references
+  - heartbeat/telemetry summary
+  - sync cursor and retry status
+- [ ] Keep handlers thin in both services: parse request, call service, map explicit HTTP response.
+- [ ] Keep SQL explicit through `sqlc`; CBT Engine gets its own narrow query set for runtime tables only.
+- [ ] Add focused tests for race-prone and mobile-critical runtime semantics:
+  - duplicate submit
+  - already-submitted answer/save
+  - time-window closed
+  - missing participant context
+  - device/session mismatch
+  - stale heartbeat and resume recovery
+  - malformed telemetry rejection
+- [ ] Add lightweight runtime metrics/log fields for:
+  - answer-save latency
+  - submit latency
+  - heartbeat failure rate
+  - duplicate/conflict response counts
+  - status/login error distribution by HTTP code
+  - DB query duration on runtime paths
+- [ ] Point Flutter exam base URL to CBT Engine after contract parity is verified.
+- [ ] Keep Core API exam endpoints as a temporary compatibility bridge or controlled redirect during migration.
+- [ ] Run realistic load tests before exam season using expected device count, polling interval, answer frequency, media payload size, and final-submit burst.
+- [ ] Run a rehearsal exam with non-production participants before switching real exams to CBT Engine.
+
+### Cache Strategy For CBT Runtime
+- [ ] Start with bounded in-process cache inside `services/cbt-engine`, scoped only to CBT runtime read paths.
+- [ ] Cache safe read models:
+  - published exam payload snapshots
+  - session metadata (`title`, start/end time, duration, runtime rules)
+  - resolved question list/options/media/audio URLs for a published package/session
+  - participant token/session lookup with short TTL
+  - rarely changing runtime configuration
+- [ ] Keep PostgreSQL as source of truth for critical write paths:
+  - answer saves
+  - final submit state
+  - already-submitted checks
+  - device/session mismatch decisions
+  - participant authorization
+  - durable telemetry/audit events
+- [ ] Use payload versioning for cache keys, for example `session_id + payload_version`, so admin republish or session changes naturally invalidate stale payloads.
+- [ ] Use short TTL for token/session lookup cache, for example 30-60 seconds, and always revalidate critical state on `answer` and `submit`.
+- [ ] Use singleflight-style request coalescing so concurrent logins/status requests for the same session do not stampede PostgreSQL.
+- [ ] Prefer cache invalidation by publish/version change over manual broad cache clearing.
+- [ ] Do not use cache to hide slow or unsafe SQL; optimize runtime queries and indexes first.
+- [ ] Redis is optional for the first 200-student target; evaluate it only if CBT Engine runs multiple instances or load tests show memory-cache misses/stampedes are still painful.
+
+### CBT Runtime Data Ownership
+- [ ] Core API remains source of truth for:
+  - question bank authoring
+  - package building
+  - session scheduling and publish decisions
+  - academic master data
+  - admin reports and long-term records
+- [ ] CBT Engine owns runtime-only data for:
+  - published exam snapshot copy
+  - participant runtime token/session state
+  - answers during the live exam
+  - final submit status
+  - heartbeat records
+  - anti-cheat telemetry events
+  - sync cursor/status back to Core API
+- [ ] Snapshot data in CBT Engine must be immutable per `payload_version`; changes require republish from Core API.
+- [ ] Runtime result sync must be idempotent so retries do not duplicate answers, submissions, or telemetry summaries.
+
+### Service Constraints
+- [ ] Prefer Go for `services/cbt-engine`; do not add a new language/runtime just for separation.
+- [ ] Preserve Flutter-facing response envelopes and error semantics.
+- [ ] Keep admin authoring, scheduling, and reporting in Core API unless a separate pain signal appears.
+- [ ] Do not introduce cross-service transactions for normal answer/submit flows.
+- [ ] Do not let CBT Engine query or mutate the main school database directly.
+- [ ] Do not route live Flutter exam traffic through SvelteKit.
+- [ ] Use direct Flutter-to-CBT-Engine communication for exam runtime.
+- [ ] Use service-to-service auth for Core API publish/sync calls.
+
+### Slice Map
+| Slice | Owner | Allowed Dependencies | Notes |
+|---|---|---|---|
+| CBT Authoring | Core API | Academic master data, employees/users, assets | Bank soal, package builder, review workflow, publication |
+| CBT Scheduling/Ops | Core API | Academic master data, rooms, participants | Events, sessions, tokens, seat plans, print ops |
+| CBT Runtime Critical Core | CBT Engine | Published snapshots, runtime DB, in-memory cache | Live exam path used by Flutter |
+| CBT Result Sync | Core API + CBT Engine | Idempotent service API | Moves completed runtime results back to admin/reporting domain |
+| CBT Reporting | Core API | Synced runtime results, academic master data | Reports and exports stay outside live write path |
+| Flutter Exam Client | Mobile app | CBT Engine exam API contract only | No direct DB or Core API runtime dependency during exams |
+
+### Cross-Slice Dependency Matrix
+| From | To | Allowed? | Rule |
+|---|---|---:|---|
+| Flutter Exam Client | CBT Runtime Critical Core | Yes | HTTP exam API to CBT Engine only |
+| Flutter Exam Client | PostgreSQL | No | Never direct database access |
+| Web Admin BFF | CBT Authoring/Scheduling/Reporting | Yes | BFF proxy to Go API only |
+| Web Admin BFF | CBT Runtime Critical Core | Limited | Operator/proctor screens should go through Core API or explicit read-only bridge; no runtime business logic |
+| Core API | CBT Runtime Critical Core | Yes | Publish immutable snapshots and receive idempotent result sync |
+| CBT Runtime Critical Core | Core API | Limited | Sync results/status only; no direct main DB access |
+| CBT Runtime Critical Core | Main PostgreSQL | No | CBT Engine must not connect to the main school database |
+| CBT Runtime Critical Core | CBT Runtime PostgreSQL | Yes | Runtime-only ownership |
+| CBT Authoring/Scheduling | CBT Runtime Critical Core | Yes | Publish/republish runtime snapshot through service API |
+| PUSAKA Worker | CBT Runtime Critical Core | No | Separate bounded subsystem |
+
+### Risks and Rollback
+- [ ] Risk: service extraction increases deploy/auth/observability burden. Mitigation: keep only one new service, use Go, and keep the API surface narrow.
+- [ ] Risk: two databases create sync complexity. Mitigation: immutable publish snapshots, idempotent result sync, sync cursors, and retryable reconciliation jobs.
+- [ ] Risk: Flutter contract drift during refactor. Mitigation: keep HTTP handler contract tests around login/status/answer/submit/heartbeat/event.
+- [ ] Risk: exam VPS still undersized. Mitigation: load test 200+ clients, reduce polling interval if needed, cache payloads, tune DB pool, and keep media payloads lightweight.
+- [ ] Rollback path: keep Core API exam endpoints temporarily available until CBT Engine passes rehearsal; switch Flutter base URL back to Core API if the exam VPS fails before production rollout.
+
+### Validation Metrics
+- [ ] P95 answer-save latency during load test.
+- [ ] P95 submit latency during final-submit burst.
+- [ ] Runtime endpoint 5xx rate.
+- [ ] Conflict/error response counts by expected category (`401`, `403`, `404`, `409`).
+- [ ] DB pool saturation and slow query count on runtime queries.
+- [ ] Heartbeat stale/degraded event rate during BYOD simulation.
+- [ ] Admin/API health during live exam load.
+- [ ] Cache hit ratio for published payload/status read paths.
+- [ ] PostgreSQL query reduction on login/status/payload endpoints during burst load.
+- [ ] Cache stampede prevention effectiveness during simultaneous exam start.
+- [ ] Result sync lag from CBT Engine back to Core API.
+- [ ] Number of unsynced final submissions after rehearsal and after real exam windows.
+- [ ] Exam VPS CPU, memory, disk I/O, and network headroom at 200 simulated students.
 
 ---
 

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -57,6 +58,12 @@ type cbtSessionService interface {
 	GetResultsByTeacher(ctx context.Context, sessionID, teacherEmployeeID pgtype.UUID) ([]db.GetSessionResultsByTeacherRow, error)
 	GetResults(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionResultsRow, error)
 	GetParticipantAnswers(ctx context.Context, participantID pgtype.UUID) ([]db.GetParticipantAnswersRow, error)
+}
+
+type cbtSessionProctorControlService interface {
+	ResetParticipantRuntimeAccess(ctx context.Context, participantID pgtype.UUID, actor string) error
+	ListParticipantEvents(ctx context.Context, sessionID, participantID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error)
+	ForceSubmitParticipant(ctx context.Context, sessionID, participantID pgtype.UUID, actor string) (db.ForceSubmitParticipantRow, error)
 }
 
 func NewCbtSession(svc *service.CbtSession, audit ...cbtSessionAuditWriter) *CbtSession {
@@ -518,6 +525,41 @@ func (h *CbtSession) RegenerateToken(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, row)
 }
 
+func (h *CbtSession) ResetParticipantAccess(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+		return
+	}
+	pid, err := parseUUID(chi.URLParam(r, "pid"))
+	if err != nil {
+		api.BadRequest(w, "invalid participant id")
+		return
+	}
+	if !h.requireSessionParticipant(w, r, sessionID, pid) {
+		return
+	}
+	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
+		return
+	}
+	if err := proctorSvc.ResetParticipantRuntimeAccess(r.Context(), pid, currentUsername(r)); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_SESSION_PARTICIPANT_RESET_ACCESS", "cbt_session", pgUUIDString(sessionID), map[string]any{
+		"participant_id":   pgUUIDString(pid),
+		"actor_username":   currentUsername(r),
+		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, map[string]string{"status": "reset"})
+}
+
 func (h *CbtSession) AssignSeat(w http.ResponseWriter, r *http.Request) {
 	if !adminAccessAllowed(r) {
 		api.Forbidden(w)
@@ -708,6 +750,46 @@ func (h *CbtSession) GetProctoringStatus(w http.ResponseWriter, r *http.Request)
 	api.OK(w, rows)
 }
 
+func (h *CbtSession) ListParticipantEvents(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+		return
+	}
+	var participantID pgtype.UUID
+	if raw := r.URL.Query().Get("participant_id"); raw != "" {
+		participantID, err = parseUUID(raw)
+		if err != nil {
+			api.BadRequest(w, "participant_id invalid")
+			return
+		}
+		if !h.requireSessionParticipant(w, r, sessionID, participantID) {
+			return
+		}
+	}
+	limit := int32(100)
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		var parsed int32
+		if _, err := fmt.Sscanf(raw, "%d", &parsed); err == nil {
+			limit = parsed
+		}
+	}
+	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
+		return
+	}
+	rows, err := proctorSvc.ListParticipantEvents(r.Context(), sessionID, participantID, limit)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
 func (h *CbtSession) FlagParticipant(w http.ResponseWriter, r *http.Request) {
 	sessionID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
@@ -744,6 +826,43 @@ func (h *CbtSession) FlagParticipant(w http.ResponseWriter, r *http.Request) {
 		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
 	})
 	api.OK(w, map[string]bool{"suspicious_flag": body.Flag})
+}
+
+func (h *CbtSession) ForceSubmitParticipant(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+		return
+	}
+	pid, err := parseUUID(chi.URLParam(r, "pid"))
+	if err != nil {
+		api.BadRequest(w, "invalid participant id")
+		return
+	}
+	if !h.requireSessionParticipant(w, r, sessionID, pid) {
+		return
+	}
+	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
+		return
+	}
+	row, err := proctorSvc.ForceSubmitParticipant(r.Context(), sessionID, pid, currentUsername(r))
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_SESSION_PARTICIPANT_FORCE_SUBMIT", "cbt_session", pgUUIDString(sessionID), map[string]any{
+		"participant_id":   pgUUIDString(pid),
+		"score":            row.Score,
+		"actor_username":   currentUsername(r),
+		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, row)
 }
 
 // --- Essay Grading ---

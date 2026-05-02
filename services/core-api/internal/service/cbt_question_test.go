@@ -22,9 +22,10 @@ type fakeQuestionStore struct {
 	countArg      db.CountCbtQuestionsFilteredParams
 	count         int64
 
-	createParams db.CreateCbtQuestionParams
-	createCalls  int
-	createRow    db.CbtQuestion
+	createParams  db.CreateCbtQuestionParams
+	createCalls   int
+	createRow     db.CbtQuestion
+	createHistory []db.CreateCbtQuestionParams
 
 	updateParams db.UpdateCbtQuestionParams
 	updateCalls  int
@@ -61,6 +62,7 @@ func (f *fakeQuestionStore) GetCbtQuestionDetail(ctx context.Context, id pgtype.
 func (f *fakeQuestionStore) CreateCbtQuestion(ctx context.Context, arg db.CreateCbtQuestionParams) (db.CbtQuestion, error) {
 	f.createParams = arg
 	f.createCalls++
+	f.createHistory = append(f.createHistory, arg)
 	return f.createRow, nil
 }
 
@@ -186,6 +188,55 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	}
 	if store.deleteID != deleteID || store.deleteCalls != 1 {
 		t.Fatalf("Delete() id/calls = %v/%d, want %v/1", store.deleteID, store.deleteCalls, deleteID)
+	}
+}
+
+func TestCbtQuestionImportLegacyCSVMapsRows(t *testing.T) {
+	subjectID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	store := &fakeQuestionStore{
+		createRow: db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{8}, Valid: true}},
+	}
+	svc := &CbtQuestion{q: store}
+	csvText := strings.Join([]string{
+		"kode;soal;opsi_a;opsi_b;opsi_c;opsi_d;jawaban;gambar_soal;gambar_b;bobot;is_rtl",
+		"MTK-1;<p>Berapa 2+2?</p>;3;4;5;6;1;https://cdn.test/soal.png;https://cdn.test/b.png;2;true",
+		"MTK-1;Berapa 3+3?;5;6;7;8;B;;;;",
+		"; ;A;B;C;D;A;;;;",
+		"MTK-2;Pilih huruf;A;B;C;D;C;;;;",
+	}, "\n")
+
+	got, err := svc.ImportLegacyCSV(context.Background(), ImportLegacyQuestionsInput{
+		SubjectID: subjectID,
+		CSVText:   csvText,
+		Username:  " guru.cbt ",
+	})
+	if err != nil {
+		t.Fatalf("ImportLegacyCSV() error = %v", err)
+	}
+	if got.TotalRows != 4 || got.Imported != 2 || got.Skipped != 2 {
+		t.Fatalf("ImportLegacyCSV() result = %+v, want 4 total, 2 imported, 2 skipped", got)
+	}
+	if len(got.Errors) != 2 || !strings.Contains(strings.Join(got.Errors, "\n"), "kode MTK-1 duplikat") || !strings.Contains(strings.Join(got.Errors, "\n"), "soal kosong") {
+		t.Fatalf("ImportLegacyCSV() errors = %+v, want duplicate code and empty question errors", got.Errors)
+	}
+	if len(got.DuplicateCodes) != 1 || got.DuplicateCodes[0] != "MTK-1" {
+		t.Fatalf("ImportLegacyCSV() duplicate codes = %+v, want MTK-1", got.DuplicateCodes)
+	}
+	if store.createCalls != 2 || len(store.createHistory) != 2 {
+		t.Fatalf("CreateCbtQuestion() calls/history = %d/%d, want 2/2", store.createCalls, len(store.createHistory))
+	}
+	first := store.createHistory[0]
+	if first.SubjectID != subjectID || first.Code != "MTK-1" || first.AnswerKey != "B" || first.AuthorUsername != "guru.cbt" {
+		t.Fatalf("first imported params = %+v, want subject/code/answer/author mapped", first)
+	}
+	if !strings.Contains(first.StemHtml, "https://cdn.test/soal.png") || !strings.Contains(string(first.Options), "https://cdn.test/b.png") {
+		t.Fatalf("first imported media = stem %q options %s, want legacy image URLs", first.StemHtml, string(first.Options))
+	}
+	if !strings.Contains(first.WriterNotes, "Bobot legacy: 2") || !strings.Contains(first.WriterNotes, "RTL legacy: ya") {
+		t.Fatalf("first imported notes = %q, want legacy metadata notes", first.WriterNotes)
+	}
+	if store.createHistory[1].Code != "MTK-2" || store.createHistory[1].AnswerKey != "C" {
+		t.Fatalf("second imported params = %+v, want MTK-2 with answer C", store.createHistory[1])
 	}
 }
 

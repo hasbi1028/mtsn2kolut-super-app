@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"sort"
 	"strconv"
@@ -62,6 +63,18 @@ type cbtRoomShuffleStore interface {
 type cbtScoreStore interface {
 	UpdateAnswerCorrectness(ctx context.Context, sessionID pgtype.UUID) error
 	UpdateParticipantScores(ctx context.Context, sessionID pgtype.UUID) error
+}
+
+type cbtParticipantForceSubmitStore interface {
+	UpdateParticipantAnswerCorrectness(ctx context.Context, participantID pgtype.UUID) error
+	ForceSubmitParticipant(ctx context.Context, arg db.ForceSubmitParticipantParams) (db.ForceSubmitParticipantRow, error)
+	InsertParticipantEvent(ctx context.Context, arg db.InsertParticipantEventParams) error
+}
+
+type cbtParticipantEventStore interface {
+	ResetParticipantRuntimeAccess(ctx context.Context, id pgtype.UUID) error
+	ListSessionParticipantEvents(ctx context.Context, arg db.ListSessionParticipantEventsParams) ([]db.ListSessionParticipantEventsRow, error)
+	InsertParticipantEvent(ctx context.Context, arg db.InsertParticipantEventParams) error
 }
 
 func NewCbtSession(pool *pgxpool.Pool) *CbtSession {
@@ -210,6 +223,21 @@ type RegenerateTokenResult struct {
 
 func (s *CbtSession) RegenerateToken(ctx context.Context, participantID pgtype.UUID) (db.RegenerateParticipantTokenRow, error) {
 	return s.q.RegenerateParticipantToken(ctx, participantID)
+}
+
+func (s *CbtSession) ResetParticipantRuntimeAccess(ctx context.Context, participantID pgtype.UUID, actor string) error {
+	q, ok := s.q.(cbtParticipantEventStore)
+	if !ok {
+		return fmt.Errorf("cbt participant event store unavailable")
+	}
+	if err := q.ResetParticipantRuntimeAccess(ctx, participantID); err != nil {
+		return err
+	}
+	return q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
+		ParticipantID: participantID,
+		EventType:     "proctor_reset_access",
+		EventData:     marshalJSON(map[string]string{"actor": actor}),
+	})
 }
 
 func (s *CbtSession) HasParticipant(ctx context.Context, sessionID, participantID pgtype.UUID) (bool, error) {
@@ -371,11 +399,78 @@ func (s *CbtSession) GetProctoringStatus(ctx context.Context, sessionID pgtype.U
 	return rows, nil
 }
 
+func (s *CbtSession) ListParticipantEvents(ctx context.Context, sessionID, participantID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error) {
+	q, ok := s.q.(cbtParticipantEventStore)
+	if !ok {
+		return nil, fmt.Errorf("cbt participant event store unavailable")
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := q.ListSessionParticipantEvents(ctx, db.ListSessionParticipantEventsParams{
+		SessionID:     sessionID,
+		ParticipantID: participantID,
+		LimitCount:    limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.ListSessionParticipantEventsRow{}, nil
+	}
+	return rows, nil
+}
+
 func (s *CbtSession) SetSuspiciousFlag(ctx context.Context, participantID pgtype.UUID, flag bool) error {
 	return s.q.SetParticipantSuspiciousFlag(ctx, db.SetParticipantSuspiciousFlagParams{
 		ID:             participantID,
 		SuspiciousFlag: flag,
 	})
+}
+
+func (s *CbtSession) ForceSubmitParticipant(ctx context.Context, sessionID, participantID pgtype.UUID, actor string) (db.ForceSubmitParticipantRow, error) {
+	conn, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return db.ForceSubmitParticipantRow{}, err
+	}
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return db.ForceSubmitParticipantRow{}, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	qtx := s.q.WithTx(tx)
+	row, err := forceSubmitParticipant(ctx, qtx, sessionID, participantID, actor)
+	if err != nil {
+		return db.ForceSubmitParticipantRow{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return db.ForceSubmitParticipantRow{}, err
+	}
+	return row, nil
+}
+
+func forceSubmitParticipant(ctx context.Context, q cbtParticipantForceSubmitStore, sessionID, participantID pgtype.UUID, actor string) (db.ForceSubmitParticipantRow, error) {
+	if err := q.UpdateParticipantAnswerCorrectness(ctx, participantID); err != nil {
+		return db.ForceSubmitParticipantRow{}, err
+	}
+	row, err := q.ForceSubmitParticipant(ctx, db.ForceSubmitParticipantParams{
+		SessionID: sessionID,
+		ID:        participantID,
+	})
+	if err != nil {
+		return db.ForceSubmitParticipantRow{}, err
+	}
+	if err := q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
+		ParticipantID: participantID,
+		EventType:     "proctor_force_submit",
+		EventData:     marshalJSON(map[string]string{"actor": actor}),
+	}); err != nil {
+		return db.ForceSubmitParticipantRow{}, err
+	}
+	return row, nil
 }
 
 // --- Essay Grading ---

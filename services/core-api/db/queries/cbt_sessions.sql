@@ -111,6 +111,14 @@ SET token = encode(gen_random_bytes(4), 'hex')
 WHERE id = $1
 RETURNING id, token;
 
+-- name: ResetParticipantRuntimeAccess :exec
+UPDATE cbt_exam_participants
+SET device_fingerprint = NULL,
+    login_ip = NULL,
+    last_heartbeat = NULL,
+    question_order = NULL
+WHERE id = $1;
+
 -- name: AssignParticipantRoom :exec
 UPDATE cbt_exam_participants
 SET room_id = $2
@@ -176,6 +184,26 @@ FROM cbt_participant_events
 WHERE participant_id = $1
 ORDER BY created_at DESC
 LIMIT 100;
+
+-- name: ListSessionParticipantEvents :many
+SELECT
+  ev.id,
+  ev.participant_id,
+  ep.student_id,
+  s.nis,
+  s.nama,
+  COALESCE(r.room_name, '') AS room_name,
+  ev.event_type,
+  ev.event_data,
+  ev.created_at
+FROM cbt_participant_events ev
+JOIN cbt_exam_participants ep ON ep.id = ev.participant_id
+JOIN students s ON s.id = ep.student_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.session_id = $1
+  AND (sqlc.arg(participant_id)::uuid IS NULL OR ev.participant_id = sqlc.arg(participant_id)::uuid)
+ORDER BY ev.created_at DESC
+LIMIT sqlc.arg(limit_count);
 
 -- name: GetSessionProctoringStatus :many
 SELECT
@@ -269,6 +297,21 @@ WHERE sa.question_id = q.id
     SELECT id FROM cbt_exam_participants WHERE session_id = $1
   );
 
+-- name: UpdateParticipantAnswerCorrectness :exec
+UPDATE cbt_student_answers sa
+SET is_correct = CASE
+  WHEN q.question_type = 'essay' THEN NULL
+  WHEN q.question_type = 'multiple_answer' THEN
+    (array_to_string(ARRAY(SELECT unnest(string_to_array(sa.answer, ',')) ORDER BY 1), ',') =
+     array_to_string(ARRAY(SELECT unnest(string_to_array(q.answer_key, ',')) ORDER BY 1), ','))
+  ELSE (sa.answer = q.answer_key)
+END
+FROM cbt_questions q
+WHERE sa.question_id = q.id
+  AND q.question_type <> 'essay'
+  AND sa.manual_score IS NULL
+  AND sa.participant_id = $1;
+
 -- name: UpdateParticipantScores :exec
 UPDATE cbt_exam_participants ep
 SET
@@ -297,6 +340,36 @@ FROM (
   GROUP BY sa.participant_id
 ) subq
 WHERE ep.id = subq.participant_id;
+
+-- name: ForceSubmitParticipant :one
+WITH score_parts AS (
+  SELECT
+    ep.id AS participant_id,
+    COALESCE(SUM(
+      CASE
+        WHEN q.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * pq.points
+        WHEN q.question_type <> 'essay' AND sa.is_correct IS TRUE THEN pq.points
+        ELSE 0
+      END
+    ), 0)::numeric AS earned_points,
+    COALESCE(SUM(pq.points), 0)::numeric AS total_points
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+  WHERE ep.session_id = $1 AND ep.id = $2
+  GROUP BY ep.id
+)
+UPDATE cbt_exam_participants ep
+SET score = CASE
+      WHEN score_parts.total_points > 0 THEN ROUND((score_parts.earned_points / score_parts.total_points) * 100, 2)
+      ELSE 0
+    END,
+    submitted_at = COALESCE(ep.submitted_at, NOW())
+FROM score_parts
+WHERE ep.id = score_parts.participant_id
+RETURNING ep.id, ep.submitted_at, ep.score;
 
 -- name: GetSessionResults :many
 SELECT

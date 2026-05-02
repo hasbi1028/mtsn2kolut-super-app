@@ -8,7 +8,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
-	import EditorWrapper from '$lib/components/EditorWrapper.svelte';
+	import LegacyRichTextEditor from '$lib/components/LegacyRichTextEditor.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import RichContent from '$lib/components/RichContent.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
@@ -69,6 +69,13 @@
 		options: string[];
 		answerKey: 'A' | 'B' | 'C' | 'D';
 		isRtl?: boolean;
+	};
+	type LegacyImportResult = {
+		total_rows: number;
+		imported: number;
+		skipped: number;
+		errors: string[];
+		duplicate_codes: string[];
 	};
 
 	// ── Constants ─────────────────────────────────────────────────────────────
@@ -181,6 +188,12 @@
 	let composerMobilePanel = $state<'write' | 'preview'>('write');
 	let lastDraftSig = '';
 	let questionsRequestId = 0;
+	let showImport = $state(false);
+	let importSubjectId = $state('');
+	let importFile = $state<File | null>(null);
+	let importBusy = $state(false);
+	let importResult = $state<LegacyImportResult | null>(null);
+	let duplicateBusyId = $state('');
 
 	// ── Form fields ────────────────────────────────────────────────────────────
 	let fSubjectId = $state('');
@@ -206,14 +219,16 @@
 
 	let stemText = $derived(htmlToPlainText(fStem));
 	let hasImage = $derived(fStem.includes('<img'));
+	let optionPlainTexts = $derived(fOptions.map((option) => htmlToPlainText(option)));
+	let optionHasImages = $derived(fOptions.map((option) => option.includes('<img')));
 
 	let readinessChecks = $derived({
 		subject: !!fSubjectId,
 		stem: stemText.length >= 5 || hasImage,
-		optA: fOptions[0].trim().length > 0,
-		optB: fOptions[1].trim().length > 0,
-		optC: fOptions[2].trim().length > 0,
-		optD: fOptions[3].trim().length > 0,
+		optA: richTextHasContent(fOptions[0]),
+		optB: richTextHasContent(fOptions[1]),
+		optC: richTextHasContent(fOptions[2]),
+		optD: richTextHasContent(fOptions[3]),
 		answerKey: !!fAnswerKey,
 		weight: Number.isFinite(fWeight) && fWeight >= 1,
 	});
@@ -224,7 +239,7 @@
 	let canSave = $derived(readinessScore === 100 && !composerBusy);
 
 	let qualitySignals = $derived.by(() => {
-		const filled = fOptions.map((o) => o.trim()).filter(Boolean);
+		const filled = optionPlainTexts.filter((text, index) => text || optionHasImages[index]);
 		const unique = new Set(filled);
 		const lengths = filled.map((o) => o.length);
 		const lengthRange =
@@ -433,6 +448,10 @@
 		return fallback;
 	}
 
+	function richTextHasContent(html: string): boolean {
+		return htmlToPlainText(html).length > 0 || html.includes('<img');
+	}
+
 	function resetForm() {
 		fSubjectId = '';
 		fStem = '';
@@ -468,7 +487,7 @@
 			fSubjectId = d.subject_id ?? '';
 			fStem = d.stem_html || d.question_text || '';
 			const opts = d.options?.length
-				? d.options.map((o) => o.text || o.html || o.latex || '')
+				? d.options.map((o) => o.html || o.text || o.latex || '')
 				: ['', '', '', ''];
 			while (opts.length < 4) opts.push('');
 			fOptions = opts;
@@ -506,6 +525,19 @@
 		editingId = null;
 	}
 
+	function openImport() {
+		importSubjectId = filterSubject || fSubjectId || '';
+		importFile = null;
+		importResult = null;
+		showImport = true;
+	}
+
+	function onImportFileChange(event: Event) {
+		const input = event.target as HTMLInputElement;
+		importFile = input.files?.[0] ?? null;
+		importResult = null;
+	}
+
 	async function saveQuestion() {
 		if (!canSave) return;
 		composerBusy = true;
@@ -516,7 +548,11 @@
 				question_text: htmlToPlainText(fStem),
 				question_type: 'multiple_choice',
 				stem_html: fStem,
-				options: fOptions.map((text, i) => ({ label: ANSWER_LABELS[i], text })),
+				options: fOptions.map((html, i) => ({
+					label: ANSWER_LABELS[i],
+					text: htmlToPlainText(html),
+					html,
+				})),
 				answer_key: fAnswerKey,
 				difficulty: fDifficulty,
 				status: 'draft',
@@ -540,6 +576,55 @@
 			toast.error(mutationErrorMessage(e, 'Gagal menyimpan soal'));
 		} finally {
 			composerBusy = false;
+		}
+	}
+
+	async function importLegacyCSV() {
+		if (!importSubjectId) {
+			toast.error('Pilih mata pelajaran untuk import');
+			return;
+		}
+		if (!importFile) {
+			toast.error('Pilih file CSV terlebih dahulu');
+			return;
+		}
+		importBusy = true;
+		try {
+			const form = new FormData();
+			form.set('subject_id', importSubjectId);
+			form.set('file', importFile);
+			const res = await fetch('/api/cbt/questions/import-legacy', {
+				method: 'POST',
+				body: form,
+			});
+			const result = await readClientApiData<LegacyImportResult>(res, 'Import CSV gagal');
+			importResult = {
+				total_rows: result.total_rows ?? 0,
+				imported: result.imported ?? 0,
+				skipped: result.skipped ?? 0,
+				errors: result.errors ?? [],
+				duplicate_codes: result.duplicate_codes ?? [],
+			};
+			toast.success(`${importResult.imported} soal berhasil diimport`);
+			await refreshOverview(1);
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Import CSV gagal'));
+		} finally {
+			importBusy = false;
+		}
+	}
+
+	async function duplicateQuestion(id: string) {
+		duplicateBusyId = id;
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/questions/${id}/duplicate`, { method: 'POST' });
+			await readClientJson<unknown>(res);
+			toast.success('Soal diduplikasi sebagai draft');
+			await refreshOverview(currentPage);
+		} catch (e) {
+			toast.error(mutationErrorMessage(e, 'Gagal menduplikasi soal'));
+		} finally {
+			duplicateBusyId = '';
 		}
 	}
 
@@ -606,9 +691,14 @@
 				Buat butir soal dengan template, preview langsung, dan simpan draft otomatis
 			</p>
 		</div>
-		<Button onclick={openCreate} class="bg-green-700 hover:bg-green-800 text-white shrink-0">
-			+ Buat Soal
-		</Button>
+		<div class="flex shrink-0 flex-wrap gap-2">
+			<Button variant="outline" onclick={openImport}>
+				Import CSV
+			</Button>
+			<Button onclick={openCreate} class="bg-green-700 hover:bg-green-800 text-white">
+				+ Buat Soal
+			</Button>
+		</div>
 	</div>
 
 	<!-- Filter bar -->
@@ -655,7 +745,7 @@
 					<Table.Head class="w-32 text-slate-500">Mapel</Table.Head>
 					<Table.Head class="w-28 hidden sm:table-cell text-slate-500">Status</Table.Head>
 					<Table.Head class="w-16 text-slate-500">Kunci</Table.Head>
-					<Table.Head class="w-24 text-right text-slate-500">Aksi</Table.Head>
+					<Table.Head class="w-36 text-right text-slate-500">Aksi</Table.Head>
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
@@ -728,6 +818,16 @@
 										<button
 											onclick={(e) => {
 												e.stopPropagation();
+												duplicateQuestion(q.id);
+											}}
+											disabled={duplicateBusyId === q.id}
+											class="rounded px-2 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 disabled:opacity-50"
+										>
+											{duplicateBusyId === q.id ? 'Menyalin...' : 'Duplikat'}
+										</button>
+										<button
+											onclick={(e) => {
+												e.stopPropagation();
 												deleteQuestion(q.id);
 											}}
 											class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 transition-colors"
@@ -770,6 +870,85 @@
 		</div>
 	{/if}
 </div>
+
+<Dialog.Root bind:open={showImport}>
+	<Dialog.Content>
+		<div class="w-[min(92vw,34rem)] space-y-4 p-5">
+			<div>
+				<h2 class="text-base font-semibold text-slate-800">Import CSV Bank Soal Legacy</h2>
+				<p class="mt-1 text-xs text-slate-500">Hasil import disimpan sebagai draft di model soal CBT.</p>
+			</div>
+			<div class="space-y-3">
+				<div>
+					<label for="legacy-import-subject" class="mb-1 block text-xs font-medium text-slate-600">
+						Mata Pelajaran <span class="text-red-500">*</span>
+					</label>
+					<select
+						id="legacy-import-subject"
+						bind:value={importSubjectId}
+						class="w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+					>
+						<option value="">-- Pilih Mapel --</option>
+						{#each subjects as s (s.id)}
+							<option value={s.id}>{s.name}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label for="legacy-import-file" class="mb-1 block text-xs font-medium text-slate-600">
+						File CSV <span class="text-red-500">*</span>
+					</label>
+					<input
+						id="legacy-import-file"
+						type="file"
+						accept=".csv,text/csv"
+						onchange={onImportFileChange}
+						class="block w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-green-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-green-800"
+					/>
+				</div>
+			</div>
+			{#if importResult}
+				<div class="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+					<div class="grid grid-cols-3 gap-2 text-center">
+						<div>
+							<div class="text-lg font-bold">{importResult.imported}</div>
+							<div class="text-[10px] uppercase text-green-700">Masuk</div>
+						</div>
+						<div>
+							<div class="text-lg font-bold">{importResult.skipped}</div>
+							<div class="text-[10px] uppercase text-green-700">Lewat</div>
+						</div>
+						<div>
+							<div class="text-lg font-bold">{importResult.total_rows}</div>
+							<div class="text-[10px] uppercase text-green-700">Baris</div>
+						</div>
+					</div>
+					{#if importResult.errors.length > 0}
+						<ul class="mt-3 space-y-1 border-t border-green-200 pt-2 text-xs text-amber-800">
+							{#each importResult.errors.slice(0, 6) as err (`legacy-import-error-${err}`)}
+								<li>{err}</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+			{/if}
+			<div class="flex justify-end gap-2 border-t border-slate-100 pt-4">
+				<Button variant="outline" onclick={() => (showImport = false)}>
+					Tutup
+				</Button>
+				<LoadingButton
+					onclick={() => void importLegacyCSV()}
+					loading={importBusy}
+					loadingLabel="Import..."
+					disabled={importBusy || !importSubjectId || !importFile}
+					class="bg-green-700 text-white hover:bg-green-800 disabled:opacity-50"
+				>
+					Import
+				</LoadingButton>
+			</div>
+		</div>
+	</Dialog.Content>
+</Dialog.Root>
 
 {#snippet composerPreview()}
 	<div class="mb-4">
@@ -841,15 +1020,15 @@
 				<p class="text-xs text-slate-400 italic">Isi soal belum dimasukkan</p>
 			{/if}
 
-			{#if fOptions.some((o) => o.trim())}
+			{#if fOptions.some(richTextHasContent)}
 				<div class="space-y-1.5 border-t border-slate-100 pt-2">
 					{#each fOptions as opt, i (ANSWER_LABELS[i])}
 						{@const label = ANSWER_LABELS[i]}
 						{@const isAnswer = fAnswerKey === label}
-						<div class="flex items-baseline gap-2 text-sm {isAnswer ? 'text-green-700 font-medium' : 'text-slate-700'}">
+						<div class="flex items-start gap-2 text-sm {isAnswer ? 'text-green-700 font-medium' : 'text-slate-700'}">
 							<span class="shrink-0 font-bold">{label}.</span>
-							{#if opt.trim()}
-								<RichContent tag="span" html={opt} class="latex-preview" />
+							{#if richTextHasContent(opt)}
+								<RichContent html={opt} class="latex-preview min-w-0 flex-1" />
 							{:else}
 								<span class="italic text-slate-300">(kosong)</span>
 							{/if}
@@ -867,255 +1046,254 @@
 <!-- ── Composer Dialog ─────────────────────────────────────────────────────── -->
 <Dialog.Root bind:open={showComposer}>
 	<Dialog.Content>
-		<div class="w-[min(94vw,88rem)] max-h-[93vh] h-[93vh] flex flex-col gap-0 p-0 overflow-hidden">
-		<!-- Dialog header -->
-		<div class="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
-			<div>
-				<h2 class="text-base font-semibold text-slate-800">
-					{editingId ? 'Edit Butir Soal' : 'Buat Butir Soal Baru'}
-				</h2>
-				{#if draftStatus}
-					<p class="text-[10px] text-slate-400 mt-0.5">{draftStatus}</p>
-				{/if}
-			</div>
-			<button
-				onclick={closeComposer}
-				class="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
-				aria-label="Tutup"
-			>
-				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M6 18L18 6M6 6l12 12"
-					/>
-				</svg>
-			</button>
-		</div>
-
-		<div class="grid grid-cols-2 gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 lg:hidden">
-			<button
-				type="button"
-				class={`rounded-lg px-3 py-2 text-sm font-medium ${composerMobilePanel === 'write' ? 'bg-white text-green-800 shadow-sm' : 'text-slate-500'}`}
-				onclick={() => (composerMobilePanel = 'write')}
-			>
-				Tulis Soal
-			</button>
-			<button
-				type="button"
-				class={`rounded-lg px-3 py-2 text-sm font-medium ${composerMobilePanel === 'preview' ? 'bg-white text-green-800 shadow-sm' : 'text-slate-500'}`}
-				onclick={() => (composerMobilePanel = 'preview')}
-			>
-				Preview & Kualitas
-			</button>
-		</div>
-
-		<!-- Dialog body: split layout -->
-		<div class="flex flex-1 overflow-hidden min-h-0">
-			<!-- Left: form -->
-			<div class={`flex-1 overflow-y-auto p-5 space-y-5 min-w-0 ${composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
-				<!-- Template strip -->
-				<div>
-					<div class="flex items-center justify-between mb-1.5">
-						<span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-							Template Cepat
-						</span>
-						<button
-							type="button"
-							onclick={() => (showTemplates = !showTemplates)}
-							class="text-[10px] text-slate-400 hover:text-slate-600"
-						>
-							{showTemplates ? 'Sembunyikan' : 'Tampilkan'}
-						</button>
+		<div class="soal-composer-modal flex h-[94vh] w-[min(96vw,110rem)] max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-2xl">
+			<div class="shrink-0 border-b border-green-100 bg-white px-5 py-4 md:px-8">
+				<div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+					<div class="space-y-1">
+						<p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-green-700">
+							Komposer Soal Legacy
+						</p>
+						<h2 class="text-xl font-black uppercase italic tracking-tight text-slate-900">
+							{editingId ? 'Edit Butir Soal' : 'Penyusunan Soal Baru'}
+						</h2>
+						<p class="text-xs font-medium uppercase tracking-widest text-slate-500">
+							Satu modal penuh untuk template, rich text, opsi, kunci, preview, dan kesiapan.
+						</p>
 					</div>
-					{#if showTemplates}
-						<div class="flex gap-2 overflow-x-auto pb-2">
-							{#each templates as t (t.id)}
+					<div class="flex flex-wrap gap-2 xl:justify-end">
+						<Button
+							type="button"
+							variant={composerMobilePanel === 'write' ? 'default' : 'outline'}
+							size="sm"
+							class="h-8 text-xs lg:hidden"
+							onclick={() => (composerMobilePanel = 'write')}
+						>
+							Editor
+						</Button>
+						<Button
+							type="button"
+							variant={composerMobilePanel === 'preview' ? 'default' : 'outline'}
+							size="sm"
+							class="h-8 text-xs lg:hidden"
+							onclick={() => (composerMobilePanel = 'preview')}
+						>
+							Preview
+						</Button>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							class="h-8 text-xs"
+							onclick={closeComposer}
+						>
+							Tutup
+						</Button>
+					</div>
+				</div>
+			</div>
+
+			<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-5 md:p-8">
+				{#if draftStatus}
+					<div class="mb-6 flex flex-col gap-2 rounded-2xl border border-green-200 bg-green-50 p-4 text-xs font-semibold text-green-900 md:flex-row md:items-center md:justify-between">
+						<span>{draftStatus}</span>
+						<span class="text-[10px] uppercase tracking-widest text-green-700">Draft lokal aktif</span>
+					</div>
+				{/if}
+
+				<div class="grid grid-cols-1 gap-7 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.72fr)]">
+					<div class={`space-y-7 min-w-0 ${composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
+						<section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+							<div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+								<div>
+									<h3 class="text-sm font-black uppercase tracking-[0.2em] text-slate-800">Template Cepat</h3>
+									<p class="mt-1 text-sm text-slate-500">Muat struktur awal sebelum menyusun soal.</p>
+								</div>
 								<button
 									type="button"
-									onclick={() => applyTemplate(t)}
-									class="flex-shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left hover:border-green-400 hover:bg-green-50 transition-colors min-w-[110px] max-w-[130px]"
+									onclick={() => (showTemplates = !showTemplates)}
+									class="self-start rounded-md border border-slate-200 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 hover:bg-slate-50 lg:self-auto"
 								>
-									<div class="text-xs font-medium text-slate-700 leading-tight">{t.label}</div>
-									<div class="text-[10px] text-slate-400 mt-0.5">{t.desc}</div>
-									{#if t.isRtl}
-										<span
-											class="mt-1 inline-block rounded bg-amber-100 px-1 text-[9px] font-medium text-amber-700"
-											>RTL</span
-										>
-									{/if}
+									{showTemplates ? 'Sembunyikan' : 'Tampilkan'}
 								</button>
-							{/each}
+							</div>
+							{#if showTemplates}
+								<div class="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
+									{#each templates as t (t.id)}
+										<button
+											type="button"
+											onclick={() => applyTemplate(t)}
+											class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-left transition-colors hover:border-green-400 hover:bg-green-50"
+										>
+											<div class="text-xs font-black uppercase tracking-wider text-slate-800">{t.label}</div>
+											<div class="mt-2 text-xs leading-relaxed text-slate-500">{t.desc}</div>
+											{#if t.isRtl}
+												<span class="mt-3 inline-block rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">RTL</span>
+											{/if}
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</section>
+
+						<section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+							<h3 class="mb-4 text-sm font-black uppercase tracking-[0.2em] text-slate-800">Metadata Soal</h3>
+							<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_10rem_8rem_12rem] md:items-end">
+								<div>
+									<label for="f-subject" class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600">
+										Mata Pelajaran <span class="text-red-500">*</span>
+									</label>
+									<select
+										id="f-subject"
+										bind:value={fSubjectId}
+										class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+									>
+										<option value="">-- Pilih Mapel --</option>
+										{#each subjects as s (s.id)}
+											<option value={s.id}>{s.name}</option>
+										{/each}
+									</select>
+								</div>
+								<div>
+									<label for="f-difficulty" class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600">
+										Kesulitan
+									</label>
+									<select
+										id="f-difficulty"
+										bind:value={fDifficulty}
+										class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+									>
+										{#each Object.entries(DIFFICULTY_LABEL) as [val, lbl] (val)}
+											<option value={val}>{lbl}</option>
+										{/each}
+									</select>
+								</div>
+								<div>
+									<label for="f-weight" class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600">
+										Bobot
+									</label>
+									<Input id="f-weight" type="number" min="1" bind:value={fWeight} class="h-11 text-sm font-medium" />
+								</div>
+								<label for="f-rtl" class="flex h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed border-green-200 bg-green-50 px-3">
+									<span class="text-xs font-black uppercase tracking-wider text-green-800">Mode Arab / RTL</span>
+									<input id="f-rtl" type="checkbox" bind:checked={fIsRtl} class="rounded accent-green-700" />
+								</label>
+							</div>
+						</section>
+
+						<section class="space-y-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+							<div>
+								<h3 class="text-sm font-black uppercase tracking-[0.2em] text-slate-800">Isi Pertanyaan</h3>
+								<p class="mt-1 text-sm text-slate-500">Rich text legacy penuh untuk teks, gambar, daftar, dan formula.</p>
+							</div>
+							<LegacyRichTextEditor
+								bind:value={fStem}
+								id="soal-stem"
+								placeholder="Tuliskan pertanyaan utama. Gambar bisa disisipkan langsung di antara teks."
+								minRows={7}
+								onImageUpload={uploadImageInEditor}
+							/>
+						</section>
+
+						<section class="space-y-5 border-t border-slate-200 pt-7">
+							<div class="text-center">
+								<h3 class="text-sm font-black uppercase italic tracking-[0.26em] text-slate-500">Opsi & Kunci Jawaban</h3>
+								<p class="mt-2 text-sm text-slate-500">Setiap opsi memakai kotak rich text legacy sendiri.</p>
+							</div>
+							<div class="grid grid-cols-1 gap-5">
+								{#each fOptions as _, i (ANSWER_LABELS[i])}
+									{@const label = ANSWER_LABELS[i]}
+									{@const isAnswer = fAnswerKey === label}
+									<section
+										class="space-y-4 rounded-3xl border bg-white p-5 shadow-sm transition-colors md:p-6 {isAnswer
+											? 'border-green-500 ring-4 ring-green-100'
+											: 'border-slate-200 hover:border-slate-300'}"
+									>
+										<div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+											<div>
+												<p class="text-xs font-black uppercase tracking-[0.2em] text-slate-700">Opsi {label}</p>
+												<p class="mt-1 text-xs text-slate-400">{isAnswer ? 'Ditandai sebagai kunci jawaban' : 'Pengecoh / alternatif jawaban'}</p>
+											</div>
+											<label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-green-50">
+												<input
+													type="radio"
+													name="answer-key"
+													value={label}
+													checked={fAnswerKey === label}
+													onchange={() => (fAnswerKey = label)}
+													class="h-4 w-4 cursor-pointer accent-green-700"
+												/>
+												<span class="text-[10px] font-black uppercase tracking-widest {isAnswer ? 'text-green-700' : 'text-slate-500'}">Kunci</span>
+											</label>
+										</div>
+										<div dir={fIsRtl ? 'rtl' : undefined}>
+											<LegacyRichTextEditor
+												bind:value={fOptions[i]}
+												id={`soal-option-${label}`}
+												placeholder={`Teks jawaban ${label}. Gambar bisa disisipkan langsung di dalam opsi.`}
+												minRows={4}
+												onImageUpload={uploadImageInEditor}
+											/>
+										</div>
+									</section>
+								{/each}
+							</div>
+						</section>
+					</div>
+
+					<aside class={`space-y-5 min-w-0 xl:sticky xl:top-0 xl:self-start ${composerMobilePanel === 'write' ? 'hidden lg:block' : 'block'}`}>
+						<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+							{@render composerPreview()}
 						</div>
+					</aside>
+				</div>
+			</div>
+
+			<div class="flex shrink-0 flex-col gap-3 border-t border-green-100 bg-white px-5 py-4 md:flex-row md:items-center md:justify-between md:px-8">
+				<div class="min-w-0 text-xs text-slate-500">
+					{#if draftStatus}
+						<span class="font-semibold text-green-700">{draftStatus}</span>
+					{:else}
+						<span>Editor legacy siap untuk buat/edit soal.</span>
 					{/if}
 				</div>
-
-				<!-- Metadata row -->
-				<div class="flex flex-wrap gap-3">
-					<div class="flex-1 min-w-[160px]">
-						<label
-							for="f-subject"
-							class="mb-1 block text-xs font-medium text-slate-600"
-						>
-							Mata Pelajaran <span class="text-red-500">*</span>
-						</label>
-						<select
-							id="f-subject"
-							bind:value={fSubjectId}
-							class="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-						>
-							<option value="">-- Pilih Mapel --</option>
-							{#each subjects as s (s.id)}
-								<option value={s.id}>{s.name}</option>
-							{/each}
-						</select>
-					</div>
-					<div class="w-28">
-						<label
-							for="f-difficulty"
-							class="mb-1 block text-xs font-medium text-slate-600"
-						>
-							Tingkat Kesulitan
-						</label>
-						<select
-							id="f-difficulty"
-							bind:value={fDifficulty}
-							class="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-						>
-								{#each Object.entries(DIFFICULTY_LABEL) as [val, lbl] (val)}
-								<option value={val}>{lbl}</option>
-							{/each}
-						</select>
-					</div>
-					<div class="w-20">
-						<label for="f-weight" class="mb-1 block text-xs font-medium text-slate-600">
-							Bobot
-						</label>
-						<Input
-							id="f-weight"
-							type="number"
-							min="1"
-							bind:value={fWeight}
-							class="h-8 text-sm"
-						/>
-						</div>
-						<div class="flex items-end pb-1">
-							<label for="f-rtl" class="flex cursor-pointer items-center gap-2">
-								<input id="f-rtl" type="checkbox" bind:checked={fIsRtl} class="rounded" />
-								<span class="text-xs text-slate-600">Mode Arab (RTL)</span>
-							</label>
-						</div>
+				<div class="flex shrink-0 flex-wrap justify-end gap-2">
+					<Button
+						variant="outline"
+						class="h-9 text-sm"
+						onclick={() => {
+							clearDraft();
+							closeComposer();
+						}}
+					>
+						Batalkan
+					</Button>
+					<LoadingButton
+						onclick={() => void saveQuestion()}
+						disabled={!canSave}
+						loading={composerBusy}
+						loadingLabel="Menyimpan..."
+						class="h-9 bg-green-700 text-sm text-white hover:bg-green-800 disabled:opacity-50"
+					>
+						{editingId ? 'Simpan Perubahan' : 'Simpan Soal'}
+					</LoadingButton>
 				</div>
-
-				<!-- Stem editor -->
-				<div>
-					<div class="mb-1.5 block text-xs font-medium text-slate-600">
-						Isi Soal (Stem) <span class="text-red-500">*</span>
-					</div>
-					<EditorWrapper
-						bind:value={fStem}
-						id="soal-stem"
-						placeholder="Tuliskan pertanyaan utama. Gambar (🖼), LaTeX ($x^2$), dan tabel bisa disisipkan langsung."
-						minRows={6}
-						onImageUpload={uploadImageInEditor}
-					/>
-				</div>
-
-				<!-- Options A–D -->
-				<div>
-					<div class="mb-2 flex items-baseline justify-between">
-						<div class="text-xs font-medium text-slate-600">
-							Pilihan Jawaban <span class="text-red-500">*</span>
-						</div>
-						<span class="text-[10px] text-slate-400">
-							Klik lingkaran huruf untuk menandai kunci jawaban
-						</span>
-					</div>
-					<div class="space-y-2">
-							{#each fOptions as _, i (ANSWER_LABELS[i])}
-							{@const label = ANSWER_LABELS[i]}
-							{@const isAnswer = fAnswerKey === label}
-							<div class="flex items-center gap-2">
-								<button
-									type="button"
-									onclick={() => (fAnswerKey = label)}
-									aria-label="Pilih opsi {label} sebagai kunci jawaban"
-									class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors
-										{isAnswer
-										? 'border-green-600 bg-green-600 text-white'
-										: 'border-slate-300 bg-white text-slate-500 hover:border-green-400 hover:text-green-600'}"
-								>
-									{label}
-								</button>
-								<textarea
-									rows="1"
-									value={fOptions[i]}
-									oninput={(e) =>
-										(fOptions[i] = (e.target as HTMLTextAreaElement).value)}
-									placeholder="Opsi {label}... (LaTeX: $rumus$)"
-									dir={fIsRtl ? 'rtl' : undefined}
-									class="flex-1 resize-none rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors
-										{isAnswer
-										? 'border-green-300 bg-green-50'
-										: 'border-slate-200 bg-white'}"
-								></textarea>
-							</div>
-						{/each}
-					</div>
-				</div>
-
-				<div class="h-4"></div>
 			</div>
-
-			{#if composerMobilePanel === 'preview'}
-				<div class="block flex-1 overflow-y-auto bg-slate-50 p-4 lg:hidden">
-					{@render composerPreview()}
-				</div>
-			{/if}
-
-			<!-- Right: preview panel (desktop only) -->
-			<div
-				class="hidden w-72 shrink-0 overflow-y-auto border-l border-slate-100 bg-slate-50 p-4 lg:block xl:w-80"
-			>
-				{@render composerPreview()}
-			</div>
-		</div>
-
-		<!-- Dialog footer -->
-		<div
-			class="flex shrink-0 items-center justify-between gap-3 border-t border-slate-100 bg-white px-5 py-3"
-		>
-			<div class="text-[10px] text-slate-400 truncate max-w-xs">
-				{draftStatus}
-			</div>
-			<div class="flex gap-2 shrink-0">
-				<Button
-					variant="outline"
-					class="h-8 text-sm"
-					onclick={() => {
-						clearDraft();
-						closeComposer();
-					}}
-				>
-					Batalkan
-				</Button>
-				<LoadingButton
-					onclick={() => void saveQuestion()}
-					disabled={!canSave}
-					loading={composerBusy}
-					loadingLabel="Menyimpan..."
-					class="h-8 bg-green-700 text-sm text-white hover:bg-green-800 disabled:opacity-50"
-				>
-					{editingId ? 'Simpan Perubahan' : 'Simpan Soal'}
-				</LoadingButton>
-			</div>
-		</div>
 		</div>
 	</Dialog.Content>
 </Dialog.Root>
 
 <style>
+	:global(.content:has(.soal-composer-modal)) {
+		width: min(96vw, 110rem);
+		min-width: min(96vw, 110rem);
+		max-width: 96vw;
+		max-height: 94vh;
+		overflow: hidden;
+		border: 0;
+		border-radius: 1rem;
+		padding: 0;
+	}
+
 	:global(.latex-preview .latex-display) {
 		overflow-x: auto;
 		padding: 0.25rem 0;

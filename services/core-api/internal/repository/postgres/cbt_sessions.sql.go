@@ -178,6 +178,55 @@ func (q *Queries) EnrollSchoolToSession(ctx context.Context, sessionID pgtype.UU
 	return err
 }
 
+const forceSubmitParticipant = `-- name: ForceSubmitParticipant :one
+WITH score_parts AS (
+  SELECT
+    ep.id AS participant_id,
+    COALESCE(SUM(
+      CASE
+        WHEN q.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * pq.points
+        WHEN q.question_type <> 'essay' AND sa.is_correct IS TRUE THEN pq.points
+        ELSE 0
+      END
+    ), 0)::numeric AS earned_points,
+    COALESCE(SUM(pq.points), 0)::numeric AS total_points
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+  WHERE ep.session_id = $1 AND ep.id = $2
+  GROUP BY ep.id
+)
+UPDATE cbt_exam_participants ep
+SET score = CASE
+      WHEN score_parts.total_points > 0 THEN ROUND((score_parts.earned_points / score_parts.total_points) * 100, 2)
+      ELSE 0
+    END,
+    submitted_at = COALESCE(ep.submitted_at, NOW())
+FROM score_parts
+WHERE ep.id = score_parts.participant_id
+RETURNING ep.id, ep.submitted_at, ep.score
+`
+
+type ForceSubmitParticipantParams struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	ID        pgtype.UUID `json:"id"`
+}
+
+type ForceSubmitParticipantRow struct {
+	ID          pgtype.UUID        `json:"id"`
+	SubmittedAt pgtype.Timestamptz `json:"submitted_at"`
+	Score       pgtype.Numeric     `json:"score"`
+}
+
+func (q *Queries) ForceSubmitParticipant(ctx context.Context, arg ForceSubmitParticipantParams) (ForceSubmitParticipantRow, error) {
+	row := q.db.QueryRow(ctx, forceSubmitParticipant, arg.SessionID, arg.ID)
+	var i ForceSubmitParticipantRow
+	err := row.Scan(&i.ID, &i.SubmittedAt, &i.Score)
+	return i, err
+}
+
 const generateTokensForSession = `-- name: GenerateTokensForSession :exec
 UPDATE cbt_exam_participants
 SET token = encode(gen_random_bytes(4), 'hex')
@@ -1077,6 +1126,75 @@ func (q *Queries) ListParticipantsByRoom(ctx context.Context, sessionID pgtype.U
 	return items, nil
 }
 
+const listSessionParticipantEvents = `-- name: ListSessionParticipantEvents :many
+SELECT
+  ev.id,
+  ev.participant_id,
+  ep.student_id,
+  s.nis,
+  s.nama,
+  COALESCE(r.room_name, '') AS room_name,
+  ev.event_type,
+  ev.event_data,
+  ev.created_at
+FROM cbt_participant_events ev
+JOIN cbt_exam_participants ep ON ep.id = ev.participant_id
+JOIN students s ON s.id = ep.student_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.session_id = $1
+  AND ($2::uuid IS NULL OR ev.participant_id = $2::uuid)
+ORDER BY ev.created_at DESC
+LIMIT $3
+`
+
+type ListSessionParticipantEventsParams struct {
+	SessionID     pgtype.UUID `json:"session_id"`
+	ParticipantID pgtype.UUID `json:"participant_id"`
+	LimitCount    int32       `json:"limit_count"`
+}
+
+type ListSessionParticipantEventsRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	ParticipantID pgtype.UUID        `json:"participant_id"`
+	StudentID     pgtype.UUID        `json:"student_id"`
+	Nis           string             `json:"nis"`
+	Nama          string             `json:"nama"`
+	RoomName      string             `json:"room_name"`
+	EventType     string             `json:"event_type"`
+	EventData     []byte             `json:"event_data"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListSessionParticipantEvents(ctx context.Context, arg ListSessionParticipantEventsParams) ([]ListSessionParticipantEventsRow, error) {
+	rows, err := q.db.Query(ctx, listSessionParticipantEvents, arg.SessionID, arg.ParticipantID, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSessionParticipantEventsRow{}
+	for rows.Next() {
+		var i ListSessionParticipantEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParticipantID,
+			&i.StudentID,
+			&i.Nis,
+			&i.Nama,
+			&i.RoomName,
+			&i.EventType,
+			&i.EventData,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStudentExamSessions = `-- name: ListStudentExamSessions :many
 SELECT
   ep.id AS participant_id,
@@ -1175,6 +1293,20 @@ func (q *Queries) RegenerateParticipantToken(ctx context.Context, id pgtype.UUID
 	return i, err
 }
 
+const resetParticipantRuntimeAccess = `-- name: ResetParticipantRuntimeAccess :exec
+UPDATE cbt_exam_participants
+SET device_fingerprint = NULL,
+    login_ip = NULL,
+    last_heartbeat = NULL,
+    question_order = NULL
+WHERE id = $1
+`
+
+func (q *Queries) ResetParticipantRuntimeAccess(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, resetParticipantRuntimeAccess, id)
+	return err
+}
+
 const setParticipantSuspiciousFlag = `-- name: SetParticipantSuspiciousFlag :exec
 UPDATE cbt_exam_participants
 SET suspicious_flag = $2
@@ -1270,6 +1402,27 @@ func (q *Queries) UpdateCbtExamSessionStatus(ctx context.Context, arg UpdateCbtE
 		&i.IsSpecialEvent,
 	)
 	return i, err
+}
+
+const updateParticipantAnswerCorrectness = `-- name: UpdateParticipantAnswerCorrectness :exec
+UPDATE cbt_student_answers sa
+SET is_correct = CASE
+  WHEN q.question_type = 'essay' THEN NULL
+  WHEN q.question_type = 'multiple_answer' THEN
+    (array_to_string(ARRAY(SELECT unnest(string_to_array(sa.answer, ',')) ORDER BY 1), ',') =
+     array_to_string(ARRAY(SELECT unnest(string_to_array(q.answer_key, ',')) ORDER BY 1), ','))
+  ELSE (sa.answer = q.answer_key)
+END
+FROM cbt_questions q
+WHERE sa.question_id = q.id
+  AND q.question_type <> 'essay'
+  AND sa.manual_score IS NULL
+  AND sa.participant_id = $1
+`
+
+func (q *Queries) UpdateParticipantAnswerCorrectness(ctx context.Context, participantID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, updateParticipantAnswerCorrectness, participantID)
+	return err
 }
 
 const updateParticipantHeartbeat = `-- name: UpdateParticipantHeartbeat :exec

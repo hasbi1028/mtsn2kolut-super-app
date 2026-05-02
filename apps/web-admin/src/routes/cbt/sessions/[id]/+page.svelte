@@ -14,7 +14,7 @@
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
-	import { readClientApiData, readClientJson } from '$lib/client/api';
+	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 
 	type SessionInfo = {
 		id: string; title: string; package_title: string; duration_minutes: number;
@@ -44,6 +44,17 @@
 		app_switch_count: number; screenshot_attempt: number;
 		suspicious_flag: boolean; answered_count: number; score: string | null;
 	};
+	type ProctoringEvent = {
+		id: string;
+		participant_id: string;
+		student_id: string;
+		nis: string;
+		nama: string;
+		room_name: string;
+		event_type: string;
+		event_data: unknown;
+		created_at: string;
+	};
 	type UngradedEssay = {
 		id: string; nis: string; nama: string;
 		question_text: string; answer: string;
@@ -59,7 +70,7 @@
 		message?: string;
 	};
 
-	const sessionId = page.params.id;
+	const sessionId = page.params.id ?? '';
 	type ActiveTab = 'hasil' | 'peserta' | 'ruangan' | 'proctoring' | 'essay';
 
 	let activeTab = $state<ActiveTab>('hasil');
@@ -68,6 +79,7 @@
 	let participants = $state<Participant[]>([]);
 	let rooms = $state<Room[]>([]);
 	let proctoring = $state<ProctoringRow[]>([]);
+	let proctoringEvents = $state<ProctoringEvent[]>([]);
 	let essays = $state<UngradedEssay[]>([]);
 	let detailPromise = $state<Promise<SessionResultsDetail> | null>(null);
 	let scoreBusy = $state(false);
@@ -79,11 +91,15 @@
 	let tokenBusy = $state(false);
 	let participantRefreshBusy = $state(false);
 	let proctoringRefreshBusy = $state(false);
+	let eventRefreshBusy = $state(false);
 	let regenBusyId = $state('');
 	let roomDeleteBusyId = $state('');
 	let seatSaveBusyId = $state('');
 	let gradeBusyId = $state('');
 	let flagBusyId = $state('');
+	let resetAccessBusyId = $state('');
+	let forceSubmitBusyId = $state('');
+	let eventPanelParticipantId = $state('');
 	let procInterval: ReturnType<typeof setInterval> | null = null;
 	let gradeInput = $state<Record<string, number>>({});
 	let seatInput = $state<Record<string, number>>({});
@@ -93,6 +109,7 @@
 	let participantsRequestId = 0;
 	let roomsRequestId = 0;
 	let proctoringRequestId = 0;
+	let proctoringEventsRequestId = 0;
 	let essaysRequestId = 0;
 
 	const statusLabel: Record<string, string> = {
@@ -137,12 +154,20 @@
 		return 'text-red-600 font-semibold';
 	}
 
-	function heartbeatStatus(hb: string | null): { label: string; cls: string } {
-		if (!hb) return { label: 'Belum login', cls: 'text-slate-400' };
+	function heartbeatBucket(hb: string | null): 'none' | 'online' | 'slow' | 'offline' {
+		if (!hb) return 'none';
 		const diff = (Date.now() - new Date(hb).getTime()) / 1000;
-		if (diff < 60) return { label: '🟢 Online', cls: 'text-emerald-600' };
-		if (diff < 180) return { label: '🟡 Lambat', cls: 'text-amber-600' };
-		return { label: '🔴 Offline', cls: 'text-red-600' };
+		if (diff < 60) return 'online';
+		if (diff < 180) return 'slow';
+		return 'offline';
+	}
+
+	function heartbeatStatus(hb: string | null): { label: string; cls: string } {
+		const bucket = heartbeatBucket(hb);
+		if (bucket === 'online') return { label: 'Online', cls: 'text-emerald-600' };
+		if (bucket === 'slow') return { label: 'Lambat', cls: 'text-amber-600' };
+		if (bucket === 'offline') return { label: 'Offline', cls: 'text-red-600' };
+		return { label: 'Belum login', cls: 'text-slate-400' };
 	}
 
 	let stats = $derived({
@@ -152,6 +177,27 @@
 			? results.reduce((sum, r) => sum + (r.score ? parseFloat(r.score) : 0), 0) / results.length
 			: 0,
 		passing: results.filter(r => r.score && parseFloat(r.score) >= 75).length,
+	});
+
+	let proctoringStats = $derived.by(() => {
+		let online = 0;
+		let slow = 0;
+		let offline = 0;
+		let submitted = 0;
+		let suspicious = 0;
+		let appSwitches = 0;
+		let screenshots = 0;
+		for (const row of proctoring) {
+			const bucket = heartbeatBucket(row.last_heartbeat);
+			if (row.submitted_at) submitted += 1;
+			else if (bucket === 'online') online += 1;
+			else if (bucket === 'slow') slow += 1;
+			else if (bucket === 'offline') offline += 1;
+			if (row.suspicious_flag) suspicious += 1;
+			appSwitches += row.app_switch_count;
+			screenshots += row.screenshot_attempt;
+		}
+		return { online, slow, offline, submitted, suspicious, appSwitches, screenshots };
 	});
 
 	function showToast(msg: string, ok = true) {
@@ -250,6 +296,30 @@
 		return fallback;
 	}
 
+	function proctoringEventLabel(type: string): string {
+		const map: Record<string, string> = {
+			login: 'Login',
+			heartbeat: 'Heartbeat',
+			answer: 'Jawaban',
+			submit: 'Submit',
+			app_switch: 'Pindah Aplikasi',
+			screenshot_attempt: 'Screenshot',
+			copy_attempt: 'Salin Teks',
+			paste_attempt: 'Tempel Teks',
+			cut_attempt: 'Potong Teks',
+			proctor_reset_access: 'Reset Akses',
+			proctor_force_submit: 'Paksa Submit',
+		};
+		return map[type] ?? type.replaceAll('_', ' ');
+	}
+
+	function eventDataText(data: unknown): string {
+		if (data === null || data === undefined || data === '') return '—';
+		const text = typeof data === 'string' ? data : JSON.stringify(data);
+		if (!text) return '—';
+		return text.length > 140 ? `${text.slice(0, 140)}...` : text;
+	}
+
 	async function loadParticipants() {
 		const requestId = ++participantsRequestId;
 		try {
@@ -288,6 +358,32 @@
 		}
 	}
 
+	async function loadProctoringEvents(participantId = eventPanelParticipantId) {
+		const requestId = ++proctoringEventsRequestId;
+		const params = new URLSearchParams({ limit: '100' });
+		if (participantId) params.set('participant_id', participantId);
+		try {
+			const res = await fetch(clientApiPathWithQuery(clientApiPath`/api/cbt/sessions/${sessionId}/proctoring/events`, params));
+			const rows = await readClientApiData<ProctoringEvent[]>(res, 'Gagal memuat log proctoring');
+			if (requestId !== proctoringEventsRequestId) return;
+			proctoringEvents = Array.isArray(rows) ? rows : [];
+		} catch (error) {
+			if (requestId === proctoringEventsRequestId) throw error;
+		}
+	}
+
+	async function showParticipantEvents(pid: string) {
+		eventPanelParticipantId = eventPanelParticipantId === pid ? '' : pid;
+		eventRefreshBusy = true;
+		try {
+			await loadProctoringEvents();
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			eventRefreshBusy = false;
+		}
+	}
+
 	async function refreshParticipants() {
 		participantRefreshBusy = true;
 		try {
@@ -302,11 +398,22 @@
 	async function refreshProctoring() {
 		proctoringRefreshBusy = true;
 		try {
-			await loadProctoring();
+			await Promise.all([loadProctoring(), loadProctoringEvents()]);
 		} catch (error) {
 			toast.error(detailErrorMessage(error));
 		} finally {
 			proctoringRefreshBusy = false;
+		}
+	}
+
+	async function refreshProctoringEvents() {
+		eventRefreshBusy = true;
+		try {
+			await loadProctoringEvents();
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			eventRefreshBusy = false;
 		}
 	}
 
@@ -329,7 +436,7 @@
 			if (tab === 'ruangan') { await loadRooms(); await loadParticipants(); }
 			if (tab === 'essay') await loadEssays();
 			if (tab === 'proctoring') {
-				await loadProctoring();
+				await Promise.all([loadProctoring(), loadProctoringEvents()]);
 				if (!procInterval) {
 					procInterval = setInterval(() => {
 						void loadProctoring().catch((error) => toast.error(detailErrorMessage(error)));
@@ -521,6 +628,42 @@
 			showToast(mutationErrorMessage(error, 'Gagal memperbarui tanda peserta'), false);
 		} finally {
 			flagBusyId = '';
+		}
+	}
+
+	async function resetParticipantAccess(pid: string, nama: string) {
+		if (!(await confirmPhrase('Reset Akses Ujian', `Akses perangkat untuk ${nama} akan dilepas sehingga peserta dapat login ulang. Gunakan hanya setelah diverifikasi oleh pengawas.`, 'RESET AKSES'))) return;
+		resetAccessBusyId = pid;
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/sessions/${sessionId}/participants/${pid}/reset-access`, { method: 'POST' });
+			await readClientJson<unknown>(res);
+			setOperationState('warning', 'Akses Peserta Direset', `${nama} dapat login ulang setelah pengawas memastikan perangkat yang dipakai benar.`);
+			toast.success('Akses peserta direset');
+			eventPanelParticipantId = pid;
+			await Promise.all([loadProctoring(), loadProctoringEvents(pid)]);
+		} catch (error) {
+			setOperationState('error', 'Reset Akses Gagal', 'Akses peserta belum berhasil direset. Ulangi setelah memeriksa status sesi.');
+			toast.error(mutationErrorMessage(error, 'Gagal reset akses peserta'));
+		} finally {
+			resetAccessBusyId = '';
+		}
+	}
+
+	async function forceSubmitParticipant(pid: string, nama: string) {
+		if (!(await confirmPhrase('Paksa Submit Peserta', `Jawaban ${nama} akan dikunci dan skor objektif dihitung dari jawaban yang sudah tersimpan. Tindakan ini untuk kondisi darurat operasional.`, 'PAKSA SUBMIT'))) return;
+		forceSubmitBusyId = pid;
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/sessions/${sessionId}/participants/${pid}/force-submit`, { method: 'POST' });
+			await readClientJson<unknown>(res);
+			setOperationState('warning', 'Peserta Dipaksa Submit', `${nama} sudah ditandai submit oleh proktor. Periksa hasil akhir sebelum menutup sesi.`);
+			toast.success('Peserta disubmit oleh proktor');
+			eventPanelParticipantId = pid;
+			await Promise.all([loadProctoring(), loadProctoringEvents(pid), refreshSessionDetail()]);
+		} catch (error) {
+			setOperationState('error', 'Paksa Submit Gagal', 'Sistem belum berhasil mengunci submit peserta. Periksa status waktu ujian dan ulangi bila perlu.');
+			toast.error(mutationErrorMessage(error, 'Gagal paksa submit peserta'));
+		} finally {
+			forceSubmitBusyId = '';
 		}
 	}
 
@@ -944,9 +1087,28 @@
 
 		<!-- Tab: Proctoring -->
 		{:else if activeTab === 'proctoring'}
-			<div class="flex items-center justify-between mb-4">
-				<p class="text-sm text-muted-foreground">Pembaruan otomatis setiap 15 detik</p>
+			{@const selectedEventParticipant = proctoring.find((row) => row.participant_id === eventPanelParticipantId)}
+			<div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+				<div>
+					<p class="text-sm font-medium text-slate-700">Monitoring proctoring live</p>
+					<p class="text-xs text-muted-foreground">Pembaruan otomatis setiap 15 detik</p>
+				</div>
 				<LoadingButton variant="outline" size="sm" onclick={() => void refreshProctoring()} loading={proctoringRefreshBusy} loadingLabel="Memuat..." disabled={proctoringRefreshBusy}>↻ Refresh Sekarang</LoadingButton>
+			</div>
+			<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+				{#each [
+					{ label: 'Online Aktif', value: proctoringStats.online.toString(), className: 'text-emerald-700' },
+					{ label: 'Lambat / Offline', value: `${proctoringStats.slow + proctoringStats.offline}`, className: 'text-amber-700' },
+					{ label: 'Perlu Atensi', value: proctoringStats.suspicious.toString(), className: 'text-red-700' },
+					{ label: 'App Switch / Screenshot', value: `${proctoringStats.appSwitches} / ${proctoringStats.screenshots}`, className: 'text-slate-700' },
+				] as item (item.label)}
+					<Card.Root class="border-green-100">
+						<Card.Content class="px-4 pb-3 pt-4">
+							<p class="mb-1 text-xs text-slate-500">{item.label}</p>
+							<p class={`text-2xl font-bold ${item.className}`}>{item.value}</p>
+						</Card.Content>
+					</Card.Root>
+				{/each}
 			</div>
 			<Card.Root>
 				<Card.Content class="p-0 overflow-x-auto">
@@ -960,7 +1122,7 @@
 								<Table.Head class="text-center">App Switch</Table.Head>
 								<Table.Head class="text-center">Screenshot</Table.Head>
 								<Table.Head>Submit</Table.Head>
-								<Table.Head class="text-right">Flag</Table.Head>
+								<Table.Head class="text-right">Aksi Proktor</Table.Head>
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
@@ -990,6 +1152,31 @@
 										{p.submitted_at ? fmtDt(p.submitted_at) : '—'}
 									</Table.Cell>
 									<Table.Cell class="text-right">
+										<div class="flex flex-wrap items-center justify-end gap-1">
+											<Button
+												variant="outline" size="sm"
+												class={eventPanelParticipantId === p.participant_id ? 'border-green-500 text-green-800 bg-green-50' : 'border-slate-200 text-slate-600'}
+												onclick={() => showParticipantEvents(p.participant_id)}
+												disabled={eventRefreshBusy}>
+												Log
+											</Button>
+											<LoadingButton
+												variant="outline" size="sm"
+												onclick={() => resetParticipantAccess(p.participant_id, p.nama)}
+												loading={resetAccessBusyId === p.participant_id}
+												disabled={resetAccessBusyId !== '' && resetAccessBusyId !== p.participant_id}
+												loadingLabel="Reset...">
+												Reset Akses
+											</LoadingButton>
+											<LoadingButton
+												variant="outline" size="sm"
+												class="border-amber-300 text-amber-700 hover:bg-amber-50"
+												onclick={() => forceSubmitParticipant(p.participant_id, p.nama)}
+												loading={forceSubmitBusyId === p.participant_id}
+												disabled={!!p.submitted_at || (forceSubmitBusyId !== '' && forceSubmitBusyId !== p.participant_id)}
+												loadingLabel="Submit...">
+												Paksa Submit
+											</LoadingButton>
 											<Button
 												variant="outline" size="sm"
 												class={p.suspicious_flag ? 'border-red-400 text-red-700 bg-red-50' : 'border-slate-200 text-slate-500'}
@@ -997,11 +1184,78 @@
 												disabled={flagBusyId === p.participant_id}>
 											{p.suspicious_flag ? '⚑ Hapus Tanda' : '⚐ Tandai'}
 										</Button>
+										</div>
 									</Table.Cell>
 								</Table.Row>
 							{:else}
 								<Table.Row>
 									<Table.Cell colspan={8} class="text-center text-slate-400 py-8">Belum ada data proctoring</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				</Card.Content>
+			</Card.Root>
+			<Card.Root class="border-green-100">
+				<Card.Header class="pb-3">
+					<div class="flex items-start justify-between gap-3 flex-wrap">
+						<div>
+							<Card.Title class="text-base">
+								Log Aktivitas {selectedEventParticipant ? selectedEventParticipant.nama : 'Semua Peserta'}
+							</Card.Title>
+							<p class="text-xs text-muted-foreground mt-1">
+								{selectedEventParticipant
+									? `${selectedEventParticipant.nis} · ${selectedEventParticipant.room_name || 'Tanpa ruangan'}`
+									: '100 aktivitas terbaru dari sesi ini'}
+							</p>
+						</div>
+						<div class="flex gap-2">
+							{#if eventPanelParticipantId}
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={() => {
+										eventPanelParticipantId = '';
+										void refreshProctoringEvents();
+									}}
+								>
+									Semua Log
+								</Button>
+							{/if}
+							<LoadingButton variant="outline" size="sm" onclick={() => void refreshProctoringEvents()} loading={eventRefreshBusy} loadingLabel="Memuat..." disabled={eventRefreshBusy}>
+								↻ Refresh Log
+							</LoadingButton>
+						</div>
+					</div>
+				</Card.Header>
+				<Card.Content class="p-0 overflow-x-auto">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row class="bg-slate-50">
+								<Table.Head>Waktu</Table.Head>
+								<Table.Head>Peserta</Table.Head>
+								<Table.Head>Aktivitas</Table.Head>
+								<Table.Head>Ruangan</Table.Head>
+								<Table.Head>Data</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each proctoringEvents as ev (ev.id)}
+								<Table.Row>
+									<Table.Cell class="whitespace-nowrap text-xs text-muted-foreground">{fmtDt(ev.created_at)}</Table.Cell>
+									<Table.Cell>
+										<div class="font-medium text-sm">{ev.nama}</div>
+										<div class="font-mono text-xs text-muted-foreground">{ev.nis}</div>
+									</Table.Cell>
+									<Table.Cell>
+										<Badge variant="outline" class="text-xs">{proctoringEventLabel(ev.event_type)}</Badge>
+									</Table.Cell>
+									<Table.Cell class="text-sm text-muted-foreground">{ev.room_name || '—'}</Table.Cell>
+									<Table.Cell class="max-w-md break-words font-mono text-xs text-slate-500">{eventDataText(ev.event_data)}</Table.Cell>
+								</Table.Row>
+							{:else}
+								<Table.Row>
+									<Table.Cell colspan={5} class="py-8 text-center text-sm text-slate-400">Belum ada log aktivitas</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>

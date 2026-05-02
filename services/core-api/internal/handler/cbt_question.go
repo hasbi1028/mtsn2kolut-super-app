@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -36,6 +37,10 @@ type cbtQuestionService interface {
 	Publish(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
 	Archive(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
 	DuplicateAsDraft(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
+}
+
+type cbtQuestionImportService interface {
+	ImportLegacyCSV(ctx context.Context, input service.ImportLegacyQuestionsInput) (service.ImportLegacyQuestionsResult, error)
 }
 
 func NewCbtQuestion(svc *service.CbtQuestion, audit ...cbtAuthoringAuditWriter) *CbtQuestion {
@@ -183,6 +188,53 @@ func (h *CbtQuestion) Create(w http.ResponseWriter, r *http.Request) {
 		"author_username": row.AuthorUsername,
 	})
 	api.Created(w, serializeQuestionModel(row))
+}
+
+func (h *CbtQuestion) ImportLegacyCSV(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		api.BadRequest(w, "multipart import tidak valid")
+		return
+	}
+	subjectID, err := parseUUID(r.FormValue("subject_id"))
+	if err != nil {
+		api.BadRequest(w, "subject_id invalid")
+		return
+	}
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		api.BadRequest(w, "file CSV wajib diisi")
+		return
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(io.LimitReader(file, 5<<20))
+	if err != nil {
+		api.BadRequest(w, "file CSV tidak dapat dibaca")
+		return
+	}
+	importSvc, ok := h.svc.(cbtQuestionImportService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt question import service unavailable"))
+		return
+	}
+	result, err := importSvc.ImportLegacyCSV(r.Context(), service.ImportLegacyQuestionsInput{
+		SubjectID: subjectID,
+		CSVText:   string(raw),
+		Username:  currentUsername(r),
+	})
+	if err != nil {
+		writeClientError(w, err, "Import bank soal legacy tidak valid")
+		return
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_IMPORT_LEGACY", "cbt_question", "", map[string]any{
+		"subject_id": pgUUIDString(subjectID),
+		"imported":   result.Imported,
+		"skipped":    result.Skipped,
+	})
+	api.OK(w, result)
 }
 
 func (h *CbtQuestion) Update(w http.ResponseWriter, r *http.Request) {

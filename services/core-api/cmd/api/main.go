@@ -245,6 +245,7 @@ func main() {
 
 		r.With(requireCbt).Get("/api/cbt/questions", questionH.List)
 		r.With(requireCbt).Post("/api/cbt/questions", questionH.Create)
+		r.With(requireCbt).Post("/api/cbt/questions/import-legacy", questionH.ImportLegacyCSV)
 		r.With(requireCbt).Get("/api/cbt/questions/{id}", questionH.Get)
 		r.With(requireCbt).Put("/api/cbt/questions/{id}", questionH.Update)
 		r.With(requireCbt).Post("/api/cbt/questions/{id}/duplicate", questionH.Duplicate)
@@ -281,6 +282,7 @@ func main() {
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/enroll-school", sessionH.EnrollSchool)
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/generate-tokens", sessionH.GenerateTokens)
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/participants/{pid}/regenerate-token", sessionH.RegenerateToken)
+		r.With(requireCbt).Post("/api/cbt/sessions/{id}/participants/{pid}/reset-access", sessionH.ResetParticipantAccess)
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/participants/{pid}/seat", sessionH.AssignSeat)
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/seats/auto", sessionH.AutoAssignSeats)
 
@@ -299,7 +301,9 @@ func main() {
 
 		// Proctoring
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/proctoring", sessionH.GetProctoringStatus)
+		r.With(requireCbt).Get("/api/cbt/sessions/{id}/proctoring/events", sessionH.ListParticipantEvents)
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/participants/{pid}/flag", sessionH.FlagParticipant)
+		r.With(requireCbt).Post("/api/cbt/sessions/{id}/participants/{pid}/force-submit", sessionH.ForceSubmitParticipant)
 
 		// Essay Grading
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/ungraded-essays", sessionH.ListUngradedEssays)

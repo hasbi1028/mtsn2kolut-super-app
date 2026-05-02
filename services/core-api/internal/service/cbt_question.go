@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -220,6 +221,210 @@ func (s *CbtQuestion) DuplicateAsDraft(ctx context.Context, id pgtype.UUID, user
 		input.Code = input.Code + "-COPY"
 	}
 	return s.Create(ctx, input)
+}
+
+type ImportLegacyQuestionsInput struct {
+	SubjectID pgtype.UUID
+	CSVText   string
+	Username  string
+}
+
+type ImportLegacyQuestionsResult struct {
+	TotalRows      int      `json:"total_rows"`
+	Imported       int      `json:"imported"`
+	Skipped        int      `json:"skipped"`
+	Errors         []string `json:"errors"`
+	DuplicateCodes []string `json:"duplicate_codes"`
+}
+
+func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQuestionsInput) (ImportLegacyQuestionsResult, error) {
+	reader := csv.NewReader(strings.NewReader(input.CSVText))
+	reader.TrimLeadingSpace = true
+	reader.FieldsPerRecord = -1
+	if strings.Count(firstLine(input.CSVText), ";") > strings.Count(firstLine(input.CSVText), ",") {
+		reader.Comma = ';'
+	}
+	records, err := reader.ReadAll()
+	if err != nil {
+		return ImportLegacyQuestionsResult{}, fmt.Errorf("CSV tidak valid: %w", err)
+	}
+	if len(records) < 2 {
+		return ImportLegacyQuestionsResult{}, fmt.Errorf("CSV minimal berisi header dan satu baris soal")
+	}
+	headers := normalizeCSVHeaders(records[0])
+	result := ImportLegacyQuestionsResult{TotalRows: len(records) - 1, Errors: []string{}, DuplicateCodes: []string{}}
+	seen := map[string]bool{}
+	seenCodes := map[string]bool{}
+	skip := func(message string) {
+		result.Skipped++
+		result.Errors = append(result.Errors, message)
+	}
+	for idx, record := range records[1:] {
+		rowNumber := idx + 2
+		row := csvRow(headers, record)
+		stem := strings.TrimSpace(firstCSVValue(row, "soal", "question", "stem", "pertanyaan"))
+		if stem == "" {
+			skip(fmt.Sprintf("Baris %d: soal kosong", rowNumber))
+			continue
+		}
+		signature := strings.ToLower(strings.Join(strings.Fields(derivePlainText(stem)), " "))
+		if seen[signature] {
+			skip(fmt.Sprintf("Baris %d: duplikat dalam file import", rowNumber))
+			continue
+		}
+		seen[signature] = true
+		code := strings.TrimSpace(firstCSVValue(row, "kode", "code"))
+		if code != "" {
+			codeKey := strings.ToUpper(code)
+			if seenCodes[codeKey] {
+				result.DuplicateCodes = append(result.DuplicateCodes, code)
+				skip(fmt.Sprintf("Baris %d: kode %s duplikat dalam file import", rowNumber, code))
+				continue
+			}
+			seenCodes[codeKey] = true
+		}
+
+		answerKey, ok := normalizeLegacyAnswer(firstCSVValue(row, "jawaban", "answer", "answer_key", "kunci"))
+		if !ok {
+			skip(fmt.Sprintf("Baris %d: kunci jawaban tidak valid", rowNumber))
+			continue
+		}
+
+		options := []QuestionOption{
+			legacyImportOption("A", firstCSVValue(row, "opsia", "opsi_a", "optiona", "option_a"), firstCSVValue(row, "gambara", "gambar_a", "imagea", "image_a")),
+			legacyImportOption("B", firstCSVValue(row, "opsib", "opsi_b", "optionb", "option_b"), firstCSVValue(row, "gambarb", "gambar_b", "imageb", "image_b")),
+			legacyImportOption("C", firstCSVValue(row, "opsic", "opsi_c", "optionc", "option_c"), firstCSVValue(row, "gambarc", "gambar_c", "imagec", "image_c")),
+			legacyImportOption("D", firstCSVValue(row, "opsid", "opsi_d", "optiond", "option_d"), firstCSVValue(row, "gambard", "gambar_d", "imaged", "image_d")),
+		}
+
+		stemHTML := appendLegacyImage(stem, firstCSVValue(row, "gambar", "gambarsoal", "gambar_soal", "image", "question_image"))
+		writerNotes := legacyImportNotes(row)
+		_, err := s.Create(ctx, SaveCbtQuestionInput{
+			SubjectID:        input.SubjectID,
+			AuthoringMode:    "advance",
+			Code:             code,
+			QuestionText:     derivePlainText(stemHTML),
+			QuestionType:     "multiple_choice",
+			Options:          options,
+			AnswerKey:        answerKey,
+			Difficulty:       db.CbtQuestionDifficultyEnumMedium,
+			Status:           db.CbtQuestionStatusEnumDraft,
+			StemHTML:         stemHTML,
+			WorkflowStatus:   "draft",
+			AuthorUsername:   strings.TrimSpace(input.Username),
+			ReviewerUsername: "",
+			ApproverUsername: "",
+			WriterNotes:      writerNotes,
+		})
+		if err != nil {
+			skip(fmt.Sprintf("Baris %d: %s", rowNumber, err.Error()))
+			continue
+		}
+		result.Imported++
+	}
+	return result, nil
+}
+
+func firstLine(value string) string {
+	if idx := strings.IndexAny(value, "\r\n"); idx >= 0 {
+		return value[:idx]
+	}
+	return value
+}
+
+func normalizeCSVHeaders(headers []string) map[string]int {
+	out := make(map[string]int, len(headers))
+	for idx, header := range headers {
+		key := normalizeCSVKey(header)
+		if key != "" {
+			out[key] = idx
+		}
+	}
+	return out
+}
+
+func normalizeCSVKey(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	replacer := strings.NewReplacer(" ", "", "-", "", ".", "", "/", "")
+	return replacer.Replace(value)
+}
+
+func csvRow(headers map[string]int, record []string) map[string]string {
+	row := map[string]string{}
+	for key, idx := range headers {
+		if idx >= 0 && idx < len(record) {
+			row[key] = strings.TrimSpace(record[idx])
+		}
+	}
+	return row
+}
+
+func firstCSVValue(row map[string]string, keys ...string) string {
+	for _, key := range keys {
+		if value := strings.TrimSpace(row[normalizeCSVKey(key)]); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func normalizeLegacyAnswer(value string) (string, bool) {
+	value = strings.ToUpper(strings.TrimSpace(value))
+	switch value {
+	case "A", "B", "C", "D", "E":
+		return value, true
+	case "0":
+		return "A", true
+	case "1":
+		return "B", true
+	case "2":
+		return "C", true
+	case "3":
+		return "D", true
+	case "4":
+		return "E", true
+	default:
+		return "", false
+	}
+}
+
+func legacyImportOption(label, text, imageURL string) QuestionOption {
+	text = strings.TrimSpace(text)
+	htmlText := appendLegacyImage(text, imageURL)
+	if imageURL != "" {
+		return QuestionOption{Label: label, HTML: htmlText}
+	}
+	return QuestionOption{Label: label, Text: text}
+}
+
+func appendLegacyImage(content, imageURL string) string {
+	content = strings.TrimSpace(content)
+	imageURL = strings.TrimSpace(imageURL)
+	if content == "" && imageURL == "" {
+		return ""
+	}
+	if strings.Contains(strings.ToLower(content), "<img") || imageURL == "" {
+		return content
+	}
+	safeSrc := html.EscapeString(imageURL)
+	if content == "" {
+		return fmt.Sprintf(`<p><img src="%s" alt="Media soal" /></p>`, safeSrc)
+	}
+	return fmt.Sprintf(`%s<p><img src="%s" alt="Media soal" /></p>`, content, safeSrc)
+}
+
+func legacyImportNotes(row map[string]string) string {
+	notes := []string{"Import CSV legacy CBT lama."}
+	if value := firstCSVValue(row, "bobot", "weight", "points"); value != "" {
+		notes = append(notes, "Bobot legacy: "+value)
+	}
+	if value := firstCSVValue(row, "isrtl", "is_rtl", "rtl"); value == "true" || value == "1" {
+		notes = append(notes, "RTL legacy: ya")
+	}
+	if value := firstCSVValue(row, "isshuffle", "is_shuffle", "shuffle"); value == "true" || value == "1" {
+		notes = append(notes, "Shuffle opsi legacy: ya")
+	}
+	return strings.Join(notes, "\n")
 }
 
 func buildCreateQuestionParams(input SaveCbtQuestionInput) (db.CreateCbtQuestionParams, error) {
