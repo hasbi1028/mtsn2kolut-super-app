@@ -73,6 +73,12 @@
 		helper: string;
 		tone: ScheduleBoardTone;
 	};
+	type ScheduleQuickAction = {
+		label: string;
+		status?: 'cancelled' | 'finished';
+		href?: string;
+		tone: NextSessionAction['tone'];
+	};
 	type SchoolClass = { id: string; name: string; code: string; level: string; };
 	type SessionsOverview = {
 		sessions: ExamSession[];
@@ -399,6 +405,13 @@
 		if (state === 'today' || state === 'running_window') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
 		if (state === 'upcoming') return 'border-sky-200 bg-sky-50 text-sky-700';
 		return 'border-slate-200 bg-slate-50 text-slate-600';
+	}
+
+	function scheduleQuickAction(session: ExamSession, state: SessionScheduleState): ScheduleQuickAction | null {
+		if (state !== 'overdue') return null;
+		if (session.status === 'active') return { label: 'Selesaikan', status: 'finished', tone: 'primary' };
+		if (session.status === 'scheduled' || session.status === 'draft') return { label: 'Batalkan', status: 'cancelled', tone: 'danger' };
+		return { label: 'Buka Detail', href: resolve(`/cbt/sessions/${session.id}`), tone: 'warning' };
 	}
 
 	function buildScheduleBoardCards(items: ExamSession[]) {
@@ -1121,6 +1134,7 @@
 							{@const rowReadinessIssues = sessionRowReadinessIssues(s)}
 							{@const rowNextAction = nextSessionAction(s)}
 							{@const rowScheduleState = sessionScheduleState(s)}
+							{@const rowScheduleQuickAction = scheduleQuickAction(s, rowScheduleState)}
 							<Table.Row>
 								<Table.Cell class="font-medium max-w-48">
 									<p class="truncate">{s.title}</p>
@@ -1148,6 +1162,19 @@
 									<div class="space-y-1">
 										<p class="text-xs text-slate-500">{fmtDt(s.scheduled_start)}</p>
 										<Badge class="{scheduleStateClass(rowScheduleState)} text-[11px]">{scheduleStateLabel(rowScheduleState)}</Badge>
+										{#if rowScheduleQuickAction?.status === 'cancelled'}
+											<LoadingButton size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">
+												{rowScheduleQuickAction.label}
+											</LoadingButton>
+										{:else if rowScheduleQuickAction?.status === 'finished'}
+											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">
+												{rowScheduleQuickAction.label}
+											</LoadingButton>
+										{:else if rowScheduleQuickAction?.href}
+											<a class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors {nextActionClass(rowScheduleQuickAction.tone)}" href={rowScheduleQuickAction.href}>
+												{rowScheduleQuickAction.label}
+											</a>
+										{/if}
 									</div>
 								</Table.Cell>
 								<Table.Cell>
@@ -1206,14 +1233,14 @@
 											>
 												Daftarkan Siswa
 											</Button>
-											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0} loadingLabel="Memproses...">
+											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">
 												Jadwalkan
 											</LoadingButton>
 											<LoadingButton size="xs" variant="destructive" onclick={() => deleteSession(s.id, s.title)} loading={deleteBusyId === s.id} disabled={deleteBusyId !== '' && deleteBusyId !== s.id} loadingLabel="Menghapus...">
 												Hapus
 											</LoadingButton>
 										{:else if s.status === 'scheduled'}
-											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0} loadingLabel="Memproses...">Mulai</LoadingButton>
+											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Mulai</LoadingButton>
 											<LoadingButton size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Batalkan</LoadingButton>
 										{:else if s.status === 'active'}
 											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
@@ -1245,6 +1272,7 @@
 						{@const rowReadinessIssues = sessionRowReadinessIssues(s)}
 						{@const rowNextAction = nextSessionAction(s)}
 						{@const rowScheduleState = sessionScheduleState(s)}
+						{@const rowScheduleQuickAction = scheduleQuickAction(s, rowScheduleState)}
 						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
@@ -1302,6 +1330,19 @@
 							<div class="mt-3 flex flex-wrap items-center gap-2">
 								<p class="text-xs text-slate-500">{fmtDt(s.scheduled_start)}</p>
 								<Badge class="{scheduleStateClass(rowScheduleState)} text-xs">{scheduleStateLabel(rowScheduleState)}</Badge>
+								{#if rowScheduleQuickAction?.status === 'cancelled'}
+									<LoadingButton size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">
+										{rowScheduleQuickAction.label}
+									</LoadingButton>
+								{:else if rowScheduleQuickAction?.status === 'finished'}
+									<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">
+										{rowScheduleQuickAction.label}
+									</LoadingButton>
+								{:else if rowScheduleQuickAction?.href}
+									<a class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors {nextActionClass(rowScheduleQuickAction.tone)}" href={rowScheduleQuickAction.href}>
+										{rowScheduleQuickAction.label}
+									</a>
+								{/if}
 							</div>
 							<div class="mt-4 flex flex-wrap gap-2">
 								{#if s.status === 'draft'}
@@ -1317,10 +1358,10 @@
 									>
 										Daftarkan
 									</Button>
-									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0} loadingLabel="Memproses...">Jadwalkan</LoadingButton>
+									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Jadwalkan</LoadingButton>
 									<LoadingButton size="sm" variant="destructive" onclick={() => deleteSession(s.id, s.title)} loading={deleteBusyId === s.id} disabled={deleteBusyId !== '' && deleteBusyId !== s.id} loadingLabel="Menghapus...">Hapus</LoadingButton>
 								{:else if s.status === 'scheduled'}
-									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0} loadingLabel="Memproses...">Mulai</LoadingButton>
+									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0 || rowScheduleState === 'overdue'} loadingLabel="Memproses...">Mulai</LoadingButton>
 									<LoadingButton size="sm" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Batalkan</LoadingButton>
 								{:else if s.status === 'active'}
 									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>

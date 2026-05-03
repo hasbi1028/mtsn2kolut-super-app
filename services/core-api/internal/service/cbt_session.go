@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -185,8 +186,10 @@ func validateCbtPackageQualityForSession(quality db.GetCbtPackageQuestionQuality
 }
 
 func (s *CbtSession) UpdateStatus(ctx context.Context, id pgtype.UUID, status db.CbtSessionStatusEnum) (db.CbtExamSession, error) {
+	var session db.GetCbtExamSessionRow
 	if status == db.CbtSessionStatusEnumScheduled || status == db.CbtSessionStatusEnumActive {
-		session, err := s.q.GetCbtExamSession(ctx, id)
+		var err error
+		session, err = s.q.GetCbtExamSession(ctx, id)
 		if err != nil {
 			return db.CbtExamSession{}, err
 		}
@@ -195,6 +198,9 @@ func (s *CbtSession) UpdateStatus(ctx context.Context, id pgtype.UUID, status db
 		}
 	}
 	if status == db.CbtSessionStatusEnumActive {
+		if session.ScheduledEnd.Valid && time.Now().After(session.ScheduledEnd.Time) {
+			return db.CbtExamSession{}, fmt.Errorf("%w: jadwal sesi sudah berakhir", domain.ErrConflict)
+		}
 		readiness, err := s.q.GetCbtSessionRoomReadiness(ctx, id)
 		if err != nil {
 			return db.CbtExamSession{}, err

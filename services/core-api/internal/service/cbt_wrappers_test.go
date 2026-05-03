@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -1073,6 +1074,40 @@ func TestCbtSessionUpdateStatusRechecksPackageQuality(t *testing.T) {
 	}
 	if store.packageQualityID != packageID {
 		t.Fatalf("UpdateStatus() package quality id = %v, want %v", store.packageQualityID, packageID)
+	}
+	if store.updateStatusArg.ID.Valid {
+		t.Fatalf("UpdateStatus() called update with %+v, want blocked before status write", store.updateStatusArg)
+	}
+}
+
+func TestCbtSessionUpdateStatusRejectsExpiredActivation(t *testing.T) {
+	sessionID := documentCycleTestUUID(233)
+	packageID := documentCycleTestUUID(234)
+	store := &fakeCbtSessionStore{
+		sessionRow: db.GetCbtExamSessionRow{
+			ID:           sessionID,
+			PackageID:    packageID,
+			Title:        "Sesi lewat jadwal",
+			ScheduledEnd: pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
+		},
+		roomReadinessRow: db.GetCbtSessionRoomReadinessRow{
+			ParticipantCount:           1,
+			RoomCount:                  1,
+			TotalCapacity:              1,
+			AssignedParticipantCount:   1,
+			UnassignedParticipantCount: 0,
+			MissingSeatCount:           0,
+			RoomsWithoutProctor:        0,
+		},
+	}
+	svc := &CbtSession{q: store}
+
+	_, err := svc.UpdateStatus(context.Background(), sessionID, db.CbtSessionStatusEnumActive)
+	if err == nil || !strings.Contains(err.Error(), "jadwal sesi sudah berakhir") {
+		t.Fatalf("UpdateStatus(active) error = %v, want expired schedule conflict", err)
+	}
+	if store.roomReadinessID.Valid {
+		t.Fatalf("UpdateStatus() readiness id = %v, want blocked before readiness check", store.roomReadinessID)
 	}
 	if store.updateStatusArg.ID.Valid {
 		t.Fatalf("UpdateStatus() called update with %+v, want blocked before status write", store.updateStatusArg)
