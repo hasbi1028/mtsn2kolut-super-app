@@ -36,7 +36,8 @@ type cbtSessionService interface {
 	Get(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSessionRow, error)
 	Create(ctx context.Context, in service.CreateCbtSessionInput) (db.CbtExamSession, error)
 	UpdateStatus(ctx context.Context, id pgtype.UUID, status db.CbtSessionStatusEnum) (db.CbtExamSession, error)
-	UpdateSchedule(ctx context.Context, id pgtype.UUID, start, end pgtype.Timestamptz) (db.CbtExamSession, error)
+	UpdateSchedule(ctx context.Context, id pgtype.UUID, start, end pgtype.Timestamptz) (service.UpdateCbtSessionScheduleResult, error)
+	ListAuditLogs(ctx context.Context, id pgtype.UUID, limit, offset int32) ([]db.ListEntityAuditLogsRow, error)
 	Delete(ctx context.Context, id pgtype.UUID) error
 	ListParticipants(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error)
 	EnrollClass(ctx context.Context, sessionID, classID pgtype.UUID) error
@@ -475,19 +476,19 @@ func (h *CbtSession) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	start, err := time.Parse(time.RFC3339, body.ScheduledStart)
 	if err != nil {
-		api.BadRequest(w, "scheduled_start invalid — use RFC3339")
+		api.BadRequest(w, "scheduled_start invalid - use RFC3339")
 		return
 	}
 	end, err := time.Parse(time.RFC3339, body.ScheduledEnd)
 	if err != nil {
-		api.BadRequest(w, "scheduled_end invalid — use RFC3339")
+		api.BadRequest(w, "scheduled_end invalid - use RFC3339")
 		return
 	}
 	if !end.After(start) {
 		api.BadRequest(w, "scheduled_end must be after scheduled_start")
 		return
 	}
-	row, err := h.svc.UpdateSchedule(
+	result, err := h.svc.UpdateSchedule(
 		r.Context(),
 		id,
 		pgtype.Timestamptz{Time: start, Valid: true},
@@ -511,7 +512,78 @@ func (h *CbtSession) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
-	api.OK(w, row)
+	h.auditEvent(r.Context(), "CBT_SESSION_SCHEDULE_UPDATE", "cbt_session", pgUUIDString(id), map[string]any{
+		"title":                    result.Session.Title,
+		"status":                   result.Session.Status,
+		"previous_scheduled_start": timestamptzRFC3339(result.Before.ScheduledStart),
+		"previous_scheduled_end":   timestamptzRFC3339(result.Before.ScheduledEnd),
+		"new_scheduled_start":      timestamptzRFC3339(result.Session.ScheduledStart),
+		"new_scheduled_end":        timestamptzRFC3339(result.Session.ScheduledEnd),
+		"actor_session_id":         cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user":         cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, result.Session)
+}
+
+func (h *CbtSession) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, id) {
+		return
+	}
+	q := r.URL.Query()
+	limit := int32(pageSize(q.Get("per_page"), 50))
+	page := pageNum(q.Get("page"), 1)
+	offset := int32((page - 1) * int(limit))
+
+	rows, err := h.svc.ListAuditLogs(r.Context(), id, limit, offset)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, serializeCbtSessionAuditLogs(rows))
+}
+
+type cbtSessionAuditLogResponse struct {
+	ID         string          `json:"id"`
+	UserID     string          `json:"user_id"`
+	Username   string          `json:"username"`
+	Action     string          `json:"action"`
+	EntityType string          `json:"entity_type"`
+	EntityID   string          `json:"entity_id"`
+	Metadata   json.RawMessage `json:"metadata"`
+	CreatedAt  string          `json:"created_at"`
+}
+
+func serializeCbtSessionAuditLogs(rows []db.ListEntityAuditLogsRow) []cbtSessionAuditLogResponse {
+	items := make([]cbtSessionAuditLogResponse, 0, len(rows))
+	for _, row := range rows {
+		metadata := json.RawMessage(`{}`)
+		if len(row.Metadata) > 0 && json.Valid(row.Metadata) {
+			metadata = json.RawMessage(row.Metadata)
+		}
+		items = append(items, cbtSessionAuditLogResponse{
+			ID:         pgUUIDString(row.ID),
+			UserID:     pgUUIDString(row.UserID),
+			Username:   row.Username.String,
+			Action:     row.Action,
+			EntityType: row.EntityType,
+			EntityID:   row.EntityID,
+			Metadata:   metadata,
+			CreatedAt:  timestamptzRFC3339(row.CreatedAt),
+		})
+	}
+	return items
+}
+
+func timestamptzRFC3339(value pgtype.Timestamptz) string {
+	if !value.Valid {
+		return ""
+	}
+	return value.Time.UTC().Format(time.RFC3339)
 }
 
 func (h *CbtSession) Delete(w http.ResponseWriter, r *http.Request) {

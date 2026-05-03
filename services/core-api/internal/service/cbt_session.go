@@ -24,6 +24,11 @@ type CbtSession struct {
 	pool *pgxpool.Pool
 }
 
+type UpdateCbtSessionScheduleResult struct {
+	Before  db.GetCbtExamSessionRow `json:"before"`
+	Session db.CbtExamSession       `json:"session"`
+}
+
 type cbtSessionStore interface {
 	ListCbtExamSessions(ctx context.Context) ([]db.ListCbtExamSessionsRow, error)
 	GetCbtExamSession(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSessionRow, error)
@@ -31,6 +36,7 @@ type cbtSessionStore interface {
 	CreateCbtExamSession(ctx context.Context, arg db.CreateCbtExamSessionParams) (db.CbtExamSession, error)
 	UpdateCbtExamSessionStatus(ctx context.Context, arg db.UpdateCbtExamSessionStatusParams) (db.CbtExamSession, error)
 	UpdateCbtExamSessionSchedule(ctx context.Context, arg db.UpdateCbtExamSessionScheduleParams) (db.CbtExamSession, error)
+	ListEntityAuditLogs(ctx context.Context, arg db.ListEntityAuditLogsParams) ([]db.ListEntityAuditLogsRow, error)
 	DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) error
 	ListCbtExamParticipants(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error)
 	EnrollClassToSession(ctx context.Context, arg db.EnrollClassToSessionParams) error
@@ -216,24 +222,37 @@ func (s *CbtSession) UpdateStatus(ctx context.Context, id pgtype.UUID, status db
 	})
 }
 
-func (s *CbtSession) UpdateSchedule(ctx context.Context, id pgtype.UUID, start, end pgtype.Timestamptz) (db.CbtExamSession, error) {
+func (s *CbtSession) UpdateSchedule(ctx context.Context, id pgtype.UUID, start, end pgtype.Timestamptz) (UpdateCbtSessionScheduleResult, error) {
 	if !start.Valid || !end.Valid || !end.Time.After(start.Time) {
-		return db.CbtExamSession{}, fmt.Errorf("%w: jadwal selesai harus setelah jadwal mulai", domain.ErrBadRequest)
+		return UpdateCbtSessionScheduleResult{}, fmt.Errorf("%w: jadwal selesai harus setelah jadwal mulai", domain.ErrBadRequest)
 	}
 	if time.Now().After(end.Time) {
-		return db.CbtExamSession{}, fmt.Errorf("%w: jadwal baru sudah berakhir", domain.ErrConflict)
+		return UpdateCbtSessionScheduleResult{}, fmt.Errorf("%w: jadwal baru sudah berakhir", domain.ErrConflict)
 	}
 	session, err := s.q.GetCbtExamSession(ctx, id)
 	if err != nil {
-		return db.CbtExamSession{}, err
+		return UpdateCbtSessionScheduleResult{}, err
 	}
 	if session.Status != db.CbtSessionStatusEnumDraft && session.Status != db.CbtSessionStatusEnumScheduled {
-		return db.CbtExamSession{}, fmt.Errorf("%w: hanya sesi draft atau terjadwal yang boleh diubah jadwalnya", domain.ErrConflict)
+		return UpdateCbtSessionScheduleResult{}, fmt.Errorf("%w: hanya sesi draft atau terjadwal yang boleh diubah jadwalnya", domain.ErrConflict)
 	}
-	return s.q.UpdateCbtExamSessionSchedule(ctx, db.UpdateCbtExamSessionScheduleParams{
+	updated, err := s.q.UpdateCbtExamSessionSchedule(ctx, db.UpdateCbtExamSessionScheduleParams{
 		ID:             id,
 		ScheduledStart: start,
 		ScheduledEnd:   end,
+	})
+	if err != nil {
+		return UpdateCbtSessionScheduleResult{}, err
+	}
+	return UpdateCbtSessionScheduleResult{Before: session, Session: updated}, nil
+}
+
+func (s *CbtSession) ListAuditLogs(ctx context.Context, id pgtype.UUID, limit, offset int32) ([]db.ListEntityAuditLogsRow, error) {
+	return s.q.ListEntityAuditLogs(ctx, db.ListEntityAuditLogsParams{
+		EntityType: "cbt_session",
+		EntityID:   pgUUIDString(id),
+		Limit:      limit,
+		Offset:     offset,
 	})
 }
 

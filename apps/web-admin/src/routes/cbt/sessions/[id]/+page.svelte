@@ -75,6 +75,16 @@
 		event_data: unknown;
 		created_at: string;
 	};
+	type AuditLog = {
+		id: string;
+		user_id: string;
+		username: string;
+		action: string;
+		entity_type: string;
+		entity_id: string;
+		metadata: unknown;
+		created_at: string;
+	};
 	type OperationalRecap = {
 		session_id: string;
 		session_title: string;
@@ -202,7 +212,7 @@
 	};
 
 	const sessionId = page.params.id ?? '';
-	type ActiveTab = 'hasil' | 'butir' | 'peserta' | 'ruangan' | 'operasional' | 'proctoring' | 'essay';
+	type ActiveTab = 'hasil' | 'butir' | 'peserta' | 'ruangan' | 'operasional' | 'proctoring' | 'audit' | 'essay';
 	type DetailNextAction = {
 		title: string;
 		message: string;
@@ -225,6 +235,7 @@
 	let itemAnalysis = $state<ItemAnalysisRow[]>([]);
 	let proctoring = $state<ProctoringRow[]>([]);
 	let proctoringEvents = $state<ProctoringEvent[]>([]);
+	let auditLogs = $state<AuditLog[]>([]);
 	let essays = $state<UngradedEssay[]>([]);
 	let detailPromise = $state<Promise<SessionResultsDetail> | null>(null);
 	let scoreBusy = $state(false);
@@ -240,6 +251,7 @@
 	let operationalRefreshBusy = $state(false);
 	let itemAnalysisRefreshBusy = $state(false);
 	let eventRefreshBusy = $state(false);
+	let auditRefreshBusy = $state(false);
 	let regenBusyId = $state('');
 	let roomDeleteBusyId = $state('');
 	let proctorSaveBusyId = $state('');
@@ -266,6 +278,7 @@
 	let itemAnalysisRequestId = 0;
 	let proctoringRequestId = 0;
 	let proctoringEventsRequestId = 0;
+	let auditLogsRequestId = 0;
 	let essaysRequestId = 0;
 
 	const statusLabel: Record<string, string> = {
@@ -279,6 +292,7 @@
 		{ id: 'ruangan', label: 'Ruangan' },
 		{ id: 'operasional', label: 'Rekap Ops' },
 		{ id: 'proctoring', label: 'Proctoring' },
+		{ id: 'audit', label: 'Audit Ops' },
 		{ id: 'essay', label: 'Koreksi Uraian' },
 	];
 
@@ -679,6 +693,54 @@
 		return text.length > 140 ? `${text.slice(0, 140)}...` : text;
 	}
 
+	function auditMetadata(meta: unknown): Record<string, unknown> {
+		if (typeof meta === 'object' && meta !== null && !Array.isArray(meta)) return meta as Record<string, unknown>;
+		if (typeof meta === 'string' && meta.trim()) {
+			try {
+				const parsed = JSON.parse(meta);
+				if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+			} catch {
+				return {};
+			}
+		}
+		return {};
+	}
+
+	function auditValue(log: AuditLog, key: string): string {
+		const value = auditMetadata(log.metadata)[key];
+		return typeof value === 'string' ? value : '';
+	}
+
+	function auditActionLabel(action: string): string {
+		const labels: Record<string, string> = {
+			CBT_SESSION_SCHEDULE_UPDATE: 'Ubah Jadwal',
+			CBT_SESSION_PARTICIPANT_FLAG: 'Flag Peserta',
+			CBT_SESSION_PARTICIPANT_RESET_ACCESS: 'Reset Akses',
+			CBT_SESSION_PARTICIPANT_FORCE_SUBMIT: 'Paksa Submit',
+			CBT_SESSION_ESSAY_GRADE: 'Koreksi Uraian',
+			CBT_SESSION_SCORE: 'Hitung Skor',
+			CBT_SESSION_ROOM_HANDOVER_SAVE: 'Simpan Handover',
+			CBT_SESSION_ROOM_HANDOVER_LOCK: 'Kunci Handover',
+		};
+		return labels[action] ?? action.replaceAll('_', ' ');
+	}
+
+	function auditSummary(log: AuditLog): string {
+		if (log.action === 'CBT_SESSION_SCHEDULE_UPDATE') {
+			const beforeStart = auditValue(log, 'previous_scheduled_start');
+			const beforeEnd = auditValue(log, 'previous_scheduled_end');
+			const nextStart = auditValue(log, 'new_scheduled_start');
+			const nextEnd = auditValue(log, 'new_scheduled_end');
+			return `${fmtDt(beforeStart)} - ${fmtDt(beforeEnd)} -> ${fmtDt(nextStart)} - ${fmtDt(nextEnd)}`;
+		}
+		const participantId = auditValue(log, 'participant_id');
+		const roomId = auditValue(log, 'room_id');
+		const answerId = auditValue(log, 'answer_id');
+		return [participantId && `Peserta ${participantId}`, roomId && `Ruang ${roomId}`, answerId && `Jawaban ${answerId}`]
+			.filter(Boolean)
+			.join(' · ') || 'Detail tersedia di metadata audit.';
+	}
+
 	async function loadParticipants() {
 		const requestId = ++participantsRequestId;
 		try {
@@ -796,6 +858,19 @@
 		}
 	}
 
+	async function loadAuditLogs() {
+		const requestId = ++auditLogsRequestId;
+		const params = new URLSearchParams({ per_page: '30' });
+		try {
+			const res = await fetch(clientApiPathWithQuery(clientApiPath`/api/cbt/sessions/${sessionId}/audit-logs`, params));
+			const rows = await readClientApiData<AuditLog[]>(res, 'Gagal memuat audit operasi');
+			if (requestId !== auditLogsRequestId) return;
+			auditLogs = Array.isArray(rows) ? rows : [];
+		} catch (error) {
+			if (requestId === auditLogsRequestId) throw error;
+		}
+	}
+
 	async function showParticipantEvents(pid: string) {
 		eventPanelParticipantId = eventPanelParticipantId === pid ? '' : pid;
 		eventRefreshBusy = true;
@@ -894,6 +969,17 @@
 		}
 	}
 
+	async function refreshAuditLogs() {
+		auditRefreshBusy = true;
+		try {
+			await loadAuditLogs();
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			auditRefreshBusy = false;
+		}
+	}
+
 	async function loadEssays() {
 		const requestId = ++essaysRequestId;
 		try {
@@ -913,6 +999,7 @@
 			if (tab === 'ruangan') { await Promise.all([loadRooms(), loadParticipants(), loadSchoolRooms(), loadEmployeeOptions(), loadRoomReadiness()]); }
 			if (tab === 'operasional') await loadOperationalRecap();
 			if (tab === 'butir') await loadItemAnalysis();
+			if (tab === 'audit') await loadAuditLogs();
 			if (tab === 'essay') await loadEssays();
 			if (tab === 'proctoring') {
 				await Promise.all([loadProctoring(), loadProctoringEvents()]);
@@ -2190,6 +2277,52 @@
 							{:else}
 								<Table.Row>
 									<Table.Cell colspan={5} class="py-8 text-center text-sm text-slate-400">Belum ada log aktivitas</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				</Card.Content>
+			</Card.Root>
+
+		<!-- Tab: Audit Ops -->
+		{:else if activeTab === 'audit'}
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<div>
+					<p class="text-sm font-medium text-slate-700">Jejak audit operasional sesi</p>
+					<p class="text-xs text-muted-foreground">Mencatat perubahan jadwal, koreksi, proctoring, dan handover yang punya dampak operasional.</p>
+				</div>
+				<LoadingButton variant="outline" size="sm" onclick={() => void refreshAuditLogs()} loading={auditRefreshBusy} loadingLabel="Memuat..." disabled={auditRefreshBusy}>
+					↻ Refresh Audit
+				</LoadingButton>
+			</div>
+
+			<Card.Root class="border-green-100">
+				<Card.Content class="p-0 overflow-x-auto">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row class="bg-green-50">
+								<Table.Head>Waktu</Table.Head>
+								<Table.Head>Aktor</Table.Head>
+								<Table.Head>Aksi</Table.Head>
+								<Table.Head>Ringkasan</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each auditLogs as log (log.id)}
+								<Table.Row>
+									<Table.Cell class="whitespace-nowrap text-xs text-muted-foreground">{fmtDt(log.created_at)}</Table.Cell>
+									<Table.Cell>
+										<div class="text-sm font-medium text-slate-800">{log.username || auditValue(log, 'username') || 'Sistem'}</div>
+										<div class="font-mono text-[11px] text-slate-400">{log.user_id || auditValue(log, 'user_id') || '—'}</div>
+									</Table.Cell>
+									<Table.Cell>
+										<Badge variant="outline" class="text-xs">{auditActionLabel(log.action)}</Badge>
+									</Table.Cell>
+									<Table.Cell class="max-w-2xl text-xs text-slate-600">{auditSummary(log)}</Table.Cell>
+								</Table.Row>
+							{:else}
+								<Table.Row>
+									<Table.Cell colspan={4} class="py-10 text-center text-sm text-slate-400">Belum ada audit operasional untuk sesi ini</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>

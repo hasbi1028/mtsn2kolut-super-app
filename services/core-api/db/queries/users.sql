@@ -91,8 +91,15 @@ LIMIT $1 OFFSET $2;
 SELECT a.id, a.user_id, u.username, a.action, a.entity_type, a.entity_id, a.metadata, a.created_at
 FROM audit_logs a
 LEFT JOIN users u ON u.id = a.user_id
-WHERE a.entity_type = $1
-  AND a.entity_id = $2
+WHERE (
+    a.entity_type = $1
+    AND a.entity_id = $2
+  )
+  OR (
+    $1 = 'cbt_session'
+    AND a.entity_type = 'cbt_session_room'
+    AND a.metadata->>'session_id' = $2
+  )
 ORDER BY a.created_at DESC
 LIMIT $3 OFFSET $4;
 

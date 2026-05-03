@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -60,6 +61,12 @@ type fakeCbtSessionService struct {
 	updateScheduleStart pgtype.Timestamptz
 	updateScheduleEnd   pgtype.Timestamptz
 	updateScheduleErr   error
+
+	listAuditID     pgtype.UUID
+	listAuditLimit  int32
+	listAuditOffset int32
+	listAuditRows   []db.ListEntityAuditLogsRow
+	listAuditErr    error
 
 	deleteID  pgtype.UUID
 	deleteErr error
@@ -324,14 +331,30 @@ func (f *fakeCbtSessionService) UpdateStatus(_ context.Context, id pgtype.UUID, 
 	return db.CbtExamSession{ID: id, Status: status}, nil
 }
 
-func (f *fakeCbtSessionService) UpdateSchedule(_ context.Context, id pgtype.UUID, start, end pgtype.Timestamptz) (db.CbtExamSession, error) {
+func (f *fakeCbtSessionService) UpdateSchedule(_ context.Context, id pgtype.UUID, start, end pgtype.Timestamptz) (service.UpdateCbtSessionScheduleResult, error) {
 	f.updateScheduleID = id
 	f.updateScheduleStart = start
 	f.updateScheduleEnd = end
 	if f.updateScheduleErr != nil {
-		return db.CbtExamSession{}, f.updateScheduleErr
+		return service.UpdateCbtSessionScheduleResult{}, f.updateScheduleErr
 	}
-	return db.CbtExamSession{ID: id, ScheduledStart: start, ScheduledEnd: end}, nil
+	return service.UpdateCbtSessionScheduleResult{
+		Before: db.GetCbtExamSessionRow{
+			ID:             id,
+			Title:          "Sesi Lama",
+			Status:         db.CbtSessionStatusEnumScheduled,
+			ScheduledStart: pgtype.Timestamptz{Time: time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC), Valid: true},
+			ScheduledEnd:   pgtype.Timestamptz{Time: time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC), Valid: true},
+		},
+		Session: db.CbtExamSession{ID: id, Title: "Sesi Baru", Status: db.CbtSessionStatusEnumScheduled, ScheduledStart: start, ScheduledEnd: end},
+	}, nil
+}
+
+func (f *fakeCbtSessionService) ListAuditLogs(_ context.Context, id pgtype.UUID, limit, offset int32) ([]db.ListEntityAuditLogsRow, error) {
+	f.listAuditID = id
+	f.listAuditLimit = limit
+	f.listAuditOffset = offset
+	return f.listAuditRows, f.listAuditErr
 }
 
 func (f *fakeCbtSessionService) Delete(_ context.Context, id pgtype.UUID) error {
@@ -578,7 +601,8 @@ func TestCbtSessionAdminLifecycleHandlersForwardValidRequests(t *testing.T) {
 	packageID := handlerTestUUID(91)
 	classID := handlerTestUUID(92)
 	fake := &fakeCbtSessionService{}
-	h := &CbtSession{svc: fake}
+	audit := &fakeCbtSessionAuditWriter{}
+	h := &CbtSession{svc: fake, audit: audit}
 
 	rec := httptest.NewRecorder()
 	h.List(rec, adminRequest(http.MethodGet, "/api/cbt/sessions", ""))
@@ -614,6 +638,35 @@ func TestCbtSessionAdminLifecycleHandlersForwardValidRequests(t *testing.T) {
 	}
 	if fake.updateScheduleID != sessionID || !fake.updateScheduleStart.Valid || !fake.updateScheduleEnd.Valid {
 		t.Fatalf("UpdateSchedule args = %v/%+v/%+v, want valid schedule", fake.updateScheduleID, fake.updateScheduleStart, fake.updateScheduleEnd)
+	}
+	if len(audit.entries) != 1 || audit.entries[0].Action != "CBT_SESSION_SCHEDULE_UPDATE" || audit.entries[0].EntityID != pgUUIDString(sessionID) {
+		t.Fatalf("UpdateSchedule audit = %+v, want schedule update audit", audit.entries)
+	}
+	scheduleMeta := mustAuditMetadataMap(t, audit.entries[0].Metadata)
+	if scheduleMeta["previous_scheduled_start"] != "2026-05-01T08:00:00Z" || scheduleMeta["new_scheduled_start"] != "2026-05-02T08:00:00Z" {
+		t.Fatalf("UpdateSchedule audit metadata = %+v, want previous and new schedule", scheduleMeta)
+	}
+
+	fake.listAuditRows = []db.ListEntityAuditLogsRow{{
+		ID:         handlerTestUUID(102),
+		UserID:     handlerTestUUID(103),
+		Username:   pgtype.Text{String: "operator.cbt", Valid: true},
+		Action:     "CBT_SESSION_SCHEDULE_UPDATE",
+		EntityType: "cbt_session",
+		EntityID:   pgUUIDString(sessionID),
+		Metadata:   []byte(`{"new_scheduled_start":"2026-05-02T08:00:00Z"}`),
+		CreatedAt:  pgtype.Timestamptz{Time: time.Date(2026, 5, 2, 7, 0, 0, 0, time.UTC), Valid: true},
+	}}
+	rec = httptest.NewRecorder()
+	h.ListAuditLogs(rec, withRouteParam(adminRequest(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/audit-logs?page=2&per_page=25", ""), "id", sessionID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ListAuditLogs() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.listAuditID != sessionID || fake.listAuditLimit != 25 || fake.listAuditOffset != 25 {
+		t.Fatalf("ListAuditLogs args = %v/%d/%d, want session page params", fake.listAuditID, fake.listAuditLimit, fake.listAuditOffset)
+	}
+	if !strings.Contains(rec.Body.String(), "CBT_SESSION_SCHEDULE_UPDATE") || !strings.Contains(rec.Body.String(), "operator.cbt") {
+		t.Fatalf("ListAuditLogs body = %s, want serialized audit row", rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()

@@ -409,6 +409,9 @@ type fakeCbtSessionStore struct {
 	createArg             db.CreateCbtExamSessionParams
 	updateStatusArg       db.UpdateCbtExamSessionStatusParams
 	updateScheduleArg     db.UpdateCbtExamSessionScheduleParams
+	auditArg              db.ListEntityAuditLogsParams
+	auditRows             []db.ListEntityAuditLogsRow
+	auditErr              error
 	deleteID              pgtype.UUID
 	participantRows       []db.ListCbtExamParticipantsRow
 	participantsErr       error
@@ -519,6 +522,11 @@ func (f *fakeCbtSessionStore) UpdateCbtExamSessionStatus(ctx context.Context, ar
 func (f *fakeCbtSessionStore) UpdateCbtExamSessionSchedule(ctx context.Context, arg db.UpdateCbtExamSessionScheduleParams) (db.CbtExamSession, error) {
 	f.updateScheduleArg = arg
 	return db.CbtExamSession{ID: arg.ID, ScheduledStart: arg.ScheduledStart, ScheduledEnd: arg.ScheduledEnd}, nil
+}
+
+func (f *fakeCbtSessionStore) ListEntityAuditLogs(ctx context.Context, arg db.ListEntityAuditLogsParams) ([]db.ListEntityAuditLogsRow, error) {
+	f.auditArg = arg
+	return f.auditRows, f.auditErr
 }
 
 func (f *fakeCbtSessionStore) DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) error {
@@ -1134,8 +1142,12 @@ func TestCbtSessionUpdateScheduleGuardsStatusAndWindow(t *testing.T) {
 	}
 	svc := &CbtSession{q: store}
 
-	if _, err := svc.UpdateSchedule(context.Background(), sessionID, start, end); err != nil {
+	result, err := svc.UpdateSchedule(context.Background(), sessionID, start, end)
+	if err != nil {
 		t.Fatalf("UpdateSchedule() error = %v", err)
+	}
+	if result.Before.ID != sessionID || result.Session.ID != sessionID {
+		t.Fatalf("UpdateSchedule() result = %+v, want before and updated session ids", result)
 	}
 	if store.updateScheduleArg.ID != sessionID || !store.updateScheduleArg.ScheduledStart.Time.Equal(start.Time) || !store.updateScheduleArg.ScheduledEnd.Time.Equal(end.Time) {
 		t.Fatalf("UpdateSchedule() arg = %+v, want schedule params", store.updateScheduleArg)
@@ -1143,12 +1155,31 @@ func TestCbtSessionUpdateScheduleGuardsStatusAndWindow(t *testing.T) {
 
 	store.updateScheduleArg = db.UpdateCbtExamSessionScheduleParams{}
 	store.sessionRow.Status = db.CbtSessionStatusEnumActive
-	_, err := svc.UpdateSchedule(context.Background(), sessionID, start, end)
+	_, err = svc.UpdateSchedule(context.Background(), sessionID, start, end)
 	if err == nil || !strings.Contains(err.Error(), "hanya sesi draft atau terjadwal") {
 		t.Fatalf("UpdateSchedule(active) error = %v, want status conflict", err)
 	}
 	if store.updateScheduleArg.ID.Valid {
 		t.Fatalf("UpdateSchedule(active) wrote %+v, want blocked before update", store.updateScheduleArg)
+	}
+}
+
+func TestCbtSessionListAuditLogsScopesEntity(t *testing.T) {
+	sessionID := documentCycleTestUUID(244)
+	store := &fakeCbtSessionStore{
+		auditRows: []db.ListEntityAuditLogsRow{{Action: "CBT_SESSION_SCHEDULE_UPDATE"}},
+	}
+	svc := &CbtSession{q: store}
+
+	rows, err := svc.ListAuditLogs(context.Background(), sessionID, 25, 50)
+	if err != nil {
+		t.Fatalf("ListAuditLogs() error = %v", err)
+	}
+	if len(rows) != 1 || rows[0].Action != "CBT_SESSION_SCHEDULE_UPDATE" {
+		t.Fatalf("ListAuditLogs() rows = %+v, want audit rows", rows)
+	}
+	if store.auditArg.EntityType != "cbt_session" || store.auditArg.EntityID != pgUUIDString(sessionID) || store.auditArg.Limit != 25 || store.auditArg.Offset != 50 {
+		t.Fatalf("ListAuditLogs() arg = %+v, want cbt session entity scope", store.auditArg)
 	}
 }
 
