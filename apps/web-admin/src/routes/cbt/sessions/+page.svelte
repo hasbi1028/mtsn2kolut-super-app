@@ -23,6 +23,9 @@
 		allow_cross_grade: boolean; is_special_event: boolean;
 		title: string; scheduled_start: string; scheduled_end: string;
 		status: string; participant_count: number; created_at: string;
+		room_count: number; total_capacity: number;
+		assigned_participant_count: number; unassigned_participant_count: number;
+		missing_seat_count: number; rooms_without_proctor: number; proctor_assignment_count: number;
 	};
 	type CbtPackage = {
 		id: string; title: string; subject_code: string; subject_name: string;
@@ -215,6 +218,21 @@
 			issues.push(`${quality.unpublishedCount} belum terbit`);
 		}
 		return issues;
+	}
+
+	function sessionOperationalIssues(session: ExamSession) {
+		const issues: string[] = [];
+		if (session.participant_count === 0) issues.push('belum ada peserta');
+		if (session.room_count === 0) issues.push('belum ada ruang');
+		if (session.participant_count > 0 && session.total_capacity < session.participant_count) issues.push('kapasitas kurang');
+		if (session.unassigned_participant_count > 0) issues.push(`${session.unassigned_participant_count} belum ruang`);
+		if (session.missing_seat_count > 0) issues.push(`${session.missing_seat_count} belum meja`);
+		if (session.rooms_without_proctor > 0) issues.push(`${session.rooms_without_proctor} ruang tanpa pengawas`);
+		return issues;
+	}
+
+	function sessionRowReadinessIssues(session: ExamSession) {
+		return [...packageQualityIssues(session.package_id), ...sessionOperationalIssues(session)];
 	}
 
 	function buildSessionReadinessIssues() {
@@ -688,12 +706,13 @@
 				<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 					<Card.Content class="space-y-3 p-6">
 						{#each Array.from({ length: 5 }) as _, index (`cbt-session-row-skeleton-${index}`)}
-							<div class="grid gap-3 lg:grid-cols-[1.2fr_1fr_0.9fr_1fr_0.5fr_0.7fr_auto] lg:items-center">
+							<div class="grid gap-3 lg:grid-cols-[1.1fr_1fr_0.85fr_0.9fr_0.45fr_1fr_0.65fr_auto] lg:items-center">
 								<Skeleton class="h-5 w-40" />
 								<Skeleton class="h-5 w-32" />
 								<Skeleton class="h-5 w-28" />
 								<Skeleton class="h-5 w-36" />
 								<Skeleton class="h-5 w-12" />
+								<Skeleton class="h-8 w-44" />
 								<Skeleton class="h-6 w-20" />
 								<Skeleton class="h-9 w-36 justify-self-end" />
 							</div>
@@ -728,6 +747,7 @@
 							<Table.Head>Cakupan</Table.Head>
 							<Table.Head>Jadwal Mulai</Table.Head>
 							<Table.Head>Peserta</Table.Head>
+							<Table.Head>Kesiapan</Table.Head>
 							<Table.Head>Status</Table.Head>
 							<Table.Head></Table.Head>
 						</Table.Row>
@@ -736,6 +756,8 @@
 						{#each currentSessions as s (s.id)}
 							{@const rowPackageQuality = packageQualitySummary(s.package_id)}
 							{@const rowPackageIssues = packageQualityIssues(s.package_id)}
+							{@const rowOperationalIssues = sessionOperationalIssues(s)}
+							{@const rowReadinessIssues = sessionRowReadinessIssues(s)}
 							<Table.Row>
 								<Table.Cell class="font-medium max-w-48">
 									<p class="truncate">{s.title}</p>
@@ -764,6 +786,23 @@
 									<span class="font-mono text-sm">{s.participant_count}</span>
 								</Table.Cell>
 								<Table.Cell>
+									<div class="flex max-w-60 flex-wrap gap-1">
+										{#if rowReadinessIssues.length === 0}
+											<Badge class="border-emerald-200 bg-emerald-50 text-[11px] text-emerald-700">Siap mulai</Badge>
+										{:else}
+											<Badge class="{rowPackageIssues.length > 0 ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-700'} text-[11px]">
+												{rowReadinessIssues.length} atensi
+											</Badge>
+										{/if}
+										<Badge variant="outline" class="bg-white text-[11px]">{s.room_count} ruang / {s.total_capacity} kursi</Badge>
+										<Badge variant="outline" class="bg-white text-[11px]">{s.assigned_participant_count}/{s.participant_count} ditempatkan</Badge>
+										<Badge variant="outline" class="bg-white text-[11px]">{s.proctor_assignment_count} pengawas</Badge>
+										{#each rowReadinessIssues.slice(0, 2) as issue (issue)}
+											<span class="text-[11px] text-slate-500">{issue}</span>
+										{/each}
+									</div>
+								</Table.Cell>
+								<Table.Cell>
 									<Badge class={statusClass(s.status)}>{statusLabel[s.status] ?? s.status}</Badge>
 								</Table.Cell>
 								<Table.Cell>
@@ -788,7 +827,7 @@
 												Hapus
 											</LoadingButton>
 										{:else if s.status === 'scheduled'}
-											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0} loadingLabel="Memproses...">Mulai</LoadingButton>
+											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0} loadingLabel="Memproses...">Mulai</LoadingButton>
 											<LoadingButton size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Batalkan</LoadingButton>
 										{:else if s.status === 'active'}
 											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
@@ -803,7 +842,7 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={7} class="text-center text-slate-400 py-8">Belum ada sesi ujian</Table.Cell>
+								<Table.Cell colspan={8} class="text-center text-slate-400 py-8">Belum ada sesi ujian</Table.Cell>
 							</Table.Row>
 						{/each}
 					</Table.Body>
@@ -814,6 +853,8 @@
 					{#each currentSessions as s (s.id)}
 						{@const rowPackageQuality = packageQualitySummary(s.package_id)}
 						{@const rowPackageIssues = packageQualityIssues(s.package_id)}
+						{@const rowOperationalIssues = sessionOperationalIssues(s)}
+						{@const rowReadinessIssues = sessionRowReadinessIssues(s)}
 						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
@@ -837,6 +878,19 @@
 									<Badge class="border-emerald-200 bg-emerald-50 text-emerald-700 text-xs">Paket siap</Badge>
 								{/if}
 							</div>
+							<div class="mt-2 flex flex-wrap items-center gap-1.5">
+								{#if rowReadinessIssues.length === 0}
+									<Badge class="border-emerald-200 bg-emerald-50 text-emerald-700 text-xs">Siap mulai</Badge>
+								{:else}
+									<Badge class="{rowPackageIssues.length > 0 ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-700'} text-xs">{rowReadinessIssues.length} atensi</Badge>
+								{/if}
+								<Badge variant="outline" class="bg-white text-xs">{s.room_count} ruang / {s.total_capacity} kursi</Badge>
+								<Badge variant="outline" class="bg-white text-xs">{s.assigned_participant_count}/{s.participant_count} ditempatkan</Badge>
+								<Badge variant="outline" class="bg-white text-xs">{s.proctor_assignment_count} pengawas</Badge>
+								{#each rowReadinessIssues.slice(0, 2) as issue (issue)}
+									<span class="text-xs text-slate-500">{issue}</span>
+								{/each}
+							</div>
 							<p class="mt-3 text-xs text-slate-500">{fmtDt(s.scheduled_start)}</p>
 							<div class="mt-4 flex flex-wrap gap-2">
 								{#if s.status === 'draft'}
@@ -855,7 +909,7 @@
 									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'scheduled')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0} loadingLabel="Memproses...">Jadwalkan</LoadingButton>
 									<LoadingButton size="sm" variant="destructive" onclick={() => deleteSession(s.id, s.title)} loading={deleteBusyId === s.id} disabled={deleteBusyId !== '' && deleteBusyId !== s.id} loadingLabel="Menghapus...">Hapus</LoadingButton>
 								{:else if s.status === 'scheduled'}
-									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0} loadingLabel="Memproses...">Mulai</LoadingButton>
+									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'active')} loading={statusBusyId === s.id} disabled={(statusBusyId !== '' && statusBusyId !== s.id) || rowPackageIssues.length > 0 || rowOperationalIssues.length > 0} loadingLabel="Memproses...">Mulai</LoadingButton>
 									<LoadingButton size="sm" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Batalkan</LoadingButton>
 								{:else if s.status === 'active'}
 									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>

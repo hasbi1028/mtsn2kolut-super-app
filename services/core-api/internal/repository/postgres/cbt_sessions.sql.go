@@ -1106,36 +1106,73 @@ SELECT
   s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
   s.title, s.scheduled_start, s.scheduled_end, s.status,
   s.created_at, s.updated_at,
-  COUNT(ep.id)::int AS participant_count
+  COALESCE(ps.participant_count, 0)::int AS participant_count,
+  COALESCE(rs.room_count, 0)::int AS room_count,
+  COALESCE(rs.total_capacity, 0)::int AS total_capacity,
+  COALESCE(ps.assigned_participant_count, 0)::int AS assigned_participant_count,
+  COALESCE(ps.unassigned_participant_count, 0)::int AS unassigned_participant_count,
+  COALESCE(ps.missing_seat_count, 0)::int AS missing_seat_count,
+  COALESCE(rs.rooms_without_proctor, 0)::int AS rooms_without_proctor,
+  COALESCE(rs.proctor_assignment_count, 0)::int AS proctor_assignment_count
 FROM cbt_exam_sessions s
 JOIN cbt_packages p ON p.id = s.package_id
 LEFT JOIN school_classes c ON c.id = s.class_id
-LEFT JOIN cbt_exam_participants ep ON ep.session_id = s.id
-GROUP BY s.id, p.title, c.name, c.code
+LEFT JOIN (
+  SELECT
+    session_id,
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL)::int AS assigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NULL)::int AS unassigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL AND seat_no IS NULL)::int AS missing_seat_count
+  FROM cbt_exam_participants
+  GROUP BY session_id
+) ps ON ps.session_id = s.id
+LEFT JOIN (
+  SELECT
+    r.session_id,
+    COUNT(r.id)::int AS room_count,
+    COALESCE(SUM(r.capacity), 0)::int AS total_capacity,
+    COUNT(r.id) FILTER (WHERE COALESCE(pr.proctor_count, 0) = 0)::int AS rooms_without_proctor,
+    COALESCE(SUM(COALESCE(pr.proctor_count, 0)), 0)::int AS proctor_assignment_count
+  FROM cbt_exam_rooms r
+  LEFT JOIN (
+    SELECT exam_room_id, COUNT(*)::int AS proctor_count
+    FROM cbt_room_proctors
+    GROUP BY exam_room_id
+  ) pr ON pr.exam_room_id = r.id
+  GROUP BY r.session_id
+) rs ON rs.session_id = s.id
 ORDER BY s.scheduled_start DESC
 `
 
 type ListCbtExamSessionsRow struct {
-	ID               pgtype.UUID          `json:"id"`
-	PackageID        pgtype.UUID          `json:"package_id"`
-	PackageTitle     string               `json:"package_title"`
-	ClassID          pgtype.UUID          `json:"class_id"`
-	EventID          pgtype.UUID          `json:"event_id"`
-	ClassName        string               `json:"class_name"`
-	ClassCode        string               `json:"class_code"`
-	ScopeType        string               `json:"scope_type"`
-	ScopeRef         string               `json:"scope_ref"`
-	MixPolicy        string               `json:"mix_policy"`
-	AssignmentMode   string               `json:"assignment_mode"`
-	AllowCrossGrade  bool                 `json:"allow_cross_grade"`
-	IsSpecialEvent   bool                 `json:"is_special_event"`
-	Title            string               `json:"title"`
-	ScheduledStart   pgtype.Timestamptz   `json:"scheduled_start"`
-	ScheduledEnd     pgtype.Timestamptz   `json:"scheduled_end"`
-	Status           CbtSessionStatusEnum `json:"status"`
-	CreatedAt        pgtype.Timestamptz   `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz   `json:"updated_at"`
-	ParticipantCount int32                `json:"participant_count"`
+	ID                         pgtype.UUID          `json:"id"`
+	PackageID                  pgtype.UUID          `json:"package_id"`
+	PackageTitle               string               `json:"package_title"`
+	ClassID                    pgtype.UUID          `json:"class_id"`
+	EventID                    pgtype.UUID          `json:"event_id"`
+	ClassName                  string               `json:"class_name"`
+	ClassCode                  string               `json:"class_code"`
+	ScopeType                  string               `json:"scope_type"`
+	ScopeRef                   string               `json:"scope_ref"`
+	MixPolicy                  string               `json:"mix_policy"`
+	AssignmentMode             string               `json:"assignment_mode"`
+	AllowCrossGrade            bool                 `json:"allow_cross_grade"`
+	IsSpecialEvent             bool                 `json:"is_special_event"`
+	Title                      string               `json:"title"`
+	ScheduledStart             pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd               pgtype.Timestamptz   `json:"scheduled_end"`
+	Status                     CbtSessionStatusEnum `json:"status"`
+	CreatedAt                  pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt                  pgtype.Timestamptz   `json:"updated_at"`
+	ParticipantCount           int32                `json:"participant_count"`
+	RoomCount                  int32                `json:"room_count"`
+	TotalCapacity              int32                `json:"total_capacity"`
+	AssignedParticipantCount   int32                `json:"assigned_participant_count"`
+	UnassignedParticipantCount int32                `json:"unassigned_participant_count"`
+	MissingSeatCount           int32                `json:"missing_seat_count"`
+	RoomsWithoutProctor        int32                `json:"rooms_without_proctor"`
+	ProctorAssignmentCount     int32                `json:"proctor_assignment_count"`
 }
 
 func (q *Queries) ListCbtExamSessions(ctx context.Context) ([]ListCbtExamSessionsRow, error) {
@@ -1168,6 +1205,13 @@ func (q *Queries) ListCbtExamSessions(ctx context.Context) ([]ListCbtExamSession
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ParticipantCount,
+			&i.RoomCount,
+			&i.TotalCapacity,
+			&i.AssignedParticipantCount,
+			&i.UnassignedParticipantCount,
+			&i.MissingSeatCount,
+			&i.RoomsWithoutProctor,
+			&i.ProctorAssignmentCount,
 		); err != nil {
 			return nil, err
 		}
@@ -1180,45 +1224,82 @@ func (q *Queries) ListCbtExamSessions(ctx context.Context) ([]ListCbtExamSession
 }
 
 const listCbtExamSessionsByTeacher = `-- name: ListCbtExamSessionsByTeacher :many
-SELECT
+SELECT DISTINCT
   s.id, s.package_id, p.title AS package_title,
   s.class_id, s.event_id,
   COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
   s.title, s.scheduled_start, s.scheduled_end, s.status,
   s.created_at, s.updated_at,
-  COUNT(ep.id)::int AS participant_count
+  COALESCE(ps.participant_count, 0)::int AS participant_count,
+  COALESCE(rs.room_count, 0)::int AS room_count,
+  COALESCE(rs.total_capacity, 0)::int AS total_capacity,
+  COALESCE(ps.assigned_participant_count, 0)::int AS assigned_participant_count,
+  COALESCE(ps.unassigned_participant_count, 0)::int AS unassigned_participant_count,
+  COALESCE(ps.missing_seat_count, 0)::int AS missing_seat_count,
+  COALESCE(rs.rooms_without_proctor, 0)::int AS rooms_without_proctor,
+  COALESCE(rs.proctor_assignment_count, 0)::int AS proctor_assignment_count
 FROM cbt_exam_sessions s
 JOIN cbt_packages p ON p.id = s.package_id
 JOIN class_subject_assignments csa ON csa.subject_id = p.subject_id
 LEFT JOIN school_classes c ON c.id = s.class_id
-LEFT JOIN cbt_exam_participants ep ON ep.session_id = s.id
+LEFT JOIN (
+  SELECT
+    session_id,
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL)::int AS assigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NULL)::int AS unassigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL AND seat_no IS NULL)::int AS missing_seat_count
+  FROM cbt_exam_participants
+  GROUP BY session_id
+) ps ON ps.session_id = s.id
+LEFT JOIN (
+  SELECT
+    r.session_id,
+    COUNT(r.id)::int AS room_count,
+    COALESCE(SUM(r.capacity), 0)::int AS total_capacity,
+    COUNT(r.id) FILTER (WHERE COALESCE(pr.proctor_count, 0) = 0)::int AS rooms_without_proctor,
+    COALESCE(SUM(COALESCE(pr.proctor_count, 0)), 0)::int AS proctor_assignment_count
+  FROM cbt_exam_rooms r
+  LEFT JOIN (
+    SELECT exam_room_id, COUNT(*)::int AS proctor_count
+    FROM cbt_room_proctors
+    GROUP BY exam_room_id
+  ) pr ON pr.exam_room_id = r.id
+  GROUP BY r.session_id
+) rs ON rs.session_id = s.id
 WHERE csa.teacher_employee_id = $1
-GROUP BY s.id, p.title, c.name, c.code
 ORDER BY s.scheduled_start DESC
 `
 
 type ListCbtExamSessionsByTeacherRow struct {
-	ID               pgtype.UUID          `json:"id"`
-	PackageID        pgtype.UUID          `json:"package_id"`
-	PackageTitle     string               `json:"package_title"`
-	ClassID          pgtype.UUID          `json:"class_id"`
-	EventID          pgtype.UUID          `json:"event_id"`
-	ClassName        string               `json:"class_name"`
-	ClassCode        string               `json:"class_code"`
-	ScopeType        string               `json:"scope_type"`
-	ScopeRef         string               `json:"scope_ref"`
-	MixPolicy        string               `json:"mix_policy"`
-	AssignmentMode   string               `json:"assignment_mode"`
-	AllowCrossGrade  bool                 `json:"allow_cross_grade"`
-	IsSpecialEvent   bool                 `json:"is_special_event"`
-	Title            string               `json:"title"`
-	ScheduledStart   pgtype.Timestamptz   `json:"scheduled_start"`
-	ScheduledEnd     pgtype.Timestamptz   `json:"scheduled_end"`
-	Status           CbtSessionStatusEnum `json:"status"`
-	CreatedAt        pgtype.Timestamptz   `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz   `json:"updated_at"`
-	ParticipantCount int32                `json:"participant_count"`
+	ID                         pgtype.UUID          `json:"id"`
+	PackageID                  pgtype.UUID          `json:"package_id"`
+	PackageTitle               string               `json:"package_title"`
+	ClassID                    pgtype.UUID          `json:"class_id"`
+	EventID                    pgtype.UUID          `json:"event_id"`
+	ClassName                  string               `json:"class_name"`
+	ClassCode                  string               `json:"class_code"`
+	ScopeType                  string               `json:"scope_type"`
+	ScopeRef                   string               `json:"scope_ref"`
+	MixPolicy                  string               `json:"mix_policy"`
+	AssignmentMode             string               `json:"assignment_mode"`
+	AllowCrossGrade            bool                 `json:"allow_cross_grade"`
+	IsSpecialEvent             bool                 `json:"is_special_event"`
+	Title                      string               `json:"title"`
+	ScheduledStart             pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd               pgtype.Timestamptz   `json:"scheduled_end"`
+	Status                     CbtSessionStatusEnum `json:"status"`
+	CreatedAt                  pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt                  pgtype.Timestamptz   `json:"updated_at"`
+	ParticipantCount           int32                `json:"participant_count"`
+	RoomCount                  int32                `json:"room_count"`
+	TotalCapacity              int32                `json:"total_capacity"`
+	AssignedParticipantCount   int32                `json:"assigned_participant_count"`
+	UnassignedParticipantCount int32                `json:"unassigned_participant_count"`
+	MissingSeatCount           int32                `json:"missing_seat_count"`
+	RoomsWithoutProctor        int32                `json:"rooms_without_proctor"`
+	ProctorAssignmentCount     int32                `json:"proctor_assignment_count"`
 }
 
 func (q *Queries) ListCbtExamSessionsByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]ListCbtExamSessionsByTeacherRow, error) {
@@ -1251,6 +1332,13 @@ func (q *Queries) ListCbtExamSessionsByTeacher(ctx context.Context, teacherEmplo
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ParticipantCount,
+			&i.RoomCount,
+			&i.TotalCapacity,
+			&i.AssignedParticipantCount,
+			&i.UnassignedParticipantCount,
+			&i.MissingSeatCount,
+			&i.RoomsWithoutProctor,
+			&i.ProctorAssignmentCount,
 		); err != nil {
 			return nil, err
 		}

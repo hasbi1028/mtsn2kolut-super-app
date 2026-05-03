@@ -6,12 +6,42 @@ SELECT
   s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
   s.title, s.scheduled_start, s.scheduled_end, s.status,
   s.created_at, s.updated_at,
-  COUNT(ep.id)::int AS participant_count
+  COALESCE(ps.participant_count, 0)::int AS participant_count,
+  COALESCE(rs.room_count, 0)::int AS room_count,
+  COALESCE(rs.total_capacity, 0)::int AS total_capacity,
+  COALESCE(ps.assigned_participant_count, 0)::int AS assigned_participant_count,
+  COALESCE(ps.unassigned_participant_count, 0)::int AS unassigned_participant_count,
+  COALESCE(ps.missing_seat_count, 0)::int AS missing_seat_count,
+  COALESCE(rs.rooms_without_proctor, 0)::int AS rooms_without_proctor,
+  COALESCE(rs.proctor_assignment_count, 0)::int AS proctor_assignment_count
 FROM cbt_exam_sessions s
 JOIN cbt_packages p ON p.id = s.package_id
 LEFT JOIN school_classes c ON c.id = s.class_id
-LEFT JOIN cbt_exam_participants ep ON ep.session_id = s.id
-GROUP BY s.id, p.title, c.name, c.code
+LEFT JOIN (
+  SELECT
+    session_id,
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL)::int AS assigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NULL)::int AS unassigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL AND seat_no IS NULL)::int AS missing_seat_count
+  FROM cbt_exam_participants
+  GROUP BY session_id
+) ps ON ps.session_id = s.id
+LEFT JOIN (
+  SELECT
+    r.session_id,
+    COUNT(r.id)::int AS room_count,
+    COALESCE(SUM(r.capacity), 0)::int AS total_capacity,
+    COUNT(r.id) FILTER (WHERE COALESCE(pr.proctor_count, 0) = 0)::int AS rooms_without_proctor,
+    COALESCE(SUM(COALESCE(pr.proctor_count, 0)), 0)::int AS proctor_assignment_count
+  FROM cbt_exam_rooms r
+  LEFT JOIN (
+    SELECT exam_room_id, COUNT(*)::int AS proctor_count
+    FROM cbt_room_proctors
+    GROUP BY exam_room_id
+  ) pr ON pr.exam_room_id = r.id
+  GROUP BY r.session_id
+) rs ON rs.session_id = s.id
 ORDER BY s.scheduled_start DESC;
 
 -- name: GetCbtExamSession :one
@@ -549,21 +579,51 @@ LEFT JOIN answer_distribution ad ON ad.question_id = a.question_id
 ORDER BY a.position ASC, a.question_code ASC;
 
 -- name: ListCbtExamSessionsByTeacher :many
-SELECT
+SELECT DISTINCT
   s.id, s.package_id, p.title AS package_title,
   s.class_id, s.event_id,
   COALESCE(c.name, '') AS class_name, COALESCE(c.code, '') AS class_code,
   s.scope_type, s.scope_ref, s.mix_policy, s.assignment_mode, s.allow_cross_grade, s.is_special_event,
   s.title, s.scheduled_start, s.scheduled_end, s.status,
   s.created_at, s.updated_at,
-  COUNT(ep.id)::int AS participant_count
+  COALESCE(ps.participant_count, 0)::int AS participant_count,
+  COALESCE(rs.room_count, 0)::int AS room_count,
+  COALESCE(rs.total_capacity, 0)::int AS total_capacity,
+  COALESCE(ps.assigned_participant_count, 0)::int AS assigned_participant_count,
+  COALESCE(ps.unassigned_participant_count, 0)::int AS unassigned_participant_count,
+  COALESCE(ps.missing_seat_count, 0)::int AS missing_seat_count,
+  COALESCE(rs.rooms_without_proctor, 0)::int AS rooms_without_proctor,
+  COALESCE(rs.proctor_assignment_count, 0)::int AS proctor_assignment_count
 FROM cbt_exam_sessions s
 JOIN cbt_packages p ON p.id = s.package_id
 JOIN class_subject_assignments csa ON csa.subject_id = p.subject_id
 LEFT JOIN school_classes c ON c.id = s.class_id
-LEFT JOIN cbt_exam_participants ep ON ep.session_id = s.id
+LEFT JOIN (
+  SELECT
+    session_id,
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL)::int AS assigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NULL)::int AS unassigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL AND seat_no IS NULL)::int AS missing_seat_count
+  FROM cbt_exam_participants
+  GROUP BY session_id
+) ps ON ps.session_id = s.id
+LEFT JOIN (
+  SELECT
+    r.session_id,
+    COUNT(r.id)::int AS room_count,
+    COALESCE(SUM(r.capacity), 0)::int AS total_capacity,
+    COUNT(r.id) FILTER (WHERE COALESCE(pr.proctor_count, 0) = 0)::int AS rooms_without_proctor,
+    COALESCE(SUM(COALESCE(pr.proctor_count, 0)), 0)::int AS proctor_assignment_count
+  FROM cbt_exam_rooms r
+  LEFT JOIN (
+    SELECT exam_room_id, COUNT(*)::int AS proctor_count
+    FROM cbt_room_proctors
+    GROUP BY exam_room_id
+  ) pr ON pr.exam_room_id = r.id
+  GROUP BY r.session_id
+) rs ON rs.session_id = s.id
 WHERE csa.teacher_employee_id = $1
-GROUP BY s.id, p.title, c.name, c.code
 ORDER BY s.scheduled_start DESC;
 
 -- name: GetSessionResultsByTeacher :many
