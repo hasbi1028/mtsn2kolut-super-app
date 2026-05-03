@@ -43,6 +43,10 @@ type cbtQuestionImportService interface {
 	ImportLegacyCSV(ctx context.Context, input service.ImportLegacyQuestionsInput) (service.ImportLegacyQuestionsResult, error)
 }
 
+type cbtQuestionExportService interface {
+	ExportCSV(ctx context.Context, input service.ListCbtQuestionsInput) (service.ExportCbtQuestionsCSVResult, error)
+}
+
 func NewCbtQuestion(svc *service.CbtQuestion, audit ...cbtAuthoringAuditWriter) *CbtQuestion {
 	var writer cbtAuthoringAuditWriter
 	if len(audit) > 0 {
@@ -93,38 +97,12 @@ func (h *CbtQuestion) List(w http.ResponseWriter, r *http.Request) {
 		api.Forbidden(w)
 		return
 	}
-	subjectID := pgtype.UUID{}
-	if raw := strings.TrimSpace(r.URL.Query().Get("subject_id")); raw != "" {
-		parsed, err := parseUUID(raw)
-		if err != nil {
-			api.BadRequest(w, "subject_id invalid")
-			return
-		}
-		subjectID = parsed
+	input, err := questionListInputFromRequest(r, 25, 100)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
 	}
-	limit := int32(25)
-	offset := int32(0)
-	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
-		var parsed int
-		if _, err := fmt.Sscanf(raw, "%d", &parsed); err == nil && parsed > 0 && parsed <= 100 {
-			limit = int32(parsed)
-		}
-	}
-	if raw := strings.TrimSpace(r.URL.Query().Get("offset")); raw != "" {
-		var parsed int
-		if _, err := fmt.Sscanf(raw, "%d", &parsed); err == nil && parsed >= 0 {
-			offset = int32(parsed)
-		}
-	}
-	rows, total, err := h.svc.ListFiltered(r.Context(), service.ListCbtQuestionsInput{
-		SubjectID:      subjectID,
-		WorkflowStatus: r.URL.Query().Get("workflow_status"),
-		QuestionType:   r.URL.Query().Get("question_type"),
-		HotsFilter:     r.URL.Query().Get("hots"),
-		SearchQuery:    r.URL.Query().Get("q"),
-		Limit:          limit,
-		Offset:         offset,
-	})
+	rows, total, err := h.svc.ListFiltered(r.Context(), input)
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -137,10 +115,70 @@ func (h *CbtQuestion) List(w http.ResponseWriter, r *http.Request) {
 		"items": items,
 		"meta": map[string]any{
 			"total":  total,
-			"limit":  limit,
-			"offset": offset,
+			"limit":  input.Limit,
+			"offset": input.Offset,
 		},
 	})
+}
+
+func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit int32) (service.ListCbtQuestionsInput, error) {
+	subjectID := pgtype.UUID{}
+	if raw := strings.TrimSpace(r.URL.Query().Get("subject_id")); raw != "" {
+		parsed, err := parseUUID(raw)
+		if err != nil {
+			return service.ListCbtQuestionsInput{}, fmt.Errorf("subject_id invalid")
+		}
+		subjectID = parsed
+	}
+	limit := defaultLimit
+	offset := int32(0)
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		var parsed int
+		if _, err := fmt.Sscanf(raw, "%d", &parsed); err == nil && parsed > 0 && parsed <= int(maxLimit) {
+			limit = int32(parsed)
+		}
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("offset")); raw != "" {
+		var parsed int
+		if _, err := fmt.Sscanf(raw, "%d", &parsed); err == nil && parsed >= 0 {
+			offset = int32(parsed)
+		}
+	}
+	return service.ListCbtQuestionsInput{
+		SubjectID:      subjectID,
+		WorkflowStatus: r.URL.Query().Get("workflow_status"),
+		QuestionType:   r.URL.Query().Get("question_type"),
+		HotsFilter:     r.URL.Query().Get("hots"),
+		SearchQuery:    r.URL.Query().Get("q"),
+		Limit:          limit,
+		Offset:         offset,
+	}, nil
+}
+
+func (h *CbtQuestion) ExportCSV(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	exportSvc, ok := h.svc.(cbtQuestionExportService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt question export service unavailable"))
+		return
+	}
+	input, err := questionListInputFromRequest(r, 2000, 2000)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+	result, err := exportSvc.ExportCSV(r.Context(), input)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, result.Filename))
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(result.Content)
 }
 
 func (h *CbtQuestion) Get(w http.ResponseWriter, r *http.Request) {

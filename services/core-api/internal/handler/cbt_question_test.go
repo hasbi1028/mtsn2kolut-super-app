@@ -80,6 +80,10 @@ type fakeCbtQuestionService struct {
 	duplicateUser string
 	duplicateRow  db.CbtQuestion
 	duplicateErr  error
+
+	exportInput  service.ListCbtQuestionsInput
+	exportResult service.ExportCbtQuestionsCSVResult
+	exportErr    error
 }
 
 func (f *fakeCbtQuestionService) ListFiltered(_ context.Context, in service.ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error) {
@@ -164,6 +168,14 @@ func (f *fakeCbtQuestionService) DuplicateAsDraft(_ context.Context, id pgtype.U
 		return db.CbtQuestion{}, f.duplicateErr
 	}
 	return f.duplicateRow, nil
+}
+
+func (f *fakeCbtQuestionService) ExportCSV(_ context.Context, input service.ListCbtQuestionsInput) (service.ExportCbtQuestionsCSVResult, error) {
+	f.exportInput = input
+	if f.exportErr != nil {
+		return service.ExportCbtQuestionsCSVResult{}, f.exportErr
+	}
+	return f.exportResult, nil
 }
 
 func cbtQuestionHandlerModel(id, subjectID pgtype.UUID) db.CbtQuestion {
@@ -421,6 +433,31 @@ func TestCbtQuestionHandlersForwardSuccessPaths(t *testing.T) {
 	}
 	if listFake.listInput.Limit != 50 || listFake.listInput.Offset != 10 || !strings.Contains(rec.Body.String(), "IPA") {
 		t.Fatalf("ListFiltered paging/body = %+v/%s, want forwarded paging and item", listFake.listInput, rec.Body.String())
+	}
+
+	exportFake := &fakeCbtQuestionService{
+		exportResult: service.ExportCbtQuestionsCSVResult{
+			Filename: "bank-soal-cbt-test.csv",
+			Content:  []byte("kode,tipe\nQ-001,essay\n"),
+			Count:    1,
+		},
+	}
+	rec = httptest.NewRecorder()
+	(&CbtQuestion{svc: exportFake}).ExportCSV(rec, adminRequest(http.MethodGet, "/api/cbt/questions/export?subject_id="+subjectID.String()+"&workflow_status=review&question_type=essay&q=energi", ""))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ExportCSV() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if exportFake.exportInput.SubjectID != subjectID || exportFake.exportInput.WorkflowStatus != "review" || exportFake.exportInput.QuestionType != "essay" || exportFake.exportInput.SearchQuery != "energi" || exportFake.exportInput.Limit != 2000 {
+		t.Fatalf("ExportCSV() input = %+v, want forwarded filters with export limit", exportFake.exportInput)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/csv") {
+		t.Fatalf("ExportCSV() content-type = %q, want text/csv", got)
+	}
+	if got := rec.Header().Get("Content-Disposition"); !strings.Contains(got, "bank-soal-cbt-test.csv") {
+		t.Fatalf("ExportCSV() disposition = %q, want filename", got)
+	}
+	if rec.Body.String() != "kode,tipe\nQ-001,essay\n" {
+		t.Fatalf("ExportCSV() body = %q, want CSV content", rec.Body.String())
 	}
 
 	getFake := &fakeCbtQuestionService{getDetailRow: db.GetCbtQuestionDetailRow{

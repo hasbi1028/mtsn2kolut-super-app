@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -327,6 +328,97 @@ func TestCbtQuestionImportLegacyCSVSupportsStructuredTypes(t *testing.T) {
 
 func importCSVRow(values ...string) string {
 	return strings.Join(values, ";")
+}
+
+func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
+	subjectID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	multipleAnswerOptions, err := EncodeQuestionOptions([]QuestionOption{
+		{Label: "A", Text: "Satu"},
+		{Label: "B", Text: "Dua"},
+		{Label: "C", Text: "Tiga"},
+		{Label: "D", Text: "Empat"},
+		{Label: "E", Text: "Enam"},
+	})
+	if err != nil {
+		t.Fatalf("EncodeQuestionOptions(multiple answer) error = %v", err)
+	}
+	matchingOptions, err := EncodeQuestionOptions([]QuestionOption{
+		{Label: "A", Text: "Satu", MatchLabel: "1", MatchText: "1"},
+		{Label: "B", Text: "Dua", MatchLabel: "2", MatchText: "2"},
+		{MatchLabel: "3", MatchText: "Tiga", IsDistractor: true},
+	})
+	if err != nil {
+		t.Fatalf("EncodeQuestionOptions(matching) error = %v", err)
+	}
+	store := &fakeQuestionStore{
+		filteredRows: []db.ListCbtQuestionsFilteredRow{
+			{
+				SubjectID:      subjectID,
+				SubjectName:    "Matematika",
+				Code:           "MTK-G",
+				QuestionText:   "Pilih bilangan genap",
+				QuestionType:   "multiple_answer",
+				Options:        multipleAnswerOptions,
+				AnswerKey:      "B,E",
+				Difficulty:     db.CbtQuestionDifficultyEnumMedium,
+				Status:         db.CbtQuestionStatusEnumDraft,
+				WorkflowStatus: "draft",
+				GradeLevel:     pgtype.Int2{Int16: 8, Valid: true},
+				HotsFlag:       true,
+			},
+			{
+				SubjectID:      subjectID,
+				SubjectName:    "Matematika",
+				Code:           "MTK-M",
+				QuestionText:   "Pasangkan angka",
+				QuestionType:   "matching",
+				Options:        matchingOptions,
+				AnswerKey:      "A=1;B=2",
+				Difficulty:     db.CbtQuestionDifficultyEnumMedium,
+				Status:         db.CbtQuestionStatusEnumDraft,
+				WorkflowStatus: "draft",
+			},
+		},
+		count: 2,
+	}
+	svc := &CbtQuestion{q: store}
+
+	got, err := svc.ExportCSV(context.Background(), ListCbtQuestionsInput{
+		SubjectID:      subjectID,
+		WorkflowStatus: " draft ",
+		Limit:          0,
+	})
+	if err != nil {
+		t.Fatalf("ExportCSV() error = %v", err)
+	}
+	if got.Count != 2 || !strings.HasPrefix(got.Filename, "bank-soal-cbt-") {
+		t.Fatalf("ExportCSV() result = %+v, want count and generated filename", got)
+	}
+	if store.listFilterArg.LimitCount != 2000 || store.listFilterArg.WorkflowStatus != "draft" {
+		t.Fatalf("ExportCSV() list arg = %+v, want default export limit and trimmed workflow", store.listFilterArg)
+	}
+	records, err := csv.NewReader(strings.NewReader(string(got.Content))).ReadAll()
+	if err != nil {
+		t.Fatalf("ExportCSV() CSV parse error = %v content=%s", err, string(got.Content))
+	}
+	if len(records) != 3 {
+		t.Fatalf("ExportCSV() records = %d, want header + 2 rows", len(records))
+	}
+	header := csvHeaderIndex(records[0])
+	if records[1][header["tipe"]] != "pg_kompleks" || records[1][header["opsi_e"]] != "Enam" || records[1][header["jawaban"]] != "B,E" || records[1][header["grade_level"]] != "8" || records[1][header["hots_flag"]] != "true" {
+		t.Fatalf("multiple answer CSV row = %+v, want type/options/key/metadata mapped", records[1])
+	}
+	if records[2][header["tipe"]] != "menjodohkan" || records[2][header["kiri_a"]] != "Satu" || records[2][header["kanan_2"]] != "2" || records[2][header["distraktor_1"]] != "Tiga" {
+		t.Fatalf("matching CSV row = %+v, want pairs and distractor mapped", records[2])
+	}
+}
+
+func csvHeaderIndex(headers []string) map[string]int {
+	out := make(map[string]int, len(headers))
+	for idx, header := range headers {
+		out[header] = idx
+	}
+	return out
 }
 
 func TestNormalizeQuestionInputSanitizesDangerousHTML(t *testing.T) {

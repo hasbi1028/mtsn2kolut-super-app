@@ -265,6 +265,7 @@
 	let importFile = $state<File | null>(null);
 	let importBusy = $state(false);
 	let importResult = $state<LegacyImportResult | null>(null);
+	let exportBusy = $state(false);
 	let duplicateBusyId = $state('');
 
 	// ── Form fields ────────────────────────────────────────────────────────────
@@ -1430,6 +1431,38 @@
 		}
 	}
 
+	function exportFilenameFromResponse(response: Response) {
+		const disposition = response.headers.get('content-disposition') ?? '';
+		const match = /filename="?([^";]+)"?/i.exec(disposition);
+		return match?.[1] ?? `bank-soal-cbt-${new Date().toISOString().slice(0, 10)}.csv`;
+	}
+
+	async function exportQuestionsCSV() {
+		exportBusy = true;
+		try {
+			const params = buildQuestionParams(1);
+			params.delete('limit');
+			params.delete('offset');
+			const response = await fetch(clientApiPathWithQuery('/api/cbt/questions/export', params));
+			if (!response.ok) {
+				const payload = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+				throw new Error(payload?.error ?? payload?.message ?? 'Export CSV gagal');
+			}
+			const blob = await response.blob();
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = exportFilenameFromResponse(response);
+			link.click();
+			URL.revokeObjectURL(url);
+			toast.success('Export CSV bank soal berhasil dibuat');
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Export CSV gagal'));
+		} finally {
+			exportBusy = false;
+		}
+	}
+
 	async function duplicateQuestion(id: string) {
 		duplicateBusyId = id;
 		try {
@@ -1528,6 +1561,15 @@
 			</p>
 		</div>
 		<div class="flex shrink-0 flex-wrap gap-2">
+			<LoadingButton
+				variant="outline"
+				onclick={() => void exportQuestionsCSV()}
+				loading={exportBusy}
+				loadingLabel="Export..."
+				disabled={exportBusy || totalItems === 0}
+			>
+				Export CSV
+			</LoadingButton>
 			<Button variant="outline" onclick={() => setModuleMode('import')}>
 				Import CSV
 			</Button>
