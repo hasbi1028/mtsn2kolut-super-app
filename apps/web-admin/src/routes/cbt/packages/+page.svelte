@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Input } from '$lib/components/ui/input';
@@ -24,6 +24,8 @@
 	type Question = {
 		id: string; subject_id: string; subject_code: string;
 		code: string; question_text: string; difficulty: string; status: string;
+		question_type?: string; cp_ref?: string; tp_ref?: string; kd_ref?: string;
+		material_topic?: string; cognitive_level?: string; hots_flag?: boolean;
 	};
 	type Subject = { id: string; name: string; code: string; };
 	type PackagesOverview = {
@@ -42,6 +44,33 @@
 		error?: string;
 		message?: string;
 	};
+	type QuestionListPayload = {
+		items?: Question[];
+		meta?: {
+			total?: number;
+			limit?: number;
+			offset?: number;
+		};
+	};
+	type BlueprintBucket = {
+		label: string;
+		count: number;
+	};
+	type BlueprintMatrixRow = {
+		key: string;
+		cp: string;
+		tp: string;
+		kd: string;
+		topic: string;
+		cognitive: string;
+		count: number;
+		hotsCount: number;
+		types: string[];
+		missing: boolean;
+	};
+
+	const questionPageSize = 100;
+	const maxQuestionPages = 20;
 
 	let packages = $state<CbtPackage[]>([]);
 	let allQuestions = $state<Question[]>([]);
@@ -66,33 +95,151 @@
 			? allQuestions.filter(q => q.subject_id === fSubjectId && q.status === 'published')
 			: []
 	);
+	let selectedQuestions = $derived(questionPool.filter((q) => fSelectedIds.has(q.id)));
+	let selectedBlueprintMatrix = $derived(buildBlueprintMatrix(selectedQuestions));
+	let selectedTypeBuckets = $derived(countByLabel(selectedQuestions, (q) => questionTypeLabel(q.question_type)));
+	let selectedCognitiveBuckets = $derived(countByLabel(selectedQuestions, (q) => compactValue(q.cognitive_level, 'Belum level')));
+	let selectedHotsCount = $derived(selectedQuestions.filter((q) => q.hots_flag).length);
+	let selectedBlueprintMissingCount = $derived(selectedQuestions.filter(questionHasBlueprintGap).length);
 
 	function toggleQuestion(id: string) {
 		if (fSelectedIds.has(id)) fSelectedIds.delete(id);
 		else fSelectedIds.add(id);
 	}
 
+	function handleSubjectChange() {
+		fSelectedIds.clear();
+	}
+
 	function isRecord(value: unknown): value is Record<string, unknown> {
 		return typeof value === 'object' && value !== null;
 	}
 
-	function parseQuestions(payload: unknown) {
-		return Array.isArray(payload) ? (payload as Question[]) : [];
+	function parseQuestionPage(payload: unknown) {
+		if (Array.isArray(payload)) return { items: payload as Question[], total: payload.length };
+		if (!isRecord(payload)) return { items: [], total: 0 };
+		const data = payload as QuestionListPayload;
+		const items = Array.isArray(data.items) ? data.items : [];
+		const total = data.meta?.total ?? items.length;
+		return { items, total };
 	}
 
 	function parseSubjects(payload: AcademicPayload | unknown) {
 		return isRecord(payload) && Array.isArray(payload.subjects) ? (payload.subjects as Subject[]) : [];
 	}
 
+	async function fetchQuestionsPage(offset: number) {
+		const params = new URLSearchParams({
+			limit: String(questionPageSize),
+			offset: String(offset),
+		});
+		const payload = await fetch(clientApiPathWithQuery('/api/cbt/questions', params))
+			.then((response) => readClientApiData<unknown>(response, 'Gagal memuat bank soal'));
+		return parseQuestionPage(payload);
+	}
+
+	async function fetchAllQuestions() {
+		const firstPage = await fetchQuestionsPage(0);
+		const questionsById = new SvelteMap(firstPage.items.map((question) => [question.id, question]));
+		let loaded = firstPage.items.length;
+		let pages = 1;
+		while (loaded < firstPage.total && pages < maxQuestionPages) {
+			const page = await fetchQuestionsPage(loaded);
+			if (page.items.length === 0) break;
+			for (const question of page.items) questionsById.set(question.id, question);
+			loaded += page.items.length;
+			pages += 1;
+		}
+		return Array.from(questionsById.values());
+	}
+
+	function compactValue(value: string | number | null | undefined, fallback: string) {
+		const text = value === null || value === undefined ? '' : String(value).trim();
+		return text || fallback;
+	}
+
+	function questionTypeLabel(value: string | null | undefined) {
+		const labels: Record<string, string> = {
+			multiple_choice: 'PG',
+			multiple_answer: 'PG Kompleks',
+			true_false: 'Benar/Salah',
+			agree_disagree: 'Setuju/Tidak',
+			matching: 'Menjodohkan',
+			short_answer: 'Isian',
+			essay: 'Essay',
+		};
+		const normalized = compactValue(value, '');
+		return labels[normalized] ?? (normalized ? normalized.replaceAll('_', ' ') : 'Belum tipe');
+	}
+
+	function difficultyLabel(value: string | null | undefined) {
+		const labels: Record<string, string> = {
+			easy: 'Mudah',
+			medium: 'Sedang',
+			hard: 'Sulit',
+		};
+		const normalized = compactValue(value, '');
+		return labels[normalized] ?? (normalized || '-');
+	}
+
+	function questionHasBlueprintGap(question: Question) {
+		return !compactValue(question.cp_ref, '')
+			|| (!compactValue(question.tp_ref, '') && !compactValue(question.kd_ref, ''))
+			|| !compactValue(question.cognitive_level, '');
+	}
+
+	function countByLabel(questions: Question[], selector: (question: Question) => string): BlueprintBucket[] {
+		const counts = new SvelteMap<string, number>();
+		for (const question of questions) {
+			const label = selector(question);
+			counts.set(label, (counts.get(label) ?? 0) + 1);
+		}
+		return Array.from(counts.entries())
+			.map(([label, count]) => ({ label, count }))
+			.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+	}
+
+	function buildBlueprintMatrix(questions: Question[]): BlueprintMatrixRow[] {
+		const rows = new SvelteMap<string, BlueprintMatrixRow>();
+		for (const question of questions) {
+			const cp = compactValue(question.cp_ref, 'Belum CP');
+			const tp = compactValue(question.tp_ref, 'Belum TP');
+			const kd = compactValue(question.kd_ref, 'Belum KD');
+			const topic = compactValue(question.material_topic, 'Belum materi');
+			const cognitive = compactValue(question.cognitive_level, 'Belum level');
+			const missing = questionHasBlueprintGap(question);
+			const key = [cp, tp, kd, topic, cognitive].join('|');
+			const row = rows.get(key) ?? {
+				key,
+				cp,
+				tp,
+				kd,
+				topic,
+				cognitive,
+				count: 0,
+				hotsCount: 0,
+				types: [],
+				missing,
+			};
+			row.count += 1;
+			if (question.hots_flag) row.hotsCount += 1;
+			const typeLabel = questionTypeLabel(question.question_type);
+			if (!row.types.includes(typeLabel)) row.types.push(typeLabel);
+			row.missing = row.missing || missing;
+			rows.set(key, row);
+		}
+		return Array.from(rows.values()).sort((a, b) => Number(b.missing) - Number(a.missing) || b.count - a.count || a.cp.localeCompare(b.cp));
+	}
+
 	async function fetchOverview(): Promise<PackagesOverview> {
-		const [packagesPayload, questionsPayload, academicPayload] = await Promise.all([
+		const [packagesPayload, questionItems, academicPayload] = await Promise.all([
 			fetch('/api/cbt/packages').then((response) => readClientApiData<CbtPackagesPayload>(response, 'Gagal memuat data paket')),
-			fetch('/api/cbt/questions').then((response) => readClientApiData<unknown>(response, 'Gagal memuat bank soal')),
+			fetchAllQuestions(),
 			fetch('/api/academic').then((response) => readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')),
 		]);
 		return {
 			packages: packagesPayload.packages ?? [],
-			allQuestions: parseQuestions(questionsPayload),
+			allQuestions: questionItems,
 			subjects: parseSubjects(academicPayload),
 		};
 	}
@@ -196,7 +343,7 @@
 				body: JSON.stringify({
 					subject_id: fSubjectId, title: fTitle, description: fDescription,
 					duration_minutes: fDuration, randomize_questions: fRandomize,
-					is_active: fActive, question_ids: Array.from(fSelectedIds),
+					is_active: fActive, question_ids: selectedQuestions.map((question) => question.id),
 				}),
 			});
 			await readClientJson<unknown>(res);
@@ -259,7 +406,7 @@
 				<div class="grid gap-3 sm:grid-cols-2">
 					<div>
 						<label for="package-subject-id" class="text-xs text-slate-500 mb-1 block">Mata Pelajaran <span class="text-red-500">*</span></label>
-						<select id="package-subject-id" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fSubjectId}>
+						<select id="package-subject-id" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fSubjectId} onchange={handleSubjectChange}>
 							<option value="">-- Pilih --</option>
 								{#each subjects as s (s.id)}
 								<option value={s.id}>{s.code} — {s.name}</option>
@@ -295,8 +442,8 @@
 					<div>
 						<div class="text-xs text-slate-500 mb-2 block">
 							Pilih Soal dari Bank ({questionPool.length} soal tersedia)
-							{#if fSelectedIds.size > 0}
-								— <span class="text-green-700 font-medium">{fSelectedIds.size} dipilih</span>
+							{#if selectedQuestions.length > 0}
+								— <span class="text-green-700 font-medium">{selectedQuestions.length} dipilih</span>
 							{/if}
 						</div>
 						{#if questionPool.length === 0}
@@ -310,15 +457,89 @@
 										<input type="checkbox" checked={fSelectedIds.has(q.id)} onchange={() => toggleQuestion(q.id)} class="mt-0.5 rounded" />
 										<div class="flex-1 min-w-0">
 											<p class="text-sm line-clamp-1">{q.question_text}</p>
-											<div class="flex gap-1 mt-0.5">
+											<div class="flex flex-wrap gap-1 mt-0.5">
 												{#if q.code}
 													<span class="text-xs text-slate-400 font-mono">{q.code}</span>
 												{/if}
-										<Badge variant="outline" class="text-xs py-0">{q.difficulty === 'easy' ? 'Mudah' : q.difficulty === 'medium' ? 'Sedang' : q.difficulty === 'hard' ? 'Sulit' : q.difficulty}</Badge>
+												<Badge variant="outline" class="text-xs py-0">{questionTypeLabel(q.question_type)}</Badge>
+												<Badge variant="outline" class="text-xs py-0">{difficultyLabel(q.difficulty)}</Badge>
+												{#if q.cognitive_level}
+													<Badge variant="secondary" class="text-xs py-0">{q.cognitive_level}</Badge>
+												{/if}
+												{#if q.hots_flag}
+													<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs py-0">HOTS</Badge>
+												{/if}
 											</div>
 										</div>
 									</label>
 								{/each}
+							</div>
+						{/if}
+						{#if selectedQuestions.length > 0}
+							<div class="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
+								<div class="flex flex-wrap items-start justify-between gap-2">
+									<div>
+										<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-900">Blueprint Paket Sementara</p>
+										<p class="mt-1 text-xs text-emerald-800">
+											{selectedQuestions.length} soal dipilih, {selectedBlueprintMatrix.length} kombinasi CP/TP/KD, {selectedHotsCount} HOTS.
+										</p>
+									</div>
+									{#if selectedBlueprintMissingCount > 0}
+										<Badge class="border-amber-200 bg-amber-50 text-amber-700">{selectedBlueprintMissingCount} perlu metadata</Badge>
+									{:else}
+										<Badge class="border-emerald-200 bg-white text-emerald-700">Blueprint lengkap</Badge>
+									{/if}
+								</div>
+
+								<div class="mt-3 grid gap-3 xl:grid-cols-[0.75fr_1.25fr]">
+									<div class="space-y-2 text-xs">
+										<div>
+											<p class="mb-1 font-semibold text-slate-600">Bentuk soal</p>
+											<div class="flex flex-wrap gap-1">
+												{#each selectedTypeBuckets as bucket (bucket.label)}
+													<Badge variant="outline" class="bg-white">{bucket.label}: {bucket.count}</Badge>
+												{/each}
+											</div>
+										</div>
+										<div>
+											<p class="mb-1 font-semibold text-slate-600">Level kognitif</p>
+											<div class="flex flex-wrap gap-1">
+												{#each selectedCognitiveBuckets as bucket (bucket.label)}
+													<Badge variant={bucket.label === 'Belum level' ? 'secondary' : 'outline'} class="bg-white">{bucket.label}: {bucket.count}</Badge>
+												{/each}
+											</div>
+										</div>
+										<p class="rounded-md border border-emerald-100 bg-white px-2 py-1.5 text-slate-600">
+											Gunakan panel ini untuk mencegah paket terlalu menumpuk di satu CP/KD sebelum sesi ujian dibuat.
+										</p>
+									</div>
+
+									<div class="overflow-hidden rounded-md border border-emerald-100 bg-white">
+										<div class="grid grid-cols-[1fr_1fr_1fr_0.8fr_0.5fr] gap-2 border-b bg-emerald-50 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-900">
+											<span>CP</span>
+											<span>TP</span>
+											<span>KD / Materi</span>
+											<span>Level</span>
+											<span class="text-right">Soal</span>
+										</div>
+										<div class="max-h-40 overflow-y-auto">
+											{#each selectedBlueprintMatrix as row (row.key)}
+												<div class="grid grid-cols-[1fr_1fr_1fr_0.8fr_0.5fr] gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 {row.missing ? 'bg-amber-50/70' : ''}">
+													<span class="min-w-0 truncate font-medium text-slate-700" title={row.cp}>{row.cp}</span>
+													<span class="min-w-0 truncate text-slate-600" title={row.tp}>{row.tp}</span>
+													<span class="min-w-0 truncate text-slate-600" title={`${row.kd} / ${row.topic}`}>{row.kd} / {row.topic}</span>
+													<span class="min-w-0 truncate text-slate-600" title={row.types.join(', ')}>{row.cognitive}</span>
+													<span class="text-right font-semibold text-slate-800">
+														{row.count}
+														{#if row.hotsCount > 0}
+															<span class="text-amber-600">/{row.hotsCount}</span>
+														{/if}
+													</span>
+												</div>
+											{/each}
+										</div>
+									</div>
+								</div>
 							</div>
 						{/if}
 					</div>
@@ -326,7 +547,7 @@
 
 				<div class="flex gap-2">
 					<LoadingButton disabled={fBusy || !fSubjectId || !fTitle || !fDuration} onclick={() => void createPackage()} loading={fBusy} loadingLabel="Menyimpan...">
-						{`Buat Paket${fSelectedIds.size > 0 ? ` (${fSelectedIds.size} soal)` : ''}`}
+						{`Buat Paket${selectedQuestions.length > 0 ? ` (${selectedQuestions.length} soal)` : ''}`}
 					</LoadingButton>
 					<LoadingButton variant="outline" onclick={() => (showForm = false)}>Batal</LoadingButton>
 				</div>
