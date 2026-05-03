@@ -145,6 +145,7 @@
 	let filterStatus = $state('');
 	let filterType = $state('');
 	let filterSubjectId = $state('');
+	let filterNeedsSync = $state(false);
 
 	let formMode = $state<'beginner' | 'advance'>('beginner');
 	let formSubjectId = $state('');
@@ -167,7 +168,7 @@
 		active: assessments.filter((item) => item.status === 'active').length,
 		draft: assessments.filter((item) => item.status === 'draft').length,
 		closed: assessments.filter((item) => item.status === 'closed').length,
-		needsSync: assessments.filter((item) => canSyncGrade(item) && (!item.grade_component_id || syncFreshnessCount(item) > 0)).length,
+		needsSync: assessments.filter(needsGradeSync).length,
 	});
 
 	function assessmentTypeLabel(value: string) {
@@ -218,6 +219,10 @@
 		return Boolean(item.class_id) && item.reviewed_submissions > 0;
 	}
 
+	function needsGradeSync(item: NonTestAssessment) {
+		return canSyncGrade(item) && (!item.grade_component_id || syncFreshnessCount(item) > 0);
+	}
+
 	function syncFreshnessCount(item: NonTestAssessment) {
 		return Math.max(Number(item.unsynced_reviewed_submissions ?? 0), 0);
 	}
@@ -253,6 +258,7 @@
 		if (filterStatus) params.set('status', filterStatus);
 		if (filterType) params.set('assessment_type', filterType);
 		if (filterSubjectId) params.set('subject_id', filterSubjectId);
+		if (filterNeedsSync) params.set('sync_filter', 'needs_sync');
 		return clientApiPathWithQuery('/api/cbt/non-test-assessments', params);
 	}
 
@@ -621,11 +627,17 @@
 		load();
 	}
 
+	function toggleNeedsSyncFilter() {
+		filterNeedsSync = !filterNeedsSync;
+		load();
+	}
+
 	function clearFilters() {
 		filterSearch = '';
 		filterStatus = '';
 		filterType = '';
 		filterSubjectId = '';
+		filterNeedsSync = false;
 		load();
 	}
 
@@ -676,10 +688,17 @@
 				<p class="mt-1 text-2xl font-semibold text-blue-800">{summary.draft}</p>
 			</Card.Content>
 		</Card.Root>
-		<Card.Root class="border-amber-100 shadow-sm">
-			<Card.Content class="p-4">
-				<p class="text-xs font-medium uppercase tracking-wider text-slate-500">Perlu Sinkron</p>
-				<p class="mt-1 text-2xl font-semibold text-amber-800">{summary.needsSync}</p>
+		<Card.Root class={`border-amber-100 shadow-sm ${filterNeedsSync ? 'ring-2 ring-amber-300' : ''}`}>
+			<Card.Content class="p-0">
+				<button type="button" class="block w-full p-4 text-left" onclick={toggleNeedsSyncFilter}>
+					<div class="flex items-center justify-between gap-2">
+						<p class="text-xs font-medium uppercase tracking-wider text-slate-500">Perlu Sinkron</p>
+						{#if filterNeedsSync}
+							<Badge class="border border-amber-200 bg-amber-100 text-[10px] text-amber-800">Aktif</Badge>
+						{/if}
+					</div>
+					<p class="mt-1 text-2xl font-semibold text-amber-800">{summary.needsSync}</p>
+				</button>
 			</Card.Content>
 		</Card.Root>
 		<Card.Root class="border-slate-200 shadow-sm">
@@ -821,7 +840,7 @@
 	{/if}
 
 	<Card.Root class="border-slate-200 shadow-sm">
-		<Card.Content class="grid gap-3 p-4 lg:grid-cols-[1fr_12rem_12rem_14rem_auto_auto] lg:items-end">
+		<Card.Content class="grid gap-3 p-4 lg:grid-cols-[1fr_11rem_11rem_13rem_auto_auto_auto] lg:items-end">
 			<div>
 				<label for="non-test-search" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Cari</label>
 				<Input id="non-test-search" placeholder="Judul, bukti, mapel, kelas..." bind:value={filterSearch} onkeydown={(event) => { if (event.key === 'Enter') applyFilters(); }} />
@@ -853,6 +872,9 @@
 					{/each}
 				</select>
 			</div>
+			<LoadingButton variant={filterNeedsSync ? 'default' : 'outline'} onclick={toggleNeedsSyncFilter}>
+				Perlu Sinkron
+			</LoadingButton>
 			<LoadingButton onclick={applyFilters}>Terapkan</LoadingButton>
 			<LoadingButton variant="outline" onclick={clearFilters}>Reset</LoadingButton>
 		</Card.Content>
@@ -889,8 +911,15 @@
 			{@const currentAssessments = overview.assessments}
 			<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 				<Card.Header class="pb-2">
-					<Card.Title class="text-base">Daftar Asesmen ({overview.totalItems})</Card.Title>
-					<Card.Description>Semua item di sini dinilai manual dan tidak masuk runtime ujian token.</Card.Description>
+					<div class="flex flex-wrap items-start justify-between gap-2">
+						<div>
+							<Card.Title class="text-base">Daftar Asesmen ({overview.totalItems})</Card.Title>
+							<Card.Description>Semua item di sini dinilai manual dan tidak masuk runtime ujian token.</Card.Description>
+						</div>
+						{#if filterNeedsSync}
+							<Badge class="border border-amber-200 bg-amber-100 text-amber-800">Filter Perlu Sinkron</Badge>
+						{/if}
+					</div>
 				</Card.Header>
 				<Card.Content class="p-0">
 					<div class="hidden overflow-x-auto lg:block">

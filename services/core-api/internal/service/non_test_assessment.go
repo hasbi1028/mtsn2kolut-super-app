@@ -40,6 +40,9 @@ var (
 		"reviewed":  true,
 		"returned":  true,
 	}
+	allowedNonTestAssessmentSyncFilters = map[string]bool{
+		"needs_sync": true,
+	}
 )
 
 type nonTestAssessmentStore interface {
@@ -84,6 +87,7 @@ type ListNonTestAssessmentsInput struct {
 	ClassID        pgtype.UUID
 	Status         string
 	AssessmentType string
+	SyncFilter     string
 	SearchQuery    string
 	Limit          int32
 	Offset         int32
@@ -140,6 +144,7 @@ func (s *NonTestAssessment) List(ctx context.Context, in ListNonTestAssessmentsI
 		ClassID:              normalized.ClassID,
 		StatusFilter:         normalized.Status,
 		AssessmentTypeFilter: normalized.AssessmentType,
+		SyncFilter:           normalized.SyncFilter,
 		SearchQuery:          normalized.SearchQuery,
 		LimitCount:           normalized.Limit,
 		OffsetCount:          normalized.Offset,
@@ -152,6 +157,7 @@ func (s *NonTestAssessment) List(ctx context.Context, in ListNonTestAssessmentsI
 		ClassID:              normalized.ClassID,
 		StatusFilter:         normalized.Status,
 		AssessmentTypeFilter: normalized.AssessmentType,
+		SyncFilter:           normalized.SyncFilter,
 		SearchQuery:          normalized.SearchQuery,
 	})
 	if err != nil {
@@ -463,12 +469,16 @@ func (s *NonTestAssessment) ensureNonTestGradeComponent(ctx context.Context, q n
 func normalizeNonTestListInput(in ListNonTestAssessmentsInput) ListNonTestAssessmentsInput {
 	in.Status = strings.TrimSpace(in.Status)
 	in.AssessmentType = strings.TrimSpace(in.AssessmentType)
+	in.SyncFilter = strings.TrimSpace(in.SyncFilter)
 	in.SearchQuery = strings.TrimSpace(in.SearchQuery)
 	if !allowedNonTestAssessmentStatuses[in.Status] {
 		in.Status = ""
 	}
 	if !allowedNonTestAssessmentTypes[in.AssessmentType] {
 		in.AssessmentType = ""
+	}
+	if !allowedNonTestAssessmentSyncFilters[in.SyncFilter] {
+		in.SyncFilter = ""
 	}
 	if in.Limit <= 0 || in.Limit > 100 {
 		in.Limit = 25

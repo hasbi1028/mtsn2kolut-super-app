@@ -199,6 +199,7 @@ func TestNonTestAssessmentListIgnoresInvalidFilters(t *testing.T) {
 	_, _, err := svc.List(context.Background(), ListNonTestAssessmentsInput{
 		Status:         "selesai",
 		AssessmentType: "kiosk",
+		SyncFilter:     "stale",
 		Limit:          500,
 		Offset:         -10,
 		SearchQuery:    "  portofolio  ",
@@ -209,8 +210,27 @@ func TestNonTestAssessmentListIgnoresInvalidFilters(t *testing.T) {
 	if store.listParams.StatusFilter != "" || store.listParams.AssessmentTypeFilter != "" {
 		t.Fatalf("filters = %q/%q, want invalid filters cleared", store.listParams.StatusFilter, store.listParams.AssessmentTypeFilter)
 	}
+	if store.listParams.SyncFilter != "" || store.countParams.SyncFilter != "" {
+		t.Fatalf("sync filters = %q/%q, want invalid sync filter cleared", store.listParams.SyncFilter, store.countParams.SyncFilter)
+	}
 	if store.listParams.LimitCount != 25 || store.listParams.OffsetCount != 0 || store.listParams.SearchQuery != "portofolio" {
 		t.Fatalf("paging/search = %+v, want clamped limit/offset and trimmed search", store.listParams)
+	}
+}
+
+func TestNonTestAssessmentListForwardsNeedsSyncFilter(t *testing.T) {
+	store := &fakeNonTestAssessmentStore{}
+	svc := &NonTestAssessment{q: store}
+
+	_, _, err := svc.List(context.Background(), ListNonTestAssessmentsInput{
+		SyncFilter: " needs_sync ",
+		Limit:      10,
+	})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if store.listParams.SyncFilter != "needs_sync" || store.countParams.SyncFilter != "needs_sync" {
+		t.Fatalf("sync filters = %q/%q, want needs_sync forwarded", store.listParams.SyncFilter, store.countParams.SyncFilter)
 	}
 }
 

@@ -22,11 +22,37 @@ WHERE ($1::uuid IS NULL OR a.subject_id = $1::uuid)
   AND ($4::text = '' OR a.assessment_type = $4::text)
   AND (
     $5::text = ''
-    OR a.title ILIKE '%' || $5::text || '%'
-    OR a.description ILIKE '%' || $5::text || '%'
-    OR a.evidence_requirements ILIKE '%' || $5::text || '%'
-    OR s.name ILIKE '%' || $5::text || '%'
-    OR COALESCE(sc.name, '') ILIKE '%' || $5::text || '%'
+    OR (
+      $5::text = 'needs_sync'
+      AND a.class_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM non_test_assessment_submissions reviewed
+        WHERE reviewed.assessment_id = a.id
+          AND reviewed.status = 'reviewed'
+      )
+      AND (
+        a.grade_component_id IS NULL
+        OR EXISTS (
+          SELECT 1
+          FROM non_test_assessment_submissions changed
+          WHERE changed.assessment_id = a.id
+            AND changed.status = 'reviewed'
+            AND (
+              a.grade_synced_at IS NULL
+              OR changed.updated_at > a.grade_synced_at
+            )
+        )
+      )
+    )
+  )
+  AND (
+    $6::text = ''
+    OR a.title ILIKE '%' || $6::text || '%'
+    OR a.description ILIKE '%' || $6::text || '%'
+    OR a.evidence_requirements ILIKE '%' || $6::text || '%'
+    OR s.name ILIKE '%' || $6::text || '%'
+    OR COALESCE(sc.name, '') ILIKE '%' || $6::text || '%'
   )
 `
 
@@ -35,6 +61,7 @@ type CountNonTestAssessmentsParams struct {
 	ClassID              pgtype.UUID `json:"class_id"`
 	StatusFilter         string      `json:"status_filter"`
 	AssessmentTypeFilter string      `json:"assessment_type_filter"`
+	SyncFilter           string      `json:"sync_filter"`
 	SearchQuery          string      `json:"search_query"`
 }
 
@@ -44,6 +71,7 @@ func (q *Queries) CountNonTestAssessments(ctx context.Context, arg CountNonTestA
 		arg.ClassID,
 		arg.StatusFilter,
 		arg.AssessmentTypeFilter,
+		arg.SyncFilter,
 		arg.SearchQuery,
 	)
 	var column_1 int64
@@ -437,14 +465,40 @@ WHERE ($1::uuid IS NULL OR a.subject_id = $1::uuid)
   AND ($4::text = '' OR a.assessment_type = $4::text)
   AND (
     $5::text = ''
-    OR a.title ILIKE '%' || $5::text || '%'
-    OR a.description ILIKE '%' || $5::text || '%'
-    OR a.evidence_requirements ILIKE '%' || $5::text || '%'
-    OR s.name ILIKE '%' || $5::text || '%'
-    OR COALESCE(sc.name, '') ILIKE '%' || $5::text || '%'
+    OR (
+      $5::text = 'needs_sync'
+      AND a.class_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM non_test_assessment_submissions reviewed
+        WHERE reviewed.assessment_id = a.id
+          AND reviewed.status = 'reviewed'
+      )
+      AND (
+        a.grade_component_id IS NULL
+        OR EXISTS (
+          SELECT 1
+          FROM non_test_assessment_submissions changed
+          WHERE changed.assessment_id = a.id
+            AND changed.status = 'reviewed'
+            AND (
+              a.grade_synced_at IS NULL
+              OR changed.updated_at > a.grade_synced_at
+            )
+        )
+      )
+    )
+  )
+  AND (
+    $6::text = ''
+    OR a.title ILIKE '%' || $6::text || '%'
+    OR a.description ILIKE '%' || $6::text || '%'
+    OR a.evidence_requirements ILIKE '%' || $6::text || '%'
+    OR s.name ILIKE '%' || $6::text || '%'
+    OR COALESCE(sc.name, '') ILIKE '%' || $6::text || '%'
   )
 ORDER BY a.created_at DESC
-LIMIT $7 OFFSET $6
+LIMIT $8 OFFSET $7
 `
 
 type ListNonTestAssessmentsParams struct {
@@ -452,6 +506,7 @@ type ListNonTestAssessmentsParams struct {
 	ClassID              pgtype.UUID `json:"class_id"`
 	StatusFilter         string      `json:"status_filter"`
 	AssessmentTypeFilter string      `json:"assessment_type_filter"`
+	SyncFilter           string      `json:"sync_filter"`
 	SearchQuery          string      `json:"search_query"`
 	OffsetCount          int32       `json:"offset_count"`
 	LimitCount           int32       `json:"limit_count"`
@@ -497,6 +552,7 @@ func (q *Queries) ListNonTestAssessments(ctx context.Context, arg ListNonTestAss
 		arg.ClassID,
 		arg.StatusFilter,
 		arg.AssessmentTypeFilter,
+		arg.SyncFilter,
 		arg.SearchQuery,
 		arg.OffsetCount,
 		arg.LimitCount,

@@ -54,6 +54,32 @@ WHERE (sqlc.arg(subject_id)::uuid IS NULL OR a.subject_id = sqlc.arg(subject_id)
   AND (sqlc.arg(status_filter)::text = '' OR a.status = sqlc.arg(status_filter)::text)
   AND (sqlc.arg(assessment_type_filter)::text = '' OR a.assessment_type = sqlc.arg(assessment_type_filter)::text)
   AND (
+    sqlc.arg(sync_filter)::text = ''
+    OR (
+      sqlc.arg(sync_filter)::text = 'needs_sync'
+      AND a.class_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM non_test_assessment_submissions reviewed
+        WHERE reviewed.assessment_id = a.id
+          AND reviewed.status = 'reviewed'
+      )
+      AND (
+        a.grade_component_id IS NULL
+        OR EXISTS (
+          SELECT 1
+          FROM non_test_assessment_submissions changed
+          WHERE changed.assessment_id = a.id
+            AND changed.status = 'reviewed'
+            AND (
+              a.grade_synced_at IS NULL
+              OR changed.updated_at > a.grade_synced_at
+            )
+        )
+      )
+    )
+  )
+  AND (
     sqlc.arg(search_query)::text = ''
     OR a.title ILIKE '%' || sqlc.arg(search_query)::text || '%'
     OR a.description ILIKE '%' || sqlc.arg(search_query)::text || '%'
@@ -73,6 +99,32 @@ WHERE (sqlc.arg(subject_id)::uuid IS NULL OR a.subject_id = sqlc.arg(subject_id)
   AND (sqlc.arg(class_id)::uuid IS NULL OR a.class_id = sqlc.arg(class_id)::uuid)
   AND (sqlc.arg(status_filter)::text = '' OR a.status = sqlc.arg(status_filter)::text)
   AND (sqlc.arg(assessment_type_filter)::text = '' OR a.assessment_type = sqlc.arg(assessment_type_filter)::text)
+  AND (
+    sqlc.arg(sync_filter)::text = ''
+    OR (
+      sqlc.arg(sync_filter)::text = 'needs_sync'
+      AND a.class_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM non_test_assessment_submissions reviewed
+        WHERE reviewed.assessment_id = a.id
+          AND reviewed.status = 'reviewed'
+      )
+      AND (
+        a.grade_component_id IS NULL
+        OR EXISTS (
+          SELECT 1
+          FROM non_test_assessment_submissions changed
+          WHERE changed.assessment_id = a.id
+            AND changed.status = 'reviewed'
+            AND (
+              a.grade_synced_at IS NULL
+              OR changed.updated_at > a.grade_synced_at
+            )
+        )
+      )
+    )
+  )
   AND (
     sqlc.arg(search_query)::text = ''
     OR a.title ILIKE '%' || sqlc.arg(search_query)::text || '%'

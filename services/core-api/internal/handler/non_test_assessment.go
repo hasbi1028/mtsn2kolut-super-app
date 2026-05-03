@@ -435,6 +435,7 @@ func nonTestAssessmentListInputFromRequest(r *http.Request) (service.ListNonTest
 		ClassID:        classID,
 		Status:         r.URL.Query().Get("status"),
 		AssessmentType: r.URL.Query().Get("assessment_type"),
+		SyncFilter:     r.URL.Query().Get("sync_filter"),
 		SearchQuery:    r.URL.Query().Get("q"),
 		Limit:          limit,
 		Offset:         offset,
