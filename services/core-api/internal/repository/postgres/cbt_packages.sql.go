@@ -148,19 +148,30 @@ func (q *Queries) GetExamQuestions(ctx context.Context, packageID pgtype.UUID) (
 
 const listCbtPackageQuestions = `-- name: ListCbtPackageQuestions :many
 SELECT pq.package_id, pq.question_id, pq.position, pq.points,
-       q.code AS question_code, q.question_text
+       q.code AS question_code, q.question_text, q.question_type, q.difficulty, q.status, q.workflow_status,
+       q.cp_ref, q.tp_ref, q.kd_ref, q.material_topic, q.cognitive_level, q.hots_flag
 FROM cbt_package_questions pq
 JOIN cbt_questions q ON q.id = pq.question_id
 ORDER BY pq.package_id, pq.position ASC
 `
 
 type ListCbtPackageQuestionsRow struct {
-	PackageID    pgtype.UUID `json:"package_id"`
-	QuestionID   pgtype.UUID `json:"question_id"`
-	Position     int32       `json:"position"`
-	Points       int32       `json:"points"`
-	QuestionCode string      `json:"question_code"`
-	QuestionText string      `json:"question_text"`
+	PackageID      pgtype.UUID               `json:"package_id"`
+	QuestionID     pgtype.UUID               `json:"question_id"`
+	Position       int32                     `json:"position"`
+	Points         int32                     `json:"points"`
+	QuestionCode   string                    `json:"question_code"`
+	QuestionText   string                    `json:"question_text"`
+	QuestionType   string                    `json:"question_type"`
+	Difficulty     CbtQuestionDifficultyEnum `json:"difficulty"`
+	Status         CbtQuestionStatusEnum     `json:"status"`
+	WorkflowStatus string                    `json:"workflow_status"`
+	CpRef          string                    `json:"cp_ref"`
+	TpRef          string                    `json:"tp_ref"`
+	KdRef          string                    `json:"kd_ref"`
+	MaterialTopic  string                    `json:"material_topic"`
+	CognitiveLevel string                    `json:"cognitive_level"`
+	HotsFlag       bool                      `json:"hots_flag"`
 }
 
 func (q *Queries) ListCbtPackageQuestions(ctx context.Context) ([]ListCbtPackageQuestionsRow, error) {
@@ -179,6 +190,16 @@ func (q *Queries) ListCbtPackageQuestions(ctx context.Context) ([]ListCbtPackage
 			&i.Points,
 			&i.QuestionCode,
 			&i.QuestionText,
+			&i.QuestionType,
+			&i.Difficulty,
+			&i.Status,
+			&i.WorkflowStatus,
+			&i.CpRef,
+			&i.TpRef,
+			&i.KdRef,
+			&i.MaterialTopic,
+			&i.CognitiveLevel,
+			&i.HotsFlag,
 		); err != nil {
 			return nil, err
 		}

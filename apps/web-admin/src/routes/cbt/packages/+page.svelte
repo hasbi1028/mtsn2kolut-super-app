@@ -27,9 +27,17 @@
 		workflow_status?: string; question_type?: string; cp_ref?: string; tp_ref?: string; kd_ref?: string;
 		material_topic?: string; cognitive_level?: string; hots_flag?: boolean;
 	};
+	type PackageQuestion = {
+		package_id: string; question_id: string; position: number; points: number;
+		question_code: string; question_text: string;
+		question_type?: string; difficulty?: string; status?: string; workflow_status?: string;
+		cp_ref?: string; tp_ref?: string; kd_ref?: string; material_topic?: string; cognitive_level?: string;
+		hots_flag?: boolean;
+	};
 	type Subject = { id: string; name: string; code: string; };
 	type PackagesOverview = {
 		packages: CbtPackage[];
+		packageQuestions: PackageQuestion[];
 		allQuestions: Question[];
 		subjects: Subject[];
 	};
@@ -56,6 +64,14 @@
 		label: string;
 		count: number;
 	};
+	type PackageQualitySummary = {
+		questions: PackageQuestion[];
+		typeBuckets: BlueprintBucket[];
+		cognitiveBuckets: BlueprintBucket[];
+		hotsCount: number;
+		missingCount: number;
+		unpublishedCount: number;
+	};
 	type BlueprintMatrixRow = {
 		key: string;
 		cp: string;
@@ -73,6 +89,7 @@
 	const maxQuestionPages = 20;
 
 	let packages = $state<CbtPackage[]>([]);
+	let packageQuestions = $state<PackageQuestion[]>([]);
 	let allQuestions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
 	let packagesPromise = $state<Promise<PackagesOverview> | null>(null);
@@ -133,6 +150,10 @@
 		return isRecord(payload) && Array.isArray(payload.subjects) ? (payload.subjects as Subject[]) : [];
 	}
 
+	function parsePackageQuestions(payload: CbtPackagesPayload | unknown) {
+		return isRecord(payload) && Array.isArray(payload.questions) ? (payload.questions as PackageQuestion[]) : [];
+	}
+
 	async function fetchQuestionsPage(offset: number) {
 		const params = new URLSearchParams({
 			limit: String(questionPageSize),
@@ -188,7 +209,7 @@
 		return labels[normalized] ?? (normalized || '-');
 	}
 
-	function questionHasBlueprintGap(question: Question) {
+	function questionHasBlueprintGap(question: { cp_ref?: string; tp_ref?: string; kd_ref?: string; cognitive_level?: string }) {
 		return !compactValue(question.cp_ref, '')
 			|| (!compactValue(question.tp_ref, '') && !compactValue(question.kd_ref, ''))
 			|| !compactValue(question.cognitive_level, '');
@@ -220,7 +241,7 @@
 		return issues;
 	}
 
-	function countByLabel(questions: Question[], selector: (question: Question) => string): BlueprintBucket[] {
+	function countByLabel<T>(questions: T[], selector: (question: T) => string): BlueprintBucket[] {
 		const counts = new SvelteMap<string, number>();
 		for (const question of questions) {
 			const label = selector(question);
@@ -263,6 +284,16 @@
 		return Array.from(rows.values()).sort((a, b) => Number(b.missing) - Number(a.missing) || b.count - a.count || a.cp.localeCompare(b.cp));
 	}
 
+	function packageQualitySummary(packageID: string): PackageQualitySummary {
+		const questions = packageQuestions.filter((question) => question.package_id === packageID);
+		const typeBuckets = countByLabel(questions, (question) => questionTypeLabel(question.question_type));
+		const cognitiveBuckets = countByLabel(questions, (question) => compactValue(question.cognitive_level, 'Belum level'));
+		const hotsCount = questions.filter((question) => question.hots_flag).length;
+		const missingCount = questions.filter(questionHasBlueprintGap).length;
+		const unpublishedCount = questions.filter((question) => question.status !== 'published').length;
+		return { questions, typeBuckets, cognitiveBuckets, hotsCount, missingCount, unpublishedCount };
+	}
+
 	async function fetchOverview(): Promise<PackagesOverview> {
 		const [packagesPayload, questionItems, academicPayload] = await Promise.all([
 			fetch('/api/cbt/packages').then((response) => readClientApiData<CbtPackagesPayload>(response, 'Gagal memuat data paket')),
@@ -271,6 +302,7 @@
 		]);
 		return {
 			packages: packagesPayload.packages ?? [],
+			packageQuestions: parsePackageQuestions(packagesPayload),
 			allQuestions: questionItems,
 			subjects: parseSubjects(academicPayload),
 		};
@@ -278,6 +310,7 @@
 
 	function applyOverview(overview: PackagesOverview) {
 		packages = overview.packages;
+		packageQuestions = overview.packageQuestions;
 		allQuestions = overview.allQuestions;
 		subjects = overview.subjects;
 	}
@@ -285,15 +318,16 @@
 	function load() {
 		const requestId = ++packagesRequestId;
 		packages = [];
+		packageQuestions = [];
 		allQuestions = [];
 		subjects = [];
 		packagesPromise = fetchOverview().then((overview) => {
-			if (requestId !== packagesRequestId) return { packages, allQuestions, subjects };
+			if (requestId !== packagesRequestId) return { packages, packageQuestions, allQuestions, subjects };
 			applyOverview(overview);
 			return overview;
 		}).catch((error: unknown) => {
 			if (requestId === packagesRequestId) throw error;
-			return { packages, allQuestions, subjects };
+			return { packages, packageQuestions, allQuestions, subjects };
 		});
 	}
 
@@ -310,7 +344,7 @@
 			packagesPromise = Promise.resolve(overview);
 		} catch (error) {
 			if (requestId === packagesRequestId) {
-				packagesPromise = Promise.resolve({ packages, allQuestions, subjects });
+				packagesPromise = Promise.resolve({ packages, packageQuestions, allQuestions, subjects });
 				toast.error(packagesErrorMessage(error));
 			}
 		}
@@ -628,11 +662,12 @@
 			<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 				<Card.Content class="space-y-3 p-6">
 					{#each Array.from({ length: 5 }) as _, index (`package-row-skeleton-${index}`)}
-						<div class="grid gap-3 lg:grid-cols-[1.2fr_0.6fr_0.5fr_0.5fr_0.5fr_0.6fr_auto] lg:items-center">
+						<div class="grid gap-3 lg:grid-cols-[1.2fr_0.6fr_0.5fr_0.5fr_1fr_0.5fr_0.6fr_auto] lg:items-center">
 							<Skeleton class="h-5 w-40" />
 							<Skeleton class="h-6 w-16" />
 							<Skeleton class="h-5 w-14" />
 							<Skeleton class="h-5 w-12" />
+							<Skeleton class="h-7 w-48" />
 							<Skeleton class="h-6 w-12" />
 							<Skeleton class="h-6 w-16" />
 							<Skeleton class="h-9 w-20 justify-self-end" />
@@ -666,6 +701,7 @@
 							<Table.Head>Mapel</Table.Head>
 							<Table.Head>Durasi</Table.Head>
 							<Table.Head>Jml Soal</Table.Head>
+							<Table.Head>Mutu Paket</Table.Head>
 							<Table.Head>Acak</Table.Head>
 							<Table.Head>Status</Table.Head>
 							<Table.Head></Table.Head>
@@ -673,6 +709,7 @@
 					</Table.Header>
 					<Table.Body>
 						{#each currentPackages as p (p.id)}
+							{@const quality = packageQualitySummary(p.id)}
 							<Table.Row>
 								<Table.Cell class="font-medium">{p.title}</Table.Cell>
 								<Table.Cell>
@@ -681,6 +718,26 @@
 								<Table.Cell class="text-slate-600">{p.duration_minutes} mnt</Table.Cell>
 								<Table.Cell>
 									<span class="font-mono text-sm">{p.question_count}</span>
+								</Table.Cell>
+								<Table.Cell>
+									<div class="flex max-w-sm flex-wrap gap-1">
+										{#if quality.questions.length === 0}
+											<span class="text-xs text-slate-400">Belum ada rincian</span>
+										{:else}
+											{#each quality.typeBuckets.slice(0, 3) as bucket (bucket.label)}
+												<Badge variant="outline" class="bg-white text-xs">{bucket.label}: {bucket.count}</Badge>
+											{/each}
+											{#if quality.hotsCount > 0}
+												<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">{quality.hotsCount} HOTS</Badge>
+											{/if}
+											{#if quality.missingCount > 0}
+												<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">{quality.missingCount} metadata kurang</Badge>
+											{/if}
+											{#if quality.unpublishedCount > 0}
+												<Badge class="border-red-200 bg-red-50 text-red-700 text-xs">{quality.unpublishedCount} belum terbit</Badge>
+											{/if}
+										{/if}
+									</div>
 								</Table.Cell>
 								<Table.Cell>
 									{#if p.randomize_questions}
@@ -711,7 +768,7 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={7} class="text-center text-slate-400 py-8">Belum ada paket ujian</Table.Cell>
+								<Table.Cell colspan={8} class="text-center text-slate-400 py-8">Belum ada paket ujian</Table.Cell>
 							</Table.Row>
 						{/each}
 					</Table.Body>
@@ -720,6 +777,7 @@
 
 				<div class="grid gap-3 p-4 lg:hidden">
 					{#each currentPackages as p (p.id)}
+						{@const quality = packageQualitySummary(p.id)}
 						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
@@ -737,6 +795,27 @@
 								<Badge variant="secondary">{p.question_count} soal</Badge>
 								{#if p.randomize_questions}
 									<Badge class="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">Acak</Badge>
+								{/if}
+							</div>
+							<div class="mt-2 flex flex-wrap items-center gap-1.5">
+								{#if quality.questions.length === 0}
+									<span class="text-xs text-slate-400">Rincian mutu belum tersedia</span>
+								{:else}
+									{#each quality.typeBuckets.slice(0, 3) as bucket (bucket.label)}
+										<Badge variant="outline" class="bg-white text-xs">{bucket.label}: {bucket.count}</Badge>
+									{/each}
+									{#each quality.cognitiveBuckets.slice(0, 1) as bucket (bucket.label)}
+										<Badge variant="secondary" class="text-xs">{bucket.label}: {bucket.count}</Badge>
+									{/each}
+									{#if quality.hotsCount > 0}
+										<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">{quality.hotsCount} HOTS</Badge>
+									{/if}
+									{#if quality.missingCount > 0}
+										<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">{quality.missingCount} metadata kurang</Badge>
+									{/if}
+									{#if quality.unpublishedCount > 0}
+										<Badge class="border-red-200 bg-red-50 text-red-700 text-xs">{quality.unpublishedCount} belum terbit</Badge>
+									{/if}
 								{/if}
 							</div>
 							{#if p.description}

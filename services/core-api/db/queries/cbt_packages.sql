@@ -23,7 +23,8 @@ VALUES ($1, $2, $3, $4);
 
 -- name: ListCbtPackageQuestions :many
 SELECT pq.package_id, pq.question_id, pq.position, pq.points,
-       q.code AS question_code, q.question_text
+       q.code AS question_code, q.question_text, q.question_type, q.difficulty, q.status, q.workflow_status,
+       q.cp_ref, q.tp_ref, q.kd_ref, q.material_topic, q.cognitive_level, q.hots_flag
 FROM cbt_package_questions pq
 JOIN cbt_questions q ON q.id = pq.question_id
 ORDER BY pq.package_id, pq.position ASC;
