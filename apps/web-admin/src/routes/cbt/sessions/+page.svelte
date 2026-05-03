@@ -64,6 +64,15 @@
 		helper: string;
 		tone: ReadinessBoardTone;
 	};
+	type SessionScheduleFilter = 'all' | 'today' | 'upcoming' | 'overdue';
+	type SessionScheduleState = 'today' | 'upcoming' | 'overdue' | 'running_window' | 'closed' | 'unknown';
+	type ScheduleBoardTone = 'danger' | 'success' | 'info';
+	type ScheduleBoardConfig = {
+		filter: Exclude<SessionScheduleFilter, 'all'>;
+		label: string;
+		helper: string;
+		tone: ScheduleBoardTone;
+	};
 	type SchoolClass = { id: string; name: string; code: string; level: string; };
 	type SessionsOverview = {
 		sessions: ExamSession[];
@@ -90,6 +99,7 @@
 	let sessionsPromise = $state<Promise<SessionsOverview> | null>(null);
 	let showForm = $state(false);
 	let readinessFilter = $state<SessionReadinessFilter>('all');
+	let scheduleFilter = $state<SessionScheduleFilter>('all');
 
 	let fPackageId = $state('');
 	let fScopeType = $state('class');
@@ -138,6 +148,18 @@
 		{ filter: 'needs_rooms', label: 'Butuh Ruang', helper: 'Ruang, kursi, atau kapasitas belum rapi', tone: 'warning' },
 		{ filter: 'needs_proctors', label: 'Butuh Pengawas', helper: 'Ruang ujian belum lengkap pengawas', tone: 'info' },
 	];
+	const scheduleFilters: SessionScheduleFilter[] = ['all', 'today', 'upcoming', 'overdue'];
+	const scheduleBoardConfigs: ScheduleBoardConfig[] = [
+		{ filter: 'today', label: 'Hari Ini', helper: 'Perlu dipantau hari ini', tone: 'success' },
+		{ filter: 'upcoming', label: 'Akan Datang', helper: 'Masih sebelum tanggal mulai', tone: 'info' },
+		{ filter: 'overdue', label: 'Lewat Jadwal', helper: 'Belum selesai setelah waktu tutup', tone: 'danger' },
+	];
+	const witaDateFormatter = new Intl.DateTimeFormat('en-CA', {
+		timeZone: 'Asia/Makassar',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+	});
 
 	function statusClass(s: string) {
 		if (s === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -328,6 +350,64 @@
 		}));
 	}
 
+	function witaDateKey(value: string | Date) {
+		const date = value instanceof Date ? value : new Date(value);
+		if (Number.isNaN(date.getTime())) return '';
+		return witaDateFormatter.format(date);
+	}
+
+	function sessionIsClosed(session: ExamSession) {
+		return session.status === 'finished' || session.status === 'cancelled';
+	}
+
+	function sessionScheduleState(session: ExamSession): SessionScheduleState {
+		const now = Date.now();
+		const start = new Date(session.scheduled_start);
+		const end = new Date(session.scheduled_end);
+		const startTime = start.getTime();
+		const endTime = end.getTime();
+		if (Number.isNaN(startTime)) return 'unknown';
+		if (!sessionIsClosed(session) && !Number.isNaN(endTime) && endTime < now) return 'overdue';
+		if (witaDateKey(start) === witaDateKey(new Date())) return 'today';
+		if (startTime > now) return 'upcoming';
+		if (sessionIsClosed(session)) return 'closed';
+		if (Number.isNaN(endTime) || endTime >= now) return 'running_window';
+		return 'unknown';
+	}
+
+	function sessionMatchesScheduleFilter(session: ExamSession, filter: SessionScheduleFilter) {
+		if (filter === 'today') return sessionScheduleState(session) === 'today';
+		if (filter === 'upcoming') return sessionScheduleState(session) === 'upcoming';
+		if (filter === 'overdue') return sessionScheduleState(session) === 'overdue';
+		return true;
+	}
+
+	function scheduleStateLabel(state: SessionScheduleState) {
+		const labels: Record<SessionScheduleState, string> = {
+			today: 'Hari ini',
+			upcoming: 'Akan datang',
+			overdue: 'Lewat jadwal',
+			running_window: 'Dalam rentang',
+			closed: 'Riwayat',
+			unknown: 'Jadwal belum pasti',
+		};
+		return labels[state];
+	}
+
+	function scheduleStateClass(state: SessionScheduleState) {
+		if (state === 'overdue') return 'border-red-200 bg-red-50 text-red-700';
+		if (state === 'today' || state === 'running_window') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+		if (state === 'upcoming') return 'border-sky-200 bg-sky-50 text-sky-700';
+		return 'border-slate-200 bg-slate-50 text-slate-600';
+	}
+
+	function buildScheduleBoardCards(items: ExamSession[]) {
+		return scheduleBoardConfigs.map((card) => ({
+			...card,
+			count: items.filter((session) => sessionMatchesScheduleFilter(session, card.filter)).length,
+		}));
+	}
+
 	function readinessBoardCardClass(tone: ReadinessBoardTone, active: boolean) {
 		const base = 'rounded-lg border p-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700';
 		if (active) return `${base} border-emerald-300 bg-emerald-50 text-emerald-950`;
@@ -337,8 +417,20 @@
 		return `${base} border-sky-100 bg-white hover:border-sky-200 hover:bg-sky-50`;
 	}
 
+	function scheduleBoardCardClass(tone: ScheduleBoardTone, active: boolean) {
+		const base = 'rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700';
+		if (active) return `${base} border-emerald-300 bg-emerald-50 text-emerald-950`;
+		if (tone === 'danger') return `${base} border-red-100 bg-white hover:border-red-200 hover:bg-red-50`;
+		if (tone === 'success') return `${base} border-emerald-100 bg-white hover:border-emerald-200 hover:bg-emerald-50`;
+		return `${base} border-sky-100 bg-white hover:border-sky-200 hover:bg-sky-50`;
+	}
+
 	function isSessionReadinessFilter(value: string | null): value is SessionReadinessFilter {
 		return readinessFilters.includes(value as SessionReadinessFilter);
+	}
+
+	function isSessionScheduleFilter(value: string | null): value is SessionScheduleFilter {
+		return scheduleFilters.includes(value as SessionScheduleFilter);
 	}
 
 	function replaceCurrentUrl(url: URL) {
@@ -355,6 +447,15 @@
 		replaceCurrentUrl(url);
 	}
 
+	function setSessionScheduleFilter(filter: SessionScheduleFilter) {
+		scheduleFilter = filter;
+		if (typeof window === 'undefined') return;
+		const url = new URL(window.location.href);
+		if (filter === 'all') url.searchParams.delete('schedule');
+		else url.searchParams.set('schedule', filter);
+		replaceCurrentUrl(url);
+	}
+
 	function initSessionReadinessFilterFromQuery() {
 		if (typeof window === 'undefined') return;
 		const url = new URL(window.location.href);
@@ -365,6 +466,20 @@
 		}
 		if (requestedFilter !== null) {
 			url.searchParams.delete('readiness');
+			replaceCurrentUrl(url);
+		}
+	}
+
+	function initSessionScheduleFilterFromQuery() {
+		if (typeof window === 'undefined') return;
+		const url = new URL(window.location.href);
+		const requestedFilter = url.searchParams.get('schedule');
+		if (isSessionScheduleFilter(requestedFilter)) {
+			scheduleFilter = requestedFilter;
+			return;
+		}
+		if (requestedFilter !== null) {
+			url.searchParams.delete('schedule');
 			replaceCurrentUrl(url);
 		}
 	}
@@ -631,6 +746,7 @@
 
 	onMount(() => {
 		initSessionReadinessFilterFromQuery();
+		initSessionScheduleFilterFromQuery();
 		void loadInitial();
 	});
 </script>
@@ -897,9 +1013,12 @@
 		{#snippet children(value)}
 			{@const overview = value as SessionsOverview}
 			{@const currentSessions = overview.sessions}
-			{@const visibleSessions = currentSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter))}
-			{@const readinessFilterOptions = buildReadinessFilterOptions(currentSessions)}
-			{@const readinessBoardCards = buildReadinessBoardCards(currentSessions)}
+			{@const scheduleScopedSessions = currentSessions.filter((session) => sessionMatchesScheduleFilter(session, scheduleFilter))}
+			{@const readinessScopedSessions = currentSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter))}
+			{@const visibleSessions = currentSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter) && sessionMatchesScheduleFilter(session, scheduleFilter))}
+			{@const readinessFilterOptions = buildReadinessFilterOptions(scheduleScopedSessions)}
+			{@const readinessBoardCards = buildReadinessBoardCards(scheduleScopedSessions)}
+			{@const scheduleBoardCards = buildScheduleBoardCards(readinessScopedSessions)}
 		<div class="space-y-4">
 			<div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
 				{#each readinessBoardCards as card (card.filter)}
@@ -922,13 +1041,47 @@
 					</button>
 				{/each}
 			</div>
+			<div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+				<div class="flex flex-wrap items-center justify-between gap-2">
+					<div>
+						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">Urgensi Jadwal</p>
+						<p class="mt-0.5 text-xs text-slate-500">Monitoring waktu pelaksanaan CBT</p>
+					</div>
+					{#if scheduleFilter !== 'all'}
+						<Button variant="outline" size="sm" onclick={() => setSessionScheduleFilter('all')}>
+							Reset Jadwal
+						</Button>
+					{/if}
+				</div>
+				<div class="mt-3 grid gap-2 sm:grid-cols-3">
+					{#each scheduleBoardCards as card (card.filter)}
+						<button
+							type="button"
+							class={scheduleBoardCardClass(card.tone, scheduleFilter === card.filter)}
+							aria-pressed={scheduleFilter === card.filter}
+							onclick={() => setSessionScheduleFilter(card.filter)}
+						>
+							<div class="flex items-start justify-between gap-2">
+								<div>
+									<p class="text-xs font-semibold text-slate-700">{card.label}</p>
+									<p class="text-xl font-semibold text-slate-900">{card.count}</p>
+								</div>
+								{#if scheduleFilter === card.filter}
+									<span class="rounded bg-emerald-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">Aktif</span>
+								{/if}
+							</div>
+							<p class="mt-0.5 text-xs text-slate-500">{card.helper}</p>
+						</button>
+					{/each}
+				</div>
+			</div>
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Header class="space-y-3 pb-3">
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<Card.Title class="text-base">Daftar Sesi ({visibleSessions.length}/{currentSessions.length})</Card.Title>
 					{#if readinessFilter !== 'all'}
 						<Button variant="outline" size="sm" onclick={() => setSessionReadinessFilter('all')}>
-							Reset Filter
+							Reset Kesiapan
 						</Button>
 					{/if}
 				</div>
@@ -967,6 +1120,7 @@
 							{@const rowOperationalIssues = sessionOperationalIssues(s)}
 							{@const rowReadinessIssues = sessionRowReadinessIssues(s)}
 							{@const rowNextAction = nextSessionAction(s)}
+							{@const rowScheduleState = sessionScheduleState(s)}
 							<Table.Row>
 								<Table.Cell class="font-medium max-w-48">
 									<p class="truncate">{s.title}</p>
@@ -990,7 +1144,12 @@
 										<p class="text-[11px] text-slate-500">{mixPolicyLabel(s.mix_policy)}</p>
 									</div>
 								</Table.Cell>
-								<Table.Cell class="text-slate-500 text-xs whitespace-nowrap">{fmtDt(s.scheduled_start)}</Table.Cell>
+								<Table.Cell class="whitespace-nowrap">
+									<div class="space-y-1">
+										<p class="text-xs text-slate-500">{fmtDt(s.scheduled_start)}</p>
+										<Badge class="{scheduleStateClass(rowScheduleState)} text-[11px]">{scheduleStateLabel(rowScheduleState)}</Badge>
+									</div>
+								</Table.Cell>
 								<Table.Cell>
 									<span class="font-mono text-sm">{s.participant_count}</span>
 								</Table.Cell>
@@ -1085,6 +1244,7 @@
 						{@const rowOperationalIssues = sessionOperationalIssues(s)}
 						{@const rowReadinessIssues = sessionRowReadinessIssues(s)}
 						{@const rowNextAction = nextSessionAction(s)}
+						{@const rowScheduleState = sessionScheduleState(s)}
 						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
@@ -1139,7 +1299,10 @@
 									</a>
 								{/if}
 							</div>
-							<p class="mt-3 text-xs text-slate-500">{fmtDt(s.scheduled_start)}</p>
+							<div class="mt-3 flex flex-wrap items-center gap-2">
+								<p class="text-xs text-slate-500">{fmtDt(s.scheduled_start)}</p>
+								<Badge class="{scheduleStateClass(rowScheduleState)} text-xs">{scheduleStateLabel(rowScheduleState)}</Badge>
+							</div>
 							<div class="mt-4 flex flex-wrap gap-2">
 								{#if s.status === 'draft'}
 									<Button
