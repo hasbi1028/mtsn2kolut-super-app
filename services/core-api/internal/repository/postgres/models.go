@@ -1501,6 +1501,45 @@ type LibraryLoan struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type NonTestAssessment struct {
+	ID                   pgtype.UUID        `json:"id"`
+	SubjectID            pgtype.UUID        `json:"subject_id"`
+	ClassID              pgtype.UUID        `json:"class_id"`
+	AssessmentType       string             `json:"assessment_type"`
+	Title                string             `json:"title"`
+	Description          string             `json:"description"`
+	InstructionHtml      string             `json:"instruction_html"`
+	RubricHtml           string             `json:"rubric_html"`
+	EvidenceRequirements string             `json:"evidence_requirements"`
+	Mode                 string             `json:"mode"`
+	ScoringScale         string             `json:"scoring_scale"`
+	MaxScore             pgtype.Numeric     `json:"max_score"`
+	Weight               pgtype.Numeric     `json:"weight"`
+	DueAt                pgtype.Timestamptz `json:"due_at"`
+	Status               string             `json:"status"`
+	CreatedByUsername    string             `json:"created_by_username"`
+	AssessorUsername     string             `json:"assessor_username"`
+	Checklist            []byte             `json:"checklist"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
+type NonTestAssessmentSubmission struct {
+	ID               pgtype.UUID        `json:"id"`
+	AssessmentID     pgtype.UUID        `json:"assessment_id"`
+	StudentID        pgtype.UUID        `json:"student_id"`
+	Status           string             `json:"status"`
+	EvidenceUrl      string             `json:"evidence_url"`
+	EvidenceNote     string             `json:"evidence_note"`
+	Score            pgtype.Numeric     `json:"score"`
+	Feedback         string             `json:"feedback"`
+	SubmittedAt      pgtype.Timestamptz `json:"submitted_at"`
+	GradedAt         pgtype.Timestamptz `json:"graded_at"`
+	GradedByUsername string             `json:"graded_by_username"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
 type OutgoingLetter struct {
 	ID                 pgtype.UUID        `json:"id"`
 	NomorSurat         string             `json:"nomor_surat"`

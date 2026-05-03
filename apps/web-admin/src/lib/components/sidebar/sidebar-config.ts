@@ -40,6 +40,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 			{ href: '/cbt/events', label: 'Kegiatan Ujian', icon: 'calendar', roles: ['admin'] },
 			{ href: '/cbt/byod', label: 'Panduan BYOD', icon: 'activity', roles: ['admin', 'guru'] },
 			{ href: '/cbt/soal', label: 'Bank Soal', icon: 'file-text' },
+			{ href: '/cbt/non-test', label: 'Asesmen Non-Tes', icon: 'clipboard', roles: ['admin', 'guru'] },
 			{ href: '/cbt/packages', label: 'Paket Ujian', icon: 'package' },
 			{ href: '/cbt/sessions', label: 'Sesi Ujian', icon: 'play' }
 		]
