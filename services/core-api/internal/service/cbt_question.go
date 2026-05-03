@@ -662,7 +662,7 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	out.OptionD = optionD
 	out.OptionE = optionE
 	if out.QuestionType == "short_answer" {
-		out.AnswerKey = strings.TrimSpace(out.AnswerKey)
+		out.AnswerKey = normalizeShortAnswerKey(out.AnswerKey)
 	} else {
 		out.AnswerKey = strings.TrimSpace(strings.ToUpper(out.AnswerKey))
 	}
@@ -745,6 +745,34 @@ func validateObjectiveAnswerKey(options []QuestionOption, answerKey string, ques
 		return fmt.Errorf("multiple_answer membutuhkan minimal 2 kunci jawaban")
 	}
 	return nil
+}
+
+func normalizeShortAnswerKey(value string) string {
+	aliases := shortAnswerAliases(value)
+	return strings.Join(aliases, "|")
+}
+
+func shortAnswerAliases(value string) []string {
+	parts := strings.Split(value, "|")
+	seen := make(map[string]bool, len(parts))
+	aliases := make([]string, 0, len(parts))
+	for _, part := range parts {
+		alias := strings.TrimSpace(strings.ReplaceAll(part, "\u00a0", " "))
+		if alias == "" {
+			continue
+		}
+		normalized := normalizeShortAnswerComparable(alias)
+		if normalized == "" || seen[normalized] {
+			continue
+		}
+		seen[normalized] = true
+		aliases = append(aliases, alias)
+	}
+	return aliases
+}
+
+func normalizeShortAnswerComparable(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.ReplaceAll(value, "\u00a0", " ")), " "))
 }
 
 func beginnerSupportsQuestionType(questionType string) bool {

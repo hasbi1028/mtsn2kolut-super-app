@@ -18,6 +18,7 @@ void main() {
         'questions': [
           {
             'id': 'question-1',
+            'question_type': 'multiple_answer',
             'question_text': '',
             'stem_html': '<p>Soal utama</p>',
             'stimulus_html': '<p>Stimulus</p>',
@@ -40,6 +41,8 @@ void main() {
       expect(payload.session.title, 'Matematika Kelas VIII');
       expect(payload.room?.roomName, 'Lab 1');
       expect(payload.questions, hasLength(1));
+      expect(payload.questions.first.questionType, 'multiple_answer');
+      expect(payload.questions.first.isMultipleAnswer, isTrue);
       expect(payload.questions.first.stemHtml, '<p>Soal utama</p>');
       expect(payload.questions.first.stimulusHtml, '<p>Stimulus</p>');
       expect(
@@ -80,6 +83,7 @@ void main() {
     test('detects essay and rich content states correctly', () {
       final richEssay = ExamQuestion.fromJson({
         'id': 'essay-1',
+        'question_type': 'essay',
         'question_text': '',
         'stem_html': '<p>Uraikan jawaban Anda.</p>',
         'stimulus_html': '',
@@ -95,10 +99,27 @@ void main() {
       });
 
       expect(richEssay.isEssay, isTrue);
+      expect(richEssay.isTextAnswer, isTrue);
       expect(richEssay.hasRichContent, isTrue);
       expect(plainMcq.isEssay, isFalse);
       expect(plainMcq.hasRichContent, isFalse);
     });
+
+    test(
+      'detects short answer as text answer without treating it as essay',
+      () {
+        final shortAnswer = ExamQuestion.fromJson({
+          'id': 'short-1',
+          'question_type': 'short_answer',
+          'question_text': 'Istilah lain fotosintesis adalah...',
+          'options': const [],
+        });
+
+        expect(shortAnswer.isShortAnswer, isTrue);
+        expect(shortAnswer.isTextAnswer, isTrue);
+        expect(shortAnswer.isEssay, isFalse);
+      },
+    );
   });
 
   group('ExamStatusPayload.fromJson', () {

@@ -1349,8 +1349,16 @@ SET is_correct = CASE
   WHEN q.question_type = 'essay' THEN NULL
   -- multiple_answer: answer is comma-separated labels, must match answer_key exactly after sorting
   WHEN q.question_type = 'multiple_answer' THEN
-    (array_to_string(ARRAY(SELECT unnest(string_to_array(sa.answer, ',')) ORDER BY 1), ',') =
-     array_to_string(ARRAY(SELECT unnest(string_to_array(q.answer_key, ',')) ORDER BY 1), ','))
+    (array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(sa.answer, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ',') =
+     array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(q.answer_key, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ','))
+  -- short_answer: answer_key may contain accepted aliases separated by "|";
+  -- normalize case, repeated whitespace, and non-breaking spaces before matching.
+  WHEN q.question_type = 'short_answer' THEN EXISTS (
+    SELECT 1
+    FROM unnest(string_to_array(q.answer_key, '|')) AS accepted(answer)
+    WHERE lower(regexp_replace(btrim(replace(accepted.answer, chr(160), ' ')), '[[:space:]]+', ' ', 'g')) =
+          lower(regexp_replace(btrim(replace(sa.answer, chr(160), ' ')), '[[:space:]]+', ' ', 'g'))
+  )
   -- all others: exact string match
   ELSE (sa.answer = q.answer_key)
 END
@@ -1409,8 +1417,14 @@ UPDATE cbt_student_answers sa
 SET is_correct = CASE
   WHEN q.question_type = 'essay' THEN NULL
   WHEN q.question_type = 'multiple_answer' THEN
-    (array_to_string(ARRAY(SELECT unnest(string_to_array(sa.answer, ',')) ORDER BY 1), ',') =
-     array_to_string(ARRAY(SELECT unnest(string_to_array(q.answer_key, ',')) ORDER BY 1), ','))
+    (array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(sa.answer, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ',') =
+     array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(q.answer_key, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ','))
+  WHEN q.question_type = 'short_answer' THEN EXISTS (
+    SELECT 1
+    FROM unnest(string_to_array(q.answer_key, '|')) AS accepted(answer)
+    WHERE lower(regexp_replace(btrim(replace(accepted.answer, chr(160), ' ')), '[[:space:]]+', ' ', 'g')) =
+          lower(regexp_replace(btrim(replace(sa.answer, chr(160), ' ')), '[[:space:]]+', ' ', 'g'))
+  )
   ELSE (sa.answer = q.answer_key)
 END
 FROM cbt_questions q

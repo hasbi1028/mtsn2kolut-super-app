@@ -856,6 +856,58 @@ void main() {
     );
   });
 
+  testWidgets('exam shell renders multiple answer as checkbox options', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleMultipleAnswerPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.byType(Checkbox), findsNWidgets(4));
+    expect(find.text('Pilihan A'), findsOneWidget);
+  });
+
+  testWidgets('exam shell renders short answer as compact text input', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleShortAnswerPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Jawaban singkat'), findsOneWidget);
+    expect(find.text('Jawaban uraian'), findsNothing);
+  });
+
   testWidgets('exam shell renders stale supervisor attention panel', (
     tester,
   ) async {
@@ -1199,6 +1251,75 @@ ExamLoginPayload _sampleRichContentLoginPayload() {
           ExamOption(label: 'C', text: 'Pilihan C'),
           ExamOption(label: 'D', text: 'Pilihan D'),
         ],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _sampleMultipleAnswerPayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-multiple-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'IPA Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-multiple-1',
+        questionType: 'multiple_answer',
+        questionText: 'Pilih semua pernyataan yang benar.',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: '',
+        stimulusMediaUrl: '',
+        stemAudioUrl: '',
+        stimulusAudioUrl: '',
+        options: [
+          ExamOption(label: 'A', text: 'Pilihan A'),
+          ExamOption(label: 'B', text: 'Pilihan B'),
+          ExamOption(label: 'C', text: 'Pilihan C'),
+          ExamOption(label: 'D', text: 'Pilihan D'),
+        ],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _sampleShortAnswerPayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-short-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'IPA Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-short-1',
+        questionType: 'short_answer',
+        questionText: 'Proses tumbuhan membuat makanan disebut...',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: '',
+        stimulusMediaUrl: '',
+        stemAudioUrl: '',
+        stimulusAudioUrl: '',
+        options: [],
       ),
     ],
     answeredCount: 0,

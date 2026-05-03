@@ -396,9 +396,10 @@
 	let optionPlainTexts = $derived(fOptions.map((option) => htmlToPlainText(option)));
 	let optionHasImages = $derived(fOptions.map((option) => option.includes('<img')));
 	let optionsReady = $derived(!hasEditableOptions || (fOptions.length >= questionTypeConfig.minOptions && fOptions.every(richTextHasContent)));
+	let shortAnswerAliases = $derived(parseShortAnswerAliases(fAnswerKey));
 	let answerKeyReady = $derived.by(() => {
 		if (requiresRubric) return true;
-		if (isShortAnswer) return fAnswerKey.trim().length > 0;
+		if (isShortAnswer) return shortAnswerAliases.length > 0;
 		if (isMultipleAnswer) return selectedAnswerLabels.length >= 2;
 		return selectedAnswerLabels.length === 1;
 	});
@@ -461,12 +462,12 @@
 				{
 					label: 'Kunci jawaban tersedia',
 					status: answerKeyReady ? 'good' : 'warn',
-					desc: answerKeyReady ? 'Kunci isian terisi' : 'Belum ada kunci teks',
+					desc: answerKeyReady ? `${shortAnswerAliases.length} jawaban diterima` : 'Belum ada kunci teks',
 				},
 				{
-					label: 'Jawaban mudah diverifikasi',
-					status: fAnswerKey.trim().length > 1 && fAnswerKey.trim().length <= 80 ? 'good' : 'warn',
-					desc: `${fAnswerKey.trim().length} karakter kunci`,
+					label: 'Alias tidak berlebihan',
+					status: shortAnswerAliases.length > 0 && shortAnswerAliases.length <= 5 ? 'good' : 'warn',
+					desc: `${shortAnswerAliases.length} alias aktif`,
 				},
 				{
 					label: 'Stimulus pendukung',
@@ -863,10 +864,25 @@
 		return keys.sort((a, b) => ANSWER_LABELS.indexOf(a) - ANSWER_LABELS.indexOf(b));
 	}
 
+	function normalizeShortAnswerComparable(value: string): string {
+		return value.replace(/\u00a0/g, ' ').trim().replace(/\s+/g, ' ').toLocaleLowerCase('id-ID');
+	}
+
+	function parseShortAnswerAliases(value: string | undefined): string[] {
+		const aliases: string[] = [];
+		for (const raw of (value ?? '').split('|')) {
+			const alias = raw.replace(/\u00a0/g, ' ').trim().replace(/\s+/g, ' ');
+			const comparable = normalizeShortAnswerComparable(alias);
+			if (!comparable || aliases.some((item) => normalizeShortAnswerComparable(item) === comparable)) continue;
+			aliases.push(alias);
+		}
+		return aliases;
+	}
+
 	function normalizeAnswerKey(value: string | undefined, type: ComposerQuestionType = fQuestionType, optionCount = fOptions.length): string {
 		const config = getQuestionTypeConfig(type);
 		if (config.answerMode === 'rubric') return '';
-		if (config.answerMode === 'short_text') return (value ?? '').trim();
+		if (config.answerMode === 'short_text') return parseShortAnswerAliases(value).join('|');
 		const labels = ANSWER_LABELS.slice(0, optionCount);
 		const keys = answerKeyLabels(value, labels);
 		if (config.answerMode === 'multi_option') return keys.join(',');
@@ -1182,7 +1198,7 @@
 	function buildPayloadAnswerKey(): string {
 		const config = getQuestionTypeConfig(fQuestionType);
 		if (config.answerMode === 'rubric') return '';
-		if (config.answerMode === 'short_text') return fAnswerKey.trim();
+		if (config.answerMode === 'short_text') return normalizeAnswerKey(fAnswerKey, fQuestionType, fOptions.length);
 		return normalizeAnswerKey(fAnswerKey, fQuestionType, fOptions.length);
 	}
 
@@ -1817,9 +1833,9 @@
 					<div class="rounded-md border border-dashed border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
 						Siswa akan melihat kolom jawaban isian singkat.
 					</div>
-					{#if fAnswerKey.trim()}
+					{#if shortAnswerAliases.length > 0}
 						<div class="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-							<span class="font-semibold text-slate-500">Kunci guru:</span> {fAnswerKey.trim()}
+							<span class="font-semibold text-slate-500">Jawaban diterima:</span> {shortAnswerAliases.join(' / ')}
 						</div>
 					{/if}
 				</div>
@@ -2249,18 +2265,21 @@
 							<section id="composer-answer" class="scroll-mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 								<div>
 									<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Kunci Isian Singkat</h3>
-									<p class="mt-0.5 text-xs text-slate-500">Gunakan jawaban pendek yang dapat diverifikasi otomatis.</p>
+									<p class="mt-0.5 text-xs text-slate-500">Pisahkan beberapa jawaban diterima dengan tanda |. Sistem mengabaikan besar/kecil huruf dan spasi ganda.</p>
 								</div>
 								<div>
 									<label for="f-short-answer-key" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-										Kunci Jawaban <span class="text-red-500">*</span>
+										Kunci / Alias Jawaban <span class="text-red-500">*</span>
 									</label>
 									<Input
 										id="f-short-answer-key"
 										bind:value={fAnswerKey}
-										placeholder="Contoh: Fotosintesis"
+										placeholder="Contoh: Fotosintesis | foto sintesis"
 										class="h-9 text-sm font-medium"
 									/>
+									{#if shortAnswerAliases.length > 0}
+										<p class="mt-1 text-[10px] font-semibold text-green-700">{shortAnswerAliases.length} jawaban diterima: {shortAnswerAliases.join(' / ')}</p>
+									{/if}
 									{#if !readinessChecks.answerKey}
 										<p class="mt-1 text-[10px] font-semibold text-red-500">Kunci isian singkat wajib diisi sebelum review.</p>
 									{/if}

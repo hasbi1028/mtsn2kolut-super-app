@@ -127,7 +127,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     _errorMessage = widget.initialErrorMessage;
     for (var i = 0; i < widget.initialPayload.questions.length; i++) {
       final question = widget.initialPayload.questions[i];
-      if (question.isEssay) {
+      if (question.isTextAnswer) {
         _essayControllers[i].text = _answers[question.id] ?? '';
       }
     }
@@ -415,13 +415,15 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     }
   }
 
-  Future<void> _saveEssayAnswer() async {
+  Future<void> _saveTextAnswer() async {
     final question = widget.initialPayload.questions[_currentQuestionIndex];
     final answer = _essayControllers[_currentQuestionIndex].text.trim();
 
     if (answer.isEmpty) {
       setState(() {
-        _errorMessage = 'Isi jawaban uraian terlebih dahulu.';
+        _errorMessage = question.isShortAnswer
+            ? 'Isi jawaban singkat terlebih dahulu.'
+            : 'Isi jawaban uraian terlebih dahulu.';
       });
       return;
     }
@@ -1178,9 +1180,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             ],
             const SizedBox(height: 22),
             Expanded(
-              child: question.isEssay
-                  ? _buildEssayQuestion(theme, question)
-                  : _buildMultipleChoiceQuestion(theme, question),
+              child: question.isTextAnswer
+                  ? _buildTextAnswerQuestion(theme, question)
+                  : _buildObjectiveQuestion(theme, question),
             ),
             const SizedBox(height: 16),
             Row(
@@ -1233,17 +1235,53 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     );
   }
 
-  Widget _buildMultipleChoiceQuestion(ThemeData theme, ExamQuestion question) {
+  List<String> _selectedOptionLabels(ExamQuestion question) {
+    final raw = _answers[question.id] ?? '';
+    return raw
+        .split(',')
+        .map((label) => label.trim())
+        .where((label) => label.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+  }
+
+  Future<void> _toggleObjectiveOption(
+    ExamQuestion question,
+    String label,
+  ) async {
+    if (!question.isMultipleAnswer) {
+      await _selectOption(question, label);
+      return;
+    }
+    final selected = _selectedOptionLabels(question);
+    if (selected.contains(label)) {
+      if (selected.length == 1) {
+        setState(() {
+          _statusMessage = 'Pilih minimal satu opsi jawaban.';
+        });
+        return;
+      }
+      selected.remove(label);
+    } else {
+      selected.add(label);
+    }
+    selected.sort();
+    await _selectOption(question, selected.join(','));
+  }
+
+  Widget _buildObjectiveQuestion(ThemeData theme, ExamQuestion question) {
     return ListView.separated(
       itemCount: question.options.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final option = question.options[index];
-        final selectedAnswer = _answers[question.id];
-        final selected = selectedAnswer == option.label;
+        final selected = question.isMultipleAnswer
+            ? _selectedOptionLabels(question).contains(option.label)
+            : _answers[question.id] == option.label;
 
         return InkWell(
-          onTap: () => _selectOption(question, option.label),
+          onTap: () => _toggleObjectiveOption(question, option.label),
           borderRadius: BorderRadius.circular(18),
           child: Ink(
             padding: const EdgeInsets.all(16),
@@ -1278,6 +1316,12 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                     style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
                   ),
                 ),
+                if (question.isMultipleAnswer)
+                  Checkbox(
+                    value: selected,
+                    onChanged: (_) =>
+                        _toggleObjectiveOption(question, option.label),
+                  ),
               ],
             ),
           ),
@@ -1286,13 +1330,35 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     );
   }
 
-  Widget _buildEssayQuestion(ThemeData theme, ExamQuestion question) {
+  Widget _buildTextAnswerQuestion(ThemeData theme, ExamQuestion question) {
     final controller = _essayControllers[_currentQuestionIndex];
     final savedValue = _answers[question.id];
     if (savedValue != null && controller.text != savedValue) {
       controller.text = savedValue;
       controller.selection = TextSelection.collapsed(
         offset: controller.text.length,
+      );
+    }
+
+    if (question.isShortAnswer) {
+      return ListView(
+        children: [
+          TextField(
+            controller: controller,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: 'Jawaban singkat',
+              hintText: 'Tulis jawaban singkat Anda...',
+            ),
+            onSubmitted: (_) => _saveTextAnswer(),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: _isSavingAnswer || _isSubmitted ? null : _saveTextAnswer,
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Simpan Jawaban'),
+          ),
+        ],
       );
     }
 
@@ -1313,7 +1379,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         ),
         const SizedBox(height: 14),
         FilledButton.icon(
-          onPressed: _isSavingAnswer || _isSubmitted ? null : _saveEssayAnswer,
+          onPressed: _isSavingAnswer || _isSubmitted ? null : _saveTextAnswer,
           icon: const Icon(Icons.save_outlined),
           label: const Text('Simpan Jawaban'),
         ),

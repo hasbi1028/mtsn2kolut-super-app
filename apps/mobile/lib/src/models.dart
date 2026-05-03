@@ -95,6 +95,7 @@ class ExamRoom {
 class ExamQuestion {
   const ExamQuestion({
     required this.id,
+    this.questionType = 'multiple_choice',
     required this.questionText,
     required this.stemHtml,
     required this.stimulusHtml,
@@ -106,6 +107,7 @@ class ExamQuestion {
   });
 
   final String id;
+  final String questionType;
   final String questionText;
   final String stemHtml;
   final String stimulusHtml;
@@ -115,13 +117,25 @@ class ExamQuestion {
   final String stimulusAudioUrl;
   final List<ExamOption> options;
 
-  bool get isEssay => options.isEmpty;
+  bool get isEssay =>
+      questionType == 'essay' || (questionType.isEmpty && options.isEmpty);
+  bool get isShortAnswer => questionType == 'short_answer';
+  bool get isMultipleAnswer => questionType == 'multiple_answer';
+  bool get isTextAnswer => isEssay || isShortAnswer;
   bool get hasRichContent =>
       stemHtml.trim().isNotEmpty || stimulusHtml.trim().isNotEmpty;
 
   factory ExamQuestion.fromJson(Map<String, dynamic> json) {
+    final options = ((json['options'] as List<dynamic>?) ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(ExamOption.fromJson)
+        .toList();
+    final type =
+        json['question_type'] as String? ??
+        (options.isEmpty ? 'essay' : 'multiple_choice');
     return ExamQuestion(
       id: json['id'] as String? ?? '',
+      questionType: type,
       questionText: json['question_text'] as String? ?? '',
       stemHtml: json['stem_html'] as String? ?? '',
       stimulusHtml: json['stimulus_html'] as String? ?? '',
@@ -129,10 +143,7 @@ class ExamQuestion {
       stimulusMediaUrl: json['stimulus_media_url'] as String? ?? '',
       stemAudioUrl: json['stem_audio_url'] as String? ?? '',
       stimulusAudioUrl: json['stimulus_audio_url'] as String? ?? '',
-      options: ((json['options'] as List<dynamic>?) ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map(ExamOption.fromJson)
-          .toList(),
+      options: options,
     );
   }
 }

@@ -479,7 +479,7 @@ func TestNormalizeQuestionInputBeginnerSupportsJuknisTypes(t *testing.T) {
 		AuthoringMode:  "beginner",
 		QuestionType:   "short_answer",
 		QuestionText:   "Jawab singkat",
-		AnswerKey:      "Fotosintesis",
+		AnswerKey:      " Fotosintesis | fotosintesis | foto sintesis ",
 		Difficulty:     db.CbtQuestionDifficultyEnumMedium,
 		Status:         db.CbtQuestionStatusEnumDraft,
 		WorkflowStatus: "draft",
@@ -489,8 +489,19 @@ func TestNormalizeQuestionInputBeginnerSupportsJuknisTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("normalizeQuestionInput() error = %v", err)
 	}
-	if got.QuestionType != "short_answer" || got.AnswerKey != "Fotosintesis" {
-		t.Fatalf("normalizeQuestionInput() type/key = %q/%q, want short_answer/Fotosintesis", got.QuestionType, got.AnswerKey)
+	if got.QuestionType != "short_answer" || got.AnswerKey != "Fotosintesis|foto sintesis" {
+		t.Fatalf("normalizeQuestionInput() type/key = %q/%q, want short_answer normalized aliases", got.QuestionType, got.AnswerKey)
+	}
+}
+
+func TestNormalizeShortAnswerKey(t *testing.T) {
+	got := normalizeShortAnswerKey("  Iman kepada Allah | iman   kepada allah | Iman\u00a0Kepada\u00a0Rasul  | ")
+	want := "Iman kepada Allah|Iman Kepada Rasul"
+	if got != want {
+		t.Fatalf("normalizeShortAnswerKey() = %q, want %q", got, want)
+	}
+	if got := normalizeShortAnswerComparable("  Iman\u00a0  Kepada   Allah "); got != "iman kepada allah" {
+		t.Fatalf("normalizeShortAnswerComparable() = %q, want normalized lowercase whitespace", got)
 	}
 }
 
