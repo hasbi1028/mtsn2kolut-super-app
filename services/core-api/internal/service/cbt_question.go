@@ -107,6 +107,7 @@ func (s *CbtQuestion) List(ctx context.Context) ([]db.ListCbtQuestionsRow, error
 
 type ListCbtQuestionsInput struct {
 	SubjectID      pgtype.UUID
+	AuthorUsername string
 	WorkflowStatus string
 	Status         string
 	QuestionType   string
@@ -126,6 +127,7 @@ type ExportCbtQuestionsCSVResult struct {
 func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error) {
 	rows, err := s.q.ListCbtQuestionsFiltered(ctx, db.ListCbtQuestionsFilteredParams{
 		SubjectID:      in.SubjectID,
+		AuthorUsername: strings.TrimSpace(in.AuthorUsername),
 		WorkflowStatus: strings.TrimSpace(in.WorkflowStatus),
 		StatusFilter:   normalizeQuestionStatusFilter(in.Status),
 		QuestionType:   strings.TrimSpace(in.QuestionType),
@@ -140,6 +142,7 @@ func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput
 	}
 	total, err := s.q.CountCbtQuestionsFiltered(ctx, db.CountCbtQuestionsFilteredParams{
 		SubjectID:      in.SubjectID,
+		AuthorUsername: strings.TrimSpace(in.AuthorUsername),
 		WorkflowStatus: strings.TrimSpace(in.WorkflowStatus),
 		StatusFilter:   normalizeQuestionStatusFilter(in.Status),
 		QuestionType:   strings.TrimSpace(in.QuestionType),

@@ -15,42 +15,44 @@ const countCbtQuestionsFiltered = `-- name: CountCbtQuestionsFiltered :one
 SELECT COUNT(*)::bigint
 FROM cbt_questions q
 WHERE ($1::uuid IS NULL OR q.subject_id = $1::uuid)
-  AND ($2::text = '' OR q.workflow_status = $2::text)
-  AND ($3::text = '' OR q.status = $3::cbt_question_status_enum)
-  AND ($4::text = '' OR q.question_type = $4::text)
-  AND ($5::text = '' OR ($5::text = 'yes' AND q.hots_flag = TRUE) OR ($5::text = 'no' AND q.hots_flag = FALSE))
+  AND ($2::text = '' OR q.author_username = $2::text)
+  AND ($3::text = '' OR q.workflow_status = $3::text)
+  AND ($4::text = '' OR q.status = $4::cbt_question_status_enum)
+  AND ($5::text = '' OR q.question_type = $5::text)
+  AND ($6::text = '' OR ($6::text = 'yes' AND q.hots_flag = TRUE) OR ($6::text = 'no' AND q.hots_flag = FALSE))
   AND (
-    $6::text = ''
+    $7::text = ''
     OR (
-      $6::text = 'item_analysis'
+      $7::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $6::text = 'reviewer'
+      $7::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $6::text = 'workflow'
+      $7::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $7::text = ''
-    OR q.code ILIKE '%' || $7::text || '%'
-    OR q.question_text ILIKE '%' || $7::text || '%'
-    OR q.material_topic ILIKE '%' || $7::text || '%'
-    OR q.cp_ref ILIKE '%' || $7::text || '%'
-    OR q.kd_ref ILIKE '%' || $7::text || '%'
+    $8::text = ''
+    OR q.code ILIKE '%' || $8::text || '%'
+    OR q.question_text ILIKE '%' || $8::text || '%'
+    OR q.material_topic ILIKE '%' || $8::text || '%'
+    OR q.cp_ref ILIKE '%' || $8::text || '%'
+    OR q.kd_ref ILIKE '%' || $8::text || '%'
   )
 `
 
 type CountCbtQuestionsFilteredParams struct {
 	SubjectID      pgtype.UUID `json:"subject_id"`
+	AuthorUsername string      `json:"author_username"`
 	WorkflowStatus string      `json:"workflow_status"`
 	StatusFilter   string      `json:"status_filter"`
 	QuestionType   string      `json:"question_type"`
@@ -62,6 +64,7 @@ type CountCbtQuestionsFilteredParams struct {
 func (q *Queries) CountCbtQuestionsFiltered(ctx context.Context, arg CountCbtQuestionsFilteredParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countCbtQuestionsFiltered,
 		arg.SubjectID,
+		arg.AuthorUsername,
 		arg.WorkflowStatus,
 		arg.StatusFilter,
 		arg.QuestionType,
@@ -702,44 +705,46 @@ LEFT JOIN LATERAL (
   WHERE sa.question_id = q.id
 ) answer_usage ON TRUE
 WHERE ($1::uuid IS NULL OR q.subject_id = $1::uuid)
-  AND ($2::text = '' OR q.workflow_status = $2::text)
-  AND ($3::text = '' OR q.status = $3::cbt_question_status_enum)
-  AND ($4::text = '' OR q.question_type = $4::text)
-  AND ($5::text = '' OR ($5::text = 'yes' AND q.hots_flag = TRUE) OR ($5::text = 'no' AND q.hots_flag = FALSE))
+  AND ($2::text = '' OR q.author_username = $2::text)
+  AND ($3::text = '' OR q.workflow_status = $3::text)
+  AND ($4::text = '' OR q.status = $4::cbt_question_status_enum)
+  AND ($5::text = '' OR q.question_type = $5::text)
+  AND ($6::text = '' OR ($6::text = 'yes' AND q.hots_flag = TRUE) OR ($6::text = 'no' AND q.hots_flag = FALSE))
   AND (
-    $6::text = ''
+    $7::text = ''
     OR (
-      $6::text = 'item_analysis'
+      $7::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $6::text = 'reviewer'
+      $7::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $6::text = 'workflow'
+      $7::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $7::text = ''
-    OR q.code ILIKE '%' || $7::text || '%'
-    OR q.question_text ILIKE '%' || $7::text || '%'
-    OR q.material_topic ILIKE '%' || $7::text || '%'
-    OR q.cp_ref ILIKE '%' || $7::text || '%'
-    OR q.kd_ref ILIKE '%' || $7::text || '%'
+    $8::text = ''
+    OR q.code ILIKE '%' || $8::text || '%'
+    OR q.question_text ILIKE '%' || $8::text || '%'
+    OR q.material_topic ILIKE '%' || $8::text || '%'
+    OR q.cp_ref ILIKE '%' || $8::text || '%'
+    OR q.kd_ref ILIKE '%' || $8::text || '%'
   )
 ORDER BY q.created_at DESC
-LIMIT $9 OFFSET $8
+LIMIT $10 OFFSET $9
 `
 
 type ListCbtQuestionsFilteredParams struct {
 	SubjectID      pgtype.UUID `json:"subject_id"`
+	AuthorUsername string      `json:"author_username"`
 	WorkflowStatus string      `json:"workflow_status"`
 	StatusFilter   string      `json:"status_filter"`
 	QuestionType   string      `json:"question_type"`
@@ -802,6 +807,7 @@ type ListCbtQuestionsFilteredRow struct {
 func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuestionsFilteredParams) ([]ListCbtQuestionsFilteredRow, error) {
 	rows, err := q.db.Query(ctx, listCbtQuestionsFiltered,
 		arg.SubjectID,
+		arg.AuthorUsername,
 		arg.WorkflowStatus,
 		arg.StatusFilter,
 		arg.QuestionType,

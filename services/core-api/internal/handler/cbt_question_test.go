@@ -504,8 +504,16 @@ func TestCbtQuestionHandlersForwardSuccessPaths(t *testing.T) {
 	}
 	rec = httptest.NewRecorder()
 	(&CbtQuestion{svc: exportFake}).ExportCSV(rec, withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/questions/export", nil), jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa"}))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ExportCSV(guru) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if exportFake.exportInput.AuthorUsername != "guru.ipa" {
+		t.Fatalf("ExportCSV(guru) AuthorUsername = %q, want forced current guru username", exportFake.exportInput.AuthorUsername)
+	}
+	rec = httptest.NewRecorder()
+	(&CbtQuestion{svc: exportFake}).ExportCSV(rec, withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/questions/export", nil), jwt.MapClaims{"roles": []any{"guru"}}))
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("ExportCSV(guru) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+		t.Fatalf("ExportCSV(guru without username) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
 	}
 
 	templateFake := &fakeCbtQuestionService{

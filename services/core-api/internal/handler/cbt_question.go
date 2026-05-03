@@ -165,7 +165,7 @@ func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit 
 }
 
 func (h *CbtQuestion) ExportCSV(w http.ResponseWriter, r *http.Request) {
-	if !adminAccessAllowed(r) {
+	if !cbtAccessAllowed(r) {
 		api.Forbidden(w)
 		return
 	}
@@ -178,6 +178,14 @@ func (h *CbtQuestion) ExportCSV(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		api.BadRequest(w, err.Error())
 		return
+	}
+	if !adminAccessAllowed(r) {
+		username := strings.TrimSpace(currentUsername(r))
+		if username == "" {
+			api.Forbidden(w)
+			return
+		}
+		input.AuthorUsername = username
 	}
 	result, err := exportSvc.ExportCSV(r.Context(), input)
 	if err != nil {

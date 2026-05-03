@@ -140,6 +140,7 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 
 	rows, total, err := svc.ListFiltered(context.Background(), ListCbtQuestionsInput{
 		SubjectID:      pgtype.UUID{Valid: true},
+		AuthorUsername: " guru.ipa ",
 		WorkflowStatus: " draft ",
 		Status:         " published ",
 		QuestionType:   " multiple_choice ",
@@ -155,10 +156,10 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	if len(rows) != 1 || total != 7 {
 		t.Fatalf("ListFiltered() rows/total = %d/%d, want 1/7", len(rows), total)
 	}
-	if store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.StatusFilter != "published" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.RevisionSource != "item_analysis" || store.listFilterArg.SearchQuery != "aljabar" {
+	if store.listFilterArg.AuthorUsername != "guru.ipa" || store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.StatusFilter != "published" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.RevisionSource != "item_analysis" || store.listFilterArg.SearchQuery != "aljabar" {
 		t.Fatalf("ListFiltered() arg = %+v, want trimmed filters", store.listFilterArg)
 	}
-	if store.countArg.WorkflowStatus != store.listFilterArg.WorkflowStatus || store.countArg.StatusFilter != store.listFilterArg.StatusFilter || store.countArg.RevisionSource != store.listFilterArg.RevisionSource || store.countArg.SearchQuery != store.listFilterArg.SearchQuery {
+	if store.countArg.AuthorUsername != store.listFilterArg.AuthorUsername || store.countArg.WorkflowStatus != store.listFilterArg.WorkflowStatus || store.countArg.StatusFilter != store.listFilterArg.StatusFilter || store.countArg.RevisionSource != store.listFilterArg.RevisionSource || store.countArg.SearchQuery != store.listFilterArg.SearchQuery {
 		t.Fatalf("ListFiltered() count arg = %+v, want same trimmed filters", store.countArg)
 	}
 
@@ -388,6 +389,7 @@ func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
 
 	got, err := svc.ExportCSV(context.Background(), ListCbtQuestionsInput{
 		SubjectID:      subjectID,
+		AuthorUsername: " guru.ipa ",
 		WorkflowStatus: " draft ",
 		Limit:          0,
 	})
@@ -397,7 +399,7 @@ func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
 	if got.Count != 2 || !strings.HasPrefix(got.Filename, "bank-soal-cbt-") {
 		t.Fatalf("ExportCSV() result = %+v, want count and generated filename", got)
 	}
-	if store.listFilterArg.LimitCount != 2000 || store.listFilterArg.WorkflowStatus != "draft" {
+	if store.listFilterArg.LimitCount != 2000 || store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.AuthorUsername != "guru.ipa" {
 		t.Fatalf("ExportCSV() list arg = %+v, want default export limit and trimmed workflow", store.listFilterArg)
 	}
 	records, err := csv.NewReader(strings.NewReader(string(got.Content))).ReadAll()
