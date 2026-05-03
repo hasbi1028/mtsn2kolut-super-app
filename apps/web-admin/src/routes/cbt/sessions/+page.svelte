@@ -57,6 +57,13 @@
 		| 'needs_participants'
 		| 'needs_rooms'
 		| 'needs_proctors';
+	type ReadinessBoardTone = 'danger' | 'success' | 'warning' | 'info';
+	type ReadinessBoardConfig = {
+		filter: Exclude<SessionReadinessFilter, 'all'>;
+		label: string;
+		helper: string;
+		tone: ReadinessBoardTone;
+	};
 	type SchoolClass = { id: string; name: string; code: string; level: string; };
 	type SessionsOverview = {
 		sessions: ExamSession[];
@@ -123,6 +130,13 @@
 		'needs_participants',
 		'needs_rooms',
 		'needs_proctors',
+	];
+	const readinessBoardConfigs: ReadinessBoardConfig[] = [
+		{ filter: 'not_ready', label: 'Belum Siap', helper: 'Masih punya kendala operasional', tone: 'danger' },
+		{ filter: 'ready', label: 'Siap Mulai', helper: 'Paket, peserta, ruang, pengawas siap', tone: 'success' },
+		{ filter: 'needs_participants', label: 'Butuh Peserta', helper: 'Peserta belum didaftarkan', tone: 'warning' },
+		{ filter: 'needs_rooms', label: 'Butuh Ruang', helper: 'Ruang, kursi, atau kapasitas belum rapi', tone: 'warning' },
+		{ filter: 'needs_proctors', label: 'Butuh Pengawas', helper: 'Ruang ujian belum lengkap pengawas', tone: 'info' },
 	];
 
 	function statusClass(s: string) {
@@ -305,6 +319,22 @@
 			label: readinessFilterLabel(filter),
 			count: items.filter((session) => sessionMatchesReadinessFilter(session, filter)).length,
 		}));
+	}
+
+	function buildReadinessBoardCards(items: ExamSession[]) {
+		return readinessBoardConfigs.map((card) => ({
+			...card,
+			count: items.filter((session) => sessionMatchesReadinessFilter(session, card.filter)).length,
+		}));
+	}
+
+	function readinessBoardCardClass(tone: ReadinessBoardTone, active: boolean) {
+		const base = 'rounded-lg border p-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700';
+		if (active) return `${base} border-emerald-300 bg-emerald-50 text-emerald-950`;
+		if (tone === 'danger') return `${base} border-red-100 bg-white hover:border-red-200 hover:bg-red-50`;
+		if (tone === 'success') return `${base} border-emerald-100 bg-white hover:border-emerald-200 hover:bg-emerald-50`;
+		if (tone === 'warning') return `${base} border-amber-100 bg-white hover:border-amber-200 hover:bg-amber-50`;
+		return `${base} border-sky-100 bg-white hover:border-sky-200 hover:bg-sky-50`;
 	}
 
 	function isSessionReadinessFilter(value: string | null): value is SessionReadinessFilter {
@@ -827,8 +857,8 @@
 	<AsyncContent promise={sessionsPromise} onerror={handleSessionsRenderError}>
 		{#snippet pending()}
 			<div class="space-y-4">
-				<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-					{#each Array.from({ length: 4 }) as _, index (`cbt-session-stat-skeleton-${index}`)}
+				<div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+					{#each Array.from({ length: 5 }) as _, index (`cbt-session-stat-skeleton-${index}`)}
 						<Card.Root class="border-slate-200">
 							<Card.Content class="space-y-2 p-4">
 								<Skeleton class="h-4 w-24" />
@@ -869,6 +899,29 @@
 			{@const currentSessions = overview.sessions}
 			{@const visibleSessions = currentSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter))}
 			{@const readinessFilterOptions = buildReadinessFilterOptions(currentSessions)}
+			{@const readinessBoardCards = buildReadinessBoardCards(currentSessions)}
+		<div class="space-y-4">
+			<div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+				{#each readinessBoardCards as card (card.filter)}
+					<button
+						type="button"
+						class={readinessBoardCardClass(card.tone, readinessFilter === card.filter)}
+						aria-pressed={readinessFilter === card.filter}
+						onclick={() => setSessionReadinessFilter(card.filter)}
+					>
+						<div class="flex items-start justify-between gap-2">
+							<div>
+								<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{card.label}</p>
+								<p class="mt-1 text-2xl font-semibold text-slate-900">{card.count}</p>
+							</div>
+							{#if readinessFilter === card.filter}
+								<span class="rounded bg-emerald-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">Aktif</span>
+							{/if}
+						</div>
+						<p class="mt-1 text-xs text-slate-500">{card.helper}</p>
+					</button>
+				{/each}
+			</div>
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Header class="space-y-3 pb-3">
 				<div class="flex flex-wrap items-center justify-between gap-2">
@@ -1124,6 +1177,7 @@
 				</div>
 			</Card.Content>
 		</Card.Root>
+		</div>
 		{/snippet}
 	</AsyncContent>
 </div>
