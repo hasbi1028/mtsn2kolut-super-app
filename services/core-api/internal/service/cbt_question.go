@@ -688,6 +688,9 @@ func validateQuestion(input SaveCbtQuestionInput) error {
 		if input.AnswerKey == "" {
 			return fmt.Errorf("answer_key wajib diisi")
 		}
+		if err := validateObjectiveAnswerKey(input.Options, input.AnswerKey, input.QuestionType); err != nil {
+			return err
+		}
 	case "short_answer":
 		if input.AnswerKey == "" {
 			return fmt.Errorf("answer_key wajib diisi untuk short_answer")
@@ -706,6 +709,28 @@ func validateQuestion(input SaveCbtQuestionInput) error {
 		return fmt.Errorf("soal hanya boleh dipublish jika workflow_status sudah approved")
 	}
 
+	return nil
+}
+
+func validateObjectiveAnswerKey(options []QuestionOption, answerKey string, questionType string) error {
+	available := make(map[string]bool, len(options))
+	for _, option := range options {
+		label := strings.TrimSpace(strings.ToUpper(option.Label))
+		if label != "" {
+			available[label] = true
+		}
+	}
+
+	keys := []string{answerKey}
+	if questionType == "multiple_answer" {
+		keys = strings.Split(answerKey, ",")
+	}
+	for _, key := range keys {
+		key = strings.TrimSpace(strings.ToUpper(key))
+		if key == "" || !available[key] {
+			return fmt.Errorf("answer_key harus sesuai label opsi yang tersedia")
+		}
+	}
 	return nil
 }
 

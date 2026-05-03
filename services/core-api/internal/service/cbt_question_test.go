@@ -578,6 +578,18 @@ func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
 			wantErr: "answer_key wajib diisi untuk short_answer",
 		},
 		{
+			name: "objective answer key must match option label",
+			input: SaveCbtQuestionInput{
+				SubjectID:     pgtype.UUID{Valid: true},
+				AuthoringMode: "advance",
+				QuestionType:  "multiple_choice",
+				QuestionText:  "Pilih",
+				Options:       []QuestionOption{{Label: "A", Text: "A"}, {Label: "B", Text: "B"}},
+				AnswerKey:     "F",
+			},
+			wantErr: "answer_key harus sesuai label opsi yang tersedia",
+		},
+		{
 			name: "approved essay requires rubric",
 			input: SaveCbtQuestionInput{
 				SubjectID:      pgtype.UUID{Valid: true},
@@ -651,6 +663,28 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 	}
 	if got := normalizeWorkflowStatus("published"); got != "draft" {
 		t.Fatalf("normalizeWorkflowStatus(invalid) = %q, want draft", got)
+	}
+
+	sixOptions, err := normalizeQuestionInput(SaveCbtQuestionInput{
+		SubjectID:     pgtype.UUID{Valid: true},
+		AuthoringMode: "beginner",
+		QuestionType:  "multiple_choice",
+		QuestionText:  "Pilih jawaban",
+		Options: []QuestionOption{
+			{Label: "A", Text: "A"},
+			{Label: "B", Text: "B"},
+			{Label: "C", Text: "C"},
+			{Label: "D", Text: "D"},
+			{Label: "E", Text: "E"},
+			{Label: "F", Text: "F"},
+		},
+		AnswerKey: "f",
+	})
+	if err != nil {
+		t.Fatalf("normalizeQuestionInput(six options) error = %v", err)
+	}
+	if len(sixOptions.Options) != 6 || sixOptions.AnswerKey != "F" {
+		t.Fatalf("normalizeQuestionInput(six options) = %d/%q, want 6/F", len(sixOptions.Options), sixOptions.AnswerKey)
 	}
 
 	a, b, c, d, e := legacyOptionColumns([]QuestionOption{

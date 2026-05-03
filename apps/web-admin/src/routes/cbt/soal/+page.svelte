@@ -71,13 +71,14 @@
 		isRtl: boolean;
 		savedAt: string;
 	};
+	type OptionLabel = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 	type Template = {
 		id: string;
 		label: string;
 		desc: string;
 		stem: string;
 		options: string[];
-		answerKey: 'A' | 'B' | 'C' | 'D';
+		answerKey: OptionLabel;
 		isRtl?: boolean;
 	};
 	type LegacyImportResult = {
@@ -87,11 +88,13 @@
 		errors: string[];
 		duplicate_codes: string[];
 	};
-	type FocusedEditor = 'stem' | 'A' | 'B' | 'C' | 'D';
+	type FocusedEditor = 'stem' | OptionLabel;
 
 	// ── Constants ─────────────────────────────────────────────────────────────
 	const PAGE_SIZE = 15;
-	const ANSWER_LABELS = ['A', 'B', 'C', 'D'] as const;
+	const MIN_OPTION_COUNT = 4;
+	const MAX_OPTION_COUNT = 6;
+	const ANSWER_LABELS: OptionLabel[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 	const moduleModes: Array<{ id: ModuleMode; label: string; desc: string }> = [
 		{ id: 'catalog', label: 'Katalog', desc: 'Daftar terpadu' },
 		{ id: 'composer', label: 'Komposer Cepat', desc: 'Input PG legacy' },
@@ -221,7 +224,7 @@
 	let fSubjectId = $state('');
 	let fStem = $state('');
 	let fOptions = $state(['', '', '', '']);
-	let fAnswerKey = $state<string>('A');
+	let fAnswerKey = $state<OptionLabel>('A');
 	let fWeight = $state(1);
 	let fDifficulty = $state('medium');
 	let fIsRtl = $state(false);
@@ -245,17 +248,17 @@
 
 	let stemText = $derived(htmlToPlainText(fStem));
 	let hasImage = $derived(fStem.includes('<img'));
+	let activeOptionLabels = $derived(ANSWER_LABELS.slice(0, fOptions.length));
 	let optionPlainTexts = $derived(fOptions.map((option) => htmlToPlainText(option)));
 	let optionHasImages = $derived(fOptions.map((option) => option.includes('<img')));
+	let optionsReady = $derived(fOptions.length >= MIN_OPTION_COUNT && fOptions.every(richTextHasContent));
+	let answerKeyReady = $derived(activeOptionLabels.includes(fAnswerKey as OptionLabel));
 
 	let readinessChecks = $derived({
 		subject: !!fSubjectId,
 		stem: stemText.length >= 5 || hasImage,
-		optA: richTextHasContent(fOptions[0]),
-		optB: richTextHasContent(fOptions[1]),
-		optC: richTextHasContent(fOptions[2]),
-		optD: richTextHasContent(fOptions[3]),
-		answerKey: !!fAnswerKey,
+		options: optionsReady,
+		answerKey: answerKeyReady,
 		weight: Number.isFinite(fWeight) && fWeight >= 1,
 	});
 
@@ -298,8 +301,8 @@
 		const issues: string[] = [];
 		if (!readinessChecks.subject) issues.push('Pilih mata pelajaran');
 		if (!readinessChecks.stem) issues.push('Isi soal minimal 5 karakter');
-		if (!readinessChecks.optA || !readinessChecks.optB || !readinessChecks.optC || !readinessChecks.optD)
-			issues.push('Semua opsi (A–D) wajib diisi');
+		if (!readinessChecks.options)
+			issues.push(`Semua opsi (${activeOptionLabels.join('–')}) wajib diisi`);
 		if (!readinessChecks.answerKey) issues.push('Pilih kunci jawaban');
 		if (!readinessChecks.weight) issues.push('Bobot nilai minimal 1');
 		return issues;
@@ -366,9 +369,8 @@
 			};
 			fSubjectId = d.subjectId ?? '';
 			fStem = d.stem ?? '';
-			fOptions = d.options ?? ['', '', '', ''];
-			while (fOptions.length < 4) fOptions = [...fOptions, ''];
-			fAnswerKey = d.answerKey ?? 'A';
+			fOptions = normalizeOptionCount(d.options ?? ['', '', '', '']);
+			fAnswerKey = normalizeAnswerLabel(d.answerKey, fOptions.length);
 			fWeight = d.weight ?? 1;
 			fDifficulty = d.difficulty ?? 'medium';
 			fIsRtl = d.isRtl ?? false;
@@ -496,6 +498,33 @@
 		return htmlToPlainText(html).length > 0 || html.includes('<img');
 	}
 
+	function normalizeOptionCount(options: string[]): string[] {
+		let normalized = options.slice(0, MAX_OPTION_COUNT);
+		while (normalized.length < MIN_OPTION_COUNT) normalized = [...normalized, ''];
+		return normalized;
+	}
+
+	function optionLabelAt(index: number): OptionLabel {
+		return ANSWER_LABELS[index] ?? 'A';
+	}
+
+	function normalizeAnswerLabel(value: string | undefined, optionCount = fOptions.length): OptionLabel {
+		const label = (value ?? '').trim().toUpperCase() as OptionLabel;
+		return ANSWER_LABELS.slice(0, optionCount).includes(label) ? label : 'A';
+	}
+
+	function addOption() {
+		if (fOptions.length >= MAX_OPTION_COUNT) return;
+		fOptions = [...fOptions, ''];
+	}
+
+	function removeLastOption() {
+		if (fOptions.length <= MIN_OPTION_COUNT) return;
+		const removedLabel = optionLabelAt(fOptions.length - 1);
+		fOptions = fOptions.slice(0, -1);
+		if (fAnswerKey === removedLabel) fAnswerKey = 'A';
+	}
+
 	function questionUsageLocked(q: Question): boolean {
 		const packages = q.package_count ?? q.usage?.package_count ?? 0;
 		const answers = q.answer_count ?? q.usage?.answer_count ?? 0;
@@ -540,7 +569,7 @@
 	function resetForm() {
 		fSubjectId = '';
 		fStem = '';
-		fOptions = ['', '', '', ''];
+		fOptions = normalizeOptionCount([]);
 		fAnswerKey = 'A';
 		fWeight = 1;
 		fDifficulty = 'medium';
@@ -582,9 +611,8 @@
 			const opts = d.options?.length
 				? d.options.map((o) => o.html || o.text || o.latex || '')
 				: ['', '', '', ''];
-			while (opts.length < 4) opts.push('');
-			fOptions = opts;
-			fAnswerKey = d.answer_key || 'A';
+			fOptions = normalizeOptionCount(opts);
+			fAnswerKey = normalizeAnswerLabel(d.answer_key, fOptions.length);
 			fDifficulty = d.difficulty || 'medium';
 			showTemplates = false;
 			showInspector = false;
@@ -597,7 +625,8 @@
 			resetForm();
 			fSubjectId = q.subject_id;
 			fStem = q.stem_html || q.question_text || '';
-			fAnswerKey = q.answer_key || 'A';
+			fOptions = normalizeOptionCount(q.options?.map((o) => o.html || o.text || o.latex || '') ?? []);
+			fAnswerKey = normalizeAnswerLabel(q.answer_key, fOptions.length);
 			showInspector = false;
 			focusedEditor = null;
 			composerMobilePanel = 'write';
@@ -609,8 +638,7 @@
 
 	function applyTemplate(t: Template) {
 		fStem = t.stem;
-		fOptions = [...t.options];
-		while (fOptions.length < 4) fOptions = [...fOptions, ''];
+		fOptions = normalizeOptionCount(t.options);
 		fAnswerKey = t.answerKey;
 		fIsRtl = t.isRtl ?? false;
 		draftStatus = `Template "${t.label}" diterapkan`;
@@ -712,7 +740,7 @@
 				question_type: 'multiple_choice',
 				stem_html: fStem,
 				options: fOptions.map((html, i) => ({
-					label: ANSWER_LABELS[i],
+					label: optionLabelAt(i),
 					text: htmlToPlainText(html),
 					html,
 				})),
@@ -1286,8 +1314,8 @@
 
 			{#if fOptions.some(richTextHasContent)}
 				<div class="space-y-1.5 border-t border-slate-100 pt-2">
-					{#each fOptions as opt, i (ANSWER_LABELS[i])}
-						{@const label = ANSWER_LABELS[i]}
+					{#each fOptions as opt, i (`preview-option-${i}`)}
+						{@const label = optionLabelAt(i)}
 						{@const isAnswer = fAnswerKey === label}
 						<div class="flex items-start gap-2 text-sm {isAnswer ? 'text-green-700 font-medium' : 'text-slate-700'}">
 							<span class="shrink-0 font-bold">{label}.</span>
@@ -1517,11 +1545,20 @@
 						<section id="composer-options" class="scroll-mt-4 space-y-4 border-t border-slate-200 pt-5">
 							<div class="text-center">
 								<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-slate-500">Opsi & Kunci Jawaban</h3>
-								<p class="mt-1 text-xs text-slate-500">Setiap opsi memakai kotak rich text legacy sendiri.</p>
+								<p class="mt-1 text-xs text-slate-500">Default 4 opsi, bisa ditambah sampai 6.</p>
+							</div>
+							<div class="flex flex-wrap items-center justify-center gap-2">
+								<span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">{fOptions.length} opsi aktif</span>
+								<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fOptions.length <= MIN_OPTION_COUNT} onclick={removeLastOption}>
+									Kurangi
+								</Button>
+								<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fOptions.length >= MAX_OPTION_COUNT} onclick={addOption}>
+									+ Opsi
+								</Button>
 							</div>
 							<div class="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
-								{#each fOptions as _, i (ANSWER_LABELS[i])}
-									{@const label = ANSWER_LABELS[i]}
+								{#each fOptions as _, i (`composer-option-${i}`)}
+									{@const label = optionLabelAt(i)}
 									{@const isAnswer = fAnswerKey === label}
 									<section
 										class="space-y-2 rounded-xl border bg-white p-3 shadow-sm transition-colors {isAnswer
@@ -1655,6 +1692,22 @@
 									bind:value={fOptions[3]}
 									id="soal-option-focus-d"
 									placeholder="Teks jawaban D"
+									minRows={8}
+									onImageUpload={uploadImageInEditor}
+								/>
+							{:else if focusedEditor === 'E'}
+								<LegacyRichTextEditor
+									bind:value={fOptions[4]}
+									id="soal-option-focus-e"
+									placeholder="Teks jawaban E"
+									minRows={8}
+									onImageUpload={uploadImageInEditor}
+								/>
+							{:else if focusedEditor === 'F'}
+								<LegacyRichTextEditor
+									bind:value={fOptions[5]}
+									id="soal-option-focus-f"
+									placeholder="Teks jawaban F"
 									minRows={8}
 									onImageUpload={uploadImageInEditor}
 								/>
