@@ -304,6 +304,7 @@ func main() {
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/rooms", sessionH.ListRooms)
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/rooms", sessionH.CreateRoom)
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/rooms/readiness", sessionH.GetRoomReadiness)
+		r.With(requireCbt).Get("/api/cbt/sessions/{id}/operational-recap", sessionH.GetSessionOperationalRecap)
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/rooms/{rid}/proctors", sessionH.ListRoomProctors)
 		r.With(requireCbt).Put("/api/cbt/sessions/{id}/rooms/{rid}/proctors", sessionH.ReplaceRoomProctors)
 		r.With(requireCbt).Delete("/api/cbt/sessions/{id}/rooms/{rid}", sessionH.DeleteRoom)

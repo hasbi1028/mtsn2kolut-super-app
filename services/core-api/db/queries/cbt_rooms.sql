@@ -147,6 +147,156 @@ LEFT JOIN room_stats rs ON rs.room_id = r.id
 LEFT JOIN cbt_room_handovers h ON h.exam_room_id = r.id
 WHERE r.id = $1;
 
+-- name: GetCbtSessionOperationalRecap :one
+WITH participant_stats AS (
+  SELECT
+    ep.session_id,
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE ep.room_id IS NULL)::int AS unassigned_participant_count,
+    COUNT(*) FILTER (WHERE ep.joined_at IS NOT NULL)::int AS joined_count,
+    COUNT(*) FILTER (WHERE ep.submitted_at IS NOT NULL)::int AS submitted_count,
+    COUNT(*) FILTER (WHERE ep.joined_at IS NULL AND ep.submitted_at IS NULL)::int AS no_show_count,
+    COUNT(*) FILTER (WHERE ep.suspicious_flag = TRUE)::int AS suspicious_count,
+    COALESCE(SUM(ep.app_switch_count), 0)::int AS app_switch_count,
+    COALESCE(SUM(ep.screenshot_attempt), 0)::int AS screenshot_attempt_count
+  FROM cbt_exam_participants ep
+  WHERE ep.session_id = $1
+  GROUP BY ep.session_id
+),
+room_stats AS (
+  SELECT
+    r.session_id,
+    COUNT(*)::int AS room_count,
+    COUNT(*) FILTER (WHERE h.locked_at IS NOT NULL)::int AS handover_locked_count,
+    COUNT(*) FILTER (WHERE h.id IS NOT NULL AND h.locked_at IS NULL)::int AS handover_draft_count,
+    COUNT(*) FILTER (WHERE h.id IS NULL)::int AS handover_missing_count,
+    COUNT(*) FILTER (
+      WHERE NULLIF(TRIM(COALESCE(h.incident_notes, '')), '') IS NOT NULL
+         OR NULLIF(TRIM(COALESCE(h.operator_notes, '')), '') IS NOT NULL
+    )::int AS incident_room_count
+  FROM cbt_exam_rooms r
+  LEFT JOIN cbt_room_handovers h ON h.exam_room_id = r.id
+  WHERE r.session_id = $1
+  GROUP BY r.session_id
+),
+event_stats AS (
+  SELECT
+    ep.session_id,
+    COUNT(ev.id) FILTER (
+      WHERE ev.event_type IN ('app_switch', 'screenshot_attempt', 'proctor_force_submit', 'proctor_reset_access', 'warning')
+    )::int AS incident_event_count,
+    COUNT(ev.id) FILTER (WHERE ev.event_type = 'proctor_force_submit')::int AS force_submit_count,
+    COUNT(ev.id) FILTER (WHERE ev.event_type = 'proctor_reset_access')::int AS reset_access_count,
+    COUNT(ev.id) FILTER (WHERE ev.event_type = 'app_switch')::int AS app_switch_event_count,
+    COUNT(ev.id) FILTER (WHERE ev.event_type = 'screenshot_attempt')::int AS screenshot_event_count
+  FROM cbt_exam_participants ep
+  LEFT JOIN cbt_participant_events ev ON ev.participant_id = ep.id
+  WHERE ep.session_id = $1
+  GROUP BY ep.session_id
+)
+SELECT
+  s.id AS session_id,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  COALESCE(rs.room_count, 0)::int AS room_count,
+  COALESCE(rs.handover_locked_count, 0)::int AS handover_locked_count,
+  COALESCE(rs.handover_draft_count, 0)::int AS handover_draft_count,
+  COALESCE(rs.handover_missing_count, 0)::int AS handover_missing_count,
+  COALESCE(rs.incident_room_count, 0)::int AS incident_room_count,
+  COALESCE(ps.participant_count, 0)::int AS participant_count,
+  COALESCE(ps.unassigned_participant_count, 0)::int AS unassigned_participant_count,
+  COALESCE(ps.joined_count, 0)::int AS joined_count,
+  COALESCE(ps.submitted_count, 0)::int AS submitted_count,
+  COALESCE(ps.no_show_count, 0)::int AS no_show_count,
+  COALESCE(ps.suspicious_count, 0)::int AS suspicious_count,
+  COALESCE(ps.app_switch_count, 0)::int AS app_switch_count,
+  COALESCE(ps.screenshot_attempt_count, 0)::int AS screenshot_attempt_count,
+  COALESCE(es.incident_event_count, 0)::int AS incident_event_count,
+  COALESCE(es.force_submit_count, 0)::int AS force_submit_count,
+  COALESCE(es.reset_access_count, 0)::int AS reset_access_count,
+  COALESCE(es.app_switch_event_count, 0)::int AS app_switch_event_count,
+  COALESCE(es.screenshot_event_count, 0)::int AS screenshot_event_count
+FROM cbt_exam_sessions s
+LEFT JOIN participant_stats ps ON ps.session_id = s.id
+LEFT JOIN room_stats rs ON rs.session_id = s.id
+LEFT JOIN event_stats es ON es.session_id = s.id
+WHERE s.id = $1;
+
+-- name: ListCbtSessionRoomOperationalRecap :many
+WITH participant_stats AS (
+  SELECT
+    ep.room_id,
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE ep.joined_at IS NOT NULL)::int AS joined_count,
+    COUNT(*) FILTER (WHERE ep.submitted_at IS NOT NULL)::int AS submitted_count,
+    COUNT(*) FILTER (WHERE ep.joined_at IS NULL AND ep.submitted_at IS NULL)::int AS no_show_count,
+    COUNT(*) FILTER (WHERE ep.suspicious_flag = TRUE)::int AS suspicious_count,
+    COUNT(*) FILTER (WHERE ep.seat_no IS NULL)::int AS missing_seat_count,
+    COALESCE(SUM(ep.app_switch_count), 0)::int AS app_switch_count,
+    COALESCE(SUM(ep.screenshot_attempt), 0)::int AS screenshot_attempt_count
+  FROM cbt_exam_participants ep
+  WHERE ep.session_id = $1 AND ep.room_id IS NOT NULL
+  GROUP BY ep.room_id
+),
+event_stats AS (
+  SELECT
+    ep.room_id,
+    COUNT(ev.id) FILTER (
+      WHERE ev.event_type IN ('app_switch', 'screenshot_attempt', 'proctor_force_submit', 'proctor_reset_access', 'warning')
+    )::int AS incident_event_count,
+    COUNT(ev.id) FILTER (WHERE ev.event_type = 'proctor_force_submit')::int AS force_submit_count,
+    COUNT(ev.id) FILTER (WHERE ev.event_type = 'proctor_reset_access')::int AS reset_access_count
+  FROM cbt_exam_participants ep
+  LEFT JOIN cbt_participant_events ev ON ev.participant_id = ep.id
+  WHERE ep.session_id = $1 AND ep.room_id IS NOT NULL
+  GROUP BY ep.room_id
+)
+SELECT
+  r.id AS room_id,
+  r.session_id,
+  r.room_name,
+  r.room_token,
+  r.status AS room_status,
+  r.is_locked AS room_is_locked,
+  COALESCE(ps.participant_count, 0)::int AS participant_count,
+  COALESCE(ps.joined_count, 0)::int AS joined_count,
+  COALESCE(ps.submitted_count, 0)::int AS submitted_count,
+  COALESCE(ps.no_show_count, 0)::int AS no_show_count,
+  COALESCE(ps.suspicious_count, 0)::int AS suspicious_count,
+  COALESCE(ps.missing_seat_count, 0)::int AS missing_seat_count,
+  COALESCE(ps.app_switch_count, 0)::int AS app_switch_count,
+  COALESCE(ps.screenshot_attempt_count, 0)::int AS screenshot_attempt_count,
+  COALESCE(es.incident_event_count, 0)::int AS incident_event_count,
+  COALESCE(es.force_submit_count, 0)::int AS force_submit_count,
+  COALESCE(es.reset_access_count, 0)::int AS reset_access_count,
+  h.id AS handover_id,
+  COALESCE(h.attendance_checked, FALSE)::boolean AS attendance_checked,
+  COALESCE(h.all_submitted_checked, FALSE)::boolean AS all_submitted_checked,
+  COALESCE(h.device_issue_checked, FALSE)::boolean AS device_issue_checked,
+  COALESCE(h.room_clean_checked, FALSE)::boolean AS room_clean_checked,
+  COALESCE(h.token_returned_checked, FALSE)::boolean AS token_returned_checked,
+  COALESCE(h.assets_returned_checked, FALSE)::boolean AS assets_returned_checked,
+  COALESCE(h.incident_notes, '')::text AS incident_notes,
+  COALESCE(h.operator_notes, '')::text AS operator_notes,
+  COALESCE(h.handover_notes, '')::text AS handover_notes,
+  h.locked_at,
+  h.updated_at AS handover_updated_at
+FROM cbt_exam_rooms r
+LEFT JOIN participant_stats ps ON ps.room_id = r.id
+LEFT JOIN event_stats es ON es.room_id = r.id
+LEFT JOIN cbt_room_handovers h ON h.exam_room_id = r.id
+WHERE r.session_id = $1
+ORDER BY
+  CASE
+    WHEN h.id IS NULL THEN 0
+    WHEN h.locked_at IS NULL THEN 1
+    ELSE 2
+  END,
+  COALESCE(es.incident_event_count, 0) DESC,
+  r.room_name ASC;
+
 -- name: UpsertCbtRoomHandover :one
 INSERT INTO cbt_room_handovers (
   exam_room_id,

@@ -90,6 +90,7 @@ type cbtSessionRoomProctorDashboardService interface {
 
 type cbtSessionRoomHandoverService interface {
 	GetRoomHandover(ctx context.Context, roomID pgtype.UUID) (db.GetCbtRoomHandoverRow, error)
+	GetSessionOperationalRecap(ctx context.Context, sessionID pgtype.UUID) (db.GetCbtSessionOperationalRecapRow, []db.ListCbtSessionRoomOperationalRecapRow, error)
 	SaveRoomHandover(ctx context.Context, roomID, updatedBy pgtype.UUID, in service.SaveCbtRoomHandoverInput) (db.CbtRoomHandover, error)
 	LockRoomHandover(ctx context.Context, roomID, lockedBy pgtype.UUID) (db.CbtRoomHandover, error)
 }
@@ -1266,6 +1267,31 @@ func (h *CbtSession) GetRoomHandover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, row)
+}
+
+func (h *CbtSession) GetSessionOperationalRecap(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+		return
+	}
+	handoverSvc, ok := h.svc.(cbtSessionRoomHandoverService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt session operational recap service unavailable"))
+		return
+	}
+	recap, rooms, err := handoverSvc.GetSessionOperationalRecap(r.Context(), sessionID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{
+		"recap": recap,
+		"rooms": rooms,
+	})
 }
 
 func (h *CbtSession) SaveRoomHandover(w http.ResponseWriter, r *http.Request) {

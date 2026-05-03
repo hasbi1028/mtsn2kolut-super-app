@@ -75,6 +75,66 @@
 		event_data: unknown;
 		created_at: string;
 	};
+	type OperationalRecap = {
+		session_id: string;
+		session_title: string;
+		session_status: string;
+		scheduled_start: string;
+		scheduled_end: string;
+		room_count: number;
+		handover_locked_count: number;
+		handover_draft_count: number;
+		handover_missing_count: number;
+		incident_room_count: number;
+		participant_count: number;
+		unassigned_participant_count: number;
+		joined_count: number;
+		submitted_count: number;
+		no_show_count: number;
+		suspicious_count: number;
+		app_switch_count: number;
+		screenshot_attempt_count: number;
+		incident_event_count: number;
+		force_submit_count: number;
+		reset_access_count: number;
+		app_switch_event_count: number;
+		screenshot_event_count: number;
+	};
+	type OperationalRoom = {
+		room_id: string;
+		session_id: string;
+		room_name: string;
+		room_token: string;
+		room_status: string;
+		room_is_locked: boolean;
+		participant_count: number;
+		joined_count: number;
+		submitted_count: number;
+		no_show_count: number;
+		suspicious_count: number;
+		missing_seat_count: number;
+		app_switch_count: number;
+		screenshot_attempt_count: number;
+		incident_event_count: number;
+		force_submit_count: number;
+		reset_access_count: number;
+		handover_id: string | null;
+		attendance_checked: boolean;
+		all_submitted_checked: boolean;
+		device_issue_checked: boolean;
+		room_clean_checked: boolean;
+		token_returned_checked: boolean;
+		assets_returned_checked: boolean;
+		incident_notes: string;
+		operator_notes: string;
+		handover_notes: string;
+		locked_at: string | null;
+		handover_updated_at: string | null;
+	};
+	type OperationalRecapPayload = {
+		recap?: OperationalRecap;
+		rooms?: OperationalRoom[];
+	};
 	type UngradedEssay = {
 		answer_id: string;
 		participant_id: string;
@@ -102,7 +162,7 @@
 	};
 
 	const sessionId = page.params.id ?? '';
-	type ActiveTab = 'hasil' | 'peserta' | 'ruangan' | 'proctoring' | 'essay';
+	type ActiveTab = 'hasil' | 'peserta' | 'ruangan' | 'operasional' | 'proctoring' | 'essay';
 
 	let activeTab = $state<ActiveTab>('hasil');
 	let session = $state<SessionInfo | null>(null);
@@ -112,6 +172,8 @@
 	let schoolRooms = $state<SchoolRoom[]>([]);
 	let employeeOptions = $state<EmployeeOption[]>([]);
 	let roomReadiness = $state<RoomReadiness | null>(null);
+	let operationalRecap = $state<OperationalRecap | null>(null);
+	let operationalRooms = $state<OperationalRoom[]>([]);
 	let proctoring = $state<ProctoringRow[]>([]);
 	let proctoringEvents = $state<ProctoringEvent[]>([]);
 	let essays = $state<UngradedEssay[]>([]);
@@ -126,6 +188,7 @@
 	let tokenBusy = $state(false);
 	let participantRefreshBusy = $state(false);
 	let proctoringRefreshBusy = $state(false);
+	let operationalRefreshBusy = $state(false);
 	let eventRefreshBusy = $state(false);
 	let regenBusyId = $state('');
 	let roomDeleteBusyId = $state('');
@@ -148,6 +211,7 @@
 	let schoolRoomsRequestId = 0;
 	let employeesRequestId = 0;
 	let readinessRequestId = 0;
+	let operationalRequestId = 0;
 	let proctoringRequestId = 0;
 	let proctoringEventsRequestId = 0;
 	let essaysRequestId = 0;
@@ -160,6 +224,7 @@
 		{ id: 'hasil', label: 'Hasil Ujian' },
 		{ id: 'peserta', label: 'Peserta & Token' },
 		{ id: 'ruangan', label: 'Ruangan' },
+		{ id: 'operasional', label: 'Rekap Ops' },
 		{ id: 'proctoring', label: 'Proctoring' },
 		{ id: 'essay', label: 'Koreksi Uraian' },
 	];
@@ -204,6 +269,30 @@
 	function roomReadinessMessage(readiness: RoomReadiness | null) {
 		if (!readiness) return 'Kesiapan ruangan belum dimuat.';
 		return `${readiness.assigned_participant_count}/${readiness.participant_count} peserta sudah punya ruang, kapasitas total ${readiness.total_capacity}, ${readiness.rooms_without_proctor} ruang belum punya pengawas, ${readiness.missing_seat_count} peserta belum punya nomor meja.`;
+	}
+
+	function operationalTone(recap: OperationalRecap | null) {
+		if (!recap) return 'info';
+		if (recap.handover_missing_count > 0 || recap.unassigned_participant_count > 0) return 'warning';
+		if (recap.incident_room_count > 0 || recap.incident_event_count > 0 || recap.force_submit_count > 0) return 'warning';
+		return 'success';
+	}
+
+	function operationalMessage(recap: OperationalRecap | null) {
+		if (!recap) return 'Rekap operasional belum dimuat.';
+		return `${recap.handover_locked_count}/${recap.room_count} ruang sudah mengunci handover, ${recap.submitted_count}/${recap.participant_count} peserta submit, ${recap.incident_room_count} ruang punya catatan insiden, ${recap.force_submit_count} peserta dipaksa submit.`;
+	}
+
+	function handoverStatusLabel(room: OperationalRoom) {
+		if (room.locked_at) return 'Terkunci';
+		if (room.handover_id) return 'Draft';
+		return 'Belum ada';
+	}
+
+	function handoverStatusClass(room: OperationalRoom) {
+		if (room.locked_at) return 'border-emerald-300 bg-emerald-50 text-emerald-700';
+		if (room.handover_id) return 'border-amber-300 bg-amber-50 text-amber-700';
+		return 'border-red-300 bg-red-50 text-red-700';
 	}
 
 	function fmtEssayPoints(points: unknown) {
@@ -452,6 +541,19 @@
 		}
 	}
 
+	async function loadOperationalRecap() {
+		const requestId = ++operationalRequestId;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/operational-recap`);
+			const data = await readClientApiData<OperationalRecapPayload>(res, 'Gagal memuat rekap operasional');
+			if (requestId !== operationalRequestId) return;
+			operationalRecap = data.recap ?? null;
+			operationalRooms = Array.isArray(data.rooms) ? data.rooms : [];
+		} catch (error) {
+			if (requestId === operationalRequestId) throw error;
+		}
+	}
+
 	async function loadProctoring() {
 		const requestId = ++proctoringRequestId;
 		try {
@@ -512,6 +614,17 @@
 		}
 	}
 
+	async function refreshOperationalRecap() {
+		operationalRefreshBusy = true;
+		try {
+			await loadOperationalRecap();
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			operationalRefreshBusy = false;
+		}
+	}
+
 	async function refreshProctoringEvents() {
 		eventRefreshBusy = true;
 		try {
@@ -540,6 +653,7 @@
 		try {
 			if (tab === 'peserta') { await loadRooms(); await loadParticipants(); }
 			if (tab === 'ruangan') { await Promise.all([loadRooms(), loadParticipants(), loadSchoolRooms(), loadEmployeeOptions(), loadRoomReadiness()]); }
+			if (tab === 'operasional') await loadOperationalRecap();
 			if (tab === 'essay') await loadEssays();
 			if (tab === 'proctoring') {
 				await Promise.all([loadProctoring(), loadProctoringEvents()]);
@@ -841,6 +955,51 @@
 		const a = document.createElement('a');
 		a.href = url;
 		a.download = `hasil_${session.title.replace(/\s+/g, '_')}.csv`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function exportOperationalCSV() {
+		if (!session || !operationalRecap) return;
+		const header = 'Ruang,Handover,Peserta,Login,Submit,No Show,Atensi,Force Submit,Reset Akses,App Switch,Screenshot,Catatan Kejadian,Catatan Operator,Catatan Serah Terima';
+		const rows = operationalRooms.map((room) => [
+			`"${room.room_name}"`,
+			handoverStatusLabel(room),
+			room.participant_count,
+			room.joined_count,
+			room.submitted_count,
+			room.no_show_count,
+			room.suspicious_count,
+			room.force_submit_count,
+			room.reset_access_count,
+			room.app_switch_count,
+			room.screenshot_attempt_count,
+			`"${room.incident_notes.replaceAll('"', '""')}"`,
+			`"${room.operator_notes.replaceAll('"', '""')}"`,
+			`"${room.handover_notes.replaceAll('"', '""')}"`,
+		].join(','));
+		const summary = [
+			`"TOTAL ${operationalRecap.session_title}"`,
+			`${operationalRecap.handover_locked_count}/${operationalRecap.room_count} terkunci`,
+			operationalRecap.participant_count,
+			operationalRecap.joined_count,
+			operationalRecap.submitted_count,
+			operationalRecap.no_show_count,
+			operationalRecap.suspicious_count,
+			operationalRecap.force_submit_count,
+			operationalRecap.reset_access_count,
+			operationalRecap.app_switch_count,
+			operationalRecap.screenshot_attempt_count,
+			`"${operationalRecap.incident_room_count} ruang punya catatan"`,
+			`"${operationalRecap.incident_event_count} event atensi"`,
+			`"Generated ${new Date().toISOString()}"`,
+		].join(',');
+		const csv = [header, summary, ...rows].join('\n');
+		const blob = new Blob([csv], { type: 'text/csv' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `rekap_operasional_${session.title.replace(/\s+/g, '_')}.csv`;
 		a.click();
 		URL.revokeObjectURL(url);
 	}
@@ -1284,6 +1443,126 @@
 				<div class="rounded-lg border border-dashed border-green-200 p-8 text-center text-muted-foreground text-sm mt-4">
 					Belum ada ruangan. Tambah ruangan di atas, lalu klik "Acak Peserta ke Ruangan".
 				</div>
+			{/if}
+
+		<!-- Tab: Rekap Operasional -->
+		{:else if activeTab === 'operasional'}
+			<div class="flex items-center justify-between gap-3 flex-wrap">
+				<div>
+					<p class="text-sm font-medium text-slate-700">Rekap handover, insiden, dan rekonsiliasi sesi</p>
+					<p class="text-xs text-muted-foreground">Dipakai operator/panitia untuk memastikan semua ruang siap diarsipkan.</p>
+				</div>
+				<div class="flex flex-wrap gap-2">
+					<LoadingButton variant="outline" size="sm" onclick={() => void refreshOperationalRecap()} loading={operationalRefreshBusy} loadingLabel="Memuat..." disabled={operationalRefreshBusy}>
+						↻ Refresh
+					</LoadingButton>
+					<Button variant="outline" size="sm" onclick={exportOperationalCSV} disabled={!operationalRecap || operationalRooms.length === 0}>
+						↓ CSV Rekap
+					</Button>
+				</div>
+			</div>
+
+			<OperationStatusPanel
+				tone={operationalTone(operationalRecap)}
+				compact
+				title="Status Penutupan CBT"
+				message={operationalMessage(operationalRecap)}
+			/>
+
+			{#if operationalRecap}
+				<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+					{#each [
+						{ label: 'Handover Terkunci', value: `${operationalRecap.handover_locked_count}/${operationalRecap.room_count}`, hint: `${operationalRecap.handover_missing_count} belum ada` },
+						{ label: 'Submit Akhir', value: `${operationalRecap.submitted_count}/${operationalRecap.participant_count}`, hint: `${operationalRecap.no_show_count} belum login/no-show` },
+						{ label: 'Ruang Berinsiden', value: operationalRecap.incident_room_count.toString(), hint: `${operationalRecap.incident_event_count} event atensi` },
+						{ label: 'Paksa Submit', value: operationalRecap.force_submit_count.toString(), hint: `${operationalRecap.reset_access_count} reset akses` },
+						{ label: 'Anti-Cheat', value: `${operationalRecap.app_switch_count}/${operationalRecap.screenshot_attempt_count}`, hint: 'app switch / screenshot' },
+					] as item (item.label)}
+						<Card.Root class="border-green-100">
+							<Card.Content class="px-4 pb-3 pt-4">
+								<p class="mb-1 text-xs text-slate-500">{item.label}</p>
+								<p class="text-2xl font-bold text-[oklch(0.38_0.13_145)]">{item.value}</p>
+								<p class="mt-1 text-xs text-slate-400">{item.hint}</p>
+							</Card.Content>
+						</Card.Root>
+					{/each}
+				</div>
+
+				<Card.Root class="border-green-100">
+					<Card.Header class="pb-2">
+						<Card.Title class="text-base">Rekap Ruang & Register Insiden</Card.Title>
+						<p class="text-xs text-muted-foreground">Ruang yang belum punya handover atau belum terkunci ditampilkan di atas.</p>
+					</Card.Header>
+					<Card.Content class="p-0 overflow-x-auto">
+						<Table.Root>
+							<Table.Header>
+								<Table.Row class="bg-green-50">
+									<Table.Head>Ruang</Table.Head>
+									<Table.Head>Handover</Table.Head>
+									<Table.Head class="text-center">Submit</Table.Head>
+									<Table.Head class="text-center">Atensi</Table.Head>
+									<Table.Head class="text-center">Force/Reset</Table.Head>
+									<Table.Head>Catatan Kejadian</Table.Head>
+									<Table.Head>Catatan Operator</Table.Head>
+									<Table.Head class="text-right">Aksi</Table.Head>
+								</Table.Row>
+							</Table.Header>
+							<Table.Body>
+								{#each operationalRooms as room (room.room_id)}
+									<Table.Row class={room.locked_at ? '' : 'bg-amber-50/50'}>
+										<Table.Cell>
+											<div class="font-medium text-slate-900">{room.room_name}</div>
+											<div class="text-xs text-slate-500">Token {room.room_token || '—'} · {room.joined_count}/{room.participant_count} login</div>
+										</Table.Cell>
+										<Table.Cell>
+											<Badge variant="outline" class={handoverStatusClass(room)}>{handoverStatusLabel(room)}</Badge>
+											<p class="mt-1 text-[11px] text-slate-400">{room.locked_at ? fmtDt(room.locked_at) : room.handover_updated_at ? `Draft ${fmtDt(room.handover_updated_at)}` : 'Belum diisi'}</p>
+										</Table.Cell>
+										<Table.Cell class="text-center font-mono text-sm">
+											{room.submitted_count}/{room.participant_count}
+											{#if room.no_show_count > 0}<div class="text-[11px] text-amber-700">{room.no_show_count} no-show</div>{/if}
+										</Table.Cell>
+										<Table.Cell class="text-center">
+											<div class={room.suspicious_count > 0 || room.incident_event_count > 0 ? 'font-semibold text-red-700' : 'text-slate-500'}>
+												{room.suspicious_count} / {room.incident_event_count}
+											</div>
+											<div class="text-[11px] text-slate-400">flag / event</div>
+										</Table.Cell>
+										<Table.Cell class="text-center font-mono text-sm">{room.force_submit_count}/{room.reset_access_count}</Table.Cell>
+										<Table.Cell class="max-w-sm text-xs text-slate-600">
+											{room.incident_notes || '—'}
+										</Table.Cell>
+										<Table.Cell class="max-w-sm text-xs text-slate-600">
+											{room.operator_notes || room.handover_notes || '—'}
+										</Table.Cell>
+										<Table.Cell class="text-right">
+											<div class="flex flex-wrap justify-end gap-2">
+												<Button variant="outline" size="sm" href={resolve(`/cbt/sessions/${sessionId}/rooms/${room.room_id}/proctoring`)}>
+													Dashboard
+												</Button>
+												<Button variant="outline" size="sm" href={resolve(`/cbt/sessions/${sessionId}/rooms/${room.room_id}/print-pack`)}>
+													Cetak
+												</Button>
+											</div>
+										</Table.Cell>
+									</Table.Row>
+								{:else}
+									<Table.Row>
+										<Table.Cell colspan={8} class="py-10 text-center text-slate-400">Belum ada ruang untuk direkap</Table.Cell>
+									</Table.Row>
+								{/each}
+							</Table.Body>
+						</Table.Root>
+					</Card.Content>
+				</Card.Root>
+			{:else}
+				<Card.Root>
+					<Card.Content class="grid gap-3 p-4 sm:grid-cols-3">
+						<Skeleton class="h-24 rounded-lg" />
+						<Skeleton class="h-24 rounded-lg" />
+						<Skeleton class="h-24 rounded-lg" />
+					</Card.Content>
+				</Card.Root>
 			{/if}
 
 		<!-- Tab: Proctoring -->

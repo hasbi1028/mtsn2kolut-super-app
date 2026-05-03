@@ -418,6 +418,10 @@ type fakeCbtSessionStore struct {
 	roomDashboardRow      db.GetCbtRoomProctorDashboardRow
 	roomHandoverRow       db.GetCbtRoomHandoverRow
 	roomHandoverID        pgtype.UUID
+	operationalRecapID    pgtype.UUID
+	operationalRecapRow   db.GetCbtSessionOperationalRecapRow
+	operationalRoomRows   []db.ListCbtSessionRoomOperationalRecapRow
+	operationalRoomID     pgtype.UUID
 	saveHandoverArg       db.UpsertCbtRoomHandoverParams
 	saveHandoverErr       error
 	lockHandoverArg       db.LockCbtRoomHandoverParams
@@ -559,6 +563,19 @@ func (f *fakeCbtSessionStore) GetCbtRoomHandover(ctx context.Context, id pgtype.
 		return f.roomHandoverRow, nil
 	}
 	return db.GetCbtRoomHandoverRow{RoomID: id, RoomName: "Ruang 1"}, nil
+}
+
+func (f *fakeCbtSessionStore) GetCbtSessionOperationalRecap(ctx context.Context, id pgtype.UUID) (db.GetCbtSessionOperationalRecapRow, error) {
+	f.operationalRecapID = id
+	if f.operationalRecapRow.SessionID.Valid {
+		return f.operationalRecapRow, nil
+	}
+	return db.GetCbtSessionOperationalRecapRow{SessionID: id, SessionTitle: "Sesi", RoomCount: 1}, nil
+}
+
+func (f *fakeCbtSessionStore) ListCbtSessionRoomOperationalRecap(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtSessionRoomOperationalRecapRow, error) {
+	f.operationalRoomID = sessionID
+	return f.operationalRoomRows, nil
 }
 
 func (f *fakeCbtSessionStore) UpsertCbtRoomHandover(ctx context.Context, arg db.UpsertCbtRoomHandoverParams) (db.CbtRoomHandover, error) {
@@ -729,10 +746,13 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	answerID := documentCycleTestUUID(218)
 	teacherID := documentCycleTestUUID(219)
 	store := &fakeCbtSessionStore{
-		listRows:           []db.ListCbtExamSessionsRow{{ID: sessionID, Title: "Sesi"}},
-		participantRows:    []db.ListCbtExamParticipantsRow{{ID: participantID}},
-		roomRows:           []db.ListCbtExamRoomsRow{{ID: roomID, RoomName: "R1"}},
-		proctorRoomRows:    []db.ListCbtProctorRoomsRow{{ID: roomID, RoomName: "R1"}},
+		listRows:        []db.ListCbtExamSessionsRow{{ID: sessionID, Title: "Sesi"}},
+		participantRows: []db.ListCbtExamParticipantsRow{{ID: participantID}},
+		roomRows:        []db.ListCbtExamRoomsRow{{ID: roomID, RoomName: "R1"}},
+		proctorRoomRows: []db.ListCbtProctorRoomsRow{{ID: roomID, RoomName: "R1"}},
+		operationalRoomRows: []db.ListCbtSessionRoomOperationalRecapRow{{
+			RoomID: roomID, RoomName: "R1", ParticipantCount: 1,
+		}},
 		proctorRows:        []db.GetSessionProctoringStatusRow{{ParticipantID: participantID}},
 		ungradedRows:       []db.ListUngradedEssaysRow{{AnswerID: answerID}},
 		teacherRows:        []db.ListCbtExamSessionsByTeacherRow{{ID: sessionID}},
@@ -849,6 +869,9 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	}
 	if got, err := svc.GetRoomHandover(context.Background(), roomID); err != nil || got.RoomID != roomID || store.roomHandoverID != roomID {
 		t.Fatalf("GetRoomHandover() = %+v/%v id=%v, want room handover", got, err, store.roomHandoverID)
+	}
+	if recap, roomRows, err := svc.GetSessionOperationalRecap(context.Background(), sessionID); err != nil || recap.SessionID != sessionID || len(roomRows) != 1 || store.operationalRecapID != sessionID || store.operationalRoomID != sessionID {
+		t.Fatalf("GetSessionOperationalRecap() = %+v/%d/%v ids=%v/%v, want recap and room rows", recap, len(roomRows), err, store.operationalRecapID, store.operationalRoomID)
 	}
 	if got, err := svc.SaveRoomHandover(context.Background(), roomID, teacherID, SaveCbtRoomHandoverInput{
 		AttendanceChecked:     true,

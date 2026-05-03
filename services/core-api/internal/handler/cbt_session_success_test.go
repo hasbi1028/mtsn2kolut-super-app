@@ -119,6 +119,7 @@ type fakeCbtSessionService struct {
 	roomEventsRoomID         pgtype.UUID
 	proctoringErr            error
 	handoverRoomID           pgtype.UUID
+	operationalRecapID       pgtype.UUID
 	saveHandoverRoomID       pgtype.UUID
 	saveHandoverUpdatedBy    pgtype.UUID
 	saveHandoverInput        service.SaveCbtRoomHandoverInput
@@ -454,6 +455,11 @@ func (f *fakeCbtSessionService) GetRoomHandover(_ context.Context, roomID pgtype
 	return db.GetCbtRoomHandoverRow{RoomID: roomID, RoomName: "Ruang 1"}, nil
 }
 
+func (f *fakeCbtSessionService) GetSessionOperationalRecap(_ context.Context, sessionID pgtype.UUID) (db.GetCbtSessionOperationalRecapRow, []db.ListCbtSessionRoomOperationalRecapRow, error) {
+	f.operationalRecapID = sessionID
+	return db.GetCbtSessionOperationalRecapRow{SessionID: sessionID, SessionTitle: "Sesi", RoomCount: 1}, []db.ListCbtSessionRoomOperationalRecapRow{{SessionID: sessionID, RoomName: "Ruang 1"}}, nil
+}
+
 func (f *fakeCbtSessionService) SaveRoomHandover(_ context.Context, roomID, updatedBy pgtype.UUID, in service.SaveCbtRoomHandoverInput) (db.CbtRoomHandover, error) {
 	f.saveHandoverRoomID = roomID
 	f.saveHandoverUpdatedBy = updatedBy
@@ -639,6 +645,7 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	run("ListMyProctorRooms", h.ListMyProctorRooms, adminRoute(http.MethodGet, "/api/cbt/proctoring/my-rooms", ""), http.StatusOK)
 	run("GetRoomProctoringDashboard", h.GetRoomProctoringDashboard, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/proctoring", "", "id", sessionID.String(), "rid", roomID.String()), http.StatusOK)
 	run("GetRoomProctorPrintPack", h.GetRoomProctorPrintPack, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/print-pack", "", "id", sessionID.String(), "rid", roomID.String()), http.StatusOK)
+	run("GetSessionOperationalRecap", h.GetSessionOperationalRecap, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/operational-recap", "", "id", sessionID.String()), http.StatusOK)
 	run("FlagParticipant", h.FlagParticipant, adminRoute(http.MethodPost, "/api/cbt/sessions/"+sessionID.String()+"/participants/"+participantID.String()+"/flag", `{"flag":true}`, "id", sessionID.String(), "pid", participantID.String()), http.StatusOK)
 	run("ListUngradedEssays", h.ListUngradedEssays, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/essays/ungraded", "", "id", sessionID.String()), http.StatusOK)
 	gradeReq := withRouteParams(withClaims(httptest.NewRequest(http.MethodPost, "/api/cbt/sessions/"+sessionID.String()+"/answers/"+answerID.String()+"/grade", strings.NewReader(`{"manual_score":87.5,"graded_by":"spoofed.actor"}`)), jwt.MapClaims{"roles": []any{"admin"}, "usr": "pengawas.utama", "uid": "01000000-0000-0000-0000-000000000000", "sub": "01000000-0000-0000-0000-000000000000", "ssid": "session-admin-1"}), "id", sessionID.String(), "aid", answerID.String())
@@ -672,6 +679,9 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	}
 	if fake.handoverRoomID != roomID || fake.saveHandoverRoomID != roomID || fake.lockHandoverRoomID != roomID || !fake.saveHandoverInput.AllSubmittedChecked || fake.saveHandoverInput.IncidentNotes != "  aman  " {
 		t.Fatalf("handover args = get:%v save:%v lock:%v input:%+v, want room and forwarded payload", fake.handoverRoomID, fake.saveHandoverRoomID, fake.lockHandoverRoomID, fake.saveHandoverInput)
+	}
+	if fake.operationalRecapID != sessionID {
+		t.Fatalf("operational recap id = %v, want %v", fake.operationalRecapID, sessionID)
 	}
 	if !fake.proctorRoomsIncludeAll || fake.proctorRoomsEmployeeID.Valid {
 		t.Fatalf("proctor rooms args = includeAll:%v employee:%v, want admin all rooms without employee filter", fake.proctorRoomsIncludeAll, fake.proctorRoomsEmployeeID)

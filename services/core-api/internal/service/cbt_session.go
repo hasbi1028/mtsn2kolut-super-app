@@ -41,6 +41,8 @@ type cbtSessionStore interface {
 	GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error)
 	GetCbtRoomProctorDashboard(ctx context.Context, id pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error)
 	GetCbtRoomHandover(ctx context.Context, id pgtype.UUID) (db.GetCbtRoomHandoverRow, error)
+	GetCbtSessionOperationalRecap(ctx context.Context, id pgtype.UUID) (db.GetCbtSessionOperationalRecapRow, error)
+	ListCbtSessionRoomOperationalRecap(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtSessionRoomOperationalRecapRow, error)
 	UpsertCbtRoomHandover(ctx context.Context, arg db.UpsertCbtRoomHandoverParams) (db.CbtRoomHandover, error)
 	LockCbtRoomHandover(ctx context.Context, arg db.LockCbtRoomHandoverParams) (db.CbtRoomHandover, error)
 	ListCbtProctorRooms(ctx context.Context, arg db.ListCbtProctorRoomsParams) ([]db.ListCbtProctorRoomsRow, error)
@@ -440,6 +442,21 @@ type SaveCbtRoomHandoverInput struct {
 
 func (s *CbtSession) GetRoomHandover(ctx context.Context, roomID pgtype.UUID) (db.GetCbtRoomHandoverRow, error) {
 	return s.q.GetCbtRoomHandover(ctx, roomID)
+}
+
+func (s *CbtSession) GetSessionOperationalRecap(ctx context.Context, sessionID pgtype.UUID) (db.GetCbtSessionOperationalRecapRow, []db.ListCbtSessionRoomOperationalRecapRow, error) {
+	recap, err := s.q.GetCbtSessionOperationalRecap(ctx, sessionID)
+	if err != nil {
+		return db.GetCbtSessionOperationalRecapRow{}, nil, err
+	}
+	rooms, err := s.q.ListCbtSessionRoomOperationalRecap(ctx, sessionID)
+	if err != nil {
+		return db.GetCbtSessionOperationalRecapRow{}, nil, err
+	}
+	if rooms == nil {
+		rooms = []db.ListCbtSessionRoomOperationalRecapRow{}
+	}
+	return recap, rooms, nil
 }
 
 func (s *CbtSession) SaveRoomHandover(ctx context.Context, roomID, updatedBy pgtype.UUID, in SaveCbtRoomHandoverInput) (db.CbtRoomHandover, error) {
