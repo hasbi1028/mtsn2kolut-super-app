@@ -59,6 +59,44 @@ SELECT *
 FROM cbt_exam_rooms
 WHERE id = $1;
 
+-- name: GetCbtRoomProctorDashboard :one
+SELECT
+  r.id,
+  r.session_id,
+  r.school_room_id,
+  r.room_name,
+  r.room_name_snapshot,
+  r.capacity,
+  r.capacity_override,
+  r.room_token,
+  r.status,
+  r.is_locked,
+  r.created_at,
+  r.updated_at,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(sr.code, '') AS school_room_code,
+  COALESCE(sr.name, '') AS school_room_name,
+  COALESCE(sr.building, '') AS school_room_building,
+  COALESCE(sr.location_note, '') AS school_room_location_note,
+  COUNT(ep.id)::int AS participant_count,
+  COUNT(ep.id) FILTER (WHERE ep.submitted_at IS NOT NULL)::int AS submitted_count,
+  COUNT(ep.id) FILTER (WHERE ep.last_heartbeat IS NOT NULL AND ep.last_heartbeat > NOW() - INTERVAL '2 minutes')::int AS online_count,
+  COUNT(ep.id) FILTER (WHERE ep.suspicious_flag = TRUE)::int AS suspicious_count,
+  COUNT(ep.id) FILTER (WHERE ep.seat_no IS NULL)::int AS missing_seat_count
+FROM cbt_exam_rooms r
+JOIN cbt_exam_sessions s ON s.id = r.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN school_rooms sr ON sr.id = r.school_room_id
+LEFT JOIN cbt_exam_participants ep ON ep.room_id = r.id AND ep.session_id = r.session_id
+WHERE r.id = $1
+GROUP BY r.id, s.title, s.status, s.scheduled_start, s.scheduled_end, p.title, p.duration_minutes,
+         sr.code, sr.name, sr.building, sr.location_note;
+
 -- name: ListCbtRoomProctors :many
 SELECT rp.id, rp.exam_room_id, rp.employee_id, e.nip, e.nama,
        rp.role, rp.assigned_by, rp.assigned_at
@@ -74,6 +112,25 @@ DELETE FROM cbt_room_proctors WHERE exam_room_id = $1;
 INSERT INTO cbt_room_proctors (exam_room_id, employee_id, role, assigned_by)
 VALUES ($1, $2, $3, $4)
 RETURNING *;
+
+-- name: HasSessionRoomProctor :one
+SELECT EXISTS (
+  SELECT 1
+  FROM cbt_room_proctors rp
+  JOIN cbt_exam_rooms r ON r.id = rp.exam_room_id
+  WHERE r.session_id = sqlc.arg(session_id)
+    AND r.id = sqlc.arg(room_id)
+    AND rp.employee_id = sqlc.arg(employee_id)
+)::boolean;
+
+-- name: HasSessionRoomParticipant :one
+SELECT EXISTS (
+  SELECT 1
+  FROM cbt_exam_participants ep
+  WHERE ep.session_id = sqlc.arg(session_id)
+    AND ep.room_id = sqlc.arg(room_id)
+    AND ep.id = sqlc.arg(participant_id)
+)::boolean;
 
 -- name: GetCbtSessionRoomReadiness :one
 WITH room_stats AS (

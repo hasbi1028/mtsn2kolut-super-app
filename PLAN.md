@@ -979,13 +979,13 @@ Three runtime units deployed across 3 VPS:
 #### Phase 2 — Penugasan Pengawas Per Ruang
 - [x] Tambahkan tabel `cbt_room_proctors` untuk pengawas utama, pendamping, dan cadangan per ruang ujian.
 - [x] Detail sesi CBT menampilkan pengawas utama per ruang dan menyediakan aksi penugasan awal dari daftar pegawai aktif.
-- [ ] Otorisasi proctoring room-scoped akan mengikuti model legacy: pengawas hanya melihat ruang yang ditugaskan, admin tetap melihat semua.
+- [x] Otorisasi proctoring room-scoped mengikuti model legacy: dashboard ruang hanya bisa dibuka admin atau pegawai yang ditugaskan sebagai pengawas ruang tersebut.
 - [x] Audit event mencatat perubahan pengawas agar penugasan ruang ujian dapat ditelusuri.
 
 #### Phase 3 — Readiness Check dan Operasional Pengawas
 - [x] Tambahkan readiness ringkas: jumlah peserta, peserta belum punya ruang, kapasitas total, ruang tanpa pengawas, dan nomor meja belum lengkap.
 - [x] Blokir aktivasi sesi CBT jika peserta, ruangan, kapasitas, nomor meja, atau pengawas ruang belum siap; UI daftar sesi menampilkan alasan backend agar operator tahu tindakan koreksi berikutnya.
-- [ ] Buat dashboard pengawas per ruang mirip legacy proctoring: token ruang, peserta, nomor meja, status heartbeat, pelanggaran, reset akses, dan force submit terbatas pada ruang tersebut.
+- [x] Buat dashboard pengawas per ruang mirip legacy proctoring: ringkasan ruang, token ruang, daftar pengawas, peserta, nomor meja, heartbeat, pelanggaran, reset akses, flag atensi, force submit, dan log ruang dibatasi ke ruang tersebut.
 - [ ] Tambahkan cetak paket pengawas per ruang: daftar hadir, token ruang, denah/meja, kontak operator, dan checklist kesiapan.
 
 #### Guardrail Sprint 63

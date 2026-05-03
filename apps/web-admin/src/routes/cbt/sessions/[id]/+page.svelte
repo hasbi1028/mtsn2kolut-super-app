@@ -1193,12 +1193,17 @@
 												</div>
 											</div>
 										</div>
-									<LoadingButton variant="outline" size="sm"
-										class="border-red-200 text-red-600 hover:bg-red-50 ml-3"
-										onclick={() => deleteRoom(room.id, room.room_name)}
-										loading={roomDeleteBusyId === room.id}
-										disabled={roomDeleteBusyId !== '' && roomDeleteBusyId !== room.id}
-										loadingLabel="Menghapus...">Hapus</LoadingButton>
+										<div class="flex shrink-0 flex-col gap-2">
+											<Button variant="outline" size="sm" href={resolve(`/cbt/sessions/${sessionId}/rooms/${room.id}/proctoring`)}>
+												Dashboard
+											</Button>
+											<LoadingButton variant="outline" size="sm"
+												class="border-red-200 text-red-600 hover:bg-red-50"
+												onclick={() => deleteRoom(room.id, room.room_name)}
+												loading={roomDeleteBusyId === room.id}
+												disabled={roomDeleteBusyId !== '' && roomDeleteBusyId !== room.id}
+												loadingLabel="Menghapus...">Hapus</LoadingButton>
+										</div>
 									</div>
 									<div class="rounded-md border border-slate-200 bg-slate-50 p-2">
 										<label for={`proctor-${room.id}`} class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Pengawas utama</label>

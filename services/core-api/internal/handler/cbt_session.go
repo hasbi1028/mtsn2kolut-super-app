@@ -79,6 +79,14 @@ type cbtSessionRoomProctorService interface {
 	RoomReadiness(ctx context.Context, sessionID pgtype.UUID) (db.GetCbtSessionRoomReadinessRow, error)
 }
 
+type cbtSessionRoomProctorDashboardService interface {
+	GetRoomProctoringDashboard(ctx context.Context, roomID pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error)
+	HasRoomProctor(ctx context.Context, sessionID, roomID, employeeID pgtype.UUID) (bool, error)
+	HasRoomParticipant(ctx context.Context, sessionID, roomID, participantID pgtype.UUID) (bool, error)
+	GetProctoringStatusForRoom(ctx context.Context, sessionID, roomID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error)
+	ListParticipantEventsForRoom(ctx context.Context, sessionID, participantID, roomID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error)
+}
+
 func NewCbtSession(svc *service.CbtSession, audit ...cbtSessionAuditWriter) *CbtSession {
 	var writer cbtSessionAuditWriter
 	if len(audit) > 0 {
@@ -103,6 +111,22 @@ func cbtSessionTeacherID(r *http.Request) pgtype.UUID {
 		}
 	}
 	return pgtype.UUID{}
+}
+
+func cbtSessionEmployeeID(r *http.Request) pgtype.UUID {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		return pgtype.UUID{}
+	}
+	eidRaw, _ := claims["eid"].(string)
+	if strings.TrimSpace(eidRaw) == "" {
+		return pgtype.UUID{}
+	}
+	var eid pgtype.UUID
+	if err := eid.Scan(strings.TrimSpace(eidRaw)); err != nil {
+		return pgtype.UUID{}
+	}
+	return eid
 }
 
 func cbtSessionActorUserID(r *http.Request) pgtype.UUID {
@@ -161,6 +185,55 @@ func (h *CbtSession) requireSessionRoom(w http.ResponseWriter, r *http.Request, 
 		return false
 	}
 	if !ok {
+		api.Forbidden(w)
+		return false
+	}
+	return true
+}
+
+func (h *CbtSession) requireSessionRoomProctorOrAdmin(w http.ResponseWriter, r *http.Request, sessionID, roomID pgtype.UUID) bool {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return false
+	}
+	if cbtSessionHasAnyRole(claims, "admin") {
+		return true
+	}
+	employeeID := cbtSessionEmployeeID(r)
+	if !employeeID.Valid {
+		api.Forbidden(w)
+		return false
+	}
+	roomSvc, ok := h.svc.(cbtSessionRoomProctorDashboardService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room proctor dashboard service unavailable"))
+		return false
+	}
+	allowed, err := roomSvc.HasRoomProctor(r.Context(), sessionID, roomID, employeeID)
+	if err != nil {
+		api.Internal(w, err)
+		return false
+	}
+	if !allowed {
+		api.Forbidden(w)
+		return false
+	}
+	return true
+}
+
+func (h *CbtSession) requireSessionRoomParticipant(w http.ResponseWriter, r *http.Request, sessionID, roomID, participantID pgtype.UUID) bool {
+	roomSvc, ok := h.svc.(cbtSessionRoomProctorDashboardService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room proctor dashboard service unavailable"))
+		return false
+	}
+	allowed, err := roomSvc.HasRoomParticipant(r.Context(), sessionID, roomID, participantID)
+	if err != nil {
+		api.Internal(w, err)
+		return false
+	}
+	if !allowed {
 		api.Forbidden(w)
 		return false
 	}
@@ -1041,6 +1114,172 @@ func (h *CbtSession) ForceSubmitParticipant(w http.ResponseWriter, r *http.Reque
 		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
 	})
 	api.OK(w, row)
+}
+
+func (h *CbtSession) GetRoomProctoringDashboard(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	roomSvc, ok := h.svc.(cbtSessionRoomProctorDashboardService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room proctor dashboard service unavailable"))
+		return
+	}
+	proctorSvc, ok := h.svc.(cbtSessionRoomProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room proctor service unavailable"))
+		return
+	}
+	room, err := roomSvc.GetRoomProctoringDashboard(r.Context(), roomID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	proctors, err := proctorSvc.ListRoomProctors(r.Context(), roomID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	participants, err := roomSvc.GetProctoringStatusForRoom(r.Context(), sessionID, roomID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	events, err := roomSvc.ListParticipantEventsForRoom(r.Context(), sessionID, pgtype.UUID{}, roomID, 100)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{
+		"room":         room,
+		"proctors":     proctors,
+		"participants": participants,
+		"events":       events,
+	})
+}
+
+func (h *CbtSession) FlagRoomParticipant(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, pid, ok := h.requireRoomParticipantControlParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomParticipant(w, r, sessionID, roomID, pid) {
+		return
+	}
+	var body struct {
+		Flag bool `json:"flag"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	if err := h.svc.SetSuspiciousFlag(r.Context(), pid, body.Flag); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PARTICIPANT_FLAG", "cbt_session_room", pgUUIDString(roomID), map[string]any{
+		"session_id":       pgUUIDString(sessionID),
+		"participant_id":   pgUUIDString(pid),
+		"suspicious_flag":  body.Flag,
+		"actor_username":   currentUsername(r),
+		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, map[string]bool{"suspicious_flag": body.Flag})
+}
+
+func (h *CbtSession) ResetRoomParticipantAccess(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, pid, ok := h.requireRoomParticipantControlParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomParticipant(w, r, sessionID, roomID, pid) {
+		return
+	}
+	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
+		return
+	}
+	if err := proctorSvc.ResetParticipantRuntimeAccess(r.Context(), pid, currentUsername(r)); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PARTICIPANT_RESET_ACCESS", "cbt_session_room", pgUUIDString(roomID), map[string]any{
+		"session_id":       pgUUIDString(sessionID),
+		"participant_id":   pgUUIDString(pid),
+		"actor_username":   currentUsername(r),
+		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, map[string]string{"status": "reset"})
+}
+
+func (h *CbtSession) ForceSubmitRoomParticipant(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, pid, ok := h.requireRoomParticipantControlParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomParticipant(w, r, sessionID, roomID, pid) {
+		return
+	}
+	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
+		return
+	}
+	row, err := proctorSvc.ForceSubmitParticipant(r.Context(), sessionID, pid, currentUsername(r))
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PARTICIPANT_FORCE_SUBMIT", "cbt_session_room", pgUUIDString(roomID), map[string]any{
+		"session_id":       pgUUIDString(sessionID),
+		"participant_id":   pgUUIDString(pid),
+		"score":            row.Score,
+		"actor_username":   currentUsername(r),
+		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, row)
+}
+
+func (h *CbtSession) requireRoomParticipantControlParams(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, pgtype.UUID, bool) {
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return pgtype.UUID{}, pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	pid, err := parseUUID(chi.URLParam(r, "pid"))
+	if err != nil {
+		api.BadRequest(w, "invalid participant id")
+		return pgtype.UUID{}, pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	return sessionID, roomID, pid, true
 }
 
 // --- Essay Grading ---

@@ -192,6 +192,7 @@ SELECT
   ep.student_id,
   s.nis,
   s.nama,
+  ep.room_id,
   COALESCE(r.room_name, '') AS room_name,
   ev.event_type,
   ev.event_data,
@@ -200,8 +201,9 @@ FROM cbt_participant_events ev
 JOIN cbt_exam_participants ep ON ep.id = ev.participant_id
 JOIN students s ON s.id = ep.student_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
-WHERE ep.session_id = $1
+WHERE ep.session_id = sqlc.arg(session_id)
   AND (sqlc.arg(participant_id)::uuid IS NULL OR ev.participant_id = sqlc.arg(participant_id)::uuid)
+  AND (sqlc.arg(room_id)::uuid IS NULL OR ep.room_id = sqlc.arg(room_id)::uuid)
 ORDER BY ev.created_at DESC
 LIMIT sqlc.arg(limit_count);
 
@@ -211,6 +213,7 @@ SELECT
   ep.student_id,
   s.nis, s.nama,
   ep.token,
+  ep.room_id,
   COALESCE(r.room_name, '') AS room_name,
   ep.seat_no,
   ep.submitted_at,
@@ -224,9 +227,10 @@ FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id
-WHERE ep.session_id = $1
-GROUP BY ep.id, s.nis, s.nama, r.room_name
-ORDER BY s.nama ASC;
+WHERE ep.session_id = sqlc.arg(session_id)
+  AND (sqlc.arg(room_id)::uuid IS NULL OR ep.room_id = sqlc.arg(room_id)::uuid)
+GROUP BY ep.id, s.nis, s.nama, ep.room_id, r.room_name
+ORDER BY r.room_name ASC NULLS LAST, ep.seat_no ASC NULLS LAST, s.nama ASC;
 
 -- name: ListParticipantsByRoom :many
 SELECT

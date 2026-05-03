@@ -456,6 +456,7 @@ SELECT
   ep.student_id,
   s.nis, s.nama,
   ep.token,
+  ep.room_id,
   COALESCE(r.room_name, '') AS room_name,
   ep.seat_no,
   ep.submitted_at,
@@ -470,9 +471,15 @@ JOIN students s ON s.id = ep.student_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id
 WHERE ep.session_id = $1
-GROUP BY ep.id, s.nis, s.nama, r.room_name
-ORDER BY s.nama ASC
+  AND ($2::uuid IS NULL OR ep.room_id = $2::uuid)
+GROUP BY ep.id, s.nis, s.nama, ep.room_id, r.room_name
+ORDER BY r.room_name ASC NULLS LAST, ep.seat_no ASC NULLS LAST, s.nama ASC
 `
+
+type GetSessionProctoringStatusParams struct {
+	SessionID pgtype.UUID `json:"session_id"`
+	RoomID    pgtype.UUID `json:"room_id"`
+}
 
 type GetSessionProctoringStatusRow struct {
 	ParticipantID     pgtype.UUID        `json:"participant_id"`
@@ -480,6 +487,7 @@ type GetSessionProctoringStatusRow struct {
 	Nis               string             `json:"nis"`
 	Nama              string             `json:"nama"`
 	Token             string             `json:"token"`
+	RoomID            pgtype.UUID        `json:"room_id"`
 	RoomName          string             `json:"room_name"`
 	SeatNo            pgtype.Int4        `json:"seat_no"`
 	SubmittedAt       pgtype.Timestamptz `json:"submitted_at"`
@@ -491,8 +499,8 @@ type GetSessionProctoringStatusRow struct {
 	Score             pgtype.Numeric     `json:"score"`
 }
 
-func (q *Queries) GetSessionProctoringStatus(ctx context.Context, sessionID pgtype.UUID) ([]GetSessionProctoringStatusRow, error) {
-	rows, err := q.db.Query(ctx, getSessionProctoringStatus, sessionID)
+func (q *Queries) GetSessionProctoringStatus(ctx context.Context, arg GetSessionProctoringStatusParams) ([]GetSessionProctoringStatusRow, error) {
+	rows, err := q.db.Query(ctx, getSessionProctoringStatus, arg.SessionID, arg.RoomID)
 	if err != nil {
 		return nil, err
 	}
@@ -506,6 +514,7 @@ func (q *Queries) GetSessionProctoringStatus(ctx context.Context, sessionID pgty
 			&i.Nis,
 			&i.Nama,
 			&i.Token,
+			&i.RoomID,
 			&i.RoomName,
 			&i.SeatNo,
 			&i.SubmittedAt,
@@ -1133,6 +1142,7 @@ SELECT
   ep.student_id,
   s.nis,
   s.nama,
+  ep.room_id,
   COALESCE(r.room_name, '') AS room_name,
   ev.event_type,
   ev.event_data,
@@ -1143,13 +1153,15 @@ JOIN students s ON s.id = ep.student_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 WHERE ep.session_id = $1
   AND ($2::uuid IS NULL OR ev.participant_id = $2::uuid)
+  AND ($3::uuid IS NULL OR ep.room_id = $3::uuid)
 ORDER BY ev.created_at DESC
-LIMIT $3
+LIMIT $4
 `
 
 type ListSessionParticipantEventsParams struct {
 	SessionID     pgtype.UUID `json:"session_id"`
 	ParticipantID pgtype.UUID `json:"participant_id"`
+	RoomID        pgtype.UUID `json:"room_id"`
 	LimitCount    int32       `json:"limit_count"`
 }
 
@@ -1159,6 +1171,7 @@ type ListSessionParticipantEventsRow struct {
 	StudentID     pgtype.UUID        `json:"student_id"`
 	Nis           string             `json:"nis"`
 	Nama          string             `json:"nama"`
+	RoomID        pgtype.UUID        `json:"room_id"`
 	RoomName      string             `json:"room_name"`
 	EventType     string             `json:"event_type"`
 	EventData     []byte             `json:"event_data"`
@@ -1166,7 +1179,12 @@ type ListSessionParticipantEventsRow struct {
 }
 
 func (q *Queries) ListSessionParticipantEvents(ctx context.Context, arg ListSessionParticipantEventsParams) ([]ListSessionParticipantEventsRow, error) {
-	rows, err := q.db.Query(ctx, listSessionParticipantEvents, arg.SessionID, arg.ParticipantID, arg.LimitCount)
+	rows, err := q.db.Query(ctx, listSessionParticipantEvents,
+		arg.SessionID,
+		arg.ParticipantID,
+		arg.RoomID,
+		arg.LimitCount,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1180,6 +1198,7 @@ func (q *Queries) ListSessionParticipantEvents(ctx context.Context, arg ListSess
 			&i.StudentID,
 			&i.Nis,
 			&i.Nama,
+			&i.RoomID,
 			&i.RoomName,
 			&i.EventType,
 			&i.EventData,

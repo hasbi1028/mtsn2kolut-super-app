@@ -133,6 +133,110 @@ func (q *Queries) GetCbtExamRoom(ctx context.Context, id pgtype.UUID) (CbtExamRo
 	return i, err
 }
 
+const getCbtRoomProctorDashboard = `-- name: GetCbtRoomProctorDashboard :one
+SELECT
+  r.id,
+  r.session_id,
+  r.school_room_id,
+  r.room_name,
+  r.room_name_snapshot,
+  r.capacity,
+  r.capacity_override,
+  r.room_token,
+  r.status,
+  r.is_locked,
+  r.created_at,
+  r.updated_at,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(sr.code, '') AS school_room_code,
+  COALESCE(sr.name, '') AS school_room_name,
+  COALESCE(sr.building, '') AS school_room_building,
+  COALESCE(sr.location_note, '') AS school_room_location_note,
+  COUNT(ep.id)::int AS participant_count,
+  COUNT(ep.id) FILTER (WHERE ep.submitted_at IS NOT NULL)::int AS submitted_count,
+  COUNT(ep.id) FILTER (WHERE ep.last_heartbeat IS NOT NULL AND ep.last_heartbeat > NOW() - INTERVAL '2 minutes')::int AS online_count,
+  COUNT(ep.id) FILTER (WHERE ep.suspicious_flag = TRUE)::int AS suspicious_count,
+  COUNT(ep.id) FILTER (WHERE ep.seat_no IS NULL)::int AS missing_seat_count
+FROM cbt_exam_rooms r
+JOIN cbt_exam_sessions s ON s.id = r.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN school_rooms sr ON sr.id = r.school_room_id
+LEFT JOIN cbt_exam_participants ep ON ep.room_id = r.id AND ep.session_id = r.session_id
+WHERE r.id = $1
+GROUP BY r.id, s.title, s.status, s.scheduled_start, s.scheduled_end, p.title, p.duration_minutes,
+         sr.code, sr.name, sr.building, sr.location_note
+`
+
+type GetCbtRoomProctorDashboardRow struct {
+	ID                     pgtype.UUID          `json:"id"`
+	SessionID              pgtype.UUID          `json:"session_id"`
+	SchoolRoomID           pgtype.UUID          `json:"school_room_id"`
+	RoomName               string               `json:"room_name"`
+	RoomNameSnapshot       string               `json:"room_name_snapshot"`
+	Capacity               int32                `json:"capacity"`
+	CapacityOverride       pgtype.Int4          `json:"capacity_override"`
+	RoomToken              string               `json:"room_token"`
+	Status                 string               `json:"status"`
+	IsLocked               bool                 `json:"is_locked"`
+	CreatedAt              pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz   `json:"updated_at"`
+	SessionTitle           string               `json:"session_title"`
+	SessionStatus          CbtSessionStatusEnum `json:"session_status"`
+	ScheduledStart         pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd           pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageTitle           string               `json:"package_title"`
+	DurationMinutes        int32                `json:"duration_minutes"`
+	SchoolRoomCode         string               `json:"school_room_code"`
+	SchoolRoomName         string               `json:"school_room_name"`
+	SchoolRoomBuilding     string               `json:"school_room_building"`
+	SchoolRoomLocationNote string               `json:"school_room_location_note"`
+	ParticipantCount       int32                `json:"participant_count"`
+	SubmittedCount         int32                `json:"submitted_count"`
+	OnlineCount            int32                `json:"online_count"`
+	SuspiciousCount        int32                `json:"suspicious_count"`
+	MissingSeatCount       int32                `json:"missing_seat_count"`
+}
+
+func (q *Queries) GetCbtRoomProctorDashboard(ctx context.Context, id pgtype.UUID) (GetCbtRoomProctorDashboardRow, error) {
+	row := q.db.QueryRow(ctx, getCbtRoomProctorDashboard, id)
+	var i GetCbtRoomProctorDashboardRow
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.SchoolRoomID,
+		&i.RoomName,
+		&i.RoomNameSnapshot,
+		&i.Capacity,
+		&i.CapacityOverride,
+		&i.RoomToken,
+		&i.Status,
+		&i.IsLocked,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SessionTitle,
+		&i.SessionStatus,
+		&i.ScheduledStart,
+		&i.ScheduledEnd,
+		&i.PackageTitle,
+		&i.DurationMinutes,
+		&i.SchoolRoomCode,
+		&i.SchoolRoomName,
+		&i.SchoolRoomBuilding,
+		&i.SchoolRoomLocationNote,
+		&i.ParticipantCount,
+		&i.SubmittedCount,
+		&i.OnlineCount,
+		&i.SuspiciousCount,
+		&i.MissingSeatCount,
+	)
+	return i, err
+}
+
 const getCbtSessionRoomReadiness = `-- name: GetCbtSessionRoomReadiness :one
 WITH room_stats AS (
   SELECT
@@ -200,6 +304,53 @@ func (q *Queries) GetCbtSessionRoomReadiness(ctx context.Context, targetSessionI
 		&i.ProctorAssignmentCount,
 	)
 	return i, err
+}
+
+const hasSessionRoomParticipant = `-- name: HasSessionRoomParticipant :one
+SELECT EXISTS (
+  SELECT 1
+  FROM cbt_exam_participants ep
+  WHERE ep.session_id = $1
+    AND ep.room_id = $2
+    AND ep.id = $3
+)::boolean
+`
+
+type HasSessionRoomParticipantParams struct {
+	SessionID     pgtype.UUID `json:"session_id"`
+	RoomID        pgtype.UUID `json:"room_id"`
+	ParticipantID pgtype.UUID `json:"participant_id"`
+}
+
+func (q *Queries) HasSessionRoomParticipant(ctx context.Context, arg HasSessionRoomParticipantParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasSessionRoomParticipant, arg.SessionID, arg.RoomID, arg.ParticipantID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const hasSessionRoomProctor = `-- name: HasSessionRoomProctor :one
+SELECT EXISTS (
+  SELECT 1
+  FROM cbt_room_proctors rp
+  JOIN cbt_exam_rooms r ON r.id = rp.exam_room_id
+  WHERE r.session_id = $1
+    AND r.id = $2
+    AND rp.employee_id = $3
+)::boolean
+`
+
+type HasSessionRoomProctorParams struct {
+	SessionID  pgtype.UUID `json:"session_id"`
+	RoomID     pgtype.UUID `json:"room_id"`
+	EmployeeID pgtype.UUID `json:"employee_id"`
+}
+
+func (q *Queries) HasSessionRoomProctor(ctx context.Context, arg HasSessionRoomProctorParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasSessionRoomProctor, arg.SessionID, arg.RoomID, arg.EmployeeID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const listCbtExamRooms = `-- name: ListCbtExamRooms :many

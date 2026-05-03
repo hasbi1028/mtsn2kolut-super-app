@@ -101,8 +101,21 @@ type fakeCbtSessionService struct {
 	shuffleSessionID pgtype.UUID
 	shuffleErr       error
 
-	proctoringSessionID pgtype.UUID
-	proctoringErr       error
+	proctoringSessionID      pgtype.UUID
+	roomDashboardID          pgtype.UUID
+	roomProctorSessionID     pgtype.UUID
+	roomProctorRoomID        pgtype.UUID
+	roomProctorEmployeeID    pgtype.UUID
+	roomProctorAllowed       bool
+	roomParticipantSessionID pgtype.UUID
+	roomParticipantRoomID    pgtype.UUID
+	roomParticipantID        pgtype.UUID
+	roomParticipantAllowed   bool
+	roomProctoringSessionID  pgtype.UUID
+	roomProctoringRoomID     pgtype.UUID
+	roomEventsSessionID      pgtype.UUID
+	roomEventsRoomID         pgtype.UUID
+	proctoringErr            error
 
 	flagParticipantID pgtype.UUID
 	flagValue         bool
@@ -386,6 +399,52 @@ func (f *fakeCbtSessionService) GetProctoringStatus(_ context.Context, sessionID
 	return []db.GetSessionProctoringStatusRow{}, nil
 }
 
+func (f *fakeCbtSessionService) GetRoomProctoringDashboard(_ context.Context, roomID pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error) {
+	f.roomDashboardID = roomID
+	return db.GetCbtRoomProctorDashboardRow{ID: roomID, RoomName: "Ruang 1"}, nil
+}
+
+func (f *fakeCbtSessionService) HasRoomProctor(_ context.Context, sessionID, roomID, employeeID pgtype.UUID) (bool, error) {
+	f.roomProctorSessionID = sessionID
+	f.roomProctorRoomID = roomID
+	f.roomProctorEmployeeID = employeeID
+	return f.roomProctorAllowed, nil
+}
+
+func (f *fakeCbtSessionService) HasRoomParticipant(_ context.Context, sessionID, roomID, participantID pgtype.UUID) (bool, error) {
+	f.roomParticipantSessionID = sessionID
+	f.roomParticipantRoomID = roomID
+	f.roomParticipantID = participantID
+	if f.roomParticipantAllowed {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (f *fakeCbtSessionService) GetProctoringStatusForRoom(_ context.Context, sessionID, roomID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error) {
+	f.roomProctoringSessionID = sessionID
+	f.roomProctoringRoomID = roomID
+	return []db.GetSessionProctoringStatusRow{}, nil
+}
+
+func (f *fakeCbtSessionService) ListParticipantEventsForRoom(_ context.Context, sessionID, participantID, roomID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error) {
+	f.roomEventsSessionID = sessionID
+	f.roomEventsRoomID = roomID
+	return []db.ListSessionParticipantEventsRow{}, nil
+}
+
+func (f *fakeCbtSessionService) ListRoomProctors(_ context.Context, roomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
+	return []db.ListCbtRoomProctorsRow{{ExamRoomID: roomID, Nama: "Pengawas"}}, nil
+}
+
+func (f *fakeCbtSessionService) ReplaceRoomProctors(_ context.Context, roomID, assignedBy, primaryEmployeeID pgtype.UUID, employeeIDs []pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
+	return []db.ListCbtRoomProctorsRow{{ExamRoomID: roomID, EmployeeID: primaryEmployeeID}}, nil
+}
+
+func (f *fakeCbtSessionService) RoomReadiness(_ context.Context, sessionID pgtype.UUID) (db.GetCbtSessionRoomReadinessRow, error) {
+	return db.GetCbtSessionRoomReadinessRow{RoomCount: 1, ParticipantCount: 1, TotalCapacity: 30}, nil
+}
+
 func (f *fakeCbtSessionService) SetSuspiciousFlag(_ context.Context, participantID pgtype.UUID, flag bool) error {
 	f.flagParticipantID = participantID
 	f.flagValue = flag
@@ -537,6 +596,7 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	run("DeleteRoom", h.DeleteRoom, adminRoute(http.MethodDelete, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String(), "", "id", sessionID.String(), "rid", roomID.String()), http.StatusNoContent)
 	run("ShuffleRooms", h.ShuffleRooms, adminRoute(http.MethodPost, "/api/cbt/sessions/"+sessionID.String()+"/rooms/shuffle", "", "id", sessionID.String()), http.StatusOK)
 	run("GetProctoringStatus", h.GetProctoringStatus, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/proctoring", "", "id", sessionID.String()), http.StatusOK)
+	run("GetRoomProctoringDashboard", h.GetRoomProctoringDashboard, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/proctoring", "", "id", sessionID.String(), "rid", roomID.String()), http.StatusOK)
 	run("FlagParticipant", h.FlagParticipant, adminRoute(http.MethodPost, "/api/cbt/sessions/"+sessionID.String()+"/participants/"+participantID.String()+"/flag", `{"flag":true}`, "id", sessionID.String(), "pid", participantID.String()), http.StatusOK)
 	run("ListUngradedEssays", h.ListUngradedEssays, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/essays/ungraded", "", "id", sessionID.String()), http.StatusOK)
 	gradeReq := withRouteParams(withClaims(httptest.NewRequest(http.MethodPost, "/api/cbt/sessions/"+sessionID.String()+"/answers/"+answerID.String()+"/grade", strings.NewReader(`{"manual_score":87.5,"graded_by":"spoofed.actor"}`)), jwt.MapClaims{"roles": []any{"admin"}, "usr": "pengawas.utama", "uid": "01000000-0000-0000-0000-000000000000", "sub": "01000000-0000-0000-0000-000000000000", "ssid": "session-admin-1"}), "id", sessionID.String(), "aid", answerID.String())
@@ -561,6 +621,9 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	}
 	if fake.createRoomSessionID != sessionID || fake.createRoomName != "Ruang 1" || fake.createRoomCapacity != 30 || fake.deleteRoomID != roomID {
 		t.Fatalf("room args = %v/%q/%d delete:%v, want default capacity and room delete", fake.createRoomSessionID, fake.createRoomName, fake.createRoomCapacity, fake.deleteRoomID)
+	}
+	if fake.roomDashboardID != roomID || fake.roomProctoringSessionID != sessionID || fake.roomProctoringRoomID != roomID || fake.roomEventsRoomID != roomID {
+		t.Fatalf("room dashboard args = dashboard:%v proctoring:%v/%v events:%v, want room-scoped dashboard", fake.roomDashboardID, fake.roomProctoringSessionID, fake.roomProctoringRoomID, fake.roomEventsRoomID)
 	}
 	if fake.flagParticipantID != participantID || !fake.flagValue || fake.gradeAnswerID != answerID || fake.gradeScore != 87.5 || fake.gradeBy != "pengawas.utama" {
 		t.Fatalf("flag/grade args = flag:%v/%v grade:%v/%v/%q, want forwarded values", fake.flagParticipantID, fake.flagValue, fake.gradeAnswerID, fake.gradeScore, fake.gradeBy)
@@ -587,6 +650,37 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	}
 	if audit.entries[2].Action != "CBT_SESSION_SCORE" || audit.entries[2].EntityID != pgUUIDString(sessionID) {
 		t.Fatalf("score audit entry = %+v, want session score audit", audit.entries[2])
+	}
+}
+
+func TestCbtSessionRoomProctorDashboardScopesAssignedProctor(t *testing.T) {
+	sessionID := handlerTestUUID(108)
+	roomID := handlerTestUUID(109)
+	employeeID := handlerTestUUID(110)
+
+	req := withRouteParams(
+		withClaims(
+			httptest.NewRequest(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/proctoring", nil),
+			jwt.MapClaims{"roles": []any{"guru"}, "eid": employeeID.String()},
+		),
+		"id", sessionID.String(),
+		"rid", roomID.String(),
+	)
+	fake := &fakeCbtSessionService{roomProctorAllowed: true}
+	rec := httptest.NewRecorder()
+	(&CbtSession{svc: fake}).GetRoomProctoringDashboard(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GetRoomProctoringDashboard(assigned proctor) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.roomProctorSessionID != sessionID || fake.roomProctorRoomID != roomID || fake.roomProctorEmployeeID != employeeID {
+		t.Fatalf("room proctor check = %v/%v/%v, want session/room/employee", fake.roomProctorSessionID, fake.roomProctorRoomID, fake.roomProctorEmployeeID)
+	}
+
+	denied := &fakeCbtSessionService{}
+	rec = httptest.NewRecorder()
+	(&CbtSession{svc: denied}).GetRoomProctoringDashboard(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("GetRoomProctoringDashboard(unassigned proctor) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
 	}
 }
 

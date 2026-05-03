@@ -415,8 +415,13 @@ type fakeCbtSessionStore struct {
 	createRoomArg         db.CreateCbtExamRoomParams
 	schoolRoomRow         db.SchoolRoom
 	roomProctorRows       []db.ListCbtRoomProctorsRow
+	roomDashboardRow      db.GetCbtRoomProctorDashboardRow
 	roomReadinessRow      db.GetCbtSessionRoomReadinessRow
 	roomReadinessID       pgtype.UUID
+	roomProctorArg        db.HasSessionRoomProctorParams
+	roomProctor           bool
+	roomParticipantArg    db.HasSessionRoomParticipantParams
+	roomParticipant       bool
 	deleteRoomID          pgtype.UUID
 	clearRoomID           pgtype.UUID
 	clearRoomErr          error
@@ -426,6 +431,7 @@ type fakeCbtSessionStore struct {
 	byRoomRows            []db.ListParticipantsByRoomRow
 	byRoomErr             error
 	proctorRows           []db.GetSessionProctoringStatusRow
+	proctorStatusArg      db.GetSessionProctoringStatusParams
 	proctorErr            error
 	flagArg               db.SetParticipantSuspiciousFlagParams
 	gradeArg              db.GradeStudentEssayParams
@@ -531,6 +537,13 @@ func (f *fakeCbtSessionStore) GetSchoolRoom(ctx context.Context, id pgtype.UUID)
 	return db.SchoolRoom{ID: id, Name: "Lab Komputer", DefaultCapacity: 30, ExamCapacity: 30, IsExamEligible: true}, nil
 }
 
+func (f *fakeCbtSessionStore) GetCbtRoomProctorDashboard(ctx context.Context, id pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error) {
+	if f.roomDashboardRow.ID.Valid {
+		return f.roomDashboardRow, nil
+	}
+	return db.GetCbtRoomProctorDashboardRow{ID: id, RoomName: "Ruang 1"}, nil
+}
+
 func (f *fakeCbtSessionStore) ListCbtRoomProctors(ctx context.Context, examRoomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
 	return f.roomProctorRows, nil
 }
@@ -546,6 +559,16 @@ func (f *fakeCbtSessionStore) CreateCbtRoomProctor(ctx context.Context, arg db.C
 func (f *fakeCbtSessionStore) GetCbtSessionRoomReadiness(ctx context.Context, targetSessionID pgtype.UUID) (db.GetCbtSessionRoomReadinessRow, error) {
 	f.roomReadinessID = targetSessionID
 	return f.roomReadinessRow, nil
+}
+
+func (f *fakeCbtSessionStore) HasSessionRoomProctor(ctx context.Context, arg db.HasSessionRoomProctorParams) (bool, error) {
+	f.roomProctorArg = arg
+	return f.roomProctor, nil
+}
+
+func (f *fakeCbtSessionStore) HasSessionRoomParticipant(ctx context.Context, arg db.HasSessionRoomParticipantParams) (bool, error) {
+	f.roomParticipantArg = arg
+	return f.roomParticipant, nil
 }
 
 func (f *fakeCbtSessionStore) ClearParticipantRooms(ctx context.Context, sessionID pgtype.UUID) error {
@@ -567,7 +590,8 @@ func (f *fakeCbtSessionStore) ListParticipantsByRoom(ctx context.Context, sessio
 	return f.byRoomRows, f.byRoomErr
 }
 
-func (f *fakeCbtSessionStore) GetSessionProctoringStatus(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error) {
+func (f *fakeCbtSessionStore) GetSessionProctoringStatus(ctx context.Context, arg db.GetSessionProctoringStatusParams) ([]db.GetSessionProctoringStatusRow, error) {
+	f.proctorStatusArg = arg
 	return f.proctorRows, f.proctorErr
 }
 
@@ -667,6 +691,8 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 		sessionParticipant: true,
 		sessionRoom:        true,
 		sessionAnswer:      true,
+		roomProctor:        true,
+		roomParticipant:    true,
 		roomReadinessRow: db.GetCbtSessionRoomReadinessRow{
 			RoomCount:                  1,
 			TotalCapacity:              30,
@@ -767,6 +793,15 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	if ok, err := svc.HasRoom(context.Background(), sessionID, roomID); err != nil || !ok || store.sessionRoomArg.SessionID != sessionID || store.sessionRoomArg.ID != roomID {
 		t.Fatalf("HasRoom() = %v/%v arg=%+v, want true session/room", ok, err, store.sessionRoomArg)
 	}
+	if got, err := svc.GetRoomProctoringDashboard(context.Background(), roomID); err != nil || got.ID != roomID {
+		t.Fatalf("GetRoomProctoringDashboard() = %+v/%v, want room dashboard", got, err)
+	}
+	if ok, err := svc.HasRoomProctor(context.Background(), sessionID, roomID, teacherID); err != nil || !ok || store.roomProctorArg.EmployeeID != teacherID {
+		t.Fatalf("HasRoomProctor() = %v/%v arg=%+v, want teacher proctor", ok, err, store.roomProctorArg)
+	}
+	if ok, err := svc.HasRoomParticipant(context.Background(), sessionID, roomID, participantID); err != nil || !ok || store.roomParticipantArg.ParticipantID != participantID {
+		t.Fatalf("HasRoomParticipant() = %v/%v arg=%+v, want participant in room", ok, err, store.roomParticipantArg)
+	}
 	if err := svc.AssignSeat(context.Background(), participantID, roomID, 12); err != nil {
 		t.Fatalf("AssignSeat() error = %v", err)
 	}
@@ -775,6 +810,12 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	}
 	if rows, err := svc.GetProctoringStatus(context.Background(), sessionID); err != nil || len(rows) != 1 {
 		t.Fatalf("GetProctoringStatus() = %d rows/%v, want 1 nil", len(rows), err)
+	}
+	if store.proctorStatusArg.SessionID != sessionID || store.proctorStatusArg.RoomID.Valid {
+		t.Fatalf("GetProctoringStatus() arg = %+v, want session without room", store.proctorStatusArg)
+	}
+	if _, err := svc.GetProctoringStatusForRoom(context.Background(), sessionID, roomID); err != nil || store.proctorStatusArg.RoomID != roomID {
+		t.Fatalf("GetProctoringStatusForRoom() = %v arg=%+v, want room filter", err, store.proctorStatusArg)
 	}
 	store.proctorRows = nil
 	if rows, err := svc.GetProctoringStatus(context.Background(), sessionID); err != nil || len(rows) != 0 {

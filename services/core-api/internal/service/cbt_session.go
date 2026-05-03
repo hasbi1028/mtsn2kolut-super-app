@@ -38,13 +38,16 @@ type cbtSessionStore interface {
 	CreateCbtExamRoom(ctx context.Context, arg db.CreateCbtExamRoomParams) (db.CbtExamRoom, error)
 	DeleteCbtExamRoom(ctx context.Context, id pgtype.UUID) error
 	GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error)
+	GetCbtRoomProctorDashboard(ctx context.Context, id pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error)
 	ListCbtRoomProctors(ctx context.Context, examRoomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error)
 	DeleteCbtRoomProctorsByRoom(ctx context.Context, examRoomID pgtype.UUID) error
 	CreateCbtRoomProctor(ctx context.Context, arg db.CreateCbtRoomProctorParams) (db.CbtRoomProctor, error)
 	GetCbtSessionRoomReadiness(ctx context.Context, targetSessionID pgtype.UUID) (db.GetCbtSessionRoomReadinessRow, error)
+	HasSessionRoomProctor(ctx context.Context, arg db.HasSessionRoomProctorParams) (bool, error)
+	HasSessionRoomParticipant(ctx context.Context, arg db.HasSessionRoomParticipantParams) (bool, error)
 	AssignParticipantSeat(ctx context.Context, arg db.AssignParticipantSeatParams) error
 	ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]db.ListParticipantsByRoomRow, error)
-	GetSessionProctoringStatus(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error)
+	GetSessionProctoringStatus(ctx context.Context, arg db.GetSessionProctoringStatusParams) ([]db.GetSessionProctoringStatusRow, error)
 	SetParticipantSuspiciousFlag(ctx context.Context, arg db.SetParticipantSuspiciousFlagParams) error
 	GradeStudentEssay(ctx context.Context, arg db.GradeStudentEssayParams) error
 	ListUngradedEssays(ctx context.Context, sessionID pgtype.UUID) ([]db.ListUngradedEssaysRow, error)
@@ -414,6 +417,26 @@ func (s *CbtSession) RoomReadiness(ctx context.Context, sessionID pgtype.UUID) (
 	return s.q.GetCbtSessionRoomReadiness(ctx, sessionID)
 }
 
+func (s *CbtSession) GetRoomProctoringDashboard(ctx context.Context, roomID pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error) {
+	return s.q.GetCbtRoomProctorDashboard(ctx, roomID)
+}
+
+func (s *CbtSession) HasRoomProctor(ctx context.Context, sessionID, roomID, employeeID pgtype.UUID) (bool, error) {
+	return s.q.HasSessionRoomProctor(ctx, db.HasSessionRoomProctorParams{
+		SessionID:  sessionID,
+		RoomID:     roomID,
+		EmployeeID: employeeID,
+	})
+}
+
+func (s *CbtSession) HasRoomParticipant(ctx context.Context, sessionID, roomID, participantID pgtype.UUID) (bool, error) {
+	return s.q.HasSessionRoomParticipant(ctx, db.HasSessionRoomParticipantParams{
+		SessionID:     sessionID,
+		RoomID:        roomID,
+		ParticipantID: participantID,
+	})
+}
+
 func normalizeRoomProctorIDs(primary pgtype.UUID, ids []pgtype.UUID) []pgtype.UUID {
 	seen := make(map[[16]byte]bool, len(ids)+1)
 	out := make([]pgtype.UUID, 0, len(ids)+1)
@@ -534,7 +557,14 @@ func (s *CbtSession) AutoAssignSeats(ctx context.Context, sessionID pgtype.UUID)
 // --- Proctoring ---
 
 func (s *CbtSession) GetProctoringStatus(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error) {
-	rows, err := s.q.GetSessionProctoringStatus(ctx, sessionID)
+	return s.GetProctoringStatusForRoom(ctx, sessionID, pgtype.UUID{})
+}
+
+func (s *CbtSession) GetProctoringStatusForRoom(ctx context.Context, sessionID, roomID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error) {
+	rows, err := s.q.GetSessionProctoringStatus(ctx, db.GetSessionProctoringStatusParams{
+		SessionID: sessionID,
+		RoomID:    roomID,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -545,6 +575,10 @@ func (s *CbtSession) GetProctoringStatus(ctx context.Context, sessionID pgtype.U
 }
 
 func (s *CbtSession) ListParticipantEvents(ctx context.Context, sessionID, participantID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error) {
+	return s.ListParticipantEventsForRoom(ctx, sessionID, participantID, pgtype.UUID{}, limit)
+}
+
+func (s *CbtSession) ListParticipantEventsForRoom(ctx context.Context, sessionID, participantID, roomID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error) {
 	q, ok := s.q.(cbtParticipantEventStore)
 	if !ok {
 		return nil, fmt.Errorf("cbt participant event store unavailable")
@@ -555,6 +589,7 @@ func (s *CbtSession) ListParticipantEvents(ctx context.Context, sessionID, parti
 	rows, err := q.ListSessionParticipantEvents(ctx, db.ListSessionParticipantEventsParams{
 		SessionID:     sessionID,
 		ParticipantID: participantID,
+		RoomID:        roomID,
 		LimitCount:    limit,
 	})
 	if err != nil {
