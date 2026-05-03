@@ -1,6 +1,6 @@
 # MTs Negeri 2 Kolaka Utara — Super App Strategic Plan
 
-> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Jurnal Kelas Complete | Sprint 17 Persuratan Complete | Sprint 18 Tata Kelola Madrasah Complete | Sprint 19 SKP Mirror Complete | Sprint 20 Bukti Mutu Complete | Sprint 21 Kesiswaan Foundation Complete | Sprint 22 Surat Keterangan Complete | Sprint 23 Kesiswaan Engagement Complete | Sprint 24 Arsip TU Complete | Sprint 25 RKT/RKJM Execution Complete | Sprint 26 TU Dashboard Complete | Sprint 27 Renstra/IKU Alignment Complete | Sprint 28 Governance Print Pack Complete | Sprint 29 School Profile Complete | Sprint 30 Print Surface Letterhead Complete | Sprint 31 Compliance Actions Complete | Sprint 32 Compliance Print/Export Complete | Sprint 33 Compliance Escalation Board Complete | Sprint 34 Compliance Quick Status Complete | Sprint 35 Compliance Evidence Capture Complete | Sprint 36 Compliance Meeting Pack Complete | Sprint 37 Compliance Deadline Calendar Complete | Sprint 38 Governance Control Center Complete | Sprint 39 Compliance Advanced Filters Complete | Sprint 40 PIC Briefing Pack Complete | Sprint 41 8 SNP Briefing Pack Complete | Sprint 42 Evidence Briefing Pack Complete | Sprint 43 Siklus Dokumen Module Complete | Sprint 44 Dokumen Integration Control Center Complete | Sprint 45 Cross-Module Document Shortcuts Complete | Sprint 46 Document Cycle Audit Timeline Complete | Sprint 47 Document Cycle Audit Test Coverage Complete | Sprint 48 BFF Staff Operations Gate Complete | Sprint 49 Backend Staff Gate Claim Hardening Complete | Sprint 50 Document Cycle Completion Readiness Complete | Sprint 51 Final Archive Requirement Complete | Sprint 52 Document Cycle Status Transition Lock Complete | Sprint 53 Document Cycle Detail Status Actions Complete | Sprint 54 Document Cycle Traceability Detail Complete | Sprint 55 External Compliance Checklist Complete | Sprint 56 External Checklist CSV Export Complete | Sprint 57 SvelteKit BFF Async Boundary Hardening Complete | Sprint 58 CBT Legacy Proctoring & Bank Soal Migration Complete | Sprint 59 CBT Soal Legacy Full Modal Complete | Sprint 60 Unified CBT Question Bank Complete | Sprint 61 CBT Essay Authoring & Manual Scoring Complete | Last Updated: 2026-05-03
+> **Status:** Sprints 1-9 Complete | PUSAKA Isolation Phase 1-3 Complete | Lightweight Ops Hardening Complete | Sprint 11 In Progress | Sprint 15 Library Module Complete | Sprint 16 Public Website Foundation Complete | Sprint 16B Public Website Polish Complete | Rapor Print View Complete | Jurnal Kelas Complete | Sprint 17 Persuratan Complete | Sprint 18 Tata Kelola Madrasah Complete | Sprint 19 SKP Mirror Complete | Sprint 20 Bukti Mutu Complete | Sprint 21 Kesiswaan Foundation Complete | Sprint 22 Surat Keterangan Complete | Sprint 23 Kesiswaan Engagement Complete | Sprint 24 Arsip TU Complete | Sprint 25 RKT/RKJM Execution Complete | Sprint 26 TU Dashboard Complete | Sprint 27 Renstra/IKU Alignment Complete | Sprint 28 Governance Print Pack Complete | Sprint 29 School Profile Complete | Sprint 30 Print Surface Letterhead Complete | Sprint 31 Compliance Actions Complete | Sprint 32 Compliance Print/Export Complete | Sprint 33 Compliance Escalation Board Complete | Sprint 34 Compliance Quick Status Complete | Sprint 35 Compliance Evidence Capture Complete | Sprint 36 Compliance Meeting Pack Complete | Sprint 37 Compliance Deadline Calendar Complete | Sprint 38 Governance Control Center Complete | Sprint 39 Compliance Advanced Filters Complete | Sprint 40 PIC Briefing Pack Complete | Sprint 41 8 SNP Briefing Pack Complete | Sprint 42 Evidence Briefing Pack Complete | Sprint 43 Siklus Dokumen Module Complete | Sprint 44 Dokumen Integration Control Center Complete | Sprint 45 Cross-Module Document Shortcuts Complete | Sprint 46 Document Cycle Audit Timeline Complete | Sprint 47 Document Cycle Audit Test Coverage Complete | Sprint 48 BFF Staff Operations Gate Complete | Sprint 49 Backend Staff Gate Claim Hardening Complete | Sprint 50 Document Cycle Completion Readiness Complete | Sprint 51 Final Archive Requirement Complete | Sprint 52 Document Cycle Status Transition Lock Complete | Sprint 53 Document Cycle Detail Status Actions Complete | Sprint 54 Document Cycle Traceability Detail Complete | Sprint 55 External Compliance Checklist Complete | Sprint 56 External Checklist CSV Export Complete | Sprint 57 SvelteKit BFF Async Boundary Hardening Complete | Sprint 58 CBT Legacy Proctoring & Bank Soal Migration Complete | Sprint 59 CBT Soal Legacy Full Modal Complete | Sprint 60 Unified CBT Question Bank Complete | Sprint 61 CBT Essay Authoring & Manual Scoring Complete | Sprint 62 CBT Juknis Question Types Planned | Last Updated: 2026-05-03
 > This file is the master roadmap. Update after each sprint completion.
 
 ---
@@ -792,6 +792,52 @@ Three runtime units deployed across 3 VPS:
 - [x] Workbench Koreksi Uraian pada detail sesi menampilkan stimulus, soal, jawaban siswa, rubrik, bobot, input nilai 0-100, dan refresh skor setelah simpan.
 - [x] Query `ListUngradedEssays` diperkaya dengan stem/stimulus/rubrik/bobot dan `sqlc` diregenerasi.
 - [x] Verification: `make db-sqlc`, Svelte autofixer untuk komposer dan detail sesi, `npm run check:web`, `go test ./internal/service ./internal/handler`, `go test ./...`, dan `git diff --check`.
+
+### 📋 Sprint 62 — CBT Bentuk Soal Juknis/Asesmen Madrasah (PLANNED)
+- [ ] Tujuan utama: membuat bank soal CBT lengkap untuk bentuk soal tertulis yang lazim dipakai pada Asesmen Madrasah/Juknis madrasah, tanpa membuat guru kewalahan saat membuat soal harian.
+- [ ] Basis riset produk: bentuk tertulis yang perlu dipetakan adalah Pilihan Ganda, Pilihan Ganda Kompleks, Benar/Salah, Setuju/Tidak Setuju, Menjodohkan, Isian/Jawaban Singkat, dan Uraian/Essay; bentuk non-tes seperti Praktik, Portofolio, Penugasan, dan bentuk lain madrasah diperlakukan sebagai asesmen non-CBT dengan rubrik dan bukti.
+- [ ] Rujukan implementasi awal: artikel resmi Kemenag daerah tentang Asesmen Madrasah dan SOP publik Asesmen Madrasah 2025 dipakai sebagai baseline produk, tetapi implementasi harus tetap mudah disesuaikan jika juknis pusat terbaru berubah.
+
+#### UX Mode Pemula vs Advance
+- [ ] Semua bentuk soal di `/cbt/soal` wajib punya mode `Pemula` dan `Advance` dengan kontrak backend yang sama agar guru bisa mulai sederhana lalu memperkaya soal tanpa migrasi data.
+- [ ] Mode `Pemula`: hanya tampilkan field wajib per bentuk soal, seperti mapel, tingkat kesulitan, bobot, stem, opsi/jawaban, dan kunci; hide stimulus, blueprint, pembahasan, rubrik detail, dan workflow review sampai dibutuhkan.
+- [ ] Mode `Advance`: buka stimulus, CP/TP/KD, level kognitif, HOTS, media, RTL Arab, pembahasan, rubrik, catatan reviewer, workflow ajukan review, dan metadata paket.
+- [ ] Pemilih bentuk soal harus berbentuk segmented/type picker ringkas, dikelompokkan menjadi `Objektif`, `Respons Singkat`, dan `Uraian/Rubrik`, bukan daftar panjang yang memaksa guru membaca semua variasi.
+- [ ] Readiness score dan quality signals harus berubah sesuai tipe soal: PG fokus opsi/kunci, essay fokus rubrik, isian fokus jawaban diterima, matching fokus pasangan lengkap.
+
+#### Phase 1 — Ekstensi Aman Di Atas Kontrak Yang Sudah Ada
+- [ ] Tambahkan `Pilihan Ganda Kompleks` ke komposer utama dengan opsi A-F fleksibel, multi-kunci, preview siswa, validasi minimal 2 jawaban benar, dan penilaian all-or-nothing sebagai default awal.
+- [ ] Tambahkan `Benar/Salah` sebagai bentuk cepat dengan dua opsi otomatis, kunci tunggal, copy khusus madrasah, dan tetap memakai rich text legacy untuk stem/stimulus.
+- [ ] Tambahkan `Isian/Jawaban Singkat` dengan input jawaban kunci, alias jawaban diterima, normalisasi huruf besar/kecil/spasi, dan preview siswa satu field.
+- [ ] Pastikan create/edit/duplicate/import CSV legacy tetap tidak merusak soal PG dan Essay yang sudah berjalan.
+- [ ] Perluas test backend dan frontend untuk validasi payload, answer key, readiness, dan edit cepat pada bentuk soal baru.
+
+#### Phase 2 — Bentuk Juknis Yang Butuh Model Data Lebih Kaya
+- [ ] Tambahkan `Setuju/Tidak Setuju` sebagai varian semantik terpisah dari Benar/Salah agar laporan dan bank soal bisa membedakan sikap/pendapat dari fakta benar-salah.
+- [ ] Tambahkan `Menjodohkan` dengan editor pasangan kiri-kanan, opsi distraktor kanan, preview siswa, dan format jawaban deterministik agar scoring bisa diuji.
+- [ ] Definisikan scoring `Menjodohkan`: all-or-nothing sebagai default Pemula; partial credit dapat dibuka di Advance setelah format jawaban dan laporan stabil.
+- [ ] Perluas Flutter exam renderer untuk PG Kompleks, Benar/Salah, Setuju/Tidak Setuju, Isian, dan Menjodohkan sebelum tipe tersebut dipakai pada sesi ujian produksi.
+- [ ] Tambahkan export/import CSV bertahap untuk tipe baru, dimulai dari PG Kompleks dan Benar/Salah, lalu Isian dan Menjodohkan setelah format final.
+
+#### Phase 3 — Asesmen Non-Tes Di Luar CBT Murni
+- [ ] Buat konsep `Asesmen Non-Tes` terpisah dari bank soal CBT live untuk Praktik, Portofolio, Penugasan, Proyek, atau bentuk lain yang ditetapkan madrasah.
+- [ ] Non-tes harus memakai instruksi tugas, rubrik, bukti/link/lampiran, status pengumpulan, dan penilaian manual; jangan dipaksa menjadi soal CBT satu-jawaban.
+- [ ] Integrasikan nilai non-tes ke Grade/Rapor melalui komponen nilai yang jelas, bukan ke runtime ujian token.
+- [ ] Mode Pemula untuk non-tes cukup berisi instruksi, bobot, tenggat, dan rubrik sederhana; mode Advance membuka kriteria rubrik, bukti wajib, penilai, dan checklist observasi.
+
+#### Aturan Penilaian Awal
+- [ ] Pilihan Ganda: jawaban benar tunggal bernilai penuh, salah nol.
+- [ ] Pilihan Ganda Kompleks: semua kunci harus tepat untuk nilai penuh pada fase awal; partial credit disiapkan sebagai opsi Advance setelah laporan siap.
+- [ ] Benar/Salah dan Setuju/Tidak Setuju: exact match terhadap kunci.
+- [ ] Isian/Jawaban Singkat: exact match setelah normalisasi dan alias jawaban diterima; toleransi typo tidak aktif secara default.
+- [ ] Menjodohkan: exact match semua pasangan pada fase awal; partial credit per pasangan hanya di Advance.
+- [ ] Essay/Uraian: manual scoring 0-100 berbasis rubrik, dikonversi proporsional ke bobot soal seperti Sprint 61.
+
+#### Guardrail Implementasi
+- [ ] Tetap patuhi boundary: SvelteKit hanya UI/BFF, semua validasi domain dan scoring di Go API, SQL eksplisit lewat `sqlc`, migration hanya di `services/core-api/db/migrations`.
+- [ ] Tidak melakukan rewrite bank soal; tambahkan tipe secara bertahap di `/cbt/soal` sambil menjaga `/cbt/questions` sebagai hub eksperimen/bridge.
+- [ ] Jangan aktifkan tipe baru untuk paket/sesi produksi sebelum Flutter renderer, backend scoring, preview siswa, dan laporan hasil siap.
+- [ ] Setiap fase harus update `PLAN.md`, menjalankan Svelte autofixer untuk file `.svelte` tersentuh, `npm run check:web`, test Go terkait, dan `git diff --check`.
 
 ### ✅ Repository Hygiene Checkpoint — Source Commit Discipline (COMPLETE)
 - [x] Pisahkan artefak runtime SQLite sidecar (`*.db-shm`, `*.db-wal`, `*.sqlite-shm`, `*.sqlite-wal`) dari source control sesuai aturan legacy SQLite hanya sebagai artefak impor.
