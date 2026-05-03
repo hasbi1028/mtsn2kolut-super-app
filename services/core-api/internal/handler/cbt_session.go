@@ -95,6 +95,10 @@ type cbtSessionRoomHandoverService interface {
 	LockRoomHandover(ctx context.Context, roomID, lockedBy pgtype.UUID) (db.CbtRoomHandover, error)
 }
 
+type cbtSessionItemAnalysisService interface {
+	GetItemAnalysis(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionItemAnalysisRow, error)
+}
+
 func NewCbtSession(svc *service.CbtSession, audit ...cbtSessionAuditWriter) *CbtSession {
 	var writer cbtSessionAuditWriter
 	if len(audit) > 0 {
@@ -1802,6 +1806,103 @@ func (h *CbtSession) GetResults(w http.ResponseWriter, r *http.Request) {
 		"session": session,
 		"results": results,
 	})
+}
+
+func (h *CbtSession) GetItemAnalysis(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, id) {
+		return
+	}
+	itemAnalysisSvc, ok := h.svc.(cbtSessionItemAnalysisService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt item analysis service unavailable"))
+		return
+	}
+	rows, err := itemAnalysisSvc.GetItemAnalysis(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, serializeSessionItemAnalysisRow(row))
+	}
+	api.OK(w, map[string]any{"items": items})
+}
+
+func serializeSessionItemAnalysisRow(row db.GetSessionItemAnalysisRow) map[string]any {
+	return map[string]any{
+		"position":             row.Position,
+		"points":               row.Points,
+		"question_id":          pgUUIDString(row.QuestionID),
+		"question_code":        row.QuestionCode,
+		"question_text":        row.QuestionText,
+		"question_type":        row.QuestionType,
+		"difficulty":           row.Difficulty,
+		"answer_key":           row.AnswerKey,
+		"cp_ref":               row.CpRef,
+		"tp_ref":               row.TpRef,
+		"kd_ref":               row.KdRef,
+		"material_topic":       row.MaterialTopic,
+		"cognitive_level":      row.CognitiveLevel,
+		"hots_flag":            row.HotsFlag,
+		"submitted_count":      row.SubmittedCount,
+		"answered_count":       row.AnsweredCount,
+		"blank_count":          row.BlankCount,
+		"correct_count":        row.CorrectCount,
+		"incorrect_count":      row.IncorrectCount,
+		"unscored_count":       row.UnscoredCount,
+		"avg_manual_score":     row.AvgManualScore,
+		"difficulty_index":     row.DifficultyIndex,
+		"top_group_count":      row.TopGroupCount,
+		"top_correct_count":    row.TopCorrectCount,
+		"bottom_group_count":   row.BottomGroupCount,
+		"bottom_correct_count": row.BottomCorrectCount,
+		"discrimination_index": row.DiscriminationIndex,
+		"answer_distribution":  decodeJSONBytes(row.AnswerDistribution),
+		"recommendation":       sessionItemAnalysisRecommendation(row),
+		"recommendation_tone":  sessionItemAnalysisTone(row),
+	}
+}
+
+func sessionItemAnalysisRecommendation(row db.GetSessionItemAnalysisRow) string {
+	switch {
+	case row.SubmittedCount == 0:
+		return "Belum ada submit"
+	case row.QuestionType == "essay" && row.UnscoredCount > 0:
+		return "Koreksi uraian belum lengkap"
+	case row.AnsweredCount == 0:
+		return "Belum dijawab"
+	case row.DiscriminationIndex < -0.05:
+		return "Cek kunci/rubrik"
+	case row.DifficultyIndex < 0.20:
+		return "Terlalu sulit"
+	case row.DifficultyIndex > 0.90:
+		return "Terlalu mudah"
+	case row.SubmittedCount >= 3 && row.DiscriminationIndex < 0.15:
+		return "Daya pembeda rendah"
+	case row.BlankCount > row.SubmittedCount/2:
+		return "Banyak jawaban kosong"
+	default:
+		return "Baik"
+	}
+}
+
+func sessionItemAnalysisTone(row db.GetSessionItemAnalysisRow) string {
+	switch sessionItemAnalysisRecommendation(row) {
+	case "Baik":
+		return "success"
+	case "Belum ada submit":
+		return "info"
+	case "Cek kunci/rubrik", "Belum dijawab":
+		return "danger"
+	default:
+		return "warning"
+	}
 }
 
 func (h *CbtSession) GetMinutes(w http.ResponseWriter, r *http.Request) {

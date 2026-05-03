@@ -450,6 +450,221 @@ func (q *Queries) GetParticipantByToken(ctx context.Context, token string) (GetP
 	return i, err
 }
 
+const getSessionItemAnalysis = `-- name: GetSessionItemAnalysis :many
+WITH ranked_participants AS (
+  SELECT
+    ranked.id,
+    ranked.score,
+    ranked.submitted_count,
+    CASE
+      WHEN ranked.submitted_count < 3 THEN 'all'
+      WHEN ranked.score_tercile = 1 THEN 'top'
+      WHEN ranked.score_tercile = 3 THEN 'bottom'
+      ELSE 'middle'
+    END AS score_band
+  FROM (
+    SELECT
+      ep.id,
+      COALESCE(ep.score, 0)::double precision AS score,
+      COUNT(*) OVER ()::int AS submitted_count,
+      NTILE(3) OVER (ORDER BY COALESCE(ep.score, 0) DESC, ep.id) AS score_tercile
+    FROM cbt_exam_participants ep
+    WHERE ep.session_id = $1
+      AND ep.submitted_at IS NOT NULL
+  ) ranked
+),
+item_answers AS (
+  SELECT
+    pq.question_id,
+    rp.id AS participant_id,
+    rp.score_band,
+    sa.id AS answer_id,
+    NULLIF(BTRIM(COALESCE(sa.answer, '')), '') AS normalized_answer,
+    sa.is_correct,
+    sa.manual_score
+  FROM cbt_exam_sessions ses
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  LEFT JOIN ranked_participants rp ON TRUE
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = rp.id AND sa.question_id = pq.question_id
+  WHERE ses.id = $1
+),
+answer_distribution AS (
+  SELECT
+    counts.question_id,
+    JSONB_OBJECT_AGG(counts.answer_value, counts.answer_count ORDER BY counts.answer_value)::jsonb AS answer_distribution
+  FROM (
+    SELECT
+      ia.question_id,
+      ia.normalized_answer AS answer_value,
+      COUNT(*)::int AS answer_count
+    FROM item_answers ia
+    WHERE ia.normalized_answer IS NOT NULL
+    GROUP BY ia.question_id, ia.normalized_answer
+  ) counts
+  GROUP BY counts.question_id
+),
+aggregates AS (
+  SELECT
+    pq.position,
+    pq.points,
+    q.id AS question_id,
+    q.code AS question_code,
+    q.question_text,
+    q.question_type,
+    q.difficulty,
+    q.answer_key,
+    q.cp_ref,
+    q.tp_ref,
+    q.kd_ref,
+    q.material_topic,
+    q.cognitive_level,
+    q.hots_flag,
+    COUNT(ia.participant_id)::int AS submitted_count,
+    COUNT(ia.answer_id) FILTER (WHERE ia.normalized_answer IS NOT NULL)::int AS answered_count,
+    (COUNT(ia.participant_id) - COUNT(ia.answer_id) FILTER (WHERE ia.normalized_answer IS NOT NULL))::int AS blank_count,
+    COUNT(ia.answer_id) FILTER (WHERE ia.is_correct IS TRUE)::int AS correct_count,
+    COUNT(ia.answer_id) FILTER (WHERE ia.is_correct IS FALSE)::int AS incorrect_count,
+    COUNT(ia.answer_id) FILTER (WHERE q.question_type = 'essay' AND ia.normalized_answer IS NOT NULL AND ia.manual_score IS NULL)::int AS unscored_count,
+    COALESCE(AVG(ia.manual_score::double precision) FILTER (WHERE ia.manual_score IS NOT NULL), 0)::double precision AS avg_manual_score,
+    COUNT(ia.participant_id) FILTER (WHERE ia.score_band = 'top')::int AS top_group_count,
+    COUNT(ia.answer_id) FILTER (WHERE ia.score_band = 'top' AND ia.is_correct IS TRUE)::int AS top_correct_count,
+    COALESCE(AVG(ia.manual_score::double precision) FILTER (WHERE ia.score_band = 'top' AND ia.manual_score IS NOT NULL), 0)::double precision AS top_avg_manual_score,
+    COUNT(ia.participant_id) FILTER (WHERE ia.score_band = 'bottom')::int AS bottom_group_count,
+    COUNT(ia.answer_id) FILTER (WHERE ia.score_band = 'bottom' AND ia.is_correct IS TRUE)::int AS bottom_correct_count,
+    COALESCE(AVG(ia.manual_score::double precision) FILTER (WHERE ia.score_band = 'bottom' AND ia.manual_score IS NOT NULL), 0)::double precision AS bottom_avg_manual_score
+  FROM cbt_exam_sessions ses
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  LEFT JOIN item_answers ia ON ia.question_id = pq.question_id
+  WHERE ses.id = $1
+  GROUP BY
+    pq.position, pq.points, q.id, q.code, q.question_text, q.question_type, q.difficulty,
+    q.answer_key, q.cp_ref, q.tp_ref, q.kd_ref, q.material_topic, q.cognitive_level, q.hots_flag
+)
+SELECT
+  a.position,
+  a.points,
+  a.question_id,
+  a.question_code,
+  a.question_text,
+  a.question_type,
+  a.difficulty,
+  a.answer_key,
+  a.cp_ref,
+  a.tp_ref,
+  a.kd_ref,
+  a.material_topic,
+  a.cognitive_level,
+  a.hots_flag,
+  a.submitted_count,
+  a.answered_count,
+  a.blank_count,
+  a.correct_count,
+  a.incorrect_count,
+  a.unscored_count,
+  a.avg_manual_score,
+  CASE
+    WHEN a.submitted_count = 0 THEN 0::double precision
+    WHEN a.question_type = 'essay' THEN a.avg_manual_score / 100.0
+    ELSE a.correct_count::double precision / a.submitted_count::double precision
+  END::double precision AS difficulty_index,
+  a.top_group_count,
+  a.top_correct_count,
+  a.bottom_group_count,
+  a.bottom_correct_count,
+  CASE
+    WHEN a.question_type = 'essay' AND a.top_group_count > 0 AND a.bottom_group_count > 0 THEN (a.top_avg_manual_score - a.bottom_avg_manual_score) / 100.0
+    WHEN a.question_type <> 'essay' AND a.top_group_count > 0 AND a.bottom_group_count > 0 THEN
+      (a.top_correct_count::double precision / a.top_group_count::double precision) -
+      (a.bottom_correct_count::double precision / a.bottom_group_count::double precision)
+    ELSE 0::double precision
+  END AS discrimination_index,
+  COALESCE(ad.answer_distribution, '{}'::jsonb) AS answer_distribution
+FROM aggregates a
+LEFT JOIN answer_distribution ad ON ad.question_id = a.question_id
+ORDER BY a.position ASC, a.question_code ASC
+`
+
+type GetSessionItemAnalysisRow struct {
+	Position            int32                     `json:"position"`
+	Points              int32                     `json:"points"`
+	QuestionID          pgtype.UUID               `json:"question_id"`
+	QuestionCode        string                    `json:"question_code"`
+	QuestionText        string                    `json:"question_text"`
+	QuestionType        string                    `json:"question_type"`
+	Difficulty          CbtQuestionDifficultyEnum `json:"difficulty"`
+	AnswerKey           string                    `json:"answer_key"`
+	CpRef               string                    `json:"cp_ref"`
+	TpRef               string                    `json:"tp_ref"`
+	KdRef               string                    `json:"kd_ref"`
+	MaterialTopic       string                    `json:"material_topic"`
+	CognitiveLevel      string                    `json:"cognitive_level"`
+	HotsFlag            bool                      `json:"hots_flag"`
+	SubmittedCount      int32                     `json:"submitted_count"`
+	AnsweredCount       int32                     `json:"answered_count"`
+	BlankCount          int32                     `json:"blank_count"`
+	CorrectCount        int32                     `json:"correct_count"`
+	IncorrectCount      int32                     `json:"incorrect_count"`
+	UnscoredCount       int32                     `json:"unscored_count"`
+	AvgManualScore      float64                   `json:"avg_manual_score"`
+	DifficultyIndex     float64                   `json:"difficulty_index"`
+	TopGroupCount       int32                     `json:"top_group_count"`
+	TopCorrectCount     int32                     `json:"top_correct_count"`
+	BottomGroupCount    int32                     `json:"bottom_group_count"`
+	BottomCorrectCount  int32                     `json:"bottom_correct_count"`
+	DiscriminationIndex float64                   `json:"discrimination_index"`
+	AnswerDistribution  []byte                    `json:"answer_distribution"`
+}
+
+func (q *Queries) GetSessionItemAnalysis(ctx context.Context, sessionID pgtype.UUID) ([]GetSessionItemAnalysisRow, error) {
+	rows, err := q.db.Query(ctx, getSessionItemAnalysis, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetSessionItemAnalysisRow{}
+	for rows.Next() {
+		var i GetSessionItemAnalysisRow
+		if err := rows.Scan(
+			&i.Position,
+			&i.Points,
+			&i.QuestionID,
+			&i.QuestionCode,
+			&i.QuestionText,
+			&i.QuestionType,
+			&i.Difficulty,
+			&i.AnswerKey,
+			&i.CpRef,
+			&i.TpRef,
+			&i.KdRef,
+			&i.MaterialTopic,
+			&i.CognitiveLevel,
+			&i.HotsFlag,
+			&i.SubmittedCount,
+			&i.AnsweredCount,
+			&i.BlankCount,
+			&i.CorrectCount,
+			&i.IncorrectCount,
+			&i.UnscoredCount,
+			&i.AvgManualScore,
+			&i.DifficultyIndex,
+			&i.TopGroupCount,
+			&i.TopCorrectCount,
+			&i.BottomGroupCount,
+			&i.BottomCorrectCount,
+			&i.DiscriminationIndex,
+			&i.AnswerDistribution,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSessionProctoringStatus = `-- name: GetSessionProctoringStatus :many
 SELECT
   ep.id AS participant_id,

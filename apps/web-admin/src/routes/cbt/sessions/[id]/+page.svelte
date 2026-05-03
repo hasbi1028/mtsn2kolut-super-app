@@ -135,6 +135,41 @@
 		recap?: OperationalRecap;
 		rooms?: OperationalRoom[];
 	};
+	type ItemAnalysisRow = {
+		position: number;
+		points: number;
+		question_id: string;
+		question_code: string;
+		question_text: string;
+		question_type: string;
+		difficulty: string;
+		answer_key: string;
+		cp_ref: string;
+		tp_ref: string;
+		kd_ref: string;
+		material_topic: string;
+		cognitive_level: string;
+		hots_flag: boolean;
+		submitted_count: number;
+		answered_count: number;
+		blank_count: number;
+		correct_count: number;
+		incorrect_count: number;
+		unscored_count: number;
+		avg_manual_score: number;
+		difficulty_index: number;
+		top_group_count: number;
+		top_correct_count: number;
+		bottom_group_count: number;
+		bottom_correct_count: number;
+		discrimination_index: number;
+		answer_distribution: unknown;
+		recommendation: string;
+		recommendation_tone: string;
+	};
+	type ItemAnalysisPayload = {
+		items?: ItemAnalysisRow[];
+	};
 	type UngradedEssay = {
 		answer_id: string;
 		participant_id: string;
@@ -162,7 +197,7 @@
 	};
 
 	const sessionId = page.params.id ?? '';
-	type ActiveTab = 'hasil' | 'peserta' | 'ruangan' | 'operasional' | 'proctoring' | 'essay';
+	type ActiveTab = 'hasil' | 'butir' | 'peserta' | 'ruangan' | 'operasional' | 'proctoring' | 'essay';
 
 	let activeTab = $state<ActiveTab>('hasil');
 	let session = $state<SessionInfo | null>(null);
@@ -174,6 +209,7 @@
 	let roomReadiness = $state<RoomReadiness | null>(null);
 	let operationalRecap = $state<OperationalRecap | null>(null);
 	let operationalRooms = $state<OperationalRoom[]>([]);
+	let itemAnalysis = $state<ItemAnalysisRow[]>([]);
 	let proctoring = $state<ProctoringRow[]>([]);
 	let proctoringEvents = $state<ProctoringEvent[]>([]);
 	let essays = $state<UngradedEssay[]>([]);
@@ -189,6 +225,7 @@
 	let participantRefreshBusy = $state(false);
 	let proctoringRefreshBusy = $state(false);
 	let operationalRefreshBusy = $state(false);
+	let itemAnalysisRefreshBusy = $state(false);
 	let eventRefreshBusy = $state(false);
 	let regenBusyId = $state('');
 	let roomDeleteBusyId = $state('');
@@ -212,6 +249,7 @@
 	let employeesRequestId = 0;
 	let readinessRequestId = 0;
 	let operationalRequestId = 0;
+	let itemAnalysisRequestId = 0;
 	let proctoringRequestId = 0;
 	let proctoringEventsRequestId = 0;
 	let essaysRequestId = 0;
@@ -222,6 +260,7 @@
 	};
 	const detailTabs: { id: ActiveTab; label: string }[] = [
 		{ id: 'hasil', label: 'Hasil Ujian' },
+		{ id: 'butir', label: 'Analisis Butir' },
 		{ id: 'peserta', label: 'Peserta & Token' },
 		{ id: 'ruangan', label: 'Ruangan' },
 		{ id: 'operasional', label: 'Rekap Ops' },
@@ -281,6 +320,48 @@
 	function operationalMessage(recap: OperationalRecap | null) {
 		if (!recap) return 'Rekap operasional belum dimuat.';
 		return `${recap.handover_locked_count}/${recap.room_count} ruang sudah mengunci handover, ${recap.submitted_count}/${recap.participant_count} peserta submit, ${recap.incident_room_count} ruang punya catatan insiden, ${recap.force_submit_count} peserta dipaksa submit.`;
+	}
+
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function percent(value: number) {
+		if (!Number.isFinite(value)) return '0%';
+		return `${Math.round(value * 100)}%`;
+	}
+
+	function questionTypeLabel(type: string) {
+		const labels: Record<string, string> = {
+			multiple_choice: 'PG',
+			multiple_answer: 'PG Kompleks',
+			true_false: 'Benar/Salah',
+			agree_disagree: 'Setuju/Tidak',
+			matching: 'Menjodohkan',
+			short_answer: 'Isian',
+			essay: 'Essay',
+		};
+		return labels[type] ?? type.replaceAll('_', ' ');
+	}
+
+	function itemAnalysisToneClass(tone: string) {
+		if (tone === 'success') return 'border-emerald-300 bg-emerald-50 text-emerald-700';
+		if (tone === 'danger') return 'border-red-300 bg-red-50 text-red-700';
+		if (tone === 'info') return 'border-slate-300 bg-slate-50 text-slate-600';
+		return 'border-amber-300 bg-amber-50 text-amber-700';
+	}
+
+	function itemAnalysisSignalClass(row: ItemAnalysisRow) {
+		if (row.recommendation_tone === 'danger') return 'bg-red-50/70';
+		if (row.recommendation_tone === 'warning') return 'bg-amber-50/60';
+		return '';
+	}
+
+	function answerDistributionEntries(row: ItemAnalysisRow) {
+		if (!isRecord(row.answer_distribution)) return [];
+		return Object.entries(row.answer_distribution)
+			.map(([answer, count]) => ({ answer, count: Number(count) || 0 }))
+			.sort((a, b) => b.count - a.count || a.answer.localeCompare(b.answer));
 	}
 
 	function handoverStatusLabel(room: OperationalRoom) {
@@ -353,6 +434,23 @@
 			screenshots += row.screenshot_attempt;
 		}
 		return { online, slow, offline, submitted, suspicious, appSwitches, screenshots };
+	});
+
+	let itemAnalysisStats = $derived.by(() => {
+		const submittedRows = itemAnalysis.filter((row) => row.submitted_count > 0);
+		const reviewRows = itemAnalysis.filter((row) => row.recommendation_tone === 'warning' || row.recommendation_tone === 'danger');
+		const unscoredRows = itemAnalysis.filter((row) => row.unscored_count > 0);
+		const avgDifficulty = submittedRows.length > 0
+			? submittedRows.reduce((sum, row) => sum + row.difficulty_index, 0) / submittedRows.length
+			: 0;
+		const lowDiscrimination = itemAnalysis.filter((row) => row.submitted_count >= 3 && row.discrimination_index < 0.15).length;
+		return {
+			total: itemAnalysis.length,
+			review: reviewRows.length,
+			unscored: unscoredRows.length,
+			avgDifficulty,
+			lowDiscrimination,
+		};
 	});
 
 	function showToast(msg: string, ok = true) {
@@ -554,6 +652,18 @@
 		}
 	}
 
+	async function loadItemAnalysis() {
+		const requestId = ++itemAnalysisRequestId;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/item-analysis`);
+			const data = await readClientApiData<ItemAnalysisPayload>(res, 'Gagal memuat analisis butir');
+			if (requestId !== itemAnalysisRequestId) return;
+			itemAnalysis = Array.isArray(data.items) ? data.items : [];
+		} catch (error) {
+			if (requestId === itemAnalysisRequestId) throw error;
+		}
+	}
+
 	async function loadProctoring() {
 		const requestId = ++proctoringRequestId;
 		try {
@@ -625,6 +735,17 @@
 		}
 	}
 
+	async function refreshItemAnalysis() {
+		itemAnalysisRefreshBusy = true;
+		try {
+			await loadItemAnalysis();
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			itemAnalysisRefreshBusy = false;
+		}
+	}
+
 	async function refreshProctoringEvents() {
 		eventRefreshBusy = true;
 		try {
@@ -654,6 +775,7 @@
 			if (tab === 'peserta') { await loadRooms(); await loadParticipants(); }
 			if (tab === 'ruangan') { await Promise.all([loadRooms(), loadParticipants(), loadSchoolRooms(), loadEmployeeOptions(), loadRoomReadiness()]); }
 			if (tab === 'operasional') await loadOperationalRecap();
+			if (tab === 'butir') await loadItemAnalysis();
 			if (tab === 'essay') await loadEssays();
 			if (tab === 'proctoring') {
 				await Promise.all([loadProctoring(), loadProctoringEvents()]);
@@ -679,6 +801,7 @@
 			setOperationState('success', 'Skor Diperbarui', 'Perhitungan nilai sesi sudah disegarkan. Tinjau kembali hasil akhir sebelum menutup sesi.');
 			showToast('Penilaian selesai — skor diperbarui');
 			await refreshSessionDetail();
+			if (activeTab === 'butir') await loadItemAnalysis();
 		} catch (error) {
 			setOperationState('error', 'Skor Gagal Dihitung Ulang', 'Perhitungan ulang belum berhasil. Periksa data jawaban atau ulangi beberapa saat lagi.');
 			showToast(mutationErrorMessage(error, 'Gagal menghitung skor'), false);
@@ -1004,6 +1127,37 @@
 		URL.revokeObjectURL(url);
 	}
 
+	function exportItemAnalysisCSV() {
+		if (!session || itemAnalysis.length === 0) return;
+		const header = 'No,Kode,Tipe,CP,TP,KD,Materi,Level,HOTS,Dijawab,Kosong,Benar,Salah,Kesukaran,Daya Pembeda,Rekomendasi';
+		const rows = itemAnalysis.map((row) => [
+			row.position,
+			row.question_code,
+			`"${questionTypeLabel(row.question_type)}"`,
+			`"${row.cp_ref.replaceAll('"', '""')}"`,
+			`"${row.tp_ref.replaceAll('"', '""')}"`,
+			`"${row.kd_ref.replaceAll('"', '""')}"`,
+			`"${row.material_topic.replaceAll('"', '""')}"`,
+			`"${row.cognitive_level.replaceAll('"', '""')}"`,
+			row.hots_flag ? 'Ya' : 'Tidak',
+			row.answered_count,
+			row.blank_count,
+			row.correct_count,
+			row.incorrect_count,
+			percent(row.difficulty_index),
+			percent(row.discrimination_index),
+			`"${row.recommendation.replaceAll('"', '""')}"`,
+		].join(','));
+		const csv = [header, ...rows].join('\n');
+		const blob = new Blob([csv], { type: 'text/csv' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `analisis_butir_${session.title.replace(/\s+/g, '_')}.csv`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
 	onMount(() => {
 		void loadInitial();
 	});
@@ -1177,6 +1331,131 @@
 							{:else}
 								<Table.Row>
 									<Table.Cell colspan={8} class="text-center text-slate-400 py-10">Belum ada data nilai</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				</Card.Content>
+			</Card.Root>
+
+		<!-- Tab: Analisis Butir -->
+		{:else if activeTab === 'butir'}
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<div>
+					<p class="text-sm font-medium text-slate-700">Analisis kualitas butir dari jawaban siswa</p>
+					<p class="text-xs text-muted-foreground">Gunakan setelah skor dihitung untuk melihat kesukaran, daya pembeda, dan opsi jawaban.</p>
+				</div>
+				<div class="flex flex-wrap gap-2">
+					<LoadingButton variant="outline" size="sm" onclick={() => void refreshItemAnalysis()} loading={itemAnalysisRefreshBusy} loadingLabel="Memuat..." disabled={itemAnalysisRefreshBusy}>
+						↻ Refresh
+					</LoadingButton>
+					<Button variant="outline" size="sm" onclick={exportItemAnalysisCSV} disabled={itemAnalysis.length === 0}>
+						↓ CSV Analisis
+					</Button>
+				</div>
+			</div>
+
+			<OperationStatusPanel
+				tone={itemAnalysisStats.review > 0 ? 'warning' : itemAnalysisStats.total > 0 ? 'success' : 'info'}
+				compact
+				title="Kontrol Mutu Bank Soal"
+				message={`${itemAnalysisStats.total} butir dianalisis, ${itemAnalysisStats.review} butir perlu ditinjau, ${itemAnalysisStats.lowDiscrimination} daya pembeda rendah, rata-rata kesukaran ${percent(itemAnalysisStats.avgDifficulty)}.`}
+			/>
+
+			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+				{#each [
+					{ label: 'Total Butir', value: itemAnalysisStats.total.toString(), hint: 'dalam paket' },
+					{ label: 'Perlu Review', value: itemAnalysisStats.review.toString(), hint: 'kunci/rubrik/level' },
+					{ label: 'Kesukaran Rata-rata', value: percent(itemAnalysisStats.avgDifficulty), hint: 'proporsi benar/skor' },
+					{ label: 'Daya Pembeda Rendah', value: itemAnalysisStats.lowDiscrimination.toString(), hint: '< 15%' },
+					{ label: 'Uraian Belum Dinilai', value: itemAnalysisStats.unscored.toString(), hint: 'butir essay' },
+				] as item (item.label)}
+					<Card.Root class="border-green-100">
+						<Card.Content class="px-4 pb-3 pt-4">
+							<p class="mb-1 text-xs text-slate-500">{item.label}</p>
+							<p class="text-2xl font-bold text-[oklch(0.38_0.13_145)]">{item.value}</p>
+							<p class="mt-1 text-xs text-slate-400">{item.hint}</p>
+						</Card.Content>
+					</Card.Root>
+				{/each}
+			</div>
+
+			<Card.Root class="border-green-100">
+				<Card.Header class="pb-2">
+					<Card.Title class="text-base">Matriks Analisis Butir</Card.Title>
+					<p class="text-xs text-muted-foreground">Butir bermasalah ditandai agar guru bisa memperbaiki bank soal setelah ujian.</p>
+				</Card.Header>
+				<Card.Content class="p-0 overflow-x-auto">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row class="bg-green-50">
+								<Table.Head class="w-10">No</Table.Head>
+								<Table.Head>Butir</Table.Head>
+								<Table.Head>Blueprint</Table.Head>
+								<Table.Head class="text-center">Dijawab</Table.Head>
+								<Table.Head class="text-center">Benar / Salah</Table.Head>
+								<Table.Head class="text-center">Kesukaran</Table.Head>
+								<Table.Head class="text-center">Daya Pembeda</Table.Head>
+								<Table.Head>Distribusi</Table.Head>
+								<Table.Head>Rekomendasi</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each itemAnalysis as row (row.question_id)}
+								<Table.Row class={itemAnalysisSignalClass(row)}>
+									<Table.Cell class="text-xs text-slate-400">{row.position}</Table.Cell>
+									<Table.Cell class="min-w-72">
+										<div class="flex flex-wrap items-center gap-1">
+											{#if row.question_code}<span class="font-mono text-xs text-slate-500">{row.question_code}</span>{/if}
+											<Badge variant="outline" class="text-xs">{questionTypeLabel(row.question_type)}</Badge>
+											<Badge variant="secondary" class="text-xs">{row.difficulty}</Badge>
+											{#if row.hots_flag}<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">HOTS</Badge>{/if}
+										</div>
+										<p class="mt-1 line-clamp-2 text-sm text-slate-700">{row.question_text}</p>
+										<p class="mt-1 text-[11px] text-slate-400">Kunci: {row.question_type === 'essay' ? 'Rubrik' : row.answer_key || '—'} · Bobot {row.points}</p>
+									</Table.Cell>
+									<Table.Cell class="min-w-56 text-xs text-slate-600">
+										<div>CP: {row.cp_ref || '—'}</div>
+										<div>TP/KD: {row.tp_ref || row.kd_ref || '—'}</div>
+										<div>Materi: {row.material_topic || '—'} · {row.cognitive_level || '—'}</div>
+									</Table.Cell>
+									<Table.Cell class="text-center text-sm">
+										{row.answered_count}/{row.submitted_count}
+										{#if row.blank_count > 0}<div class="text-[11px] text-amber-700">{row.blank_count} kosong</div>{/if}
+									</Table.Cell>
+									<Table.Cell class="text-center text-sm">
+										{#if row.question_type === 'essay'}
+											{row.avg_manual_score.toFixed(1)} rata-rata
+											{#if row.unscored_count > 0}<div class="text-[11px] text-red-700">{row.unscored_count} belum dinilai</div>{/if}
+										{:else}
+											<span class="font-mono">{row.correct_count}/{row.incorrect_count}</span>
+										{/if}
+									</Table.Cell>
+									<Table.Cell class="text-center font-semibold text-slate-700">{percent(row.difficulty_index)}</Table.Cell>
+									<Table.Cell class="text-center">
+										<span class={row.discrimination_index < 0 ? 'font-semibold text-red-700' : row.discrimination_index < 0.15 ? 'font-semibold text-amber-700' : 'font-semibold text-emerald-700'}>
+											{percent(row.discrimination_index)}
+										</span>
+										{#if row.top_group_count > 0 || row.bottom_group_count > 0}
+											<div class="text-[11px] text-slate-400">atas {row.top_correct_count}/{row.top_group_count} · bawah {row.bottom_correct_count}/{row.bottom_group_count}</div>
+										{/if}
+									</Table.Cell>
+									<Table.Cell class="min-w-40">
+										<div class="flex flex-wrap gap-1">
+											{#each answerDistributionEntries(row).slice(0, 5) as entry (entry.answer)}
+												<Badge variant="outline" class="bg-white text-xs">{entry.answer}: {entry.count}</Badge>
+											{:else}
+												<span class="text-xs text-slate-400">Belum ada jawaban</span>
+											{/each}
+										</div>
+									</Table.Cell>
+									<Table.Cell>
+										<Badge variant="outline" class={itemAnalysisToneClass(row.recommendation_tone)}>{row.recommendation}</Badge>
+									</Table.Cell>
+								</Table.Row>
+							{:else}
+								<Table.Row>
+									<Table.Cell colspan={9} class="py-10 text-center text-slate-400">Analisis butir belum tersedia. Pastikan paket memiliki soal dan klik refresh setelah skor dihitung.</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>

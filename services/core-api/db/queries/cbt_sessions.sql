@@ -414,6 +414,140 @@ WHERE ep.session_id = $1
 GROUP BY ep.id, s.nis, s.nama, s.gender, ep.room_id, ep.seat_no, r.room_name
 ORDER BY ep.score DESC NULLS LAST, s.nama ASC;
 
+-- name: GetSessionItemAnalysis :many
+WITH ranked_participants AS (
+  SELECT
+    ranked.id,
+    ranked.score,
+    ranked.submitted_count,
+    CASE
+      WHEN ranked.submitted_count < 3 THEN 'all'
+      WHEN ranked.score_tercile = 1 THEN 'top'
+      WHEN ranked.score_tercile = 3 THEN 'bottom'
+      ELSE 'middle'
+    END AS score_band
+  FROM (
+    SELECT
+      ep.id,
+      COALESCE(ep.score, 0)::double precision AS score,
+      COUNT(*) OVER ()::int AS submitted_count,
+      NTILE(3) OVER (ORDER BY COALESCE(ep.score, 0) DESC, ep.id) AS score_tercile
+    FROM cbt_exam_participants ep
+    WHERE ep.session_id = $1
+      AND ep.submitted_at IS NOT NULL
+  ) ranked
+),
+item_answers AS (
+  SELECT
+    pq.question_id,
+    rp.id AS participant_id,
+    rp.score_band,
+    sa.id AS answer_id,
+    NULLIF(BTRIM(COALESCE(sa.answer, '')), '') AS normalized_answer,
+    sa.is_correct,
+    sa.manual_score
+  FROM cbt_exam_sessions ses
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  LEFT JOIN ranked_participants rp ON TRUE
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = rp.id AND sa.question_id = pq.question_id
+  WHERE ses.id = $1
+),
+answer_distribution AS (
+  SELECT
+    counts.question_id,
+    JSONB_OBJECT_AGG(counts.answer_value, counts.answer_count ORDER BY counts.answer_value)::jsonb AS answer_distribution
+  FROM (
+    SELECT
+      ia.question_id,
+      ia.normalized_answer AS answer_value,
+      COUNT(*)::int AS answer_count
+    FROM item_answers ia
+    WHERE ia.normalized_answer IS NOT NULL
+    GROUP BY ia.question_id, ia.normalized_answer
+  ) counts
+  GROUP BY counts.question_id
+),
+aggregates AS (
+  SELECT
+    pq.position,
+    pq.points,
+    q.id AS question_id,
+    q.code AS question_code,
+    q.question_text,
+    q.question_type,
+    q.difficulty,
+    q.answer_key,
+    q.cp_ref,
+    q.tp_ref,
+    q.kd_ref,
+    q.material_topic,
+    q.cognitive_level,
+    q.hots_flag,
+    COUNT(ia.participant_id)::int AS submitted_count,
+    COUNT(ia.answer_id) FILTER (WHERE ia.normalized_answer IS NOT NULL)::int AS answered_count,
+    (COUNT(ia.participant_id) - COUNT(ia.answer_id) FILTER (WHERE ia.normalized_answer IS NOT NULL))::int AS blank_count,
+    COUNT(ia.answer_id) FILTER (WHERE ia.is_correct IS TRUE)::int AS correct_count,
+    COUNT(ia.answer_id) FILTER (WHERE ia.is_correct IS FALSE)::int AS incorrect_count,
+    COUNT(ia.answer_id) FILTER (WHERE q.question_type = 'essay' AND ia.normalized_answer IS NOT NULL AND ia.manual_score IS NULL)::int AS unscored_count,
+    COALESCE(AVG(ia.manual_score::double precision) FILTER (WHERE ia.manual_score IS NOT NULL), 0)::double precision AS avg_manual_score,
+    COUNT(ia.participant_id) FILTER (WHERE ia.score_band = 'top')::int AS top_group_count,
+    COUNT(ia.answer_id) FILTER (WHERE ia.score_band = 'top' AND ia.is_correct IS TRUE)::int AS top_correct_count,
+    COALESCE(AVG(ia.manual_score::double precision) FILTER (WHERE ia.score_band = 'top' AND ia.manual_score IS NOT NULL), 0)::double precision AS top_avg_manual_score,
+    COUNT(ia.participant_id) FILTER (WHERE ia.score_band = 'bottom')::int AS bottom_group_count,
+    COUNT(ia.answer_id) FILTER (WHERE ia.score_band = 'bottom' AND ia.is_correct IS TRUE)::int AS bottom_correct_count,
+    COALESCE(AVG(ia.manual_score::double precision) FILTER (WHERE ia.score_band = 'bottom' AND ia.manual_score IS NOT NULL), 0)::double precision AS bottom_avg_manual_score
+  FROM cbt_exam_sessions ses
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  LEFT JOIN item_answers ia ON ia.question_id = pq.question_id
+  WHERE ses.id = $1
+  GROUP BY
+    pq.position, pq.points, q.id, q.code, q.question_text, q.question_type, q.difficulty,
+    q.answer_key, q.cp_ref, q.tp_ref, q.kd_ref, q.material_topic, q.cognitive_level, q.hots_flag
+)
+SELECT
+  a.position,
+  a.points,
+  a.question_id,
+  a.question_code,
+  a.question_text,
+  a.question_type,
+  a.difficulty,
+  a.answer_key,
+  a.cp_ref,
+  a.tp_ref,
+  a.kd_ref,
+  a.material_topic,
+  a.cognitive_level,
+  a.hots_flag,
+  a.submitted_count,
+  a.answered_count,
+  a.blank_count,
+  a.correct_count,
+  a.incorrect_count,
+  a.unscored_count,
+  a.avg_manual_score,
+  CASE
+    WHEN a.submitted_count = 0 THEN 0::double precision
+    WHEN a.question_type = 'essay' THEN a.avg_manual_score / 100.0
+    ELSE a.correct_count::double precision / a.submitted_count::double precision
+  END::double precision AS difficulty_index,
+  a.top_group_count,
+  a.top_correct_count,
+  a.bottom_group_count,
+  a.bottom_correct_count,
+  CASE
+    WHEN a.question_type = 'essay' AND a.top_group_count > 0 AND a.bottom_group_count > 0 THEN (a.top_avg_manual_score - a.bottom_avg_manual_score) / 100.0
+    WHEN a.question_type <> 'essay' AND a.top_group_count > 0 AND a.bottom_group_count > 0 THEN
+      (a.top_correct_count::double precision / a.top_group_count::double precision) -
+      (a.bottom_correct_count::double precision / a.bottom_group_count::double precision)
+    ELSE 0::double precision
+  END AS discrimination_index,
+  COALESCE(ad.answer_distribution, '{}'::jsonb) AS answer_distribution
+FROM aggregates a
+LEFT JOIN answer_distribution ad ON ad.question_id = a.question_id
+ORDER BY a.position ASC, a.question_code ASC;
+
 -- name: ListCbtExamSessionsByTeacher :many
 SELECT
   s.id, s.package_id, p.title AS package_title,

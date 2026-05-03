@@ -84,6 +84,10 @@ type cbtScoreStore interface {
 	UpdateParticipantScores(ctx context.Context, sessionID pgtype.UUID) error
 }
 
+type cbtItemAnalysisStore interface {
+	GetSessionItemAnalysis(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionItemAnalysisRow, error)
+}
+
 type cbtParticipantForceSubmitStore interface {
 	UpdateParticipantAnswerCorrectness(ctx context.Context, participantID pgtype.UUID) error
 	ForceSubmitParticipant(ctx context.Context, arg db.ForceSubmitParticipantParams) (db.ForceSubmitParticipantRow, error)
@@ -878,6 +882,21 @@ func (s *CbtSession) GetResults(ctx context.Context, sessionID pgtype.UUID) ([]d
 	}
 	if rows == nil {
 		return []db.GetSessionResultsRow{}, nil
+	}
+	return rows, nil
+}
+
+func (s *CbtSession) GetItemAnalysis(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionItemAnalysisRow, error) {
+	q, ok := s.q.(cbtItemAnalysisStore)
+	if !ok {
+		return nil, fmt.Errorf("cbt item analysis store unavailable")
+	}
+	rows, err := q.GetSessionItemAnalysis(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.GetSessionItemAnalysisRow{}, nil
 	}
 	return rows, nil
 }

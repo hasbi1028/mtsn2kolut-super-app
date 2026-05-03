@@ -314,6 +314,7 @@ func main() {
 		// Scoring & Results
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/score", sessionH.ScoreSession)
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/results", sessionH.GuruAwareResults)
+		r.With(requireCbt).Get("/api/cbt/sessions/{id}/item-analysis", sessionH.GetItemAnalysis)
 		r.With(requireAdmin).Post("/api/cbt/sessions/{id}/participants/{pid}/answer", sessionH.RecordAnswer)
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/participants/{pid}/answers", sessionH.GetParticipantAnswers)
 
