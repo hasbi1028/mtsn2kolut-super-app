@@ -995,6 +995,29 @@ describe('api proxy route handlers', () => {
 		expect(res).toBe(streamed);
 	});
 
+	it('streams CBT question export CSV with active query filters', async () => {
+		const mod = await import('../../routes/api/cbt/questions/export/+server');
+		const upstream = new Response('kode,tipe\nQ-001,pg\n', {
+			status: 200,
+			headers: { 'content-type': 'text/csv; charset=utf-8' }
+		});
+		const streamed = new Response('kode,tipe\nQ-001,pg\n', { status: 200 });
+		const event = createEvent({
+			url: new URL('http://localhost/api/cbt/questions/export?subject_id=ipa&workflow_status=draft&q=energi')
+		});
+		proxyFetchMock.mockResolvedValueOnce(upstream);
+		streamProxyResponseMock.mockResolvedValueOnce(streamed);
+
+		const res = await mod.GET(event as never);
+
+		expect(proxyFetchMock).toHaveBeenCalledWith('/api/cbt/questions/export?subject_id=ipa&workflow_status=draft&q=energi');
+		expect(streamProxyResponseMock).toHaveBeenCalledWith(upstream, {
+			defaultContentType: 'text/csv; charset=utf-8',
+			defaultCacheControl: 'no-store',
+		});
+		expect(res).toBe(streamed);
+	});
+
 	it('encodes CBT participant path params before forwarding mutations', async () => {
 		const mod = await import('../../routes/api/cbt/sessions/[id]/participants/[pid]/seat/+server');
 		const request = new Request('http://localhost/api/cbt/sessions/session%201/participants/student%3F1/seat', {

@@ -12,6 +12,7 @@
 	import LegacyRichTextEditor from '$lib/components/LegacyRichTextEditor.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import RichContent from '$lib/components/RichContent.svelte';
+	import { questionExportButtonLabel, questionExportSuccessMessage } from '$lib/cbt/question-export-ui';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { htmlToPlainText } from '$lib/utils/html-text';
@@ -365,10 +366,9 @@
 	let pageCount = $derived(Math.max(1, Math.ceil(totalItems / PAGE_SIZE)));
 	let lockedCount = $derived(questions.filter(questionUsageLocked).length);
 	let roles = $derived(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
-	let isAdmin = $derived(roles.includes('admin'));
 	let canReviewWorkflow = $derived(roles.includes('admin'));
-	let exportButtonLabel = $derived(isAdmin ? 'Export CSV' : 'Export Soal Saya');
-	let exportSuccessMessage = $derived(isAdmin ? 'Export CSV bank soal berhasil dibuat' : 'Export CSV soal saya berhasil dibuat');
+	let exportButtonLabel = $derived(questionExportButtonLabel(roles));
+	let exportSuccessMessage = $derived(questionExportSuccessMessage(roles));
 	let reviewCount = $derived(reviewTotal);
 	let visibleReviewCount = $derived(questions.filter((item) => item.workflow_status === 'review').length);
 	let approvedCount = $derived(approvedTotal);
