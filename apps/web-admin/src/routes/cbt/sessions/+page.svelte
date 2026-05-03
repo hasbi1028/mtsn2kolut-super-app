@@ -116,6 +116,14 @@
 		draft: 'Draft', scheduled: 'Terjadwal', active: 'Berlangsung',
 		finished: 'Selesai', cancelled: 'Dibatalkan',
 	};
+	const readinessFilters: SessionReadinessFilter[] = [
+		'all',
+		'not_ready',
+		'ready',
+		'needs_participants',
+		'needs_rooms',
+		'needs_proctors',
+	];
 
 	function statusClass(s: string) {
 		if (s === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -292,19 +300,43 @@
 	}
 
 	function buildReadinessFilterOptions(items: ExamSession[]) {
-		const filters: SessionReadinessFilter[] = [
-			'all',
-			'not_ready',
-			'ready',
-			'needs_participants',
-			'needs_rooms',
-			'needs_proctors',
-		];
-		return filters.map((filter) => ({
+		return readinessFilters.map((filter) => ({
 			filter,
 			label: readinessFilterLabel(filter),
 			count: items.filter((session) => sessionMatchesReadinessFilter(session, filter)).length,
 		}));
+	}
+
+	function isSessionReadinessFilter(value: string | null): value is SessionReadinessFilter {
+		return readinessFilters.includes(value as SessionReadinessFilter);
+	}
+
+	function replaceCurrentUrl(url: URL) {
+		const query = url.searchParams.toString();
+		window.history.replaceState({}, '', `${url.pathname}${query ? `?${query}` : ''}${url.hash}`);
+	}
+
+	function setSessionReadinessFilter(filter: SessionReadinessFilter) {
+		readinessFilter = filter;
+		if (typeof window === 'undefined') return;
+		const url = new URL(window.location.href);
+		if (filter === 'all') url.searchParams.delete('readiness');
+		else url.searchParams.set('readiness', filter);
+		replaceCurrentUrl(url);
+	}
+
+	function initSessionReadinessFilterFromQuery() {
+		if (typeof window === 'undefined') return;
+		const url = new URL(window.location.href);
+		const requestedFilter = url.searchParams.get('readiness');
+		if (isSessionReadinessFilter(requestedFilter)) {
+			readinessFilter = requestedFilter;
+			return;
+		}
+		if (requestedFilter !== null) {
+			url.searchParams.delete('readiness');
+			replaceCurrentUrl(url);
+		}
 	}
 
 	function nextSessionAction(session: ExamSession): NextSessionAction {
@@ -568,6 +600,7 @@
 	}
 
 	onMount(() => {
+		initSessionReadinessFilterFromQuery();
 		void loadInitial();
 	});
 </script>
@@ -841,7 +874,7 @@
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<Card.Title class="text-base">Daftar Sesi ({visibleSessions.length}/{currentSessions.length})</Card.Title>
 					{#if readinessFilter !== 'all'}
-						<Button variant="outline" size="sm" onclick={() => (readinessFilter = 'all')}>
+						<Button variant="outline" size="sm" onclick={() => setSessionReadinessFilter('all')}>
 							Reset Filter
 						</Button>
 					{/if}
@@ -851,7 +884,7 @@
 						<button
 							type="button"
 							class="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors {readinessFilter === option.filter ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}"
-							onclick={() => (readinessFilter = option.filter)}
+							onclick={() => setSessionReadinessFilter(option.filter)}
 						>
 							<span>{option.label}</span>
 							<span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">{option.count}</span>
