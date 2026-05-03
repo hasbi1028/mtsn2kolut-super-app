@@ -283,6 +283,7 @@
 	let exportBusy = $state(false);
 	let templateBusy = $state(false);
 	let duplicateBusyId = $state('');
+	let workflowBusyId = $state('');
 
 	// ── Form fields ────────────────────────────────────────────────────────────
 	let fSubjectId = $state('');
@@ -1121,6 +1122,10 @@
 		return note.length > 180 ? `${note.slice(0, 180)}...` : note;
 	}
 
+	function canSubmitRevisionReview(q: Question): boolean {
+		return q.workflow_status === 'rejected' && q.status === 'draft' && !questionUsageLocked(q);
+	}
+
 	function isQuickEditable(q: Question): boolean {
 		return isComposerQuestionType(q.question_type) && (q.workflow_status === 'draft' || q.workflow_status === 'rejected') && q.status === 'draft' && !questionUsageLocked(q);
 	}
@@ -1561,6 +1566,34 @@
 		}
 	}
 
+	async function submitRevisionForReview(q: Question) {
+		if (!canSubmitRevisionReview(q)) {
+			toast.warning('Revisi ini belum aman diajukan review ulang.');
+			return;
+		}
+		if (!(await confirmAction({
+			title: 'Ajukan Review Ulang',
+			message: 'Ajukan revisi soal ini ke reviewer? Pastikan isi, kunci/rubrik, dan metadata sudah diperbaiki.',
+			confirmLabel: 'Ajukan Review',
+			tone: 'warning'
+		}))) return;
+		workflowBusyId = q.id;
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/questions/${q.id}/workflow`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'submit_review', notes: '' }),
+			});
+			await readClientJson<unknown>(res);
+			toast.success('Revisi diajukan review ulang');
+			await refreshOverview(currentPage);
+		} catch (e) {
+			toast.error(mutationErrorMessage(e, 'Gagal mengajukan review ulang'));
+		} finally {
+			workflowBusyId = '';
+		}
+	}
+
 	async function deleteQuestion(id: string) {
 		const current = questions.find((item) => item.id === id);
 		if (current && questionUsageLocked(current)) {
@@ -1709,16 +1742,14 @@
 			{#if revisionQueue.length > 0}
 				<div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
 					{#each revisionQueue as q (q.id)}
-						<button
-							type="button"
-							onclick={() => openQuestion(q)}
-							class="min-w-0 rounded-md border border-red-100 bg-white px-3 py-2 text-left shadow-sm transition-colors hover:border-red-300 hover:bg-red-50"
-						>
+						<article class="min-w-0 rounded-md border border-red-100 bg-white px-3 py-2 text-left shadow-sm transition-colors hover:border-red-300 hover:bg-red-50">
 							<div class="mb-1 flex items-center gap-1">
 								<span class="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">{questionTypeLabel(q.question_type)}</span>
 								<span class="truncate text-[11px] text-slate-400">{q.subject_name || q.subject_code || 'Mapel belum ada'}</span>
 							</div>
-							<p class="line-clamp-2 text-sm font-medium text-slate-800">{stemPreview(q)}</p>
+							<button type="button" onclick={() => openQuestion(q)} class="block w-full text-left">
+								<p class="line-clamp-2 text-sm font-medium text-slate-800 hover:text-green-800">{stemPreview(q)}</p>
+							</button>
 							<div class="mt-2 rounded border border-red-100 bg-red-50/70 px-2 py-1.5">
 								<div class="mb-0.5 flex flex-wrap items-center gap-1">
 									<span class="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-700">{revisionSourceLabel(q)}</span>
@@ -1731,7 +1762,23 @@
 								{#if q.author_username}<span>{q.author_username}</span>{/if}
 								<span>{DIFFICULTY_LABEL[q.difficulty] ?? q.difficulty ?? 'Sedang'}</span>
 							</div>
-						</button>
+							<div class="mt-2 flex flex-wrap gap-1.5">
+								<Button variant="outline" size="sm" class="h-7 bg-white text-xs" onclick={() => openQuestion(q)}>
+									Edit Revisi
+								</Button>
+								<LoadingButton
+									variant="outline"
+									size="sm"
+									class="h-7 border-green-200 bg-green-50 text-xs text-green-800 hover:bg-green-100"
+									onclick={() => void submitRevisionForReview(q)}
+									loading={workflowBusyId === q.id}
+									loadingLabel="Mengajukan..."
+									disabled={!canSubmitRevisionReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
+								>
+									Ajukan Review Ulang
+								</LoadingButton>
+							</div>
+						</article>
 					{/each}
 				</div>
 			{:else}
@@ -1939,6 +1986,18 @@
 										>
 											{isQuickEditable(q) ? 'Edit' : 'Editor'}
 										</button>
+										{#if q.workflow_status === 'rejected'}
+											<button
+												onclick={(e) => {
+													e.stopPropagation();
+													void submitRevisionForReview(q);
+												}}
+												disabled={!canSubmitRevisionReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
+												class="rounded px-2 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40"
+											>
+												{workflowBusyId === q.id ? 'Mengajukan...' : 'Review Ulang'}
+											</button>
+										{/if}
 										<button
 											onclick={(e) => {
 												e.stopPropagation();
