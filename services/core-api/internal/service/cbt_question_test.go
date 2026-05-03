@@ -632,7 +632,7 @@ func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
 			wantErr: "rubric_html wajib diisi untuk essay yang diajukan review, di-approve, atau dipublish",
 		},
 		{
-			name: "matching requires complete pairs",
+			name: "matching requires complete pair content",
 			input: SaveCbtQuestionInput{
 				SubjectID:      pgtype.UUID{Valid: true},
 				AuthoringMode:  "beginner",
@@ -642,7 +642,7 @@ func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
 				AnswerKey:      "A=1",
 				WorkflowStatus: "review",
 			},
-			wantErr: "menjodohkan membutuhkan minimal 2 pasangan",
+			wantErr: "setiap pasangan menjodohkan wajib memiliki kolom kiri dan kanan",
 		},
 		{
 			name: "unsupported type",
@@ -715,6 +715,7 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 		Options: []QuestionOption{
 			{Label: "A", HTML: "<p>Fotosintesis</p>", MatchLabel: "1", MatchHTML: "<p>Proses membuat makanan</p>"},
 			{Label: "B", Text: "Evaporasi", MatchLabel: "2", MatchText: "Penguapan"},
+			{MatchLabel: "3", MatchText: "Distraktor kanan", IsDistractor: true},
 		},
 		AnswerKey:      "b=2; a=1",
 		WorkflowStatus: "review",
@@ -722,7 +723,7 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("normalizeQuestionInput(matching) error = %v", err)
 	}
-	if matching.AnswerKey != "A=1;B=2" || len(matching.Options) != 2 || matching.Options[0].MatchText != "" || matching.Options[0].MatchHTML != "<p>Proses membuat makanan</p>" {
+	if matching.AnswerKey != "A=1;B=2" || len(matching.Options) != 3 || matching.Options[0].MatchText != "" || matching.Options[0].MatchHTML != "<p>Proses membuat makanan</p>" || !matching.Options[2].IsDistractor {
 		t.Fatalf("normalizeQuestionInput(matching) key/options = %q/%+v, want canonical matching options", matching.AnswerKey, matching.Options)
 	}
 

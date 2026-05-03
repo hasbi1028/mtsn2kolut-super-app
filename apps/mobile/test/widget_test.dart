@@ -934,6 +934,7 @@ void main() {
     expect(find.byType(DropdownButtonFormField<String>), findsNWidgets(2));
     expect(find.text('Fotosintesis'), findsOneWidget);
     expect(find.text('Proses membuat makanan'), findsOneWidget);
+    expect(find.text('Distraktor kanan'), findsOneWidget);
   });
 
   testWidgets('exam shell renders stale supervisor attention panel', (
@@ -1391,6 +1392,13 @@ ExamLoginPayload _sampleMatchingPayload() {
             text: 'Evaporasi',
             matchLabel: '2',
             matchText: 'Penguapan',
+          ),
+          ExamOption(
+            label: '',
+            text: '',
+            matchLabel: '3',
+            matchText: 'Distraktor kanan',
+            isDistractor: true,
           ),
         ],
       ),

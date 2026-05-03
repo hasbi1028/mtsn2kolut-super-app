@@ -155,12 +155,14 @@ class ExamOption {
     required this.text,
     this.matchLabel = '',
     this.matchText = '',
+    this.isDistractor = false,
   });
 
   final String label;
   final String text;
   final String matchLabel;
   final String matchText;
+  final bool isDistractor;
 
   factory ExamOption.fromJson(Map<String, dynamic> json) {
     return ExamOption(
@@ -168,6 +170,7 @@ class ExamOption {
       text: json['text'] as String? ?? '',
       matchLabel: json['match_label'] as String? ?? '',
       matchText: json['match_text'] as String? ?? '',
+      isDistractor: json['is_distractor'] as bool? ?? false,
     );
   }
 }

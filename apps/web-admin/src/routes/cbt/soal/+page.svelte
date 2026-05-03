@@ -25,6 +25,7 @@
 		match_label?: string;
 		match_text?: string;
 		match_html?: string;
+		is_distractor?: boolean;
 	};
 	type MatchingPair = { left: string; right: string };
 	type ModuleMode = 'catalog' | 'composer' | 'review' | 'import';
@@ -107,6 +108,7 @@
 		explanation: string;
 		options: string[];
 		matchingPairs: MatchingPair[];
+		matchingDistractors: string[];
 		answerKey: string;
 		weight: number;
 		difficulty: string;
@@ -140,6 +142,7 @@
 	const MIN_MATCHING_PAIR_COUNT = 2;
 	const DEFAULT_MATCHING_PAIR_COUNT = 4;
 	const MAX_MATCHING_PAIR_COUNT = 6;
+	const MAX_MATCHING_DISTRACTOR_COUNT = 4;
 	const ANSWER_LABELS: OptionLabel[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 	const TRUE_FALSE_OPTIONS = ['Benar', 'Salah'];
 	const AGREE_DISAGREE_OPTIONS = ['Setuju', 'Tidak Setuju'];
@@ -274,6 +277,7 @@
 	let fExplanation = $state('');
 	let fOptions = $state(['', '', '', '']);
 	let fMatchingPairs = $state<MatchingPair[]>(createEmptyMatchingPairs());
+	let fMatchingDistractors = $state<string[]>([]);
 	let fAnswerKey = $state('A');
 	let fWeight = $state(1);
 	let fDifficulty = $state('medium');
@@ -299,6 +303,7 @@
 		fExplanation,
 		opts: fOptions,
 		matchingPairs: fMatchingPairs,
+		matchingDistractors: fMatchingDistractors,
 		fAnswerKey,
 		fWeight,
 		fDifficulty,
@@ -352,6 +357,7 @@
 	let optionHasImages = $derived(fOptions.map((option) => option.includes('<img')));
 	let matchingLeftTexts = $derived(fMatchingPairs.map((pair) => htmlToPlainText(pair.left)));
 	let matchingRightTexts = $derived(fMatchingPairs.map((pair) => htmlToPlainText(pair.right)));
+	let matchingDistractorTexts = $derived(fMatchingDistractors.map((distractor) => htmlToPlainText(distractor)));
 	let matchingPairsReady = $derived(
 		!isMatching ||
 			(fMatchingPairs.length >= questionTypeConfig.minOptions &&
@@ -417,8 +423,9 @@
 		}
 		if (isMatching) {
 			const filledLeft = matchingLeftTexts.filter(Boolean);
-			const filledRight = matchingRightTexts.filter(Boolean);
+			const filledRight = [...matchingRightTexts, ...matchingDistractorTexts].filter(Boolean);
 			const uniqueRight = new Set(filledRight);
+			const filledDistractors = matchingDistractorTexts.filter(Boolean).length;
 			return [
 				{
 					label: 'Instruksi menjodohkan jelas',
@@ -434,6 +441,11 @@
 					label: 'Jawaban kanan unik',
 					status: filledRight.length > 0 && uniqueRight.size === filledRight.length ? 'good' : 'warn',
 					desc: uniqueRight.size < filledRight.length ? 'Ada pasangan kanan yang sama' : 'Semua pasangan kanan berbeda',
+				},
+				{
+					label: 'Distraktor kanan',
+					status: fMatchingDistractors.length === 0 || filledDistractors === fMatchingDistractors.length ? 'good' : 'warn',
+					desc: fMatchingDistractors.length === 0 ? 'Opsional' : `${filledDistractors} / ${fMatchingDistractors.length} distraktor terisi`,
 				},
 				{
 					label: 'Skoring deterministik',
@@ -548,6 +560,7 @@
 		richTextHasContent(fExplanation) ||
 		fOptions.some(richTextHasContent) ||
 		fMatchingPairs.some((pair) => richTextHasContent(pair.left) || richTextHasContent(pair.right)) ||
+		fMatchingDistractors.some(richTextHasContent) ||
 		draftStatus
 	));
 
@@ -563,6 +576,7 @@
 			explanation: fExplanation,
 			options: [...fOptions],
 			matchingPairs: fMatchingPairs.map((pair) => ({ ...pair })),
+			matchingDistractors: [...fMatchingDistractors],
 			answerKey: fAnswerKey,
 			weight: fWeight,
 			difficulty: fDifficulty,
@@ -624,6 +638,7 @@
 				explanation?: string;
 				options?: string[];
 				matchingPairs?: MatchingPair[];
+				matchingDistractors?: string[];
 				answerKey?: string;
 				weight?: number;
 				difficulty?: string;
@@ -649,6 +664,7 @@
 			fExplanation = d.explanation ?? '';
 			fOptions = normalizeOptionCount(d.options ?? defaultOptionsForQuestionType(fQuestionType), fQuestionType);
 			fMatchingPairs = normalizeMatchingPairs(d.matchingPairs ?? [], fQuestionType);
+			fMatchingDistractors = normalizeMatchingDistractors(d.matchingDistractors ?? [], fQuestionType);
 			fAnswerKey = normalizeAnswerKey(d.answerKey, fQuestionType, answerItemCountForType(fQuestionType));
 			fWeight = d.weight ?? 1;
 			fDifficulty = d.difficulty ?? 'medium';
@@ -821,6 +837,7 @@
 		fQuestionType = type;
 		fOptions = normalizeOptionCount(changed ? [] : fOptions, type);
 		fMatchingPairs = normalizeMatchingPairs(changed ? [] : fMatchingPairs, type);
+		fMatchingDistractors = normalizeMatchingDistractors(changed ? [] : fMatchingDistractors, type);
 		fAnswerKey = changed
 			? defaultAnswerKeyForQuestionType(type)
 			: normalizeAnswerKey(fAnswerKey, type, answerItemCountForType(type));
@@ -869,10 +886,23 @@
 	}
 
 	function optionsToMatchingPairs(options: OptionItem[]): MatchingPair[] {
-		return options.map((option) => ({
+		return options.filter((option) => !option.is_distractor).map((option) => ({
 			left: option.html || option.text || option.latex || '',
 			right: option.match_html || option.match_text || '',
 		}));
+	}
+
+	function normalizeMatchingDistractors(distractors: string[], type: ComposerQuestionType = fQuestionType): string[] {
+		const config = getQuestionTypeConfig(type);
+		if (config.answerMode !== 'matching') return [];
+		return distractors.slice(0, MAX_MATCHING_DISTRACTOR_COUNT);
+	}
+
+	function optionsToMatchingDistractors(options: OptionItem[]): string[] {
+		return options
+			.filter((option) => option.is_distractor)
+			.map((option) => option.match_html || option.match_text || '')
+			.filter((option) => option.trim().length > 0);
 	}
 
 	function answerItemCountForType(type: ComposerQuestionType = fQuestionType): number {
@@ -999,6 +1029,15 @@
 		fAnswerKey = buildMatchingAnswerKey(fMatchingPairs.length);
 	}
 
+	function addMatchingDistractor() {
+		if (!isMatching || fMatchingDistractors.length >= MAX_MATCHING_DISTRACTOR_COUNT) return;
+		fMatchingDistractors = [...fMatchingDistractors, ''];
+	}
+
+	function removeMatchingDistractor(index: number) {
+		fMatchingDistractors = fMatchingDistractors.filter((_, i) => i !== index);
+	}
+
 	function questionUsageLocked(q: Question): boolean {
 		const packages = q.package_count ?? q.usage?.package_count ?? 0;
 		const answers = q.answer_count ?? q.usage?.answer_count ?? 0;
@@ -1053,6 +1092,7 @@
 		fExplanation = '';
 		fOptions = normalizeOptionCount([], fQuestionType);
 		fMatchingPairs = normalizeMatchingPairs([], fQuestionType);
+		fMatchingDistractors = normalizeMatchingDistractors([], fQuestionType);
 		fAnswerKey = defaultAnswerKeyForQuestionType(fQuestionType);
 		fWeight = 1;
 		fDifficulty = 'medium';
@@ -1110,6 +1150,7 @@
 				: defaultOptionsForQuestionType(fQuestionType);
 			fOptions = normalizeOptionCount(opts, fQuestionType);
 			fMatchingPairs = normalizeMatchingPairs(optionsToMatchingPairs(d.options ?? []), fQuestionType);
+			fMatchingDistractors = normalizeMatchingDistractors(optionsToMatchingDistractors(d.options ?? []), fQuestionType);
 			fAnswerKey = normalizeAnswerKey(d.answer_key, fQuestionType, answerItemCountForType(fQuestionType));
 			fDifficulty = d.difficulty || 'medium';
 			fGradeLevel = d.grade_level ?? 7;
@@ -1139,6 +1180,7 @@
 			fExplanation = q.explanation_html ?? '';
 			fOptions = normalizeOptionCount(q.options?.map((o) => o.html || o.text || o.latex || '') ?? defaultOptionsForQuestionType(fQuestionType), fQuestionType);
 			fMatchingPairs = normalizeMatchingPairs(optionsToMatchingPairs(q.options ?? []), fQuestionType);
+			fMatchingDistractors = normalizeMatchingDistractors(optionsToMatchingDistractors(q.options ?? []), fQuestionType);
 			fAnswerKey = normalizeAnswerKey(q.answer_key, fQuestionType, answerItemCountForType(fQuestionType));
 			fGradeLevel = q.grade_level ?? 7;
 			fAcademicPhase = q.academic_phase ?? '';
@@ -1247,14 +1289,26 @@
 			}));
 		}
 		if (config.answerMode === 'matching') {
-			return fMatchingPairs.map((pair, i) => ({
-				label: optionLabelAt(i),
-				text: htmlToPlainText(pair.left),
-				html: pair.left,
-				match_label: String(i + 1),
-				match_text: htmlToPlainText(pair.right),
-				match_html: pair.right,
-			}));
+			return [
+				...fMatchingPairs.map((pair, i) => ({
+					label: optionLabelAt(i),
+					text: htmlToPlainText(pair.left),
+					html: pair.left,
+					match_label: String(i + 1),
+					match_text: htmlToPlainText(pair.right),
+					match_html: pair.right,
+					is_distractor: false,
+				})),
+				...fMatchingDistractors.map((html, i) => ({
+					label: '',
+					text: '',
+					html: '',
+					match_label: String(fMatchingPairs.length + i + 1),
+					match_text: htmlToPlainText(html),
+					match_html: html,
+					is_distractor: true,
+				})),
+			];
 		}
 		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') {
 			return [];
@@ -1941,6 +1995,16 @@
 									{/if}
 								</div>
 							{/each}
+							{#each fMatchingDistractors as distractor, i (`preview-match-distractor-${i}`)}
+								<div class="flex items-start gap-2 rounded-md border border-amber-100 bg-amber-50 px-2 py-1.5 text-xs">
+									<span class="shrink-0 font-bold text-amber-700">{fMatchingPairs.length + i + 1}.</span>
+									{#if richTextHasContent(distractor)}
+										<RichContent html={distractor} class="latex-preview min-w-0 flex-1" />
+									{:else}
+										<span class="italic text-amber-400">(distraktor kosong)</span>
+									{/if}
+								</div>
+							{/each}
 						</div>
 					</div>
 					<div class="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
@@ -2306,6 +2370,42 @@
 											</div>
 										</section>
 									{/each}
+								</div>
+								<div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3">
+									<div class="flex flex-wrap items-center justify-between gap-3">
+										<div>
+											<p class="text-xs font-black uppercase tracking-[0.2em] text-slate-700">Distraktor Kanan Opsional</p>
+											<p class="mt-0.5 text-[11px] text-slate-500">Tambahkan pilihan kanan ekstra agar siswa tidak hanya mencocokkan satu-ke-satu.</p>
+										</div>
+										<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fMatchingDistractors.length >= MAX_MATCHING_DISTRACTOR_COUNT} onclick={addMatchingDistractor}>
+											+ Distraktor
+										</Button>
+									</div>
+									{#if fMatchingDistractors.length > 0}
+										<div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+											{#each fMatchingDistractors as distractor, i (`matching-distractor-${i}`)}
+												<div class="rounded-lg border border-slate-200 bg-white p-3">
+													<div class="mb-2 flex items-center justify-between gap-3">
+														<label for={`matching-distractor-${i}`} class="block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Distraktor Kanan {fMatchingPairs.length + i + 1}</label>
+														<button type="button" onclick={() => removeMatchingDistractor(i)} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">
+															Hapus
+														</button>
+													</div>
+													<LegacyRichTextEditor
+														bind:value={fMatchingDistractors[i]}
+														id={`matching-distractor-${i}`}
+														placeholder={`Pilihan kanan ekstra ${fMatchingPairs.length + i + 1}`}
+														minRows={2}
+														compact
+														onImageUpload={uploadImageInEditor}
+													/>
+													{#if !richTextHasContent(distractor)}
+														<p class="mt-1 text-[10px] font-semibold text-amber-600">Isi distraktor atau hapus jika tidak dipakai.</p>
+													{/if}
+												</div>
+											{/each}
+										</div>
+									{/if}
 								</div>
 							</section>
 						{:else if hasOptionSection}

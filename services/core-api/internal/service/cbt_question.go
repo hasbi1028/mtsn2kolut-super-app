@@ -45,14 +45,15 @@ type CbtQuestion struct {
 func NewCbtQuestion(q *db.Queries) *CbtQuestion { return &CbtQuestion{q: q} }
 
 type QuestionOption struct {
-	Label      string `json:"label"`
-	Text       string `json:"text,omitempty"`
-	HTML       string `json:"html,omitempty"`
-	Latex      string `json:"latex,omitempty"`
-	AssetID    string `json:"asset_id,omitempty"`
-	MatchLabel string `json:"match_label,omitempty"`
-	MatchText  string `json:"match_text,omitempty"`
-	MatchHTML  string `json:"match_html,omitempty"`
+	Label        string `json:"label"`
+	Text         string `json:"text,omitempty"`
+	HTML         string `json:"html,omitempty"`
+	Latex        string `json:"latex,omitempty"`
+	AssetID      string `json:"asset_id,omitempty"`
+	MatchLabel   string `json:"match_label,omitempty"`
+	MatchText    string `json:"match_text,omitempty"`
+	MatchHTML    string `json:"match_html,omitempty"`
+	IsDistractor bool   `json:"is_distractor,omitempty"`
 }
 
 type SaveCbtQuestionInput struct {
@@ -665,7 +666,7 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	if out.QuestionType == "short_answer" {
 		out.AnswerKey = normalizeShortAnswerKey(out.AnswerKey)
 	} else if out.QuestionType == "matching" {
-		out.AnswerKey = normalizeMatchingAnswerKey(out.AnswerKey, len(normalizedOptions))
+		out.AnswerKey = normalizeMatchingAnswerKey(out.AnswerKey, countMatchingPairs(normalizedOptions))
 	} else {
 		out.AnswerKey = strings.TrimSpace(strings.ToUpper(out.AnswerKey))
 	}
@@ -758,14 +759,23 @@ func validateObjectiveAnswerKey(options []QuestionOption, answerKey string, ques
 }
 
 func validateMatchingQuestion(options []QuestionOption, answerKey string) error {
-	if len(options) < 2 {
-		return fmt.Errorf("menjodohkan membutuhkan minimal 2 pasangan")
-	}
+	pairCount := 0
 	leftLabels := make(map[string]bool, len(options))
 	rightLabels := make(map[string]bool, len(options))
+	correctRightLabels := make(map[string]bool, len(options))
 	for _, option := range options {
 		left := strings.TrimSpace(strings.ToUpper(option.Label))
 		right := strings.TrimSpace(option.MatchLabel)
+		if option.IsDistractor {
+			if right == "" || matchingOptionContent(option) == "" {
+				return fmt.Errorf("distraktor menjodohkan wajib memiliki label dan teks kanan")
+			}
+			if rightLabels[right] {
+				return fmt.Errorf("label pasangan menjodohkan tidak boleh duplikat")
+			}
+			rightLabels[right] = true
+			continue
+		}
 		if left == "" || right == "" || optionContent(option) == "" || matchingOptionContent(option) == "" {
 			return fmt.Errorf("setiap pasangan menjodohkan wajib memiliki kolom kiri dan kanan")
 		}
@@ -774,6 +784,11 @@ func validateMatchingQuestion(options []QuestionOption, answerKey string) error 
 		}
 		leftLabels[left] = true
 		rightLabels[right] = true
+		correctRightLabels[right] = true
+		pairCount++
+	}
+	if pairCount < 2 {
+		return fmt.Errorf("menjodohkan membutuhkan minimal 2 pasangan")
 	}
 	for _, pair := range strings.Split(answerKey, ";") {
 		parts := strings.Split(pair, "=")
@@ -782,13 +797,12 @@ func validateMatchingQuestion(options []QuestionOption, answerKey string) error 
 		}
 		left := strings.TrimSpace(strings.ToUpper(parts[0]))
 		right := strings.TrimSpace(parts[1])
-		if !leftLabels[left] || !rightLabels[right] {
+		if !leftLabels[left] || !correctRightLabels[right] {
 			return fmt.Errorf("answer_key menjodohkan harus sesuai label pasangan")
 		}
 		delete(leftLabels, left)
-		delete(rightLabels, right)
 	}
-	if len(leftLabels) != 0 || len(rightLabels) != 0 {
+	if len(leftLabels) != 0 {
 		return fmt.Errorf("answer_key menjodohkan harus memetakan semua pasangan")
 	}
 	return nil
@@ -860,6 +874,16 @@ func buildMatchingAnswerKey(optionCount int) string {
 		pairs = append(pairs, fmt.Sprintf("%s=%d", string(rune('A'+i)), i+1))
 	}
 	return strings.Join(pairs, ";")
+}
+
+func countMatchingPairs(options []QuestionOption) int {
+	count := 0
+	for _, option := range options {
+		if !option.IsDistractor {
+			count++
+		}
+	}
+	return count
 }
 
 func shortAnswerAliases(value string) []string {
@@ -956,7 +980,7 @@ func normalizeOptions(options []QuestionOption) ([]QuestionOption, error) {
 	normalized := make([]QuestionOption, 0, len(options))
 	for idx, option := range options {
 		label := strings.TrimSpace(strings.ToUpper(option.Label))
-		if label == "" {
+		if label == "" && !option.IsDistractor {
 			label = string(rune('A' + idx))
 		}
 		text := strings.TrimSpace(option.Text)
@@ -972,14 +996,15 @@ func normalizeOptions(options []QuestionOption) ([]QuestionOption, error) {
 			continue
 		}
 		normalized = append(normalized, QuestionOption{
-			Label:      label,
-			Text:       text,
-			HTML:       sanitizeHTML(htmlText),
-			Latex:      latex,
-			AssetID:    strings.TrimSpace(option.AssetID),
-			MatchLabel: matchLabel,
-			MatchText:  matchText,
-			MatchHTML:  sanitizeHTML(matchHTML),
+			Label:        label,
+			Text:         text,
+			HTML:         sanitizeHTML(htmlText),
+			Latex:        latex,
+			AssetID:      strings.TrimSpace(option.AssetID),
+			MatchLabel:   matchLabel,
+			MatchText:    matchText,
+			MatchHTML:    sanitizeHTML(matchHTML),
+			IsDistractor: option.IsDistractor,
 		})
 	}
 	return normalized, nil

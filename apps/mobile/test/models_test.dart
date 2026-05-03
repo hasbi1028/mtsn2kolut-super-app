@@ -133,6 +133,11 @@ void main() {
             'match_label': '1',
             'match_text': 'Proses membuat makanan',
           },
+          {
+            'match_label': '2',
+            'match_text': 'Distraktor kanan',
+            'is_distractor': true,
+          },
         ],
       });
 
@@ -140,6 +145,8 @@ void main() {
       expect(matching.isTextAnswer, isFalse);
       expect(matching.options.first.matchLabel, '1');
       expect(matching.options.first.matchText, 'Proses membuat makanan');
+      expect(matching.options.last.isDistractor, isTrue);
+      expect(matching.options.last.matchText, 'Distraktor kanan');
     });
   });
 

@@ -1273,6 +1273,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     }
     final selected = _selectedMatchingPairsFromRaw(answer);
     final requiredLabels = question.options
+        .where((option) => !option.isDistractor)
         .map((option) => option.label)
         .toSet();
     return requiredLabels.isNotEmpty &&
@@ -1397,6 +1398,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     final rightOptions = question.options
         .where((option) => option.matchLabel.trim().isNotEmpty)
         .toList();
+    final leftOptions = question.options
+        .where((option) => !option.isDistractor)
+        .toList();
 
     return ListView(
       children: [
@@ -1450,7 +1454,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           ),
         ),
         const SizedBox(height: 16),
-        ...question.options.map(
+        ...leftOptions.map(
           (option) => Padding(
             padding: const EdgeInsets.only(bottom: 14),
             child: Container(
