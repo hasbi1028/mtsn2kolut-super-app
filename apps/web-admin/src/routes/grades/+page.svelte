@@ -32,6 +32,11 @@
 		weight: number;
 		max_score: number;
 		is_published: boolean;
+		source_non_test_assessment_id?: string | null;
+		source_non_test_title?: string;
+		source_non_test_type?: string;
+		source_non_test_synced_at?: string | null;
+		source_non_test_synced_by?: string;
 	};
 
 	type GradeSummary = {
@@ -350,6 +355,34 @@
 
 	function categoryLabel(value: string) {
 		return categoryOptions.find((item) => item.value === value)?.label ?? value;
+	}
+
+	function nonTestTypeLabel(value: string | undefined) {
+		switch (value) {
+			case 'praktik':
+				return 'Praktik';
+			case 'portofolio':
+				return 'Portofolio';
+			case 'proyek':
+				return 'Proyek';
+			case 'penugasan':
+				return 'Penugasan';
+			case 'observasi':
+				return 'Observasi';
+			case 'lainnya':
+				return 'Lainnya';
+			default:
+				return 'Non-Tes';
+		}
+	}
+
+	function isNonTestComponent(component: GradeComponent | null | undefined) {
+		return Boolean(component?.source_non_test_assessment_id);
+	}
+
+	function nonTestSourceHref(component: GradeComponent) {
+		const sourceId = component.source_non_test_assessment_id;
+		return sourceId ? resolve(`/cbt/non-test?assessment_id=${sourceId}`) : resolve('/cbt/non-test');
 	}
 
 	function assignmentStatusLabel(item: AssignmentStatus) {
@@ -1662,10 +1695,26 @@
 												<button class="text-left font-medium text-slate-900 hover:text-emerald-700" onclick={async () => { componentId = item.id; await loadOverview(); }}>
 													{item.title}
 												</button>
+												{#if isNonTestComponent(item)}
+													<div class="mt-2 flex flex-wrap items-center gap-2">
+														<Badge class="border border-emerald-200 bg-emerald-50 text-[10px] font-semibold uppercase tracking-wider text-emerald-800">
+															Non-Tes
+														</Badge>
+														<a
+															href={nonTestSourceHref(item)}
+															class="text-xs font-medium text-emerald-700 hover:text-emerald-900 hover:underline"
+														>
+															{item.source_non_test_title || 'Buka asesmen asal'}
+														</a>
+													</div>
+												{/if}
 											</Table.Cell>
 											<Table.Cell>
 												<div class="flex flex-wrap gap-2">
 													<Badge variant="outline">{categoryLabel(item.category)}</Badge>
+													{#if isNonTestComponent(item)}
+														<Badge variant="outline">{nonTestTypeLabel(item.source_non_test_type)}</Badge>
+													{/if}
 													<Badge variant={item.is_published ? 'default' : 'secondary'}>
 														{item.is_published ? 'Terbit' : 'Draft'}
 													</Badge>
@@ -1756,6 +1805,9 @@
 					<Card.Description>
 						{#if selectedComponent}
 							{selectedComponent.title} · {categoryLabel(selectedComponent.category)} · maksimum {selectedComponent.max_score}
+							{#if isNonTestComponent(selectedComponent)}
+								· sumber non-tes: {selectedComponent.source_non_test_title || nonTestTypeLabel(selectedComponent.source_non_test_type)}
+							{/if}
 						{:else}
 							Pilih komponen penilaian untuk mulai mengisi nilai siswa.
 						{/if}
@@ -1763,6 +1815,27 @@
 				</Card.Header>
 				<Card.Content class="space-y-4 p-0">
 					{#if selectedComponent}
+						{#if isNonTestComponent(selectedComponent)}
+							<div class="mx-6 mt-6 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+								<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+									<div>
+										<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Sumber Nilai Non-Tes</p>
+										<p class="mt-1 text-sm font-medium text-slate-900">
+											{selectedComponent.source_non_test_title || nonTestTypeLabel(selectedComponent.source_non_test_type)}
+										</p>
+										<p class="text-sm text-slate-600">
+											Komponen ini dibuat dari sinkronisasi asesmen non-tes. Koreksi sumber nilai sebaiknya dilakukan dari modul asal lalu dikirim ulang ke nilai.
+										</p>
+									</div>
+									<a
+										href={nonTestSourceHref(selectedComponent)}
+										class="inline-flex items-center justify-center rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50"
+									>
+										Buka Asesmen Asal
+									</a>
+								</div>
+							</div>
+						{/if}
 						<div class="mx-6 mt-6 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
 							<div>
 								<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Bulk Input</p>

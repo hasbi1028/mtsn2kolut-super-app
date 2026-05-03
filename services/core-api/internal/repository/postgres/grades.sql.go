@@ -257,12 +257,24 @@ SELECT gc.id, gc.assignment_id, gc.title, gc.category, gc.weight, gc.max_score,
        gc.is_published, gc.created_at, gc.updated_at,
        csa.class_id, c.name AS class_name, c.code AS class_code,
        csa.subject_id, s.name AS subject_name, s.code AS subject_code,
-       csa.teacher_employee_id, e.nama AS teacher_name
+       csa.teacher_employee_id, e.nama AS teacher_name,
+       nta.id AS source_non_test_assessment_id,
+       COALESCE(nta.title, '') AS source_non_test_title,
+       COALESCE(nta.assessment_type, '') AS source_non_test_type,
+       nta.grade_synced_at AS source_non_test_synced_at,
+       COALESCE(nta.grade_synced_by, '') AS source_non_test_synced_by
 FROM grade_components gc
 JOIN class_subject_assignments csa ON csa.id = gc.assignment_id
 JOIN school_classes c ON c.id = csa.class_id
 JOIN subjects s ON s.id = csa.subject_id
 JOIN employees e ON e.id = csa.teacher_employee_id
+LEFT JOIN LATERAL (
+  SELECT id, title, assessment_type, grade_synced_at, grade_synced_by
+  FROM non_test_assessments
+  WHERE grade_component_id = gc.id
+  ORDER BY grade_synced_at DESC NULLS LAST, updated_at DESC
+  LIMIT 1
+) nta ON TRUE
 WHERE ($1::uuid IS NULL OR gc.assignment_id = $1::uuid)
   AND (NOT $2::boolean OR gc.is_published = TRUE)
 ORDER BY c.level ASC, c.name ASC, s.name ASC, gc.created_at DESC
@@ -274,23 +286,28 @@ type ListGradeComponentsParams struct {
 }
 
 type ListGradeComponentsRow struct {
-	ID                pgtype.UUID        `json:"id"`
-	AssignmentID      pgtype.UUID        `json:"assignment_id"`
-	Title             string             `json:"title"`
-	Category          string             `json:"category"`
-	Weight            float64            `json:"weight"`
-	MaxScore          float64            `json:"max_score"`
-	IsPublished       bool               `json:"is_published"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	ClassID           pgtype.UUID        `json:"class_id"`
-	ClassName         string             `json:"class_name"`
-	ClassCode         string             `json:"class_code"`
-	SubjectID         pgtype.UUID        `json:"subject_id"`
-	SubjectName       string             `json:"subject_name"`
-	SubjectCode       string             `json:"subject_code"`
-	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
-	TeacherName       string             `json:"teacher_name"`
+	ID                        pgtype.UUID        `json:"id"`
+	AssignmentID              pgtype.UUID        `json:"assignment_id"`
+	Title                     string             `json:"title"`
+	Category                  string             `json:"category"`
+	Weight                    float64            `json:"weight"`
+	MaxScore                  float64            `json:"max_score"`
+	IsPublished               bool               `json:"is_published"`
+	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
+	ClassID                   pgtype.UUID        `json:"class_id"`
+	ClassName                 string             `json:"class_name"`
+	ClassCode                 string             `json:"class_code"`
+	SubjectID                 pgtype.UUID        `json:"subject_id"`
+	SubjectName               string             `json:"subject_name"`
+	SubjectCode               string             `json:"subject_code"`
+	TeacherEmployeeID         pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName               string             `json:"teacher_name"`
+	SourceNonTestAssessmentID pgtype.UUID        `json:"source_non_test_assessment_id"`
+	SourceNonTestTitle        string             `json:"source_non_test_title"`
+	SourceNonTestType         string             `json:"source_non_test_type"`
+	SourceNonTestSyncedAt     pgtype.Timestamptz `json:"source_non_test_synced_at"`
+	SourceNonTestSyncedBy     string             `json:"source_non_test_synced_by"`
 }
 
 func (q *Queries) ListGradeComponents(ctx context.Context, arg ListGradeComponentsParams) ([]ListGradeComponentsRow, error) {
@@ -320,6 +337,11 @@ func (q *Queries) ListGradeComponents(ctx context.Context, arg ListGradeComponen
 			&i.SubjectCode,
 			&i.TeacherEmployeeID,
 			&i.TeacherName,
+			&i.SourceNonTestAssessmentID,
+			&i.SourceNonTestTitle,
+			&i.SourceNonTestType,
+			&i.SourceNonTestSyncedAt,
+			&i.SourceNonTestSyncedBy,
 		); err != nil {
 			return nil, err
 		}

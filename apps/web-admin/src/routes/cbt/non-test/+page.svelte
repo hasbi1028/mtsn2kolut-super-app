@@ -137,6 +137,7 @@
 	let submissions = $state<NonTestSubmission[]>([]);
 	let submissionsPromise = $state<Promise<NonTestSubmission[]> | null>(null);
 	let submissionDrafts = $state<Record<string, SubmissionDraft>>({});
+	let initialAssessmentId = $state('');
 
 	let filterSearch = $state('');
 	let filterStatus = $state('');
@@ -238,11 +239,20 @@
 		classes = overview.classes;
 	}
 
+	function openInitialAssessment(rows: NonTestAssessment[]) {
+		if (!initialAssessmentId || selectedAssessment?.id === initialAssessmentId) return;
+		const target = rows.find((item) => item.id === initialAssessmentId);
+		if (!target) return;
+		openScoringPanel(target);
+		initialAssessmentId = '';
+	}
+
 	function load() {
 		const currentRequestId = ++requestId;
 		overviewPromise = fetchOverview().then((overview) => {
 			if (currentRequestId !== requestId) return { assessments, subjects, classes, totalItems: assessments.length };
 			applyOverview(overview);
+			openInitialAssessment(overview.assessments);
 			return overview;
 		}).catch((error: unknown) => {
 			if (currentRequestId === requestId) throw error;
@@ -256,6 +266,7 @@
 			const overview = await fetchOverview();
 			if (currentRequestId !== requestId) return;
 			applyOverview(overview);
+			openInitialAssessment(overview.assessments);
 			overviewPromise = Promise.resolve(overview);
 		} catch (error) {
 			if (currentRequestId !== requestId) return;
@@ -581,6 +592,7 @@
 	}
 
 	onMount(() => {
+		initialAssessmentId = new URLSearchParams(window.location.search).get('assessment_id') ?? '';
 		load();
 	});
 </script>
