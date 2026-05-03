@@ -263,6 +263,7 @@ func main() {
 		r.With(requireCbt).Put("/api/cbt/non-test-assessments/{id}", nonTestAssessmentH.Update)
 		r.With(requireCbt).Delete("/api/cbt/non-test-assessments/{id}", nonTestAssessmentH.Delete)
 		r.With(requireCbt).Get("/api/cbt/non-test-assessments/{id}/submissions", nonTestAssessmentH.ListSubmissions)
+		r.With(requireCbt).Post("/api/cbt/non-test-assessments/{id}/submissions/generate", nonTestAssessmentH.GenerateSubmissions)
 		r.With(requireCbt).Post("/api/cbt/non-test-assessments/{id}/submissions", nonTestAssessmentH.UpsertSubmission)
 
 		r.With(requireCbt).Get("/api/cbt/packages", packageH.List)

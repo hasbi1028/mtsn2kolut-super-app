@@ -152,6 +152,73 @@ func (q *Queries) DeleteNonTestAssessment(ctx context.Context, id pgtype.UUID) e
 	return err
 }
 
+const generateNonTestSubmissionsForClass = `-- name: GenerateNonTestSubmissionsForClass :many
+WITH target_assessment AS (
+  SELECT id, class_id
+  FROM non_test_assessments
+  WHERE id = $1::uuid
+),
+target_class AS (
+  SELECT COALESCE($2::uuid, class_id) AS class_id
+  FROM target_assessment
+)
+INSERT INTO non_test_assessment_submissions (
+  assessment_id,
+  student_id,
+  status
+)
+SELECT
+  target_assessment.id,
+  st.id,
+  'assigned'
+FROM target_assessment
+JOIN target_class ON TRUE
+JOIN students st ON st.class_id = target_class.class_id
+WHERE target_class.class_id IS NOT NULL
+  AND st.is_active = TRUE
+ON CONFLICT (assessment_id, student_id) DO NOTHING
+RETURNING id, assessment_id, student_id, status, evidence_url, evidence_note, score, feedback, submitted_at, graded_at, graded_by_username, created_at, updated_at
+`
+
+type GenerateNonTestSubmissionsForClassParams struct {
+	AssessmentID pgtype.UUID `json:"assessment_id"`
+	ClassID      pgtype.UUID `json:"class_id"`
+}
+
+func (q *Queries) GenerateNonTestSubmissionsForClass(ctx context.Context, arg GenerateNonTestSubmissionsForClassParams) ([]NonTestAssessmentSubmission, error) {
+	rows, err := q.db.Query(ctx, generateNonTestSubmissionsForClass, arg.AssessmentID, arg.ClassID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NonTestAssessmentSubmission{}
+	for rows.Next() {
+		var i NonTestAssessmentSubmission
+		if err := rows.Scan(
+			&i.ID,
+			&i.AssessmentID,
+			&i.StudentID,
+			&i.Status,
+			&i.EvidenceUrl,
+			&i.EvidenceNote,
+			&i.Score,
+			&i.Feedback,
+			&i.SubmittedAt,
+			&i.GradedAt,
+			&i.GradedByUsername,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getNonTestAssessment = `-- name: GetNonTestAssessment :one
 SELECT
   a.id,

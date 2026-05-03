@@ -188,6 +188,33 @@ LEFT JOIN school_classes sc ON sc.id = st.class_id
 WHERE nas.assessment_id = $1
 ORDER BY sc.level NULLS LAST, sc.name NULLS LAST, st.nama;
 
+-- name: GenerateNonTestSubmissionsForClass :many
+WITH target_assessment AS (
+  SELECT id, class_id
+  FROM non_test_assessments
+  WHERE id = sqlc.arg(assessment_id)::uuid
+),
+target_class AS (
+  SELECT COALESCE(sqlc.arg(class_id)::uuid, class_id) AS class_id
+  FROM target_assessment
+)
+INSERT INTO non_test_assessment_submissions (
+  assessment_id,
+  student_id,
+  status
+)
+SELECT
+  target_assessment.id,
+  st.id,
+  'assigned'
+FROM target_assessment
+JOIN target_class ON TRUE
+JOIN students st ON st.class_id = target_class.class_id
+WHERE target_class.class_id IS NOT NULL
+  AND st.is_active = TRUE
+ON CONFLICT (assessment_id, student_id) DO NOTHING
+RETURNING *;
+
 -- name: UpsertNonTestSubmission :one
 INSERT INTO non_test_assessment_submissions (
   assessment_id,

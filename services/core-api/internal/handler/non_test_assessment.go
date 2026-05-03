@@ -3,7 +3,9 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net/http"
 	"strings"
@@ -29,6 +31,7 @@ type nonTestAssessmentService interface {
 	Update(ctx context.Context, input service.SaveNonTestAssessmentInput) (db.NonTestAssessment, error)
 	Delete(ctx context.Context, id pgtype.UUID) error
 	ListSubmissions(ctx context.Context, assessmentID pgtype.UUID) ([]db.ListNonTestSubmissionsRow, error)
+	GenerateSubmissions(ctx context.Context, assessmentID pgtype.UUID, classID pgtype.UUID) ([]db.NonTestAssessmentSubmission, error)
 	UpsertSubmission(ctx context.Context, input service.SaveNonTestSubmissionInput) (db.NonTestAssessmentSubmission, error)
 }
 
@@ -68,6 +71,10 @@ type nonTestSubmissionBody struct {
 	Feedback     string   `json:"feedback"`
 	SubmittedAt  string   `json:"submitted_at"`
 	GradedAt     string   `json:"graded_at"`
+}
+
+type nonTestGenerateSubmissionsBody struct {
+	ClassID string `json:"class_id"`
 }
 
 func (h *NonTestAssessment) List(w http.ResponseWriter, r *http.Request) {
@@ -208,6 +215,46 @@ func (h *NonTestAssessment) ListSubmissions(w http.ResponseWriter, r *http.Reque
 	api.OK(w, map[string]any{"items": items})
 }
 
+func (h *NonTestAssessment) GenerateSubmissions(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	assessmentID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body nonTestGenerateSubmissionsBody
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+			api.BadRequest(w, "invalid json")
+			return
+		}
+	}
+	classID := pgtype.UUID{}
+	if strings.TrimSpace(body.ClassID) != "" {
+		classID, err = parseUUID(body.ClassID)
+		if err != nil {
+			api.BadRequest(w, "class_id invalid")
+			return
+		}
+	}
+	rows, err := h.svc.GenerateSubmissions(r.Context(), assessmentID, classID)
+	if err != nil {
+		writeClientError(w, err, "Penyiapan siswa asesmen non-tes tidak valid")
+		return
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_NON_TEST_SUBMISSIONS_GENERATE", "non_test_assessment", pgUUIDString(assessmentID), map[string]any{
+		"class_id":      pgUUIDString(classID),
+		"created_count": len(rows),
+	})
+	api.OK(w, map[string]any{
+		"status":        "generated",
+		"created_count": len(rows),
+	})
+}
+
 func (h *NonTestAssessment) UpsertSubmission(w http.ResponseWriter, r *http.Request) {
 	if !cbtAccessAllowed(r) {
 		api.Forbidden(w)
@@ -237,6 +284,12 @@ func (h *NonTestAssessment) UpsertSubmission(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		api.BadRequest(w, "graded_at invalid")
 		return
+	}
+	if strings.TrimSpace(body.Status) == "submitted" && !submittedAt.Valid {
+		_ = submittedAt.Scan(time.Now())
+	}
+	if strings.TrimSpace(body.Status) == "reviewed" && !gradedAt.Valid {
+		_ = gradedAt.Scan(time.Now())
 	}
 	row, err := h.svc.UpsertSubmission(r.Context(), service.SaveNonTestSubmissionInput{
 		AssessmentID:     assessmentID,

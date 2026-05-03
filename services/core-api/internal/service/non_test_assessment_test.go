@@ -11,11 +11,13 @@ import (
 )
 
 type fakeNonTestAssessmentStore struct {
-	listParams   db.ListNonTestAssessmentsParams
-	countParams  db.CountNonTestAssessmentsParams
-	createParams db.CreateNonTestAssessmentParams
-	updateParams db.UpdateNonTestAssessmentParams
-	createErr    error
+	listParams     db.ListNonTestAssessmentsParams
+	countParams    db.CountNonTestAssessmentsParams
+	createParams   db.CreateNonTestAssessmentParams
+	updateParams   db.UpdateNonTestAssessmentParams
+	generateParams db.GenerateNonTestSubmissionsForClassParams
+	upsertParams   db.UpsertNonTestSubmissionParams
+	createErr      error
 }
 
 func (f *fakeNonTestAssessmentStore) ListNonTestAssessments(_ context.Context, arg db.ListNonTestAssessmentsParams) ([]db.ListNonTestAssessmentsRow, error) {
@@ -29,7 +31,12 @@ func (f *fakeNonTestAssessmentStore) CountNonTestAssessments(_ context.Context, 
 }
 
 func (f *fakeNonTestAssessmentStore) GetNonTestAssessment(_ context.Context, id pgtype.UUID) (db.GetNonTestAssessmentRow, error) {
-	return db.GetNonTestAssessmentRow{ID: id, CreatedByUsername: "guru.lama"}, nil
+	return db.GetNonTestAssessmentRow{
+		ID:                id,
+		ClassID:           uuidForNonTest("22222222-2222-2222-2222-222222222222"),
+		CreatedByUsername: "guru.lama",
+		MaxScore:          pgNumeric(100),
+	}, nil
 }
 
 func (f *fakeNonTestAssessmentStore) CreateNonTestAssessment(_ context.Context, arg db.CreateNonTestAssessmentParams) (db.NonTestAssessment, error) {
@@ -50,7 +57,13 @@ func (f *fakeNonTestAssessmentStore) ListNonTestSubmissions(_ context.Context, _
 	return []db.ListNonTestSubmissionsRow{}, nil
 }
 
+func (f *fakeNonTestAssessmentStore) GenerateNonTestSubmissionsForClass(_ context.Context, arg db.GenerateNonTestSubmissionsForClassParams) ([]db.NonTestAssessmentSubmission, error) {
+	f.generateParams = arg
+	return []db.NonTestAssessmentSubmission{{AssessmentID: arg.AssessmentID, StudentID: uuidForNonTest("33333333-3333-3333-3333-333333333333"), Status: "assigned"}}, nil
+}
+
 func (f *fakeNonTestAssessmentStore) UpsertNonTestSubmission(_ context.Context, arg db.UpsertNonTestSubmissionParams) (db.NonTestAssessmentSubmission, error) {
+	f.upsertParams = arg
 	return db.NonTestAssessmentSubmission{AssessmentID: arg.AssessmentID, StudentID: arg.StudentID, Status: arg.Status}, nil
 }
 
@@ -125,12 +138,71 @@ func TestNonTestAssessmentListIgnoresInvalidFilters(t *testing.T) {
 	}
 }
 
+func TestNonTestAssessmentGenerateSubmissionsUsesAssessmentClassFallback(t *testing.T) {
+	store := &fakeNonTestAssessmentStore{}
+	svc := &NonTestAssessment{q: store}
+	assessmentID := mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111")
+
+	rows, err := svc.GenerateSubmissions(context.Background(), assessmentID, pgtype.UUID{})
+	if err != nil {
+		t.Fatalf("GenerateSubmissions() error = %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("GenerateSubmissions() rows = %d, want 1", len(rows))
+	}
+	if store.generateParams.AssessmentID != assessmentID {
+		t.Fatalf("assessment id = %v, want %v", store.generateParams.AssessmentID, assessmentID)
+	}
+	if store.generateParams.ClassID.Valid {
+		t.Fatalf("class id = %v, want invalid fallback param", store.generateParams.ClassID)
+	}
+}
+
+func TestNonTestAssessmentUpsertSubmissionRejectsScoreAboveMax(t *testing.T) {
+	store := &fakeNonTestAssessmentStore{}
+	svc := &NonTestAssessment{q: store}
+
+	score := 101.0
+	_, err := svc.UpsertSubmission(context.Background(), SaveNonTestSubmissionInput{
+		AssessmentID: mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111"),
+		StudentID:    mustUUIDForNonTest(t, "33333333-3333-3333-3333-333333333333"),
+		Status:       "reviewed",
+		Score:        &score,
+	})
+	if err == nil {
+		t.Fatal("UpsertSubmission() error = nil, want score above max error")
+	}
+	if store.upsertParams.Status != "" {
+		t.Fatalf("upsert called despite invalid score: %+v", store.upsertParams)
+	}
+}
+
+func TestNonTestAssessmentUpsertSubmissionRequiresScoreForReviewed(t *testing.T) {
+	store := &fakeNonTestAssessmentStore{}
+	svc := &NonTestAssessment{q: store}
+
+	_, err := svc.UpsertSubmission(context.Background(), SaveNonTestSubmissionInput{
+		AssessmentID: mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111"),
+		StudentID:    mustUUIDForNonTest(t, "33333333-3333-3333-3333-333333333333"),
+		Status:       "reviewed",
+	})
+	if err == nil {
+		t.Fatal("UpsertSubmission() error = nil, want missing score error")
+	}
+}
+
 func mustUUIDForNonTest(t *testing.T, raw string) pgtype.UUID {
 	t.Helper()
 	var id pgtype.UUID
 	if err := id.Scan(raw); err != nil {
 		t.Fatalf("Scan(%q) error = %v", raw, err)
 	}
+	return id
+}
+
+func uuidForNonTest(raw string) pgtype.UUID {
+	var id pgtype.UUID
+	_ = id.Scan(raw)
 	return id
 }
 

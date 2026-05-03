@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math/big"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -46,6 +47,7 @@ type nonTestAssessmentStore interface {
 	UpdateNonTestAssessment(ctx context.Context, arg db.UpdateNonTestAssessmentParams) (db.NonTestAssessment, error)
 	DeleteNonTestAssessment(ctx context.Context, id pgtype.UUID) error
 	ListNonTestSubmissions(ctx context.Context, assessmentID pgtype.UUID) ([]db.ListNonTestSubmissionsRow, error)
+	GenerateNonTestSubmissionsForClass(ctx context.Context, arg db.GenerateNonTestSubmissionsForClassParams) ([]db.NonTestAssessmentSubmission, error)
 	UpsertNonTestSubmission(ctx context.Context, arg db.UpsertNonTestSubmissionParams) (db.NonTestAssessmentSubmission, error)
 }
 
@@ -209,10 +211,39 @@ func (s *NonTestAssessment) ListSubmissions(ctx context.Context, assessmentID pg
 	return s.q.ListNonTestSubmissions(ctx, assessmentID)
 }
 
+func (s *NonTestAssessment) GenerateSubmissions(ctx context.Context, assessmentID pgtype.UUID, classID pgtype.UUID) ([]db.NonTestAssessmentSubmission, error) {
+	if !assessmentID.Valid {
+		return nil, errors.New("id asesmen tidak valid")
+	}
+	if !classID.Valid {
+		assessment, err := s.q.GetNonTestAssessment(ctx, assessmentID)
+		if err != nil {
+			return nil, err
+		}
+		if !assessment.ClassID.Valid {
+			return nil, errors.New("kelas asesmen wajib dipilih sebelum menyiapkan siswa")
+		}
+	}
+	return s.q.GenerateNonTestSubmissionsForClass(ctx, db.GenerateNonTestSubmissionsForClassParams{
+		AssessmentID: assessmentID,
+		ClassID:      classID,
+	})
+}
+
 func (s *NonTestAssessment) UpsertSubmission(ctx context.Context, input SaveNonTestSubmissionInput) (db.NonTestAssessmentSubmission, error) {
 	normalized, err := normalizeNonTestSubmissionInput(input)
 	if err != nil {
 		return db.NonTestAssessmentSubmission{}, err
+	}
+	assessment, err := s.q.GetNonTestAssessment(ctx, normalized.AssessmentID)
+	if err != nil {
+		return db.NonTestAssessmentSubmission{}, err
+	}
+	if normalized.Score != nil {
+		maxScore, ok := numericFloat64(assessment.MaxScore)
+		if ok && *normalized.Score > maxScore {
+			return db.NonTestAssessmentSubmission{}, errors.New("nilai melebihi skor maksimum asesmen")
+		}
 	}
 	score := pgtype.Numeric{}
 	if normalized.Score != nil {
@@ -325,6 +356,9 @@ func normalizeNonTestSubmissionInput(input SaveNonTestSubmissionInput) (SaveNonT
 	if input.Score != nil && *input.Score < 0 {
 		return SaveNonTestSubmissionInput{}, errors.New("nilai tidak boleh negatif")
 	}
+	if input.Status == "reviewed" && input.Score == nil {
+		return SaveNonTestSubmissionInput{}, errors.New("nilai wajib diisi sebelum ditandai sudah dinilai")
+	}
 	return input, nil
 }
 
@@ -340,4 +374,26 @@ func normalizeChecklistJSON(raw []byte) ([]byte, error) {
 		return nil, errors.New("checklist observasi harus berupa daftar")
 	}
 	return raw, nil
+}
+
+func numericFloat64(value pgtype.Numeric) (float64, bool) {
+	if !value.Valid || value.Int == nil {
+		return 0, false
+	}
+	ratio := new(big.Rat).SetInt(value.Int)
+	scale := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(absInt32Service(value.Exp))), nil)
+	if value.Exp >= 0 {
+		ratio.Mul(ratio, new(big.Rat).SetInt(scale))
+	} else {
+		ratio.Quo(ratio, new(big.Rat).SetInt(scale))
+	}
+	out, _ := ratio.Float64()
+	return out, true
+}
+
+func absInt32Service(value int32) int32 {
+	if value < 0 {
+		return -value
+	}
+	return value
 }

@@ -41,6 +41,25 @@
 		total_submissions: number;
 		reviewed_submissions: number;
 	};
+	type NonTestSubmission = {
+		id: string;
+		assessment_id: string;
+		student_id: string;
+		nis: string;
+		nisn: string;
+		student_name: string;
+		class_id: string;
+		class_name: string;
+		class_level: string;
+		status: string;
+		evidence_url: string;
+		evidence_note: string;
+		score: number | null;
+		feedback: string;
+		submitted_at: string | null;
+		graded_at: string | null;
+		graded_by_username: string;
+	};
 	type AssessmentPayload = {
 		items?: NonTestAssessment[];
 		meta?: { total?: number; limit?: number; offset?: number };
@@ -50,6 +69,11 @@
 	type AcademicPayload = {
 		subjects?: Subject[];
 		classes?: SchoolClass[];
+		error?: string;
+		message?: string;
+	};
+	type SubmissionsPayload = {
+		items?: NonTestSubmission[];
 		error?: string;
 		message?: string;
 	};
@@ -63,6 +87,11 @@
 		tone: 'success' | 'error' | 'warning' | 'info';
 		title: string;
 		message: string;
+	};
+	type SubmissionDraft = {
+		score: string;
+		feedback: string;
+		evidenceNote: string;
 	};
 
 	const ASSESSMENT_TYPES = [
@@ -90,7 +119,13 @@
 	let editingId = $state('');
 	let saving = $state(false);
 	let deleteBusyId = $state('');
+	let generatingId = $state('');
+	let savingSubmissionId = $state('');
 	let operationState = $state<OperationState | null>(null);
+	let selectedAssessment = $state<NonTestAssessment | null>(null);
+	let submissions = $state<NonTestSubmission[]>([]);
+	let submissionsPromise = $state<Promise<NonTestSubmission[]> | null>(null);
+	let submissionDrafts = $state<Record<string, SubmissionDraft>>({});
 
 	let filterSearch = $state('');
 	let filterStatus = $state('');
@@ -133,6 +168,20 @@
 		if (value === 'closed') return 'border-slate-200 bg-slate-100 text-slate-700';
 		if (value === 'archived') return 'border-amber-200 bg-amber-100 text-amber-800';
 		return 'border-blue-200 bg-blue-50 text-blue-800';
+	}
+
+	function submissionStatusLabel(value: string) {
+		if (value === 'reviewed') return 'Sudah dinilai';
+		if (value === 'submitted') return 'Dikumpulkan';
+		if (value === 'returned') return 'Dikembalikan';
+		return 'Ditugaskan';
+	}
+
+	function submissionStatusBadgeClass(value: string) {
+		if (value === 'reviewed') return 'border-emerald-200 bg-emerald-100 text-emerald-800';
+		if (value === 'submitted') return 'border-blue-200 bg-blue-50 text-blue-800';
+		if (value === 'returned') return 'border-amber-200 bg-amber-100 text-amber-800';
+		return 'border-slate-200 bg-slate-100 text-slate-700';
 	}
 
 	function fetchAssessmentsPath() {
@@ -202,6 +251,10 @@
 
 	function handleRenderError(error: unknown) {
 		console.error('CBT non-test assessment render failed', error);
+	}
+
+	function handleSubmissionsRenderError(error: unknown) {
+		console.error('CBT non-test submissions render failed', error);
 	}
 
 	function resetForm() {
@@ -333,6 +386,115 @@
 			toast.error(errorMessage(error, 'Gagal menghapus asesmen non-tes.'));
 		} finally {
 			deleteBusyId = '';
+		}
+	}
+
+	async function fetchSubmissions(item: NonTestAssessment): Promise<NonTestSubmission[]> {
+		const payload = await fetch(clientApiPath`/api/cbt/non-test-assessments/${item.id}/submissions`)
+			.then((response) => readClientJson<SubmissionsPayload | NonTestSubmission[]>(response));
+		if (Array.isArray(payload)) return payload;
+		return payload.items ?? [];
+	}
+
+	function buildSubmissionDrafts(rows: NonTestSubmission[]) {
+		const next: Record<string, SubmissionDraft> = {};
+		for (const row of rows) {
+			next[row.student_id] = {
+				score: row.score === null || row.score === undefined ? '' : String(row.score),
+				feedback: row.feedback ?? '',
+				evidenceNote: row.evidence_note ?? '',
+			};
+		}
+		submissionDrafts = next;
+	}
+
+	function openScoringPanel(item: NonTestAssessment) {
+		selectedAssessment = item;
+		const promise = fetchSubmissions(item).then((rows) => {
+			if (selectedAssessment?.id !== item.id) return submissions;
+			submissions = rows;
+			buildSubmissionDrafts(rows);
+			return rows;
+		});
+		submissionsPromise = promise;
+	}
+
+	function closeScoringPanel() {
+		selectedAssessment = null;
+		submissions = [];
+		submissionsPromise = null;
+		submissionDrafts = {};
+	}
+
+	async function generateSubmissions(item: NonTestAssessment) {
+		if (!item.class_id) {
+			toast.error('Pilih kelas pada asesmen sebelum menyiapkan siswa.');
+			return;
+		}
+		generatingId = item.id;
+		try {
+			const response = await fetch(clientApiPath`/api/cbt/non-test-assessments/${item.id}/submissions/generate`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ class_id: item.class_id }),
+			});
+			const result = await readClientApiData<{ created_count?: number }>(response, 'Gagal menyiapkan siswa.');
+			const count = result.created_count ?? 0;
+			toast.success(count > 0 ? `${count} siswa disiapkan` : 'Daftar siswa sudah sinkron');
+			operationState = {
+				tone: 'success',
+				title: 'Daftar Siswa Siap',
+				message: count > 0
+					? `${count} siswa aktif dari ${item.class_name} sudah masuk daftar penilaian.`
+					: `Daftar penilaian untuk ${item.class_name} sudah tidak memiliki siswa baru.`,
+			};
+			await refresh();
+			openScoringPanel(item);
+		} catch (error) {
+			toast.error(errorMessage(error, 'Gagal menyiapkan siswa.'));
+		} finally {
+			generatingId = '';
+		}
+	}
+
+	async function saveSubmission(row: NonTestSubmission) {
+		const assessment = selectedAssessment;
+		if (!assessment) return;
+		const draft = submissionDrafts[row.student_id];
+		if (!draft) return;
+		const scoreValue = Number(draft.score);
+		if (!draft.score.trim() || Number.isNaN(scoreValue)) {
+			toast.error('Nilai wajib diisi sebelum menyimpan koreksi.');
+			return;
+		}
+		const maxScore = Number(assessment.max_score || 100);
+		if (scoreValue < 0 || scoreValue > maxScore) {
+			toast.error(`Nilai harus berada di rentang 0-${maxScore}.`);
+			return;
+		}
+		savingSubmissionId = row.student_id;
+		try {
+			const response = await fetch(clientApiPath`/api/cbt/non-test-assessments/${assessment.id}/submissions`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					student_id: row.student_id,
+					status: 'reviewed',
+					score: scoreValue,
+					feedback: draft.feedback,
+					evidence_note: draft.evidenceNote,
+					evidence_url: row.evidence_url,
+					submitted_at: row.submitted_at,
+				}),
+			});
+			await readClientJson<unknown>(response);
+			toast.success(`Nilai ${row.student_name} tersimpan`);
+			openScoringPanel(assessment);
+			await refresh();
+		} catch (error) {
+			toast.error(errorMessage(error, 'Gagal menyimpan nilai siswa.'));
+		} finally {
+			savingSubmissionId = '';
 		}
 	}
 
@@ -639,7 +801,20 @@
 											{item.reviewed_submissions}/{item.total_submissions} dinilai
 										</Table.Cell>
 										<Table.Cell>
-											<div class="flex justify-end gap-2">
+											<div class="flex flex-wrap justify-end gap-2">
+												<LoadingButton variant="outline" size="xs" onclick={() => openScoringPanel(item)}>
+													{selectedAssessment?.id === item.id ? 'Dibuka' : 'Nilai'}
+												</LoadingButton>
+												<LoadingButton
+													variant="outline"
+													size="xs"
+													onclick={() => generateSubmissions(item)}
+													loading={generatingId === item.id}
+													disabled={!item.class_id || (generatingId !== '' && generatingId !== item.id)}
+													loadingLabel="Menyiapkan..."
+												>
+													Siapkan Siswa
+												</LoadingButton>
 												<LoadingButton variant="outline" size="xs" onclick={() => editAssessment(item)}>Edit</LoadingButton>
 												<LoadingButton
 													variant="destructive"
@@ -675,6 +850,17 @@
 								</div>
 								<p class="mt-2 text-sm text-slate-600">{item.reviewed_submissions}/{item.total_submissions} dinilai</p>
 								<div class="mt-3 flex justify-end gap-2">
+									<LoadingButton variant="outline" size="xs" onclick={() => openScoringPanel(item)}>Nilai</LoadingButton>
+									<LoadingButton
+										variant="outline"
+										size="xs"
+										onclick={() => generateSubmissions(item)}
+										loading={generatingId === item.id}
+										disabled={!item.class_id || (generatingId !== '' && generatingId !== item.id)}
+										loadingLabel="Siap..."
+									>
+										Siswa
+									</LoadingButton>
 									<LoadingButton variant="outline" size="xs" onclick={() => editAssessment(item)}>Edit</LoadingButton>
 									<LoadingButton variant="destructive" size="xs" onclick={() => deleteAssessment(item)} loading={deleteBusyId === item.id}>Hapus</LoadingButton>
 								</div>
@@ -687,4 +873,180 @@
 			</Card.Root>
 		{/snippet}
 	</AsyncContent>
+
+	{#if selectedAssessment}
+		<Card.Root class="border-emerald-100 shadow-sm">
+			<Card.Header class="border-b border-slate-100 pb-3">
+				<div class="flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Panel Koreksi</p>
+						<Card.Title class="mt-1 text-base">{selectedAssessment.title}</Card.Title>
+						<Card.Description>
+							{selectedAssessment.class_name || 'Lintas kelas'} · Skor maksimum {selectedAssessment.max_score} · {selectedAssessment.reviewed_submissions}/{selectedAssessment.total_submissions} dinilai
+						</Card.Description>
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<LoadingButton
+							variant="outline"
+							onclick={() => {
+								if (selectedAssessment) generateSubmissions(selectedAssessment);
+							}}
+							loading={generatingId === selectedAssessment.id}
+							disabled={!selectedAssessment.class_id}
+							loadingLabel="Menyiapkan..."
+						>
+							Siapkan Siswa
+						</LoadingButton>
+						<LoadingButton variant="outline" onclick={closeScoringPanel}>Tutup Panel</LoadingButton>
+					</div>
+				</div>
+			</Card.Header>
+			<Card.Content class="p-0">
+				<AsyncContent promise={submissionsPromise} onerror={handleSubmissionsRenderError}>
+					{#snippet pending()}
+						<div class="space-y-3 p-5">
+							{#each Array.from({ length: 4 }) as _, index (`submission-skeleton-${index}`)}
+								<div class="grid gap-3 lg:grid-cols-[1fr_7rem_10rem_1fr_auto] lg:items-center">
+									<Skeleton class="h-5 w-48" />
+									<Skeleton class="h-9 w-20" />
+									<Skeleton class="h-6 w-24" />
+									<Skeleton class="h-9 w-full" />
+									<Skeleton class="h-9 w-24 justify-self-end" />
+								</div>
+							{/each}
+						</div>
+					{/snippet}
+
+					{#snippet failed(error, reset)}
+						<div class="p-4">
+							<RecoveryPanel
+								title="Daftar Siswa Belum Tersaji"
+								message={errorMessage(error, 'Daftar siswa asesmen belum dapat dimuat.')}
+								onRetry={() => {
+									reset?.();
+									if (selectedAssessment) openScoringPanel(selectedAssessment);
+								}}
+							/>
+						</div>
+					{/snippet}
+
+					{#snippet children(value)}
+						{@const currentSubmissions = value as NonTestSubmission[]}
+						<div class="hidden overflow-x-auto lg:block">
+							<Table.Root>
+								<Table.Header>
+									<Table.Row>
+										<Table.Head>Siswa</Table.Head>
+										<Table.Head>Nilai</Table.Head>
+										<Table.Head>Status</Table.Head>
+										<Table.Head>Catatan Bukti</Table.Head>
+										<Table.Head>Feedback</Table.Head>
+										<Table.Head></Table.Head>
+									</Table.Row>
+								</Table.Header>
+								<Table.Body>
+									{#each currentSubmissions as row (row.student_id)}
+										{@const draft = submissionDrafts[row.student_id]}
+										<Table.Row>
+											<Table.Cell>
+												<div>
+													<p class="font-medium text-slate-900">{row.student_name}</p>
+													<p class="text-xs text-slate-500">{row.nis} · {row.class_name || '-'}</p>
+												</div>
+											</Table.Cell>
+											<Table.Cell>
+												<Input
+													id={`non-test-score-${row.student_id}`}
+													type="number"
+													min={0}
+													max={selectedAssessment?.max_score ?? 100}
+													step={0.1}
+													class="h-9 w-24"
+													bind:value={submissionDrafts[row.student_id].score}
+												/>
+											</Table.Cell>
+											<Table.Cell>
+												<Badge class={`border text-xs ${submissionStatusBadgeClass(row.status)}`}>{submissionStatusLabel(row.status)}</Badge>
+											</Table.Cell>
+											<Table.Cell>
+												<Input
+													id={`non-test-evidence-note-${row.student_id}`}
+													placeholder="Bukti/catatan singkat"
+													bind:value={submissionDrafts[row.student_id].evidenceNote}
+												/>
+											</Table.Cell>
+											<Table.Cell>
+												<Input
+													id={`non-test-feedback-${row.student_id}`}
+													placeholder="Feedback untuk siswa"
+													bind:value={submissionDrafts[row.student_id].feedback}
+												/>
+											</Table.Cell>
+											<Table.Cell>
+												<LoadingButton
+													size="xs"
+													onclick={() => saveSubmission(row)}
+													loading={savingSubmissionId === row.student_id}
+													disabled={!draft || (savingSubmissionId !== '' && savingSubmissionId !== row.student_id)}
+													loadingLabel="Simpan..."
+												>
+													Simpan
+												</LoadingButton>
+											</Table.Cell>
+										</Table.Row>
+									{:else}
+										<Table.Row>
+											<Table.Cell colspan={6} class="py-8 text-center text-slate-400">
+												Belum ada siswa. Gunakan tombol Siapkan Siswa setelah kelas asesmen dipilih.
+											</Table.Cell>
+										</Table.Row>
+									{/each}
+								</Table.Body>
+							</Table.Root>
+						</div>
+
+						<div class="space-y-3 p-4 lg:hidden">
+							{#each currentSubmissions as row (row.student_id)}
+								<div class="rounded-lg border border-slate-200 p-3">
+									<div class="flex items-start justify-between gap-3">
+										<div>
+											<p class="font-medium text-slate-900">{row.student_name}</p>
+											<p class="text-xs text-slate-500">{row.nis} · {row.class_name || '-'}</p>
+										</div>
+										<Badge class={`border text-xs ${submissionStatusBadgeClass(row.status)}`}>{submissionStatusLabel(row.status)}</Badge>
+									</div>
+									<div class="mt-3 grid gap-3">
+										<div>
+											<label for={`mobile-non-test-score-${row.student_id}`} class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Nilai</label>
+											<Input
+												id={`mobile-non-test-score-${row.student_id}`}
+												type="number"
+												min={0}
+												max={selectedAssessment?.max_score ?? 100}
+												step={0.1}
+												bind:value={submissionDrafts[row.student_id].score}
+											/>
+										</div>
+										<div>
+											<label for={`mobile-non-test-evidence-${row.student_id}`} class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Catatan Bukti</label>
+											<Input id={`mobile-non-test-evidence-${row.student_id}`} bind:value={submissionDrafts[row.student_id].evidenceNote} />
+										</div>
+										<div>
+											<label for={`mobile-non-test-feedback-${row.student_id}`} class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Feedback</label>
+											<Input id={`mobile-non-test-feedback-${row.student_id}`} bind:value={submissionDrafts[row.student_id].feedback} />
+										</div>
+									</div>
+									<div class="mt-3 flex justify-end">
+										<LoadingButton size="xs" onclick={() => saveSubmission(row)} loading={savingSubmissionId === row.student_id}>Simpan Nilai</LoadingButton>
+									</div>
+								</div>
+							{:else}
+								<p class="py-6 text-center text-sm text-slate-400">Belum ada siswa. Gunakan tombol Siapkan Siswa setelah kelas asesmen dipilih.</p>
+							{/each}
+						</div>
+					{/snippet}
+				</AsyncContent>
+			</Card.Content>
+		</Card.Root>
+	{/if}
 </div>
