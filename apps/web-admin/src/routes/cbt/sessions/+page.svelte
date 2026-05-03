@@ -44,6 +44,12 @@
 		unpublishedCount: number;
 		totalCount: number;
 	};
+	type NextSessionAction = {
+		label: string;
+		href?: string;
+		kind: 'enroll' | 'link';
+		tone: 'primary' | 'warning' | 'danger';
+	};
 	type SchoolClass = { id: string; name: string; code: string; level: string; };
 	type SessionsOverview = {
 		sessions: ExamSession[];
@@ -233,6 +239,35 @@
 
 	function sessionRowReadinessIssues(session: ExamSession) {
 		return [...packageQualityIssues(session.package_id), ...sessionOperationalIssues(session)];
+	}
+
+	function nextSessionAction(session: ExamSession): NextSessionAction {
+		const packageIssues = packageQualityIssues(session.package_id);
+		if (packageIssues.length > 0) {
+			return { label: 'Rapikan Paket', href: resolve('/cbt/packages'), kind: 'link', tone: 'danger' };
+		}
+		if (session.participant_count === 0) {
+			return { label: 'Daftarkan Peserta', kind: 'enroll', tone: 'warning' };
+		}
+		if (session.room_count === 0 || session.total_capacity < session.participant_count) {
+			return { label: 'Atur Ruang', href: resolve(`/cbt/sessions/${session.id}?tab=ruangan`), kind: 'link', tone: 'warning' };
+		}
+		if (session.unassigned_participant_count > 0) {
+			return { label: 'Acak Ruang', href: resolve(`/cbt/sessions/${session.id}?tab=ruangan`), kind: 'link', tone: 'warning' };
+		}
+		if (session.missing_seat_count > 0) {
+			return { label: 'Atur Nomor Meja', href: resolve(`/cbt/sessions/${session.id}?tab=ruangan`), kind: 'link', tone: 'warning' };
+		}
+		if (session.rooms_without_proctor > 0) {
+			return { label: 'Tetapkan Pengawas', href: resolve(`/cbt/sessions/${session.id}?tab=ruangan`), kind: 'link', tone: 'warning' };
+		}
+		return { label: session.status === 'scheduled' ? 'Siap Mulai' : 'Lihat Detail', href: resolve(`/cbt/sessions/${session.id}`), kind: 'link', tone: 'primary' };
+	}
+
+	function nextActionClass(tone: NextSessionAction['tone']) {
+		if (tone === 'danger') return 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100';
+		if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100';
+		return 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
 	}
 
 	function buildSessionReadinessIssues() {
@@ -758,6 +793,7 @@
 							{@const rowPackageIssues = packageQualityIssues(s.package_id)}
 							{@const rowOperationalIssues = sessionOperationalIssues(s)}
 							{@const rowReadinessIssues = sessionRowReadinessIssues(s)}
+							{@const rowNextAction = nextSessionAction(s)}
 							<Table.Row>
 								<Table.Cell class="font-medium max-w-48">
 									<p class="truncate">{s.title}</p>
@@ -800,6 +836,24 @@
 										{#each rowReadinessIssues.slice(0, 2) as issue (issue)}
 											<span class="text-[11px] text-slate-500">{issue}</span>
 										{/each}
+										{#if rowNextAction.kind === 'enroll'}
+											<button
+												type="button"
+												class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors {nextActionClass(rowNextAction.tone)}"
+												onclick={() => {
+													enrollSession = s;
+													enrollScopeType = s.scope_type || 'class';
+													enrollClassId = s.class_id;
+													enrollGradeLevel = s.scope_type === 'grade' ? s.scope_ref : 'VII';
+												}}
+											>
+												Aksi: {rowNextAction.label}
+											</button>
+										{:else if rowNextAction.href}
+											<a class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors {nextActionClass(rowNextAction.tone)}" href={rowNextAction.href}>
+												Aksi: {rowNextAction.label}
+											</a>
+										{/if}
 									</div>
 								</Table.Cell>
 								<Table.Cell>
@@ -855,6 +909,7 @@
 						{@const rowPackageIssues = packageQualityIssues(s.package_id)}
 						{@const rowOperationalIssues = sessionOperationalIssues(s)}
 						{@const rowReadinessIssues = sessionRowReadinessIssues(s)}
+						{@const rowNextAction = nextSessionAction(s)}
 						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
@@ -890,6 +945,24 @@
 								{#each rowReadinessIssues.slice(0, 2) as issue (issue)}
 									<span class="text-xs text-slate-500">{issue}</span>
 								{/each}
+								{#if rowNextAction.kind === 'enroll'}
+									<button
+										type="button"
+										class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors {nextActionClass(rowNextAction.tone)}"
+										onclick={() => {
+											enrollSession = s;
+											enrollScopeType = s.scope_type || 'class';
+											enrollClassId = s.class_id;
+											enrollGradeLevel = s.scope_type === 'grade' ? s.scope_ref : 'VII';
+										}}
+									>
+										Aksi: {rowNextAction.label}
+									</button>
+								{:else if rowNextAction.href}
+									<a class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors {nextActionClass(rowNextAction.tone)}" href={rowNextAction.href}>
+										Aksi: {rowNextAction.label}
+									</a>
+								{/if}
 							</div>
 							<p class="mt-3 text-xs text-slate-500">{fmtDt(s.scheduled_start)}</p>
 							<div class="mt-4 flex flex-wrap gap-2">

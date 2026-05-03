@@ -203,6 +203,14 @@
 
 	const sessionId = page.params.id ?? '';
 	type ActiveTab = 'hasil' | 'butir' | 'peserta' | 'ruangan' | 'operasional' | 'proctoring' | 'essay';
+	type DetailNextAction = {
+		title: string;
+		message: string;
+		label: string;
+		tab?: ActiveTab;
+		run?: 'auto_seats';
+		tone: 'success' | 'warning' | 'info';
+	};
 
 	let activeTab = $state<ActiveTab>('hasil');
 	let session = $state<SessionInfo | null>(null);
@@ -274,6 +282,11 @@
 		{ id: 'essay', label: 'Koreksi Uraian' },
 	];
 
+	function tabFromQuery(value: string | null): ActiveTab | null {
+		const found = detailTabs.find((tab) => tab.id === value);
+		return found?.id ?? null;
+	}
+
 	function statusClass(s: string) {
 		if (s === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
 		if (s === 'finished') return 'bg-slate-100 text-slate-500 border-slate-200';
@@ -314,6 +327,76 @@
 	function roomReadinessMessage(readiness: RoomReadiness | null) {
 		if (!readiness) return 'Kesiapan ruangan belum dimuat.';
 		return `${readiness.assigned_participant_count}/${readiness.participant_count} peserta sudah punya ruang, kapasitas total ${readiness.total_capacity}, ${readiness.rooms_without_proctor} ruang belum punya pengawas, ${readiness.missing_seat_count} peserta belum punya nomor meja.`;
+	}
+
+	function nextDetailAction(readiness: RoomReadiness | null): DetailNextAction {
+		if (!readiness) {
+			return {
+				title: 'Cek kesiapan operasional',
+				message: 'Muat data ruang, peserta, kapasitas, nomor meja, dan pengawas sebelum sesi dimulai.',
+				label: 'Cek Kesiapan',
+				tab: 'ruangan',
+				tone: 'info',
+			};
+		}
+		if (readiness.participant_count === 0) {
+			return {
+				title: 'Peserta belum terdaftar',
+				message: 'Daftarkan peserta dari daftar sesi, lalu kembali untuk mengatur ruangan dan pengawas.',
+				label: 'Lihat Peserta',
+				tab: 'peserta',
+				tone: 'warning',
+			};
+		}
+		if (readiness.room_count === 0 || readiness.total_capacity < readiness.participant_count) {
+			return {
+				title: 'Ruang ujian belum cukup',
+				message: `${readiness.room_count} ruang tersedia dengan kapasitas ${readiness.total_capacity} untuk ${readiness.participant_count} peserta.`,
+				label: 'Atur Ruang',
+				tab: 'ruangan',
+				tone: 'warning',
+			};
+		}
+		if (readiness.unassigned_participant_count > 0) {
+			return {
+				title: 'Peserta belum masuk ruang',
+				message: `${readiness.unassigned_participant_count} peserta belum punya ruang ujian.`,
+				label: 'Acak Ruang',
+				tab: 'ruangan',
+				tone: 'warning',
+			};
+		}
+		if (readiness.missing_seat_count > 0) {
+			return {
+				title: 'Nomor meja belum lengkap',
+				message: `${readiness.missing_seat_count} peserta belum punya nomor meja.`,
+				label: 'Atur Nomor Meja',
+				run: 'auto_seats',
+				tone: 'warning',
+			};
+		}
+		if (readiness.rooms_without_proctor > 0) {
+			return {
+				title: 'Pengawas belum lengkap',
+				message: `${readiness.rooms_without_proctor} ruang belum punya pengawas.`,
+				label: 'Tetapkan Pengawas',
+				tab: 'ruangan',
+				tone: 'warning',
+			};
+		}
+		return {
+			title: 'Sesi siap dipantau',
+			message: 'Peserta, ruang, kapasitas, nomor meja, dan pengawas sudah siap.',
+			label: 'Pantau Proctoring',
+			tab: 'proctoring',
+			tone: 'success',
+		};
+	}
+
+	function detailActionPanelClass(tone: DetailNextAction['tone']) {
+		if (tone === 'warning') return 'border-amber-200 bg-amber-50';
+		if (tone === 'success') return 'border-emerald-200 bg-emerald-50';
+		return 'border-slate-200 bg-slate-50';
 	}
 
 	function operationalTone(recap: OperationalRecap | null) {
@@ -1214,6 +1297,10 @@
 
 	onMount(() => {
 		void loadInitial();
+		const requestedTab = tabFromQuery(page.url.searchParams.get('tab'));
+		if (requestedTab && requestedTab !== activeTab) {
+			void switchTab(requestedTab);
+		}
 	});
 	onDestroy(() => { if (procInterval) clearInterval(procInterval); });
 </script>
@@ -1331,6 +1418,26 @@
 				</Card.Root>
 			{/each}
 		</div>
+
+		{@const detailNextAction = nextDetailAction(roomReadiness)}
+		<Card.Root class={detailActionPanelClass(detailNextAction.tone)}>
+			<Card.Content class="flex flex-wrap items-center justify-between gap-3 p-4">
+				<div>
+					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Aksi Berikutnya</p>
+					<p class="mt-1 text-sm font-semibold text-slate-900">{detailNextAction.title}</p>
+					<p class="mt-0.5 text-xs text-slate-600">{detailNextAction.message}</p>
+				</div>
+				{#if detailNextAction.run === 'auto_seats'}
+					<LoadingButton size="sm" loading={seatBusy} loadingLabel="Mengatur..." disabled={seatBusy} onclick={autoAssignSeats}>
+						{detailNextAction.label}
+					</LoadingButton>
+				{:else if detailNextAction.tab}
+					<Button size="sm" onclick={() => switchTab(detailNextAction.tab ?? 'hasil')}>
+						{detailNextAction.label}
+					</Button>
+				{/if}
+			</Card.Content>
+		</Card.Root>
 
 		<!-- Tabs -->
 		<div class="border-b border-green-100">
