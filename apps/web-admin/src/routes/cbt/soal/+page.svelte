@@ -100,6 +100,8 @@
 		revisionTotal: number;
 		reviewQueue: Question[];
 		reviewTotal: number;
+		approvedQueue: Question[];
+		approvedTotal: number;
 		totalItems: number;
 		page: number;
 	};
@@ -269,12 +271,15 @@
 	let revisionTotal = $state(0);
 	let reviewQueue = $state<Question[]>([]);
 	let reviewTotal = $state(0);
+	let approvedQueue = $state<Question[]>([]);
+	let approvedTotal = $state(0);
 	let totalItems = $state(0);
 	let currentPage = $state(1);
 
 	let search = $state('');
 	let filterSubject = $state('');
 	let filterWorkflow = $state('');
+	let filterStatus = $state('');
 	let revisionSourceFilter = $state<RevisionSourceFilter>('');
 
 	// ── Composer state ─────────────────────────────────────────────────────────
@@ -363,6 +368,8 @@
 	let canReviewWorkflow = $derived(roles.includes('admin'));
 	let reviewCount = $derived(reviewTotal);
 	let visibleReviewCount = $derived(questions.filter((item) => item.workflow_status === 'review').length);
+	let approvedCount = $derived(approvedTotal);
+	let visibleApprovedCount = $derived(questions.filter((item) => item.workflow_status === 'approved' && item.status === 'draft').length);
 	let draftCount = $derived(questions.filter((item) => item.workflow_status === 'draft').length);
 	let visibleRevisionCount = $derived(questions.filter((item) => item.workflow_status === 'rejected').length);
 	let publishedCount = $derived(questions.filter((item) => item.status === 'published').length);
@@ -746,6 +753,7 @@
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		if (filterWorkflow) params.set('workflow_status', filterWorkflow);
+		if (filterStatus) params.set('status', filterStatus);
 		if (filterWorkflow === 'rejected' && revisionSourceFilter) params.set('revision_source', revisionSourceFilter);
 		return params;
 	}
@@ -771,11 +779,23 @@
 		return params;
 	}
 
+	function buildApprovedQueueParams() {
+		const params = new URLSearchParams();
+		params.set('limit', '6');
+		params.set('offset', '0');
+		params.set('workflow_status', 'approved');
+		params.set('status', 'draft');
+		if (search.trim()) params.set('q', search.trim());
+		if (filterSubject) params.set('subject_id', filterSubject);
+		return params;
+	}
+
 	async function fetchOverview(page = currentPage): Promise<SoalOverview> {
 		const params = buildQuestionParams(page);
 		const revisionParams = buildRevisionQueueParams();
 		const reviewParams = buildReviewQueueParams();
-		const [questionPayload, revisionPayload, reviewPayload, academicPayload] = await Promise.all([
+		const approvedParams = buildApprovedQueueParams();
+		const [questionPayload, revisionPayload, reviewPayload, approvedPayload, academicPayload] = await Promise.all([
 			fetch(clientApiPathWithQuery('/api/cbt/questions', params)).then((response) =>
 				readClientApiData<QuestionListResponse>(response, 'Gagal memuat soal')
 			),
@@ -785,6 +805,9 @@
 			fetch(clientApiPathWithQuery('/api/cbt/questions', reviewParams)).then((response) =>
 				readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrian review')
 			),
+			fetch(clientApiPathWithQuery('/api/cbt/questions', approvedParams)).then((response) =>
+				readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrian siap terbit')
+			),
 			fetch('/api/academic').then((response) =>
 				readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')
 			),
@@ -792,6 +815,7 @@
 		const loadedQuestions = questionPayload.items ?? [];
 		const loadedRevisions = revisionPayload.items ?? [];
 		const loadedReviews = reviewPayload.items ?? [];
+		const loadedApproved = approvedPayload.items ?? [];
 		return {
 			questions: loadedQuestions,
 			subjects: academicPayload.subjects ?? [],
@@ -799,6 +823,8 @@
 			revisionTotal: revisionPayload.meta?.total ?? loadedRevisions.length,
 			reviewQueue: loadedReviews,
 			reviewTotal: reviewPayload.meta?.total ?? loadedReviews.length,
+			approvedQueue: loadedApproved,
+			approvedTotal: approvedPayload.meta?.total ?? loadedApproved.length,
 			totalItems: questionPayload.meta?.total ?? loadedQuestions.length,
 			page,
 		};
@@ -811,6 +837,8 @@
 		revisionTotal = overview.revisionTotal;
 		reviewQueue = overview.reviewQueue;
 		reviewTotal = overview.reviewTotal;
+		approvedQueue = overview.approvedQueue;
+		approvedTotal = overview.approvedTotal;
 		totalItems = overview.totalItems;
 		currentPage = overview.page;
 	}
@@ -818,12 +846,12 @@
 	function load(page = currentPage) {
 		const requestId = ++questionsRequestId;
 		questionsPromise = fetchOverview(page).then((overview) => {
-			if (requestId !== questionsRequestId) return { questions, subjects, revisionQueue, revisionTotal, reviewQueue, reviewTotal, totalItems, page: currentPage };
+			if (requestId !== questionsRequestId) return { questions, subjects, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, totalItems, page: currentPage };
 			applyOverview(overview);
 			return overview;
 		}).catch((error: unknown) => {
 			if (requestId === questionsRequestId) throw error;
-			return { questions, subjects, revisionQueue, revisionTotal, reviewQueue, reviewTotal, totalItems, page: currentPage };
+			return { questions, subjects, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, totalItems, page: currentPage };
 		});
 	}
 
@@ -840,7 +868,7 @@
 			questionsPromise = Promise.resolve(overview);
 		} catch (error) {
 			if (requestId === questionsRequestId) {
-				questionsPromise = Promise.resolve({ questions, subjects, revisionQueue, revisionTotal, reviewQueue, reviewTotal, totalItems, page: currentPage });
+				questionsPromise = Promise.resolve({ questions, subjects, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, totalItems, page: currentPage });
 				toast.error(soalErrorMessage(error));
 			}
 		}
@@ -885,6 +913,15 @@
 
 	function showPendingReviews() {
 		filterWorkflow = 'review';
+		filterStatus = '';
+		revisionSourceFilter = '';
+		setModuleMode('review');
+		load(1);
+	}
+
+	function showApprovedQuestions() {
+		filterWorkflow = 'approved';
+		filterStatus = 'draft';
 		revisionSourceFilter = '';
 		setModuleMode('review');
 		load(1);
@@ -893,12 +930,14 @@
 	function setRevisionSourceFilter(source: RevisionSourceFilter) {
 		revisionSourceFilter = source;
 		filterWorkflow = 'rejected';
+		filterStatus = '';
 		setModuleMode('review');
 		load(1);
 	}
 
 	function onWorkflowFilterChange() {
 		if (filterWorkflow !== 'rejected') revisionSourceFilter = '';
+		filterStatus = '';
 		load(1);
 	}
 
@@ -1175,6 +1214,10 @@
 
 	function canDecideReview(q: Question): boolean {
 		return canReviewWorkflow && q.workflow_status === 'review' && q.status === 'draft' && !questionUsageLocked(q);
+	}
+
+	function canPublishQuestion(q: Question): boolean {
+		return canReviewWorkflow && q.workflow_status === 'approved' && q.status === 'draft' && !questionUsageLocked(q);
 	}
 
 	function isQuickEditable(q: Question): boolean {
@@ -1701,6 +1744,34 @@
 		}
 	}
 
+	async function publishQuestion(q: Question) {
+		if (!canPublishQuestion(q)) {
+			toast.warning('Soal ini belum siap diterbitkan.');
+			return;
+		}
+		if (!(await confirmAction({
+			title: 'Terbitkan Soal',
+			message: 'Terbitkan soal ini agar bisa dipilih ke paket ujian CBT? Setelah diterbitkan, perubahan isi harus melalui duplikasi/revisi.',
+			confirmLabel: 'Terbitkan',
+			tone: 'warning'
+		}))) return;
+		workflowBusyId = q.id;
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/questions/${q.id}/workflow`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'publish', notes: '' }),
+			});
+			await readClientJson<unknown>(res);
+			toast.success('Soal diterbitkan dan siap masuk paket ujian');
+			await refreshOverview(currentPage);
+		} catch (e) {
+			toast.error(mutationErrorMessage(e, 'Gagal menerbitkan soal'));
+		} finally {
+			workflowBusyId = '';
+		}
+	}
+
 	async function deleteQuestion(id: string) {
 		const current = questions.find((item) => item.id === id);
 		if (current && questionUsageLocked(current)) {
@@ -1965,6 +2036,61 @@
 		</section>
 	{/if}
 
+	{#if activeMode === 'review' || (canReviewWorkflow && approvedTotal > 0)}
+		<section class="rounded-lg border border-green-200 bg-green-50/70 p-3">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+				<div class="min-w-0">
+					<div class="flex flex-wrap items-center gap-2">
+						<h2 class="text-sm font-bold uppercase tracking-wider text-green-950">Siap Terbit ke Paket</h2>
+						<span class="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-green-800">{approvedTotal} disetujui</span>
+					</div>
+					<p class="mt-1 text-xs text-green-900">Soal sudah lolos review tetapi belum berstatus terbit, sehingga belum bisa dipilih di pembuat paket ujian.</p>
+				</div>
+				<Button variant="outline" size="sm" class="shrink-0 border-green-200 bg-white text-green-900 hover:bg-green-100" onclick={showApprovedQuestions}>
+					Lihat Semua Disetujui
+				</Button>
+			</div>
+			{#if approvedQueue.length > 0}
+				<div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+					{#each approvedQueue as q (q.id)}
+						<article class="min-w-0 rounded-md border border-green-100 bg-white px-3 py-2 text-left shadow-sm transition-colors hover:border-green-300 hover:bg-green-50">
+							<div class="mb-1 flex items-center gap-1">
+								<span class="rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold text-green-800">{questionTypeLabel(q.question_type)}</span>
+								<span class="truncate text-[11px] text-slate-400">{q.subject_name || q.subject_code || 'Mapel belum ada'}</span>
+							</div>
+							<p class="line-clamp-2 text-sm font-medium text-slate-800">{stemPreview(q)}</p>
+							<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
+								<span>{q.code || 'Tanpa kode'}</span>
+								{#if q.author_username}<span>Guru: {q.author_username}</span>{/if}
+								{#if q.reviewer_username}<span>Reviewer: {q.reviewer_username}</span>{/if}
+							</div>
+							<div class="mt-2 flex flex-wrap items-center gap-1.5">
+								<LoadingButton
+									variant="outline"
+									size="sm"
+									class="h-7 border-green-200 bg-green-700 text-xs text-white hover:bg-green-800"
+									onclick={() => void publishQuestion(q)}
+									loading={workflowBusyId === q.id}
+									loadingLabel="Menerbitkan..."
+									disabled={!canPublishQuestion(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
+								>
+									Terbitkan
+								</LoadingButton>
+								{#if !canReviewWorkflow}
+									<span class="text-[11px] text-green-800">Menunggu admin menerbitkan.</span>
+								{/if}
+							</div>
+						</article>
+					{/each}
+				</div>
+			{:else}
+				<div class="mt-3 rounded-md border border-green-100 bg-white px-3 py-3 text-sm text-green-900">
+					Belum ada soal disetujui yang menunggu terbit.
+				</div>
+			{/if}
+		</section>
+	{/if}
+
 	{#if activeMode === 'composer'}
 		<section class="rounded-lg border border-green-200 bg-green-50 p-4">
 			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1976,7 +2102,7 @@
 			</div>
 		</section>
 	{:else if activeMode === 'review'}
-		<section class="grid gap-3 md:grid-cols-5">
+		<section class="grid gap-3 md:grid-cols-6">
 			<div class="rounded-lg border border-slate-200 bg-white p-4">
 				<p class="text-xs uppercase tracking-wider text-slate-500">Draft</p>
 				<p class="mt-2 text-2xl font-bold text-slate-900">{draftCount}</p>
@@ -1990,6 +2116,11 @@
 				<p class="text-xs uppercase tracking-wider text-yellow-700">Menunggu Review</p>
 				<p class="mt-2 text-2xl font-bold text-yellow-900">{reviewCount}</p>
 				<p class="mt-1 text-[11px] text-yellow-700">{visibleReviewCount} tampil di halaman ini</p>
+			</div>
+			<div class="rounded-lg border border-green-200 bg-green-50 p-4">
+				<p class="text-xs uppercase tracking-wider text-green-700">Siap Terbit</p>
+				<p class="mt-2 text-2xl font-bold text-green-900">{approvedCount}</p>
+				<p class="mt-1 text-[11px] text-green-700">{visibleApprovedCount} tampil di halaman ini</p>
 			</div>
 			<div class="rounded-lg border border-green-200 bg-green-50 p-4">
 				<p class="text-xs uppercase tracking-wider text-green-700">Terbit</p>
@@ -2185,6 +2316,18 @@
 												class="rounded px-2 py-1 text-xs text-amber-700 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40"
 											>
 												Review
+											</button>
+										{/if}
+										{#if canPublishQuestion(q)}
+											<button
+												onclick={(e) => {
+													e.stopPropagation();
+													void publishQuestion(q);
+												}}
+												disabled={workflowBusyId !== '' && workflowBusyId !== q.id}
+												class="rounded px-2 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40"
+											>
+												{workflowBusyId === q.id ? 'Terbit...' : 'Terbitkan'}
 											</button>
 										{/if}
 										<button

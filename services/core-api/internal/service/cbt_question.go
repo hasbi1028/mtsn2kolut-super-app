@@ -106,6 +106,7 @@ func (s *CbtQuestion) List(ctx context.Context) ([]db.ListCbtQuestionsRow, error
 type ListCbtQuestionsInput struct {
 	SubjectID      pgtype.UUID
 	WorkflowStatus string
+	Status         string
 	QuestionType   string
 	HotsFilter     string
 	RevisionSource string
@@ -124,6 +125,7 @@ func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput
 	rows, err := s.q.ListCbtQuestionsFiltered(ctx, db.ListCbtQuestionsFilteredParams{
 		SubjectID:      in.SubjectID,
 		WorkflowStatus: strings.TrimSpace(in.WorkflowStatus),
+		StatusFilter:   normalizeQuestionStatusFilter(in.Status),
 		QuestionType:   strings.TrimSpace(in.QuestionType),
 		HotsFilter:     strings.TrimSpace(in.HotsFilter),
 		RevisionSource: normalizeRevisionSource(in.RevisionSource),
@@ -137,6 +139,7 @@ func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput
 	total, err := s.q.CountCbtQuestionsFiltered(ctx, db.CountCbtQuestionsFilteredParams{
 		SubjectID:      in.SubjectID,
 		WorkflowStatus: strings.TrimSpace(in.WorkflowStatus),
+		StatusFilter:   normalizeQuestionStatusFilter(in.Status),
 		QuestionType:   strings.TrimSpace(in.QuestionType),
 		HotsFilter:     strings.TrimSpace(in.HotsFilter),
 		RevisionSource: normalizeRevisionSource(in.RevisionSource),
@@ -153,6 +156,19 @@ func normalizeRevisionSource(value string) string {
 	switch normalized {
 	case "item_analysis", "reviewer", "workflow":
 		return normalized
+	default:
+		return ""
+	}
+}
+
+func normalizeQuestionStatusFilter(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case string(db.CbtQuestionStatusEnumDraft):
+		return string(db.CbtQuestionStatusEnumDraft)
+	case string(db.CbtQuestionStatusEnumPublished):
+		return string(db.CbtQuestionStatusEnumPublished)
+	case string(db.CbtQuestionStatusEnumArchived):
+		return string(db.CbtQuestionStatusEnumArchived)
 	default:
 		return ""
 	}

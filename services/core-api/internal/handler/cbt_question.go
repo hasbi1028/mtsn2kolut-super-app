@@ -153,6 +153,7 @@ func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit 
 	return service.ListCbtQuestionsInput{
 		SubjectID:      subjectID,
 		WorkflowStatus: r.URL.Query().Get("workflow_status"),
+		Status:         r.URL.Query().Get("status"),
 		QuestionType:   r.URL.Query().Get("question_type"),
 		HotsFilter:     r.URL.Query().Get("hots"),
 		RevisionSource: r.URL.Query().Get("revision_source"),

@@ -16,41 +16,43 @@ SELECT COUNT(*)::bigint
 FROM cbt_questions q
 WHERE ($1::uuid IS NULL OR q.subject_id = $1::uuid)
   AND ($2::text = '' OR q.workflow_status = $2::text)
-  AND ($3::text = '' OR q.question_type = $3::text)
-  AND ($4::text = '' OR ($4::text = 'yes' AND q.hots_flag = TRUE) OR ($4::text = 'no' AND q.hots_flag = FALSE))
+  AND ($3::text = '' OR q.status = $3::cbt_question_status_enum)
+  AND ($4::text = '' OR q.question_type = $4::text)
+  AND ($5::text = '' OR ($5::text = 'yes' AND q.hots_flag = TRUE) OR ($5::text = 'no' AND q.hots_flag = FALSE))
   AND (
-    $5::text = ''
+    $6::text = ''
     OR (
-      $5::text = 'item_analysis'
+      $6::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $5::text = 'reviewer'
+      $6::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $5::text = 'workflow'
+      $6::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $6::text = ''
-    OR q.code ILIKE '%' || $6::text || '%'
-    OR q.question_text ILIKE '%' || $6::text || '%'
-    OR q.material_topic ILIKE '%' || $6::text || '%'
-    OR q.cp_ref ILIKE '%' || $6::text || '%'
-    OR q.kd_ref ILIKE '%' || $6::text || '%'
+    $7::text = ''
+    OR q.code ILIKE '%' || $7::text || '%'
+    OR q.question_text ILIKE '%' || $7::text || '%'
+    OR q.material_topic ILIKE '%' || $7::text || '%'
+    OR q.cp_ref ILIKE '%' || $7::text || '%'
+    OR q.kd_ref ILIKE '%' || $7::text || '%'
   )
 `
 
 type CountCbtQuestionsFilteredParams struct {
 	SubjectID      pgtype.UUID `json:"subject_id"`
 	WorkflowStatus string      `json:"workflow_status"`
+	StatusFilter   string      `json:"status_filter"`
 	QuestionType   string      `json:"question_type"`
 	HotsFilter     string      `json:"hots_filter"`
 	RevisionSource string      `json:"revision_source"`
@@ -61,6 +63,7 @@ func (q *Queries) CountCbtQuestionsFiltered(ctx context.Context, arg CountCbtQue
 	row := q.db.QueryRow(ctx, countCbtQuestionsFiltered,
 		arg.SubjectID,
 		arg.WorkflowStatus,
+		arg.StatusFilter,
 		arg.QuestionType,
 		arg.HotsFilter,
 		arg.RevisionSource,
@@ -700,43 +703,45 @@ LEFT JOIN LATERAL (
 ) answer_usage ON TRUE
 WHERE ($1::uuid IS NULL OR q.subject_id = $1::uuid)
   AND ($2::text = '' OR q.workflow_status = $2::text)
-  AND ($3::text = '' OR q.question_type = $3::text)
-  AND ($4::text = '' OR ($4::text = 'yes' AND q.hots_flag = TRUE) OR ($4::text = 'no' AND q.hots_flag = FALSE))
+  AND ($3::text = '' OR q.status = $3::cbt_question_status_enum)
+  AND ($4::text = '' OR q.question_type = $4::text)
+  AND ($5::text = '' OR ($5::text = 'yes' AND q.hots_flag = TRUE) OR ($5::text = 'no' AND q.hots_flag = FALSE))
   AND (
-    $5::text = ''
+    $6::text = ''
     OR (
-      $5::text = 'item_analysis'
+      $6::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $5::text = 'reviewer'
+      $6::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $5::text = 'workflow'
+      $6::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $6::text = ''
-    OR q.code ILIKE '%' || $6::text || '%'
-    OR q.question_text ILIKE '%' || $6::text || '%'
-    OR q.material_topic ILIKE '%' || $6::text || '%'
-    OR q.cp_ref ILIKE '%' || $6::text || '%'
-    OR q.kd_ref ILIKE '%' || $6::text || '%'
+    $7::text = ''
+    OR q.code ILIKE '%' || $7::text || '%'
+    OR q.question_text ILIKE '%' || $7::text || '%'
+    OR q.material_topic ILIKE '%' || $7::text || '%'
+    OR q.cp_ref ILIKE '%' || $7::text || '%'
+    OR q.kd_ref ILIKE '%' || $7::text || '%'
   )
 ORDER BY q.created_at DESC
-LIMIT $8 OFFSET $7
+LIMIT $9 OFFSET $8
 `
 
 type ListCbtQuestionsFilteredParams struct {
 	SubjectID      pgtype.UUID `json:"subject_id"`
 	WorkflowStatus string      `json:"workflow_status"`
+	StatusFilter   string      `json:"status_filter"`
 	QuestionType   string      `json:"question_type"`
 	HotsFilter     string      `json:"hots_filter"`
 	RevisionSource string      `json:"revision_source"`
@@ -798,6 +803,7 @@ func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuest
 	rows, err := q.db.Query(ctx, listCbtQuestionsFiltered,
 		arg.SubjectID,
 		arg.WorkflowStatus,
+		arg.StatusFilter,
 		arg.QuestionType,
 		arg.HotsFilter,
 		arg.RevisionSource,
