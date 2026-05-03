@@ -1372,7 +1372,8 @@
 								bind:value={fStem}
 								id="soal-stem"
 								placeholder="Tuliskan pertanyaan utama. Gambar bisa disisipkan langsung di antara teks."
-								minRows={7}
+								minRows={4}
+								compact
 								onImageUpload={uploadImageInEditor}
 							/>
 						</section>
