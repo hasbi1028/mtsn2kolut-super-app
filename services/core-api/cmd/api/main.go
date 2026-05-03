@@ -254,6 +254,7 @@ func main() {
 		r.With(requireCbt).Get("/api/cbt/questions/{id}", questionH.Get)
 		r.With(requireCbt).Put("/api/cbt/questions/{id}", questionH.Update)
 		r.With(requireCbt).Post("/api/cbt/questions/{id}/duplicate", questionH.Duplicate)
+		r.With(requireCbt).Post("/api/cbt/questions/{id}/revision", questionH.MarkRevision)
 		r.With(requireCbt).Patch("/api/cbt/questions/{id}/workflow", questionH.WorkflowAction)
 		r.With(requireCbt).Delete("/api/cbt/questions/{id}", questionH.Delete)
 		r.With(requireCbt).Get("/api/cbt/assets", questionAssetH.List)

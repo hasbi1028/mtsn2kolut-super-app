@@ -1056,12 +1056,12 @@
 	}
 
 	function isQuickEditable(q: Question): boolean {
-		return isComposerQuestionType(q.question_type) && q.workflow_status === 'draft' && q.status === 'draft' && !questionUsageLocked(q);
+		return isComposerQuestionType(q.question_type) && (q.workflow_status === 'draft' || q.workflow_status === 'rejected') && q.status === 'draft' && !questionUsageLocked(q);
 	}
 
 	function explainQuickEditBlocked(q: Question): string {
 		if (questionUsageLocked(q)) return 'Soal sudah dipakai. Gunakan Duplikat untuk membuat revisi draft.';
-		if (q.workflow_status !== 'draft' || q.status !== 'draft') return 'Soal sudah masuk alur review/publikasi. Gunakan Duplikat untuk revisi.';
+		if ((q.workflow_status !== 'draft' && q.workflow_status !== 'rejected') || q.status !== 'draft') return 'Soal sudah masuk alur review/publikasi. Gunakan Duplikat untuk revisi.';
 		if (!isComposerQuestionType(q.question_type)) return 'Tipe soal ini belum masuk komposer utama. Gunakan Duplikat setelah tipe ini dimigrasikan.';
 		return 'Buat revisi lewat Duplikat agar riwayat soal tetap aman.';
 	}

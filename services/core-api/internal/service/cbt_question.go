@@ -289,6 +289,27 @@ func (s *CbtQuestion) DuplicateAsDraft(ctx context.Context, id pgtype.UUID, user
 	return s.Create(ctx, input)
 }
 
+func (s *CbtQuestion) DuplicateForRevision(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error) {
+	current, err := s.q.GetCbtQuestion(ctx, id)
+	if err != nil {
+		return db.CbtQuestion{}, err
+	}
+	input := questionInputFromCurrent(current, username)
+	input.ID = pgtype.UUID{}
+	input.Status = db.CbtQuestionStatusEnumDraft
+	input.WorkflowStatus = "rejected"
+	input.ReviewerUsername = username
+	input.ApproverUsername = ""
+	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
+	if strings.TrimSpace(input.ReviewNotes) == "" {
+		input.ReviewNotes = "Perlu revisi berdasarkan analisis butir."
+	}
+	if input.Code != "" {
+		input.Code = fmt.Sprintf("%s-REV-%s", input.Code, time.Now().Format("20060102150405"))
+	}
+	return s.Create(ctx, input)
+}
+
 type ImportLegacyQuestionsInput struct {
 	SubjectID pgtype.UUID
 	CSVText   string

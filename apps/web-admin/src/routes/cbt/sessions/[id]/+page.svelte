@@ -170,6 +170,11 @@
 	type ItemAnalysisPayload = {
 		items?: ItemAnalysisRow[];
 	};
+	type QuestionRevisionResponse = {
+		id?: string;
+		code?: string;
+		workflow_status?: string;
+	};
 	type UngradedEssay = {
 		answer_id: string;
 		participant_id: string;
@@ -235,6 +240,7 @@
 	let flagBusyId = $state('');
 	let resetAccessBusyId = $state('');
 	let forceSubmitBusyId = $state('');
+	let revisionBusyId = $state('');
 	let eventPanelParticipantId = $state('');
 	let procInterval: ReturnType<typeof setInterval> | null = null;
 	let gradeInput = $state<Record<string, number>>({});
@@ -362,6 +368,23 @@
 		return Object.entries(row.answer_distribution)
 			.map(([answer, count]) => ({ answer, count: Number(count) || 0 }))
 			.sort((a, b) => b.count - a.count || a.answer.localeCompare(b.answer));
+	}
+
+	function shouldOfferQuestionRevision(row: ItemAnalysisRow) {
+		return row.recommendation_tone === 'warning' || row.recommendation_tone === 'danger';
+	}
+
+	function itemRevisionNotes(row: ItemAnalysisRow) {
+		const sessionTitle = session?.title || 'Sesi CBT';
+		const answeredText = `${row.answered_count}/${row.submitted_count} dijawab`;
+		const scoreSignal = row.question_type === 'essay'
+			? `skor rata-rata ${row.avg_manual_score.toFixed(1)}, belum dinilai ${row.unscored_count}`
+			: `benar ${row.correct_count}, salah ${row.incorrect_count}, kosong ${row.blank_count}`;
+		return [
+			`Revisi dari analisis butir sesi "${sessionTitle}".`,
+			`Rekomendasi: ${row.recommendation}.`,
+			`Kesukaran: ${percent(row.difficulty_index)}; daya pembeda: ${percent(row.discrimination_index)}; ${answeredText}; ${scoreSignal}.`,
+		].join(' ');
 	}
 
 	function handoverStatusLabel(room: OperationalRoom) {
@@ -743,6 +766,37 @@
 			toast.error(detailErrorMessage(error));
 		} finally {
 			itemAnalysisRefreshBusy = false;
+		}
+	}
+
+	async function markQuestionRevision(row: ItemAnalysisRow) {
+		if (revisionBusyId) return;
+		const questionLabel = row.question_code || `nomor ${row.position}`;
+		if (!(await confirmAction({
+			title: 'Buat Draft Revisi Soal',
+			message: `Sistem akan menduplikasi butir ${questionLabel} menjadi draft revisi di bank soal. Soal asli tetap aman untuk riwayat ujian.`,
+			confirmLabel: 'Buat Draft Revisi',
+			tone: 'warning',
+		}))) return;
+
+		revisionBusyId = row.question_id;
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/questions/${row.question_id}/revision`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ notes: itemRevisionNotes(row) }),
+			});
+			const created = await readClientJson<QuestionRevisionResponse>(res);
+			const codeText = created.code ? ` (${created.code})` : '';
+			setOperationState('success', 'Draft Revisi Dibuat', `Butir ${questionLabel} sudah dibuat sebagai draft revisi${codeText}. Buka Bank Soal untuk menyunting isi, opsi, kunci, atau rubriknya.`);
+			toast.success('Draft revisi soal dibuat');
+			await loadItemAnalysis();
+		} catch (error) {
+			const message = mutationErrorMessage(error, 'Gagal membuat draft revisi soal');
+			setOperationState('error', 'Draft Revisi Gagal', message);
+			toast.error(message);
+		} finally {
+			revisionBusyId = '';
 		}
 	}
 
@@ -1450,7 +1504,21 @@
 										</div>
 									</Table.Cell>
 									<Table.Cell>
-										<Badge variant="outline" class={itemAnalysisToneClass(row.recommendation_tone)}>{row.recommendation}</Badge>
+										<div class="flex min-w-44 flex-col items-start gap-2">
+											<Badge variant="outline" class={itemAnalysisToneClass(row.recommendation_tone)}>{row.recommendation}</Badge>
+											{#if shouldOfferQuestionRevision(row)}
+												<LoadingButton
+													variant="outline"
+													size="sm"
+													onclick={() => void markQuestionRevision(row)}
+													loading={revisionBusyId === row.question_id}
+													loadingLabel="Membuat..."
+													disabled={revisionBusyId !== '' && revisionBusyId !== row.question_id}
+												>
+													Buat Draft Revisi
+												</LoadingButton>
+											{/if}
+										</div>
 									</Table.Cell>
 								</Table.Row>
 							{:else}

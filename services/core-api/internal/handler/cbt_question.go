@@ -37,6 +37,7 @@ type cbtQuestionService interface {
 	Publish(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
 	Archive(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
 	DuplicateAsDraft(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
+	DuplicateForRevision(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error)
 }
 
 type cbtQuestionImportService interface {
@@ -484,6 +485,39 @@ func (h *CbtQuestion) Duplicate(w http.ResponseWriter, r *http.Request) {
 	api.Created(w, serializeQuestionModel(row))
 }
 
+func (h *CbtQuestion) MarkRevision(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		Notes string `json:"notes"`
+	}
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+			api.BadRequest(w, "invalid json")
+			return
+		}
+	}
+	row, err := h.svc.DuplicateForRevision(r.Context(), id, currentUsername(r), body.Notes)
+	if err != nil {
+		writeClientError(w, err, "Draft revisi soal CBT tidak valid")
+		return
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_MARK_REVISION", "cbt_question", pgUUIDString(row.ID), map[string]any{
+		"source_question_id": pgUUIDString(id),
+		"workflow_status":    row.WorkflowStatus,
+		"review_notes":       body.Notes,
+		"author_username":    row.AuthorUsername,
+	})
+	api.Created(w, serializeQuestionModel(row))
+}
+
 func decodeQuestionBody(r *http.Request) (cbtQuestionBody, error) {
 	var body cbtQuestionBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -601,7 +635,7 @@ func (h *CbtQuestion) directQuestionUpdateAllowed(w http.ResponseWriter, r *http
 		return false
 	}
 	if !hasAnyRole(r, "admin") {
-		if currentWorkflow != "" && currentWorkflow != "draft" {
+		if currentWorkflow != "" && currentWorkflow != "draft" && currentWorkflow != "rejected" {
 			api.Conflict(w, "Soal sedang atau sudah masuk alur review. Duplikat soal untuk membuat revisi baru.")
 			return false
 		}

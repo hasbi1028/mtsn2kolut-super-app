@@ -81,6 +81,12 @@ type fakeCbtQuestionService struct {
 	duplicateRow  db.CbtQuestion
 	duplicateErr  error
 
+	revisionID    pgtype.UUID
+	revisionUser  string
+	revisionNotes string
+	revisionRow   db.CbtQuestion
+	revisionErr   error
+
 	exportInput  service.ListCbtQuestionsInput
 	exportResult service.ExportCbtQuestionsCSVResult
 	exportErr    error
@@ -171,6 +177,16 @@ func (f *fakeCbtQuestionService) DuplicateAsDraft(_ context.Context, id pgtype.U
 		return db.CbtQuestion{}, f.duplicateErr
 	}
 	return f.duplicateRow, nil
+}
+
+func (f *fakeCbtQuestionService) DuplicateForRevision(_ context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error) {
+	f.revisionID = id
+	f.revisionUser = username
+	f.revisionNotes = reviewNotes
+	if f.revisionErr != nil {
+		return db.CbtQuestion{}, f.revisionErr
+	}
+	return f.revisionRow, nil
 }
 
 func (f *fakeCbtQuestionService) ExportCSV(_ context.Context, input service.ListCbtQuestionsInput) (service.ExportCbtQuestionsCSVResult, error) {
@@ -647,6 +663,24 @@ func TestCbtQuestionWorkflowAndDuplicateForwardActor(t *testing.T) {
 	if len(duplicateAudit.entries) != 1 || duplicateAudit.entries[0].Action != "CBT_QUESTION_DUPLICATE" {
 		t.Fatalf("Duplicate audit = %#v, want one duplicate audit", duplicateAudit.entries)
 	}
+
+	revisionRow := cbtQuestionHandlerModel(handlerTestUUID(33), subjectID)
+	revisionRow.WorkflowStatus = "rejected"
+	revisionFake := &fakeCbtQuestionService{revisionRow: revisionRow}
+	revisionAudit := &fakeCbtSessionAuditWriter{}
+	revisionReq := withClaims(httptest.NewRequest(http.MethodPost, "/api/cbt/questions/"+questionID.String()+"/revision", strings.NewReader(`{"notes":"Daya pembeda rendah"}`)), jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa", "uid": "01000000-0000-0000-0000-000000000000", "sub": "01000000-0000-0000-0000-000000000000", "ssid": "sess-1"})
+	revisionReq = withRouteParam(revisionReq, "id", questionID.String())
+	revisionRec := httptest.NewRecorder()
+	(&CbtQuestion{svc: revisionFake, audit: revisionAudit}).MarkRevision(revisionRec, revisionReq)
+	if revisionRec.Code != http.StatusCreated {
+		t.Fatalf("MarkRevision() status = %d, want 201; body=%s", revisionRec.Code, revisionRec.Body.String())
+	}
+	if revisionFake.revisionID != questionID || revisionFake.revisionUser != "guru.ipa" || revisionFake.revisionNotes != "Daya pembeda rendah" {
+		t.Fatalf("MarkRevision args = %v/%q/%q, want id/user/notes", revisionFake.revisionID, revisionFake.revisionUser, revisionFake.revisionNotes)
+	}
+	if len(revisionAudit.entries) != 1 || revisionAudit.entries[0].Action != "CBT_QUESTION_MARK_REVISION" {
+		t.Fatalf("MarkRevision audit = %#v, want one revision audit", revisionAudit.entries)
+	}
 }
 
 func TestCbtQuestionTeacherWriteScopeRequiresAuthorOwnership(t *testing.T) {
@@ -712,6 +746,28 @@ func TestCbtQuestionTeacherWriteScopeRequiresAuthorOwnership(t *testing.T) {
 		}
 		if fake.updateInput.ID != questionID {
 			t.Fatalf("Update(author) id = %v, want %v", fake.updateInput.ID, questionID)
+		}
+	})
+
+	t.Run("update allowed for author revision draft", func(t *testing.T) {
+		fake := &fakeCbtQuestionService{
+			getDetailRow: db.GetCbtQuestionDetailRow{
+				ID:             questionID,
+				AuthorUsername: "guru.ipa",
+				WorkflowStatus: "rejected",
+				Status:         db.CbtQuestionStatusEnumDraft,
+			},
+			updateRow: cbtQuestionHandlerModel(questionID, subjectID),
+		}
+		req := withClaims(httptest.NewRequest(http.MethodPatch, "/api/cbt/questions/"+questionID.String(), strings.NewReader(body)), reqClaims)
+		req = withRouteParam(req, "id", questionID.String())
+		rec := httptest.NewRecorder()
+		(&CbtQuestion{svc: fake}).Update(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("Update(revision author) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+		}
+		if fake.updateInput.ID != questionID {
+			t.Fatalf("Update(revision author) id = %v, want %v", fake.updateInput.ID, questionID)
 		}
 	})
 }

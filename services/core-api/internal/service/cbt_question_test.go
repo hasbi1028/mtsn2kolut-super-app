@@ -648,6 +648,25 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 			t.Fatalf("DuplicateAsDraft() reviewer/approver/notes = %q/%q/%q, want cleared", store.createParams.ReviewerUsername, store.createParams.ApproverUsername, store.createParams.ReviewNotes)
 		}
 	})
+
+	t.Run("duplicate for revision creates rejected draft copy with notes", func(t *testing.T) {
+		store := &fakeQuestionStore{current: current}
+		svc := &CbtQuestion{q: store}
+
+		_, err := svc.DuplicateForRevision(context.Background(), questionID, "reviewer", "Daya pembeda rendah")
+		if err != nil {
+			t.Fatalf("DuplicateForRevision() error = %v", err)
+		}
+		if store.createCalls != 1 {
+			t.Fatalf("CreateCbtQuestion() calls = %d, want 1", store.createCalls)
+		}
+		if !strings.HasPrefix(store.createParams.Code, "Q-1-REV-") || store.createParams.Status != db.CbtQuestionStatusEnumDraft || store.createParams.WorkflowStatus != "rejected" {
+			t.Fatalf("DuplicateForRevision() create params = %+v, want rejected draft revision copy", store.createParams)
+		}
+		if store.createParams.ReviewerUsername != "reviewer" || store.createParams.ApproverUsername != "" || store.createParams.ReviewNotes != "Daya pembeda rendah" {
+			t.Fatalf("DuplicateForRevision() reviewer/approver/notes = %q/%q/%q, want reviewer/no approver/notes", store.createParams.ReviewerUsername, store.createParams.ApproverUsername, store.createParams.ReviewNotes)
+		}
+	})
 }
 
 func TestNormalizeQuestionInputBeginnerDefaultsToDraft(t *testing.T) {
