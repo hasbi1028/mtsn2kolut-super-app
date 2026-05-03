@@ -1,10 +1,11 @@
 # MTSN 2 Kolut Super App
 
-Monorepo ini menampung tiga deploy unit utama:
+Monorepo ini menampung tiga runtime server dan satu client mobile:
 
 - `apps/web-admin` untuk UI SvelteKit dan cookie/session admin
 - `services/core-api` untuk Go Chi API, `sqlc`, migration, scheduler, queue, dan PostgreSQL ownership
 - `services/pusaka-worker` untuk worker Playwright yang pull job dari API
+- `apps/mobile` untuk APK Flutter CBT siswa berbasis BYOD
 
 Prinsip boundary yang dipakai:
 
@@ -14,11 +15,24 @@ Prinsip boundary yang dipakai:
 - `services/pusaka-worker` tidak mengakses DB langsung
 - file SQLite lama, bila masih ada, hanya dipakai sebagai sumber migrasi satu arah
 
+## Status Terkini
+
+Sinkron per 2026-05-03:
+
+- roadmap aktif ada di [PLAN.md](/home/hasbiopm/mtsn2kolut-super-app/PLAN.md) dan sudah mencapai Sprint 96 Documentation Sync
+- server tetap dideploy ke 3 VPS: frontend, backend, dan worker
+- Flutter CBT adalah client/APK siswa, bukan VPS runtime
+- Bank Soal web-admin aktif ada di `/cbt/soal`; `/cbt/questions` hanya redirect legacy
+- kontrak data Bank Soal tetap lewat `/api/cbt/questions/*`
+- smoke operasional CBT ada di [docs/cbt-smoke-checklist.md](/home/hasbiopm/mtsn2kolut-super-app/docs/cbt-smoke-checklist.md)
+- ledger review aktif ada di [findings.md](/home/hasbiopm/mtsn2kolut-super-app/findings.md)
+
 ## Struktur
 
 ```text
 apps/
   web-admin/
+  mobile/
 services/
   core-api/
   pusaka-worker/
@@ -127,3 +141,5 @@ Perintah ini menjalankan:
 ## Deploy
 
 Monorepo ini tetap ditujukan untuk 3 VPS terpisah: frontend, backend, dan worker. Kontrak deploy detail ada di `deploy/DEPLOY.md`, dan config PM2 per service tersedia di `deploy/pm2/`.
+
+Flutter CBT dibuild dan didistribusikan sebagai APK internal. Panduan build dan uji BYOD ada di `apps/mobile/README.md`, `apps/mobile/RELEASE_CHECKLIST.md`, dan `apps/mobile/BYOD_TRIAL_PROCEDURE.md`.

@@ -2,6 +2,8 @@
 
 Gunakan template ini setiap kali backend Go mengubah kontrak payload endpoint exam yang dipakai aplikasi Flutter.
 
+Status: sinkron per 2026-05-03. Template ini harus dipakai bersama [docs/exam-api.md](./exam-api.md), [docs/cbt-smoke-checklist.md](./cbt-smoke-checklist.md), dan checklist APK di `apps/mobile/RELEASE_CHECKLIST.md`.
+
 ## Ringkasan Perubahan
 
 - tanggal rilis:
@@ -60,6 +62,8 @@ Checklist:
 - [ ] progress dan countdown aman
 - [ ] submit guard aman
 - [ ] event warning semantics tetap masuk akal
+- [ ] guidance panel untuk `403/409` tetap sesuai status backend
+- [ ] transport failure (`statusCode == null`) tetap dibedakan dari backend rejection
 
 ## Strategi Kompatibilitas
 
@@ -68,6 +72,8 @@ Checklist:
 - [ ] fallback plain text tetap ada
 - [ ] string kosong / omit tetap aman diparse
 - [ ] URL media tetap valid untuk mobile
+- [ ] URL media tidak membawa token ujian di query string
+- [ ] success envelope tetap `data.status` untuk heartbeat/event/answer/submit
 
 Jelaskan jika ada catatan khusus:
 
@@ -80,6 +86,8 @@ Jelaskan jika ada catatan khusus:
 - [ ] review terhadap `apps/mobile/lib/src/exam_api.dart`
 - [ ] `flutter analyze`
 - [ ] `flutter test`
+- [ ] test handler Go untuk login/status/answer/submit/heartbeat/event tetap hijau bila payload berubah
+- [ ] `docs/cbt-smoke-checklist.md` dipakai untuk rehearsal admin/guru dan token login Flutter bila perubahan menyentuh ujian nyata
 - [ ] uji manual login token
 - [ ] uji manual render soal
 - [ ] uji manual restore

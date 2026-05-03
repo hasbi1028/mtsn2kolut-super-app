@@ -2,15 +2,18 @@
 
 Panduan singkat ini ditujukan untuk pengawas atau operator sekolah saat mendampingi uji coba APK CBT di perangkat Android milik siswa.
 
+Status: sinkron per 2026-05-03. Panduan ini untuk BYOD; jangan menyampaikan bahwa aplikasi memberi jaminan kiosk penuh.
+
 ## Sebelum Siswa Masuk
 
 1. Pastikan backend ujian aktif dan `API_BASE_URL` yang dipakai APK sudah benar.
 2. Pastikan token ujian tersedia dan sesuai sesi.
-3. Minta siswa:
+3. Jika token/kartu baru saja diregenerasi, gunakan kartu terbaru.
+4. Minta siswa:
    - baterai cukup
    - koneksi data/Wi-Fi stabil
    - tidak mengganti perangkat di tengah ujian
-4. Pastikan APK sudah terpasang sebelum sesi dimulai.
+5. Pastikan APK sudah terpasang sebelum sesi dimulai.
 
 ## Saat Login
 

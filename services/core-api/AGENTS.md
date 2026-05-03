@@ -2,6 +2,16 @@
 
 This service owns the domain model, PostgreSQL schema, migrations, queue state, scheduler, and API contracts.
 
+## Current Baseline — 2026-05-03
+
+- Core API is still the only implemented PostgreSQL owner.
+- Library and Inventory routes are grouped behind `admin`/`staf` access.
+- Kesiswaan student photo access is scoped through `CanReadKesiswaanStudentPhoto`.
+- PUSAKA jobs recover stale `running` rows before claim/scheduler work.
+- CBT question answer keys and tokens must stay role-redacted outside admin/authorized author contexts.
+- CBT scoring must not mutate `submitted_at`; duplicate submit must remain an explicit conflict.
+- `/api/cbt/questions/*` remains the canonical question contract even though web UI `/cbt/questions` is retired.
+
 ## Must Keep
 
 - Go code must stay idiomatic and clean.
@@ -24,6 +34,7 @@ This service owns the domain model, PostgreSQL schema, migrations, queue state, 
 - Do not bypass migrations with ad hoc schema edits.
 - Prefer transaction boundaries in services where multi-step writes must be atomic.
 - Keep error mapping explicit and predictable.
+- Keep mobile-facing exam response envelopes and HTTP status semantics covered by handler tests.
 
 ## Product Context
 

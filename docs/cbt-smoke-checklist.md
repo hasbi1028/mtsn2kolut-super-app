@@ -1,6 +1,10 @@
 # CBT Smoke Checklist — Admin/Guru Visibility & Runtime Integrity
 
+Status: sinkron dengan Sprint 95/Sprint 96 per 2026-05-03.
+
 Gunakan checklist ini sebelum ujian besar, setelah deploy backend/frontend CBT, dan setelah migration token CBT dijalankan di staging/produksi. Fokusnya adalah memastikan batas role admin/guru, token, kunci jawaban, export, dan submit tidak regress.
+
+Checklist ini melengkapi test otomatis. Saat ini unit test sudah mengunci label export admin/guru, proxy CSV export/template, dan redirect legacy `/cbt/questions` ke `/cbt/soal`; login role nyata dan isi data staging tetap harus dicek manual.
 
 ## 1. Prasyarat
 
@@ -8,6 +12,7 @@ Gunakan checklist ini sebelum ujian besar, setelah deploy backend/frontend CBT, 
 - [ ] Migration CBT terbaru sudah dijalankan sesuai urutan deploy.
 - [ ] Jika `060_cbt_exam_token_hardening.sql` baru dijalankan, kartu ujian/token peserta sudah dicetak ulang.
 - [ ] Frontend web-admin sudah deploy dari commit yang sama atau lebih baru dari backend.
+- [ ] Bookmark lama `/cbt/questions` sudah redirect ke `/cbt/soal`.
 - [ ] Tersedia akun uji:
   - `admin` panitia/operator.
   - `guru_a` sebagai penulis minimal 1 soal.

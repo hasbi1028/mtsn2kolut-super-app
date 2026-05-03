@@ -2,12 +2,16 @@
 
 Checklist ini untuk operator sekolah saat menyiapkan APK Android internal bagi siswa BYOD.
 
+Status: sinkron per 2026-05-03. Gunakan bersama `docs/exam-api.md` dan `docs/cbt-smoke-checklist.md`.
+
 ## Sebelum Build
 
 - [ ] backend Go sudah aktif dan endpoint CBT login peserta siap
 - [ ] `API_BASE_URL` final untuk gelombang uji coba sudah dipastikan
 - [ ] token ujian dan sesi uji tersedia untuk minimal 2-3 siswa percobaan
 - [ ] pengawas paham bahwa aplikasi BYOD tidak setara kiosk penuh
+- [ ] backend/frontend yang akan dipakai sudah tercatat commit-nya
+- [ ] jika token hardening/migrasi CBT baru dijalankan, kartu ujian sudah dicetak ulang
 
 ## Quality Gate
 
@@ -45,6 +49,7 @@ build/app/outputs/flutter-apk/app-release.apk
 - [ ] submit berhasil saat koneksi stabil
 - [ ] panel warning muncul saat jaringan dimatikan sementara
 - [ ] hasil setiap perangkat dicatat di `DEVICE_TEST_MATRIX.md`
+- [ ] smoke admin/guru di `docs/cbt-smoke-checklist.md` tidak menemukan kebocoran token/kunci jawaban
 
 ## Distribusi Internal
 
@@ -60,3 +65,4 @@ build/app/outputs/flutter-apk/app-release.apk
 - jika ada jawaban lokal menunggu sinkron, peserta tetap harus berada di layar ujian
 - beberapa vendor Android agresif mematikan koneksi latar; pengawas perlu memeriksa kasus per perangkat
 - `FLAG_SECURE` hanya mengurangi screenshot/recent preview, bukan jaminan anti-cheat penuh
+- fingerprint perangkat hanya telemetry/resume hint, bukan identitas kuat

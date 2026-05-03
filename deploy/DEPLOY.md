@@ -6,7 +6,18 @@ Monorepo ini tetap dideploy sebagai tiga unit runtime terpisah:
 - `services/core-api` ke VPS backend
 - `services/pusaka-worker` ke VPS worker
 
-Satu repo tidak berarti satu VPS. Yang penting hanya boundary source code berada di satu tempat, sedangkan proses build, env, dan runtime tetap dipisahkan per service.
+Satu repo tidak berarti satu VPS. Yang penting hanya boundary source code berada di satu tempat, sedangkan proses build, env, dan runtime tetap dipisahkan per service. `apps/mobile` tidak masuk PM2/VPS; Flutter CBT dibuild sebagai APK internal.
+
+## Status Terkini
+
+Sinkron per 2026-05-03:
+
+- deploy server tetap 3 VPS: frontend, backend, worker
+- backend tetap owner migration PostgreSQL
+- web-admin tetap BFF/UI
+- worker tetap API client ke `/api/pusaka/worker/*`
+- Flutter CBT memakai exam API langsung dan harus dicek lewat `docs/exam-api.md`
+- sebelum ujian besar, jalankan `docs/cbt-smoke-checklist.md` setelah backend/frontend deploy
 
 ## Model yang direkomendasikan
 
@@ -82,6 +93,18 @@ cd /path/to/mtsn2kolut-super-app/services/pusaka-worker
 npx playwright install chromium
 ```
 
+APK Flutter CBT:
+
+```bash
+cd /path/to/mtsn2kolut-super-app/apps/mobile
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --release --dart-define=API_BASE_URL=https://api.sekolah.example
+```
+
+Distribusi APK mengikuti `apps/mobile/RELEASE_CHECKLIST.md` dan `apps/mobile/BYOD_TRIAL_PROCEDURE.md`.
+
 ## Urutan deploy yang aman
 
 1. Deploy backend code lebih dulu.
@@ -89,6 +112,7 @@ npx playwright install chromium
 3. Restart backend dan cek health.
 4. Deploy frontend.
 5. Deploy worker.
+6. Untuk rilis CBT, jalankan smoke checklist admin/guru dan token login Flutter.
 
 Urutan ini aman karena schema owner ada di backend. Frontend dan worker cukup menyesuaikan kontrak API yang sudah naik duluan.
 
@@ -180,3 +204,4 @@ Jika deploy worker gagal:
 - frontend tidak boleh memiliki schema DB runtime sendiri
 - worker tidak boleh mengakses PostgreSQL langsung
 - perubahan `sqlc` harus selalu digenerate ulang dari `services/core-api/db`
+- APK Flutter harus diverifikasi terhadap kontrak `docs/exam-api.md` sebelum dibagikan ke siswa

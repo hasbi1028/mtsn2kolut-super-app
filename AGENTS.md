@@ -11,6 +11,18 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 | **Pusaka Worker** | `services/pusaka-worker` | TypeScript + Playwright (Chromium) | Async job consumer for PUSAKA attendance automation |
 | **Flutter App** | `apps/mobile` | Flutter | Student-facing CBT exam client |
 
+## Current Baseline — 2026-05-03
+
+- Latest completed roadmap checkpoint: Sprint 96 Documentation Sync, after Sprint 95 CBT retired-route guard coverage.
+- Server deployment topology is still 3 VPS targets: frontend, backend, and worker. `apps/mobile` is a student BYOD APK/client, not a VPS runtime.
+- `/cbt/soal` is the only active web-admin question-bank UI. `/cbt/questions` is retained only as a legacy redirect to `/cbt/soal`.
+- `/api/cbt/questions/*` remains the canonical backend/BFF data contract for question CRUD, workflow, duplicate/revision, import/export, and package usage.
+- CBT runtime hardening is active: exam tokens are strong random hex values, answer keys/tokens are role-redacted, duplicate submit is explicit, and scoring must not mark unsubmitted participants as submitted.
+- PUSAKA worker jobs have stale-running recovery in the backend claim/scheduler path; the worker still must report complete/fail explicitly.
+- Library and Inventory are admin/staf scoped in both backend route grouping and SvelteKit navigation/proxy gate.
+- Kesiswaan student photo reads are scoped consistently with student visibility for admin/kesiswaan and teacher-owned class access.
+- `findings.md` is now a current review ledger: no open High findings from the 2026-05-01 review remain active.
+
 ## Non-Negotiable Architecture Rules
 
 1. **PostgreSQL is owned only by `services/core-api`.** No other runtime unit reads or writes PostgreSQL directly.
@@ -18,14 +30,15 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 3. **`apps/web-admin` is a BFF/proxy only.** It must not read or write PostgreSQL directly, nor import SQLite or Drizzle as runtime storage.
 4. **`services/pusaka-worker` is an API client only.** It must not read or write PostgreSQL directly.
 5. **Legacy SQLite files** (`backup.db`, `data/pusaka.sqlite`) are one-way import artifacts only. Never active runtime storage.
-6. **Monorepo source, but 3 separate VPS deployments.** One repo does not mean one server.
+6. **Monorepo source, but 3 separate server VPS deployments.** One repo does not mean one server; Flutter is distributed as an APK/client.
 7. **Safe deploy order:** backend code → migrations → backend restart + health check → frontend → worker.
 8. **PUSAKA is a bounded subsystem.** Canonical contracts use `/api/pusaka/*`; legacy runtime aliases such as `/api/jobs`, `/api/attendance`, `/api/schedules`, `/api/settings`, and `/api/worker` are retired.
 9. **`employees` stays general.** Employee master data covers all school staff; PUSAKA only manages the eligible subset (`PNS`/`PPPK`) via `pusaka_accounts` and `/pusaka/*` screens.
 10. **No employee-scoped PUSAKA aliases in the BFF.** PUSAKA employee operations must proxy only through `/api/pusaka/employees/*`, not `/api/employees/{id}/*`.
-11. **Kesiswaan & Tata Usaha modules are role-scoped.** `/api/kesiswaan/*` is owned by `admin` and `kesiswaan`; `guru` may only read kesiswaan data for siswa di kelasnya. `/api/tu/*` is owned by `admin` and `staf`. Cross-role access requires explicit handler-level allow rules, not implicit fallthrough.
+11. **Kesiswaan & Tata Usaha modules are role-scoped.** `/api/kesiswaan/*` is owned by `admin` and `kesiswaan`; `guru` may only read kesiswaan data for siswa di kelasnya, including student photo files. `/api/tu/*` is owned by `admin` and `staf`. Cross-role access requires explicit handler-level allow rules, not implicit fallthrough.
 12. **Letter numbering is centrally issued.** Outgoing letter numbers must be allocated through the backend `IssueOutgoingLetterNumber` service to preserve `(year, classification)` sequence integrity. Manual override is allowed for legacy import / surat balasan, but must still respect `UNIQUE (nomor_surat)`.
 13. **Confidential BK records are role-gated.** Counseling rows flagged `is_confidential = true` must only be readable by `admin` and `kesiswaan`. Guru biasa (tanpa role kesiswaan) tidak boleh melihat catatan rahasia bahkan untuk siswa di kelasnya.
+14. **Library and Inventory are staff-scoped operations.** `/library/*`, `/inventory/*`, `/api/library/*`, and `/api/inventory/*` are limited to `admin` and `staf`; sidebar visibility is UX only, not the security boundary.
 
 ## Backend Architecture Rules
 
@@ -75,6 +88,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **CBT UI direction:** educational, institutional, and operator-friendly for MTsN 2 Kolaka Utara. Avoid generic SaaS dashboards for exam operations and printable artifacts.
 - **Public site direction:** educational, institutional, and trustworthy for MTsN 2 Kolaka Utara. Public routes must feel like a real school website, not a reused admin dashboard shell.
 - **Question bank UI canonical route:** `/cbt/soal` is the only active web-admin question-bank UI. The old `/cbt/questions` UI is retired and must redirect to `/cbt/soal`; do not add new internal links or features there. The backend/BFF `/api/cbt/questions/*` contract remains canonical for question data, validation, workflow, duplicate, import, and package usage.
+- **Question bank retired-route guard:** keep test coverage around `/cbt/questions` redirect semantics so legacy bookmarks preserve `question_id` and retained modes while retired experiment modes do not re-enter the product.
 - **Question bank authoring uses two UX modes:** `beginner` for quick teacher input with minimal required fields, and `advance` for full blueprint/workflow authoring. Both modes must write to the same backend model and API contract.
 - **`/cbt/soal` is the Komposer Soal route** — a dedicated question composer with template quick-start, real-time readiness scoring, quality signals, split preview with KaTeX rendering, RTL toggle for Arabic questions, and localStorage draft autosave. It proxies all data through the existing Go API BFF; no direct DB access, no new backend routes.
 - **`/library/*` is the library module** — accessible to `admin` and `staf` roles only. Member data reuses existing `students` and `employees` tables; no separate member table. All forms use beginner/advance mode toggles consistent with the CBT question bank UX pattern.
@@ -90,6 +104,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Worker is an API client of `services/core-api`.** No direct backend access.
 - **Keep communication direct to Go API.** No tunneling through SvelteKit.
 - **Use canonical PUSAKA worker routes.** Worker runtime should call `/api/pusaka/worker/*`.
+- **Recover stale PUSAKA jobs in backend.** Worker failure reporting remains required, but backend claim/scheduler flows must continue recovering `running` jobs that exceed the stale threshold.
 - **Never own business state.** All state lives in PostgreSQL via the Go API.
 - **Keep concurrency configurable.** Safe default: 5 consumers.
 - **Explicit retry, claim, and failure reporting.** No silent swallowing of errors.
@@ -286,7 +301,15 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 | `docs/deployment.md` | Deployment topology and safe order |
 | `docs/ui-guidelines.md` | UI/UX direction and visual guidelines |
 | `docs/exam-api.md` | Flutter exam API documentation |
+| `docs/cbt-smoke-checklist.md` | Manual CBT smoke checklist for admin/guru visibility and runtime integrity |
+| `docs/exam-payload-release-template.md` | Release-note template for exam payload changes affecting Flutter |
+| `findings.md` | Current review ledger and remaining operational recommendations |
 | `deploy/DEPLOY.md` | Step-by-step deployment contract for 3 VPS |
+| `apps/mobile/README.md` | Flutter CBT client build/run guide |
+| `apps/mobile/RELEASE_CHECKLIST.md` | Internal APK release checklist |
+| `apps/mobile/OPERATOR_QUICKSTART.md` | Pengawas/operator quick-start for BYOD trials |
+| `apps/mobile/BYOD_TRIAL_PROCEDURE.md` | End-to-end BYOD trial procedure |
+| `apps/mobile/DEVICE_TEST_MATRIX.md` | Per-device BYOD compatibility matrix |
 | `apps/web-admin/AGENTS.md` | Web admin-specific policy |
 | `services/core-api/AGENTS.md` | Core API-specific policy |
 | `services/pusaka-worker/AGENTS.md` | Worker-specific policy |
@@ -294,10 +317,11 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 ## Known Technical Debt
 
 1. **No automated CI/CD.** All deploys are manual `git pull` + build + PM2 restart.
-2. **Low test coverage.** Only 4 service test files (auth, job, scheduler, setting). No integration tests, no e2e tests.
+2. **No browser e2e suite yet.** Backend, Svelte unit tests, and Flutter tests exist, but admin/guru CBT visibility still needs staging smoke rehearsal before large exams.
 3. **No Dockerfiles.** Services run bare-metal with PM2. No containerized deployment option.
 4. **Rate limiting is in-memory per-IP** — does not scale across backend instances.
 5. **Audit log entity_id is path, not real entity ID.** Middleware logs URL path (`/api/students/uuid`) into `entity_id`. Sufficient for forensics but not perfect. Future: per-handler structured audit emit.
-6. **`INTERNAL_API_KEY` still exists as integration debt surface.** The main user-facing protected/admin routes and CBT asset file route should rely on real JWT or exam-token context, but the shared internal key still exists as a helper primitive in middleware and should stay tightly scoped.
+6. **`INTERNAL_API_KEY` still exists as integration debt surface.** The main user-facing protected/admin routes and CBT asset file route rely on real JWT or exam-token context, but the shared internal key still exists as a helper primitive in middleware and should stay tightly scoped.
 7. **CBT print artifacts are HTML-first.** Event cards and berita acara are printable browser views; no PDF rendering service yet.
 8. **Seat plan validation is still light.** Current backend stores `seat_no` and room assignment, but does not yet enforce uniqueness per `(room_id, seat_no)` at the database level.
+9. **CBT Engine extraction is only planned.** Do not change PostgreSQL ownership rules or deploy topology until `services/cbt-engine` is implemented as a controlled runtime-only exception.

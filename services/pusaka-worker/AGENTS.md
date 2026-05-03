@@ -2,6 +2,13 @@
 
 This service is the worker runtime for asynchronous job execution.
 
+## Current Baseline — 2026-05-03
+
+- Worker runtime must call only canonical `/api/pusaka/worker/*` routes.
+- Backend now recovers stale `running` jobs, but the worker must still report `complete` or `fail` explicitly for every claimed job.
+- Worker heartbeat remains the operational signal for status pages and health checks.
+- Worker must not depend on SvelteKit or frontend routes.
+
 ## Role
 
 - Claim jobs from the Go API
@@ -14,6 +21,7 @@ This service is the worker runtime for asynchronous job execution.
 - Never become a second owner of business state.
 - Keep communication direct to `services/core-api`.
 - Keep concurrency configurable, but prefer safe defaults.
+- Keep shutdown behavior graceful; avoid abandoning claimed jobs without a final fail attempt when possible.
 
 ## Implementation Direction
 

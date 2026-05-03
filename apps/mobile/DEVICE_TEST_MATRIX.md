@@ -2,6 +2,8 @@
 
 Gunakan matriks ini saat uji perangkat Android siswa. Tujuannya agar hasil uji bisa dibandingkan antar vendor, versi Android, dan jenis koneksi.
 
+Status: sinkron per 2026-05-03. Matriks ini dipakai bersama release checklist dan prosedur BYOD; hasilnya menjadi bukti operasional, bukan jaminan kiosk penuh.
+
 ## Cara Pakai
 
 1. Satu baris untuk satu perangkat.
@@ -34,6 +36,8 @@ Per perangkat, minimal cek:
 8. status `Waspada` muncul saat kontak server stale
 9. status `Menurun` muncul saat gangguan sinkron berulang
 10. submit berhasil saat koneksi sehat
+11. guidance panel muncul jelas untuk kondisi `403/409` atau server tidak terjangkau
+12. tidak ada token/kunci jawaban yang terlihat di layar siswa
 
 ## Catatan yang Sebaiknya Dicatat
 

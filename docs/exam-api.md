@@ -2,6 +2,19 @@
 
 Dokumentasi ini merinci API yang digunakan oleh portal siswa (Flutter) untuk mengerjakan ujian CBT.
 
+## Status Kontrak Saat Ini
+
+Sinkron per 2026-05-03:
+
+- Flutter memakai token ujian, bukan JWT admin.
+- Token ujian backend memakai hex acak kuat dan tidak boleh disisipkan ke URL media.
+- `X-Device-Fingerprint` adalah telemetry/resume hint BYOD, bukan bukti identitas perangkat yang kuat.
+- Response exam tetap dibungkus dalam envelope `data`.
+- Error semantics yang penting untuk mobile harus stabil: `404` token tidak ditemukan, `403` sesi tidak aktif/waktu tertutup, `409` device mismatch atau sudah submitted, dan `401` jika konteks peserta hilang.
+- Endpoint `answer` dan `submit` harus menjaga response sukses `data.status = recorded|submitted`.
+- Endpoint `heartbeat` dan `event` harus menjaga response sukses `data.status = ok|recorded`.
+- Perubahan payload wajib direview dengan `docs/exam-payload-release-template.md`.
+
 ## Base URL
 `https://api-cbt.mtsn2kolut.sch.id` (Sesuaikan dengan environment)
 
@@ -130,6 +143,12 @@ Wajib dipanggil secara berkala (misal setiap 30-60 detik) untuk menandakan siswa
 - **Endpoint:** `POST /api/exam/heartbeat`
 - **Headers:** `X-Exam-Token`, `X-Device-Fingerprint`
 - **Response:** `200 OK`
+- **Success Envelope:**
+```json
+{
+  "data": { "status": "ok" }
+}
+```
 
 ---
 
@@ -146,6 +165,12 @@ Mencatat aktivitas mencurigakan atau perpindahan status aplikasi.
 }
 ```
 - **Event Types:** `app_switch`, `screenshot_attempt`, `warning`.
+- **Success Envelope:**
+```json
+{
+  "data": { "status": "recorded" }
+}
+```
 
 ---
 
@@ -164,6 +189,12 @@ Mengirim jawaban untuk satu soal. Panggil setiap kali siswa memilih/mengubah jaw
 - **Error Responses:**
   - `403 Forbidden`: Waktu ujian sudah habis.
   - `409 Conflict`: Ujian sudah disubmit sebelumnya.
+- **Success Envelope:**
+```json
+{
+  "data": { "status": "recorded" }
+}
+```
 
 ---
 
@@ -173,6 +204,15 @@ Finalisasi pengerjaan. Setelah ini, token tidak bisa digunakan lagi untuk menjaw
 - **Endpoint:** `POST /api/exam/submit`
 - **Headers:** `X-Exam-Token`, `X-Device-Fingerprint`
 - **Response:** `200 OK`
+- **Success Envelope:**
+```json
+{
+  "data": { "status": "submitted" }
+}
+```
+- **Error Responses:**
+  - `403 Forbidden`: Waktu ujian sudah tertutup.
+  - `409 Conflict`: Ujian sudah disubmit sebelumnya.
 
 ---
 
@@ -186,6 +226,8 @@ Gunakan daftar ini saat mengubah endpoint exam agar app Flutter tidak diam-diam 
 - [ ] nilai `time_remaining_seconds` tetap akurat untuk countdown dan auto-submit
 - [ ] perubahan event type/warning semantics tetap backward-compatible
 - [ ] perubahan error code login/status/submit sudah ditinjau dampaknya ke restore flow
+- [ ] `answer`, `submit`, `heartbeat`, dan `event` masih mengembalikan success envelope yang sama
+- [ ] token/kunci jawaban tidak bocor melalui payload siswa atau URL media
 
 Untuk rilis yang lebih formal, gunakan template:
 

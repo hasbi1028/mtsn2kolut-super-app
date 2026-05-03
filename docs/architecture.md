@@ -2,13 +2,26 @@
 
 ## System Shape
 
-This repository is a monorepo with three deployable runtime units:
+This repository is a monorepo with three deployable server runtime units and one mobile client:
 
 - `apps/web-admin`
 - `services/core-api`
 - `services/pusaka-worker`
+- `apps/mobile`
 
-The monorepo is for source organization, not for collapsing runtime topology.
+The monorepo is for source organization, not for collapsing runtime topology. The three server units still deploy to separate VPS targets; `apps/mobile` is built and distributed as an internal Android APK for student CBT.
+
+## Current Baseline
+
+As of 2026-05-03:
+
+- `services/core-api` remains the only PostgreSQL owner for the implemented system.
+- `apps/web-admin` remains a BFF/UI layer and must not read or write database state directly.
+- `services/pusaka-worker` talks directly to `/api/pusaka/worker/*` and never owns business state.
+- `apps/mobile` talks to the exam API using exam tokens and BYOD-oriented safeguards.
+- `/cbt/soal` is the active question-bank UI. `/cbt/questions` is a legacy redirect only.
+- `/api/cbt/questions/*` remains the canonical question data/workflow/import/export contract.
+- Manual CBT smoke rehearsal is documented in `docs/cbt-smoke-checklist.md`.
 
 ## Ownership Boundaries
 
@@ -35,6 +48,13 @@ The monorepo is for source organization, not for collapsing runtime topology.
 - claims jobs from backend
 - reports result state back to backend
 
+### `apps/mobile`
+
+- Flutter Android client for student CBT
+- token-based exam login
+- local answer safety and restore metadata for BYOD conditions
+- heartbeat, warning telemetry, and visible connection-health guidance
+
 ## PUSAKA Subsystem Boundary
 
 - PUSAKA attendance automation is a bounded subsystem inside this monorepo.
@@ -55,6 +75,7 @@ The monorepo is for source organization, not for collapsing runtime topology.
 - PostgreSQL belongs only to `services/core-api`.
 - Legacy SQLite files, if still present, are one-way import artifacts only.
 - Frontend and worker must treat backend API as the source of truth.
+- Flutter must treat the exam API as the source of truth and must not talk to PostgreSQL or SvelteKit for live exam runtime.
 
 ## Migration Strategy
 
@@ -75,3 +96,7 @@ The preferred build order for the academic and CBT ecosystem is:
 8. **Academic Reporting**: Report cards (Rapor) and performance tracking.
 
 Do not jump straight to student exam runtime before the authoring, identity, and scheduling model is stable.
+
+## Planned CBT Engine Boundary
+
+`services/cbt-engine` is documented in `PLAN.md` as a proposed future extraction for live exam runtime only. It is not implemented yet. Until that sprint starts, do not change the current rule that `services/core-api` owns PostgreSQL. Any future exception must be narrow: Core API keeps the main school database, while CBT Engine may own only a runtime exam database/schema after explicit implementation.

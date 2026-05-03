@@ -2,6 +2,8 @@
 
 Dokumen ini untuk uji lapangan APK CBT pada perangkat Android milik siswa.
 
+Status: sinkron per 2026-05-03. Uji ini wajib diperlakukan sebagai rehearsal BYOD, bukan validasi kiosk penuh.
+
 ## 1. Tujuan Uji Coba
 
 Memastikan bahwa:
@@ -44,6 +46,7 @@ Memastikan bahwa:
    - event warning
    - save answer
    - submit
+5. Jalankan smoke admin/guru pada `docs/cbt-smoke-checklist.md` untuk memastikan token dan kunci jawaban tidak bocor lintas role.
 
 ## 4. Saat Siswa Masuk
 
@@ -97,6 +100,7 @@ Catat:
 - apakah audio/gambar soal tampil baik
 - apakah restore bekerja baik
 - apakah ada false positive yang terlalu sering membuat siswa tertahan
+- apakah token login, simpan jawaban, heartbeat, dan submit masih sesuai kontrak `docs/exam-api.md`
 
 Gunakan [DEVICE_TEST_MATRIX.md](./DEVICE_TEST_MATRIX.md) agar hasil antar perangkat tetap sebanding.
 

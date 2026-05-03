@@ -2,6 +2,8 @@
 
 Flutter Android client untuk peserta CBT MTs Negeri 2 Kolaka Utara.
 
+Status: sinkron per 2026-05-03. Aplikasi ini adalah client/APK BYOD, bukan service VPS.
+
 ## Fokus MVP
 
 - login token peserta ke backend Go
@@ -10,6 +12,8 @@ Flutter Android client untuk peserta CBT MTs Negeri 2 Kolaka Utara.
 - simpan jawaban lokal dan sinkron ulang saat koneksi membaik
 - restore sesi aktif bila aplikasi dibuka kembali
 - baseline deterrence BYOD: `FLAG_SECURE`, blok tombol kembali, event `app_switch`, resume re-check
+- guidance panel untuk kondisi backend penting seperti `403`, `409`, dan transport failure
+- secure snapshot split: token/fingerprint/jawaban sensitif tidak disimpan bersama metadata restore ringan
 
 ## Constraint BYOD
 
@@ -19,6 +23,12 @@ Perangkat adalah milik siswa sendiri, jadi aplikasi ini tidak bisa menjanjikan m
 - memperjelas status sinkron dan gangguan koneksi
 - mengirim telemetry peringatan ke server saat perilaku resume/switch berisiko
 - menahan submit manual saat mode koneksi menurun berulang
+
+Yang tidak boleh diklaim:
+
+- bukan kiosk penuh untuk semua vendor Android
+- fingerprint perangkat bukan bukti identitas kuat
+- `FLAG_SECURE` bukan jaminan anti-cheat total
 
 ## Menjalankan Lokal
 
@@ -105,3 +115,12 @@ Belum ada:
 - cache media offline penuh
 - video
 - mode kiosk Android terkelola
+
+## Dokumen Operasional Terkait
+
+- [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md)
+- [OPERATOR_QUICKSTART.md](./OPERATOR_QUICKSTART.md)
+- [BYOD_TRIAL_PROCEDURE.md](./BYOD_TRIAL_PROCEDURE.md)
+- [DEVICE_TEST_MATRIX.md](./DEVICE_TEST_MATRIX.md)
+- [../../docs/exam-api.md](../../docs/exam-api.md)
+- [../../docs/cbt-smoke-checklist.md](../../docs/cbt-smoke-checklist.md)
