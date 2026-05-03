@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -356,7 +357,7 @@ func TestCbtQuestionSerializerHelpers(t *testing.T) {
 		WorkflowStatus: "draft",
 		Version:        1,
 	}
-	detailMap := serializeQuestionDetailRow(detailRow)
+	detailMap := serializeQuestionDetailRow(detailRow, true)
 	if detailMap["subject_name"] != "Bahasa Arab" || detailMap["suggested_mode"] != "advance" || detailMap["rubric_html"] != "<p>Rubrik</p>" {
 		t.Fatalf("serializeQuestionDetailRow() = %+v, want detail metadata and advance mode", detailMap)
 	}
@@ -500,6 +501,11 @@ func TestCbtQuestionHandlersForwardSuccessPaths(t *testing.T) {
 	}
 	if rec.Body.String() != "kode,tipe\nQ-001,essay\n" {
 		t.Fatalf("ExportCSV() body = %q, want CSV content", rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	(&CbtQuestion{svc: exportFake}).ExportCSV(rec, withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/questions/export", nil), jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa"}))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("ExportCSV(guru) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
 	}
 
 	templateFake := &fakeCbtQuestionService{
@@ -707,6 +713,53 @@ func TestCbtQuestionWorkflowAndDuplicateForwardActor(t *testing.T) {
 	}
 	if len(revisionAudit.entries) != 1 || revisionAudit.entries[0].Action != "CBT_QUESTION_MARK_REVISION" {
 		t.Fatalf("MarkRevision audit = %#v, want one revision audit", revisionAudit.entries)
+	}
+}
+
+func TestCbtQuestionGetAnswerKeyVisibility(t *testing.T) {
+	subjectID := handlerTestUUID(220)
+	questionID := handlerTestUUID(221)
+	row := db.GetCbtQuestionDetailRow{
+		ID:             questionID,
+		SubjectID:      subjectID,
+		SubjectName:    "IPA",
+		SubjectCode:    "IPA",
+		Code:           "Q-KEY",
+		QuestionText:   "Energi",
+		QuestionType:   "multiple_choice",
+		AnswerKey:      "A",
+		Difficulty:     db.CbtQuestionDifficultyEnumEasy,
+		Status:         db.CbtQuestionStatusEnumDraft,
+		WorkflowStatus: "draft",
+		AuthorUsername: "guru.ipa",
+	}
+
+	run := func(t *testing.T, claims jwt.MapClaims) map[string]any {
+		t.Helper()
+		req := withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/questions/"+questionID.String(), nil), claims)
+		req = withRouteParam(req, "id", questionID.String())
+		rec := httptest.NewRecorder()
+		(&CbtQuestion{svc: &fakeCbtQuestionService{getDetailRow: row}}).Get(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("Get() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			Data map[string]any `json:"data"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("Get() decode response: %v body=%s", err, rec.Body.String())
+		}
+		return payload.Data
+	}
+
+	if got := run(t, jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.lain"})["answer_key"]; got != "" {
+		t.Fatalf("Get(non-author guru) answer_key = %#v, want redacted empty string", got)
+	}
+	if got := run(t, jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa"})["answer_key"]; got != "A" {
+		t.Fatalf("Get(author guru) answer_key = %#v, want A", got)
+	}
+	if got := run(t, jwt.MapClaims{"roles": []any{"admin"}, "usr": "admin"})["answer_key"]; got != "A" {
+		t.Fatalf("Get(admin) answer_key = %#v, want A", got)
 	}
 }
 

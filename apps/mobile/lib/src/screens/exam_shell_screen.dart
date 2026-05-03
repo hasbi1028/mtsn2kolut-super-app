@@ -713,6 +713,10 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     return _playedAudioQuestionIds.contains(question.id);
   }
 
+  Map<String, String> _examAssetHeaders() {
+    return widget.client.examAssetHeaders(widget.examToken);
+  }
+
   @override
   Widget build(BuildContext context) {
     final payload = widget.initialPayload;
@@ -1105,6 +1109,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   Widget _buildQuestionArea(ThemeData theme, ExamQuestion question) {
     final hasAudio = _questionHasAudio(question);
     final audioPlayed = _questionAudioPlayed(question);
+    final assetHeaders = _examAssetHeaders();
 
     return Card(
       child: Padding(
@@ -1148,13 +1153,17 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               const SizedBox(height: 16),
             ],
             if (question.stimulusMediaUrl.trim().isNotEmpty) ...[
-              QuestionMediaCard(url: question.stimulusMediaUrl),
+              QuestionMediaCard(
+                url: question.stimulusMediaUrl,
+                headers: assetHeaders,
+              ),
               const SizedBox(height: 16),
             ],
             if (question.stimulusAudioUrl.trim().isNotEmpty) ...[
               AudioPromptCard(
                 url: question.stimulusAudioUrl,
                 label: 'Audio stimulus',
+                headers: assetHeaders,
                 hasBeenPlayed: audioPlayed,
                 onPlayed: () => _markQuestionAudioPlayed(question.id),
               ),
@@ -1173,13 +1182,17 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             ),
             if (question.stemMediaUrl.trim().isNotEmpty) ...[
               const SizedBox(height: 16),
-              QuestionMediaCard(url: question.stemMediaUrl),
+              QuestionMediaCard(
+                url: question.stemMediaUrl,
+                headers: assetHeaders,
+              ),
             ],
             if (question.stemAudioUrl.trim().isNotEmpty) ...[
               const SizedBox(height: 16),
               AudioPromptCard(
                 url: question.stemAudioUrl,
                 label: 'Audio soal',
+                headers: assetHeaders,
                 hasBeenPlayed: audioPlayed,
                 onPlayed: () => _markQuestionAudioPlayed(question.id),
               ),

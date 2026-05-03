@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -308,9 +310,16 @@ func (s *CbtQuestion) Archive(ctx context.Context, id pgtype.UUID, username stri
 	if err != nil {
 		return db.CbtQuestion{}, err
 	}
+	if questionUsageLocked(current.PackageCount, current.AnswerCount) {
+		return db.CbtQuestion{}, fmt.Errorf("%w: soal sudah masuk paket ujian atau memiliki jawaban siswa. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+	}
 	input := questionInputFromCurrent(current, username)
 	input.Status = db.CbtQuestionStatusEnumArchived
 	return s.Update(ctx, input)
+}
+
+func questionUsageLocked(packageCount, answerCount int32) bool {
+	return packageCount > 0 || answerCount > 0
 }
 
 func (s *CbtQuestion) DuplicateAsDraft(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error) {

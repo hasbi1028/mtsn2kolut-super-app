@@ -19,6 +19,19 @@ void main() {
       await server.close(force: true);
     });
 
+    test('examAssetHeaders carries exam token and device fingerprint', () {
+      final client = ExamApiClient(
+        baseUrl: 'http://127.0.0.1',
+        deviceFingerprint: deviceFingerprint,
+      );
+
+      expect(client.examAssetHeaders(' token-1 '), <String, String>{
+        'X-Exam-Token': 'token-1',
+        'X-Device-Fingerprint': deviceFingerprint,
+      });
+      expect(client.examAssetHeaders(''), isEmpty);
+    });
+
     test('login unwraps data envelope into payload', () async {
       server.listen((request) async {
         expect(request.uri.path, '/api/exam/login');

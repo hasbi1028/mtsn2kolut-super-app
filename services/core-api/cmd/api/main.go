@@ -317,15 +317,15 @@ func main() {
 		// Scoring & Results
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/score", sessionH.ScoreSession)
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/results", sessionH.GuruAwareResults)
-		r.With(requireCbt).Get("/api/cbt/sessions/{id}/item-analysis", sessionH.GetItemAnalysis)
+		r.With(requireAdmin).Get("/api/cbt/sessions/{id}/item-analysis", sessionH.GetItemAnalysis)
 		r.With(requireAdmin).Post("/api/cbt/sessions/{id}/participants/{pid}/answer", sessionH.RecordAnswer)
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/participants/{pid}/answers", sessionH.GetParticipantAnswers)
 
 		// Proctoring
-		r.With(requireCbt).Get("/api/cbt/sessions/{id}/proctoring", sessionH.GetProctoringStatus)
-		r.With(requireCbt).Get("/api/cbt/sessions/{id}/proctoring/events", sessionH.ListParticipantEvents)
-		r.With(requireCbt).Post("/api/cbt/sessions/{id}/participants/{pid}/flag", sessionH.FlagParticipant)
-		r.With(requireCbt).Post("/api/cbt/sessions/{id}/participants/{pid}/force-submit", sessionH.ForceSubmitParticipant)
+		r.With(requireAdmin).Get("/api/cbt/sessions/{id}/proctoring", sessionH.GetProctoringStatus)
+		r.With(requireAdmin).Get("/api/cbt/sessions/{id}/proctoring/events", sessionH.ListParticipantEvents)
+		r.With(requireAdmin).Post("/api/cbt/sessions/{id}/participants/{pid}/flag", sessionH.FlagParticipant)
+		r.With(requireAdmin).Post("/api/cbt/sessions/{id}/participants/{pid}/force-submit", sessionH.ForceSubmitParticipant)
 		r.With(requireCbtOps).Get("/api/cbt/proctoring/my-rooms", sessionH.ListMyProctorRooms)
 		r.With(requireCbtOps).Get("/api/cbt/sessions/{id}/rooms/{rid}/proctoring", sessionH.GetRoomProctoringDashboard)
 		r.With(requireCbtOps).Get("/api/cbt/sessions/{id}/rooms/{rid}/print-pack", sessionH.GetRoomProctorPrintPack)

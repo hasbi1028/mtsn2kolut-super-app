@@ -395,6 +395,7 @@ func TestCbtQuestionAssetFileServesFileAndChecksParticipantAccess(t *testing.T) 
 	h := &CbtQuestionAsset{svc: &fakeCbtQuestionAssetService{getRow: baseRow}}
 	rec := httptest.NewRecorder()
 	req := withRouteParam(httptest.NewRequest(http.MethodGet, "/api/cbt/assets/"+assetID.String()+"/file", nil), "id", assetID.String())
+	req = withClaims(req, jwt.MapClaims{"roles": []any{"admin"}, "usr": "operator.cbt"})
 
 	h.File(rec, req)
 
@@ -421,6 +422,21 @@ func TestCbtQuestionAssetFileServesFileAndChecksParticipantAccess(t *testing.T) 
 	if deniedFake.accessQuestionID != questionID || deniedFake.accessPackageID != handlerTestUUID(7) {
 		t.Fatalf("AccessibleByPackage ids = %v/%v, want question/package", deniedFake.accessQuestionID, deniedFake.accessPackageID)
 	}
+
+	teacherDeniedFake := &fakeCbtQuestionAssetService{
+		getRow:      baseRow,
+		questionRow: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.lain"},
+	}
+	teacherReq := withRouteParam(httptest.NewRequest(http.MethodGet, "/api/cbt/assets/"+assetID.String()+"/file", nil), "id", assetID.String())
+	teacherReq = withClaims(teacherReq, jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa"})
+	rec = httptest.NewRecorder()
+	(&CbtQuestionAsset{svc: teacherDeniedFake}).File(rec, teacherReq)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("File(non-author teacher) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+	if teacherDeniedFake.questionID != questionID {
+		t.Fatalf("GetQuestion id = %v, want %v", teacherDeniedFake.questionID, questionID)
+	}
 }
 
 func TestCbtQuestionAssetFileRejectsInvalidAndMissingAssets(t *testing.T) {
@@ -441,6 +457,9 @@ func TestCbtQuestionAssetFileRejectsInvalidAndMissingAssets(t *testing.T) {
 			req := withRouteParam(httptest.NewRequest(http.MethodGet, "/api/cbt/assets/"+tt.id+"/file", nil), "id", tt.id)
 			if tt.name == "access error" {
 				req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, db.GetParticipantByTokenRow{PackageID: handlerTestUUID(10)}))
+			}
+			if tt.name == "missing file" {
+				req = withClaims(req, jwt.MapClaims{"roles": []any{"admin"}, "usr": "operator.cbt"})
 			}
 			rec := httptest.NewRecorder()
 			(&CbtQuestionAsset{svc: tt.svc}).File(rec, req)

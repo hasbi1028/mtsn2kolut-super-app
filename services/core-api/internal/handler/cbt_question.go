@@ -165,7 +165,7 @@ func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit 
 }
 
 func (h *CbtQuestion) ExportCSV(w http.ResponseWriter, r *http.Request) {
-	if !cbtAccessAllowed(r) {
+	if !adminAccessAllowed(r) {
 		api.Forbidden(w)
 		return
 	}
@@ -226,7 +226,7 @@ func (h *CbtQuestion) Get(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
-	api.OK(w, serializeQuestionDetailRow(row))
+	api.OK(w, serializeQuestionDetailRow(row, questionAnswerKeyAllowed(r, row.AuthorUsername)))
 }
 
 func (h *CbtQuestion) Create(w http.ResponseWriter, r *http.Request) {
@@ -779,8 +779,19 @@ func serializeQuestionListRow(row db.ListCbtQuestionsFilteredRow, includeAnswerK
 	}
 }
 
-func serializeQuestionDetailRow(row db.GetCbtQuestionDetailRow) map[string]any {
+func questionAnswerKeyAllowed(r *http.Request, authorUsername string) bool {
+	if adminAccessAllowed(r) {
+		return true
+	}
+	return strings.TrimSpace(currentUsername(r)) != "" && strings.TrimSpace(currentUsername(r)) == strings.TrimSpace(authorUsername)
+}
+
+func serializeQuestionDetailRow(row db.GetCbtQuestionDetailRow, includeAnswerKey bool) map[string]any {
 	suggestedMode := serviceAuthoringModeFromRow(row.QuestionType, row.StemLatex, row.StimulusLatex, row.AcademicPhase, row.CpRef, row.TpRef, row.KdRef, row.IndicatorRef, row.MaterialTopic, row.CognitiveLevel, row.HotsFlag, row.WorkflowStatus, row.WriterNotes, row.ReviewNotes, row.RubricHtml)
+	answerKey := ""
+	if includeAnswerKey {
+		answerKey = row.AnswerKey
+	}
 	return map[string]any{
 		"id":                pgUUIDString(row.ID),
 		"authoring_mode":    suggestedMode,
@@ -797,7 +808,7 @@ func serializeQuestionDetailRow(row db.GetCbtQuestionDetailRow) map[string]any {
 		"option_c":          row.OptionC,
 		"option_d":          row.OptionD,
 		"option_e":          row.OptionE,
-		"answer_key":        row.AnswerKey,
+		"answer_key":        answerKey,
 		"explanation":       row.Explanation,
 		"difficulty":        row.Difficulty,
 		"status":            row.Status,

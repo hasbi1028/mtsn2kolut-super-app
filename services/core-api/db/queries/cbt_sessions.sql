@@ -96,6 +96,26 @@ LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 WHERE ep.session_id = $1
 ORDER BY s.nama ASC;
 
+-- name: ListCbtExamParticipantsByTeacher :many
+SELECT
+  ep.id, ep.session_id, ep.student_id,
+  s.nis, s.nama, s.gender,
+  ep.token, ep.room_id, ep.seat_no, ep.joined_at, ep.submitted_at, ep.score,
+  ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.last_heartbeat, ep.created_at,
+  COALESCE(r.room_name, '') AS room_name
+FROM cbt_exam_participants ep
+JOIN students s ON s.id = ep.student_id
+JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+JOIN cbt_packages p ON p.id = ses.package_id
+JOIN class_subject_assignments csa
+  ON csa.subject_id = p.subject_id
+ AND csa.class_id = s.class_id
+ AND csa.teacher_employee_id = sqlc.arg(teacher_employee_id)
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.session_id = sqlc.arg(session_id)
+ORDER BY s.nama ASC;
+
 -- name: GetParticipantByToken :one
 SELECT
   ep.id, ep.session_id, ep.student_id,
@@ -142,7 +162,12 @@ ON CONFLICT (session_id, student_id) DO NOTHING;
 -- name: GenerateTokensForSession :exec
 UPDATE cbt_exam_participants
 SET token = encode(gen_random_bytes(16), 'hex')
-WHERE session_id = $1 AND (token = '' OR token IS NULL);
+WHERE session_id = $1
+  AND (
+    token = ''
+    OR token IS NULL
+    OR token !~ '^[0-9a-f]{32}$'
+  );
 
 -- name: RegenerateParticipantToken :one
 UPDATE cbt_exam_participants
@@ -447,8 +472,7 @@ UPDATE cbt_exam_participants ep
 SET score = CASE
       WHEN score_parts.total_points > 0 THEN ROUND((score_parts.earned_points / score_parts.total_points) * 100, 2)
       ELSE 0
-    END,
-  submitted_at = COALESCE(ep.submitted_at, NOW())
+    END
 FROM score_parts
 WHERE ep.id = score_parts.participant_id;
 
@@ -657,13 +681,20 @@ JOIN cbt_packages p ON p.id = s.package_id
 LEFT JOIN school_classes c ON c.id = s.class_id
 LEFT JOIN (
   SELECT
-    session_id,
+    ep.session_id,
     COUNT(*)::int AS participant_count,
-    COUNT(*) FILTER (WHERE room_id IS NOT NULL)::int AS assigned_participant_count,
-    COUNT(*) FILTER (WHERE room_id IS NULL)::int AS unassigned_participant_count,
-    COUNT(*) FILTER (WHERE room_id IS NOT NULL AND seat_no IS NULL)::int AS missing_seat_count
-  FROM cbt_exam_participants
-  GROUP BY session_id
+    COUNT(*) FILTER (WHERE ep.room_id IS NOT NULL)::int AS assigned_participant_count,
+    COUNT(*) FILTER (WHERE ep.room_id IS NULL)::int AS unassigned_participant_count,
+    COUNT(*) FILTER (WHERE ep.room_id IS NOT NULL AND ep.seat_no IS NULL)::int AS missing_seat_count
+  FROM cbt_exam_participants ep
+  JOIN students st ON st.id = ep.student_id
+  JOIN cbt_exam_sessions ses_scope ON ses_scope.id = ep.session_id
+  JOIN cbt_packages p_scope ON p_scope.id = ses_scope.package_id
+  JOIN class_subject_assignments csa_scope
+    ON csa_scope.subject_id = p_scope.subject_id
+   AND csa_scope.class_id = st.class_id
+   AND csa_scope.teacher_employee_id = $1
+  GROUP BY ep.session_id
 ) ps ON ps.session_id = s.id
 LEFT JOIN (
   SELECT
@@ -749,6 +780,21 @@ SELECT EXISTS(
   WHERE session_id = $1 AND id = $2
 ) AS has_participant;
 
+-- name: HasSessionParticipantByTeacher :one
+SELECT EXISTS(
+  SELECT 1
+  FROM cbt_exam_participants ep
+  JOIN students st ON st.id = ep.student_id
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN class_subject_assignments csa
+    ON csa.subject_id = p.subject_id
+   AND csa.class_id = st.class_id
+   AND csa.teacher_employee_id = sqlc.arg(teacher_employee_id)
+  WHERE ep.session_id = sqlc.arg(session_id)
+    AND ep.id = sqlc.arg(participant_id)
+) AS has_participant;
+
 -- name: HasSessionRoom :one
 SELECT EXISTS(
   SELECT 1
@@ -762,6 +808,22 @@ SELECT EXISTS(
   FROM cbt_student_answers sa
   JOIN cbt_exam_participants ep ON ep.id = sa.participant_id
   WHERE ep.session_id = $1 AND sa.id = $2
+) AS has_answer;
+
+-- name: HasSessionAnswerByTeacher :one
+SELECT EXISTS(
+  SELECT 1
+  FROM cbt_student_answers sa
+  JOIN cbt_exam_participants ep ON ep.id = sa.participant_id
+  JOIN students st ON st.id = ep.student_id
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN class_subject_assignments csa
+    ON csa.subject_id = p.subject_id
+   AND csa.class_id = st.class_id
+   AND csa.teacher_employee_id = sqlc.arg(teacher_employee_id)
+  WHERE ep.session_id = sqlc.arg(session_id)
+    AND sa.id = sqlc.arg(answer_id)
 ) AS has_answer;
 
 -- name: GetParticipantAnswers :many

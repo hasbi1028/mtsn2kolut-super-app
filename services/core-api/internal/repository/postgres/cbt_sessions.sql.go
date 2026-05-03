@@ -230,7 +230,12 @@ func (q *Queries) ForceSubmitParticipant(ctx context.Context, arg ForceSubmitPar
 const generateTokensForSession = `-- name: GenerateTokensForSession :exec
 UPDATE cbt_exam_participants
 SET token = encode(gen_random_bytes(16), 'hex')
-WHERE session_id = $1 AND (token = '' OR token IS NULL)
+WHERE session_id = $1
+  AND (
+    token = ''
+    OR token IS NULL
+    OR token !~ '^[0-9a-f]{32}$'
+  )
 `
 
 func (q *Queries) GenerateTokensForSession(ctx context.Context, sessionID pgtype.UUID) error {
@@ -973,6 +978,36 @@ func (q *Queries) HasSessionAnswer(ctx context.Context, arg HasSessionAnswerPara
 	return has_answer, err
 }
 
+const hasSessionAnswerByTeacher = `-- name: HasSessionAnswerByTeacher :one
+SELECT EXISTS(
+  SELECT 1
+  FROM cbt_student_answers sa
+  JOIN cbt_exam_participants ep ON ep.id = sa.participant_id
+  JOIN students st ON st.id = ep.student_id
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN class_subject_assignments csa
+    ON csa.subject_id = p.subject_id
+   AND csa.class_id = st.class_id
+   AND csa.teacher_employee_id = $1
+  WHERE ep.session_id = $2
+    AND sa.id = $3
+) AS has_answer
+`
+
+type HasSessionAnswerByTeacherParams struct {
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+	SessionID         pgtype.UUID `json:"session_id"`
+	AnswerID          pgtype.UUID `json:"answer_id"`
+}
+
+func (q *Queries) HasSessionAnswerByTeacher(ctx context.Context, arg HasSessionAnswerByTeacherParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasSessionAnswerByTeacher, arg.TeacherEmployeeID, arg.SessionID, arg.AnswerID)
+	var has_answer bool
+	err := row.Scan(&has_answer)
+	return has_answer, err
+}
+
 const hasSessionParticipant = `-- name: HasSessionParticipant :one
 SELECT EXISTS(
   SELECT 1
@@ -988,6 +1023,35 @@ type HasSessionParticipantParams struct {
 
 func (q *Queries) HasSessionParticipant(ctx context.Context, arg HasSessionParticipantParams) (bool, error) {
 	row := q.db.QueryRow(ctx, hasSessionParticipant, arg.SessionID, arg.ID)
+	var has_participant bool
+	err := row.Scan(&has_participant)
+	return has_participant, err
+}
+
+const hasSessionParticipantByTeacher = `-- name: HasSessionParticipantByTeacher :one
+SELECT EXISTS(
+  SELECT 1
+  FROM cbt_exam_participants ep
+  JOIN students st ON st.id = ep.student_id
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_packages p ON p.id = ses.package_id
+  JOIN class_subject_assignments csa
+    ON csa.subject_id = p.subject_id
+   AND csa.class_id = st.class_id
+   AND csa.teacher_employee_id = $1
+  WHERE ep.session_id = $2
+    AND ep.id = $3
+) AS has_participant
+`
+
+type HasSessionParticipantByTeacherParams struct {
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+	SessionID         pgtype.UUID `json:"session_id"`
+	ParticipantID     pgtype.UUID `json:"participant_id"`
+}
+
+func (q *Queries) HasSessionParticipantByTeacher(ctx context.Context, arg HasSessionParticipantByTeacherParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasSessionParticipantByTeacher, arg.TeacherEmployeeID, arg.SessionID, arg.ParticipantID)
 	var has_participant bool
 	err := row.Scan(&has_participant)
 	return has_participant, err
@@ -1096,6 +1160,92 @@ func (q *Queries) ListCbtExamParticipants(ctx context.Context, sessionID pgtype.
 	items := []ListCbtExamParticipantsRow{}
 	for rows.Next() {
 		var i ListCbtExamParticipantsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.StudentID,
+			&i.Nis,
+			&i.Nama,
+			&i.Gender,
+			&i.Token,
+			&i.RoomID,
+			&i.SeatNo,
+			&i.JoinedAt,
+			&i.SubmittedAt,
+			&i.Score,
+			&i.AppSwitchCount,
+			&i.ScreenshotAttempt,
+			&i.SuspiciousFlag,
+			&i.LastHeartbeat,
+			&i.CreatedAt,
+			&i.RoomName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtExamParticipantsByTeacher = `-- name: ListCbtExamParticipantsByTeacher :many
+SELECT
+  ep.id, ep.session_id, ep.student_id,
+  s.nis, s.nama, s.gender,
+  ep.token, ep.room_id, ep.seat_no, ep.joined_at, ep.submitted_at, ep.score,
+  ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.last_heartbeat, ep.created_at,
+  COALESCE(r.room_name, '') AS room_name
+FROM cbt_exam_participants ep
+JOIN students s ON s.id = ep.student_id
+JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+JOIN cbt_packages p ON p.id = ses.package_id
+JOIN class_subject_assignments csa
+  ON csa.subject_id = p.subject_id
+ AND csa.class_id = s.class_id
+ AND csa.teacher_employee_id = $1
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.session_id = $2
+ORDER BY s.nama ASC
+`
+
+type ListCbtExamParticipantsByTeacherParams struct {
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+	SessionID         pgtype.UUID `json:"session_id"`
+}
+
+type ListCbtExamParticipantsByTeacherRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	SessionID         pgtype.UUID        `json:"session_id"`
+	StudentID         pgtype.UUID        `json:"student_id"`
+	Nis               string             `json:"nis"`
+	Nama              string             `json:"nama"`
+	Gender            GenderEnum         `json:"gender"`
+	Token             string             `json:"token"`
+	RoomID            pgtype.UUID        `json:"room_id"`
+	SeatNo            pgtype.Int4        `json:"seat_no"`
+	JoinedAt          pgtype.Timestamptz `json:"joined_at"`
+	SubmittedAt       pgtype.Timestamptz `json:"submitted_at"`
+	Score             pgtype.Numeric     `json:"score"`
+	AppSwitchCount    int32              `json:"app_switch_count"`
+	ScreenshotAttempt int32              `json:"screenshot_attempt"`
+	SuspiciousFlag    bool               `json:"suspicious_flag"`
+	LastHeartbeat     pgtype.Timestamptz `json:"last_heartbeat"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	RoomName          string             `json:"room_name"`
+}
+
+func (q *Queries) ListCbtExamParticipantsByTeacher(ctx context.Context, arg ListCbtExamParticipantsByTeacherParams) ([]ListCbtExamParticipantsByTeacherRow, error) {
+	rows, err := q.db.Query(ctx, listCbtExamParticipantsByTeacher, arg.TeacherEmployeeID, arg.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtExamParticipantsByTeacherRow{}
+	for rows.Next() {
+		var i ListCbtExamParticipantsByTeacherRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SessionID,
@@ -1272,13 +1422,20 @@ JOIN cbt_packages p ON p.id = s.package_id
 LEFT JOIN school_classes c ON c.id = s.class_id
 LEFT JOIN (
   SELECT
-    session_id,
+    ep.session_id,
     COUNT(*)::int AS participant_count,
-    COUNT(*) FILTER (WHERE room_id IS NOT NULL)::int AS assigned_participant_count,
-    COUNT(*) FILTER (WHERE room_id IS NULL)::int AS unassigned_participant_count,
-    COUNT(*) FILTER (WHERE room_id IS NOT NULL AND seat_no IS NULL)::int AS missing_seat_count
-  FROM cbt_exam_participants
-  GROUP BY session_id
+    COUNT(*) FILTER (WHERE ep.room_id IS NOT NULL)::int AS assigned_participant_count,
+    COUNT(*) FILTER (WHERE ep.room_id IS NULL)::int AS unassigned_participant_count,
+    COUNT(*) FILTER (WHERE ep.room_id IS NOT NULL AND ep.seat_no IS NULL)::int AS missing_seat_count
+  FROM cbt_exam_participants ep
+  JOIN students st ON st.id = ep.student_id
+  JOIN cbt_exam_sessions ses_scope ON ses_scope.id = ep.session_id
+  JOIN cbt_packages p_scope ON p_scope.id = ses_scope.package_id
+  JOIN class_subject_assignments csa_scope
+    ON csa_scope.subject_id = p_scope.subject_id
+   AND csa_scope.class_id = st.class_id
+   AND csa_scope.teacher_employee_id = $1
+  GROUP BY ep.session_id
 ) ps ON ps.session_id = s.id
 LEFT JOIN (
   SELECT
@@ -1981,8 +2138,7 @@ UPDATE cbt_exam_participants ep
 SET score = CASE
       WHEN score_parts.total_points > 0 THEN ROUND((score_parts.earned_points / score_parts.total_points) * 100, 2)
       ELSE 0
-    END,
-  submitted_at = COALESCE(ep.submitted_at, NOW())
+    END
 FROM score_parts
 WHERE ep.id = score_parts.participant_id
 `

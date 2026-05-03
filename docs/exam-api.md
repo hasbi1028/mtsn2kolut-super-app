@@ -6,10 +6,11 @@ Dokumentasi ini merinci API yang digunakan oleh portal siswa (Flutter) untuk men
 `https://api-cbt.mtsn2kolut.sch.id` (Sesuaikan dengan environment)
 
 ## Autentikasi
-Aplikasi Flutter tidak menggunakan JWT admin. Sebagai gantinya, autentikasi menggunakan **Token Ujian** (8-digit hex) yang didapat siswa dari kartu ujian atau pengawas.
+Aplikasi Flutter tidak menggunakan JWT admin. Sebagai gantinya, autentikasi menggunakan **Token Ujian** 128-bit hex yang didapat siswa dari kartu ujian atau pengawas.
 
 Setelah login berhasil, semua request selanjutnya wajib menyertakan header:
 `X-Exam-Token: [TOKEN_SISWA]`
+`X-Device-Fingerprint: [FINGERPRINT_PERANGKAT]`
 
 ---
 
@@ -96,10 +97,11 @@ Checklist sebelum backend mengubah payload:
 
 1. Jangan hapus field yang sudah dipakai mobile tanpa migration contract yang jelas.
 2. Untuk field rich content baru, tetap sediakan fallback plain text bila memungkinkan.
-3. URL media harus absolut atau konsisten dapat di-resolve oleh app.
+3. URL media harus absolut atau konsisten dapat di-resolve oleh app, tanpa menyisipkan token ujian di query string.
 4. Untuk soal tanpa media/audio, kirim string kosong atau omit dengan bentuk yang tetap aman diparse.
 5. Jangan ubah arti `answered_count`, `total_questions`, dan `time_remaining_seconds` karena dipakai untuk restore, progress, dan submit guard.
 6. Jika menambah jenis media baru, dokumentasikan dulu sebelum dianggap wajib didukung mobile.
+7. Fetch media/audio CBT oleh peserta wajib memakai header `X-Exam-Token` dan `X-Device-Fingerprint`; jangan mengembalikan URL berisi `exam_token`.
 
 ---
 
@@ -107,7 +109,7 @@ Checklist sebelum backend mengubah payload:
 Mengecek sisa waktu dan progres pengerjaan di server.
 
 - **Endpoint:** `GET /api/exam/status`
-- **Headers:** `X-Exam-Token`
+- **Headers:** `X-Exam-Token`, `X-Device-Fingerprint`
 - **Success Response (200 OK):**
 ```json
 {
@@ -126,7 +128,7 @@ Mengecek sisa waktu dan progres pengerjaan di server.
 Wajib dipanggil secara berkala (misal setiap 30-60 detik) untuk menandakan siswa masih aktif di aplikasi.
 
 - **Endpoint:** `POST /api/exam/heartbeat`
-- **Headers:** `X-Exam-Token`
+- **Headers:** `X-Exam-Token`, `X-Device-Fingerprint`
 - **Response:** `200 OK`
 
 ---
@@ -135,7 +137,7 @@ Wajib dipanggil secara berkala (misal setiap 30-60 detik) untuk menandakan siswa
 Mencatat aktivitas mencurigakan atau perpindahan status aplikasi.
 
 - **Endpoint:** `POST /api/exam/event`
-- **Headers:** `X-Exam-Token`
+- **Headers:** `X-Exam-Token`, `X-Device-Fingerprint`
 - **Body:**
 ```json
 {
@@ -151,7 +153,7 @@ Mencatat aktivitas mencurigakan atau perpindahan status aplikasi.
 Mengirim jawaban untuk satu soal. Panggil setiap kali siswa memilih/mengubah jawaban.
 
 - **Endpoint:** `POST /api/exam/answer`
-- **Headers:** `X-Exam-Token`
+- **Headers:** `X-Exam-Token`, `X-Device-Fingerprint`
 - **Body:**
 ```json
 {
@@ -169,7 +171,7 @@ Mengirim jawaban untuk satu soal. Panggil setiap kali siswa memilih/mengubah jaw
 Finalisasi pengerjaan. Setelah ini, token tidak bisa digunakan lagi untuk menjawab.
 
 - **Endpoint:** `POST /api/exam/submit`
-- **Headers:** `X-Exam-Token`
+- **Headers:** `X-Exam-Token`, `X-Device-Fingerprint`
 - **Response:** `200 OK`
 
 ---

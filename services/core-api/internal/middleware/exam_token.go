@@ -62,8 +62,8 @@ func ParticipantFromContext(ctx context.Context) (db.GetParticipantByTokenRow, b
 }
 
 // ExamTokenOrJWT allows asset/file routes to be accessed either by a logged-in
-// admin/guru request (JWT) or by an active exam
-// participant using the `exam_token` query parameter.
+// admin/guru request (JWT) or by an active exam participant using the same
+// header-bound token and device check as operational exam endpoints.
 func ExamTokenOrJWT(
 	jwtSecret string,
 	currentVersion authVersionProvider,
@@ -73,7 +73,7 @@ func ExamTokenOrJWT(
 	jwtOnly := JWT(jwtSecret, currentVersion, validateSession)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if token := strings.TrimSpace(r.URL.Query().Get("exam_token")); token != "" {
+			if token := strings.TrimSpace(r.Header.Get("X-Exam-Token")); token != "" {
 				p, err := lookup(r.Context(), token)
 				if err != nil {
 					api.Unauthorized(w)
@@ -81,6 +81,10 @@ func ExamTokenOrJWT(
 				}
 				if p.SessionStatus != db.CbtSessionStatusEnumActive {
 					api.Forbidden(w)
+					return
+				}
+				if !examDeviceMatchesRequest(r, p) {
+					api.Err(w, http.StatusConflict, "token already bound to another device")
 					return
 				}
 				ctx := context.WithValue(r.Context(), ExamParticipantKey, p)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -648,6 +649,21 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		}
 		if store.updateParams.Status != db.CbtQuestionStatusEnumArchived {
 			t.Fatalf("Archive() status = %q, want archived", store.updateParams.Status)
+		}
+	})
+
+	t.Run("archive rejects used question", func(t *testing.T) {
+		used := current
+		used.PackageCount = 1
+		store := &fakeQuestionStore{current: used}
+		svc := &CbtQuestion{q: store}
+
+		_, err := svc.Archive(context.Background(), questionID, "admin")
+		if !errors.Is(err, domain.ErrConflict) {
+			t.Fatalf("Archive(used) error = %v, want ErrConflict", err)
+		}
+		if store.updateCalls != 0 {
+			t.Fatalf("Archive(used) update calls = %d, want 0", store.updateCalls)
 		}
 	})
 

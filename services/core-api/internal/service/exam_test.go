@@ -434,6 +434,10 @@ func TestExamOperationalMethodsHandleErrorsAndEvents(t *testing.T) {
 	if err := svc.Submit(ctx, participant); !errors.Is(err, submitErr) {
 		t.Fatalf("Submit(submit error) = %v, want %v", err, submitErr)
 	}
+	svc = &Exam{q: &fakeExamStore{submitErr: pgx.ErrNoRows}}
+	if err := svc.Submit(ctx, participant); !errors.Is(err, ErrExamAlreadySubmit) {
+		t.Fatalf("Submit(duplicate submit race) = %v, want ErrExamAlreadySubmit", err)
+	}
 	svc = &Exam{q: &fakeExamStore{eventErr: eventErr, submitRow: db.SubmitParticipantExamRow{ID: participant.ID, SubmittedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}}}}
 	if err := svc.Submit(ctx, participant); !errors.Is(err, eventErr) {
 		t.Fatalf("Submit(event error) = %v, want %v", err, eventErr)

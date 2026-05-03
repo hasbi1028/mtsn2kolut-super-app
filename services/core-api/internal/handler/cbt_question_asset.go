@@ -175,6 +175,8 @@ func (h *CbtQuestionAsset) File(w http.ResponseWriter, r *http.Request) {
 			api.Forbidden(w)
 			return
 		}
+	} else if !h.requireQuestionAssetScope(w, r, asset.QuestionID) {
+		return
 	}
 	f, err := os.Open(asset.StoragePath)
 	if err != nil {

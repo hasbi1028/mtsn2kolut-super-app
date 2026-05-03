@@ -295,6 +295,9 @@ func (s *Exam) Submit(ctx context.Context, p db.GetParticipantByTokenRow) error 
 	}
 	row, err := s.q.SubmitParticipantExam(ctx, p.ID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrExamAlreadySubmit
+		}
 		return err
 	}
 	return s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{

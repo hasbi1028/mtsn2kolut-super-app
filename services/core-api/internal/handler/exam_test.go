@@ -71,7 +71,7 @@ func TestAbsolutizeExamAssetURLHonorsForwardedHeaders(t *testing.T) {
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-Host", "cbt.mtsn2kolut.sch.id")
 
-	got := absolutizeExamAssetURL(req, "", "/api/cbt/assets/asset-1/file")
+	got := absolutizeExamAssetURL(req, "/api/cbt/assets/asset-1/file")
 	want := "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/asset-1/file"
 	if got != want {
 		t.Fatalf("absolutizeExamAssetURL() = %q, want %q", got, want)
@@ -82,7 +82,7 @@ func TestAbsolutizeExamAssetURLFallsBackToRequestHost(t *testing.T) {
 	req := httptest.NewRequest("POST", "http://localhost:8080/api/exam/login", nil)
 	req.Host = "localhost:8080"
 
-	got := absolutizeExamAssetURL(req, "", "api/cbt/assets/asset-2/file")
+	got := absolutizeExamAssetURL(req, "api/cbt/assets/asset-2/file")
 	want := "http://localhost:8080/api/cbt/assets/asset-2/file"
 	if got != want {
 		t.Fatalf("absolutizeExamAssetURL() = %q, want %q", got, want)
@@ -92,7 +92,7 @@ func TestAbsolutizeExamAssetURLFallsBackToRequestHost(t *testing.T) {
 func TestAbsolutizeExamAssetURLLeavesAbsoluteURLUntouched(t *testing.T) {
 	req := httptest.NewRequest("POST", "http://localhost:8080/api/exam/login", nil)
 
-	got := absolutizeExamAssetURL(req, "", "https://cdn.example.com/file.png")
+	got := absolutizeExamAssetURL(req, "https://cdn.example.com/file.png")
 	want := "https://cdn.example.com/file.png"
 	if got != want {
 		t.Fatalf("absolutizeExamAssetURL() = %q, want %q", got, want)
@@ -102,27 +102,27 @@ func TestAbsolutizeExamAssetURLLeavesAbsoluteURLUntouched(t *testing.T) {
 func TestAbsolutizeExamAssetURLCoversEdgeBranches(t *testing.T) {
 	req := httptest.NewRequest("POST", "https://localhost:8443/api/exam/login", nil)
 	req.TLS = &tls.ConnectionState{}
-	got := absolutizeExamAssetURL(req, "tok-1", "/api/cbt/assets/secure/file")
-	want := "https://localhost:8443/api/cbt/assets/secure/file?exam_token=tok-1"
+	got := absolutizeExamAssetURL(req, "/api/cbt/assets/secure/file")
+	want := "https://localhost:8443/api/cbt/assets/secure/file"
 	if got != want {
 		t.Fatalf("absolutizeExamAssetURL(https fallback) = %q, want %q", got, want)
 	}
 
 	req = &http.Request{Header: http.Header{}}
-	if got := absolutizeExamAssetURL(req, "tok-1", "api/cbt/assets/no-host/file"); got != "api/cbt/assets/no-host/file" {
+	if got := absolutizeExamAssetURL(req, "api/cbt/assets/no-host/file"); got != "api/cbt/assets/no-host/file" {
 		t.Fatalf("absolutizeExamAssetURL(no host) = %q, want original relative path", got)
 	}
 
 	req = httptest.NewRequest("POST", "http://localhost:8080/api/exam/login", nil)
-	if got := absolutizeExamAssetURL(req, "tok-1", ""); got != "" {
+	if got := absolutizeExamAssetURL(req, ""); got != "" {
 		t.Fatalf("absolutizeExamAssetURL(empty) = %q, want empty", got)
 	}
-	if got := absolutizeExamAssetURL(req, "tok-1", "http://%zz"); got != "http://%zz" {
+	if got := absolutizeExamAssetURL(req, "http://%zz"); got != "http://%zz" {
 		t.Fatalf("absolutizeExamAssetURL(malformed absolute) = %q, want original malformed URL", got)
 	}
-	got = absolutizeExamAssetURL(req, "tok-2", "https://cdn.example.com/file.png?exam_token=existing")
-	if got != "https://cdn.example.com/file.png?exam_token=existing" {
-		t.Fatalf("absolutizeExamAssetURL(existing token) = %q, want unchanged token", got)
+	got = absolutizeExamAssetURL(req, "https://cdn.example.com/file.png?existing=1")
+	if got != "https://cdn.example.com/file.png?existing=1" {
+		t.Fatalf("absolutizeExamAssetURL(existing query) = %q, want unchanged URL", got)
 	}
 }
 
@@ -142,19 +142,19 @@ func TestAbsolutizeExamLoginResultRewritesAllMediaFields(t *testing.T) {
 		},
 	}
 
-	absolutizeExamLoginResult(req, "exam-token-123", &result)
+	absolutizeExamLoginResult(req, &result)
 
 	question := result.Questions[0]
-	if question.StemMediaURL != "https://mobile-api.example.sch.id/api/cbt/assets/image-1/file?exam_token=exam-token-123" {
+	if question.StemMediaURL != "https://mobile-api.example.sch.id/api/cbt/assets/image-1/file" {
 		t.Fatalf("StemMediaURL = %q", question.StemMediaURL)
 	}
-	if question.StimulusMediaURL != "https://mobile-api.example.sch.id/api/cbt/assets/image-2/file?exam_token=exam-token-123" {
+	if question.StimulusMediaURL != "https://mobile-api.example.sch.id/api/cbt/assets/image-2/file" {
 		t.Fatalf("StimulusMediaURL = %q", question.StimulusMediaURL)
 	}
-	if question.StemAudioURL != "https://mobile-api.example.sch.id/api/cbt/assets/audio-1/file?exam_token=exam-token-123" {
+	if question.StemAudioURL != "https://mobile-api.example.sch.id/api/cbt/assets/audio-1/file" {
 		t.Fatalf("StemAudioURL = %q", question.StemAudioURL)
 	}
-	if question.StimulusAudioURL != "https://mobile-api.example.sch.id/api/cbt/assets/audio-2/file?exam_token=exam-token-123" {
+	if question.StimulusAudioURL != "https://mobile-api.example.sch.id/api/cbt/assets/audio-2/file" {
 		t.Fatalf("StimulusAudioURL = %q", question.StimulusAudioURL)
 	}
 }
@@ -204,10 +204,10 @@ func TestExamLoginWritesWrappedJSONWithAbsoluteMediaURLs(t *testing.T) {
 	if len(payload.Data.Questions) != 1 {
 		t.Fatalf("len(Questions) = %d, want 1", len(payload.Data.Questions))
 	}
-	if payload.Data.Questions[0].StemMediaURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/image-1/file?exam_token=a1b2c3d4" {
+	if payload.Data.Questions[0].StemMediaURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/image-1/file" {
 		t.Fatalf("StemMediaURL = %q", payload.Data.Questions[0].StemMediaURL)
 	}
-	if payload.Data.Questions[0].StimulusAudioURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/audio-1/file?exam_token=a1b2c3d4" {
+	if payload.Data.Questions[0].StimulusAudioURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/audio-1/file" {
 		t.Fatalf("StimulusAudioURL = %q", payload.Data.Questions[0].StimulusAudioURL)
 	}
 	if svc.lastLoginToken != "a1b2c3d4" {

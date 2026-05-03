@@ -39,6 +39,7 @@ type cbtSessionStore interface {
 	ListEntityAuditLogs(ctx context.Context, arg db.ListEntityAuditLogsParams) ([]db.ListEntityAuditLogsRow, error)
 	DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) error
 	ListCbtExamParticipants(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error)
+	ListCbtExamParticipantsByTeacher(ctx context.Context, arg db.ListCbtExamParticipantsByTeacherParams) ([]db.ListCbtExamParticipantsByTeacherRow, error)
 	EnrollClassToSession(ctx context.Context, arg db.EnrollClassToSessionParams) error
 	EnrollGradeToSession(ctx context.Context, arg db.EnrollGradeToSessionParams) error
 	EnrollSchoolToSession(ctx context.Context, sessionID pgtype.UUID) error
@@ -75,10 +76,13 @@ type cbtSessionStore interface {
 	GetSessionResultsByTeacher(ctx context.Context, arg db.GetSessionResultsByTeacherParams) ([]db.GetSessionResultsByTeacherRow, error)
 	GetSessionTeacherAccess(ctx context.Context, arg db.GetSessionTeacherAccessParams) (bool, error)
 	HasSessionParticipant(ctx context.Context, arg db.HasSessionParticipantParams) (bool, error)
+	HasSessionParticipantByTeacher(ctx context.Context, arg db.HasSessionParticipantByTeacherParams) (bool, error)
 	HasSessionRoom(ctx context.Context, arg db.HasSessionRoomParams) (bool, error)
 	HasSessionAnswer(ctx context.Context, arg db.HasSessionAnswerParams) (bool, error)
+	HasSessionAnswerByTeacher(ctx context.Context, arg db.HasSessionAnswerByTeacherParams) (bool, error)
 	GetSessionResults(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionResultsRow, error)
 	GetParticipantAnswers(ctx context.Context, participantID pgtype.UUID) ([]db.GetParticipantAnswersRow, error)
+	ListUngradedEssaysByTeacher(ctx context.Context, arg db.ListUngradedEssaysByTeacherParams) ([]db.ListUngradedEssaysByTeacherRow, error)
 	WithTx(tx pgx.Tx) *db.Queries
 }
 
@@ -293,6 +297,24 @@ func (s *CbtSession) ListParticipants(ctx context.Context, sessionID pgtype.UUID
 	return rows, nil
 }
 
+func (s *CbtSession) ListParticipantsByTeacher(ctx context.Context, sessionID, teacherEmployeeID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error) {
+	rows, err := s.q.ListCbtExamParticipantsByTeacher(ctx, db.ListCbtExamParticipantsByTeacherParams{
+		TeacherEmployeeID: teacherEmployeeID,
+		SessionID:         sessionID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.ListCbtExamParticipantsRow{}, nil
+	}
+	out := make([]db.ListCbtExamParticipantsRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, db.ListCbtExamParticipantsRow(row))
+	}
+	return out, nil
+}
+
 func (s *CbtSession) EnrollClass(ctx context.Context, sessionID, classID pgtype.UUID) error {
 	return s.q.EnrollClassToSession(ctx, db.EnrollClassToSessionParams{
 		SessionID: sessionID,
@@ -402,6 +424,14 @@ func (s *CbtSession) HasParticipant(ctx context.Context, sessionID, participantI
 	})
 }
 
+func (s *CbtSession) HasParticipantByTeacher(ctx context.Context, sessionID, participantID, teacherEmployeeID pgtype.UUID) (bool, error) {
+	return s.q.HasSessionParticipantByTeacher(ctx, db.HasSessionParticipantByTeacherParams{
+		TeacherEmployeeID: teacherEmployeeID,
+		SessionID:         sessionID,
+		ParticipantID:     participantID,
+	})
+}
+
 func (s *CbtSession) HasRoom(ctx context.Context, sessionID, roomID pgtype.UUID) (bool, error) {
 	return s.q.HasSessionRoom(ctx, db.HasSessionRoomParams{
 		SessionID: sessionID,
@@ -413,6 +443,14 @@ func (s *CbtSession) HasAnswer(ctx context.Context, sessionID, answerID pgtype.U
 	return s.q.HasSessionAnswer(ctx, db.HasSessionAnswerParams{
 		SessionID: sessionID,
 		ID:        answerID,
+	})
+}
+
+func (s *CbtSession) HasAnswerByTeacher(ctx context.Context, sessionID, answerID, teacherEmployeeID pgtype.UUID) (bool, error) {
+	return s.q.HasSessionAnswerByTeacher(ctx, db.HasSessionAnswerByTeacherParams{
+		TeacherEmployeeID: teacherEmployeeID,
+		SessionID:         sessionID,
+		AnswerID:          answerID,
 	})
 }
 
@@ -902,6 +940,24 @@ func (s *CbtSession) ListUngradedEssays(ctx context.Context, sessionID pgtype.UU
 		return []db.ListUngradedEssaysRow{}, nil
 	}
 	return rows, nil
+}
+
+func (s *CbtSession) ListUngradedEssaysByTeacher(ctx context.Context, sessionID, teacherEmployeeID pgtype.UUID) ([]db.ListUngradedEssaysRow, error) {
+	rows, err := s.q.ListUngradedEssaysByTeacher(ctx, db.ListUngradedEssaysByTeacherParams{
+		TeacherEmployeeID: teacherEmployeeID,
+		SessionID:         sessionID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.ListUngradedEssaysRow{}, nil
+	}
+	out := make([]db.ListUngradedEssaysRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, db.ListUngradedEssaysRow(row))
+	}
+	return out, nil
 }
 
 // --- Answers & Scoring ---

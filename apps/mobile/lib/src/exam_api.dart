@@ -24,6 +24,19 @@ class ExamApiClient {
   final String? deviceFingerprint;
   final HttpClient _httpClient;
 
+  Map<String, String> examAssetHeaders(String token) {
+    final trimmedToken = token.trim();
+    if (trimmedToken.isEmpty) {
+      return const <String, String>{};
+    }
+    final headers = <String, String>{'X-Exam-Token': trimmedToken};
+    final boundDevice = deviceFingerprint?.trim() ?? '';
+    if (boundDevice.isNotEmpty) {
+      headers['X-Device-Fingerprint'] = boundDevice;
+    }
+    return headers;
+  }
+
   Future<ExamLoginPayload> login({
     required String token,
     required String deviceFingerprint,
@@ -103,12 +116,8 @@ class ExamApiClient {
       final request = await _httpClient.openUrl(method, uri);
       request.headers.contentType = ContentType.json;
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      if (examToken != null && examToken.isNotEmpty) {
-        request.headers.set('X-Exam-Token', examToken);
-      }
-      final boundDevice = deviceFingerprint?.trim() ?? '';
-      if (examToken != null && examToken.isNotEmpty && boundDevice.isNotEmpty) {
-        request.headers.set('X-Device-Fingerprint', boundDevice);
+      for (final entry in examAssetHeaders(examToken ?? '').entries) {
+        request.headers.set(entry.key, entry.value);
       }
       if (body != null) {
         request.write(jsonEncode(body));

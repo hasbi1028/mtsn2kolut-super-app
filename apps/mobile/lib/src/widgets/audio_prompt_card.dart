@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 
@@ -7,12 +10,14 @@ class AudioPromptCard extends StatefulWidget {
     required this.url,
     required this.label,
     this.hasBeenPlayed = false,
+    this.headers = const <String, String>{},
     this.onPlayed,
   });
 
   final String url;
   final String label;
   final bool hasBeenPlayed;
+  final Map<String, String> headers;
   final VoidCallback? onPlayed;
 
   @override
@@ -65,7 +70,7 @@ class _AudioPromptCardState extends State<AudioPromptCard> {
     });
 
     try {
-      await _player.play(UrlSource(widget.url));
+      await _player.play(await _buildSource());
       if (!mounted) {
         return;
       }
@@ -87,6 +92,33 @@ class _AudioPromptCardState extends State<AudioPromptCard> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<Source> _buildSource() async {
+    if (widget.headers.isEmpty) {
+      return UrlSource(widget.url);
+    }
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(Uri.parse(widget.url));
+      for (final entry in widget.headers.entries) {
+        request.headers.set(entry.key, entry.value);
+      }
+      final response = await request.close();
+      if (response.statusCode >= 400) {
+        throw HttpException('audio request failed: ${response.statusCode}');
+      }
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk in response) {
+        builder.add(chunk);
+      }
+      return BytesSource(
+        builder.takeBytes(),
+        mimeType: response.headers.contentType?.mimeType,
+      );
+    } finally {
+      client.close(force: true);
     }
   }
 

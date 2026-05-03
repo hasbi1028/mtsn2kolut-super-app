@@ -959,6 +959,99 @@ func (q *Queries) ListUngradedEssays(ctx context.Context, sessionID pgtype.UUID)
 	return items, nil
 }
 
+const listUngradedEssaysByTeacher = `-- name: ListUngradedEssaysByTeacher :many
+SELECT
+  sa.id AS answer_id,
+  sa.participant_id,
+  sa.question_id,
+  sa.answer,
+  sa.manual_score,
+  sa.graded_at,
+  q.code AS question_code,
+  q.question_text,
+  q.stem_html,
+  q.stimulus_html,
+  q.rubric_html,
+  COALESCE(pq.points, 1)::numeric AS points,
+  s.nis, s.nama,
+  COALESCE(r.room_name, '') AS room_name
+FROM cbt_student_answers sa
+JOIN cbt_questions q ON q.id = sa.question_id
+JOIN cbt_exam_participants ep ON ep.id = sa.participant_id
+JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+JOIN cbt_packages pkg ON pkg.id = ses.package_id
+LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id AND pq.question_id = q.id
+JOIN students s ON s.id = ep.student_id
+JOIN class_subject_assignments csa
+  ON csa.subject_id = pkg.subject_id
+ AND csa.class_id = s.class_id
+ AND csa.teacher_employee_id = $1
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.session_id = $2
+  AND q.question_type = 'essay'
+  AND sa.manual_score IS NULL
+ORDER BY q.code, s.nama
+`
+
+type ListUngradedEssaysByTeacherParams struct {
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+	SessionID         pgtype.UUID `json:"session_id"`
+}
+
+type ListUngradedEssaysByTeacherRow struct {
+	AnswerID      pgtype.UUID        `json:"answer_id"`
+	ParticipantID pgtype.UUID        `json:"participant_id"`
+	QuestionID    pgtype.UUID        `json:"question_id"`
+	Answer        string             `json:"answer"`
+	ManualScore   pgtype.Numeric     `json:"manual_score"`
+	GradedAt      pgtype.Timestamptz `json:"graded_at"`
+	QuestionCode  string             `json:"question_code"`
+	QuestionText  string             `json:"question_text"`
+	StemHtml      string             `json:"stem_html"`
+	StimulusHtml  string             `json:"stimulus_html"`
+	RubricHtml    string             `json:"rubric_html"`
+	Points        pgtype.Numeric     `json:"points"`
+	Nis           string             `json:"nis"`
+	Nama          string             `json:"nama"`
+	RoomName      string             `json:"room_name"`
+}
+
+func (q *Queries) ListUngradedEssaysByTeacher(ctx context.Context, arg ListUngradedEssaysByTeacherParams) ([]ListUngradedEssaysByTeacherRow, error) {
+	rows, err := q.db.Query(ctx, listUngradedEssaysByTeacher, arg.TeacherEmployeeID, arg.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUngradedEssaysByTeacherRow{}
+	for rows.Next() {
+		var i ListUngradedEssaysByTeacherRow
+		if err := rows.Scan(
+			&i.AnswerID,
+			&i.ParticipantID,
+			&i.QuestionID,
+			&i.Answer,
+			&i.ManualScore,
+			&i.GradedAt,
+			&i.QuestionCode,
+			&i.QuestionText,
+			&i.StemHtml,
+			&i.StimulusHtml,
+			&i.RubricHtml,
+			&i.Points,
+			&i.Nis,
+			&i.Nama,
+			&i.RoomName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateCbtQuestion = `-- name: UpdateCbtQuestion :one
 UPDATE cbt_questions
 SET

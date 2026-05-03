@@ -424,6 +424,8 @@ type fakeCbtSessionStore struct {
 	auditErr               error
 	deleteID               pgtype.UUID
 	participantRows        []db.ListCbtExamParticipantsRow
+	participantTeacherRows []db.ListCbtExamParticipantsByTeacherRow
+	participantTeacherArg  db.ListCbtExamParticipantsByTeacherParams
 	participantsErr        error
 	enrollClassArg         db.EnrollClassToSessionParams
 	enrollGradeArg         db.EnrollGradeToSessionParams
@@ -469,6 +471,8 @@ type fakeCbtSessionStore struct {
 	flagArg                db.SetParticipantSuspiciousFlagParams
 	gradeArg               db.GradeStudentEssayParams
 	ungradedRows           []db.ListUngradedEssaysRow
+	ungradedTeacherRows    []db.ListUngradedEssaysByTeacherRow
+	ungradedTeacherArg     db.ListUngradedEssaysByTeacherParams
 	ungradedErr            error
 	answerArg              db.UpsertStudentAnswerParams
 	teacherRows            []db.ListCbtExamSessionsByTeacherRow
@@ -479,10 +483,12 @@ type fakeCbtSessionStore struct {
 	teacherAccess          bool
 	teacherAccessArg       db.GetSessionTeacherAccessParams
 	sessionParticipantArg  db.HasSessionParticipantParams
+	teacherParticipantArg  db.HasSessionParticipantByTeacherParams
 	sessionParticipant     bool
 	sessionRoomArg         db.HasSessionRoomParams
 	sessionRoom            bool
 	sessionAnswerArg       db.HasSessionAnswerParams
+	teacherAnswerArg       db.HasSessionAnswerByTeacherParams
 	sessionAnswer          bool
 	questionScopeArg       db.QuestionBelongsToParticipantPackageParams
 	questionOutsidePackage bool
@@ -549,6 +555,11 @@ func (f *fakeCbtSessionStore) DeleteCbtExamSession(ctx context.Context, id pgtyp
 
 func (f *fakeCbtSessionStore) ListCbtExamParticipants(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error) {
 	return f.participantRows, f.participantsErr
+}
+
+func (f *fakeCbtSessionStore) ListCbtExamParticipantsByTeacher(ctx context.Context, arg db.ListCbtExamParticipantsByTeacherParams) ([]db.ListCbtExamParticipantsByTeacherRow, error) {
+	f.participantTeacherArg = arg
+	return f.participantTeacherRows, f.participantsErr
 }
 
 func (f *fakeCbtSessionStore) EnrollClassToSession(ctx context.Context, arg db.EnrollClassToSessionParams) error {
@@ -723,6 +734,11 @@ func (f *fakeCbtSessionStore) ListUngradedEssays(ctx context.Context, sessionID 
 	return f.ungradedRows, f.ungradedErr
 }
 
+func (f *fakeCbtSessionStore) ListUngradedEssaysByTeacher(ctx context.Context, arg db.ListUngradedEssaysByTeacherParams) ([]db.ListUngradedEssaysByTeacherRow, error) {
+	f.ungradedTeacherArg = arg
+	return f.ungradedTeacherRows, f.ungradedErr
+}
+
 func (f *fakeCbtSessionStore) UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) error {
 	f.answerArg = arg
 	return nil
@@ -756,6 +772,11 @@ func (f *fakeCbtSessionStore) HasSessionParticipant(ctx context.Context, arg db.
 	return f.sessionParticipant, nil
 }
 
+func (f *fakeCbtSessionStore) HasSessionParticipantByTeacher(ctx context.Context, arg db.HasSessionParticipantByTeacherParams) (bool, error) {
+	f.teacherParticipantArg = arg
+	return f.sessionParticipant, nil
+}
+
 func (f *fakeCbtSessionStore) HasSessionRoom(ctx context.Context, arg db.HasSessionRoomParams) (bool, error) {
 	f.sessionRoomArg = arg
 	return f.sessionRoom, nil
@@ -763,6 +784,11 @@ func (f *fakeCbtSessionStore) HasSessionRoom(ctx context.Context, arg db.HasSess
 
 func (f *fakeCbtSessionStore) HasSessionAnswer(ctx context.Context, arg db.HasSessionAnswerParams) (bool, error) {
 	f.sessionAnswerArg = arg
+	return f.sessionAnswer, nil
+}
+
+func (f *fakeCbtSessionStore) HasSessionAnswerByTeacher(ctx context.Context, arg db.HasSessionAnswerByTeacherParams) (bool, error) {
+	f.teacherAnswerArg = arg
 	return f.sessionAnswer, nil
 }
 

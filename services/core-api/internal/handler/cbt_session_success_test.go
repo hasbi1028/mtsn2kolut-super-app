@@ -27,6 +27,7 @@ type fakeCbtSessionService struct {
 
 	hasParticipantSessionID pgtype.UUID
 	hasParticipantID        pgtype.UUID
+	hasParticipantTeacherID pgtype.UUID
 	hasParticipant          bool
 	hasParticipantSet       bool
 	hasParticipantErr       error
@@ -39,6 +40,7 @@ type fakeCbtSessionService struct {
 
 	hasAnswerSessionID pgtype.UUID
 	hasAnswerID        pgtype.UUID
+	hasAnswerTeacherID pgtype.UUID
 	hasAnswer          bool
 	hasAnswerSet       bool
 	hasAnswerErr       error
@@ -72,6 +74,8 @@ type fakeCbtSessionService struct {
 	deleteErr error
 
 	listParticipantsSessionID pgtype.UUID
+	listParticipantsTeacherID pgtype.UUID
+	listParticipantsRows      []db.ListCbtExamParticipantsRow
 	listParticipantsErr       error
 
 	enrollClassSessionID pgtype.UUID
@@ -145,6 +149,7 @@ type fakeCbtSessionService struct {
 	flagErr           error
 
 	ungradedSessionID pgtype.UUID
+	ungradedTeacherID pgtype.UUID
 	ungradedErr       error
 
 	gradeAnswerID pgtype.UUID
@@ -274,6 +279,19 @@ func (f *fakeCbtSessionService) HasParticipant(_ context.Context, sessionID, par
 	return true, nil
 }
 
+func (f *fakeCbtSessionService) HasParticipantByTeacher(_ context.Context, sessionID, participantID, teacherEmployeeID pgtype.UUID) (bool, error) {
+	f.hasParticipantSessionID = sessionID
+	f.hasParticipantID = participantID
+	f.hasParticipantTeacherID = teacherEmployeeID
+	if f.hasParticipantErr != nil {
+		return false, f.hasParticipantErr
+	}
+	if f.hasParticipantSet {
+		return f.hasParticipant, nil
+	}
+	return true, nil
+}
+
 func (f *fakeCbtSessionService) HasRoom(_ context.Context, sessionID, roomID pgtype.UUID) (bool, error) {
 	f.hasRoomSessionID = sessionID
 	f.hasRoomID = roomID
@@ -289,6 +307,19 @@ func (f *fakeCbtSessionService) HasRoom(_ context.Context, sessionID, roomID pgt
 func (f *fakeCbtSessionService) HasAnswer(_ context.Context, sessionID, answerID pgtype.UUID) (bool, error) {
 	f.hasAnswerSessionID = sessionID
 	f.hasAnswerID = answerID
+	if f.hasAnswerErr != nil {
+		return false, f.hasAnswerErr
+	}
+	if f.hasAnswerSet {
+		return f.hasAnswer, nil
+	}
+	return true, nil
+}
+
+func (f *fakeCbtSessionService) HasAnswerByTeacher(_ context.Context, sessionID, answerID, teacherEmployeeID pgtype.UUID) (bool, error) {
+	f.hasAnswerSessionID = sessionID
+	f.hasAnswerID = answerID
+	f.hasAnswerTeacherID = teacherEmployeeID
 	if f.hasAnswerErr != nil {
 		return false, f.hasAnswerErr
 	}
@@ -367,7 +398,16 @@ func (f *fakeCbtSessionService) ListParticipants(_ context.Context, sessionID pg
 	if f.listParticipantsErr != nil {
 		return nil, f.listParticipantsErr
 	}
-	return []db.ListCbtExamParticipantsRow{}, nil
+	return f.listParticipantsRows, nil
+}
+
+func (f *fakeCbtSessionService) ListParticipantsByTeacher(_ context.Context, sessionID, teacherEmployeeID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error) {
+	f.listParticipantsSessionID = sessionID
+	f.listParticipantsTeacherID = teacherEmployeeID
+	if f.listParticipantsErr != nil {
+		return nil, f.listParticipantsErr
+	}
+	return f.listParticipantsRows, nil
 }
 
 func (f *fakeCbtSessionService) EnrollClass(_ context.Context, sessionID, classID pgtype.UUID) error {
@@ -537,6 +577,15 @@ func (f *fakeCbtSessionService) SetSuspiciousFlag(_ context.Context, participant
 
 func (f *fakeCbtSessionService) ListUngradedEssays(_ context.Context, sessionID pgtype.UUID) ([]db.ListUngradedEssaysRow, error) {
 	f.ungradedSessionID = sessionID
+	if f.ungradedErr != nil {
+		return nil, f.ungradedErr
+	}
+	return []db.ListUngradedEssaysRow{}, nil
+}
+
+func (f *fakeCbtSessionService) ListUngradedEssaysByTeacher(_ context.Context, sessionID, teacherEmployeeID pgtype.UUID) ([]db.ListUngradedEssaysRow, error) {
+	f.ungradedSessionID = sessionID
+	f.ungradedTeacherID = teacherEmployeeID
 	if f.ungradedErr != nil {
 		return nil, f.ungradedErr
 	}
@@ -794,6 +843,59 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	}
 	if audit.entries[4].Action != "CBT_SESSION_ROOM_HANDOVER_LOCK" || audit.entries[4].EntityID != pgUUIDString(roomID) {
 		t.Fatalf("handover lock audit entry = %+v, want room handover lock audit", audit.entries[4])
+	}
+}
+
+func TestCbtSessionGetMinutesRedactsTokensForTeacher(t *testing.T) {
+	sessionID := handlerTestUUID(230)
+	teacherID := handlerTestUUID(231)
+	participantID := handlerTestUUID(232)
+	studentID := handlerTestUUID(233)
+	fake := &fakeCbtSessionService{
+		checkAllowed: true,
+		getRow: db.GetCbtExamSessionRow{
+			ID:    sessionID,
+			Title: "Asesmen IPA",
+		},
+		listParticipantsRows: []db.ListCbtExamParticipantsRow{
+			{
+				ID:        participantID,
+				SessionID: sessionID,
+				StudentID: studentID,
+				Nis:       "12345",
+				Nama:      "Ahmad",
+				Token:     "secret-token",
+			},
+		},
+	}
+	h := &CbtSession{svc: fake}
+	req := withRouteParams(
+		withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/minutes", nil), jwt.MapClaims{"roles": []any{"guru"}, "eid": teacherID.String()}),
+		"id", sessionID.String(),
+	)
+	rec := httptest.NewRecorder()
+
+	h.GetMinutes(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GetMinutes(guru) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.listParticipantsTeacherID != teacherID {
+		t.Fatalf("ListParticipantsByTeacher teacher = %v, want %v", fake.listParticipantsTeacherID, teacherID)
+	}
+	var payload struct {
+		Data struct {
+			Participants []map[string]any `json:"participants"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode GetMinutes response: %v body=%s", err, rec.Body.String())
+	}
+	if len(payload.Data.Participants) != 1 {
+		t.Fatalf("participants len = %d, want 1", len(payload.Data.Participants))
+	}
+	if got := payload.Data.Participants[0]["token"]; got != "" {
+		t.Fatalf("guru minutes token = %#v, want redacted empty string", got)
 	}
 }
 
@@ -1315,8 +1417,8 @@ func TestCbtSessionGuruAwareHandlersForwardTeacherScope(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GuruAwareParticipants() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
-	if fake.checkSessionID != sessionID || fake.checkTeacherID != teacherID || fake.listParticipantsSessionID != sessionID {
-		t.Fatalf("GuruAwareParticipants args = check:%v/%v list:%v, want session/teacher/list", fake.checkSessionID, fake.checkTeacherID, fake.listParticipantsSessionID)
+	if fake.checkSessionID != sessionID || fake.checkTeacherID != teacherID || fake.listParticipantsSessionID != sessionID || fake.listParticipantsTeacherID != teacherID {
+		t.Fatalf("GuruAwareParticipants args = check:%v/%v list:%v/%v, want session/teacher/list", fake.checkSessionID, fake.checkTeacherID, fake.listParticipantsSessionID, fake.listParticipantsTeacherID)
 	}
 }
 

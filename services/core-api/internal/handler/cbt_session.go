@@ -40,14 +40,17 @@ type cbtSessionService interface {
 	ListAuditLogs(ctx context.Context, id pgtype.UUID, limit, offset int32) ([]db.ListEntityAuditLogsRow, error)
 	Delete(ctx context.Context, id pgtype.UUID) error
 	ListParticipants(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error)
+	ListParticipantsByTeacher(ctx context.Context, sessionID, teacherEmployeeID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error)
 	EnrollClass(ctx context.Context, sessionID, classID pgtype.UUID) error
 	EnrollGrade(ctx context.Context, sessionID pgtype.UUID, level string) error
 	EnrollSchool(ctx context.Context, sessionID pgtype.UUID) error
 	GenerateTokens(ctx context.Context, sessionID pgtype.UUID) error
 	RegenerateToken(ctx context.Context, participantID pgtype.UUID) (db.RegenerateParticipantTokenRow, error)
 	HasParticipant(ctx context.Context, sessionID, participantID pgtype.UUID) (bool, error)
+	HasParticipantByTeacher(ctx context.Context, sessionID, participantID, teacherEmployeeID pgtype.UUID) (bool, error)
 	HasRoom(ctx context.Context, sessionID, roomID pgtype.UUID) (bool, error)
 	HasAnswer(ctx context.Context, sessionID, answerID pgtype.UUID) (bool, error)
+	HasAnswerByTeacher(ctx context.Context, sessionID, answerID, teacherEmployeeID pgtype.UUID) (bool, error)
 	AssignSeat(ctx context.Context, participantID, roomID pgtype.UUID, seatNo int32) error
 	AutoAssignSeats(ctx context.Context, sessionID pgtype.UUID) error
 	ListRooms(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamRoomsRow, error)
@@ -57,6 +60,7 @@ type cbtSessionService interface {
 	GetProctoringStatus(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error)
 	SetSuspiciousFlag(ctx context.Context, participantID pgtype.UUID, flag bool) error
 	ListUngradedEssays(ctx context.Context, sessionID pgtype.UUID) ([]db.ListUngradedEssaysRow, error)
+	ListUngradedEssaysByTeacher(ctx context.Context, sessionID, teacherEmployeeID pgtype.UUID) ([]db.ListUngradedEssaysRow, error)
 	GradeEssay(ctx context.Context, sessionID, answerID pgtype.UUID, manualScore float64, gradedBy string) error
 	RecordAnswer(ctx context.Context, participantID, questionID pgtype.UUID, answer string) error
 	ScoreSession(ctx context.Context, sessionID pgtype.UUID) error
@@ -182,6 +186,48 @@ func (h *CbtSession) requireSessionTeacherOrAdmin(w http.ResponseWriter, r *http
 
 func (h *CbtSession) requireSessionParticipant(w http.ResponseWriter, r *http.Request, sessionID, participantID pgtype.UUID) bool {
 	ok, err := h.svc.HasParticipant(r.Context(), sessionID, participantID)
+	if err != nil {
+		api.Internal(w, err)
+		return false
+	}
+	if !ok {
+		api.Forbidden(w)
+		return false
+	}
+	return true
+}
+
+func (h *CbtSession) requireSessionParticipantForTeacherOrAdmin(w http.ResponseWriter, r *http.Request, sessionID, participantID pgtype.UUID) bool {
+	if adminAccessAllowed(r) {
+		return h.requireSessionParticipant(w, r, sessionID, participantID)
+	}
+	teacherID := cbtSessionTeacherID(r)
+	if !teacherID.Valid {
+		api.Forbidden(w)
+		return false
+	}
+	ok, err := h.svc.HasParticipantByTeacher(r.Context(), sessionID, participantID, teacherID)
+	if err != nil {
+		api.Internal(w, err)
+		return false
+	}
+	if !ok {
+		api.Forbidden(w)
+		return false
+	}
+	return true
+}
+
+func (h *CbtSession) requireSessionAnswerForTeacherOrAdmin(w http.ResponseWriter, r *http.Request, sessionID, answerID pgtype.UUID) bool {
+	if adminAccessAllowed(r) {
+		return h.requireSessionAnswer(w, r, sessionID, answerID)
+	}
+	teacherID := cbtSessionTeacherID(r)
+	if !teacherID.Valid {
+		api.Forbidden(w)
+		return false
+	}
+	ok, err := h.svc.HasAnswerByTeacher(r.Context(), sessionID, answerID, teacherID)
 	if err != nil {
 		api.Internal(w, err)
 		return false
@@ -1154,7 +1200,8 @@ func (h *CbtSession) GetProctoringStatus(w http.ResponseWriter, r *http.Request)
 		api.BadRequest(w, "invalid session id")
 		return
 	}
-	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
 		return
 	}
 	rows, err := h.svc.GetProctoringStatus(r.Context(), sessionID)
@@ -1171,7 +1218,8 @@ func (h *CbtSession) ListParticipantEvents(w http.ResponseWriter, r *http.Reques
 		api.BadRequest(w, "invalid session id")
 		return
 	}
-	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
 		return
 	}
 	var participantID pgtype.UUID
@@ -1211,7 +1259,8 @@ func (h *CbtSession) FlagParticipant(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid session id")
 		return
 	}
-	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
 		return
 	}
 	pid, err := parseUUID(chi.URLParam(r, "pid"))
@@ -1249,7 +1298,8 @@ func (h *CbtSession) ForceSubmitParticipant(w http.ResponseWriter, r *http.Reque
 		api.BadRequest(w, "invalid session id")
 		return
 	}
-	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
 		return
 	}
 	pid, err := parseUUID(chi.URLParam(r, "pid"))
@@ -1666,10 +1716,26 @@ func (h *CbtSession) ListUngradedEssays(w http.ResponseWriter, r *http.Request) 
 		api.BadRequest(w, "invalid session id")
 		return
 	}
-	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
-		return
+	var rows []db.ListUngradedEssaysRow
+	if adminAccessAllowed(r) {
+		rows, err = h.svc.ListUngradedEssays(r.Context(), sessionID)
+	} else {
+		teacherID := cbtSessionTeacherID(r)
+		if !teacherID.Valid {
+			api.Forbidden(w)
+			return
+		}
+		hasAccess, accessErr := h.svc.CheckTeacherAccess(r.Context(), sessionID, teacherID)
+		if accessErr != nil {
+			api.Internal(w, accessErr)
+			return
+		}
+		if !hasAccess {
+			api.Forbidden(w)
+			return
+		}
+		rows, err = h.svc.ListUngradedEssaysByTeacher(r.Context(), sessionID, teacherID)
 	}
-	rows, err := h.svc.ListUngradedEssays(r.Context(), sessionID)
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -1683,15 +1749,12 @@ func (h *CbtSession) GradeEssay(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid session id")
 		return
 	}
-	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
-		return
-	}
 	answerID, err := parseUUID(chi.URLParam(r, "aid"))
 	if err != nil {
 		api.BadRequest(w, "invalid answer id")
 		return
 	}
-	if !h.requireSessionAnswer(w, r, sessionID, answerID) {
+	if !h.requireSessionAnswerForTeacherOrAdmin(w, r, sessionID, answerID) {
 		return
 	}
 	var body struct {
@@ -1939,6 +2002,13 @@ func (h *CbtSession) GuruAwareParticipants(w http.ResponseWriter, r *http.Reques
 			api.Forbidden(w)
 			return
 		}
+		rows, err := h.svc.ListParticipantsByTeacher(r.Context(), id, eid)
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		api.OK(w, serializeParticipantListRows(rows, false))
+		return
 	}
 	if !ok || !cbtSessionHasAnyRole(claims, "admin", "guru") {
 		api.Forbidden(w)
@@ -1979,7 +2049,8 @@ func (h *CbtSession) GetItemAnalysis(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid id")
 		return
 	}
-	if !h.requireSessionTeacherOrAdmin(w, r, id) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
 		return
 	}
 	itemAnalysisSvc, ok := h.svc.(cbtSessionItemAnalysisService)
@@ -2089,7 +2160,17 @@ func (h *CbtSession) GetMinutes(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
-	participants, err := h.svc.ListParticipants(r.Context(), id)
+	var participants []db.ListCbtExamParticipantsRow
+	if adminAccessAllowed(r) {
+		participants, err = h.svc.ListParticipants(r.Context(), id)
+	} else {
+		teacherID := cbtSessionTeacherID(r)
+		if !teacherID.Valid {
+			api.Forbidden(w)
+			return
+		}
+		participants, err = h.svc.ListParticipantsByTeacher(r.Context(), id, teacherID)
+	}
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -2101,7 +2182,7 @@ func (h *CbtSession) GetMinutes(w http.ResponseWriter, r *http.Request) {
 	}
 	api.OK(w, map[string]any{
 		"session":      session,
-		"participants": participants,
+		"participants": serializeParticipantListRows(participants, adminAccessAllowed(r)),
 		"rooms":        rooms,
 	})
 }
@@ -2120,7 +2201,7 @@ func (h *CbtSession) GetParticipantAnswers(w http.ResponseWriter, r *http.Reques
 		api.BadRequest(w, "invalid participant id")
 		return
 	}
-	if !h.requireSessionParticipant(w, r, sessionID, pid) {
+	if !h.requireSessionParticipantForTeacherOrAdmin(w, r, sessionID, pid) {
 		return
 	}
 	rows, err := h.svc.GetParticipantAnswers(r.Context(), pid)
