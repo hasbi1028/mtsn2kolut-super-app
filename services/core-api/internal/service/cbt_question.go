@@ -661,7 +661,11 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	out.OptionC = optionC
 	out.OptionD = optionD
 	out.OptionE = optionE
-	out.AnswerKey = strings.TrimSpace(strings.ToUpper(out.AnswerKey))
+	if out.QuestionType == "short_answer" {
+		out.AnswerKey = strings.TrimSpace(out.AnswerKey)
+	} else {
+		out.AnswerKey = strings.TrimSpace(strings.ToUpper(out.AnswerKey))
+	}
 
 	if err := validateQuestion(out); err != nil {
 		return SaveCbtQuestionInput{}, err
@@ -673,10 +677,8 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 func validateQuestion(input SaveCbtQuestionInput) error {
 	requiresCompleteContent := input.WorkflowStatus != "draft" || input.Status != db.CbtQuestionStatusEnumDraft
 	if input.AuthoringMode == "beginner" {
-		switch input.QuestionType {
-		case "multiple_choice", "essay":
-		default:
-			return fmt.Errorf("mode beginner hanya mendukung pilihan ganda dan essay")
+		if !beginnerSupportsQuestionType(input.QuestionType) {
+			return fmt.Errorf("mode beginner belum mendukung tipe soal ini")
 		}
 	}
 
@@ -688,7 +690,7 @@ func validateQuestion(input SaveCbtQuestionInput) error {
 		if len(input.Options) < 2 {
 			return fmt.Errorf("opsi jawaban minimal 2 untuk tipe soal objektif")
 		}
-		if input.AuthoringMode == "beginner" && len(input.Options) < 4 {
+		if input.AuthoringMode == "beginner" && input.QuestionType != "true_false" && len(input.Options) < 4 {
 			return fmt.Errorf("mode beginner membutuhkan minimal 4 opsi untuk pilihan ganda")
 		}
 		if input.AnswerKey == "" {
@@ -731,23 +733,38 @@ func validateObjectiveAnswerKey(options []QuestionOption, answerKey string, ques
 	if questionType == "multiple_answer" {
 		keys = strings.Split(answerKey, ",")
 	}
+	validKeyCount := 0
 	for _, key := range keys {
 		key = strings.TrimSpace(strings.ToUpper(key))
 		if key == "" || !available[key] {
 			return fmt.Errorf("answer_key harus sesuai label opsi yang tersedia")
 		}
+		validKeyCount++
+	}
+	if questionType == "multiple_answer" && validKeyCount < 2 {
+		return fmt.Errorf("multiple_answer membutuhkan minimal 2 kunci jawaban")
 	}
 	return nil
 }
 
+func beginnerSupportsQuestionType(questionType string) bool {
+	switch questionType {
+	case "multiple_choice", "multiple_answer", "true_false", "short_answer", "essay":
+		return true
+	default:
+		return false
+	}
+}
+
 func normalizeQuestionType(value string) string {
-	switch strings.TrimSpace(strings.ToLower(value)) {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	switch normalized {
 	case "", "multiple_choice", "single_choice":
 		return "multiple_choice"
 	case "multiple_answer", "true_false", "short_answer", "essay":
-		return value
+		return normalized
 	default:
-		return strings.TrimSpace(strings.ToLower(value))
+		return normalized
 	}
 }
 
@@ -930,7 +947,7 @@ func questionInputFromCurrent(current db.GetCbtQuestionRow, username string) Sav
 }
 
 func suggestQuestionAuthoringMode(questionType, stemLatex, stimulusLatex, academicPhase, cpRef, tpRef, kdRef, indicatorRef, materialTopic, cognitiveLevel string, hotsFlag bool, workflowStatus, writerNotes, reviewNotes, rubricHTML string) string {
-	if questionType != "multiple_choice" && questionType != "essay" {
+	if !beginnerSupportsQuestionType(questionType) {
 		return "advance"
 	}
 	if strings.TrimSpace(stemLatex) != "" || strings.TrimSpace(stimulusLatex) != "" {

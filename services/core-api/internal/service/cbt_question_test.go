@@ -473,21 +473,24 @@ func TestNormalizeQuestionInputBeginnerDefaultsToDraft(t *testing.T) {
 	}
 }
 
-func TestNormalizeQuestionInputBeginnerRejectsAdvancedType(t *testing.T) {
+func TestNormalizeQuestionInputBeginnerSupportsJuknisTypes(t *testing.T) {
 	input := SaveCbtQuestionInput{
 		SubjectID:      pgtype.UUID{Valid: true},
 		AuthoringMode:  "beginner",
 		QuestionType:   "short_answer",
 		QuestionText:   "Jawab singkat",
-		AnswerKey:      "42",
+		AnswerKey:      "Fotosintesis",
 		Difficulty:     db.CbtQuestionDifficultyEnumMedium,
 		Status:         db.CbtQuestionStatusEnumDraft,
 		WorkflowStatus: "draft",
 	}
 
-	_, err := normalizeQuestionInput(input)
-	if err == nil {
-		t.Fatal("normalizeQuestionInput() error = nil, want beginner type rejection")
+	got, err := normalizeQuestionInput(input)
+	if err != nil {
+		t.Fatalf("normalizeQuestionInput() error = %v", err)
+	}
+	if got.QuestionType != "short_answer" || got.AnswerKey != "Fotosintesis" {
+		t.Fatalf("normalizeQuestionInput() type/key = %q/%q, want short_answer/Fotosintesis", got.QuestionType, got.AnswerKey)
 	}
 }
 
@@ -555,6 +558,19 @@ func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
 				WorkflowStatus: "review",
 			},
 			wantErr: "opsi jawaban minimal 2 untuk tipe soal objektif",
+		},
+		{
+			name: "multiple answer requires two keys",
+			input: SaveCbtQuestionInput{
+				SubjectID:      pgtype.UUID{Valid: true},
+				AuthoringMode:  "advance",
+				QuestionType:   "multiple_answer",
+				QuestionText:   "Pilih semua",
+				Options:        []QuestionOption{{Label: "A", Text: "A"}, {Label: "B", Text: "B"}, {Label: "C", Text: "C"}, {Label: "D", Text: "D"}},
+				AnswerKey:      "A",
+				WorkflowStatus: "review",
+			},
+			wantErr: "multiple_answer membutuhkan minimal 2 kunci jawaban",
 		},
 		{
 			name: "beginner multiple choice requires four options",
@@ -669,6 +685,9 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 	if got := normalizeQuestionType(" SINGLE_CHOICE "); got != "multiple_choice" {
 		t.Fatalf("normalizeQuestionType(single_choice) = %q, want multiple_choice", got)
 	}
+	if got := normalizeQuestionType(" TRUE_FALSE "); got != "true_false" {
+		t.Fatalf("normalizeQuestionType(true_false) = %q, want true_false", got)
+	}
 	if got := normalizeQuestionType("matching"); got != "matching" {
 		t.Fatalf("normalizeQuestionType(unknown) = %q, want matching passthrough", got)
 	}
@@ -757,7 +776,7 @@ func TestCbtQuestionSuggestAuthoringMode(t *testing.T) {
 		want string
 	}{
 		{name: "beginner", args: []string{"multiple_choice", "", "", "", "", "", "", "", "", "", "draft", "", "", ""}, want: "beginner"},
-		{name: "type advance", args: []string{"short_answer", "", "", "", "", "", "", "", "", "", "draft", "", "", ""}, want: "advance"},
+		{name: "type beginner", args: []string{"short_answer", "", "", "", "", "", "", "", "", "", "draft", "", "", ""}, want: "beginner"},
 		{name: "latex advance", args: []string{"essay", "", " y ", "", "", "", "", "", "", "", "draft", "", "", ""}, want: "advance"},
 		{name: "metadata advance", args: []string{"essay", "", "", "", "", "TP", "", "", "", "", "draft", "", "", ""}, want: "advance"},
 		{name: "hots advance", args: []string{"essay", "", "", "", "", "", "", "", "", "", "draft", "", "", ""}, hots: true, want: "advance"},

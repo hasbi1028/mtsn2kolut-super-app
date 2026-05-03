@@ -20,8 +20,19 @@
 	type OptionItem = { label: string; text?: string; html?: string; latex?: string };
 	type ModuleMode = 'catalog' | 'composer' | 'review' | 'import';
 	type AuthoringMode = 'beginner' | 'advance';
-	type ComposerQuestionType = 'multiple_choice' | 'essay';
+	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'short_answer' | 'essay';
 	type ComposerSaveIntent = 'draft' | 'review';
+	type AnswerMode = 'single_option' | 'multi_option' | 'fixed_true_false' | 'short_text' | 'rubric';
+	type QuestionTypeConfig = {
+		id: ComposerQuestionType;
+		label: string;
+		shortLabel: string;
+		desc: string;
+		studentHint: string;
+		answerMode: AnswerMode;
+		minOptions: number;
+		maxOptions: number;
+	};
 	type Question = {
 		id: string;
 		authoring_mode?: string;
@@ -125,9 +136,62 @@
 	const MIN_OPTION_COUNT = 4;
 	const MAX_OPTION_COUNT = 6;
 	const ANSWER_LABELS: OptionLabel[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+	const TRUE_FALSE_OPTIONS = ['Benar', 'Salah'];
+	const QUESTION_TYPE_CONFIGS: QuestionTypeConfig[] = [
+		{
+			id: 'multiple_choice',
+			label: 'Pilihan Ganda',
+			shortLabel: 'PG',
+			desc: 'Satu jawaban benar dari beberapa opsi.',
+			studentHint: 'Siswa memilih satu jawaban.',
+			answerMode: 'single_option',
+			minOptions: MIN_OPTION_COUNT,
+			maxOptions: MAX_OPTION_COUNT,
+		},
+		{
+			id: 'multiple_answer',
+			label: 'Jawaban Ganda',
+			shortLabel: 'Ganda',
+			desc: 'Lebih dari satu opsi dapat menjadi kunci.',
+			studentHint: 'Siswa memilih semua jawaban benar.',
+			answerMode: 'multi_option',
+			minOptions: MIN_OPTION_COUNT,
+			maxOptions: MAX_OPTION_COUNT,
+		},
+		{
+			id: 'true_false',
+			label: 'Benar/Salah',
+			shortLabel: 'B/S',
+			desc: 'Pernyataan dengan kunci benar atau salah.',
+			studentHint: 'Siswa memilih Benar atau Salah.',
+			answerMode: 'fixed_true_false',
+			minOptions: 2,
+			maxOptions: 2,
+		},
+		{
+			id: 'short_answer',
+			label: 'Isian Singkat',
+			shortLabel: 'Isian',
+			desc: 'Jawaban pendek dengan kunci teks.',
+			studentHint: 'Siswa mengetik jawaban singkat.',
+			answerMode: 'short_text',
+			minOptions: 0,
+			maxOptions: 0,
+		},
+		{
+			id: 'essay',
+			label: 'Essay',
+			shortLabel: 'Essay',
+			desc: 'Jawaban uraian dikoreksi manual dengan pedoman.',
+			studentHint: 'Siswa menulis jawaban uraian.',
+			answerMode: 'rubric',
+			minOptions: 0,
+			maxOptions: 0,
+		},
+	];
 	const moduleModes: Array<{ id: ModuleMode; label: string; desc: string }> = [
 		{ id: 'catalog', label: 'Katalog', desc: 'Daftar terpadu' },
-		{ id: 'composer', label: 'Komposer Soal', desc: 'PG & essay' },
+		{ id: 'composer', label: 'Komposer Soal', desc: 'Semua tipe' },
 		{ id: 'review', label: 'Review', desc: 'Mutu & publikasi' },
 		{ id: 'import', label: 'Import Legacy', desc: 'CSV lama' },
 	];
@@ -259,7 +323,7 @@
 	let fRubric = $state('');
 	let fExplanation = $state('');
 	let fOptions = $state(['', '', '', '']);
-	let fAnswerKey = $state<OptionLabel>('A');
+	let fAnswerKey = $state('A');
 	let fWeight = $state(1);
 	let fDifficulty = $state('medium');
 	let fIsRtl = $state(false);
@@ -311,14 +375,34 @@
 	let stimulusText = $derived(htmlToPlainText(fStimulus));
 	let rubricText = $derived(htmlToPlainText(fRubric));
 	let explanationText = $derived(htmlToPlainText(fExplanation));
+	let questionTypeConfig = $derived(getQuestionTypeConfig(fQuestionType));
 	let isEssay = $derived(fQuestionType === 'essay');
+	let isMultipleAnswer = $derived(questionTypeConfig.answerMode === 'multi_option');
+	let isTrueFalse = $derived(questionTypeConfig.answerMode === 'fixed_true_false');
+	let isShortAnswer = $derived(questionTypeConfig.answerMode === 'short_text');
+	let hasOptionSection = $derived(
+		questionTypeConfig.answerMode === 'single_option' ||
+			questionTypeConfig.answerMode === 'multi_option' ||
+			questionTypeConfig.answerMode === 'fixed_true_false'
+	);
+	let hasEditableOptions = $derived(
+		questionTypeConfig.answerMode === 'single_option' ||
+			questionTypeConfig.answerMode === 'multi_option'
+	);
+	let requiresRubric = $derived(questionTypeConfig.answerMode === 'rubric');
 	let isAdvanceMode = $derived(fAuthoringMode === 'advance');
 	let activeOptionLabels = $derived(ANSWER_LABELS.slice(0, fOptions.length));
+	let selectedAnswerLabels = $derived(answerKeyLabels(fAnswerKey, activeOptionLabels));
 	let optionPlainTexts = $derived(fOptions.map((option) => htmlToPlainText(option)));
 	let optionHasImages = $derived(fOptions.map((option) => option.includes('<img')));
-	let optionsReady = $derived(fOptions.length >= MIN_OPTION_COUNT && fOptions.every(richTextHasContent));
-	let answerKeyReady = $derived(isEssay || activeOptionLabels.includes(fAnswerKey as OptionLabel));
-	let rubricReady = $derived(!isEssay || rubricText.length >= 5 || fRubric.includes('<img'));
+	let optionsReady = $derived(!hasEditableOptions || (fOptions.length >= questionTypeConfig.minOptions && fOptions.every(richTextHasContent)));
+	let answerKeyReady = $derived.by(() => {
+		if (requiresRubric) return true;
+		if (isShortAnswer) return fAnswerKey.trim().length > 0;
+		if (isMultipleAnswer) return selectedAnswerLabels.length >= 2;
+		return selectedAnswerLabels.length === 1;
+	});
+	let rubricReady = $derived(!requiresRubric || rubricText.length >= 5 || fRubric.includes('<img'));
 
 	let readinessChecks = $derived({
 		subject: !!fSubjectId,
@@ -367,6 +451,54 @@
 				},
 			];
 		}
+		if (isShortAnswer) {
+			return [
+				{
+					label: 'Pertanyaan singkat jelas',
+					status: stemText.length >= 25 ? 'good' : 'warn',
+					desc: `${stemText.length} / 25 karakter minimum`,
+				},
+				{
+					label: 'Kunci jawaban tersedia',
+					status: answerKeyReady ? 'good' : 'warn',
+					desc: answerKeyReady ? 'Kunci isian terisi' : 'Belum ada kunci teks',
+				},
+				{
+					label: 'Jawaban mudah diverifikasi',
+					status: fAnswerKey.trim().length > 1 && fAnswerKey.trim().length <= 80 ? 'good' : 'warn',
+					desc: `${fAnswerKey.trim().length} karakter kunci`,
+				},
+				{
+					label: 'Stimulus pendukung',
+					status: !isAdvanceMode || stimulusText.length > 0 || hasImage || stemText.length >= 60 ? 'good' : 'warn',
+					desc: isAdvanceMode ? (stimulusText ? 'Stimulus terisi' : `${stimulusText.length} karakter stimulus`) : 'Opsional di mode pemula',
+				},
+			];
+		}
+		if (isTrueFalse) {
+			return [
+				{
+					label: 'Pernyataan tegas',
+					status: stemText.length >= 20 ? 'good' : 'warn',
+					desc: `${stemText.length} / 20 karakter minimum`,
+				},
+				{
+					label: 'Kunci benar/salah dipilih',
+					status: answerKeyReady ? 'good' : 'warn',
+					desc: answerKeyReady ? `Kunci ${fAnswerKey === 'A' ? 'Benar' : 'Salah'}` : 'Belum dipilih',
+				},
+				{
+					label: 'Tidak ambigu',
+					status: stemText.includes('?') ? 'warn' : 'good',
+					desc: stemText.includes('?') ? 'B/S lebih kuat sebagai pernyataan' : 'Format pernyataan',
+				},
+				{
+					label: 'Media pendukung',
+					status: hasImage || stemText.length >= 60 ? 'good' : 'warn',
+					desc: hasImage ? 'Ada gambar' : `${stemText.length} / 60 karakter`,
+				},
+			];
+		}
 		const filled = optionPlainTexts.filter((text, index) => text || optionHasImages[index]);
 		const unique = new Set(filled);
 		const lengths = filled.map((o) => o.length);
@@ -379,9 +511,11 @@
 				desc: `${stemText.length} / 35 karakter minimum`,
 			},
 			{
-				label: 'Distraktor bervariasi',
-				status: unique.size === filled.length ? 'good' : 'warn',
-				desc: unique.size < filled.length ? 'Ada opsi yang duplikat' : 'Semua opsi unik',
+				label: isMultipleAnswer ? 'Kunci jawaban ganda' : 'Distraktor bervariasi',
+				status: isMultipleAnswer ? (selectedAnswerLabels.length >= 2 ? 'good' : 'warn') : (unique.size === filled.length ? 'good' : 'warn'),
+				desc: isMultipleAnswer
+					? `${selectedAnswerLabels.length} kunci dipilih`
+					: unique.size < filled.length ? 'Ada opsi yang duplikat' : 'Semua opsi unik',
 			},
 			{
 				label: 'Panjang opsi seimbang',
@@ -400,10 +534,14 @@
 		const issues: string[] = [];
 		if (!readinessChecks.subject) issues.push('Pilih mata pelajaran');
 		if (!readinessChecks.stem) issues.push('Isi soal minimal 5 karakter');
-		if (!isEssay && !readinessChecks.options)
+		if (hasEditableOptions && !readinessChecks.options)
 			issues.push(`Semua opsi (${activeOptionLabels.join('–')}) wajib diisi`);
-		if (!isEssay && !readinessChecks.answerKey) issues.push('Pilih kunci jawaban');
-		if (isEssay && !readinessChecks.rubric) issues.push('Isi pedoman/rubrik penilaian essay');
+		if (!readinessChecks.answerKey) {
+			if (isShortAnswer) issues.push('Isi kunci jawaban isian singkat');
+			else if (isMultipleAnswer) issues.push('Pilih minimal dua kunci jawaban');
+			else issues.push('Pilih kunci jawaban');
+		}
+		if (requiresRubric && !readinessChecks.rubric) issues.push('Isi pedoman/rubrik penilaian essay');
 		if (!readinessChecks.weight) issues.push('Bobot nilai minimal 1');
 		return issues;
 	});
@@ -512,8 +650,8 @@
 			fStimulus = d.stimulus ?? '';
 			fRubric = d.rubric ?? '';
 			fExplanation = d.explanation ?? '';
-			fOptions = normalizeOptionCount(d.options ?? ['', '', '', '']);
-			fAnswerKey = normalizeAnswerLabel(d.answerKey, fOptions.length);
+			fOptions = normalizeOptionCount(d.options ?? defaultOptionsForQuestionType(fQuestionType), fQuestionType);
+			fAnswerKey = normalizeAnswerKey(d.answerKey, fQuestionType, fOptions.length);
 			fWeight = d.weight ?? 1;
 			fDifficulty = d.difficulty ?? 'medium';
 			fIsRtl = d.isRtl ?? false;
@@ -651,8 +789,17 @@
 		return htmlToPlainText(html).length > 0 || html.includes('<img');
 	}
 
+	function isComposerQuestionType(value: string | undefined): value is ComposerQuestionType {
+		return QUESTION_TYPE_CONFIGS.some((config) => config.id === value);
+	}
+
+	function getQuestionTypeConfig(type: ComposerQuestionType): QuestionTypeConfig {
+		return QUESTION_TYPE_CONFIGS.find((config) => config.id === type) ?? QUESTION_TYPE_CONFIGS[0]!;
+	}
+
 	function normalizeQuestionType(value: string | undefined): ComposerQuestionType {
-		return value === 'essay' ? 'essay' : 'multiple_choice';
+		const normalized = (value ?? '').trim().toLowerCase();
+		return isComposerQuestionType(normalized) ? normalized : 'multiple_choice';
 	}
 
 	function normalizeAuthoringMode(value: string | undefined): AuthoringMode {
@@ -664,16 +811,15 @@
 	}
 
 	function setQuestionType(type: ComposerQuestionType) {
+		const changed = fQuestionType !== type;
 		fQuestionType = type;
-		if (type === 'essay') {
-			fAnswerKey = 'A';
-			if (focusedEditor && focusedEditor !== 'stem' && focusedEditor !== 'stimulus' && focusedEditor !== 'rubric' && focusedEditor !== 'explanation') {
-				focusedEditor = null;
-			}
-			return;
+		fOptions = normalizeOptionCount(changed ? [] : fOptions, type);
+		fAnswerKey = changed
+			? defaultAnswerKeyForQuestionType(type)
+			: normalizeAnswerKey(fAnswerKey, type, fOptions.length);
+		if (focusedEditor && !editorAllowedForQuestionType(focusedEditor, type)) {
+			focusedEditor = null;
 		}
-		fOptions = normalizeOptionCount(fOptions);
-		fAnswerKey = normalizeAnswerLabel(fAnswerKey, fOptions.length);
 	}
 
 	function setAuthoringMode(mode: AuthoringMode) {
@@ -681,9 +827,25 @@
 		if (mode === 'beginner') fWorkflowStatus = 'draft';
 	}
 
-	function normalizeOptionCount(options: string[]): string[] {
-		let normalized = options.slice(0, MAX_OPTION_COUNT);
-		while (normalized.length < MIN_OPTION_COUNT) normalized = [...normalized, ''];
+	function defaultAnswerKeyForQuestionType(type: ComposerQuestionType): string {
+		const config = getQuestionTypeConfig(type);
+		if (config.answerMode === 'single_option' || config.answerMode === 'fixed_true_false') return 'A';
+		return '';
+	}
+
+	function defaultOptionsForQuestionType(type: ComposerQuestionType): string[] {
+		const config = getQuestionTypeConfig(type);
+		if (config.answerMode === 'fixed_true_false') return [...TRUE_FALSE_OPTIONS];
+		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') return [];
+		return Array.from({ length: config.minOptions }, () => '');
+	}
+
+	function normalizeOptionCount(options: string[], type: ComposerQuestionType = fQuestionType): string[] {
+		const config = getQuestionTypeConfig(type);
+		if (config.answerMode === 'fixed_true_false') return [...TRUE_FALSE_OPTIONS];
+		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') return [];
+		let normalized = options.slice(0, config.maxOptions);
+		while (normalized.length < config.minOptions) normalized = [...normalized, ''];
 		return normalized;
 	}
 
@@ -691,21 +853,64 @@
 		return ANSWER_LABELS[index] ?? 'A';
 	}
 
-	function normalizeAnswerLabel(value: string | undefined, optionCount = fOptions.length): OptionLabel {
-		const label = (value ?? '').trim().toUpperCase() as OptionLabel;
-		return ANSWER_LABELS.slice(0, optionCount).includes(label) ? label : 'A';
+	function answerKeyLabels(value: string | undefined, labels: OptionLabel[]): OptionLabel[] {
+		const keys: OptionLabel[] = [];
+		for (const raw of (value ?? '').split(',')) {
+			const label = raw.trim().toUpperCase() as OptionLabel;
+			if (!labels.includes(label) || keys.includes(label)) continue;
+			keys.push(label);
+		}
+		return keys.sort((a, b) => ANSWER_LABELS.indexOf(a) - ANSWER_LABELS.indexOf(b));
+	}
+
+	function normalizeAnswerKey(value: string | undefined, type: ComposerQuestionType = fQuestionType, optionCount = fOptions.length): string {
+		const config = getQuestionTypeConfig(type);
+		if (config.answerMode === 'rubric') return '';
+		if (config.answerMode === 'short_text') return (value ?? '').trim();
+		const labels = ANSWER_LABELS.slice(0, optionCount);
+		const keys = answerKeyLabels(value, labels);
+		if (config.answerMode === 'multi_option') return keys.join(',');
+		return keys[0] ?? defaultAnswerKeyForQuestionType(type);
+	}
+
+	function isAnswerLabelSelected(label: OptionLabel): boolean {
+		return selectedAnswerLabels.includes(label);
+	}
+
+	function toggleAnswerLabel(label: OptionLabel) {
+		if (!isMultipleAnswer) {
+			fAnswerKey = label;
+			return;
+		}
+		const selected = answerKeyLabels(fAnswerKey, activeOptionLabels);
+		const next = selected.includes(label)
+			? selected.filter((item) => item !== label)
+			: [...selected, label];
+		fAnswerKey = normalizeAnswerKey(next.join(','), fQuestionType, fOptions.length);
+	}
+
+	function editorAllowedForQuestionType(editor: FocusedEditor, type: ComposerQuestionType): boolean {
+		if (editor === 'stem' || editor === 'stimulus' || editor === 'explanation') return true;
+		if (editor === 'rubric') return getQuestionTypeConfig(type).answerMode === 'rubric';
+		return getQuestionTypeConfig(type).answerMode === 'single_option' || getQuestionTypeConfig(type).answerMode === 'multi_option';
 	}
 
 	function addOption() {
-		if (fOptions.length >= MAX_OPTION_COUNT) return;
+		const config = getQuestionTypeConfig(fQuestionType);
+		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') return;
+		if (fOptions.length >= config.maxOptions) return;
 		fOptions = [...fOptions, ''];
 	}
 
 	function removeLastOption() {
-		if (fOptions.length <= MIN_OPTION_COUNT) return;
+		const config = getQuestionTypeConfig(fQuestionType);
+		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') return;
+		if (fOptions.length <= config.minOptions) return;
 		const removedLabel = optionLabelAt(fOptions.length - 1);
 		fOptions = fOptions.slice(0, -1);
-		if (fAnswerKey === removedLabel) fAnswerKey = 'A';
+		if (answerKeyLabels(fAnswerKey, ANSWER_LABELS).includes(removedLabel)) {
+			fAnswerKey = normalizeAnswerKey(fAnswerKey, fQuestionType, fOptions.length);
+		}
 	}
 
 	function questionUsageLocked(q: Question): boolean {
@@ -724,13 +929,13 @@
 	}
 
 	function isQuickEditable(q: Question): boolean {
-		return (q.question_type === 'multiple_choice' || q.question_type === 'essay') && q.workflow_status === 'draft' && q.status === 'draft' && !questionUsageLocked(q);
+		return isComposerQuestionType(q.question_type) && q.workflow_status === 'draft' && q.status === 'draft' && !questionUsageLocked(q);
 	}
 
 	function explainQuickEditBlocked(q: Question): string {
 		if (questionUsageLocked(q)) return 'Soal sudah dipakai. Gunakan Duplikat untuk membuat revisi draft.';
 		if (q.workflow_status !== 'draft' || q.status !== 'draft') return 'Soal sudah masuk alur review/publikasi. Gunakan Duplikat untuk revisi.';
-		if (q.question_type !== 'multiple_choice' && q.question_type !== 'essay') return 'Tipe soal ini akan dimigrasikan ke komposer utama pada Sprint 62.';
+		if (!isComposerQuestionType(q.question_type)) return 'Tipe soal ini belum masuk komposer utama. Gunakan Duplikat setelah tipe ini dimigrasikan.';
 		return 'Buat revisi lewat Duplikat agar riwayat soal tetap aman.';
 	}
 
@@ -760,8 +965,8 @@
 		fStimulus = '';
 		fRubric = '';
 		fExplanation = '';
-		fOptions = normalizeOptionCount([]);
-		fAnswerKey = 'A';
+		fOptions = normalizeOptionCount([], fQuestionType);
+		fAnswerKey = defaultAnswerKeyForQuestionType(fQuestionType);
 		fWeight = 1;
 		fDifficulty = 'medium';
 		fIsRtl = false;
@@ -816,9 +1021,9 @@
 			fExplanation = d.explanation_html ?? '';
 			const opts = d.options?.length
 				? d.options.map((o) => o.html || o.text || o.latex || '')
-				: ['', '', '', ''];
-			fOptions = normalizeOptionCount(opts);
-			fAnswerKey = normalizeAnswerLabel(d.answer_key, fOptions.length);
+				: defaultOptionsForQuestionType(fQuestionType);
+			fOptions = normalizeOptionCount(opts, fQuestionType);
+			fAnswerKey = normalizeAnswerKey(d.answer_key, fQuestionType, fOptions.length);
 			fDifficulty = d.difficulty || 'medium';
 			fGradeLevel = d.grade_level ?? 7;
 			fAcademicPhase = d.academic_phase ?? '';
@@ -846,8 +1051,8 @@
 			fStimulus = q.stimulus_html ?? '';
 			fRubric = q.rubric_html ?? '';
 			fExplanation = q.explanation_html ?? '';
-			fOptions = normalizeOptionCount(q.options?.map((o) => o.html || o.text || o.latex || '') ?? []);
-			fAnswerKey = normalizeAnswerLabel(q.answer_key, fOptions.length);
+			fOptions = normalizeOptionCount(q.options?.map((o) => o.html || o.text || o.latex || '') ?? defaultOptionsForQuestionType(fQuestionType), fQuestionType);
+			fAnswerKey = normalizeAnswerKey(q.answer_key, fQuestionType, fOptions.length);
 			fGradeLevel = q.grade_level ?? 7;
 			fAcademicPhase = q.academic_phase ?? '';
 			fCPRef = q.cp_ref ?? '';
@@ -870,8 +1075,8 @@
 	function applyTemplate(t: Template) {
 		setQuestionType('multiple_choice');
 		fStem = t.stem;
-		fOptions = normalizeOptionCount(t.options);
-		fAnswerKey = t.answerKey;
+		fOptions = normalizeOptionCount(t.options, 'multiple_choice');
+		fAnswerKey = normalizeAnswerKey(t.answerKey, 'multiple_choice', fOptions.length);
 		fIsRtl = t.isRtl ?? false;
 		draftStatus = `Template "${t.label}" diterapkan`;
 		showTemplates = false;
@@ -955,6 +1160,32 @@
 		importResult = null;
 	}
 
+	function buildPayloadOptions() {
+		const config = getQuestionTypeConfig(fQuestionType);
+		if (config.answerMode === 'fixed_true_false') {
+			return TRUE_FALSE_OPTIONS.map((text, i) => ({
+				label: optionLabelAt(i),
+				text,
+				html: text,
+			}));
+		}
+		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') {
+			return [];
+		}
+		return fOptions.map((html, i) => ({
+			label: optionLabelAt(i),
+			text: htmlToPlainText(html),
+			html,
+		}));
+	}
+
+	function buildPayloadAnswerKey(): string {
+		const config = getQuestionTypeConfig(fQuestionType);
+		if (config.answerMode === 'rubric') return '';
+		if (config.answerMode === 'short_text') return fAnswerKey.trim();
+		return normalizeAnswerKey(fAnswerKey, fQuestionType, fOptions.length);
+	}
+
 	async function saveQuestion(intent: ComposerSaveIntent = 'draft') {
 		const isReview = intent === 'review';
 		if (isReview && !canSubmitReview) {
@@ -983,15 +1214,9 @@
 				stem_html: fStem,
 				stimulus_html: fStimulus,
 				explanation_html: fExplanation,
-				rubric_html: isEssay ? fRubric : '',
-				options: isEssay
-					? []
-					: fOptions.map((html, i) => ({
-						label: optionLabelAt(i),
-						text: htmlToPlainText(html),
-						html,
-					})),
-				answer_key: isEssay ? '' : fAnswerKey,
+				rubric_html: requiresRubric ? fRubric : '',
+				options: buildPayloadOptions(),
+				answer_key: buildPayloadAnswerKey(),
 				difficulty: fDifficulty,
 				status: 'draft',
 				workflow_status: isReview ? 'review' : 'draft',
@@ -1587,11 +1812,22 @@
 						</div>
 					{/if}
 				</div>
+			{:else if isShortAnswer}
+				<div class="space-y-2 border-t border-slate-100 pt-2">
+					<div class="rounded-md border border-dashed border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
+						Siswa akan melihat kolom jawaban isian singkat.
+					</div>
+					{#if fAnswerKey.trim()}
+						<div class="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+							<span class="font-semibold text-slate-500">Kunci guru:</span> {fAnswerKey.trim()}
+						</div>
+					{/if}
+				</div>
 			{:else if fOptions.some(richTextHasContent)}
 				<div class="space-y-1.5 border-t border-slate-100 pt-2">
 					{#each fOptions as opt, i (`preview-option-${i}`)}
 						{@const label = optionLabelAt(i)}
-						{@const isAnswer = fAnswerKey === label}
+						{@const isAnswer = isAnswerLabelSelected(label)}
 						<div class="flex items-start gap-2 text-sm {isAnswer ? 'text-green-700 font-medium' : 'text-slate-700'}">
 							<span class="shrink-0 font-bold">{label}.</span>
 							{#if richTextHasContent(opt)}
@@ -1687,7 +1923,7 @@
 								<button type="button" onclick={() => scrollComposerSection('composer-advanced')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Advance</button>
 							{/if}
 							<button type="button" onclick={() => scrollComposerSection('composer-question')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Pertanyaan</button>
-							<button type="button" onclick={() => scrollComposerSection(isEssay ? 'composer-rubric' : 'composer-options')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">{isEssay ? 'Rubrik' : 'Opsi'}</button>
+							<button type="button" onclick={() => scrollComposerSection(isEssay ? 'composer-rubric' : isShortAnswer ? 'composer-answer' : 'composer-options')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">{isEssay ? 'Rubrik' : isShortAnswer ? 'Kunci' : 'Opsi'}</button>
 							<button
 								type="button"
 								onclick={() => (showInspector = !showInspector)}
@@ -1703,7 +1939,7 @@
 
 				<div class={`grid grid-cols-1 gap-5 ${showInspector || composerMobilePanel === 'preview' ? 'xl:grid-cols-[minmax(0,1.55fr)_minmax(18rem,0.5fr)]' : ''}`}>
 					<div class={`space-y-4 min-w-0 ${composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
-						{#if !isEssay}
+						{#if fQuestionType === 'multiple_choice'}
 						<section class="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
 							<div class="flex flex-col gap-2 lg:flex-row lg:items-center">
 								<div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -1744,21 +1980,17 @@
 						<section id="composer-metadata" class="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
 							<div class="mb-3 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
 								<span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-800">Bentuk Soal</span>
-								<div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-									<button
-										type="button"
-										onclick={() => setQuestionType('multiple_choice')}
-										class="h-7 rounded-md px-3 text-[10px] font-bold uppercase tracking-wide {fQuestionType === 'multiple_choice' ? 'bg-green-700 text-white' : 'text-slate-600 hover:bg-white'}"
-									>
-										Pilihan Ganda
-									</button>
-									<button
-										type="button"
-										onclick={() => setQuestionType('essay')}
-										class="h-7 rounded-md px-3 text-[10px] font-bold uppercase tracking-wide {fQuestionType === 'essay' ? 'bg-green-700 text-white' : 'text-slate-600 hover:bg-white'}"
-									>
-										Essay
-									</button>
+								<div class="flex flex-wrap rounded-lg border border-slate-200 bg-slate-50 p-1">
+									{#each QUESTION_TYPE_CONFIGS as typeConfig (typeConfig.id)}
+										<button
+											type="button"
+											onclick={() => setQuestionType(typeConfig.id)}
+											title={typeConfig.desc}
+											class="h-7 rounded-md px-2.5 text-[10px] font-bold uppercase tracking-wide {fQuestionType === typeConfig.id ? 'bg-green-700 text-white' : 'text-slate-600 hover:bg-white'}"
+										>
+											{typeConfig.shortLabel}
+										</button>
+									{/each}
 								</div>
 								<span class="ml-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-800">Mode</span>
 								<div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
@@ -1778,7 +2010,7 @@
 									</button>
 								</div>
 								<span class="text-[11px] text-slate-500">
-									{isEssay ? 'Jawaban dikoreksi manual.' : 'PG memakai opsi dan kunci jawaban.'}
+									<span class="font-semibold text-slate-700">{questionTypeConfig.label}:</span> {questionTypeConfig.desc}
 								</span>
 							</div>
 							<div class="grid gap-2 lg:grid-cols-[8rem_minmax(0,1fr)_8rem_6.5rem_10.5rem] lg:items-end">
@@ -1910,15 +2142,15 @@
 						<section id="composer-question" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex flex-wrap items-center justify-between gap-2">
 								<div>
-								<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">{isEssay ? 'Pertanyaan Essay' : 'Isi Pertanyaan'}</h3>
-									<p class="mt-0.5 text-xs text-slate-500">{isEssay ? 'Instruksi uraian yang akan dijawab siswa.' : 'Teks, gambar, daftar, dan formula.'}</p>
+								<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">{isEssay ? 'Pertanyaan Essay' : isShortAnswer ? 'Pertanyaan Isian Singkat' : isTrueFalse ? 'Pernyataan Benar/Salah' : 'Isi Pertanyaan'}</h3>
+									<p class="mt-0.5 text-xs text-slate-500">{questionTypeConfig.studentHint}</p>
 								</div>
 								<button type="button" onclick={() => (focusedEditor = 'stem')} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
 							</div>
 							<LegacyRichTextEditor
 								bind:value={fStem}
 								id="soal-stem"
-								placeholder={isEssay ? 'Tuliskan instruksi essay/uraian. Contoh: Jelaskan alasan, uraikan langkah, atau analisis data berikut.' : 'Tuliskan pertanyaan utama. Gambar bisa disisipkan langsung di antara teks.'}
+								placeholder={isEssay ? 'Tuliskan instruksi essay/uraian. Contoh: Jelaskan alasan, uraikan langkah, atau analisis data berikut.' : isShortAnswer ? 'Tuliskan pertanyaan yang jawabannya singkat dan jelas.' : isTrueFalse ? 'Tuliskan satu pernyataan yang dapat dinilai benar atau salah.' : 'Tuliskan pertanyaan utama. Gambar bisa disisipkan langsung di antara teks.'}
 								minRows={4}
 								compact
 								onImageUpload={uploadImageInEditor}
@@ -1928,67 +2160,112 @@
 							{/if}
 						</section>
 
-						{#if !isEssay}
-						<section id="composer-options" class="scroll-mt-4 space-y-4 border-t border-slate-200 pt-5">
-							<div class="text-center">
-								<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-slate-500">Opsi & Kunci Jawaban</h3>
-								<p class="mt-1 text-xs text-slate-500">Default 4 opsi, bisa ditambah sampai 6.</p>
-							</div>
-							<div class="flex flex-wrap items-center justify-center gap-2">
-								<span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">{fOptions.length} opsi aktif</span>
-								<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fOptions.length <= MIN_OPTION_COUNT} onclick={removeLastOption}>
-									Kurangi
-								</Button>
-								<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fOptions.length >= MAX_OPTION_COUNT} onclick={addOption}>
-									+ Opsi
-								</Button>
-							</div>
-							<div class="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
-								{#each fOptions as _, i (`composer-option-${i}`)}
-									{@const label = optionLabelAt(i)}
-									{@const isAnswer = fAnswerKey === label}
-									<section
-										class="space-y-2 rounded-xl border bg-white p-3 shadow-sm transition-colors {isAnswer
-											? 'border-green-500 ring-4 ring-green-100'
-											: 'border-slate-200 hover:border-slate-300'}"
-									>
-										<div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
-											<div>
-												<p class="text-xs font-black uppercase tracking-[0.2em] text-slate-700">Opsi {label}</p>
-												<p class="mt-0.5 text-[11px] text-slate-400">{isAnswer ? 'Ditandai sebagai kunci jawaban' : 'Pengecoh / alternatif jawaban'}</p>
+						{#if hasOptionSection}
+							<section id="composer-options" class="scroll-mt-4 space-y-4 border-t border-slate-200 pt-5">
+								<div class="text-center">
+									<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-slate-500">
+										{isMultipleAnswer ? 'Opsi & Kunci Jawaban Ganda' : isTrueFalse ? 'Kunci Benar/Salah' : 'Opsi & Kunci Jawaban'}
+									</h3>
+									<p class="mt-1 text-xs text-slate-500">{questionTypeConfig.studentHint}</p>
+								</div>
+								{#if hasEditableOptions}
+									<div class="flex flex-wrap items-center justify-center gap-2">
+										<span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">{fOptions.length} opsi aktif</span>
+										<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fOptions.length <= questionTypeConfig.minOptions} onclick={removeLastOption}>
+											Kurangi
+										</Button>
+										<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fOptions.length >= questionTypeConfig.maxOptions} onclick={addOption}>
+											+ Opsi
+										</Button>
+									</div>
+								{/if}
+								<div class="grid grid-cols-1 items-start gap-3 {isTrueFalse ? 'xl:grid-cols-2' : 'xl:grid-cols-2'}">
+									{#each fOptions as opt, i (`composer-option-${i}`)}
+										{@const label = optionLabelAt(i)}
+										{@const isAnswer = isAnswerLabelSelected(label)}
+										<section
+											class="space-y-2 rounded-xl border bg-white p-3 shadow-sm transition-colors {isAnswer
+												? 'border-green-500 ring-4 ring-green-100'
+												: 'border-slate-200 hover:border-slate-300'}"
+										>
+											<div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+												<div>
+													<p class="text-xs font-black uppercase tracking-[0.2em] text-slate-700">Opsi {label}</p>
+													<p class="mt-0.5 text-[11px] text-slate-400">{isAnswer ? 'Ditandai sebagai kunci jawaban' : isTrueFalse ? 'Pilihan tetap' : 'Pengecoh / alternatif jawaban'}</p>
+												</div>
+												<div class="flex shrink-0 items-center gap-1">
+													{#if hasEditableOptions}
+														<button type="button" onclick={() => (focusedEditor = label)} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
+													{/if}
+													<label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {isAnswer ? 'bg-green-600 text-white' : 'hover:bg-green-50'}">
+														{#if isMultipleAnswer}
+															<input
+																type="checkbox"
+																checked={isAnswer}
+																onchange={() => toggleAnswerLabel(label)}
+																class="h-4 w-4 cursor-pointer accent-green-700"
+															/>
+														{:else}
+															<input
+																type="radio"
+																name="answer-key"
+																value={label}
+																checked={isAnswer}
+																onchange={() => toggleAnswerLabel(label)}
+																class="h-4 w-4 cursor-pointer accent-green-700"
+															/>
+														{/if}
+														<span class="text-[10px] font-black uppercase tracking-widest {isAnswer ? 'text-white' : 'text-slate-500'}">Kunci</span>
+													</label>
+												</div>
 											</div>
-											<div class="flex shrink-0 items-center gap-1">
-												<button type="button" onclick={() => (focusedEditor = label)} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
-											<label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {isAnswer ? 'bg-green-600 text-white' : 'hover:bg-green-50'}">
-												<input
-													type="radio"
-													name="answer-key"
-													value={label}
-													checked={fAnswerKey === label}
-													onchange={() => (fAnswerKey = label)}
-													class="h-4 w-4 cursor-pointer accent-green-700"
-												/>
-												<span class="text-[10px] font-black uppercase tracking-widest {isAnswer ? 'text-white' : 'text-slate-500'}">Kunci</span>
-											</label>
+											<div dir={fIsRtl ? 'rtl' : undefined}>
+												{#if hasEditableOptions}
+													<LegacyRichTextEditor
+														bind:value={fOptions[i]}
+														id={`soal-option-${label}`}
+														placeholder={`Teks jawaban ${label}. Gambar bisa disisipkan langsung di dalam opsi.`}
+														minRows={2}
+														compact
+														onImageUpload={uploadImageInEditor}
+													/>
+													{#if !richTextHasContent(fOptions[i])}
+														<p class="mt-1 text-[10px] font-semibold text-red-500">Opsi {label} wajib diisi.</p>
+													{/if}
+												{:else}
+													<div class="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+														{opt}
+													</div>
+												{/if}
 											</div>
-										</div>
-										<div dir={fIsRtl ? 'rtl' : undefined}>
-											<LegacyRichTextEditor
-												bind:value={fOptions[i]}
-												id={`soal-option-${label}`}
-												placeholder={`Teks jawaban ${label}. Gambar bisa disisipkan langsung di dalam opsi.`}
-												minRows={2}
-												compact
-												onImageUpload={uploadImageInEditor}
-											/>
-											{#if !richTextHasContent(fOptions[i])}
-												<p class="mt-1 text-[10px] font-semibold text-red-500">Opsi {label} wajib diisi.</p>
-											{/if}
-										</div>
-									</section>
-								{/each}
-							</div>
-						</section>
+										</section>
+									{/each}
+								</div>
+								{#if isMultipleAnswer && !answerKeyReady}
+									<p class="text-center text-[10px] font-semibold text-red-500">Pilih minimal dua opsi sebagai kunci jawaban ganda.</p>
+								{/if}
+							</section>
+						{:else if isShortAnswer}
+							<section id="composer-answer" class="scroll-mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+								<div>
+									<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Kunci Isian Singkat</h3>
+									<p class="mt-0.5 text-xs text-slate-500">Gunakan jawaban pendek yang dapat diverifikasi otomatis.</p>
+								</div>
+								<div>
+									<label for="f-short-answer-key" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+										Kunci Jawaban <span class="text-red-500">*</span>
+									</label>
+									<Input
+										id="f-short-answer-key"
+										bind:value={fAnswerKey}
+										placeholder="Contoh: Fotosintesis"
+										class="h-9 text-sm font-medium"
+									/>
+									{#if !readinessChecks.answerKey}
+										<p class="mt-1 text-[10px] font-semibold text-red-500">Kunci isian singkat wajib diisi sebelum review.</p>
+									{/if}
+								</div>
+							</section>
 						{:else}
 						<section id="composer-rubric" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex flex-wrap items-center justify-between gap-2">
