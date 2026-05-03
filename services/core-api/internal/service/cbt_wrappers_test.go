@@ -408,6 +408,7 @@ type fakeCbtSessionStore struct {
 	packageQualityErr     error
 	createArg             db.CreateCbtExamSessionParams
 	updateStatusArg       db.UpdateCbtExamSessionStatusParams
+	updateScheduleArg     db.UpdateCbtExamSessionScheduleParams
 	deleteID              pgtype.UUID
 	participantRows       []db.ListCbtExamParticipantsRow
 	participantsErr       error
@@ -513,6 +514,11 @@ func (f *fakeCbtSessionStore) CreateCbtExamSession(ctx context.Context, arg db.C
 func (f *fakeCbtSessionStore) UpdateCbtExamSessionStatus(ctx context.Context, arg db.UpdateCbtExamSessionStatusParams) (db.CbtExamSession, error) {
 	f.updateStatusArg = arg
 	return db.CbtExamSession{ID: arg.ID, Status: arg.Status}, nil
+}
+
+func (f *fakeCbtSessionStore) UpdateCbtExamSessionSchedule(ctx context.Context, arg db.UpdateCbtExamSessionScheduleParams) (db.CbtExamSession, error) {
+	f.updateScheduleArg = arg
+	return db.CbtExamSession{ID: arg.ID, ScheduledStart: arg.ScheduledStart, ScheduledEnd: arg.ScheduledEnd}, nil
 }
 
 func (f *fakeCbtSessionStore) DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) error {
@@ -1111,6 +1117,38 @@ func TestCbtSessionUpdateStatusRejectsExpiredActivation(t *testing.T) {
 	}
 	if store.updateStatusArg.ID.Valid {
 		t.Fatalf("UpdateStatus() called update with %+v, want blocked before status write", store.updateStatusArg)
+	}
+}
+
+func TestCbtSessionUpdateScheduleGuardsStatusAndWindow(t *testing.T) {
+	sessionID := documentCycleTestUUID(242)
+	packageID := documentCycleTestUUID(243)
+	start := pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}
+	end := pgtype.Timestamptz{Time: time.Now().Add(2 * time.Hour), Valid: true}
+	store := &fakeCbtSessionStore{
+		sessionRow: db.GetCbtExamSessionRow{
+			ID:        sessionID,
+			PackageID: packageID,
+			Status:    db.CbtSessionStatusEnumScheduled,
+		},
+	}
+	svc := &CbtSession{q: store}
+
+	if _, err := svc.UpdateSchedule(context.Background(), sessionID, start, end); err != nil {
+		t.Fatalf("UpdateSchedule() error = %v", err)
+	}
+	if store.updateScheduleArg.ID != sessionID || !store.updateScheduleArg.ScheduledStart.Time.Equal(start.Time) || !store.updateScheduleArg.ScheduledEnd.Time.Equal(end.Time) {
+		t.Fatalf("UpdateSchedule() arg = %+v, want schedule params", store.updateScheduleArg)
+	}
+
+	store.updateScheduleArg = db.UpdateCbtExamSessionScheduleParams{}
+	store.sessionRow.Status = db.CbtSessionStatusEnumActive
+	_, err := svc.UpdateSchedule(context.Background(), sessionID, start, end)
+	if err == nil || !strings.Contains(err.Error(), "hanya sesi draft atau terjadwal") {
+		t.Fatalf("UpdateSchedule(active) error = %v, want status conflict", err)
+	}
+	if store.updateScheduleArg.ID.Valid {
+		t.Fatalf("UpdateSchedule(active) wrote %+v, want blocked before update", store.updateScheduleArg)
 	}
 }
 

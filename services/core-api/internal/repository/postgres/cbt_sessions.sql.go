@@ -1702,6 +1702,45 @@ func (q *Queries) UpdateAnswerCorrectness(ctx context.Context, sessionID pgtype.
 	return err
 }
 
+const updateCbtExamSessionSchedule = `-- name: UpdateCbtExamSessionSchedule :one
+UPDATE cbt_exam_sessions
+SET scheduled_start = $2,
+    scheduled_end = $3,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, package_id, class_id, title, scheduled_start, scheduled_end, status, created_at, updated_at, event_id, scope_type, scope_ref, mix_policy, assignment_mode, allow_cross_grade, is_special_event
+`
+
+type UpdateCbtExamSessionScheduleParams struct {
+	ID             pgtype.UUID        `json:"id"`
+	ScheduledStart pgtype.Timestamptz `json:"scheduled_start"`
+	ScheduledEnd   pgtype.Timestamptz `json:"scheduled_end"`
+}
+
+func (q *Queries) UpdateCbtExamSessionSchedule(ctx context.Context, arg UpdateCbtExamSessionScheduleParams) (CbtExamSession, error) {
+	row := q.db.QueryRow(ctx, updateCbtExamSessionSchedule, arg.ID, arg.ScheduledStart, arg.ScheduledEnd)
+	var i CbtExamSession
+	err := row.Scan(
+		&i.ID,
+		&i.PackageID,
+		&i.ClassID,
+		&i.Title,
+		&i.ScheduledStart,
+		&i.ScheduledEnd,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.EventID,
+		&i.ScopeType,
+		&i.ScopeRef,
+		&i.MixPolicy,
+		&i.AssignmentMode,
+		&i.AllowCrossGrade,
+		&i.IsSpecialEvent,
+	)
+	return i, err
+}
+
 const updateCbtExamSessionStatus = `-- name: UpdateCbtExamSessionStatus :one
 UPDATE cbt_exam_sessions
 SET status = $2, updated_at = NOW()

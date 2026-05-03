@@ -71,6 +71,14 @@ SET status = $2, updated_at = NOW()
 WHERE id = $1
 RETURNING *;
 
+-- name: UpdateCbtExamSessionSchedule :one
+UPDATE cbt_exam_sessions
+SET scheduled_start = $2,
+    scheduled_end = $3,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
 -- name: DeleteCbtExamSession :exec
 DELETE FROM cbt_exam_sessions WHERE id = $1 AND status = 'draft';
 

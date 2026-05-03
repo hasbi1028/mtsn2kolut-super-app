@@ -56,6 +56,11 @@ type fakeCbtSessionService struct {
 	updateStatusStatus db.CbtSessionStatusEnum
 	updateStatusErr    error
 
+	updateScheduleID    pgtype.UUID
+	updateScheduleStart pgtype.Timestamptz
+	updateScheduleEnd   pgtype.Timestamptz
+	updateScheduleErr   error
+
 	deleteID  pgtype.UUID
 	deleteErr error
 
@@ -317,6 +322,16 @@ func (f *fakeCbtSessionService) UpdateStatus(_ context.Context, id pgtype.UUID, 
 		return db.CbtExamSession{}, f.updateStatusErr
 	}
 	return db.CbtExamSession{ID: id, Status: status}, nil
+}
+
+func (f *fakeCbtSessionService) UpdateSchedule(_ context.Context, id pgtype.UUID, start, end pgtype.Timestamptz) (db.CbtExamSession, error) {
+	f.updateScheduleID = id
+	f.updateScheduleStart = start
+	f.updateScheduleEnd = end
+	if f.updateScheduleErr != nil {
+		return db.CbtExamSession{}, f.updateScheduleErr
+	}
+	return db.CbtExamSession{ID: id, ScheduledStart: start, ScheduledEnd: end}, nil
 }
 
 func (f *fakeCbtSessionService) Delete(_ context.Context, id pgtype.UUID) error {
@@ -590,6 +605,15 @@ func TestCbtSessionAdminLifecycleHandlersForwardValidRequests(t *testing.T) {
 	}
 	if fake.updateStatusID != sessionID || fake.updateStatusStatus != db.CbtSessionStatusEnumActive {
 		t.Fatalf("UpdateStatus args = %v/%s, want session/active", fake.updateStatusID, fake.updateStatusStatus)
+	}
+
+	rec = httptest.NewRecorder()
+	h.UpdateSchedule(rec, withRouteParam(adminRequest(http.MethodPatch, "/api/cbt/sessions/"+sessionID.String()+"/schedule", `{"scheduled_start":"2026-05-02T08:00:00Z","scheduled_end":"2026-05-02T09:30:00Z"}`), "id", sessionID.String()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("UpdateSchedule() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.updateScheduleID != sessionID || !fake.updateScheduleStart.Valid || !fake.updateScheduleEnd.Valid {
+		t.Fatalf("UpdateSchedule args = %v/%+v/%+v, want valid schedule", fake.updateScheduleID, fake.updateScheduleStart, fake.updateScheduleEnd)
 	}
 
 	rec = httptest.NewRecorder()

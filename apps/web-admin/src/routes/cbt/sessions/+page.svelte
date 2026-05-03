@@ -75,6 +75,7 @@
 	};
 	type ScheduleQuickAction = {
 		label: string;
+		kind: 'status' | 'schedule' | 'link';
 		status?: 'cancelled' | 'finished';
 		href?: string;
 		tone: NextSessionAction['tone'];
@@ -130,6 +131,10 @@
 	let enrollClassId = $state('');
 	let enrollGradeLevel = $state('VII');
 	let enrollBusy = $state(false);
+	let scheduleSession = $state<ExamSession | null>(null);
+	let scheduleStart = $state('');
+	let scheduleEnd = $state('');
+	let scheduleBusy = $state(false);
 	let selectedPackage = $derived(packages.find((pkg) => pkg.id === fPackageId) ?? null);
 	let selectedPackageQuality = $derived(packageQualitySummary(fPackageId));
 	let sessionReadinessIssues = $derived(buildSessionReadinessIssues());
@@ -186,6 +191,14 @@
 	function toRFC3339(localDt: string): string {
 		if (!localDt) return '';
 		return new Date(localDt).toISOString();
+	}
+
+	function toLocalDateTimeInput(iso: string) {
+		if (!iso) return '';
+		const date = new Date(iso);
+		if (Number.isNaN(date.getTime())) return '';
+		const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+		return local.toISOString().slice(0, 16);
 	}
 
 	function scopeSummary(session: ExamSession) {
@@ -409,9 +422,9 @@
 
 	function scheduleQuickAction(session: ExamSession, state: SessionScheduleState): ScheduleQuickAction | null {
 		if (state !== 'overdue') return null;
-		if (session.status === 'active') return { label: 'Selesaikan', status: 'finished', tone: 'primary' };
-		if (session.status === 'scheduled' || session.status === 'draft') return { label: 'Batalkan', status: 'cancelled', tone: 'danger' };
-		return { label: 'Buka Detail', href: resolve(`/cbt/sessions/${session.id}`), tone: 'warning' };
+		if (session.status === 'active') return { label: 'Selesaikan', kind: 'status', status: 'finished', tone: 'primary' };
+		if (session.status === 'scheduled' || session.status === 'draft') return { label: 'Ubah Jadwal', kind: 'schedule', tone: 'warning' };
+		return { label: 'Buka Detail', kind: 'link', href: resolve(`/cbt/sessions/${session.id}`), tone: 'warning' };
 	}
 
 	function buildScheduleBoardCards(items: ExamSession[]) {
@@ -757,6 +770,52 @@
 		} finally { enrollBusy = false; }
 	}
 
+	function openScheduleEditor(session: ExamSession) {
+		scheduleSession = session;
+		scheduleStart = toLocalDateTimeInput(session.scheduled_start);
+		scheduleEnd = toLocalDateTimeInput(session.scheduled_end);
+	}
+
+	function closeScheduleEditor() {
+		scheduleSession = null;
+		scheduleStart = '';
+		scheduleEnd = '';
+	}
+
+	async function updateSchedule() {
+		if (!scheduleSession) return;
+		if (!scheduleStart || !scheduleEnd) {
+			setOperationState('warning', 'Jadwal Belum Lengkap', 'Isi jadwal mulai dan selesai sebelum menyimpan perubahan jadwal.');
+			return;
+		}
+		if (new Date(scheduleEnd) <= new Date(scheduleStart)) {
+			setOperationState('warning', 'Jadwal Tidak Valid', 'Jadwal selesai harus setelah jadwal mulai.');
+			return;
+		}
+		scheduleBusy = true;
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/sessions/${scheduleSession.id}/schedule`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					scheduled_start: toRFC3339(scheduleStart),
+					scheduled_end: toRFC3339(scheduleEnd),
+				}),
+			});
+			await readClientJson<unknown>(res);
+			setOperationState('success', 'Jadwal Sesi Diperbarui', `Jadwal "${scheduleSession.title}" sudah digeser. Cek kembali kesiapan ruang dan pengawas sebelum sesi dimulai.`);
+			showToast('Jadwal sesi diperbarui');
+			closeScheduleEditor();
+			await refreshSessions();
+		} catch (error) {
+			const message = mutationErrorMessage(error, 'Gagal mengubah jadwal sesi. Periksa jadwal lalu coba lagi.');
+			setOperationState('error', 'Jadwal Gagal Diperbarui', message);
+			showToast(message, false);
+		} finally {
+			scheduleBusy = false;
+		}
+	}
+
 	onMount(() => {
 		initSessionReadinessFilterFromQuery();
 		initSessionScheduleFilterFromQuery();
@@ -983,6 +1042,39 @@
 		</Card.Root>
 	{/if}
 
+	{#if scheduleSession}
+		<Card.Root class="border-amber-200 bg-amber-50">
+			<Card.Header class="pb-2">
+				<Card.Title class="text-base text-amber-950">Ubah Jadwal Sesi</Card.Title>
+				<p class="text-sm text-amber-800 mt-0.5">{scheduleSession.title}</p>
+			</Card.Header>
+			<Card.Content class="space-y-3">
+				<p class="text-sm text-slate-600">Geser jadwal untuk sesi draft atau terjadwal. Setelah disimpan, cek lagi kesiapan ruang dan pengawas.</p>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<div>
+						<label for="quick-schedule-start" class="text-xs text-slate-500 mb-1 block">Mulai <span class="text-red-500">*</span></label>
+						<Input id="quick-schedule-start" type="datetime-local" bind:value={scheduleStart} />
+					</div>
+					<div>
+						<label for="quick-schedule-end" class="text-xs text-slate-500 mb-1 block">Selesai <span class="text-red-500">*</span></label>
+						<Input id="quick-schedule-end" type="datetime-local" bind:value={scheduleEnd} />
+					</div>
+				</div>
+				<div class="flex flex-wrap gap-2">
+					<LoadingButton
+						disabled={scheduleBusy || !scheduleStart || !scheduleEnd}
+						onclick={() => void updateSchedule()}
+						loading={scheduleBusy}
+						loadingLabel="Menyimpan..."
+					>
+						Simpan Jadwal
+					</LoadingButton>
+					<Button variant="outline" disabled={scheduleBusy} onclick={closeScheduleEditor}>Batal</Button>
+				</div>
+			</Card.Content>
+		</Card.Root>
+	{/if}
+
 	<AsyncContent promise={sessionsPromise} onerror={handleSessionsRenderError}>
 		{#snippet pending()}
 			<div class="space-y-4">
@@ -1162,7 +1254,15 @@
 									<div class="space-y-1">
 										<p class="text-xs text-slate-500">{fmtDt(s.scheduled_start)}</p>
 										<Badge class="{scheduleStateClass(rowScheduleState)} text-[11px]">{scheduleStateLabel(rowScheduleState)}</Badge>
-										{#if rowScheduleQuickAction?.status === 'cancelled'}
+										{#if rowScheduleQuickAction?.kind === 'schedule'}
+											<button
+												type="button"
+												class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors {nextActionClass(rowScheduleQuickAction.tone)}"
+												onclick={() => openScheduleEditor(s)}
+											>
+												{rowScheduleQuickAction.label}
+											</button>
+										{:else if rowScheduleQuickAction?.status === 'cancelled'}
 											<LoadingButton size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">
 												{rowScheduleQuickAction.label}
 											</LoadingButton>
@@ -1330,7 +1430,15 @@
 							<div class="mt-3 flex flex-wrap items-center gap-2">
 								<p class="text-xs text-slate-500">{fmtDt(s.scheduled_start)}</p>
 								<Badge class="{scheduleStateClass(rowScheduleState)} text-xs">{scheduleStateLabel(rowScheduleState)}</Badge>
-								{#if rowScheduleQuickAction?.status === 'cancelled'}
+								{#if rowScheduleQuickAction?.kind === 'schedule'}
+									<button
+										type="button"
+										class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors {nextActionClass(rowScheduleQuickAction.tone)}"
+										onclick={() => openScheduleEditor(s)}
+									>
+										{rowScheduleQuickAction.label}
+									</button>
+								{:else if rowScheduleQuickAction?.status === 'cancelled'}
 									<LoadingButton size="xs" variant="outline" onclick={() => updateStatus(s.id, 'cancelled')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">
 										{rowScheduleQuickAction.label}
 									</LoadingButton>

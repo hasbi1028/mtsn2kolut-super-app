@@ -30,6 +30,7 @@ type cbtSessionStore interface {
 	GetCbtPackageQuestionQuality(ctx context.Context, id pgtype.UUID) (db.GetCbtPackageQuestionQualityRow, error)
 	CreateCbtExamSession(ctx context.Context, arg db.CreateCbtExamSessionParams) (db.CbtExamSession, error)
 	UpdateCbtExamSessionStatus(ctx context.Context, arg db.UpdateCbtExamSessionStatusParams) (db.CbtExamSession, error)
+	UpdateCbtExamSessionSchedule(ctx context.Context, arg db.UpdateCbtExamSessionScheduleParams) (db.CbtExamSession, error)
 	DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) error
 	ListCbtExamParticipants(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error)
 	EnrollClassToSession(ctx context.Context, arg db.EnrollClassToSessionParams) error
@@ -212,6 +213,27 @@ func (s *CbtSession) UpdateStatus(ctx context.Context, id pgtype.UUID, status db
 	return s.q.UpdateCbtExamSessionStatus(ctx, db.UpdateCbtExamSessionStatusParams{
 		ID:     id,
 		Status: status,
+	})
+}
+
+func (s *CbtSession) UpdateSchedule(ctx context.Context, id pgtype.UUID, start, end pgtype.Timestamptz) (db.CbtExamSession, error) {
+	if !start.Valid || !end.Valid || !end.Time.After(start.Time) {
+		return db.CbtExamSession{}, fmt.Errorf("%w: jadwal selesai harus setelah jadwal mulai", domain.ErrBadRequest)
+	}
+	if time.Now().After(end.Time) {
+		return db.CbtExamSession{}, fmt.Errorf("%w: jadwal baru sudah berakhir", domain.ErrConflict)
+	}
+	session, err := s.q.GetCbtExamSession(ctx, id)
+	if err != nil {
+		return db.CbtExamSession{}, err
+	}
+	if session.Status != db.CbtSessionStatusEnumDraft && session.Status != db.CbtSessionStatusEnumScheduled {
+		return db.CbtExamSession{}, fmt.Errorf("%w: hanya sesi draft atau terjadwal yang boleh diubah jadwalnya", domain.ErrConflict)
+	}
+	return s.q.UpdateCbtExamSessionSchedule(ctx, db.UpdateCbtExamSessionScheduleParams{
+		ID:             id,
+		ScheduledStart: start,
+		ScheduledEnd:   end,
 	})
 }
 

@@ -288,6 +288,7 @@ func main() {
 		r.With(requireAdmin).Post("/api/cbt/sessions", sessionH.Create)
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}", sessionH.Get)
 		r.With(requireAdmin).Patch("/api/cbt/sessions/{id}/status", sessionH.UpdateStatus)
+		r.With(requireAdmin).Patch("/api/cbt/sessions/{id}/schedule", sessionH.UpdateSchedule)
 		r.With(requireAdmin).Delete("/api/cbt/sessions/{id}", sessionH.Delete)
 
 		// Participants & Enrollment

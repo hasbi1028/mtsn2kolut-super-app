@@ -36,6 +36,7 @@ type cbtSessionService interface {
 	Get(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSessionRow, error)
 	Create(ctx context.Context, in service.CreateCbtSessionInput) (db.CbtExamSession, error)
 	UpdateStatus(ctx context.Context, id pgtype.UUID, status db.CbtSessionStatusEnum) (db.CbtExamSession, error)
+	UpdateSchedule(ctx context.Context, id pgtype.UUID, start, end pgtype.Timestamptz) (db.CbtExamSession, error)
 	Delete(ctx context.Context, id pgtype.UUID) error
 	ListParticipants(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error)
 	EnrollClass(ctx context.Context, sessionID, classID pgtype.UUID) error
@@ -369,12 +370,12 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 
 	start, err := time.Parse(time.RFC3339, body.ScheduledStart)
 	if err != nil {
-		api.BadRequest(w, "scheduled_start invalid — use RFC3339")
+		api.BadRequest(w, "scheduled_start invalid - use RFC3339")
 		return
 	}
 	end, err := time.Parse(time.RFC3339, body.ScheduledEnd)
 	if err != nil {
-		api.BadRequest(w, "scheduled_end invalid — use RFC3339")
+		api.BadRequest(w, "scheduled_end invalid - use RFC3339")
 		return
 	}
 	if !end.After(start) {
@@ -446,6 +447,65 @@ func (h *CbtSession) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, domain.ErrConflict) {
 			message := strings.TrimPrefix(safeClientMessage(err, "Status sesi tidak dapat diperbarui"), "conflict: ")
 			api.Conflict(w, message)
+			return
+		}
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *CbtSession) UpdateSchedule(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		ScheduledStart string `json:"scheduled_start"`
+		ScheduledEnd   string `json:"scheduled_end"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	start, err := time.Parse(time.RFC3339, body.ScheduledStart)
+	if err != nil {
+		api.BadRequest(w, "scheduled_start invalid — use RFC3339")
+		return
+	}
+	end, err := time.Parse(time.RFC3339, body.ScheduledEnd)
+	if err != nil {
+		api.BadRequest(w, "scheduled_end invalid — use RFC3339")
+		return
+	}
+	if !end.After(start) {
+		api.BadRequest(w, "scheduled_end must be after scheduled_start")
+		return
+	}
+	row, err := h.svc.UpdateSchedule(
+		r.Context(),
+		id,
+		pgtype.Timestamptz{Time: start, Valid: true},
+		pgtype.Timestamptz{Time: end, Valid: true},
+	)
+	if err != nil {
+		if errors.Is(err, domain.ErrBadRequest) {
+			message := strings.TrimPrefix(safeClientMessage(err, "Jadwal sesi tidak valid"), "bad request: ")
+			api.BadRequest(w, message)
+			return
+		}
+		if errors.Is(err, domain.ErrConflict) {
+			message := strings.TrimPrefix(safeClientMessage(err, "Jadwal sesi tidak dapat diperbarui"), "conflict: ")
+			api.Conflict(w, message)
+			return
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			api.NotFound(w)
 			return
 		}
 		api.Internal(w, err)
