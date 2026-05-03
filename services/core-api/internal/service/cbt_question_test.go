@@ -602,6 +602,25 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		}
 	})
 
+	t.Run("reject updates workflow reviewer and notes", func(t *testing.T) {
+		store := &fakeQuestionStore{current: current}
+		svc := &CbtQuestion{q: store}
+
+		_, err := svc.Reject(context.Background(), questionID, "waka", "perbaiki opsi C")
+		if err != nil {
+			t.Fatalf("Reject() error = %v", err)
+		}
+		if store.updateParams.WorkflowStatus != "rejected" || store.updateParams.ReviewerUsername != "waka" {
+			t.Fatalf("Reject() params = %+v, want rejected reviewer waka", store.updateParams)
+		}
+		if !store.updateParams.ReviewedAt.Valid || store.updateParams.ReviewNotes != "perbaiki opsi C" {
+			t.Fatalf("Reject() review timestamp/notes = %v/%q, want valid/notes", store.updateParams.ReviewedAt, store.updateParams.ReviewNotes)
+		}
+		if store.updateParams.ApproverUsername != "" {
+			t.Fatalf("Reject() approver = %q, want cleared", store.updateParams.ApproverUsername)
+		}
+	})
+
 	t.Run("publish sets published status and approver", func(t *testing.T) {
 		store := &fakeQuestionStore{current: current}
 		svc := &CbtQuestion{q: store}

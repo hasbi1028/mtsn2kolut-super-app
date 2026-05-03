@@ -66,6 +66,12 @@ type fakeCbtQuestionService struct {
 	approveRow   db.CbtQuestion
 	approveErr   error
 
+	rejectID    pgtype.UUID
+	rejectUser  string
+	rejectNotes string
+	rejectRow   db.CbtQuestion
+	rejectErr   error
+
 	publishID   pgtype.UUID
 	publishUser string
 	publishRow  db.CbtQuestion
@@ -150,6 +156,16 @@ func (f *fakeCbtQuestionService) Approve(_ context.Context, id pgtype.UUID, user
 		return db.CbtQuestion{}, f.approveErr
 	}
 	return f.approveRow, nil
+}
+
+func (f *fakeCbtQuestionService) Reject(_ context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error) {
+	f.rejectID = id
+	f.rejectUser = username
+	f.rejectNotes = reviewNotes
+	if f.rejectErr != nil {
+		return db.CbtQuestion{}, f.rejectErr
+	}
+	return f.rejectRow, nil
 }
 
 func (f *fakeCbtQuestionService) Publish(_ context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error) {
@@ -605,6 +621,16 @@ func TestCbtQuestionWorkflowAndDuplicateForwardActor(t *testing.T) {
 			},
 		},
 		{
+			name:   "reject",
+			action: "reject",
+			check: func(t *testing.T, fake *fakeCbtQuestionService) {
+				t.Helper()
+				if fake.rejectID != questionID || fake.rejectUser != "admin.cbt" || fake.rejectNotes != "cek" {
+					t.Fatalf("Reject args = %v/%q/%q, want id/user/notes", fake.rejectID, fake.rejectUser, fake.rejectNotes)
+				}
+			},
+		},
+		{
 			name:   "publish",
 			action: "publish",
 			check: func(t *testing.T, fake *fakeCbtQuestionService) {
@@ -630,6 +656,7 @@ func TestCbtQuestionWorkflowAndDuplicateForwardActor(t *testing.T) {
 			fake := &fakeCbtQuestionService{
 				submitReviewRow: model,
 				approveRow:      model,
+				rejectRow:       model,
 				publishRow:      model,
 				archiveRow:      model,
 			}
@@ -1067,6 +1094,12 @@ func TestCbtQuestionHandlersMapServiceErrors(t *testing.T) {
 			want: http.StatusForbidden,
 		},
 		{
+			name: "workflow reject forbidden for guru",
+			fn:   (&CbtQuestion{svc: &fakeCbtQuestionService{}}).WorkflowAction,
+			req:  withRouteParam(withClaims(httptest.NewRequest(http.MethodPost, "/api/cbt/questions/"+questionID.String()+"/workflow", strings.NewReader(`{"action":"reject"}`)), jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa"}), "id", questionID.String()),
+			want: http.StatusForbidden,
+		},
+		{
 			name: "workflow publish forbidden for guru",
 			fn:   (&CbtQuestion{svc: &fakeCbtQuestionService{}}).WorkflowAction,
 			req:  withRouteParam(withClaims(httptest.NewRequest(http.MethodPost, "/api/cbt/questions/"+questionID.String()+"/workflow", strings.NewReader(`{"action":"publish"}`)), jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa"}), "id", questionID.String()),
@@ -1088,6 +1121,12 @@ func TestCbtQuestionHandlersMapServiceErrors(t *testing.T) {
 			name: "workflow approve client error",
 			fn:   (&CbtQuestion{svc: &fakeCbtQuestionService{approveErr: errors.New("workflow tidak valid")}}).WorkflowAction,
 			req:  withRouteParam(adminRequest(http.MethodPost, "/api/cbt/questions/"+questionID.String()+"/workflow", `{"action":"approve"}`), "id", questionID.String()),
+			want: http.StatusBadRequest,
+		},
+		{
+			name: "workflow reject client error",
+			fn:   (&CbtQuestion{svc: &fakeCbtQuestionService{rejectErr: errors.New("workflow tidak valid")}}).WorkflowAction,
+			req:  withRouteParam(adminRequest(http.MethodPost, "/api/cbt/questions/"+questionID.String()+"/workflow", `{"action":"reject"}`), "id", questionID.String()),
 			want: http.StatusBadRequest,
 		},
 		{

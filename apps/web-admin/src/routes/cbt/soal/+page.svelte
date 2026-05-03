@@ -4,6 +4,7 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
@@ -31,6 +32,7 @@
 	type ModuleMode = 'catalog' | 'composer' | 'review' | 'import';
 	type AuthoringMode = 'beginner' | 'advance';
 	type RevisionSourceFilter = '' | 'item_analysis' | 'reviewer' | 'workflow';
+	type ReviewDecision = 'approve' | 'reject';
 	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'agree_disagree' | 'matching' | 'short_answer' | 'essay';
 	type ComposerSaveIntent = 'draft' | 'review';
 	type AnswerMode = 'single_option' | 'multi_option' | 'fixed_pair' | 'matching' | 'short_text' | 'rubric';
@@ -96,8 +98,16 @@
 		subjects: Subject[];
 		revisionQueue: Question[];
 		revisionTotal: number;
+		reviewQueue: Question[];
+		reviewTotal: number;
 		totalItems: number;
 		page: number;
+	};
+	type PageData = {
+		user?: {
+			role?: string;
+			roles?: string[];
+		};
 	};
 	type AcademicPayload = {
 		subjects?: Subject[];
@@ -140,6 +150,8 @@
 		duplicate_codes: string[];
 	};
 	type FocusedEditor = 'stem' | 'stimulus' | 'rubric' | 'explanation' | OptionLabel;
+
+	let { data }: { data: PageData } = $props();
 
 	// ── Constants ─────────────────────────────────────────────────────────────
 	const PAGE_SIZE = 15;
@@ -255,6 +267,8 @@
 	let subjects = $state<Subject[]>([]);
 	let revisionQueue = $state<Question[]>([]);
 	let revisionTotal = $state(0);
+	let reviewQueue = $state<Question[]>([]);
+	let reviewTotal = $state(0);
 	let totalItems = $state(0);
 	let currentPage = $state(1);
 
@@ -284,6 +298,10 @@
 	let templateBusy = $state(false);
 	let duplicateBusyId = $state('');
 	let workflowBusyId = $state('');
+	let reviewDecisionOpen = $state(false);
+	let reviewDecisionQuestion = $state<Question | null>(null);
+	let reviewDecision = $state<ReviewDecision>('approve');
+	let reviewDecisionNotes = $state('');
 
 	// ── Form fields ────────────────────────────────────────────────────────────
 	let fSubjectId = $state('');
@@ -341,7 +359,10 @@
 	// ── Derived ────────────────────────────────────────────────────────────────
 	let pageCount = $derived(Math.max(1, Math.ceil(totalItems / PAGE_SIZE)));
 	let lockedCount = $derived(questions.filter(questionUsageLocked).length);
-	let reviewCount = $derived(questions.filter((item) => item.workflow_status === 'review').length);
+	let roles = $derived(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
+	let canReviewWorkflow = $derived(roles.includes('admin'));
+	let reviewCount = $derived(reviewTotal);
+	let visibleReviewCount = $derived(questions.filter((item) => item.workflow_status === 'review').length);
 	let draftCount = $derived(questions.filter((item) => item.workflow_status === 'draft').length);
 	let visibleRevisionCount = $derived(questions.filter((item) => item.workflow_status === 'rejected').length);
 	let publishedCount = $derived(questions.filter((item) => item.status === 'published').length);
@@ -740,15 +761,29 @@
 		return params;
 	}
 
+	function buildReviewQueueParams() {
+		const params = new URLSearchParams();
+		params.set('limit', '6');
+		params.set('offset', '0');
+		params.set('workflow_status', 'review');
+		if (search.trim()) params.set('q', search.trim());
+		if (filterSubject) params.set('subject_id', filterSubject);
+		return params;
+	}
+
 	async function fetchOverview(page = currentPage): Promise<SoalOverview> {
 		const params = buildQuestionParams(page);
 		const revisionParams = buildRevisionQueueParams();
-		const [questionPayload, revisionPayload, academicPayload] = await Promise.all([
+		const reviewParams = buildReviewQueueParams();
+		const [questionPayload, revisionPayload, reviewPayload, academicPayload] = await Promise.all([
 			fetch(clientApiPathWithQuery('/api/cbt/questions', params)).then((response) =>
 				readClientApiData<QuestionListResponse>(response, 'Gagal memuat soal')
 			),
 			fetch(clientApiPathWithQuery('/api/cbt/questions', revisionParams)).then((response) =>
 				readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrian revisi')
+			),
+			fetch(clientApiPathWithQuery('/api/cbt/questions', reviewParams)).then((response) =>
+				readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrian review')
 			),
 			fetch('/api/academic').then((response) =>
 				readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')
@@ -756,11 +791,14 @@
 		]);
 		const loadedQuestions = questionPayload.items ?? [];
 		const loadedRevisions = revisionPayload.items ?? [];
+		const loadedReviews = reviewPayload.items ?? [];
 		return {
 			questions: loadedQuestions,
 			subjects: academicPayload.subjects ?? [],
 			revisionQueue: loadedRevisions,
 			revisionTotal: revisionPayload.meta?.total ?? loadedRevisions.length,
+			reviewQueue: loadedReviews,
+			reviewTotal: reviewPayload.meta?.total ?? loadedReviews.length,
 			totalItems: questionPayload.meta?.total ?? loadedQuestions.length,
 			page,
 		};
@@ -771,6 +809,8 @@
 		subjects = overview.subjects;
 		revisionQueue = overview.revisionQueue;
 		revisionTotal = overview.revisionTotal;
+		reviewQueue = overview.reviewQueue;
+		reviewTotal = overview.reviewTotal;
 		totalItems = overview.totalItems;
 		currentPage = overview.page;
 	}
@@ -778,12 +818,12 @@
 	function load(page = currentPage) {
 		const requestId = ++questionsRequestId;
 		questionsPromise = fetchOverview(page).then((overview) => {
-			if (requestId !== questionsRequestId) return { questions, subjects, revisionQueue, revisionTotal, totalItems, page: currentPage };
+			if (requestId !== questionsRequestId) return { questions, subjects, revisionQueue, revisionTotal, reviewQueue, reviewTotal, totalItems, page: currentPage };
 			applyOverview(overview);
 			return overview;
 		}).catch((error: unknown) => {
 			if (requestId === questionsRequestId) throw error;
-			return { questions, subjects, revisionQueue, revisionTotal, totalItems, page: currentPage };
+			return { questions, subjects, revisionQueue, revisionTotal, reviewQueue, reviewTotal, totalItems, page: currentPage };
 		});
 	}
 
@@ -800,7 +840,7 @@
 			questionsPromise = Promise.resolve(overview);
 		} catch (error) {
 			if (requestId === questionsRequestId) {
-				questionsPromise = Promise.resolve({ questions, subjects, revisionQueue, revisionTotal, totalItems, page: currentPage });
+				questionsPromise = Promise.resolve({ questions, subjects, revisionQueue, revisionTotal, reviewQueue, reviewTotal, totalItems, page: currentPage });
 				toast.error(soalErrorMessage(error));
 			}
 		}
@@ -841,6 +881,13 @@
 
 	function showAllRevisions() {
 		setRevisionSourceFilter('');
+	}
+
+	function showPendingReviews() {
+		filterWorkflow = 'review';
+		revisionSourceFilter = '';
+		setModuleMode('review');
+		load(1);
 	}
 
 	function setRevisionSourceFilter(source: RevisionSourceFilter) {
@@ -1124,6 +1171,10 @@
 
 	function canSubmitRevisionReview(q: Question): boolean {
 		return q.workflow_status === 'rejected' && q.status === 'draft' && !questionUsageLocked(q);
+	}
+
+	function canDecideReview(q: Question): boolean {
+		return canReviewWorkflow && q.workflow_status === 'review' && q.status === 'draft' && !questionUsageLocked(q);
 	}
 
 	function isQuickEditable(q: Question): boolean {
@@ -1594,6 +1645,62 @@
 		}
 	}
 
+	function openReviewDecision(q: Question, decision: ReviewDecision) {
+		if (!canReviewWorkflow) {
+			toast.warning('Hanya admin yang dapat memutuskan review soal.');
+			return;
+		}
+		if (q.workflow_status !== 'review' || q.status !== 'draft') {
+			toast.warning('Soal ini tidak sedang menunggu review.');
+			return;
+		}
+		if (questionUsageLocked(q)) {
+			toast.warning('Soal sudah dipakai. Buat revisi baru sebelum mengubah keputusan review.');
+			return;
+		}
+		reviewDecisionQuestion = q;
+		reviewDecision = decision;
+		reviewDecisionNotes = '';
+		reviewDecisionOpen = true;
+	}
+
+	function closeReviewDecision() {
+		reviewDecisionOpen = false;
+		reviewDecisionQuestion = null;
+		reviewDecisionNotes = '';
+		reviewDecision = 'approve';
+	}
+
+	async function submitReviewDecision() {
+		const q = reviewDecisionQuestion;
+		if (!q) return;
+		if (!canDecideReview(q)) {
+			toast.warning('Keputusan review tidak tersedia untuk soal ini.');
+			return;
+		}
+		const notes = reviewDecisionNotes.trim();
+		if (reviewDecision === 'reject' && notes.length < 8) {
+			toast.warning('Catatan revisi minimal 8 karakter agar guru tahu yang harus diperbaiki.');
+			return;
+		}
+		workflowBusyId = q.id;
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/questions/${q.id}/workflow`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: reviewDecision, notes }),
+			});
+			await readClientJson<unknown>(res);
+			toast.success(reviewDecision === 'approve' ? 'Soal disetujui' : 'Soal dikembalikan untuk revisi');
+			closeReviewDecision();
+			await refreshOverview(currentPage);
+		} catch (e) {
+			toast.error(mutationErrorMessage(e, 'Gagal menyimpan keputusan review'));
+		} finally {
+			workflowBusyId = '';
+		}
+	}
+
 	async function deleteQuestion(id: string) {
 		const current = questions.find((item) => item.id === id);
 		if (current && questionUsageLocked(current)) {
@@ -1789,6 +1896,75 @@
 		</section>
 	{/if}
 
+	{#if activeMode === 'review' || (canReviewWorkflow && reviewTotal > 0)}
+		<section class="rounded-lg border border-amber-200 bg-amber-50/70 p-3">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+				<div class="min-w-0">
+					<div class="flex flex-wrap items-center gap-2">
+						<h2 class="text-sm font-bold uppercase tracking-wider text-amber-950">Antrian Review Soal</h2>
+						<span class="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-amber-800">{reviewTotal} menunggu keputusan</span>
+					</div>
+					<p class="mt-1 text-xs text-amber-900">Meja kerja reviewer untuk memeriksa soal yang diajukan guru, menyetujui, atau mengembalikan dengan catatan revisi.</p>
+				</div>
+				<Button variant="outline" size="sm" class="shrink-0 border-amber-200 bg-white text-amber-900 hover:bg-amber-100" onclick={showPendingReviews}>
+					Lihat Semua Ditinjau
+				</Button>
+			</div>
+			{#if reviewQueue.length > 0}
+				<div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+					{#each reviewQueue as q (q.id)}
+						<article class="min-w-0 rounded-md border border-amber-100 bg-white px-3 py-2 text-left shadow-sm transition-colors hover:border-amber-300 hover:bg-amber-50">
+							<div class="mb-1 flex items-center gap-1">
+								<span class="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">{questionTypeLabel(q.question_type)}</span>
+								<span class="truncate text-[11px] text-slate-400">{q.subject_name || q.subject_code || 'Mapel belum ada'}</span>
+							</div>
+							<button type="button" onclick={() => openReviewDecision(q, 'approve')} class="block w-full text-left" disabled={!canReviewWorkflow}>
+								<p class="line-clamp-2 text-sm font-medium text-slate-800 hover:text-green-800">{stemPreview(q)}</p>
+							</button>
+							<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
+								<span>{q.code || 'Tanpa kode'}</span>
+								{#if q.author_username}<span>Guru: {q.author_username}</span>{/if}
+								<span>{DIFFICULTY_LABEL[q.difficulty] ?? q.difficulty ?? 'Sedang'}</span>
+							</div>
+							{#if q.review_notes}
+								<div class="mt-2 rounded border border-amber-100 bg-amber-50/70 px-2 py-1.5 text-[11px] leading-relaxed text-amber-900">
+									<span class="font-semibold">Catatan sebelumnya:</span> {revisionReason(q)}
+								</div>
+							{/if}
+							<div class="mt-2 flex flex-wrap gap-1.5">
+								<Button
+									variant="outline"
+									size="sm"
+									class="h-7 border-green-200 bg-green-50 text-xs text-green-800 hover:bg-green-100"
+									onclick={() => openReviewDecision(q, 'approve')}
+									disabled={!canDecideReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
+								>
+									Setujui
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									class="h-7 border-red-200 bg-red-50 text-xs text-red-700 hover:bg-red-100"
+									onclick={() => openReviewDecision(q, 'reject')}
+									disabled={!canDecideReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
+								>
+									Minta Revisi
+								</Button>
+							</div>
+							{#if !canReviewWorkflow}
+								<p class="mt-2 text-[11px] text-amber-800">Menunggu keputusan admin/reviewer.</p>
+							{/if}
+						</article>
+					{/each}
+				</div>
+			{:else}
+				<div class="mt-3 rounded-md border border-amber-100 bg-white px-3 py-3 text-sm text-amber-900">
+					Belum ada soal yang menunggu review pada filter ini.
+				</div>
+			{/if}
+		</section>
+	{/if}
+
 	{#if activeMode === 'composer'}
 		<section class="rounded-lg border border-green-200 bg-green-50 p-4">
 			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1813,6 +1989,7 @@
 			<div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
 				<p class="text-xs uppercase tracking-wider text-yellow-700">Menunggu Review</p>
 				<p class="mt-2 text-2xl font-bold text-yellow-900">{reviewCount}</p>
+				<p class="mt-1 text-[11px] text-yellow-700">{visibleReviewCount} tampil di halaman ini</p>
 			</div>
 			<div class="rounded-lg border border-green-200 bg-green-50 p-4">
 				<p class="text-xs uppercase tracking-wider text-green-700">Terbit</p>
@@ -1934,7 +2111,7 @@
 							{#each currentQuestions as q, i (q.id)}
 								<Table.Row
 									class="hover:bg-slate-50 cursor-pointer"
-									onclick={() => openQuestion(q)}
+									onclick={() => (canDecideReview(q) ? openReviewDecision(q, 'approve') : openQuestion(q))}
 								>
 									<Table.Cell class="text-xs text-slate-400">
 										{(overview.page - 1) * PAGE_SIZE + i + 1}
@@ -1996,6 +2173,18 @@
 												class="rounded px-2 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40"
 											>
 												{workflowBusyId === q.id ? 'Mengajukan...' : 'Review Ulang'}
+											</button>
+										{/if}
+										{#if canDecideReview(q)}
+											<button
+												onclick={(e) => {
+													e.stopPropagation();
+													openReviewDecision(q, 'approve');
+												}}
+												disabled={workflowBusyId !== '' && workflowBusyId !== q.id}
+												class="rounded px-2 py-1 text-xs text-amber-700 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40"
+											>
+												Review
 											</button>
 										{/if}
 										<button
@@ -2128,6 +2317,122 @@
 					class="bg-green-700 text-white hover:bg-green-800 disabled:opacity-50"
 				>
 					Import
+				</LoadingButton>
+			</div>
+		</div>
+	</Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={reviewDecisionOpen}>
+	<Dialog.Content>
+		<div class="w-[min(94vw,42rem)] space-y-4 p-5">
+			<div>
+				<p class="text-xs font-bold uppercase tracking-wider text-green-700">Review Soal CBT</p>
+				<h2 class="mt-1 text-base font-semibold text-slate-800">
+					{reviewDecision === 'approve' ? 'Setujui Soal' : 'Minta Revisi Soal'}
+				</h2>
+				<p class="mt-1 text-xs text-slate-500">Periksa isi, opsi, kunci/rubrik, dan catatan sebelum menyimpan keputusan.</p>
+			</div>
+
+			{#if reviewDecisionQuestion}
+				<div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+					<div class="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+						<span class="rounded bg-white px-1.5 py-0.5 font-semibold text-green-700">{questionTypeLabel(reviewDecisionQuestion.question_type)}</span>
+						<span>{reviewDecisionQuestion.subject_name || reviewDecisionQuestion.subject_code || 'Mapel belum ada'}</span>
+						<span>{reviewDecisionQuestion.code || 'Tanpa kode'}</span>
+						{#if reviewDecisionQuestion.author_username}<span>Guru: {reviewDecisionQuestion.author_username}</span>{/if}
+					</div>
+					<div class="max-h-64 space-y-3 overflow-auto rounded-md border border-slate-200 bg-white p-3 text-sm">
+						{#if reviewDecisionQuestion.stimulus_html}
+							<div class="rounded border border-slate-100 bg-slate-50 p-2">
+								<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Stimulus</p>
+								<RichContent html={reviewDecisionQuestion.stimulus_html} class="prose prose-sm max-w-none text-slate-700 latex-preview" />
+							</div>
+						{/if}
+						<div>
+							<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pertanyaan</p>
+							<RichContent html={reviewDecisionQuestion.stem_html || reviewDecisionQuestion.question_text || 'Isi soal belum tersedia'} class="prose prose-sm max-w-none text-slate-800 latex-preview" />
+						</div>
+						{#if reviewDecisionQuestion.options.length > 0}
+							<div class="space-y-1.5">
+								<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Opsi / Pasangan</p>
+								{#each reviewDecisionQuestion.options as opt, i (`review-option-${reviewDecisionQuestion.id}-${i}`)}
+									<div class="rounded border border-slate-100 bg-slate-50 px-2 py-1.5">
+										<div class="flex gap-2">
+											<span class="mt-0.5 text-xs font-bold text-green-700">{opt.label || opt.match_label || i + 1}</span>
+											<div class="min-w-0 flex-1 text-xs text-slate-700">
+												<RichContent html={opt.html || opt.text || opt.latex || opt.match_html || opt.match_text || '-'} class="latex-preview" />
+												{#if opt.match_html || opt.match_text}
+													<div class="mt-1 border-t border-slate-200 pt-1 text-slate-500">
+														<RichContent html={opt.match_html || opt.match_text || '-'} class="latex-preview" />
+													</div>
+												{/if}
+											</div>
+										</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
+						<div class="rounded border border-green-100 bg-green-50 px-2 py-1.5 text-xs text-green-900">
+							<span class="font-semibold">Kunci/Rubrik:</span>
+							{reviewDecisionQuestion.question_type === 'essay' ? 'Periksa rubrik uraian pada isi soal.' : reviewDecisionQuestion.answer_key || '-'}
+						</div>
+						{#if reviewDecisionQuestion.review_notes}
+							<div class="rounded border border-amber-100 bg-amber-50 px-2 py-1.5 text-xs leading-relaxed text-amber-900">
+								<span class="font-semibold">Catatan sebelumnya:</span> {revisionReason(reviewDecisionQuestion)}
+							</div>
+						{/if}
+					</div>
+				</div>
+			{/if}
+
+			<div class="grid grid-cols-2 gap-2">
+				<button
+					type="button"
+					onclick={() => (reviewDecision = 'approve')}
+					class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'approve'
+						? 'border-green-300 bg-green-50 font-semibold text-green-800'
+						: 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}"
+				>
+					Setujui
+					<span class="mt-0.5 block text-[11px] font-normal text-slate-500">Soal masuk status disetujui.</span>
+				</button>
+				<button
+					type="button"
+					onclick={() => (reviewDecision = 'reject')}
+					class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'reject'
+						? 'border-red-300 bg-red-50 font-semibold text-red-700'
+						: 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}"
+				>
+					Minta Revisi
+					<span class="mt-0.5 block text-[11px] font-normal text-slate-500">Kembalikan ke guru dengan catatan.</span>
+				</button>
+			</div>
+
+			<div>
+				<label for="review-decision-notes" class="mb-1 block text-xs font-medium text-slate-600">
+					Catatan Reviewer {#if reviewDecision === 'reject'}<span class="text-red-500">*</span>{/if}
+				</label>
+				<Textarea
+					id="review-decision-notes"
+					rows={3}
+					bind:value={reviewDecisionNotes}
+					placeholder={reviewDecision === 'approve' ? 'Opsional: catatan persetujuan.' : 'Tuliskan bagian yang harus diperbaiki guru.'}
+				/>
+			</div>
+
+			<div class="flex justify-end gap-2 border-t border-slate-100 pt-4">
+				<Button variant="outline" onclick={closeReviewDecision} disabled={workflowBusyId !== ''}>
+					Batal
+				</Button>
+				<LoadingButton
+					onclick={() => void submitReviewDecision()}
+					loading={workflowBusyId !== ''}
+					loadingLabel="Menyimpan..."
+					disabled={!reviewDecisionQuestion || workflowBusyId !== ''}
+					class={reviewDecision === 'approve' ? 'bg-green-700 text-white hover:bg-green-800' : 'bg-red-600 text-white hover:bg-red-700'}
+				>
+					{reviewDecision === 'approve' ? 'Setujui Soal' : 'Kirim Revisi'}
 				</LoadingButton>
 			</div>
 		</div>

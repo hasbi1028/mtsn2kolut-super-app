@@ -34,6 +34,7 @@ type cbtQuestionService interface {
 	Delete(ctx context.Context, id pgtype.UUID) error
 	SubmitReview(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error)
 	Approve(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error)
+	Reject(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error)
 	Publish(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
 	Archive(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
 	DuplicateAsDraft(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
@@ -426,6 +427,21 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_APPROVE", "cbt_question", pgUUIDString(row.ID), map[string]any{
+			"workflow_status": row.WorkflowStatus,
+			"review_notes":    body.Notes,
+		})
+		api.OK(w, serializeQuestionModel(row))
+	case "reject":
+		if !hasAnyRole(r, "admin") {
+			api.Forbidden(w)
+			return
+		}
+		row, err := h.svc.Reject(r.Context(), id, username, body.Notes)
+		if err != nil {
+			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
+			return
+		}
+		cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_REJECT", "cbt_question", pgUUIDString(row.ID), map[string]any{
 			"workflow_status": row.WorkflowStatus,
 			"review_notes":    body.Notes,
 		})

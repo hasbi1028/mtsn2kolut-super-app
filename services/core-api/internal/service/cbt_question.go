@@ -264,6 +264,19 @@ func (s *CbtQuestion) Approve(ctx context.Context, id pgtype.UUID, username stri
 	return s.Update(ctx, input)
 }
 
+func (s *CbtQuestion) Reject(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error) {
+	current, err := s.q.GetCbtQuestion(ctx, id)
+	if err != nil {
+		return db.CbtQuestion{}, err
+	}
+	input := questionInputFromCurrent(current, username)
+	input.WorkflowStatus = "rejected"
+	input.ReviewerUsername = username
+	input.ApproverUsername = ""
+	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
+	return s.Update(ctx, input)
+}
+
 func (s *CbtQuestion) Publish(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error) {
 	current, err := s.q.GetCbtQuestion(ctx, id)
 	if err != nil {
@@ -1136,7 +1149,7 @@ func buildUpdateQuestionParams(current db.GetCbtQuestionRow, input SaveCbtQuesti
 
 	reviewer := current.ReviewerUsername
 	reviewedAt := current.ReviewedAt
-	if normalized.WorkflowStatus == "approved" || normalized.WorkflowStatus == "review" {
+	if normalized.WorkflowStatus == "approved" || normalized.WorkflowStatus == "review" || normalized.WorkflowStatus == "rejected" {
 		reviewer = normalized.ReviewerUsername
 		reviewedAt = normalized.reviewedAt()
 	}
