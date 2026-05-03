@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	"mtsn2kolut-super-app/backend/internal/domain"
 	mw "mtsn2kolut-super-app/backend/internal/middleware"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
@@ -346,6 +348,11 @@ func (h *CbtSession) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	row, err := h.svc.UpdateStatus(r.Context(), id, db.CbtSessionStatusEnum(body.Status))
 	if err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			message := strings.TrimPrefix(safeClientMessage(err, "Status sesi tidak dapat diperbarui"), "conflict: ")
+			api.Conflict(w, message)
+			return
+		}
 		api.Internal(w, err)
 		return
 	}

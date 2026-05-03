@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -143,10 +144,38 @@ func (s *CbtSession) Create(ctx context.Context, in CreateCbtSessionInput) (db.C
 }
 
 func (s *CbtSession) UpdateStatus(ctx context.Context, id pgtype.UUID, status db.CbtSessionStatusEnum) (db.CbtExamSession, error) {
+	if status == db.CbtSessionStatusEnumActive {
+		readiness, err := s.q.GetCbtSessionRoomReadiness(ctx, id)
+		if err != nil {
+			return db.CbtExamSession{}, err
+		}
+		if err := validateCbtSessionActivationReadiness(readiness); err != nil {
+			return db.CbtExamSession{}, err
+		}
+	}
 	return s.q.UpdateCbtExamSessionStatus(ctx, db.UpdateCbtExamSessionStatusParams{
 		ID:     id,
 		Status: status,
 	})
+}
+
+func validateCbtSessionActivationReadiness(readiness db.GetCbtSessionRoomReadinessRow) error {
+	switch {
+	case readiness.ParticipantCount == 0:
+		return fmt.Errorf("%w: sesi belum memiliki peserta", domain.ErrConflict)
+	case readiness.RoomCount == 0:
+		return fmt.Errorf("%w: sesi belum memiliki ruangan ujian", domain.ErrConflict)
+	case readiness.TotalCapacity < readiness.ParticipantCount:
+		return fmt.Errorf("%w: kapasitas ruangan belum cukup untuk seluruh peserta", domain.ErrConflict)
+	case readiness.UnassignedParticipantCount > 0:
+		return fmt.Errorf("%w: masih ada %d peserta belum mendapat ruangan", domain.ErrConflict, readiness.UnassignedParticipantCount)
+	case readiness.MissingSeatCount > 0:
+		return fmt.Errorf("%w: masih ada %d peserta belum mendapat nomor meja", domain.ErrConflict, readiness.MissingSeatCount)
+	case readiness.RoomsWithoutProctor > 0:
+		return fmt.Errorf("%w: masih ada %d ruangan belum punya pengawas", domain.ErrConflict, readiness.RoomsWithoutProctor)
+	default:
+		return nil
+	}
 }
 
 func (s *CbtSession) Delete(ctx context.Context, id pgtype.UUID) error {

@@ -984,7 +984,7 @@ Three runtime units deployed across 3 VPS:
 
 #### Phase 3 — Readiness Check dan Operasional Pengawas
 - [x] Tambahkan readiness ringkas: jumlah peserta, peserta belum punya ruang, kapasitas total, ruang tanpa pengawas, dan nomor meja belum lengkap.
-- [ ] Blokir atau minimal beri peringatan kuat saat operator mengaktifkan sesi yang belum punya kapasitas cukup atau pengawas ruang.
+- [x] Blokir aktivasi sesi CBT jika peserta, ruangan, kapasitas, nomor meja, atau pengawas ruang belum siap; UI daftar sesi menampilkan alasan backend agar operator tahu tindakan koreksi berikutnya.
 - [ ] Buat dashboard pengawas per ruang mirip legacy proctoring: token ruang, peserta, nomor meja, status heartbeat, pelanggaran, reset akses, dan force submit terbatas pada ruang tersebut.
 - [ ] Tambahkan cetak paket pengawas per ruang: daftar hadir, token ruang, denah/meja, kontak operator, dan checklist kesiapan.
 

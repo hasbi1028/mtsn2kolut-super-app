@@ -416,6 +416,7 @@ type fakeCbtSessionStore struct {
 	schoolRoomRow         db.SchoolRoom
 	roomProctorRows       []db.ListCbtRoomProctorsRow
 	roomReadinessRow      db.GetCbtSessionRoomReadinessRow
+	roomReadinessID       pgtype.UUID
 	deleteRoomID          pgtype.UUID
 	clearRoomID           pgtype.UUID
 	clearRoomErr          error
@@ -543,6 +544,7 @@ func (f *fakeCbtSessionStore) CreateCbtRoomProctor(ctx context.Context, arg db.C
 }
 
 func (f *fakeCbtSessionStore) GetCbtSessionRoomReadiness(ctx context.Context, targetSessionID pgtype.UUID) (db.GetCbtSessionRoomReadinessRow, error) {
+	f.roomReadinessID = targetSessionID
 	return f.roomReadinessRow, nil
 }
 
@@ -665,6 +667,16 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 		sessionParticipant: true,
 		sessionRoom:        true,
 		sessionAnswer:      true,
+		roomReadinessRow: db.GetCbtSessionRoomReadinessRow{
+			RoomCount:                  1,
+			TotalCapacity:              30,
+			ParticipantCount:           1,
+			AssignedParticipantCount:   1,
+			UnassignedParticipantCount: 0,
+			MissingSeatCount:           0,
+			RoomsWithoutProctor:        0,
+			ProctorAssignmentCount:     1,
+		},
 	}
 	svc := &CbtSession{q: store}
 	if NewCbtSession(nil) == nil {
@@ -704,6 +716,9 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	}
 	if store.updateStatusArg.ID != sessionID || store.updateStatusArg.Status != db.CbtSessionStatusEnumActive {
 		t.Fatalf("UpdateStatus() arg = %+v, want active status", store.updateStatusArg)
+	}
+	if store.roomReadinessID != sessionID {
+		t.Fatalf("UpdateStatus() readiness id = %v, want %v", store.roomReadinessID, sessionID)
 	}
 	if err := svc.Delete(context.Background(), sessionID); err != nil || store.deleteID != sessionID {
 		t.Fatalf("Delete() = %v id=%v, want nil/%v", err, store.deleteID, sessionID)

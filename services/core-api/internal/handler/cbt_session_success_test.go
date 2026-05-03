@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
@@ -803,6 +804,7 @@ func TestCbtSessionAdminValidationAndServiceErrors(t *testing.T) {
 		{name: "update status invalid id", handler: (*CbtSession).UpdateStatus, req: adminRoute(http.MethodPatch, "/api/cbt/sessions/bad/status", `{"status":"active"}`, "id", "bad"), wantStatus: http.StatusBadRequest},
 		{name: "update status invalid json", handler: (*CbtSession).UpdateStatus, req: adminRoute(http.MethodPatch, "/api/cbt/sessions/"+sessionID.String()+"/status", `{`, "id", sessionID.String()), wantStatus: http.StatusBadRequest},
 		{name: "update status service error", handler: (*CbtSession).UpdateStatus, svc: &fakeCbtSessionService{updateStatusErr: errDB}, req: adminRoute(http.MethodPatch, "/api/cbt/sessions/"+sessionID.String()+"/status", `{"status":"active"}`, "id", sessionID.String()), wantStatus: http.StatusInternalServerError},
+		{name: "update status readiness conflict", handler: (*CbtSession).UpdateStatus, svc: &fakeCbtSessionService{updateStatusErr: errors.Join(domain.ErrConflict, errors.New("masih ada 1 ruangan belum punya pengawas"))}, req: adminRoute(http.MethodPatch, "/api/cbt/sessions/"+sessionID.String()+"/status", `{"status":"active"}`, "id", sessionID.String()), wantStatus: http.StatusConflict},
 		{name: "delete invalid id", handler: (*CbtSession).Delete, req: adminRoute(http.MethodDelete, "/api/cbt/sessions/bad", "", "id", "bad"), wantStatus: http.StatusBadRequest},
 		{name: "delete service error", handler: (*CbtSession).Delete, svc: &fakeCbtSessionService{deleteErr: errDB}, req: adminRoute(http.MethodDelete, "/api/cbt/sessions/"+sessionID.String(), "", "id", sessionID.String()), wantStatus: http.StatusInternalServerError},
 	}

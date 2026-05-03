@@ -299,8 +299,9 @@
 			showToast('Status diperbarui');
 			await refreshSessions();
 		} catch (error) {
-			setOperationState('error', 'Status Gagal Diperbarui', 'Perubahan status tidak tersimpan. Coba ulang setelah memeriksa koneksi atau status sesi saat ini.');
-			showToast(mutationErrorMessage(error, 'Gagal mengubah status sesi. Periksa koneksi lalu coba lagi.'), false);
+			const message = mutationErrorMessage(error, 'Gagal mengubah status sesi. Periksa kesiapan ruang, peserta, kursi, dan pengawas lalu coba lagi.');
+			setOperationState('error', 'Status Gagal Diperbarui', message);
+			showToast(message, false);
 		} finally {
 			statusBusyId = '';
 		}

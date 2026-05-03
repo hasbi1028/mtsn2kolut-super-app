@@ -2,10 +2,15 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"mtsn2kolut-super-app/backend/internal/domain"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
 func cbtSessionTestUUID(seed byte) pgtype.UUID {
@@ -86,6 +91,51 @@ func TestCbtSessionPgNumeric(t *testing.T) {
 	divisor, _ := scale.Float64()
 	if got := f / divisor; got != 87.5 {
 		t.Fatalf("pgNumeric(87.5) = %v, want 87.5", got)
+	}
+}
+
+func TestValidateCbtSessionActivationReadiness(t *testing.T) {
+	valid := db.GetCbtSessionRoomReadinessRow{
+		RoomCount:                  2,
+		TotalCapacity:              60,
+		ParticipantCount:           50,
+		AssignedParticipantCount:   50,
+		UnassignedParticipantCount: 0,
+		MissingSeatCount:           0,
+		RoomsWithoutProctor:        0,
+		ProctorAssignmentCount:     2,
+	}
+
+	tests := []struct {
+		name    string
+		row     db.GetCbtSessionRoomReadinessRow
+		wantErr string
+	}{
+		{name: "ready", row: valid},
+		{name: "no participants", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 1, TotalCapacity: 30}, wantErr: "sesi belum memiliki peserta"},
+		{name: "no rooms", row: db.GetCbtSessionRoomReadinessRow{ParticipantCount: 10}, wantErr: "sesi belum memiliki ruangan ujian"},
+		{name: "capacity too small", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 1, TotalCapacity: 5, ParticipantCount: 10}, wantErr: "kapasitas ruangan belum cukup"},
+		{name: "unassigned participants", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 1, TotalCapacity: 30, ParticipantCount: 20, UnassignedParticipantCount: 3}, wantErr: "3 peserta belum mendapat ruangan"},
+		{name: "missing seats", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 1, TotalCapacity: 30, ParticipantCount: 20, MissingSeatCount: 4}, wantErr: "4 peserta belum mendapat nomor meja"},
+		{name: "rooms without proctors", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 2, TotalCapacity: 60, ParticipantCount: 50, RoomsWithoutProctor: 1}, wantErr: "1 ruangan belum punya pengawas"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateCbtSessionActivationReadiness(tt.row)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validateCbtSessionActivationReadiness() error = %v, want nil", err)
+				}
+				return
+			}
+			if !errors.Is(err, domain.ErrConflict) {
+				t.Fatalf("validateCbtSessionActivationReadiness() error = %v, want ErrConflict", err)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("validateCbtSessionActivationReadiness() error = %q, want contains %q", err.Error(), tt.wantErr)
+			}
+		})
 	}
 }
 
