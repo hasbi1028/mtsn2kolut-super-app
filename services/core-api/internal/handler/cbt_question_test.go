@@ -650,6 +650,117 @@ func TestCbtQuestionTeacherWriteScopeRequiresAuthorOwnership(t *testing.T) {
 	})
 }
 
+func TestCbtQuestionDirectUpdateGuardrails(t *testing.T) {
+	subjectID := handlerTestUUID(43)
+	questionID := handlerTestUUID(44)
+	baseBody := `{"subject_id":"` + subjectID.String() + `","question_text":"Apa inti materi?","question_type":"essay","answer_key":"Energi","difficulty":"easy","status":"draft","workflow_status":"draft"}`
+	adminClaims := jwt.MapClaims{"roles": []any{"admin"}, "usr": "admin.cbt", "sub": "01000000-0000-0000-0000-000000000011"}
+	guruClaims := jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa", "sub": "01000000-0000-0000-0000-000000000012"}
+
+	tests := []struct {
+		name   string
+		claims jwt.MapClaims
+		body   string
+		row    db.GetCbtQuestionDetailRow
+	}{
+		{
+			name:   "locked by package usage",
+			claims: adminClaims,
+			body:   baseBody,
+			row: db.GetCbtQuestionDetailRow{
+				ID:             questionID,
+				AuthorUsername: "guru.ipa",
+				WorkflowStatus: "draft",
+				Status:         db.CbtQuestionStatusEnumDraft,
+				PackageCount:   1,
+			},
+		},
+		{
+			name:   "locked by student answers",
+			claims: adminClaims,
+			body:   baseBody,
+			row: db.GetCbtQuestionDetailRow{
+				ID:             questionID,
+				AuthorUsername: "guru.ipa",
+				WorkflowStatus: "draft",
+				Status:         db.CbtQuestionStatusEnumDraft,
+				AnswerCount:    1,
+			},
+		},
+		{
+			name:   "direct approve rejected",
+			claims: adminClaims,
+			body:   `{"subject_id":"` + subjectID.String() + `","question_text":"Apa inti materi?","question_type":"essay","answer_key":"Energi","difficulty":"easy","status":"draft","workflow_status":"approved"}`,
+			row: db.GetCbtQuestionDetailRow{
+				ID:             questionID,
+				AuthorUsername: "guru.ipa",
+				WorkflowStatus: "review",
+				Status:         db.CbtQuestionStatusEnumDraft,
+			},
+		},
+		{
+			name:   "direct publish rejected",
+			claims: adminClaims,
+			body:   `{"subject_id":"` + subjectID.String() + `","question_text":"Apa inti materi?","question_type":"essay","answer_key":"Energi","difficulty":"easy","status":"published","workflow_status":"draft"}`,
+			row: db.GetCbtQuestionDetailRow{
+				ID:             questionID,
+				AuthorUsername: "guru.ipa",
+				WorkflowStatus: "draft",
+				Status:         db.CbtQuestionStatusEnumDraft,
+			},
+		},
+		{
+			name:   "teacher cannot edit review item directly",
+			claims: guruClaims,
+			body:   baseBody,
+			row: db.GetCbtQuestionDetailRow{
+				ID:             questionID,
+				AuthorUsername: "guru.ipa",
+				WorkflowStatus: "review",
+				Status:         db.CbtQuestionStatusEnumDraft,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeCbtQuestionService{getDetailRow: tt.row}
+			req := withClaims(httptest.NewRequest(http.MethodPatch, "/api/cbt/questions/"+questionID.String(), strings.NewReader(tt.body)), tt.claims)
+			req = withRouteParam(req, "id", questionID.String())
+			rec := httptest.NewRecorder()
+			(&CbtQuestion{svc: fake}).Update(rec, req)
+			if rec.Code != http.StatusConflict {
+				t.Fatalf("Update() status = %d, want 409; body=%s", rec.Code, rec.Body.String())
+			}
+			if fake.updateInput.ID.Valid {
+				t.Fatalf("Update() unexpectedly called service update: %+v", fake.updateInput)
+			}
+		})
+	}
+}
+
+func TestCbtQuestionDeleteRejectsLockedQuestion(t *testing.T) {
+	questionID := handlerTestUUID(45)
+	fake := &fakeCbtQuestionService{
+		getDetailRow: db.GetCbtQuestionDetailRow{
+			ID:             questionID,
+			AuthorUsername: "guru.ipa",
+			WorkflowStatus: "draft",
+			Status:         db.CbtQuestionStatusEnumDraft,
+			PackageCount:   1,
+		},
+	}
+	req := withRouteParam(adminRequest(http.MethodDelete, "/api/cbt/questions/"+questionID.String(), ""), "id", questionID.String())
+	rec := httptest.NewRecorder()
+	(&CbtQuestion{svc: fake}).Delete(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("Delete() status = %d, want 409; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.deleteID.Valid {
+		t.Fatalf("Delete() unexpectedly called service delete: %v", fake.deleteID)
+	}
+}
+
 func TestCbtQuestionRequireAuthorOrAdminBranches(t *testing.T) {
 	questionID := handlerTestUUID(42)
 	tests := []struct {

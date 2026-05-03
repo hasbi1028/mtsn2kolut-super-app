@@ -18,6 +18,7 @@ type fakeQuestionStore struct {
 
 	listRows      []db.ListCbtQuestionsRow
 	filteredRows  []db.ListCbtQuestionsFilteredRow
+	stemRows      []db.ListCbtQuestionStemTextsBySubjectRow
 	listFilterArg db.ListCbtQuestionsFilteredParams
 	countArg      db.CountCbtQuestionsFilteredParams
 	count         int64
@@ -46,6 +47,10 @@ func (f *fakeQuestionStore) ListCbtQuestionsFiltered(ctx context.Context, arg db
 func (f *fakeQuestionStore) CountCbtQuestionsFiltered(ctx context.Context, arg db.CountCbtQuestionsFilteredParams) (int64, error) {
 	f.countArg = arg
 	return f.count, nil
+}
+
+func (f *fakeQuestionStore) ListCbtQuestionStemTextsBySubject(ctx context.Context, subjectID pgtype.UUID) ([]db.ListCbtQuestionStemTextsBySubjectRow, error) {
+	return f.stemRows, nil
 }
 
 func (f *fakeQuestionStore) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error) {
@@ -237,6 +242,40 @@ func TestCbtQuestionImportLegacyCSVMapsRows(t *testing.T) {
 	}
 	if store.createHistory[1].Code != "MTK-2" || store.createHistory[1].AnswerKey != "C" {
 		t.Fatalf("second imported params = %+v, want MTK-2 with answer C", store.createHistory[1])
+	}
+}
+
+func TestCbtQuestionImportLegacyCSVSkipsExistingStem(t *testing.T) {
+	subjectID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	store := &fakeQuestionStore{
+		stemRows: []db.ListCbtQuestionStemTextsBySubjectRow{
+			{QuestionText: "Berapa 2+2?", StemHtml: "<p>Berapa 2+2?</p>"},
+		},
+		createRow: db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{8}, Valid: true}},
+	}
+	svc := &CbtQuestion{q: store}
+	csvText := strings.Join([]string{
+		"kode;soal;opsi_a;opsi_b;opsi_c;opsi_d;jawaban",
+		"MTK-1;<p>Berapa 2+2?</p>;3;4;5;6;B",
+		"MTK-2;Berapa 3+3?;5;6;7;8;B",
+	}, "\n")
+
+	got, err := svc.ImportLegacyCSV(context.Background(), ImportLegacyQuestionsInput{
+		SubjectID: subjectID,
+		CSVText:   csvText,
+		Username:  "guru.cbt",
+	})
+	if err != nil {
+		t.Fatalf("ImportLegacyCSV() error = %v", err)
+	}
+	if got.Imported != 1 || got.Skipped != 1 || store.createCalls != 1 {
+		t.Fatalf("ImportLegacyCSV() result/calls = %+v/%d, want 1 imported, 1 skipped, 1 create", got, store.createCalls)
+	}
+	if !strings.Contains(strings.Join(got.Errors, "\n"), "duplikat dengan bank soal") {
+		t.Fatalf("ImportLegacyCSV() errors = %+v, want existing duplicate message", got.Errors)
+	}
+	if store.createHistory[0].Code != "MTK-2" {
+		t.Fatalf("created code = %q, want only non-duplicate row", store.createHistory[0].Code)
 	}
 }
 

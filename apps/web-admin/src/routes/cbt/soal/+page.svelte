@@ -18,8 +18,11 @@
 	// ── Types ─────────────────────────────────────────────────────────────────
 	type Subject = { id: string; name: string; code: string };
 	type OptionItem = { label: string; text?: string; html?: string; latex?: string };
+	type ModuleMode = 'catalog' | 'composer' | 'advanced' | 'review' | 'import';
 	type Question = {
 		id: string;
+		authoring_mode?: string;
+		suggested_mode?: string;
 		subject_id: string;
 		subject_name: string;
 		subject_code: string;
@@ -32,9 +35,16 @@
 		difficulty: string;
 		status: string;
 		workflow_status: string;
-		authoring_mode?: string;
 		author_username: string;
 		created_at: string;
+		package_count?: number;
+		answer_count?: number;
+		is_locked?: boolean;
+		usage?: {
+			package_count?: number;
+			answer_count?: number;
+			is_locked?: boolean;
+		};
 	};
 	type QuestionListResponse = {
 		items: Question[];
@@ -81,6 +91,13 @@
 	// ── Constants ─────────────────────────────────────────────────────────────
 	const PAGE_SIZE = 15;
 	const ANSWER_LABELS = ['A', 'B', 'C', 'D'] as const;
+	const moduleModes: Array<{ id: ModuleMode; label: string; desc: string }> = [
+		{ id: 'catalog', label: 'Katalog', desc: 'Daftar terpadu' },
+		{ id: 'composer', label: 'Komposer Cepat', desc: 'Input PG legacy' },
+		{ id: 'advanced', label: 'Editor Lanjutan', desc: 'Blueprint & asset' },
+		{ id: 'review', label: 'Review', desc: 'Mutu & publikasi' },
+		{ id: 'import', label: 'Import Legacy', desc: 'CSV lama' },
+	];
 	const WORKFLOW_LABEL: Record<string, string> = {
 		draft: 'Draft',
 		review: 'Ditinjau',
@@ -169,6 +186,7 @@
 	];
 
 	// ── Page state ─────────────────────────────────────────────────────────────
+	let activeMode = $state<ModuleMode>('catalog');
 	let questionsPromise = $state<Promise<SoalOverview> | null>(null);
 	let questions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
@@ -216,6 +234,10 @@
 
 	// ── Derived ────────────────────────────────────────────────────────────────
 	let pageCount = $derived(Math.max(1, Math.ceil(totalItems / PAGE_SIZE)));
+	let lockedCount = $derived(questions.filter(questionUsageLocked).length);
+	let reviewCount = $derived(questions.filter((item) => item.workflow_status === 'review').length);
+	let draftCount = $derived(questions.filter((item) => item.workflow_status === 'draft').length);
+	let publishedCount = $derived(questions.filter((item) => item.status === 'published').length);
 
 	let stemText = $derived(htmlToPlainText(fStem));
 	let hasImage = $derived(fStem.includes('<img'));
@@ -448,8 +470,61 @@
 		return fallback;
 	}
 
+	function validModuleMode(value: string | null): value is ModuleMode {
+		return moduleModes.some((mode) => mode.id === value);
+	}
+
+	function setModuleMode(mode: ModuleMode) {
+		activeMode = mode;
+		if (typeof window === 'undefined') return;
+		const url = new URL(window.location.href);
+		url.searchParams.set('mode', mode);
+		window.history.replaceState({}, '', `${url.pathname}?${url.searchParams.toString()}`);
+	}
+
 	function richTextHasContent(html: string): boolean {
 		return htmlToPlainText(html).length > 0 || html.includes('<img');
+	}
+
+	function questionUsageLocked(q: Question): boolean {
+		const packages = q.package_count ?? q.usage?.package_count ?? 0;
+		const answers = q.answer_count ?? q.usage?.answer_count ?? 0;
+		return Boolean(q.is_locked ?? q.usage?.is_locked ?? (packages > 0 || answers > 0));
+	}
+
+	function questionUsageText(q: Question): string {
+		const packages = q.package_count ?? q.usage?.package_count ?? 0;
+		const answers = q.answer_count ?? q.usage?.answer_count ?? 0;
+		if (packages > 0 && answers > 0) return `${packages} paket, ${answers} jawaban`;
+		if (packages > 0) return `${packages} paket`;
+		if (answers > 0) return `${answers} jawaban`;
+		return 'Belum dipakai';
+	}
+
+	function isQuickEditable(q: Question): boolean {
+		const mode = q.suggested_mode ?? q.authoring_mode ?? 'beginner';
+		return mode !== 'advance' && q.question_type === 'multiple_choice' && q.workflow_status === 'draft' && q.status === 'draft' && !questionUsageLocked(q);
+	}
+
+	function explainQuickEditBlocked(q: Question): string {
+		if (questionUsageLocked(q)) return 'Soal sudah dipakai. Gunakan Duplikat untuk membuat revisi draft.';
+		if ((q.suggested_mode ?? q.authoring_mode) === 'advance') return 'Soal ini memakai metadata lanjutan. Gunakan editor lanjutan agar metadata tidak hilang.';
+		if (q.workflow_status !== 'draft' || q.status !== 'draft') return 'Soal sudah masuk alur review/publikasi. Gunakan Duplikat untuk revisi.';
+		if (q.question_type !== 'multiple_choice') return 'Komposer cepat hanya untuk pilihan ganda A-D.';
+		return 'Gunakan editor lanjutan untuk item ini.';
+	}
+
+	function openQuestion(q: Question) {
+		if (isQuickEditable(q)) {
+			void openEdit(q);
+			return;
+		}
+		setModuleMode('advanced');
+		if (typeof window !== 'undefined') {
+			window.location.href = `/cbt/questions?question_id=${encodeURIComponent(q.id)}`;
+			return;
+		}
+		toast.warning(explainQuickEditBlocked(q));
 	}
 
 	function resetForm() {
@@ -477,6 +552,11 @@
 	}
 
 	async function openEdit(q: Question) {
+		if (!isQuickEditable(q)) {
+			setModuleMode('advanced');
+			toast.warning(explainQuickEditBlocked(q));
+			return;
+		}
 		composerBusy = true;
 		try {
 			const res = await fetch(clientApiPath`/api/cbt/questions/${q.id}`);
@@ -540,6 +620,13 @@
 
 	async function saveQuestion() {
 		if (!canSave) return;
+		if (editingId) {
+			const current = questions.find((item) => item.id === editingId);
+			if (current && !isQuickEditable(current)) {
+				toast.error('Soal ini tidak aman diedit lewat komposer cepat. Gunakan Duplikat untuk revisi.');
+				return;
+			}
+		}
 		composerBusy = true;
 		try {
 			const payload = {
@@ -629,6 +716,11 @@
 	}
 
 	async function deleteQuestion(id: string) {
+		const current = questions.find((item) => item.id === id);
+		if (current && questionUsageLocked(current)) {
+			toast.error('Soal yang sudah dipakai tidak bisa dihapus langsung. Duplikat untuk revisi atau arsipkan lewat alur review.');
+			return;
+		}
 		if (!(await confirmAction({
 			title: 'Hapus Soal',
 			message: 'Hapus soal ini? Tindakan tidak bisa dibatalkan dari layar operator.',
@@ -649,6 +741,7 @@
 		const form = new FormData();
 		form.set('file', file);
 		form.set('purpose', 'general');
+		if (editingId) form.set('question_id', editingId);
 		const res = await fetch('/api/cbt/assets', { method: 'POST', body: form });
 		const payload = await readClientApiData<{ url?: string }>(res, 'Upload gambar gagal');
 		return payload.url ?? '';
@@ -677,6 +770,9 @@
 	}
 
 	onMount(() => {
+		const params = new URLSearchParams(window.location.search);
+		const mode = params.get('mode');
+		if (validModuleMode(mode)) activeMode = mode;
 		load();
 	});
 </script>
@@ -686,13 +782,13 @@
 	<!-- Header -->
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-xl font-semibold text-slate-800">Komposer Soal</h1>
+			<h1 class="text-xl font-semibold text-slate-800">Bank Soal CBT</h1>
 			<p class="text-sm text-slate-500 mt-0.5">
-				Buat butir soal dengan template, preview langsung, dan simpan draft otomatis
+				Satu modul untuk katalog, komposer cepat, editor lanjutan, review, dan import legacy
 			</p>
 		</div>
 		<div class="flex shrink-0 flex-wrap gap-2">
-			<Button variant="outline" onclick={openImport}>
+			<Button variant="outline" onclick={() => setModuleMode('import')}>
 				Import CSV
 			</Button>
 			<Button onclick={openCreate} class="bg-green-700 hover:bg-green-800 text-white">
@@ -700,6 +796,74 @@
 			</Button>
 		</div>
 	</div>
+
+	<div class="grid gap-2 md:grid-cols-5">
+		{#each moduleModes as mode (mode.id)}
+			<button
+				type="button"
+				onclick={() => setModuleMode(mode.id)}
+				class="rounded-lg border px-3 py-3 text-left transition-colors {activeMode === mode.id
+					? 'border-green-500 bg-green-50 text-green-900'
+					: 'border-slate-200 bg-white text-slate-600 hover:border-green-200 hover:bg-green-50/40'}"
+			>
+				<div class="text-xs font-bold uppercase tracking-wider">{mode.label}</div>
+				<div class="mt-1 text-[11px] text-slate-500">{mode.desc}</div>
+			</button>
+		{/each}
+	</div>
+
+	{#if activeMode === 'composer'}
+		<section class="rounded-lg border border-green-200 bg-green-50 p-4">
+			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+				<div>
+					<h2 class="text-sm font-bold uppercase tracking-wider text-green-900">Komposer Cepat PG Legacy</h2>
+					<p class="mt-1 text-sm text-green-800">Dipakai untuk membuat draft pilihan ganda A-D. Soal yang sudah review/publish atau dipakai paket wajib direvisi lewat duplikasi.</p>
+				</div>
+				<Button onclick={openCreate} class="bg-green-700 text-white hover:bg-green-800">Buka Komposer</Button>
+			</div>
+		</section>
+	{:else if activeMode === 'advanced'}
+		<section class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+				<div>
+					<h2 class="text-sm font-bold uppercase tracking-wider text-amber-900">Editor Lanjutan sebagai Compatibility Bridge</h2>
+					<p class="mt-1 text-sm text-amber-800">Gunakan untuk CP/TP/KD, HOTS, stimulus, rubrik, asset, dan tipe soal selain PG. Route lama tetap hidup sebagai jembatan aman pada sprint ini.</p>
+				</div>
+				<a href="/cbt/questions" class="inline-flex h-9 items-center justify-center rounded-md border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-900 hover:bg-amber-100">
+					Buka Editor Lanjutan
+				</a>
+			</div>
+		</section>
+	{:else if activeMode === 'review'}
+		<section class="grid gap-3 md:grid-cols-4">
+			<div class="rounded-lg border border-slate-200 bg-white p-4">
+				<p class="text-xs uppercase tracking-wider text-slate-500">Draft</p>
+				<p class="mt-2 text-2xl font-bold text-slate-900">{draftCount}</p>
+			</div>
+			<div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+				<p class="text-xs uppercase tracking-wider text-yellow-700">Menunggu Review</p>
+				<p class="mt-2 text-2xl font-bold text-yellow-900">{reviewCount}</p>
+			</div>
+			<div class="rounded-lg border border-green-200 bg-green-50 p-4">
+				<p class="text-xs uppercase tracking-wider text-green-700">Terbit</p>
+				<p class="mt-2 text-2xl font-bold text-green-900">{publishedCount}</p>
+			</div>
+			<div class="rounded-lg border border-red-200 bg-red-50 p-4">
+				<p class="text-xs uppercase tracking-wider text-red-700">Terkunci</p>
+				<p class="mt-2 text-2xl font-bold text-red-900">{lockedCount}</p>
+			</div>
+		</section>
+	{:else if activeMode === 'import'}
+		<section class="rounded-lg border border-slate-200 bg-white p-4">
+			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+				<div>
+					<h2 class="text-sm font-bold uppercase tracking-wider text-slate-800">Import CSV Bank Soal Legacy</h2>
+					<p class="mt-1 text-sm text-slate-500">Import masuk sebagai draft, memakai kontrak Go API, dan akan menolak duplikat dalam file maupun duplikat stem di bank soal.</p>
+				</div>
+				<Button variant="outline" onclick={openImport}>Pilih CSV</Button>
+			</div>
+		</section>
+	{/if}
 
 	<!-- Filter bar -->
 	<div class="flex flex-wrap gap-2">
@@ -790,7 +954,7 @@
 							{#each currentQuestions as q, i (q.id)}
 								<Table.Row
 									class="hover:bg-slate-50 cursor-pointer"
-									onclick={() => openEdit(q)}
+									onclick={() => openQuestion(q)}
 								>
 									<Table.Cell class="text-xs text-slate-400">
 										{(overview.page - 1) * PAGE_SIZE + i + 1}
@@ -800,6 +964,16 @@
 										{#if q.author_username}
 											<div class="text-[10px] text-slate-400 mt-0.5">{q.author_username}</div>
 										{/if}
+										<div class="mt-1 flex flex-wrap gap-1">
+											<span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+												{q.suggested_mode ?? q.authoring_mode ?? 'beginner'}
+											</span>
+											{#if questionUsageLocked(q)}
+												<span class="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+													Terkunci: {questionUsageText(q)}
+												</span>
+											{/if}
+										</div>
 									</Table.Cell>
 									<Table.Cell class="text-xs text-slate-500 truncate max-w-[8rem]">
 										{q.subject_name || q.subject_code || '-'}
@@ -818,6 +992,15 @@
 										<button
 											onclick={(e) => {
 												e.stopPropagation();
+												openQuestion(q);
+											}}
+											class="rounded px-2 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-100"
+										>
+											{isQuickEditable(q) ? 'Edit' : 'Editor'}
+										</button>
+										<button
+											onclick={(e) => {
+												e.stopPropagation();
 												duplicateQuestion(q.id);
 											}}
 											disabled={duplicateBusyId === q.id}
@@ -830,7 +1013,8 @@
 												e.stopPropagation();
 												deleteQuestion(q.id);
 											}}
-											class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 transition-colors"
+											disabled={questionUsageLocked(q)}
+											class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded hover:bg-red-50 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
 										>
 											Hapus
 										</button>
@@ -1169,9 +1353,10 @@
 								</div>
 								<div>
 									<label for="f-weight" class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600">
-										Bobot
+										Bobot Paket
 									</label>
 									<Input id="f-weight" type="number" min="1" bind:value={fWeight} class="h-11 text-sm font-medium" />
+									<p class="mt-1 text-[10px] text-slate-400">Catatan kesiapan; poin final diatur saat soal masuk paket.</p>
 								</div>
 								<label for="f-rtl" class="flex h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed border-green-200 bg-green-50 px-3">
 									<span class="text-xs font-black uppercase tracking-wider text-green-800">Mode Arab / RTL</span>

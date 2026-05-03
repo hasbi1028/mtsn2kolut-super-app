@@ -29,6 +29,7 @@ type cbtQuestionStore interface {
 	ListCbtQuestions(ctx context.Context) ([]db.ListCbtQuestionsRow, error)
 	ListCbtQuestionsFiltered(ctx context.Context, arg db.ListCbtQuestionsFilteredParams) ([]db.ListCbtQuestionsFilteredRow, error)
 	CountCbtQuestionsFiltered(ctx context.Context, arg db.CountCbtQuestionsFilteredParams) (int64, error)
+	ListCbtQuestionStemTextsBySubject(ctx context.Context, subjectID pgtype.UUID) ([]db.ListCbtQuestionStemTextsBySubjectRow, error)
 	GetCbtQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error)
 	GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionDetailRow, error)
 	CreateCbtQuestion(ctx context.Context, arg db.CreateCbtQuestionParams) (db.CbtQuestion, error)
@@ -253,6 +254,10 @@ func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQue
 	}
 	headers := normalizeCSVHeaders(records[0])
 	result := ImportLegacyQuestionsResult{TotalRows: len(records) - 1, Errors: []string{}, DuplicateCodes: []string{}}
+	existingSignatures, err := s.existingQuestionSignatures(ctx, input.SubjectID)
+	if err != nil {
+		return ImportLegacyQuestionsResult{}, err
+	}
 	seen := map[string]bool{}
 	seenCodes := map[string]bool{}
 	skip := func(message string) {
@@ -270,6 +275,10 @@ func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQue
 		signature := strings.ToLower(strings.Join(strings.Fields(derivePlainText(stem)), " "))
 		if seen[signature] {
 			skip(fmt.Sprintf("Baris %d: duplikat dalam file import", rowNumber))
+			continue
+		}
+		if existingSignatures[signature] {
+			skip(fmt.Sprintf("Baris %d: duplikat dengan bank soal yang sudah ada", rowNumber))
 			continue
 		}
 		seen[signature] = true
@@ -325,6 +334,22 @@ func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQue
 	return result, nil
 }
 
+func (s *CbtQuestion) existingQuestionSignatures(ctx context.Context, subjectID pgtype.UUID) (map[string]bool, error) {
+	rows, err := s.q.ListCbtQuestionStemTextsBySubject(ctx, subjectID)
+	if err != nil {
+		return nil, err
+	}
+	signatures := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		for _, value := range []string{row.QuestionText, row.StemHtml} {
+			if sig := normalizedQuestionSignature(value); sig != "" {
+				signatures[sig] = true
+			}
+		}
+	}
+	return signatures, nil
+}
+
 func firstLine(value string) string {
 	if idx := strings.IndexAny(value, "\r\n"); idx >= 0 {
 		return value[:idx]
@@ -347,6 +372,10 @@ func normalizeCSVKey(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	replacer := strings.NewReplacer(" ", "", "-", "", ".", "", "/", "")
 	return replacer.Replace(value)
+}
+
+func normalizedQuestionSignature(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(derivePlainText(value)), " "))
 }
 
 func csvRow(headers map[string]int, record []string) map[string]string {

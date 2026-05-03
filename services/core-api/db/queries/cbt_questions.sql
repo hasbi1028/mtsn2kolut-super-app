@@ -10,9 +10,21 @@ SELECT q.id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
        q.author_username, q.reviewer_username, q.reviewed_at,
-       q.approver_username, q.approved_at, q.writer_notes, q.review_notes
+       q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
+       COALESCE(pkg_usage.package_count, 0)::int AS package_count,
+       COALESCE(answer_usage.answer_count, 0)::int AS answer_count
 FROM cbt_questions q
 JOIN subjects s ON s.id = q.subject_id
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS package_count
+  FROM cbt_package_questions pq
+  WHERE pq.question_id = q.id
+) pkg_usage ON TRUE
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS answer_count
+  FROM cbt_student_answers sa
+  WHERE sa.question_id = q.id
+) answer_usage ON TRUE
 ORDER BY q.created_at DESC;
 
 -- name: ListCbtQuestionsFiltered :many
@@ -27,9 +39,21 @@ SELECT q.id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
        q.author_username, q.reviewer_username, q.reviewed_at,
-       q.approver_username, q.approved_at, q.writer_notes, q.review_notes
+       q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
+       COALESCE(pkg_usage.package_count, 0)::int AS package_count,
+       COALESCE(answer_usage.answer_count, 0)::int AS answer_count
 FROM cbt_questions q
 JOIN subjects s ON s.id = q.subject_id
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS package_count
+  FROM cbt_package_questions pq
+  WHERE pq.question_id = q.id
+) pkg_usage ON TRUE
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS answer_count
+  FROM cbt_student_answers sa
+  WHERE sa.question_id = q.id
+) answer_usage ON TRUE
 WHERE (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)::uuid)
   AND (sqlc.arg(workflow_status)::text = '' OR q.workflow_status = sqlc.arg(workflow_status)::text)
   AND (sqlc.arg(question_type)::text = '' OR q.question_type = sqlc.arg(question_type)::text)
@@ -62,19 +86,31 @@ WHERE (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)
   );
 
 -- name: GetCbtQuestion :one
-SELECT id, subject_id, code, question_text, question_type, options,
-       option_a, option_b, option_c, option_d, option_e,
-       answer_key, explanation, difficulty, status, created_at, updated_at,
-       stem_html, stem_latex, stimulus_html, stimulus_latex,
-       explanation_html, rubric_html,
-       academic_phase, grade_level,
-       cp_ref, tp_ref, kd_ref, indicator_ref,
-       material_topic, cognitive_level, hots_flag,
-       media_asset_ids, workflow_status, version,
-       author_username, reviewer_username, reviewed_at,
-       approver_username, approved_at, writer_notes, review_notes
-FROM cbt_questions
-WHERE id = $1;
+SELECT q.id, q.subject_id, q.code, q.question_text, q.question_type, q.options,
+       q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
+       q.answer_key, q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
+       q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
+       q.explanation_html, q.rubric_html,
+       q.academic_phase, q.grade_level,
+       q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
+       q.material_topic, q.cognitive_level, q.hots_flag,
+       q.media_asset_ids, q.workflow_status, q.version,
+       q.author_username, q.reviewer_username, q.reviewed_at,
+       q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
+       COALESCE(pkg_usage.package_count, 0)::int AS package_count,
+       COALESCE(answer_usage.answer_count, 0)::int AS answer_count
+FROM cbt_questions q
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS package_count
+  FROM cbt_package_questions pq
+  WHERE pq.question_id = q.id
+) pkg_usage ON TRUE
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS answer_count
+  FROM cbt_student_answers sa
+  WHERE sa.question_id = q.id
+) answer_usage ON TRUE
+WHERE q.id = $1;
 
 -- name: GetCbtQuestionDetail :one
 SELECT q.id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
@@ -88,10 +124,27 @@ SELECT q.id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
        q.material_topic, q.cognitive_level, q.hots_flag,
        q.media_asset_ids, q.workflow_status, q.version,
        q.author_username, q.reviewer_username, q.reviewed_at,
-       q.approver_username, q.approved_at, q.writer_notes, q.review_notes
+       q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
+       COALESCE(pkg_usage.package_count, 0)::int AS package_count,
+       COALESCE(answer_usage.answer_count, 0)::int AS answer_count
 FROM cbt_questions q
 JOIN subjects s ON s.id = q.subject_id
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS package_count
+  FROM cbt_package_questions pq
+  WHERE pq.question_id = q.id
+) pkg_usage ON TRUE
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS answer_count
+  FROM cbt_student_answers sa
+  WHERE sa.question_id = q.id
+) answer_usage ON TRUE
 WHERE q.id = $1;
+
+-- name: ListCbtQuestionStemTextsBySubject :many
+SELECT question_text, stem_html
+FROM cbt_questions
+WHERE subject_id = $1;
 
 -- name: CreateCbtQuestion :one
 INSERT INTO cbt_questions (

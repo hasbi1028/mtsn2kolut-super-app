@@ -250,9 +250,17 @@ func (h *CbtQuestion) Update(w http.ResponseWriter, r *http.Request) {
 	if !h.requireQuestionAuthorOrAdmin(w, r, id) {
 		return
 	}
+	current, err := h.svc.GetDetail(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
 	body, err := decodeQuestionBody(r)
 	if err != nil {
 		writeClientError(w, err, "Data soal CBT tidak valid")
+		return
+	}
+	if !h.directQuestionUpdateAllowed(w, r, current, body) {
 		return
 	}
 	input, err := questionInputFromBody(r, body, id)
@@ -285,6 +293,15 @@ func (h *CbtQuestion) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !h.requireQuestionAuthorOrAdmin(w, r, id) {
+		return
+	}
+	current, err := h.svc.GetDetail(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	if cbtQuestionUsageLocked(current.PackageCount, current.AnswerCount) {
+		api.Conflict(w, "Soal sudah masuk paket ujian atau memiliki jawaban siswa. Duplikat soal untuk membuat revisi baru.")
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
@@ -505,6 +522,46 @@ func (h *CbtQuestion) requireQuestionAuthorOrAdmin(w http.ResponseWriter, r *htt
 	return true
 }
 
+func (h *CbtQuestion) directQuestionUpdateAllowed(w http.ResponseWriter, r *http.Request, current db.GetCbtQuestionDetailRow, body cbtQuestionBody) bool {
+	if cbtQuestionUsageLocked(current.PackageCount, current.AnswerCount) {
+		api.Conflict(w, "Soal sudah masuk paket ujian atau memiliki jawaban siswa. Duplikat soal untuk membuat revisi baru.")
+		return false
+	}
+	requestedWorkflow := strings.ToLower(strings.TrimSpace(body.WorkflowStatus))
+	currentWorkflow := strings.ToLower(strings.TrimSpace(current.WorkflowStatus))
+	if requestedWorkflow == "approved" && currentWorkflow != "approved" {
+		api.Conflict(w, "Setujui soal melalui aksi workflow, bukan edit langsung.")
+		return false
+	}
+	if db.CbtQuestionStatusEnum(strings.TrimSpace(body.Status)) == db.CbtQuestionStatusEnumPublished && current.Status != db.CbtQuestionStatusEnumPublished {
+		api.Conflict(w, "Terbitkan soal melalui aksi workflow, bukan edit langsung.")
+		return false
+	}
+	if !hasAnyRole(r, "admin") {
+		if currentWorkflow != "" && currentWorkflow != "draft" {
+			api.Conflict(w, "Soal sedang atau sudah masuk alur review. Duplikat soal untuk membuat revisi baru.")
+			return false
+		}
+		if current.Status != "" && current.Status != db.CbtQuestionStatusEnumDraft {
+			api.Conflict(w, "Soal tidak lagi berstatus draft. Duplikat soal untuk membuat revisi baru.")
+			return false
+		}
+	}
+	return true
+}
+
+func cbtQuestionUsageLocked(packageCount, answerCount int32) bool {
+	return packageCount > 0 || answerCount > 0
+}
+
+func cbtQuestionUsageMap(packageCount, answerCount int32) map[string]any {
+	return map[string]any{
+		"package_count": packageCount,
+		"answer_count":  answerCount,
+		"is_locked":     cbtQuestionUsageLocked(packageCount, answerCount),
+	}
+}
+
 func hasAnyRole(r *http.Request, allowed ...string) bool {
 	claims, ok := api.ClaimsFromContext(r.Context())
 	if !ok {
@@ -595,6 +652,10 @@ func serializeQuestionListRow(row db.ListCbtQuestionsFilteredRow) map[string]any
 		"approved_at":       row.ApprovedAt,
 		"writer_notes":      row.WriterNotes,
 		"review_notes":      row.ReviewNotes,
+		"package_count":     row.PackageCount,
+		"answer_count":      row.AnswerCount,
+		"is_locked":         cbtQuestionUsageLocked(row.PackageCount, row.AnswerCount),
+		"usage":             cbtQuestionUsageMap(row.PackageCount, row.AnswerCount),
 	}
 }
 
@@ -647,6 +708,10 @@ func serializeQuestionDetailRow(row db.GetCbtQuestionDetailRow) map[string]any {
 		"approved_at":       row.ApprovedAt,
 		"writer_notes":      row.WriterNotes,
 		"review_notes":      row.ReviewNotes,
+		"package_count":     row.PackageCount,
+		"answer_count":      row.AnswerCount,
+		"is_locked":         cbtQuestionUsageLocked(row.PackageCount, row.AnswerCount),
+		"usage":             cbtQuestionUsageMap(row.PackageCount, row.AnswerCount),
 	}
 }
 

@@ -731,22 +731,30 @@
 		if (event.key === 'Enter') { event.preventDefault(); void applyFilters(); }
 	}
 
-	onMount(() => { void load(); });
+	onMount(() => {
+		const questionId = page.url.searchParams.get('question_id');
+		void load().then(() => {
+			if (questionId) void openDetail(questionId);
+		});
+	});
 </script>
 
 <svelte:head>
-	<title>Bank Soal CBT — MTsN 2 Kolaka Utara</title>
+	<title>Editor Lanjutan Bank Soal CBT — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <div class="space-y-6">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div class="space-y-1">
-			<h1 class="text-2xl font-semibold tracking-tight text-slate-900">Bank Soal CBT</h1>
+			<h1 class="text-2xl font-semibold tracking-tight text-slate-900">Editor Lanjutan Bank Soal CBT</h1>
 			<p class="max-w-3xl text-sm text-slate-600">
-				Bangun item asesmen dengan rich text, LaTeX, stimulus, alur review, dan metadata kurikulum. Mode <strong>dasar</strong> untuk input cepat, mode <strong>lanjutan</strong> untuk metadata blueprint lengkap.
+				Compatibility bridge untuk metadata blueprint, stimulus, rubrik, asset, dan workflow. Pintu utama guru/operator sekarang ada di <a href="/cbt/soal" class="font-semibold text-emerald-700 underline">/cbt/soal</a>.
 			</p>
 		</div>
-		<Button onclick={openCreate}>{showForm ? 'Tutup Form' : '+ Tambah Item'}</Button>
+		<div class="flex flex-wrap gap-2">
+			<a href="/cbt/soal" class="inline-flex h-10 items-center rounded-md border border-emerald-200 px-4 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">Modul Terpadu</a>
+			<Button onclick={openCreate}>{showForm ? 'Tutup Form' : '+ Tambah Item Lanjutan'}</Button>
+		</div>
 	</div>
 
 	<div class="grid gap-3 md:grid-cols-4">
