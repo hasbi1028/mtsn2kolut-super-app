@@ -22,6 +22,9 @@ SELECT
   a.created_by_username,
   a.assessor_username,
   a.checklist,
+  a.grade_component_id,
+  a.grade_synced_at,
+  a.grade_synced_by,
   a.created_at,
   a.updated_at,
   COALESCE(submission_stats.total_submissions, 0)::int AS total_submissions,
@@ -93,6 +96,9 @@ SELECT
   a.created_by_username,
   a.assessor_username,
   a.checklist,
+  a.grade_component_id,
+  a.grade_synced_at,
+  a.grade_synced_by,
   a.created_at,
   a.updated_at,
   COALESCE(submission_stats.total_submissions, 0)::int AS total_submissions,
@@ -160,6 +166,21 @@ RETURNING *;
 
 -- name: DeleteNonTestAssessment :exec
 DELETE FROM non_test_assessments WHERE id = $1;
+
+-- name: GetGradeAssignmentByClassSubject :one
+SELECT id, class_id, subject_id, teacher_employee_id
+FROM class_subject_assignments
+WHERE class_id = $1
+  AND subject_id = $2;
+
+-- name: MarkNonTestAssessmentGradeSync :one
+UPDATE non_test_assessments
+SET grade_component_id = $2,
+    grade_synced_at = NOW(),
+    grade_synced_by = $3,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;
 
 -- name: ListNonTestSubmissions :many
 SELECT

@@ -1522,6 +1522,9 @@ type NonTestAssessment struct {
 	Checklist            []byte             `json:"checklist"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	GradeComponentID     pgtype.UUID        `json:"grade_component_id"`
+	GradeSyncedAt        pgtype.Timestamptz `json:"grade_synced_at"`
+	GradeSyncedBy        string             `json:"grade_synced_by"`
 }
 
 type NonTestAssessmentSubmission struct {

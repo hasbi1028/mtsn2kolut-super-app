@@ -33,6 +33,7 @@ type nonTestAssessmentService interface {
 	ListSubmissions(ctx context.Context, assessmentID pgtype.UUID) ([]db.ListNonTestSubmissionsRow, error)
 	GenerateSubmissions(ctx context.Context, assessmentID pgtype.UUID, classID pgtype.UUID) ([]db.NonTestAssessmentSubmission, error)
 	UpsertSubmission(ctx context.Context, input service.SaveNonTestSubmissionInput) (db.NonTestAssessmentSubmission, error)
+	SyncToGrade(ctx context.Context, assessmentID, teacherEmployeeID pgtype.UUID, syncedBy string, publish bool) (service.SyncNonTestAssessmentToGradeResult, error)
 }
 
 func NewNonTestAssessment(svc *service.NonTestAssessment, audit ...cbtAuthoringAuditWriter) *NonTestAssessment {
@@ -75,6 +76,10 @@ type nonTestSubmissionBody struct {
 
 type nonTestGenerateSubmissionsBody struct {
 	ClassID string `json:"class_id"`
+}
+
+type nonTestSyncGradeBody struct {
+	IsPublished *bool `json:"is_published"`
 }
 
 func (h *NonTestAssessment) List(w http.ResponseWriter, r *http.Request) {
@@ -255,6 +260,41 @@ func (h *NonTestAssessment) GenerateSubmissions(w http.ResponseWriter, r *http.R
 	})
 }
 
+func (h *NonTestAssessment) SyncGrade(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	assessmentID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	publish := true
+	var body nonTestSyncGradeBody
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+			api.BadRequest(w, "invalid json")
+			return
+		}
+	}
+	if body.IsPublished != nil {
+		publish = *body.IsPublished
+	}
+	result, err := h.svc.SyncToGrade(r.Context(), assessmentID, gradeTeacherEmployeeID(r), currentUsername(r), publish)
+	if err != nil {
+		writeClientError(w, err, "Sinkron nilai non-tes tidak valid")
+		return
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_NON_TEST_GRADE_SYNC", "non_test_assessment", pgUUIDString(assessmentID), map[string]any{
+		"grade_component_id": result.GradeComponentID,
+		"synced_entries":     result.SyncedEntries,
+		"skipped_entries":    result.SkippedEntries,
+		"is_published":       result.IsPublished,
+	})
+	api.OK(w, result)
+}
+
 func (h *NonTestAssessment) UpsertSubmission(w http.ResponseWriter, r *http.Request) {
 	if !cbtAccessAllowed(r) {
 		api.Forbidden(w)
@@ -425,6 +465,9 @@ func serializeNonTestAssessmentListRow(row db.ListNonTestAssessmentsRow) map[str
 		"created_by_username":   row.CreatedByUsername,
 		"assessor_username":     row.AssessorUsername,
 		"checklist":             decodeJSONBytes(row.Checklist),
+		"grade_component_id":    pgUUIDString(row.GradeComponentID),
+		"grade_synced_at":       row.GradeSyncedAt,
+		"grade_synced_by":       row.GradeSyncedBy,
 		"created_at":            row.CreatedAt,
 		"updated_at":            row.UpdatedAt,
 		"total_submissions":     row.TotalSubmissions,
@@ -456,6 +499,9 @@ func serializeNonTestAssessmentDetailRow(row db.GetNonTestAssessmentRow) map[str
 		"created_by_username":   row.CreatedByUsername,
 		"assessor_username":     row.AssessorUsername,
 		"checklist":             decodeJSONBytes(row.Checklist),
+		"grade_component_id":    pgUUIDString(row.GradeComponentID),
+		"grade_synced_at":       row.GradeSyncedAt,
+		"grade_synced_by":       row.GradeSyncedBy,
 		"created_at":            row.CreatedAt,
 		"updated_at":            row.UpdatedAt,
 		"total_submissions":     row.TotalSubmissions,
@@ -484,6 +530,9 @@ func serializeNonTestAssessment(row db.NonTestAssessment) map[string]any {
 		"created_by_username":   row.CreatedByUsername,
 		"assessor_username":     row.AssessorUsername,
 		"checklist":             decodeJSONBytes(row.Checklist),
+		"grade_component_id":    pgUUIDString(row.GradeComponentID),
+		"grade_synced_at":       row.GradeSyncedAt,
+		"grade_synced_by":       row.GradeSyncedBy,
 		"created_at":            row.CreatedAt,
 		"updated_at":            row.UpdatedAt,
 	}

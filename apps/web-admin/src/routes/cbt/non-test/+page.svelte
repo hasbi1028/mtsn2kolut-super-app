@@ -38,6 +38,9 @@
 		status: string;
 		assessor_username: string;
 		checklist: string[];
+		grade_component_id: string;
+		grade_synced_at: string | null;
+		grade_synced_by: string;
 		total_submissions: number;
 		reviewed_submissions: number;
 	};
@@ -76,6 +79,13 @@
 		items?: NonTestSubmission[];
 		error?: string;
 		message?: string;
+	};
+	type SyncGradeResult = {
+		grade_component_id?: string;
+		created_component?: boolean;
+		synced_entries?: number;
+		skipped_entries?: number;
+		is_published?: boolean;
 	};
 	type AssessmentOverview = {
 		assessments: NonTestAssessment[];
@@ -120,6 +130,7 @@
 	let saving = $state(false);
 	let deleteBusyId = $state('');
 	let generatingId = $state('');
+	let syncingGradeId = $state('');
 	let savingSubmissionId = $state('');
 	let operationState = $state<OperationState | null>(null);
 	let selectedAssessment = $state<NonTestAssessment | null>(null);
@@ -182,6 +193,20 @@
 		if (value === 'submitted') return 'border-blue-200 bg-blue-50 text-blue-800';
 		if (value === 'returned') return 'border-amber-200 bg-amber-100 text-amber-800';
 		return 'border-slate-200 bg-slate-100 text-slate-700';
+	}
+
+	function gradeSyncLabel(item: NonTestAssessment) {
+		return item.grade_component_id ? 'Tersinkron nilai' : 'Belum masuk nilai';
+	}
+
+	function gradeSyncBadgeClass(item: NonTestAssessment) {
+		return item.grade_component_id
+			? 'border-emerald-200 bg-emerald-100 text-emerald-800'
+			: 'border-slate-200 bg-slate-100 text-slate-600';
+	}
+
+	function canSyncGrade(item: NonTestAssessment) {
+		return Boolean(item.class_id) && item.reviewed_submissions > 0;
 	}
 
 	function fetchAssessmentsPath() {
@@ -454,6 +479,43 @@
 			toast.error(errorMessage(error, 'Gagal menyiapkan siswa.'));
 		} finally {
 			generatingId = '';
+		}
+	}
+
+	async function syncToGrade(item: NonTestAssessment) {
+		if (!item.class_id) {
+			toast.error('Pilih kelas pada asesmen sebelum mengirim nilai ke rapor.');
+			return;
+		}
+		if (item.reviewed_submissions <= 0) {
+			toast.error('Belum ada nilai berstatus sudah dinilai.');
+			return;
+		}
+		syncingGradeId = item.id;
+		try {
+			const response = await fetch(clientApiPath`/api/cbt/non-test-assessments/${item.id}/sync-grade`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ is_published: true }),
+			});
+			const result = await readClientApiData<SyncGradeResult>(response, 'Gagal mengirim nilai non-tes.');
+			const syncedEntries = result.synced_entries ?? 0;
+			const skippedEntries = result.skipped_entries ?? 0;
+			toast.success(`${syncedEntries} nilai dikirim ke modul nilai`);
+			operationState = {
+				tone: 'success',
+				title: 'Nilai Non-Tes Tersinkron',
+				message: `${syncedEntries} nilai dari "${item.title}" sudah menjadi komponen nilai resmi. ${skippedEntries} entri dilewati karena belum reviewed.`,
+			};
+			await refresh();
+			if (selectedAssessment?.id === item.id) {
+				const refreshed = assessments.find((assessment) => assessment.id === item.id) ?? item;
+				openScoringPanel(refreshed);
+			}
+		} catch (error) {
+			toast.error(errorMessage(error, 'Gagal mengirim nilai non-tes.'));
+		} finally {
+			syncingGradeId = '';
 		}
 	}
 
@@ -798,12 +860,25 @@
 											<Badge class={`border text-xs ${statusBadgeClass(item.status)}`}>{statusLabel(item.status)}</Badge>
 										</Table.Cell>
 										<Table.Cell class="text-sm text-slate-600">
-											{item.reviewed_submissions}/{item.total_submissions} dinilai
+											<div class="space-y-1">
+												<p>{item.reviewed_submissions}/{item.total_submissions} dinilai</p>
+												<Badge class={`border text-xs ${gradeSyncBadgeClass(item)}`}>{gradeSyncLabel(item)}</Badge>
+											</div>
 										</Table.Cell>
 										<Table.Cell>
 											<div class="flex flex-wrap justify-end gap-2">
 												<LoadingButton variant="outline" size="xs" onclick={() => openScoringPanel(item)}>
 													{selectedAssessment?.id === item.id ? 'Dibuka' : 'Nilai'}
+												</LoadingButton>
+												<LoadingButton
+													variant="outline"
+													size="xs"
+													onclick={() => syncToGrade(item)}
+													loading={syncingGradeId === item.id}
+													disabled={!canSyncGrade(item) || (syncingGradeId !== '' && syncingGradeId !== item.id)}
+													loadingLabel="Kirim..."
+												>
+													Kirim Nilai
 												</LoadingButton>
 												<LoadingButton
 													variant="outline"
@@ -848,9 +923,22 @@
 									</div>
 									<Badge class={`border text-xs ${statusBadgeClass(item.status)}`}>{statusLabel(item.status)}</Badge>
 								</div>
-								<p class="mt-2 text-sm text-slate-600">{item.reviewed_submissions}/{item.total_submissions} dinilai</p>
-								<div class="mt-3 flex justify-end gap-2">
+								<div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+									<span>{item.reviewed_submissions}/{item.total_submissions} dinilai</span>
+									<Badge class={`border text-xs ${gradeSyncBadgeClass(item)}`}>{gradeSyncLabel(item)}</Badge>
+								</div>
+								<div class="mt-3 flex flex-wrap justify-end gap-2">
 									<LoadingButton variant="outline" size="xs" onclick={() => openScoringPanel(item)}>Nilai</LoadingButton>
+									<LoadingButton
+										variant="outline"
+										size="xs"
+										onclick={() => syncToGrade(item)}
+										loading={syncingGradeId === item.id}
+										disabled={!canSyncGrade(item) || (syncingGradeId !== '' && syncingGradeId !== item.id)}
+										loadingLabel="Kirim..."
+									>
+										Kirim
+									</LoadingButton>
 									<LoadingButton
 										variant="outline"
 										size="xs"
@@ -882,10 +970,21 @@
 						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Panel Koreksi</p>
 						<Card.Title class="mt-1 text-base">{selectedAssessment.title}</Card.Title>
 						<Card.Description>
-							{selectedAssessment.class_name || 'Lintas kelas'} · Skor maksimum {selectedAssessment.max_score} · {selectedAssessment.reviewed_submissions}/{selectedAssessment.total_submissions} dinilai
+							{selectedAssessment.class_name || 'Lintas kelas'} · Skor maksimum {selectedAssessment.max_score} · {selectedAssessment.reviewed_submissions}/{selectedAssessment.total_submissions} dinilai · {gradeSyncLabel(selectedAssessment)}
 						</Card.Description>
 					</div>
 					<div class="flex flex-wrap gap-2">
+						<LoadingButton
+							variant="outline"
+							onclick={() => {
+								if (selectedAssessment) syncToGrade(selectedAssessment);
+							}}
+							loading={syncingGradeId === selectedAssessment?.id}
+							disabled={!selectedAssessment || !canSyncGrade(selectedAssessment)}
+							loadingLabel="Mengirim..."
+						>
+							Kirim ke Nilai
+						</LoadingButton>
 						<LoadingButton
 							variant="outline"
 							onclick={() => {

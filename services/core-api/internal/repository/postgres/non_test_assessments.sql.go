@@ -74,7 +74,7 @@ INSERT INTO non_test_assessments (
 VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 )
-RETURNING id, subject_id, class_id, assessment_type, title, description, instruction_html, rubric_html, evidence_requirements, mode, scoring_scale, max_score, weight, due_at, status, created_by_username, assessor_username, checklist, created_at, updated_at
+RETURNING id, subject_id, class_id, assessment_type, title, description, instruction_html, rubric_html, evidence_requirements, mode, scoring_scale, max_score, weight, due_at, status, created_by_username, assessor_username, checklist, created_at, updated_at, grade_component_id, grade_synced_at, grade_synced_by
 `
 
 type CreateNonTestAssessmentParams struct {
@@ -139,6 +139,9 @@ func (q *Queries) CreateNonTestAssessment(ctx context.Context, arg CreateNonTest
 		&i.Checklist,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.GradeComponentID,
+		&i.GradeSyncedAt,
+		&i.GradeSyncedBy,
 	)
 	return i, err
 }
@@ -219,6 +222,37 @@ func (q *Queries) GenerateNonTestSubmissionsForClass(ctx context.Context, arg Ge
 	return items, nil
 }
 
+const getGradeAssignmentByClassSubject = `-- name: GetGradeAssignmentByClassSubject :one
+SELECT id, class_id, subject_id, teacher_employee_id
+FROM class_subject_assignments
+WHERE class_id = $1
+  AND subject_id = $2
+`
+
+type GetGradeAssignmentByClassSubjectParams struct {
+	ClassID   pgtype.UUID `json:"class_id"`
+	SubjectID pgtype.UUID `json:"subject_id"`
+}
+
+type GetGradeAssignmentByClassSubjectRow struct {
+	ID                pgtype.UUID `json:"id"`
+	ClassID           pgtype.UUID `json:"class_id"`
+	SubjectID         pgtype.UUID `json:"subject_id"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+}
+
+func (q *Queries) GetGradeAssignmentByClassSubject(ctx context.Context, arg GetGradeAssignmentByClassSubjectParams) (GetGradeAssignmentByClassSubjectRow, error) {
+	row := q.db.QueryRow(ctx, getGradeAssignmentByClassSubject, arg.ClassID, arg.SubjectID)
+	var i GetGradeAssignmentByClassSubjectRow
+	err := row.Scan(
+		&i.ID,
+		&i.ClassID,
+		&i.SubjectID,
+		&i.TeacherEmployeeID,
+	)
+	return i, err
+}
+
 const getNonTestAssessment = `-- name: GetNonTestAssessment :one
 SELECT
   a.id,
@@ -243,6 +277,9 @@ SELECT
   a.created_by_username,
   a.assessor_username,
   a.checklist,
+  a.grade_component_id,
+  a.grade_synced_at,
+  a.grade_synced_by,
   a.created_at,
   a.updated_at,
   COALESCE(submission_stats.total_submissions, 0)::int AS total_submissions,
@@ -283,6 +320,9 @@ type GetNonTestAssessmentRow struct {
 	CreatedByUsername    string             `json:"created_by_username"`
 	AssessorUsername     string             `json:"assessor_username"`
 	Checklist            []byte             `json:"checklist"`
+	GradeComponentID     pgtype.UUID        `json:"grade_component_id"`
+	GradeSyncedAt        pgtype.Timestamptz `json:"grade_synced_at"`
+	GradeSyncedBy        string             `json:"grade_synced_by"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 	TotalSubmissions     int32              `json:"total_submissions"`
@@ -315,6 +355,9 @@ func (q *Queries) GetNonTestAssessment(ctx context.Context, id pgtype.UUID) (Get
 		&i.CreatedByUsername,
 		&i.AssessorUsername,
 		&i.Checklist,
+		&i.GradeComponentID,
+		&i.GradeSyncedAt,
+		&i.GradeSyncedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TotalSubmissions,
@@ -347,6 +390,9 @@ SELECT
   a.created_by_username,
   a.assessor_username,
   a.checklist,
+  a.grade_component_id,
+  a.grade_synced_at,
+  a.grade_synced_by,
   a.created_at,
   a.updated_at,
   COALESCE(submission_stats.total_submissions, 0)::int AS total_submissions,
@@ -410,6 +456,9 @@ type ListNonTestAssessmentsRow struct {
 	CreatedByUsername    string             `json:"created_by_username"`
 	AssessorUsername     string             `json:"assessor_username"`
 	Checklist            []byte             `json:"checklist"`
+	GradeComponentID     pgtype.UUID        `json:"grade_component_id"`
+	GradeSyncedAt        pgtype.Timestamptz `json:"grade_synced_at"`
+	GradeSyncedBy        string             `json:"grade_synced_by"`
 	CreatedAt            pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
 	TotalSubmissions     int32              `json:"total_submissions"`
@@ -456,6 +505,9 @@ func (q *Queries) ListNonTestAssessments(ctx context.Context, arg ListNonTestAss
 			&i.CreatedByUsername,
 			&i.AssessorUsername,
 			&i.Checklist,
+			&i.GradeComponentID,
+			&i.GradeSyncedAt,
+			&i.GradeSyncedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TotalSubmissions,
@@ -561,6 +613,53 @@ func (q *Queries) ListNonTestSubmissions(ctx context.Context, assessmentID pgtyp
 	return items, nil
 }
 
+const markNonTestAssessmentGradeSync = `-- name: MarkNonTestAssessmentGradeSync :one
+UPDATE non_test_assessments
+SET grade_component_id = $2,
+    grade_synced_at = NOW(),
+    grade_synced_by = $3,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, subject_id, class_id, assessment_type, title, description, instruction_html, rubric_html, evidence_requirements, mode, scoring_scale, max_score, weight, due_at, status, created_by_username, assessor_username, checklist, created_at, updated_at, grade_component_id, grade_synced_at, grade_synced_by
+`
+
+type MarkNonTestAssessmentGradeSyncParams struct {
+	ID               pgtype.UUID `json:"id"`
+	GradeComponentID pgtype.UUID `json:"grade_component_id"`
+	GradeSyncedBy    string      `json:"grade_synced_by"`
+}
+
+func (q *Queries) MarkNonTestAssessmentGradeSync(ctx context.Context, arg MarkNonTestAssessmentGradeSyncParams) (NonTestAssessment, error) {
+	row := q.db.QueryRow(ctx, markNonTestAssessmentGradeSync, arg.ID, arg.GradeComponentID, arg.GradeSyncedBy)
+	var i NonTestAssessment
+	err := row.Scan(
+		&i.ID,
+		&i.SubjectID,
+		&i.ClassID,
+		&i.AssessmentType,
+		&i.Title,
+		&i.Description,
+		&i.InstructionHtml,
+		&i.RubricHtml,
+		&i.EvidenceRequirements,
+		&i.Mode,
+		&i.ScoringScale,
+		&i.MaxScore,
+		&i.Weight,
+		&i.DueAt,
+		&i.Status,
+		&i.CreatedByUsername,
+		&i.AssessorUsername,
+		&i.Checklist,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.GradeComponentID,
+		&i.GradeSyncedAt,
+		&i.GradeSyncedBy,
+	)
+	return i, err
+}
+
 const updateNonTestAssessment = `-- name: UpdateNonTestAssessment :one
 UPDATE non_test_assessments
 SET
@@ -583,7 +682,7 @@ SET
   checklist = $18,
   updated_at = NOW()
 WHERE id = $1
-RETURNING id, subject_id, class_id, assessment_type, title, description, instruction_html, rubric_html, evidence_requirements, mode, scoring_scale, max_score, weight, due_at, status, created_by_username, assessor_username, checklist, created_at, updated_at
+RETURNING id, subject_id, class_id, assessment_type, title, description, instruction_html, rubric_html, evidence_requirements, mode, scoring_scale, max_score, weight, due_at, status, created_by_username, assessor_username, checklist, created_at, updated_at, grade_component_id, grade_synced_at, grade_synced_by
 `
 
 type UpdateNonTestAssessmentParams struct {
@@ -650,6 +749,9 @@ func (q *Queries) UpdateNonTestAssessment(ctx context.Context, arg UpdateNonTest
 		&i.Checklist,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.GradeComponentID,
+		&i.GradeSyncedAt,
+		&i.GradeSyncedBy,
 	)
 	return i, err
 }

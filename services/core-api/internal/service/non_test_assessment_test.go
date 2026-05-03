@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"math/big"
+	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -17,7 +19,21 @@ type fakeNonTestAssessmentStore struct {
 	updateParams   db.UpdateNonTestAssessmentParams
 	generateParams db.GenerateNonTestSubmissionsForClassParams
 	upsertParams   db.UpsertNonTestSubmissionParams
-	createErr      error
+	assessmentRow  db.GetNonTestAssessmentRow
+	submissionRows []db.ListNonTestSubmissionsRow
+
+	gradeAssignment           db.GetGradeAssignmentByClassSubjectRow
+	gradeComponent            db.GradeComponent
+	createGradeComponentParam db.CreateGradeComponentParams
+	updatePublishParam        db.UpdateGradeComponentPublishStateParams
+	upsertGradeParams         []db.UpsertGradeEntryParams
+	markGradeSyncParams       db.MarkNonTestAssessmentGradeSyncParams
+
+	createErr error
+}
+
+func (f *fakeNonTestAssessmentStore) WithTx(_ pgx.Tx) *db.Queries {
+	return nil
 }
 
 func (f *fakeNonTestAssessmentStore) ListNonTestAssessments(_ context.Context, arg db.ListNonTestAssessmentsParams) ([]db.ListNonTestAssessmentsRow, error) {
@@ -31,6 +47,13 @@ func (f *fakeNonTestAssessmentStore) CountNonTestAssessments(_ context.Context, 
 }
 
 func (f *fakeNonTestAssessmentStore) GetNonTestAssessment(_ context.Context, id pgtype.UUID) (db.GetNonTestAssessmentRow, error) {
+	if f.assessmentRow.ID.Valid || f.assessmentRow.SubjectID.Valid || f.assessmentRow.ClassID.Valid {
+		row := f.assessmentRow
+		if !row.ID.Valid {
+			row.ID = id
+		}
+		return row, nil
+	}
 	return db.GetNonTestAssessmentRow{
 		ID:                id,
 		ClassID:           uuidForNonTest("22222222-2222-2222-2222-222222222222"),
@@ -54,7 +77,7 @@ func (f *fakeNonTestAssessmentStore) DeleteNonTestAssessment(_ context.Context, 
 }
 
 func (f *fakeNonTestAssessmentStore) ListNonTestSubmissions(_ context.Context, _ pgtype.UUID) ([]db.ListNonTestSubmissionsRow, error) {
-	return []db.ListNonTestSubmissionsRow{}, nil
+	return f.submissionRows, nil
 }
 
 func (f *fakeNonTestAssessmentStore) GenerateNonTestSubmissionsForClass(_ context.Context, arg db.GenerateNonTestSubmissionsForClassParams) ([]db.NonTestAssessmentSubmission, error) {
@@ -65,6 +88,59 @@ func (f *fakeNonTestAssessmentStore) GenerateNonTestSubmissionsForClass(_ contex
 func (f *fakeNonTestAssessmentStore) UpsertNonTestSubmission(_ context.Context, arg db.UpsertNonTestSubmissionParams) (db.NonTestAssessmentSubmission, error) {
 	f.upsertParams = arg
 	return db.NonTestAssessmentSubmission{AssessmentID: arg.AssessmentID, StudentID: arg.StudentID, Status: arg.Status}, nil
+}
+
+func (f *fakeNonTestAssessmentStore) GetGradeAssignmentByClassSubject(_ context.Context, arg db.GetGradeAssignmentByClassSubjectParams) (db.GetGradeAssignmentByClassSubjectRow, error) {
+	if f.gradeAssignment.ID.Valid {
+		return f.gradeAssignment, nil
+	}
+	return db.GetGradeAssignmentByClassSubjectRow{
+		ID:        uuidForNonTest("44444444-4444-4444-4444-444444444444"),
+		ClassID:   arg.ClassID,
+		SubjectID: arg.SubjectID,
+	}, nil
+}
+
+func (f *fakeNonTestAssessmentStore) GetGradeAssignmentFinalization(_ context.Context, _ pgtype.UUID) (db.GradeAssignmentFinalization, error) {
+	return db.GradeAssignmentFinalization{}, pgx.ErrNoRows
+}
+
+func (f *fakeNonTestAssessmentStore) GetGradeComponent(_ context.Context, id pgtype.UUID) (db.GradeComponent, error) {
+	if f.gradeComponent.ID.Valid && f.gradeComponent.ID == id {
+		return f.gradeComponent, nil
+	}
+	return db.GradeComponent{}, pgx.ErrNoRows
+}
+
+func (f *fakeNonTestAssessmentStore) CreateGradeComponent(_ context.Context, arg db.CreateGradeComponentParams) (db.GradeComponent, error) {
+	f.createGradeComponentParam = arg
+	component := db.GradeComponent{
+		ID:           uuidForNonTest("55555555-5555-5555-5555-555555555555"),
+		AssignmentID: arg.AssignmentID,
+		Title:        arg.Title,
+		Category:     arg.Category,
+		Weight:       arg.Weight,
+		MaxScore:     arg.MaxScore,
+		IsPublished:  arg.IsPublished,
+	}
+	f.gradeComponent = component
+	return component, nil
+}
+
+func (f *fakeNonTestAssessmentStore) UpdateGradeComponentPublishState(_ context.Context, arg db.UpdateGradeComponentPublishStateParams) (db.GradeComponent, error) {
+	f.updatePublishParam = arg
+	f.gradeComponent.IsPublished = arg.IsPublished
+	return f.gradeComponent, nil
+}
+
+func (f *fakeNonTestAssessmentStore) UpsertGradeEntry(_ context.Context, arg db.UpsertGradeEntryParams) (db.GradeEntry, error) {
+	f.upsertGradeParams = append(f.upsertGradeParams, arg)
+	return db.GradeEntry{ComponentID: arg.ComponentID, StudentID: arg.StudentID, Score: arg.Score, Notes: arg.Notes, GradedBy: arg.GradedBy}, nil
+}
+
+func (f *fakeNonTestAssessmentStore) MarkNonTestAssessmentGradeSync(_ context.Context, arg db.MarkNonTestAssessmentGradeSyncParams) (db.NonTestAssessment, error) {
+	f.markGradeSyncParams = arg
+	return db.NonTestAssessment{ID: arg.ID, GradeComponentID: arg.GradeComponentID, GradeSyncedBy: arg.GradeSyncedBy}, nil
 }
 
 func TestNonTestAssessmentCreateDefaultsAndTrims(t *testing.T) {
@@ -188,6 +264,95 @@ func TestNonTestAssessmentUpsertSubmissionRequiresScoreForReviewed(t *testing.T)
 	})
 	if err == nil {
 		t.Fatal("UpsertSubmission() error = nil, want missing score error")
+	}
+}
+
+func TestNonTestAssessmentSyncToGradeCreatesComponentAndEntries(t *testing.T) {
+	assessmentID := mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111")
+	subjectID := mustUUIDForNonTest(t, "22222222-2222-2222-2222-222222222222")
+	classID := mustUUIDForNonTest(t, "33333333-3333-3333-3333-333333333333")
+	assignmentID := mustUUIDForNonTest(t, "44444444-4444-4444-4444-444444444444")
+	studentID := mustUUIDForNonTest(t, "66666666-6666-6666-6666-666666666666")
+	store := &fakeNonTestAssessmentStore{
+		assessmentRow: db.GetNonTestAssessmentRow{
+			ID:             assessmentID,
+			SubjectID:      subjectID,
+			ClassID:        classID,
+			AssessmentType: "praktik",
+			Title:          "Praktik Wudhu",
+			MaxScore:       pgNumeric(100),
+			Weight:         pgNumeric(2),
+		},
+		gradeAssignment: db.GetGradeAssignmentByClassSubjectRow{
+			ID:        assignmentID,
+			ClassID:   classID,
+			SubjectID: subjectID,
+		},
+		submissionRows: []db.ListNonTestSubmissionsRow{
+			{StudentID: studentID, Status: "reviewed", Score: pgNumeric(87), Feedback: "Sudah baik"},
+			{StudentID: uuidForNonTest("77777777-7777-7777-7777-777777777777"), Status: "assigned"},
+		},
+	}
+	svc := &NonTestAssessment{q: store}
+
+	result, err := svc.SyncToGrade(context.Background(), assessmentID, pgtype.UUID{}, " guru.fiqih ", true)
+	if err != nil {
+		t.Fatalf("SyncToGrade() error = %v", err)
+	}
+	if !result.CreatedComponent || result.SyncedEntries != 1 || result.SkippedEntries != 1 {
+		t.Fatalf("SyncToGrade() result = %+v, want one created component and one synced entry", result)
+	}
+	if store.createGradeComponentParam.AssignmentID != assignmentID ||
+		store.createGradeComponentParam.Title != "Non-Tes: Praktik Wudhu" ||
+		store.createGradeComponentParam.Category != "practice" ||
+		store.createGradeComponentParam.Weight != 2 ||
+		store.createGradeComponentParam.MaxScore != 100 ||
+		!store.createGradeComponentParam.IsPublished {
+		t.Fatalf("CreateGradeComponent params = %+v, want non-test practice component", store.createGradeComponentParam)
+	}
+	if len(store.upsertGradeParams) != 1 {
+		t.Fatalf("grade entries = %d, want 1", len(store.upsertGradeParams))
+	}
+	entry := store.upsertGradeParams[0]
+	if entry.StudentID != studentID || entry.Score.Float64 != 87 || entry.GradedBy != "guru.fiqih" || entry.Notes != "Sudah baik" {
+		t.Fatalf("grade entry = %+v, want reviewed submission mapped", entry)
+	}
+	if store.markGradeSyncParams.ID != assessmentID || !store.markGradeSyncParams.GradeComponentID.Valid || store.markGradeSyncParams.GradeSyncedBy != "guru.fiqih" {
+		t.Fatalf("MarkNonTestAssessmentGradeSync params = %+v, want sync marker", store.markGradeSyncParams)
+	}
+}
+
+func TestNonTestAssessmentSyncToGradeRejectsOtherTeacherAssignment(t *testing.T) {
+	assessmentID := mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111")
+	subjectID := mustUUIDForNonTest(t, "22222222-2222-2222-2222-222222222222")
+	classID := mustUUIDForNonTest(t, "33333333-3333-3333-3333-333333333333")
+	teacherID := mustUUIDForNonTest(t, "88888888-8888-8888-8888-888888888888")
+	store := &fakeNonTestAssessmentStore{
+		assessmentRow: db.GetNonTestAssessmentRow{
+			ID:        assessmentID,
+			SubjectID: subjectID,
+			ClassID:   classID,
+			MaxScore:  pgNumeric(100),
+			Weight:    pgNumeric(1),
+		},
+		gradeAssignment: db.GetGradeAssignmentByClassSubjectRow{
+			ID:                mustUUIDForNonTest(t, "44444444-4444-4444-4444-444444444444"),
+			ClassID:           classID,
+			SubjectID:         subjectID,
+			TeacherEmployeeID: mustUUIDForNonTest(t, "99999999-9999-9999-9999-999999999999"),
+		},
+		submissionRows: []db.ListNonTestSubmissionsRow{
+			{StudentID: mustUUIDForNonTest(t, "66666666-6666-6666-6666-666666666666"), Status: "reviewed", Score: pgNumeric(80)},
+		},
+	}
+	svc := &NonTestAssessment{q: store}
+
+	_, err := svc.SyncToGrade(context.Background(), assessmentID, teacherID, "guru", true)
+	if err == nil || !strings.Contains(err.Error(), "akses ditolak") {
+		t.Fatalf("SyncToGrade() error = %v, want access denied", err)
+	}
+	if len(store.upsertGradeParams) != 0 {
+		t.Fatalf("grade entries written despite access denial: %+v", store.upsertGradeParams)
 	}
 }
 
