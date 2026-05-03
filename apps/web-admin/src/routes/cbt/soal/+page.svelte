@@ -365,7 +365,10 @@
 	let pageCount = $derived(Math.max(1, Math.ceil(totalItems / PAGE_SIZE)));
 	let lockedCount = $derived(questions.filter(questionUsageLocked).length);
 	let roles = $derived(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
+	let isAdmin = $derived(roles.includes('admin'));
 	let canReviewWorkflow = $derived(roles.includes('admin'));
+	let exportButtonLabel = $derived(isAdmin ? 'Export CSV' : 'Export Soal Saya');
+	let exportSuccessMessage = $derived(isAdmin ? 'Export CSV bank soal berhasil dibuat' : 'Export CSV soal saya berhasil dibuat');
 	let reviewCount = $derived(reviewTotal);
 	let visibleReviewCount = $derived(questions.filter((item) => item.workflow_status === 'review').length);
 	let approvedCount = $derived(approvedTotal);
@@ -1625,7 +1628,7 @@
 			params.delete('offset');
 			const response = await fetch(clientApiPathWithQuery('/api/cbt/questions/export', params));
 			await downloadCSVResponse(response, `bank-soal-cbt-${new Date().toISOString().slice(0, 10)}.csv`);
-			toast.success('Export CSV bank soal berhasil dibuat');
+			toast.success(exportSuccessMessage);
 		} catch (error) {
 			toast.error(mutationErrorMessage(error, 'Export CSV gagal'));
 		} finally {
@@ -1863,7 +1866,7 @@
 				loadingLabel="Export..."
 				disabled={exportBusy || totalItems === 0}
 			>
-				Export CSV
+				{exportButtonLabel}
 			</LoadingButton>
 			<Button variant="outline" onclick={() => setModuleMode('import')}>
 				Import CSV
