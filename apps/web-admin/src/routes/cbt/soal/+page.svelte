@@ -1343,10 +1343,6 @@
 				<div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
 					<div class="min-w-0">
 						<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-							<p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-green-700">
-								Komposer Soal Legacy
-							</p>
-							<span class="text-xs text-slate-300">/</span>
 							<h2 class="text-base font-black uppercase italic tracking-tight text-slate-900">
 								{editingId ? 'Edit Butir Soal' : 'Penyusunan Soal Baru'}
 							</h2>
