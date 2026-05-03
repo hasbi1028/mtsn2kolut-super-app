@@ -140,11 +140,7 @@ func (s *CbtSession) Create(ctx context.Context, in CreateCbtSessionInput) (db.C
 	scopeType := normalizeScopeType(in.ScopeType)
 	mixPolicy := normalizeMixPolicy(in.MixPolicy, scopeType)
 	assignmentMode := normalizeAssignmentMode(in.AssignmentMode)
-	quality, err := s.q.GetCbtPackageQuestionQuality(ctx, in.PackageID)
-	if err != nil {
-		return db.CbtExamSession{}, err
-	}
-	if err := validateCbtPackageQualityForSession(quality); err != nil {
+	if err := s.ensureCbtPackageReadyForSession(ctx, in.PackageID); err != nil {
 		return db.CbtExamSession{}, err
 	}
 
@@ -165,6 +161,14 @@ func (s *CbtSession) Create(ctx context.Context, in CreateCbtSessionInput) (db.C
 	})
 }
 
+func (s *CbtSession) ensureCbtPackageReadyForSession(ctx context.Context, packageID pgtype.UUID) error {
+	quality, err := s.q.GetCbtPackageQuestionQuality(ctx, packageID)
+	if err != nil {
+		return err
+	}
+	return validateCbtPackageQualityForSession(quality)
+}
+
 func validateCbtPackageQualityForSession(quality db.GetCbtPackageQuestionQualityRow) error {
 	switch {
 	case !quality.IsActive:
@@ -181,6 +185,15 @@ func validateCbtPackageQualityForSession(quality db.GetCbtPackageQuestionQuality
 }
 
 func (s *CbtSession) UpdateStatus(ctx context.Context, id pgtype.UUID, status db.CbtSessionStatusEnum) (db.CbtExamSession, error) {
+	if status == db.CbtSessionStatusEnumScheduled || status == db.CbtSessionStatusEnumActive {
+		session, err := s.q.GetCbtExamSession(ctx, id)
+		if err != nil {
+			return db.CbtExamSession{}, err
+		}
+		if err := s.ensureCbtPackageReadyForSession(ctx, session.PackageID); err != nil {
+			return db.CbtExamSession{}, err
+		}
+	}
 	if status == db.CbtSessionStatusEnumActive {
 		readiness, err := s.q.GetCbtSessionRoomReadiness(ctx, id)
 		if err != nil {

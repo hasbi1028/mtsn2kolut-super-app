@@ -401,6 +401,7 @@ type fakeCbtSessionStore struct {
 	listRows              []db.ListCbtExamSessionsRow
 	listErr               error
 	getID                 pgtype.UUID
+	sessionRow            db.GetCbtExamSessionRow
 	packageQualityID      pgtype.UUID
 	packageQualityRow     db.GetCbtPackageQuestionQualityRow
 	packageQualityErr     error
@@ -486,7 +487,10 @@ func (f *fakeCbtSessionStore) ListCbtExamSessions(ctx context.Context) ([]db.Lis
 
 func (f *fakeCbtSessionStore) GetCbtExamSession(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSessionRow, error) {
 	f.getID = id
-	return db.GetCbtExamSessionRow{ID: id, Title: "Sesi"}, nil
+	if f.sessionRow.ID.Valid {
+		return f.sessionRow, nil
+	}
+	return db.GetCbtExamSessionRow{ID: id, PackageID: documentCycleTestUUID(229), Title: "Sesi"}, nil
 }
 
 func (f *fakeCbtSessionStore) GetCbtPackageQuestionQuality(ctx context.Context, id pgtype.UUID) (db.GetCbtPackageQuestionQualityRow, error) {
@@ -1048,6 +1052,30 @@ func TestCbtSessionCreateRejectsUnsafePackageQuality(t *testing.T) {
 				t.Fatalf("Create() called CreateCbtExamSession with %+v, want blocked before insert", store.createArg)
 			}
 		})
+	}
+}
+
+func TestCbtSessionUpdateStatusRechecksPackageQuality(t *testing.T) {
+	sessionID := documentCycleTestUUID(231)
+	packageID := documentCycleTestUUID(232)
+	store := &fakeCbtSessionStore{
+		sessionRow:        db.GetCbtExamSessionRow{ID: sessionID, PackageID: packageID, Title: "Sesi lama"},
+		packageQualityRow: db.GetCbtPackageQuestionQualityRow{IsActive: true, TotalQuestions: 3, PublishedQuestions: 2, UnpublishedQuestions: 1},
+	}
+	svc := &CbtSession{q: store}
+
+	_, err := svc.UpdateStatus(context.Background(), sessionID, db.CbtSessionStatusEnumScheduled)
+	if err == nil || !strings.Contains(err.Error(), "paket soal masih memiliki 1 soal belum terbit") {
+		t.Fatalf("UpdateStatus(scheduled) error = %v, want package quality conflict", err)
+	}
+	if store.getID != sessionID {
+		t.Fatalf("UpdateStatus() session id = %v, want %v", store.getID, sessionID)
+	}
+	if store.packageQualityID != packageID {
+		t.Fatalf("UpdateStatus() package quality id = %v, want %v", store.packageQualityID, packageID)
+	}
+	if store.updateStatusArg.ID.Valid {
+		t.Fatalf("UpdateStatus() called update with %+v, want blocked before status write", store.updateStatusArg)
 	}
 }
 
