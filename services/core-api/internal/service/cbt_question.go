@@ -177,6 +177,26 @@ func (s *CbtQuestion) ExportCSV(ctx context.Context, in ListCbtQuestionsInput) (
 	}, nil
 }
 
+func (s *CbtQuestion) TemplateCSV() (ExportCbtQuestionsCSVResult, error) {
+	var builder strings.Builder
+	writer := csv.NewWriter(&builder)
+	records := templateQuestionCSVRecords()
+	for _, record := range records {
+		if err := writer.Write(record); err != nil {
+			return ExportCbtQuestionsCSVResult{}, err
+		}
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return ExportCbtQuestionsCSVResult{}, err
+	}
+	return ExportCbtQuestionsCSVResult{
+		Filename: "template-bank-soal-cbt.csv",
+		Content:  []byte(builder.String()),
+		Count:    len(records) - 1,
+	}, nil
+}
+
 func (s *CbtQuestion) Get(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error) {
 	return s.q.GetCbtQuestion(ctx, id)
 }
@@ -352,6 +372,8 @@ func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQue
 		}
 
 		stemHTML := appendLegacyImage(stem, firstCSVValue(row, "gambar", "gambarsoal", "gambar_soal", "image", "question_image"))
+		stimulusHTML := firstCSVValue(row, "stimulus", "stimulus_html", "stimulushtml")
+		explanationHTML := firstCSVValue(row, "pembahasan", "explanation", "explanation_html", "explanationhtml")
 		rubricHTML := appendLegacyImage(firstCSVValue(row, "rubrik", "rubric", "pedoman", "pedoman_jawaban"), firstCSVValue(row, "gambar_rubrik", "rubric_image"))
 		writerNotes := legacyImportNotes(row)
 		_, err := s.Create(ctx, SaveCbtQuestionInput{
@@ -362,10 +384,20 @@ func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQue
 			QuestionType:     questionType,
 			Options:          options,
 			AnswerKey:        answerKey,
-			Difficulty:       db.CbtQuestionDifficultyEnumMedium,
+			Difficulty:       importQuestionDifficulty(row),
 			Status:           db.CbtQuestionStatusEnumDraft,
 			StemHTML:         stemHTML,
+			StimulusHTML:     stimulusHTML,
+			ExplanationHTML:  explanationHTML,
 			RubricHTML:       rubricHTML,
+			GradeLevel:       importGradeLevel(row),
+			CPRef:            firstCSVValue(row, "cp_ref", "cpref", "cp"),
+			TPRef:            firstCSVValue(row, "tp_ref", "tpref", "tp"),
+			KDRef:            firstCSVValue(row, "kd_ref", "kdref", "kd"),
+			IndicatorRef:     firstCSVValue(row, "indicator_ref", "indicatorref", "indikator", "indikator_ref"),
+			MaterialTopic:    firstCSVValue(row, "material_topic", "materialtopic", "materi", "topik"),
+			CognitiveLevel:   firstCSVValue(row, "cognitive_level", "cognitivelevel", "level_kognitif", "levelkognitif"),
+			HotsFlag:         importBoolean(row, "hots_flag", "hotsflag", "hots"),
 			WorkflowStatus:   "draft",
 			AuthorUsername:   strings.TrimSpace(input.Username),
 			ReviewerUsername: "",
@@ -753,6 +785,40 @@ func importOptionImage(row map[string]string, label string) string {
 		"image"+lower,
 		"image_"+lower,
 	)
+}
+
+func importQuestionDifficulty(row map[string]string) db.CbtQuestionDifficultyEnum {
+	switch normalizeImportToken(firstCSVValue(row, "kesulitan", "difficulty")) {
+	case "easy", "mudah", "rendah":
+		return db.CbtQuestionDifficultyEnumEasy
+	case "hard", "sulit", "tinggi":
+		return db.CbtQuestionDifficultyEnumHard
+	case "medium", "sedang", "menengah":
+		return db.CbtQuestionDifficultyEnumMedium
+	default:
+		return db.CbtQuestionDifficultyEnumMedium
+	}
+}
+
+func importGradeLevel(row map[string]string) pgtype.Int2 {
+	value := strings.TrimSpace(firstCSVValue(row, "grade_level", "gradelevel", "kelas", "tingkat"))
+	if value == "" {
+		return pgtype.Int2{}
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 || parsed > 12 {
+		return pgtype.Int2{}
+	}
+	return pgtype.Int2{Int16: int16(parsed), Valid: true}
+}
+
+func importBoolean(row map[string]string, keys ...string) bool {
+	switch normalizeImportToken(firstCSVValue(row, keys...)) {
+	case "true", "1", "ya", "y", "yes", "hots":
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeImportToken(value string) string {
@@ -1543,6 +1609,82 @@ func legacyOptionColumns(options []QuestionOption) (string, string, string, stri
 		values[i] = options[i].Latex
 	}
 	return values[0], values[1], values[2], values[3], values[4]
+}
+
+func templateQuestionCSVRecords() [][]string {
+	return [][]string{
+		exportQuestionCSVHeaders(),
+		templateQuestionCSVRow(map[string]string{
+			"kode":        "TPL-PG-001",
+			"tipe":        "pg",
+			"soal":        "Contoh soal pilihan ganda",
+			"opsi_a":      "Opsi A",
+			"opsi_b":      "Opsi B benar",
+			"opsi_c":      "Opsi C",
+			"opsi_d":      "Opsi D",
+			"jawaban":     "B",
+			"kesulitan":   "sedang",
+			"grade_level": "8",
+		}),
+		templateQuestionCSVRow(map[string]string{
+			"kode":        "TPL-PGK-001",
+			"tipe":        "pg_kompleks",
+			"soal":        "Contoh soal pilihan ganda kompleks",
+			"opsi_a":      "Pernyataan A benar",
+			"opsi_b":      "Pernyataan B",
+			"opsi_c":      "Pernyataan C benar",
+			"opsi_d":      "Pernyataan D",
+			"jawaban":     "A,C",
+			"kesulitan":   "sedang",
+			"grade_level": "8",
+			"hots_flag":   "false",
+		}),
+		templateQuestionCSVRow(map[string]string{
+			"kode":      "TPL-BS-001",
+			"tipe":      "benar_salah",
+			"soal":      "Contoh pernyataan benar/salah",
+			"jawaban":   "Benar",
+			"kesulitan": "mudah",
+		}),
+		templateQuestionCSVRow(map[string]string{
+			"kode":           "TPL-ISIAN-001",
+			"tipe":           "isian",
+			"soal":           "Contoh soal isian singkat",
+			"jawaban":        "Jawaban utama | alias jawaban",
+			"kesulitan":      "sedang",
+			"material_topic": "Topik materi",
+		}),
+		templateQuestionCSVRow(map[string]string{
+			"kode":         "TPL-JODOH-001",
+			"tipe":         "menjodohkan",
+			"soal":         "Contoh soal menjodohkan",
+			"kiri_a":       "Istilah A",
+			"kanan_1":      "Pasangan A",
+			"kiri_b":       "Istilah B",
+			"kanan_2":      "Pasangan B",
+			"distraktor_1": "Distraktor kanan",
+			"jawaban":      "A=1;B=2",
+			"kesulitan":    "sedang",
+		}),
+		templateQuestionCSVRow(map[string]string{
+			"kode":        "TPL-ESSAY-001",
+			"tipe":        "essay",
+			"soal":        "Contoh soal uraian",
+			"rubrik":      "Tuliskan pedoman koreksi atau rubrik singkat",
+			"pembahasan":  "Opsional: catatan pembahasan",
+			"kesulitan":   "sedang",
+			"grade_level": "9",
+		}),
+	}
+}
+
+func templateQuestionCSVRow(values map[string]string) []string {
+	headers := exportQuestionCSVHeaders()
+	row := make([]string, len(headers))
+	for idx, header := range headers {
+		row[idx] = values[header]
+	}
+	return row
 }
 
 func derivePlainText(value string) string {

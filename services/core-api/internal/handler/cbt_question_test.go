@@ -84,6 +84,9 @@ type fakeCbtQuestionService struct {
 	exportInput  service.ListCbtQuestionsInput
 	exportResult service.ExportCbtQuestionsCSVResult
 	exportErr    error
+
+	templateResult service.ExportCbtQuestionsCSVResult
+	templateErr    error
 }
 
 func (f *fakeCbtQuestionService) ListFiltered(_ context.Context, in service.ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error) {
@@ -176,6 +179,13 @@ func (f *fakeCbtQuestionService) ExportCSV(_ context.Context, input service.List
 		return service.ExportCbtQuestionsCSVResult{}, f.exportErr
 	}
 	return f.exportResult, nil
+}
+
+func (f *fakeCbtQuestionService) TemplateCSV() (service.ExportCbtQuestionsCSVResult, error) {
+	if f.templateErr != nil {
+		return service.ExportCbtQuestionsCSVResult{}, f.templateErr
+	}
+	return f.templateResult, nil
 }
 
 func cbtQuestionHandlerModel(id, subjectID pgtype.UUID) db.CbtQuestion {
@@ -458,6 +468,25 @@ func TestCbtQuestionHandlersForwardSuccessPaths(t *testing.T) {
 	}
 	if rec.Body.String() != "kode,tipe\nQ-001,essay\n" {
 		t.Fatalf("ExportCSV() body = %q, want CSV content", rec.Body.String())
+	}
+
+	templateFake := &fakeCbtQuestionService{
+		templateResult: service.ExportCbtQuestionsCSVResult{
+			Filename: "template-bank-soal-cbt.csv",
+			Content:  []byte("kode,tipe\nTPL-PG-001,pg\n"),
+			Count:    1,
+		},
+	}
+	rec = httptest.NewRecorder()
+	(&CbtQuestion{svc: templateFake}).TemplateCSV(rec, adminRequest(http.MethodGet, "/api/cbt/questions/template", ""))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("TemplateCSV() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Disposition"); !strings.Contains(got, "template-bank-soal-cbt.csv") {
+		t.Fatalf("TemplateCSV() disposition = %q, want template filename", got)
+	}
+	if rec.Body.String() != "kode,tipe\nTPL-PG-001,pg\n" {
+		t.Fatalf("TemplateCSV() body = %q, want CSV content", rec.Body.String())
 	}
 
 	getFake := &fakeCbtQuestionService{getDetailRow: db.GetCbtQuestionDetailRow{

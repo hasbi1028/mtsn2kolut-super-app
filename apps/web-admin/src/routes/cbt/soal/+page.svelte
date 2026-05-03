@@ -266,6 +266,7 @@
 	let importBusy = $state(false);
 	let importResult = $state<LegacyImportResult | null>(null);
 	let exportBusy = $state(false);
+	let templateBusy = $state(false);
 	let duplicateBusyId = $state('');
 
 	// ── Form fields ────────────────────────────────────────────────────────────
@@ -1437,6 +1438,20 @@
 		return match?.[1] ?? `bank-soal-cbt-${new Date().toISOString().slice(0, 10)}.csv`;
 	}
 
+	async function downloadCSVResponse(response: Response, fallbackFilename: string) {
+		if (!response.ok) {
+			const payload = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+			throw new Error(payload?.error ?? payload?.message ?? 'Download CSV gagal');
+		}
+		const blob = await response.blob();
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = exportFilenameFromResponse(response) || fallbackFilename;
+		link.click();
+		URL.revokeObjectURL(url);
+	}
+
 	async function exportQuestionsCSV() {
 		exportBusy = true;
 		try {
@@ -1444,22 +1459,25 @@
 			params.delete('limit');
 			params.delete('offset');
 			const response = await fetch(clientApiPathWithQuery('/api/cbt/questions/export', params));
-			if (!response.ok) {
-				const payload = await response.json().catch(() => null) as { error?: string; message?: string } | null;
-				throw new Error(payload?.error ?? payload?.message ?? 'Export CSV gagal');
-			}
-			const blob = await response.blob();
-			const url = URL.createObjectURL(blob);
-			const link = document.createElement('a');
-			link.href = url;
-			link.download = exportFilenameFromResponse(response);
-			link.click();
-			URL.revokeObjectURL(url);
+			await downloadCSVResponse(response, `bank-soal-cbt-${new Date().toISOString().slice(0, 10)}.csv`);
 			toast.success('Export CSV bank soal berhasil dibuat');
 		} catch (error) {
 			toast.error(mutationErrorMessage(error, 'Export CSV gagal'));
 		} finally {
 			exportBusy = false;
+		}
+	}
+
+	async function downloadQuestionsTemplateCSV() {
+		templateBusy = true;
+		try {
+			const response = await fetch('/api/cbt/questions/template');
+			await downloadCSVResponse(response, 'template-bank-soal-cbt.csv');
+			toast.success('Template CSV bank soal berhasil diunduh');
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Download template CSV gagal'));
+		} finally {
+			templateBusy = false;
 		}
 	}
 
@@ -1630,7 +1648,17 @@
 					<h2 class="text-sm font-bold uppercase tracking-wider text-slate-800">Import CSV Bank Soal</h2>
 					<p class="mt-1 text-sm text-slate-500">Mendukung PG lama serta kolom tipe untuk PG Kompleks, Benar/Salah, Setuju/Tidak Setuju, Isian, Essay, dan Menjodohkan.</p>
 				</div>
-				<Button variant="outline" onclick={openImport}>Pilih CSV</Button>
+				<div class="flex flex-wrap gap-2">
+					<LoadingButton
+						variant="outline"
+						onclick={() => void downloadQuestionsTemplateCSV()}
+						loading={templateBusy}
+						loadingLabel="Mengunduh..."
+					>
+						Template CSV
+					</LoadingButton>
+					<Button variant="outline" onclick={openImport}>Pilih CSV</Button>
+				</div>
 			</div>
 		</section>
 	{/if}

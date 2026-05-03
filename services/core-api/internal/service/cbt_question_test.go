@@ -411,6 +411,73 @@ func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
 	if records[2][header["tipe"]] != "menjodohkan" || records[2][header["kiri_a"]] != "Satu" || records[2][header["kanan_2"]] != "2" || records[2][header["distraktor_1"]] != "Tiga" {
 		t.Fatalf("matching CSV row = %+v, want pairs and distractor mapped", records[2])
 	}
+
+	importStore := &fakeQuestionStore{
+		createRow: db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{9}, Valid: true}},
+	}
+	importSvc := &CbtQuestion{q: importStore}
+	imported, err := importSvc.ImportLegacyCSV(context.Background(), ImportLegacyQuestionsInput{
+		SubjectID: subjectID,
+		CSVText:   string(got.Content),
+		Username:  "guru.import",
+	})
+	if err != nil {
+		t.Fatalf("roundtrip ImportLegacyCSV() error = %v", err)
+	}
+	if imported.Imported != 2 || imported.Skipped != 0 {
+		t.Fatalf("roundtrip import result = %+v, want 2 imported and no skipped rows", imported)
+	}
+	if importStore.createHistory[0].QuestionType != "multiple_answer" || importStore.createHistory[0].AnswerKey != "B,E" || importStore.createHistory[0].GradeLevel.Int16 != 8 || !importStore.createHistory[0].HotsFlag {
+		t.Fatalf("roundtrip multiple answer params = %+v, want type/key/metadata preserved", importStore.createHistory[0])
+	}
+	if importStore.createHistory[1].QuestionType != "matching" || importStore.createHistory[1].AnswerKey != "A=1;B=2" || !strings.Contains(string(importStore.createHistory[1].Options), `"is_distractor":true`) {
+		t.Fatalf("roundtrip matching params = %+v options %s, want matching pair and distractor preserved", importStore.createHistory[1], string(importStore.createHistory[1].Options))
+	}
+}
+
+func TestCbtQuestionTemplateCSVRoundtripsThroughImport(t *testing.T) {
+	subjectID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	svc := &CbtQuestion{q: &fakeQuestionStore{}}
+	template, err := svc.TemplateCSV()
+	if err != nil {
+		t.Fatalf("TemplateCSV() error = %v", err)
+	}
+	if template.Count < 6 || template.Filename != "template-bank-soal-cbt.csv" {
+		t.Fatalf("TemplateCSV() result = %+v, want sample rows and stable filename", template)
+	}
+	records, err := csv.NewReader(strings.NewReader(string(template.Content))).ReadAll()
+	if err != nil {
+		t.Fatalf("TemplateCSV() CSV parse error = %v content=%s", err, string(template.Content))
+	}
+	header := csvHeaderIndex(records[0])
+	if header["tipe"] == 0 || header["rubrik"] == 0 || header["distraktor_1"] == 0 {
+		t.Fatalf("TemplateCSV() header = %+v, want multi-type columns", records[0])
+	}
+
+	importStore := &fakeQuestionStore{
+		createRow: db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{10}, Valid: true}},
+	}
+	importSvc := &CbtQuestion{q: importStore}
+	imported, err := importSvc.ImportLegacyCSV(context.Background(), ImportLegacyQuestionsInput{
+		SubjectID: subjectID,
+		CSVText:   string(template.Content),
+		Username:  "guru.template",
+	})
+	if err != nil {
+		t.Fatalf("template ImportLegacyCSV() error = %v", err)
+	}
+	if imported.Imported != template.Count || imported.Skipped != 0 {
+		t.Fatalf("template import result = %+v, want all template rows imported", imported)
+	}
+	types := make(map[string]bool, len(importStore.createHistory))
+	for _, params := range importStore.createHistory {
+		types[params.QuestionType] = true
+	}
+	for _, questionType := range []string{"multiple_choice", "multiple_answer", "true_false", "short_answer", "matching", "essay"} {
+		if !types[questionType] {
+			t.Fatalf("template import types = %+v, want %s", types, questionType)
+		}
+	}
 }
 
 func csvHeaderIndex(headers []string) map[string]int {

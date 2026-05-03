@@ -47,6 +47,10 @@ type cbtQuestionExportService interface {
 	ExportCSV(ctx context.Context, input service.ListCbtQuestionsInput) (service.ExportCbtQuestionsCSVResult, error)
 }
 
+type cbtQuestionTemplateService interface {
+	TemplateCSV() (service.ExportCbtQuestionsCSVResult, error)
+}
+
 func NewCbtQuestion(svc *service.CbtQuestion, audit ...cbtAuthoringAuditWriter) *CbtQuestion {
 	var writer cbtAuthoringAuditWriter
 	if len(audit) > 0 {
@@ -171,6 +175,27 @@ func (h *CbtQuestion) ExportCSV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := exportSvc.ExportCSV(r.Context(), input)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, result.Filename))
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(result.Content)
+}
+
+func (h *CbtQuestion) TemplateCSV(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	templateSvc, ok := h.svc.(cbtQuestionTemplateService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt question template service unavailable"))
+		return
+	}
+	result, err := templateSvc.TemplateCSV()
 	if err != nil {
 		api.Internal(w, err)
 		return
