@@ -50,6 +50,13 @@
 		kind: 'enroll' | 'link';
 		tone: 'primary' | 'warning' | 'danger';
 	};
+	type SessionReadinessFilter =
+		| 'all'
+		| 'not_ready'
+		| 'ready'
+		| 'needs_participants'
+		| 'needs_rooms'
+		| 'needs_proctors';
 	type SchoolClass = { id: string; name: string; code: string; level: string; };
 	type SessionsOverview = {
 		sessions: ExamSession[];
@@ -75,6 +82,7 @@
 	let classes = $state<SchoolClass[]>([]);
 	let sessionsPromise = $state<Promise<SessionsOverview> | null>(null);
 	let showForm = $state(false);
+	let readinessFilter = $state<SessionReadinessFilter>('all');
 
 	let fPackageId = $state('');
 	let fScopeType = $state('class');
@@ -239,6 +247,64 @@
 
 	function sessionRowReadinessIssues(session: ExamSession) {
 		return [...packageQualityIssues(session.package_id), ...sessionOperationalIssues(session)];
+	}
+
+	function sessionNeedsParticipants(session: ExamSession) {
+		return session.participant_count === 0;
+	}
+
+	function sessionNeedsRooms(session: ExamSession) {
+		return session.participant_count > 0 && (
+			session.room_count === 0
+			|| session.total_capacity < session.participant_count
+			|| session.unassigned_participant_count > 0
+			|| session.missing_seat_count > 0
+		);
+	}
+
+	function sessionNeedsProctors(session: ExamSession) {
+		return session.room_count > 0 && session.rooms_without_proctor > 0;
+	}
+
+	function sessionHasBlockingIssues(session: ExamSession) {
+		return packageQualityIssues(session.package_id).length > 0 || sessionOperationalIssues(session).length > 0;
+	}
+
+	function sessionMatchesReadinessFilter(session: ExamSession, filter: SessionReadinessFilter) {
+		if (filter === 'not_ready') return sessionHasBlockingIssues(session);
+		if (filter === 'ready') return !sessionHasBlockingIssues(session);
+		if (filter === 'needs_participants') return sessionNeedsParticipants(session);
+		if (filter === 'needs_rooms') return sessionNeedsRooms(session);
+		if (filter === 'needs_proctors') return sessionNeedsProctors(session);
+		return true;
+	}
+
+	function readinessFilterLabel(filter: SessionReadinessFilter) {
+		const labels: Record<SessionReadinessFilter, string> = {
+			all: 'Semua',
+			not_ready: 'Belum Siap',
+			ready: 'Siap Mulai',
+			needs_participants: 'Butuh Peserta',
+			needs_rooms: 'Butuh Ruang',
+			needs_proctors: 'Butuh Pengawas',
+		};
+		return labels[filter];
+	}
+
+	function buildReadinessFilterOptions(items: ExamSession[]) {
+		const filters: SessionReadinessFilter[] = [
+			'all',
+			'not_ready',
+			'ready',
+			'needs_participants',
+			'needs_rooms',
+			'needs_proctors',
+		];
+		return filters.map((filter) => ({
+			filter,
+			label: readinessFilterLabel(filter),
+			count: items.filter((session) => sessionMatchesReadinessFilter(session, filter)).length,
+		}));
 	}
 
 	function nextSessionAction(session: ExamSession): NextSessionAction {
@@ -768,9 +834,30 @@
 		{#snippet children(value)}
 			{@const overview = value as SessionsOverview}
 			{@const currentSessions = overview.sessions}
+			{@const visibleSessions = currentSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter))}
+			{@const readinessFilterOptions = buildReadinessFilterOptions(currentSessions)}
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
-			<Card.Header class="pb-2">
-				<Card.Title class="text-base">Daftar Sesi ({currentSessions.length})</Card.Title>
+			<Card.Header class="space-y-3 pb-3">
+				<div class="flex flex-wrap items-center justify-between gap-2">
+					<Card.Title class="text-base">Daftar Sesi ({visibleSessions.length}/{currentSessions.length})</Card.Title>
+					{#if readinessFilter !== 'all'}
+						<Button variant="outline" size="sm" onclick={() => (readinessFilter = 'all')}>
+							Reset Filter
+						</Button>
+					{/if}
+				</div>
+				<div class="flex flex-wrap gap-1.5">
+					{#each readinessFilterOptions as option (option.filter)}
+						<button
+							type="button"
+							class="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors {readinessFilter === option.filter ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}"
+							onclick={() => (readinessFilter = option.filter)}
+						>
+							<span>{option.label}</span>
+							<span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">{option.count}</span>
+						</button>
+					{/each}
+				</div>
 			</Card.Header>
 			<Card.Content class="p-0">
 				<div class="hidden overflow-x-auto lg:block">
@@ -788,7 +875,7 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each currentSessions as s (s.id)}
+						{#each visibleSessions as s (s.id)}
 							{@const rowPackageQuality = packageQualitySummary(s.package_id)}
 							{@const rowPackageIssues = packageQualityIssues(s.package_id)}
 							{@const rowOperationalIssues = sessionOperationalIssues(s)}
@@ -896,7 +983,9 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={8} class="text-center text-slate-400 py-8">Belum ada sesi ujian</Table.Cell>
+								<Table.Cell colspan={8} class="text-center text-slate-400 py-8">
+									{currentSessions.length === 0 ? 'Belum ada sesi ujian' : 'Tidak ada sesi pada filter ini'}
+								</Table.Cell>
 							</Table.Row>
 						{/each}
 					</Table.Body>
@@ -904,7 +993,7 @@
 				</div>
 
 				<div class="grid gap-3 p-4 lg:hidden">
-					{#each currentSessions as s (s.id)}
+					{#each visibleSessions as s (s.id)}
 						{@const rowPackageQuality = packageQualitySummary(s.package_id)}
 						{@const rowPackageIssues = packageQualityIssues(s.package_id)}
 						{@const rowOperationalIssues = sessionOperationalIssues(s)}
@@ -996,7 +1085,7 @@
 						</div>
 					{:else}
 						<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-							Belum ada sesi ujian
+							{currentSessions.length === 0 ? 'Belum ada sesi ujian' : 'Tidak ada sesi pada filter ini'}
 						</div>
 					{/each}
 				</div>
