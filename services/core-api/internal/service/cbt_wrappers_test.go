@@ -742,8 +742,11 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	if err := svc.SetSuspiciousFlag(context.Background(), participantID, true); err != nil || store.flagArg.ID != participantID || !store.flagArg.SuspiciousFlag {
 		t.Fatalf("SetSuspiciousFlag() = %v arg=%+v, want true flag", err, store.flagArg)
 	}
-	if err := svc.GradeEssay(context.Background(), answerID, 87.5, "guru"); err != nil || store.gradeArg.ID != answerID || store.gradeArg.GradedBy.String != "guru" {
+	if err := svc.GradeEssay(context.Background(), sessionID, answerID, 87.5, "guru"); err != nil || store.gradeArg.ID != answerID || store.gradeArg.GradedBy.String != "guru" {
 		t.Fatalf("GradeEssay() = %v arg=%+v, want graded answer", err, store.gradeArg)
+	}
+	if store.correctnessID != sessionID || store.scoresID != sessionID {
+		t.Fatalf("GradeEssay() score refresh ids = %v/%v, want %v", store.correctnessID, store.scoresID, sessionID)
 	}
 	if ok, err := svc.HasAnswer(context.Background(), sessionID, answerID); err != nil || !ok || store.sessionAnswerArg.SessionID != sessionID || store.sessionAnswerArg.ID != answerID {
 		t.Fatalf("HasAnswer() = %v/%v arg=%+v, want true session/answer", ok, err, store.sessionAnswerArg)

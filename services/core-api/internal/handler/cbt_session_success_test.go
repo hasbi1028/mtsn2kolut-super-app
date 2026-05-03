@@ -399,8 +399,9 @@ func (f *fakeCbtSessionService) ListUngradedEssays(_ context.Context, sessionID 
 	return []db.ListUngradedEssaysRow{}, nil
 }
 
-func (f *fakeCbtSessionService) GradeEssay(_ context.Context, answerID pgtype.UUID, manualScore float64, gradedBy string) error {
+func (f *fakeCbtSessionService) GradeEssay(_ context.Context, sessionID, answerID pgtype.UUID, manualScore float64, gradedBy string) error {
 	f.gradeAnswerID = answerID
+	f.scoreSessionID = sessionID
 	f.gradeScore = manualScore
 	f.gradeBy = gradedBy
 	return f.gradeErr

@@ -836,11 +836,17 @@ SELECT
   sa.graded_at,
   q.code AS question_code,
   q.question_text,
+  q.stem_html,
+  q.stimulus_html,
+  q.rubric_html,
+  COALESCE(pq.points, 1)::numeric AS points,
   s.nis, s.nama,
   COALESCE(r.room_name, '') AS room_name
 FROM cbt_student_answers sa
 JOIN cbt_questions q ON q.id = sa.question_id
 JOIN cbt_exam_participants ep ON ep.id = sa.participant_id
+JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id AND pq.question_id = q.id
 JOIN students s ON s.id = ep.student_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 WHERE ep.session_id = $1
@@ -858,6 +864,10 @@ type ListUngradedEssaysRow struct {
 	GradedAt      pgtype.Timestamptz `json:"graded_at"`
 	QuestionCode  string             `json:"question_code"`
 	QuestionText  string             `json:"question_text"`
+	StemHtml      string             `json:"stem_html"`
+	StimulusHtml  string             `json:"stimulus_html"`
+	RubricHtml    string             `json:"rubric_html"`
+	Points        pgtype.Numeric     `json:"points"`
 	Nis           string             `json:"nis"`
 	Nama          string             `json:"nama"`
 	RoomName      string             `json:"room_name"`
@@ -881,6 +891,10 @@ func (q *Queries) ListUngradedEssays(ctx context.Context, sessionID pgtype.UUID)
 			&i.GradedAt,
 			&i.QuestionCode,
 			&i.QuestionText,
+			&i.StemHtml,
+			&i.StimulusHtml,
+			&i.RubricHtml,
+			&i.Points,
 			&i.Nis,
 			&i.Nama,
 			&i.RoomName,

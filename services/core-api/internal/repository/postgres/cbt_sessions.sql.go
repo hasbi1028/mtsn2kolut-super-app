@@ -685,7 +685,7 @@ UPDATE cbt_student_answers
 SET manual_score = $2,
     graded_by    = $3,
     graded_at    = NOW(),
-    is_correct   = ($2 > 0)
+    is_correct   = NULL
 WHERE id = $1
 `
 
@@ -1473,33 +1473,33 @@ func (q *Queries) UpdateParticipantQuestionOrder(ctx context.Context, arg Update
 }
 
 const updateParticipantScores = `-- name: UpdateParticipantScores :exec
-UPDATE cbt_exam_participants ep
-SET
-  score = subq.pct,
-  submitted_at = COALESCE(ep.submitted_at, NOW())
-FROM (
+WITH score_parts AS (
   SELECT
-    sa.participant_id,
-    ROUND(
-      SUM(CASE
-        -- essay with manual score: treat as correct if manual_score >= passing threshold (stored as is_correct)
-        WHEN q.question_type = 'essay' AND sa.is_correct IS NOT NULL THEN
-          CASE WHEN sa.is_correct THEN 1 ELSE 0 END
-        -- auto-graded questions
-        WHEN q.question_type <> 'essay' AND sa.is_correct IS NOT NULL THEN
-          CASE WHEN sa.is_correct THEN 1 ELSE 0 END
+    ep.id AS participant_id,
+    COALESCE(SUM(
+      CASE
+        WHEN q.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * pq.points
+        WHEN q.question_type <> 'essay' AND sa.is_correct IS TRUE THEN pq.points
         ELSE 0
-      END)::numeric /
-      NULLIF(COUNT(sa.id), 0) * 100, 2
-    ) AS pct
-  FROM cbt_student_answers sa
-  JOIN cbt_questions q ON q.id = sa.question_id
-  WHERE sa.participant_id IN (
-    SELECT ep2.id FROM cbt_exam_participants ep2 WHERE ep2.session_id = $1
-  )
-  GROUP BY sa.participant_id
-) subq
-WHERE ep.id = subq.participant_id
+      END
+    ), 0)::numeric AS earned_points,
+    COALESCE(SUM(pq.points), 0)::numeric AS total_points
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+  WHERE ep.session_id = $1
+  GROUP BY ep.id
+)
+UPDATE cbt_exam_participants ep
+SET score = CASE
+      WHEN score_parts.total_points > 0 THEN ROUND((score_parts.earned_points / score_parts.total_points) * 100, 2)
+      ELSE 0
+    END,
+  submitted_at = COALESCE(ep.submitted_at, NOW())
+FROM score_parts
+WHERE ep.id = score_parts.participant_id
 `
 
 func (q *Queries) UpdateParticipantScores(ctx context.Context, sessionID pgtype.UUID) error {

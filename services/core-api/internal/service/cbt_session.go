@@ -42,6 +42,8 @@ type cbtSessionStore interface {
 	GradeStudentEssay(ctx context.Context, arg db.GradeStudentEssayParams) error
 	ListUngradedEssays(ctx context.Context, sessionID pgtype.UUID) ([]db.ListUngradedEssaysRow, error)
 	UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) error
+	UpdateAnswerCorrectness(ctx context.Context, sessionID pgtype.UUID) error
+	UpdateParticipantScores(ctx context.Context, sessionID pgtype.UUID) error
 	ListCbtExamSessionsByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]db.ListCbtExamSessionsByTeacherRow, error)
 	GetSessionResultsByTeacher(ctx context.Context, arg db.GetSessionResultsByTeacherParams) ([]db.GetSessionResultsByTeacherRow, error)
 	GetSessionTeacherAccess(ctx context.Context, arg db.GetSessionTeacherAccessParams) (bool, error)
@@ -475,12 +477,39 @@ func forceSubmitParticipant(ctx context.Context, q cbtParticipantForceSubmitStor
 
 // --- Essay Grading ---
 
-func (s *CbtSession) GradeEssay(ctx context.Context, answerID pgtype.UUID, manualScore float64, gradedBy string) error {
-	return s.q.GradeStudentEssay(ctx, db.GradeStudentEssayParams{
+func (s *CbtSession) GradeEssay(ctx context.Context, sessionID, answerID pgtype.UUID, manualScore float64, gradedBy string) error {
+	if s.pool == nil {
+		return gradeEssayAndRefreshScore(ctx, s.q, sessionID, answerID, manualScore, gradedBy)
+	}
+
+	conn, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	qtx := s.q.WithTx(tx)
+	if err := gradeEssayAndRefreshScore(ctx, qtx, sessionID, answerID, manualScore, gradedBy); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func gradeEssayAndRefreshScore(ctx context.Context, q cbtSessionStore, sessionID, answerID pgtype.UUID, manualScore float64, gradedBy string) error {
+	if err := q.GradeStudentEssay(ctx, db.GradeStudentEssayParams{
 		ID:          answerID,
 		ManualScore: pgNumeric(manualScore),
 		GradedBy:    pgtype.Text{String: gradedBy, Valid: true},
-	})
+	}); err != nil {
+		return err
+	}
+	return scoreSession(ctx, q, sessionID)
 }
 
 func pgNumeric(f float64) pgtype.Numeric {

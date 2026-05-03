@@ -19,6 +19,8 @@
 	type Subject = { id: string; name: string; code: string };
 	type OptionItem = { label: string; text?: string; html?: string; latex?: string };
 	type ModuleMode = 'catalog' | 'composer' | 'advanced' | 'review' | 'import';
+	type AuthoringMode = 'beginner' | 'advance';
+	type ComposerQuestionType = 'multiple_choice' | 'essay';
 	type Question = {
 		id: string;
 		authoring_mode?: string;
@@ -30,11 +32,23 @@
 		question_type: string;
 		stem_html: string;
 		question_text: string;
+		stimulus_html?: string;
+		explanation_html?: string;
+		rubric_html?: string;
+		academic_phase?: string;
+		grade_level?: number | null;
+		cp_ref?: string;
+		tp_ref?: string;
+		kd_ref?: string;
+		indicator_ref?: string;
+		material_topic?: string;
+		cognitive_level?: string;
+		hots_flag?: boolean;
+		workflow_status: string;
 		options: OptionItem[];
 		answer_key: string;
 		difficulty: string;
 		status: string;
-		workflow_status: string;
 		author_username: string;
 		created_at: string;
 		package_count?: number;
@@ -63,12 +77,27 @@
 	};
 	type DraftPayload = {
 		subjectId: string;
+		questionType: ComposerQuestionType;
+		authoringMode: AuthoringMode;
 		stem: string;
+		stimulus: string;
+		rubric: string;
+		explanation: string;
 		options: string[];
 		answerKey: string;
 		weight: number;
 		difficulty: string;
 		isRtl: boolean;
+		gradeLevel: number;
+		academicPhase: string;
+		cpRef: string;
+		tpRef: string;
+		kdRef: string;
+		indicatorRef: string;
+		materialTopic: string;
+		cognitiveLevel: string;
+		hotsFlag: boolean;
+		workflowStatus: string;
 		savedAt: string;
 	};
 	type OptionLabel = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
@@ -88,7 +117,7 @@
 		errors: string[];
 		duplicate_codes: string[];
 	};
-	type FocusedEditor = 'stem' | OptionLabel;
+	type FocusedEditor = 'stem' | 'stimulus' | 'rubric' | 'explanation' | OptionLabel;
 
 	// ── Constants ─────────────────────────────────────────────────────────────
 	const PAGE_SIZE = 15;
@@ -97,7 +126,7 @@
 	const ANSWER_LABELS: OptionLabel[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 	const moduleModes: Array<{ id: ModuleMode; label: string; desc: string }> = [
 		{ id: 'catalog', label: 'Katalog', desc: 'Daftar terpadu' },
-		{ id: 'composer', label: 'Komposer Cepat', desc: 'Input PG legacy' },
+		{ id: 'composer', label: 'Komposer Soal', desc: 'PG & essay' },
 		{ id: 'advanced', label: 'Editor Lanjutan', desc: 'Blueprint & asset' },
 		{ id: 'review', label: 'Review', desc: 'Mutu & publikasi' },
 		{ id: 'import', label: 'Import Legacy', desc: 'CSV lama' },
@@ -222,21 +251,51 @@
 
 	// ── Form fields ────────────────────────────────────────────────────────────
 	let fSubjectId = $state('');
+	let fQuestionType = $state<ComposerQuestionType>('multiple_choice');
+	let fAuthoringMode = $state<AuthoringMode>('beginner');
 	let fStem = $state('');
+	let fStimulus = $state('');
+	let fRubric = $state('');
+	let fExplanation = $state('');
 	let fOptions = $state(['', '', '', '']);
 	let fAnswerKey = $state<OptionLabel>('A');
 	let fWeight = $state(1);
 	let fDifficulty = $state('medium');
 	let fIsRtl = $state(false);
+	let fGradeLevel = $state(7);
+	let fAcademicPhase = $state('');
+	let fCPRef = $state('');
+	let fTPRef = $state('');
+	let fKDRef = $state('');
+	let fIndicatorRef = $state('');
+	let fMaterialTopic = $state('');
+	let fCognitiveLevel = $state('');
+	let fHotsFlag = $state(false);
+	let fWorkflowStatus = $state('draft');
 	let activeDraftKey = $derived(DRAFT_KEY(editingId));
 	let draftSignature = $derived(JSON.stringify({
 		fSubjectId,
+		fQuestionType,
+		fAuthoringMode,
 		fStem,
+		fStimulus,
+		fRubric,
+		fExplanation,
 		opts: fOptions,
 		fAnswerKey,
 		fWeight,
 		fDifficulty,
 		fIsRtl,
+		fGradeLevel,
+		fAcademicPhase,
+		fCPRef,
+		fTPRef,
+		fKDRef,
+		fIndicatorRef,
+		fMaterialTopic,
+		fCognitiveLevel,
+		fHotsFlag,
+		fWorkflowStatus,
 	}));
 
 	// ── Derived ────────────────────────────────────────────────────────────────
@@ -248,17 +307,24 @@
 
 	let stemText = $derived(htmlToPlainText(fStem));
 	let hasImage = $derived(fStem.includes('<img'));
+	let stimulusText = $derived(htmlToPlainText(fStimulus));
+	let rubricText = $derived(htmlToPlainText(fRubric));
+	let explanationText = $derived(htmlToPlainText(fExplanation));
+	let isEssay = $derived(fQuestionType === 'essay');
+	let isAdvanceMode = $derived(fAuthoringMode === 'advance');
 	let activeOptionLabels = $derived(ANSWER_LABELS.slice(0, fOptions.length));
 	let optionPlainTexts = $derived(fOptions.map((option) => htmlToPlainText(option)));
 	let optionHasImages = $derived(fOptions.map((option) => option.includes('<img')));
 	let optionsReady = $derived(fOptions.length >= MIN_OPTION_COUNT && fOptions.every(richTextHasContent));
-	let answerKeyReady = $derived(activeOptionLabels.includes(fAnswerKey as OptionLabel));
+	let answerKeyReady = $derived(isEssay || activeOptionLabels.includes(fAnswerKey as OptionLabel));
+	let rubricReady = $derived(!isEssay || rubricText.length >= 5 || fRubric.includes('<img'));
 
 	let readinessChecks = $derived({
 		subject: !!fSubjectId,
 		stem: stemText.length >= 5 || hasImage,
-		options: optionsReady,
+		options: isEssay || optionsReady,
 		answerKey: answerKeyReady,
+		rubric: rubricReady,
 		weight: Number.isFinite(fWeight) && fWeight >= 1,
 	});
 
@@ -268,6 +334,30 @@
 	let canSave = $derived(readinessScore === 100 && !composerBusy);
 
 	let qualitySignals = $derived.by(() => {
+		if (isEssay) {
+			return [
+				{
+					label: 'Pertanyaan terbuka jelas',
+					status: stemText.length >= 35 ? 'good' : 'warn',
+					desc: `${stemText.length} / 35 karakter minimum`,
+				},
+				{
+					label: 'Pedoman penilaian tersedia',
+					status: rubricReady ? 'good' : 'warn',
+					desc: rubricReady ? 'Rubrik/pedoman terisi' : `${rubricText.length} / 5 karakter minimum`,
+				},
+				{
+					label: 'Stimulus pendukung',
+					status: !isAdvanceMode || stimulusText.length > 0 || hasImage || stemText.length >= 70 ? 'good' : 'warn',
+					desc: isAdvanceMode ? (stimulusText ? 'Stimulus terisi' : `${stimulusText.length} karakter stimulus`) : 'Opsional di mode pemula',
+				},
+				{
+					label: 'Level kognitif',
+					status: !isAdvanceMode || fCognitiveLevel.trim().length > 0 ? 'good' : 'warn',
+					desc: isAdvanceMode ? (fCognitiveLevel.trim() || 'Belum diisi') : 'Opsional di mode pemula',
+				},
+			];
+		}
 		const filled = optionPlainTexts.filter((text, index) => text || optionHasImages[index]);
 		const unique = new Set(filled);
 		const lengths = filled.map((o) => o.length);
@@ -301,25 +391,49 @@
 		const issues: string[] = [];
 		if (!readinessChecks.subject) issues.push('Pilih mata pelajaran');
 		if (!readinessChecks.stem) issues.push('Isi soal minimal 5 karakter');
-		if (!readinessChecks.options)
+		if (!isEssay && !readinessChecks.options)
 			issues.push(`Semua opsi (${activeOptionLabels.join('–')}) wajib diisi`);
-		if (!readinessChecks.answerKey) issues.push('Pilih kunci jawaban');
+		if (!isEssay && !readinessChecks.answerKey) issues.push('Pilih kunci jawaban');
+		if (isEssay && !readinessChecks.rubric) issues.push('Isi pedoman/rubrik penilaian essay');
 		if (!readinessChecks.weight) issues.push('Bobot nilai minimal 1');
 		return issues;
 	});
 	let qualityWarningCount = $derived(qualitySignals.filter((signal) => signal.status !== 'good').length);
-	let hasDraftWork = $derived(Boolean(fSubjectId || richTextHasContent(fStem) || fOptions.some(richTextHasContent) || draftStatus));
+	let hasDraftWork = $derived(Boolean(
+		fSubjectId ||
+		richTextHasContent(fStem) ||
+		richTextHasContent(fStimulus) ||
+		richTextHasContent(fRubric) ||
+		richTextHasContent(fExplanation) ||
+		fOptions.some(richTextHasContent) ||
+		draftStatus
+	));
 
 	// ── Draft autosave ─────────────────────────────────────────────────────────
 	function buildDraftPayload(): DraftPayload {
 		return {
 			subjectId: fSubjectId,
+			questionType: fQuestionType,
+			authoringMode: fAuthoringMode,
 			stem: fStem,
+			stimulus: fStimulus,
+			rubric: fRubric,
+			explanation: fExplanation,
 			options: [...fOptions],
 			answerKey: fAnswerKey,
 			weight: fWeight,
 			difficulty: fDifficulty,
 			isRtl: fIsRtl,
+			gradeLevel: fGradeLevel,
+			academicPhase: fAcademicPhase,
+			cpRef: fCPRef,
+			tpRef: fTPRef,
+			kdRef: fKDRef,
+			indicatorRef: fIndicatorRef,
+			materialTopic: fMaterialTopic,
+			cognitiveLevel: fCognitiveLevel,
+			hotsFlag: fHotsFlag,
+			workflowStatus: fWorkflowStatus,
 			savedAt: new Date().toISOString(),
 		};
 	}
@@ -359,21 +473,51 @@
 			if (!raw) return false;
 			const d = JSON.parse(raw) as {
 				subjectId?: string;
+				questionType?: string;
+				authoringMode?: string;
 				stem?: string;
+				stimulus?: string;
+				rubric?: string;
+				explanation?: string;
 				options?: string[];
 				answerKey?: string;
 				weight?: number;
 				difficulty?: string;
 				isRtl?: boolean;
+				gradeLevel?: number;
+				academicPhase?: string;
+				cpRef?: string;
+				tpRef?: string;
+				kdRef?: string;
+				indicatorRef?: string;
+				materialTopic?: string;
+				cognitiveLevel?: string;
+				hotsFlag?: boolean;
+				workflowStatus?: string;
 				savedAt?: string;
 			};
 			fSubjectId = d.subjectId ?? '';
+			fQuestionType = normalizeQuestionType(d.questionType);
+			fAuthoringMode = normalizeAuthoringMode(d.authoringMode);
 			fStem = d.stem ?? '';
+			fStimulus = d.stimulus ?? '';
+			fRubric = d.rubric ?? '';
+			fExplanation = d.explanation ?? '';
 			fOptions = normalizeOptionCount(d.options ?? ['', '', '', '']);
 			fAnswerKey = normalizeAnswerLabel(d.answerKey, fOptions.length);
 			fWeight = d.weight ?? 1;
 			fDifficulty = d.difficulty ?? 'medium';
 			fIsRtl = d.isRtl ?? false;
+			fGradeLevel = d.gradeLevel ?? 7;
+			fAcademicPhase = d.academicPhase ?? '';
+			fCPRef = d.cpRef ?? '';
+			fTPRef = d.tpRef ?? '';
+			fKDRef = d.kdRef ?? '';
+			fIndicatorRef = d.indicatorRef ?? '';
+			fMaterialTopic = d.materialTopic ?? '';
+			fCognitiveLevel = d.cognitiveLevel ?? '';
+			fHotsFlag = d.hotsFlag ?? false;
+			fWorkflowStatus = normalizeWorkflowStatus(d.workflowStatus);
 			draftStatus = 'Draft lokal dipulihkan';
 			draftSavedAt = d.savedAt ?? null;
 			return true;
@@ -498,6 +642,36 @@
 		return htmlToPlainText(html).length > 0 || html.includes('<img');
 	}
 
+	function normalizeQuestionType(value: string | undefined): ComposerQuestionType {
+		return value === 'essay' ? 'essay' : 'multiple_choice';
+	}
+
+	function normalizeAuthoringMode(value: string | undefined): AuthoringMode {
+		return value === 'advance' ? 'advance' : 'beginner';
+	}
+
+	function normalizeWorkflowStatus(value: string | undefined): string {
+		return value === 'review' ? 'review' : 'draft';
+	}
+
+	function setQuestionType(type: ComposerQuestionType) {
+		fQuestionType = type;
+		if (type === 'essay') {
+			fAnswerKey = 'A';
+			if (focusedEditor && focusedEditor !== 'stem' && focusedEditor !== 'stimulus' && focusedEditor !== 'rubric' && focusedEditor !== 'explanation') {
+				focusedEditor = null;
+			}
+			return;
+		}
+		fOptions = normalizeOptionCount(fOptions);
+		fAnswerKey = normalizeAnswerLabel(fAnswerKey, fOptions.length);
+	}
+
+	function setAuthoringMode(mode: AuthoringMode) {
+		fAuthoringMode = mode;
+		if (mode === 'beginner') fWorkflowStatus = 'draft';
+	}
+
 	function normalizeOptionCount(options: string[]): string[] {
 		let normalized = options.slice(0, MAX_OPTION_COUNT);
 		while (normalized.length < MIN_OPTION_COUNT) normalized = [...normalized, ''];
@@ -541,15 +715,13 @@
 	}
 
 	function isQuickEditable(q: Question): boolean {
-		const mode = q.suggested_mode ?? q.authoring_mode ?? 'beginner';
-		return mode !== 'advance' && q.question_type === 'multiple_choice' && q.workflow_status === 'draft' && q.status === 'draft' && !questionUsageLocked(q);
+		return (q.question_type === 'multiple_choice' || q.question_type === 'essay') && q.workflow_status === 'draft' && q.status === 'draft' && !questionUsageLocked(q);
 	}
 
 	function explainQuickEditBlocked(q: Question): string {
 		if (questionUsageLocked(q)) return 'Soal sudah dipakai. Gunakan Duplikat untuk membuat revisi draft.';
-		if ((q.suggested_mode ?? q.authoring_mode) === 'advance') return 'Soal ini memakai metadata lanjutan. Gunakan editor lanjutan agar metadata tidak hilang.';
 		if (q.workflow_status !== 'draft' || q.status !== 'draft') return 'Soal sudah masuk alur review/publikasi. Gunakan Duplikat untuk revisi.';
-		if (q.question_type !== 'multiple_choice') return 'Komposer cepat hanya untuk pilihan ganda A-D.';
+		if (q.question_type !== 'multiple_choice' && q.question_type !== 'essay') return 'Komposer utama saat ini mendukung pilihan ganda dan essay.';
 		return 'Gunakan editor lanjutan untuk item ini.';
 	}
 
@@ -568,12 +740,27 @@
 
 	function resetForm() {
 		fSubjectId = '';
+		fQuestionType = 'multiple_choice';
+		fAuthoringMode = 'beginner';
 		fStem = '';
+		fStimulus = '';
+		fRubric = '';
+		fExplanation = '';
 		fOptions = normalizeOptionCount([]);
 		fAnswerKey = 'A';
 		fWeight = 1;
 		fDifficulty = 'medium';
 		fIsRtl = false;
+		fGradeLevel = 7;
+		fAcademicPhase = '';
+		fCPRef = '';
+		fTPRef = '';
+		fKDRef = '';
+		fIndicatorRef = '';
+		fMaterialTopic = '';
+		fCognitiveLevel = '';
+		fHotsFlag = false;
+		fWorkflowStatus = 'draft';
 		draftStatus = '';
 		draftSavedAt = null;
 		lastDraftSig = '';
@@ -607,13 +794,28 @@
 			editingId = d.id;
 			resetForm();
 			fSubjectId = d.subject_id ?? '';
+			fQuestionType = normalizeQuestionType(d.question_type);
+			fAuthoringMode = normalizeAuthoringMode(d.suggested_mode ?? d.authoring_mode);
 			fStem = d.stem_html || d.question_text || '';
+			fStimulus = d.stimulus_html ?? '';
+			fRubric = d.rubric_html ?? '';
+			fExplanation = d.explanation_html ?? '';
 			const opts = d.options?.length
 				? d.options.map((o) => o.html || o.text || o.latex || '')
 				: ['', '', '', ''];
 			fOptions = normalizeOptionCount(opts);
 			fAnswerKey = normalizeAnswerLabel(d.answer_key, fOptions.length);
 			fDifficulty = d.difficulty || 'medium';
+			fGradeLevel = d.grade_level ?? 7;
+			fAcademicPhase = d.academic_phase ?? '';
+			fCPRef = d.cp_ref ?? '';
+			fTPRef = d.tp_ref ?? '';
+			fKDRef = d.kd_ref ?? '';
+			fIndicatorRef = d.indicator_ref ?? '';
+			fMaterialTopic = d.material_topic ?? '';
+			fCognitiveLevel = d.cognitive_level ?? '';
+			fHotsFlag = d.hots_flag ?? false;
+			fWorkflowStatus = normalizeWorkflowStatus(d.workflow_status);
 			showTemplates = false;
 			showInspector = false;
 			focusedEditor = null;
@@ -624,9 +826,24 @@
 			editingId = q.id;
 			resetForm();
 			fSubjectId = q.subject_id;
+			fQuestionType = normalizeQuestionType(q.question_type);
+			fAuthoringMode = normalizeAuthoringMode(q.suggested_mode ?? q.authoring_mode);
 			fStem = q.stem_html || q.question_text || '';
+			fStimulus = q.stimulus_html ?? '';
+			fRubric = q.rubric_html ?? '';
+			fExplanation = q.explanation_html ?? '';
 			fOptions = normalizeOptionCount(q.options?.map((o) => o.html || o.text || o.latex || '') ?? []);
 			fAnswerKey = normalizeAnswerLabel(q.answer_key, fOptions.length);
+			fGradeLevel = q.grade_level ?? 7;
+			fAcademicPhase = q.academic_phase ?? '';
+			fCPRef = q.cp_ref ?? '';
+			fTPRef = q.tp_ref ?? '';
+			fKDRef = q.kd_ref ?? '';
+			fIndicatorRef = q.indicator_ref ?? '';
+			fMaterialTopic = q.material_topic ?? '';
+			fCognitiveLevel = q.cognitive_level ?? '';
+			fHotsFlag = q.hots_flag ?? false;
+			fWorkflowStatus = normalizeWorkflowStatus(q.workflow_status);
 			showInspector = false;
 			focusedEditor = null;
 			composerMobilePanel = 'write';
@@ -637,6 +854,7 @@
 	}
 
 	function applyTemplate(t: Template) {
+		setQuestionType('multiple_choice');
 		fStem = t.stem;
 		fOptions = normalizeOptionCount(t.options);
 		fAnswerKey = t.answerKey;
@@ -686,7 +904,11 @@
 	}
 
 	function focusTitle(editor: FocusedEditor) {
-		return editor === 'stem' ? 'Isi Pertanyaan' : `Opsi ${editor}`;
+		if (editor === 'stem') return 'Isi Pertanyaan';
+		if (editor === 'stimulus') return 'Stimulus';
+		if (editor === 'rubric') return 'Rubrik Penilaian';
+		if (editor === 'explanation') return 'Pembahasan';
+		return `Opsi ${editor}`;
 	}
 
 	function handleComposerKeydown(event: KeyboardEvent) {
@@ -734,20 +956,36 @@
 		composerBusy = true;
 		try {
 			const payload = {
-				authoring_mode: 'beginner',
+				authoring_mode: fAuthoringMode,
 				subject_id: fSubjectId,
 				question_text: htmlToPlainText(fStem),
-				question_type: 'multiple_choice',
+				question_type: fQuestionType,
 				stem_html: fStem,
-				options: fOptions.map((html, i) => ({
-					label: optionLabelAt(i),
-					text: htmlToPlainText(html),
-					html,
-				})),
-				answer_key: fAnswerKey,
+				stimulus_html: isAdvanceMode ? fStimulus : '',
+				explanation_html: isAdvanceMode ? fExplanation : '',
+				rubric_html: isEssay ? fRubric : '',
+				options: isEssay
+					? []
+					: fOptions.map((html, i) => ({
+						label: optionLabelAt(i),
+						text: htmlToPlainText(html),
+						html,
+					})),
+				answer_key: isEssay ? '' : fAnswerKey,
 				difficulty: fDifficulty,
 				status: 'draft',
-				workflow_status: 'draft',
+				workflow_status: isAdvanceMode ? fWorkflowStatus : 'draft',
+				grade_level: fGradeLevel,
+				academic_phase: isAdvanceMode ? fAcademicPhase : '',
+				cp_ref: isAdvanceMode ? fCPRef : '',
+				tp_ref: isAdvanceMode ? fTPRef : '',
+				kd_ref: isAdvanceMode ? fKDRef : '',
+				indicator_ref: isAdvanceMode ? fIndicatorRef : '',
+				material_topic: isAdvanceMode ? fMaterialTopic : '',
+				cognitive_level: isAdvanceMode ? fCognitiveLevel : '',
+				hots_flag: isAdvanceMode ? fHotsFlag : false,
+				writer_notes: isAdvanceMode ? 'Disusun dari komposer soal mode advance.' : '',
+				review_notes: '',
 			};
 
 			const url = editingId ? clientApiPath`/api/cbt/questions/${editingId}` : '/api/cbt/questions';
@@ -924,8 +1162,8 @@
 		<section class="rounded-lg border border-green-200 bg-green-50 p-4">
 			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 				<div>
-					<h2 class="text-sm font-bold uppercase tracking-wider text-green-900">Komposer Cepat PG Legacy</h2>
-					<p class="mt-1 text-sm text-green-800">Dipakai untuk membuat draft pilihan ganda A-D. Soal yang sudah review/publish atau dipakai paket wajib direvisi lewat duplikasi.</p>
+					<h2 class="text-sm font-bold uppercase tracking-wider text-green-900">Komposer Soal PG & Essay</h2>
+					<p class="mt-1 text-sm text-green-800">Buat draft pilihan ganda atau essay dengan mode Pemula dan Advance. Soal yang sudah review/publish atau dipakai paket wajib direvisi lewat duplikasi.</p>
 				</div>
 				<Button onclick={openCreate} class="bg-green-700 text-white hover:bg-green-800">Buka Komposer</Button>
 			</div>
@@ -1073,6 +1311,9 @@
 											<div class="text-[10px] text-slate-400 mt-0.5">{q.author_username}</div>
 										{/if}
 										<div class="mt-1 flex flex-wrap gap-1">
+											<span class="rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+												{q.question_type === 'essay' ? 'Essay' : 'PG'}
+											</span>
 											<span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
 												{q.suggested_mode ?? q.authoring_mode ?? 'beginner'}
 											</span>
@@ -1094,7 +1335,7 @@
 										</span>
 									</Table.Cell>
 									<Table.Cell class="text-sm font-bold text-green-700">
-										{q.answer_key || '-'}
+										{q.question_type === 'essay' ? 'Essay' : q.answer_key || '-'}
 									</Table.Cell>
 									<Table.Cell class="text-right">
 										<button
@@ -1303,6 +1544,12 @@
 			Preview Siswa
 		</p>
 		<div class="rounded-lg border border-slate-200 bg-white p-3 space-y-3" dir={fIsRtl ? 'rtl' : undefined}>
+			{#if isAdvanceMode && fStimulus}
+				<div class="rounded-md border border-slate-100 bg-slate-50 p-2">
+					<p class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Stimulus</p>
+					<RichContent html={fStimulus} class="prose prose-sm max-w-none text-slate-700 latex-preview text-sm" />
+				</div>
+			{/if}
 			{#if fStem}
 				<RichContent
 					html={fStem}
@@ -1312,7 +1559,19 @@
 				<p class="text-xs text-slate-400 italic">Isi soal belum dimasukkan</p>
 			{/if}
 
-			{#if fOptions.some(richTextHasContent)}
+			{#if isEssay}
+				<div class="space-y-2 border-t border-slate-100 pt-2">
+					<div class="rounded-md border border-dashed border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
+						Siswa akan melihat kotak jawaban uraian pada aplikasi ujian.
+					</div>
+					{#if richTextHasContent(fRubric)}
+						<div class="rounded-md border border-amber-100 bg-amber-50 p-2">
+							<p class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700">Pedoman koreksi guru</p>
+							<RichContent html={fRubric} class="prose prose-sm max-w-none text-amber-950 latex-preview text-sm" />
+						</div>
+					{/if}
+				</div>
+			{:else if fOptions.some(richTextHasContent)}
 				<div class="space-y-1.5 border-t border-slate-100 pt-2">
 					{#each fOptions as opt, i (`preview-option-${i}`)}
 						{@const label = optionLabelAt(i)}
@@ -1408,8 +1667,11 @@
 						</span>
 						<div class="ml-auto flex flex-wrap items-center gap-1">
 							<button type="button" onclick={() => scrollComposerSection('composer-metadata')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Metadata</button>
+							{#if isAdvanceMode}
+								<button type="button" onclick={() => scrollComposerSection('composer-advanced')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Advance</button>
+							{/if}
 							<button type="button" onclick={() => scrollComposerSection('composer-question')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Pertanyaan</button>
-							<button type="button" onclick={() => scrollComposerSection('composer-options')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Opsi</button>
+							<button type="button" onclick={() => scrollComposerSection(isEssay ? 'composer-rubric' : 'composer-options')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">{isEssay ? 'Rubrik' : 'Opsi'}</button>
 							<button
 								type="button"
 								onclick={() => (showInspector = !showInspector)}
@@ -1425,6 +1687,7 @@
 
 				<div class={`grid grid-cols-1 gap-5 ${showInspector || composerMobilePanel === 'preview' ? 'xl:grid-cols-[minmax(0,1.55fr)_minmax(18rem,0.5fr)]' : ''}`}>
 					<div class={`space-y-4 min-w-0 ${composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
+						{#if !isEssay}
 						<section class="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
 							<div class="flex flex-col gap-2 lg:flex-row lg:items-center">
 								<div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -1460,8 +1723,48 @@
 								</button>
 							</div>
 						</section>
+						{/if}
 
 						<section id="composer-metadata" class="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+							<div class="mb-3 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
+								<span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-800">Bentuk Soal</span>
+								<div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+									<button
+										type="button"
+										onclick={() => setQuestionType('multiple_choice')}
+										class="h-7 rounded-md px-3 text-[10px] font-bold uppercase tracking-wide {fQuestionType === 'multiple_choice' ? 'bg-green-700 text-white' : 'text-slate-600 hover:bg-white'}"
+									>
+										Pilihan Ganda
+									</button>
+									<button
+										type="button"
+										onclick={() => setQuestionType('essay')}
+										class="h-7 rounded-md px-3 text-[10px] font-bold uppercase tracking-wide {fQuestionType === 'essay' ? 'bg-green-700 text-white' : 'text-slate-600 hover:bg-white'}"
+									>
+										Essay
+									</button>
+								</div>
+								<span class="ml-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-800">Mode</span>
+								<div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+									<button
+										type="button"
+										onclick={() => setAuthoringMode('beginner')}
+										class="h-7 rounded-md px-3 text-[10px] font-bold uppercase tracking-wide {fAuthoringMode === 'beginner' ? 'bg-green-700 text-white' : 'text-slate-600 hover:bg-white'}"
+									>
+										Pemula
+									</button>
+									<button
+										type="button"
+										onclick={() => setAuthoringMode('advance')}
+										class="h-7 rounded-md px-3 text-[10px] font-bold uppercase tracking-wide {fAuthoringMode === 'advance' ? 'bg-green-700 text-white' : 'text-slate-600 hover:bg-white'}"
+									>
+										Advance
+									</button>
+								</div>
+								<span class="text-[11px] text-slate-500">
+									{isEssay ? 'Jawaban dikoreksi manual.' : 'PG memakai opsi dan kunci jawaban.'}
+								</span>
+							</div>
 							<div class="grid gap-2 lg:grid-cols-[8rem_minmax(0,1fr)_8rem_6.5rem_10.5rem] lg:items-end">
 								<div class="self-center">
 									<h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-800">Metadata</h3>
@@ -1517,18 +1820,92 @@
 							</div>
 						</section>
 
+						{#if isAdvanceMode}
+							<section id="composer-advanced" class="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+								<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+									<div>
+										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Detail Advance</h3>
+										<p class="mt-0.5 text-xs text-slate-500">Blueprint, kurikulum, dan alur review.</p>
+									</div>
+									<label for="f-hots" class="flex h-8 cursor-pointer items-center gap-2 rounded-md border border-green-200 bg-green-50 px-2.5">
+										<input id="f-hots" type="checkbox" bind:checked={fHotsFlag} class="rounded accent-green-700" />
+										<span class="text-[10px] font-black uppercase tracking-wider text-green-800">HOTS</span>
+									</label>
+								</div>
+								<div class="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
+									<div>
+										<label for="f-grade-level" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tingkat</label>
+										<Input id="f-grade-level" type="number" min="1" max="12" bind:value={fGradeLevel} class="h-8 text-sm" />
+									</div>
+									<div>
+										<label for="f-phase" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Fase</label>
+										<Input id="f-phase" placeholder="Fase D" bind:value={fAcademicPhase} class="h-8 text-sm" />
+									</div>
+									<div>
+										<label for="f-topic" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Topik</label>
+										<Input id="f-topic" placeholder="Topik materi" bind:value={fMaterialTopic} class="h-8 text-sm" />
+									</div>
+									<div>
+										<label for="f-cognitive" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Kognitif</label>
+										<Input id="f-cognitive" placeholder="C3 / HOTS" bind:value={fCognitiveLevel} class="h-8 text-sm" />
+									</div>
+									<div>
+										<label for="f-cp" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">CP</label>
+										<Input id="f-cp" placeholder="CP ref" bind:value={fCPRef} class="h-8 text-sm" />
+									</div>
+									<div>
+										<label for="f-tp" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">TP</label>
+										<Input id="f-tp" placeholder="TP ref" bind:value={fTPRef} class="h-8 text-sm" />
+									</div>
+									<div>
+										<label for="f-kd" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">KD</label>
+										<Input id="f-kd" placeholder="KD ref" bind:value={fKDRef} class="h-8 text-sm" />
+									</div>
+									<div>
+										<label for="f-indicator" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Indikator</label>
+										<Input id="f-indicator" placeholder="Indikator" bind:value={fIndicatorRef} class="h-8 text-sm" />
+									</div>
+									<div>
+										<label for="f-workflow" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Alur</label>
+										<select id="f-workflow" bind:value={fWorkflowStatus} class="h-8 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+											<option value="draft">Draft</option>
+											<option value="review">Ajukan Review</option>
+										</select>
+									</div>
+								</div>
+							</section>
+
+							<section id="composer-stimulus" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+								<div class="flex flex-wrap items-center justify-between gap-2">
+									<div>
+										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Stimulus</h3>
+										<p class="mt-0.5 text-xs text-slate-500">Narasi, data, gambar, atau konteks pendukung.</p>
+									</div>
+									<button type="button" onclick={() => (focusedEditor = 'stimulus')} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
+								</div>
+								<LegacyRichTextEditor
+									bind:value={fStimulus}
+									id="soal-stimulus"
+									placeholder="Opsional. Tambahkan wacana, data, tabel, gambar, atau konteks sebelum pertanyaan utama."
+									minRows={3}
+									compact
+									onImageUpload={uploadImageInEditor}
+								/>
+							</section>
+						{/if}
+
 						<section id="composer-question" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex flex-wrap items-center justify-between gap-2">
 								<div>
-								<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Isi Pertanyaan</h3>
-									<p class="mt-0.5 text-xs text-slate-500">Teks, gambar, daftar, dan formula.</p>
+								<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">{isEssay ? 'Pertanyaan Essay' : 'Isi Pertanyaan'}</h3>
+									<p class="mt-0.5 text-xs text-slate-500">{isEssay ? 'Instruksi uraian yang akan dijawab siswa.' : 'Teks, gambar, daftar, dan formula.'}</p>
 								</div>
 								<button type="button" onclick={() => (focusedEditor = 'stem')} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
 							</div>
 							<LegacyRichTextEditor
 								bind:value={fStem}
 								id="soal-stem"
-								placeholder="Tuliskan pertanyaan utama. Gambar bisa disisipkan langsung di antara teks."
+								placeholder={isEssay ? 'Tuliskan instruksi essay/uraian. Contoh: Jelaskan alasan, uraikan langkah, atau analisis data berikut.' : 'Tuliskan pertanyaan utama. Gambar bisa disisipkan langsung di antara teks.'}
 								minRows={4}
 								compact
 								onImageUpload={uploadImageInEditor}
@@ -1538,6 +1915,7 @@
 							{/if}
 						</section>
 
+						{#if !isEssay}
 						<section id="composer-options" class="scroll-mt-4 space-y-4 border-t border-slate-200 pt-5">
 							<div class="text-center">
 								<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-slate-500">Opsi & Kunci Jawaban</h3>
@@ -1598,6 +1976,48 @@
 								{/each}
 							</div>
 						</section>
+						{:else}
+						<section id="composer-rubric" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+							<div class="flex flex-wrap items-center justify-between gap-2">
+								<div>
+									<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">{isAdvanceMode ? 'Rubrik Penilaian' : 'Pedoman Jawaban'}</h3>
+									<p class="mt-0.5 text-xs text-slate-500">{isAdvanceMode ? 'Kriteria koreksi, rentang skor, dan catatan penilai.' : 'Panduan singkat agar guru mudah mengoreksi jawaban.'}</p>
+								</div>
+								<button type="button" onclick={() => (focusedEditor = 'rubric')} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
+							</div>
+							<LegacyRichTextEditor
+								bind:value={fRubric}
+								id="soal-rubric"
+								placeholder={isAdvanceMode ? 'Tuliskan rubrik lengkap. Contoh: ketepatan konsep 40%, langkah/alasan 40%, bahasa/sistematika 20%.' : 'Tuliskan pedoman jawaban atau poin penting yang harus ada pada jawaban siswa.'}
+								minRows={isAdvanceMode ? 4 : 3}
+								compact
+								onImageUpload={uploadImageInEditor}
+							/>
+							{#if !readinessChecks.rubric}
+								<p class="text-[10px] font-semibold text-red-500">Pedoman/rubrik essay wajib diisi.</p>
+							{/if}
+						</section>
+						{/if}
+
+						{#if isAdvanceMode}
+							<section id="composer-explanation" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+								<div class="flex flex-wrap items-center justify-between gap-2">
+									<div>
+										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">{isEssay ? 'Catatan Pembahasan' : 'Pembahasan'}</h3>
+										<p class="mt-0.5 text-xs text-slate-500">{isEssay ? 'Catatan internal untuk guru/reviewer.' : 'Pembahasan yang membantu review dan bank soal.'}</p>
+									</div>
+									<button type="button" onclick={() => (focusedEditor = 'explanation')} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
+								</div>
+								<LegacyRichTextEditor
+									bind:value={fExplanation}
+									id="soal-explanation"
+									placeholder={isEssay ? 'Opsional. Catatan koreksi, contoh jawaban ideal, atau alasan rubrik.' : 'Opsional. Tulis pembahasan atau langkah penyelesaian.'}
+									minRows={3}
+									compact
+									onImageUpload={uploadImageInEditor}
+								/>
+							</section>
+						{/if}
 					</div>
 
 					{#if showInspector || composerMobilePanel === 'preview'}
@@ -1657,6 +2077,30 @@
 									id="soal-stem-focus"
 									placeholder="Tuliskan pertanyaan utama. Gambar bisa disisipkan langsung di antara teks."
 									minRows={10}
+									onImageUpload={uploadImageInEditor}
+								/>
+							{:else if focusedEditor === 'stimulus'}
+								<LegacyRichTextEditor
+									bind:value={fStimulus}
+									id="soal-stimulus-focus"
+									placeholder="Tambahkan stimulus, wacana, data, tabel, atau konteks pendukung."
+									minRows={8}
+									onImageUpload={uploadImageInEditor}
+								/>
+							{:else if focusedEditor === 'rubric'}
+								<LegacyRichTextEditor
+									bind:value={fRubric}
+									id="soal-rubric-focus"
+									placeholder="Tuliskan rubrik atau pedoman jawaban essay."
+									minRows={8}
+									onImageUpload={uploadImageInEditor}
+								/>
+							{:else if focusedEditor === 'explanation'}
+								<LegacyRichTextEditor
+									bind:value={fExplanation}
+									id="soal-explanation-focus"
+									placeholder="Tulis pembahasan atau catatan internal."
+									minRows={8}
 									onImageUpload={uploadImageInEditor}
 								/>
 							{:else if focusedEditor === 'A'}

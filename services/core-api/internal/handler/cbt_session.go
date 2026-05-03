@@ -51,7 +51,7 @@ type cbtSessionService interface {
 	GetProctoringStatus(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error)
 	SetSuspiciousFlag(ctx context.Context, participantID pgtype.UUID, flag bool) error
 	ListUngradedEssays(ctx context.Context, sessionID pgtype.UUID) ([]db.ListUngradedEssaysRow, error)
-	GradeEssay(ctx context.Context, answerID pgtype.UUID, manualScore float64, gradedBy string) error
+	GradeEssay(ctx context.Context, sessionID, answerID pgtype.UUID, manualScore float64, gradedBy string) error
 	RecordAnswer(ctx context.Context, participantID, questionID pgtype.UUID, answer string) error
 	ScoreSession(ctx context.Context, sessionID pgtype.UUID) error
 	ListByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]db.ListCbtExamSessionsByTeacherRow, error)
@@ -912,7 +912,7 @@ func (h *CbtSession) GradeEssay(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "manual_score must be 0–100")
 		return
 	}
-	if err := h.svc.GradeEssay(r.Context(), answerID, body.ManualScore, currentUsername(r)); err != nil {
+	if err := h.svc.GradeEssay(r.Context(), sessionID, answerID, body.ManualScore, currentUsername(r)); err != nil {
 		api.Internal(w, err)
 		return
 	}

@@ -13,6 +13,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import RichContent from '$lib/components/RichContent.svelte';
 	import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 
@@ -56,8 +57,19 @@
 		created_at: string;
 	};
 	type UngradedEssay = {
-		id: string; nis: string; nama: string;
-		question_text: string; answer: string;
+		answer_id: string;
+		participant_id: string;
+		question_id: string;
+		nis: string;
+		nama: string;
+		room_name?: string;
+		question_code: string;
+		question_text: string;
+		stem_html?: string;
+		stimulus_html?: string;
+		rubric_html?: string;
+		points?: unknown;
+		answer: string;
 	};
 	type SessionResultsDetail = {
 		session: SessionInfo;
@@ -144,6 +156,12 @@
 		if (score === null || score === undefined || score === '') return '—';
 		const n = parseFloat(score);
 		return isNaN(n) ? '—' : n.toFixed(1);
+	}
+
+	function fmtEssayPoints(points: unknown) {
+		if (typeof points === 'number') return points.toFixed(points % 1 === 0 ? 0 : 1);
+		if (typeof points === 'string' && points.trim()) return points;
+		return '1';
 	}
 
 	function scoreClass(score: string | null) {
@@ -681,9 +699,9 @@
 				body: JSON.stringify({ manual_score: score }),
 			});
 			await readClientJson<unknown>(res);
-			setOperationState('success', 'Nilai Uraian Tersimpan', 'Koreksi uraian sudah masuk ke sistem. Lanjutkan ke jawaban uraian berikutnya bila masih ada.');
+			setOperationState('success', 'Nilai Uraian Tersimpan', 'Koreksi uraian sudah masuk dan skor peserta sudah disegarkan.');
 			showToast('Nilai berhasil disimpan');
-			await loadEssays();
+			await Promise.all([loadEssays(), refreshSessionDetail()]);
 		} catch (error) {
 			setOperationState('error', 'Nilai Uraian Gagal Disimpan', 'Koreksi belum berhasil tersimpan. Ulangi setelah memastikan skor sudah valid.');
 			showToast(mutationErrorMessage(error, 'Gagal menyimpan nilai'), false);
@@ -1268,45 +1286,68 @@
 			<Card.Root>
 				<Card.Header class="pb-2">
 					<Card.Title class="text-base">Koreksi Jawaban Uraian ({essays.length} belum dinilai)</Card.Title>
+					<p class="text-sm text-slate-500">Nilai 0-100 akan dikalikan proporsional dengan bobot soal di paket.</p>
 				</Card.Header>
-				<Card.Content class="p-0 overflow-x-auto">
-					<Table.Root>
-						<Table.Header>
-							<Table.Row class="bg-green-50">
-								<Table.Head>Siswa</Table.Head>
-								<Table.Head>Pertanyaan</Table.Head>
-								<Table.Head>Jawaban Siswa</Table.Head>
-								<Table.Head class="w-32">Nilai (0-100)</Table.Head>
-								<Table.Head></Table.Head>
-							</Table.Row>
-						</Table.Header>
-						<Table.Body>
-							{#each essays as e (e.id)}
-								<Table.Row>
-									<Table.Cell>
-										<div class="font-medium">{e.nama}</div>
-										<div class="text-xs text-slate-500 font-mono">{e.nis}</div>
-									</Table.Cell>
-									<Table.Cell class="max-w-xs text-sm">{e.question_text}</Table.Cell>
-									<Table.Cell class="max-w-sm">
-										<div class="rounded bg-slate-50 p-2 text-sm border border-slate-200 whitespace-pre-wrap">{e.answer}</div>
-									</Table.Cell>
-									<Table.Cell>
-										<Input type="number" min="0" max="100" bind:value={gradeInput[e.id]} placeholder="0-100" class="w-24 h-8" />
-									</Table.Cell>
-									<Table.Cell>
-										<LoadingButton size="sm" onclick={() => submitGrade(e.id)} loading={gradeBusyId === e.id} disabled={gradeBusyId !== '' && gradeBusyId !== e.id} loadingLabel="Menyimpan...">Simpan</LoadingButton>
-									</Table.Cell>
-								</Table.Row>
-							{:else}
-								<Table.Row>
-									<Table.Cell colspan={5} class="text-center text-slate-400 py-12">
-										Tidak ada jawaban uraian yang perlu dikoreksi.
-									</Table.Cell>
-								</Table.Row>
-							{/each}
-						</Table.Body>
-					</Table.Root>
+				<Card.Content class="space-y-3">
+					{#each essays as e (e.answer_id)}
+						<section class="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_16rem]">
+							<div class="space-y-2">
+								<div class="flex flex-wrap items-center gap-2">
+									<Badge variant="outline">{e.question_code || 'Essay'}</Badge>
+									<Badge variant="outline">Bobot {fmtEssayPoints(e.points)}</Badge>
+								</div>
+								<div>
+									<p class="text-sm font-semibold text-slate-900">{e.nama}</p>
+									<p class="text-xs text-slate-500">{e.nis}{e.room_name ? ` · ${e.room_name}` : ''}</p>
+								</div>
+								{#if e.stimulus_html}
+									<div class="rounded-md border border-slate-100 bg-slate-50 p-2">
+										<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Stimulus</p>
+										<RichContent html={e.stimulus_html} class="prose prose-sm max-w-none text-slate-700" />
+									</div>
+								{/if}
+								<div class="rounded-md border border-slate-100 bg-slate-50 p-2">
+									<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Soal</p>
+									{#if e.stem_html}
+										<RichContent html={e.stem_html} class="prose prose-sm max-w-none text-slate-800" />
+									{:else}
+										<p class="text-sm text-slate-800">{e.question_text}</p>
+									{/if}
+								</div>
+							</div>
+
+							<div class="space-y-2">
+								<p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Jawaban Siswa</p>
+								<div class="min-h-32 whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">{e.answer || '(jawaban kosong)'}</div>
+								{#if e.rubric_html}
+									<div class="rounded-md border border-amber-100 bg-amber-50 p-3">
+										<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">Rubrik / Pedoman</p>
+										<RichContent html={e.rubric_html} class="prose prose-sm max-w-none text-amber-950" />
+									</div>
+								{/if}
+							</div>
+
+							<div class="space-y-2 rounded-md border border-green-100 bg-green-50 p-3">
+								<label for={`essay-score-${e.answer_id}`} class="block text-[10px] font-bold uppercase tracking-wide text-green-800">Nilai Manual</label>
+								<Input id={`essay-score-${e.answer_id}`} type="number" min="0" max="100" bind:value={gradeInput[e.answer_id]} placeholder="0-100" class="h-9 bg-white" />
+								<p class="text-xs text-green-800">0 berarti sudah dikoreksi dengan nilai nol. Kosong berarti belum bisa disimpan.</p>
+								<LoadingButton
+									size="sm"
+									onclick={() => submitGrade(e.answer_id)}
+									loading={gradeBusyId === e.answer_id}
+									disabled={gradeBusyId !== '' && gradeBusyId !== e.answer_id}
+									loadingLabel="Menyimpan..."
+									class="w-full bg-green-700 text-white hover:bg-green-800"
+								>
+									Simpan Nilai
+								</LoadingButton>
+							</div>
+						</section>
+					{:else}
+						<div class="rounded-lg border border-dashed border-slate-200 py-12 text-center text-sm text-slate-400">
+							Tidak ada jawaban uraian yang perlu dikoreksi.
+						</div>
+					{/each}
 				</Card.Content>
 			</Card.Root>
 		{/if}
