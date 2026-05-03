@@ -142,6 +142,14 @@ void main() {
       expect(restored?.examToken, 'token-1');
       expect(restored?.answers, {'q1': 'A'});
       expect(restored?.pendingAnswers, {'q2': 'B'});
+      expect(
+        metadataStore.values['exam_active_snapshot'],
+        isNot(contains('exam_token')),
+      );
+      expect(
+        secureStore.values['exam_active_snapshot_secure'],
+        contains('token-1'),
+      );
     });
   });
 }

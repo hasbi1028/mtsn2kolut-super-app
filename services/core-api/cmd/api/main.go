@@ -273,12 +273,12 @@ func main() {
 		r.With(requireAdmin).Post("/api/cbt/packages", packageH.Create)
 		r.With(requireAdmin).Delete("/api/cbt/packages/{id}", packageH.Delete)
 
-		// CBT Events (kegiatan ujian) — admin manages, guru reads
+		// CBT Events (kegiatan ujian) — admin manages, guru reads event metadata only.
 		r.With(requireCbt).Get("/api/cbt/events", eventH.List)
 		r.With(requireAdmin).Post("/api/cbt/events", eventH.Create)
 		r.With(requireCbt).Get("/api/cbt/events/{id}", eventH.Get)
-		r.With(requireCbt).Get("/api/cbt/events/{id}/results", eventH.GetResults)
-		r.With(requireCbt).Get("/api/cbt/events/{id}/exam-cards", eventH.GetExamCards)
+		r.With(requireAdmin).Get("/api/cbt/events/{id}/results", eventH.GetResults)
+		r.With(requireAdmin).Get("/api/cbt/events/{id}/exam-cards", eventH.GetExamCards)
 		r.With(requireAdmin).Put("/api/cbt/events/{id}", eventH.Update)
 		r.With(requireAdmin).Patch("/api/cbt/events/{id}/status", eventH.UpdateStatus)
 		r.With(requireAdmin).Delete("/api/cbt/events/{id}", eventH.Delete)

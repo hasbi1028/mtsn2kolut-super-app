@@ -65,7 +65,7 @@ func (h *CbtEvent) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtEvent) GetResults(w http.ResponseWriter, r *http.Request) {
-	if !cbtAccessAllowed(r) {
+	if !adminAccessAllowed(r) {
 		api.Forbidden(w)
 		return
 	}
@@ -83,7 +83,7 @@ func (h *CbtEvent) GetResults(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtEvent) GetExamCards(w http.ResponseWriter, r *http.Request) {
-	if !cbtAccessAllowed(r) {
+	if !adminAccessAllowed(r) {
 		api.Forbidden(w)
 		return
 	}

@@ -14,10 +14,14 @@ class ExamApiException implements Exception {
 }
 
 class ExamApiClient {
-  ExamApiClient({required this.baseUrl, HttpClient? httpClient})
-    : _httpClient = httpClient ?? HttpClient();
+  ExamApiClient({
+    required this.baseUrl,
+    this.deviceFingerprint,
+    HttpClient? httpClient,
+  }) : _httpClient = httpClient ?? HttpClient();
 
   final String baseUrl;
+  final String? deviceFingerprint;
   final HttpClient _httpClient;
 
   Future<ExamLoginPayload> login({
@@ -101,6 +105,10 @@ class ExamApiClient {
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       if (examToken != null && examToken.isNotEmpty) {
         request.headers.set('X-Exam-Token', examToken);
+      }
+      final boundDevice = deviceFingerprint?.trim() ?? '';
+      if (examToken != null && examToken.isNotEmpty && boundDevice.isNotEmpty) {
+        request.headers.set('X-Device-Fingerprint', boundDevice);
       }
       if (body != null) {
         request.write(jsonEncode(body));

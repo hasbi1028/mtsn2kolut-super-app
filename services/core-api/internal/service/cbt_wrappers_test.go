@@ -354,6 +354,10 @@ func TestCreateCbtPackageHelperValidatesQuestionsAndPositions(t *testing.T) {
 		RandomizeQuestions: true,
 		IsActive:           true,
 		QuestionIDs:        []pgtype.UUID{firstQuestionID, secondQuestionID},
+		QuestionWeights: map[string]int32{
+			pgUUIDString(firstQuestionID):  2,
+			pgUUIDString(secondQuestionID): 5,
+		},
 	})
 	if err != nil {
 		t.Fatalf("createCbtPackage() error = %v", err)
@@ -364,7 +368,8 @@ func TestCreateCbtPackageHelperValidatesQuestionsAndPositions(t *testing.T) {
 	if len(store.addArgs) != 2 {
 		t.Fatalf("AddCbtPackageQuestion calls = %d, want 2", len(store.addArgs))
 	}
-	if store.addArgs[0].QuestionID != firstQuestionID || store.addArgs[0].Position != 1 || store.addArgs[1].QuestionID != secondQuestionID || store.addArgs[1].Position != 2 {
+	if store.addArgs[0].QuestionID != firstQuestionID || store.addArgs[0].Position != 1 || store.addArgs[0].Points != 2 ||
+		store.addArgs[1].QuestionID != secondQuestionID || store.addArgs[1].Position != 2 || store.addArgs[1].Points != 5 {
 		t.Fatalf("AddCbtPackageQuestion args = %+v, want ordered positions", store.addArgs)
 	}
 }
@@ -386,11 +391,16 @@ func TestCreateCbtPackageHelperPropagatesStoreErrors(t *testing.T) {
 		{name: "create error", store: &fakeCbtPackageStore{createErr: errors.New("create failed")}, wantErr: "create failed"},
 		{name: "question error", store: &fakeCbtPackageStore{questionErr: errors.New("question failed")}, wantErr: "question failed"},
 		{name: "subject mismatch", store: &fakeCbtPackageStore{questionRow: db.GetCbtQuestionRow{ID: questionID, SubjectID: documentCycleTestUUID(210)}}, wantErr: "semua soal harus dari mapel yang sama"},
+		{name: "invalid weight", store: &fakeCbtPackageStore{}, wantErr: "bobot soal harus 1-100"},
 		{name: "add error", store: &fakeCbtPackageStore{addErr: errors.New("add failed")}, wantErr: "add failed"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := createCbtPackage(context.Background(), tt.store, baseInput)
+			input := baseInput
+			if tt.name == "invalid weight" {
+				input.QuestionWeights = map[string]int32{pgUUIDString(questionID): 0}
+			}
+			_, err := createCbtPackage(context.Background(), tt.store, input)
 			if err == nil || err.Error() != tt.wantErr {
 				t.Fatalf("createCbtPackage() error = %v, want %q", err, tt.wantErr)
 			}
@@ -399,91 +409,94 @@ func TestCreateCbtPackageHelperPropagatesStoreErrors(t *testing.T) {
 }
 
 type fakeCbtSessionStore struct {
-	listRows              []db.ListCbtExamSessionsRow
-	listErr               error
-	getID                 pgtype.UUID
-	sessionRow            db.GetCbtExamSessionRow
-	packageQualityID      pgtype.UUID
-	packageQualityRow     db.GetCbtPackageQuestionQualityRow
-	packageQualityErr     error
-	createArg             db.CreateCbtExamSessionParams
-	updateStatusArg       db.UpdateCbtExamSessionStatusParams
-	updateScheduleArg     db.UpdateCbtExamSessionScheduleParams
-	auditArg              db.ListEntityAuditLogsParams
-	auditRows             []db.ListEntityAuditLogsRow
-	auditErr              error
-	deleteID              pgtype.UUID
-	participantRows       []db.ListCbtExamParticipantsRow
-	participantsErr       error
-	enrollClassArg        db.EnrollClassToSessionParams
-	enrollGradeArg        db.EnrollGradeToSessionParams
-	enrollSchoolID        pgtype.UUID
-	generateID            pgtype.UUID
-	regenerateID          pgtype.UUID
-	roomRows              []db.ListCbtExamRoomsRow
-	roomsErr              error
-	createRoomArg         db.CreateCbtExamRoomParams
-	schoolRoomRow         db.SchoolRoom
-	roomProctorRows       []db.ListCbtRoomProctorsRow
-	roomDashboardRow      db.GetCbtRoomProctorDashboardRow
-	roomHandoverRow       db.GetCbtRoomHandoverRow
-	roomHandoverID        pgtype.UUID
-	operationalRecapID    pgtype.UUID
-	operationalRecapRow   db.GetCbtSessionOperationalRecapRow
-	operationalRoomRows   []db.ListCbtSessionRoomOperationalRecapRow
-	operationalRoomID     pgtype.UUID
-	saveHandoverArg       db.UpsertCbtRoomHandoverParams
-	saveHandoverErr       error
-	lockHandoverArg       db.LockCbtRoomHandoverParams
-	lockHandoverErr       error
-	proctorRoomRows       []db.ListCbtProctorRoomsRow
-	proctorRoomArg        db.ListCbtProctorRoomsParams
-	proctorRoomErr        error
-	roomReadinessRow      db.GetCbtSessionRoomReadinessRow
-	roomReadinessID       pgtype.UUID
-	roomProctorArg        db.HasSessionRoomProctorParams
-	roomProctor           bool
-	roomParticipantArg    db.HasSessionRoomParticipantParams
-	roomParticipant       bool
-	deleteRoomID          pgtype.UUID
-	clearRoomID           pgtype.UUID
-	clearRoomErr          error
-	assignRoomArgs        []db.AssignParticipantRoomParams
-	assignRoomErr         error
-	assignSeatArgs        []db.AssignParticipantSeatParams
-	byRoomRows            []db.ListParticipantsByRoomRow
-	byRoomErr             error
-	proctorRows           []db.GetSessionProctoringStatusRow
-	proctorStatusArg      db.GetSessionProctoringStatusParams
-	proctorErr            error
-	flagArg               db.SetParticipantSuspiciousFlagParams
-	gradeArg              db.GradeStudentEssayParams
-	ungradedRows          []db.ListUngradedEssaysRow
-	ungradedErr           error
-	answerArg             db.UpsertStudentAnswerParams
-	teacherRows           []db.ListCbtExamSessionsByTeacherRow
-	teacherRowsErr        error
-	teacherID             pgtype.UUID
-	resultsTeacherArg     db.GetSessionResultsByTeacherParams
-	resultsTeacherErr     error
-	teacherAccess         bool
-	teacherAccessArg      db.GetSessionTeacherAccessParams
-	sessionParticipantArg db.HasSessionParticipantParams
-	sessionParticipant    bool
-	sessionRoomArg        db.HasSessionRoomParams
-	sessionRoom           bool
-	sessionAnswerArg      db.HasSessionAnswerParams
-	sessionAnswer         bool
-	resultsRows           []db.GetSessionResultsRow
-	resultsErr            error
-	resultsID             pgtype.UUID
-	answersRows           []db.GetParticipantAnswersRow
-	answersErr            error
-	answersID             pgtype.UUID
-	correctnessID         pgtype.UUID
-	correctnessErr        error
-	scoresID              pgtype.UUID
-	scoresErr             error
+	listRows               []db.ListCbtExamSessionsRow
+	listErr                error
+	getID                  pgtype.UUID
+	sessionRow             db.GetCbtExamSessionRow
+	packageQualityID       pgtype.UUID
+	packageQualityRow      db.GetCbtPackageQuestionQualityRow
+	packageQualityErr      error
+	createArg              db.CreateCbtExamSessionParams
+	updateStatusArg        db.UpdateCbtExamSessionStatusParams
+	updateScheduleArg      db.UpdateCbtExamSessionScheduleParams
+	auditArg               db.ListEntityAuditLogsParams
+	auditRows              []db.ListEntityAuditLogsRow
+	auditErr               error
+	deleteID               pgtype.UUID
+	participantRows        []db.ListCbtExamParticipantsRow
+	participantsErr        error
+	enrollClassArg         db.EnrollClassToSessionParams
+	enrollGradeArg         db.EnrollGradeToSessionParams
+	enrollSchoolID         pgtype.UUID
+	generateID             pgtype.UUID
+	regenerateID           pgtype.UUID
+	roomRows               []db.ListCbtExamRoomsRow
+	roomsErr               error
+	createRoomArg          db.CreateCbtExamRoomParams
+	schoolRoomRow          db.SchoolRoom
+	roomProctorRows        []db.ListCbtRoomProctorsRow
+	roomDashboardRow       db.GetCbtRoomProctorDashboardRow
+	roomHandoverRow        db.GetCbtRoomHandoverRow
+	roomHandoverID         pgtype.UUID
+	operationalRecapID     pgtype.UUID
+	operationalRecapRow    db.GetCbtSessionOperationalRecapRow
+	operationalRoomRows    []db.ListCbtSessionRoomOperationalRecapRow
+	operationalRoomID      pgtype.UUID
+	saveHandoverArg        db.UpsertCbtRoomHandoverParams
+	saveHandoverErr        error
+	lockHandoverArg        db.LockCbtRoomHandoverParams
+	lockHandoverErr        error
+	proctorRoomRows        []db.ListCbtProctorRoomsRow
+	proctorRoomArg         db.ListCbtProctorRoomsParams
+	proctorRoomErr         error
+	roomReadinessRow       db.GetCbtSessionRoomReadinessRow
+	roomReadinessID        pgtype.UUID
+	roomProctorArg         db.HasSessionRoomProctorParams
+	roomProctor            bool
+	roomParticipantArg     db.HasSessionRoomParticipantParams
+	roomParticipant        bool
+	deleteRoomID           pgtype.UUID
+	clearRoomID            pgtype.UUID
+	clearRoomErr           error
+	assignRoomArgs         []db.AssignParticipantRoomParams
+	assignRoomErr          error
+	assignSeatArgs         []db.AssignParticipantSeatParams
+	byRoomRows             []db.ListParticipantsByRoomRow
+	byRoomErr              error
+	proctorRows            []db.GetSessionProctoringStatusRow
+	proctorStatusArg       db.GetSessionProctoringStatusParams
+	proctorErr             error
+	flagArg                db.SetParticipantSuspiciousFlagParams
+	gradeArg               db.GradeStudentEssayParams
+	ungradedRows           []db.ListUngradedEssaysRow
+	ungradedErr            error
+	answerArg              db.UpsertStudentAnswerParams
+	teacherRows            []db.ListCbtExamSessionsByTeacherRow
+	teacherRowsErr         error
+	teacherID              pgtype.UUID
+	resultsTeacherArg      db.GetSessionResultsByTeacherParams
+	resultsTeacherErr      error
+	teacherAccess          bool
+	teacherAccessArg       db.GetSessionTeacherAccessParams
+	sessionParticipantArg  db.HasSessionParticipantParams
+	sessionParticipant     bool
+	sessionRoomArg         db.HasSessionRoomParams
+	sessionRoom            bool
+	sessionAnswerArg       db.HasSessionAnswerParams
+	sessionAnswer          bool
+	questionScopeArg       db.QuestionBelongsToParticipantPackageParams
+	questionOutsidePackage bool
+	questionScopeErr       error
+	resultsRows            []db.GetSessionResultsRow
+	resultsErr             error
+	resultsID              pgtype.UUID
+	answersRows            []db.GetParticipantAnswersRow
+	answersErr             error
+	answersID              pgtype.UUID
+	correctnessID          pgtype.UUID
+	correctnessErr         error
+	scoresID               pgtype.UUID
+	scoresErr              error
 }
 
 func (f *fakeCbtSessionStore) ListCbtExamSessions(ctx context.Context) ([]db.ListCbtExamSessionsRow, error) {
@@ -495,7 +508,7 @@ func (f *fakeCbtSessionStore) GetCbtExamSession(ctx context.Context, id pgtype.U
 	if f.sessionRow.ID.Valid {
 		return f.sessionRow, nil
 	}
-	return db.GetCbtExamSessionRow{ID: id, PackageID: documentCycleTestUUID(229), Title: "Sesi"}, nil
+	return db.GetCbtExamSessionRow{ID: id, PackageID: documentCycleTestUUID(229), Title: "Sesi", Status: db.CbtSessionStatusEnumScheduled}, nil
 }
 
 func (f *fakeCbtSessionStore) GetCbtPackageQuestionQuality(ctx context.Context, id pgtype.UUID) (db.GetCbtPackageQuestionQualityRow, error) {
@@ -715,6 +728,14 @@ func (f *fakeCbtSessionStore) UpsertStudentAnswer(ctx context.Context, arg db.Up
 	return nil
 }
 
+func (f *fakeCbtSessionStore) QuestionBelongsToParticipantPackage(ctx context.Context, arg db.QuestionBelongsToParticipantPackageParams) (bool, error) {
+	f.questionScopeArg = arg
+	if f.questionScopeErr != nil {
+		return false, f.questionScopeErr
+	}
+	return !f.questionOutsidePackage, nil
+}
+
 func (f *fakeCbtSessionStore) ListCbtExamSessionsByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]db.ListCbtExamSessionsByTeacherRow, error) {
 	f.teacherID = teacherEmployeeID
 	return f.teacherRows, f.teacherRowsErr
@@ -873,6 +894,7 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	if err := svc.EnrollSchool(context.Background(), sessionID); err != nil || store.enrollSchoolID != sessionID {
 		t.Fatalf("EnrollSchool() = %v id=%v, want %v", err, store.enrollSchoolID, sessionID)
 	}
+	store.sessionRow = db.GetCbtExamSessionRow{ID: sessionID, PackageID: packageID, Status: db.CbtSessionStatusEnumScheduled}
 	if err := svc.GenerateTokens(context.Background(), sessionID); err != nil || store.generateID != sessionID {
 		t.Fatalf("GenerateTokens() = %v id=%v, want %v", err, store.generateID, sessionID)
 	}
@@ -980,8 +1002,13 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	if rows, err := svc.ListUngradedEssays(context.Background(), sessionID); err != nil || len(rows) != 0 {
 		t.Fatalf("ListUngradedEssays(nil rows) = %d rows/%v, want empty nil", len(rows), err)
 	}
-	if err := svc.RecordAnswer(context.Background(), participantID, questionID, "A"); err != nil || store.answerArg.ParticipantID != participantID || store.answerArg.QuestionID != questionID || store.answerArg.Answer != "A" {
-		t.Fatalf("RecordAnswer() = %v arg=%+v, want answer", err, store.answerArg)
+	if err := svc.RecordAnswer(context.Background(), participantID, questionID, "A"); err != nil ||
+		store.questionScopeArg.ID != participantID || store.questionScopeArg.QuestionID != questionID ||
+		store.answerArg.ParticipantID != participantID || store.answerArg.QuestionID != questionID || store.answerArg.Answer != "A" {
+		t.Fatalf("RecordAnswer() = %v scope=%+v arg=%+v, want scoped answer", err, store.questionScopeArg, store.answerArg)
+	}
+	if err := (&CbtSession{q: &fakeCbtSessionStore{questionOutsidePackage: true}}).RecordAnswer(context.Background(), participantID, questionID, "A"); !errors.Is(err, ErrExamQuestionScope) {
+		t.Fatalf("RecordAnswer(outside package) = %v, want ErrExamQuestionScope", err)
 	}
 	if rows, err := svc.ListByTeacher(context.Background(), teacherID); err != nil || len(rows) != 1 || store.teacherID != teacherID {
 		t.Fatalf("ListByTeacher() = %d rows/%v id=%v, want teacher rows", len(rows), err, store.teacherID)

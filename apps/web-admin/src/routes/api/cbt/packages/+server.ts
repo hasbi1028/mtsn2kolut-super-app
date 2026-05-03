@@ -14,7 +14,7 @@ export const GET = async (event: RequestEvent) => {
 export const POST = async (event: RequestEvent) => {
 	try {
 		const body = await readRequestJson<Record<string, unknown>>(event.request);
-		const { subject_id, title, description, duration_minutes, randomize_questions, is_active, question_ids } = body;
+		const { subject_id, title, description, duration_minutes, randomize_questions, is_active, question_ids, question_weights } = body;
 		if (!subject_id || !title || !duration_minutes) {
 			return json({ error: 'subject_id, title, duration_minutes wajib diisi' }, { status: 400 });
 		}
@@ -24,6 +24,7 @@ export const POST = async (event: RequestEvent) => {
 			randomize_questions: randomize_questions ?? false,
 			is_active: is_active ?? true,
 			question_ids: question_ids ?? [],
+			question_weights: question_weights ?? {},
 		});
 		return json(data, { status: 201 });
 	} catch (e) {

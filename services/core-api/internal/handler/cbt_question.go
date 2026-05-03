@@ -114,8 +114,9 @@ func (h *CbtQuestion) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items := make([]map[string]any, 0, len(rows))
+	includeAnswerKey := adminAccessAllowed(r)
 	for _, row := range rows {
-		items = append(items, serializeQuestionListRow(row))
+		items = append(items, serializeQuestionListRow(row, includeAnswerKey))
 	}
 	api.OK(w, map[string]any{
 		"items": items,
@@ -718,8 +719,12 @@ func cbtAuditAuthoringEvent(audit cbtAuthoringAuditWriter, ctx context.Context, 
 	})
 }
 
-func serializeQuestionListRow(row db.ListCbtQuestionsFilteredRow) map[string]any {
+func serializeQuestionListRow(row db.ListCbtQuestionsFilteredRow, includeAnswerKey bool) map[string]any {
 	suggestedMode := serviceAuthoringModeFromRow(row.QuestionType, row.StemLatex, row.StimulusLatex, row.AcademicPhase, row.CpRef, row.TpRef, row.KdRef, row.IndicatorRef, row.MaterialTopic, row.CognitiveLevel, row.HotsFlag, row.WorkflowStatus, row.WriterNotes, row.ReviewNotes, row.RubricHtml)
+	answerKey := ""
+	if includeAnswerKey {
+		answerKey = row.AnswerKey
+	}
 	return map[string]any{
 		"id":                pgUUIDString(row.ID),
 		"authoring_mode":    suggestedMode,
@@ -736,7 +741,7 @@ func serializeQuestionListRow(row db.ListCbtQuestionsFilteredRow) map[string]any
 		"option_c":          row.OptionC,
 		"option_d":          row.OptionD,
 		"option_e":          row.OptionE,
-		"answer_key":        row.AnswerKey,
+		"answer_key":        answerKey,
 		"explanation":       row.Explanation,
 		"difficulty":        row.Difficulty,
 		"status":            row.Status,

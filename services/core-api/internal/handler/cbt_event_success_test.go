@@ -152,6 +152,18 @@ func TestCbtEventReadHandlersForwardIDs(t *testing.T) {
 	if fake.cardsID != eventID {
 		t.Fatalf("GetExamCards id = %v, want %v", fake.cardsID, eventID)
 	}
+
+	rec = httptest.NewRecorder()
+	h.GetResults(rec, withRouteParam(guruRequest(http.MethodGet, "/api/cbt/events/"+eventID.String()+"/results", ""), "id", eventID.String()))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("GetResults(guru) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.GetExamCards(rec, withRouteParam(guruRequest(http.MethodGet, "/api/cbt/events/"+eventID.String()+"/exam-cards", ""), "id", eventID.String()))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("GetExamCards(guru) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
 }
 
 func TestCbtEventMutationHandlersForwardPayloads(t *testing.T) {

@@ -637,10 +637,10 @@
 								</Table.Header>
 								<Table.Body>
 									{#each participants as row (row.participant_id)}
-										<Table.Row class={row.suspicious_flag ? 'bg-red-50' : row.app_switch_count >= 3 ? 'bg-amber-50/60' : ''}>
+											<Table.Row class={row.suspicious_flag ? 'bg-red-50' : row.app_switch_count >= 3 ? 'bg-amber-50/60' : ''}>
 											<Table.Cell>
 												<div class="font-medium text-slate-900">{row.nama}</div>
-												<div class="text-xs text-slate-500">{row.nis} · token {row.token}</div>
+												<div class="text-xs text-slate-500">{row.nis}</div>
 											</Table.Cell>
 											<Table.Cell class="text-center font-mono">{row.seat_no ?? '—'}</Table.Cell>
 											<Table.Cell>

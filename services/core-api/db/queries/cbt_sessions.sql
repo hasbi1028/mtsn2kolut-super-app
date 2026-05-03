@@ -109,7 +109,8 @@ SELECT
   cs.scheduled_start, cs.scheduled_end,
   cs.package_id,
   p.title AS package_title,
-  p.duration_minutes
+  p.duration_minutes,
+  p.randomize_questions
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
 JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
@@ -118,14 +119,14 @@ WHERE ep.token = $1;
 
 -- name: EnrollClassToSession :exec
 INSERT INTO cbt_exam_participants (session_id, student_id, token)
-SELECT $1, s.id, encode(gen_random_bytes(4), 'hex')
+SELECT $1, s.id, encode(gen_random_bytes(16), 'hex')
 FROM students s
 WHERE s.class_id = $2 AND s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING;
 
 -- name: EnrollGradeToSession :exec
 INSERT INTO cbt_exam_participants (session_id, student_id, token)
-SELECT $1, s.id, encode(gen_random_bytes(4), 'hex')
+SELECT $1, s.id, encode(gen_random_bytes(16), 'hex')
 FROM students s
 JOIN school_classes c ON c.id = s.class_id
 WHERE c.level = $2 AND s.is_active = TRUE
@@ -133,28 +134,30 @@ ON CONFLICT (session_id, student_id) DO NOTHING;
 
 -- name: EnrollSchoolToSession :exec
 INSERT INTO cbt_exam_participants (session_id, student_id, token)
-SELECT $1, s.id, encode(gen_random_bytes(4), 'hex')
+SELECT $1, s.id, encode(gen_random_bytes(16), 'hex')
 FROM students s
 WHERE s.is_active = TRUE
 ON CONFLICT (session_id, student_id) DO NOTHING;
 
 -- name: GenerateTokensForSession :exec
 UPDATE cbt_exam_participants
-SET token = encode(gen_random_bytes(4), 'hex')
+SET token = encode(gen_random_bytes(16), 'hex')
 WHERE session_id = $1 AND (token = '' OR token IS NULL);
 
 -- name: RegenerateParticipantToken :one
 UPDATE cbt_exam_participants
-SET token = encode(gen_random_bytes(4), 'hex')
-WHERE id = $1
-RETURNING id, token;
+SET token = encode(gen_random_bytes(16), 'hex')
+FROM cbt_exam_sessions s
+WHERE cbt_exam_participants.id = $1
+  AND s.id = cbt_exam_participants.session_id
+  AND s.status IN ('draft', 'scheduled')
+RETURNING cbt_exam_participants.id, cbt_exam_participants.token;
 
 -- name: ResetParticipantRuntimeAccess :exec
 UPDATE cbt_exam_participants
 SET device_fingerprint = NULL,
     login_ip = NULL,
-    last_heartbeat = NULL,
-    question_order = NULL
+    last_heartbeat = NULL
 WHERE id = $1;
 
 -- name: AssignParticipantRoom :exec
@@ -178,13 +181,19 @@ UPDATE cbt_exam_participants
 SET question_order = $2
 WHERE id = $1;
 
--- name: UpdateParticipantLogin :exec
+-- name: UpdateParticipantLogin :one
 UPDATE cbt_exam_participants
 SET device_fingerprint = $2,
     login_ip           = $3,
     joined_at          = COALESCE(joined_at, NOW()),
     last_heartbeat     = NOW()
-WHERE id = $1;
+WHERE id = $1
+  AND (
+    device_fingerprint IS NULL
+    OR device_fingerprint = ''
+    OR device_fingerprint = $2
+  )
+RETURNING id;
 
 -- name: UpdateParticipantHeartbeat :exec
 UPDATE cbt_exam_participants
@@ -207,10 +216,35 @@ SET suspicious_flag = $2
 WHERE id = $1;
 
 -- name: SubmitParticipantExam :one
-UPDATE cbt_exam_participants
-SET submitted_at = NOW()
-WHERE id = $1 AND submitted_at IS NULL
-RETURNING id, submitted_at;
+WITH score_parts AS (
+  SELECT
+    ep.id AS participant_id,
+    COALESCE(SUM(
+      CASE
+        WHEN q.question_type = 'essay' AND sa.manual_score IS NOT NULL THEN (sa.manual_score / 100) * pq.points
+        WHEN q.question_type <> 'essay' AND sa.is_correct IS TRUE THEN pq.points
+        ELSE 0
+      END
+    ), 0)::numeric AS earned_points,
+    COALESCE(SUM(pq.points), 0)::numeric AS total_points
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+  WHERE ep.id = $1
+  GROUP BY ep.id
+)
+UPDATE cbt_exam_participants ep
+SET score = CASE
+      WHEN score_parts.total_points > 0 THEN ROUND((score_parts.earned_points / score_parts.total_points) * 100, 2)
+      ELSE 0
+    END,
+    submitted_at = COALESCE(ep.submitted_at, NOW())
+FROM score_parts
+WHERE ep.id = score_parts.participant_id
+  AND ep.submitted_at IS NULL
+RETURNING ep.id, ep.submitted_at, ep.score;
 
 -- name: InsertParticipantEvent :exec
 INSERT INTO cbt_participant_events (participant_id, event_type, event_data)
@@ -259,12 +293,14 @@ SELECT
   ep.app_switch_count,
   ep.screenshot_attempt,
   ep.suspicious_flag,
-  COUNT(sa.id)::int AS answered_count,
+  COUNT(sa.id) FILTER (WHERE pq.question_id IS NOT NULL)::int AS answered_count,
   ep.score
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
+JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
-LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id
+LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
 WHERE ep.session_id = sqlc.arg(session_id)
   AND (sqlc.arg(room_id)::uuid IS NULL OR ep.room_id = sqlc.arg(room_id)::uuid)
 GROUP BY ep.id, s.nis, s.nama, ep.room_id, r.room_name
@@ -318,6 +354,18 @@ INSERT INTO cbt_student_answers (participant_id, question_id, answer, is_correct
 VALUES ($1, $2, $3, NULL)
 ON CONFLICT (participant_id, question_id)
 DO UPDATE SET answer = EXCLUDED.answer, is_correct = NULL, answered_at = NOW();
+
+-- name: QuestionBelongsToParticipantPackage :one
+SELECT EXISTS(
+  SELECT 1
+  FROM cbt_exam_participants ep
+  JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+  JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE ep.id = $1
+    AND pq.question_id = $2
+    AND q.status = 'published'
+) AS belongs_to_package;
 
 -- name: UpdateAnswerCorrectness :exec
 UPDATE cbt_student_answers sa
@@ -442,12 +490,14 @@ SELECT
   ep.submitted_at, ep.score,
   ep.room_id, ep.seat_no,
   COALESCE(r.room_name, '') AS room_name,
-  COUNT(sa.id)::int                                    AS total_answers,
+  COUNT(sa.id) FILTER (WHERE pq.question_id IS NOT NULL)::int AS total_answers,
   SUM(CASE WHEN sa.is_correct THEN 1 ELSE 0 END)::int AS correct_answers
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
+JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
-LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id
+LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
 WHERE ep.session_id = $1
 GROUP BY ep.id, s.nis, s.nama, s.gender, ep.room_id, ep.seat_no, r.room_name
 ORDER BY ep.score DESC NULLS LAST, s.nama ASC;
@@ -604,7 +654,6 @@ SELECT DISTINCT
   COALESCE(rs.proctor_assignment_count, 0)::int AS proctor_assignment_count
 FROM cbt_exam_sessions s
 JOIN cbt_packages p ON p.id = s.package_id
-JOIN class_subject_assignments csa ON csa.subject_id = p.subject_id
 LEFT JOIN school_classes c ON c.id = s.class_id
 LEFT JOIN (
   SELECT
@@ -631,7 +680,22 @@ LEFT JOIN (
   ) pr ON pr.exam_room_id = r.id
   GROUP BY r.session_id
 ) rs ON rs.session_id = s.id
-WHERE csa.teacher_employee_id = $1
+WHERE EXISTS (
+  SELECT 1
+  FROM class_subject_assignments csa
+  WHERE csa.teacher_employee_id = $1
+    AND csa.subject_id = p.subject_id
+    AND (
+      (s.class_id IS NOT NULL AND csa.class_id = s.class_id)
+      OR EXISTS (
+        SELECT 1
+        FROM cbt_exam_participants ep_scope
+        JOIN students st_scope ON st_scope.id = ep_scope.student_id
+        WHERE ep_scope.session_id = s.id
+          AND st_scope.class_id = csa.class_id
+      )
+    )
+)
 ORDER BY s.scheduled_start DESC;
 
 -- name: GetSessionResultsByTeacher :many
@@ -640,15 +704,22 @@ SELECT
   ep.student_id,
   s.nis, s.nama, s.gender,
   ep.submitted_at, ep.score,
-  COUNT(sa.id)::int AS total_answers,
+  COUNT(sa.id) FILTER (WHERE pq.question_id IS NOT NULL)::int AS total_answers,
   SUM(CASE WHEN sa.is_correct THEN 1 ELSE 0 END)::int AS correct_answers
 FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
 JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
 JOIN cbt_packages pkg ON pkg.id = ses.package_id
-JOIN class_subject_assignments csa ON csa.subject_id = pkg.subject_id
-LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id
-WHERE ep.session_id = $1 AND csa.teacher_employee_id = $2
+LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
+LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+WHERE ep.session_id = $1
+  AND EXISTS (
+    SELECT 1
+    FROM class_subject_assignments csa
+    WHERE csa.subject_id = pkg.subject_id
+      AND csa.teacher_employee_id = $2
+      AND csa.class_id = s.class_id
+  )
 GROUP BY ep.id, s.nis, s.nama, s.gender
 ORDER BY ep.score DESC NULLS LAST, s.nama ASC;
 
@@ -657,7 +728,18 @@ SELECT EXISTS(
   SELECT 1 FROM cbt_exam_sessions s
   JOIN cbt_packages p ON p.id = s.package_id
   JOIN class_subject_assignments csa ON csa.subject_id = p.subject_id
-  WHERE s.id = $1 AND csa.teacher_employee_id = $2
+  WHERE s.id = $1
+    AND csa.teacher_employee_id = $2
+    AND (
+      (s.class_id IS NOT NULL AND csa.class_id = s.class_id)
+      OR EXISTS (
+        SELECT 1
+        FROM cbt_exam_participants ep_scope
+        JOIN students st_scope ON st_scope.id = ep_scope.student_id
+        WHERE ep_scope.session_id = s.id
+          AND st_scope.class_id = csa.class_id
+      )
+    )
 ) AS has_access;
 
 -- name: HasSessionParticipant :one
@@ -690,6 +772,9 @@ SELECT
    q.answer_key,
    sa.answer, sa.is_correct, sa.answered_at
 FROM cbt_student_answers sa
+JOIN cbt_exam_participants ep ON ep.id = sa.participant_id
+JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
+JOIN cbt_package_questions pq ON pq.package_id = ses.package_id AND pq.question_id = sa.question_id
 JOIN cbt_questions q ON q.id = sa.question_id
 WHERE sa.participant_id = $1
-ORDER BY q.code ASC;
+ORDER BY pq.position ASC, q.code ASC;

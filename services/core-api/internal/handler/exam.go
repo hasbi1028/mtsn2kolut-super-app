@@ -57,6 +57,8 @@ func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 			api.Err(w, http.StatusForbidden, "exam session is not active")
 		case service.ErrDeviceMismatch:
 			api.Err(w, http.StatusConflict, "token already bound to another device")
+		case service.ErrDeviceRequired:
+			api.BadRequest(w, "device fingerprint required")
 		default:
 			api.Internal(w, err)
 		}
@@ -143,6 +145,8 @@ func (h *Exam) SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 			api.Err(w, http.StatusConflict, "exam already submitted")
 		case service.ErrExamWindowClosed:
 			api.Err(w, http.StatusForbidden, "exam window has closed")
+		case service.ErrExamQuestionScope:
+			api.Err(w, http.StatusBadRequest, "question is not part of this exam")
 		default:
 			api.Internal(w, err)
 		}
@@ -161,6 +165,8 @@ func (h *Exam) Submit(w http.ResponseWriter, r *http.Request) {
 		switch err {
 		case service.ErrExamAlreadySubmit:
 			api.Err(w, http.StatusConflict, "exam already submitted")
+		case service.ErrExamWindowClosed:
+			api.Err(w, http.StatusForbidden, "exam window has closed")
 		default:
 			api.Internal(w, err)
 		}

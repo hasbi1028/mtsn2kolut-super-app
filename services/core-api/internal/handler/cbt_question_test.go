@@ -328,7 +328,7 @@ func TestCbtQuestionSerializerHelpers(t *testing.T) {
 		Version:        2,
 		AuthorUsername: "guru.mtk",
 	}
-	listMap := serializeQuestionListRow(listRow)
+	listMap := serializeQuestionListRow(listRow, true)
 	if listMap["subject_name"] != "Matematika" || listMap["subject_code"] != "MTK" || listMap["authoring_mode"] != "beginner" {
 		t.Fatalf("serializeQuestionListRow() = %+v, want subject metadata and beginner mode", listMap)
 	}

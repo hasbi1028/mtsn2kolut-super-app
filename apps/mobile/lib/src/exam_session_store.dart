@@ -195,7 +195,9 @@ class ExamSessionStore {
     }
 
     if (_isLegacySnapshot(decodedMetadata)) {
-      return ExamSessionSnapshot.fromJson(decodedMetadata);
+      final snapshot = ExamSessionSnapshot.fromJson(decodedMetadata);
+      await saveSnapshot(snapshot);
+      return snapshot;
     }
 
     final rawSensitive = await _secureStore.read(_snapshotSensitiveKey);

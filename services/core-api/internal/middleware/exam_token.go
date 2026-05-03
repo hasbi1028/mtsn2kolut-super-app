@@ -11,16 +11,19 @@ import (
 
 type examContextKey string
 
-const ExamParticipantKey examContextKey = "exam_participant"
+const (
+	ExamParticipantKey   examContextKey = "exam_participant"
+	DeviceFingerprintHdr string         = "X-Device-Fingerprint"
+)
 
 type ParticipantLookup func(ctx context.Context, token string) (db.GetParticipantByTokenRow, error)
 
-// ExamToken validates the X-Exam-Token header and injects the participant into context.
-// It rejects if the session is not active or the exam has already been submitted.
+// ExamToken validates the X-Exam-Token and device fingerprint headers, then
+// injects the participant into context.
 func ExamToken(lookup ParticipantLookup) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token := r.Header.Get("X-Exam-Token")
+			token := strings.TrimSpace(r.Header.Get("X-Exam-Token"))
 			if token == "" {
 				api.Unauthorized(w)
 				return
@@ -34,10 +37,22 @@ func ExamToken(lookup ParticipantLookup) func(http.Handler) http.Handler {
 				api.Forbidden(w)
 				return
 			}
+			if !examDeviceMatchesRequest(r, p) {
+				api.Err(w, http.StatusConflict, "token already bound to another device")
+				return
+			}
 			ctx := context.WithValue(r.Context(), ExamParticipantKey, p)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func examDeviceMatchesRequest(r *http.Request, p db.GetParticipantByTokenRow) bool {
+	bound := strings.TrimSpace(p.DeviceFingerprint.String)
+	if !p.DeviceFingerprint.Valid || bound == "" {
+		return false
+	}
+	return strings.TrimSpace(r.Header.Get(DeviceFingerprintHdr)) == bound
 }
 
 // ParticipantFromContext retrieves the exam participant injected by ExamToken middleware.

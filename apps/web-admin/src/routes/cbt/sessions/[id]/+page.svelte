@@ -249,6 +249,7 @@
 	let participantRefreshBusy = $state(false);
 	let proctoringRefreshBusy = $state(false);
 	let operationalRefreshBusy = $state(false);
+	let commandCenterBusy = $state(false);
 	let itemAnalysisRefreshBusy = $state(false);
 	let eventRefreshBusy = $state(false);
 	let auditRefreshBusy = $state(false);
@@ -556,6 +557,77 @@
 		return { online, slow, offline, submitted, suspicious, appSwitches, screenshots };
 	});
 
+	let commandCenterIssues = $derived.by(() => {
+		const issues: { label: string; tone: 'danger' | 'warning' | 'info'; tab: ActiveTab }[] = [];
+		if (!roomReadiness) {
+			issues.push({ label: 'Kesiapan ruang belum dimuat', tone: 'info', tab: 'ruangan' });
+		} else {
+			if (roomReadiness.participant_count === 0) issues.push({ label: 'Belum ada peserta', tone: 'warning', tab: 'peserta' });
+			if (roomReadiness.total_capacity < roomReadiness.participant_count) issues.push({ label: 'Kapasitas ruang kurang', tone: 'danger', tab: 'ruangan' });
+			if (roomReadiness.unassigned_participant_count > 0) issues.push({ label: `${roomReadiness.unassigned_participant_count} peserta belum punya ruang`, tone: 'warning', tab: 'ruangan' });
+			if (roomReadiness.missing_seat_count > 0) issues.push({ label: `${roomReadiness.missing_seat_count} nomor meja kosong`, tone: 'warning', tab: 'ruangan' });
+			if (roomReadiness.rooms_without_proctor > 0) issues.push({ label: `${roomReadiness.rooms_without_proctor} ruang belum ada pengawas`, tone: 'danger', tab: 'ruangan' });
+		}
+		if (operationalRecap) {
+			if (operationalRecap.incident_room_count > 0) issues.push({ label: `${operationalRecap.incident_room_count} ruang punya catatan insiden`, tone: 'warning', tab: 'operasional' });
+			if (operationalRecap.handover_missing_count > 0) issues.push({ label: `${operationalRecap.handover_missing_count} handover belum dibuat`, tone: 'warning', tab: 'operasional' });
+			if (operationalRecap.suspicious_count > 0) issues.push({ label: `${operationalRecap.suspicious_count} peserta perlu atensi`, tone: 'danger', tab: 'proctoring' });
+		}
+		if (proctoringStats.slow + proctoringStats.offline > 0) issues.push({ label: `${proctoringStats.slow + proctoringStats.offline} koneksi lambat/offline`, tone: 'warning', tab: 'proctoring' });
+		return issues;
+	});
+
+	let commandCenterMetrics = $derived.by(() => [
+		{
+			label: 'Ruang',
+			value: roomReadiness ? `${roomReadiness.room_count}` : '—',
+			helper: roomReadiness ? `${roomReadiness.total_capacity} kursi / ${roomReadiness.participant_count} peserta` : 'Belum dimuat',
+			tab: 'ruangan' as ActiveTab,
+		},
+		{
+			label: 'Pengawas',
+			value: roomReadiness ? `${Math.max(roomReadiness.room_count - roomReadiness.rooms_without_proctor, 0)}/${roomReadiness.room_count}` : '—',
+			helper: roomReadiness ? `${roomReadiness.rooms_without_proctor} ruang kosong` : 'Belum dimuat',
+			tab: 'ruangan' as ActiveTab,
+		},
+		{
+			label: 'Submit',
+			value: operationalRecap ? `${operationalRecap.submitted_count}/${operationalRecap.participant_count}` : `${stats.submitted}/${stats.total}`,
+			helper: operationalRecap ? `${operationalRecap.joined_count} login, ${operationalRecap.no_show_count} belum hadir` : 'Dari hasil ujian',
+			tab: 'hasil' as ActiveTab,
+		},
+		{
+			label: 'Koneksi',
+			value: `${proctoringStats.online}`,
+			helper: `${proctoringStats.slow} lambat, ${proctoringStats.offline} offline`,
+			tab: 'proctoring' as ActiveTab,
+		},
+		{
+			label: 'Atensi',
+			value: `${(operationalRecap?.suspicious_count ?? proctoringStats.suspicious) + (operationalRecap?.incident_room_count ?? 0)}`,
+			helper: operationalRecap ? `${operationalRecap.force_submit_count} paksa submit, ${operationalRecap.reset_access_count} reset akses` : 'Dari proctoring aktif',
+			tab: 'operasional' as ActiveTab,
+		},
+		{
+			label: 'Handover',
+			value: operationalRecap ? `${operationalRecap.handover_locked_count}/${operationalRecap.room_count}` : '—',
+			helper: operationalRecap ? `${operationalRecap.handover_missing_count} belum dibuat` : 'Belum dimuat',
+			tab: 'operasional' as ActiveTab,
+		},
+	]);
+
+	function commandCenterClass() {
+		if (commandCenterIssues.some((issue) => issue.tone === 'danger')) return 'border-red-200 bg-red-50/60';
+		if (commandCenterIssues.some((issue) => issue.tone === 'warning')) return 'border-amber-200 bg-amber-50/70';
+		return 'border-emerald-200 bg-emerald-50/60';
+	}
+
+	function commandIssueClass(tone: 'danger' | 'warning' | 'info') {
+		if (tone === 'danger') return 'border-red-200 bg-white text-red-700';
+		if (tone === 'warning') return 'border-amber-200 bg-white text-amber-700';
+		return 'border-slate-200 bg-white text-slate-600';
+	}
+
 	let itemAnalysisStats = $derived.by(() => {
 		const submittedRows = itemAnalysis.filter((row) => row.submitted_count > 0);
 		const reviewRows = itemAnalysis.filter((row) => row.recommendation_tone === 'warning' || row.recommendation_tone === 'danger');
@@ -820,6 +892,18 @@
 		}
 	}
 
+	async function loadCommandCenterSnapshot() {
+		const results = await Promise.allSettled([
+			loadRoomReadiness(),
+			loadOperationalRecap(),
+			loadProctoring(),
+		]);
+		const failed = results.find((result) => result.status === 'rejected');
+		if (failed && !roomReadiness && !operationalRecap && proctoring.length === 0) {
+			throw failed.reason;
+		}
+	}
+
 	async function loadItemAnalysis() {
 		const requestId = ++itemAnalysisRequestId;
 		try {
@@ -913,6 +997,17 @@
 			toast.error(detailErrorMessage(error));
 		} finally {
 			operationalRefreshBusy = false;
+		}
+	}
+
+	async function refreshCommandCenter() {
+		commandCenterBusy = true;
+		try {
+			await loadCommandCenterSnapshot();
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			commandCenterBusy = false;
 		}
 	}
 
@@ -1069,10 +1164,6 @@
 		} finally {
 			regenBusyId = '';
 		}
-	}
-
-	function copyToken(token: string) {
-		navigator.clipboard.writeText(token).then(() => showToast('Token disalin'));
 	}
 
 	async function createRoom() {
@@ -1384,6 +1475,7 @@
 
 	onMount(() => {
 		void loadInitial();
+		void loadCommandCenterSnapshot().catch((error) => console.warn('CBT command center snapshot failed', error));
 		const requestedTab = tabFromQuery(page.url.searchParams.get('tab'));
 		if (requestedTab && requestedTab !== activeTab) {
 			void switchTab(requestedTab);
@@ -1506,6 +1598,53 @@
 			{/each}
 		</div>
 
+		<Card.Root class={commandCenterClass()}>
+			<Card.Header class="flex flex-row items-start justify-between gap-3 pb-2">
+				<div>
+					<Card.Title class="text-base">Command Center Ujian</Card.Title>
+					<p class="mt-1 text-xs text-slate-600">
+						Snapshot ringkas untuk operator: ruang, pengawas, submit, koneksi, atensi, dan handover.
+					</p>
+				</div>
+				<LoadingButton variant="outline" size="sm" loading={commandCenterBusy} loadingLabel="Memuat..." onclick={() => void refreshCommandCenter()}>
+					Refresh
+				</LoadingButton>
+			</Card.Header>
+			<Card.Content class="space-y-3">
+				<div class="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+					{#each commandCenterMetrics as metric (metric.label)}
+						<button
+							type="button"
+							class="rounded-md border border-white/80 bg-white px-3 py-2 text-left shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50"
+							onclick={() => switchTab(metric.tab)}
+						>
+							<span class="block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{metric.label}</span>
+							<span class="mt-1 block text-xl font-bold text-[oklch(0.38_0.13_145)]">{metric.value}</span>
+							<span class="mt-0.5 block text-[11px] text-slate-500">{metric.helper}</span>
+						</button>
+					{/each}
+				</div>
+				<div class="flex flex-wrap items-center gap-2">
+					{#if commandCenterIssues.length === 0}
+						<Badge class="border-emerald-200 bg-white text-emerald-700">Operasional terkendali</Badge>
+					{:else}
+						{#each commandCenterIssues.slice(0, 6) as issue (`${issue.tab}-${issue.label}`)}
+							<button
+								type="button"
+								class="rounded-md border px-2.5 py-1 text-xs font-semibold transition hover:bg-slate-50 {commandIssueClass(issue.tone)}"
+								onclick={() => switchTab(issue.tab)}
+							>
+								{issue.label}
+							</button>
+						{/each}
+						{#if commandCenterIssues.length > 6}
+							<Badge variant="outline" class="bg-white text-xs">+{commandCenterIssues.length - 6} atensi lain</Badge>
+						{/if}
+					{/if}
+				</div>
+			</Card.Content>
+		</Card.Root>
+
 		{@const detailNextAction = nextDetailAction(roomReadiness)}
 		<Card.Root class={detailActionPanelClass(detailNextAction.tone)}>
 			<Card.Content class="flex flex-wrap items-center justify-between gap-3 p-4">
@@ -1571,10 +1710,14 @@
 									<Table.Cell><Badge variant="outline" class="text-xs">{r.gender}</Badge></Table.Cell>
 									<Table.Cell class="text-center text-sm">{r.total_answers}</Table.Cell>
 									<Table.Cell class="text-center text-sm">{r.correct_answers}</Table.Cell>
-									<Table.Cell class="text-center"><span class={scoreClass(r.score)}>{fmtScore(r.score)}</span></Table.Cell>
-									<Table.Cell class="text-slate-500 text-xs whitespace-nowrap">
-										{r.submitted_at ? fmtDt(r.submitted_at) : '<span class="text-slate-300">Belum submit</span>'}
-									</Table.Cell>
+										<Table.Cell class="text-center"><span class={scoreClass(r.score)}>{fmtScore(r.score)}</span></Table.Cell>
+										<Table.Cell class="text-slate-500 text-xs whitespace-nowrap">
+											{#if r.submitted_at}
+												{fmtDt(r.submitted_at)}
+											{:else}
+												<span class="text-slate-300">Belum submit</span>
+											{/if}
+										</Table.Cell>
 								</Table.Row>
 							{:else}
 								<Table.Row>
@@ -1765,9 +1908,7 @@
 										<Table.Cell class="text-sm text-muted-foreground">{p.seat_no ?? '—'}</Table.Cell>
 										<Table.Cell>
 										{#if p.token}
-											<code class="bg-green-50 text-green-800 px-2 py-0.5 rounded text-xs font-mono border border-green-200">
-												{p.token}
-											</code>
+											<Badge variant="outline" class="border-green-200 bg-green-50 text-xs text-green-800">Siap di kartu</Badge>
 										{:else}
 											<span class="text-slate-400 text-xs">—</span>
 										{/if}
@@ -1789,9 +1930,6 @@
 												</select>
 												<Input bind:value={seatInput[p.id]} type="number" min="1" class="h-8 w-16" />
 												<LoadingButton variant="outline" size="sm" onclick={() => assignSeat(p.id)} loading={seatSaveBusyId === p.id} disabled={(seatSaveBusyId !== '' && seatSaveBusyId !== p.id) || seatBusy} loadingLabel="Menyimpan...">Simpan</LoadingButton>
-												{#if p.token}
-													<Button variant="outline" size="sm" onclick={() => copyToken(p.token)}>Salin</Button>
-												{/if}
 											<LoadingButton variant="outline" size="sm" onclick={() => regenerateToken(p.id)} loading={regenBusyId === p.id} disabled={regenBusyId !== '' && regenBusyId !== p.id} loadingLabel="Membuat ulang...">Buat Ulang</LoadingButton>
 										</div>
 									</Table.Cell>
@@ -1969,7 +2107,7 @@
 											<Table.Cell class="text-sm text-slate-600">{p.seat_no ?? '—'}</Table.Cell>
 											<Table.Cell>
 											{#if p.token}
-												<code class="bg-green-50 text-green-800 px-2 py-0.5 rounded text-xs font-mono border border-green-200">{p.token}</code>
+												<Badge variant="outline" class="border-green-200 bg-green-50 text-xs text-green-800">Siap di kartu</Badge>
 											{:else}
 												<span class="text-slate-400 text-xs">—</span>
 											{/if}

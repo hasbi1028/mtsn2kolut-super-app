@@ -71,6 +71,7 @@
 		hotsCount: number;
 		missingCount: number;
 		unpublishedCount: number;
+		totalPoints: number;
 	};
 	type BlueprintMatrixRow = {
 		key: string;
@@ -102,6 +103,7 @@
 	let fRandomize = $state(false);
 	let fActive = $state(true);
 	let fSelectedIds = new SvelteSet<string>();
+	let fQuestionWeights = new SvelteMap<string, number>();
 	let fBusy = $state(false);
 	let deleteBusyId = $state('');
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
@@ -113,6 +115,7 @@
 			: []
 	);
 	let selectedQuestions = $derived(questionPool.filter((q) => fSelectedIds.has(q.id)));
+	let selectedWeightTotal = $derived(selectedQuestions.reduce((sum, question) => sum + questionWeightValue(question.id), 0));
 	let availableBlueprintMissingCount = $derived(questionPool.filter(questionHasBlueprintGap).length);
 	let availableHotsCount = $derived(questionPool.filter((q) => q.hots_flag).length);
 	let availableTypeBuckets = $derived(countByLabel(questionPool, (q) => questionTypeLabel(q.question_type)));
@@ -125,12 +128,34 @@
 	let canCreatePackage = $derived(packageReadinessIssues.length === 0 && !fBusy);
 
 	function toggleQuestion(id: string) {
-		if (fSelectedIds.has(id)) fSelectedIds.delete(id);
-		else fSelectedIds.add(id);
+		if (fSelectedIds.has(id)) {
+			fSelectedIds.delete(id);
+			fQuestionWeights.delete(id);
+		} else {
+			fSelectedIds.add(id);
+			if (!fQuestionWeights.has(id)) fQuestionWeights.set(id, 1);
+		}
 	}
 
 	function handleSubjectChange() {
 		fSelectedIds.clear();
+		fQuestionWeights.clear();
+	}
+
+	function questionWeightValue(id: string) {
+		const value = Number(fQuestionWeights.get(id) ?? 1);
+		if (!Number.isFinite(value)) return 1;
+		return Math.max(1, Math.min(100, Math.round(value)));
+	}
+
+	function setQuestionWeight(id: string, value: number) {
+		const normalized = Number.isFinite(value) ? Math.max(1, Math.min(100, Math.round(value))) : 1;
+		fQuestionWeights.set(id, normalized);
+	}
+
+	function handleQuestionWeightInput(id: string, event: Event) {
+		const target = event.currentTarget as HTMLInputElement;
+		setQuestionWeight(id, Number(target.value));
 	}
 
 	function isRecord(value: unknown): value is Record<string, unknown> {
@@ -238,6 +263,11 @@
 		if (selectedQuestions.length === 0) issues.push('Pilih minimal 1 soal terbit');
 		const blocked = selectedQuestions.filter((question) => question.status !== 'published');
 		if (blocked.length > 0) issues.push(`${blocked.length} soal belum terbit`);
+		const invalidWeights = selectedQuestions.filter((question) => {
+			const weight = questionWeightValue(question.id);
+			return weight < 1 || weight > 100;
+		});
+		if (invalidWeights.length > 0) issues.push('Bobot setiap soal harus 1-100');
 		return issues;
 	}
 
@@ -291,7 +321,8 @@
 		const hotsCount = questions.filter((question) => question.hots_flag).length;
 		const missingCount = questions.filter(questionHasBlueprintGap).length;
 		const unpublishedCount = questions.filter((question) => question.status !== 'published').length;
-		return { questions, typeBuckets, cognitiveBuckets, hotsCount, missingCount, unpublishedCount };
+		const totalPoints = questions.reduce((sum, question) => sum + (Number(question.points) || 0), 0);
+		return { questions, typeBuckets, cognitiveBuckets, hotsCount, missingCount, unpublishedCount, totalPoints };
 	}
 
 	async function fetchOverview(): Promise<PackagesOverview> {
@@ -412,12 +443,14 @@
 				body: JSON.stringify({
 					subject_id: fSubjectId, title: fTitle, description: fDescription,
 					duration_minutes: fDuration, randomize_questions: fRandomize,
-					is_active: fActive, question_ids: selectedQuestions.map((question) => question.id),
+					is_active: fActive,
+					question_ids: selectedQuestions.map((question) => question.id),
+					question_weights: Object.fromEntries(selectedQuestions.map((question) => [question.id, questionWeightValue(question.id)])),
 				}),
 			});
 			await readClientJson<unknown>(res);
 			fSubjectId = ''; fTitle = ''; fDescription = ''; fDuration = 60;
-			fRandomize = false; fActive = true; fSelectedIds.clear();
+			fRandomize = false; fActive = true; fSelectedIds.clear(); fQuestionWeights.clear();
 			showForm = false;
 			setOperationState('success', 'Paket Berhasil Dibuat', 'Paket ujian baru sudah tersimpan dan siap dipakai untuk sesi ujian.');
 			showToast('Paket ujian berhasil dibuat');
@@ -573,7 +606,7 @@
 									<div>
 										<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-900">Blueprint Paket Sementara</p>
 										<p class="mt-1 text-xs text-emerald-800">
-											{selectedQuestions.length} soal dipilih, {selectedBlueprintMatrix.length} kombinasi CP/TP/KD, {selectedHotsCount} HOTS.
+											{selectedQuestions.length} soal dipilih, bobot total {selectedWeightTotal}, {selectedBlueprintMatrix.length} kombinasi CP/TP/KD, {selectedHotsCount} HOTS.
 										</p>
 									</div>
 									{#if selectedBlueprintMissingCount > 0}
@@ -581,6 +614,32 @@
 									{:else}
 										<Badge class="border-emerald-200 bg-white text-emerald-700">Blueprint lengkap</Badge>
 									{/if}
+								</div>
+
+								<div class="mt-3 overflow-hidden rounded-md border border-emerald-100 bg-white">
+									<div class="grid grid-cols-[1fr_5rem] gap-2 border-b bg-emerald-50 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-900">
+										<span>Soal Terpilih</span>
+										<span class="text-right">Bobot</span>
+									</div>
+									<div class="max-h-36 overflow-y-auto">
+										{#each selectedQuestions as question (question.id)}
+											<div class="grid grid-cols-[1fr_5rem] items-center gap-2 border-b px-2 py-1.5 last:border-b-0">
+												<div class="min-w-0">
+													<p class="truncate text-xs font-medium text-slate-700">{question.code || 'Tanpa kode'} · {question.question_text}</p>
+													<p class="text-[11px] text-slate-500">{questionTypeLabel(question.question_type)} · {difficultyLabel(question.difficulty)}</p>
+												</div>
+												<Input
+													aria-label={`Bobot ${question.code || question.question_text}`}
+													class="h-8 text-right text-xs"
+													type="number"
+													min={1}
+													max={100}
+													value={questionWeightValue(question.id)}
+													oninput={(event) => handleQuestionWeightInput(question.id, event)}
+												/>
+											</div>
+										{/each}
+									</div>
 								</div>
 
 								<div class="mt-3 grid gap-3 xl:grid-cols-[0.75fr_1.25fr]">
@@ -718,6 +777,9 @@
 								<Table.Cell class="text-slate-600">{p.duration_minutes} mnt</Table.Cell>
 								<Table.Cell>
 									<span class="font-mono text-sm">{p.question_count}</span>
+									{#if quality.totalPoints > 0}
+										<span class="ml-1 text-xs text-slate-400">/{quality.totalPoints} poin</span>
+									{/if}
 								</Table.Cell>
 								<Table.Cell>
 									<div class="flex max-w-sm flex-wrap gap-1">
@@ -793,6 +855,9 @@
 							<div class="mt-3 flex flex-wrap items-center gap-2">
 								<Badge variant="outline" class="text-xs">{p.duration_minutes} menit</Badge>
 								<Badge variant="secondary">{p.question_count} soal</Badge>
+								{#if quality.totalPoints > 0}
+									<Badge variant="outline" class="text-xs">{quality.totalPoints} poin</Badge>
+								{/if}
 								{#if p.randomize_questions}
 									<Badge class="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">Acak</Badge>
 								{/if}

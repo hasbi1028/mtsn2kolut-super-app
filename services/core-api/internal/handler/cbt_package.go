@@ -54,13 +54,14 @@ func (h *CbtPackage) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		SubjectID          string   `json:"subject_id"`
-		Title              string   `json:"title"`
-		Description        string   `json:"description"`
-		DurationMinutes    int32    `json:"duration_minutes"`
-		RandomizeQuestions bool     `json:"randomize_questions"`
-		IsActive           bool     `json:"is_active"`
-		QuestionIDs        []string `json:"question_ids"`
+		SubjectID          string           `json:"subject_id"`
+		Title              string           `json:"title"`
+		Description        string           `json:"description"`
+		DurationMinutes    int32            `json:"duration_minutes"`
+		RandomizeQuestions bool             `json:"randomize_questions"`
+		IsActive           bool             `json:"is_active"`
+		QuestionIDs        []string         `json:"question_ids"`
+		QuestionWeights    map[string]int32 `json:"question_weights"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -88,6 +89,7 @@ func (h *CbtPackage) Create(w http.ResponseWriter, r *http.Request) {
 		RandomizeQuestions: body.RandomizeQuestions,
 		IsActive:           body.IsActive,
 		QuestionIDs:        questionIDs,
+		QuestionWeights:    body.QuestionWeights,
 	})
 	if err != nil {
 		writeClientError(w, err, "Paket CBT tidak valid")

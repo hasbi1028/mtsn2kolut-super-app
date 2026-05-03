@@ -314,6 +314,12 @@ func TestExamLoginMapsKnownServiceErrors(t *testing.T) {
 			wantError:  "token already bound to another device",
 		},
 		{
+			name:       "device required",
+			err:        service.ErrDeviceRequired,
+			wantStatus: 400,
+			wantError:  "device fingerprint required",
+		},
+		{
 			name:       "unexpected error",
 			err:        errors.New("database down"),
 			wantStatus: 500,
@@ -460,6 +466,12 @@ func TestExamSubmitAnswerMapsKnownServiceErrors(t *testing.T) {
 			wantError:  "exam window has closed",
 		},
 		{
+			name:       "question outside exam",
+			err:        service.ErrExamQuestionScope,
+			wantStatus: 400,
+			wantError:  "question is not part of this exam",
+		},
+		{
 			name:       "unexpected error",
 			err:        errors.New("save failed"),
 			wantStatus: 500,
@@ -590,6 +602,12 @@ func TestExamSubmitMapsKnownServiceErrors(t *testing.T) {
 			err:        service.ErrExamAlreadySubmit,
 			wantStatus: 409,
 			wantError:  "exam already submitted",
+		},
+		{
+			name:       "window closed",
+			err:        service.ErrExamWindowClosed,
+			wantStatus: 403,
+			wantError:  "exam window has closed",
 		},
 		{
 			name:       "unexpected error",

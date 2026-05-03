@@ -619,7 +619,7 @@ func (h *CbtSession) ListParticipants(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
-	api.OK(w, rows)
+	api.OK(w, serializeParticipantListRows(rows, adminAccessAllowed(r)))
 }
 
 func (h *CbtSession) Enroll(w http.ResponseWriter, r *http.Request) {
@@ -745,6 +745,11 @@ func (h *CbtSession) GenerateTokens(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.GenerateTokens(r.Context(), sessionID); err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			message := strings.TrimPrefix(safeClientMessage(err, "Token sesi tidak dapat diperbarui"), "conflict: ")
+			api.Conflict(w, message)
+			return
+		}
 		api.Internal(w, err)
 		return
 	}
@@ -774,6 +779,11 @@ func (h *CbtSession) RegenerateToken(w http.ResponseWriter, r *http.Request) {
 	}
 	row, err := h.svc.RegenerateToken(r.Context(), pid)
 	if err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			message := strings.TrimPrefix(safeClientMessage(err, "Token peserta tidak dapat diperbarui"), "conflict: ")
+			api.Conflict(w, message)
+			return
+		}
 		api.Internal(w, err)
 		return
 	}
@@ -1152,7 +1162,7 @@ func (h *CbtSession) GetProctoringStatus(w http.ResponseWriter, r *http.Request)
 		api.Internal(w, err)
 		return
 	}
-	api.OK(w, rows)
+	api.OK(w, serializeProctoringRows(rows, adminAccessAllowed(r)))
 }
 
 func (h *CbtSession) ListParticipantEvents(w http.ResponseWriter, r *http.Request) {
@@ -1314,7 +1324,7 @@ func (h *CbtSession) GetRoomProctoringDashboard(w http.ResponseWriter, r *http.R
 	api.OK(w, map[string]any{
 		"room":         room,
 		"proctors":     proctors,
-		"participants": participants,
+		"participants": serializeProctoringRows(participants, adminAccessAllowed(r)),
 		"events":       events,
 	})
 }
@@ -1746,6 +1756,10 @@ func (h *CbtSession) RecordAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.RecordAnswer(r.Context(), participantID, questionID, body.Answer); err != nil {
+		if errors.Is(err, service.ErrExamQuestionScope) {
+			api.BadRequest(w, "question is not part of this exam")
+			return
+		}
 		api.Internal(w, err)
 		return
 	}
@@ -1866,6 +1880,15 @@ func (h *CbtSession) GuruAwareResults(w http.ResponseWriter, r *http.Request) {
 			api.Forbidden(w)
 			return
 		}
+		hasAccess, err := h.svc.CheckTeacherAccess(r.Context(), id, eid)
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		if !hasAccess {
+			api.Forbidden(w)
+			return
+		}
 		session, err := h.svc.Get(r.Context(), id)
 		if err != nil {
 			api.Internal(w, err)
@@ -1970,13 +1993,18 @@ func (h *CbtSession) GetItemAnalysis(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items := make([]map[string]any, 0, len(rows))
+	includeAnswerKey := adminAccessAllowed(r)
 	for _, row := range rows {
-		items = append(items, serializeSessionItemAnalysisRow(row))
+		items = append(items, serializeSessionItemAnalysisRow(row, includeAnswerKey))
 	}
 	api.OK(w, map[string]any{"items": items})
 }
 
-func serializeSessionItemAnalysisRow(row db.GetSessionItemAnalysisRow) map[string]any {
+func serializeSessionItemAnalysisRow(row db.GetSessionItemAnalysisRow, includeAnswerKey bool) map[string]any {
+	answerKey := ""
+	if includeAnswerKey {
+		answerKey = row.AnswerKey
+	}
 	return map[string]any{
 		"position":             row.Position,
 		"points":               row.Points,
@@ -1985,7 +2013,7 @@ func serializeSessionItemAnalysisRow(row db.GetSessionItemAnalysisRow) map[strin
 		"question_text":        row.QuestionText,
 		"question_type":        row.QuestionType,
 		"difficulty":           row.Difficulty,
-		"answer_key":           row.AnswerKey,
+		"answer_key":           answerKey,
 		"cp_ref":               row.CpRef,
 		"tp_ref":               row.TpRef,
 		"kd_ref":               row.KdRef,
@@ -2100,5 +2128,91 @@ func (h *CbtSession) GetParticipantAnswers(w http.ResponseWriter, r *http.Reques
 		api.Internal(w, err)
 		return
 	}
-	api.OK(w, rows)
+	api.OK(w, serializeParticipantAnswerRows(rows, adminAccessAllowed(r)))
+}
+
+func serializeProctoringRows(rows []db.GetSessionProctoringStatusRow, includeToken bool) []map[string]any {
+	items := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		token := ""
+		if includeToken {
+			token = row.Token
+		}
+		items = append(items, map[string]any{
+			"participant_id":     pgUUIDString(row.ParticipantID),
+			"student_id":         pgUUIDString(row.StudentID),
+			"nis":                row.Nis,
+			"nama":               row.Nama,
+			"token":              token,
+			"room_id":            pgUUIDString(row.RoomID),
+			"room_name":          row.RoomName,
+			"seat_no":            row.SeatNo,
+			"submitted_at":       row.SubmittedAt,
+			"last_heartbeat":     row.LastHeartbeat,
+			"app_switch_count":   row.AppSwitchCount,
+			"screenshot_attempt": row.ScreenshotAttempt,
+			"suspicious_flag":    row.SuspiciousFlag,
+			"answered_count":     row.AnsweredCount,
+			"score":              row.Score,
+		})
+	}
+	return items
+}
+
+func serializeParticipantListRows(rows []db.ListCbtExamParticipantsRow, includeToken bool) []map[string]any {
+	items := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		token := ""
+		if includeToken {
+			token = row.Token
+		}
+		items = append(items, map[string]any{
+			"id":                 pgUUIDString(row.ID),
+			"session_id":         pgUUIDString(row.SessionID),
+			"student_id":         pgUUIDString(row.StudentID),
+			"nis":                row.Nis,
+			"nama":               row.Nama,
+			"gender":             row.Gender,
+			"token":              token,
+			"room_id":            pgUUIDString(row.RoomID),
+			"seat_no":            row.SeatNo,
+			"joined_at":          row.JoinedAt,
+			"submitted_at":       row.SubmittedAt,
+			"score":              row.Score,
+			"app_switch_count":   row.AppSwitchCount,
+			"screenshot_attempt": row.ScreenshotAttempt,
+			"suspicious_flag":    row.SuspiciousFlag,
+			"last_heartbeat":     row.LastHeartbeat,
+			"created_at":         row.CreatedAt,
+			"room_name":          row.RoomName,
+		})
+	}
+	return items
+}
+
+func serializeParticipantAnswerRows(rows []db.GetParticipantAnswersRow, includeAnswerKey bool) []map[string]any {
+	items := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		answerKey := ""
+		if includeAnswerKey {
+			answerKey = row.AnswerKey
+		}
+		items = append(items, map[string]any{
+			"id":             pgUUIDString(row.ID),
+			"participant_id": pgUUIDString(row.ParticipantID),
+			"question_id":    pgUUIDString(row.QuestionID),
+			"question_code":  row.QuestionCode,
+			"question_text":  row.QuestionText,
+			"option_a":       row.OptionA,
+			"option_b":       row.OptionB,
+			"option_c":       row.OptionC,
+			"option_d":       row.OptionD,
+			"option_e":       row.OptionE,
+			"answer_key":     answerKey,
+			"answer":         row.Answer,
+			"is_correct":     row.IsCorrect,
+			"answered_at":    row.AnsweredAt,
+		})
+	}
+	return items
 }

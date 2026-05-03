@@ -2281,9 +2281,9 @@
 											{WORKFLOW_LABEL[q.workflow_status] ?? q.workflow_status ?? '-'}
 										</span>
 									</Table.Cell>
-									<Table.Cell class="text-sm font-bold text-green-700">
-										{q.question_type === 'essay' ? 'Essay' : q.answer_key || '-'}
-									</Table.Cell>
+										<Table.Cell class="text-sm font-medium text-slate-600">
+											{questionTypeLabel(q.question_type)}
+										</Table.Cell>
 									<Table.Cell class="text-right">
 										<button
 											onclick={(e) => {
@@ -2518,7 +2518,7 @@
 						{/if}
 						<div class="rounded border border-green-100 bg-green-50 px-2 py-1.5 text-xs text-green-900">
 							<span class="font-semibold">Kunci/Rubrik:</span>
-							{reviewDecisionQuestion.question_type === 'essay' ? 'Periksa rubrik uraian pada isi soal.' : reviewDecisionQuestion.answer_key || '-'}
+							{reviewDecisionQuestion.question_type === 'essay' ? 'Periksa rubrik uraian pada isi soal.' : 'Periksa kunci dari detail soal sebelum keputusan final.'}
 						</div>
 						{#if reviewDecisionQuestion.review_notes}
 							<div class="rounded border border-amber-100 bg-amber-50 px-2 py-1.5 text-xs leading-relaxed text-amber-900">

@@ -67,6 +67,7 @@ type cbtSessionStore interface {
 	SetParticipantSuspiciousFlag(ctx context.Context, arg db.SetParticipantSuspiciousFlagParams) error
 	GradeStudentEssay(ctx context.Context, arg db.GradeStudentEssayParams) error
 	ListUngradedEssays(ctx context.Context, sessionID pgtype.UUID) ([]db.ListUngradedEssaysRow, error)
+	QuestionBelongsToParticipantPackage(ctx context.Context, arg db.QuestionBelongsToParticipantPackageParams) (bool, error)
 	UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) error
 	UpdateAnswerCorrectness(ctx context.Context, sessionID pgtype.UUID) error
 	UpdateParticipantScores(ctx context.Context, sessionID pgtype.UUID) error
@@ -347,6 +348,9 @@ func normalizeAssignmentMode(value string) string {
 }
 
 func (s *CbtSession) GenerateTokens(ctx context.Context, sessionID pgtype.UUID) error {
+	if err := s.ensureSessionTokenMutable(ctx, sessionID); err != nil {
+		return err
+	}
 	return s.q.GenerateTokensForSession(ctx, sessionID)
 }
 
@@ -356,7 +360,24 @@ type RegenerateTokenResult struct {
 }
 
 func (s *CbtSession) RegenerateToken(ctx context.Context, participantID pgtype.UUID) (db.RegenerateParticipantTokenRow, error) {
-	return s.q.RegenerateParticipantToken(ctx, participantID)
+	row, err := s.q.RegenerateParticipantToken(ctx, participantID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.RegenerateParticipantTokenRow{}, fmt.Errorf("%w: token peserta hanya boleh diubah sebelum sesi aktif", domain.ErrConflict)
+	}
+	return row, err
+}
+
+func (s *CbtSession) ensureSessionTokenMutable(ctx context.Context, sessionID pgtype.UUID) error {
+	session, err := s.q.GetCbtExamSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	switch session.Status {
+	case db.CbtSessionStatusEnumDraft, db.CbtSessionStatusEnumScheduled:
+		return nil
+	default:
+		return fmt.Errorf("%w: token sesi hanya boleh dibuat sebelum sesi aktif", domain.ErrConflict)
+	}
 }
 
 func (s *CbtSession) ResetParticipantRuntimeAccess(ctx context.Context, participantID pgtype.UUID, actor string) error {
@@ -886,6 +907,16 @@ func (s *CbtSession) ListUngradedEssays(ctx context.Context, sessionID pgtype.UU
 // --- Answers & Scoring ---
 
 func (s *CbtSession) RecordAnswer(ctx context.Context, participantID, questionID pgtype.UUID, answer string) error {
+	belongs, err := s.q.QuestionBelongsToParticipantPackage(ctx, db.QuestionBelongsToParticipantPackageParams{
+		ID:         participantID,
+		QuestionID: questionID,
+	})
+	if err != nil {
+		return err
+	}
+	if !belongs {
+		return ErrExamQuestionScope
+	}
 	return s.q.UpsertStudentAnswer(ctx, db.UpsertStudentAnswerParams{
 		ParticipantID: participantID,
 		QuestionID:    questionID,

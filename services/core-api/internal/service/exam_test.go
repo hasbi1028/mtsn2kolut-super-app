@@ -7,47 +7,53 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
 type fakeExamStore struct {
-	participant    db.GetParticipantByTokenRow
-	participantErr error
-	updateLoginArg db.UpdateParticipantLoginParams
-	updateLoginErr error
-	events         []db.InsertParticipantEventParams
-	eventErr       error
-	questions      []db.GetExamQuestionsRow
-	questionsErr   error
-	orderArg       db.UpdateParticipantQuestionOrderParams
-	answers        []db.GetParticipantAnswersRow
-	answersErr     error
-	room           db.CbtExamRoom
-	roomErr        error
-	heartbeatID    pgtype.UUID
-	heartbeatErr   error
-	appSwitchID    pgtype.UUID
-	appSwitchErr   error
-	screenshotID   pgtype.UUID
-	screenshotErr  error
-	answerArg      db.UpsertStudentAnswerParams
-	answerErr      error
-	submitRow      db.SubmitParticipantExamRow
-	submitID       pgtype.UUID
-	submitErr      error
-	assets         map[string][]db.CbtQuestionAsset
-	assetsErr      error
+	participant            db.GetParticipantByTokenRow
+	participantErr         error
+	updateLoginArg         db.UpdateParticipantLoginParams
+	updateLoginErr         error
+	events                 []db.InsertParticipantEventParams
+	eventErr               error
+	questions              []db.GetExamQuestionsRow
+	questionsErr           error
+	orderArg               db.UpdateParticipantQuestionOrderParams
+	answers                []db.GetParticipantAnswersRow
+	answersErr             error
+	room                   db.CbtExamRoom
+	roomErr                error
+	heartbeatID            pgtype.UUID
+	heartbeatErr           error
+	appSwitchID            pgtype.UUID
+	appSwitchErr           error
+	screenshotID           pgtype.UUID
+	screenshotErr          error
+	questionScopeArg       db.QuestionBelongsToParticipantPackageParams
+	questionOutsidePackage bool
+	questionScopeErr       error
+	answerArg              db.UpsertStudentAnswerParams
+	answerErr              error
+	correctnessID          pgtype.UUID
+	correctnessErr         error
+	submitRow              db.SubmitParticipantExamRow
+	submitID               pgtype.UUID
+	submitErr              error
+	assets                 map[string][]db.CbtQuestionAsset
+	assetsErr              error
 }
 
 func (f *fakeExamStore) GetParticipantByToken(ctx context.Context, token string) (db.GetParticipantByTokenRow, error) {
 	return f.participant, f.participantErr
 }
 
-func (f *fakeExamStore) UpdateParticipantLogin(ctx context.Context, arg db.UpdateParticipantLoginParams) error {
+func (f *fakeExamStore) UpdateParticipantLogin(ctx context.Context, arg db.UpdateParticipantLoginParams) (pgtype.UUID, error) {
 	f.updateLoginArg = arg
-	return f.updateLoginErr
+	return arg.ID, f.updateLoginErr
 }
 
 func (f *fakeExamStore) InsertParticipantEvent(ctx context.Context, arg db.InsertParticipantEventParams) error {
@@ -87,9 +93,22 @@ func (f *fakeExamStore) IncrementParticipantScreenshot(ctx context.Context, part
 	return f.screenshotErr
 }
 
+func (f *fakeExamStore) QuestionBelongsToParticipantPackage(ctx context.Context, arg db.QuestionBelongsToParticipantPackageParams) (bool, error) {
+	f.questionScopeArg = arg
+	if f.questionScopeErr != nil {
+		return false, f.questionScopeErr
+	}
+	return !f.questionOutsidePackage, nil
+}
+
 func (f *fakeExamStore) UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) error {
 	f.answerArg = arg
 	return f.answerErr
+}
+
+func (f *fakeExamStore) UpdateParticipantAnswerCorrectness(ctx context.Context, participantID pgtype.UUID) error {
+	f.correctnessID = participantID
+	return f.correctnessErr
 }
 
 func (f *fakeExamStore) SubmitParticipantExam(ctx context.Context, id pgtype.UUID) (db.SubmitParticipantExamRow, error) {
@@ -224,7 +243,12 @@ func TestExamLoginRejectsInvalidStatesAndPropagatesErrors(t *testing.T) {
 	base := examActiveParticipant(t)
 
 	storeErr := errors.New("store failed")
-	svc := &Exam{q: &fakeExamStore{participantErr: storeErr}}
+	svc := &Exam{q: &fakeExamStore{participant: base}}
+	if _, err := svc.Login(ctx, "token", "", "127.0.0.1"); !errors.Is(err, ErrDeviceRequired) {
+		t.Fatalf("Login(empty device) error = %v, want ErrDeviceRequired", err)
+	}
+
+	svc = &Exam{q: &fakeExamStore{participantErr: storeErr}}
 	if _, err := svc.Login(ctx, "missing", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamNotFound) {
 		t.Fatalf("Login(missing token) error = %v, want ErrExamNotFound", err)
 	}
@@ -247,6 +271,10 @@ func TestExamLoginRejectsInvalidStatesAndPropagatesErrors(t *testing.T) {
 	svc = &Exam{q: &fakeExamStore{participant: base, updateLoginErr: loginErr}}
 	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, loginErr) {
 		t.Fatalf("Login(update error) error = %v, want %v", err, loginErr)
+	}
+	svc = &Exam{q: &fakeExamStore{participant: base, updateLoginErr: pgx.ErrNoRows}}
+	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, ErrDeviceMismatch) {
+		t.Fatalf("Login(update no rows) error = %v, want ErrDeviceMismatch", err)
 	}
 
 	questionsErr := errors.New("questions failed")
@@ -354,6 +382,20 @@ func TestExamOperationalMethodsHandleErrorsAndEvents(t *testing.T) {
 		t.Fatalf("SubmitAnswer(closed) = %v, want ErrExamWindowClosed", err)
 	}
 
+	scopeErr := errors.New("scope lookup failed")
+	svc = &Exam{q: &fakeExamStore{questionScopeErr: scopeErr}}
+	if err := svc.SubmitAnswer(ctx, participant, questionID, "A"); !errors.Is(err, scopeErr) {
+		t.Fatalf("SubmitAnswer(scope error) = %v, want %v", err, scopeErr)
+	}
+	store = &fakeExamStore{questionOutsidePackage: true}
+	svc = &Exam{q: store}
+	if err := svc.SubmitAnswer(ctx, participant, questionID, "A"); !errors.Is(err, ErrExamQuestionScope) {
+		t.Fatalf("SubmitAnswer(outside package) = %v, want ErrExamQuestionScope", err)
+	}
+	if store.answerArg.QuestionID.Valid {
+		t.Fatalf("SubmitAnswer(outside package) wrote answer arg = %+v, want blocked before upsert", store.answerArg)
+	}
+
 	answerErr := errors.New("answer failed")
 	svc = &Exam{q: &fakeExamStore{answerErr: answerErr}}
 	if err := svc.SubmitAnswer(ctx, participant, questionID, "A"); !errors.Is(err, answerErr) {
@@ -379,6 +421,14 @@ func TestExamOperationalMethodsHandleErrorsAndEvents(t *testing.T) {
 	if err := svc.Submit(ctx, submitted); !errors.Is(err, ErrExamAlreadySubmit) {
 		t.Fatalf("Submit(submitted) = %v, want ErrExamAlreadySubmit", err)
 	}
+	if err := svc.Submit(ctx, closed); !errors.Is(err, ErrExamWindowClosed) {
+		t.Fatalf("Submit(closed) = %v, want ErrExamWindowClosed", err)
+	}
+	correctnessErr := errors.New("correctness failed")
+	svc = &Exam{q: &fakeExamStore{correctnessErr: correctnessErr}}
+	if err := svc.Submit(ctx, participant); !errors.Is(err, correctnessErr) {
+		t.Fatalf("Submit(correctness error) = %v, want %v", err, correctnessErr)
+	}
 	submitErr := errors.New("submit failed")
 	svc = &Exam{q: &fakeExamStore{submitErr: submitErr}}
 	if err := svc.Submit(ctx, participant); !errors.Is(err, submitErr) {
@@ -393,8 +443,8 @@ func TestExamOperationalMethodsHandleErrorsAndEvents(t *testing.T) {
 	if err := svc.Submit(ctx, participant); err != nil {
 		t.Fatalf("Submit() error = %v", err)
 	}
-	if store.submitID != participant.ID || len(store.events) != 1 || store.events[0].EventType != "submit" {
-		t.Fatalf("Submit store state = id %v events %+v, want submit event", store.submitID, store.events)
+	if store.correctnessID != participant.ID || store.submitID != participant.ID || len(store.events) != 1 || store.events[0].EventType != "submit" {
+		t.Fatalf("Submit store state = correctness %v submit %v events %+v, want correctness and submit event", store.correctnessID, store.submitID, store.events)
 	}
 }
 
@@ -413,15 +463,18 @@ func TestExamStatusAndHelpersCoverFallbackBranches(t *testing.T) {
 		{ID: firstID, Code: "Q-1"},
 		{ID: secondID, Code: "Q-2"},
 	}
-	if got := orderQuestions(rows, []byte("not-json")); len(got) != 2 || got[0].ID != firstID || got[1].ID != secondID {
+	if got := orderQuestions(rows, []byte("not-json"), true); len(got) != 2 || got[0].ID != firstID || got[1].ID != secondID {
 		t.Fatalf("orderQuestions(invalid json) = %+v, want original order", got)
 	}
 	orderJSON, _ := json.Marshal([]string{pgUUIDString(secondID), "missing"})
-	if got := orderQuestions(rows, orderJSON); len(got) != 1 || got[0].ID != secondID {
+	if got := orderQuestions(rows, orderJSON, false); len(got) != 1 || got[0].ID != secondID {
 		t.Fatalf("orderQuestions(partial) = %+v, want only second question", got)
 	}
-	if got := orderQuestions(rows, nil); len(got) != 2 {
-		t.Fatalf("orderQuestions(empty) len = %d, want 2", len(got))
+	if got := orderQuestions(rows, nil, false); len(got) != 2 || got[0].ID != firstID || got[1].ID != secondID {
+		t.Fatalf("orderQuestions(non-random empty) = %+v, want original order", got)
+	}
+	if got := orderQuestions(rows, nil, true); len(got) != 2 {
+		t.Fatalf("orderQuestions(random empty) len = %d, want 2", len(got))
 	}
 
 	now := time.Now()
@@ -436,6 +489,12 @@ func TestExamStatusAndHelpersCoverFallbackBranches(t *testing.T) {
 	none := calcRemaining(pgtype.Timestamptz{}, 0, pgtype.Timestamptz{})
 	if endBeforeDuration <= 0 || durationOnly <= 0 || endOnly <= 0 || past != 0 || none != 0 {
 		t.Fatalf("calcRemaining branches = %d/%d/%d/%d/%d, want positive positive positive 0 0", endBeforeDuration, durationOnly, endOnly, past, none)
+	}
+	if !examWindowClosed(pgtype.Timestamptz{}, 1, pgtype.Timestamptz{Time: now.Add(-2 * time.Minute), Valid: true}, now) {
+		t.Fatal("examWindowClosed(duration elapsed) = false, want true")
+	}
+	if examWindowClosed(pgtype.Timestamptz{}, 30, pgtype.Timestamptz{Time: now, Valid: true}, now) {
+		t.Fatal("examWindowClosed(active duration) = true, want false")
 	}
 
 	if stemMedia, stimulusMedia, stemAudio, stimulusAudio := resolveExamQuestionAssets(nil, ctx, firstID); stemMedia != "" || stimulusMedia != "" || stemAudio != "" || stimulusAudio != "" {

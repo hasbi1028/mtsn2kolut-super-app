@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"errors"
+	"math/big"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -19,6 +22,8 @@ var (
 	ErrExamAlreadySubmit = errors.New("exam already submitted")
 	ErrExamWindowClosed  = errors.New("exam window has closed")
 	ErrDeviceMismatch    = errors.New("token already bound to another device")
+	ErrDeviceRequired    = errors.New("device fingerprint required")
+	ErrExamQuestionScope = errors.New("question is not part of participant exam")
 )
 
 type Exam struct {
@@ -28,7 +33,7 @@ type Exam struct {
 
 type examStore interface {
 	GetParticipantByToken(ctx context.Context, token string) (db.GetParticipantByTokenRow, error)
-	UpdateParticipantLogin(ctx context.Context, arg db.UpdateParticipantLoginParams) error
+	UpdateParticipantLogin(ctx context.Context, arg db.UpdateParticipantLoginParams) (pgtype.UUID, error)
 	InsertParticipantEvent(ctx context.Context, arg db.InsertParticipantEventParams) error
 	GetExamQuestions(ctx context.Context, packageID pgtype.UUID) ([]db.GetExamQuestionsRow, error)
 	UpdateParticipantQuestionOrder(ctx context.Context, arg db.UpdateParticipantQuestionOrderParams) error
@@ -37,7 +42,9 @@ type examStore interface {
 	UpdateParticipantHeartbeat(ctx context.Context, participantID pgtype.UUID) error
 	IncrementParticipantAppSwitch(ctx context.Context, participantID pgtype.UUID) error
 	IncrementParticipantScreenshot(ctx context.Context, participantID pgtype.UUID) error
+	QuestionBelongsToParticipantPackage(ctx context.Context, arg db.QuestionBelongsToParticipantPackageParams) (bool, error)
 	UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) error
+	UpdateParticipantAnswerCorrectness(ctx context.Context, participantID pgtype.UUID) error
 	SubmitParticipantExam(ctx context.Context, id pgtype.UUID) (db.SubmitParticipantExamRow, error)
 	ListCbtQuestionAssetsByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error)
 }
@@ -99,6 +106,10 @@ type ExamQuestion struct {
 }
 
 func (s *Exam) Login(ctx context.Context, token, deviceFingerprint, loginIP string) (LoginResult, error) {
+	deviceFingerprint = strings.TrimSpace(deviceFingerprint)
+	if deviceFingerprint == "" {
+		return LoginResult{}, ErrDeviceRequired
+	}
 	p, err := s.q.GetParticipantByToken(ctx, token)
 	if err != nil {
 		return LoginResult{}, ErrExamNotFound
@@ -108,17 +119,20 @@ func (s *Exam) Login(ctx context.Context, token, deviceFingerprint, loginIP stri
 	}
 
 	// Device binding: if already bound, reject different device
-	if p.DeviceFingerprint.Valid && p.DeviceFingerprint.String != "" &&
-		p.DeviceFingerprint.String != deviceFingerprint {
+	if p.DeviceFingerprint.Valid && strings.TrimSpace(p.DeviceFingerprint.String) != "" &&
+		strings.TrimSpace(p.DeviceFingerprint.String) != deviceFingerprint {
 		return LoginResult{}, ErrDeviceMismatch
 	}
 
 	// Record login and bind device
-	if err := s.q.UpdateParticipantLogin(ctx, db.UpdateParticipantLoginParams{
+	if _, err := s.q.UpdateParticipantLogin(ctx, db.UpdateParticipantLoginParams{
 		ID:                p.ID,
 		DeviceFingerprint: pgtype.Text{String: deviceFingerprint, Valid: true},
 		LoginIp:           pgtype.Text{String: loginIP, Valid: true},
 	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return LoginResult{}, ErrDeviceMismatch
+		}
 		return LoginResult{}, err
 	}
 
@@ -135,8 +149,8 @@ func (s *Exam) Login(ctx context.Context, token, deviceFingerprint, loginIP stri
 		return LoginResult{}, err
 	}
 
-	// Build ordered question list — use stored question_order if available, else sequential
-	ordered := orderQuestions(questions, p.QuestionOrder)
+	// Build ordered question list — use stored question_order if available.
+	ordered := orderQuestions(questions, p.QuestionOrder, p.RandomizeQuestions)
 
 	// If no question_order yet, save the order for this participant
 	if len(p.QuestionOrder) == 0 {
@@ -215,9 +229,18 @@ func (s *Exam) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, 
 	if p.SubmittedAt.Valid {
 		return ErrExamAlreadySubmit
 	}
-	now := time.Now()
-	if p.ScheduledEnd.Valid && now.After(p.ScheduledEnd.Time) {
+	if examWindowClosed(p.ScheduledEnd, p.DurationMinutes, p.JoinedAt, time.Now()) {
 		return ErrExamWindowClosed
+	}
+	belongs, err := s.q.QuestionBelongsToParticipantPackage(ctx, db.QuestionBelongsToParticipantPackageParams{
+		ID:         p.ID,
+		QuestionID: questionID,
+	})
+	if err != nil {
+		return err
+	}
+	if !belongs {
+		return ErrExamQuestionScope
 	}
 	if err := s.q.UpsertStudentAnswer(ctx, db.UpsertStudentAnswerParams{
 		ParticipantID: p.ID,
@@ -264,6 +287,12 @@ func (s *Exam) Submit(ctx context.Context, p db.GetParticipantByTokenRow) error 
 	if p.SubmittedAt.Valid {
 		return ErrExamAlreadySubmit
 	}
+	if examWindowClosed(p.ScheduledEnd, p.DurationMinutes, p.JoinedAt, time.Now()) {
+		return ErrExamWindowClosed
+	}
+	if err := s.q.UpdateParticipantAnswerCorrectness(ctx, p.ID); err != nil {
+		return err
+	}
 	row, err := s.q.SubmitParticipantExam(ctx, p.ID)
 	if err != nil {
 		return err
@@ -278,21 +307,10 @@ func (s *Exam) Submit(ctx context.Context, p db.GetParticipantByTokenRow) error 
 // --- helpers ---
 
 func calcRemaining(end pgtype.Timestamptz, durationMin int32, joinedAt pgtype.Timestamptz) int64 {
-	var deadline time.Time
-
-	if durationMin > 0 && joinedAt.Valid {
-		byDuration := joinedAt.Time.Add(time.Duration(durationMin) * time.Minute)
-		if end.Valid && end.Time.Before(byDuration) {
-			deadline = end.Time
-		} else {
-			deadline = byDuration
-		}
-	} else if end.Valid {
-		deadline = end.Time
-	} else {
+	deadline, ok := examDeadline(end, durationMin, joinedAt)
+	if !ok {
 		return 0
 	}
-
 	remaining := time.Until(deadline)
 	if remaining < 0 {
 		return 0
@@ -300,9 +318,29 @@ func calcRemaining(end pgtype.Timestamptz, durationMin int32, joinedAt pgtype.Ti
 	return int64(remaining.Seconds())
 }
 
-func orderQuestions(questions []db.GetExamQuestionsRow, orderJSON []byte) []db.GetExamQuestionsRow {
+func examWindowClosed(end pgtype.Timestamptz, durationMin int32, joinedAt pgtype.Timestamptz, now time.Time) bool {
+	deadline, ok := examDeadline(end, durationMin, joinedAt)
+	return ok && now.After(deadline)
+}
+
+func examDeadline(end pgtype.Timestamptz, durationMin int32, joinedAt pgtype.Timestamptz) (time.Time, bool) {
+	if durationMin > 0 && joinedAt.Valid {
+		byDuration := joinedAt.Time.Add(time.Duration(durationMin) * time.Minute)
+		if end.Valid && end.Time.Before(byDuration) {
+			return end.Time, true
+		}
+		return byDuration, true
+	} else if end.Valid {
+		return end.Time, true
+	}
+	return time.Time{}, false
+}
+
+func orderQuestions(questions []db.GetExamQuestionsRow, orderJSON []byte, randomize bool) []db.GetExamQuestionsRow {
 	if len(orderJSON) == 0 {
-		// First login: shuffle randomly
+		if !randomize {
+			return questions
+		}
 		indices := shuffleInts(len(questions))
 		ordered := make([]db.GetExamQuestionsRow, len(questions))
 		for i, idx := range indices {
@@ -335,10 +373,11 @@ func shuffleInts(n int) []int {
 		idx[i] = i
 	}
 	for i := n - 1; i > 0; i-- {
-		j := int(time.Now().UnixNano()) % (i + 1)
-		if j < 0 {
-			j = -j
+		value, err := cryptorand.Int(cryptorand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			return idx
 		}
+		j := int(value.Int64())
 		idx[i], idx[j] = idx[j], idx[i]
 	}
 	return idx

@@ -238,10 +238,15 @@ func TestExamTokenMiddlewareBranches(t *testing.T) {
 	})
 
 	active := ExamToken(func(_ context.Context, token string) (db.GetParticipantByTokenRow, error) {
-		return db.GetParticipantByTokenRow{Token: token, SessionStatus: db.CbtSessionStatusEnumActive}, nil
+		return db.GetParticipantByTokenRow{
+			Token:             token,
+			SessionStatus:     db.CbtSessionStatusEnumActive,
+			DeviceFingerprint: pgtype.Text{String: "device-1", Valid: true},
+		}, nil
 	})(next)
 	req := httptest.NewRequest(http.MethodPost, "/exam", nil)
 	req.Header.Set("X-Exam-Token", "token-1")
+	req.Header.Set(DeviceFingerprintHdr, "device-1")
 	rec := httptest.NewRecorder()
 	active.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
@@ -263,6 +268,7 @@ func TestExamTokenMiddlewareBranches(t *testing.T) {
 	})(next)
 	req = httptest.NewRequest(http.MethodPost, "/exam", nil)
 	req.Header.Set("X-Exam-Token", "bad")
+	req.Header.Set(DeviceFingerprintHdr, "device-1")
 	rec = httptest.NewRecorder()
 	failing.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -274,10 +280,26 @@ func TestExamTokenMiddlewareBranches(t *testing.T) {
 	})(next)
 	req = httptest.NewRequest(http.MethodPost, "/exam", nil)
 	req.Header.Set("X-Exam-Token", "token-2")
+	req.Header.Set(DeviceFingerprintHdr, "device-1")
 	rec = httptest.NewRecorder()
 	inactive.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("ExamToken(inactive) status = %d, want 403", rec.Code)
+	}
+
+	mismatch := ExamToken(func(context.Context, string) (db.GetParticipantByTokenRow, error) {
+		return db.GetParticipantByTokenRow{
+			SessionStatus:     db.CbtSessionStatusEnumActive,
+			DeviceFingerprint: pgtype.Text{String: "device-1", Valid: true},
+		}, nil
+	})(next)
+	req = httptest.NewRequest(http.MethodPost, "/exam", nil)
+	req.Header.Set("X-Exam-Token", "token-3")
+	req.Header.Set(DeviceFingerprintHdr, "device-2")
+	rec = httptest.NewRecorder()
+	mismatch.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("ExamToken(device mismatch) status = %d, want 409", rec.Code)
 	}
 }
 

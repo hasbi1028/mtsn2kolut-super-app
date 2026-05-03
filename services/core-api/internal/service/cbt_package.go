@@ -52,6 +52,7 @@ type CreateCbtPackageInput struct {
 	RandomizeQuestions bool
 	IsActive           bool
 	QuestionIDs        []pgtype.UUID
+	QuestionWeights    map[string]int32
 }
 
 func (s *CbtPackage) Create(ctx context.Context, input CreateCbtPackageInput) (db.CbtPackage, error) {
@@ -102,11 +103,20 @@ func createCbtPackage(ctx context.Context, q cbtPackageCreateStore, input Create
 		if question.Status != db.CbtQuestionStatusEnumPublished {
 			return db.CbtPackage{}, fmt.Errorf("semua soal paket harus berstatus terbit")
 		}
+		points := int32(1)
+		if input.QuestionWeights != nil {
+			if value, ok := input.QuestionWeights[pgUUIDString(questionID)]; ok {
+				points = value
+			}
+		}
+		if points < 1 || points > 100 {
+			return db.CbtPackage{}, fmt.Errorf("bobot soal harus 1-100")
+		}
 		if err := q.AddCbtPackageQuestion(ctx, db.AddCbtPackageQuestionParams{
 			PackageID:  pkg.ID,
 			QuestionID: questionID,
 			Position:   int32(i + 1),
-			Points:     1,
+			Points:     points,
 		}); err != nil {
 			return db.CbtPackage{}, err
 		}

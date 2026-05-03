@@ -90,7 +90,10 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
       _errorNotice = null;
     });
 
-    final client = ExamApiClient(baseUrl: snapshot.baseUrl);
+    final client = ExamApiClient(
+      baseUrl: snapshot.baseUrl,
+      deviceFingerprint: snapshot.deviceFingerprint,
+    );
 
     try {
       final payload = await client.login(
@@ -155,9 +158,9 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
     final token = _tokenController.text.trim().toLowerCase();
     final baseUrl = _baseUrlController.text.trim();
 
-    if (token.length != 8) {
+    if (token.length < 8 || token.length > 64) {
       setState(() {
-        _errorMessage = 'Token ujian harus terdiri dari 8 karakter.';
+        _errorMessage = 'Token ujian tidak valid. Periksa kembali kartu ujian.';
         _errorNotice = null;
       });
       return;
@@ -178,8 +181,11 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
     });
 
     await _sessionStore.saveBaseUrl(baseUrl);
-    final client = ExamApiClient(baseUrl: baseUrl);
     final deviceFingerprint = _deviceFingerprint();
+    final client = ExamApiClient(
+      baseUrl: baseUrl,
+      deviceFingerprint: deviceFingerprint,
+    );
 
     try {
       final payload = await client.login(

@@ -6,6 +6,7 @@ import 'package:mobile/src/exam_api.dart';
 
 void main() {
   group('ExamApiClient', () {
+    const deviceFingerprint = 'android:test';
     late HttpServer server;
     late String baseUrl;
 
@@ -55,7 +56,10 @@ void main() {
         await request.response.close();
       });
 
-      final client = ExamApiClient(baseUrl: baseUrl);
+      final client = ExamApiClient(
+        baseUrl: baseUrl,
+        deviceFingerprint: deviceFingerprint,
+      );
       final payload = await client.login(
         token: 'token-1',
         deviceFingerprint: 'android:test',
@@ -71,6 +75,10 @@ void main() {
         expect(request.uri.path, '/api/exam/heartbeat');
         expect(request.method, 'POST');
         expect(request.headers.value('X-Exam-Token'), 'token-1');
+        expect(
+          request.headers.value('X-Device-Fingerprint'),
+          deviceFingerprint,
+        );
 
         final rawBody = await utf8.decoder.bind(request).join();
         expect(jsonDecode(rawBody), <String, dynamic>{});
@@ -86,7 +94,10 @@ void main() {
         await request.response.close();
       });
 
-      final client = ExamApiClient(baseUrl: baseUrl);
+      final client = ExamApiClient(
+        baseUrl: baseUrl,
+        deviceFingerprint: deviceFingerprint,
+      );
       await client.sendHeartbeat('token-1');
     });
 
@@ -111,6 +122,10 @@ void main() {
       server.listen((request) async {
         expect(request.uri.path, '/api/exam/status');
         expect(request.headers.value('X-Exam-Token'), 'token-1');
+        expect(
+          request.headers.value('X-Device-Fingerprint'),
+          deviceFingerprint,
+        );
 
         request.response
           ..statusCode = 200
@@ -128,7 +143,10 @@ void main() {
         await request.response.close();
       });
 
-      final client = ExamApiClient(baseUrl: baseUrl);
+      final client = ExamApiClient(
+        baseUrl: baseUrl,
+        deviceFingerprint: deviceFingerprint,
+      );
       final payload = await client.getStatus('token-1');
 
       expect(payload.answeredCount, 10);
@@ -142,6 +160,10 @@ void main() {
         expect(request.uri.path, '/api/exam/answer');
         expect(request.method, 'POST');
         expect(request.headers.value('X-Exam-Token'), 'token-1');
+        expect(
+          request.headers.value('X-Device-Fingerprint'),
+          deviceFingerprint,
+        );
 
         final rawBody = await utf8.decoder.bind(request).join();
         expect(jsonDecode(rawBody), <String, dynamic>{
@@ -160,7 +182,10 @@ void main() {
         await request.response.close();
       });
 
-      final client = ExamApiClient(baseUrl: baseUrl);
+      final client = ExamApiClient(
+        baseUrl: baseUrl,
+        deviceFingerprint: deviceFingerprint,
+      );
       await client.saveAnswer(
         token: 'token-1',
         questionId: 'question-7',
@@ -173,6 +198,10 @@ void main() {
         expect(request.uri.path, '/api/exam/event');
         expect(request.method, 'POST');
         expect(request.headers.value('X-Exam-Token'), 'token-1');
+        expect(
+          request.headers.value('X-Device-Fingerprint'),
+          deviceFingerprint,
+        );
 
         final rawBody = await utf8.decoder.bind(request).join();
         expect(jsonDecode(rawBody), <String, dynamic>{
@@ -191,7 +220,10 @@ void main() {
         await request.response.close();
       });
 
-      final client = ExamApiClient(baseUrl: baseUrl);
+      final client = ExamApiClient(
+        baseUrl: baseUrl,
+        deviceFingerprint: deviceFingerprint,
+      );
       await client.sendEvent(
         token: 'token-1',
         eventType: 'repeat_resume_attempt',
@@ -204,6 +236,10 @@ void main() {
         expect(request.uri.path, '/api/exam/submit');
         expect(request.method, 'POST');
         expect(request.headers.value('X-Exam-Token'), 'token-1');
+        expect(
+          request.headers.value('X-Device-Fingerprint'),
+          deviceFingerprint,
+        );
 
         final rawBody = await utf8.decoder.bind(request).join();
         expect(jsonDecode(rawBody), <String, dynamic>{});
@@ -219,7 +255,10 @@ void main() {
         await request.response.close();
       });
 
-      final client = ExamApiClient(baseUrl: baseUrl);
+      final client = ExamApiClient(
+        baseUrl: baseUrl,
+        deviceFingerprint: deviceFingerprint,
+      );
       await client.submit('token-1');
     });
 
@@ -232,7 +271,10 @@ void main() {
         await request.response.close();
       });
 
-      final client = ExamApiClient(baseUrl: baseUrl);
+      final client = ExamApiClient(
+        baseUrl: baseUrl,
+        deviceFingerprint: deviceFingerprint,
+      );
 
       await expectLater(
         () => client.getStatus('token-1'),
@@ -257,7 +299,10 @@ void main() {
           await request.response.close();
         });
 
-        final client = ExamApiClient(baseUrl: baseUrl);
+        final client = ExamApiClient(
+          baseUrl: baseUrl,
+          deviceFingerprint: deviceFingerprint,
+        );
 
         await expectLater(
           () => client.getStatus('token-1'),
@@ -287,7 +332,10 @@ void main() {
         await request.response.close();
       });
 
-      final client = ExamApiClient(baseUrl: baseUrl);
+      final client = ExamApiClient(
+        baseUrl: baseUrl,
+        deviceFingerprint: deviceFingerprint,
+      );
 
       await expectLater(
         () => client.login(token: 'token-1', deviceFingerprint: 'android:test'),
@@ -314,7 +362,10 @@ void main() {
           await request.response.close();
         });
 
-        final client = ExamApiClient(baseUrl: baseUrl);
+        final client = ExamApiClient(
+          baseUrl: baseUrl,
+          deviceFingerprint: deviceFingerprint,
+        );
 
         await expectLater(
           () => client.getStatus('token-1'),
@@ -342,7 +393,10 @@ void main() {
           await request.response.close();
         });
 
-        final client = ExamApiClient(baseUrl: baseUrl);
+        final client = ExamApiClient(
+          baseUrl: baseUrl,
+          deviceFingerprint: deviceFingerprint,
+        );
 
         await expectLater(
           () => client.submit('token-1'),
@@ -384,7 +438,10 @@ void main() {
           await request.response.close();
         });
 
-        final client = ExamApiClient(baseUrl: baseUrl);
+        final client = ExamApiClient(
+          baseUrl: baseUrl,
+          deviceFingerprint: deviceFingerprint,
+        );
 
         await expectLater(
           () => client.submit('token-1'),
@@ -421,7 +478,10 @@ void main() {
           await request.response.close();
         });
 
-        final client = ExamApiClient(baseUrl: baseUrl);
+        final client = ExamApiClient(
+          baseUrl: baseUrl,
+          deviceFingerprint: deviceFingerprint,
+        );
 
         await expectLater(
           () => client.submit('token-1'),
