@@ -618,8 +618,10 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	if out.AuthoringMode == "beginner" {
 		out.Difficulty = db.CbtQuestionDifficultyEnumMedium
 		out.Status = db.CbtQuestionStatusEnumDraft
-		out.WorkflowStatus = "draft"
-		out.ReviewerUsername = ""
+		if out.WorkflowStatus != "review" {
+			out.WorkflowStatus = "draft"
+			out.ReviewerUsername = ""
+		}
 		out.ApproverUsername = ""
 		out.WriterNotes = ""
 		out.ReviewNotes = ""
@@ -669,6 +671,7 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 }
 
 func validateQuestion(input SaveCbtQuestionInput) error {
+	requiresCompleteContent := input.WorkflowStatus != "draft" || input.Status != db.CbtQuestionStatusEnumDraft
 	if input.AuthoringMode == "beginner" {
 		switch input.QuestionType {
 		case "multiple_choice", "essay":
@@ -679,6 +682,9 @@ func validateQuestion(input SaveCbtQuestionInput) error {
 
 	switch input.QuestionType {
 	case "multiple_choice", "single_choice", "multiple_answer", "true_false":
+		if !requiresCompleteContent {
+			return nil
+		}
 		if len(input.Options) < 2 {
 			return fmt.Errorf("opsi jawaban minimal 2 untuk tipe soal objektif")
 		}
@@ -692,13 +698,13 @@ func validateQuestion(input SaveCbtQuestionInput) error {
 			return err
 		}
 	case "short_answer":
-		if input.AnswerKey == "" {
+		if requiresCompleteContent && input.AnswerKey == "" {
 			return fmt.Errorf("answer_key wajib diisi untuk short_answer")
 		}
 	case "essay":
-		if input.WorkflowStatus == "approved" || input.Status == db.CbtQuestionStatusEnumPublished {
+		if requiresCompleteContent {
 			if input.RubricHTML == "" {
-				return fmt.Errorf("rubric_html wajib diisi untuk essay yang di-approve atau dipublish")
+				return fmt.Errorf("rubric_html wajib diisi untuk essay yang diajukan review, di-approve, atau dipublish")
 			}
 		}
 	default:

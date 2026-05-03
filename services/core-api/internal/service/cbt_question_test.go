@@ -546,46 +546,50 @@ func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
 		{
 			name: "objective requires two options",
 			input: SaveCbtQuestionInput{
-				SubjectID:     pgtype.UUID{Valid: true},
-				AuthoringMode: "advance",
-				QuestionType:  "multiple_answer",
-				QuestionText:  "Pilih",
-				Options:       []QuestionOption{{Label: "A", Text: "A"}},
-				AnswerKey:     "A",
+				SubjectID:      pgtype.UUID{Valid: true},
+				AuthoringMode:  "advance",
+				QuestionType:   "multiple_answer",
+				QuestionText:   "Pilih",
+				Options:        []QuestionOption{{Label: "A", Text: "A"}},
+				AnswerKey:      "A",
+				WorkflowStatus: "review",
 			},
 			wantErr: "opsi jawaban minimal 2 untuk tipe soal objektif",
 		},
 		{
 			name: "beginner multiple choice requires four options",
 			input: SaveCbtQuestionInput{
-				SubjectID:     pgtype.UUID{Valid: true},
-				AuthoringMode: "beginner",
-				QuestionType:  "multiple_choice",
-				QuestionText:  "Pilih",
-				Options:       []QuestionOption{{Label: "A", Text: "A"}, {Label: "B", Text: "B"}},
-				AnswerKey:     "A",
+				SubjectID:      pgtype.UUID{Valid: true},
+				AuthoringMode:  "beginner",
+				QuestionType:   "multiple_choice",
+				QuestionText:   "Pilih",
+				Options:        []QuestionOption{{Label: "A", Text: "A"}, {Label: "B", Text: "B"}},
+				AnswerKey:      "A",
+				WorkflowStatus: "review",
 			},
 			wantErr: "mode beginner membutuhkan minimal 4 opsi untuk pilihan ganda",
 		},
 		{
 			name: "short answer requires key",
 			input: SaveCbtQuestionInput{
-				SubjectID:     pgtype.UUID{Valid: true},
-				AuthoringMode: "advance",
-				QuestionType:  "short_answer",
-				QuestionText:  "Jawab",
+				SubjectID:      pgtype.UUID{Valid: true},
+				AuthoringMode:  "advance",
+				QuestionType:   "short_answer",
+				QuestionText:   "Jawab",
+				WorkflowStatus: "review",
 			},
 			wantErr: "answer_key wajib diisi untuk short_answer",
 		},
 		{
 			name: "objective answer key must match option label",
 			input: SaveCbtQuestionInput{
-				SubjectID:     pgtype.UUID{Valid: true},
-				AuthoringMode: "advance",
-				QuestionType:  "multiple_choice",
-				QuestionText:  "Pilih",
-				Options:       []QuestionOption{{Label: "A", Text: "A"}, {Label: "B", Text: "B"}},
-				AnswerKey:     "F",
+				SubjectID:      pgtype.UUID{Valid: true},
+				AuthoringMode:  "advance",
+				QuestionType:   "multiple_choice",
+				QuestionText:   "Pilih",
+				Options:        []QuestionOption{{Label: "A", Text: "A"}, {Label: "B", Text: "B"}},
+				AnswerKey:      "F",
+				WorkflowStatus: "review",
 			},
 			wantErr: "answer_key harus sesuai label opsi yang tersedia",
 		},
@@ -598,7 +602,7 @@ func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
 				QuestionText:   "Uraikan",
 				WorkflowStatus: "approved",
 			},
-			wantErr: "rubric_html wajib diisi untuk essay yang di-approve atau dipublish",
+			wantErr: "rubric_html wajib diisi untuk essay yang diajukan review, di-approve, atau dipublish",
 		},
 		{
 			name: "unsupported type",
@@ -622,6 +626,19 @@ func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
 }
 
 func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
+	draft, err := normalizeQuestionInput(SaveCbtQuestionInput{
+		SubjectID:     pgtype.UUID{Valid: true},
+		AuthoringMode: "beginner",
+		QuestionType:  "multiple_choice",
+		QuestionText:  "Draft awal",
+	})
+	if err != nil {
+		t.Fatalf("normalizeQuestionInput(draft partial) error = %v", err)
+	}
+	if draft.WorkflowStatus != "draft" || len(draft.Options) != 0 {
+		t.Fatalf("normalizeQuestionInput(draft partial) workflow/options = %q/%d, want draft/0", draft.WorkflowStatus, len(draft.Options))
+	}
+
 	trueFalse, err := normalizeQuestionInput(SaveCbtQuestionInput{
 		SubjectID:     pgtype.UUID{Valid: true},
 		AuthoringMode: "advance",

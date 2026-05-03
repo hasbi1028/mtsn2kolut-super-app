@@ -21,6 +21,7 @@
 	type ModuleMode = 'catalog' | 'composer' | 'review' | 'import';
 	type AuthoringMode = 'beginner' | 'advance';
 	type ComposerQuestionType = 'multiple_choice' | 'essay';
+	type ComposerSaveIntent = 'draft' | 'review';
 	type Question = {
 		id: string;
 		authoring_mode?: string;
@@ -233,6 +234,7 @@
 	let showComposer = $state(false);
 	let editingId = $state<string | null>(null);
 	let composerBusy = $state(false);
+	let composerAction = $state<ComposerSaveIntent | ''>('');
 	let draftStatus = $state('');
 	let draftSavedAt = $state<string | null>(null);
 	let showTemplates = $state(true);
@@ -330,7 +332,15 @@
 	let passedChecks = $derived(Object.values(readinessChecks).filter(Boolean).length);
 	let totalChecks = $derived(Object.keys(readinessChecks).length);
 	let readinessScore = $derived(Math.round((passedChecks / totalChecks) * 100));
-	let canSave = $derived(readinessScore === 100 && !composerBusy);
+	let draftIssues = $derived.by(() => {
+		const issues: string[] = [];
+		if (!readinessChecks.subject) issues.push('Pilih mata pelajaran sebelum menyimpan draft');
+		if (!readinessChecks.stem) issues.push('Isi pertanyaan minimal 5 karakter untuk draft');
+		if (!readinessChecks.weight) issues.push('Bobot nilai minimal 1');
+		return issues;
+	});
+	let canSaveDraft = $derived(draftIssues.length === 0 && !composerBusy);
+	let canSubmitReview = $derived(readinessScore === 100 && !composerBusy);
 
 	let qualitySignals = $derived.by(() => {
 		if (isEssay) {
@@ -924,11 +934,11 @@
 		}
 		if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
 			event.preventDefault();
-			if (canSave) {
-				void saveQuestion();
+			if (canSaveDraft) {
+				void saveQuestion('draft');
 				return;
 			}
-			toast.warning(validationIssues[0] ?? 'Lengkapi soal sebelum menyimpan');
+			toast.warning(draftIssues[0] ?? 'Lengkapi draft sebelum menyimpan');
 		}
 	}
 
@@ -945,9 +955,14 @@
 		importResult = null;
 	}
 
-	async function saveQuestion() {
-		if (!canSave) {
-			toast.warning(validationIssues[0] ?? 'Lengkapi soal sebelum menyimpan');
+	async function saveQuestion(intent: ComposerSaveIntent = 'draft') {
+		const isReview = intent === 'review';
+		if (isReview && !canSubmitReview) {
+			toast.warning(validationIssues[0] ?? 'Lengkapi soal sebelum diajukan review');
+			return;
+		}
+		if (!isReview && !canSaveDraft) {
+			toast.warning(draftIssues[0] ?? 'Lengkapi draft sebelum menyimpan');
 			return;
 		}
 		if (editingId) {
@@ -958,6 +973,7 @@
 			}
 		}
 		composerBusy = true;
+		composerAction = intent;
 		try {
 			const payload = {
 				authoring_mode: fAuthoringMode,
@@ -965,8 +981,8 @@
 				question_text: htmlToPlainText(fStem),
 				question_type: fQuestionType,
 				stem_html: fStem,
-				stimulus_html: isAdvanceMode ? fStimulus : '',
-				explanation_html: isAdvanceMode ? fExplanation : '',
+				stimulus_html: fStimulus,
+				explanation_html: fExplanation,
 				rubric_html: isEssay ? fRubric : '',
 				options: isEssay
 					? []
@@ -978,16 +994,16 @@
 				answer_key: isEssay ? '' : fAnswerKey,
 				difficulty: fDifficulty,
 				status: 'draft',
-				workflow_status: isAdvanceMode ? fWorkflowStatus : 'draft',
+				workflow_status: isReview ? 'review' : 'draft',
 				grade_level: fGradeLevel,
-				academic_phase: isAdvanceMode ? fAcademicPhase : '',
-				cp_ref: isAdvanceMode ? fCPRef : '',
-				tp_ref: isAdvanceMode ? fTPRef : '',
-				kd_ref: isAdvanceMode ? fKDRef : '',
-				indicator_ref: isAdvanceMode ? fIndicatorRef : '',
-				material_topic: isAdvanceMode ? fMaterialTopic : '',
-				cognitive_level: isAdvanceMode ? fCognitiveLevel : '',
-				hots_flag: isAdvanceMode ? fHotsFlag : false,
+				academic_phase: fAcademicPhase,
+				cp_ref: fCPRef,
+				tp_ref: fTPRef,
+				kd_ref: fKDRef,
+				indicator_ref: fIndicatorRef,
+				material_topic: fMaterialTopic,
+				cognitive_level: fCognitiveLevel,
+				hots_flag: fHotsFlag,
 				writer_notes: isAdvanceMode ? 'Disusun dari komposer soal mode advance.' : '',
 				review_notes: '',
 			};
@@ -1002,13 +1018,14 @@
 			await readClientJson<unknown>(res);
 
 			clearDraft();
-			toast.success(editingId ? 'Soal berhasil diperbarui' : 'Soal berhasil dibuat');
+			toast.success(isReview ? 'Soal diajukan review' : editingId ? 'Draft soal berhasil diperbarui' : 'Draft soal berhasil dibuat');
 			closeComposer();
 			await refreshOverview(1);
 		} catch (e) {
 			toast.error(mutationErrorMessage(e, 'Gagal menyimpan soal'));
 		} finally {
 			composerBusy = false;
+			composerAction = '';
 		}
 	}
 
@@ -1485,7 +1502,7 @@
 {#snippet composerPreview()}
 	<div class="mb-4">
 		<div class="mb-1 flex items-center justify-between">
-			<span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Kesiapan Soal</span>
+			<span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Kesiapan Review</span>
 			<span
 				class="text-sm font-bold {readinessScore === 100
 					? 'text-green-700'
@@ -1513,7 +1530,7 @@
 				{/each}
 			</ul>
 		{:else}
-			<p class="mt-1 text-[10px] text-green-600">Soal siap disimpan!</p>
+			<p class="mt-1 text-[10px] text-green-600">Soal siap diajukan review.</p>
 		{/if}
 	</div>
 
@@ -1642,7 +1659,7 @@
 				<section class="mb-4 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
 					<div class="flex flex-wrap items-center gap-2">
 						<div class="flex min-w-[11rem] items-center gap-2">
-							<span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Kesiapan</span>
+							<span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Review</span>
 							<div class="h-1.5 w-20 overflow-hidden rounded-full bg-slate-200">
 								<div
 									class="h-1.5 rounded-full transition-all duration-300 {readinessScore === 100
@@ -1656,7 +1673,7 @@
 							<span class="text-xs font-bold {readinessScore === 100 ? 'text-green-700' : 'text-red-500'}">{readinessScore}%</span>
 						</div>
 						<span class="rounded-full px-2 py-1 text-[10px] font-semibold {validationIssues.length === 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}">
-							{validationIssues.length === 0 ? 'Wajib lengkap' : `${validationIssues.length} wajib belum lengkap`}
+							{validationIssues.length === 0 ? 'Siap review' : `${validationIssues.length} wajib belum lengkap`}
 						</span>
 						<span class="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">
 							{qualityWarningCount} sinyal kualitas perlu cek
@@ -1864,12 +1881,9 @@
 										<label for="f-indicator" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Indikator</label>
 										<Input id="f-indicator" placeholder="Indikator" bind:value={fIndicatorRef} class="h-8 text-sm" />
 									</div>
-									<div>
-										<label for="f-workflow" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Alur</label>
-										<select id="f-workflow" bind:value={fWorkflowStatus} class="h-8 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500">
-											<option value="draft">Draft</option>
-											<option value="review">Ajukan Review</option>
-										</select>
+									<div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+										<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Alur</p>
+										<p class="mt-0.5 text-[11px] text-slate-500">Draft dan review dikendalikan dari tombol bawah.</p>
 									</div>
 								</div>
 							</section>
@@ -2032,7 +2046,7 @@
 			<div class="flex shrink-0 flex-col gap-2 border-t border-green-100 bg-white px-4 py-2.5 md:flex-row md:items-center md:justify-between md:px-6">
 				<div class="min-w-0 text-xs text-slate-500">
 					<span class="font-semibold text-green-700">{draftStatusLabel()}</span>
-					<span class="ml-2 text-slate-400">· {validationIssues.length === 0 ? 'Siap disimpan' : `${validationIssues.length} field wajib belum lengkap`} · Ctrl+S</span>
+					<span class="ml-2 text-slate-400">· {draftIssues.length === 0 ? 'Draft bisa disimpan' : draftIssues[0]} · Review {validationIssues.length === 0 ? 'siap' : `${validationIssues.length} wajib belum lengkap`} · Ctrl+S</span>
 				</div>
 				<div class="flex shrink-0 flex-wrap justify-end gap-2">
 					<Button
@@ -2046,13 +2060,23 @@
 						Batalkan
 					</Button>
 					<LoadingButton
-						onclick={() => void saveQuestion()}
-						disabled={!canSave}
-						loading={composerBusy}
-						loadingLabel="Menyimpan..."
+						onclick={() => void saveQuestion('draft')}
+						disabled={!canSaveDraft}
+						loading={composerAction === 'draft'}
+						loadingLabel="Menyimpan draft..."
+						variant="outline"
+						class="h-8 text-xs disabled:opacity-50"
+					>
+						Simpan Draft
+					</LoadingButton>
+					<LoadingButton
+						onclick={() => void saveQuestion('review')}
+						disabled={!canSubmitReview}
+						loading={composerAction === 'review'}
+						loadingLabel="Mengajukan..."
 						class="h-8 bg-green-700 text-xs text-white hover:bg-green-800 disabled:opacity-50"
 					>
-						{editingId ? 'Simpan Perubahan' : 'Simpan Soal'}
+						Ajukan Review
 					</LoadingButton>
 				</div>
 			</div>
