@@ -94,6 +94,13 @@ SELECT gc.id, gc.assignment_id, gc.title, gc.category, gc.weight, gc.max_score,
 FROM grade_components gc
 WHERE gc.id = $1;
 
+-- name: GetNonTestGradeComponentSource :one
+SELECT id
+FROM non_test_assessments
+WHERE grade_component_id = $1
+ORDER BY grade_synced_at DESC NULLS LAST, updated_at DESC
+LIMIT 1;
+
 -- name: GetGradeComponentHighestScore :one
 SELECT COALESCE(MAX(ge.score), -1)::double precision AS max_score
 FROM grade_entries ge

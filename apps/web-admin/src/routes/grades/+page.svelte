@@ -385,6 +385,10 @@
 		return sourceId ? resolve(`/cbt/non-test?assessment_id=${sourceId}`) : resolve('/cbt/non-test');
 	}
 
+	function nonTestGradeLockMessage() {
+		return 'Komponen nilai non-tes dikoreksi dari modul non-tes lalu disinkron ulang.';
+	}
+
 	function assignmentStatusLabel(item: AssignmentStatus) {
 		if (item.is_finalized) return 'Sudah Final';
 		if (item.ready) return 'Siap Difinalkan';
@@ -766,6 +770,10 @@
 			showError('Assignment sudah difinalisasi. Buka finalisasi terlebih dahulu untuk mengubah komponen.');
 			return;
 		}
+		if (isNonTestComponent(component)) {
+			showError(nonTestGradeLockMessage());
+			return;
+		}
 		editingComponentId = component.id;
 		componentTitle = component.title;
 		componentCategory = component.category;
@@ -776,6 +784,10 @@
 	async function saveComponent() {
 		if (isFinalized) {
 			showError('Assignment sudah difinalisasi. Buka finalisasi terlebih dahulu untuk mengubah komponen.');
+			return;
+		}
+		if (editingComponent && isNonTestComponent(editingComponent)) {
+			showError(nonTestGradeLockMessage());
 			return;
 		}
 		if ((!assignmentId && !editingComponentId) || !componentTitle) return;
@@ -816,6 +828,11 @@
 	async function deleteComponent(id: string) {
 		if (isFinalized) {
 			showError('Assignment sudah difinalisasi. Buka finalisasi terlebih dahulu untuk mengubah komponen.');
+			return;
+		}
+		const component = components.find((item) => item.id === id);
+		if (isNonTestComponent(component)) {
+			showError(nonTestGradeLockMessage());
 			return;
 		}
 		if (!(await confirmAction({
@@ -868,6 +885,9 @@
 		if (isFinalized) {
 			throw new Error('Assignment sudah difinalisasi. Buka finalisasi terlebih dahulu untuk mengubah nilai.');
 		}
+		if (selectedComponent && isNonTestComponent(selectedComponent)) {
+			throw new Error(nonTestGradeLockMessage());
+		}
 		if (!componentId) return;
 		const rawScore = normalizedEntryScore(studentId);
 		if (rawScore === '') {
@@ -908,6 +928,10 @@
 
 	async function saveAllDirtyEntries() {
 		if (!selectedComponent || dirtyEntryIds.length === 0) return;
+		if (isNonTestComponent(selectedComponent)) {
+			showError(nonTestGradeLockMessage());
+			return;
+		}
 		bulkSaveBusy = true;
 		const failedStudents: string[] = [];
 		try {
@@ -936,6 +960,10 @@
 			return;
 		}
 		if (!selectedComponent) return;
+		if (isNonTestComponent(selectedComponent)) {
+			showError(nonTestGradeLockMessage());
+			return;
+		}
 		const normalizedScore = quickFillScore.trim();
 		const normalizedNote = quickFillNote.trim();
 		if (normalizedScore === '' && normalizedNote === '') {
@@ -1724,7 +1752,7 @@
 											<Table.Cell>{item.max_score}</Table.Cell>
 											<Table.Cell class="text-right">
 												<div class="flex justify-end gap-2">
-													<Button variant="outline" size="sm" onclick={() => beginEditComponent(item)}>Edit</Button>
+													<Button variant="outline" size="sm" disabled={isNonTestComponent(item)} onclick={() => beginEditComponent(item)}>Edit</Button>
 													<LoadingButton
 														size="sm"
 														variant={item.is_published ? 'outline' : 'default'}
@@ -1733,7 +1761,7 @@
 														onclick={() => togglePublish(item)}
 														label={item.is_published ? 'Kembalikan ke Draft' : 'Terbitkan'}
 													/>
-													<Button variant="destructive" size="xs" onclick={() => deleteComponent(item.id)}>Hapus</Button>
+													<Button variant="destructive" size="xs" disabled={isNonTestComponent(item)} onclick={() => deleteComponent(item.id)}>Hapus</Button>
 												</div>
 											</Table.Cell>
 										</Table.Row>
@@ -1824,7 +1852,7 @@
 											{selectedComponent.source_non_test_title || nonTestTypeLabel(selectedComponent.source_non_test_type)}
 										</p>
 										<p class="text-sm text-slate-600">
-											Komponen ini dibuat dari sinkronisasi asesmen non-tes. Koreksi sumber nilai sebaiknya dilakukan dari modul asal lalu dikirim ulang ke nilai.
+											Komponen ini dibuat dari sinkronisasi asesmen non-tes dan bersifat read-only di gradebook. Koreksi sumber nilai dilakukan dari modul asal lalu dikirim ulang ke nilai.
 										</p>
 									</div>
 									<a
@@ -1836,47 +1864,49 @@
 								</div>
 							</div>
 						{/if}
-						<div class="mx-6 mt-6 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-							<div>
-								<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Bulk Input</p>
-								<p class="mt-2 text-lg font-semibold text-slate-900">{dirtyEntryIds.length} perubahan belum disimpan</p>
-								<p class="text-sm text-slate-600">Guru dapat mengubah banyak nilai terlebih dahulu, lalu menyimpan seluruh perubahan untuk komponen ini sekaligus.</p>
-							</div>
-							<div class="flex flex-wrap gap-2">
-								<Badge variant="outline">{entries.length} siswa</Badge>
-								<Badge variant={dirtyEntryIds.length > 0 ? 'secondary' : 'outline'}>
-									{dirtyEntryIds.length > 0 ? `${dirtyEntryIds.length} perlu disimpan` : 'Semua tersimpan'}
-								</Badge>
-								<LoadingButton
-									loading={bulkSaveBusy}
-									loadingLabel="Menyimpan semua..."
-									disabled={dirtyEntryIds.length === 0}
-									onclick={() => void saveAllDirtyEntries()}
-									label="Simpan Semua Perubahan"
-								/>
-							</div>
-						</div>
-						<div class="mx-6 flex flex-col gap-3 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-4">
-							<div>
-								<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Quick Fill</p>
-								<p class="mt-2 text-sm text-slate-700">Isi nilai atau catatan massal sebelum melakukan bulk save. Guru bisa menerapkan ke semua siswa atau hanya ke baris yang masih kosong.</p>
-							</div>
-							<div class="grid gap-3 lg:grid-cols-[12rem_1fr_auto]">
+						{#if !isNonTestComponent(selectedComponent)}
+							<div class="mx-6 mt-6 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
 								<div>
-									<label for="quick-fill-score" class="mb-1 block text-xs font-medium text-slate-500">Nilai Massal</label>
-									<Input id="quick-fill-score" type="number" min="0" max={selectedComponent.max_score} step="0.1" bind:value={quickFillScore} />
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Bulk Input</p>
+									<p class="mt-2 text-lg font-semibold text-slate-900">{dirtyEntryIds.length} perubahan belum disimpan</p>
+									<p class="text-sm text-slate-600">Guru dapat mengubah banyak nilai terlebih dahulu, lalu menyimpan seluruh perubahan untuk komponen ini sekaligus.</p>
 								</div>
-								<div>
-									<label for="quick-fill-note" class="mb-1 block text-xs font-medium text-slate-500">Catatan Massal</label>
-									<Input id="quick-fill-note" placeholder="Mis: remedial, observasi, atau catatan umum" bind:value={quickFillNote} />
-								</div>
-								<div class="flex items-end gap-2">
-									<Button variant="outline" onclick={() => applyQuickFill('empty')}>Isi yang Kosong</Button>
-									<Button variant="outline" onclick={() => applyQuickFill('all')}>Terapkan ke Semua</Button>
-									<Button variant="ghost" onclick={resetQuickFill}>Reset</Button>
+								<div class="flex flex-wrap gap-2">
+									<Badge variant="outline">{entries.length} siswa</Badge>
+									<Badge variant={dirtyEntryIds.length > 0 ? 'secondary' : 'outline'}>
+										{dirtyEntryIds.length > 0 ? `${dirtyEntryIds.length} perlu disimpan` : 'Semua tersimpan'}
+									</Badge>
+									<LoadingButton
+										loading={bulkSaveBusy}
+										loadingLabel="Menyimpan semua..."
+										disabled={dirtyEntryIds.length === 0}
+										onclick={() => void saveAllDirtyEntries()}
+										label="Simpan Semua Perubahan"
+									/>
 								</div>
 							</div>
-						</div>
+							<div class="mx-6 flex flex-col gap-3 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-4">
+								<div>
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Quick Fill</p>
+									<p class="mt-2 text-sm text-slate-700">Isi nilai atau catatan massal sebelum melakukan bulk save. Guru bisa menerapkan ke semua siswa atau hanya ke baris yang masih kosong.</p>
+								</div>
+								<div class="grid gap-3 lg:grid-cols-[12rem_1fr_auto]">
+									<div>
+										<label for="quick-fill-score" class="mb-1 block text-xs font-medium text-slate-500">Nilai Massal</label>
+										<Input id="quick-fill-score" type="number" min="0" max={selectedComponent.max_score} step="0.1" bind:value={quickFillScore} />
+									</div>
+									<div>
+										<label for="quick-fill-note" class="mb-1 block text-xs font-medium text-slate-500">Catatan Massal</label>
+										<Input id="quick-fill-note" placeholder="Mis: remedial, observasi, atau catatan umum" bind:value={quickFillNote} />
+									</div>
+									<div class="flex items-end gap-2">
+										<Button variant="outline" onclick={() => applyQuickFill('empty')}>Isi yang Kosong</Button>
+										<Button variant="outline" onclick={() => applyQuickFill('all')}>Terapkan ke Semua</Button>
+										<Button variant="ghost" onclick={resetQuickFill}>Reset</Button>
+									</div>
+								</div>
+							</div>
+						{/if}
 					{/if}
 					<div class="overflow-x-auto">
 						<Table.Root>
@@ -1908,16 +1938,24 @@
 												<div class="text-xs text-slate-500">{row.nis || row.nisn || 'Tanpa NIS/NISN'}</div>
 											</Table.Cell>
 											<Table.Cell>
-												<Input type="number" min="0" max={selectedComponent.max_score} step="0.1" bind:value={scoreInput[row.student_id]} />
+												<Input
+													type="number"
+													min="0"
+													max={selectedComponent.max_score}
+													step="0.1"
+													bind:value={scoreInput[row.student_id]}
+													disabled={isNonTestComponent(selectedComponent)}
+												/>
 											</Table.Cell>
 											<Table.Cell>
-												<Input placeholder="Catatan singkat" bind:value={noteInput[row.student_id]} />
+												<Input placeholder="Catatan singkat" bind:value={noteInput[row.student_id]} disabled={isNonTestComponent(selectedComponent)} />
 											</Table.Cell>
 											<Table.Cell class="text-right">
 												<LoadingButton
 													size="sm"
 													loading={entryBusy[row.student_id]}
 													loadingLabel="Menyimpan..."
+													disabled={isNonTestComponent(selectedComponent)}
 													onclick={() => saveEntry(row.student_id)}
 													label="Simpan"
 												/>

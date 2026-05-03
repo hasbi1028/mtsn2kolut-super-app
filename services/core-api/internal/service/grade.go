@@ -16,6 +16,7 @@ type gradeStore interface {
 	ListGradeAssignmentStatuses(ctx context.Context) ([]db.ListGradeAssignmentStatusesRow, error)
 	ListGradeComponents(ctx context.Context, arg db.ListGradeComponentsParams) ([]db.ListGradeComponentsRow, error)
 	GetGradeComponent(ctx context.Context, id pgtype.UUID) (db.GradeComponent, error)
+	GetNonTestGradeComponentSource(ctx context.Context, gradeComponentID pgtype.UUID) (pgtype.UUID, error)
 	GetGradeComponentHighestScore(ctx context.Context, componentID pgtype.UUID) (float64, error)
 	GetGradeAssignmentFinalization(ctx context.Context, assignmentID pgtype.UUID) (db.GradeAssignmentFinalization, error)
 	UpsertGradeAssignmentFinalization(ctx context.Context, arg db.UpsertGradeAssignmentFinalizationParams) (db.GradeAssignmentFinalization, error)
@@ -174,6 +175,9 @@ func (s *Grade) UpdateComponent(ctx context.Context, arg db.UpdateGradeComponent
 	if err := s.ensureAssignmentEditable(ctx, component.AssignmentID); err != nil {
 		return db.GradeComponent{}, err
 	}
+	if err := s.ensureComponentNotNonTestSource(ctx, arg.ID); err != nil {
+		return db.GradeComponent{}, err
+	}
 	arg.Title = strings.TrimSpace(arg.Title)
 	arg.Category = normalizeGradeCategory(arg.Category)
 	if arg.Title == "" {
@@ -223,6 +227,9 @@ func (s *Grade) DeleteComponent(ctx context.Context, id pgtype.UUID, teacherEmpl
 	if err := s.ensureAssignmentEditable(ctx, component.AssignmentID); err != nil {
 		return err
 	}
+	if err := s.ensureComponentNotNonTestSource(ctx, id); err != nil {
+		return err
+	}
 	return s.q.DeleteGradeComponent(ctx, id)
 }
 
@@ -235,6 +242,9 @@ func (s *Grade) UpsertEntry(ctx context.Context, componentID, studentID, teacher
 		return db.GradeEntry{}, err
 	}
 	if err := s.ensureAssignmentEditable(ctx, component.AssignmentID); err != nil {
+		return db.GradeEntry{}, err
+	}
+	if err := s.ensureComponentNotNonTestSource(ctx, componentID); err != nil {
 		return db.GradeEntry{}, err
 	}
 	if score < 0 {
@@ -311,6 +321,17 @@ func (s *Grade) ensureAssignmentEditable(ctx context.Context, assignmentID pgtyp
 	_, err := s.q.GetGradeAssignmentFinalization(ctx, assignmentID)
 	if err == nil {
 		return fmt.Errorf("assignment sudah difinalisasi, buka finalisasi terlebih dahulu")
+	}
+	if err == pgx.ErrNoRows {
+		return nil
+	}
+	return err
+}
+
+func (s *Grade) ensureComponentNotNonTestSource(ctx context.Context, componentID pgtype.UUID) error {
+	_, err := s.q.GetNonTestGradeComponentSource(ctx, componentID)
+	if err == nil {
+		return fmt.Errorf("komponen nilai berasal dari asesmen non-tes; ubah nilai dari modul non-tes lalu sinkron ulang")
 	}
 	if err == pgx.ErrNoRows {
 		return nil

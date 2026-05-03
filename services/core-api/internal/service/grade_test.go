@@ -32,6 +32,8 @@ type fakeGradeStore struct {
 	assignmentStatusesErr error
 	component             db.GradeComponent
 	componentErr          error
+	nonTestSourceID       pgtype.UUID
+	nonTestSourceErr      error
 	listComponents        []db.ListGradeComponentsRow
 	listComponentsErr     error
 	listSummary           []db.ListGradebookSummaryRow
@@ -59,6 +61,16 @@ func (f *fakeGradeStore) ListGradeComponents(ctx context.Context, arg db.ListGra
 
 func (f *fakeGradeStore) GetGradeComponent(ctx context.Context, id pgtype.UUID) (db.GradeComponent, error) {
 	return f.component, f.componentErr
+}
+
+func (f *fakeGradeStore) GetNonTestGradeComponentSource(ctx context.Context, gradeComponentID pgtype.UUID) (pgtype.UUID, error) {
+	if f.nonTestSourceErr != nil {
+		return pgtype.UUID{}, f.nonTestSourceErr
+	}
+	if f.nonTestSourceID.Valid {
+		return f.nonTestSourceID, nil
+	}
+	return pgtype.UUID{}, pgx.ErrNoRows
 }
 
 func (f *fakeGradeStore) GetGradeComponentHighestScore(ctx context.Context, componentID pgtype.UUID) (float64, error) {
@@ -184,6 +196,48 @@ func TestGradeUpdateComponentNormalizesAndForwardsValues(t *testing.T) {
 	}
 	if store.updateArg.Category != "project" {
 		t.Fatalf("category = %q, want %q", store.updateArg.Category, "project")
+	}
+}
+
+func TestGradeRejectsDirectMutationForNonTestSourcedComponent(t *testing.T) {
+	assignmentID := pgtype.UUID{Bytes: [16]byte{61}, Valid: true}
+	componentID := pgtype.UUID{Bytes: [16]byte{62}, Valid: true}
+	studentID := pgtype.UUID{Bytes: [16]byte{63}, Valid: true}
+	store := &fakeGradeStore{
+		component:       db.GradeComponent{ID: componentID, AssignmentID: assignmentID, Title: "Praktik", MaxScore: 100},
+		finalizationErr: pgx.ErrNoRows,
+		nonTestSourceID: pgtype.UUID{Bytes: [16]byte{64}, Valid: true},
+	}
+	svc := &Grade{q: store}
+
+	_, err := svc.UpdateComponent(context.Background(), db.UpdateGradeComponentParams{
+		ID:       componentID,
+		Title:    "Praktik Revisi",
+		Category: "practice",
+		Weight:   1,
+		MaxScore: 100,
+	}, pgtype.UUID{})
+	if err == nil || !strings.Contains(err.Error(), "asesmen non-tes") {
+		t.Fatalf("UpdateComponent() error = %v, want non-test source guard", err)
+	}
+	if store.updateArg.ID.Valid {
+		t.Fatal("UpdateComponent() forwarded repository update for non-test sourced component")
+	}
+
+	err = svc.DeleteComponent(context.Background(), componentID, pgtype.UUID{})
+	if err == nil || !strings.Contains(err.Error(), "asesmen non-tes") {
+		t.Fatalf("DeleteComponent() error = %v, want non-test source guard", err)
+	}
+	if store.deleteComponentID.Valid {
+		t.Fatal("DeleteComponent() forwarded repository delete for non-test sourced component")
+	}
+
+	_, err = svc.UpsertEntry(context.Background(), componentID, studentID, pgtype.UUID{}, 88, "catatan", "guru")
+	if err == nil || !strings.Contains(err.Error(), "asesmen non-tes") {
+		t.Fatalf("UpsertEntry() error = %v, want non-test source guard", err)
+	}
+	if store.upsertEntryArg.ComponentID.Valid {
+		t.Fatal("UpsertEntry() forwarded repository entry write for non-test sourced component")
 	}
 }
 

@@ -124,6 +124,21 @@ func (q *Queries) GetGradeComponentHighestScore(ctx context.Context, componentID
 	return max_score, err
 }
 
+const getNonTestGradeComponentSource = `-- name: GetNonTestGradeComponentSource :one
+SELECT id
+FROM non_test_assessments
+WHERE grade_component_id = $1
+ORDER BY grade_synced_at DESC NULLS LAST, updated_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetNonTestGradeComponentSource(ctx context.Context, gradeComponentID pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getNonTestGradeComponentSource, gradeComponentID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const listGradeAssignmentStatuses = `-- name: ListGradeAssignmentStatuses :many
 WITH component_rollup AS (
   SELECT csa.id AS assignment_id,
