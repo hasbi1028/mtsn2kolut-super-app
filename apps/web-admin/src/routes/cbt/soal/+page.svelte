@@ -1387,14 +1387,14 @@
 									{@const label = ANSWER_LABELS[i]}
 									{@const isAnswer = fAnswerKey === label}
 									<section
-										class="space-y-3 rounded-xl border bg-white p-4 shadow-sm transition-colors {isAnswer
+										class="space-y-2 rounded-xl border bg-white p-3 shadow-sm transition-colors {isAnswer
 											? 'border-green-500 ring-4 ring-green-100'
 											: 'border-slate-200 hover:border-slate-300'}"
 									>
-										<div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+										<div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
 											<div>
 												<p class="text-xs font-black uppercase tracking-[0.2em] text-slate-700">Opsi {label}</p>
-												<p class="mt-1 text-xs text-slate-400">{isAnswer ? 'Ditandai sebagai kunci jawaban' : 'Pengecoh / alternatif jawaban'}</p>
+												<p class="mt-0.5 text-[11px] text-slate-400">{isAnswer ? 'Ditandai sebagai kunci jawaban' : 'Pengecoh / alternatif jawaban'}</p>
 											</div>
 											<label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-green-50">
 												<input
@@ -1413,7 +1413,8 @@
 												bind:value={fOptions[i]}
 												id={`soal-option-${label}`}
 												placeholder={`Teks jawaban ${label}. Gambar bisa disisipkan langsung di dalam opsi.`}
-												minRows={4}
+												minRows={2}
+												compact
 												onImageUpload={uploadImageInEditor}
 											/>
 										</div>

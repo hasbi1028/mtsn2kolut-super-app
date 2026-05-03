@@ -13,12 +13,16 @@
 		id = '',
 		placeholder = 'Ketik di sini...',
 		minRows = 5,
+		compact = false,
+		resizable = true,
 		onImageUpload,
 	}: {
 		value: string;
 		id?: string;
 		placeholder?: string;
 		minRows?: number;
+		compact?: boolean;
+		resizable?: boolean;
 		onImageUpload?: (file: File) => Promise<string>;
 	} = $props();
 
@@ -41,7 +45,7 @@
 	let activePresetWidth = $state<number | null>(320);
 	let isAdjustingImage = $state(false);
 	let syncingFromEditor = false;
-	const minHeight = $derived(`${Math.max(3, minRows) * 2.5}rem`);
+	const minHeight = $derived(`${Math.max(compact ? 2 : 3, minRows) * (compact ? 2 : 2.5)}rem`);
 
 	function editorHTML() {
 		if (!quill) return '';
@@ -197,7 +201,11 @@
 	});
 </script>
 
-<div class="legacy-rich-editor overflow-hidden rounded-md border border-slate-200 bg-white text-slate-900 shadow-sm">
+<div
+	class="legacy-rich-editor overflow-hidden rounded-md border border-slate-200 bg-white text-slate-900 shadow-sm"
+	class:legacy-rich-editor--compact={compact}
+	class:legacy-rich-editor--resizable={resizable}
+>
 	{#if selectedImage}
 		<div
 			bind:this={controlsElement}
@@ -256,7 +264,7 @@
 			</div>
 		</div>
 	{/if}
-	<div bind:this={editorElement} {id} class="min-h-[120px]" style:min-height={minHeight}></div>
+	<div bind:this={editorElement} {id} style:min-height={minHeight}></div>
 </div>
 
 <style>
@@ -273,10 +281,40 @@
 		font-family: inherit !important;
 		font-size: 14px !important;
 	}
+	:global(.legacy-rich-editor--resizable .ql-container.ql-snow) {
+		resize: vertical;
+		overflow: auto !important;
+	}
 	:global(.legacy-rich-editor .ql-editor) {
 		min-height: inherit;
 		padding: 14px !important;
 		line-height: 1.65;
+	}
+	:global(.legacy-rich-editor--compact .ql-toolbar.ql-snow) {
+		padding: 4px !important;
+	}
+	:global(.legacy-rich-editor--compact .ql-toolbar.ql-snow .ql-formats) {
+		margin-right: 6px !important;
+	}
+	:global(.legacy-rich-editor--compact .ql-toolbar.ql-snow button) {
+		height: 24px !important;
+		width: 24px !important;
+		padding: 3px !important;
+	}
+	:global(.legacy-rich-editor--compact .ql-toolbar.ql-snow .ql-picker) {
+		height: 24px !important;
+		font-size: 12px !important;
+	}
+	:global(.legacy-rich-editor--compact .ql-toolbar.ql-snow .ql-picker-label) {
+		padding-left: 4px !important;
+		padding-right: 14px !important;
+	}
+	:global(.legacy-rich-editor--compact .ql-container.ql-snow) {
+		font-size: 13px !important;
+	}
+	:global(.legacy-rich-editor--compact .ql-editor) {
+		padding: 9px !important;
+		line-height: 1.45;
 	}
 	:global(.legacy-rich-editor .ql-editor img) {
 		display: block;
