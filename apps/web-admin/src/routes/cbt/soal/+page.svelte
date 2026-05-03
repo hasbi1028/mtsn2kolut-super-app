@@ -30,6 +30,7 @@
 	type MatchingPair = { left: string; right: string };
 	type ModuleMode = 'catalog' | 'composer' | 'review' | 'import';
 	type AuthoringMode = 'beginner' | 'advance';
+	type RevisionSourceFilter = '' | 'item_analysis' | 'reviewer' | 'workflow';
 	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'agree_disagree' | 'matching' | 'short_answer' | 'essay';
 	type ComposerSaveIntent = 'draft' | 'review';
 	type AnswerMode = 'single_option' | 'multi_option' | 'fixed_pair' | 'matching' | 'short_text' | 'rubric';
@@ -238,6 +239,12 @@
 		rejected: 'Revisi',
 	};
 	const DIFFICULTY_LABEL: Record<string, string> = { easy: 'Mudah', medium: 'Sedang', hard: 'Sulit' };
+	const revisionSourceOptions: Array<{ id: RevisionSourceFilter; label: string; desc: string }> = [
+		{ id: '', label: 'Semua Revisi', desc: 'Semua sumber' },
+		{ id: 'item_analysis', label: 'Analisis Butir', desc: 'Dari hasil ujian' },
+		{ id: 'reviewer', label: 'Reviewer', desc: 'Catatan penelaah' },
+		{ id: 'workflow', label: 'Workflow', desc: 'Tanpa reviewer' },
+	];
 
 	const DRAFT_KEY = (id: string | null) => `mtsn2-soal-komposer:${id ?? 'new'}`;
 
@@ -254,6 +261,7 @@
 	let search = $state('');
 	let filterSubject = $state('');
 	let filterWorkflow = $state('');
+	let revisionSourceFilter = $state<RevisionSourceFilter>('');
 
 	// ── Composer state ─────────────────────────────────────────────────────────
 	let showComposer = $state(false);
@@ -716,6 +724,7 @@
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		if (filterWorkflow) params.set('workflow_status', filterWorkflow);
+		if (filterWorkflow === 'rejected' && revisionSourceFilter) params.set('revision_source', revisionSourceFilter);
 		return params;
 	}
 
@@ -724,6 +733,7 @@
 		params.set('limit', '6');
 		params.set('offset', '0');
 		params.set('workflow_status', 'rejected');
+		if (revisionSourceFilter) params.set('revision_source', revisionSourceFilter);
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		return params;
@@ -829,8 +839,18 @@
 	}
 
 	function showAllRevisions() {
+		setRevisionSourceFilter('');
+	}
+
+	function setRevisionSourceFilter(source: RevisionSourceFilter) {
+		revisionSourceFilter = source;
 		filterWorkflow = 'rejected';
 		setModuleMode('review');
+		load(1);
+	}
+
+	function onWorkflowFilterChange() {
+		if (filterWorkflow !== 'rejected') revisionSourceFilter = '';
 		load(1);
 	}
 
@@ -1658,13 +1678,13 @@
 		{/each}
 	</div>
 
-	{#if revisionTotal > 0}
+	{#if revisionTotal > 0 || revisionSourceFilter}
 		<section class="rounded-lg border border-red-200 bg-red-50/60 p-3">
 			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 				<div class="min-w-0">
 					<div class="flex flex-wrap items-center gap-2">
 						<h2 class="text-sm font-bold uppercase tracking-wider text-red-900">Antrian Revisi Soal</h2>
-						<span class="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-red-700">{revisionTotal} perlu diperbaiki</span>
+						<span class="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-red-700">{revisionTotal} {revisionSourceFilter ? 'sesuai filter' : 'perlu diperbaiki'}</span>
 					</div>
 					<p class="mt-1 text-xs text-red-800">Draft revisi dari analisis butir atau workflow reviewer. Buka, koreksi isi/kunci/rubrik, lalu simpan sebagai draft atau ajukan review lagi.</p>
 				</div>
@@ -1672,33 +1692,53 @@
 					Lihat Semua Revisi
 				</Button>
 			</div>
-			<div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-				{#each revisionQueue as q (q.id)}
+			<div class="mt-3 flex flex-wrap gap-1.5">
+				{#each revisionSourceOptions as source (source.id)}
 					<button
 						type="button"
-						onclick={() => openQuestion(q)}
-						class="min-w-0 rounded-md border border-red-100 bg-white px-3 py-2 text-left shadow-sm transition-colors hover:border-red-300 hover:bg-red-50"
+						onclick={() => setRevisionSourceFilter(source.id)}
+						class="rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors {revisionSourceFilter === source.id
+							? 'border-red-300 bg-white font-semibold text-red-800 shadow-sm'
+							: 'border-red-100 bg-red-50 text-red-700 hover:bg-white'}"
 					>
-						<div class="mb-1 flex items-center gap-1">
-							<span class="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">{questionTypeLabel(q.question_type)}</span>
-							<span class="truncate text-[11px] text-slate-400">{q.subject_name || q.subject_code || 'Mapel belum ada'}</span>
-						</div>
-						<p class="line-clamp-2 text-sm font-medium text-slate-800">{stemPreview(q)}</p>
-						<div class="mt-2 rounded border border-red-100 bg-red-50/70 px-2 py-1.5">
-							<div class="mb-0.5 flex flex-wrap items-center gap-1">
-								<span class="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-700">{revisionSourceLabel(q)}</span>
-								{#if q.reviewed_at}<span class="text-[10px] text-red-500">{new Date(q.reviewed_at).toLocaleDateString('id-ID')}</span>{/if}
-							</div>
-							<p class="line-clamp-2 text-[11px] leading-relaxed text-red-900">{revisionReason(q)}</p>
-						</div>
-						<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
-							<span>{q.code || 'Tanpa kode'}</span>
-							{#if q.author_username}<span>{q.author_username}</span>{/if}
-							<span>{DIFFICULTY_LABEL[q.difficulty] ?? q.difficulty ?? 'Sedang'}</span>
-						</div>
+						<span>{source.label}</span>
+						<span class="ml-1 text-[10px] font-normal opacity-70">{source.desc}</span>
 					</button>
 				{/each}
 			</div>
+			{#if revisionQueue.length > 0}
+				<div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+					{#each revisionQueue as q (q.id)}
+						<button
+							type="button"
+							onclick={() => openQuestion(q)}
+							class="min-w-0 rounded-md border border-red-100 bg-white px-3 py-2 text-left shadow-sm transition-colors hover:border-red-300 hover:bg-red-50"
+						>
+							<div class="mb-1 flex items-center gap-1">
+								<span class="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">{questionTypeLabel(q.question_type)}</span>
+								<span class="truncate text-[11px] text-slate-400">{q.subject_name || q.subject_code || 'Mapel belum ada'}</span>
+							</div>
+							<p class="line-clamp-2 text-sm font-medium text-slate-800">{stemPreview(q)}</p>
+							<div class="mt-2 rounded border border-red-100 bg-red-50/70 px-2 py-1.5">
+								<div class="mb-0.5 flex flex-wrap items-center gap-1">
+									<span class="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-700">{revisionSourceLabel(q)}</span>
+									{#if q.reviewed_at}<span class="text-[10px] text-red-500">{new Date(q.reviewed_at).toLocaleDateString('id-ID')}</span>{/if}
+								</div>
+								<p class="line-clamp-2 text-[11px] leading-relaxed text-red-900">{revisionReason(q)}</p>
+							</div>
+							<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
+								<span>{q.code || 'Tanpa kode'}</span>
+								{#if q.author_username}<span>{q.author_username}</span>{/if}
+								<span>{DIFFICULTY_LABEL[q.difficulty] ?? q.difficulty ?? 'Sedang'}</span>
+							</div>
+						</button>
+					{/each}
+				</div>
+			{:else}
+				<div class="mt-3 rounded-md border border-red-100 bg-white px-3 py-3 text-sm text-red-800">
+					Tidak ada revisi pada sumber ini.
+				</div>
+			{/if}
 		</section>
 	{/if}
 
@@ -1778,7 +1818,7 @@
 		</select>
 		<select
 			bind:value={filterWorkflow}
-			onchange={() => load(1)}
+			onchange={onWorkflowFilterChange}
 			class="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
 		>
 			<option value="">Semua Status</option>

@@ -450,11 +450,11 @@ func TestCbtQuestionHandlersForwardSuccessPaths(t *testing.T) {
 	}
 	h := &CbtQuestion{svc: listFake}
 	rec := httptest.NewRecorder()
-	h.List(rec, adminRequest(http.MethodGet, "/api/cbt/questions?subject_id="+subjectID.String()+"&workflow_status=review&question_type=essay&hots=true&q=energi&limit=50&offset=10", ""))
+	h.List(rec, adminRequest(http.MethodGet, "/api/cbt/questions?subject_id="+subjectID.String()+"&workflow_status=review&question_type=essay&hots=true&revision_source=reviewer&q=energi&limit=50&offset=10", ""))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("List() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
-	if listFake.listInput.SubjectID != subjectID || listFake.listInput.WorkflowStatus != "review" || listFake.listInput.QuestionType != "essay" || listFake.listInput.HotsFilter != "true" || listFake.listInput.SearchQuery != "energi" {
+	if listFake.listInput.SubjectID != subjectID || listFake.listInput.WorkflowStatus != "review" || listFake.listInput.QuestionType != "essay" || listFake.listInput.HotsFilter != "true" || listFake.listInput.RevisionSource != "reviewer" || listFake.listInput.SearchQuery != "energi" {
 		t.Fatalf("ListFiltered input = %+v, want forwarded filters", listFake.listInput)
 	}
 	if listFake.listInput.Limit != 50 || listFake.listInput.Offset != 10 || !strings.Contains(rec.Body.String(), "IPA") {

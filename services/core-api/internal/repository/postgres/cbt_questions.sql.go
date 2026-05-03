@@ -20,11 +20,31 @@ WHERE ($1::uuid IS NULL OR q.subject_id = $1::uuid)
   AND ($4::text = '' OR ($4::text = 'yes' AND q.hots_flag = TRUE) OR ($4::text = 'no' AND q.hots_flag = FALSE))
   AND (
     $5::text = ''
-    OR q.code ILIKE '%' || $5::text || '%'
-    OR q.question_text ILIKE '%' || $5::text || '%'
-    OR q.material_topic ILIKE '%' || $5::text || '%'
-    OR q.cp_ref ILIKE '%' || $5::text || '%'
-    OR q.kd_ref ILIKE '%' || $5::text || '%'
+    OR (
+      $5::text = 'item_analysis'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes ILIKE '%analisis butir%'
+    )
+    OR (
+      $5::text = 'reviewer'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes NOT ILIKE '%analisis butir%'
+      AND btrim(q.reviewer_username) <> ''
+    )
+    OR (
+      $5::text = 'workflow'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes NOT ILIKE '%analisis butir%'
+      AND btrim(q.reviewer_username) = ''
+    )
+  )
+  AND (
+    $6::text = ''
+    OR q.code ILIKE '%' || $6::text || '%'
+    OR q.question_text ILIKE '%' || $6::text || '%'
+    OR q.material_topic ILIKE '%' || $6::text || '%'
+    OR q.cp_ref ILIKE '%' || $6::text || '%'
+    OR q.kd_ref ILIKE '%' || $6::text || '%'
   )
 `
 
@@ -33,6 +53,7 @@ type CountCbtQuestionsFilteredParams struct {
 	WorkflowStatus string      `json:"workflow_status"`
 	QuestionType   string      `json:"question_type"`
 	HotsFilter     string      `json:"hots_filter"`
+	RevisionSource string      `json:"revision_source"`
 	SearchQuery    string      `json:"search_query"`
 }
 
@@ -42,6 +63,7 @@ func (q *Queries) CountCbtQuestionsFiltered(ctx context.Context, arg CountCbtQue
 		arg.WorkflowStatus,
 		arg.QuestionType,
 		arg.HotsFilter,
+		arg.RevisionSource,
 		arg.SearchQuery,
 	)
 	var column_1 int64
@@ -682,14 +704,34 @@ WHERE ($1::uuid IS NULL OR q.subject_id = $1::uuid)
   AND ($4::text = '' OR ($4::text = 'yes' AND q.hots_flag = TRUE) OR ($4::text = 'no' AND q.hots_flag = FALSE))
   AND (
     $5::text = ''
-    OR q.code ILIKE '%' || $5::text || '%'
-    OR q.question_text ILIKE '%' || $5::text || '%'
-    OR q.material_topic ILIKE '%' || $5::text || '%'
-    OR q.cp_ref ILIKE '%' || $5::text || '%'
-    OR q.kd_ref ILIKE '%' || $5::text || '%'
+    OR (
+      $5::text = 'item_analysis'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes ILIKE '%analisis butir%'
+    )
+    OR (
+      $5::text = 'reviewer'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes NOT ILIKE '%analisis butir%'
+      AND btrim(q.reviewer_username) <> ''
+    )
+    OR (
+      $5::text = 'workflow'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes NOT ILIKE '%analisis butir%'
+      AND btrim(q.reviewer_username) = ''
+    )
+  )
+  AND (
+    $6::text = ''
+    OR q.code ILIKE '%' || $6::text || '%'
+    OR q.question_text ILIKE '%' || $6::text || '%'
+    OR q.material_topic ILIKE '%' || $6::text || '%'
+    OR q.cp_ref ILIKE '%' || $6::text || '%'
+    OR q.kd_ref ILIKE '%' || $6::text || '%'
   )
 ORDER BY q.created_at DESC
-LIMIT $7 OFFSET $6
+LIMIT $8 OFFSET $7
 `
 
 type ListCbtQuestionsFilteredParams struct {
@@ -697,6 +739,7 @@ type ListCbtQuestionsFilteredParams struct {
 	WorkflowStatus string      `json:"workflow_status"`
 	QuestionType   string      `json:"question_type"`
 	HotsFilter     string      `json:"hots_filter"`
+	RevisionSource string      `json:"revision_source"`
 	SearchQuery    string      `json:"search_query"`
 	OffsetCount    int32       `json:"offset_count"`
 	LimitCount     int32       `json:"limit_count"`
@@ -757,6 +800,7 @@ func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuest
 		arg.WorkflowStatus,
 		arg.QuestionType,
 		arg.HotsFilter,
+		arg.RevisionSource,
 		arg.SearchQuery,
 		arg.OffsetCount,
 		arg.LimitCount,

@@ -59,6 +59,26 @@ WHERE (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)
   AND (sqlc.arg(question_type)::text = '' OR q.question_type = sqlc.arg(question_type)::text)
   AND (sqlc.arg(hots_filter)::text = '' OR (sqlc.arg(hots_filter)::text = 'yes' AND q.hots_flag = TRUE) OR (sqlc.arg(hots_filter)::text = 'no' AND q.hots_flag = FALSE))
   AND (
+    sqlc.arg(revision_source)::text = ''
+    OR (
+      sqlc.arg(revision_source)::text = 'item_analysis'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes ILIKE '%analisis butir%'
+    )
+    OR (
+      sqlc.arg(revision_source)::text = 'reviewer'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes NOT ILIKE '%analisis butir%'
+      AND btrim(q.reviewer_username) <> ''
+    )
+    OR (
+      sqlc.arg(revision_source)::text = 'workflow'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes NOT ILIKE '%analisis butir%'
+      AND btrim(q.reviewer_username) = ''
+    )
+  )
+  AND (
     sqlc.arg(search_query)::text = ''
     OR q.code ILIKE '%' || sqlc.arg(search_query)::text || '%'
     OR q.question_text ILIKE '%' || sqlc.arg(search_query)::text || '%'
@@ -76,6 +96,26 @@ WHERE (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)
   AND (sqlc.arg(workflow_status)::text = '' OR q.workflow_status = sqlc.arg(workflow_status)::text)
   AND (sqlc.arg(question_type)::text = '' OR q.question_type = sqlc.arg(question_type)::text)
   AND (sqlc.arg(hots_filter)::text = '' OR (sqlc.arg(hots_filter)::text = 'yes' AND q.hots_flag = TRUE) OR (sqlc.arg(hots_filter)::text = 'no' AND q.hots_flag = FALSE))
+  AND (
+    sqlc.arg(revision_source)::text = ''
+    OR (
+      sqlc.arg(revision_source)::text = 'item_analysis'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes ILIKE '%analisis butir%'
+    )
+    OR (
+      sqlc.arg(revision_source)::text = 'reviewer'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes NOT ILIKE '%analisis butir%'
+      AND btrim(q.reviewer_username) <> ''
+    )
+    OR (
+      sqlc.arg(revision_source)::text = 'workflow'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes NOT ILIKE '%analisis butir%'
+      AND btrim(q.reviewer_username) = ''
+    )
+  )
   AND (
     sqlc.arg(search_query)::text = ''
     OR q.code ILIKE '%' || sqlc.arg(search_query)::text || '%'

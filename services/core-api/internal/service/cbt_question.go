@@ -108,6 +108,7 @@ type ListCbtQuestionsInput struct {
 	WorkflowStatus string
 	QuestionType   string
 	HotsFilter     string
+	RevisionSource string
 	SearchQuery    string
 	Limit          int32
 	Offset         int32
@@ -125,6 +126,7 @@ func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput
 		WorkflowStatus: strings.TrimSpace(in.WorkflowStatus),
 		QuestionType:   strings.TrimSpace(in.QuestionType),
 		HotsFilter:     strings.TrimSpace(in.HotsFilter),
+		RevisionSource: normalizeRevisionSource(in.RevisionSource),
 		SearchQuery:    strings.TrimSpace(in.SearchQuery),
 		LimitCount:     in.Limit,
 		OffsetCount:    in.Offset,
@@ -137,12 +139,23 @@ func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput
 		WorkflowStatus: strings.TrimSpace(in.WorkflowStatus),
 		QuestionType:   strings.TrimSpace(in.QuestionType),
 		HotsFilter:     strings.TrimSpace(in.HotsFilter),
+		RevisionSource: normalizeRevisionSource(in.RevisionSource),
 		SearchQuery:    strings.TrimSpace(in.SearchQuery),
 	})
 	if err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil
+}
+
+func normalizeRevisionSource(value string) string {
+	normalized := strings.TrimSpace(value)
+	switch normalized {
+	case "item_analysis", "reviewer", "workflow":
+		return normalized
+	default:
+		return ""
+	}
 }
 
 func (s *CbtQuestion) ExportCSV(ctx context.Context, in ListCbtQuestionsInput) (ExportCbtQuestionsCSVResult, error) {

@@ -142,6 +142,7 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 		WorkflowStatus: " draft ",
 		QuestionType:   " multiple_choice ",
 		HotsFilter:     " true ",
+		RevisionSource: " item_analysis ",
 		SearchQuery:    " aljabar ",
 		Limit:          25,
 		Offset:         5,
@@ -152,10 +153,10 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	if len(rows) != 1 || total != 7 {
 		t.Fatalf("ListFiltered() rows/total = %d/%d, want 1/7", len(rows), total)
 	}
-	if store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.SearchQuery != "aljabar" {
+	if store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.RevisionSource != "item_analysis" || store.listFilterArg.SearchQuery != "aljabar" {
 		t.Fatalf("ListFiltered() arg = %+v, want trimmed filters", store.listFilterArg)
 	}
-	if store.countArg.WorkflowStatus != store.listFilterArg.WorkflowStatus || store.countArg.SearchQuery != store.listFilterArg.SearchQuery {
+	if store.countArg.WorkflowStatus != store.listFilterArg.WorkflowStatus || store.countArg.RevisionSource != store.listFilterArg.RevisionSource || store.countArg.SearchQuery != store.listFilterArg.SearchQuery {
 		t.Fatalf("ListFiltered() count arg = %+v, want same trimmed filters", store.countArg)
 	}
 

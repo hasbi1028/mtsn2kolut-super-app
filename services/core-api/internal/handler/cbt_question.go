@@ -154,6 +154,7 @@ func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit 
 		WorkflowStatus: r.URL.Query().Get("workflow_status"),
 		QuestionType:   r.URL.Query().Get("question_type"),
 		HotsFilter:     r.URL.Query().Get("hots"),
+		RevisionSource: r.URL.Query().Get("revision_source"),
 		SearchQuery:    r.URL.Query().Get("q"),
 		Limit:          limit,
 		Offset:         offset,
