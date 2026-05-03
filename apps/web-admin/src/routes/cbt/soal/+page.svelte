@@ -1277,13 +1277,6 @@
 			</div>
 
 			<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-5 md:p-8">
-				{#if draftStatus}
-					<div class="mb-6 flex flex-col gap-2 rounded-2xl border border-green-200 bg-green-50 p-4 text-xs font-semibold text-green-900 md:flex-row md:items-center md:justify-between">
-						<span>{draftStatus}</span>
-						<span class="text-[10px] uppercase tracking-widest text-green-700">Draft lokal aktif</span>
-					</div>
-				{/if}
-
 				<div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.72fr)]">
 					<div class={`space-y-5 min-w-0 ${composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
 						<section class="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
