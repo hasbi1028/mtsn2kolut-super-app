@@ -39,6 +39,7 @@ type cbtSessionStore interface {
 	DeleteCbtExamRoom(ctx context.Context, id pgtype.UUID) error
 	GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error)
 	GetCbtRoomProctorDashboard(ctx context.Context, id pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error)
+	ListCbtProctorRooms(ctx context.Context, arg db.ListCbtProctorRoomsParams) ([]db.ListCbtProctorRoomsRow, error)
 	ListCbtRoomProctors(ctx context.Context, examRoomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error)
 	DeleteCbtRoomProctorsByRoom(ctx context.Context, examRoomID pgtype.UUID) error
 	CreateCbtRoomProctor(ctx context.Context, arg db.CreateCbtRoomProctorParams) (db.CbtRoomProctor, error)
@@ -419,6 +420,20 @@ func (s *CbtSession) RoomReadiness(ctx context.Context, sessionID pgtype.UUID) (
 
 func (s *CbtSession) GetRoomProctoringDashboard(ctx context.Context, roomID pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error) {
 	return s.q.GetCbtRoomProctorDashboard(ctx, roomID)
+}
+
+func (s *CbtSession) ListProctorRooms(ctx context.Context, employeeID pgtype.UUID, includeAll bool) ([]db.ListCbtProctorRoomsRow, error) {
+	rows, err := s.q.ListCbtProctorRooms(ctx, db.ListCbtProctorRoomsParams{
+		EmployeeID: employeeID,
+		IncludeAll: includeAll,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.ListCbtProctorRoomsRow{}, nil
+	}
+	return rows, nil
 }
 
 func (s *CbtSession) HasRoomProctor(ctx context.Context, sessionID, roomID, employeeID pgtype.UUID) (bool, error) {

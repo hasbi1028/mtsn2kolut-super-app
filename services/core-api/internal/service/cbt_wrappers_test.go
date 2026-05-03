@@ -416,6 +416,9 @@ type fakeCbtSessionStore struct {
 	schoolRoomRow         db.SchoolRoom
 	roomProctorRows       []db.ListCbtRoomProctorsRow
 	roomDashboardRow      db.GetCbtRoomProctorDashboardRow
+	proctorRoomRows       []db.ListCbtProctorRoomsRow
+	proctorRoomArg        db.ListCbtProctorRoomsParams
+	proctorRoomErr        error
 	roomReadinessRow      db.GetCbtSessionRoomReadinessRow
 	roomReadinessID       pgtype.UUID
 	roomProctorArg        db.HasSessionRoomProctorParams
@@ -542,6 +545,11 @@ func (f *fakeCbtSessionStore) GetCbtRoomProctorDashboard(ctx context.Context, id
 		return f.roomDashboardRow, nil
 	}
 	return db.GetCbtRoomProctorDashboardRow{ID: id, RoomName: "Ruang 1"}, nil
+}
+
+func (f *fakeCbtSessionStore) ListCbtProctorRooms(ctx context.Context, arg db.ListCbtProctorRoomsParams) ([]db.ListCbtProctorRoomsRow, error) {
+	f.proctorRoomArg = arg
+	return f.proctorRoomRows, f.proctorRoomErr
 }
 
 func (f *fakeCbtSessionStore) ListCbtRoomProctors(ctx context.Context, examRoomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
@@ -682,6 +690,7 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 		listRows:           []db.ListCbtExamSessionsRow{{ID: sessionID, Title: "Sesi"}},
 		participantRows:    []db.ListCbtExamParticipantsRow{{ID: participantID}},
 		roomRows:           []db.ListCbtExamRoomsRow{{ID: roomID, RoomName: "R1"}},
+		proctorRoomRows:    []db.ListCbtProctorRoomsRow{{ID: roomID, RoomName: "R1"}},
 		proctorRows:        []db.GetSessionProctoringStatusRow{{ParticipantID: participantID}},
 		ungradedRows:       []db.ListUngradedEssaysRow{{AnswerID: answerID}},
 		teacherRows:        []db.ListCbtExamSessionsByTeacherRow{{ID: sessionID}},
@@ -795,6 +804,13 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	}
 	if got, err := svc.GetRoomProctoringDashboard(context.Background(), roomID); err != nil || got.ID != roomID {
 		t.Fatalf("GetRoomProctoringDashboard() = %+v/%v, want room dashboard", got, err)
+	}
+	if rows, err := svc.ListProctorRooms(context.Background(), teacherID, false); err != nil || len(rows) != 1 || store.proctorRoomArg.EmployeeID != teacherID || store.proctorRoomArg.IncludeAll {
+		t.Fatalf("ListProctorRooms() = %d rows/%v arg=%+v, want employee scoped room", len(rows), err, store.proctorRoomArg)
+	}
+	store.proctorRoomRows = nil
+	if rows, err := svc.ListProctorRooms(context.Background(), teacherID, true); err != nil || len(rows) != 0 || store.proctorRoomArg.EmployeeID != teacherID || !store.proctorRoomArg.IncludeAll {
+		t.Fatalf("ListProctorRooms(nil rows) = %d rows/%v arg=%+v, want empty all-rooms query", len(rows), err, store.proctorRoomArg)
 	}
 	if ok, err := svc.HasRoomProctor(context.Background(), sessionID, roomID, teacherID); err != nil || !ok || store.roomProctorArg.EmployeeID != teacherID {
 		t.Fatalf("HasRoomProctor() = %v/%v arg=%+v, want teacher proctor", ok, err, store.roomProctorArg)
@@ -1037,6 +1053,10 @@ func TestCbtSessionListMethodsPropagateErrors(t *testing.T) {
 	svc = &CbtSession{q: &fakeCbtSessionStore{proctorErr: errors.New("proctor failed")}}
 	if _, err := svc.GetProctoringStatus(context.Background(), sessionID); err == nil || err.Error() != "proctor failed" {
 		t.Fatalf("GetProctoringStatus(error) = %v, want proctor failed", err)
+	}
+	svc = &CbtSession{q: &fakeCbtSessionStore{proctorRoomErr: errors.New("proctor rooms failed")}}
+	if _, err := svc.ListProctorRooms(context.Background(), teacherID, false); err == nil || err.Error() != "proctor rooms failed" {
+		t.Fatalf("ListProctorRooms(error) = %v, want proctor rooms failed", err)
 	}
 	svc = &CbtSession{q: &fakeCbtSessionStore{ungradedErr: errors.New("ungraded failed")}}
 	if _, err := svc.ListUngradedEssays(context.Background(), sessionID); err == nil || err.Error() != "ungraded failed" {

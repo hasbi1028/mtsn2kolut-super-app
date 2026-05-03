@@ -97,6 +97,83 @@ WHERE r.id = $1
 GROUP BY r.id, s.title, s.status, s.scheduled_start, s.scheduled_end, p.title, p.duration_minutes,
          sr.code, sr.name, sr.building, sr.location_note;
 
+-- name: ListCbtProctorRooms :many
+WITH participant_stats AS (
+  SELECT
+    ep.room_id,
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE ep.submitted_at IS NOT NULL)::int AS submitted_count,
+    COUNT(*) FILTER (WHERE ep.last_heartbeat IS NOT NULL AND ep.last_heartbeat > NOW() - INTERVAL '2 minutes')::int AS online_count,
+    COUNT(*) FILTER (WHERE ep.suspicious_flag = TRUE)::int AS suspicious_count,
+    COUNT(*) FILTER (WHERE ep.seat_no IS NULL)::int AS missing_seat_count
+  FROM cbt_exam_participants ep
+  WHERE ep.room_id IS NOT NULL
+  GROUP BY ep.room_id
+),
+proctor_rollup AS (
+  SELECT
+    rp.exam_room_id,
+    COUNT(*)::int AS proctor_count,
+    STRING_AGG(e.nama, ', ' ORDER BY CASE rp.role WHEN 'utama' THEN 0 WHEN 'pendamping' THEN 1 ELSE 2 END, e.nama ASC)::text AS proctor_names,
+    COALESCE(
+      MAX(CASE WHEN rp.employee_id = sqlc.arg(employee_id) THEN rp.role ELSE '' END),
+      ''
+    )::text AS actor_role
+  FROM cbt_room_proctors rp
+  JOIN employees e ON e.id = rp.employee_id
+  GROUP BY rp.exam_room_id
+)
+SELECT
+  r.id,
+  r.session_id,
+  r.school_room_id,
+  r.room_name,
+  r.room_name_snapshot,
+  r.capacity,
+  r.capacity_override,
+  r.room_token,
+  r.status,
+  r.is_locked,
+  r.created_at,
+  r.updated_at,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(sr.code, '') AS school_room_code,
+  COALESCE(sr.name, '') AS school_room_name,
+  COALESCE(sr.building, '') AS school_room_building,
+  COALESCE(sr.location_note, '') AS school_room_location_note,
+  COALESCE(ps.participant_count, 0)::int AS participant_count,
+  COALESCE(ps.submitted_count, 0)::int AS submitted_count,
+  COALESCE(ps.online_count, 0)::int AS online_count,
+  COALESCE(ps.suspicious_count, 0)::int AS suspicious_count,
+  COALESCE(ps.missing_seat_count, 0)::int AS missing_seat_count,
+  COALESCE(pr.proctor_count, 0)::int AS proctor_count,
+  COALESCE(pr.proctor_names, '')::text AS proctor_names,
+  COALESCE(pr.actor_role, '')::text AS actor_role
+FROM cbt_exam_rooms r
+JOIN cbt_exam_sessions s ON s.id = r.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN school_rooms sr ON sr.id = r.school_room_id
+LEFT JOIN participant_stats ps ON ps.room_id = r.id
+LEFT JOIN proctor_rollup pr ON pr.exam_room_id = r.id
+WHERE (
+    sqlc.arg(include_all)::boolean
+    OR EXISTS (
+      SELECT 1
+      FROM cbt_room_proctors actor_rp
+      WHERE actor_rp.exam_room_id = r.id
+        AND actor_rp.employee_id = sqlc.arg(employee_id)
+    )
+  )
+  AND (s.status IN ('draft', 'scheduled', 'active') OR s.scheduled_end >= NOW() - INTERVAL '7 days')
+ORDER BY CASE s.status WHEN 'active' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'draft' THEN 2 ELSE 3 END,
+         s.scheduled_start ASC,
+         r.room_name ASC;
+
 -- name: ListCbtRoomProctors :many
 SELECT rp.id, rp.exam_room_id, rp.employee_id, e.nip, e.nama,
        rp.role, rp.assigned_by, rp.assigned_at

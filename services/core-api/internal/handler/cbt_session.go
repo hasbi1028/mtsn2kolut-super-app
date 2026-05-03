@@ -81,6 +81,7 @@ type cbtSessionRoomProctorService interface {
 
 type cbtSessionRoomProctorDashboardService interface {
 	GetRoomProctoringDashboard(ctx context.Context, roomID pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error)
+	ListProctorRooms(ctx context.Context, employeeID pgtype.UUID, includeAll bool) ([]db.ListCbtProctorRoomsRow, error)
 	HasRoomProctor(ctx context.Context, sessionID, roomID, employeeID pgtype.UUID) (bool, error)
 	HasRoomParticipant(ctx context.Context, sessionID, roomID, participantID pgtype.UUID) (bool, error)
 	GetProctoringStatusForRoom(ctx context.Context, sessionID, roomID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error)
@@ -1163,6 +1164,35 @@ func (h *CbtSession) GetRoomProctoringDashboard(w http.ResponseWriter, r *http.R
 		"participants": participants,
 		"events":       events,
 	})
+}
+
+func (h *CbtSession) ListMyProctorRooms(w http.ResponseWriter, r *http.Request) {
+	if !cbtOpsAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	includeAll := cbtSessionHasAnyRole(claims, "admin")
+	employeeID := cbtSessionEmployeeID(r)
+	if !includeAll && !employeeID.Valid {
+		api.Forbidden(w)
+		return
+	}
+	roomSvc, ok := h.svc.(cbtSessionRoomProctorDashboardService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room proctor dashboard service unavailable"))
+		return
+	}
+	rows, err := roomSvc.ListProctorRooms(r.Context(), employeeID, includeAll)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
 }
 
 func (h *CbtSession) GetRoomProctorPrintPack(w http.ResponseWriter, r *http.Request) {

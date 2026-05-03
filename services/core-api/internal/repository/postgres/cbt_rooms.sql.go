@@ -466,6 +466,173 @@ func (q *Queries) ListCbtExamRooms(ctx context.Context, sessionID pgtype.UUID) (
 	return items, nil
 }
 
+const listCbtProctorRooms = `-- name: ListCbtProctorRooms :many
+WITH participant_stats AS (
+  SELECT
+    ep.room_id,
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE ep.submitted_at IS NOT NULL)::int AS submitted_count,
+    COUNT(*) FILTER (WHERE ep.last_heartbeat IS NOT NULL AND ep.last_heartbeat > NOW() - INTERVAL '2 minutes')::int AS online_count,
+    COUNT(*) FILTER (WHERE ep.suspicious_flag = TRUE)::int AS suspicious_count,
+    COUNT(*) FILTER (WHERE ep.seat_no IS NULL)::int AS missing_seat_count
+  FROM cbt_exam_participants ep
+  WHERE ep.room_id IS NOT NULL
+  GROUP BY ep.room_id
+),
+proctor_rollup AS (
+  SELECT
+    rp.exam_room_id,
+    COUNT(*)::int AS proctor_count,
+    STRING_AGG(e.nama, ', ' ORDER BY CASE rp.role WHEN 'utama' THEN 0 WHEN 'pendamping' THEN 1 ELSE 2 END, e.nama ASC)::text AS proctor_names,
+    COALESCE(
+      MAX(CASE WHEN rp.employee_id = $2 THEN rp.role ELSE '' END),
+      ''
+    )::text AS actor_role
+  FROM cbt_room_proctors rp
+  JOIN employees e ON e.id = rp.employee_id
+  GROUP BY rp.exam_room_id
+)
+SELECT
+  r.id,
+  r.session_id,
+  r.school_room_id,
+  r.room_name,
+  r.room_name_snapshot,
+  r.capacity,
+  r.capacity_override,
+  r.room_token,
+  r.status,
+  r.is_locked,
+  r.created_at,
+  r.updated_at,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(sr.code, '') AS school_room_code,
+  COALESCE(sr.name, '') AS school_room_name,
+  COALESCE(sr.building, '') AS school_room_building,
+  COALESCE(sr.location_note, '') AS school_room_location_note,
+  COALESCE(ps.participant_count, 0)::int AS participant_count,
+  COALESCE(ps.submitted_count, 0)::int AS submitted_count,
+  COALESCE(ps.online_count, 0)::int AS online_count,
+  COALESCE(ps.suspicious_count, 0)::int AS suspicious_count,
+  COALESCE(ps.missing_seat_count, 0)::int AS missing_seat_count,
+  COALESCE(pr.proctor_count, 0)::int AS proctor_count,
+  COALESCE(pr.proctor_names, '')::text AS proctor_names,
+  COALESCE(pr.actor_role, '')::text AS actor_role
+FROM cbt_exam_rooms r
+JOIN cbt_exam_sessions s ON s.id = r.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN school_rooms sr ON sr.id = r.school_room_id
+LEFT JOIN participant_stats ps ON ps.room_id = r.id
+LEFT JOIN proctor_rollup pr ON pr.exam_room_id = r.id
+WHERE (
+    $1::boolean
+    OR EXISTS (
+      SELECT 1
+      FROM cbt_room_proctors actor_rp
+      WHERE actor_rp.exam_room_id = r.id
+        AND actor_rp.employee_id = $2
+    )
+  )
+  AND (s.status IN ('draft', 'scheduled', 'active') OR s.scheduled_end >= NOW() - INTERVAL '7 days')
+ORDER BY CASE s.status WHEN 'active' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'draft' THEN 2 ELSE 3 END,
+         s.scheduled_start ASC,
+         r.room_name ASC
+`
+
+type ListCbtProctorRoomsParams struct {
+	IncludeAll bool        `json:"include_all"`
+	EmployeeID pgtype.UUID `json:"employee_id"`
+}
+
+type ListCbtProctorRoomsRow struct {
+	ID                     pgtype.UUID          `json:"id"`
+	SessionID              pgtype.UUID          `json:"session_id"`
+	SchoolRoomID           pgtype.UUID          `json:"school_room_id"`
+	RoomName               string               `json:"room_name"`
+	RoomNameSnapshot       string               `json:"room_name_snapshot"`
+	Capacity               int32                `json:"capacity"`
+	CapacityOverride       pgtype.Int4          `json:"capacity_override"`
+	RoomToken              string               `json:"room_token"`
+	Status                 string               `json:"status"`
+	IsLocked               bool                 `json:"is_locked"`
+	CreatedAt              pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz   `json:"updated_at"`
+	SessionTitle           string               `json:"session_title"`
+	SessionStatus          CbtSessionStatusEnum `json:"session_status"`
+	ScheduledStart         pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd           pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageTitle           string               `json:"package_title"`
+	DurationMinutes        int32                `json:"duration_minutes"`
+	SchoolRoomCode         string               `json:"school_room_code"`
+	SchoolRoomName         string               `json:"school_room_name"`
+	SchoolRoomBuilding     string               `json:"school_room_building"`
+	SchoolRoomLocationNote string               `json:"school_room_location_note"`
+	ParticipantCount       int32                `json:"participant_count"`
+	SubmittedCount         int32                `json:"submitted_count"`
+	OnlineCount            int32                `json:"online_count"`
+	SuspiciousCount        int32                `json:"suspicious_count"`
+	MissingSeatCount       int32                `json:"missing_seat_count"`
+	ProctorCount           int32                `json:"proctor_count"`
+	ProctorNames           string               `json:"proctor_names"`
+	ActorRole              string               `json:"actor_role"`
+}
+
+func (q *Queries) ListCbtProctorRooms(ctx context.Context, arg ListCbtProctorRoomsParams) ([]ListCbtProctorRoomsRow, error) {
+	rows, err := q.db.Query(ctx, listCbtProctorRooms, arg.IncludeAll, arg.EmployeeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtProctorRoomsRow{}
+	for rows.Next() {
+		var i ListCbtProctorRoomsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.SchoolRoomID,
+			&i.RoomName,
+			&i.RoomNameSnapshot,
+			&i.Capacity,
+			&i.CapacityOverride,
+			&i.RoomToken,
+			&i.Status,
+			&i.IsLocked,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SessionTitle,
+			&i.SessionStatus,
+			&i.ScheduledStart,
+			&i.ScheduledEnd,
+			&i.PackageTitle,
+			&i.DurationMinutes,
+			&i.SchoolRoomCode,
+			&i.SchoolRoomName,
+			&i.SchoolRoomBuilding,
+			&i.SchoolRoomLocationNote,
+			&i.ParticipantCount,
+			&i.SubmittedCount,
+			&i.OnlineCount,
+			&i.SuspiciousCount,
+			&i.MissingSeatCount,
+			&i.ProctorCount,
+			&i.ProctorNames,
+			&i.ActorRole,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCbtRoomProctors = `-- name: ListCbtRoomProctors :many
 SELECT rp.id, rp.exam_room_id, rp.employee_id, e.nip, e.nama,
        rp.role, rp.assigned_by, rp.assigned_at

@@ -103,6 +103,8 @@ type fakeCbtSessionService struct {
 
 	proctoringSessionID      pgtype.UUID
 	roomDashboardID          pgtype.UUID
+	proctorRoomsEmployeeID   pgtype.UUID
+	proctorRoomsIncludeAll   bool
 	roomProctorSessionID     pgtype.UUID
 	roomProctorRoomID        pgtype.UUID
 	roomProctorEmployeeID    pgtype.UUID
@@ -404,6 +406,12 @@ func (f *fakeCbtSessionService) GetRoomProctoringDashboard(_ context.Context, ro
 	return db.GetCbtRoomProctorDashboardRow{ID: roomID, RoomName: "Ruang 1"}, nil
 }
 
+func (f *fakeCbtSessionService) ListProctorRooms(_ context.Context, employeeID pgtype.UUID, includeAll bool) ([]db.ListCbtProctorRoomsRow, error) {
+	f.proctorRoomsEmployeeID = employeeID
+	f.proctorRoomsIncludeAll = includeAll
+	return []db.ListCbtProctorRoomsRow{{ID: handlerTestUUID(103), RoomName: "Ruang 1"}}, nil
+}
+
 func (f *fakeCbtSessionService) HasRoomProctor(_ context.Context, sessionID, roomID, employeeID pgtype.UUID) (bool, error) {
 	f.roomProctorSessionID = sessionID
 	f.roomProctorRoomID = roomID
@@ -596,6 +604,7 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	run("DeleteRoom", h.DeleteRoom, adminRoute(http.MethodDelete, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String(), "", "id", sessionID.String(), "rid", roomID.String()), http.StatusNoContent)
 	run("ShuffleRooms", h.ShuffleRooms, adminRoute(http.MethodPost, "/api/cbt/sessions/"+sessionID.String()+"/rooms/shuffle", "", "id", sessionID.String()), http.StatusOK)
 	run("GetProctoringStatus", h.GetProctoringStatus, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/proctoring", "", "id", sessionID.String()), http.StatusOK)
+	run("ListMyProctorRooms", h.ListMyProctorRooms, adminRoute(http.MethodGet, "/api/cbt/proctoring/my-rooms", ""), http.StatusOK)
 	run("GetRoomProctoringDashboard", h.GetRoomProctoringDashboard, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/proctoring", "", "id", sessionID.String(), "rid", roomID.String()), http.StatusOK)
 	run("GetRoomProctorPrintPack", h.GetRoomProctorPrintPack, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/print-pack", "", "id", sessionID.String(), "rid", roomID.String()), http.StatusOK)
 	run("FlagParticipant", h.FlagParticipant, adminRoute(http.MethodPost, "/api/cbt/sessions/"+sessionID.String()+"/participants/"+participantID.String()+"/flag", `{"flag":true}`, "id", sessionID.String(), "pid", participantID.String()), http.StatusOK)
@@ -625,6 +634,9 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	}
 	if fake.roomDashboardID != roomID || fake.roomProctoringSessionID != sessionID || fake.roomProctoringRoomID != roomID || fake.roomEventsRoomID != roomID {
 		t.Fatalf("room dashboard args = dashboard:%v proctoring:%v/%v events:%v, want room-scoped dashboard", fake.roomDashboardID, fake.roomProctoringSessionID, fake.roomProctoringRoomID, fake.roomEventsRoomID)
+	}
+	if !fake.proctorRoomsIncludeAll || fake.proctorRoomsEmployeeID.Valid {
+		t.Fatalf("proctor rooms args = includeAll:%v employee:%v, want admin all rooms without employee filter", fake.proctorRoomsIncludeAll, fake.proctorRoomsEmployeeID)
 	}
 	if fake.flagParticipantID != participantID || !fake.flagValue || fake.gradeAnswerID != answerID || fake.gradeScore != 87.5 || fake.gradeBy != "pengawas.utama" {
 		t.Fatalf("flag/grade args = flag:%v/%v grade:%v/%v/%q, want forwarded values", fake.flagParticipantID, fake.flagValue, fake.gradeAnswerID, fake.gradeScore, fake.gradeBy)
@@ -700,6 +712,42 @@ func TestCbtSessionRoomProctorDashboardScopesAssignedProctor(t *testing.T) {
 	(&CbtSession{svc: denied}).GetRoomProctorPrintPack(rec, printReq)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("GetRoomProctorPrintPack(unassigned proctor) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCbtSessionListMyProctorRoomsScopesByActor(t *testing.T) {
+	employeeID := handlerTestUUID(111)
+	req := withClaims(
+		httptest.NewRequest(http.MethodGet, "/api/cbt/proctoring/my-rooms", nil),
+		jwt.MapClaims{"roles": []any{"guru"}, "eid": employeeID.String()},
+	)
+	fake := &fakeCbtSessionService{}
+	rec := httptest.NewRecorder()
+	(&CbtSession{svc: fake}).ListMyProctorRooms(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ListMyProctorRooms(guru) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.proctorRoomsEmployeeID != employeeID || fake.proctorRoomsIncludeAll {
+		t.Fatalf("guru proctor rooms args = %v includeAll:%v, want employee scoped", fake.proctorRoomsEmployeeID, fake.proctorRoomsIncludeAll)
+	}
+
+	adminFake := &fakeCbtSessionService{}
+	rec = httptest.NewRecorder()
+	(&CbtSession{svc: adminFake}).ListMyProctorRooms(rec, adminRequest(http.MethodGet, "/api/cbt/proctoring/my-rooms", ""))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ListMyProctorRooms(admin) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if !adminFake.proctorRoomsIncludeAll || adminFake.proctorRoomsEmployeeID.Valid {
+		t.Fatalf("admin proctor rooms args = %v includeAll:%v, want all rooms", adminFake.proctorRoomsEmployeeID, adminFake.proctorRoomsIncludeAll)
+	}
+
+	rec = httptest.NewRecorder()
+	(&CbtSession{svc: &fakeCbtSessionService{}}).ListMyProctorRooms(
+		rec,
+		withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/proctoring/my-rooms", nil), jwt.MapClaims{"roles": []any{"staf"}}),
+	)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("ListMyProctorRooms(staf missing eid) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
 	}
 }
 

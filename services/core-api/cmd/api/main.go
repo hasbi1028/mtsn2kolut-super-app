@@ -321,6 +321,7 @@ func main() {
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/proctoring/events", sessionH.ListParticipantEvents)
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/participants/{pid}/flag", sessionH.FlagParticipant)
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/participants/{pid}/force-submit", sessionH.ForceSubmitParticipant)
+		r.With(requireCbtOps).Get("/api/cbt/proctoring/my-rooms", sessionH.ListMyProctorRooms)
 		r.With(requireCbtOps).Get("/api/cbt/sessions/{id}/rooms/{rid}/proctoring", sessionH.GetRoomProctoringDashboard)
 		r.With(requireCbtOps).Get("/api/cbt/sessions/{id}/rooms/{rid}/print-pack", sessionH.GetRoomProctorPrintPack)
 		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/participants/{pid}/flag", sessionH.FlagRoomParticipant)

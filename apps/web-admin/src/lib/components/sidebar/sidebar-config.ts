@@ -39,6 +39,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		items: [
 			{ href: '/cbt/events', label: 'Kegiatan Ujian', icon: 'calendar', roles: ['admin'] },
 			{ href: '/cbt/byod', label: 'Panduan BYOD', icon: 'activity', roles: ['admin', 'guru'] },
+			{ href: '/cbt/proctoring/rooms', label: 'Ruang Saya', icon: 'user-check', roles: ['admin', 'guru', 'staf'] },
 			{ href: '/cbt/soal', label: 'Bank Soal', icon: 'file-text' },
 			{ href: '/cbt/non-test', label: 'Asesmen Non-Tes', icon: 'clipboard', roles: ['admin', 'guru'] },
 			{ href: '/cbt/packages', label: 'Paket Ujian', icon: 'package' },
@@ -105,7 +106,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 
 export const defaultPinnedByRole: Record<string, string[]> = {
 	admin: ['/cbt/sessions', '/grades', '/settings'],
-	guru: ['/cbt/soal', '/grades', '/jadwal'],
+	guru: ['/cbt/proctoring/rooms', '/cbt/soal', '/grades', '/jadwal'],
 	staf: ['/document-cycles', '/inventory', '/library'],
 	kesiswaan: ['/kesiswaan', '/students']
 };
