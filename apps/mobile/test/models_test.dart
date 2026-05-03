@@ -120,6 +120,27 @@ void main() {
         expect(shortAnswer.isEssay, isFalse);
       },
     );
+
+    test('parses matching question options with right-side labels', () {
+      final matching = ExamQuestion.fromJson({
+        'id': 'matching-1',
+        'question_type': 'matching',
+        'question_text': 'Jodohkan istilah berikut.',
+        'options': [
+          {
+            'label': 'A',
+            'text': 'Fotosintesis',
+            'match_label': '1',
+            'match_text': 'Proses membuat makanan',
+          },
+        ],
+      });
+
+      expect(matching.isMatching, isTrue);
+      expect(matching.isTextAnswer, isFalse);
+      expect(matching.options.first.matchLabel, '1');
+      expect(matching.options.first.matchText, 'Proses membuat makanan');
+    });
   });
 
   group('ExamStatusPayload.fromJson', () {

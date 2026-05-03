@@ -17,12 +17,21 @@
 
 	// ── Types ─────────────────────────────────────────────────────────────────
 	type Subject = { id: string; name: string; code: string };
-	type OptionItem = { label: string; text?: string; html?: string; latex?: string };
+	type OptionItem = {
+		label: string;
+		text?: string;
+		html?: string;
+		latex?: string;
+		match_label?: string;
+		match_text?: string;
+		match_html?: string;
+	};
+	type MatchingPair = { left: string; right: string };
 	type ModuleMode = 'catalog' | 'composer' | 'review' | 'import';
 	type AuthoringMode = 'beginner' | 'advance';
-	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'agree_disagree' | 'short_answer' | 'essay';
+	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'agree_disagree' | 'matching' | 'short_answer' | 'essay';
 	type ComposerSaveIntent = 'draft' | 'review';
-	type AnswerMode = 'single_option' | 'multi_option' | 'fixed_pair' | 'short_text' | 'rubric';
+	type AnswerMode = 'single_option' | 'multi_option' | 'fixed_pair' | 'matching' | 'short_text' | 'rubric';
 	type QuestionTypeConfig = {
 		id: ComposerQuestionType;
 		label: string;
@@ -97,6 +106,7 @@
 		rubric: string;
 		explanation: string;
 		options: string[];
+		matchingPairs: MatchingPair[];
 		answerKey: string;
 		weight: number;
 		difficulty: string;
@@ -127,6 +137,9 @@
 	const PAGE_SIZE = 15;
 	const MIN_OPTION_COUNT = 4;
 	const MAX_OPTION_COUNT = 6;
+	const MIN_MATCHING_PAIR_COUNT = 2;
+	const DEFAULT_MATCHING_PAIR_COUNT = 4;
+	const MAX_MATCHING_PAIR_COUNT = 6;
 	const ANSWER_LABELS: OptionLabel[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 	const TRUE_FALSE_OPTIONS = ['Benar', 'Salah'];
 	const AGREE_DISAGREE_OPTIONS = ['Setuju', 'Tidak Setuju'];
@@ -172,6 +185,16 @@
 			minOptions: 2,
 			maxOptions: 2,
 			fixedOptions: AGREE_DISAGREE_OPTIONS,
+		},
+		{
+			id: 'matching',
+			label: 'Menjodohkan',
+			shortLabel: 'Jodoh',
+			desc: 'Pasangkan pernyataan kiri dengan jawaban kanan.',
+			studentHint: 'Siswa memilih pasangan yang sesuai untuk setiap baris.',
+			answerMode: 'matching',
+			minOptions: MIN_MATCHING_PAIR_COUNT,
+			maxOptions: MAX_MATCHING_PAIR_COUNT,
 		},
 		{
 			id: 'short_answer',
@@ -250,6 +273,7 @@
 	let fRubric = $state('');
 	let fExplanation = $state('');
 	let fOptions = $state(['', '', '', '']);
+	let fMatchingPairs = $state<MatchingPair[]>(createEmptyMatchingPairs());
 	let fAnswerKey = $state('A');
 	let fWeight = $state(1);
 	let fDifficulty = $state('medium');
@@ -274,6 +298,7 @@
 		fRubric,
 		fExplanation,
 		opts: fOptions,
+		matchingPairs: fMatchingPairs,
 		fAnswerKey,
 		fWeight,
 		fDifficulty,
@@ -308,6 +333,7 @@
 	let isTrueFalse = $derived(fQuestionType === 'true_false');
 	let isAgreeDisagree = $derived(fQuestionType === 'agree_disagree');
 	let isFixedPair = $derived(questionTypeConfig.answerMode === 'fixed_pair');
+	let isMatching = $derived(questionTypeConfig.answerMode === 'matching');
 	let isShortAnswer = $derived(questionTypeConfig.answerMode === 'short_text');
 	let hasOptionSection = $derived(
 		questionTypeConfig.answerMode === 'single_option' ||
@@ -324,10 +350,18 @@
 	let selectedAnswerLabels = $derived(answerKeyLabels(fAnswerKey, activeOptionLabels));
 	let optionPlainTexts = $derived(fOptions.map((option) => htmlToPlainText(option)));
 	let optionHasImages = $derived(fOptions.map((option) => option.includes('<img')));
+	let matchingLeftTexts = $derived(fMatchingPairs.map((pair) => htmlToPlainText(pair.left)));
+	let matchingRightTexts = $derived(fMatchingPairs.map((pair) => htmlToPlainText(pair.right)));
+	let matchingPairsReady = $derived(
+		!isMatching ||
+			(fMatchingPairs.length >= questionTypeConfig.minOptions &&
+				fMatchingPairs.every((pair) => richTextHasContent(pair.left) && richTextHasContent(pair.right)))
+	);
 	let optionsReady = $derived(!hasEditableOptions || (fOptions.length >= questionTypeConfig.minOptions && fOptions.every(richTextHasContent)));
 	let shortAnswerAliases = $derived(parseShortAnswerAliases(fAnswerKey));
 	let answerKeyReady = $derived.by(() => {
 		if (requiresRubric) return true;
+		if (isMatching) return matchingPairsReady;
 		if (isShortAnswer) return shortAnswerAliases.length > 0;
 		if (isMultipleAnswer) return selectedAnswerLabels.length >= 2;
 		return selectedAnswerLabels.length === 1;
@@ -337,7 +371,7 @@
 	let readinessChecks = $derived({
 		subject: !!fSubjectId,
 		stem: stemText.length >= 5 || hasImage,
-		options: isEssay || optionsReady,
+		options: isEssay || (isMatching ? matchingPairsReady : optionsReady),
 		answerKey: answerKeyReady,
 		rubric: rubricReady,
 		weight: Number.isFinite(fWeight) && fWeight >= 1,
@@ -378,6 +412,33 @@
 					label: 'Level kognitif',
 					status: !isAdvanceMode || fCognitiveLevel.trim().length > 0 ? 'good' : 'warn',
 					desc: isAdvanceMode ? (fCognitiveLevel.trim() || 'Belum diisi') : 'Opsional di mode pemula',
+				},
+			];
+		}
+		if (isMatching) {
+			const filledLeft = matchingLeftTexts.filter(Boolean);
+			const filledRight = matchingRightTexts.filter(Boolean);
+			const uniqueRight = new Set(filledRight);
+			return [
+				{
+					label: 'Instruksi menjodohkan jelas',
+					status: stemText.length >= 25 ? 'good' : 'warn',
+					desc: `${stemText.length} / 25 karakter minimum`,
+				},
+				{
+					label: 'Pasangan lengkap',
+					status: matchingPairsReady ? 'good' : 'warn',
+					desc: `${Math.min(filledLeft.length, filledRight.length)} / ${fMatchingPairs.length} pasangan terisi`,
+				},
+				{
+					label: 'Jawaban kanan unik',
+					status: filledRight.length > 0 && uniqueRight.size === filledRight.length ? 'good' : 'warn',
+					desc: uniqueRight.size < filledRight.length ? 'Ada pasangan kanan yang sama' : 'Semua pasangan kanan berbeda',
+				},
+				{
+					label: 'Skoring deterministik',
+					status: matchingPairsReady ? 'good' : 'warn',
+					desc: buildMatchingAnswerKey(fMatchingPairs.length) || 'Belum ada pasangan',
 				},
 			];
 		}
@@ -464,10 +525,13 @@
 		const issues: string[] = [];
 		if (!readinessChecks.subject) issues.push('Pilih mata pelajaran');
 		if (!readinessChecks.stem) issues.push('Isi soal minimal 5 karakter');
+		if (isMatching && !readinessChecks.options)
+			issues.push('Lengkapi semua pasangan kiri dan kanan');
 		if (hasEditableOptions && !readinessChecks.options)
 			issues.push(`Semua opsi (${activeOptionLabels.join('–')}) wajib diisi`);
 		if (!readinessChecks.answerKey) {
-			if (isShortAnswer) issues.push('Isi kunci jawaban isian singkat');
+			if (isMatching) issues.push('Lengkapi pasangan menjodohkan');
+			else if (isShortAnswer) issues.push('Isi kunci jawaban isian singkat');
 			else if (isMultipleAnswer) issues.push('Pilih minimal dua kunci jawaban');
 			else issues.push('Pilih kunci jawaban');
 		}
@@ -483,6 +547,7 @@
 		richTextHasContent(fRubric) ||
 		richTextHasContent(fExplanation) ||
 		fOptions.some(richTextHasContent) ||
+		fMatchingPairs.some((pair) => richTextHasContent(pair.left) || richTextHasContent(pair.right)) ||
 		draftStatus
 	));
 
@@ -497,6 +562,7 @@
 			rubric: fRubric,
 			explanation: fExplanation,
 			options: [...fOptions],
+			matchingPairs: fMatchingPairs.map((pair) => ({ ...pair })),
 			answerKey: fAnswerKey,
 			weight: fWeight,
 			difficulty: fDifficulty,
@@ -557,6 +623,7 @@
 				rubric?: string;
 				explanation?: string;
 				options?: string[];
+				matchingPairs?: MatchingPair[];
 				answerKey?: string;
 				weight?: number;
 				difficulty?: string;
@@ -581,7 +648,8 @@
 			fRubric = d.rubric ?? '';
 			fExplanation = d.explanation ?? '';
 			fOptions = normalizeOptionCount(d.options ?? defaultOptionsForQuestionType(fQuestionType), fQuestionType);
-			fAnswerKey = normalizeAnswerKey(d.answerKey, fQuestionType, fOptions.length);
+			fMatchingPairs = normalizeMatchingPairs(d.matchingPairs ?? [], fQuestionType);
+			fAnswerKey = normalizeAnswerKey(d.answerKey, fQuestionType, answerItemCountForType(fQuestionType));
 			fWeight = d.weight ?? 1;
 			fDifficulty = d.difficulty ?? 'medium';
 			fIsRtl = d.isRtl ?? false;
@@ -719,6 +787,10 @@
 		return htmlToPlainText(html).length > 0 || html.includes('<img');
 	}
 
+	function createEmptyMatchingPairs(count = DEFAULT_MATCHING_PAIR_COUNT): MatchingPair[] {
+		return Array.from({ length: count }, () => ({ left: '', right: '' }));
+	}
+
 	function isComposerQuestionType(value: string | undefined): value is ComposerQuestionType {
 		return QUESTION_TYPE_CONFIGS.some((config) => config.id === value);
 	}
@@ -748,9 +820,10 @@
 		const changed = fQuestionType !== type;
 		fQuestionType = type;
 		fOptions = normalizeOptionCount(changed ? [] : fOptions, type);
+		fMatchingPairs = normalizeMatchingPairs(changed ? [] : fMatchingPairs, type);
 		fAnswerKey = changed
 			? defaultAnswerKeyForQuestionType(type)
-			: normalizeAnswerKey(fAnswerKey, type, fOptions.length);
+			: normalizeAnswerKey(fAnswerKey, type, answerItemCountForType(type));
 		if (focusedEditor && !editorAllowedForQuestionType(focusedEditor, type)) {
 			focusedEditor = null;
 		}
@@ -764,6 +837,7 @@
 	function defaultAnswerKeyForQuestionType(type: ComposerQuestionType): string {
 		const config = getQuestionTypeConfig(type);
 		if (config.answerMode === 'single_option' || config.answerMode === 'fixed_pair') return 'A';
+		if (config.answerMode === 'matching') return buildMatchingAnswerKey(DEFAULT_MATCHING_PAIR_COUNT);
 		return '';
 	}
 
@@ -781,6 +855,28 @@
 		let normalized = options.slice(0, config.maxOptions);
 		while (normalized.length < config.minOptions) normalized = [...normalized, ''];
 		return normalized;
+	}
+
+	function normalizeMatchingPairs(pairs: MatchingPair[], type: ComposerQuestionType = fQuestionType): MatchingPair[] {
+		const config = getQuestionTypeConfig(type);
+		if (config.answerMode !== 'matching') return createEmptyMatchingPairs();
+		let normalized = pairs
+			.slice(0, config.maxOptions)
+			.map((pair) => ({ left: pair.left ?? '', right: pair.right ?? '' }));
+		const minCount = pairs.length === 0 ? DEFAULT_MATCHING_PAIR_COUNT : config.minOptions;
+		while (normalized.length < minCount) normalized = [...normalized, { left: '', right: '' }];
+		return normalized;
+	}
+
+	function optionsToMatchingPairs(options: OptionItem[]): MatchingPair[] {
+		return options.map((option) => ({
+			left: option.html || option.text || option.latex || '',
+			right: option.match_html || option.match_text || '',
+		}));
+	}
+
+	function answerItemCountForType(type: ComposerQuestionType = fQuestionType): number {
+		return getQuestionTypeConfig(type).answerMode === 'matching' ? fMatchingPairs.length : fOptions.length;
 	}
 
 	function optionLabelAt(index: number): OptionLabel {
@@ -803,6 +899,28 @@
 		return questionTypeConfig.fixedOptions?.[index] ?? label;
 	}
 
+	function buildMatchingAnswerKey(count: number): string {
+		return Array.from({ length: count }, (_, index) => `${optionLabelAt(index)}=${index + 1}`).join(';');
+	}
+
+	function normalizeMatchingAnswerKey(value: string | undefined, count: number): string {
+		const fallback = buildMatchingAnswerKey(count);
+		const rawPairs = (value ?? '').split(';');
+		const labels = ANSWER_LABELS.slice(0, count);
+		const matches: Record<string, string> = {};
+		for (const rawPair of rawPairs) {
+			const [rawLeft, rawRight] = rawPair.split('=');
+			const left = rawLeft?.trim().toUpperCase() ?? '';
+			const right = rawRight?.trim() ?? '';
+			if (!labels.includes(left as OptionLabel) || !/^[1-6]$/.test(right)) continue;
+			const rightIndex = Number(right) - 1;
+			if (rightIndex < 0 || rightIndex >= count) continue;
+			matches[left] = String(rightIndex + 1);
+		}
+		if (Object.keys(matches).length !== count) return fallback;
+		return labels.map((label) => `${label}=${matches[label]}`).join(';');
+	}
+
 	function normalizeShortAnswerComparable(value: string): string {
 		return value.replace(/\u00a0/g, ' ').trim().replace(/\s+/g, ' ').toLocaleLowerCase('id-ID');
 	}
@@ -822,6 +940,7 @@
 		const config = getQuestionTypeConfig(type);
 		if (config.answerMode === 'rubric') return '';
 		if (config.answerMode === 'short_text') return parseShortAnswerAliases(value).join('|');
+		if (config.answerMode === 'matching') return normalizeMatchingAnswerKey(value, optionCount);
 		const labels = ANSWER_LABELS.slice(0, optionCount);
 		const keys = answerKeyLabels(value, labels);
 		if (config.answerMode === 'multi_option') return keys.join(',');
@@ -866,6 +985,18 @@
 		if (answerKeyLabels(fAnswerKey, ANSWER_LABELS).includes(removedLabel)) {
 			fAnswerKey = normalizeAnswerKey(fAnswerKey, fQuestionType, fOptions.length);
 		}
+	}
+
+	function addMatchingPair() {
+		if (!isMatching || fMatchingPairs.length >= questionTypeConfig.maxOptions) return;
+		fMatchingPairs = [...fMatchingPairs, { left: '', right: '' }];
+		fAnswerKey = buildMatchingAnswerKey(fMatchingPairs.length);
+	}
+
+	function removeLastMatchingPair() {
+		if (!isMatching || fMatchingPairs.length <= questionTypeConfig.minOptions) return;
+		fMatchingPairs = fMatchingPairs.slice(0, -1);
+		fAnswerKey = buildMatchingAnswerKey(fMatchingPairs.length);
 	}
 
 	function questionUsageLocked(q: Question): boolean {
@@ -921,6 +1052,7 @@
 		fRubric = '';
 		fExplanation = '';
 		fOptions = normalizeOptionCount([], fQuestionType);
+		fMatchingPairs = normalizeMatchingPairs([], fQuestionType);
 		fAnswerKey = defaultAnswerKeyForQuestionType(fQuestionType);
 		fWeight = 1;
 		fDifficulty = 'medium';
@@ -977,7 +1109,8 @@
 				? d.options.map((o) => o.html || o.text || o.latex || '')
 				: defaultOptionsForQuestionType(fQuestionType);
 			fOptions = normalizeOptionCount(opts, fQuestionType);
-			fAnswerKey = normalizeAnswerKey(d.answer_key, fQuestionType, fOptions.length);
+			fMatchingPairs = normalizeMatchingPairs(optionsToMatchingPairs(d.options ?? []), fQuestionType);
+			fAnswerKey = normalizeAnswerKey(d.answer_key, fQuestionType, answerItemCountForType(fQuestionType));
 			fDifficulty = d.difficulty || 'medium';
 			fGradeLevel = d.grade_level ?? 7;
 			fAcademicPhase = d.academic_phase ?? '';
@@ -1005,7 +1138,8 @@
 			fRubric = q.rubric_html ?? '';
 			fExplanation = q.explanation_html ?? '';
 			fOptions = normalizeOptionCount(q.options?.map((o) => o.html || o.text || o.latex || '') ?? defaultOptionsForQuestionType(fQuestionType), fQuestionType);
-			fAnswerKey = normalizeAnswerKey(q.answer_key, fQuestionType, fOptions.length);
+			fMatchingPairs = normalizeMatchingPairs(optionsToMatchingPairs(q.options ?? []), fQuestionType);
+			fAnswerKey = normalizeAnswerKey(q.answer_key, fQuestionType, answerItemCountForType(fQuestionType));
 			fGradeLevel = q.grade_level ?? 7;
 			fAcademicPhase = q.academic_phase ?? '';
 			fCPRef = q.cp_ref ?? '';
@@ -1112,6 +1246,16 @@
 				html: text,
 			}));
 		}
+		if (config.answerMode === 'matching') {
+			return fMatchingPairs.map((pair, i) => ({
+				label: optionLabelAt(i),
+				text: htmlToPlainText(pair.left),
+				html: pair.left,
+				match_label: String(i + 1),
+				match_text: htmlToPlainText(pair.right),
+				match_html: pair.right,
+			}));
+		}
 		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') {
 			return [];
 		}
@@ -1126,7 +1270,7 @@
 		const config = getQuestionTypeConfig(fQuestionType);
 		if (config.answerMode === 'rubric') return '';
 		if (config.answerMode === 'short_text') return normalizeAnswerKey(fAnswerKey, fQuestionType, fOptions.length);
-		return normalizeAnswerKey(fAnswerKey, fQuestionType, fOptions.length);
+		return normalizeAnswerKey(fAnswerKey, fQuestionType, answerItemCountForType(fQuestionType));
 	}
 
 	async function saveQuestion(intent: ComposerSaveIntent = 'draft') {
@@ -1766,6 +1910,43 @@
 						</div>
 					{/if}
 				</div>
+			{:else if isMatching}
+				<div class="space-y-3 border-t border-slate-100 pt-2">
+					<div class="rounded-md border border-dashed border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
+						Siswa akan memilih nomor pasangan kanan untuk setiap item kiri.
+					</div>
+					<div class="grid grid-cols-1 gap-2 md:grid-cols-2">
+						<div class="space-y-1.5">
+							<p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Kolom Kiri</p>
+							{#each fMatchingPairs as pair, i (`preview-match-left-${i}`)}
+								<div class="flex items-start gap-2 rounded-md border border-slate-100 bg-white px-2 py-1.5 text-xs">
+									<span class="shrink-0 font-bold text-green-700">{optionLabelAt(i)}.</span>
+									{#if richTextHasContent(pair.left)}
+										<RichContent html={pair.left} class="latex-preview min-w-0 flex-1" />
+									{:else}
+										<span class="italic text-slate-300">(kiri kosong)</span>
+									{/if}
+								</div>
+							{/each}
+						</div>
+						<div class="space-y-1.5">
+							<p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Pilihan Kanan</p>
+							{#each fMatchingPairs as pair, i (`preview-match-right-${i}`)}
+								<div class="flex items-start gap-2 rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs">
+									<span class="shrink-0 font-bold text-slate-500">{i + 1}.</span>
+									{#if richTextHasContent(pair.right)}
+										<RichContent html={pair.right} class="latex-preview min-w-0 flex-1" />
+									{:else}
+										<span class="italic text-slate-300">(kanan kosong)</span>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					</div>
+					<div class="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+						<span class="font-semibold text-slate-500">Kunci otomatis:</span> {buildMatchingAnswerKey(fMatchingPairs.length)}
+					</div>
+				</div>
 			{:else if fOptions.some(richTextHasContent)}
 				<div class="space-y-1.5 border-t border-slate-100 pt-2">
 					{#each fOptions as opt, i (`preview-option-${i}`)}
@@ -1866,7 +2047,7 @@
 								<button type="button" onclick={() => scrollComposerSection('composer-advanced')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Advance</button>
 							{/if}
 							<button type="button" onclick={() => scrollComposerSection('composer-question')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Pertanyaan</button>
-							<button type="button" onclick={() => scrollComposerSection(isEssay ? 'composer-rubric' : isShortAnswer ? 'composer-answer' : 'composer-options')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">{isEssay ? 'Rubrik' : isShortAnswer ? 'Kunci' : 'Opsi'}</button>
+							<button type="button" onclick={() => scrollComposerSection(isEssay ? 'composer-rubric' : isShortAnswer ? 'composer-answer' : isMatching ? 'composer-matching' : 'composer-options')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">{isEssay ? 'Rubrik' : isShortAnswer ? 'Kunci' : isMatching ? 'Pasangan' : 'Opsi'}</button>
 							<button
 								type="button"
 								onclick={() => (showInspector = !showInspector)}
@@ -2047,7 +2228,7 @@
 						<section id="composer-question" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex flex-wrap items-center justify-between gap-2">
 								<div>
-									<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">{isEssay ? 'Pertanyaan Essay' : isShortAnswer ? 'Pertanyaan Isian Singkat' : isTrueFalse ? 'Pernyataan Benar/Salah' : isAgreeDisagree ? 'Pernyataan Setuju/Tidak Setuju' : 'Isi Pertanyaan'}</h3>
+									<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">{isEssay ? 'Pertanyaan Essay' : isShortAnswer ? 'Pertanyaan Isian Singkat' : isMatching ? 'Instruksi Menjodohkan' : isTrueFalse ? 'Pernyataan Benar/Salah' : isAgreeDisagree ? 'Pernyataan Setuju/Tidak Setuju' : 'Isi Pertanyaan'}</h3>
 									<p class="mt-0.5 text-xs text-slate-500">{questionTypeConfig.studentHint}</p>
 								</div>
 								<button type="button" onclick={() => (focusedEditor = 'stem')} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
@@ -2055,7 +2236,7 @@
 							<LegacyRichTextEditor
 								bind:value={fStem}
 								id="soal-stem"
-								placeholder={isEssay ? 'Tuliskan instruksi essay/uraian. Contoh: Jelaskan alasan, uraikan langkah, atau analisis data berikut.' : isShortAnswer ? 'Tuliskan pertanyaan yang jawabannya singkat dan jelas.' : isTrueFalse ? 'Tuliskan satu pernyataan yang dapat dinilai benar atau salah.' : isAgreeDisagree ? 'Tuliskan pernyataan sikap yang dapat dijawab setuju atau tidak setuju.' : 'Tuliskan pertanyaan utama. Gambar bisa disisipkan langsung di antara teks.'}
+								placeholder={isEssay ? 'Tuliskan instruksi essay/uraian. Contoh: Jelaskan alasan, uraikan langkah, atau analisis data berikut.' : isShortAnswer ? 'Tuliskan pertanyaan yang jawabannya singkat dan jelas.' : isMatching ? 'Tuliskan instruksi. Contoh: Jodohkan istilah pada kolom kiri dengan pengertian yang tepat pada kolom kanan.' : isTrueFalse ? 'Tuliskan satu pernyataan yang dapat dinilai benar atau salah.' : isAgreeDisagree ? 'Tuliskan pernyataan sikap yang dapat dijawab setuju atau tidak setuju.' : 'Tuliskan pertanyaan utama. Gambar bisa disisipkan langsung di antara teks.'}
 								minRows={4}
 								compact
 								onImageUpload={uploadImageInEditor}
@@ -2065,7 +2246,69 @@
 							{/if}
 						</section>
 
-						{#if hasOptionSection}
+						{#if isMatching}
+							<section id="composer-matching" class="scroll-mt-4 space-y-4 border-t border-slate-200 pt-5">
+								<div class="flex flex-wrap items-center justify-between gap-3">
+									<div>
+										<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-slate-500">Pasangan Menjodohkan</h3>
+										<p class="mt-1 text-xs text-slate-500">Kolom kiri adalah pernyataan/istilah. Kolom kanan adalah pasangan benar yang akan dipilih siswa.</p>
+									</div>
+									<div class="flex flex-wrap items-center gap-2">
+										<span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">{fMatchingPairs.length} pasangan</span>
+										<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fMatchingPairs.length <= questionTypeConfig.minOptions} onclick={removeLastMatchingPair}>
+											Kurangi
+										</Button>
+										<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fMatchingPairs.length >= questionTypeConfig.maxOptions} onclick={addMatchingPair}>
+											+ Pasangan
+										</Button>
+									</div>
+								</div>
+								<div class="space-y-3">
+									{#each fMatchingPairs as pair, i (`matching-pair-${i}`)}
+										{@const leftLabel = optionLabelAt(i)}
+										{@const rightLabel = i + 1}
+										<section class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+											<div class="mb-2 flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+												<div>
+													<p class="text-xs font-black uppercase tracking-[0.2em] text-slate-700">Pasangan {leftLabel} = {rightLabel}</p>
+													<p class="mt-0.5 text-[11px] text-slate-400">Kunci disimpan otomatis sebagai {leftLabel}={rightLabel}</p>
+												</div>
+											</div>
+											<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+												<div>
+													<label for={`matching-left-${i}`} class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Kolom Kiri {leftLabel}</label>
+													<LegacyRichTextEditor
+														bind:value={fMatchingPairs[i].left}
+														id={`matching-left-${i}`}
+														placeholder={`Istilah/pernyataan ${leftLabel}`}
+														minRows={2}
+														compact
+														onImageUpload={uploadImageInEditor}
+													/>
+													{#if !richTextHasContent(pair.left)}
+														<p class="mt-1 text-[10px] font-semibold text-red-500">Kolom kiri wajib diisi.</p>
+													{/if}
+												</div>
+												<div>
+													<label for={`matching-right-${i}`} class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Kolom Kanan {rightLabel}</label>
+													<LegacyRichTextEditor
+														bind:value={fMatchingPairs[i].right}
+														id={`matching-right-${i}`}
+														placeholder={`Pasangan jawaban ${rightLabel}`}
+														minRows={2}
+														compact
+														onImageUpload={uploadImageInEditor}
+													/>
+													{#if !richTextHasContent(pair.right)}
+														<p class="mt-1 text-[10px] font-semibold text-red-500">Kolom kanan wajib diisi.</p>
+													{/if}
+												</div>
+											</div>
+										</section>
+									{/each}
+								</div>
+							</section>
+						{:else if hasOptionSection}
 							<section id="composer-options" class="scroll-mt-4 space-y-4 border-t border-slate-200 pt-5">
 								<div class="text-center">
 									<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-slate-500">

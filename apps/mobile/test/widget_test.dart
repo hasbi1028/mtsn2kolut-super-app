@@ -908,6 +908,34 @@ void main() {
     expect(find.text('Jawaban uraian'), findsNothing);
   });
 
+  testWidgets('exam shell renders matching question with pair selectors', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleMatchingPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Pilihan pasangan'), findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<String>), findsNWidgets(2));
+    expect(find.text('Fotosintesis'), findsOneWidget);
+    expect(find.text('Proses membuat makanan'), findsOneWidget);
+  });
+
   testWidgets('exam shell renders stale supervisor attention panel', (
     tester,
   ) async {
@@ -1320,6 +1348,51 @@ ExamLoginPayload _sampleShortAnswerPayload() {
         stemAudioUrl: '',
         stimulusAudioUrl: '',
         options: [],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _sampleMatchingPayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-matching-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'IPA Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-matching-1',
+        questionType: 'matching',
+        questionText: 'Jodohkan istilah berikut dengan pengertiannya.',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: '',
+        stimulusMediaUrl: '',
+        stemAudioUrl: '',
+        stimulusAudioUrl: '',
+        options: [
+          ExamOption(
+            label: 'A',
+            text: 'Fotosintesis',
+            matchLabel: '1',
+            matchText: 'Proses membuat makanan',
+          ),
+          ExamOption(
+            label: 'B',
+            text: 'Evaporasi',
+            matchLabel: '2',
+            matchText: 'Penguapan',
+          ),
+        ],
       ),
     ],
     answeredCount: 0,

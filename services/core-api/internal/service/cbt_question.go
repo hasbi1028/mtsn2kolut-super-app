@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,11 +45,14 @@ type CbtQuestion struct {
 func NewCbtQuestion(q *db.Queries) *CbtQuestion { return &CbtQuestion{q: q} }
 
 type QuestionOption struct {
-	Label   string `json:"label"`
-	Text    string `json:"text,omitempty"`
-	HTML    string `json:"html,omitempty"`
-	Latex   string `json:"latex,omitempty"`
-	AssetID string `json:"asset_id,omitempty"`
+	Label      string `json:"label"`
+	Text       string `json:"text,omitempty"`
+	HTML       string `json:"html,omitempty"`
+	Latex      string `json:"latex,omitempty"`
+	AssetID    string `json:"asset_id,omitempty"`
+	MatchLabel string `json:"match_label,omitempty"`
+	MatchText  string `json:"match_text,omitempty"`
+	MatchHTML  string `json:"match_html,omitempty"`
 }
 
 type SaveCbtQuestionInput struct {
@@ -660,6 +664,8 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	out.OptionE = optionE
 	if out.QuestionType == "short_answer" {
 		out.AnswerKey = normalizeShortAnswerKey(out.AnswerKey)
+	} else if out.QuestionType == "matching" {
+		out.AnswerKey = normalizeMatchingAnswerKey(out.AnswerKey, len(normalizedOptions))
 	} else {
 		out.AnswerKey = strings.TrimSpace(strings.ToUpper(out.AnswerKey))
 	}
@@ -699,6 +705,13 @@ func validateQuestion(input SaveCbtQuestionInput) error {
 	case "short_answer":
 		if requiresCompleteContent && input.AnswerKey == "" {
 			return fmt.Errorf("answer_key wajib diisi untuk short_answer")
+		}
+	case "matching":
+		if !requiresCompleteContent {
+			return nil
+		}
+		if err := validateMatchingQuestion(input.Options, input.AnswerKey); err != nil {
+			return err
 		}
 	case "essay":
 		if requiresCompleteContent {
@@ -744,9 +757,109 @@ func validateObjectiveAnswerKey(options []QuestionOption, answerKey string, ques
 	return nil
 }
 
+func validateMatchingQuestion(options []QuestionOption, answerKey string) error {
+	if len(options) < 2 {
+		return fmt.Errorf("menjodohkan membutuhkan minimal 2 pasangan")
+	}
+	leftLabels := make(map[string]bool, len(options))
+	rightLabels := make(map[string]bool, len(options))
+	for _, option := range options {
+		left := strings.TrimSpace(strings.ToUpper(option.Label))
+		right := strings.TrimSpace(option.MatchLabel)
+		if left == "" || right == "" || optionContent(option) == "" || matchingOptionContent(option) == "" {
+			return fmt.Errorf("setiap pasangan menjodohkan wajib memiliki kolom kiri dan kanan")
+		}
+		if leftLabels[left] || rightLabels[right] {
+			return fmt.Errorf("label pasangan menjodohkan tidak boleh duplikat")
+		}
+		leftLabels[left] = true
+		rightLabels[right] = true
+	}
+	for _, pair := range strings.Split(answerKey, ";") {
+		parts := strings.Split(pair, "=")
+		if len(parts) != 2 {
+			return fmt.Errorf("answer_key menjodohkan tidak valid")
+		}
+		left := strings.TrimSpace(strings.ToUpper(parts[0]))
+		right := strings.TrimSpace(parts[1])
+		if !leftLabels[left] || !rightLabels[right] {
+			return fmt.Errorf("answer_key menjodohkan harus sesuai label pasangan")
+		}
+		delete(leftLabels, left)
+		delete(rightLabels, right)
+	}
+	if len(leftLabels) != 0 || len(rightLabels) != 0 {
+		return fmt.Errorf("answer_key menjodohkan harus memetakan semua pasangan")
+	}
+	return nil
+}
+
+func optionContent(option QuestionOption) string {
+	return strings.TrimSpace(firstQuestionOptionContent(option.Text, option.HTML, option.Latex))
+}
+
+func matchingOptionContent(option QuestionOption) string {
+	return strings.TrimSpace(firstQuestionOptionContent(option.MatchText, option.MatchHTML))
+}
+
+func firstQuestionOptionContent(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 func normalizeShortAnswerKey(value string) string {
 	aliases := shortAnswerAliases(value)
 	return strings.Join(aliases, "|")
+}
+
+func normalizeMatchingAnswerKey(value string, optionCount int) string {
+	if optionCount <= 0 {
+		return ""
+	}
+	fallback := buildMatchingAnswerKey(optionCount)
+	pairs := strings.Split(value, ";")
+	labels := make(map[string]bool, optionCount)
+	matches := make(map[string]string, optionCount)
+	for i := 0; i < optionCount; i++ {
+		labels[string(rune('A'+i))] = true
+	}
+	for _, pair := range pairs {
+		parts := strings.Split(pair, "=")
+		if len(parts) != 2 {
+			continue
+		}
+		left := strings.TrimSpace(strings.ToUpper(parts[0]))
+		right := strings.TrimSpace(parts[1])
+		if !labels[left] {
+			continue
+		}
+		rightIndex, err := strconv.Atoi(right)
+		if err != nil || rightIndex < 1 || rightIndex > optionCount {
+			continue
+		}
+		matches[left] = strconv.Itoa(rightIndex)
+	}
+	if len(matches) != optionCount {
+		return fallback
+	}
+	ordered := make([]string, 0, optionCount)
+	for i := 0; i < optionCount; i++ {
+		left := string(rune('A' + i))
+		ordered = append(ordered, fmt.Sprintf("%s=%s", left, matches[left]))
+	}
+	return strings.Join(ordered, ";")
+}
+
+func buildMatchingAnswerKey(optionCount int) string {
+	pairs := make([]string, 0, optionCount)
+	for i := 0; i < optionCount; i++ {
+		pairs = append(pairs, fmt.Sprintf("%s=%d", string(rune('A'+i)), i+1))
+	}
+	return strings.Join(pairs, ";")
 }
 
 func shortAnswerAliases(value string) []string {
@@ -774,7 +887,7 @@ func normalizeShortAnswerComparable(value string) string {
 
 func beginnerSupportsQuestionType(questionType string) bool {
 	switch questionType {
-	case "multiple_choice", "multiple_answer", "true_false", "agree_disagree", "short_answer", "essay":
+	case "multiple_choice", "multiple_answer", "true_false", "agree_disagree", "matching", "short_answer", "essay":
 		return true
 	default:
 		return false
@@ -786,7 +899,7 @@ func normalizeQuestionType(value string) string {
 	switch normalized {
 	case "", "multiple_choice", "single_choice":
 		return "multiple_choice"
-	case "multiple_answer", "true_false", "agree_disagree", "short_answer", "essay":
+	case "multiple_answer", "true_false", "agree_disagree", "matching", "short_answer", "essay":
 		return normalized
 	default:
 		return normalized
@@ -849,15 +962,24 @@ func normalizeOptions(options []QuestionOption) ([]QuestionOption, error) {
 		text := strings.TrimSpace(option.Text)
 		htmlText := strings.TrimSpace(option.HTML)
 		latex := strings.TrimSpace(option.Latex)
-		if text == "" && htmlText == "" && latex == "" {
+		matchLabel := strings.TrimSpace(option.MatchLabel)
+		if matchLabel == "" && (strings.TrimSpace(option.MatchText) != "" || strings.TrimSpace(option.MatchHTML) != "") {
+			matchLabel = fmt.Sprintf("%d", idx+1)
+		}
+		matchText := strings.TrimSpace(option.MatchText)
+		matchHTML := strings.TrimSpace(option.MatchHTML)
+		if text == "" && htmlText == "" && latex == "" && matchText == "" && matchHTML == "" {
 			continue
 		}
 		normalized = append(normalized, QuestionOption{
-			Label:   label,
-			Text:    text,
-			HTML:    sanitizeHTML(htmlText),
-			Latex:   latex,
-			AssetID: strings.TrimSpace(option.AssetID),
+			Label:      label,
+			Text:       text,
+			HTML:       sanitizeHTML(htmlText),
+			Latex:      latex,
+			AssetID:    strings.TrimSpace(option.AssetID),
+			MatchLabel: matchLabel,
+			MatchText:  matchText,
+			MatchHTML:  sanitizeHTML(matchHTML),
 		})
 	}
 	return normalized, nil

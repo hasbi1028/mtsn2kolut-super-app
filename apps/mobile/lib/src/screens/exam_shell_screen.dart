@@ -355,11 +355,17 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     if (_isSubmitted) {
       return;
     }
-    final wasAnswered = _answers.containsKey(question.id);
+    final wasAnswered = _isAnswerComplete(
+      question,
+      _answers[question.id] ?? '',
+    );
+    final isAnswered = _isAnswerComplete(question, answer);
     setState(() {
       _answers[question.id] = answer;
-      if (!wasAnswered) {
+      if (!wasAnswered && isAnswered) {
         _answeredCount += 1;
+      } else if (wasAnswered && !isAnswered && _answeredCount > 0) {
+        _answeredCount -= 1;
       }
       _isSavingAnswer = true;
       _statusMessage = 'Jawaban sedang disimpan...';
@@ -1182,6 +1188,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             Expanded(
               child: question.isTextAnswer
                   ? _buildTextAnswerQuestion(theme, question)
+                  : question.isMatching
+                  ? _buildMatchingQuestion(theme, question)
                   : _buildObjectiveQuestion(theme, question),
             ),
             const SizedBox(height: 16),
@@ -1244,6 +1252,60 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         .toSet()
         .toList()
       ..sort();
+  }
+
+  Map<String, String> _selectedMatchingPairs(ExamQuestion question) {
+    return _selectedMatchingPairsFromRaw(_answers[question.id] ?? '');
+  }
+
+  String _encodeMatchingPairs(Map<String, String> pairs) {
+    final entries = pairs.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries.map((entry) => '${entry.key}=${entry.value}').join(';');
+  }
+
+  bool _isAnswerComplete(ExamQuestion question, String answer) {
+    if (answer.trim().isEmpty) {
+      return false;
+    }
+    if (!question.isMatching) {
+      return true;
+    }
+    final selected = _selectedMatchingPairsFromRaw(answer);
+    final requiredLabels = question.options
+        .map((option) => option.label)
+        .toSet();
+    return requiredLabels.isNotEmpty &&
+        requiredLabels.every(
+          (label) => selected[label]?.trim().isNotEmpty ?? false,
+        );
+  }
+
+  Map<String, String> _selectedMatchingPairsFromRaw(String raw) {
+    final pairs = <String, String>{};
+    for (final part in raw.split(';')) {
+      final pieces = part.split('=');
+      if (pieces.length != 2) {
+        continue;
+      }
+      final left = pieces[0].trim();
+      final right = pieces[1].trim();
+      if (left.isEmpty || right.isEmpty) {
+        continue;
+      }
+      pairs[left] = right;
+    }
+    return pairs;
+  }
+
+  Future<void> _selectMatchingPair(
+    ExamQuestion question,
+    String leftLabel,
+    String rightLabel,
+  ) async {
+    final selected = _selectedMatchingPairs(question);
+    selected[leftLabel] = rightLabel;
+    await _selectOption(question, _encodeMatchingPairs(selected));
   }
 
   Future<void> _toggleObjectiveOption(
@@ -1327,6 +1389,149 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildMatchingQuestion(ThemeData theme, ExamQuestion question) {
+    final selected = _selectedMatchingPairs(question);
+    final rightOptions = question.options
+        .where((option) => option.matchLabel.trim().isNotEmpty)
+        .toList();
+
+    return ListView(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF6F8F3),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Pilihan pasangan',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 10),
+              ...rightOptions.map(
+                (option) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 28,
+                        child: Text(
+                          '${option.matchLabel}.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          option.matchText,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        ...question.options.map(
+          (option) => Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: theme.colorScheme.outlineVariant),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(
+                        radius: 17,
+                        backgroundColor: theme.colorScheme.primary,
+                        foregroundColor: theme.colorScheme.onPrimary,
+                        child: Text(option.label),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: RichExamText(
+                          content: option.text,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            height: 1.45,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Builder(
+                    builder: (context) {
+                      final currentValue =
+                          rightOptions.any(
+                            (right) =>
+                                right.matchLabel == selected[option.label],
+                          )
+                          ? selected[option.label]
+                          : null;
+                      return DropdownButtonFormField<String>(
+                        initialValue: currentValue,
+                        decoration: const InputDecoration(
+                          labelText: 'Pilih pasangan kanan',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: rightOptions
+                            .map(
+                              (right) => DropdownMenuItem<String>(
+                                value: right.matchLabel,
+                                child: Text(
+                                  '${right.matchLabel}. ${right.matchText}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: _isSubmitted
+                            ? null
+                            : (value) {
+                                if (value == null) {
+                                  return;
+                                }
+                                _selectMatchingPair(
+                                  question,
+                                  option.label,
+                                  value,
+                                );
+                              },
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

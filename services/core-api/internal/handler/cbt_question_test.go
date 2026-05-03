@@ -354,7 +354,7 @@ func TestCbtQuestionModeAndJSONHelpers(t *testing.T) {
 		want string
 	}{
 		{name: "beginner multiple choice", args: []string{"multiple_choice", "", "", "", "", "", "", "", "", "", "draft", "", "", ""}, want: "beginner"},
-		{name: "unsupported type", args: []string{"matching", "", "", "", "", "", "", "", "", "", "draft", "", "", ""}, want: "advance"},
+		{name: "unsupported type", args: []string{"ordering", "", "", "", "", "", "", "", "", "", "draft", "", "", ""}, want: "advance"},
 		{name: "latex content", args: []string{"essay", " x^2 ", "", "", "", "", "", "", "", "", "draft", "", "", ""}, want: "advance"},
 		{name: "curriculum metadata", args: []string{"essay", "", "", "D", "", "", "", "", "", "", "draft", "", "", ""}, want: "advance"},
 		{name: "hots flag", args: []string{"essay", "", "", "", "", "", "", "", "", "", "draft", "", "", ""}, hots: true, want: "advance"},

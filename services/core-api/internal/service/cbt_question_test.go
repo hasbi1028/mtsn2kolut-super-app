@@ -632,11 +632,24 @@ func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
 			wantErr: "rubric_html wajib diisi untuk essay yang diajukan review, di-approve, atau dipublish",
 		},
 		{
+			name: "matching requires complete pairs",
+			input: SaveCbtQuestionInput{
+				SubjectID:      pgtype.UUID{Valid: true},
+				AuthoringMode:  "beginner",
+				QuestionType:   "matching",
+				QuestionText:   "Cocokkan",
+				Options:        []QuestionOption{{Label: "A", Text: "Istilah", MatchLabel: "1"}},
+				AnswerKey:      "A=1",
+				WorkflowStatus: "review",
+			},
+			wantErr: "menjodohkan membutuhkan minimal 2 pasangan",
+		},
+		{
 			name: "unsupported type",
 			input: SaveCbtQuestionInput{
 				SubjectID:     pgtype.UUID{Valid: true},
 				AuthoringMode: "advance",
-				QuestionType:  "matching",
+				QuestionType:  "ordering",
 				QuestionText:  "Cocokkan",
 			},
 			wantErr: "question_type tidak didukung",
@@ -694,6 +707,25 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 		t.Fatalf("normalizeQuestionInput(agree_disagree) options/key = %+v/%q, want Setuju/Tidak Setuju with key B", agreeDisagree.Options, agreeDisagree.AnswerKey)
 	}
 
+	matching, err := normalizeQuestionInput(SaveCbtQuestionInput{
+		SubjectID:     pgtype.UUID{Valid: true},
+		AuthoringMode: "beginner",
+		QuestionType:  "matching",
+		QuestionText:  "Jodohkan istilah dengan pengertiannya",
+		Options: []QuestionOption{
+			{Label: "A", HTML: "<p>Fotosintesis</p>", MatchLabel: "1", MatchHTML: "<p>Proses membuat makanan</p>"},
+			{Label: "B", Text: "Evaporasi", MatchLabel: "2", MatchText: "Penguapan"},
+		},
+		AnswerKey:      "b=2; a=1",
+		WorkflowStatus: "review",
+	})
+	if err != nil {
+		t.Fatalf("normalizeQuestionInput(matching) error = %v", err)
+	}
+	if matching.AnswerKey != "A=1;B=2" || len(matching.Options) != 2 || matching.Options[0].MatchText != "" || matching.Options[0].MatchHTML != "<p>Proses membuat makanan</p>" {
+		t.Fatalf("normalizeQuestionInput(matching) key/options = %q/%+v, want canonical matching options", matching.AnswerKey, matching.Options)
+	}
+
 	fromStem, err := normalizeQuestionInput(SaveCbtQuestionInput{
 		SubjectID:     pgtype.UUID{Valid: true},
 		AuthoringMode: "advance",
@@ -717,7 +749,10 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 		t.Fatalf("normalizeQuestionType(agree_disagree) = %q, want agree_disagree", got)
 	}
 	if got := normalizeQuestionType("matching"); got != "matching" {
-		t.Fatalf("normalizeQuestionType(unknown) = %q, want matching passthrough", got)
+		t.Fatalf("normalizeQuestionType(matching) = %q, want matching", got)
+	}
+	if got := normalizeQuestionType("ordering"); got != "ordering" {
+		t.Fatalf("normalizeQuestionType(unknown) = %q, want ordering passthrough", got)
 	}
 	if got := normalizeAuthoringMode("ADVANCE"); got != "advance" {
 		t.Fatalf("normalizeAuthoringMode() = %q, want advance", got)

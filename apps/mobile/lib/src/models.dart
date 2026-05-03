@@ -121,6 +121,7 @@ class ExamQuestion {
       questionType == 'essay' || (questionType.isEmpty && options.isEmpty);
   bool get isShortAnswer => questionType == 'short_answer';
   bool get isMultipleAnswer => questionType == 'multiple_answer';
+  bool get isMatching => questionType == 'matching';
   bool get isTextAnswer => isEssay || isShortAnswer;
   bool get hasRichContent =>
       stemHtml.trim().isNotEmpty || stimulusHtml.trim().isNotEmpty;
@@ -149,15 +150,24 @@ class ExamQuestion {
 }
 
 class ExamOption {
-  const ExamOption({required this.label, required this.text});
+  const ExamOption({
+    required this.label,
+    required this.text,
+    this.matchLabel = '',
+    this.matchText = '',
+  });
 
   final String label;
   final String text;
+  final String matchLabel;
+  final String matchText;
 
   factory ExamOption.fromJson(Map<String, dynamic> json) {
     return ExamOption(
       label: json['label'] as String? ?? '',
       text: json['text'] as String? ?? '',
+      matchLabel: json['match_label'] as String? ?? '',
+      matchText: json['match_text'] as String? ?? '',
     );
   }
 }

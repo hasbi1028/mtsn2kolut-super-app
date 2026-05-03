@@ -1351,6 +1351,10 @@ SET is_correct = CASE
   WHEN q.question_type = 'multiple_answer' THEN
     (array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(sa.answer, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ',') =
      array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(q.answer_key, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ','))
+  -- matching: answer is semicolon-separated left=right pairs, all pairs must match.
+  WHEN q.question_type = 'matching' THEN
+    (array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(sa.answer, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';') =
+     array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(q.answer_key, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';'))
   -- short_answer: answer_key may contain accepted aliases separated by "|";
   -- normalize case, repeated whitespace, and non-breaking spaces before matching.
   WHEN q.question_type = 'short_answer' THEN EXISTS (
@@ -1419,6 +1423,9 @@ SET is_correct = CASE
   WHEN q.question_type = 'multiple_answer' THEN
     (array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(sa.answer, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ',') =
      array_to_string(ARRAY(SELECT btrim(label) FROM unnest(string_to_array(q.answer_key, ',')) AS key(label) WHERE btrim(label) <> '' ORDER BY 1), ','))
+  WHEN q.question_type = 'matching' THEN
+    (array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(sa.answer, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';') =
+     array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(q.answer_key, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';'))
   WHEN q.question_type = 'short_answer' THEN EXISTS (
     SELECT 1
     FROM unnest(string_to_array(q.answer_key, '|')) AS accepted(answer)
