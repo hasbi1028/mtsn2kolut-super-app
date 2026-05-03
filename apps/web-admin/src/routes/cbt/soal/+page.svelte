@@ -87,6 +87,7 @@
 		errors: string[];
 		duplicate_codes: string[];
 	};
+	type FocusedEditor = 'stem' | 'A' | 'B' | 'C' | 'D';
 
 	// ── Constants ─────────────────────────────────────────────────────────────
 	const PAGE_SIZE = 15;
@@ -202,8 +203,11 @@
 	let editingId = $state<string | null>(null);
 	let composerBusy = $state(false);
 	let draftStatus = $state('');
+	let draftSavedAt = $state<string | null>(null);
 	let showTemplates = $state(true);
+	let showInspector = $state(false);
 	let composerMobilePanel = $state<'write' | 'preview'>('write');
+	let focusedEditor = $state<FocusedEditor | null>(null);
 	let lastDraftSig = '';
 	let questionsRequestId = 0;
 	let showImport = $state(false);
@@ -300,6 +304,8 @@
 		if (!readinessChecks.weight) issues.push('Bobot nilai minimal 1');
 		return issues;
 	});
+	let qualityWarningCount = $derived(qualitySignals.filter((signal) => signal.status !== 'good').length);
+	let hasDraftWork = $derived(Boolean(fSubjectId || richTextHasContent(fStem) || fOptions.some(richTextHasContent) || draftStatus));
 
 	// ── Draft autosave ─────────────────────────────────────────────────────────
 	function buildDraftPayload(): DraftPayload {
@@ -317,6 +323,7 @@
 
 	function markDraftAutosaved() {
 		draftStatus = 'Draft tersimpan otomatis';
+		draftSavedAt = new Date().toISOString();
 	}
 
 	function saveDraftSnapshot(draftKey: string, signature: string) {
@@ -355,6 +362,7 @@
 				weight?: number;
 				difficulty?: string;
 				isRtl?: boolean;
+				savedAt?: string;
 			};
 			fSubjectId = d.subjectId ?? '';
 			fStem = d.stem ?? '';
@@ -365,6 +373,7 @@
 			fDifficulty = d.difficulty ?? 'medium';
 			fIsRtl = d.isRtl ?? false;
 			draftStatus = 'Draft lokal dipulihkan';
+			draftSavedAt = d.savedAt ?? null;
 			return true;
 		} catch {
 			return false;
@@ -379,6 +388,7 @@
 		}
 		lastDraftSig = '';
 		draftStatus = '';
+		draftSavedAt = null;
 	}
 
 	// ── API ────────────────────────────────────────────────────────────────────
@@ -536,6 +546,7 @@
 		fDifficulty = 'medium';
 		fIsRtl = false;
 		draftStatus = '';
+		draftSavedAt = null;
 		lastDraftSig = '';
 	}
 
@@ -543,6 +554,8 @@
 		editingId = null;
 		resetForm();
 		showTemplates = true;
+		showInspector = false;
+		focusedEditor = null;
 		composerMobilePanel = 'write';
 		showComposer = true;
 		// Delay to let state settle before restoring
@@ -574,6 +587,8 @@
 			fAnswerKey = d.answer_key || 'A';
 			fDifficulty = d.difficulty || 'medium';
 			showTemplates = false;
+			showInspector = false;
+			focusedEditor = null;
 			composerMobilePanel = 'write';
 			showComposer = true;
 		} catch (error) {
@@ -583,6 +598,8 @@
 			fSubjectId = q.subject_id;
 			fStem = q.stem_html || q.question_text || '';
 			fAnswerKey = q.answer_key || 'A';
+			showInspector = false;
+			focusedEditor = null;
 			composerMobilePanel = 'write';
 			showComposer = true;
 		} finally {
@@ -603,6 +620,62 @@
 	function closeComposer() {
 		showComposer = false;
 		editingId = null;
+		focusedEditor = null;
+		showInspector = false;
+	}
+
+	async function requestCloseComposer() {
+		if (hasDraftWork && draftStatus) {
+			const confirmed = await confirmAction({
+				title: 'Tutup Komposer?',
+				message: 'Draft lokal tetap disimpan otomatis. Tutup modal dan lanjutkan nanti?',
+				confirmLabel: 'Tutup',
+				tone: 'warning'
+			});
+			if (!confirmed) return;
+		}
+		closeComposer();
+	}
+
+	function scrollComposerSection(id: string) {
+		document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
+
+	function openInspector() {
+		showInspector = true;
+		composerMobilePanel = 'preview';
+	}
+
+	function draftStatusLabel() {
+		if (draftSavedAt) {
+			const saved = new Date(draftSavedAt);
+			const clock = Number.isNaN(saved.getTime())
+				? ''
+				: saved.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+			return `${draftStatus || 'Draft tersimpan'}${clock ? ` ${clock}` : ''}`;
+		}
+		return draftStatus || 'Editor legacy siap untuk buat/edit soal.';
+	}
+
+	function focusTitle(editor: FocusedEditor) {
+		return editor === 'stem' ? 'Isi Pertanyaan' : `Opsi ${editor}`;
+	}
+
+	function handleComposerKeydown(event: KeyboardEvent) {
+		if (!showComposer) return;
+		if (event.key === 'Escape' && focusedEditor) {
+			event.preventDefault();
+			focusedEditor = null;
+			return;
+		}
+		if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+			event.preventDefault();
+			if (canSave) {
+				void saveQuestion();
+				return;
+			}
+			toast.warning(validationIssues[0] ?? 'Lengkapi soal sebelum menyimpan');
+		}
 	}
 
 	function openImport() {
@@ -619,7 +692,10 @@
 	}
 
 	async function saveQuestion() {
-		if (!canSave) return;
+		if (!canSave) {
+			toast.warning(validationIssues[0] ?? 'Lengkapi soal sebelum menyimpan');
+			return;
+		}
 		if (editingId) {
 			const current = questions.find((item) => item.id === editingId);
 			if (current && !isQuickEditable(current)) {
@@ -774,6 +850,10 @@
 		const mode = params.get('mode');
 		if (validModuleMode(mode)) activeMode = mode;
 		load();
+		window.addEventListener('keydown', handleComposerKeydown);
+		return () => {
+			window.removeEventListener('keydown', handleComposerKeydown);
+		};
 	});
 </script>
 
@@ -1230,7 +1310,7 @@
 <!-- ── Composer Dialog ─────────────────────────────────────────────────────── -->
 <Dialog.Root bind:open={showComposer}>
 	<Dialog.Content>
-		<div class="soal-composer-modal flex h-[94vh] w-[min(96vw,110rem)] max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-2xl">
+		<div class="soal-composer-modal relative flex h-[94vh] w-[min(96vw,110rem)] max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-2xl">
 			<div class="shrink-0 border-b border-green-100 bg-white px-4 py-2.5 md:px-6">
 				<div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
 					<div class="min-w-0">
@@ -1259,7 +1339,7 @@
 							variant={composerMobilePanel === 'preview' ? 'default' : 'outline'}
 							size="sm"
 							class="h-8 text-xs lg:hidden"
-							onclick={() => (composerMobilePanel = 'preview')}
+							onclick={openInspector}
 						>
 							Preview
 						</Button>
@@ -1268,7 +1348,7 @@
 							variant="outline"
 							size="sm"
 							class="h-8 text-xs"
-							onclick={closeComposer}
+							onclick={() => void requestCloseComposer()}
 						>
 							Tutup
 						</Button>
@@ -1277,7 +1357,49 @@
 			</div>
 
 			<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 md:p-6">
-				<div class="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.72fr)]">
+				<section class="mb-4 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+					<div class="flex flex-wrap items-center gap-2">
+						<div class="flex min-w-[11rem] items-center gap-2">
+							<span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Kesiapan</span>
+							<div class="h-1.5 w-20 overflow-hidden rounded-full bg-slate-200">
+								<div
+									class="h-1.5 rounded-full transition-all duration-300 {readinessScore === 100
+										? 'bg-green-600'
+										: readinessScore >= 50
+											? 'bg-amber-400'
+											: 'bg-red-400'}"
+									style="width: {readinessScore}%"
+								></div>
+							</div>
+							<span class="text-xs font-bold {readinessScore === 100 ? 'text-green-700' : 'text-red-500'}">{readinessScore}%</span>
+						</div>
+						<span class="rounded-full px-2 py-1 text-[10px] font-semibold {validationIssues.length === 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}">
+							{validationIssues.length === 0 ? 'Wajib lengkap' : `${validationIssues.length} wajib belum lengkap`}
+						</span>
+						<span class="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">
+							{qualityWarningCount} sinyal kualitas perlu cek
+						</span>
+						<span class="rounded-full bg-green-50 px-2 py-1 text-[10px] font-semibold text-green-700">
+							{draftStatusLabel()}
+						</span>
+						<div class="ml-auto flex flex-wrap items-center gap-1">
+							<button type="button" onclick={() => scrollComposerSection('composer-metadata')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Metadata</button>
+							<button type="button" onclick={() => scrollComposerSection('composer-question')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Pertanyaan</button>
+							<button type="button" onclick={() => scrollComposerSection('composer-options')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Opsi</button>
+							<button
+								type="button"
+								onclick={() => (showInspector = !showInspector)}
+								class="rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider {showInspector
+									? 'border-green-200 bg-green-50 text-green-800'
+									: 'border-slate-200 text-slate-600 hover:bg-slate-50'}"
+							>
+								{showInspector ? 'Tutup Inspector' : 'Inspector'}
+							</button>
+						</div>
+					</div>
+				</section>
+
+				<div class={`grid grid-cols-1 gap-5 ${showInspector || composerMobilePanel === 'preview' ? 'xl:grid-cols-[minmax(0,1.55fr)_minmax(18rem,0.5fr)]' : ''}`}>
 					<div class={`space-y-4 min-w-0 ${composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
 						<section class="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
 							<div class="flex flex-col gap-2 lg:flex-row lg:items-center">
@@ -1315,7 +1437,7 @@
 							</div>
 						</section>
 
-						<section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+						<section id="composer-metadata" class="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
 								<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Metadata Soal</h3>
 								<span class="text-[11px] text-slate-400">Poin final diatur saat soal masuk paket</span>
@@ -1335,6 +1457,9 @@
 											<option value={s.id}>{s.name}</option>
 										{/each}
 									</select>
+									{#if !readinessChecks.subject}
+										<p class="mt-1 text-[10px] font-semibold text-red-500">Mata pelajaran wajib dipilih.</p>
+									{/if}
 								</div>
 								<div>
 									<label for="f-difficulty" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
@@ -1355,6 +1480,9 @@
 										Bobot Paket
 									</label>
 									<Input id="f-weight" type="number" min="1" bind:value={fWeight} class="h-9 text-sm font-medium" />
+									{#if !readinessChecks.weight}
+										<p class="mt-1 text-[10px] font-semibold text-red-500">Minimal 1.</p>
+									{/if}
 								</div>
 								<label for="f-rtl" class="flex h-9 cursor-pointer items-center justify-between gap-2 rounded-md border border-dashed border-green-200 bg-green-50 px-3">
 									<span class="text-[10px] font-black uppercase tracking-wider text-green-800">Mode Arab / RTL</span>
@@ -1363,10 +1491,13 @@
 							</div>
 						</section>
 
-						<section class="space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-							<div>
+						<section id="composer-question" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+							<div class="flex flex-wrap items-center justify-between gap-2">
+								<div>
 								<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Isi Pertanyaan</h3>
-								<p class="mt-0.5 text-xs text-slate-500">Rich text legacy penuh untuk teks, gambar, daftar, dan formula.</p>
+									<p class="mt-0.5 text-xs text-slate-500">Teks, gambar, daftar, dan formula.</p>
+								</div>
+								<button type="button" onclick={() => (focusedEditor = 'stem')} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
 							</div>
 							<LegacyRichTextEditor
 								bind:value={fStem}
@@ -1376,9 +1507,12 @@
 								compact
 								onImageUpload={uploadImageInEditor}
 							/>
+							{#if !readinessChecks.stem}
+								<p class="text-[10px] font-semibold text-red-500">Isi pertanyaan minimal 5 karakter atau sisipkan gambar.</p>
+							{/if}
 						</section>
 
-						<section class="space-y-4 border-t border-slate-200 pt-5">
+						<section id="composer-options" class="scroll-mt-4 space-y-4 border-t border-slate-200 pt-5">
 							<div class="text-center">
 								<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-slate-500">Opsi & Kunci Jawaban</h3>
 								<p class="mt-1 text-xs text-slate-500">Setiap opsi memakai kotak rich text legacy sendiri.</p>
@@ -1397,7 +1531,9 @@
 												<p class="text-xs font-black uppercase tracking-[0.2em] text-slate-700">Opsi {label}</p>
 												<p class="mt-0.5 text-[11px] text-slate-400">{isAnswer ? 'Ditandai sebagai kunci jawaban' : 'Pengecoh / alternatif jawaban'}</p>
 											</div>
-											<label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-green-50">
+											<div class="flex shrink-0 items-center gap-1">
+												<button type="button" onclick={() => (focusedEditor = label)} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
+											<label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {isAnswer ? 'bg-green-600 text-white' : 'hover:bg-green-50'}">
 												<input
 													type="radio"
 													name="answer-key"
@@ -1406,8 +1542,9 @@
 													onchange={() => (fAnswerKey = label)}
 													class="h-4 w-4 cursor-pointer accent-green-700"
 												/>
-												<span class="text-[10px] font-black uppercase tracking-widest {isAnswer ? 'text-green-700' : 'text-slate-500'}">Kunci</span>
+												<span class="text-[10px] font-black uppercase tracking-widest {isAnswer ? 'text-white' : 'text-slate-500'}">Kunci</span>
 											</label>
+											</div>
 										</div>
 										<div dir={fIsRtl ? 'rtl' : undefined}>
 											<LegacyRichTextEditor
@@ -1418,6 +1555,9 @@
 												compact
 												onImageUpload={uploadImageInEditor}
 											/>
+											{#if !richTextHasContent(fOptions[i])}
+												<p class="mt-1 text-[10px] font-semibold text-red-500">Opsi {label} wajib diisi.</p>
+											{/if}
 										</div>
 									</section>
 								{/each}
@@ -1425,21 +1565,20 @@
 						</section>
 					</div>
 
+					{#if showInspector || composerMobilePanel === 'preview'}
 					<aside class={`space-y-4 min-w-0 xl:sticky xl:top-0 xl:self-start ${composerMobilePanel === 'write' ? 'hidden lg:block' : 'block'}`}>
 						<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 							{@render composerPreview()}
 						</div>
 					</aside>
+					{/if}
 				</div>
 			</div>
 
 			<div class="flex shrink-0 flex-col gap-2 border-t border-green-100 bg-white px-4 py-2.5 md:flex-row md:items-center md:justify-between md:px-6">
 				<div class="min-w-0 text-xs text-slate-500">
-					{#if draftStatus}
-						<span class="font-semibold text-green-700">{draftStatus}</span>
-					{:else}
-						<span>Editor legacy siap untuk buat/edit soal.</span>
-					{/if}
+					<span class="font-semibold text-green-700">{draftStatusLabel()}</span>
+					<span class="ml-2 text-slate-400">· {validationIssues.length === 0 ? 'Siap disimpan' : `${validationIssues.length} field wajib belum lengkap`} · Ctrl+S</span>
 				</div>
 				<div class="flex shrink-0 flex-wrap justify-end gap-2">
 					<Button
@@ -1463,6 +1602,65 @@
 					</LoadingButton>
 				</div>
 			</div>
+
+			{#if focusedEditor}
+				<div class="absolute inset-0 z-20 flex bg-slate-950/35 p-3 md:p-6">
+					<div class="flex min-h-0 w-full flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+						<div class="flex shrink-0 items-center justify-between gap-3 border-b border-green-100 px-4 py-3">
+							<div>
+								<p class="text-[10px] font-black uppercase tracking-[0.22em] text-green-700">Mode Fokus</p>
+								<h3 class="text-base font-black uppercase italic text-slate-900">{focusTitle(focusedEditor)}</h3>
+							</div>
+							<Button type="button" variant="outline" size="sm" class="h-8 text-xs" onclick={() => (focusedEditor = null)}>
+								Tutup Fokus
+							</Button>
+						</div>
+						<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4">
+							{#if focusedEditor === 'stem'}
+								<LegacyRichTextEditor
+									bind:value={fStem}
+									id="soal-stem-focus"
+									placeholder="Tuliskan pertanyaan utama. Gambar bisa disisipkan langsung di antara teks."
+									minRows={10}
+									onImageUpload={uploadImageInEditor}
+								/>
+							{:else if focusedEditor === 'A'}
+								<LegacyRichTextEditor
+									bind:value={fOptions[0]}
+									id="soal-option-focus-a"
+									placeholder="Teks jawaban A"
+									minRows={8}
+									onImageUpload={uploadImageInEditor}
+								/>
+							{:else if focusedEditor === 'B'}
+								<LegacyRichTextEditor
+									bind:value={fOptions[1]}
+									id="soal-option-focus-b"
+									placeholder="Teks jawaban B"
+									minRows={8}
+									onImageUpload={uploadImageInEditor}
+								/>
+							{:else if focusedEditor === 'C'}
+								<LegacyRichTextEditor
+									bind:value={fOptions[2]}
+									id="soal-option-focus-c"
+									placeholder="Teks jawaban C"
+									minRows={8}
+									onImageUpload={uploadImageInEditor}
+								/>
+							{:else if focusedEditor === 'D'}
+								<LegacyRichTextEditor
+									bind:value={fOptions[3]}
+									id="soal-option-focus-d"
+									placeholder="Teks jawaban D"
+									minRows={8}
+									onImageUpload={uploadImageInEditor}
+								/>
+							{/if}
+						</div>
+					</div>
+				</div>
+			{/if}
 		</div>
 	</Dialog.Content>
 </Dialog.Root>
