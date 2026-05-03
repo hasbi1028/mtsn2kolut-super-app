@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
@@ -408,6 +409,15 @@ func (h *CbtSession) Create(w http.ResponseWriter, r *http.Request) {
 		Status:          status,
 	})
 	if err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			message := strings.TrimPrefix(safeClientMessage(err, "Sesi CBT tidak valid"), "conflict: ")
+			api.Conflict(w, message)
+			return
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			api.NotFound(w)
+			return
+		}
 		api.Internal(w, err)
 		return
 	}

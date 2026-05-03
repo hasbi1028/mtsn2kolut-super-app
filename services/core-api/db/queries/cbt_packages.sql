@@ -29,6 +29,23 @@ FROM cbt_package_questions pq
 JOIN cbt_questions q ON q.id = pq.question_id
 ORDER BY pq.package_id, pq.position ASC;
 
+-- name: GetCbtPackageQuestionQuality :one
+SELECT
+  p.is_active,
+  COUNT(q.id)::int AS total_questions,
+  COUNT(q.id) FILTER (WHERE q.status = 'published')::int AS published_questions,
+  COUNT(q.id) FILTER (WHERE q.status <> 'published')::int AS unpublished_questions,
+  COUNT(q.id) FILTER (
+    WHERE q.cp_ref = ''
+       OR (q.tp_ref = '' AND q.kd_ref = '')
+       OR q.cognitive_level = ''
+  )::int AS metadata_gap_questions
+FROM cbt_packages p
+LEFT JOIN cbt_package_questions pq ON pq.package_id = p.id
+LEFT JOIN cbt_questions q ON q.id = pq.question_id
+WHERE p.id = $1
+GROUP BY p.id, p.is_active;
+
 -- name: GetExamQuestions :many
 SELECT
   q.id, q.code, q.question_text, q.question_type, q.options,

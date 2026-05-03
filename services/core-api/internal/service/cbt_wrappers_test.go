@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -400,6 +401,9 @@ type fakeCbtSessionStore struct {
 	listRows              []db.ListCbtExamSessionsRow
 	listErr               error
 	getID                 pgtype.UUID
+	packageQualityID      pgtype.UUID
+	packageQualityRow     db.GetCbtPackageQuestionQualityRow
+	packageQualityErr     error
 	createArg             db.CreateCbtExamSessionParams
 	updateStatusArg       db.UpdateCbtExamSessionStatusParams
 	deleteID              pgtype.UUID
@@ -483,6 +487,17 @@ func (f *fakeCbtSessionStore) ListCbtExamSessions(ctx context.Context) ([]db.Lis
 func (f *fakeCbtSessionStore) GetCbtExamSession(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSessionRow, error) {
 	f.getID = id
 	return db.GetCbtExamSessionRow{ID: id, Title: "Sesi"}, nil
+}
+
+func (f *fakeCbtSessionStore) GetCbtPackageQuestionQuality(ctx context.Context, id pgtype.UUID) (db.GetCbtPackageQuestionQualityRow, error) {
+	f.packageQualityID = id
+	if f.packageQualityErr != nil {
+		return db.GetCbtPackageQuestionQualityRow{}, f.packageQualityErr
+	}
+	if !f.packageQualityRow.IsActive && f.packageQualityRow.TotalQuestions == 0 && f.packageQualityRow.PublishedQuestions == 0 && f.packageQualityRow.UnpublishedQuestions == 0 {
+		return db.GetCbtPackageQuestionQualityRow{IsActive: true, TotalQuestions: 1, PublishedQuestions: 1}, nil
+	}
+	return f.packageQualityRow, nil
 }
 
 func (f *fakeCbtSessionStore) CreateCbtExamSession(ctx context.Context, arg db.CreateCbtExamSessionParams) (db.CbtExamSession, error) {
@@ -808,6 +823,9 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	if store.createArg.PackageID != packageID || store.createArg.ScopeType != "grade" || store.createArg.MixPolicy != "same_grade" || store.createArg.AssignmentMode != "manual" {
 		t.Fatalf("Create() arg = %+v, want normalized session", store.createArg)
 	}
+	if store.packageQualityID != packageID {
+		t.Fatalf("Create() package quality id = %v, want %v", store.packageQualityID, packageID)
+	}
 	if _, err := svc.UpdateStatus(context.Background(), sessionID, db.CbtSessionStatusEnumActive); err != nil {
 		t.Fatalf("UpdateStatus() error = %v", err)
 	}
@@ -972,6 +990,64 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	store.answersRows = nil
 	if rows, err := svc.GetParticipantAnswers(context.Background(), participantID); err != nil || len(rows) != 0 {
 		t.Fatalf("GetParticipantAnswers(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+}
+
+func TestCbtSessionCreateRejectsUnsafePackageQuality(t *testing.T) {
+	packageID := documentCycleTestUUID(229)
+	tests := []struct {
+		name    string
+		row     db.GetCbtPackageQuestionQualityRow
+		err     error
+		wantErr string
+	}{
+		{
+			name:    "inactive package",
+			row:     db.GetCbtPackageQuestionQualityRow{IsActive: false, TotalQuestions: 1, PublishedQuestions: 1},
+			wantErr: "paket soal tidak aktif",
+		},
+		{
+			name:    "empty package",
+			row:     db.GetCbtPackageQuestionQualityRow{IsActive: true},
+			wantErr: "paket soal belum memiliki soal",
+		},
+		{
+			name:    "no published questions",
+			row:     db.GetCbtPackageQuestionQualityRow{IsActive: true, TotalQuestions: 2},
+			wantErr: "paket soal belum memiliki soal terbit",
+		},
+		{
+			name:    "contains unpublished questions",
+			row:     db.GetCbtPackageQuestionQualityRow{IsActive: true, TotalQuestions: 3, PublishedQuestions: 2, UnpublishedQuestions: 1},
+			wantErr: "paket soal masih memiliki 1 soal belum terbit",
+		},
+		{
+			name:    "quality query error",
+			err:     errors.New("quality failed"),
+			wantErr: "quality failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &fakeCbtSessionStore{packageQualityRow: tt.row, packageQualityErr: tt.err}
+			svc := &CbtSession{q: store}
+			_, err := svc.Create(context.Background(), CreateCbtSessionInput{
+				PackageID: packageID,
+				ScopeType: "school",
+				Title:     "Sesi",
+				Status:    db.CbtSessionStatusEnumDraft,
+			})
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Create() error = %v, want contains %q", err, tt.wantErr)
+			}
+			if store.packageQualityID != packageID {
+				t.Fatalf("Create() package quality id = %v, want %v", store.packageQualityID, packageID)
+			}
+			if store.createArg.PackageID.Valid {
+				t.Fatalf("Create() called CreateCbtExamSession with %+v, want blocked before insert", store.createArg)
+			}
+		})
 	}
 }
 

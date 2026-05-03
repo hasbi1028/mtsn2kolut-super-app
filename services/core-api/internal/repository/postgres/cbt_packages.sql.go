@@ -81,6 +81,45 @@ func (q *Queries) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const getCbtPackageQuestionQuality = `-- name: GetCbtPackageQuestionQuality :one
+SELECT
+  p.is_active,
+  COUNT(q.id)::int AS total_questions,
+  COUNT(q.id) FILTER (WHERE q.status = 'published')::int AS published_questions,
+  COUNT(q.id) FILTER (WHERE q.status <> 'published')::int AS unpublished_questions,
+  COUNT(q.id) FILTER (
+    WHERE q.cp_ref = ''
+       OR (q.tp_ref = '' AND q.kd_ref = '')
+       OR q.cognitive_level = ''
+  )::int AS metadata_gap_questions
+FROM cbt_packages p
+LEFT JOIN cbt_package_questions pq ON pq.package_id = p.id
+LEFT JOIN cbt_questions q ON q.id = pq.question_id
+WHERE p.id = $1
+GROUP BY p.id, p.is_active
+`
+
+type GetCbtPackageQuestionQualityRow struct {
+	IsActive             bool  `json:"is_active"`
+	TotalQuestions       int32 `json:"total_questions"`
+	PublishedQuestions   int32 `json:"published_questions"`
+	UnpublishedQuestions int32 `json:"unpublished_questions"`
+	MetadataGapQuestions int32 `json:"metadata_gap_questions"`
+}
+
+func (q *Queries) GetCbtPackageQuestionQuality(ctx context.Context, id pgtype.UUID) (GetCbtPackageQuestionQualityRow, error) {
+	row := q.db.QueryRow(ctx, getCbtPackageQuestionQuality, id)
+	var i GetCbtPackageQuestionQualityRow
+	err := row.Scan(
+		&i.IsActive,
+		&i.TotalQuestions,
+		&i.PublishedQuestions,
+		&i.UnpublishedQuestions,
+		&i.MetadataGapQuestions,
+	)
+	return i, err
+}
+
 const getExamQuestions = `-- name: GetExamQuestions :many
 SELECT
   q.id, q.code, q.question_text, q.question_type, q.options,

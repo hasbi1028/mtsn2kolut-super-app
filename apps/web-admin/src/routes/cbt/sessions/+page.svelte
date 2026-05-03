@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
@@ -23,15 +24,33 @@
 		title: string; scheduled_start: string; scheduled_end: string;
 		status: string; participant_count: number; created_at: string;
 	};
-	type CbtPackage = { id: string; title: string; subject_code: string; subject_name: string; };
+	type CbtPackage = {
+		id: string; title: string; subject_code: string; subject_name: string;
+		question_count: number; is_active: boolean;
+	};
+	type PackageQuestion = {
+		package_id: string; question_id: string;
+		question_type?: string; status?: string; cp_ref?: string; tp_ref?: string; kd_ref?: string;
+		cognitive_level?: string; hots_flag?: boolean;
+	};
+	type PackageQualitySummary = {
+		questions: PackageQuestion[];
+		typeBuckets: { label: string; count: number }[];
+		hotsCount: number;
+		missingCount: number;
+		unpublishedCount: number;
+		totalCount: number;
+	};
 	type SchoolClass = { id: string; name: string; code: string; level: string; };
 	type SessionsOverview = {
 		sessions: ExamSession[];
 		packages: CbtPackage[];
+		packageQuestions: PackageQuestion[];
 		classes: SchoolClass[];
 	};
 	type CbtPackagesPayload = {
 		packages?: CbtPackage[];
+		questions?: unknown[];
 		error?: string;
 		message?: string;
 	};
@@ -43,6 +62,7 @@
 
 	let sessions = $state<ExamSession[]>([]);
 	let packages = $state<CbtPackage[]>([]);
+	let packageQuestions = $state<PackageQuestion[]>([]);
 	let classes = $state<SchoolClass[]>([]);
 	let sessionsPromise = $state<Promise<SessionsOverview> | null>(null);
 	let showForm = $state(false);
@@ -70,6 +90,10 @@
 	let enrollClassId = $state('');
 	let enrollGradeLevel = $state('VII');
 	let enrollBusy = $state(false);
+	let selectedPackage = $derived(packages.find((pkg) => pkg.id === fPackageId) ?? null);
+	let selectedPackageQuality = $derived(packageQualitySummary(fPackageId));
+	let sessionReadinessIssues = $derived(buildSessionReadinessIssues());
+	let canCreateSession = $derived(!fBusy && sessionReadinessIssues.length === 0);
 
 	const statusLabel: Record<string, string> = {
 		draft: 'Draft', scheduled: 'Terjadwal', active: 'Berlangsung',
@@ -124,6 +148,81 @@
 		return 'Dibatalkan';
 	}
 
+	function isRecord(value: unknown): value is Record<string, unknown> {
+		return typeof value === 'object' && value !== null;
+	}
+
+	function parsePackageQuestions(payload: CbtPackagesPayload | unknown) {
+		return isRecord(payload) && Array.isArray(payload.questions) ? (payload.questions as PackageQuestion[]) : [];
+	}
+
+	function compactValue(value: string | number | null | undefined, fallback: string) {
+		const text = value === null || value === undefined ? '' : String(value).trim();
+		return text || fallback;
+	}
+
+	function questionTypeLabel(value: string | null | undefined) {
+		const labels: Record<string, string> = {
+			multiple_choice: 'PG',
+			multiple_answer: 'PG Kompleks',
+			true_false: 'Benar/Salah',
+			agree_disagree: 'Setuju/Tidak',
+			matching: 'Menjodohkan',
+			short_answer: 'Isian',
+			essay: 'Essay',
+		};
+		const normalized = compactValue(value, '');
+		return labels[normalized] ?? (normalized ? normalized.replaceAll('_', ' ') : 'Belum tipe');
+	}
+
+	function packageQuestionHasBlueprintGap(question: PackageQuestion) {
+		return !compactValue(question.cp_ref, '')
+			|| (!compactValue(question.tp_ref, '') && !compactValue(question.kd_ref, ''))
+			|| !compactValue(question.cognitive_level, '');
+	}
+
+	function countByLabel<T>(items: T[], selector: (item: T) => string) {
+		const counts = new SvelteMap<string, number>();
+		for (const item of items) {
+			const label = selector(item);
+			counts.set(label, (counts.get(label) ?? 0) + 1);
+		}
+		return Array.from(counts.entries())
+			.map(([label, count]) => ({ label, count }))
+			.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+	}
+
+	function packageQualitySummary(packageID: string): PackageQualitySummary {
+		const pkg = packages.find((item) => item.id === packageID);
+		const questions = packageQuestions.filter((question) => question.package_id === packageID);
+		return {
+			questions,
+			typeBuckets: countByLabel(questions, (question) => questionTypeLabel(question.question_type)),
+			hotsCount: questions.filter((question) => question.hots_flag).length,
+			missingCount: questions.filter(packageQuestionHasBlueprintGap).length,
+			unpublishedCount: questions.filter((question) => question.status !== 'published').length,
+			totalCount: pkg?.question_count ?? questions.length,
+		};
+	}
+
+	function buildSessionReadinessIssues() {
+		const issues: string[] = [];
+		if (!fPackageId) issues.push('Pilih paket soal');
+		if (selectedPackage && !selectedPackage.is_active) issues.push('Paket soal tidak aktif');
+		if (fPackageId && selectedPackageQuality.totalCount === 0) issues.push('Paket belum memiliki soal');
+		if (fPackageId && selectedPackageQuality.questions.length > 0 && selectedPackageQuality.unpublishedCount > 0) {
+			issues.push(`${selectedPackageQuality.unpublishedCount} soal paket belum terbit`);
+		}
+		if (!fTitle.trim()) issues.push('Isi nama sesi');
+		if (!fStart) issues.push('Isi jadwal mulai');
+		if (!fEnd) issues.push('Isi jadwal selesai');
+		if (fStart && fEnd && new Date(fEnd) <= new Date(fStart)) issues.push('Jadwal selesai harus setelah mulai');
+		if (fScopeType === 'class' && !fClassId) issues.push('Pilih kelas peserta');
+		if (fScopeType === 'grade' && !fGradeLevel) issues.push('Pilih tingkat peserta');
+		if (fAllowCrossGrade && !fIsSpecialEvent) issues.push('Lintas tingkat hanya boleh untuk sesi khusus');
+		return issues;
+	}
+
 	async function fetchOverview(): Promise<SessionsOverview> {
 		const [nextSessions, packagePayload, academicPayload] = await Promise.all([
 			fetch('/api/cbt/sessions').then((response) => readClientApiData<ExamSession[]>(response, 'Gagal memuat data sesi')),
@@ -133,6 +232,7 @@
 		return {
 			sessions: Array.isArray(nextSessions) ? nextSessions : [],
 			packages: packagePayload.packages ?? [],
+			packageQuestions: parsePackageQuestions(packagePayload),
 			classes: academicPayload.classes ?? [],
 		};
 	}
@@ -140,6 +240,7 @@
 	function applyOverview(overview: SessionsOverview) {
 		sessions = overview.sessions;
 		packages = overview.packages;
+		packageQuestions = overview.packageQuestions;
 		classes = overview.classes;
 	}
 
@@ -147,14 +248,15 @@
 		const requestId = ++sessionsRequestId;
 		sessions = [];
 		packages = [];
+		packageQuestions = [];
 		classes = [];
 		sessionsPromise = fetchOverview().then((overview) => {
-			if (requestId !== sessionsRequestId) return { sessions, packages, classes };
+			if (requestId !== sessionsRequestId) return { sessions, packages, packageQuestions, classes };
 			applyOverview(overview);
 			return overview;
 		}).catch((error: unknown) => {
 			if (requestId === sessionsRequestId) throw error;
-			return { sessions, packages, classes };
+			return { sessions, packages, packageQuestions, classes };
 		});
 	}
 
@@ -171,7 +273,7 @@
 			sessionsPromise = Promise.resolve(overview);
 		} catch (error) {
 			if (requestId === sessionsRequestId) {
-				sessionsPromise = Promise.resolve({ sessions, packages, classes });
+				sessionsPromise = Promise.resolve({ sessions, packages, packageQuestions, classes });
 				toast.error(sessionsErrorMessage(error));
 			}
 		}
@@ -224,11 +326,8 @@
 	}
 
 	async function createSession() {
-		if (!fPackageId || !fTitle || !fStart || !fEnd) return;
-		if (fScopeType === 'class' && !fClassId) return;
-		if (fScopeType === 'grade' && !fGradeLevel) return;
-		if (fAllowCrossGrade && !fIsSpecialEvent) {
-			showToast('Lintas tingkat hanya boleh untuk sesi khusus', false);
+		if (sessionReadinessIssues.length > 0) {
+			setOperationState('warning', 'Sesi Belum Siap', sessionReadinessIssues[0] ?? 'Lengkapi sesi ujian terlebih dahulu.');
 			return;
 		}
 		fBusy = true;
@@ -371,10 +470,47 @@
 						<select id="session-package" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fPackageId}>
 							<option value="">-- Pilih Paket --</option>
 							{#each packages as p (p.id)}
-								<option value={p.id}>{p.title} ({p.subject_code})</option>
+								<option value={p.id}>{p.title} ({p.subject_code}){p.is_active ? '' : ' - nonaktif'}</option>
 							{/each}
 						</select>
 					</div>
+					{#if fPackageId}
+						{@const quality = selectedPackageQuality}
+						<div class="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+							<div class="flex flex-wrap items-start justify-between gap-3">
+								<div>
+									<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-700">Quality Gate Paket</p>
+									<p class="mt-1 text-sm font-medium text-slate-900">{selectedPackage?.title ?? 'Paket dipilih'}</p>
+								</div>
+								<div class="flex flex-wrap gap-1.5">
+									<Badge variant="outline" class="bg-white text-xs">{quality.totalCount} soal</Badge>
+									{#each quality.typeBuckets.slice(0, 3) as bucket (bucket.label)}
+										<Badge variant="outline" class="bg-white text-xs">{bucket.label}: {bucket.count}</Badge>
+									{/each}
+									{#if quality.hotsCount > 0}
+										<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">{quality.hotsCount} HOTS</Badge>
+									{/if}
+									{#if quality.missingCount > 0}
+										<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">{quality.missingCount} metadata kurang</Badge>
+									{/if}
+									{#if quality.unpublishedCount > 0}
+										<Badge class="border-red-200 bg-red-50 text-red-700 text-xs">{quality.unpublishedCount} belum terbit</Badge>
+									{/if}
+								</div>
+							</div>
+							{#if selectedPackage && !selectedPackage.is_active}
+								<p class="mt-2 text-xs font-medium text-red-700">Paket nonaktif tidak boleh dijadikan sesi ujian.</p>
+							{:else if quality.totalCount === 0}
+								<p class="mt-2 text-xs font-medium text-red-700">Paket ini belum memiliki soal, sehingga sesi tidak bisa dibuat.</p>
+							{:else if quality.unpublishedCount > 0}
+								<p class="mt-2 text-xs font-medium text-red-700">Rapikan paket dulu. Flutter hanya menyajikan soal terbit, jadi soal belum terbit akan membuat jumlah soal sesi tidak konsisten.</p>
+							{:else if quality.missingCount > 0}
+								<p class="mt-2 text-xs font-medium text-amber-700">Sesi masih boleh dibuat, tetapi {quality.missingCount} soal belum lengkap CP/TP/KD atau level kognitif.</p>
+							{:else}
+								<p class="mt-2 text-xs font-medium text-emerald-700">Paket siap dipakai untuk draft sesi CBT.</p>
+							{/if}
+						</div>
+					{/if}
 					<div>
 						<label for="session-scope" class="text-xs text-slate-500 mb-1 block">Cakupan peserta <span class="text-red-500">*</span></label>
 						<select id="session-scope" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fScopeType}>
@@ -449,7 +585,7 @@
 				</div>
 				<div class="flex gap-2">
 					<LoadingButton
-						disabled={fBusy || !fPackageId || !fTitle || !fStart || !fEnd || (fScopeType === 'class' && !fClassId) || (fScopeType === 'grade' && !fGradeLevel)}
+						disabled={!canCreateSession}
 						onclick={() => void createSession()}
 						loading={fBusy}
 						loadingLabel="Menyimpan..."
@@ -458,6 +594,12 @@
 					</LoadingButton>
 					<Button variant="outline" onclick={() => (showForm = false)}>Batal</Button>
 				</div>
+				{#if sessionReadinessIssues.length > 0}
+					<div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+						<span class="font-semibold">Belum siap dibuat:</span>
+						<span>{sessionReadinessIssues.join(', ')}</span>
+					</div>
+				{/if}
 			</Card.Content>
 		</Card.Root>
 	{/if}

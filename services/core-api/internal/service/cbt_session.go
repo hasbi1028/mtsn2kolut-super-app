@@ -26,6 +26,7 @@ type CbtSession struct {
 type cbtSessionStore interface {
 	ListCbtExamSessions(ctx context.Context) ([]db.ListCbtExamSessionsRow, error)
 	GetCbtExamSession(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSessionRow, error)
+	GetCbtPackageQuestionQuality(ctx context.Context, id pgtype.UUID) (db.GetCbtPackageQuestionQualityRow, error)
 	CreateCbtExamSession(ctx context.Context, arg db.CreateCbtExamSessionParams) (db.CbtExamSession, error)
 	UpdateCbtExamSessionStatus(ctx context.Context, arg db.UpdateCbtExamSessionStatusParams) (db.CbtExamSession, error)
 	DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) error
@@ -139,6 +140,13 @@ func (s *CbtSession) Create(ctx context.Context, in CreateCbtSessionInput) (db.C
 	scopeType := normalizeScopeType(in.ScopeType)
 	mixPolicy := normalizeMixPolicy(in.MixPolicy, scopeType)
 	assignmentMode := normalizeAssignmentMode(in.AssignmentMode)
+	quality, err := s.q.GetCbtPackageQuestionQuality(ctx, in.PackageID)
+	if err != nil {
+		return db.CbtExamSession{}, err
+	}
+	if err := validateCbtPackageQualityForSession(quality); err != nil {
+		return db.CbtExamSession{}, err
+	}
 
 	return s.q.CreateCbtExamSession(ctx, db.CreateCbtExamSessionParams{
 		PackageID:       in.PackageID,
@@ -155,6 +163,21 @@ func (s *CbtSession) Create(ctx context.Context, in CreateCbtSessionInput) (db.C
 		ScheduledEnd:    in.ScheduledEnd,
 		Status:          in.Status,
 	})
+}
+
+func validateCbtPackageQualityForSession(quality db.GetCbtPackageQuestionQualityRow) error {
+	switch {
+	case !quality.IsActive:
+		return fmt.Errorf("%w: paket soal tidak aktif", domain.ErrConflict)
+	case quality.TotalQuestions == 0:
+		return fmt.Errorf("%w: paket soal belum memiliki soal", domain.ErrConflict)
+	case quality.PublishedQuestions == 0:
+		return fmt.Errorf("%w: paket soal belum memiliki soal terbit", domain.ErrConflict)
+	case quality.UnpublishedQuestions > 0:
+		return fmt.Errorf("%w: paket soal masih memiliki %d soal belum terbit", domain.ErrConflict, quality.UnpublishedQuestions)
+	default:
+		return nil
+	}
 }
 
 func (s *CbtSession) UpdateStatus(ctx context.Context, id pgtype.UUID, status db.CbtSessionStatusEnum) (db.CbtExamSession, error) {
