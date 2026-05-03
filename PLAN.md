@@ -773,6 +773,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Modal komposer `/cbt/soal` dipadatkan lagi: header satu baris, metadata dense row, card radius/padding lebih kecil, dan footer sticky lebih pendek.
 - [x] Rich text legacy bisa di-resize vertikal; editor opsi A-D memakai mode compact dengan default tinggi lebih kecil.
 - [x] Editor rich text utama `Isi Pertanyaan` juga memakai mode compact dengan default tinggi sekitar setengah dari sebelumnya.
+- [x] Uji rekomendasi layout opsi dua kolom di desktop untuk mengurangi scroll panjang pada modal komposer.
 - [x] Backend menambahkan metadata pemakaian soal (`package_count`, `answer_count`, `is_locked`, `usage`) pada list/detail agar UI bisa membedakan soal draft yang masih bisa diedit cepat dan soal yang harus direvisi lewat duplikasi.
 - [x] Edit/hapus langsung diblokir untuk soal yang sudah masuk paket ujian atau memiliki jawaban siswa; approve/publish langsung via edit juga diblokir agar workflow tetap melalui aksi resmi.
 - [x] Import CSV legacy sekarang mengecek duplikat terhadap isi bank soal yang sudah ada pada mapel yang sama, bukan hanya duplikat dalam file import.

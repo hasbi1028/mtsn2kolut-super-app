@@ -1383,7 +1383,7 @@
 								<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-slate-500">Opsi & Kunci Jawaban</h3>
 								<p class="mt-1 text-xs text-slate-500">Setiap opsi memakai kotak rich text legacy sendiri.</p>
 							</div>
-							<div class="grid grid-cols-1 gap-4">
+							<div class="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
 								{#each fOptions as _, i (ANSWER_LABELS[i])}
 									{@const label = ANSWER_LABELS[i]}
 									{@const isAnswer = fAnswerKey === label}
