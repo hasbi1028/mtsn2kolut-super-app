@@ -18,7 +18,7 @@
 	// ── Types ─────────────────────────────────────────────────────────────────
 	type Subject = { id: string; name: string; code: string };
 	type OptionItem = { label: string; text?: string; html?: string; latex?: string };
-	type ModuleMode = 'catalog' | 'composer' | 'advanced' | 'review' | 'import';
+	type ModuleMode = 'catalog' | 'composer' | 'review' | 'import';
 	type AuthoringMode = 'beginner' | 'advance';
 	type ComposerQuestionType = 'multiple_choice' | 'essay';
 	type Question = {
@@ -127,7 +127,6 @@
 	const moduleModes: Array<{ id: ModuleMode; label: string; desc: string }> = [
 		{ id: 'catalog', label: 'Katalog', desc: 'Daftar terpadu' },
 		{ id: 'composer', label: 'Komposer Soal', desc: 'PG & essay' },
-		{ id: 'advanced', label: 'Editor Lanjutan', desc: 'Blueprint & asset' },
 		{ id: 'review', label: 'Review', desc: 'Mutu & publikasi' },
 		{ id: 'import', label: 'Import Legacy', desc: 'CSV lama' },
 	];
@@ -721,8 +720,8 @@
 	function explainQuickEditBlocked(q: Question): string {
 		if (questionUsageLocked(q)) return 'Soal sudah dipakai. Gunakan Duplikat untuk membuat revisi draft.';
 		if (q.workflow_status !== 'draft' || q.status !== 'draft') return 'Soal sudah masuk alur review/publikasi. Gunakan Duplikat untuk revisi.';
-		if (q.question_type !== 'multiple_choice' && q.question_type !== 'essay') return 'Komposer utama saat ini mendukung pilihan ganda dan essay.';
-		return 'Gunakan editor lanjutan untuk item ini.';
+		if (q.question_type !== 'multiple_choice' && q.question_type !== 'essay') return 'Tipe soal ini akan dimigrasikan ke komposer utama pada Sprint 62.';
+		return 'Buat revisi lewat Duplikat agar riwayat soal tetap aman.';
 	}
 
 	function openQuestion(q: Question) {
@@ -730,12 +729,17 @@
 			void openEdit(q);
 			return;
 		}
-		setModuleMode('advanced');
-		if (typeof window !== 'undefined') {
-			window.location.href = `/cbt/questions?question_id=${encodeURIComponent(q.id)}`;
-			return;
-		}
 		toast.warning(explainQuickEditBlocked(q));
+	}
+
+	async function openQuestionFromRouteParam(id: string) {
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/questions/${id}`);
+			const q = await readClientApiData<Question>(res, 'Gagal memuat detail soal');
+			openQuestion(q);
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal membuka soal dari tautan lama.'));
+		}
 	}
 
 	function resetForm() {
@@ -782,7 +786,7 @@
 
 	async function openEdit(q: Question) {
 		if (!isQuickEditable(q)) {
-			setModuleMode('advanced');
+			setModuleMode('catalog');
 			toast.warning(explainQuickEditBlocked(q));
 			return;
 		}
@@ -1114,8 +1118,15 @@
 	onMount(() => {
 		const params = new URLSearchParams(window.location.search);
 		const mode = params.get('mode');
+		const questionId = params.get('question_id');
 		if (validModuleMode(mode)) activeMode = mode;
+		if (questionId) {
+			params.delete('question_id');
+			const query = params.toString();
+			window.history.replaceState({}, '', query ? `${window.location.pathname}?${query}` : window.location.pathname);
+		}
 		load();
+		if (questionId) void openQuestionFromRouteParam(questionId);
 		window.addEventListener('keydown', handleComposerKeydown);
 		return () => {
 			window.removeEventListener('keydown', handleComposerKeydown);
@@ -1166,18 +1177,6 @@
 					<p class="mt-1 text-sm text-green-800">Buat draft pilihan ganda atau essay dengan mode Pemula dan Advance. Soal yang sudah review/publish atau dipakai paket wajib direvisi lewat duplikasi.</p>
 				</div>
 				<Button onclick={openCreate} class="bg-green-700 text-white hover:bg-green-800">Buka Komposer</Button>
-			</div>
-		</section>
-	{:else if activeMode === 'advanced'}
-		<section class="rounded-lg border border-amber-200 bg-amber-50 p-4">
-			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-				<div>
-					<h2 class="text-sm font-bold uppercase tracking-wider text-amber-900">Editor Lanjutan sebagai Compatibility Bridge</h2>
-					<p class="mt-1 text-sm text-amber-800">Gunakan untuk CP/TP/KD, HOTS, stimulus, rubrik, asset, dan tipe soal selain PG. Route lama tetap hidup sebagai jembatan aman pada sprint ini.</p>
-				</div>
-				<a href="/cbt/questions" class="inline-flex h-9 items-center justify-center rounded-md border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-900 hover:bg-amber-100">
-					Buka Editor Lanjutan
-				</a>
 			</div>
 		</section>
 	{:else if activeMode === 'review'}
