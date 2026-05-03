@@ -25,6 +25,8 @@ var stripDangerousBlockPatterns = []*regexp.Regexp{
 }
 var stripEventHandlers = regexp.MustCompile(`(?i)\s+on[a-z]+\s*=\s*(".*?"|'.*?'|[^\s>]+)`)
 var stripDangerousURLs = regexp.MustCompile(`(?i)\s(href|src)\s*=\s*(['"])\s*javascript:[^'"]*['"]`)
+var importAnswerTokenSeparators = regexp.MustCompile(`[,\|;/+\s]+`)
+var importMatchingPairSeparators = regexp.MustCompile(`[;,|]+`)
 
 type cbtQuestionStore interface {
 	ListCbtQuestions(ctx context.Context) ([]db.ListCbtQuestionsRow, error)
@@ -298,32 +300,34 @@ func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQue
 			seenCodes[codeKey] = true
 		}
 
-		answerKey, ok := normalizeLegacyAnswer(firstCSVValue(row, "jawaban", "answer", "answer_key", "kunci"))
+		questionType, ok := normalizeImportQuestionType(firstCSVValue(row, "tipe", "jenis", "bentuk", "type", "question_type", "questiontype"))
 		if !ok {
-			skip(fmt.Sprintf("Baris %d: kunci jawaban tidak valid", rowNumber))
+			skip(fmt.Sprintf("Baris %d: tipe soal tidak didukung", rowNumber))
 			continue
 		}
 
-		options := []QuestionOption{
-			legacyImportOption("A", firstCSVValue(row, "opsia", "opsi_a", "optiona", "option_a"), firstCSVValue(row, "gambara", "gambar_a", "imagea", "image_a")),
-			legacyImportOption("B", firstCSVValue(row, "opsib", "opsi_b", "optionb", "option_b"), firstCSVValue(row, "gambarb", "gambar_b", "imageb", "image_b")),
-			legacyImportOption("C", firstCSVValue(row, "opsic", "opsi_c", "optionc", "option_c"), firstCSVValue(row, "gambarc", "gambar_c", "imagec", "image_c")),
-			legacyImportOption("D", firstCSVValue(row, "opsid", "opsi_d", "optiond", "option_d"), firstCSVValue(row, "gambard", "gambar_d", "imaged", "image_d")),
+		options := importQuestionOptions(row, questionType)
+		answerKey, ok := normalizeImportAnswerKey(questionType, firstCSVValue(row, "jawaban", "answer", "answer_key", "kunci", "kunci_jawaban"), options)
+		if !ok {
+			skip(fmt.Sprintf("Baris %d: kunci jawaban tidak valid untuk %s", rowNumber, importQuestionTypeLabel(questionType)))
+			continue
 		}
 
 		stemHTML := appendLegacyImage(stem, firstCSVValue(row, "gambar", "gambarsoal", "gambar_soal", "image", "question_image"))
+		rubricHTML := appendLegacyImage(firstCSVValue(row, "rubrik", "rubric", "pedoman", "pedoman_jawaban"), firstCSVValue(row, "gambar_rubrik", "rubric_image"))
 		writerNotes := legacyImportNotes(row)
 		_, err := s.Create(ctx, SaveCbtQuestionInput{
 			SubjectID:        input.SubjectID,
 			AuthoringMode:    "advance",
 			Code:             code,
 			QuestionText:     derivePlainText(stemHTML),
-			QuestionType:     "multiple_choice",
+			QuestionType:     questionType,
 			Options:          options,
 			AnswerKey:        answerKey,
 			Difficulty:       db.CbtQuestionDifficultyEnumMedium,
 			Status:           db.CbtQuestionStatusEnumDraft,
 			StemHTML:         stemHTML,
+			RubricHTML:       rubricHTML,
 			WorkflowStatus:   "draft",
 			AuthorUsername:   strings.TrimSpace(input.Username),
 			ReviewerUsername: "",
@@ -405,7 +409,7 @@ func firstCSVValue(row map[string]string, keys ...string) string {
 func normalizeLegacyAnswer(value string) (string, bool) {
 	value = strings.ToUpper(strings.TrimSpace(value))
 	switch value {
-	case "A", "B", "C", "D", "E":
+	case "A", "B", "C", "D", "E", "F":
 		return value, true
 	case "0":
 		return "A", true
@@ -417,8 +421,326 @@ func normalizeLegacyAnswer(value string) (string, bool) {
 		return "D", true
 	case "4":
 		return "E", true
+	case "5":
+		return "F", true
 	default:
 		return "", false
+	}
+}
+
+func normalizeImportQuestionType(value string) (string, bool) {
+	switch normalizeImportToken(value) {
+	case "":
+		return "multiple_choice", true
+	case "pg", "pilihanganda", "multiplechoice", "singlechoice":
+		return "multiple_choice", true
+	case "pgkompleks", "jawabanganda", "jawabanmajemuk", "pilihangandakompleks", "multipleanswer", "multipleanswers":
+		return "multiple_answer", true
+	case "benarsalah", "bs", "truefalse":
+		return "true_false", true
+	case "setujutidaksetuju", "sts", "agreedisagree":
+		return "agree_disagree", true
+	case "isian", "isiansingkat", "jawabansingkat", "shortanswer":
+		return "short_answer", true
+	case "essay", "esai", "uraian":
+		return "essay", true
+	case "menjodohkan", "jodohkan", "matching", "match":
+		return "matching", true
+	default:
+		return "", false
+	}
+}
+
+func normalizeImportAnswerKey(questionType string, value string, options []QuestionOption) (string, bool) {
+	switch questionType {
+	case "multiple_choice":
+		return normalizeImportOptionAnswer(value, options, 1)
+	case "multiple_answer":
+		return normalizeImportOptionAnswer(value, options, 2)
+	case "true_false":
+		return normalizeImportFixedPairAnswer(value, "benar", "salah")
+	case "agree_disagree":
+		return normalizeImportFixedPairAnswer(value, "setuju", "tidaksetuju")
+	case "short_answer":
+		answerKey := normalizeShortAnswerKey(value)
+		return answerKey, answerKey != ""
+	case "matching":
+		if !importMatchingOptionsComplete(options) {
+			return "", false
+		}
+		return normalizeImportMatchingAnswerKey(value, countMatchingPairs(options))
+	case "essay":
+		return "", true
+	default:
+		return "", false
+	}
+}
+
+func normalizeImportOptionAnswer(value string, options []QuestionOption, minKeys int) (string, bool) {
+	available := importedOptionLabels(options)
+	rawTokens := splitImportAnswerTokens(value)
+	if len(rawTokens) == 1 && len(rawTokens[0]) > 1 && importTokenIsCompactLabels(rawTokens[0]) {
+		rawTokens = strings.Split(strings.ToUpper(rawTokens[0]), "")
+	}
+	seen := make(map[string]bool, len(rawTokens))
+	for _, token := range rawTokens {
+		label, ok := normalizeLegacyAnswer(token)
+		if !ok || !available[label] {
+			return "", false
+		}
+		seen[label] = true
+	}
+	if len(seen) < minKeys {
+		return "", false
+	}
+	ordered := make([]string, 0, len(seen))
+	for _, label := range []string{"A", "B", "C", "D", "E", "F"} {
+		if seen[label] {
+			ordered = append(ordered, label)
+		}
+	}
+	return strings.Join(ordered, ","), true
+}
+
+func normalizeImportFixedPairAnswer(value string, firstToken string, secondToken string) (string, bool) {
+	switch normalizeImportToken(value) {
+	case "a", firstToken, "true", "ya", "y", "1":
+		return "A", true
+	case "b", secondToken, "false", "tidak", "no", "n", "0":
+		return "B", true
+	default:
+		return "", false
+	}
+}
+
+func normalizeImportMatchingAnswerKey(value string, pairCount int) (string, bool) {
+	if pairCount < 2 {
+		return "", false
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return buildMatchingAnswerKey(pairCount), true
+	}
+	labels := make(map[string]bool, pairCount)
+	for i := 0; i < pairCount; i++ {
+		labels[string(rune('A'+i))] = true
+	}
+	matches := make(map[string]string, pairCount)
+	seenRight := make(map[string]bool, pairCount)
+	for _, pair := range importMatchingPairSeparators.Split(value, -1) {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		parts := strings.FieldsFunc(pair, func(r rune) bool {
+			return r == '=' || r == ':' || r == '-'
+		})
+		if len(parts) != 2 {
+			return "", false
+		}
+		left := strings.TrimSpace(strings.ToUpper(parts[0]))
+		right := strings.TrimSpace(parts[1])
+		rightIndex, err := strconv.Atoi(right)
+		normalizedRight := strconv.Itoa(rightIndex)
+		if !labels[left] || err != nil || rightIndex < 1 || rightIndex > pairCount || seenRight[normalizedRight] {
+			return "", false
+		}
+		matches[left] = normalizedRight
+		seenRight[normalizedRight] = true
+	}
+	if len(matches) != pairCount {
+		return "", false
+	}
+	ordered := make([]string, 0, pairCount)
+	for i := 0; i < pairCount; i++ {
+		left := string(rune('A' + i))
+		ordered = append(ordered, fmt.Sprintf("%s=%s", left, matches[left]))
+	}
+	return strings.Join(ordered, ";"), true
+}
+
+func splitImportAnswerTokens(value string) []string {
+	tokens := importAnswerTokenSeparators.Split(strings.TrimSpace(value), -1)
+	out := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		token = strings.TrimSpace(token)
+		if token != "" {
+			out = append(out, token)
+		}
+	}
+	return out
+}
+
+func importTokenIsCompactLabels(value string) bool {
+	value = strings.TrimSpace(strings.ToUpper(value))
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < 'A' || r > 'F' {
+			return false
+		}
+	}
+	return true
+}
+
+func importedOptionLabels(options []QuestionOption) map[string]bool {
+	available := make(map[string]bool, len(options))
+	for _, option := range options {
+		label := strings.TrimSpace(strings.ToUpper(option.Label))
+		if label != "" && optionContent(option) != "" {
+			available[label] = true
+		}
+	}
+	return available
+}
+
+func importMatchingOptionsComplete(options []QuestionOption) bool {
+	pairCount := 0
+	for _, option := range options {
+		if option.IsDistractor {
+			if strings.TrimSpace(option.MatchLabel) == "" || matchingOptionContent(option) == "" {
+				return false
+			}
+			continue
+		}
+		if optionContent(option) == "" || matchingOptionContent(option) == "" {
+			return false
+		}
+		pairCount++
+	}
+	return pairCount >= 2
+}
+
+func importQuestionOptions(row map[string]string, questionType string) []QuestionOption {
+	switch questionType {
+	case "multiple_choice", "multiple_answer":
+		return legacyImportOptions(row)
+	case "true_false", "agree_disagree":
+		return fixedPairQuestionOptions(questionType)
+	case "matching":
+		return legacyImportMatchingOptions(row)
+	default:
+		return nil
+	}
+}
+
+func legacyImportOptions(row map[string]string) []QuestionOption {
+	labels := []string{"A", "B", "C", "D", "E", "F"}
+	options := make([]QuestionOption, 0, len(labels))
+	for _, label := range labels {
+		option := legacyImportOption(label, importOptionText(row, label), importOptionImage(row, label))
+		if optionContent(option) != "" {
+			options = append(options, option)
+		}
+	}
+	return options
+}
+
+func legacyImportMatchingOptions(row map[string]string) []QuestionOption {
+	options := make([]QuestionOption, 0, 10)
+	pairCount := 0
+	for idx, label := range []string{"A", "B", "C", "D", "E", "F"} {
+		left := firstCSVValue(row,
+			"kiri"+strings.ToLower(label),
+			"kiri_"+strings.ToLower(label),
+			"left"+strings.ToLower(label),
+			"left_"+strings.ToLower(label),
+			"pasangan"+strings.ToLower(label),
+			"pasangan_"+strings.ToLower(label),
+			"match_left_"+strings.ToLower(label),
+		)
+		rightLabel := strconv.Itoa(idx + 1)
+		right := firstCSVValue(row,
+			"kanan"+rightLabel,
+			"kanan_"+rightLabel,
+			"right"+rightLabel,
+			"right_"+rightLabel,
+			"pasangan"+rightLabel,
+			"pasangan_"+rightLabel,
+			"match_right_"+rightLabel,
+		)
+		if strings.TrimSpace(left) == "" && strings.TrimSpace(right) == "" {
+			continue
+		}
+		pairCount++
+		pairLabel := string(rune('A' + pairCount - 1))
+		options = append(options, QuestionOption{
+			Label:      pairLabel,
+			Text:       left,
+			MatchLabel: strconv.Itoa(pairCount),
+			MatchText:  right,
+		})
+	}
+	for idx := 1; idx <= 4; idx++ {
+		value := firstCSVValue(row,
+			fmt.Sprintf("distraktor%d", idx),
+			fmt.Sprintf("distraktor_%d", idx),
+			fmt.Sprintf("distractor%d", idx),
+			fmt.Sprintf("distractor_%d", idx),
+			fmt.Sprintf("kananextra%d", idx),
+			fmt.Sprintf("kanan_extra_%d", idx),
+			fmt.Sprintf("rightextra%d", idx),
+			fmt.Sprintf("right_extra_%d", idx),
+		)
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		options = append(options, QuestionOption{
+			MatchLabel:   strconv.Itoa(pairCount + idx),
+			MatchText:    value,
+			IsDistractor: true,
+		})
+	}
+	return options
+}
+
+func importOptionText(row map[string]string, label string) string {
+	lower := strings.ToLower(label)
+	return firstCSVValue(row,
+		"opsi"+lower,
+		"opsi_"+lower,
+		"option"+lower,
+		"option_"+lower,
+		"jawaban"+lower,
+		"jawaban_"+lower,
+	)
+}
+
+func importOptionImage(row map[string]string, label string) string {
+	lower := strings.ToLower(label)
+	return firstCSVValue(row,
+		"gambar"+lower,
+		"gambar_"+lower,
+		"image"+lower,
+		"image_"+lower,
+	)
+}
+
+func normalizeImportToken(value string) string {
+	value = normalizeCSVKey(value)
+	value = strings.ReplaceAll(value, "_", "")
+	return value
+}
+
+func importQuestionTypeLabel(questionType string) string {
+	switch questionType {
+	case "multiple_choice":
+		return "Pilihan Ganda"
+	case "multiple_answer":
+		return "Pilihan Ganda Kompleks"
+	case "true_false":
+		return "Benar/Salah"
+	case "agree_disagree":
+		return "Setuju/Tidak Setuju"
+	case "short_answer":
+		return "Isian Singkat"
+	case "matching":
+		return "Menjodohkan"
+	case "essay":
+		return "Essay"
+	default:
+		return questionType
 	}
 }
 

@@ -279,6 +279,56 @@ func TestCbtQuestionImportLegacyCSVSkipsExistingStem(t *testing.T) {
 	}
 }
 
+func TestCbtQuestionImportLegacyCSVSupportsStructuredTypes(t *testing.T) {
+	subjectID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	store := &fakeQuestionStore{
+		createRow: db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{8}, Valid: true}},
+	}
+	svc := &CbtQuestion{q: store}
+	csvText := strings.Join([]string{
+		importCSVRow("kode", "tipe", "soal", "opsi_a", "opsi_b", "opsi_c", "opsi_d", "opsi_e", "jawaban", "kiri_a", "kanan_1", "kiri_b", "kanan_2", "distraktor_1", "rubrik"),
+		importCSVRow("MTK-G", "pg_kompleks", "Pilih bilangan genap", "1", "2", "3", "4", "6", "B E", "", "", "", "", "", ""),
+		importCSVRow("MTK-BS", "benar_salah", "Air membeku pada suhu rendah", "", "", "", "", "", "Benar", "", "", "", "", "", ""),
+		importCSVRow("MTK-IS", "isian", "Ibu kota Sulawesi Tenggara", "", "", "", "", "", "Kendari | kendari kota", "", "", "", "", "", ""),
+		importCSVRow("MTK-ES", "essay", "Jelaskan fotosintesis", "", "", "", "", "", "", "", "", "", "", "", "<p>Ketepatan konsep</p>"),
+		importCSVRow("MTK-M", "menjodohkan", "Pasangkan angka", "", "", "", "", "", "", "Satu", "1", "Dua", "2", "Tiga", ""),
+	}, "\n")
+
+	got, err := svc.ImportLegacyCSV(context.Background(), ImportLegacyQuestionsInput{
+		SubjectID: subjectID,
+		CSVText:   csvText,
+		Username:  "guru.cbt",
+	})
+	if err != nil {
+		t.Fatalf("ImportLegacyCSV() error = %v", err)
+	}
+	if got.TotalRows != 5 || got.Imported != 5 || got.Skipped != 0 {
+		t.Fatalf("ImportLegacyCSV() result = %+v, want 5 imported and no skipped rows", got)
+	}
+	if store.createCalls != 5 || len(store.createHistory) != 5 {
+		t.Fatalf("CreateCbtQuestion() calls/history = %d/%d, want 5/5", store.createCalls, len(store.createHistory))
+	}
+	if store.createHistory[0].QuestionType != "multiple_answer" || store.createHistory[0].AnswerKey != "B,E" || !strings.Contains(string(store.createHistory[0].Options), `"label":"E"`) {
+		t.Fatalf("multiple answer import = type %q answer %q options %s, want type/options/key mapped", store.createHistory[0].QuestionType, store.createHistory[0].AnswerKey, string(store.createHistory[0].Options))
+	}
+	if store.createHistory[1].QuestionType != "true_false" || store.createHistory[1].AnswerKey != "A" || !strings.Contains(string(store.createHistory[1].Options), "Benar") {
+		t.Fatalf("true/false import = %+v options %s, want fixed options and answer A", store.createHistory[1], string(store.createHistory[1].Options))
+	}
+	if store.createHistory[2].QuestionType != "short_answer" || store.createHistory[2].AnswerKey != "Kendari|kendari kota" {
+		t.Fatalf("short answer import = %+v, want aliases preserved", store.createHistory[2])
+	}
+	if store.createHistory[3].QuestionType != "essay" || store.createHistory[3].RubricHtml != "<p>Ketepatan konsep</p>" {
+		t.Fatalf("essay import = %+v, want rubric mapped", store.createHistory[3])
+	}
+	if store.createHistory[4].QuestionType != "matching" || store.createHistory[4].AnswerKey != "A=1;B=2" || !strings.Contains(string(store.createHistory[4].Options), `"is_distractor":true`) {
+		t.Fatalf("matching import = %+v options %s, want default answer and distractor", store.createHistory[4], string(store.createHistory[4].Options))
+	}
+}
+
+func importCSVRow(values ...string) string {
+	return strings.Join(values, ";")
+}
+
 func TestNormalizeQuestionInputSanitizesDangerousHTML(t *testing.T) {
 	input := SaveCbtQuestionInput{
 		SubjectID:      pgtype.UUID{Valid: true},

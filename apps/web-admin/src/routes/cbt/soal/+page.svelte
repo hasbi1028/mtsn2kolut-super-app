@@ -224,7 +224,7 @@
 		{ id: 'catalog', label: 'Katalog', desc: 'Daftar terpadu' },
 		{ id: 'composer', label: 'Komposer Soal', desc: 'Semua tipe' },
 		{ id: 'review', label: 'Review', desc: 'Mutu & publikasi' },
-		{ id: 'import', label: 'Import Legacy', desc: 'CSV lama' },
+		{ id: 'import', label: 'Import CSV', desc: 'Multi-tipe' },
 	];
 	const WORKFLOW_LABEL: Record<string, string> = {
 		draft: 'Draft',
@@ -1524,7 +1524,7 @@
 		<div>
 			<h1 class="text-xl font-semibold text-slate-800">Bank Soal CBT</h1>
 			<p class="text-sm text-slate-500 mt-0.5">
-				Satu modul untuk katalog, komposer cepat, editor lanjutan, review, dan import legacy
+				Satu modul untuk katalog, komposer terpadu, editor lanjutan, review, dan import CSV
 			</p>
 		</div>
 		<div class="flex shrink-0 flex-wrap gap-2">
@@ -1585,8 +1585,8 @@
 		<section class="rounded-lg border border-slate-200 bg-white p-4">
 			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 				<div>
-					<h2 class="text-sm font-bold uppercase tracking-wider text-slate-800">Import CSV Bank Soal Legacy</h2>
-					<p class="mt-1 text-sm text-slate-500">Import masuk sebagai draft, memakai kontrak Go API, dan akan menolak duplikat dalam file maupun duplikat stem di bank soal.</p>
+					<h2 class="text-sm font-bold uppercase tracking-wider text-slate-800">Import CSV Bank Soal</h2>
+					<p class="mt-1 text-sm text-slate-500">Mendukung PG lama serta kolom tipe untuk PG Kompleks, Benar/Salah, Setuju/Tidak Setuju, Isian, Essay, dan Menjodohkan.</p>
 				</div>
 				<Button variant="outline" onclick={openImport}>Pilih CSV</Button>
 			</div>
@@ -1790,8 +1790,8 @@
 	<Dialog.Content>
 		<div class="w-[min(92vw,34rem)] space-y-4 p-5">
 			<div>
-				<h2 class="text-base font-semibold text-slate-800">Import CSV Bank Soal Legacy</h2>
-				<p class="mt-1 text-xs text-slate-500">Hasil import disimpan sebagai draft di model soal CBT.</p>
+				<h2 class="text-base font-semibold text-slate-800">Import CSV Bank Soal</h2>
+				<p class="mt-1 text-xs text-slate-500">Hasil import disimpan sebagai draft. Kolom tipe boleh kosong untuk PG lama, atau diisi: pg_kompleks, benar_salah, setuju_tidak_setuju, isian, essay, menjodohkan.</p>
 			</div>
 			<div class="space-y-3">
 				<div>
