@@ -90,6 +90,8 @@
 	type SoalOverview = {
 		questions: Question[];
 		subjects: Subject[];
+		revisionQueue: Question[];
+		revisionTotal: number;
 		totalItems: number;
 		page: number;
 	};
@@ -241,6 +243,8 @@
 	let questionsPromise = $state<Promise<SoalOverview> | null>(null);
 	let questions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
+	let revisionQueue = $state<Question[]>([]);
+	let revisionTotal = $state(0);
 	let totalItems = $state(0);
 	let currentPage = $state(1);
 
@@ -327,6 +331,7 @@
 	let lockedCount = $derived(questions.filter(questionUsageLocked).length);
 	let reviewCount = $derived(questions.filter((item) => item.workflow_status === 'review').length);
 	let draftCount = $derived(questions.filter((item) => item.workflow_status === 'draft').length);
+	let visibleRevisionCount = $derived(questions.filter((item) => item.workflow_status === 'rejected').length);
 	let publishedCount = $derived(questions.filter((item) => item.status === 'published').length);
 
 	let stemText = $derived(htmlToPlainText(fStem));
@@ -711,20 +716,37 @@
 		return params;
 	}
 
+	function buildRevisionQueueParams() {
+		const params = new URLSearchParams();
+		params.set('limit', '6');
+		params.set('offset', '0');
+		params.set('workflow_status', 'rejected');
+		if (search.trim()) params.set('q', search.trim());
+		if (filterSubject) params.set('subject_id', filterSubject);
+		return params;
+	}
+
 	async function fetchOverview(page = currentPage): Promise<SoalOverview> {
 		const params = buildQuestionParams(page);
-		const [questionPayload, academicPayload] = await Promise.all([
+		const revisionParams = buildRevisionQueueParams();
+		const [questionPayload, revisionPayload, academicPayload] = await Promise.all([
 			fetch(clientApiPathWithQuery('/api/cbt/questions', params)).then((response) =>
 				readClientApiData<QuestionListResponse>(response, 'Gagal memuat soal')
+			),
+			fetch(clientApiPathWithQuery('/api/cbt/questions', revisionParams)).then((response) =>
+				readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrian revisi')
 			),
 			fetch('/api/academic').then((response) =>
 				readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')
 			),
 		]);
 		const loadedQuestions = questionPayload.items ?? [];
+		const loadedRevisions = revisionPayload.items ?? [];
 		return {
 			questions: loadedQuestions,
 			subjects: academicPayload.subjects ?? [],
+			revisionQueue: loadedRevisions,
+			revisionTotal: revisionPayload.meta?.total ?? loadedRevisions.length,
 			totalItems: questionPayload.meta?.total ?? loadedQuestions.length,
 			page,
 		};
@@ -733,6 +755,8 @@
 	function applyOverview(overview: SoalOverview) {
 		questions = overview.questions;
 		subjects = overview.subjects;
+		revisionQueue = overview.revisionQueue;
+		revisionTotal = overview.revisionTotal;
 		totalItems = overview.totalItems;
 		currentPage = overview.page;
 	}
@@ -740,12 +764,12 @@
 	function load(page = currentPage) {
 		const requestId = ++questionsRequestId;
 		questionsPromise = fetchOverview(page).then((overview) => {
-			if (requestId !== questionsRequestId) return { questions, subjects, totalItems, page: currentPage };
+			if (requestId !== questionsRequestId) return { questions, subjects, revisionQueue, revisionTotal, totalItems, page: currentPage };
 			applyOverview(overview);
 			return overview;
 		}).catch((error: unknown) => {
 			if (requestId === questionsRequestId) throw error;
-			return { questions, subjects, totalItems, page: currentPage };
+			return { questions, subjects, revisionQueue, revisionTotal, totalItems, page: currentPage };
 		});
 	}
 
@@ -762,7 +786,7 @@
 			questionsPromise = Promise.resolve(overview);
 		} catch (error) {
 			if (requestId === questionsRequestId) {
-				questionsPromise = Promise.resolve({ questions, subjects, totalItems, page: currentPage });
+				questionsPromise = Promise.resolve({ questions, subjects, revisionQueue, revisionTotal, totalItems, page: currentPage });
 				toast.error(soalErrorMessage(error));
 			}
 		}
@@ -799,6 +823,12 @@
 		const url = new URL(window.location.href);
 		url.searchParams.set('mode', mode);
 		window.history.replaceState({}, '', `${url.pathname}?${url.searchParams.toString()}`);
+	}
+
+	function showAllRevisions() {
+		filterWorkflow = 'rejected';
+		setModuleMode('review');
+		load(1);
 	}
 
 	function richTextHasContent(html: string): boolean {
@@ -1612,6 +1642,43 @@
 		{/each}
 	</div>
 
+	{#if revisionTotal > 0}
+		<section class="rounded-lg border border-red-200 bg-red-50/60 p-3">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+				<div class="min-w-0">
+					<div class="flex flex-wrap items-center gap-2">
+						<h2 class="text-sm font-bold uppercase tracking-wider text-red-900">Antrian Revisi Soal</h2>
+						<span class="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-red-700">{revisionTotal} perlu diperbaiki</span>
+					</div>
+					<p class="mt-1 text-xs text-red-800">Draft revisi dari analisis butir atau workflow reviewer. Buka, koreksi isi/kunci/rubrik, lalu simpan sebagai draft atau ajukan review lagi.</p>
+				</div>
+				<Button variant="outline" size="sm" class="shrink-0 border-red-200 bg-white text-red-800 hover:bg-red-100" onclick={showAllRevisions}>
+					Lihat Semua Revisi
+				</Button>
+			</div>
+			<div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+				{#each revisionQueue as q (q.id)}
+					<button
+						type="button"
+						onclick={() => openQuestion(q)}
+						class="min-w-0 rounded-md border border-red-100 bg-white px-3 py-2 text-left shadow-sm transition-colors hover:border-red-300 hover:bg-red-50"
+					>
+						<div class="mb-1 flex items-center gap-1">
+							<span class="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">{questionTypeLabel(q.question_type)}</span>
+							<span class="truncate text-[11px] text-slate-400">{q.subject_name || q.subject_code || 'Mapel belum ada'}</span>
+						</div>
+						<p class="line-clamp-2 text-sm font-medium text-slate-800">{stemPreview(q)}</p>
+						<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
+							<span>{q.code || 'Tanpa kode'}</span>
+							{#if q.author_username}<span>{q.author_username}</span>{/if}
+							<span>{DIFFICULTY_LABEL[q.difficulty] ?? q.difficulty ?? 'Sedang'}</span>
+						</div>
+					</button>
+				{/each}
+			</div>
+		</section>
+	{/if}
+
 	{#if activeMode === 'composer'}
 		<section class="rounded-lg border border-green-200 bg-green-50 p-4">
 			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1623,10 +1690,15 @@
 			</div>
 		</section>
 	{:else if activeMode === 'review'}
-		<section class="grid gap-3 md:grid-cols-4">
+		<section class="grid gap-3 md:grid-cols-5">
 			<div class="rounded-lg border border-slate-200 bg-white p-4">
 				<p class="text-xs uppercase tracking-wider text-slate-500">Draft</p>
 				<p class="mt-2 text-2xl font-bold text-slate-900">{draftCount}</p>
+			</div>
+			<div class="rounded-lg border border-red-200 bg-red-50 p-4">
+				<p class="text-xs uppercase tracking-wider text-red-700">Perlu Revisi</p>
+				<p class="mt-2 text-2xl font-bold text-red-900">{revisionTotal}</p>
+				<p class="mt-1 text-[11px] text-red-700">{visibleRevisionCount} tampil di halaman ini</p>
 			</div>
 			<div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
 				<p class="text-xs uppercase tracking-wider text-yellow-700">Menunggu Review</p>
