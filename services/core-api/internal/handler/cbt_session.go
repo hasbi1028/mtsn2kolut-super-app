@@ -88,6 +88,12 @@ type cbtSessionRoomProctorDashboardService interface {
 	ListParticipantEventsForRoom(ctx context.Context, sessionID, participantID, roomID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error)
 }
 
+type cbtSessionRoomHandoverService interface {
+	GetRoomHandover(ctx context.Context, roomID pgtype.UUID) (db.GetCbtRoomHandoverRow, error)
+	SaveRoomHandover(ctx context.Context, roomID, updatedBy pgtype.UUID, in service.SaveCbtRoomHandoverInput) (db.CbtRoomHandover, error)
+	LockRoomHandover(ctx context.Context, roomID, lockedBy pgtype.UUID) (db.CbtRoomHandover, error)
+}
+
 func NewCbtSession(svc *service.CbtSession, audit ...cbtSessionAuditWriter) *CbtSession {
 	var writer cbtSessionAuditWriter
 	if len(audit) > 0 {
@@ -1236,6 +1242,121 @@ func (h *CbtSession) GetRoomProctorPrintPack(w http.ResponseWriter, r *http.Requ
 		"proctors":     proctors,
 		"participants": participants,
 	})
+}
+
+func (h *CbtSession) GetRoomHandover(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	handoverSvc, ok := h.svc.(cbtSessionRoomHandoverService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room handover service unavailable"))
+		return
+	}
+	row, err := handoverSvc.GetRoomHandover(r.Context(), roomID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *CbtSession) SaveRoomHandover(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	var body struct {
+		AttendanceChecked     bool   `json:"attendance_checked"`
+		AllSubmittedChecked   bool   `json:"all_submitted_checked"`
+		DeviceIssueChecked    bool   `json:"device_issue_checked"`
+		RoomCleanChecked      bool   `json:"room_clean_checked"`
+		TokenReturnedChecked  bool   `json:"token_returned_checked"`
+		AssetsReturnedChecked bool   `json:"assets_returned_checked"`
+		IncidentNotes         string `json:"incident_notes"`
+		OperatorNotes         string `json:"operator_notes"`
+		HandoverNotes         string `json:"handover_notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	handoverSvc, ok := h.svc.(cbtSessionRoomHandoverService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room handover service unavailable"))
+		return
+	}
+	row, err := handoverSvc.SaveRoomHandover(r.Context(), roomID, cbtSessionActorUserID(r), service.SaveCbtRoomHandoverInput{
+		AttendanceChecked:     body.AttendanceChecked,
+		AllSubmittedChecked:   body.AllSubmittedChecked,
+		DeviceIssueChecked:    body.DeviceIssueChecked,
+		RoomCleanChecked:      body.RoomCleanChecked,
+		TokenReturnedChecked:  body.TokenReturnedChecked,
+		AssetsReturnedChecked: body.AssetsReturnedChecked,
+		IncidentNotes:         body.IncidentNotes,
+		OperatorNotes:         body.OperatorNotes,
+		HandoverNotes:         body.HandoverNotes,
+	})
+	if err != nil {
+		writeClientError(w, err, "Serah terima ruang tidak valid")
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_HANDOVER_SAVE", "cbt_session_room", pgUUIDString(roomID), map[string]any{
+		"session_id":              pgUUIDString(sessionID),
+		"attendance_checked":      body.AttendanceChecked,
+		"all_submitted_checked":   body.AllSubmittedChecked,
+		"device_issue_checked":    body.DeviceIssueChecked,
+		"room_clean_checked":      body.RoomCleanChecked,
+		"token_returned_checked":  body.TokenReturnedChecked,
+		"assets_returned_checked": body.AssetsReturnedChecked,
+		"actor_username":          currentUsername(r),
+		"actor_session_id":        cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user":        cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, row)
+}
+
+func (h *CbtSession) LockRoomHandover(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	handoverSvc, ok := h.svc.(cbtSessionRoomHandoverService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room handover service unavailable"))
+		return
+	}
+	row, err := handoverSvc.LockRoomHandover(r.Context(), roomID, cbtSessionActorUserID(r))
+	if err != nil {
+		writeClientError(w, err, "Penguncian serah terima ruang tidak valid")
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_HANDOVER_LOCK", "cbt_session_room", pgUUIDString(roomID), map[string]any{
+		"session_id":       pgUUIDString(sessionID),
+		"actor_username":   currentUsername(r),
+		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, row)
 }
 
 func (h *CbtSession) FlagRoomParticipant(w http.ResponseWriter, r *http.Request) {

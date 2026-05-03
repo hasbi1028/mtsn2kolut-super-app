@@ -9,6 +9,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
@@ -83,6 +84,38 @@
 		participants: ProctoringRow[];
 		events: ProctoringEvent[];
 	};
+	type RoomHandover = {
+		room_id: string;
+		session_id: string;
+		room_name: string;
+		room_token: string;
+		room_status: string;
+		room_is_locked: boolean;
+		session_title: string;
+		session_status: string;
+		scheduled_start: string;
+		scheduled_end: string;
+		package_title: string;
+		participant_count: number;
+		submitted_count: number;
+		suspicious_count: number;
+		missing_seat_count: number;
+		handover_id: string | null;
+		attendance_checked: boolean;
+		all_submitted_checked: boolean;
+		device_issue_checked: boolean;
+		room_clean_checked: boolean;
+		token_returned_checked: boolean;
+		assets_returned_checked: boolean;
+		incident_notes: string;
+		operator_notes: string;
+		handover_notes: string;
+		locked_at: string | null;
+		locked_by: string | null;
+		updated_by: string | null;
+		handover_created_at: string | null;
+		handover_updated_at: string | null;
+	};
 
 	const sessionId = page.params.id ?? '';
 	const roomId = page.params.rid ?? '';
@@ -92,11 +125,16 @@
 	let proctors = $state<RoomProctor[]>([]);
 	let participants = $state<ProctoringRow[]>([]);
 	let events = $state<ProctoringEvent[]>([]);
+	let handover = $state<RoomHandover | null>(null);
+	let handoverLoadBusy = $state(false);
+	let handoverBusy = $state(false);
+	let handoverLockBusy = $state(false);
 	let refreshBusy = $state(false);
 	let backgroundBusy = $state(false);
 	let actionBusyId = $state('');
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 	let interval: ReturnType<typeof setInterval> | undefined;
+	let handoverLocked = $derived(Boolean(handover?.locked_at));
 
 	let participantStats = $derived.by(() => {
 		let online = 0;
@@ -115,6 +153,7 @@
 
 	onMount(() => {
 		dashboardPromise = loadDashboard();
+		void loadHandover();
 		interval = setInterval(() => {
 			void refreshDashboard(true);
 		}, 15000);
@@ -132,6 +171,19 @@
 		participants = Array.isArray(payload.participants) ? payload.participants : [];
 		events = Array.isArray(payload.events) ? payload.events : [];
 		return payload;
+	}
+
+	async function loadHandover() {
+		handoverLoadBusy = true;
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/sessions/${sessionId}/rooms/${roomId}/handover`);
+			handover = await readClientApiData<RoomHandover>(res, 'Gagal memuat serah terima ruang');
+		} catch (error) {
+			const message = detailErrorMessage(error);
+			operationState = { tone: 'error', title: 'Serah Terima Tidak Termuat', message };
+		} finally {
+			handoverLoadBusy = false;
+		}
 	}
 
 	async function refreshDashboard(background = false) {
@@ -278,6 +330,58 @@
 		}
 	}
 
+	function handoverPayload() {
+		return {
+			attendance_checked: handover?.attendance_checked === true,
+			all_submitted_checked: handover?.all_submitted_checked === true,
+			device_issue_checked: handover?.device_issue_checked === true,
+			room_clean_checked: handover?.room_clean_checked === true,
+			token_returned_checked: handover?.token_returned_checked === true,
+			assets_returned_checked: handover?.assets_returned_checked === true,
+			incident_notes: handover?.incident_notes ?? '',
+			operator_notes: handover?.operator_notes ?? '',
+			handover_notes: handover?.handover_notes ?? '',
+		};
+	}
+
+	async function saveHandover() {
+		handoverBusy = true;
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/sessions/${sessionId}/rooms/${roomId}/handover`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(handoverPayload()),
+			});
+			await readClientJson<unknown>(res);
+			operationState = { tone: 'success', title: 'Serah Terima Tersimpan', message: 'Checklist dan catatan akhir ruang sudah disimpan.' };
+			await loadHandover();
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			handoverBusy = false;
+		}
+	}
+
+	async function lockHandover() {
+		if (!(await confirmAction({
+			title: 'Kunci Serah Terima Ruang',
+			message: 'Setelah dikunci, checklist dan catatan ruang menjadi arsip akhir dan tidak dapat diedit dari dashboard pengawas.',
+			confirmLabel: 'Kunci',
+			tone: 'warning',
+		}))) return;
+		handoverLockBusy = true;
+		try {
+			const res = await fetch(clientApiPath`/api/cbt/sessions/${sessionId}/rooms/${roomId}/handover/lock`, { method: 'POST' });
+			await readClientJson<unknown>(res);
+			operationState = { tone: 'success', title: 'Serah Terima Dikunci', message: 'Ruang sudah memiliki bukti penutupan digital.' };
+			await loadHandover();
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			handoverLockBusy = false;
+		}
+	}
+
 	function handleRenderError(error: unknown) {
 		console.error('CBT room proctoring dashboard render failed', error);
 	}
@@ -407,6 +511,107 @@
 							<p class="mt-1 text-sm text-slate-700">Durasi paket {room.duration_minutes} menit</p>
 							<p class="text-xs text-slate-500">{room.is_locked ? 'Ruang dikunci' : 'Ruang masih dapat diperbarui operator'}</p>
 						</div>
+					</Card.Content>
+				</Card.Root>
+
+				<Card.Root class="border-emerald-100">
+					<Card.Header class="pb-3">
+						<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+							<div>
+								<Card.Title>Serah Terima Akhir Ruang</Card.Title>
+								<Card.Description>Checklist penutupan, catatan insiden, dan bukti penguncian ruang setelah ujian.</Card.Description>
+							</div>
+							<div class="flex flex-wrap items-center gap-2">
+								<Badge variant="outline" class={handoverLocked ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-amber-300 bg-amber-50 text-amber-700'}>
+									{handoverLocked ? 'Terkunci' : 'Belum dikunci'}
+								</Badge>
+								{#if handoverLoadBusy}
+									<Badge variant="outline">Memuat</Badge>
+								{/if}
+							</div>
+						</div>
+					</Card.Header>
+					<Card.Content>
+						{#if handover}
+							<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+								<div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+									<label for="handover-attendance" class="flex min-h-14 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+										<input id="handover-attendance" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.attendance_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.attendance_checked = event.currentTarget.checked)} />
+										<span><span class="font-semibold text-slate-900">Daftar hadir</span><br /><span class="text-xs text-slate-500">Paraf/kehadiran peserta sudah dicek.</span></span>
+									</label>
+									<label for="handover-submitted" class="flex min-h-14 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+										<input id="handover-submitted" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.all_submitted_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.all_submitted_checked = event.currentTarget.checked)} />
+										<span><span class="font-semibold text-slate-900">Submit akhir</span><br /><span class="text-xs text-slate-500">{participantStats.submitted}/{room.participant_count} peserta tercatat.</span></span>
+									</label>
+									<label for="handover-device" class="flex min-h-14 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+										<input id="handover-device" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.device_issue_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.device_issue_checked = event.currentTarget.checked)} />
+										<span><span class="font-semibold text-slate-900">Gangguan dicatat</span><br /><span class="text-xs text-slate-500">{room.suspicious_count} atensi, {room.missing_seat_count} meja kosong.</span></span>
+									</label>
+									<label for="handover-clean" class="flex min-h-14 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+										<input id="handover-clean" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.room_clean_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.room_clean_checked = event.currentTarget.checked)} />
+										<span><span class="font-semibold text-slate-900">Ruang rapi</span><br /><span class="text-xs text-slate-500">Meja, kursi, listrik, dan jaringan dicek.</span></span>
+									</label>
+									<label for="handover-token" class="flex min-h-14 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+										<input id="handover-token" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.token_returned_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.token_returned_checked = event.currentTarget.checked)} />
+										<span><span class="font-semibold text-slate-900">Token/berkas</span><br /><span class="text-xs text-slate-500">Token ruang dan berkas pengawas dikembalikan.</span></span>
+									</label>
+									<label for="handover-assets" class="flex min-h-14 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+										<input id="handover-assets" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.assets_returned_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.assets_returned_checked = event.currentTarget.checked)} />
+										<span><span class="font-semibold text-slate-900">Aset cadangan</span><br /><span class="text-xs text-slate-500">Perangkat pinjaman/cadangan sudah kembali.</span></span>
+									</label>
+								</div>
+								<div class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+									<div class="grid grid-cols-3 gap-2 text-center">
+										<div>
+											<p class="text-lg font-bold text-slate-900">{participantStats.submitted}</p>
+											<p class="text-[11px] uppercase tracking-wide text-slate-500">Submit</p>
+										</div>
+										<div>
+											<p class="text-lg font-bold text-red-700">{room.suspicious_count}</p>
+											<p class="text-[11px] uppercase tracking-wide text-slate-500">Atensi</p>
+										</div>
+										<div>
+											<p class="text-lg font-bold text-amber-700">{participantStats.stale + participantStats.offline}</p>
+											<p class="text-[11px] uppercase tracking-wide text-slate-500">Cek ulang</p>
+										</div>
+									</div>
+									<p class="border-t border-slate-200 pt-2 text-xs text-slate-500">
+										Terakhir diperbarui {fmtDate(handover.handover_updated_at)}. {handoverLocked ? `Dikunci ${fmtDate(handover.locked_at)}.` : 'Simpan draft sebelum mengunci.'}
+									</p>
+								</div>
+							</div>
+							<div class="mt-4 grid gap-3 lg:grid-cols-3">
+								<div>
+									<label for="handover-incident-notes" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Catatan Kejadian</label>
+									<Textarea id="handover-incident-notes" class="mt-1 min-h-24" bind:value={handover.incident_notes} disabled={handoverLocked || handoverBusy} placeholder="Gangguan perangkat, jaringan, keterlambatan, atau kejadian ruang." />
+								</div>
+								<div>
+									<label for="handover-operator-notes" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Catatan Operator</label>
+									<Textarea id="handover-operator-notes" class="mt-1 min-h-24" bind:value={handover.operator_notes} disabled={handoverLocked || handoverBusy} placeholder="Tindak lanjut operator, reset akses, atau verifikasi submit." />
+								</div>
+								<div>
+									<label for="handover-notes" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Catatan Serah Terima</label>
+									<Textarea id="handover-notes" class="mt-1 min-h-24" bind:value={handover.handover_notes} disabled={handoverLocked || handoverBusy} placeholder="Ringkasan akhir untuk kepala madrasah/panitia." />
+								</div>
+							</div>
+							<div class="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+								<p class="text-xs text-slate-500">Penguncian membuat catatan menjadi arsip akhir ruang. Perubahan setelah itu dilakukan melalui prosedur operator.</p>
+								<div class="flex flex-wrap gap-2">
+									<LoadingButton variant="outline" onclick={() => void saveHandover()} loading={handoverBusy} disabled={handoverLocked || handoverLockBusy} loadingLabel="Menyimpan...">
+										Simpan Draft
+									</LoadingButton>
+									<LoadingButton onclick={() => void lockHandover()} loading={handoverLockBusy} disabled={handoverLocked || handoverBusy} loadingLabel="Mengunci...">
+										Kunci Handover
+									</LoadingButton>
+								</div>
+							</div>
+						{:else}
+							<div class="grid gap-3 md:grid-cols-3">
+								<Skeleton class="h-20 rounded-lg" />
+								<Skeleton class="h-20 rounded-lg" />
+								<Skeleton class="h-20 rounded-lg" />
+							</div>
+						{/if}
 					</Card.Content>
 				</Card.Root>
 

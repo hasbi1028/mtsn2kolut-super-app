@@ -416,6 +416,12 @@ type fakeCbtSessionStore struct {
 	schoolRoomRow         db.SchoolRoom
 	roomProctorRows       []db.ListCbtRoomProctorsRow
 	roomDashboardRow      db.GetCbtRoomProctorDashboardRow
+	roomHandoverRow       db.GetCbtRoomHandoverRow
+	roomHandoverID        pgtype.UUID
+	saveHandoverArg       db.UpsertCbtRoomHandoverParams
+	saveHandoverErr       error
+	lockHandoverArg       db.LockCbtRoomHandoverParams
+	lockHandoverErr       error
 	proctorRoomRows       []db.ListCbtProctorRoomsRow
 	proctorRoomArg        db.ListCbtProctorRoomsParams
 	proctorRoomErr        error
@@ -545,6 +551,42 @@ func (f *fakeCbtSessionStore) GetCbtRoomProctorDashboard(ctx context.Context, id
 		return f.roomDashboardRow, nil
 	}
 	return db.GetCbtRoomProctorDashboardRow{ID: id, RoomName: "Ruang 1"}, nil
+}
+
+func (f *fakeCbtSessionStore) GetCbtRoomHandover(ctx context.Context, id pgtype.UUID) (db.GetCbtRoomHandoverRow, error) {
+	f.roomHandoverID = id
+	if f.roomHandoverRow.RoomID.Valid {
+		return f.roomHandoverRow, nil
+	}
+	return db.GetCbtRoomHandoverRow{RoomID: id, RoomName: "Ruang 1"}, nil
+}
+
+func (f *fakeCbtSessionStore) UpsertCbtRoomHandover(ctx context.Context, arg db.UpsertCbtRoomHandoverParams) (db.CbtRoomHandover, error) {
+	f.saveHandoverArg = arg
+	if f.saveHandoverErr != nil {
+		return db.CbtRoomHandover{}, f.saveHandoverErr
+	}
+	return db.CbtRoomHandover{
+		ExamRoomID:            arg.ExamRoomID,
+		AttendanceChecked:     arg.AttendanceChecked,
+		AllSubmittedChecked:   arg.AllSubmittedChecked,
+		DeviceIssueChecked:    arg.DeviceIssueChecked,
+		RoomCleanChecked:      arg.RoomCleanChecked,
+		TokenReturnedChecked:  arg.TokenReturnedChecked,
+		AssetsReturnedChecked: arg.AssetsReturnedChecked,
+		IncidentNotes:         arg.IncidentNotes,
+		OperatorNotes:         arg.OperatorNotes,
+		HandoverNotes:         arg.HandoverNotes,
+		UpdatedBy:             arg.UpdatedBy,
+	}, nil
+}
+
+func (f *fakeCbtSessionStore) LockCbtRoomHandover(ctx context.Context, arg db.LockCbtRoomHandoverParams) (db.CbtRoomHandover, error) {
+	f.lockHandoverArg = arg
+	if f.lockHandoverErr != nil {
+		return db.CbtRoomHandover{}, f.lockHandoverErr
+	}
+	return db.CbtRoomHandover{ExamRoomID: arg.ExamRoomID, LockedBy: arg.LockedBy}, nil
 }
 
 func (f *fakeCbtSessionStore) ListCbtProctorRooms(ctx context.Context, arg db.ListCbtProctorRoomsParams) ([]db.ListCbtProctorRoomsRow, error) {
@@ -804,6 +846,28 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	}
 	if got, err := svc.GetRoomProctoringDashboard(context.Background(), roomID); err != nil || got.ID != roomID {
 		t.Fatalf("GetRoomProctoringDashboard() = %+v/%v, want room dashboard", got, err)
+	}
+	if got, err := svc.GetRoomHandover(context.Background(), roomID); err != nil || got.RoomID != roomID || store.roomHandoverID != roomID {
+		t.Fatalf("GetRoomHandover() = %+v/%v id=%v, want room handover", got, err, store.roomHandoverID)
+	}
+	if got, err := svc.SaveRoomHandover(context.Background(), roomID, teacherID, SaveCbtRoomHandoverInput{
+		AttendanceChecked:     true,
+		AllSubmittedChecked:   true,
+		DeviceIssueChecked:    true,
+		RoomCleanChecked:      true,
+		TokenReturnedChecked:  true,
+		AssetsReturnedChecked: true,
+		IncidentNotes:         "  kejadian  ",
+		OperatorNotes:         "  operator  ",
+		HandoverNotes:         "  selesai  ",
+	}); err != nil || got.ExamRoomID != roomID {
+		t.Fatalf("SaveRoomHandover() = %+v/%v, want saved handover", got, err)
+	}
+	if store.saveHandoverArg.ExamRoomID != roomID || store.saveHandoverArg.UpdatedBy != teacherID || store.saveHandoverArg.IncidentNotes != "kejadian" || !store.saveHandoverArg.AssetsReturnedChecked {
+		t.Fatalf("SaveRoomHandover() arg = %+v, want trimmed room handover", store.saveHandoverArg)
+	}
+	if got, err := svc.LockRoomHandover(context.Background(), roomID, teacherID); err != nil || got.ExamRoomID != roomID || store.lockHandoverArg.LockedBy != teacherID {
+		t.Fatalf("LockRoomHandover() = %+v/%v arg=%+v, want locked handover", got, err, store.lockHandoverArg)
 	}
 	if rows, err := svc.ListProctorRooms(context.Background(), teacherID, false); err != nil || len(rows) != 1 || store.proctorRoomArg.EmployeeID != teacherID || store.proctorRoomArg.IncludeAll {
 		t.Fatalf("ListProctorRooms() = %d rows/%v arg=%+v, want employee scoped room", len(rows), err, store.proctorRoomArg)

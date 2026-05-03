@@ -133,6 +133,128 @@ func (q *Queries) GetCbtExamRoom(ctx context.Context, id pgtype.UUID) (CbtExamRo
 	return i, err
 }
 
+const getCbtRoomHandover = `-- name: GetCbtRoomHandover :one
+WITH room_stats AS (
+  SELECT
+    ep.room_id,
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE ep.submitted_at IS NOT NULL)::int AS submitted_count,
+    COUNT(*) FILTER (WHERE ep.suspicious_flag = TRUE)::int AS suspicious_count,
+    COUNT(*) FILTER (WHERE ep.seat_no IS NULL)::int AS missing_seat_count
+  FROM cbt_exam_participants ep
+  WHERE ep.room_id = $1
+  GROUP BY ep.room_id
+)
+SELECT
+  r.id AS room_id,
+  r.session_id,
+  r.room_name,
+  r.room_token,
+  r.status AS room_status,
+  r.is_locked AS room_is_locked,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  COALESCE(rs.participant_count, 0)::int AS participant_count,
+  COALESCE(rs.submitted_count, 0)::int AS submitted_count,
+  COALESCE(rs.suspicious_count, 0)::int AS suspicious_count,
+  COALESCE(rs.missing_seat_count, 0)::int AS missing_seat_count,
+  h.id AS handover_id,
+  COALESCE(h.attendance_checked, FALSE)::boolean AS attendance_checked,
+  COALESCE(h.all_submitted_checked, FALSE)::boolean AS all_submitted_checked,
+  COALESCE(h.device_issue_checked, FALSE)::boolean AS device_issue_checked,
+  COALESCE(h.room_clean_checked, FALSE)::boolean AS room_clean_checked,
+  COALESCE(h.token_returned_checked, FALSE)::boolean AS token_returned_checked,
+  COALESCE(h.assets_returned_checked, FALSE)::boolean AS assets_returned_checked,
+  COALESCE(h.incident_notes, '')::text AS incident_notes,
+  COALESCE(h.operator_notes, '')::text AS operator_notes,
+  COALESCE(h.handover_notes, '')::text AS handover_notes,
+  h.locked_at,
+  h.locked_by,
+  h.updated_by,
+  h.created_at AS handover_created_at,
+  h.updated_at AS handover_updated_at
+FROM cbt_exam_rooms r
+JOIN cbt_exam_sessions s ON s.id = r.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN room_stats rs ON rs.room_id = r.id
+LEFT JOIN cbt_room_handovers h ON h.exam_room_id = r.id
+WHERE r.id = $1
+`
+
+type GetCbtRoomHandoverRow struct {
+	RoomID                pgtype.UUID          `json:"room_id"`
+	SessionID             pgtype.UUID          `json:"session_id"`
+	RoomName              string               `json:"room_name"`
+	RoomToken             string               `json:"room_token"`
+	RoomStatus            string               `json:"room_status"`
+	RoomIsLocked          bool                 `json:"room_is_locked"`
+	SessionTitle          string               `json:"session_title"`
+	SessionStatus         CbtSessionStatusEnum `json:"session_status"`
+	ScheduledStart        pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd          pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageTitle          string               `json:"package_title"`
+	ParticipantCount      int32                `json:"participant_count"`
+	SubmittedCount        int32                `json:"submitted_count"`
+	SuspiciousCount       int32                `json:"suspicious_count"`
+	MissingSeatCount      int32                `json:"missing_seat_count"`
+	HandoverID            pgtype.UUID          `json:"handover_id"`
+	AttendanceChecked     bool                 `json:"attendance_checked"`
+	AllSubmittedChecked   bool                 `json:"all_submitted_checked"`
+	DeviceIssueChecked    bool                 `json:"device_issue_checked"`
+	RoomCleanChecked      bool                 `json:"room_clean_checked"`
+	TokenReturnedChecked  bool                 `json:"token_returned_checked"`
+	AssetsReturnedChecked bool                 `json:"assets_returned_checked"`
+	IncidentNotes         string               `json:"incident_notes"`
+	OperatorNotes         string               `json:"operator_notes"`
+	HandoverNotes         string               `json:"handover_notes"`
+	LockedAt              pgtype.Timestamptz   `json:"locked_at"`
+	LockedBy              pgtype.UUID          `json:"locked_by"`
+	UpdatedBy             pgtype.UUID          `json:"updated_by"`
+	HandoverCreatedAt     pgtype.Timestamptz   `json:"handover_created_at"`
+	HandoverUpdatedAt     pgtype.Timestamptz   `json:"handover_updated_at"`
+}
+
+func (q *Queries) GetCbtRoomHandover(ctx context.Context, id pgtype.UUID) (GetCbtRoomHandoverRow, error) {
+	row := q.db.QueryRow(ctx, getCbtRoomHandover, id)
+	var i GetCbtRoomHandoverRow
+	err := row.Scan(
+		&i.RoomID,
+		&i.SessionID,
+		&i.RoomName,
+		&i.RoomToken,
+		&i.RoomStatus,
+		&i.RoomIsLocked,
+		&i.SessionTitle,
+		&i.SessionStatus,
+		&i.ScheduledStart,
+		&i.ScheduledEnd,
+		&i.PackageTitle,
+		&i.ParticipantCount,
+		&i.SubmittedCount,
+		&i.SuspiciousCount,
+		&i.MissingSeatCount,
+		&i.HandoverID,
+		&i.AttendanceChecked,
+		&i.AllSubmittedChecked,
+		&i.DeviceIssueChecked,
+		&i.RoomCleanChecked,
+		&i.TokenReturnedChecked,
+		&i.AssetsReturnedChecked,
+		&i.IncidentNotes,
+		&i.OperatorNotes,
+		&i.HandoverNotes,
+		&i.LockedAt,
+		&i.LockedBy,
+		&i.UpdatedBy,
+		&i.HandoverCreatedAt,
+		&i.HandoverUpdatedAt,
+	)
+	return i, err
+}
+
 const getCbtRoomProctorDashboard = `-- name: GetCbtRoomProctorDashboard :one
 SELECT
   r.id,
@@ -680,4 +802,150 @@ func (q *Queries) ListCbtRoomProctors(ctx context.Context, examRoomID pgtype.UUI
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockCbtRoomHandover = `-- name: LockCbtRoomHandover :one
+INSERT INTO cbt_room_handovers (
+  exam_room_id,
+  locked_at,
+  locked_by,
+  updated_by
+)
+VALUES (
+  $1,
+  NOW(),
+  $2,
+  $2
+)
+ON CONFLICT (exam_room_id) DO UPDATE
+SET
+  locked_at = NOW(),
+  locked_by = EXCLUDED.locked_by,
+  updated_by = EXCLUDED.updated_by,
+  updated_at = NOW()
+WHERE cbt_room_handovers.locked_at IS NULL
+RETURNING id, exam_room_id, attendance_checked, all_submitted_checked, device_issue_checked, room_clean_checked, token_returned_checked, assets_returned_checked, incident_notes, operator_notes, handover_notes, locked_at, locked_by, updated_by, created_at, updated_at
+`
+
+type LockCbtRoomHandoverParams struct {
+	ExamRoomID pgtype.UUID `json:"exam_room_id"`
+	LockedBy   pgtype.UUID `json:"locked_by"`
+}
+
+func (q *Queries) LockCbtRoomHandover(ctx context.Context, arg LockCbtRoomHandoverParams) (CbtRoomHandover, error) {
+	row := q.db.QueryRow(ctx, lockCbtRoomHandover, arg.ExamRoomID, arg.LockedBy)
+	var i CbtRoomHandover
+	err := row.Scan(
+		&i.ID,
+		&i.ExamRoomID,
+		&i.AttendanceChecked,
+		&i.AllSubmittedChecked,
+		&i.DeviceIssueChecked,
+		&i.RoomCleanChecked,
+		&i.TokenReturnedChecked,
+		&i.AssetsReturnedChecked,
+		&i.IncidentNotes,
+		&i.OperatorNotes,
+		&i.HandoverNotes,
+		&i.LockedAt,
+		&i.LockedBy,
+		&i.UpdatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertCbtRoomHandover = `-- name: UpsertCbtRoomHandover :one
+INSERT INTO cbt_room_handovers (
+  exam_room_id,
+  attendance_checked,
+  all_submitted_checked,
+  device_issue_checked,
+  room_clean_checked,
+  token_returned_checked,
+  assets_returned_checked,
+  incident_notes,
+  operator_notes,
+  handover_notes,
+  updated_by
+)
+VALUES (
+  $1,
+  $2,
+  $3,
+  $4,
+  $5,
+  $6,
+  $7,
+  $8,
+  $9,
+  $10,
+  $11
+)
+ON CONFLICT (exam_room_id) DO UPDATE
+SET
+  attendance_checked = EXCLUDED.attendance_checked,
+  all_submitted_checked = EXCLUDED.all_submitted_checked,
+  device_issue_checked = EXCLUDED.device_issue_checked,
+  room_clean_checked = EXCLUDED.room_clean_checked,
+  token_returned_checked = EXCLUDED.token_returned_checked,
+  assets_returned_checked = EXCLUDED.assets_returned_checked,
+  incident_notes = EXCLUDED.incident_notes,
+  operator_notes = EXCLUDED.operator_notes,
+  handover_notes = EXCLUDED.handover_notes,
+  updated_by = EXCLUDED.updated_by,
+  updated_at = NOW()
+WHERE cbt_room_handovers.locked_at IS NULL
+RETURNING id, exam_room_id, attendance_checked, all_submitted_checked, device_issue_checked, room_clean_checked, token_returned_checked, assets_returned_checked, incident_notes, operator_notes, handover_notes, locked_at, locked_by, updated_by, created_at, updated_at
+`
+
+type UpsertCbtRoomHandoverParams struct {
+	ExamRoomID            pgtype.UUID `json:"exam_room_id"`
+	AttendanceChecked     bool        `json:"attendance_checked"`
+	AllSubmittedChecked   bool        `json:"all_submitted_checked"`
+	DeviceIssueChecked    bool        `json:"device_issue_checked"`
+	RoomCleanChecked      bool        `json:"room_clean_checked"`
+	TokenReturnedChecked  bool        `json:"token_returned_checked"`
+	AssetsReturnedChecked bool        `json:"assets_returned_checked"`
+	IncidentNotes         string      `json:"incident_notes"`
+	OperatorNotes         string      `json:"operator_notes"`
+	HandoverNotes         string      `json:"handover_notes"`
+	UpdatedBy             pgtype.UUID `json:"updated_by"`
+}
+
+func (q *Queries) UpsertCbtRoomHandover(ctx context.Context, arg UpsertCbtRoomHandoverParams) (CbtRoomHandover, error) {
+	row := q.db.QueryRow(ctx, upsertCbtRoomHandover,
+		arg.ExamRoomID,
+		arg.AttendanceChecked,
+		arg.AllSubmittedChecked,
+		arg.DeviceIssueChecked,
+		arg.RoomCleanChecked,
+		arg.TokenReturnedChecked,
+		arg.AssetsReturnedChecked,
+		arg.IncidentNotes,
+		arg.OperatorNotes,
+		arg.HandoverNotes,
+		arg.UpdatedBy,
+	)
+	var i CbtRoomHandover
+	err := row.Scan(
+		&i.ID,
+		&i.ExamRoomID,
+		&i.AttendanceChecked,
+		&i.AllSubmittedChecked,
+		&i.DeviceIssueChecked,
+		&i.RoomCleanChecked,
+		&i.TokenReturnedChecked,
+		&i.AssetsReturnedChecked,
+		&i.IncidentNotes,
+		&i.OperatorNotes,
+		&i.HandoverNotes,
+		&i.LockedAt,
+		&i.LockedBy,
+		&i.UpdatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

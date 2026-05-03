@@ -118,6 +118,14 @@ type fakeCbtSessionService struct {
 	roomEventsSessionID      pgtype.UUID
 	roomEventsRoomID         pgtype.UUID
 	proctoringErr            error
+	handoverRoomID           pgtype.UUID
+	saveHandoverRoomID       pgtype.UUID
+	saveHandoverUpdatedBy    pgtype.UUID
+	saveHandoverInput        service.SaveCbtRoomHandoverInput
+	saveHandoverErr          error
+	lockHandoverRoomID       pgtype.UUID
+	lockHandoverLockedBy     pgtype.UUID
+	lockHandoverErr          error
 
 	flagParticipantID pgtype.UUID
 	flagValue         bool
@@ -441,6 +449,30 @@ func (f *fakeCbtSessionService) ListParticipantEventsForRoom(_ context.Context, 
 	return []db.ListSessionParticipantEventsRow{}, nil
 }
 
+func (f *fakeCbtSessionService) GetRoomHandover(_ context.Context, roomID pgtype.UUID) (db.GetCbtRoomHandoverRow, error) {
+	f.handoverRoomID = roomID
+	return db.GetCbtRoomHandoverRow{RoomID: roomID, RoomName: "Ruang 1"}, nil
+}
+
+func (f *fakeCbtSessionService) SaveRoomHandover(_ context.Context, roomID, updatedBy pgtype.UUID, in service.SaveCbtRoomHandoverInput) (db.CbtRoomHandover, error) {
+	f.saveHandoverRoomID = roomID
+	f.saveHandoverUpdatedBy = updatedBy
+	f.saveHandoverInput = in
+	if f.saveHandoverErr != nil {
+		return db.CbtRoomHandover{}, f.saveHandoverErr
+	}
+	return db.CbtRoomHandover{ExamRoomID: roomID, AttendanceChecked: in.AttendanceChecked, IncidentNotes: in.IncidentNotes}, nil
+}
+
+func (f *fakeCbtSessionService) LockRoomHandover(_ context.Context, roomID, lockedBy pgtype.UUID) (db.CbtRoomHandover, error) {
+	f.lockHandoverRoomID = roomID
+	f.lockHandoverLockedBy = lockedBy
+	if f.lockHandoverErr != nil {
+		return db.CbtRoomHandover{}, f.lockHandoverErr
+	}
+	return db.CbtRoomHandover{ExamRoomID: roomID, LockedBy: lockedBy}, nil
+}
+
 func (f *fakeCbtSessionService) ListRoomProctors(_ context.Context, roomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
 	return []db.ListCbtRoomProctorsRow{{ExamRoomID: roomID, Nama: "Pengawas"}}, nil
 }
@@ -616,6 +648,9 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	run("GetResults", h.GetResults, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/results", "", "id", sessionID.String()), http.StatusOK)
 	run("GetMinutes", h.GetMinutes, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/minutes", "", "id", sessionID.String()), http.StatusOK)
 	run("GetParticipantAnswers", h.GetParticipantAnswers, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/participants/"+participantID.String()+"/answers", "", "id", sessionID.String(), "pid", participantID.String()), http.StatusOK)
+	run("GetRoomHandover", h.GetRoomHandover, adminRoute(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/handover", "", "id", sessionID.String(), "rid", roomID.String()), http.StatusOK)
+	run("SaveRoomHandover", h.SaveRoomHandover, adminRoute(http.MethodPut, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/handover", `{"attendance_checked":true,"all_submitted_checked":true,"device_issue_checked":true,"room_clean_checked":true,"token_returned_checked":true,"assets_returned_checked":true,"incident_notes":"  aman  ","operator_notes":"reset 1","handover_notes":"selesai"}`, "id", sessionID.String(), "rid", roomID.String()), http.StatusOK)
+	run("LockRoomHandover", h.LockRoomHandover, adminRoute(http.MethodPost, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/handover/lock", "", "id", sessionID.String(), "rid", roomID.String()), http.StatusOK)
 
 	if fake.enrollClassSessionID != sessionID || fake.enrollClassID != classID {
 		t.Fatalf("EnrollClass args = %v/%v, want session/class", fake.enrollClassSessionID, fake.enrollClassID)
@@ -635,6 +670,9 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	if fake.roomDashboardID != roomID || fake.roomProctoringSessionID != sessionID || fake.roomProctoringRoomID != roomID || fake.roomEventsRoomID != roomID {
 		t.Fatalf("room dashboard args = dashboard:%v proctoring:%v/%v events:%v, want room-scoped dashboard", fake.roomDashboardID, fake.roomProctoringSessionID, fake.roomProctoringRoomID, fake.roomEventsRoomID)
 	}
+	if fake.handoverRoomID != roomID || fake.saveHandoverRoomID != roomID || fake.lockHandoverRoomID != roomID || !fake.saveHandoverInput.AllSubmittedChecked || fake.saveHandoverInput.IncidentNotes != "  aman  " {
+		t.Fatalf("handover args = get:%v save:%v lock:%v input:%+v, want room and forwarded payload", fake.handoverRoomID, fake.saveHandoverRoomID, fake.lockHandoverRoomID, fake.saveHandoverInput)
+	}
 	if !fake.proctorRoomsIncludeAll || fake.proctorRoomsEmployeeID.Valid {
 		t.Fatalf("proctor rooms args = includeAll:%v employee:%v, want admin all rooms without employee filter", fake.proctorRoomsIncludeAll, fake.proctorRoomsEmployeeID)
 	}
@@ -644,8 +682,8 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	if fake.recordParticipantID != participantID || fake.recordQuestionID != questionID || fake.recordAnswer != "B" || fake.participantAnswersID != participantID {
 		t.Fatalf("answer args = %v/%v/%q participantAnswers:%v, want forwarded answer ids", fake.recordParticipantID, fake.recordQuestionID, fake.recordAnswer, fake.participantAnswersID)
 	}
-	if len(audit.entries) != 3 {
-		t.Fatalf("audit entries len = %d, want 3", len(audit.entries))
+	if len(audit.entries) != 5 {
+		t.Fatalf("audit entries len = %d, want 5", len(audit.entries))
 	}
 	if audit.entries[0].Action != "CBT_SESSION_PARTICIPANT_FLAG" || audit.entries[0].EntityID != pgUUIDString(sessionID) {
 		t.Fatalf("flag audit entry = %+v, want flagged cbt session audit", audit.entries[0])
@@ -663,6 +701,12 @@ func TestCbtSessionOperationalHandlersForwardValidRequests(t *testing.T) {
 	}
 	if audit.entries[2].Action != "CBT_SESSION_SCORE" || audit.entries[2].EntityID != pgUUIDString(sessionID) {
 		t.Fatalf("score audit entry = %+v, want session score audit", audit.entries[2])
+	}
+	if audit.entries[3].Action != "CBT_SESSION_ROOM_HANDOVER_SAVE" || audit.entries[3].EntityID != pgUUIDString(roomID) {
+		t.Fatalf("handover save audit entry = %+v, want room handover save audit", audit.entries[3])
+	}
+	if audit.entries[4].Action != "CBT_SESSION_ROOM_HANDOVER_LOCK" || audit.entries[4].EntityID != pgUUIDString(roomID) {
+		t.Fatalf("handover lock audit entry = %+v, want room handover lock audit", audit.entries[4])
 	}
 }
 
@@ -698,6 +742,32 @@ func TestCbtSessionRoomProctorDashboardScopesAssignedProctor(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GetRoomProctorPrintPack(assigned proctor) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
+	handoverReq := withRouteParams(
+		withClaims(
+			httptest.NewRequest(http.MethodGet, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/handover", nil),
+			jwt.MapClaims{"roles": []any{"guru"}, "eid": employeeID.String()},
+		),
+		"id", sessionID.String(),
+		"rid", roomID.String(),
+	)
+	rec = httptest.NewRecorder()
+	(&CbtSession{svc: fake}).GetRoomHandover(rec, handoverReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GetRoomHandover(assigned proctor) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	saveReq := withRouteParams(
+		withClaims(
+			httptest.NewRequest(http.MethodPut, "/api/cbt/sessions/"+sessionID.String()+"/rooms/"+roomID.String()+"/handover", strings.NewReader(`{"attendance_checked":true}`)),
+			jwt.MapClaims{"roles": []any{"guru"}, "eid": employeeID.String(), "uid": handlerTestUUID(251).String(), "sub": handlerTestUUID(251).String()},
+		),
+		"id", sessionID.String(),
+		"rid", roomID.String(),
+	)
+	rec = httptest.NewRecorder()
+	(&CbtSession{svc: fake}).SaveRoomHandover(rec, saveReq)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("SaveRoomHandover(assigned proctor) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
 	if fake.roomProctorSessionID != sessionID || fake.roomProctorRoomID != roomID || fake.roomProctorEmployeeID != employeeID {
 		t.Fatalf("room proctor check = %v/%v/%v, want session/room/employee", fake.roomProctorSessionID, fake.roomProctorRoomID, fake.roomProctorEmployeeID)
 	}
@@ -712,6 +782,11 @@ func TestCbtSessionRoomProctorDashboardScopesAssignedProctor(t *testing.T) {
 	(&CbtSession{svc: denied}).GetRoomProctorPrintPack(rec, printReq)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("GetRoomProctorPrintPack(unassigned proctor) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	(&CbtSession{svc: denied}).GetRoomHandover(rec, handoverReq)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("GetRoomHandover(unassigned proctor) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
 	}
 }
 

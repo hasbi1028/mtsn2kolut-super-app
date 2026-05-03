@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -39,6 +40,9 @@ type cbtSessionStore interface {
 	DeleteCbtExamRoom(ctx context.Context, id pgtype.UUID) error
 	GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error)
 	GetCbtRoomProctorDashboard(ctx context.Context, id pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error)
+	GetCbtRoomHandover(ctx context.Context, id pgtype.UUID) (db.GetCbtRoomHandoverRow, error)
+	UpsertCbtRoomHandover(ctx context.Context, arg db.UpsertCbtRoomHandoverParams) (db.CbtRoomHandover, error)
+	LockCbtRoomHandover(ctx context.Context, arg db.LockCbtRoomHandoverParams) (db.CbtRoomHandover, error)
 	ListCbtProctorRooms(ctx context.Context, arg db.ListCbtProctorRoomsParams) ([]db.ListCbtProctorRoomsRow, error)
 	ListCbtRoomProctors(ctx context.Context, examRoomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error)
 	DeleteCbtRoomProctorsByRoom(ctx context.Context, examRoomID pgtype.UUID) error
@@ -420,6 +424,59 @@ func (s *CbtSession) RoomReadiness(ctx context.Context, sessionID pgtype.UUID) (
 
 func (s *CbtSession) GetRoomProctoringDashboard(ctx context.Context, roomID pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error) {
 	return s.q.GetCbtRoomProctorDashboard(ctx, roomID)
+}
+
+type SaveCbtRoomHandoverInput struct {
+	AttendanceChecked     bool
+	AllSubmittedChecked   bool
+	DeviceIssueChecked    bool
+	RoomCleanChecked      bool
+	TokenReturnedChecked  bool
+	AssetsReturnedChecked bool
+	IncidentNotes         string
+	OperatorNotes         string
+	HandoverNotes         string
+}
+
+func (s *CbtSession) GetRoomHandover(ctx context.Context, roomID pgtype.UUID) (db.GetCbtRoomHandoverRow, error) {
+	return s.q.GetCbtRoomHandover(ctx, roomID)
+}
+
+func (s *CbtSession) SaveRoomHandover(ctx context.Context, roomID, updatedBy pgtype.UUID, in SaveCbtRoomHandoverInput) (db.CbtRoomHandover, error) {
+	row, err := s.q.UpsertCbtRoomHandover(ctx, db.UpsertCbtRoomHandoverParams{
+		ExamRoomID:            roomID,
+		AttendanceChecked:     in.AttendanceChecked,
+		AllSubmittedChecked:   in.AllSubmittedChecked,
+		DeviceIssueChecked:    in.DeviceIssueChecked,
+		RoomCleanChecked:      in.RoomCleanChecked,
+		TokenReturnedChecked:  in.TokenReturnedChecked,
+		AssetsReturnedChecked: in.AssetsReturnedChecked,
+		IncidentNotes:         strings.TrimSpace(in.IncidentNotes),
+		OperatorNotes:         strings.TrimSpace(in.OperatorNotes),
+		HandoverNotes:         strings.TrimSpace(in.HandoverNotes),
+		UpdatedBy:             updatedBy,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.CbtRoomHandover{}, fmt.Errorf("%w: serah terima ruang sudah dikunci", domain.ErrConflict)
+		}
+		return db.CbtRoomHandover{}, err
+	}
+	return row, nil
+}
+
+func (s *CbtSession) LockRoomHandover(ctx context.Context, roomID, lockedBy pgtype.UUID) (db.CbtRoomHandover, error) {
+	row, err := s.q.LockCbtRoomHandover(ctx, db.LockCbtRoomHandoverParams{
+		ExamRoomID: roomID,
+		LockedBy:   lockedBy,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.CbtRoomHandover{}, fmt.Errorf("%w: serah terima ruang sudah dikunci", domain.ErrConflict)
+		}
+		return db.CbtRoomHandover{}, err
+	}
+	return row, nil
 }
 
 func (s *CbtSession) ListProctorRooms(ctx context.Context, employeeID pgtype.UUID, includeAll bool) ([]db.ListCbtProctorRoomsRow, error) {

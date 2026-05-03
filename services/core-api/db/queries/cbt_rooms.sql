@@ -97,6 +97,121 @@ WHERE r.id = $1
 GROUP BY r.id, s.title, s.status, s.scheduled_start, s.scheduled_end, p.title, p.duration_minutes,
          sr.code, sr.name, sr.building, sr.location_note;
 
+-- name: GetCbtRoomHandover :one
+WITH room_stats AS (
+  SELECT
+    ep.room_id,
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE ep.submitted_at IS NOT NULL)::int AS submitted_count,
+    COUNT(*) FILTER (WHERE ep.suspicious_flag = TRUE)::int AS suspicious_count,
+    COUNT(*) FILTER (WHERE ep.seat_no IS NULL)::int AS missing_seat_count
+  FROM cbt_exam_participants ep
+  WHERE ep.room_id = $1
+  GROUP BY ep.room_id
+)
+SELECT
+  r.id AS room_id,
+  r.session_id,
+  r.room_name,
+  r.room_token,
+  r.status AS room_status,
+  r.is_locked AS room_is_locked,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  COALESCE(rs.participant_count, 0)::int AS participant_count,
+  COALESCE(rs.submitted_count, 0)::int AS submitted_count,
+  COALESCE(rs.suspicious_count, 0)::int AS suspicious_count,
+  COALESCE(rs.missing_seat_count, 0)::int AS missing_seat_count,
+  h.id AS handover_id,
+  COALESCE(h.attendance_checked, FALSE)::boolean AS attendance_checked,
+  COALESCE(h.all_submitted_checked, FALSE)::boolean AS all_submitted_checked,
+  COALESCE(h.device_issue_checked, FALSE)::boolean AS device_issue_checked,
+  COALESCE(h.room_clean_checked, FALSE)::boolean AS room_clean_checked,
+  COALESCE(h.token_returned_checked, FALSE)::boolean AS token_returned_checked,
+  COALESCE(h.assets_returned_checked, FALSE)::boolean AS assets_returned_checked,
+  COALESCE(h.incident_notes, '')::text AS incident_notes,
+  COALESCE(h.operator_notes, '')::text AS operator_notes,
+  COALESCE(h.handover_notes, '')::text AS handover_notes,
+  h.locked_at,
+  h.locked_by,
+  h.updated_by,
+  h.created_at AS handover_created_at,
+  h.updated_at AS handover_updated_at
+FROM cbt_exam_rooms r
+JOIN cbt_exam_sessions s ON s.id = r.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN room_stats rs ON rs.room_id = r.id
+LEFT JOIN cbt_room_handovers h ON h.exam_room_id = r.id
+WHERE r.id = $1;
+
+-- name: UpsertCbtRoomHandover :one
+INSERT INTO cbt_room_handovers (
+  exam_room_id,
+  attendance_checked,
+  all_submitted_checked,
+  device_issue_checked,
+  room_clean_checked,
+  token_returned_checked,
+  assets_returned_checked,
+  incident_notes,
+  operator_notes,
+  handover_notes,
+  updated_by
+)
+VALUES (
+  sqlc.arg(exam_room_id),
+  sqlc.arg(attendance_checked),
+  sqlc.arg(all_submitted_checked),
+  sqlc.arg(device_issue_checked),
+  sqlc.arg(room_clean_checked),
+  sqlc.arg(token_returned_checked),
+  sqlc.arg(assets_returned_checked),
+  sqlc.arg(incident_notes),
+  sqlc.arg(operator_notes),
+  sqlc.arg(handover_notes),
+  sqlc.arg(updated_by)
+)
+ON CONFLICT (exam_room_id) DO UPDATE
+SET
+  attendance_checked = EXCLUDED.attendance_checked,
+  all_submitted_checked = EXCLUDED.all_submitted_checked,
+  device_issue_checked = EXCLUDED.device_issue_checked,
+  room_clean_checked = EXCLUDED.room_clean_checked,
+  token_returned_checked = EXCLUDED.token_returned_checked,
+  assets_returned_checked = EXCLUDED.assets_returned_checked,
+  incident_notes = EXCLUDED.incident_notes,
+  operator_notes = EXCLUDED.operator_notes,
+  handover_notes = EXCLUDED.handover_notes,
+  updated_by = EXCLUDED.updated_by,
+  updated_at = NOW()
+WHERE cbt_room_handovers.locked_at IS NULL
+RETURNING *;
+
+-- name: LockCbtRoomHandover :one
+INSERT INTO cbt_room_handovers (
+  exam_room_id,
+  locked_at,
+  locked_by,
+  updated_by
+)
+VALUES (
+  sqlc.arg(exam_room_id),
+  NOW(),
+  sqlc.arg(locked_by),
+  sqlc.arg(locked_by)
+)
+ON CONFLICT (exam_room_id) DO UPDATE
+SET
+  locked_at = NOW(),
+  locked_by = EXCLUDED.locked_by,
+  updated_by = EXCLUDED.updated_by,
+  updated_at = NOW()
+WHERE cbt_room_handovers.locked_at IS NULL
+RETURNING *;
+
 -- name: ListCbtProctorRooms :many
 WITH participant_stats AS (
   SELECT

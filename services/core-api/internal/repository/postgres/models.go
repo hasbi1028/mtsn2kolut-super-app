@@ -1005,6 +1005,25 @@ type CbtQuestionAsset struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
+type CbtRoomHandover struct {
+	ID                    pgtype.UUID        `json:"id"`
+	ExamRoomID            pgtype.UUID        `json:"exam_room_id"`
+	AttendanceChecked     bool               `json:"attendance_checked"`
+	AllSubmittedChecked   bool               `json:"all_submitted_checked"`
+	DeviceIssueChecked    bool               `json:"device_issue_checked"`
+	RoomCleanChecked      bool               `json:"room_clean_checked"`
+	TokenReturnedChecked  bool               `json:"token_returned_checked"`
+	AssetsReturnedChecked bool               `json:"assets_returned_checked"`
+	IncidentNotes         string             `json:"incident_notes"`
+	OperatorNotes         string             `json:"operator_notes"`
+	HandoverNotes         string             `json:"handover_notes"`
+	LockedAt              pgtype.Timestamptz `json:"locked_at"`
+	LockedBy              pgtype.UUID        `json:"locked_by"`
+	UpdatedBy             pgtype.UUID        `json:"updated_by"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CbtRoomProctor struct {
 	ID         pgtype.UUID        `json:"id"`
 	ExamRoomID pgtype.UUID        `json:"exam_room_id"`
