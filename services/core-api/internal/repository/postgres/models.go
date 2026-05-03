@@ -886,11 +886,18 @@ type CbtExamParticipant struct {
 }
 
 type CbtExamRoom struct {
-	ID        pgtype.UUID        `json:"id"`
-	SessionID pgtype.UUID        `json:"session_id"`
-	RoomName  string             `json:"room_name"`
-	Capacity  int32              `json:"capacity"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID               pgtype.UUID        `json:"id"`
+	SessionID        pgtype.UUID        `json:"session_id"`
+	RoomName         string             `json:"room_name"`
+	Capacity         int32              `json:"capacity"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	SchoolRoomID     pgtype.UUID        `json:"school_room_id"`
+	RoomNameSnapshot string             `json:"room_name_snapshot"`
+	CapacityOverride pgtype.Int4        `json:"capacity_override"`
+	RoomToken        string             `json:"room_token"`
+	Status           string             `json:"status"`
+	IsLocked         bool               `json:"is_locked"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
 type CbtExamSession struct {
@@ -996,6 +1003,15 @@ type CbtQuestionAsset struct {
 	Purpose      string             `json:"purpose"`
 	UploadedBy   string             `json:"uploaded_by"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type CbtRoomProctor struct {
+	ID         pgtype.UUID        `json:"id"`
+	ExamRoomID pgtype.UUID        `json:"exam_room_id"`
+	EmployeeID pgtype.UUID        `json:"employee_id"`
+	Role       string             `json:"role"`
+	AssignedBy pgtype.UUID        `json:"assigned_by"`
+	AssignedAt pgtype.Timestamptz `json:"assigned_at"`
 }
 
 type CbtStudentAnswer struct {
@@ -1608,6 +1624,25 @@ type SchoolClass struct {
 	IsActive       bool               `json:"is_active"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type SchoolRoom struct {
+	ID              pgtype.UUID        `json:"id"`
+	Code            string             `json:"code"`
+	Name            string             `json:"name"`
+	Building        string             `json:"building"`
+	Floor           string             `json:"floor"`
+	RoomType        string             `json:"room_type"`
+	LocationNote    string             `json:"location_note"`
+	DefaultCapacity int32              `json:"default_capacity"`
+	ExamCapacity    int32              `json:"exam_capacity"`
+	Condition       string             `json:"condition"`
+	IsExamEligible  bool               `json:"is_exam_eligible"`
+	NetworkReady    bool               `json:"network_ready"`
+	PowerReady      bool               `json:"power_ready"`
+	Notes           string             `json:"notes"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Student struct {

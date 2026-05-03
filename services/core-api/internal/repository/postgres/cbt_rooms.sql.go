@@ -12,19 +12,33 @@ import (
 )
 
 const createCbtExamRoom = `-- name: CreateCbtExamRoom :one
-INSERT INTO cbt_exam_rooms (session_id, room_name, capacity)
-VALUES ($1, $2, $3)
-RETURNING id, session_id, room_name, capacity, created_at
+INSERT INTO cbt_exam_rooms (
+  session_id, school_room_id, room_name, room_name_snapshot, capacity
+)
+VALUES (
+  $1, $2, $3,
+  COALESCE(NULLIF($4::TEXT, ''), $3::TEXT),
+  $5
+)
+RETURNING id, session_id, room_name, capacity, created_at, school_room_id, room_name_snapshot, capacity_override, room_token, status, is_locked, updated_at
 `
 
 type CreateCbtExamRoomParams struct {
-	SessionID pgtype.UUID `json:"session_id"`
-	RoomName  string      `json:"room_name"`
-	Capacity  int32       `json:"capacity"`
+	SessionID        pgtype.UUID `json:"session_id"`
+	SchoolRoomID     pgtype.UUID `json:"school_room_id"`
+	RoomName         string      `json:"room_name"`
+	RoomNameSnapshot string      `json:"room_name_snapshot"`
+	Capacity         int32       `json:"capacity"`
 }
 
 func (q *Queries) CreateCbtExamRoom(ctx context.Context, arg CreateCbtExamRoomParams) (CbtExamRoom, error) {
-	row := q.db.QueryRow(ctx, createCbtExamRoom, arg.SessionID, arg.RoomName, arg.Capacity)
+	row := q.db.QueryRow(ctx, createCbtExamRoom,
+		arg.SessionID,
+		arg.SchoolRoomID,
+		arg.RoomName,
+		arg.RoomNameSnapshot,
+		arg.Capacity,
+	)
 	var i CbtExamRoom
 	err := row.Scan(
 		&i.ID,
@@ -32,6 +46,45 @@ func (q *Queries) CreateCbtExamRoom(ctx context.Context, arg CreateCbtExamRoomPa
 		&i.RoomName,
 		&i.Capacity,
 		&i.CreatedAt,
+		&i.SchoolRoomID,
+		&i.RoomNameSnapshot,
+		&i.CapacityOverride,
+		&i.RoomToken,
+		&i.Status,
+		&i.IsLocked,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createCbtRoomProctor = `-- name: CreateCbtRoomProctor :one
+INSERT INTO cbt_room_proctors (exam_room_id, employee_id, role, assigned_by)
+VALUES ($1, $2, $3, $4)
+RETURNING id, exam_room_id, employee_id, role, assigned_by, assigned_at
+`
+
+type CreateCbtRoomProctorParams struct {
+	ExamRoomID pgtype.UUID `json:"exam_room_id"`
+	EmployeeID pgtype.UUID `json:"employee_id"`
+	Role       string      `json:"role"`
+	AssignedBy pgtype.UUID `json:"assigned_by"`
+}
+
+func (q *Queries) CreateCbtRoomProctor(ctx context.Context, arg CreateCbtRoomProctorParams) (CbtRoomProctor, error) {
+	row := q.db.QueryRow(ctx, createCbtRoomProctor,
+		arg.ExamRoomID,
+		arg.EmployeeID,
+		arg.Role,
+		arg.AssignedBy,
+	)
+	var i CbtRoomProctor
+	err := row.Scan(
+		&i.ID,
+		&i.ExamRoomID,
+		&i.EmployeeID,
+		&i.Role,
+		&i.AssignedBy,
+		&i.AssignedAt,
 	)
 	return i, err
 }
@@ -45,10 +98,19 @@ func (q *Queries) DeleteCbtExamRoom(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const deleteCbtRoomProctorsByRoom = `-- name: DeleteCbtRoomProctorsByRoom :exec
+DELETE FROM cbt_room_proctors WHERE exam_room_id = $1
+`
+
+func (q *Queries) DeleteCbtRoomProctorsByRoom(ctx context.Context, examRoomID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteCbtRoomProctorsByRoom, examRoomID)
+	return err
+}
+
 const getCbtExamRoom = `-- name: GetCbtExamRoom :one
-SELECT r.id, r.session_id, r.room_name, r.capacity, r.created_at
-FROM cbt_exam_rooms r
-WHERE r.id = $1
+SELECT id, session_id, room_name, capacity, created_at, school_room_id, room_name_snapshot, capacity_override, room_token, status, is_locked, updated_at
+FROM cbt_exam_rooms
+WHERE id = $1
 `
 
 func (q *Queries) GetCbtExamRoom(ctx context.Context, id pgtype.UUID) (CbtExamRoom, error) {
@@ -60,28 +122,153 @@ func (q *Queries) GetCbtExamRoom(ctx context.Context, id pgtype.UUID) (CbtExamRo
 		&i.RoomName,
 		&i.Capacity,
 		&i.CreatedAt,
+		&i.SchoolRoomID,
+		&i.RoomNameSnapshot,
+		&i.CapacityOverride,
+		&i.RoomToken,
+		&i.Status,
+		&i.IsLocked,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getCbtSessionRoomReadiness = `-- name: GetCbtSessionRoomReadiness :one
+WITH room_stats AS (
+  SELECT
+    COUNT(*)::int AS room_count,
+    COALESCE(SUM(capacity), 0)::int AS total_capacity
+  FROM cbt_exam_rooms er
+  WHERE er.session_id = $1
+),
+participant_stats AS (
+  SELECT
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL)::int AS assigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NULL)::int AS unassigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL AND seat_no IS NULL)::int AS missing_seat_count
+  FROM cbt_exam_participants ep
+  WHERE ep.session_id = $1
+),
+room_proctor_counts AS (
+  SELECT r.id, COUNT(rp.id)::int AS proctor_count
+  FROM cbt_exam_rooms r
+  LEFT JOIN cbt_room_proctors rp ON rp.exam_room_id = r.id
+  WHERE r.session_id = $1
+  GROUP BY r.id
+),
+proctor_stats AS (
+  SELECT
+    COUNT(*) FILTER (WHERE proctor_count = 0)::int AS rooms_without_proctor,
+    COALESCE(SUM(proctor_count), 0)::int AS proctor_assignment_count
+  FROM room_proctor_counts
+)
+SELECT
+  rs.room_count,
+  rs.total_capacity,
+  ps.participant_count,
+  ps.assigned_participant_count,
+  ps.unassigned_participant_count,
+  ps.missing_seat_count,
+  COALESCE(prs.rooms_without_proctor, 0)::int AS rooms_without_proctor,
+  COALESCE(prs.proctor_assignment_count, 0)::int AS proctor_assignment_count
+FROM room_stats rs, participant_stats ps, proctor_stats prs
+`
+
+type GetCbtSessionRoomReadinessRow struct {
+	RoomCount                  int32 `json:"room_count"`
+	TotalCapacity              int32 `json:"total_capacity"`
+	ParticipantCount           int32 `json:"participant_count"`
+	AssignedParticipantCount   int32 `json:"assigned_participant_count"`
+	UnassignedParticipantCount int32 `json:"unassigned_participant_count"`
+	MissingSeatCount           int32 `json:"missing_seat_count"`
+	RoomsWithoutProctor        int32 `json:"rooms_without_proctor"`
+	ProctorAssignmentCount     int32 `json:"proctor_assignment_count"`
+}
+
+func (q *Queries) GetCbtSessionRoomReadiness(ctx context.Context, targetSessionID pgtype.UUID) (GetCbtSessionRoomReadinessRow, error) {
+	row := q.db.QueryRow(ctx, getCbtSessionRoomReadiness, targetSessionID)
+	var i GetCbtSessionRoomReadinessRow
+	err := row.Scan(
+		&i.RoomCount,
+		&i.TotalCapacity,
+		&i.ParticipantCount,
+		&i.AssignedParticipantCount,
+		&i.UnassignedParticipantCount,
+		&i.MissingSeatCount,
+		&i.RoomsWithoutProctor,
+		&i.ProctorAssignmentCount,
 	)
 	return i, err
 }
 
 const listCbtExamRooms = `-- name: ListCbtExamRooms :many
+WITH participant_counts AS (
+  SELECT room_id, COUNT(*)::int AS participant_count
+  FROM cbt_exam_participants
+  WHERE session_id = $1 AND room_id IS NOT NULL
+  GROUP BY room_id
+),
+proctor_counts AS (
+  SELECT exam_room_id, COUNT(*)::int AS proctor_count
+  FROM cbt_room_proctors
+  GROUP BY exam_room_id
+),
+primary_proctors AS (
+  SELECT DISTINCT ON (rp.exam_room_id)
+    rp.exam_room_id, rp.employee_id AS primary_proctor_id, e.nama AS primary_proctor_name
+  FROM cbt_room_proctors rp
+  JOIN employees e ON e.id = rp.employee_id
+  ORDER BY rp.exam_room_id, CASE rp.role WHEN 'utama' THEN 0 WHEN 'pendamping' THEN 1 ELSE 2 END, rp.assigned_at ASC
+)
 SELECT
-  r.id, r.session_id, r.room_name, r.capacity, r.created_at,
-  COUNT(p.id)::int AS participant_count
+  r.id, r.session_id, r.school_room_id,
+  r.room_name, r.room_name_snapshot, r.capacity, r.capacity_override,
+  r.room_token, r.status, r.is_locked, r.created_at, r.updated_at,
+  COALESCE(sr.code, '') AS school_room_code,
+  COALESCE(sr.name, '') AS school_room_name,
+  COALESCE(sr.building, '') AS school_room_building,
+  COALESCE(sr.location_note, '') AS school_room_location_note,
+  COALESCE(sr.exam_capacity, 0)::int AS school_room_exam_capacity,
+  COALESCE(sr.condition, '') AS school_room_condition,
+  COALESCE(sr.is_exam_eligible, false) AS school_room_exam_eligible,
+  COALESCE(pc.participant_count, 0)::int AS participant_count,
+  COALESCE(prc.proctor_count, 0)::int AS proctor_count,
+  pp.primary_proctor_id,
+  COALESCE(pp.primary_proctor_name, '') AS primary_proctor_name
 FROM cbt_exam_rooms r
-LEFT JOIN cbt_exam_participants p ON p.room_id = r.id
+LEFT JOIN school_rooms sr ON sr.id = r.school_room_id
+LEFT JOIN participant_counts pc ON pc.room_id = r.id
+LEFT JOIN proctor_counts prc ON prc.exam_room_id = r.id
+LEFT JOIN primary_proctors pp ON pp.exam_room_id = r.id
 WHERE r.session_id = $1
-GROUP BY r.id
 ORDER BY r.room_name ASC
 `
 
 type ListCbtExamRoomsRow struct {
-	ID               pgtype.UUID        `json:"id"`
-	SessionID        pgtype.UUID        `json:"session_id"`
-	RoomName         string             `json:"room_name"`
-	Capacity         int32              `json:"capacity"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	ParticipantCount int32              `json:"participant_count"`
+	ID                     pgtype.UUID        `json:"id"`
+	SessionID              pgtype.UUID        `json:"session_id"`
+	SchoolRoomID           pgtype.UUID        `json:"school_room_id"`
+	RoomName               string             `json:"room_name"`
+	RoomNameSnapshot       string             `json:"room_name_snapshot"`
+	Capacity               int32              `json:"capacity"`
+	CapacityOverride       pgtype.Int4        `json:"capacity_override"`
+	RoomToken              string             `json:"room_token"`
+	Status                 string             `json:"status"`
+	IsLocked               bool               `json:"is_locked"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	SchoolRoomCode         string             `json:"school_room_code"`
+	SchoolRoomName         string             `json:"school_room_name"`
+	SchoolRoomBuilding     string             `json:"school_room_building"`
+	SchoolRoomLocationNote string             `json:"school_room_location_note"`
+	SchoolRoomExamCapacity int32              `json:"school_room_exam_capacity"`
+	SchoolRoomCondition    string             `json:"school_room_condition"`
+	SchoolRoomExamEligible bool               `json:"school_room_exam_eligible"`
+	ParticipantCount       int32              `json:"participant_count"`
+	ProctorCount           int32              `json:"proctor_count"`
+	PrimaryProctorID       pgtype.UUID        `json:"primary_proctor_id"`
+	PrimaryProctorName     string             `json:"primary_proctor_name"`
 }
 
 func (q *Queries) ListCbtExamRooms(ctx context.Context, sessionID pgtype.UUID) ([]ListCbtExamRoomsRow, error) {
@@ -96,10 +283,76 @@ func (q *Queries) ListCbtExamRooms(ctx context.Context, sessionID pgtype.UUID) (
 		if err := rows.Scan(
 			&i.ID,
 			&i.SessionID,
+			&i.SchoolRoomID,
 			&i.RoomName,
+			&i.RoomNameSnapshot,
 			&i.Capacity,
+			&i.CapacityOverride,
+			&i.RoomToken,
+			&i.Status,
+			&i.IsLocked,
 			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.SchoolRoomCode,
+			&i.SchoolRoomName,
+			&i.SchoolRoomBuilding,
+			&i.SchoolRoomLocationNote,
+			&i.SchoolRoomExamCapacity,
+			&i.SchoolRoomCondition,
+			&i.SchoolRoomExamEligible,
 			&i.ParticipantCount,
+			&i.ProctorCount,
+			&i.PrimaryProctorID,
+			&i.PrimaryProctorName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtRoomProctors = `-- name: ListCbtRoomProctors :many
+SELECT rp.id, rp.exam_room_id, rp.employee_id, e.nip, e.nama,
+       rp.role, rp.assigned_by, rp.assigned_at
+FROM cbt_room_proctors rp
+JOIN employees e ON e.id = rp.employee_id
+WHERE rp.exam_room_id = $1
+ORDER BY CASE rp.role WHEN 'utama' THEN 0 WHEN 'pendamping' THEN 1 ELSE 2 END, e.nama ASC
+`
+
+type ListCbtRoomProctorsRow struct {
+	ID         pgtype.UUID        `json:"id"`
+	ExamRoomID pgtype.UUID        `json:"exam_room_id"`
+	EmployeeID pgtype.UUID        `json:"employee_id"`
+	Nip        string             `json:"nip"`
+	Nama       string             `json:"nama"`
+	Role       string             `json:"role"`
+	AssignedBy pgtype.UUID        `json:"assigned_by"`
+	AssignedAt pgtype.Timestamptz `json:"assigned_at"`
+}
+
+func (q *Queries) ListCbtRoomProctors(ctx context.Context, examRoomID pgtype.UUID) ([]ListCbtRoomProctorsRow, error) {
+	rows, err := q.db.Query(ctx, listCbtRoomProctors, examRoomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtRoomProctorsRow{}
+	for rows.Next() {
+		var i ListCbtRoomProctorsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ExamRoomID,
+			&i.EmployeeID,
+			&i.Nip,
+			&i.Nama,
+			&i.Role,
+			&i.AssignedBy,
+			&i.AssignedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -27,6 +27,11 @@ type inventoryService interface {
 	BatchUpdateItems(ctx context.Context, actorUserID pgtype.UUID, ids []pgtype.UUID, lokasi *string, kondisi *string) (int, error)
 	UpdateItem(ctx context.Context, actorUserID pgtype.UUID, arg db.UpdateInventoryItemParams) (db.InventoryItem, error)
 	DeleteItem(ctx context.Context, actorUserID pgtype.UUID, id pgtype.UUID) error
+	ListSchoolRooms(ctx context.Context, search, roomType, condition, examEligible string) ([]db.SchoolRoom, error)
+	GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error)
+	CreateSchoolRoom(ctx context.Context, arg db.CreateSchoolRoomParams) (db.SchoolRoom, error)
+	UpdateSchoolRoom(ctx context.Context, arg db.UpdateSchoolRoomParams) (db.SchoolRoom, error)
+	DeleteSchoolRoom(ctx context.Context, id pgtype.UUID) error
 }
 
 func NewInventory(svc *service.Inventory, audit ...cbtAuthoringAuditWriter) *Inventory {
@@ -80,6 +85,118 @@ func (h *Inventory) ListItems(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, items)
 }
 
+func (h *Inventory) ListSchoolRooms(w http.ResponseWriter, r *http.Request) {
+	if !inventoryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	rooms, err := h.svc.ListSchoolRooms(
+		r.Context(),
+		r.URL.Query().Get("search"),
+		r.URL.Query().Get("room_type"),
+		r.URL.Query().Get("condition"),
+		r.URL.Query().Get("exam_eligible"),
+	)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rooms)
+}
+
+func (h *Inventory) GetSchoolRoom(w http.ResponseWriter, r *http.Request) {
+	if !inventoryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	room, err := h.svc.GetSchoolRoom(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, room)
+}
+
+func (h *Inventory) CreateSchoolRoom(w http.ResponseWriter, r *http.Request) {
+	if !inventoryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	body, ok := decodeSchoolRoomPayload(w, r)
+	if !ok {
+		return
+	}
+	room, err := h.svc.CreateSchoolRoom(r.Context(), body.toCreateParams())
+	if err != nil {
+		writeClientError(w, err, "Data ruangan tidak valid")
+		return
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "SCHOOL_ROOM_CREATE", "school_room", pgUUIDString(room.ID), map[string]any{
+		"code":             room.Code,
+		"name":             room.Name,
+		"room_type":        room.RoomType,
+		"exam_capacity":    room.ExamCapacity,
+		"is_exam_eligible": room.IsExamEligible,
+	})
+	api.Created(w, room)
+}
+
+func (h *Inventory) UpdateSchoolRoom(w http.ResponseWriter, r *http.Request) {
+	if !inventoryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	body, ok := decodeSchoolRoomPayload(w, r)
+	if !ok {
+		return
+	}
+	arg := body.toUpdateParams()
+	arg.ID = id
+	room, err := h.svc.UpdateSchoolRoom(r.Context(), arg)
+	if err != nil {
+		writeClientError(w, err, "Perubahan ruangan tidak valid")
+		return
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "SCHOOL_ROOM_UPDATE", "school_room", pgUUIDString(room.ID), map[string]any{
+		"code":             room.Code,
+		"name":             room.Name,
+		"room_type":        room.RoomType,
+		"exam_capacity":    room.ExamCapacity,
+		"is_exam_eligible": room.IsExamEligible,
+	})
+	api.OK(w, room)
+}
+
+func (h *Inventory) DeleteSchoolRoom(w http.ResponseWriter, r *http.Request) {
+	if !inventoryAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	if err := h.svc.DeleteSchoolRoom(r.Context(), id); err != nil {
+		writeClientError(w, err, "Penghapusan ruangan tidak valid")
+		return
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "SCHOOL_ROOM_DELETE", "school_room", pgUUIDString(id), map[string]any{
+		"deleted_by": currentUsername(r),
+	})
+	api.NoContent(w)
+}
+
 func (h *Inventory) ListItemEvents(w http.ResponseWriter, r *http.Request) {
 	if !inventoryAccessAllowed(r) {
 		api.Forbidden(w)
@@ -96,6 +213,74 @@ func (h *Inventory) ListItemEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, events)
+}
+
+type schoolRoomPayload struct {
+	Code            string `json:"code"`
+	Name            string `json:"name"`
+	Building        string `json:"building"`
+	Floor           string `json:"floor"`
+	RoomType        string `json:"room_type"`
+	LocationNote    string `json:"location_note"`
+	DefaultCapacity int32  `json:"default_capacity"`
+	ExamCapacity    int32  `json:"exam_capacity"`
+	Condition       string `json:"condition"`
+	IsExamEligible  *bool  `json:"is_exam_eligible"`
+	NetworkReady    bool   `json:"network_ready"`
+	PowerReady      bool   `json:"power_ready"`
+	Notes           string `json:"notes"`
+}
+
+func decodeSchoolRoomPayload(w http.ResponseWriter, r *http.Request) (schoolRoomPayload, bool) {
+	var body schoolRoomPayload
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return schoolRoomPayload{}, false
+	}
+	return body, true
+}
+
+func (p schoolRoomPayload) examEligible() bool {
+	if p.IsExamEligible == nil {
+		return true
+	}
+	return *p.IsExamEligible
+}
+
+func (p schoolRoomPayload) toCreateParams() db.CreateSchoolRoomParams {
+	return db.CreateSchoolRoomParams{
+		Code:            strings.TrimSpace(p.Code),
+		Name:            strings.TrimSpace(p.Name),
+		Building:        strings.TrimSpace(p.Building),
+		Floor:           strings.TrimSpace(p.Floor),
+		RoomType:        strings.TrimSpace(p.RoomType),
+		LocationNote:    strings.TrimSpace(p.LocationNote),
+		DefaultCapacity: p.DefaultCapacity,
+		ExamCapacity:    p.ExamCapacity,
+		Condition:       strings.TrimSpace(p.Condition),
+		IsExamEligible:  p.examEligible(),
+		NetworkReady:    p.NetworkReady,
+		PowerReady:      p.PowerReady,
+		Notes:           strings.TrimSpace(p.Notes),
+	}
+}
+
+func (p schoolRoomPayload) toUpdateParams() db.UpdateSchoolRoomParams {
+	return db.UpdateSchoolRoomParams{
+		Code:            strings.TrimSpace(p.Code),
+		Name:            strings.TrimSpace(p.Name),
+		Building:        strings.TrimSpace(p.Building),
+		Floor:           strings.TrimSpace(p.Floor),
+		RoomType:        strings.TrimSpace(p.RoomType),
+		LocationNote:    strings.TrimSpace(p.LocationNote),
+		DefaultCapacity: p.DefaultCapacity,
+		ExamCapacity:    p.ExamCapacity,
+		Condition:       strings.TrimSpace(p.Condition),
+		IsExamEligible:  p.examEligible(),
+		NetworkReady:    p.NetworkReady,
+		PowerReady:      p.PowerReady,
+		Notes:           strings.TrimSpace(p.Notes),
+	}
 }
 
 func (h *Inventory) CreateItem(w http.ResponseWriter, r *http.Request) {

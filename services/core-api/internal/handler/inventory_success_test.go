@@ -45,6 +45,15 @@ type fakeInventoryService struct {
 	deleteActorID pgtype.UUID
 	deleteID      pgtype.UUID
 	deleteErr     error
+	roomRows      []db.SchoolRoom
+	roomSearch    string
+	roomType      string
+	roomCondition string
+	roomEligible  string
+	roomID        pgtype.UUID
+	roomCreate    db.CreateSchoolRoomParams
+	roomUpdate    db.UpdateSchoolRoomParams
+	roomRow       db.SchoolRoom
 }
 
 func (f *fakeInventoryService) Stats(context.Context) (db.GetInventoryStatsRow, error) {
@@ -87,6 +96,37 @@ func (f *fakeInventoryService) DeleteItem(_ context.Context, actorUserID pgtype.
 	f.deleteActorID = actorUserID
 	f.deleteID = id
 	return f.deleteErr
+}
+
+func (f *fakeInventoryService) ListSchoolRooms(_ context.Context, search, roomType, condition, examEligible string) ([]db.SchoolRoom, error) {
+	f.roomSearch = search
+	f.roomType = roomType
+	f.roomCondition = condition
+	f.roomEligible = examEligible
+	return f.roomRows, nil
+}
+
+func (f *fakeInventoryService) GetSchoolRoom(_ context.Context, id pgtype.UUID) (db.SchoolRoom, error) {
+	f.roomID = id
+	return f.roomRow, nil
+}
+
+func (f *fakeInventoryService) CreateSchoolRoom(_ context.Context, arg db.CreateSchoolRoomParams) (db.SchoolRoom, error) {
+	f.roomCreate = arg
+	if f.roomRow.ID.Valid {
+		return f.roomRow, nil
+	}
+	return db.SchoolRoom{ID: handlerTestUUID(150), Code: arg.Code, Name: arg.Name, ExamCapacity: arg.ExamCapacity, Condition: arg.Condition, IsExamEligible: arg.IsExamEligible}, nil
+}
+
+func (f *fakeInventoryService) UpdateSchoolRoom(_ context.Context, arg db.UpdateSchoolRoomParams) (db.SchoolRoom, error) {
+	f.roomUpdate = arg
+	return db.SchoolRoom{ID: arg.ID, Code: arg.Code, Name: arg.Name, ExamCapacity: arg.ExamCapacity, Condition: arg.Condition, IsExamEligible: arg.IsExamEligible}, nil
+}
+
+func (f *fakeInventoryService) DeleteSchoolRoom(_ context.Context, id pgtype.UUID) error {
+	f.roomID = id
+	return nil
 }
 
 func inventoryTestItem(id pgtype.UUID, nama string) db.InventoryItem {

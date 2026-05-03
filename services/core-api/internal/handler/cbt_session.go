@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -66,6 +67,16 @@ type cbtSessionProctorControlService interface {
 	ForceSubmitParticipant(ctx context.Context, sessionID, participantID pgtype.UUID, actor string) (db.ForceSubmitParticipantRow, error)
 }
 
+type cbtSessionPhysicalRoomService interface {
+	CreateRoomFromSchoolRoom(ctx context.Context, sessionID, schoolRoomID pgtype.UUID, roomName string, capacity int32) (db.CbtExamRoom, error)
+}
+
+type cbtSessionRoomProctorService interface {
+	ListRoomProctors(ctx context.Context, roomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error)
+	ReplaceRoomProctors(ctx context.Context, roomID, assignedBy, primaryEmployeeID pgtype.UUID, employeeIDs []pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error)
+	RoomReadiness(ctx context.Context, sessionID pgtype.UUID) (db.GetCbtSessionRoomReadinessRow, error)
+}
+
 func NewCbtSession(svc *service.CbtSession, audit ...cbtSessionAuditWriter) *CbtSession {
 	var writer cbtSessionAuditWriter
 	if len(audit) > 0 {
@@ -90,6 +101,16 @@ func cbtSessionTeacherID(r *http.Request) pgtype.UUID {
 		}
 	}
 	return pgtype.UUID{}
+}
+
+func cbtSessionActorUserID(r *http.Request) pgtype.UUID {
+	var uid pgtype.UUID
+	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
+		if raw, ok := claims["uid"].(string); ok {
+			_ = uid.Scan(raw)
+		}
+	}
+	return uid
 }
 
 func (h *CbtSession) requireSessionTeacherOrAdmin(w http.ResponseWriter, r *http.Request, sessionID pgtype.UUID) bool {
@@ -661,11 +682,38 @@ func (h *CbtSession) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		RoomName string `json:"room_name"`
-		Capacity int32  `json:"capacity"`
+		RoomName     string `json:"room_name"`
+		SchoolRoomID string `json:"school_room_id"`
+		Capacity     int32  `json:"capacity"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
+		return
+	}
+	body.RoomName = strings.TrimSpace(body.RoomName)
+	if strings.TrimSpace(body.SchoolRoomID) != "" {
+		schoolRoomID, err := parseUUID(body.SchoolRoomID)
+		if err != nil {
+			api.BadRequest(w, "school_room_id invalid")
+			return
+		}
+		physicalRoomSvc, ok := h.svc.(cbtSessionPhysicalRoomService)
+		if !ok {
+			api.Internal(w, fmt.Errorf("cbt physical room service unavailable"))
+			return
+		}
+		room, err := physicalRoomSvc.CreateRoomFromSchoolRoom(r.Context(), sessionID, schoolRoomID, body.RoomName, body.Capacity)
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		h.auditEvent(r.Context(), "CBT_SESSION_ROOM_LINK_CREATE", "cbt_session_room", pgUUIDString(room.ID), map[string]any{
+			"session_id":     pgUUIDString(sessionID),
+			"school_room_id": pgUUIDString(schoolRoomID),
+			"room_name":      room.RoomName,
+			"capacity":       room.Capacity,
+		})
+		api.Created(w, room)
 		return
 	}
 	if body.RoomName == "" {
@@ -681,6 +729,129 @@ func (h *CbtSession) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.Created(w, room)
+}
+
+func (h *CbtSession) GetRoomReadiness(w http.ResponseWriter, r *http.Request) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+		return
+	}
+	roomSvc, ok := h.svc.(cbtSessionRoomProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room readiness service unavailable"))
+		return
+	}
+	readiness, err := roomSvc.RoomReadiness(r.Context(), sessionID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, readiness)
+}
+
+func (h *CbtSession) ListRoomProctors(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	roomSvc, ok := h.svc.(cbtSessionRoomProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room proctor service unavailable"))
+		return
+	}
+	rows, err := roomSvc.ListRoomProctors(r.Context(), roomID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *CbtSession) ReplaceRoomProctors(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionTeacherOrAdmin(w, r, sessionID) {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	var body struct {
+		PrimaryEmployeeID string   `json:"primary_employee_id"`
+		EmployeeIDs       []string `json:"employee_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	var primaryEmployeeID pgtype.UUID
+	if strings.TrimSpace(body.PrimaryEmployeeID) != "" {
+		parsed, err := parseUUID(body.PrimaryEmployeeID)
+		if err != nil {
+			api.BadRequest(w, "primary_employee_id invalid")
+			return
+		}
+		primaryEmployeeID = parsed
+	}
+	employeeIDs := make([]pgtype.UUID, 0, len(body.EmployeeIDs))
+	for _, raw := range body.EmployeeIDs {
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		parsed, err := parseUUID(raw)
+		if err != nil {
+			api.BadRequest(w, "employee_ids invalid")
+			return
+		}
+		employeeIDs = append(employeeIDs, parsed)
+	}
+	roomSvc, ok := h.svc.(cbtSessionRoomProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room proctor service unavailable"))
+		return
+	}
+	rows, err := roomSvc.ReplaceRoomProctors(r.Context(), roomID, cbtSessionActorUserID(r), primaryEmployeeID, employeeIDs)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PROCTORS_REPLACE", "cbt_session_room", pgUUIDString(roomID), map[string]any{
+		"session_id":          pgUUIDString(sessionID),
+		"primary_employee_id": body.PrimaryEmployeeID,
+		"employee_ids":        body.EmployeeIDs,
+		"actor_username":      currentUsername(r),
+	})
+	api.OK(w, rows)
+}
+
+func (h *CbtSession) requireSessionRoomParams(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, bool) {
+	sessionID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid session id")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	roomID, err := parseUUID(chi.URLParam(r, "rid"))
+	if err != nil {
+		api.BadRequest(w, "invalid room id")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	return sessionID, roomID, true
 }
 
 func (h *CbtSession) DeleteRoom(w http.ResponseWriter, r *http.Request) {

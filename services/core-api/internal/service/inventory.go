@@ -19,6 +19,11 @@ type inventoryStore interface {
 	CreateInventoryItemEvent(ctx context.Context, arg db.CreateInventoryItemEventParams) (db.InventoryItemEvent, error)
 	ListInventoryItemEventsByItem(ctx context.Context, itemID pgtype.UUID) ([]db.ListInventoryItemEventsByItemRow, error)
 	GetInventoryStats(ctx context.Context) (db.GetInventoryStatsRow, error)
+	ListSchoolRooms(ctx context.Context, arg db.ListSchoolRoomsParams) ([]db.SchoolRoom, error)
+	GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error)
+	CreateSchoolRoom(ctx context.Context, arg db.CreateSchoolRoomParams) (db.SchoolRoom, error)
+	UpdateSchoolRoom(ctx context.Context, arg db.UpdateSchoolRoomParams) (db.SchoolRoom, error)
+	DeleteSchoolRoom(ctx context.Context, id pgtype.UUID) error
 }
 
 type Inventory struct{ q inventoryStore }
@@ -31,6 +36,39 @@ func (s *Inventory) ListItems(ctx context.Context, search, kategori, kondisi str
 		Kategori: strings.TrimSpace(kategori),
 		Kondisi:  strings.TrimSpace(kondisi),
 	})
+}
+
+func (s *Inventory) ListSchoolRooms(ctx context.Context, search, roomType, condition, examEligible string) ([]db.SchoolRoom, error) {
+	return s.q.ListSchoolRooms(ctx, db.ListSchoolRoomsParams{
+		Search:       strings.TrimSpace(search),
+		RoomType:     strings.TrimSpace(roomType),
+		Condition:    strings.TrimSpace(condition),
+		ExamEligible: normalizeSchoolRoomExamEligibleFilter(examEligible),
+	})
+}
+
+func (s *Inventory) GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error) {
+	return s.q.GetSchoolRoom(ctx, id)
+}
+
+func (s *Inventory) CreateSchoolRoom(ctx context.Context, arg db.CreateSchoolRoomParams) (db.SchoolRoom, error) {
+	normalized, err := normalizeCreateSchoolRoom(arg)
+	if err != nil {
+		return db.SchoolRoom{}, err
+	}
+	return s.q.CreateSchoolRoom(ctx, normalized)
+}
+
+func (s *Inventory) UpdateSchoolRoom(ctx context.Context, arg db.UpdateSchoolRoomParams) (db.SchoolRoom, error) {
+	normalized, err := normalizeUpdateSchoolRoom(arg)
+	if err != nil {
+		return db.SchoolRoom{}, err
+	}
+	return s.q.UpdateSchoolRoom(ctx, normalized)
+}
+
+func (s *Inventory) DeleteSchoolRoom(ctx context.Context, id pgtype.UUID) error {
+	return s.q.DeleteSchoolRoom(ctx, id)
 }
 
 func (s *Inventory) GetItem(ctx context.Context, id pgtype.UUID) (db.InventoryItem, error) {
@@ -179,6 +217,79 @@ func validateInventoryPayload(kode, nama, kondisi string, jumlahTotal, jumlahBai
 		return fmt.Errorf("kondisi inventaris tidak valid")
 	}
 	return nil
+}
+
+func normalizeCreateSchoolRoom(arg db.CreateSchoolRoomParams) (db.CreateSchoolRoomParams, error) {
+	arg.Code = strings.TrimSpace(arg.Code)
+	arg.Name = strings.TrimSpace(arg.Name)
+	arg.Building = strings.TrimSpace(arg.Building)
+	arg.Floor = strings.TrimSpace(arg.Floor)
+	arg.RoomType = normalizeInventoryText(arg.RoomType, "kelas")
+	arg.LocationNote = strings.TrimSpace(arg.LocationNote)
+	arg.Condition = normalizeInventoryText(arg.Condition, "baik")
+	arg.Notes = strings.TrimSpace(arg.Notes)
+	if arg.DefaultCapacity <= 0 {
+		arg.DefaultCapacity = 30
+	}
+	if arg.ExamCapacity <= 0 {
+		arg.ExamCapacity = arg.DefaultCapacity
+	}
+	if err := validateSchoolRoomPayload(arg.Code, arg.Name, arg.Condition, arg.DefaultCapacity, arg.ExamCapacity); err != nil {
+		return db.CreateSchoolRoomParams{}, err
+	}
+	return arg, nil
+}
+
+func normalizeUpdateSchoolRoom(arg db.UpdateSchoolRoomParams) (db.UpdateSchoolRoomParams, error) {
+	arg.Code = strings.TrimSpace(arg.Code)
+	arg.Name = strings.TrimSpace(arg.Name)
+	arg.Building = strings.TrimSpace(arg.Building)
+	arg.Floor = strings.TrimSpace(arg.Floor)
+	arg.RoomType = normalizeInventoryText(arg.RoomType, "kelas")
+	arg.LocationNote = strings.TrimSpace(arg.LocationNote)
+	arg.Condition = normalizeInventoryText(arg.Condition, "baik")
+	arg.Notes = strings.TrimSpace(arg.Notes)
+	if arg.DefaultCapacity <= 0 {
+		arg.DefaultCapacity = 30
+	}
+	if arg.ExamCapacity <= 0 {
+		arg.ExamCapacity = arg.DefaultCapacity
+	}
+	if err := validateSchoolRoomPayload(arg.Code, arg.Name, arg.Condition, arg.DefaultCapacity, arg.ExamCapacity); err != nil {
+		return db.UpdateSchoolRoomParams{}, err
+	}
+	return arg, nil
+}
+
+func validateSchoolRoomPayload(code, name, condition string, defaultCapacity, examCapacity int32) error {
+	if strings.TrimSpace(code) == "" {
+		return fmt.Errorf("kode ruangan wajib diisi")
+	}
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("nama ruangan wajib diisi")
+	}
+	if defaultCapacity < 1 {
+		return fmt.Errorf("kapasitas normal minimal 1")
+	}
+	if examCapacity < 1 {
+		return fmt.Errorf("kapasitas ujian minimal 1")
+	}
+	normalizedCondition := normalizeInventoryText(condition, "baik")
+	if normalizedCondition != "baik" && normalizedCondition != "perlu-perawatan" && normalizedCondition != "rusak" {
+		return fmt.Errorf("kondisi ruangan tidak valid")
+	}
+	return nil
+}
+
+func normalizeSchoolRoomExamEligibleFilter(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "1", "yes", "y":
+		return "true"
+	case "false", "0", "no", "n":
+		return "false"
+	default:
+		return ""
+	}
 }
 
 func normalizeInventoryText(value, fallback string) string {

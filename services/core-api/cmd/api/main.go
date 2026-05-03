@@ -302,6 +302,9 @@ func main() {
 		// Rooms & Shuffle
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/rooms", sessionH.ListRooms)
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/rooms", sessionH.CreateRoom)
+		r.With(requireCbt).Get("/api/cbt/sessions/{id}/rooms/readiness", sessionH.GetRoomReadiness)
+		r.With(requireCbt).Get("/api/cbt/sessions/{id}/rooms/{rid}/proctors", sessionH.ListRoomProctors)
+		r.With(requireCbt).Put("/api/cbt/sessions/{id}/rooms/{rid}/proctors", sessionH.ReplaceRoomProctors)
 		r.With(requireCbt).Delete("/api/cbt/sessions/{id}/rooms/{rid}", sessionH.DeleteRoom)
 		r.With(requireCbt).Post("/api/cbt/sessions/{id}/shuffle-rooms", sessionH.ShuffleRooms)
 		r.With(requireCbt).Get("/api/cbt/sessions/{id}/minutes", sessionH.GetMinutes)
@@ -338,6 +341,11 @@ func main() {
 
 			// Inventory — admin + staf
 			r.Get("/api/inventory/stats", inventoryH.Stats)
+			r.Get("/api/inventory/rooms", inventoryH.ListSchoolRooms)
+			r.Post("/api/inventory/rooms", inventoryH.CreateSchoolRoom)
+			r.Get("/api/inventory/rooms/{id}", inventoryH.GetSchoolRoom)
+			r.Put("/api/inventory/rooms/{id}", inventoryH.UpdateSchoolRoom)
+			r.Delete("/api/inventory/rooms/{id}", inventoryH.DeleteSchoolRoom)
 			r.Get("/api/inventory/items", inventoryH.ListItems)
 			r.Post("/api/inventory/items", inventoryH.CreateItem)
 			r.Patch("/api/inventory/items", inventoryH.BatchUpdateItems)

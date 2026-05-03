@@ -5,10 +5,13 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { toast } from '$lib/components/ui/sonner';
 	import { readClientApiData } from '$lib/client/api';
 
 	interface Stats {
@@ -33,12 +36,33 @@
 		catatan: string;
 	}
 
+	interface SchoolRoom {
+		id: string;
+		code: string;
+		name: string;
+		building: string;
+		room_type: string;
+		default_capacity: number;
+		exam_capacity: number;
+		condition: string;
+		is_exam_eligible: boolean;
+		network_ready: boolean;
+		power_ready: boolean;
+	}
+
 	interface InventoryOverview {
 		stats: Stats;
 		items: ItemRow[];
+		rooms: SchoolRoom[];
 	}
 
 	let inventoryPromise = $state<Promise<InventoryOverview> | null>(null);
+	let roomBusy = $state(false);
+	let roomCode = $state('');
+	let roomName = $state('');
+	let roomBuilding = $state('');
+	let roomType = $state('kelas');
+	let roomCapacity = $state(30);
 
 	function lowStockItems(items: ItemRow[]) {
 		return items
@@ -82,15 +106,17 @@
 	}
 
 	async function fetchInventoryOverview(): Promise<InventoryOverview> {
-		const [statsRes, itemsRes] = await Promise.all([
+		const [statsRes, itemsRes, roomsRes] = await Promise.all([
 			fetch('/api/inventory/stats'),
 			fetch('/api/inventory/items'),
+			fetch('/api/inventory/rooms'),
 		]);
-		const [stats, items] = await Promise.all([
+		const [stats, items, rooms] = await Promise.all([
 			readClientApiData<Stats>(statsRes, 'Gagal memuat statistik inventaris.'),
 			readClientApiData<ItemRow[]>(itemsRes, 'Gagal memuat daftar barang inventaris.'),
+			readClientApiData<SchoolRoom[]>(roomsRes, 'Gagal memuat master ruangan.'),
 		]);
-		return { stats, items: items ?? [] };
+		return { stats, items: items ?? [], rooms: rooms ?? [] };
 	}
 
 	function load() {
@@ -117,6 +143,42 @@
 			{ label: 'Perlu Restok', value: stats.perlu_restok, color: stats.perlu_restok ? 'text-amber-700' : 'text-slate-700' },
 			{ label: 'Perlu Perawatan', value: stats.perlu_perawatan, color: stats.perlu_perawatan ? 'text-red-700' : 'text-slate-700' },
 		];
+	}
+
+	async function createSchoolRoom() {
+		if (!roomCode.trim() || !roomName.trim()) {
+			toast.error('Kode dan nama ruangan wajib diisi.');
+			return;
+		}
+		roomBusy = true;
+		try {
+			const res = await fetch('/api/inventory/rooms', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					code: roomCode.trim(),
+					name: roomName.trim(),
+					building: roomBuilding.trim(),
+					room_type: roomType,
+					default_capacity: roomCapacity,
+					exam_capacity: roomCapacity,
+					condition: 'baik',
+					is_exam_eligible: true,
+				}),
+			});
+			await readClientApiData<SchoolRoom>(res, 'Gagal menyimpan ruangan.');
+			toast.success('Master ruangan ditambahkan.');
+			roomCode = '';
+			roomName = '';
+			roomBuilding = '';
+			roomType = 'kelas';
+			roomCapacity = 30;
+			load();
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal menyimpan ruangan.');
+		} finally {
+			roomBusy = false;
+		}
 	}
 
 	function handleInventoryRenderError(error: unknown) {
@@ -219,6 +281,80 @@
 					</Card.Root>
 				{/each}
 			</div>
+
+			<Card.Root class="border-emerald-200">
+				<Card.Header class="pb-2">
+					<Card.Title class="text-sm font-medium text-slate-700">Master Ruangan Fisik</Card.Title>
+					<p class="text-xs text-slate-500">Dipakai CBT sebagai sumber ruangan fisik/aset sebelum menjadi ruang ujian per sesi.</p>
+				</Card.Header>
+				<Card.Content class="space-y-4">
+					<div class="grid gap-3 md:grid-cols-[120px_1fr_1fr_150px_110px_auto] md:items-end">
+						<div>
+							<label for="room-code" class="mb-1 block text-xs font-medium text-slate-600">Kode</label>
+							<Input id="room-code" bind:value={roomCode} placeholder="LAB-A" />
+						</div>
+						<div>
+							<label for="room-name" class="mb-1 block text-xs font-medium text-slate-600">Nama Ruangan</label>
+							<Input id="room-name" bind:value={roomName} placeholder="Lab Komputer A" />
+						</div>
+						<div>
+							<label for="room-building" class="mb-1 block text-xs font-medium text-slate-600">Gedung/Lokasi</label>
+							<Input id="room-building" bind:value={roomBuilding} placeholder="Gedung utama" />
+						</div>
+						<div>
+							<label for="room-type" class="mb-1 block text-xs font-medium text-slate-600">Tipe</label>
+							<select id="room-type" bind:value={roomType} class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+								<option value="kelas">Kelas</option>
+								<option value="laboratorium">Laboratorium</option>
+								<option value="aula">Aula</option>
+								<option value="perpustakaan">Perpustakaan</option>
+								<option value="lainnya">Lainnya</option>
+							</select>
+						</div>
+						<div>
+							<label for="room-capacity" class="mb-1 block text-xs font-medium text-slate-600">Kapasitas CBT</label>
+							<Input id="room-capacity" type="number" bind:value={roomCapacity} min={1} />
+						</div>
+						<LoadingButton onclick={() => void createSchoolRoom()} loading={roomBusy} loadingLabel="Menyimpan..." disabled={roomBusy || !roomCode.trim() || !roomName.trim()}>
+							Tambah
+						</LoadingButton>
+					</div>
+
+					{#if overview.rooms.length === 0}
+						<EmptyStatePanel compact title="Belum ada master ruangan" description="Tambahkan ruangan fisik agar sesi CBT dapat memilih aset ruang yang konsisten." />
+					{:else}
+						<Table.Root>
+							<Table.Header>
+								<Table.Row class="bg-emerald-50 text-xs">
+									<Table.Head>Kode</Table.Head>
+									<Table.Head>Ruangan</Table.Head>
+									<Table.Head>Tipe</Table.Head>
+									<Table.Head>Kapasitas CBT</Table.Head>
+									<Table.Head>Kesiapan</Table.Head>
+								</Table.Row>
+							</Table.Header>
+							<Table.Body>
+								{#each overview.rooms.slice(0, 8) as room (room.id)}
+									<Table.Row class="text-sm">
+										<Table.Cell class="font-mono text-xs">{room.code}</Table.Cell>
+										<Table.Cell class="font-medium">
+											{room.name}
+											<div class="text-xs text-slate-400">{room.building || 'Lokasi belum diisi'}</div>
+										</Table.Cell>
+										<Table.Cell>{room.room_type}</Table.Cell>
+										<Table.Cell>{room.exam_capacity}</Table.Cell>
+										<Table.Cell>
+											<Badge variant={room.is_exam_eligible && room.condition === 'baik' ? 'outline' : 'destructive'}>
+												{room.is_exam_eligible ? conditionLabel(room.condition) : 'Tidak layak ujian'}
+											</Badge>
+										</Table.Cell>
+									</Table.Row>
+								{/each}
+							</Table.Body>
+						</Table.Root>
+					{/if}
+				</Card.Content>
+			</Card.Root>
 
 			<div class="grid gap-6 lg:grid-cols-2">
 				<Card.Root class="border-slate-200">

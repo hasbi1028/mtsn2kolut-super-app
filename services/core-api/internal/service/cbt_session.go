@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -35,6 +36,11 @@ type cbtSessionStore interface {
 	ListCbtExamRooms(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamRoomsRow, error)
 	CreateCbtExamRoom(ctx context.Context, arg db.CreateCbtExamRoomParams) (db.CbtExamRoom, error)
 	DeleteCbtExamRoom(ctx context.Context, id pgtype.UUID) error
+	GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error)
+	ListCbtRoomProctors(ctx context.Context, examRoomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error)
+	DeleteCbtRoomProctorsByRoom(ctx context.Context, examRoomID pgtype.UUID) error
+	CreateCbtRoomProctor(ctx context.Context, arg db.CreateCbtRoomProctorParams) (db.CbtRoomProctor, error)
+	GetCbtSessionRoomReadiness(ctx context.Context, targetSessionID pgtype.UUID) (db.GetCbtSessionRoomReadinessRow, error)
 	AssignParticipantSeat(ctx context.Context, arg db.AssignParticipantSeatParams) error
 	ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]db.ListParticipantsByRoomRow, error)
 	GetSessionProctoringStatus(ctx context.Context, sessionID pgtype.UUID) ([]db.GetSessionProctoringStatusRow, error)
@@ -277,15 +283,123 @@ func (s *CbtSession) ListRooms(ctx context.Context, sessionID pgtype.UUID) ([]db
 }
 
 func (s *CbtSession) CreateRoom(ctx context.Context, sessionID pgtype.UUID, roomName string, capacity int32) (db.CbtExamRoom, error) {
+	roomName = strings.TrimSpace(roomName)
+	if capacity <= 0 {
+		capacity = 30
+	}
 	return s.q.CreateCbtExamRoom(ctx, db.CreateCbtExamRoomParams{
-		SessionID: sessionID,
-		RoomName:  roomName,
-		Capacity:  capacity,
+		SessionID:        sessionID,
+		SchoolRoomID:     pgtype.UUID{},
+		RoomName:         roomName,
+		RoomNameSnapshot: roomName,
+		Capacity:         capacity,
+	})
+}
+
+func (s *CbtSession) CreateRoomFromSchoolRoom(ctx context.Context, sessionID, schoolRoomID pgtype.UUID, roomName string, capacity int32) (db.CbtExamRoom, error) {
+	schoolRoom, err := s.q.GetSchoolRoom(ctx, schoolRoomID)
+	if err != nil {
+		return db.CbtExamRoom{}, err
+	}
+	if !schoolRoom.IsExamEligible || schoolRoom.Condition == "rusak" {
+		return db.CbtExamRoom{}, fmt.Errorf("ruangan fisik belum layak dipakai untuk ujian")
+	}
+	roomName = strings.TrimSpace(roomName)
+	if roomName == "" {
+		roomName = schoolRoom.Name
+	}
+	if capacity <= 0 {
+		capacity = schoolRoom.ExamCapacity
+	}
+	if capacity <= 0 {
+		capacity = schoolRoom.DefaultCapacity
+	}
+	if capacity <= 0 {
+		capacity = 30
+	}
+	return s.q.CreateCbtExamRoom(ctx, db.CreateCbtExamRoomParams{
+		SessionID:        sessionID,
+		SchoolRoomID:     schoolRoomID,
+		RoomName:         roomName,
+		RoomNameSnapshot: roomName,
+		Capacity:         capacity,
 	})
 }
 
 func (s *CbtSession) DeleteRoom(ctx context.Context, roomID pgtype.UUID) error {
 	return s.q.DeleteCbtExamRoom(ctx, roomID)
+}
+
+func (s *CbtSession) ListRoomProctors(ctx context.Context, roomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
+	rows, err := s.q.ListCbtRoomProctors(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.ListCbtRoomProctorsRow{}, nil
+	}
+	return rows, nil
+}
+
+func (s *CbtSession) ReplaceRoomProctors(ctx context.Context, roomID, assignedBy, primaryEmployeeID pgtype.UUID, employeeIDs []pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
+	conn, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	qtx := s.q.WithTx(tx)
+	if err := qtx.DeleteCbtRoomProctorsByRoom(ctx, roomID); err != nil {
+		return nil, err
+	}
+
+	ordered := normalizeRoomProctorIDs(primaryEmployeeID, employeeIDs)
+	for index, employeeID := range ordered {
+		role := "pendamping"
+		if index == 0 && primaryEmployeeID.Valid && employeeID == primaryEmployeeID {
+			role = "utama"
+		}
+		if _, err := qtx.CreateCbtRoomProctor(ctx, db.CreateCbtRoomProctorParams{
+			ExamRoomID: roomID,
+			EmployeeID: employeeID,
+			Role:       role,
+			AssignedBy: assignedBy,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return s.ListRoomProctors(ctx, roomID)
+}
+
+func (s *CbtSession) RoomReadiness(ctx context.Context, sessionID pgtype.UUID) (db.GetCbtSessionRoomReadinessRow, error) {
+	return s.q.GetCbtSessionRoomReadiness(ctx, sessionID)
+}
+
+func normalizeRoomProctorIDs(primary pgtype.UUID, ids []pgtype.UUID) []pgtype.UUID {
+	seen := make(map[[16]byte]bool, len(ids)+1)
+	out := make([]pgtype.UUID, 0, len(ids)+1)
+	add := func(id pgtype.UUID) {
+		if !id.Valid || seen[id.Bytes] {
+			return
+		}
+		seen[id.Bytes] = true
+		out = append(out, id)
+	}
+	add(primary)
+	for _, id := range ids {
+		add(id)
+	}
+	return out
 }
 
 func (s *CbtSession) AssignSeat(ctx context.Context, participantID, roomID pgtype.UUID, seatNo int32) error {

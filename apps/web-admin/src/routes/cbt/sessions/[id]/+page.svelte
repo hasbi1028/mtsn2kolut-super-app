@@ -37,7 +37,26 @@
 		app_switch_count: number; screenshot_attempt: number; suspicious_flag: boolean;
 		last_heartbeat: string | null;
 	};
-	type Room = { id: string; room_name: string; capacity: number; participant_count: number; };
+	type Room = {
+		id: string; room_name: string; room_name_snapshot?: string;
+		school_room_id?: string | null; school_room_code?: string; school_room_name?: string;
+		school_room_building?: string; school_room_location_note?: string;
+		school_room_exam_capacity?: number; school_room_condition?: string; school_room_exam_eligible?: boolean;
+		capacity: number; participant_count: number; proctor_count?: number;
+		primary_proctor_id?: string | null; primary_proctor_name?: string;
+	};
+	type SchoolRoom = {
+		id: string; code: string; name: string; building: string; floor: string;
+		room_type: string; location_note: string; default_capacity: number; exam_capacity: number;
+		condition: string; is_exam_eligible: boolean; network_ready: boolean; power_ready: boolean;
+		notes: string;
+	};
+	type EmployeeOption = { id: string; nip: string; nama: string; unit_kerja?: string; is_active?: boolean; };
+	type RoomReadiness = {
+		room_count: number; total_capacity: number; participant_count: number;
+		assigned_participant_count: number; unassigned_participant_count: number;
+		missing_seat_count: number; rooms_without_proctor: number; proctor_assignment_count: number;
+	};
 	type ProctoringRow = {
 		participant_id: string; nis: string; nama: string;
 		token: string; room_name: string; seat_no?: number | null;
@@ -90,12 +109,16 @@
 	let results = $state<ResultRow[]>([]);
 	let participants = $state<Participant[]>([]);
 	let rooms = $state<Room[]>([]);
+	let schoolRooms = $state<SchoolRoom[]>([]);
+	let employeeOptions = $state<EmployeeOption[]>([]);
+	let roomReadiness = $state<RoomReadiness | null>(null);
 	let proctoring = $state<ProctoringRow[]>([]);
 	let proctoringEvents = $state<ProctoringEvent[]>([]);
 	let essays = $state<UngradedEssay[]>([]);
 	let detailPromise = $state<Promise<SessionResultsDetail> | null>(null);
 	let scoreBusy = $state(false);
 	let shuffleBusy = $state(false);
+	let selectedSchoolRoomId = $state('');
 	let newRoomName = $state('');
 	let newRoomCap = $state(30);
 	let roomBusy = $state(false);
@@ -106,6 +129,7 @@
 	let eventRefreshBusy = $state(false);
 	let regenBusyId = $state('');
 	let roomDeleteBusyId = $state('');
+	let proctorSaveBusyId = $state('');
 	let seatSaveBusyId = $state('');
 	let gradeBusyId = $state('');
 	let flagBusyId = $state('');
@@ -116,10 +140,14 @@
 	let gradeInput = $state<Record<string, number>>({});
 	let seatInput = $state<Record<string, number>>({});
 	let roomInput = $state<Record<string, string>>({});
+	let roomProctorInput = $state<Record<string, string>>({});
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 	let detailRequestId = 0;
 	let participantsRequestId = 0;
 	let roomsRequestId = 0;
+	let schoolRoomsRequestId = 0;
+	let employeesRequestId = 0;
+	let readinessRequestId = 0;
 	let proctoringRequestId = 0;
 	let proctoringEventsRequestId = 0;
 	let essaysRequestId = 0;
@@ -156,6 +184,26 @@
 		if (score === null || score === undefined || score === '') return '—';
 		const n = parseFloat(score);
 		return isNaN(n) ? '—' : n.toFixed(1);
+	}
+
+	function selectedSchoolRoom() {
+		return schoolRooms.find((room) => room.id === selectedSchoolRoomId) ?? null;
+	}
+
+	function roomCapacityRatio(room: Room) {
+		if (room.capacity <= 0) return 0;
+		return Math.min(100, (room.participant_count / room.capacity) * 100);
+	}
+
+	function roomReadinessTone(readiness: RoomReadiness | null) {
+		if (!readiness) return 'info';
+		if (readiness.unassigned_participant_count > 0 || readiness.rooms_without_proctor > 0 || readiness.total_capacity < readiness.participant_count) return 'warning';
+		return 'success';
+	}
+
+	function roomReadinessMessage(readiness: RoomReadiness | null) {
+		if (!readiness) return 'Kesiapan ruangan belum dimuat.';
+		return `${readiness.assigned_participant_count}/${readiness.participant_count} peserta sudah punya ruang, kapasitas total ${readiness.total_capacity}, ${readiness.rooms_without_proctor} ruang belum punya pengawas, ${readiness.missing_seat_count} peserta belum punya nomor meja.`;
 	}
 
 	function fmtEssayPoints(points: unknown) {
@@ -359,8 +407,48 @@
 			const rows = await readClientApiData<Room[]>(res, 'Gagal memuat ruangan');
 			if (requestId !== roomsRequestId) return;
 			rooms = Array.isArray(rows) ? rows : [];
+			roomProctorInput = Object.fromEntries(rooms.map((room) => [room.id, room.primary_proctor_id ?? '']));
 		} catch (error) {
 			if (requestId === roomsRequestId) throw error;
+		}
+	}
+
+	async function loadSchoolRooms() {
+		const requestId = ++schoolRoomsRequestId;
+		try {
+			const res = await fetch('/api/inventory/rooms?exam_eligible=true');
+			const rows = await readClientApiData<SchoolRoom[]>(res, 'Gagal memuat master ruangan');
+			if (requestId !== schoolRoomsRequestId) return;
+			schoolRooms = Array.isArray(rows) ? rows : [];
+		} catch (error) {
+			if (requestId === schoolRoomsRequestId) {
+				schoolRooms = [];
+				console.warn('Master ruangan tidak dapat dimuat dari inventaris', error);
+			}
+		}
+	}
+
+	async function loadEmployeeOptions() {
+		const requestId = ++employeesRequestId;
+		try {
+			const res = await fetch('/api/employees');
+			const data = await readClientApiData<{ items?: EmployeeOption[] } | EmployeeOption[]>(res, 'Gagal memuat pegawai');
+			if (requestId !== employeesRequestId) return;
+			employeeOptions = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+		} catch {
+			if (requestId === employeesRequestId) employeeOptions = [];
+		}
+	}
+
+	async function loadRoomReadiness() {
+		const requestId = ++readinessRequestId;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/rooms/readiness`);
+			const data = await readClientApiData<RoomReadiness>(res, 'Gagal memuat kesiapan ruangan');
+			if (requestId !== readinessRequestId) return;
+			roomReadiness = data;
+		} catch (error) {
+			if (requestId === readinessRequestId) throw error;
 		}
 	}
 
@@ -451,7 +539,7 @@
 		activeTab = tab;
 		try {
 			if (tab === 'peserta') { await loadRooms(); await loadParticipants(); }
-			if (tab === 'ruangan') { await loadRooms(); await loadParticipants(); }
+			if (tab === 'ruangan') { await Promise.all([loadRooms(), loadParticipants(), loadSchoolRooms(), loadEmployeeOptions(), loadRoomReadiness()]); }
 			if (tab === 'essay') await loadEssays();
 			if (tab === 'proctoring') {
 				await Promise.all([loadProctoring(), loadProctoringEvents()]);
@@ -527,19 +615,25 @@
 	}
 
 	async function createRoom() {
-		if (!newRoomName.trim()) return;
+		if (!newRoomName.trim() && !selectedSchoolRoomId) return;
+		const masterRoom = selectedSchoolRoom();
+		const roomLabel = newRoomName.trim() || masterRoom?.name || 'Ruangan';
 		roomBusy = true;
 		try {
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/rooms`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ room_name: newRoomName.trim(), capacity: newRoomCap }),
+				body: JSON.stringify({
+					school_room_id: selectedSchoolRoomId || undefined,
+					room_name: newRoomName.trim(),
+					capacity: newRoomCap,
+				}),
 			});
 			await readClientJson<unknown>(res);
-			setOperationState('success', 'Ruangan Ditambahkan', `Ruangan "${newRoomName}" sudah tersimpan. Pastikan kapasitasnya sesuai sebelum peserta diacak.`);
-			showToast(`Ruangan "${newRoomName}" ditambahkan`);
-			newRoomName = ''; newRoomCap = 30;
-			await loadRooms();
+			setOperationState('success', 'Ruangan Ditambahkan', `Ruangan "${roomLabel}" sudah tersimpan. Pastikan kapasitas dan pengawasnya siap sebelum peserta diacak.`);
+			showToast(`Ruangan "${roomLabel}" ditambahkan`);
+			selectedSchoolRoomId = ''; newRoomName = ''; newRoomCap = 30;
+			await Promise.all([loadRooms(), loadRoomReadiness()]);
 		} catch (error) {
 			setOperationState('error', 'Ruangan Gagal Ditambahkan', 'Ruangan baru belum berhasil disimpan. Periksa nama atau kapasitas lalu coba lagi.');
 			showToast(mutationErrorMessage(error, 'Gagal tambah ruangan'), false);
@@ -555,12 +649,36 @@
 			const res = await fetch(`/api/cbt/sessions/${sessionId}/rooms/${rid}`, { method: 'DELETE' });
 			await readClientJson<unknown>(res);
 			setOperationState('warning', 'Ruangan Dihapus', `Ruangan "${roomName}" dihapus dan peserta yang terkait perlu dialokasikan ulang.`);
-			await loadRooms(); await loadParticipants();
+			await loadRooms(); await loadParticipants(); await loadRoomReadiness();
 		} catch (error) {
 			setOperationState('error', 'Ruangan Gagal Dihapus', 'Ruangan belum berhasil dihapus. Pastikan sesi masih bisa diubah lalu coba lagi.');
 			showToast(mutationErrorMessage(error, 'Gagal menghapus ruangan'), false);
 		} finally {
 			roomDeleteBusyId = '';
+		}
+	}
+
+	async function saveRoomProctor(room: Room) {
+		const primaryEmployeeId = roomProctorInput[room.id] ?? '';
+		proctorSaveBusyId = room.id;
+		try {
+			const res = await fetch(`/api/cbt/sessions/${sessionId}/rooms/${room.id}/proctors`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					primary_employee_id: primaryEmployeeId,
+					employee_ids: primaryEmployeeId ? [primaryEmployeeId] : [],
+				}),
+			});
+			await readClientJson<unknown>(res);
+			setOperationState('success', 'Pengawas Ruangan Diperbarui', `Penugasan pengawas untuk "${room.room_name}" sudah disimpan.`);
+			showToast('Pengawas ruangan diperbarui');
+			await Promise.all([loadRooms(), loadRoomReadiness()]);
+		} catch (error) {
+			setOperationState('error', 'Pengawas Gagal Disimpan', 'Penugasan pengawas belum berhasil. Pastikan akun memiliki akses admin dan coba lagi.');
+			showToast(mutationErrorMessage(error, 'Gagal menyimpan pengawas'), false);
+		} finally {
+			proctorSaveBusyId = '';
 		}
 	}
 
@@ -572,7 +690,7 @@
 			await readClientJson<unknown>(res);
 			setOperationState('warning', 'Alokasi Ruangan Diperbarui', 'Peserta sudah diacak ulang ke ruangan. Periksa kembali pembagian sebelum ujian dimulai.');
 			showToast('Peserta berhasil diacak ke ruangan');
-			await loadRooms(); await loadParticipants();
+			await loadRooms(); await loadParticipants(); await loadRoomReadiness();
 		} catch (error) {
 			setOperationState('error', 'Pengacakan Ruangan Gagal', 'Sistem belum berhasil mengacak peserta ke ruangan. Cek kapasitas ruangan atau ulangi lagi.');
 			showToast(mutationErrorMessage(error, 'Gagal mengacak ruangan'), false);
@@ -589,7 +707,7 @@
 			await readClientJson<unknown>(res);
 			setOperationState('success', 'Nomor Meja Diatur Otomatis', 'Nomor meja peserta sudah diperbarui. Lanjutkan ke pengecekan akhir per ruangan jika diperlukan.');
 			showToast('Nomor meja berhasil diurutkan otomatis');
-			await loadParticipants();
+			await loadParticipants(); await loadRoomReadiness();
 		} catch (error) {
 			setOperationState('error', 'Nomor Meja Gagal Diatur', 'Pengaturan otomatis belum berhasil. Pastikan peserta sudah punya ruangan lalu coba lagi.');
 			showToast(mutationErrorMessage(error, 'Gagal mengatur nomor meja otomatis'), false);
@@ -992,38 +1110,66 @@
 		{:else if activeTab === 'ruangan'}
 			<Card.Root class="border-green-200">
 				<Card.Header class="pb-3">
-					<Card.Title class="text-base">Tambah Ruangan Baru</Card.Title>
+					<Card.Title class="text-base">Ruangan & Pengawas</Card.Title>
+					<p class="text-xs text-muted-foreground">Pilih master ruangan fisik bila sudah tersedia, atau isi manual untuk transisi.</p>
 				</Card.Header>
 				<Card.Content>
 					<div class="flex gap-3 flex-wrap items-end">
 						<div>
-							<label for="r-name" class="block text-sm font-medium mb-1">Nama Ruangan</label>
-							<Input id="r-name" bind:value={newRoomName} placeholder="Ruang 1 / Lab Komputer A" class="w-48" />
+							<label for="r-master" class="block text-sm font-medium mb-1">Master Ruangan</label>
+							<select
+								id="r-master"
+								bind:value={selectedSchoolRoomId}
+								class="h-10 w-64 rounded-md border border-input bg-background px-3 text-sm"
+								onchange={(event) => {
+									const value = (event.currentTarget as HTMLSelectElement).value;
+									const room = schoolRooms.find((item) => item.id === value);
+									if (room) {
+										newRoomCap = room.exam_capacity || room.default_capacity || 30;
+										if (!newRoomName.trim()) newRoomName = room.name;
+									}
+								}}
+							>
+								<option value="">Manual / belum terhubung aset</option>
+								{#each schoolRooms as room (room.id)}
+									<option value={room.id}>{room.code} — {room.name} ({room.exam_capacity} kursi)</option>
+								{/each}
+							</select>
+						</div>
+						<div>
+							<label for="r-name" class="block text-sm font-medium mb-1">Label Ruang Ujian</label>
+							<Input id="r-name" bind:value={newRoomName} placeholder="Ruang 1 / Lab Komputer A" class="w-56" />
 						</div>
 						<div>
 							<label for="r-cap" class="block text-sm font-medium mb-1">Kapasitas</label>
 							<Input id="r-cap" type="number" bind:value={newRoomCap} min={1} max={100} class="w-24" />
 						</div>
-						<LoadingButton onclick={() => void createRoom()} loading={roomBusy} loadingLabel="Menyimpan..." disabled={roomBusy || !newRoomName.trim()}>
+						<LoadingButton onclick={() => void createRoom()} loading={roomBusy} loadingLabel="Menyimpan..." disabled={roomBusy || (!newRoomName.trim() && !selectedSchoolRoomId)}>
 							+ Tambah Ruangan
 						</LoadingButton>
 							{#if rooms.length > 0}
 								<LoadingButton variant="outline" loading={shuffleBusy} loadingLabel="Mengacak..." disabled={shuffleBusy} onclick={shuffleRooms}
 									class="border-amber-300 text-amber-700 hover:bg-amber-50">
-									🔀 Acak Peserta ke Ruangan
+									Acak Peserta
 								</LoadingButton>
 								<LoadingButton variant="outline" loading={seatBusy} loadingLabel="Mengatur..." disabled={seatBusy} onclick={autoAssignSeats}>
-									🪑 Atur Nomor Meja
+									Atur Nomor Meja
 								</LoadingButton>
 							{/if}
 					</div>
 				</Card.Content>
 			</Card.Root>
 			<OperationStatusPanel
+				tone={roomReadinessTone(roomReadiness)}
+				compact
+				title="Kesiapan Ruangan"
+				message={roomReadinessMessage(roomReadiness)}
+			/>
+			<OperationStatusPanel
 				tone="warning"
 				compact
 				title="Aksi Sensitif Ruangan"
-				message="Pengacakan ruangan dan pengaturan nomor meja otomatis akan menimpa penempatan sebelumnya. Gunakan hanya setelah kapasitas dan daftar ruangan sudah final."
+				message="Pengacakan ruangan dan pengaturan nomor meja otomatis akan menimpa penempatan sebelumnya. Gunakan setelah kapasitas, master ruangan, dan pengawas sudah final."
 			/>
 
 			{#if rooms.length > 0}
@@ -1031,24 +1177,53 @@
 					{#each rooms as room (room.id)}
 						<Card.Root class="border-green-100">
 							<Card.Content class="p-4">
-								<div class="flex items-start justify-between">
-									<div>
-										<div class="font-semibold text-[oklch(0.38_0.13_145)]">{room.room_name}</div>
-										<div class="text-sm text-muted-foreground mt-1">
-											Kapasitas: {room.capacity} · Terisi: {room.participant_count}
-										</div>
-										<div class="mt-2 h-2 rounded-full bg-green-100 overflow-hidden">
-											<div class="h-full bg-[oklch(0.38_0.13_145)] rounded-full transition-all"
-												style="width: {Math.min(100, (room.participant_count / room.capacity) * 100)}%">
+								<div class="space-y-3">
+									<div class="flex items-start justify-between gap-3">
+										<div class="min-w-0">
+											<div class="font-semibold text-[oklch(0.38_0.13_145)]">{room.room_name}</div>
+											<div class="text-xs text-muted-foreground mt-1">
+												{room.school_room_name ? `${room.school_room_code} · ${room.school_room_name}` : 'Belum terhubung master ruangan'}
+											</div>
+											<div class="text-sm text-muted-foreground mt-1">
+												Kapasitas {room.capacity} · Terisi {room.participant_count} · Pengawas {room.proctor_count ?? 0}
+											</div>
+											<div class="mt-2 h-2 rounded-full bg-green-100 overflow-hidden">
+												<div class="h-full bg-[oklch(0.38_0.13_145)] rounded-full transition-all"
+													style="width: {roomCapacityRatio(room)}%">
+												</div>
 											</div>
 										</div>
-									</div>
 									<LoadingButton variant="outline" size="sm"
 										class="border-red-200 text-red-600 hover:bg-red-50 ml-3"
 										onclick={() => deleteRoom(room.id, room.room_name)}
 										loading={roomDeleteBusyId === room.id}
 										disabled={roomDeleteBusyId !== '' && roomDeleteBusyId !== room.id}
 										loadingLabel="Menghapus...">Hapus</LoadingButton>
+									</div>
+									<div class="rounded-md border border-slate-200 bg-slate-50 p-2">
+										<label for={`proctor-${room.id}`} class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Pengawas utama</label>
+										<div class="flex gap-2">
+											<select id={`proctor-${room.id}`} bind:value={roomProctorInput[room.id]} class="min-w-0 flex-1 rounded-md border border-input bg-white px-2 py-1.5 text-xs">
+												<option value="">Belum ditugaskan</option>
+												{#each employeeOptions as employee (employee.id)}
+													<option value={employee.id}>{employee.nama}{employee.nip ? ` · ${employee.nip}` : ''}</option>
+												{/each}
+											</select>
+											<LoadingButton
+												variant="outline"
+												size="sm"
+												loading={proctorSaveBusyId === room.id}
+												loadingLabel="..."
+												disabled={proctorSaveBusyId !== '' && proctorSaveBusyId !== room.id}
+												onclick={() => void saveRoomProctor(room)}
+											>
+												Simpan
+											</LoadingButton>
+										</div>
+										{#if room.primary_proctor_name}
+											<p class="mt-1 text-[11px] text-slate-500">Aktif: {room.primary_proctor_name}</p>
+										{/if}
+									</div>
 								</div>
 							</Card.Content>
 						</Card.Root>

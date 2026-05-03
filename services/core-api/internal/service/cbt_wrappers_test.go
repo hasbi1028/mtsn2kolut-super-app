@@ -413,6 +413,9 @@ type fakeCbtSessionStore struct {
 	roomRows              []db.ListCbtExamRoomsRow
 	roomsErr              error
 	createRoomArg         db.CreateCbtExamRoomParams
+	schoolRoomRow         db.SchoolRoom
+	roomProctorRows       []db.ListCbtRoomProctorsRow
+	roomReadinessRow      db.GetCbtSessionRoomReadinessRow
 	deleteRoomID          pgtype.UUID
 	clearRoomID           pgtype.UUID
 	clearRoomErr          error
@@ -518,6 +521,29 @@ func (f *fakeCbtSessionStore) CreateCbtExamRoom(ctx context.Context, arg db.Crea
 func (f *fakeCbtSessionStore) DeleteCbtExamRoom(ctx context.Context, id pgtype.UUID) error {
 	f.deleteRoomID = id
 	return nil
+}
+
+func (f *fakeCbtSessionStore) GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error) {
+	if f.schoolRoomRow.ID.Valid {
+		return f.schoolRoomRow, nil
+	}
+	return db.SchoolRoom{ID: id, Name: "Lab Komputer", DefaultCapacity: 30, ExamCapacity: 30, IsExamEligible: true}, nil
+}
+
+func (f *fakeCbtSessionStore) ListCbtRoomProctors(ctx context.Context, examRoomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
+	return f.roomProctorRows, nil
+}
+
+func (f *fakeCbtSessionStore) DeleteCbtRoomProctorsByRoom(ctx context.Context, examRoomID pgtype.UUID) error {
+	return nil
+}
+
+func (f *fakeCbtSessionStore) CreateCbtRoomProctor(ctx context.Context, arg db.CreateCbtRoomProctorParams) (db.CbtRoomProctor, error) {
+	return db.CbtRoomProctor{ExamRoomID: arg.ExamRoomID, EmployeeID: arg.EmployeeID, Role: arg.Role, AssignedBy: arg.AssignedBy}, nil
+}
+
+func (f *fakeCbtSessionStore) GetCbtSessionRoomReadiness(ctx context.Context, targetSessionID pgtype.UUID) (db.GetCbtSessionRoomReadinessRow, error) {
+	return f.roomReadinessRow, nil
 }
 
 func (f *fakeCbtSessionStore) ClearParticipantRooms(ctx context.Context, sessionID pgtype.UUID) error {

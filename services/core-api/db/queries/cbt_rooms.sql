@@ -1,22 +1,117 @@
 -- name: ListCbtExamRooms :many
+WITH participant_counts AS (
+  SELECT room_id, COUNT(*)::int AS participant_count
+  FROM cbt_exam_participants
+  WHERE session_id = $1 AND room_id IS NOT NULL
+  GROUP BY room_id
+),
+proctor_counts AS (
+  SELECT exam_room_id, COUNT(*)::int AS proctor_count
+  FROM cbt_room_proctors
+  GROUP BY exam_room_id
+),
+primary_proctors AS (
+  SELECT DISTINCT ON (rp.exam_room_id)
+    rp.exam_room_id, rp.employee_id AS primary_proctor_id, e.nama AS primary_proctor_name
+  FROM cbt_room_proctors rp
+  JOIN employees e ON e.id = rp.employee_id
+  ORDER BY rp.exam_room_id, CASE rp.role WHEN 'utama' THEN 0 WHEN 'pendamping' THEN 1 ELSE 2 END, rp.assigned_at ASC
+)
 SELECT
-  r.id, r.session_id, r.room_name, r.capacity, r.created_at,
-  COUNT(p.id)::int AS participant_count
+  r.id, r.session_id, r.school_room_id,
+  r.room_name, r.room_name_snapshot, r.capacity, r.capacity_override,
+  r.room_token, r.status, r.is_locked, r.created_at, r.updated_at,
+  COALESCE(sr.code, '') AS school_room_code,
+  COALESCE(sr.name, '') AS school_room_name,
+  COALESCE(sr.building, '') AS school_room_building,
+  COALESCE(sr.location_note, '') AS school_room_location_note,
+  COALESCE(sr.exam_capacity, 0)::int AS school_room_exam_capacity,
+  COALESCE(sr.condition, '') AS school_room_condition,
+  COALESCE(sr.is_exam_eligible, false) AS school_room_exam_eligible,
+  COALESCE(pc.participant_count, 0)::int AS participant_count,
+  COALESCE(prc.proctor_count, 0)::int AS proctor_count,
+  pp.primary_proctor_id,
+  COALESCE(pp.primary_proctor_name, '') AS primary_proctor_name
 FROM cbt_exam_rooms r
-LEFT JOIN cbt_exam_participants p ON p.room_id = r.id
+LEFT JOIN school_rooms sr ON sr.id = r.school_room_id
+LEFT JOIN participant_counts pc ON pc.room_id = r.id
+LEFT JOIN proctor_counts prc ON prc.exam_room_id = r.id
+LEFT JOIN primary_proctors pp ON pp.exam_room_id = r.id
 WHERE r.session_id = $1
-GROUP BY r.id
 ORDER BY r.room_name ASC;
 
 -- name: CreateCbtExamRoom :one
-INSERT INTO cbt_exam_rooms (session_id, room_name, capacity)
-VALUES ($1, $2, $3)
+INSERT INTO cbt_exam_rooms (
+  session_id, school_room_id, room_name, room_name_snapshot, capacity
+)
+VALUES (
+  sqlc.arg(session_id), sqlc.arg(school_room_id), sqlc.arg(room_name),
+  COALESCE(NULLIF(sqlc.arg(room_name_snapshot)::TEXT, ''), sqlc.arg(room_name)::TEXT),
+  sqlc.arg(capacity)
+)
 RETURNING *;
 
 -- name: DeleteCbtExamRoom :exec
 DELETE FROM cbt_exam_rooms WHERE id = $1;
 
 -- name: GetCbtExamRoom :one
-SELECT r.id, r.session_id, r.room_name, r.capacity, r.created_at
-FROM cbt_exam_rooms r
-WHERE r.id = $1;
+SELECT *
+FROM cbt_exam_rooms
+WHERE id = $1;
+
+-- name: ListCbtRoomProctors :many
+SELECT rp.id, rp.exam_room_id, rp.employee_id, e.nip, e.nama,
+       rp.role, rp.assigned_by, rp.assigned_at
+FROM cbt_room_proctors rp
+JOIN employees e ON e.id = rp.employee_id
+WHERE rp.exam_room_id = $1
+ORDER BY CASE rp.role WHEN 'utama' THEN 0 WHEN 'pendamping' THEN 1 ELSE 2 END, e.nama ASC;
+
+-- name: DeleteCbtRoomProctorsByRoom :exec
+DELETE FROM cbt_room_proctors WHERE exam_room_id = $1;
+
+-- name: CreateCbtRoomProctor :one
+INSERT INTO cbt_room_proctors (exam_room_id, employee_id, role, assigned_by)
+VALUES ($1, $2, $3, $4)
+RETURNING *;
+
+-- name: GetCbtSessionRoomReadiness :one
+WITH room_stats AS (
+  SELECT
+    COUNT(*)::int AS room_count,
+    COALESCE(SUM(capacity), 0)::int AS total_capacity
+  FROM cbt_exam_rooms er
+  WHERE er.session_id = sqlc.arg(target_session_id)
+),
+participant_stats AS (
+  SELECT
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL)::int AS assigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NULL)::int AS unassigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL AND seat_no IS NULL)::int AS missing_seat_count
+  FROM cbt_exam_participants ep
+  WHERE ep.session_id = sqlc.arg(target_session_id)
+),
+room_proctor_counts AS (
+  SELECT r.id, COUNT(rp.id)::int AS proctor_count
+  FROM cbt_exam_rooms r
+  LEFT JOIN cbt_room_proctors rp ON rp.exam_room_id = r.id
+  WHERE r.session_id = sqlc.arg(target_session_id)
+  GROUP BY r.id
+),
+proctor_stats AS (
+  SELECT
+    COUNT(*) FILTER (WHERE proctor_count = 0)::int AS rooms_without_proctor,
+    COALESCE(SUM(proctor_count), 0)::int AS proctor_assignment_count
+  FROM room_proctor_counts
+)
+SELECT
+  rs.room_count,
+  rs.total_capacity,
+  ps.participant_count,
+  ps.assigned_participant_count,
+  ps.unassigned_participant_count,
+  ps.missing_seat_count,
+  COALESCE(prs.rooms_without_proctor, 0)::int AS rooms_without_proctor,
+  COALESCE(prs.proctor_assignment_count, 0)::int AS proctor_assignment_count
+FROM room_stats rs, participant_stats ps, proctor_stats prs;

@@ -31,6 +31,11 @@ type fakeInventoryStore struct {
 	eventItemID pgtype.UUID
 	stats       db.GetInventoryStatsRow
 	statsErr    error
+	roomRows    []db.SchoolRoom
+	roomArg     db.ListSchoolRoomsParams
+	roomCreate  db.CreateSchoolRoomParams
+	roomUpdate  db.UpdateSchoolRoomParams
+	roomID      pgtype.UUID
 }
 
 func (f *fakeInventoryStore) ListInventoryItems(ctx context.Context, arg db.ListInventoryItemsParams) ([]db.InventoryItem, error) {
@@ -111,6 +116,31 @@ func (f *fakeInventoryStore) ListInventoryItemEventsByItem(ctx context.Context, 
 
 func (f *fakeInventoryStore) GetInventoryStats(ctx context.Context) (db.GetInventoryStatsRow, error) {
 	return f.stats, f.statsErr
+}
+
+func (f *fakeInventoryStore) ListSchoolRooms(ctx context.Context, arg db.ListSchoolRoomsParams) ([]db.SchoolRoom, error) {
+	f.roomArg = arg
+	return f.roomRows, nil
+}
+
+func (f *fakeInventoryStore) GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error) {
+	f.roomID = id
+	return db.SchoolRoom{ID: id, Code: "LAB-A", Name: "Lab A", DefaultCapacity: 30, ExamCapacity: 30, Condition: "baik", IsExamEligible: true}, nil
+}
+
+func (f *fakeInventoryStore) CreateSchoolRoom(ctx context.Context, arg db.CreateSchoolRoomParams) (db.SchoolRoom, error) {
+	f.roomCreate = arg
+	return db.SchoolRoom{ID: inventoryTestUUID(21), Code: arg.Code, Name: arg.Name, DefaultCapacity: arg.DefaultCapacity, ExamCapacity: arg.ExamCapacity, Condition: arg.Condition, IsExamEligible: arg.IsExamEligible}, nil
+}
+
+func (f *fakeInventoryStore) UpdateSchoolRoom(ctx context.Context, arg db.UpdateSchoolRoomParams) (db.SchoolRoom, error) {
+	f.roomUpdate = arg
+	return db.SchoolRoom{ID: arg.ID, Code: arg.Code, Name: arg.Name, DefaultCapacity: arg.DefaultCapacity, ExamCapacity: arg.ExamCapacity, Condition: arg.Condition, IsExamEligible: arg.IsExamEligible}, nil
+}
+
+func (f *fakeInventoryStore) DeleteSchoolRoom(ctx context.Context, id pgtype.UUID) error {
+	f.roomID = id
+	return nil
 }
 
 func inventoryTestUUID(seed byte) pgtype.UUID {
