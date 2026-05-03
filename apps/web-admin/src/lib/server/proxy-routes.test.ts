@@ -1018,6 +1018,29 @@ describe('api proxy route handlers', () => {
 		expect(res).toBe(streamed);
 	});
 
+	it('streams CBT question CSV template with no-store headers', async () => {
+		const mod = await import('../../routes/api/cbt/questions/template/+server');
+		const upstream = new Response('kode,tipe\nTPL-PG-001,pg\n', {
+			status: 200,
+			headers: { 'content-type': 'text/csv; charset=utf-8' }
+		});
+		const streamed = new Response('kode,tipe\nTPL-PG-001,pg\n', { status: 200 });
+		const event = createEvent({
+			url: new URL('http://localhost/api/cbt/questions/template')
+		});
+		proxyFetchMock.mockResolvedValueOnce(upstream);
+		streamProxyResponseMock.mockResolvedValueOnce(streamed);
+
+		const res = await mod.GET(event as never);
+
+		expect(proxyFetchMock).toHaveBeenCalledWith('/api/cbt/questions/template');
+		expect(streamProxyResponseMock).toHaveBeenCalledWith(upstream, {
+			defaultContentType: 'text/csv; charset=utf-8',
+			defaultCacheControl: 'no-store'
+		});
+		expect(res).toBe(streamed);
+	});
+
 	it('encodes CBT participant path params before forwarding mutations', async () => {
 		const mod = await import('../../routes/api/cbt/sessions/[id]/participants/[pid]/seat/+server');
 		const request = new Request('http://localhost/api/cbt/sessions/session%201/participants/student%3F1/seat', {
