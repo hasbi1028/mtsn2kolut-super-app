@@ -20,9 +20,9 @@
 	type OptionItem = { label: string; text?: string; html?: string; latex?: string };
 	type ModuleMode = 'catalog' | 'composer' | 'review' | 'import';
 	type AuthoringMode = 'beginner' | 'advance';
-	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'short_answer' | 'essay';
+	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'agree_disagree' | 'short_answer' | 'essay';
 	type ComposerSaveIntent = 'draft' | 'review';
-	type AnswerMode = 'single_option' | 'multi_option' | 'fixed_true_false' | 'short_text' | 'rubric';
+	type AnswerMode = 'single_option' | 'multi_option' | 'fixed_pair' | 'short_text' | 'rubric';
 	type QuestionTypeConfig = {
 		id: ComposerQuestionType;
 		label: string;
@@ -32,6 +32,7 @@
 		answerMode: AnswerMode;
 		minOptions: number;
 		maxOptions: number;
+		fixedOptions?: string[];
 	};
 	type Question = {
 		id: string;
@@ -113,15 +114,6 @@
 		savedAt: string;
 	};
 	type OptionLabel = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
-	type Template = {
-		id: string;
-		label: string;
-		desc: string;
-		stem: string;
-		options: string[];
-		answerKey: OptionLabel;
-		isRtl?: boolean;
-	};
 	type LegacyImportResult = {
 		total_rows: number;
 		imported: number;
@@ -137,6 +129,7 @@
 	const MAX_OPTION_COUNT = 6;
 	const ANSWER_LABELS: OptionLabel[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 	const TRUE_FALSE_OPTIONS = ['Benar', 'Salah'];
+	const AGREE_DISAGREE_OPTIONS = ['Setuju', 'Tidak Setuju'];
 	const QUESTION_TYPE_CONFIGS: QuestionTypeConfig[] = [
 		{
 			id: 'multiple_choice',
@@ -164,9 +157,21 @@
 			shortLabel: 'B/S',
 			desc: 'Pernyataan dengan kunci benar atau salah.',
 			studentHint: 'Siswa memilih Benar atau Salah.',
-			answerMode: 'fixed_true_false',
+			answerMode: 'fixed_pair',
 			minOptions: 2,
 			maxOptions: 2,
+			fixedOptions: TRUE_FALSE_OPTIONS,
+		},
+		{
+			id: 'agree_disagree',
+			label: 'Setuju/Tidak Setuju',
+			shortLabel: 'S/TS',
+			desc: 'Respons sikap/pendapat dengan kunci setuju atau tidak setuju.',
+			studentHint: 'Siswa memilih Setuju atau Tidak Setuju.',
+			answerMode: 'fixed_pair',
+			minOptions: 2,
+			maxOptions: 2,
+			fixedOptions: AGREE_DISAGREE_OPTIONS,
 		},
 		{
 			id: 'short_answer',
@@ -205,83 +210,6 @@
 
 	const DRAFT_KEY = (id: string | null) => `mtsn2-soal-komposer:${id ?? 'new'}`;
 
-	const templates: Template[] = [
-		{
-			id: 'standar',
-			label: 'Soal Standar',
-			desc: 'PG biasa',
-			stem: '<p>Perhatikan pernyataan berikut!</p><p><br></p><p>Berdasarkan pernyataan di atas, yang paling tepat adalah...</p>',
-			options: ['', '', '', ''],
-			answerKey: 'A',
-		},
-		{
-			id: 'stimulus',
-			label: 'Dengan Stimulus',
-			desc: 'Teks + pertanyaan',
-			stem: '<p><strong>Bacalah teks berikut dengan saksama!</strong></p><p><br></p><p>[Teks/wacana/stimulus di sini]</p><p><br></p><p>Berdasarkan teks di atas, apa yang dimaksud dengan...?</p>',
-			options: ['', '', '', ''],
-			answerKey: 'A',
-		},
-		{
-			id: 'matematika',
-			label: 'Matematika',
-			desc: 'Rumus LaTeX',
-			stem: '<p>Diketahui $a = 3$ dan $b = 4$. Tentukan nilai dari:</p><p>$$a^2 + b^2 = \\ldots$$</p>',
-			options: ['25', '12', '7', '49'],
-			answerKey: 'A',
-		},
-		{
-			id: 'cerita',
-			label: 'Soal Cerita',
-			desc: 'Narasi + hitung',
-			stem: '<p>Pak Ahmad memiliki [jumlah] [barang]. Setelah [kejadian], sisanya menjadi [jumlah baru]. Berapa [yang ditanya]?</p>',
-			options: ['', '', '', ''],
-			answerKey: 'A',
-		},
-		{
-			id: 'grafik',
-			label: 'Grafik / Data',
-			desc: 'Interpretasi data',
-			stem: '<p>Perhatikan grafik/tabel berikut!</p><p><br></p><p>[Sisipkan gambar grafik di sini menggunakan tombol 🖼]</p><p><br></p><p>Berdasarkan data tersebut, kesimpulan yang paling tepat adalah...</p>',
-			options: ['', '', '', ''],
-			answerKey: 'A',
-		},
-		{
-			id: 'arab-mufradat',
-			label: 'Arab: Mufradat',
-			desc: 'Kosakata Arab (RTL)',
-			stem: '<p>ما معنى الكلمة التالية ؟</p><p><br></p><p><strong>[الكلمة]</strong></p>',
-			options: ['', '', '', ''],
-			answerKey: 'A',
-			isRtl: true,
-		},
-		{
-			id: 'arab-qiraah',
-			label: 'Arab: Qiraah',
-			desc: 'Bacaan Arab (RTL)',
-			stem: '<p>اقرأ النص الآتي ثم أجب عن الأسئلة!</p><p><br></p><p>[النص هنا]</p><p><br></p><p>ما الموضوع الرئيسي للنص ؟</p>',
-			options: ['', '', '', ''],
-			answerKey: 'A',
-			isRtl: true,
-		},
-		{
-			id: 'dalil',
-			label: 'Dalil & Tafsir',
-			desc: 'Ayat/hadis + analisis',
-			stem: '<p>Perhatikan dalil berikut!</p><p><br></p><p><em>[Tulis ayat atau hadis di sini]</em></p><p><br></p><p>Kandungan pokok dari dalil di atas adalah...</p>',
-			options: ['', '', '', ''],
-			answerKey: 'A',
-		},
-		{
-			id: 'sains',
-			label: 'Percobaan Sains',
-			desc: 'Data eksperimen',
-			stem: '<p>Perhatikan hasil percobaan berikut!</p><p><br></p><p>[Tabel / data percobaan]</p><p><br></p><p>Berdasarkan data tersebut, variabel yang paling berpengaruh adalah...</p>',
-			options: ['', '', '', ''],
-			answerKey: 'A',
-		},
-	];
-
 	// ── Page state ─────────────────────────────────────────────────────────────
 	let activeMode = $state<ModuleMode>('catalog');
 	let questionsPromise = $state<Promise<SoalOverview> | null>(null);
@@ -301,7 +229,6 @@
 	let composerAction = $state<ComposerSaveIntent | ''>('');
 	let draftStatus = $state('');
 	let draftSavedAt = $state<string | null>(null);
-	let showTemplates = $state(true);
 	let showInspector = $state(false);
 	let composerMobilePanel = $state<'write' | 'preview'>('write');
 	let focusedEditor = $state<FocusedEditor | null>(null);
@@ -378,12 +305,14 @@
 	let questionTypeConfig = $derived(getQuestionTypeConfig(fQuestionType));
 	let isEssay = $derived(fQuestionType === 'essay');
 	let isMultipleAnswer = $derived(questionTypeConfig.answerMode === 'multi_option');
-	let isTrueFalse = $derived(questionTypeConfig.answerMode === 'fixed_true_false');
+	let isTrueFalse = $derived(fQuestionType === 'true_false');
+	let isAgreeDisagree = $derived(fQuestionType === 'agree_disagree');
+	let isFixedPair = $derived(questionTypeConfig.answerMode === 'fixed_pair');
 	let isShortAnswer = $derived(questionTypeConfig.answerMode === 'short_text');
 	let hasOptionSection = $derived(
 		questionTypeConfig.answerMode === 'single_option' ||
 			questionTypeConfig.answerMode === 'multi_option' ||
-			questionTypeConfig.answerMode === 'fixed_true_false'
+			isFixedPair
 	);
 	let hasEditableOptions = $derived(
 		questionTypeConfig.answerMode === 'single_option' ||
@@ -476,22 +405,22 @@
 				},
 			];
 		}
-		if (isTrueFalse) {
+		if (isTrueFalse || isAgreeDisagree) {
 			return [
 				{
-					label: 'Pernyataan tegas',
+					label: isAgreeDisagree ? 'Sikap/pendapat jelas' : 'Pernyataan tegas',
 					status: stemText.length >= 20 ? 'good' : 'warn',
 					desc: `${stemText.length} / 20 karakter minimum`,
 				},
 				{
-					label: 'Kunci benar/salah dipilih',
+					label: isAgreeDisagree ? 'Kunci setuju/tidak setuju dipilih' : 'Kunci benar/salah dipilih',
 					status: answerKeyReady ? 'good' : 'warn',
-					desc: answerKeyReady ? `Kunci ${fAnswerKey === 'A' ? 'Benar' : 'Salah'}` : 'Belum dipilih',
+					desc: answerKeyReady ? `Kunci ${fixedOptionTextForKey(fAnswerKey)}` : 'Belum dipilih',
 				},
 				{
-					label: 'Tidak ambigu',
-					status: stemText.includes('?') ? 'warn' : 'good',
-					desc: stemText.includes('?') ? 'B/S lebih kuat sebagai pernyataan' : 'Format pernyataan',
+					label: isAgreeDisagree ? 'Berbasis sikap terukur' : 'Tidak ambigu',
+					status: isAgreeDisagree || !stemText.includes('?') ? 'good' : 'warn',
+					desc: isAgreeDisagree ? 'Format respons sikap' : stemText.includes('?') ? 'B/S lebih kuat sebagai pernyataan' : 'Format pernyataan',
 				},
 				{
 					label: 'Media pendukung',
@@ -803,6 +732,10 @@
 		return isComposerQuestionType(normalized) ? normalized : 'multiple_choice';
 	}
 
+	function questionTypeLabel(value: string | undefined): string {
+		return getQuestionTypeConfig(normalizeQuestionType(value)).shortLabel;
+	}
+
 	function normalizeAuthoringMode(value: string | undefined): AuthoringMode {
 		return value === 'advance' ? 'advance' : 'beginner';
 	}
@@ -830,20 +763,20 @@
 
 	function defaultAnswerKeyForQuestionType(type: ComposerQuestionType): string {
 		const config = getQuestionTypeConfig(type);
-		if (config.answerMode === 'single_option' || config.answerMode === 'fixed_true_false') return 'A';
+		if (config.answerMode === 'single_option' || config.answerMode === 'fixed_pair') return 'A';
 		return '';
 	}
 
 	function defaultOptionsForQuestionType(type: ComposerQuestionType): string[] {
 		const config = getQuestionTypeConfig(type);
-		if (config.answerMode === 'fixed_true_false') return [...TRUE_FALSE_OPTIONS];
+		if (config.answerMode === 'fixed_pair') return [...(config.fixedOptions ?? [])];
 		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') return [];
 		return Array.from({ length: config.minOptions }, () => '');
 	}
 
 	function normalizeOptionCount(options: string[], type: ComposerQuestionType = fQuestionType): string[] {
 		const config = getQuestionTypeConfig(type);
-		if (config.answerMode === 'fixed_true_false') return [...TRUE_FALSE_OPTIONS];
+		if (config.answerMode === 'fixed_pair') return [...(config.fixedOptions ?? [])];
 		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') return [];
 		let normalized = options.slice(0, config.maxOptions);
 		while (normalized.length < config.minOptions) normalized = [...normalized, ''];
@@ -862,6 +795,12 @@
 			keys.push(label);
 		}
 		return keys.sort((a, b) => ANSWER_LABELS.indexOf(a) - ANSWER_LABELS.indexOf(b));
+	}
+
+	function fixedOptionTextForKey(key: string): string {
+		const label = key.trim().toUpperCase() as OptionLabel;
+		const index = activeOptionLabels.indexOf(label);
+		return questionTypeConfig.fixedOptions?.[index] ?? label;
 	}
 
 	function normalizeShortAnswerComparable(value: string): string {
@@ -1004,7 +943,6 @@
 	function openCreate() {
 		editingId = null;
 		resetForm();
-		showTemplates = true;
 		showInspector = false;
 		focusedEditor = null;
 		composerMobilePanel = 'write';
@@ -1051,7 +989,6 @@
 			fCognitiveLevel = d.cognitive_level ?? '';
 			fHotsFlag = d.hots_flag ?? false;
 			fWorkflowStatus = normalizeWorkflowStatus(d.workflow_status);
-			showTemplates = false;
 			showInspector = false;
 			focusedEditor = null;
 			composerMobilePanel = 'write';
@@ -1086,16 +1023,6 @@
 		} finally {
 			composerBusy = false;
 		}
-	}
-
-	function applyTemplate(t: Template) {
-		setQuestionType('multiple_choice');
-		fStem = t.stem;
-		fOptions = normalizeOptionCount(t.options, 'multiple_choice');
-		fAnswerKey = normalizeAnswerKey(t.answerKey, 'multiple_choice', fOptions.length);
-		fIsRtl = t.isRtl ?? false;
-		draftStatus = `Template "${t.label}" diterapkan`;
-		showTemplates = false;
 	}
 
 	function closeComposer() {
@@ -1178,8 +1105,8 @@
 
 	function buildPayloadOptions() {
 		const config = getQuestionTypeConfig(fQuestionType);
-		if (config.answerMode === 'fixed_true_false') {
-			return TRUE_FALSE_OPTIONS.map((text, i) => ({
+		if (config.answerMode === 'fixed_pair') {
+			return (config.fixedOptions ?? []).map((text, i) => ({
 				label: optionLabelAt(i),
 				text,
 				html: text,
@@ -1569,7 +1496,7 @@
 										{/if}
 										<div class="mt-1 flex flex-wrap gap-1">
 											<span class="rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
-												{q.question_type === 'essay' ? 'Essay' : 'PG'}
+												{questionTypeLabel(q.question_type)}
 											</span>
 											<span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
 												{q.suggested_mode ?? q.authoring_mode ?? 'beginner'}
@@ -1955,44 +1882,6 @@
 
 				<div class={`grid grid-cols-1 gap-5 ${showInspector || composerMobilePanel === 'preview' ? 'xl:grid-cols-[minmax(0,1.55fr)_minmax(18rem,0.5fr)]' : ''}`}>
 					<div class={`space-y-4 min-w-0 ${composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
-						{#if fQuestionType === 'multiple_choice'}
-						<section class="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-							<div class="flex flex-col gap-2 lg:flex-row lg:items-center">
-								<div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1">
-									<h3 class="text-[10px] font-black uppercase tracking-[0.22em] text-slate-800">Template Cepat</h3>
-									<span class="text-[11px] text-slate-500">Struktur awal</span>
-								</div>
-								{#if showTemplates}
-									<div class="min-w-0 flex-1 overflow-x-auto">
-										<div class="inline-flex min-w-max items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
-											{#each templates as t (t.id)}
-												<button
-													type="button"
-													onclick={() => applyTemplate(t)}
-													title={t.desc}
-													aria-label={`Pakai template ${t.label}: ${t.desc}`}
-													class="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[10px] font-bold uppercase tracking-wide text-slate-700 transition-colors hover:bg-green-50 hover:text-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
-												>
-													<span>{t.label}</span>
-													{#if t.isRtl}
-														<span class="rounded bg-amber-100 px-1 py-0.5 text-[8px] font-black text-amber-700">RTL</span>
-													{/if}
-												</button>
-											{/each}
-										</div>
-									</div>
-								{/if}
-								<button
-									type="button"
-									onclick={() => (showTemplates = !showTemplates)}
-									class="shrink-0 self-start rounded-md border border-slate-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500 hover:bg-slate-50 lg:ml-auto lg:self-auto"
-								>
-									{showTemplates ? 'Sembunyikan' : 'Tampilkan'}
-								</button>
-							</div>
-						</section>
-						{/if}
-
 						<section id="composer-metadata" class="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
 							<div class="mb-3 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
 								<span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-800">Bentuk Soal</span>
@@ -2158,7 +2047,7 @@
 						<section id="composer-question" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex flex-wrap items-center justify-between gap-2">
 								<div>
-								<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">{isEssay ? 'Pertanyaan Essay' : isShortAnswer ? 'Pertanyaan Isian Singkat' : isTrueFalse ? 'Pernyataan Benar/Salah' : 'Isi Pertanyaan'}</h3>
+									<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">{isEssay ? 'Pertanyaan Essay' : isShortAnswer ? 'Pertanyaan Isian Singkat' : isTrueFalse ? 'Pernyataan Benar/Salah' : isAgreeDisagree ? 'Pernyataan Setuju/Tidak Setuju' : 'Isi Pertanyaan'}</h3>
 									<p class="mt-0.5 text-xs text-slate-500">{questionTypeConfig.studentHint}</p>
 								</div>
 								<button type="button" onclick={() => (focusedEditor = 'stem')} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
@@ -2166,7 +2055,7 @@
 							<LegacyRichTextEditor
 								bind:value={fStem}
 								id="soal-stem"
-								placeholder={isEssay ? 'Tuliskan instruksi essay/uraian. Contoh: Jelaskan alasan, uraikan langkah, atau analisis data berikut.' : isShortAnswer ? 'Tuliskan pertanyaan yang jawabannya singkat dan jelas.' : isTrueFalse ? 'Tuliskan satu pernyataan yang dapat dinilai benar atau salah.' : 'Tuliskan pertanyaan utama. Gambar bisa disisipkan langsung di antara teks.'}
+								placeholder={isEssay ? 'Tuliskan instruksi essay/uraian. Contoh: Jelaskan alasan, uraikan langkah, atau analisis data berikut.' : isShortAnswer ? 'Tuliskan pertanyaan yang jawabannya singkat dan jelas.' : isTrueFalse ? 'Tuliskan satu pernyataan yang dapat dinilai benar atau salah.' : isAgreeDisagree ? 'Tuliskan pernyataan sikap yang dapat dijawab setuju atau tidak setuju.' : 'Tuliskan pertanyaan utama. Gambar bisa disisipkan langsung di antara teks.'}
 								minRows={4}
 								compact
 								onImageUpload={uploadImageInEditor}
@@ -2180,7 +2069,7 @@
 							<section id="composer-options" class="scroll-mt-4 space-y-4 border-t border-slate-200 pt-5">
 								<div class="text-center">
 									<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-slate-500">
-										{isMultipleAnswer ? 'Opsi & Kunci Jawaban Ganda' : isTrueFalse ? 'Kunci Benar/Salah' : 'Opsi & Kunci Jawaban'}
+										{isMultipleAnswer ? 'Opsi & Kunci Jawaban Ganda' : isTrueFalse ? 'Kunci Benar/Salah' : isAgreeDisagree ? 'Kunci Setuju/Tidak Setuju' : 'Opsi & Kunci Jawaban'}
 									</h3>
 									<p class="mt-1 text-xs text-slate-500">{questionTypeConfig.studentHint}</p>
 								</div>
@@ -2195,7 +2084,7 @@
 										</Button>
 									</div>
 								{/if}
-								<div class="grid grid-cols-1 items-start gap-3 {isTrueFalse ? 'xl:grid-cols-2' : 'xl:grid-cols-2'}">
+								<div class="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
 									{#each fOptions as opt, i (`composer-option-${i}`)}
 										{@const label = optionLabelAt(i)}
 										{@const isAnswer = isAnswerLabelSelected(label)}
@@ -2207,7 +2096,7 @@
 											<div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
 												<div>
 													<p class="text-xs font-black uppercase tracking-[0.2em] text-slate-700">Opsi {label}</p>
-													<p class="mt-0.5 text-[11px] text-slate-400">{isAnswer ? 'Ditandai sebagai kunci jawaban' : isTrueFalse ? 'Pilihan tetap' : 'Pengecoh / alternatif jawaban'}</p>
+													<p class="mt-0.5 text-[11px] text-slate-400">{isAnswer ? 'Ditandai sebagai kunci jawaban' : isFixedPair ? 'Pilihan tetap' : 'Pengecoh / alternatif jawaban'}</p>
 												</div>
 												<div class="flex shrink-0 items-center gap-1">
 													{#if hasEditableOptions}

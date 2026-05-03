@@ -680,6 +680,20 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 		t.Fatalf("normalizeQuestionInput(true_false) options = %+v, want Benar/Salah", trueFalse.Options)
 	}
 
+	agreeDisagree, err := normalizeQuestionInput(SaveCbtQuestionInput{
+		SubjectID:     pgtype.UUID{Valid: true},
+		AuthoringMode: "beginner",
+		QuestionType:  "agree_disagree",
+		QuestionText:  "Kebersihan kelas adalah tanggung jawab bersama",
+		AnswerKey:     "b",
+	})
+	if err != nil {
+		t.Fatalf("normalizeQuestionInput(agree_disagree) error = %v", err)
+	}
+	if len(agreeDisagree.Options) != 2 || agreeDisagree.Options[0].Text != "Setuju" || agreeDisagree.Options[1].Text != "Tidak Setuju" || agreeDisagree.AnswerKey != "B" {
+		t.Fatalf("normalizeQuestionInput(agree_disagree) options/key = %+v/%q, want Setuju/Tidak Setuju with key B", agreeDisagree.Options, agreeDisagree.AnswerKey)
+	}
+
 	fromStem, err := normalizeQuestionInput(SaveCbtQuestionInput{
 		SubjectID:     pgtype.UUID{Valid: true},
 		AuthoringMode: "advance",
@@ -698,6 +712,9 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 	}
 	if got := normalizeQuestionType(" TRUE_FALSE "); got != "true_false" {
 		t.Fatalf("normalizeQuestionType(true_false) = %q, want true_false", got)
+	}
+	if got := normalizeQuestionType(" AGREE_DISAGREE "); got != "agree_disagree" {
+		t.Fatalf("normalizeQuestionType(agree_disagree) = %q, want agree_disagree", got)
 	}
 	if got := normalizeQuestionType("matching"); got != "matching" {
 		t.Fatalf("normalizeQuestionType(unknown) = %q, want matching passthrough", got)

@@ -643,11 +643,8 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	if len(options) == 0 {
 		options = legacyOptions(out.OptionA, out.OptionB, out.OptionC, out.OptionD, out.OptionE, out.QuestionType)
 	}
-	if out.QuestionType == "true_false" && len(options) == 0 {
-		options = []QuestionOption{
-			{Label: "A", Text: "Benar"},
-			{Label: "B", Text: "Salah"},
-		}
+	if fixedOptions := fixedPairQuestionOptions(out.QuestionType); len(options) == 0 && len(fixedOptions) > 0 {
+		options = fixedOptions
 	}
 	normalizedOptions, err := normalizeOptions(options)
 	if err != nil {
@@ -683,14 +680,14 @@ func validateQuestion(input SaveCbtQuestionInput) error {
 	}
 
 	switch input.QuestionType {
-	case "multiple_choice", "single_choice", "multiple_answer", "true_false":
+	case "multiple_choice", "single_choice", "multiple_answer", "true_false", "agree_disagree":
 		if !requiresCompleteContent {
 			return nil
 		}
 		if len(input.Options) < 2 {
 			return fmt.Errorf("opsi jawaban minimal 2 untuk tipe soal objektif")
 		}
-		if input.AuthoringMode == "beginner" && input.QuestionType != "true_false" && len(input.Options) < 4 {
+		if input.AuthoringMode == "beginner" && !isFixedPairQuestionType(input.QuestionType) && len(input.Options) < 4 {
 			return fmt.Errorf("mode beginner membutuhkan minimal 4 opsi untuk pilihan ganda")
 		}
 		if input.AnswerKey == "" {
@@ -777,7 +774,7 @@ func normalizeShortAnswerComparable(value string) string {
 
 func beginnerSupportsQuestionType(questionType string) bool {
 	switch questionType {
-	case "multiple_choice", "multiple_answer", "true_false", "short_answer", "essay":
+	case "multiple_choice", "multiple_answer", "true_false", "agree_disagree", "short_answer", "essay":
 		return true
 	default:
 		return false
@@ -789,10 +786,36 @@ func normalizeQuestionType(value string) string {
 	switch normalized {
 	case "", "multiple_choice", "single_choice":
 		return "multiple_choice"
-	case "multiple_answer", "true_false", "short_answer", "essay":
+	case "multiple_answer", "true_false", "agree_disagree", "short_answer", "essay":
 		return normalized
 	default:
 		return normalized
+	}
+}
+
+func fixedPairQuestionOptions(questionType string) []QuestionOption {
+	switch questionType {
+	case "true_false":
+		return []QuestionOption{
+			{Label: "A", Text: "Benar"},
+			{Label: "B", Text: "Salah"},
+		}
+	case "agree_disagree":
+		return []QuestionOption{
+			{Label: "A", Text: "Setuju"},
+			{Label: "B", Text: "Tidak Setuju"},
+		}
+	default:
+		return nil
+	}
+}
+
+func isFixedPairQuestionType(questionType string) bool {
+	switch questionType {
+	case "true_false", "agree_disagree":
+		return true
+	default:
+		return false
 	}
 }
 
