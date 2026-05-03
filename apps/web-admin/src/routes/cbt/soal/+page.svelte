@@ -73,6 +73,9 @@
 		difficulty: string;
 		status: string;
 		author_username: string;
+		reviewer_username?: string;
+		reviewed_at?: string | null;
+		review_notes?: string;
 		created_at: string;
 		package_count?: number;
 		answer_count?: number;
@@ -1085,6 +1088,19 @@
 		return 'Belum dipakai';
 	}
 
+	function revisionSourceLabel(q: Question): string {
+		const note = (q.review_notes ?? '').toLowerCase();
+		if (note.includes('analisis butir')) return 'Analisis Butir';
+		if ((q.reviewer_username ?? '').trim()) return `Reviewer: ${q.reviewer_username}`;
+		return 'Workflow Review';
+	}
+
+	function revisionReason(q: Question): string {
+		const note = (q.review_notes ?? '').replace(/\s+/g, ' ').trim();
+		if (!note) return 'Belum ada catatan alasan revisi.';
+		return note.length > 180 ? `${note.slice(0, 180)}...` : note;
+	}
+
 	function isQuickEditable(q: Question): boolean {
 		return isComposerQuestionType(q.question_type) && (q.workflow_status === 'draft' || q.workflow_status === 'rejected') && q.status === 'draft' && !questionUsageLocked(q);
 	}
@@ -1668,6 +1684,13 @@
 							<span class="truncate text-[11px] text-slate-400">{q.subject_name || q.subject_code || 'Mapel belum ada'}</span>
 						</div>
 						<p class="line-clamp-2 text-sm font-medium text-slate-800">{stemPreview(q)}</p>
+						<div class="mt-2 rounded border border-red-100 bg-red-50/70 px-2 py-1.5">
+							<div class="mb-0.5 flex flex-wrap items-center gap-1">
+								<span class="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-700">{revisionSourceLabel(q)}</span>
+								{#if q.reviewed_at}<span class="text-[10px] text-red-500">{new Date(q.reviewed_at).toLocaleDateString('id-ID')}</span>{/if}
+							</div>
+							<p class="line-clamp-2 text-[11px] leading-relaxed text-red-900">{revisionReason(q)}</p>
+						</div>
 						<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
 							<span>{q.code || 'Tanpa kode'}</span>
 							{#if q.author_username}<span>{q.author_username}</span>{/if}
@@ -1847,6 +1870,11 @@
 												</span>
 											{/if}
 										</div>
+										{#if q.workflow_status === 'rejected'}
+											<div class="mt-1 rounded border border-red-100 bg-red-50 px-2 py-1 text-[11px] leading-relaxed text-red-800">
+												<span class="font-semibold">{revisionSourceLabel(q)}:</span> {revisionReason(q)}
+											</div>
+										{/if}
 									</Table.Cell>
 									<Table.Cell class="text-xs text-slate-500 truncate max-w-[8rem]">
 										{q.subject_name || q.subject_code || '-'}
