@@ -775,6 +775,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Editor rich text utama `Isi Pertanyaan` juga memakai mode compact dengan default tinggi sekitar setengah dari sebelumnya.
 - [x] Uji rekomendasi layout opsi dua kolom di desktop untuk mengurangi scroll panjang pada modal komposer.
 - [x] Uji paket UI/UX komposer lengkap: status strip kesiapan, inspector kanan collapsible, section navigator, inline validation, mode fokus editor, autosave timestamp/footer, shortcut `Ctrl+S`, dan guard tutup modal saat draft lokal aktif.
+- [x] Metadata komposer dipadatkan menjadi dense bar: judul kecil, field tinggi 32px, error mapel inline, dan helper bobot tidak lagi mengambil baris besar.
 - [x] Backend menambahkan metadata pemakaian soal (`package_count`, `answer_count`, `is_locked`, `usage`) pada list/detail agar UI bisa membedakan soal draft yang masih bisa diedit cepat dan soal yang harus direvisi lewat duplikasi.
 - [x] Edit/hapus langsung diblokir untuk soal yang sudah masuk paket ujian atau memiliki jawaban siswa; approve/publish langsung via edit juga diblokir agar workflow tetap melalui aksi resmi.
 - [x] Import CSV legacy sekarang mengecek duplikat terhadap isi bank soal yang sudah ada pada mapel yang sama, bukan hanya duplikat dalam file import.

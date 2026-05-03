@@ -1437,29 +1437,31 @@
 							</div>
 						</section>
 
-						<section id="composer-metadata" class="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-							<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-								<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Metadata Soal</h3>
-								<span class="text-[11px] text-slate-400">Poin final diatur saat soal masuk paket</span>
-							</div>
-							<div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_9rem_7rem_11rem] lg:items-end">
+						<section id="composer-metadata" class="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+							<div class="grid gap-2 lg:grid-cols-[8rem_minmax(0,1fr)_8rem_6.5rem_10.5rem] lg:items-end">
+								<div class="self-center">
+									<h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-800">Metadata</h3>
+									<p class="mt-0.5 text-[10px] text-slate-400">Data wajib</p>
+								</div>
 								<div>
-									<label for="f-subject" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+									<div class="mb-1 flex items-center justify-between gap-2">
+										<label for="f-subject" class="block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
 										Mata Pelajaran <span class="text-red-500">*</span>
 									</label>
+										{#if !readinessChecks.subject}
+											<span class="text-[10px] font-semibold text-red-500">Wajib</span>
+										{/if}
+									</div>
 									<select
 										id="f-subject"
 										bind:value={fSubjectId}
-										class="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+										class="h-8 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
 									>
 										<option value="">-- Pilih Mapel --</option>
 										{#each subjects as s (s.id)}
 											<option value={s.id}>{s.name}</option>
 										{/each}
 									</select>
-									{#if !readinessChecks.subject}
-										<p class="mt-1 text-[10px] font-semibold text-red-500">Mata pelajaran wajib dipilih.</p>
-									{/if}
 								</div>
 								<div>
 									<label for="f-difficulty" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
@@ -1468,7 +1470,7 @@
 									<select
 										id="f-difficulty"
 										bind:value={fDifficulty}
-										class="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+										class="h-8 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
 									>
 										{#each Object.entries(DIFFICULTY_LABEL) as [val, lbl] (val)}
 											<option value={val}>{lbl}</option>
@@ -1479,12 +1481,12 @@
 									<label for="f-weight" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
 										Bobot Paket
 									</label>
-									<Input id="f-weight" type="number" min="1" bind:value={fWeight} class="h-9 text-sm font-medium" />
+									<Input id="f-weight" type="number" min="1" bind:value={fWeight} class="h-8 text-sm font-medium" />
 									{#if !readinessChecks.weight}
 										<p class="mt-1 text-[10px] font-semibold text-red-500">Minimal 1.</p>
 									{/if}
 								</div>
-								<label for="f-rtl" class="flex h-9 cursor-pointer items-center justify-between gap-2 rounded-md border border-dashed border-green-200 bg-green-50 px-3">
+								<label for="f-rtl" class="flex h-8 cursor-pointer items-center justify-between gap-2 rounded-md border border-dashed border-green-200 bg-green-50 px-2.5">
 									<span class="text-[10px] font-black uppercase tracking-wider text-green-800">Mode Arab / RTL</span>
 									<input id="f-rtl" type="checkbox" bind:checked={fIsRtl} class="rounded accent-green-700" />
 								</label>
