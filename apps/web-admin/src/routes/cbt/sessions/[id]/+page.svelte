@@ -1197,6 +1197,9 @@
 											<Button variant="outline" size="sm" href={resolve(`/cbt/sessions/${sessionId}/rooms/${room.id}/proctoring`)}>
 												Dashboard
 											</Button>
+											<Button variant="outline" size="sm" href={resolve(`/cbt/sessions/${sessionId}/rooms/${room.id}/print-pack`)}>
+												Cetak
+											</Button>
 											<LoadingButton variant="outline" size="sm"
 												class="border-red-200 text-red-600 hover:bg-red-50"
 												onclick={() => deleteRoom(room.id, room.room_name)}

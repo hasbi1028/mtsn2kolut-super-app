@@ -1165,6 +1165,49 @@ func (h *CbtSession) GetRoomProctoringDashboard(w http.ResponseWriter, r *http.R
 	})
 }
 
+func (h *CbtSession) GetRoomProctorPrintPack(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	roomSvc, ok := h.svc.(cbtSessionRoomProctorDashboardService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room proctor dashboard service unavailable"))
+		return
+	}
+	proctorSvc, ok := h.svc.(cbtSessionRoomProctorService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt room proctor service unavailable"))
+		return
+	}
+	room, err := roomSvc.GetRoomProctoringDashboard(r.Context(), roomID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	proctors, err := proctorSvc.ListRoomProctors(r.Context(), roomID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	participants, err := roomSvc.GetProctoringStatusForRoom(r.Context(), sessionID, roomID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{
+		"room":         room,
+		"proctors":     proctors,
+		"participants": participants,
+	})
+}
+
 func (h *CbtSession) FlagRoomParticipant(w http.ResponseWriter, r *http.Request) {
 	sessionID, roomID, pid, ok := h.requireRoomParticipantControlParams(w, r)
 	if !ok {

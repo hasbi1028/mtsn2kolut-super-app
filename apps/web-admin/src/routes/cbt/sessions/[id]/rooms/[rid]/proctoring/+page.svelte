@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PrinterIcon from '@lucide/svelte/icons/printer';
 	import { onDestroy, onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
@@ -297,6 +298,10 @@
 			{#if backgroundBusy}
 				<Badge variant="outline" class="border-emerald-200 text-emerald-700">Memperbarui</Badge>
 			{/if}
+			<Button variant="outline" href={resolve(`/cbt/sessions/${sessionId}/rooms/${roomId}/print-pack`)}>
+				<PrinterIcon class="mr-2 size-4" />
+				Paket Cetak
+			</Button>
 			<LoadingButton variant="outline" onclick={() => void refreshDashboard()} loading={refreshBusy} loadingLabel="Memuat...">
 				Refresh
 			</LoadingButton>
