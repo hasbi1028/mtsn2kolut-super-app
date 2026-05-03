@@ -28,14 +28,24 @@ SELECT
   a.created_at,
   a.updated_at,
   COALESCE(submission_stats.total_submissions, 0)::int AS total_submissions,
-  COALESCE(submission_stats.reviewed_submissions, 0)::int AS reviewed_submissions
+  COALESCE(submission_stats.reviewed_submissions, 0)::int AS reviewed_submissions,
+  submission_stats.last_reviewed_at,
+  COALESCE(submission_stats.unsynced_reviewed_submissions, 0)::int AS unsynced_reviewed_submissions
 FROM non_test_assessments a
 JOIN subjects s ON s.id = a.subject_id
 LEFT JOIN school_classes sc ON sc.id = a.class_id
 LEFT JOIN LATERAL (
   SELECT
     COUNT(*)::int AS total_submissions,
-    COUNT(*) FILTER (WHERE nas.status = 'reviewed')::int AS reviewed_submissions
+    COUNT(*) FILTER (WHERE nas.status = 'reviewed')::int AS reviewed_submissions,
+    (MAX(nas.updated_at) FILTER (WHERE nas.status = 'reviewed'))::timestamptz AS last_reviewed_at,
+    COUNT(*) FILTER (
+      WHERE nas.status = 'reviewed'
+        AND (
+          a.grade_synced_at IS NULL
+          OR nas.updated_at > a.grade_synced_at
+        )
+    )::int AS unsynced_reviewed_submissions
   FROM non_test_assessment_submissions nas
   WHERE nas.assessment_id = a.id
 ) submission_stats ON TRUE
@@ -102,14 +112,24 @@ SELECT
   a.created_at,
   a.updated_at,
   COALESCE(submission_stats.total_submissions, 0)::int AS total_submissions,
-  COALESCE(submission_stats.reviewed_submissions, 0)::int AS reviewed_submissions
+  COALESCE(submission_stats.reviewed_submissions, 0)::int AS reviewed_submissions,
+  submission_stats.last_reviewed_at,
+  COALESCE(submission_stats.unsynced_reviewed_submissions, 0)::int AS unsynced_reviewed_submissions
 FROM non_test_assessments a
 JOIN subjects s ON s.id = a.subject_id
 LEFT JOIN school_classes sc ON sc.id = a.class_id
 LEFT JOIN LATERAL (
   SELECT
     COUNT(*)::int AS total_submissions,
-    COUNT(*) FILTER (WHERE nas.status = 'reviewed')::int AS reviewed_submissions
+    COUNT(*) FILTER (WHERE nas.status = 'reviewed')::int AS reviewed_submissions,
+    (MAX(nas.updated_at) FILTER (WHERE nas.status = 'reviewed'))::timestamptz AS last_reviewed_at,
+    COUNT(*) FILTER (
+      WHERE nas.status = 'reviewed'
+        AND (
+          a.grade_synced_at IS NULL
+          OR nas.updated_at > a.grade_synced_at
+        )
+    )::int AS unsynced_reviewed_submissions
   FROM non_test_assessment_submissions nas
   WHERE nas.assessment_id = a.id
 ) submission_stats ON TRUE

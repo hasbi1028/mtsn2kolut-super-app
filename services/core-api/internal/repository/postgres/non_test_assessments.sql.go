@@ -283,14 +283,24 @@ SELECT
   a.created_at,
   a.updated_at,
   COALESCE(submission_stats.total_submissions, 0)::int AS total_submissions,
-  COALESCE(submission_stats.reviewed_submissions, 0)::int AS reviewed_submissions
+  COALESCE(submission_stats.reviewed_submissions, 0)::int AS reviewed_submissions,
+  submission_stats.last_reviewed_at,
+  COALESCE(submission_stats.unsynced_reviewed_submissions, 0)::int AS unsynced_reviewed_submissions
 FROM non_test_assessments a
 JOIN subjects s ON s.id = a.subject_id
 LEFT JOIN school_classes sc ON sc.id = a.class_id
 LEFT JOIN LATERAL (
   SELECT
     COUNT(*)::int AS total_submissions,
-    COUNT(*) FILTER (WHERE nas.status = 'reviewed')::int AS reviewed_submissions
+    COUNT(*) FILTER (WHERE nas.status = 'reviewed')::int AS reviewed_submissions,
+    (MAX(nas.updated_at) FILTER (WHERE nas.status = 'reviewed'))::timestamptz AS last_reviewed_at,
+    COUNT(*) FILTER (
+      WHERE nas.status = 'reviewed'
+        AND (
+          a.grade_synced_at IS NULL
+          OR nas.updated_at > a.grade_synced_at
+        )
+    )::int AS unsynced_reviewed_submissions
   FROM non_test_assessment_submissions nas
   WHERE nas.assessment_id = a.id
 ) submission_stats ON TRUE
@@ -298,35 +308,37 @@ WHERE a.id = $1
 `
 
 type GetNonTestAssessmentRow struct {
-	ID                   pgtype.UUID        `json:"id"`
-	SubjectID            pgtype.UUID        `json:"subject_id"`
-	SubjectName          string             `json:"subject_name"`
-	SubjectCode          string             `json:"subject_code"`
-	ClassID              pgtype.UUID        `json:"class_id"`
-	ClassName            string             `json:"class_name"`
-	ClassLevel           string             `json:"class_level"`
-	AssessmentType       string             `json:"assessment_type"`
-	Title                string             `json:"title"`
-	Description          string             `json:"description"`
-	InstructionHtml      string             `json:"instruction_html"`
-	RubricHtml           string             `json:"rubric_html"`
-	EvidenceRequirements string             `json:"evidence_requirements"`
-	Mode                 string             `json:"mode"`
-	ScoringScale         string             `json:"scoring_scale"`
-	MaxScore             pgtype.Numeric     `json:"max_score"`
-	Weight               pgtype.Numeric     `json:"weight"`
-	DueAt                pgtype.Timestamptz `json:"due_at"`
-	Status               string             `json:"status"`
-	CreatedByUsername    string             `json:"created_by_username"`
-	AssessorUsername     string             `json:"assessor_username"`
-	Checklist            []byte             `json:"checklist"`
-	GradeComponentID     pgtype.UUID        `json:"grade_component_id"`
-	GradeSyncedAt        pgtype.Timestamptz `json:"grade_synced_at"`
-	GradeSyncedBy        string             `json:"grade_synced_by"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
-	TotalSubmissions     int32              `json:"total_submissions"`
-	ReviewedSubmissions  int32              `json:"reviewed_submissions"`
+	ID                          pgtype.UUID        `json:"id"`
+	SubjectID                   pgtype.UUID        `json:"subject_id"`
+	SubjectName                 string             `json:"subject_name"`
+	SubjectCode                 string             `json:"subject_code"`
+	ClassID                     pgtype.UUID        `json:"class_id"`
+	ClassName                   string             `json:"class_name"`
+	ClassLevel                  string             `json:"class_level"`
+	AssessmentType              string             `json:"assessment_type"`
+	Title                       string             `json:"title"`
+	Description                 string             `json:"description"`
+	InstructionHtml             string             `json:"instruction_html"`
+	RubricHtml                  string             `json:"rubric_html"`
+	EvidenceRequirements        string             `json:"evidence_requirements"`
+	Mode                        string             `json:"mode"`
+	ScoringScale                string             `json:"scoring_scale"`
+	MaxScore                    pgtype.Numeric     `json:"max_score"`
+	Weight                      pgtype.Numeric     `json:"weight"`
+	DueAt                       pgtype.Timestamptz `json:"due_at"`
+	Status                      string             `json:"status"`
+	CreatedByUsername           string             `json:"created_by_username"`
+	AssessorUsername            string             `json:"assessor_username"`
+	Checklist                   []byte             `json:"checklist"`
+	GradeComponentID            pgtype.UUID        `json:"grade_component_id"`
+	GradeSyncedAt               pgtype.Timestamptz `json:"grade_synced_at"`
+	GradeSyncedBy               string             `json:"grade_synced_by"`
+	CreatedAt                   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                   pgtype.Timestamptz `json:"updated_at"`
+	TotalSubmissions            int32              `json:"total_submissions"`
+	ReviewedSubmissions         int32              `json:"reviewed_submissions"`
+	LastReviewedAt              pgtype.Timestamptz `json:"last_reviewed_at"`
+	UnsyncedReviewedSubmissions int32              `json:"unsynced_reviewed_submissions"`
 }
 
 func (q *Queries) GetNonTestAssessment(ctx context.Context, id pgtype.UUID) (GetNonTestAssessmentRow, error) {
@@ -362,6 +374,8 @@ func (q *Queries) GetNonTestAssessment(ctx context.Context, id pgtype.UUID) (Get
 		&i.UpdatedAt,
 		&i.TotalSubmissions,
 		&i.ReviewedSubmissions,
+		&i.LastReviewedAt,
+		&i.UnsyncedReviewedSubmissions,
 	)
 	return i, err
 }
@@ -396,14 +410,24 @@ SELECT
   a.created_at,
   a.updated_at,
   COALESCE(submission_stats.total_submissions, 0)::int AS total_submissions,
-  COALESCE(submission_stats.reviewed_submissions, 0)::int AS reviewed_submissions
+  COALESCE(submission_stats.reviewed_submissions, 0)::int AS reviewed_submissions,
+  submission_stats.last_reviewed_at,
+  COALESCE(submission_stats.unsynced_reviewed_submissions, 0)::int AS unsynced_reviewed_submissions
 FROM non_test_assessments a
 JOIN subjects s ON s.id = a.subject_id
 LEFT JOIN school_classes sc ON sc.id = a.class_id
 LEFT JOIN LATERAL (
   SELECT
     COUNT(*)::int AS total_submissions,
-    COUNT(*) FILTER (WHERE nas.status = 'reviewed')::int AS reviewed_submissions
+    COUNT(*) FILTER (WHERE nas.status = 'reviewed')::int AS reviewed_submissions,
+    (MAX(nas.updated_at) FILTER (WHERE nas.status = 'reviewed'))::timestamptz AS last_reviewed_at,
+    COUNT(*) FILTER (
+      WHERE nas.status = 'reviewed'
+        AND (
+          a.grade_synced_at IS NULL
+          OR nas.updated_at > a.grade_synced_at
+        )
+    )::int AS unsynced_reviewed_submissions
   FROM non_test_assessment_submissions nas
   WHERE nas.assessment_id = a.id
 ) submission_stats ON TRUE
@@ -434,35 +458,37 @@ type ListNonTestAssessmentsParams struct {
 }
 
 type ListNonTestAssessmentsRow struct {
-	ID                   pgtype.UUID        `json:"id"`
-	SubjectID            pgtype.UUID        `json:"subject_id"`
-	SubjectName          string             `json:"subject_name"`
-	SubjectCode          string             `json:"subject_code"`
-	ClassID              pgtype.UUID        `json:"class_id"`
-	ClassName            string             `json:"class_name"`
-	ClassLevel           string             `json:"class_level"`
-	AssessmentType       string             `json:"assessment_type"`
-	Title                string             `json:"title"`
-	Description          string             `json:"description"`
-	InstructionHtml      string             `json:"instruction_html"`
-	RubricHtml           string             `json:"rubric_html"`
-	EvidenceRequirements string             `json:"evidence_requirements"`
-	Mode                 string             `json:"mode"`
-	ScoringScale         string             `json:"scoring_scale"`
-	MaxScore             pgtype.Numeric     `json:"max_score"`
-	Weight               pgtype.Numeric     `json:"weight"`
-	DueAt                pgtype.Timestamptz `json:"due_at"`
-	Status               string             `json:"status"`
-	CreatedByUsername    string             `json:"created_by_username"`
-	AssessorUsername     string             `json:"assessor_username"`
-	Checklist            []byte             `json:"checklist"`
-	GradeComponentID     pgtype.UUID        `json:"grade_component_id"`
-	GradeSyncedAt        pgtype.Timestamptz `json:"grade_synced_at"`
-	GradeSyncedBy        string             `json:"grade_synced_by"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
-	TotalSubmissions     int32              `json:"total_submissions"`
-	ReviewedSubmissions  int32              `json:"reviewed_submissions"`
+	ID                          pgtype.UUID        `json:"id"`
+	SubjectID                   pgtype.UUID        `json:"subject_id"`
+	SubjectName                 string             `json:"subject_name"`
+	SubjectCode                 string             `json:"subject_code"`
+	ClassID                     pgtype.UUID        `json:"class_id"`
+	ClassName                   string             `json:"class_name"`
+	ClassLevel                  string             `json:"class_level"`
+	AssessmentType              string             `json:"assessment_type"`
+	Title                       string             `json:"title"`
+	Description                 string             `json:"description"`
+	InstructionHtml             string             `json:"instruction_html"`
+	RubricHtml                  string             `json:"rubric_html"`
+	EvidenceRequirements        string             `json:"evidence_requirements"`
+	Mode                        string             `json:"mode"`
+	ScoringScale                string             `json:"scoring_scale"`
+	MaxScore                    pgtype.Numeric     `json:"max_score"`
+	Weight                      pgtype.Numeric     `json:"weight"`
+	DueAt                       pgtype.Timestamptz `json:"due_at"`
+	Status                      string             `json:"status"`
+	CreatedByUsername           string             `json:"created_by_username"`
+	AssessorUsername            string             `json:"assessor_username"`
+	Checklist                   []byte             `json:"checklist"`
+	GradeComponentID            pgtype.UUID        `json:"grade_component_id"`
+	GradeSyncedAt               pgtype.Timestamptz `json:"grade_synced_at"`
+	GradeSyncedBy               string             `json:"grade_synced_by"`
+	CreatedAt                   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                   pgtype.Timestamptz `json:"updated_at"`
+	TotalSubmissions            int32              `json:"total_submissions"`
+	ReviewedSubmissions         int32              `json:"reviewed_submissions"`
+	LastReviewedAt              pgtype.Timestamptz `json:"last_reviewed_at"`
+	UnsyncedReviewedSubmissions int32              `json:"unsynced_reviewed_submissions"`
 }
 
 func (q *Queries) ListNonTestAssessments(ctx context.Context, arg ListNonTestAssessmentsParams) ([]ListNonTestAssessmentsRow, error) {
@@ -512,6 +538,8 @@ func (q *Queries) ListNonTestAssessments(ctx context.Context, arg ListNonTestAss
 			&i.UpdatedAt,
 			&i.TotalSubmissions,
 			&i.ReviewedSubmissions,
+			&i.LastReviewedAt,
+			&i.UnsyncedReviewedSubmissions,
 		); err != nil {
 			return nil, err
 		}

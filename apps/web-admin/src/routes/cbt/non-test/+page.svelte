@@ -41,6 +41,8 @@
 		grade_component_id: string;
 		grade_synced_at: string | null;
 		grade_synced_by: string;
+		last_reviewed_at?: string | null;
+		unsynced_reviewed_submissions?: number;
 		total_submissions: number;
 		reviewed_submissions: number;
 	};
@@ -165,6 +167,7 @@
 		active: assessments.filter((item) => item.status === 'active').length,
 		draft: assessments.filter((item) => item.status === 'draft').length,
 		closed: assessments.filter((item) => item.status === 'closed').length,
+		needsSync: assessments.filter((item) => canSyncGrade(item) && (!item.grade_component_id || syncFreshnessCount(item) > 0)).length,
 	});
 
 	function assessmentTypeLabel(value: string) {
@@ -197,17 +200,50 @@
 	}
 
 	function gradeSyncLabel(item: NonTestAssessment) {
-		return item.grade_component_id ? 'Tersinkron nilai' : 'Belum masuk nilai';
+		if (!item.grade_component_id) return item.reviewed_submissions > 0 ? 'Siap kirim nilai' : 'Belum masuk nilai';
+		if (syncFreshnessCount(item) > 0) return 'Perlu sinkron ulang';
+		return 'Tersinkron nilai';
 	}
 
 	function gradeSyncBadgeClass(item: NonTestAssessment) {
-		return item.grade_component_id
-			? 'border-emerald-200 bg-emerald-100 text-emerald-800'
-			: 'border-slate-200 bg-slate-100 text-slate-600';
+		if (item.grade_component_id && syncFreshnessCount(item) > 0) {
+			return 'border-amber-200 bg-amber-100 text-amber-800';
+		}
+		if (item.grade_component_id) return 'border-emerald-200 bg-emerald-100 text-emerald-800';
+		if (item.reviewed_submissions > 0) return 'border-blue-200 bg-blue-50 text-blue-800';
+		return 'border-slate-200 bg-slate-100 text-slate-600';
 	}
 
 	function canSyncGrade(item: NonTestAssessment) {
 		return Boolean(item.class_id) && item.reviewed_submissions > 0;
+	}
+
+	function syncFreshnessCount(item: NonTestAssessment) {
+		return Math.max(Number(item.unsynced_reviewed_submissions ?? 0), 0);
+	}
+
+	function formatDateTime(value: string | null | undefined) {
+		if (!value) return 'Belum ada';
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return 'Belum ada';
+		return date.toLocaleString('id-ID', {
+			dateStyle: 'medium',
+			timeStyle: 'short',
+		});
+	}
+
+	function gradeSyncDescription(item: NonTestAssessment) {
+		const unsyncedCount = syncFreshnessCount(item);
+		if (!item.grade_component_id) {
+			if (item.reviewed_submissions > 0) {
+				return `${item.reviewed_submissions} nilai reviewed siap dikirim ke gradebook.`;
+			}
+			return 'Belum ada nilai reviewed yang bisa dikirim ke gradebook.';
+		}
+		if (unsyncedCount > 0) {
+			return `${unsyncedCount} nilai reviewed berubah setelah sinkron terakhir. Kirim ulang agar gradebook mutakhir.`;
+		}
+		return `Sinkron terakhir ${formatDateTime(item.grade_synced_at)}${item.grade_synced_by ? ` oleh ${item.grade_synced_by}` : ''}.`;
 	}
 
 	function fetchAssessmentsPath() {
@@ -237,6 +273,9 @@
 		assessments = overview.assessments;
 		subjects = overview.subjects;
 		classes = overview.classes;
+		if (selectedAssessment) {
+			selectedAssessment = overview.assessments.find((item) => item.id === selectedAssessment?.id) ?? selectedAssessment;
+		}
 	}
 
 	function openInitialAssessment(rows: NonTestAssessment[]) {
@@ -562,6 +601,13 @@
 			});
 			await readClientJson<unknown>(response);
 			toast.success(`Nilai ${row.student_name} tersimpan`);
+			if (assessment.grade_component_id) {
+				operationState = {
+					tone: 'warning',
+					title: 'Nilai Berubah Setelah Sinkron',
+					message: `Nilai ${row.student_name} sudah diperbarui. Kirim ulang nilai "${assessment.title}" agar gradebook mengambil perubahan terbaru.`,
+				};
+			}
 			openScoringPanel(assessment);
 			await refresh();
 		} catch (error) {
@@ -611,7 +657,7 @@
 		<LoadingButton onclick={openCreateForm}>+ Buat Asesmen</LoadingButton>
 	</div>
 
-	<div class="grid gap-3 md:grid-cols-4">
+	<div class="grid gap-3 md:grid-cols-5">
 		<Card.Root class="border-emerald-100 shadow-sm">
 			<Card.Content class="p-4">
 				<p class="text-xs font-medium uppercase tracking-wider text-slate-500">Total Modul</p>
@@ -628,6 +674,12 @@
 			<Card.Content class="p-4">
 				<p class="text-xs font-medium uppercase tracking-wider text-slate-500">Draft</p>
 				<p class="mt-1 text-2xl font-semibold text-blue-800">{summary.draft}</p>
+			</Card.Content>
+		</Card.Root>
+		<Card.Root class="border-amber-100 shadow-sm">
+			<Card.Content class="p-4">
+				<p class="text-xs font-medium uppercase tracking-wider text-slate-500">Perlu Sinkron</p>
+				<p class="mt-1 text-2xl font-semibold text-amber-800">{summary.needsSync}</p>
 			</Card.Content>
 		</Card.Root>
 		<Card.Root class="border-slate-200 shadow-sm">
@@ -875,6 +927,7 @@
 											<div class="space-y-1">
 												<p>{item.reviewed_submissions}/{item.total_submissions} dinilai</p>
 												<Badge class={`border text-xs ${gradeSyncBadgeClass(item)}`}>{gradeSyncLabel(item)}</Badge>
+												<p class="max-w-56 text-xs leading-5 text-slate-500">{gradeSyncDescription(item)}</p>
 											</div>
 										</Table.Cell>
 										<Table.Cell>
@@ -939,6 +992,7 @@
 									<span>{item.reviewed_submissions}/{item.total_submissions} dinilai</span>
 									<Badge class={`border text-xs ${gradeSyncBadgeClass(item)}`}>{gradeSyncLabel(item)}</Badge>
 								</div>
+								<p class="mt-2 text-xs leading-5 text-slate-500">{gradeSyncDescription(item)}</p>
 								<div class="mt-3 flex flex-wrap justify-end gap-2">
 									<LoadingButton variant="outline" size="xs" onclick={() => openScoringPanel(item)}>Nilai</LoadingButton>
 									<LoadingButton
@@ -1013,6 +1067,36 @@
 				</div>
 			</Card.Header>
 			<Card.Content class="p-0">
+				<div class="border-b border-slate-100 bg-slate-50/70 p-4">
+					<div class="grid gap-3 lg:grid-cols-[1fr_12rem_12rem_10rem]">
+						<div>
+							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status Sinkron Gradebook</p>
+							<div class="mt-2 flex flex-wrap items-center gap-2">
+								<Badge class={`border text-xs ${gradeSyncBadgeClass(selectedAssessment)}`}>{gradeSyncLabel(selectedAssessment)}</Badge>
+								{#if syncFreshnessCount(selectedAssessment) > 0}
+									<Badge variant="outline" class="text-xs">{syncFreshnessCount(selectedAssessment)} nilai berubah</Badge>
+								{/if}
+							</div>
+							<p class="mt-2 text-sm leading-6 text-slate-600">{gradeSyncDescription(selectedAssessment)}</p>
+						</div>
+						<div>
+							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Sinkron Terakhir</p>
+							<p class="mt-2 text-sm font-medium text-slate-900">{formatDateTime(selectedAssessment.grade_synced_at)}</p>
+							<p class="text-xs text-slate-500">{selectedAssessment.grade_synced_by || 'Belum ada operator'}</p>
+						</div>
+						<div>
+							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Review Terakhir</p>
+							<p class="mt-2 text-sm font-medium text-slate-900">{formatDateTime(selectedAssessment.last_reviewed_at)}</p>
+							<p class="text-xs text-slate-500">{selectedAssessment.reviewed_submissions}/{selectedAssessment.total_submissions} dinilai</p>
+						</div>
+						<div>
+							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Belum Terkirim</p>
+							<p class={`mt-2 text-2xl font-semibold ${syncFreshnessCount(selectedAssessment) > 0 ? 'text-amber-800' : 'text-emerald-800'}`}>
+								{syncFreshnessCount(selectedAssessment)}
+							</p>
+						</div>
+					</div>
+				</div>
 				<AsyncContent promise={submissionsPromise} onerror={handleSubmissionsRenderError}>
 					{#snippet pending()}
 						<div class="space-y-3 p-5">
