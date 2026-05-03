@@ -1231,20 +1231,20 @@
 <Dialog.Root bind:open={showComposer}>
 	<Dialog.Content>
 		<div class="soal-composer-modal flex h-[94vh] w-[min(96vw,110rem)] max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-2xl">
-			<div class="shrink-0 border-b border-green-100 bg-white px-5 py-4 md:px-8">
-				<div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-					<div class="space-y-1">
-						<p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-green-700">
-							Komposer Soal Legacy
-						</p>
-						<h2 class="text-xl font-black uppercase italic tracking-tight text-slate-900">
-							{editingId ? 'Edit Butir Soal' : 'Penyusunan Soal Baru'}
-						</h2>
-						<p class="text-xs font-medium uppercase tracking-widest text-slate-500">
-							Satu modal penuh untuk template, rich text, opsi, kunci, preview, dan kesiapan.
-						</p>
+			<div class="shrink-0 border-b border-green-100 bg-white px-4 py-2.5 md:px-6">
+				<div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+					<div class="min-w-0">
+						<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+							<p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-green-700">
+								Komposer Soal Legacy
+							</p>
+							<span class="text-xs text-slate-300">/</span>
+							<h2 class="text-base font-black uppercase italic tracking-tight text-slate-900">
+								{editingId ? 'Edit Butir Soal' : 'Penyusunan Soal Baru'}
+							</h2>
+						</div>
 					</div>
-					<div class="flex flex-wrap gap-2 xl:justify-end">
+					<div class="flex flex-wrap gap-2 lg:justify-end">
 						<Button
 							type="button"
 							variant={composerMobilePanel === 'write' ? 'default' : 'outline'}
@@ -1276,9 +1276,9 @@
 				</div>
 			</div>
 
-			<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-5 md:p-8">
-				<div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.72fr)]">
-					<div class={`space-y-5 min-w-0 ${composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
+			<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 md:p-6">
+				<div class="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.72fr)]">
+					<div class={`space-y-4 min-w-0 ${composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
 						<section class="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
 							<div class="flex flex-col gap-2 lg:flex-row lg:items-center">
 								<div class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -1315,17 +1315,20 @@
 							</div>
 						</section>
 
-						<section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-							<h3 class="mb-4 text-sm font-black uppercase tracking-[0.2em] text-slate-800">Metadata Soal</h3>
-							<div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_10rem_8rem_12rem] md:items-end">
+						<section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+							<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+								<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Metadata Soal</h3>
+								<span class="text-[11px] text-slate-400">Poin final diatur saat soal masuk paket</span>
+							</div>
+							<div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_9rem_7rem_11rem] lg:items-end">
 								<div>
-									<label for="f-subject" class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600">
+									<label for="f-subject" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
 										Mata Pelajaran <span class="text-red-500">*</span>
 									</label>
 									<select
 										id="f-subject"
 										bind:value={fSubjectId}
-										class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+										class="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
 									>
 										<option value="">-- Pilih Mapel --</option>
 										{#each subjects as s (s.id)}
@@ -1334,13 +1337,13 @@
 									</select>
 								</div>
 								<div>
-									<label for="f-difficulty" class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600">
+									<label for="f-difficulty" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
 										Kesulitan
 									</label>
 									<select
 										id="f-difficulty"
 										bind:value={fDifficulty}
-										class="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+										class="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
 									>
 										{#each Object.entries(DIFFICULTY_LABEL) as [val, lbl] (val)}
 											<option value={val}>{lbl}</option>
@@ -1348,23 +1351,22 @@
 									</select>
 								</div>
 								<div>
-									<label for="f-weight" class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600">
+									<label for="f-weight" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
 										Bobot Paket
 									</label>
-									<Input id="f-weight" type="number" min="1" bind:value={fWeight} class="h-11 text-sm font-medium" />
-									<p class="mt-1 text-[10px] text-slate-400">Catatan kesiapan; poin final diatur saat soal masuk paket.</p>
+									<Input id="f-weight" type="number" min="1" bind:value={fWeight} class="h-9 text-sm font-medium" />
 								</div>
-								<label for="f-rtl" class="flex h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-dashed border-green-200 bg-green-50 px-3">
-									<span class="text-xs font-black uppercase tracking-wider text-green-800">Mode Arab / RTL</span>
+								<label for="f-rtl" class="flex h-9 cursor-pointer items-center justify-between gap-2 rounded-md border border-dashed border-green-200 bg-green-50 px-3">
+									<span class="text-[10px] font-black uppercase tracking-wider text-green-800">Mode Arab / RTL</span>
 									<input id="f-rtl" type="checkbox" bind:checked={fIsRtl} class="rounded accent-green-700" />
 								</label>
 							</div>
 						</section>
 
-						<section class="space-y-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+						<section class="space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div>
-								<h3 class="text-sm font-black uppercase tracking-[0.2em] text-slate-800">Isi Pertanyaan</h3>
-								<p class="mt-1 text-sm text-slate-500">Rich text legacy penuh untuk teks, gambar, daftar, dan formula.</p>
+								<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Isi Pertanyaan</h3>
+								<p class="mt-0.5 text-xs text-slate-500">Rich text legacy penuh untuk teks, gambar, daftar, dan formula.</p>
 							</div>
 							<LegacyRichTextEditor
 								bind:value={fStem}
@@ -1375,17 +1377,17 @@
 							/>
 						</section>
 
-						<section class="space-y-5 border-t border-slate-200 pt-7">
+						<section class="space-y-4 border-t border-slate-200 pt-5">
 							<div class="text-center">
-								<h3 class="text-sm font-black uppercase italic tracking-[0.26em] text-slate-500">Opsi & Kunci Jawaban</h3>
-								<p class="mt-2 text-sm text-slate-500">Setiap opsi memakai kotak rich text legacy sendiri.</p>
+								<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-slate-500">Opsi & Kunci Jawaban</h3>
+								<p class="mt-1 text-xs text-slate-500">Setiap opsi memakai kotak rich text legacy sendiri.</p>
 							</div>
-							<div class="grid grid-cols-1 gap-5">
+							<div class="grid grid-cols-1 gap-4">
 								{#each fOptions as _, i (ANSWER_LABELS[i])}
 									{@const label = ANSWER_LABELS[i]}
 									{@const isAnswer = fAnswerKey === label}
 									<section
-										class="space-y-4 rounded-3xl border bg-white p-5 shadow-sm transition-colors md:p-6 {isAnswer
+										class="space-y-3 rounded-xl border bg-white p-4 shadow-sm transition-colors {isAnswer
 											? 'border-green-500 ring-4 ring-green-100'
 											: 'border-slate-200 hover:border-slate-300'}"
 									>
@@ -1421,15 +1423,15 @@
 						</section>
 					</div>
 
-					<aside class={`space-y-5 min-w-0 xl:sticky xl:top-0 xl:self-start ${composerMobilePanel === 'write' ? 'hidden lg:block' : 'block'}`}>
-						<div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+					<aside class={`space-y-4 min-w-0 xl:sticky xl:top-0 xl:self-start ${composerMobilePanel === 'write' ? 'hidden lg:block' : 'block'}`}>
+						<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 							{@render composerPreview()}
 						</div>
 					</aside>
 				</div>
 			</div>
 
-			<div class="flex shrink-0 flex-col gap-3 border-t border-green-100 bg-white px-5 py-4 md:flex-row md:items-center md:justify-between md:px-8">
+			<div class="flex shrink-0 flex-col gap-2 border-t border-green-100 bg-white px-4 py-2.5 md:flex-row md:items-center md:justify-between md:px-6">
 				<div class="min-w-0 text-xs text-slate-500">
 					{#if draftStatus}
 						<span class="font-semibold text-green-700">{draftStatus}</span>
@@ -1440,7 +1442,7 @@
 				<div class="flex shrink-0 flex-wrap justify-end gap-2">
 					<Button
 						variant="outline"
-						class="h-9 text-sm"
+						class="h-8 text-xs"
 						onclick={() => {
 							clearDraft();
 							closeComposer();
@@ -1453,7 +1455,7 @@
 						disabled={!canSave}
 						loading={composerBusy}
 						loadingLabel="Menyimpan..."
-						class="h-9 bg-green-700 text-sm text-white hover:bg-green-800 disabled:opacity-50"
+						class="h-8 bg-green-700 text-xs text-white hover:bg-green-800 disabled:opacity-50"
 					>
 						{editingId ? 'Simpan Perubahan' : 'Simpan Soal'}
 					</LoadingButton>

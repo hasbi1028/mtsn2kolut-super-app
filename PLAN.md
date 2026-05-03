@@ -770,6 +770,7 @@ Three runtime units deployed across 3 VPS:
 - [x] Sidebar CBT disederhanakan menjadi satu menu "Bank Soal" menuju `/cbt/soal`; pin default guru ikut dipindahkan dari `/cbt/questions` ke `/cbt/soal`.
 - [x] Modal komposer `/cbt/soal` merapikan Template Cepat menjadi segmented toolbar satu baris agar metadata dan editor utama lebih cepat terlihat tanpa mengubah fungsi template.
 - [x] Status draft otomatis di modal komposer dipindahkan hanya ke footer sticky, sehingga tidak ada banner status besar yang mengambil ruang konten.
+- [x] Modal komposer `/cbt/soal` dipadatkan lagi: header satu baris, metadata dense row, card radius/padding lebih kecil, dan footer sticky lebih pendek.
 - [x] Backend menambahkan metadata pemakaian soal (`package_count`, `answer_count`, `is_locked`, `usage`) pada list/detail agar UI bisa membedakan soal draft yang masih bisa diedit cepat dan soal yang harus direvisi lewat duplikasi.
 - [x] Edit/hapus langsung diblokir untuk soal yang sudah masuk paket ujian atau memiliki jawaban siswa; approve/publish langsung via edit juga diblokir agar workflow tetap melalui aksi resmi.
 - [x] Import CSV legacy sekarang mengecek duplikat terhadap isi bank soal yang sudah ada pada mapel yang sama, bukan hanya duplikat dalam file import.
