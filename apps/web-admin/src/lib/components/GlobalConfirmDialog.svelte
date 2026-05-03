@@ -79,44 +79,52 @@
 	});
 </script>
 
-<Dialog.Root bind:open>
-	{#if current}
-		<Dialog.Content>
-			<Dialog.Header>
-				<Dialog.Title>{current.options.title}</Dialog.Title>
-				<Dialog.Description>
-					Tinjau dampak tindakan sebelum melanjutkan.
-				</Dialog.Description>
-			</Dialog.Header>
+<div class="global-confirm-dialog-layer">
+	<Dialog.Root bind:open>
+		{#if current}
+			<Dialog.Content>
+				<Dialog.Header>
+					<Dialog.Title>{current.options.title}</Dialog.Title>
+					<Dialog.Description>
+						Tinjau dampak tindakan sebelum melanjutkan.
+					</Dialog.Description>
+				</Dialog.Header>
 
-			<div class={`rounded-2xl border px-4 py-3 ${toneClasses(current.options.tone)}`}>
-				<p class="whitespace-pre-line text-sm leading-6">{current.options.message}</p>
-			</div>
-
-			{#if current.options.challenge}
-				<div class="mt-4 space-y-2">
-					<label for="confirm-challenge" class="block text-xs font-medium text-slate-600">
-						Ketik <span class="font-semibold text-slate-900">{current.options.challenge}</span> untuk mengaktifkan tombol konfirmasi.
-					</label>
-					<Input
-						id="confirm-challenge"
-						bind:value={challengeInput}
-						placeholder={current.options.challenge}
-						autocomplete="off"
-					/>
+				<div class={`rounded-2xl border px-4 py-3 ${toneClasses(current.options.tone)}`}>
+					<p class="whitespace-pre-line text-sm leading-6">{current.options.message}</p>
 				</div>
-			{/if}
 
-			<Dialog.Footer>
-				<Button variant="outline" onclick={() => finish(false)}>{current.options.cancelLabel}</Button>
-				<Button
-					variant={confirmButtonVariant(current.options.tone)}
-					disabled={!canConfirm}
-					onclick={() => finish(true)}
-				>
-					{current.options.confirmLabel}
-				</Button>
-			</Dialog.Footer>
-		</Dialog.Content>
-	{/if}
-</Dialog.Root>
+				{#if current.options.challenge}
+					<div class="mt-4 space-y-2">
+						<label for="confirm-challenge" class="block text-xs font-medium text-slate-600">
+							Ketik <span class="font-semibold text-slate-900">{current.options.challenge}</span> untuk mengaktifkan tombol konfirmasi.
+						</label>
+						<Input
+							id="confirm-challenge"
+							bind:value={challengeInput}
+							placeholder={current.options.challenge}
+							autocomplete="off"
+						/>
+					</div>
+				{/if}
+
+				<Dialog.Footer>
+					<Button variant="outline" onclick={() => finish(false)}>{current.options.cancelLabel}</Button>
+					<Button
+						variant={confirmButtonVariant(current.options.tone)}
+						disabled={!canConfirm}
+						onclick={() => finish(true)}
+					>
+						{current.options.confirmLabel}
+					</Button>
+				</Dialog.Footer>
+			</Dialog.Content>
+		{/if}
+	</Dialog.Root>
+</div>
+
+<style>
+	:global(.global-confirm-dialog-layer .overlay) {
+		z-index: 90;
+	}
+</style>
