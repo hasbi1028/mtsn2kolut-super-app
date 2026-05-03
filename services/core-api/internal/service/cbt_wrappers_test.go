@@ -287,7 +287,7 @@ func (f *fakeCbtPackageStore) GetCbtQuestion(ctx context.Context, id pgtype.UUID
 		f.questionRow.ID = id
 		return f.questionRow, f.questionErr
 	}
-	return db.GetCbtQuestionRow{ID: id, SubjectID: f.createArg.SubjectID}, f.questionErr
+	return db.GetCbtQuestionRow{ID: id, SubjectID: f.createArg.SubjectID, Status: db.CbtQuestionStatusEnumPublished}, f.questionErr
 }
 
 func (f *fakeCbtPackageStore) AddCbtPackageQuestion(ctx context.Context, arg db.AddCbtPackageQuestionParams) error {
@@ -341,7 +341,7 @@ func TestCreateCbtPackageHelperValidatesQuestionsAndPositions(t *testing.T) {
 	secondQuestionID := documentCycleTestUUID(207)
 	store := &fakeCbtPackageStore{
 		packageRow:  db.CbtPackage{ID: packageID, SubjectID: subjectID, Title: "Paket"},
-		questionRow: db.GetCbtQuestionRow{ID: firstQuestionID, SubjectID: subjectID},
+		questionRow: db.GetCbtQuestionRow{ID: firstQuestionID, SubjectID: subjectID, Status: db.CbtQuestionStatusEnumPublished},
 	}
 
 	got, err := createCbtPackage(context.Background(), store, CreateCbtPackageInput{

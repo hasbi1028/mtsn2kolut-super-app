@@ -24,7 +24,7 @@
 	type Question = {
 		id: string; subject_id: string; subject_code: string;
 		code: string; question_text: string; difficulty: string; status: string;
-		question_type?: string; cp_ref?: string; tp_ref?: string; kd_ref?: string;
+		workflow_status?: string; question_type?: string; cp_ref?: string; tp_ref?: string; kd_ref?: string;
 		material_topic?: string; cognitive_level?: string; hots_flag?: boolean;
 	};
 	type Subject = { id: string; name: string; code: string; };
@@ -96,11 +96,16 @@
 			: []
 	);
 	let selectedQuestions = $derived(questionPool.filter((q) => fSelectedIds.has(q.id)));
+	let availableBlueprintMissingCount = $derived(questionPool.filter(questionHasBlueprintGap).length);
+	let availableHotsCount = $derived(questionPool.filter((q) => q.hots_flag).length);
+	let availableTypeBuckets = $derived(countByLabel(questionPool, (q) => questionTypeLabel(q.question_type)));
 	let selectedBlueprintMatrix = $derived(buildBlueprintMatrix(selectedQuestions));
 	let selectedTypeBuckets = $derived(countByLabel(selectedQuestions, (q) => questionTypeLabel(q.question_type)));
 	let selectedCognitiveBuckets = $derived(countByLabel(selectedQuestions, (q) => compactValue(q.cognitive_level, 'Belum level')));
 	let selectedHotsCount = $derived(selectedQuestions.filter((q) => q.hots_flag).length);
 	let selectedBlueprintMissingCount = $derived(selectedQuestions.filter(questionHasBlueprintGap).length);
+	let packageReadinessIssues = $derived(buildPackageReadinessIssues());
+	let canCreatePackage = $derived(packageReadinessIssues.length === 0 && !fBusy);
 
 	function toggleQuestion(id: string) {
 		if (fSelectedIds.has(id)) fSelectedIds.delete(id);
@@ -132,6 +137,7 @@
 		const params = new URLSearchParams({
 			limit: String(questionPageSize),
 			offset: String(offset),
+			status: 'published',
 		});
 		const payload = await fetch(clientApiPathWithQuery('/api/cbt/questions', params))
 			.then((response) => readClientApiData<unknown>(response, 'Gagal memuat bank soal'));
@@ -186,6 +192,32 @@
 		return !compactValue(question.cp_ref, '')
 			|| (!compactValue(question.tp_ref, '') && !compactValue(question.kd_ref, ''))
 			|| !compactValue(question.cognitive_level, '');
+	}
+
+	function questionReviewLabel(question: Question) {
+		if (question.status === 'published') return 'Terbit';
+		if (question.workflow_status === 'approved') return 'Disetujui';
+		if (question.workflow_status === 'review') return 'Ditinjau';
+		if (question.workflow_status === 'rejected') return 'Revisi';
+		return 'Draft';
+	}
+
+	function questionReadinessIssues(question: Question) {
+		const issues: string[] = [];
+		if (question.status !== 'published') issues.push('belum terbit');
+		if (questionHasBlueprintGap(question)) issues.push('metadata kurang');
+		return issues;
+	}
+
+	function buildPackageReadinessIssues() {
+		const issues: string[] = [];
+		if (!fSubjectId) issues.push('Pilih mata pelajaran');
+		if (!fTitle.trim()) issues.push('Isi nama paket');
+		if (!fDuration || fDuration < 10) issues.push('Durasi minimal 10 menit');
+		if (selectedQuestions.length === 0) issues.push('Pilih minimal 1 soal terbit');
+		const blocked = selectedQuestions.filter((question) => question.status !== 'published');
+		if (blocked.length > 0) issues.push(`${blocked.length} soal belum terbit`);
+		return issues;
 	}
 
 	function countByLabel(questions: Question[], selector: (question: Question) => string): BlueprintBucket[] {
@@ -334,7 +366,10 @@
 	}
 
 	async function createPackage() {
-		if (!fSubjectId || !fTitle || !fDuration) return;
+		if (packageReadinessIssues.length > 0) {
+			setOperationState('warning', 'Paket Belum Siap', packageReadinessIssues[0] ?? 'Lengkapi paket ujian terlebih dahulu.');
+			return;
+		}
 		fBusy = true;
 		try {
 			const res = await fetch('/api/cbt/packages', {
@@ -440,17 +475,36 @@
 
 				{#if fSubjectId}
 					<div>
-						<div class="text-xs text-slate-500 mb-2 block">
-							Pilih Soal dari Bank ({questionPool.length} soal tersedia)
-							{#if selectedQuestions.length > 0}
-								— <span class="text-green-700 font-medium">{selectedQuestions.length} dipilih</span>
-							{/if}
+						<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+							<div class="text-xs text-slate-500">
+								Pilih Soal dari Bank ({questionPool.length} soal terbit)
+								{#if selectedQuestions.length > 0}
+									— <span class="font-medium text-green-700">{selectedQuestions.length} dipilih</span>
+								{/if}
+							</div>
+							<div class="flex flex-wrap gap-1">
+								<Badge class="border-green-200 bg-green-50 text-green-700">{questionPool.length} terbit</Badge>
+								<Badge variant={availableBlueprintMissingCount > 0 ? 'secondary' : 'outline'} class="bg-white">
+									{availableBlueprintMissingCount > 0 ? `${availableBlueprintMissingCount} metadata kurang` : 'Metadata siap'}
+								</Badge>
+								{#if availableHotsCount > 0}
+									<Badge class="border-amber-200 bg-amber-50 text-amber-700">{availableHotsCount} HOTS</Badge>
+								{/if}
+							</div>
 						</div>
 						{#if questionPool.length === 0}
 							<p class="text-sm text-slate-400 py-4 text-center border rounded-md">
-								Belum ada soal berstatus "Terbit" untuk mata pelajaran ini
+								Belum ada soal berstatus "Terbit" untuk mata pelajaran ini. Terbitkan soal dari Bank Soal sebelum membuat paket.
 							</p>
 						{:else}
+							<div class="mb-2 rounded-md border border-green-100 bg-green-50/60 px-3 py-2 text-xs text-green-900">
+								<div class="flex flex-wrap gap-1.5">
+									<span class="font-semibold">Pool bentuk soal:</span>
+									{#each availableTypeBuckets as bucket (bucket.label)}
+										<span class="rounded bg-white px-1.5 py-0.5">{bucket.label}: {bucket.count}</span>
+									{/each}
+								</div>
+							</div>
 							<div class="border rounded-md max-h-64 overflow-y-auto">
 									{#each questionPool as q (q.id)}
 									<label class="flex items-start gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer border-b last:border-b-0">
@@ -463,12 +517,16 @@
 												{/if}
 												<Badge variant="outline" class="text-xs py-0">{questionTypeLabel(q.question_type)}</Badge>
 												<Badge variant="outline" class="text-xs py-0">{difficultyLabel(q.difficulty)}</Badge>
+												<Badge class="border-green-200 bg-green-50 text-green-700 text-xs py-0">{questionReviewLabel(q)}</Badge>
 												{#if q.cognitive_level}
 													<Badge variant="secondary" class="text-xs py-0">{q.cognitive_level}</Badge>
 												{/if}
 												{#if q.hots_flag}
 													<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs py-0">HOTS</Badge>
 												{/if}
+												{#each questionReadinessIssues(q) as issue (`${q.id}-${issue}`)}
+													<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs py-0">{issue}</Badge>
+												{/each}
 											</div>
 										</div>
 									</label>
@@ -542,11 +600,21 @@
 								</div>
 							</div>
 						{/if}
+						{#if packageReadinessIssues.length > 0}
+							<div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+								<span class="font-semibold">Belum siap dibuat:</span>
+								<span>{packageReadinessIssues.join(', ')}</span>
+							</div>
+						{:else}
+							<div class="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs font-medium text-green-800">
+								Paket siap dibuat dengan soal terbit yang sudah terpilih.
+							</div>
+						{/if}
 					</div>
 				{/if}
 
 				<div class="flex gap-2">
-					<LoadingButton disabled={fBusy || !fSubjectId || !fTitle || !fDuration} onclick={() => void createPackage()} loading={fBusy} loadingLabel="Menyimpan...">
+					<LoadingButton disabled={!canCreatePackage} onclick={() => void createPackage()} loading={fBusy} loadingLabel="Menyimpan...">
 						{`Buat Paket${selectedQuestions.length > 0 ? ` (${selectedQuestions.length} soal)` : ''}`}
 					</LoadingButton>
 					<LoadingButton variant="outline" onclick={() => (showForm = false)}>Batal</LoadingButton>

@@ -99,6 +99,9 @@ func createCbtPackage(ctx context.Context, q cbtPackageCreateStore, input Create
 		if question.SubjectID != input.SubjectID {
 			return db.CbtPackage{}, fmt.Errorf("semua soal harus dari mapel yang sama")
 		}
+		if question.Status != db.CbtQuestionStatusEnumPublished {
+			return db.CbtPackage{}, fmt.Errorf("semua soal paket harus berstatus terbit")
+		}
 		if err := q.AddCbtPackageQuestion(ctx, db.AddCbtPackageQuestionParams{
 			PackageID:  pkg.ID,
 			QuestionID: questionID,
