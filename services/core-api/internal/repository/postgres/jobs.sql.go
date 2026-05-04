@@ -103,17 +103,29 @@ func (q *Queries) ClaimJob(ctx context.Context, claimedBy string) (ClaimJobRow, 
 	return i, err
 }
 
-const completeJob = `-- name: CompleteJob :exec
+const completeJob = `-- name: CompleteJob :execrows
 UPDATE jobs
 SET status        = 'success',
     error_message = '',
+    claimed_by    = '',
+    claimed_at    = NULL,
     updated_at    = NOW()
 WHERE id = $1
+  AND status = 'running'
+  AND claimed_by = $2
 `
 
-func (q *Queries) CompleteJob(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, completeJob, id)
-	return err
+type CompleteJobParams struct {
+	ID        pgtype.UUID `json:"id"`
+	ClaimedBy string      `json:"claimed_by"`
+}
+
+func (q *Queries) CompleteJob(ctx context.Context, arg CompleteJobParams) (int64, error) {
+	result, err := q.db.Exec(ctx, completeJob, arg.ID, arg.ClaimedBy)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const countJobs = `-- name: CountJobs :one
@@ -180,28 +192,40 @@ func (q *Queries) CreateJobIfAbsent(ctx context.Context, arg CreateJobIfAbsentPa
 	return i, err
 }
 
-const failJob = `-- name: FailJob :exec
+const failJob = `-- name: FailJob :execrows
 UPDATE jobs
 SET status        = 'failed',
     error_message = $2,
     claimed_by    = '',
+    claimed_at    = NULL,
     next_retry_at = CASE
-      WHEN attempts < max_attempts THEN NOW() + ($3 || ' seconds')::INTERVAL
+      WHEN attempts < max_attempts THEN NOW() + ($4 || ' seconds')::INTERVAL
       ELSE NULL
     END,
     updated_at    = NOW()
 WHERE id = $1
+  AND status = 'running'
+  AND claimed_by = $3
 `
 
 type FailJobParams struct {
 	ID           pgtype.UUID `json:"id"`
 	ErrorMessage string      `json:"error_message"`
-	Column3      pgtype.Text `json:"column_3"`
+	ClaimedBy    string      `json:"claimed_by"`
+	Column4      pgtype.Text `json:"column_4"`
 }
 
-func (q *Queries) FailJob(ctx context.Context, arg FailJobParams) error {
-	_, err := q.db.Exec(ctx, failJob, arg.ID, arg.ErrorMessage, arg.Column3)
-	return err
+func (q *Queries) FailJob(ctx context.Context, arg FailJobParams) (int64, error) {
+	result, err := q.db.Exec(ctx, failJob,
+		arg.ID,
+		arg.ErrorMessage,
+		arg.ClaimedBy,
+		arg.Column4,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getJob = `-- name: GetJob :one

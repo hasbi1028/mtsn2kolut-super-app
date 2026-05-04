@@ -25,16 +25,18 @@ type fakeWorkerJobService struct {
 	getRow db.GetJobRow
 	getErr error
 
-	completeID  pgtype.UUID
-	completeErr error
+	completeID       pgtype.UUID
+	completeWorkerID string
+	completeErr      error
 
-	failID     pgtype.UUID
-	failError  string
-	failRetry  pgtype.Text
-	failErr    error
-	statsRow   db.GetJobStatsRow
-	statsErr   error
-	statsCalls int
+	failID       pgtype.UUID
+	failWorkerID string
+	failError    string
+	failRetry    pgtype.Text
+	failErr      error
+	statsRow     db.GetJobStatsRow
+	statsErr     error
+	statsCalls   int
 }
 
 func (f *fakeWorkerJobService) Claim(ctx context.Context, workerID string) (db.ClaimJobRow, error) {
@@ -47,13 +49,15 @@ func (f *fakeWorkerJobService) Get(ctx context.Context, id pgtype.UUID) (db.GetJ
 	return f.getRow, f.getErr
 }
 
-func (f *fakeWorkerJobService) Complete(ctx context.Context, id pgtype.UUID) error {
+func (f *fakeWorkerJobService) Complete(ctx context.Context, id pgtype.UUID, workerID string) error {
 	f.completeID = id
+	f.completeWorkerID = workerID
 	return f.completeErr
 }
 
-func (f *fakeWorkerJobService) Fail(ctx context.Context, id pgtype.UUID, errorMessage string, retryAfter pgtype.Text) error {
+func (f *fakeWorkerJobService) Fail(ctx context.Context, id pgtype.UUID, workerID string, errorMessage string, retryAfter pgtype.Text) error {
 	f.failID = id
+	f.failWorkerID = workerID
 	f.failError = errorMessage
 	f.failRetry = retryAfter
 	return f.failErr
@@ -103,20 +107,20 @@ func TestPusakaWorkerSuccessHandlersForwardPayloads(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	req := withRouteParam(httptest.NewRequest(http.MethodPost, "/api/pusaka/worker/jobs/"+jobID.String()+"/complete", strings.NewReader(`{"tanggal":"2026-05-01","jam_masuk":"07:10","jam_pulang":"15:00"}`)), "id", jobID.String())
+	req := withRouteParam(httptest.NewRequest(http.MethodPost, "/api/pusaka/worker/jobs/"+jobID.String()+"/complete", strings.NewReader(`{"worker_id":"worker-1","tanggal":"2026-05-01","jam_masuk":"07:10","jam_pulang":"15:00"}`)), "id", jobID.String())
 	h.Complete(rec, req)
-	if rec.Code != http.StatusNoContent || jobs.getID != jobID || jobs.completeID != jobID {
-		t.Fatalf("Complete() status/get/complete = %d/%v/%v", rec.Code, jobs.getID, jobs.completeID)
+	if rec.Code != http.StatusNoContent || jobs.getID != jobID || jobs.completeID != jobID || jobs.completeWorkerID != "worker-1" {
+		t.Fatalf("Complete() status/get/complete/worker = %d/%v/%v/%q", rec.Code, jobs.getID, jobs.completeID, jobs.completeWorkerID)
 	}
 	if attendance.upsertArg.EmployeeID != employeeID || !attendance.upsertArg.Tanggal.Valid || attendance.upsertArg.JamMasuk != "07:10" || attendance.upsertArg.SourceJobID != jobID {
 		t.Fatalf("Complete() attendance arg = %+v, want job employee attendance", attendance.upsertArg)
 	}
 
 	rec = httptest.NewRecorder()
-	req = withRouteParam(httptest.NewRequest(http.MethodPost, "/api/pusaka/worker/jobs/"+jobID.String()+"/fail", strings.NewReader(`{"error":"timeout","retry_after_secs":"120"}`)), "id", jobID.String())
+	req = withRouteParam(httptest.NewRequest(http.MethodPost, "/api/pusaka/worker/jobs/"+jobID.String()+"/fail", strings.NewReader(`{"worker_id":"worker-1","error":"timeout","retry_after_secs":"120"}`)), "id", jobID.String())
 	h.Fail(rec, req)
-	if rec.Code != http.StatusNoContent || jobs.failID != jobID || jobs.failError != "timeout" || jobs.failRetry.String != "120" {
-		t.Fatalf("Fail() status/args = %d/%v/%q/%+v", rec.Code, jobs.failID, jobs.failError, jobs.failRetry)
+	if rec.Code != http.StatusNoContent || jobs.failID != jobID || jobs.failWorkerID != "worker-1" || jobs.failError != "timeout" || jobs.failRetry.String != "120" {
+		t.Fatalf("Fail() status/args = %d/%v/%q/%q/%+v", rec.Code, jobs.failID, jobs.failWorkerID, jobs.failError, jobs.failRetry)
 	}
 
 	rec = httptest.NewRecorder()
@@ -225,7 +229,7 @@ func TestPusakaWorkerValidationAndServiceErrors(t *testing.T) {
 
 		jobs.getErr = errors.New("get failed")
 		rec = httptest.NewRecorder()
-		req := withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/complete", strings.NewReader(`{"tanggal":"2026-05-01"}`)), "id", jobID.String())
+		req := withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/complete", strings.NewReader(`{"worker_id":"worker-1","tanggal":"2026-05-01"}`)), "id", jobID.String())
 		h.Complete(rec, req)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("Complete(get error) status = %d, want 500", rec.Code)
@@ -233,7 +237,7 @@ func TestPusakaWorkerValidationAndServiceErrors(t *testing.T) {
 
 		jobs.getErr = nil
 		rec = httptest.NewRecorder()
-		req = withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/complete", strings.NewReader(`{"tanggal":"bad"}`)), "id", jobID.String())
+		req = withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/complete", strings.NewReader(`{"worker_id":"worker-1","tanggal":"bad"}`)), "id", jobID.String())
 		h.Complete(rec, req)
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("Complete(invalid tanggal) status = %d, want 400", rec.Code)
@@ -241,7 +245,7 @@ func TestPusakaWorkerValidationAndServiceErrors(t *testing.T) {
 
 		attendance.upsertErr = errors.New("attendance failed")
 		rec = httptest.NewRecorder()
-		req = withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/complete", strings.NewReader(`{"tanggal":"2026-05-01"}`)), "id", jobID.String())
+		req = withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/complete", strings.NewReader(`{"worker_id":"worker-1","tanggal":"2026-05-01"}`)), "id", jobID.String())
 		h.Complete(rec, req)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("Complete(attendance error) status = %d, want 500", rec.Code)
@@ -251,7 +255,7 @@ func TestPusakaWorkerValidationAndServiceErrors(t *testing.T) {
 		jobs.completeErr = errors.New("complete failed")
 		jobs.getID = pgtype.UUID{}
 		rec = httptest.NewRecorder()
-		req = withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/complete", strings.NewReader(`{}`)), "id", jobID.String())
+		req = withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/complete", strings.NewReader(`{"worker_id":"worker-1"}`)), "id", jobID.String())
 		h.Complete(rec, req)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("Complete(complete error) status = %d, want 500", rec.Code)
@@ -279,7 +283,7 @@ func TestPusakaWorkerValidationAndServiceErrors(t *testing.T) {
 		}
 
 		rec = httptest.NewRecorder()
-		req = withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/fail", strings.NewReader(`{"error":"timeout"}`)), "id", jobID.String())
+		req = withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/fail", strings.NewReader(`{"worker_id":"worker-1","error":"timeout"}`)), "id", jobID.String())
 		h.Fail(rec, req)
 		if rec.Code != http.StatusNoContent || jobs.failRetry.String != "60" {
 			t.Fatalf("Fail(default retry) status/retry = %d/%q, want 204/60", rec.Code, jobs.failRetry.String)
@@ -287,7 +291,7 @@ func TestPusakaWorkerValidationAndServiceErrors(t *testing.T) {
 
 		jobs.failErr = errors.New("fail failed")
 		rec = httptest.NewRecorder()
-		req = withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/fail", strings.NewReader(`{"error":"timeout"}`)), "id", jobID.String())
+		req = withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/fail", strings.NewReader(`{"worker_id":"worker-1","error":"timeout"}`)), "id", jobID.String())
 		h.Fail(rec, req)
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("Fail(service error) status = %d, want 500", rec.Code)

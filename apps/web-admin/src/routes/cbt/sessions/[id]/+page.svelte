@@ -16,6 +16,7 @@
 	import RichContent from '$lib/components/RichContent.svelte';
 	import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
+	import { cbtRoomSetupErrorMessage, roomReadinessMessage, roomReadinessTone, type CbtRoomReadiness } from '$lib/client/cbt-room-readiness';
 	import { csvRow } from '$lib/csv';
 
 	type SessionInfo = {
@@ -53,11 +54,7 @@
 		notes: string;
 	};
 	type EmployeeOption = { id: string; nip: string; nama: string; unit_kerja?: string; is_active?: boolean; };
-	type RoomReadiness = {
-		room_count: number; total_capacity: number; participant_count: number;
-		assigned_participant_count: number; unassigned_participant_count: number;
-		missing_seat_count: number; rooms_without_proctor: number; proctor_assignment_count: number;
-	};
+	type RoomReadiness = CbtRoomReadiness;
 	type ProctoringRow = {
 		participant_id: string; nis: string; nama: string;
 		token: string; room_name: string; seat_no?: number | null;
@@ -243,6 +240,7 @@
 	let shuffleBusy = $state(false);
 	let selectedSchoolRoomId = $state('');
 	let newRoomName = $state('');
+	let roomNameCustomized = $state(false);
 	let newRoomCap = $state(30);
 	let roomBusy = $state(false);
 	let seatBusy = $state(false);
@@ -329,20 +327,29 @@
 		return schoolRooms.find((room) => room.id === selectedSchoolRoomId) ?? null;
 	}
 
+	function roomSetupLocked(status: string | null | undefined) {
+		return status === 'active' || status === 'finished';
+	}
+
+	function selectSchoolRoom(value: string) {
+		selectedSchoolRoomId = value;
+		const room = schoolRooms.find((item) => item.id === value);
+		if (!room) {
+			if (!roomNameCustomized) newRoomName = '';
+			return;
+		}
+		newRoomCap = room.exam_capacity || room.default_capacity || 30;
+		if (!roomNameCustomized) newRoomName = room.name;
+	}
+
+	function updateNewRoomName(value: string) {
+		newRoomName = value;
+		roomNameCustomized = true;
+	}
+
 	function roomCapacityRatio(room: Room) {
 		if (room.capacity <= 0) return 0;
 		return Math.min(100, (room.participant_count / room.capacity) * 100);
-	}
-
-	function roomReadinessTone(readiness: RoomReadiness | null) {
-		if (!readiness) return 'info';
-		if (readiness.unassigned_participant_count > 0 || readiness.rooms_without_proctor > 0 || readiness.total_capacity < readiness.participant_count) return 'warning';
-		return 'success';
-	}
-
-	function roomReadinessMessage(readiness: RoomReadiness | null) {
-		if (!readiness) return 'Kesiapan ruangan belum dimuat.';
-		return `${readiness.assigned_participant_count}/${readiness.participant_count} peserta sudah punya ruang, kapasitas total ${readiness.total_capacity}, ${readiness.rooms_without_proctor} ruang belum punya pengawas, ${readiness.missing_seat_count} peserta belum punya nomor meja.`;
 	}
 
 	function nextDetailAction(readiness: RoomReadiness | null): DetailNextAction {
@@ -1168,6 +1175,10 @@
 	}
 
 	async function createRoom() {
+		if (roomSetupLocked(session?.status)) {
+			setOperationState('warning', 'Ruangan Terkunci', 'Ruangan terkunci setelah sesi aktif/selesai.');
+			return;
+		}
 		if (!newRoomName.trim() && !selectedSchoolRoomId) return;
 		const masterRoom = selectedSchoolRoom();
 		const roomLabel = newRoomName.trim() || masterRoom?.name || 'Ruangan';
@@ -1185,17 +1196,22 @@
 			await readClientJson<unknown>(res);
 			setOperationState('success', 'Ruangan Ditambahkan', `Ruangan "${roomLabel}" sudah tersimpan. Pastikan kapasitas dan pengawasnya siap sebelum peserta diacak.`);
 			showToast(`Ruangan "${roomLabel}" ditambahkan`);
-			selectedSchoolRoomId = ''; newRoomName = ''; newRoomCap = 30;
+			selectedSchoolRoomId = ''; newRoomName = ''; roomNameCustomized = false; newRoomCap = 30;
 			await Promise.all([loadRooms(), loadRoomReadiness()]);
 		} catch (error) {
-			setOperationState('error', 'Ruangan Gagal Ditambahkan', 'Ruangan baru belum berhasil disimpan. Periksa nama atau kapasitas lalu coba lagi.');
-			showToast(mutationErrorMessage(error, 'Gagal tambah ruangan'), false);
+			const message = cbtRoomSetupErrorMessage(error, 'Ruangan baru belum berhasil disimpan. Periksa nama atau kapasitas lalu coba lagi.');
+			setOperationState('error', 'Ruangan Gagal Ditambahkan', message);
+			showToast(message, false);
 		} finally {
 			roomBusy = false;
 		}
 	}
 
 	async function deleteRoom(rid: string, roomName: string) {
+		if (roomSetupLocked(session?.status)) {
+			setOperationState('warning', 'Ruangan Terkunci', 'Ruangan terkunci setelah sesi aktif/selesai.');
+			return;
+		}
 		if (!(await confirmPhrase('Hapus Ruangan Sesi', `Ruangan "${roomName}" akan dihapus dari sesi dan peserta di dalamnya akan dilepas dari alokasi ruangan.`, 'RUANGAN'))) return;
 		roomDeleteBusyId = rid;
 		try {
@@ -1204,14 +1220,19 @@
 			setOperationState('warning', 'Ruangan Dihapus', `Ruangan "${roomName}" dihapus dan peserta yang terkait perlu dialokasikan ulang.`);
 			await loadRooms(); await loadParticipants(); await loadRoomReadiness();
 		} catch (error) {
-			setOperationState('error', 'Ruangan Gagal Dihapus', 'Ruangan belum berhasil dihapus. Pastikan sesi masih bisa diubah lalu coba lagi.');
-			showToast(mutationErrorMessage(error, 'Gagal menghapus ruangan'), false);
+			const message = cbtRoomSetupErrorMessage(error, 'Ruangan belum berhasil dihapus. Pastikan sesi masih bisa diubah lalu coba lagi.');
+			setOperationState('error', 'Ruangan Gagal Dihapus', message);
+			showToast(message, false);
 		} finally {
 			roomDeleteBusyId = '';
 		}
 	}
 
 	async function saveRoomProctor(room: Room) {
+		if (roomSetupLocked(session?.status)) {
+			setOperationState('warning', 'Ruangan Terkunci', 'Ruangan terkunci setelah sesi aktif/selesai.');
+			return;
+		}
 		const primaryEmployeeId = roomProctorInput[room.id] ?? '';
 		proctorSaveBusyId = room.id;
 		try {
@@ -1228,14 +1249,19 @@
 			showToast('Pengawas ruangan diperbarui');
 			await Promise.all([loadRooms(), loadRoomReadiness()]);
 		} catch (error) {
-			setOperationState('error', 'Pengawas Gagal Disimpan', 'Penugasan pengawas belum berhasil. Pastikan akun memiliki akses admin dan coba lagi.');
-			showToast(mutationErrorMessage(error, 'Gagal menyimpan pengawas'), false);
+			const message = cbtRoomSetupErrorMessage(error, 'Penugasan pengawas belum berhasil. Akses pengaturan sesi hanya untuk admin/operator CBT.');
+			setOperationState('error', 'Pengawas Gagal Disimpan', message);
+			showToast(message, false);
 		} finally {
 			proctorSaveBusyId = '';
 		}
 	}
 
 	async function shuffleRooms() {
+		if (roomSetupLocked(session?.status)) {
+			setOperationState('warning', 'Ruangan Terkunci', 'Ruangan terkunci setelah sesi aktif/selesai.');
+			return;
+		}
 		if (!(await confirmPhrase('Acak Peserta ke Ruangan', 'Sistem akan menghapus alokasi ruangan sebelumnya dan membagikan ulang peserta secara otomatis. Pastikan daftar ruangan dan kapasitas sudah final.', 'ACAK'))) return;
 		shuffleBusy = true;
 		try {
@@ -1245,14 +1271,19 @@
 			showToast('Peserta berhasil diacak ke ruangan');
 			await loadRooms(); await loadParticipants(); await loadRoomReadiness();
 		} catch (error) {
-			setOperationState('error', 'Pengacakan Ruangan Gagal', 'Sistem belum berhasil mengacak peserta ke ruangan. Cek kapasitas ruangan atau ulangi lagi.');
-			showToast(mutationErrorMessage(error, 'Gagal mengacak ruangan'), false);
+			const message = cbtRoomSetupErrorMessage(error, 'Sistem belum berhasil mengacak peserta ke ruangan. Cek kapasitas ruangan atau ulangi lagi.');
+			setOperationState('error', 'Pengacakan Ruangan Gagal', message);
+			showToast(message, false);
 		} finally {
 			shuffleBusy = false;
 		}
 	}
 
 	async function autoAssignSeats() {
+		if (roomSetupLocked(session?.status)) {
+			setOperationState('warning', 'Ruangan Terkunci', 'Ruangan terkunci setelah sesi aktif/selesai.');
+			return;
+		}
 		if (!(await confirmPhrase('Atur Nomor Meja Otomatis', 'Nomor meja peserta akan diurutkan ulang per ruangan. Gunakan setelah alokasi ruangan sudah final.', 'MEJA'))) return;
 		seatBusy = true;
 		try {
@@ -1260,16 +1291,21 @@
 			await readClientJson<unknown>(res);
 			setOperationState('success', 'Nomor Meja Diatur Otomatis', 'Nomor meja peserta sudah diperbarui. Lanjutkan ke pengecekan akhir per ruangan jika diperlukan.');
 			showToast('Nomor meja berhasil diurutkan otomatis');
-			await loadParticipants(); await loadRoomReadiness();
+			await Promise.all([loadParticipants(), loadRooms(), loadRoomReadiness()]);
 		} catch (error) {
-			setOperationState('error', 'Nomor Meja Gagal Diatur', 'Pengaturan otomatis belum berhasil. Pastikan peserta sudah punya ruangan lalu coba lagi.');
-			showToast(mutationErrorMessage(error, 'Gagal mengatur nomor meja otomatis'), false);
+			const message = cbtRoomSetupErrorMessage(error, 'Pengaturan otomatis belum berhasil. Pastikan peserta sudah punya ruangan lalu coba lagi.');
+			setOperationState('error', 'Nomor Meja Gagal Diatur', message);
+			showToast(message, false);
 		} finally {
 			seatBusy = false;
 		}
 	}
 
 	async function assignSeat(pid: string) {
+		if (roomSetupLocked(session?.status)) {
+			setOperationState('warning', 'Ruangan Terkunci', 'Ruangan terkunci setelah sesi aktif/selesai.');
+			return;
+		}
 		const roomId = roomInput[pid];
 		const seatNo = seatInput[pid];
 		if (!roomId || !seatNo || seatNo <= 0) {
@@ -1286,10 +1322,11 @@
 			await readClientJson<unknown>(res);
 			setOperationState('success', 'Nomor Meja Peserta Disimpan', 'Ruangan dan nomor meja peserta sudah diperbarui sesuai pengaturan operator.');
 			showToast('No meja peserta diperbarui');
-			await loadParticipants();
+			await Promise.all([loadParticipants(), loadRooms(), loadRoomReadiness()]);
 		} catch (error) {
-			setOperationState('error', 'Nomor Meja Gagal Disimpan', 'Perubahan ruangan atau nomor meja belum berhasil. Periksa input dan ulangi lagi.');
-			showToast(mutationErrorMessage(error, 'Gagal menyimpan nomor meja'), false);
+			const message = cbtRoomSetupErrorMessage(error, 'Perubahan ruangan atau nomor meja belum berhasil. Periksa input dan ulangi lagi.');
+			setOperationState('error', 'Nomor Meja Gagal Disimpan', message);
+			showToast(message, false);
 		} finally {
 			seatSaveBusyId = '';
 		}
@@ -1550,6 +1587,7 @@
 			{@const detail = value as SessionResultsDetail}
 			{@const currentSession = detail.session}
 			{@const currentResults = detail.results}
+			{@const roomControlsLocked = roomSetupLocked(currentSession.status)}
 		<!-- Session header -->
 		<div class="flex items-start justify-between gap-4 flex-wrap">
 			<div>
@@ -1655,7 +1693,7 @@
 					<p class="mt-0.5 text-xs text-slate-600">{detailNextAction.message}</p>
 				</div>
 				{#if detailNextAction.run === 'auto_seats'}
-					<LoadingButton size="sm" loading={seatBusy} loadingLabel="Mengatur..." disabled={seatBusy} onclick={autoAssignSeats}>
+					<LoadingButton size="sm" loading={seatBusy} loadingLabel="Mengatur..." disabled={roomControlsLocked || seatBusy} onclick={autoAssignSeats}>
 						{detailNextAction.label}
 					</LoadingButton>
 				{:else if detailNextAction.tab}
@@ -1668,9 +1706,14 @@
 
 		<!-- Tabs -->
 		<div class="border-b border-green-100">
-			<nav class="flex gap-1">
+		<div class="flex gap-1" role="tablist" aria-label="Navigasi detail sesi CBT">
 				{#each detailTabs as tab (tab.id)}
 					<button
+						id={`tab-${tab.id}`}
+						type="button"
+						role="tab"
+						aria-selected={activeTab === tab.id}
+						aria-controls={`panel-${tab.id}`}
 						onclick={() => switchTab(tab.id)}
 						class="px-4 py-2 text-sm font-medium border-b-2 transition-colors {activeTab === tab.id
 							? 'border-[oklch(0.38_0.13_145)] text-[oklch(0.38_0.13_145)]'
@@ -1679,7 +1722,7 @@
 						{tab.label}
 					</button>
 				{/each}
-			</nav>
+			</div>
 		</div>
 
 		<!-- Tab: Hasil -->
@@ -1871,6 +1914,7 @@
 
 		<!-- Tab: Peserta & Token -->
 		{:else if activeTab === 'peserta'}
+			<div id="panel-peserta" role="tabpanel" aria-labelledby="tab-peserta" class="space-y-4">
 			<div class="flex gap-2 flex-wrap">
 				<LoadingButton variant="outline" size="sm" onclick={() => void generateTokens()} loading={tokenBusy} disabled={tokenBusy} loadingLabel="Membuat token...">⚡ Buat Token Massal</LoadingButton>
 				<LoadingButton variant="outline" size="sm" onclick={() => void refreshParticipants()} loading={participantRefreshBusy} loadingLabel="Memuat..." disabled={participantRefreshBusy}>↻ Refresh</LoadingButton>
@@ -1879,7 +1923,7 @@
 				tone="warning"
 				compact
 				title="Aksi Sensitif Peserta"
-				message="Pembuatan token massal, ubah token, dan simpan nomor meja akan langsung mengubah data operasional ujian. Pastikan pengawas sudah siap menerima perubahan terbaru."
+				message={roomControlsLocked ? 'Ruangan terkunci setelah sesi aktif/selesai. Token masih bisa dikelola sesuai kebutuhan operasional, tetapi ruangan dan nomor meja tidak dapat diubah.' : 'Pembuatan token massal, ubah token, dan simpan nomor meja akan langsung mengubah data operasional ujian. Pastikan pengawas sudah siap menerima perubahan terbaru.'}
 			/>
 			<Card.Root>
 				<Card.Content class="p-0 overflow-x-auto">
@@ -1923,14 +1967,14 @@
 									</Table.Cell>
 										<Table.Cell class="text-right">
 											<div class="flex items-center justify-end gap-1">
-												<select bind:value={roomInput[p.id]} class="h-8 rounded-md border border-input bg-background px-2 text-xs">
+										<select bind:value={roomInput[p.id]} aria-label={`Pilih ruangan untuk ${p.nama}`} class="h-8 rounded-md border border-input bg-background px-2 text-xs" disabled={roomControlsLocked}>
 													<option value="">Ruangan</option>
 													{#each rooms as room (room.id)}
 														<option value={room.id}>{room.room_name}</option>
 													{/each}
 												</select>
-												<Input bind:value={seatInput[p.id]} type="number" min="1" class="h-8 w-16" />
-												<LoadingButton variant="outline" size="sm" onclick={() => assignSeat(p.id)} loading={seatSaveBusyId === p.id} disabled={(seatSaveBusyId !== '' && seatSaveBusyId !== p.id) || seatBusy} loadingLabel="Menyimpan...">Simpan</LoadingButton>
+										<Input bind:value={seatInput[p.id]} type="number" min="1" aria-label={`Nomor meja untuk ${p.nama}`} class="h-8 w-16" disabled={roomControlsLocked} />
+										<LoadingButton variant="outline" size="sm" onclick={() => assignSeat(p.id)} loading={seatSaveBusyId === p.id} disabled={roomControlsLocked || (seatSaveBusyId !== '' && seatSaveBusyId !== p.id) || seatBusy} loadingLabel="Menyimpan...">Simpan</LoadingButton>
 											<LoadingButton variant="outline" size="sm" onclick={() => regenerateToken(p.id)} loading={regenBusyId === p.id} disabled={regenBusyId !== '' && regenBusyId !== p.id} loadingLabel="Membuat ulang...">Buat Ulang</LoadingButton>
 										</div>
 									</Table.Cell>
@@ -1944,30 +1988,34 @@
 					</Table.Root>
 				</Card.Content>
 			</Card.Root>
+			</div>
 
 		<!-- Tab: Ruangan -->
 		{:else if activeTab === 'ruangan'}
+			<div id="panel-ruangan" role="tabpanel" aria-labelledby="tab-ruangan" class="space-y-4">
+			{#if roomControlsLocked}
+				<OperationStatusPanel
+					tone="warning"
+					compact
+					title="Ruangan Terkunci"
+					message="Ruangan terkunci setelah sesi aktif/selesai. Gunakan tab proctoring dan rekap operasional untuk pemantauan tanpa mengubah setup ruang."
+				/>
+			{/if}
 			<Card.Root class="border-green-200">
 				<Card.Header class="pb-3">
 					<Card.Title class="text-base">Ruangan & Pengawas</Card.Title>
 					<p class="text-xs text-muted-foreground">Pilih master ruangan fisik bila sudah tersedia, atau isi manual untuk transisi.</p>
 				</Card.Header>
 				<Card.Content>
-					<div class="flex gap-3 flex-wrap items-end">
+					<div class="flex gap-3 flex-wrap items-end {roomControlsLocked ? 'opacity-70' : ''}">
 						<div>
 							<label for="r-master" class="block text-sm font-medium mb-1">Master Ruangan</label>
 							<select
 								id="r-master"
-								bind:value={selectedSchoolRoomId}
+								value={selectedSchoolRoomId}
 								class="h-10 w-64 rounded-md border border-input bg-background px-3 text-sm"
-								onchange={(event) => {
-									const value = (event.currentTarget as HTMLSelectElement).value;
-									const room = schoolRooms.find((item) => item.id === value);
-									if (room) {
-										newRoomCap = room.exam_capacity || room.default_capacity || 30;
-										if (!newRoomName.trim()) newRoomName = room.name;
-									}
-								}}
+								disabled={roomControlsLocked}
+								onchange={(event) => selectSchoolRoom((event.currentTarget as HTMLSelectElement).value)}
 							>
 								<option value="">Manual / belum terhubung aset</option>
 								{#each schoolRooms as room (room.id)}
@@ -1977,21 +2025,24 @@
 						</div>
 						<div>
 							<label for="r-name" class="block text-sm font-medium mb-1">Label Ruang Ujian</label>
-							<Input id="r-name" bind:value={newRoomName} placeholder="Ruang 1 / Lab Komputer A" class="w-56" />
+							<Input id="r-name" value={newRoomName} oninput={(event) => updateNewRoomName((event.currentTarget as HTMLInputElement).value)} placeholder="Ruang 1 / Lab Komputer A" class="w-56" disabled={roomControlsLocked} />
+							{#if selectedSchoolRoomId && roomNameCustomized}
+								<p class="mt-1 text-[11px] text-amber-700">Label sudah dikustom manual dan tidak mengikuti master ruangan.</p>
+							{/if}
 						</div>
 						<div>
 							<label for="r-cap" class="block text-sm font-medium mb-1">Kapasitas</label>
-							<Input id="r-cap" type="number" bind:value={newRoomCap} min={1} max={100} class="w-24" />
+							<Input id="r-cap" type="number" bind:value={newRoomCap} min={1} max={100} class="w-24" disabled={roomControlsLocked} />
 						</div>
-						<LoadingButton onclick={() => void createRoom()} loading={roomBusy} loadingLabel="Menyimpan..." disabled={roomBusy || (!newRoomName.trim() && !selectedSchoolRoomId)}>
+						<LoadingButton onclick={() => void createRoom()} loading={roomBusy} loadingLabel="Menyimpan..." disabled={roomControlsLocked || roomBusy || (!newRoomName.trim() && !selectedSchoolRoomId)}>
 							+ Tambah Ruangan
 						</LoadingButton>
 							{#if rooms.length > 0}
-								<LoadingButton variant="outline" loading={shuffleBusy} loadingLabel="Mengacak..." disabled={shuffleBusy} onclick={shuffleRooms}
+								<LoadingButton variant="outline" loading={shuffleBusy} loadingLabel="Mengacak..." disabled={roomControlsLocked || shuffleBusy} onclick={shuffleRooms}
 									class="border-amber-300 text-amber-700 hover:bg-amber-50">
 									Acak Peserta
 								</LoadingButton>
-								<LoadingButton variant="outline" loading={seatBusy} loadingLabel="Mengatur..." disabled={seatBusy} onclick={autoAssignSeats}>
+								<LoadingButton variant="outline" loading={seatBusy} loadingLabel="Mengatur..." disabled={roomControlsLocked || seatBusy} onclick={autoAssignSeats}>
 									Atur Nomor Meja
 								</LoadingButton>
 							{/if}
@@ -2039,18 +2090,18 @@
 											<Button variant="outline" size="sm" href={resolve(`/cbt/sessions/${sessionId}/rooms/${room.id}/print-pack`)}>
 												Cetak
 											</Button>
-											<LoadingButton variant="outline" size="sm"
-												class="border-red-200 text-red-600 hover:bg-red-50"
-												onclick={() => deleteRoom(room.id, room.room_name)}
-												loading={roomDeleteBusyId === room.id}
-												disabled={roomDeleteBusyId !== '' && roomDeleteBusyId !== room.id}
-												loadingLabel="Menghapus...">Hapus</LoadingButton>
+										<LoadingButton variant="outline" size="sm"
+											class="border-red-200 text-red-600 hover:bg-red-50"
+											onclick={() => deleteRoom(room.id, room.room_name)}
+											loading={roomDeleteBusyId === room.id}
+											disabled={roomControlsLocked || (roomDeleteBusyId !== '' && roomDeleteBusyId !== room.id)}
+											loadingLabel="Menghapus...">Hapus</LoadingButton>
 										</div>
 									</div>
 									<div class="rounded-md border border-slate-200 bg-slate-50 p-2">
 										<label for={`proctor-${room.id}`} class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Pengawas utama</label>
 										<div class="flex gap-2">
-											<select id={`proctor-${room.id}`} bind:value={roomProctorInput[room.id]} class="min-w-0 flex-1 rounded-md border border-input bg-white px-2 py-1.5 text-xs">
+											<select id={`proctor-${room.id}`} bind:value={roomProctorInput[room.id]} class="min-w-0 flex-1 rounded-md border border-input bg-white px-2 py-1.5 text-xs" disabled={roomControlsLocked}>
 												<option value="">Belum ditugaskan</option>
 												{#each employeeOptions as employee (employee.id)}
 													<option value={employee.id}>{employee.nama}{employee.nip ? ` · ${employee.nip}` : ''}</option>
@@ -2061,7 +2112,7 @@
 												size="sm"
 												loading={proctorSaveBusyId === room.id}
 												loadingLabel="..."
-												disabled={proctorSaveBusyId !== '' && proctorSaveBusyId !== room.id}
+											disabled={roomControlsLocked || (proctorSaveBusyId !== '' && proctorSaveBusyId !== room.id)}
 												onclick={() => void saveRoomProctor(room)}
 											>
 												Simpan
@@ -2124,6 +2175,7 @@
 					Belum ada ruangan. Tambah ruangan di atas, lalu klik "Acak Peserta ke Ruangan".
 				</div>
 			{/if}
+			</div>
 
 		<!-- Tab: Rekap Operasional -->
 		{:else if activeTab === 'operasional'}

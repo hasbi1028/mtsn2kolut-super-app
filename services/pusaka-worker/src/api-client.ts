@@ -30,10 +30,25 @@ export class WorkerApiCancelledError extends Error {
   }
 }
 
+export class WorkerApiUncertainCompletionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WorkerApiUncertainCompletionError';
+  }
+}
+
+export class WorkerApiFinalStateError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'WorkerApiFinalStateError';
+  }
+}
+
 function workerHeaders(): Record<string, string> {
   return {
     'content-type': 'application/json',
     'x-worker-key': WORKER_API_KEY,
+    'x-worker-id': WORKER_ID,
   };
 }
 
@@ -220,21 +235,38 @@ export async function completeJob(
   jobId: string,
   record: AttendanceRecord,
 ): Promise<void> {
-  const response = await workerFetch(
-    'complete job',
-    `${BACKEND_URL}/api/pusaka/worker/jobs/${jobId}/complete`,
-    {
-      method: 'POST',
-      headers: workerHeaders(),
-      body: JSON.stringify(record),
-    },
-  );
+  let response: Response;
+  try {
+    response = await workerFetch(
+      'complete job',
+      `${BACKEND_URL}/api/pusaka/worker/jobs/${jobId}/complete`,
+      {
+        method: 'POST',
+        headers: workerHeaders(),
+        body: JSON.stringify({ worker_id: WORKER_ID, ...record }),
+      },
+    );
+  } catch (error) {
+    if (error instanceof WorkerApiCancelledError) {
+      throw error;
+    }
+    throw new WorkerApiUncertainCompletionError(
+      `complete report uncertain: ${(error as Error)?.message ?? String(error)}`,
+    );
+  }
   if (!response.ok) {
-    throw await responseError('complete failed', response);
+    const error = await responseError('complete failed', response);
+    if (response.status === 404 || response.status === 409) {
+      throw new WorkerApiFinalStateError(error.message, response.status);
+    }
+    if (response.status >= 500) {
+      throw new WorkerApiUncertainCompletionError(error.message);
+    }
+    throw error;
   }
 }
 
-export async function failJob(jobId: string, error: string): Promise<boolean> {
+export async function failJob(jobId: string, error: string, retryAfterSecs = 0): Promise<boolean> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= FAIL_REPORT_ATTEMPTS; attempt++) {
     try {
@@ -244,7 +276,7 @@ export async function failJob(jobId: string, error: string): Promise<boolean> {
         {
           method: 'POST',
           headers: workerHeaders(),
-          body: JSON.stringify({ error }),
+          body: JSON.stringify({ worker_id: WORKER_ID, error, retry_after_secs: retryAfterSecs }),
         },
       );
       if (response.ok) {

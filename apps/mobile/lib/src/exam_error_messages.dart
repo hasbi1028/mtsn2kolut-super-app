@@ -108,6 +108,10 @@ ExamGuidanceNotice? restoreFailureNotice(ExamApiException error) {
   }
 }
 
+bool shouldClearSnapshotAfterRestoreFailure(ExamApiException error) {
+  return error.statusCode == 403 || error.statusCode == 404;
+}
+
 String answerFailureMessage(ExamApiException error) {
   if (error.statusCode == null) {
     return 'Perangkat sedang kehilangan koneksi ke server ujian. Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.';

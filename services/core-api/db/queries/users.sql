@@ -31,7 +31,7 @@ ORDER BY u.username ASC;
 -- name: CreateUser :one
 INSERT INTO users (username, password_hash, employee_id, student_id, parent_id, is_active)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING *;
+RETURNING id, username, employee_id, student_id, parent_id, is_active, auth_version, created_at, updated_at;
 
 -- name: UpdateUserPassword :exec
 UPDATE users

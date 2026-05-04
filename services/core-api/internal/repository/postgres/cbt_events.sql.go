@@ -751,7 +751,10 @@ SELECT
   COALESCE(parts.scored_count, 0)::int AS scored_count,
   COALESCE(rooms.room_count, 0)::int AS room_count,
   COALESCE(rooms.total_capacity, 0)::int AS total_capacity,
-  COALESCE(rooms.rooms_without_proctor, 0)::int AS rooms_without_proctor
+  COALESCE(rooms.rooms_without_proctor, 0)::int AS rooms_without_proctor,
+  COALESCE(rooms.over_capacity_room_count, 0)::int AS over_capacity_room_count,
+  COALESCE(rooms.network_not_ready_room_count, 0)::int AS network_not_ready_room_count,
+  COALESCE(rooms.power_not_ready_room_count, 0)::int AS power_not_ready_room_count
 FROM cbt_exam_sessions ses
 JOIN cbt_packages p ON p.id = ses.package_id
 JOIN subjects sub ON sub.id = p.subject_id
@@ -777,14 +780,23 @@ LEFT JOIN LATERAL (
 LEFT JOIN LATERAL (
   SELECT
     COUNT(r.id)::int AS room_count,
-    COALESCE(SUM(r.capacity), 0)::int AS total_capacity,
-    COUNT(r.id) FILTER (WHERE COALESCE(pr.proctor_count, 0) = 0)::int AS rooms_without_proctor
+    COALESCE(SUM(COALESCE(r.capacity_override, r.capacity)), 0)::int AS total_capacity,
+    COUNT(r.id) FILTER (WHERE COALESCE(pr.proctor_count, 0) = 0)::int AS rooms_without_proctor,
+    COUNT(r.id) FILTER (WHERE COALESCE(pc.participant_count, 0) > COALESCE(r.capacity_override, r.capacity))::int AS over_capacity_room_count,
+    COUNT(r.id) FILTER (WHERE r.school_room_id IS NOT NULL AND COALESCE(sr.network_ready, FALSE) = FALSE)::int AS network_not_ready_room_count,
+    COUNT(r.id) FILTER (WHERE r.school_room_id IS NOT NULL AND COALESCE(sr.power_ready, FALSE) = FALSE)::int AS power_not_ready_room_count
   FROM cbt_exam_rooms r
+  LEFT JOIN school_rooms sr ON sr.id = r.school_room_id
   LEFT JOIN LATERAL (
     SELECT COUNT(*)::int AS proctor_count
     FROM cbt_room_proctors rp
     WHERE rp.exam_room_id = r.id
   ) pr ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT COUNT(*)::int AS participant_count
+    FROM cbt_exam_participants ep
+    WHERE ep.session_id = r.session_id AND ep.room_id = r.id
+  ) pc ON TRUE
   WHERE r.session_id = ses.id
 ) rooms ON TRUE
 WHERE ses.event_id = $1
@@ -818,6 +830,9 @@ type ListCbtEventSessionsReadinessRow struct {
 	RoomCount                int32                `json:"room_count"`
 	TotalCapacity            int32                `json:"total_capacity"`
 	RoomsWithoutProctor      int32                `json:"rooms_without_proctor"`
+	OverCapacityRoomCount    int32                `json:"over_capacity_room_count"`
+	NetworkNotReadyRoomCount int32                `json:"network_not_ready_room_count"`
+	PowerNotReadyRoomCount   int32                `json:"power_not_ready_room_count"`
 }
 
 func (q *Queries) ListCbtEventSessionsReadiness(ctx context.Context, eventID pgtype.UUID) ([]ListCbtEventSessionsReadinessRow, error) {
@@ -856,6 +871,9 @@ func (q *Queries) ListCbtEventSessionsReadiness(ctx context.Context, eventID pgt
 			&i.RoomCount,
 			&i.TotalCapacity,
 			&i.RoomsWithoutProctor,
+			&i.OverCapacityRoomCount,
+			&i.NetworkNotReadyRoomCount,
+			&i.PowerNotReadyRoomCount,
 		); err != nil {
 			return nil, err
 		}

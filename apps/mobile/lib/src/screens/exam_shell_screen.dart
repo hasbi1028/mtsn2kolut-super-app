@@ -79,6 +79,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   ExamGuidanceNotice? _serverNotice;
   Timer? _countdownTimer;
   Timer? _heartbeatTimer;
+  Timer? _textAutosaveTimer;
 
   ExamShellConnectionViewModel get _connectionState =>
       ExamShellConnectionViewModel(
@@ -147,6 +148,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     WidgetsBinding.instance.removeObserver(this);
     _countdownTimer?.cancel();
     _heartbeatTimer?.cancel();
+    _textAutosaveTimer?.cancel();
     for (final controller in _essayControllers) {
       controller.dispose();
     }
@@ -241,6 +243,10 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _isSubmitted = status.isSubmitted;
       });
       _markServerContact();
+      if (status.isSubmitted) {
+        await _finishExam(wasAutoSubmitted: false);
+        return;
+      }
       if (_pendingAnswers.isNotEmpty) {
         await _flushPendingAnswers();
       }
@@ -362,6 +368,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     }
 
     setState(() {
+      _answeredCount = _calculateAnsweredCount();
       _statusMessage = _pendingAnswers.isEmpty
           ? 'Semua jawaban lokal berhasil disinkronkan ke server.'
           : '$syncedCount jawaban lokal berhasil disinkronkan. Sisanya akan dicoba lagi.';
@@ -370,6 +377,15 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       }
     });
     return _pendingAnswers.isEmpty;
+  }
+
+  int _calculateAnsweredCount() {
+    return widget.initialPayload.questions
+        .where(
+          (question) =>
+              _isAnswerComplete(question, _answers[question.id] ?? ''),
+        )
+        .length;
   }
 
   Future<void> _selectOption(ExamQuestion question, String answer) async {
@@ -456,6 +472,27 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     }
 
     await _selectOption(question, answer);
+  }
+
+  void _autosaveTextAnswer(ExamQuestion question, String rawAnswer) {
+    if (_isSubmitted) {
+      return;
+    }
+    final answer = rawAnswer.trim();
+    setState(() {
+      if (answer.isEmpty) {
+        _answers.remove(question.id);
+      } else {
+        _answers[question.id] = answer;
+      }
+      _answeredCount = _calculateAnsweredCount();
+      _statusMessage = 'Draft jawaban tersimpan lokal.';
+      _errorMessage = null;
+    });
+    _textAutosaveTimer?.cancel();
+    _textAutosaveTimer = Timer(const Duration(milliseconds: 350), () {
+      unawaited(_persistSnapshot());
+    });
   }
 
   Future<void> _persistSnapshot() async {
@@ -595,36 +632,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       if (!mounted) {
         return;
       }
-      setState(() {
-        _isSubmitted = true;
-        _statusMessage = 'Ujian berhasil dikirim.';
-        _serverNotice = null;
-      });
-      await _sessionStore.clearSnapshot();
-      if (!mounted) {
-        return;
-      }
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(
-          builder: (_) => ExamCompletedScreen(
-            studentName: widget.initialPayload.student.nama,
-            studentNis: widget.initialPayload.student.nis,
-            sessionTitle: widget.initialPayload.session.title,
-            roomName: widget.initialPayload.room?.roomName ?? '-',
-            scheduledStartIso:
-                widget.initialPayload.session.scheduledStart
-                    ?.toIso8601String() ??
-                '',
-            scheduledEndIso:
-                widget.initialPayload.session.scheduledEnd?.toIso8601String() ??
-                '',
-            durationMinutes: widget.initialPayload.session.durationMinutes,
-            answeredCount: _answeredCount,
-            totalQuestions: widget.initialPayload.totalQuestions,
-            wasAutoSubmitted: autoSubmit,
-          ),
-        ),
-      );
+      await _finishExam(wasAutoSubmitted: autoSubmit);
       if (!autoSubmit) {
         await widget.client.sendEvent(
           token: widget.examToken,
@@ -634,6 +642,10 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       }
     } on ExamApiException catch (error) {
       if (!mounted) {
+        return;
+      }
+      if (error.statusCode == 409) {
+        await _finishExam(wasAutoSubmitted: autoSubmit);
         return;
       }
       setState(() {
@@ -758,6 +770,50 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     return widget.client.examAssetHeadersForUrl(widget.examToken, url);
   }
 
+  String _resolveExamAssetUrl(String url) {
+    return widget.client.resolveAssetUrl(url);
+  }
+
+  Future<void> _finishExam({required bool wasAutoSubmitted}) async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isSubmitted = true;
+      _isSubmitPendingIntervention = false;
+      _statusMessage =
+          'Ujian sudah selesai dan akan diverifikasi pada layar akhir.';
+      _serverNotice = null;
+    });
+    _countdownTimer?.cancel();
+    _heartbeatTimer?.cancel();
+    _textAutosaveTimer?.cancel();
+    await _sessionStore.clearSnapshot();
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => ExamCompletedScreen(
+          studentName: widget.initialPayload.student.nama,
+          studentNis: widget.initialPayload.student.nis,
+          sessionTitle: widget.initialPayload.session.title,
+          roomName: widget.initialPayload.room?.roomName ?? '-',
+          scheduledStartIso:
+              widget.initialPayload.session.scheduledStart?.toIso8601String() ??
+              '',
+          scheduledEndIso:
+              widget.initialPayload.session.scheduledEnd?.toIso8601String() ??
+              '',
+          durationMinutes: widget.initialPayload.session.durationMinutes,
+          answeredCount: _answeredCount,
+          totalQuestions: widget.initialPayload.totalQuestions,
+          wasAutoSubmitted: wasAutoSubmitted,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final payload = widget.initialPayload;
@@ -775,11 +831,15 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           return;
         }
         final messenger = ScaffoldMessenger.of(context);
-        await widget.client.sendEvent(
-          token: widget.examToken,
-          eventType: 'warning',
-          data: const <String, Object?>{'reason': 'back_button_attempt'},
-        );
+        try {
+          await widget.client.sendEvent(
+            token: widget.examToken,
+            eventType: 'warning',
+            data: const <String, Object?>{'reason': 'back_button_attempt'},
+          );
+        } catch (_) {
+          // Back blocking is a local safety control; telemetry must not break it.
+        }
         if (!mounted) {
           return;
         }
@@ -1271,14 +1331,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             ],
             if (question.stimulusMediaUrl.trim().isNotEmpty) ...[
               QuestionMediaCard(
-                url: question.stimulusMediaUrl,
+                url: _resolveExamAssetUrl(question.stimulusMediaUrl),
                 headers: _examAssetHeadersForUrl(question.stimulusMediaUrl),
               ),
               const SizedBox(height: 16),
             ],
             if (question.stimulusAudioUrl.trim().isNotEmpty) ...[
               AudioPromptCard(
-                url: question.stimulusAudioUrl,
+                url: _resolveExamAssetUrl(question.stimulusAudioUrl),
                 label: 'Audio stimulus',
                 headers: _examAssetHeadersForUrl(question.stimulusAudioUrl),
                 hasBeenPlayed: audioPlayed,
@@ -1300,14 +1360,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             if (question.stemMediaUrl.trim().isNotEmpty) ...[
               const SizedBox(height: 16),
               QuestionMediaCard(
-                url: question.stemMediaUrl,
+                url: _resolveExamAssetUrl(question.stemMediaUrl),
                 headers: _examAssetHeadersForUrl(question.stemMediaUrl),
               ),
             ],
             if (question.stemAudioUrl.trim().isNotEmpty) ...[
               const SizedBox(height: 16),
               AudioPromptCard(
-                url: question.stemAudioUrl,
+                url: _resolveExamAssetUrl(question.stemAudioUrl),
                 label: 'Audio soal',
                 headers: _examAssetHeadersForUrl(question.stemAudioUrl),
                 hasBeenPlayed: audioPlayed,
@@ -1690,6 +1750,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               hintText: 'Tulis jawaban singkat Anda...',
             ),
             onSubmitted: (_) => _saveTextAnswer(),
+            onChanged: (value) => _autosaveTextAnswer(question, value),
           ),
           const SizedBox(height: 14),
           FilledButton.icon(
@@ -1714,6 +1775,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               labelText: 'Jawaban uraian',
               hintText: 'Tulis jawaban Anda di sini...',
             ),
+            onChanged: (value) => _autosaveTextAnswer(question, value),
           ),
         ),
         const SizedBox(height: 14),

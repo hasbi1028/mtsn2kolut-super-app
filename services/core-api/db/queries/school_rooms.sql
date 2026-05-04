@@ -55,3 +55,10 @@ RETURNING *;
 
 -- name: DeleteSchoolRoom :exec
 DELETE FROM school_rooms WHERE id = $1;
+
+-- name: HasSchoolRoomCbtRooms :one
+SELECT EXISTS (
+    SELECT 1
+    FROM cbt_exam_rooms
+    WHERE school_room_id = $1
+)::boolean;

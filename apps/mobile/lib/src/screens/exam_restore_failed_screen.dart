@@ -108,6 +108,15 @@ class ExamRestoreFailedScreen extends StatelessWidget {
                                   warning:
                                       snapshot.consecutiveSyncFailures >= 3,
                                 ),
+                                _RestoreStatusChip(
+                                  label:
+                                      '${snapshot.answers.length} jawaban lokal',
+                                ),
+                                _RestoreStatusChip(
+                                  label:
+                                      '${snapshot.pendingAnswers.length} belum tersinkron',
+                                  warning: snapshot.pendingAnswers.isNotEmpty,
+                                ),
                                 if (snapshot.lastServerContactIso
                                     .trim()
                                     .isNotEmpty)

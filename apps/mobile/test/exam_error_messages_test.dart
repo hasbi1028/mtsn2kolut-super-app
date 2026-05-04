@@ -98,6 +98,25 @@ void main() {
       );
       expect(dangerNotice?.title, 'Sesi lama aktif di perangkat lain');
       expect(dangerNotice?.tone, ExamGuidanceTone.danger);
+
+      expect(
+        shouldClearSnapshotAfterRestoreFailure(
+          const ExamApiException('transport', statusCode: null),
+        ),
+        isFalse,
+      );
+      expect(
+        shouldClearSnapshotAfterRestoreFailure(
+          const ExamApiException('backend', statusCode: 409),
+        ),
+        isFalse,
+      );
+      expect(
+        shouldClearSnapshotAfterRestoreFailure(
+          const ExamApiException('backend', statusCode: 404),
+        ),
+        isTrue,
+      );
     });
 
     test('answer failure maps common status codes', () {

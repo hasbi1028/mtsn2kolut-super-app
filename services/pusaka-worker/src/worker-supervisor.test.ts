@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import {
+  WorkerApiCancelledError,
+  WorkerApiFinalStateError,
+  WorkerApiUncertainCompletionError,
+} from './api-client.js';
 import { WorkerSupervisor } from './worker-supervisor.js';
 import type { ClaimedJob, RuntimeConfig } from './types.js';
 
@@ -265,4 +270,86 @@ test('WorkerSupervisor aborts active job before shutdown timeout fail report', a
   assert.deepEqual(h.calls.failJob, [
     { jobId: 'job-active-shutdown', error: 'worker shutdown timeout' },
   ]);
+});
+
+test('WorkerSupervisor does not fail job when completion report is uncertain after processing', async () => {
+  let claimCount = 0;
+  const job: ClaimedJob = {
+    id: 'job-complete-uncertain',
+    employee_id: 'employee-1',
+    run_type: 'checkin',
+    attempts: 1,
+    max_attempts: 3,
+    pusaka_username: 'user-1',
+    pusaka_password: 'secret',
+  };
+  const h = createSupervisorHarness({
+    claimJob: async () => {
+      claimCount += 1;
+      if (claimCount === 1) {
+        return job;
+      }
+      (h.supervisor as any).shuttingDown = true;
+      throw new WorkerApiCancelledError('claim job');
+    },
+    completeJob: async () => {
+      throw new WorkerApiUncertainCompletionError('complete report uncertain: timeout');
+    },
+  });
+  const state = {
+    id: 1,
+    consumerId: 'w-c1',
+    stopRequested: false,
+    activeJobIds: new Set<string>(),
+    activeJobControllers: new Map<string, AbortController>(),
+  };
+
+  await (h.supervisor as any).consumerLoop(state);
+
+  assert.deepEqual(h.calls.failJob, []);
+  assert.equal(
+    h.calls.logs.some((entry) => entry.message === 'job completion report uncertain - fail report skipped'),
+    true,
+  );
+});
+
+test('WorkerSupervisor does not fail job when completion returns final-state conflict', async () => {
+  let claimCount = 0;
+  const job: ClaimedJob = {
+    id: 'job-complete-conflict',
+    employee_id: 'employee-1',
+    run_type: 'checkin',
+    attempts: 1,
+    max_attempts: 3,
+    pusaka_username: 'user-1',
+    pusaka_password: 'secret',
+  };
+  const h = createSupervisorHarness({
+    claimJob: async () => {
+      claimCount += 1;
+      if (claimCount === 1) {
+        return job;
+      }
+      (h.supervisor as any).shuttingDown = true;
+      throw new WorkerApiCancelledError('claim job');
+    },
+    completeJob: async () => {
+      throw new WorkerApiFinalStateError('complete failed: 409 already final', 409);
+    },
+  });
+  const state = {
+    id: 1,
+    consumerId: 'w-c1',
+    stopRequested: false,
+    activeJobIds: new Set<string>(),
+    activeJobControllers: new Map<string, AbortController>(),
+  };
+
+  await (h.supervisor as any).consumerLoop(state);
+
+  assert.deepEqual(h.calls.failJob, []);
+  assert.equal(
+    h.calls.logs.some((entry) => entry.message === 'job completion report reached final-state response - fail report skipped'),
+    true,
+  );
 });

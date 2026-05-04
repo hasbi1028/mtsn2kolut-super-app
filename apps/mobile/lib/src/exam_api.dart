@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import 'models.dart';
 
 class ExamApiException implements Exception {
@@ -20,7 +22,11 @@ class ExamApiClient {
     this.deviceFingerprint,
     HttpClient? httpClient,
     this.requestTimeout = const Duration(seconds: 20),
-  }) : baseUrl = normalizeBaseUrl(baseUrl),
+    bool allowDebugPlainHttp = _defaultAllowDebugPlainHttp,
+  }) : baseUrl = normalizeBaseUrl(
+         baseUrl,
+         allowDebugPlainHttp: allowDebugPlainHttp,
+       ),
        _httpClient = httpClient ?? HttpClient() {
     _httpClient.connectionTimeout = const Duration(seconds: 10);
   }
@@ -30,7 +36,15 @@ class ExamApiClient {
   final Duration requestTimeout;
   final HttpClient _httpClient;
 
-  static String normalizeBaseUrl(String rawBaseUrl) {
+  static const bool _defaultAllowDebugPlainHttp = bool.fromEnvironment(
+    'ALLOW_PLAINTEXT_EXAM_HTTP',
+    defaultValue: !kReleaseMode,
+  );
+
+  static String normalizeBaseUrl(
+    String rawBaseUrl, {
+    bool allowDebugPlainHttp = _defaultAllowDebugPlainHttp,
+  }) {
     final uri = Uri.tryParse(rawBaseUrl.trim());
     if (uri == null ||
         (uri.scheme != 'http' && uri.scheme != 'https') ||
@@ -40,8 +54,15 @@ class ExamApiClient {
         uri.hasFragment ||
         (uri.path.isNotEmpty && uri.path != '/')) {
       throw const ExamApiException(
-        'Alamat server ujian tidak valid. Gunakan alamat http/https tanpa path atau query.',
+        'Alamat server ujian tidak valid. Gunakan alamat HTTPS tanpa path atau query.',
       );
+    }
+    if (uri.scheme == 'http') {
+      if (!allowDebugPlainHttp || !_isLocalTrialHttpHost(uri.host)) {
+        throw const ExamApiException(
+          'Alamat server ujian produksi harus memakai HTTPS. HTTP hanya diizinkan untuk uji lokal/operator pada localhost atau jaringan privat.',
+        );
+      }
     }
     return uri.replace(path: '', query: null, fragment: null).toString();
   }
@@ -60,7 +81,7 @@ class ExamApiClient {
   }
 
   Map<String, String> examAssetHeadersForUrl(String token, String assetUrl) {
-    final uri = Uri.tryParse(assetUrl.trim());
+    final uri = Uri.tryParse(resolveAssetUrl(assetUrl));
     if (uri == null) {
       return const <String, String>{};
     }
@@ -76,6 +97,24 @@ class ExamApiClient {
       }
     }
     return examAssetHeaders(token);
+  }
+
+  String resolveAssetUrl(String assetUrl) {
+    final trimmed = assetUrl.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null) {
+      return trimmed;
+    }
+    if (uri.hasScheme) {
+      return uri.toString();
+    }
+    if (uri.hasAuthority) {
+      return trimmed;
+    }
+    return Uri.parse(baseUrl).resolveUri(uri).toString();
   }
 
   Future<ExamLoginPayload> login({
@@ -247,4 +286,32 @@ class ExamApiClient {
       statusCode: statusCode,
     );
   }
+}
+
+bool _isLocalTrialHttpHost(String host) {
+  final normalized = host.toLowerCase().trim();
+  if (normalized == 'localhost' || normalized == '10.0.2.2') {
+    return true;
+  }
+
+  final address = InternetAddress.tryParse(normalized);
+  if (address == null) {
+    return false;
+  }
+  if (address.isLoopback) {
+    return true;
+  }
+  if (address.type != InternetAddressType.IPv4) {
+    return false;
+  }
+
+  final octets = normalized.split('.').map(int.tryParse).toList();
+  if (octets.length != 4 || octets.any((octet) => octet == null)) {
+    return false;
+  }
+  final first = octets[0]!;
+  final second = octets[1]!;
+  return first == 10 ||
+      (first == 172 && second >= 16 && second <= 31) ||
+      (first == 192 && second == 168);
 }

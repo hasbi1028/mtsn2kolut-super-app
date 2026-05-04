@@ -478,7 +478,7 @@ SELECT EXISTS (
 WITH room_stats AS (
   SELECT
     COUNT(*)::int AS room_count,
-    COALESCE(SUM(capacity), 0)::int AS total_capacity
+    COALESCE(SUM(COALESCE(capacity_override, capacity)), 0)::int AS total_capacity
   FROM cbt_exam_rooms er
   WHERE er.session_id = sqlc.arg(target_session_id)
 ),
@@ -503,6 +503,41 @@ proctor_stats AS (
     COUNT(*) FILTER (WHERE proctor_count = 0)::int AS rooms_without_proctor,
     COALESCE(SUM(proctor_count), 0)::int AS proctor_assignment_count
   FROM room_proctor_counts
+),
+room_capacity_stats AS (
+  SELECT
+    r.id,
+    r.room_name,
+    COALESCE(r.capacity_override, r.capacity)::int AS effective_capacity,
+    COUNT(ep.id)::int AS participant_count
+  FROM cbt_exam_rooms r
+  LEFT JOIN cbt_exam_participants ep ON ep.room_id = r.id AND ep.session_id = r.session_id
+  WHERE r.session_id = sqlc.arg(target_session_id)
+  GROUP BY r.id, r.room_name, r.capacity_override, r.capacity
+),
+over_capacity_stats AS (
+  SELECT
+    COUNT(*) FILTER (WHERE participant_count > effective_capacity)::int AS over_capacity_room_count,
+    COALESCE(
+      jsonb_agg(
+        jsonb_build_object(
+          'room_id', id,
+          'room_name', room_name,
+          'participant_count', participant_count,
+          'effective_capacity', effective_capacity
+        ) ORDER BY room_name
+      ) FILTER (WHERE participant_count > effective_capacity),
+      '[]'::jsonb
+    ) AS over_capacity_rooms
+  FROM room_capacity_stats
+),
+physical_room_stats AS (
+  SELECT
+    COUNT(*) FILTER (WHERE r.school_room_id IS NOT NULL AND COALESCE(sr.network_ready, FALSE) = FALSE)::int AS network_not_ready_room_count,
+    COUNT(*) FILTER (WHERE r.school_room_id IS NOT NULL AND COALESCE(sr.power_ready, FALSE) = FALSE)::int AS power_not_ready_room_count
+  FROM cbt_exam_rooms r
+  LEFT JOIN school_rooms sr ON sr.id = r.school_room_id
+  WHERE r.session_id = sqlc.arg(target_session_id)
 )
 SELECT
   rs.room_count,
@@ -512,5 +547,62 @@ SELECT
   ps.unassigned_participant_count,
   ps.missing_seat_count,
   COALESCE(prs.rooms_without_proctor, 0)::int AS rooms_without_proctor,
-  COALESCE(prs.proctor_assignment_count, 0)::int AS proctor_assignment_count
-FROM room_stats rs, participant_stats ps, proctor_stats prs;
+  COALESCE(prs.proctor_assignment_count, 0)::int AS proctor_assignment_count,
+  COALESCE(ocs.over_capacity_room_count, 0)::int AS over_capacity_room_count,
+  COALESCE(ocs.over_capacity_rooms, '[]'::jsonb) AS over_capacity_rooms,
+  COALESCE(phys.network_not_ready_room_count, 0)::int AS network_not_ready_room_count,
+  COALESCE(phys.power_not_ready_room_count, 0)::int AS power_not_ready_room_count
+FROM room_stats rs, participant_stats ps, proctor_stats prs, over_capacity_stats ocs, physical_room_stats phys;
+
+-- name: GetCbtExamRoomSetupContext :one
+SELECT
+  r.id,
+  r.session_id,
+  r.school_room_id,
+  r.room_name,
+  r.room_name_snapshot,
+  r.capacity,
+  r.capacity_override,
+  r.room_token,
+  r.status,
+  r.is_locked,
+  r.created_at,
+  r.updated_at,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end
+FROM cbt_exam_rooms r
+JOIN cbt_exam_sessions s ON s.id = r.session_id
+WHERE r.id = $1;
+
+-- name: GetCbtExamRoomSetupUsage :one
+SELECT
+  COUNT(DISTINCT ep.id)::int AS participant_count,
+  COUNT(DISTINCT rp.id)::int AS proctor_count,
+  COUNT(DISTINCT h.id)::int AS handover_count
+FROM cbt_exam_rooms r
+LEFT JOIN cbt_exam_participants ep ON ep.room_id = r.id AND ep.session_id = r.session_id
+LEFT JOIN cbt_room_proctors rp ON rp.exam_room_id = r.id
+LEFT JOIN cbt_room_handovers h ON h.exam_room_id = r.id
+WHERE r.id = $1
+GROUP BY r.id;
+
+-- name: ClearParticipantSeatsForSession :exec
+UPDATE cbt_exam_participants
+SET seat_no = NULL
+WHERE session_id = $1
+  AND room_id IS NOT NULL;
+
+-- name: HasOverlappingCbtRoomProctor :one
+SELECT EXISTS (
+  SELECT 1
+  FROM cbt_room_proctors rp
+  JOIN cbt_exam_rooms r ON r.id = rp.exam_room_id
+  JOIN cbt_exam_sessions s ON s.id = r.session_id
+  JOIN cbt_exam_sessions target_session ON target_session.id = sqlc.arg(session_id)
+  WHERE rp.employee_id = sqlc.arg(employee_id)
+    AND r.id <> sqlc.arg(exam_room_id)
+    AND s.status IN ('draft', 'scheduled', 'active')
+    AND s.scheduled_start < target_session.scheduled_end
+    AND target_session.scheduled_start < s.scheduled_end
+)::boolean;

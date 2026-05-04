@@ -63,7 +63,7 @@ func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, password_hash, employee_id, student_id, parent_id, is_active)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, username, password_hash, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version
+RETURNING id, username, employee_id, student_id, parent_id, is_active, auth_version, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -75,7 +75,19 @@ type CreateUserParams struct {
 	IsActive     bool        `json:"is_active"`
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+type CreateUserRow struct {
+	ID          pgtype.UUID        `json:"id"`
+	Username    string             `json:"username"`
+	EmployeeID  pgtype.UUID        `json:"employee_id"`
+	StudentID   pgtype.UUID        `json:"student_id"`
+	ParentID    pgtype.UUID        `json:"parent_id"`
+	IsActive    bool               `json:"is_active"`
+	AuthVersion int32              `json:"auth_version"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
 	row := q.db.QueryRow(ctx, createUser,
 		arg.Username,
 		arg.PasswordHash,
@@ -84,18 +96,17 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.ParentID,
 		arg.IsActive,
 	)
-	var i User
+	var i CreateUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Username,
-		&i.PasswordHash,
 		&i.EmployeeID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 		&i.StudentID,
 		&i.ParentID,
 		&i.IsActive,
 		&i.AuthVersion,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

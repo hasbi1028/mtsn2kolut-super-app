@@ -1,7 +1,6 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
+import '../device_fingerprint.dart';
 import '../exam_api.dart';
 import '../exam_error_messages.dart';
 import '../exam_format.dart';
@@ -17,6 +16,7 @@ class ExamLoginScreen extends StatefulWidget {
     this.initialErrorNotice,
     this.previewSnapshot,
     this.sessionStore,
+    this.deviceFingerprintStore,
   });
 
   final bool autoRestore;
@@ -24,6 +24,7 @@ class ExamLoginScreen extends StatefulWidget {
   final ExamGuidanceNotice? initialErrorNotice;
   final ExamSessionSnapshot? previewSnapshot;
   final ExamSessionStore? sessionStore;
+  final DeviceFingerprintStore? deviceFingerprintStore;
 
   @override
   State<ExamLoginScreen> createState() => _ExamLoginScreenState();
@@ -31,6 +32,7 @@ class ExamLoginScreen extends StatefulWidget {
 
 class _ExamLoginScreenState extends State<ExamLoginScreen> {
   late final ExamSessionStore _sessionStore;
+  late final DeviceFingerprintStore _deviceFingerprintStore;
   final _tokenController = TextEditingController();
   final _baseUrlController = TextEditingController(
     text: const String.fromEnvironment(
@@ -49,8 +51,11 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
   void initState() {
     super.initState();
     _sessionStore = widget.sessionStore ?? ExamSessionStore();
+    _deviceFingerprintStore =
+        widget.deviceFingerprintStore ?? DeviceFingerprintStore();
     _errorMessage = widget.initialErrorMessage;
     _errorNotice = widget.initialErrorNotice;
+    _baseUrlController.addListener(_refreshOperatorBaseUrlGuidance);
     if (widget.autoRestore) {
       _restoreExamSession();
     } else {
@@ -60,9 +65,17 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
 
   @override
   void dispose() {
+    _baseUrlController.removeListener(_refreshOperatorBaseUrlGuidance);
     _tokenController.dispose();
     _baseUrlController.dispose();
     super.dispose();
+  }
+
+  void _refreshOperatorBaseUrlGuidance() {
+    if (!_showOperatorSettings || !mounted) {
+      return;
+    }
+    setState(() {});
   }
 
   Future<void> _restoreExamSession() async {
@@ -117,7 +130,9 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
         ),
       );
     } on ExamApiException catch (error) {
-      await _sessionStore.clearSnapshot();
+      if (shouldClearSnapshotAfterRestoreFailure(error)) {
+        await _sessionStore.clearSnapshot();
+      }
       if (!mounted) {
         return;
       }
@@ -182,7 +197,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
     try {
       final normalizedBaseUrl = ExamApiClient.normalizeBaseUrl(baseUrl);
       await _sessionStore.saveBaseUrl(normalizedBaseUrl);
-      final deviceFingerprint = _deviceFingerprint();
+      final deviceFingerprint = await _deviceFingerprint();
       final client = ExamApiClient(
         baseUrl: normalizedBaseUrl,
         deviceFingerprint: deviceFingerprint,
@@ -247,11 +262,8 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
     }
   }
 
-  String _deviceFingerprint() {
-    final host = Platform.localHostname;
-    // BYOD note: this is only a lightweight telemetry hint for resume/sync
-    // correlation, not a strong device identity proof.
-    return '${Platform.operatingSystem}:$host';
+  Future<String> _deviceFingerprint() {
+    return _deviceFingerprintStore.loadFingerprint();
   }
 
   @override
@@ -406,11 +418,11 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
               ),
             TextField(
               controller: _tokenController,
-              maxLength: 8,
+              maxLength: 64,
               textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(
                 labelText: 'Token ujian',
-                hintText: 'Contoh: A1B2C3D4',
+                hintText: 'Contoh: 32 karakter heksadesimal dari kartu ujian',
                 counterText: '',
               ),
             ),
@@ -493,7 +505,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
                       const SizedBox(height: 4),
                       Text(
                         _showOperatorSettings
-                            ? 'Alamat server hanya perlu diubah bila operator sekolah memang memakai endpoint yang berbeda.'
+                            ? 'Gunakan HTTPS untuk server produksi. HTTP hanya untuk uji lokal/operator pada emulator, localhost, atau jaringan privat.'
                             : 'Disembunyikan saat mode siswa biasa agar peserta tidak mudah salah mengubah alamat server.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           height: 1.45,
@@ -526,8 +538,12 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Alamat server API',
                   hintText: 'Contoh: http://10.0.2.2:8080',
+                  helperText:
+                      'Produksi: https://... • Uji lokal: http://10.0.2.2:8080',
                 ),
               ),
+              const SizedBox(height: 10),
+              _BaseUrlGuidance(baseUrl: _baseUrlController.text),
             ],
           ],
         ),
@@ -694,6 +710,74 @@ class _RestoreMetaChip extends StatelessWidget {
           color: foreground,
           fontWeight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+class _BaseUrlGuidance extends StatelessWidget {
+  const _BaseUrlGuidance({required this.baseUrl});
+
+  final String baseUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final normalized = baseUrl.trim().toLowerCase();
+    final isHttps = normalized.startsWith('https://');
+    final isHttp = normalized.startsWith('http://');
+    final title = isHttps
+        ? 'HTTPS siap untuk server produksi'
+        : isHttp
+        ? 'HTTP hanya untuk uji lokal atau jaringan privat'
+        : 'Gunakan alamat dengan awalan https:// atau http://';
+    final message = isHttps
+        ? 'Alamat ini sesuai untuk sesi produksi selama sertifikat dan domain sekolah sudah benar.'
+        : isHttp
+        ? 'Jangan pakai HTTP untuk ujian produksi. HTTP dipertahankan hanya untuk operator saat uji emulator, localhost, atau jaringan privat sekolah.'
+        : 'Pengawas/operator perlu memeriksa alamat server sebelum peserta login agar perangkat tidak mencoba server yang salah.';
+    final color = isHttps
+        ? const Color(0xFF1E6B36)
+        : isHttp
+        ? const Color(0xFF8A5A00)
+        : theme.colorScheme.error;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isHttps ? Icons.https_outlined : Icons.info_outline,
+            color: color,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

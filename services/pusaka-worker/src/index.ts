@@ -8,11 +8,13 @@ import {
   createRuntimeConfig,
 } from './config.js';
 import { ensureLogDirectories, log } from './logger.js';
+import { pruneOldScreenshots } from './pusaka-runner.js';
 import { WorkerSupervisor } from './worker-supervisor.js';
 
 const runtimeConfig = createRuntimeConfig();
 
 ensureLogDirectories();
+pruneOldScreenshots();
 log('INFO', 'worker starting', {
   WORKER_ID,
   BACKEND_URL,

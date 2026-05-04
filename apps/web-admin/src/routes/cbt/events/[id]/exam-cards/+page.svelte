@@ -144,6 +144,7 @@
 		{@const currentCards = data.cards}
 		{@const schoolProfile = data.schoolProfile}
 		{@const readinessIssues = cardReadinessIssues(currentCards)}
+		{@const printDisabled = currentCards.length === 0 || readinessIssues.length > 0}
 	<div class="mx-auto max-w-7xl space-y-6 p-6 print:p-0">
 		<div class="flex items-center justify-between print:hidden">
 			<div>
@@ -152,18 +153,27 @@
 			</div>
 			<div class="flex flex-wrap gap-2">
 				<a href={resolve(`/cbt/events/${eventId}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Event</a>
-			<Button onclick={() => window.print()} disabled={readinessIssues.length > 0}>
+			<Button onclick={() => window.print()} disabled={printDisabled}>
 				<PrinterIcon class="mr-2 size-4" />
 				Cetak
 			</Button>
 			</div>
 		</div>
 
-		{#if readinessIssues.length > 0}
+		{#if currentCards.length === 0}
+			<div class="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-5 text-sm text-amber-950 print:hidden">
+				<p class="font-semibold">Belum ada kartu ujian untuk dicetak.</p>
+				<p class="mt-1">Daftarkan peserta, buat token, lalu lengkapi ruangan dan nomor meja pada sesi event sebelum cetak massal.</p>
+				<div class="mt-3 flex flex-wrap gap-2">
+					<a href={resolve(`/cbt/sessions?event_id=${eventId}&readiness=not_ready`)} class="inline-flex rounded-md border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100">Cek sesi event</a>
+					<a href={resolve(`/cbt/events/${eventId}/members`)} class="inline-flex rounded-md border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100">Cek penugasan/peserta</a>
+				</div>
+			</div>
+		{:else if readinessIssues.length > 0}
 			<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 print:hidden">
 				<p class="font-semibold">Kartu belum siap dicetak massal.</p>
 				<p class="mt-1">{readinessIssues.join(', ')}. Rapikan token, ruang, dan kursi dari detail sesi sebelum cetak final.</p>
-				<a href={resolve(`/cbt/sessions?event_id=${eventId}&readiness=needs_rooms`)} class="mt-3 inline-flex rounded-md border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100">Cek sesi dan ruang</a>
+				<a href={resolve(`/cbt/sessions?event_id=${eventId}&readiness=not_ready`)} class="mt-3 inline-flex rounded-md border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100">Cek sesi dan ruang</a>
 			</div>
 		{:else if currentCards.length > 0}
 			<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 print:hidden">

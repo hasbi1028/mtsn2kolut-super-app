@@ -9,6 +9,8 @@ import {
   fetchRuntimeConfig,
   sendHeartbeat,
   WorkerApiCancelledError,
+  WorkerApiFinalStateError,
+  WorkerApiUncertainCompletionError,
 } from './api-client.js';
 import { log } from './logger.js';
 import { processClaimedJob } from './pusaka-runner.js';
@@ -111,6 +113,23 @@ export class WorkerSupervisor {
             record,
           });
         } catch (error) {
+          if (error instanceof WorkerApiUncertainCompletionError) {
+            this.deps.log('WARN', 'job completion report uncertain - fail report skipped', {
+              consumerId: state.consumerId,
+              job_id: job.id,
+              error: error.message,
+            });
+            continue;
+          }
+          if (error instanceof WorkerApiFinalStateError) {
+            this.deps.log('WARN', 'job completion report reached final-state response - fail report skipped', {
+              consumerId: state.consumerId,
+              job_id: job.id,
+              status: error.status,
+              error: error.message,
+            });
+            continue;
+          }
           const errorMessage = String((error as Error)?.message ?? error);
           if (this.shutdownReportedJobIds.has(job.id)) {
             this.deps.log('WARN', 'job failed after shutdown timeout report', {

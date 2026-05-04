@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -567,6 +568,9 @@ type fakeCbtSessionStore struct {
 	roomRows               []db.ListCbtExamRoomsRow
 	roomsErr               error
 	createRoomArg          db.CreateCbtExamRoomParams
+	roomSetupRow           db.GetCbtExamRoomSetupContextRow
+	roomSetupUsageRow      db.GetCbtExamRoomSetupUsageRow
+	roomSetupID            pgtype.UUID
 	schoolRoomRow          db.SchoolRoom
 	roomProctorRows        []db.ListCbtRoomProctorsRow
 	roomDashboardRow       db.GetCbtRoomProctorDashboardRow
@@ -592,9 +596,14 @@ type fakeCbtSessionStore struct {
 	deleteRoomID           pgtype.UUID
 	clearRoomID            pgtype.UUID
 	clearRoomErr           error
+	clearSeatID            pgtype.UUID
+	clearSeatErr           error
 	assignRoomArgs         []db.AssignParticipantRoomParams
 	assignRoomErr          error
 	assignSeatArgs         []db.AssignParticipantSeatParams
+	assignSeatErr          error
+	proctorOverlap         bool
+	proctorOverlapArg      db.HasOverlappingCbtRoomProctorParams
 	byRoomRows             []db.ListParticipantsByRoomRow
 	byRoomErr              error
 	proctorRows            []db.GetSessionProctoringStatusRow
@@ -746,11 +755,23 @@ func (f *fakeCbtSessionStore) DeleteCbtExamRoom(ctx context.Context, id pgtype.U
 	return nil
 }
 
+func (f *fakeCbtSessionStore) GetCbtExamRoomSetupContext(ctx context.Context, id pgtype.UUID) (db.GetCbtExamRoomSetupContextRow, error) {
+	f.roomSetupID = id
+	if f.roomSetupRow.ID.Valid {
+		return f.roomSetupRow, nil
+	}
+	return db.GetCbtExamRoomSetupContextRow{ID: id, SessionID: documentCycleTestUUID(228), RoomName: "Ruang 1", SessionStatus: db.CbtSessionStatusEnumScheduled}, nil
+}
+
+func (f *fakeCbtSessionStore) GetCbtExamRoomSetupUsage(ctx context.Context, id pgtype.UUID) (db.GetCbtExamRoomSetupUsageRow, error) {
+	return f.roomSetupUsageRow, nil
+}
+
 func (f *fakeCbtSessionStore) GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error) {
 	if f.schoolRoomRow.ID.Valid {
 		return f.schoolRoomRow, nil
 	}
-	return db.SchoolRoom{ID: id, Name: "Lab Komputer", DefaultCapacity: 30, ExamCapacity: 30, IsExamEligible: true}, nil
+	return db.SchoolRoom{ID: id, Name: "Lab Komputer", DefaultCapacity: 30, ExamCapacity: 30, IsExamEligible: true, NetworkReady: true, PowerReady: true}, nil
 }
 
 func (f *fakeCbtSessionStore) GetCbtRoomProctorDashboard(ctx context.Context, id pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error) {
@@ -853,7 +874,17 @@ func (f *fakeCbtSessionStore) AssignParticipantRoom(ctx context.Context, arg db.
 
 func (f *fakeCbtSessionStore) AssignParticipantSeat(ctx context.Context, arg db.AssignParticipantSeatParams) error {
 	f.assignSeatArgs = append(f.assignSeatArgs, arg)
-	return nil
+	return f.assignSeatErr
+}
+
+func (f *fakeCbtSessionStore) ClearParticipantSeatsForSession(ctx context.Context, sessionID pgtype.UUID) error {
+	f.clearSeatID = sessionID
+	return f.clearSeatErr
+}
+
+func (f *fakeCbtSessionStore) HasOverlappingCbtRoomProctor(ctx context.Context, arg db.HasOverlappingCbtRoomProctorParams) (bool, error) {
+	f.proctorOverlapArg = arg
+	return f.proctorOverlap, nil
 }
 
 func (f *fakeCbtSessionStore) ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]db.ListParticipantsByRoomRow, error) {
@@ -1418,6 +1449,91 @@ func TestCbtSessionUpdateScheduleGuardsStatusAndWindow(t *testing.T) {
 	}
 }
 
+func TestCbtSessionSetupMutationsRequireDraftOrScheduled(t *testing.T) {
+	sessionID := documentCycleTestUUID(245)
+	roomID := documentCycleTestUUID(246)
+	participantID := documentCycleTestUUID(247)
+	activeSession := db.GetCbtExamSessionRow{ID: sessionID, PackageID: documentCycleTestUUID(248), Status: db.CbtSessionStatusEnumActive}
+
+	store := &fakeCbtSessionStore{sessionRow: activeSession}
+	svc := &CbtSession{q: store}
+	if _, err := svc.CreateRoom(context.Background(), sessionID, "R1", 20); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("CreateRoom(active) error = %v, want ErrConflict", err)
+	}
+	if store.createRoomArg.SessionID.Valid {
+		t.Fatalf("CreateRoom(active) wrote %+v, want blocked", store.createRoomArg)
+	}
+
+	store = &fakeCbtSessionStore{roomSetupRow: db.GetCbtExamRoomSetupContextRow{ID: roomID, SessionID: sessionID, SessionStatus: db.CbtSessionStatusEnumFinished}}
+	svc = &CbtSession{q: store}
+	if err := svc.AssignSeat(context.Background(), participantID, roomID, 1); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("AssignSeat(finished) error = %v, want ErrConflict", err)
+	}
+	if len(store.assignSeatArgs) != 0 {
+		t.Fatalf("AssignSeat(finished) wrote %+v, want blocked", store.assignSeatArgs)
+	}
+}
+
+func TestCbtSessionDeleteRoomRejectsUsageAndNonMutableSession(t *testing.T) {
+	roomID := documentCycleTestUUID(249)
+
+	store := &fakeCbtSessionStore{
+		roomSetupRow: db.GetCbtExamRoomSetupContextRow{ID: roomID, SessionStatus: db.CbtSessionStatusEnumCancelled},
+	}
+	svc := &CbtSession{q: store}
+	if err := svc.DeleteRoom(context.Background(), roomID); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("DeleteRoom(cancelled) error = %v, want ErrConflict", err)
+	}
+	if store.deleteRoomID.Valid {
+		t.Fatalf("DeleteRoom(cancelled) deleted %v, want blocked", store.deleteRoomID)
+	}
+
+	tests := []struct {
+		name  string
+		usage db.GetCbtExamRoomSetupUsageRow
+		want  string
+	}{
+		{name: "participants", usage: db.GetCbtExamRoomSetupUsageRow{ParticipantCount: 1}, want: "peserta"},
+		{name: "proctors", usage: db.GetCbtExamRoomSetupUsageRow{ProctorCount: 1}, want: "pengawas"},
+		{name: "handovers", usage: db.GetCbtExamRoomSetupUsageRow{HandoverCount: 1}, want: "serah terima"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &fakeCbtSessionStore{
+				roomSetupRow:      db.GetCbtExamRoomSetupContextRow{ID: roomID, SessionStatus: db.CbtSessionStatusEnumScheduled},
+				roomSetupUsageRow: tt.usage,
+			}
+			svc := &CbtSession{q: store}
+			err := svc.DeleteRoom(context.Background(), roomID)
+			if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("DeleteRoom(%s) error = %v, want conflict containing %q", tt.name, err, tt.want)
+			}
+			if store.deleteRoomID.Valid {
+				t.Fatalf("DeleteRoom(%s) deleted %v, want blocked", tt.name, store.deleteRoomID)
+			}
+		})
+	}
+}
+
+func TestCbtSessionReplaceRoomProctorsRejectsOverlap(t *testing.T) {
+	sessionID := documentCycleTestUUID(250)
+	roomID := documentCycleTestUUID(251)
+	employeeID := documentCycleTestUUID(252)
+	store := &fakeCbtSessionStore{
+		roomSetupRow:   db.GetCbtExamRoomSetupContextRow{ID: roomID, SessionID: sessionID, SessionStatus: db.CbtSessionStatusEnumScheduled},
+		proctorOverlap: true,
+	}
+	svc := &CbtSession{q: store}
+
+	_, err := svc.ReplaceRoomProctors(context.Background(), roomID, documentCycleTestUUID(253), employeeID, nil)
+	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "bertugas") {
+		t.Fatalf("ReplaceRoomProctors(overlap) error = %v, want proctor overlap conflict", err)
+	}
+	if store.proctorOverlapArg.SessionID != sessionID || store.proctorOverlapArg.ExamRoomID != roomID || store.proctorOverlapArg.EmployeeID != employeeID {
+		t.Fatalf("overlap arg = %+v, want session/room/employee", store.proctorOverlapArg)
+	}
+}
+
 func TestCbtSessionListAuditLogsScopesEntity(t *testing.T) {
 	sessionID := documentCycleTestUUID(244)
 	store := &fakeCbtSessionStore{
@@ -1562,6 +1678,9 @@ func TestCbtSessionAutoAssignSeatsSortsWithinRooms(t *testing.T) {
 	}
 	if len(store.assignSeatArgs) != 3 {
 		t.Fatalf("AutoAssignSeats() assigned %d seats, want 3", len(store.assignSeatArgs))
+	}
+	if store.clearSeatID != sessionID {
+		t.Fatalf("AutoAssignSeats() clear seats id = %v, want %v", store.clearSeatID, sessionID)
 	}
 	seats := map[pgtype.UUID]db.AssignParticipantSeatParams{}
 	for _, arg := range store.assignSeatArgs {

@@ -115,9 +115,12 @@ func TestValidateCbtSessionActivationReadiness(t *testing.T) {
 		{name: "no participants", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 1, TotalCapacity: 30}, wantErr: "sesi belum memiliki peserta"},
 		{name: "no rooms", row: db.GetCbtSessionRoomReadinessRow{ParticipantCount: 10}, wantErr: "sesi belum memiliki ruangan ujian"},
 		{name: "capacity too small", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 1, TotalCapacity: 5, ParticipantCount: 10}, wantErr: "kapasitas ruangan belum cukup"},
+		{name: "room over capacity", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 2, TotalCapacity: 60, ParticipantCount: 50, OverCapacityRoomCount: 1}, wantErr: "1 ruangan melebihi kapasitas efektif"},
 		{name: "unassigned participants", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 1, TotalCapacity: 30, ParticipantCount: 20, UnassignedParticipantCount: 3}, wantErr: "3 peserta belum mendapat ruangan"},
 		{name: "missing seats", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 1, TotalCapacity: 30, ParticipantCount: 20, MissingSeatCount: 4}, wantErr: "4 peserta belum mendapat nomor meja"},
 		{name: "rooms without proctors", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 2, TotalCapacity: 60, ParticipantCount: 50, RoomsWithoutProctor: 1}, wantErr: "1 ruangan belum punya pengawas"},
+		{name: "network not ready", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 2, TotalCapacity: 60, ParticipantCount: 50, NetworkNotReadyRoomCount: 1}, wantErr: "1 ruangan CBT dengan jaringan belum siap"},
+		{name: "power not ready", row: db.GetCbtSessionRoomReadinessRow{RoomCount: 2, TotalCapacity: 60, ParticipantCount: 50, PowerNotReadyRoomCount: 1}, wantErr: "1 ruangan CBT dengan listrik belum siap"},
 	}
 
 	for _, tt := range tests {

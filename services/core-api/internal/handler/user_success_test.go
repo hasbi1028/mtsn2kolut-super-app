@@ -40,10 +40,10 @@ func (f *fakeUserStore) ListUsers(ctx context.Context) ([]db.ListUsersRow, error
 	return f.listRows, f.listErr
 }
 
-func (f *fakeUserStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error) {
+func (f *fakeUserStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error) {
 	f.createArg = arg
 	id := handlerTestUUID(230)
-	return db.User{ID: id, Username: arg.Username, PasswordHash: arg.PasswordHash, IsActive: arg.IsActive}, f.createErr
+	return db.CreateUserRow{ID: id, Username: arg.Username, IsActive: arg.IsActive}, f.createErr
 }
 
 func (f *fakeUserStore) AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error {
@@ -99,6 +99,14 @@ func TestUserSuccessHandlersForwardPayloads(t *testing.T) {
 	h.Create(rec, adminRequest(http.MethodPost, "/api/users", `{"username":"operator","password":"secret123","roles":["admin"]}`))
 	if rec.Code != http.StatusCreated || store.createArg.Username != "operator" || !store.createArg.IsActive || store.createArg.PasswordHash == "" || len(store.roles) != 1 || store.roles[0].Role != db.UserRoleAdmin {
 		t.Fatalf("Create() status/arg/roles = %d/%+v/%+v", rec.Code, store.createArg, store.roles)
+	}
+	var created map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("Create() json error = %v", err)
+	}
+	data, ok := created["data"].(map[string]any)
+	if !ok || data["password_hash"] != nil {
+		t.Fatalf("Create() data exposes password_hash: %#v", created["data"])
 	}
 
 	rec = httptest.NewRecorder()

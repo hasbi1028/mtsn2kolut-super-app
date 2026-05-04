@@ -36,7 +36,7 @@ type fakeJobStore struct {
 	listStatusCount int64
 	statusCountErr  error
 	statsRow        db.GetJobStatsRow
-	completeID      pgtype.UUID
+	completeArg     db.CompleteJobParams
 	failArg         db.FailJobParams
 	getID           pgtype.UUID
 	getRow          db.GetJobRow
@@ -95,14 +95,14 @@ func (f *fakeJobStore) RecoverStaleRunningJobs(ctx context.Context, staleAfterSe
 	return 0, f.recoverErr
 }
 
-func (f *fakeJobStore) CompleteJob(ctx context.Context, id pgtype.UUID) error {
-	f.completeID = id
-	return nil
+func (f *fakeJobStore) CompleteJob(ctx context.Context, arg db.CompleteJobParams) (int64, error) {
+	f.completeArg = arg
+	return 1, nil
 }
 
-func (f *fakeJobStore) FailJob(ctx context.Context, arg db.FailJobParams) error {
+func (f *fakeJobStore) FailJob(ctx context.Context, arg db.FailJobParams) (int64, error) {
 	f.failArg = arg
-	return nil
+	return 1, nil
 }
 
 func (f *fakeJobStore) GetJob(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error) {
@@ -331,17 +331,17 @@ func TestJobListStatsAndStateMutationsForwardStoreCalls(t *testing.T) {
 		t.Fatalf("RecoverStaleRunning(custom) seconds = %d, want 120", store.recoverSeconds)
 	}
 
-	if err := svc.Complete(context.Background(), jobID); err != nil {
+	if err := svc.Complete(context.Background(), jobID, "worker-1"); err != nil {
 		t.Fatalf("Complete() error = %v", err)
 	}
-	if store.completeID != jobID {
-		t.Fatalf("Complete() id = %v, want %v", store.completeID, jobID)
+	if store.completeArg.ID != jobID || store.completeArg.ClaimedBy != "worker-1" {
+		t.Fatalf("Complete() arg = %+v, want id and worker", store.completeArg)
 	}
 	retryAfter := pgtype.Text{String: "60", Valid: true}
-	if err := svc.Fail(context.Background(), jobID, "network", retryAfter); err != nil {
+	if err := svc.Fail(context.Background(), jobID, "worker-1", "network", retryAfter); err != nil {
 		t.Fatalf("Fail() error = %v", err)
 	}
-	if store.failArg.ID != jobID || store.failArg.ErrorMessage != "network" || store.failArg.Column3 != retryAfter {
+	if store.failArg.ID != jobID || store.failArg.ClaimedBy != "worker-1" || store.failArg.ErrorMessage != "network" || store.failArg.Column4 != retryAfter {
 		t.Fatalf("Fail() arg = %+v, want forwarded failure", store.failArg)
 	}
 	got, err := svc.Get(context.Background(), jobID)

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -49,6 +50,8 @@ type cbtSessionStore interface {
 	ListCbtExamRooms(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamRoomsRow, error)
 	CreateCbtExamRoom(ctx context.Context, arg db.CreateCbtExamRoomParams) (db.CbtExamRoom, error)
 	DeleteCbtExamRoom(ctx context.Context, id pgtype.UUID) error
+	GetCbtExamRoomSetupContext(ctx context.Context, id pgtype.UUID) (db.GetCbtExamRoomSetupContextRow, error)
+	GetCbtExamRoomSetupUsage(ctx context.Context, id pgtype.UUID) (db.GetCbtExamRoomSetupUsageRow, error)
 	GetSchoolRoom(ctx context.Context, id pgtype.UUID) (db.SchoolRoom, error)
 	GetCbtRoomProctorDashboard(ctx context.Context, id pgtype.UUID) (db.GetCbtRoomProctorDashboardRow, error)
 	GetCbtRoomHandover(ctx context.Context, id pgtype.UUID) (db.GetCbtRoomHandoverRow, error)
@@ -64,6 +67,8 @@ type cbtSessionStore interface {
 	HasSessionRoomProctor(ctx context.Context, arg db.HasSessionRoomProctorParams) (bool, error)
 	HasSessionRoomParticipant(ctx context.Context, arg db.HasSessionRoomParticipantParams) (bool, error)
 	AssignParticipantSeat(ctx context.Context, arg db.AssignParticipantSeatParams) error
+	ClearParticipantSeatsForSession(ctx context.Context, sessionID pgtype.UUID) error
+	HasOverlappingCbtRoomProctor(ctx context.Context, arg db.HasOverlappingCbtRoomProctorParams) (bool, error)
 	ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]db.ListParticipantsByRoomRow, error)
 	GetSessionProctoringStatus(ctx context.Context, arg db.GetSessionProctoringStatusParams) ([]db.GetSessionProctoringStatusRow, error)
 	SetParticipantSuspiciousFlag(ctx context.Context, arg db.SetParticipantSuspiciousFlagParams) error
@@ -92,6 +97,12 @@ type cbtRoomShuffleStore interface {
 	ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]db.ListParticipantsByRoomRow, error)
 	ListCbtExamRooms(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamRoomsRow, error)
 	AssignParticipantRoom(ctx context.Context, arg db.AssignParticipantRoomParams) error
+}
+
+type cbtSeatAssignmentStore interface {
+	ClearParticipantSeatsForSession(ctx context.Context, sessionID pgtype.UUID) error
+	ListParticipantsByRoom(ctx context.Context, sessionID pgtype.UUID) ([]db.ListParticipantsByRoomRow, error)
+	AssignParticipantSeat(ctx context.Context, arg db.AssignParticipantSeatParams) error
 }
 
 type cbtScoreStore interface {
@@ -301,12 +312,18 @@ func validateCbtSessionActivationReadiness(readiness db.GetCbtSessionRoomReadine
 		return fmt.Errorf("%w: sesi belum memiliki ruangan ujian", domain.ErrConflict)
 	case readiness.TotalCapacity < readiness.ParticipantCount:
 		return fmt.Errorf("%w: kapasitas ruangan belum cukup untuk seluruh peserta", domain.ErrConflict)
+	case readiness.OverCapacityRoomCount > 0:
+		return fmt.Errorf("%w: ada %d ruangan melebihi kapasitas efektif", domain.ErrConflict, readiness.OverCapacityRoomCount)
 	case readiness.UnassignedParticipantCount > 0:
 		return fmt.Errorf("%w: masih ada %d peserta belum mendapat ruangan", domain.ErrConflict, readiness.UnassignedParticipantCount)
 	case readiness.MissingSeatCount > 0:
 		return fmt.Errorf("%w: masih ada %d peserta belum mendapat nomor meja", domain.ErrConflict, readiness.MissingSeatCount)
 	case readiness.RoomsWithoutProctor > 0:
 		return fmt.Errorf("%w: masih ada %d ruangan belum punya pengawas", domain.ErrConflict, readiness.RoomsWithoutProctor)
+	case readiness.NetworkNotReadyRoomCount > 0:
+		return fmt.Errorf("%w: ada %d ruangan CBT dengan jaringan belum siap", domain.ErrConflict, readiness.NetworkNotReadyRoomCount)
+	case readiness.PowerNotReadyRoomCount > 0:
+		return fmt.Errorf("%w: ada %d ruangan CBT dengan listrik belum siap", domain.ErrConflict, readiness.PowerNotReadyRoomCount)
 	default:
 		return nil
 	}
@@ -507,26 +524,42 @@ func (s *CbtSession) ListRooms(ctx context.Context, sessionID pgtype.UUID) ([]db
 }
 
 func (s *CbtSession) CreateRoom(ctx context.Context, sessionID pgtype.UUID, roomName string, capacity int32) (db.CbtExamRoom, error) {
+	if err := s.ensureSessionSetupMutable(ctx, sessionID); err != nil {
+		return db.CbtExamRoom{}, err
+	}
 	roomName = strings.TrimSpace(roomName)
 	if capacity <= 0 {
 		capacity = 30
 	}
-	return s.q.CreateCbtExamRoom(ctx, db.CreateCbtExamRoomParams{
+	room, err := s.q.CreateCbtExamRoom(ctx, db.CreateCbtExamRoomParams{
 		SessionID:        sessionID,
 		SchoolRoomID:     pgtype.UUID{},
 		RoomName:         roomName,
 		RoomNameSnapshot: roomName,
 		Capacity:         capacity,
 	})
+	if err != nil {
+		return db.CbtExamRoom{}, mapCbtRoomSetupError(err)
+	}
+	return room, nil
 }
 
 func (s *CbtSession) CreateRoomFromSchoolRoom(ctx context.Context, sessionID, schoolRoomID pgtype.UUID, roomName string, capacity int32) (db.CbtExamRoom, error) {
+	if err := s.ensureSessionSetupMutable(ctx, sessionID); err != nil {
+		return db.CbtExamRoom{}, err
+	}
 	schoolRoom, err := s.q.GetSchoolRoom(ctx, schoolRoomID)
 	if err != nil {
 		return db.CbtExamRoom{}, err
 	}
 	if !schoolRoom.IsExamEligible || schoolRoom.Condition == "rusak" {
-		return db.CbtExamRoom{}, fmt.Errorf("ruangan fisik belum layak dipakai untuk ujian")
+		return db.CbtExamRoom{}, fmt.Errorf("%w: ruangan fisik belum layak dipakai untuk ujian", domain.ErrConflict)
+	}
+	if !schoolRoom.NetworkReady {
+		return db.CbtExamRoom{}, fmt.Errorf("%w: jaringan ruangan fisik belum siap untuk CBT", domain.ErrConflict)
+	}
+	if !schoolRoom.PowerReady {
+		return db.CbtExamRoom{}, fmt.Errorf("%w: listrik ruangan fisik belum siap untuk CBT", domain.ErrConflict)
 	}
 	roomName = strings.TrimSpace(roomName)
 	if roomName == "" {
@@ -541,17 +574,43 @@ func (s *CbtSession) CreateRoomFromSchoolRoom(ctx context.Context, sessionID, sc
 	if capacity <= 0 {
 		capacity = 30
 	}
-	return s.q.CreateCbtExamRoom(ctx, db.CreateCbtExamRoomParams{
+	room, err := s.q.CreateCbtExamRoom(ctx, db.CreateCbtExamRoomParams{
 		SessionID:        sessionID,
 		SchoolRoomID:     schoolRoomID,
 		RoomName:         roomName,
 		RoomNameSnapshot: roomName,
 		Capacity:         capacity,
 	})
+	if err != nil {
+		return db.CbtExamRoom{}, mapCbtRoomSetupError(err)
+	}
+	return room, nil
 }
 
 func (s *CbtSession) DeleteRoom(ctx context.Context, roomID pgtype.UUID) error {
-	return s.q.DeleteCbtExamRoom(ctx, roomID)
+	ctxRow, err := s.q.GetCbtExamRoomSetupContext(ctx, roomID)
+	if err != nil {
+		return err
+	}
+	if err := ensureCbtSessionSetupStatusMutable(ctxRow.SessionStatus); err != nil {
+		return err
+	}
+	usage, err := s.q.GetCbtExamRoomSetupUsage(ctx, roomID)
+	if err != nil {
+		return err
+	}
+	switch {
+	case usage.ParticipantCount > 0:
+		return fmt.Errorf("%w: ruangan masih memiliki %d peserta", domain.ErrConflict, usage.ParticipantCount)
+	case usage.ProctorCount > 0:
+		return fmt.Errorf("%w: ruangan masih memiliki %d pengawas", domain.ErrConflict, usage.ProctorCount)
+	case usage.HandoverCount > 0:
+		return fmt.Errorf("%w: ruangan sudah memiliki serah terima", domain.ErrConflict)
+	}
+	if err := s.q.DeleteCbtExamRoom(ctx, roomID); err != nil {
+		return mapCbtRoomSetupError(err)
+	}
+	return nil
 }
 
 func (s *CbtSession) ListRoomProctors(ctx context.Context, roomID pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
@@ -566,6 +625,28 @@ func (s *CbtSession) ListRoomProctors(ctx context.Context, roomID pgtype.UUID) (
 }
 
 func (s *CbtSession) ReplaceRoomProctors(ctx context.Context, roomID, assignedBy, primaryEmployeeID pgtype.UUID, employeeIDs []pgtype.UUID) ([]db.ListCbtRoomProctorsRow, error) {
+	room, err := s.q.GetCbtExamRoomSetupContext(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureCbtSessionSetupStatusMutable(room.SessionStatus); err != nil {
+		return nil, err
+	}
+	ordered := normalizeRoomProctorIDs(primaryEmployeeID, employeeIDs)
+	for _, employeeID := range ordered {
+		overlaps, err := s.q.HasOverlappingCbtRoomProctor(ctx, db.HasOverlappingCbtRoomProctorParams{
+			SessionID:  room.SessionID,
+			EmployeeID: employeeID,
+			ExamRoomID: roomID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if overlaps {
+			return nil, fmt.Errorf("%w: pengawas sudah bertugas pada sesi CBT lain yang waktunya bertabrakan", domain.ErrConflict)
+		}
+	}
+
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return nil, err
@@ -580,10 +661,9 @@ func (s *CbtSession) ReplaceRoomProctors(ctx context.Context, roomID, assignedBy
 
 	qtx := s.q.WithTx(tx)
 	if err := qtx.DeleteCbtRoomProctorsByRoom(ctx, roomID); err != nil {
-		return nil, err
+		return nil, mapCbtRoomSetupError(err)
 	}
 
-	ordered := normalizeRoomProctorIDs(primaryEmployeeID, employeeIDs)
 	for index, employeeID := range ordered {
 		role := "pendamping"
 		if index == 0 && primaryEmployeeID.Valid && employeeID == primaryEmployeeID {
@@ -595,7 +675,7 @@ func (s *CbtSession) ReplaceRoomProctors(ctx context.Context, roomID, assignedBy
 			Role:       role,
 			AssignedBy: assignedBy,
 		}); err != nil {
-			return nil, err
+			return nil, mapCbtRoomSetupError(err)
 		}
 	}
 
@@ -729,16 +809,32 @@ func normalizeRoomProctorIDs(primary pgtype.UUID, ids []pgtype.UUID) []pgtype.UU
 }
 
 func (s *CbtSession) AssignSeat(ctx context.Context, participantID, roomID pgtype.UUID, seatNo int32) error {
-	return s.q.AssignParticipantSeat(ctx, db.AssignParticipantSeatParams{
+	room, err := s.q.GetCbtExamRoomSetupContext(ctx, roomID)
+	if err != nil {
+		return err
+	}
+	if err := ensureCbtSessionSetupStatusMutable(room.SessionStatus); err != nil {
+		return err
+	}
+	if seatNo <= 0 {
+		return fmt.Errorf("%w: nomor meja harus lebih dari 0", domain.ErrBadRequest)
+	}
+	if err := s.q.AssignParticipantSeat(ctx, db.AssignParticipantSeatParams{
 		ID:     participantID,
 		RoomID: roomID,
 		SeatNo: pgtype.Int4{Int32: seatNo, Valid: seatNo > 0},
-	})
+	}); err != nil {
+		return mapCbtRoomSetupError(err)
+	}
+	return nil
 }
 
 // ShuffleRooms randomly assigns participants to rooms respecting capacity.
 // If a room is full, remaining participants are left unassigned.
 func (s *CbtSession) ShuffleRooms(ctx context.Context, sessionID pgtype.UUID) error {
+	if err := s.ensureSessionSetupMutable(ctx, sessionID); err != nil {
+		return err
+	}
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return err
@@ -781,7 +877,7 @@ func shuffleRooms(ctx context.Context, q cbtRoomShuffleStore, sessionID pgtype.U
 
 	slot := 0
 	for _, room := range rooms {
-		for range int(room.Capacity) {
+		for range int(cbtRoomEffectiveCapacity(room)) {
 			if slot >= len(indices) {
 				break
 			}
@@ -800,7 +896,35 @@ func shuffleRooms(ctx context.Context, q cbtRoomShuffleStore, sessionID pgtype.U
 }
 
 func (s *CbtSession) AutoAssignSeats(ctx context.Context, sessionID pgtype.UUID) error {
-	participants, err := s.q.ListParticipantsByRoom(ctx, sessionID)
+	if err := s.ensureSessionSetupMutable(ctx, sessionID); err != nil {
+		return err
+	}
+	if s.pool == nil {
+		return autoAssignSeats(ctx, s.q, sessionID)
+	}
+	conn, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if err := autoAssignSeats(ctx, s.q.WithTx(tx), sessionID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func autoAssignSeats(ctx context.Context, q cbtSeatAssignmentStore, sessionID pgtype.UUID) error {
+	if err := q.ClearParticipantSeatsForSession(ctx, sessionID); err != nil {
+		return mapCbtRoomSetupError(err)
+	}
+	participants, err := q.ListParticipantsByRoom(ctx, sessionID)
 	if err != nil {
 		return err
 	}
@@ -820,12 +944,60 @@ func (s *CbtSession) AutoAssignSeats(ctx context.Context, sessionID pgtype.UUID)
 			return rows[i].Nama < rows[j].Nama
 		})
 		for idx, participant := range rows {
-			if err := s.AssignSeat(ctx, participant.ID, participant.RoomID, int32(idx+1)); err != nil {
-				return err
+			if err := q.AssignParticipantSeat(ctx, db.AssignParticipantSeatParams{
+				ID:     participant.ID,
+				RoomID: participant.RoomID,
+				SeatNo: pgtype.Int4{Int32: int32(idx + 1), Valid: true},
+			}); err != nil {
+				return mapCbtRoomSetupError(err)
 			}
 		}
 	}
 	return nil
+}
+
+func cbtRoomEffectiveCapacity(room db.ListCbtExamRoomsRow) int32 {
+	if room.CapacityOverride.Valid && room.CapacityOverride.Int32 > 0 {
+		return room.CapacityOverride.Int32
+	}
+	return room.Capacity
+}
+
+func (s *CbtSession) ensureSessionSetupMutable(ctx context.Context, sessionID pgtype.UUID) error {
+	session, err := s.q.GetCbtExamSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	return ensureCbtSessionSetupStatusMutable(session.Status)
+}
+
+func ensureCbtSessionSetupStatusMutable(status db.CbtSessionStatusEnum) error {
+	switch status {
+	case db.CbtSessionStatusEnumDraft, db.CbtSessionStatusEnumScheduled:
+		return nil
+	default:
+		return fmt.Errorf("%w: pengaturan ruangan, kursi, dan pengawas hanya boleh diubah saat sesi draft atau terjadwal", domain.ErrConflict)
+	}
+}
+
+func mapCbtRoomSetupError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return err
+	}
+	switch pgErr.Code {
+	case "23505":
+		return fmt.Errorf("%w: data pengaturan ruang CBT sudah ada atau bertabrakan", domain.ErrConflict)
+	case "23503":
+		return fmt.Errorf("%w: referensi pengaturan ruang CBT tidak valid", domain.ErrBadRequest)
+	case "23514":
+		return fmt.Errorf("%w: nilai pengaturan ruang CBT tidak valid", domain.ErrBadRequest)
+	default:
+		return err
+	}
 }
 
 // --- Proctoring ---

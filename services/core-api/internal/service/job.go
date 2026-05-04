@@ -27,8 +27,8 @@ type jobStore interface {
 	GetJobStats(ctx context.Context) (db.GetJobStatsRow, error)
 	ClaimJob(ctx context.Context, workerID string) (db.ClaimJobRow, error)
 	RecoverStaleRunningJobs(ctx context.Context, staleAfterSeconds int32) (int64, error)
-	CompleteJob(ctx context.Context, id pgtype.UUID) error
-	FailJob(ctx context.Context, arg db.FailJobParams) error
+	CompleteJob(ctx context.Context, arg db.CompleteJobParams) (int64, error)
+	FailJob(ctx context.Context, arg db.FailJobParams) (int64, error)
 	GetJob(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error)
 	ListActiveEmployees(ctx context.Context) ([]db.ListActiveEmployeesRow, error)
 	CancelEmployeeJobs(ctx context.Context, employeeID pgtype.UUID) (int64, error)
@@ -108,16 +108,39 @@ func (s *PusakaJob) Claim(ctx context.Context, workerID string) (db.ClaimJobRow,
 	return row, err
 }
 
-func (s *PusakaJob) Complete(ctx context.Context, id pgtype.UUID) error {
-	return s.q.CompleteJob(ctx, id)
+func (s *PusakaJob) Complete(ctx context.Context, id pgtype.UUID, workerID string) error {
+	affected, err := s.q.CompleteJob(ctx, db.CompleteJobParams{ID: id, ClaimedBy: workerID})
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		job, err := s.q.GetJob(ctx, id)
+		if err == nil && job.Status == db.JobStatusEnumSuccess {
+			return nil
+		}
+		return domain.ErrConflict
+	}
+	return nil
 }
 
-func (s *PusakaJob) Fail(ctx context.Context, id pgtype.UUID, errMsg string, retryAfterSecs pgtype.Text) error {
-	return s.q.FailJob(ctx, db.FailJobParams{
+func (s *PusakaJob) Fail(ctx context.Context, id pgtype.UUID, workerID string, errMsg string, retryAfterSecs pgtype.Text) error {
+	affected, err := s.q.FailJob(ctx, db.FailJobParams{
 		ID:           id,
 		ErrorMessage: errMsg,
-		Column3:      retryAfterSecs,
+		ClaimedBy:    workerID,
+		Column4:      retryAfterSecs,
 	})
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		job, err := s.q.GetJob(ctx, id)
+		if err == nil && (job.Status == db.JobStatusEnumSuccess || job.Status == db.JobStatusEnumFailed) {
+			return nil
+		}
+		return domain.ErrConflict
+	}
+	return nil
 }
 
 func (s *PusakaJob) Get(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error) {

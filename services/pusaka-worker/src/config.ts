@@ -41,6 +41,32 @@ function parseBoolean(name: string, defaultValue: boolean): boolean {
   throw new Error(`Invalid worker config: ${name} must be true or false`);
 }
 
+function parseBackendUrl(raw: string): URL {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error('Invalid worker config: BACKEND_URL must be a valid http(s) URL');
+  }
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('Invalid worker config: BACKEND_URL must use http or https');
+  }
+  if (url.username || url.password) {
+    throw new Error('Invalid worker config: BACKEND_URL must not include credentials');
+  }
+  if (url.search || url.hash) {
+    throw new Error('Invalid worker config: BACKEND_URL must not include query or fragment');
+  }
+  return url;
+}
+
+function normalizeBackendUrl(raw: string): string {
+  const url = parseBackendUrl(raw);
+  const pathname = url.pathname === '/' ? '' : url.pathname.replace(/\/+$/, '');
+  return `${url.origin}${pathname}`;
+}
+
 function isLocalOrTestEnv(backendUrl: string): boolean {
   if (['test', 'local', 'development'].includes(NODE_ENV)) {
     return true;
@@ -51,14 +77,11 @@ function isLocalOrTestEnv(backendUrl: string): boolean {
   if (['test', 'local', 'development'].includes(APP_ENV)) {
     return true;
   }
-  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(
-    backendUrl,
-  );
+  const hostname = parseBackendUrl(backendUrl).hostname.toLowerCase();
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1';
 }
 
-export const BACKEND_URL = (
-  process.env.BACKEND_URL ?? 'http://localhost:8080'
-).replace(/\/$/, '');
+export const BACKEND_URL = normalizeBackendUrl(process.env.BACKEND_URL ?? 'http://localhost:8080');
 export const WORKER_API_KEY = process.env.WORKER_API_KEY ?? '';
 if (!WORKER_API_KEY && !isLocalOrTestEnv(BACKEND_URL)) {
   throw new Error('Invalid worker config: WORKER_API_KEY is required');

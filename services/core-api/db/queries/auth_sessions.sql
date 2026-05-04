@@ -17,6 +17,22 @@ SET revoked_at = NOW(), updated_at = NOW()
 WHERE id = $1
   AND revoked_at IS NULL;
 
+-- name: RevokeLiveAuthSessionByHash :execrows
+UPDATE auth_sessions
+SET revoked_at = NOW(), updated_at = NOW()
+WHERE id = $1
+  AND refresh_token_hash = $2
+  AND revoked_at IS NULL
+  AND expires_at > NOW();
+
+-- name: TouchAuthSessionLastUsed :execrows
+UPDATE auth_sessions
+SET last_used_at = NOW(), updated_at = NOW()
+WHERE id = $1
+  AND revoked_at IS NULL
+  AND expires_at > NOW()
+  AND last_used_at < NOW() - INTERVAL '5 minutes';
+
 -- name: RevokeAllAuthSessionsForUser :execrows
 UPDATE auth_sessions
 SET revoked_at = NOW(), updated_at = NOW()

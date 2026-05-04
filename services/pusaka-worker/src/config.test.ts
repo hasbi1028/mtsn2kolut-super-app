@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 
 import { normalizeRuntimeConfigPatch } from './config.js';
 
-function importConfig(env: NodeJS.ProcessEnv) {
+function importConfig(env: NodeJS.ProcessEnv, script = "import('./src/config.ts').then(() => process.exit(0)).catch((error) => { console.error(error.message); process.exit(42); })") {
   return spawnSync(
     process.execPath,
     [
@@ -12,7 +12,7 @@ function importConfig(env: NodeJS.ProcessEnv) {
       'tsx',
       '--input-type=module',
       '-e',
-      "import('./src/config.ts').then(() => process.exit(0)).catch((error) => { console.error(error.message); process.exit(42); })",
+      script,
     ],
     {
       cwd: new URL('..', import.meta.url),
@@ -49,6 +49,33 @@ test('numeric config rejects invalid values with sanitized message', () => {
   assert.equal(result.status, 42);
   assert.match(result.stderr, /WORKER_CONCURRENCY must be a finite number/);
   assert.doesNotMatch(result.stderr, /NaN/);
+});
+
+test('BACKEND_URL rejects credentials, query, and fragment', () => {
+  for (const BACKEND_URL of [
+    'https://worker:secret@api.example.invalid',
+    'https://api.example.invalid?token=secret',
+    'https://api.example.invalid#secret',
+  ]) {
+    const result = importConfig({ NODE_ENV: 'test', BACKEND_URL });
+
+    assert.equal(result.status, 42);
+    assert.match(result.stderr, /BACKEND_URL must not include/);
+    assert.doesNotMatch(result.stderr, /secret/);
+  }
+});
+
+test('BACKEND_URL requires http or https and normalizes trailing slash safely', () => {
+  const invalid = importConfig({ NODE_ENV: 'test', BACKEND_URL: 'ftp://api.example.invalid' });
+  assert.equal(invalid.status, 42);
+  assert.match(invalid.stderr, /BACKEND_URL must use http or https/);
+
+  const valid = importConfig(
+    { NODE_ENV: 'test', BACKEND_URL: 'https://api.example.invalid/pusaka/' },
+    "import('./src/config.ts').then((config) => { console.log(config.BACKEND_URL); process.exit(0); }).catch((error) => { console.error(error.message); process.exit(42); })",
+  );
+  assert.equal(valid.status, 0);
+  assert.equal(valid.stdout.trim(), 'https://api.example.invalid/pusaka');
 });
 
 test('normalizeRuntimeConfigPatch bounds backend maxConcurrent', () => {

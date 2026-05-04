@@ -123,9 +123,9 @@ func (f *fakeStore) GetUserByID(ctx context.Context, id pgtype.UUID) (db.GetUser
 	return db.GetUserByIDRow{}, pgx.ErrNoRows
 }
 
-func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error) {
+func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error) {
 	if f.createUserErr != nil {
-		return db.User{}, f.createUserErr
+		return db.CreateUserRow{}, f.createUserErr
 	}
 	var id pgtype.UUID
 	_ = id.Scan("11111111-1111-1111-1111-111111111111")
@@ -140,7 +140,17 @@ func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db
 		AuthVersion:  0,
 	}
 	f.users[arg.Username] = u
-	return u, nil
+	return db.CreateUserRow{
+		ID:          u.ID,
+		Username:    u.Username,
+		EmployeeID:  u.EmployeeID,
+		StudentID:   u.StudentID,
+		ParentID:    u.ParentID,
+		IsActive:    u.IsActive,
+		AuthVersion: u.AuthVersion,
+		CreatedAt:   u.CreatedAt,
+		UpdatedAt:   u.UpdatedAt,
+	}, nil
 }
 
 func (f *fakeStore) UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error {
@@ -227,6 +237,33 @@ func (f *fakeStore) RevokeAuthSession(ctx context.Context, id pgtype.UUID) error
 	session.RevokedAt = now
 	f.authSessions[id] = session
 	return nil
+}
+
+func (f *fakeStore) RevokeLiveAuthSessionByHash(ctx context.Context, arg db.RevokeLiveAuthSessionByHashParams) (int64, error) {
+	if f.revokeSessionErr != nil {
+		return 0, f.revokeSessionErr
+	}
+	session, ok := f.authSessions[arg.ID]
+	if !ok || session.RevokedAt.Valid || !session.ExpiresAt.Valid || session.ExpiresAt.Time.Before(time.Now()) || session.RefreshTokenHash != arg.RefreshTokenHash {
+		return 0, nil
+	}
+	now := pgtype.Timestamptz{}
+	_ = now.Scan(time.Now())
+	session.RevokedAt = now
+	f.authSessions[arg.ID] = session
+	return 1, nil
+}
+
+func (f *fakeStore) TouchAuthSessionLastUsed(ctx context.Context, id pgtype.UUID) (int64, error) {
+	session, ok := f.authSessions[id]
+	if !ok || session.RevokedAt.Valid || !session.ExpiresAt.Valid || session.ExpiresAt.Time.Before(time.Now()) {
+		return 0, nil
+	}
+	now := pgtype.Timestamptz{}
+	_ = now.Scan(time.Now())
+	session.LastUsedAt = now
+	f.authSessions[id] = session
+	return 1, nil
 }
 
 func (f *fakeStore) RevokeAllAuthSessionsForUser(ctx context.Context, userID pgtype.UUID) (int64, error) {

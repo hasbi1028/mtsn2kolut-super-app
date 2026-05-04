@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -226,6 +227,70 @@ func TestAuditLogsSuccessfulMutationsOnly(t *testing.T) {
 
 	if got := entityFromPath("plain/path"); got != "plain" {
 		t.Fatalf("entityFromPath() = %q, want plain", got)
+	}
+}
+
+func TestAuditUsesChiRouteParamAsEntityID(t *testing.T) {
+	writer := &fakeAuditWriter{}
+	r := chi.NewRouter()
+	r.With(Audit(writer)).Put("/api/students/{id}", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/students/01000000-0000-0000-0000-000000000001", nil))
+
+	if rec.Code != http.StatusNoContent || !writer.called {
+		t.Fatalf("Audit status/called = %d/%v, want 204/true", rec.Code, writer.called)
+	}
+	if writer.arg.EntityID != "01000000-0000-0000-0000-000000000001" {
+		t.Fatalf("EntityID = %q, want route id param", writer.arg.EntityID)
+	}
+
+	var metadata map[string]any
+	if err := json.Unmarshal(writer.arg.Metadata, &metadata); err != nil {
+		t.Fatalf("metadata unmarshal error = %v", err)
+	}
+	if metadata["route"] != "/api/students/{id}" {
+		t.Fatalf("route metadata = %v, want route pattern", metadata["route"])
+	}
+	params, ok := metadata["route_params"].(map[string]any)
+	if !ok || params["id"] != "01000000-0000-0000-0000-000000000001" {
+		t.Fatalf("route_params = %+v, want id param", metadata["route_params"])
+	}
+}
+
+func TestAuditFallbackEntityIDUsesSanitizedPath(t *testing.T) {
+	writer := &fakeAuditWriter{}
+	handler := Audit(writer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPatch, "/api/students/1?secret=token", nil))
+
+	if rec.Code != http.StatusOK || !writer.called {
+		t.Fatalf("Audit status/called = %d/%v, want 200/true", rec.Code, writer.called)
+	}
+	if writer.arg.EntityID != "/api/students/1" {
+		t.Fatalf("EntityID = %q, want path without query", writer.arg.EntityID)
+	}
+}
+
+func TestAuditDoesNotPanicOutsideChiContext(t *testing.T) {
+	writer := &fakeAuditWriter{}
+	handler := Audit(writer)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	}))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/plain", nil))
+
+	if rec.Code != http.StatusCreated || !writer.called {
+		t.Fatalf("Audit status/called = %d/%v, want 201/true", rec.Code, writer.called)
+	}
+	if writer.arg.EntityID != "/api/plain" {
+		t.Fatalf("EntityID = %q, want fallback path", writer.arg.EntityID)
 	}
 }
 

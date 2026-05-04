@@ -360,18 +360,8 @@ func sessionMetaFromRequest(r *http.Request) service.SessionMeta {
 		userAgent = strings.TrimSpace(r.UserAgent())
 	}
 
-	ipAddress := strings.TrimSpace(r.Header.Get("X-Client-IP"))
-	if ipAddress == "" {
-		if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
-			ipAddress = strings.TrimSpace(strings.Split(forwarded, ",")[0])
-		}
-	}
-	if ipAddress == "" {
-		ipAddress = strings.TrimSpace(r.RemoteAddr)
-	}
-
 	return service.SessionMeta{
-		IPAddress: ipAddress,
+		IPAddress: trustedClientIP(r),
 		UserAgent: userAgent,
 	}
 }

@@ -20,8 +20,8 @@ import (
 type pusakaWorkerJobService interface {
 	Claim(ctx context.Context, workerID string) (db.ClaimJobRow, error)
 	Get(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error)
-	Complete(ctx context.Context, id pgtype.UUID) error
-	Fail(ctx context.Context, id pgtype.UUID, errorMessage string, retryAfter pgtype.Text) error
+	Complete(ctx context.Context, id pgtype.UUID, workerID string) error
+	Fail(ctx context.Context, id pgtype.UUID, workerID string, errorMessage string, retryAfter pgtype.Text) error
 	Stats(ctx context.Context) (db.GetJobStatsRow, error)
 }
 
@@ -68,11 +68,17 @@ func (h *PusakaWorker) Complete(w http.ResponseWriter, r *http.Request) {
 
 	// Optional attendance data in body
 	var body struct {
+		WorkerID  string `json:"worker_id"`
 		Tanggal   string `json:"tanggal"`
 		JamMasuk  string `json:"jam_masuk"`
 		JamPulang string `json:"jam_pulang"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
+	workerID := workerIDFromRequest(r, body.WorkerID)
+	if workerID == "" {
+		api.BadRequest(w, "worker_id required")
+		return
+	}
 
 	if body.Tanggal != "" {
 		// Need employee_id from job for attendance upsert
@@ -98,7 +104,11 @@ func (h *PusakaWorker) Complete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.jobs.Complete(r.Context(), id); err != nil {
+	if err := h.jobs.Complete(r.Context(), id, workerID); err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			api.Conflict(w, "job is not running for this worker")
+			return
+		}
 		api.Internal(w, err)
 		return
 	}
@@ -112,6 +122,7 @@ func (h *PusakaWorker) Fail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
+		WorkerID       string `json:"worker_id"`
 		Error          string `json:"error"`
 		RetryAfterSecs string `json:"retry_after_secs"`
 	}
@@ -122,12 +133,28 @@ func (h *PusakaWorker) Fail(w http.ResponseWriter, r *http.Request) {
 	if body.RetryAfterSecs == "" {
 		body.RetryAfterSecs = "60"
 	}
+	workerID := workerIDFromRequest(r, body.WorkerID)
+	if workerID == "" {
+		api.BadRequest(w, "worker_id required")
+		return
+	}
 	retryAfter := pgtype.Text{String: body.RetryAfterSecs, Valid: true}
-	if err := h.jobs.Fail(r.Context(), id, body.Error, retryAfter); err != nil {
+	if err := h.jobs.Fail(r.Context(), id, workerID, body.Error, retryAfter); err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			api.Conflict(w, "job is not running for this worker")
+			return
+		}
 		api.Internal(w, err)
 		return
 	}
 	api.NoContent(w)
+}
+
+func workerIDFromRequest(r *http.Request, bodyWorkerID string) string {
+	if workerID := strings.TrimSpace(bodyWorkerID); workerID != "" {
+		return workerID
+	}
+	return strings.TrimSpace(r.Header.Get("X-Worker-ID"))
 }
 
 func (h *PusakaWorker) UpsertAttendance(w http.ResponseWriter, r *http.Request) {

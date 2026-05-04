@@ -172,7 +172,7 @@ func newArchiveMultipartRequest(t *testing.T, fields map[string]string, withFile
 		if err != nil {
 			t.Fatalf("CreateFormFile() error = %v", err)
 		}
-		if _, err := part.Write([]byte("archive")); err != nil {
+		if _, err := part.Write([]byte("%PDF-1.4\narchive")); err != nil {
 			t.Fatalf("multipart file write error = %v", err)
 		}
 	}
@@ -305,7 +305,7 @@ func TestArchiveDocumentHandlersForwardSuccessPaths(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("UploadDocument() status = %d, want 201; body=%s", rec.Code, rec.Body.String())
 	}
-	if fake.uploadInput.CategoryID != categoryID || fake.uploadInput.Title != "SK Tim" || fake.uploadInput.FileSize != 7 || fake.uploadContent != "archive" || !fake.uploadInput.UploadedByUserID.Valid {
+	if fake.uploadInput.CategoryID != categoryID || fake.uploadInput.Title != "SK Tim" || fake.uploadInput.FileSize != 16 || fake.uploadContent != "%PDF-1.4\narchive" || !fake.uploadInput.UploadedByUserID.Valid {
 		t.Fatalf("UploadDocument input = %+v content=%q, want request fields/user/file", fake.uploadInput, fake.uploadContent)
 	}
 
@@ -434,7 +434,7 @@ func TestArchiveFileServesStoredDocument(t *testing.T) {
 	if rec.Body.String() != "archive" || fake.getFileID != documentID {
 		t.Fatalf("File() body/id = %q/%v, want archive/id", rec.Body.String(), fake.getFileID)
 	}
-	if got := rec.Header().Get("Content-Disposition"); !strings.Contains(got, `filename=arsip.pdf`) {
+	if got := rec.Header().Get("Content-Disposition"); !strings.Contains(got, `filename="arsip.pdf"`) {
 		t.Fatalf("Content-Disposition = %q, want archive filename", got)
 	}
 }

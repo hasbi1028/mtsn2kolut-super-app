@@ -44,7 +44,9 @@
 		| `/cbt/soal/review?event_id=${string}`
 		| `/cbt/packages?event_id=${string}`
 		| `/cbt/sessions?event_id=${string}`
+		| `/cbt/sessions?event_id=${string}&readiness=not_ready`
 		| `/cbt/sessions?event_id=${string}&readiness=needs_rooms`
+		| `/cbt/sessions?event_id=${string}&readiness=needs_proctors`
 		| `/cbt/events/${string}/exam-cards`
 		| `/cbt/events/${string}#hasil`;
 	type ChecklistItem = {
@@ -163,17 +165,18 @@
 		const sessionFallback = detail.sessions.length > 0 ? detail.sessions.length : null;
 		const packageFallback = detail.packages.length > 0 ? detail.packages.length : null;
 		const roomIssues = detail.sessions.filter((session) => (session.room_count ?? 0) === 0 || (session.missing_seat_count ?? 0) > 0 || (session.rooms_without_proctor ?? 0) > 0 || (session.unassigned_participant_count ?? 0) > 0).length;
+		const proctorIssues = detail.sessions.filter((session) => (session.rooms_without_proctor ?? 0) > 0).length;
 		const items: Array<Omit<ChecklistItem, 'tone'>> = [
 			{ label: 'Penugasan', helper: 'Guru pembuat soal dan reviewer kegiatan', count: countFrom(overview?.member_count, null), href: `/cbt/events/${eventId}/members`, action: 'Atur penugasan' },
 			{ label: 'Bank Soal/Target', helper: 'Soal terbit dan target per mapel', count: countFrom(overview?.published_question_count ?? overview?.question_count, null), href: `/cbt/soal?event_id=${eventId}`, action: 'Buka bank soal' },
 			{ label: 'Review', helper: 'Antrean soal kegiatan yang perlu keputusan', count: countFrom(overview?.review_count, null), href: `/cbt/soal/review?event_id=${eventId}`, action: 'Review soal' },
 			{ label: 'Paket', helper: 'Paket siap dipakai sesi ujian', count: countFrom(overview?.package_count, packageFallback), href: `/cbt/packages?event_id=${eventId}`, action: 'Kelola paket' },
 			{ label: 'Sesi/Jadwal', helper: 'Sesi, status, dan jadwal operasional', count: countFrom(overview?.session_count, sessionFallback), href: `/cbt/sessions?event_id=${eventId}`, action: 'Kelola sesi' },
-			{ label: 'Ruang/Pengawas/Kursi', helper: roomIssues > 0 ? `${roomIssues} sesi masih perlu dirapikan` : 'Cek ruang, pengawas, kapasitas, dan nomor meja', count: countFrom(overview?.room_count, detail.sessions.length > 0 ? detail.sessions.reduce((sum, session) => sum + (session.room_count ?? 0), 0) : null), href: `/cbt/sessions?event_id=${eventId}&readiness=needs_rooms`, action: 'Cek ruang' },
+			{ label: 'Ruang/Pengawas/Kursi', helper: roomIssues > 0 ? `${roomIssues} sesi masih perlu dirapikan${proctorIssues > 0 ? `, ${proctorIssues} butuh pengawas` : ''}` : 'Cek ruang, pengawas, kapasitas, dan nomor meja', count: countFrom(overview?.room_count, detail.sessions.length > 0 ? detail.sessions.reduce((sum, session) => sum + (session.room_count ?? 0), 0) : null), href: `/cbt/sessions?event_id=${eventId}&readiness=not_ready`, action: 'Cek ruang' },
 			{ label: 'Token/Kartu', helper: 'Token peserta dan kartu ujian siap cetak', count: countFrom(overview?.token_count ?? overview?.card_count, null), href: `/cbt/events/${eventId}/exam-cards`, action: 'Cetak kartu' },
 			{ label: 'Hasil', helper: 'Rekap nilai gabungan tetap tersedia di bagian bawah', count: countFrom(overview?.result_count, detail.results.length), href: `/cbt/events/${eventId}#hasil`, action: 'Lihat hasil' },
 		];
-		return items.map((item) => ({ ...item, tone: checklistTone(item.count) }));
+		return items.map((item) => ({ ...item, tone: item.label === 'Ruang/Pengawas/Kursi' && roomIssues > 0 ? 'warning' : checklistTone(item.count) }));
 	}
 
 	function exportCSV() {

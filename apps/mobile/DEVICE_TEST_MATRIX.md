@@ -15,19 +15,21 @@ Status: sinkron per 2026-05-03. Matriks ini dipakai bersama release checklist da
 
 ## Kolom yang Disarankan
 
+Baris yang sudah terisi di bawah adalah contoh format, bukan hasil sertifikasi perangkat. Ganti dengan hasil uji nyata sekolah sebelum dipakai untuk keputusan operasional.
+
 | Vendor | Model | Android | RAM | Koneksi | Install APK | Login Token | Simpan PG | Simpan Uraian | Restore | Audio | Gambar | Status `Waspada` | Status `Menurun` | Submit | Catatan |
 |--------|-------|---------|-----|---------|-------------|-------------|-----------|---------------|---------|-------|--------|------------------|------------------|--------|---------|
-| Samsung | Galaxy A14 | 14 | 4 GB | Wi-Fi | Lulus | Lulus | Lulus | Lulus | Lulus | Lulus | Lulus | Lulus | Lulus | Lulus | - |
-| Xiaomi | Redmi Note 11 | 13 | 4 GB | Data |  |  |  |  |  |  |  |  |  |  |  |
-| Oppo | A57 | 13 | 4 GB | Wi-Fi |  |  |  |  |  |  |  |  |  |  |  |
-| Vivo | Y21 | 12 | 4 GB | Data |  |  |  |  |  |  |  |  |  |  |  |
+| Contoh: Samsung | Galaxy A14 | 14 | 4 GB | Wi-Fi | Lulus | Lulus | Lulus | Lulus | Lulus | Lulus | Lulus | Lulus | Lulus | Lulus | contoh baris, ganti dengan hasil nyata |
+| Contoh: Xiaomi | Redmi Note 11 | 13 | 4 GB | Data |  |  |  |  |  |  |  |  |  |  | contoh baris |
+| Contoh: Oppo | A57 | 13 | 4 GB | Wi-Fi |  |  |  |  |  |  |  |  |  |  | contoh baris |
+| Contoh: Vivo | Y21 | 12 | 4 GB | Data |  |  |  |  |  |  |  |  |  |  | contoh baris |
 
 ## Fokus Pengujian
 
 Per perangkat, minimal cek:
 
 1. APK bisa dipasang
-2. login token berhasil
+2. login token 32 karakter dari kartu ujian berhasil
 3. jawaban PG tersimpan
 4. jawaban uraian tersimpan
 5. restore sesi setelah app ditutup/buka lagi

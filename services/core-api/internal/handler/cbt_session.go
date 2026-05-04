@@ -918,7 +918,7 @@ func (h *CbtSession) AssignSeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.AssignSeat(r.Context(), pid, roomID, body.SeatNo); err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Nomor meja tidak dapat ditetapkan")
 		return
 	}
 	api.OK(w, map[string]any{"status": "assigned", "seat_no": body.SeatNo})
@@ -938,7 +938,7 @@ func (h *CbtSession) AutoAssignSeats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.AutoAssignSeats(r.Context(), sessionID); err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Nomor meja tidak dapat dibagikan otomatis")
 		return
 	}
 	api.OK(w, map[string]string{"status": "auto_assigned"})
@@ -999,7 +999,7 @@ func (h *CbtSession) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		}
 		room, err := physicalRoomSvc.CreateRoomFromSchoolRoom(r.Context(), sessionID, schoolRoomID, body.RoomName, body.Capacity)
 		if err != nil {
-			api.Internal(w, err)
+			writeDomainOrInternal(w, err, "Ruangan CBT tidak dapat dibuat")
 			return
 		}
 		h.auditEvent(r.Context(), "CBT_SESSION_ROOM_LINK_CREATE", "cbt_session_room", pgUUIDString(room.ID), map[string]any{
@@ -1020,7 +1020,7 @@ func (h *CbtSession) CreateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	room, err := h.svc.CreateRoom(r.Context(), sessionID, body.RoomName, body.Capacity)
 	if err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Ruangan CBT tidak dapat dibuat")
 		return
 	}
 	api.Created(w, room)
@@ -1123,7 +1123,7 @@ func (h *CbtSession) ReplaceRoomProctors(w http.ResponseWriter, r *http.Request)
 	}
 	rows, err := roomSvc.ReplaceRoomProctors(r.Context(), roomID, cbtSessionActorUserID(r), primaryEmployeeID, employeeIDs)
 	if err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Pengawas ruangan tidak dapat diperbarui")
 		return
 	}
 	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PROCTORS_REPLACE", "cbt_session_room", pgUUIDString(roomID), map[string]any{
@@ -1171,7 +1171,7 @@ func (h *CbtSession) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.DeleteRoom(r.Context(), roomID); err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Ruangan CBT tidak dapat dihapus")
 		return
 	}
 	api.NoContent(w)
@@ -1191,7 +1191,7 @@ func (h *CbtSession) ShuffleRooms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.ShuffleRooms(r.Context(), sessionID); err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Pembagian ruangan tidak dapat diacak")
 		return
 	}
 	api.OK(w, map[string]string{"status": "shuffled"})

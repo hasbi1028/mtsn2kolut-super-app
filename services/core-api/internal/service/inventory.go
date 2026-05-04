@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -24,6 +25,7 @@ type inventoryStore interface {
 	CreateSchoolRoom(ctx context.Context, arg db.CreateSchoolRoomParams) (db.SchoolRoom, error)
 	UpdateSchoolRoom(ctx context.Context, arg db.UpdateSchoolRoomParams) (db.SchoolRoom, error)
 	DeleteSchoolRoom(ctx context.Context, id pgtype.UUID) error
+	HasSchoolRoomCbtRooms(ctx context.Context, schoolRoomID pgtype.UUID) (bool, error)
 }
 
 type Inventory struct{ q inventoryStore }
@@ -68,6 +70,13 @@ func (s *Inventory) UpdateSchoolRoom(ctx context.Context, arg db.UpdateSchoolRoo
 }
 
 func (s *Inventory) DeleteSchoolRoom(ctx context.Context, id pgtype.UUID) error {
+	linked, err := s.q.HasSchoolRoomCbtRooms(ctx, id)
+	if err != nil {
+		return err
+	}
+	if linked {
+		return fmt.Errorf("%w: ruangan fisik masih terhubung ke ruangan CBT", domain.ErrConflict)
+	}
 	return s.q.DeleteSchoolRoom(ctx, id)
 }
 

@@ -10,14 +10,15 @@ Satu repo tidak berarti satu VPS. Yang penting hanya boundary source code berada
 
 ## Status Terkini
 
-Sinkron per 2026-05-03:
+Sinkron per 2026-05-04:
 
 - deploy server tetap 3 VPS: frontend, backend, worker
 - backend tetap owner migration PostgreSQL
 - web-admin tetap BFF/UI
 - worker tetap API client ke `/api/pusaka/worker/*`
 - Flutter CBT memakai exam API langsung dan harus dicek lewat `docs/exam-api.md`
-- sebelum ujian besar, jalankan `docs/cbt-smoke-checklist.md` setelah backend/frontend deploy
+- sebelum ujian besar, ikuti `docs/cbt-operator-runbook.md` dan jalankan `docs/cbt-smoke-checklist.md` setelah backend/frontend deploy
+- bila staging punya akun uji dan browser tooling, jalankan scaffold `apps/web-admin/docs/cbt-role-smoke.md`
 
 ## Model yang direkomendasikan
 
@@ -110,6 +111,14 @@ flutter build apk --release --dart-define=API_BASE_URL=https://api.sekolah.examp
 
 Distribusi APK mengikuti `apps/mobile/RELEASE_CHECKLIST.md` dan `apps/mobile/BYOD_TRIAL_PROCEDURE.md`.
 
+Checklist APK release CBT sebelum dibagikan:
+
+- pastikan permission Android `INTERNET` ada di manifest/APK sehingga aplikasi dapat menghubungi backend
+- gunakan `API_BASE_URL` HTTPS untuk staging/produksi; HTTP hanya boleh untuk dev lokal terkontrol
+- token uji baru harus 32 karakter hex dan cocok dengan sesi yang akan diuji
+- signing APK harus sesuai prosedur internal Android release; catat versi, commit, dan tanggal build
+- uji pada perangkat nyata lintas vendor dan catat hasil di `apps/mobile/DEVICE_TEST_MATRIX.md`
+
 ## Urutan deploy yang aman
 
 1. Deploy backend code lebih dulu.
@@ -119,9 +128,59 @@ Distribusi APK mengikuti `apps/mobile/RELEASE_CHECKLIST.md` dan `apps/mobile/BYO
 5. Deploy frontend.
 6. Verifikasi env worker: `WORKER_API_KEY`, `WORKER_API_TIMEOUT_MS`, `WORKER_LOG_PATH`, dan `SCREENSHOT_DIR`.
 7. Deploy/restart worker.
-8. Untuk rilis CBT, jalankan smoke checklist admin/guru dan token login Flutter.
+8. Untuk rilis CBT, jalankan smoke checklist admin/guru, scaffold web-admin bila tersedia, dan token login Flutter.
 
 Urutan ini aman karena schema owner ada di backend. Frontend dan worker cukup menyesuaikan kontrak API yang sudah naik duluan.
+
+## Preflight migration CBT
+
+Wajib dilakukan sebelum migration CBT yang menyentuh token, peserta, seat, event member, atau scope soal.
+
+1. Backup database terlebih dahulu:
+
+```bash
+make ops-backup
+```
+
+2. Konfirmasi tidak ada jendela ujian aktif atau segera dimulai. Jangan migrate saat siswa bisa login token, heartbeat, simpan jawaban, atau submit.
+3. Cek token peserta duplikat sebelum migration 060:
+
+```sql
+SELECT token, COUNT(*)
+FROM cbt_exam_participants
+WHERE token <> ''
+GROUP BY token
+HAVING COUNT(*) > 1;
+```
+
+4. Cek seat invalid sebelum migration 061:
+
+```sql
+SELECT id, session_id, room_id, seat_no
+FROM cbt_exam_participants
+WHERE seat_no IS NOT NULL
+  AND seat_no <= 0;
+```
+
+5. Cek seat duplikat sebelum migration 061:
+
+```sql
+SELECT room_id, seat_no, COUNT(*)
+FROM cbt_exam_participants
+WHERE room_id IS NOT NULL
+  AND seat_no IS NOT NULL
+GROUP BY room_id, seat_no
+HAVING COUNT(*) > 1;
+```
+
+6. Jalankan migration dari backend path dengan `make db-migrate` atau command DB script yang setara.
+7. Setelah migration, jalankan `make ops-health` dan smoke CBT sebelum sesi ujian diaktifkan.
+
+Catatan migration terbaru:
+
+- `060_cbt_exam_token_hardening.sql` tidak merotasi token yang sudah ada. Migration ini hanya menolak token non-empty yang duplikat dan menambahkan unique index token. Cetak ulang kartu hanya setelah operator menjalankan regenerasi/repair token eksplisit atau data kartu seperti ruang/seat berubah.
+- `061_cbt_participant_seat_invariants.sql` menolak `seat_no <= 0` dan duplikasi `(room_id, seat_no)`, lalu menambahkan constraint positif dan unique index room-seat.
+- `062_cbt_event_members_question_scope.sql` menambahkan role anggota event `panitia`, `pembuat_soal`, `reviewer`, `proktor`, `pengawas`, dan `korektor`. Hanya `pembuat_soal`, `reviewer`, dan `korektor` yang boleh punya `subject_id`; role lain bersifat event/ruang tanpa scope mapel.
 
 ## Health checks minimum
 
@@ -151,6 +210,28 @@ make ops-health-backend
 make ops-health-frontend
 make ops-health-worker
 ```
+
+## Target Makefile operasional
+
+Jalankan dari root repo kecuali command Flutter langsung yang disebutkan eksplisit.
+
+| Target/command | Fungsi |
+|----------------|--------|
+| `make ops-backup` | Backup PostgreSQL sebelum migration/deploy. |
+| `make db-migrate` | Apply migration PostgreSQL memakai `DATABASE_URL` atau `.env` backend. |
+| `make db-migrate-local` | Apply migration ke database lokal yang diizinkan eksplisit. |
+| `make ops-health` | Health check backend, frontend, dan worker. |
+| `make ops-health-backend` | Health check backend saja. |
+| `make ops-health-frontend` | Health check frontend saja. |
+| `make ops-health-worker` | Health check worker saja. |
+| `make check` | Check/test utama repo yang sudah terhubung di Makefile. |
+| `make ci-check` | Check ringan gaya CI tanpa vet/audit tambahan. |
+| `make check-web` | `npm run check` untuk SvelteKit web-admin. |
+| `make check-mobile` | `flutter analyze` untuk Flutter CBT. |
+| `make test-mobile` | `flutter test` untuk Flutter CBT. |
+| `make mobile-release-apk API_BASE_URL=https://api.sekolah.example` | Build APK release Flutter dengan HTTPS base URL. |
+| `cd apps/mobile && flutter pub get` | Install dependency Flutter sebelum analyze/test/build. |
+| `cd apps/mobile && flutter build apk --release --dart-define=API_BASE_URL=https://...` | Command build APK langsung bila tidak memakai Makefile. |
 
 ## Backup PostgreSQL minimum
 
@@ -183,6 +264,19 @@ Repo ini sekarang punya workflow CI dasar untuk:
 - `tsc --noEmit` pada `services/pusaka-worker`
 
 CI ini sengaja ringan dan hanya memeriksa kualitas dasar, bukan deploy automation.
+
+## Rate limit dan proxy
+
+Rate limit sensitif saat ini bersifat in-memory per proses backend. Model ini cocok untuk baseline satu backend VPS/proses, tetapi belum cukup bila backend dijalankan dalam beberapa replica, PM2 cluster, atau load balancer yang membagi trafik ke banyak proses.
+
+Sebelum scaling backend horizontal:
+
+- pindahkan counter rate limit ke shared store seperti Redis atau mekanisme counter/advisory PostgreSQL, atau terapkan limit setara di edge proxy terpercaya
+- pertahankan limiter aplikasi sebagai lapisan tambahan setelah shared/edge limiter aktif
+- uji ulang batas login, refresh, registrasi publik, dan login token ujian di staging
+- pastikan format log/proxy membuat IP client asli dapat dikorelasikan dengan log backend
+
+`TRUSTED_PROXY_CIDRS` hanya boleh berisi CIDR reverse proxy/load balancer yang benar-benar menjadi hop terpercaya di depan backend. Jangan isi dengan CIDR publik luas, range CDN yang tidak menjadi direct trusted hop, atau `0.0.0.0/0`, karena header `X-Forwarded-For` palsu dapat mengacaukan rate limit dan konteks audit.
 
 ## Rollback
 

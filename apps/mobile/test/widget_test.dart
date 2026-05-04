@@ -22,6 +22,32 @@ void main() {
     expect(find.text('Alamat server API'), findsNothing);
   });
 
+  testWidgets('login token field accepts 32-character backend hex token', (
+    tester,
+  ) async {
+    const token = '0123456789abcdef0123456789abcdef';
+
+    await tester.pumpWidget(
+      const _TestApp(child: ExamLoginScreen(autoRestore: false)),
+    );
+    await tester.pump();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Token ujian'),
+      token,
+    );
+    await tester.pump();
+
+    final editable = tester.widget<EditableText>(
+      find.byType(EditableText).first,
+    );
+    expect(editable.controller.text, token);
+    expect(
+      find.text('Contoh: 32 karakter heksadesimal dari kartu ujian'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('login screen reveals operator server field on demand', (
     tester,
   ) async {
@@ -42,6 +68,42 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Alamat server API'), findsOneWidget);
+    expect(
+      find.text('HTTP hanya untuk uji lokal atau jaringan privat'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Jangan pakai HTTP untuk ujian produksi'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('login screen shows HTTPS guidance only inside operator panel', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const _TestApp(child: ExamLoginScreen(autoRestore: false)),
+    );
+
+    await tester.pump();
+    expect(find.text('HTTPS siap untuk server produksi'), findsNothing);
+
+    await tester.ensureVisible(find.text('Tampilkan'));
+    await tester.tap(find.text('Tampilkan'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Alamat server API'),
+      'https://cbt.mtsn2kolut.sch.id',
+    );
+    await tester.pump();
+
+    expect(find.text('HTTPS siap untuk server produksi'), findsOneWidget);
+    expect(find.textContaining('sesuai untuk sesi produksi'), findsOneWidget);
   });
 
   testWidgets('login screen renders persistent guidance notice', (
@@ -282,6 +344,32 @@ void main() {
     );
   });
 
+  testWidgets('restore failed screen renders local answer counts', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamRestoreFailedScreen(
+          snapshot: _sampleSnapshot(
+            answers: const <String, String>{'q1': 'A', 'q2': 'B'},
+            pendingAnswers: const <String, String>{'q2': 'B'},
+          ),
+          message: 'Sesi lama belum bisa dipulihkan.',
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('2 jawaban lokal'), findsOneWidget);
+    expect(find.text('1 belum tersinkron'), findsOneWidget);
+  });
+
   testWidgets('restore failed screen renders stable restore health label', (
     tester,
   ) async {
@@ -519,6 +607,37 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('exam shell still blocks back when telemetry fails', (
+    tester,
+  ) async {
+    final client = _RecordingExamApiClient(
+      baseUrl: 'http://127.0.0.1:65535',
+      throwOnEvent: true,
+    );
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(client.eventCount, 1);
+    expect(
+      find.text('Tombol kembali dinonaktifkan selama ujian berlangsung.'),
+      findsOneWidget,
+    );
+    expect(find.text('Soal 1'), findsOneWidget);
   });
 
   testWidgets('exam shell renders danger guidance notice', (tester) async {
@@ -825,6 +944,37 @@ void main() {
     expect(find.text('Media soal'), findsOneWidget);
   });
 
+  testWidgets('exam shell resolves relative media and audio URLs', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleRelativeMediaLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    final image = tester.widget<Image>(find.byType(Image).first);
+    final provider = image.image as NetworkImage;
+    expect(provider.url, 'http://127.0.0.1:65535/uploads/questions/q1.png');
+    expect(
+      find.text('http://127.0.0.1:65535/uploads/audio/q1.mp3'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('exam shell renders rich stimulus and stem content', (
     tester,
   ) async {
@@ -906,6 +1056,174 @@ void main() {
 
     expect(find.text('Jawaban singkat'), findsOneWidget);
     expect(find.text('Jawaban uraian'), findsNothing);
+  });
+
+  testWidgets('exam shell autosaves text answers locally before server save', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = _MemoryExamSessionStore();
+    final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          sessionStore: store,
+          initialPayload: _sampleShortAnswerPayload(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Jawaban singkat'),
+      'Fotosintesis',
+    );
+    await tester.pump(const Duration(milliseconds: 450));
+
+    final snapshot = await store.loadSnapshot();
+    expect(snapshot?.answers, containsPair('question-short-1', 'Fotosintesis'));
+    expect(snapshot?.pendingAnswers, isEmpty);
+    expect(client.saveAnswerCount, 0);
+    expect(find.text('1 / 1'), findsOneWidget);
+  });
+
+  testWidgets(
+    'exam shell treats submitted status as terminal and clears snapshot',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final store = _MemoryExamSessionStore(
+        initialSnapshot: _sampleSnapshot(
+          answers: const <String, String>{'question-1': 'B'},
+        ),
+      );
+      final client = _RecordingExamApiClient(
+        baseUrl: 'http://127.0.0.1:65535',
+        statusPayload: const ExamStatusPayload(
+          answeredCount: 1,
+          totalQuestions: 1,
+          timeRemainingSeconds: 0,
+          isSubmitted: true,
+        ),
+      );
+
+      await tester.pumpWidget(
+        _TestApp(
+          child: ExamShellScreen(
+            client: client,
+            examToken: 'abc12345',
+            deviceFingerprint: 'android:test',
+            sessionStore: store,
+            restoredSnapshot: _sampleSnapshot(
+              answers: const <String, String>{'question-1': 'B'},
+            ),
+            initialPayload: _sampleLoginPayload(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ujian berhasil dikirim.'), findsOneWidget);
+      expect(await store.loadSnapshot(), isNull);
+    },
+  );
+
+  testWidgets('exam shell treats submit 409 as terminal and clears snapshot', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = _MemoryExamSessionStore(
+      initialSnapshot: _sampleSnapshot(
+        answers: const <String, String>{'question-1': 'B'},
+      ),
+    );
+    final client = _RecordingExamApiClient(
+      baseUrl: 'http://127.0.0.1:65535',
+      submitError: const ExamApiException('already submitted', statusCode: 409),
+    );
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          sessionStore: store,
+          restoredSnapshot: _sampleSnapshot(
+            answers: const <String, String>{'question-1': 'B'},
+          ),
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Kirim Ujian'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kirim Ujian').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ujian berhasil dikirim.'), findsOneWidget);
+    expect(await store.loadSnapshot(), isNull);
+  });
+
+  testWidgets('exam shell recomputes progress after pending answer flush', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = _MemoryExamSessionStore(
+      initialSnapshot: _sampleSnapshot(
+        answers: const <String, String>{'question-1': 'B'},
+        pendingAnswers: const <String, String>{'question-1': 'B'},
+      ),
+    );
+    final client = _RecordingExamApiClient(
+      baseUrl: 'http://127.0.0.1:65535',
+      statusPayload: const ExamStatusPayload(
+        answeredCount: 0,
+        totalQuestions: 1,
+        timeRemainingSeconds: 1800,
+        isSubmitted: false,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          sessionStore: store,
+          restoredSnapshot: _sampleSnapshot(
+            answers: const <String, String>{'question-1': 'B'},
+            pendingAnswers: const <String, String>{'question-1': 'B'},
+          ),
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(client.saveAnswerCount, 1);
+    expect(find.text('1 / 1'), findsOneWidget);
+    expect((await store.loadSnapshot())?.pendingAnswers, isEmpty);
   });
 
   testWidgets('exam shell renders matching question with pair selectors', (
@@ -1183,11 +1501,26 @@ void main() {
 }
 
 class _RecordingExamApiClient extends ExamApiClient {
-  _RecordingExamApiClient({required super.baseUrl});
+  _RecordingExamApiClient({
+    required super.baseUrl,
+    this.throwOnEvent = false,
+    this.statusPayload = const ExamStatusPayload(
+      answeredCount: 0,
+      totalQuestions: 0,
+      timeRemainingSeconds: 0,
+      isSubmitted: false,
+    ),
+    this.submitError,
+  });
 
   int heartbeatCount = 0;
   int statusCount = 0;
   int submitCount = 0;
+  int eventCount = 0;
+  int saveAnswerCount = 0;
+  final bool throwOnEvent;
+  final ExamStatusPayload statusPayload;
+  final ExamApiException? submitError;
 
   @override
   Future<void> sendHeartbeat(String token) async {
@@ -1197,17 +1530,71 @@ class _RecordingExamApiClient extends ExamApiClient {
   @override
   Future<ExamStatusPayload> getStatus(String token) async {
     statusCount += 1;
-    return const ExamStatusPayload(
-      answeredCount: 0,
-      totalQuestions: 0,
-      timeRemainingSeconds: 0,
-      isSubmitted: false,
-    );
+    return statusPayload;
   }
 
   @override
   Future<void> submit(String token) async {
     submitCount += 1;
+    final error = submitError;
+    if (error != null) {
+      throw error;
+    }
+  }
+
+  @override
+  Future<void> saveAnswer({
+    required String token,
+    required String questionId,
+    required String answer,
+  }) async {
+    saveAnswerCount += 1;
+  }
+
+  @override
+  Future<void> sendEvent({
+    required String token,
+    required String eventType,
+    Map<String, Object?> data = const <String, Object?>{},
+  }) async {
+    eventCount += 1;
+    if (throwOnEvent) {
+      throw const ExamApiException('transport');
+    }
+  }
+}
+
+class _MemoryExamSessionStore extends ExamSessionStore {
+  _MemoryExamSessionStore({ExamSessionSnapshot? initialSnapshot})
+    : _snapshot = initialSnapshot;
+
+  ExamSessionSnapshot? _snapshot;
+  String? _baseUrl;
+
+  @override
+  Future<void> saveBaseUrl(String baseUrl) async {
+    _baseUrl = baseUrl;
+  }
+
+  @override
+  Future<String?> loadBaseUrl() async {
+    return _baseUrl;
+  }
+
+  @override
+  Future<void> saveSnapshot(ExamSessionSnapshot snapshot) async {
+    _snapshot = snapshot;
+    _baseUrl = snapshot.baseUrl;
+  }
+
+  @override
+  Future<ExamSessionSnapshot?> loadSnapshot() async {
+    return _snapshot;
+  }
+
+  @override
+  Future<void> clearSnapshot() async {
+    _snapshot = null;
   }
 }
 
@@ -1334,6 +1721,42 @@ ExamLoginPayload _sampleMediaLoginPayload() {
         stemMediaUrl: 'https://cdn.example.com/images/question-1.png',
         stimulusMediaUrl: '',
         stemAudioUrl: '',
+        stimulusAudioUrl: '',
+        options: [
+          ExamOption(label: 'A', text: 'Pilihan A'),
+          ExamOption(label: 'B', text: 'Pilihan B'),
+          ExamOption(label: 'C', text: 'Pilihan C'),
+          ExamOption(label: 'D', text: 'Pilihan D'),
+        ],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _sampleRelativeMediaLoginPayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-media-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'IPA Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-media-1',
+        questionText: 'Perhatikan gambar berikut.',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: '/uploads/questions/q1.png',
+        stimulusMediaUrl: '',
+        stemAudioUrl: 'uploads/audio/q1.mp3',
         stimulusAudioUrl: '',
         options: [
           ExamOption(label: 'A', text: 'Pilihan A'),
@@ -1511,6 +1934,7 @@ ExamSessionSnapshot _sampleSnapshot({
   String lastServerContactIso = '',
   String lastSyncFailureIso = '',
   int consecutiveSyncFailures = 0,
+  Map<String, String> answers = const <String, String>{},
   Map<String, String> pendingAnswers = const <String, String>{},
   List<String> playedAudioQuestionIds = const <String>[],
   int currentQuestionIndex = 0,
@@ -1527,7 +1951,7 @@ ExamSessionSnapshot _sampleSnapshot({
     scheduledEndIso: '2026-05-01T09:30:00+08:00',
     durationMinutes: 90,
     currentQuestionIndex: currentQuestionIndex,
-    answers: const <String, String>{},
+    answers: answers,
     pendingAnswers: pendingAnswers,
     playedAudioQuestionIds: playedAudioQuestionIds,
     lastServerContactIso: lastServerContactIso,

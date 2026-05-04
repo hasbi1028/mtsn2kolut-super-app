@@ -264,8 +264,8 @@ func TestAuthLoginWritesAuditAndForwardsSessionMeta(t *testing.T) {
 	if svc.lastLoginUsername != "admin" || svc.lastLoginPassword != "secretpass" {
 		t.Fatalf("login credentials forwarded = (%q, %q)", svc.lastLoginUsername, svc.lastLoginPassword)
 	}
-	if svc.lastLoginMeta.IPAddress != "203.0.113.10" {
-		t.Fatalf("login ip = %q, want %q", svc.lastLoginMeta.IPAddress, "203.0.113.10")
+	if svc.lastLoginMeta.IPAddress != "192.0.2.1" {
+		t.Fatalf("login ip = %q, want remote address for untrusted client", svc.lastLoginMeta.IPAddress)
 	}
 	if svc.lastLoginMeta.UserAgent != "MTsN2 Test Client/1.0" {
 		t.Fatalf("login user agent = %q", svc.lastLoginMeta.UserAgent)
@@ -318,8 +318,8 @@ func TestAuthRefreshMapsSuspendedAndWritesAudit(t *testing.T) {
 	if svc.lastRefreshToken != "r1" {
 		t.Fatalf("refresh token forwarded = %q", svc.lastRefreshToken)
 	}
-	if svc.lastRefreshMeta.IPAddress != "203.0.113.11" {
-		t.Fatalf("refresh ip = %q, want %q", svc.lastRefreshMeta.IPAddress, "203.0.113.11")
+	if svc.lastRefreshMeta.IPAddress != "192.0.2.1" {
+		t.Fatalf("refresh ip = %q, want remote address for untrusted client", svc.lastRefreshMeta.IPAddress)
 	}
 	if len(audit.entries) != 1 || audit.entries[0].Action != "AUTH_REFRESH" {
 		t.Fatalf("audit entries = %#v", audit.entries)

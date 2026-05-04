@@ -116,6 +116,21 @@ func (q *Queries) GetSchoolRoom(ctx context.Context, id pgtype.UUID) (SchoolRoom
 	return i, err
 }
 
+const hasSchoolRoomCbtRooms = `-- name: HasSchoolRoomCbtRooms :one
+SELECT EXISTS (
+    SELECT 1
+    FROM cbt_exam_rooms
+    WHERE school_room_id = $1
+)::boolean
+`
+
+func (q *Queries) HasSchoolRoomCbtRooms(ctx context.Context, schoolRoomID pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, hasSchoolRoomCbtRooms, schoolRoomID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const listSchoolRooms = `-- name: ListSchoolRooms :many
 SELECT id, code, name, building, floor, room_type, location_note,
        default_capacity, exam_capacity, condition, is_exam_eligible,

@@ -38,6 +38,14 @@ void main() {
         'http://127.0.0.1:8080',
       );
       expect(
+        ExamApiClient.normalizeBaseUrl(' http://10.20.30.40:8080/ '),
+        'http://10.20.30.40:8080',
+      );
+      expect(
+        ExamApiClient.normalizeBaseUrl(' https://exam.example.test/ '),
+        'https://exam.example.test',
+      );
+      expect(
         () => ExamApiClient(baseUrl: 'ftp://127.0.0.1:8080'),
         throwsA(isA<ExamApiException>()),
       );
@@ -47,6 +55,17 @@ void main() {
       );
       expect(
         () => ExamApiClient(baseUrl: 'https://user:pass@127.0.0.1:8080'),
+        throwsA(isA<ExamApiException>()),
+      );
+      expect(
+        () => ExamApiClient.normalizeBaseUrl('http://exam.example.test'),
+        throwsA(isA<ExamApiException>()),
+      );
+      expect(
+        () => ExamApiClient.normalizeBaseUrl(
+          'http://127.0.0.1:8080',
+          allowDebugPlainHttp: false,
+        ),
         throwsA(isA<ExamApiException>()),
       );
     });
@@ -93,6 +112,24 @@ void main() {
         ),
         isEmpty,
       );
+    });
+
+    test('resolves relative exam asset URLs against base URL', () {
+      final client = ExamApiClient(baseUrl: 'https://exam.example.test:8443');
+
+      expect(
+        client.resolveAssetUrl('/uploads/questions/image.png'),
+        'https://exam.example.test:8443/uploads/questions/image.png',
+      );
+      expect(
+        client.resolveAssetUrl('uploads/audio/prompt.mp3'),
+        'https://exam.example.test:8443/uploads/audio/prompt.mp3',
+      );
+      expect(
+        client.resolveAssetUrl('https://cdn.example.test/a.mp3'),
+        'https://cdn.example.test/a.mp3',
+      );
+      expect(client.resolveAssetUrl(''), '');
     });
 
     test('login unwraps data envelope into payload', () async {

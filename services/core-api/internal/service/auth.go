@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -30,7 +31,7 @@ const (
 type authStore interface {
 	GetUserByUsername(ctx context.Context, username string) (db.GetUserByUsernameRow, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (db.GetUserByIDRow, error)
-	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
+	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error)
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
 	GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error)
 	AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error
@@ -38,6 +39,8 @@ type authStore interface {
 	CreateAuthSession(ctx context.Context, arg db.CreateAuthSessionParams) (db.AuthSession, error)
 	GetAuthSession(ctx context.Context, id pgtype.UUID) (db.AuthSession, error)
 	RevokeAuthSession(ctx context.Context, id pgtype.UUID) error
+	RevokeLiveAuthSessionByHash(ctx context.Context, arg db.RevokeLiveAuthSessionByHashParams) (int64, error)
+	TouchAuthSessionLastUsed(ctx context.Context, id pgtype.UUID) (int64, error)
 	RevokeAllAuthSessionsForUser(ctx context.Context, userID pgtype.UUID) (int64, error)
 	ListActiveAuthSessionsByUser(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error)
 	RevokeOwnedAuthSession(ctx context.Context, arg db.RevokeOwnedAuthSessionParams) (int64, error)
@@ -130,8 +133,15 @@ func (s *Auth) Refresh(ctx context.Context, refreshToken string, meta SessionMet
 		return domain.TokenPair{}, domain.ErrUnauthorized
 	}
 
-	if err := s.q.RevokeAuthSession(ctx, session.ID); err != nil {
+	affected, err := s.q.RevokeLiveAuthSessionByHash(ctx, db.RevokeLiveAuthSessionByHashParams{
+		ID:               session.ID,
+		RefreshTokenHash: hashToken(refreshToken),
+	})
+	if err != nil {
 		return domain.TokenPair{}, err
+	}
+	if affected == 0 {
+		return domain.TokenPair{}, domain.ErrUnauthorized
 	}
 	return s.issueTokenPair(ctx, user, normalizeSessionMeta(meta))
 }
@@ -515,6 +525,9 @@ func (s *Auth) ValidateAccessSession(ctx context.Context, subject, sessionRef st
 	if !user.IsActive {
 		return false, nil
 	}
+	if _, err := s.q.TouchAuthSessionLastUsed(ctx, sessionID); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -618,7 +631,7 @@ func (s *Auth) validateRefreshSession(ctx context.Context, refreshToken string, 
 	if !session.ExpiresAt.Valid || session.ExpiresAt.Time.Before(time.Now()) {
 		return db.AuthSession{}, domain.ErrUnauthorized
 	}
-	if session.RefreshTokenHash != hashToken(refreshToken) {
+	if subtle.ConstantTimeCompare([]byte(session.RefreshTokenHash), []byte(hashToken(refreshToken))) != 1 {
 		return db.AuthSession{}, domain.ErrUnauthorized
 	}
 	return session, nil

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
@@ -45,23 +47,63 @@ func Audit(q AuditWriter) func(http.Handler) http.Handler {
 				}
 			}
 
+			entityID, routePattern, routeParams := auditRouteMetadata(r)
+
 			meta, _ := json.Marshal(map[string]any{
-				"method":     method,
-				"path":       r.URL.Path,
-				"status":     rec.status,
-				"actor":      actor,
-				"request_id": r.Header.Get("X-Request-ID"),
+				"method":       method,
+				"path":         r.URL.Path,
+				"route":        routePattern,
+				"route_params": routeParams,
+				"status":       rec.status,
+				"actor":        actor,
+				"request_id":   r.Header.Get("X-Request-ID"),
 			})
 
 			_, _ = q.CreateAuditLog(r.Context(), db.CreateAuditLogParams{
 				UserID:     uid,
 				Action:     method,
 				EntityType: entityFromPath(r.URL.Path),
-				EntityID:   r.URL.Path,
+				EntityID:   entityID,
 				Metadata:   meta,
 			})
 		})
 	}
+}
+
+func auditRouteMetadata(r *http.Request) (string, string, map[string]string) {
+	path := sanitizedPath(r)
+	entityID := path
+	routeParams := map[string]string{}
+
+	rctx := chi.RouteContext(r.Context())
+	if rctx == nil {
+		return entityID, "", routeParams
+	}
+
+	for i, key := range rctx.URLParams.Keys {
+		if i >= len(rctx.URLParams.Values) {
+			continue
+		}
+		value := rctx.URLParams.Values[i]
+		routeParams[key] = value
+		if entityID == path && isIDRouteParam(key) && value != "" {
+			entityID = value
+		}
+	}
+
+	return entityID, rctx.RoutePattern(), routeParams
+}
+
+func sanitizedPath(r *http.Request) string {
+	if r.URL == nil {
+		return ""
+	}
+	return r.URL.Path
+}
+
+func isIDRouteParam(key string) bool {
+	key = strings.ToLower(strings.TrimSpace(key))
+	return key == "id" || strings.HasSuffix(key, "_id") || strings.HasSuffix(key, "id")
 }
 
 type recordingResponseWriter struct {

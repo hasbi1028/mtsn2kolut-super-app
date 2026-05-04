@@ -8,34 +8,36 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
 type fakeInventoryStore struct {
-	listArg     db.ListInventoryItemsParams
-	listRows    []db.InventoryItem
-	listErr     error
-	itemsByID   map[pgtype.UUID]db.InventoryItem
-	getItem     db.InventoryItem
-	getErr      error
-	getIDs      []pgtype.UUID
-	createArg   db.CreateInventoryItemParams
-	createErr   error
-	updateArgs  []db.UpdateInventoryItemParams
-	updateErr   error
-	deleteID    pgtype.UUID
-	deleteErr   error
-	eventArgs   []db.CreateInventoryItemEventParams
-	eventErr    error
-	eventRows   []db.ListInventoryItemEventsByItemRow
-	eventItemID pgtype.UUID
-	stats       db.GetInventoryStatsRow
-	statsErr    error
-	roomRows    []db.SchoolRoom
-	roomArg     db.ListSchoolRoomsParams
-	roomCreate  db.CreateSchoolRoomParams
-	roomUpdate  db.UpdateSchoolRoomParams
-	roomID      pgtype.UUID
+	listArg       db.ListInventoryItemsParams
+	listRows      []db.InventoryItem
+	listErr       error
+	itemsByID     map[pgtype.UUID]db.InventoryItem
+	getItem       db.InventoryItem
+	getErr        error
+	getIDs        []pgtype.UUID
+	createArg     db.CreateInventoryItemParams
+	createErr     error
+	updateArgs    []db.UpdateInventoryItemParams
+	updateErr     error
+	deleteID      pgtype.UUID
+	deleteErr     error
+	eventArgs     []db.CreateInventoryItemEventParams
+	eventErr      error
+	eventRows     []db.ListInventoryItemEventsByItemRow
+	eventItemID   pgtype.UUID
+	stats         db.GetInventoryStatsRow
+	statsErr      error
+	roomRows      []db.SchoolRoom
+	roomArg       db.ListSchoolRoomsParams
+	roomCreate    db.CreateSchoolRoomParams
+	roomUpdate    db.UpdateSchoolRoomParams
+	roomID        pgtype.UUID
+	linkedCbtRoom bool
 }
 
 func (f *fakeInventoryStore) ListInventoryItems(ctx context.Context, arg db.ListInventoryItemsParams) ([]db.InventoryItem, error) {
@@ -141,6 +143,10 @@ func (f *fakeInventoryStore) UpdateSchoolRoom(ctx context.Context, arg db.Update
 func (f *fakeInventoryStore) DeleteSchoolRoom(ctx context.Context, id pgtype.UUID) error {
 	f.roomID = id
 	return nil
+}
+
+func (f *fakeInventoryStore) HasSchoolRoomCbtRooms(ctx context.Context, schoolRoomID pgtype.UUID) (bool, error) {
+	return f.linkedCbtRoom, nil
 }
 
 func inventoryTestUUID(seed byte) pgtype.UUID {
@@ -452,6 +458,20 @@ func TestInventoryDeleteItemPropagatesStoreErrors(t *testing.T) {
 	}
 	if len(store.eventArgs) != 1 {
 		t.Fatalf("CreateInventoryItemEvent() calls = %d, want delete audit before delete failure", len(store.eventArgs))
+	}
+}
+
+func TestInventoryDeleteSchoolRoomRejectsCbtLinkedRoom(t *testing.T) {
+	roomID := inventoryTestUUID(19)
+	store := &fakeInventoryStore{linkedCbtRoom: true}
+	svc := &Inventory{q: store}
+
+	err := svc.DeleteSchoolRoom(context.Background(), roomID)
+	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "terhubung ke ruangan CBT") {
+		t.Fatalf("DeleteSchoolRoom(linked) error = %v, want linked CBT conflict", err)
+	}
+	if store.roomID.Valid {
+		t.Fatalf("DeleteSchoolRoom(linked) deleted %v, want blocked", store.roomID)
 	}
 }
 

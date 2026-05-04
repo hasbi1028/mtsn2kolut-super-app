@@ -150,6 +150,28 @@ func (q *Queries) RevokeAuthSession(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const revokeLiveAuthSessionByHash = `-- name: RevokeLiveAuthSessionByHash :execrows
+UPDATE auth_sessions
+SET revoked_at = NOW(), updated_at = NOW()
+WHERE id = $1
+  AND refresh_token_hash = $2
+  AND revoked_at IS NULL
+  AND expires_at > NOW()
+`
+
+type RevokeLiveAuthSessionByHashParams struct {
+	ID               pgtype.UUID `json:"id"`
+	RefreshTokenHash string      `json:"refresh_token_hash"`
+}
+
+func (q *Queries) RevokeLiveAuthSessionByHash(ctx context.Context, arg RevokeLiveAuthSessionByHashParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeLiveAuthSessionByHash, arg.ID, arg.RefreshTokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeOwnedAuthSession = `-- name: RevokeOwnedAuthSession :execrows
 UPDATE auth_sessions
 SET revoked_at = NOW(), updated_at = NOW()
@@ -165,6 +187,23 @@ type RevokeOwnedAuthSessionParams struct {
 
 func (q *Queries) RevokeOwnedAuthSession(ctx context.Context, arg RevokeOwnedAuthSessionParams) (int64, error) {
 	result, err := q.db.Exec(ctx, revokeOwnedAuthSession, arg.UserID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const touchAuthSessionLastUsed = `-- name: TouchAuthSessionLastUsed :execrows
+UPDATE auth_sessions
+SET last_used_at = NOW(), updated_at = NOW()
+WHERE id = $1
+  AND revoked_at IS NULL
+  AND expires_at > NOW()
+  AND last_used_at < NOW() - INTERVAL '5 minutes'
+`
+
+func (q *Queries) TouchAuthSessionLastUsed(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, touchAuthSessionLastUsed, id)
 	if err != nil {
 		return 0, err
 	}

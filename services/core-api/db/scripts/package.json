@@ -6,7 +6,8 @@
   "scripts": {
     "migrate": "node migrate_sqlite.js",
     "migrate:pg": "node apply_migrations.js",
-    "seed:mobile-cbt": "node seed_mobile_cbt.js"
+    "seed:mobile-cbt": "node seed_mobile_cbt.js",
+    "test": "node --test"
   },
   "dependencies": {
     "better-sqlite3": "^12.9.0",

@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearParticipantSeatsForSession = `-- name: ClearParticipantSeatsForSession :exec
+UPDATE cbt_exam_participants
+SET seat_no = NULL
+WHERE session_id = $1
+  AND room_id IS NOT NULL
+`
+
+func (q *Queries) ClearParticipantSeatsForSession(ctx context.Context, sessionID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, clearParticipantSeatsForSession, sessionID)
+	return err
+}
+
 const createCbtExamRoom = `-- name: CreateCbtExamRoom :one
 INSERT INTO cbt_exam_rooms (
   session_id, school_room_id, room_name, room_name_snapshot, capacity
@@ -130,6 +142,95 @@ func (q *Queries) GetCbtExamRoom(ctx context.Context, id pgtype.UUID) (CbtExamRo
 		&i.IsLocked,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const getCbtExamRoomSetupContext = `-- name: GetCbtExamRoomSetupContext :one
+SELECT
+  r.id,
+  r.session_id,
+  r.school_room_id,
+  r.room_name,
+  r.room_name_snapshot,
+  r.capacity,
+  r.capacity_override,
+  r.room_token,
+  r.status,
+  r.is_locked,
+  r.created_at,
+  r.updated_at,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end
+FROM cbt_exam_rooms r
+JOIN cbt_exam_sessions s ON s.id = r.session_id
+WHERE r.id = $1
+`
+
+type GetCbtExamRoomSetupContextRow struct {
+	ID               pgtype.UUID          `json:"id"`
+	SessionID        pgtype.UUID          `json:"session_id"`
+	SchoolRoomID     pgtype.UUID          `json:"school_room_id"`
+	RoomName         string               `json:"room_name"`
+	RoomNameSnapshot string               `json:"room_name_snapshot"`
+	Capacity         int32                `json:"capacity"`
+	CapacityOverride pgtype.Int4          `json:"capacity_override"`
+	RoomToken        string               `json:"room_token"`
+	Status           string               `json:"status"`
+	IsLocked         bool                 `json:"is_locked"`
+	CreatedAt        pgtype.Timestamptz   `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz   `json:"updated_at"`
+	SessionStatus    CbtSessionStatusEnum `json:"session_status"`
+	ScheduledStart   pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd     pgtype.Timestamptz   `json:"scheduled_end"`
+}
+
+func (q *Queries) GetCbtExamRoomSetupContext(ctx context.Context, id pgtype.UUID) (GetCbtExamRoomSetupContextRow, error) {
+	row := q.db.QueryRow(ctx, getCbtExamRoomSetupContext, id)
+	var i GetCbtExamRoomSetupContextRow
+	err := row.Scan(
+		&i.ID,
+		&i.SessionID,
+		&i.SchoolRoomID,
+		&i.RoomName,
+		&i.RoomNameSnapshot,
+		&i.Capacity,
+		&i.CapacityOverride,
+		&i.RoomToken,
+		&i.Status,
+		&i.IsLocked,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SessionStatus,
+		&i.ScheduledStart,
+		&i.ScheduledEnd,
+	)
+	return i, err
+}
+
+const getCbtExamRoomSetupUsage = `-- name: GetCbtExamRoomSetupUsage :one
+SELECT
+  COUNT(DISTINCT ep.id)::int AS participant_count,
+  COUNT(DISTINCT rp.id)::int AS proctor_count,
+  COUNT(DISTINCT h.id)::int AS handover_count
+FROM cbt_exam_rooms r
+LEFT JOIN cbt_exam_participants ep ON ep.room_id = r.id AND ep.session_id = r.session_id
+LEFT JOIN cbt_room_proctors rp ON rp.exam_room_id = r.id
+LEFT JOIN cbt_room_handovers h ON h.exam_room_id = r.id
+WHERE r.id = $1
+GROUP BY r.id
+`
+
+type GetCbtExamRoomSetupUsageRow struct {
+	ParticipantCount int32 `json:"participant_count"`
+	ProctorCount     int32 `json:"proctor_count"`
+	HandoverCount    int32 `json:"handover_count"`
+}
+
+func (q *Queries) GetCbtExamRoomSetupUsage(ctx context.Context, id pgtype.UUID) (GetCbtExamRoomSetupUsageRow, error) {
+	row := q.db.QueryRow(ctx, getCbtExamRoomSetupUsage, id)
+	var i GetCbtExamRoomSetupUsageRow
+	err := row.Scan(&i.ParticipantCount, &i.ProctorCount, &i.HandoverCount)
 	return i, err
 }
 
@@ -498,7 +599,7 @@ const getCbtSessionRoomReadiness = `-- name: GetCbtSessionRoomReadiness :one
 WITH room_stats AS (
   SELECT
     COUNT(*)::int AS room_count,
-    COALESCE(SUM(capacity), 0)::int AS total_capacity
+    COALESCE(SUM(COALESCE(capacity_override, capacity)), 0)::int AS total_capacity
   FROM cbt_exam_rooms er
   WHERE er.session_id = $1
 ),
@@ -523,6 +624,41 @@ proctor_stats AS (
     COUNT(*) FILTER (WHERE proctor_count = 0)::int AS rooms_without_proctor,
     COALESCE(SUM(proctor_count), 0)::int AS proctor_assignment_count
   FROM room_proctor_counts
+),
+room_capacity_stats AS (
+  SELECT
+    r.id,
+    r.room_name,
+    COALESCE(r.capacity_override, r.capacity)::int AS effective_capacity,
+    COUNT(ep.id)::int AS participant_count
+  FROM cbt_exam_rooms r
+  LEFT JOIN cbt_exam_participants ep ON ep.room_id = r.id AND ep.session_id = r.session_id
+  WHERE r.session_id = $1
+  GROUP BY r.id, r.room_name, r.capacity_override, r.capacity
+),
+over_capacity_stats AS (
+  SELECT
+    COUNT(*) FILTER (WHERE participant_count > effective_capacity)::int AS over_capacity_room_count,
+    COALESCE(
+      jsonb_agg(
+        jsonb_build_object(
+          'room_id', id,
+          'room_name', room_name,
+          'participant_count', participant_count,
+          'effective_capacity', effective_capacity
+        ) ORDER BY room_name
+      ) FILTER (WHERE participant_count > effective_capacity),
+      '[]'::jsonb
+    ) AS over_capacity_rooms
+  FROM room_capacity_stats
+),
+physical_room_stats AS (
+  SELECT
+    COUNT(*) FILTER (WHERE r.school_room_id IS NOT NULL AND COALESCE(sr.network_ready, FALSE) = FALSE)::int AS network_not_ready_room_count,
+    COUNT(*) FILTER (WHERE r.school_room_id IS NOT NULL AND COALESCE(sr.power_ready, FALSE) = FALSE)::int AS power_not_ready_room_count
+  FROM cbt_exam_rooms r
+  LEFT JOIN school_rooms sr ON sr.id = r.school_room_id
+  WHERE r.session_id = $1
 )
 SELECT
   rs.room_count,
@@ -532,19 +668,27 @@ SELECT
   ps.unassigned_participant_count,
   ps.missing_seat_count,
   COALESCE(prs.rooms_without_proctor, 0)::int AS rooms_without_proctor,
-  COALESCE(prs.proctor_assignment_count, 0)::int AS proctor_assignment_count
-FROM room_stats rs, participant_stats ps, proctor_stats prs
+  COALESCE(prs.proctor_assignment_count, 0)::int AS proctor_assignment_count,
+  COALESCE(ocs.over_capacity_room_count, 0)::int AS over_capacity_room_count,
+  COALESCE(ocs.over_capacity_rooms, '[]'::jsonb) AS over_capacity_rooms,
+  COALESCE(phys.network_not_ready_room_count, 0)::int AS network_not_ready_room_count,
+  COALESCE(phys.power_not_ready_room_count, 0)::int AS power_not_ready_room_count
+FROM room_stats rs, participant_stats ps, proctor_stats prs, over_capacity_stats ocs, physical_room_stats phys
 `
 
 type GetCbtSessionRoomReadinessRow struct {
-	RoomCount                  int32 `json:"room_count"`
-	TotalCapacity              int32 `json:"total_capacity"`
-	ParticipantCount           int32 `json:"participant_count"`
-	AssignedParticipantCount   int32 `json:"assigned_participant_count"`
-	UnassignedParticipantCount int32 `json:"unassigned_participant_count"`
-	MissingSeatCount           int32 `json:"missing_seat_count"`
-	RoomsWithoutProctor        int32 `json:"rooms_without_proctor"`
-	ProctorAssignmentCount     int32 `json:"proctor_assignment_count"`
+	RoomCount                  int32       `json:"room_count"`
+	TotalCapacity              int32       `json:"total_capacity"`
+	ParticipantCount           int32       `json:"participant_count"`
+	AssignedParticipantCount   int32       `json:"assigned_participant_count"`
+	UnassignedParticipantCount int32       `json:"unassigned_participant_count"`
+	MissingSeatCount           int32       `json:"missing_seat_count"`
+	RoomsWithoutProctor        int32       `json:"rooms_without_proctor"`
+	ProctorAssignmentCount     int32       `json:"proctor_assignment_count"`
+	OverCapacityRoomCount      int32       `json:"over_capacity_room_count"`
+	OverCapacityRooms          interface{} `json:"over_capacity_rooms"`
+	NetworkNotReadyRoomCount   int32       `json:"network_not_ready_room_count"`
+	PowerNotReadyRoomCount     int32       `json:"power_not_ready_room_count"`
 }
 
 func (q *Queries) GetCbtSessionRoomReadiness(ctx context.Context, targetSessionID pgtype.UUID) (GetCbtSessionRoomReadinessRow, error) {
@@ -559,8 +703,40 @@ func (q *Queries) GetCbtSessionRoomReadiness(ctx context.Context, targetSessionI
 		&i.MissingSeatCount,
 		&i.RoomsWithoutProctor,
 		&i.ProctorAssignmentCount,
+		&i.OverCapacityRoomCount,
+		&i.OverCapacityRooms,
+		&i.NetworkNotReadyRoomCount,
+		&i.PowerNotReadyRoomCount,
 	)
 	return i, err
+}
+
+const hasOverlappingCbtRoomProctor = `-- name: HasOverlappingCbtRoomProctor :one
+SELECT EXISTS (
+  SELECT 1
+  FROM cbt_room_proctors rp
+  JOIN cbt_exam_rooms r ON r.id = rp.exam_room_id
+  JOIN cbt_exam_sessions s ON s.id = r.session_id
+  JOIN cbt_exam_sessions target_session ON target_session.id = $1
+  WHERE rp.employee_id = $2
+    AND r.id <> $3
+    AND s.status IN ('draft', 'scheduled', 'active')
+    AND s.scheduled_start < target_session.scheduled_end
+    AND target_session.scheduled_start < s.scheduled_end
+)::boolean
+`
+
+type HasOverlappingCbtRoomProctorParams struct {
+	SessionID  pgtype.UUID `json:"session_id"`
+	EmployeeID pgtype.UUID `json:"employee_id"`
+	ExamRoomID pgtype.UUID `json:"exam_room_id"`
+}
+
+func (q *Queries) HasOverlappingCbtRoomProctor(ctx context.Context, arg HasOverlappingCbtRoomProctorParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasOverlappingCbtRoomProctor, arg.SessionID, arg.EmployeeID, arg.ExamRoomID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const hasSessionRoomParticipant = `-- name: HasSessionRoomParticipant :one

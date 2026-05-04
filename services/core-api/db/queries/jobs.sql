@@ -84,24 +84,31 @@ WITH updated AS (
 )
 SELECT COUNT(*)::BIGINT FROM updated;
 
--- name: CompleteJob :exec
+-- name: CompleteJob :execrows
 UPDATE jobs
 SET status        = 'success',
     error_message = '',
+    claimed_by    = '',
+    claimed_at    = NULL,
     updated_at    = NOW()
-WHERE id = $1;
+WHERE id = $1
+  AND status = 'running'
+  AND claimed_by = $2;
 
--- name: FailJob :exec
+-- name: FailJob :execrows
 UPDATE jobs
 SET status        = 'failed',
     error_message = $2,
     claimed_by    = '',
+    claimed_at    = NULL,
     next_retry_at = CASE
-      WHEN attempts < max_attempts THEN NOW() + ($3 || ' seconds')::INTERVAL
+      WHEN attempts < max_attempts THEN NOW() + ($4 || ' seconds')::INTERVAL
       ELSE NULL
     END,
     updated_at    = NOW()
-WHERE id = $1;
+WHERE id = $1
+  AND status = 'running'
+  AND claimed_by = $3;
 
 -- name: GetJob :one
 SELECT id, employee_id, run_type, status, error_message, claimed_by, claimed_at,

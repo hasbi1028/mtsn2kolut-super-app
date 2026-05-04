@@ -34,6 +34,9 @@ export const actions: Actions = {
 			if (e instanceof ApiError && e.status === 401) {
 				return fail(401, { error: 'Username atau password salah' });
 			}
+			if (e instanceof ApiError && e.status === 403) {
+				return fail(403, { error: e.message || 'Akun sedang dinonaktifkan. Hubungi admin madrasah.' });
+			}
 			return fail(500, { error: 'Server error, coba lagi' });
 		}
 

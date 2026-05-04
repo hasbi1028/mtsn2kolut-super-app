@@ -35,6 +35,24 @@ function usernameContext(username: string): Record<string, string> {
   return { username_hash: usernameHash(username) };
 }
 
+function pageTextSummary(text: string): Record<string, unknown> {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  const markers = [
+    ['login_form', /username|password|masuk/i],
+    ['attendance', /absensi|presensi|hadir/i],
+    ['dashboard', /dashboard|beranda|profil/i],
+    ['error', /gagal|error|bad request|timeout/i],
+  ]
+    .filter(([, pattern]) => (pattern as RegExp).test(normalized))
+    .map(([marker]) => marker);
+
+  return {
+    text_hash: crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 12),
+    text_length: normalized.length,
+    markers,
+  };
+}
+
 function sanitizeScreenshotName(name: string): string {
   return name.replace(/[^a-z0-9._-]+/gi, '-').slice(0, 120);
 }
@@ -44,7 +62,10 @@ function isCredentialOrLoginFailure(error: unknown): boolean {
   return /login|credential|username|password/.test(message);
 }
 
-function pruneOldScreenshots(): void {
+export function pruneOldScreenshots(): void {
+  if (!fs.existsSync(SCREENSHOT_DIR)) {
+    return;
+  }
   const cutoff = Date.now() - SCREENSHOT_RETENTION_MS;
   for (const entry of fs.readdirSync(SCREENSHOT_DIR, { withFileTypes: true })) {
     if (!entry.isFile()) {
@@ -300,7 +321,7 @@ async function assertPresenceResult(
   }
   log('WARN', `${label}: status tidak jelas`, {
     ...usernameContext(username),
-    snippet: text.substring(0, 300),
+    page: pageTextSummary(text),
   });
 }
 

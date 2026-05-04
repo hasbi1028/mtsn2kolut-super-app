@@ -40,7 +40,7 @@ dev-backend:
 
 # ── Check / Test ─────────────────────────────────────────────────────────────
 
-.PHONY: check check-web check-worker test-web test-worker test-mobile test-backend coverage-backend-unit coverage-backend-unit-88 vet-backend audit-web lint-backend lint ci-check
+.PHONY: check check-web check-worker check-mobile test-web test-worker test-mobile test-backend coverage-backend-unit coverage-backend-unit-88 vet-backend audit-web lint-backend lint ci-check
 .PHONY: ops-health ops-health-backend ops-health-frontend ops-health-worker ops-backup
 
 check-web:
@@ -51,6 +51,9 @@ test-web:
 
 check-worker:
 	cd $(WORKER_DIR) && ./node_modules/.bin/tsc --noEmit
+
+check-mobile:
+	cd apps/mobile && flutter analyze
 
 test-worker:
 	cd $(WORKER_DIR) && npm run test
@@ -84,7 +87,7 @@ check: check-web test-web check-worker test-worker test-backend test-mobile vet-
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
-.PHONY: build build-web build-worker build-backend
+.PHONY: build build-web build-worker build-backend mobile-release-apk
 
 build-web:
 	cd $(WEB_DIR) && npm run build
@@ -96,6 +99,14 @@ build-backend:
 	cd $(BACKEND_DIR) && go build -o bin/api ./cmd/api
 
 build: build-web build-worker build-backend
+
+mobile-release-apk:
+	@if [ -z "$${API_BASE_URL}" ]; then \
+		printf 'API_BASE_URL is required, for example: make mobile-release-apk API_BASE_URL=https://api.sekolah.example\n' >&2; \
+		exit 1; \
+	fi
+	@case "$${API_BASE_URL}" in https://*) ;; *) printf 'API_BASE_URL must use https:// for release APK builds\n' >&2; exit 1 ;; esac
+	cd apps/mobile && flutter build apk --release --dart-define=API_BASE_URL="$${API_BASE_URL}"
 
 # ── Start (production, manual) ───────────────────────────────────────────────
 
@@ -163,7 +174,7 @@ pm2-stop-worker:
 
 # ── DB helpers ───────────────────────────────────────────────────────────────
 
-.PHONY: db-sqlc db-sqlc-install db-migrate db-schema
+.PHONY: db-sqlc db-sqlc-install db-migrate db-migrate-local db-schema
 
 db-sqlc: db-sqlc-install
 	cd $(BACKEND_DIR)/db && ../../../$(SQLC_BIN) generate -f sqlc.yaml
@@ -176,7 +187,17 @@ db-sqlc-install:
 	fi
 
 db-migrate:
-	cd $(DB_SCRIPTS_DIR) && npm run migrate:pg
+	cd $(DB_SCRIPTS_DIR) && \
+		if [ -n "$${DATABASE_URL}" ]; then \
+			npm run migrate:pg; \
+		elif [ -f ../../.env ]; then \
+			set -a; . ../../.env; set +a; npm run migrate:pg; \
+		else \
+			npm run migrate:pg; \
+		fi
+
+db-migrate-local:
+	cd $(DB_SCRIPTS_DIR) && ALLOW_LOCAL_DATABASE_URL=true npm run migrate:pg
 
 db-schema:
 	psql "$${DATABASE_URL}" -f $(BACKEND_DIR)/db/migrations/001_initial_schema.sql
@@ -236,8 +257,11 @@ help:
 	@echo "  coverage-backend-unit  Go unit coverage excluding cmd/api and generated sqlc"
 	@echo "  coverage-backend-unit-88  same coverage scope with 88% threshold"
 	@echo "  lint                   golangci-lint run (falls back if not installed)"
+	@echo "  check-mobile           flutter analyze apps/mobile"
+	@echo "  test-mobile            flutter test apps/mobile"
 	@echo "  db-sqlc                install repo-local sqlc if needed, then regenerate sqlc code"
-	@echo "  db-migrate             apply PostgreSQL migrations"
+	@echo "  db-migrate             apply PostgreSQL migrations using DATABASE_URL"
+	@echo "  db-migrate-local       apply migrations to explicit local dev database"
 	@echo "  ops-health             health check backend + frontend + worker"
 	@echo "  ops-backup             run PostgreSQL backup script"
 	@echo ""
@@ -249,6 +273,7 @@ help:
 	@echo ""
 	@echo "Build:"
 	@echo "  build                  build web + backend"
+	@echo "  mobile-release-apk     build Flutter APK release; requires API_BASE_URL=https://..."
 	@echo "  start-web              start SvelteKit production server"
 	@echo "  start-worker           start Playwright worker"
 	@echo "  start-backend          start compiled Go API"

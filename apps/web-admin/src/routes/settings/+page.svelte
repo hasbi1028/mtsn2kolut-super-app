@@ -11,6 +11,7 @@
   import ScheduleList   from '$lib/components/ScheduleList.svelte';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
   import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+  import { clearCbtComposerDrafts } from '$lib/client/cbt-drafts';
   import { readClientApiData, readClientJson } from '$lib/client/api';
 
   type WorkerSettingState = {
@@ -216,6 +217,7 @@
     try {
       const res = await fetch('/api/auth/logout-all', { method: 'POST' });
       await readClientJson<unknown>(res);
+      clearCbtComposerDrafts();
       window.location.href = '/login';
     } catch (error) {
       showError(mutationErrorMessage(error, 'Gagal mengakhiri semua sesi'));
@@ -232,6 +234,7 @@
 
       if (sessionId === currentSessionId) {
         await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+        clearCbtComposerDrafts();
         window.location.href = '/login';
         return;
       }

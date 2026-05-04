@@ -11,19 +11,15 @@ import fs from 'fs';
 import crypto from 'crypto';
 import path from 'path';
 import pg from 'pg';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const { Pool } = pg;
 
 const __dir = path.dirname(fileURLToPath(import.meta.url));
-const MIGRATIONS_DIR = path.resolve(__dir, '../migrations');
-const DATABASE_URL = process.env.DATABASE_URL
-  ?? 'postgresql://pusaka:pusaka_dev@localhost:5432/pusaka';
-const BASELINE_ON_EXISTING_SCHEMA = !['0', 'false', 'no'].includes(
-  String(process.env.BASELINE_ON_EXISTING_SCHEMA ?? 'true').toLowerCase()
-);
+const LOCAL_DATABASE_URL = 'postgresql://pusaka:pusaka_dev@localhost:5432/pusaka';
+const DEFAULT_MIGRATIONS_DIR = path.resolve(__dir, '../migrations');
 
-async function hasExistingSchema(client) {
+export async function hasExistingSchema(client) {
   const res = await client.query(`
     SELECT COUNT(*)::int AS count
     FROM information_schema.tables
@@ -33,8 +29,12 @@ async function hasExistingSchema(client) {
   return (res.rows[0]?.count ?? 0) > 0;
 }
 
-async function applyMigrations() {
-  const pool = new Pool({ connectionString: DATABASE_URL });
+export async function applyMigrations(options = {}) {
+  const env = options.env ?? process.env;
+  const migrationsDir = options.migrationsDir ?? DEFAULT_MIGRATIONS_DIR;
+  const databaseURL = options.databaseURL ?? resolveDatabaseURL(env);
+  const baselineOnExistingSchema = options.baselineOnExistingSchema ?? baselineOnExistingSchemaEnabled(env);
+  const pool = options.pool ?? new Pool({ connectionString: databaseURL });
   const client = await pool.connect();
 
   try {
@@ -50,17 +50,17 @@ async function applyMigrations() {
       ADD COLUMN IF NOT EXISTS checksum TEXT NOT NULL DEFAULT ''
     `);
 
-    const files = fs.readdirSync(MIGRATIONS_DIR)
+    const files = fs.readdirSync(migrationsDir)
       .filter((name) => name.endsWith('.sql'))
       .sort();
     validateMigrationOrder(files);
 
-    let baselinePending = BASELINE_ON_EXISTING_SCHEMA && await hasExistingSchema(client);
+    let baselinePending = baselineOnExistingSchema && await hasExistingSchema(client);
 
     for (const file of files) {
       const version = file.replace(/\.sql$/, '');
       const acceptableVersions = [version, ...legacyMigrationVersions(version)];
-      const fullPath = path.join(MIGRATIONS_DIR, file);
+      const fullPath = path.join(migrationsDir, file);
       const sql = fs.readFileSync(fullPath, 'utf8');
       const checksum = checksumFor(sql);
       const exists = await client.query(
@@ -70,9 +70,7 @@ async function applyMigrations() {
       if (exists.rowCount > 0) {
         const appliedVersion = exists.rows[0]?.version ?? version;
         const appliedChecksum = exists.rows[0]?.checksum ?? '';
-        if (appliedChecksum && appliedChecksum !== checksum) {
-          throw new Error(`checksum mismatch for ${file} (applied as ${appliedVersion})`);
-        }
+        assertAppliedChecksum(file, appliedVersion, appliedChecksum, checksum);
         if (!appliedChecksum) {
           await client.query(
             'UPDATE schema_migrations SET checksum = $2 WHERE version = $1',
@@ -116,11 +114,29 @@ async function applyMigrations() {
   }
 }
 
-function checksumFor(sql) {
+export function resolveDatabaseURL(env = process.env) {
+  if (env.DATABASE_URL) {
+    return env.DATABASE_URL;
+  }
+  if (truthy(env.ALLOW_LOCAL_DATABASE_URL)) {
+    return LOCAL_DATABASE_URL;
+  }
+  throw new Error('DATABASE_URL is required; set ALLOW_LOCAL_DATABASE_URL=true only for explicit local development');
+}
+
+export function baselineOnExistingSchemaEnabled(env = process.env) {
+  return !['0', 'false', 'no'].includes(String(env.BASELINE_ON_EXISTING_SCHEMA ?? 'true').toLowerCase());
+}
+
+export function truthy(value) {
+  return ['1', 'true', 'yes'].includes(String(value ?? '').toLowerCase());
+}
+
+export function checksumFor(sql) {
   return crypto.createHash('sha256').update(sql).digest('hex');
 }
 
-function validateMigrationOrder(files) {
+export function validateMigrationOrder(files) {
   const seenNumericPrefixes = new Map();
   for (const file of files) {
     const match = file.match(/^(\d+)_/);
@@ -136,14 +152,22 @@ function validateMigrationOrder(files) {
   }
 }
 
-function legacyMigrationVersions(version) {
+export function assertAppliedChecksum(file, appliedVersion, appliedChecksum, checksum) {
+  if (appliedChecksum && appliedChecksum !== checksum) {
+    throw new Error(`checksum mismatch for ${file} (applied as ${appliedVersion})`);
+  }
+}
+
+export function legacyMigrationVersions(version) {
   if (version === '027a_library_foundation') {
     return ['027_library_foundation'];
   }
   return [];
 }
 
-applyMigrations().catch((err) => {
-  console.error('migration failed:', err.message);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  applyMigrations().catch((err) => {
+    console.error('migration failed:', err.message);
+    process.exit(1);
+  });
+}

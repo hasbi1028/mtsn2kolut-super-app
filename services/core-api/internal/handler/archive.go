@@ -1,11 +1,11 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
-	"mime"
 	"net/http"
 	"os"
 	"strconv"
@@ -18,6 +18,8 @@ import (
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
+
+const maxArchiveUploadBytes = 25 * 1024 * 1024
 
 type Archive struct {
 	svc   archiveService
@@ -205,6 +207,11 @@ func (h *Archive) UploadDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+	validated, err := validateUploadedFile(header.Filename, file, maxArchiveUploadBytes, false)
+	if err != nil {
+		api.BadRequest(w, archiveClientMessage(err))
+		return
+	}
 
 	categoryID, err := service.ParseArchiveOptionalUUID(r.FormValue("category_id"))
 	if err != nil {
@@ -239,10 +246,10 @@ func (h *Archive) UploadDocument(w http.ResponseWriter, r *http.Request) {
 		StorageLocation:  r.FormValue("storage_location"),
 		RetentionUntil:   retentionUntil,
 		OriginalName:     header.Filename,
-		MimeType:         header.Header.Get("Content-Type"),
-		FileSize:         header.Size,
+		MimeType:         validated.MimeType,
+		FileSize:         int64(len(validated.Data)),
 		UploadedByUserID: inventoryActorUserID(r),
-		File:             file,
+		File:             bytes.NewReader(validated.Data),
 	})
 	if err != nil {
 		api.BadRequest(w, archiveClientMessage(err))
@@ -388,9 +395,8 @@ func (h *Archive) File(w http.ResponseWriter, r *http.Request) {
 	}
 	defer f.Close()
 
-	w.Header().Set("Content-Type", document.MimeType)
+	secureFileResponseHeaders(w, document.MimeType, document.OriginalName)
 	w.Header().Set("Content-Length", strconv.FormatInt(document.FileSize, 10))
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": document.OriginalName}))
 	w.Header().Set("Cache-Control", "private, max-age=300")
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, f)

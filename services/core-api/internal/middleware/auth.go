@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
 	"strings"
 
@@ -137,7 +138,7 @@ func WorkerKey(key string) func(http.Handler) http.Handler {
 			if got == "" {
 				got = bearerToken(r)
 			}
-			if got != key {
+			if subtle.ConstantTimeCompare([]byte(got), []byte(key)) != 1 {
 				api.Unauthorized(w)
 				return
 			}

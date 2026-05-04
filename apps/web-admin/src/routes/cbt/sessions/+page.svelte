@@ -115,7 +115,7 @@
 	let fScopeType = $state('class');
 	let fClassId = $state('');
 	let fGradeLevel = $state('VII');
-	let fMixPolicy = $state('same_grade');
+	let fMixPolicy = $state('same_class');
 	let fAssignmentMode = $state('random_balanced');
 	let fAllowCrossGrade = $state(false);
 	let fIsSpecialEvent = $state(false);
@@ -162,7 +162,7 @@
 		{ filter: 'ready', label: 'Siap Mulai', helper: 'Paket, peserta, ruang, pengawas siap', tone: 'success' },
 		{ filter: 'needs_participants', label: 'Butuh Peserta', helper: 'Peserta belum didaftarkan', tone: 'warning' },
 		{ filter: 'needs_rooms', label: 'Butuh Ruang', helper: 'Ruang, kursi, atau kapasitas belum rapi', tone: 'warning' },
-		{ filter: 'needs_proctors', label: 'Butuh Pengawas', helper: 'Ruang ujian belum lengkap pengawas', tone: 'info' },
+		{ filter: 'needs_proctors', label: 'Butuh Pengawas', helper: 'Ruang ujian belum lengkap pengawas', tone: 'warning' },
 	];
 	const scheduleFilters: SessionScheduleFilter[] = ['all', 'today', 'upcoming', 'overdue'];
 	const scheduleBoardConfigs: ScheduleBoardConfig[] = [
@@ -223,6 +223,11 @@
 		if (scopeType === 'class') return 'same_class';
 		if (scopeType === 'grade') return 'same_grade';
 		return 'mixed_scope';
+	}
+
+	function updateScopeType(value: string) {
+		fScopeType = value;
+		fMixPolicy = adaptiveMixPolicy(value);
 	}
 
 	function sessionActionLabel(status: string) {
@@ -697,7 +702,7 @@
 					class_id: fScopeType === 'class' ? fClassId : '',
 					scope_type: fScopeType,
 					scope_ref: scopeRef,
-					mix_policy: adaptiveMixPolicy(fScopeType),
+					mix_policy: fMixPolicy,
 					assignment_mode: fAssignmentMode,
 					allow_cross_grade: fAllowCrossGrade,
 					is_special_event: fIsSpecialEvent,
@@ -939,7 +944,12 @@
 					{/if}
 					<div>
 						<label for="session-scope" class="text-xs text-slate-500 mb-1 block">Cakupan peserta <span class="text-red-500">*</span></label>
-						<select id="session-scope" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fScopeType}>
+						<select
+							id="session-scope"
+							class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+							value={fScopeType}
+							onchange={(event) => updateScopeType((event.currentTarget as HTMLSelectElement).value)}
+						>
 							<option value="class">Per kelas</option>
 							<option value="grade">Per tingkat</option>
 							<option value="school">Seluruh sekolah</option>
@@ -976,6 +986,7 @@
 							<option value="same_grade">Campur dalam tingkat</option>
 							<option value="mixed_scope">Campur lintas cakupan</option>
 						</select>
+						<p class="mt-1 text-[11px] text-slate-500">Nilai ini dikirim ke backend. Saat cakupan berubah, opsi disetel otomatis lalu tetap bisa disesuaikan operator.</p>
 					</div>
 					<div>
 						<label for="session-assignment-mode" class="text-xs text-slate-500 mb-1 block">Mode alokasi ruangan</label>

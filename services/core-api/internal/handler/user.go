@@ -19,7 +19,7 @@ import (
 
 type userStore interface {
 	ListUsers(ctx context.Context) ([]db.ListUsersRow, error)
-	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
+	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error)
 	AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error
 	ListAuditLogs(ctx context.Context, arg db.ListAuditLogsParams) ([]db.ListAuditLogsRow, error)
 }
@@ -138,7 +138,7 @@ func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	create := func(store userStore) (db.User, error) {
+	create := func(store userStore) (db.CreateUserRow, error) {
 		row, err := store.CreateUser(r.Context(), db.CreateUserParams{
 			Username:     body.Username,
 			PasswordHash: string(hash),
@@ -148,20 +148,20 @@ func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 			IsActive:     true,
 		})
 		if err != nil {
-			return db.User{}, err
+			return db.CreateUserRow{}, err
 		}
 		for _, rStr := range body.Roles {
 			if err := store.AddUserRole(r.Context(), db.AddUserRoleParams{
 				UserID: row.ID,
 				Role:   db.UserRole(rStr),
 			}); err != nil {
-				return db.User{}, err
+				return db.CreateUserRow{}, err
 			}
 		}
 		return row, nil
 	}
 
-	var row db.User
+	var row db.CreateUserRow
 	if h.tx != nil {
 		tx, err := h.tx.Begin(r.Context())
 		if err != nil {

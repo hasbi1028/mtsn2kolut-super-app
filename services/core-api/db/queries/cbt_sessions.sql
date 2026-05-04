@@ -31,7 +31,7 @@ LEFT JOIN (
   SELECT
     r.session_id,
     COUNT(r.id)::int AS room_count,
-    COALESCE(SUM(r.capacity), 0)::int AS total_capacity,
+    COALESCE(SUM(COALESCE(r.capacity_override, r.capacity)), 0)::int AS total_capacity,
     COUNT(r.id) FILTER (WHERE COALESCE(pr.proctor_count, 0) = 0)::int AS rooms_without_proctor,
     COALESCE(SUM(COALESCE(pr.proctor_count, 0)), 0)::int AS proctor_assignment_count
   FROM cbt_exam_rooms r
@@ -703,7 +703,7 @@ LEFT JOIN (
   SELECT
     r.session_id,
     COUNT(r.id)::int AS room_count,
-    COALESCE(SUM(r.capacity), 0)::int AS total_capacity,
+    COALESCE(SUM(COALESCE(r.capacity_override, r.capacity)), 0)::int AS total_capacity,
     COUNT(r.id) FILTER (WHERE COALESCE(pr.proctor_count, 0) = 0)::int AS rooms_without_proctor,
     COALESCE(SUM(COALESCE(pr.proctor_count, 0)), 0)::int AS proctor_assignment_count
   FROM cbt_exam_rooms r

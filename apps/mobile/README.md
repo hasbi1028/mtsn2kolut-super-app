@@ -6,7 +6,7 @@ Status: sinkron per 2026-05-03. Aplikasi ini adalah client/APK BYOD, bukan servi
 
 ## Fokus MVP
 
-- login token peserta ke backend Go
+- login token peserta ke backend Go, termasuk token hex 32 karakter dari backend produksi
 - render soal pilihan ganda dan uraian
 - heartbeat + refresh status
 - simpan jawaban lokal dan sinkron ulang saat koneksi membaik
@@ -68,6 +68,13 @@ flutter test
 ## Build APK Internal
 
 Build ini ditujukan untuk uji coba internal BYOD, bukan distribusi Play Store.
+
+Release signing tidak menyimpan rahasia di repo. Siapkan salah satu opsi berikut sebelum build rilis resmi:
+
+- `android/key.properties` lokal yang sudah diabaikan Git, berisi `storeFile`, `storePassword`, `keyAlias`, dan `keyPassword`
+- environment variable `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, dan `ANDROID_KEY_PASSWORD`
+
+Jika konfigurasi signing tidak ada, Gradle hanya memakai debug signing agar build lokal tidak rusak. APK seperti itu tidak boleh dipakai untuk distribusi ujian resmi.
 
 ```bash
 cd apps/mobile
