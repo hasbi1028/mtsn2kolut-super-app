@@ -317,7 +317,21 @@ describe('server api helpers', () => {
 		expect(response.headers.get('content-type')).toBe('application/octet-stream');
 		expect(response.headers.get('cache-control')).toBe('private, max-age=300');
 		expect(response.headers.get('content-disposition')).toBe('attachment; filename="bukti.pdf"');
+		expect(response.headers.get('x-content-type-options')).toBe('nosniff');
 		await expect(response.text()).resolves.toBe('file');
+	});
+
+	it('streamProxyResponse preserves upstream X-Content-Type-Options for file streams', async () => {
+		const response = await streamProxyResponse(new Response(new Uint8Array([102, 105, 108, 101]), {
+			status: 200,
+			headers: {
+				'content-type': 'application/pdf',
+				'x-content-type-options': 'nosniff'
+			}
+		}));
+
+		expect(response.headers.get('content-type')).toBe('application/pdf');
+		expect(response.headers.get('x-content-type-options')).toBe('nosniff');
 	});
 
 	it('streamProxyResponse maps upstream file errors through ApiError', async () => {

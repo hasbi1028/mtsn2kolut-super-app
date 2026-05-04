@@ -28,17 +28,20 @@ type cbtAuthoringAuditWriter interface {
 
 type cbtQuestionService interface {
 	ListFiltered(ctx context.Context, in service.ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error)
-	GetDetail(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionDetailRow, error)
+	GetDetail(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.GetCbtQuestionDetailRow, error)
 	Create(ctx context.Context, input service.SaveCbtQuestionInput) (db.CbtQuestion, error)
 	Update(ctx context.Context, input service.SaveCbtQuestionInput) (db.CbtQuestion, error)
 	Delete(ctx context.Context, id pgtype.UUID) error
-	SubmitReview(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error)
-	Approve(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error)
-	Reject(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error)
-	Publish(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
-	Archive(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
-	DuplicateAsDraft(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error)
-	DuplicateForRevision(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error)
+	DeleteWithActor(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) error
+	Timeline(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) ([]db.CbtQuestionAuditLog, error)
+	BulkWorkflow(ctx context.Context, in service.BulkCbtQuestionWorkflowInput) (service.BulkCbtQuestionWorkflowResult, error)
+	SubmitReview(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)
+	Approve(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)
+	Reject(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)
+	Publish(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error)
+	Archive(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error)
+	DuplicateAsDraft(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error)
+	DuplicateForRevision(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error)
 }
 
 type cbtQuestionImportService interface {
@@ -63,6 +66,7 @@ func NewCbtQuestion(svc *service.CbtQuestion, audit ...cbtAuthoringAuditWriter) 
 
 type cbtQuestionBody struct {
 	SubjectID       string                   `json:"subject_id"`
+	EventID         string                   `json:"event_id"`
 	AuthoringMode   string                   `json:"authoring_mode"`
 	Code            string                   `json:"code"`
 	QuestionText    string                   `json:"question_text"`
@@ -114,9 +118,8 @@ func (h *CbtQuestion) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items := make([]map[string]any, 0, len(rows))
-	includeAnswerKey := adminAccessAllowed(r)
 	for _, row := range rows {
-		items = append(items, serializeQuestionListRow(row, includeAnswerKey))
+		items = append(items, serializeQuestionListRow(row))
 	}
 	api.OK(w, map[string]any{
 		"items": items,
@@ -129,6 +132,14 @@ func (h *CbtQuestion) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit int32) (service.ListCbtQuestionsInput, error) {
+	eventID := pgtype.UUID{}
+	if raw := strings.TrimSpace(r.URL.Query().Get("event_id")); raw != "" {
+		parsed, err := parseUUID(raw)
+		if err != nil {
+			return service.ListCbtQuestionsInput{}, fmt.Errorf("event_id invalid")
+		}
+		eventID = parsed
+	}
 	subjectID := pgtype.UUID{}
 	if raw := strings.TrimSpace(r.URL.Query().Get("subject_id")); raw != "" {
 		parsed, err := parseUUID(raw)
@@ -152,6 +163,7 @@ func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit 
 		}
 	}
 	return service.ListCbtQuestionsInput{
+		EventID:        eventID,
 		SubjectID:      subjectID,
 		WorkflowStatus: r.URL.Query().Get("workflow_status"),
 		Status:         r.URL.Query().Get("status"),
@@ -161,6 +173,7 @@ func questionListInputFromRequest(r *http.Request, defaultLimit int32, maxLimit 
 		SearchQuery:    r.URL.Query().Get("q"),
 		Limit:          limit,
 		Offset:         offset,
+		Actor:          cbtQuestionActorFromRequest(r),
 	}, nil
 }
 
@@ -229,12 +242,30 @@ func (h *CbtQuestion) Get(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid id")
 		return
 	}
-	row, err := h.svc.GetDetail(r.Context(), id)
+	row, err := h.svc.GetDetail(r.Context(), id, cbtQuestionActorFromRequest(r))
 	if err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Detail soal CBT tidak dapat diakses")
 		return
 	}
-	api.OK(w, serializeQuestionDetailRow(row, questionAnswerKeyAllowed(r, row.AuthorUsername)))
+	api.OK(w, serializeQuestionDetailRow(row, true))
+}
+
+func (h *CbtQuestion) Timeline(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	rows, err := h.svc.Timeline(r.Context(), id, cbtQuestionActorFromRequest(r))
+	if err != nil {
+		writeDomainOrInternal(w, err, "Timeline soal CBT tidak dapat diakses")
+		return
+	}
+	api.OK(w, rows)
 }
 
 func (h *CbtQuestion) Create(w http.ResponseWriter, r *http.Request) {
@@ -281,6 +312,15 @@ func (h *CbtQuestion) ImportLegacyCSV(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "subject_id invalid")
 		return
 	}
+	eventID := pgtype.UUID{}
+	if raw := strings.TrimSpace(r.FormValue("event_id")); raw != "" {
+		parsed, err := parseUUID(raw)
+		if err != nil {
+			api.BadRequest(w, "event_id invalid")
+			return
+		}
+		eventID = parsed
+	}
 	file, _, err := r.FormFile("file")
 	if err != nil {
 		api.BadRequest(w, "file CSV wajib diisi")
@@ -299,8 +339,11 @@ func (h *CbtQuestion) ImportLegacyCSV(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := importSvc.ImportLegacyCSV(r.Context(), service.ImportLegacyQuestionsInput{
 		SubjectID: subjectID,
+		EventID:   eventID,
 		CSVText:   string(raw),
 		Username:  currentUsername(r),
+		Actor:     cbtQuestionActorFromRequest(r),
+		DryRun:    parseBoolFormValue(r.FormValue("dry_run")),
 	})
 	if err != nil {
 		writeClientError(w, err, "Import bank soal legacy tidak valid")
@@ -308,6 +351,7 @@ func (h *CbtQuestion) ImportLegacyCSV(w http.ResponseWriter, r *http.Request) {
 	}
 	cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_IMPORT_LEGACY", "cbt_question", "", map[string]any{
 		"subject_id": pgUUIDString(subjectID),
+		"event_id":   pgUUIDString(eventID),
 		"imported":   result.Imported,
 		"skipped":    result.Skipped,
 	})
@@ -327,9 +371,9 @@ func (h *CbtQuestion) Update(w http.ResponseWriter, r *http.Request) {
 	if !h.requireQuestionAuthorOrAdmin(w, r, id) {
 		return
 	}
-	current, err := h.svc.GetDetail(r.Context(), id)
+	current, err := h.svc.GetDetail(r.Context(), id, cbtQuestionActorFromRequest(r))
 	if err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Detail soal CBT tidak dapat diakses")
 		return
 	}
 	body, err := decodeQuestionBody(r)
@@ -372,7 +416,7 @@ func (h *CbtQuestion) Delete(w http.ResponseWriter, r *http.Request) {
 	if !h.requireQuestionAuthorOrAdmin(w, r, id) {
 		return
 	}
-	current, err := h.svc.GetDetail(r.Context(), id)
+	current, err := h.svc.GetDetail(r.Context(), id, cbtQuestionActorFromRequest(r))
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -381,12 +425,61 @@ func (h *CbtQuestion) Delete(w http.ResponseWriter, r *http.Request) {
 		api.Conflict(w, "Soal sudah masuk paket ujian atau memiliki jawaban siswa. Duplikat soal untuk membuat revisi baru.")
 		return
 	}
-	if err := h.svc.Delete(r.Context(), id); err != nil {
-		api.Internal(w, err)
+	if err := h.svc.DeleteWithActor(r.Context(), id, cbtQuestionActorFromRequest(r)); err != nil {
+		writeDomainOrInternal(w, err, "Hapus soal CBT tidak valid")
 		return
 	}
 	cbtAuditAuthoringEvent(h.audit, r.Context(), "CBT_QUESTION_DELETE", "cbt_question", pgUUIDString(id), nil)
 	api.NoContent(w)
+}
+
+func (h *CbtQuestion) BulkWorkflowAction(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	var body struct {
+		Action      string   `json:"action"`
+		Notes       string   `json:"notes"`
+		QuestionIDs []string `json:"question_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	ids := make([]pgtype.UUID, 0, len(body.QuestionIDs))
+	for _, raw := range body.QuestionIDs {
+		id, err := parseUUID(raw)
+		if err != nil {
+			api.BadRequest(w, "question_ids invalid")
+			return
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 || len(ids) > 100 {
+		api.BadRequest(w, "question_ids wajib berisi 1-100 id")
+		return
+	}
+	action := strings.TrimSpace(body.Action)
+	if action == "publish" && !hasAnyRole(r, "admin") {
+		api.Forbidden(w)
+		return
+	}
+	if (action == "approve" || action == "reject") && !hasAnyRole(r, "admin", "guru") {
+		api.Forbidden(w)
+		return
+	}
+	result, err := h.svc.BulkWorkflow(r.Context(), service.BulkCbtQuestionWorkflowInput{
+		QuestionIDs: ids,
+		Action:      action,
+		Notes:       body.Notes,
+		Actor:       cbtQuestionActorFromRequest(r),
+	})
+	if err != nil {
+		writeClientError(w, err, "Aksi bulk workflow soal CBT tidak valid")
+		return
+	}
+	api.OK(w, result)
 }
 
 func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
@@ -407,7 +500,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	username := currentUsername(r)
+	actor := cbtQuestionActorFromRequest(r)
 	switch strings.TrimSpace(body.Action) {
 	case "submit_review":
 		if !hasAnyRole(r, "admin", "guru") {
@@ -417,7 +510,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		if !h.requireQuestionAuthorOrAdmin(w, r, id) {
 			return
 		}
-		row, err := h.svc.SubmitReview(r.Context(), id, username, body.Notes)
+		row, err := h.svc.SubmitReview(r.Context(), id, actor, body.Notes)
 		if err != nil {
 			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
 			return
@@ -428,11 +521,15 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		})
 		api.OK(w, serializeQuestionModel(row))
 	case "approve":
-		if !hasAnyRole(r, "admin") {
+		if !hasAnyRole(r, "admin", "guru") {
 			api.Forbidden(w)
 			return
 		}
-		row, err := h.svc.Approve(r.Context(), id, username, body.Notes)
+		if !actor.IsAdmin() && !actor.UserID.Valid {
+			api.Forbidden(w)
+			return
+		}
+		row, err := h.svc.Approve(r.Context(), id, actor, body.Notes)
 		if err != nil {
 			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
 			return
@@ -443,11 +540,15 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		})
 		api.OK(w, serializeQuestionModel(row))
 	case "reject":
-		if !hasAnyRole(r, "admin") {
+		if !hasAnyRole(r, "admin", "guru") {
 			api.Forbidden(w)
 			return
 		}
-		row, err := h.svc.Reject(r.Context(), id, username, body.Notes)
+		if !actor.IsAdmin() && !actor.UserID.Valid {
+			api.Forbidden(w)
+			return
+		}
+		row, err := h.svc.Reject(r.Context(), id, actor, body.Notes)
 		if err != nil {
 			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
 			return
@@ -462,7 +563,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 			api.Forbidden(w)
 			return
 		}
-		row, err := h.svc.Publish(r.Context(), id, username)
+		row, err := h.svc.Publish(r.Context(), id, actor)
 		if err != nil {
 			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
 			return
@@ -476,7 +577,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 			api.Forbidden(w)
 			return
 		}
-		row, err := h.svc.Archive(r.Context(), id, username)
+		row, err := h.svc.Archive(r.Context(), id, actor)
 		if err != nil {
 			writeClientError(w, err, "Aksi workflow soal CBT tidak valid")
 			return
@@ -500,7 +601,7 @@ func (h *CbtQuestion) Duplicate(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid id")
 		return
 	}
-	row, err := h.svc.DuplicateAsDraft(r.Context(), id, currentUsername(r))
+	row, err := h.svc.DuplicateAsDraft(r.Context(), id, cbtQuestionActorFromRequest(r))
 	if err != nil {
 		writeClientError(w, err, "Duplikasi soal CBT tidak valid")
 		return
@@ -532,7 +633,7 @@ func (h *CbtQuestion) MarkRevision(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	row, err := h.svc.DuplicateForRevision(r.Context(), id, currentUsername(r), body.Notes)
+	row, err := h.svc.DuplicateForRevision(r.Context(), id, cbtQuestionActorFromRequest(r), body.Notes)
 	if err != nil {
 		writeClientError(w, err, "Draft revisi soal CBT tidak valid")
 		return
@@ -555,6 +656,14 @@ func decodeQuestionBody(r *http.Request) (cbtQuestionBody, error) {
 }
 
 func questionInputFromBody(r *http.Request, body cbtQuestionBody, id pgtype.UUID) (service.SaveCbtQuestionInput, error) {
+	var eventID pgtype.UUID
+	if strings.TrimSpace(body.EventID) != "" {
+		parsed, err := parseUUID(body.EventID)
+		if err != nil {
+			return service.SaveCbtQuestionInput{}, err
+		}
+		eventID = parsed
+	}
 	subjectID, err := parseUUID(body.SubjectID)
 	if err != nil {
 		return service.SaveCbtQuestionInput{}, err
@@ -568,6 +677,7 @@ func questionInputFromBody(r *http.Request, body cbtQuestionBody, id pgtype.UUID
 	username := currentUsername(r)
 	return service.SaveCbtQuestionInput{
 		ID:               id,
+		EventID:          eventID,
 		SubjectID:        subjectID,
 		AuthoringMode:    body.AuthoringMode,
 		Code:             body.Code,
@@ -605,7 +715,28 @@ func questionInputFromBody(r *http.Request, body cbtQuestionBody, id pgtype.UUID
 		ApproverUsername: username,
 		WriterNotes:      body.WriterNotes,
 		ReviewNotes:      body.ReviewNotes,
+		Actor:            cbtQuestionActorFromRequest(r),
 	}, nil
+}
+
+func cbtQuestionActorFromRequest(r *http.Request) service.CbtQuestionActor {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		return service.CbtQuestionActor{}
+	}
+	userID, _ := authUserID(claims)
+	roles := []string{}
+	if raw, ok := claims["roles"].([]any); ok {
+		for _, value := range raw {
+			if role, ok := value.(string); ok {
+				roles = append(roles, role)
+			}
+		}
+	}
+	if role, _ := claims["role"].(string); role != "" {
+		roles = append(roles, role)
+	}
+	return service.CbtQuestionActor{UserID: userID, Username: currentUsername(r), Roles: roles}
 }
 
 func currentUsername(r *http.Request) string {
@@ -635,9 +766,9 @@ func (h *CbtQuestion) requireQuestionAuthorOrAdmin(w http.ResponseWriter, r *htt
 		api.Forbidden(w)
 		return false
 	}
-	row, err := h.svc.GetDetail(r.Context(), id)
+	row, err := h.svc.GetDetail(r.Context(), id, cbtQuestionActorFromRequest(r))
 	if err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Detail soal CBT tidak dapat diakses")
 		return false
 	}
 	if strings.TrimSpace(row.AuthorUsername) != username {
@@ -687,6 +818,15 @@ func cbtQuestionUsageMap(packageCount, answerCount int32) map[string]any {
 	}
 }
 
+func parseBoolFormValue(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 func hasAnyRole(r *http.Request, allowed ...string) bool {
 	claims, ok := api.ClaimsFromContext(r.Context())
 	if !ok {
@@ -728,14 +868,11 @@ func cbtAuditAuthoringEvent(audit cbtAuthoringAuditWriter, ctx context.Context, 
 	})
 }
 
-func serializeQuestionListRow(row db.ListCbtQuestionsFilteredRow, includeAnswerKey bool) map[string]any {
+func serializeQuestionListRow(row db.ListCbtQuestionsFilteredRow, includeAnswerKey ...bool) map[string]any {
 	suggestedMode := serviceAuthoringModeFromRow(row.QuestionType, row.StemLatex, row.StimulusLatex, row.AcademicPhase, row.CpRef, row.TpRef, row.KdRef, row.IndicatorRef, row.MaterialTopic, row.CognitiveLevel, row.HotsFlag, row.WorkflowStatus, row.WriterNotes, row.ReviewNotes, row.RubricHtml)
-	answerKey := ""
-	if includeAnswerKey {
-		answerKey = row.AnswerKey
-	}
 	return map[string]any{
 		"id":                pgUUIDString(row.ID),
+		"event_id":          pgUUIDString(row.EventID),
 		"authoring_mode":    suggestedMode,
 		"suggested_mode":    suggestedMode,
 		"subject_id":        pgUUIDString(row.SubjectID),
@@ -750,7 +887,7 @@ func serializeQuestionListRow(row db.ListCbtQuestionsFilteredRow, includeAnswerK
 		"option_c":          row.OptionC,
 		"option_d":          row.OptionD,
 		"option_e":          row.OptionE,
-		"answer_key":        answerKey,
+		"answer_key":        row.AnswerKey,
 		"explanation":       row.Explanation,
 		"difficulty":        row.Difficulty,
 		"status":            row.Status,
@@ -803,6 +940,7 @@ func serializeQuestionDetailRow(row db.GetCbtQuestionDetailRow, includeAnswerKey
 	}
 	return map[string]any{
 		"id":                pgUUIDString(row.ID),
+		"event_id":          pgUUIDString(row.EventID),
 		"authoring_mode":    suggestedMode,
 		"suggested_mode":    suggestedMode,
 		"subject_id":        pgUUIDString(row.SubjectID),
@@ -859,6 +997,7 @@ func serializeQuestionModel(row db.CbtQuestion) map[string]any {
 	suggestedMode := serviceAuthoringModeFromRow(row.QuestionType, row.StemLatex, row.StimulusLatex, row.AcademicPhase, row.CpRef, row.TpRef, row.KdRef, row.IndicatorRef, row.MaterialTopic, row.CognitiveLevel, row.HotsFlag, row.WorkflowStatus, row.WriterNotes, row.ReviewNotes, row.RubricHtml)
 	return map[string]any{
 		"id":                pgUUIDString(row.ID),
+		"event_id":          pgUUIDString(row.EventID),
 		"authoring_mode":    suggestedMode,
 		"suggested_mode":    suggestedMode,
 		"subject_id":        pgUUIDString(row.SubjectID),

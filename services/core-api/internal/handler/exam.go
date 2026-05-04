@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/time/rate"
 	"mtsn2kolut-super-app/backend/internal/api"
 	mw "mtsn2kolut-super-app/backend/internal/middleware"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -14,10 +17,11 @@ import (
 )
 
 type Exam struct {
-	svc examService
+	svc          examService
+	writeLimiter *examWriteLimiter
 }
 
-func NewExam(svc *service.Exam) *Exam { return &Exam{svc: svc} }
+func NewExam(svc *service.Exam) *Exam { return &Exam{svc: svc, writeLimiter: newExamWriteLimiter()} }
 
 type examService interface {
 	Login(ctx context.Context, token, deviceFingerprint, loginIP string) (service.LoginResult, error)
@@ -42,10 +46,7 @@ func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		ip = r.RemoteAddr
-	}
+	ip := trustedClientIP(r)
 
 	result, err := h.svc.Login(r.Context(), body.Token, body.DeviceFingerprint, ip)
 	if err != nil {
@@ -54,6 +55,8 @@ func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 			api.Err(w, http.StatusNotFound, "token not found")
 		case service.ErrExamNotActive:
 			api.Err(w, http.StatusForbidden, "exam session is not active")
+		case service.ErrExamNotStarted:
+			api.Err(w, http.StatusForbidden, "exam session has not started")
 		case service.ErrDeviceMismatch:
 			api.Err(w, http.StatusConflict, "token already bound to another device")
 		case service.ErrDeviceRequired:
@@ -73,11 +76,15 @@ func (h *Exam) Status(w http.ResponseWriter, r *http.Request) {
 		api.Unauthorized(w)
 		return
 	}
+	if !h.allowExamWrite(w, p.ID, "status") {
+		return
+	}
 	result, err := h.svc.GetStatus(r.Context(), p)
 	if err != nil {
 		api.Internal(w, err)
 		return
 	}
+	// Status payload currently has no media URLs; keep this path explicit if fields are added.
 	api.OK(w, result)
 }
 
@@ -85,6 +92,9 @@ func (h *Exam) Heartbeat(w http.ResponseWriter, r *http.Request) {
 	p, ok := mw.ParticipantFromContext(r.Context())
 	if !ok {
 		api.Unauthorized(w)
+		return
+	}
+	if !h.allowExamWrite(w, p.ID, "heartbeat") {
 		return
 	}
 	if err := h.svc.Heartbeat(r.Context(), p.ID); err != nil {
@@ -98,6 +108,9 @@ func (h *Exam) RecordEvent(w http.ResponseWriter, r *http.Request) {
 	p, ok := mw.ParticipantFromContext(r.Context())
 	if !ok {
 		api.Unauthorized(w)
+		return
+	}
+	if !h.allowExamWrite(w, p.ID, "event") {
 		return
 	}
 	var body struct {
@@ -123,6 +136,9 @@ func (h *Exam) SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 	p, ok := mw.ParticipantFromContext(r.Context())
 	if !ok {
 		api.Unauthorized(w)
+		return
+	}
+	if !h.allowExamWrite(w, p.ID, "answer") {
 		return
 	}
 	var body struct {
@@ -160,6 +176,9 @@ func (h *Exam) Submit(w http.ResponseWriter, r *http.Request) {
 		api.Unauthorized(w)
 		return
 	}
+	if !h.allowExamWrite(w, p.ID, "submit") {
+		return
+	}
 	if err := h.svc.Submit(r.Context(), p); err != nil {
 		switch err {
 		case service.ErrExamAlreadySubmit:
@@ -175,39 +194,71 @@ func (h *Exam) Submit(w http.ResponseWriter, r *http.Request) {
 }
 
 func absolutizeExamLoginResult(r *http.Request, result *service.LoginResult) {
+	base := publicAPIBaseURL(r)
 	for i := range result.Questions {
-		result.Questions[i].StemMediaURL = absolutizeExamAssetURL(r, result.Questions[i].StemMediaURL)
-		result.Questions[i].StimulusMediaURL = absolutizeExamAssetURL(r, result.Questions[i].StimulusMediaURL)
-		result.Questions[i].StemAudioURL = absolutizeExamAssetURL(r, result.Questions[i].StemAudioURL)
-		result.Questions[i].StimulusAudioURL = absolutizeExamAssetURL(r, result.Questions[i].StimulusAudioURL)
+		result.Questions[i].StemMediaURL = absolutizeExamAssetURL(base, result.Questions[i].StemMediaURL)
+		result.Questions[i].StimulusMediaURL = absolutizeExamAssetURL(base, result.Questions[i].StimulusMediaURL)
+		result.Questions[i].StemAudioURL = absolutizeExamAssetURL(base, result.Questions[i].StemAudioURL)
+		result.Questions[i].StimulusAudioURL = absolutizeExamAssetURL(base, result.Questions[i].StimulusAudioURL)
 	}
 }
 
-func absolutizeExamAssetURL(r *http.Request, value string) string {
-	if value == "" {
-		return ""
+func absolutizeExamAssetURL(base, value string) string {
+	return joinBaseURL(base, value)
+}
+
+func (h *Exam) allowExamWrite(w http.ResponseWriter, participantID pgtype.UUID, action string) bool {
+	if h.writeLimiter == nil {
+		return true
 	}
-	if !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
-		scheme := r.Header.Get("X-Forwarded-Proto")
-		if scheme == "" {
-			if r.TLS != nil {
-				scheme = "https"
-			} else {
-				scheme = "http"
+	if !h.writeLimiter.allow(pgUUIDString(participantID)+":"+action, action) {
+		api.TooManyRequests(w)
+		return false
+	}
+	return true
+}
+
+type examWriteLimiter struct {
+	mu          sync.Mutex
+	items       map[string]*examWriteLimiterItem
+	lastCleanup time.Time
+}
+
+type examWriteLimiterItem struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
+
+func newExamWriteLimiter() *examWriteLimiter {
+	return &examWriteLimiter{items: map[string]*examWriteLimiterItem{}}
+}
+
+func (l *examWriteLimiter) allow(key, action string) bool {
+	now := time.Now()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if now.Sub(l.lastCleanup) >= time.Minute {
+		for key, item := range l.items {
+			if now.Sub(item.lastSeen) > 10*time.Minute {
+				delete(l.items, key)
 			}
 		}
-		host := r.Header.Get("X-Forwarded-Host")
-		if host == "" {
-			host = r.Host
-		}
-		if host == "" {
-			return value
-		}
-		if strings.HasPrefix(value, "/") {
-			value = scheme + "://" + host + value
-		} else {
-			value = scheme + "://" + host + "/" + value
-		}
+		l.lastCleanup = now
 	}
-	return value
+	item, ok := l.items[key]
+	if !ok {
+		item = &examWriteLimiterItem{limiter: newExamActionLimiter(action)}
+		l.items[key] = item
+	}
+	item.lastSeen = now
+	return item.limiter.Allow()
+}
+
+func newExamActionLimiter(action string) *rate.Limiter {
+	switch action {
+	case "submit":
+		return rate.NewLimiter(rate.Every(5*time.Second), 5)
+	default:
+		return rate.NewLimiter(rate.Limit(2), 60)
+	}
 }

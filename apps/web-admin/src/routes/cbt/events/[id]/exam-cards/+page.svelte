@@ -2,6 +2,7 @@
 	import PrinterIcon from '@lucide/svelte/icons/printer';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
@@ -75,6 +76,17 @@
 		}) + ' WITA';
 	}
 
+	function cardReadinessIssues(cards: ExamCard[]) {
+		const missingToken = cards.filter((card) => !card.token).length;
+		const missingRoom = cards.filter((card) => !card.room_name).length;
+		const missingSeat = cards.filter((card) => card.seat_no === null || card.seat_no === undefined).length;
+		const issues: string[] = [];
+		if (missingToken > 0) issues.push(`${missingToken} kartu belum punya token`);
+		if (missingRoom > 0) issues.push(`${missingRoom} peserta belum punya ruangan`);
+		if (missingSeat > 0) issues.push(`${missingSeat} peserta belum punya nomor meja`);
+		return issues;
+	}
+
 	onMount(() => {
 		void loadCards();
 	});
@@ -131,17 +143,33 @@
 		{@const data = value as ExamCardPrintData}
 		{@const currentCards = data.cards}
 		{@const schoolProfile = data.schoolProfile}
+		{@const readinessIssues = cardReadinessIssues(currentCards)}
 	<div class="mx-auto max-w-7xl space-y-6 p-6 print:p-0">
 		<div class="flex items-center justify-between print:hidden">
 			<div>
 				<h1 class="text-2xl font-semibold text-slate-900">Kartu Ujian Event</h1>
 				<p class="text-sm text-slate-500">Cetak per peserta dengan token, ruangan, dan nomor meja.</p>
 			</div>
-			<Button onclick={() => window.print()}>
+			<div class="flex flex-wrap gap-2">
+				<a href={resolve(`/cbt/events/${eventId}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Event</a>
+			<Button onclick={() => window.print()} disabled={readinessIssues.length > 0}>
 				<PrinterIcon class="mr-2 size-4" />
 				Cetak
 			</Button>
+			</div>
 		</div>
+
+		{#if readinessIssues.length > 0}
+			<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 print:hidden">
+				<p class="font-semibold">Kartu belum siap dicetak massal.</p>
+				<p class="mt-1">{readinessIssues.join(', ')}. Rapikan token, ruang, dan kursi dari detail sesi sebelum cetak final.</p>
+				<a href={resolve(`/cbt/sessions?event_id=${eventId}&readiness=needs_rooms`)} class="mt-3 inline-flex rounded-md border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100">Cek sesi dan ruang</a>
+			</div>
+		{:else if currentCards.length > 0}
+			<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 print:hidden">
+				Token, ruang, dan nomor meja pada data kartu yang termuat sudah lengkap. Layout cetak tetap bersih tanpa panel kesiapan ini.
+			</div>
+		{/if}
 
 		<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 			{#each currentCards as card (card.participant_id)}

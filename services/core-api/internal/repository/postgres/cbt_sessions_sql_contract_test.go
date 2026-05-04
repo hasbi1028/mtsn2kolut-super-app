@@ -6,10 +6,14 @@ import (
 )
 
 func TestUpdateParticipantScoresDoesNotMutateSubmittedAt(t *testing.T) {
-	if strings.Contains(strings.ToLower(updateParticipantScores), "submitted_at") {
-		t.Fatal("UpdateParticipantScores must not mutate submitted_at; scoring recalculation may run before final submit")
+	sql := strings.ToLower(updateParticipantScores)
+	if strings.Contains(sql, "set submitted_at") {
+		t.Fatal("UpdateParticipantScores must not mutate submitted_at; final submit owns that timestamp")
 	}
-	if !strings.Contains(strings.ToLower(updateParticipantScores), "set score") {
+	if !strings.Contains(sql, "ep.submitted_at is not null") {
+		t.Fatal("UpdateParticipantScores should only score submitted participants")
+	}
+	if !strings.Contains(sql, "set score") {
 		t.Fatal("UpdateParticipantScores should still update participant score")
 	}
 }

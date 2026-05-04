@@ -2,9 +2,14 @@ import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { apiPath, handleRouteError, proxy, readRequestJson, requiredRouteParam } from '$lib/server/api';
 
+function queryPath(path: string, params: URLSearchParams) {
+	const query = params.toString();
+	return query ? `${path}?${query}` : path;
+}
+
 export const GET = async (event: RequestEvent) => {
 	try {
-		const data = await proxy(event).get('/api/cbt/packages');
+		const data = await proxy(event).get(queryPath('/api/cbt/packages', event.url.searchParams));
 		return json(data);
 	} catch (e) {
 		return handleRouteError(e, 'cbt/packages GET');
@@ -14,7 +19,7 @@ export const GET = async (event: RequestEvent) => {
 export const POST = async (event: RequestEvent) => {
 	try {
 		const body = await readRequestJson<Record<string, unknown>>(event.request);
-		const { subject_id, title, description, duration_minutes, randomize_questions, is_active, question_ids, question_weights } = body;
+		const { subject_id, title, description, duration_minutes, randomize_questions, is_active, question_ids, question_weights, event_id } = body;
 		if (!subject_id || !title || !duration_minutes) {
 			return json({ error: 'subject_id, title, duration_minutes wajib diisi' }, { status: 400 });
 		}
@@ -25,6 +30,7 @@ export const POST = async (event: RequestEvent) => {
 			is_active: is_active ?? true,
 			question_ids: question_ids ?? [],
 			question_weights: question_weights ?? {},
+			...(typeof event_id === 'string' && event_id.trim() ? { event_id } : {}),
 		});
 		return json(data, { status: 201 });
 	} catch (e) {

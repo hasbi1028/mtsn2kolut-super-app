@@ -137,6 +137,21 @@ func TestCbtQuestionAssetSaveRejectsInvalidInputAndCreateErrors(t *testing.T) {
 	}
 }
 
+func TestCbtQuestionAssetOpenRejectsStoragePathOutsideAssetDir(t *testing.T) {
+	dir := t.TempDir()
+	svc := NewCbtQuestionAsset(nil, dir)
+	outside, err := os.CreateTemp(t.TempDir(), "outside-*.png")
+	if err != nil {
+		t.Fatalf("CreateTemp() error = %v", err)
+	}
+	outside.Close()
+
+	_, err = svc.Open(db.CbtQuestionAsset{StoragePath: outside.Name()})
+	if err == nil || !strings.Contains(err.Error(), "di luar direktori aset") {
+		t.Fatalf("Open(outside storage_path) error = %v, want path defense error", err)
+	}
+}
+
 func TestCbtQuestionAssetGetListAndHelpers(t *testing.T) {
 	questionID := mustUUID(t, "12121212-1212-1212-1212-121212121212")
 	assetID := mustUUID(t, "13131313-1313-1313-1313-131313131313")

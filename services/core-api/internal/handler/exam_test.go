@@ -32,6 +32,7 @@ type fakeExamService struct {
 	lastEventData              map[string]any
 	lastAnswerQuestionID       pgtype.UUID
 	lastAnswerText             string
+	submitCalls                int
 }
 
 func (f *fakeExamService) Login(ctx context.Context, token, deviceFingerprint, loginIP string) (service.LoginResult, error) {
@@ -62,16 +63,19 @@ func (f *fakeExamService) SubmitAnswer(ctx context.Context, p db.GetParticipantB
 }
 
 func (f *fakeExamService) Submit(ctx context.Context, p db.GetParticipantByTokenRow) error {
+	f.submitCalls++
 	return f.submitErr
 }
 
 func TestAbsolutizeExamAssetURLHonorsForwardedHeaders(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_CIDRS", "10.0.0.0/24")
 	req := httptest.NewRequest("POST", "http://internal/api/exam/login", nil)
 	req.Host = "internal:8080"
+	req.RemoteAddr = "10.0.0.10:1234"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-Host", "cbt.mtsn2kolut.sch.id")
 
-	got := absolutizeExamAssetURL(req, "/api/cbt/assets/asset-1/file")
+	got := absolutizeExamAssetURL(publicAPIBaseURL(req), "/api/cbt/assets/asset-1/file")
 	want := "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/asset-1/file"
 	if got != want {
 		t.Fatalf("absolutizeExamAssetURL() = %q, want %q", got, want)
@@ -82,7 +86,7 @@ func TestAbsolutizeExamAssetURLFallsBackToRequestHost(t *testing.T) {
 	req := httptest.NewRequest("POST", "http://localhost:8080/api/exam/login", nil)
 	req.Host = "localhost:8080"
 
-	got := absolutizeExamAssetURL(req, "api/cbt/assets/asset-2/file")
+	got := absolutizeExamAssetURL(publicAPIBaseURL(req), "api/cbt/assets/asset-2/file")
 	want := "http://localhost:8080/api/cbt/assets/asset-2/file"
 	if got != want {
 		t.Fatalf("absolutizeExamAssetURL() = %q, want %q", got, want)
@@ -92,7 +96,7 @@ func TestAbsolutizeExamAssetURLFallsBackToRequestHost(t *testing.T) {
 func TestAbsolutizeExamAssetURLLeavesAbsoluteURLUntouched(t *testing.T) {
 	req := httptest.NewRequest("POST", "http://localhost:8080/api/exam/login", nil)
 
-	got := absolutizeExamAssetURL(req, "https://cdn.example.com/file.png")
+	got := absolutizeExamAssetURL(publicAPIBaseURL(req), "https://cdn.example.com/file.png")
 	want := "https://cdn.example.com/file.png"
 	if got != want {
 		t.Fatalf("absolutizeExamAssetURL() = %q, want %q", got, want)
@@ -102,32 +106,34 @@ func TestAbsolutizeExamAssetURLLeavesAbsoluteURLUntouched(t *testing.T) {
 func TestAbsolutizeExamAssetURLCoversEdgeBranches(t *testing.T) {
 	req := httptest.NewRequest("POST", "https://localhost:8443/api/exam/login", nil)
 	req.TLS = &tls.ConnectionState{}
-	got := absolutizeExamAssetURL(req, "/api/cbt/assets/secure/file")
+	got := absolutizeExamAssetURL(publicAPIBaseURL(req), "/api/cbt/assets/secure/file")
 	want := "https://localhost:8443/api/cbt/assets/secure/file"
 	if got != want {
 		t.Fatalf("absolutizeExamAssetURL(https fallback) = %q, want %q", got, want)
 	}
 
 	req = &http.Request{Header: http.Header{}}
-	if got := absolutizeExamAssetURL(req, "api/cbt/assets/no-host/file"); got != "api/cbt/assets/no-host/file" {
+	if got := absolutizeExamAssetURL(publicAPIBaseURL(req), "api/cbt/assets/no-host/file"); got != "api/cbt/assets/no-host/file" {
 		t.Fatalf("absolutizeExamAssetURL(no host) = %q, want original relative path", got)
 	}
 
 	req = httptest.NewRequest("POST", "http://localhost:8080/api/exam/login", nil)
-	if got := absolutizeExamAssetURL(req, ""); got != "" {
+	if got := absolutizeExamAssetURL(publicAPIBaseURL(req), ""); got != "" {
 		t.Fatalf("absolutizeExamAssetURL(empty) = %q, want empty", got)
 	}
-	if got := absolutizeExamAssetURL(req, "http://%zz"); got != "http://%zz" {
+	if got := absolutizeExamAssetURL(publicAPIBaseURL(req), "http://%zz"); got != "http://%zz" {
 		t.Fatalf("absolutizeExamAssetURL(malformed absolute) = %q, want original malformed URL", got)
 	}
-	got = absolutizeExamAssetURL(req, "https://cdn.example.com/file.png?existing=1")
+	got = absolutizeExamAssetURL(publicAPIBaseURL(req), "https://cdn.example.com/file.png?existing=1")
 	if got != "https://cdn.example.com/file.png?existing=1" {
 		t.Fatalf("absolutizeExamAssetURL(existing query) = %q, want unchanged URL", got)
 	}
 }
 
 func TestAbsolutizeExamLoginResultRewritesAllMediaFields(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_CIDRS", "10.0.0.0/24")
 	req := httptest.NewRequest("POST", "http://internal/api/exam/login", nil)
+	req.RemoteAddr = "10.0.0.10:1234"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-Host", "mobile-api.example.sch.id")
 
@@ -160,6 +166,7 @@ func TestAbsolutizeExamLoginResultRewritesAllMediaFields(t *testing.T) {
 }
 
 func TestExamLoginWritesWrappedJSONWithAbsoluteMediaURLs(t *testing.T) {
+	t.Setenv("TRUSTED_PROXY_CIDRS", "10.0.0.0/24")
 	svc := &fakeExamService{
 		loginResult: service.LoginResult{
 			ParticipantID: "participant-1",
@@ -179,6 +186,7 @@ func TestExamLoginWritesWrappedJSONWithAbsoluteMediaURLs(t *testing.T) {
 
 	body := bytes.NewBufferString(`{"token":"a1b2c3d4","device_fingerprint":"device-1"}`)
 	req := httptest.NewRequest("POST", "http://internal/api/exam/login", body)
+	req.RemoteAddr = "10.0.0.10:1234"
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-Host", "cbt.mtsn2kolut.sch.id")
@@ -663,6 +671,34 @@ func TestExamSubmitWritesWrappedJSON(t *testing.T) {
 	}
 	if payload.Data["status"] != "submitted" {
 		t.Fatalf("status = %q, want %q", payload.Data["status"], "submitted")
+	}
+}
+
+func TestExamSubmitUsesWriteLimiter(t *testing.T) {
+	participant := db.GetParticipantByTokenRow{ID: handlerTestUUID(130)}
+	fake := &fakeExamService{}
+	h := &Exam{svc: fake, writeLimiter: newExamWriteLimiter()}
+
+	for i := 0; i < 5; i++ {
+		req := httptest.NewRequest("POST", "http://internal/api/exam/submit", nil)
+		req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+		rec := httptest.NewRecorder()
+		h.Submit(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("Submit attempt %d status = %d, want 200; body=%s", i+1, rec.Code, rec.Body.String())
+		}
+	}
+
+	req := httptest.NewRequest("POST", "http://internal/api/exam/submit", nil)
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+	h.Submit(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("Submit rate-limited status = %d, want 429; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.submitCalls != 5 {
+		t.Fatalf("Submit service calls = %d, want 5 before limiter blocks", fake.submitCalls)
 	}
 }
 

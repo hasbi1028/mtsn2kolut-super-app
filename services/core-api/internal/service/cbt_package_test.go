@@ -99,4 +99,31 @@ func TestCreateCbtPackageRequiresPublishedQuestions(t *testing.T) {
 			t.Fatalf("AddCbtPackageQuestion() calls = %d, want 0", len(store.addParams))
 		}
 	})
+
+	t.Run("rejects event questions in global package", func(t *testing.T) {
+		eventID := pgtype.UUID{Bytes: [16]byte{5}, Valid: true}
+		store := &fakeCbtPackageCreateStore{
+			createRow: db.CbtPackage{ID: packageID, SubjectID: subjectID},
+			questions: map[pgtype.UUID]db.GetCbtQuestionRow{
+				publishedQuestionID: {
+					ID:        publishedQuestionID,
+					EventID:   eventID,
+					SubjectID: subjectID,
+					Status:    db.CbtQuestionStatusEnumPublished,
+				},
+			},
+		}
+
+		_, err := createCbtPackage(context.Background(), store, CreateCbtPackageInput{
+			SubjectID:   subjectID,
+			Title:       "Paket Umum IPA",
+			QuestionIDs: []pgtype.UUID{publishedQuestionID},
+		})
+		if err == nil || !strings.Contains(err.Error(), "paket umum") {
+			t.Fatalf("createCbtPackage() error = %v, want global package event-question rejection", err)
+		}
+		if len(store.addParams) != 0 {
+			t.Fatalf("AddCbtPackageQuestion() calls = %d, want 0", len(store.addParams))
+		}
+	})
 }

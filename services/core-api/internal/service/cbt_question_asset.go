@@ -90,6 +90,25 @@ func (s *CbtQuestionAsset) Get(ctx context.Context, id pgtype.UUID) (db.CbtQuest
 	return s.q.GetCbtQuestionAsset(ctx, id)
 }
 
+func (s *CbtQuestionAsset) Open(asset db.CbtQuestionAsset) (*os.File, error) {
+	assetDir, err := filepath.Abs(s.assetDir)
+	if err != nil {
+		return nil, err
+	}
+	storagePath, err := filepath.Abs(asset.StoragePath)
+	if err != nil {
+		return nil, err
+	}
+	rel, err := filepath.Rel(assetDir, storagePath)
+	if err != nil {
+		return nil, err
+	}
+	if rel == "." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || rel == ".." || filepath.IsAbs(rel) {
+		return nil, fmt.Errorf("storage_path di luar direktori aset")
+	}
+	return os.Open(storagePath)
+}
+
 func (s *CbtQuestionAsset) GetQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error) {
 	return s.q.GetCbtQuestion(ctx, id)
 }

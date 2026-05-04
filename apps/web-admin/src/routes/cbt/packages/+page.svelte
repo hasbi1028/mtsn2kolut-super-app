@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Input } from '$lib/components/ui/input';
@@ -13,13 +15,14 @@
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmChallenge } from '$lib/confirm-dialog';
-	import { clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
+	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 
 	type CbtPackage = {
 		id: string; subject_id: string; subject_name: string; subject_code: string;
 		title: string; description: string; duration_minutes: number;
 		randomize_questions: boolean; is_active: boolean;
 		question_count: number; created_at: string;
+		event_id?: string | null;
 	};
 	type Question = {
 		id: string; subject_id: string; subject_code: string;
@@ -35,6 +38,7 @@
 		hots_flag?: boolean;
 	};
 	type Subject = { id: string; name: string; code: string; };
+	type EventContext = { id: string; title: string; status: string; target_levels?: string[]; academic_year_name?: string; };
 	type PackagesOverview = {
 		packages: CbtPackage[];
 		packageQuestions: PackageQuestion[];
@@ -108,6 +112,9 @@
 	let deleteBusyId = $state('');
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 	let packagesRequestId = 0;
+	let questionPoolTotal = $state(0);
+	let eventContext = $state<EventContext | null>(null);
+	const eventId = page.url.searchParams.get('event_id') ?? '';
 
 	let questionPool = $derived(
 		fSubjectId
@@ -124,6 +131,7 @@
 	let selectedCognitiveBuckets = $derived(countByLabel(selectedQuestions, (q) => compactValue(q.cognitive_level, 'Belum level')));
 	let selectedHotsCount = $derived(selectedQuestions.filter((q) => q.hots_flag).length);
 	let selectedBlueprintMissingCount = $derived(selectedQuestions.filter(questionHasBlueprintGap).length);
+	let questionPoolCapped = $derived(questionPoolTotal > allQuestions.length);
 	let packageReadinessIssues = $derived(buildPackageReadinessIssues());
 	let canCreatePackage = $derived(packageReadinessIssues.length === 0 && !fBusy);
 
@@ -185,6 +193,7 @@
 			offset: String(offset),
 			status: 'published',
 		});
+		if (eventId) params.set('event_id', eventId);
 		const payload = await fetch(clientApiPathWithQuery('/api/cbt/questions', params))
 			.then((response) => readClientApiData<unknown>(response, 'Gagal memuat bank soal'));
 		return parseQuestionPage(payload);
@@ -202,6 +211,7 @@
 			loaded += page.items.length;
 			pages += 1;
 		}
+		questionPoolTotal = Math.max(firstPage.total, questionsById.size);
 		return Array.from(questionsById.values());
 	}
 
@@ -325,9 +335,20 @@
 		return { questions, typeBuckets, cognitiveBuckets, hotsCount, missingCount, unpublishedCount, totalPoints };
 	}
 
+	async function fetchEventContext() {
+		if (!eventId) return null;
+		try {
+			return await fetch(clientApiPath`/api/cbt/events/${eventId}`).then((response) => readClientApiData<EventContext>(response, 'Gagal memuat konteks kegiatan'));
+		} catch {
+			return null;
+		}
+	}
+
 	async function fetchOverview(): Promise<PackagesOverview> {
+		const packageParams = new URLSearchParams();
+		if (eventId) packageParams.set('event_id', eventId);
 		const [packagesPayload, questionItems, academicPayload] = await Promise.all([
-			fetch('/api/cbt/packages').then((response) => readClientApiData<CbtPackagesPayload>(response, 'Gagal memuat data paket')),
+			fetch(clientApiPathWithQuery('/api/cbt/packages', packageParams)).then((response) => readClientApiData<CbtPackagesPayload>(response, 'Gagal memuat data paket')),
 			fetchAllQuestions(),
 			fetch('/api/academic').then((response) => readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')),
 		]);
@@ -352,6 +373,8 @@
 		packageQuestions = [];
 		allQuestions = [];
 		subjects = [];
+		questionPoolTotal = 0;
+		void fetchEventContext().then((context) => { eventContext = context; });
 		packagesPromise = fetchOverview().then((overview) => {
 			if (requestId !== packagesRequestId) return { packages, packageQuestions, allQuestions, subjects };
 			applyOverview(overview);
@@ -444,6 +467,7 @@
 					subject_id: fSubjectId, title: fTitle, description: fDescription,
 					duration_minutes: fDuration, randomize_questions: fRandomize,
 					is_active: fActive,
+					...(eventId ? { event_id: eventId } : {}),
 					question_ids: selectedQuestions.map((question) => question.id),
 					question_weights: Object.fromEntries(selectedQuestions.map((question) => [question.id, questionWeightValue(question.id)])),
 				}),
@@ -482,18 +506,40 @@
 	});
 </script>
 
-<svelte:head><title>Paket Ujian CBT — MTSN 2 Kolut</title></svelte:head>
+	<svelte:head><title>{eventId ? 'Paket Event CBT' : 'Paket Ujian CBT'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
+			<p class="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">{eventId ? 'Konteks Event' : 'Paket Global'}</p>
 			<h1 class="text-2xl font-semibold text-slate-800">Paket Ujian CBT</h1>
-			<p class="text-sm text-slate-500 mt-1">Buat dan kelola paket soal untuk sesi ujian</p>
+			<p class="text-sm text-slate-500 mt-1">Buat dan kelola paket soal untuk sesi ujian{eventId ? ' kegiatan ini' : ''}</p>
 		</div>
-		<LoadingButton onclick={() => (showForm = !showForm)}>
-			{showForm ? 'Batal' : '+ Buat Paket'}
-		</LoadingButton>
+		<div class="flex flex-wrap gap-2">
+			{#if eventId}
+				<a href={resolve(`/cbt/events/${eventId}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Event</a>
+			{/if}
+			<LoadingButton onclick={() => (showForm = !showForm)}>
+				{showForm ? 'Batal' : '+ Buat Paket'}
+			</LoadingButton>
+		</div>
 	</div>
+
+	{#if eventId}
+		<div class="rounded-xl border border-green-200 bg-green-50/70 p-4 text-sm text-green-950">
+			<div class="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<p class="font-semibold">Paket difilter untuk event: {eventContext?.title ?? eventId}</p>
+					<p class="mt-1 text-green-800">Daftar paket, payload pembuatan paket, dan pool soal terbit membawa <code class="rounded bg-white px-1">event_id</code>. Jika backend belum mendukung filter event, halaman tetap menampilkan respons yang tersedia.</p>
+				</div>
+				<a href={resolve(`/cbt/soal?event_id=${eventId}`)} class="rounded-md border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Bank Soal Event</a>
+			</div>
+		</div>
+	{:else}
+		<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+			Anda sedang melihat paket global. Dari Kegiatan Ujian, gunakan tombol Paket agar pembuatan paket otomatis membawa konteks event.
+		</div>
+	{/if}
 
 	{#if operationState}
 		<OperationStatusPanel {...operationState} />
@@ -549,6 +595,11 @@
 									— <span class="font-medium text-green-700">{selectedQuestions.length} dipilih</span>
 								{/if}
 							</div>
+							{#if questionPoolCapped}
+								<div class="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+									Bank soal besar: termuat {allQuestions.length} dari {questionPoolTotal} soal terbit. Gunakan filter mapel atau cari soal di Bank Soal jika soal belum muncul di pilihan paket.
+								</div>
+							{/if}
 							<div class="flex flex-wrap gap-1">
 								<Badge class="border-green-200 bg-green-50 text-green-700">{questionPool.length} terbit</Badge>
 								<Badge variant={availableBlueprintMissingCount > 0 ? 'secondary' : 'outline'} class="bg-white">
@@ -746,7 +797,8 @@
 
 		{#snippet children(value)}
 			{@const overview = value as PackagesOverview}
-			{@const currentPackages = overview.packages}
+			{@const eventPackages = eventId ? overview.packages.filter((pkg) => !pkg.event_id || pkg.event_id === eventId) : overview.packages}
+			{@const currentPackages = eventPackages}
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Header class="pb-2">
 				<Card.Title class="text-base">Daftar Paket ({currentPackages.length})</Card.Title>

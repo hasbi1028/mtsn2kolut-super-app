@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
@@ -13,12 +14,40 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import RichContent from '$lib/components/RichContent.svelte';
 	import { questionExportButtonLabel, questionExportSuccessMessage } from '$lib/cbt/question-export-ui';
+	import { clearCbtComposerDrafts } from '$lib/client/cbt-drafts';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { htmlToPlainText } from '$lib/utils/html-text';
 
 	// ── Types ─────────────────────────────────────────────────────────────────
 	type Subject = { id: string; name: string; code: string };
+	type CbtEvent = {
+		id: string;
+		title: string;
+		exam_type?: string;
+		status?: string;
+		academic_year_name?: string;
+	};
+	type UserOption = {
+		id: string;
+		username: string;
+		roles?: string[];
+		employee_id?: string | null;
+		profile_nama?: string | null;
+	};
+	type EventMemberRole = 'panitia' | 'pembuat_soal' | 'reviewer' | 'proktor' | 'pengawas' | 'korektor';
+	type EventMember = {
+		id: string;
+		user_id: string;
+		employee_id?: string | null;
+		subject_id?: string | null;
+		role: EventMemberRole;
+		username?: string;
+		employee_nama?: string;
+		employee_name?: string;
+		subject_name?: string;
+		subject_code?: string;
+	};
 	type OptionItem = {
 		label: string;
 		text?: string;
@@ -32,8 +61,10 @@
 	type MatchingPair = { left: string; right: string };
 	type ModuleMode = 'catalog' | 'composer' | 'review' | 'import';
 	type AuthoringMode = 'beginner' | 'advance';
+	type ComposerStep = 'info' | 'content' | 'preview';
 	type RevisionSourceFilter = '' | 'item_analysis' | 'reviewer' | 'workflow';
 	type ReviewDecision = 'approve' | 'reject';
+	type BulkWorkflowAction = 'approve' | 'reject' | 'publish';
 	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'agree_disagree' | 'matching' | 'short_answer' | 'essay';
 	type ComposerSaveIntent = 'draft' | 'review';
 	type AnswerMode = 'single_option' | 'multi_option' | 'fixed_pair' | 'matching' | 'short_text' | 'rubric';
@@ -50,6 +81,7 @@
 	};
 	type Question = {
 		id: string;
+		event_id?: string | null;
 		authoring_mode?: string;
 		suggested_mode?: string;
 		subject_id: string;
@@ -97,12 +129,14 @@
 	type SoalOverview = {
 		questions: Question[];
 		subjects: Subject[];
+		events: CbtEvent[];
 		revisionQueue: Question[];
 		revisionTotal: number;
 		reviewQueue: Question[];
 		reviewTotal: number;
 		approvedQueue: Question[];
 		approvedTotal: number;
+		questionTargets: QuestionTarget[];
 		totalItems: number;
 		page: number;
 	};
@@ -117,7 +151,10 @@
 		error?: string;
 		message?: string;
 	};
+	type EventsPayload = CbtEvent[] | { items?: CbtEvent[]; events?: CbtEvent[] };
+	type UsersPayload = UserOption[] | { items?: UserOption[]; users?: UserOption[] };
 	type DraftPayload = {
+		eventId?: string;
 		subjectId: string;
 		questionType: ComposerQuestionType;
 		authoringMode: AuthoringMode;
@@ -147,11 +184,44 @@
 	type OptionLabel = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 	type LegacyImportResult = {
 		total_rows: number;
+		valid?: number;
+		would_import?: number;
 		imported: number;
 		skipped: number;
 		errors: string[];
 		duplicate_codes: string[];
 	};
+	type QuestionTarget = {
+		event_id?: string;
+		subject_id: string;
+		subject_name?: string;
+		subject_code?: string;
+		target_questions: number;
+		total: number;
+		draft: number;
+		review: number;
+		rejected: number;
+		approved: number;
+		published: number;
+	};
+	type TimelineItem = {
+		id?: string;
+		action?: string;
+		status?: string;
+		notes?: string;
+		actor_username?: string;
+		created_at?: string;
+	};
+	type BulkWorkflowResult = {
+		question_id?: string;
+		id?: string;
+		ok?: boolean;
+		success?: boolean;
+		status?: string;
+		error?: string;
+		message?: string;
+	};
+	type BulkWorkflowResponse = { results?: BulkWorkflowResult[] } | BulkWorkflowResult[];
 	type FocusedEditor = 'stem' | 'stimulus' | 'rubric' | 'explanation' | OptionLabel;
 
 	let { data }: { data: PageData } = $props();
@@ -242,16 +312,16 @@
 		},
 	];
 	const moduleModes: Array<{ id: ModuleMode; label: string; desc: string }> = [
-		{ id: 'catalog', label: 'Katalog', desc: 'Daftar terpadu' },
-		{ id: 'composer', label: 'Komposer Soal', desc: 'Semua tipe' },
-		{ id: 'review', label: 'Review', desc: 'Mutu & publikasi' },
-		{ id: 'import', label: 'Import CSV', desc: 'Multi-tipe' },
+		{ id: 'catalog', label: 'Daftar Soal', desc: 'Lihat dan kelola' },
+		{ id: 'composer', label: 'Buat Soal', desc: 'Tulis satu soal' },
+		{ id: 'review', label: 'Periksa Soal', desc: 'Review & terbit' },
+		{ id: 'import', label: 'Upload CSV', desc: 'Masukkan banyak soal' },
 	];
 	const WORKFLOW_LABEL: Record<string, string> = {
 		draft: 'Draft',
-		review: 'Ditinjau',
+		review: 'Menunggu Review',
 		approved: 'Disetujui',
-		rejected: 'Revisi',
+		rejected: 'Perlu Revisi',
 	};
 	const DIFFICULTY_LABEL: Record<string, string> = { easy: 'Mudah', medium: 'Sedang', hard: 'Sulit' };
 	const revisionSourceOptions: Array<{ id: RevisionSourceFilter; label: string; desc: string }> = [
@@ -261,13 +331,22 @@
 		{ id: 'workflow', label: 'Workflow', desc: 'Tanpa reviewer' },
 	];
 
-	const DRAFT_KEY = (id: string | null) => `mtsn2-soal-komposer:${id ?? 'new'}`;
+	const DRAFT_KEY = (id: string | null, eventId: string) => `mtsn2-soal-komposer:${eventId || 'global'}:${id ?? 'new'}`;
+	const EVENT_MEMBER_ROLES: Array<{ value: EventMemberRole; label: string; desc: string }> = [
+		{ value: 'panitia', label: 'Panitia', desc: 'Koordinasi kegiatan' },
+		{ value: 'pembuat_soal', label: 'Pembuat Soal', desc: 'Menyusun bank soal' },
+		{ value: 'reviewer', label: 'Reviewer', desc: 'Menelaah mutu soal' },
+		{ value: 'proktor', label: 'Proktor', desc: 'Teknis sesi ujian' },
+		{ value: 'pengawas', label: 'Pengawas', desc: 'Pengawasan ruang' },
+		{ value: 'korektor', label: 'Korektor', desc: 'Koreksi uraian' },
+	];
 
 	// ── Page state ─────────────────────────────────────────────────────────────
 	let activeMode = $state<ModuleMode>('catalog');
 	let questionsPromise = $state<Promise<SoalOverview> | null>(null);
 	let questions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
+	let events = $state<CbtEvent[]>([]);
 	let revisionQueue = $state<Question[]>([]);
 	let revisionTotal = $state(0);
 	let reviewQueue = $state<Question[]>([]);
@@ -279,12 +358,26 @@
 
 	let search = $state('');
 	let filterSubject = $state('');
+	let selectedEventId = $state('');
 	let filterWorkflow = $state('');
 	let filterStatus = $state('');
 	let revisionSourceFilter = $state<RevisionSourceFilter>('');
+	let questionTargets = $state<QuestionTarget[]>([]);
+	let targetBusy = $state(false);
+	let targetQuestionsInput = $state(0);
+	let eventMembers = $state<EventMember[]>([]);
+	let eventMembersLoading = $state(false);
+	let userOptions = $state<UserOption[]>([]);
+	let userOptionsLoading = $state(false);
+	let memberBusyId = $state('');
+	let addMemberBusy = $state(false);
+	let memberUserId = $state('');
+	let memberSubjectId = $state('');
+	let memberRole = $state<EventMemberRole>('pembuat_soal');
 
 	// ── Composer state ─────────────────────────────────────────────────────────
 	let showComposer = $state(false);
+	let composerStep = $state<ComposerStep>('info');
 	let editingId = $state<string | null>(null);
 	let composerBusy = $state(false);
 	let composerAction = $state<ComposerSaveIntent | ''>('');
@@ -299,6 +392,7 @@
 	let importSubjectId = $state('');
 	let importFile = $state<File | null>(null);
 	let importBusy = $state(false);
+	let importDryRunDone = $state(false);
 	let importResult = $state<LegacyImportResult | null>(null);
 	let exportBusy = $state(false);
 	let templateBusy = $state(false);
@@ -308,6 +402,14 @@
 	let reviewDecisionQuestion = $state<Question | null>(null);
 	let reviewDecision = $state<ReviewDecision>('approve');
 	let reviewDecisionNotes = $state('');
+	let questionPreviewOpen = $state(false);
+	let questionPreview = $state<Question | null>(null);
+	let questionPreviewLoading = $state(false);
+	let questionTimeline = $state<TimelineItem[]>([]);
+	let questionTimelineLoading = $state(false);
+	let selectedQuestionIds = $state<string[]>([]);
+	let bulkBusy = $state(false);
+	let bulkNotes = $state('');
 
 	// ── Form fields ────────────────────────────────────────────────────────────
 	let fSubjectId = $state('');
@@ -334,7 +436,7 @@
 	let fCognitiveLevel = $state('');
 	let fHotsFlag = $state(false);
 	let fWorkflowStatus = $state('draft');
-	let activeDraftKey = $derived(DRAFT_KEY(editingId));
+	let activeDraftKey = $derived(DRAFT_KEY(editingId, selectedEventId));
 	let draftSignature = $derived(JSON.stringify({
 		fSubjectId,
 		fQuestionType,
@@ -367,6 +469,16 @@
 	let lockedCount = $derived(questions.filter(questionUsageLocked).length);
 	let roles = $derived(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
 	let canReviewWorkflow = $derived(roles.includes('admin'));
+	let selectedEvent = $derived(events.find((event) => event.id === selectedEventId) ?? null);
+	let selectedEventTitle = $derived(selectedEvent?.title ?? 'Semua kegiatan');
+	let roleLabel = $derived.by(() => {
+		if (roles.includes('admin')) return 'Admin bank soal';
+		if (roles.includes('guru') || roles.includes('teacher')) return 'Pembuat soal / guru';
+		return roles.length > 0 ? roles.join(', ') : 'Pengguna';
+	});
+	let isAdminRole = $derived(roles.includes('admin'));
+	let canUseReviewerTools = $derived(canReviewWorkflow || roles.includes('reviewer'));
+	let selectedImportContext = $derived(selectedEvent ? `${selectedEvent.title}${selectedEvent.status ? ` (${selectedEvent.status})` : ''}` : 'Bank umum tanpa kegiatan');
 	let exportButtonLabel = $derived(questionExportButtonLabel(roles));
 	let exportSuccessMessage = $derived(questionExportSuccessMessage(roles));
 	let reviewCount = $derived(reviewTotal);
@@ -376,6 +488,20 @@
 	let draftCount = $derived(questions.filter((item) => item.workflow_status === 'draft').length);
 	let visibleRevisionCount = $derived(questions.filter((item) => item.workflow_status === 'rejected').length);
 	let publishedCount = $derived(questions.filter((item) => item.status === 'published').length);
+	let selectedTarget = $derived(questionTargets.find((target) => target.subject_id === filterSubject) ?? null);
+	let eventTargetTotal = $derived(questionTargets.reduce((sum, target) => sum + (target.target_questions || 0), 0));
+	let eventPublishedTotal = $derived(questionTargets.reduce((sum, target) => sum + (target.published || 0), 0));
+	let selectedTargetShortage = $derived(Math.max(0, (selectedTarget?.target_questions ?? 0) - (selectedTarget?.published ?? 0)));
+	let selectedQuestions = $derived(questions.filter((question) => selectedQuestionIds.includes(question.id)));
+	let selectedReviewEligibleCount = $derived(selectedQuestions.filter(canDecideReview).length);
+	let selectedPublishEligibleCount = $derived(selectedQuestions.filter(canPublishQuestion).length);
+	let statusCards = $derived([
+		{ label: 'Draft', value: draftCount, tone: 'slate', helper: 'soal masih disusun' },
+		{ label: 'Perlu Revisi', value: revisionTotal, tone: 'red', helper: `${visibleRevisionCount} tampil` },
+		{ label: 'Menunggu Review', value: reviewCount, tone: 'amber', helper: `${visibleReviewCount} tampil` },
+		{ label: 'Disetujui', value: approvedCount, tone: 'green', helper: `${visibleApprovedCount} siap terbit` },
+		{ label: 'Terbit', value: publishedCount, tone: 'emerald', helper: 'siap dipakai paket' },
+	]);
 
 	let stemText = $derived(htmlToPlainText(fStem));
 	let hasImage = $derived(fStem.includes('<img'));
@@ -430,7 +556,6 @@
 		options: isEssay || (isMatching ? matchingPairsReady : optionsReady),
 		answerKey: answerKeyReady,
 		rubric: rubricReady,
-		weight: Number.isFinite(fWeight) && fWeight >= 1,
 	});
 
 	let passedChecks = $derived(Object.values(readinessChecks).filter(Boolean).length);
@@ -440,7 +565,6 @@
 		const issues: string[] = [];
 		if (!readinessChecks.subject) issues.push('Pilih mata pelajaran sebelum menyimpan draft');
 		if (!readinessChecks.stem) issues.push('Isi pertanyaan minimal 5 karakter untuk draft');
-		if (!readinessChecks.weight) issues.push('Bobot nilai minimal 1');
 		return issues;
 	});
 	let canSaveDraft = $derived(draftIssues.length === 0 && !composerBusy);
@@ -598,7 +722,6 @@
 			else issues.push('Pilih kunci jawaban');
 		}
 		if (requiresRubric && !readinessChecks.rubric) issues.push('Isi pedoman/rubrik penilaian essay');
-		if (!readinessChecks.weight) issues.push('Bobot nilai minimal 1');
 		return issues;
 	});
 	let qualityWarningCount = $derived(qualitySignals.filter((signal) => signal.status !== 'good').length);
@@ -617,6 +740,7 @@
 	// ── Draft autosave ─────────────────────────────────────────────────────────
 	function buildDraftPayload(): DraftPayload {
 		return {
+			eventId: selectedEventId,
 			subjectId: fSubjectId,
 			questionType: fQuestionType,
 			authoringMode: fAuthoringMode,
@@ -679,6 +803,7 @@
 			const raw = localStorage.getItem(activeDraftKey);
 			if (!raw) return false;
 			const d = JSON.parse(raw) as {
+				eventId?: string;
 				subjectId?: string;
 				questionType?: string;
 				authoringMode?: string;
@@ -705,6 +830,7 @@
 				workflowStatus?: string;
 				savedAt?: string;
 			};
+			if (!selectedEventId && d.eventId) selectedEventId = d.eventId;
 			fSubjectId = d.subjectId ?? '';
 			fQuestionType = normalizeQuestionType(d.questionType);
 			fAuthoringMode = normalizeAuthoringMode(d.authoringMode);
@@ -748,11 +874,20 @@
 		draftSavedAt = null;
 	}
 
+	function clearAllLocalDrafts() {
+		const count = clearCbtComposerDrafts();
+		lastDraftSig = '';
+		draftStatus = '';
+		draftSavedAt = null;
+		toast.success(count > 0 ? `${count} draft lokal CBT dihapus dari perangkat ini` : 'Tidak ada draft lokal CBT di perangkat ini');
+	}
+
 	// ── API ────────────────────────────────────────────────────────────────────
 	function buildQuestionParams(page: number) {
 		const params = new URLSearchParams();
 		params.set('limit', String(PAGE_SIZE));
 		params.set('offset', String((page - 1) * PAGE_SIZE));
+		if (selectedEventId) params.set('event_id', selectedEventId);
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		if (filterWorkflow) params.set('workflow_status', filterWorkflow);
@@ -766,6 +901,7 @@
 		params.set('limit', '6');
 		params.set('offset', '0');
 		params.set('workflow_status', 'rejected');
+		if (selectedEventId) params.set('event_id', selectedEventId);
 		if (revisionSourceFilter) params.set('revision_source', revisionSourceFilter);
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
@@ -777,6 +913,7 @@
 		params.set('limit', '6');
 		params.set('offset', '0');
 		params.set('workflow_status', 'review');
+		if (selectedEventId) params.set('event_id', selectedEventId);
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		return params;
@@ -788,6 +925,7 @@
 		params.set('offset', '0');
 		params.set('workflow_status', 'approved');
 		params.set('status', 'draft');
+		if (selectedEventId) params.set('event_id', selectedEventId);
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		return params;
@@ -798,7 +936,12 @@
 		const revisionParams = buildRevisionQueueParams();
 		const reviewParams = buildReviewQueueParams();
 		const approvedParams = buildApprovedQueueParams();
-		const [questionPayload, revisionPayload, reviewPayload, approvedPayload, academicPayload] = await Promise.all([
+		const targetsPromise = selectedEventId
+			? fetch(clientApiPath`/api/cbt/events/${selectedEventId}/question-targets`).then((response) =>
+				readClientApiData<QuestionTarget[]>(response, 'Gagal memuat target soal kegiatan')
+			)
+			: Promise.resolve([] as QuestionTarget[]);
+		const [questionPayload, revisionPayload, reviewPayload, approvedPayload, academicPayload, eventsPayload, targetsPayload] = await Promise.all([
 			fetch(clientApiPathWithQuery('/api/cbt/questions', params)).then((response) =>
 				readClientApiData<QuestionListResponse>(response, 'Gagal memuat soal')
 			),
@@ -811,9 +954,13 @@
 			fetch(clientApiPathWithQuery('/api/cbt/questions', approvedParams)).then((response) =>
 				readClientApiData<QuestionListResponse>(response, 'Gagal memuat antrian siap terbit')
 			),
-			fetch('/api/academic').then((response) =>
+			fetch('/api/cbt/soal-support/subjects').then((response) =>
 				readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')
 			),
+			fetch('/api/cbt/events').then((response) =>
+				readClientApiData<EventsPayload>(response, 'Gagal memuat kegiatan CBT')
+			),
+			targetsPromise,
 		]);
 		const loadedQuestions = questionPayload.items ?? [];
 		const loadedRevisions = revisionPayload.items ?? [];
@@ -822,6 +969,7 @@
 		return {
 			questions: loadedQuestions,
 			subjects: academicPayload.subjects ?? [],
+			events: normalizeEventsPayload(eventsPayload),
 			revisionQueue: loadedRevisions,
 			revisionTotal: revisionPayload.meta?.total ?? loadedRevisions.length,
 			reviewQueue: loadedReviews,
@@ -830,18 +978,22 @@
 			approvedTotal: approvedPayload.meta?.total ?? loadedApproved.length,
 			totalItems: questionPayload.meta?.total ?? loadedQuestions.length,
 			page,
+			questionTargets: Array.isArray(targetsPayload) ? targetsPayload : [],
 		};
 	}
 
 	function applyOverview(overview: SoalOverview) {
 		questions = overview.questions;
 		subjects = overview.subjects;
+		events = overview.events;
 		revisionQueue = overview.revisionQueue;
 		revisionTotal = overview.revisionTotal;
 		reviewQueue = overview.reviewQueue;
 		reviewTotal = overview.reviewTotal;
 		approvedQueue = overview.approvedQueue;
 		approvedTotal = overview.approvedTotal;
+		questionTargets = overview.questionTargets;
+		if (filterSubject) targetQuestionsInput = questionTargets.find((target) => target.subject_id === filterSubject)?.target_questions ?? 0;
 		totalItems = overview.totalItems;
 		currentPage = overview.page;
 	}
@@ -849,12 +1001,12 @@
 	function load(page = currentPage) {
 		const requestId = ++questionsRequestId;
 		questionsPromise = fetchOverview(page).then((overview) => {
-			if (requestId !== questionsRequestId) return { questions, subjects, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, totalItems, page: currentPage };
+			if (requestId !== questionsRequestId) return { questions, subjects, events, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, questionTargets, totalItems, page: currentPage };
 			applyOverview(overview);
 			return overview;
 		}).catch((error: unknown) => {
 			if (requestId === questionsRequestId) throw error;
-			return { questions, subjects, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, totalItems, page: currentPage };
+			return { questions, subjects, events, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, questionTargets, totalItems, page: currentPage };
 		});
 	}
 
@@ -871,7 +1023,7 @@
 			questionsPromise = Promise.resolve(overview);
 		} catch (error) {
 			if (requestId === questionsRequestId) {
-				questionsPromise = Promise.resolve({ questions, subjects, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, totalItems, page: currentPage });
+				questionsPromise = Promise.resolve({ questions, subjects, events, revisionQueue, revisionTotal, reviewQueue, reviewTotal, approvedQueue, approvedTotal, questionTargets, totalItems, page: currentPage });
 				toast.error(soalErrorMessage(error));
 			}
 		}
@@ -886,6 +1038,29 @@
 		if (error instanceof Error && error.message.trim()) return error.message;
 		if (typeof error === 'string' && error.trim()) return error;
 		return 'Gagal memuat soal';
+	}
+
+	function normalizeEventsPayload(payload: EventsPayload): CbtEvent[] {
+		if (Array.isArray(payload)) return payload;
+		return payload.items ?? payload.events ?? [];
+	}
+
+	function normalizeUsersPayload(payload: UsersPayload): UserOption[] {
+		if (Array.isArray(payload)) return payload;
+		return payload.items ?? payload.users ?? [];
+	}
+
+	function userDisplayName(user: UserOption): string {
+		const profile = user.profile_nama?.trim();
+		return profile ? `${profile} (${user.username})` : user.username;
+	}
+
+	function memberDisplayName(member: EventMember): string {
+		return member.employee_nama ?? member.employee_name ?? member.username ?? member.user_id;
+	}
+
+	function memberRoleLabel(role: string): string {
+		return EVENT_MEMBER_ROLES.find((item) => item.value === role)?.label ?? role;
 	}
 
 	function handleQuestionsRenderError(error: unknown, reset: () => void) {
@@ -908,6 +1083,187 @@
 		const url = new URL(window.location.href);
 		url.searchParams.set('mode', mode);
 		window.history.replaceState({}, '', `${url.pathname}?${url.searchParams.toString()}`);
+	}
+
+	function setSelectedEvent(eventId: string) {
+		selectedEventId = eventId;
+		selectedQuestionIds = [];
+		currentPage = 1;
+		if (typeof window !== 'undefined') {
+			const url = new URL(window.location.href);
+			if (eventId) url.searchParams.set('event_id', eventId);
+			else url.searchParams.delete('event_id');
+			window.history.replaceState({}, '', `${url.pathname}?${url.searchParams.toString()}`);
+		}
+		load(1);
+		void refreshEventMembers();
+	}
+
+	function setFilterSubject(subjectId: string) {
+		filterSubject = subjectId;
+		selectedQuestionIds = [];
+		targetQuestionsInput = questionTargets.find((target) => target.subject_id === subjectId)?.target_questions ?? 0;
+		load(1);
+	}
+
+	function membersHref(): `/cbt/events/${string}/members` | '/cbt/events' {
+		return selectedEventId ? `/cbt/events/${selectedEventId}/members` : '/cbt/events';
+	}
+
+	function reviewFocusHref(): '/cbt/soal/review' | `/cbt/soal/review?${string}` {
+		const params = new URLSearchParams();
+		if (selectedEventId) params.set('event_id', selectedEventId);
+		const query = params.toString();
+		return query ? `/cbt/soal/review?${query}` : '/cbt/soal/review';
+	}
+
+	async function saveQuestionTarget() {
+		if (!selectedEventId || !filterSubject) {
+			toast.warning('Pilih kegiatan dan mapel sebelum mengatur target soal.');
+			return;
+		}
+		targetBusy = true;
+		try {
+			await fetch(clientApiPath`/api/cbt/events/${selectedEventId}/question-targets`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ subject_id: filterSubject, target_questions: Number(targetQuestionsInput) || 0 })
+			}).then((response) => readClientJson<unknown>(response));
+			toast.success('Target soal mapel diperbarui');
+			await refreshOverview(currentPage);
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menyimpan target soal'));
+		} finally {
+			targetBusy = false;
+		}
+	}
+
+	function toggleQuestionSelection(id: string) {
+		selectedQuestionIds = selectedQuestionIds.includes(id)
+			? selectedQuestionIds.filter((item) => item !== id)
+			: [...selectedQuestionIds, id];
+	}
+
+	function clearSelection() {
+		selectedQuestionIds = [];
+	}
+
+	async function runBulkWorkflow(action: BulkWorkflowAction) {
+		const ids = action === 'publish'
+			? selectedQuestions.filter(canPublishQuestion).map((question) => question.id)
+			: selectedQuestions.filter(canDecideReview).map((question) => question.id);
+		if (ids.length === 0) {
+			toast.warning('Tidak ada soal terpilih yang memenuhi syarat aksi ini.');
+			return;
+		}
+		const notes = bulkNotes.trim();
+		if (action === 'reject' && notes.length < 8) {
+			toast.warning('Catatan bulk reject minimal 8 karakter.');
+			return;
+		}
+		bulkBusy = true;
+		try {
+			const res = await fetch('/api/cbt/questions/bulk-workflow', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action, question_ids: ids, notes })
+			});
+			const payload = await readClientApiData<BulkWorkflowResponse>(res, 'Aksi bulk gagal');
+			const results = Array.isArray(payload) ? payload : payload.results ?? [];
+			const ok = results.filter((item) => item.ok ?? item.success ?? !item.error).length;
+			const failed = Math.max(0, results.length - ok);
+			toast.success(`${ok} soal berhasil diproses${failed ? `, ${failed} gagal` : ''}`);
+			selectedQuestionIds = [];
+			bulkNotes = '';
+			await refreshOverview(currentPage);
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Aksi bulk gagal'));
+		} finally {
+			bulkBusy = false;
+		}
+	}
+
+	async function ensureUserOptions() {
+		if (!canReviewWorkflow || userOptions.length > 0 || userOptionsLoading) return;
+		userOptionsLoading = true;
+		try {
+			const payload = await fetch('/api/users').then((response) => readClientApiData<UsersPayload>(response, 'Gagal memuat pengguna'));
+			userOptions = normalizeUsersPayload(payload);
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal memuat daftar pengguna'));
+		} finally {
+			userOptionsLoading = false;
+		}
+	}
+
+	async function refreshEventMembers() {
+		if (!selectedEventId || !canReviewWorkflow) {
+			eventMembers = [];
+			return;
+		}
+		eventMembersLoading = true;
+		try {
+			const members = await fetch(clientApiPath`/api/cbt/events/${selectedEventId}/members`).then((response) =>
+				readClientApiData<EventMember[]>(response, 'Gagal memuat panitia kegiatan')
+			);
+			eventMembers = Array.isArray(members) ? members : [];
+			await ensureUserOptions();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal memuat panitia kegiatan'));
+		} finally {
+			eventMembersLoading = false;
+		}
+	}
+
+	async function addEventMember() {
+		if (!selectedEventId || !memberUserId) {
+			toast.warning('Pilih kegiatan dan pengguna terlebih dahulu.');
+			return;
+		}
+		addMemberBusy = true;
+		try {
+			const selectedUser = userOptions.find((user) => user.id === memberUserId);
+			const payload = {
+				user_id: memberUserId,
+				employee_id: selectedUser?.employee_id || undefined,
+				subject_id: memberSubjectId || undefined,
+				role: memberRole,
+			};
+			await fetch(clientApiPath`/api/cbt/events/${selectedEventId}/members`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload),
+			}).then((response) => readClientJson<unknown>(response));
+			memberUserId = '';
+			memberSubjectId = '';
+			memberRole = 'pembuat_soal';
+			toast.success('Penugasan kegiatan ditambahkan');
+			await refreshEventMembers();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menambahkan penugasan'));
+		} finally {
+			addMemberBusy = false;
+		}
+	}
+
+	async function removeEventMember(member: EventMember) {
+		if (!selectedEventId) return;
+		if (!(await confirmAction({
+			title: 'Hapus Penugasan',
+			message: `Hapus ${memberDisplayName(member)} dari panitia ${selectedEventTitle}?`,
+			confirmLabel: 'Hapus Penugasan',
+			tone: 'danger'
+		}))) return;
+		memberBusyId = member.id;
+		try {
+			await fetch(clientApiPath`/api/cbt/events/${selectedEventId}/members/${member.id}`, { method: 'DELETE' }).then((response) => readClientJson<unknown>(response));
+			toast.success('Penugasan kegiatan dihapus');
+			await refreshEventMembers();
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal menghapus penugasan'));
+		} finally {
+			memberBusyId = '';
+		}
 	}
 
 	function showAllRevisions() {
@@ -1234,18 +1590,64 @@
 		return 'Buat revisi lewat Duplikat agar riwayat soal tetap aman.';
 	}
 
+	async function loadQuestionDetail(q: Question): Promise<Question> {
+		const res = await fetch(clientApiPath`/api/cbt/questions/${q.id}`);
+		return readClientApiData<Question>(res, 'Gagal memuat detail soal');
+	}
+
+	async function openQuestionPreview(q: Question) {
+		questionPreview = q;
+		questionPreviewOpen = true;
+		questionPreviewLoading = true;
+		questionTimeline = [];
+		try {
+			questionPreview = await loadQuestionDetail(q);
+			void loadQuestionTimeline(questionPreview.id);
+		} catch (error) {
+			toast.warning(mutationErrorMessage(error, explainQuickEditBlocked(q)));
+			void loadQuestionTimeline(q.id);
+		} finally {
+			questionPreviewLoading = false;
+		}
+	}
+
+	async function loadQuestionTimeline(id: string) {
+		questionTimelineLoading = true;
+		try {
+			const payload = await fetch(clientApiPath`/api/cbt/questions/${id}/timeline`).then((response) =>
+				readClientApiData<TimelineItem[] | { items?: TimelineItem[] }>(response, 'Gagal memuat timeline soal')
+			);
+			questionTimeline = Array.isArray(payload) ? payload : payload.items ?? [];
+		} catch {
+			questionTimeline = [];
+		} finally {
+			questionTimelineLoading = false;
+		}
+	}
+
+	function closeQuestionPreview() {
+		questionPreviewOpen = false;
+		questionPreview = null;
+		questionPreviewLoading = false;
+		questionTimeline = [];
+	}
+
+	function duplicatePreviewQuestion() {
+		if (!questionPreview) return;
+		void duplicateQuestion(questionPreview.id);
+	}
+
 	function openQuestion(q: Question) {
 		if (isQuickEditable(q)) {
 			void openEdit(q);
 			return;
 		}
-		toast.warning(explainQuickEditBlocked(q));
+		void openQuestionPreview(q);
 	}
 
 	async function openQuestionFromRouteParam(id: string) {
 		try {
-			const res = await fetch(clientApiPath`/api/cbt/questions/${id}`);
-			const q = await readClientApiData<Question>(res, 'Gagal memuat detail soal');
+			const q = await loadQuestionDetail({ id } as Question);
 			openQuestion(q);
 		} catch (error) {
 			toast.error(mutationErrorMessage(error, 'Gagal membuka soal dari tautan lama.'));
@@ -1288,6 +1690,7 @@
 		showInspector = false;
 		focusedEditor = null;
 		composerMobilePanel = 'write';
+		composerStep = 'info';
 		showComposer = true;
 		// Delay to let state settle before restoring
 		setTimeout(() => {
@@ -1303,8 +1706,8 @@
 		}
 		composerBusy = true;
 		try {
-			const res = await fetch(clientApiPath`/api/cbt/questions/${q.id}`);
-			const d = await readClientApiData<Question>(res, 'Gagal memuat detail soal');
+			const d = await loadQuestionDetail(q);
+			if (!selectedEventId && d.event_id) selectedEventId = d.event_id;
 
 			editingId = d.id;
 			resetForm();
@@ -1336,7 +1739,11 @@
 			showInspector = false;
 			focusedEditor = null;
 			composerMobilePanel = 'write';
+			composerStep = 'info';
 			showComposer = true;
+			setTimeout(() => {
+				if (restoreDraft()) toast.info('Draft edit lokal dipulihkan otomatis.');
+			}, 50);
 		} catch (error) {
 			toast.error(mutationErrorMessage(error, 'Gagal memuat detail soal. Form memakai data ringkas dari daftar.'));
 			editingId = q.id;
@@ -1365,6 +1772,7 @@
 			showInspector = false;
 			focusedEditor = null;
 			composerMobilePanel = 'write';
+			composerStep = 'info';
 			showComposer = true;
 		} finally {
 			composerBusy = false;
@@ -1388,6 +1796,18 @@
 			});
 			if (!confirmed) return;
 		}
+		closeComposer();
+	}
+
+	async function discardLocalDraftAndClose() {
+		const confirmed = await confirmAction({
+			title: 'Hapus Draft Lokal?',
+			message: 'Draft autosave pada perangkat ini akan dihapus dan komposer ditutup. Soal yang sudah tersimpan di server tidak ikut dihapus.',
+			confirmLabel: 'Hapus Draft Lokal',
+			tone: 'danger'
+		});
+		if (!confirmed) return;
+		clearDraft();
 		closeComposer();
 	}
 
@@ -1440,6 +1860,7 @@
 		importSubjectId = filterSubject || fSubjectId || '';
 		importFile = null;
 		importResult = null;
+		importDryRunDone = false;
 		showImport = true;
 	}
 
@@ -1447,6 +1868,7 @@
 		const input = event.target as HTMLInputElement;
 		importFile = input.files?.[0] ?? null;
 		importResult = null;
+		importDryRunDone = false;
 	}
 
 	function buildPayloadOptions() {
@@ -1518,6 +1940,7 @@
 		composerAction = intent;
 		try {
 			const payload = {
+				...(selectedEventId ? { event_id: selectedEventId } : {}),
 				authoring_mode: fAuthoringMode,
 				subject_id: fSubjectId,
 				question_text: htmlToPlainText(fStem),
@@ -1565,7 +1988,7 @@
 		}
 	}
 
-	async function importLegacyCSV() {
+	async function importLegacyCSV(dryRun = false) {
 		if (!importSubjectId) {
 			toast.error('Pilih mata pelajaran untuk import');
 			return;
@@ -1578,6 +2001,8 @@
 		try {
 			const form = new FormData();
 			form.set('subject_id', importSubjectId);
+			if (selectedEventId) form.set('event_id', selectedEventId);
+			if (dryRun) form.set('dry_run', 'true');
 			form.set('file', importFile);
 			const res = await fetch('/api/cbt/questions/import-legacy', {
 				method: 'POST',
@@ -1586,13 +2011,20 @@
 			const result = await readClientApiData<LegacyImportResult>(res, 'Import CSV gagal');
 			importResult = {
 				total_rows: result.total_rows ?? 0,
+				valid: result.valid ?? result.would_import ?? result.imported ?? 0,
+				would_import: result.would_import ?? result.valid ?? result.imported ?? 0,
 				imported: result.imported ?? 0,
 				skipped: result.skipped ?? 0,
 				errors: result.errors ?? [],
 				duplicate_codes: result.duplicate_codes ?? [],
 			};
-			toast.success(`${importResult.imported} soal berhasil diimport`);
-			await refreshOverview(1);
+			if (dryRun) {
+				importDryRunDone = true;
+				toast.success(`${importResult.would_import ?? importResult.valid ?? 0} soal valid untuk diimport`);
+			} else {
+				toast.success(`${importResult.imported} soal berhasil diimport`);
+				await refreshOverview(1);
+			}
 		} catch (error) {
 			toast.error(mutationErrorMessage(error, 'Import CSV gagal'));
 		} finally {
@@ -1708,6 +2140,15 @@
 		reviewDecision = decision;
 		reviewDecisionNotes = '';
 		reviewDecisionOpen = true;
+			void loadQuestionDetail(q).then((detail) => {
+			if (reviewDecisionOpen && reviewDecisionQuestion?.id === q.id) {
+				reviewDecisionQuestion = detail;
+				void loadQuestionTimeline(detail.id);
+			}
+		}).catch((error) => {
+			toast.warning(mutationErrorMessage(error, 'Detail lengkap soal belum dapat dimuat.'));
+		});
+		void loadQuestionTimeline(q.id);
 	}
 
 	function closeReviewDecision() {
@@ -1715,6 +2156,7 @@
 		reviewDecisionQuestion = null;
 		reviewDecisionNotes = '';
 		reviewDecision = 'approve';
+		questionTimeline = [];
 	}
 
 	async function submitReviewDecision() {
@@ -1829,10 +2271,37 @@
 		return map[status] ?? 'bg-slate-100 text-slate-500';
 	}
 
-	onMount(() => {
+	function answerKeyLabelForQuestion(q: Question): string {
+		const key = (q.answer_key ?? '').trim();
+		const type = normalizeQuestionType(q.question_type);
+		if (type === 'essay') return q.rubric_html ? 'Rubrik uraian tersedia' : 'Rubrik belum tersedia';
+		if (!key) return 'Kunci belum tersedia atau dirahasiakan';
+		if (type === 'multiple_answer') return `Kunci: ${answerKeyLabels(key, ANSWER_LABELS).join(', ') || key}`;
+		if (type === 'matching') return `Pasangan: ${key.split(';').map((part) => part.trim()).filter(Boolean).join(' · ')}`;
+		if (type === 'short_answer') return `Jawaban diterima: ${parseShortAnswerAliases(key).join(' / ') || key}`;
+		if (type === 'true_false' || type === 'agree_disagree') {
+			const config = getQuestionTypeConfig(type);
+			const index = ANSWER_LABELS.indexOf(key.toUpperCase() as OptionLabel);
+			return `Kunci: ${config.fixedOptions?.[index] ?? key}`;
+		}
+		return `Kunci: ${key}`;
+	}
+
+	function optionPrimaryContent(option: OptionItem): string {
+		if (option.is_distractor) return option.match_html || option.match_text || '-';
+		return option.html || option.text || option.latex || '-';
+	}
+
+	function optionSecondaryContent(option: OptionItem): string {
+		if (option.is_distractor) return '';
+		return option.match_html || option.match_text || '';
+	}
+
+		onMount(() => {
 		const params = new URLSearchParams(window.location.search);
 		const mode = params.get('mode');
 		const questionId = params.get('question_id');
+		selectedEventId = params.get('event_id') ?? '';
 		if (validModuleMode(mode)) activeMode = mode;
 		if (questionId) {
 			params.delete('question_id');
@@ -1840,6 +2309,7 @@
 			window.history.replaceState({}, '', query ? `${window.location.pathname}?${query}` : window.location.pathname);
 		}
 		load();
+		void refreshEventMembers();
 		if (questionId) void openQuestionFromRouteParam(questionId);
 		window.addEventListener('keydown', handleComposerKeydown);
 		return () => {
@@ -1850,38 +2320,210 @@
 
 <!-- ── Main page ──────────────────────────────────────────────────────────── -->
 <div class="space-y-4">
-	<!-- Header -->
-	<div class="flex flex-wrap items-start justify-between gap-3">
-		<div>
-			<h1 class="text-xl font-semibold text-slate-800">Bank Soal CBT</h1>
-			<p class="text-sm text-slate-500 mt-0.5">
-				Satu modul untuk katalog, komposer terpadu, editor lanjutan, review, dan import CSV
-			</p>
+	<section class="overflow-hidden rounded-2xl border border-green-200 bg-gradient-to-br from-green-50 via-white to-emerald-50 shadow-sm">
+		<div class="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.42fr)] lg:p-5">
+			<div class="min-w-0">
+				<p class="text-xs font-bold uppercase tracking-[0.18em] text-green-700">Bank Soal CBT</p>
+				<h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Susun soal dengan alur yang jelas</h1>
+				<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+					Pilih kegiatan CBT, buat atau upload soal, kirim review, lalu admin menerbitkan soal yang sudah disetujui agar siap masuk Paket Ujian.
+				</p>
+				<div class="mt-4 grid gap-2 text-xs md:grid-cols-6">
+					{#each ['Pilih Kegiatan', 'Buat/Upload Soal', 'Kirim Review', 'Reviewer Periksa', 'Admin Terbitkan', 'Paket Ujian'] as step, index (`workflow-step-${step}`)}
+						<div class="rounded-lg border border-green-100 bg-white/80 px-2.5 py-2 text-slate-700 shadow-sm">
+							<span class="mb-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-700 text-[10px] font-bold text-white">{index + 1}</span>
+							<p class="font-semibold leading-snug">{step}</p>
+						</div>
+					{/each}
+				</div>
+			</div>
+			<div class="rounded-xl border border-green-100 bg-white/90 p-3 shadow-sm">
+				<p class="text-xs font-bold uppercase tracking-wider text-green-700">Aksi Cepat</p>
+				<div class="mt-3 grid gap-2">
+					<Button onclick={openCreate} class="justify-start bg-green-700 text-white hover:bg-green-800">Buat Soal</Button>
+					<a href={resolve(reviewFocusHref())} class="inline-flex justify-start rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100">Ruang Review Fokus</a>
+					<Button variant="outline" onclick={openImport} class="justify-start border-green-200 text-green-800 hover:bg-green-50">Upload CSV</Button>
+					<LoadingButton
+						variant="outline"
+						onclick={() => void exportQuestionsCSV()}
+						loading={exportBusy}
+						loadingLabel="Export..."
+						disabled={exportBusy || totalItems === 0}
+						class="justify-start"
+					>
+						{exportButtonLabel}
+					</LoadingButton>
+				</div>
+			</div>
 		</div>
-		<div class="flex shrink-0 flex-wrap gap-2">
-			<LoadingButton
-				variant="outline"
-				onclick={() => void exportQuestionsCSV()}
-				loading={exportBusy}
-				loadingLabel="Export..."
-				disabled={exportBusy || totalItems === 0}
-			>
-				{exportButtonLabel}
-			</LoadingButton>
-			<Button variant="outline" onclick={() => setModuleMode('import')}>
-				Import CSV
-			</Button>
-			<Button onclick={openCreate} class="bg-green-700 hover:bg-green-800 text-white">
-				+ Buat Soal
-			</Button>
-		</div>
-	</div>
+	</section>
 
-	<div class="grid gap-2 md:grid-cols-5">
+	<section class="rounded-xl border border-green-200 bg-white p-3 shadow-sm">
+		<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+			<div class="min-w-0">
+				<p class="text-xs font-bold uppercase tracking-wider text-green-700">Konteks Kerja</p>
+				<h2 class="mt-1 text-base font-semibold text-slate-900">{selectedEventTitle}</h2>
+				<p class="mt-1 text-xs text-slate-500">Pilih konteks sebelum bekerja agar daftar, soal baru, upload, dan export tidak tercampur antar kegiatan.</p>
+			</div>
+			<div class="grid w-full gap-2 md:grid-cols-3 lg:w-auto lg:min-w-[46rem]">
+				<div>
+					<label for="event-context" class="mb-1 block text-xs font-medium text-slate-600">Kegiatan CBT</label>
+					<select
+						id="event-context"
+						value={selectedEventId}
+						onchange={(event) => setSelectedEvent((event.currentTarget as HTMLSelectElement).value)}
+						class="h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+					>
+						<option value="">Pilih kegiatan CBT...</option>
+						{#each events as event (event.id)}
+							<option value={event.id}>{event.title}{event.status ? ` · ${event.status}` : ''}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label for="subject-context" class="mb-1 block text-xs font-medium text-slate-600">Mapel</label>
+					<select
+						id="subject-context"
+						bind:value={filterSubject}
+						onchange={(event) => setFilterSubject((event.currentTarget as HTMLSelectElement).value)}
+						class="h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+					>
+						<option value="">Semua Mapel</option>
+						{#each subjects as s (s.id)}
+							<option value={s.id}>{s.name}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label for="role-context" class="mb-1 block text-xs font-medium text-slate-600">Peran saya</label>
+					<div id="role-context" class="flex h-9 items-center rounded-md border border-green-100 bg-green-50 px-2.5 text-sm font-semibold text-green-900">
+						{roleLabel}
+					</div>
+				</div>
+			</div>
+		</div>
+		{#if !selectedEventId}
+			<div class="mt-3 rounded-lg border border-dashed border-green-200 bg-green-50 px-3 py-3 text-sm text-green-950">
+				<p class="font-semibold">Mulai dari memilih kegiatan CBT.</p>
+				<p class="mt-1 text-xs leading-5 text-green-800">Daftar soal tetap bisa dibuka sebagai bank umum, tetapi alur harian lebih aman jika kegiatan dipilih lebih dulu agar guru, reviewer, dan admin melihat konteks yang sama.</p>
+			</div>
+		{/if}
+	</section>
+
+	<section class="grid gap-3 md:grid-cols-5">
+		{#each statusCards as card (card.label)}
+			<div class="rounded-xl border p-4 shadow-sm {card.tone === 'red'
+				? 'border-red-200 bg-red-50'
+				: card.tone === 'amber'
+					? 'border-amber-200 bg-amber-50'
+					: card.tone === 'green'
+						? 'border-green-200 bg-green-50'
+						: card.tone === 'emerald'
+							? 'border-emerald-200 bg-emerald-50'
+							: 'border-slate-200 bg-white'}">
+				<p class="text-xs font-semibold uppercase tracking-wider text-slate-500">{card.label}</p>
+				<p class="mt-2 text-2xl font-bold text-slate-900">{card.value}</p>
+				<p class="mt-1 text-[11px] text-slate-500">{card.helper}</p>
+			</div>
+		{/each}
+	</section>
+
+	{#if selectedEventId}
+		<section class="rounded-xl border border-green-200 bg-white p-4 shadow-sm">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+				<div>
+					<p class="text-xs font-bold uppercase tracking-wider text-green-700">Kesiapan Target Bank Soal</p>
+					<h2 class="mt-1 text-base font-semibold text-slate-900">{selectedEventTitle}</h2>
+					<p class="mt-1 text-xs text-slate-500">Target dihitung dari soal terbit per mapel. Soal draft/review tetap terlihat sebagai progres kerja.</p>
+				</div>
+				<div class="grid gap-2 text-center sm:grid-cols-3 lg:min-w-[24rem]">
+					<div class="rounded-lg border border-green-100 bg-green-50 px-3 py-2">
+						<p class="text-[10px] font-semibold uppercase text-green-700">Target Event</p>
+						<p class="text-xl font-bold text-green-950">{eventTargetTotal}</p>
+					</div>
+					<div class="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+						<p class="text-[10px] font-semibold uppercase text-emerald-700">Terbit</p>
+						<p class="text-xl font-bold text-emerald-950">{eventPublishedTotal}</p>
+					</div>
+					<div class="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
+						<p class="text-[10px] font-semibold uppercase text-amber-700">Kurang</p>
+						<p class="text-xl font-bold text-amber-950">{Math.max(0, eventTargetTotal - eventPublishedTotal)}</p>
+					</div>
+				</div>
+			</div>
+			<div class="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.42fr)]">
+				<div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+					{#each questionTargets as target (target.subject_id)}
+						<div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+							<div class="flex items-start justify-between gap-2">
+								<div>
+									<p class="text-sm font-semibold text-slate-900">{target.subject_name ?? target.subject_code ?? target.subject_id}</p>
+									<p class="text-[11px] text-slate-500">Target {target.target_questions} · kurang {Math.max(0, target.target_questions - target.published)}</p>
+								</div>
+								<span class="rounded bg-white px-2 py-1 text-xs font-bold text-green-700">{target.published}/{target.target_questions}</span>
+							</div>
+							<div class="mt-2 h-2 overflow-hidden rounded-full bg-white">
+								<div class="h-2 rounded-full bg-green-600" style="width: {target.target_questions > 0 ? Math.min(100, Math.round((target.published / target.target_questions) * 100)) : 0}%"></div>
+							</div>
+							<p class="mt-2 text-[11px] text-slate-500">Draft {target.draft} · Review {target.review} · Revisi {target.rejected} · Disetujui {target.approved}</p>
+						</div>
+					{:else}
+						<div class="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-sm text-slate-400">Belum ada target soal untuk kegiatan ini.</div>
+					{/each}
+				</div>
+				<div class="rounded-lg border border-green-100 bg-green-50 p-3">
+					<p class="text-xs font-bold uppercase tracking-wider text-green-800">Atur Target Mapel</p>
+					<p class="mt-1 text-xs text-green-900">Pilih mapel di filter konteks, lalu isi jumlah target soal terbit.</p>
+					<div class="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+						<Input id="target-questions" type="number" min="0" bind:value={targetQuestionsInput} disabled={!filterSubject || !canReviewWorkflow} class="h-9 bg-white" />
+						<LoadingButton onclick={() => void saveQuestionTarget()} loading={targetBusy} loadingLabel="Simpan..." disabled={targetBusy || !filterSubject || !canReviewWorkflow} class="bg-green-700 text-white hover:bg-green-800 disabled:opacity-50">Simpan Target</LoadingButton>
+					</div>
+					{#if selectedTarget}
+						<p class="mt-2 text-xs text-green-900">Mapel terpilih kurang <span class="font-bold">{selectedTargetShortage}</span> soal terbit dari target {selectedTarget.target_questions}.</p>
+					{:else if filterSubject}
+						<p class="mt-2 text-xs text-green-900">Mapel ini belum punya target. Simpan untuk membuat target baru.</p>
+					{:else}
+						<p class="mt-2 text-xs text-green-900">Pilih mapel spesifik untuk melihat shortage dan mengatur target.</p>
+					{/if}
+				</div>
+			</div>
+		</section>
+	{/if}
+
+	<section class="grid gap-3 lg:grid-cols-3">
+		<div class="rounded-xl border border-green-200 bg-white p-4 shadow-sm">
+			<p class="text-xs font-bold uppercase tracking-wider text-green-700">Pembuat Soal / Guru</p>
+			<div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+				<Button onclick={openCreate} class="justify-start bg-green-700 text-white hover:bg-green-800">Buat Soal</Button>
+				<Button variant="outline" onclick={openImport} class="justify-start">Upload CSV</Button>
+				<Button variant="outline" onclick={() => setModuleMode('catalog')} class="justify-start">Soal Saya</Button>
+				<Button variant="outline" onclick={() => setRevisionSourceFilter('')} class="justify-start border-red-200 text-red-700 hover:bg-red-50">Perlu Revisi</Button>
+			</div>
+		</div>
+		<div class="rounded-xl border border-amber-200 bg-white p-4 shadow-sm {canUseReviewerTools ? '' : 'opacity-70'}">
+			<p class="text-xs font-bold uppercase tracking-wider text-amber-700">Reviewer</p>
+			<p class="mt-1 text-xs text-slate-500">Periksa satu soal, pilih setujui atau minta revisi.</p>
+			<div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+				<Button variant="outline" onclick={showPendingReviews} class="justify-start border-amber-200 text-amber-800 hover:bg-amber-50">Antrean Review</Button>
+				<a href={resolve(reviewFocusHref())} class="inline-flex justify-start rounded-md border border-amber-200 px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-50">Ruang Review Fokus</a>
+			</div>
+		</div>
+		<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm {isAdminRole ? '' : 'opacity-70'}">
+			<p class="text-xs font-bold uppercase tracking-wider text-slate-700">Admin</p>
+			<p class="mt-1 text-xs text-slate-500">Atur penugasan, terbitkan soal yang disetujui, dan export data.</p>
+			<div class="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+				<a href={resolve(membersHref())} class="inline-flex justify-start rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Atur Penugasan</a>
+				<Button variant="outline" onclick={showApprovedQuestions} class="justify-start text-green-800">Publish Soal</Button>
+				<LoadingButton variant="outline" onclick={() => void exportQuestionsCSV()} loading={exportBusy} loadingLabel="Export..." disabled={exportBusy || totalItems === 0} class="justify-start">Export</LoadingButton>
+			</div>
+		</div>
+	</section>
+
+	<div class="grid gap-2 md:grid-cols-4">
 		{#each moduleModes as mode (mode.id)}
 			<button
 				type="button"
-				onclick={() => setModuleMode(mode.id)}
+				onclick={() => (mode.id === 'composer' ? openCreate() : mode.id === 'import' ? openImport() : setModuleMode(mode.id))}
 				class="rounded-lg border px-3 py-3 text-left transition-colors {activeMode === mode.id
 					? 'border-green-500 bg-green-50 text-green-900'
 					: 'border-slate-200 bg-white text-slate-600 hover:border-green-200 hover:bg-green-50/40'}"
@@ -1891,6 +2533,29 @@
 			</button>
 		{/each}
 	</div>
+
+	<section class="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-950">
+		<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+			<p>
+				<span class="font-semibold">Perangkat bersama:</span> komposer menyimpan draft lokal di browser ini. Logout akan menghapus draft CBT lokal; gunakan tombol hapus jika selesai memakai komputer bersama.
+			</p>
+			<Button variant="outline" class="border-amber-300 bg-white text-amber-900 hover:bg-amber-100" onclick={clearAllLocalDrafts}>
+				Hapus Draft Lokal
+			</Button>
+		</div>
+	</section>
+
+	{#if selectedEventId && canReviewWorkflow}
+		<section class="rounded-lg border border-green-200 bg-green-50 p-3 shadow-sm">
+			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+				<div>
+					<h2 class="text-sm font-bold uppercase tracking-wider text-green-900">Penugasan dipindah ke halaman kegiatan</h2>
+					<p class="mt-1 text-xs text-green-800">Kelola panitia, pembuat soal, reviewer, proktor, pengawas, dan korektor dari halaman khusus agar Bank Soal tetap fokus pada komposer dan review.</p>
+				</div>
+				<a href={resolve(membersHref())} class="inline-flex rounded-md border border-green-300 bg-white px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kelola Penugasan</a>
+			</div>
+		</section>
+	{/if}
 
 	{#if revisionTotal > 0 || revisionSourceFilter}
 		<section class="rounded-lg border border-red-200 bg-red-50/60 p-3">
@@ -1981,7 +2646,7 @@
 					<p class="mt-1 text-xs text-amber-900">Meja kerja reviewer untuk memeriksa soal yang diajukan guru, menyetujui, atau mengembalikan dengan catatan revisi.</p>
 				</div>
 				<Button variant="outline" size="sm" class="shrink-0 border-amber-200 bg-white text-amber-900 hover:bg-amber-100" onclick={showPendingReviews}>
-					Lihat Semua Ditinjau
+					Lihat Semua Menunggu Review
 				</Button>
 			</div>
 			{#if reviewQueue.length > 0}
@@ -2098,10 +2763,10 @@
 		<section class="rounded-lg border border-green-200 bg-green-50 p-4">
 			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 				<div>
-					<h2 class="text-sm font-bold uppercase tracking-wider text-green-900">Komposer Soal PG & Essay</h2>
-					<p class="mt-1 text-sm text-green-800">Buat draft pilihan ganda atau essay dengan mode Pemula dan Advance. Soal yang sudah review/publish atau dipakai paket wajib direvisi lewat duplikasi.</p>
+					<h2 class="text-sm font-bold uppercase tracking-wider text-green-900">Buat Soal</h2>
+					<p class="mt-1 text-sm text-green-800">Tulis satu soal, simpan draft, lalu ajukan review saat sudah lengkap. Soal yang sudah review/publish atau dipakai paket wajib direvisi lewat duplikasi.</p>
 				</div>
-				<Button onclick={openCreate} class="bg-green-700 text-white hover:bg-green-800">Buka Komposer</Button>
+				<Button onclick={openCreate} class="bg-green-700 text-white hover:bg-green-800">Mulai Buat Soal</Button>
 			</div>
 		</section>
 	{:else if activeMode === 'review'}
@@ -2138,8 +2803,8 @@
 		<section class="rounded-lg border border-slate-200 bg-white p-4">
 			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 				<div>
-					<h2 class="text-sm font-bold uppercase tracking-wider text-slate-800">Import CSV Bank Soal</h2>
-					<p class="mt-1 text-sm text-slate-500">Mendukung PG lama serta kolom tipe untuk PG Kompleks, Benar/Salah, Setuju/Tidak Setuju, Isian, Essay, dan Menjodohkan.</p>
+					<h2 class="text-sm font-bold uppercase tracking-wider text-slate-800">Upload CSV</h2>
+					<p class="mt-1 text-sm text-slate-500">Upload banyak soal dari template CSV. Hasilnya tetap draft agar bisa diperiksa sebelum review.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<LoadingButton
@@ -2148,58 +2813,85 @@
 						loading={templateBusy}
 						loadingLabel="Mengunduh..."
 					>
-						Template CSV
+						Download Template
 					</LoadingButton>
-					<Button variant="outline" onclick={openImport}>Pilih CSV</Button>
+					<Button variant="outline" onclick={openImport}>Upload CSV</Button>
 				</div>
 			</div>
 		</section>
 	{/if}
 
-	<!-- Filter bar -->
-	<div class="flex flex-wrap gap-2">
-		<Input
-			placeholder="Cari soal..."
-			value={search}
-			oninput={onSearchInput}
-			class="w-48 text-sm h-8"
-		/>
-		<select
-			bind:value={filterSubject}
-			onchange={() => load(1)}
-			class="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-		>
-			<option value="">Semua Mapel</option>
-			{#each subjects as s (s.id)}
-				<option value={s.id}>{s.name}</option>
-			{/each}
-		</select>
-		<select
-			bind:value={filterWorkflow}
-			onchange={onWorkflowFilterChange}
-			class="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-		>
-			<option value="">Semua Status</option>
-			<option value="draft">Draft</option>
-			<option value="review">Ditinjau</option>
-			<option value="approved">Disetujui</option>
-			<option value="rejected">Revisi</option>
-		</select>
-		{#if totalItems > 0}
-			<span class="flex items-center text-xs text-slate-400">{totalItems} soal</span>
+	<section class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+		<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+			<div>
+				<h2 class="text-sm font-semibold text-slate-800">Daftar Soal</h2>
+				<p class="mt-0.5 text-xs text-slate-500">Bagian ini adalah daftar teknis lama: filter, tabel, dan aksi detail tetap tersedia sebagai alat lanjutan.</p>
+			</div>
+			{#if selectedEventId}
+				<Button variant="outline" class="h-8 text-xs" onclick={() => setSelectedEvent('')}>Lepas Konteks Kegiatan</Button>
+			{/if}
+		</div>
+		<div class="mt-3 flex flex-wrap gap-2">
+			<Input
+				placeholder="Cari soal..."
+				value={search}
+				oninput={onSearchInput}
+				class="h-8 w-48 text-sm"
+			/>
+			<select
+				bind:value={filterSubject}
+				onchange={(event) => setFilterSubject((event.currentTarget as HTMLSelectElement).value)}
+				class="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+			>
+				<option value="">Semua Mapel</option>
+				{#each subjects as s (s.id)}
+					<option value={s.id}>{s.name}</option>
+				{/each}
+			</select>
+			<select
+				bind:value={filterWorkflow}
+				onchange={onWorkflowFilterChange}
+				class="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+			>
+				<option value="">Semua Status</option>
+				<option value="draft">Draft</option>
+				<option value="review">Menunggu Review</option>
+				<option value="approved">Disetujui</option>
+				<option value="rejected">Perlu Revisi</option>
+			</select>
+			{#if totalItems > 0}
+				<span class="flex items-center text-xs text-slate-400">{totalItems} soal</span>
+			{/if}
+		</div>
+		{#if selectedQuestionIds.length > 0}
+			<div class="mt-3 rounded-lg border border-green-200 bg-green-50 p-3">
+				<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+					<div>
+						<p class="text-sm font-semibold text-green-950">{selectedQuestionIds.length} soal dipilih</p>
+						<p class="text-xs text-green-800">Eligible review: {selectedReviewEligibleCount}; eligible publish: {selectedPublishEligibleCount}. Aksi yang tidak memenuhi syarat otomatis dilewati.</p>
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<Input placeholder="Catatan bulk reject/approve..." bind:value={bulkNotes} class="h-8 min-w-56 bg-white text-xs" />
+						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('approve')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-white text-green-800">Approve</LoadingButton>
+						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('reject')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-white text-red-700">Reject</LoadingButton>
+						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('publish')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedPublishEligibleCount === 0} class="h-8 bg-white text-green-800">Publish</LoadingButton>
+						<Button variant="outline" size="sm" class="h-8 bg-white" onclick={clearSelection}>Bersihkan</Button>
+					</div>
+				</div>
+			</div>
 		{/if}
-	</div>
+	</section>
 
 	<!-- Table -->
 	<div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
 		<Table.Root>
 			<Table.Header>
 				<Table.Row class="bg-slate-50 text-xs">
-					<Table.Head class="w-10 text-slate-500">#</Table.Head>
+					<Table.Head class="w-12 text-slate-500">Pilih</Table.Head>
 					<Table.Head class="text-slate-500">Isi Soal</Table.Head>
 					<Table.Head class="w-32 text-slate-500">Mapel</Table.Head>
 					<Table.Head class="w-28 hidden sm:table-cell text-slate-500">Status</Table.Head>
-					<Table.Head class="w-16 text-slate-500">Kunci</Table.Head>
+					<Table.Head class="w-16 text-slate-500">Tipe</Table.Head>
 					<Table.Head class="w-36 text-right text-slate-500">Aksi</Table.Head>
 				</Table.Row>
 			</Table.Header>
@@ -2247,9 +2939,16 @@
 									class="hover:bg-slate-50 cursor-pointer"
 									onclick={() => (canDecideReview(q) ? openReviewDecision(q, 'approve') : openQuestion(q))}
 								>
-									<Table.Cell class="text-xs text-slate-400">
-										{(overview.page - 1) * PAGE_SIZE + i + 1}
-									</Table.Cell>
+								<Table.Cell class="text-xs text-slate-400">
+									<input
+										type="checkbox"
+										checked={selectedQuestionIds.includes(q.id)}
+										aria-label={`Pilih soal ${(overview.page - 1) * PAGE_SIZE + i + 1}`}
+										onclick={(event) => event.stopPropagation()}
+										onchange={() => toggleQuestionSelection(q.id)}
+										class="rounded accent-green-700"
+									/>
+								</Table.Cell>
 									<Table.Cell class="text-sm text-slate-700 max-w-xs">
 										<div class="truncate">{stemPreview(q)}</div>
 										{#if q.author_username}
@@ -2295,7 +2994,7 @@
 											}}
 											class="rounded px-2 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-100"
 										>
-											{isQuickEditable(q) ? 'Edit' : 'Editor'}
+										{isQuickEditable(q) ? 'Edit' : 'Lihat/Terkunci'}
 										</button>
 										{#if q.workflow_status === 'rejected'}
 											<button
@@ -2371,6 +3070,7 @@
 				<Button
 					variant="outline"
 					class="h-7 w-7 p-0 text-xs"
+					aria-label="Halaman sebelumnya"
 					disabled={currentPage <= 1}
 					onclick={() => load(currentPage - 1)}
 				>
@@ -2380,6 +3080,7 @@
 				<Button
 					variant="outline"
 					class="h-7 w-7 p-0 text-xs"
+					aria-label="Halaman berikutnya"
 					disabled={currentPage >= pageCount}
 					onclick={() => load(currentPage + 1)}
 				>
@@ -2394,8 +3095,30 @@
 	<Dialog.Content>
 		<div class="w-[min(92vw,34rem)] space-y-4 p-5">
 			<div>
-				<h2 class="text-base font-semibold text-slate-800">Import CSV Bank Soal</h2>
-				<p class="mt-1 text-xs text-slate-500">Hasil import disimpan sebagai draft. Kolom tipe boleh kosong untuk PG lama, atau diisi: pg_kompleks, benar_salah, setuju_tidak_setuju, isian, essay, menjodohkan.</p>
+				<p class="text-xs font-bold uppercase tracking-wider text-green-700">Upload CSV</p>
+				<h2 class="mt-1 text-base font-semibold text-slate-800">Masukkan banyak soal sekaligus</h2>
+				<p class="mt-1 text-xs text-slate-500">Hasil upload disimpan sebagai draft. Kolom tipe boleh kosong untuk PG lama, atau diisi: pg_kompleks, benar_salah, setuju_tidak_setuju, isian, essay, menjodohkan.</p>
+				<p class="mt-2 rounded-md border border-green-200 bg-green-50 px-2 py-1.5 text-xs text-green-900">Konteks kegiatan: <span class="font-semibold">{selectedImportContext}</span></p>
+			</div>
+			<div class="grid gap-2 text-xs sm:grid-cols-4">
+				<div class="rounded-md border border-green-200 bg-green-50 p-2 text-green-900">
+					<p class="font-semibold">1. Download Template</p>
+					<LoadingButton variant="outline" size="sm" onclick={() => void downloadQuestionsTemplateCSV()} loading={templateBusy} loadingLabel="Mengunduh..." class="mt-2 h-7 bg-white text-[11px]">
+						Template
+					</LoadingButton>
+				</div>
+				<div class="rounded-md border border-slate-200 bg-slate-50 p-2 text-slate-700">
+					<p class="font-semibold">2. Pilih Kegiatan/Mapel</p>
+					<p class="mt-1 text-[11px]">Kegiatan mengikuti pilihan halaman, mapel dipilih di bawah.</p>
+				</div>
+				<div class="rounded-md border border-slate-200 bg-slate-50 p-2 text-slate-700">
+					<p class="font-semibold">3. Upload File</p>
+					<p class="mt-1 text-[11px]">Gunakan CSV UTF-8 agar huruf dan simbol aman.</p>
+				</div>
+				<div class="rounded-md border border-slate-200 bg-slate-50 p-2 text-slate-700">
+					<p class="font-semibold">4. Lihat Hasil Import</p>
+					<p class="mt-1 text-[11px]">Jumlah masuk, dilewati, dan error muncul setelah upload.</p>
+				</div>
 			</div>
 			<div class="space-y-3">
 				<div>
@@ -2430,8 +3153,8 @@
 				<div class="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
 					<div class="grid grid-cols-3 gap-2 text-center">
 						<div>
-							<div class="text-lg font-bold">{importResult.imported}</div>
-							<div class="text-[10px] uppercase text-green-700">Masuk</div>
+							<div class="text-lg font-bold">{importDryRunDone ? (importResult.would_import ?? importResult.valid ?? 0) : importResult.imported}</div>
+							<div class="text-[10px] uppercase text-green-700">{importDryRunDone ? 'Akan Masuk' : 'Masuk'}</div>
 						</div>
 						<div>
 							<div class="text-lg font-bold">{importResult.skipped}</div>
@@ -2442,12 +3165,22 @@
 							<div class="text-[10px] uppercase text-green-700">Baris</div>
 						</div>
 					</div>
+					{#if importDryRunDone}
+						<p class="mt-3 border-t border-green-200 pt-2 text-xs font-semibold text-green-900">Preview dry-run selesai. Periksa error dan kode duplikat sebelum menekan Konfirmasi Import.</p>
+					{/if}
 					{#if importResult.errors.length > 0}
+						<p class="mt-3 border-t border-green-200 pt-2 text-xs font-semibold text-amber-900">Error import ditampilkan agar kolom wajib, format tipe, dan encoding bisa diperbaiki sebelum upload ulang.</p>
 						<ul class="mt-3 space-y-1 border-t border-green-200 pt-2 text-xs text-amber-800">
 							{#each importResult.errors.slice(0, 6) as err (`legacy-import-error-${err}`)}
 								<li>{err}</li>
 							{/each}
 						</ul>
+					{/if}
+					{#if importResult.duplicate_codes.length > 0}
+						<div class="mt-3 border-t border-green-200 pt-2 text-xs text-amber-900">
+							<p class="font-semibold">Kode duplikat dilewati:</p>
+							<p class="mt-1 break-words font-mono text-[11px]">{importResult.duplicate_codes.slice(0, 24).join(', ')}{importResult.duplicate_codes.length > 24 ? `, +${importResult.duplicate_codes.length - 24} lagi` : ''}</p>
+						</div>
 					{/if}
 				</div>
 			{/if}
@@ -2456,13 +3189,23 @@
 					Tutup
 				</Button>
 				<LoadingButton
-					onclick={() => void importLegacyCSV()}
+					onclick={() => void importLegacyCSV(true)}
+					loading={importBusy}
+					loadingLabel="Preview..."
+					disabled={importBusy || !importSubjectId || !importFile}
+					variant="outline"
+					class="disabled:opacity-50"
+				>
+					Preview Dry-run
+				</LoadingButton>
+				<LoadingButton
+					onclick={() => void importLegacyCSV(false)}
 					loading={importBusy}
 					loadingLabel="Import..."
-					disabled={importBusy || !importSubjectId || !importFile}
+					disabled={importBusy || !importSubjectId || !importFile || !importDryRunDone}
 					class="bg-green-700 text-white hover:bg-green-800 disabled:opacity-50"
 				>
-					Import
+					Konfirmasi Import
 				</LoadingButton>
 			</div>
 		</div>
@@ -2473,14 +3216,28 @@
 	<Dialog.Content>
 		<div class="w-[min(94vw,42rem)] space-y-4 p-5">
 			<div>
-				<p class="text-xs font-bold uppercase tracking-wider text-green-700">Review Soal CBT</p>
+				<p class="text-xs font-bold uppercase tracking-wider text-green-700">Periksa Satu Soal</p>
 				<h2 class="mt-1 text-base font-semibold text-slate-800">
-					{reviewDecision === 'approve' ? 'Setujui Soal' : 'Minta Revisi Soal'}
+					{reviewDecision === 'approve' ? 'Pilihan saat ini: Setujui Soal' : 'Pilihan saat ini: Minta Revisi Soal'}
 				</h2>
-				<p class="mt-1 text-xs text-slate-500">Periksa isi, opsi, kunci/rubrik, dan catatan sebelum menyimpan keputusan.</p>
+				<p class="mt-1 text-xs text-slate-500">Baca satu soal ini sampai lengkap, lalu pilih salah satu keputusan yang jelas untuk guru dan admin.</p>
 			</div>
 
 			{#if reviewDecisionQuestion}
+				<div class="grid gap-2 text-xs sm:grid-cols-3">
+					<div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+						<p class="font-semibold">Status sekarang</p>
+						<p class="mt-0.5">{WORKFLOW_LABEL[reviewDecisionQuestion.workflow_status] ?? reviewDecisionQuestion.workflow_status}</p>
+					</div>
+					<div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700">
+						<p class="font-semibold">Aksi aman</p>
+						<p class="mt-0.5">Setujui atau kembalikan revisi.</p>
+					</div>
+					<div class="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-green-900">
+						<p class="font-semibold">Setelah disetujui</p>
+						<p class="mt-0.5">Admin dapat menerbitkan ke paket ujian.</p>
+					</div>
+				</div>
 				<div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
 					<div class="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
 						<span class="rounded bg-white px-1.5 py-0.5 font-semibold text-green-700">{questionTypeLabel(reviewDecisionQuestion.question_type)}</span>
@@ -2503,14 +3260,15 @@
 							<div class="space-y-1.5">
 								<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Opsi / Pasangan</p>
 								{#each reviewDecisionQuestion.options as opt, i (`review-option-${reviewDecisionQuestion.id}-${i}`)}
+									{@const secondary = optionSecondaryContent(opt)}
 									<div class="rounded border border-slate-100 bg-slate-50 px-2 py-1.5">
 										<div class="flex gap-2">
 											<span class="mt-0.5 text-xs font-bold text-green-700">{opt.label || opt.match_label || i + 1}</span>
 											<div class="min-w-0 flex-1 text-xs text-slate-700">
-												<RichContent html={opt.html || opt.text || opt.latex || opt.match_html || opt.match_text || '-'} class="latex-preview" />
-												{#if opt.match_html || opt.match_text}
+												<RichContent html={optionPrimaryContent(opt)} class="latex-preview" />
+												{#if secondary}
 													<div class="mt-1 border-t border-slate-200 pt-1 text-slate-500">
-														<RichContent html={opt.match_html || opt.match_text || '-'} class="latex-preview" />
+														<RichContent html={secondary} class="latex-preview" />
 													</div>
 												{/if}
 											</div>
@@ -2519,15 +3277,27 @@
 								{/each}
 							</div>
 						{/if}
-						<div class="rounded border border-green-100 bg-green-50 px-2 py-1.5 text-xs text-green-900">
-							<span class="font-semibold">Kunci/Rubrik:</span>
-							{reviewDecisionQuestion.question_type === 'essay' ? 'Periksa rubrik uraian pada isi soal.' : 'Periksa kunci dari detail soal sebelum keputusan final.'}
+						<div class="space-y-2 rounded border border-green-100 bg-green-50 px-2 py-1.5 text-xs text-green-900">
+							<p><span class="font-semibold">Kunci/Rubrik:</span> {answerKeyLabelForQuestion(reviewDecisionQuestion)}</p>
+							{#if reviewDecisionQuestion.rubric_html}
+								<div class="rounded border border-green-100 bg-white p-2">
+									<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-green-700">Rubrik / Pedoman Koreksi</p>
+									<RichContent html={reviewDecisionQuestion.rubric_html} class="prose prose-sm max-w-none text-green-950 latex-preview" />
+								</div>
+							{/if}
+							{#if reviewDecisionQuestion.explanation_html}
+								<div class="rounded border border-slate-100 bg-white p-2">
+									<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Pembahasan / Catatan Internal</p>
+									<RichContent html={reviewDecisionQuestion.explanation_html} class="prose prose-sm max-w-none text-slate-700 latex-preview" />
+								</div>
+							{/if}
 						</div>
 						{#if reviewDecisionQuestion.review_notes}
 							<div class="rounded border border-amber-100 bg-amber-50 px-2 py-1.5 text-xs leading-relaxed text-amber-900">
 								<span class="font-semibold">Catatan sebelumnya:</span> {revisionReason(reviewDecisionQuestion)}
 							</div>
 						{/if}
+						{@render questionTimelinePanel()}
 					</div>
 				</div>
 			{/if}
@@ -2584,6 +3354,109 @@
 		</div>
 	</Dialog.Content>
 </Dialog.Root>
+
+<Dialog.Root bind:open={questionPreviewOpen}>
+	<Dialog.Content>
+		<div class="w-[min(94vw,42rem)] space-y-4 p-5">
+			<div class="flex items-start justify-between gap-3">
+				<div>
+					<p class="text-xs font-bold uppercase tracking-wider text-slate-500">Lihat Soal Terkunci</p>
+					<h2 class="mt-1 text-base font-semibold text-slate-800">Detail Read-only</h2>
+					<p class="mt-1 text-xs text-slate-500">Soal tidak bisa diedit langsung karena sudah dipakai, masuk review/publikasi, atau tipe belum kompatibel dengan editor cepat.</p>
+				</div>
+				{#if questionPreviewLoading}<span class="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">Memuat detail...</span>{/if}
+			</div>
+
+			{#if questionPreview}
+				<div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+					<div class="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+						<span class="rounded bg-white px-1.5 py-0.5 font-semibold text-green-700">{questionTypeLabel(questionPreview.question_type)}</span>
+						<span>{questionPreview.subject_name || questionPreview.subject_code || 'Mapel belum ada'}</span>
+						<span>{WORKFLOW_LABEL[questionPreview.workflow_status] ?? questionPreview.workflow_status}</span>
+						<span>{questionUsageText(questionPreview)}</span>
+					</div>
+					<div class="max-h-80 space-y-3 overflow-auto rounded-md border border-slate-200 bg-white p-3 text-sm">
+						{#if questionPreview.stimulus_html}
+							<div class="rounded border border-slate-100 bg-slate-50 p-2">
+								<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Stimulus</p>
+								<RichContent html={questionPreview.stimulus_html} class="prose prose-sm max-w-none text-slate-700 latex-preview" />
+							</div>
+						{/if}
+						<div>
+							<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pertanyaan</p>
+							<RichContent html={questionPreview.stem_html || questionPreview.question_text || 'Isi soal belum tersedia'} class="prose prose-sm max-w-none text-slate-800 latex-preview" />
+						</div>
+						{#if questionPreview.options.length > 0}
+							<div class="space-y-1.5">
+								<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Opsi / Pasangan</p>
+							{#each questionPreview.options as opt, i (`preview-option-${questionPreview.id}-${i}`)}
+								{@const secondary = optionSecondaryContent(opt)}
+								<div class="rounded border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
+									<span class="font-bold text-green-700">{opt.label || opt.match_label || i + 1}.</span>
+									<RichContent html={optionPrimaryContent(opt)} class="mt-1 latex-preview" />
+									{#if secondary}
+										<div class="mt-1 border-t border-slate-200 pt-1 text-slate-500">
+											<RichContent html={secondary} class="latex-preview" />
+										</div>
+									{/if}
+								</div>
+								{/each}
+							</div>
+						{/if}
+						<div class="rounded border border-green-100 bg-green-50 px-2 py-1.5 text-xs text-green-900">
+							<span class="font-semibold">Kunci/Rubrik:</span> {answerKeyLabelForQuestion(questionPreview)}
+						</div>
+						{#if questionPreview.rubric_html}
+							<div class="rounded border border-amber-100 bg-amber-50 p-2 text-xs text-amber-950">
+								<p class="mb-1 font-semibold">Rubrik / Pedoman Koreksi</p>
+								<RichContent html={questionPreview.rubric_html} class="prose prose-sm max-w-none latex-preview" />
+							</div>
+						{/if}
+						{#if questionPreview.explanation_html}
+							<div class="rounded border border-slate-100 bg-slate-50 p-2 text-xs text-slate-700">
+								<p class="mb-1 font-semibold">Pembahasan</p>
+								<RichContent html={questionPreview.explanation_html} class="prose prose-sm max-w-none latex-preview" />
+							</div>
+						{/if}
+						{@render questionTimelinePanel()}
+					</div>
+				</div>
+			{/if}
+
+			<div class="flex justify-end gap-2 border-t border-slate-100 pt-4">
+				<Button variant="outline" onclick={closeQuestionPreview}>Tutup</Button>
+				{#if questionPreview}
+					<Button class="bg-green-700 text-white hover:bg-green-800" onclick={duplicatePreviewQuestion}>Duplikat untuk Revisi</Button>
+				{/if}
+			</div>
+		</div>
+	</Dialog.Content>
+</Dialog.Root>
+
+{#snippet questionTimelinePanel()}
+	<div class="rounded border border-slate-200 bg-white p-2 text-xs">
+		<div class="mb-2 flex items-center justify-between gap-2">
+			<p class="font-semibold uppercase tracking-wider text-slate-500">Timeline Soal</p>
+			{#if questionTimelineLoading}<span class="text-slate-400">Memuat...</span>{/if}
+		</div>
+		{#if questionTimeline.length > 0}
+			<div class="space-y-2">
+				{#each questionTimeline.slice(0, 8) as item, index (`timeline-${item.id ?? index}`)}
+					<div class="rounded border border-slate-100 bg-slate-50 px-2 py-1.5">
+						<div class="flex flex-wrap items-center gap-1.5">
+							<span class="font-semibold text-green-800">{item.action ?? item.status ?? 'Perubahan'}</span>
+							{#if item.actor_username}<span class="text-slate-500">oleh {item.actor_username}</span>{/if}
+							{#if item.created_at}<span class="text-slate-400">{new Date(item.created_at).toLocaleString('id-ID')}</span>{/if}
+						</div>
+						{#if item.notes}<p class="mt-1 text-slate-600">{item.notes}</p>{/if}
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<p class="text-slate-400">Timeline belum tersedia dari backend.</p>
+		{/if}
+	</div>
+{/snippet}
 
 {#snippet composerPreview()}
 	<div class="mb-4">
@@ -2800,10 +3673,27 @@
 			</div>
 
 			<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 md:p-6">
-				<section class="mb-4 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-					<div class="flex flex-wrap items-center gap-2">
+				<section class="mb-4 rounded-xl border border-green-200 bg-white p-3 shadow-sm">
+					<div class="grid gap-2 md:grid-cols-3">
+						<button type="button" onclick={() => (composerStep = 'info')} class="rounded-lg border px-3 py-2 text-left {composerStep === 'info' ? 'border-green-200 bg-green-50' : 'border-slate-200 bg-slate-50'}">
+							<p class="text-[10px] font-bold uppercase tracking-wider text-green-700">Langkah 1</p>
+							<p class="text-sm font-semibold text-green-950">Info Dasar</p>
+							<p class="mt-0.5 text-[11px] text-green-800">Mapel, tipe soal, tingkat, dan mode penulisan.</p>
+						</button>
+						<button type="button" onclick={() => (composerStep = 'content')} class="rounded-lg border px-3 py-2 text-left {composerStep === 'content' ? 'border-green-200 bg-green-50' : 'border-slate-200 bg-slate-50'}">
+							<p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Langkah 2</p>
+							<p class="text-sm font-semibold text-slate-900">Isi Soal</p>
+							<p class="mt-0.5 text-[11px] text-slate-500">Pertanyaan, opsi/pasangan/kunci, rubrik, dan pembahasan.</p>
+						</button>
+						<button type="button" onclick={() => (composerStep = 'preview')} class="rounded-lg border px-3 py-2 text-left {composerStep === 'preview' ? 'border-green-200 bg-green-50' : 'border-slate-200 bg-slate-50'}">
+							<p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Langkah 3</p>
+							<p class="text-sm font-semibold text-slate-900">Preview & Kirim</p>
+							<p class="mt-0.5 text-[11px] text-slate-500">Cek kesiapan, simpan draft, atau ajukan review.</p>
+						</button>
+					</div>
+					<div class="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
 						<div class="flex min-w-[11rem] items-center gap-2">
-							<span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Review</span>
+							<span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Kesiapan Kirim</span>
 							<div class="h-1.5 w-20 overflow-hidden rounded-full bg-slate-200">
 								<div
 									class="h-1.5 rounded-full transition-all duration-300 {readinessScore === 100
@@ -2825,28 +3715,34 @@
 						<span class="rounded-full bg-green-50 px-2 py-1 text-[10px] font-semibold text-green-700">
 							{draftStatusLabel()}
 						</span>
+						{#if selectedEventId}
+							<span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
+								Bank kegiatan: {selectedEventTitle}
+							</span>
+						{/if}
 						<div class="ml-auto flex flex-wrap items-center gap-1">
-							<button type="button" onclick={() => scrollComposerSection('composer-metadata')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Metadata</button>
+							<button type="button" onclick={() => (composerStep = 'info')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Info Dasar</button>
 							{#if isAdvanceMode}
-								<button type="button" onclick={() => scrollComposerSection('composer-advanced')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Advance</button>
+								<button type="button" onclick={() => (composerStep = 'info')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Advance</button>
 							{/if}
-							<button type="button" onclick={() => scrollComposerSection('composer-question')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Pertanyaan</button>
-							<button type="button" onclick={() => scrollComposerSection(isEssay ? 'composer-rubric' : isShortAnswer ? 'composer-answer' : isMatching ? 'composer-matching' : 'composer-options')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">{isEssay ? 'Rubrik' : isShortAnswer ? 'Kunci' : isMatching ? 'Pasangan' : 'Opsi'}</button>
+							<button type="button" onclick={() => (composerStep = 'content')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">Isi Soal</button>
+							<button type="button" onclick={() => (composerStep = 'content')} class="rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">{isEssay ? 'Rubrik' : isShortAnswer ? 'Kunci' : isMatching ? 'Pasangan' : 'Opsi'}</button>
 							<button
 								type="button"
-								onclick={() => (showInspector = !showInspector)}
+								onclick={() => (composerStep = 'preview')}
 								class="rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider {showInspector
 									? 'border-green-200 bg-green-50 text-green-800'
 									: 'border-slate-200 text-slate-600 hover:bg-slate-50'}"
 							>
-								{showInspector ? 'Tutup Inspector' : 'Inspector'}
+								Preview
 							</button>
 						</div>
 					</div>
 				</section>
 
 				<div class={`grid grid-cols-1 gap-5 ${showInspector || composerMobilePanel === 'preview' ? 'xl:grid-cols-[minmax(0,1.55fr)_minmax(18rem,0.5fr)]' : ''}`}>
-					<div class={`space-y-4 min-w-0 ${composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
+					<div class={`space-y-4 min-w-0 ${composerStep === 'preview' || composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
+						{#if composerStep === 'info'}
 						<section id="composer-metadata" class="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
 							<div class="mb-3 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
 								<span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-800">Bentuk Soal</span>
@@ -2924,12 +3820,10 @@
 								</div>
 								<div>
 									<label for="f-weight" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-										Bobot Paket
+										Bobot lokal (panduan paket)
 									</label>
 									<Input id="f-weight" type="number" min="1" bind:value={fWeight} class="h-8 text-sm font-medium" />
-									{#if !readinessChecks.weight}
-										<p class="mt-1 text-[10px] font-semibold text-red-500">Minimal 1.</p>
-									{/if}
+									<p class="mt-1 text-[10px] text-slate-400">Tidak disimpan backend; hanya catatan saat menyusun paket.</p>
 								</div>
 								<label for="f-rtl" class="flex h-8 cursor-pointer items-center justify-between gap-2 rounded-md border border-dashed border-green-200 bg-green-50 px-2.5">
 									<span class="text-[10px] font-black uppercase tracking-wider text-green-800">Mode Arab / RTL</span>
@@ -3008,6 +3902,7 @@
 								/>
 							</section>
 						{/if}
+						{:else if composerStep === 'content'}
 
 						<section id="composer-question" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex flex-wrap items-center justify-between gap-2">
@@ -3279,9 +4174,10 @@
 								/>
 							</section>
 						{/if}
+						{/if}
 					</div>
 
-					{#if showInspector || composerMobilePanel === 'preview'}
+					{#if composerStep === 'preview' || showInspector || composerMobilePanel === 'preview'}
 					<aside class={`space-y-4 min-w-0 xl:sticky xl:top-0 xl:self-start ${composerMobilePanel === 'write' ? 'hidden lg:block' : 'block'}`}>
 						<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 							{@render composerPreview()}
@@ -3300,32 +4196,36 @@
 					<Button
 						variant="outline"
 						class="h-8 text-xs"
-						onclick={() => {
-							clearDraft();
-							closeComposer();
-						}}
+						onclick={() => void discardLocalDraftAndClose()}
 					>
-						Batalkan
+						Hapus Draft Lokal & Tutup
 					</Button>
-					<LoadingButton
-						onclick={() => void saveQuestion('draft')}
-						disabled={!canSaveDraft}
-						loading={composerAction === 'draft'}
-						loadingLabel="Menyimpan draft..."
-						variant="outline"
-						class="h-8 text-xs disabled:opacity-50"
-					>
-						Simpan Draft
-					</LoadingButton>
-					<LoadingButton
-						onclick={() => void saveQuestion('review')}
-						disabled={!canSubmitReview}
-						loading={composerAction === 'review'}
-						loadingLabel="Mengajukan..."
-						class="h-8 bg-green-700 text-xs text-white hover:bg-green-800 disabled:opacity-50"
-					>
-						Ajukan Review
-					</LoadingButton>
+					{#if composerStep !== 'info'}
+						<Button variant="outline" class="h-8 text-xs" onclick={() => (composerStep = composerStep === 'preview' ? 'content' : 'info')}>Kembali</Button>
+					{/if}
+					{#if composerStep !== 'preview'}
+						<Button class="h-8 bg-green-700 text-xs text-white hover:bg-green-800" onclick={() => (composerStep = composerStep === 'info' ? 'content' : 'preview')}>Lanjut</Button>
+					{:else}
+						<LoadingButton
+							onclick={() => void saveQuestion('draft')}
+							disabled={!canSaveDraft}
+							loading={composerAction === 'draft'}
+							loadingLabel="Menyimpan draft..."
+							variant="outline"
+							class="h-8 text-xs disabled:opacity-50"
+						>
+							Simpan Draft
+						</LoadingButton>
+						<LoadingButton
+							onclick={() => void saveQuestion('review')}
+							disabled={!canSubmitReview}
+							loading={composerAction === 'review'}
+							loadingLabel="Mengajukan..."
+							class="h-8 bg-green-700 text-xs text-white hover:bg-green-800 disabled:opacity-50"
+						>
+							Ajukan Review
+						</LoadingButton>
+					{/if}
 				</div>
 			</div>
 

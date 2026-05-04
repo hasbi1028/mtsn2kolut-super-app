@@ -58,6 +58,7 @@ func TestCbtPackageRejectsInvalidRequests(t *testing.T) {
 type fakeCbtPackageHandlerService struct {
 	listPackages  []db.ListCbtPackagesRow
 	listQuestions []db.ListCbtPackageQuestionsRow
+	listEventID   pgtype.UUID
 	listErr       error
 	createInput   service.CreateCbtPackageInput
 	createRow     db.CbtPackage
@@ -66,7 +67,8 @@ type fakeCbtPackageHandlerService struct {
 	deleteErr     error
 }
 
-func (f *fakeCbtPackageHandlerService) List(ctx context.Context) ([]db.ListCbtPackagesRow, []db.ListCbtPackageQuestionsRow, error) {
+func (f *fakeCbtPackageHandlerService) List(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackagesRow, []db.ListCbtPackageQuestionsRow, error) {
+	f.listEventID = eventID
 	if f.listErr != nil {
 		return nil, nil, f.listErr
 	}
@@ -88,6 +90,7 @@ func (f *fakeCbtPackageHandlerService) Delete(ctx context.Context, id pgtype.UUI
 
 func TestCbtPackageHandlersForwardValidRequests(t *testing.T) {
 	packageID := handlerTestUUID(131)
+	eventID := handlerTestUUID(130)
 	subjectID := handlerTestUUID(132)
 	firstQuestionID := handlerTestUUID(133)
 	secondQuestionID := handlerTestUUID(134)
@@ -104,13 +107,17 @@ func TestCbtPackageHandlersForwardValidRequests(t *testing.T) {
 	h := &CbtPackage{svc: svc, audit: audit}
 
 	rec := httptest.NewRecorder()
-	h.List(rec, adminRequest(http.MethodGet, "/cbt/packages", ""))
+	h.List(rec, adminRequest(http.MethodGet, "/cbt/packages?event_id="+eventID.String(), ""))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("List() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if svc.listEventID != eventID {
+		t.Fatalf("List() event_id = %v, want %v", svc.listEventID, eventID)
 	}
 
 	rec = httptest.NewRecorder()
 	body := `{
+		"event_id":"` + eventID.String() + `",
 		"subject_id":"` + subjectID.String() + `",
 		"title":"Paket 1",
 		"description":"Latihan",
@@ -123,7 +130,7 @@ func TestCbtPackageHandlersForwardValidRequests(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("Create() status = %d, want 201; body=%s", rec.Code, rec.Body.String())
 	}
-	if svc.createInput.SubjectID != subjectID || svc.createInput.Title != "Paket 1" || svc.createInput.DurationMinutes != 90 || !svc.createInput.RandomizeQuestions || !svc.createInput.IsActive {
+	if svc.createInput.EventID != eventID || svc.createInput.SubjectID != subjectID || svc.createInput.Title != "Paket 1" || svc.createInput.DurationMinutes != 90 || !svc.createInput.RandomizeQuestions || !svc.createInput.IsActive {
 		t.Fatalf("Create() input = %+v, want parsed package fields", svc.createInput)
 	}
 	if len(svc.createInput.QuestionIDs) != 2 || svc.createInput.QuestionIDs[0] != firstQuestionID || svc.createInput.QuestionIDs[1] != secondQuestionID {

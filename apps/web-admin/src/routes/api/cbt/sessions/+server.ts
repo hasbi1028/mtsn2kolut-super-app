@@ -2,9 +2,14 @@ import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { apiPath, handleRouteError, proxy, readRequestJson, requiredRouteParam } from '$lib/server/api';
 
+function queryPath(path: string, params: URLSearchParams) {
+	const query = params.toString();
+	return query ? `${path}?${query}` : path;
+}
+
 export const GET = async (event: RequestEvent) => {
 	try {
-		const data = await proxy(event).get('/api/cbt/sessions');
+		const data = await proxy(event).get(queryPath('/api/cbt/sessions', event.url.searchParams));
 		return json(data);
 	} catch (e) {
 		return handleRouteError(e, 'cbt/sessions GET');

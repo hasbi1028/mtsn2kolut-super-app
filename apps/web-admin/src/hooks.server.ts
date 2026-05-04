@@ -5,7 +5,7 @@ import { env } from '$env/dynamic/private';
 import { ApiError, AuthValidationUnavailableError, apiRefreshWithFetch, getVerifiedUserFromAccessToken } from '$lib/server/api';
 import type { TokenPair } from '$lib/server/api';
 import { hasRefreshToken, isAccessTokenValid, getUserFromToken } from '$lib/server/auth';
-import { hasAnyRole, isAdminOnlyPath, isKesiswaanPath, isPublicPath, isStaffOperationPath } from '$lib/server/route-access';
+import { hasAnyRole, isAdminOnlyPath, isGuruSafeCbtSupportReadPath, isKesiswaanPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath } from '$lib/server/route-access';
 
 const API_BASE = (env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 
@@ -161,7 +161,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		
 		if (!isAdmin) {
 			const isAdminPath = isAdminOnlyPath(event.url.pathname);
-			if (isAdminPath) {
+			if (isAdminPath && !isGuruSafeCbtSupportReadPath(event.url.pathname, event.request.method)) {
 				if (event.url.pathname.startsWith('/api/')) {
 					throw error(403, 'forbidden: admin role required');
 				}
@@ -180,12 +180,27 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 
 		if (isKesiswaanPath(event.url.pathname)) {
-			const allowed = isAdmin || hasAnyRole(event.locals.user, ['kesiswaan', 'guru']);
+			const allowed = isAdmin || hasAnyRole(event.locals.user, isReadMethod(event.request.method) ? ['kesiswaan', 'guru'] : ['kesiswaan']);
 			if (!allowed) {
 				if (event.url.pathname.startsWith('/api/')) {
 					throw error(403, 'forbidden: kesiswaan role required');
 				}
 				throw redirect(302, '/');
+			}
+		}
+
+		if (isStudentPagePath(event.url.pathname)) {
+			const allowed = isAdmin || hasAnyRole(event.locals.user, ['kesiswaan']);
+			if (!allowed) throw redirect(302, '/');
+		}
+
+		if (isStudentApiPath(event.url.pathname)) {
+			const allowedRoles = isReadMethod(event.request.method) ? ['kesiswaan', 'guru'] : ['kesiswaan'];
+			const allowed = isAdmin || hasAnyRole(event.locals.user, allowedRoles);
+			if (!allowed) {
+				throw error(403, isReadMethod(event.request.method)
+					? 'forbidden: student read role required'
+					: 'forbidden: student mutation role required');
 			}
 		}
 	}

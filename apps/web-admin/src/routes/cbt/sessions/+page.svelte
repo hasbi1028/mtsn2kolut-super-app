@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
+	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
@@ -23,6 +24,7 @@
 		allow_cross_grade: boolean; is_special_event: boolean;
 		title: string; scheduled_start: string; scheduled_end: string;
 		status: string; participant_count: number; created_at: string;
+		event_id?: string | null;
 		room_count: number; total_capacity: number;
 		assigned_participant_count: number; unassigned_participant_count: number;
 		missing_seat_count: number; rooms_without_proctor: number; proctor_assignment_count: number;
@@ -81,6 +83,7 @@
 		tone: NextSessionAction['tone'];
 	};
 	type SchoolClass = { id: string; name: string; code: string; level: string; };
+	type EventContext = { id: string; title: string; status: string; target_levels?: string[]; academic_year_name?: string; };
 	type SessionsOverview = {
 		sessions: ExamSession[];
 		packages: CbtPackage[];
@@ -124,6 +127,8 @@
 	let deleteBusyId = $state('');
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 	let sessionsRequestId = 0;
+	let eventContext = $state<EventContext | null>(null);
+	const eventId = page.url.searchParams.get('event_id') ?? '';
 
 	// Enroll modal
 	let enrollSession = $state<ExamSession | null>(null);
@@ -513,7 +518,7 @@
 	function nextSessionAction(session: ExamSession): NextSessionAction {
 		const packageIssues = packageQualityIssues(session.package_id);
 		if (packageIssues.length > 0) {
-			return { label: 'Rapikan Paket', href: resolve('/cbt/packages'), kind: 'link', tone: 'danger' };
+			return { label: 'Rapikan Paket', href: `${resolve('/cbt/packages')}${eventId ? `?event_id=${eventId}` : ''}`, kind: 'link', tone: 'danger' };
 		}
 		if (session.participant_count === 0) {
 			return { label: 'Daftarkan Peserta', kind: 'enroll', tone: 'warning' };
@@ -557,10 +562,25 @@
 		return issues;
 	}
 
+	async function fetchEventContext() {
+		if (!eventId) return null;
+		try {
+			return await fetch(clientApiPath`/api/cbt/events/${eventId}`).then((response) => readClientApiData<EventContext>(response, 'Gagal memuat konteks kegiatan'));
+		} catch {
+			return null;
+		}
+	}
+
 	async function fetchOverview(): Promise<SessionsOverview> {
+		const sessionParams = new URLSearchParams();
+		const packageParams = new URLSearchParams();
+		if (eventId) {
+			sessionParams.set('event_id', eventId);
+			packageParams.set('event_id', eventId);
+		}
 		const [nextSessions, packagePayload, academicPayload] = await Promise.all([
-			fetch('/api/cbt/sessions').then((response) => readClientApiData<ExamSession[]>(response, 'Gagal memuat data sesi')),
-			fetch('/api/cbt/packages').then((response) => readClientApiData<CbtPackagesPayload>(response, 'Gagal memuat paket ujian')),
+			fetch(clientApiPathWithQuery('/api/cbt/sessions', sessionParams)).then((response) => readClientApiData<ExamSession[]>(response, 'Gagal memuat data sesi')),
+			fetch(clientApiPathWithQuery('/api/cbt/packages', packageParams)).then((response) => readClientApiData<CbtPackagesPayload>(response, 'Gagal memuat paket ujian')),
 			fetch('/api/academic').then((response) => readClientApiData<AcademicPayload>(response, 'Gagal memuat data akademik')),
 		]);
 		return {
@@ -584,6 +604,7 @@
 		packages = [];
 		packageQuestions = [];
 		classes = [];
+		void fetchEventContext().then((context) => { eventContext = context; });
 		sessionsPromise = fetchOverview().then((overview) => {
 			if (requestId !== sessionsRequestId) return { sessions, packages, packageQuestions, classes };
 			applyOverview(overview);
@@ -671,6 +692,7 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
+					...(eventId ? { event_id: eventId } : {}),
 					package_id: fPackageId,
 					class_id: fScopeType === 'class' ? fClassId : '',
 					scope_type: fScopeType,
@@ -823,18 +845,40 @@
 	});
 </script>
 
-<svelte:head><title>Sesi Ujian CBT — MTSN 2 Kolut</title></svelte:head>
+	<svelte:head><title>{eventId ? 'Sesi Event CBT' : 'Sesi Ujian CBT'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
+			<p class="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">{eventId ? 'Konteks Event' : 'Sesi Global'}</p>
 			<h1 class="text-2xl font-semibold text-slate-800">Sesi Ujian CBT</h1>
-			<p class="text-sm text-slate-500 mt-1">Jadwalkan sesi per kelas, tingkat, atau seluruh sekolah dengan rooming yang fleksibel</p>
+			<p class="text-sm text-slate-500 mt-1">Jadwalkan sesi per kelas, tingkat, atau seluruh sekolah dengan rooming yang fleksibel{eventId ? ' untuk kegiatan ini' : ''}</p>
 		</div>
-		<Button onclick={() => (showForm = !showForm)}>
-			{showForm ? 'Batal' : '+ Buat Sesi'}
-		</Button>
+		<div class="flex flex-wrap gap-2">
+			{#if eventId}
+				<a href={resolve(`/cbt/events/${eventId}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Event</a>
+			{/if}
+			<Button onclick={() => (showForm = !showForm)}>
+				{showForm ? 'Batal' : '+ Buat Sesi'}
+			</Button>
+		</div>
 	</div>
+
+	{#if eventId}
+		<div class="rounded-xl border border-green-200 bg-green-50/70 p-4 text-sm text-green-950">
+			<div class="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<p class="font-semibold">Sesi difilter untuk event: {eventContext?.title ?? eventId}</p>
+					<p class="mt-1 text-green-800">Daftar sesi dan payload pembuatan sesi membawa <code class="rounded bg-white px-1">event_id</code>. Jika backend belum mendukung filter event, halaman tetap memakai respons yang tersedia.</p>
+				</div>
+				<a href={resolve(`/cbt/packages?event_id=${eventId}`)} class="rounded-md border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Paket Event</a>
+			</div>
+		</div>
+	{:else}
+		<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+			Anda sedang melihat sesi global. Dari Kegiatan Ujian, gunakan tombol Sesi agar pembuatan sesi otomatis terhubung ke event.
+		</div>
+	{/if}
 
 	{#if operationState}
 		<OperationStatusPanel {...operationState} />
@@ -1117,7 +1161,8 @@
 
 		{#snippet children(value)}
 			{@const overview = value as SessionsOverview}
-			{@const currentSessions = overview.sessions}
+			{@const eventSessions = eventId ? overview.sessions.filter((session) => !session.event_id || session.event_id === eventId) : overview.sessions}
+			{@const currentSessions = eventSessions}
 			{@const scheduleScopedSessions = currentSessions.filter((session) => sessionMatchesScheduleFilter(session, scheduleFilter))}
 			{@const readinessScopedSessions = currentSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter))}
 			{@const visibleSessions = currentSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter) && sessionMatchesScheduleFilter(session, scheduleFilter))}

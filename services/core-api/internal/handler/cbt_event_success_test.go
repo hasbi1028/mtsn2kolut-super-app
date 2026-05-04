@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -19,6 +20,7 @@ type fakeCbtEventService struct {
 
 	listRows    []db.ListCbtExamEventsRow
 	listErr     error
+	listUserID  pgtype.UUID
 	getID       pgtype.UUID
 	getRow      db.GetCbtExamEventRow
 	getErr      error
@@ -44,6 +46,11 @@ type fakeCbtEventService struct {
 }
 
 func (f *fakeCbtEventService) List(context.Context) ([]db.ListCbtExamEventsRow, error) {
+	return f.listRows, f.listErr
+}
+
+func (f *fakeCbtEventService) ListForUser(_ context.Context, userID pgtype.UUID) ([]db.ListCbtExamEventsRow, error) {
+	f.listUserID = userID
 	return f.listRows, f.listErr
 }
 
@@ -163,6 +170,48 @@ func TestCbtEventReadHandlersForwardIDs(t *testing.T) {
 	h.GetExamCards(rec, withRouteParam(guruRequest(http.MethodGet, "/api/cbt/events/"+eventID.String()+"/exam-cards", ""), "id", eventID.String()))
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("GetExamCards(guru) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCbtEventListScopesGuruToEventMembership(t *testing.T) {
+	eventID := handlerTestUUID(142)
+	userID := handlerTestUUID(143)
+	fake := &fakeCbtEventService{
+		CbtEvent: &service.CbtEvent{},
+		listRows: []db.ListCbtExamEventsRow{
+			{ID: eventID, Title: "PAT 2026", ExamType: db.CbtExamTypeUas, Scope: "grade", Status: "active"},
+		},
+	}
+	h := &CbtEvent{svc: fake}
+	req := withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/events", nil), jwt.MapClaims{
+		"roles": []any{"guru"},
+		"role":  "guru",
+		"uid":   userID.String(),
+	})
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("List(guru) status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.listUserID != userID {
+		t.Fatalf("ListForUser user id = %v, want %v", fake.listUserID, userID)
+	}
+}
+
+func TestCbtEventListRejectsGuruWithoutUserID(t *testing.T) {
+	h := &CbtEvent{svc: &fakeCbtEventService{CbtEvent: &service.CbtEvent{}}}
+	req := withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/events", nil), jwt.MapClaims{
+		"roles": []any{"guru"},
+		"role":  "guru",
+	})
+	rec := httptest.NewRecorder()
+
+	h.List(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("List(guru without uid) status = %d, want 401; body=%s", rec.Code, rec.Body.String())
 	}
 }
 

@@ -43,9 +43,10 @@ async function loadHooks() {
 	return await import('./hooks.server');
 }
 
-function makeHandleEvent(accessToken?: string, refreshToken?: string, url = 'http://localhost/dashboard') {
+function makeHandleEvent(accessToken?: string, refreshToken?: string, url = 'http://localhost/dashboard', method = 'GET') {
 	return {
 		request: new Request(url, {
+			method,
 			headers: { 'user-agent': 'vitest-agent' }
 		}),
 		url: new URL(url),
@@ -382,12 +383,43 @@ describe('SvelteKit handle auth gate', () => {
 	const roleCases = [
 		{ path: '/settings/users', roles: ['admin'], allowed: true, api: false },
 		{ path: '/settings/users', roles: ['staf'], allowed: false, api: false },
+		{ path: '/api/school-profile', roles: ['admin'], allowed: true, api: true },
+		{ path: '/api/school-profile', roles: ['staf'], allowed: false, api: true },
+		{ path: '/cbt/events', roles: ['admin'], allowed: true, api: false },
+		{ path: '/cbt/events/event-1', roles: ['guru'], allowed: false, api: false },
+		{ path: '/api/cbt/events', roles: ['admin'], allowed: true, api: true },
+		{ path: '/api/cbt/events', roles: ['guru'], allowed: true, api: true, method: 'GET' },
+		{ path: '/api/cbt/events', roles: ['guru'], allowed: false, api: true, method: 'POST' },
+		{ path: '/api/cbt/events/event-1', roles: ['guru'], allowed: false, api: true },
+		{ path: '/api/cbt/events/event-1/question-targets', roles: ['guru'], allowed: true, api: true, method: 'GET' },
+		{ path: '/api/cbt/events/event-1/question-targets', roles: ['guru'], allowed: false, api: true, method: 'PUT' },
+		{ path: '/cbt/events/event-1/members', roles: ['guru'], allowed: false, api: false },
+		{ path: '/cbt/soal/review', roles: ['guru'], allowed: true, api: false },
+		{ path: '/api/cbt/soal-support/subjects', roles: ['guru'], allowed: true, api: true, method: 'GET' },
+		{ path: '/cbt/packages', roles: ['guru'], allowed: false, api: false },
+		{ path: '/cbt/sessions', roles: ['guru'], allowed: false, api: false },
+		{ path: '/api/cbt/packages', roles: ['guru'], allowed: false, api: true },
+		{ path: '/api/cbt/sessions', roles: ['guru'], allowed: false, api: true },
+		{ path: '/cbt/soal', roles: ['guru'], allowed: true, api: false },
+		{ path: '/api/cbt/questions', roles: ['guru'], allowed: true, api: true },
 		{ path: '/parents', roles: ['admin'], allowed: true, api: false },
 		{ path: '/parents', roles: ['staf'], allowed: false, api: false },
 		{ path: '/api/parents', roles: ['admin'], allowed: true, api: true },
 		{ path: '/api/parents', roles: ['guru'], allowed: false, api: true },
 		{ path: '/kesiswaan', roles: ['kesiswaan'], allowed: true, api: false },
+		{ path: '/kesiswaan', roles: ['guru'], allowed: true, api: false },
 		{ path: '/kesiswaan', roles: ['staf'], allowed: false, api: false },
+		{ path: '/api/kesiswaan/students', roles: ['guru'], allowed: true, api: true, method: 'GET' },
+		{ path: '/api/kesiswaan/students', roles: ['guru'], allowed: false, api: true, method: 'POST' },
+		{ path: '/api/kesiswaan/students', roles: ['kesiswaan'], allowed: true, api: true, method: 'POST' },
+		{ path: '/students', roles: ['kesiswaan'], allowed: true, api: false },
+		{ path: '/students', roles: ['guru'], allowed: false, api: false },
+		{ path: '/students', roles: ['staf'], allowed: false, api: false },
+		{ path: '/api/students', roles: ['guru'], allowed: true, api: true, method: 'GET' },
+		{ path: '/api/students', roles: ['siswa'], allowed: false, api: true, method: 'GET' },
+		{ path: '/api/students', roles: ['staf'], allowed: false, api: true, method: 'GET' },
+		{ path: '/api/students', roles: ['guru'], allowed: false, api: true, method: 'POST' },
+		{ path: '/api/students', roles: ['kesiswaan'], allowed: true, api: true, method: 'POST' },
 		{ path: '/api/scheduler/tick', roles: ['staf'], allowed: false, api: true },
 		{ path: '/api/scheduler/tick', roles: ['admin'], allowed: true, api: true },
 	] as const;
@@ -396,7 +428,8 @@ describe('SvelteKit handle auth gate', () => {
 		it(`enforces hook role access for ${item.path} as ${item.roles.join(',')}`, async () => {
 			const { handle } = await loadHooks();
 			const access = token('access', { uid: 'u1', role: item.roles[0], roles: item.roles });
-			const event = makeHandleEvent(access, undefined, `http://localhost${item.path}`);
+			const method = 'method' in item ? item.method : undefined;
+			const event = makeHandleEvent(access, undefined, `http://localhost${item.path}`, method);
 			event.fetch.mockResolvedValueOnce(validationOkResponse());
 			const resolve = vi.fn(async () => new Response('ok'));
 

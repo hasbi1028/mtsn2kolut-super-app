@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
@@ -131,6 +132,13 @@ type fakeCbtQuestionService struct {
 	importInput  service.ImportLegacyQuestionsInput
 	importResult service.ImportLegacyQuestionsResult
 	importErr    error
+
+	timelineRows []db.CbtQuestionAuditLog
+	timelineErr  error
+
+	bulkInput  service.BulkCbtQuestionWorkflowInput
+	bulkResult service.BulkCbtQuestionWorkflowResult
+	bulkErr    error
 }
 
 func (f *fakeCbtQuestionService) ListFiltered(_ context.Context, in service.ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error) {
@@ -141,12 +149,16 @@ func (f *fakeCbtQuestionService) ListFiltered(_ context.Context, in service.List
 	return f.listRows, f.listTotal, nil
 }
 
-func (f *fakeCbtQuestionService) GetDetail(_ context.Context, id pgtype.UUID) (db.GetCbtQuestionDetailRow, error) {
+func (f *fakeCbtQuestionService) GetDetail(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.GetCbtQuestionDetailRow, error) {
 	f.getID = id
 	if f.getErr != nil {
 		return db.GetCbtQuestionDetailRow{}, f.getErr
 	}
-	return f.getDetailRow, nil
+	row := f.getDetailRow
+	if !actor.IsAdmin() && strings.TrimSpace(actor.Username) != strings.TrimSpace(row.AuthorUsername) {
+		row.AnswerKey = ""
+	}
+	return row, nil
 }
 
 func (f *fakeCbtQuestionService) ImportLegacyCSV(_ context.Context, input service.ImportLegacyQuestionsInput) (service.ImportLegacyQuestionsResult, error) {
@@ -194,9 +206,29 @@ func (f *fakeCbtQuestionService) Delete(_ context.Context, id pgtype.UUID) error
 	return f.deleteErr
 }
 
-func (f *fakeCbtQuestionService) SubmitReview(_ context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error) {
+func (f *fakeCbtQuestionService) DeleteWithActor(_ context.Context, id pgtype.UUID, _ service.CbtQuestionActor) error {
+	f.deleteID = id
+	return f.deleteErr
+}
+
+func (f *fakeCbtQuestionService) Timeline(_ context.Context, _ pgtype.UUID, _ service.CbtQuestionActor) ([]db.CbtQuestionAuditLog, error) {
+	if f.timelineErr != nil {
+		return nil, f.timelineErr
+	}
+	return f.timelineRows, nil
+}
+
+func (f *fakeCbtQuestionService) BulkWorkflow(_ context.Context, in service.BulkCbtQuestionWorkflowInput) (service.BulkCbtQuestionWorkflowResult, error) {
+	f.bulkInput = in
+	if f.bulkErr != nil {
+		return service.BulkCbtQuestionWorkflowResult{}, f.bulkErr
+	}
+	return f.bulkResult, nil
+}
+
+func (f *fakeCbtQuestionService) SubmitReview(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
 	f.submitReviewID = id
-	f.submitReviewUser = username
+	f.submitReviewUser = actor.Username
 	f.submitReviewNotes = reviewNotes
 	if f.submitReviewErr != nil {
 		return db.CbtQuestion{}, f.submitReviewErr
@@ -204,9 +236,9 @@ func (f *fakeCbtQuestionService) SubmitReview(_ context.Context, id pgtype.UUID,
 	return f.submitReviewRow, nil
 }
 
-func (f *fakeCbtQuestionService) Approve(_ context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error) {
+func (f *fakeCbtQuestionService) Approve(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
 	f.approveID = id
-	f.approveUser = username
+	f.approveUser = actor.Username
 	f.approveNotes = reviewNotes
 	if f.approveErr != nil {
 		return db.CbtQuestion{}, f.approveErr
@@ -214,9 +246,9 @@ func (f *fakeCbtQuestionService) Approve(_ context.Context, id pgtype.UUID, user
 	return f.approveRow, nil
 }
 
-func (f *fakeCbtQuestionService) Reject(_ context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error) {
+func (f *fakeCbtQuestionService) Reject(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
 	f.rejectID = id
-	f.rejectUser = username
+	f.rejectUser = actor.Username
 	f.rejectNotes = reviewNotes
 	if f.rejectErr != nil {
 		return db.CbtQuestion{}, f.rejectErr
@@ -224,36 +256,36 @@ func (f *fakeCbtQuestionService) Reject(_ context.Context, id pgtype.UUID, usern
 	return f.rejectRow, nil
 }
 
-func (f *fakeCbtQuestionService) Publish(_ context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error) {
+func (f *fakeCbtQuestionService) Publish(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error) {
 	f.publishID = id
-	f.publishUser = username
+	f.publishUser = actor.Username
 	if f.publishErr != nil {
 		return db.CbtQuestion{}, f.publishErr
 	}
 	return f.publishRow, nil
 }
 
-func (f *fakeCbtQuestionService) Archive(_ context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error) {
+func (f *fakeCbtQuestionService) Archive(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error) {
 	f.archiveID = id
-	f.archiveUser = username
+	f.archiveUser = actor.Username
 	if f.archiveErr != nil {
 		return db.CbtQuestion{}, f.archiveErr
 	}
 	return f.archiveRow, nil
 }
 
-func (f *fakeCbtQuestionService) DuplicateAsDraft(_ context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error) {
+func (f *fakeCbtQuestionService) DuplicateAsDraft(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.CbtQuestion, error) {
 	f.duplicateID = id
-	f.duplicateUser = username
+	f.duplicateUser = actor.Username
 	if f.duplicateErr != nil {
 		return db.CbtQuestion{}, f.duplicateErr
 	}
 	return f.duplicateRow, nil
 }
 
-func (f *fakeCbtQuestionService) DuplicateForRevision(_ context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error) {
+func (f *fakeCbtQuestionService) DuplicateForRevision(_ context.Context, id pgtype.UUID, actor service.CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
 	f.revisionID = id
-	f.revisionUser = username
+	f.revisionUser = actor.Username
 	f.revisionNotes = reviewNotes
 	if f.revisionErr != nil {
 		return db.CbtQuestion{}, f.revisionErr
@@ -1065,6 +1097,18 @@ func TestCbtQuestionRequireAuthorOrAdminBranches(t *testing.T) {
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
+			name:       "detail forbidden maps forbidden",
+			claims:     jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa"},
+			svc:        &fakeCbtQuestionService{getErr: domain.ErrForbidden},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "detail missing maps not found",
+			claims:     jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa"},
+			svc:        &fakeCbtQuestionService{getErr: domain.ErrNotFound},
+			wantStatus: http.StatusNotFound,
+		},
+		{
 			name:       "author mismatch forbidden",
 			claims:     jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa"},
 			svc:        &fakeCbtQuestionService{getDetailRow: db.GetCbtQuestionDetailRow{ID: questionID, AuthorUsername: "guru.matematika"}},
@@ -1172,6 +1216,12 @@ func TestCbtQuestionHandlersMapServiceErrors(t *testing.T) {
 			fn:   (&CbtQuestion{svc: &fakeCbtQuestionService{updateErr: errors.New("answer_key wajib diisi")}}).Update,
 			req:  withRouteParam(adminRequest(http.MethodPut, "/api/cbt/questions/"+questionID.String(), body), "id", questionID.String()),
 			want: http.StatusBadRequest,
+		},
+		{
+			name: "update detail forbidden",
+			fn:   (&CbtQuestion{svc: &fakeCbtQuestionService{getErr: domain.ErrForbidden}}).Update,
+			req:  withRouteParam(adminRequest(http.MethodPut, "/api/cbt/questions/"+questionID.String(), body), "id", questionID.String()),
+			want: http.StatusForbidden,
 		},
 		{
 			name: "delete internal error",

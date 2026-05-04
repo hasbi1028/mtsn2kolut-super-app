@@ -212,7 +212,7 @@
 			};
 		}
 
-		if (isAdmin || isStaff) {
+		if (isAdmin) {
 			return {
 				academicStats: await fetchJSON<AcademicStats>('/api/academic/stats'),
 				guruStats: null,
@@ -335,7 +335,7 @@
 						</Card.Root>
 					{/each}
 				</div>
-			{:else if isAdmin || isStaff}
+		{:else if isAdmin}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 					{#each Array.from({ length: 4 }) as _, index (`admin-stat-skeleton-${index}`)}
 						<Card.Root class="border-slate-200">
@@ -610,7 +610,7 @@
 				</Card.Root>
 			{/if}
 
-			{#if isAdmin || isStaff}
+			{#if isAdmin}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Siswa</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_students ?? '—'}</p></Card.Content></Card.Root>
 			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Kelas Aktif</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_classes ?? '—'}</p></Card.Content></Card.Root>
@@ -627,8 +627,9 @@
 			</Card.Header>
 			<Card.Content>
 				<div class="flex flex-wrap gap-2">
-					<Button variant="default" size="sm" href="/parents">Manajemen Orang Tua</Button>
-					<Button variant="outline" size="sm" href="/students">Data Siswa</Button>
+					<Button variant="default" size="sm" href="/tu">Layanan Tata Usaha</Button>
+					<Button variant="outline" size="sm" href="/library">Perpustakaan</Button>
+					<Button variant="outline" size="sm" href="/inventory">Inventaris</Button>
 				</div>
 			</Card.Content>
 				</Card.Root>

@@ -643,7 +643,7 @@ func (h *CbtSession) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Hapus sesi CBT tidak valid")
 		return
 	}
 	api.NoContent(w)

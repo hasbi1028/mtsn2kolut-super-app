@@ -115,6 +115,8 @@ type fakeCbtEventStore struct {
 	listRows        []db.ListCbtExamEventsRow
 	listErr         error
 	getID           pgtype.UUID
+	overviewRow     db.GetCbtEventOverviewSummaryRow
+	overviewID      pgtype.UUID
 	resultsRows     []db.GetEventResultsRow
 	resultsErr      error
 	resultsID       pgtype.UUID
@@ -125,6 +127,10 @@ type fakeCbtEventStore struct {
 	updateStatusArg db.UpdateCbtExamEventStatusParams
 	updateArg       db.UpdateCbtExamEventParams
 	deleteID        pgtype.UUID
+	packagesRows    []db.ListCbtEventPackagesRow
+	sessionsRows    []db.ListCbtEventSessionsReadinessRow
+	matrixRows      []db.ListCbtEventSubjectMatrixRow
+	membersByUser   []db.CbtEventMember
 }
 
 func (f *fakeCbtEventStore) ListCbtExamEvents(ctx context.Context) ([]db.ListCbtExamEventsRow, error) {
@@ -134,6 +140,14 @@ func (f *fakeCbtEventStore) ListCbtExamEvents(ctx context.Context) ([]db.ListCbt
 func (f *fakeCbtEventStore) GetCbtExamEvent(ctx context.Context, id pgtype.UUID) (db.GetCbtExamEventRow, error) {
 	f.getID = id
 	return db.GetCbtExamEventRow{ID: id, Title: "PAT"}, nil
+}
+
+func (f *fakeCbtEventStore) GetCbtEventOverviewSummary(ctx context.Context, id pgtype.UUID) (db.GetCbtEventOverviewSummaryRow, error) {
+	f.overviewID = id
+	if f.overviewRow.ID.Valid {
+		return f.overviewRow, nil
+	}
+	return db.GetCbtEventOverviewSummaryRow{ID: id, Title: "PAT"}, nil
 }
 
 func (f *fakeCbtEventStore) GetEventResults(ctx context.Context, eventID pgtype.UUID) ([]db.GetEventResultsRow, error) {
@@ -161,9 +175,57 @@ func (f *fakeCbtEventStore) UpdateCbtExamEvent(ctx context.Context, arg db.Updat
 	return db.CbtExamEvent{ID: arg.ID, Title: arg.Title, ExamType: arg.ExamType, Scope: arg.Scope, TargetLevels: arg.TargetLevels}, nil
 }
 
-func (f *fakeCbtEventStore) DeleteCbtExamEvent(ctx context.Context, id pgtype.UUID) error {
+func (f *fakeCbtEventStore) DeleteCbtExamEvent(ctx context.Context, id pgtype.UUID) (int64, error) {
 	f.deleteID = id
+	return 1, nil
+}
+
+func (f *fakeCbtEventStore) ListCbtEventMembers(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventMembersRow, error) {
+	return nil, nil
+}
+
+func (f *fakeCbtEventStore) ListCbtEventMembersByUser(ctx context.Context, userID pgtype.UUID) ([]db.CbtEventMember, error) {
+	return f.membersByUser, nil
+}
+
+func (f *fakeCbtEventStore) ListCbtEventPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventPackagesRow, error) {
+	return f.packagesRows, nil
+}
+
+func (f *fakeCbtEventStore) ListCbtEventSessionsReadiness(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSessionsReadinessRow, error) {
+	return f.sessionsRows, nil
+}
+
+func (f *fakeCbtEventStore) ListCbtEventSubjectMatrix(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSubjectMatrixRow, error) {
+	return f.matrixRows, nil
+}
+
+func (f *fakeCbtEventStore) GetCbtEventMember(ctx context.Context, arg db.GetCbtEventMemberParams) (db.GetCbtEventMemberRow, error) {
+	return db.GetCbtEventMemberRow{}, nil
+}
+
+func (f *fakeCbtEventStore) CreateCbtEventMember(ctx context.Context, arg db.CreateCbtEventMemberParams) (db.CbtEventMember, error) {
+	return db.CbtEventMember{EventID: arg.EventID, UserID: arg.UserID, SubjectID: arg.SubjectID, Role: arg.Role}, nil
+}
+
+func (f *fakeCbtEventStore) UpdateCbtEventMember(ctx context.Context, arg db.UpdateCbtEventMemberParams) (db.CbtEventMember, error) {
+	return db.CbtEventMember{ID: arg.ID, EventID: arg.EventID, UserID: arg.UserID, SubjectID: arg.SubjectID, Role: arg.Role}, nil
+}
+
+func (f *fakeCbtEventStore) DeleteCbtEventMember(ctx context.Context, arg db.DeleteCbtEventMemberParams) error {
 	return nil
+}
+
+func (f *fakeCbtEventStore) ListCbtEventSubjectTargets(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSubjectTargetsRow, error) {
+	return []db.ListCbtEventSubjectTargetsRow{}, nil
+}
+
+func (f *fakeCbtEventStore) UpsertCbtEventSubjectTarget(ctx context.Context, arg db.UpsertCbtEventSubjectTargetParams) (db.CbtEventSubjectTarget, error) {
+	return db.CbtEventSubjectTarget{EventID: arg.EventID, SubjectID: arg.SubjectID, TargetQuestions: arg.TargetQuestions}, nil
+}
+
+func (f *fakeCbtEventStore) DeleteCbtEventSubjectTarget(ctx context.Context, arg db.DeleteCbtEventSubjectTargetParams) (int64, error) {
+	return 1, nil
 }
 
 func TestCbtEventServiceForwardsStoreCalls(t *testing.T) {
@@ -185,6 +247,13 @@ func TestCbtEventServiceForwardsStoreCalls(t *testing.T) {
 	store.listRows = nil
 	if rows, err := svc.List(context.Background()); err != nil || len(rows) != 0 {
 		t.Fatalf("List(nil rows) = %d rows/%v, want empty nil", len(rows), err)
+	}
+	otherEventID := documentCycleTestUUID(193)
+	userID := documentCycleTestUUID(194)
+	store.listRows = []db.ListCbtExamEventsRow{{ID: eventID, Title: "PAT"}, {ID: otherEventID, Title: "Tryout"}}
+	store.membersByUser = []db.CbtEventMember{{EventID: eventID, UserID: userID}}
+	if rows, err := svc.ListForUser(context.Background(), userID); err != nil || len(rows) != 1 || rows[0].ID != eventID {
+		t.Fatalf("ListForUser() = %+v/%v, want only member event %v", rows, err, eventID)
 	}
 	if got, err := svc.Get(context.Background(), eventID); err != nil || got.ID != eventID || store.getID != eventID {
 		t.Fatalf("Get() = %+v/%v id=%v, want event", got, err, store.getID)
@@ -209,17 +278,23 @@ func TestCbtEventServiceForwardsStoreCalls(t *testing.T) {
 	if store.createArg.Status != "draft" || store.createArg.AcademicYearID != yearID {
 		t.Fatalf("Create(default status) arg = %+v, want draft/year", store.createArg)
 	}
-	if _, err := svc.Create(context.Background(), CreateCbtEventInput{Title: "PAT", ExamType: db.CbtExamTypeUts, Scope: "school", Status: "published"}); err != nil {
+	if _, err := svc.Create(context.Background(), CreateCbtEventInput{Title: "PAT", ExamType: db.CbtExamTypeUts, Scope: "school", Status: "active"}); err != nil {
 		t.Fatalf("Create(status) error = %v", err)
 	}
-	if store.createArg.Status != "published" {
-		t.Fatalf("Create(status) arg = %+v, want published", store.createArg)
+	if store.createArg.Status != "active" {
+		t.Fatalf("Create(status) arg = %+v, want active", store.createArg)
 	}
-	if _, err := svc.UpdateStatus(context.Background(), eventID, "archived"); err != nil {
+	if _, err := svc.Create(context.Background(), CreateCbtEventInput{Title: "PAT", ExamType: db.CbtExamTypeUts, Scope: "school", Status: "published"}); err == nil {
+		t.Fatal("Create(invalid status) error = nil, want validation error")
+	}
+	if _, err := svc.UpdateStatus(context.Background(), eventID, "active"); err != nil {
 		t.Fatalf("UpdateStatus() error = %v", err)
 	}
-	if store.updateStatusArg.ID != eventID || store.updateStatusArg.Status != "archived" {
+	if store.updateStatusArg.ID != eventID || store.updateStatusArg.Status != "active" {
 		t.Fatalf("UpdateStatus() arg = %+v, want status", store.updateStatusArg)
+	}
+	if _, err := svc.UpdateStatus(context.Background(), eventID, "archived"); err == nil {
+		t.Fatal("UpdateStatus(invalid) error = nil, want validation error")
 	}
 	if _, err := svc.Update(context.Background(), eventID, CreateCbtEventInput{Title: "PAS", ExamType: db.CbtExamTypeUas, Scope: "school", AcademicYearID: yearID}); err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -229,6 +304,39 @@ func TestCbtEventServiceForwardsStoreCalls(t *testing.T) {
 	}
 	if err := svc.Delete(context.Background(), eventID); err != nil || store.deleteID != eventID {
 		t.Fatalf("Delete() = %v id=%v, want nil/%v", err, store.deleteID, eventID)
+	}
+}
+
+func TestCbtEventOverviewBuildsReadinessAndBlockers(t *testing.T) {
+	eventID := documentCycleTestUUID(194)
+	store := &fakeCbtEventStore{
+		overviewRow: db.GetCbtEventOverviewSummaryRow{
+			ID:                         eventID,
+			Title:                      "PAT",
+			MemberCount:                1,
+			TargetQuestionCount:        10,
+			PublishedQuestions:         8,
+			ActivePackageCount:         1,
+			SessionCount:               1,
+			RoomCount:                  1,
+			ParticipantCount:           2,
+			AssignedParticipantCount:   1,
+			UnassignedParticipantCount: 1,
+			TokenReadyCount:            1,
+		},
+		matrixRows: []db.ListCbtEventSubjectMatrixRow{{SubjectName: "Matematika", TargetQuestions: 10, PublishedQuestions: 8, ShortageCount: 2}},
+	}
+	svc := &CbtEvent{q: store}
+
+	got, err := svc.Overview(context.Background(), eventID)
+	if err != nil {
+		t.Fatalf("Overview() error = %v", err)
+	}
+	if got.Event.ID != eventID || got.Readiness.AuthoringReady || !got.Readiness.PackageReady || !got.Readiness.SessionReady {
+		t.Fatalf("Overview() = %+v, want event with package/session ready and authoring blocked", got)
+	}
+	if len(got.BlockingReasons) == 0 {
+		t.Fatal("Overview() blockers empty, want readiness blockers")
 	}
 }
 
@@ -263,17 +371,17 @@ type fakeCbtPackageStore struct {
 	addErr        error
 }
 
-func (f *fakeCbtPackageStore) ListCbtPackages(ctx context.Context) ([]db.ListCbtPackagesRow, error) {
+func (f *fakeCbtPackageStore) ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackagesRow, error) {
 	return f.packagesRows, f.packagesErr
 }
 
-func (f *fakeCbtPackageStore) ListCbtPackageQuestions(ctx context.Context) ([]db.ListCbtPackageQuestionsRow, error) {
+func (f *fakeCbtPackageStore) ListCbtPackageQuestions(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackageQuestionsRow, error) {
 	return f.questionsRows, f.questionsErr
 }
 
-func (f *fakeCbtPackageStore) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) error {
+func (f *fakeCbtPackageStore) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) (int64, error) {
 	f.deleteID = id
-	return nil
+	return 1, nil
 }
 
 func (f *fakeCbtPackageStore) CreateCbtPackage(ctx context.Context, arg db.CreateCbtPackageParams) (db.CbtPackage, error) {
@@ -281,7 +389,7 @@ func (f *fakeCbtPackageStore) CreateCbtPackage(ctx context.Context, arg db.Creat
 	if f.packageRow.ID.Valid {
 		return f.packageRow, f.createErr
 	}
-	return db.CbtPackage{ID: documentCycleTestUUID(203), SubjectID: arg.SubjectID, Title: arg.Title}, f.createErr
+	return db.CbtPackage{ID: documentCycleTestUUID(203), EventID: arg.EventID, SubjectID: arg.SubjectID, Title: arg.Title}, f.createErr
 }
 
 func (f *fakeCbtPackageStore) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error) {
@@ -289,7 +397,7 @@ func (f *fakeCbtPackageStore) GetCbtQuestion(ctx context.Context, id pgtype.UUID
 		f.questionRow.ID = id
 		return f.questionRow, f.questionErr
 	}
-	return db.GetCbtQuestionRow{ID: id, SubjectID: f.createArg.SubjectID, Status: db.CbtQuestionStatusEnumPublished}, f.questionErr
+	return db.GetCbtQuestionRow{ID: id, EventID: f.createArg.EventID, SubjectID: f.createArg.SubjectID, Status: db.CbtQuestionStatusEnumPublished}, f.questionErr
 }
 
 func (f *fakeCbtPackageStore) AddCbtPackageQuestion(ctx context.Context, arg db.AddCbtPackageQuestionParams) error {
@@ -313,7 +421,7 @@ func TestCbtPackageServiceListDeleteAndValidation(t *testing.T) {
 		t.Fatal("NewCbtPackage(nil) = nil, want service")
 	}
 
-	packages, questions, err := svc.List(context.Background())
+	packages, questions, err := svc.List(context.Background(), pgtype.UUID{})
 	if err != nil || len(packages) != 1 || len(questions) != 1 {
 		t.Fatalf("List() = %d packages/%d questions/%v, want 1/1/nil", len(packages), len(questions), err)
 	}
@@ -327,26 +435,28 @@ func TestCbtPackageServiceListDeleteAndValidation(t *testing.T) {
 
 func TestCbtPackageListPropagatesErrors(t *testing.T) {
 	svc := &CbtPackage{q: &fakeCbtPackageStore{packagesErr: errors.New("packages failed")}}
-	if _, _, err := svc.List(context.Background()); err == nil || err.Error() != "packages failed" {
+	if _, _, err := svc.List(context.Background(), pgtype.UUID{}); err == nil || err.Error() != "packages failed" {
 		t.Fatalf("List(package error) = %v, want packages failed", err)
 	}
 	svc = &CbtPackage{q: &fakeCbtPackageStore{questionsErr: errors.New("questions failed")}}
-	if _, _, err := svc.List(context.Background()); err == nil || err.Error() != "questions failed" {
+	if _, _, err := svc.List(context.Background(), pgtype.UUID{}); err == nil || err.Error() != "questions failed" {
 		t.Fatalf("List(question error) = %v, want questions failed", err)
 	}
 }
 
 func TestCreateCbtPackageHelperValidatesQuestionsAndPositions(t *testing.T) {
+	eventID := documentCycleTestUUID(211)
 	subjectID := documentCycleTestUUID(204)
 	packageID := documentCycleTestUUID(205)
 	firstQuestionID := documentCycleTestUUID(206)
 	secondQuestionID := documentCycleTestUUID(207)
 	store := &fakeCbtPackageStore{
-		packageRow:  db.CbtPackage{ID: packageID, SubjectID: subjectID, Title: "Paket"},
-		questionRow: db.GetCbtQuestionRow{ID: firstQuestionID, SubjectID: subjectID, Status: db.CbtQuestionStatusEnumPublished},
+		packageRow:  db.CbtPackage{ID: packageID, EventID: eventID, SubjectID: subjectID, Title: "Paket"},
+		questionRow: db.GetCbtQuestionRow{ID: firstQuestionID, EventID: eventID, SubjectID: subjectID, Status: db.CbtQuestionStatusEnumPublished},
 	}
 
 	got, err := createCbtPackage(context.Background(), store, CreateCbtPackageInput{
+		EventID:            eventID,
 		SubjectID:          subjectID,
 		Title:              "Paket PAT",
 		Description:        "Soal akhir tahun",
@@ -362,7 +472,7 @@ func TestCreateCbtPackageHelperValidatesQuestionsAndPositions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("createCbtPackage() error = %v", err)
 	}
-	if got.ID != packageID || store.createArg.SubjectID != subjectID || store.createArg.Title != "Paket PAT" || !store.createArg.RandomizeQuestions {
+	if got.ID != packageID || store.createArg.EventID != eventID || store.createArg.SubjectID != subjectID || store.createArg.Title != "Paket PAT" || !store.createArg.RandomizeQuestions {
 		t.Fatalf("createCbtPackage() got/createArg = %+v/%+v, want created package", got, store.createArg)
 	}
 	if len(store.addArgs) != 2 {
@@ -371,6 +481,26 @@ func TestCreateCbtPackageHelperValidatesQuestionsAndPositions(t *testing.T) {
 	if store.addArgs[0].QuestionID != firstQuestionID || store.addArgs[0].Position != 1 || store.addArgs[0].Points != 2 ||
 		store.addArgs[1].QuestionID != secondQuestionID || store.addArgs[1].Position != 2 || store.addArgs[1].Points != 5 {
 		t.Fatalf("AddCbtPackageQuestion args = %+v, want ordered positions", store.addArgs)
+	}
+}
+
+func TestCreateCbtPackageHelperRejectsCrossEventQuestion(t *testing.T) {
+	eventID := documentCycleTestUUID(212)
+	otherEventID := documentCycleTestUUID(213)
+	subjectID := documentCycleTestUUID(214)
+	questionID := documentCycleTestUUID(215)
+	store := &fakeCbtPackageStore{
+		questionRow: db.GetCbtQuestionRow{ID: questionID, EventID: otherEventID, SubjectID: subjectID, Status: db.CbtQuestionStatusEnumPublished},
+	}
+
+	_, err := createCbtPackage(context.Background(), store, CreateCbtPackageInput{
+		EventID:     eventID,
+		SubjectID:   subjectID,
+		Title:       "Paket Event",
+		QuestionIDs: []pgtype.UUID{questionID},
+	})
+	if err == nil || !strings.Contains(err.Error(), "event yang sama") {
+		t.Fatalf("createCbtPackage(cross event) error = %v, want same-event validation", err)
 	}
 }
 
@@ -413,6 +543,8 @@ type fakeCbtSessionStore struct {
 	listErr                error
 	getID                  pgtype.UUID
 	sessionRow             db.GetCbtExamSessionRow
+	packageRows            []db.ListCbtPackagesRow
+	packageRowsErr         error
 	packageQualityID       pgtype.UUID
 	packageQualityRow      db.GetCbtPackageQuestionQualityRow
 	packageQualityErr      error
@@ -517,6 +649,19 @@ func (f *fakeCbtSessionStore) GetCbtExamSession(ctx context.Context, id pgtype.U
 	return db.GetCbtExamSessionRow{ID: id, PackageID: documentCycleTestUUID(229), Title: "Sesi", Status: db.CbtSessionStatusEnumScheduled}, nil
 }
 
+func (f *fakeCbtSessionStore) ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackagesRow, error) {
+	if f.packageRowsErr != nil {
+		return nil, f.packageRowsErr
+	}
+	if f.packageRows != nil {
+		return f.packageRows, nil
+	}
+	if f.sessionRow.PackageID.Valid {
+		return []db.ListCbtPackagesRow{{ID: f.sessionRow.PackageID, EventID: f.sessionRow.EventID}}, nil
+	}
+	return []db.ListCbtPackagesRow{{ID: documentCycleTestUUID(229)}}, nil
+}
+
 func (f *fakeCbtSessionStore) GetCbtPackageQuestionQuality(ctx context.Context, id pgtype.UUID) (db.GetCbtPackageQuestionQualityRow, error) {
 	f.packageQualityID = id
 	if f.packageQualityErr != nil {
@@ -548,9 +693,9 @@ func (f *fakeCbtSessionStore) ListEntityAuditLogs(ctx context.Context, arg db.Li
 	return f.auditRows, f.auditErr
 }
 
-func (f *fakeCbtSessionStore) DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) error {
+func (f *fakeCbtSessionStore) DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) (int64, error) {
 	f.deleteID = id
-	return nil
+	return 1, nil
 }
 
 func (f *fakeCbtSessionStore) ListCbtExamParticipants(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error) {
@@ -827,7 +972,11 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	answerID := documentCycleTestUUID(218)
 	teacherID := documentCycleTestUUID(219)
 	store := &fakeCbtSessionStore{
-		listRows:        []db.ListCbtExamSessionsRow{{ID: sessionID, Title: "Sesi"}},
+		listRows: []db.ListCbtExamSessionsRow{{ID: sessionID, Title: "Sesi"}},
+		packageRows: []db.ListCbtPackagesRow{
+			{ID: packageID, EventID: eventID, Title: "Paket"},
+			{ID: documentCycleTestUUID(229), Title: "Paket Default"},
+		},
 		participantRows: []db.ListCbtExamParticipantsRow{{ID: participantID}},
 		roomRows:        []db.ListCbtExamRoomsRow{{ID: roomID, RoomName: "R1"}},
 		proctorRoomRows: []db.ListCbtProctorRoomsRow{{ID: roomID, RoomName: "R1"}},
@@ -1118,6 +1267,58 @@ func TestCbtSessionCreateRejectsUnsafePackageQuality(t *testing.T) {
 			}
 			if store.createArg.PackageID.Valid {
 				t.Fatalf("Create() called CreateCbtExamSession with %+v, want blocked before insert", store.createArg)
+			}
+		})
+	}
+}
+
+func TestCbtSessionCreateRejectsPackageEventMismatch(t *testing.T) {
+	packageID := documentCycleTestUUID(235)
+	eventID := documentCycleTestUUID(236)
+	otherEventID := documentCycleTestUUID(237)
+	tests := []struct {
+		name           string
+		sessionEventID pgtype.UUID
+		packageEventID pgtype.UUID
+		wantErr        string
+	}{
+		{
+			name:           "event session cannot use global package",
+			sessionEventID: eventID,
+			wantErr:        "event yang sama",
+		},
+		{
+			name:           "event session cannot use other event package",
+			sessionEventID: eventID,
+			packageEventID: otherEventID,
+			wantErr:        "event yang sama",
+		},
+		{
+			name:           "non event session cannot use event package",
+			packageEventID: eventID,
+			wantErr:        "sesi event yang sama",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &fakeCbtSessionStore{
+				packageRows: []db.ListCbtPackagesRow{{ID: packageID, EventID: tt.packageEventID}},
+			}
+			svc := &CbtSession{q: store}
+
+			_, err := svc.Create(context.Background(), CreateCbtSessionInput{
+				PackageID: packageID,
+				EventID:   tt.sessionEventID,
+				ScopeType: "school",
+				Title:     "Sesi",
+				Status:    db.CbtSessionStatusEnumDraft,
+			})
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Create() error = %v, want contains %q", err, tt.wantErr)
+			}
+			if store.packageQualityID.Valid {
+				t.Fatalf("Create() package quality id = %v, want blocked before quality check", store.packageQualityID)
 			}
 		})
 	}

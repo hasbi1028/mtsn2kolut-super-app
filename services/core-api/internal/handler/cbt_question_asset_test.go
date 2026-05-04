@@ -42,6 +42,7 @@ type fakeCbtQuestionAssetService struct {
 	accessPackageID  pgtype.UUID
 	accessAllowed    bool
 	accessErr        error
+	openErr          error
 }
 
 func (f *fakeCbtQuestionAssetService) Save(_ context.Context, input service.UploadCbtQuestionAssetInput) (db.CbtQuestionAsset, error) {
@@ -90,6 +91,13 @@ func (f *fakeCbtQuestionAssetService) AccessibleByPackage(_ context.Context, que
 		return false, f.accessErr
 	}
 	return f.accessAllowed, nil
+}
+
+func (f *fakeCbtQuestionAssetService) Open(asset db.CbtQuestionAsset) (*os.File, error) {
+	if f.openErr != nil {
+		return nil, f.openErr
+	}
+	return os.Open(asset.StoragePath)
 }
 
 func newMultipartAssetRequest(t *testing.T, fields map[string]string, withFile bool) *http.Request {

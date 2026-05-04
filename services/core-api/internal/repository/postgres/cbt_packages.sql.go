@@ -34,12 +34,13 @@ func (q *Queries) AddCbtPackageQuestion(ctx context.Context, arg AddCbtPackageQu
 }
 
 const createCbtPackage = `-- name: CreateCbtPackage :one
-INSERT INTO cbt_packages (id, subject_id, title, description, duration_minutes, randomize_questions, is_active)
-VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
-RETURNING id, subject_id, title, description, duration_minutes, randomize_questions, is_active, created_at, updated_at
+INSERT INTO cbt_packages (id, event_id, subject_id, title, description, duration_minutes, randomize_questions, is_active)
+VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+RETURNING id, subject_id, title, description, duration_minutes, randomize_questions, is_active, created_at, updated_at, event_id
 `
 
 type CreateCbtPackageParams struct {
+	EventID            pgtype.UUID `json:"event_id"`
 	SubjectID          pgtype.UUID `json:"subject_id"`
 	Title              string      `json:"title"`
 	Description        string      `json:"description"`
@@ -50,6 +51,7 @@ type CreateCbtPackageParams struct {
 
 func (q *Queries) CreateCbtPackage(ctx context.Context, arg CreateCbtPackageParams) (CbtPackage, error) {
 	row := q.db.QueryRow(ctx, createCbtPackage,
+		arg.EventID,
 		arg.SubjectID,
 		arg.Title,
 		arg.Description,
@@ -68,17 +70,21 @@ func (q *Queries) CreateCbtPackage(ctx context.Context, arg CreateCbtPackagePara
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EventID,
 	)
 	return i, err
 }
 
-const deleteCbtPackage = `-- name: DeleteCbtPackage :exec
+const deleteCbtPackage = `-- name: DeleteCbtPackage :execrows
 DELETE FROM cbt_packages WHERE id = $1
 `
 
-func (q *Queries) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteCbtPackage, id)
-	return err
+func (q *Queries) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCbtPackage, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getCbtPackageQuestionQuality = `-- name: GetCbtPackageQuestionQuality :one
@@ -185,12 +191,84 @@ func (q *Queries) GetExamQuestions(ctx context.Context, packageID pgtype.UUID) (
 	return items, nil
 }
 
+const listCbtEventPackages = `-- name: ListCbtEventPackages :many
+SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject_code,
+       p.title, p.description, p.duration_minutes, p.randomize_questions, p.is_active,
+       p.created_at, p.updated_at,
+       COUNT(pq.question_id)::int AS question_count,
+       COUNT(pq.question_id) FILTER (WHERE q.status = 'published')::int AS published_question_count,
+       COUNT(pq.question_id) FILTER (WHERE q.event_id = p.event_id)::int AS event_question_count
+FROM cbt_packages p
+JOIN subjects s ON s.id = p.subject_id
+LEFT JOIN cbt_package_questions pq ON pq.package_id = p.id
+LEFT JOIN cbt_questions q ON q.id = pq.question_id
+WHERE p.event_id = $1
+GROUP BY p.id, s.name, s.code
+ORDER BY s.name ASC, p.created_at DESC
+`
+
+type ListCbtEventPackagesRow struct {
+	ID                     pgtype.UUID        `json:"id"`
+	EventID                pgtype.UUID        `json:"event_id"`
+	SubjectID              pgtype.UUID        `json:"subject_id"`
+	SubjectName            string             `json:"subject_name"`
+	SubjectCode            string             `json:"subject_code"`
+	Title                  string             `json:"title"`
+	Description            string             `json:"description"`
+	DurationMinutes        int32              `json:"duration_minutes"`
+	RandomizeQuestions     bool               `json:"randomize_questions"`
+	IsActive               bool               `json:"is_active"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	QuestionCount          int32              `json:"question_count"`
+	PublishedQuestionCount int32              `json:"published_question_count"`
+	EventQuestionCount     int32              `json:"event_question_count"`
+}
+
+func (q *Queries) ListCbtEventPackages(ctx context.Context, eventID pgtype.UUID) ([]ListCbtEventPackagesRow, error) {
+	rows, err := q.db.Query(ctx, listCbtEventPackages, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtEventPackagesRow{}
+	for rows.Next() {
+		var i ListCbtEventPackagesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.Title,
+			&i.Description,
+			&i.DurationMinutes,
+			&i.RandomizeQuestions,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.QuestionCount,
+			&i.PublishedQuestionCount,
+			&i.EventQuestionCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCbtPackageQuestions = `-- name: ListCbtPackageQuestions :many
 SELECT pq.package_id, pq.question_id, pq.position, pq.points,
-       q.code AS question_code, q.question_text, q.question_type, q.difficulty, q.status, q.workflow_status,
+       q.event_id, q.code AS question_code, q.question_text, q.question_type, q.difficulty, q.status, q.workflow_status,
        q.cp_ref, q.tp_ref, q.kd_ref, q.material_topic, q.cognitive_level, q.hots_flag
 FROM cbt_package_questions pq
 JOIN cbt_questions q ON q.id = pq.question_id
+JOIN cbt_packages p ON p.id = pq.package_id
+WHERE ($1::uuid IS NULL OR p.event_id = $1::uuid)
 ORDER BY pq.package_id, pq.position ASC
 `
 
@@ -199,6 +277,7 @@ type ListCbtPackageQuestionsRow struct {
 	QuestionID     pgtype.UUID               `json:"question_id"`
 	Position       int32                     `json:"position"`
 	Points         int32                     `json:"points"`
+	EventID        pgtype.UUID               `json:"event_id"`
 	QuestionCode   string                    `json:"question_code"`
 	QuestionText   string                    `json:"question_text"`
 	QuestionType   string                    `json:"question_type"`
@@ -213,8 +292,8 @@ type ListCbtPackageQuestionsRow struct {
 	HotsFlag       bool                      `json:"hots_flag"`
 }
 
-func (q *Queries) ListCbtPackageQuestions(ctx context.Context) ([]ListCbtPackageQuestionsRow, error) {
-	rows, err := q.db.Query(ctx, listCbtPackageQuestions)
+func (q *Queries) ListCbtPackageQuestions(ctx context.Context, eventID pgtype.UUID) ([]ListCbtPackageQuestionsRow, error) {
+	rows, err := q.db.Query(ctx, listCbtPackageQuestions, eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -227,6 +306,7 @@ func (q *Queries) ListCbtPackageQuestions(ctx context.Context) ([]ListCbtPackage
 			&i.QuestionID,
 			&i.Position,
 			&i.Points,
+			&i.EventID,
 			&i.QuestionCode,
 			&i.QuestionText,
 			&i.QuestionType,
@@ -251,19 +331,21 @@ func (q *Queries) ListCbtPackageQuestions(ctx context.Context) ([]ListCbtPackage
 }
 
 const listCbtPackages = `-- name: ListCbtPackages :many
-SELECT p.id, p.subject_id, s.name AS subject_name, s.code AS subject_code,
+SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject_code,
        p.title, p.description, p.duration_minutes, p.randomize_questions, p.is_active,
        p.created_at, p.updated_at,
        COUNT(pq.question_id)::int AS question_count
 FROM cbt_packages p
 JOIN subjects s ON s.id = p.subject_id
 LEFT JOIN cbt_package_questions pq ON pq.package_id = p.id
+WHERE ($1::uuid IS NULL OR p.event_id = $1::uuid)
 GROUP BY p.id, s.name, s.code
 ORDER BY p.created_at DESC
 `
 
 type ListCbtPackagesRow struct {
 	ID                 pgtype.UUID        `json:"id"`
+	EventID            pgtype.UUID        `json:"event_id"`
 	SubjectID          pgtype.UUID        `json:"subject_id"`
 	SubjectName        string             `json:"subject_name"`
 	SubjectCode        string             `json:"subject_code"`
@@ -277,8 +359,8 @@ type ListCbtPackagesRow struct {
 	QuestionCount      int32              `json:"question_count"`
 }
 
-func (q *Queries) ListCbtPackages(ctx context.Context) ([]ListCbtPackagesRow, error) {
-	rows, err := q.db.Query(ctx, listCbtPackages)
+func (q *Queries) ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]ListCbtPackagesRow, error) {
+	rows, err := q.db.Query(ctx, listCbtPackages, eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -288,6 +370,7 @@ func (q *Queries) ListCbtPackages(ctx context.Context) ([]ListCbtPackagesRow, er
 		var i ListCbtPackagesRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.EventID,
 			&i.SubjectID,
 			&i.SubjectName,
 			&i.SubjectCode,

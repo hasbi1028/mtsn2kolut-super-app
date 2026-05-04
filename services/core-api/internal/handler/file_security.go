@@ -62,7 +62,23 @@ func secureFileResponseHeaders(w http.ResponseWriter, mimeType, filename string)
 	if archiveLike(filename, mimeType) {
 		disposition = "attachment"
 	}
-	w.Header().Set("Content-Disposition", disposition+`; filename="`+strings.ReplaceAll(filename, `"`, "")+`"`)
+	w.Header().Set("Content-Disposition", disposition+`; filename="`+contentDispositionFilename(filename)+`"`)
+}
+
+func contentDispositionFilename(filename string) string {
+	name := filepath.Base(filename)
+	name = strings.Map(func(r rune) rune {
+		if r == '\r' || r == '\n' || r == 0 {
+			return -1
+		}
+		return r
+	}, name)
+	name = strings.ReplaceAll(name, `\`, `\\`)
+	name = strings.ReplaceAll(name, `"`, `\"`)
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		return "download"
+	}
+	return name
 }
 
 func archiveLike(filename, mimeType string) bool {

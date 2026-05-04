@@ -33,12 +33,24 @@ type fakeQuestionStore struct {
 	updateParams db.UpdateCbtQuestionParams
 	updateCalls  int
 
-	deleteID    pgtype.UUID
-	deleteCalls int
+	deleteID          pgtype.UUID
+	deleteCalls       int
+	membersByUser     []db.CbtEventMember
+	membersByUsername []db.CbtEventMember
+	auditLogs         []db.CbtQuestionAuditLog
+	auditCalls        int
 }
 
-func (f *fakeQuestionStore) ListCbtQuestions(ctx context.Context) ([]db.ListCbtQuestionsRow, error) {
+func (f *fakeQuestionStore) ListCbtQuestions(ctx context.Context, arg db.ListCbtQuestionsParams) ([]db.ListCbtQuestionsRow, error) {
 	return f.listRows, nil
+}
+
+func (f *fakeQuestionStore) ListCbtEventMembersByUser(ctx context.Context, userID pgtype.UUID) ([]db.CbtEventMember, error) {
+	return f.membersByUser, nil
+}
+
+func (f *fakeQuestionStore) ListCbtEventMembersByUsername(ctx context.Context, username string) ([]db.CbtEventMember, error) {
+	return f.membersByUsername, nil
 }
 
 func (f *fakeQuestionStore) ListCbtQuestionsFiltered(ctx context.Context, arg db.ListCbtQuestionsFilteredParams) ([]db.ListCbtQuestionsFilteredRow, error) {
@@ -92,6 +104,17 @@ func (f *fakeQuestionStore) DeleteCbtQuestion(ctx context.Context, id pgtype.UUI
 	return nil
 }
 
+func (f *fakeQuestionStore) CreateCbtQuestionAuditLog(ctx context.Context, arg db.CreateCbtQuestionAuditLogParams) (db.CbtQuestionAuditLog, error) {
+	f.auditCalls++
+	row := db.CbtQuestionAuditLog{QuestionID: arg.QuestionID, ActorUsername: arg.ActorUsername, Action: arg.Action, Note: arg.Note, Metadata: arg.Metadata}
+	f.auditLogs = append(f.auditLogs, row)
+	return row, nil
+}
+
+func (f *fakeQuestionStore) ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAuditLog, error) {
+	return f.auditLogs, nil
+}
+
 func TestNewCbtQuestionAndReadDelegation(t *testing.T) {
 	questionID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
 	store := &fakeQuestionStore{
@@ -118,7 +141,7 @@ func TestNewCbtQuestionAndReadDelegation(t *testing.T) {
 		t.Fatalf("Get() = %+v, want current row", got)
 	}
 
-	detail, err := svc.GetDetail(context.Background(), questionID)
+	detail, err := svc.GetDetail(context.Background(), questionID, CbtQuestionActor{Username: "admin", Roles: []string{"admin"}})
 	if err != nil {
 		t.Fatalf("GetDetail() error = %v", err)
 	}
@@ -175,6 +198,7 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 		AnswerKey:      " b ",
 		MediaAssetIDs:  []string{"asset-1"},
 		AuthorUsername: " guru ",
+		Actor:          CbtQuestionActor{Username: "guru", Roles: []string{"admin"}},
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -193,6 +217,7 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	}
 
 	deleteID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
+	store.current = db.GetCbtQuestionRow{ID: deleteID, Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "draft"}
 	if err := svc.Delete(context.Background(), deleteID); err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
@@ -219,6 +244,7 @@ func TestCbtQuestionImportLegacyCSVMapsRows(t *testing.T) {
 		SubjectID: subjectID,
 		CSVText:   csvText,
 		Username:  " guru.cbt ",
+		Actor:     CbtQuestionActor{Username: "guru.cbt", Roles: []string{"admin"}},
 	})
 	if err != nil {
 		t.Fatalf("ImportLegacyCSV() error = %v", err)
@@ -269,6 +295,7 @@ func TestCbtQuestionImportLegacyCSVSkipsExistingStem(t *testing.T) {
 		SubjectID: subjectID,
 		CSVText:   csvText,
 		Username:  "guru.cbt",
+		Actor:     CbtQuestionActor{Username: "guru.cbt", Roles: []string{"admin"}},
 	})
 	if err != nil {
 		t.Fatalf("ImportLegacyCSV() error = %v", err)
@@ -281,6 +308,35 @@ func TestCbtQuestionImportLegacyCSVSkipsExistingStem(t *testing.T) {
 	}
 	if store.createHistory[0].Code != "MTK-2" {
 		t.Fatalf("created code = %q, want only non-duplicate row", store.createHistory[0].Code)
+	}
+}
+
+func TestCbtQuestionImportLegacyCSVDryRunDoesNotInsert(t *testing.T) {
+	subjectID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	store := &fakeQuestionStore{
+		createRow: db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{8}, Valid: true}},
+	}
+	svc := &CbtQuestion{q: store}
+	csvText := strings.Join([]string{
+		"kode;soal;opsi_a;opsi_b;opsi_c;opsi_d;jawaban",
+		"MTK-1;Berapa 2+2?;3;4;5;6;B",
+		"MTK-2;Berapa 3+3?;5;6;7;8;B",
+	}, "\n")
+
+	got, err := svc.ImportLegacyCSV(context.Background(), ImportLegacyQuestionsInput{
+		SubjectID: subjectID,
+		CSVText:   csvText,
+		Actor:     CbtQuestionActor{Username: "admin", Roles: []string{"admin"}},
+		DryRun:    true,
+	})
+	if err != nil {
+		t.Fatalf("ImportLegacyCSV(dry run) error = %v", err)
+	}
+	if !got.DryRun || got.WouldImport != 2 || got.Imported != 0 || got.Skipped != 0 {
+		t.Fatalf("ImportLegacyCSV(dry run) result = %+v, want dry_run with 2 would_import and no inserts", got)
+	}
+	if store.createCalls != 0 || store.auditCalls != 0 {
+		t.Fatalf("ImportLegacyCSV(dry run) create/audit calls = %d/%d, want 0/0", store.createCalls, store.auditCalls)
 	}
 }
 
@@ -303,6 +359,7 @@ func TestCbtQuestionImportLegacyCSVSupportsStructuredTypes(t *testing.T) {
 		SubjectID: subjectID,
 		CSVText:   csvText,
 		Username:  "guru.cbt",
+		Actor:     CbtQuestionActor{Username: "guru.cbt", Roles: []string{"admin"}},
 	})
 	if err != nil {
 		t.Fatalf("ImportLegacyCSV() error = %v", err)
@@ -327,6 +384,73 @@ func TestCbtQuestionImportLegacyCSVSupportsStructuredTypes(t *testing.T) {
 	}
 	if store.createHistory[4].QuestionType != "matching" || store.createHistory[4].AnswerKey != "A=1;B=2" || !strings.Contains(string(store.createHistory[4].Options), `"is_distractor":true`) {
 		t.Fatalf("matching import = %+v options %s, want default answer and distractor", store.createHistory[4], string(store.createHistory[4].Options))
+	}
+}
+
+func TestCbtQuestionImportLegacyCSVRequiresCreatePermission(t *testing.T) {
+	svc := &CbtQuestion{q: &fakeQuestionStore{}}
+	_, err := svc.ImportLegacyCSV(context.Background(), ImportLegacyQuestionsInput{
+		SubjectID: pgtype.UUID{Bytes: [16]byte{7}, Valid: true},
+		CSVText:   "kode;soal;jawaban\nQ-1;Soal;A",
+		Username:  "guru.tanpa-event",
+		Actor:     CbtQuestionActor{Username: "guru.tanpa-event", Roles: []string{"guru"}},
+	})
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("ImportLegacyCSV() error = %v, want ErrForbidden", err)
+	}
+}
+
+func TestCbtQuestionGetDetailScopesAndRedactsAnswerKey(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
+	store := &fakeQuestionStore{detail: db.GetCbtQuestionDetailRow{
+		ID:             questionID,
+		SubjectID:      pgtype.UUID{Bytes: [16]byte{2}, Valid: true},
+		Status:         db.CbtQuestionStatusEnumPublished,
+		AuthorUsername: "author",
+		AnswerKey:      "A",
+	}}
+	svc := &CbtQuestion{q: store}
+	row, err := svc.GetDetail(context.Background(), questionID, CbtQuestionActor{Username: "guru.lain", Roles: []string{"guru"}})
+	if err != nil {
+		t.Fatalf("GetDetail(published) error = %v", err)
+	}
+	if row.AnswerKey != "" {
+		t.Fatalf("GetDetail(published unauthorized) answer_key = %q, want redacted", row.AnswerKey)
+	}
+
+	store.detail.Status = db.CbtQuestionStatusEnumDraft
+	_, err = svc.GetDetail(context.Background(), questionID, CbtQuestionActor{Username: "guru.lain", Roles: []string{"guru"}})
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("GetDetail(private unauthorized) error = %v, want ErrForbidden", err)
+	}
+}
+
+func TestCbtQuestionReviewerCanApproveAssignedEventQuestion(t *testing.T) {
+	eventID := pgtype.UUID{Bytes: [16]byte{4}, Valid: true}
+	subjectID := pgtype.UUID{Bytes: [16]byte{5}, Valid: true}
+	questionID := pgtype.UUID{Bytes: [16]byte{6}, Valid: true}
+	store := &fakeQuestionStore{
+		current: db.GetCbtQuestionRow{
+			ID: questionID, EventID: eventID, SubjectID: subjectID, QuestionText: "Soal", QuestionType: "multiple_choice",
+			Options:   []byte(`[{"label":"A","text":"A"},{"label":"B","text":"B"},{"label":"C","text":"C"},{"label":"D","text":"D"}]`),
+			AnswerKey: "A", Difficulty: db.CbtQuestionDifficultyEnumMedium, Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "review",
+		},
+		membersByUsername: []db.CbtEventMember{{EventID: eventID, SubjectID: subjectID, Role: db.CbtEventMemberRoleReviewer}},
+	}
+	svc := &CbtQuestion{q: store}
+	_, err := svc.Approve(context.Background(), questionID, CbtQuestionActor{Username: "reviewer", Roles: []string{"guru"}}, "siap")
+	if err != nil {
+		t.Fatalf("Approve(reviewer) error = %v", err)
+	}
+	if store.updateParams.WorkflowStatus != "approved" {
+		t.Fatalf("Approve(reviewer) workflow = %q, want approved", store.updateParams.WorkflowStatus)
+	}
+
+	store.updateParams = db.UpdateCbtQuestionParams{}
+	store.membersByUsername = nil
+	_, err = svc.Reject(context.Background(), questionID, CbtQuestionActor{Username: "bukan-reviewer", Roles: []string{"guru"}}, "tolak")
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("Reject(unauthorized) error = %v, want ErrForbidden", err)
 	}
 }
 
@@ -425,6 +549,7 @@ func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
 		SubjectID: subjectID,
 		CSVText:   string(got.Content),
 		Username:  "guru.import",
+		Actor:     CbtQuestionActor{Username: "guru.import", Roles: []string{"admin"}},
 	})
 	if err != nil {
 		t.Fatalf("roundtrip ImportLegacyCSV() error = %v", err)
@@ -467,6 +592,7 @@ func TestCbtQuestionTemplateCSVRoundtripsThroughImport(t *testing.T) {
 		SubjectID: subjectID,
 		CSVText:   string(template.Content),
 		Username:  "guru.template",
+		Actor:     CbtQuestionActor{Username: "guru.template", Roles: []string{"admin"}},
 	})
 	if err != nil {
 		t.Fatalf("template ImportLegacyCSV() error = %v", err)
@@ -557,7 +683,7 @@ func TestSubmitReviewUpdatesWorkflowAndReviewer(t *testing.T) {
 	}
 	svc := &CbtQuestion{q: store}
 
-	_, err := svc.SubmitReview(context.Background(), store.current.ID, "reviewer1", "cek redaksi")
+	_, err := svc.SubmitReview(context.Background(), store.current.ID, CbtQuestionActor{Username: "reviewer1", Roles: []string{"admin"}}, "cek redaksi")
 	if err != nil {
 		t.Fatalf("SubmitReview() error = %v", err)
 	}
@@ -586,7 +712,7 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		AnswerKey:      "A",
 		Difficulty:     db.CbtQuestionDifficultyEnumMedium,
 		Status:         db.CbtQuestionStatusEnumDraft,
-		WorkflowStatus: "approved",
+		WorkflowStatus: "review",
 		ReviewNotes:    "catatan lama",
 	}
 
@@ -594,7 +720,7 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		store := &fakeQuestionStore{current: current}
 		svc := &CbtQuestion{q: store}
 
-		_, err := svc.Approve(context.Background(), questionID, "waka", "siap")
+		_, err := svc.Approve(context.Background(), questionID, CbtQuestionActor{Username: "waka", Roles: []string{"admin"}}, "siap")
 		if err != nil {
 			t.Fatalf("Approve() error = %v", err)
 		}
@@ -610,7 +736,7 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		store := &fakeQuestionStore{current: current}
 		svc := &CbtQuestion{q: store}
 
-		_, err := svc.Reject(context.Background(), questionID, "waka", "perbaiki opsi C")
+		_, err := svc.Reject(context.Background(), questionID, CbtQuestionActor{Username: "waka", Roles: []string{"admin"}}, "perbaiki opsi C")
 		if err != nil {
 			t.Fatalf("Reject() error = %v", err)
 		}
@@ -626,10 +752,12 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 	})
 
 	t.Run("publish sets published status and approver", func(t *testing.T) {
-		store := &fakeQuestionStore{current: current}
+		approved := current
+		approved.WorkflowStatus = "approved"
+		store := &fakeQuestionStore{current: approved}
 		svc := &CbtQuestion{q: store}
 
-		_, err := svc.Publish(context.Background(), questionID, "kepala")
+		_, err := svc.Publish(context.Background(), questionID, CbtQuestionActor{Username: "kepala", Roles: []string{"admin"}})
 		if err != nil {
 			t.Fatalf("Publish() error = %v", err)
 		}
@@ -645,7 +773,7 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		store := &fakeQuestionStore{current: current}
 		svc := &CbtQuestion{q: store}
 
-		_, err := svc.Archive(context.Background(), questionID, "admin")
+		_, err := svc.Archive(context.Background(), questionID, CbtQuestionActor{Username: "admin", Roles: []string{"admin"}})
 		if err != nil {
 			t.Fatalf("Archive() error = %v", err)
 		}
@@ -660,7 +788,7 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		store := &fakeQuestionStore{current: used}
 		svc := &CbtQuestion{q: store}
 
-		_, err := svc.Archive(context.Background(), questionID, "admin")
+		_, err := svc.Archive(context.Background(), questionID, CbtQuestionActor{Username: "admin", Roles: []string{"admin"}})
 		if !errors.Is(err, domain.ErrConflict) {
 			t.Fatalf("Archive(used) error = %v, want ErrConflict", err)
 		}
@@ -673,7 +801,7 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		store := &fakeQuestionStore{current: current}
 		svc := &CbtQuestion{q: store}
 
-		_, err := svc.DuplicateAsDraft(context.Background(), questionID, "guru")
+		_, err := svc.DuplicateAsDraft(context.Background(), questionID, CbtQuestionActor{Username: "guru", Roles: []string{"admin"}})
 		if err != nil {
 			t.Fatalf("DuplicateAsDraft() error = %v", err)
 		}
@@ -692,7 +820,7 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		store := &fakeQuestionStore{current: current}
 		svc := &CbtQuestion{q: store}
 
-		_, err := svc.DuplicateForRevision(context.Background(), questionID, "reviewer", "Daya pembeda rendah")
+		_, err := svc.DuplicateForRevision(context.Background(), questionID, CbtQuestionActor{Username: "reviewer", Roles: []string{"admin"}}, "Daya pembeda rendah")
 		if err != nil {
 			t.Fatalf("DuplicateForRevision() error = %v", err)
 		}
@@ -706,6 +834,38 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 			t.Fatalf("DuplicateForRevision() reviewer/approver/notes = %q/%q/%q, want reviewer/no approver/notes", store.createParams.ReviewerUsername, store.createParams.ApproverUsername, store.createParams.ReviewNotes)
 		}
 	})
+}
+
+func TestCbtQuestionBulkWorkflowReturnsPerItemResults(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
+	store := &fakeQuestionStore{current: db.GetCbtQuestionRow{
+		ID:             questionID,
+		SubjectID:      pgtype.UUID{Bytes: [16]byte{3}, Valid: true},
+		QuestionText:   "Soal",
+		QuestionType:   "multiple_choice",
+		Options:        []byte(`[{"label":"A","text":"A"},{"label":"B","text":"B"}]`),
+		AnswerKey:      "A",
+		Difficulty:     db.CbtQuestionDifficultyEnumMedium,
+		Status:         db.CbtQuestionStatusEnumDraft,
+		WorkflowStatus: "review",
+	}}
+	svc := &CbtQuestion{q: store}
+
+	got, err := svc.BulkWorkflow(context.Background(), BulkCbtQuestionWorkflowInput{
+		QuestionIDs: []pgtype.UUID{questionID},
+		Action:      "approve",
+		Notes:       "siap",
+		Actor:       CbtQuestionActor{Username: "reviewer", Roles: []string{"admin"}},
+	})
+	if err != nil {
+		t.Fatalf("BulkWorkflow() error = %v", err)
+	}
+	if got.Total != 1 || got.Success != 1 || got.Failed != 0 || len(got.Items) != 1 || !got.Items[0].OK {
+		t.Fatalf("BulkWorkflow() result = %+v, want one successful item", got)
+	}
+	if store.updateParams.WorkflowStatus != "approved" || store.auditCalls != 1 || store.auditLogs[0].Action != "approve" {
+		t.Fatalf("BulkWorkflow() update/audit = %+v/%+v, want approved audit", store.updateParams, store.auditLogs)
+	}
 }
 
 func TestNormalizeQuestionInputBeginnerDefaultsToDraft(t *testing.T) {

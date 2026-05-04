@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/domain"
@@ -31,15 +33,19 @@ var importAnswerTokenSeparators = regexp.MustCompile(`[,\|;/+\s]+`)
 var importMatchingPairSeparators = regexp.MustCompile(`[;,|]+`)
 
 type cbtQuestionStore interface {
-	ListCbtQuestions(ctx context.Context) ([]db.ListCbtQuestionsRow, error)
+	ListCbtQuestions(ctx context.Context, arg db.ListCbtQuestionsParams) ([]db.ListCbtQuestionsRow, error)
 	ListCbtQuestionsFiltered(ctx context.Context, arg db.ListCbtQuestionsFilteredParams) ([]db.ListCbtQuestionsFilteredRow, error)
 	CountCbtQuestionsFiltered(ctx context.Context, arg db.CountCbtQuestionsFilteredParams) (int64, error)
+	ListCbtEventMembersByUser(ctx context.Context, userID pgtype.UUID) ([]db.CbtEventMember, error)
+	ListCbtEventMembersByUsername(ctx context.Context, username string) ([]db.CbtEventMember, error)
 	ListCbtQuestionStemTextsBySubject(ctx context.Context, subjectID pgtype.UUID) ([]db.ListCbtQuestionStemTextsBySubjectRow, error)
 	GetCbtQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error)
 	GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionDetailRow, error)
 	CreateCbtQuestion(ctx context.Context, arg db.CreateCbtQuestionParams) (db.CbtQuestion, error)
 	UpdateCbtQuestion(ctx context.Context, arg db.UpdateCbtQuestionParams) (db.CbtQuestion, error)
 	DeleteCbtQuestion(ctx context.Context, id pgtype.UUID) error
+	CreateCbtQuestionAuditLog(ctx context.Context, arg db.CreateCbtQuestionAuditLogParams) (db.CbtQuestionAuditLog, error)
+	ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAuditLog, error)
 }
 
 type CbtQuestion struct {
@@ -62,6 +68,7 @@ type QuestionOption struct {
 
 type SaveCbtQuestionInput struct {
 	ID               pgtype.UUID
+	EventID          pgtype.UUID
 	SubjectID        pgtype.UUID
 	AuthoringMode    string
 	Code             string
@@ -99,13 +106,43 @@ type SaveCbtQuestionInput struct {
 	ApproverUsername string
 	WriterNotes      string
 	ReviewNotes      string
+	Actor            CbtQuestionActor
+}
+
+type CbtQuestionActor struct {
+	UserID   pgtype.UUID
+	Username string
+	Roles    []string
+}
+
+func (a CbtQuestionActor) IsAdmin() bool {
+	for _, role := range a.Roles {
+		if strings.TrimSpace(role) == "admin" {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeCbtQuestionActor(actor CbtQuestionActor) CbtQuestionActor {
+	actor.Username = strings.TrimSpace(actor.Username)
+	return actor
+}
+
+func inputActor(input SaveCbtQuestionInput) CbtQuestionActor {
+	actor := normalizeCbtQuestionActor(input.Actor)
+	if actor.Username == "" {
+		actor.Username = strings.TrimSpace(input.AuthorUsername)
+	}
+	return actor
 }
 
 func (s *CbtQuestion) List(ctx context.Context) ([]db.ListCbtQuestionsRow, error) {
-	return s.q.ListCbtQuestions(ctx)
+	return s.q.ListCbtQuestions(ctx, db.ListCbtQuestionsParams{IsAdmin: true})
 }
 
 type ListCbtQuestionsInput struct {
+	EventID        pgtype.UUID
 	SubjectID      pgtype.UUID
 	AuthorUsername string
 	WorkflowStatus string
@@ -116,6 +153,7 @@ type ListCbtQuestionsInput struct {
 	SearchQuery    string
 	Limit          int32
 	Offset         int32
+	Actor          CbtQuestionActor
 }
 
 type ExportCbtQuestionsCSVResult struct {
@@ -124,14 +162,42 @@ type ExportCbtQuestionsCSVResult struct {
 	Count    int
 }
 
+type BulkCbtQuestionWorkflowInput struct {
+	QuestionIDs []pgtype.UUID
+	Action      string
+	Notes       string
+	Actor       CbtQuestionActor
+}
+
+type BulkCbtQuestionWorkflowItem struct {
+	QuestionID pgtype.UUID `json:"question_id"`
+	OK         bool        `json:"ok"`
+	Error      string      `json:"error,omitempty"`
+	Status     string      `json:"status,omitempty"`
+	Workflow   string      `json:"workflow_status,omitempty"`
+}
+
+type BulkCbtQuestionWorkflowResult struct {
+	Action  string                        `json:"action"`
+	Total   int                           `json:"total"`
+	Success int                           `json:"success"`
+	Failed  int                           `json:"failed"`
+	Items   []BulkCbtQuestionWorkflowItem `json:"items"`
+}
+
 func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error) {
+	actor := normalizeCbtQuestionActor(in.Actor)
 	rows, err := s.q.ListCbtQuestionsFiltered(ctx, db.ListCbtQuestionsFilteredParams{
+		EventID:        in.EventID,
 		SubjectID:      in.SubjectID,
 		AuthorUsername: strings.TrimSpace(in.AuthorUsername),
 		WorkflowStatus: strings.TrimSpace(in.WorkflowStatus),
 		StatusFilter:   normalizeQuestionStatusFilter(in.Status),
 		QuestionType:   strings.TrimSpace(in.QuestionType),
 		HotsFilter:     strings.TrimSpace(in.HotsFilter),
+		IsAdmin:        actor.IsAdmin(),
+		ActorUsername:  actor.Username,
+		ActorUserID:    actor.UserID,
 		RevisionSource: normalizeRevisionSource(in.RevisionSource),
 		SearchQuery:    strings.TrimSpace(in.SearchQuery),
 		LimitCount:     in.Limit,
@@ -141,12 +207,16 @@ func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput
 		return nil, 0, err
 	}
 	total, err := s.q.CountCbtQuestionsFiltered(ctx, db.CountCbtQuestionsFilteredParams{
+		EventID:        in.EventID,
 		SubjectID:      in.SubjectID,
 		AuthorUsername: strings.TrimSpace(in.AuthorUsername),
 		WorkflowStatus: strings.TrimSpace(in.WorkflowStatus),
 		StatusFilter:   normalizeQuestionStatusFilter(in.Status),
 		QuestionType:   strings.TrimSpace(in.QuestionType),
 		HotsFilter:     strings.TrimSpace(in.HotsFilter),
+		IsAdmin:        actor.IsAdmin(),
+		ActorUsername:  actor.Username,
+		ActorUserID:    actor.UserID,
 		RevisionSource: normalizeRevisionSource(in.RevisionSource),
 		SearchQuery:    strings.TrimSpace(in.SearchQuery),
 	})
@@ -154,6 +224,62 @@ func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput
 		return nil, 0, err
 	}
 	return rows, total, nil
+}
+
+func (s *CbtQuestion) Timeline(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) ([]db.CbtQuestionAuditLog, error) {
+	if _, err := s.GetDetail(ctx, id, actor); err != nil {
+		return nil, err
+	}
+	rows, err := s.q.ListCbtQuestionTimeline(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		return []db.CbtQuestionAuditLog{}, nil
+	}
+	return rows, nil
+}
+
+func (s *CbtQuestion) BulkWorkflow(ctx context.Context, in BulkCbtQuestionWorkflowInput) (BulkCbtQuestionWorkflowResult, error) {
+	action := strings.TrimSpace(in.Action)
+	switch action {
+	case "approve", "reject", "publish":
+	default:
+		return BulkCbtQuestionWorkflowResult{}, fmt.Errorf("%w: action tidak didukung", domain.ErrBadRequest)
+	}
+	result := BulkCbtQuestionWorkflowResult{
+		Action: action,
+		Total:  len(in.QuestionIDs),
+		Items:  make([]BulkCbtQuestionWorkflowItem, 0, len(in.QuestionIDs)),
+	}
+	for _, id := range in.QuestionIDs {
+		item := BulkCbtQuestionWorkflowItem{QuestionID: id}
+		row, err := s.applyBulkWorkflowItem(ctx, id, action, in.Actor, in.Notes)
+		if err != nil {
+			item.Error = err.Error()
+			result.Failed++
+		} else {
+			item.OK = true
+			item.Status = string(row.Status)
+			item.Workflow = row.WorkflowStatus
+			result.Success++
+		}
+		result.Items = append(result.Items, item)
+	}
+	return result, nil
+}
+
+func (s *CbtQuestion) applyBulkWorkflowItem(ctx context.Context, id pgtype.UUID, action string, actor CbtQuestionActor, notes string) (db.CbtQuestion, error) {
+	switch action {
+	case "approve":
+		return s.Approve(ctx, id, actor, notes)
+	case "reject":
+		return s.Reject(ctx, id, actor, notes)
+	case "publish":
+		return s.Publish(ctx, id, actor)
+	default:
+		return db.CbtQuestion{}, fmt.Errorf("%w: action tidak didukung", domain.ErrBadRequest)
+	}
 }
 
 func normalizeRevisionSource(value string) string {
@@ -235,80 +361,180 @@ func (s *CbtQuestion) Get(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestio
 	return s.q.GetCbtQuestion(ctx, id)
 }
 
-func (s *CbtQuestion) GetDetail(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionDetailRow, error) {
-	return s.q.GetCbtQuestionDetail(ctx, id)
+func (s *CbtQuestion) GetDetail(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) (db.GetCbtQuestionDetailRow, error) {
+	row, err := s.q.GetCbtQuestionDetail(ctx, id)
+	if err != nil {
+		return db.GetCbtQuestionDetailRow{}, normalizeNoRows(err)
+	}
+	actor = normalizeCbtQuestionActor(actor)
+	canView, canSeeAnswerKey, err := s.questionDetailAccess(ctx, actor, row)
+	if err != nil {
+		return db.GetCbtQuestionDetailRow{}, err
+	}
+	if !canView {
+		return db.GetCbtQuestionDetailRow{}, domain.ErrForbidden
+	}
+	if !canSeeAnswerKey {
+		row.AnswerKey = ""
+	}
+	return row, nil
 }
 
 func (s *CbtQuestion) Create(ctx context.Context, input SaveCbtQuestionInput) (db.CbtQuestion, error) {
+	return s.createWithAudit(ctx, input, "create", "", nil)
+}
+
+func (s *CbtQuestion) createWithAudit(ctx context.Context, input SaveCbtQuestionInput, action string, note string, metadata map[string]any) (db.CbtQuestion, error) {
+	actor := normalizeCbtQuestionActor(inputActor(input))
+	if err := s.requireCreateQuestion(ctx, actor, input.EventID, input.SubjectID); err != nil {
+		return db.CbtQuestion{}, err
+	}
 	params, err := buildCreateQuestionParams(input)
 	if err != nil {
 		return db.CbtQuestion{}, err
 	}
-	return s.q.CreateCbtQuestion(ctx, params)
+	row, err := s.q.CreateCbtQuestion(ctx, params)
+	if err != nil {
+		return db.CbtQuestion{}, err
+	}
+	if err := s.logQuestionAudit(ctx, row.ID, actor.Username, action, note, metadata); err != nil {
+		return db.CbtQuestion{}, err
+	}
+	return row, nil
 }
 
 func (s *CbtQuestion) Update(ctx context.Context, input SaveCbtQuestionInput) (db.CbtQuestion, error) {
+	return s.updateWithAudit(ctx, input, "update", strings.TrimSpace(input.ReviewNotes), nil)
+}
+
+func (s *CbtQuestion) updateWithAudit(ctx context.Context, input SaveCbtQuestionInput, action string, note string, metadata map[string]any) (db.CbtQuestion, error) {
+	actor := normalizeCbtQuestionActor(inputActor(input))
 	current, err := s.q.GetCbtQuestion(ctx, input.ID)
 	if err != nil {
+		return db.CbtQuestion{}, normalizeNoRows(err)
+	}
+	if err := s.requireModifyQuestion(ctx, actor, current); err != nil {
 		return db.CbtQuestion{}, err
+	}
+	if questionUsageLocked(current.PackageCount, current.AnswerCount) {
+		return db.CbtQuestion{}, fmt.Errorf("%w: soal sudah masuk paket ujian atau memiliki jawaban siswa. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
 	}
 	params, err := buildUpdateQuestionParams(current, input)
 	if err != nil {
 		return db.CbtQuestion{}, err
 	}
-	return s.q.UpdateCbtQuestion(ctx, params)
+	row, err := s.q.UpdateCbtQuestion(ctx, params)
+	if err != nil {
+		return db.CbtQuestion{}, err
+	}
+	if err := s.logQuestionAudit(ctx, row.ID, actor.Username, action, note, metadata); err != nil {
+		return db.CbtQuestion{}, err
+	}
+	return row, nil
 }
 
 func (s *CbtQuestion) Delete(ctx context.Context, id pgtype.UUID) error {
+	return s.DeleteWithActor(ctx, id, CbtQuestionActor{})
+}
+
+func (s *CbtQuestion) DeleteWithActor(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) error {
+	actor = normalizeCbtQuestionActor(actor)
+	current, err := s.q.GetCbtQuestion(ctx, id)
+	if err != nil {
+		return normalizeNoRows(err)
+	}
+	if questionUsageLocked(current.PackageCount, current.AnswerCount) {
+		return fmt.Errorf("%w: soal sudah masuk paket ujian atau memiliki jawaban siswa. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+	}
+	if err := s.logQuestionAudit(ctx, id, actor.Username, "delete", "", nil); err != nil {
+		return err
+	}
 	return s.q.DeleteCbtQuestion(ctx, id)
 }
 
-func (s *CbtQuestion) SubmitReview(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error) {
+func (s *CbtQuestion) SubmitReview(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
+	actor = normalizeCbtQuestionActor(actor)
 	current, err := s.q.GetCbtQuestion(ctx, id)
 	if err != nil {
-		return db.CbtQuestion{}, err
+		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
-	input := questionInputFromCurrent(current, username)
+	if current.WorkflowStatus != "draft" && current.WorkflowStatus != "rejected" {
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya draft atau rejected yang dapat diajukan review", domain.ErrConflict)
+	}
+	input := questionInputFromCurrent(current, actor.Username)
+	input.Actor = actor
 	input.WorkflowStatus = "review"
 	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
-	return s.Update(ctx, input)
+	return s.updateWithAudit(ctx, input, "submit_review", reviewNotes, map[string]any{"workflow_status": "review"})
 }
 
-func (s *CbtQuestion) Approve(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error) {
+func (s *CbtQuestion) Approve(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
+	actor = normalizeCbtQuestionActor(actor)
 	current, err := s.q.GetCbtQuestion(ctx, id)
 	if err != nil {
-		return db.CbtQuestion{}, err
+		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
-	input := questionInputFromCurrent(current, username)
+	if current.WorkflowStatus != "review" {
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal review yang dapat disetujui", domain.ErrConflict)
+	}
+	if !actor.IsAdmin() {
+		if err := s.requireWorkflowRole(ctx, actor.Username, current, db.CbtEventMemberRoleReviewer); err != nil {
+			return db.CbtQuestion{}, err
+		}
+	}
+	input := questionInputFromCurrent(current, actor.Username)
+	input.Actor = CbtQuestionActor{Username: actor.Username, Roles: []string{"admin"}}
 	input.WorkflowStatus = "approved"
 	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
-	return s.Update(ctx, input)
+	return s.updateWithAudit(ctx, input, "approve", reviewNotes, map[string]any{"workflow_status": "approved"})
 }
 
-func (s *CbtQuestion) Reject(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error) {
+func (s *CbtQuestion) Reject(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
+	actor = normalizeCbtQuestionActor(actor)
 	current, err := s.q.GetCbtQuestion(ctx, id)
 	if err != nil {
-		return db.CbtQuestion{}, err
+		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
-	input := questionInputFromCurrent(current, username)
+	if current.WorkflowStatus != "review" {
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal review yang dapat ditolak", domain.ErrConflict)
+	}
+	if !actor.IsAdmin() {
+		if err := s.requireWorkflowRole(ctx, actor.Username, current, db.CbtEventMemberRoleReviewer); err != nil {
+			return db.CbtQuestion{}, err
+		}
+	}
+	input := questionInputFromCurrent(current, actor.Username)
+	input.Actor = CbtQuestionActor{Username: actor.Username, Roles: []string{"admin"}}
 	input.WorkflowStatus = "rejected"
-	input.ReviewerUsername = username
+	input.ReviewerUsername = actor.Username
 	input.ApproverUsername = ""
 	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
-	return s.Update(ctx, input)
+	return s.updateWithAudit(ctx, input, "reject", reviewNotes, map[string]any{"workflow_status": "rejected"})
 }
 
-func (s *CbtQuestion) Publish(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error) {
+func (s *CbtQuestion) Publish(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) (db.CbtQuestion, error) {
+	actor = normalizeCbtQuestionActor(actor)
+	if !actor.IsAdmin() {
+		return db.CbtQuestion{}, domain.ErrForbidden
+	}
 	current, err := s.q.GetCbtQuestion(ctx, id)
 	if err != nil {
-		return db.CbtQuestion{}, err
+		return db.CbtQuestion{}, normalizeNoRows(err)
 	}
-	input := questionInputFromCurrent(current, username)
+	if current.WorkflowStatus != "approved" {
+		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal approved yang dapat dipublish", domain.ErrConflict)
+	}
+	input := questionInputFromCurrent(current, actor.Username)
+	input.Actor = actor
 	input.Status = db.CbtQuestionStatusEnumPublished
-	return s.Update(ctx, input)
+	return s.updateWithAudit(ctx, input, "publish", "", map[string]any{"status": db.CbtQuestionStatusEnumPublished})
 }
 
-func (s *CbtQuestion) Archive(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error) {
+func (s *CbtQuestion) Archive(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) (db.CbtQuestion, error) {
+	actor = normalizeCbtQuestionActor(actor)
+	if !actor.IsAdmin() {
+		return db.CbtQuestion{}, domain.ErrForbidden
+	}
 	current, err := s.q.GetCbtQuestion(ctx, id)
 	if err != nil {
 		return db.CbtQuestion{}, err
@@ -316,7 +542,8 @@ func (s *CbtQuestion) Archive(ctx context.Context, id pgtype.UUID, username stri
 	if questionUsageLocked(current.PackageCount, current.AnswerCount) {
 		return db.CbtQuestion{}, fmt.Errorf("%w: soal sudah masuk paket ujian atau memiliki jawaban siswa. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
 	}
-	input := questionInputFromCurrent(current, username)
+	input := questionInputFromCurrent(current, actor.Username)
+	input.Actor = actor
 	input.Status = db.CbtQuestionStatusEnumArchived
 	return s.Update(ctx, input)
 }
@@ -325,12 +552,182 @@ func questionUsageLocked(packageCount, answerCount int32) bool {
 	return packageCount > 0 || answerCount > 0
 }
 
-func (s *CbtQuestion) DuplicateAsDraft(ctx context.Context, id pgtype.UUID, username string) (db.CbtQuestion, error) {
+func normalizeNoRows(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrNotFound
+	}
+	return err
+}
+
+func (s *CbtQuestion) requireCreateQuestion(ctx context.Context, actor CbtQuestionActor, eventID pgtype.UUID, subjectID pgtype.UUID) error {
+	if actor.IsAdmin() {
+		return nil
+	}
+	if !eventID.Valid {
+		return domain.ErrForbidden
+	}
+	members, err := s.q.ListCbtEventMembersByUser(ctx, actor.UserID)
+	if err != nil {
+		return err
+	}
+	for _, member := range members {
+		if sameUUID(member.EventID, eventID) && member.Role == db.CbtEventMemberRolePembuatSoal && memberSubjectMatches(member.SubjectID, subjectID) {
+			return nil
+		}
+	}
+	return domain.ErrForbidden
+}
+
+func (s *CbtQuestion) requireModifyQuestion(ctx context.Context, actor CbtQuestionActor, current db.GetCbtQuestionRow) error {
+	if actor.IsAdmin() {
+		return nil
+	}
+	if strings.TrimSpace(current.AuthorUsername) == "" || strings.TrimSpace(current.AuthorUsername) != actor.Username {
+		return domain.ErrForbidden
+	}
+	if current.WorkflowStatus != "" && current.WorkflowStatus != "draft" && current.WorkflowStatus != "rejected" {
+		return fmt.Errorf("%w: soal sedang atau sudah masuk alur review. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+	}
+	if current.Status != "" && current.Status != db.CbtQuestionStatusEnumDraft {
+		return fmt.Errorf("%w: soal tidak lagi berstatus draft. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+	}
+	if current.EventID.Valid {
+		return s.requireCreateQuestion(ctx, actor, current.EventID, current.SubjectID)
+	}
+	return nil
+}
+
+func sameUUID(a, b pgtype.UUID) bool {
+	return a.Valid && b.Valid && a.Bytes == b.Bytes
+}
+
+func cbtQuestionUUIDString(id pgtype.UUID) string {
+	if !id.Valid {
+		return ""
+	}
+	return fmt.Sprintf("%x-%x-%x-%x-%x", id.Bytes[0:4], id.Bytes[4:6], id.Bytes[6:8], id.Bytes[8:10], id.Bytes[10:16])
+}
+
+func (s *CbtQuestion) logQuestionAudit(ctx context.Context, questionID pgtype.UUID, actorUsername string, action string, note string, metadata map[string]any) error {
+	action = strings.TrimSpace(action)
+	if !questionID.Valid || action == "" {
+		return nil
+	}
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	raw, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	_, err = s.q.CreateCbtQuestionAuditLog(ctx, db.CreateCbtQuestionAuditLogParams{
+		QuestionID:    questionID,
+		ActorUsername: strings.TrimSpace(actorUsername),
+		Action:        action,
+		Note:          strings.TrimSpace(note),
+		Metadata:      raw,
+	})
+	return err
+}
+
+func memberSubjectMatches(memberSubjectID pgtype.UUID, subjectID pgtype.UUID) bool {
+	return !memberSubjectID.Valid || sameUUID(memberSubjectID, subjectID)
+}
+
+func (s *CbtQuestion) requireWorkflowRole(ctx context.Context, username string, current db.GetCbtQuestionRow, role db.CbtEventMemberRole) error {
+	if !current.EventID.Valid {
+		return nil
+	}
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return domain.ErrForbidden
+	}
+	members, err := s.q.ListCbtEventMembersByUsername(ctx, username)
+	if err != nil {
+		return err
+	}
+	for _, member := range members {
+		if sameUUID(member.EventID, current.EventID) && memberSubjectMatches(member.SubjectID, current.SubjectID) {
+			if member.Role == role || member.Role == db.CbtEventMemberRolePanitia {
+				return nil
+			}
+		}
+	}
+	return domain.ErrForbidden
+}
+
+func (s *CbtQuestion) questionDetailAccess(ctx context.Context, actor CbtQuestionActor, row db.GetCbtQuestionDetailRow) (bool, bool, error) {
+	if actor.IsAdmin() {
+		return true, true, nil
+	}
+	if strings.TrimSpace(row.AuthorUsername) != "" && row.AuthorUsername == actor.Username {
+		return true, true, nil
+	}
+	member, err := s.actorHasEventQuestionRole(ctx, actor, row.EventID, row.SubjectID, db.CbtEventMemberRoleReviewer, db.CbtEventMemberRolePanitia)
+	if err != nil {
+		return false, false, err
+	}
+	if member {
+		return true, true, nil
+	}
+	if row.Status == db.CbtQuestionStatusEnumPublished {
+		return true, false, nil
+	}
+	return false, false, nil
+}
+
+func (s *CbtQuestion) requireDuplicateSourceAccess(ctx context.Context, actor CbtQuestionActor, current db.GetCbtQuestionRow) error {
+	if actor.IsAdmin() {
+		return nil
+	}
+	if strings.TrimSpace(current.AuthorUsername) != "" && current.AuthorUsername == actor.Username {
+		if current.EventID.Valid {
+			return s.requireCreateQuestion(ctx, actor, current.EventID, current.SubjectID)
+		}
+		return nil
+	}
+	member, err := s.actorHasEventQuestionRole(ctx, actor, current.EventID, current.SubjectID, db.CbtEventMemberRoleReviewer, db.CbtEventMemberRolePanitia)
+	if err != nil {
+		return err
+	}
+	if member {
+		return nil
+	}
+	return domain.ErrForbidden
+}
+
+func (s *CbtQuestion) actorHasEventQuestionRole(ctx context.Context, actor CbtQuestionActor, eventID, subjectID pgtype.UUID, roles ...db.CbtEventMemberRole) (bool, error) {
+	if !eventID.Valid || !actor.UserID.Valid {
+		return false, nil
+	}
+	members, err := s.q.ListCbtEventMembersByUser(ctx, actor.UserID)
+	if err != nil {
+		return false, err
+	}
+	for _, member := range members {
+		if !sameUUID(member.EventID, eventID) || !memberSubjectMatches(member.SubjectID, subjectID) {
+			continue
+		}
+		for _, role := range roles {
+			if member.Role == role {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func (s *CbtQuestion) DuplicateAsDraft(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) (db.CbtQuestion, error) {
+	actor = normalizeCbtQuestionActor(actor)
 	current, err := s.q.GetCbtQuestion(ctx, id)
 	if err != nil {
 		return db.CbtQuestion{}, err
 	}
-	input := questionInputFromCurrent(current, username)
+	if err := s.requireDuplicateSourceAccess(ctx, actor, current); err != nil {
+		return db.CbtQuestion{}, err
+	}
+	input := questionInputFromCurrent(current, actor.Username)
+	input.Actor = actor
 	input.ID = pgtype.UUID{}
 	input.Status = db.CbtQuestionStatusEnumDraft
 	input.WorkflowStatus = "draft"
@@ -340,19 +737,24 @@ func (s *CbtQuestion) DuplicateAsDraft(ctx context.Context, id pgtype.UUID, user
 	if input.Code != "" {
 		input.Code = input.Code + "-COPY"
 	}
-	return s.Create(ctx, input)
+	return s.createWithAudit(ctx, input, "duplicate", "", map[string]any{"source_question_id": cbtQuestionUUIDString(id)})
 }
 
-func (s *CbtQuestion) DuplicateForRevision(ctx context.Context, id pgtype.UUID, username string, reviewNotes string) (db.CbtQuestion, error) {
+func (s *CbtQuestion) DuplicateForRevision(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor, reviewNotes string) (db.CbtQuestion, error) {
+	actor = normalizeCbtQuestionActor(actor)
 	current, err := s.q.GetCbtQuestion(ctx, id)
 	if err != nil {
 		return db.CbtQuestion{}, err
 	}
-	input := questionInputFromCurrent(current, username)
+	if err := s.requireDuplicateSourceAccess(ctx, actor, current); err != nil {
+		return db.CbtQuestion{}, err
+	}
+	input := questionInputFromCurrent(current, actor.Username)
+	input.Actor = actor
 	input.ID = pgtype.UUID{}
 	input.Status = db.CbtQuestionStatusEnumDraft
 	input.WorkflowStatus = "rejected"
-	input.ReviewerUsername = username
+	input.ReviewerUsername = actor.Username
 	input.ApproverUsername = ""
 	input.ReviewNotes = mergeNotes(current.ReviewNotes, reviewNotes)
 	if strings.TrimSpace(input.ReviewNotes) == "" {
@@ -361,17 +763,22 @@ func (s *CbtQuestion) DuplicateForRevision(ctx context.Context, id pgtype.UUID, 
 	if input.Code != "" {
 		input.Code = fmt.Sprintf("%s-REV-%s", input.Code, time.Now().Format("20060102150405"))
 	}
-	return s.Create(ctx, input)
+	return s.createWithAudit(ctx, input, "revision", reviewNotes, map[string]any{"source_question_id": cbtQuestionUUIDString(id)})
 }
 
 type ImportLegacyQuestionsInput struct {
 	SubjectID pgtype.UUID
+	EventID   pgtype.UUID
 	CSVText   string
 	Username  string
+	Actor     CbtQuestionActor
+	DryRun    bool
 }
 
 type ImportLegacyQuestionsResult struct {
 	TotalRows      int      `json:"total_rows"`
+	DryRun         bool     `json:"dry_run"`
+	WouldImport    int      `json:"would_import"`
 	Imported       int      `json:"imported"`
 	Skipped        int      `json:"skipped"`
 	Errors         []string `json:"errors"`
@@ -379,6 +786,13 @@ type ImportLegacyQuestionsResult struct {
 }
 
 func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQuestionsInput) (ImportLegacyQuestionsResult, error) {
+	actor := normalizeCbtQuestionActor(input.Actor)
+	if actor.Username == "" {
+		actor.Username = strings.TrimSpace(input.Username)
+	}
+	if err := s.requireCreateQuestion(ctx, actor, input.EventID, input.SubjectID); err != nil {
+		return ImportLegacyQuestionsResult{}, err
+	}
 	reader := csv.NewReader(strings.NewReader(input.CSVText))
 	reader.TrimLeadingSpace = true
 	reader.FieldsPerRecord = -1
@@ -393,7 +807,7 @@ func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQue
 		return ImportLegacyQuestionsResult{}, fmt.Errorf("CSV minimal berisi header dan satu baris soal")
 	}
 	headers := normalizeCSVHeaders(records[0])
-	result := ImportLegacyQuestionsResult{TotalRows: len(records) - 1, Errors: []string{}, DuplicateCodes: []string{}}
+	result := ImportLegacyQuestionsResult{TotalRows: len(records) - 1, DryRun: input.DryRun, Errors: []string{}, DuplicateCodes: []string{}}
 	existingSignatures, err := s.existingQuestionSignatures(ctx, input.SubjectID)
 	if err != nil {
 		return ImportLegacyQuestionsResult{}, err
@@ -451,7 +865,8 @@ func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQue
 		explanationHTML := firstCSVValue(row, "pembahasan", "explanation", "explanation_html", "explanationhtml")
 		rubricHTML := appendLegacyImage(firstCSVValue(row, "rubrik", "rubric", "pedoman", "pedoman_jawaban"), firstCSVValue(row, "gambar_rubrik", "rubric_image"))
 		writerNotes := legacyImportNotes(row)
-		_, err := s.Create(ctx, SaveCbtQuestionInput{
+		saveInput := SaveCbtQuestionInput{
+			EventID:          input.EventID,
 			SubjectID:        input.SubjectID,
 			AuthoringMode:    "advance",
 			Code:             code,
@@ -474,11 +889,17 @@ func (s *CbtQuestion) ImportLegacyCSV(ctx context.Context, input ImportLegacyQue
 			CognitiveLevel:   firstCSVValue(row, "cognitive_level", "cognitivelevel", "level_kognitif", "levelkognitif"),
 			HotsFlag:         importBoolean(row, "hots_flag", "hotsflag", "hots"),
 			WorkflowStatus:   "draft",
-			AuthorUsername:   strings.TrimSpace(input.Username),
+			AuthorUsername:   actor.Username,
 			ReviewerUsername: "",
 			ApproverUsername: "",
 			WriterNotes:      writerNotes,
-		})
+			Actor:            actor,
+		}
+		if input.DryRun {
+			result.WouldImport++
+			continue
+		}
+		_, err := s.createWithAudit(ctx, saveInput, "import", "", map[string]any{"event_id": cbtQuestionUUIDString(input.EventID), "subject_id": cbtQuestionUUIDString(input.SubjectID)})
 		if err != nil {
 			skip(fmt.Sprintf("Baris %d: %s", rowNumber, err.Error()))
 			continue
@@ -1119,6 +1540,7 @@ func buildCreateQuestionParams(input SaveCbtQuestionInput) (db.CreateCbtQuestion
 		return db.CreateCbtQuestionParams{}, err
 	}
 	return db.CreateCbtQuestionParams{
+		EventID:          normalized.EventID,
 		SubjectID:        normalized.SubjectID,
 		Code:             normalized.Code,
 		QuestionText:     normalized.QuestionText,
@@ -1191,6 +1613,7 @@ func buildUpdateQuestionParams(current db.GetCbtQuestionRow, input SaveCbtQuesti
 
 	return db.UpdateCbtQuestionParams{
 		ID:               input.ID,
+		EventID:          normalized.EventID,
 		SubjectID:        normalized.SubjectID,
 		Code:             normalized.Code,
 		QuestionText:     normalized.QuestionText,
@@ -1824,6 +2247,7 @@ func mergeNotes(existing string, incoming string) string {
 func questionInputFromCurrent(current db.GetCbtQuestionRow, username string) SaveCbtQuestionInput {
 	return SaveCbtQuestionInput{
 		ID:               current.ID,
+		EventID:          current.EventID,
 		SubjectID:        current.SubjectID,
 		AuthoringMode:    "advance",
 		Code:             current.Code,

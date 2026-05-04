@@ -11,6 +11,52 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type CbtEventMemberRole string
+
+const (
+	CbtEventMemberRolePanitia     CbtEventMemberRole = "panitia"
+	CbtEventMemberRolePembuatSoal CbtEventMemberRole = "pembuat_soal"
+	CbtEventMemberRoleReviewer    CbtEventMemberRole = "reviewer"
+	CbtEventMemberRoleProktor     CbtEventMemberRole = "proktor"
+	CbtEventMemberRolePengawas    CbtEventMemberRole = "pengawas"
+	CbtEventMemberRoleKorektor    CbtEventMemberRole = "korektor"
+)
+
+func (e *CbtEventMemberRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CbtEventMemberRole(s)
+	case string:
+		*e = CbtEventMemberRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CbtEventMemberRole: %T", src)
+	}
+	return nil
+}
+
+type NullCbtEventMemberRole struct {
+	CbtEventMemberRole CbtEventMemberRole `json:"cbt_event_member_role"`
+	Valid              bool               `json:"valid"` // Valid is true if CbtEventMemberRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCbtEventMemberRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.CbtEventMemberRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CbtEventMemberRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCbtEventMemberRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CbtEventMemberRole), nil
+}
+
 type CbtExamType string
 
 const (
@@ -853,6 +899,26 @@ type AuthSession struct {
 	DeviceLabel      string             `json:"device_label"`
 }
 
+type CbtEventMember struct {
+	ID         pgtype.UUID        `json:"id"`
+	EventID    pgtype.UUID        `json:"event_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	EmployeeID pgtype.UUID        `json:"employee_id"`
+	SubjectID  pgtype.UUID        `json:"subject_id"`
+	Role       CbtEventMemberRole `json:"role"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CbtEventSubjectTarget struct {
+	ID              pgtype.UUID        `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	SubjectID       pgtype.UUID        `json:"subject_id"`
+	TargetQuestions int32              `json:"target_questions"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CbtExamEvent struct {
 	ID             pgtype.UUID        `json:"id"`
 	Title          string             `json:"title"`
@@ -929,6 +995,7 @@ type CbtPackage struct {
 	IsActive           bool               `json:"is_active"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	EventID            pgtype.UUID        `json:"event_id"`
 }
 
 type CbtPackageQuestion struct {
@@ -990,6 +1057,7 @@ type CbtQuestion struct {
 	ApprovedAt       pgtype.Timestamptz        `json:"approved_at"`
 	WriterNotes      string                    `json:"writer_notes"`
 	ReviewNotes      string                    `json:"review_notes"`
+	EventID          pgtype.UUID               `json:"event_id"`
 }
 
 type CbtQuestionAsset struct {
@@ -1003,6 +1071,16 @@ type CbtQuestionAsset struct {
 	Purpose      string             `json:"purpose"`
 	UploadedBy   string             `json:"uploaded_by"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type CbtQuestionAuditLog struct {
+	ID            pgtype.UUID        `json:"id"`
+	QuestionID    pgtype.UUID        `json:"question_id"`
+	ActorUsername string             `json:"actor_username"`
+	Action        string             `json:"action"`
+	Note          string             `json:"note"`
+	Metadata      []byte             `json:"metadata"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 type CbtRoomHandover struct {

@@ -18,7 +18,7 @@
 		note: string;
 	};
 
-	const sampleRows: DeviceRow[] = [
+	const templateRows: DeviceRow[] = [
 		{
 			vendor: 'Samsung',
 			model: 'Galaxy A14',
@@ -100,9 +100,9 @@
 	<div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
 		<Card.Root class="border-slate-200 shadow-sm">
 			<Card.Header>
-				<Card.Title class="text-lg text-slate-900">Contoh Matriks Perangkat</Card.Title>
+				<Card.Title class="text-lg text-slate-900">Template Contoh Matriks Perangkat</Card.Title>
 				<Card.Description>
-					Tabel ini bisa dijadikan acuan saat operator memindahkan hasil uji dari catatan lapangan ke format yang lebih seragam.
+					Baris di bawah adalah contoh/template, bukan hasil sertifikasi perangkat resmi sekolah.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-4">
@@ -124,7 +124,7 @@
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
-							{#each sampleRows as row (row.vendor + row.model)}
+							{#each templateRows as row (row.vendor + row.model)}
 								<Table.Row>
 									<Table.Cell class="font-medium text-slate-900">{row.vendor}</Table.Cell>
 									<Table.Cell>{row.model}</Table.Cell>

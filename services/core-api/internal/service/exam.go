@@ -21,6 +21,7 @@ var (
 	ErrExamNotActive     = errors.New("exam session is not active")
 	ErrExamAlreadySubmit = errors.New("exam already submitted")
 	ErrExamWindowClosed  = errors.New("exam window has closed")
+	ErrExamNotStarted    = errors.New("exam session has not started")
 	ErrDeviceMismatch    = errors.New("token already bound to another device")
 	ErrDeviceRequired    = errors.New("device fingerprint required")
 	ErrExamQuestionScope = errors.New("question is not part of participant exam")
@@ -36,7 +37,7 @@ type examStore interface {
 	UpdateParticipantLogin(ctx context.Context, arg db.UpdateParticipantLoginParams) (pgtype.UUID, error)
 	InsertParticipantEvent(ctx context.Context, arg db.InsertParticipantEventParams) error
 	GetExamQuestions(ctx context.Context, packageID pgtype.UUID) ([]db.GetExamQuestionsRow, error)
-	UpdateParticipantQuestionOrder(ctx context.Context, arg db.UpdateParticipantQuestionOrderParams) error
+	SetParticipantQuestionOrderIfEmpty(ctx context.Context, arg db.SetParticipantQuestionOrderIfEmptyParams) ([]byte, error)
 	GetParticipantAnswers(ctx context.Context, participantID pgtype.UUID) ([]db.GetParticipantAnswersRow, error)
 	GetCbtExamRoom(ctx context.Context, id pgtype.UUID) (db.CbtExamRoom, error)
 	UpdateParticipantHeartbeat(ctx context.Context, participantID pgtype.UUID) error
@@ -117,6 +118,9 @@ func (s *Exam) Login(ctx context.Context, token, deviceFingerprint, loginIP stri
 	if p.SessionStatus != db.CbtSessionStatusEnumActive {
 		return LoginResult{}, ErrExamNotActive
 	}
+	if p.ScheduledStart.Valid && time.Now().Before(p.ScheduledStart.Time) {
+		return LoginResult{}, ErrExamNotStarted
+	}
 
 	// Device binding: if already bound, reject different device
 	if p.DeviceFingerprint.Valid && strings.TrimSpace(p.DeviceFingerprint.String) != "" &&
@@ -158,11 +162,18 @@ func (s *Exam) Login(ctx context.Context, token, deviceFingerprint, loginIP stri
 		for i, q := range ordered {
 			ids[i] = pgUUIDString(q.ID)
 		}
-		orderJSON, _ := json.Marshal(ids)
-		_ = s.q.UpdateParticipantQuestionOrder(ctx, db.UpdateParticipantQuestionOrderParams{
+		orderJSON, err := json.Marshal(ids)
+		if err != nil {
+			return LoginResult{}, err
+		}
+		if savedOrder, err := s.q.SetParticipantQuestionOrderIfEmpty(ctx, db.SetParticipantQuestionOrderIfEmptyParams{
 			ID:            p.ID,
 			QuestionOrder: orderJSON,
-		})
+		}); err == nil && len(savedOrder) > 0 {
+			ordered = orderQuestions(questions, savedOrder, p.RandomizeQuestions)
+		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return LoginResult{}, err
+		}
 	}
 
 	// Count answered questions

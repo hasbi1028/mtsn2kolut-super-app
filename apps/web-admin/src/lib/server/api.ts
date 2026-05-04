@@ -178,7 +178,7 @@ type StreamProxyOptions = {
 	headers?: readonly string[];
 };
 
-const DEFAULT_STREAM_HEADERS = ['content-type', 'content-length', 'content-disposition', 'cache-control'] as const;
+const DEFAULT_STREAM_HEADERS = ['content-type', 'content-length', 'content-disposition', 'cache-control', 'x-content-type-options'] as const;
 
 export async function streamProxyResponse(res: Response, options: StreamProxyOptions = {}): Promise<Response> {
 	if (!res.ok) {
@@ -196,6 +196,9 @@ export async function streamProxyResponse(res: Response, options: StreamProxyOpt
 	}
 	if (options.defaultCacheControl && !headers.has('cache-control')) {
 		headers.set('cache-control', options.defaultCacheControl);
+	}
+	if (!headers.has('x-content-type-options')) {
+		headers.set('x-content-type-options', 'nosniff');
 	}
 	return new Response(res.body, { status: res.status, headers });
 }

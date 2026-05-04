@@ -32,12 +32,13 @@ type UpdateCbtSessionScheduleResult struct {
 type cbtSessionStore interface {
 	ListCbtExamSessions(ctx context.Context) ([]db.ListCbtExamSessionsRow, error)
 	GetCbtExamSession(ctx context.Context, id pgtype.UUID) (db.GetCbtExamSessionRow, error)
+	ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackagesRow, error)
 	GetCbtPackageQuestionQuality(ctx context.Context, id pgtype.UUID) (db.GetCbtPackageQuestionQualityRow, error)
 	CreateCbtExamSession(ctx context.Context, arg db.CreateCbtExamSessionParams) (db.CbtExamSession, error)
 	UpdateCbtExamSessionStatus(ctx context.Context, arg db.UpdateCbtExamSessionStatusParams) (db.CbtExamSession, error)
 	UpdateCbtExamSessionSchedule(ctx context.Context, arg db.UpdateCbtExamSessionScheduleParams) (db.CbtExamSession, error)
 	ListEntityAuditLogs(ctx context.Context, arg db.ListEntityAuditLogsParams) ([]db.ListEntityAuditLogsRow, error)
-	DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) error
+	DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) (int64, error)
 	ListCbtExamParticipants(ctx context.Context, sessionID pgtype.UUID) ([]db.ListCbtExamParticipantsRow, error)
 	ListCbtExamParticipantsByTeacher(ctx context.Context, arg db.ListCbtExamParticipantsByTeacherParams) ([]db.ListCbtExamParticipantsByTeacherRow, error)
 	EnrollClassToSession(ctx context.Context, arg db.EnrollClassToSessionParams) error
@@ -153,7 +154,7 @@ func (s *CbtSession) Create(ctx context.Context, in CreateCbtSessionInput) (db.C
 	scopeType := normalizeScopeType(in.ScopeType)
 	mixPolicy := normalizeMixPolicy(in.MixPolicy, scopeType)
 	assignmentMode := normalizeAssignmentMode(in.AssignmentMode)
-	if err := s.ensureCbtPackageReadyForSession(ctx, in.PackageID); err != nil {
+	if err := s.ensureCbtPackageReadyForSession(ctx, in.PackageID, in.EventID); err != nil {
 		return db.CbtExamSession{}, err
 	}
 
@@ -174,12 +175,43 @@ func (s *CbtSession) Create(ctx context.Context, in CreateCbtSessionInput) (db.C
 	})
 }
 
-func (s *CbtSession) ensureCbtPackageReadyForSession(ctx context.Context, packageID pgtype.UUID) error {
+func (s *CbtSession) ensureCbtPackageReadyForSession(ctx context.Context, packageID, eventID pgtype.UUID) error {
+	if err := s.ensureCbtPackageEventForSession(ctx, packageID, eventID); err != nil {
+		return err
+	}
 	quality, err := s.q.GetCbtPackageQuestionQuality(ctx, packageID)
 	if err != nil {
 		return err
 	}
 	return validateCbtPackageQualityForSession(quality)
+}
+
+func (s *CbtSession) ensureCbtPackageEventForSession(ctx context.Context, packageID, eventID pgtype.UUID) error {
+	pkg, err := s.findCbtPackage(ctx, packageID)
+	if err != nil {
+		return err
+	}
+	switch {
+	case eventID.Valid && !sameUUID(pkg.EventID, eventID):
+		return fmt.Errorf("%w: paket sesi harus berasal dari event yang sama", domain.ErrBadRequest)
+	case !eventID.Valid && pkg.EventID.Valid:
+		return fmt.Errorf("%w: paket khusus event hanya boleh dipakai pada sesi event yang sama", domain.ErrBadRequest)
+	default:
+		return nil
+	}
+}
+
+func (s *CbtSession) findCbtPackage(ctx context.Context, packageID pgtype.UUID) (db.ListCbtPackagesRow, error) {
+	rows, err := s.q.ListCbtPackages(ctx, pgtype.UUID{})
+	if err != nil {
+		return db.ListCbtPackagesRow{}, err
+	}
+	for _, row := range rows {
+		if sameUUID(row.ID, packageID) {
+			return row, nil
+		}
+	}
+	return db.ListCbtPackagesRow{}, domain.ErrNotFound
 }
 
 func validateCbtPackageQualityForSession(quality db.GetCbtPackageQuestionQualityRow) error {
@@ -205,7 +237,7 @@ func (s *CbtSession) UpdateStatus(ctx context.Context, id pgtype.UUID, status db
 		if err != nil {
 			return db.CbtExamSession{}, err
 		}
-		if err := s.ensureCbtPackageReadyForSession(ctx, session.PackageID); err != nil {
+		if err := s.ensureCbtPackageReadyForSession(ctx, session.PackageID, session.EventID); err != nil {
 			return db.CbtExamSession{}, err
 		}
 	}
@@ -281,7 +313,14 @@ func validateCbtSessionActivationReadiness(readiness db.GetCbtSessionRoomReadine
 }
 
 func (s *CbtSession) Delete(ctx context.Context, id pgtype.UUID) error {
-	return s.q.DeleteCbtExamSession(ctx, id)
+	rows, err := s.q.DeleteCbtExamSession(ctx, id)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("%w: sesi tidak ditemukan atau bukan draft", domain.ErrConflict)
+	}
+	return nil
 }
 
 // --- Participants ---

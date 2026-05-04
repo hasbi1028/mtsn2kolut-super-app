@@ -27,6 +27,7 @@ type cbtQuestionAssetService interface {
 	ListByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error)
 	GetQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error)
 	Get(ctx context.Context, id pgtype.UUID) (db.CbtQuestionAsset, error)
+	Open(asset db.CbtQuestionAsset) (*os.File, error)
 	AccessibleByPackage(ctx context.Context, questionID, packageID pgtype.UUID) (bool, error)
 }
 
@@ -186,7 +187,7 @@ func (h *CbtQuestionAsset) File(w http.ResponseWriter, r *http.Request) {
 	} else if !h.requireQuestionAssetScope(w, r, asset.QuestionID) {
 		return
 	}
-	f, err := os.Open(asset.StoragePath)
+	f, err := h.svc.Open(asset)
 	if err != nil {
 		api.NotFound(w)
 		return

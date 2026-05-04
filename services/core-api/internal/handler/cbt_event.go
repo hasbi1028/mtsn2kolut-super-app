@@ -22,13 +22,25 @@ type CbtEvent struct {
 
 type cbtEventService interface {
 	List(ctx context.Context) ([]db.ListCbtExamEventsRow, error)
+	ListForUser(ctx context.Context, userID pgtype.UUID) ([]db.ListCbtExamEventsRow, error)
 	Get(ctx context.Context, id pgtype.UUID) (db.GetCbtExamEventRow, error)
+	Overview(ctx context.Context, id pgtype.UUID) (service.CbtEventOverview, error)
+	ListPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventPackagesRow, error)
+	ListSessions(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSessionsReadinessRow, error)
 	GetResults(ctx context.Context, id pgtype.UUID) ([]db.GetEventResultsRow, error)
 	GetExamCards(ctx context.Context, id pgtype.UUID) ([]db.GetEventExamCardsRow, error)
 	Create(ctx context.Context, in service.CreateCbtEventInput) (db.CbtExamEvent, error)
 	Update(ctx context.Context, id pgtype.UUID, in service.CreateCbtEventInput) (db.CbtExamEvent, error)
 	UpdateStatus(ctx context.Context, id pgtype.UUID, status string) (db.CbtExamEvent, error)
 	Delete(ctx context.Context, id pgtype.UUID) error
+	ListMembers(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventMembersRow, error)
+	CreateMember(ctx context.Context, eventID pgtype.UUID, in service.SaveCbtEventMemberInput) (db.CbtEventMember, error)
+	UpdateMember(ctx context.Context, eventID pgtype.UUID, id pgtype.UUID, in service.SaveCbtEventMemberInput) (db.CbtEventMember, error)
+	DeleteMember(ctx context.Context, eventID pgtype.UUID, id pgtype.UUID) error
+	ListQuestionTargets(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtEventSubjectTargetsRow, error)
+	UpsertQuestionTarget(ctx context.Context, eventID pgtype.UUID, in service.SaveCbtEventSubjectTargetInput) (db.CbtEventSubjectTarget, error)
+	DeleteQuestionTarget(ctx context.Context, eventID pgtype.UUID, subjectID pgtype.UUID) error
+	CanRead(ctx context.Context, eventID, userID pgtype.UUID) (bool, error)
 }
 
 func NewCbtEvent(svc *service.CbtEvent) *CbtEvent { return &CbtEvent{svc: svc} }
@@ -38,7 +50,25 @@ func (h *CbtEvent) List(w http.ResponseWriter, r *http.Request) {
 		api.Forbidden(w)
 		return
 	}
-	rows, err := h.svc.List(r.Context())
+	var (
+		rows []db.ListCbtExamEventsRow
+		err  error
+	)
+	if adminAccessAllowed(r) {
+		rows, err = h.svc.List(r.Context())
+	} else {
+		claims, ok := api.ClaimsFromContext(r.Context())
+		if !ok {
+			api.Unauthorized(w)
+			return
+		}
+		userID, userErr := authUserID(claims)
+		if userErr != nil {
+			api.Unauthorized(w)
+			return
+		}
+		rows, err = h.svc.ListForUser(r.Context(), userID)
+	}
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -56,12 +86,78 @@ func (h *CbtEvent) Get(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid id")
 		return
 	}
+	if !h.requireEventReadAccess(w, r, id) {
+		return
+	}
 	row, err := h.svc.Get(r.Context(), id)
 	if err != nil {
 		api.Internal(w, err)
 		return
 	}
 	api.OK(w, row)
+}
+
+func (h *CbtEvent) Overview(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	if !h.requireEventReadAccess(w, r, id) {
+		return
+	}
+	row, err := h.svc.Overview(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *CbtEvent) ListPackages(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	if !h.requireEventReadAccess(w, r, id) {
+		return
+	}
+	rows, err := h.svc.ListPackages(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *CbtEvent) ListSessions(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	if !h.requireEventReadAccess(w, r, id) {
+		return
+	}
+	rows, err := h.svc.ListSessions(r.Context(), id)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
 }
 
 func (h *CbtEvent) GetResults(w http.ResponseWriter, r *http.Request) {
@@ -244,10 +340,250 @@ func (h *CbtEvent) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Hapus event CBT tidak valid")
 		return
 	}
 	api.NoContent(w)
+}
+
+func (h *CbtEvent) ListMembers(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	eventID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid event_id")
+		return
+	}
+	if !h.requireEventReadAccess(w, r, eventID) {
+		return
+	}
+	rows, err := h.svc.ListMembers(r.Context(), eventID)
+	if err != nil {
+		writeClientError(w, err, "Data anggota event CBT tidak valid")
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *CbtEvent) CreateMember(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	eventID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid event_id")
+		return
+	}
+	input, err := cbtEventMemberInputFromRequest(r)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+	row, err := h.svc.CreateMember(r.Context(), eventID, input)
+	if err != nil {
+		writeClientError(w, err, "Data anggota event CBT tidak valid")
+		return
+	}
+	api.Created(w, row)
+}
+
+func (h *CbtEvent) UpdateMember(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	eventID, memberID, ok := cbtEventMemberRouteIDs(w, r)
+	if !ok {
+		return
+	}
+	input, err := cbtEventMemberInputFromRequest(r)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+	row, err := h.svc.UpdateMember(r.Context(), eventID, memberID, input)
+	if err != nil {
+		writeClientError(w, err, "Data anggota event CBT tidak valid")
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *CbtEvent) DeleteMember(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	eventID, memberID, ok := cbtEventMemberRouteIDs(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.DeleteMember(r.Context(), eventID, memberID); err != nil {
+		writeClientError(w, err, "Data anggota event CBT tidak valid")
+		return
+	}
+	api.NoContent(w)
+}
+
+func (h *CbtEvent) ListQuestionTargets(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	eventID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid event_id")
+		return
+	}
+	if !h.requireEventReadAccess(w, r, eventID) {
+		return
+	}
+	rows, err := h.svc.ListQuestionTargets(r.Context(), eventID)
+	if err != nil {
+		writeClientError(w, err, "Target soal event CBT tidak valid")
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *CbtEvent) UpsertQuestionTarget(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	eventID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid event_id")
+		return
+	}
+	var body struct {
+		SubjectID       string `json:"subject_id"`
+		TargetQuestions int32  `json:"target_questions"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	subjectID, err := parseUUID(body.SubjectID)
+	if err != nil {
+		api.BadRequest(w, "subject_id invalid")
+		return
+	}
+	row, err := h.svc.UpsertQuestionTarget(r.Context(), eventID, service.SaveCbtEventSubjectTargetInput{SubjectID: subjectID, TargetQuestions: body.TargetQuestions})
+	if err != nil {
+		writeClientError(w, err, "Target soal event CBT tidak valid")
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *CbtEvent) DeleteQuestionTarget(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	eventID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid event_id")
+		return
+	}
+	subjectID, err := parseUUID(chi.URLParam(r, "subject_id"))
+	if err != nil {
+		api.BadRequest(w, "invalid subject_id")
+		return
+	}
+	if err := h.svc.DeleteQuestionTarget(r.Context(), eventID, subjectID); err != nil {
+		writeClientError(w, err, "Target soal event CBT tidak valid")
+		return
+	}
+	api.NoContent(w)
+}
+
+func cbtEventMemberInputFromRequest(r *http.Request) (service.SaveCbtEventMemberInput, error) {
+	var body struct {
+		UserID     string `json:"user_id"`
+		EmployeeID string `json:"employee_id"`
+		SubjectID  string `json:"subject_id"`
+		Role       string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		return service.SaveCbtEventMemberInput{}, errors.New("invalid json")
+	}
+	userID, err := parseUUID(body.UserID)
+	if err != nil {
+		return service.SaveCbtEventMemberInput{}, errors.New("user_id invalid")
+	}
+	var employeeID pgtype.UUID
+	if strings.TrimSpace(body.EmployeeID) != "" {
+		employeeID, err = parseUUID(body.EmployeeID)
+		if err != nil {
+			return service.SaveCbtEventMemberInput{}, errors.New("employee_id invalid")
+		}
+	}
+	var subjectID pgtype.UUID
+	if strings.TrimSpace(body.SubjectID) != "" {
+		subjectID, err = parseUUID(body.SubjectID)
+		if err != nil {
+			return service.SaveCbtEventMemberInput{}, errors.New("subject_id invalid")
+		}
+	}
+	role := db.CbtEventMemberRole(strings.TrimSpace(body.Role))
+	if !validCbtEventMemberRole(role) {
+		return service.SaveCbtEventMemberInput{}, errors.New("role invalid")
+	}
+	return service.SaveCbtEventMemberInput{UserID: userID, EmployeeID: employeeID, SubjectID: subjectID, Role: role}, nil
+}
+
+func validCbtEventMemberRole(role db.CbtEventMemberRole) bool {
+	switch role {
+	case db.CbtEventMemberRolePanitia, db.CbtEventMemberRolePembuatSoal, db.CbtEventMemberRoleReviewer, db.CbtEventMemberRoleProktor, db.CbtEventMemberRolePengawas, db.CbtEventMemberRoleKorektor:
+		return true
+	default:
+		return false
+	}
+}
+
+func (h *CbtEvent) requireEventReadAccess(w http.ResponseWriter, r *http.Request, eventID pgtype.UUID) bool {
+	if adminAccessAllowed(r) {
+		return true
+	}
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return false
+	}
+	userID, err := authUserID(claims)
+	if err != nil {
+		api.Forbidden(w)
+		return false
+	}
+	allowed, err := h.svc.CanRead(r.Context(), eventID, userID)
+	if err != nil {
+		api.Internal(w, err)
+		return false
+	}
+	if !allowed {
+		api.Forbidden(w)
+		return false
+	}
+	return true
+}
+
+func cbtEventMemberRouteIDs(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, bool) {
+	eventID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid event_id")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	memberID, err := parseUUID(chi.URLParam(r, "member_id"))
+	if err != nil {
+		api.BadRequest(w, "invalid member_id")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	return eventID, memberID, true
 }
 
 func normalizeTargetLevels(levels []string) []string {

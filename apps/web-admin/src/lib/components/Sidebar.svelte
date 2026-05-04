@@ -7,6 +7,7 @@
 	import SidebarIcon from '$lib/components/sidebar/SidebarIcon.svelte';
 	import SidebarNavSection from '$lib/components/sidebar/SidebarNavSection.svelte';
 	import SidebarQuickAccess from '$lib/components/sidebar/SidebarQuickAccess.svelte';
+	import { clearCbtComposerDrafts } from '$lib/client/cbt-drafts';
 	import { fetchSidebarAttention } from '$lib/components/sidebar/sidebar-attention';
 	import { readClientJson } from '$lib/client/api';
 	import {
@@ -455,6 +456,7 @@
 		try {
 			await fetch('/api/auth/logout', { method: 'POST' });
 		} finally {
+			clearCbtComposerDrafts();
 			location.href = '/login';
 		}
 	}

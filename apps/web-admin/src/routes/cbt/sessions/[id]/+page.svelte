@@ -16,6 +16,7 @@
 	import RichContent from '$lib/components/RichContent.svelte';
 	import { confirmAction, confirmChallenge } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
+	import { csvRow } from '$lib/csv';
 
 	type SessionInfo = {
 		id: string; title: string; package_title: string; duration_minutes: number;
@@ -1382,10 +1383,10 @@
 
 	function exportCSV() {
 		if (!session || results.length === 0) return;
-		const header = 'NIS,Nama,L/P,Jawaban Masuk,Benar,Skor,Waktu Submit';
+		const header = csvRow(['NIS', 'Nama', 'L/P', 'Jawaban Masuk', 'Benar', 'Skor', 'Waktu Submit']);
 		const rows = results.map(r =>
-			[r.nis, `"${r.nama}"`, r.gender, r.total_answers, r.correct_answers,
-			 fmtScore(r.score), r.submitted_at ? fmtDt(r.submitted_at) : ''].join(',')
+			csvRow([r.nis, r.nama, r.gender, r.total_answers, r.correct_answers,
+			 fmtScore(r.score), r.submitted_at ? fmtDt(r.submitted_at) : ''])
 		);
 		const csv = [header, ...rows].join('\n');
 		const blob = new Blob([csv], { type: 'text/csv' });
@@ -1399,9 +1400,9 @@
 
 	function exportOperationalCSV() {
 		if (!session || !operationalRecap) return;
-		const header = 'Ruang,Handover,Peserta,Login,Submit,No Show,Atensi,Force Submit,Reset Akses,App Switch,Screenshot,Catatan Kejadian,Catatan Operator,Catatan Serah Terima';
-		const rows = operationalRooms.map((room) => [
-			`"${room.room_name}"`,
+		const header = csvRow(['Ruang', 'Handover', 'Peserta', 'Login', 'Submit', 'No Show', 'Atensi', 'Force Submit', 'Reset Akses', 'App Switch', 'Screenshot', 'Catatan Kejadian', 'Catatan Operator', 'Catatan Serah Terima']);
+		const rows = operationalRooms.map((room) => csvRow([
+			room.room_name,
 			handoverStatusLabel(room),
 			room.participant_count,
 			room.joined_count,
@@ -1412,12 +1413,12 @@
 			room.reset_access_count,
 			room.app_switch_count,
 			room.screenshot_attempt_count,
-			`"${room.incident_notes.replaceAll('"', '""')}"`,
-			`"${room.operator_notes.replaceAll('"', '""')}"`,
-			`"${room.handover_notes.replaceAll('"', '""')}"`,
-		].join(','));
-		const summary = [
-			`"TOTAL ${operationalRecap.session_title}"`,
+			room.incident_notes,
+			room.operator_notes,
+			room.handover_notes,
+		]));
+		const summary = csvRow([
+			`TOTAL ${operationalRecap.session_title}`,
 			`${operationalRecap.handover_locked_count}/${operationalRecap.room_count} terkunci`,
 			operationalRecap.participant_count,
 			operationalRecap.joined_count,
@@ -1428,10 +1429,10 @@
 			operationalRecap.reset_access_count,
 			operationalRecap.app_switch_count,
 			operationalRecap.screenshot_attempt_count,
-			`"${operationalRecap.incident_room_count} ruang punya catatan"`,
-			`"${operationalRecap.incident_event_count} event atensi"`,
-			`"Generated ${new Date().toISOString()}"`,
-		].join(',');
+			`${operationalRecap.incident_room_count} ruang punya catatan`,
+			`${operationalRecap.incident_event_count} event atensi`,
+			`Generated ${new Date().toISOString()}`,
+		]);
 		const csv = [header, summary, ...rows].join('\n');
 		const blob = new Blob([csv], { type: 'text/csv' });
 		const url = URL.createObjectURL(blob);
@@ -1444,16 +1445,16 @@
 
 	function exportItemAnalysisCSV() {
 		if (!session || itemAnalysis.length === 0) return;
-		const header = 'No,Kode,Tipe,CP,TP,KD,Materi,Level,HOTS,Dijawab,Kosong,Benar,Salah,Kesukaran,Daya Pembeda,Rekomendasi';
-		const rows = itemAnalysis.map((row) => [
+		const header = csvRow(['No', 'Kode', 'Tipe', 'CP', 'TP', 'KD', 'Materi', 'Level', 'HOTS', 'Dijawab', 'Kosong', 'Benar', 'Salah', 'Kesukaran', 'Daya Pembeda', 'Rekomendasi']);
+		const rows = itemAnalysis.map((row) => csvRow([
 			row.position,
 			row.question_code,
-			`"${questionTypeLabel(row.question_type)}"`,
-			`"${row.cp_ref.replaceAll('"', '""')}"`,
-			`"${row.tp_ref.replaceAll('"', '""')}"`,
-			`"${row.kd_ref.replaceAll('"', '""')}"`,
-			`"${row.material_topic.replaceAll('"', '""')}"`,
-			`"${row.cognitive_level.replaceAll('"', '""')}"`,
+			questionTypeLabel(row.question_type),
+			row.cp_ref,
+			row.tp_ref,
+			row.kd_ref,
+			row.material_topic,
+			row.cognitive_level,
 			row.hots_flag ? 'Ya' : 'Tidak',
 			row.answered_count,
 			row.blank_count,
@@ -1461,8 +1462,8 @@
 			row.incorrect_count,
 			percent(row.difficulty_index),
 			percent(row.discrimination_index),
-			`"${row.recommendation.replaceAll('"', '""')}"`,
-		].join(','));
+			row.recommendation,
+		]));
 		const csv = [header, ...rows].join('\n');
 		const blob = new Blob([csv], { type: 'text/csv' });
 		const url = URL.createObjectURL(blob);

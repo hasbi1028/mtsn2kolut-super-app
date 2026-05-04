@@ -41,6 +41,18 @@ func writeClientError(w http.ResponseWriter, err error, fallback string) {
 	}
 }
 
+func writeDomainOrInternal(w http.ResponseWriter, err error, fallback string) {
+	if err == nil {
+		api.BadRequest(w, fallback)
+		return
+	}
+	if errors.Is(err, domain.ErrUnauthorized) || errors.Is(err, domain.ErrForbidden) || errors.Is(err, domain.ErrNotFound) || errors.Is(err, domain.ErrConflict) || errors.Is(err, domain.ErrBadRequest) || errors.Is(err, pgx.ErrNoRows) {
+		writeClientError(w, err, fallback)
+		return
+	}
+	api.Internal(w, err)
+}
+
 func safeClientMessage(err error, fallback string) string {
 	message := strings.TrimSpace(err.Error())
 	if message == "" {

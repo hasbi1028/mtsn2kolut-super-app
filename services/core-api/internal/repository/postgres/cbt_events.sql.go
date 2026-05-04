@@ -11,6 +11,42 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createCbtEventMember = `-- name: CreateCbtEventMember :one
+INSERT INTO cbt_event_members (event_id, user_id, employee_id, subject_id, role)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, event_id, user_id, employee_id, subject_id, role, created_at, updated_at
+`
+
+type CreateCbtEventMemberParams struct {
+	EventID    pgtype.UUID        `json:"event_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	EmployeeID pgtype.UUID        `json:"employee_id"`
+	SubjectID  pgtype.UUID        `json:"subject_id"`
+	Role       CbtEventMemberRole `json:"role"`
+}
+
+func (q *Queries) CreateCbtEventMember(ctx context.Context, arg CreateCbtEventMemberParams) (CbtEventMember, error) {
+	row := q.db.QueryRow(ctx, createCbtEventMember,
+		arg.EventID,
+		arg.UserID,
+		arg.EmployeeID,
+		arg.SubjectID,
+		arg.Role,
+	)
+	var i CbtEventMember
+	err := row.Scan(
+		&i.ID,
+		&i.EventID,
+		&i.UserID,
+		&i.EmployeeID,
+		&i.SubjectID,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createCbtExamEvent = `-- name: CreateCbtExamEvent :one
 INSERT INTO cbt_exam_events (title, exam_type, scope, target_levels, academic_year_id, status)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -50,13 +86,316 @@ func (q *Queries) CreateCbtExamEvent(ctx context.Context, arg CreateCbtExamEvent
 	return i, err
 }
 
-const deleteCbtExamEvent = `-- name: DeleteCbtExamEvent :exec
+const deleteCbtEventMember = `-- name: DeleteCbtEventMember :exec
+DELETE FROM cbt_event_members WHERE id = $1 AND event_id = $2
+`
+
+type DeleteCbtEventMemberParams struct {
+	ID      pgtype.UUID `json:"id"`
+	EventID pgtype.UUID `json:"event_id"`
+}
+
+func (q *Queries) DeleteCbtEventMember(ctx context.Context, arg DeleteCbtEventMemberParams) error {
+	_, err := q.db.Exec(ctx, deleteCbtEventMember, arg.ID, arg.EventID)
+	return err
+}
+
+const deleteCbtEventSubjectTarget = `-- name: DeleteCbtEventSubjectTarget :execrows
+DELETE FROM cbt_event_subject_targets
+WHERE event_id = $1 AND subject_id = $2
+`
+
+type DeleteCbtEventSubjectTargetParams struct {
+	EventID   pgtype.UUID `json:"event_id"`
+	SubjectID pgtype.UUID `json:"subject_id"`
+}
+
+func (q *Queries) DeleteCbtEventSubjectTarget(ctx context.Context, arg DeleteCbtEventSubjectTargetParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCbtEventSubjectTarget, arg.EventID, arg.SubjectID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteCbtExamEvent = `-- name: DeleteCbtExamEvent :execrows
 DELETE FROM cbt_exam_events WHERE id = $1 AND status = 'draft'
 `
 
-func (q *Queries) DeleteCbtExamEvent(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteCbtExamEvent, id)
-	return err
+func (q *Queries) DeleteCbtExamEvent(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCbtExamEvent, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getCbtEventMember = `-- name: GetCbtEventMember :one
+SELECT
+  m.id, m.event_id, m.user_id, u.username,
+  m.employee_id, COALESCE(e.nama, '') AS employee_name, COALESCE(e.nip, '') AS employee_nip,
+  m.subject_id, COALESCE(s.name, '') AS subject_name, COALESCE(s.code, '') AS subject_code,
+  m.role, m.created_at, m.updated_at
+FROM cbt_event_members m
+JOIN users u ON u.id = m.user_id
+LEFT JOIN employees e ON e.id = m.employee_id
+LEFT JOIN subjects s ON s.id = m.subject_id
+WHERE m.id = $1 AND m.event_id = $2
+`
+
+type GetCbtEventMemberParams struct {
+	ID      pgtype.UUID `json:"id"`
+	EventID pgtype.UUID `json:"event_id"`
+}
+
+type GetCbtEventMemberRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	EventID      pgtype.UUID        `json:"event_id"`
+	UserID       pgtype.UUID        `json:"user_id"`
+	Username     string             `json:"username"`
+	EmployeeID   pgtype.UUID        `json:"employee_id"`
+	EmployeeName string             `json:"employee_name"`
+	EmployeeNip  string             `json:"employee_nip"`
+	SubjectID    pgtype.UUID        `json:"subject_id"`
+	SubjectName  string             `json:"subject_name"`
+	SubjectCode  string             `json:"subject_code"`
+	Role         CbtEventMemberRole `json:"role"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetCbtEventMember(ctx context.Context, arg GetCbtEventMemberParams) (GetCbtEventMemberRow, error) {
+	row := q.db.QueryRow(ctx, getCbtEventMember, arg.ID, arg.EventID)
+	var i GetCbtEventMemberRow
+	err := row.Scan(
+		&i.ID,
+		&i.EventID,
+		&i.UserID,
+		&i.Username,
+		&i.EmployeeID,
+		&i.EmployeeName,
+		&i.EmployeeNip,
+		&i.SubjectID,
+		&i.SubjectName,
+		&i.SubjectCode,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getCbtEventOverviewSummary = `-- name: GetCbtEventOverviewSummary :one
+SELECT
+  e.id,
+  e.title,
+  e.exam_type,
+  e.scope,
+  e.target_levels,
+  e.status,
+  e.academic_year_id,
+  COALESCE(ay.name, '') AS academic_year_name,
+  e.created_at,
+  e.updated_at,
+  COALESCE(member_summary.member_count, 0)::int AS member_count,
+  COALESCE(member_summary.panitia_count, 0)::int AS panitia_count,
+  COALESCE(member_summary.author_count, 0)::int AS author_count,
+  COALESCE(member_summary.reviewer_count, 0)::int AS reviewer_count,
+  COALESCE(member_summary.proctor_count, 0)::int AS proctor_count,
+  COALESCE(target_summary.target_subject_count, 0)::int AS target_subject_count,
+  COALESCE(target_summary.target_question_count, 0)::int AS target_question_count,
+  COALESCE(question_summary.total_questions, 0)::int AS total_questions,
+  COALESCE(question_summary.published_questions, 0)::int AS published_questions,
+  COALESCE(question_summary.review_questions, 0)::int AS review_questions,
+  COALESCE(question_summary.approved_questions, 0)::int AS approved_questions,
+  COALESCE(package_summary.package_count, 0)::int AS package_count,
+  COALESCE(package_summary.active_package_count, 0)::int AS active_package_count,
+  COALESCE(package_summary.empty_package_count, 0)::int AS empty_package_count,
+  COALESCE(session_summary.session_count, 0)::int AS session_count,
+  COALESCE(session_summary.draft_session_count, 0)::int AS draft_session_count,
+  COALESCE(session_summary.scheduled_session_count, 0)::int AS scheduled_session_count,
+  COALESCE(session_summary.active_session_count, 0)::int AS active_session_count,
+  COALESCE(session_summary.finished_session_count, 0)::int AS finished_session_count,
+  COALESCE(ops_summary.room_count, 0)::int AS room_count,
+  COALESCE(ops_summary.rooms_without_proctor, 0)::int AS rooms_without_proctor,
+  COALESCE(ops_summary.total_capacity, 0)::int AS total_capacity,
+  COALESCE(participant_summary.participant_count, 0)::int AS participant_count,
+  COALESCE(participant_summary.assigned_participant_count, 0)::int AS assigned_participant_count,
+  COALESCE(participant_summary.unassigned_participant_count, 0)::int AS unassigned_participant_count,
+  COALESCE(participant_summary.missing_seat_count, 0)::int AS missing_seat_count,
+  COALESCE(participant_summary.token_ready_count, 0)::int AS token_ready_count,
+  COALESCE(participant_summary.joined_count, 0)::int AS joined_count,
+  COALESCE(participant_summary.submitted_count, 0)::int AS submitted_count,
+  COALESCE(participant_summary.scored_count, 0)::int AS scored_count
+FROM cbt_exam_events e
+LEFT JOIN academic_years ay ON ay.id = e.academic_year_id
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*)::int AS member_count,
+    COUNT(*) FILTER (WHERE role = 'panitia')::int AS panitia_count,
+    COUNT(*) FILTER (WHERE role = 'pembuat_soal')::int AS author_count,
+    COUNT(*) FILTER (WHERE role = 'reviewer')::int AS reviewer_count,
+    COUNT(*) FILTER (WHERE role IN ('proktor', 'pengawas'))::int AS proctor_count
+  FROM cbt_event_members m
+  WHERE m.event_id = e.id
+) member_summary ON TRUE
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS target_subject_count, COALESCE(SUM(target_questions), 0)::int AS target_question_count
+  FROM cbt_event_subject_targets t
+  WHERE t.event_id = e.id
+) target_summary ON TRUE
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*)::int AS total_questions,
+    COUNT(*) FILTER (WHERE q.status = 'published')::int AS published_questions,
+    COUNT(*) FILTER (WHERE q.workflow_status = 'review')::int AS review_questions,
+    COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::int AS approved_questions
+  FROM cbt_questions q
+  WHERE q.event_id = e.id
+) question_summary ON TRUE
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*)::int AS package_count,
+    COUNT(*) FILTER (WHERE p.is_active)::int AS active_package_count,
+    COUNT(*) FILTER (WHERE COALESCE(pq.question_count, 0) = 0)::int AS empty_package_count
+  FROM cbt_packages p
+  LEFT JOIN LATERAL (
+    SELECT COUNT(*)::int AS question_count
+    FROM cbt_package_questions pq
+    WHERE pq.package_id = p.id
+  ) pq ON TRUE
+  WHERE p.event_id = e.id
+) package_summary ON TRUE
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*)::int AS session_count,
+    COUNT(*) FILTER (WHERE status = 'draft')::int AS draft_session_count,
+    COUNT(*) FILTER (WHERE status = 'scheduled')::int AS scheduled_session_count,
+    COUNT(*) FILTER (WHERE status = 'active')::int AS active_session_count,
+    COUNT(*) FILTER (WHERE status = 'finished')::int AS finished_session_count
+  FROM cbt_exam_sessions s
+  WHERE s.event_id = e.id
+) session_summary ON TRUE
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(r.id)::int AS room_count,
+    COALESCE(SUM(r.capacity), 0)::int AS total_capacity,
+    COUNT(r.id) FILTER (WHERE COALESCE(pr.proctor_count, 0) = 0)::int AS rooms_without_proctor
+  FROM cbt_exam_sessions s
+  JOIN cbt_exam_rooms r ON r.session_id = s.id
+  LEFT JOIN LATERAL (
+    SELECT COUNT(*)::int AS proctor_count
+    FROM cbt_room_proctors rp
+    WHERE rp.exam_room_id = r.id
+  ) pr ON TRUE
+  WHERE s.event_id = e.id
+) ops_summary ON TRUE
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(ep.id)::int AS participant_count,
+    COUNT(ep.id) FILTER (WHERE ep.room_id IS NOT NULL)::int AS assigned_participant_count,
+    COUNT(ep.id) FILTER (WHERE ep.room_id IS NULL)::int AS unassigned_participant_count,
+    COUNT(ep.id) FILTER (WHERE ep.room_id IS NOT NULL AND ep.seat_no IS NULL)::int AS missing_seat_count,
+    COUNT(ep.id) FILTER (WHERE ep.token IS NOT NULL AND ep.token ~ '^[0-9a-f]{32}$')::int AS token_ready_count,
+    COUNT(ep.id) FILTER (WHERE ep.joined_at IS NOT NULL)::int AS joined_count,
+    COUNT(ep.id) FILTER (WHERE ep.submitted_at IS NOT NULL)::int AS submitted_count,
+    COUNT(ep.id) FILTER (WHERE ep.score IS NOT NULL)::int AS scored_count
+  FROM cbt_exam_sessions s
+  JOIN cbt_exam_participants ep ON ep.session_id = s.id
+  WHERE s.event_id = e.id
+) participant_summary ON TRUE
+WHERE e.id = $1
+`
+
+type GetCbtEventOverviewSummaryRow struct {
+	ID                         pgtype.UUID        `json:"id"`
+	Title                      string             `json:"title"`
+	ExamType                   CbtExamType        `json:"exam_type"`
+	Scope                      string             `json:"scope"`
+	TargetLevels               []string           `json:"target_levels"`
+	Status                     string             `json:"status"`
+	AcademicYearID             pgtype.UUID        `json:"academic_year_id"`
+	AcademicYearName           string             `json:"academic_year_name"`
+	CreatedAt                  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                  pgtype.Timestamptz `json:"updated_at"`
+	MemberCount                int32              `json:"member_count"`
+	PanitiaCount               int32              `json:"panitia_count"`
+	AuthorCount                int32              `json:"author_count"`
+	ReviewerCount              int32              `json:"reviewer_count"`
+	ProctorCount               int32              `json:"proctor_count"`
+	TargetSubjectCount         int32              `json:"target_subject_count"`
+	TargetQuestionCount        int32              `json:"target_question_count"`
+	TotalQuestions             int32              `json:"total_questions"`
+	PublishedQuestions         int32              `json:"published_questions"`
+	ReviewQuestions            int32              `json:"review_questions"`
+	ApprovedQuestions          int32              `json:"approved_questions"`
+	PackageCount               int32              `json:"package_count"`
+	ActivePackageCount         int32              `json:"active_package_count"`
+	EmptyPackageCount          int32              `json:"empty_package_count"`
+	SessionCount               int32              `json:"session_count"`
+	DraftSessionCount          int32              `json:"draft_session_count"`
+	ScheduledSessionCount      int32              `json:"scheduled_session_count"`
+	ActiveSessionCount         int32              `json:"active_session_count"`
+	FinishedSessionCount       int32              `json:"finished_session_count"`
+	RoomCount                  int32              `json:"room_count"`
+	RoomsWithoutProctor        int32              `json:"rooms_without_proctor"`
+	TotalCapacity              int32              `json:"total_capacity"`
+	ParticipantCount           int32              `json:"participant_count"`
+	AssignedParticipantCount   int32              `json:"assigned_participant_count"`
+	UnassignedParticipantCount int32              `json:"unassigned_participant_count"`
+	MissingSeatCount           int32              `json:"missing_seat_count"`
+	TokenReadyCount            int32              `json:"token_ready_count"`
+	JoinedCount                int32              `json:"joined_count"`
+	SubmittedCount             int32              `json:"submitted_count"`
+	ScoredCount                int32              `json:"scored_count"`
+}
+
+func (q *Queries) GetCbtEventOverviewSummary(ctx context.Context, id pgtype.UUID) (GetCbtEventOverviewSummaryRow, error) {
+	row := q.db.QueryRow(ctx, getCbtEventOverviewSummary, id)
+	var i GetCbtEventOverviewSummaryRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.ExamType,
+		&i.Scope,
+		&i.TargetLevels,
+		&i.Status,
+		&i.AcademicYearID,
+		&i.AcademicYearName,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.MemberCount,
+		&i.PanitiaCount,
+		&i.AuthorCount,
+		&i.ReviewerCount,
+		&i.ProctorCount,
+		&i.TargetSubjectCount,
+		&i.TargetQuestionCount,
+		&i.TotalQuestions,
+		&i.PublishedQuestions,
+		&i.ReviewQuestions,
+		&i.ApprovedQuestions,
+		&i.PackageCount,
+		&i.ActivePackageCount,
+		&i.EmptyPackageCount,
+		&i.SessionCount,
+		&i.DraftSessionCount,
+		&i.ScheduledSessionCount,
+		&i.ActiveSessionCount,
+		&i.FinishedSessionCount,
+		&i.RoomCount,
+		&i.RoomsWithoutProctor,
+		&i.TotalCapacity,
+		&i.ParticipantCount,
+		&i.AssignedParticipantCount,
+		&i.UnassignedParticipantCount,
+		&i.MissingSeatCount,
+		&i.TokenReadyCount,
+		&i.JoinedCount,
+		&i.SubmittedCount,
+		&i.ScoredCount,
+	)
+	return i, err
 }
 
 const getCbtExamEvent = `-- name: GetCbtExamEvent :one
@@ -250,6 +589,485 @@ func (q *Queries) GetEventResults(ctx context.Context, eventID pgtype.UUID) ([]G
 	return items, nil
 }
 
+const listCbtEventMembers = `-- name: ListCbtEventMembers :many
+SELECT
+  m.id, m.event_id, m.user_id, u.username,
+  m.employee_id, COALESCE(e.nama, '') AS employee_name, COALESCE(e.nip, '') AS employee_nip,
+  m.subject_id, COALESCE(s.name, '') AS subject_name, COALESCE(s.code, '') AS subject_code,
+  m.role, m.created_at, m.updated_at
+FROM cbt_event_members m
+JOIN users u ON u.id = m.user_id
+LEFT JOIN employees e ON e.id = m.employee_id
+LEFT JOIN subjects s ON s.id = m.subject_id
+WHERE m.event_id = $1
+ORDER BY m.role ASC, subject_name ASC, u.username ASC
+`
+
+type ListCbtEventMembersRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	EventID      pgtype.UUID        `json:"event_id"`
+	UserID       pgtype.UUID        `json:"user_id"`
+	Username     string             `json:"username"`
+	EmployeeID   pgtype.UUID        `json:"employee_id"`
+	EmployeeName string             `json:"employee_name"`
+	EmployeeNip  string             `json:"employee_nip"`
+	SubjectID    pgtype.UUID        `json:"subject_id"`
+	SubjectName  string             `json:"subject_name"`
+	SubjectCode  string             `json:"subject_code"`
+	Role         CbtEventMemberRole `json:"role"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListCbtEventMembers(ctx context.Context, eventID pgtype.UUID) ([]ListCbtEventMembersRow, error) {
+	rows, err := q.db.Query(ctx, listCbtEventMembers, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtEventMembersRow{}
+	for rows.Next() {
+		var i ListCbtEventMembersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.UserID,
+			&i.Username,
+			&i.EmployeeID,
+			&i.EmployeeName,
+			&i.EmployeeNip,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.Role,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtEventMembersByUser = `-- name: ListCbtEventMembersByUser :many
+SELECT id, event_id, user_id, employee_id, subject_id, role, created_at, updated_at
+FROM cbt_event_members
+WHERE user_id = $1
+`
+
+func (q *Queries) ListCbtEventMembersByUser(ctx context.Context, userID pgtype.UUID) ([]CbtEventMember, error) {
+	rows, err := q.db.Query(ctx, listCbtEventMembersByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CbtEventMember{}
+	for rows.Next() {
+		var i CbtEventMember
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.UserID,
+			&i.EmployeeID,
+			&i.SubjectID,
+			&i.Role,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtEventMembersByUsername = `-- name: ListCbtEventMembersByUsername :many
+SELECT m.id, m.event_id, m.user_id, m.employee_id, m.subject_id, m.role, m.created_at, m.updated_at
+FROM cbt_event_members m
+JOIN users u ON u.id = m.user_id
+WHERE u.username = $1
+`
+
+func (q *Queries) ListCbtEventMembersByUsername(ctx context.Context, username string) ([]CbtEventMember, error) {
+	rows, err := q.db.Query(ctx, listCbtEventMembersByUsername, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CbtEventMember{}
+	for rows.Next() {
+		var i CbtEventMember
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.UserID,
+			&i.EmployeeID,
+			&i.SubjectID,
+			&i.Role,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtEventSessionsReadiness = `-- name: ListCbtEventSessionsReadiness :many
+SELECT
+  ses.id,
+  ses.event_id,
+  ses.package_id,
+  p.title AS package_title,
+  p.subject_id,
+  sub.name AS subject_name,
+  sub.code AS subject_code,
+  ses.class_id,
+  COALESCE(c.name, '') AS class_name,
+  COALESCE(c.code, '') AS class_code,
+  ses.title,
+  ses.scheduled_start,
+  ses.scheduled_end,
+  ses.status,
+  COALESCE(pq.question_count, 0)::int AS question_count,
+  COALESCE(pq.published_question_count, 0)::int AS published_question_count,
+  COALESCE(parts.participant_count, 0)::int AS participant_count,
+  COALESCE(parts.assigned_participant_count, 0)::int AS assigned_participant_count,
+  COALESCE(parts.missing_seat_count, 0)::int AS missing_seat_count,
+  COALESCE(parts.token_ready_count, 0)::int AS token_ready_count,
+  COALESCE(parts.joined_count, 0)::int AS joined_count,
+  COALESCE(parts.submitted_count, 0)::int AS submitted_count,
+  COALESCE(parts.scored_count, 0)::int AS scored_count,
+  COALESCE(rooms.room_count, 0)::int AS room_count,
+  COALESCE(rooms.total_capacity, 0)::int AS total_capacity,
+  COALESCE(rooms.rooms_without_proctor, 0)::int AS rooms_without_proctor
+FROM cbt_exam_sessions ses
+JOIN cbt_packages p ON p.id = ses.package_id
+JOIN subjects sub ON sub.id = p.subject_id
+LEFT JOIN school_classes c ON c.id = ses.class_id
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS question_count, COUNT(*) FILTER (WHERE q.status = 'published')::int AS published_question_count
+  FROM cbt_package_questions pq
+  JOIN cbt_questions q ON q.id = pq.question_id
+  WHERE pq.package_id = p.id
+) pq ON TRUE
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*)::int AS participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL)::int AS assigned_participant_count,
+    COUNT(*) FILTER (WHERE room_id IS NOT NULL AND seat_no IS NULL)::int AS missing_seat_count,
+    COUNT(*) FILTER (WHERE token IS NOT NULL AND token ~ '^[0-9a-f]{32}$')::int AS token_ready_count,
+    COUNT(*) FILTER (WHERE joined_at IS NOT NULL)::int AS joined_count,
+    COUNT(*) FILTER (WHERE submitted_at IS NOT NULL)::int AS submitted_count,
+    COUNT(*) FILTER (WHERE score IS NOT NULL)::int AS scored_count
+  FROM cbt_exam_participants ep
+  WHERE ep.session_id = ses.id
+) parts ON TRUE
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(r.id)::int AS room_count,
+    COALESCE(SUM(r.capacity), 0)::int AS total_capacity,
+    COUNT(r.id) FILTER (WHERE COALESCE(pr.proctor_count, 0) = 0)::int AS rooms_without_proctor
+  FROM cbt_exam_rooms r
+  LEFT JOIN LATERAL (
+    SELECT COUNT(*)::int AS proctor_count
+    FROM cbt_room_proctors rp
+    WHERE rp.exam_room_id = r.id
+  ) pr ON TRUE
+  WHERE r.session_id = ses.id
+) rooms ON TRUE
+WHERE ses.event_id = $1
+ORDER BY ses.scheduled_start ASC, ses.title ASC
+`
+
+type ListCbtEventSessionsReadinessRow struct {
+	ID                       pgtype.UUID          `json:"id"`
+	EventID                  pgtype.UUID          `json:"event_id"`
+	PackageID                pgtype.UUID          `json:"package_id"`
+	PackageTitle             string               `json:"package_title"`
+	SubjectID                pgtype.UUID          `json:"subject_id"`
+	SubjectName              string               `json:"subject_name"`
+	SubjectCode              string               `json:"subject_code"`
+	ClassID                  pgtype.UUID          `json:"class_id"`
+	ClassName                string               `json:"class_name"`
+	ClassCode                string               `json:"class_code"`
+	Title                    string               `json:"title"`
+	ScheduledStart           pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd             pgtype.Timestamptz   `json:"scheduled_end"`
+	Status                   CbtSessionStatusEnum `json:"status"`
+	QuestionCount            int32                `json:"question_count"`
+	PublishedQuestionCount   int32                `json:"published_question_count"`
+	ParticipantCount         int32                `json:"participant_count"`
+	AssignedParticipantCount int32                `json:"assigned_participant_count"`
+	MissingSeatCount         int32                `json:"missing_seat_count"`
+	TokenReadyCount          int32                `json:"token_ready_count"`
+	JoinedCount              int32                `json:"joined_count"`
+	SubmittedCount           int32                `json:"submitted_count"`
+	ScoredCount              int32                `json:"scored_count"`
+	RoomCount                int32                `json:"room_count"`
+	TotalCapacity            int32                `json:"total_capacity"`
+	RoomsWithoutProctor      int32                `json:"rooms_without_proctor"`
+}
+
+func (q *Queries) ListCbtEventSessionsReadiness(ctx context.Context, eventID pgtype.UUID) ([]ListCbtEventSessionsReadinessRow, error) {
+	rows, err := q.db.Query(ctx, listCbtEventSessionsReadiness, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtEventSessionsReadinessRow{}
+	for rows.Next() {
+		var i ListCbtEventSessionsReadinessRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.PackageID,
+			&i.PackageTitle,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.ClassID,
+			&i.ClassName,
+			&i.ClassCode,
+			&i.Title,
+			&i.ScheduledStart,
+			&i.ScheduledEnd,
+			&i.Status,
+			&i.QuestionCount,
+			&i.PublishedQuestionCount,
+			&i.ParticipantCount,
+			&i.AssignedParticipantCount,
+			&i.MissingSeatCount,
+			&i.TokenReadyCount,
+			&i.JoinedCount,
+			&i.SubmittedCount,
+			&i.ScoredCount,
+			&i.RoomCount,
+			&i.TotalCapacity,
+			&i.RoomsWithoutProctor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtEventSubjectMatrix = `-- name: ListCbtEventSubjectMatrix :many
+SELECT
+  subjects.subject_id,
+  subjects.subject_name,
+  subjects.subject_code,
+  COALESCE(targets.target_questions, 0)::int AS target_questions,
+  COALESCE(members.author_count, 0)::int AS author_count,
+  COALESCE(members.reviewer_count, 0)::int AS reviewer_count,
+  COALESCE(questions.total_questions, 0)::int AS total_questions,
+  COALESCE(questions.published_questions, 0)::int AS published_questions,
+  COALESCE(packages.package_count, 0)::int AS package_count,
+  COALESCE(packages.active_package_count, 0)::int AS active_package_count,
+  COALESCE(sessions.session_count, 0)::int AS session_count,
+  GREATEST(COALESCE(targets.target_questions, 0)::int - COALESCE(questions.published_questions, 0)::int, 0)::int AS shortage_count,
+  (COALESCE(targets.target_questions, 0)::int > 0 AND COALESCE(questions.published_questions, 0)::int >= COALESCE(targets.target_questions, 0)::int) AS authoring_ready,
+  (COALESCE(packages.active_package_count, 0)::int > 0) AS package_ready,
+  (COALESCE(sessions.session_count, 0)::int > 0) AS session_ready
+FROM (
+  SELECT t.event_id, t.subject_id, s.name AS subject_name, s.code AS subject_code
+  FROM cbt_event_subject_targets t
+  JOIN subjects s ON s.id = t.subject_id
+  WHERE t.event_id = $1
+  UNION
+  SELECT q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject_code
+  FROM cbt_questions q
+  JOIN subjects s ON s.id = q.subject_id
+  WHERE q.event_id = $1
+  UNION
+  SELECT p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject_code
+  FROM cbt_packages p
+  JOIN subjects s ON s.id = p.subject_id
+  WHERE p.event_id = $1
+) subjects
+LEFT JOIN cbt_event_subject_targets targets ON targets.event_id = subjects.event_id AND targets.subject_id = subjects.subject_id
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*) FILTER (WHERE role = 'pembuat_soal')::int AS author_count,
+    COUNT(*) FILTER (WHERE role = 'reviewer')::int AS reviewer_count
+  FROM cbt_event_members m
+  WHERE m.event_id = subjects.event_id
+    AND (m.subject_id IS NULL OR m.subject_id = subjects.subject_id)
+) members ON TRUE
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS total_questions, COUNT(*) FILTER (WHERE status = 'published')::int AS published_questions
+  FROM cbt_questions q
+  WHERE q.event_id = subjects.event_id AND q.subject_id = subjects.subject_id
+) questions ON TRUE
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS package_count, COUNT(*) FILTER (WHERE is_active)::int AS active_package_count
+  FROM cbt_packages p
+  WHERE p.event_id = subjects.event_id AND p.subject_id = subjects.subject_id
+) packages ON TRUE
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS session_count
+  FROM cbt_exam_sessions ses
+  JOIN cbt_packages p ON p.id = ses.package_id
+  WHERE ses.event_id = subjects.event_id AND p.subject_id = subjects.subject_id
+) sessions ON TRUE
+ORDER BY subjects.subject_name ASC, subjects.subject_code ASC
+`
+
+type ListCbtEventSubjectMatrixRow struct {
+	SubjectID          pgtype.UUID `json:"subject_id"`
+	SubjectName        string      `json:"subject_name"`
+	SubjectCode        string      `json:"subject_code"`
+	TargetQuestions    int32       `json:"target_questions"`
+	AuthorCount        int32       `json:"author_count"`
+	ReviewerCount      int32       `json:"reviewer_count"`
+	TotalQuestions     int32       `json:"total_questions"`
+	PublishedQuestions int32       `json:"published_questions"`
+	PackageCount       int32       `json:"package_count"`
+	ActivePackageCount int32       `json:"active_package_count"`
+	SessionCount       int32       `json:"session_count"`
+	ShortageCount      int32       `json:"shortage_count"`
+	AuthoringReady     pgtype.Bool `json:"authoring_ready"`
+	PackageReady       bool        `json:"package_ready"`
+	SessionReady       bool        `json:"session_ready"`
+}
+
+func (q *Queries) ListCbtEventSubjectMatrix(ctx context.Context, eventID pgtype.UUID) ([]ListCbtEventSubjectMatrixRow, error) {
+	rows, err := q.db.Query(ctx, listCbtEventSubjectMatrix, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtEventSubjectMatrixRow{}
+	for rows.Next() {
+		var i ListCbtEventSubjectMatrixRow
+		if err := rows.Scan(
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.TargetQuestions,
+			&i.AuthorCount,
+			&i.ReviewerCount,
+			&i.TotalQuestions,
+			&i.PublishedQuestions,
+			&i.PackageCount,
+			&i.ActivePackageCount,
+			&i.SessionCount,
+			&i.ShortageCount,
+			&i.AuthoringReady,
+			&i.PackageReady,
+			&i.SessionReady,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtEventSubjectTargets = `-- name: ListCbtEventSubjectTargets :many
+SELECT
+  t.id,
+  t.event_id,
+  t.subject_id,
+  s.name AS subject_name,
+  s.code AS subject_code,
+  t.target_questions,
+  COALESCE(progress.total_count, 0)::int AS total_count,
+  COALESCE(progress.draft_count, 0)::int AS draft_count,
+  COALESCE(progress.review_count, 0)::int AS review_count,
+  COALESCE(progress.rejected_count, 0)::int AS rejected_count,
+  COALESCE(progress.approved_count, 0)::int AS approved_count,
+  COALESCE(progress.published_count, 0)::int AS published_count,
+  t.created_at,
+  t.updated_at
+FROM cbt_event_subject_targets t
+JOIN subjects s ON s.id = t.subject_id
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*)::int AS total_count,
+    COUNT(*) FILTER (WHERE q.workflow_status = 'draft')::int AS draft_count,
+    COUNT(*) FILTER (WHERE q.workflow_status = 'review')::int AS review_count,
+    COUNT(*) FILTER (WHERE q.workflow_status = 'rejected')::int AS rejected_count,
+    COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::int AS approved_count,
+    COUNT(*) FILTER (WHERE q.status = 'published')::int AS published_count
+  FROM cbt_questions q
+  WHERE q.event_id = t.event_id
+    AND q.subject_id = t.subject_id
+) progress ON TRUE
+WHERE t.event_id = $1
+ORDER BY s.name ASC, s.code ASC
+`
+
+type ListCbtEventSubjectTargetsRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	EventID         pgtype.UUID        `json:"event_id"`
+	SubjectID       pgtype.UUID        `json:"subject_id"`
+	SubjectName     string             `json:"subject_name"`
+	SubjectCode     string             `json:"subject_code"`
+	TargetQuestions int32              `json:"target_questions"`
+	TotalCount      int32              `json:"total_count"`
+	DraftCount      int32              `json:"draft_count"`
+	ReviewCount     int32              `json:"review_count"`
+	RejectedCount   int32              `json:"rejected_count"`
+	ApprovedCount   int32              `json:"approved_count"`
+	PublishedCount  int32              `json:"published_count"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListCbtEventSubjectTargets(ctx context.Context, eventID pgtype.UUID) ([]ListCbtEventSubjectTargetsRow, error) {
+	rows, err := q.db.Query(ctx, listCbtEventSubjectTargets, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtEventSubjectTargetsRow{}
+	for rows.Next() {
+		var i ListCbtEventSubjectTargetsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.TargetQuestions,
+			&i.TotalCount,
+			&i.DraftCount,
+			&i.ReviewCount,
+			&i.RejectedCount,
+			&i.ApprovedCount,
+			&i.PublishedCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCbtExamEvents = `-- name: ListCbtExamEvents :many
 SELECT
   e.id, e.title, e.exam_type, e.scope, e.target_levels, e.status,
@@ -308,6 +1126,49 @@ func (q *Queries) ListCbtExamEvents(ctx context.Context) ([]ListCbtExamEventsRow
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateCbtEventMember = `-- name: UpdateCbtEventMember :one
+UPDATE cbt_event_members
+SET user_id = $3,
+    employee_id = $4,
+    subject_id = $5,
+    role = $6,
+    updated_at = NOW()
+WHERE id = $1 AND event_id = $2
+RETURNING id, event_id, user_id, employee_id, subject_id, role, created_at, updated_at
+`
+
+type UpdateCbtEventMemberParams struct {
+	ID         pgtype.UUID        `json:"id"`
+	EventID    pgtype.UUID        `json:"event_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	EmployeeID pgtype.UUID        `json:"employee_id"`
+	SubjectID  pgtype.UUID        `json:"subject_id"`
+	Role       CbtEventMemberRole `json:"role"`
+}
+
+func (q *Queries) UpdateCbtEventMember(ctx context.Context, arg UpdateCbtEventMemberParams) (CbtEventMember, error) {
+	row := q.db.QueryRow(ctx, updateCbtEventMember,
+		arg.ID,
+		arg.EventID,
+		arg.UserID,
+		arg.EmployeeID,
+		arg.SubjectID,
+		arg.Role,
+	)
+	var i CbtEventMember
+	err := row.Scan(
+		&i.ID,
+		&i.EventID,
+		&i.UserID,
+		&i.EmployeeID,
+		&i.SubjectID,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateCbtExamEvent = `-- name: UpdateCbtExamEvent :one
@@ -375,6 +1236,34 @@ func (q *Queries) UpdateCbtExamEventStatus(ctx context.Context, arg UpdateCbtExa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TargetLevels,
+	)
+	return i, err
+}
+
+const upsertCbtEventSubjectTarget = `-- name: UpsertCbtEventSubjectTarget :one
+INSERT INTO cbt_event_subject_targets (event_id, subject_id, target_questions)
+VALUES ($1, $2, $3)
+ON CONFLICT (event_id, subject_id)
+DO UPDATE SET target_questions = EXCLUDED.target_questions, updated_at = NOW()
+RETURNING id, event_id, subject_id, target_questions, created_at, updated_at
+`
+
+type UpsertCbtEventSubjectTargetParams struct {
+	EventID         pgtype.UUID `json:"event_id"`
+	SubjectID       pgtype.UUID `json:"subject_id"`
+	TargetQuestions int32       `json:"target_questions"`
+}
+
+func (q *Queries) UpsertCbtEventSubjectTarget(ctx context.Context, arg UpsertCbtEventSubjectTargetParams) (CbtEventSubjectTarget, error) {
+	row := q.db.QueryRow(ctx, upsertCbtEventSubjectTarget, arg.EventID, arg.SubjectID, arg.TargetQuestions)
+	var i CbtEventSubjectTarget
+	err := row.Scan(
+		&i.ID,
+		&i.EventID,
+		&i.SubjectID,
+		&i.TargetQuestions,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

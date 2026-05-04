@@ -1,20 +1,21 @@
 -- name: ListCbtPackages :many
-SELECT p.id, p.subject_id, s.name AS subject_name, s.code AS subject_code,
+SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject_code,
        p.title, p.description, p.duration_minutes, p.randomize_questions, p.is_active,
        p.created_at, p.updated_at,
        COUNT(pq.question_id)::int AS question_count
 FROM cbt_packages p
 JOIN subjects s ON s.id = p.subject_id
 LEFT JOIN cbt_package_questions pq ON pq.package_id = p.id
+WHERE (sqlc.arg(event_id)::uuid IS NULL OR p.event_id = sqlc.arg(event_id)::uuid)
 GROUP BY p.id, s.name, s.code
 ORDER BY p.created_at DESC;
 
 -- name: CreateCbtPackage :one
-INSERT INTO cbt_packages (id, subject_id, title, description, duration_minutes, randomize_questions, is_active)
-VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+INSERT INTO cbt_packages (id, event_id, subject_id, title, description, duration_minutes, randomize_questions, is_active)
+VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
--- name: DeleteCbtPackage :exec
+-- name: DeleteCbtPackage :execrows
 DELETE FROM cbt_packages WHERE id = $1;
 
 -- name: AddCbtPackageQuestion :exec
@@ -23,11 +24,28 @@ VALUES ($1, $2, $3, $4);
 
 -- name: ListCbtPackageQuestions :many
 SELECT pq.package_id, pq.question_id, pq.position, pq.points,
-       q.code AS question_code, q.question_text, q.question_type, q.difficulty, q.status, q.workflow_status,
+       q.event_id, q.code AS question_code, q.question_text, q.question_type, q.difficulty, q.status, q.workflow_status,
        q.cp_ref, q.tp_ref, q.kd_ref, q.material_topic, q.cognitive_level, q.hots_flag
 FROM cbt_package_questions pq
 JOIN cbt_questions q ON q.id = pq.question_id
+JOIN cbt_packages p ON p.id = pq.package_id
+WHERE (sqlc.arg(event_id)::uuid IS NULL OR p.event_id = sqlc.arg(event_id)::uuid)
 ORDER BY pq.package_id, pq.position ASC;
+
+-- name: ListCbtEventPackages :many
+SELECT p.id, p.event_id, p.subject_id, s.name AS subject_name, s.code AS subject_code,
+       p.title, p.description, p.duration_minutes, p.randomize_questions, p.is_active,
+       p.created_at, p.updated_at,
+       COUNT(pq.question_id)::int AS question_count,
+       COUNT(pq.question_id) FILTER (WHERE q.status = 'published')::int AS published_question_count,
+       COUNT(pq.question_id) FILTER (WHERE q.event_id = p.event_id)::int AS event_question_count
+FROM cbt_packages p
+JOIN subjects s ON s.id = p.subject_id
+LEFT JOIN cbt_package_questions pq ON pq.package_id = p.id
+LEFT JOIN cbt_questions q ON q.id = pq.question_id
+WHERE p.event_id = $1
+GROUP BY p.id, s.name, s.code
+ORDER BY s.name ASC, p.created_at DESC;
 
 -- name: GetCbtPackageQuestionQuality :one
 SELECT

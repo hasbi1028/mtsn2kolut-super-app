@@ -14,61 +14,82 @@ import (
 const countCbtQuestionsFiltered = `-- name: CountCbtQuestionsFiltered :one
 SELECT COUNT(*)::bigint
 FROM cbt_questions q
-WHERE ($1::uuid IS NULL OR q.subject_id = $1::uuid)
-  AND ($2::text = '' OR q.author_username = $2::text)
-  AND ($3::text = '' OR q.workflow_status = $3::text)
-  AND ($4::text = '' OR q.status = $4::cbt_question_status_enum)
-  AND ($5::text = '' OR q.question_type = $5::text)
-  AND ($6::text = '' OR ($6::text = 'yes' AND q.hots_flag = TRUE) OR ($6::text = 'no' AND q.hots_flag = FALSE))
+WHERE ($1::uuid IS NULL OR q.event_id = $1::uuid)
+  AND ($2::uuid IS NULL OR q.subject_id = $2::uuid)
+  AND ($3::text = '' OR q.author_username = $3::text)
+  AND ($4::text = '' OR q.workflow_status = $4::text)
+  AND ($5::text = '' OR q.status = $5::cbt_question_status_enum)
+  AND ($6::text = '' OR q.question_type = $6::text)
+  AND ($7::text = '' OR ($7::text = 'yes' AND q.hots_flag = TRUE) OR ($7::text = 'no' AND q.hots_flag = FALSE))
   AND (
-    $7::text = ''
+    $8::bool
+    OR q.status = 'published'
+    OR q.author_username = $9::text
+    OR EXISTS (
+      SELECT 1 FROM cbt_event_members m
+      WHERE m.event_id = q.event_id
+        AND m.user_id = $10::uuid
+        AND m.role IN ('reviewer', 'panitia')
+        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+  )
+  AND (
+    $11::text = ''
     OR (
-      $7::text = 'item_analysis'
+      $11::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $7::text = 'reviewer'
+      $11::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $7::text = 'workflow'
+      $11::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $8::text = ''
-    OR q.code ILIKE '%' || $8::text || '%'
-    OR q.question_text ILIKE '%' || $8::text || '%'
-    OR q.material_topic ILIKE '%' || $8::text || '%'
-    OR q.cp_ref ILIKE '%' || $8::text || '%'
-    OR q.kd_ref ILIKE '%' || $8::text || '%'
+    $12::text = ''
+    OR q.code ILIKE '%' || $12::text || '%'
+    OR q.question_text ILIKE '%' || $12::text || '%'
+    OR q.material_topic ILIKE '%' || $12::text || '%'
+    OR q.cp_ref ILIKE '%' || $12::text || '%'
+    OR q.kd_ref ILIKE '%' || $12::text || '%'
   )
 `
 
 type CountCbtQuestionsFilteredParams struct {
+	EventID        pgtype.UUID `json:"event_id"`
 	SubjectID      pgtype.UUID `json:"subject_id"`
 	AuthorUsername string      `json:"author_username"`
 	WorkflowStatus string      `json:"workflow_status"`
 	StatusFilter   string      `json:"status_filter"`
 	QuestionType   string      `json:"question_type"`
 	HotsFilter     string      `json:"hots_filter"`
+	IsAdmin        bool        `json:"is_admin"`
+	ActorUsername  string      `json:"actor_username"`
+	ActorUserID    pgtype.UUID `json:"actor_user_id"`
 	RevisionSource string      `json:"revision_source"`
 	SearchQuery    string      `json:"search_query"`
 }
 
 func (q *Queries) CountCbtQuestionsFiltered(ctx context.Context, arg CountCbtQuestionsFilteredParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countCbtQuestionsFiltered,
+		arg.EventID,
 		arg.SubjectID,
 		arg.AuthorUsername,
 		arg.WorkflowStatus,
 		arg.StatusFilter,
 		arg.QuestionType,
 		arg.HotsFilter,
+		arg.IsAdmin,
+		arg.ActorUsername,
+		arg.ActorUserID,
 		arg.RevisionSource,
 		arg.SearchQuery,
 	)
@@ -79,7 +100,7 @@ func (q *Queries) CountCbtQuestionsFiltered(ctx context.Context, arg CountCbtQue
 
 const createCbtQuestion = `-- name: CreateCbtQuestion :one
 INSERT INTO cbt_questions (
-  id, subject_id, code, question_text, question_type, options,
+  id, event_id, subject_id, code, question_text, question_type, options,
   option_a, option_b, option_c, option_d, option_e,
   answer_key, explanation, difficulty, status,
   stem_html, stem_latex, stimulus_html, stimulus_latex,
@@ -92,14 +113,15 @@ INSERT INTO cbt_questions (
   approver_username, approved_at, writer_notes, review_notes
 )
 VALUES (
-  gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-  $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-  $31, $32, $33, $34, $35, $36, $37, $38, $39
+  gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+  $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31,
+  $32, $33, $34, $35, $36, $37, $38, $39, $40
 )
-RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes
+RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id
 `
 
 type CreateCbtQuestionParams struct {
+	EventID          pgtype.UUID               `json:"event_id"`
 	SubjectID        pgtype.UUID               `json:"subject_id"`
 	Code             string                    `json:"code"`
 	QuestionText     string                    `json:"question_text"`
@@ -143,6 +165,7 @@ type CreateCbtQuestionParams struct {
 
 func (q *Queries) CreateCbtQuestion(ctx context.Context, arg CreateCbtQuestionParams) (CbtQuestion, error) {
 	row := q.db.QueryRow(ctx, createCbtQuestion,
+		arg.EventID,
 		arg.SubjectID,
 		arg.Code,
 		arg.QuestionText,
@@ -227,6 +250,42 @@ func (q *Queries) CreateCbtQuestion(ctx context.Context, arg CreateCbtQuestionPa
 		&i.ApprovedAt,
 		&i.WriterNotes,
 		&i.ReviewNotes,
+		&i.EventID,
+	)
+	return i, err
+}
+
+const createCbtQuestionAuditLog = `-- name: CreateCbtQuestionAuditLog :one
+INSERT INTO cbt_question_audit_logs (question_id, actor_username, action, note, metadata)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, question_id, actor_username, action, note, metadata, created_at
+`
+
+type CreateCbtQuestionAuditLogParams struct {
+	QuestionID    pgtype.UUID `json:"question_id"`
+	ActorUsername string      `json:"actor_username"`
+	Action        string      `json:"action"`
+	Note          string      `json:"note"`
+	Metadata      []byte      `json:"metadata"`
+}
+
+func (q *Queries) CreateCbtQuestionAuditLog(ctx context.Context, arg CreateCbtQuestionAuditLogParams) (CbtQuestionAuditLog, error) {
+	row := q.db.QueryRow(ctx, createCbtQuestionAuditLog,
+		arg.QuestionID,
+		arg.ActorUsername,
+		arg.Action,
+		arg.Note,
+		arg.Metadata,
+	)
+	var i CbtQuestionAuditLog
+	err := row.Scan(
+		&i.ID,
+		&i.QuestionID,
+		&i.ActorUsername,
+		&i.Action,
+		&i.Note,
+		&i.Metadata,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -241,7 +300,7 @@ func (q *Queries) DeleteCbtQuestion(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getCbtQuestion = `-- name: GetCbtQuestion :one
-SELECT q.id, q.subject_id, q.code, q.question_text, q.question_type, q.options,
+SELECT q.id, q.event_id, q.subject_id, q.code, q.question_text, q.question_type, q.options,
        q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
        q.answer_key, q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
@@ -270,6 +329,7 @@ WHERE q.id = $1
 
 type GetCbtQuestionRow struct {
 	ID               pgtype.UUID               `json:"id"`
+	EventID          pgtype.UUID               `json:"event_id"`
 	SubjectID        pgtype.UUID               `json:"subject_id"`
 	Code             string                    `json:"code"`
 	QuestionText     string                    `json:"question_text"`
@@ -320,6 +380,7 @@ func (q *Queries) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (GetCbtQue
 	var i GetCbtQuestionRow
 	err := row.Scan(
 		&i.ID,
+		&i.EventID,
 		&i.SubjectID,
 		&i.Code,
 		&i.QuestionText,
@@ -368,7 +429,7 @@ func (q *Queries) GetCbtQuestion(ctx context.Context, id pgtype.UUID) (GetCbtQue
 }
 
 const getCbtQuestionDetail = `-- name: GetCbtQuestionDetail :one
-SELECT q.id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
+SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
        q.code, q.question_text, q.question_type, q.options,
        q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
        q.answer_key, q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
@@ -399,6 +460,7 @@ WHERE q.id = $1
 
 type GetCbtQuestionDetailRow struct {
 	ID               pgtype.UUID               `json:"id"`
+	EventID          pgtype.UUID               `json:"event_id"`
 	SubjectID        pgtype.UUID               `json:"subject_id"`
 	SubjectName      string                    `json:"subject_name"`
 	SubjectCode      string                    `json:"subject_code"`
@@ -451,6 +513,7 @@ func (q *Queries) GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (Get
 	var i GetCbtQuestionDetailRow
 	err := row.Scan(
 		&i.ID,
+		&i.EventID,
 		&i.SubjectID,
 		&i.SubjectName,
 		&i.SubjectCode,
@@ -531,11 +594,57 @@ func (q *Queries) ListCbtQuestionStemTextsBySubject(ctx context.Context, subject
 	return items, nil
 }
 
+const listCbtQuestionTimeline = `-- name: ListCbtQuestionTimeline :many
+SELECT id, question_id, actor_username, action, note, metadata, created_at
+FROM cbt_question_audit_logs
+WHERE question_id = $1
+ORDER BY created_at ASC, id ASC
+`
+
+func (q *Queries) ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]CbtQuestionAuditLog, error) {
+	rows, err := q.db.Query(ctx, listCbtQuestionTimeline, questionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CbtQuestionAuditLog{}
+	for rows.Next() {
+		var i CbtQuestionAuditLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.QuestionID,
+			&i.ActorUsername,
+			&i.Action,
+			&i.Note,
+			&i.Metadata,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCbtQuestions = `-- name: ListCbtQuestions :many
-SELECT q.id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
+SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
        q.code, q.question_text, q.question_type, q.options,
        q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
-       q.answer_key, q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
+       CASE
+         WHEN $1::bool
+           OR q.author_username = $2::text
+           OR EXISTS (
+             SELECT 1 FROM cbt_event_members m
+             WHERE m.event_id = q.event_id
+               AND m.user_id = $3::uuid
+               AND m.role IN ('reviewer', 'panitia')
+               AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+           )
+         THEN q.answer_key ELSE '' END AS answer_key,
+       q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
        q.academic_phase, q.grade_level,
@@ -561,8 +670,15 @@ LEFT JOIN LATERAL (
 ORDER BY q.created_at DESC
 `
 
+type ListCbtQuestionsParams struct {
+	IsAdmin       bool        `json:"is_admin"`
+	ActorUsername string      `json:"actor_username"`
+	ActorUserID   pgtype.UUID `json:"actor_user_id"`
+}
+
 type ListCbtQuestionsRow struct {
 	ID               pgtype.UUID               `json:"id"`
+	EventID          pgtype.UUID               `json:"event_id"`
 	SubjectID        pgtype.UUID               `json:"subject_id"`
 	SubjectName      string                    `json:"subject_name"`
 	SubjectCode      string                    `json:"subject_code"`
@@ -610,8 +726,8 @@ type ListCbtQuestionsRow struct {
 	AnswerCount      int32                     `json:"answer_count"`
 }
 
-func (q *Queries) ListCbtQuestions(ctx context.Context) ([]ListCbtQuestionsRow, error) {
-	rows, err := q.db.Query(ctx, listCbtQuestions)
+func (q *Queries) ListCbtQuestions(ctx context.Context, arg ListCbtQuestionsParams) ([]ListCbtQuestionsRow, error) {
+	rows, err := q.db.Query(ctx, listCbtQuestions, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -621,6 +737,7 @@ func (q *Queries) ListCbtQuestions(ctx context.Context) ([]ListCbtQuestionsRow, 
 		var i ListCbtQuestionsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.EventID,
 			&i.SubjectID,
 			&i.SubjectName,
 			&i.SubjectCode,
@@ -678,10 +795,21 @@ func (q *Queries) ListCbtQuestions(ctx context.Context) ([]ListCbtQuestionsRow, 
 }
 
 const listCbtQuestionsFiltered = `-- name: ListCbtQuestionsFiltered :many
-SELECT q.id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
+SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
        q.code, q.question_text, q.question_type, q.options,
        q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
-       q.answer_key, q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
+       CASE
+         WHEN $1::bool
+           OR q.author_username = $2::text
+           OR EXISTS (
+             SELECT 1 FROM cbt_event_members m
+             WHERE m.event_id = q.event_id
+               AND m.user_id = $3::uuid
+               AND m.role IN ('reviewer', 'panitia')
+               AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+           )
+         THEN q.answer_key ELSE '' END AS answer_key,
+       q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
        q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
        q.explanation_html, q.rubric_html,
        q.academic_phase, q.grade_level,
@@ -704,45 +832,62 @@ LEFT JOIN LATERAL (
   FROM cbt_student_answers sa
   WHERE sa.question_id = q.id
 ) answer_usage ON TRUE
-WHERE ($1::uuid IS NULL OR q.subject_id = $1::uuid)
-  AND ($2::text = '' OR q.author_username = $2::text)
-  AND ($3::text = '' OR q.workflow_status = $3::text)
-  AND ($4::text = '' OR q.status = $4::cbt_question_status_enum)
-  AND ($5::text = '' OR q.question_type = $5::text)
-  AND ($6::text = '' OR ($6::text = 'yes' AND q.hots_flag = TRUE) OR ($6::text = 'no' AND q.hots_flag = FALSE))
+WHERE ($4::uuid IS NULL OR q.event_id = $4::uuid)
+  AND ($5::uuid IS NULL OR q.subject_id = $5::uuid)
+  AND ($6::text = '' OR q.author_username = $6::text)
+  AND ($7::text = '' OR q.workflow_status = $7::text)
+  AND ($8::text = '' OR q.status = $8::cbt_question_status_enum)
+  AND ($9::text = '' OR q.question_type = $9::text)
+  AND ($10::text = '' OR ($10::text = 'yes' AND q.hots_flag = TRUE) OR ($10::text = 'no' AND q.hots_flag = FALSE))
   AND (
-    $7::text = ''
+    $1::bool
+    OR q.status = 'published'
+    OR q.author_username = $2::text
+    OR EXISTS (
+      SELECT 1 FROM cbt_event_members m
+      WHERE m.event_id = q.event_id
+        AND m.user_id = $3::uuid
+        AND m.role IN ('reviewer', 'panitia')
+        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+  )
+  AND (
+    $11::text = ''
     OR (
-      $7::text = 'item_analysis'
+      $11::text = 'item_analysis'
       AND q.workflow_status = 'rejected'
       AND q.review_notes ILIKE '%analisis butir%'
     )
     OR (
-      $7::text = 'reviewer'
+      $11::text = 'reviewer'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) <> ''
     )
     OR (
-      $7::text = 'workflow'
+      $11::text = 'workflow'
       AND q.workflow_status = 'rejected'
       AND q.review_notes NOT ILIKE '%analisis butir%'
       AND btrim(q.reviewer_username) = ''
     )
   )
   AND (
-    $8::text = ''
-    OR q.code ILIKE '%' || $8::text || '%'
-    OR q.question_text ILIKE '%' || $8::text || '%'
-    OR q.material_topic ILIKE '%' || $8::text || '%'
-    OR q.cp_ref ILIKE '%' || $8::text || '%'
-    OR q.kd_ref ILIKE '%' || $8::text || '%'
+    $12::text = ''
+    OR q.code ILIKE '%' || $12::text || '%'
+    OR q.question_text ILIKE '%' || $12::text || '%'
+    OR q.material_topic ILIKE '%' || $12::text || '%'
+    OR q.cp_ref ILIKE '%' || $12::text || '%'
+    OR q.kd_ref ILIKE '%' || $12::text || '%'
   )
 ORDER BY q.created_at DESC
-LIMIT $10 OFFSET $9
+LIMIT $14 OFFSET $13
 `
 
 type ListCbtQuestionsFilteredParams struct {
+	IsAdmin        bool        `json:"is_admin"`
+	ActorUsername  string      `json:"actor_username"`
+	ActorUserID    pgtype.UUID `json:"actor_user_id"`
+	EventID        pgtype.UUID `json:"event_id"`
 	SubjectID      pgtype.UUID `json:"subject_id"`
 	AuthorUsername string      `json:"author_username"`
 	WorkflowStatus string      `json:"workflow_status"`
@@ -757,6 +902,7 @@ type ListCbtQuestionsFilteredParams struct {
 
 type ListCbtQuestionsFilteredRow struct {
 	ID               pgtype.UUID               `json:"id"`
+	EventID          pgtype.UUID               `json:"event_id"`
 	SubjectID        pgtype.UUID               `json:"subject_id"`
 	SubjectName      string                    `json:"subject_name"`
 	SubjectCode      string                    `json:"subject_code"`
@@ -806,6 +952,10 @@ type ListCbtQuestionsFilteredRow struct {
 
 func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuestionsFilteredParams) ([]ListCbtQuestionsFilteredRow, error) {
 	rows, err := q.db.Query(ctx, listCbtQuestionsFiltered,
+		arg.IsAdmin,
+		arg.ActorUsername,
+		arg.ActorUserID,
+		arg.EventID,
 		arg.SubjectID,
 		arg.AuthorUsername,
 		arg.WorkflowStatus,
@@ -826,6 +976,246 @@ func (q *Queries) ListCbtQuestionsFiltered(ctx context.Context, arg ListCbtQuest
 		var i ListCbtQuestionsFilteredRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.EventID,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.Code,
+			&i.QuestionText,
+			&i.QuestionType,
+			&i.Options,
+			&i.OptionA,
+			&i.OptionB,
+			&i.OptionC,
+			&i.OptionD,
+			&i.OptionE,
+			&i.AnswerKey,
+			&i.Explanation,
+			&i.Difficulty,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.StemHtml,
+			&i.StemLatex,
+			&i.StimulusHtml,
+			&i.StimulusLatex,
+			&i.ExplanationHtml,
+			&i.RubricHtml,
+			&i.AcademicPhase,
+			&i.GradeLevel,
+			&i.CpRef,
+			&i.TpRef,
+			&i.KdRef,
+			&i.IndicatorRef,
+			&i.MaterialTopic,
+			&i.CognitiveLevel,
+			&i.HotsFlag,
+			&i.MediaAssetIds,
+			&i.WorkflowStatus,
+			&i.Version,
+			&i.AuthorUsername,
+			&i.ReviewerUsername,
+			&i.ReviewedAt,
+			&i.ApproverUsername,
+			&i.ApprovedAt,
+			&i.WriterNotes,
+			&i.ReviewNotes,
+			&i.PackageCount,
+			&i.AnswerCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtQuestionsScoped = `-- name: ListCbtQuestionsScoped :many
+SELECT q.id, q.event_id, q.subject_id, s.name AS subject_name, s.code AS subject_code,
+       q.code, q.question_text, q.question_type, q.options,
+       q.option_a, q.option_b, q.option_c, q.option_d, q.option_e,
+       CASE
+         WHEN $1::bool
+           OR q.author_username = $2::text
+           OR EXISTS (
+             SELECT 1 FROM cbt_event_members m
+             WHERE m.event_id = q.event_id
+               AND m.user_id = $3::uuid
+               AND m.role IN ('reviewer', 'panitia')
+               AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+           )
+         THEN q.answer_key ELSE '' END AS answer_key,
+       q.explanation, q.difficulty, q.status, q.created_at, q.updated_at,
+       q.stem_html, q.stem_latex, q.stimulus_html, q.stimulus_latex,
+       q.explanation_html, q.rubric_html,
+       q.academic_phase, q.grade_level,
+       q.cp_ref, q.tp_ref, q.kd_ref, q.indicator_ref,
+       q.material_topic, q.cognitive_level, q.hots_flag,
+       q.media_asset_ids, q.workflow_status, q.version,
+       q.author_username, q.reviewer_username, q.reviewed_at,
+       q.approver_username, q.approved_at, q.writer_notes, q.review_notes,
+       COALESCE(pkg_usage.package_count, 0)::int AS package_count,
+       COALESCE(answer_usage.answer_count, 0)::int AS answer_count
+FROM cbt_questions q
+JOIN subjects s ON s.id = q.subject_id
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS package_count
+  FROM cbt_package_questions pq
+  WHERE pq.question_id = q.id
+) pkg_usage ON TRUE
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::int AS answer_count
+  FROM cbt_student_answers sa
+  WHERE sa.question_id = q.id
+) answer_usage ON TRUE
+WHERE ($4::uuid IS NULL OR q.event_id = $4::uuid)
+  AND ($5::uuid IS NULL OR q.subject_id = $5::uuid)
+  AND ($6::text = '' OR q.author_username = $6::text)
+  AND ($7::text = '' OR q.workflow_status = $7::text)
+  AND ($8::text = '' OR q.status = $8::cbt_question_status_enum)
+  AND ($9::text = '' OR q.question_type = $9::text)
+  AND ($10::text = '' OR ($10::text = 'yes' AND q.hots_flag = TRUE) OR ($10::text = 'no' AND q.hots_flag = FALSE))
+  AND (
+    $1::bool
+    OR q.status = 'published'
+    OR q.author_username = $2::text
+    OR EXISTS (
+      SELECT 1 FROM cbt_event_members m
+      WHERE m.event_id = q.event_id
+        AND m.user_id = $3::uuid
+        AND m.role IN ('reviewer', 'panitia')
+        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+  )
+  AND (
+    $11::text = ''
+    OR (
+      $11::text = 'item_analysis'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes ILIKE '%analisis butir%'
+    )
+    OR (
+      $11::text = 'reviewer'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes NOT ILIKE '%analisis butir%'
+      AND btrim(q.reviewer_username) <> ''
+    )
+    OR (
+      $11::text = 'workflow'
+      AND q.workflow_status = 'rejected'
+      AND q.review_notes NOT ILIKE '%analisis butir%'
+      AND btrim(q.reviewer_username) = ''
+    )
+  )
+  AND (
+    $12::text = ''
+    OR q.code ILIKE '%' || $12::text || '%'
+    OR q.question_text ILIKE '%' || $12::text || '%'
+    OR q.material_topic ILIKE '%' || $12::text || '%'
+    OR q.cp_ref ILIKE '%' || $12::text || '%'
+    OR q.kd_ref ILIKE '%' || $12::text || '%'
+  )
+ORDER BY q.created_at DESC
+LIMIT $14 OFFSET $13
+`
+
+type ListCbtQuestionsScopedParams struct {
+	IsAdmin        bool        `json:"is_admin"`
+	ActorUsername  string      `json:"actor_username"`
+	ActorUserID    pgtype.UUID `json:"actor_user_id"`
+	EventID        pgtype.UUID `json:"event_id"`
+	SubjectID      pgtype.UUID `json:"subject_id"`
+	AuthorUsername string      `json:"author_username"`
+	WorkflowStatus string      `json:"workflow_status"`
+	StatusFilter   string      `json:"status_filter"`
+	QuestionType   string      `json:"question_type"`
+	HotsFilter     string      `json:"hots_filter"`
+	RevisionSource string      `json:"revision_source"`
+	SearchQuery    string      `json:"search_query"`
+	OffsetCount    int32       `json:"offset_count"`
+	LimitCount     int32       `json:"limit_count"`
+}
+
+type ListCbtQuestionsScopedRow struct {
+	ID               pgtype.UUID               `json:"id"`
+	EventID          pgtype.UUID               `json:"event_id"`
+	SubjectID        pgtype.UUID               `json:"subject_id"`
+	SubjectName      string                    `json:"subject_name"`
+	SubjectCode      string                    `json:"subject_code"`
+	Code             string                    `json:"code"`
+	QuestionText     string                    `json:"question_text"`
+	QuestionType     string                    `json:"question_type"`
+	Options          []byte                    `json:"options"`
+	OptionA          string                    `json:"option_a"`
+	OptionB          string                    `json:"option_b"`
+	OptionC          string                    `json:"option_c"`
+	OptionD          string                    `json:"option_d"`
+	OptionE          string                    `json:"option_e"`
+	AnswerKey        string                    `json:"answer_key"`
+	Explanation      string                    `json:"explanation"`
+	Difficulty       CbtQuestionDifficultyEnum `json:"difficulty"`
+	Status           CbtQuestionStatusEnum     `json:"status"`
+	CreatedAt        pgtype.Timestamptz        `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz        `json:"updated_at"`
+	StemHtml         string                    `json:"stem_html"`
+	StemLatex        string                    `json:"stem_latex"`
+	StimulusHtml     string                    `json:"stimulus_html"`
+	StimulusLatex    string                    `json:"stimulus_latex"`
+	ExplanationHtml  string                    `json:"explanation_html"`
+	RubricHtml       string                    `json:"rubric_html"`
+	AcademicPhase    string                    `json:"academic_phase"`
+	GradeLevel       pgtype.Int2               `json:"grade_level"`
+	CpRef            string                    `json:"cp_ref"`
+	TpRef            string                    `json:"tp_ref"`
+	KdRef            string                    `json:"kd_ref"`
+	IndicatorRef     string                    `json:"indicator_ref"`
+	MaterialTopic    string                    `json:"material_topic"`
+	CognitiveLevel   string                    `json:"cognitive_level"`
+	HotsFlag         bool                      `json:"hots_flag"`
+	MediaAssetIds    []byte                    `json:"media_asset_ids"`
+	WorkflowStatus   string                    `json:"workflow_status"`
+	Version          int32                     `json:"version"`
+	AuthorUsername   string                    `json:"author_username"`
+	ReviewerUsername string                    `json:"reviewer_username"`
+	ReviewedAt       pgtype.Timestamptz        `json:"reviewed_at"`
+	ApproverUsername string                    `json:"approver_username"`
+	ApprovedAt       pgtype.Timestamptz        `json:"approved_at"`
+	WriterNotes      string                    `json:"writer_notes"`
+	ReviewNotes      string                    `json:"review_notes"`
+	PackageCount     int32                     `json:"package_count"`
+	AnswerCount      int32                     `json:"answer_count"`
+}
+
+func (q *Queries) ListCbtQuestionsScoped(ctx context.Context, arg ListCbtQuestionsScopedParams) ([]ListCbtQuestionsScopedRow, error) {
+	rows, err := q.db.Query(ctx, listCbtQuestionsScoped,
+		arg.IsAdmin,
+		arg.ActorUsername,
+		arg.ActorUserID,
+		arg.EventID,
+		arg.SubjectID,
+		arg.AuthorUsername,
+		arg.WorkflowStatus,
+		arg.StatusFilter,
+		arg.QuestionType,
+		arg.HotsFilter,
+		arg.RevisionSource,
+		arg.SearchQuery,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtQuestionsScopedRow{}
+	for rows.Next() {
+		var i ListCbtQuestionsScopedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
 			&i.SubjectID,
 			&i.SubjectName,
 			&i.SubjectCode,
@@ -1061,51 +1451,53 @@ func (q *Queries) ListUngradedEssaysByTeacher(ctx context.Context, arg ListUngra
 const updateCbtQuestion = `-- name: UpdateCbtQuestion :one
 UPDATE cbt_questions
 SET
-  subject_id         = $2,
-  code               = $3,
-  question_text      = $4,
-  question_type      = $5,
-  options            = $6,
-  option_a           = $7,
-  option_b           = $8,
-  option_c           = $9,
-  option_d           = $10,
-  option_e           = $11,
-  answer_key         = $12,
-  explanation        = $13,
-  difficulty         = $14,
-  status             = $15,
-  stem_html          = $16,
-  stem_latex         = $17,
-  stimulus_html      = $18,
-  stimulus_latex     = $19,
-  explanation_html   = $20,
-  rubric_html        = $21,
-  academic_phase     = $22,
-  grade_level        = $23,
-  cp_ref             = $24,
-  tp_ref             = $25,
-  kd_ref             = $26,
-  indicator_ref      = $27,
-  material_topic     = $28,
-  cognitive_level    = $29,
-  hots_flag          = $30,
-  media_asset_ids    = $31,
-  workflow_status    = $32,
+  event_id           = $2,
+  subject_id         = $3,
+  code               = $4,
+  question_text      = $5,
+  question_type      = $6,
+  options            = $7,
+  option_a           = $8,
+  option_b           = $9,
+  option_c           = $10,
+  option_d           = $11,
+  option_e           = $12,
+  answer_key         = $13,
+  explanation        = $14,
+  difficulty         = $15,
+  status             = $16,
+  stem_html          = $17,
+  stem_latex         = $18,
+  stimulus_html      = $19,
+  stimulus_latex     = $20,
+  explanation_html   = $21,
+  rubric_html        = $22,
+  academic_phase     = $23,
+  grade_level        = $24,
+  cp_ref             = $25,
+  tp_ref             = $26,
+  kd_ref             = $27,
+  indicator_ref      = $28,
+  material_topic     = $29,
+  cognitive_level    = $30,
+  hots_flag          = $31,
+  media_asset_ids    = $32,
+  workflow_status    = $33,
   version            = version + 1,
-  reviewer_username  = $33,
-  reviewed_at        = $34,
-  approver_username  = $35,
-  approved_at        = $36,
-  writer_notes       = $37,
-  review_notes       = $38,
+  reviewer_username  = $34,
+  reviewed_at        = $35,
+  approver_username  = $36,
+  approved_at        = $37,
+  writer_notes       = $38,
+  review_notes       = $39,
   updated_at         = NOW()
 WHERE id = $1
-RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes
+RETURNING id, subject_id, code, question_text, option_a, option_b, option_c, option_d, option_e, answer_key, explanation, difficulty, status, created_at, updated_at, question_type, options, stem_html, stem_latex, stimulus_html, stimulus_latex, explanation_html, rubric_html, academic_phase, grade_level, cp_ref, tp_ref, kd_ref, indicator_ref, material_topic, cognitive_level, hots_flag, media_asset_ids, workflow_status, version, author_username, reviewer_username, reviewed_at, approver_username, approved_at, writer_notes, review_notes, event_id
 `
 
 type UpdateCbtQuestionParams struct {
 	ID               pgtype.UUID               `json:"id"`
+	EventID          pgtype.UUID               `json:"event_id"`
 	SubjectID        pgtype.UUID               `json:"subject_id"`
 	Code             string                    `json:"code"`
 	QuestionText     string                    `json:"question_text"`
@@ -1148,6 +1540,7 @@ type UpdateCbtQuestionParams struct {
 func (q *Queries) UpdateCbtQuestion(ctx context.Context, arg UpdateCbtQuestionParams) (CbtQuestion, error) {
 	row := q.db.QueryRow(ctx, updateCbtQuestion,
 		arg.ID,
+		arg.EventID,
 		arg.SubjectID,
 		arg.Code,
 		arg.QuestionText,
@@ -1230,6 +1623,7 @@ func (q *Queries) UpdateCbtQuestion(ctx context.Context, arg UpdateCbtQuestionPa
 		&i.ApprovedAt,
 		&i.WriterNotes,
 		&i.ReviewNotes,
+		&i.EventID,
 	)
 	return i, err
 }

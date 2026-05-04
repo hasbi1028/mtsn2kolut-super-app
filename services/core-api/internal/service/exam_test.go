@@ -22,7 +22,7 @@ type fakeExamStore struct {
 	eventErr               error
 	questions              []db.GetExamQuestionsRow
 	questionsErr           error
-	orderArg               db.UpdateParticipantQuestionOrderParams
+	orderArg               db.SetParticipantQuestionOrderIfEmptyParams
 	answers                []db.GetParticipantAnswersRow
 	answersErr             error
 	room                   db.CbtExamRoom
@@ -65,9 +65,9 @@ func (f *fakeExamStore) GetExamQuestions(ctx context.Context, packageID pgtype.U
 	return f.questions, f.questionsErr
 }
 
-func (f *fakeExamStore) UpdateParticipantQuestionOrder(ctx context.Context, arg db.UpdateParticipantQuestionOrderParams) error {
+func (f *fakeExamStore) SetParticipantQuestionOrderIfEmpty(ctx context.Context, arg db.SetParticipantQuestionOrderIfEmptyParams) ([]byte, error) {
 	f.orderArg = arg
-	return nil
+	return arg.QuestionOrder, nil
 }
 
 func (f *fakeExamStore) GetParticipantAnswers(ctx context.Context, participantID pgtype.UUID) ([]db.GetParticipantAnswersRow, error) {
@@ -258,6 +258,13 @@ func TestExamLoginRejectsInvalidStatesAndPropagatesErrors(t *testing.T) {
 	svc = &Exam{q: &fakeExamStore{participant: inactive}}
 	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamNotActive) {
 		t.Fatalf("Login(inactive) error = %v, want ErrExamNotActive", err)
+	}
+
+	future := base
+	future.ScheduledStart = pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}
+	svc = &Exam{q: &fakeExamStore{participant: future}}
+	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamNotStarted) {
+		t.Fatalf("Login(before scheduled_start) error = %v, want ErrExamNotStarted", err)
 	}
 
 	bound := base

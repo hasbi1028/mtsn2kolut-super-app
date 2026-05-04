@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Input } from '$lib/components/ui/input';
@@ -36,6 +37,7 @@
 	let fScope = $state('grade');
 	let fYearId = $state('');
 	let fStatus = $state('draft');
+	let originalStatus = $state('draft');
 	let fTargetLevels = $state<string[]>([]);
 	let fBusy = $state(false);
 	let eventsRequestId = 0;
@@ -46,6 +48,19 @@
 	};
 	const scopeLabel: Record<string, string> = { class: 'Per Kelas', grade: 'Per Tingkat', school: 'Seluruh Sekolah' };
 	const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Aktif', finished: 'Selesai' };
+	const eventHomeCopy = 'Rumah operasi CBT: mulai dari penugasan guru, kesiapan bank soal, paket, sesi, ruang, token, kartu, sampai hasil.';
+
+	function statusClass(status: string) {
+		if (status === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+		if (status === 'finished') return 'bg-slate-100 text-slate-600 border-slate-200';
+		return 'bg-amber-100 text-amber-700 border-amber-200';
+	}
+
+	function eventProgressLabel(event: CbtEvent) {
+		if (event.session_count > 0) return `${event.session_count} sesi tersusun`;
+		if (event.status === 'draft') return 'Siapkan penugasan dan bank soal';
+		return 'Belum ada sesi';
+	}
 
 	function isRecord(value: unknown): value is Record<string, unknown> {
 		return typeof value === 'object' && value !== null;
@@ -138,6 +153,7 @@
 
 	function resetForm() {
 		fTitle = ''; fType = 'uts'; fScope = 'grade'; fStatus = 'draft';
+		originalStatus = 'draft';
 		fTargetLevels = [];
 		editId = null; showForm = false;
 	}
@@ -148,9 +164,20 @@
 		fScope = e.scope;
 		fYearId = e.academic_year_id;
 		fStatus = e.status;
+		originalStatus = e.status;
 		fTargetLevels = [...(e.target_levels ?? [])];
 		editId = e.id;
 		showForm = true;
+	}
+
+	async function updateEventStatusIfNeeded(id: string) {
+		if (fStatus === originalStatus) return;
+		const res = await fetch(clientApiPath`/api/cbt/events/${id}/status`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ status: fStatus }),
+		});
+		await readClientJson<unknown>(res);
 	}
 
 	function toggleTargetLevel(level: string, checked: boolean) {
@@ -164,24 +191,36 @@
 	async function saveEvent() {
 		if (!fTitle || !fType || !fYearId) return;
 		fBusy = true;
+		const currentEditId = editId;
+		let fieldUpdateSucceeded = false;
 		try {
-			const method = editId ? 'PUT' : 'POST';
-			const path = editId ? clientApiPath`/api/cbt/events/${editId}` : '/api/cbt/events';
-			const res = await fetch(path, {
-				method,
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
+			const method = currentEditId ? 'PUT' : 'POST';
+			const path = currentEditId ? clientApiPath`/api/cbt/events/${currentEditId}` : '/api/cbt/events';
+			const body = currentEditId
+				? {
+					title: fTitle, exam_type: fType, scope: fScope,
+					target_levels: fTargetLevels,
+					academic_year_id: fYearId,
+				}
+				: {
 					title: fTitle, exam_type: fType, scope: fScope,
 					target_levels: fTargetLevels,
 					academic_year_id: fYearId, status: fStatus,
-				}),
+				};
+			const res = await fetch(path, {
+				method,
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body),
 			});
 			await readClientJson<unknown>(res);
-			showToast(editId ? 'Kegiatan diperbarui' : 'Kegiatan berhasil dibuat');
+			fieldUpdateSucceeded = true;
+			if (currentEditId) await updateEventStatusIfNeeded(currentEditId);
+			showToast(currentEditId ? 'Kegiatan diperbarui' : 'Kegiatan berhasil dibuat');
 			resetForm();
 			await refreshOverview();
 		} catch (error) {
 			showError(mutationErrorMessage(error, 'Gagal menyimpan kegiatan ujian. Periksa koneksi lalu coba lagi.'));
+			if (currentEditId && fieldUpdateSucceeded) await refreshOverview();
 		} finally { fBusy = false; }
 	}
 
@@ -216,7 +255,7 @@
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<h1 class="text-2xl font-semibold text-slate-800">Kegiatan Ujian</h1>
-			<p class="text-sm text-slate-500 mt-1">Grup besar untuk sesi-sesi ujian (mis: UTS, UAS)</p>
+			<p class="text-sm text-slate-500 mt-1">{eventHomeCopy}</p>
 		</div>
 		<LoadingButton onclick={() => { if (showForm) resetForm(); else showForm = true; }}>
 			{showForm ? 'Batal' : '+ Buat Kegiatan'}
@@ -326,6 +365,29 @@
 
 		{#snippet children(value)}
 			{@const overview = value as EventsOverview}
+		<div class="grid gap-3 md:grid-cols-3">
+			<Card.Root class="border-green-200 bg-green-50/60">
+				<Card.Content class="p-4">
+					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-green-800">Event aktif</p>
+					<p class="mt-2 text-2xl font-bold text-green-950">{overview.events.filter((event) => event.status === 'active').length}</p>
+					<p class="mt-1 text-xs text-green-900">Pantau dari command center per kegiatan.</p>
+				</Card.Content>
+			</Card.Root>
+			<Card.Root>
+				<Card.Content class="p-4">
+					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Total sesi</p>
+					<p class="mt-2 text-2xl font-bold text-slate-900">{overview.events.reduce((sum, event) => sum + (event.session_count || 0), 0)}</p>
+					<p class="mt-1 text-xs text-slate-500">Ringkasan ringan dari daftar kegiatan.</p>
+				</Card.Content>
+			</Card.Root>
+			<Card.Root>
+				<Card.Content class="p-4">
+					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Alur kerja</p>
+					<p class="mt-2 text-sm font-semibold text-slate-900">Penugasan → Soal → Paket → Sesi → Kartu → Hasil</p>
+					<p class="mt-1 text-xs text-slate-500">Gunakan tombol Kelola Event di setiap baris.</p>
+				</Card.Content>
+			</Card.Root>
+		</div>
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Content class="p-0 overflow-x-auto">
 				<div class="hidden overflow-x-auto lg:block">
@@ -357,12 +419,14 @@
 									<Badge variant="secondary">{e.session_count} Sesi</Badge>
 								</Table.Cell>
 								<Table.Cell>
-									<Badge class={e.status === 'active' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600'}>
+									<Badge class={statusClass(e.status)}>
 										{statusLabel[e.status] ?? e.status}
 									</Badge>
+									<div class="mt-1 text-xs text-slate-500">{eventProgressLabel(e)}</div>
 								</Table.Cell>
 								<Table.Cell class="text-right">
 									<div class="flex gap-2 justify-end">
+										<a href={resolve(`/cbt/events/${e.id}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-100">Kelola Event</a>
 										<LoadingButton variant="outline" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
 										<LoadingButton
 											variant="destructive"
@@ -394,7 +458,7 @@
 									<p class="text-sm font-semibold text-slate-900">{e.title}</p>
 									<p class="mt-1 text-xs text-slate-500">{e.academic_year_name}</p>
 								</div>
-								<Badge class={e.status === 'active' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600'}>
+								<Badge class={statusClass(e.status)}>
 									{statusLabel[e.status] ?? e.status}
 								</Badge>
 							</div>
@@ -405,8 +469,10 @@
 									<Badge variant="outline" class="text-xs">{e.target_levels.join(', ')}</Badge>
 								{/if}
 								<Badge variant="secondary">{e.session_count} Sesi</Badge>
+								<Badge variant="outline" class="text-xs">{eventProgressLabel(e)}</Badge>
 							</div>
 							<div class="mt-4 grid grid-cols-2 gap-2">
+								<a href={resolve(`/cbt/events/${e.id}`)} class="col-span-2 inline-flex items-center justify-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kelola Event</a>
 								<LoadingButton variant="outline" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
 								<LoadingButton
 									variant="destructive"

@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -16,9 +17,9 @@ type CbtPackage struct {
 }
 
 type cbtPackageStore interface {
-	ListCbtPackages(ctx context.Context) ([]db.ListCbtPackagesRow, error)
-	ListCbtPackageQuestions(ctx context.Context) ([]db.ListCbtPackageQuestionsRow, error)
-	DeleteCbtPackage(ctx context.Context, id pgtype.UUID) error
+	ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackagesRow, error)
+	ListCbtPackageQuestions(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackageQuestionsRow, error)
+	DeleteCbtPackage(ctx context.Context, id pgtype.UUID) (int64, error)
 	WithTx(tx pgx.Tx) *db.Queries
 }
 
@@ -32,12 +33,12 @@ func NewCbtPackage(pool *pgxpool.Pool) *CbtPackage {
 	return &CbtPackage{pool: pool, q: db.New(pool)}
 }
 
-func (s *CbtPackage) List(ctx context.Context) ([]db.ListCbtPackagesRow, []db.ListCbtPackageQuestionsRow, error) {
-	packages, err := s.q.ListCbtPackages(ctx)
+func (s *CbtPackage) List(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackagesRow, []db.ListCbtPackageQuestionsRow, error) {
+	packages, err := s.q.ListCbtPackages(ctx, eventID)
 	if err != nil {
 		return nil, nil, err
 	}
-	questions, err := s.q.ListCbtPackageQuestions(ctx)
+	questions, err := s.q.ListCbtPackageQuestions(ctx, eventID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -45,6 +46,7 @@ func (s *CbtPackage) List(ctx context.Context) ([]db.ListCbtPackagesRow, []db.Li
 }
 
 type CreateCbtPackageInput struct {
+	EventID            pgtype.UUID
 	SubjectID          pgtype.UUID
 	Title              string
 	Description        string
@@ -56,6 +58,10 @@ type CreateCbtPackageInput struct {
 }
 
 func (s *CbtPackage) Create(ctx context.Context, input CreateCbtPackageInput) (db.CbtPackage, error) {
+	if err := validateCbtPackageDuration(input.DurationMinutes); err != nil {
+		return db.CbtPackage{}, err
+	}
+	input.DurationMinutes = normalizeCbtPackageDuration(input.DurationMinutes)
 	if len(input.QuestionIDs) == 0 {
 		return db.CbtPackage{}, fmt.Errorf("question_ids wajib diisi")
 	}
@@ -80,7 +86,12 @@ func (s *CbtPackage) Create(ctx context.Context, input CreateCbtPackageInput) (d
 }
 
 func createCbtPackage(ctx context.Context, q cbtPackageCreateStore, input CreateCbtPackageInput) (db.CbtPackage, error) {
+	if err := validateCbtPackageDuration(input.DurationMinutes); err != nil {
+		return db.CbtPackage{}, err
+	}
+	input.DurationMinutes = normalizeCbtPackageDuration(input.DurationMinutes)
 	pkg, err := q.CreateCbtPackage(ctx, db.CreateCbtPackageParams{
+		EventID:            input.EventID,
 		SubjectID:          input.SubjectID,
 		Title:              input.Title,
 		Description:        input.Description,
@@ -102,6 +113,12 @@ func createCbtPackage(ctx context.Context, q cbtPackageCreateStore, input Create
 		}
 		if question.Status != db.CbtQuestionStatusEnumPublished {
 			return db.CbtPackage{}, fmt.Errorf("semua soal paket harus berstatus terbit")
+		}
+		switch {
+		case input.EventID.Valid && !sameUUID(question.EventID, input.EventID):
+			return db.CbtPackage{}, fmt.Errorf("%w: soal paket event harus berasal dari event yang sama", domain.ErrBadRequest)
+		case !input.EventID.Valid && question.EventID.Valid:
+			return db.CbtPackage{}, fmt.Errorf("%w: paket umum tidak boleh memakai soal khusus event", domain.ErrBadRequest)
 		}
 		points := int32(1)
 		if input.QuestionWeights != nil {
@@ -125,5 +142,29 @@ func createCbtPackage(ctx context.Context, q cbtPackageCreateStore, input Create
 }
 
 func (s *CbtPackage) Delete(ctx context.Context, id pgtype.UUID) error {
-	return s.q.DeleteCbtPackage(ctx, id)
+	rows, err := s.q.DeleteCbtPackage(ctx, id)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func validateCbtPackageDuration(duration int32) error {
+	if duration == 0 {
+		return nil
+	}
+	if duration < 1 || duration > 360 {
+		return fmt.Errorf("%w: durasi paket CBT harus 1-360 menit", domain.ErrBadRequest)
+	}
+	return nil
+}
+
+func normalizeCbtPackageDuration(duration int32) int32 {
+	if duration == 0 {
+		return 60
+	}
+	return duration
 }

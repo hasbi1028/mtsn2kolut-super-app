@@ -79,7 +79,7 @@ SET scheduled_start = $2,
 WHERE id = $1
 RETURNING *;
 
--- name: DeleteCbtExamSession :exec
+-- name: DeleteCbtExamSession :execrows
 DELETE FROM cbt_exam_sessions WHERE id = $1 AND status = 'draft';
 
 -- name: ListCbtExamParticipants :many
@@ -201,10 +201,12 @@ SET room_id = $2,
     seat_no = $3
 WHERE id = $1;
 
--- name: UpdateParticipantQuestionOrder :exec
+-- name: SetParticipantQuestionOrderIfEmpty :one
 UPDATE cbt_exam_participants
 SET question_order = $2
-WHERE id = $1;
+WHERE id = $1
+  AND (question_order IS NULL OR jsonb_array_length(question_order) = 0)
+RETURNING question_order;
 
 -- name: UpdateParticipantLogin :one
 UPDATE cbt_exam_participants
@@ -466,6 +468,7 @@ WITH score_parts AS (
   JOIN cbt_questions q ON q.id = pq.question_id
   LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
   WHERE ep.session_id = $1
+    AND ep.submitted_at IS NOT NULL
   GROUP BY ep.id
 )
 UPDATE cbt_exam_participants ep

@@ -119,13 +119,16 @@ func (q *Queries) CreateCbtExamSession(ctx context.Context, arg CreateCbtExamSes
 	return i, err
 }
 
-const deleteCbtExamSession = `-- name: DeleteCbtExamSession :exec
+const deleteCbtExamSession = `-- name: DeleteCbtExamSession :execrows
 DELETE FROM cbt_exam_sessions WHERE id = $1 AND status = 'draft'
 `
 
-func (q *Queries) DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteCbtExamSession, id)
-	return err
+func (q *Queries) DeleteCbtExamSession(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCbtExamSession, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const enrollClassToSession = `-- name: EnrollClassToSession :exec
@@ -1855,6 +1858,26 @@ func (q *Queries) ResetParticipantRuntimeAccess(ctx context.Context, id pgtype.U
 	return err
 }
 
+const setParticipantQuestionOrderIfEmpty = `-- name: SetParticipantQuestionOrderIfEmpty :one
+UPDATE cbt_exam_participants
+SET question_order = $2
+WHERE id = $1
+  AND (question_order IS NULL OR jsonb_array_length(question_order) = 0)
+RETURNING question_order
+`
+
+type SetParticipantQuestionOrderIfEmptyParams struct {
+	ID            pgtype.UUID `json:"id"`
+	QuestionOrder []byte      `json:"question_order"`
+}
+
+func (q *Queries) SetParticipantQuestionOrderIfEmpty(ctx context.Context, arg SetParticipantQuestionOrderIfEmptyParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, setParticipantQuestionOrderIfEmpty, arg.ID, arg.QuestionOrder)
+	var question_order []byte
+	err := row.Scan(&question_order)
+	return question_order, err
+}
+
 const setParticipantSuspiciousFlag = `-- name: SetParticipantSuspiciousFlag :exec
 UPDATE cbt_exam_participants
 SET suspicious_flag = $2
@@ -2098,22 +2121,6 @@ func (q *Queries) UpdateParticipantLogin(ctx context.Context, arg UpdateParticip
 	return id, err
 }
 
-const updateParticipantQuestionOrder = `-- name: UpdateParticipantQuestionOrder :exec
-UPDATE cbt_exam_participants
-SET question_order = $2
-WHERE id = $1
-`
-
-type UpdateParticipantQuestionOrderParams struct {
-	ID            pgtype.UUID `json:"id"`
-	QuestionOrder []byte      `json:"question_order"`
-}
-
-func (q *Queries) UpdateParticipantQuestionOrder(ctx context.Context, arg UpdateParticipantQuestionOrderParams) error {
-	_, err := q.db.Exec(ctx, updateParticipantQuestionOrder, arg.ID, arg.QuestionOrder)
-	return err
-}
-
 const updateParticipantScores = `-- name: UpdateParticipantScores :exec
 WITH score_parts AS (
   SELECT
@@ -2132,6 +2139,7 @@ WITH score_parts AS (
   JOIN cbt_questions q ON q.id = pq.question_id
   LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
   WHERE ep.session_id = $1
+    AND ep.submitted_at IS NOT NULL
   GROUP BY ep.id
 )
 UPDATE cbt_exam_participants ep
