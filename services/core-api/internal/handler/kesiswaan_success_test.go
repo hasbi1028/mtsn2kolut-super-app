@@ -531,7 +531,7 @@ func TestKesiswaanPhotoHandlersForwardUploadAndServeFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateFormFile() error = %v", err)
 	}
-	if _, err := part.Write([]byte("image-bytes")); err != nil {
+	if _, err := part.Write([]byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00")); err != nil {
 		t.Fatalf("multipart write error = %v", err)
 	}
 	if err := writer.Close(); err != nil {
@@ -833,6 +833,14 @@ func TestKesiswaanPhotoValidationAndServiceErrors(t *testing.T) {
 		t.Fatalf("UploadStudentPhoto(service error) status = %d, want 400; body=%s", rec.Code, rec.Body.String())
 	}
 
+	h = &Kesiswaan{svc: &fakeKesiswaanService{}}
+	req = newOversizedKesiswaanPhotoRequest(t, studentID)
+	rec = httptest.NewRecorder()
+	h.UploadStudentPhoto(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("UploadStudentPhoto(oversized) status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
 	photoCases := []struct {
 		name       string
 		svc        *fakeKesiswaanService
@@ -867,9 +875,29 @@ func newKesiswaanMultipartAdminRequest(t *testing.T, studentID pgtype.UUID, incl
 		if err != nil {
 			t.Fatalf("CreateFormFile() error = %v", err)
 		}
-		if _, err := part.Write([]byte("image-bytes")); err != nil {
+		if _, err := part.Write([]byte("\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00")); err != nil {
 			t.Fatalf("multipart write error = %v", err)
 		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("multipart close error = %v", err)
+	}
+	req := withRouteParam(adminRequest(http.MethodPost, "/api/kesiswaan/students/"+studentID.String()+"/photo", body.String()), "id", studentID.String())
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	return req
+}
+
+func newOversizedKesiswaanPhotoRequest(t *testing.T, studentID pgtype.UUID) *http.Request {
+	t.Helper()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "foto.jpg")
+	if err != nil {
+		t.Fatalf("CreateFormFile() error = %v", err)
+	}
+	if _, err := part.Write(bytes.Repeat([]byte("x"), (3<<20)+1)); err != nil {
+		t.Fatalf("multipart write error = %v", err)
 	}
 	if err := writer.Close(); err != nil {
 		t.Fatalf("multipart close error = %v", err)

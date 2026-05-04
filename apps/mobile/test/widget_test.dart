@@ -1130,6 +1130,85 @@ void main() {
     expect(find.text('1 jawaban lokal menunggu sinkron.'), findsOneWidget);
     expect(find.text('Memeriksa status...'), findsOneWidget);
   });
+
+  testWidgets('exam shell blocks empty question payload safely', (
+    tester,
+  ) async {
+    final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          initialPayload: _emptyQuestionPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(find.text('Paket soal belum tersedia'), findsOneWidget);
+    expect(
+      find.textContaining('Server mengirim sesi ujian tanpa daftar soal'),
+      findsOneWidget,
+    );
+    expect(find.text('Perbarui Status'), findsOneWidget);
+    expect(client.heartbeatCount, 0);
+    expect(client.statusCount, 0);
+    expect(client.submitCount, 0);
+  });
+
+  testWidgets('exam shell clamps restored question index', (tester) async {
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleLoginPayload(),
+          restoredSnapshot: _sampleSnapshot(currentQuestionIndex: 99),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Soal 1'), findsOneWidget);
+    expect(find.text('2 + 2 = ...'), findsOneWidget);
+  });
+}
+
+class _RecordingExamApiClient extends ExamApiClient {
+  _RecordingExamApiClient({required super.baseUrl});
+
+  int heartbeatCount = 0;
+  int statusCount = 0;
+  int submitCount = 0;
+
+  @override
+  Future<void> sendHeartbeat(String token) async {
+    heartbeatCount += 1;
+  }
+
+  @override
+  Future<ExamStatusPayload> getStatus(String token) async {
+    statusCount += 1;
+    return const ExamStatusPayload(
+      answeredCount: 0,
+      totalQuestions: 0,
+      timeRemainingSeconds: 0,
+      isSubmitted: false,
+    );
+  }
+
+  @override
+  Future<void> submit(String token) async {
+    submitCount += 1;
+  }
 }
 
 class _TestApp extends StatelessWidget {
@@ -1175,6 +1254,25 @@ ExamLoginPayload _sampleLoginPayload() {
     ],
     answeredCount: 0,
     totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _emptyQuestionPayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-empty-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-empty-1',
+      title: 'Matematika Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [],
+    answeredCount: 0,
+    totalQuestions: 0,
     timeRemainingSeconds: 1800,
   );
 }
@@ -1415,6 +1513,7 @@ ExamSessionSnapshot _sampleSnapshot({
   int consecutiveSyncFailures = 0,
   Map<String, String> pendingAnswers = const <String, String>{},
   List<String> playedAudioQuestionIds = const <String>[],
+  int currentQuestionIndex = 0,
 }) {
   return ExamSessionSnapshot(
     baseUrl: 'http://10.0.2.2:8080',
@@ -1427,7 +1526,7 @@ ExamSessionSnapshot _sampleSnapshot({
     scheduledStartIso: '2026-05-01T08:00:00+08:00',
     scheduledEndIso: '2026-05-01T09:30:00+08:00',
     durationMinutes: 90,
-    currentQuestionIndex: 0,
+    currentQuestionIndex: currentQuestionIndex,
     answers: const <String, String>{},
     pendingAnswers: pendingAnswers,
     playedAudioQuestionIds: playedAudioQuestionIds,

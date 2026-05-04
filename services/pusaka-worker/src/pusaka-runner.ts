@@ -1,7 +1,8 @@
 import fs from 'fs';
+import crypto from 'crypto';
 import path from 'path';
 
-import { chromium, type Page } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 
 import {
   ACTION_TIMEOUT,
@@ -24,16 +25,53 @@ import {
 } from './parsers.js';
 import type { AttendanceRecord, ClaimedJob, RuntimeConfig } from './types.js';
 
+const SCREENSHOT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+function usernameHash(username: string): string {
+  return crypto.createHash('sha256').update(username).digest('hex').slice(0, 12);
+}
+
+function usernameContext(username: string): Record<string, string> {
+  return { username_hash: usernameHash(username) };
+}
+
+function sanitizeScreenshotName(name: string): string {
+  return name.replace(/[^a-z0-9._-]+/gi, '-').slice(0, 120);
+}
+
+function isCredentialOrLoginFailure(error: unknown): boolean {
+  const message = ((error as Error | undefined)?.message ?? String(error)).toLowerCase();
+  return /login|credential|username|password/.test(message);
+}
+
+function pruneOldScreenshots(): void {
+  const cutoff = Date.now() - SCREENSHOT_RETENTION_MS;
+  for (const entry of fs.readdirSync(SCREENSHOT_DIR, { withFileTypes: true })) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    const file = path.join(SCREENSHOT_DIR, entry.name);
+    const stat = fs.statSync(file);
+    if (stat.mtimeMs < cutoff) {
+      fs.unlinkSync(file);
+    }
+  }
+}
+
 export async function processClaimedJob(
   job: ClaimedJob,
   runtimeConfig: RuntimeConfig,
+  signal?: AbortSignal,
 ): Promise<AttendanceRecord> {
+  throwIfCancelled(signal);
   if (job.run_type === 'checkin') {
     await withRetry(
       (attempt) =>
-        checkin(job.pusaka_username, job.pusaka_password, attempt, runtimeConfig),
+        checkin(job.pusaka_username, job.pusaka_password, attempt, runtimeConfig, signal),
       'checkin',
+      signal,
     );
+    throwIfCancelled(signal);
     return {
       tanggal: toISODateMakassar(),
       jam_masuk: toTimeWITA(),
@@ -49,9 +87,12 @@ export async function processClaimedJob(
           job.pusaka_password,
           attempt,
           runtimeConfig,
+          signal,
         ),
       'checkout',
+      signal,
     );
+    throwIfCancelled(signal);
     return {
       tanggal: toISODateMakassar(),
       jam_masuk: '',
@@ -66,17 +107,21 @@ export async function processClaimedJob(
         job.pusaka_password,
         attempt,
         runtimeConfig,
+        signal,
       ),
     'scrape',
+    signal,
   );
 }
 
 async function withRetry<T>(
   fn: (attempt: number) => Promise<T>,
   label: string,
+  signal?: AbortSignal,
 ): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= SCRAPE_RETRIES; attempt++) {
+    throwIfCancelled(signal);
     try {
       return await fn(attempt);
     } catch (error) {
@@ -85,11 +130,51 @@ async function withRetry<T>(
         error: (error as Error)?.message ?? String(error),
       });
       if (attempt < SCRAPE_RETRIES) {
-        await sleep(SCRAPE_RETRY_MS * attempt);
+        await sleep(SCRAPE_RETRY_MS * attempt, signal);
       }
     }
   }
   throw lastError;
+}
+
+class WorkerJobCancelledError extends Error {
+  constructor() {
+    super('worker shutdown interrupted active job');
+    this.name = 'WorkerJobCancelledError';
+  }
+}
+
+function throwIfCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new WorkerJobCancelledError();
+  }
+}
+
+function registerAbortCleanup(
+  signal: AbortSignal | undefined,
+  resources: () => { page?: Page; context?: BrowserContext; browser?: Browser },
+): () => void {
+  if (!signal) {
+    return () => {};
+  }
+
+  const closeResources = async () => {
+    const { page, context, browser } = resources();
+    await page?.close().catch(() => {});
+    await context?.close().catch(() => {});
+    await browser?.close().catch(() => {});
+  };
+  const onAbort = () => {
+    void closeResources();
+  };
+
+  if (signal.aborted) {
+    onAbort();
+  } else {
+    signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  return () => signal.removeEventListener('abort', onAbort);
 }
 
 function getBrowserOpts(runtimeConfig: RuntimeConfig) {
@@ -151,7 +236,10 @@ async function loginToPusaka(
       throw new Error('Login gagal: username/password ditolak oleh server');
     }
 
-    log('INFO', `${label}: login ok`, { username, url: page.url() });
+    log('INFO', `${label}: login ok`, {
+      ...usernameContext(username),
+      url: page.url(),
+    });
     return;
   } catch (urlError) {
     if ((urlError as Error)?.message?.includes('username/password')) {
@@ -167,7 +255,7 @@ async function loginToPusaka(
 
   if (/absensi|dashboard|beranda|profil|selamat\s+datang/i.test(body)) {
     log('INFO', `${label}: login ok (via body fallback)`, {
-      username,
+      ...usernameContext(username),
       url: page.url(),
     });
     return;
@@ -203,29 +291,48 @@ async function assertPresenceResult(
     throw new Error('PRESENSI GAGAL — Bad Request (mungkin GPS tidak valid)');
   }
   if (/berhasil/i.test(text)) {
-    log('INFO', `${label}: BERHASIL`, { username });
+    log('INFO', `${label}: BERHASIL`, usernameContext(username));
     return;
   }
   if (/sudah presensi/i.test(text)) {
-    log('WARN', `${label}: sudah absen sebelumnya`, { username });
+    log('WARN', `${label}: sudah absen sebelumnya`, usernameContext(username));
     return;
   }
   log('WARN', `${label}: status tidak jelas`, {
-    username,
+    ...usernameContext(username),
     snippet: text.substring(0, 300),
   });
 }
 
 async function saveFailScreenshot(page: Page, name: string): Promise<void> {
   try {
-    fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    fs.mkdirSync(SCREENSHOT_DIR, { recursive: true, mode: 0o700 });
+    fs.chmodSync(SCREENSHOT_DIR, 0o700);
+    pruneOldScreenshots();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const file = path.join(SCREENSHOT_DIR, `${name}-${timestamp}.png`);
+    const file = path.join(
+      SCREENSHOT_DIR,
+      `${sanitizeScreenshotName(name)}-${timestamp}.png`,
+    );
     await page.screenshot({ path: file, fullPage: false });
+    fs.chmodSync(file, 0o600);
     log('WARN', 'screenshot saved', { file });
   } catch {
     // best-effort
   }
+}
+
+async function saveOperationalFailScreenshot(
+  page: Page,
+  name: string,
+  error: unknown,
+): Promise<void> {
+  if (isCredentialOrLoginFailure(error)) {
+    log('WARN', 'screenshot skipped for credential/login failure');
+    return;
+  }
+
+  await saveFailScreenshot(page, name);
 }
 
 async function scrapeOnce(
@@ -233,13 +340,21 @@ async function scrapeOnce(
   password: string,
   attempt: number,
   runtimeConfig: RuntimeConfig,
+  signal?: AbortSignal,
 ): Promise<AttendanceRecord> {
+  throwIfCancelled(signal);
   const browser = await chromium.launch(getBrowserOpts(runtimeConfig));
   const context = await browser.newContext(getContextOpts());
   context.setDefaultTimeout(ACTION_TIMEOUT);
   const page = await context.newPage();
+  const unregisterAbortCleanup = registerAbortCleanup(signal, () => ({
+    page,
+    context,
+    browser,
+  }));
 
   try {
+    throwIfCancelled(signal);
     await loginToPusaka(page, username, password, 'scrape');
     await blockAssets(page);
 
@@ -259,7 +374,8 @@ async function scrapeOnce(
       .first()
       .waitFor()
       .catch(() => {});
-    await page.waitForTimeout(2000);
+    await sleep(2000, signal);
+    throwIfCancelled(signal);
 
     const parsed = parseTodayFromText(
       await page.locator('body').innerText(),
@@ -270,11 +386,12 @@ async function scrapeOnce(
     }
     return parsed;
   } catch (error) {
-    await saveFailScreenshot(page, `scrape-fail-a${attempt}`);
+    await saveOperationalFailScreenshot(page, `scrape-fail-a${attempt}`, error);
     throw error;
   } finally {
-    await context.close();
-    await browser.close();
+    unregisterAbortCleanup();
+    await context.close().catch(() => {});
+    await browser.close().catch(() => {});
   }
 }
 
@@ -283,7 +400,9 @@ async function checkin(
   password: string,
   attempt: number,
   runtimeConfig: RuntimeConfig,
+  signal?: AbortSignal,
 ): Promise<void> {
+  throwIfCancelled(signal);
   const label = 'checkin';
   const geo = randomGeo(BASE_LAT, BASE_LNG, 28);
   const browser = await chromium.launch(getBrowserOpts(runtimeConfig));
@@ -292,48 +411,61 @@ async function checkin(
   );
   context.setDefaultTimeout(ACTION_TIMEOUT);
   const page = await context.newPage();
+  const unregisterAbortCleanup = registerAbortCleanup(signal, () => ({
+    page,
+    context,
+    browser,
+  }));
 
   try {
     log('INFO', `${label}: starting`, {
-      username,
+      ...usernameContext(username),
       lat: geo.latitude.toFixed(7),
       lng: geo.longitude.toFixed(7),
     });
+    throwIfCancelled(signal);
     await loginToPusaka(page, username, password, label);
     await page.goto(`${BASE_URL}/profile/presence`, {
       waitUntil: 'domcontentloaded',
     });
-    await page.waitForTimeout(3000);
+    await sleep(3000, signal);
     await triggerGeo(page);
-    await page.waitForTimeout(2000);
+    await sleep(2000, signal);
 
     const button = page.locator('button:has-text("Presensi masuk")');
     if ((await button.count()) === 0) {
       if (
         /hadir|sudah/i.test(await page.locator('body').innerText().catch(() => ''))
       ) {
-        log('WARN', `${label}: sudah absen`, { username });
+        log('WARN', `${label}: sudah absen`, usernameContext(username));
         return;
       }
       throw new Error('Tombol Presensi masuk tidak ditemukan');
     }
     if (await button.first().isDisabled().catch(() => false)) {
-      log('WARN', `${label}: tombol disabled`, { username });
+      log('WARN', `${label}: tombol disabled`, usernameContext(username));
       return;
     }
 
     await triggerGeo(page);
-    await page.waitForTimeout(1000);
+    await sleep(1000, signal);
+    throwIfCancelled(signal);
     await button.first().click();
-    log('INFO', `${label}: tombol diklik`, { username });
-    await page.waitForTimeout(3000);
+    log('INFO', `${label}: tombol diklik`, usernameContext(username));
+    await sleep(3000, signal);
+    throwIfCancelled(signal);
     await assertPresenceResult(page, label, username);
   } catch (error) {
-    await saveFailScreenshot(page, `${label}-fail-a${attempt}-${username}`);
+    await saveOperationalFailScreenshot(
+      page,
+      `${label}-fail-a${attempt}-u${usernameHash(username)}`,
+      error,
+    );
     throw error;
   } finally {
-    await context.close();
-    await browser.close();
+    unregisterAbortCleanup();
+    await context.close().catch(() => {});
+    await browser.close().catch(() => {});
   }
 }
 
@@ -342,7 +474,9 @@ async function checkout(
   password: string,
   attempt: number,
   runtimeConfig: RuntimeConfig,
+  signal?: AbortSignal,
 ): Promise<void> {
+  throwIfCancelled(signal);
   const label = 'checkout';
   const geo = randomGeo(BASE_LAT, BASE_LNG, 28);
   const browser = await chromium.launch(getBrowserOpts(runtimeConfig));
@@ -351,33 +485,40 @@ async function checkout(
   );
   context.setDefaultTimeout(ACTION_TIMEOUT);
   const page = await context.newPage();
+  const unregisterAbortCleanup = registerAbortCleanup(signal, () => ({
+    page,
+    context,
+    browser,
+  }));
 
   try {
     log('INFO', `${label}: starting`, {
-      username,
+      ...usernameContext(username),
       lat: geo.latitude.toFixed(7),
       lng: geo.longitude.toFixed(7),
     });
+    throwIfCancelled(signal);
     await loginToPusaka(page, username, password, label);
     await page.goto(`${BASE_URL}/profile/presence`, {
       waitUntil: 'domcontentloaded',
     });
-    await page.waitForTimeout(3000);
+    await sleep(3000, signal);
     await triggerGeo(page);
-    await page.waitForTimeout(2000);
+    await sleep(2000, signal);
 
     const button = page.locator('button:has-text("Presensi pulang")');
     if ((await button.count()) === 0) {
       throw new Error('Tombol Presensi pulang tidak ditemukan');
     }
     if (await button.first().isDisabled().catch(() => false)) {
-      log('WARN', `${label}: tombol disabled`, { username });
+      log('WARN', `${label}: tombol disabled`, usernameContext(username));
       return;
     }
 
+    throwIfCancelled(signal);
     await button.first().click();
-    log('INFO', `${label}: tombol diklik`, { username });
-    await page.waitForTimeout(2000);
+    log('INFO', `${label}: tombol diklik`, usernameContext(username));
+    await sleep(2000, signal);
 
     const yesButton = page.getByRole('button', { name: /^ya$/i });
     if (
@@ -385,20 +526,49 @@ async function checkout(
       !(await yesButton.first().isDisabled().catch(() => false))
     ) {
       await yesButton.first().click();
-      log('INFO', `${label}: konfirmasi Ya diklik`, { username });
+      log('INFO', `${label}: konfirmasi Ya diklik`, usernameContext(username));
     }
 
-    await page.waitForTimeout(3000);
+    await sleep(3000, signal);
+    throwIfCancelled(signal);
     await assertPresenceResult(page, label, username);
   } catch (error) {
-    await saveFailScreenshot(page, `${label}-fail-a${attempt}-${username}`);
+    await saveOperationalFailScreenshot(
+      page,
+      `${label}-fail-a${attempt}-u${usernameHash(username)}`,
+      error,
+    );
     throw error;
   } finally {
-    await context.close();
-    await browser.close();
+    unregisterAbortCleanup();
+    await context.close().catch(() => {});
+    await browser.close().catch(() => {});
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  return new Promise((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener('abort', onAbort);
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timeout);
+      cleanup();
+      reject(new WorkerJobCancelledError());
+    };
+
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    timeout.unref?.();
+  });
 }

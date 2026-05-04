@@ -2,9 +2,10 @@ import { dev } from '$app/environment';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { ApiError, apiLoginWithFetch } from '$lib/server/api';
+import { safeSameOriginRedirectPath } from '$lib/server/redirects';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	if (locals.user) throw redirect(302, url.searchParams.get('from') ?? '/');
+	if (locals.user) throw redirect(302, safeSameOriginRedirectPath(url.searchParams.get('from')));
 	return {};
 };
 
@@ -37,6 +38,6 @@ export const actions: Actions = {
 		}
 
 
-		throw redirect(302, url.searchParams.get('from') ?? '/');
+		throw redirect(302, safeSameOriginRedirectPath(url.searchParams.get('from')));
 	},
 };

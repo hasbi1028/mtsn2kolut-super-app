@@ -113,15 +113,6 @@ func (q *Queries) DeleteOldAuditLogs(ctx context.Context) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
-const deleteUser = `-- name: DeleteUser :exec
-DELETE FROM users WHERE id = $1
-`
-
-func (q *Queries) DeleteUser(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteUser, id)
-	return err
-}
-
 const getUserByID = `-- name: GetUserByID :one
 SELECT 
     u.id, u.username, u.password_hash, 
@@ -562,7 +553,11 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 }
 
 const updateUserStatus = `-- name: UpdateUserStatus :exec
-UPDATE users SET is_active = $2, updated_at = NOW() WHERE id = $1
+UPDATE users
+SET is_active = $2,
+    auth_version = CASE WHEN is_active = TRUE AND $2 = FALSE THEN auth_version + 1 ELSE auth_version END,
+    updated_at = NOW()
+WHERE id = $1
 `
 
 type UpdateUserStatusParams struct {

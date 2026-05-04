@@ -31,9 +31,11 @@ type nonTestAssessmentService interface {
 	Update(ctx context.Context, input service.SaveNonTestAssessmentInput) (db.NonTestAssessment, error)
 	Delete(ctx context.Context, id pgtype.UUID) error
 	ListSubmissions(ctx context.Context, assessmentID pgtype.UUID) ([]db.ListNonTestSubmissionsRow, error)
-	GenerateSubmissions(ctx context.Context, assessmentID pgtype.UUID, classID pgtype.UUID) ([]db.NonTestAssessmentSubmission, error)
+	GenerateSubmissions(ctx context.Context, assessmentID pgtype.UUID, classID, teacherEmployeeID pgtype.UUID) ([]db.NonTestAssessmentSubmission, error)
 	UpsertSubmission(ctx context.Context, input service.SaveNonTestSubmissionInput) (db.NonTestAssessmentSubmission, error)
 	SyncToGrade(ctx context.Context, assessmentID, teacherEmployeeID pgtype.UUID, syncedBy string, publish bool) (service.SyncNonTestAssessmentToGradeResult, error)
+	TeacherOwnsClassSubject(ctx context.Context, classID, subjectID, teacherEmployeeID pgtype.UUID) (bool, error)
+	TeacherOwnsAssessment(ctx context.Context, assessmentID, teacherEmployeeID pgtype.UUID) (bool, error)
 }
 
 func NewNonTestAssessment(svc *service.NonTestAssessment, audit ...cbtAuthoringAuditWriter) *NonTestAssessment {
@@ -92,6 +94,7 @@ func (h *NonTestAssessment) List(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, err.Error())
 		return
 	}
+	input.TeacherEmployeeID = gradeTeacherEmployeeID(r)
 	rows, total, err := h.svc.List(r.Context(), input)
 	if err != nil {
 		api.Internal(w, err)
@@ -126,6 +129,9 @@ func (h *NonTestAssessment) Get(w http.ResponseWriter, r *http.Request) {
 		writeClientError(w, err, "Asesmen non-tes tidak ditemukan")
 		return
 	}
+	if !h.requireAssessmentTeacherOrAdmin(w, r, id) {
+		return
+	}
 	api.OK(w, serializeNonTestAssessmentDetailRow(row))
 }
 
@@ -137,6 +143,9 @@ func (h *NonTestAssessment) Create(w http.ResponseWriter, r *http.Request) {
 	input, err := h.inputFromRequest(r, pgtype.UUID{})
 	if err != nil {
 		writeClientError(w, err, "Data asesmen non-tes tidak valid")
+		return
+	}
+	if !h.requireClassSubjectTeacherOrAdmin(w, r, input.ClassID, input.SubjectID) {
 		return
 	}
 	row, err := h.svc.Create(r.Context(), input)
@@ -167,6 +176,9 @@ func (h *NonTestAssessment) Update(w http.ResponseWriter, r *http.Request) {
 		writeClientError(w, err, "Data asesmen non-tes tidak valid")
 		return
 	}
+	if !h.requireAssessmentTeacherOrAdmin(w, r, id) || !h.requireClassSubjectTeacherOrAdmin(w, r, input.ClassID, input.SubjectID) {
+		return
+	}
 	row, err := h.svc.Update(r.Context(), input)
 	if err != nil {
 		writeClientError(w, err, "Perubahan asesmen non-tes tidak valid")
@@ -190,6 +202,9 @@ func (h *NonTestAssessment) Delete(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid id")
 		return
 	}
+	if !h.requireAssessmentTeacherOrAdmin(w, r, id) {
+		return
+	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		writeClientError(w, err, "Penghapusan asesmen non-tes tidak valid")
 		return
@@ -206,6 +221,9 @@ func (h *NonTestAssessment) ListSubmissions(w http.ResponseWriter, r *http.Reque
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
+		return
+	}
+	if !h.requireAssessmentTeacherOrAdmin(w, r, id) {
 		return
 	}
 	rows, err := h.svc.ListSubmissions(r.Context(), id)
@@ -230,6 +248,9 @@ func (h *NonTestAssessment) GenerateSubmissions(w http.ResponseWriter, r *http.R
 		api.BadRequest(w, "invalid id")
 		return
 	}
+	if !h.requireAssessmentTeacherOrAdmin(w, r, assessmentID) {
+		return
+	}
 	var body nonTestGenerateSubmissionsBody
 	if r.Body != nil {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
@@ -245,7 +266,7 @@ func (h *NonTestAssessment) GenerateSubmissions(w http.ResponseWriter, r *http.R
 			return
 		}
 	}
-	rows, err := h.svc.GenerateSubmissions(r.Context(), assessmentID, classID)
+	rows, err := h.svc.GenerateSubmissions(r.Context(), assessmentID, classID, gradeTeacherEmployeeID(r))
 	if err != nil {
 		writeClientError(w, err, "Penyiapan siswa asesmen non-tes tidak valid")
 		return
@@ -268,6 +289,9 @@ func (h *NonTestAssessment) SyncGrade(w http.ResponseWriter, r *http.Request) {
 	assessmentID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
+		return
+	}
+	if !h.requireAssessmentTeacherOrAdmin(w, r, assessmentID) {
 		return
 	}
 	publish := true
@@ -305,6 +329,9 @@ func (h *NonTestAssessment) UpsertSubmission(w http.ResponseWriter, r *http.Requ
 		api.BadRequest(w, "invalid id")
 		return
 	}
+	if !h.requireAssessmentTeacherOrAdmin(w, r, assessmentID) {
+		return
+	}
 	var body nonTestSubmissionBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -332,16 +359,17 @@ func (h *NonTestAssessment) UpsertSubmission(w http.ResponseWriter, r *http.Requ
 		_ = gradedAt.Scan(time.Now())
 	}
 	row, err := h.svc.UpsertSubmission(r.Context(), service.SaveNonTestSubmissionInput{
-		AssessmentID:     assessmentID,
-		StudentID:        studentID,
-		Status:           body.Status,
-		EvidenceURL:      body.EvidenceURL,
-		EvidenceNote:     body.EvidenceNote,
-		Score:            body.Score,
-		Feedback:         body.Feedback,
-		SubmittedAt:      submittedAt,
-		GradedAt:         gradedAt,
-		GradedByUsername: currentUsername(r),
+		AssessmentID:      assessmentID,
+		StudentID:         studentID,
+		Status:            body.Status,
+		EvidenceURL:       body.EvidenceURL,
+		EvidenceNote:      body.EvidenceNote,
+		Score:             body.Score,
+		Feedback:          body.Feedback,
+		SubmittedAt:       submittedAt,
+		GradedAt:          gradedAt,
+		GradedByUsername:  currentUsername(r),
+		TeacherEmployeeID: gradeTeacherEmployeeID(r),
 	})
 	if err != nil {
 		writeClientError(w, err, "Data pengumpulan asesmen non-tes tidak valid")
@@ -352,6 +380,48 @@ func (h *NonTestAssessment) UpsertSubmission(w http.ResponseWriter, r *http.Requ
 		"status":     row.Status,
 	})
 	api.OK(w, serializeNonTestSubmission(row))
+}
+
+func (h *NonTestAssessment) requireAssessmentTeacherOrAdmin(w http.ResponseWriter, r *http.Request, assessmentID pgtype.UUID) bool {
+	if adminAccessAllowed(r) {
+		return true
+	}
+	teacherID := gradeTeacherEmployeeID(r)
+	if !teacherID.Valid {
+		api.Forbidden(w)
+		return false
+	}
+	ok, err := h.svc.TeacherOwnsAssessment(r.Context(), assessmentID, teacherID)
+	if err != nil {
+		api.Internal(w, err)
+		return false
+	}
+	if !ok {
+		api.Forbidden(w)
+		return false
+	}
+	return true
+}
+
+func (h *NonTestAssessment) requireClassSubjectTeacherOrAdmin(w http.ResponseWriter, r *http.Request, classID, subjectID pgtype.UUID) bool {
+	if adminAccessAllowed(r) {
+		return true
+	}
+	teacherID := gradeTeacherEmployeeID(r)
+	if !teacherID.Valid {
+		api.Forbidden(w)
+		return false
+	}
+	ok, err := h.svc.TeacherOwnsClassSubject(r.Context(), classID, subjectID, teacherID)
+	if err != nil {
+		api.Internal(w, err)
+		return false
+	}
+	if !ok {
+		api.Forbidden(w)
+		return false
+	}
+	return true
 }
 
 func (h *NonTestAssessment) inputFromRequest(r *http.Request, id pgtype.UUID) (service.SaveNonTestAssessmentInput, error) {

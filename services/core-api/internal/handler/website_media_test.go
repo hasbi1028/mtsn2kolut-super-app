@@ -75,7 +75,7 @@ func TestWebsiteMediaUploadValidationAndSuccess(t *testing.T) {
 		t.Fatalf("Upload(non image) status = %d, want 400", rec.Code)
 	}
 
-	imageBody, imageContentType := websiteMediaBody(t, "Foto Rapat Komite Dengan Nama Sangat Panjang Sekali!!.PNG", "image/png", []byte("png-data"))
+	imageBody, imageContentType := websiteMediaBody(t, "Foto Rapat Komite Dengan Nama Sangat Panjang Sekali!!.PNG", "image/png", []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\b\x02\x00\x00\x00"))
 	rec = httptest.NewRecorder()
 	h.Upload(rec, websiteMediaAdminMultipartRequest(t, "/api/website/media", imageBody, imageContentType))
 	if rec.Code != http.StatusCreated {
@@ -101,13 +101,25 @@ func TestWebsiteMediaUploadValidationAndSuccess(t *testing.T) {
 	}
 }
 
+func TestWebsiteMediaUploadRejectsOversizedMultipart(t *testing.T) {
+	h := NewWebsiteMedia(t.TempDir())
+	body, contentType := websiteMediaBody(t, "foto.png", "image/png", bytes.Repeat([]byte("x"), (8<<20)+1))
+	rec := httptest.NewRecorder()
+
+	h.Upload(rec, websiteMediaAdminMultipartRequest(t, "/api/website/media", body, contentType))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("Upload(oversized) status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestWebsiteMediaUploadStorageError(t *testing.T) {
 	blocker := filepath.Join(t.TempDir(), "storage-file")
 	if err := os.WriteFile(blocker, []byte("not a dir"), 0o600); err != nil {
 		t.Fatalf("setup storage blocker error = %v", err)
 	}
 	h := &WebsiteMedia{storageDir: filepath.Join(blocker, "child")}
-	body, contentType := websiteMediaBody(t, "foto.png", "image/png", []byte("png-data"))
+	body, contentType := websiteMediaBody(t, "foto.png", "image/png", []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\b\x02\x00\x00\x00"))
 
 	rec := httptest.NewRecorder()
 	h.Upload(rec, websiteMediaAdminMultipartRequest(t, "/api/website/media", body, contentType))

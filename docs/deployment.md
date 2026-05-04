@@ -21,9 +21,10 @@ This monorepo is deployed to three separate VPS targets:
 
 1. Deploy backend code
 2. Run PostgreSQL migrations from backend path
-3. Restart backend and verify health
-4. Deploy frontend
-5. Deploy worker
+3. Set or verify backend env such as `TRUSTED_PROXY_CIDRS` and `WORKER_API_KEY`
+4. Restart backend and verify health
+5. Deploy frontend
+6. Set or verify worker env, then deploy worker
 
 For CBT exam windows, add a post-deploy rehearsal:
 
@@ -37,5 +38,20 @@ For CBT exam windows, add a post-deploy rehearsal:
 - Do not introduce frontend-owned runtime database state.
 - Do not let worker bypass backend API contracts.
 - Do not route live Flutter exam traffic through SvelteKit; the app should use the backend exam API directly.
+
+## Security Env Checklist
+
+Backend VPS:
+
+- `TRUSTED_PROXY_CIDRS` must contain only trusted reverse proxy/load balancer CIDRs that are allowed to supply `X-Forwarded-For`; leave empty for direct backend access.
+- `WORKER_API_KEY` must be present and must match the worker VPS value before worker restart.
+- Upload/file responses must keep backend MIME/extension allowlist validation and `X-Content-Type-Options: nosniff` behavior intact.
+
+Worker VPS:
+
+- `WORKER_API_KEY` is required outside local/test environments; do not log or commit it.
+- `WORKER_API_TIMEOUT_MS` should be explicit for production if the default `10000` ms is too short/long for the backend link; valid range is 1000-60000 ms.
+- `WORKER_LOG_PATH` should point to a non-public service log path with rotation/retention.
+- `SCREENSHOT_DIR` should point to a non-public directory with restricted permissions; screenshots are operational evidence and must not be served by web-admin.
 
 For operational details, see `deploy/DEPLOY.md`.

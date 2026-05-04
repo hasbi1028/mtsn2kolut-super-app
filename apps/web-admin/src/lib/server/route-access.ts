@@ -25,15 +25,18 @@ const PUBLIC_PREFIXES = [
 const ADMIN_ONLY_PREFIXES = [
 	'/employees',
 	'/academic',
+	'/parents',
 	'/pusaka',
 	'/website',
 	'/settings/users',
 	'/settings/audit-logs',
 	'/settings/school-profile',
 	'/api/employees',
+	'/api/parents',
 	'/api/users',
 	'/api/pusaka',
-	'/api/website'
+	'/api/website',
+	'/api/scheduler/tick'
 ] as const;
 
 const STAFF_OPERATION_PREFIXES = [
@@ -51,9 +54,14 @@ const STAFF_OPERATION_PREFIXES = [
 
 const KESISWAAN_PREFIXES = ['/kesiswaan', '/api/kesiswaan'] as const;
 
+function matchesPathSegment(pathname: string, prefix: string) {
+	const normalizedPrefix = prefix === '/' ? '/' : prefix.replace(/\/$/, '');
+	return pathname === normalizedPrefix || pathname.startsWith(`${normalizedPrefix}/`);
+}
+
 export function isPublicPath(pathname: string) {
 	if (PUBLIC_EXACT_PATHS.has(pathname)) return true;
-	return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+	return PUBLIC_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
 }
 
 export function userRoles(user: AuthUser | undefined): string[] {
@@ -67,13 +75,13 @@ export function hasAnyRole(user: AuthUser | undefined, allowed: readonly string[
 }
 
 export function isAdminOnlyPath(pathname: string) {
-	return ADMIN_ONLY_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+	return ADMIN_ONLY_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
 }
 
 export function isStaffOperationPath(pathname: string) {
-	return STAFF_OPERATION_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+	return STAFF_OPERATION_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
 }
 
 export function isKesiswaanPath(pathname: string) {
-	return KESISWAAN_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+	return KESISWAAN_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
 }

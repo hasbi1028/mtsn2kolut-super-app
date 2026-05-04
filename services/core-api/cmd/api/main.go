@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -100,7 +101,7 @@ func main() {
 	sessionH := handler.NewCbtSession(sessionSvc, q)
 	eventH := handler.NewCbtEvent(eventSvc)
 	examH := handler.NewExam(examSvc)
-	userH := handler.NewUser(q)
+	userH := handler.NewUserWithPool(pool)
 	pusakaScheduleH := handler.NewPusakaSchedule(pusakaScheduleSvc)
 	empSchedH := handler.NewEmployeeSchedule(empSchedSvc)
 	settH := handler.NewSetting(settSvc)
@@ -120,10 +121,11 @@ func main() {
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
 	examTokenMW := mw.ExamToken(examSvc.GetParticipantByToken)
-	authRateLimit := ratelimit.RateLimit(5, 1)
-	refreshRateLimit := ratelimit.RateLimit(10, 1)
-	publicRegisterRateLimit := ratelimit.RateLimit(3, 0.2)
-	examLoginRateLimit := ratelimit.RateLimit(8, 1)
+	trustedProxies := splitCSVEnv("TRUSTED_PROXY_CIDRS")
+	authRateLimit := ratelimit.RateLimitWithTrustedProxies(5, 1, trustedProxies)
+	refreshRateLimit := ratelimit.RateLimitWithTrustedProxies(10, 1, trustedProxies)
+	publicRegisterRateLimit := ratelimit.RateLimitWithTrustedProxies(3, 0.2, trustedProxies)
+	examLoginRateLimit := ratelimit.RateLimitWithTrustedProxies(8, 1, trustedProxies)
 
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
@@ -592,4 +594,19 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func splitCSVEnv(key string) []string {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if value := strings.TrimSpace(part); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }

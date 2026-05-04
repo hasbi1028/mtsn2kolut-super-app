@@ -107,7 +107,7 @@ func newMultipartAssetRequest(t *testing.T, fields map[string]string, withFile b
 		if err != nil {
 			t.Fatalf("CreateFormFile() error = %v", err)
 		}
-		if _, err := part.Write([]byte("png")); err != nil {
+		if _, err := part.Write([]byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\b\x02\x00\x00\x00")); err != nil {
 			t.Fatalf("multipart file write error = %v", err)
 		}
 	}
@@ -115,6 +115,28 @@ func newMultipartAssetRequest(t *testing.T, fields map[string]string, withFile b
 		t.Fatalf("multipart Close() error = %v", err)
 	}
 
+	req := httptest.NewRequest(http.MethodPost, "/api/cbt/assets", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	return withClaims(req, jwt.MapClaims{"roles": []any{"admin"}, "usr": "operator.cbt"})
+}
+
+func newOversizedMultipartAssetRequest(t *testing.T, questionID pgtype.UUID) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("question_id", questionID.String()); err != nil {
+		t.Fatalf("WriteField(question_id) error = %v", err)
+	}
+	part, err := writer.CreateFormFile("file", "diagram.png")
+	if err != nil {
+		t.Fatalf("CreateFormFile() error = %v", err)
+	}
+	if _, err := part.Write(bytes.Repeat([]byte("x"), (12<<20)+1)); err != nil {
+		t.Fatalf("multipart file write error = %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("multipart Close() error = %v", err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/cbt/assets", &body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	return withClaims(req, jwt.MapClaims{"roles": []any{"admin"}, "usr": "operator.cbt"})
@@ -152,8 +174,8 @@ func TestCbtQuestionAssetUploadForwardsValidMultipart(t *testing.T) {
 	if fake.saveInput.OriginalName != "diagram.png" || fake.saveInput.Purpose != "stimulus" || fake.saveInput.UploadedBy != "operator.cbt" {
 		t.Fatalf("Save input = %+v, want filename/purpose/uploader forwarded", fake.saveInput)
 	}
-	if fake.saveInput.FileSize != 3 || fake.saveContent != "png" {
-		t.Fatalf("Save file size/content = %d/%q, want 3/png", fake.saveInput.FileSize, fake.saveContent)
+	if fake.saveInput.FileSize == 0 || !strings.HasPrefix(fake.saveContent, "\x89PNG") {
+		t.Fatalf("Save file size/content = %d/%q, want detected png", fake.saveInput.FileSize, fake.saveContent)
 	}
 	if !strings.Contains(rec.Body.String(), `/api/cbt/assets/`+assetID.String()+`/file`) {
 		t.Fatalf("Upload() body missing asset URL: %s", rec.Body.String())
@@ -198,6 +220,22 @@ func TestCbtQuestionAssetUploadRejectsInvalidRequests(t *testing.T) {
 	failing.Upload(rec, newMultipartAssetRequest(t, map[string]string{"question_id": handlerTestUUID(11).String()}, true))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("Upload(service error) status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCbtQuestionAssetUploadRejectsOversizedMultipart(t *testing.T) {
+	questionID := handlerTestUUID(252)
+	fake := &fakeCbtQuestionAssetService{questionRow: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "operator.cbt"}}
+	h := &CbtQuestionAsset{svc: fake}
+	rec := httptest.NewRecorder()
+
+	h.Upload(rec, newOversizedMultipartAssetRequest(t, questionID))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("Upload(oversized) status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.saveInput.FileSize != 0 {
+		t.Fatalf("Upload(oversized) reached service with input %+v", fake.saveInput)
 	}
 }
 

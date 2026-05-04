@@ -4,6 +4,7 @@ node_modules/
 # Build output
 apps/web-admin/build/
 services/core-api/bin/
+.tools/
 
 # Docker volumes (local dev)
 services/core-api/postgres_data/

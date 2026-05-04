@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -15,14 +16,35 @@ class ExamApiException implements Exception {
 
 class ExamApiClient {
   ExamApiClient({
-    required this.baseUrl,
+    required String baseUrl,
     this.deviceFingerprint,
     HttpClient? httpClient,
-  }) : _httpClient = httpClient ?? HttpClient();
+    this.requestTimeout = const Duration(seconds: 20),
+  }) : baseUrl = normalizeBaseUrl(baseUrl),
+       _httpClient = httpClient ?? HttpClient() {
+    _httpClient.connectionTimeout = const Duration(seconds: 10);
+  }
 
   final String baseUrl;
   final String? deviceFingerprint;
+  final Duration requestTimeout;
   final HttpClient _httpClient;
+
+  static String normalizeBaseUrl(String rawBaseUrl) {
+    final uri = Uri.tryParse(rawBaseUrl.trim());
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.trim().isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        (uri.path.isNotEmpty && uri.path != '/')) {
+      throw const ExamApiException(
+        'Alamat server ujian tidak valid. Gunakan alamat http/https tanpa path atau query.',
+      );
+    }
+    return uri.replace(path: '', query: null, fragment: null).toString();
+  }
 
   Map<String, String> examAssetHeaders(String token) {
     final trimmedToken = token.trim();
@@ -35,6 +57,25 @@ class ExamApiClient {
       headers['X-Device-Fingerprint'] = boundDevice;
     }
     return headers;
+  }
+
+  Map<String, String> examAssetHeadersForUrl(String token, String assetUrl) {
+    final uri = Uri.tryParse(assetUrl.trim());
+    if (uri == null) {
+      return const <String, String>{};
+    }
+    if (uri.hasScheme || uri.hasAuthority) {
+      if (!uri.hasScheme) {
+        return const <String, String>{};
+      }
+      final baseUri = Uri.parse(baseUrl);
+      if (uri.scheme != baseUri.scheme ||
+          uri.host != baseUri.host ||
+          uri.port != baseUri.port) {
+        return const <String, String>{};
+      }
+    }
+    return examAssetHeaders(token);
   }
 
   Future<ExamLoginPayload> login({
@@ -113,7 +154,9 @@ class ExamApiClient {
   }) async {
     try {
       final uri = Uri.parse('$baseUrl$path');
-      final request = await _httpClient.openUrl(method, uri);
+      final request = await _httpClient
+          .openUrl(method, uri)
+          .timeout(requestTimeout);
       request.headers.contentType = ContentType.json;
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
       for (final entry in examAssetHeaders(examToken ?? '').entries) {
@@ -123,8 +166,11 @@ class ExamApiClient {
         request.write(jsonEncode(body));
       }
 
-      final response = await request.close();
-      final raw = await utf8.decoder.bind(response).join();
+      final response = await request.close().timeout(requestTimeout);
+      final raw = await utf8.decoder
+          .bind(response)
+          .join()
+          .timeout(requestTimeout);
       final parsed = _parseJsonResponse(raw, statusCode: response.statusCode);
 
       if (response.statusCode >= 400) {
@@ -139,6 +185,14 @@ class ExamApiClient {
       throw const ExamApiException('Tidak bisa terhubung ke server ujian.');
     } on HttpException {
       throw const ExamApiException('Koneksi ke server ujian tidak valid.');
+    } on TimeoutException {
+      throw const ExamApiException(
+        'Koneksi ke server ujian terlalu lama merespons.',
+      );
+    } on FormatException {
+      throw const ExamApiException(
+        'Alamat server ujian tidak valid. Gunakan alamat http/https tanpa path atau query.',
+      );
     }
   }
 

@@ -23,15 +23,17 @@ type fakeUserStore struct {
 	roles     []db.AddUserRoleParams
 	roleErr   error
 
-	deleteID  pgtype.UUID
-	deleteErr error
-
-	statusArg db.UpdateUserStatusParams
-	statusErr error
-
 	auditArg  db.ListAuditLogsParams
 	auditRows []db.ListAuditLogsRow
 	auditErr  error
+}
+
+type fakeUserLifecycle struct {
+	deleteID       pgtype.UUID
+	deleteErr      error
+	statusID       pgtype.UUID
+	statusIsActive bool
+	statusErr      error
 }
 
 func (f *fakeUserStore) ListUsers(ctx context.Context) ([]db.ListUsersRow, error) {
@@ -49,13 +51,14 @@ func (f *fakeUserStore) AddUserRole(ctx context.Context, arg db.AddUserRoleParam
 	return f.roleErr
 }
 
-func (f *fakeUserStore) DeleteUser(ctx context.Context, id pgtype.UUID) error {
+func (f *fakeUserLifecycle) DeleteAsDeactivate(ctx context.Context, id pgtype.UUID) error {
 	f.deleteID = id
 	return f.deleteErr
 }
 
-func (f *fakeUserStore) UpdateUserStatus(ctx context.Context, arg db.UpdateUserStatusParams) error {
-	f.statusArg = arg
+func (f *fakeUserLifecycle) UpdateStatus(ctx context.Context, id pgtype.UUID, isActive bool) error {
+	f.statusID = id
+	f.statusIsActive = isActive
 	return f.statusErr
 }
 
@@ -71,7 +74,8 @@ func TestUserSuccessHandlersForwardPayloads(t *testing.T) {
 		listRows:  []db.ListUsersRow{{ID: userID, Username: "admin", Roles: roleJSON}},
 		auditRows: []db.ListAuditLogsRow{{ID: handlerTestUUID(232), Action: "AUTH_LOGIN"}},
 	}
-	h := &User{q: store}
+	lifecycle := &fakeUserLifecycle{}
+	h := &User{q: store, lifecycle: lifecycle}
 
 	rec := httptest.NewRecorder()
 	h.List(rec, adminRequest(http.MethodGet, "/api/users", ""))
@@ -100,15 +104,15 @@ func TestUserSuccessHandlersForwardPayloads(t *testing.T) {
 	rec = httptest.NewRecorder()
 	req := withRouteParam(adminRequest(http.MethodDelete, "/api/users/"+userID.String(), ""), "id", userID.String())
 	h.Delete(rec, req)
-	if rec.Code != http.StatusNoContent || store.deleteID != userID {
-		t.Fatalf("Delete() status/id = %d/%v", rec.Code, store.deleteID)
+	if rec.Code != http.StatusNoContent || lifecycle.deleteID != userID {
+		t.Fatalf("Delete() status/id = %d/%v", rec.Code, lifecycle.deleteID)
 	}
 
 	rec = httptest.NewRecorder()
 	req = withRouteParam(adminRequest(http.MethodPatch, "/api/users/"+userID.String()+"/status", `{"is_active":false}`), "id", userID.String())
 	h.UpdateStatus(rec, req)
-	if rec.Code != http.StatusOK || store.statusArg.ID != userID || store.statusArg.IsActive {
-		t.Fatalf("UpdateStatus() status/arg = %d/%+v", rec.Code, store.statusArg)
+	if rec.Code != http.StatusOK || lifecycle.statusID != userID || lifecycle.statusIsActive {
+		t.Fatalf("UpdateStatus() status/arg = %d/%v/%v", rec.Code, lifecycle.statusID, lifecycle.statusIsActive)
 	}
 
 	rec = httptest.NewRecorder()
@@ -132,6 +136,7 @@ func TestUserValidationAndStoreErrors(t *testing.T) {
 		name       string
 		handler    func(*User, http.ResponseWriter, *http.Request)
 		store      *fakeUserStore
+		lifecycle  *fakeUserLifecycle
 		req        *http.Request
 		wantStatus int
 	}{
@@ -150,14 +155,14 @@ func TestUserValidationAndStoreErrors(t *testing.T) {
 		{name: "create store error", handler: (*User).Create, store: &fakeUserStore{createErr: errDB}, req: adminRequest(http.MethodPost, "/api/users", `{"username":"operator","password":"secret123","roles":["admin"]}`), wantStatus: http.StatusInternalServerError},
 		{name: "delete forbidden", handler: (*User).Delete, req: withRouteParam(plainRequest(http.MethodDelete, "/api/users/"+userID.String(), ""), "id", userID.String()), wantStatus: http.StatusForbidden},
 		{name: "delete invalid id", handler: (*User).Delete, req: withRouteParam(adminRequest(http.MethodDelete, "/api/users/bad", ""), "id", "bad"), wantStatus: http.StatusBadRequest},
-		{name: "delete store error", handler: (*User).Delete, store: &fakeUserStore{deleteErr: errDB}, req: withRouteParam(adminRequest(http.MethodDelete, "/api/users/"+userID.String(), ""), "id", userID.String()), wantStatus: http.StatusInternalServerError},
+		{name: "delete service error", handler: (*User).Delete, lifecycle: &fakeUserLifecycle{deleteErr: errDB}, req: withRouteParam(adminRequest(http.MethodDelete, "/api/users/"+userID.String(), ""), "id", userID.String()), wantStatus: http.StatusInternalServerError},
 		{name: "status forbidden", handler: (*User).UpdateStatus, req: withRouteParam(plainRequest(http.MethodPatch, "/api/users/"+userID.String()+"/status", `{}`), "id", userID.String()), wantStatus: http.StatusForbidden},
 		{name: "status invalid id", handler: (*User).UpdateStatus, req: withRouteParam(adminRequest(http.MethodPatch, "/api/users/bad/status", `{}`), "id", "bad"), wantStatus: http.StatusBadRequest},
 		{name: "status invalid json", handler: (*User).UpdateStatus, req: withRouteParam(adminRequest(http.MethodPatch, "/api/users/"+userID.String()+"/status", `{`), "id", userID.String()), wantStatus: http.StatusBadRequest},
-		{name: "status store error", handler: (*User).UpdateStatus, store: &fakeUserStore{statusErr: errDB}, req: withRouteParam(adminRequest(http.MethodPatch, "/api/users/"+userID.String()+"/status", `{"is_active":true}`), "id", userID.String()), wantStatus: http.StatusInternalServerError},
+		{name: "status service error", handler: (*User).UpdateStatus, lifecycle: &fakeUserLifecycle{statusErr: errDB}, req: withRouteParam(adminRequest(http.MethodPatch, "/api/users/"+userID.String()+"/status", `{"is_active":true}`), "id", userID.String()), wantStatus: http.StatusInternalServerError},
 		{name: "audit forbidden", handler: (*User).ListAuditLogs, req: plainRequest(http.MethodGet, "/api/settings/audit-logs", ""), wantStatus: http.StatusForbidden},
 		{name: "audit store error", handler: (*User).ListAuditLogs, store: &fakeUserStore{auditErr: errDB}, req: adminRequest(http.MethodGet, "/api/settings/audit-logs", ""), wantStatus: http.StatusInternalServerError},
-		{name: "create valid parent link with role add error ignored", handler: (*User).Create, store: &fakeUserStore{roleErr: errDB}, req: adminRequest(http.MethodPost, "/api/users", `{"username":"ortu","password":"secret123","roles":["ortu"],"parent_id":"`+parentID.String()+`"}`), wantStatus: http.StatusCreated},
+		{name: "create valid parent link surfaces role add error", handler: (*User).Create, store: &fakeUserStore{roleErr: errDB}, req: adminRequest(http.MethodPost, "/api/users", `{"username":"ortu","password":"secret123","roles":["ortu"],"parent_id":"`+parentID.String()+`"}`), wantStatus: http.StatusInternalServerError},
 	}
 
 	for _, tt := range tests {
@@ -166,8 +171,12 @@ func TestUserValidationAndStoreErrors(t *testing.T) {
 			if store == nil {
 				store = &fakeUserStore{}
 			}
+			lifecycle := tt.lifecycle
+			if lifecycle == nil {
+				lifecycle = &fakeUserLifecycle{}
+			}
 			rec := httptest.NewRecorder()
-			tt.handler(&User{q: store}, rec, tt.req)
+			tt.handler(&User{q: store, lifecycle: lifecycle}, rec, tt.req)
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
 			}

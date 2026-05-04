@@ -32,6 +32,69 @@ void main() {
       expect(client.examAssetHeaders(''), isEmpty);
     });
 
+    test('normalizes and rejects unsafe operator base URLs', () {
+      expect(
+        ExamApiClient.normalizeBaseUrl(' http://127.0.0.1:8080/ '),
+        'http://127.0.0.1:8080',
+      );
+      expect(
+        () => ExamApiClient(baseUrl: 'ftp://127.0.0.1:8080'),
+        throwsA(isA<ExamApiException>()),
+      );
+      expect(
+        () => ExamApiClient(baseUrl: 'http://127.0.0.1:8080/api?x=1'),
+        throwsA(isA<ExamApiException>()),
+      );
+      expect(
+        () => ExamApiClient(baseUrl: 'https://user:pass@127.0.0.1:8080'),
+        throwsA(isA<ExamApiException>()),
+      );
+    });
+
+    test('asset credentials are limited to relative and same-origin URLs', () {
+      final client = ExamApiClient(
+        baseUrl: 'https://exam.example.test:8443',
+        deviceFingerprint: deviceFingerprint,
+      );
+
+      expect(
+        client.examAssetHeadersForUrl('token-1', '/assets/audio.mp3'),
+        containsPair('X-Exam-Token', 'token-1'),
+      );
+      expect(
+        client.examAssetHeadersForUrl('token-1', 'assets/audio.mp3'),
+        containsPair('X-Exam-Token', 'token-1'),
+      );
+      expect(
+        client.examAssetHeadersForUrl(
+          'token-1',
+          'https://exam.example.test:8443/assets/audio.mp3',
+        ),
+        containsPair('X-Device-Fingerprint', deviceFingerprint),
+      );
+      expect(
+        client.examAssetHeadersForUrl(
+          'token-1',
+          '//exam.example.test:8443/assets/audio.mp3',
+        ),
+        isEmpty,
+      );
+      expect(
+        client.examAssetHeadersForUrl(
+          'token-1',
+          '//cdn.example.test/assets/audio.mp3',
+        ),
+        isEmpty,
+      );
+      expect(
+        client.examAssetHeadersForUrl(
+          'token-1',
+          'https://cdn.example.test/assets/audio.mp3',
+        ),
+        isEmpty,
+      );
+    });
+
     test('login unwraps data envelope into payload', () async {
       server.listen((request) async {
         expect(request.uri.path, '/api/exam/login');
@@ -127,6 +190,33 @@ void main() {
                 'message',
                 'Tidak bisa terhubung ke server ujian.',
               ),
+        ),
+      );
+    });
+
+    test('maps request timeouts into controlled exception', () async {
+      server.listen((request) async {
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+        request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType.json
+          ..write(jsonEncode({'data': <String, Object?>{}}));
+        await request.response.close();
+      });
+
+      final client = ExamApiClient(
+        baseUrl: baseUrl,
+        requestTimeout: const Duration(milliseconds: 20),
+      );
+
+      await expectLater(
+        () => client.getStatus('token-1'),
+        throwsA(
+          isA<ExamApiException>().having(
+            (error) => error.message,
+            'message',
+            'Koneksi ke server ujian terlalu lama merespons.',
+          ),
         ),
       );
     });

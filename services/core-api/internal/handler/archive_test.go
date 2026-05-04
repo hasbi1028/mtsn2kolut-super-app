@@ -188,6 +188,30 @@ func newArchiveMultipartRequest(t *testing.T, fields map[string]string, withFile
 	})
 }
 
+func newOversizedArchiveMultipartRequest(t *testing.T) *http.Request {
+	t.Helper()
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "arsip.pdf")
+	if err != nil {
+		t.Fatalf("CreateFormFile() error = %v", err)
+	}
+	if _, err := part.Write(bytes.Repeat([]byte("x"), (28<<20)+1)); err != nil {
+		t.Fatalf("multipart file write error = %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("multipart Close() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/tu/archives/documents", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	return withClaims(req, jwt.MapClaims{
+		"roles": []any{"staf"},
+		"uid":   "01000000-0000-0000-0000-000000000000",
+	})
+}
+
 func TestArchiveCategoryHandlersForwardSuccessPaths(t *testing.T) {
 	categoryID := handlerTestUUID(50)
 	category := db.ArchiveCategory{ID: categoryID, Code: "AK", Name: "Akademik", RetentionYears: 5, IsActive: true}
@@ -637,6 +661,12 @@ func TestArchiveHandlersMapValidationAndServiceErrors(t *testing.T) {
 	(&Archive{svc: &fakeArchiveService{}}).UploadDocument(rec, newArchiveMultipartRequest(t, map[string]string{}, false))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("UploadDocument(missing file) status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	(&Archive{svc: &fakeArchiveService{}}).UploadDocument(rec, newOversizedArchiveMultipartRequest(t))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("UploadDocument(oversized) status = %d, want 400; body=%s", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()

@@ -3,7 +3,7 @@ package handler
 import (
 	"crypto/md5"
 	"fmt"
-	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,6 +29,7 @@ func (h *WebsiteMedia) Upload(w http.ResponseWriter, r *http.Request) {
 		api.Forbidden(w)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<20)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
 		api.BadRequest(w, "multipart form tidak valid (maks 8 MB)")
 		return
@@ -40,20 +41,15 @@ func (h *WebsiteMedia) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	mimeType := header.Header.Get("Content-Type")
-	if !strings.HasPrefix(mimeType, "image/") {
-		api.BadRequest(w, "hanya file gambar yang diperbolehkan")
-		return
-	}
-
-	data, err := io.ReadAll(io.LimitReader(file, 8<<20))
+	validated, err := validateUploadedFile(header.Filename, file, 8<<20, true)
 	if err != nil {
-		api.Internal(w, err)
+		api.BadRequest(w, err.Error())
 		return
 	}
+	data := validated.Data
 
 	hash := fmt.Sprintf("%x", md5.Sum(data))
-	ext := strings.ToLower(filepath.Ext(header.Filename))
+	ext := validated.Ext
 	baseName := strings.TrimSuffix(header.Filename, filepath.Ext(header.Filename))
 	baseName = websiteMediaSafeFilename.ReplaceAllString(baseName, "_")
 	if len(baseName) > 40 {
@@ -84,6 +80,6 @@ func (h *WebsiteMedia) File(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := filepath.Join(h.storageDir, filename)
-	w.Header().Del("Content-Type")
+	secureFileResponseHeaders(w, mime.TypeByExtension(strings.ToLower(filepath.Ext(filename))), filename)
 	http.ServeFile(w, r, path)
 }

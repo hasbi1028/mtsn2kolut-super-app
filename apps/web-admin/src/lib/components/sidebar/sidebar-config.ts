@@ -30,7 +30,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		group: 'Siswa & Wali',
 		items: [
 			{ href: '/students', label: 'Siswa', icon: 'users' },
-			{ href: '/parents', label: 'Orang Tua', icon: 'user-group', roles: ['admin', 'staf'] },
+			{ href: '/parents', label: 'Orang Tua', icon: 'user-group', roles: ['admin'] },
 			{ href: '/kesiswaan', label: 'Kesiswaan', icon: 'user-check', roles: ['admin', 'kesiswaan', 'guru'] }
 		]
 	},

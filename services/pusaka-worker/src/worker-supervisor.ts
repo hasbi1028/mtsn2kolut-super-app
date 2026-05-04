@@ -1,13 +1,14 @@
 import process from 'process';
 import { setTimeout as delay } from 'timers/promises';
 
-import { CONFIG_SYNC_MS, POLL_MS, WORKER_ID } from './config.js';
+import { CONFIG_SYNC_MS, normalizeRuntimeConfigPatch, POLL_MS, WORKER_ID } from './config.js';
 import {
   claimJob,
   completeJob,
   failJob,
   fetchRuntimeConfig,
   sendHeartbeat,
+  WorkerApiCancelledError,
 } from './api-client.js';
 import { log } from './logger.js';
 import { processClaimedJob } from './pusaka-runner.js';
@@ -52,6 +53,8 @@ export class WorkerSupervisor {
   private nextConsumerNumber = 1;
   private lastConfigSyncAt = '';
   private shuttingDown = false;
+  private readonly shutdownController = new AbortController();
+  private readonly shutdownReportedJobIds = new Set<string>();
 
   constructor(
     private readonly runtimeConfig: RuntimeConfig,
@@ -74,7 +77,7 @@ export class WorkerSupervisor {
     this.deps.log('INFO', 'consumer started', { consumerId: state.consumerId });
     while (!state.stopRequested) {
       try {
-        const job = await this.deps.claimJob();
+        const job = await this.deps.claimJob(this.shutdownController.signal);
         if (!job) {
           await this.sleep(POLL_MS);
           continue;
@@ -87,8 +90,20 @@ export class WorkerSupervisor {
           employee_id: job.employee_id,
         });
 
+        state.activeJobIds.add(job.id);
+        const jobController = new AbortController();
+        const abortActiveJob = () => jobController.abort();
+        this.shutdownController.signal.addEventListener('abort', abortActiveJob, { once: true });
+        state.activeJobControllers.set(job.id, jobController);
         try {
-          const record = await this.deps.processClaimedJob(job, this.runtimeConfig);
+          const record = await this.deps.processClaimedJob(
+            job,
+            this.runtimeConfig,
+            jobController.signal,
+          );
+          if (jobController.signal.aborted) {
+            throw new Error('worker shutdown interrupted job before completion report');
+          }
           await this.deps.completeJob(job.id, record);
           this.deps.log('INFO', 'job success', {
             consumerId: state.consumerId,
@@ -97,14 +112,38 @@ export class WorkerSupervisor {
           });
         } catch (error) {
           const errorMessage = String((error as Error)?.message ?? error);
-          await this.deps.failJob(job.id, errorMessage);
-          this.deps.log('WARN', 'job failed — reported to frontend', {
-            consumerId: state.consumerId,
-            job_id: job.id,
-            error: errorMessage,
-          });
+          if (this.shutdownReportedJobIds.has(job.id)) {
+            this.deps.log('WARN', 'job failed after shutdown timeout report', {
+              consumerId: state.consumerId,
+              job_id: job.id,
+              error: errorMessage,
+            });
+            continue;
+          }
+          try {
+            await this.deps.failJob(job.id, errorMessage);
+            this.deps.log('WARN', 'job failed - reported to backend', {
+              consumerId: state.consumerId,
+              job_id: job.id,
+              error: errorMessage,
+            });
+          } catch (reportError) {
+            this.deps.log('ERROR', 'job failed - fail report failed', {
+              consumerId: state.consumerId,
+              job_id: job.id,
+              error: errorMessage,
+              reportError: (reportError as Error)?.message ?? String(reportError),
+            });
+          }
+        } finally {
+          this.shutdownController.signal.removeEventListener('abort', abortActiveJob);
+          state.activeJobControllers.delete(job.id);
+          state.activeJobIds.delete(job.id);
         }
       } catch (error) {
+        if (this.shuttingDown && error instanceof WorkerApiCancelledError) {
+          break;
+        }
         this.deps.log('ERROR', 'consumer loop error', {
           consumerId: state.consumerId,
           error: (error as Error)?.message ?? String(error),
@@ -120,7 +159,7 @@ export class WorkerSupervisor {
       return;
     }
     try {
-      const next = await this.deps.fetchRuntimeConfig();
+      const next = normalizeRuntimeConfigPatch(await this.deps.fetchRuntimeConfig());
       const previous = { ...this.runtimeConfig };
 
       if (typeof next.maxConcurrent === 'number') {
@@ -159,6 +198,8 @@ export class WorkerSupervisor {
         id,
         consumerId: `${WORKER_ID}-c${id}`,
         stopRequested: false,
+        activeJobIds: new Set<string>(),
+        activeJobControllers: new Map<string, AbortController>(),
       };
       this.consumers.set(id, state);
       this.consumerLoop(state)
@@ -229,6 +270,7 @@ export class WorkerSupervisor {
       return;
     }
     this.shuttingDown = true;
+    this.shutdownController.abort();
     if (this.configTimer) {
       this.deps.clearInterval(this.configTimer);
     }
@@ -243,6 +285,9 @@ export class WorkerSupervisor {
 
     for (const state of this.consumers.values()) {
       state.stopRequested = true;
+      for (const controller of state.activeJobControllers?.values() ?? []) {
+        controller.abort();
+      }
     }
 
     const deadline = this.deps.now() + 15_000;
@@ -251,6 +296,7 @@ export class WorkerSupervisor {
     }
 
     if (this.consumers.size > 0) {
+      await this.failActiveJobsOnShutdownTimeout();
       this.deps.log('WARN', 'shutdown timeout reached', {
         remainingConsumers: this.consumers.size,
       });
@@ -274,6 +320,45 @@ export class WorkerSupervisor {
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    if (this.shutdownController.signal.aborted) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      const cleanup = () => this.shutdownController.signal.removeEventListener('abort', onAbort);
+      const timeout = setTimeout(() => {
+        cleanup();
+        resolve();
+      }, ms);
+      const onAbort = () => {
+        clearTimeout(timeout);
+        cleanup();
+        resolve();
+      };
+      this.shutdownController.signal.addEventListener('abort', onAbort, { once: true });
+      timeout.unref?.();
+    });
+  }
+
+  private async failActiveJobsOnShutdownTimeout(): Promise<void> {
+    const activeJobIds = Array.from(this.consumers.values()).flatMap((state) =>
+      Array.from(state.activeJobIds),
+    );
+    const uniqueJobIds = Array.from(new Set(activeJobIds));
+
+    for (const jobId of uniqueJobIds) {
+      try {
+        await this.deps.failJob(jobId, 'worker shutdown timeout');
+        this.shutdownReportedJobIds.add(jobId);
+        this.deps.log('WARN', 'active job failed during shutdown timeout', {
+          job_id: jobId,
+        });
+      } catch (error) {
+        this.deps.log('ERROR', 'active job shutdown fail report failed', {
+          job_id: jobId,
+          error: (error as Error)?.message ?? String(error),
+        });
+      }
+    }
   }
 }

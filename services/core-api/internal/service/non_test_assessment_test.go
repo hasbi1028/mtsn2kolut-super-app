@@ -13,14 +13,17 @@ import (
 )
 
 type fakeNonTestAssessmentStore struct {
-	listParams     db.ListNonTestAssessmentsParams
-	countParams    db.CountNonTestAssessmentsParams
-	createParams   db.CreateNonTestAssessmentParams
-	updateParams   db.UpdateNonTestAssessmentParams
-	generateParams db.GenerateNonTestSubmissionsForClassParams
-	upsertParams   db.UpsertNonTestSubmissionParams
-	assessmentRow  db.GetNonTestAssessmentRow
-	submissionRows []db.ListNonTestSubmissionsRow
+	listParams                 db.ListNonTestAssessmentsParams
+	countParams                db.CountNonTestAssessmentsParams
+	createParams               db.CreateNonTestAssessmentParams
+	updateParams               db.UpdateNonTestAssessmentParams
+	generateParams             db.GenerateNonTestSubmissionsForClassParams
+	upsertParams               db.UpsertNonTestSubmissionParams
+	assessmentRow              db.GetNonTestAssessmentRow
+	submissionRows             []db.ListNonTestSubmissionsRow
+	studentBelongs             bool
+	teacherOwnsClassSubjectSet bool
+	teacherOwnsClassSubject    bool
 
 	gradeAssignment           db.GetGradeAssignmentByClassSubjectRow
 	gradeComponent            db.GradeComponent
@@ -90,6 +93,10 @@ func (f *fakeNonTestAssessmentStore) UpsertNonTestSubmission(_ context.Context, 
 	return db.NonTestAssessmentSubmission{AssessmentID: arg.AssessmentID, StudentID: arg.StudentID, Status: arg.Status}, nil
 }
 
+func (f *fakeNonTestAssessmentStore) StudentBelongsToClass(_ context.Context, _ db.StudentBelongsToClassParams) (bool, error) {
+	return f.studentBelongs, nil
+}
+
 func (f *fakeNonTestAssessmentStore) GetGradeAssignmentByClassSubject(_ context.Context, arg db.GetGradeAssignmentByClassSubjectParams) (db.GetGradeAssignmentByClassSubjectRow, error) {
 	if f.gradeAssignment.ID.Valid {
 		return f.gradeAssignment, nil
@@ -99,6 +106,17 @@ func (f *fakeNonTestAssessmentStore) GetGradeAssignmentByClassSubject(_ context.
 		ClassID:   arg.ClassID,
 		SubjectID: arg.SubjectID,
 	}, nil
+}
+
+func (f *fakeNonTestAssessmentStore) TeacherOwnsClassSubject(_ context.Context, arg db.TeacherOwnsClassSubjectParams) (bool, error) {
+	if f.teacherOwnsClassSubjectSet {
+		return f.teacherOwnsClassSubject, nil
+	}
+	return arg.TeacherEmployeeID.Valid, nil
+}
+
+func (f *fakeNonTestAssessmentStore) TeacherOwnsNonTestAssessment(_ context.Context, arg db.TeacherOwnsNonTestAssessmentParams) (bool, error) {
+	return arg.TeacherEmployeeID.Valid, nil
 }
 
 func (f *fakeNonTestAssessmentStore) GetGradeAssignmentFinalization(_ context.Context, _ pgtype.UUID) (db.GradeAssignmentFinalization, error) {
@@ -239,7 +257,7 @@ func TestNonTestAssessmentGenerateSubmissionsUsesAssessmentClassFallback(t *test
 	svc := &NonTestAssessment{q: store}
 	assessmentID := mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111")
 
-	rows, err := svc.GenerateSubmissions(context.Background(), assessmentID, pgtype.UUID{})
+	rows, err := svc.GenerateSubmissions(context.Background(), assessmentID, pgtype.UUID{}, pgtype.UUID{})
 	if err != nil {
 		t.Fatalf("GenerateSubmissions() error = %v", err)
 	}
@@ -249,13 +267,50 @@ func TestNonTestAssessmentGenerateSubmissionsUsesAssessmentClassFallback(t *test
 	if store.generateParams.AssessmentID != assessmentID {
 		t.Fatalf("assessment id = %v, want %v", store.generateParams.AssessmentID, assessmentID)
 	}
-	if store.generateParams.ClassID.Valid {
-		t.Fatalf("class id = %v, want invalid fallback param", store.generateParams.ClassID)
+	if !store.generateParams.ClassID.Valid {
+		t.Fatalf("class id = %v, want assessment class forwarded", store.generateParams.ClassID)
+	}
+}
+
+func TestNonTestAssessmentGenerateSubmissionsRejectsCrossClass(t *testing.T) {
+	assessmentID := mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111")
+	classID := mustUUIDForNonTest(t, "22222222-2222-2222-2222-222222222222")
+	otherClassID := mustUUIDForNonTest(t, "99999999-9999-9999-9999-999999999999")
+	store := &fakeNonTestAssessmentStore{
+		assessmentRow:              db.GetNonTestAssessmentRow{ID: assessmentID, SubjectID: mustUUIDForNonTest(t, "33333333-3333-3333-3333-333333333333"), ClassID: classID},
+		teacherOwnsClassSubjectSet: true,
+		teacherOwnsClassSubject:    false,
+	}
+	svc := &NonTestAssessment{q: store}
+
+	_, err := svc.GenerateSubmissions(context.Background(), assessmentID, otherClassID, pgtype.UUID{})
+	if err == nil || !strings.Contains(err.Error(), "class_id harus sesuai") {
+		t.Fatalf("GenerateSubmissions() error = %v, want cross-class rejection", err)
+	}
+	if store.generateParams.AssessmentID.Valid {
+		t.Fatalf("generate called despite cross-class input: %+v", store.generateParams)
+	}
+}
+
+func TestNonTestAssessmentGenerateSubmissionsRejectsOtherTeacherScope(t *testing.T) {
+	assessmentID := mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111")
+	classID := mustUUIDForNonTest(t, "22222222-2222-2222-2222-222222222222")
+	teacherID := mustUUIDForNonTest(t, "44444444-4444-4444-4444-444444444444")
+	store := &fakeNonTestAssessmentStore{
+		assessmentRow:              db.GetNonTestAssessmentRow{ID: assessmentID, SubjectID: mustUUIDForNonTest(t, "33333333-3333-3333-3333-333333333333"), ClassID: classID},
+		teacherOwnsClassSubjectSet: true,
+		teacherOwnsClassSubject:    false,
+	}
+	svc := &NonTestAssessment{q: store}
+
+	_, err := svc.GenerateSubmissions(context.Background(), assessmentID, pgtype.UUID{}, teacherID)
+	if err == nil || !strings.Contains(err.Error(), "akses ditolak") {
+		t.Fatalf("GenerateSubmissions() error = %v, want teacher scope rejection", err)
 	}
 }
 
 func TestNonTestAssessmentUpsertSubmissionRejectsScoreAboveMax(t *testing.T) {
-	store := &fakeNonTestAssessmentStore{}
+	store := &fakeNonTestAssessmentStore{studentBelongs: true, teacherOwnsClassSubjectSet: true, teacherOwnsClassSubject: false}
 	svc := &NonTestAssessment{q: store}
 
 	score := 101.0
@@ -274,7 +329,7 @@ func TestNonTestAssessmentUpsertSubmissionRejectsScoreAboveMax(t *testing.T) {
 }
 
 func TestNonTestAssessmentUpsertSubmissionRequiresScoreForReviewed(t *testing.T) {
-	store := &fakeNonTestAssessmentStore{}
+	store := &fakeNonTestAssessmentStore{studentBelongs: true}
 	svc := &NonTestAssessment{q: store}
 
 	_, err := svc.UpsertSubmission(context.Background(), SaveNonTestSubmissionInput{
@@ -284,6 +339,46 @@ func TestNonTestAssessmentUpsertSubmissionRequiresScoreForReviewed(t *testing.T)
 	})
 	if err == nil {
 		t.Fatal("UpsertSubmission() error = nil, want missing score error")
+	}
+}
+
+func TestNonTestAssessmentUpsertSubmissionRejectsStudentOutsideAssessmentClass(t *testing.T) {
+	assessmentID := mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111")
+	studentID := mustUUIDForNonTest(t, "33333333-3333-3333-3333-333333333333")
+	store := &fakeNonTestAssessmentStore{studentBelongs: false}
+	svc := &NonTestAssessment{q: store}
+
+	_, err := svc.UpsertSubmission(context.Background(), SaveNonTestSubmissionInput{
+		AssessmentID: assessmentID,
+		StudentID:    studentID,
+		Status:       "assigned",
+	})
+	if err == nil || !strings.Contains(err.Error(), "siswa tidak berada") {
+		t.Fatalf("UpsertSubmission() error = %v, want class membership rejection", err)
+	}
+	if store.upsertParams.AssessmentID.Valid {
+		t.Fatalf("upsert called despite student class mismatch: %+v", store.upsertParams)
+	}
+}
+
+func TestNonTestAssessmentUpsertSubmissionRejectsOtherTeacherScope(t *testing.T) {
+	assessmentID := mustUUIDForNonTest(t, "11111111-1111-1111-1111-111111111111")
+	studentID := mustUUIDForNonTest(t, "33333333-3333-3333-3333-333333333333")
+	teacherID := mustUUIDForNonTest(t, "44444444-4444-4444-4444-444444444444")
+	store := &fakeNonTestAssessmentStore{studentBelongs: true}
+	svc := &NonTestAssessment{q: store}
+
+	_, err := svc.UpsertSubmission(context.Background(), SaveNonTestSubmissionInput{
+		AssessmentID:      assessmentID,
+		StudentID:         studentID,
+		Status:            "assigned",
+		TeacherEmployeeID: teacherID,
+	})
+	if err == nil || !strings.Contains(err.Error(), "akses ditolak") {
+		t.Fatalf("UpsertSubmission() error = %v, want teacher scope rejection", err)
+	}
+	if store.upsertParams.AssessmentID.Valid {
+		t.Fatalf("upsert called despite teacher scope mismatch: %+v", store.upsertParams)
 	}
 }
 

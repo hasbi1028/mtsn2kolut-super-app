@@ -21,9 +21,19 @@ WHERE ($1::uuid IS NULL OR a.subject_id = $1::uuid)
   AND ($3::text = '' OR a.status = $3::text)
   AND ($4::text = '' OR a.assessment_type = $4::text)
   AND (
-    $5::text = ''
+    $5::uuid IS NULL
+    OR EXISTS (
+      SELECT 1
+      FROM class_subject_assignments csa
+      WHERE csa.class_id = a.class_id
+        AND csa.subject_id = a.subject_id
+        AND csa.teacher_employee_id = $5::uuid
+    )
+  )
+  AND (
+    $6::text = ''
     OR (
-      $5::text = 'needs_sync'
+      $6::text = 'needs_sync'
       AND a.class_id IS NOT NULL
       AND EXISTS (
         SELECT 1
@@ -47,12 +57,12 @@ WHERE ($1::uuid IS NULL OR a.subject_id = $1::uuid)
     )
   )
   AND (
-    $6::text = ''
-    OR a.title ILIKE '%' || $6::text || '%'
-    OR a.description ILIKE '%' || $6::text || '%'
-    OR a.evidence_requirements ILIKE '%' || $6::text || '%'
-    OR s.name ILIKE '%' || $6::text || '%'
-    OR COALESCE(sc.name, '') ILIKE '%' || $6::text || '%'
+    $7::text = ''
+    OR a.title ILIKE '%' || $7::text || '%'
+    OR a.description ILIKE '%' || $7::text || '%'
+    OR a.evidence_requirements ILIKE '%' || $7::text || '%'
+    OR s.name ILIKE '%' || $7::text || '%'
+    OR COALESCE(sc.name, '') ILIKE '%' || $7::text || '%'
   )
 `
 
@@ -61,6 +71,7 @@ type CountNonTestAssessmentsParams struct {
 	ClassID              pgtype.UUID `json:"class_id"`
 	StatusFilter         string      `json:"status_filter"`
 	AssessmentTypeFilter string      `json:"assessment_type_filter"`
+	TeacherEmployeeID    pgtype.UUID `json:"teacher_employee_id"`
 	SyncFilter           string      `json:"sync_filter"`
 	SearchQuery          string      `json:"search_query"`
 }
@@ -71,6 +82,7 @@ func (q *Queries) CountNonTestAssessments(ctx context.Context, arg CountNonTestA
 		arg.ClassID,
 		arg.StatusFilter,
 		arg.AssessmentTypeFilter,
+		arg.TeacherEmployeeID,
 		arg.SyncFilter,
 		arg.SearchQuery,
 	)
@@ -188,10 +200,7 @@ WITH target_assessment AS (
   SELECT id, class_id
   FROM non_test_assessments
   WHERE id = $1::uuid
-),
-target_class AS (
-  SELECT COALESCE($2::uuid, class_id) AS class_id
-  FROM target_assessment
+    AND class_id = $2::uuid
 )
 INSERT INTO non_test_assessment_submissions (
   assessment_id,
@@ -203,10 +212,8 @@ SELECT
   st.id,
   'assigned'
 FROM target_assessment
-JOIN target_class ON TRUE
-JOIN students st ON st.class_id = target_class.class_id
-WHERE target_class.class_id IS NOT NULL
-  AND st.is_active = TRUE
+JOIN students st ON st.class_id = target_assessment.class_id
+WHERE st.is_active = TRUE
 ON CONFLICT (assessment_id, student_id) DO NOTHING
 RETURNING id, assessment_id, student_id, status, evidence_url, evidence_note, score, feedback, submitted_at, graded_at, graded_by_username, created_at, updated_at
 `
@@ -464,9 +471,19 @@ WHERE ($1::uuid IS NULL OR a.subject_id = $1::uuid)
   AND ($3::text = '' OR a.status = $3::text)
   AND ($4::text = '' OR a.assessment_type = $4::text)
   AND (
-    $5::text = ''
+    $5::uuid IS NULL
+    OR EXISTS (
+      SELECT 1
+      FROM class_subject_assignments csa
+      WHERE csa.class_id = a.class_id
+        AND csa.subject_id = a.subject_id
+        AND csa.teacher_employee_id = $5::uuid
+    )
+  )
+  AND (
+    $6::text = ''
     OR (
-      $5::text = 'needs_sync'
+      $6::text = 'needs_sync'
       AND a.class_id IS NOT NULL
       AND EXISTS (
         SELECT 1
@@ -490,15 +507,15 @@ WHERE ($1::uuid IS NULL OR a.subject_id = $1::uuid)
     )
   )
   AND (
-    $6::text = ''
-    OR a.title ILIKE '%' || $6::text || '%'
-    OR a.description ILIKE '%' || $6::text || '%'
-    OR a.evidence_requirements ILIKE '%' || $6::text || '%'
-    OR s.name ILIKE '%' || $6::text || '%'
-    OR COALESCE(sc.name, '') ILIKE '%' || $6::text || '%'
+    $7::text = ''
+    OR a.title ILIKE '%' || $7::text || '%'
+    OR a.description ILIKE '%' || $7::text || '%'
+    OR a.evidence_requirements ILIKE '%' || $7::text || '%'
+    OR s.name ILIKE '%' || $7::text || '%'
+    OR COALESCE(sc.name, '') ILIKE '%' || $7::text || '%'
   )
 ORDER BY a.created_at DESC
-LIMIT $8 OFFSET $7
+LIMIT $9 OFFSET $8
 `
 
 type ListNonTestAssessmentsParams struct {
@@ -506,6 +523,7 @@ type ListNonTestAssessmentsParams struct {
 	ClassID              pgtype.UUID `json:"class_id"`
 	StatusFilter         string      `json:"status_filter"`
 	AssessmentTypeFilter string      `json:"assessment_type_filter"`
+	TeacherEmployeeID    pgtype.UUID `json:"teacher_employee_id"`
 	SyncFilter           string      `json:"sync_filter"`
 	SearchQuery          string      `json:"search_query"`
 	OffsetCount          int32       `json:"offset_count"`
@@ -552,6 +570,7 @@ func (q *Queries) ListNonTestAssessments(ctx context.Context, arg ListNonTestAss
 		arg.ClassID,
 		arg.StatusFilter,
 		arg.AssessmentTypeFilter,
+		arg.TeacherEmployeeID,
 		arg.SyncFilter,
 		arg.SearchQuery,
 		arg.OffsetCount,
@@ -744,6 +763,74 @@ func (q *Queries) MarkNonTestAssessmentGradeSync(ctx context.Context, arg MarkNo
 	return i, err
 }
 
+const studentBelongsToClass = `-- name: StudentBelongsToClass :one
+SELECT EXISTS (
+  SELECT 1
+  FROM students
+  WHERE id = $1::uuid
+    AND class_id = $2::uuid
+)::bool
+`
+
+type StudentBelongsToClassParams struct {
+	StudentID pgtype.UUID `json:"student_id"`
+	ClassID   pgtype.UUID `json:"class_id"`
+}
+
+func (q *Queries) StudentBelongsToClass(ctx context.Context, arg StudentBelongsToClassParams) (bool, error) {
+	row := q.db.QueryRow(ctx, studentBelongsToClass, arg.StudentID, arg.ClassID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const teacherOwnsClassSubject = `-- name: TeacherOwnsClassSubject :one
+SELECT EXISTS (
+  SELECT 1
+  FROM class_subject_assignments
+  WHERE class_id = $1
+    AND subject_id = $2
+    AND teacher_employee_id = $3
+)::bool
+`
+
+type TeacherOwnsClassSubjectParams struct {
+	ClassID           pgtype.UUID `json:"class_id"`
+	SubjectID         pgtype.UUID `json:"subject_id"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+}
+
+func (q *Queries) TeacherOwnsClassSubject(ctx context.Context, arg TeacherOwnsClassSubjectParams) (bool, error) {
+	row := q.db.QueryRow(ctx, teacherOwnsClassSubject, arg.ClassID, arg.SubjectID, arg.TeacherEmployeeID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const teacherOwnsNonTestAssessment = `-- name: TeacherOwnsNonTestAssessment :one
+SELECT EXISTS (
+  SELECT 1
+  FROM non_test_assessments a
+  JOIN class_subject_assignments csa
+    ON csa.class_id = a.class_id
+   AND csa.subject_id = a.subject_id
+  WHERE a.id = $1
+    AND csa.teacher_employee_id = $2
+)::bool
+`
+
+type TeacherOwnsNonTestAssessmentParams struct {
+	ID                pgtype.UUID `json:"id"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+}
+
+func (q *Queries) TeacherOwnsNonTestAssessment(ctx context.Context, arg TeacherOwnsNonTestAssessmentParams) (bool, error) {
+	row := q.db.QueryRow(ctx, teacherOwnsNonTestAssessment, arg.ID, arg.TeacherEmployeeID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const updateNonTestAssessment = `-- name: UpdateNonTestAssessment :one
 UPDATE non_test_assessments
 SET
@@ -853,7 +940,22 @@ INSERT INTO non_test_assessment_submissions (
   graded_at,
   graded_by_username
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+SELECT
+  $1::uuid,
+  $2::uuid,
+  $3::text,
+  $4::text,
+  $5::text,
+  $6::numeric,
+  $7::text,
+  $8::timestamptz,
+  $9::timestamptz,
+  $10::text
+FROM non_test_assessments a
+JOIN students st ON st.id = $2::uuid
+WHERE a.id = $1::uuid
+  AND a.class_id IS NOT NULL
+  AND st.class_id = a.class_id
 ON CONFLICT (assessment_id, student_id) DO UPDATE
 SET
   status = EXCLUDED.status,

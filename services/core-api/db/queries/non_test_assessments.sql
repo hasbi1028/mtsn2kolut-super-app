@@ -54,6 +54,16 @@ WHERE (sqlc.arg(subject_id)::uuid IS NULL OR a.subject_id = sqlc.arg(subject_id)
   AND (sqlc.arg(status_filter)::text = '' OR a.status = sqlc.arg(status_filter)::text)
   AND (sqlc.arg(assessment_type_filter)::text = '' OR a.assessment_type = sqlc.arg(assessment_type_filter)::text)
   AND (
+    sqlc.arg(teacher_employee_id)::uuid IS NULL
+    OR EXISTS (
+      SELECT 1
+      FROM class_subject_assignments csa
+      WHERE csa.class_id = a.class_id
+        AND csa.subject_id = a.subject_id
+        AND csa.teacher_employee_id = sqlc.arg(teacher_employee_id)::uuid
+    )
+  )
+  AND (
     sqlc.arg(sync_filter)::text = ''
     OR (
       sqlc.arg(sync_filter)::text = 'needs_sync'
@@ -99,6 +109,16 @@ WHERE (sqlc.arg(subject_id)::uuid IS NULL OR a.subject_id = sqlc.arg(subject_id)
   AND (sqlc.arg(class_id)::uuid IS NULL OR a.class_id = sqlc.arg(class_id)::uuid)
   AND (sqlc.arg(status_filter)::text = '' OR a.status = sqlc.arg(status_filter)::text)
   AND (sqlc.arg(assessment_type_filter)::text = '' OR a.assessment_type = sqlc.arg(assessment_type_filter)::text)
+  AND (
+    sqlc.arg(teacher_employee_id)::uuid IS NULL
+    OR EXISTS (
+      SELECT 1
+      FROM class_subject_assignments csa
+      WHERE csa.class_id = a.class_id
+        AND csa.subject_id = a.subject_id
+        AND csa.teacher_employee_id = sqlc.arg(teacher_employee_id)::uuid
+    )
+  )
   AND (
     sqlc.arg(sync_filter)::text = ''
     OR (
@@ -245,6 +265,34 @@ FROM class_subject_assignments
 WHERE class_id = $1
   AND subject_id = $2;
 
+-- name: TeacherOwnsClassSubject :one
+SELECT EXISTS (
+  SELECT 1
+  FROM class_subject_assignments
+  WHERE class_id = $1
+    AND subject_id = $2
+    AND teacher_employee_id = $3
+)::bool;
+
+-- name: TeacherOwnsNonTestAssessment :one
+SELECT EXISTS (
+  SELECT 1
+  FROM non_test_assessments a
+  JOIN class_subject_assignments csa
+    ON csa.class_id = a.class_id
+   AND csa.subject_id = a.subject_id
+  WHERE a.id = $1
+    AND csa.teacher_employee_id = $2
+)::bool;
+
+-- name: StudentBelongsToClass :one
+SELECT EXISTS (
+  SELECT 1
+  FROM students
+  WHERE id = sqlc.arg(student_id)::uuid
+    AND class_id = sqlc.arg(class_id)::uuid
+)::bool;
+
 -- name: MarkNonTestAssessmentGradeSync :one
 UPDATE non_test_assessments
 SET grade_component_id = $2,
@@ -286,10 +334,7 @@ WITH target_assessment AS (
   SELECT id, class_id
   FROM non_test_assessments
   WHERE id = sqlc.arg(assessment_id)::uuid
-),
-target_class AS (
-  SELECT COALESCE(sqlc.arg(class_id)::uuid, class_id) AS class_id
-  FROM target_assessment
+    AND class_id = sqlc.arg(class_id)::uuid
 )
 INSERT INTO non_test_assessment_submissions (
   assessment_id,
@@ -301,10 +346,8 @@ SELECT
   st.id,
   'assigned'
 FROM target_assessment
-JOIN target_class ON TRUE
-JOIN students st ON st.class_id = target_class.class_id
-WHERE target_class.class_id IS NOT NULL
-  AND st.is_active = TRUE
+JOIN students st ON st.class_id = target_assessment.class_id
+WHERE st.is_active = TRUE
 ON CONFLICT (assessment_id, student_id) DO NOTHING
 RETURNING *;
 
@@ -321,7 +364,22 @@ INSERT INTO non_test_assessment_submissions (
   graded_at,
   graded_by_username
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+SELECT
+  sqlc.arg(assessment_id)::uuid,
+  sqlc.arg(student_id)::uuid,
+  sqlc.arg(status)::text,
+  sqlc.arg(evidence_url)::text,
+  sqlc.arg(evidence_note)::text,
+  sqlc.arg(score)::numeric,
+  sqlc.arg(feedback)::text,
+  sqlc.arg(submitted_at)::timestamptz,
+  sqlc.arg(graded_at)::timestamptz,
+  sqlc.arg(graded_by_username)::text
+FROM non_test_assessments a
+JOIN students st ON st.id = sqlc.arg(student_id)::uuid
+WHERE a.id = sqlc.arg(assessment_id)::uuid
+  AND a.class_id IS NOT NULL
+  AND st.class_id = a.class_id
 ON CONFLICT (assessment_id, student_id) DO UPDATE
 SET
   status = EXCLUDED.status,

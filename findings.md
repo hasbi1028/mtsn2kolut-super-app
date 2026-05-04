@@ -1,6 +1,6 @@
 # Findings — `mtsn2kolut-super-app`
 
-Dokumen ini adalah ledger review aktif per 2026-05-03 setelah Sprint 96 Documentation Sync.
+Dokumen ini adalah ledger review aktif per 2026-05-04 setelah final verification pass lintas backend, web, worker, dan mobile.
 
 ---
 
@@ -12,7 +12,9 @@ Tidak ada temuan **High** yang masih terbuka dari review 2026-05-01. Tiga temuan
 - Job PUSAKA `running` yang stale sekarang dipulihkan backend sebelum claim/scheduler berjalan.
 - File foto siswa Kesiswaan sekarang mengecek scope siswa melalui `CanReadKesiswaanStudentPhoto`.
 
-Prioritas yang tersisa bersifat operasional dan peningkatan mutu, bukan bug akses kritis yang diketahui.
+Prioritas yang tersisa bersifat operasional dan peningkatan mutu, bukan bug akses kritis yang diketahui. Checkpoint 5 juga menutup gap compliance berupa helper Podman DB baru yang sempat masuk working tree; target/script itu dibatalkan agar tidak menambah tooling container atau mengubah topology deploy. Checkpoint 6 menyelaraskan ledger dengan security hardening lintas backend/web/mobile/worker: trusted proxy CIDR untuk rate-limit IP forwarding, worker API key/timeout/log/screenshot hygiene, upload allowlist, dan `nosniff` response headers.
+
+**Catatan sqlc final verification:** `make db-sqlc` sekarang memprovision `sqlc` repo-local ke `.tools/bin/sqlc` bila binary belum tersedia, lalu menjalankan generate terhadap `services/core-api/db/sqlc.yaml`. Direktori `.tools/` di-ignore agar binary tool tidak masuk source control.
 
 ---
 
@@ -41,6 +43,15 @@ Gunakan [docs/cbt-smoke-checklist.md](./docs/cbt-smoke-checklist.md) setelah bac
 
 **Tindakan:**
 Jika checklist manual mulai sering dipakai, ubah bagian stabil menjadi Playwright smoke test role-based. Jangan menambah suite e2e besar sebelum data seed dan akun uji staging jelas.
+
+### Medium — Validasi env security hardening saat deploy
+
+**Area:** backend reverse proxy, PUSAKA worker, upload/file serving.
+
+**Status:** Code hardening sudah masuk working tree, tetapi nilai environment produksi harus diverifikasi di VPS masing-masing.
+
+**Tindakan:**
+Sebelum restart produksi, cek `TRUSTED_PROXY_CIDRS` di backend, samakan `WORKER_API_KEY` backend/worker, set `WORKER_API_TIMEOUT_MS` sesuai kondisi jaringan, dan pastikan `WORKER_LOG_PATH`/`SCREENSHOT_DIR` berada di direktori non-public dengan permission/retention terbatas.
 
 ### Low — Perkuat seat plan constraint
 

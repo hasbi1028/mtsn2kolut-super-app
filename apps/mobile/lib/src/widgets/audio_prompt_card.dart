@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -11,13 +12,20 @@ class AudioPromptCard extends StatefulWidget {
     required this.label,
     this.hasBeenPlayed = false,
     this.headers = const <String, String>{},
+    this.maxAudioBytes = _defaultMaxAudioBytes,
+    this.audioTimeout = _defaultAudioTimeout,
     this.onPlayed,
   });
+
+  static const int _defaultMaxAudioBytes = 8 * 1024 * 1024;
+  static const Duration _defaultAudioTimeout = Duration(seconds: 20);
 
   final String url;
   final String label;
   final bool hasBeenPlayed;
   final Map<String, String> headers;
+  final int maxAudioBytes;
+  final Duration audioTimeout;
   final VoidCallback? onPlayed;
 
   @override
@@ -96,26 +104,39 @@ class _AudioPromptCardState extends State<AudioPromptCard> {
   }
 
   Future<Source> _buildSource() async {
-    if (widget.headers.isEmpty) {
-      return UrlSource(widget.url);
-    }
     final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 10);
     try {
-      final request = await client.getUrl(Uri.parse(widget.url));
+      final request = await client
+          .getUrl(Uri.parse(widget.url))
+          .timeout(widget.audioTimeout);
       for (final entry in widget.headers.entries) {
         request.headers.set(entry.key, entry.value);
       }
-      final response = await request.close();
+      final response = await request.close().timeout(widget.audioTimeout);
       if (response.statusCode >= 400) {
         throw HttpException('audio request failed: ${response.statusCode}');
       }
+      final contentType = response.headers.contentType?.mimeType ?? '';
+      if (contentType.isNotEmpty && !contentType.startsWith('audio/')) {
+        throw const HttpException('audio response mime type is not allowed');
+      }
+      final contentLength = response.contentLength;
+      if (contentLength > widget.maxAudioBytes) {
+        throw const HttpException('audio response is too large');
+      }
       final builder = BytesBuilder(copy: false);
-      await for (final chunk in response) {
+      var downloadedBytes = 0;
+      await for (final chunk in response.timeout(widget.audioTimeout)) {
+        downloadedBytes += chunk.length;
+        if (downloadedBytes > widget.maxAudioBytes) {
+          throw const HttpException('audio response exceeded size limit');
+        }
         builder.add(chunk);
       }
       return BytesSource(
         builder.takeBytes(),
-        mimeType: response.headers.contentType?.mimeType,
+        mimeType: contentType.isEmpty ? null : contentType,
       );
     } finally {
       client.close(force: true);

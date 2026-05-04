@@ -98,6 +98,8 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Error handling:** keep a global SvelteKit `+error.svelte` experience for public and admin routes. New pages should rely on centralized error UX before adding page-local fallback banners.
 - **Internal error hygiene:** backend 500 responses must return a generic client-safe message; raw internal error details belong in server logs, not API responses.
 - **Rate limiting baseline:** sensitive public/auth entrypoints such as login, refresh, public registration, and exam token login should be explicitly rate-limited with a concurrency-safe limiter implementation that respects forwarded client IPs.
+- **Trusted proxy baseline:** forwarded client IP headers may influence rate limiting only when the source proxy is listed in `TRUSTED_PROXY_CIDRS`; never trust broad public CIDRs.
+- **Upload/file hygiene:** backend-owned uploads must use explicit extension/MIME allowlists, reject scriptable content, and serve files with `X-Content-Type-Options: nosniff` plus safe disposition.
 
 ## Worker Architecture Rules
 
@@ -110,6 +112,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Explicit retry, claim, and failure reporting.** No silent swallowing of errors.
 - **Graceful shutdown** on SIGINT/SIGTERM with drain timeout.
 - **Heartbeat every 30s** to report consumer count and health status.
+- **Worker secret/log hygiene:** `WORKER_API_KEY` must be provided outside local/test environments, logs must redact secrets/user credentials, and worker screenshots/logs must stay in non-public ignored paths with retention.
 
 ## Delivery & Operational Rules
 

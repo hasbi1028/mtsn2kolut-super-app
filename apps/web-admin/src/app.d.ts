@@ -7,6 +7,7 @@ declare global {
 			user?: AuthUser;
 			accessToken?: string;
 			authRefreshPromise?: Promise<TokenPair>;
+			authUserPromise?: Promise<AuthUser | undefined>;
 		}
 		interface PageData {
 			user?: AuthUser;

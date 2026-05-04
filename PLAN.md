@@ -1345,6 +1345,30 @@ Three runtime units deployed across 3 VPS:
 - [x] Commit dibuat bertahap: hygiene repository, dokumentasi temuan, lalu fitur aplikasi.
 - [x] Verification: staged diff dicek dengan `git diff --cached --check` dan status git dirapikan setelah commit.
 
+### ✅ Orchestration Checkpoint 5 — Compliance Verification (COMPLETE)
+- [x] Review perubahan lintas backend, web BFF, worker, dan mobile terhadap `AGENTS.md`, `PLAN.md`, dan `findings.md` tanpa mengubah ulang feature code.
+- [x] Koreksi compliance: helper Podman database baru dan target Make terkait dibatalkan agar tidak menambah tooling container/deployment topology baru di luar baseline manual deploy.
+- [x] Query `non_test_assessments.sql` dan `users.sql` dibandingkan dengan generated sqlc output terkait; signature parameter dan SQL generated tampak selaras. Catatan lama bahwa `make db-sqlc` gagal saat binary `sqlc` tidak tersedia sudah ditutup oleh provisioning repo-local `.tools/bin/sqlc`.
+- [x] Guardrail tetap: SvelteKit hanya BFF/proxy, PUSAKA worker memakai `/api/pusaka/worker/*`, PostgreSQL tetap dimiliki Core API, dan tidak ada Dockerfile/CI-CD/deploy topology baru.
+
+### ✅ Orchestration Checkpoint 6 — Security Hardening Documentation Sync (COMPLETE)
+- [x] Dokumentasi diselaraskan dengan hardening backend/web/mobile/worker terbaru: trusted proxy CIDR untuk rate-limit IP forwarding, worker API key wajib di environment non-lokal, timeout worker API, sanitasi log, dan penyimpanan screenshot worker yang dibatasi.
+- [x] Backend upload/streaming file sekarang didokumentasikan sebagai allowlist MIME/ekstensi dengan header `X-Content-Type-Options: nosniff`; file arsip/scriptable tidak boleh diperlakukan sebagai konten inline aman.
+- [x] Safe deploy order tetap backend code -> migrations -> backend restart + health -> frontend -> worker; perubahan env backend harus naik sebelum frontend/worker yang bergantung pada kontrak auth/proxy/worker baru.
+- [x] Tidak ada perubahan topology deploy: tetap 3 VPS server, tanpa Dockerfile baru, dan tanpa CI/CD deploy automation.
+- [x] Catatan sqlc diperbarui: `make db-sqlc` memprovision `github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0` ke `.tools/bin` bila perlu, lalu regenerate dari `services/core-api/db/sqlc.yaml` tanpa Docker/CI-CD dan tanpa melacak binary tool.
+
+#### Rekomendasi Lanjutan Setelah Checkpoint 6
+- [ ] Pastikan `TRUSTED_PROXY_CIDRS` hanya berisi reverse proxy/load balancer internal yang benar-benar dipercaya; jangan isi dengan CIDR publik luas.
+- [ ] Rotasi dan samakan `WORKER_API_KEY` di backend dan worker VPS sebelum restart worker produksi.
+- [ ] Pastikan direktori `WORKER_LOG_PATH` dan `SCREENSHOT_DIR` berada di path non-public dengan permission terbatas dan masuk ignore/retention operasional.
+
+### ✅ Final Verification Pass — Backend/Web/Worker Hardening (COMPLETE)
+- [x] Feasible verification completed after latest backend/web/worker hardening: `git diff --check`, backend `go test ./...`, web `npm run check` + `npm run test:unit`, worker `npm test` + `npx tsc --noEmit`.
+- [x] Mobile was not part of the latest server hardening wave, but Flutter verification was also feasible and passed: `flutter analyze` and `flutter test`.
+- [x] Documentation caveat resolved: `make db-sqlc` no longer depends on `sqlc` already being installed on `PATH`; it provisions `sqlc` v1.30.0 into ignored `.tools/bin` before generation.
+- [x] Remaining deployment caveats are operational: verify trusted proxy CIDRs, matched worker API key, worker timeout/log/screenshot paths, and staging CBT smoke rehearsal with real admin/guru data before production exam windows.
+
 ---
 
 ## 📋 Proposed Architecture Plan — Dedicated CBT Engine For Exam Runtime

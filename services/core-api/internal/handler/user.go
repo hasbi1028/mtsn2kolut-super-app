@@ -7,27 +7,43 @@ import (
 	"slices"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
 	"mtsn2kolut-super-app/backend/internal/api"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
+	"mtsn2kolut-super-app/backend/internal/service"
 )
 
 type userStore interface {
 	ListUsers(ctx context.Context) ([]db.ListUsersRow, error)
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.User, error)
 	AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error
-	DeleteUser(ctx context.Context, id pgtype.UUID) error
-	UpdateUserStatus(ctx context.Context, arg db.UpdateUserStatusParams) error
 	ListAuditLogs(ctx context.Context, arg db.ListAuditLogsParams) ([]db.ListAuditLogsRow, error)
 }
 
-type User struct {
-	q userStore
+type userLifecycleService interface {
+	DeleteAsDeactivate(ctx context.Context, id pgtype.UUID) error
+	UpdateStatus(ctx context.Context, id pgtype.UUID, isActive bool) error
 }
 
-func NewUser(q *db.Queries) *User { return &User{q: q} }
+type userTxStarter interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+type User struct {
+	q         userStore
+	lifecycle userLifecycleService
+	tx        userTxStarter
+}
+
+func NewUser(q *db.Queries) *User { return &User{q: q, lifecycle: service.NewUserLifecycle(q)} }
+
+func NewUserWithPool(pool *pgxpool.Pool) *User {
+	return &User{q: db.New(pool), lifecycle: service.NewUserLifecycleWithPool(pool), tx: pool}
+}
 
 func (h *User) List(w http.ResponseWriter, r *http.Request) {
 	if !adminAccessAllowed(r) {
@@ -92,6 +108,10 @@ func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "username and password required")
 		return
 	}
+	if err := service.ValidatePassword(body.Username, body.Password); err != nil {
+		writeClientError(w, err, "Password tidak memenuhi kebijakan keamanan")
+		return
+	}
 	if len(body.Roles) == 0 {
 		api.BadRequest(w, "at least one role required")
 		return
@@ -118,25 +138,52 @@ func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	row, err := h.q.CreateUser(r.Context(), db.CreateUserParams{
-		Username:     body.Username,
-		PasswordHash: string(hash),
-		EmployeeID:   empID,
-		StudentID:    stuID,
-		ParentID:     parID,
-		IsActive:     true,
-	})
-	if err != nil {
-		api.Internal(w, err)
-		return
+	create := func(store userStore) (db.User, error) {
+		row, err := store.CreateUser(r.Context(), db.CreateUserParams{
+			Username:     body.Username,
+			PasswordHash: string(hash),
+			EmployeeID:   empID,
+			StudentID:    stuID,
+			ParentID:     parID,
+			IsActive:     true,
+		})
+		if err != nil {
+			return db.User{}, err
+		}
+		for _, rStr := range body.Roles {
+			if err := store.AddUserRole(r.Context(), db.AddUserRoleParams{
+				UserID: row.ID,
+				Role:   db.UserRole(rStr),
+			}); err != nil {
+				return db.User{}, err
+			}
+		}
+		return row, nil
 	}
 
-	// Add roles
-	for _, rStr := range body.Roles {
-		_ = h.q.AddUserRole(r.Context(), db.AddUserRoleParams{
-			UserID: row.ID,
-			Role:   db.UserRole(rStr),
-		})
+	var row db.User
+	if h.tx != nil {
+		tx, err := h.tx.Begin(r.Context())
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		defer tx.Rollback(r.Context())
+		row, err = create(db.New(tx))
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			api.Internal(w, err)
+			return
+		}
+	} else {
+		row, err = create(h.q)
+		if err != nil {
+			api.Internal(w, err)
+			return
+		}
 	}
 
 	api.Created(w, row)
@@ -203,7 +250,7 @@ func (h *User) Delete(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid id")
 		return
 	}
-	if err := h.q.DeleteUser(r.Context(), id); err != nil {
+	if err := h.lifecycle.DeleteAsDeactivate(r.Context(), id); err != nil {
 		api.Internal(w, err)
 		return
 	}
@@ -227,10 +274,7 @@ func (h *User) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	if err := h.q.UpdateUserStatus(r.Context(), db.UpdateUserStatusParams{
-		ID:       id,
-		IsActive: body.IsActive,
-	}); err != nil {
+	if err := h.lifecycle.UpdateStatus(r.Context(), id, body.IsActive); err != nil {
 		api.Internal(w, err)
 		return
 	}

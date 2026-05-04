@@ -660,7 +660,12 @@ func (h *CbtSession) ListParticipants(w http.ResponseWriter, r *http.Request) {
 	if !h.requireSessionTeacherOrAdmin(w, r, id) {
 		return
 	}
-	rows, err := h.svc.ListParticipants(r.Context(), id)
+	var rows []db.ListCbtExamParticipantsRow
+	if teacherID := cbtSessionTeacherID(r); teacherID.Valid && !adminAccessAllowed(r) {
+		rows, err = h.svc.ListParticipantsByTeacher(r.Context(), id, teacherID)
+	} else {
+		rows, err = h.svc.ListParticipants(r.Context(), id)
+	}
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -820,7 +825,7 @@ func (h *CbtSession) RegenerateToken(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid participant id")
 		return
 	}
-	if !h.requireSessionParticipant(w, r, sessionID, pid) {
+	if !h.requireSessionParticipantForTeacherOrAdmin(w, r, sessionID, pid) {
 		return
 	}
 	row, err := h.svc.RegenerateToken(r.Context(), pid)
@@ -850,7 +855,7 @@ func (h *CbtSession) ResetParticipantAccess(w http.ResponseWriter, r *http.Reque
 		api.BadRequest(w, "invalid participant id")
 		return
 	}
-	if !h.requireSessionParticipant(w, r, sessionID, pid) {
+	if !h.requireSessionParticipantForTeacherOrAdmin(w, r, sessionID, pid) {
 		return
 	}
 	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)

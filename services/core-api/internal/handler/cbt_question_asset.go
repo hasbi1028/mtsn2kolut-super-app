@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -38,6 +39,7 @@ func (h *CbtQuestionAsset) Upload(w http.ResponseWriter, r *http.Request) {
 		api.Forbidden(w)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 12<<20)
 	if err := r.ParseMultipartForm(12 << 20); err != nil {
 		api.BadRequest(w, "multipart form invalid")
 		return
@@ -62,14 +64,20 @@ func (h *CbtQuestionAsset) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	validated, err := validateUploadedFile(header.Filename, file, 10<<20, false)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+
 	row, err := h.svc.Save(r.Context(), service.UploadCbtQuestionAssetInput{
 		QuestionID:   questionID,
 		OriginalName: header.Filename,
-		MimeType:     header.Header.Get("Content-Type"),
-		FileSize:     header.Size,
+		MimeType:     validated.MimeType,
+		FileSize:     int64(len(validated.Data)),
 		Purpose:      r.FormValue("purpose"),
 		UploadedBy:   currentUsername(r),
-		File:         file,
+		File:         bytes.NewReader(validated.Data),
 	})
 	if err != nil {
 		writeClientError(w, err, "Upload aset soal CBT tidak valid")
@@ -185,9 +193,8 @@ func (h *CbtQuestionAsset) File(w http.ResponseWriter, r *http.Request) {
 	}
 	defer f.Close()
 
-	w.Header().Set("Content-Type", asset.MimeType)
+	secureFileResponseHeaders(w, asset.MimeType, asset.StoredName)
 	w.Header().Set("Content-Length", strconv.FormatInt(asset.FileSize, 10))
-	w.Header().Set("Content-Disposition", `inline; filename="`+asset.StoredName+`"`)
 	w.Header().Set("Cache-Control", "private, max-age=300")
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, f)

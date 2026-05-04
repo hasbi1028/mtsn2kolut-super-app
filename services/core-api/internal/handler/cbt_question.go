@@ -271,6 +271,7 @@ func (h *CbtQuestion) ImportLegacyCSV(w http.ResponseWriter, r *http.Request) {
 		api.Forbidden(w)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		api.BadRequest(w, "multipart import tidak valid")
 		return

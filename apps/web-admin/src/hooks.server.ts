@@ -2,7 +2,7 @@ import { redirect, error } from '@sveltejs/kit';
 import type { Handle, HandleFetch, RequestEvent } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
-import { apiRefreshWithFetch } from '$lib/server/api';
+import { ApiError, AuthValidationUnavailableError, apiRefreshWithFetch, getVerifiedUserFromAccessToken } from '$lib/server/api';
 import type { TokenPair } from '$lib/server/api';
 import { hasRefreshToken, isAccessTokenValid, getUserFromToken } from '$lib/server/auth';
 import { hasAnyRole, isAdminOnlyPath, isKesiswaanPath, isPublicPath, isStaffOperationPath } from '$lib/server/route-access';
@@ -38,7 +38,8 @@ function setAuthCookies(event: RequestEvent, tokens: TokenPair) {
 		path: '/', httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 3600, secure: !dev
 	});
 	event.locals.accessToken = tokens.access_token;
-	event.locals.user = getUserFromToken(tokens.access_token) ?? undefined;
+	event.locals.user = undefined;
+	event.locals.authUserPromise = undefined;
 }
 
 function clearAuthCookies(event: RequestEvent) {
@@ -46,6 +47,18 @@ function clearAuthCookies(event: RequestEvent) {
 	event.cookies.delete('refresh_token', { path: '/' });
 	event.locals.accessToken = undefined;
 	event.locals.user = undefined;
+	event.locals.authUserPromise = undefined;
+}
+
+function isExplicitAuthRejection(error: unknown): boolean {
+	return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}
+
+async function verifiedUserForAccessToken(event: RequestEvent, accessToken: string) {
+	if (!event.locals.authUserPromise) {
+		event.locals.authUserPromise = getVerifiedUserFromAccessToken(event.fetch, accessToken, getUserFromToken);
+	}
+	return event.locals.authUserPromise;
 }
 
 function requestWithAccessToken(request: Request, accessToken: string): Request {
@@ -67,7 +80,7 @@ async function refreshAuthSession(
 			setAuthCookies(event, tokens);
 			return tokens;
 		}).catch((refreshError: unknown) => {
-			clearAuthCookies(event);
+			if (isExplicitAuthRejection(refreshError)) clearAuthCookies(event);
 			throw refreshError;
 		}).finally(() => {
 			event.locals.authRefreshPromise = undefined;
@@ -77,6 +90,7 @@ async function refreshAuthSession(
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
+	const isPublic = isPublicPath(event.url.pathname);
 	let access = event.cookies.get('access_token');
 	const refresh = event.cookies.get('refresh_token');
 
@@ -90,10 +104,52 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 	if (!isAccessTokenValid(access)) access = undefined;
 
-	event.locals.user = getUserFromToken(access) ?? undefined;
+	event.locals.user = undefined;
 	event.locals.accessToken = access;
+	if (access) {
+		let validationUnavailable = false;
+		try {
+			event.locals.user = await verifiedUserForAccessToken(event, access);
+		} catch (validationError) {
+			if (validationError instanceof AuthValidationUnavailableError) {
+				if (!isPublic) {
+					throw error(503, 'Layanan validasi sesi sedang bermasalah. Silakan coba beberapa saat lagi.');
+				}
+				validationUnavailable = true;
+				event.locals.user = undefined;
+			} else {
+				throw validationError;
+			}
+		}
+		if (!event.locals.user && !validationUnavailable && hasRefreshToken(refresh)) {
+			try {
+				const tokens = await refreshAuthSession(event, refresh!, event.fetch);
+				access = tokens.access_token;
+				event.locals.accessToken = access;
+				event.locals.user = await verifiedUserForAccessToken(event, access);
+			} catch (validationError) {
+				if (validationError instanceof AuthValidationUnavailableError) {
+					if (!isPublic) {
+						throw error(503, 'Layanan validasi sesi sedang bermasalah. Silakan coba beberapa saat lagi.');
+					}
+					validationUnavailable = true;
+					event.locals.user = undefined;
+				} else if (isExplicitAuthRejection(validationError)) {
+					access = undefined;
+				} else {
+					if (!isPublic) {
+						throw error(503, 'Layanan sesi sedang bermasalah. Silakan coba beberapa saat lagi.');
+					}
+					validationUnavailable = true;
+				}
+			}
+		}
+		if (!event.locals.user && !validationUnavailable) {
+			clearAuthCookies(event);
+			access = undefined;
+		}
+	}
 
-	const isPublic = isPublicPath(event.url.pathname);
 	if (!isPublic && !event.locals.user) {
 		const from = encodeURIComponent(event.url.pathname + event.url.search);
 		throw redirect(302, `/login?from=${from}`);

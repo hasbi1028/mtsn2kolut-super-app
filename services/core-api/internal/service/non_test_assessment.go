@@ -56,7 +56,10 @@ type nonTestAssessmentStore interface {
 	ListNonTestSubmissions(ctx context.Context, assessmentID pgtype.UUID) ([]db.ListNonTestSubmissionsRow, error)
 	GenerateNonTestSubmissionsForClass(ctx context.Context, arg db.GenerateNonTestSubmissionsForClassParams) ([]db.NonTestAssessmentSubmission, error)
 	UpsertNonTestSubmission(ctx context.Context, arg db.UpsertNonTestSubmissionParams) (db.NonTestAssessmentSubmission, error)
+	StudentBelongsToClass(ctx context.Context, arg db.StudentBelongsToClassParams) (bool, error)
 	GetGradeAssignmentByClassSubject(ctx context.Context, arg db.GetGradeAssignmentByClassSubjectParams) (db.GetGradeAssignmentByClassSubjectRow, error)
+	TeacherOwnsClassSubject(ctx context.Context, arg db.TeacherOwnsClassSubjectParams) (bool, error)
+	TeacherOwnsNonTestAssessment(ctx context.Context, arg db.TeacherOwnsNonTestAssessmentParams) (bool, error)
 	GetGradeAssignmentFinalization(ctx context.Context, assignmentID pgtype.UUID) (db.GradeAssignmentFinalization, error)
 	GetGradeComponent(ctx context.Context, id pgtype.UUID) (db.GradeComponent, error)
 	CreateGradeComponent(ctx context.Context, arg db.CreateGradeComponentParams) (db.GradeComponent, error)
@@ -83,14 +86,15 @@ func NewNonTestAssessmentWithPool(pool *pgxpool.Pool) *NonTestAssessment {
 }
 
 type ListNonTestAssessmentsInput struct {
-	SubjectID      pgtype.UUID
-	ClassID        pgtype.UUID
-	Status         string
-	AssessmentType string
-	SyncFilter     string
-	SearchQuery    string
-	Limit          int32
-	Offset         int32
+	SubjectID         pgtype.UUID
+	ClassID           pgtype.UUID
+	Status            string
+	AssessmentType    string
+	SyncFilter        string
+	SearchQuery       string
+	Limit             int32
+	Offset            int32
+	TeacherEmployeeID pgtype.UUID
 }
 
 type SaveNonTestAssessmentInput struct {
@@ -115,16 +119,17 @@ type SaveNonTestAssessmentInput struct {
 }
 
 type SaveNonTestSubmissionInput struct {
-	AssessmentID     pgtype.UUID
-	StudentID        pgtype.UUID
-	Status           string
-	EvidenceURL      string
-	EvidenceNote     string
-	Score            *float64
-	Feedback         string
-	SubmittedAt      pgtype.Timestamptz
-	GradedAt         pgtype.Timestamptz
-	GradedByUsername string
+	AssessmentID      pgtype.UUID
+	StudentID         pgtype.UUID
+	Status            string
+	EvidenceURL       string
+	EvidenceNote      string
+	Score             *float64
+	Feedback          string
+	SubmittedAt       pgtype.Timestamptz
+	GradedAt          pgtype.Timestamptz
+	GradedByUsername  string
+	TeacherEmployeeID pgtype.UUID
 }
 
 type SyncNonTestAssessmentToGradeResult struct {
@@ -148,6 +153,7 @@ func (s *NonTestAssessment) List(ctx context.Context, in ListNonTestAssessmentsI
 		SearchQuery:          normalized.SearchQuery,
 		LimitCount:           normalized.Limit,
 		OffsetCount:          normalized.Offset,
+		TeacherEmployeeID:    normalized.TeacherEmployeeID,
 	})
 	if err != nil {
 		return nil, 0, err
@@ -159,11 +165,33 @@ func (s *NonTestAssessment) List(ctx context.Context, in ListNonTestAssessmentsI
 		AssessmentTypeFilter: normalized.AssessmentType,
 		SyncFilter:           normalized.SyncFilter,
 		SearchQuery:          normalized.SearchQuery,
+		TeacherEmployeeID:    normalized.TeacherEmployeeID,
 	})
 	if err != nil {
 		return nil, 0, err
 	}
 	return rows, total, nil
+}
+
+func (s *NonTestAssessment) TeacherOwnsClassSubject(ctx context.Context, classID, subjectID, teacherEmployeeID pgtype.UUID) (bool, error) {
+	if !classID.Valid || !subjectID.Valid || !teacherEmployeeID.Valid {
+		return false, nil
+	}
+	return s.q.TeacherOwnsClassSubject(ctx, db.TeacherOwnsClassSubjectParams{
+		ClassID:           classID,
+		SubjectID:         subjectID,
+		TeacherEmployeeID: teacherEmployeeID,
+	})
+}
+
+func (s *NonTestAssessment) TeacherOwnsAssessment(ctx context.Context, assessmentID, teacherEmployeeID pgtype.UUID) (bool, error) {
+	if !assessmentID.Valid || !teacherEmployeeID.Valid {
+		return false, nil
+	}
+	return s.q.TeacherOwnsNonTestAssessment(ctx, db.TeacherOwnsNonTestAssessmentParams{
+		ID:                assessmentID,
+		TeacherEmployeeID: teacherEmployeeID,
+	})
 }
 
 func (s *NonTestAssessment) Get(ctx context.Context, id pgtype.UUID) (db.GetNonTestAssessmentRow, error) {
@@ -247,22 +275,32 @@ func (s *NonTestAssessment) ListSubmissions(ctx context.Context, assessmentID pg
 	return s.q.ListNonTestSubmissions(ctx, assessmentID)
 }
 
-func (s *NonTestAssessment) GenerateSubmissions(ctx context.Context, assessmentID pgtype.UUID, classID pgtype.UUID) ([]db.NonTestAssessmentSubmission, error) {
+func (s *NonTestAssessment) GenerateSubmissions(ctx context.Context, assessmentID pgtype.UUID, classID, teacherEmployeeID pgtype.UUID) ([]db.NonTestAssessmentSubmission, error) {
 	if !assessmentID.Valid {
 		return nil, errors.New("id asesmen tidak valid")
 	}
-	if !classID.Valid {
-		assessment, err := s.q.GetNonTestAssessment(ctx, assessmentID)
+	assessment, err := s.q.GetNonTestAssessment(ctx, assessmentID)
+	if err != nil {
+		return nil, err
+	}
+	if !assessment.ClassID.Valid {
+		return nil, errors.New("kelas asesmen wajib dipilih sebelum menyiapkan siswa")
+	}
+	if classID.Valid && classID != assessment.ClassID {
+		return nil, errors.New("class_id harus sesuai dengan kelas asesmen")
+	}
+	if teacherEmployeeID.Valid {
+		owns, err := s.TeacherOwnsClassSubject(ctx, assessment.ClassID, assessment.SubjectID, teacherEmployeeID)
 		if err != nil {
 			return nil, err
 		}
-		if !assessment.ClassID.Valid {
-			return nil, errors.New("kelas asesmen wajib dipilih sebelum menyiapkan siswa")
+		if !owns {
+			return nil, errors.New("akses ditolak")
 		}
 	}
 	return s.q.GenerateNonTestSubmissionsForClass(ctx, db.GenerateNonTestSubmissionsForClassParams{
 		AssessmentID: assessmentID,
-		ClassID:      classID,
+		ClassID:      assessment.ClassID,
 	})
 }
 
@@ -280,6 +318,28 @@ func (s *NonTestAssessment) UpsertSubmission(ctx context.Context, input SaveNonT
 		if ok && *normalized.Score > maxScore {
 			return db.NonTestAssessmentSubmission{}, errors.New("nilai melebihi skor maksimum asesmen")
 		}
+	}
+	if !assessment.ClassID.Valid {
+		return db.NonTestAssessmentSubmission{}, errors.New("kelas asesmen wajib dipilih sebelum menyimpan pengumpulan")
+	}
+	if normalized.TeacherEmployeeID.Valid {
+		owns, err := s.TeacherOwnsClassSubject(ctx, assessment.ClassID, assessment.SubjectID, normalized.TeacherEmployeeID)
+		if err != nil {
+			return db.NonTestAssessmentSubmission{}, err
+		}
+		if !owns {
+			return db.NonTestAssessmentSubmission{}, errors.New("akses ditolak")
+		}
+	}
+	belongs, err := s.q.StudentBelongsToClass(ctx, db.StudentBelongsToClassParams{
+		StudentID: normalized.StudentID,
+		ClassID:   assessment.ClassID,
+	})
+	if err != nil {
+		return db.NonTestAssessmentSubmission{}, err
+	}
+	if !belongs {
+		return db.NonTestAssessmentSubmission{}, errors.New("siswa tidak berada di kelas asesmen")
 	}
 	score := pgtype.Numeric{}
 	if normalized.Score != nil {

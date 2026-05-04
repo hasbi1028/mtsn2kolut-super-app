@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -32,6 +35,30 @@ func requireAnySlice(t *testing.T, value any, key string) []any {
 		t.Fatalf("%s = %#v (%T), want []any", key, value, value)
 	}
 	return got
+}
+
+func oversizedCbtQuestionImportRequest(t *testing.T, subjectID pgtype.UUID) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("subject_id", subjectID.String()); err != nil {
+		t.Fatalf("WriteField(subject_id) error = %v", err)
+	}
+	part, err := writer.CreateFormFile("file", "legacy.csv")
+	if err != nil {
+		t.Fatalf("CreateFormFile() error = %v", err)
+	}
+	if _, err := part.Write(bytes.Repeat([]byte("x"), (10<<20)+1)); err != nil {
+		t.Fatalf("multipart file write error = %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("multipart close error = %v", err)
+	}
+	req := adminRequest(http.MethodPost, "/api/cbt/questions/import/legacy", "")
+	req.Body = io.NopCloser(&body)
+	req.ContentLength = int64(body.Len())
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	return req
 }
 
 type fakeCbtQuestionService struct {
@@ -100,6 +127,10 @@ type fakeCbtQuestionService struct {
 
 	templateResult service.ExportCbtQuestionsCSVResult
 	templateErr    error
+
+	importInput  service.ImportLegacyQuestionsInput
+	importResult service.ImportLegacyQuestionsResult
+	importErr    error
 }
 
 func (f *fakeCbtQuestionService) ListFiltered(_ context.Context, in service.ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error) {
@@ -116,6 +147,30 @@ func (f *fakeCbtQuestionService) GetDetail(_ context.Context, id pgtype.UUID) (d
 		return db.GetCbtQuestionDetailRow{}, f.getErr
 	}
 	return f.getDetailRow, nil
+}
+
+func (f *fakeCbtQuestionService) ImportLegacyCSV(_ context.Context, input service.ImportLegacyQuestionsInput) (service.ImportLegacyQuestionsResult, error) {
+	f.importInput = input
+	if f.importErr != nil {
+		return service.ImportLegacyQuestionsResult{}, f.importErr
+	}
+	return f.importResult, nil
+}
+
+func TestCbtQuestionImportLegacyCSVRejectsOversizedMultipart(t *testing.T) {
+	subjectID := handlerTestUUID(251)
+	fake := &fakeCbtQuestionService{}
+	h := &CbtQuestion{svc: fake}
+	rec := httptest.NewRecorder()
+
+	h.ImportLegacyCSV(rec, oversizedCbtQuestionImportRequest(t, subjectID))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("ImportLegacyCSV(oversized) status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.importInput.SubjectID.Valid {
+		t.Fatalf("ImportLegacyCSV(oversized) reached service with input %+v", fake.importInput)
+	}
 }
 
 func (f *fakeCbtQuestionService) Create(_ context.Context, input service.SaveCbtQuestionInput) (db.CbtQuestion, error) {

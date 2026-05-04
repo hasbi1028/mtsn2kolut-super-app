@@ -42,6 +42,7 @@ function createSupervisorHarness(overrides: Partial<any> = {}) {
     },
     failJob: async (jobId: string, error: string) => {
       calls.failJob.push({ jobId, error });
+      return true;
     },
     fetchRuntimeConfig: async () => (configQueue.length > 0 ? configQueue.shift() ?? {} : {}),
     sendHeartbeat: async (payload: {
@@ -102,6 +103,17 @@ test('WorkerSupervisor syncRuntimeConfig updates runtime config and timestamp', 
   assert.equal(h.runtimeConfig.maxConcurrent, 3);
   assert.equal(h.runtimeConfig.headless, false);
   assert.match((h.supervisor as any).lastConfigSyncAt, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test('WorkerSupervisor syncRuntimeConfig does not mutate invalid concurrency', async () => {
+  const h = createSupervisorHarness();
+  h.configQueue.push({ maxConcurrent: 1000, headless: false });
+  (h.supervisor as any).reconcileConsumers = () => {};
+
+  await (h.supervisor as any).syncRuntimeConfig();
+
+  assert.equal(h.runtimeConfig.maxConcurrent, 1);
+  assert.equal(h.runtimeConfig.headless, false);
 });
 
 test('WorkerSupervisor reconcileConsumers marks extra consumers for stop when concurrency shrinks', () => {
@@ -168,4 +180,89 @@ test('WorkerSupervisor gracefulShutdown stops consumers, sends zero heartbeat, a
   assert.equal(h.calls.cleared.length, 2);
   assert.equal(h.calls.heartbeats.at(-1)?.consumerCount, 0);
   assert.deepEqual(h.calls.exitCodes, [0]);
+});
+
+test('WorkerSupervisor reports active claimed jobs when shutdown deadline expires', async () => {
+  const h = createSupervisorHarness();
+  const consumers = (h.supervisor as any).consumers as Map<number, any>;
+  consumers.set(1, {
+    id: 1,
+    consumerId: 'w-c1',
+    stopRequested: false,
+    activeJobControllers: new Map(),
+    activeJobIds: new Set(['job-active-1', 'job-active-2']),
+  });
+  h.setNow(10_000);
+  let tick = 0;
+  (h.supervisor as any).deps.now = () => {
+    tick += 1;
+    return tick === 1 ? 10_000 : 30_000;
+  };
+
+  await (h.supervisor as any).gracefulShutdown('SIGTERM');
+
+  assert.deepEqual(h.calls.failJob, [
+    { jobId: 'job-active-1', error: 'worker shutdown timeout' },
+    { jobId: 'job-active-2', error: 'worker shutdown timeout' },
+  ]);
+  assert.equal(
+    h.calls.logs.some((entry) => entry.message === 'shutdown timeout reached'),
+    true,
+  );
+});
+
+test('WorkerSupervisor aborts active job before shutdown timeout fail report', async () => {
+  let activeSignal: AbortSignal | undefined;
+  let releaseJob: (() => void) | undefined;
+  const h = createSupervisorHarness({
+    processClaimedJob: async (_job: ClaimedJob, _config: RuntimeConfig, signal?: AbortSignal) => {
+      activeSignal = signal;
+      await new Promise<void>((resolve) => {
+        releaseJob = resolve;
+      });
+      throw new Error(signal?.aborted ? 'cancelled after abort' : 'not cancelled');
+    },
+  });
+  const consumers = (h.supervisor as any).consumers as Map<number, any>;
+  const state = {
+    id: 1,
+    consumerId: 'w-c1',
+    stopRequested: false,
+    activeJobIds: new Set<string>(),
+    activeJobControllers: new Map<string, AbortController>(),
+  };
+  consumers.set(1, state);
+  h.claimQueue.push({
+    id: 'job-active-shutdown',
+    employee_id: 'employee-1',
+    run_type: 'checkin',
+    attempts: 1,
+    max_attempts: 3,
+    pusaka_username: 'user-1',
+    pusaka_password: 'secret',
+  });
+
+  const loop = (h.supervisor as any).consumerLoop(state);
+  while (!activeSignal) {
+    await Promise.resolve();
+  }
+
+  h.setNow(10_000);
+  let tick = 0;
+  (h.supervisor as any).deps.now = () => {
+    tick += 1;
+    return tick === 1 ? 10_000 : 30_000;
+  };
+
+  await (h.supervisor as any).gracefulShutdown('SIGTERM');
+  assert.equal(activeSignal.aborted, true);
+  assert.deepEqual(h.calls.failJob, [
+    { jobId: 'job-active-shutdown', error: 'worker shutdown timeout' },
+  ]);
+
+  releaseJob?.();
+  await loop;
+  assert.deepEqual(h.calls.failJob, [
+    { jobId: 'job-active-shutdown', error: 'worker shutdown timeout' },
+  ]);
 });

@@ -35,6 +35,8 @@ This service owns the domain model, PostgreSQL schema, migrations, queue state, 
 - Prefer transaction boundaries in services where multi-step writes must be atomic.
 - Keep error mapping explicit and predictable.
 - Keep mobile-facing exam response envelopes and HTTP status semantics covered by handler tests.
+- Trust `X-Forwarded-For` only through configured `TRUSTED_PROXY_CIDRS`; rate limits must not accept arbitrary forwarded client IPs from the public internet.
+- Keep upload/file handlers on shared allowlist + `nosniff` helpers; do not add ad hoc file serving that bypasses MIME/extension validation or safe disposition.
 
 ## Product Context
 

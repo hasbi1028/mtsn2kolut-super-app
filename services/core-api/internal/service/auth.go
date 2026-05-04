@@ -471,6 +471,9 @@ func (s *Auth) CurrentAuthVersion(ctx context.Context, subject string) (int64, e
 		}
 		return 0, err
 	}
+	if !user.IsActive {
+		return 0, domain.ErrUnauthorized
+	}
 	return int64(user.AuthVersion), nil
 }
 
@@ -500,6 +503,16 @@ func (s *Auth) ValidateAccessSession(ctx context.Context, subject, sessionRef st
 		return false, nil
 	}
 	if pgUUIDString(session.UserID) != pgUUIDString(userID) {
+		return false, nil
+	}
+	user, err := s.q.GetUserByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, domain.ErrUnauthorized
+		}
+		return false, err
+	}
+	if !user.IsActive {
 		return false, nil
 	}
 	return true, nil
@@ -565,6 +578,10 @@ func validatePassword(username, password string) error {
 	}
 
 	return nil
+}
+
+func ValidatePassword(username, password string) error {
+	return validatePassword(username, password)
 }
 
 func (s *Auth) parseTokenClaims(token string) (jwt.MapClaims, error) {

@@ -1,10 +1,12 @@
 import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import type { RequestEvent } from '@sveltejs/kit';
+import type { AuthUser } from '$lib/server/auth';
 
 const BASE = (env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 const GENERIC_UPSTREAM_ERROR = 'Layanan backend sedang bermasalah. Silakan coba beberapa saat lagi.';
 const INVALID_UPSTREAM_JSON = 'Respons backend kosong atau bukan JSON';
+export const AUTH_VALIDATION_PROBE_PATH = '/api/auth/sessions';
 type Fetcher = typeof fetch;
 
 export class ApiError extends Error {
@@ -19,6 +21,12 @@ export class ApiError extends Error {
 
 export class RequestPayloadError extends Error {
 	constructor(message = 'Payload JSON tidak valid') {
+		super(message);
+	}
+}
+
+export class AuthValidationUnavailableError extends Error {
+	constructor(message = 'Layanan validasi sesi belum tersedia') {
 		super(message);
 	}
 }
@@ -316,6 +324,31 @@ export async function apiRefreshWithFetch(
 		method: 'POST',
 		body: JSON.stringify({ refresh_token }),
 	}, { 'Content-Type': 'application/json', ...clientMetaHeaders(meta) });
+}
+
+export async function apiValidateAuthWithFetch(fetcher: Fetcher, accessToken: string): Promise<boolean> {
+	let res: Response;
+	try {
+		// Use a protected auth-domain read as the session-validity probe. The response body is
+		// intentionally ignored; JWT/session liveness is enforced by the Go middleware.
+		res = await fetcher(`${BASE}${AUTH_VALIDATION_PROBE_PATH}`, {
+			headers: { Authorization: `Bearer ${accessToken}` },
+		});
+	} catch (e) {
+		throw new AuthValidationUnavailableError((e as Error)?.message);
+	}
+	if (res.status === 401 || res.status === 403) return false;
+	if (!res.ok) throw new AuthValidationUnavailableError(`HTTP ${res.status}`);
+	return res.ok;
+}
+
+export async function getVerifiedUserFromAccessToken(
+	fetcher: Fetcher,
+	accessToken: string,
+	decodeUser: (token: string) => AuthUser | null
+): Promise<AuthUser | undefined> {
+	if (!await apiValidateAuthWithFetch(fetcher, accessToken)) return undefined;
+	return decodeUser(accessToken) ?? undefined;
 }
 
 // Error handler untuk semua route proxy — kembalikan JSON error yang jelas

@@ -90,12 +90,11 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
       _errorNotice = null;
     });
 
-    final client = ExamApiClient(
-      baseUrl: snapshot.baseUrl,
-      deviceFingerprint: snapshot.deviceFingerprint,
-    );
-
     try {
+      final client = ExamApiClient(
+        baseUrl: snapshot.baseUrl,
+        deviceFingerprint: snapshot.deviceFingerprint,
+      );
       final payload = await client.login(
         token: snapshot.examToken,
         deviceFingerprint: snapshot.deviceFingerprint,
@@ -180,21 +179,21 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
       _errorNotice = null;
     });
 
-    await _sessionStore.saveBaseUrl(baseUrl);
-    final deviceFingerprint = _deviceFingerprint();
-    final client = ExamApiClient(
-      baseUrl: baseUrl,
-      deviceFingerprint: deviceFingerprint,
-    );
-
     try {
+      final normalizedBaseUrl = ExamApiClient.normalizeBaseUrl(baseUrl);
+      await _sessionStore.saveBaseUrl(normalizedBaseUrl);
+      final deviceFingerprint = _deviceFingerprint();
+      final client = ExamApiClient(
+        baseUrl: normalizedBaseUrl,
+        deviceFingerprint: deviceFingerprint,
+      );
       final payload = await client.login(
         token: token,
         deviceFingerprint: deviceFingerprint,
       );
       await _sessionStore.saveSnapshot(
         ExamSessionSnapshot(
-          baseUrl: baseUrl,
+          baseUrl: normalizedBaseUrl,
           examToken: token,
           deviceFingerprint: deviceFingerprint,
           studentName: payload.student.nama,

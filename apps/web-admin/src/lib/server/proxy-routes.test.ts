@@ -506,7 +506,7 @@ describe('api proxy route handlers', () => {
 		const request = new Request('http://localhost/api/public/register-student', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ nama: 'Siswa Baru', nisn: '1234567890' })
+			body: JSON.stringify({ nama: 'Siswa Baru', nis: '1234567890', gender: 'P', parent_name: 'Ortu' })
 		});
 		const event = createEvent({ request, fetch: eventFetch });
 
@@ -516,11 +516,81 @@ describe('api proxy route handlers', () => {
 		expect(eventFetch).toHaveBeenCalledWith('http://localhost:8080/api/public/register-student', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ nama: 'Siswa Baru', nisn: '1234567890' })
+			body: JSON.stringify({
+				nis: '1234567890',
+				nama: 'Siswa Baru',
+				gender: 'P',
+				parent_name: 'Ortu',
+				parent_phone: ''
+			})
 		});
 		expect(jsonProxyResponseMock).toHaveBeenCalledWith(upstream, { status: 201 });
 		expect(res).toBe(upstream);
 	}, 10000);
+
+	it('rejects malformed public student registration before proxying', async () => {
+		const mod = await import('../../routes/api/public/register-student/+server');
+		const eventFetch = vi.fn<typeof fetch>();
+		const request = new Request('http://localhost/api/public/register-student', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ nama: 'Siswa Baru', nis: 123 })
+		});
+
+		const res = await mod.POST(createEvent({ request, fetch: eventFetch }) as never);
+
+		expect(res.status).toBe(400);
+		expect(eventFetch).not.toHaveBeenCalled();
+	});
+
+	it('rejects public student registration without gender before proxying', async () => {
+		const mod = await import('../../routes/api/public/register-student/+server');
+		const eventFetch = vi.fn<typeof fetch>();
+		const request = new Request('http://localhost/api/public/register-student', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ nama: 'Siswa Baru', nis: '1234567890' })
+		});
+
+		const res = await mod.POST(createEvent({ request, fetch: eventFetch }) as never);
+
+		expect(res.status).toBe(400);
+		await expect(res.json()).resolves.toEqual({ error: 'gender tidak valid' });
+		expect(eventFetch).not.toHaveBeenCalled();
+	});
+
+	it('normalizes parent create payload before proxying', async () => {
+		const mod = await import('../../routes/api/parents/+server');
+		proxyPostMock.mockResolvedValueOnce({ id: 'parent-1', nama: 'Orang Tua' });
+		const request = new Request('http://localhost/api/parents', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ nama: ' Orang Tua ', phone: ' 0812 ', address: null })
+		});
+
+		const res = await mod.POST(createEvent({ request }) as never);
+
+		expect(proxyPostMock).toHaveBeenCalledWith('/api/parents', {
+			nama: 'Orang Tua',
+			phone: '0812',
+			address: ''
+		});
+		expect(res.status).toBe(201);
+	});
+
+	it('rejects invalid parent link student_id before proxying', async () => {
+		const mod = await import('../../routes/api/parents/[id]/link/+server');
+		const request = new Request('http://localhost/api/parents/parent-1/link', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ student_id: 'not-a-uuid' })
+		});
+
+		const res = await mod.POST(createEvent({ request, params: { id: 'parent-1' } }) as never);
+
+		expect(res.status).toBe(400);
+		expect(proxyPostMock).not.toHaveBeenCalled();
+	});
 
 	it('creates users through the typed JSON body helper', async () => {
 		const mod = await import('../../routes/api/users/+server');

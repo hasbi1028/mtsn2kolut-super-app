@@ -92,8 +92,15 @@ type fakeCbtSessionService struct {
 	generateTokensSessionID pgtype.UUID
 	generateTokensErr       error
 
-	regenerateParticipantID pgtype.UUID
-	regenerateErr           error
+	regenerateParticipantID  pgtype.UUID
+	regenerateErr            error
+	resetParticipantID       pgtype.UUID
+	resetActor               string
+	resetErr                 error
+	forceSubmitSessionID     pgtype.UUID
+	forceSubmitParticipantID pgtype.UUID
+	forceSubmitActor         string
+	forceSubmitErr           error
 
 	assignSeatParticipantID pgtype.UUID
 	assignSeatRoomID        pgtype.UUID
@@ -438,6 +445,28 @@ func (f *fakeCbtSessionService) RegenerateToken(_ context.Context, participantID
 		return db.RegenerateParticipantTokenRow{}, f.regenerateErr
 	}
 	return db.RegenerateParticipantTokenRow{ID: participantID, Token: "TOKEN"}, nil
+}
+
+func (f *fakeCbtSessionService) ResetParticipantRuntimeAccess(_ context.Context, participantID pgtype.UUID, actor string) error {
+	f.resetParticipantID = participantID
+	f.resetActor = actor
+	return f.resetErr
+}
+
+func (f *fakeCbtSessionService) ListParticipantEvents(_ context.Context, sessionID, participantID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error) {
+	f.roomEventsSessionID = sessionID
+	f.roomParticipantID = participantID
+	return []db.ListSessionParticipantEventsRow{}, nil
+}
+
+func (f *fakeCbtSessionService) ForceSubmitParticipant(_ context.Context, sessionID, participantID pgtype.UUID, actor string) (db.ForceSubmitParticipantRow, error) {
+	f.forceSubmitSessionID = sessionID
+	f.forceSubmitParticipantID = participantID
+	f.forceSubmitActor = actor
+	if f.forceSubmitErr != nil {
+		return db.ForceSubmitParticipantRow{}, f.forceSubmitErr
+	}
+	return db.ForceSubmitParticipantRow{ID: participantID}, nil
 }
 
 func (f *fakeCbtSessionService) AssignSeat(_ context.Context, participantID, roomID pgtype.UUID, seatNo int32) error {
@@ -896,6 +925,39 @@ func TestCbtSessionGetMinutesRedactsTokensForTeacher(t *testing.T) {
 	}
 	if got := payload.Data.Participants[0]["token"]; got != "" {
 		t.Fatalf("guru minutes token = %#v, want redacted empty string", got)
+	}
+}
+
+func TestCbtSessionResetParticipantAccessScopesGuruToParticipantClass(t *testing.T) {
+	sessionID := handlerTestUUID(234)
+	participantID := handlerTestUUID(235)
+	teacherID := handlerTestUUID(236)
+	fake := &fakeCbtSessionService{
+		checkAllowed:      true,
+		hasParticipantSet: true,
+		hasParticipant:    false,
+	}
+	h := &CbtSession{svc: fake}
+	req := withRouteParams(
+		withClaims(
+			httptest.NewRequest(http.MethodPost, "/api/cbt/sessions/"+sessionID.String()+"/participants/"+participantID.String()+"/reset-access", nil),
+			jwt.MapClaims{"roles": []any{"guru"}, "eid": teacherID.String(), "usr": "guru.ipa"},
+		),
+		"id", sessionID.String(),
+		"pid", participantID.String(),
+	)
+	rec := httptest.NewRecorder()
+
+	h.ResetParticipantAccess(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("ResetParticipantAccess(guru outside participant class) status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.hasParticipantTeacherID != teacherID {
+		t.Fatalf("teacher participant scope check = %v, want %v", fake.hasParticipantTeacherID, teacherID)
+	}
+	if fake.resetParticipantID.Valid {
+		t.Fatalf("reset called despite teacher scope denial: participant=%v actor=%q", fake.resetParticipantID, fake.resetActor)
 	}
 }
 

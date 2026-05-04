@@ -22,6 +22,8 @@ This service is the worker runtime for asynchronous job execution.
 - Keep communication direct to `services/core-api`.
 - Keep concurrency configurable, but prefer safe defaults.
 - Keep shutdown behavior graceful; avoid abandoning claimed jobs without a final fail attempt when possible.
+- Require `WORKER_API_KEY` outside local/test environments and keep it out of source, logs, and screenshots.
+- Keep `WORKER_API_TIMEOUT_MS`, `WORKER_LOG_PATH`, and `SCREENSHOT_DIR` explicit in production deploy notes; logs/screenshots must stay in non-public ignored paths with retention.
 
 ## Implementation Direction
 

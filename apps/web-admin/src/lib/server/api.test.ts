@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RequestEvent } from '@sveltejs/kit';
 import * as apiModule from './api';
-import { ApiError, RequestPayloadError, apiLoginWithFetch, apiPath, apiPathWithQuery, apiPublicGetWithFetch, apiPublicPostWithFetch, handleRouteError, jsonProxyResponse, proxy, readOptionalRequestJson, readProxyJson, readRequestJson, requireAuthorizationHeader, requiredRouteParam, streamProxyResponse } from './api';
+import { ApiError, AuthValidationUnavailableError, RequestPayloadError, apiLoginWithFetch, apiPath, apiPathWithQuery, apiPublicGetWithFetch, apiPublicPostWithFetch, apiValidateAuthWithFetch, handleRouteError, jsonProxyResponse, proxy, readOptionalRequestJson, readProxyJson, readRequestJson, requireAuthorizationHeader, requiredRouteParam, streamProxyResponse } from './api';
 
 function okResponse<T>(data: T, init?: ResponseInit) {
 	return new Response(JSON.stringify({ data }), {
@@ -122,6 +122,36 @@ describe('server api helpers', () => {
 				body: JSON.stringify({ username: 'admin', password: 'secret' })
 			})
 		);
+	});
+
+	it('apiValidateAuthWithFetch probes the protected auth sessions endpoint', async () => {
+		const eventFetch = vi.fn<typeof fetch>().mockResolvedValue(okResponse([]));
+
+		await expect(apiValidateAuthWithFetch(eventFetch, 'access-1')).resolves.toBe(true);
+		expect(eventFetch).toHaveBeenCalledWith(
+			expect.stringContaining('/api/auth/sessions'),
+			expect.objectContaining({
+				headers: { Authorization: 'Bearer access-1' }
+			})
+		);
+	});
+
+	it('apiValidateAuthWithFetch treats explicit auth rejection as an invalid session', async () => {
+		const eventFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 }));
+
+		await expect(apiValidateAuthWithFetch(eventFetch, 'access-1')).resolves.toBe(false);
+	});
+
+	it('apiValidateAuthWithFetch preserves validation outage semantics for protected UX', async () => {
+		const eventFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ error: 'down' }), { status: 503 }));
+
+		await expect(apiValidateAuthWithFetch(eventFetch, 'access-1')).rejects.toBeInstanceOf(AuthValidationUnavailableError);
+	});
+
+	it('apiValidateAuthWithFetch maps network failures to validation outage errors', async () => {
+		const eventFetch = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('connect ECONNREFUSED'));
+
+		await expect(apiValidateAuthWithFetch(eventFetch, 'access-1')).rejects.toBeInstanceOf(AuthValidationUnavailableError);
 	});
 
 	it('readRequestJson returns typed request bodies and maps malformed JSON to RequestPayloadError', async () => {

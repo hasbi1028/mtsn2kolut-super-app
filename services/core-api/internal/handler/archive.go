@@ -194,6 +194,7 @@ func (h *Archive) UploadDocument(w http.ResponseWriter, r *http.Request) {
 		api.Forbidden(w)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 28<<20)
 	if err := r.ParseMultipartForm(28 << 20); err != nil {
 		api.BadRequest(w, "multipart form invalid")
 		return

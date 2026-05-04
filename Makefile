@@ -3,6 +3,9 @@ WORKER_DIR     := services/pusaka-worker
 BACKEND_DIR    := services/core-api
 DB_SCRIPTS_DIR := $(BACKEND_DIR)/db/scripts
 LOGS_DIR       := logs
+TOOLS_BIN      := .tools/bin
+SQLC_VERSION   := v1.30.0
+SQLC_BIN       := $(TOOLS_BIN)/sqlc
 
 # ── Install ──────────────────────────────────────────────────────────────────
 
@@ -160,10 +163,17 @@ pm2-stop-worker:
 
 # ── DB helpers ───────────────────────────────────────────────────────────────
 
-.PHONY: db-sqlc db-migrate db-schema
+.PHONY: db-sqlc db-sqlc-install db-migrate db-schema
 
-db-sqlc:
-	cd $(BACKEND_DIR)/db && sqlc generate
+db-sqlc: db-sqlc-install
+	cd $(BACKEND_DIR)/db && ../../../$(SQLC_BIN) generate -f sqlc.yaml
+
+db-sqlc-install:
+	@if [ ! -x "$(SQLC_BIN)" ]; then \
+		printf 'Installing sqlc %s into %s\n' "$(SQLC_VERSION)" "$(TOOLS_BIN)"; \
+		mkdir -p "$(TOOLS_BIN)"; \
+		GOBIN="$(CURDIR)/$(TOOLS_BIN)" go install github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION); \
+	fi
 
 db-migrate:
 	cd $(DB_SCRIPTS_DIR) && npm run migrate:pg
@@ -226,7 +236,7 @@ help:
 	@echo "  coverage-backend-unit  Go unit coverage excluding cmd/api and generated sqlc"
 	@echo "  coverage-backend-unit-88  same coverage scope with 88% threshold"
 	@echo "  lint                   golangci-lint run (falls back if not installed)"
-	@echo "  db-sqlc                regenerate sqlc code"
+	@echo "  db-sqlc                install repo-local sqlc if needed, then regenerate sqlc code"
 	@echo "  db-migrate             apply PostgreSQL migrations"
 	@echo "  ops-health             health check backend + frontend + worker"
 	@echo "  ops-backup             run PostgreSQL backup script"

@@ -30,4 +30,6 @@ export interface ConsumerState {
   id: number;
   consumerId: string;
   stopRequested: boolean;
+  activeJobIds: Set<string>;
+  activeJobControllers: Map<string, AbortController>;
 }

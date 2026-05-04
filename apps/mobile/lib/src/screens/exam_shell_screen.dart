@@ -64,6 +64,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   bool _isSubmitting = false;
   bool _isSyncingStatus = false;
   bool _isSubmitted = false;
+  bool _isSubmitPendingIntervention = false;
   bool _resumeCheckRequired = false;
   bool _isResumingExam = false;
   bool _hasReportedDegradedMode = false;
@@ -110,7 +111,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         .toList();
     _answeredCount = widget.initialPayload.answeredCount;
     _timeRemainingSeconds = widget.initialPayload.timeRemainingSeconds;
-    _currentQuestionIndex = widget.restoredSnapshot?.currentQuestionIndex ?? 0;
+    _currentQuestionIndex = _clampQuestionIndex(
+      widget.restoredSnapshot?.currentQuestionIndex ?? 0,
+    );
     _lastServerContactAt = DateTime.tryParse(
       widget.restoredSnapshot?.lastServerContactIso ?? '',
     );
@@ -131,7 +134,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _essayControllers[i].text = _answers[question.id] ?? '';
       }
     }
-    if (widget.autoStartRuntime) {
+    if (widget.autoStartRuntime && widget.initialPayload.questions.isNotEmpty) {
       _startCountdown();
       _startHeartbeat();
       _syncStatus();
@@ -308,9 +311,23 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     });
   }
 
-  Future<void> _flushPendingAnswers() async {
+  int _clampQuestionIndex(int index) {
+    final questionCount = widget.initialPayload.questions.length;
+    if (questionCount == 0) {
+      return 0;
+    }
+    if (index < 0) {
+      return 0;
+    }
+    if (index >= questionCount) {
+      return questionCount - 1;
+    }
+    return index;
+  }
+
+  Future<bool> _flushPendingAnswers() async {
     if (_pendingAnswers.isEmpty || _isSubmitted) {
-      return;
+      return _pendingAnswers.isEmpty;
     }
 
     final entries = Map<String, String>.from(_pendingAnswers).entries.toList();
@@ -341,14 +358,18 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     await _persistSnapshot();
 
     if (!mounted || syncedCount == 0) {
-      return;
+      return _pendingAnswers.isEmpty;
     }
 
     setState(() {
       _statusMessage = _pendingAnswers.isEmpty
           ? 'Semua jawaban lokal berhasil disinkronkan ke server.'
           : '$syncedCount jawaban lokal berhasil disinkronkan. Sisanya akan dicoba lagi.';
+      if (_pendingAnswers.isEmpty) {
+        _isSubmitPendingIntervention = false;
+      }
     });
+    return _pendingAnswers.isEmpty;
   }
 
   Future<void> _selectOption(ExamQuestion question, String answer) async {
@@ -465,30 +486,49 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   }
 
   Future<void> _submit({bool autoSubmit = false}) async {
+    if (widget.initialPayload.questions.isEmpty) {
+      return;
+    }
+
     if (_isSubmitting || _isSubmitted) {
       return;
     }
 
     if (_pendingAnswers.isNotEmpty) {
-      await _flushPendingAnswers();
-    }
-
-    if (!autoSubmit && _pendingAnswers.isNotEmpty) {
-      setState(() {
-        _errorMessage =
-            'Masih ada jawaban yang belum tersinkron ke server. Tunggu koneksi stabil lalu coba kirim lagi.';
-      });
-      await widget.client
-          .sendEvent(
-            token: widget.examToken,
-            eventType: 'warning',
-            data: <String, Object?>{
-              'reason': 'submit_blocked_pending_sync',
-              'pending_count': _pendingAnswers.length,
-            },
-          )
-          .catchError((_) {});
-      return;
+      final flushed = await _flushPendingAnswers();
+      if (!flushed || _pendingAnswers.isNotEmpty) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _isSubmitPendingIntervention = true;
+          _errorMessage = autoSubmit
+              ? 'Waktu habis, tetapi masih ada jawaban lokal yang belum diterima server. Tetap di layar ini, minta pengawas memeriksa koneksi, lalu tekan perbarui status atau coba kirim ulang setelah sinkron pulih.'
+              : 'Masih ada jawaban yang belum tersinkron ke server. Tunggu koneksi stabil lalu coba kirim lagi.';
+          _serverNotice = ExamGuidanceNotice(
+            title: autoSubmit
+                ? 'Submit otomatis ditahan'
+                : 'Submit ditahan sementara',
+            message:
+                'Snapshot jawaban lokal tetap disimpan di perangkat ini. Jangan menutup aplikasi sampai pengawas memastikan sinkronisasi pulih atau memberikan instruksi lanjutan.',
+            tone: ExamGuidanceTone.danger,
+          );
+        });
+        await _persistSnapshot();
+        await widget.client
+            .sendEvent(
+              token: widget.examToken,
+              eventType: 'warning',
+              data: <String, Object?>{
+                'reason': autoSubmit
+                    ? 'auto_submit_blocked_pending_sync'
+                    : 'submit_blocked_pending_sync',
+                'pending_count': _pendingAnswers.length,
+              },
+            )
+            .catchError((_) {});
+        return;
+      }
     }
 
     if (!autoSubmit && _isDegradedMode) {
@@ -543,6 +583,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
 
     setState(() {
       _isSubmitting = true;
+      _isSubmitPendingIntervention = false;
       _statusMessage = autoSubmit
           ? 'Waktu habis. Jawaban sedang dikirim otomatis...'
           : 'Jawaban akhir sedang dikirim...';
@@ -713,13 +754,16 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     return _playedAudioQuestionIds.contains(question.id);
   }
 
-  Map<String, String> _examAssetHeaders() {
-    return widget.client.examAssetHeaders(widget.examToken);
+  Map<String, String> _examAssetHeadersForUrl(String url) {
+    return widget.client.examAssetHeadersForUrl(widget.examToken, url);
   }
 
   @override
   Widget build(BuildContext context) {
     final payload = widget.initialPayload;
+    if (payload.questions.isEmpty) {
+      return _buildEmptyExamPayloadScaffold(context, payload);
+    }
     final currentQuestion = payload.questions[_currentQuestionIndex];
     final theme = Theme.of(context);
     final connection = _connectionState;
@@ -897,6 +941,71 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     );
   }
 
+  Widget _buildEmptyExamPayloadScaffold(
+    BuildContext context,
+    ExamLoginPayload payload,
+  ) {
+    final theme = Theme.of(context);
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        appBar: AppBar(title: Text(payload.session.title)),
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Paket soal belum tersedia',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Server mengirim sesi ujian tanpa daftar soal. Jangan melakukan submit dari perangkat ini. Minta pengawas memeriksa paket ujian dan coba perbarui status setelah diperbaiki.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _isSyncingStatus ? null : _syncStatus,
+                          icon: _isSyncingStatus
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.sync),
+                          label: Text(
+                            _isSyncingStatus
+                                ? 'Memperbarui status...'
+                                : 'Perbarui Status',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSidePanel(
     ThemeData theme,
     ExamLoginPayload payload, {
@@ -1056,6 +1165,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                 ExamGuidanceCard(notice: _serverNotice!),
                 const SizedBox(height: 12),
               ],
+              if (_isSubmitPendingIntervention) ...[
+                InlineMessage(
+                  tone: BannerTone.error,
+                  message:
+                      'Submit final sedang ditahan sampai semua jawaban lokal tersinkron ke server.',
+                ),
+                const SizedBox(height: 12),
+              ],
               if (_statusMessage != null)
                 InlineMessage(
                   tone: BannerTone.success,
@@ -1093,6 +1210,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                   label: Text(
                     _isSubmitted
                         ? 'Ujian Terkirim'
+                        : _isSubmitPendingIntervention
+                        ? 'Coba kirim ulang setelah sinkron'
                         : _isDegradedMode
                         ? 'Kirim ditahan saat koneksi menurun'
                         : 'Kirim Ujian',
@@ -1109,8 +1228,6 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   Widget _buildQuestionArea(ThemeData theme, ExamQuestion question) {
     final hasAudio = _questionHasAudio(question);
     final audioPlayed = _questionAudioPlayed(question);
-    final assetHeaders = _examAssetHeaders();
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(22),
@@ -1155,7 +1272,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             if (question.stimulusMediaUrl.trim().isNotEmpty) ...[
               QuestionMediaCard(
                 url: question.stimulusMediaUrl,
-                headers: assetHeaders,
+                headers: _examAssetHeadersForUrl(question.stimulusMediaUrl),
               ),
               const SizedBox(height: 16),
             ],
@@ -1163,7 +1280,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               AudioPromptCard(
                 url: question.stimulusAudioUrl,
                 label: 'Audio stimulus',
-                headers: assetHeaders,
+                headers: _examAssetHeadersForUrl(question.stimulusAudioUrl),
                 hasBeenPlayed: audioPlayed,
                 onPlayed: () => _markQuestionAudioPlayed(question.id),
               ),
@@ -1184,7 +1301,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               const SizedBox(height: 16),
               QuestionMediaCard(
                 url: question.stemMediaUrl,
-                headers: assetHeaders,
+                headers: _examAssetHeadersForUrl(question.stemMediaUrl),
               ),
             ],
             if (question.stemAudioUrl.trim().isNotEmpty) ...[
@@ -1192,7 +1309,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               AudioPromptCard(
                 url: question.stemAudioUrl,
                 label: 'Audio soal',
-                headers: assetHeaders,
+                headers: _examAssetHeadersForUrl(question.stemAudioUrl),
                 hasBeenPlayed: audioPlayed,
                 onPlayed: () => _markQuestionAudioPlayed(question.id),
               ),

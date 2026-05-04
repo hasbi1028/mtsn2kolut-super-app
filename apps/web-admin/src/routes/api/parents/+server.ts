@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { handleRouteError, proxy, readRequestJson } from '$lib/server/api';
+import { optionalStringField, requireStringField, validationErrorResponse } from '$lib/server/validation';
 
 export const GET = async (event: RequestEvent) => {
 	try {
@@ -14,17 +15,18 @@ export const GET = async (event: RequestEvent) => {
 export const POST = async (event: RequestEvent) => {
 	try {
 		const body = await readRequestJson<Record<string, unknown>>(event.request);
-		const { nama, phone, address } = body;
-		if (!nama) {
-			return json({ error: 'nama wajib diisi' }, { status: 400 });
-		}
+		const nama = requireStringField(body, 'nama');
+		const phone = optionalStringField(body, 'phone');
+		const address = optionalStringField(body, 'address');
 		const data = await proxy(event).post('/api/parents', {
 			nama,
-			phone: phone ?? '',
-			address: address ?? '',
+			phone,
+			address,
 		});
 		return json(data, { status: 201 });
 	} catch (e) {
+		const validation = validationErrorResponse(e);
+		if (validation) return validation;
 		return handleRouteError(e, 'parents POST');
 	}
 };

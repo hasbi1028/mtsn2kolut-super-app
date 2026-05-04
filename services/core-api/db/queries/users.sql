@@ -46,10 +46,11 @@ WHERE id = $1
 RETURNING auth_version;
 
 -- name: UpdateUserStatus :exec
-UPDATE users SET is_active = $2, updated_at = NOW() WHERE id = $1;
-
--- name: DeleteUser :exec
-DELETE FROM users WHERE id = $1;
+UPDATE users
+SET is_active = $2,
+    auth_version = CASE WHEN is_active = TRUE AND $2 = FALSE THEN auth_version + 1 ELSE auth_version END,
+    updated_at = NOW()
+WHERE id = $1;
 
 -- name: GetUserRoles :many
 SELECT role FROM user_account_roles WHERE user_id = $1;

@@ -44,6 +44,8 @@ Backend VPS:
 - PostgreSQL tersedia atau dapat diakses
 - repo checkout di server
 - `.env` tersedia di `services/core-api/.env`
+- `TRUSTED_PROXY_CIDRS` diisi hanya dengan CIDR reverse proxy/load balancer terpercaya jika backend berada di belakang proxy
+- `WORKER_API_KEY` diset dan sama dengan nilai di worker VPS
 
 Worker VPS:
 
@@ -51,6 +53,9 @@ Worker VPS:
 - Chromium dependencies untuk Playwright tersedia
 - repo checkout di server
 - `.env` tersedia di `services/pusaka-worker/.env`
+- `WORKER_API_KEY` wajib untuk backend non-lokal dan harus sama dengan backend
+- `WORKER_API_TIMEOUT_MS` diset eksplisit bila default `10000` ms tidak sesuai kondisi jaringan
+- `WORKER_LOG_PATH` dan `SCREENSHOT_DIR` mengarah ke path non-public dengan permission/retention terbatas
 
 ## Command per VPS
 
@@ -109,10 +114,12 @@ Distribusi APK mengikuti `apps/mobile/RELEASE_CHECKLIST.md` dan `apps/mobile/BYO
 
 1. Deploy backend code lebih dulu.
 2. Apply migration PostgreSQL dari backend path.
-3. Restart backend dan cek health.
-4. Deploy frontend.
-5. Deploy worker.
-6. Untuk rilis CBT, jalankan smoke checklist admin/guru dan token login Flutter.
+3. Verifikasi env backend: `TRUSTED_PROXY_CIDRS` dan `WORKER_API_KEY`.
+4. Restart backend dan cek health.
+5. Deploy frontend.
+6. Verifikasi env worker: `WORKER_API_KEY`, `WORKER_API_TIMEOUT_MS`, `WORKER_LOG_PATH`, dan `SCREENSHOT_DIR`.
+7. Deploy/restart worker.
+8. Untuk rilis CBT, jalankan smoke checklist admin/guru dan token login Flutter.
 
 Urutan ini aman karena schema owner ada di backend. Frontend dan worker cukup menyesuaikan kontrak API yang sudah naik duluan.
 
@@ -205,3 +212,6 @@ Jika deploy worker gagal:
 - worker tidak boleh mengakses PostgreSQL langsung
 - perubahan `sqlc` harus selalu digenerate ulang dari `services/core-api/db`
 - APK Flutter harus diverifikasi terhadap kontrak `docs/exam-api.md` sebelum dibagikan ke siswa
+- jangan isi `TRUSTED_PROXY_CIDRS` dengan CIDR publik luas; hanya proxy yang dipercaya boleh menentukan IP client forwarded
+- jangan commit/log `WORKER_API_KEY`, log PUSAKA, atau screenshot worker; simpan di path non-public dan gunakan rotasi/retention
+- jangan bypass upload allowlist atau header `nosniff` backend saat menambah endpoint file baru

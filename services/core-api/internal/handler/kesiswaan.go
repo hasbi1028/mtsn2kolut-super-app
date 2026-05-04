@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -212,6 +215,7 @@ func (h *Kesiswaan) UploadStudentPhoto(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "id tidak valid")
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 3<<20)
 	if err := r.ParseMultipartForm(3 << 20); err != nil {
 		api.BadRequest(w, "multipart form tidak valid (maks 3 MB)")
 		return
@@ -222,12 +226,17 @@ func (h *Kesiswaan) UploadStudentPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+	validated, err := validateUploadedFile(header.Filename, file, 3<<20, true)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
 	row, err := h.svc.SaveStudentPhoto(r.Context(), service.UploadStudentPhotoInput{
 		StudentID:    id,
 		OriginalName: header.Filename,
-		MimeType:     header.Header.Get("Content-Type"),
-		FileSize:     header.Size,
-		File:         file,
+		MimeType:     validated.MimeType,
+		FileSize:     int64(len(validated.Data)),
+		File:         bytes.NewReader(validated.Data),
 	})
 	if err != nil {
 		writeClientError(w, err, "Data kesiswaan tidak valid")
@@ -260,7 +269,7 @@ func (h *Kesiswaan) StudentPhotoFile(w http.ResponseWriter, r *http.Request) {
 		api.NotFound(w)
 		return
 	}
-	w.Header().Del("Content-Type")
+	secureFileResponseHeaders(w, mime.TypeByExtension(strings.ToLower(filepath.Ext(filename))), filename)
 	http.ServeFile(w, r, path)
 }
 
