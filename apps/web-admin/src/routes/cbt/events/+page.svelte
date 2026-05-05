@@ -24,6 +24,7 @@
 		events: CbtEvent[];
 		years: AcademicYear[];
 	};
+	type StatusFilter = 'all' | 'draft' | 'active' | 'finished';
 
 	let events = $state<CbtEvent[]>([]);
 	let years = $state<AcademicYear[]>([]);
@@ -40,15 +41,22 @@
 	let originalStatus = $state('draft');
 	let fTargetLevels = $state<string[]>([]);
 	let fBusy = $state(false);
+	let statusFilter = $state<StatusFilter>('all');
 	let eventsRequestId = 0;
 	const gradeOptions = ['VII', 'VIII', 'IX'];
+	const statusFilters: Array<{ value: StatusFilter; label: string }> = [
+		{ value: 'all', label: 'Semua' },
+		{ value: 'active', label: 'Aktif' },
+		{ value: 'draft', label: 'Draft' },
+		{ value: 'finished', label: 'Selesai' },
+	];
 
 	const typeLabel: Record<string, string> = {
 		ulangan: 'Ulangan', uts: 'UTS', uas: 'UAS', uam: 'UAM', tryout: 'Try Out', lainnya: 'Lainnya'
 	};
 	const scopeLabel: Record<string, string> = { class: 'Per Kelas', grade: 'Per Tingkat', school: 'Seluruh Sekolah' };
 	const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Aktif', finished: 'Selesai' };
-	const eventHomeCopy = 'Rumah operasi CBT: mulai dari penugasan guru, kesiapan bank soal, paket, sesi, ruang, token, kartu, sampai hasil.';
+	const eventHomeCopy = 'Rumah operasi CBT untuk mengatur paket, sesi, ruang, token, kartu, dan hasil. Soal tetap dikelola sebagai Bank Soal reusable di luar kepemilikan event.';
 
 	function statusClass(status: string) {
 		if (status === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -58,8 +66,18 @@
 
 	function eventProgressLabel(event: CbtEvent) {
 		if (event.session_count > 0) return `${event.session_count} sesi tersusun`;
-		if (event.status === 'draft') return 'Siapkan penugasan dan bank soal';
+		if (event.status === 'draft') return 'Siapkan paket dan sesi';
 		return 'Belum ada sesi';
+	}
+
+	function statusCount(items: CbtEvent[], status: StatusFilter) {
+		if (status === 'all') return items.length;
+		return items.filter((event) => event.status === status).length;
+	}
+
+	function filteredEvents(items: CbtEvent[]) {
+		if (statusFilter === 'all') return items;
+		return items.filter((event) => event.status === statusFilter);
 	}
 
 	function isRecord(value: unknown): value is Record<string, unknown> {
@@ -251,21 +269,27 @@
 
 <svelte:head><title>Kegiatan Ujian — MTSN 2 Kolut</title></svelte:head>
 
-<div class="space-y-6">
-	<div class="flex flex-wrap items-start justify-between gap-4">
-		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Kegiatan Ujian</h1>
-			<p class="text-sm text-slate-500 mt-1">{eventHomeCopy}</p>
+<div class="space-y-5">
+	<section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+		<div class="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+			<div class="min-w-0">
+				<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Kegiatan CBT</p>
+				<h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Kelola event ujian dengan alur ringkas</h1>
+				<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{eventHomeCopy}</p>
+			</div>
+			<div class="flex flex-wrap gap-2 lg:justify-end">
+				<LoadingButton onclick={() => { if (showForm) resetForm(); else showForm = true; }}>
+					{showForm ? 'Tutup Form' : 'Buat Kegiatan'}
+				</LoadingButton>
+			</div>
 		</div>
-		<LoadingButton onclick={() => { if (showForm) resetForm(); else showForm = true; }}>
-			{showForm ? 'Batal' : '+ Buat Kegiatan'}
-		</LoadingButton>
-	</div>
+	</section>
 
 	{#if showForm}
-		<Card.Root>
+		<Card.Root class="border-slate-200 shadow-sm">
 			<Card.Header class="pb-2">
-				<Card.Title class="text-base">{editId ? 'Edit Kegiatan' : 'Tambah Kegiatan Baru'}</Card.Title>
+				<Card.Title class="text-base">{editId ? 'Edit Kegiatan' : 'Buat Kegiatan'}</Card.Title>
+				<Card.Description>Isi identitas kegiatan sekali, lalu lanjutkan pengelolaan lewat tombol Kelola.</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-4">
 				<div class="grid gap-3 sm:grid-cols-2">
@@ -365,29 +389,27 @@
 
 		{#snippet children(value)}
 			{@const overview = value as EventsOverview}
-		<div class="grid gap-3 md:grid-cols-3">
-			<Card.Root class="border-green-200 bg-green-50/60">
-				<Card.Content class="p-4">
-					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-green-800">Event aktif</p>
-					<p class="mt-2 text-2xl font-bold text-green-950">{overview.events.filter((event) => event.status === 'active').length}</p>
-					<p class="mt-1 text-xs text-green-900">Pantau dari command center per kegiatan.</p>
-				</Card.Content>
-			</Card.Root>
-			<Card.Root>
-				<Card.Content class="p-4">
-					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Total sesi</p>
-					<p class="mt-2 text-2xl font-bold text-slate-900">{overview.events.reduce((sum, event) => sum + (event.session_count || 0), 0)}</p>
-					<p class="mt-1 text-xs text-slate-500">Ringkasan ringan dari daftar kegiatan.</p>
-				</Card.Content>
-			</Card.Root>
-			<Card.Root>
-				<Card.Content class="p-4">
-					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Alur kerja</p>
-					<p class="mt-2 text-sm font-semibold text-slate-900">Penugasan → Soal → Paket → Sesi → Kartu → Hasil</p>
-					<p class="mt-1 text-xs text-slate-500">Gunakan tombol Kelola Event di setiap baris.</p>
-				</Card.Content>
-			</Card.Root>
-		</div>
+		{@const visibleEvents = filteredEvents(overview.events)}
+		<section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<div>
+					<p class="text-sm font-semibold text-slate-900">Ringkasan kegiatan</p>
+					<p class="mt-1 text-xs text-slate-500">{overview.events.length} kegiatan, {overview.events.reduce((sum, event) => sum + (event.session_count || 0), 0)} sesi tersusun</p>
+				</div>
+				<div class="flex flex-wrap gap-2" aria-label="Filter status kegiatan">
+					{#each statusFilters as filter (filter.value)}
+						<button
+							type="button"
+							class={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${statusFilter === filter.value ? 'border-emerald-700 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+							aria-pressed={statusFilter === filter.value}
+							onclick={() => statusFilter = filter.value}
+						>
+							{filter.label} <span class="ml-1 font-bold">{statusCount(overview.events, filter.value)}</span>
+						</button>
+					{/each}
+				</div>
+			</div>
+		</section>
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Content class="p-0 overflow-x-auto">
 				<div class="hidden overflow-x-auto lg:block">
@@ -404,7 +426,7 @@
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
-						{#each overview.events as e (e.id)}
+						{#each visibleEvents as e (e.id)}
 							<Table.Row>
 								<Table.Cell>
 									<div class="font-medium text-slate-800">{e.title}</div>
@@ -414,7 +436,7 @@
 									<Badge variant="outline" class="text-xs capitalize">{typeLabel[e.exam_type] ?? e.exam_type}</Badge>
 								</Table.Cell>
 								<Table.Cell class="text-sm text-slate-600">{scopeLabel[e.scope] ?? e.scope}</Table.Cell>
-								<Table.Cell class="text-sm text-slate-600">{e.target_levels?.length ? e.target_levels.join(', ') : 'Semua sesuai cakupan'}</Table.Cell>
+								<Table.Cell class="text-sm text-slate-600">{e.target_levels?.length ? e.target_levels.join(', ') : 'Mengikuti cakupan'}</Table.Cell>
 								<Table.Cell class="text-center">
 									<Badge variant="secondary">{e.session_count} Sesi</Badge>
 								</Table.Cell>
@@ -425,12 +447,13 @@
 									<div class="mt-1 text-xs text-slate-500">{eventProgressLabel(e)}</div>
 								</Table.Cell>
 								<Table.Cell class="text-right">
-									<div class="flex gap-2 justify-end">
-										<a href={resolve(`/cbt/events/${e.id}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-100">Kelola Event</a>
-										<LoadingButton variant="outline" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
+									<div class="flex flex-wrap justify-end gap-2">
+										<a href={resolve(`/cbt/events/${e.id}`)} class="inline-flex items-center rounded-md bg-[oklch(0.38_0.13_145)] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[oklch(0.34_0.13_145)]">Kelola</a>
+										<LoadingButton variant="ghost" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
 										<LoadingButton
-											variant="destructive"
+											variant="ghost"
 											size="sm"
+											class="text-red-600 hover:bg-red-50 hover:text-red-700"
 											onclick={() => deleteEvent(e.id)}
 											loading={deleteBusyId === e.id}
 											loadingLabel="Menghapus..."
@@ -442,7 +465,7 @@
 						{:else}
 							<Table.Row>
 								<Table.Cell colspan={7} class="text-center text-slate-400 py-12">
-									Belum ada kegiatan ujian.
+									{overview.events.length === 0 ? 'Belum ada kegiatan ujian.' : 'Tidak ada kegiatan pada filter ini.'}
 								</Table.Cell>
 							</Table.Row>
 						{/each}
@@ -451,7 +474,7 @@
 				</div>
 
 				<div class="grid gap-3 p-4 lg:hidden">
-					{#each overview.events as e (e.id)}
+					{#each visibleEvents as e (e.id)}
 						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
@@ -468,15 +491,16 @@
 								{#if e.target_levels?.length}
 									<Badge variant="outline" class="text-xs">{e.target_levels.join(', ')}</Badge>
 								{/if}
-								<Badge variant="secondary">{e.session_count} Sesi</Badge>
-								<Badge variant="outline" class="text-xs">{eventProgressLabel(e)}</Badge>
+								<Badge variant="secondary">{e.session_count} sesi</Badge>
 							</div>
+							<p class="mt-3 text-xs text-slate-500">{eventProgressLabel(e)}</p>
 							<div class="mt-4 grid grid-cols-2 gap-2">
-								<a href={resolve(`/cbt/events/${e.id}`)} class="col-span-2 inline-flex items-center justify-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kelola Event</a>
-								<LoadingButton variant="outline" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
+								<a href={resolve(`/cbt/events/${e.id}`)} class="col-span-2 inline-flex items-center justify-center rounded-md bg-[oklch(0.38_0.13_145)] px-3 py-2 text-sm font-semibold text-white hover:bg-[oklch(0.34_0.13_145)]">Kelola</a>
+								<LoadingButton variant="ghost" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
 								<LoadingButton
-									variant="destructive"
+									variant="ghost"
 									size="sm"
+									class="text-red-600 hover:bg-red-50 hover:text-red-700"
 									onclick={() => deleteEvent(e.id)}
 									loading={deleteBusyId === e.id}
 									loadingLabel="Menghapus..."
@@ -486,7 +510,7 @@
 						</div>
 					{:else}
 						<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-							Belum ada kegiatan ujian.
+							{overview.events.length === 0 ? 'Belum ada kegiatan ujian.' : 'Tidak ada kegiatan pada filter ini.'}
 						</div>
 					{/each}
 				</div>

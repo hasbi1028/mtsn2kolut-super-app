@@ -1072,6 +1072,9 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	if store.packageQualityID != packageID {
 		t.Fatalf("Create() package quality id = %v, want %v", store.packageQualityID, packageID)
 	}
+	if _, err := svc.Create(context.Background(), CreateCbtSessionInput{PackageID: packageID, ClassID: classID, Status: db.CbtSessionStatusEnum("archived")}); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("Create(invalid status) error = %v, want ErrBadRequest", err)
+	}
 	if _, err := svc.UpdateStatus(context.Background(), sessionID, db.CbtSessionStatusEnumActive); err != nil {
 		t.Fatalf("UpdateStatus() error = %v", err)
 	}
@@ -1080,6 +1083,9 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	}
 	if store.roomReadinessID != sessionID {
 		t.Fatalf("UpdateStatus() readiness id = %v, want %v", store.roomReadinessID, sessionID)
+	}
+	if _, err := svc.UpdateStatus(context.Background(), sessionID, db.CbtSessionStatusEnum("archived")); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("UpdateStatus(invalid status) error = %v, want ErrBadRequest", err)
 	}
 	if err := svc.Delete(context.Background(), sessionID); err != nil || store.deleteID != sessionID {
 		t.Fatalf("Delete() = %v id=%v, want nil/%v", err, store.deleteID, sessionID)
@@ -1170,11 +1176,16 @@ func TestCbtSessionServiceForwardsStoreCalls(t *testing.T) {
 	if ok, err := svc.HasRoomParticipant(context.Background(), sessionID, roomID, participantID); err != nil || !ok || store.roomParticipantArg.ParticipantID != participantID {
 		t.Fatalf("HasRoomParticipant() = %v/%v arg=%+v, want participant in room", ok, err, store.roomParticipantArg)
 	}
+	store.roomSetupRow = db.GetCbtExamRoomSetupContextRow{ID: roomID, SessionID: sessionID, SessionStatus: db.CbtSessionStatusEnumScheduled}
+	store.sessionParticipantArg = db.HasSessionParticipantParams{}
 	if err := svc.AssignSeat(context.Background(), participantID, roomID, 12); err != nil {
 		t.Fatalf("AssignSeat() error = %v", err)
 	}
 	if got := store.assignSeatArgs[len(store.assignSeatArgs)-1]; got.ID != participantID || got.RoomID != roomID || got.SeatNo.Int32 != 12 || !got.SeatNo.Valid {
 		t.Fatalf("AssignSeat() arg = %+v, want seat 12", got)
+	}
+	if store.sessionParticipantArg.SessionID != sessionID || store.sessionParticipantArg.ID != participantID {
+		t.Fatalf("AssignSeat() membership arg = %+v, want participant scoped to target room session", store.sessionParticipantArg)
 	}
 	if rows, err := svc.GetProctoringStatus(context.Background(), sessionID); err != nil || len(rows) != 1 {
 		t.Fatalf("GetProctoringStatus() = %d rows/%v, want 1 nil", len(rows), err)
@@ -1463,6 +1474,12 @@ func TestCbtSessionSetupMutationsRequireDraftOrScheduled(t *testing.T) {
 	if store.createRoomArg.SessionID.Valid {
 		t.Fatalf("CreateRoom(active) wrote %+v, want blocked", store.createRoomArg)
 	}
+	if err := svc.EnrollClass(context.Background(), sessionID, documentCycleTestUUID(249)); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("EnrollClass(active) error = %v, want ErrConflict", err)
+	}
+	if store.enrollClassArg.SessionID.Valid {
+		t.Fatalf("EnrollClass(active) wrote %+v, want blocked", store.enrollClassArg)
+	}
 
 	store = &fakeCbtSessionStore{roomSetupRow: db.GetCbtExamRoomSetupContextRow{ID: roomID, SessionID: sessionID, SessionStatus: db.CbtSessionStatusEnumFinished}}
 	svc = &CbtSession{q: store}
@@ -1471,6 +1488,39 @@ func TestCbtSessionSetupMutationsRequireDraftOrScheduled(t *testing.T) {
 	}
 	if len(store.assignSeatArgs) != 0 {
 		t.Fatalf("AssignSeat(finished) wrote %+v, want blocked", store.assignSeatArgs)
+	}
+
+	store = &fakeCbtSessionStore{roomSetupRow: db.GetCbtExamRoomSetupContextRow{ID: roomID, SessionID: sessionID, SessionStatus: db.CbtSessionStatusEnumScheduled}}
+	svc = &CbtSession{q: store}
+	if err := svc.AssignSeat(context.Background(), participantID, roomID, 1); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("AssignSeat(mismatched participant/room) error = %v, want ErrBadRequest", err)
+	}
+	if len(store.assignSeatArgs) != 0 {
+		t.Fatalf("AssignSeat(mismatched participant/room) wrote %+v, want blocked", store.assignSeatArgs)
+	}
+}
+
+func TestCbtSessionAssignSeatAllowsRoomAssignmentMoveWithinSession(t *testing.T) {
+	sessionID := documentCycleTestUUID(252)
+	roomID := documentCycleTestUUID(253)
+	participantID := documentCycleTestUUID(254)
+	store := &fakeCbtSessionStore{
+		roomSetupRow: db.GetCbtExamRoomSetupContextRow{ID: roomID, SessionID: sessionID, SessionStatus: db.CbtSessionStatusEnumScheduled},
+		// The participant belongs to the session but is not currently in the target room.
+		// AssignSeat must be able to assign or move room_id and seat_no in one write.
+		sessionParticipant: true,
+		roomParticipant:    false,
+	}
+	svc := &CbtSession{q: store}
+
+	if err := svc.AssignSeat(context.Background(), participantID, roomID, 7); err != nil {
+		t.Fatalf("AssignSeat() error = %v, want room assignment/move allowed", err)
+	}
+	if store.sessionParticipantArg.SessionID != sessionID || store.sessionParticipantArg.ID != participantID {
+		t.Fatalf("AssignSeat() participant guard = %+v, want participant in room session", store.sessionParticipantArg)
+	}
+	if len(store.assignSeatArgs) != 1 || store.assignSeatArgs[0].ID != participantID || store.assignSeatArgs[0].RoomID != roomID || store.assignSeatArgs[0].SeatNo.Int32 != 7 {
+		t.Fatalf("AssignSeat() writes = %+v, want target room and seat", store.assignSeatArgs)
 	}
 }
 

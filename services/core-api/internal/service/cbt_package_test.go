@@ -127,3 +127,75 @@ func TestCreateCbtPackageRequiresPublishedQuestions(t *testing.T) {
 		}
 	})
 }
+
+func TestCreateCbtPackageEventQuestionScope(t *testing.T) {
+	subjectID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
+	packageID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
+	eventID := pgtype.UUID{Bytes: [16]byte{3}, Valid: true}
+	otherEventID := pgtype.UUID{Bytes: [16]byte{4}, Valid: true}
+	globalQuestionID := pgtype.UUID{Bytes: [16]byte{5}, Valid: true}
+	eventQuestionID := pgtype.UUID{Bytes: [16]byte{6}, Valid: true}
+	otherEventQuestionID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+
+	t.Run("event package accepts reusable global and same-event questions", func(t *testing.T) {
+		store := &fakeCbtPackageCreateStore{
+			createRow: db.CbtPackage{ID: packageID, EventID: eventID, SubjectID: subjectID},
+			questions: map[pgtype.UUID]db.GetCbtQuestionRow{
+				globalQuestionID: {
+					ID:        globalQuestionID,
+					SubjectID: subjectID,
+					Status:    db.CbtQuestionStatusEnumPublished,
+				},
+				eventQuestionID: {
+					ID:        eventQuestionID,
+					EventID:   eventID,
+					SubjectID: subjectID,
+					Status:    db.CbtQuestionStatusEnumPublished,
+				},
+			},
+		}
+
+		_, err := createCbtPackage(context.Background(), store, CreateCbtPackageInput{
+			EventID:     eventID,
+			SubjectID:   subjectID,
+			Title:       "Paket Event IPA",
+			QuestionIDs: []pgtype.UUID{globalQuestionID, eventQuestionID},
+		})
+		if err != nil {
+			t.Fatalf("createCbtPackage() error = %v", err)
+		}
+		if len(store.addParams) != 2 {
+			t.Fatalf("AddCbtPackageQuestion() calls = %d, want 2", len(store.addParams))
+		}
+		if store.addParams[0].QuestionID != globalQuestionID || store.addParams[1].QuestionID != eventQuestionID {
+			t.Fatalf("AddCbtPackageQuestion() params = %+v, want global then same-event questions", store.addParams)
+		}
+	})
+
+	t.Run("event package rejects questions from another event", func(t *testing.T) {
+		store := &fakeCbtPackageCreateStore{
+			createRow: db.CbtPackage{ID: packageID, EventID: eventID, SubjectID: subjectID},
+			questions: map[pgtype.UUID]db.GetCbtQuestionRow{
+				otherEventQuestionID: {
+					ID:        otherEventQuestionID,
+					EventID:   otherEventID,
+					SubjectID: subjectID,
+					Status:    db.CbtQuestionStatusEnumPublished,
+				},
+			},
+		}
+
+		_, err := createCbtPackage(context.Background(), store, CreateCbtPackageInput{
+			EventID:     eventID,
+			SubjectID:   subjectID,
+			Title:       "Paket Event IPA",
+			QuestionIDs: []pgtype.UUID{otherEventQuestionID},
+		})
+		if err == nil || !strings.Contains(err.Error(), "event yang sama") {
+			t.Fatalf("createCbtPackage() error = %v, want other-event question rejection", err)
+		}
+		if len(store.addParams) != 0 {
+			t.Fatalf("AddCbtPackageQuestion() calls = %d, want 0", len(store.addParams))
+		}
+	})
+}

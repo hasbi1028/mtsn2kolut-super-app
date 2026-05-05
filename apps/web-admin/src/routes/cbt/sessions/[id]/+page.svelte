@@ -210,6 +210,8 @@
 	};
 
 	const sessionId = page.params.id ?? '';
+	const userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
+	const isAdmin = $derived(userRoles.includes('admin'));
 	type ActiveTab = 'hasil' | 'butir' | 'peserta' | 'ruangan' | 'operasional' | 'proctoring' | 'audit' | 'essay';
 	type DetailNextAction = {
 		title: string;
@@ -1601,7 +1603,7 @@
 			</div>
 				<div class="flex items-center gap-2 flex-wrap">
 					<Badge class={statusClass(currentSession.status)}>{statusLabel[currentSession.status] ?? currentSession.status}</Badge>
-				{#if currentSession.status === 'finished' || currentSession.status === 'active'}
+				{#if isAdmin && (currentSession.status === 'finished' || currentSession.status === 'active')}
 					<LoadingButton size="sm" variant="outline" disabled={scoreBusy} onclick={triggerScoring} loading={scoreBusy} loadingLabel="Menghitung...">
 						⟳ Hitung Skor
 					</LoadingButton>
@@ -1916,14 +1918,14 @@
 		{:else if activeTab === 'peserta'}
 			<div id="panel-peserta" role="tabpanel" aria-labelledby="tab-peserta" class="space-y-4">
 			<div class="flex gap-2 flex-wrap">
-				<LoadingButton variant="outline" size="sm" onclick={() => void generateTokens()} loading={tokenBusy} disabled={tokenBusy} loadingLabel="Membuat token...">⚡ Buat Token Massal</LoadingButton>
+				<LoadingButton variant="outline" size="sm" onclick={() => void generateTokens()} loading={tokenBusy} disabled={tokenBusy} loadingLabel="Membuat token...">Buat Token Massal</LoadingButton>
 				<LoadingButton variant="outline" size="sm" onclick={() => void refreshParticipants()} loading={participantRefreshBusy} loadingLabel="Memuat..." disabled={participantRefreshBusy}>↻ Refresh</LoadingButton>
 			</div>
 			<OperationStatusPanel
 				tone="warning"
 				compact
-				title="Aksi Sensitif Peserta"
-				message={roomControlsLocked ? 'Ruangan terkunci setelah sesi aktif/selesai. Token masih bisa dikelola sesuai kebutuhan operasional, tetapi ruangan dan nomor meja tidak dapat diubah.' : 'Pembuatan token massal, ubah token, dan simpan nomor meja akan langsung mengubah data operasional ujian. Pastikan pengawas sudah siap menerima perubahan terbaru.'}
+				title="Aksi Sensitif Peserta & Token Rahasia"
+				message={roomControlsLocked ? 'Ruangan terkunci setelah sesi aktif/selesai. Token peserta tetap rahasia dan hanya boleh dibagikan ke pengawas atau peserta yang berwenang saat operasional ujian.' : 'Pembuatan token massal, ubah token, dan simpan nomor meja akan langsung mengubah data operasional ujian. Perlakukan token seperti kredensial ujian: jangan kirim ke kanal umum, jangan tampilkan di layar proyektor, dan bagikan hanya saat sesi siap.'}
 			/>
 			<Card.Root>
 				<Card.Content class="p-0 overflow-x-auto">
@@ -1935,7 +1937,7 @@
 								<Table.Head>L/P</Table.Head>
 								<Table.Head>Ruangan</Table.Head>
 								<Table.Head>No Meja</Table.Head>
-								<Table.Head>Token</Table.Head>
+								<Table.Head>Token Rahasia</Table.Head>
 								<Table.Head>Status</Table.Head>
 								<Table.Head class="text-right">Aksi</Table.Head>
 							</Table.Row>
@@ -1953,7 +1955,7 @@
 										<Table.Cell class="text-sm text-muted-foreground">{p.seat_no ?? '—'}</Table.Cell>
 										<Table.Cell>
 										{#if p.token}
-											<Badge variant="outline" class="border-green-200 bg-green-50 text-xs text-green-800">Siap di kartu</Badge>
+											<Badge variant="outline" class="border-green-200 bg-green-50 text-xs text-green-800">Rahasia - siap kartu</Badge>
 										{:else}
 											<span class="text-slate-400 text-xs">—</span>
 										{/if}
@@ -2142,7 +2144,7 @@
 										<Table.Head>L/P</Table.Head>
 										<Table.Head>Ruangan</Table.Head>
 										<Table.Head>No Meja</Table.Head>
-										<Table.Head>Token</Table.Head>
+										<Table.Head>Token Rahasia</Table.Head>
 								</Table.Row>
 							</Table.Header>
 							<Table.Body>
@@ -2159,7 +2161,7 @@
 											<Table.Cell class="text-sm text-slate-600">{p.seat_no ?? '—'}</Table.Cell>
 											<Table.Cell>
 											{#if p.token}
-												<Badge variant="outline" class="border-green-200 bg-green-50 text-xs text-green-800">Siap di kartu</Badge>
+												<Badge variant="outline" class="border-green-200 bg-green-50 text-xs text-green-800">Rahasia - siap kartu</Badge>
 											{:else}
 												<span class="text-slate-400 text-xs">—</span>
 											{/if}
@@ -2244,7 +2246,7 @@
 									<Table.Row class={room.locked_at ? '' : 'bg-amber-50/50'}>
 										<Table.Cell>
 											<div class="font-medium text-slate-900">{room.room_name}</div>
-											<div class="text-xs text-slate-500">Token {room.room_token || '—'} · {room.joined_count}/{room.participant_count} login</div>
+											<div class="text-xs text-slate-500">Token rahasia {room.room_token || '—'} · {room.joined_count}/{room.participant_count} login</div>
 										</Table.Cell>
 										<Table.Cell>
 											<Badge variant="outline" class={handoverStatusClass(room)}>{handoverStatusLabel(room)}</Badge>

@@ -251,7 +251,12 @@ LEFT JOIN LATERAL (
     COUNT(*) FILTER (WHERE q.workflow_status = 'review')::int AS review_questions,
     COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::int AS approved_questions
   FROM cbt_questions q
-  WHERE q.event_id = e.id
+  WHERE (q.event_id = e.id OR (q.event_id IS NULL AND q.status = 'published'))
+    AND EXISTS (
+      SELECT 1
+      FROM cbt_event_subject_targets t
+      WHERE t.event_id = e.id AND t.subject_id = q.subject_id
+    )
 ) question_summary ON TRUE
 LEFT JOIN LATERAL (
   SELECT
@@ -930,7 +935,11 @@ LEFT JOIN LATERAL (
 LEFT JOIN LATERAL (
   SELECT COUNT(*)::int AS total_questions, COUNT(*) FILTER (WHERE status = 'published')::int AS published_questions
   FROM cbt_questions q
-  WHERE q.event_id = subjects.event_id AND q.subject_id = subjects.subject_id
+  WHERE q.subject_id = subjects.subject_id
+    AND (
+      q.event_id = subjects.event_id
+      OR (q.event_id IS NULL AND q.status = 'published')
+    )
 ) questions ON TRUE
 LEFT JOIN LATERAL (
   SELECT COUNT(*)::int AS package_count, COUNT(*) FILTER (WHERE is_active)::int AS active_package_count
@@ -1027,8 +1036,11 @@ LEFT JOIN LATERAL (
     COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::int AS approved_count,
     COUNT(*) FILTER (WHERE q.status = 'published')::int AS published_count
   FROM cbt_questions q
-  WHERE q.event_id = t.event_id
-    AND q.subject_id = t.subject_id
+  WHERE q.subject_id = t.subject_id
+    AND (
+      q.event_id = t.event_id
+      OR (q.event_id IS NULL AND q.status = 'published')
+    )
 ) progress ON TRUE
 WHERE t.event_id = $1
 ORDER BY s.name ASC, s.code ASC

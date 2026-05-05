@@ -17,6 +17,7 @@
 	type CbtEvent = { id: string; title: string; status?: string; exam_type?: string; academic_year_name?: string };
 	type UserOption = { id: string; username: string; roles?: string[]; employee_id?: string | null; profile_nama?: string | null };
 	type EventMemberRole = 'panitia' | 'pembuat_soal' | 'reviewer' | 'proktor' | 'pengawas' | 'korektor';
+	type SubjectScopedRole = 'pembuat_soal' | 'reviewer' | 'korektor';
 	type EventMember = {
 		id: string;
 		user_id: string;
@@ -42,6 +43,7 @@
 		{ value: 'pengawas', label: 'Pengawas', desc: 'Pengawasan ruang' },
 		{ value: 'korektor', label: 'Korektor', desc: 'Koreksi uraian' }
 	];
+	const subjectScopedRoles: SubjectScopedRole[] = ['pembuat_soal', 'reviewer', 'korektor'];
 
 	let info = $state<CbtEvent | null>(null);
 	let subjects = $state<Subject[]>([]);
@@ -63,6 +65,14 @@
 			.filter(Boolean)
 			.some((value) => String(value).toLowerCase().includes(q)));
 	});
+	let subjectSelectorAvailable = $derived(isSubjectScopedRole(formRole));
+	let subjectSelectorHelper = $derived(subjectSelectorAvailable
+		? 'Mapel dipakai untuk membatasi kerja pembuat soal, reviewer, atau korektor.'
+		: 'Peran panitia, proktor, dan pengawas bersifat operasional, jadi mapel tidak dikirim untuk penugasan ini.');
+
+	function isSubjectScopedRole(role: EventMemberRole): role is SubjectScopedRole {
+		return subjectScopedRoles.includes(role as SubjectScopedRole);
+	}
 
 	function normalizeUsers(payload: UsersPayload): UserOption[] {
 		if (Array.isArray(payload)) return payload;
@@ -83,7 +93,14 @@
 	}
 
 	function subjectLabel(member: EventMember): string {
+		if (!isSubjectScopedRole(member.role)) return 'Tidak berlaku';
 		return member.subject_name ?? member.subject_code ?? 'Semua mapel';
+	}
+
+	function handleRoleChange(event: Event) {
+		const target = event.currentTarget as HTMLSelectElement;
+		formRole = target.value as EventMemberRole;
+		if (!isSubjectScopedRole(formRole)) formSubjectId = '';
 	}
 
 	function errorMessage(error: unknown, fallback: string) {
@@ -125,7 +142,7 @@
 		editingId = member.id;
 		formUserId = member.user_id;
 		formRole = member.role;
-		formSubjectId = member.subject_id ?? '';
+		formSubjectId = isSubjectScopedRole(member.role) ? (member.subject_id ?? '') : '';
 	}
 
 	async function saveMember() {
@@ -140,7 +157,7 @@
 				user_id: formUserId,
 				employee_id: selectedUser?.employee_id || undefined,
 				role: formRole,
-				subject_id: formSubjectId || undefined
+				subject_id: subjectSelectorAvailable && formSubjectId ? formSubjectId : undefined
 			};
 			const url = editingId ? clientApiPath`/api/cbt/events/${eventId}/members/${editingId}` : clientApiPath`/api/cbt/events/${eventId}/members`;
 			await fetch(url, {
@@ -222,20 +239,27 @@
 					</div>
 					<div>
 						<label for="member-role" class="mb-1 block text-xs font-medium text-slate-600">Peran</label>
-						<select id="member-role" bind:value={formRole} class="h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+						<select id="member-role" value={formRole} onchange={handleRoleChange} class="h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500">
 							{#each roles as role (role.value)}
 								<option value={role.value}>{role.label}</option>
 							{/each}
 						</select>
 					</div>
 					<div>
-						<label for="member-subject" class="mb-1 block text-xs font-medium text-slate-600">Mapel Opsional</label>
-						<select id="member-subject" bind:value={formSubjectId} class="h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500">
-							<option value="">Semua mapel</option>
-							{#each subjects as subject (subject.id)}
-								<option value={subject.id}>{subject.name}</option>
-							{/each}
-						</select>
+						<label for="member-subject" class="mb-1 block text-xs font-medium text-slate-600">Mapel Penugasan</label>
+						{#if subjectSelectorAvailable}
+							<select id="member-subject" bind:value={formSubjectId} class="h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+								<option value="">Semua mapel</option>
+								{#each subjects as subject (subject.id)}
+									<option value={subject.id}>{subject.name}</option>
+								{/each}
+							</select>
+						{:else}
+							<select id="member-subject" value="" disabled class="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 text-sm text-slate-500">
+								<option value="">Tidak berlaku untuk peran ini</option>
+							</select>
+						{/if}
+						<p class="mt-1 text-[11px] text-slate-500">{subjectSelectorHelper}</p>
 					</div>
 					<div class="flex gap-2">
 						{#if editingId}<Button variant="outline" onclick={resetForm} disabled={busy}>Batal</Button>{/if}

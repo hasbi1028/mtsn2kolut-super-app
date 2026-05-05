@@ -57,6 +57,10 @@ func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 			api.Err(w, http.StatusForbidden, "exam session is not active")
 		case service.ErrExamNotStarted:
 			api.Err(w, http.StatusForbidden, "exam session has not started")
+		case service.ErrExamAlreadySubmit:
+			api.Err(w, http.StatusConflict, "exam already submitted")
+		case service.ErrExamWindowClosed:
+			api.Err(w, http.StatusForbidden, "exam window has closed")
 		case service.ErrDeviceMismatch:
 			api.Err(w, http.StatusConflict, "token already bound to another device")
 		case service.ErrDeviceRequired:

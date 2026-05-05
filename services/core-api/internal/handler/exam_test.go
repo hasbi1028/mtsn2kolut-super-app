@@ -316,6 +316,24 @@ func TestExamLoginMapsKnownServiceErrors(t *testing.T) {
 			wantError:  "exam session is not active",
 		},
 		{
+			name:       "session not started",
+			err:        service.ErrExamNotStarted,
+			wantStatus: 403,
+			wantError:  "exam session has not started",
+		},
+		{
+			name:       "already submitted",
+			err:        service.ErrExamAlreadySubmit,
+			wantStatus: 409,
+			wantError:  "exam already submitted",
+		},
+		{
+			name:       "window closed",
+			err:        service.ErrExamWindowClosed,
+			wantStatus: 403,
+			wantError:  "exam window has closed",
+		},
+		{
 			name:       "device mismatch",
 			err:        service.ErrDeviceMismatch,
 			wantStatus: 409,

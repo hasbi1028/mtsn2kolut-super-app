@@ -32,6 +32,7 @@
 	type CbtPackage = {
 		id: string; title: string; subject_code: string; subject_name: string;
 		question_count: number; is_active: boolean;
+		event_id?: string | null;
 	};
 	type PackageQuestion = {
 		package_id: string; question_id: string;
@@ -127,7 +128,10 @@
 	let deleteBusyId = $state('');
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 	let sessionsRequestId = 0;
+	let hiddenEventSessionCount = $state(0);
+	let hiddenEventPackageCount = $state(0);
 	let eventContext = $state<EventContext | null>(null);
+	let browserTimeZone = $state('');
 	const eventId = page.url.searchParams.get('event_id') ?? '';
 
 	// Enroll modal
@@ -144,6 +148,7 @@
 	let selectedPackageQuality = $derived(packageQualitySummary(fPackageId));
 	let sessionReadinessIssues = $derived(buildSessionReadinessIssues());
 	let canCreateSession = $derived(!fBusy && sessionReadinessIssues.length === 0);
+	let browserTimeZoneMismatch = $derived(browserTimeZone !== '' && browserTimeZone !== 'Asia/Makassar');
 
 	const statusLabel: Record<string, string> = {
 		draft: 'Draft', scheduled: 'Terjadwal', active: 'Berlangsung',
@@ -198,6 +203,14 @@
 		return new Date(localDt).toISOString();
 	}
 
+	function detectBrowserTimeZone() {
+		try {
+			browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+		} catch {
+			browserTimeZone = '';
+		}
+	}
+
 	function toLocalDateTimeInput(iso: string) {
 		if (!iso) return '';
 		const date = new Date(iso);
@@ -244,6 +257,22 @@
 
 	function parsePackageQuestions(payload: CbtPackagesPayload | unknown) {
 		return isRecord(payload) && Array.isArray(payload.questions) ? (payload.questions as PackageQuestion[]) : [];
+	}
+
+	function strictEventSessions(items: ExamSession[]) {
+		return eventId ? items.filter((session) => session.event_id === eventId) : items;
+	}
+
+	function strictEventPackages(items: CbtPackage[]) {
+		return eventId ? items.filter((pkg) => pkg.event_id === eventId) : items;
+	}
+
+	function hiddenSessionCount(items: ExamSession[]) {
+		return eventId ? items.filter((session) => session.event_id !== eventId).length : 0;
+	}
+
+	function hiddenPackageCount(items: CbtPackage[]) {
+		return eventId ? items.filter((pkg) => pkg.event_id !== eventId).length : 0;
 	}
 
 	function compactValue(value: string | number | null | undefined, fallback: string) {
@@ -597,8 +626,10 @@
 	}
 
 	function applyOverview(overview: SessionsOverview) {
-		sessions = overview.sessions;
-		packages = overview.packages;
+		hiddenEventSessionCount = hiddenSessionCount(overview.sessions);
+		hiddenEventPackageCount = hiddenPackageCount(overview.packages);
+		sessions = strictEventSessions(overview.sessions);
+		packages = strictEventPackages(overview.packages);
 		packageQuestions = overview.packageQuestions;
 		classes = overview.classes;
 	}
@@ -609,6 +640,8 @@
 		packages = [];
 		packageQuestions = [];
 		classes = [];
+		hiddenEventSessionCount = 0;
+		hiddenEventPackageCount = 0;
 		void fetchEventContext().then((context) => { eventContext = context; });
 		sessionsPromise = fetchOverview().then((overview) => {
 			if (requestId !== sessionsRequestId) return { sessions, packages, packageQuestions, classes };
@@ -844,6 +877,7 @@
 	}
 
 	onMount(() => {
+		detectBrowserTimeZone();
 		initSessionReadinessFilterFromQuery();
 		initSessionScheduleFilterFromQuery();
 		void loadInitial();
@@ -874,7 +908,7 @@
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div>
 					<p class="font-semibold">Sesi difilter untuk event: {eventContext?.title ?? eventId}</p>
-					<p class="mt-1 text-green-800">Daftar sesi dan payload pembuatan sesi membawa <code class="rounded bg-white px-1">event_id</code>. Jika backend belum mendukung filter event, halaman tetap memakai respons yang tersedia.</p>
+					<p class="mt-1 text-green-800">Daftar sesi dan payload pembuatan sesi membawa <code class="rounded bg-white px-1">event_id</code>. Item global atau event lain disembunyikan agar tidak terbaca sebagai sesi kegiatan ini.</p>
 				</div>
 				<a href={resolve(`/cbt/packages?event_id=${eventId}`)} class="rounded-md border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Paket Event</a>
 			</div>
@@ -882,6 +916,15 @@
 	{:else}
 		<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
 			Anda sedang melihat sesi global. Dari Kegiatan Ujian, gunakan tombol Sesi agar pembuatan sesi otomatis terhubung ke event.
+		</div>
+	{/if}
+
+	{#if hiddenEventSessionCount > 0 || hiddenEventPackageCount > 0}
+		<div class="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+			<p class="font-semibold">Item di luar event disembunyikan dari layar ini.</p>
+			<p class="mt-1">
+				{hiddenEventSessionCount} sesi dan {hiddenEventPackageCount} paket global/event lain tidak ditampilkan karena <code class="rounded bg-white px-1">event_id</code> tidak sama dengan kegiatan aktif.
+			</p>
 		</div>
 	{/if}
 
@@ -904,6 +947,9 @@
 								<option value={p.id}>{p.title} ({p.subject_code}){p.is_active ? '' : ' - nonaktif'}</option>
 							{/each}
 						</select>
+						{#if hiddenEventPackageCount > 0}
+							<p class="mt-1 text-[11px] text-sky-700">{hiddenEventPackageCount} paket global/event lain disembunyikan dari pilihan sesi event ini.</p>
+						{/if}
 					</div>
 					{#if fPackageId}
 						{@const quality = selectedPackageQuality}
@@ -1009,6 +1055,14 @@
 						<label for="session-end" class="text-xs text-slate-500 mb-1 block">Selesai <span class="text-red-500">*</span></label>
 						<Input id="session-end" type="datetime-local" bind:value={fEnd} />
 					</div>
+					<div class="sm:col-span-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900">
+						<p class="font-semibold">Jadwal sesi dicatat dan ditampilkan sebagai WITA (Asia/Makassar).</p>
+						{#if browserTimeZoneMismatch}
+							<p class="text-amber-800">Zona waktu browser terdeteksi {browserTimeZone}. Samakan perangkat operator ke Asia/Makassar sebelum menyimpan agar input <code class="rounded bg-white px-1">datetime-local</code> tidak bergeser.</p>
+						{:else}
+							<p>Pastikan jam mulai dan selesai mengikuti waktu sekolah/WITA sebelum sesi dijadwalkan.</p>
+						{/if}
+					</div>
 					<div class="sm:col-span-2 grid gap-3 sm:grid-cols-2">
 						<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-slate-700">
 							<input type="checkbox" bind:checked={fIsSpecialEvent} class="size-4 accent-emerald-700" />
@@ -1105,6 +1159,14 @@
 			</Card.Header>
 			<Card.Content class="space-y-3">
 				<p class="text-sm text-slate-600">Geser jadwal untuk sesi draft atau terjadwal. Setelah disimpan, cek lagi kesiapan ruang dan pengawas.</p>
+				<div class="rounded-md border border-amber-200 bg-white px-3 py-2 text-xs leading-5 text-amber-900">
+					<p class="font-semibold">Jadwal sesi menggunakan WITA (Asia/Makassar).</p>
+					{#if browserTimeZoneMismatch}
+						<p>Browser operator saat ini terdeteksi {browserTimeZone}. Koreksi zona waktu perangkat ke Asia/Makassar sebelum menyimpan perubahan jadwal.</p>
+					{:else}
+						<p>Periksa ulang jam mulai dan selesai dengan jam sekolah sebelum menyimpan.</p>
+					{/if}
+				</div>
 				<div class="grid gap-3 sm:grid-cols-2">
 					<div>
 						<label for="quick-schedule-start" class="text-xs text-slate-500 mb-1 block">Mulai <span class="text-red-500">*</span></label>
@@ -1172,8 +1234,9 @@
 
 		{#snippet children(value)}
 			{@const overview = value as SessionsOverview}
-			{@const eventSessions = eventId ? overview.sessions.filter((session) => !session.event_id || session.event_id === eventId) : overview.sessions}
+			{@const eventSessions = strictEventSessions(overview.sessions)}
 			{@const currentSessions = eventSessions}
+			{@const hiddenSessions = hiddenSessionCount(overview.sessions)}
 			{@const scheduleScopedSessions = currentSessions.filter((session) => sessionMatchesScheduleFilter(session, scheduleFilter))}
 			{@const readinessScopedSessions = currentSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter))}
 			{@const visibleSessions = currentSessions.filter((session) => sessionMatchesReadinessFilter(session, readinessFilter) && sessionMatchesScheduleFilter(session, scheduleFilter))}
@@ -1246,6 +1309,9 @@
 						</Button>
 					{/if}
 				</div>
+				{#if hiddenSessions > 0}
+					<Card.Description>{hiddenSessions} sesi global atau event lain disembunyikan dari daftar event ini.</Card.Description>
+				{/if}
 				<div class="flex flex-wrap gap-1.5">
 					{#each readinessFilterOptions as option (option.filter)}
 						<button
@@ -1327,7 +1393,7 @@
 												{rowScheduleQuickAction.label}
 											</LoadingButton>
 										{:else if rowScheduleQuickAction?.href}
-											<a class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors {nextActionClass(rowScheduleQuickAction.tone)}" href={rowScheduleQuickAction.href}>
+											<a class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors {nextActionClass(rowScheduleQuickAction.tone)}" href={resolve(rowScheduleQuickAction.href as '/')}>
 												{rowScheduleQuickAction.label}
 											</a>
 										{/if}
@@ -1365,7 +1431,7 @@
 												Aksi: {rowNextAction.label}
 											</button>
 										{:else if rowNextAction.href}
-											<a class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors {nextActionClass(rowNextAction.tone)}" href={rowNextAction.href}>
+											<a class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold transition-colors {nextActionClass(rowNextAction.tone)}" href={resolve(rowNextAction.href as '/')}>
 												Aksi: {rowNextAction.label}
 											</a>
 										{/if}
@@ -1478,7 +1544,7 @@
 										Aksi: {rowNextAction.label}
 									</button>
 								{:else if rowNextAction.href}
-									<a class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors {nextActionClass(rowNextAction.tone)}" href={rowNextAction.href}>
+									<a class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors {nextActionClass(rowNextAction.tone)}" href={resolve(rowNextAction.href as '/')}>
 										Aksi: {rowNextAction.label}
 									</a>
 								{/if}
@@ -1503,7 +1569,7 @@
 										{rowScheduleQuickAction.label}
 									</LoadingButton>
 								{:else if rowScheduleQuickAction?.href}
-									<a class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors {nextActionClass(rowScheduleQuickAction.tone)}" href={rowScheduleQuickAction.href}>
+									<a class="inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold transition-colors {nextActionClass(rowScheduleQuickAction.tone)}" href={resolve(rowScheduleQuickAction.href as '/')}>
 										{rowScheduleQuickAction.label}
 									</a>
 								{/if}

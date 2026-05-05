@@ -2,6 +2,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { resolve } from '$app/paths';
 
 	type StatusTone = 'good' | 'warning' | 'danger';
 
@@ -85,6 +86,29 @@
 		}
 	];
 
+	const proctoringLinks = [
+		{
+			label: 'Sesi Hari Ini',
+			href: '/cbt/sessions?schedule=today',
+			description: 'Mulai dari daftar sesi yang perlu dipantau hari ini, lalu buka detail atau ruang.'
+		},
+		{
+			label: 'Aktif / Siap Hari Ini',
+			href: '/cbt/sessions?schedule=today&readiness=ready',
+			description: 'Filter cepat untuk sesi hari ini yang siap operasional; status aktif terlihat langsung di daftar sesi.'
+		},
+		{
+			label: 'Butuh Pengawas',
+			href: '/cbt/sessions?readiness=needs_proctors',
+			description: 'Temukan ruang yang belum lengkap pengawas sebelum siswa mulai login BYOD.'
+		},
+		{
+			label: 'Dashboard Ruang',
+			href: '/cbt/proctoring/rooms',
+			description: 'Buka rekap ruang/proctoring yang sudah ada tanpa endpoint backend baru.'
+		}
+	];
+
 	function badgeClass(tone: StatusTone) {
 		switch (tone) {
 			case 'good':
@@ -95,6 +119,7 @@
 				return 'border-rose-200 bg-rose-50 text-rose-700';
 		}
 	}
+
 </script>
 
 <svelte:head>
@@ -138,6 +163,23 @@
 			</Card.Root>
 		{/each}
 	</div>
+
+	<Card.Root class="border-sky-200 bg-sky-50/60 shadow-sm">
+		<Card.Header>
+			<Card.Title class="text-lg text-slate-900">Akses Cepat Pemantauan BYOD</Card.Title>
+			<Card.Description>
+				Tautan ini memakai filter halaman sesi dan dashboard proctoring yang sudah ada, tanpa endpoint backend tambahan.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+			{#each proctoringLinks as link (link.href)}
+				<a href={resolve(link.href as '/')} class="rounded-2xl border border-sky-200 bg-white p-4 text-sm shadow-sm transition hover:border-sky-300 hover:bg-sky-50">
+					<p class="font-semibold text-sky-900">{link.label}</p>
+					<p class="mt-2 leading-6 text-slate-600">{link.description}</p>
+				</a>
+			{/each}
+		</Card.Content>
+	</Card.Root>
 
 	<div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
 		<Card.Root class="border-slate-200 shadow-sm">

@@ -250,7 +250,7 @@ func (h *CbtEvent) Create(w http.ResponseWriter, r *http.Request) {
 		Status:         body.Status,
 	})
 	if err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Data event CBT tidak valid")
 		return
 	}
 	api.Created(w, row)
@@ -323,7 +323,7 @@ func (h *CbtEvent) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	row, err := h.svc.UpdateStatus(r.Context(), id, body.Status)
 	if err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Status event CBT tidak valid")
 		return
 	}
 	api.OK(w, row)

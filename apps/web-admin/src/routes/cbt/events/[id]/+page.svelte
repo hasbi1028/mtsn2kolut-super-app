@@ -41,7 +41,8 @@
 	type ChecklistHref =
 		| `/cbt/events/${string}/members`
 		| `/cbt/soal?event_id=${string}`
-		| `/cbt/soal/review?event_id=${string}`
+		| '/cbt/soal'
+		| '/cbt/soal/review'
 		| `/cbt/packages?event_id=${string}`
 		| `/cbt/sessions?event_id=${string}`
 		| `/cbt/sessions?event_id=${string}&readiness=not_ready`
@@ -52,12 +53,29 @@
 	type ChecklistItem = {
 		label: string; helper: string; count: number | null; href: ChecklistHref; tone: 'success' | 'warning' | 'info'; action: string;
 	};
+	type EventSection = 'ringkasan' | 'persiapan' | 'operasional' | 'hasil';
+	type OperationalPhase = {
+		id: EventSection;
+		title: string;
+		description: string;
+		items: ChecklistItem[];
+	};
 
 	const eventId = page.params.id ?? '';
 	let info = $state<EventInfo | null>(null);
 	let results = $state<ResultRow[]>([]);
 	let detailPromise = $state<Promise<EventCommandDetail> | null>(null);
+	let activeSection = $state<EventSection>('ringkasan');
+	let hasilSectionElement = $state<HTMLElement | null>(null);
+	let hasilFocusRequest = $state(0);
 	let detailRequestId = 0;
+	let handledHasilFocusRequest = 0;
+	const sectionTabs: Array<{ id: EventSection; label: string }> = [
+		{ id: 'ringkasan', label: 'Ringkasan' },
+		{ id: 'persiapan', label: 'Persiapan' },
+		{ id: 'operasional', label: 'Operasional' },
+		{ id: 'hasil', label: 'Hasil' },
+	];
 
 	const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Aktif', finished: 'Selesai' };
 	const scopeLabel: Record<string, string> = { class: 'Per Kelas', grade: 'Per Tingkat', school: 'Seluruh Sekolah' };
@@ -154,6 +172,12 @@
 		return 'border-slate-200 bg-white';
 	}
 
+	function phaseBadgeClass(tone: ChecklistItem['tone']) {
+		if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+		if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-700';
+		return 'border-slate-200 bg-white text-slate-600';
+	}
+
 	function statusClass(status: string) {
 		if (status === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
 		if (status === 'finished') return 'bg-slate-100 text-slate-600 border-slate-200';
@@ -168,15 +192,39 @@
 		const proctorIssues = detail.sessions.filter((session) => (session.rooms_without_proctor ?? 0) > 0).length;
 		const items: Array<Omit<ChecklistItem, 'tone'>> = [
 			{ label: 'Penugasan', helper: 'Guru pembuat soal dan reviewer kegiatan', count: countFrom(overview?.member_count, null), href: `/cbt/events/${eventId}/members`, action: 'Atur penugasan' },
-			{ label: 'Bank Soal/Target', helper: 'Soal terbit dan target per mapel', count: countFrom(overview?.published_question_count ?? overview?.question_count, null), href: `/cbt/soal?event_id=${eventId}`, action: 'Buka bank soal' },
-			{ label: 'Review', helper: 'Antrean soal kegiatan yang perlu keputusan', count: countFrom(overview?.review_count, null), href: `/cbt/soal/review?event_id=${eventId}`, action: 'Review soal' },
-			{ label: 'Paket', helper: 'Paket siap dipakai sesi ujian', count: countFrom(overview?.package_count, packageFallback), href: `/cbt/packages?event_id=${eventId}`, action: 'Kelola paket' },
+			{ label: 'Kebutuhan Soal', helper: 'Target kebutuhan event; repositori Bank Soal tetap reusable tanpa filter event', count: countFrom(overview?.published_question_count ?? overview?.question_count, null), href: `/cbt/soal?event_id=${eventId}`, action: 'Cek target kebutuhan' },
+			{ label: 'Review Repositori', helper: 'Antrean review dari Bank Soal reusable sebelum soal diterbitkan dan masuk paket', count: countFrom(overview?.review_count, null), href: '/cbt/soal/review', action: 'Review repositori' },
+			{ label: 'Paket Event', helper: 'Prioritas persiapan: paket yang tertaut event agar sesi ujian bisa memakai paket yang tepat', count: countFrom(overview?.package_count, packageFallback), href: `/cbt/packages?event_id=${eventId}`, action: 'Kelola paket event' },
 			{ label: 'Sesi/Jadwal', helper: 'Sesi, status, dan jadwal operasional', count: countFrom(overview?.session_count, sessionFallback), href: `/cbt/sessions?event_id=${eventId}`, action: 'Kelola sesi' },
 			{ label: 'Ruang/Pengawas/Kursi', helper: roomIssues > 0 ? `${roomIssues} sesi masih perlu dirapikan${proctorIssues > 0 ? `, ${proctorIssues} butuh pengawas` : ''}` : 'Cek ruang, pengawas, kapasitas, dan nomor meja', count: countFrom(overview?.room_count, detail.sessions.length > 0 ? detail.sessions.reduce((sum, session) => sum + (session.room_count ?? 0), 0) : null), href: `/cbt/sessions?event_id=${eventId}&readiness=not_ready`, action: 'Cek ruang' },
 			{ label: 'Token/Kartu', helper: 'Token peserta dan kartu ujian siap cetak', count: countFrom(overview?.token_count ?? overview?.card_count, null), href: `/cbt/events/${eventId}/exam-cards`, action: 'Cetak kartu' },
-			{ label: 'Hasil', helper: 'Rekap nilai gabungan tetap tersedia di bagian bawah', count: countFrom(overview?.result_count, detail.results.length), href: `/cbt/events/${eventId}#hasil`, action: 'Lihat hasil' },
+			{ label: 'Hasil', helper: 'Rekap nilai gabungan tersedia di tab Hasil', count: countFrom(overview?.result_count, detail.results.length), href: `/cbt/events/${eventId}#hasil`, action: 'Buka tab hasil' },
 		];
 		return items.map((item) => ({ ...item, tone: item.label === 'Ruang/Pengawas/Kursi' && roomIssues > 0 ? 'warning' : checklistTone(item.count) }));
+	}
+
+	function buildOperationalPhases(checklist: ChecklistItem[]): OperationalPhase[] {
+		const byLabel = new Map(checklist.map((item) => [item.label, item]));
+		return [
+			{
+				id: 'persiapan',
+				title: 'Persiapan akademik',
+				description: 'Pastikan tim, target kebutuhan soal, review repositori, dan terutama paket event siap sebelum sesi dibuka.',
+				items: ['Penugasan', 'Paket Event', 'Kebutuhan Soal', 'Review Repositori'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
+			},
+			{
+				id: 'operasional',
+				title: 'Operasional ujian',
+				description: 'Rapikan jadwal, ruang, pengawas, kursi, token, dan kartu ujian.',
+				items: ['Sesi/Jadwal', 'Ruang/Pengawas/Kursi', 'Token/Kartu'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
+			},
+			{
+				id: 'hasil',
+				title: 'Hasil dan rekap',
+				description: 'Pantau rekap nilai gabungan dan ekspor saat data sudah masuk.',
+				items: ['Hasil'].map((label) => byLabel.get(label)).filter((item): item is ChecklistItem => Boolean(item)),
+			},
+		];
 	}
 
 	function exportCSV() {
@@ -193,12 +241,32 @@
 		URL.revokeObjectURL(url);
 	}
 
+	function activateHasilHash() {
+		if (window.location.hash !== '#hasil') return;
+		activeSection = 'hasil';
+		hasilFocusRequest += 1;
+	}
+
+	function handleHashChange() {
+		activateHasilHash();
+	}
+
+	$effect(() => {
+		if (hasilFocusRequest === handledHasilFocusRequest || activeSection !== 'hasil' || !hasilSectionElement) return;
+		handledHasilFocusRequest = hasilFocusRequest;
+		hasilSectionElement.focus({ preventScroll: true });
+		hasilSectionElement.scrollIntoView({ block: 'start', behavior: 'smooth' });
+	});
+
 	onMount(() => {
+		activateHasilHash();
 		void loadInitial();
 	});
 </script>
 
 <svelte:head><title>Pusat Kendali Event — {info?.title ?? 'Kegiatan Ujian'}</title></svelte:head>
+
+<svelte:window onhashchange={handleHashChange} />
 
 <div class="space-y-6 p-6">
 	<div class="flex items-center gap-2 text-sm text-slate-500">
@@ -228,15 +296,16 @@
 			{@const currentInfo = detail.info}
 			{@const currentResults = detail.results}
 			{@const checklist = buildChecklist(detail)}
-			<section class="rounded-2xl border border-green-200 bg-gradient-to-br from-green-50 to-white p-5 shadow-sm">
+			{@const phases = buildOperationalPhases(checklist)}
+			<section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 				<div class="flex flex-wrap items-start justify-between gap-4">
-					<div class="max-w-3xl">
-						<p class="text-xs font-bold uppercase tracking-[0.18em] text-green-700">Event Command Center</p>
+					<div class="max-w-3xl p-5">
+						<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Pusat Kegiatan CBT</p>
 						<h1 class="mt-1 text-2xl font-semibold text-slate-900">{currentInfo.title}</h1>
 						<p class="mt-2 text-sm text-slate-600">{currentInfo.academic_year_name} · <span class="capitalize">{currentInfo.exam_type}</span> · {scopeLabel[currentInfo.scope] ?? currentInfo.scope}</p>
-						<p class="mt-2 text-sm text-slate-500">Kelola alur CBT dari penugasan hingga hasil tanpa kehilangan konteks kegiatan.</p>
+						<p class="mt-2 text-sm text-slate-500">Gunakan bagian Ringkasan, Persiapan, Operasional, dan Hasil agar operator fokus pada tahap kerja yang sedang berjalan.</p>
 					</div>
-					<div class="flex flex-wrap items-center gap-2">
+					<div class="flex flex-wrap items-center gap-2 p-5 lg:justify-end">
 						<Badge class={statusClass(currentInfo.status)}>{statusLabel[currentInfo.status] ?? currentInfo.status}</Badge>
 						{#each currentInfo.target_levels ?? [] as level (level)}
 							<Badge variant="outline" class="bg-white">Tingkat {level}</Badge>
@@ -246,47 +315,78 @@
 						{/if}
 					</div>
 				</div>
+				<nav class="flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-2" aria-label="Bagian pusat kegiatan">
+					{#each sectionTabs as tab (tab.id)}
+						<button
+							type="button"
+							class={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${activeSection === tab.id ? 'bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-200' : 'text-slate-600 hover:bg-white hover:text-slate-900'}`}
+							aria-current={activeSection === tab.id ? 'page' : undefined}
+							aria-pressed={activeSection === tab.id}
+							onclick={() => activeSection = tab.id}
+						>
+							{tab.label}
+						</button>
+					{/each}
+				</nav>
 			</section>
 
-			<section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-				{#each checklist as item (item.label)}
-					<a href={resolve(item.href)} class={`block rounded-xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${checklistClass(item.tone)}`}>
-						<div class="flex items-start justify-between gap-3">
-							<div>
-								<p class="text-sm font-semibold text-slate-900">{item.label}</p>
-								<p class="mt-1 text-xs text-slate-500">{item.helper}</p>
-							</div>
-							<Badge variant={item.tone === 'warning' ? 'secondary' : 'outline'} class="bg-white">{item.count ?? 'Cek'}</Badge>
-						</div>
-						<p class="mt-4 text-sm font-semibold text-green-800">{item.action}</p>
-					</a>
-				{/each}
-			</section>
+			{#if activeSection === 'ringkasan'}
+				<section class="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
+					<Card.Root>
+						<Card.Header class="pb-2"><Card.Title class="text-base">Kesiapan per tahap</Card.Title><Card.Description>Ringkasan ini menggantikan tautan cepat terpisah agar operator melihat tahap dan aksi dalam satu tempat.</Card.Description></Card.Header>
+						<Card.Content class="space-y-3">
+							{#each phases as phase (phase.id)}
+								<div class="rounded-xl border border-slate-200 bg-white p-4">
+									<div class="flex flex-wrap items-start justify-between gap-3">
+										<div>
+											<p class="text-sm font-semibold text-slate-900">{phase.title}</p>
+											<p class="mt-1 text-xs text-slate-500">{phase.description}</p>
+										</div>
+										<button type="button" class="text-xs font-semibold text-emerald-800 hover:text-emerald-900" onclick={() => activeSection = phase.id}>Buka bagian</button>
+									</div>
+									<div class="mt-3 flex flex-wrap gap-2">
+										{#each phase.items as item (item.label)}
+											<Badge variant="outline" class={phaseBadgeClass(item.tone)}>{item.label}: {item.count ?? 'Cek'}</Badge>
+										{/each}
+									</div>
+								</div>
+							{/each}
+						</Card.Content>
+					</Card.Root>
+					<Card.Root>
+						<Card.Header class="pb-2"><Card.Title class="text-base">Kelengkapan data</Card.Title><Card.Description>Ringkasan operator dari paket, sesi, dan hasil yang sudah terbaca.</Card.Description></Card.Header>
+						<Card.Content class="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+							<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-500">Paket</p><p class="text-lg font-semibold text-slate-900">{detail.packages.length}</p></div>
+							<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-500">Sesi</p><p class="text-lg font-semibold text-slate-900">{detail.sessions.length}</p></div>
+							<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-500">Baris hasil</p><p class="text-lg font-semibold text-slate-900">{currentResults.length}</p></div>
+							<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-500">Ringkasan kesiapan</p><p class="text-sm font-semibold text-slate-900">{detail.overview ? 'Lengkap dari sistem' : 'Sebagian data tersedia'}</p></div>
+						</Card.Content>
+					</Card.Root>
+				</section>
+			{/if}
 
-			<section class="grid gap-3 lg:grid-cols-2">
-				<Card.Root>
-					<Card.Header class="pb-2"><Card.Title class="text-base">Jalur Operasi Cepat</Card.Title><Card.Description>Semua tautan membawa event_id agar operator tetap berada dalam konteks kegiatan ini.</Card.Description></Card.Header>
-					<Card.Content class="flex flex-wrap gap-2">
-						<a href={resolve(`/cbt/events/${eventId}/members`)} class="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Penugasan</a>
-						<a href={resolve(`/cbt/soal?event_id=${eventId}`)} class="rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">Bank Soal</a>
-						<a href={resolve(`/cbt/soal/review?event_id=${eventId}`)} class="rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">Review</a>
-						<a href={resolve(`/cbt/packages?event_id=${eventId}`)} class="rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">Paket</a>
-						<a href={resolve(`/cbt/sessions?event_id=${eventId}`)} class="rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">Sesi</a>
-						<a href={resolve(`/cbt/events/${eventId}/exam-cards`)} class="rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">Kartu Ujian</a>
-					</Card.Content>
-				</Card.Root>
-				<Card.Root>
-					<Card.Header class="pb-2"><Card.Title class="text-base">Ringkasan Sumber Data</Card.Title><Card.Description>Endpoint overview/sessions/packages dipakai bila backend sudah tersedia; halaman tetap berjalan dengan data event dan hasil lama.</Card.Description></Card.Header>
-					<Card.Content class="flex flex-wrap gap-2">
-						<Badge variant="outline" class="bg-white">{detail.overview ? 'Overview tersedia' : 'Overview fallback'}</Badge>
-						<Badge variant="outline" class="bg-white">{detail.packages.length} paket terdeteksi</Badge>
-						<Badge variant="outline" class="bg-white">{detail.sessions.length} sesi terdeteksi</Badge>
-						<Badge variant="outline" class="bg-white">{currentResults.length} baris hasil</Badge>
-					</Card.Content>
-				</Card.Root>
-			</section>
+			{#if activeSection === 'persiapan' || activeSection === 'operasional'}
+				{@const phase = phases.find((item) => item.id === activeSection)}
+				{#if phase}
+					<section class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+						{#each phase.items as item (item.label)}
+							<a href={resolve(item.href)} class={`block rounded-xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${checklistClass(item.tone)}`}>
+								<div class="flex items-start justify-between gap-3">
+									<div>
+										<p class="text-sm font-semibold text-slate-900">{item.label}</p>
+										<p class="mt-1 text-xs text-slate-500">{item.helper}</p>
+									</div>
+									<Badge variant={item.tone === 'warning' ? 'secondary' : 'outline'} class="bg-white">{item.count ?? 'Cek'}</Badge>
+								</div>
+								<p class="mt-4 text-sm font-semibold text-green-800">{item.action}</p>
+							</a>
+						{/each}
+					</section>
+				{/if}
+			{/if}
 
-			<Card.Root id="hasil">
+			{#if activeSection === 'hasil'}
+			<Card.Root id="hasil" bind:ref={hasilSectionElement} tabindex={-1}>
 				<Card.Header class="pb-2">
 					<div class="flex flex-wrap items-start justify-between gap-3">
 						<div><Card.Title class="text-base">Hasil dan Rekap Nilai Gabungan</Card.Title><Card.Description>Nilai dari seluruh sesi yang terhubung ke kegiatan ini.</Card.Description></div>
@@ -306,6 +406,7 @@
 					</Table.Root>
 				</Card.Content>
 			</Card.Root>
+			{/if}
 		{/snippet}
 	</AsyncContent>
 </div>

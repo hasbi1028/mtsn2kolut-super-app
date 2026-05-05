@@ -115,7 +115,7 @@ func createCbtPackage(ctx context.Context, q cbtPackageCreateStore, input Create
 			return db.CbtPackage{}, fmt.Errorf("semua soal paket harus berstatus terbit")
 		}
 		switch {
-		case input.EventID.Valid && !sameUUID(question.EventID, input.EventID):
+		case input.EventID.Valid && question.EventID.Valid && !sameUUID(question.EventID, input.EventID):
 			return db.CbtPackage{}, fmt.Errorf("%w: soal paket event harus berasal dari event yang sama", domain.ErrBadRequest)
 		case !input.EventID.Valid && question.EventID.Valid:
 			return db.CbtPackage{}, fmt.Errorf("%w: paket umum tidak boleh memakai soal khusus event", domain.ErrBadRequest)

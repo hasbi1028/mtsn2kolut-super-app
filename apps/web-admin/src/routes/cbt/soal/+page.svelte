@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { resolve } from '$app/paths';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
@@ -13,6 +12,15 @@
 	import LegacyRichTextEditor from '$lib/components/LegacyRichTextEditor.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import RichContent from '$lib/components/RichContent.svelte';
+	import ComposerDraftNotice from './_components/ComposerDraftNotice.svelte';
+	import CatalogShortcutPanel from './_components/CatalogShortcutPanel.svelte';
+	import CatalogTargetPanel from './_components/CatalogTargetPanel.svelte';
+	import ImportWorkflowPanel from './_components/ImportWorkflowPanel.svelte';
+	import ReviewWorkflowQueues from './_components/ReviewWorkflowQueues.svelte';
+	import SoalContextPanel from './_components/SoalContextPanel.svelte';
+	import SoalModeTabs from './_components/SoalModeTabs.svelte';
+	import SoalShellHeader from './_components/SoalShellHeader.svelte';
+	import SoalStatusCards from './_components/SoalStatusCards.svelte';
 	import { questionExportButtonLabel, questionExportSuccessMessage } from '$lib/cbt/question-export-ui';
 	import { clearCbtComposerDrafts } from '$lib/client/cbt-drafts';
 	import { confirmAction } from '$lib/confirm-dialog';
@@ -155,6 +163,7 @@
 	type UsersPayload = UserOption[] | { items?: UserOption[]; users?: UserOption[] };
 	type DraftPayload = {
 		eventId?: string;
+		specialEventMode?: boolean;
 		subjectId: string;
 		questionType: ComposerQuestionType;
 		authoringMode: AuthoringMode;
@@ -359,6 +368,7 @@
 	let search = $state('');
 	let filterSubject = $state('');
 	let selectedEventId = $state('');
+	let specialEventQuestionMode = $state(false);
 	let filterWorkflow = $state('');
 	let filterStatus = $state('');
 	let revisionSourceFilter = $state<RevisionSourceFilter>('');
@@ -376,9 +386,9 @@
 	let memberRole = $state<EventMemberRole>('pembuat_soal');
 
 	// ── Composer state ─────────────────────────────────────────────────────────
-	let showComposer = $state(false);
 	let composerStep = $state<ComposerStep>('info');
 	let editingId = $state<string | null>(null);
+	let editingEventId = $state('');
 	let composerBusy = $state(false);
 	let composerAction = $state<ComposerSaveIntent | ''>('');
 	let draftStatus = $state('');
@@ -388,7 +398,6 @@
 	let focusedEditor = $state<FocusedEditor | null>(null);
 	let lastDraftSig = '';
 	let questionsRequestId = 0;
-	let showImport = $state(false);
 	let importSubjectId = $state('');
 	let importFile = $state<File | null>(null);
 	let importBusy = $state(false);
@@ -438,6 +447,7 @@
 	let fWorkflowStatus = $state('draft');
 	let activeDraftKey = $derived(DRAFT_KEY(editingId, selectedEventId));
 	let draftSignature = $derived(JSON.stringify({
+		specialEventQuestionMode,
 		fSubjectId,
 		fQuestionType,
 		fAuthoringMode,
@@ -470,7 +480,8 @@
 	let roles = $derived(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
 	let canReviewWorkflow = $derived(roles.includes('admin'));
 	let selectedEvent = $derived(events.find((event) => event.id === selectedEventId) ?? null);
-	let selectedEventTitle = $derived(selectedEvent?.title ?? 'Semua kegiatan');
+	let selectedEventTitle = $derived(selectedEvent?.title ?? 'Bank soal reusable');
+	let specialEventAttachId = $derived(specialEventQuestionMode && selectedEventId ? selectedEventId : '');
 	let roleLabel = $derived.by(() => {
 		if (roles.includes('admin')) return 'Admin bank soal';
 		if (roles.includes('guru') || roles.includes('teacher')) return 'Pembuat soal / guru';
@@ -478,7 +489,12 @@
 	});
 	let isAdminRole = $derived(roles.includes('admin'));
 	let canUseReviewerTools = $derived(canReviewWorkflow || roles.includes('reviewer'));
-	let selectedImportContext = $derived(selectedEvent ? `${selectedEvent.title}${selectedEvent.status ? ` (${selectedEvent.status})` : ''}` : 'Bank umum tanpa kegiatan');
+	let selectedImportContext = $derived.by(() => {
+		if (!selectedEvent) return 'Bank Soal reusable tanpa event';
+		const eventLabel = `${selectedEvent.title}${selectedEvent.status ? ` (${selectedEvent.status})` : ''}`;
+		if (specialEventQuestionMode) return `Soal khusus kegiatan untuk ${eventLabel}`;
+		return `Bank Soal reusable; filter kegiatan aktif: ${eventLabel}. CSV tidak membawa event_id`;
+	});
 	let exportButtonLabel = $derived(questionExportButtonLabel(roles));
 	let exportSuccessMessage = $derived(questionExportSuccessMessage(roles));
 	let reviewCount = $derived(reviewTotal);
@@ -741,6 +757,7 @@
 	function buildDraftPayload(): DraftPayload {
 		return {
 			eventId: selectedEventId,
+			specialEventMode: specialEventQuestionMode,
 			subjectId: fSubjectId,
 			questionType: fQuestionType,
 			authoringMode: fAuthoringMode,
@@ -785,7 +802,7 @@
 	}
 
 	$effect(() => {
-		if (!showComposer) return;
+		if (activeMode !== 'composer') return;
 		const sig = draftSignature;
 		if (sig === lastDraftSig) return;
 
@@ -804,6 +821,7 @@
 			if (!raw) return false;
 			const d = JSON.parse(raw) as {
 				eventId?: string;
+				specialEventMode?: boolean;
 				subjectId?: string;
 				questionType?: string;
 				authoringMode?: string;
@@ -831,6 +849,7 @@
 				savedAt?: string;
 			};
 			if (!selectedEventId && d.eventId) selectedEventId = d.eventId;
+			specialEventQuestionMode = !editingId && Boolean(d.specialEventMode && (selectedEventId || d.eventId));
 			fSubjectId = d.subjectId ?? '';
 			fQuestionType = normalizeQuestionType(d.questionType);
 			fAuthoringMode = normalizeAuthoringMode(d.authoringMode);
@@ -887,7 +906,6 @@
 		const params = new URLSearchParams();
 		params.set('limit', String(PAGE_SIZE));
 		params.set('offset', String((page - 1) * PAGE_SIZE));
-		if (selectedEventId) params.set('event_id', selectedEventId);
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		if (filterWorkflow) params.set('workflow_status', filterWorkflow);
@@ -901,7 +919,6 @@
 		params.set('limit', '6');
 		params.set('offset', '0');
 		params.set('workflow_status', 'rejected');
-		if (selectedEventId) params.set('event_id', selectedEventId);
 		if (revisionSourceFilter) params.set('revision_source', revisionSourceFilter);
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
@@ -913,7 +930,6 @@
 		params.set('limit', '6');
 		params.set('offset', '0');
 		params.set('workflow_status', 'review');
-		if (selectedEventId) params.set('event_id', selectedEventId);
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		return params;
@@ -925,7 +941,6 @@
 		params.set('offset', '0');
 		params.set('workflow_status', 'approved');
 		params.set('status', 'draft');
-		if (selectedEventId) params.set('event_id', selectedEventId);
 		if (search.trim()) params.set('q', search.trim());
 		if (filterSubject) params.set('subject_id', filterSubject);
 		return params;
@@ -1068,6 +1083,18 @@
 		reset();
 	}
 
+	function selectModuleMode(mode: ModuleMode) {
+		if (mode === 'composer') {
+			openCreate();
+			return;
+		}
+		if (mode === 'import') {
+			openImport();
+			return;
+		}
+		setModuleMode(mode);
+	}
+
 	function mutationErrorMessage(error: unknown, fallback: string) {
 		if (error instanceof Error && error.message.trim() && !error.message.toLowerCase().includes('fetch')) return error.message;
 		return fallback;
@@ -1085,8 +1112,28 @@
 		window.history.replaceState({}, '', `${url.pathname}?${url.searchParams.toString()}`);
 	}
 
+	function resetImportDryRunPreview() {
+		importResult = null;
+		importDryRunDone = false;
+	}
+
+	function setImportSubject(subjectId: string) {
+		if (importSubjectId === subjectId) return;
+		importSubjectId = subjectId;
+		resetImportDryRunPreview();
+	}
+
+	function setSpecialEventQuestionMode(enabled: boolean) {
+		if (specialEventQuestionMode === enabled) return;
+		specialEventQuestionMode = enabled;
+		resetImportDryRunPreview();
+	}
+
 	function setSelectedEvent(eventId: string) {
+		const eventChanged = selectedEventId !== eventId;
 		selectedEventId = eventId;
+		if (eventChanged) resetImportDryRunPreview();
+		if (!eventId) specialEventQuestionMode = false;
 		selectedQuestionIds = [];
 		currentPage = 1;
 		if (typeof window !== 'undefined') {
@@ -1111,15 +1158,12 @@
 	}
 
 	function reviewFocusHref(): '/cbt/soal/review' | `/cbt/soal/review?${string}` {
-		const params = new URLSearchParams();
-		if (selectedEventId) params.set('event_id', selectedEventId);
-		const query = params.toString();
-		return query ? `/cbt/soal/review?${query}` : '/cbt/soal/review';
+		return '/cbt/soal/review';
 	}
 
 	async function saveQuestionTarget() {
 		if (!selectedEventId || !filterSubject) {
-			toast.warning('Pilih kegiatan dan mapel sebelum mengatur target soal.');
+			toast.warning('Pilih konteks kegiatan dan mapel sebelum mengatur kebutuhan soal paket/event.');
 			return;
 		}
 		targetBusy = true;
@@ -1686,12 +1730,14 @@
 
 	function openCreate() {
 		editingId = null;
+		editingEventId = '';
+		specialEventQuestionMode = false;
 		resetForm();
 		showInspector = false;
 		focusedEditor = null;
 		composerMobilePanel = 'write';
 		composerStep = 'info';
-		showComposer = true;
+		setModuleMode('composer');
 		// Delay to let state settle before restoring
 		setTimeout(() => {
 			if (!restoreDraft()) draftStatus = '';
@@ -1705,11 +1751,13 @@
 			return;
 		}
 		composerBusy = true;
+		specialEventQuestionMode = false;
 		try {
 			const d = await loadQuestionDetail(q);
 			if (!selectedEventId && d.event_id) selectedEventId = d.event_id;
 
 			editingId = d.id;
+			editingEventId = d.event_id ?? '';
 			resetForm();
 			fSubjectId = d.subject_id ?? '';
 			fQuestionType = normalizeQuestionType(d.question_type);
@@ -1740,7 +1788,7 @@
 			focusedEditor = null;
 			composerMobilePanel = 'write';
 			composerStep = 'info';
-			showComposer = true;
+			setModuleMode('composer');
 			setTimeout(() => {
 				if (restoreDraft()) toast.info('Draft edit lokal dipulihkan otomatis.');
 			}, 50);
@@ -1773,15 +1821,16 @@
 			focusedEditor = null;
 			composerMobilePanel = 'write';
 			composerStep = 'info';
-			showComposer = true;
+			setModuleMode('composer');
 		} finally {
 			composerBusy = false;
 		}
 	}
 
 	function closeComposer() {
-		showComposer = false;
+		setModuleMode('catalog');
 		editingId = null;
+		editingEventId = '';
 		focusedEditor = null;
 		showInspector = false;
 	}
@@ -1790,7 +1839,7 @@
 		if (hasDraftWork && draftStatus) {
 			const confirmed = await confirmAction({
 				title: 'Tutup Komposer?',
-				message: 'Draft lokal tetap disimpan otomatis. Tutup modal dan lanjutkan nanti?',
+				message: 'Draft lokal tetap disimpan otomatis. Kembali ke daftar soal dan lanjutkan nanti?',
 				confirmLabel: 'Tutup',
 				tone: 'warning'
 			});
@@ -1802,7 +1851,7 @@
 	async function discardLocalDraftAndClose() {
 		const confirmed = await confirmAction({
 			title: 'Hapus Draft Lokal?',
-			message: 'Draft autosave pada perangkat ini akan dihapus dan komposer ditutup. Soal yang sudah tersimpan di server tidak ikut dihapus.',
+			message: 'Draft autosave pada perangkat ini akan dihapus dan komposer kembali ke daftar soal. Soal yang sudah tersimpan di server tidak ikut dihapus.',
 			confirmLabel: 'Hapus Draft Lokal',
 			tone: 'danger'
 		});
@@ -1840,7 +1889,7 @@
 	}
 
 	function handleComposerKeydown(event: KeyboardEvent) {
-		if (!showComposer) return;
+		if (activeMode !== 'composer') return;
 		if (event.key === 'Escape' && focusedEditor) {
 			event.preventDefault();
 			focusedEditor = null;
@@ -1857,11 +1906,13 @@
 	}
 
 	function openImport() {
-		importSubjectId = filterSubject || fSubjectId || '';
+		editingId = null;
+		editingEventId = '';
+		setImportSubject(filterSubject || fSubjectId || '');
 		importFile = null;
 		importResult = null;
 		importDryRunDone = false;
-		showImport = true;
+		setModuleMode('import');
 	}
 
 	function onImportFileChange(event: Event) {
@@ -1940,7 +1991,8 @@
 		composerAction = intent;
 		try {
 			const payload = {
-				...(selectedEventId ? { event_id: selectedEventId } : {}),
+				...(!editingId && specialEventAttachId ? { event_id: specialEventAttachId } : {}),
+				...(editingId && editingEventId ? { event_id: editingEventId } : {}),
 				authoring_mode: fAuthoringMode,
 				subject_id: fSubjectId,
 				question_text: htmlToPlainText(fStem),
@@ -2001,7 +2053,7 @@
 		try {
 			const form = new FormData();
 			form.set('subject_id', importSubjectId);
-			if (selectedEventId) form.set('event_id', selectedEventId);
+			if (specialEventAttachId) form.set('event_id', specialEventAttachId);
 			if (dryRun) form.set('dry_run', 'true');
 			form.set('file', importFile);
 			const res = await fetch('/api/cbt/questions/import-legacy', {
@@ -2139,8 +2191,9 @@
 		reviewDecisionQuestion = q;
 		reviewDecision = decision;
 		reviewDecisionNotes = '';
+		questionTimeline = [];
 		reviewDecisionOpen = true;
-			void loadQuestionDetail(q).then((detail) => {
+		void loadQuestionDetail(q).then((detail) => {
 			if (reviewDecisionOpen && reviewDecisionQuestion?.id === q.id) {
 				reviewDecisionQuestion = detail;
 				void loadQuestionTimeline(detail.id);
@@ -2297,7 +2350,13 @@
 		return option.match_html || option.match_text || '';
 	}
 
-		onMount(() => {
+	function composerStepClass(step: ComposerStep) {
+		const base = 'rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700';
+		if (composerStep === step) return `${base} border-emerald-300 bg-emerald-50 text-emerald-950`;
+		return `${base} border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:bg-emerald-50`;
+	}
+
+	onMount(() => {
 		const params = new URLSearchParams(window.location.search);
 		const mode = params.get('mode');
 		const questionId = params.get('question_id');
@@ -2311,6 +2370,11 @@
 		load();
 		void refreshEventMembers();
 		if (questionId) void openQuestionFromRouteParam(questionId);
+		else if (activeMode === 'composer') {
+			setTimeout(() => {
+				if (!restoreDraft()) draftStatus = '';
+			}, 50);
+		}
 		window.addEventListener('keydown', handleComposerKeydown);
 		return () => {
 			window.removeEventListener('keydown', handleComposerKeydown);
@@ -2320,507 +2384,164 @@
 
 <!-- ── Main page ──────────────────────────────────────────────────────────── -->
 <div class="space-y-4">
-	<section class="overflow-hidden rounded-2xl border border-green-200 bg-gradient-to-br from-green-50 via-white to-emerald-50 shadow-sm">
-		<div class="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.42fr)] lg:p-5">
-			<div class="min-w-0">
-				<p class="text-xs font-bold uppercase tracking-[0.18em] text-green-700">Bank Soal CBT</p>
-				<h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Susun soal dengan alur yang jelas</h1>
-				<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-					Pilih kegiatan CBT, buat atau upload soal, kirim review, lalu admin menerbitkan soal yang sudah disetujui agar siap masuk Paket Ujian.
-				</p>
-				<div class="mt-4 grid gap-2 text-xs md:grid-cols-6">
-					{#each ['Pilih Kegiatan', 'Buat/Upload Soal', 'Kirim Review', 'Reviewer Periksa', 'Admin Terbitkan', 'Paket Ujian'] as step, index (`workflow-step-${step}`)}
-						<div class="rounded-lg border border-green-100 bg-white/80 px-2.5 py-2 text-slate-700 shadow-sm">
-							<span class="mb-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-700 text-[10px] font-bold text-white">{index + 1}</span>
-							<p class="font-semibold leading-snug">{step}</p>
-						</div>
-					{/each}
-				</div>
-			</div>
-			<div class="rounded-xl border border-green-100 bg-white/90 p-3 shadow-sm">
-				<p class="text-xs font-bold uppercase tracking-wider text-green-700">Aksi Cepat</p>
-				<div class="mt-3 grid gap-2">
-					<Button onclick={openCreate} class="justify-start bg-green-700 text-white hover:bg-green-800">Buat Soal</Button>
-					<a href={resolve(reviewFocusHref())} class="inline-flex justify-start rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100">Ruang Review Fokus</a>
-					<Button variant="outline" onclick={openImport} class="justify-start border-green-200 text-green-800 hover:bg-green-50">Upload CSV</Button>
-					<LoadingButton
-						variant="outline"
-						onclick={() => void exportQuestionsCSV()}
-						loading={exportBusy}
-						loadingLabel="Export..."
-						disabled={exportBusy || totalItems === 0}
-						class="justify-start"
-					>
-						{exportButtonLabel}
-					</LoadingButton>
-				</div>
-			</div>
-		</div>
-	</section>
+	<SoalShellHeader
+		reviewHref={reviewFocusHref()}
+		{exportButtonLabel}
+		{exportBusy}
+		{totalItems}
+		onCreate={openCreate}
+		onImport={openImport}
+		onExport={() => void exportQuestionsCSV()}
+	/>
 
-	<section class="rounded-xl border border-green-200 bg-white p-3 shadow-sm">
-		<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-			<div class="min-w-0">
-				<p class="text-xs font-bold uppercase tracking-wider text-green-700">Konteks Kerja</p>
-				<h2 class="mt-1 text-base font-semibold text-slate-900">{selectedEventTitle}</h2>
-				<p class="mt-1 text-xs text-slate-500">Pilih konteks sebelum bekerja agar daftar, soal baru, upload, dan export tidak tercampur antar kegiatan.</p>
-			</div>
-			<div class="grid w-full gap-2 md:grid-cols-3 lg:w-auto lg:min-w-[46rem]">
-				<div>
-					<label for="event-context" class="mb-1 block text-xs font-medium text-slate-600">Kegiatan CBT</label>
-					<select
-						id="event-context"
-						value={selectedEventId}
-						onchange={(event) => setSelectedEvent((event.currentTarget as HTMLSelectElement).value)}
-						class="h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-					>
-						<option value="">Pilih kegiatan CBT...</option>
-						{#each events as event (event.id)}
-							<option value={event.id}>{event.title}{event.status ? ` · ${event.status}` : ''}</option>
-						{/each}
-					</select>
-				</div>
-				<div>
-					<label for="subject-context" class="mb-1 block text-xs font-medium text-slate-600">Mapel</label>
-					<select
-						id="subject-context"
-						bind:value={filterSubject}
-						onchange={(event) => setFilterSubject((event.currentTarget as HTMLSelectElement).value)}
-						class="h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-					>
-						<option value="">Semua Mapel</option>
-						{#each subjects as s (s.id)}
-							<option value={s.id}>{s.name}</option>
-						{/each}
-					</select>
-				</div>
-				<div>
-					<label for="role-context" class="mb-1 block text-xs font-medium text-slate-600">Peran saya</label>
-					<div id="role-context" class="flex h-9 items-center rounded-md border border-green-100 bg-green-50 px-2.5 text-sm font-semibold text-green-900">
-						{roleLabel}
-					</div>
-				</div>
-			</div>
-		</div>
-		{#if !selectedEventId}
-			<div class="mt-3 rounded-lg border border-dashed border-green-200 bg-green-50 px-3 py-3 text-sm text-green-950">
-				<p class="font-semibold">Mulai dari memilih kegiatan CBT.</p>
-				<p class="mt-1 text-xs leading-5 text-green-800">Daftar soal tetap bisa dibuka sebagai bank umum, tetapi alur harian lebih aman jika kegiatan dipilih lebih dulu agar guru, reviewer, dan admin melihat konteks yang sama.</p>
-			</div>
-		{/if}
-	</section>
+	<SoalContextPanel
+		{events}
+		{subjects}
+		{selectedEventId}
+		{filterSubject}
+		{selectedEventTitle}
+		{roleLabel}
+		onEventChange={setSelectedEvent}
+		onSubjectChange={setFilterSubject}
+	/>
 
-	<section class="grid gap-3 md:grid-cols-5">
-		{#each statusCards as card (card.label)}
-			<div class="rounded-xl border p-4 shadow-sm {card.tone === 'red'
-				? 'border-red-200 bg-red-50'
-				: card.tone === 'amber'
-					? 'border-amber-200 bg-amber-50'
-					: card.tone === 'green'
-						? 'border-green-200 bg-green-50'
-						: card.tone === 'emerald'
-							? 'border-emerald-200 bg-emerald-50'
-							: 'border-slate-200 bg-white'}">
-				<p class="text-xs font-semibold uppercase tracking-wider text-slate-500">{card.label}</p>
-				<p class="mt-2 text-2xl font-bold text-slate-900">{card.value}</p>
-				<p class="mt-1 text-[11px] text-slate-500">{card.helper}</p>
-			</div>
-		{/each}
-	</section>
+	<SoalModeTabs modes={moduleModes} {activeMode} onSelect={selectModuleMode} />
 
-	{#if selectedEventId}
-		<section class="rounded-xl border border-green-200 bg-white p-4 shadow-sm">
-			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-				<div>
-					<p class="text-xs font-bold uppercase tracking-wider text-green-700">Kesiapan Target Bank Soal</p>
-					<h2 class="mt-1 text-base font-semibold text-slate-900">{selectedEventTitle}</h2>
-					<p class="mt-1 text-xs text-slate-500">Target dihitung dari soal terbit per mapel. Soal draft/review tetap terlihat sebagai progres kerja.</p>
-				</div>
-				<div class="grid gap-2 text-center sm:grid-cols-3 lg:min-w-[24rem]">
-					<div class="rounded-lg border border-green-100 bg-green-50 px-3 py-2">
-						<p class="text-[10px] font-semibold uppercase text-green-700">Target Event</p>
-						<p class="text-xl font-bold text-green-950">{eventTargetTotal}</p>
-					</div>
-					<div class="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
-						<p class="text-[10px] font-semibold uppercase text-emerald-700">Terbit</p>
-						<p class="text-xl font-bold text-emerald-950">{eventPublishedTotal}</p>
-					</div>
-					<div class="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
-						<p class="text-[10px] font-semibold uppercase text-amber-700">Kurang</p>
-						<p class="text-xl font-bold text-amber-950">{Math.max(0, eventTargetTotal - eventPublishedTotal)}</p>
-					</div>
-				</div>
-			</div>
-			<div class="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.42fr)]">
-				<div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-					{#each questionTargets as target (target.subject_id)}
-						<div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-							<div class="flex items-start justify-between gap-2">
-								<div>
-									<p class="text-sm font-semibold text-slate-900">{target.subject_name ?? target.subject_code ?? target.subject_id}</p>
-									<p class="text-[11px] text-slate-500">Target {target.target_questions} · kurang {Math.max(0, target.target_questions - target.published)}</p>
-								</div>
-								<span class="rounded bg-white px-2 py-1 text-xs font-bold text-green-700">{target.published}/{target.target_questions}</span>
-							</div>
-							<div class="mt-2 h-2 overflow-hidden rounded-full bg-white">
-								<div class="h-2 rounded-full bg-green-600" style="width: {target.target_questions > 0 ? Math.min(100, Math.round((target.published / target.target_questions) * 100)) : 0}%"></div>
-							</div>
-							<p class="mt-2 text-[11px] text-slate-500">Draft {target.draft} · Review {target.review} · Revisi {target.rejected} · Disetujui {target.approved}</p>
-						</div>
-					{:else}
-						<div class="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-sm text-slate-400">Belum ada target soal untuk kegiatan ini.</div>
-					{/each}
-				</div>
-				<div class="rounded-lg border border-green-100 bg-green-50 p-3">
-					<p class="text-xs font-bold uppercase tracking-wider text-green-800">Atur Target Mapel</p>
-					<p class="mt-1 text-xs text-green-900">Pilih mapel di filter konteks, lalu isi jumlah target soal terbit.</p>
-					<div class="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
-						<Input id="target-questions" type="number" min="0" bind:value={targetQuestionsInput} disabled={!filterSubject || !canReviewWorkflow} class="h-9 bg-white" />
-						<LoadingButton onclick={() => void saveQuestionTarget()} loading={targetBusy} loadingLabel="Simpan..." disabled={targetBusy || !filterSubject || !canReviewWorkflow} class="bg-green-700 text-white hover:bg-green-800 disabled:opacity-50">Simpan Target</LoadingButton>
-					</div>
-					{#if selectedTarget}
-						<p class="mt-2 text-xs text-green-900">Mapel terpilih kurang <span class="font-bold">{selectedTargetShortage}</span> soal terbit dari target {selectedTarget.target_questions}.</p>
-					{:else if filterSubject}
-						<p class="mt-2 text-xs text-green-900">Mapel ini belum punya target. Simpan untuk membuat target baru.</p>
-					{:else}
-						<p class="mt-2 text-xs text-green-900">Pilih mapel spesifik untuk melihat shortage dan mengatur target.</p>
-					{/if}
-				</div>
-			</div>
-		</section>
+	{#if activeMode === 'catalog'}
+		<SoalStatusCards cards={statusCards} />
 	{/if}
 
-	<section class="grid gap-3 lg:grid-cols-3">
-		<div class="rounded-xl border border-green-200 bg-white p-4 shadow-sm">
-			<p class="text-xs font-bold uppercase tracking-wider text-green-700">Pembuat Soal / Guru</p>
-			<div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-				<Button onclick={openCreate} class="justify-start bg-green-700 text-white hover:bg-green-800">Buat Soal</Button>
-				<Button variant="outline" onclick={openImport} class="justify-start">Upload CSV</Button>
-				<Button variant="outline" onclick={() => setModuleMode('catalog')} class="justify-start">Soal Saya</Button>
-				<Button variant="outline" onclick={() => setRevisionSourceFilter('')} class="justify-start border-red-200 text-red-700 hover:bg-red-50">Perlu Revisi</Button>
-			</div>
-		</div>
-		<div class="rounded-xl border border-amber-200 bg-white p-4 shadow-sm {canUseReviewerTools ? '' : 'opacity-70'}">
-			<p class="text-xs font-bold uppercase tracking-wider text-amber-700">Reviewer</p>
-			<p class="mt-1 text-xs text-slate-500">Periksa satu soal, pilih setujui atau minta revisi.</p>
-			<div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-				<Button variant="outline" onclick={showPendingReviews} class="justify-start border-amber-200 text-amber-800 hover:bg-amber-50">Antrean Review</Button>
-				<a href={resolve(reviewFocusHref())} class="inline-flex justify-start rounded-md border border-amber-200 px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-50">Ruang Review Fokus</a>
-			</div>
-		</div>
-		<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm {isAdminRole ? '' : 'opacity-70'}">
-			<p class="text-xs font-bold uppercase tracking-wider text-slate-700">Admin</p>
-			<p class="mt-1 text-xs text-slate-500">Atur penugasan, terbitkan soal yang disetujui, dan export data.</p>
-			<div class="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-				<a href={resolve(membersHref())} class="inline-flex justify-start rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Atur Penugasan</a>
-				<Button variant="outline" onclick={showApprovedQuestions} class="justify-start text-green-800">Publish Soal</Button>
-				<LoadingButton variant="outline" onclick={() => void exportQuestionsCSV()} loading={exportBusy} loadingLabel="Export..." disabled={exportBusy || totalItems === 0} class="justify-start">Export</LoadingButton>
-			</div>
-		</div>
-	</section>
-
-	<div class="grid gap-2 md:grid-cols-4">
-		{#each moduleModes as mode (mode.id)}
-			<button
-				type="button"
-				onclick={() => (mode.id === 'composer' ? openCreate() : mode.id === 'import' ? openImport() : setModuleMode(mode.id))}
-				class="rounded-lg border px-3 py-3 text-left transition-colors {activeMode === mode.id
-					? 'border-green-500 bg-green-50 text-green-900'
-					: 'border-slate-200 bg-white text-slate-600 hover:border-green-200 hover:bg-green-50/40'}"
-			>
-				<div class="text-xs font-bold uppercase tracking-wider">{mode.label}</div>
-				<div class="mt-1 text-[11px] text-slate-500">{mode.desc}</div>
-			</button>
-		{/each}
-	</div>
-
-	<section class="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-950">
-		<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-			<p>
-				<span class="font-semibold">Perangkat bersama:</span> komposer menyimpan draft lokal di browser ini. Logout akan menghapus draft CBT lokal; gunakan tombol hapus jika selesai memakai komputer bersama.
-			</p>
-			<Button variant="outline" class="border-amber-300 bg-white text-amber-900 hover:bg-amber-100" onclick={clearAllLocalDrafts}>
-				Hapus Draft Lokal
-			</Button>
-		</div>
-	</section>
-
-	{#if selectedEventId && canReviewWorkflow}
-		<section class="rounded-lg border border-green-200 bg-green-50 p-3 shadow-sm">
-			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-				<div>
-					<h2 class="text-sm font-bold uppercase tracking-wider text-green-900">Penugasan dipindah ke halaman kegiatan</h2>
-					<p class="mt-1 text-xs text-green-800">Kelola panitia, pembuat soal, reviewer, proktor, pengawas, dan korektor dari halaman khusus agar Bank Soal tetap fokus pada komposer dan review.</p>
-				</div>
-				<a href={resolve(membersHref())} class="inline-flex rounded-md border border-green-300 bg-white px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kelola Penugasan</a>
-			</div>
-		</section>
+	{#if activeMode === 'catalog' && selectedEventId}
+		<CatalogTargetPanel
+			{selectedEventTitle}
+			{questionTargets}
+			{eventTargetTotal}
+			{eventPublishedTotal}
+			{filterSubject}
+			{canReviewWorkflow}
+			{targetBusy}
+			bind:targetQuestionsInput
+			{selectedTarget}
+			{selectedTargetShortage}
+			onSaveTarget={() => void saveQuestionTarget()}
+		/>
 	{/if}
 
-	{#if revisionTotal > 0 || revisionSourceFilter}
-		<section class="rounded-lg border border-red-200 bg-red-50/60 p-3">
-			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-				<div class="min-w-0">
-					<div class="flex flex-wrap items-center gap-2">
-						<h2 class="text-sm font-bold uppercase tracking-wider text-red-900">Antrian Revisi Soal</h2>
-						<span class="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-red-700">{revisionTotal} {revisionSourceFilter ? 'sesuai filter' : 'perlu diperbaiki'}</span>
-					</div>
-					<p class="mt-1 text-xs text-red-800">Draft revisi dari analisis butir atau workflow reviewer. Buka, koreksi isi/kunci/rubrik, lalu simpan sebagai draft atau ajukan review lagi.</p>
-				</div>
-				<Button variant="outline" size="sm" class="shrink-0 border-red-200 bg-white text-red-800 hover:bg-red-100" onclick={showAllRevisions}>
-					Lihat Semua Revisi
-				</Button>
-			</div>
-			<div class="mt-3 flex flex-wrap gap-1.5">
-				{#each revisionSourceOptions as source (source.id)}
-					<button
-						type="button"
-						onclick={() => setRevisionSourceFilter(source.id)}
-						class="rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors {revisionSourceFilter === source.id
-							? 'border-red-300 bg-white font-semibold text-red-800 shadow-sm'
-							: 'border-red-100 bg-red-50 text-red-700 hover:bg-white'}"
-					>
-						<span>{source.label}</span>
-						<span class="ml-1 text-[10px] font-normal opacity-70">{source.desc}</span>
-					</button>
-				{/each}
-			</div>
-			{#if revisionQueue.length > 0}
-				<div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-					{#each revisionQueue as q (q.id)}
-						<article class="min-w-0 rounded-md border border-red-100 bg-white px-3 py-2 text-left shadow-sm transition-colors hover:border-red-300 hover:bg-red-50">
-							<div class="mb-1 flex items-center gap-1">
-								<span class="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">{questionTypeLabel(q.question_type)}</span>
-								<span class="truncate text-[11px] text-slate-400">{q.subject_name || q.subject_code || 'Mapel belum ada'}</span>
-							</div>
-							<button type="button" onclick={() => openQuestion(q)} class="block w-full text-left">
-								<p class="line-clamp-2 text-sm font-medium text-slate-800 hover:text-green-800">{stemPreview(q)}</p>
-							</button>
-							<div class="mt-2 rounded border border-red-100 bg-red-50/70 px-2 py-1.5">
-								<div class="mb-0.5 flex flex-wrap items-center gap-1">
-									<span class="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-red-700">{revisionSourceLabel(q)}</span>
-									{#if q.reviewed_at}<span class="text-[10px] text-red-500">{new Date(q.reviewed_at).toLocaleDateString('id-ID')}</span>{/if}
-								</div>
-								<p class="line-clamp-2 text-[11px] leading-relaxed text-red-900">{revisionReason(q)}</p>
-							</div>
-							<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
-								<span>{q.code || 'Tanpa kode'}</span>
-								{#if q.author_username}<span>{q.author_username}</span>{/if}
-								<span>{DIFFICULTY_LABEL[q.difficulty] ?? q.difficulty ?? 'Sedang'}</span>
-							</div>
-							<div class="mt-2 flex flex-wrap gap-1.5">
-								<Button variant="outline" size="sm" class="h-7 bg-white text-xs" onclick={() => openQuestion(q)}>
-									Edit Revisi
-								</Button>
-								<LoadingButton
-									variant="outline"
-									size="sm"
-									class="h-7 border-green-200 bg-green-50 text-xs text-green-800 hover:bg-green-100"
-									onclick={() => void submitRevisionForReview(q)}
-									loading={workflowBusyId === q.id}
-									loadingLabel="Mengajukan..."
-									disabled={!canSubmitRevisionReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
-								>
-									Ajukan Review Ulang
-								</LoadingButton>
-							</div>
-						</article>
-					{/each}
-				</div>
-			{:else}
-				<div class="mt-3 rounded-md border border-red-100 bg-white px-3 py-3 text-sm text-red-800">
-					Tidak ada revisi pada sumber ini.
-				</div>
-			{/if}
-		</section>
-	{/if}
-
-	{#if activeMode === 'review' || (canReviewWorkflow && reviewTotal > 0)}
-		<section class="rounded-lg border border-amber-200 bg-amber-50/70 p-3">
-			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-				<div class="min-w-0">
-					<div class="flex flex-wrap items-center gap-2">
-						<h2 class="text-sm font-bold uppercase tracking-wider text-amber-950">Antrian Review Soal</h2>
-						<span class="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-amber-800">{reviewTotal} menunggu keputusan</span>
-					</div>
-					<p class="mt-1 text-xs text-amber-900">Meja kerja reviewer untuk memeriksa soal yang diajukan guru, menyetujui, atau mengembalikan dengan catatan revisi.</p>
-				</div>
-				<Button variant="outline" size="sm" class="shrink-0 border-amber-200 bg-white text-amber-900 hover:bg-amber-100" onclick={showPendingReviews}>
-					Lihat Semua Menunggu Review
-				</Button>
-			</div>
-			{#if reviewQueue.length > 0}
-				<div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-					{#each reviewQueue as q (q.id)}
-						<article class="min-w-0 rounded-md border border-amber-100 bg-white px-3 py-2 text-left shadow-sm transition-colors hover:border-amber-300 hover:bg-amber-50">
-							<div class="mb-1 flex items-center gap-1">
-								<span class="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">{questionTypeLabel(q.question_type)}</span>
-								<span class="truncate text-[11px] text-slate-400">{q.subject_name || q.subject_code || 'Mapel belum ada'}</span>
-							</div>
-							<button type="button" onclick={() => openReviewDecision(q, 'approve')} class="block w-full text-left" disabled={!canReviewWorkflow}>
-								<p class="line-clamp-2 text-sm font-medium text-slate-800 hover:text-green-800">{stemPreview(q)}</p>
-							</button>
-							<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
-								<span>{q.code || 'Tanpa kode'}</span>
-								{#if q.author_username}<span>Guru: {q.author_username}</span>{/if}
-								<span>{DIFFICULTY_LABEL[q.difficulty] ?? q.difficulty ?? 'Sedang'}</span>
-							</div>
-							{#if q.review_notes}
-								<div class="mt-2 rounded border border-amber-100 bg-amber-50/70 px-2 py-1.5 text-[11px] leading-relaxed text-amber-900">
-									<span class="font-semibold">Catatan sebelumnya:</span> {revisionReason(q)}
-								</div>
-							{/if}
-							<div class="mt-2 flex flex-wrap gap-1.5">
-								<Button
-									variant="outline"
-									size="sm"
-									class="h-7 border-green-200 bg-green-50 text-xs text-green-800 hover:bg-green-100"
-									onclick={() => openReviewDecision(q, 'approve')}
-									disabled={!canDecideReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
-								>
-									Setujui
-								</Button>
-								<Button
-									variant="outline"
-									size="sm"
-									class="h-7 border-red-200 bg-red-50 text-xs text-red-700 hover:bg-red-100"
-									onclick={() => openReviewDecision(q, 'reject')}
-									disabled={!canDecideReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
-								>
-									Minta Revisi
-								</Button>
-							</div>
-							{#if !canReviewWorkflow}
-								<p class="mt-2 text-[11px] text-amber-800">Menunggu keputusan admin/reviewer.</p>
-							{/if}
-						</article>
-					{/each}
-				</div>
-			{:else}
-				<div class="mt-3 rounded-md border border-amber-100 bg-white px-3 py-3 text-sm text-amber-900">
-					Belum ada soal yang menunggu review pada filter ini.
-				</div>
-			{/if}
-		</section>
-	{/if}
-
-	{#if activeMode === 'review' || (canReviewWorkflow && approvedTotal > 0)}
-		<section class="rounded-lg border border-green-200 bg-green-50/70 p-3">
-			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-				<div class="min-w-0">
-					<div class="flex flex-wrap items-center gap-2">
-						<h2 class="text-sm font-bold uppercase tracking-wider text-green-950">Siap Terbit ke Paket</h2>
-						<span class="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-green-800">{approvedTotal} disetujui</span>
-					</div>
-					<p class="mt-1 text-xs text-green-900">Soal sudah lolos review tetapi belum berstatus terbit, sehingga belum bisa dipilih di pembuat paket ujian.</p>
-				</div>
-				<Button variant="outline" size="sm" class="shrink-0 border-green-200 bg-white text-green-900 hover:bg-green-100" onclick={showApprovedQuestions}>
-					Lihat Semua Disetujui
-				</Button>
-			</div>
-			{#if approvedQueue.length > 0}
-				<div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-					{#each approvedQueue as q (q.id)}
-						<article class="min-w-0 rounded-md border border-green-100 bg-white px-3 py-2 text-left shadow-sm transition-colors hover:border-green-300 hover:bg-green-50">
-							<div class="mb-1 flex items-center gap-1">
-								<span class="rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold text-green-800">{questionTypeLabel(q.question_type)}</span>
-								<span class="truncate text-[11px] text-slate-400">{q.subject_name || q.subject_code || 'Mapel belum ada'}</span>
-							</div>
-							<p class="line-clamp-2 text-sm font-medium text-slate-800">{stemPreview(q)}</p>
-							<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
-								<span>{q.code || 'Tanpa kode'}</span>
-								{#if q.author_username}<span>Guru: {q.author_username}</span>{/if}
-								{#if q.reviewer_username}<span>Reviewer: {q.reviewer_username}</span>{/if}
-							</div>
-							<div class="mt-2 flex flex-wrap items-center gap-1.5">
-								<LoadingButton
-									variant="outline"
-									size="sm"
-									class="h-7 border-green-200 bg-green-700 text-xs text-white hover:bg-green-800"
-									onclick={() => void publishQuestion(q)}
-									loading={workflowBusyId === q.id}
-									loadingLabel="Menerbitkan..."
-									disabled={!canPublishQuestion(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
-								>
-									Terbitkan
-								</LoadingButton>
-								{#if !canReviewWorkflow}
-									<span class="text-[11px] text-green-800">Menunggu admin menerbitkan.</span>
-								{/if}
-							</div>
-						</article>
-					{/each}
-				</div>
-			{:else}
-				<div class="mt-3 rounded-md border border-green-100 bg-white px-3 py-3 text-sm text-green-900">
-					Belum ada soal disetujui yang menunggu terbit.
-				</div>
-			{/if}
-		</section>
+	{#if activeMode === 'catalog'}
+		<CatalogShortcutPanel
+			reviewHref={reviewFocusHref()}
+			membersHref={membersHref()}
+			{canUseReviewerTools}
+			{isAdminRole}
+			{exportBusy}
+			{totalItems}
+			onCreate={openCreate}
+			onImport={openImport}
+			onRevision={() => setRevisionSourceFilter('')}
+			onPendingReviews={showPendingReviews}
+			onApproved={showApprovedQuestions}
+			onExport={() => void exportQuestionsCSV()}
+		/>
 	{/if}
 
 	{#if activeMode === 'composer'}
-		<section class="rounded-lg border border-green-200 bg-green-50 p-4">
-			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-				<div>
-					<h2 class="text-sm font-bold uppercase tracking-wider text-green-900">Buat Soal</h2>
-					<p class="mt-1 text-sm text-green-800">Tulis satu soal, simpan draft, lalu ajukan review saat sudah lengkap. Soal yang sudah review/publish atau dipakai paket wajib direvisi lewat duplikasi.</p>
-				</div>
-				<Button onclick={openCreate} class="bg-green-700 text-white hover:bg-green-800">Mulai Buat Soal</Button>
-			</div>
+		<section class="rounded-lg border border-green-200 bg-green-50/70 p-3 text-sm text-green-950">
+			<p class="font-semibold">Ruang komposer Bank Soal aktif.</p>
+			<p class="mt-1 text-xs text-green-800">Konteks saat ini: {selectedEventTitle}. Default penyimpanan adalah Bank Soal reusable; konteks kegiatan hanya membantu target kebutuhan dan penugasan.</p>
 		</section>
-	{:else if activeMode === 'review'}
-		<section class="grid gap-3 md:grid-cols-6">
-			<div class="rounded-lg border border-slate-200 bg-white p-4">
-				<p class="text-xs uppercase tracking-wider text-slate-500">Draft</p>
-				<p class="mt-2 text-2xl font-bold text-slate-900">{draftCount}</p>
-			</div>
-			<div class="rounded-lg border border-red-200 bg-red-50 p-4">
-				<p class="text-xs uppercase tracking-wider text-red-700">Perlu Revisi</p>
-				<p class="mt-2 text-2xl font-bold text-red-900">{revisionTotal}</p>
-				<p class="mt-1 text-[11px] text-red-700">{visibleRevisionCount} tampil di halaman ini</p>
-			</div>
-			<div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-				<p class="text-xs uppercase tracking-wider text-yellow-700">Menunggu Review</p>
-				<p class="mt-2 text-2xl font-bold text-yellow-900">{reviewCount}</p>
-				<p class="mt-1 text-[11px] text-yellow-700">{visibleReviewCount} tampil di halaman ini</p>
-			</div>
-			<div class="rounded-lg border border-green-200 bg-green-50 p-4">
-				<p class="text-xs uppercase tracking-wider text-green-700">Siap Terbit</p>
-				<p class="mt-2 text-2xl font-bold text-green-900">{approvedCount}</p>
-				<p class="mt-1 text-[11px] text-green-700">{visibleApprovedCount} tampil di halaman ini</p>
-			</div>
-			<div class="rounded-lg border border-green-200 bg-green-50 p-4">
-				<p class="text-xs uppercase tracking-wider text-green-700">Terbit</p>
-				<p class="mt-2 text-2xl font-bold text-green-900">{publishedCount}</p>
-			</div>
-			<div class="rounded-lg border border-red-200 bg-red-50 p-4">
-				<p class="text-xs uppercase tracking-wider text-red-700">Terkunci</p>
-				<p class="mt-2 text-2xl font-bold text-red-900">{lockedCount}</p>
-			</div>
-		</section>
-	{:else if activeMode === 'import'}
-		<section class="rounded-lg border border-slate-200 bg-white p-4">
-			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+		<ComposerDraftNotice onClear={clearAllLocalDrafts} />
+	{/if}
+
+	{#if activeMode === 'composer' || activeMode === 'import'}
+		<section class="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm">
+			<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 				<div>
-					<h2 class="text-sm font-bold uppercase tracking-wider text-slate-800">Upload CSV</h2>
-					<p class="mt-1 text-sm text-slate-500">Upload banyak soal dari template CSV. Hasilnya tetap draft agar bisa diperiksa sebelum review.</p>
+					<p class="font-semibold text-slate-800">Cakupan penyimpanan soal</p>
+					<p class="mt-1 text-xs leading-5 text-slate-500">
+						Default: soal baru masuk Bank Soal reusable tanpa <code class="rounded bg-slate-100 px-1">event_id</code>, meskipun filter kegiatan sedang dipilih.
+					</p>
+					{#if editingId && editingEventId}
+						<p class="mt-1 text-xs font-medium text-green-700">Edit soal ini tetap mempertahankan cakupan kegiatan yang sudah ada.</p>
+					{:else if specialEventAttachId}
+						<p class="mt-1 text-xs font-medium text-amber-700">Soal baru atau import CSV akan ditandai khusus untuk {selectedEventTitle}.</p>
+					{:else if selectedEventId}
+						<p class="mt-1 text-xs font-medium text-slate-600">Soal baru/import tetap reusable sampai opsi khusus kegiatan diaktifkan.</p>
+					{/if}
 				</div>
-				<div class="flex flex-wrap gap-2">
-					<LoadingButton
-						variant="outline"
-						onclick={() => void downloadQuestionsTemplateCSV()}
-						loading={templateBusy}
-						loadingLabel="Mengunduh..."
-					>
-						Download Template
-					</LoadingButton>
-					<Button variant="outline" onclick={openImport}>Upload CSV</Button>
-				</div>
+				<label for="special-event-question-mode" class="flex cursor-pointer items-start gap-3 rounded-lg border border-dashed border-green-200 bg-green-50 px-3 py-2 text-green-950 {(!selectedEventId || (activeMode === 'composer' && Boolean(editingId))) ? 'opacity-70' : ''}">
+					<input
+						id="special-event-question-mode"
+						type="checkbox"
+						class="mt-1 rounded accent-green-700"
+						checked={specialEventQuestionMode}
+						disabled={!selectedEventId || (activeMode === 'composer' && Boolean(editingId))}
+						onchange={(event) => setSpecialEventQuestionMode((event.currentTarget as HTMLInputElement).checked)}
+					/>
+					<span>
+						<span class="block text-xs font-bold uppercase tracking-[0.16em]">Soal khusus kegiatan ini</span>
+						<span class="mt-0.5 block text-xs text-green-800">
+							{selectedEventId ? 'Aktifkan hanya jika soal tidak boleh menjadi bank soal lintas kegiatan.' : 'Pilih kegiatan dulu untuk membuat soal khusus event.'}
+						</span>
+					</span>
+				</label>
 			</div>
 		</section>
 	{/if}
 
+	{#if activeMode === 'review'}
+		<ReviewWorkflowQueues
+			{revisionQueue}
+			{revisionTotal}
+			{reviewQueue}
+			{reviewTotal}
+			{approvedQueue}
+			{approvedTotal}
+			{revisionSourceOptions}
+			{revisionSourceFilter}
+			{canReviewWorkflow}
+			{workflowBusyId}
+			{questionTypeLabel}
+			{stemPreview}
+			{revisionSourceLabel}
+			{revisionReason}
+			{canSubmitRevisionReview}
+			{canDecideReview}
+			{canPublishQuestion}
+			onRevisionSourceFilter={setRevisionSourceFilter}
+			onShowAllRevisions={showAllRevisions}
+			onShowPendingReviews={showPendingReviews}
+			onShowApprovedQuestions={showApprovedQuestions}
+			onOpenQuestion={openQuestion}
+			onOpenReviewDecision={openReviewDecision}
+			onSubmitRevisionForReview={(question) => void submitRevisionForReview(question)}
+			onPublishQuestion={(question) => void publishQuestion(question)}
+			difficultyLabel={DIFFICULTY_LABEL}
+		/>
+	{/if}
+
+	{#if activeMode === 'composer'}
+		{@render composerPanel()}
+	{:else if activeMode === 'import'}
+		<ImportWorkflowPanel
+			{subjects}
+			{selectedImportContext}
+			{specialEventQuestionMode}
+			bind:importSubjectId
+			onSubjectChange={setImportSubject}
+			{importBusy}
+			hasImportFile={importFile !== null}
+			{importDryRunDone}
+			{importResult}
+			{templateBusy}
+			onTemplate={() => void downloadQuestionsTemplateCSV()}
+			onFileChange={onImportFileChange}
+			onDryRun={() => void importLegacyCSV(true)}
+			onConfirmImport={() => void importLegacyCSV(false)}
+			onBack={() => setModuleMode('catalog')}
+		/>
+	{/if}
+
+	{#if activeMode === 'catalog'}
 	<section class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
 		<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 			<div>
@@ -2828,17 +2549,21 @@
 				<p class="mt-0.5 text-xs text-slate-500">Bagian ini adalah daftar teknis lama: filter, tabel, dan aksi detail tetap tersedia sebagai alat lanjutan.</p>
 			</div>
 			{#if selectedEventId}
-				<Button variant="outline" class="h-8 text-xs" onclick={() => setSelectedEvent('')}>Lepas Konteks Kegiatan</Button>
+				<Button variant="outline" class="h-8 text-xs" onclick={() => setSelectedEvent('')}>Lepas Filter Kegiatan</Button>
 			{/if}
 		</div>
 		<div class="mt-3 flex flex-wrap gap-2">
+			<label for="question-search" class="sr-only">Cari soal berdasarkan isi atau kode</label>
 			<Input
+				id="question-search"
 				placeholder="Cari soal..."
 				value={search}
 				oninput={onSearchInput}
 				class="h-8 w-48 text-sm"
 			/>
+			<label for="question-subject-filter" class="sr-only">Filter mata pelajaran daftar soal</label>
 			<select
+				id="question-subject-filter"
 				bind:value={filterSubject}
 				onchange={(event) => setFilterSubject((event.currentTarget as HTMLSelectElement).value)}
 				class="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -2848,7 +2573,9 @@
 					<option value={s.id}>{s.name}</option>
 				{/each}
 			</select>
+			<label for="question-workflow-filter" class="sr-only">Filter status workflow daftar soal</label>
 			<select
+				id="question-workflow-filter"
 				bind:value={filterWorkflow}
 				onchange={onWorkflowFilterChange}
 				class="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -2868,13 +2595,13 @@
 				<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 					<div>
 						<p class="text-sm font-semibold text-green-950">{selectedQuestionIds.length} soal dipilih</p>
-						<p class="text-xs text-green-800">Eligible review: {selectedReviewEligibleCount}; eligible publish: {selectedPublishEligibleCount}. Aksi yang tidak memenuhi syarat otomatis dilewati.</p>
+						<p class="text-xs text-green-800">Siap diputuskan: {selectedReviewEligibleCount}; siap diterbitkan: {selectedPublishEligibleCount}. Aksi yang tidak memenuhi syarat otomatis dilewati.</p>
 					</div>
 					<div class="flex flex-wrap gap-2">
-						<Input placeholder="Catatan bulk reject/approve..." bind:value={bulkNotes} class="h-8 min-w-56 bg-white text-xs" />
-						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('approve')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-white text-green-800">Approve</LoadingButton>
-						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('reject')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-white text-red-700">Reject</LoadingButton>
-						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('publish')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedPublishEligibleCount === 0} class="h-8 bg-white text-green-800">Publish</LoadingButton>
+						<Input placeholder="Catatan untuk Setujui/Minta Revisi..." aria-label="Catatan aksi massal review soal" bind:value={bulkNotes} class="h-8 min-w-56 bg-white text-xs" />
+						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('approve')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-white text-green-800">Setujui</LoadingButton>
+						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('reject')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-white text-red-700">Minta Revisi</LoadingButton>
+						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('publish')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedPublishEligibleCount === 0} class="h-8 bg-white text-green-800">Terbitkan</LoadingButton>
 						<Button variant="outline" size="sm" class="h-8 bg-white" onclick={clearSelection}>Bersihkan</Button>
 					</div>
 				</div>
@@ -3089,128 +2816,8 @@
 			</div>
 		</div>
 	{/if}
+	{/if}
 </div>
-
-<Dialog.Root bind:open={showImport}>
-	<Dialog.Content>
-		<div class="w-[min(92vw,34rem)] space-y-4 p-5">
-			<div>
-				<p class="text-xs font-bold uppercase tracking-wider text-green-700">Upload CSV</p>
-				<h2 class="mt-1 text-base font-semibold text-slate-800">Masukkan banyak soal sekaligus</h2>
-				<p class="mt-1 text-xs text-slate-500">Hasil upload disimpan sebagai draft. Kolom tipe boleh kosong untuk PG lama, atau diisi: pg_kompleks, benar_salah, setuju_tidak_setuju, isian, essay, menjodohkan.</p>
-				<p class="mt-2 rounded-md border border-green-200 bg-green-50 px-2 py-1.5 text-xs text-green-900">Konteks kegiatan: <span class="font-semibold">{selectedImportContext}</span></p>
-			</div>
-			<div class="grid gap-2 text-xs sm:grid-cols-4">
-				<div class="rounded-md border border-green-200 bg-green-50 p-2 text-green-900">
-					<p class="font-semibold">1. Download Template</p>
-					<LoadingButton variant="outline" size="sm" onclick={() => void downloadQuestionsTemplateCSV()} loading={templateBusy} loadingLabel="Mengunduh..." class="mt-2 h-7 bg-white text-[11px]">
-						Template
-					</LoadingButton>
-				</div>
-				<div class="rounded-md border border-slate-200 bg-slate-50 p-2 text-slate-700">
-					<p class="font-semibold">2. Pilih Kegiatan/Mapel</p>
-					<p class="mt-1 text-[11px]">Kegiatan mengikuti pilihan halaman, mapel dipilih di bawah.</p>
-				</div>
-				<div class="rounded-md border border-slate-200 bg-slate-50 p-2 text-slate-700">
-					<p class="font-semibold">3. Upload File</p>
-					<p class="mt-1 text-[11px]">Gunakan CSV UTF-8 agar huruf dan simbol aman.</p>
-				</div>
-				<div class="rounded-md border border-slate-200 bg-slate-50 p-2 text-slate-700">
-					<p class="font-semibold">4. Lihat Hasil Import</p>
-					<p class="mt-1 text-[11px]">Jumlah masuk, dilewati, dan error muncul setelah upload.</p>
-				</div>
-			</div>
-			<div class="space-y-3">
-				<div>
-					<label for="legacy-import-subject" class="mb-1 block text-xs font-medium text-slate-600">
-						Mata Pelajaran <span class="text-red-500">*</span>
-					</label>
-					<select
-						id="legacy-import-subject"
-						bind:value={importSubjectId}
-						class="w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-					>
-						<option value="">-- Pilih Mapel --</option>
-						{#each subjects as s (s.id)}
-							<option value={s.id}>{s.name}</option>
-						{/each}
-					</select>
-				</div>
-				<div>
-					<label for="legacy-import-file" class="mb-1 block text-xs font-medium text-slate-600">
-						File CSV <span class="text-red-500">*</span>
-					</label>
-					<input
-						id="legacy-import-file"
-						type="file"
-						accept=".csv,text/csv"
-						onchange={onImportFileChange}
-						class="block w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-green-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-green-800"
-					/>
-				</div>
-			</div>
-			{#if importResult}
-				<div class="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
-					<div class="grid grid-cols-3 gap-2 text-center">
-						<div>
-							<div class="text-lg font-bold">{importDryRunDone ? (importResult.would_import ?? importResult.valid ?? 0) : importResult.imported}</div>
-							<div class="text-[10px] uppercase text-green-700">{importDryRunDone ? 'Akan Masuk' : 'Masuk'}</div>
-						</div>
-						<div>
-							<div class="text-lg font-bold">{importResult.skipped}</div>
-							<div class="text-[10px] uppercase text-green-700">Lewat</div>
-						</div>
-						<div>
-							<div class="text-lg font-bold">{importResult.total_rows}</div>
-							<div class="text-[10px] uppercase text-green-700">Baris</div>
-						</div>
-					</div>
-					{#if importDryRunDone}
-						<p class="mt-3 border-t border-green-200 pt-2 text-xs font-semibold text-green-900">Preview dry-run selesai. Periksa error dan kode duplikat sebelum menekan Konfirmasi Import.</p>
-					{/if}
-					{#if importResult.errors.length > 0}
-						<p class="mt-3 border-t border-green-200 pt-2 text-xs font-semibold text-amber-900">Error import ditampilkan agar kolom wajib, format tipe, dan encoding bisa diperbaiki sebelum upload ulang.</p>
-						<ul class="mt-3 space-y-1 border-t border-green-200 pt-2 text-xs text-amber-800">
-							{#each importResult.errors.slice(0, 6) as err (`legacy-import-error-${err}`)}
-								<li>{err}</li>
-							{/each}
-						</ul>
-					{/if}
-					{#if importResult.duplicate_codes.length > 0}
-						<div class="mt-3 border-t border-green-200 pt-2 text-xs text-amber-900">
-							<p class="font-semibold">Kode duplikat dilewati:</p>
-							<p class="mt-1 break-words font-mono text-[11px]">{importResult.duplicate_codes.slice(0, 24).join(', ')}{importResult.duplicate_codes.length > 24 ? `, +${importResult.duplicate_codes.length - 24} lagi` : ''}</p>
-						</div>
-					{/if}
-				</div>
-			{/if}
-			<div class="flex justify-end gap-2 border-t border-slate-100 pt-4">
-				<Button variant="outline" onclick={() => (showImport = false)}>
-					Tutup
-				</Button>
-				<LoadingButton
-					onclick={() => void importLegacyCSV(true)}
-					loading={importBusy}
-					loadingLabel="Preview..."
-					disabled={importBusy || !importSubjectId || !importFile}
-					variant="outline"
-					class="disabled:opacity-50"
-				>
-					Preview Dry-run
-				</LoadingButton>
-				<LoadingButton
-					onclick={() => void importLegacyCSV(false)}
-					loading={importBusy}
-					loadingLabel="Import..."
-					disabled={importBusy || !importSubjectId || !importFile || !importDryRunDone}
-					class="bg-green-700 text-white hover:bg-green-800 disabled:opacity-50"
-				>
-					Konfirmasi Import
-				</LoadingButton>
-			</div>
-		</div>
-	</Dialog.Content>
-</Dialog.Root>
 
 <Dialog.Root bind:open={reviewDecisionOpen}>
 	<Dialog.Content>
@@ -3303,20 +2910,24 @@
 			{/if}
 
 			<div class="grid grid-cols-2 gap-2">
-				<button
-					type="button"
-					onclick={() => (reviewDecision = 'approve')}
-					class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'approve'
+			<button
+				type="button"
+				onclick={() => (reviewDecision = 'approve')}
+				aria-pressed={reviewDecision === 'approve'}
+				aria-label="Pilih keputusan Setujui untuk soal ini"
+				class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'approve'
 						? 'border-green-300 bg-green-50 font-semibold text-green-800'
 						: 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}"
 				>
 					Setujui
 					<span class="mt-0.5 block text-[11px] font-normal text-slate-500">Soal masuk status disetujui.</span>
 				</button>
-				<button
-					type="button"
-					onclick={() => (reviewDecision = 'reject')}
-					class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'reject'
+			<button
+				type="button"
+				onclick={() => (reviewDecision = 'reject')}
+				aria-pressed={reviewDecision === 'reject'}
+				aria-label="Pilih keputusan Minta Revisi untuk soal ini"
+				class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'reject'
 						? 'border-red-300 bg-red-50 font-semibold text-red-700'
 						: 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}"
 				>
@@ -3348,7 +2959,7 @@
 					disabled={!reviewDecisionQuestion || workflowBusyId !== ''}
 					class={reviewDecision === 'approve' ? 'bg-green-700 text-white hover:bg-green-800' : 'bg-red-600 text-white hover:bg-red-700'}
 				>
-					{reviewDecision === 'approve' ? 'Setujui Soal' : 'Kirim Revisi'}
+					{reviewDecision === 'approve' ? 'Setujui Soal' : 'Minta Revisi'}
 				</LoadingButton>
 			</div>
 		</div>
@@ -3627,11 +3238,10 @@
 	</div>
 {/snippet}
 
-<!-- ── Composer Dialog ─────────────────────────────────────────────────────── -->
-<Dialog.Root bind:open={showComposer}>
-	<Dialog.Content>
-		<div class="soal-composer-modal relative flex h-[94vh] w-[min(96vw,110rem)] max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-2xl">
-			<div class="shrink-0 border-b border-green-100 bg-white px-4 py-2.5 md:px-6">
+<!-- ── Composer Inline Section ─────────────────────────────────────────────── -->
+{#snippet composerPanel()}
+	<section class="soal-composer-inline relative flex min-h-[42rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm">
+			<div class="shrink-0 border-b border-slate-200 bg-white px-4 py-3 md:px-5">
 				<div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
 					<div class="min-w-0">
 						<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -3672,22 +3282,22 @@
 				</div>
 			</div>
 
-			<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 md:p-6">
-				<section class="mb-4 rounded-xl border border-green-200 bg-white p-3 shadow-sm">
+			<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 md:p-5">
+				<section class="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 					<div class="grid gap-2 md:grid-cols-3">
-						<button type="button" onclick={() => (composerStep = 'info')} class="rounded-lg border px-3 py-2 text-left {composerStep === 'info' ? 'border-green-200 bg-green-50' : 'border-slate-200 bg-slate-50'}">
-							<p class="text-[10px] font-bold uppercase tracking-wider text-green-700">Langkah 1</p>
-							<p class="text-sm font-semibold text-green-950">Info Dasar</p>
-							<p class="mt-0.5 text-[11px] text-green-800">Mapel, tipe soal, tingkat, dan mode penulisan.</p>
+						<button type="button" onclick={() => (composerStep = 'info')} class={composerStepClass('info')}>
+							<p class="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Langkah 1</p>
+							<p class="text-sm font-semibold">Info Dasar</p>
+							<p class="mt-0.5 text-[11px] text-slate-500">Mapel, tipe soal, tingkat, dan mode penulisan.</p>
 						</button>
-						<button type="button" onclick={() => (composerStep = 'content')} class="rounded-lg border px-3 py-2 text-left {composerStep === 'content' ? 'border-green-200 bg-green-50' : 'border-slate-200 bg-slate-50'}">
+						<button type="button" onclick={() => (composerStep = 'content')} class={composerStepClass('content')}>
 							<p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Langkah 2</p>
-							<p class="text-sm font-semibold text-slate-900">Isi Soal</p>
+							<p class="text-sm font-semibold">Isi Soal</p>
 							<p class="mt-0.5 text-[11px] text-slate-500">Pertanyaan, opsi/pasangan/kunci, rubrik, dan pembahasan.</p>
 						</button>
-						<button type="button" onclick={() => (composerStep = 'preview')} class="rounded-lg border px-3 py-2 text-left {composerStep === 'preview' ? 'border-green-200 bg-green-50' : 'border-slate-200 bg-slate-50'}">
+						<button type="button" onclick={() => (composerStep = 'preview')} class={composerStepClass('preview')}>
 							<p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Langkah 3</p>
-							<p class="text-sm font-semibold text-slate-900">Preview & Kirim</p>
+							<p class="text-sm font-semibold">Preview & Kirim</p>
 							<p class="mt-0.5 text-[11px] text-slate-500">Cek kesiapan, simpan draft, atau ajukan review.</p>
 						</button>
 					</div>
@@ -3706,18 +3316,18 @@
 							</div>
 							<span class="text-xs font-bold {readinessScore === 100 ? 'text-green-700' : 'text-red-500'}">{readinessScore}%</span>
 						</div>
-						<span class="rounded-full px-2 py-1 text-[10px] font-semibold {validationIssues.length === 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}">
+						<span class="rounded-full border px-2 py-1 text-[10px] font-semibold {validationIssues.length === 0 ? 'border-emerald-100 bg-white text-emerald-700' : 'border-red-100 bg-white text-red-600'}">
 							{validationIssues.length === 0 ? 'Siap review' : `${validationIssues.length} wajib belum lengkap`}
 						</span>
-						<span class="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">
+						<span class="rounded-full border border-amber-100 bg-white px-2 py-1 text-[10px] font-semibold text-amber-700">
 							{qualityWarningCount} sinyal kualitas perlu cek
 						</span>
-						<span class="rounded-full bg-green-50 px-2 py-1 text-[10px] font-semibold text-green-700">
+						<span class="rounded-full border border-emerald-100 bg-white px-2 py-1 text-[10px] font-semibold text-emerald-700">
 							{draftStatusLabel()}
 						</span>
 						{#if selectedEventId}
-							<span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
-								Bank kegiatan: {selectedEventTitle}
+							<span class="rounded-full border border-emerald-100 bg-white px-2 py-1 text-[10px] font-semibold text-emerald-700">
+								Konteks kegiatan: {selectedEventTitle}
 							</span>
 						{/if}
 						<div class="ml-auto flex flex-wrap items-center gap-1">
@@ -4327,22 +3937,10 @@
 					</div>
 				</div>
 			{/if}
-		</div>
-	</Dialog.Content>
-</Dialog.Root>
+	</section>
+{/snippet}
 
 <style>
-	:global(.content:has(.soal-composer-modal)) {
-		width: min(96vw, 110rem);
-		min-width: min(96vw, 110rem);
-		max-width: 96vw;
-		max-height: 94vh;
-		overflow: hidden;
-		border: 0;
-		border-radius: 1rem;
-		padding: 0;
-	}
-
 	:global(.latex-preview .latex-display) {
 		overflow-x: auto;
 		padding: 0.25rem 0;

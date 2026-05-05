@@ -162,6 +162,12 @@ type CreateCbtSessionInput struct {
 }
 
 func (s *CbtSession) Create(ctx context.Context, in CreateCbtSessionInput) (db.CbtExamSession, error) {
+	if in.Status == "" {
+		in.Status = db.CbtSessionStatusEnumDraft
+	}
+	if !validCbtSessionStatus(in.Status) {
+		return db.CbtExamSession{}, fmt.Errorf("%w: status sesi CBT tidak valid", domain.ErrBadRequest)
+	}
 	scopeType := normalizeScopeType(in.ScopeType)
 	mixPolicy := normalizeMixPolicy(in.MixPolicy, scopeType)
 	assignmentMode := normalizeAssignmentMode(in.AssignmentMode)
@@ -241,6 +247,9 @@ func validateCbtPackageQualityForSession(quality db.GetCbtPackageQuestionQuality
 }
 
 func (s *CbtSession) UpdateStatus(ctx context.Context, id pgtype.UUID, status db.CbtSessionStatusEnum) (db.CbtExamSession, error) {
+	if !validCbtSessionStatus(status) {
+		return db.CbtExamSession{}, fmt.Errorf("%w: status sesi CBT tidak valid", domain.ErrBadRequest)
+	}
 	var session db.GetCbtExamSessionRow
 	if status == db.CbtSessionStatusEnumScheduled || status == db.CbtSessionStatusEnumActive {
 		var err error
@@ -372,6 +381,9 @@ func (s *CbtSession) ListParticipantsByTeacher(ctx context.Context, sessionID, t
 }
 
 func (s *CbtSession) EnrollClass(ctx context.Context, sessionID, classID pgtype.UUID) error {
+	if err := s.ensureSessionSetupMutable(ctx, sessionID); err != nil {
+		return err
+	}
 	return s.q.EnrollClassToSession(ctx, db.EnrollClassToSessionParams{
 		SessionID: sessionID,
 		ClassID:   classID,
@@ -379,6 +391,9 @@ func (s *CbtSession) EnrollClass(ctx context.Context, sessionID, classID pgtype.
 }
 
 func (s *CbtSession) EnrollGrade(ctx context.Context, sessionID pgtype.UUID, level string) error {
+	if err := s.ensureSessionSetupMutable(ctx, sessionID); err != nil {
+		return err
+	}
 	return s.q.EnrollGradeToSession(ctx, db.EnrollGradeToSessionParams{
 		SessionID: sessionID,
 		Level:     level,
@@ -386,6 +401,9 @@ func (s *CbtSession) EnrollGrade(ctx context.Context, sessionID pgtype.UUID, lev
 }
 
 func (s *CbtSession) EnrollSchool(ctx context.Context, sessionID pgtype.UUID) error {
+	if err := s.ensureSessionSetupMutable(ctx, sessionID); err != nil {
+		return err
+	}
 	return s.q.EnrollSchoolToSession(ctx, sessionID)
 }
 
@@ -422,6 +440,19 @@ func normalizeAssignmentMode(value string) string {
 		return value
 	default:
 		return "random_balanced"
+	}
+}
+
+func validCbtSessionStatus(status db.CbtSessionStatusEnum) bool {
+	switch status {
+	case db.CbtSessionStatusEnumDraft,
+		db.CbtSessionStatusEnumScheduled,
+		db.CbtSessionStatusEnumActive,
+		db.CbtSessionStatusEnumFinished,
+		db.CbtSessionStatusEnumCancelled:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -818,6 +849,16 @@ func (s *CbtSession) AssignSeat(ctx context.Context, participantID, roomID pgtyp
 	}
 	if seatNo <= 0 {
 		return fmt.Errorf("%w: nomor meja harus lebih dari 0", domain.ErrBadRequest)
+	}
+	belongs, err := s.q.HasSessionParticipant(ctx, db.HasSessionParticipantParams{
+		SessionID: room.SessionID,
+		ID:        participantID,
+	})
+	if err != nil {
+		return err
+	}
+	if !belongs {
+		return fmt.Errorf("%w: peserta dan ruang harus berada pada sesi CBT yang sama", domain.ErrBadRequest)
 	}
 	if err := s.q.AssignParticipantSeat(ctx, db.AssignParticipantSeatParams{
 		ID:     participantID,

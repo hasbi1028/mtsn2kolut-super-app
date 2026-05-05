@@ -63,7 +63,7 @@ func TestCbtSessionHandlersRejectInvalidIDs(t *testing.T) {
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/bad-request", strings.NewReader(`{}`))
 			switch tt.name {
-			case "UpdateStatus", "Delete", "Enroll", "EnrollGrade", "EnrollSchool", "GenerateTokens", "RegenerateToken", "AssignSeat", "AutoAssignSeats", "CreateRoom", "DeleteRoom", "ShuffleRooms", "RecordAnswer", "GetResults":
+			case "UpdateStatus", "Delete", "Enroll", "EnrollGrade", "EnrollSchool", "GenerateTokens", "RegenerateToken", "AssignSeat", "AutoAssignSeats", "CreateRoom", "DeleteRoom", "ShuffleRooms", "RecordAnswer", "ScoreSession", "GetResults":
 				req = withClaims(req, jwt.MapClaims{"roles": []any{"admin"}})
 			}
 			tt.fn(rec, req)

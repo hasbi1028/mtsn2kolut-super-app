@@ -127,9 +127,10 @@ func TestExamLoginIncludesMobileContractFields(t *testing.T) {
 	packageID := mustUUID(t, "33333333-3333-3333-3333-333333333333")
 	questionID := mustUUID(t, "44444444-4444-4444-4444-444444444444")
 
-	start := mustTimestamp(t, "2026-05-01T08:00:00Z")
-	end := mustTimestamp(t, "2026-05-01T10:00:00Z")
-	joined := mustTimestamp(t, "2026-05-01T08:05:00Z")
+	now := time.Now()
+	start := pgtype.Timestamptz{Time: now.Add(-5 * time.Minute), Valid: true}
+	end := pgtype.Timestamptz{Time: now.Add(time.Hour), Valid: true}
+	joined := pgtype.Timestamptz{Time: now.Add(-4 * time.Minute), Valid: true}
 	orderJSON, _ := json.Marshal([]string{pgUUIDString(questionID)})
 
 	store := &fakeExamStore{
@@ -265,6 +266,20 @@ func TestExamLoginRejectsInvalidStatesAndPropagatesErrors(t *testing.T) {
 	svc = &Exam{q: &fakeExamStore{participant: future}}
 	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamNotStarted) {
 		t.Fatalf("Login(before scheduled_start) error = %v, want ErrExamNotStarted", err)
+	}
+
+	submitted := base
+	submitted.SubmittedAt = pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true}
+	svc = &Exam{q: &fakeExamStore{participant: submitted}}
+	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamAlreadySubmit) {
+		t.Fatalf("Login(already submitted) error = %v, want ErrExamAlreadySubmit", err)
+	}
+
+	closed := base
+	closed.ScheduledEnd = pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true}
+	svc = &Exam{q: &fakeExamStore{participant: closed}}
+	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamWindowClosed) {
+		t.Fatalf("Login(closed window) error = %v, want ErrExamWindowClosed", err)
 	}
 
 	bound := base

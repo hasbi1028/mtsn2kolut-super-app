@@ -11,6 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
@@ -310,6 +311,13 @@ func TestCbtEventHandlersMapServiceErrors(t *testing.T) {
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
+			name:       "create invalid status",
+			handler:    (*CbtEvent).Create,
+			svc:        &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, createErr: errors.Join(domain.ErrBadRequest, errors.New("status event CBT tidak valid"))},
+			req:        adminRequest(http.MethodPost, "/api/cbt/events", `{"title":"PAT","status":"archived"}`),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
 			name:       "update",
 			handler:    (*CbtEvent).Update,
 			svc:        &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, updateErr: errors.New("db down")},
@@ -322,6 +330,13 @@ func TestCbtEventHandlersMapServiceErrors(t *testing.T) {
 			svc:        &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, statusErr: errors.New("db down")},
 			req:        withRouteParam(adminRequest(http.MethodPatch, "/api/cbt/events/"+eventID.String()+"/status", `{"status":"active"}`), "id", eventID.String()),
 			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "status invalid value",
+			handler:    (*CbtEvent).UpdateStatus,
+			svc:        &fakeCbtEventService{CbtEvent: &service.CbtEvent{}, statusErr: errors.Join(domain.ErrBadRequest, errors.New("status event CBT tidak valid"))},
+			req:        withRouteParam(adminRequest(http.MethodPatch, "/api/cbt/events/"+eventID.String()+"/status", `{"status":"archived"}`), "id", eventID.String()),
+			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "delete",

@@ -149,7 +149,7 @@
 		<div class="flex items-center justify-between print:hidden">
 			<div>
 				<h1 class="text-2xl font-semibold text-slate-900">Kartu Ujian Event</h1>
-				<p class="text-sm text-slate-500">Cetak per peserta dengan token, ruangan, dan nomor meja.</p>
+				<p class="text-sm text-slate-500">Cetak per peserta dengan token rahasia, ruangan, dan nomor meja.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				<a href={resolve(`/cbt/events/${eventId}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Event</a>
@@ -177,9 +177,14 @@
 			</div>
 		{:else if currentCards.length > 0}
 			<div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 print:hidden">
-				Token, ruang, dan nomor meja pada data kartu yang termuat sudah lengkap. Layout cetak tetap bersih tanpa panel kesiapan ini.
+				Token rahasia, ruang, dan nomor meja pada data kartu yang termuat sudah lengkap. Cetak hanya saat distribusi kartu siap dan jangan tampilkan token di layar umum.
 			</div>
 		{/if}
+
+		<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden">
+			<p class="font-semibold">Token pada kartu ujian adalah kredensial rahasia peserta.</p>
+			<p class="mt-1">Cetak dan simpan kartu melalui panitia/pengawas resmi. Hindari membagikan file cetak ke grup umum, layar proyektor, atau kanal yang dapat diakses peserta lain.</p>
+		</div>
 
 		<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 			{#each currentCards as card (card.participant_id)}
@@ -200,8 +205,9 @@
 						<p><span class="font-medium">Jadwal:</span> {fmtDt(card.scheduled_start)}</p>
 					</div>
 					<div class="mt-5 rounded-md bg-emerald-50 px-4 py-3">
-						<p class="text-xs uppercase tracking-[0.2em] text-emerald-700">Token Ujian</p>
+						<p class="text-xs uppercase tracking-[0.2em] text-emerald-700">Token Ujian Rahasia</p>
 						<p class="mt-1 font-mono text-2xl font-bold text-emerald-950">{card.token || 'Belum digenerate'}</p>
+						<p class="mt-1 text-[11px] text-emerald-800 print:hidden">Bagikan hanya kepada peserta terkait atau pengawas ruangan.</p>
 					</div>
 				</article>
 			{/each}

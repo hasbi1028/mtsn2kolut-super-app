@@ -121,6 +121,12 @@ func (s *Exam) Login(ctx context.Context, token, deviceFingerprint, loginIP stri
 	if p.ScheduledStart.Valid && time.Now().Before(p.ScheduledStart.Time) {
 		return LoginResult{}, ErrExamNotStarted
 	}
+	if p.SubmittedAt.Valid {
+		return LoginResult{}, ErrExamAlreadySubmit
+	}
+	if p.ScheduledEnd.Valid && time.Now().After(p.ScheduledEnd.Time) {
+		return LoginResult{}, ErrExamWindowClosed
+	}
 
 	// Device binding: if already bound, reject different device
 	if p.DeviceFingerprint.Valid && strings.TrimSpace(p.DeviceFingerprint.String) != "" &&

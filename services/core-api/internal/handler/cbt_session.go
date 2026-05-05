@@ -491,12 +491,7 @@ func (h *CbtSession) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	row, err := h.svc.UpdateStatus(r.Context(), id, db.CbtSessionStatusEnum(body.Status))
 	if err != nil {
-		if errors.Is(err, domain.ErrConflict) {
-			message := strings.TrimPrefix(safeClientMessage(err, "Status sesi tidak dapat diperbarui"), "conflict: ")
-			api.Conflict(w, message)
-			return
-		}
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Status sesi tidak dapat diperbarui")
 		return
 	}
 	api.OK(w, row)
@@ -703,7 +698,7 @@ func (h *CbtSession) Enroll(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := h.svc.EnrollClass(r.Context(), sessionID, classID); err != nil {
-			api.Internal(w, err)
+			writeDomainOrInternal(w, err, "Pendaftaran peserta CBT tidak valid")
 			return
 		}
 	case "grade":
@@ -712,12 +707,12 @@ func (h *CbtSession) Enroll(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := h.svc.EnrollGrade(r.Context(), sessionID, body.Level); err != nil {
-			api.Internal(w, err)
+			writeDomainOrInternal(w, err, "Pendaftaran peserta CBT tidak valid")
 			return
 		}
 	case "school":
 		if err := h.svc.EnrollSchool(r.Context(), sessionID); err != nil {
-			api.Internal(w, err)
+			writeDomainOrInternal(w, err, "Pendaftaran peserta CBT tidak valid")
 			return
 		}
 	default:
@@ -756,7 +751,7 @@ func (h *CbtSession) EnrollGrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.EnrollGrade(r.Context(), sessionID, body.Level); err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Pendaftaran peserta CBT tidak valid")
 		return
 	}
 	api.OK(w, map[string]string{"status": "enrolled"})
@@ -776,7 +771,7 @@ func (h *CbtSession) EnrollSchool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.EnrollSchool(r.Context(), sessionID); err != nil {
-		api.Internal(w, err)
+		writeDomainOrInternal(w, err, "Pendaftaran peserta CBT tidak valid")
 		return
 	}
 	api.OK(w, map[string]string{"status": "enrolled"})
@@ -1835,12 +1830,13 @@ func (h *CbtSession) RecordAnswer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CbtSession) ScoreSession(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
 		api.BadRequest(w, "invalid id")
-		return
-	}
-	if !h.requireSessionTeacherOrAdmin(w, r, id) {
 		return
 	}
 	if err := h.svc.ScoreSession(r.Context(), id); err != nil {

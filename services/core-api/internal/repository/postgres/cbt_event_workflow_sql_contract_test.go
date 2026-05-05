@@ -28,3 +28,40 @@ func TestCbtPackageCreatePersistsEventID(t *testing.T) {
 		t.Fatal("CreateCbtPackage must persist nullable event_id")
 	}
 }
+
+func TestCbtEventReadinessQuestionCountsIncludeReusableBankQuestions(t *testing.T) {
+	queries := map[string]string{
+		"overview summary": getCbtEventOverviewSummary,
+		"subject matrix":   listCbtEventSubjectMatrix,
+		"subject targets":  listCbtEventSubjectTargets,
+	}
+
+	for name, sql := range queries {
+		t.Run(name, func(t *testing.T) {
+			lower := strings.ToLower(sql)
+			if !strings.Contains(lower, "q.event_id is null and q.status = 'published'") {
+				t.Fatalf("%s query must include reusable/global published questions", name)
+			}
+			if !strings.Contains(lower, "q.event_id =") {
+				t.Fatalf("%s query must include same-event questions", name)
+			}
+		})
+	}
+}
+
+func TestCbtEventReadinessQuestionCountsStayTargetSubjectScoped(t *testing.T) {
+	queries := map[string]string{
+		"overview summary": getCbtEventOverviewSummary,
+		"subject matrix":   listCbtEventSubjectMatrix,
+		"subject targets":  listCbtEventSubjectTargets,
+	}
+
+	for name, sql := range queries {
+		t.Run(name, func(t *testing.T) {
+			lower := strings.ToLower(sql)
+			if !strings.Contains(lower, "q.subject_id") {
+				t.Fatalf("%s query must scope reusable question counts by subject", name)
+			}
+		})
+	}
+}

@@ -27,6 +27,7 @@
 	type Question = {
 		id: string; subject_id: string; subject_code: string;
 		code: string; question_text: string; difficulty: string; status: string;
+		event_id?: string | null;
 		workflow_status?: string; question_type?: string; cp_ref?: string; tp_ref?: string; kd_ref?: string;
 		material_topic?: string; cognitive_level?: string; hots_flag?: boolean;
 	};
@@ -113,13 +114,19 @@
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 	let packagesRequestId = 0;
 	let questionPoolTotal = $state(0);
+	let hiddenEventPackageCount = $state(0);
 	let eventContext = $state<EventContext | null>(null);
 	const eventId = page.url.searchParams.get('event_id') ?? '';
 
 	let questionPool = $derived(
 		fSubjectId
-			? allQuestions.filter(q => q.subject_id === fSubjectId && q.status === 'published')
+			? allQuestions.filter(q => q.subject_id === fSubjectId && q.status === 'published' && isQuestionAllowedForPackage(q))
 			: []
+	);
+	let hiddenScopedQuestionCount = $derived(
+		fSubjectId
+			? allQuestions.filter(q => q.subject_id === fSubjectId && q.status === 'published' && !isQuestionAllowedForPackage(q)).length
+			: 0
 	);
 	let selectedQuestions = $derived(questionPool.filter((q) => fSelectedIds.has(q.id)));
 	let selectedWeightTotal = $derived(selectedQuestions.reduce((sum, question) => sum + questionWeightValue(question.id), 0));
@@ -193,7 +200,6 @@
 			offset: String(offset),
 			status: 'published',
 		});
-		if (eventId) params.set('event_id', eventId);
 		const payload = await fetch(clientApiPathWithQuery('/api/cbt/questions', params))
 			.then((response) => readClientApiData<unknown>(response, 'Gagal memuat bank soal'));
 		return parseQuestionPage(payload);
@@ -335,6 +341,28 @@
 		return { questions, typeBuckets, cognitiveBuckets, hotsCount, missingCount, unpublishedCount, totalPoints };
 	}
 
+	function strictEventPackages(items: CbtPackage[]) {
+		return eventId ? items.filter((pkg) => pkg.event_id === eventId) : items;
+	}
+
+	function hiddenPackageCount(items: CbtPackage[]) {
+		return eventId ? items.filter((pkg) => pkg.event_id !== eventId).length : 0;
+	}
+
+	function normalizedScopeId(value: string | null | undefined) {
+		return (value ?? '').trim();
+	}
+
+	function isGlobalQuestion(question: Question) {
+		return normalizedScopeId(question.event_id) === '';
+	}
+
+	function isQuestionAllowedForPackage(question: Question) {
+		const questionEventId = normalizedScopeId(question.event_id);
+		if (!eventId) return questionEventId === '';
+		return isGlobalQuestion(question) || questionEventId === eventId;
+	}
+
 	async function fetchEventContext() {
 		if (!eventId) return null;
 		try {
@@ -361,7 +389,8 @@
 	}
 
 	function applyOverview(overview: PackagesOverview) {
-		packages = overview.packages;
+		hiddenEventPackageCount = hiddenPackageCount(overview.packages);
+		packages = strictEventPackages(overview.packages);
 		packageQuestions = overview.packageQuestions;
 		allQuestions = overview.allQuestions;
 		subjects = overview.subjects;
@@ -374,6 +403,7 @@
 		allQuestions = [];
 		subjects = [];
 		questionPoolTotal = 0;
+		hiddenEventPackageCount = 0;
 		void fetchEventContext().then((context) => { eventContext = context; });
 		packagesPromise = fetchOverview().then((overview) => {
 			if (requestId !== packagesRequestId) return { packages, packageQuestions, allQuestions, subjects };
@@ -506,14 +536,14 @@
 	});
 </script>
 
-	<svelte:head><title>{eventId ? 'Paket Event CBT' : 'Paket Ujian CBT'} — MTSN 2 Kolut</title></svelte:head>
+	<svelte:head><title>{eventId ? 'Paket Event CBT' : 'Template Paket CBT'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<p class="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">{eventId ? 'Konteks Event' : 'Paket Global'}</p>
-			<h1 class="text-2xl font-semibold text-slate-800">Paket Ujian CBT</h1>
-			<p class="text-sm text-slate-500 mt-1">Buat dan kelola paket soal untuk sesi ujian{eventId ? ' kegiatan ini' : ''}</p>
+			<p class="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">{eventId ? 'Paket Event' : 'Template Paket Global'}</p>
+			<h1 class="text-2xl font-semibold text-slate-800">{eventId ? 'Paket Event CBT' : 'Template Paket CBT'}</h1>
+			<p class="text-sm text-slate-500 mt-1">Buat paket ujian dari Bank Soal reusable{eventId ? ' dan tautkan ke event ini agar bisa dipakai sesi ujian.' : ' sebagai template reusable atau paket standalone bila tidak terkait event.'}</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			{#if eventId}
@@ -529,15 +559,22 @@
 		<div class="rounded-xl border border-green-200 bg-green-50/70 p-4 text-sm text-green-950">
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div>
-					<p class="font-semibold">Paket difilter untuk event: {eventContext?.title ?? eventId}</p>
-					<p class="mt-1 text-green-800">Daftar paket, payload pembuatan paket, dan pool soal terbit membawa <code class="rounded bg-white px-1">event_id</code>. Jika backend belum mendukung filter event, halaman tetap menampilkan respons yang tersedia.</p>
+					<p class="font-semibold">Paket tertaut event: {eventContext?.title ?? eventId}</p>
+					<p class="mt-1 text-green-800">Sesi event membutuhkan paket yang membawa <code class="rounded bg-white px-1">event_id</code> event ini. Pilihan soal mencakup Bank Soal reusable dan soal khusus event ini saja.</p>
 				</div>
-				<a href={resolve(`/cbt/soal?event_id=${eventId}`)} class="rounded-md border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Bank Soal Event</a>
+				<a href={resolve('/cbt/soal')} class="rounded-md border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Buka Bank Soal</a>
 			</div>
 		</div>
 	{:else}
 		<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-			Anda sedang melihat paket global. Dari Kegiatan Ujian, gunakan tombol Paket agar pembuatan paket otomatis membawa konteks event.
+			Anda sedang melihat template paket global. Paket global dipakai sebagai template reusable atau paket standalone bila tidak terkait event; sesi dalam event harus memakai paket yang tertaut event. Dari Kegiatan Ujian, gunakan tombol Paket agar pembuatan paket otomatis membawa konteks event.
+		</div>
+	{/if}
+
+	{#if hiddenEventPackageCount > 0}
+		<div class="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+			<p class="font-semibold">Hanya paket tertaut event ini yang ditampilkan.</p>
+			<p class="mt-1">{hiddenEventPackageCount} template global atau paket event lain tidak ditampilkan karena sesi event membutuhkan paket dengan <code class="rounded bg-white px-1">event_id</code> yang sama. Soal dari event lain juga tidak masuk pool pilihan paket.</p>
 		</div>
 	{/if}
 
@@ -590,14 +627,15 @@
 					<div>
 						<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
 							<div class="text-xs text-slate-500">
-								Pilih Soal dari Bank ({questionPool.length} soal terbit)
+								Pilih Soal dari Bank Soal ({questionPool.length} soal terbit sesuai cakupan)
 								{#if selectedQuestions.length > 0}
 									— <span class="font-medium text-green-700">{selectedQuestions.length} dipilih</span>
 								{/if}
 							</div>
 							{#if questionPoolCapped}
-								<div class="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
-									Bank soal besar: termuat {allQuestions.length} dari {questionPoolTotal} soal terbit. Gunakan filter mapel atau cari soal di Bank Soal jika soal belum muncul di pilihan paket.
+								<div class="max-w-xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+									<p class="font-semibold">Pool soal dibatasi: termuat {allQuestions.length} dari {questionPoolTotal} soal terbit.</p>
+									<p>Narrow pilihan dengan mapel yang tepat dan pencarian/kode soal di Bank Soal sebelum membuat paket. Jika soal belum muncul, buka Bank Soal lalu cari atau rapikan status/mapel soal tersebut.</p>
 								</div>
 							{/if}
 							<div class="flex flex-wrap gap-1">
@@ -612,9 +650,19 @@
 						</div>
 						{#if questionPool.length === 0}
 							<p class="text-sm text-slate-400 py-4 text-center border rounded-md">
-								Belum ada soal berstatus "Terbit" untuk mata pelajaran ini. Terbitkan soal dari Bank Soal sebelum membuat paket.
+								Belum ada soal berstatus "Terbit" untuk mata pelajaran ini dalam cakupan paket ini. Paket global hanya memakai soal reusable; paket event memakai soal reusable dan soal khusus event yang sama.
 							</p>
+							{#if hiddenScopedQuestionCount > 0}
+								<p class="mt-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+									{hiddenScopedQuestionCount} soal terbit disembunyikan karena {eventId ? 'tertaut ke kegiatan lain' : 'khusus kegiatan tertentu'}.
+								</p>
+							{/if}
 						{:else}
+							{#if hiddenScopedQuestionCount > 0}
+								<div class="mb-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+									{hiddenScopedQuestionCount} soal terbit disembunyikan karena {eventId ? 'tertaut ke kegiatan lain' : 'khusus kegiatan tertentu'}. Pool ini hanya memakai {eventId ? 'soal reusable dan soal kegiatan ini' : 'soal reusable/global'}.
+								</div>
+							{/if}
 							<div class="mb-2 rounded-md border border-green-100 bg-green-50/60 px-3 py-2 text-xs text-green-900">
 								<div class="flex flex-wrap gap-1.5">
 									<span class="font-semibold">Pool bentuk soal:</span>
@@ -797,11 +845,15 @@
 
 		{#snippet children(value)}
 			{@const overview = value as PackagesOverview}
-			{@const eventPackages = eventId ? overview.packages.filter((pkg) => !pkg.event_id || pkg.event_id === eventId) : overview.packages}
+			{@const eventPackages = strictEventPackages(overview.packages)}
 			{@const currentPackages = eventPackages}
+			{@const hiddenPackages = hiddenPackageCount(overview.packages)}
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Header class="pb-2">
 				<Card.Title class="text-base">Daftar Paket ({currentPackages.length})</Card.Title>
+				{#if hiddenPackages > 0}
+					<Card.Description>{hiddenPackages} template global atau paket event lain disembunyikan dari daftar event ini.</Card.Description>
+				{/if}
 			</Card.Header>
 			<Card.Content class="p-0">
 				<div class="hidden overflow-x-auto lg:block">
