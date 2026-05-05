@@ -26,10 +26,26 @@
 		total: number;
 	};
 
+	type ViewMode = 'normal' | 'compact';
+
+	const SAMPLE_RECORDS: AttendanceRecord[] = [
+		{ id: 's1', employee_nama: 'Ahmad Fauzi, S.Pd.',       employee_nip: '197501012005011001', tanggal: '2026-05-05', jam_masuk: '07:12:04 WITA', jam_pulang: '14:05:22 WITA' },
+		{ id: 's2', employee_nama: 'Siti Rahayu, S.Pd.I.',     employee_nip: '198003152006042002', tanggal: '2026-05-05', jam_masuk: '07:18:31 WITA', jam_pulang: '14:02:47 WITA' },
+		{ id: 's3', employee_nama: 'Muhammad Ilham, S.Pd.',    employee_nip: '199205102019031003', tanggal: '2026-05-05', jam_masuk: '07:23:09 WITA', jam_pulang: '' },
+		{ id: 's4', employee_nama: 'Fitriani, S.Pd.',           employee_nip: '198807202015041004', tanggal: '2026-05-05', jam_masuk: '07:30:00 WITA', jam_pulang: '14:00:00 WITA' },
+		{ id: 's5', employee_nama: 'Hasmawati, S.Ag.',          employee_nip: '197912052003122005', tanggal: '2026-05-05', jam_masuk: '07:09:55 WITA', jam_pulang: '13:58:11 WITA' },
+		{ id: 's6', employee_nama: 'Rahmat Hidayat, S.Pd.',    employee_nip: '200001102022031006', tanggal: '2026-05-05', jam_masuk: '',              jam_pulang: '' },
+		{ id: 's7', employee_nama: 'Nurjannah, S.Pd.',          employee_nip: '198504182009012007', tanggal: '2026-05-05', jam_masuk: '07:14:22 WITA', jam_pulang: '14:10:03 WITA' },
+		{ id: 's8', employee_nama: 'Abdul Karim, S.Pd.I.',     employee_nip: '197806092001121008', tanggal: '2026-05-05', jam_masuk: '07:40:17 WITA', jam_pulang: '14:01:59 WITA' },
+		{ id: 's9', employee_nama: 'Dewi Anggraini, S.Pd.',    employee_nip: '199308152020122009', tanggal: '2026-05-05', jam_masuk: '07:27:44 WITA', jam_pulang: '' },
+		{ id: 's10', employee_nama: 'Syarifuddin, S.Pd.',       employee_nip: '198111302007011010', tanggal: '2026-05-05', jam_masuk: '07:33:06 WITA', jam_pulang: '14:07:38 WITA' },
+	];
+
 	let records   = $state<AttendanceRecord[]>([]);
 	let total     = $state<number | null>(null);
 	let startDate = $state('');
 	let endDate   = $state('');
+	let viewMode  = $state<ViewMode>('normal');
 	let recordsPromise = $state<Promise<AttendanceOverview> | null>(null);
 	let refreshing = $state(false);
 	let loadedRangeKey = $state('');
@@ -250,6 +266,23 @@
 					<LoadingButton class="h-10 w-full sm:w-auto" size="sm" onclick={() => void load()} loading={refreshing} loadingLabel="Memuat..." label="Terapkan" />
 					<div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
 						<LoadingButton variant="outline" class="h-10 w-full bg-white sm:w-auto" size="sm" onclick={exportCSV} disabled={records.length === 0} label="↓ CSV" />
+						<div class="col-span-2 flex h-10 overflow-hidden rounded-md border border-slate-200 bg-white sm:col-span-1">
+							<button
+								class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'normal' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-50'}"
+								onclick={() => viewMode = 'normal'}
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+								Normal
+							</button>
+							<div class="w-px bg-slate-200"></div>
+							<button
+								class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'compact' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-50'}"
+								onclick={() => viewMode = 'compact'}
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18M3 13h18M3 18h18"/></svg>
+								Ringkas
+							</button>
+						</div>
 						<LoadingButton variant="outline" class="h-10 w-full bg-white sm:w-auto" size="sm" href={resolve('/pusaka/antrian')} label="Antrian →" />
 					</div>
 				</div>
@@ -257,113 +290,169 @@
 		</Card.Header>
 
 		<Card.Content class="p-0">
-			<AsyncContent promise={recordsPromise} onerror={handleAttendanceRenderError}>
-				{#snippet pending()}
-				<div class="space-y-3 p-4">
-					<Skeleton class="h-12 w-full" />
-					<Skeleton class="h-14 w-full" />
-					<Skeleton class="h-14 w-full" />
-					<Skeleton class="h-14 w-full" />
+			{#if viewMode === 'compact'}
+				<!-- Tampilan Ringkas: langsung pakai state records, tidak perlu tunggu promise -->
+				{@const displayRecords = records.length > 0 ? records : SAMPLE_RECORDS}
+				{@const isSample = records.length === 0}
+				{#if isSample}
+				<div class="flex items-center gap-1.5 border-b border-amber-100 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-700">
+					<span class="font-semibold">Contoh tampilan</span>
+					<span class="text-amber-500">— data di bawah adalah sampel. Terapkan filter tanggal untuk memuat data nyata.</span>
 				</div>
-				{/snippet}
-
-				{#snippet failed(error, reset)}
-					<div class="p-4">
-						<RecoveryPanel
-							compact
-							title="Kehadiran Belum Tersaji"
-							message={attendanceErrorMessage(error)}
-							onRetry={() => retryAttendance(reset)}
-						/>
+				{/if}
+				<div class="overflow-x-auto">
+					<table class="w-full border-collapse text-xs">
+						<thead>
+							<tr class="border-b border-slate-200 bg-slate-50">
+								<th class="w-8 py-1.5 pl-3 pr-2 text-left font-semibold text-slate-500">#</th>
+								<th class="whitespace-nowrap py-1.5 px-2 text-left font-semibold text-slate-600">Tanggal</th>
+								<th class="py-1.5 px-2 text-left font-semibold text-slate-600">Nama Pegawai</th>
+								<th class="hidden py-1.5 px-2 text-left font-semibold text-slate-600 sm:table-cell">NIP</th>
+								<th class="py-1.5 px-2 text-center font-semibold text-slate-600">Masuk</th>
+								<th class="py-1.5 px-2 text-center font-semibold text-slate-600">Pulang</th>
+								<th class="py-1.5 pr-3 pl-2 text-center font-semibold text-slate-600">Status</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each displayRecords as r, i (r.id)}
+								{@const s = attendanceStatus(r)}
+								<tr class="border-b border-slate-100 {i % 2 === 1 ? 'bg-slate-50/60' : 'bg-white'} hover:bg-emerald-50/40 {isSample ? 'opacity-75' : ''}">
+									<td class="py-1 pl-3 pr-2 text-slate-400">{i + 1}</td>
+									<td class="whitespace-nowrap py-1 px-2 text-slate-600">{r.tanggal}</td>
+									<td class="py-1 px-2 font-medium text-slate-800">{r.employee_nama}</td>
+									<td class="hidden py-1 px-2 font-mono text-slate-500 sm:table-cell">{r.employee_nip}</td>
+									<td class="py-1 px-2 text-center text-slate-700">{stripWita(r.jam_masuk)}</td>
+									<td class="py-1 px-2 text-center text-slate-700">{stripWita(r.jam_pulang)}</td>
+									<td class="py-1 pr-3 pl-2 text-center">
+										{#if s === 'lengkap'}
+											<span class="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-700">Lengkap</span>
+										{:else if s === 'masuk'}
+											<span class="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700">Masuk</span>
+										{:else}
+											<span class="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-500">Belum</span>
+										{/if}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+					<div class="border-t border-slate-100 bg-slate-50/60 px-3 py-1.5 text-right text-[10px] text-slate-400">
+						{#if isSample}
+							Contoh data (10 sampel)
+						{:else}
+							{displayRecords.length} rekaman · {startDate}{endDate && endDate !== startDate ? ' s/d ' + endDate : ''}
+						{/if}
 					</div>
-				{/snippet}
+				</div>
+			{:else}
+				<!-- Tampilan Normal: pakai AsyncContent seperti semula -->
+				<AsyncContent promise={recordsPromise} onerror={handleAttendanceRenderError}>
+					{#snippet pending()}
+					<div class="space-y-3 p-4">
+						<Skeleton class="h-12 w-full" />
+						<Skeleton class="h-14 w-full" />
+						<Skeleton class="h-14 w-full" />
+						<Skeleton class="h-14 w-full" />
+					</div>
+					{/snippet}
 
-				{#snippet children(value)}
-					{@const currentRecords = (value as AttendanceOverview).records}
-			<div class="hidden overflow-x-auto lg:block">
-			<Table.Root>
-				<Table.Header>
-					<Table.Row>
-						<Table.Head class="w-10">#</Table.Head>
-						<Table.Head>Tanggal</Table.Head>
-						<Table.Head>Nama Pegawai</Table.Head>
-						<Table.Head class="hidden sm:table-cell">NIP</Table.Head>
-						<Table.Head class="text-center">Masuk</Table.Head>
-						<Table.Head class="text-center">Pulang</Table.Head>
-						<Table.Head class="text-center">Status</Table.Head>
-					</Table.Row>
-				</Table.Header>
-				<Table.Body>
+					{#snippet failed(error, reset)}
+						<div class="p-4">
+							<RecoveryPanel
+								compact
+								title="Kehadiran Belum Tersaji"
+								message={attendanceErrorMessage(error)}
+								onRetry={() => retryAttendance(reset)}
+							/>
+						</div>
+					{/snippet}
+
+					{#snippet children(value)}
+						{@const currentRecords = (value as AttendanceOverview).records}
+					<div class="hidden overflow-x-auto lg:block">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row>
+								<Table.Head class="w-10">#</Table.Head>
+								<Table.Head>Tanggal</Table.Head>
+								<Table.Head>Nama Pegawai</Table.Head>
+								<Table.Head class="hidden sm:table-cell">NIP</Table.Head>
+								<Table.Head class="text-center">Masuk</Table.Head>
+								<Table.Head class="text-center">Pulang</Table.Head>
+								<Table.Head class="text-center">Status</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each currentRecords as r, i (r.id)}
+							{@const s = attendanceStatus(r)}
+							<Table.Row>
+								<Table.Cell class="text-muted-foreground">{i + 1}</Table.Cell>
+								<Table.Cell class="text-sm whitespace-nowrap">{r.tanggal}</Table.Cell>
+								<Table.Cell class="font-medium">{r.employee_nama}</Table.Cell>
+								<Table.Cell class="hidden sm:table-cell text-muted-foreground font-mono text-xs">{r.employee_nip}</Table.Cell>
+								<Table.Cell class="text-center text-sm">{stripWita(r.jam_masuk)}</Table.Cell>
+								<Table.Cell class="text-center text-sm">{stripWita(r.jam_pulang)}</Table.Cell>
+								<Table.Cell class="text-center">
+									{#if s === 'lengkap'}
+										<Badge variant="default" class="bg-emerald-600">Lengkap</Badge>
+									{:else if s === 'masuk'}
+										<Badge variant="outline" class="text-amber-600 border-amber-200">Masuk</Badge>
+									{:else}
+										<Badge variant="secondary">Belum</Badge>
+									{/if}
+								</Table.Cell>
+							</Table.Row>
+						{:else}
+							<Table.Row>
+								<Table.Cell colspan={7} class="py-12 text-center text-muted-foreground">
+									Tidak ada data kehadiran untuk rentang tanggal ini.
+								</Table.Cell>
+							</Table.Row>
+						{/each}
+						</Table.Body>
+					</Table.Root>
+					</div>
+
+					<div class="grid gap-3 p-4 lg:hidden">
 						{#each currentRecords as r, i (r.id)}
 						{@const s = attendanceStatus(r)}
-						<Table.Row>
-							<Table.Cell class="text-muted-foreground">{i + 1}</Table.Cell>
-							<Table.Cell class="text-sm whitespace-nowrap">{r.tanggal}</Table.Cell>
-							<Table.Cell class="font-medium">{r.employee_nama}</Table.Cell>
-							<Table.Cell class="hidden sm:table-cell text-muted-foreground font-mono text-xs">{r.employee_nip}</Table.Cell>
-							<Table.Cell class="text-center text-sm">{stripWita(r.jam_masuk)}</Table.Cell>
-							<Table.Cell class="text-center text-sm">{stripWita(r.jam_pulang)}</Table.Cell>
-							<Table.Cell class="text-center">
-								{#if s === 'lengkap'}
-									<Badge variant="default" class="bg-emerald-600">Lengkap</Badge>
-								{:else if s === 'masuk'}
-									<Badge variant="outline" class="text-amber-600 border-amber-200">Masuk</Badge>
-								{:else}
-									<Badge variant="secondary">Belum</Badge>
-								{/if}
-							</Table.Cell>
-						</Table.Row>
+						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">#{i + 1} • {r.tanggal}</p>
+									<p class="mt-1 text-base font-semibold text-slate-900">{r.employee_nama}</p>
+									<p class="mt-1 break-all font-mono text-xs text-slate-500">{r.employee_nip}</p>
+								</div>
+								<div class="shrink-0">
+									{#if s === 'lengkap'}
+										<Badge variant="default" class="bg-emerald-600">Lengkap</Badge>
+									{:else if s === 'masuk'}
+										<Badge variant="outline" class="text-amber-600 border-amber-200">Masuk</Badge>
+									{:else}
+										<Badge variant="secondary">Belum</Badge>
+									{/if}
+								</div>
+							</div>
+							<div class="mt-4 grid grid-cols-2 gap-3">
+								<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Masuk</p>
+									<p class="mt-1 text-sm font-medium text-slate-800">{stripWita(r.jam_masuk)}</p>
+								</div>
+								<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Pulang</p>
+									<p class="mt-1 text-sm font-medium text-slate-800">{stripWita(r.jam_pulang)}</p>
+								</div>
+							</div>
+						</div>
 					{:else}
-						<Table.Row>
-							<Table.Cell colspan={7} class="py-12 text-center text-muted-foreground">
-								Tidak ada data kehadiran untuk rentang tanggal ini.
-							</Table.Cell>
-						</Table.Row>
+						<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+							Tidak ada data kehadiran untuk rentang tanggal ini.
+						</div>
 					{/each}
-				</Table.Body>
-			</Table.Root>
-			</div>
-
-			<div class="grid gap-3 p-4 lg:hidden">
-					{#each currentRecords as r, i (r.id)}
-					{@const s = attendanceStatus(r)}
-					<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-						<div class="flex items-start justify-between gap-3">
-							<div class="min-w-0">
-								<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">#{i + 1} • {r.tanggal}</p>
-								<p class="mt-1 text-base font-semibold text-slate-900">{r.employee_nama}</p>
-								<p class="mt-1 break-all font-mono text-xs text-slate-500">{r.employee_nip}</p>
-							</div>
-							<div class="shrink-0">
-								{#if s === 'lengkap'}
-									<Badge variant="default" class="bg-emerald-600">Lengkap</Badge>
-								{:else if s === 'masuk'}
-									<Badge variant="outline" class="text-amber-600 border-amber-200">Masuk</Badge>
-								{:else}
-									<Badge variant="secondary">Belum</Badge>
-								{/if}
-							</div>
-						</div>
-
-						<div class="mt-4 grid grid-cols-2 gap-3">
-							<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-								<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Masuk</p>
-								<p class="mt-1 text-sm font-medium text-slate-800">{stripWita(r.jam_masuk)}</p>
-							</div>
-							<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-								<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Pulang</p>
-								<p class="mt-1 text-sm font-medium text-slate-800">{stripWita(r.jam_pulang)}</p>
-							</div>
-						</div>
 					</div>
-				{:else}
-					<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-						Tidak ada data kehadiran untuk rentang tanggal ini.
-					</div>
-				{/each}
-			</div>
-				{/snippet}
-			</AsyncContent>
+					{/snippet}
+				</AsyncContent>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 

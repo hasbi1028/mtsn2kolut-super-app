@@ -49,12 +49,12 @@ describe('SidebarCommandPalette', () => {
 			}
 		});
 
-		await user.type(screen.getByPlaceholderText('Mis. Bank Soal, Hasil & Analisis, Inventaris, atau PUSAKA'), 'inventaris');
+		await user.type(screen.getByPlaceholderText('Mis. Persiapan, Pelaksanaan, Inventaris, atau PUSAKA'), 'inventaris');
 
 		expect(screen.getByText('Daftar Barang')).toBeTruthy();
 		expect(screen.queryByText('Peminjaman')).toBeNull();
 
-		await user.clear(screen.getByPlaceholderText('Mis. Bank Soal, Hasil & Analisis, Inventaris, atau PUSAKA'));
+		await user.clear(screen.getByPlaceholderText('Mis. Persiapan, Pelaksanaan, Inventaris, atau PUSAKA'));
 		await user.click(screen.getByText('Bersihkan'));
 
 		expect(clearRecent).toHaveBeenCalledTimes(1);

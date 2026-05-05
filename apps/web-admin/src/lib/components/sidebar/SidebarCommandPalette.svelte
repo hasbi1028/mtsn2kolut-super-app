@@ -119,7 +119,7 @@
 				<Input
 					bind:ref={commandInputRef}
 					bind:value={query}
-					placeholder="Mis. Bank Soal, Hasil & Analisis, Inventaris, atau PUSAKA"
+					placeholder="Mis. Persiapan, Pelaksanaan, Inventaris, atau PUSAKA"
 				/>
 
 				{#if pinnedItems.length > 0}

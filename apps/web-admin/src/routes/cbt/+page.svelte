@@ -1,33 +1,61 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import type { RouteId } from '$app/types';
 	import * as Card from '$lib/components/ui/card';
-	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 
-	type UserRole = 'admin' | 'guru' | 'staf' | 'kesiswaan' | 'siswa' | 'ortu' | 'reviewer' | string;
-	type CbtRoute = '/cbt/soal' | '/cbt/packages' | '/cbt/events' | '/cbt/byod' | '/cbt/hasil' | '/';
+	type AppRole = 'admin' | 'guru' | 'staf' | 'kesiswaan' | 'siswa' | 'ortu';
+	type KnownRole = AppRole | (string & {});
+	type CbtRoute = Extract<
+		RouteId,
+		| '/'
+		| '/cbt/soal'
+		| '/cbt/soal/review'
+		| '/cbt/persiapan'
+		| '/cbt/events'
+		| '/cbt/pelaksanaan'
+		| '/cbt/hasil'
+		| '/cbt/byod'
+		| '/cbt/bank-soal'
+		| '/cbt/kegiatan'
+		| '/cbt/paket-soal'
+	>;
+	type LauncherRole = 'admin' | 'guru' | 'staf';
 
-	type ModuleCard = {
+	type TaskCard = {
+		phase: string;
 		title: string;
-		label: string;
 		description: string;
 		href: CbtRoute;
-		roles: UserRole[];
-		tone: 'authoring' | 'assembly' | 'operation' | 'monitoring' | 'reporting';
+		roles: LauncherRole[];
+		priority: Partial<Record<LauncherRole, number>>;
 	};
 
-	type FlowStep = {
+	type Phase = {
+		number: string;
 		title: string;
 		description: string;
 	};
 
-	type RoleMode = {
-		eyebrow: string;
-		title: string;
-		description: string;
-		ctaLabel: string;
-		ctaHref: CbtRoute;
-		badge: string;
+	type SecondaryLink = {
+		label: string;
+		href: CbtRoute;
+		roles: LauncherRole[];
+	};
+
+	const roleCopy: Record<LauncherRole, { name: string; description: string }> = {
+		admin: {
+			name: 'Admin CBT',
+			description: 'Mulai dari persiapan ujian, sesi dan token, pemantauan hari-H, lalu hasil.'
+		},
+		guru: {
+			name: 'Guru',
+			description: 'Fokus ke pekerjaan inti: membuat soal, mereview kesiapan soal, dan melihat hasil.'
+		},
+		staf: {
+			name: 'Staf',
+			description: 'Akses dibuat ringan untuk membantu pantauan ujian dan membaca panduan BYOD.'
+		}
 	};
 
 	let { data }: {
@@ -39,125 +67,112 @@
 		};
 	} = $props();
 
-	const modules: ModuleCard[] = [
+	const phases: Phase[] = [
 		{
-			title: 'Bank Soal',
-			label: 'Komposer',
-			description: 'Tulis, susun, dan rapikan butir soal dari jalur /cbt/soal yang aktif.',
+			number: '1',
+			title: 'Siapkan',
+			description: 'Soal, paket, jadwal, peserta, ruang, dan token siap sebelum hari ujian.'
+		},
+		{
+			number: '2',
+			title: 'Jalankan',
+			description: 'Operator memantau sesi, koneksi BYOD, dan kebutuhan pengawas saat ujian berlangsung.'
+		},
+		{
+			number: '3',
+			title: 'Evaluasi',
+			description: 'Guru dan admin membuka hasil untuk pemeriksaan, rekap, dan tindak lanjut.'
+		}
+	];
+
+	const tasks: TaskCard[] = [
+		{
+			phase: 'Siapkan',
+			title: 'Buat Soal',
+			description: 'Masuk ke komposer soal untuk menulis dan merapikan butir ujian.',
 			href: '/cbt/soal',
-			roles: ['admin', 'guru', 'reviewer'],
-			tone: 'authoring'
+			roles: ['guru'],
+			priority: { guru: 1 }
 		},
 		{
-			title: 'Paket Soal',
-			label: 'Admin',
-			description: 'Rakit paket dan komposisi ujian. Disembunyikan dari guru karena route ini admin-only.',
-			href: '/cbt/packages',
+			phase: 'Siapkan',
+			title: 'Review Soal',
+			description: 'Periksa antrean review agar soal siap digunakan saat paket ujian dirakit.',
+			href: '/cbt/soal/review',
+			roles: ['guru'],
+			priority: { guru: 2 }
+		},
+		{
+			phase: 'Evaluasi',
+			title: 'Lihat Hasil',
+			description: 'Buka rekap hasil ujian dan pemeriksaan yang relevan untuk guru.',
+			href: '/cbt/hasil',
+			roles: ['guru', 'admin'],
+			priority: { guru: 3, admin: 4 }
+		},
+		{
+			phase: 'Siapkan',
+			title: 'Siapkan Ujian',
+			description: 'Mulai dari kegiatan ujian: paket, peserta, jadwal, dan ruang.',
+			href: '/cbt/persiapan',
 			roles: ['admin'],
-			tone: 'assembly'
+			priority: { admin: 1 }
 		},
 		{
-			title: 'Kegiatan & Sesi',
-			label: 'Admin',
-			description: 'Atur event, jadwal sesi, peserta, ruang, token, dan kesiapan operasional.',
+			phase: 'Siapkan',
+			title: 'Atur Sesi & Token',
+			description: 'Kelola sesi, kartu ujian, dan token dari pusat kegiatan CBT.',
 			href: '/cbt/events',
 			roles: ['admin'],
-			tone: 'operation'
+			priority: { admin: 2 }
 		},
 		{
-			title: 'Monitoring',
-			label: 'Hari-H',
-			description: 'Baca panduan BYOD, status koneksi, dan akses ringkas untuk pantauan ujian.',
+			phase: 'Jalankan',
+			title: 'Pantau Ujian',
+			description: 'Pantau pelaksanaan hari-H dan tindak lanjuti kebutuhan pengawas.',
+			href: '/cbt/pelaksanaan',
+			roles: ['admin', 'staf'],
+			priority: { admin: 3, staf: 1 }
+		},
+		{
+			phase: 'Jalankan',
+			title: 'Panduan BYOD',
+			description: 'Baca ringkasan status perangkat, koneksi, dan kesiapan submit.',
 			href: '/cbt/byod',
-			roles: ['admin', 'guru', 'staf'],
-			tone: 'monitoring'
-		},
-		{
-			title: 'Hasil & Analisis',
-			label: 'Rekap',
-			description: 'Masuk ke hasil ujian dan analisis yang aman untuk admin dan guru.',
-			href: '/cbt/hasil',
-			roles: ['admin', 'guru'],
-			tone: 'reporting'
+			roles: ['staf'],
+			priority: { staf: 2 }
 		}
 	];
 
-	const flowSteps: FlowStep[] = [
-		{
-			title: '1. Siapkan Soal',
-			description: 'Guru mulai dari Bank Soal; admin dapat meninjau kelengkapan sebelum paket dibuat.'
-		},
-		{
-			title: '2. Rakit Sesi',
-			description: 'Admin menghubungkan paket, jadwal, peserta, ruang, dan kartu ujian.'
-		},
-		{
-			title: '3. Pantau Hari-H',
-			description: 'Operator membuka monitoring, membaca status BYOD, lalu menindaklanjuti hasil.'
-		}
+	const secondaryLinks: SecondaryLink[] = [
+		{ label: 'Bank Soal lama', href: '/cbt/bank-soal', roles: ['admin', 'guru'] },
+		{ label: 'Paket Soal', href: '/cbt/paket-soal', roles: ['admin'] },
+		{ label: 'Kegiatan lama', href: '/cbt/kegiatan', roles: ['admin'] },
+		{ label: 'Panduan BYOD', href: '/cbt/byod', roles: ['admin', 'guru'] }
 	];
 
-	const roles = $derived(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
-	const roleSet = $derived(new Set(roles));
-	const visibleModules = $derived(modules.filter((module) => module.roles.some((role) => roleSet.has(role))));
-	const roleLabel = $derived(roles.length > 0 ? roles.join(' / ') : 'pengguna');
-	const primaryMode = $derived.by<RoleMode>(() => {
-		if (roleSet.has('admin')) {
-			return {
-				eyebrow: 'Beranda CBT · Mode Operasional',
-				title: 'Pusat Kendali CBT Madrasah',
-				description: 'Arahkan pekerjaan CBT dari penyusunan soal, paket, sesi ujian, monitoring BYOD, sampai hasil dalam urutan yang jelas.',
-				ctaLabel: 'Kelola Kegiatan & Sesi',
-				ctaHref: '/cbt/events',
-				badge: 'Admin melihat 5 modul'
-			};
-		}
-
-		if (roleSet.has('guru')) {
-			return {
-				eyebrow: 'Beranda CBT · Mode Guru',
-				title: 'Ruang CBT Sederhana untuk Guru',
-				description: 'Fokus pada pekerjaan aman untuk guru: menyiapkan Bank Soal, melihat monitoring yang relevan, dan membuka hasil ujian.',
-				ctaLabel: 'Buka Bank Soal',
-				ctaHref: '/cbt/soal',
-				badge: 'Paket disembunyikan'
-			};
-		}
-
-		if (roleSet.has('staf')) {
-			return {
-				eyebrow: 'Beranda CBT · Mode Staf',
-				title: 'Dukungan Monitoring CBT',
-				description: 'Akses CBT staf dibuat ringan: masuk ke monitoring BYOD untuk membaca status hari-H tanpa membuka area admin.',
-				ctaLabel: 'Buka Monitoring',
-				ctaHref: '/cbt/byod',
-				badge: 'Staf melihat monitoring'
-			};
-		}
-
-		return {
-			eyebrow: 'Beranda CBT · Tidak Ada Modul',
-			title: 'CBT Belum Tersedia untuk Peran Ini',
-			description: 'Peran kesiswaan, siswa, dan orang tua tidak memiliki kartu CBT di beranda admin ini. Gunakan menu utama sesuai tugas masing-masing.',
-			ctaLabel: 'Kembali ke Beranda',
-			ctaHref: '/',
-			badge: 'Tanpa kartu CBT'
-		};
+	const userRoles = $derived<KnownRole[]>(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
+	const roleSet = $derived(new Set<KnownRole>(userRoles));
+	const launcherRole = $derived<LauncherRole | undefined>(resolveLauncherRole(roleSet));
+	const visibleTasks = $derived.by<TaskCard[]>(() => {
+		return tasks
+			.filter((task) => task.roles.some((role) => roleSet.has(role)))
+			.toSorted((firstTask, secondTask) => taskPriority(firstTask, launcherRole) - taskPriority(secondTask, launcherRole))
+			.slice(0, 4);
 	});
+	const visibleSecondaryLinks = $derived(secondaryLinks.filter((link) => link.roles.some((role) => roleSet.has(role))));
+	const roleName = $derived(launcherRole ? roleCopy[launcherRole].name : 'Peran ini');
+	const roleDescription = $derived(launcherRole ? roleCopy[launcherRole].description : 'CBT belum menyediakan pintasan untuk peran aktif ini. Gunakan menu utama sesuai tugas masing-masing.');
 
-	function moduleToneClass(tone: ModuleCard['tone']): string {
-		switch (tone) {
-			case 'authoring':
-				return 'border-emerald-200 bg-emerald-50/70 text-emerald-800';
-			case 'assembly':
-				return 'border-lime-200 bg-lime-50 text-lime-800';
-			case 'operation':
-				return 'border-teal-200 bg-teal-50 text-teal-800';
-			case 'monitoring':
-				return 'border-amber-200 bg-amber-50 text-amber-800';
-			case 'reporting':
-				return 'border-sky-200 bg-sky-50 text-sky-800';
-		}
+	function resolveLauncherRole(roleSetValue: ReadonlySet<KnownRole>): LauncherRole | undefined {
+		if (roleSetValue.has('admin')) return 'admin';
+		if (roleSetValue.has('guru')) return 'guru';
+		if (roleSetValue.has('staf')) return 'staf';
+		return undefined;
+	}
+
+	function taskPriority(task: TaskCard, role: LauncherRole | undefined): number {
+		return role ? (task.priority[role] ?? 99) : 99;
 	}
 </script>
 
@@ -165,80 +180,60 @@
 	<title>Beranda CBT — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
-<div class="space-y-6">
-	<section class="overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 shadow-sm">
-		<div class="grid gap-6 p-6 lg:grid-cols-[1fr_20rem] lg:p-8">
-			<div class="space-y-4">
-				<div class="flex flex-wrap items-center gap-2">
-					<Badge class="border-emerald-200 bg-white text-emerald-700" variant="outline">{primaryMode.eyebrow}</Badge>
-					<Badge class="border-slate-200 bg-white text-slate-600" variant="outline">Role: {roleLabel}</Badge>
-				</div>
-				<div class="max-w-3xl space-y-3">
-					<h1 class="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">{primaryMode.title}</h1>
-					<p class="text-sm leading-6 text-slate-600 md:text-base">{primaryMode.description}</p>
-				</div>
-				<div class="flex flex-wrap items-center gap-3">
-					<Button href={resolve(primaryMode.ctaHref)}>{primaryMode.ctaLabel}</Button>
-					<span class="text-sm font-medium text-emerald-800">{primaryMode.badge}</span>
-				</div>
+<div class="space-y-8">
+	<section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+		<div class="max-w-4xl space-y-4">
+			<p class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">Beranda CBT</p>
+			<div class="space-y-3">
+				<h1 class="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Apa yang perlu dikerjakan hari ini?</h1>
+				<p class="max-w-2xl text-base leading-7 text-slate-600">
+					{roleName}: {roleDescription}
+				</p>
 			</div>
-
-			<Card.Root class="border-emerald-200 bg-white/85 shadow-sm">
-				<Card.Header>
-					<Card.Title class="text-lg text-slate-950">Mode sederhana</Card.Title>
-					<Card.Description>Beranda ini hanya menampilkan rute yang aman untuk role aktif.</Card.Description>
-				</Card.Header>
-				<Card.Content class="space-y-3 text-sm text-slate-600">
-					<div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
-						<p class="font-semibold text-emerald-900">{visibleModules.length} modul terlihat</p>
-						<p class="mt-1 leading-6">Tidak ada data live dan tidak ada panggilan API dari halaman ini.</p>
-					</div>
-				</Card.Content>
-			</Card.Root>
 		</div>
 	</section>
 
-	<section aria-labelledby="cbt-flow-title" class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-		<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-			<div>
-				<p class="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">Alur kerja</p>
-				<h2 id="cbt-flow-title" class="mt-1 text-xl font-semibold text-slate-950">Dari komposisi soal sampai hasil</h2>
-			</div>
-			<Badge class="border-emerald-200 text-emerald-700" variant="outline">Dashboard operasional</Badge>
+	<section aria-labelledby="cbt-phases-title" class="space-y-4">
+		<div class="space-y-1">
+			<p class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">3 fase besar</p>
+			<h2 id="cbt-phases-title" class="text-2xl font-semibold tracking-tight text-slate-950">Alur CBT dibuat sederhana</h2>
 		</div>
 
 		<div class="grid gap-3 md:grid-cols-3">
-			{#each flowSteps as step (step.title)}
-				<div class="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
-					<p class="font-semibold text-emerald-950">{step.title}</p>
-					<p class="mt-2 text-sm leading-6 text-slate-600">{step.description}</p>
+			{#each phases as phase (phase.number)}
+				<div class="rounded-2xl border border-slate-200 bg-white p-5">
+					<div class="flex h-9 w-9 items-center justify-center rounded-full border border-emerald-200 text-sm font-semibold text-emerald-800">{phase.number}</div>
+					<h3 class="mt-4 text-lg font-semibold text-slate-950">{phase.title}</h3>
+					<p class="mt-2 text-sm leading-6 text-slate-600">{phase.description}</p>
 				</div>
 			{/each}
 		</div>
 	</section>
 
-	<section aria-labelledby="cbt-modules-title" class="space-y-4">
+	<section aria-labelledby="cbt-tasks-title" class="space-y-4">
 		<div class="flex flex-wrap items-end justify-between gap-3">
-			<div>
-				<p class="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">Modul CBT</p>
-				<h2 id="cbt-modules-title" class="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Kartu sesuai peran</h2>
+			<div class="space-y-1">
+				<p class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">Pilih tugas</p>
+				<h2 id="cbt-tasks-title" class="text-2xl font-semibold tracking-tight text-slate-950">Pintasan sesuai peran</h2>
 			</div>
-			<p class="max-w-xl text-sm leading-6 text-slate-600">Admin melihat seluruh rangkaian. Guru dan staf hanya melihat jalur yang selaras dengan route guard yang sudah ada.</p>
+			<p class="text-sm text-slate-500">Maksimal 4 tugas utama ditampilkan.</p>
 		</div>
 
-		{#if visibleModules.length > 0}
-			<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-				{#each visibleModules as module (module.href)}
-					<Card.Root class="group border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md">
-						<Card.Header class="space-y-3">
-							<Badge class={moduleToneClass(module.tone)} variant="outline">{module.label}</Badge>
-							<div>
-								<Card.Title class="text-lg text-slate-950">{module.title}</Card.Title>
-								<Card.Description class="mt-2 leading-6">{module.description}</Card.Description>
+		{#if visibleTasks.length > 0}
+			<div class="grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-4">
+				{#each visibleTasks as task (task.title)}
+					<Card.Root class="flex h-full min-h-[17rem] flex-col border-slate-200 bg-white shadow-sm transition hover:border-emerald-300 hover:shadow-md">
+						<Card.Header class="flex-1 space-y-4 p-5">
+							<p class="w-fit rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-800">
+								{task.phase}
+							</p>
+							<div class="space-y-3">
+								<Card.Title class="min-h-14 text-xl leading-7 text-slate-950">{task.title}</Card.Title>
+								<Card.Description class="min-h-20 text-sm leading-6">{task.description}</Card.Description>
 							</div>
 						</Card.Header>
-						<Card.Footer>
-							<Button href={resolve(module.href)} variant="outline" class="border-emerald-200 text-emerald-800 hover:bg-emerald-50">Buka Modul</Button>
+						<Card.Footer class="mt-auto border-t border-slate-100 p-5 pt-4">
+							<Button href={resolve(task.href)} class="w-full">Buka</Button>
 						</Card.Footer>
 					</Card.Root>
 				{/each}
@@ -246,8 +241,8 @@
 		{:else}
 			<Card.Root class="border-dashed border-slate-300 bg-slate-50 shadow-sm">
 				<Card.Header>
-					<Card.Title class="text-lg text-slate-950">Tidak ada kartu CBT untuk role ini</Card.Title>
-					<Card.Description>Beranda CBT tetap aman dibuka, tetapi tidak menawarkan pintasan ke modul yang tidak relevan.</Card.Description>
+					<Card.Title class="text-lg text-slate-950">Tidak ada tugas CBT untuk peran ini</Card.Title>
+					<Card.Description>Halaman ini tidak membuka modul yang tidak relevan dengan role aktif.</Card.Description>
 				</Card.Header>
 				<Card.Footer>
 					<Button href={resolve('/')} variant="outline">Kembali ke Beranda</Button>
@@ -255,4 +250,13 @@
 			</Card.Root>
 		{/if}
 	</section>
+
+	{#if visibleSecondaryLinks.length > 0}
+		<nav aria-label="Tautan CBT lainnya" class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-200 pt-4 text-sm">
+			<span class="font-medium text-slate-500">Tautan lain:</span>
+			{#each visibleSecondaryLinks as link (link.href)}
+				<a href={resolve(link.href)} class="font-medium text-emerald-800 underline-offset-4 hover:underline">{link.label}</a>
+			{/each}
+		</nav>
+	{/if}
 </div>
