@@ -554,11 +554,11 @@ func TestCbtQuestionHandlersForwardSuccessPaths(t *testing.T) {
 	}
 	h := &CbtQuestion{svc: listFake}
 	rec := httptest.NewRecorder()
-	h.List(rec, adminRequest(http.MethodGet, "/api/cbt/questions?subject_id="+subjectID.String()+"&workflow_status=review&status=draft&question_type=essay&hots=true&revision_source=reviewer&q=energi&limit=50&offset=10", ""))
+	h.List(rec, adminRequest(http.MethodGet, "/api/cbt/questions?subject_id="+subjectID.String()+"&scope=event_pool&workflow_status=review&status=draft&question_type=essay&hots=true&revision_source=reviewer&q=energi&limit=50&offset=10", ""))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("List() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
-	if listFake.listInput.SubjectID != subjectID || listFake.listInput.WorkflowStatus != "review" || listFake.listInput.Status != "draft" || listFake.listInput.QuestionType != "essay" || listFake.listInput.HotsFilter != "true" || listFake.listInput.RevisionSource != "reviewer" || listFake.listInput.SearchQuery != "energi" {
+	if listFake.listInput.SubjectID != subjectID || listFake.listInput.QuestionScope != "event_pool" || listFake.listInput.WorkflowStatus != "review" || listFake.listInput.Status != "draft" || listFake.listInput.QuestionType != "essay" || listFake.listInput.HotsFilter != "true" || listFake.listInput.RevisionSource != "reviewer" || listFake.listInput.SearchQuery != "energi" {
 		t.Fatalf("ListFiltered input = %+v, want forwarded filters", listFake.listInput)
 	}
 	if listFake.listInput.Limit != 50 || listFake.listInput.Offset != 10 || !strings.Contains(rec.Body.String(), "IPA") {
@@ -855,6 +855,18 @@ func TestCbtQuestionGetAnswerKeyVisibility(t *testing.T) {
 	}
 	if got := run(t, jwt.MapClaims{"roles": []any{"admin"}, "usr": "admin"})["answer_key"]; got != "A" {
 		t.Fatalf("Get(admin) answer_key = %#v, want A", got)
+	}
+}
+
+func TestCbtQuestionActorFromRequestAcceptsStringRoleSlices(t *testing.T) {
+	req := withClaims(httptest.NewRequest(http.MethodGet, "/api/cbt/questions", nil), jwt.MapClaims{
+		"roles": []string{"admin", "guru"},
+		"usr":   "admin.cbt",
+	})
+
+	actor := cbtQuestionActorFromRequest(req)
+	if !actor.IsAdmin() {
+		t.Fatalf("cbtQuestionActorFromRequest() roles = %+v, want admin actor", actor.Roles)
 	}
 }
 

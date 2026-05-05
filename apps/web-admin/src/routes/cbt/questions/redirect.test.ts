@@ -20,7 +20,14 @@ describe('/cbt/questions retired route', () => {
 	it('preserves safe legacy question id and retained mode query parameters', () => {
 		expectRedirect(
 			'http://localhost/cbt/questions?question_id=abc-123&mode=review&unsafe=ignored',
-			'/cbt/soal?question_id=abc-123&mode=review'
+			'/cbt/soal/review?question_id=abc-123'
+		);
+	});
+
+	it('maps retained import mode to the import page route', () => {
+		expectRedirect(
+			'http://localhost/cbt/questions?mode=import&event_id=evt-1',
+			'/cbt/soal/import?event_id=evt-1'
 		);
 	});
 

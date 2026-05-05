@@ -35,9 +35,18 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		]
 	},
 	{
-		group: 'CBT',
+		group: 'Bank Soal',
 		items: [
-			{ href: '/cbt', label: 'Dashboard CBT', icon: 'grid', roles: ['admin', 'guru', 'staf'] },
+			{ href: '/cbt/bank-soal', label: 'Daftar Soal', icon: 'book-open', roles: ['admin', 'guru'] },
+			{ href: '/cbt/soal', label: 'Tambah Soal', icon: 'pen-tool', roles: ['admin', 'guru'] },
+			{ href: '/cbt/soal/review', label: 'Review Soal', icon: 'clipboard', roles: ['admin', 'guru'] },
+			{ href: '/cbt/soal/import', label: 'Impor Soal', icon: 'file-text', roles: ['admin', 'guru'] }
+		]
+	},
+	{
+		group: 'Asesmen',
+		items: [
+			{ href: '/cbt', label: 'Dashboard Asesmen', icon: 'grid', roles: ['admin', 'guru', 'staf'] },
 			{ href: '/cbt/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'] },
 			{ href: '/cbt/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'] },
 			{ href: '/cbt/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'] }

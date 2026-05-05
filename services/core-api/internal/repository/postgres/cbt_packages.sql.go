@@ -126,6 +126,21 @@ func (q *Queries) GetCbtPackageQuestionQuality(ctx context.Context, id pgtype.UU
 	return i, err
 }
 
+const getCbtPackageUsage = `-- name: GetCbtPackageUsage :one
+SELECT COUNT(s.id)::int AS session_count
+FROM cbt_packages p
+LEFT JOIN cbt_exam_sessions s ON s.package_id = p.id
+WHERE p.id = $1
+GROUP BY p.id
+`
+
+func (q *Queries) GetCbtPackageUsage(ctx context.Context, id pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, getCbtPackageUsage, id)
+	var session_count int32
+	err := row.Scan(&session_count)
+	return session_count, err
+}
+
 const getExamQuestions = `-- name: GetExamQuestions :many
 SELECT
   q.id, q.code, q.question_text, q.question_type, q.options,

@@ -6,9 +6,6 @@
 	import { Button } from '$lib/components/ui/button';
 
 	type PersiapanRoute =
-		| '/cbt/soal'
-		| '/cbt/soal/new'
-		| '/cbt/soal/review'
 		| '/cbt/packages'
 		| '/cbt/packages/new'
 		| '/cbt/events'
@@ -33,53 +30,46 @@
 	const adminTasks: PreparationTask[] = [
 		{
 			step: '01',
-			title: 'Buat Soal',
-			description: 'Tulis dan rapikan butir soal di Komposer Soal sebelum paket disusun.',
-			href: '/cbt/soal/new',
-			cta: 'Buat Soal'
+			title: 'Manajemen Paket',
+			description: 'Pilih soal siap pakai, atur komposisi, dan siapkan paket untuk kegiatan ujian.',
+			href: '/cbt/packages',
+			cta: 'Kelola Paket'
 		},
 		{
 			step: '02',
-			title: 'Susun Paket',
-			description: 'Pilih soal siap pakai, atur komposisi, dan siapkan paket untuk kegiatan ujian.',
-			href: '/cbt/packages/new',
-			cta: 'Susun Paket'
-		},
-		{
-			step: '03',
 			title: 'Buat Kegiatan',
 			description: 'Daftarkan kegiatan ujian agar sesi, peserta, dan kartu ujian punya konteks yang jelas.',
 			href: '/cbt/events/new',
 			cta: 'Buat Kegiatan'
 		},
 		{
-			step: '04',
+			step: '03',
 			title: 'Atur Sesi/Token',
 			description: 'Tetapkan jadwal, ruang, peserta, dan token sebelum ujian masuk hari pelaksanaan.',
 			href: '/cbt/sessions/new',
 			cta: 'Atur Sesi'
+		},
+		{
+			step: '04',
+			title: 'Lanjut Pelaksanaan',
+			description: 'Setelah paket, kegiatan, dan sesi siap, masuk ke ruang monitoring hari-H.',
+			href: '/cbt/pelaksanaan',
+			cta: 'Ke Pelaksanaan'
 		}
 	];
 
 	const guruTasks: PreparationTask[] = [
 		{
 			step: '01',
-			title: 'Buat Soal',
-			description: 'Tulis dan rapikan butir soal di Komposer Soal tanpa masuk ke pengaturan operasional admin.',
-			href: '/cbt/soal/new',
-			cta: 'Buat Soal'
+			title: 'Pantau Pelaksanaan',
+			description: 'Jika ditugaskan pada hari-H, masuk ke ruang pelaksanaan untuk melihat status ujian.',
+			href: '/cbt/pelaksanaan',
+			cta: 'Ke Pelaksanaan'
 		},
 		{
 			step: '02',
-			title: 'Review Soal',
-			description: 'Periksa antrean review dan tindak lanjuti soal yang perlu keputusan atau revisi.',
-			href: '/cbt/soal/review',
-			cta: 'Buka Review'
-		},
-		{
-			step: '03',
 			title: 'Lihat Hasil',
-			description: 'Masuk ke pintu hasil CBT yang tersedia untuk akun guru.',
+			description: 'Masuk ke pintu hasil asesmen yang tersedia untuk akun guru.',
 			href: '/cbt/hasil',
 			cta: 'Buka Hasil'
 		}
@@ -89,7 +79,7 @@
 </script>
 
 <svelte:head>
-	<title>Persiapan CBT — MTsN 2 Kolaka Utara</title>
+	<title>Persiapan Asesmen — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 {#if canAccess}
@@ -98,17 +88,17 @@
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
 				<div class="flex flex-wrap items-center gap-2">
-					<Badge class="border-emerald-200 bg-white text-emerald-700" variant="outline">CBT · Fase Persiapan</Badge>
+					<Badge class="border-emerald-200 bg-white text-emerald-700" variant="outline">Asesmen · Fase Persiapan</Badge>
 					<Badge class="border-slate-200 bg-white text-slate-600" variant="outline">UI-only</Badge>
 				</div>
-				<h1 class="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Persiapan CBT</h1>
+				<h1 class="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Persiapan Asesmen</h1>
 				<p class="max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
-					Mulai dari pekerjaan yang paling penting sebelum hari ujian: soal, paket, kegiatan, lalu sesi dan token. Halaman ini
-					hanya berisi pintasan tugas, tanpa membaca data ujian.
+					Mulai dari pekerjaan operasional sebelum hari ujian: paket, kegiatan, sesi, token, lalu pelaksanaan.
+					Penyusunan soal sudah dipindahkan ke menu Bank Soal agar alurnya tidak bercampur.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
-				<Button href={resolve('/cbt')} variant="outline">Beranda CBT</Button>
+				<Button href={resolve('/cbt')} variant="outline">Dashboard Asesmen</Button>
 				<Button href={resolve('/cbt/pelaksanaan')}>Ke Pelaksanaan</Button>
 			</div>
 		</div>
@@ -120,7 +110,7 @@
 				<p class="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">Daftar tugas</p>
 				<h2 id="persiapan-tasks-title" class="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Selesaikan berurutan</h2>
 			</div>
-			<p class="max-w-lg text-sm leading-6 text-slate-600">Empat kartu besar ini menjaga operator tetap fokus pada jalur kerja CBT yang direkomendasikan.</p>
+			<p class="max-w-lg text-sm leading-6 text-slate-600">Kartu ini menjaga operator tetap fokus pada jalur persiapan asesmen tanpa masuk ke authoring soal.</p>
 		</div>
 
 		<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -146,10 +136,11 @@
 			<Card.Title class="text-lg text-slate-950">Prinsip fase persiapan</Card.Title>
 			<Card.Description>
 				{#if userRoles.includes('admin')}
-					Jika ada bagian yang belum siap, tetap selesaikan dari kiri ke kanan. Hindari membuka monitoring hari-H sebelum sesi,
-					ruang, peserta, dan token sudah jelas.
+					Bank Soal kini berdiri sebagai menu terpisah. Di sini fokuskan pekerjaan pada paket, kegiatan, sesi,
+					ruang, peserta, token, dan kesiapan masuk hari-H.
 				{:else}
-					Untuk guru, fase persiapan difokuskan pada pekerjaan soal: menulis, mereview, dan membaca hasil yang sudah tersedia.
+					Untuk guru, penyusunan dan review soal ada di menu Bank Soal. Halaman ini dipakai untuk membaca paket,
+					hasil, dan akses pelaksanaan jika ditugaskan.
 				{/if}
 			</Card.Description>
 		</Card.Header>
@@ -160,10 +151,10 @@
 		<div class="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
 			<h2 class="text-xl font-semibold text-slate-900">Akses terbatas</h2>
 			<p class="mt-3 text-sm leading-6 text-slate-600">
-				Fase persiapan CBT hanya tersedia untuk admin dan guru. Silakan kembali ke Dashboard CBT untuk memilih pekerjaan lain.
+				Fase persiapan asesmen hanya tersedia untuk admin dan guru. Silakan kembali ke Dashboard Asesmen untuk memilih pekerjaan lain.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/cbt')} variant="outline">Kembali ke Dashboard CBT</Button>
+				<Button href={resolve('/cbt')} variant="outline">Kembali ke Dashboard Asesmen</Button>
 			</div>
 		</div>
 	</div>

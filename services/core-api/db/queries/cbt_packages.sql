@@ -18,6 +18,13 @@ RETURNING *;
 -- name: DeleteCbtPackage :execrows
 DELETE FROM cbt_packages WHERE id = $1;
 
+-- name: GetCbtPackageUsage :one
+SELECT COUNT(s.id)::int AS session_count
+FROM cbt_packages p
+LEFT JOIN cbt_exam_sessions s ON s.package_id = p.id
+WHERE p.id = $1
+GROUP BY p.id;
+
 -- name: AddCbtPackageQuestion :exec
 INSERT INTO cbt_package_questions (package_id, question_id, position, points)
 VALUES ($1, $2, $3, $4);

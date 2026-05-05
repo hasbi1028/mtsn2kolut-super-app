@@ -76,7 +76,17 @@ LEFT JOIN LATERAL (
   FROM cbt_student_answers sa
   WHERE sa.question_id = q.id
 ) answer_usage ON TRUE
-WHERE (sqlc.arg(event_id)::uuid IS NULL OR q.event_id = sqlc.arg(event_id)::uuid)
+WHERE (
+    (sqlc.arg(scope_filter)::text = 'global' AND q.event_id IS NULL)
+    OR (
+      sqlc.arg(scope_filter)::text = 'event_pool'
+      AND (q.event_id IS NULL OR (sqlc.arg(event_id)::uuid IS NOT NULL AND q.event_id = sqlc.arg(event_id)::uuid))
+    )
+    OR (
+      sqlc.arg(scope_filter)::text NOT IN ('global', 'event_pool')
+      AND (sqlc.arg(event_id)::uuid IS NULL OR q.event_id = sqlc.arg(event_id)::uuid)
+    )
+  )
   AND (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)::uuid)
   AND (sqlc.arg(author_username)::text = '' OR q.author_username = sqlc.arg(author_username)::text)
   AND (sqlc.arg(workflow_status)::text = '' OR q.workflow_status = sqlc.arg(workflow_status)::text)
@@ -164,7 +174,17 @@ LEFT JOIN LATERAL (
   FROM cbt_student_answers sa
   WHERE sa.question_id = q.id
 ) answer_usage ON TRUE
-WHERE (sqlc.arg(event_id)::uuid IS NULL OR q.event_id = sqlc.arg(event_id)::uuid)
+WHERE (
+    (sqlc.arg(scope_filter)::text = 'global' AND q.event_id IS NULL)
+    OR (
+      sqlc.arg(scope_filter)::text = 'event_pool'
+      AND (q.event_id IS NULL OR (sqlc.arg(event_id)::uuid IS NOT NULL AND q.event_id = sqlc.arg(event_id)::uuid))
+    )
+    OR (
+      sqlc.arg(scope_filter)::text NOT IN ('global', 'event_pool')
+      AND (sqlc.arg(event_id)::uuid IS NULL OR q.event_id = sqlc.arg(event_id)::uuid)
+    )
+  )
   AND (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)::uuid)
   AND (sqlc.arg(author_username)::text = '' OR q.author_username = sqlc.arg(author_username)::text)
   AND (sqlc.arg(workflow_status)::text = '' OR q.workflow_status = sqlc.arg(workflow_status)::text)
@@ -217,7 +237,17 @@ LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 -- name: CountCbtQuestionsFiltered :one
 SELECT COUNT(*)::bigint
 FROM cbt_questions q
-WHERE (sqlc.arg(event_id)::uuid IS NULL OR q.event_id = sqlc.arg(event_id)::uuid)
+WHERE (
+    (sqlc.arg(scope_filter)::text = 'global' AND q.event_id IS NULL)
+    OR (
+      sqlc.arg(scope_filter)::text = 'event_pool'
+      AND (q.event_id IS NULL OR (sqlc.arg(event_id)::uuid IS NOT NULL AND q.event_id = sqlc.arg(event_id)::uuid))
+    )
+    OR (
+      sqlc.arg(scope_filter)::text NOT IN ('global', 'event_pool')
+      AND (sqlc.arg(event_id)::uuid IS NULL OR q.event_id = sqlc.arg(event_id)::uuid)
+    )
+  )
   AND (sqlc.arg(subject_id)::uuid IS NULL OR q.subject_id = sqlc.arg(subject_id)::uuid)
   AND (sqlc.arg(author_username)::text = '' OR q.author_username = sqlc.arg(author_username)::text)
   AND (sqlc.arg(workflow_status)::text = '' OR q.workflow_status = sqlc.arg(workflow_status)::text)

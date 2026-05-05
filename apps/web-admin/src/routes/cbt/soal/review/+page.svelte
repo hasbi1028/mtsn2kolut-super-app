@@ -140,27 +140,27 @@
 	});
 </script>
 
-	<svelte:head><title>Review Bank Soal CBT</title></svelte:head>
+	<svelte:head><title>Review Bank Soal</title></svelte:head>
 
 <div class="space-y-5 p-6">
 	<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 		<div>
 			<p class="text-xs font-bold uppercase tracking-[0.18em] text-green-700">Ruang Review Fokus</p>
-			<h1 class="mt-1 text-2xl font-semibold text-slate-900">Periksa Bank Soal CBT</h1>
+			<h1 class="mt-1 text-2xl font-semibold text-slate-900">Periksa Bank Soal</h1>
 			<p class="mt-1 max-w-2xl text-sm text-slate-500">Tampilan ini memusatkan reviewer pada satu soal dari repositori reusable, kunci/rubrik, pembahasan, dan timeline sebelum mengambil keputusan.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			{#if eventId}
 				<a href={resolve(`/cbt/events/${eventId}`)} class="inline-flex rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Event</a>
 			{/if}
-			<a href={resolve('/cbt/soal?mode=review')} class="inline-flex rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-muted">Kembali ke Bank Soal</a>
+			<a href={resolve('/cbt/bank-soal')} class="inline-flex rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-muted">Kembali ke Bank Soal</a>
 		</div>
 	</div>
 
 	{#if eventId}
 		<div class="rounded-xl border border-green-200 bg-green-50/70 p-4 text-sm text-green-950">
 			<p class="font-semibold">Konteks event terbaca: {eventContext?.title ?? eventId}</p>
-			<p class="mt-1 text-green-800">Antrean review tetap membaca repositori Bank Soal reusable tanpa mengirim <code class="rounded bg-white px-1">event_id</code>. Gunakan konteks event hanya untuk kembali ke pusat kegiatan atau target kebutuhan.</p>
+			<p class="mt-1 text-green-800">Antrean review dibatasi ke soal yang terkait kegiatan ini. Reviewer mapel hanya dapat memutuskan soal sesuai scope event yang ditetapkan panitia.</p>
 		</div>
 	{/if}
 

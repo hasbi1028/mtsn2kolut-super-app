@@ -50,7 +50,7 @@
 		},
 		guru: {
 			name: 'Guru',
-			description: 'Fokus ke pekerjaan inti: membuat soal, mereview kesiapan soal, dan melihat hasil.'
+			description: 'Fokus ke pekerjaan inti: kelola Bank Soal, review kesiapan soal, dan lihat hasil.'
 		},
 		staf: {
 			name: 'Staf',
@@ -87,15 +87,15 @@
 
 	const tasks: TaskCard[] = [
 		{
-			phase: 'Siapkan',
-			title: 'Buat Soal',
-			description: 'Masuk ke komposer soal untuk menulis dan merapikan butir ujian.',
-			href: '/cbt/soal',
+			phase: 'Bank Soal',
+			title: 'Kelola Bank Soal',
+			description: 'Masuk ke ruang Bank Soal untuk menulis, mengimpor, dan merapikan butir reusable.',
+			href: '/cbt/bank-soal',
 			roles: ['guru'],
 			priority: { guru: 1 }
 		},
 		{
-			phase: 'Siapkan',
+			phase: 'Bank Soal',
 			title: 'Review Soal',
 			description: 'Periksa antrean review agar soal siap digunakan saat paket ujian dirakit.',
 			href: '/cbt/soal/review',
@@ -145,7 +145,7 @@
 	];
 
 	const secondaryLinks: SecondaryLink[] = [
-		{ label: 'Bank Soal lama', href: '/cbt/bank-soal', roles: ['admin', 'guru'] },
+		{ label: 'Bank Soal', href: '/cbt/bank-soal', roles: ['admin', 'guru'] },
 		{ label: 'Paket Soal', href: '/cbt/paket-soal', roles: ['admin'] },
 		{ label: 'Kegiatan lama', href: '/cbt/kegiatan', roles: ['admin'] },
 		{ label: 'Panduan BYOD', href: '/cbt/byod', roles: ['admin', 'guru'] }

@@ -164,6 +164,7 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	rows, total, err := svc.ListFiltered(context.Background(), ListCbtQuestionsInput{
 		SubjectID:      pgtype.UUID{Valid: true},
 		AuthorUsername: " guru.ipa ",
+		QuestionScope:  " event_pool ",
 		WorkflowStatus: " draft ",
 		Status:         " published ",
 		QuestionType:   " multiple_choice ",
@@ -179,10 +180,10 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	if len(rows) != 1 || total != 7 {
 		t.Fatalf("ListFiltered() rows/total = %d/%d, want 1/7", len(rows), total)
 	}
-	if store.listFilterArg.AuthorUsername != "guru.ipa" || store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.StatusFilter != "published" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.RevisionSource != "item_analysis" || store.listFilterArg.SearchQuery != "aljabar" {
+	if store.listFilterArg.AuthorUsername != "guru.ipa" || store.listFilterArg.ScopeFilter != "event_pool" || store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.StatusFilter != "published" || store.listFilterArg.QuestionType != "multiple_choice" || store.listFilterArg.HotsFilter != "true" || store.listFilterArg.RevisionSource != "item_analysis" || store.listFilterArg.SearchQuery != "aljabar" {
 		t.Fatalf("ListFiltered() arg = %+v, want trimmed filters", store.listFilterArg)
 	}
-	if store.countArg.AuthorUsername != store.listFilterArg.AuthorUsername || store.countArg.WorkflowStatus != store.listFilterArg.WorkflowStatus || store.countArg.StatusFilter != store.listFilterArg.StatusFilter || store.countArg.RevisionSource != store.listFilterArg.RevisionSource || store.countArg.SearchQuery != store.listFilterArg.SearchQuery {
+	if store.countArg.AuthorUsername != store.listFilterArg.AuthorUsername || store.countArg.ScopeFilter != store.listFilterArg.ScopeFilter || store.countArg.WorkflowStatus != store.listFilterArg.WorkflowStatus || store.countArg.StatusFilter != store.listFilterArg.StatusFilter || store.countArg.RevisionSource != store.listFilterArg.RevisionSource || store.countArg.SearchQuery != store.listFilterArg.SearchQuery {
 		t.Fatalf("ListFiltered() count arg = %+v, want same trimmed filters", store.countArg)
 	}
 
@@ -198,7 +199,7 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 		AnswerKey:      " b ",
 		MediaAssetIDs:  []string{"asset-1"},
 		AuthorUsername: " guru ",
-		Actor:          CbtQuestionActor{Username: "guru", Roles: []string{"admin"}},
+		Actor:          CbtQuestionActor{Username: "guru", Roles: []string{"guru"}},
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -223,6 +224,63 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	}
 	if store.deleteID != deleteID || store.deleteCalls != 1 {
 		t.Fatalf("Delete() id/calls = %v/%d, want %v/1", store.deleteID, store.deleteCalls, deleteID)
+	}
+}
+
+func TestCbtQuestionCreateRejectsDirectApprovalBypass(t *testing.T) {
+	subjectID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	store := &fakeQuestionStore{
+		createRow: db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{8}, Valid: true}},
+	}
+	svc := &CbtQuestion{q: store}
+	base := SaveCbtQuestionInput{
+		SubjectID:      subjectID,
+		AuthoringMode:  "advance",
+		QuestionType:   "multiple_choice",
+		QuestionText:   "Soal lengkap",
+		Options:        []QuestionOption{{Label: "A", Text: "A"}, {Label: "B", Text: "B"}, {Label: "C", Text: "C"}, {Label: "D", Text: "D"}},
+		AnswerKey:      "A",
+		Difficulty:     db.CbtQuestionDifficultyEnumMedium,
+		Status:         db.CbtQuestionStatusEnumDraft,
+		WorkflowStatus: "review",
+		Actor:          CbtQuestionActor{Username: "admin", Roles: []string{"admin"}},
+	}
+	if _, err := svc.Create(context.Background(), base); err != nil {
+		t.Fatalf("Create(review draft) error = %v", err)
+	}
+
+	approved := base
+	approved.WorkflowStatus = "approved"
+	_, err := svc.Create(context.Background(), approved)
+	if !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("Create(approved bypass) error = %v, want ErrBadRequest", err)
+	}
+
+	published := base
+	published.Status = db.CbtQuestionStatusEnumPublished
+	published.WorkflowStatus = "approved"
+	_, err = svc.Create(context.Background(), published)
+	if !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("Create(published bypass) error = %v, want ErrBadRequest", err)
+	}
+	if store.createCalls != 1 {
+		t.Fatalf("Create direct bypass create calls = %d, want only initial valid create", store.createCalls)
+	}
+}
+
+func TestCbtQuestionDeleteWithActorRequiresModifyAccess(t *testing.T) {
+	questionID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
+	store := &fakeQuestionStore{
+		current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru.a", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "draft"},
+	}
+	svc := &CbtQuestion{q: store}
+
+	err := svc.DeleteWithActor(context.Background(), questionID, CbtQuestionActor{Username: "guru.b", Roles: []string{"guru"}})
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("DeleteWithActor(other author) error = %v, want forbidden", err)
+	}
+	if store.deleteCalls != 0 {
+		t.Fatalf("DeleteWithActor(other author) delete calls = %d, want 0", store.deleteCalls)
 	}
 }
 
@@ -387,16 +445,34 @@ func TestCbtQuestionImportLegacyCSVSupportsStructuredTypes(t *testing.T) {
 	}
 }
 
-func TestCbtQuestionImportLegacyCSVRequiresCreatePermission(t *testing.T) {
-	svc := &CbtQuestion{q: &fakeQuestionStore{}}
-	_, err := svc.ImportLegacyCSV(context.Background(), ImportLegacyQuestionsInput{
-		SubjectID: pgtype.UUID{Bytes: [16]byte{7}, Valid: true},
-		CSVText:   "kode;soal;jawaban\nQ-1;Soal;A",
-		Username:  "guru.tanpa-event",
-		Actor:     CbtQuestionActor{Username: "guru.tanpa-event", Roles: []string{"guru"}},
-	})
+func TestCbtQuestionCreateAllowsGuruReusableAndRejectsNonGuru(t *testing.T) {
+	store := &fakeQuestionStore{createRow: db.CbtQuestion{ID: pgtype.UUID{Bytes: [16]byte{8}, Valid: true}}}
+	svc := &CbtQuestion{q: store}
+	base := SaveCbtQuestionInput{
+		SubjectID:      pgtype.UUID{Bytes: [16]byte{7}, Valid: true},
+		QuestionType:   "multiple_choice",
+		QuestionText:   "Soal reusable",
+		Options:        []QuestionOption{{Label: "A", Text: "A"}, {Label: "B", Text: "B"}, {Label: "C", Text: "C"}, {Label: "D", Text: "D"}},
+		AnswerKey:      "A",
+		Status:         db.CbtQuestionStatusEnumDraft,
+		WorkflowStatus: "draft",
+		AuthorUsername: "guru.tanpa-event",
+		Actor:          CbtQuestionActor{Username: "guru.tanpa-event", Roles: []string{"guru"}},
+	}
+	_, err := svc.Create(context.Background(), base)
+	if err != nil {
+		t.Fatalf("Create(guru reusable) error = %v", err)
+	}
+	if store.createCalls != 1 || store.createHistory[0].EventID.Valid {
+		t.Fatalf("Create(guru reusable) calls/event = %d/%+v, want one global reusable create", store.createCalls, store.createHistory[0].EventID)
+	}
+
+	blocked := base
+	blocked.AuthorUsername = "staf.tu"
+	blocked.Actor = CbtQuestionActor{Username: "staf.tu", Roles: []string{"staf"}}
+	_, err = svc.Create(context.Background(), blocked)
 	if !errors.Is(err, domain.ErrForbidden) {
-		t.Fatalf("ImportLegacyCSV() error = %v, want ErrForbidden", err)
+		t.Fatalf("Create(non-guru reusable) error = %v, want ErrForbidden", err)
 	}
 }
 
@@ -451,6 +527,31 @@ func TestCbtQuestionReviewerCanApproveAssignedEventQuestion(t *testing.T) {
 	_, err = svc.Reject(context.Background(), questionID, CbtQuestionActor{Username: "bukan-reviewer", Roles: []string{"guru"}}, "tolak")
 	if !errors.Is(err, domain.ErrForbidden) {
 		t.Fatalf("Reject(unauthorized) error = %v, want ErrForbidden", err)
+	}
+}
+
+func TestCbtQuestionNonAdminCannotReviewGlobalQuestion(t *testing.T) {
+	subjectID := pgtype.UUID{Bytes: [16]byte{5}, Valid: true}
+	questionID := pgtype.UUID{Bytes: [16]byte{6}, Valid: true}
+	store := &fakeQuestionStore{
+		current: db.GetCbtQuestionRow{
+			ID: questionID, SubjectID: subjectID, QuestionText: "Soal global", QuestionType: "multiple_choice",
+			Options:   []byte(`[{"label":"A","text":"A"},{"label":"B","text":"B"},{"label":"C","text":"C"},{"label":"D","text":"D"}]`),
+			AnswerKey: "A", Difficulty: db.CbtQuestionDifficultyEnumMedium, Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "review",
+		},
+	}
+	svc := &CbtQuestion{q: store}
+
+	_, err := svc.Approve(context.Background(), questionID, CbtQuestionActor{Username: "guru.ipa", Roles: []string{"guru"}}, "siap")
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("Approve(global non-admin) error = %v, want ErrForbidden", err)
+	}
+	_, err = svc.Reject(context.Background(), questionID, CbtQuestionActor{Username: "guru.ipa", Roles: []string{"guru"}}, "revisi")
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("Reject(global non-admin) error = %v, want ErrForbidden", err)
+	}
+	if store.updateCalls != 0 {
+		t.Fatalf("global non-admin review update calls = %d, want 0", store.updateCalls)
 	}
 }
 
@@ -897,6 +998,27 @@ func TestNormalizeQuestionInputBeginnerDefaultsToDraft(t *testing.T) {
 	}
 	if got.WriterNotes != "" {
 		t.Fatalf("WriterNotes = %q, want cleared", got.WriterNotes)
+	}
+}
+
+func TestNormalizeQuestionInputClearsDraftReviewActors(t *testing.T) {
+	got, err := normalizeQuestionInput(SaveCbtQuestionInput{
+		SubjectID:        pgtype.UUID{Valid: true},
+		AuthoringMode:    "advance",
+		QuestionType:     "multiple_choice",
+		QuestionText:     "Soal draft",
+		Options:          []QuestionOption{{Label: "A", Text: "A"}, {Label: "B", Text: "B"}, {Label: "C", Text: "C"}, {Label: "D", Text: "D"}},
+		AnswerKey:        "A",
+		Status:           db.CbtQuestionStatusEnumDraft,
+		WorkflowStatus:   "draft",
+		ReviewerUsername: "guru",
+		ApproverUsername: "admin",
+	})
+	if err != nil {
+		t.Fatalf("normalizeQuestionInput() error = %v", err)
+	}
+	if got.ReviewerUsername != "" || got.ApproverUsername != "" {
+		t.Fatalf("draft actors = reviewer %q approver %q, want cleared", got.ReviewerUsername, got.ApproverUsername)
 	}
 }
 

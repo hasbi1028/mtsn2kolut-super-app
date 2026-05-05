@@ -71,10 +71,12 @@ func (s *CbtQuestionAsset) Save(ctx context.Context, input UploadCbtQuestionAsse
 	}
 	defer out.Close()
 	if _, err := io.Copy(out, input.File); err != nil {
+		_ = out.Close()
+		_ = os.Remove(absPath)
 		return db.CbtQuestionAsset{}, err
 	}
 
-	return s.q.CreateCbtQuestionAsset(ctx, db.CreateCbtQuestionAssetParams{
+	asset, err := s.q.CreateCbtQuestionAsset(ctx, db.CreateCbtQuestionAssetParams{
 		QuestionID:   input.QuestionID,
 		OriginalName: input.OriginalName,
 		StoredName:   storedName,
@@ -84,6 +86,11 @@ func (s *CbtQuestionAsset) Save(ctx context.Context, input UploadCbtQuestionAsse
 		Purpose:      normalizeAssetPurpose(input.Purpose),
 		UploadedBy:   input.UploadedBy,
 	})
+	if err != nil {
+		_ = os.Remove(absPath)
+		return db.CbtQuestionAsset{}, err
+	}
+	return asset, nil
 }
 
 func (s *CbtQuestionAsset) Get(ctx context.Context, id pgtype.UUID) (db.CbtQuestionAsset, error) {

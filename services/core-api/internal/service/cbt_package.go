@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -19,6 +20,7 @@ type CbtPackage struct {
 type cbtPackageStore interface {
 	ListCbtPackages(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackagesRow, error)
 	ListCbtPackageQuestions(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackageQuestionsRow, error)
+	GetCbtPackageUsage(ctx context.Context, id pgtype.UUID) (int32, error)
 	DeleteCbtPackage(ctx context.Context, id pgtype.UUID) (int64, error)
 	WithTx(tx pgx.Tx) *db.Queries
 }
@@ -142,6 +144,16 @@ func createCbtPackage(ctx context.Context, q cbtPackageCreateStore, input Create
 }
 
 func (s *CbtPackage) Delete(ctx context.Context, id pgtype.UUID) error {
+	sessionCount, err := s.q.GetCbtPackageUsage(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrNotFound
+		}
+		return err
+	}
+	if sessionCount > 0 {
+		return fmt.Errorf("%w: paket CBT sudah digunakan oleh sesi ujian dan tidak dapat dihapus", domain.ErrConflict)
+	}
 	rows, err := s.q.DeleteCbtPackage(ctx, id)
 	if err != nil {
 		return err

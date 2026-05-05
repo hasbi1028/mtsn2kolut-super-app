@@ -201,6 +201,8 @@
 			offset: String(offset),
 			status: 'published',
 		});
+		params.set('scope', eventId ? 'event_pool' : 'global');
+		if (eventId) params.set('event_id', eventId);
 		const payload = await fetch(clientApiPathWithQuery('/api/cbt/questions', params))
 			.then((response) => readClientApiData<unknown>(response, 'Gagal memuat bank soal'));
 		return parseQuestionPage(payload);

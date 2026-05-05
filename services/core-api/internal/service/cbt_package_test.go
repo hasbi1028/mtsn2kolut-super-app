@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -21,6 +23,20 @@ type fakeCbtPackageCreateStore struct {
 
 	addParams []db.AddCbtPackageQuestionParams
 	addErr    error
+}
+
+func TestCbtPackageDeleteRejectsSessionUsage(t *testing.T) {
+	packageID := pgtype.UUID{Bytes: [16]byte{8}, Valid: true}
+	store := &fakeCbtPackageStore{usageCount: 2}
+	svc := &CbtPackage{q: store}
+
+	err := svc.Delete(context.Background(), packageID)
+	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "sesi ujian") {
+		t.Fatalf("Delete(used package) error = %v, want usage conflict", err)
+	}
+	if store.deleteID.Valid {
+		t.Fatalf("Delete(used package) delete id = %v, want no delete", store.deleteID)
+	}
 }
 
 func (f *fakeCbtPackageCreateStore) CreateCbtPackage(_ context.Context, arg db.CreateCbtPackageParams) (db.CbtPackage, error) {

@@ -23,6 +23,13 @@ type fakeCbtQuestionAssetStore struct {
 	examErr     error
 }
 
+type partialFailReader struct{}
+
+func (partialFailReader) Read(p []byte) (int, error) {
+	copy(p, "partial")
+	return len("partial"), errors.New("copy failed")
+}
+
 func (f *fakeCbtQuestionAssetStore) CreateCbtQuestionAsset(ctx context.Context, arg db.CreateCbtQuestionAssetParams) (db.CbtQuestionAsset, error) {
 	f.createArg = arg
 	if f.createErr != nil {
@@ -134,6 +141,27 @@ func TestCbtQuestionAssetSaveRejectsInvalidInputAndCreateErrors(t *testing.T) {
 	svc := &CbtQuestionAsset{q: &fakeCbtQuestionAssetStore{createErr: errors.New("create failed")}, assetDir: t.TempDir()}
 	if _, err := svc.Save(context.Background(), valid); err == nil || err.Error() != "create failed" {
 		t.Fatalf("Save(create error) = %v, want create failed", err)
+	}
+	entries, err := os.ReadDir(svc.assetDir)
+	if err != nil {
+		t.Fatalf("ReadDir(asset dir) error = %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("Save(create error) left files = %d, want cleanup", len(entries))
+	}
+
+	svc = &CbtQuestionAsset{q: &fakeCbtQuestionAssetStore{}, assetDir: t.TempDir()}
+	copyFailInput := valid
+	copyFailInput.File = partialFailReader{}
+	if _, err := svc.Save(context.Background(), copyFailInput); err == nil || err.Error() != "copy failed" {
+		t.Fatalf("Save(copy error) = %v, want copy failed", err)
+	}
+	entries, err = os.ReadDir(svc.assetDir)
+	if err != nil {
+		t.Fatalf("ReadDir(asset dir after copy error) error = %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("Save(copy error) left files = %d, want cleanup", len(entries))
 	}
 }
 

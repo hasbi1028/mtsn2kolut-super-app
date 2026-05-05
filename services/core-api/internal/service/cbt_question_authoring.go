@@ -1,0 +1,1031 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"html"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"mtsn2kolut-super-app/backend/internal/domain"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
+)
+
+func (s *CbtQuestion) Get(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error) {
+	return s.q.GetCbtQuestion(ctx, id)
+}
+
+func (s *CbtQuestion) GetDetail(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) (db.GetCbtQuestionDetailRow, error) {
+	row, err := s.q.GetCbtQuestionDetail(ctx, id)
+	if err != nil {
+		return db.GetCbtQuestionDetailRow{}, normalizeNoRows(err)
+	}
+	actor = normalizeCbtQuestionActor(actor)
+	canView, canSeeAnswerKey, err := s.questionDetailAccess(ctx, actor, row)
+	if err != nil {
+		return db.GetCbtQuestionDetailRow{}, err
+	}
+	if !canView {
+		return db.GetCbtQuestionDetailRow{}, domain.ErrForbidden
+	}
+	if !canSeeAnswerKey {
+		row.AnswerKey = ""
+	}
+	return row, nil
+}
+
+func (s *CbtQuestion) Create(ctx context.Context, input SaveCbtQuestionInput) (db.CbtQuestion, error) {
+	return s.createWithAudit(ctx, input, "create", "", nil)
+}
+
+func (s *CbtQuestion) createWithAudit(ctx context.Context, input SaveCbtQuestionInput, action string, note string, metadata map[string]any) (db.CbtQuestion, error) {
+	actor := normalizeCbtQuestionActor(inputActor(input))
+	if err := s.requireCreateQuestion(ctx, actor, input.EventID, input.SubjectID); err != nil {
+		return db.CbtQuestion{}, err
+	}
+	if createInputBypassesWorkflow(input) {
+		return db.CbtQuestion{}, fmt.Errorf("%w: soal baru hanya boleh dibuat sebagai draft atau diajukan review", domain.ErrBadRequest)
+	}
+	params, err := buildCreateQuestionParams(input)
+	if err != nil {
+		return db.CbtQuestion{}, err
+	}
+	row, err := s.q.CreateCbtQuestion(ctx, params)
+	if err != nil {
+		return db.CbtQuestion{}, err
+	}
+	if err := s.logQuestionAudit(ctx, row.ID, actor.Username, action, note, metadata); err != nil {
+		return db.CbtQuestion{}, err
+	}
+	return row, nil
+}
+
+func createInputBypassesWorkflow(input SaveCbtQuestionInput) bool {
+	status := strings.TrimSpace(string(input.Status))
+	workflowStatus := normalizeWorkflowStatus(input.WorkflowStatus)
+	return status == string(db.CbtQuestionStatusEnumPublished) ||
+		status == string(db.CbtQuestionStatusEnumArchived) ||
+		workflowStatus == "approved"
+}
+
+func (s *CbtQuestion) Update(ctx context.Context, input SaveCbtQuestionInput) (db.CbtQuestion, error) {
+	return s.updateWithAudit(ctx, input, "update", strings.TrimSpace(input.ReviewNotes), nil)
+}
+
+func (s *CbtQuestion) updateWithAudit(ctx context.Context, input SaveCbtQuestionInput, action string, note string, metadata map[string]any) (db.CbtQuestion, error) {
+	actor := normalizeCbtQuestionActor(inputActor(input))
+	current, err := s.q.GetCbtQuestion(ctx, input.ID)
+	if err != nil {
+		return db.CbtQuestion{}, normalizeNoRows(err)
+	}
+	if err := s.requireModifyQuestion(ctx, actor, current); err != nil {
+		return db.CbtQuestion{}, err
+	}
+	if questionUsageLocked(current.PackageCount, current.AnswerCount) {
+		return db.CbtQuestion{}, fmt.Errorf("%w: soal sudah masuk paket ujian atau memiliki jawaban siswa. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+	}
+	params, err := buildUpdateQuestionParams(current, input)
+	if err != nil {
+		return db.CbtQuestion{}, err
+	}
+	row, err := s.q.UpdateCbtQuestion(ctx, params)
+	if err != nil {
+		return db.CbtQuestion{}, err
+	}
+	if err := s.logQuestionAudit(ctx, row.ID, actor.Username, action, note, metadata); err != nil {
+		return db.CbtQuestion{}, err
+	}
+	return row, nil
+}
+
+func (s *CbtQuestion) Delete(ctx context.Context, id pgtype.UUID) error {
+	return s.DeleteWithActor(ctx, id, CbtQuestionActor{Roles: []string{"admin"}})
+}
+
+func (s *CbtQuestion) DeleteWithActor(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) error {
+	actor = normalizeCbtQuestionActor(actor)
+	current, err := s.q.GetCbtQuestion(ctx, id)
+	if err != nil {
+		return normalizeNoRows(err)
+	}
+	if err := s.requireModifyQuestion(ctx, actor, current); err != nil {
+		return err
+	}
+	if questionUsageLocked(current.PackageCount, current.AnswerCount) {
+		return fmt.Errorf("%w: soal sudah masuk paket ujian atau memiliki jawaban siswa. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+	}
+	if err := s.logQuestionAudit(ctx, id, actor.Username, "delete", "", nil); err != nil {
+		return err
+	}
+	return s.q.DeleteCbtQuestion(ctx, id)
+}
+
+func questionUsageLocked(packageCount, answerCount int32) bool {
+	return packageCount > 0 || answerCount > 0
+}
+
+func normalizeNoRows(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrNotFound
+	}
+	return err
+}
+
+func (s *CbtQuestion) requireCreateQuestion(ctx context.Context, actor CbtQuestionActor, eventID pgtype.UUID, subjectID pgtype.UUID) error {
+	if actor.IsAdmin() {
+		return nil
+	}
+	if !eventID.Valid {
+		if actor.HasRole("guru") || actor.HasRole("teacher") {
+			return nil
+		}
+		return domain.ErrForbidden
+	}
+	members, err := s.q.ListCbtEventMembersByUser(ctx, actor.UserID)
+	if err != nil {
+		return err
+	}
+	for _, member := range members {
+		if sameUUID(member.EventID, eventID) && member.Role == db.CbtEventMemberRolePembuatSoal && memberSubjectMatches(member.SubjectID, subjectID) {
+			return nil
+		}
+	}
+	return domain.ErrForbidden
+}
+
+func (s *CbtQuestion) requireModifyQuestion(ctx context.Context, actor CbtQuestionActor, current db.GetCbtQuestionRow) error {
+	if actor.IsAdmin() {
+		return nil
+	}
+	if strings.TrimSpace(current.AuthorUsername) == "" || strings.TrimSpace(current.AuthorUsername) != actor.Username {
+		return domain.ErrForbidden
+	}
+	if current.WorkflowStatus != "" && current.WorkflowStatus != "draft" && current.WorkflowStatus != "rejected" {
+		return fmt.Errorf("%w: soal sedang atau sudah masuk alur review. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+	}
+	if current.Status != "" && current.Status != db.CbtQuestionStatusEnumDraft {
+		return fmt.Errorf("%w: soal tidak lagi berstatus draft. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
+	}
+	if current.EventID.Valid {
+		return s.requireCreateQuestion(ctx, actor, current.EventID, current.SubjectID)
+	}
+	return nil
+}
+
+func sameUUID(a, b pgtype.UUID) bool {
+	return a.Valid && b.Valid && a.Bytes == b.Bytes
+}
+
+func cbtQuestionUUIDString(id pgtype.UUID) string {
+	if !id.Valid {
+		return ""
+	}
+	return fmt.Sprintf("%x-%x-%x-%x-%x", id.Bytes[0:4], id.Bytes[4:6], id.Bytes[6:8], id.Bytes[8:10], id.Bytes[10:16])
+}
+
+func (s *CbtQuestion) logQuestionAudit(ctx context.Context, questionID pgtype.UUID, actorUsername string, action string, note string, metadata map[string]any) error {
+	action = strings.TrimSpace(action)
+	if !questionID.Valid || action == "" {
+		return nil
+	}
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	raw, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	_, err = s.q.CreateCbtQuestionAuditLog(ctx, db.CreateCbtQuestionAuditLogParams{
+		QuestionID:    questionID,
+		ActorUsername: strings.TrimSpace(actorUsername),
+		Action:        action,
+		Note:          strings.TrimSpace(note),
+		Metadata:      raw,
+	})
+	return err
+}
+
+func memberSubjectMatches(memberSubjectID pgtype.UUID, subjectID pgtype.UUID) bool {
+	return !memberSubjectID.Valid || sameUUID(memberSubjectID, subjectID)
+}
+
+func (s *CbtQuestion) requireWorkflowRole(ctx context.Context, username string, current db.GetCbtQuestionRow, role db.CbtEventMemberRole) error {
+	username = strings.TrimSpace(username)
+	if !current.EventID.Valid || username == "" {
+		return domain.ErrForbidden
+	}
+	members, err := s.q.ListCbtEventMembersByUsername(ctx, username)
+	if err != nil {
+		return err
+	}
+	for _, member := range members {
+		if sameUUID(member.EventID, current.EventID) && memberSubjectMatches(member.SubjectID, current.SubjectID) {
+			if member.Role == role || member.Role == db.CbtEventMemberRolePanitia {
+				return nil
+			}
+		}
+	}
+	return domain.ErrForbidden
+}
+
+func (s *CbtQuestion) questionDetailAccess(ctx context.Context, actor CbtQuestionActor, row db.GetCbtQuestionDetailRow) (bool, bool, error) {
+	if actor.IsAdmin() {
+		return true, true, nil
+	}
+	if strings.TrimSpace(row.AuthorUsername) != "" && row.AuthorUsername == actor.Username {
+		return true, true, nil
+	}
+	member, err := s.actorHasEventQuestionRole(ctx, actor, row.EventID, row.SubjectID, db.CbtEventMemberRoleReviewer, db.CbtEventMemberRolePanitia)
+	if err != nil {
+		return false, false, err
+	}
+	if member {
+		return true, true, nil
+	}
+	if row.Status == db.CbtQuestionStatusEnumPublished {
+		return true, false, nil
+	}
+	return false, false, nil
+}
+
+func (s *CbtQuestion) requireDuplicateSourceAccess(ctx context.Context, actor CbtQuestionActor, current db.GetCbtQuestionRow) error {
+	if actor.IsAdmin() {
+		return nil
+	}
+	if strings.TrimSpace(current.AuthorUsername) != "" && current.AuthorUsername == actor.Username {
+		if current.EventID.Valid {
+			return s.requireCreateQuestion(ctx, actor, current.EventID, current.SubjectID)
+		}
+		return nil
+	}
+	member, err := s.actorHasEventQuestionRole(ctx, actor, current.EventID, current.SubjectID, db.CbtEventMemberRoleReviewer, db.CbtEventMemberRolePanitia)
+	if err != nil {
+		return err
+	}
+	if member {
+		return nil
+	}
+	return domain.ErrForbidden
+}
+
+func (s *CbtQuestion) actorHasEventQuestionRole(ctx context.Context, actor CbtQuestionActor, eventID, subjectID pgtype.UUID, roles ...db.CbtEventMemberRole) (bool, error) {
+	if !eventID.Valid || !actor.UserID.Valid {
+		return false, nil
+	}
+	members, err := s.q.ListCbtEventMembersByUser(ctx, actor.UserID)
+	if err != nil {
+		return false, err
+	}
+	for _, member := range members {
+		if !sameUUID(member.EventID, eventID) || !memberSubjectMatches(member.SubjectID, subjectID) {
+			continue
+		}
+		for _, role := range roles {
+			if member.Role == role {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func buildCreateQuestionParams(input SaveCbtQuestionInput) (db.CreateCbtQuestionParams, error) {
+	normalized, err := normalizeQuestionInput(input)
+	if err != nil {
+		return db.CreateCbtQuestionParams{}, err
+	}
+	optionsJSON, err := EncodeQuestionOptions(normalized.Options)
+	if err != nil {
+		return db.CreateCbtQuestionParams{}, err
+	}
+	mediaJSON, err := EncodeStringArray(normalized.MediaAssetIDs)
+	if err != nil {
+		return db.CreateCbtQuestionParams{}, err
+	}
+	return db.CreateCbtQuestionParams{
+		EventID:          normalized.EventID,
+		SubjectID:        normalized.SubjectID,
+		Code:             normalized.Code,
+		QuestionText:     normalized.QuestionText,
+		QuestionType:     normalized.QuestionType,
+		Options:          optionsJSON,
+		OptionA:          normalized.OptionA,
+		OptionB:          normalized.OptionB,
+		OptionC:          normalized.OptionC,
+		OptionD:          normalized.OptionD,
+		OptionE:          normalized.OptionE,
+		AnswerKey:        normalized.AnswerKey,
+		Explanation:      normalized.Explanation,
+		Difficulty:       normalized.Difficulty,
+		Status:           normalized.Status,
+		StemHtml:         normalized.StemHTML,
+		StemLatex:        normalized.StemLatex,
+		StimulusHtml:     normalized.StimulusHTML,
+		StimulusLatex:    normalized.StimulusLatex,
+		ExplanationHtml:  normalized.ExplanationHTML,
+		RubricHtml:       normalized.RubricHTML,
+		AcademicPhase:    normalized.AcademicPhase,
+		GradeLevel:       normalized.GradeLevel,
+		CpRef:            normalized.CPRef,
+		TpRef:            normalized.TPRef,
+		KdRef:            normalized.KDRef,
+		IndicatorRef:     normalized.IndicatorRef,
+		MaterialTopic:    normalized.MaterialTopic,
+		CognitiveLevel:   normalized.CognitiveLevel,
+		HotsFlag:         normalized.HotsFlag,
+		MediaAssetIds:    mediaJSON,
+		WorkflowStatus:   normalized.WorkflowStatus,
+		Version:          1,
+		AuthorUsername:   normalized.AuthorUsername,
+		ReviewerUsername: normalized.ReviewerUsername,
+		ReviewedAt:       normalized.reviewedAt(),
+		ApproverUsername: normalized.ApproverUsername,
+		ApprovedAt:       normalized.approvedAt(),
+		WriterNotes:      normalized.WriterNotes,
+		ReviewNotes:      normalized.ReviewNotes,
+	}, nil
+}
+
+func buildUpdateQuestionParams(current db.GetCbtQuestionRow, input SaveCbtQuestionInput) (db.UpdateCbtQuestionParams, error) {
+	normalized, err := normalizeQuestionInput(input)
+	if err != nil {
+		return db.UpdateCbtQuestionParams{}, err
+	}
+	optionsJSON, err := EncodeQuestionOptions(normalized.Options)
+	if err != nil {
+		return db.UpdateCbtQuestionParams{}, err
+	}
+	mediaJSON, err := EncodeStringArray(normalized.MediaAssetIDs)
+	if err != nil {
+		return db.UpdateCbtQuestionParams{}, err
+	}
+
+	reviewer := current.ReviewerUsername
+	reviewedAt := current.ReviewedAt
+	if normalized.WorkflowStatus == "approved" || normalized.WorkflowStatus == "review" || normalized.WorkflowStatus == "rejected" {
+		reviewer = normalized.ReviewerUsername
+		reviewedAt = normalized.reviewedAt()
+	}
+
+	approver := current.ApproverUsername
+	approvedAt := current.ApprovedAt
+	if normalized.Status == db.CbtQuestionStatusEnumPublished {
+		approver = normalized.ApproverUsername
+		approvedAt = normalized.approvedAt()
+	}
+
+	return db.UpdateCbtQuestionParams{
+		ID:               input.ID,
+		EventID:          normalized.EventID,
+		SubjectID:        normalized.SubjectID,
+		Code:             normalized.Code,
+		QuestionText:     normalized.QuestionText,
+		QuestionType:     normalized.QuestionType,
+		Options:          optionsJSON,
+		OptionA:          normalized.OptionA,
+		OptionB:          normalized.OptionB,
+		OptionC:          normalized.OptionC,
+		OptionD:          normalized.OptionD,
+		OptionE:          normalized.OptionE,
+		AnswerKey:        normalized.AnswerKey,
+		Explanation:      normalized.Explanation,
+		Difficulty:       normalized.Difficulty,
+		Status:           normalized.Status,
+		StemHtml:         normalized.StemHTML,
+		StemLatex:        normalized.StemLatex,
+		StimulusHtml:     normalized.StimulusHTML,
+		StimulusLatex:    normalized.StimulusLatex,
+		ExplanationHtml:  normalized.ExplanationHTML,
+		RubricHtml:       normalized.RubricHTML,
+		AcademicPhase:    normalized.AcademicPhase,
+		GradeLevel:       normalized.GradeLevel,
+		CpRef:            normalized.CPRef,
+		TpRef:            normalized.TPRef,
+		KdRef:            normalized.KDRef,
+		IndicatorRef:     normalized.IndicatorRef,
+		MaterialTopic:    normalized.MaterialTopic,
+		CognitiveLevel:   normalized.CognitiveLevel,
+		HotsFlag:         normalized.HotsFlag,
+		MediaAssetIds:    mediaJSON,
+		WorkflowStatus:   normalized.WorkflowStatus,
+		ReviewerUsername: reviewer,
+		ReviewedAt:       reviewedAt,
+		ApproverUsername: approver,
+		ApprovedAt:       approvedAt,
+		WriterNotes:      normalized.WriterNotes,
+		ReviewNotes:      normalized.ReviewNotes,
+	}, nil
+}
+
+func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, error) {
+	out := input
+	out.AuthoringMode = normalizeAuthoringMode(out.AuthoringMode)
+	out.Code = strings.TrimSpace(out.Code)
+	out.QuestionType = normalizeQuestionType(out.QuestionType)
+	out.QuestionText = strings.TrimSpace(out.QuestionText)
+	out.Explanation = strings.TrimSpace(out.Explanation)
+	out.StemHTML = sanitizeHTML(out.StemHTML)
+	out.StemLatex = strings.TrimSpace(out.StemLatex)
+	out.StimulusHTML = sanitizeHTML(out.StimulusHTML)
+	out.StimulusLatex = strings.TrimSpace(out.StimulusLatex)
+	out.ExplanationHTML = sanitizeHTML(out.ExplanationHTML)
+	out.RubricHTML = sanitizeHTML(out.RubricHTML)
+	out.AcademicPhase = strings.TrimSpace(out.AcademicPhase)
+	out.CPRef = strings.TrimSpace(out.CPRef)
+	out.TPRef = strings.TrimSpace(out.TPRef)
+	out.KDRef = strings.TrimSpace(out.KDRef)
+	out.IndicatorRef = strings.TrimSpace(out.IndicatorRef)
+	out.MaterialTopic = strings.TrimSpace(out.MaterialTopic)
+	out.CognitiveLevel = strings.TrimSpace(out.CognitiveLevel)
+	out.WorkflowStatus = normalizeWorkflowStatus(out.WorkflowStatus)
+	out.AuthorUsername = strings.TrimSpace(out.AuthorUsername)
+	out.ReviewerUsername = strings.TrimSpace(out.ReviewerUsername)
+	out.ApproverUsername = strings.TrimSpace(out.ApproverUsername)
+	out.WriterNotes = strings.TrimSpace(out.WriterNotes)
+	out.ReviewNotes = strings.TrimSpace(out.ReviewNotes)
+
+	if out.Difficulty == "" {
+		out.Difficulty = db.CbtQuestionDifficultyEnumMedium
+	}
+	if out.Status == "" {
+		out.Status = db.CbtQuestionStatusEnumDraft
+	}
+	if out.AuthoringMode == "beginner" {
+		out.Difficulty = db.CbtQuestionDifficultyEnumMedium
+		out.Status = db.CbtQuestionStatusEnumDraft
+		if out.WorkflowStatus != "review" {
+			out.WorkflowStatus = "draft"
+			out.ReviewerUsername = ""
+		}
+		out.ApproverUsername = ""
+		out.WriterNotes = ""
+		out.ReviewNotes = ""
+	}
+	if out.WorkflowStatus == "draft" {
+		out.ReviewerUsername = ""
+	}
+	if out.Status != db.CbtQuestionStatusEnumPublished {
+		out.ApproverUsername = ""
+	}
+	if out.QuestionText == "" && out.StemHTML != "" {
+		out.QuestionText = derivePlainText(out.StemHTML)
+	}
+	if out.QuestionText == "" && out.StimulusHTML != "" {
+		out.QuestionText = derivePlainText(out.StimulusHTML)
+	}
+	if out.QuestionText == "" && out.StemLatex != "" {
+		out.QuestionText = out.StemLatex
+	}
+	if out.QuestionText == "" {
+		return SaveCbtQuestionInput{}, fmt.Errorf("question_text atau stem_html/stem_latex wajib diisi")
+	}
+
+	options := out.Options
+	if len(options) == 0 {
+		options = legacyOptions(out.OptionA, out.OptionB, out.OptionC, out.OptionD, out.OptionE, out.QuestionType)
+	}
+	if fixedOptions := fixedPairQuestionOptions(out.QuestionType); len(options) == 0 && len(fixedOptions) > 0 {
+		options = fixedOptions
+	}
+	normalizedOptions, err := normalizeOptions(options)
+	if err != nil {
+		return SaveCbtQuestionInput{}, err
+	}
+	optionA, optionB, optionC, optionD, optionE := legacyOptionColumns(normalizedOptions)
+
+	out.Options = normalizedOptions
+	out.OptionA = optionA
+	out.OptionB = optionB
+	out.OptionC = optionC
+	out.OptionD = optionD
+	out.OptionE = optionE
+	if out.QuestionType == "short_answer" {
+		out.AnswerKey = normalizeShortAnswerKey(out.AnswerKey)
+	} else if out.QuestionType == "matching" {
+		out.AnswerKey = normalizeMatchingAnswerKey(out.AnswerKey, countMatchingPairs(normalizedOptions))
+	} else {
+		out.AnswerKey = strings.TrimSpace(strings.ToUpper(out.AnswerKey))
+	}
+
+	if err := validateQuestion(out); err != nil {
+		return SaveCbtQuestionInput{}, err
+	}
+
+	return out, nil
+}
+
+func validateQuestion(input SaveCbtQuestionInput) error {
+	requiresCompleteContent := input.WorkflowStatus != "draft" || input.Status != db.CbtQuestionStatusEnumDraft
+	if input.AuthoringMode == "beginner" {
+		if !beginnerSupportsQuestionType(input.QuestionType) {
+			return fmt.Errorf("mode beginner belum mendukung tipe soal ini")
+		}
+	}
+
+	switch input.QuestionType {
+	case "multiple_choice", "single_choice", "multiple_answer", "true_false", "agree_disagree":
+		if !requiresCompleteContent {
+			return nil
+		}
+		if len(input.Options) < 2 {
+			return fmt.Errorf("opsi jawaban minimal 2 untuk tipe soal objektif")
+		}
+		if input.AuthoringMode == "beginner" && !isFixedPairQuestionType(input.QuestionType) && len(input.Options) < 4 {
+			return fmt.Errorf("mode beginner membutuhkan minimal 4 opsi untuk pilihan ganda")
+		}
+		if input.AnswerKey == "" {
+			return fmt.Errorf("answer_key wajib diisi")
+		}
+		if err := validateObjectiveAnswerKey(input.Options, input.AnswerKey, input.QuestionType); err != nil {
+			return err
+		}
+	case "short_answer":
+		if requiresCompleteContent && input.AnswerKey == "" {
+			return fmt.Errorf("answer_key wajib diisi untuk short_answer")
+		}
+	case "matching":
+		if !requiresCompleteContent {
+			return nil
+		}
+		if err := validateMatchingQuestion(input.Options, input.AnswerKey); err != nil {
+			return err
+		}
+	case "essay":
+		if requiresCompleteContent {
+			if input.RubricHTML == "" {
+				return fmt.Errorf("rubric_html wajib diisi untuk essay yang diajukan review, di-approve, atau dipublish")
+			}
+		}
+	default:
+		return fmt.Errorf("question_type tidak didukung")
+	}
+
+	if input.Status == db.CbtQuestionStatusEnumPublished && input.WorkflowStatus != "approved" {
+		return fmt.Errorf("soal hanya boleh dipublish jika workflow_status sudah approved")
+	}
+
+	return nil
+}
+
+func validateObjectiveAnswerKey(options []QuestionOption, answerKey string, questionType string) error {
+	available := make(map[string]bool, len(options))
+	for _, option := range options {
+		label := strings.TrimSpace(strings.ToUpper(option.Label))
+		if label != "" {
+			available[label] = true
+		}
+	}
+
+	keys := []string{answerKey}
+	if questionType == "multiple_answer" {
+		keys = strings.Split(answerKey, ",")
+	}
+	validKeyCount := 0
+	for _, key := range keys {
+		key = strings.TrimSpace(strings.ToUpper(key))
+		if key == "" || !available[key] {
+			return fmt.Errorf("answer_key harus sesuai label opsi yang tersedia")
+		}
+		validKeyCount++
+	}
+	if questionType == "multiple_answer" && validKeyCount < 2 {
+		return fmt.Errorf("multiple_answer membutuhkan minimal 2 kunci jawaban")
+	}
+	return nil
+}
+
+func validateMatchingQuestion(options []QuestionOption, answerKey string) error {
+	pairCount := 0
+	leftLabels := make(map[string]bool, len(options))
+	rightLabels := make(map[string]bool, len(options))
+	correctRightLabels := make(map[string]bool, len(options))
+	for _, option := range options {
+		left := strings.TrimSpace(strings.ToUpper(option.Label))
+		right := strings.TrimSpace(option.MatchLabel)
+		if option.IsDistractor {
+			if right == "" || matchingOptionContent(option) == "" {
+				return fmt.Errorf("distraktor menjodohkan wajib memiliki label dan teks kanan")
+			}
+			if rightLabels[right] {
+				return fmt.Errorf("label pasangan menjodohkan tidak boleh duplikat")
+			}
+			rightLabels[right] = true
+			continue
+		}
+		if left == "" || right == "" || optionContent(option) == "" || matchingOptionContent(option) == "" {
+			return fmt.Errorf("setiap pasangan menjodohkan wajib memiliki kolom kiri dan kanan")
+		}
+		if leftLabels[left] || rightLabels[right] {
+			return fmt.Errorf("label pasangan menjodohkan tidak boleh duplikat")
+		}
+		leftLabels[left] = true
+		rightLabels[right] = true
+		correctRightLabels[right] = true
+		pairCount++
+	}
+	if pairCount < 2 {
+		return fmt.Errorf("menjodohkan membutuhkan minimal 2 pasangan")
+	}
+	for _, pair := range strings.Split(answerKey, ";") {
+		parts := strings.Split(pair, "=")
+		if len(parts) != 2 {
+			return fmt.Errorf("answer_key menjodohkan tidak valid")
+		}
+		left := strings.TrimSpace(strings.ToUpper(parts[0]))
+		right := strings.TrimSpace(parts[1])
+		if !leftLabels[left] || !correctRightLabels[right] {
+			return fmt.Errorf("answer_key menjodohkan harus sesuai label pasangan")
+		}
+		delete(leftLabels, left)
+	}
+	if len(leftLabels) != 0 {
+		return fmt.Errorf("answer_key menjodohkan harus memetakan semua pasangan")
+	}
+	return nil
+}
+
+func optionContent(option QuestionOption) string {
+	return strings.TrimSpace(firstQuestionOptionContent(option.Text, option.HTML, option.Latex))
+}
+
+func matchingOptionContent(option QuestionOption) string {
+	return strings.TrimSpace(firstQuestionOptionContent(option.MatchText, option.MatchHTML))
+}
+
+func firstQuestionOptionContent(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func normalizeShortAnswerKey(value string) string {
+	aliases := shortAnswerAliases(value)
+	return strings.Join(aliases, "|")
+}
+
+func normalizeMatchingAnswerKey(value string, optionCount int) string {
+	if optionCount <= 0 {
+		return ""
+	}
+	fallback := buildMatchingAnswerKey(optionCount)
+	pairs := strings.Split(value, ";")
+	labels := make(map[string]bool, optionCount)
+	matches := make(map[string]string, optionCount)
+	for i := 0; i < optionCount; i++ {
+		labels[string(rune('A'+i))] = true
+	}
+	for _, pair := range pairs {
+		parts := strings.Split(pair, "=")
+		if len(parts) != 2 {
+			continue
+		}
+		left := strings.TrimSpace(strings.ToUpper(parts[0]))
+		right := strings.TrimSpace(parts[1])
+		if !labels[left] {
+			continue
+		}
+		rightIndex, err := strconv.Atoi(right)
+		if err != nil || rightIndex < 1 || rightIndex > optionCount {
+			continue
+		}
+		matches[left] = strconv.Itoa(rightIndex)
+	}
+	if len(matches) != optionCount {
+		return fallback
+	}
+	ordered := make([]string, 0, optionCount)
+	for i := 0; i < optionCount; i++ {
+		left := string(rune('A' + i))
+		ordered = append(ordered, fmt.Sprintf("%s=%s", left, matches[left]))
+	}
+	return strings.Join(ordered, ";")
+}
+
+func buildMatchingAnswerKey(optionCount int) string {
+	pairs := make([]string, 0, optionCount)
+	for i := 0; i < optionCount; i++ {
+		pairs = append(pairs, fmt.Sprintf("%s=%d", string(rune('A'+i)), i+1))
+	}
+	return strings.Join(pairs, ";")
+}
+
+func countMatchingPairs(options []QuestionOption) int {
+	count := 0
+	for _, option := range options {
+		if !option.IsDistractor {
+			count++
+		}
+	}
+	return count
+}
+
+func shortAnswerAliases(value string) []string {
+	parts := strings.Split(value, "|")
+	seen := make(map[string]bool, len(parts))
+	aliases := make([]string, 0, len(parts))
+	for _, part := range parts {
+		alias := strings.TrimSpace(strings.ReplaceAll(part, "\u00a0", " "))
+		if alias == "" {
+			continue
+		}
+		normalized := normalizeShortAnswerComparable(alias)
+		if normalized == "" || seen[normalized] {
+			continue
+		}
+		seen[normalized] = true
+		aliases = append(aliases, alias)
+	}
+	return aliases
+}
+
+func normalizeShortAnswerComparable(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.ReplaceAll(value, "\u00a0", " ")), " "))
+}
+
+func beginnerSupportsQuestionType(questionType string) bool {
+	switch questionType {
+	case "multiple_choice", "multiple_answer", "true_false", "agree_disagree", "matching", "short_answer", "essay":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeQuestionType(value string) string {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	switch normalized {
+	case "", "multiple_choice", "single_choice":
+		return "multiple_choice"
+	case "multiple_answer", "true_false", "agree_disagree", "matching", "short_answer", "essay":
+		return normalized
+	default:
+		return normalized
+	}
+}
+
+func fixedPairQuestionOptions(questionType string) []QuestionOption {
+	switch questionType {
+	case "true_false":
+		return []QuestionOption{
+			{Label: "A", Text: "Benar"},
+			{Label: "B", Text: "Salah"},
+		}
+	case "agree_disagree":
+		return []QuestionOption{
+			{Label: "A", Text: "Setuju"},
+			{Label: "B", Text: "Tidak Setuju"},
+		}
+	default:
+		return nil
+	}
+}
+
+func isFixedPairQuestionType(questionType string) bool {
+	switch questionType {
+	case "true_false", "agree_disagree":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeAuthoringMode(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "advance":
+		return "advance"
+	default:
+		return "beginner"
+	}
+}
+
+func normalizeWorkflowStatus(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "", "draft":
+		return "draft"
+	case "review", "approved", "rejected":
+		return strings.TrimSpace(strings.ToLower(value))
+	default:
+		return "draft"
+	}
+}
+
+func normalizeOptions(options []QuestionOption) ([]QuestionOption, error) {
+	normalized := make([]QuestionOption, 0, len(options))
+	for idx, option := range options {
+		label := strings.TrimSpace(strings.ToUpper(option.Label))
+		if label == "" && !option.IsDistractor {
+			label = string(rune('A' + idx))
+		}
+		text := strings.TrimSpace(option.Text)
+		htmlText := strings.TrimSpace(option.HTML)
+		latex := strings.TrimSpace(option.Latex)
+		matchLabel := strings.TrimSpace(option.MatchLabel)
+		if matchLabel == "" && (strings.TrimSpace(option.MatchText) != "" || strings.TrimSpace(option.MatchHTML) != "") {
+			matchLabel = fmt.Sprintf("%d", idx+1)
+		}
+		matchText := strings.TrimSpace(option.MatchText)
+		matchHTML := strings.TrimSpace(option.MatchHTML)
+		if text == "" && htmlText == "" && latex == "" && matchText == "" && matchHTML == "" {
+			continue
+		}
+		normalized = append(normalized, QuestionOption{
+			Label:        label,
+			Text:         text,
+			HTML:         sanitizeHTML(htmlText),
+			Latex:        latex,
+			AssetID:      strings.TrimSpace(option.AssetID),
+			MatchLabel:   matchLabel,
+			MatchText:    matchText,
+			MatchHTML:    sanitizeHTML(matchHTML),
+			IsDistractor: option.IsDistractor,
+		})
+	}
+	return normalized, nil
+}
+
+func legacyOptions(a, b, c, d, e, questionType string) []QuestionOption {
+	raw := []string{a, b, c, d, e}
+	options := make([]QuestionOption, 0, len(raw))
+	for idx, value := range raw {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		options = append(options, QuestionOption{
+			Label: string(rune('A' + idx)),
+			Text:  value,
+		})
+	}
+	return options
+}
+
+func legacyOptionColumns(options []QuestionOption) (string, string, string, string, string) {
+	values := [5]string{}
+	for i := 0; i < len(options) && i < 5; i++ {
+		if options[i].Text != "" {
+			values[i] = options[i].Text
+			continue
+		}
+		if options[i].HTML != "" {
+			values[i] = derivePlainText(options[i].HTML)
+			continue
+		}
+		values[i] = options[i].Latex
+	}
+	return values[0], values[1], values[2], values[3], values[4]
+}
+
+func derivePlainText(value string) string {
+	plain := stripHTMLTags.ReplaceAllString(value, " ")
+	plain = html.UnescapeString(strings.TrimSpace(plain))
+	plain = strings.Join(strings.Fields(plain), " ")
+	if len(plain) > 500 {
+		return plain[:500]
+	}
+	return plain
+}
+
+func (s SaveCbtQuestionInput) reviewedAt() pgtype.Timestamptz {
+	if s.ReviewerUsername == "" {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: time.Now(), Valid: true}
+}
+
+func (s SaveCbtQuestionInput) approvedAt() pgtype.Timestamptz {
+	if s.ApproverUsername == "" {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: time.Now(), Valid: true}
+}
+
+func EncodeQuestionOptions(options []QuestionOption) ([]byte, error) {
+	if len(options) == 0 {
+		return []byte("[]"), nil
+	}
+	return json.Marshal(options)
+}
+
+func EncodeStringArray(values []string) ([]byte, error) {
+	if len(values) == 0 {
+		return []byte("[]"), nil
+	}
+	return json.Marshal(values)
+}
+
+func sanitizeHTML(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	for _, pattern := range stripDangerousBlockPatterns {
+		value = pattern.ReplaceAllString(value, "")
+	}
+	value = stripEventHandlers.ReplaceAllString(value, "")
+	value = stripDangerousURLs.ReplaceAllString(value, "")
+	return strings.TrimSpace(value)
+}
+
+func mergeNotes(existing string, incoming string) string {
+	incoming = strings.TrimSpace(incoming)
+	if incoming == "" {
+		return existing
+	}
+	return incoming
+}
+
+func questionInputFromCurrent(current db.GetCbtQuestionRow, username string) SaveCbtQuestionInput {
+	return SaveCbtQuestionInput{
+		ID:               current.ID,
+		EventID:          current.EventID,
+		SubjectID:        current.SubjectID,
+		AuthoringMode:    "advance",
+		Code:             current.Code,
+		QuestionText:     current.QuestionText,
+		QuestionType:     current.QuestionType,
+		Options:          decodeQuestionOptions(current.Options),
+		OptionA:          current.OptionA,
+		OptionB:          current.OptionB,
+		OptionC:          current.OptionC,
+		OptionD:          current.OptionD,
+		OptionE:          current.OptionE,
+		AnswerKey:        current.AnswerKey,
+		Explanation:      current.Explanation,
+		Difficulty:       current.Difficulty,
+		Status:           current.Status,
+		StemHTML:         current.StemHtml,
+		StemLatex:        current.StemLatex,
+		StimulusHTML:     current.StimulusHtml,
+		StimulusLatex:    current.StimulusLatex,
+		ExplanationHTML:  current.ExplanationHtml,
+		RubricHTML:       current.RubricHtml,
+		AcademicPhase:    current.AcademicPhase,
+		GradeLevel:       current.GradeLevel,
+		CPRef:            current.CpRef,
+		TPRef:            current.TpRef,
+		KDRef:            current.KdRef,
+		IndicatorRef:     current.IndicatorRef,
+		MaterialTopic:    current.MaterialTopic,
+		CognitiveLevel:   current.CognitiveLevel,
+		HotsFlag:         current.HotsFlag,
+		MediaAssetIDs:    decodeStringArray(current.MediaAssetIds),
+		WorkflowStatus:   current.WorkflowStatus,
+		AuthorUsername:   current.AuthorUsername,
+		ReviewerUsername: username,
+		ApproverUsername: username,
+		WriterNotes:      current.WriterNotes,
+		ReviewNotes:      current.ReviewNotes,
+	}
+}
+
+func suggestQuestionAuthoringMode(questionType, stemLatex, stimulusLatex, academicPhase, cpRef, tpRef, kdRef, indicatorRef, materialTopic, cognitiveLevel string, hotsFlag bool, workflowStatus, writerNotes, reviewNotes, rubricHTML string) string {
+	if !beginnerSupportsQuestionType(questionType) {
+		return "advance"
+	}
+	if strings.TrimSpace(stemLatex) != "" || strings.TrimSpace(stimulusLatex) != "" {
+		return "advance"
+	}
+	if strings.TrimSpace(academicPhase) != "" || strings.TrimSpace(cpRef) != "" || strings.TrimSpace(tpRef) != "" ||
+		strings.TrimSpace(kdRef) != "" || strings.TrimSpace(indicatorRef) != "" || strings.TrimSpace(materialTopic) != "" ||
+		strings.TrimSpace(cognitiveLevel) != "" || hotsFlag {
+		return "advance"
+	}
+	if strings.TrimSpace(workflowStatus) != "" && strings.TrimSpace(workflowStatus) != "draft" {
+		return "advance"
+	}
+	if strings.TrimSpace(writerNotes) != "" || strings.TrimSpace(reviewNotes) != "" || strings.TrimSpace(rubricHTML) != "" {
+		return "advance"
+	}
+	return "beginner"
+}
+
+func decodeQuestionOptions(raw []byte) []QuestionOption {
+	if len(raw) == 0 {
+		return nil
+	}
+	var options []QuestionOption
+	if err := json.Unmarshal(raw, &options); err != nil {
+		return nil
+	}
+	return options
+}
+
+func decodeStringArray(raw []byte) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var values []string
+	if err := json.Unmarshal(raw, &values); err != nil {
+		return nil
+	}
+	return values
+}

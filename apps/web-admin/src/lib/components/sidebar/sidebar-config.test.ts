@@ -1,38 +1,73 @@
 import { describe, expect, it } from 'vitest';
 import { sidebarNavGroups } from './sidebar-config';
 
-const cbtItems = sidebarNavGroups.find((group) => group.group === 'CBT')?.items ?? [];
+const assessmentItems = sidebarNavGroups.find((group) => group.group === 'Asesmen')?.items ?? [];
+const bankSoalItems = sidebarNavGroups.find((group) => group.group === 'Bank Soal')?.items ?? [];
 
-describe('sidebar CBT configuration', () => {
-	it('keeps CBT navigation aligned to the three-phase workflow', () => {
-		expect(cbtItems.map((item) => item.label)).toEqual([
-			'Dashboard CBT',
+describe('sidebar assessment configuration', () => {
+	it('keeps assessment navigation aligned to the three-phase workflow', () => {
+		expect(assessmentItems.map((item) => item.label)).toEqual([
+			'Dashboard Asesmen',
 			'Persiapan',
 			'Pelaksanaan',
 			'Hasil'
 		]);
 	});
 
-	it('does not expose granular CBT task links in the sidebar', () => {
-		expect(cbtItems.map((item) => item.href)).toEqual([
+	it('does not expose Bank Soal authoring links in the assessment group', () => {
+		expect(assessmentItems.map((item) => item.href)).toEqual([
 			'/cbt',
 			'/cbt/persiapan',
 			'/cbt/pelaksanaan',
 			'/cbt/hasil'
 		]);
-		expect(cbtItems).toHaveLength(4);
-		expect(new Set(cbtItems.map((item) => item.href)).size).toBe(cbtItems.length);
-		expect(cbtItems.some((item) => item.href === '/cbt/soal')).toBe(false);
-		expect(cbtItems.some((item) => item.href === '/cbt/bank-soal')).toBe(false);
-		expect(cbtItems.some((item) => item.href === '/cbt/questions')).toBe(false);
-		expect(cbtItems.some((item) => item.href.includes('[id]'))).toBe(false);
+		expect(assessmentItems).toHaveLength(4);
+		expect(new Set(assessmentItems.map((item) => item.href)).size).toBe(assessmentItems.length);
+		expect(assessmentItems.some((item) => item.href === '/cbt/soal')).toBe(false);
+		expect(assessmentItems.some((item) => item.href === '/cbt/bank-soal')).toBe(false);
+		expect(assessmentItems.some((item) => item.href === '/cbt/questions')).toBe(false);
+		expect(assessmentItems.some((item) => item.href.includes('[id]'))).toBe(false);
 	});
 
-	it('keeps CBT phase visibility aligned to role scope', () => {
-		expect(cbtItems.find((item) => item.href === '/cbt')?.roles).toEqual(['admin', 'guru', 'staf']);
-		expect(cbtItems.find((item) => item.href === '/cbt/persiapan')?.roles).toEqual(['admin', 'guru']);
-		expect(cbtItems.find((item) => item.href === '/cbt/pelaksanaan')?.roles).toEqual(['admin', 'guru', 'staf']);
-		expect(cbtItems.find((item) => item.href === '/cbt/hasil')?.roles).toEqual(['admin', 'guru']);
-		expect(cbtItems.flatMap((item) => item.roles ?? [])).not.toContain('reviewer');
+	it('keeps assessment phase visibility aligned to role scope', () => {
+		expect(assessmentItems.find((item) => item.href === '/cbt')?.roles).toEqual(['admin', 'guru', 'staf']);
+		expect(assessmentItems.find((item) => item.href === '/cbt/persiapan')?.roles).toEqual(['admin', 'guru']);
+		expect(assessmentItems.find((item) => item.href === '/cbt/pelaksanaan')?.roles).toEqual(['admin', 'guru', 'staf']);
+		expect(assessmentItems.find((item) => item.href === '/cbt/hasil')?.roles).toEqual(['admin', 'guru']);
+		expect(assessmentItems.flatMap((item) => item.roles ?? [])).not.toContain('reviewer');
+	});
+
+	it('separates Bank Soal as a UX group without changing canonical CBT routes', () => {
+		expect(sidebarNavGroups.findIndex((group) => group.group === 'Bank Soal')).toBeLessThan(
+			sidebarNavGroups.findIndex((group) => group.group === 'Asesmen')
+		);
+		expect(sidebarNavGroups.some((group) => group.group === 'CBT')).toBe(false);
+		expect(sidebarNavGroups.some((group) => group.group === 'Bank Soal & Asesmen')).toBe(false);
+		expect(bankSoalItems.map((item) => item.label)).toEqual([
+			'Daftar Soal',
+			'Tambah Soal',
+			'Review Soal',
+			'Impor Soal'
+		]);
+		expect(bankSoalItems.map((item) => item.href)).toEqual([
+			'/cbt/bank-soal',
+			'/cbt/soal',
+			'/cbt/soal/review',
+			'/cbt/soal/import'
+		]);
+		expect(bankSoalItems.every((item) => !item.href.includes('?mode='))).toBe(true);
+		expect(bankSoalItems.map((item) => item.icon)).toEqual([
+			'book-open',
+			'pen-tool',
+			'clipboard',
+			'file-text'
+		]);
+		expect(bankSoalItems.every((item) => item.roles?.includes('admin') && item.roles.includes('guru'))).toBe(true);
+		expect(bankSoalItems.some((item) => item.href === '/cbt/questions')).toBe(false);
+	});
+
+	it('does not expose the retired question-bank route anywhere in sidebar nav', () => {
+		const allItems = sidebarNavGroups.flatMap((group) => group.items);
+		expect(allItems.some((item) => item.href.startsWith('/cbt/questions'))).toBe(false);
 	});
 });
