@@ -279,9 +279,7 @@
 			</div>
 			<div class="flex flex-wrap gap-2 lg:justify-end">
 				<a href={resolve('/cbt')} class="inline-flex rounded-md border border-input bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Beranda CBT</a>
-				<LoadingButton onclick={() => { if (showForm) resetForm(); else showForm = true; }}>
-					{showForm ? 'Tutup Form' : 'Buat Kegiatan'}
-				</LoadingButton>
+				<a href={resolve('/cbt/events/new')} class="inline-flex rounded-md bg-[oklch(0.38_0.13_145)] px-3 py-2 text-sm font-semibold text-white hover:bg-[oklch(0.34_0.13_145)]">Buat Kegiatan</a>
 			</div>
 		</div>
 	</section>

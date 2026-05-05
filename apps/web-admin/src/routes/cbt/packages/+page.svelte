@@ -141,6 +141,7 @@
 	let questionPoolCapped = $derived(questionPoolTotal > allQuestions.length);
 	let packageReadinessIssues = $derived(buildPackageReadinessIssues());
 	let canCreatePackage = $derived(packageReadinessIssues.length === 0 && !fBusy);
+	let createPackageHref = $derived(`${resolve('/cbt/packages/new')}${eventId ? `?event_id=${encodeURIComponent(eventId)}` : ''}`);
 
 	function toggleQuestion(id: string) {
 		if (fSelectedIds.has(id)) {
@@ -553,9 +554,7 @@
 					<a href={resolve(`/cbt/events/${eventId}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Event</a>
 				{/if}
 				<a href={resolve('/cbt')} class="inline-flex items-center rounded-md border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-50">Beranda CBT</a>
-				<LoadingButton onclick={() => (showForm = !showForm)}>
-					{showForm ? 'Tutup Builder' : 'Buat Paket'}
-				</LoadingButton>
+				<a href={createPackageHref} class="inline-flex items-center rounded-md bg-[oklch(0.38_0.13_145)] px-3 py-2 text-sm font-semibold text-white hover:bg-[oklch(0.34_0.13_145)]">Buat Paket</a>
 			</div>
 		</div>
 
@@ -565,15 +564,14 @@
 				<p class="mt-2 text-lg font-semibold">Lihat daftar paket</p>
 				<p class="mt-1 leading-6 text-slate-600">Daftar paket menjadi pusat kerja utama.</p>
 			</a>
-			<button
-				type="button"
-				onclick={() => (showForm = true)}
-				class={`rounded-2xl border p-4 text-left text-sm shadow-sm transition ${showForm ? 'border-emerald-300 bg-white text-emerald-950' : 'border-emerald-100 bg-white/70 text-slate-700 hover:border-emerald-200 hover:bg-white'}`}
+			<a
+				href={createPackageHref}
+				class="rounded-2xl border border-emerald-100 bg-white/70 p-4 text-left text-sm text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-white"
 			>
 				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Buat Paket</p>
 				<p class="mt-2 text-lg font-semibold">Buka builder soal</p>
-				<p class="mt-1 leading-6 text-slate-600">Form hanya tampil saat dibutuhkan.</p>
-			</button>
+				<p class="mt-1 leading-6 text-slate-600">Masuk ke halaman create-only agar alur utama tetap fokus.</p>
+			</a>
 			<a
 				href={resolve(eventId ? `/cbt/events/${eventId}` : '/cbt/events')}
 				class="rounded-2xl border border-emerald-100 bg-white/70 p-4 text-sm text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-white"
@@ -869,7 +867,7 @@
 						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Paket Saya</p>
 						<Card.Title class="mt-1 text-base">Daftar Paket ({currentPackages.length})</Card.Title>
 					</div>
-					<LoadingButton onclick={() => (showForm = true)} size="sm">Buat Paket</LoadingButton>
+					<a href={createPackageHref} class="inline-flex items-center rounded-md bg-[oklch(0.38_0.13_145)] px-3 py-2 text-sm font-semibold text-white hover:bg-[oklch(0.34_0.13_145)]">Buat Paket</a>
 				</div>
 				{#if hiddenPackages > 0}
 					<Card.Description>{hiddenPackages} template global atau paket event lain disembunyikan dari daftar event ini.</Card.Description>

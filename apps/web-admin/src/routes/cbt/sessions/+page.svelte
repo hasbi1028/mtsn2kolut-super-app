@@ -149,6 +149,7 @@
 	let sessionReadinessIssues = $derived(buildSessionReadinessIssues());
 	let canCreateSession = $derived(!fBusy && sessionReadinessIssues.length === 0);
 	let browserTimeZoneMismatch = $derived(browserTimeZone !== '' && browserTimeZone !== 'Asia/Makassar');
+	let createSessionHref = $derived(`${resolve('/cbt/sessions/new')}${eventId ? `?event_id=${encodeURIComponent(eventId)}` : ''}`);
 
 	const statusLabel: Record<string, string> = {
 		draft: 'Draft', scheduled: 'Terjadwal', active: 'Berlangsung',
@@ -897,9 +898,7 @@
 			{#if eventId}
 				<a href={resolve(`/cbt/events/${eventId}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Kegiatan</a>
 			{/if}
-			<Button onclick={() => (showForm = !showForm)}>
-				{showForm ? 'Batal' : '+ Sesi'}
-			</Button>
+			<Button href={createSessionHref}>+ Sesi</Button>
 		</div>
 	</div>
 
