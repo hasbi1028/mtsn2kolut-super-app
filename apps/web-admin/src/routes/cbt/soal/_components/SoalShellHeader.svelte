@@ -34,6 +34,7 @@
 		<div class="flex flex-wrap gap-2 lg:justify-end">
 			<Button onclick={onCreate} class="bg-[oklch(0.38_0.13_145)] text-white hover:bg-[oklch(0.34_0.13_145)]">Buat Soal</Button>
 			<Button variant="outline" onclick={onImport} class="bg-white text-slate-700 hover:bg-slate-50">Upload CSV</Button>
+			<a href={resolve('/cbt')} class="inline-flex rounded-md border border-input bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Beranda CBT</a>
 			<a href={resolve(reviewHref)} class="inline-flex rounded-md border border-input bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Ruang Review</a>
 			<LoadingButton
 				variant="outline"

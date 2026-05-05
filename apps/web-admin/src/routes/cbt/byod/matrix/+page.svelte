@@ -80,22 +80,40 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<section class="rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-6 shadow-sm">
+	<section class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">Matriks Uji Lapangan</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Perangkat & Kesiapan · Monitoring</p>
 				<h1 class="text-3xl font-semibold tracking-tight text-slate-900">Perbandingan Perangkat BYOD</h1>
 				<p class="max-w-2xl text-sm leading-6 text-slate-600">
-					Gunakan halaman ini sebagai format acuan untuk mencatat hasil uji vendor, model, versi Android,
-					dan kestabilan fungsi inti mobile CBT sebelum dipakai lebih luas.
+					Bagian pendukung setelah monitoring hari-H. Gunakan untuk membaca kesiapan perangkat siswa:
+					install, login, restore, media, koneksi, dan submit.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
-				<Button href="/cbt/byod">Kembali ke Panduan BYOD</Button>
-				<Button href="/cbt/sessions" variant="outline">Buka Sesi Ujian</Button>
+				<Button href="/cbt/byod">Kembali ke Monitoring</Button>
+				<Button href="/cbt/proctoring/rooms" variant="outline">Dashboard Ruang</Button>
+				<Button href="/cbt/sessions?schedule=today" variant="outline">Sesi Hari Ini</Button>
 			</div>
 		</div>
 	</section>
+
+	<Card.Root class="border-emerald-200 bg-emerald-50/60 shadow-sm">
+		<Card.Content class="grid gap-4 pt-6 md:grid-cols-3">
+			<div>
+				<p class="text-sm font-semibold text-emerald-950">Pantau Ujian</p>
+				<p class="mt-1 text-sm leading-6 text-slate-600">Untuk hari-H, mulai dari Monitoring, sesi hari ini, atau dashboard ruang.</p>
+			</div>
+			<div>
+				<p class="text-sm font-semibold text-emerald-950">Panduan BYOD</p>
+				<p class="mt-1 text-sm leading-6 text-slate-600">Status guide dan checklist submit tetap berada di halaman Monitoring.</p>
+			</div>
+			<div>
+				<p class="text-sm font-semibold text-emerald-950">Perangkat & Kesiapan</p>
+				<p class="mt-1 text-sm leading-6 text-slate-600">Halaman ini hanya untuk pembanding perangkat dan catatan kesiapan teknis.</p>
+			</div>
+		</Card.Content>
+	</Card.Root>
 
 	<div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
 		<Card.Root class="border-slate-200 shadow-sm">
@@ -161,7 +179,7 @@
 					<ul class="space-y-3">
 						{#each focusChecks as item (item)}
 							<li class="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
-								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-semibold text-sky-700">UJI</span>
+								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700">UJI</span>
 								<span>{item}</span>
 							</li>
 						{/each}

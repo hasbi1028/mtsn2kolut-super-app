@@ -539,53 +539,77 @@
 	<svelte:head><title>{eventId ? 'Paket Event CBT' : 'Template Paket CBT'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
-	<div class="flex flex-wrap items-start justify-between gap-4">
-		<div>
-			<p class="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">{eventId ? 'Paket Event' : 'Template Paket Global'}</p>
-			<h1 class="text-2xl font-semibold text-slate-800">{eventId ? 'Paket Event CBT' : 'Template Paket CBT'}</h1>
-			<p class="text-sm text-slate-500 mt-1">Buat paket ujian dari Bank Soal reusable{eventId ? ' dan tautkan ke event ini agar bisa dipakai sesi ujian.' : ' sebagai template reusable atau paket standalone bila tidak terkait event.'}</p>
-		</div>
-		<div class="flex flex-wrap gap-2">
-			{#if eventId}
-				<a href={resolve(`/cbt/events/${eventId}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Event</a>
-			{/if}
-			<LoadingButton onclick={() => (showForm = !showForm)}>
-				{showForm ? 'Batal' : '+ Buat Paket'}
-			</LoadingButton>
-		</div>
-	</div>
-
-	{#if eventId}
-		<div class="rounded-xl border border-green-200 bg-green-50/70 p-4 text-sm text-green-950">
-			<div class="flex flex-wrap items-start justify-between gap-3">
-				<div>
-					<p class="font-semibold">Paket tertaut event: {eventContext?.title ?? eventId}</p>
-					<p class="mt-1 text-green-800">Sesi event membutuhkan paket yang membawa <code class="rounded bg-white px-1">event_id</code> event ini. Pilihan soal mencakup Bank Soal reusable dan soal khusus event ini saja.</p>
-				</div>
-				<a href={resolve('/cbt/soal')} class="rounded-md border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Buka Bank Soal</a>
+	<section class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-6 shadow-sm">
+		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+			<div class="max-w-3xl space-y-3">
+				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Keranjang Soal CBT</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-slate-900">{eventId ? 'Paket Soal Event' : 'Paket Soal'}</h1>
+				<p class="max-w-2xl text-sm leading-6 text-slate-600">
+					Pilih soal terbit dari Bank Soal, masukkan ke paket, lalu pakai paket itu saat membuat sesi event.
+				</p>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				{#if eventId}
+					<a href={resolve(`/cbt/events/${eventId}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Event</a>
+				{/if}
+				<a href={resolve('/cbt')} class="inline-flex items-center rounded-md border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-50">Beranda CBT</a>
+				<LoadingButton onclick={() => (showForm = !showForm)}>
+					{showForm ? 'Tutup Builder' : 'Buat Paket'}
+				</LoadingButton>
 			</div>
 		</div>
-	{:else}
-		<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-			Anda sedang melihat template paket global. Paket global dipakai sebagai template reusable atau paket standalone bila tidak terkait event; sesi dalam event harus memakai paket yang tertaut event. Dari Kegiatan Ujian, gunakan tombol Paket agar pembuatan paket otomatis membawa konteks event.
-		</div>
-	{/if}
 
-	{#if hiddenEventPackageCount > 0}
-		<div class="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-			<p class="font-semibold">Hanya paket tertaut event ini yang ditampilkan.</p>
-			<p class="mt-1">{hiddenEventPackageCount} template global atau paket event lain tidak ditampilkan karena sesi event membutuhkan paket dengan <code class="rounded bg-white px-1">event_id</code> yang sama. Soal dari event lain juga tidak masuk pool pilihan paket.</p>
+		<div class="mt-5 grid gap-3 md:grid-cols-3">
+			<a href="#paket-saya" class="rounded-2xl border border-emerald-300 bg-white p-4 text-sm text-emerald-950 shadow-sm transition hover:border-emerald-400">
+				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Paket Saya</p>
+				<p class="mt-2 text-lg font-semibold">Lihat daftar paket</p>
+				<p class="mt-1 leading-6 text-slate-600">Daftar paket menjadi pusat kerja utama.</p>
+			</a>
+			<button
+				type="button"
+				onclick={() => (showForm = true)}
+				class={`rounded-2xl border p-4 text-left text-sm shadow-sm transition ${showForm ? 'border-emerald-300 bg-white text-emerald-950' : 'border-emerald-100 bg-white/70 text-slate-700 hover:border-emerald-200 hover:bg-white'}`}
+			>
+				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Buat Paket</p>
+				<p class="mt-2 text-lg font-semibold">Buka builder soal</p>
+				<p class="mt-1 leading-6 text-slate-600">Form hanya tampil saat dibutuhkan.</p>
+			</button>
+			<a
+				href={resolve(eventId ? `/cbt/events/${eventId}` : '/cbt/events')}
+				class="rounded-2xl border border-emerald-100 bg-white/70 p-4 text-sm text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-white"
+			>
+				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Pakai untuk Event</p>
+				<p class="mt-2 text-lg font-semibold">Buat/Cek Sesi Event</p>
+				<p class="mt-1 leading-6 text-slate-600">Lanjutkan paket ke sesi, ruang, dan token.</p>
+			</a>
 		</div>
-	{/if}
+	</section>
+
+	<details class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
+		<summary class="cursor-pointer font-semibold text-slate-800">Catatan penggunaan paket dan cakupan soal</summary>
+		<div class="mt-3 space-y-3 leading-6">
+			{#if eventId}
+				<p><span class="font-semibold text-emerald-800">Paket event:</span> {eventContext?.title ?? eventId}. Sesi event membutuhkan paket yang membawa <code class="rounded bg-slate-100 px-1">event_id</code> event ini.</p>
+				<p>Pilihan soal tetap memakai filter Bank Soal reusable yang sudah ada, ditambah soal khusus event ini saja.</p>
+			{:else}
+				<p><span class="font-semibold text-amber-800">Paket global:</span> dapat dipakai sebagai template reusable atau paket standalone. Jika bekerja dari Kegiatan Ujian, buka builder paket dari event agar paket otomatis tertaut event.</p>
+			{/if}
+			{#if hiddenEventPackageCount > 0}
+				<p>{hiddenEventPackageCount} template global atau paket event lain disembunyikan dari daftar event ini.</p>
+			{/if}
+			<a href={resolve('/cbt/soal')} class="inline-flex rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Buka Bank Soal</a>
+		</div>
+	</details>
 
 	{#if operationState}
 		<OperationStatusPanel {...operationState} />
 	{/if}
 
 	{#if showForm}
-		<Card.Root>
+		<Card.Root id="buat-paket" class="border-emerald-200 shadow-sm">
 			<Card.Header class="pb-2">
-				<Card.Title class="text-base">Buat Paket Ujian Baru</Card.Title>
+				<Card.Title class="text-base">Buat Paket</Card.Title>
+				<Card.Description>Builder sederhana untuk memilih mapel, mengisi identitas paket, lalu memasukkan soal seperti keranjang.</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-4">
 				<div class="grid gap-3 sm:grid-cols-2">
@@ -632,21 +656,18 @@
 									— <span class="font-medium text-green-700">{selectedQuestions.length} dipilih</span>
 								{/if}
 							</div>
-							{#if questionPoolCapped}
-								<div class="max-w-xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-									<p class="font-semibold">Pool soal dibatasi: termuat {allQuestions.length} dari {questionPoolTotal} soal terbit.</p>
-									<p>Narrow pilihan dengan mapel yang tepat dan pencarian/kode soal di Bank Soal sebelum membuat paket. Jika soal belum muncul, buka Bank Soal lalu cari atau rapikan status/mapel soal tersebut.</p>
+							<details class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+								<summary class="cursor-pointer font-medium">Info pool soal</summary>
+								<div class="mt-2 space-y-2 leading-5">
+									<p>{questionPool.length} soal terbit tersedia, {availableBlueprintMissingCount} metadata kurang, {availableHotsCount} HOTS.</p>
+									{#if questionPoolCapped}
+										<p>Pool soal dibatasi: termuat {allQuestions.length} dari {questionPoolTotal} soal terbit. Rapikan status/mapel di Bank Soal bila soal belum muncul.</p>
+									{/if}
+									{#if availableTypeBuckets.length > 0}
+										<p>Bentuk soal: {availableTypeBuckets.map((bucket) => `${bucket.label}: ${bucket.count}`).join(', ')}</p>
+									{/if}
 								</div>
-							{/if}
-							<div class="flex flex-wrap gap-1">
-								<Badge class="border-green-200 bg-green-50 text-green-700">{questionPool.length} terbit</Badge>
-								<Badge variant={availableBlueprintMissingCount > 0 ? 'secondary' : 'outline'} class="bg-white">
-									{availableBlueprintMissingCount > 0 ? `${availableBlueprintMissingCount} metadata kurang` : 'Metadata siap'}
-								</Badge>
-								{#if availableHotsCount > 0}
-									<Badge class="border-amber-200 bg-amber-50 text-amber-700">{availableHotsCount} HOTS</Badge>
-								{/if}
-							</div>
+							</details>
 						</div>
 						{#if questionPool.length === 0}
 							<p class="text-sm text-slate-400 py-4 text-center border rounded-md">
@@ -663,14 +684,6 @@
 									{hiddenScopedQuestionCount} soal terbit disembunyikan karena {eventId ? 'tertaut ke kegiatan lain' : 'khusus kegiatan tertentu'}. Pool ini hanya memakai {eventId ? 'soal reusable dan soal kegiatan ini' : 'soal reusable/global'}.
 								</div>
 							{/if}
-							<div class="mb-2 rounded-md border border-green-100 bg-green-50/60 px-3 py-2 text-xs text-green-900">
-								<div class="flex flex-wrap gap-1.5">
-									<span class="font-semibold">Pool bentuk soal:</span>
-									{#each availableTypeBuckets as bucket (bucket.label)}
-										<span class="rounded bg-white px-1.5 py-0.5">{bucket.label}: {bucket.count}</span>
-									{/each}
-								</div>
-							</div>
 							<div class="border rounded-md max-h-64 overflow-y-auto">
 									{#each questionPool as q (q.id)}
 									<label class="flex items-start gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer border-b last:border-b-0">
@@ -703,16 +716,14 @@
 							<div class="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
 								<div class="flex flex-wrap items-start justify-between gap-2">
 									<div>
-										<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-900">Blueprint Paket Sementara</p>
+										<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-900">Keranjang Paket</p>
 										<p class="mt-1 text-xs text-emerald-800">
-											{selectedQuestions.length} soal dipilih, bobot total {selectedWeightTotal}, {selectedBlueprintMatrix.length} kombinasi CP/TP/KD, {selectedHotsCount} HOTS.
+											{selectedQuestions.length} soal dipilih dengan bobot total {selectedWeightTotal}.
 										</p>
 									</div>
-									{#if selectedBlueprintMissingCount > 0}
-										<Badge class="border-amber-200 bg-amber-50 text-amber-700">{selectedBlueprintMissingCount} perlu metadata</Badge>
-									{:else}
-										<Badge class="border-emerald-200 bg-white text-emerald-700">Blueprint lengkap</Badge>
-									{/if}
+									<span class="rounded-full border border-emerald-200 bg-white px-2 py-1 text-xs font-medium text-emerald-700">
+										{selectedBlueprintMissingCount > 0 ? `${selectedBlueprintMissingCount} metadata kurang` : 'Metadata siap'}
+									</span>
 								</div>
 
 								<div class="mt-3 overflow-hidden rounded-md border border-emerald-100 bg-white">
@@ -741,7 +752,9 @@
 									</div>
 								</div>
 
-								<div class="mt-3 grid gap-3 xl:grid-cols-[0.75fr_1.25fr]">
+								<details class="mt-3 rounded-md border border-emerald-100 bg-white px-3 py-2 text-xs text-slate-700">
+									<summary class="cursor-pointer font-semibold text-slate-700">Lihat ringkasan blueprint dan mutu</summary>
+									<div class="mt-3 grid gap-3 xl:grid-cols-[0.75fr_1.25fr]">
 									<div class="space-y-2 text-xs">
 										<div>
 											<p class="mb-1 font-semibold text-slate-600">Bentuk soal</p>
@@ -789,7 +802,8 @@
 											{/each}
 										</div>
 									</div>
-								</div>
+									</div>
+								</details>
 							</div>
 						{/if}
 						{#if packageReadinessIssues.length > 0}
@@ -848,9 +862,15 @@
 			{@const eventPackages = strictEventPackages(overview.packages)}
 			{@const currentPackages = eventPackages}
 			{@const hiddenPackages = hiddenPackageCount(overview.packages)}
-		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+		<Card.Root id="paket-saya" class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Header class="pb-2">
-				<Card.Title class="text-base">Daftar Paket ({currentPackages.length})</Card.Title>
+				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Paket Saya</p>
+						<Card.Title class="mt-1 text-base">Daftar Paket ({currentPackages.length})</Card.Title>
+					</div>
+					<LoadingButton onclick={() => (showForm = true)} size="sm">Buat Paket</LoadingButton>
+				</div>
 				{#if hiddenPackages > 0}
 					<Card.Description>{hiddenPackages} template global atau paket event lain disembunyikan dari daftar event ini.</Card.Description>
 				{/if}
@@ -886,24 +906,20 @@
 									{/if}
 								</Table.Cell>
 								<Table.Cell>
-									<div class="flex max-w-sm flex-wrap gap-1">
-										{#if quality.questions.length === 0}
-											<span class="text-xs text-slate-400">Belum ada rincian</span>
-										{:else}
-											{#each quality.typeBuckets.slice(0, 3) as bucket (bucket.label)}
-												<Badge variant="outline" class="bg-white text-xs">{bucket.label}: {bucket.count}</Badge>
-											{/each}
-											{#if quality.hotsCount > 0}
-												<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">{quality.hotsCount} HOTS</Badge>
-											{/if}
-											{#if quality.missingCount > 0}
-												<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">{quality.missingCount} metadata kurang</Badge>
-											{/if}
-											{#if quality.unpublishedCount > 0}
-												<Badge class="border-red-200 bg-red-50 text-red-700 text-xs">{quality.unpublishedCount} belum terbit</Badge>
-											{/if}
-										{/if}
-									</div>
+									{#if quality.questions.length === 0}
+										<span class="text-xs text-slate-400">Belum ada rincian</span>
+									{:else}
+										<details class="max-w-sm text-xs text-slate-600">
+											<summary class="cursor-pointer font-medium text-slate-700">
+												{quality.typeBuckets.slice(0, 2).map((bucket) => `${bucket.label}: ${bucket.count}`).join(', ')}
+											</summary>
+											<div class="mt-2 space-y-1 rounded-md border border-slate-200 bg-slate-50 p-2 leading-5">
+												<p>Bentuk: {quality.typeBuckets.map((bucket) => `${bucket.label}: ${bucket.count}`).join(', ')}</p>
+												<p>Level: {quality.cognitiveBuckets.map((bucket) => `${bucket.label}: ${bucket.count}`).join(', ')}</p>
+												<p>HOTS {quality.hotsCount}, metadata kurang {quality.missingCount}, belum terbit {quality.unpublishedCount}.</p>
+											</div>
+										</details>
+									{/if}
 								</Table.Cell>
 								<Table.Cell>
 									{#if p.randomize_questions}
@@ -966,7 +982,9 @@
 									<Badge class="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">Acak</Badge>
 								{/if}
 							</div>
-							<div class="mt-2 flex flex-wrap items-center gap-1.5">
+							<details class="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+								<summary class="cursor-pointer font-medium text-slate-700">Mutu paket</summary>
+								<div class="mt-2 flex flex-wrap items-center gap-1.5">
 								{#if quality.questions.length === 0}
 									<span class="text-xs text-slate-400">Rincian mutu belum tersedia</span>
 								{:else}
@@ -986,7 +1004,8 @@
 										<Badge class="border-red-200 bg-red-50 text-red-700 text-xs">{quality.unpublishedCount} belum terbit</Badge>
 									{/if}
 								{/if}
-							</div>
+								</div>
+							</details>
 							{#if p.description}
 								<p class="mt-3 text-sm text-slate-600">{p.description}</p>
 							{/if}

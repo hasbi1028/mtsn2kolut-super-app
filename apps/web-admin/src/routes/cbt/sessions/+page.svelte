@@ -884,21 +884,21 @@
 	});
 </script>
 
-	<svelte:head><title>{eventId ? 'Sesi Event CBT' : 'Sesi Ujian CBT'} — MTSN 2 Kolut</title></svelte:head>
+	<svelte:head><title>{eventId ? 'Kegiatan & Sesi CBT' : 'Sesi CBT'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<p class="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">{eventId ? 'Konteks Event' : 'Sesi Global'}</p>
-			<h1 class="text-2xl font-semibold text-slate-800">Sesi Ujian CBT</h1>
-			<p class="text-sm text-slate-500 mt-1">Jadwalkan sesi per kelas, tingkat, atau seluruh sekolah dengan rooming yang fleksibel{eventId ? ' untuk kegiatan ini' : ''}</p>
+			<p class="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">Kegiatan & Sesi</p>
+			<h1 class="text-2xl font-semibold text-slate-800">Sesi CBT</h1>
+			<p class="text-sm text-slate-500 mt-1">Daftar sesi ujian sebagai bagian dari alur Kegiatan & Sesi{eventId ? ' untuk kegiatan ini' : ''}.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			{#if eventId}
-				<a href={resolve(`/cbt/events/${eventId}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Event</a>
+				<a href={resolve(`/cbt/events/${eventId}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Kegiatan</a>
 			{/if}
 			<Button onclick={() => (showForm = !showForm)}>
-				{showForm ? 'Batal' : '+ Buat Sesi'}
+				{showForm ? 'Batal' : '+ Sesi'}
 			</Button>
 		</div>
 	</div>
@@ -907,7 +907,7 @@
 		<div class="rounded-xl border border-green-200 bg-green-50/70 p-4 text-sm text-green-950">
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div>
-					<p class="font-semibold">Sesi difilter untuk event: {eventContext?.title ?? eventId}</p>
+					<p class="font-semibold">Sesi untuk kegiatan: {eventContext?.title ?? eventId}</p>
 					<p class="mt-1 text-green-800">Daftar sesi dan payload pembuatan sesi membawa <code class="rounded bg-white px-1">event_id</code>. Item global atau event lain disembunyikan agar tidak terbaca sebagai sesi kegiatan ini.</p>
 				</div>
 				<a href={resolve(`/cbt/packages?event_id=${eventId}`)} class="rounded-md border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Paket Event</a>
@@ -915,7 +915,7 @@
 		</div>
 	{:else}
 		<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-			Anda sedang melihat sesi global. Dari Kegiatan Ujian, gunakan tombol Sesi agar pembuatan sesi otomatis terhubung ke event.
+			Anda sedang melihat sesi global. Dari Kegiatan & Sesi, gunakan tombol Sesi agar pembuatan sesi otomatis terhubung ke kegiatan.
 		</div>
 	{/if}
 
@@ -1268,8 +1268,8 @@
 			<div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<div>
-						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">Urgensi Jadwal</p>
-						<p class="mt-0.5 text-xs text-slate-500">Monitoring waktu pelaksanaan CBT</p>
+						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">Jadwal Sesi</p>
+						<p class="mt-0.5 text-xs text-slate-500">Urutan waktu pelaksanaan CBT</p>
 					</div>
 					{#if scheduleFilter !== 'all'}
 						<Button variant="outline" size="sm" onclick={() => setSessionScheduleFilter('all')}>
@@ -1302,7 +1302,7 @@
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Header class="space-y-3 pb-3">
 				<div class="flex flex-wrap items-center justify-between gap-2">
-					<Card.Title class="text-base">Daftar Sesi ({visibleSessions.length}/{currentSessions.length})</Card.Title>
+					<Card.Title class="text-base">Sesi dalam Kegiatan ({visibleSessions.length}/{currentSessions.length})</Card.Title>
 					{#if readinessFilter !== 'all'}
 						<Button variant="outline" size="sm" onclick={() => setSessionReadinessFilter('all')}>
 							Reset Kesiapan
@@ -1330,7 +1330,7 @@
 				<Table.Root>
 					<Table.Header>
 						<Table.Row>
-							<Table.Head>Nama Sesi</Table.Head>
+							<Table.Head>Sesi</Table.Head>
 							<Table.Head>Paket</Table.Head>
 							<Table.Head>Cakupan</Table.Head>
 							<Table.Head>Jadwal Mulai</Table.Head>
@@ -1469,7 +1469,7 @@
 										{/if}
 										{#if s.status === 'finished' || s.status === 'active'}
 											<a href={resolve(`/cbt/sessions/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-slate-700 transition-colors">
-												Lihat Hasil
+												Detail
 											</a>
 										{/if}
 									</div>
@@ -1598,7 +1598,7 @@
 								{/if}
 								{#if s.status === 'finished' || s.status === 'active'}
 									<a href={resolve(`/cbt/sessions/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-slate-700 transition-colors">
-										Lihat Hasil
+										Detail
 									</a>
 								{/if}
 							</div>

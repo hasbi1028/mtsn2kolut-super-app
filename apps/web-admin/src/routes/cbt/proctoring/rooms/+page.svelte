@@ -231,11 +231,11 @@
 					<p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">CBT / Pengawas Ruang</p>
 					<h1 class="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">Ruang Pengawas CBT</h1>
 					<p class="text-sm leading-6 text-slate-600">
-						Satu layar untuk menemukan ruang ujian yang perlu dipantau, membuka dashboard live, dan mencetak paket pengawas.
+						Satu layar untuk menemukan ruang ujian yang perlu dipantau, membuka dashboard live, dan kembali ke Monitoring BYOD saat butuh status guide.
 					</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
-					<Button href={resolve('/cbt/byod')} variant="outline">Panduan BYOD</Button>
+					<Button href={resolve('/cbt/byod')} variant="outline">Monitoring BYOD</Button>
 					<Button href={resolve('/cbt/sessions')} variant="outline">Sesi Ujian</Button>
 				</div>
 			</section>

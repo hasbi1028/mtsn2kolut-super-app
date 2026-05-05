@@ -112,7 +112,8 @@
 
 	function isActive(href: string) {
 		if (href === '/') return page.url.pathname === '/';
-		return page.url.pathname.startsWith(href);
+		if (href === '/cbt') return page.url.pathname === '/cbt';
+		return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
 	}
 
 	function isGroupOpen(group: string) {

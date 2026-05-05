@@ -49,18 +49,13 @@
 
 	let importIntroCopy = $derived(
 		specialEventQuestionMode
-			? 'Hasil upload CSV akan disimpan sebagai soal khusus kegiatan yang sedang dipilih. Kolom tipe boleh kosong untuk PG lama, atau diisi: pg_kompleks, benar_salah, setuju_tidak_setuju, isian, essay, menjodohkan.'
-			: 'Hasil upload disimpan sebagai draft di Bank Soal reusable. Kolom tipe boleh kosong untuk PG lama, atau diisi: pg_kompleks, benar_salah, setuju_tidak_setuju, isian, essay, menjodohkan.'
+			? 'CSV disimpan sebagai soal khusus kegiatan terpilih. Pakai mode ini hanya untuk stok event yang tidak boleh masuk repositori reusable.'
+			: 'CSV disimpan sebagai draft Bank Soal reusable tanpa event_id, sehingga bisa dipakai ulang lintas paket.'
 	);
 	let importScopeCopy = $derived(
 		specialEventQuestionMode
-			? 'Mode khusus kegiatan aktif: CSV dikirim dengan event_id kegiatan terpilih, sehingga soal menjadi stok khusus event tersebut.'
-			: 'Konteks kegiatan hanya membantu filter dan cek kebutuhan; import tetap menambah stok reusable lintas paket.'
-	);
-	let stepTwoCopy = $derived(
-		specialEventQuestionMode
-			? 'Mapel wajib dipilih; CSV akan dikaitkan ke kegiatan terpilih sebagai soal khusus event.'
-			: 'Mapel wajib dipilih; import default masuk Bank Soal reusable tanpa event_id.'
+			? 'Khusus event: soal dikaitkan ke kegiatan yang sedang dipilih.'
+			: 'Reusable: konteks kegiatan hanya membantu cek kebutuhan, bukan tujuan import.'
 	);
 
 	function handleSubjectChange(event: Event) {
@@ -74,30 +69,18 @@
 			<p class="text-xs font-bold uppercase tracking-wider text-green-700">Upload CSV</p>
 			<h2 id="legacy-import-title" class="mt-1 text-base font-semibold text-slate-800">Masukkan banyak soal sekaligus</h2>
 			<p class="mt-1 text-xs text-slate-500">{importIntroCopy}</p>
-			<p class="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">Tujuan import: <span class="font-semibold text-emerald-800">{selectedImportContext}</span></p>
-			<p class="mt-1 text-xs text-slate-500">{importScopeCopy}</p>
-		</div>
-		<div class="grid gap-2 text-xs sm:grid-cols-4">
-			<div class="rounded-md border border-emerald-200 bg-white p-3 text-emerald-900 shadow-sm">
-				<p class="font-semibold">1. Download Template</p>
-				<LoadingButton variant="outline" size="sm" onclick={onTemplate} loading={templateBusy} loadingLabel="Mengunduh..." class="mt-2 h-7 bg-white text-[11px]">
-					Template
-				</LoadingButton>
-			</div>
-			<div class="rounded-md border border-slate-200 bg-white p-3 text-slate-700">
-				<p class="font-semibold">2. Pilih Mapel</p>
-				<p class="mt-1 text-[11px]">{stepTwoCopy}</p>
-			</div>
-			<div class="rounded-md border border-slate-200 bg-white p-3 text-slate-700">
-				<p class="font-semibold">3. Upload File</p>
-				<p class="mt-1 text-[11px]">Gunakan CSV UTF-8 agar huruf dan simbol aman.</p>
-			</div>
-			<div class="rounded-md border border-slate-200 bg-white p-3 text-slate-700">
-				<p class="font-semibold">4. Lihat Hasil Import</p>
-				<p class="mt-1 text-[11px]">Jumlah masuk, dilewati, dan error muncul setelah upload.</p>
+			<div class="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+				<p><span class="font-semibold text-slate-900">Tujuan import:</span> {selectedImportContext}</p>
+				<p class="mt-1 text-slate-500">{importScopeCopy}</p>
 			</div>
 		</div>
-		<div class="space-y-3">
+		<div class="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+			<LoadingButton variant="outline" size="sm" onclick={onTemplate} loading={templateBusy} loadingLabel="Mengunduh..." class="h-8 bg-white text-xs">
+				Download Template
+			</LoadingButton>
+			<span>Kolom tipe boleh kosong untuk PG lama, atau diisi: pg_kompleks, benar_salah, setuju_tidak_setuju, isian, essay, menjodohkan.</span>
+		</div>
+		<div class="grid gap-3 md:grid-cols-2">
 			<div>
 				<label for="legacy-import-subject" class="mb-1 block text-xs font-medium text-slate-600">
 					Mata Pelajaran <span class="text-red-500">*</span>

@@ -12,6 +12,16 @@
 		meaning: string;
 		intervention: string;
 	};
+	type QuickLink = {
+		label: string;
+		href: string;
+		description: string;
+	};
+	type QuickLinkGroup = {
+		title: string;
+		description: string;
+		links: QuickLink[];
+	};
 
 	const statuses: StatusGuide[] = [
 		{
@@ -62,50 +72,64 @@
 		'Sebelum submit, ulangi checklist pengawas dan jangan izinkan kirim jika status masih Menurun.'
 	];
 
-	const hubAreas = [
+	const monitoringGroups: QuickLinkGroup[] = [
 		{
-			title: 'Panduan Pengawas',
-			href: '/cbt/byod',
-			badge: 'Aktif',
-			description: 'Dipakai saat mendampingi siswa secara langsung, membaca arti status, dan memastikan submit readiness.',
-			phase: 'Saat ujian'
+			title: 'Pantau Ujian',
+			description: 'Aksi utama hari-H: buka sesi hari ini, ruang pengawas, dan status koneksi siswa.',
+			links: [
+				{
+					label: 'Sesi Hari Ini / Aktif',
+					href: '/cbt/sessions?schedule=today',
+					description: 'Daftar sesi yang perlu dipantau hari ini.'
+				},
+				{
+					label: 'Dashboard Ruang',
+					href: '/cbt/proctoring/rooms',
+					description: 'Buka rekap ruang/proctoring untuk dashboard live.'
+				},
+				{
+					label: 'Status Guide',
+					href: '#status-guide',
+					description: 'Arti Tersambung, Lokal, Waspada, Gangguan, dan Menurun.'
+				}
+			]
 		},
 		{
-			title: 'Matriks Perangkat',
-			href: '/cbt/byod/matrix',
-			badge: 'Aktif',
-			description: 'Dipakai saat membandingkan vendor, model, versi Android, dan kestabilan perangkat uji lapangan.',
-			phase: 'Uji perangkat'
+			title: 'Panduan BYOD',
+			description: 'Bahan pengawas saat perlu menjelaskan status, submit, dan alur trial kepada siswa.',
+			links: [
+				{
+					label: 'Arti Status Koneksi',
+					href: '#status-guide',
+					description: 'Makna badge aplikasi mobile dan tindakan pengawas.'
+				},
+				{
+					label: 'Checklist Submit',
+					href: '#submit-checklist',
+					description: 'Pemeriksaan singkat sebelum siswa menekan Kirim Ujian.'
+				},
+				{
+					label: 'Alur Trial BYOD',
+					href: '#trial-flow',
+					description: 'Urutan latihan untuk operator dan pengawas.'
+				}
+			]
 		},
 		{
-			title: 'Readiness Release',
-			href: '/cbt/byod/release',
-			badge: 'Aktif',
-			description: 'Dipakai sebelum merilis backend exam atau APK baru ke gelombang uji berikutnya.',
-			phase: 'Sebelum rilis'
-		}
-	];
-
-	const proctoringLinks = [
-		{
-			label: 'Sesi Hari Ini',
-			href: '/cbt/sessions?schedule=today',
-			description: 'Mulai dari daftar sesi yang perlu dipantau hari ini, lalu buka detail atau ruang.'
-		},
-		{
-			label: 'Aktif / Siap Hari Ini',
-			href: '/cbt/sessions?schedule=today&readiness=ready',
-			description: 'Filter cepat untuk sesi hari ini yang siap operasional; status aktif terlihat langsung di daftar sesi.'
-		},
-		{
-			label: 'Butuh Pengawas',
-			href: '/cbt/sessions?readiness=needs_proctors',
-			description: 'Temukan ruang yang belum lengkap pengawas sebelum siswa mulai login BYOD.'
-		},
-		{
-			label: 'Dashboard Ruang',
-			href: '/cbt/proctoring/rooms',
-			description: 'Buka rekap ruang/proctoring yang sudah ada tanpa endpoint backend baru.'
+			title: 'Perangkat & Kesiapan',
+			description: 'Dibuka setelah kebutuhan monitoring terpenuhi: matrix perangkat dan release checklist.',
+			links: [
+				{
+					label: 'Matriks Perangkat',
+					href: '/cbt/byod/matrix',
+					description: 'Bandingkan vendor, model, koneksi, restore, audio, dan submit.'
+				},
+				{
+					label: 'Release Checklist',
+					href: '/cbt/byod/release',
+					description: 'Cek kesiapan backend, APK, operator, dan artefak rollout.'
+				}
+			]
 		}
 	];
 
@@ -130,59 +154,49 @@
 	<section class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Panduan Pengawas CBT</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-slate-900">Ringkasan BYOD untuk Operator dan Pengawas</h1>
+				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Modul 4 dari 5 · Monitoring</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-slate-900">Monitoring CBT Mobile BYOD</h1>
 				<p class="max-w-2xl text-sm leading-6 text-slate-600">
-					Halaman ini merangkum arti status koneksi mobile, titik intervensi pengawas, dan langkah cepat
-					sebelum siswa menekan kirim ujian di perangkat Android milik sendiri.
+					Mulai dari kebutuhan hari-H: buka sesi aktif, pantau dashboard ruang, lalu gunakan status guide
+					hanya saat pengawas perlu membaca sinyal koneksi siswa.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
-				<Button href="/cbt/sessions">Buka Sesi Ujian</Button>
-				<Button href="/cbt/byod/matrix" variant="outline">Lihat Matriks Perangkat</Button>
-				<Button href="/cbt/byod/release" variant="outline">Readiness Release</Button>
-				<Button href="/cbt/events" variant="outline">Lihat Kegiatan Ujian</Button>
+				<Button href={resolve('/cbt')} variant="outline">Beranda CBT</Button>
+				<Button href="/cbt/sessions?schedule=today">Pantau Sesi Hari Ini</Button>
+				<Button href="/cbt/proctoring/rooms" variant="outline">Dashboard Ruang</Button>
+				<Button href="#status-guide" variant="outline">Status Guide</Button>
 			</div>
 		</div>
 	</section>
 
-	<div class="grid gap-4 xl:grid-cols-3">
-		{#each hubAreas as area (area.href)}
-			<Card.Root class="border-slate-200 shadow-sm">
-				<Card.Content class="space-y-4 pt-6">
-					<div class="flex items-center justify-between gap-3">
-						<p class="text-sm font-semibold text-slate-900">{area.title}</p>
-						<Badge class="border-emerald-200 bg-emerald-50 text-emerald-700">{area.badge}</Badge>
-					</div>
-					<p class="text-sm leading-6 text-slate-600">{area.description}</p>
-					<div class="flex items-center justify-between gap-3">
-						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{area.phase}</p>
-						<Button href={area.href} variant="outline">Buka</Button>
-					</div>
-				</Card.Content>
-			</Card.Root>
-		{/each}
-	</div>
-
-	<Card.Root class="border-sky-200 bg-sky-50/60 shadow-sm">
+	<Card.Root class="border-emerald-200 bg-emerald-50/60 shadow-sm">
 		<Card.Header>
-			<Card.Title class="text-lg text-slate-900">Akses Cepat Pemantauan BYOD</Card.Title>
+			<Card.Title class="text-lg text-slate-900">Pantau Ujian Dulu</Card.Title>
 			<Card.Description>
-				Tautan ini memakai filter halaman sesi dan dashboard proctoring yang sudah ada, tanpa endpoint backend tambahan.
+				Tiga grup sederhana untuk monitoring: hari-H dulu, panduan setelahnya, perangkat dan kesiapan sebagai dukungan.
 			</Card.Description>
 		</Card.Header>
-		<Card.Content class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-			{#each proctoringLinks as link (link.href)}
-				<a href={resolve(link.href as '/')} class="rounded-2xl border border-sky-200 bg-white p-4 text-sm shadow-sm transition hover:border-sky-300 hover:bg-sky-50">
-					<p class="font-semibold text-sky-900">{link.label}</p>
-					<p class="mt-2 leading-6 text-slate-600">{link.description}</p>
-				</a>
+		<Card.Content class="grid gap-4 lg:grid-cols-3">
+			{#each monitoringGroups as group (group.title)}
+				<div class="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
+					<p class="text-sm font-semibold text-emerald-950">{group.title}</p>
+					<p class="mt-1 text-sm leading-6 text-slate-600">{group.description}</p>
+					<div class="mt-4 space-y-2">
+						{#each group.links as link (link.href)}
+							<a href={resolve((link.href.startsWith('#') ? `/cbt/byod${link.href}` : link.href) as '/')} class="block rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-2 text-sm transition hover:border-emerald-200 hover:bg-emerald-50">
+								<span class="font-semibold text-emerald-900">{link.label}</span>
+								<span class="mt-1 block leading-5 text-slate-600">{link.description}</span>
+							</a>
+						{/each}
+					</div>
+				</div>
 			{/each}
 		</Card.Content>
 	</Card.Root>
 
 	<div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-		<Card.Root class="border-slate-200 shadow-sm">
+		<Card.Root id="status-guide" class="border-slate-200 shadow-sm">
 			<Card.Header>
 				<Card.Title class="text-lg text-slate-900">Arti Status Koneksi Mobile</Card.Title>
 				<Card.Description>
@@ -205,7 +219,7 @@
 		</Card.Root>
 
 		<div class="space-y-6">
-			<Card.Root class="border-slate-200 shadow-sm">
+			<Card.Root id="submit-checklist" class="border-slate-200 shadow-sm">
 				<Card.Header>
 					<Card.Title class="text-lg text-slate-900">Checklist Sebelum Submit</Card.Title>
 					<Card.Description>
@@ -224,7 +238,7 @@
 				</Card.Content>
 			</Card.Root>
 
-			<Card.Root class="border-slate-200 shadow-sm">
+			<Card.Root id="trial-flow" class="border-slate-200 shadow-sm">
 				<Card.Header>
 					<Card.Title class="text-lg text-slate-900">Alur Trial BYOD</Card.Title>
 					<Card.Description>

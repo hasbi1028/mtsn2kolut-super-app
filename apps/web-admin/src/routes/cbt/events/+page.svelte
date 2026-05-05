@@ -56,7 +56,7 @@
 	};
 	const scopeLabel: Record<string, string> = { class: 'Per Kelas', grade: 'Per Tingkat', school: 'Seluruh Sekolah' };
 	const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Aktif', finished: 'Selesai' };
-	const eventHomeCopy = 'Rumah operasi CBT untuk mengatur paket, sesi, ruang, token, kartu, dan hasil. Soal tetap dikelola sebagai Bank Soal reusable di luar kepemilikan event.';
+	const eventHomeCopy = 'Daftar ringkas kegiatan CBT. Buka satu kegiatan untuk mengikuti wizard kesiapan paket, sesi, monitoring, dan hasil.';
 
 	function statusClass(status: string) {
 		if (status === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -267,17 +267,18 @@
 	});
 </script>
 
-<svelte:head><title>Kegiatan Ujian — MTSN 2 Kolut</title></svelte:head>
+<svelte:head><title>Kegiatan & Sesi CBT — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-5">
 	<section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 		<div class="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
 			<div class="min-w-0">
-				<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Kegiatan CBT</p>
-				<h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Kelola event ujian dengan alur ringkas</h1>
+				<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Kegiatan & Sesi CBT</p>
+				<h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Kegiatan & Sesi CBT</h1>
 				<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{eventHomeCopy}</p>
 			</div>
 			<div class="flex flex-wrap gap-2 lg:justify-end">
+				<a href={resolve('/cbt')} class="inline-flex rounded-md border border-input bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Beranda CBT</a>
 				<LoadingButton onclick={() => { if (showForm) resetForm(); else showForm = true; }}>
 					{showForm ? 'Tutup Form' : 'Buat Kegiatan'}
 				</LoadingButton>
@@ -289,7 +290,7 @@
 		<Card.Root class="border-slate-200 shadow-sm">
 			<Card.Header class="pb-2">
 				<Card.Title class="text-base">{editId ? 'Edit Kegiatan' : 'Buat Kegiatan'}</Card.Title>
-				<Card.Description>Isi identitas kegiatan sekali, lalu lanjutkan pengelolaan lewat tombol Kelola.</Card.Description>
+				<Card.Description>Isi identitas kegiatan sekali, lalu lanjutkan ke wizard kesiapan untuk paket, sesi, monitoring, dan hasil.</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-4">
 				<div class="grid gap-3 sm:grid-cols-2">
@@ -365,11 +366,10 @@
 			<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 				<Card.Content class="space-y-3 p-6">
 					{#each Array.from({ length: 5 }) as _, index (`event-row-skeleton-${index}`)}
-						<div class="grid gap-3 lg:grid-cols-[1.2fr_0.7fr_0.8fr_0.8fr_0.5fr_0.6fr_auto] lg:items-center">
+						<div class="grid gap-3 lg:grid-cols-[1.2fr_0.7fr_0.8fr_0.5fr_0.6fr_auto] lg:items-center">
 							<Skeleton class="h-5 w-40" />
 							<Skeleton class="h-6 w-20" />
 							<Skeleton class="h-5 w-20" />
-							<Skeleton class="h-5 w-28" />
 							<Skeleton class="h-6 w-16" />
 							<Skeleton class="h-6 w-16" />
 							<Skeleton class="h-9 w-28 justify-self-end" />
@@ -393,7 +393,7 @@
 		<section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<p class="text-sm font-semibold text-slate-900">Ringkasan kegiatan</p>
+					<p class="text-sm font-semibold text-slate-900">Kegiatan & Sesi</p>
 					<p class="mt-1 text-xs text-slate-500">{overview.events.length} kegiatan, {overview.events.reduce((sum, event) => sum + (event.session_count || 0), 0)} sesi tersusun</p>
 				</div>
 				<div class="flex flex-wrap gap-2" aria-label="Filter status kegiatan">
@@ -413,64 +413,62 @@
 		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
 			<Card.Content class="p-0 overflow-x-auto">
 				<div class="hidden overflow-x-auto lg:block">
-				<Table.Root>
-					<Table.Header>
-						<Table.Row>
-							<Table.Head>Judul Kegiatan</Table.Head>
-							<Table.Head>Tipe</Table.Head>
+					<Table.Root>
+						<Table.Header>
+							<Table.Row>
+								<Table.Head>Judul Kegiatan</Table.Head>
+								<Table.Head>Tipe</Table.Head>
 								<Table.Head>Cakupan</Table.Head>
-							<Table.Head>Tingkat</Table.Head>
-							<Table.Head class="text-center">Sesi</Table.Head>
-							<Table.Head>Status</Table.Head>
-							<Table.Head class="text-right">Aksi</Table.Head>
-						</Table.Row>
-					</Table.Header>
-					<Table.Body>
-						{#each visibleEvents as e (e.id)}
-							<Table.Row>
-								<Table.Cell>
-									<div class="font-medium text-slate-800">{e.title}</div>
-									<div class="text-xs text-slate-500">{e.academic_year_name}</div>
-								</Table.Cell>
-								<Table.Cell>
-									<Badge variant="outline" class="text-xs capitalize">{typeLabel[e.exam_type] ?? e.exam_type}</Badge>
-								</Table.Cell>
-								<Table.Cell class="text-sm text-slate-600">{scopeLabel[e.scope] ?? e.scope}</Table.Cell>
-								<Table.Cell class="text-sm text-slate-600">{e.target_levels?.length ? e.target_levels.join(', ') : 'Mengikuti cakupan'}</Table.Cell>
-								<Table.Cell class="text-center">
-									<Badge variant="secondary">{e.session_count} Sesi</Badge>
-								</Table.Cell>
-								<Table.Cell>
-									<Badge class={statusClass(e.status)}>
-										{statusLabel[e.status] ?? e.status}
-									</Badge>
-									<div class="mt-1 text-xs text-slate-500">{eventProgressLabel(e)}</div>
-								</Table.Cell>
-								<Table.Cell class="text-right">
-									<div class="flex flex-wrap justify-end gap-2">
-										<a href={resolve(`/cbt/events/${e.id}`)} class="inline-flex items-center rounded-md bg-[oklch(0.38_0.13_145)] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[oklch(0.34_0.13_145)]">Kelola</a>
-										<LoadingButton variant="ghost" size="sm" onclick={() => openEdit(e)}>Edit</LoadingButton>
-										<LoadingButton
-											variant="ghost"
-											size="sm"
-											class="text-red-600 hover:bg-red-50 hover:text-red-700"
-											onclick={() => deleteEvent(e.id)}
-											loading={deleteBusyId === e.id}
-											loadingLabel="Menghapus..."
-											disabled={deleteBusyId !== '' && deleteBusyId !== e.id}
-										>Hapus</LoadingButton>
-									</div>
-								</Table.Cell>
+								<Table.Head class="text-center">Sesi</Table.Head>
+								<Table.Head>Status</Table.Head>
+								<Table.Head class="text-right">Aksi</Table.Head>
 							</Table.Row>
-						{:else}
-							<Table.Row>
-								<Table.Cell colspan={7} class="text-center text-slate-400 py-12">
-									{overview.events.length === 0 ? 'Belum ada kegiatan ujian.' : 'Tidak ada kegiatan pada filter ini.'}
-								</Table.Cell>
-							</Table.Row>
-						{/each}
-					</Table.Body>
-				</Table.Root>
+						</Table.Header>
+						<Table.Body>
+							{#each visibleEvents as e (e.id)}
+								<Table.Row>
+									<Table.Cell>
+										<div class="font-medium text-slate-800">{e.title}</div>
+										<div class="text-xs text-slate-500">{e.academic_year_name} · {e.target_levels?.length ? `Tingkat ${e.target_levels.join(', ')}` : 'Target mengikuti cakupan'}</div>
+									</Table.Cell>
+									<Table.Cell>
+										<Badge variant="outline" class="text-xs capitalize">{typeLabel[e.exam_type] ?? e.exam_type}</Badge>
+									</Table.Cell>
+									<Table.Cell class="text-sm text-slate-600">{scopeLabel[e.scope] ?? e.scope}</Table.Cell>
+									<Table.Cell class="text-center">
+										<Badge variant="secondary">{e.session_count} Sesi</Badge>
+									</Table.Cell>
+									<Table.Cell>
+										<Badge class={statusClass(e.status)}>
+											{statusLabel[e.status] ?? e.status}
+										</Badge>
+										<div class="mt-1 text-xs text-slate-500">{eventProgressLabel(e)}</div>
+									</Table.Cell>
+									<Table.Cell class="text-right">
+										<div class="flex flex-wrap justify-end gap-1.5">
+											<a href={resolve(`/cbt/events/${e.id}`)} class="inline-flex items-center rounded-md bg-[oklch(0.38_0.13_145)] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[oklch(0.34_0.13_145)]">Kelola</a>
+											<LoadingButton variant="ghost" size="sm" class="text-slate-500" onclick={() => openEdit(e)}>Edit</LoadingButton>
+											<LoadingButton
+												variant="ghost"
+												size="sm"
+												class="text-red-600 hover:bg-red-50 hover:text-red-700"
+												onclick={() => deleteEvent(e.id)}
+												loading={deleteBusyId === e.id}
+												loadingLabel="Menghapus..."
+												disabled={deleteBusyId !== '' && deleteBusyId !== e.id}
+											>Hapus</LoadingButton>
+										</div>
+									</Table.Cell>
+								</Table.Row>
+							{:else}
+								<Table.Row>
+									<Table.Cell colspan={6} class="text-center text-slate-400 py-12">
+										{overview.events.length === 0 ? 'Belum ada kegiatan ujian.' : 'Tidak ada kegiatan pada filter ini.'}
+									</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
 				</div>
 
 				<div class="grid gap-3 p-4 lg:hidden">

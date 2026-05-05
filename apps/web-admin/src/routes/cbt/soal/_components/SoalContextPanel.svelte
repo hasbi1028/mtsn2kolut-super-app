@@ -23,12 +23,12 @@
 	} = $props();
 </script>
 
-<section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-	<div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,46rem)] lg:items-end">
+<section class="rounded-xl border border-slate-200 bg-white/80 p-3 shadow-sm">
+	<div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,44rem)] lg:items-end">
 		<div class="min-w-0">
-			<p class="text-xs font-bold uppercase tracking-wider text-green-700">Konteks Bank Soal</p>
-			<h2 class="mt-1 text-base font-semibold text-slate-900">{selectedEventTitle}</h2>
-			<p class="mt-1 text-xs text-slate-500">Bank Soal tetap reusable. Kegiatan hanya dipakai untuk target kebutuhan dan penugasan, bukan untuk menyaring repositori soal.</p>
+			<p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Konteks opsional</p>
+			<h2 class="mt-1 truncate text-sm font-semibold text-slate-800">{selectedEventTitle}</h2>
+			<p class="mt-1 text-xs text-slate-500">Kegiatan membantu target kebutuhan; daftar soal tetap repositori reusable.</p>
 		</div>
 		<div class="grid gap-2 md:grid-cols-3">
 			<div>
@@ -68,9 +68,9 @@
 		</div>
 	</div>
 	{#if !selectedEventId}
-		<div class="mt-3 rounded-lg border border-dashed border-emerald-200 bg-emerald-50/70 px-3 py-3 text-sm text-emerald-950">
+		<div class="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
 			<p class="font-semibold">Mode bank reusable aktif.</p>
-			<p class="mt-1 text-xs leading-5 text-green-800">Gunakan tanpa kegiatan untuk menyusun stok soal lintas paket. Pilih kegiatan hanya saat perlu melihat target kebutuhan atau penugasan event tertentu.</p>
+			<p class="mt-1 text-xs leading-5 text-slate-500">Pilih kegiatan hanya saat perlu melihat target kebutuhan atau penugasan event tertentu.</p>
 		</div>
 	{/if}
 </section>

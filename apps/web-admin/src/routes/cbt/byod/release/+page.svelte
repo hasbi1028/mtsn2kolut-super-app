@@ -57,22 +57,40 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<section class="rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-6 shadow-sm">
+	<section class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">Readiness Release Mobile</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Perangkat & Kesiapan · Monitoring</p>
 				<h1 class="text-3xl font-semibold tracking-tight text-slate-900">Checklist Rilis CBT Mobile BYOD</h1>
 				<p class="max-w-2xl text-sm leading-6 text-slate-600">
-					Gunakan halaman ini sebelum backend exam atau APK mobile dirilis ke gelombang uji berikutnya.
-					Fokusnya adalah kompatibilitas payload, stabilitas app, dan kesiapan operator lapangan.
+					Bagian pendukung sebelum backend exam atau APK mobile dipakai di gelombang berikutnya.
+					Monitoring hari-H tetap dimulai dari sesi aktif dan dashboard ruang.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
-				<Button href="/cbt/byod">Kembali ke Panduan BYOD</Button>
+				<Button href="/cbt/byod">Kembali ke Monitoring</Button>
+				<Button href="/cbt/proctoring/rooms" variant="outline">Dashboard Ruang</Button>
 				<Button href="/cbt/byod/matrix" variant="outline">Buka Matriks Perangkat</Button>
 			</div>
 		</div>
 	</section>
+
+	<Card.Root class="border-emerald-200 bg-emerald-50/60 shadow-sm">
+		<Card.Content class="grid gap-4 pt-6 md:grid-cols-3">
+			<div>
+				<p class="text-sm font-semibold text-emerald-950">Pantau Ujian</p>
+				<p class="mt-1 text-sm leading-6 text-slate-600">Hari-H tetap diarahkan ke Monitoring, sesi hari ini, dan dashboard ruang.</p>
+			</div>
+			<div>
+				<p class="text-sm font-semibold text-emerald-950">Panduan BYOD</p>
+				<p class="mt-1 text-sm leading-6 text-slate-600">Status guide dan checklist submit dipakai saat pengawas membaca kondisi siswa.</p>
+			</div>
+			<div>
+				<p class="text-sm font-semibold text-emerald-950">Perangkat & Kesiapan</p>
+				<p class="mt-1 text-sm leading-6 text-slate-600">Halaman ini fokus pada readiness backend, APK, operator, dan artefak rollout.</p>
+			</div>
+		</Card.Content>
+	</Card.Root>
 
 	<div class="grid gap-6 xl:grid-cols-3">
 		<Card.Root class="border-slate-200 shadow-sm">
@@ -86,7 +104,7 @@
 				<ul class="space-y-3">
 					{#each backendChecks as item (item)}
 						<li class="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
-							<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-semibold text-sky-700">API</span>
+							<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700">API</span>
 							<span>{item}</span>
 						</li>
 					{/each}
@@ -124,7 +142,7 @@
 				<ul class="space-y-3">
 					{#each rolloutChecks as item (item)}
 						<li class="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
-							<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-semibold text-sky-700">OPS</span>
+							<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700">OPS</span>
 							<span>{item}</span>
 						</li>
 					{/each}
@@ -144,7 +162,7 @@
 			{#each releaseArtifacts as item (item.path)}
 				<div class="rounded-2xl border border-slate-200 bg-white p-4">
 					<div class="flex items-center gap-3">
-						<Badge class="border-sky-200 bg-sky-50 text-sky-700">Dokumen</Badge>
+						<Badge class="border-emerald-200 bg-emerald-50 text-emerald-700">Dokumen</Badge>
 						<p class="text-sm font-semibold text-slate-900">{item.title}</p>
 					</div>
 					<p class="mt-3 text-sm leading-6 text-slate-600">{item.description}</p>

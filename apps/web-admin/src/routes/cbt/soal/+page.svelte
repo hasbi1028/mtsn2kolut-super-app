@@ -13,7 +13,6 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import RichContent from '$lib/components/RichContent.svelte';
 	import ComposerDraftNotice from './_components/ComposerDraftNotice.svelte';
-	import CatalogShortcutPanel from './_components/CatalogShortcutPanel.svelte';
 	import CatalogTargetPanel from './_components/CatalogTargetPanel.svelte';
 	import ImportWorkflowPanel from './_components/ImportWorkflowPanel.svelte';
 	import ReviewWorkflowQueues from './_components/ReviewWorkflowQueues.svelte';
@@ -487,8 +486,6 @@
 		if (roles.includes('guru') || roles.includes('teacher')) return 'Pembuat soal / guru';
 		return roles.length > 0 ? roles.join(', ') : 'Pengguna';
 	});
-	let isAdminRole = $derived(roles.includes('admin'));
-	let canUseReviewerTools = $derived(canReviewWorkflow || roles.includes('reviewer'));
 	let selectedImportContext = $derived.by(() => {
 		if (!selectedEvent) return 'Bank Soal reusable tanpa event';
 		const eventLabel = `${selectedEvent.title}${selectedEvent.status ? ` (${selectedEvent.status})` : ''}`;
@@ -1151,10 +1148,6 @@
 		selectedQuestionIds = [];
 		targetQuestionsInput = questionTargets.find((target) => target.subject_id === subjectId)?.target_questions ?? 0;
 		load(1);
-	}
-
-	function membersHref(): `/cbt/events/${string}/members` | '/cbt/events' {
-		return selectedEventId ? `/cbt/events/${selectedEventId}/members` : '/cbt/events';
 	}
 
 	function reviewFocusHref(): '/cbt/soal/review' | `/cbt/soal/review?${string}` {
@@ -2427,23 +2420,6 @@
 		/>
 	{/if}
 
-	{#if activeMode === 'catalog'}
-		<CatalogShortcutPanel
-			reviewHref={reviewFocusHref()}
-			membersHref={membersHref()}
-			{canUseReviewerTools}
-			{isAdminRole}
-			{exportBusy}
-			{totalItems}
-			onCreate={openCreate}
-			onImport={openImport}
-			onRevision={() => setRevisionSourceFilter('')}
-			onPendingReviews={showPendingReviews}
-			onApproved={showApprovedQuestions}
-			onExport={() => void exportQuestionsCSV()}
-		/>
-	{/if}
-
 	{#if activeMode === 'composer'}
 		<section class="rounded-lg border border-green-200 bg-green-50/70 p-3 text-sm text-green-950">
 			<p class="font-semibold">Ruang komposer Bank Soal aktif.</p>
@@ -2546,7 +2522,7 @@
 		<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 			<div>
 				<h2 class="text-sm font-semibold text-slate-800">Daftar Soal</h2>
-				<p class="mt-0.5 text-xs text-slate-500">Bagian ini adalah daftar teknis lama: filter, tabel, dan aksi detail tetap tersedia sebagai alat lanjutan.</p>
+				<p class="mt-0.5 text-xs text-slate-500">Cari, filter, lalu kelola soal dari tabel utama Bank Soal.</p>
 			</div>
 			{#if selectedEventId}
 				<Button variant="outline" class="h-8 text-xs" onclick={() => setSelectedEvent('')}>Lepas Filter Kegiatan</Button>

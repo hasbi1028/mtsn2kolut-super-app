@@ -287,16 +287,40 @@
 		draft: 'Draft', scheduled: 'Terjadwal', active: 'Berlangsung',
 		finished: 'Selesai', cancelled: 'Dibatalkan',
 	};
-	const detailTabs: { id: ActiveTab; label: string }[] = [
-		{ id: 'hasil', label: 'Hasil Ujian' },
-		{ id: 'butir', label: 'Analisis Butir' },
-		{ id: 'peserta', label: 'Peserta & Token' },
-		{ id: 'ruangan', label: 'Ruangan' },
-		{ id: 'operasional', label: 'Rekap Ops' },
-		{ id: 'proctoring', label: 'Proctoring' },
-		{ id: 'audit', label: 'Audit Ops' },
-		{ id: 'essay', label: 'Koreksi Uraian' },
+	type DetailTabGroup = {
+		module: string;
+		help: string;
+		tabs: { id: ActiveTab; label: string }[];
+	};
+	const detailTabGroups: DetailTabGroup[] = [
+		{
+			module: 'Kegiatan & Sesi',
+			help: 'Peserta/Ruang/Kartu',
+			tabs: [
+				{ id: 'peserta', label: 'Peserta' },
+				{ id: 'ruangan', label: 'Ruang' },
+			],
+		},
+		{
+			module: 'Monitoring',
+			help: 'Pantau ujian berjalan',
+			tabs: [
+				{ id: 'proctoring', label: 'Proctoring' },
+				{ id: 'operasional', label: 'Operasional' },
+				{ id: 'audit', label: 'Audit' },
+			],
+		},
+		{
+			module: 'Hasil & Analisis',
+			help: 'Nilai, butir, uraian',
+			tabs: [
+				{ id: 'hasil', label: 'Hasil' },
+				{ id: 'butir', label: 'Butir' },
+				{ id: 'essay', label: 'Uraian' },
+			],
+		},
 	];
+	const detailTabs = detailTabGroups.flatMap((group) => group.tabs);
 
 	function tabFromQuery(value: string | null): ActiveTab | null {
 		const found = detailTabs.find((tab) => tab.id === value);
@@ -1531,7 +1555,7 @@
 <div class="space-y-5 p-6">
 	<!-- Breadcrumb -->
 	<div class="flex items-center gap-2 text-sm text-slate-500">
-		<a href={resolve('/cbt/sessions')} class="hover:text-slate-700">Sesi Ujian</a>
+		<a href={resolve('/cbt/sessions')} class="hover:text-slate-700">Kegiatan & Sesi</a>
 		<span>/</span>
 		<span class="text-slate-700 font-medium truncate max-w-xs">{session?.title ?? '...'}</span>
 	</div>
@@ -1642,7 +1666,7 @@
 		<Card.Root class={commandCenterClass()}>
 			<Card.Header class="flex flex-row items-start justify-between gap-3 pb-2">
 				<div>
-					<Card.Title class="text-base">Command Center Ujian</Card.Title>
+					<Card.Title class="text-base">Monitoring Sesi</Card.Title>
 					<p class="mt-1 text-xs text-slate-600">
 						Snapshot ringkas untuk operator: ruang, pengawas, submit, koneksi, atensi, dan handover.
 					</p>
@@ -1707,22 +1731,48 @@
 		</Card.Root>
 
 		<!-- Tabs -->
-		<div class="border-b border-green-100">
-		<div class="flex gap-1" role="tablist" aria-label="Navigasi detail sesi CBT">
-				{#each detailTabs as tab (tab.id)}
-					<button
-						id={`tab-${tab.id}`}
-						type="button"
-						role="tab"
-						aria-selected={activeTab === tab.id}
-						aria-controls={`panel-${tab.id}`}
-						onclick={() => switchTab(tab.id)}
-						class="px-4 py-2 text-sm font-medium border-b-2 transition-colors {activeTab === tab.id
-							? 'border-[oklch(0.38_0.13_145)] text-[oklch(0.38_0.13_145)]'
-							: 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}"
-					>
-						{tab.label}
-					</button>
+		<div class="space-y-3 rounded-xl border border-green-100 bg-white p-3 shadow-sm">
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<div>
+					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">Alur 5 Modul CBT</p>
+					<p class="mt-0.5 text-sm text-slate-600">Detail sesi dikelompokkan ke Kegiatan & Sesi, Monitoring, dan Hasil & Analisis.</p>
+				</div>
+				<div class="flex flex-wrap gap-2">
+					<a href={resolve(`/cbt/sessions/${sessionId}/minutes`)} class="inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-muted">
+						Berita Acara
+					</a>
+					{#if currentSession.event_id}
+						<a href={resolve(`/cbt/events/${currentSession.event_id}/exam-cards`)} class="inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-muted">
+							Kartu Ujian
+						</a>
+					{/if}
+				</div>
+			</div>
+			<div class="grid gap-3 xl:grid-cols-3" role="tablist" aria-label="Navigasi detail sesi CBT">
+				{#each detailTabGroups as group (group.module)}
+					<section class="rounded-lg border border-slate-200 bg-slate-50/70 p-2">
+						<div class="mb-2 px-1">
+							<p class="text-xs font-semibold text-slate-800">{group.module}</p>
+							<p class="text-[11px] text-slate-500">{group.help}</p>
+						</div>
+						<div class="flex flex-wrap gap-1">
+							{#each group.tabs as tab (tab.id)}
+								<button
+									id={`tab-${tab.id}`}
+									type="button"
+									role="tab"
+									aria-selected={activeTab === tab.id}
+									aria-controls={`panel-${tab.id}`}
+									onclick={() => switchTab(tab.id)}
+									class="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors {activeTab === tab.id
+										? 'border-[oklch(0.38_0.13_145)] bg-green-50 text-[oklch(0.38_0.13_145)]'
+										: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'}"
+								>
+									{tab.label}
+								</button>
+							{/each}
+						</div>
+					</section>
 				{/each}
 			</div>
 		</div>

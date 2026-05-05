@@ -37,14 +37,12 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'CBT',
 		items: [
-			{ href: '/cbt/events', label: 'Kegiatan Ujian', icon: 'calendar', roles: ['admin'] },
-			{ href: '/cbt/soal', label: 'Bank Soal', icon: 'file-text', roles: ['admin', 'guru', 'reviewer'] },
-			{ href: '/cbt/soal/review', label: 'Review Soal', icon: 'user-check', roles: ['admin', 'guru', 'reviewer'] },
-			{ href: '/cbt/packages', label: 'Paket Ujian', icon: 'package', roles: ['admin'] },
-			{ href: '/cbt/sessions', label: 'Sesi Ujian', icon: 'play', roles: ['admin'] },
-			{ href: '/cbt/proctoring/rooms', label: 'Ruang Saya', icon: 'user-check', roles: ['admin', 'guru', 'staf'] },
-			{ href: '/cbt/byod', label: 'Kesiapan BYOD', icon: 'activity', roles: ['admin', 'guru'] },
-			{ href: '/cbt/non-test', label: 'Non-Tes', icon: 'clipboard', roles: ['admin', 'guru'] }
+			{ href: '/cbt', label: 'Dashboard CBT', icon: 'grid', roles: ['admin', 'guru', 'staf'] },
+			{ href: '/cbt/soal', label: 'Bank Soal', icon: 'file-text', roles: ['admin', 'guru'] },
+			{ href: '/cbt/packages', label: 'Paket Soal', icon: 'package', roles: ['admin'] },
+			{ href: '/cbt/events', label: 'Kegiatan & Sesi', icon: 'calendar', roles: ['admin'] },
+			{ href: '/cbt/byod', label: 'Monitoring', icon: 'activity', roles: ['admin', 'guru', 'staf'] },
+			{ href: '/cbt/hasil', label: 'Hasil & Analisis', icon: 'clipboard', roles: ['admin', 'guru'] }
 		]
 	},
 	{
@@ -106,8 +104,8 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	];
 
 export const defaultPinnedByRole: Record<string, string[]> = {
-	admin: ['/cbt/sessions', '/grades', '/settings'],
-	guru: ['/cbt/proctoring/rooms', '/cbt/soal', '/grades', '/jadwal'],
+	admin: ['/cbt/events', '/grades', '/settings'],
+	guru: ['/cbt/byod', '/cbt/soal', '/grades', '/jadwal'],
 	staf: ['/document-cycles', '/inventory', '/library'],
 	kesiswaan: ['/kesiswaan', '/students']
 };
