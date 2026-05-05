@@ -413,7 +413,7 @@ func TestAuthListSessionsForwardsUserID(t *testing.T) {
 	userID := "11111111-1111-1111-1111-111111111111"
 	sessionID := mustUUID(t, "33333333-3333-3333-3333-333333333333")
 	svc := &fakeAuthService{
-		sessionListResult: []db.AuthSession{{ID: sessionID, DeviceLabel: "Laptop TU"}},
+		sessionListResult: []db.AuthSession{{ID: sessionID, DeviceLabel: "Laptop TU", RefreshTokenHash: "secret-hash"}},
 	}
 	h := NewAuth(svc, nil)
 	req := httptest.NewRequest(http.MethodGet, "http://internal/api/auth/sessions", nil)
@@ -430,6 +430,9 @@ func TestAuthListSessionsForwardsUserID(t *testing.T) {
 	}
 	if !bytes.Contains(rec.Body.Bytes(), []byte("Laptop TU")) {
 		t.Fatalf("ListSessions body = %s, want device label", rec.Body.String())
+	}
+	if bytes.Contains(rec.Body.Bytes(), []byte("refresh_token_hash")) || bytes.Contains(rec.Body.Bytes(), []byte("secret-hash")) {
+		t.Fatalf("ListSessions body = %s, must not expose refresh token hash", rec.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "http://internal/api/auth/sessions", nil)

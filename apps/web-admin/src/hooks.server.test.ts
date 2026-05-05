@@ -99,7 +99,7 @@ describe('SvelteKit handleFetch auth refresh', () => {
 				headers: { 'Content-Type': 'application/json' }
 			}))
 			.mockResolvedValueOnce(new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }));
-		const request = new Request('http://localhost:8080/api/document-cycles/stats', {
+		const request = new Request('http://127.0.0.1:8080/api/document-cycles/stats', {
 			headers: { Authorization: `Bearer ${token('access')}` }
 		});
 		const event = makeEvent();
@@ -134,7 +134,7 @@ describe('SvelteKit handleFetch auth refresh', () => {
 				headers: { 'Content-Type': 'application/json' }
 			}))
 			.mockResolvedValueOnce(new Response(JSON.stringify({ data: { ok: true } }), { status: 200 }));
-		const request = new Request('http://localhost:8080/api/document-cycles/catalogs', {
+		const request = new Request('http://127.0.0.1:8080/api/document-cycles/catalogs', {
 			method: 'POST',
 			headers: {
 				Authorization: `Bearer ${token('access')}`,
@@ -201,7 +201,7 @@ describe('SvelteKit handleFetch auth refresh', () => {
 		const globalFetch = vi.spyOn(globalThis, 'fetch');
 		const routeFetch = vi.fn<typeof fetch>()
 			.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 }));
-		const request = new Request('http://localhost:8080/api/document-cycles/stats', {
+		const request = new Request('http://127.0.0.1:8080/api/document-cycles/stats', {
 			headers: { Authorization: 'Basic operator-secret' }
 		});
 		const event = makeEvent();
@@ -219,7 +219,7 @@ describe('SvelteKit handleFetch auth refresh', () => {
 		const globalFetch = vi.spyOn(globalThis, 'fetch');
 		const routeFetch = vi.fn<typeof fetch>()
 			.mockResolvedValue(new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 }));
-		const request = new Request('http://localhost:8080/api/document-cycles/stats', {
+		const request = new Request('http://127.0.0.1:8080/api/document-cycles/stats', {
 			headers: { Authorization: `Bearer ${token('access')}` }
 		});
 		const event = makeEvent();
@@ -256,14 +256,14 @@ describe('SvelteKit handleFetch auth refresh', () => {
 		const [first, second] = await Promise.all([
 			handleFetch({
 				event,
-				request: new Request('http://localhost:8080/api/document-cycles/stats', {
+				request: new Request('http://127.0.0.1:8080/api/document-cycles/stats', {
 					headers: { Authorization: `Bearer ${token('access')}` }
 				}),
 				fetch: routeFetch
 			} as never),
 			handleFetch({
 				event,
-				request: new Request('http://localhost:8080/api/document-cycles/catalogs', {
+				request: new Request('http://127.0.0.1:8080/api/document-cycles/catalogs', {
 					headers: { Authorization: `Bearer ${token('access')}` }
 				}),
 				fetch: routeFetch
@@ -300,6 +300,19 @@ describe('SvelteKit handle auth gate', () => {
 		expect(resolve).not.toHaveBeenCalled();
 		expect(event.locals.accessToken).toBeUndefined();
 		expect(event.locals.user).toBeUndefined();
+	});
+
+	it('returns JSON 401 for unauthenticated protected API requests', async () => {
+		const { handle } = await loadHooks();
+		const event = makeHandleEvent(undefined, undefined, 'http://localhost/api/school-profile');
+		const resolve = vi.fn(async () => new Response('ok'));
+
+		const response = await handle({ event, resolve } as never);
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get('Content-Type')).toBe('application/json');
+		await expect(response.json()).resolves.toEqual({ error: 'unauthorized' });
+		expect(resolve).not.toHaveBeenCalled();
 	});
 
 	it('refreshes an expired access token through the event fetch boundary before resolving', async () => {

@@ -1096,6 +1096,51 @@ void main() {
   });
 
   testWidgets(
+    'exam shell does not queue answer after already-submitted conflict',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final store = _MemoryExamSessionStore();
+      final client = _RecordingExamApiClient(
+        baseUrl: 'http://127.0.0.1:65535',
+        saveAnswerError: const ExamApiException(
+          'already submitted',
+          statusCode: 409,
+        ),
+        statusPayload: const ExamStatusPayload(
+          answeredCount: 1,
+          totalQuestions: 1,
+          timeRemainingSeconds: 0,
+          isSubmitted: true,
+        ),
+      );
+
+      await tester.pumpWidget(
+        _TestApp(
+          child: ExamShellScreen(
+            client: client,
+            examToken: 'abc12345',
+            deviceFingerprint: 'android:test',
+            autoStartRuntime: false,
+            sessionStore: store,
+            initialPayload: _sampleLoginPayload(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('4'));
+      await tester.pumpAndSettle();
+
+      expect(client.saveAnswerCount, 1);
+      expect(find.text('Ujian berhasil dikirim.'), findsOneWidget);
+      expect(await store.loadSnapshot(), isNull);
+    },
+  );
+
+  testWidgets(
     'exam shell treats submitted status as terminal and clears snapshot',
     (tester) async {
       tester.view.physicalSize = const Size(1440, 2200);
@@ -1511,6 +1556,7 @@ class _RecordingExamApiClient extends ExamApiClient {
       isSubmitted: false,
     ),
     this.submitError,
+    this.saveAnswerError,
   });
 
   int heartbeatCount = 0;
@@ -1521,6 +1567,7 @@ class _RecordingExamApiClient extends ExamApiClient {
   final bool throwOnEvent;
   final ExamStatusPayload statusPayload;
   final ExamApiException? submitError;
+  final ExamApiException? saveAnswerError;
 
   @override
   Future<void> sendHeartbeat(String token) async {
@@ -1549,6 +1596,10 @@ class _RecordingExamApiClient extends ExamApiClient {
     required String answer,
   }) async {
     saveAnswerCount += 1;
+    final error = saveAnswerError;
+    if (error != null) {
+      throw error;
+    }
   }
 
   @override

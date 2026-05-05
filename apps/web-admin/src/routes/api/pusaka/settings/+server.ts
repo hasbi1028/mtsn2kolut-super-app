@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { handleRouteError, proxy, readOptionalRequestJson } from '$lib/server/api';
+import { apiPath, handleRouteError, proxy, readOptionalRequestJson } from '$lib/server/api';
 
 interface GoSetting { key: string; value: string }
 
@@ -13,6 +13,7 @@ const NUMBER_KEYS = new Set([
 	'pusaka_geo_checkin_radius_m',
 	'pusaka_geo_checkout_radius_m'
 ]);
+const EDITABLE_KEYS = new Set([...NUMBER_KEYS, 'headless']);
 
 export const GET = async (event: RequestEvent) => {
 	try {
@@ -33,11 +34,16 @@ export const GET = async (event: RequestEvent) => {
 export const PUT = async (event: RequestEvent) => {
 	try {
 		const payload = await readOptionalRequestJson<Record<string, unknown>>(event.request, {});
+		for (const key of Object.keys(payload)) {
+			if (BLOCKED.has(key) || !EDITABLE_KEYS.has(key)) {
+				return json({ error: `Pengaturan ${key} tidak dapat diubah dari web-admin` }, { status: 400 });
+			}
+		}
 		const p = proxy(event);
 		await Promise.all(
-			Object.entries(payload).map(([key, val]) =>
-				p.put(`/api/pusaka/settings/${key}`, { value: String(val) })
-			)
+			Object.entries(payload).map(([key, val]) => {
+				return p.put(apiPath`/api/pusaka/settings/${key}`, { value: String(val) });
+			})
 		);
 		return json({ ok: true, ...payload });
 	} catch (e) {

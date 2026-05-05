@@ -142,12 +142,13 @@ class ExamApiClient {
   }
 
   Future<void> sendHeartbeat(String token) async {
-    await _sendJson(
+    final payload = await _sendJson(
       'POST',
       '/api/exam/heartbeat',
       examToken: token,
       body: const <String, Object?>{},
     );
+    _expectDataStatus(payload, 'ok');
   }
 
   Future<void> sendEvent({
@@ -155,12 +156,13 @@ class ExamApiClient {
     required String eventType,
     Map<String, Object?> data = const <String, Object?>{},
   }) async {
-    await _sendJson(
+    final payload = await _sendJson(
       'POST',
       '/api/exam/event',
       examToken: token,
       body: <String, Object?>{'event_type': eventType, 'data': data},
     );
+    _expectDataStatus(payload, 'recorded');
   }
 
   Future<void> saveAnswer({
@@ -168,21 +170,23 @@ class ExamApiClient {
     required String questionId,
     required String answer,
   }) async {
-    await _sendJson(
+    final payload = await _sendJson(
       'POST',
       '/api/exam/answer',
       examToken: token,
       body: <String, Object?>{'question_id': questionId, 'answer': answer},
     );
+    _expectDataStatus(payload, 'recorded');
   }
 
   Future<void> submit(String token) async {
-    await _sendJson(
+    final payload = await _sendJson(
       'POST',
       '/api/exam/submit',
       examToken: token,
       body: const <String, Object?>{},
     );
+    _expectDataStatus(payload, 'submitted');
   }
 
   Future<Map<String, dynamic>> _sendJson(
@@ -239,6 +243,14 @@ class ExamApiClient {
     final data = payload['data'];
     if (data is Map<String, dynamic>) {
       return data;
+    }
+    throw const ExamApiException('Respons server ujian tidak lengkap.');
+  }
+
+  void _expectDataStatus(Map<String, dynamic> payload, String expectedStatus) {
+    final data = _unwrapData(payload);
+    if (data['status'] == expectedStatus) {
+      return;
     }
     throw const ExamApiException('Respons server ujian tidak lengkap.');
   }

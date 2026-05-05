@@ -151,6 +151,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	if (!isPublic && !event.locals.user) {
+		if (event.url.pathname.startsWith('/api/')) {
+			return new Response(JSON.stringify({ error: 'unauthorized' }), {
+				status: 401,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
 		const from = encodeURIComponent(event.url.pathname + event.url.search);
 		throw redirect(302, `/login?from=${from}`);
 	}

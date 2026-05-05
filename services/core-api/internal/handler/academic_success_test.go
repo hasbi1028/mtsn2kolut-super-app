@@ -188,7 +188,7 @@ func TestAcademicOverviewAndStatsSuccess(t *testing.T) {
 	h := &Academic{svc: fake}
 
 	rec := httptest.NewRecorder()
-	h.Overview(rec, httptest.NewRequest(http.MethodGet, "/api/academic", nil))
+	h.Overview(rec, adminRequest(http.MethodGet, "/api/academic", ""))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Overview() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
@@ -200,7 +200,7 @@ func TestAcademicOverviewAndStatsSuccess(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.GetStats(rec, httptest.NewRequest(http.MethodGet, "/api/academic/stats", nil))
+	h.GetStats(rec, adminRequest(http.MethodGet, "/api/academic/stats", ""))
 	if rec.Code != http.StatusOK || !fake.statsCalled {
 		t.Fatalf("GetStats() status/called = %d/%v, want 200/true; body=%s", rec.Code, fake.statsCalled, rec.Body.String())
 	}
@@ -226,10 +226,10 @@ func TestAcademicAdditionalValidationBranches(t *testing.T) {
 		req        *http.Request
 		wantStatus int
 	}{
-		{name: "overview class error", fn: (*Academic).Overview, svc: &fakeAcademicService{listClassesErr: errDB}, req: httptest.NewRequest(http.MethodGet, "/api/academic", nil), wantStatus: http.StatusInternalServerError},
-		{name: "overview subject error", fn: (*Academic).Overview, svc: &fakeAcademicService{listSubjectsErr: errDB}, req: httptest.NewRequest(http.MethodGet, "/api/academic", nil), wantStatus: http.StatusInternalServerError},
-		{name: "overview assignment error", fn: (*Academic).Overview, svc: &fakeAcademicService{listAssignsErr: errDB}, req: httptest.NewRequest(http.MethodGet, "/api/academic", nil), wantStatus: http.StatusInternalServerError},
-		{name: "overview timetable error", fn: (*Academic).Overview, svc: &fakeAcademicService{listTimetableErr: errDB}, req: httptest.NewRequest(http.MethodGet, "/api/academic", nil), wantStatus: http.StatusInternalServerError},
+		{name: "overview class error", fn: (*Academic).Overview, svc: &fakeAcademicService{listClassesErr: errDB}, req: adminRequest(http.MethodGet, "/api/academic", ""), wantStatus: http.StatusInternalServerError},
+		{name: "overview subject error", fn: (*Academic).Overview, svc: &fakeAcademicService{listSubjectsErr: errDB}, req: adminRequest(http.MethodGet, "/api/academic", ""), wantStatus: http.StatusInternalServerError},
+		{name: "overview assignment error", fn: (*Academic).Overview, svc: &fakeAcademicService{listAssignsErr: errDB}, req: adminRequest(http.MethodGet, "/api/academic", ""), wantStatus: http.StatusInternalServerError},
+		{name: "overview timetable error", fn: (*Academic).Overview, svc: &fakeAcademicService{listTimetableErr: errDB}, req: adminRequest(http.MethodGet, "/api/academic", ""), wantStatus: http.StatusInternalServerError},
 		{name: "create forbidden", fn: (*Academic).Create, req: withRouteParam(plainRequest(http.MethodPost, "/api/academic/subjects", `{}`), "entity", "subjects"), wantStatus: http.StatusForbidden},
 		{name: "create year invalid end", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/years", `{"name":"2026","start_date":"2026-07-01","end_date":"bad"}`), "entity", "years"), wantStatus: http.StatusBadRequest},
 		{name: "create class invalid json", fn: (*Academic).Create, req: withRouteParam(adminRequest(http.MethodPost, "/api/academic/classes", `{`), "entity", "classes"), wantStatus: http.StatusBadRequest},
@@ -420,13 +420,13 @@ func TestAcademicHandlersMapServiceErrors(t *testing.T) {
 		{
 			name: "overview internal",
 			fn:   (&Academic{svc: &fakeAcademicService{listErr: errors.New("db down")}}).Overview,
-			req:  httptest.NewRequest(http.MethodGet, "/api/academic", nil),
+			req:  adminRequest(http.MethodGet, "/api/academic", ""),
 			want: http.StatusInternalServerError,
 		},
 		{
 			name: "stats internal",
 			fn:   (&Academic{svc: &fakeAcademicService{statsErr: errors.New("db down")}}).GetStats,
-			req:  httptest.NewRequest(http.MethodGet, "/api/academic/stats", nil),
+			req:  adminRequest(http.MethodGet, "/api/academic/stats", ""),
 			want: http.StatusInternalServerError,
 		},
 		{

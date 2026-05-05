@@ -390,6 +390,25 @@ describe('api proxy route handlers', () => {
 		await expect(res.json()).resolves.toEqual({ ok: true, max_concurrent: 7, headless: false, pusaka_geo_checkin_radius_m: 60 });
 	});
 
+	it('rejects blocked and unknown PUSAKA setting updates', async () => {
+		const mod = await import('../../routes/api/pusaka/settings/+server');
+		const event = createEvent({
+			request: new Request('http://localhost/api/pusaka/settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ admin_password: 'secret', 'bad/key': 'value' })
+			})
+		});
+
+		const res = await mod.PUT(event as never);
+
+		expect(proxyPutMock).not.toHaveBeenCalled();
+		expect(res.status).toBe(400);
+		await expect(res.json()).resolves.toMatchObject({
+			error: expect.stringContaining('tidak dapat diubah')
+		});
+	});
+
 	it('creates document cycle catalogs through the typed JSON body helper', async () => {
 		const mod = await import('../../routes/api/document-cycles/catalogs/+server');
 		proxyPostMock.mockResolvedValueOnce({ id: 'catalog-1', code: 'RKT' });
@@ -520,7 +539,7 @@ describe('api proxy route handlers', () => {
 		const res = await mod.POST(event as never);
 
 		expect(readRequestJsonMock).toHaveBeenCalledWith(request);
-		expect(eventFetch).toHaveBeenCalledWith('http://localhost:8080/api/public/register-student', {
+		expect(eventFetch).toHaveBeenCalledWith('http://127.0.0.1:8080/api/public/register-student', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({

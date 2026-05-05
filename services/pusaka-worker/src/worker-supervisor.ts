@@ -1,7 +1,7 @@
 import process from 'process';
 import { setTimeout as delay } from 'timers/promises';
 
-import { CONFIG_SYNC_MS, normalizeRuntimeConfigPatch, POLL_MS, WORKER_ID } from './config.js';
+import { CONFIG_SYNC_MS, normalizeRuntimeConfigPatch, POLL_MS, WORKER_HEARTBEAT_MS, WORKER_ID } from './config.js';
 import {
   claimJob,
   completeJob,
@@ -70,7 +70,7 @@ export class WorkerSupervisor {
     }, CONFIG_SYNC_MS);
     this.heartbeatTimer = this.deps.setInterval(() => {
       void this.heartbeatLoop();
-    }, CONFIG_SYNC_MS);
+    }, WORKER_HEARTBEAT_MS);
     this.reconcileConsumers();
     this.installSignalHandlers();
   }

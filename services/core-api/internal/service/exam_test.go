@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,8 @@ type fakeExamStore struct {
 	questionOutsidePackage bool
 	questionScopeErr       error
 	answerArg              db.UpsertStudentAnswerParams
+	answerRows             int64
+	answerRowsSet          bool
 	answerErr              error
 	correctnessID          pgtype.UUID
 	correctnessErr         error
@@ -101,9 +104,15 @@ func (f *fakeExamStore) QuestionBelongsToParticipantPackage(ctx context.Context,
 	return !f.questionOutsidePackage, nil
 }
 
-func (f *fakeExamStore) UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) error {
+func (f *fakeExamStore) UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) (int64, error) {
 	f.answerArg = arg
-	return f.answerErr
+	if f.answerErr != nil {
+		return 0, f.answerErr
+	}
+	if f.answerRowsSet {
+		return f.answerRows, nil
+	}
+	return 1, nil
 }
 
 func (f *fakeExamStore) UpdateParticipantAnswerCorrectness(ctx context.Context, participantID pgtype.UUID) error {
@@ -347,6 +356,9 @@ func TestExamLoginRejectsInvalidStatesAndPropagatesErrors(t *testing.T) {
 	if len(store.events) == 0 || store.events[0].EventType != "login" {
 		t.Fatalf("events = %+v, want login event", store.events)
 	}
+	if strings.Contains(string(store.events[0].EventData), "device-1") || !strings.Contains(string(store.events[0].EventData), "device_hash") {
+		t.Fatalf("login event data = %s, want hashed device without raw fingerprint", string(store.events[0].EventData))
+	}
 }
 
 func TestExamOperationalMethodsHandleErrorsAndEvents(t *testing.T) {
@@ -403,6 +415,11 @@ func TestExamOperationalMethodsHandleErrorsAndEvents(t *testing.T) {
 	if err := svc.SubmitAnswer(ctx, closed, questionID, "A"); !errors.Is(err, ErrExamWindowClosed) {
 		t.Fatalf("SubmitAnswer(closed) = %v, want ErrExamWindowClosed", err)
 	}
+	beforeStart := participant
+	beforeStart.ScheduledStart = pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}
+	if err := svc.SubmitAnswer(ctx, beforeStart, questionID, "A"); !errors.Is(err, ErrExamNotStarted) {
+		t.Fatalf("SubmitAnswer(before start) = %v, want ErrExamNotStarted", err)
+	}
 
 	scopeErr := errors.New("scope lookup failed")
 	svc = &Exam{q: &fakeExamStore{questionScopeErr: scopeErr}}
@@ -423,6 +440,10 @@ func TestExamOperationalMethodsHandleErrorsAndEvents(t *testing.T) {
 	if err := svc.SubmitAnswer(ctx, participant, questionID, "A"); !errors.Is(err, answerErr) {
 		t.Fatalf("SubmitAnswer(answer error) = %v, want %v", err, answerErr)
 	}
+	svc = &Exam{q: &fakeExamStore{answerRowsSet: true, answerRows: 0}}
+	if err := svc.SubmitAnswer(ctx, participant, questionID, "A"); !errors.Is(err, ErrExamAlreadySubmit) {
+		t.Fatalf("SubmitAnswer(stale post-submit upsert) = %v, want ErrExamAlreadySubmit", err)
+	}
 	svc = &Exam{q: &fakeExamStore{eventErr: eventErr}}
 	if err := svc.SubmitAnswer(ctx, participant, questionID, "A"); !errors.Is(err, eventErr) {
 		t.Fatalf("SubmitAnswer(event error) = %v, want %v", err, eventErr)
@@ -439,6 +460,10 @@ func TestExamOperationalMethodsHandleErrorsAndEvents(t *testing.T) {
 	if len(store.events) != 1 || store.events[0].EventType != "answer" || len(store.events[0].EventData) == 0 {
 		t.Fatalf("SubmitAnswer events = %+v, want answer event with data", store.events)
 	}
+	answerEventData := string(store.events[0].EventData)
+	if strings.Contains(answerEventData, `"answer":"B"`) || !strings.Contains(answerEventData, "answer_hash") || !strings.Contains(answerEventData, "answer_length") {
+		t.Fatalf("answer event data = %s, want metadata without raw answer", answerEventData)
+	}
 
 	if err := svc.Submit(ctx, submitted); !errors.Is(err, ErrExamAlreadySubmit) {
 		t.Fatalf("Submit(submitted) = %v, want ErrExamAlreadySubmit", err)
@@ -446,8 +471,11 @@ func TestExamOperationalMethodsHandleErrorsAndEvents(t *testing.T) {
 	if err := svc.Submit(ctx, closed); !errors.Is(err, ErrExamWindowClosed) {
 		t.Fatalf("Submit(closed) = %v, want ErrExamWindowClosed", err)
 	}
+	if err := svc.Submit(ctx, beforeStart); !errors.Is(err, ErrExamNotStarted) {
+		t.Fatalf("Submit(before start) = %v, want ErrExamNotStarted", err)
+	}
 	correctnessErr := errors.New("correctness failed")
-	svc = &Exam{q: &fakeExamStore{correctnessErr: correctnessErr}}
+	svc = &Exam{q: &fakeExamStore{correctnessErr: correctnessErr, submitRow: db.SubmitParticipantExamRow{ID: participant.ID, SubmittedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}}}}
 	if err := svc.Submit(ctx, participant); !errors.Is(err, correctnessErr) {
 		t.Fatalf("Submit(correctness error) = %v, want %v", err, correctnessErr)
 	}

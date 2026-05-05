@@ -75,7 +75,7 @@ type cbtSessionStore interface {
 	GradeStudentEssay(ctx context.Context, arg db.GradeStudentEssayParams) error
 	ListUngradedEssays(ctx context.Context, sessionID pgtype.UUID) ([]db.ListUngradedEssaysRow, error)
 	QuestionBelongsToParticipantPackage(ctx context.Context, arg db.QuestionBelongsToParticipantPackageParams) (bool, error)
-	UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) error
+	UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) (int64, error)
 	UpdateAnswerCorrectness(ctx context.Context, sessionID pgtype.UUID) error
 	UpdateParticipantScores(ctx context.Context, sessionID pgtype.UUID) error
 	ListCbtExamSessionsByTeacher(ctx context.Context, teacherEmployeeID pgtype.UUID) ([]db.ListCbtExamSessionsByTeacherRow, error)
@@ -1225,11 +1225,18 @@ func (s *CbtSession) RecordAnswer(ctx context.Context, participantID, questionID
 	if !belongs {
 		return ErrExamQuestionScope
 	}
-	return s.q.UpsertStudentAnswer(ctx, db.UpsertStudentAnswerParams{
+	rows, err := s.q.UpsertStudentAnswer(ctx, db.UpsertStudentAnswerParams{
 		ParticipantID: participantID,
 		QuestionID:    questionID,
 		Answer:        answer,
 	})
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrExamAlreadySubmit
+	}
+	return nil
 }
 
 // ScoreSession marks is_correct for all answers then updates participant scores in a transaction.

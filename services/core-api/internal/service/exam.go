@@ -3,9 +3,12 @@ package service
 import (
 	"context"
 	cryptorand "crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,10 +47,14 @@ type examStore interface {
 	IncrementParticipantAppSwitch(ctx context.Context, participantID pgtype.UUID) error
 	IncrementParticipantScreenshot(ctx context.Context, participantID pgtype.UUID) error
 	QuestionBelongsToParticipantPackage(ctx context.Context, arg db.QuestionBelongsToParticipantPackageParams) (bool, error)
-	UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) error
+	UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) (int64, error)
 	UpdateParticipantAnswerCorrectness(ctx context.Context, participantID pgtype.UUID) error
 	SubmitParticipantExam(ctx context.Context, id pgtype.UUID) (db.SubmitParticipantExamRow, error)
 	ListCbtQuestionAssetsByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error)
+}
+
+type examTxStore interface {
+	WithTx(tx pgx.Tx) *db.Queries
 }
 
 func NewExam(pool *pgxpool.Pool) *Exam {
@@ -150,7 +157,7 @@ func (s *Exam) Login(ctx context.Context, token, deviceFingerprint, loginIP stri
 	_ = s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
 		ParticipantID: p.ID,
 		EventType:     "login",
-		EventData:     marshalJSON(map[string]string{"ip": loginIP, "device": deviceFingerprint}),
+		EventData:     marshalJSON(map[string]string{"ip": loginIP, "device_hash": hashString(deviceFingerprint)}),
 	})
 
 	// Load questions for this package
@@ -246,6 +253,9 @@ func (s *Exam) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, 
 	if p.SubmittedAt.Valid {
 		return ErrExamAlreadySubmit
 	}
+	if examWindowNotStarted(p.ScheduledStart, time.Now()) {
+		return ErrExamNotStarted
+	}
 	if examWindowClosed(p.ScheduledEnd, p.DurationMinutes, p.JoinedAt, time.Now()) {
 		return ErrExamWindowClosed
 	}
@@ -259,17 +269,26 @@ func (s *Exam) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, 
 	if !belongs {
 		return ErrExamQuestionScope
 	}
-	if err := s.q.UpsertStudentAnswer(ctx, db.UpsertStudentAnswerParams{
+	rows, err := s.q.UpsertStudentAnswer(ctx, db.UpsertStudentAnswerParams{
 		ParticipantID: p.ID,
 		QuestionID:    questionID,
 		Answer:        answer,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
+	}
+	if rows == 0 {
+		return ErrExamAlreadySubmit
 	}
 	return s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
 		ParticipantID: p.ID,
 		EventType:     "answer",
-		EventData:     marshalJSON(map[string]string{"question_id": pgUUIDString(questionID), "answer": answer}),
+		EventData: marshalJSON(map[string]string{
+			"question_id":   pgUUIDString(questionID),
+			"answer_length": strconv.Itoa(len([]rune(answer))),
+			"answer_hash":   hashString(answer),
+			"status":        "recorded",
+		}),
 	})
 }
 
@@ -304,21 +323,50 @@ func (s *Exam) Submit(ctx context.Context, p db.GetParticipantByTokenRow) error 
 	if p.SubmittedAt.Valid {
 		return ErrExamAlreadySubmit
 	}
+	if examWindowNotStarted(p.ScheduledStart, time.Now()) {
+		return ErrExamNotStarted
+	}
 	if examWindowClosed(p.ScheduledEnd, p.DurationMinutes, p.JoinedAt, time.Now()) {
 		return ErrExamWindowClosed
 	}
-	if err := s.q.UpdateParticipantAnswerCorrectness(ctx, p.ID); err != nil {
-		return err
+	if s.pool != nil {
+		conn, err := s.pool.Acquire(ctx)
+		if err != nil {
+			return err
+		}
+		defer conn.Release()
+
+		tx, err := conn.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx) //nolint:errcheck
+
+		qtxProvider, ok := s.q.(examTxStore)
+		if !ok {
+			return errors.New("exam store does not support transactions")
+		}
+		if err := submitExamWithStore(ctx, qtxProvider.WithTx(tx), p.ID); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
 	}
-	row, err := s.q.SubmitParticipantExam(ctx, p.ID)
+	return submitExamWithStore(ctx, s.q, p.ID)
+}
+
+func submitExamWithStore(ctx context.Context, q examStore, participantID pgtype.UUID) error {
+	row, err := q.SubmitParticipantExam(ctx, participantID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrExamAlreadySubmit
 		}
 		return err
 	}
-	return s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
-		ParticipantID: p.ID,
+	if err := q.UpdateParticipantAnswerCorrectness(ctx, participantID); err != nil {
+		return err
+	}
+	return q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
+		ParticipantID: participantID,
 		EventType:     "submit",
 		EventData:     marshalJSON(map[string]string{"submitted_at": row.SubmittedAt.Time.Format(time.RFC3339)}),
 	})
@@ -341,6 +389,10 @@ func calcRemaining(end pgtype.Timestamptz, durationMin int32, joinedAt pgtype.Ti
 func examWindowClosed(end pgtype.Timestamptz, durationMin int32, joinedAt pgtype.Timestamptz, now time.Time) bool {
 	deadline, ok := examDeadline(end, durationMin, joinedAt)
 	return ok && now.After(deadline)
+}
+
+func examWindowNotStarted(start pgtype.Timestamptz, now time.Time) bool {
+	return start.Valid && now.Before(start.Time)
 }
 
 func examDeadline(end pgtype.Timestamptz, durationMin int32, joinedAt pgtype.Timestamptz) (time.Time, bool) {
@@ -492,4 +544,9 @@ func marshalJSON(v any) []byte {
 	}
 	b, _ := json.Marshal(v)
 	return b
+}
+
+func hashString(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
 }

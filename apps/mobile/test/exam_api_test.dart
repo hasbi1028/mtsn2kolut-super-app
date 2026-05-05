@@ -402,6 +402,39 @@ void main() {
       await client.submit('token-1');
     });
 
+    test(
+      'throws controlled exception when mutation success envelope status is wrong',
+      () async {
+        server.listen((request) async {
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType.json
+            ..write(
+              jsonEncode({
+                'data': {'status': 'ok'},
+              }),
+            );
+          await request.response.close();
+        });
+
+        final client = ExamApiClient(
+          baseUrl: baseUrl,
+          deviceFingerprint: deviceFingerprint,
+        );
+
+        await expectLater(
+          () => client.submit('token-1'),
+          throwsA(
+            isA<ExamApiException>().having(
+              (error) => error.message,
+              'message',
+              'Respons server ujian tidak lengkap.',
+            ),
+          ),
+        );
+      },
+    );
+
     test('throws controlled exception when data envelope is missing', () async {
       server.listen((request) async {
         request.response

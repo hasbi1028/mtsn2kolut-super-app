@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { handleRouteError, proxy, readRequestJson } from '$lib/server/api';
+import { apiPath, handleRouteError, proxy, readRequestJson } from '$lib/server/api';
 
 interface GoSchedule {
 	id: string; label: string; run_type: string;
@@ -32,7 +32,7 @@ export const PUT = async (event: RequestEvent) => {
 		if (!Array.isArray(schedules)) return json({ error: 'schedules harus array' }, { status: 400 });
 		const p = proxy(event);
 		await Promise.all(schedules.map((s) =>
-			p.put(`/api/pusaka/schedules/${s.id}`, {
+			p.put(apiPath`/api/pusaka/schedules/${s.id}`, {
 				label: s.label,
 				run_time: s.run_time,
 				is_enabled: s.is_enabled,

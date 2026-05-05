@@ -34,6 +34,16 @@ type authService interface {
 	ChangePassword(ctx context.Context, username, oldPassword, newPassword string) error
 }
 
+type authSessionResponse struct {
+	ID          string `json:"id"`
+	DeviceLabel string `json:"device_label"`
+	IPAddress   string `json:"ip_address,omitempty"`
+	UserAgent   string `json:"user_agent,omitempty"`
+	LastUsedAt  string `json:"last_used_at,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	ExpiresAt   string `json:"expires_at,omitempty"`
+}
+
 type authAuditWriter interface {
 	CreateAuditLog(ctx context.Context, arg db.CreateAuditLogParams) (db.AuditLog, error)
 }
@@ -151,7 +161,19 @@ func (h *Auth) ListSessions(w http.ResponseWriter, r *http.Request) {
 		api.Internal(w, err)
 		return
 	}
-	api.OK(w, sessions)
+	items := make([]authSessionResponse, 0, len(sessions))
+	for _, session := range sessions {
+		items = append(items, authSessionResponse{
+			ID:          pgUUIDString(session.ID),
+			DeviceLabel: session.DeviceLabel,
+			IPAddress:   session.IpAddress,
+			UserAgent:   session.UserAgent,
+			LastUsedAt:  timestamptzRFC3339(session.LastUsedAt),
+			CreatedAt:   timestamptzRFC3339(session.CreatedAt),
+			ExpiresAt:   timestamptzRFC3339(session.ExpiresAt),
+		})
+	}
+	api.OK(w, items)
 }
 
 func (h *Auth) RevokeSession(w http.ResponseWriter, r *http.Request) {

@@ -429,6 +429,19 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       if (!mounted) {
         return;
       }
+      if (error.statusCode == 409) {
+        setState(() {
+          _pendingAnswers.remove(question.id);
+          _errorMessage = null;
+          _statusMessage = answerFailureMessage(error);
+          _serverNotice = answerFailureNotice(error);
+        });
+        await _syncStatus();
+        if (!_isSubmitted) {
+          await _persistSnapshot();
+        }
+        return;
+      }
       setState(() {
         _consecutiveSyncFailures += 1;
         _lastSyncFailureAt = DateTime.now();

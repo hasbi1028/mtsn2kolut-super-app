@@ -127,8 +127,8 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Isolate PUSAKA by contract first.** Only move storage or package ownership further when the boundary is already stable and pain is proven.
 - **Preserve deployability to 3 VPS targets.** Every change should be safe for independent rollout.
 - **Prioritize correctness, operational safety, and maintainability.**
-- **No CI/CD yet** — deploy via `git pull` + `make build` + `pm2 restart` per VPS (documented in `deploy/DEPLOY.md`).
-- **No Dockerfiles** — services run natively with PM2 process manager.
+- **No deployment automation/CD yet** — lightweight CI checks may exist, but deploy remains `git pull` + `make build` + `pm2 restart` per VPS (documented in `deploy/DEPLOY.md`).
+- **No Dockerfiles for runtime deployment** — services run natively with PM2 process manager; local database containers are dev-only helpers, not deployment topology.
 
 ## Product Roadmap
 
@@ -373,9 +373,9 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 
 ## Known Technical Debt
 
-1. **No automated CI/CD.** All deploys are manual `git pull` + build + PM2 restart.
+1. **No automated deployment/CD.** Lightweight CI checks may run, but all deploys are manual `git pull` + build + PM2 restart.
 2. **No browser e2e suite yet.** Backend, Svelte unit tests, and Flutter tests exist, but admin/guru CBT visibility still needs staging smoke rehearsal before large exams.
-3. **No Dockerfiles.** Services run bare-metal with PM2. No containerized deployment option.
+3. **No Dockerfiles for runtime deployment.** Services run bare-metal with PM2; compose/podman helpers are limited to local development database use.
 4. **Rate limiting is in-memory per-IP** — does not scale across backend instances.
 5. **Audit log entity_id is path, not real entity ID.** Middleware logs URL path (`/api/students/uuid`) into `entity_id`. Sufficient for forensics but not perfect. Future: per-handler structured audit emit.
 6. **`INTERNAL_API_KEY` still exists as integration debt surface.** The main user-facing protected/admin routes and CBT asset file route rely on real JWT or exam-token context, but the shared internal key still exists as a helper primitive in middleware and should stay tightly scoped.

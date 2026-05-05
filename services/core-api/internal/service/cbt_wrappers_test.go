@@ -362,6 +362,8 @@ type fakeCbtPackageStore struct {
 	packagesErr   error
 	questionsRows []db.ListCbtPackageQuestionsRow
 	questionsErr  error
+	usageCount    int32
+	usageErr      error
 	deleteID      pgtype.UUID
 	createArg     db.CreateCbtPackageParams
 	createErr     error
@@ -378,6 +380,10 @@ func (f *fakeCbtPackageStore) ListCbtPackages(ctx context.Context, eventID pgtyp
 
 func (f *fakeCbtPackageStore) ListCbtPackageQuestions(ctx context.Context, eventID pgtype.UUID) ([]db.ListCbtPackageQuestionsRow, error) {
 	return f.questionsRows, f.questionsErr
+}
+
+func (f *fakeCbtPackageStore) GetCbtPackageUsage(ctx context.Context, id pgtype.UUID) (int32, error) {
+	return f.usageCount, f.usageErr
 }
 
 func (f *fakeCbtPackageStore) DeleteCbtPackage(ctx context.Context, id pgtype.UUID) (int64, error) {
@@ -616,6 +622,7 @@ type fakeCbtSessionStore struct {
 	ungradedTeacherArg     db.ListUngradedEssaysByTeacherParams
 	ungradedErr            error
 	answerArg              db.UpsertStudentAnswerParams
+	answerRows             int64
 	teacherRows            []db.ListCbtExamSessionsByTeacherRow
 	teacherRowsErr         error
 	teacherID              pgtype.UUID
@@ -915,9 +922,12 @@ func (f *fakeCbtSessionStore) ListUngradedEssaysByTeacher(ctx context.Context, a
 	return f.ungradedTeacherRows, f.ungradedErr
 }
 
-func (f *fakeCbtSessionStore) UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) error {
+func (f *fakeCbtSessionStore) UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) (int64, error) {
 	f.answerArg = arg
-	return nil
+	if f.answerRows != 0 {
+		return f.answerRows, nil
+	}
+	return 1, nil
 }
 
 func (f *fakeCbtSessionStore) QuestionBelongsToParticipantPackage(ctx context.Context, arg db.QuestionBelongsToParticipantPackageParams) (bool, error) {

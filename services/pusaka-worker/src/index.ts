@@ -4,6 +4,7 @@ import {
   BACKEND_URL,
   CONFIG_SYNC_MS,
   POLL_MS,
+  WORKER_HEARTBEAT_MS,
   WORKER_ID,
   createRuntimeConfig,
 } from './config.js';
@@ -22,6 +23,7 @@ log('INFO', 'worker starting', {
   headless: runtimeConfig.headless,
   POLL_MS,
   CONFIG_SYNC_MS,
+  WORKER_HEARTBEAT_MS,
 });
 
 new WorkerSupervisor(runtimeConfig).start();

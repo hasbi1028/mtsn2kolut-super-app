@@ -376,11 +376,25 @@ SET manual_score = $2,
     is_correct   = NULL
 WHERE id = $1;
 
--- name: UpsertStudentAnswer :exec
+-- name: UpsertStudentAnswer :execrows
 INSERT INTO cbt_student_answers (participant_id, question_id, answer, is_correct)
-VALUES ($1, $2, $3, NULL)
+SELECT $1, $2, $3, NULL
+WHERE EXISTS (
+  SELECT 1
+  FROM cbt_exam_participants ep
+  WHERE ep.id = $1
+    AND ep.submitted_at IS NULL
+  FOR UPDATE
+)
 ON CONFLICT (participant_id, question_id)
-DO UPDATE SET answer = EXCLUDED.answer, is_correct = NULL, answered_at = NOW();
+DO UPDATE SET answer = EXCLUDED.answer, is_correct = NULL, answered_at = NOW()
+WHERE EXISTS (
+  SELECT 1
+  FROM cbt_exam_participants ep
+  WHERE ep.id = cbt_student_answers.participant_id
+    AND ep.submitted_at IS NULL
+  FOR UPDATE
+);
 
 -- name: QuestionBelongsToParticipantPackage :one
 SELECT EXISTS(

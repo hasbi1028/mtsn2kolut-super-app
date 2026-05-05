@@ -27,3 +27,13 @@ func TestSubmitParticipantExamKeepsSubmitGuard(t *testing.T) {
 		t.Fatal("SubmitParticipantExam must keep the duplicate submit guard")
 	}
 }
+
+func TestUpsertStudentAnswerKeepsSubmittedGuard(t *testing.T) {
+	sql := strings.ToLower(upsertStudentAnswer)
+	if !strings.Contains(sql, "submitted_at is null") {
+		t.Fatal("UpsertStudentAnswer must guard against already-submitted participants")
+	}
+	if !strings.Contains(sql, "where exists") || !strings.Contains(sql, "on conflict") {
+		t.Fatal("UpsertStudentAnswer must guard both insert and conflict-update paths")
+	}
+}

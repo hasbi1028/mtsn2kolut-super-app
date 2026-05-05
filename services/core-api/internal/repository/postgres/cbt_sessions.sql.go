@@ -2156,11 +2156,25 @@ func (q *Queries) UpdateParticipantScores(ctx context.Context, sessionID pgtype.
 	return err
 }
 
-const upsertStudentAnswer = `-- name: UpsertStudentAnswer :exec
+const upsertStudentAnswer = `-- name: UpsertStudentAnswer :execrows
 INSERT INTO cbt_student_answers (participant_id, question_id, answer, is_correct)
-VALUES ($1, $2, $3, NULL)
+SELECT $1, $2, $3, NULL
+WHERE EXISTS (
+  SELECT 1
+  FROM cbt_exam_participants ep
+  WHERE ep.id = $1
+    AND ep.submitted_at IS NULL
+  FOR UPDATE
+)
 ON CONFLICT (participant_id, question_id)
 DO UPDATE SET answer = EXCLUDED.answer, is_correct = NULL, answered_at = NOW()
+WHERE EXISTS (
+  SELECT 1
+  FROM cbt_exam_participants ep
+  WHERE ep.id = cbt_student_answers.participant_id
+    AND ep.submitted_at IS NULL
+  FOR UPDATE
+)
 `
 
 type UpsertStudentAnswerParams struct {
@@ -2169,7 +2183,10 @@ type UpsertStudentAnswerParams struct {
 	Answer        string      `json:"answer"`
 }
 
-func (q *Queries) UpsertStudentAnswer(ctx context.Context, arg UpsertStudentAnswerParams) error {
-	_, err := q.db.Exec(ctx, upsertStudentAnswer, arg.ParticipantID, arg.QuestionID, arg.Answer)
-	return err
+func (q *Queries) UpsertStudentAnswer(ctx context.Context, arg UpsertStudentAnswerParams) (int64, error) {
+	result, err := q.db.Exec(ctx, upsertStudentAnswer, arg.ParticipantID, arg.QuestionID, arg.Answer)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

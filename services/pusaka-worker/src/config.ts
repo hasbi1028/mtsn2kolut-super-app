@@ -107,6 +107,11 @@ export const CONFIG_SYNC_MS = parsePositiveNumber('CONFIG_SYNC_MS', 30000, {
   max: 300000,
   integer: true,
 });
+export const WORKER_HEARTBEAT_MS = parsePositiveNumber('WORKER_HEARTBEAT_MS', 30000, {
+  min: 5000,
+  max: 60000,
+  integer: true,
+});
 export const SCRAPE_RETRIES = parsePositiveNumber('SCRAPE_RETRIES', 3, {
   min: 1,
   max: 10,

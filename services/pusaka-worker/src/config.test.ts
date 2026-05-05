@@ -78,6 +78,21 @@ test('BACKEND_URL requires http or https and normalizes trailing slash safely', 
   assert.equal(valid.stdout.trim(), 'https://api.example.invalid/pusaka');
 });
 
+test('worker heartbeat cadence is configured independently from config sync', () => {
+  const result = importConfig(
+    {
+      NODE_ENV: 'test',
+      BACKEND_URL: 'http://localhost:8080',
+      CONFIG_SYNC_MS: '300000',
+      WORKER_HEARTBEAT_MS: '30000',
+    },
+    "import('./src/config.ts').then((config) => { console.log(`${config.CONFIG_SYNC_MS}:${config.WORKER_HEARTBEAT_MS}`); process.exit(0); }).catch((error) => { console.error(error.message); process.exit(42); })",
+  );
+
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout.trim(), '300000:30000');
+});
+
 test('normalizeRuntimeConfigPatch bounds backend maxConcurrent', () => {
   assert.deepEqual(
     normalizeRuntimeConfigPatch({ max_concurrent: '50', headless: 'yes' }),

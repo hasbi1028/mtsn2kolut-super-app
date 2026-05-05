@@ -41,6 +41,10 @@ type academicService interface {
 func NewAcademic(svc *service.Academic) *Academic { return &Academic{svc: svc} }
 
 func (h *Academic) Overview(w http.ResponseWriter, r *http.Request) {
+	if !academicReadAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	years, err := h.svc.ListYears(r.Context())
 	if err != nil {
 		api.Internal(w, err)
@@ -76,6 +80,10 @@ func (h *Academic) Overview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Academic) GetStats(w http.ResponseWriter, r *http.Request) {
+	if !academicReadAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
 	row, err := h.svc.GetStats(r.Context())
 	if err != nil {
 		api.Internal(w, err)

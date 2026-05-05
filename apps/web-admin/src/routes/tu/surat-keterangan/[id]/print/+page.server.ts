@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { proxy } from '$lib/server/api';
+import { apiPath, proxy } from '$lib/server/api';
 import type { SchoolProfile } from '$lib/school-profile';
 
 type CertificateDetail = {
@@ -37,7 +37,7 @@ export const load: PageServerLoad = async (event) => {
 	}
 	const p = proxy(event);
 	const [certificate, schoolProfile] = await Promise.all([
-		p.get<CertificateDetail>(`/api/tu/surat-keterangan/${event.params.id}`),
+		p.get<CertificateDetail>(apiPath`/api/tu/surat-keterangan/${event.params.id}`),
 		p.get<SchoolProfile>('/api/school-profile'),
 	]);
 	return { certificate, schoolProfile };
