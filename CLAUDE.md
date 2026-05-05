@@ -15,4 +15,4 @@ Use the following project files as the source of truth for this repository:
 
 If two instructions conflict, prefer the more specific service-level file for the files being edited, while preserving the global architecture rules in `AGENTS.md`.
 
-Current sync point: Sprint 96 Documentation Sync, 2026-05-03. `/cbt/soal` is the active Bank Soal UI; `/cbt/questions` is legacy redirect only.
+Current sync point: AGENTS.md Review Sync, 2026-05-05. All completed sprints (17–96) are now reflected in AGENTS.md. `/cbt/soal` is the active Bank Soal UI; `/cbt/questions` is legacy redirect only. CBT navigation uses role-based hubs: `/cbt/persiapan`, `/cbt/pelaksanaan`, `/cbt/hasil`. Kesiswaan, Tata Usaha, Governance, Document Cycles, Jurnal Kelas, Jadwal, Inventory, dan Non-test Assessments sudah aktif.

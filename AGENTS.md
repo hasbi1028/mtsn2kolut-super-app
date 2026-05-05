@@ -11,16 +11,20 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 | **Pusaka Worker** | `services/pusaka-worker` | TypeScript + Playwright (Chromium) | Async job consumer for PUSAKA attendance automation |
 | **Flutter App** | `apps/mobile` | Flutter | Student-facing CBT exam client |
 
-## Current Baseline — 2026-05-03
+## Current Baseline — 2026-05-05
 
-- Latest completed roadmap checkpoint: Sprint 96 Documentation Sync, after Sprint 95 CBT retired-route guard coverage.
+- Latest completed roadmap checkpoint: Sprint 96 Documentation Sync. Significant additional modules have shipped since the last AGENTS.md sync — see Completed Sprints for the full ledger.
 - Server deployment topology is still 3 VPS targets: frontend, backend, and worker. `apps/mobile` is a student BYOD APK/client, not a VPS runtime.
 - `/cbt/soal` is the only active web-admin question-bank UI. `/cbt/questions` is retained only as a legacy redirect to `/cbt/soal`.
 - `/api/cbt/questions/*` remains the canonical backend/BFF data contract for question CRUD, workflow, duplicate/revision, import/export, and package usage.
+- CBT web-admin navigation now uses role-based hub pages: `/cbt` (launcher), `/cbt/persiapan` (preparation workflow), `/cbt/pelaksanaan` (day-of execution), and `/cbt/hasil` (results). Sub-hubs `/cbt/bank-soal`, `/cbt/kegiatan`, and `/cbt/paket-soal` bridge between the launcher and operational routes.
 - CBT runtime hardening is active: exam tokens are strong random hex values, answer keys/tokens are role-redacted, duplicate submit is explicit, and scoring must not mark unsubmitted participants as submitted.
 - PUSAKA worker jobs have stale-running recovery in the backend claim/scheduler path; the worker still must report complete/fail explicitly.
 - Library and Inventory are admin/staf scoped in both backend route grouping and SvelteKit navigation/proxy gate.
 - Kesiswaan student photo reads are scoped consistently with student visibility for admin/kesiswaan and teacher-owned class access.
+- Tata Usaha (persuratan, arsip) and Tata Kelola (governance) modules are live and admin/staf scoped in both backend and BFF.
+- Document Cycles module is live: cataloged, scheduled, monitorable document obligations for admin/staf.
+- Non-test assessments (penilaian non-tes) live as a separate workflow from CBT; grade sync into rapor is active.
 - `findings.md` is now a current review ledger: no open High findings from the 2026-05-01 review remain active.
 
 ## Non-Negotiable Architecture Rules
@@ -91,6 +95,8 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Question bank retired-route guard:** keep test coverage around `/cbt/questions` redirect semantics so legacy bookmarks preserve `question_id` and retained modes while retired experiment modes do not re-enter the product.
 - **Question bank authoring uses two UX modes:** `beginner` for quick teacher input with minimal required fields, and `advance` for full blueprint/workflow authoring. Both modes must write to the same backend model and API contract.
 - **`/cbt/soal` is the Komposer Soal route** — a dedicated question composer with template quick-start, real-time readiness scoring, quality signals, split preview with KaTeX rendering, RTL toggle for Arabic questions, and localStorage draft autosave. It proxies all data through the existing Go API BFF; no direct DB access, no new backend routes.
+- **CBT navigation uses role-based hub pages.** `/cbt` is the role-aware launcher (admin/guru/staf). `/cbt/persiapan` is the step-by-step preparation hub (admin/guru). `/cbt/pelaksanaan` is the day-of execution hub (admin/guru/staf). `/cbt/hasil` is the results hub (admin/guru). Sub-hubs `/cbt/bank-soal`, `/cbt/kegiatan`, and `/cbt/paket-soal` are navigational bridges only — they do not own data routes.
+- **Non-test assessment authoring is separate from CBT.** `/cbt/non-test` (and its BFF/API routes) owns penilaian non-tes lifecycle and grade sync; do not mix non-test routes with live exam session logic.
 - **`/library/*` is the library module** — accessible to `admin` and `staf` roles only. Member data reuses existing `students` and `employees` tables; no separate member table. All forms use beginner/advance mode toggles consistent with the CBT question bank UX pattern.
 - **Custom local Dialog component** — `Dialog.Root` accepts only `open: $bindable(bool)` and `children`. `Dialog.Content` and `Dialog.Description` do not accept a `class` prop. Use `bind:open={boolState}` with separate bool state variables; no `onOpenChange` callback.
 - **Public shell boundary:** unauthenticated public pages (`/`, `/profil`, `/berita`, `/pengumuman`, `/ppdb`, `/kontak`) must render in the public website shell, while authenticated admin/guru pages continue to use the admin shell.
@@ -259,9 +265,9 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Cover image upload** — `WebsiteMedia` handler uploads images to `data/website-media/` (md5 filename, MIME validation, path-traversal guard); BFF proxy forwards JWT; `WebsiteContentManager` shows upload button, image preview, and file picker.
 - **Editorial UX** — featured badge in content list, SEO section with character counters.
 
-### ✅ Sprint 11C — Rapor Print View (Done)
+### ✅ Sprint 11 — Gradebook & Rapor (Done)
 - **Printable report card** — `/grades/rapor` HTML-first print layout using existing `/api/grades` endpoint; assignment selector, school header, grade table with color-coded scores (green ≥80, amber ≥65, red <65), class average footer, signature area shown only on print.
-- **Sidebar entry** — "Cetak Rapor" under Akademik group, visible to `admin` and `guru`.
+- **Sidebar entry** — “Cetak Rapor” under Akademik group, visible to `admin` and `guru`.
 - **Grade component lifecycle** — grade components now support `Draft/Terbit` lifecycle and safe editing. Gradebook operators can update title/category/weight/max-score, but backend must reject lowering `max_score` below existing student scores. Rapor views should use only published components.
 - **Grade readiness baseline** — gradebook screens should expose a clear “Siap Rapor” readiness summary per class-mapel based on published components and filled student scores, and should link directly into the rapor print view when that readiness condition is satisfied.
 - **Grade bulk-save baseline** — component-level grade entry screens should support bulk save for unsaved student edits, so guru can adjust a class worth of scores first and then commit the changed rows in one action instead of one-by-one saves only.
@@ -269,15 +275,63 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Grade finalization baseline** — assignment-level gradebooks should support a persisted finalization checkpoint. Backend may finalize only when the readiness rules are satisfied, and once finalized, grade/komponen mutations must be blocked until the assignment is explicitly reopened.
 - **Grade finalization overview baseline** — the gradebook screen should also expose an operator-facing per-assignment finalization recap (`Siap Difinalkan`, `Sudah Final`, `Perlu Dilengkapi`) so guru/admin can triage multiple kelas-mapel without opening each gradebook blindly.
 
+### ✅ Sprints 17–24 — Kesiswaan & Tata Usaha (Done)
+- **Tata Usaha Persuratan (Sprint 17)** — surat masuk, surat keluar, disposisi dengan nomor Kemenag auto-generate per `(tahun, kode klasifikasi)`. Sequence agenda surat masuk dan sequence nomor surat keluar terpusat di backend. Klasifikasi benih Kemenag dari migration 041. Migration 040.
+- **Surat Keterangan Siswa (Sprint 22)** — surat keterangan siswa berbasis template terhubung ke register surat keluar. `/tu/surat-keterangan`. Migration 046.
+- **Arsip TU (Sprint 24)** — register arsip dan metadata file. `/tu/arsip`. Migration 048.
+- **Kesiswaan Foundation (Sprint 21)** — data kesiswaan memperluas `students` yang sudah ada. NIK, foto, alamat, kondisi khusus. `/kesiswaan`. Role `kesiswaan`. Migration 045.
+- **Kesiswaan Engagement (Sprint 23)** — ekstrakurikuler, BK/konseling (dengan flag `is_confidential`), mutasi siswa. Catatan rahasia hanya bisa dibaca `admin` dan `kesiswaan`. Migration 047.
+- **Frontend** — sidebar group “Administrasi & TU” untuk `admin` dan `staf`; “Kesiswaan” visible untuk `admin`, `kesiswaan`, dan `guru` (baca terbatas scope kelas).
+- **RBAC** — `/api/tu/*` digate untuk `admin` dan `staf`; `/api/kesiswaan/*` digate untuk `admin` dan `kesiswaan`; `guru` hanya bisa baca data siswa di kelasnya.
+
+### ✅ Sprints 18–28 — Tata Kelola Madrasah / Governance (Done)
+- **Governance Foundation (Sprint 18)** — pemetaan internal 8 SNP: organisasi, dokumen, indikator, dan bukti mutu. Migration 042.
+- **RKT/RKJM Execution Items (Sprint 25)** — item kerja tahunan dengan anggaran, jadwal, bukti, dan tracking progress. Migration 049.
+- **Compliance Actions & Escalation (Sprints 31–33)** — tindak lanjut, eskalasi, dan papan status kepatuhan. `/governance/actions`.
+- **Governance Control Center & Briefing Packs (Sprints 38–42)** — filter lanjutan, compliance print/export, evidence capture, meeting pack, deadline calendar, PIC briefing, 8 SNP briefing, dan evidence briefing.
+- **Frontend** — sidebar “Tata Kelola” dan “Tindak Lanjut” di group “Administrasi & TU”. Akses `admin` dan `staf`.
+
+### ✅ Sprints 43–55 — Siklus Dokumen / Document Cycles (Done)
+- **Document Cycle Module (Sprint 43)** — kewajiban dokumen berkatalog, terjadwal, dan terpantau. Migration 051.
+- **Integration & Audit (Sprints 44–54)** — integrasi lintas modul, audit timeline, completion readiness, status transition lock, dan traceability detail. Migrations 052–053.
+- **External Compliance Checklist & Export (Sprints 55–56)** — checklist kepatuhan eksternal dan ekspor CSV.
+- **Frontend** — `/document-cycles`, `/document-cycles/verifikasi`. Akses `admin` dan `staf`.
+
+### ✅ Sprint 34 — Jurnal Kelas / Class Journal (Done)
+- **Jurnal Kelas schema** — satu baris per sesi mengajar per tanggal per `class_subject_assignment`, satu baris kehadiran per siswa per sesi. Migration 034.
+- **Frontend** — `/journal`, visible untuk `admin` dan `guru` di sidebar “Akademik & Pembelajaran”.
+
+### ✅ Sprint 36 — Jadwal / Timetable (Done)
+- **Timetable schema** — `timetable_slots` terhubung ke `class_subject_assignments`. Migration 036.
+- **Frontend** — `/jadwal`, visible untuk `guru`, `siswa`, dan `ortu` di sidebar “Akademik & Pembelajaran”.
+
+### ✅ Sprint 37 — Inventaris / Inventory (Done)
+- **Inventory schema** — `inventory_items` dan `inventory_history`. Migrations 037–038.
+- **RBAC** — `/inventory/*` dan `/api/inventory/*` terbatas untuk `admin` dan `staf`.
+- **Frontend** — `/inventory`, `/inventory/items` di sidebar “Aset & Layanan”.
+
+### ✅ Sprints 62L–Q — Non-Test Assessments (Done)
+- **Non-test assessment schema** — workflow penilaian non-tes terpisah dari live exam CBT. Migration 056.
+- **Grade sync** — nilai non-tes bisa disinkronkan ke rapor/gradebook. Migration 057.
+- **Frontend** — `/cbt/non-test` mencakup roster, scoring, traceability sumber nilai, dan sync freshness.
+
+### ✅ Sprints 63–96 — CBT Operational Hardening & Navigation Hubs (Done)
+- **CBT Rooms & Proctoring (Sprints 63–65)** — pengawas ruang, room handover, dan berita acara. Migrations 058–059.
+- **CBT Session Ops (Sprints 66–84)** — recap sesi, blueprint coverage, item analysis, revision loop, reviewer queue, publish guard, package quality summary, readiness board, filter URL persistence, dan schedule urgency.
+- **CBT Token Hardening (migration 060)** — token ujian 32 karakter hex; tidak merotasi token yang sudah ada; duplikat ditolak.
+- **CBT Seat Invariants (migration 061)** — validasi seat positif dan unique `(room_id, seat_no)` di level database.
+- **CBT Event Members & Subject Scope (migration 062)** — roles `panitia/pembuat_soal/reviewer/proktor/pengawas/korektor`; hanya `pembuat_soal`, `reviewer`, `korektor` yang boleh membawa `subject_id`.
+- **CBT Package Event Linkage (migration 066)** — paket terhubung eksplisit ke event. Duration bounds (migration 063), question targets audit (migration 065).
+- **CBT Navigation Hubs** — `/cbt` (role-based launcher untuk admin/guru/staf), `/cbt/persiapan` (preparation workflow hub), `/cbt/pelaksanaan` (execution hub), `/cbt/hasil` (results hub). Sub-hubs `/cbt/bank-soal`, `/cbt/kegiatan`, `/cbt/paket-soal` sebagai jembatan navigasi tanpa data route sendiri.
+- **CBT Smoke Checklist & Retired Route Guard (Sprints 94–95)** — checklist operasional wajib dan test coverage redirect `/cbt/questions` → `/cbt/soal`.
+- **SvelteKit BFF Async Boundary (Sprint 57)** — `<svelte:boundary>` aktif di screen data remote.
+
 ### 📋 Planned Future Phases
-1. **Kesiswaan & Tata Usaha (Sprint 17–21)** — Persuratan core (surat masuk/keluar/disposisi dengan nomor Kemenag auto-generate), profil siswa diperluas (NIK, foto, alamat, tanggal lahir), pelanggaran/prestasi siswa, surat keterangan siswa berbasis template, ekstrakurikuler/BK/mutasi, arsip dokumen. Role baru: `kesiswaan` (Wakasek Kesiswaan / Tim BK). Sidebar group baru: "Kesiswaan" dan "Tata Usaha".
-2. **Academic Foundation & RBAC Expansion** — Unified `users` table with many-to-many roles (`admin`, `teacher`, `student`, `staff`, `parent`). Student lifecycle (`active`, `alumni`, `prospective`) and Parent-child linking.
-3. **Flutter Student App Enhancements** — Build on top of the initialized CBT exam client in `apps/mobile` with stronger offline resilience, richer BYOD-aware anti-cheat telemetry, richer rich-content rendering, and safer internal distribution / packaging.
-4. **Real-time Proctoring** — WebSocket-based live monitoring.
-5. **Notifications & Reminders** — WhatsApp/Telegram for exam schedules, attendance, dan disposisi surat masuk.
-6. **Raport / Grade Management** — Academic grading, report cards integrated with CBT scores.
-7. **Schedule & Timetable** — Class schedules, teacher assignments UI.
-8. **PUSAKA Isolation** — completed through Phase 3 for current scope: canonical `/api/pusaka/*`, `pusaka_accounts` as integration owner, and legacy `employees.pusaka_*` columns removed. Deeper package extraction is deferred until code churn justifies it.
+1. **Flutter Student App Enhancements** — Stronger offline resilience, richer BYOD-aware anti-cheat telemetry, rich-content rendering, dan safer internal APK distribution di atas `apps/mobile` yang sudah ada.
+2. **Real-time Proctoring** — WebSocket-based live monitoring pengawas ruang.
+3. **Notifications & Reminders** — WhatsApp/Telegram untuk jadwal ujian, absensi, dan disposisi surat masuk.
+4. **PUSAKA Isolation** — Selesai sampai Phase 3 (canonical `/api/pusaka/*`, `pusaka_accounts`, legacy columns dihapus). Deeper package extraction ditangguhkan sampai ada alasan nyata.
+5. **CBT Engine Extraction** — `services/cbt-engine` sebagai runtime-only exception, hanya jika rehearsal/load test membuktikan perlu. Jangan ubah aturan PostgreSQL ownership sebelum sprint ini dimulai.
 
 ## RBAC & User Lifecycle Policy
 
@@ -326,5 +380,5 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 5. **Audit log entity_id is path, not real entity ID.** Middleware logs URL path (`/api/students/uuid`) into `entity_id`. Sufficient for forensics but not perfect. Future: per-handler structured audit emit.
 6. **`INTERNAL_API_KEY` still exists as integration debt surface.** The main user-facing protected/admin routes and CBT asset file route rely on real JWT or exam-token context, but the shared internal key still exists as a helper primitive in middleware and should stay tightly scoped.
 7. **CBT print artifacts are HTML-first.** Event cards and berita acara are printable browser views; no PDF rendering service yet.
-8. **Seat plan validation is still light.** Current backend stores `seat_no` and room assignment, but does not yet enforce uniqueness per `(room_id, seat_no)` at the database level.
+8. **Seat plan validation is now DB-enforced.** Migration 061 adds a positive-seat constraint and unique `(room_id, seat_no)` index. Preflight SQL checks required before running migration on environments with existing data.
 9. **CBT Engine extraction is only planned.** Do not change PostgreSQL ownership rules or deploy topology until `services/cbt-engine` is implemented as a controlled runtime-only exception.
