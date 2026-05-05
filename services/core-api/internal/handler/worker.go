@@ -210,7 +210,13 @@ func (h *PusakaWorker) Config(w http.ResponseWriter, r *http.Request) {
 	cfg := map[string]string{}
 	for _, row := range rows {
 		switch row.Key {
-		case "max_concurrent", "headless":
+		case "max_concurrent",
+			"headless",
+			"pusaka_geo_base_lat",
+			"pusaka_geo_base_lng",
+			"pusaka_geo_default_radius_m",
+			"pusaka_geo_checkin_radius_m",
+			"pusaka_geo_checkout_radius_m":
 			cfg[row.Key] = row.Value
 		}
 	}

@@ -6,8 +6,6 @@ import { chromium, type Browser, type BrowserContext, type Page } from 'playwrig
 
 import {
   ACTION_TIMEOUT,
-  BASE_LAT,
-  BASE_LNG,
   BASE_URL,
   BROWSER_ARGS,
   SCRAPE_RETRIES,
@@ -425,7 +423,11 @@ async function checkin(
 ): Promise<void> {
   throwIfCancelled(signal);
   const label = 'checkin';
-  const geo = randomGeo(BASE_LAT, BASE_LNG, 28);
+  const geo = randomGeo(
+    runtimeConfig.geo.baseLat,
+    runtimeConfig.geo.baseLng,
+    runtimeConfig.geo.checkinRadiusMeters,
+  );
   const browser = await chromium.launch(getBrowserOpts(runtimeConfig));
   const context = await browser.newContext(
     getContextOpts({ geolocation: geo, permissions: ['geolocation'] }),
@@ -499,7 +501,11 @@ async function checkout(
 ): Promise<void> {
   throwIfCancelled(signal);
   const label = 'checkout';
-  const geo = randomGeo(BASE_LAT, BASE_LNG, 28);
+  const geo = randomGeo(
+    runtimeConfig.geo.baseLat,
+    runtimeConfig.geo.baseLng,
+    runtimeConfig.geo.checkoutRadiusMeters,
+  );
   const browser = await chromium.launch(getBrowserOpts(runtimeConfig));
   const context = await browser.newContext(
     getContextOpts({ geolocation: geo, permissions: ['geolocation'] }),

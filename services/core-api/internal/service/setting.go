@@ -82,10 +82,15 @@ func (s *Setting) UpdateSchoolProfile(ctx context.Context, profile SchoolProfile
 
 func (s *Setting) SeedDefaults(ctx context.Context) error {
 	defaults := map[string]string{
-		"default_max_attempts": "3",
-		"max_concurrent":       "5",
-		"headless":             "true",
-		"scheduler_last_error": "",
+		"default_max_attempts":         "3",
+		"max_concurrent":               "5",
+		"headless":                     "true",
+		"pusaka_geo_base_lat":          "-3.2163111",
+		"pusaka_geo_base_lng":          "121.0428659",
+		"pusaka_geo_default_radius_m":  "50",
+		"pusaka_geo_checkin_radius_m":  "55",
+		"pusaka_geo_checkout_radius_m": "28",
+		"scheduler_last_error":         "",
 	}
 	for key, value := range schoolProfileDefaultMap() {
 		defaults[key] = value

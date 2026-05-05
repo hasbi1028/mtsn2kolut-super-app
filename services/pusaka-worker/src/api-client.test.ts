@@ -16,7 +16,16 @@ test('fetchRuntimeConfig normalizes backend strings into runtime config', async 
 	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		fetchCalls.push({ input, init });
 		return new Response(
-			JSON.stringify({ data: { max_concurrent: '7', headless: 'false' } }),
+			JSON.stringify({
+				data: {
+					max_concurrent: '7',
+					headless: 'false',
+					pusaka_geo_base_lat: '-3.2',
+					pusaka_geo_base_lng: '121.1',
+					pusaka_geo_checkin_radius_m: '60',
+					pusaka_geo_checkout_radius_m: '30'
+				}
+			}),
 			{ status: 200, headers: { 'content-type': 'application/json' } }
 		);
 	}) as typeof fetch;
@@ -24,7 +33,16 @@ test('fetchRuntimeConfig normalizes backend strings into runtime config', async 
 	const { fetchRuntimeConfig } = await import('./api-client.js');
 	const config = await fetchRuntimeConfig();
 
-	assert.deepEqual(config, { maxConcurrent: 7, headless: false });
+	assert.deepEqual(config, {
+		maxConcurrent: 7,
+		headless: false,
+		geo: {
+			baseLat: -3.2,
+			baseLng: 121.1,
+			checkinRadiusMeters: 60,
+			checkoutRadiusMeters: 30
+		}
+	});
 	assert.equal(String(fetchCalls[0]?.input).includes('/api/pusaka/worker/config'), true);
 	assert.equal(fetchCalls[0]?.init?.method, 'GET');
 });

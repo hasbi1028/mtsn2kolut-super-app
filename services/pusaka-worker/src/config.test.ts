@@ -92,3 +92,33 @@ test('normalizeRuntimeConfigPatch bounds backend maxConcurrent', () => {
     maxConcurrent: 3,
   });
 });
+
+test('normalizeRuntimeConfigPatch normalizes geolocation settings', () => {
+  assert.deepEqual(
+    normalizeRuntimeConfigPatch({
+      pusaka_geo_base_lat: '-3.2',
+      pusaka_geo_base_lng: '121.1',
+      pusaka_geo_default_radius_m: '40',
+      pusaka_geo_checkin_radius_m: '60',
+      pusaka_geo_checkout_radius_m: '30',
+    }),
+    {
+      geo: {
+        baseLat: -3.2,
+        baseLng: 121.1,
+        defaultRadiusMeters: 40,
+        checkinRadiusMeters: 60,
+        checkoutRadiusMeters: 30,
+      },
+    },
+  );
+
+  assert.deepEqual(
+    normalizeRuntimeConfigPatch({
+      pusaka_geo_base_lat: '-91',
+      pusaka_geo_base_lng: '181',
+      pusaka_geo_checkin_radius_m: '201',
+    }),
+    {},
+  );
+});

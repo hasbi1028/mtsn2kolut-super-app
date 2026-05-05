@@ -13,6 +13,13 @@ function createSupervisorHarness(overrides: Partial<any> = {}) {
   const runtimeConfig: RuntimeConfig = {
     maxConcurrent: 1,
     headless: true,
+    geo: {
+      baseLat: -3.2163111,
+      baseLng: 121.0428659,
+      defaultRadiusMeters: 50,
+      checkinRadiusMeters: 55,
+      checkoutRadiusMeters: 28,
+    },
   };
 
   const calls = {
@@ -100,13 +107,24 @@ function createSupervisorHarness(overrides: Partial<any> = {}) {
 
 test('WorkerSupervisor syncRuntimeConfig updates runtime config and timestamp', async () => {
   const h = createSupervisorHarness();
-  h.configQueue.push({ maxConcurrent: 3, headless: false });
+  h.configQueue.push({
+    maxConcurrent: 3,
+    headless: false,
+    geo: {
+      baseLat: -3.2,
+      baseLng: 121.1,
+      defaultRadiusMeters: 40,
+      checkinRadiusMeters: 60,
+      checkoutRadiusMeters: 30,
+    },
+  });
   (h.supervisor as any).reconcileConsumers = () => {};
 
   await (h.supervisor as any).syncRuntimeConfig();
 
   assert.equal(h.runtimeConfig.maxConcurrent, 3);
   assert.equal(h.runtimeConfig.headless, false);
+  assert.equal(h.runtimeConfig.geo.checkinRadiusMeters, 60);
   assert.match((h.supervisor as any).lastConfigSyncAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 

@@ -3,7 +3,7 @@ import type { AttendanceRecord, GeoCoords } from './types.js';
 export function randomGeo(
   baseLat: number,
   baseLng: number,
-  radiusMeters = 10,
+  radiusMeters = 50,
 ): GeoCoords {
   const earthRadius = 6371000;
   const latOffset =

@@ -6,6 +6,9 @@ import type { RuntimeConfig } from './types.js';
 
 export const RUNTIME_CONFIG_LIMITS = {
   maxConcurrent: { min: 1, max: 50 },
+  geoBaseLat: { min: -90, max: 90 },
+  geoBaseLng: { min: -180, max: 180 },
+  geoRadiusMeters: { min: 1, max: 200 },
 } as const;
 
 const NODE_ENV = (process.env.NODE_ENV ?? '').toLowerCase();
@@ -148,7 +151,31 @@ export function createRuntimeConfig(): RuntimeConfig {
   return {
     maxConcurrent: DEFAULT_MAX_CONCURRENT,
     headless: DEFAULT_HEADLESS,
+    geo: {
+      baseLat: BASE_LAT,
+      baseLng: BASE_LNG,
+      defaultRadiusMeters: 50,
+      checkinRadiusMeters: 55,
+      checkoutRadiusMeters: 28,
+    },
   };
+}
+
+function normalizeRuntimeNumber(
+  data: Record<string, unknown>,
+  snakeKey: string,
+  camelKey: string,
+  options: { min: number; max: number; integer?: boolean },
+): number | undefined {
+  if (data[snakeKey] === undefined && data[camelKey] === undefined) {
+    return undefined;
+  }
+  const raw = data[snakeKey] ?? data[camelKey];
+  const parsed = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(parsed) || parsed < options.min || parsed > options.max) {
+    return undefined;
+  }
+  return options.integer ? Math.floor(parsed) : parsed;
 }
 
 function normalizeRuntimeBoolean(value: unknown): boolean | undefined {
@@ -174,16 +201,14 @@ export function normalizeRuntimeConfigPatch(input: unknown): Partial<RuntimeConf
   const next: Partial<RuntimeConfig> = {};
 
   if (data.max_concurrent !== undefined || data.maxConcurrent !== undefined) {
-    const rawMaxConcurrent = data.max_concurrent ?? data.maxConcurrent;
-    const parsed = typeof rawMaxConcurrent === 'number'
-      ? rawMaxConcurrent
-      : Number(rawMaxConcurrent);
-    if (
-      Number.isFinite(parsed) &&
-      parsed >= RUNTIME_CONFIG_LIMITS.maxConcurrent.min &&
-      parsed <= RUNTIME_CONFIG_LIMITS.maxConcurrent.max
-    ) {
-      next.maxConcurrent = Math.floor(parsed);
+    const parsed = normalizeRuntimeNumber(
+      data,
+      'max_concurrent',
+      'maxConcurrent',
+      { ...RUNTIME_CONFIG_LIMITS.maxConcurrent, integer: true },
+    );
+    if (parsed !== undefined) {
+      next.maxConcurrent = parsed;
     }
   }
 
@@ -192,6 +217,63 @@ export function normalizeRuntimeConfigPatch(input: unknown): Partial<RuntimeConf
     if (parsedHeadless !== undefined) {
       next.headless = parsedHeadless;
     }
+  }
+
+  const geo: Partial<RuntimeConfig['geo']> = {};
+  const geoInput = data.geo && typeof data.geo === 'object'
+    ? data.geo as Record<string, unknown>
+    : {};
+  const geoData = {
+    ...geoInput,
+    baseLat: data.geoBaseLat ?? geoInput.baseLat,
+    baseLng: data.geoBaseLng ?? geoInput.baseLng,
+    defaultRadiusMeters: data.geoDefaultRadiusMeters ?? geoInput.defaultRadiusMeters,
+    checkinRadiusMeters: data.geoCheckinRadiusMeters ?? geoInput.checkinRadiusMeters,
+    checkoutRadiusMeters: data.geoCheckoutRadiusMeters ?? geoInput.checkoutRadiusMeters,
+    ...data,
+  };
+  const baseLat = normalizeRuntimeNumber(
+    geoData,
+    'pusaka_geo_base_lat',
+    'baseLat',
+    RUNTIME_CONFIG_LIMITS.geoBaseLat,
+  );
+  if (baseLat !== undefined) geo.baseLat = baseLat;
+
+  const baseLng = normalizeRuntimeNumber(
+    geoData,
+    'pusaka_geo_base_lng',
+    'baseLng',
+    RUNTIME_CONFIG_LIMITS.geoBaseLng,
+  );
+  if (baseLng !== undefined) geo.baseLng = baseLng;
+
+  const defaultRadiusMeters = normalizeRuntimeNumber(
+    geoData,
+    'pusaka_geo_default_radius_m',
+    'defaultRadiusMeters',
+    { ...RUNTIME_CONFIG_LIMITS.geoRadiusMeters, integer: true },
+  );
+  if (defaultRadiusMeters !== undefined) geo.defaultRadiusMeters = defaultRadiusMeters;
+
+  const checkinRadiusMeters = normalizeRuntimeNumber(
+    geoData,
+    'pusaka_geo_checkin_radius_m',
+    'checkinRadiusMeters',
+    { ...RUNTIME_CONFIG_LIMITS.geoRadiusMeters, integer: true },
+  );
+  if (checkinRadiusMeters !== undefined) geo.checkinRadiusMeters = checkinRadiusMeters;
+
+  const checkoutRadiusMeters = normalizeRuntimeNumber(
+    geoData,
+    'pusaka_geo_checkout_radius_m',
+    'checkoutRadiusMeters',
+    { ...RUNTIME_CONFIG_LIMITS.geoRadiusMeters, integer: true },
+  );
+  if (checkoutRadiusMeters !== undefined) geo.checkoutRadiusMeters = checkoutRadiusMeters;
+
+  if (Object.keys(geo).length > 0) {
+    next.geo = geo as RuntimeConfig['geo'];
   }
 
   return next;

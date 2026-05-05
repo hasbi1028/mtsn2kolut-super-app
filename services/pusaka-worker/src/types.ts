@@ -24,6 +24,13 @@ export interface GeoCoords {
 export interface RuntimeConfig {
   maxConcurrent: number;
   headless: boolean;
+  geo: {
+    baseLat: number;
+    baseLng: number;
+    defaultRadiusMeters: number;
+    checkinRadiusMeters: number;
+    checkoutRadiusMeters: number;
+  };
 }
 
 export interface ConsumerState {

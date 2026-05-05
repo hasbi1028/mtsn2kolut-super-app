@@ -187,10 +187,17 @@ export class WorkerSupervisor {
       if (typeof next.headless === 'boolean') {
         this.runtimeConfig.headless = next.headless;
       }
+      if (next.geo) {
+        this.runtimeConfig.geo = {
+          ...this.runtimeConfig.geo,
+          ...next.geo,
+        };
+      }
 
       if (
         previous.maxConcurrent !== this.runtimeConfig.maxConcurrent ||
-        previous.headless !== this.runtimeConfig.headless
+        previous.headless !== this.runtimeConfig.headless ||
+        JSON.stringify(previous.geo) !== JSON.stringify(this.runtimeConfig.geo)
       ) {
         this.deps.log('INFO', 'runtime config updated', {
           previous,

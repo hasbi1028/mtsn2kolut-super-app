@@ -17,6 +17,11 @@
   type WorkerSettingState = {
     max_concurrent: number;
     headless: boolean;
+    pusaka_geo_base_lat: number;
+    pusaka_geo_base_lng: number;
+    pusaka_geo_default_radius_m: number;
+    pusaka_geo_checkin_radius_m: number;
+    pusaka_geo_checkout_radius_m: number;
   };
 
   type Schedule = {
@@ -69,7 +74,15 @@
   );
 
   function emptyWorkerSettings(): WorkerSettingState {
-    return { max_concurrent: 5, headless: false };
+    return {
+      max_concurrent: 5,
+      headless: false,
+      pusaka_geo_base_lat: -3.2163111,
+      pusaka_geo_base_lng: 121.0428659,
+      pusaka_geo_default_radius_m: 50,
+      pusaka_geo_checkin_radius_m: 55,
+      pusaka_geo_checkout_radius_m: 28
+    };
   }
 
   function normalizeSchedules(value: SchedulePayload | Schedule[] | null | undefined): Schedule[] {

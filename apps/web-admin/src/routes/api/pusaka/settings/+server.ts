@@ -5,6 +5,14 @@ import { handleRouteError, proxy, readOptionalRequestJson } from '$lib/server/ap
 interface GoSetting { key: string; value: string }
 
 const BLOCKED = new Set(['admin_password', 'admin_password_hash', 'admin_username']);
+const NUMBER_KEYS = new Set([
+	'max_concurrent',
+	'pusaka_geo_base_lat',
+	'pusaka_geo_base_lng',
+	'pusaka_geo_default_radius_m',
+	'pusaka_geo_checkin_radius_m',
+	'pusaka_geo_checkout_radius_m'
+]);
 
 export const GET = async (event: RequestEvent) => {
 	try {
@@ -12,7 +20,7 @@ export const GET = async (event: RequestEvent) => {
 		const flat: Record<string, unknown> = {};
 		for (const { key, value } of rows) {
 			if (BLOCKED.has(key)) continue;
-			if (key === 'max_concurrent') flat[key] = Number(value) || 5;
+			if (NUMBER_KEYS.has(key)) flat[key] = Number(value);
 			else if (key === 'headless') flat[key] = value === 'true';
 			else flat[key] = value;
 		}

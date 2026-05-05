@@ -345,6 +345,8 @@ describe('api proxy route handlers', () => {
 		proxyGetMock.mockResolvedValueOnce([
 			{ key: 'max_concurrent', value: '9' },
 			{ key: 'headless', value: 'true' },
+			{ key: 'pusaka_geo_base_lat', value: '-3.2163111' },
+			{ key: 'pusaka_geo_checkin_radius_m', value: '55' },
 			{ key: 'admin_password', value: 'secret' },
 			{ key: 'browser_path', value: '/usr/bin/chromium' }
 		]);
@@ -356,6 +358,8 @@ describe('api proxy route handlers', () => {
 		await expect(res.json()).resolves.toEqual({
 			max_concurrent: 9,
 			headless: true,
+			pusaka_geo_base_lat: -3.2163111,
+			pusaka_geo_checkin_radius_m: 55,
 			browser_path: '/usr/bin/chromium'
 		});
 	});
@@ -367,7 +371,7 @@ describe('api proxy route handlers', () => {
 			request: new Request('http://localhost/api/pusaka/settings', {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ max_concurrent: 7, headless: false })
+				body: JSON.stringify({ max_concurrent: 7, headless: false, pusaka_geo_checkin_radius_m: 60 })
 			})
 		});
 
@@ -379,8 +383,11 @@ describe('api proxy route handlers', () => {
 		expect(proxyPutMock).toHaveBeenNthCalledWith(2, '/api/pusaka/settings/headless', {
 			value: 'false'
 		});
+		expect(proxyPutMock).toHaveBeenNthCalledWith(3, '/api/pusaka/settings/pusaka_geo_checkin_radius_m', {
+			value: '60'
+		});
 		expect(res.status).toBe(200);
-		await expect(res.json()).resolves.toEqual({ ok: true, max_concurrent: 7, headless: false });
+		await expect(res.json()).resolves.toEqual({ ok: true, max_concurrent: 7, headless: false, pusaka_geo_checkin_radius_m: 60 });
 	});
 
 	it('creates document cycle catalogs through the typed JSON body helper', async () => {

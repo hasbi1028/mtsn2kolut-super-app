@@ -92,6 +92,11 @@ func TestPusakaWorkerSuccessHandlersForwardPayloads(t *testing.T) {
 		listRows: []db.AppSetting{
 			{Key: "max_concurrent", Value: "5"},
 			{Key: "headless", Value: "true"},
+			{Key: "pusaka_geo_base_lat", Value: "-3.2163111"},
+			{Key: "pusaka_geo_base_lng", Value: "121.0428659"},
+			{Key: "pusaka_geo_default_radius_m", Value: "50"},
+			{Key: "pusaka_geo_checkin_radius_m", Value: "55"},
+			{Key: "pusaka_geo_checkout_radius_m", Value: "28"},
 			{Key: "ignored", Value: "value"},
 			{Key: "worker_status:active", Value: `{"worker_id":"active","reported_at":"` + time.Now().UTC().Format(time.RFC3339) + `","active_consumers":2}`},
 			{Key: "worker_status:stale", Value: `{"worker_id":"stale","reported_at":"` + time.Now().UTC().Add(-10*time.Minute).Format(time.RFC3339) + `"}`},
@@ -140,7 +145,11 @@ func TestPusakaWorkerSuccessHandlersForwardPayloads(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &cfg); err != nil {
 		t.Fatalf("Config() json error = %v", err)
 	}
-	if cfg.Data["max_concurrent"] != "5" || cfg.Data["headless"] != "true" || cfg.Data["ignored"] != "" {
+	if cfg.Data["max_concurrent"] != "5" ||
+		cfg.Data["headless"] != "true" ||
+		cfg.Data["pusaka_geo_base_lat"] != "-3.2163111" ||
+		cfg.Data["pusaka_geo_checkin_radius_m"] != "55" ||
+		cfg.Data["ignored"] != "" {
 		t.Fatalf("Config() data = %+v, want only worker config keys", cfg.Data)
 	}
 
