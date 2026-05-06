@@ -575,6 +575,67 @@ func (q *Queries) GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (Get
 	return i, err
 }
 
+const getCbtQuestionSummaryCounts = `-- name: GetCbtQuestionSummaryCounts :one
+SELECT
+  COUNT(*)::bigint AS total,
+  COUNT(*) FILTER (WHERE q.status = 'draft')::bigint AS draft,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'review')::bigint AS review,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'rejected')::bigint AS rejected,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::bigint AS approved,
+  COUNT(*) FILTER (WHERE q.status = 'published')::bigint AS published,
+  COALESCE(SUM(pkg_usage.package_count), 0)::bigint AS package_usage
+FROM cbt_questions q
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::bigint AS package_count
+  FROM cbt_package_questions pq
+  WHERE pq.question_id = q.id
+) pkg_usage ON TRUE
+WHERE TRUE
+  AND (
+    $1::bool
+    OR q.status = 'published'
+    OR q.author_username = $2::text
+    OR EXISTS (
+      SELECT 1 FROM cbt_event_members m
+      WHERE m.event_id = q.event_id
+        AND m.user_id = $3::uuid
+        AND m.role IN ('reviewer', 'panitia')
+        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+  )
+`
+
+type GetCbtQuestionSummaryCountsParams struct {
+	IsAdmin       bool        `json:"is_admin"`
+	ActorUsername string      `json:"actor_username"`
+	ActorUserID   pgtype.UUID `json:"actor_user_id"`
+}
+
+type GetCbtQuestionSummaryCountsRow struct {
+	Total        int64 `json:"total"`
+	Draft        int64 `json:"draft"`
+	Review       int64 `json:"review"`
+	Rejected     int64 `json:"rejected"`
+	Approved     int64 `json:"approved"`
+	Published    int64 `json:"published"`
+	PackageUsage int64 `json:"package_usage"`
+}
+
+func (q *Queries) GetCbtQuestionSummaryCounts(ctx context.Context, arg GetCbtQuestionSummaryCountsParams) (GetCbtQuestionSummaryCountsRow, error) {
+	row := q.db.QueryRow(ctx, getCbtQuestionSummaryCounts, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
+	var i GetCbtQuestionSummaryCountsRow
+	err := row.Scan(
+		&i.Total,
+		&i.Draft,
+		&i.Review,
+		&i.Rejected,
+		&i.Approved,
+		&i.Published,
+		&i.PackageUsage,
+	)
+	return i, err
+}
+
 const listCbtQuestionStemTextsBySubject = `-- name: ListCbtQuestionStemTextsBySubject :many
 SELECT question_text, stem_html
 FROM cbt_questions
@@ -596,6 +657,194 @@ func (q *Queries) ListCbtQuestionStemTextsBySubject(ctx context.Context, subject
 	for rows.Next() {
 		var i ListCbtQuestionStemTextsBySubjectRow
 		if err := rows.Scan(&i.QuestionText, &i.StemHtml); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtQuestionSummaryByCognitiveLevel = `-- name: ListCbtQuestionSummaryByCognitiveLevel :many
+SELECT COALESCE(NULLIF(btrim(q.cognitive_level), ''), 'Belum diisi') AS cognitive_level, COUNT(*)::bigint AS total
+FROM cbt_questions q
+WHERE TRUE
+  AND (
+    $1::bool
+    OR q.status = 'published'
+    OR q.author_username = $2::text
+    OR EXISTS (
+      SELECT 1 FROM cbt_event_members m
+      WHERE m.event_id = q.event_id
+        AND m.user_id = $3::uuid
+        AND m.role IN ('reviewer', 'panitia')
+        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+  )
+GROUP BY COALESCE(NULLIF(btrim(q.cognitive_level), ''), 'Belum diisi')
+ORDER BY total DESC, cognitive_level ASC
+`
+
+type ListCbtQuestionSummaryByCognitiveLevelParams struct {
+	IsAdmin       bool        `json:"is_admin"`
+	ActorUsername string      `json:"actor_username"`
+	ActorUserID   pgtype.UUID `json:"actor_user_id"`
+}
+
+type ListCbtQuestionSummaryByCognitiveLevelRow struct {
+	CognitiveLevel interface{} `json:"cognitive_level"`
+	Total          int64       `json:"total"`
+}
+
+func (q *Queries) ListCbtQuestionSummaryByCognitiveLevel(ctx context.Context, arg ListCbtQuestionSummaryByCognitiveLevelParams) ([]ListCbtQuestionSummaryByCognitiveLevelRow, error) {
+	rows, err := q.db.Query(ctx, listCbtQuestionSummaryByCognitiveLevel, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtQuestionSummaryByCognitiveLevelRow{}
+	for rows.Next() {
+		var i ListCbtQuestionSummaryByCognitiveLevelRow
+		if err := rows.Scan(&i.CognitiveLevel, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtQuestionSummaryBySubject = `-- name: ListCbtQuestionSummaryBySubject :many
+SELECT q.subject_id, s.name AS subject_name, s.code AS subject_code, COUNT(*)::bigint AS total
+FROM cbt_questions q
+JOIN subjects s ON s.id = q.subject_id
+WHERE TRUE
+  AND (
+    $1::bool
+    OR q.status = 'published'
+    OR q.author_username = $2::text
+    OR EXISTS (
+      SELECT 1 FROM cbt_event_members m
+      WHERE m.event_id = q.event_id
+        AND m.user_id = $3::uuid
+        AND m.role IN ('reviewer', 'panitia')
+        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+  )
+GROUP BY q.subject_id, s.name, s.code
+ORDER BY total DESC, s.name ASC
+LIMIT 8
+`
+
+type ListCbtQuestionSummaryBySubjectParams struct {
+	IsAdmin       bool        `json:"is_admin"`
+	ActorUsername string      `json:"actor_username"`
+	ActorUserID   pgtype.UUID `json:"actor_user_id"`
+}
+
+type ListCbtQuestionSummaryBySubjectRow struct {
+	SubjectID   pgtype.UUID `json:"subject_id"`
+	SubjectName string      `json:"subject_name"`
+	SubjectCode string      `json:"subject_code"`
+	Total       int64       `json:"total"`
+}
+
+func (q *Queries) ListCbtQuestionSummaryBySubject(ctx context.Context, arg ListCbtQuestionSummaryBySubjectParams) ([]ListCbtQuestionSummaryBySubjectRow, error) {
+	rows, err := q.db.Query(ctx, listCbtQuestionSummaryBySubject, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtQuestionSummaryBySubjectRow{}
+	for rows.Next() {
+		var i ListCbtQuestionSummaryBySubjectRow
+		if err := rows.Scan(
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCbtQuestionSummaryRecent = `-- name: ListCbtQuestionSummaryRecent :many
+SELECT q.id, q.code, q.subject_id, s.name AS subject_name, s.code AS subject_code,
+       q.material_topic, q.workflow_status, q.status, q.author_username,
+       q.reviewer_username, q.created_at, q.updated_at
+FROM cbt_questions q
+JOIN subjects s ON s.id = q.subject_id
+WHERE TRUE
+  AND (
+    $1::bool
+    OR q.status = 'published'
+    OR q.author_username = $2::text
+    OR EXISTS (
+      SELECT 1 FROM cbt_event_members m
+      WHERE m.event_id = q.event_id
+        AND m.user_id = $3::uuid
+        AND m.role IN ('reviewer', 'panitia')
+        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+  )
+ORDER BY q.updated_at DESC, q.created_at DESC
+LIMIT 5
+`
+
+type ListCbtQuestionSummaryRecentParams struct {
+	IsAdmin       bool        `json:"is_admin"`
+	ActorUsername string      `json:"actor_username"`
+	ActorUserID   pgtype.UUID `json:"actor_user_id"`
+}
+
+type ListCbtQuestionSummaryRecentRow struct {
+	ID               pgtype.UUID           `json:"id"`
+	Code             string                `json:"code"`
+	SubjectID        pgtype.UUID           `json:"subject_id"`
+	SubjectName      string                `json:"subject_name"`
+	SubjectCode      string                `json:"subject_code"`
+	MaterialTopic    string                `json:"material_topic"`
+	WorkflowStatus   string                `json:"workflow_status"`
+	Status           CbtQuestionStatusEnum `json:"status"`
+	AuthorUsername   string                `json:"author_username"`
+	ReviewerUsername string                `json:"reviewer_username"`
+	CreatedAt        pgtype.Timestamptz    `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz    `json:"updated_at"`
+}
+
+func (q *Queries) ListCbtQuestionSummaryRecent(ctx context.Context, arg ListCbtQuestionSummaryRecentParams) ([]ListCbtQuestionSummaryRecentRow, error) {
+	rows, err := q.db.Query(ctx, listCbtQuestionSummaryRecent, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCbtQuestionSummaryRecentRow{}
+	for rows.Next() {
+		var i ListCbtQuestionSummaryRecentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.MaterialTopic,
+			&i.WorkflowStatus,
+			&i.Status,
+			&i.AuthorUsername,
+			&i.ReviewerUsername,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1662,218 +1911,4 @@ func (q *Queries) UpdateCbtQuestion(ctx context.Context, arg UpdateCbtQuestionPa
 		&i.EventID,
 	)
 	return i, err
-}
-
-const getCbtQuestionSummaryCounts = `-- name: GetCbtQuestionSummaryCounts :one
-SELECT
-  COUNT(*)::bigint AS total,
-  COUNT(*) FILTER (WHERE q.status = 'draft')::bigint AS draft,
-  COUNT(*) FILTER (WHERE q.workflow_status = 'review')::bigint AS review,
-  COUNT(*) FILTER (WHERE q.workflow_status = 'rejected')::bigint AS rejected,
-  COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::bigint AS approved,
-  COUNT(*) FILTER (WHERE q.status = 'published')::bigint AS published,
-  COALESCE(SUM(pkg_usage.package_count), 0)::bigint AS package_usage
-FROM cbt_questions q
-LEFT JOIN LATERAL (
-  SELECT COUNT(*)::bigint AS package_count
-  FROM cbt_package_questions pq
-  WHERE pq.question_id = q.id
-) pkg_usage ON TRUE
-WHERE TRUE
-  AND (
-    $1::bool
-    OR q.status = 'published'
-    OR q.author_username = $2::text
-    OR EXISTS (
-      SELECT 1 FROM cbt_event_members m
-      WHERE m.event_id = q.event_id
-        AND m.user_id = $3::uuid
-        AND m.role IN ('reviewer', 'panitia')
-        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
-    )
-  )
-`
-
-type GetCbtQuestionSummaryCountsParams struct {
-	IsAdmin       bool        `json:"is_admin"`
-	ActorUsername string      `json:"actor_username"`
-	ActorUserID   pgtype.UUID `json:"actor_user_id"`
-}
-
-type GetCbtQuestionSummaryCountsRow struct {
-	Total        int64 `json:"total"`
-	Draft        int64 `json:"draft"`
-	Review       int64 `json:"review"`
-	Rejected     int64 `json:"rejected"`
-	Approved     int64 `json:"approved"`
-	Published    int64 `json:"published"`
-	PackageUsage int64 `json:"package_usage"`
-}
-
-func (q *Queries) GetCbtQuestionSummaryCounts(ctx context.Context, arg GetCbtQuestionSummaryCountsParams) (GetCbtQuestionSummaryCountsRow, error) {
-	row := q.db.QueryRow(ctx, getCbtQuestionSummaryCounts, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
-	var i GetCbtQuestionSummaryCountsRow
-	err := row.Scan(&i.Total, &i.Draft, &i.Review, &i.Rejected, &i.Approved, &i.Published, &i.PackageUsage)
-	return i, err
-}
-
-const listCbtQuestionSummaryBySubject = `-- name: ListCbtQuestionSummaryBySubject :many
-SELECT q.subject_id, s.name AS subject_name, s.code AS subject_code, COUNT(*)::bigint AS total
-FROM cbt_questions q
-JOIN subjects s ON s.id = q.subject_id
-WHERE TRUE
-  AND (
-    $1::bool
-    OR q.status = 'published'
-    OR q.author_username = $2::text
-    OR EXISTS (
-      SELECT 1 FROM cbt_event_members m
-      WHERE m.event_id = q.event_id
-        AND m.user_id = $3::uuid
-        AND m.role IN ('reviewer', 'panitia')
-        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
-    )
-  )
-GROUP BY q.subject_id, s.name, s.code
-ORDER BY total DESC, s.name ASC
-LIMIT 8
-`
-
-type ListCbtQuestionSummaryBySubjectParams struct {
-	IsAdmin       bool        `json:"is_admin"`
-	ActorUsername string      `json:"actor_username"`
-	ActorUserID   pgtype.UUID `json:"actor_user_id"`
-}
-
-type ListCbtQuestionSummaryBySubjectRow struct {
-	SubjectID   pgtype.UUID `json:"subject_id"`
-	SubjectName string      `json:"subject_name"`
-	SubjectCode string      `json:"subject_code"`
-	Total       int64       `json:"total"`
-}
-
-func (q *Queries) ListCbtQuestionSummaryBySubject(ctx context.Context, arg ListCbtQuestionSummaryBySubjectParams) ([]ListCbtQuestionSummaryBySubjectRow, error) {
-	rows, err := q.db.Query(ctx, listCbtQuestionSummaryBySubject, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListCbtQuestionSummaryBySubjectRow{}
-	for rows.Next() {
-		var i ListCbtQuestionSummaryBySubjectRow
-		if err := rows.Scan(&i.SubjectID, &i.SubjectName, &i.SubjectCode, &i.Total); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	return items, rows.Err()
-}
-
-const listCbtQuestionSummaryByCognitiveLevel = `-- name: ListCbtQuestionSummaryByCognitiveLevel :many
-SELECT COALESCE(NULLIF(btrim(q.cognitive_level), ''), 'Belum diisi') AS cognitive_level, COUNT(*)::bigint AS total
-FROM cbt_questions q
-WHERE TRUE
-  AND (
-    $1::bool
-    OR q.status = 'published'
-    OR q.author_username = $2::text
-    OR EXISTS (
-      SELECT 1 FROM cbt_event_members m
-      WHERE m.event_id = q.event_id
-        AND m.user_id = $3::uuid
-        AND m.role IN ('reviewer', 'panitia')
-        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
-    )
-  )
-GROUP BY COALESCE(NULLIF(btrim(q.cognitive_level), ''), 'Belum diisi')
-ORDER BY total DESC, cognitive_level ASC
-`
-
-type ListCbtQuestionSummaryByCognitiveLevelParams struct {
-	IsAdmin       bool        `json:"is_admin"`
-	ActorUsername string      `json:"actor_username"`
-	ActorUserID   pgtype.UUID `json:"actor_user_id"`
-}
-
-type ListCbtQuestionSummaryByCognitiveLevelRow struct {
-	CognitiveLevel string `json:"cognitive_level"`
-	Total          int64  `json:"total"`
-}
-
-func (q *Queries) ListCbtQuestionSummaryByCognitiveLevel(ctx context.Context, arg ListCbtQuestionSummaryByCognitiveLevelParams) ([]ListCbtQuestionSummaryByCognitiveLevelRow, error) {
-	rows, err := q.db.Query(ctx, listCbtQuestionSummaryByCognitiveLevel, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListCbtQuestionSummaryByCognitiveLevelRow{}
-	for rows.Next() {
-		var i ListCbtQuestionSummaryByCognitiveLevelRow
-		if err := rows.Scan(&i.CognitiveLevel, &i.Total); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	return items, rows.Err()
-}
-
-const listCbtQuestionSummaryRecent = `-- name: ListCbtQuestionSummaryRecent :many
-SELECT q.id, q.code, q.subject_id, s.name AS subject_name, s.code AS subject_code,
-       q.material_topic, q.workflow_status, q.status, q.author_username,
-       q.reviewer_username, q.created_at, q.updated_at
-FROM cbt_questions q
-JOIN subjects s ON s.id = q.subject_id
-WHERE TRUE
-  AND (
-    $1::bool
-    OR q.status = 'published'
-    OR q.author_username = $2::text
-    OR EXISTS (
-      SELECT 1 FROM cbt_event_members m
-      WHERE m.event_id = q.event_id
-        AND m.user_id = $3::uuid
-        AND m.role IN ('reviewer', 'panitia')
-        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
-    )
-  )
-ORDER BY q.updated_at DESC, q.created_at DESC
-LIMIT 5
-`
-
-type ListCbtQuestionSummaryRecentParams struct {
-	IsAdmin       bool        `json:"is_admin"`
-	ActorUsername string      `json:"actor_username"`
-	ActorUserID   pgtype.UUID `json:"actor_user_id"`
-}
-
-type ListCbtQuestionSummaryRecentRow struct {
-	ID               pgtype.UUID           `json:"id"`
-	Code             string                `json:"code"`
-	SubjectID        pgtype.UUID           `json:"subject_id"`
-	SubjectName      string                `json:"subject_name"`
-	SubjectCode      string                `json:"subject_code"`
-	MaterialTopic    string                `json:"material_topic"`
-	WorkflowStatus   string                `json:"workflow_status"`
-	Status           CbtQuestionStatusEnum `json:"status"`
-	AuthorUsername   string                `json:"author_username"`
-	ReviewerUsername string                `json:"reviewer_username"`
-	CreatedAt        pgtype.Timestamptz    `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz    `json:"updated_at"`
-}
-
-func (q *Queries) ListCbtQuestionSummaryRecent(ctx context.Context, arg ListCbtQuestionSummaryRecentParams) ([]ListCbtQuestionSummaryRecentRow, error) {
-	rows, err := q.db.Query(ctx, listCbtQuestionSummaryRecent, arg.IsAdmin, arg.ActorUsername, arg.ActorUserID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListCbtQuestionSummaryRecentRow{}
-	for rows.Next() {
-		var i ListCbtQuestionSummaryRecentRow
-		if err := rows.Scan(&i.ID, &i.Code, &i.SubjectID, &i.SubjectName, &i.SubjectCode, &i.MaterialTopic, &i.WorkflowStatus, &i.Status, &i.AuthorUsername, &i.ReviewerUsername, &i.CreatedAt, &i.UpdatedAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	return items, rows.Err()
 }

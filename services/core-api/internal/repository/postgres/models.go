@@ -1701,6 +1701,40 @@ type PusakaAccount struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type RbacPermission struct {
+	ID          pgtype.UUID        `json:"id"`
+	Code        string             `json:"code"`
+	Module      string             `json:"module"`
+	Action      string             `json:"action"`
+	Description string             `json:"description"`
+	IsActive    bool               `json:"is_active"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type RbacRole struct {
+	ID          pgtype.UUID        `json:"id"`
+	Code        string             `json:"code"`
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
+	IsSystem    bool               `json:"is_system"`
+	IsActive    bool               `json:"is_active"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type RbacRolePermission struct {
+	RoleID       pgtype.UUID        `json:"role_id"`
+	PermissionID pgtype.UUID        `json:"permission_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type RbacUserRole struct {
+	UserID    pgtype.UUID        `json:"user_id"`
+	RoleID    pgtype.UUID        `json:"role_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type Schedule struct {
 	ID                  pgtype.UUID        `json:"id"`
 	Label               string             `json:"label"`
