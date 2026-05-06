@@ -417,6 +417,8 @@ describe('SvelteKit handle auth gate', () => {
 	});
 
 	const roleCases = [
+		{ path: '/settings/account', roles: ['guru'], allowed: true, api: false },
+		{ path: '/api/auth/account', roles: ['guru'], allowed: true, api: true },
 		{ path: '/settings/users', roles: ['admin'], allowed: true, api: false },
 		{ path: '/settings/users', roles: ['staf'], allowed: false, api: false },
 		{ path: '/api/school-profile', roles: ['admin'], allowed: true, api: true },

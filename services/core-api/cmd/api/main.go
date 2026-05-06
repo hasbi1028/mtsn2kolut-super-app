@@ -194,6 +194,7 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(mw.JWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession))
 		r.Use(mw.Audit(q))
+		r.Get("/api/auth/account", authH.GetAccount)
 		r.Post("/api/auth/change-password", authH.ChangePassword)
 		r.Post("/api/auth/logout-all", authH.LogoutAll)
 		r.Get("/api/auth/sessions", authH.ListSessions)

@@ -135,6 +135,33 @@ describe('api proxy route handlers', () => {
 		await expect(res.json()).resolves.toEqual([{ id: 'sess-1' }]);
 	});
 
+	it('rejects unauthenticated account summary requests', async () => {
+		const mod = await import('../../routes/api/auth/account/+server');
+		const event = createEvent();
+
+		const res = await mod.GET(event as never);
+
+		expect(res.status).toBe(401);
+		await expect(res.json()).resolves.toEqual({ error: 'Unauthorized' });
+		expect(proxyGetMock).not.toHaveBeenCalled();
+	});
+
+	it('forwards account summary requests through authenticated proxy', async () => {
+		const mod = await import('../../routes/api/auth/account/+server');
+		const event = createEvent({
+			locals: {
+				user: { id: '1', username: 'guru.ipa', role: 'guru', roles: ['guru'] }
+			}
+		});
+		proxyGetMock.mockResolvedValueOnce({ username: 'guru.ipa', roles: ['guru'] });
+
+		const res = await mod.GET(event as never);
+
+		expect(proxyGetMock).toHaveBeenCalledWith('/api/auth/account');
+		expect(res.status).toBe(200);
+		await expect(res.json()).resolves.toEqual({ username: 'guru.ipa', roles: ['guru'] });
+	});
+
 	it('renames an auth session through the authenticated proxy', async () => {
 		const mod = await import('../../routes/api/auth/sessions/[id]/+server');
 		const request = new Request('http://localhost/api/auth/sessions/sess%201%2F2026', {

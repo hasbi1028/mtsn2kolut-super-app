@@ -132,6 +132,68 @@ func (q *Queries) DeleteOldAuditLogs(ctx context.Context) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const getUserAccountSummary = `-- name: GetUserAccountSummary :one
+SELECT
+    u.id,
+    u.username,
+    COALESCE(NULLIF(u.display_name, ''), e.nama, s.nama, p.nama, u.username)::text AS display_name,
+    u.employee_id,
+    u.student_id,
+    u.parent_id,
+    CASE
+        WHEN u.employee_id IS NOT NULL THEN 'employee'
+        WHEN u.student_id IS NOT NULL THEN 'student'
+        WHEN u.parent_id IS NOT NULL THEN 'parent'
+        ELSE ''
+    END::text AS profile_type,
+    COALESCE(e.nama, s.nama, p.nama, '')::text AS profile_nama,
+    u.is_active,
+    u.last_login_at,
+    u.created_at,
+    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+FROM users u
+LEFT JOIN employees e ON e.id = u.employee_id
+LEFT JOIN students s ON s.id = u.student_id
+LEFT JOIN parents p ON p.id = u.parent_id
+WHERE u.id = $1
+  AND u.deleted_at IS NULL
+`
+
+type GetUserAccountSummaryRow struct {
+	ID          pgtype.UUID        `json:"id"`
+	Username    string             `json:"username"`
+	DisplayName string             `json:"display_name"`
+	EmployeeID  pgtype.UUID        `json:"employee_id"`
+	StudentID   pgtype.UUID        `json:"student_id"`
+	ParentID    pgtype.UUID        `json:"parent_id"`
+	ProfileType string             `json:"profile_type"`
+	ProfileNama string             `json:"profile_nama"`
+	IsActive    bool               `json:"is_active"`
+	LastLoginAt pgtype.Timestamptz `json:"last_login_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Roles       []byte             `json:"roles"`
+}
+
+func (q *Queries) GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (GetUserAccountSummaryRow, error) {
+	row := q.db.QueryRow(ctx, getUserAccountSummary, id)
+	var i GetUserAccountSummaryRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.DisplayName,
+		&i.EmployeeID,
+		&i.StudentID,
+		&i.ParentID,
+		&i.ProfileType,
+		&i.ProfileNama,
+		&i.IsActive,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.Roles,
+	)
+	return i, err
+}
+
 const getUserByID = `-- name: GetUserByID :one
 SELECT 
     u.id, u.username, u.password_hash,

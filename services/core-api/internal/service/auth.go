@@ -31,6 +31,7 @@ const (
 type authStore interface {
 	GetUserByUsername(ctx context.Context, username string) (db.GetUserByUsernameRow, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (db.GetUserByIDRow, error)
+	GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (db.GetUserAccountSummaryRow, error)
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error)
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
 	GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error)
@@ -185,6 +186,14 @@ func (s *Auth) LogoutAll(ctx context.Context, userID pgtype.UUID) error {
 
 func (s *Auth) ListActiveSessions(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error) {
 	return s.q.ListActiveAuthSessionsByUser(ctx, userID)
+}
+
+func (s *Auth) GetAccount(ctx context.Context, userID pgtype.UUID) (db.GetUserAccountSummaryRow, error) {
+	row, err := s.q.GetUserAccountSummary(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.GetUserAccountSummaryRow{}, domain.ErrUnauthorized
+	}
+	return row, err
 }
 
 func (s *Auth) RevokeSession(ctx context.Context, userID, sessionID pgtype.UUID) error {
