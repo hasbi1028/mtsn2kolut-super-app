@@ -49,6 +49,7 @@ npm --prefix apps/web-admin run check
 npm --prefix apps/web-admin run test:unit
 cd services/core-api && go test ./...
 npm --prefix apps/web-admin run build
+deploy/scripts/health-check.sh bank-soal
 git diff --check && git diff --cached --check
 ```
 
