@@ -247,10 +247,10 @@
 
 	function heartbeatClass(row: ProctoringRow) {
 		const state = heartbeatState(row);
-		if (state === 'submitted') return 'border-slate-300 bg-slate-100 text-slate-600';
-		if (state === 'online') return 'border-emerald-300 bg-emerald-50 text-emerald-700';
-		if (state === 'stale') return 'border-amber-300 bg-amber-50 text-amber-700';
-		return 'border-red-300 bg-red-50 text-red-700';
+		if (state === 'submitted') return 'border-border bg-muted text-muted-foreground';
+		if (state === 'online') return 'border-primary/20 bg-primary/10 text-primary';
+		if (state === 'stale') return 'border-warning/30 bg-warning/10 text-warning';
+		return 'border-destructive/30 bg-destructive/10 text-destructive';
 	}
 
 	function eventLabel(type: string) {
@@ -392,15 +392,15 @@
 </svelte:head>
 
 <div class="space-y-5 p-4 md:p-6">
-	<div class="flex flex-col gap-3 border-b border-emerald-100 pb-4 md:flex-row md:items-start md:justify-between">
+	<div class="flex flex-col gap-3 border-b border-primary/20 pb-4 md:flex-row md:items-start md:justify-between">
 		<div>
-			<a href={resolve(`/asesmen/sesi/${sessionId}`)} class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Kembali ke detail sesi</a>
-			<h1 class="mt-2 text-2xl font-bold tracking-tight text-slate-900">Dashboard Pengawas Ruang</h1>
-			<p class="text-sm text-slate-500">{room?.session_title ?? 'Memuat sesi'} · {room?.room_name ?? 'Memuat ruang'}</p>
+			<a href={resolve(`/asesmen/sesi/${sessionId}`)} class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Kembali ke detail sesi</a>
+			<h1 class="mt-2 text-2xl font-bold tracking-tight text-foreground">Dashboard Pengawas Ruang</h1>
+			<p class="text-sm text-muted-foreground">{room?.session_title ?? 'Memuat sesi'} · {room?.room_name ?? 'Memuat ruang'}</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
 			{#if backgroundBusy}
-				<Badge variant="outline" class="border-emerald-200 text-emerald-700">Memperbarui</Badge>
+				<Badge variant="outline" class="border-primary/20 text-primary">Memperbarui</Badge>
 			{/if}
 			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>
 				<PrinterIcon class="mr-2 size-4" />
@@ -428,54 +428,54 @@
 
 		{#if room}
 				<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-					<Card.Root class="border-emerald-100">
+					<Card.Root class="border-primary/20">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-slate-500">Peserta</Card.Title>
+							<Card.Title class="text-sm text-muted-foreground">Peserta</Card.Title>
 						</Card.Header>
 						<Card.Content>
-							<div class="text-2xl font-bold text-slate-900">{room.participant_count}</div>
-							<p class="text-xs text-slate-500">Kapasitas {room.capacity}</p>
+							<div class="text-2xl font-bold text-foreground">{room.participant_count}</div>
+							<p class="text-xs text-muted-foreground">Kapasitas {room.capacity}</p>
 						</Card.Content>
 					</Card.Root>
-					<Card.Root class="border-emerald-100">
+					<Card.Root class="border-primary/20">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-slate-500">Online</Card.Title>
+							<Card.Title class="text-sm text-muted-foreground">Online</Card.Title>
 						</Card.Header>
 						<Card.Content>
-							<div class="text-2xl font-bold text-emerald-700">{participantStats.online}</div>
-							<p class="text-xs text-slate-500">Heartbeat 2 menit terakhir</p>
+							<div class="text-2xl font-bold text-primary">{participantStats.online}</div>
+							<p class="text-xs text-muted-foreground">Heartbeat 2 menit terakhir</p>
 						</Card.Content>
 					</Card.Root>
-					<Card.Root class="border-emerald-100">
+					<Card.Root class="border-primary/20">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-slate-500">Waspada / Offline</Card.Title>
+							<Card.Title class="text-sm text-muted-foreground">Waspada / Offline</Card.Title>
 						</Card.Header>
 						<Card.Content>
-							<div class="text-2xl font-bold text-amber-700">{participantStats.stale + participantStats.offline}</div>
-							<p class="text-xs text-slate-500">Perlu dicek pengawas</p>
+							<div class="text-2xl font-bold text-warning">{participantStats.stale + participantStats.offline}</div>
+							<p class="text-xs text-muted-foreground">Perlu dicek pengawas</p>
 						</Card.Content>
 					</Card.Root>
-					<Card.Root class="border-emerald-100">
+					<Card.Root class="border-primary/20">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-slate-500">Submit</Card.Title>
+							<Card.Title class="text-sm text-muted-foreground">Submit</Card.Title>
 						</Card.Header>
 						<Card.Content>
-							<div class="text-2xl font-bold text-slate-900">{participantStats.submitted}</div>
-							<p class="text-xs text-slate-500">Dari {room.participant_count} peserta</p>
+							<div class="text-2xl font-bold text-foreground">{participantStats.submitted}</div>
+							<p class="text-xs text-muted-foreground">Dari {room.participant_count} peserta</p>
 						</Card.Content>
 					</Card.Root>
-					<Card.Root class="border-emerald-100">
+					<Card.Root class="border-primary/20">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-slate-500">Atensi</Card.Title>
+							<Card.Title class="text-sm text-muted-foreground">Atensi</Card.Title>
 						</Card.Header>
 						<Card.Content>
-							<div class="text-2xl font-bold text-red-700">{room.suspicious_count}</div>
-							<p class="text-xs text-slate-500">{room.missing_seat_count} tanpa nomor meja</p>
+							<div class="text-2xl font-bold text-destructive">{room.suspicious_count}</div>
+							<p class="text-xs text-muted-foreground">{room.missing_seat_count} tanpa nomor meja</p>
 						</Card.Content>
 					</Card.Root>
 				</div>
 
-				<Card.Root class="border-emerald-100">
+				<Card.Root class="border-primary/20">
 					<Card.Header>
 						<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
 							<div>
@@ -485,36 +485,36 @@
 								</Card.Description>
 							</div>
 							<div class="flex flex-wrap items-center gap-2">
-								<Badge variant="outline" class="border-emerald-300 text-emerald-700">Token ruang {room.room_token || '—'}</Badge>
+								<Badge variant="outline" class="border-primary/20 text-primary">Token ruang {room.room_token || '—'}</Badge>
 								<Badge variant="outline">{room.session_status}</Badge>
 							</div>
 						</div>
 					</Card.Header>
 					<Card.Content class="grid gap-4 md:grid-cols-3">
-						<div class="rounded-lg border border-slate-200 p-3">
-							<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Lokasi</p>
-							<p class="mt-1 text-sm font-medium text-slate-800">{room.school_room_code ? `${room.school_room_code} · ${room.school_room_name}` : 'Ruang manual sesi'}</p>
-							<p class="text-xs text-slate-500">{room.school_room_building || room.school_room_location_note || 'Lokasi belum dicatat'}</p>
+						<div class="rounded-lg border border-border p-3">
+							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lokasi</p>
+							<p class="mt-1 text-sm font-medium text-foreground">{room.school_room_code ? `${room.school_room_code} · ${room.school_room_name}` : 'Ruang manual sesi'}</p>
+							<p class="text-xs text-muted-foreground">{room.school_room_building || room.school_room_location_note || 'Lokasi belum dicatat'}</p>
 						</div>
-						<div class="rounded-lg border border-slate-200 p-3">
-							<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pengawas</p>
+						<div class="rounded-lg border border-border p-3">
+							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pengawas</p>
 							<div class="mt-1 space-y-1">
 								{#each proctors as proctor (proctor.id)}
-									<p class="text-sm text-slate-700">{proctor.nama} <span class="text-xs text-slate-400">({proctor.role})</span></p>
+									<p class="text-sm text-foreground">{proctor.nama} <span class="text-xs text-muted-foreground">({proctor.role})</span></p>
 								{:else}
-									<p class="text-sm text-amber-700">Belum ada pengawas</p>
+									<p class="text-sm text-warning">Belum ada pengawas</p>
 								{/each}
 							</div>
 						</div>
-						<div class="rounded-lg border border-slate-200 p-3">
-							<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Status Ruang</p>
-							<p class="mt-1 text-sm text-slate-700">Durasi paket {room.duration_minutes} menit</p>
-							<p class="text-xs text-slate-500">{room.is_locked ? 'Ruang dikunci' : 'Ruang masih dapat diperbarui operator'}</p>
+						<div class="rounded-lg border border-border p-3">
+							<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status Ruang</p>
+							<p class="mt-1 text-sm text-foreground">Durasi paket {room.duration_minutes} menit</p>
+							<p class="text-xs text-muted-foreground">{room.is_locked ? 'Ruang dikunci' : 'Ruang masih dapat diperbarui operator'}</p>
 						</div>
 					</Card.Content>
 				</Card.Root>
 
-				<Card.Root class="border-emerald-100">
+				<Card.Root class="border-primary/20">
 					<Card.Header class="pb-3">
 						<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 							<div>
@@ -522,7 +522,7 @@
 								<Card.Description>Checklist penutupan, catatan insiden, dan bukti penguncian ruang setelah ujian.</Card.Description>
 							</div>
 							<div class="flex flex-wrap items-center gap-2">
-								<Badge variant="outline" class={handoverLocked ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-amber-300 bg-amber-50 text-amber-700'}>
+								<Badge variant="outline" class={handoverLocked ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}>
 									{handoverLocked ? 'Terkunci' : 'Belum dikunci'}
 								</Badge>
 								{#if handoverLoadBusy}
@@ -535,67 +535,67 @@
 						{#if handover}
 							<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
 								<div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-									<label for="handover-attendance" class="flex min-h-14 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+									<label for="handover-attendance" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
 										<input id="handover-attendance" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.attendance_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.attendance_checked = event.currentTarget.checked)} />
-										<span><span class="font-semibold text-slate-900">Daftar hadir</span><br /><span class="text-xs text-slate-500">Paraf/kehadiran peserta sudah dicek.</span></span>
+										<span><span class="font-semibold text-foreground">Daftar hadir</span><br /><span class="text-xs text-muted-foreground">Paraf/kehadiran peserta sudah dicek.</span></span>
 									</label>
-									<label for="handover-submitted" class="flex min-h-14 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+									<label for="handover-submitted" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
 										<input id="handover-submitted" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.all_submitted_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.all_submitted_checked = event.currentTarget.checked)} />
-										<span><span class="font-semibold text-slate-900">Submit akhir</span><br /><span class="text-xs text-slate-500">{participantStats.submitted}/{room.participant_count} peserta tercatat.</span></span>
+										<span><span class="font-semibold text-foreground">Submit akhir</span><br /><span class="text-xs text-muted-foreground">{participantStats.submitted}/{room.participant_count} peserta tercatat.</span></span>
 									</label>
-									<label for="handover-device" class="flex min-h-14 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+									<label for="handover-device" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
 										<input id="handover-device" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.device_issue_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.device_issue_checked = event.currentTarget.checked)} />
-										<span><span class="font-semibold text-slate-900">Gangguan dicatat</span><br /><span class="text-xs text-slate-500">{room.suspicious_count} atensi, {room.missing_seat_count} meja kosong.</span></span>
+										<span><span class="font-semibold text-foreground">Gangguan dicatat</span><br /><span class="text-xs text-muted-foreground">{room.suspicious_count} atensi, {room.missing_seat_count} meja kosong.</span></span>
 									</label>
-									<label for="handover-clean" class="flex min-h-14 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+									<label for="handover-clean" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
 										<input id="handover-clean" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.room_clean_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.room_clean_checked = event.currentTarget.checked)} />
-										<span><span class="font-semibold text-slate-900">Ruang rapi</span><br /><span class="text-xs text-slate-500">Meja, kursi, listrik, dan jaringan dicek.</span></span>
+										<span><span class="font-semibold text-foreground">Ruang rapi</span><br /><span class="text-xs text-muted-foreground">Meja, kursi, listrik, dan jaringan dicek.</span></span>
 									</label>
-									<label for="handover-token" class="flex min-h-14 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+									<label for="handover-token" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
 										<input id="handover-token" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.token_returned_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.token_returned_checked = event.currentTarget.checked)} />
-										<span><span class="font-semibold text-slate-900">Token/berkas</span><br /><span class="text-xs text-slate-500">Token ruang dan berkas pengawas dikembalikan.</span></span>
+										<span><span class="font-semibold text-foreground">Token/berkas</span><br /><span class="text-xs text-muted-foreground">Token ruang dan berkas pengawas dikembalikan.</span></span>
 									</label>
-									<label for="handover-assets" class="flex min-h-14 items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+									<label for="handover-assets" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
 										<input id="handover-assets" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.assets_returned_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.assets_returned_checked = event.currentTarget.checked)} />
-										<span><span class="font-semibold text-slate-900">Aset cadangan</span><br /><span class="text-xs text-slate-500">Perangkat pinjaman/cadangan sudah kembali.</span></span>
+										<span><span class="font-semibold text-foreground">Aset cadangan</span><br /><span class="text-xs text-muted-foreground">Perangkat pinjaman/cadangan sudah kembali.</span></span>
 									</label>
 								</div>
-								<div class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+								<div class="space-y-2 rounded-lg border border-border bg-muted/50 p-3">
 									<div class="grid grid-cols-3 gap-2 text-center">
 										<div>
-											<p class="text-lg font-bold text-slate-900">{participantStats.submitted}</p>
-											<p class="text-[11px] uppercase tracking-wide text-slate-500">Submit</p>
+											<p class="text-lg font-bold text-foreground">{participantStats.submitted}</p>
+											<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Submit</p>
 										</div>
 										<div>
-											<p class="text-lg font-bold text-red-700">{room.suspicious_count}</p>
-											<p class="text-[11px] uppercase tracking-wide text-slate-500">Atensi</p>
+											<p class="text-lg font-bold text-destructive">{room.suspicious_count}</p>
+											<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Atensi</p>
 										</div>
 										<div>
-											<p class="text-lg font-bold text-amber-700">{participantStats.stale + participantStats.offline}</p>
-											<p class="text-[11px] uppercase tracking-wide text-slate-500">Cek ulang</p>
+											<p class="text-lg font-bold text-warning">{participantStats.stale + participantStats.offline}</p>
+											<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Cek ulang</p>
 										</div>
 									</div>
-									<p class="border-t border-slate-200 pt-2 text-xs text-slate-500">
+									<p class="border-t border-border pt-2 text-xs text-muted-foreground">
 										Terakhir diperbarui {fmtDate(handover.handover_updated_at)}. {handoverLocked ? `Dikunci ${fmtDate(handover.locked_at)}.` : 'Simpan draft sebelum mengunci.'}
 									</p>
 								</div>
 							</div>
 							<div class="mt-4 grid gap-3 lg:grid-cols-3">
 								<div>
-									<label for="handover-incident-notes" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Catatan Kejadian</label>
+									<label for="handover-incident-notes" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Catatan Kejadian</label>
 									<Textarea id="handover-incident-notes" class="mt-1 min-h-24" bind:value={handover.incident_notes} disabled={handoverLocked || handoverBusy} placeholder="Gangguan perangkat, jaringan, keterlambatan, atau kejadian ruang." />
 								</div>
 								<div>
-									<label for="handover-operator-notes" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Catatan Operator</label>
+									<label for="handover-operator-notes" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Catatan Operator</label>
 									<Textarea id="handover-operator-notes" class="mt-1 min-h-24" bind:value={handover.operator_notes} disabled={handoverLocked || handoverBusy} placeholder="Tindak lanjut operator, reset akses, atau verifikasi submit." />
 								</div>
 								<div>
-									<label for="handover-notes" class="text-xs font-semibold uppercase tracking-wide text-slate-500">Catatan Serah Terima</label>
+									<label for="handover-notes" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Catatan Serah Terima</label>
 									<Textarea id="handover-notes" class="mt-1 min-h-24" bind:value={handover.handover_notes} disabled={handoverLocked || handoverBusy} placeholder="Ringkasan akhir untuk kepala madrasah/panitia." />
 								</div>
 							</div>
-							<div class="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-								<p class="text-xs text-slate-500">Penguncian membuat catatan menjadi arsip akhir ruang. Perubahan setelah itu dilakukan melalui prosedur operator.</p>
+							<div class="mt-4 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+								<p class="text-xs text-muted-foreground">Penguncian membuat catatan menjadi arsip akhir ruang. Perubahan setelah itu dilakukan melalui prosedur operator.</p>
 								<div class="flex flex-wrap gap-2">
 									<LoadingButton variant="outline" onclick={() => void saveHandover()} loading={handoverBusy} disabled={handoverLocked || handoverLockBusy} loadingLabel="Menyimpan...">
 										Simpan Draft
@@ -616,7 +616,7 @@
 				</Card.Root>
 
 				<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-					<Card.Root class="border-emerald-100">
+					<Card.Root class="border-primary/20">
 						<Card.Header>
 							<Card.Title>Peserta Ruang</Card.Title>
 							<Card.Description>Monitoring heartbeat, submit, dan tindakan pengawas terbatas pada ruang ini.</Card.Description>
@@ -624,7 +624,7 @@
 						<Card.Content class="overflow-x-auto">
 							<Table.Root>
 								<Table.Header>
-									<Table.Row class="bg-green-50">
+									<Table.Row class="bg-success/10">
 										<Table.Head>Peserta</Table.Head>
 										<Table.Head class="text-center">Meja</Table.Head>
 										<Table.Head>Status</Table.Head>
@@ -637,15 +637,15 @@
 								</Table.Header>
 								<Table.Body>
 									{#each participants as row (row.participant_id)}
-											<Table.Row class={row.suspicious_flag ? 'bg-red-50' : row.app_switch_count >= 3 ? 'bg-amber-50/60' : ''}>
+											<Table.Row class={row.suspicious_flag ? 'bg-destructive/10' : row.app_switch_count >= 3 ? 'bg-warning/10' : ''}>
 											<Table.Cell>
-												<div class="font-medium text-slate-900">{row.nama}</div>
-												<div class="text-xs text-slate-500">{row.nis}</div>
+												<div class="font-medium text-foreground">{row.nama}</div>
+												<div class="text-xs text-muted-foreground">{row.nis}</div>
 											</Table.Cell>
 											<Table.Cell class="text-center font-mono">{row.seat_no ?? '—'}</Table.Cell>
 											<Table.Cell>
 												<Badge variant="outline" class={heartbeatClass(row)}>{heartbeatLabel(row)}</Badge>
-												<p class="mt-1 text-[11px] text-slate-400">{fmtDate(row.last_heartbeat)}</p>
+												<p class="mt-1 text-[11px] text-muted-foreground">{fmtDate(row.last_heartbeat)}</p>
 											</Table.Cell>
 											<Table.Cell class="text-center font-mono">{row.answered_count}</Table.Cell>
 											<Table.Cell class="text-center font-mono">{row.app_switch_count}</Table.Cell>
@@ -667,7 +667,7 @@
 										</Table.Row>
 									{:else}
 										<Table.Row>
-											<Table.Cell colspan={8} class="py-10 text-center text-slate-400">Belum ada peserta di ruang ini</Table.Cell>
+											<Table.Cell colspan={8} class="py-10 text-center text-muted-foreground">Belum ada peserta di ruang ini</Table.Cell>
 										</Table.Row>
 									{/each}
 								</Table.Body>
@@ -675,22 +675,22 @@
 						</Card.Content>
 					</Card.Root>
 
-					<Card.Root class="border-emerald-100">
+					<Card.Root class="border-primary/20">
 						<Card.Header>
 							<Card.Title>Log Ruang</Card.Title>
 							<Card.Description>Aktivitas terakhir dari peserta ruang ini.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-3">
 							{#each events.slice(0, 15) as event (event.id)}
-								<div class="rounded-lg border border-slate-200 p-3">
+								<div class="rounded-lg border border-border p-3">
 									<div class="flex items-center justify-between gap-2">
-										<p class="text-sm font-medium text-slate-800">{event.nama}</p>
+										<p class="text-sm font-medium text-foreground">{event.nama}</p>
 										<Badge variant="outline" class="text-[11px]">{eventLabel(event.event_type)}</Badge>
 									</div>
-									<p class="mt-1 text-xs text-slate-500">{event.nis} · {fmtDate(event.created_at)}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{event.nis} · {fmtDate(event.created_at)}</p>
 								</div>
 							{:else}
-								<p class="rounded-lg border border-dashed border-slate-200 p-5 text-center text-sm text-slate-400">Belum ada log ruang</p>
+								<p class="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Belum ada log ruang</p>
 							{/each}
 						</Card.Content>
 					</Card.Root>

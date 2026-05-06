@@ -380,10 +380,10 @@
 <svelte:head><title>Paket Rapat Tindak Lanjut - MTsN 2 Kolaka Utara</title></svelte:head>
 
 <div class="space-y-6">
-	<div class="no-print flex flex-col gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+	<div class="no-print flex flex-col gap-3 rounded-md border border-border bg-card px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
 		<div>
-			<p class="text-sm font-semibold text-slate-900">Paket Rapat Tindak Lanjut</p>
-			<p class="text-sm text-slate-500">Agenda ringkas untuk menutup gap Renstra/IKU/RKT/SKP/8 SNP.</p>
+			<p class="text-sm font-semibold text-foreground">Paket Rapat Tindak Lanjut</p>
+			<p class="text-sm text-muted-foreground">Agenda ringkas untuk menutup gap Renstra/IKU/RKT/SKP/8 SNP.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button href={resolve('/governance/actions')} variant="outline" size="sm">
@@ -429,24 +429,24 @@
 			{@const meetingActions = sortedMeetingActions(data).slice(0, 18)}
 			{@const ownerRows = buildOwnerRows(data).slice(0, 10)}
 			{@const snpRows = buildSnpRows(data)}
-			<main class="print-root mx-auto max-w-6xl space-y-6 bg-white text-slate-950">
-				<section class="print-section rounded-md border border-slate-200 p-5">
+			<main class="print-root mx-auto max-w-6xl space-y-6 bg-card text-foreground">
+				<section class="print-section rounded-md border border-border p-5">
 					<div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
 						<div>
-							<p class="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">{data.schoolProfile.ministry_line}</p>
-							<h1 class="mt-2 text-2xl font-bold text-slate-950">Paket Rapat Tindak Lanjut Kepatuhan</h1>
-							<p class="mt-1 text-sm text-slate-600">{data.schoolProfile.name}</p>
-							<p class="mt-1 max-w-2xl text-xs text-slate-500">{schoolAddressLine(data.schoolProfile) || data.schoolProfile.office_line}</p>
+							<p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{data.schoolProfile.ministry_line}</p>
+							<h1 class="mt-2 text-2xl font-bold text-foreground">Paket Rapat Tindak Lanjut Kepatuhan</h1>
+							<p class="mt-1 text-sm text-muted-foreground">{data.schoolProfile.name}</p>
+							<p class="mt-1 max-w-2xl text-xs text-muted-foreground">{schoolAddressLine(data.schoolProfile) || data.schoolProfile.office_line}</p>
 						</div>
-						<div class="rounded-md border border-slate-200 px-4 py-3 text-sm">
-							<p class="font-medium text-slate-900">Waktu cetak</p>
-							<p class="text-slate-600">{formatGeneratedAt(generatedAt)} WITA</p>
+						<div class="rounded-md border border-border px-4 py-3 text-sm">
+							<p class="font-medium text-foreground">Waktu cetak</p>
+							<p class="text-muted-foreground">{formatGeneratedAt(generatedAt)} WITA</p>
 						</div>
 					</div>
 				</section>
 
-				<section class="print-section rounded-md border border-slate-200 p-5">
-					<h2 class="text-base font-semibold text-slate-950">Ringkasan Rapat</h2>
+				<section class="print-section rounded-md border border-border p-5">
+					<h2 class="text-base font-semibold text-foreground">Ringkasan Rapat</h2>
 					<div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 						{#each [
 							{ label: 'Total Register', value: totals.total, note: `${totals.done} selesai` },
@@ -458,18 +458,18 @@
 							{ label: 'Beban PIC/Unit', value: ownerRows.length, note: 'Unit/pegawai aktif' },
 							{ label: 'Standar SNP', value: snpRows.length, note: 'Dengan action aktif' },
 						] as item (item.label)}
-							<div class="rounded-md border border-slate-200 p-4">
-								<p class="text-xs text-slate-500">{item.label}</p>
-								<p class="mt-2 text-2xl font-semibold text-slate-950">{item.value}</p>
-								<p class="mt-1 text-xs text-slate-500">{item.note}</p>
+							<div class="rounded-md border border-border p-4">
+								<p class="text-xs text-muted-foreground">{item.label}</p>
+								<p class="mt-2 text-2xl font-semibold text-foreground">{item.value}</p>
+								<p class="mt-1 text-xs text-muted-foreground">{item.note}</p>
 							</div>
 						{/each}
 					</div>
 				</section>
 
-				<section class="print-section rounded-md border border-slate-200">
-					<div class="border-b border-slate-200 px-5 py-4">
-						<h2 class="text-base font-semibold text-slate-950">Agenda Keputusan</h2>
+				<section class="print-section rounded-md border border-border">
+					<div class="border-b border-border px-5 py-4">
+						<h2 class="text-base font-semibold text-foreground">Agenda Keputusan</h2>
 					</div>
 					<div class="overflow-x-auto">
 						<Table.Root>
@@ -484,10 +484,10 @@
 							<Table.Body>
 								{#each agendaRows as row (row.key)}
 									<Table.Row>
-										<Table.Cell class="text-sm font-medium text-slate-900">{row.agenda}</Table.Cell>
+										<Table.Cell class="text-sm font-medium text-foreground">{row.agenda}</Table.Cell>
 										<Table.Cell class="text-sm">{row.count}</Table.Cell>
-										<Table.Cell class="max-w-lg text-sm text-slate-600">{row.direction}</Table.Cell>
-										<Table.Cell class="min-w-64 text-sm text-slate-400">................................................................</Table.Cell>
+										<Table.Cell class="max-w-lg text-sm text-muted-foreground">{row.direction}</Table.Cell>
+										<Table.Cell class="min-w-64 text-sm text-muted-foreground">................................................................</Table.Cell>
 									</Table.Row>
 								{/each}
 							</Table.Body>
@@ -495,10 +495,10 @@
 					</div>
 				</section>
 
-				<section class="print-section rounded-md border border-slate-200">
-					<div class="border-b border-slate-200 px-5 py-4">
-						<h2 class="text-base font-semibold text-slate-950">Prioritas Pembahasan</h2>
-						<p class="mt-1 text-xs text-slate-500">Diurutkan dari lewat tenggat, prioritas, dan tenggat terdekat.</p>
+				<section class="print-section rounded-md border border-border">
+					<div class="border-b border-border px-5 py-4">
+						<h2 class="text-base font-semibold text-foreground">Prioritas Pembahasan</h2>
+						<p class="mt-1 text-xs text-muted-foreground">Diurutkan dari lewat tenggat, prioritas, dan tenggat terdekat.</p>
 					</div>
 					<div class="overflow-x-auto">
 						<Table.Root>
@@ -515,12 +515,12 @@
 								{#each meetingActions as action (action.id)}
 									<Table.Row>
 										<Table.Cell class="min-w-64">
-											<p class="text-sm font-medium text-slate-900">{action.title}</p>
-											<p class="text-xs text-slate-500">{action.period_year} - {sourceLabel(action.source_type)} - {snpLabel(action.snp_standard)}</p>
+											<p class="text-sm font-medium text-foreground">{action.title}</p>
+											<p class="text-xs text-muted-foreground">{action.period_year} - {sourceLabel(action.source_type)} - {snpLabel(action.snp_standard)}</p>
 										</Table.Cell>
 										<Table.Cell class="min-w-44">
 											<p class="text-sm">{ownerLabel(action)}</p>
-											<p class="text-xs text-slate-500">{ownerUnitLabel(action)}</p>
+											<p class="text-xs text-muted-foreground">{ownerUnitLabel(action)}</p>
 										</Table.Cell>
 										<Table.Cell>
 											<div class="flex flex-col gap-1">
@@ -528,16 +528,16 @@
 												<Badge variant={priorityVariant(action.priority)}>{priorityLabel(action.priority)}</Badge>
 											</div>
 										</Table.Cell>
-										<Table.Cell class={isOverdue(action) ? 'whitespace-nowrap text-sm font-medium text-red-700' : 'whitespace-nowrap text-sm text-slate-700'}>
+										<Table.Cell class={isOverdue(action) ? 'whitespace-nowrap text-sm font-medium text-destructive' : 'whitespace-nowrap text-sm text-foreground'}>
 											{formatDate(action.due_date)}
 										</Table.Cell>
-										<Table.Cell class="max-w-md text-sm text-slate-600">
+										<Table.Cell class="max-w-md text-sm text-muted-foreground">
 											<p>{linkedLabel(action)}</p>
-											<p class="mt-1 text-xs text-slate-500">{action.evidence_url || action.evidence_item_title || 'Bukti belum dicatat'}</p>
+											<p class="mt-1 text-xs text-muted-foreground">{action.evidence_url || action.evidence_item_title || 'Bukti belum dicatat'}</p>
 										</Table.Cell>
 									</Table.Row>
 								{:else}
-									<Table.Row><Table.Cell colspan={5} class="text-center text-sm text-slate-500">Belum ada tindak lanjut aktif.</Table.Cell></Table.Row>
+									<Table.Row><Table.Cell colspan={5} class="text-center text-sm text-muted-foreground">Belum ada tindak lanjut aktif.</Table.Cell></Table.Row>
 								{/each}
 							</Table.Body>
 						</Table.Root>
@@ -545,53 +545,53 @@
 				</section>
 
 				<section class="print-section grid gap-6 lg:grid-cols-2">
-					<div class="rounded-md border border-slate-200">
-						<div class="border-b border-slate-200 px-5 py-4">
-							<h2 class="text-base font-semibold text-slate-950">Beban PIC/Unit</h2>
+					<div class="rounded-md border border-border">
+						<div class="border-b border-border px-5 py-4">
+							<h2 class="text-base font-semibold text-foreground">Beban PIC/Unit</h2>
 						</div>
 						<div class="space-y-2 p-5">
 							{#each ownerRows as row (row.key)}
-								<div class="rounded-md border border-slate-200 px-3 py-2">
+								<div class="rounded-md border border-border px-3 py-2">
 									<div class="flex items-start justify-between gap-3">
 										<div>
-											<p class="text-sm font-medium text-slate-900">{row.label}</p>
-											<p class="text-xs text-slate-500">{row.unitLabel}</p>
+											<p class="text-sm font-medium text-foreground">{row.label}</p>
+											<p class="text-xs text-muted-foreground">{row.unitLabel}</p>
 										</div>
-										<p class="text-sm font-semibold text-slate-900">{row.openCount}</p>
+										<p class="text-sm font-semibold text-foreground">{row.openCount}</p>
 									</div>
-									<p class="mt-1 text-xs text-slate-500">
+									<p class="mt-1 text-xs text-muted-foreground">
 										{row.criticalCount} tinggi, {row.overdueCount} lewat, {row.waitingEvidenceCount} tunggu bukti, tenggat {formatDate(row.nextDueDate)}
 									</p>
 								</div>
 							{:else}
-								<p class="text-sm text-slate-500">Tidak ada beban PIC/unit aktif.</p>
+								<p class="text-sm text-muted-foreground">Tidak ada beban PIC/unit aktif.</p>
 							{/each}
 						</div>
 					</div>
 
-					<div class="rounded-md border border-slate-200">
-						<div class="border-b border-slate-200 px-5 py-4">
-							<h2 class="text-base font-semibold text-slate-950">Sebaran 8 SNP</h2>
+					<div class="rounded-md border border-border">
+						<div class="border-b border-border px-5 py-4">
+							<h2 class="text-base font-semibold text-foreground">Sebaran 8 SNP</h2>
 						</div>
 						<div class="space-y-2 p-5">
 							{#each snpRows as row (row.code)}
-								<div class="rounded-md border border-slate-200 px-3 py-2">
+								<div class="rounded-md border border-border px-3 py-2">
 									<div class="flex items-start justify-between gap-3">
-										<p class="text-sm font-medium text-slate-900">{row.label}</p>
-										<p class="text-sm font-semibold text-slate-900">{row.openCount}</p>
+										<p class="text-sm font-medium text-foreground">{row.label}</p>
+										<p class="text-sm font-semibold text-foreground">{row.openCount}</p>
 									</div>
-									<p class="mt-1 text-xs text-slate-500">{row.criticalCount} tinggi, {row.overdueCount} lewat, {row.waitingEvidenceCount} tunggu bukti</p>
+									<p class="mt-1 text-xs text-muted-foreground">{row.criticalCount} tinggi, {row.overdueCount} lewat, {row.waitingEvidenceCount} tunggu bukti</p>
 								</div>
 							{:else}
-								<p class="text-sm text-slate-500">Belum ada tindak lanjut aktif yang dikaitkan ke SNP.</p>
+								<p class="text-sm text-muted-foreground">Belum ada tindak lanjut aktif yang dikaitkan ke SNP.</p>
 							{/each}
 						</div>
 					</div>
 				</section>
 
-				<section class="print-section rounded-md border border-slate-200">
-					<div class="border-b border-slate-200 px-5 py-4">
-						<h2 class="text-base font-semibold text-slate-950">Keputusan Rapat</h2>
+				<section class="print-section rounded-md border border-border">
+					<div class="border-b border-border px-5 py-4">
+						<h2 class="text-base font-semibold text-foreground">Keputusan Rapat</h2>
 					</div>
 					<div class="overflow-x-auto">
 						<Table.Root>
@@ -606,10 +606,10 @@
 							<Table.Body>
 								{#each Array.from({ length: 6 }) as _, index (`decision-row-${index}`)}
 									<Table.Row>
-										<Table.Cell class="h-14 text-slate-400">................................................................</Table.Cell>
-										<Table.Cell class="text-slate-400">........................</Table.Cell>
-										<Table.Cell class="text-slate-400">........................</Table.Cell>
-										<Table.Cell class="text-slate-400">........................</Table.Cell>
+										<Table.Cell class="h-14 text-muted-foreground">................................................................</Table.Cell>
+										<Table.Cell class="text-muted-foreground">........................</Table.Cell>
+										<Table.Cell class="text-muted-foreground">........................</Table.Cell>
+										<Table.Cell class="text-muted-foreground">........................</Table.Cell>
 									</Table.Row>
 								{/each}
 							</Table.Body>
@@ -623,11 +623,11 @@
 						{ role: 'Koordinator Tata Kelola', name: '................................', nip: '' },
 						{ role: 'Notulis', name: '................................', nip: '' },
 					] as signer (signer.role)}
-						<div class="rounded-md border border-slate-200 p-5 text-center">
-							<p class="text-sm font-medium text-slate-900">{signer.role}</p>
+						<div class="rounded-md border border-border p-5 text-center">
+							<p class="text-sm font-medium text-foreground">{signer.role}</p>
 							<div class="h-20"></div>
-							<p class="text-sm font-semibold text-slate-900">{signer.name}</p>
-							<p class="text-xs text-slate-500">{signer.nip ? `NIP. ${signer.nip}` : 'NIP. ................................'}</p>
+							<p class="text-sm font-semibold text-foreground">{signer.name}</p>
+							<p class="text-xs text-muted-foreground">{signer.nip ? `NIP. ${signer.nip}` : 'NIP. ................................'}</p>
 						</div>
 					{/each}
 				</section>

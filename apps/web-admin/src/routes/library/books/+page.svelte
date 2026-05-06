@@ -191,8 +191,8 @@
 <div class="space-y-4">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Katalog Buku</h1>
-			<p class="text-sm text-slate-500">Kelola koleksi inti perpustakaan, stok eksemplar, dan klasifikasi rak.</p>
+			<h1 class="text-2xl font-semibold text-foreground">Katalog Buku</h1>
+			<p class="text-sm text-muted-foreground">Kelola koleksi inti perpustakaan, stok eksemplar, dan klasifikasi rak.</p>
 		</div>
 		<Button onclick={openCreate} size="sm">+ Tambah Buku</Button>
 	</div>
@@ -201,8 +201,8 @@
 		{#snippet pending()}
 			<div class="grid gap-3 md:grid-cols-3">
 				{#each ['Total Judul', 'Tersedia Dicari', 'Stok Habis'] as label (label)}
-					<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+					<div class="rounded-2xl border border-border bg-muted/50 px-4 py-4">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
 						<Skeleton class="mt-3 h-8 w-16" />
 						<Skeleton class="mt-2 h-4 w-48" />
 					</div>
@@ -222,33 +222,33 @@
 			{@const currentBooks = value as Book[]}
 			{@const currentFiltered = filterBooks(currentBooks)}
 			<div class="grid gap-3 md:grid-cols-3">
-				<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Judul</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{currentBooks.length}</p>
-					<p class="text-sm text-slate-600">koleksi unik yang tercatat di katalog</p>
+				<div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Total Judul</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{currentBooks.length}</p>
+					<p class="text-sm text-muted-foreground">koleksi unik yang tercatat di katalog</p>
 				</div>
-				<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Tersedia Dicari</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{currentFiltered.length}</p>
-					<p class="text-sm text-slate-600">hasil koleksi berdasarkan filter saat ini</p>
+				<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Tersedia Dicari</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{currentFiltered.length}</p>
+					<p class="text-sm text-muted-foreground">hasil koleksi berdasarkan filter saat ini</p>
 				</div>
-				<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Stok Habis</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{currentBooks.filter((item) => item.tersedia === 0).length}</p>
-					<p class="text-sm text-slate-600">judul yang butuh penambahan atau pengembalian</p>
+				<div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Stok Habis</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{currentBooks.filter((item) => item.tersedia === 0).length}</p>
+					<p class="text-sm text-muted-foreground">judul yang butuh penambahan atau pengembalian</p>
 				</div>
 			</div>
 		{/snippet}
 	</AsyncContent>
 
-	<Card.Root class="border-slate-200 shadow-sm">
+	<Card.Root class="border-border shadow-sm">
 		<Card.Content class="grid gap-3 p-4 md:grid-cols-[1.2fr_0.8fr]">
 			<div>
-				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Cari Koleksi</p>
+				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Cari Koleksi</p>
 				<Input class="w-full" placeholder="Cari judul, pengarang, atau kode buku…" bind:value={search} />
 			</div>
 			<div>
-				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Filter Kategori</p>
+				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Filter Kategori</p>
 				<select
 					bind:value={filterKategori}
 					class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -262,7 +262,7 @@
 		</Card.Content>
 	</Card.Root>
 
-	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+	<Card.Root class="overflow-hidden border-border shadow-sm">
 		<Card.Content class="p-0">
 			<AsyncContent promise={booksPromise} onerror={handleBooksRenderError}>
 				{#snippet pending()}
@@ -306,7 +306,7 @@
 					{:else}
 						<Table.Root>
 							<Table.Header>
-								<Table.Row class="bg-slate-50 text-xs">
+								<Table.Row class="bg-muted/50 text-xs">
 									<Table.Head>Kode</Table.Head>
 									<Table.Head>Judul & Pengarang</Table.Head>
 									<Table.Head>Kategori</Table.Head>
@@ -320,22 +320,22 @@
 									<Table.Row class="text-sm">
 										<Table.Cell class="font-mono text-xs">{b.kode}</Table.Cell>
 										<Table.Cell>
-											<p class="font-medium text-slate-800">{b.judul}</p>
-											{#if b.pengarang}<p class="text-xs text-slate-500">{b.pengarang}</p>{/if}
+											<p class="font-medium text-foreground">{b.judul}</p>
+											{#if b.pengarang}<p class="text-xs text-muted-foreground">{b.pengarang}</p>{/if}
 										</Table.Cell>
 										<Table.Cell>
 											<Badge variant="secondary" class="text-xs capitalize">{b.kategori}</Badge>
 										</Table.Cell>
 										<Table.Cell class="text-center">
-											<span class={b.tersedia === 0 ? 'text-red-600 font-semibold' : 'text-green-700 font-semibold'}>
+											<span class={b.tersedia === 0 ? 'text-destructive font-semibold' : 'text-success font-semibold'}>
 												{b.tersedia}
 											</span>
-											<span class="text-slate-400">/{b.total_eksemplar}</span>
+											<span class="text-muted-foreground">/{b.total_eksemplar}</span>
 										</Table.Cell>
-										<Table.Cell class="text-xs text-slate-500">{b.lokasi_rak || '-'}</Table.Cell>
+										<Table.Cell class="text-xs text-muted-foreground">{b.lokasi_rak || '-'}</Table.Cell>
 										<Table.Cell class="text-right">
 											<Button variant="ghost" size="sm" onclick={() => openEdit(b)}>Edit</Button>
-											<Button variant="ghost" size="sm" class="text-red-600 hover:text-red-700"
+											<Button variant="ghost" size="sm" class="text-destructive hover:text-destructive"
 												onclick={() => { confirmDeleteId = b.id; showDeleteDialog = true; }}>Hapus</Button>
 										</Table.Cell>
 									</Table.Row>
@@ -356,34 +356,34 @@
 			<Dialog.Title>{editingId ? 'Edit Buku' : 'Tambah Buku Baru'}</Dialog.Title>
 		</Dialog.Header>
 		<!-- Mode toggle -->
-		<div class="flex items-center gap-2 border-b border-slate-100 pb-3">
-			<span class="text-xs text-slate-500">Mode:</span>
+		<div class="flex items-center gap-2 border-b border-border pb-3">
+			<span class="text-xs text-muted-foreground">Mode:</span>
 			{#each [['beginner', 'Cepat'], ['advance', 'Lengkap']] as [val, label] (val)}
 				<button
-					class="rounded-full border px-3 py-1 text-xs transition-colors {formMode === val ? 'bg-green-700 text-white border-green-700' : 'border-slate-300 text-slate-600 hover:border-slate-400'}"
+					class="rounded-full border px-3 py-1 text-xs transition-colors {formMode === val ? 'bg-success text-background border-success' : 'border-border text-muted-foreground hover:border-border'}"
 					onclick={() => (formMode = val as 'beginner' | 'advance')}
 				>{label}</button>
 			{/each}
 			{#if formMode === 'beginner'}
-				<span class="text-xs text-slate-400">— hanya field wajib</span>
+				<span class="text-xs text-muted-foreground">— hanya field wajib</span>
 			{:else}
-				<span class="text-xs text-slate-400">— semua informasi buku</span>
+				<span class="text-xs text-muted-foreground">— semua informasi buku</span>
 			{/if}
 		</div>
 
 		<div class="space-y-3 py-2">
 			<div class="grid grid-cols-2 gap-3">
 				<div class="space-y-1">
-					<label for="b-kode" class="block text-sm font-medium">Kode Buku <span class="text-red-500">*</span></label>
+					<label for="b-kode" class="block text-sm font-medium">Kode Buku <span class="text-destructive">*</span></label>
 					<Input id="b-kode" bind:value={fKode} placeholder="BK-001" />
 				</div>
 				<div class="space-y-1">
-					<label for="b-eks" class="block text-sm font-medium">Jumlah Eksemplar <span class="text-red-500">*</span></label>
+					<label for="b-eks" class="block text-sm font-medium">Jumlah Eksemplar <span class="text-destructive">*</span></label>
 					<Input id="b-eks" type="number" min="1" bind:value={fEksemplar} />
 				</div>
 			</div>
 			<div class="space-y-1">
-				<label for="b-judul" class="block text-sm font-medium">Judul <span class="text-red-500">*</span></label>
+				<label for="b-judul" class="block text-sm font-medium">Judul <span class="text-destructive">*</span></label>
 				<Input id="b-judul" bind:value={fJudul} placeholder="Judul buku" />
 			</div>
 

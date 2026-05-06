@@ -85,19 +85,19 @@
 	}
 </script>
 
-<section class="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm" aria-labelledby="legacy-import-title">
-	<div class="border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-amber-50 p-4 md:p-5">
+<section class="overflow-hidden rounded-2xl border border-primary/20 bg-card shadow-sm" aria-labelledby="legacy-import-title">
+	<div class="border-b border-primary/20 bg-gradient-to-r from-primary/10 via-card to-warning/10 p-4 md:p-5">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 			<div class="min-w-0">
-				<p class="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-700">Studio Import Bank Soal</p>
-				<h2 id="legacy-import-title" class="mt-1 text-xl font-black uppercase italic tracking-tight text-slate-950">Masukkan banyak soal sekaligus</h2>
-				<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{importIntroCopy}</p>
+				<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Studio Import Bank Soal</p>
+				<h2 id="legacy-import-title" class="mt-1 text-xl font-black uppercase italic tracking-tight text-foreground">Masukkan banyak soal sekaligus</h2>
+				<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{importIntroCopy}</p>
 				<div class="mt-3 flex flex-wrap gap-2">
-					<span class="rounded-full border border-emerald-100 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">{selectedImportContext}</span>
-					<span class="rounded-full border border-amber-100 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">{importScopeCopy}</span>
+					<span class="rounded-full border border-primary/20 bg-card px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">{selectedImportContext}</span>
+					<span class="rounded-full border border-warning/30 bg-card px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-warning">{importScopeCopy}</span>
 				</div>
 			</div>
-			<LoadingButton variant="outline" size="sm" onclick={onTemplate} loading={templateBusy} loadingLabel="Mengunduh..." class="h-9 shrink-0 bg-white text-xs">
+			<LoadingButton variant="outline" size="sm" onclick={onTemplate} loading={templateBusy} loadingLabel="Mengunduh..." class="h-9 shrink-0 bg-card text-xs">
 				Download Template CSV
 			</LoadingButton>
 		</div>
@@ -105,28 +105,28 @@
 	<div class="space-y-4 p-4 md:p-5">
 		<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
 			{#each importSteps as step (step.label)}
-				<div class="rounded-xl border p-3 {step.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-slate-50 text-slate-700'}">
+				<div class="rounded-xl border p-3 {step.ready ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border bg-muted/50 text-foreground'}">
 					<div class="flex items-start justify-between gap-2">
 						<p class="text-[10px] font-black uppercase tracking-[0.18em]">{step.label}</p>
-						<span class="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold">{step.ready ? 'OK' : 'Menunggu'}</span>
+						<span class="rounded-full bg-card/80 px-2 py-0.5 text-[10px] font-bold">{step.ready ? 'OK' : 'Menunggu'}</span>
 					</div>
 					<p class="mt-2 text-xs leading-5 opacity-80">{step.desc}</p>
 				</div>
 			{/each}
 		</div>
-		<div class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-			<span class="font-semibold text-slate-900">Format tipe:</span> boleh kosong untuk PG lama, atau diisi: pg_kompleks, benar_salah, setuju_tidak_setuju, isian, essay, menjodohkan.
+		<div class="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+			<span class="font-semibold text-foreground">Format tipe:</span> boleh kosong untuk PG lama, atau diisi: pg_kompleks, benar_salah, setuju_tidak_setuju, isian, essay, menjodohkan.
 		</div>
 		<div class="grid gap-3 md:grid-cols-2">
 			<div>
-				<label for="legacy-import-subject" class="mb-1 block text-xs font-medium text-slate-600">
-					Mata Pelajaran <span class="text-red-500">*</span>
+				<label for="legacy-import-subject" class="mb-1 block text-xs font-medium text-muted-foreground">
+					Mata Pelajaran <span class="text-destructive">*</span>
 				</label>
 				<select
 					id="legacy-import-subject"
 					value={importSubjectId}
 					onchange={handleSubjectChange}
-					class="w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+					class="w-full rounded-md border border-border bg-card px-2.5 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 				>
 					<option value="">-- Pilih Mapel --</option>
 					{#each subjects as subject (subject.id)}
@@ -135,21 +135,21 @@
 				</select>
 			</div>
 			<div>
-				<label for="legacy-import-file" class="mb-1 block text-xs font-medium text-slate-600">
-					File CSV <span class="text-red-500">*</span>
+				<label for="legacy-import-file" class="mb-1 block text-xs font-medium text-muted-foreground">
+					File CSV <span class="text-destructive">*</span>
 				</label>
 					<input
 						id="legacy-import-file"
 						type="file"
 						accept=".csv,text/csv"
 						onchange={onFileChange}
-						class="block w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-green-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-green-800"
+						class="block w-full rounded-md border border-border bg-card px-2.5 py-2 text-sm text-foreground file:mr-3 file:rounded-md file:border-0 file:bg-success/10 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-success"
 					/>
 					{#if hasImportFile}
-						<div class="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-green-100 bg-green-50 px-2.5 py-1.5 text-xs text-green-900">
+						<div class="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-success/20 bg-success/10 px-2.5 py-1.5 text-xs text-success">
 							<span class="max-w-56 truncate font-semibold">{importFileName || 'File CSV dipilih'}</span>
-							<span class="text-green-700">{importFileSizeLabel}</span>
-							<span class="rounded-full bg-white px-2 py-0.5 font-semibold {importDryRunDone && !hasImportErrors ? 'text-green-700' : 'text-amber-700'}">
+							<span class="text-success">{importFileSizeLabel}</span>
+							<span class="rounded-full bg-card px-2 py-0.5 font-semibold {importDryRunDone && !hasImportErrors ? 'text-success' : 'text-warning'}">
 								{importFileStateLabel}
 							</span>
 						</div>
@@ -157,54 +157,54 @@
 				</div>
 			</div>
 			{#if importResult}
-				<div class="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800" aria-live="polite">
+				<div class="rounded-md border border-border bg-muted/50 p-3 text-sm text-foreground" aria-live="polite">
 					<div class="grid grid-cols-2 gap-2 text-center md:grid-cols-4">
 						<div>
 							<div class="text-lg font-bold">{importDryRunDone ? (importResult.would_import ?? importResult.valid ?? 0) : importResult.imported}</div>
-							<div class="text-[10px] uppercase text-green-700">{importDryRunDone ? 'Akan Masuk' : 'Masuk'}</div>
+							<div class="text-[10px] uppercase text-success">{importDryRunDone ? 'Akan Masuk' : 'Masuk'}</div>
 					</div>
 					<div>
 						<div class="text-lg font-bold">{importResult.skipped}</div>
-						<div class="text-[10px] uppercase text-green-700">Lewat</div>
+						<div class="text-[10px] uppercase text-success">Lewat</div>
 					</div>
 						<div>
 							<div class="text-lg font-bold">{importResult.total_rows}</div>
-							<div class="text-[10px] uppercase text-green-700">Baris</div>
+							<div class="text-[10px] uppercase text-success">Baris</div>
 						</div>
 						<div>
-							<div class="text-lg font-bold {hasImportErrors ? 'text-amber-700' : 'text-slate-900'}">{importResult.errors.length}</div>
-							<div class="text-[10px] uppercase {hasImportErrors ? 'text-amber-700' : 'text-green-700'}">Error</div>
+							<div class="text-lg font-bold {hasImportErrors ? 'text-warning' : 'text-foreground'}">{importResult.errors.length}</div>
+							<div class="text-[10px] uppercase {hasImportErrors ? 'text-warning' : 'text-success'}">Error</div>
 						</div>
 					</div>
 					{#if importDryRunDone}
-						<p class="mt-3 border-t border-green-200 pt-2 text-xs font-semibold {hasImportErrors ? 'text-amber-900' : 'text-green-900'}">
+						<p class="mt-3 border-t border-success/20 pt-2 text-xs font-semibold {hasImportErrors ? 'text-warning' : 'text-success'}">
 							{hasImportErrors
 								? 'Preview menemukan error. Perbaiki file CSV lalu jalankan dry-run ulang sebelum import.'
 								: 'Preview dry-run bersih. Konfirmasi Import sudah aman dijalankan.'}
 						</p>
 					{/if}
 					{#if importResult.errors.length > 0}
-						<p class="mt-3 border-t border-green-200 pt-2 text-xs font-semibold text-amber-900">Error import ditampilkan agar kolom wajib, format tipe, dan encoding bisa diperbaiki sebelum upload ulang.</p>
-					<ul class="mt-3 space-y-1 border-t border-green-200 pt-2 text-xs text-amber-800">
+						<p class="mt-3 border-t border-success/20 pt-2 text-xs font-semibold text-warning">Error import ditampilkan agar kolom wajib, format tipe, dan encoding bisa diperbaiki sebelum upload ulang.</p>
+					<ul class="mt-3 space-y-1 border-t border-success/20 pt-2 text-xs text-warning">
 						{#each importResult.errors.slice(0, 6) as error (`legacy-import-error-${error}`)}
 							<li>{error}</li>
 						{/each}
 					</ul>
 				{/if}
 				{#if importResult.duplicate_codes.length > 0}
-					<div class="mt-3 border-t border-green-200 pt-2 text-xs text-amber-900">
+					<div class="mt-3 border-t border-success/20 pt-2 text-xs text-warning">
 						<p class="font-semibold">Kode duplikat dilewati:</p>
 						<p class="mt-1 break-words font-mono text-[11px]">{importResult.duplicate_codes.slice(0, 24).join(', ')}{importResult.duplicate_codes.length > 24 ? `, +${importResult.duplicate_codes.length - 24} lagi` : ''}</p>
 					</div>
 				{/if}
 			</div>
 		{/if}
-		<div class="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+		<div class="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
 			<Button variant="outline" onclick={onBack}>Kembali ke Daftar</Button>
 				<LoadingButton onclick={onDryRun} loading={importBusy} loadingLabel="Preview..." disabled={importBusy || !importSubjectId || !hasImportFile} variant="outline" class="disabled:opacity-50">
 					Preview Dry-run
 				</LoadingButton>
-				<LoadingButton onclick={onConfirmImport} loading={importBusy} loadingLabel="Import..." disabled={importBusy || !canConfirmImport} class="bg-green-700 text-white hover:bg-green-800 disabled:opacity-50">
+				<LoadingButton onclick={onConfirmImport} loading={importBusy} loadingLabel="Import..." disabled={importBusy || !canConfirmImport} class="bg-success text-background hover:bg-success disabled:opacity-50">
 					Konfirmasi Import
 				</LoadingButton>
 		</div>

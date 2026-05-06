@@ -168,21 +168,21 @@
 	}
 
 	function checklistClass(tone: ChecklistItem['tone']) {
-		if (tone === 'success') return 'border-emerald-200 bg-emerald-50/60';
-		if (tone === 'warning') return 'border-amber-200 bg-amber-50/70';
-		return 'border-slate-200 bg-white';
+		if (tone === 'success') return 'border-primary/20 bg-primary/10';
+		if (tone === 'warning') return 'border-warning/30 bg-warning/10';
+		return 'border-border bg-card';
 	}
 
 	function phaseBadgeClass(tone: ChecklistItem['tone']) {
-		if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-		if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-700';
-		return 'border-slate-200 bg-white text-slate-600';
+		if (tone === 'success') return 'border-primary/20 bg-primary/10 text-primary';
+		if (tone === 'warning') return 'border-warning/30 bg-warning/10 text-warning';
+		return 'border-border bg-card text-muted-foreground';
 	}
 
 	function statusClass(status: string) {
-		if (status === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-		if (status === 'finished') return 'bg-slate-100 text-slate-600 border-slate-200';
-		return 'bg-amber-100 text-amber-700 border-amber-200';
+		if (status === 'active') return 'bg-primary/15 text-primary border-primary/20';
+		if (status === 'finished') return 'bg-muted text-muted-foreground border-border';
+		return 'bg-warning/15 text-warning border-warning/30';
 	}
 
 	function buildChecklist(detail: EventCommandDetail): ChecklistItem[] {
@@ -211,9 +211,9 @@
 	}
 
 	function readinessDotClass(tone: ChecklistItem['tone']) {
-		if (tone === 'success') return 'bg-emerald-500';
-		if (tone === 'warning') return 'bg-amber-500';
-		return 'bg-slate-300';
+		if (tone === 'success') return 'bg-primary';
+		if (tone === 'warning') return 'bg-warning';
+		return 'bg-muted';
 	}
 
 	function buildReadinessGroups(checklist: ChecklistItem[]): ReadinessGroup[] {
@@ -298,10 +298,10 @@
 <svelte:window onhashchange={handleHashChange} />
 
 <div class="space-y-6 p-6">
-	<div class="flex items-center gap-2 text-sm text-slate-500">
-		<a href={resolve('/asesmen/kegiatan')} class="hover:text-slate-700">Kegiatan & Sesi CBT</a>
+	<div class="flex items-center gap-2 text-sm text-muted-foreground">
+		<a href={resolve('/asesmen/kegiatan')} class="hover:text-foreground">Kegiatan & Sesi CBT</a>
 		<span>/</span>
-		<span class="text-slate-700 font-medium truncate max-w-xs">{info?.title ?? 'Pusat Kendali'}</span>
+		<span class="text-foreground font-medium truncate max-w-xs">{info?.title ?? 'Pusat Kendali'}</span>
 	</div>
 
 	<AsyncContent promise={detailPromise} onerror={handleDetailRenderError}>
@@ -326,29 +326,29 @@
 			{@const checklist = buildChecklist(detail)}
 			{@const readinessGroups = buildReadinessGroups(checklist)}
 			{@const nextActions = buildNextActions(detail, checklist)}
-			<section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+			<section class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
 				<div class="flex flex-wrap items-start justify-between gap-4">
 					<div class="max-w-3xl p-5">
-						<p class="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">Wizard Kesiapan CBT</p>
-						<h1 class="mt-1 text-2xl font-semibold text-slate-900">{currentInfo.title}</h1>
-						<p class="mt-2 text-sm text-slate-600">{currentInfo.academic_year_name} · <span class="capitalize">{currentInfo.exam_type}</span> · {scopeLabel[currentInfo.scope] ?? currentInfo.scope}</p>
-						<p class="mt-2 text-sm text-slate-500">Ikuti langkah kesiapan dari paket soal, sesi, monitoring, sampai hasil tanpa membuka banyak kartu modul yang setara.</p>
+						<p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Wizard Kesiapan CBT</p>
+						<h1 class="mt-1 text-2xl font-semibold text-foreground">{currentInfo.title}</h1>
+						<p class="mt-2 text-sm text-muted-foreground">{currentInfo.academic_year_name} · <span class="capitalize">{currentInfo.exam_type}</span> · {scopeLabel[currentInfo.scope] ?? currentInfo.scope}</p>
+						<p class="mt-2 text-sm text-muted-foreground">Ikuti langkah kesiapan dari paket soal, sesi, monitoring, sampai hasil tanpa membuka banyak kartu modul yang setara.</p>
 					</div>
 					<div class="flex flex-wrap items-center gap-2 p-5 lg:justify-end">
 						<Badge class={statusClass(currentInfo.status)}>{statusLabel[currentInfo.status] ?? currentInfo.status}</Badge>
 						{#each currentInfo.target_levels ?? [] as level (level)}
-							<Badge variant="outline" class="bg-white">Tingkat {level}</Badge>
+							<Badge variant="outline" class="bg-card">Tingkat {level}</Badge>
 						{/each}
 						{#if !currentInfo.target_levels?.length}
-							<Badge variant="outline" class="bg-white">Target mengikuti cakupan</Badge>
+							<Badge variant="outline" class="bg-card">Target mengikuti cakupan</Badge>
 						{/if}
 					</div>
 				</div>
-				<nav class="flex gap-1 overflow-x-auto border-t border-slate-200 bg-slate-50 px-3 py-2" aria-label="Bagian pusat kegiatan">
+				<nav class="flex gap-1 overflow-x-auto border-t border-border bg-muted/50 px-3 py-2" aria-label="Bagian pusat kegiatan">
 					{#each sectionTabs as tab (tab.id)}
 						<button
 							type="button"
-							class={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${activeSection === tab.id ? 'bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-200' : 'text-slate-600 hover:bg-white hover:text-slate-900'}`}
+							class={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${activeSection === tab.id ? 'bg-card text-primary shadow-sm ring-1 ring-primary/30' : 'text-muted-foreground hover:bg-card hover:text-foreground'}`}
 							aria-current={activeSection === tab.id ? 'page' : undefined}
 							aria-pressed={activeSection === tab.id}
 							onclick={() => activeSection = tab.id}
@@ -360,19 +360,19 @@
 			</section>
 
 			<section class="grid gap-4 lg:grid-cols-[0.82fr_1.18fr]" aria-label="Wizard kesiapan kegiatan">
-				<Card.Root class="border-emerald-200 bg-emerald-50/40 shadow-sm">
+				<Card.Root class="border-primary/20 bg-primary/10 shadow-sm">
 					<Card.Header class="pb-2">
 						<Card.Title class="text-base">Langkah berikutnya</Card.Title>
 						<Card.Description>Rekomendasi ringkas dari data kesiapan yang tersedia saat ini.</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-3">
 						{#each nextActions as action (action.label)}
-							<a href={resolve(action.href)} class="block rounded-xl border border-white bg-white p-4 shadow-sm transition hover:border-emerald-200 hover:shadow-md">
+							<a href={resolve(action.href)} class="block rounded-xl border border-white bg-card p-4 shadow-sm transition hover:border-primary/20 hover:shadow-md">
 								<div class="flex items-start justify-between gap-3">
 									<div class="min-w-0">
-										<p class="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">{action.priority}</p>
-										<p class="mt-1 text-sm font-semibold text-slate-900">{action.action}</p>
-										<p class="mt-1 text-xs leading-5 text-slate-500">{action.helper}</p>
+										<p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">{action.priority}</p>
+										<p class="mt-1 text-sm font-semibold text-foreground">{action.action}</p>
+										<p class="mt-1 text-xs leading-5 text-muted-foreground">{action.helper}</p>
 									</div>
 									<Badge variant={action.tone === 'warning' ? 'secondary' : 'outline'} class={phaseBadgeClass(action.tone)}>{readinessStatusLabel(action)}</Badge>
 								</div>
@@ -381,29 +381,29 @@
 					</Card.Content>
 				</Card.Root>
 
-				<Card.Root class="border-slate-200 shadow-sm">
+				<Card.Root class="border-border shadow-sm">
 					<Card.Header class="pb-2">
 						<Card.Title class="text-base">Kesiapan kegiatan</Card.Title>
 						<Card.Description>Satu permukaan utama untuk membaca progres. Buka tab di bawah untuk rincian kerja atau hasil.</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-4">
 						{#each readinessGroups as group (group.title)}
-							<div class="rounded-xl border border-slate-200 bg-white p-4">
+							<div class="rounded-xl border border-border bg-card p-4">
 								<div class="flex flex-wrap items-start justify-between gap-3">
 									<div>
-										<p class="text-sm font-semibold text-slate-900">{group.title}</p>
-										<p class="mt-1 text-xs text-slate-500">{group.description}</p>
+										<p class="text-sm font-semibold text-foreground">{group.title}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{group.description}</p>
 									</div>
-									<button type="button" class="text-xs font-semibold text-emerald-800 hover:text-emerald-900" onclick={() => activeSection = group.id}>Buka tab</button>
+									<button type="button" class="text-xs font-semibold text-primary hover:text-primary" onclick={() => activeSection = group.id}>Buka tab</button>
 								</div>
-								<div class="mt-3 divide-y divide-slate-100">
+								<div class="mt-3 divide-y divide-border">
 									{#each group.items as item (item.label)}
-										<a href={resolve(item.href)} class="flex items-center justify-between gap-3 py-2 text-sm hover:text-emerald-800">
+										<a href={resolve(item.href)} class="flex items-center justify-between gap-3 py-2 text-sm hover:text-primary">
 											<span class="flex min-w-0 items-center gap-2">
 												<span class={`size-2 rounded-full ${readinessDotClass(item.tone)}`}></span>
-												<span class="truncate font-medium text-slate-800">{item.label}</span>
+												<span class="truncate font-medium text-foreground">{item.label}</span>
 											</span>
-											<span class="shrink-0 text-xs font-semibold text-slate-500">{readinessStatusLabel(item)}</span>
+											<span class="shrink-0 text-xs font-semibold text-muted-foreground">{readinessStatusLabel(item)}</span>
 										</a>
 									{/each}
 								</div>
@@ -418,10 +418,10 @@
 					<Card.Root>
 						<Card.Header class="pb-2"><Card.Title class="text-base">Kelengkapan data</Card.Title><Card.Description>Angka praktis dari paket, sesi, dan hasil yang sudah terbaca.</Card.Description></Card.Header>
 						<Card.Content class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-							<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-500">Paket</p><p class="text-lg font-semibold text-slate-900">{detail.packages.length}</p></div>
-							<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-500">Sesi</p><p class="text-lg font-semibold text-slate-900">{detail.sessions.length}</p></div>
-							<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-500">Baris hasil</p><p class="text-lg font-semibold text-slate-900">{currentResults.length}</p></div>
-							<div class="rounded-xl bg-slate-50 p-3"><p class="text-xs text-slate-500">Ringkasan kesiapan</p><p class="text-sm font-semibold text-slate-900">{detail.overview ? 'Lengkap dari sistem' : 'Sebagian data tersedia'}</p></div>
+							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Paket</p><p class="text-lg font-semibold text-foreground">{detail.packages.length}</p></div>
+							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Sesi</p><p class="text-lg font-semibold text-foreground">{detail.sessions.length}</p></div>
+							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Baris hasil</p><p class="text-lg font-semibold text-foreground">{currentResults.length}</p></div>
+							<div class="rounded-xl bg-muted/50 p-3"><p class="text-xs text-muted-foreground">Ringkasan kesiapan</p><p class="text-sm font-semibold text-foreground">{detail.overview ? 'Lengkap dari sistem' : 'Sebagian data tersedia'}</p></div>
 						</Card.Content>
 					</Card.Root>
 				</section>
@@ -436,13 +436,13 @@
 							<a href={resolve(item.href)} class={`block rounded-xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${checklistClass(item.tone)}`}>
 								<div class="flex items-start justify-between gap-3">
 									<div>
-										<p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{group.title}</p>
-										<p class="mt-1 text-sm font-semibold text-slate-900">{item.label}</p>
-										<p class="mt-1 text-xs text-slate-500">{item.helper}</p>
+										<p class="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{group.title}</p>
+										<p class="mt-1 text-sm font-semibold text-foreground">{item.label}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{item.helper}</p>
 									</div>
-									<Badge variant={item.tone === 'warning' ? 'secondary' : 'outline'} class="bg-white">{item.count ?? 'Cek'}</Badge>
+									<Badge variant={item.tone === 'warning' ? 'secondary' : 'outline'} class="bg-card">{item.count ?? 'Cek'}</Badge>
 								</div>
-								<p class="mt-4 text-sm font-semibold text-green-800">{item.action}</p>
+								<p class="mt-4 text-sm font-semibold text-success">{item.action}</p>
 							</a>
 							{/each}
 						{/each}
@@ -460,12 +460,12 @@
 				</Card.Header>
 				<Card.Content class="p-0 overflow-x-auto">
 					<Table.Root>
-						<Table.Header><Table.Row class="bg-slate-50"><Table.Head>NIS</Table.Head><Table.Head>Nama Siswa</Table.Head><Table.Head>Kelas</Table.Head><Table.Head>Sesi Ujian</Table.Head><Table.Head class="text-center">Skor</Table.Head><Table.Head>Status</Table.Head></Table.Row></Table.Header>
+						<Table.Header><Table.Row class="bg-muted/50"><Table.Head>NIS</Table.Head><Table.Head>Nama Siswa</Table.Head><Table.Head>Kelas</Table.Head><Table.Head>Sesi Ujian</Table.Head><Table.Head class="text-center">Skor</Table.Head><Table.Head>Status</Table.Head></Table.Row></Table.Header>
 						<Table.Body>
 							{#each currentResults as r (r.participant_id)}
-								<Table.Row><Table.Cell class="font-mono text-sm">{r.nis}</Table.Cell><Table.Cell class="font-medium">{r.student_nama}</Table.Cell><Table.Cell><Badge variant="secondary" class="text-xs">{r.class_code || '-'}</Badge></Table.Cell><Table.Cell class="text-sm text-slate-600">{r.session_title}</Table.Cell><Table.Cell class="text-center font-bold text-green-700">{fmtScore(r.score)}</Table.Cell><Table.Cell>{#if r.submitted_at}<Badge variant="outline" class="bg-green-50 text-green-700 border-green-200">Selesai</Badge>{:else}<Badge variant="outline" class="text-slate-400 border-slate-200">Belum</Badge>{/if}</Table.Cell></Table.Row>
+								<Table.Row><Table.Cell class="font-mono text-sm">{r.nis}</Table.Cell><Table.Cell class="font-medium">{r.student_nama}</Table.Cell><Table.Cell><Badge variant="secondary" class="text-xs">{r.class_code || '-'}</Badge></Table.Cell><Table.Cell class="text-sm text-muted-foreground">{r.session_title}</Table.Cell><Table.Cell class="text-center font-bold text-success">{fmtScore(r.score)}</Table.Cell><Table.Cell>{#if r.submitted_at}<Badge variant="outline" class="bg-success/10 text-success border-success/20">Selesai</Badge>{:else}<Badge variant="outline" class="text-muted-foreground border-border">Belum</Badge>{/if}</Table.Cell></Table.Row>
 							{:else}
-								<Table.Row><Table.Cell colspan={6} class="py-12 text-center text-slate-400">Belum ada data nilai untuk kegiatan ini.</Table.Cell></Table.Row>
+								<Table.Row><Table.Cell colspan={6} class="py-12 text-center text-muted-foreground">Belum ada data nilai untuk kegiatan ini.</Table.Cell></Table.Row>
 							{/each}
 						</Table.Body>
 					</Table.Root>

@@ -65,7 +65,7 @@
 <div class="mx-auto max-w-4xl space-y-4 py-4">
 	<div class="no-print flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3">
 		<div>
-			<p class="text-sm font-semibold text-slate-950">Cetak Surat Keterangan</p>
+			<p class="text-sm font-semibold text-foreground">Cetak Surat Keterangan</p>
 			<p class="text-sm text-muted-foreground">{certificate.nomor_surat}</p>
 		</div>
 		<div class="flex gap-2">
@@ -80,8 +80,8 @@
 		</div>
 	</div>
 
-	<main class="print-page bg-white px-10 py-10 text-slate-950 shadow-sm ring-1 ring-slate-200">
-		<header class="border-b-4 border-slate-900 pb-4 text-center">
+	<main class="print-page bg-card px-10 py-10 text-foreground shadow-sm ring-1 ring-border">
+		<header class="border-b-4 border-foreground pb-4 text-center">
 			<p class="text-sm font-semibold uppercase">{schoolProfile.ministry_line}</p>
 			<p class="text-sm font-semibold uppercase">{schoolProfile.office_line}</p>
 			<h1 class="mt-1 text-xl font-bold uppercase">{schoolProfile.name}</h1>

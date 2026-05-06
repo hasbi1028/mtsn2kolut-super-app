@@ -30,10 +30,10 @@
 	);
 
 	function toneClasses(tone: ConfirmTone) {
-		if (tone === 'danger') return 'border-red-200 bg-red-50 text-red-900';
-		if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-900';
-		if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-900';
-		return 'border-slate-200 bg-slate-50 text-slate-900';
+		if (tone === 'danger') return 'border-destructive/30 bg-destructive/10 text-destructive';
+		if (tone === 'warning') return 'border-warning/30 bg-warning/10 text-warning';
+		if (tone === 'success') return 'border-primary/20 bg-primary/10 text-primary';
+		return 'border-border bg-muted/50 text-foreground';
 	}
 
 	function confirmButtonVariant(tone: ConfirmTone) {
@@ -96,8 +96,8 @@
 
 				{#if current.options.challenge}
 					<div class="mt-4 space-y-2">
-						<label for="confirm-challenge" class="block text-xs font-medium text-slate-600">
-							Ketik <span class="font-semibold text-slate-900">{current.options.challenge}</span> untuk mengaktifkan tombol konfirmasi.
+						<label for="confirm-challenge" class="block text-xs font-medium text-muted-foreground">
+							Ketik <span class="font-semibold text-foreground">{current.options.challenge}</span> untuk mengaktifkan tombol konfirmasi.
 						</label>
 						<Input
 							id="confirm-challenge"

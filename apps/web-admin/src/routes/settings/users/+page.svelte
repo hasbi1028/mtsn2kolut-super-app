@@ -540,8 +540,8 @@
 <div class="space-y-6 p-6">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Manajemen Pengguna</h1>
-			<p class="text-sm text-slate-500 mt-1">Kelola akun akses sistem dengan RBAC terpadu</p>
+			<h1 class="text-2xl font-semibold text-foreground">Manajemen Pengguna</h1>
+			<p class="text-sm text-muted-foreground mt-1">Kelola akun akses sistem dengan RBAC terpadu</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button variant="outline" href="/settings/user-change-requests">Permintaan Data Resmi</Button>
@@ -555,8 +555,8 @@
 		{#snippet pending()}
 			<div class="grid gap-3 md:grid-cols-4">
 				{#each ['Total Akun', 'Akun Aktif', 'Multi-Role', 'Terhubung Profil'] as label (label)}
-					<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+					<div class="rounded-2xl border border-border bg-muted/50 px-4 py-4">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
 						<Skeleton class="mt-3 h-8 w-16" />
 						<Skeleton class="mt-2 h-4 w-44" />
 					</div>
@@ -575,25 +575,25 @@
 		{#snippet children(value)}
 			{@const overview = value as UsersOverview}
 			<div class="grid gap-3 md:grid-cols-4">
-				<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Akun</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.users.length}</p>
-					<p class="text-sm text-slate-600">akun yang sudah dapat masuk ke sistem</p>
+				<div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Total Akun</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.users.length}</p>
+					<p class="text-sm text-muted-foreground">akun yang sudah dapat masuk ke sistem</p>
 				</div>
-				<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Akun Aktif</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.users.filter((item) => item.is_active).length}</p>
-					<p class="text-sm text-slate-600">akun yang saat ini masih aktif digunakan</p>
+				<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Akun Aktif</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.users.filter((item) => item.is_active).length}</p>
+					<p class="text-sm text-muted-foreground">akun yang saat ini masih aktif digunakan</p>
 				</div>
-				<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Multi-Role</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.users.filter((item) => (item.roles ?? []).length > 1).length}</p>
-					<p class="text-sm text-slate-600">akun yang memegang lebih dari satu role</p>
+				<div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Multi-Role</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.users.filter((item) => (item.roles ?? []).length > 1).length}</p>
+					<p class="text-sm text-muted-foreground">akun yang memegang lebih dari satu role</p>
 				</div>
-				<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Terhubung Profil</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.users.filter((item) => item.profile_nama).length}</p>
-					<p class="text-sm text-slate-600">akun yang sudah terkait dengan entitas sekolah</p>
+				<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Terhubung Profil</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.users.filter((item) => item.profile_nama).length}</p>
+					<p class="text-sm text-muted-foreground">akun yang sudah terkait dengan entitas sekolah</p>
 				</div>
 			</div>
 		{/snippet}
@@ -606,37 +606,37 @@
 				<div class="grid gap-4 sm:grid-cols-2">
 					<div class="space-y-3">
 						<div>
-							<label for="u-name" class="text-xs text-slate-500 mb-1 block">Username</label>
+							<label for="u-name" class="text-xs text-muted-foreground mb-1 block">Username</label>
 							<Input id="u-name" bind:value={fUsername} placeholder="Gunakan nama akun yang mudah dikenali" />
 						</div>
 						<div>
-							<label for="u-display" class="text-xs text-slate-500 mb-1 block">Display Name</label>
+							<label for="u-display" class="text-xs text-muted-foreground mb-1 block">Display Name</label>
 							<Input id="u-display" bind:value={fDisplayName} placeholder="Nama tampil pengguna" />
 						</div>
 						<div>
-							<label for="u-pass" class="text-xs text-slate-500 mb-1 block">Password</label>
+							<label for="u-pass" class="text-xs text-muted-foreground mb-1 block">Password</label>
 							<Input id="u-pass" type="password" bind:value={fPassword} placeholder="Minimal 8 karakter" />
 						</div>
 						<div>
-							<p class="mb-2 block text-xs text-slate-500">Peran Akses (boleh pilih lebih dari satu)</p>
+							<p class="mb-2 block text-xs text-muted-foreground">Peran Akses (boleh pilih lebih dari satu)</p>
 							<div class="flex flex-wrap gap-2">
 								{#each availableRoles as r (r.value)}
 									<button
-										class={`px-3 py-1 text-xs rounded-full border transition-colors ${fRoles.includes(r.value) ? 'bg-green-700 text-white border-green-700' : 'bg-white text-slate-600 border-slate-200'}`}
+										class={`px-3 py-1 text-xs rounded-full border transition-colors ${fRoles.includes(r.value) ? 'bg-success text-background border-success' : 'bg-card text-muted-foreground border-border'}`}
 										onclick={() => toggleRole(r.value)}
 									>
 										{r.label}
 									</button>
 								{/each}
 							</div>
-							<p class="mt-2 text-xs text-slate-500">{formHint}</p>
+							<p class="mt-2 text-xs text-muted-foreground">{formHint}</p>
 						</div>
 					</div>
 
 					<div class="space-y-3">
 						{#if fRoles.includes('guru') || fRoles.includes('staf') || fRoles.includes('kesiswaan')}
 							<div>
-								<label for="u-emp" class="text-xs text-slate-500 mb-1 block">Hubungkan ke Pegawai</label>
+								<label for="u-emp" class="text-xs text-muted-foreground mb-1 block">Hubungkan ke Pegawai</label>
 								<select id="u-emp" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fEmpId}>
 									<option value="">-- Pilih Pegawai --</option>
 									{#each employees as e (e.id)}
@@ -648,7 +648,7 @@
 
 						{#if fRoles.includes('siswa')}
 							<div>
-								<label for="u-stu" class="text-xs text-slate-500 mb-1 block">Hubungkan ke Siswa</label>
+								<label for="u-stu" class="text-xs text-muted-foreground mb-1 block">Hubungkan ke Siswa</label>
 								<select id="u-stu" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fStuId}>
 									<option value="">-- Pilih Siswa --</option>
 									{#each students as s (s.id)}
@@ -660,7 +660,7 @@
 
 						{#if fRoles.includes('ortu')}
 							<div>
-								<label for="u-par" class="text-xs text-slate-500 mb-1 block">Hubungkan ke Orang Tua</label>
+								<label for="u-par" class="text-xs text-muted-foreground mb-1 block">Hubungkan ke Orang Tua</label>
 								<select id="u-par" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fParId}>
 									<option value="">-- Pilih Orang Tua --</option>
 									{#each parents as p (p.id)}
@@ -681,11 +681,11 @@
 		</Card.Root>
 	{/if}
 
-	<Card.Root class="border-emerald-100 bg-emerald-50/40 shadow-sm">
+	<Card.Root class="border-primary/20 bg-primary/10 shadow-sm">
 		<Card.Header class="flex flex-row items-start justify-between gap-3 pb-2">
 			<div>
 				<Card.Title class="text-base">Generate Akun dari Data Pegawai</Card.Title>
-				<p class="mt-1 text-sm text-slate-600">Username/password awal: NPSN profil madrasah + 2 digit tahun lahir + nomor urut 3 digit. Role default: guru.</p>
+				<p class="mt-1 text-sm text-muted-foreground">Username/password awal: NPSN profil madrasah + 2 digit tahun lahir + nomor urut 3 digit. Role default: guru.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				<Button variant="outline" onclick={() => void previewEmployeeGeneration()} disabled={generationBusy !== null}>Preview</Button>
@@ -695,22 +695,22 @@
 		</Card.Header>
 		<Card.Content class="space-y-4">
 			<div class="grid gap-3 md:grid-cols-6">
-				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">NPSN Prefix</p><p class="font-mono text-xl font-semibold">{employeeGeneration?.npsn ?? '—'}</p></div>
-				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Total Pegawai</p><p class="text-xl font-semibold">{employeeGeneration?.total ?? 0}</p></div>
-				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Siap Dibuat</p><p class="text-xl font-semibold text-emerald-700">{employeeGeneration?.ready ?? 0}</p></div>
-				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Dibuat</p><p class="text-xl font-semibold text-sky-700">{employeeGeneration?.created ?? 0}</p></div>
-				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Dilewati</p><p class="text-xl font-semibold text-amber-700">{employeeGeneration?.skipped ?? 0}</p></div>
-				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Gagal</p><p class="text-xl font-semibold text-red-700">{employeeGeneration?.failed ?? 0}</p></div>
+				<div class="rounded-xl border bg-card p-3"><p class="text-[11px] uppercase tracking-wide text-muted-foreground">NPSN Prefix</p><p class="font-mono text-xl font-semibold">{employeeGeneration?.npsn ?? '—'}</p></div>
+				<div class="rounded-xl border bg-card p-3"><p class="text-[11px] uppercase tracking-wide text-muted-foreground">Total Pegawai</p><p class="text-xl font-semibold">{employeeGeneration?.total ?? 0}</p></div>
+				<div class="rounded-xl border bg-card p-3"><p class="text-[11px] uppercase tracking-wide text-muted-foreground">Siap Dibuat</p><p class="text-xl font-semibold text-primary">{employeeGeneration?.ready ?? 0}</p></div>
+				<div class="rounded-xl border bg-card p-3"><p class="text-[11px] uppercase tracking-wide text-muted-foreground">Dibuat</p><p class="text-xl font-semibold text-accent-foreground">{employeeGeneration?.created ?? 0}</p></div>
+				<div class="rounded-xl border bg-card p-3"><p class="text-[11px] uppercase tracking-wide text-muted-foreground">Dilewati</p><p class="text-xl font-semibold text-warning">{employeeGeneration?.skipped ?? 0}</p></div>
+				<div class="rounded-xl border bg-card p-3"><p class="text-[11px] uppercase tracking-wide text-muted-foreground">Gagal</p><p class="text-xl font-semibold text-destructive">{employeeGeneration?.failed ?? 0}</p></div>
 			</div>
 			{#if generationBusy}
-				<p class="text-sm text-slate-600">Memproses {generationBusy === 'preview' ? 'preview' : 'generate'} akun pegawai...</p>
+				<p class="text-sm text-muted-foreground">Memproses {generationBusy === 'preview' ? 'preview' : 'generate'} akun pegawai...</p>
 			{:else if !employeeGeneration}
 				<EmptyStatePanel title="Belum Ada Preview" description="Klik Preview untuk melihat pegawai aktif yang siap dibuatkan akun otomatis." />
 			{:else}
-				<div class="max-h-96 overflow-auto rounded-2xl border bg-white">
+				<div class="max-h-96 overflow-auto rounded-2xl border bg-card">
 					<Table.Root>
 						<Table.Header>
-							<Table.Row class="bg-slate-50">
+							<Table.Row class="bg-muted/50">
 								<Table.Head>Pegawai</Table.Head>
 								<Table.Head>Tanggal Lahir</Table.Head>
 								<Table.Head>Username</Table.Head>
@@ -721,11 +721,11 @@
 						<Table.Body>
 							{#each employeeGeneration.items as item (item.employee_id)}
 								<Table.Row>
-									<Table.Cell><div class="font-medium">{item.nama}</div><div class="text-xs text-slate-500">{item.nip}</div></Table.Cell>
+									<Table.Cell><div class="font-medium">{item.nama}</div><div class="text-xs text-muted-foreground">{item.nip}</div></Table.Cell>
 									<Table.Cell>{item.tanggal_lahir || '—'}</Table.Cell>
 									<Table.Cell class="font-mono text-xs">{item.username || '—'}</Table.Cell>
 									<Table.Cell class="font-mono text-xs">{item.password || (item.status === 'ready' ? 'ditampilkan setelah generate' : '—')}</Table.Cell>
-									<Table.Cell><Badge variant={item.status === 'created' || item.status === 'ready' ? 'secondary' : item.status === 'failed' ? 'destructive' : 'outline'}>{item.status}</Badge><div class="mt-1 text-xs text-slate-500">{item.message}</div></Table.Cell>
+									<Table.Cell><Badge variant={item.status === 'created' || item.status === 'ready' ? 'secondary' : item.status === 'failed' ? 'destructive' : 'outline'}>{item.status}</Badge><div class="mt-1 text-xs text-muted-foreground">{item.message}</div></Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>
@@ -735,11 +735,11 @@
 		</Card.Content>
 	</Card.Root>
 
-	<Card.Root class="border-slate-200 shadow-sm">
+	<Card.Root class="border-border shadow-sm">
 		<Card.Header class="flex flex-row items-start justify-between gap-3 pb-2">
 			<div>
 				<Card.Title class="text-base">Manajemen Role & Permission Dinamis</Card.Title>
-				<p class="mt-1 text-sm text-slate-500">CRUD role/permission via RBAC backend. Role sistem dan permission kritikal tetap dilindungi backend.</p>
+				<p class="mt-1 text-sm text-muted-foreground">CRUD role/permission via RBAC backend. Role sistem dan permission kritikal tetap dilindungi backend.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				<Button variant="outline" onclick={() => void createRolePrompt()} disabled={actionBusy === 'rbac:create-role'}>+ Role</Button>
@@ -747,25 +747,25 @@
 			</div>
 		</Card.Header>
 		<Card.Content class="grid gap-4 lg:grid-cols-2">
-			<div class="rounded-2xl border border-slate-100 p-4">
+			<div class="rounded-2xl border border-border p-4">
 				<div class="mb-3 flex items-center justify-between">
-					<h2 class="text-sm font-semibold text-slate-800">Role</h2>
+					<h2 class="text-sm font-semibold text-foreground">Role</h2>
 					<Badge variant="secondary">{rbac.roles.length} role</Badge>
 				</div>
 				<div class="max-h-80 space-y-2 overflow-auto pr-1">
 					{#each rbac.roles as role (role.code)}
-						<div class="rounded-xl border border-slate-100 bg-slate-50 p-3">
+						<div class="rounded-xl border border-border bg-muted/50 p-3">
 							<div class="flex items-start justify-between gap-2">
 								<div>
-									<p class="font-medium text-slate-800">{role.name || role.code}</p>
-									<p class="text-xs text-slate-500">{role.code}</p>
+									<p class="font-medium text-foreground">{role.name || role.code}</p>
+									<p class="text-xs text-muted-foreground">{role.code}</p>
 								</div>
 								<div class="flex flex-wrap gap-1">
 									{#if role.is_system}<Badge variant="outline">System</Badge>{/if}
 									<Badge variant={role.is_active === false ? 'destructive' : 'secondary'}>{role.is_active === false ? 'Nonaktif' : 'Aktif'}</Badge>
 								</div>
 							</div>
-							{#if role.description}<p class="mt-2 text-xs text-slate-500">{role.description}</p>{/if}
+							{#if role.description}<p class="mt-2 text-xs text-muted-foreground">{role.description}</p>{/if}
 							<div class="mt-3 flex flex-wrap gap-2">
 								<Button size="sm" variant="outline" onclick={() => void editRolePrompt(role)} disabled={role.is_system || actionBusy === `rbac:role:${role.code}`}>Edit</Button>
 								<Button size="sm" variant="outline" onclick={() => void toggleRoleStatus(role)} disabled={role.is_system || actionBusy === `rbac:role-status:${role.code}`}>{role.is_active === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
@@ -774,22 +774,22 @@
 					{/each}
 				</div>
 			</div>
-			<div class="rounded-2xl border border-slate-100 p-4">
+			<div class="rounded-2xl border border-border p-4">
 				<div class="mb-3 flex items-center justify-between">
-					<h2 class="text-sm font-semibold text-slate-800">Permission</h2>
+					<h2 class="text-sm font-semibold text-foreground">Permission</h2>
 					<Badge variant="secondary">{rbac.permissions.length} permission</Badge>
 				</div>
 				<div class="max-h-80 space-y-2 overflow-auto pr-1">
 					{#each rbac.permissions as permission (permission.code)}
-						<div class="rounded-xl border border-slate-100 bg-slate-50 p-3">
+						<div class="rounded-xl border border-border bg-muted/50 p-3">
 							<div class="flex items-start justify-between gap-2">
 								<div>
-									<p class="font-medium text-slate-800">{permission.code}</p>
-									<p class="text-xs text-slate-500">{permission.module ?? '-'} / {permission.action ?? '-'}</p>
+									<p class="font-medium text-foreground">{permission.code}</p>
+									<p class="text-xs text-muted-foreground">{permission.module ?? '-'} / {permission.action ?? '-'}</p>
 								</div>
 								<Badge variant={permission.is_active === false ? 'destructive' : 'secondary'}>{permission.is_active === false ? 'Nonaktif' : 'Aktif'}</Badge>
 							</div>
-							{#if permission.description}<p class="mt-2 text-xs text-slate-500">{permission.description}</p>{/if}
+							{#if permission.description}<p class="mt-2 text-xs text-muted-foreground">{permission.description}</p>{/if}
 							<div class="mt-3 flex flex-wrap gap-2">
 								<Button size="sm" variant="outline" onclick={() => void editPermissionPrompt(permission)} disabled={actionBusy === `rbac:permission:${permission.code}`}>Edit</Button>
 								<Button size="sm" variant="outline" onclick={() => void togglePermissionStatus(permission)} disabled={actionBusy === `rbac:permission-status:${permission.code}`}>{permission.is_active === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
@@ -803,7 +803,7 @@
 
 	<AsyncContent promise={usersPromise} onerror={handleOverviewRenderError}>
 		{#snippet pending()}
-			<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+			<Card.Root class="overflow-hidden border-border shadow-sm">
 				<Card.Content class="p-0">
 				<div class="space-y-3 p-6">
 					{#each Array.from({ length: 5 }) as _, index (`user-skeleton-${index}`)}
@@ -823,12 +823,12 @@
 
 		{#snippet children(value)}
 			{@const overview = value as UsersOverview}
-	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+	<Card.Root class="overflow-hidden border-border shadow-sm">
 		<Card.Content class="p-0">
 				<div class="hidden overflow-x-auto lg:block">
 				<Table.Root>
 					<Table.Header>
-						<Table.Row class="bg-slate-50">
+						<Table.Row class="bg-muted/50">
 							<Table.Head>Username / Display Name</Table.Head>
 							<Table.Head>Role Dinamis</Table.Head>
 							<Table.Head>Profil Terhubung</Table.Head>
@@ -843,13 +843,13 @@
 							<Table.Row>
 								<Table.Cell class="font-medium">
 									<div>{u.username}</div>
-									<div class="mt-1 text-xs font-normal text-slate-500">{u.display_name || u.profile_nama || '—'}</div>
+									<div class="mt-1 text-xs font-normal text-muted-foreground">{u.display_name || u.profile_nama || '—'}</div>
 								</Table.Cell>
 								<Table.Cell>
 									<div class="flex max-w-md flex-wrap gap-1.5">
 										{#each availableRoles as r (r.value)}
 											<button
-												class={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase transition-colors ${u.roles?.includes(r.value) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-200 bg-white text-slate-500 hover:border-green-300 hover:text-green-700'}`}
+												class={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase transition-colors ${u.roles?.includes(r.value) ? 'border-success bg-success text-background' : 'border-border bg-card text-muted-foreground hover:border-success/20 hover:text-success'}`}
 												disabled={actionBusy === `roles:${u.id}`}
 												title={`Toggle role ${r.label}`}
 												onclick={() => void toggleExistingUserRole(u, r.value)}
@@ -859,9 +859,9 @@
 										{/each}
 									</div>
 								</Table.Cell>
-								<Table.Cell class="text-sm text-slate-600">
+								<Table.Cell class="text-sm text-muted-foreground">
 									<div>{u.profile_nama || '—'}</div>
-									<div class="mt-1 text-[11px] text-slate-400">
+									<div class="mt-1 text-[11px] text-muted-foreground">
 										{u.employee_id ? 'Pegawai' : u.student_id ? 'Siswa' : u.parent_id ? 'Orang tua' : 'Belum ditautkan'}
 									</div>
 								</Table.Cell>
@@ -870,8 +870,8 @@
 										{u.is_active ? 'Aktif' : 'Nonaktif'}
 									</Badge>
 								</Table.Cell>
-								<Table.Cell class="text-xs text-slate-500">{formatDateTime(u.last_login_at)}</Table.Cell>
-								<Table.Cell class="text-xs text-slate-400">{new Date(u.created_at).toLocaleDateString()}</Table.Cell>
+								<Table.Cell class="text-xs text-muted-foreground">{formatDateTime(u.last_login_at)}</Table.Cell>
+								<Table.Cell class="text-xs text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</Table.Cell>
 								<Table.Cell class="text-right">
 									<div class="flex flex-wrap justify-end gap-2">
 										<Button
@@ -898,7 +898,7 @@
 											{u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
 										</Button>
 										<Button variant="ghost" size="sm" onclick={() => deleteUser(u.id, u.username)}
-											class="text-red-600 hover:text-red-700 hover:bg-red-50">Hapus</Button>
+											class="text-destructive hover:text-destructive hover:bg-destructive/10">Hapus</Button>
 									</div>
 								</Table.Cell>
 							</Table.Row>
@@ -919,15 +919,15 @@
 
 				<div class="grid gap-3 p-4 lg:hidden">
 					{#each overview.users as u (u.id)}
-						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+						<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
-									<p class="text-sm font-semibold text-slate-900">{u.username}</p>
-									<p class="mt-1 text-xs text-slate-500">{u.display_name || u.profile_nama || '—'}</p>
+									<p class="text-sm font-semibold text-foreground">{u.username}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{u.display_name || u.profile_nama || '—'}</p>
 									<div class="mt-1 flex flex-wrap gap-1">
 										{#each availableRoles as r (r.value)}
 											<button
-												class={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${u.roles?.includes(r.value) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-200 bg-white text-slate-500'}`}
+												class={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${u.roles?.includes(r.value) ? 'border-success bg-success text-background' : 'border-border bg-card text-muted-foreground'}`}
 												disabled={actionBusy === `roles:${u.id}`}
 												onclick={() => void toggleExistingUserRole(u, r.value)}
 											>
@@ -935,8 +935,8 @@
 											</button>
 										{/each}
 									</div>
-									<p class="mt-2 text-xs text-slate-500">{u.profile_nama || 'Tidak terhubung profil'}</p>
-									<p class="mt-1 text-xs text-slate-400">Last login: {formatDateTime(u.last_login_at)}</p>
+									<p class="mt-2 text-xs text-muted-foreground">{u.profile_nama || 'Tidak terhubung profil'}</p>
+									<p class="mt-1 text-xs text-muted-foreground">Last login: {formatDateTime(u.last_login_at)}</p>
 								</div>
 								<Badge variant={u.is_active ? 'outline' : 'destructive'}>{u.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
 							</div>
@@ -968,7 +968,7 @@
 									{u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
 								</Button>
 								<Button variant="ghost" size="sm" onclick={() => deleteUser(u.id, u.username)}
-									class="flex-1 justify-center text-red-600 hover:text-red-700 hover:bg-red-50">Hapus</Button>
+									class="flex-1 justify-center text-destructive hover:text-destructive hover:bg-destructive/10">Hapus</Button>
 							</div>
 						</div>
 					{:else}

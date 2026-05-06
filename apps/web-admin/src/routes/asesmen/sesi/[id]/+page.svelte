@@ -328,11 +328,11 @@
 	}
 
 	function statusClass(s: string) {
-		if (s === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-		if (s === 'finished') return 'bg-slate-100 text-slate-500 border-slate-200';
-		if (s === 'cancelled') return 'bg-red-100 text-red-700 border-red-200';
-		if (s === 'scheduled') return 'bg-green-100 text-green-800 border-green-200';
-		return 'bg-amber-100 text-amber-700 border-amber-200';
+		if (s === 'active') return 'bg-primary/15 text-primary border-primary/20';
+		if (s === 'finished') return 'bg-muted text-muted-foreground border-border';
+		if (s === 'cancelled') return 'bg-destructive/15 text-destructive border-destructive/30';
+		if (s === 'scheduled') return 'bg-success/15 text-success border-success/20';
+		return 'bg-warning/15 text-warning border-warning/30';
 	}
 
 	function fmtDt(iso: string | null) {
@@ -443,9 +443,9 @@
 	}
 
 	function detailActionPanelClass(tone: DetailNextAction['tone']) {
-		if (tone === 'warning') return 'border-amber-200 bg-amber-50';
-		if (tone === 'success') return 'border-emerald-200 bg-emerald-50';
-		return 'border-slate-200 bg-slate-50';
+		if (tone === 'warning') return 'border-warning/30 bg-warning/10';
+		if (tone === 'success') return 'border-primary/20 bg-primary/10';
+		return 'border-border bg-muted/50';
 	}
 
 	function operationalTone(recap: OperationalRecap | null) {
@@ -483,15 +483,15 @@
 	}
 
 	function itemAnalysisToneClass(tone: string) {
-		if (tone === 'success') return 'border-emerald-300 bg-emerald-50 text-emerald-700';
-		if (tone === 'danger') return 'border-red-300 bg-red-50 text-red-700';
-		if (tone === 'info') return 'border-slate-300 bg-slate-50 text-slate-600';
-		return 'border-amber-300 bg-amber-50 text-amber-700';
+		if (tone === 'success') return 'border-primary/20 bg-primary/10 text-primary';
+		if (tone === 'danger') return 'border-destructive/30 bg-destructive/10 text-destructive';
+		if (tone === 'info') return 'border-border bg-muted/50 text-muted-foreground';
+		return 'border-warning/30 bg-warning/10 text-warning';
 	}
 
 	function itemAnalysisSignalClass(row: ItemAnalysisRow) {
-		if (row.recommendation_tone === 'danger') return 'bg-red-50/70';
-		if (row.recommendation_tone === 'warning') return 'bg-amber-50/60';
+		if (row.recommendation_tone === 'danger') return 'bg-destructive/10';
+		if (row.recommendation_tone === 'warning') return 'bg-warning/10';
 		return '';
 	}
 
@@ -526,9 +526,9 @@
 	}
 
 	function handoverStatusClass(room: OperationalRoom) {
-		if (room.locked_at) return 'border-emerald-300 bg-emerald-50 text-emerald-700';
-		if (room.handover_id) return 'border-amber-300 bg-amber-50 text-amber-700';
-		return 'border-red-300 bg-red-50 text-red-700';
+		if (room.locked_at) return 'border-primary/20 bg-primary/10 text-primary';
+		if (room.handover_id) return 'border-warning/30 bg-warning/10 text-warning';
+		return 'border-destructive/30 bg-destructive/10 text-destructive';
 	}
 
 	function fmtEssayPoints(points: unknown) {
@@ -538,11 +538,11 @@
 	}
 
 	function scoreClass(score: string | null) {
-		if (!score) return 'text-slate-400';
+		if (!score) return 'text-muted-foreground';
 		const n = parseFloat(score);
-		if (n >= 75) return 'text-emerald-600 font-semibold';
-		if (n >= 60) return 'text-amber-600 font-semibold';
-		return 'text-red-600 font-semibold';
+		if (n >= 75) return 'text-primary font-semibold';
+		if (n >= 60) return 'text-warning font-semibold';
+		return 'text-destructive font-semibold';
 	}
 
 	function heartbeatBucket(hb: string | null): 'none' | 'online' | 'slow' | 'offline' {
@@ -555,10 +555,10 @@
 
 	function heartbeatStatus(hb: string | null): { label: string; cls: string } {
 		const bucket = heartbeatBucket(hb);
-		if (bucket === 'online') return { label: 'Online', cls: 'text-emerald-600' };
-		if (bucket === 'slow') return { label: 'Lambat', cls: 'text-amber-600' };
-		if (bucket === 'offline') return { label: 'Offline', cls: 'text-red-600' };
-		return { label: 'Belum login', cls: 'text-slate-400' };
+		if (bucket === 'online') return { label: 'Online', cls: 'text-primary' };
+		if (bucket === 'slow') return { label: 'Lambat', cls: 'text-warning' };
+		if (bucket === 'offline') return { label: 'Offline', cls: 'text-destructive' };
+		return { label: 'Belum login', cls: 'text-muted-foreground' };
 	}
 
 	let stats = $derived({
@@ -651,15 +651,15 @@
 	]);
 
 	function commandCenterClass() {
-		if (commandCenterIssues.some((issue) => issue.tone === 'danger')) return 'border-red-200 bg-red-50/60';
-		if (commandCenterIssues.some((issue) => issue.tone === 'warning')) return 'border-amber-200 bg-amber-50/70';
-		return 'border-emerald-200 bg-emerald-50/60';
+		if (commandCenterIssues.some((issue) => issue.tone === 'danger')) return 'border-destructive/30 bg-destructive/10';
+		if (commandCenterIssues.some((issue) => issue.tone === 'warning')) return 'border-warning/30 bg-warning/10';
+		return 'border-primary/20 bg-primary/10';
 	}
 
 	function commandIssueClass(tone: 'danger' | 'warning' | 'info') {
-		if (tone === 'danger') return 'border-red-200 bg-white text-red-700';
-		if (tone === 'warning') return 'border-amber-200 bg-white text-amber-700';
-		return 'border-slate-200 bg-white text-slate-600';
+		if (tone === 'danger') return 'border-destructive/30 bg-card text-destructive';
+		if (tone === 'warning') return 'border-warning/30 bg-card text-warning';
+		return 'border-border bg-card text-muted-foreground';
 	}
 
 	let itemAnalysisStats = $derived.by(() => {
@@ -1554,10 +1554,10 @@
 
 <div class="space-y-5 p-6">
 	<!-- Breadcrumb -->
-	<div class="flex items-center gap-2 text-sm text-slate-500">
-		<a href={resolve('/asesmen/sesi')} class="hover:text-slate-700">Kegiatan & Sesi</a>
+	<div class="flex items-center gap-2 text-sm text-muted-foreground">
+		<a href={resolve('/asesmen/sesi')} class="hover:text-foreground">Kegiatan & Sesi</a>
 		<span>/</span>
-		<span class="text-slate-700 font-medium truncate max-w-xs">{session?.title ?? '...'}</span>
+		<span class="text-foreground font-medium truncate max-w-xs">{session?.title ?? '...'}</span>
 	</div>
 
 	{#if operationState}
@@ -1574,7 +1574,7 @@
 				</div>
 				<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
 					{#each Array.from({ length: 4 }) as _, index (`cbt-session-detail-stat-${index}`)}
-						<Card.Root class="border-green-100">
+						<Card.Root class="border-success/20">
 							<Card.Content class="space-y-2 px-4 pb-3 pt-4">
 								<Skeleton class="h-4 w-24" />
 								<Skeleton class="h-8 w-16" />
@@ -1617,8 +1617,8 @@
 		<!-- Session header -->
 		<div class="flex items-start justify-between gap-4 flex-wrap">
 			<div>
-				<h1 class="text-2xl font-semibold text-[oklch(0.38_0.13_145)]">{currentSession.title}</h1>
-				<div class="flex flex-wrap gap-2 mt-2 text-sm text-slate-500">
+				<h1 class="text-2xl font-semibold text-primary">{currentSession.title}</h1>
+				<div class="flex flex-wrap gap-2 mt-2 text-sm text-muted-foreground">
 					<span>{currentSession.package_title}</span>
 					{#if currentSession.class_code}<span>· Kelas {currentSession.class_code}</span>{/if}
 					<span>· {currentSession.duration_minutes} menit</span>
@@ -1635,11 +1635,11 @@
 					{#if currentResults.length > 0}
 						<Button size="sm" variant="outline" onclick={exportCSV}>↓ CSV</Button>
 					{/if}
-					<a href={resolve(`/asesmen/sesi/${sessionId}/minutes`)} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
+					<a href={resolve(`/asesmen/sesi/${sessionId}/minutes`)} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
 						Berita Acara
 					</a>
 					{#if currentSession.event_id}
-						<a href={resolve(`/asesmen/kegiatan/${currentSession.event_id}/exam-cards`)} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-slate-700 hover:bg-muted">
+						<a href={resolve(`/asesmen/kegiatan/${currentSession.event_id}/exam-cards`)} class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
 							Kartu Ujian Event
 						</a>
 					{/if}
@@ -1654,10 +1654,10 @@
 				{ label: 'Rata-rata Nilai', val: stats.total > 0 ? stats.avgScore.toFixed(1) : '—' },
 				{ label: 'Lulus (≥75)', val: `${stats.passing} / ${stats.submitted}` },
 			] as s (s.label)}
-				<Card.Root class="border-green-100">
+				<Card.Root class="border-success/20">
 					<Card.Content class="pt-4 pb-3 px-4">
-						<p class="text-xs text-slate-500 mb-1">{s.label}</p>
-						<p class="text-2xl font-bold text-[oklch(0.38_0.13_145)]">{s.val}</p>
+						<p class="text-xs text-muted-foreground mb-1">{s.label}</p>
+						<p class="text-2xl font-bold text-primary">{s.val}</p>
 					</Card.Content>
 				</Card.Root>
 			{/each}
@@ -1667,7 +1667,7 @@
 			<Card.Header class="flex flex-row items-start justify-between gap-3 pb-2">
 				<div>
 					<Card.Title class="text-base">Monitoring Sesi</Card.Title>
-					<p class="mt-1 text-xs text-slate-600">
+					<p class="mt-1 text-xs text-muted-foreground">
 						Snapshot ringkas untuk operator: ruang, pengawas, submit, koneksi, atensi, dan handover.
 					</p>
 				</div>
@@ -1680,30 +1680,30 @@
 					{#each commandCenterMetrics as metric (metric.label)}
 						<button
 							type="button"
-							class="rounded-md border border-white/80 bg-white px-3 py-2 text-left shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50"
+							class="rounded-md border border-white/80 bg-card px-3 py-2 text-left shadow-sm transition hover:border-primary/20 hover:bg-primary/10"
 							onclick={() => switchTab(metric.tab)}
 						>
-							<span class="block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{metric.label}</span>
-							<span class="mt-1 block text-xl font-bold text-[oklch(0.38_0.13_145)]">{metric.value}</span>
-							<span class="mt-0.5 block text-[11px] text-slate-500">{metric.helper}</span>
+							<span class="block text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{metric.label}</span>
+							<span class="mt-1 block text-xl font-bold text-primary">{metric.value}</span>
+							<span class="mt-0.5 block text-[11px] text-muted-foreground">{metric.helper}</span>
 						</button>
 					{/each}
 				</div>
 				<div class="flex flex-wrap items-center gap-2">
 					{#if commandCenterIssues.length === 0}
-						<Badge class="border-emerald-200 bg-white text-emerald-700">Operasional terkendali</Badge>
+						<Badge class="border-primary/20 bg-card text-primary">Operasional terkendali</Badge>
 					{:else}
 						{#each commandCenterIssues.slice(0, 6) as issue (`${issue.tab}-${issue.label}`)}
 							<button
 								type="button"
-								class="rounded-md border px-2.5 py-1 text-xs font-semibold transition hover:bg-slate-50 {commandIssueClass(issue.tone)}"
+								class="rounded-md border px-2.5 py-1 text-xs font-semibold transition hover:bg-muted/50 {commandIssueClass(issue.tone)}"
 								onclick={() => switchTab(issue.tab)}
 							>
 								{issue.label}
 							</button>
 						{/each}
 						{#if commandCenterIssues.length > 6}
-							<Badge variant="outline" class="bg-white text-xs">+{commandCenterIssues.length - 6} atensi lain</Badge>
+							<Badge variant="outline" class="bg-card text-xs">+{commandCenterIssues.length - 6} atensi lain</Badge>
 						{/if}
 					{/if}
 				</div>
@@ -1714,9 +1714,9 @@
 		<Card.Root class={detailActionPanelClass(detailNextAction.tone)}>
 			<Card.Content class="flex flex-wrap items-center justify-between gap-3 p-4">
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Aksi Berikutnya</p>
-					<p class="mt-1 text-sm font-semibold text-slate-900">{detailNextAction.title}</p>
-					<p class="mt-0.5 text-xs text-slate-600">{detailNextAction.message}</p>
+					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Aksi Berikutnya</p>
+					<p class="mt-1 text-sm font-semibold text-foreground">{detailNextAction.title}</p>
+					<p class="mt-0.5 text-xs text-muted-foreground">{detailNextAction.message}</p>
 				</div>
 				{#if detailNextAction.run === 'auto_seats'}
 					<LoadingButton size="sm" loading={seatBusy} loadingLabel="Mengatur..." disabled={roomControlsLocked || seatBusy} onclick={autoAssignSeats}>
@@ -1731,18 +1731,18 @@
 		</Card.Root>
 
 		<!-- Tabs -->
-		<div class="space-y-3 rounded-xl border border-green-100 bg-white p-3 shadow-sm">
+		<div class="space-y-3 rounded-xl border border-success/20 bg-card p-3 shadow-sm">
 			<div class="flex flex-wrap items-center justify-between gap-2">
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">Alur 5 Modul CBT</p>
-					<p class="mt-0.5 text-sm text-slate-600">Detail sesi dikelompokkan ke Kegiatan & Sesi, Monitoring, dan Hasil & Analisis.</p>
+					<p class="text-xs font-semibold uppercase tracking-[0.16em] text-success">Alur 5 Modul CBT</p>
+					<p class="mt-0.5 text-sm text-muted-foreground">Detail sesi dikelompokkan ke Kegiatan & Sesi, Monitoring, dan Hasil & Analisis.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
-					<a href={resolve(`/asesmen/sesi/${sessionId}/minutes`)} class="inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-muted">
+					<a href={resolve(`/asesmen/sesi/${sessionId}/minutes`)} class="inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground hover:bg-muted">
 						Berita Acara
 					</a>
 					{#if currentSession.event_id}
-						<a href={resolve(`/asesmen/kegiatan/${currentSession.event_id}/exam-cards`)} class="inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-muted">
+						<a href={resolve(`/asesmen/kegiatan/${currentSession.event_id}/exam-cards`)} class="inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground hover:bg-muted">
 							Kartu Ujian
 						</a>
 					{/if}
@@ -1750,10 +1750,10 @@
 			</div>
 			<div class="grid gap-3 xl:grid-cols-3" role="tablist" aria-label="Navigasi detail sesi CBT">
 				{#each detailTabGroups as group (group.module)}
-					<section class="rounded-lg border border-slate-200 bg-slate-50/70 p-2">
+					<section class="rounded-lg border border-border bg-muted/50 p-2">
 						<div class="mb-2 px-1">
-							<p class="text-xs font-semibold text-slate-800">{group.module}</p>
-							<p class="text-[11px] text-slate-500">{group.help}</p>
+							<p class="text-xs font-semibold text-foreground">{group.module}</p>
+							<p class="text-[11px] text-muted-foreground">{group.help}</p>
 						</div>
 						<div class="flex flex-wrap gap-1">
 							{#each group.tabs as tab (tab.id)}
@@ -1765,8 +1765,8 @@
 									aria-controls={`panel-${tab.id}`}
 									onclick={() => switchTab(tab.id)}
 									class="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors {activeTab === tab.id
-										? 'border-[oklch(0.38_0.13_145)] bg-green-50 text-[oklch(0.38_0.13_145)]'
-										: 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'}"
+										? 'border-primary bg-success/10 text-primary'
+										: 'border-border bg-card text-muted-foreground hover:border-border hover:text-foreground'}"
 								>
 									{tab.label}
 								</button>
@@ -1786,7 +1786,7 @@
 				<Card.Content class="p-0 overflow-x-auto">
 					<Table.Root>
 						<Table.Header>
-							<Table.Row class="bg-green-50">
+							<Table.Row class="bg-success/10">
 								<Table.Head class="w-8">#</Table.Head>
 								<Table.Head>NIS</Table.Head>
 								<Table.Head>Nama</Table.Head>
@@ -1800,24 +1800,24 @@
 						<Table.Body>
 							{#each currentResults as r, i (r.participant_id)}
 								<Table.Row>
-									<Table.Cell class="text-slate-400 text-xs">{i + 1}</Table.Cell>
+									<Table.Cell class="text-muted-foreground text-xs">{i + 1}</Table.Cell>
 									<Table.Cell class="font-mono text-sm">{r.nis}</Table.Cell>
 									<Table.Cell class="font-medium">{r.nama}</Table.Cell>
 									<Table.Cell><Badge variant="outline" class="text-xs">{r.gender}</Badge></Table.Cell>
 									<Table.Cell class="text-center text-sm">{r.total_answers}</Table.Cell>
 									<Table.Cell class="text-center text-sm">{r.correct_answers}</Table.Cell>
 										<Table.Cell class="text-center"><span class={scoreClass(r.score)}>{fmtScore(r.score)}</span></Table.Cell>
-										<Table.Cell class="text-slate-500 text-xs whitespace-nowrap">
+										<Table.Cell class="text-muted-foreground text-xs whitespace-nowrap">
 											{#if r.submitted_at}
 												{fmtDt(r.submitted_at)}
 											{:else}
-												<span class="text-slate-300">Belum submit</span>
+												<span class="text-muted-foreground">Belum submit</span>
 											{/if}
 										</Table.Cell>
 								</Table.Row>
 							{:else}
 								<Table.Row>
-									<Table.Cell colspan={8} class="text-center text-slate-400 py-10">Belum ada data nilai</Table.Cell>
+									<Table.Cell colspan={8} class="text-center text-muted-foreground py-10">Belum ada data nilai</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>
@@ -1829,7 +1829,7 @@
 		{:else if activeTab === 'butir'}
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<p class="text-sm font-medium text-slate-700">Analisis kualitas butir dari jawaban siswa</p>
+					<p class="text-sm font-medium text-foreground">Analisis kualitas butir dari jawaban siswa</p>
 					<p class="text-xs text-muted-foreground">Gunakan setelah skor dihitung untuk melihat kesukaran, daya pembeda, dan opsi jawaban.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
@@ -1857,17 +1857,17 @@
 					{ label: 'Daya Pembeda Rendah', value: itemAnalysisStats.lowDiscrimination.toString(), hint: '< 15%' },
 					{ label: 'Uraian Belum Dinilai', value: itemAnalysisStats.unscored.toString(), hint: 'butir essay' },
 				] as item (item.label)}
-					<Card.Root class="border-green-100">
+					<Card.Root class="border-success/20">
 						<Card.Content class="px-4 pb-3 pt-4">
-							<p class="mb-1 text-xs text-slate-500">{item.label}</p>
-							<p class="text-2xl font-bold text-[oklch(0.38_0.13_145)]">{item.value}</p>
-							<p class="mt-1 text-xs text-slate-400">{item.hint}</p>
+							<p class="mb-1 text-xs text-muted-foreground">{item.label}</p>
+							<p class="text-2xl font-bold text-primary">{item.value}</p>
+							<p class="mt-1 text-xs text-muted-foreground">{item.hint}</p>
 						</Card.Content>
 					</Card.Root>
 				{/each}
 			</div>
 
-			<Card.Root class="border-green-100">
+			<Card.Root class="border-success/20">
 				<Card.Header class="pb-2">
 					<Card.Title class="text-base">Matriks Analisis Butir</Card.Title>
 					<p class="text-xs text-muted-foreground">Butir bermasalah ditandai agar guru bisa memperbaiki bank soal setelah ujian.</p>
@@ -1875,7 +1875,7 @@
 				<Card.Content class="p-0 overflow-x-auto">
 					<Table.Root>
 						<Table.Header>
-							<Table.Row class="bg-green-50">
+							<Table.Row class="bg-success/10">
 								<Table.Head class="w-10">No</Table.Head>
 								<Table.Head>Butir</Table.Head>
 								<Table.Head>Blueprint</Table.Head>
@@ -1890,49 +1890,49 @@
 						<Table.Body>
 							{#each itemAnalysis as row (row.question_id)}
 								<Table.Row class={itemAnalysisSignalClass(row)}>
-									<Table.Cell class="text-xs text-slate-400">{row.position}</Table.Cell>
+									<Table.Cell class="text-xs text-muted-foreground">{row.position}</Table.Cell>
 									<Table.Cell class="min-w-72">
 										<div class="flex flex-wrap items-center gap-1">
-											{#if row.question_code}<span class="font-mono text-xs text-slate-500">{row.question_code}</span>{/if}
+											{#if row.question_code}<span class="font-mono text-xs text-muted-foreground">{row.question_code}</span>{/if}
 											<Badge variant="outline" class="text-xs">{questionTypeLabel(row.question_type)}</Badge>
 											<Badge variant="secondary" class="text-xs">{row.difficulty}</Badge>
-											{#if row.hots_flag}<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">HOTS</Badge>{/if}
+											{#if row.hots_flag}<Badge class="border-warning/30 bg-warning/10 text-warning text-xs">HOTS</Badge>{/if}
 										</div>
-										<p class="mt-1 line-clamp-2 text-sm text-slate-700">{row.question_text}</p>
-										<p class="mt-1 text-[11px] text-slate-400">Kunci: {row.question_type === 'essay' ? 'Rubrik' : row.answer_key || '—'} · Bobot {row.points}</p>
+										<p class="mt-1 line-clamp-2 text-sm text-foreground">{row.question_text}</p>
+										<p class="mt-1 text-[11px] text-muted-foreground">Kunci: {row.question_type === 'essay' ? 'Rubrik' : row.answer_key || '—'} · Bobot {row.points}</p>
 									</Table.Cell>
-									<Table.Cell class="min-w-56 text-xs text-slate-600">
+									<Table.Cell class="min-w-56 text-xs text-muted-foreground">
 										<div>CP: {row.cp_ref || '—'}</div>
 										<div>TP/KD: {row.tp_ref || row.kd_ref || '—'}</div>
 										<div>Materi: {row.material_topic || '—'} · {row.cognitive_level || '—'}</div>
 									</Table.Cell>
 									<Table.Cell class="text-center text-sm">
 										{row.answered_count}/{row.submitted_count}
-										{#if row.blank_count > 0}<div class="text-[11px] text-amber-700">{row.blank_count} kosong</div>{/if}
+										{#if row.blank_count > 0}<div class="text-[11px] text-warning">{row.blank_count} kosong</div>{/if}
 									</Table.Cell>
 									<Table.Cell class="text-center text-sm">
 										{#if row.question_type === 'essay'}
 											{row.avg_manual_score.toFixed(1)} rata-rata
-											{#if row.unscored_count > 0}<div class="text-[11px] text-red-700">{row.unscored_count} belum dinilai</div>{/if}
+											{#if row.unscored_count > 0}<div class="text-[11px] text-destructive">{row.unscored_count} belum dinilai</div>{/if}
 										{:else}
 											<span class="font-mono">{row.correct_count}/{row.incorrect_count}</span>
 										{/if}
 									</Table.Cell>
-									<Table.Cell class="text-center font-semibold text-slate-700">{percent(row.difficulty_index)}</Table.Cell>
+									<Table.Cell class="text-center font-semibold text-foreground">{percent(row.difficulty_index)}</Table.Cell>
 									<Table.Cell class="text-center">
-										<span class={row.discrimination_index < 0 ? 'font-semibold text-red-700' : row.discrimination_index < 0.15 ? 'font-semibold text-amber-700' : 'font-semibold text-emerald-700'}>
+										<span class={row.discrimination_index < 0 ? 'font-semibold text-destructive' : row.discrimination_index < 0.15 ? 'font-semibold text-warning' : 'font-semibold text-primary'}>
 											{percent(row.discrimination_index)}
 										</span>
 										{#if row.top_group_count > 0 || row.bottom_group_count > 0}
-											<div class="text-[11px] text-slate-400">atas {row.top_correct_count}/{row.top_group_count} · bawah {row.bottom_correct_count}/{row.bottom_group_count}</div>
+											<div class="text-[11px] text-muted-foreground">atas {row.top_correct_count}/{row.top_group_count} · bawah {row.bottom_correct_count}/{row.bottom_group_count}</div>
 										{/if}
 									</Table.Cell>
 									<Table.Cell class="min-w-40">
 										<div class="flex flex-wrap gap-1">
 											{#each answerDistributionEntries(row).slice(0, 5) as entry (entry.answer)}
-												<Badge variant="outline" class="bg-white text-xs">{entry.answer}: {entry.count}</Badge>
+												<Badge variant="outline" class="bg-card text-xs">{entry.answer}: {entry.count}</Badge>
 											{:else}
-												<span class="text-xs text-slate-400">Belum ada jawaban</span>
+												<span class="text-xs text-muted-foreground">Belum ada jawaban</span>
 											{/each}
 										</div>
 									</Table.Cell>
@@ -1956,7 +1956,7 @@
 								</Table.Row>
 							{:else}
 								<Table.Row>
-									<Table.Cell colspan={9} class="py-10 text-center text-slate-400">Analisis butir belum tersedia. Pastikan paket memiliki soal dan klik refresh setelah skor dihitung.</Table.Cell>
+									<Table.Cell colspan={9} class="py-10 text-center text-muted-foreground">Analisis butir belum tersedia. Pastikan paket memiliki soal dan klik refresh setelah skor dihitung.</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>
@@ -1981,7 +1981,7 @@
 				<Card.Content class="p-0 overflow-x-auto">
 					<Table.Root>
 						<Table.Header>
-							<Table.Row class="bg-green-50">
+							<Table.Row class="bg-success/10">
 								<Table.Head>NIS</Table.Head>
 								<Table.Head>Nama</Table.Head>
 								<Table.Head>L/P</Table.Head>
@@ -1994,27 +1994,27 @@
 						</Table.Header>
 						<Table.Body>
 								{#each participants as p (p.id)}
-									<Table.Row class={p.suspicious_flag ? 'bg-red-50' : 'hover:bg-green-50/30'}>
+									<Table.Row class={p.suspicious_flag ? 'bg-destructive/10' : 'hover:bg-success/10'}>
 									<Table.Cell class="font-mono text-sm">{p.nis}</Table.Cell>
 									<Table.Cell class="font-medium">
 										{p.nama}
-										{#if p.suspicious_flag}<span class="ml-1 text-red-500 text-xs">⚑ Dicurigai</span>{/if}
+										{#if p.suspicious_flag}<span class="ml-1 text-destructive text-xs">⚑ Dicurigai</span>{/if}
 									</Table.Cell>
 										<Table.Cell><Badge variant="outline" class="text-xs">{p.gender}</Badge></Table.Cell>
 										<Table.Cell class="text-sm text-muted-foreground">{p.room_name || '—'}</Table.Cell>
 										<Table.Cell class="text-sm text-muted-foreground">{p.seat_no ?? '—'}</Table.Cell>
 										<Table.Cell>
 										{#if p.token}
-											<Badge variant="outline" class="border-green-200 bg-green-50 text-xs text-green-800">Rahasia - siap kartu</Badge>
+											<Badge variant="outline" class="border-success/20 bg-success/10 text-xs text-success">Rahasia - siap kartu</Badge>
 										{:else}
-											<span class="text-slate-400 text-xs">—</span>
+											<span class="text-muted-foreground text-xs">—</span>
 										{/if}
 									</Table.Cell>
 									<Table.Cell>
 										{#if p.submitted_at}
-											<Badge variant="outline" class="text-xs bg-slate-100 text-slate-500">Submit</Badge>
+											<Badge variant="outline" class="text-xs bg-muted text-muted-foreground">Submit</Badge>
 										{:else}
-											<Badge variant="outline" class="text-xs bg-amber-50 text-amber-700 border-amber-200">Belum</Badge>
+											<Badge variant="outline" class="text-xs bg-warning/10 text-warning border-warning/30">Belum</Badge>
 										{/if}
 									</Table.Cell>
 										<Table.Cell class="text-right">
@@ -2033,7 +2033,7 @@
 								</Table.Row>
 								{:else}
 									<Table.Row>
-										<Table.Cell colspan={8} class="text-center text-slate-400 py-8">Belum ada peserta</Table.Cell>
+										<Table.Cell colspan={8} class="text-center text-muted-foreground py-8">Belum ada peserta</Table.Cell>
 									</Table.Row>
 								{/each}
 						</Table.Body>
@@ -2053,7 +2053,7 @@
 					message="Ruangan terkunci setelah sesi aktif/selesai. Gunakan tab proctoring dan rekap operasional untuk pemantauan tanpa mengubah setup ruang."
 				/>
 			{/if}
-			<Card.Root class="border-green-200">
+			<Card.Root class="border-success/20">
 				<Card.Header class="pb-3">
 					<Card.Title class="text-base">Ruangan & Pengawas</Card.Title>
 					<p class="text-xs text-muted-foreground">Pilih master ruangan fisik bila sudah tersedia, atau isi manual untuk transisi.</p>
@@ -2079,7 +2079,7 @@
 							<label for="r-name" class="block text-sm font-medium mb-1">Label Ruang Ujian</label>
 							<Input id="r-name" value={newRoomName} oninput={(event) => updateNewRoomName((event.currentTarget as HTMLInputElement).value)} placeholder="Ruang 1 / Lab Komputer A" class="w-56" disabled={roomControlsLocked} />
 							{#if selectedSchoolRoomId && roomNameCustomized}
-								<p class="mt-1 text-[11px] text-amber-700">Label sudah dikustom manual dan tidak mengikuti master ruangan.</p>
+								<p class="mt-1 text-[11px] text-warning">Label sudah dikustom manual dan tidak mengikuti master ruangan.</p>
 							{/if}
 						</div>
 						<div>
@@ -2091,7 +2091,7 @@
 						</LoadingButton>
 							{#if rooms.length > 0}
 								<LoadingButton variant="outline" loading={shuffleBusy} loadingLabel="Mengacak..." disabled={roomControlsLocked || shuffleBusy} onclick={shuffleRooms}
-									class="border-amber-300 text-amber-700 hover:bg-amber-50">
+									class="border-warning/30 text-warning hover:bg-warning/10">
 									Acak Peserta
 								</LoadingButton>
 								<LoadingButton variant="outline" loading={seatBusy} loadingLabel="Mengatur..." disabled={roomControlsLocked || seatBusy} onclick={autoAssignSeats}>
@@ -2117,20 +2117,20 @@
 			{#if rooms.length > 0}
 				<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
 					{#each rooms as room (room.id)}
-						<Card.Root class="border-green-100">
+						<Card.Root class="border-success/20">
 							<Card.Content class="p-4">
 								<div class="space-y-3">
 									<div class="flex items-start justify-between gap-3">
 										<div class="min-w-0">
-											<div class="font-semibold text-[oklch(0.38_0.13_145)]">{room.room_name}</div>
+											<div class="font-semibold text-primary">{room.room_name}</div>
 											<div class="text-xs text-muted-foreground mt-1">
 												{room.school_room_name ? `${room.school_room_code} · ${room.school_room_name}` : 'Belum terhubung master ruangan'}
 											</div>
 											<div class="text-sm text-muted-foreground mt-1">
 												Kapasitas {room.capacity} · Terisi {room.participant_count} · Pengawas {room.proctor_count ?? 0}
 											</div>
-											<div class="mt-2 h-2 rounded-full bg-green-100 overflow-hidden">
-												<div class="h-full bg-[oklch(0.38_0.13_145)] rounded-full transition-all"
+											<div class="mt-2 h-2 rounded-full bg-success/15 overflow-hidden">
+												<div class="h-full bg-primary rounded-full transition-all"
 													style="width: {roomCapacityRatio(room)}%">
 												</div>
 											</div>
@@ -2143,17 +2143,17 @@
 												Cetak
 											</Button>
 										<LoadingButton variant="outline" size="sm"
-											class="border-red-200 text-red-600 hover:bg-red-50"
+											class="border-destructive/30 text-destructive hover:bg-destructive/10"
 											onclick={() => deleteRoom(room.id, room.room_name)}
 											loading={roomDeleteBusyId === room.id}
 											disabled={roomControlsLocked || (roomDeleteBusyId !== '' && roomDeleteBusyId !== room.id)}
 											loadingLabel="Menghapus...">Hapus</LoadingButton>
 										</div>
 									</div>
-									<div class="rounded-md border border-slate-200 bg-slate-50 p-2">
-										<label for={`proctor-${room.id}`} class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Pengawas utama</label>
+									<div class="rounded-md border border-border bg-muted/50 p-2">
+										<label for={`proctor-${room.id}`} class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pengawas utama</label>
 										<div class="flex gap-2">
-											<select id={`proctor-${room.id}`} bind:value={roomProctorInput[room.id]} class="min-w-0 flex-1 rounded-md border border-input bg-white px-2 py-1.5 text-xs" disabled={roomControlsLocked}>
+											<select id={`proctor-${room.id}`} bind:value={roomProctorInput[room.id]} class="min-w-0 flex-1 rounded-md border border-input bg-card px-2 py-1.5 text-xs" disabled={roomControlsLocked}>
 												<option value="">Belum ditugaskan</option>
 												{#each employeeOptions as employee (employee.id)}
 													<option value={employee.id}>{employee.nama}{employee.nip ? ` · ${employee.nip}` : ''}</option>
@@ -2171,7 +2171,7 @@
 											</LoadingButton>
 										</div>
 										{#if room.primary_proctor_name}
-											<p class="mt-1 text-[11px] text-slate-500">Aktif: {room.primary_proctor_name}</p>
+											<p class="mt-1 text-[11px] text-muted-foreground">Aktif: {room.primary_proctor_name}</p>
 										{/if}
 									</div>
 								</div>
@@ -2188,7 +2188,7 @@
 					<Card.Content class="p-0 overflow-x-auto">
 						<Table.Root>
 							<Table.Header>
-								<Table.Row class="bg-green-50">
+								<Table.Row class="bg-success/10">
 									<Table.Head>NIS</Table.Head>
 									<Table.Head>Nama</Table.Head>
 										<Table.Head>L/P</Table.Head>
@@ -2206,14 +2206,14 @@
 										{#if p.room_name}
 											<Table.Cell class="text-sm">{p.room_name}</Table.Cell>
 											{:else}
-												<Table.Cell class="text-sm text-slate-400">Belum ditentukan</Table.Cell>
+												<Table.Cell class="text-sm text-muted-foreground">Belum ditentukan</Table.Cell>
 											{/if}
-											<Table.Cell class="text-sm text-slate-600">{p.seat_no ?? '—'}</Table.Cell>
+											<Table.Cell class="text-sm text-muted-foreground">{p.seat_no ?? '—'}</Table.Cell>
 											<Table.Cell>
 											{#if p.token}
-												<Badge variant="outline" class="border-green-200 bg-green-50 text-xs text-green-800">Rahasia - siap kartu</Badge>
+												<Badge variant="outline" class="border-success/20 bg-success/10 text-xs text-success">Rahasia - siap kartu</Badge>
 											{:else}
-												<span class="text-slate-400 text-xs">—</span>
+												<span class="text-muted-foreground text-xs">—</span>
 											{/if}
 										</Table.Cell>
 									</Table.Row>
@@ -2223,7 +2223,7 @@
 					</Card.Content>
 				</Card.Root>
 			{:else}
-				<div class="rounded-lg border border-dashed border-green-200 p-8 text-center text-muted-foreground text-sm mt-4">
+				<div class="rounded-lg border border-dashed border-success/20 p-8 text-center text-muted-foreground text-sm mt-4">
 					Belum ada ruangan. Tambah ruangan di atas, lalu klik "Acak Peserta ke Ruangan".
 				</div>
 			{/if}
@@ -2233,7 +2233,7 @@
 		{:else if activeTab === 'operasional'}
 			<div class="flex items-center justify-between gap-3 flex-wrap">
 				<div>
-					<p class="text-sm font-medium text-slate-700">Rekap handover, insiden, dan rekonsiliasi sesi</p>
+					<p class="text-sm font-medium text-foreground">Rekap handover, insiden, dan rekonsiliasi sesi</p>
 					<p class="text-xs text-muted-foreground">Dipakai operator/panitia untuk memastikan semua ruang siap diarsipkan.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
@@ -2262,17 +2262,17 @@
 						{ label: 'Paksa Submit', value: operationalRecap.force_submit_count.toString(), hint: `${operationalRecap.reset_access_count} reset akses` },
 						{ label: 'Anti-Cheat', value: `${operationalRecap.app_switch_count}/${operationalRecap.screenshot_attempt_count}`, hint: 'app switch / screenshot' },
 					] as item (item.label)}
-						<Card.Root class="border-green-100">
+						<Card.Root class="border-success/20">
 							<Card.Content class="px-4 pb-3 pt-4">
-								<p class="mb-1 text-xs text-slate-500">{item.label}</p>
-								<p class="text-2xl font-bold text-[oklch(0.38_0.13_145)]">{item.value}</p>
-								<p class="mt-1 text-xs text-slate-400">{item.hint}</p>
+								<p class="mb-1 text-xs text-muted-foreground">{item.label}</p>
+								<p class="text-2xl font-bold text-primary">{item.value}</p>
+								<p class="mt-1 text-xs text-muted-foreground">{item.hint}</p>
 							</Card.Content>
 						</Card.Root>
 					{/each}
 				</div>
 
-				<Card.Root class="border-green-100">
+				<Card.Root class="border-success/20">
 					<Card.Header class="pb-2">
 						<Card.Title class="text-base">Rekap Ruang & Register Insiden</Card.Title>
 						<p class="text-xs text-muted-foreground">Ruang yang belum punya handover atau belum terkunci ditampilkan di atas.</p>
@@ -2280,7 +2280,7 @@
 					<Card.Content class="p-0 overflow-x-auto">
 						<Table.Root>
 							<Table.Header>
-								<Table.Row class="bg-green-50">
+								<Table.Row class="bg-success/10">
 									<Table.Head>Ruang</Table.Head>
 									<Table.Head>Handover</Table.Head>
 									<Table.Head class="text-center">Submit</Table.Head>
@@ -2293,30 +2293,30 @@
 							</Table.Header>
 							<Table.Body>
 								{#each operationalRooms as room (room.room_id)}
-									<Table.Row class={room.locked_at ? '' : 'bg-amber-50/50'}>
+									<Table.Row class={room.locked_at ? '' : 'bg-warning/10'}>
 										<Table.Cell>
-											<div class="font-medium text-slate-900">{room.room_name}</div>
-											<div class="text-xs text-slate-500">Token rahasia {room.room_token || '—'} · {room.joined_count}/{room.participant_count} login</div>
+											<div class="font-medium text-foreground">{room.room_name}</div>
+											<div class="text-xs text-muted-foreground">Token rahasia {room.room_token || '—'} · {room.joined_count}/{room.participant_count} login</div>
 										</Table.Cell>
 										<Table.Cell>
 											<Badge variant="outline" class={handoverStatusClass(room)}>{handoverStatusLabel(room)}</Badge>
-											<p class="mt-1 text-[11px] text-slate-400">{room.locked_at ? fmtDt(room.locked_at) : room.handover_updated_at ? `Draft ${fmtDt(room.handover_updated_at)}` : 'Belum diisi'}</p>
+											<p class="mt-1 text-[11px] text-muted-foreground">{room.locked_at ? fmtDt(room.locked_at) : room.handover_updated_at ? `Draft ${fmtDt(room.handover_updated_at)}` : 'Belum diisi'}</p>
 										</Table.Cell>
 										<Table.Cell class="text-center font-mono text-sm">
 											{room.submitted_count}/{room.participant_count}
-											{#if room.no_show_count > 0}<div class="text-[11px] text-amber-700">{room.no_show_count} no-show</div>{/if}
+											{#if room.no_show_count > 0}<div class="text-[11px] text-warning">{room.no_show_count} no-show</div>{/if}
 										</Table.Cell>
 										<Table.Cell class="text-center">
-											<div class={room.suspicious_count > 0 || room.incident_event_count > 0 ? 'font-semibold text-red-700' : 'text-slate-500'}>
+											<div class={room.suspicious_count > 0 || room.incident_event_count > 0 ? 'font-semibold text-destructive' : 'text-muted-foreground'}>
 												{room.suspicious_count} / {room.incident_event_count}
 											</div>
-											<div class="text-[11px] text-slate-400">flag / event</div>
+											<div class="text-[11px] text-muted-foreground">flag / event</div>
 										</Table.Cell>
 										<Table.Cell class="text-center font-mono text-sm">{room.force_submit_count}/{room.reset_access_count}</Table.Cell>
-										<Table.Cell class="max-w-sm text-xs text-slate-600">
+										<Table.Cell class="max-w-sm text-xs text-muted-foreground">
 											{room.incident_notes || '—'}
 										</Table.Cell>
-										<Table.Cell class="max-w-sm text-xs text-slate-600">
+										<Table.Cell class="max-w-sm text-xs text-muted-foreground">
 											{room.operator_notes || room.handover_notes || '—'}
 										</Table.Cell>
 										<Table.Cell class="text-right">
@@ -2332,7 +2332,7 @@
 									</Table.Row>
 								{:else}
 									<Table.Row>
-										<Table.Cell colspan={8} class="py-10 text-center text-slate-400">Belum ada ruang untuk direkap</Table.Cell>
+										<Table.Cell colspan={8} class="py-10 text-center text-muted-foreground">Belum ada ruang untuk direkap</Table.Cell>
 									</Table.Row>
 								{/each}
 							</Table.Body>
@@ -2354,21 +2354,21 @@
 			{@const selectedEventParticipant = proctoring.find((row) => row.participant_id === eventPanelParticipantId)}
 			<div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
 				<div>
-					<p class="text-sm font-medium text-slate-700">Monitoring proctoring live</p>
+					<p class="text-sm font-medium text-foreground">Monitoring proctoring live</p>
 					<p class="text-xs text-muted-foreground">Pembaruan otomatis setiap 15 detik</p>
 				</div>
 				<LoadingButton variant="outline" size="sm" onclick={() => void refreshProctoring()} loading={proctoringRefreshBusy} loadingLabel="Memuat..." disabled={proctoringRefreshBusy}>↻ Refresh Sekarang</LoadingButton>
 			</div>
 			<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				{#each [
-					{ label: 'Online Aktif', value: proctoringStats.online.toString(), className: 'text-emerald-700' },
-					{ label: 'Lambat / Offline', value: `${proctoringStats.slow + proctoringStats.offline}`, className: 'text-amber-700' },
-					{ label: 'Perlu Atensi', value: proctoringStats.suspicious.toString(), className: 'text-red-700' },
-					{ label: 'App Switch / Screenshot', value: `${proctoringStats.appSwitches} / ${proctoringStats.screenshots}`, className: 'text-slate-700' },
+					{ label: 'Online Aktif', value: proctoringStats.online.toString(), className: 'text-primary' },
+					{ label: 'Lambat / Offline', value: `${proctoringStats.slow + proctoringStats.offline}`, className: 'text-warning' },
+					{ label: 'Perlu Atensi', value: proctoringStats.suspicious.toString(), className: 'text-destructive' },
+					{ label: 'App Switch / Screenshot', value: `${proctoringStats.appSwitches} / ${proctoringStats.screenshots}`, className: 'text-foreground' },
 				] as item (item.label)}
-					<Card.Root class="border-green-100">
+					<Card.Root class="border-success/20">
 						<Card.Content class="px-4 pb-3 pt-4">
-							<p class="mb-1 text-xs text-slate-500">{item.label}</p>
+							<p class="mb-1 text-xs text-muted-foreground">{item.label}</p>
 							<p class={`text-2xl font-bold ${item.className}`}>{item.value}</p>
 						</Card.Content>
 					</Card.Root>
@@ -2378,7 +2378,7 @@
 				<Card.Content class="p-0 overflow-x-auto">
 					<Table.Root>
 						<Table.Header>
-							<Table.Row class="bg-green-50">
+							<Table.Row class="bg-success/10">
 								<Table.Head>Nama</Table.Head>
 								<Table.Head>Ruangan</Table.Head>
 								<Table.Head>Status</Table.Head>
@@ -2392,7 +2392,7 @@
 						<Table.Body>
 								{#each proctoring as p (p.participant_id)}
 									{@const hb = heartbeatStatus(p.last_heartbeat)}
-									<Table.Row class={p.suspicious_flag ? 'bg-red-50' : p.app_switch_count >= 3 ? 'bg-amber-50/50' : 'hover:bg-green-50/30'}>
+									<Table.Row class={p.suspicious_flag ? 'bg-destructive/10' : p.app_switch_count >= 3 ? 'bg-warning/10' : 'hover:bg-success/10'}>
 									<Table.Cell class="font-medium">
 										{p.nama}
 										<div class="text-xs text-muted-foreground font-mono">{p.nis}</div>
@@ -2403,12 +2403,12 @@
 									</Table.Cell>
 									<Table.Cell class="text-center font-mono text-sm">{p.answered_count}</Table.Cell>
 									<Table.Cell class="text-center">
-										<span class="font-mono text-sm {p.app_switch_count >= 3 ? 'text-red-600 font-bold' : 'text-slate-600'}">
+										<span class="font-mono text-sm {p.app_switch_count >= 3 ? 'text-destructive font-bold' : 'text-muted-foreground'}">
 											{p.app_switch_count}x
 										</span>
 									</Table.Cell>
 									<Table.Cell class="text-center">
-										<span class="font-mono text-sm {p.screenshot_attempt > 0 ? 'text-amber-600 font-semibold' : 'text-slate-400'}">
+										<span class="font-mono text-sm {p.screenshot_attempt > 0 ? 'text-warning font-semibold' : 'text-muted-foreground'}">
 											{p.screenshot_attempt}x
 										</span>
 									</Table.Cell>
@@ -2419,7 +2419,7 @@
 										<div class="flex flex-wrap items-center justify-end gap-1">
 											<Button
 												variant="outline" size="sm"
-												class={eventPanelParticipantId === p.participant_id ? 'border-green-500 text-green-800 bg-green-50' : 'border-slate-200 text-slate-600'}
+												class={eventPanelParticipantId === p.participant_id ? 'border-success text-success bg-success/10' : 'border-border text-muted-foreground'}
 												onclick={() => showParticipantEvents(p.participant_id)}
 												disabled={eventRefreshBusy}>
 												Log
@@ -2434,7 +2434,7 @@
 											</LoadingButton>
 											<LoadingButton
 												variant="outline" size="sm"
-												class="border-amber-300 text-amber-700 hover:bg-amber-50"
+												class="border-warning/30 text-warning hover:bg-warning/10"
 												onclick={() => forceSubmitParticipant(p.participant_id, p.nama)}
 												loading={forceSubmitBusyId === p.participant_id}
 												disabled={!!p.submitted_at || (forceSubmitBusyId !== '' && forceSubmitBusyId !== p.participant_id)}
@@ -2443,7 +2443,7 @@
 											</LoadingButton>
 											<Button
 												variant="outline" size="sm"
-												class={p.suspicious_flag ? 'border-red-400 text-red-700 bg-red-50' : 'border-slate-200 text-slate-500'}
+												class={p.suspicious_flag ? 'border-destructive text-destructive bg-destructive/10' : 'border-border text-muted-foreground'}
 												onclick={() => flagParticipant(p.participant_id, !p.suspicious_flag)}
 												disabled={flagBusyId === p.participant_id}>
 											{p.suspicious_flag ? '⚑ Hapus Tanda' : '⚐ Tandai'}
@@ -2453,14 +2453,14 @@
 								</Table.Row>
 							{:else}
 								<Table.Row>
-									<Table.Cell colspan={8} class="text-center text-slate-400 py-8">Belum ada data proctoring</Table.Cell>
+									<Table.Cell colspan={8} class="text-center text-muted-foreground py-8">Belum ada data proctoring</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>
 					</Table.Root>
 				</Card.Content>
 			</Card.Root>
-			<Card.Root class="border-green-100">
+			<Card.Root class="border-success/20">
 				<Card.Header class="pb-3">
 					<div class="flex items-start justify-between gap-3 flex-wrap">
 						<div>
@@ -2495,7 +2495,7 @@
 				<Card.Content class="p-0 overflow-x-auto">
 					<Table.Root>
 						<Table.Header>
-							<Table.Row class="bg-slate-50">
+							<Table.Row class="bg-muted/50">
 								<Table.Head>Waktu</Table.Head>
 								<Table.Head>Peserta</Table.Head>
 								<Table.Head>Aktivitas</Table.Head>
@@ -2515,11 +2515,11 @@
 										<Badge variant="outline" class="text-xs">{proctoringEventLabel(ev.event_type)}</Badge>
 									</Table.Cell>
 									<Table.Cell class="text-sm text-muted-foreground">{ev.room_name || '—'}</Table.Cell>
-									<Table.Cell class="max-w-md break-words font-mono text-xs text-slate-500">{eventDataText(ev.event_data)}</Table.Cell>
+									<Table.Cell class="max-w-md break-words font-mono text-xs text-muted-foreground">{eventDataText(ev.event_data)}</Table.Cell>
 								</Table.Row>
 							{:else}
 								<Table.Row>
-									<Table.Cell colspan={5} class="py-8 text-center text-sm text-slate-400">Belum ada log aktivitas</Table.Cell>
+									<Table.Cell colspan={5} class="py-8 text-center text-sm text-muted-foreground">Belum ada log aktivitas</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>
@@ -2531,7 +2531,7 @@
 		{:else if activeTab === 'audit'}
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<p class="text-sm font-medium text-slate-700">Jejak audit operasional sesi</p>
+					<p class="text-sm font-medium text-foreground">Jejak audit operasional sesi</p>
 					<p class="text-xs text-muted-foreground">Mencatat perubahan jadwal, koreksi, proctoring, dan handover yang punya dampak operasional.</p>
 				</div>
 				<LoadingButton variant="outline" size="sm" onclick={() => void refreshAuditLogs()} loading={auditRefreshBusy} loadingLabel="Memuat..." disabled={auditRefreshBusy}>
@@ -2539,11 +2539,11 @@
 				</LoadingButton>
 			</div>
 
-			<Card.Root class="border-green-100">
+			<Card.Root class="border-success/20">
 				<Card.Content class="p-0 overflow-x-auto">
 					<Table.Root>
 						<Table.Header>
-							<Table.Row class="bg-green-50">
+							<Table.Row class="bg-success/10">
 								<Table.Head>Waktu</Table.Head>
 								<Table.Head>Aktor</Table.Head>
 								<Table.Head>Aksi</Table.Head>
@@ -2555,17 +2555,17 @@
 								<Table.Row>
 									<Table.Cell class="whitespace-nowrap text-xs text-muted-foreground">{fmtDt(log.created_at)}</Table.Cell>
 									<Table.Cell>
-										<div class="text-sm font-medium text-slate-800">{log.username || auditValue(log, 'username') || 'Sistem'}</div>
-										<div class="font-mono text-[11px] text-slate-400">{log.user_id || auditValue(log, 'user_id') || '—'}</div>
+										<div class="text-sm font-medium text-foreground">{log.username || auditValue(log, 'username') || 'Sistem'}</div>
+										<div class="font-mono text-[11px] text-muted-foreground">{log.user_id || auditValue(log, 'user_id') || '—'}</div>
 									</Table.Cell>
 									<Table.Cell>
 										<Badge variant="outline" class="text-xs">{auditActionLabel(log.action)}</Badge>
 									</Table.Cell>
-									<Table.Cell class="max-w-2xl text-xs text-slate-600">{auditSummary(log)}</Table.Cell>
+									<Table.Cell class="max-w-2xl text-xs text-muted-foreground">{auditSummary(log)}</Table.Cell>
 								</Table.Row>
 							{:else}
 								<Table.Row>
-									<Table.Cell colspan={4} class="py-10 text-center text-sm text-slate-400">Belum ada audit operasional untuk sesi ini</Table.Cell>
+									<Table.Cell colspan={4} class="py-10 text-center text-sm text-muted-foreground">Belum ada audit operasional untuk sesi ini</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>
@@ -2578,65 +2578,65 @@
 			<Card.Root>
 				<Card.Header class="pb-2">
 					<Card.Title class="text-base">Koreksi Jawaban Uraian ({essays.length} belum dinilai)</Card.Title>
-					<p class="text-sm text-slate-500">Nilai 0-100 akan dikalikan proporsional dengan bobot soal di paket.</p>
+					<p class="text-sm text-muted-foreground">Nilai 0-100 akan dikalikan proporsional dengan bobot soal di paket.</p>
 				</Card.Header>
 				<Card.Content class="space-y-3">
 					{#each essays as e (e.answer_id)}
-						<section class="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_16rem]">
+						<section class="grid gap-3 rounded-lg border border-border bg-card p-3 shadow-sm xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_16rem]">
 							<div class="space-y-2">
 								<div class="flex flex-wrap items-center gap-2">
 									<Badge variant="outline">{e.question_code || 'Essay'}</Badge>
 									<Badge variant="outline">Bobot {fmtEssayPoints(e.points)}</Badge>
 								</div>
 								<div>
-									<p class="text-sm font-semibold text-slate-900">{e.nama}</p>
-									<p class="text-xs text-slate-500">{e.nis}{e.room_name ? ` · ${e.room_name}` : ''}</p>
+									<p class="text-sm font-semibold text-foreground">{e.nama}</p>
+									<p class="text-xs text-muted-foreground">{e.nis}{e.room_name ? ` · ${e.room_name}` : ''}</p>
 								</div>
 								{#if e.stimulus_html}
-									<div class="rounded-md border border-slate-100 bg-slate-50 p-2">
-										<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Stimulus</p>
-										<RichContent html={e.stimulus_html} class="prose prose-sm max-w-none text-slate-700" />
+									<div class="rounded-md border border-border bg-muted/50 p-2">
+										<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Stimulus</p>
+										<RichContent html={e.stimulus_html} class="prose prose-sm max-w-none text-foreground" />
 									</div>
 								{/if}
-								<div class="rounded-md border border-slate-100 bg-slate-50 p-2">
-									<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Soal</p>
+								<div class="rounded-md border border-border bg-muted/50 p-2">
+									<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Soal</p>
 									{#if e.stem_html}
-										<RichContent html={e.stem_html} class="prose prose-sm max-w-none text-slate-800" />
+										<RichContent html={e.stem_html} class="prose prose-sm max-w-none text-foreground" />
 									{:else}
-										<p class="text-sm text-slate-800">{e.question_text}</p>
+										<p class="text-sm text-foreground">{e.question_text}</p>
 									{/if}
 								</div>
 							</div>
 
 							<div class="space-y-2">
-								<p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Jawaban Siswa</p>
-								<div class="min-h-32 whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">{e.answer || '(jawaban kosong)'}</div>
+								<p class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Jawaban Siswa</p>
+								<div class="min-h-32 whitespace-pre-wrap rounded-md border border-border bg-muted/50 p-3 text-sm text-foreground">{e.answer || '(jawaban kosong)'}</div>
 								{#if e.rubric_html}
-									<div class="rounded-md border border-amber-100 bg-amber-50 p-3">
-										<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">Rubrik / Pedoman</p>
-										<RichContent html={e.rubric_html} class="prose prose-sm max-w-none text-amber-950" />
+									<div class="rounded-md border border-warning/30 bg-warning/10 p-3">
+										<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-warning">Rubrik / Pedoman</p>
+										<RichContent html={e.rubric_html} class="prose prose-sm max-w-none text-warning" />
 									</div>
 								{/if}
 							</div>
 
-							<div class="space-y-2 rounded-md border border-green-100 bg-green-50 p-3">
-								<label for={`essay-score-${e.answer_id}`} class="block text-[10px] font-bold uppercase tracking-wide text-green-800">Nilai Manual</label>
-								<Input id={`essay-score-${e.answer_id}`} type="number" min="0" max="100" bind:value={gradeInput[e.answer_id]} placeholder="0-100" class="h-9 bg-white" />
-								<p class="text-xs text-green-800">0 berarti sudah dikoreksi dengan nilai nol. Kosong berarti belum bisa disimpan.</p>
+							<div class="space-y-2 rounded-md border border-success/20 bg-success/10 p-3">
+								<label for={`essay-score-${e.answer_id}`} class="block text-[10px] font-bold uppercase tracking-wide text-success">Nilai Manual</label>
+								<Input id={`essay-score-${e.answer_id}`} type="number" min="0" max="100" bind:value={gradeInput[e.answer_id]} placeholder="0-100" class="h-9 bg-card" />
+								<p class="text-xs text-success">0 berarti sudah dikoreksi dengan nilai nol. Kosong berarti belum bisa disimpan.</p>
 								<LoadingButton
 									size="sm"
 									onclick={() => submitGrade(e.answer_id)}
 									loading={gradeBusyId === e.answer_id}
 									disabled={gradeBusyId !== '' && gradeBusyId !== e.answer_id}
 									loadingLabel="Menyimpan..."
-									class="w-full bg-green-700 text-white hover:bg-green-800"
+									class="w-full bg-success text-background hover:bg-success"
 								>
 									Simpan Nilai
 								</LoadingButton>
 							</div>
 						</section>
 					{:else}
-						<div class="rounded-lg border border-dashed border-slate-200 py-12 text-center text-sm text-slate-400">
+						<div class="rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
 							Tidak ada jawaban uraian yang perlu dikoreksi.
 						</div>
 					{/each}

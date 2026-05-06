@@ -268,12 +268,12 @@
 <svelte:head><title>{eventId ? 'Buat Sesi Event CBT' : 'Buat Sesi CBT'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
-	<section class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-6 shadow-sm">
+	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-2">
-				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Jadwal dan Token CBT</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-slate-950">{eventId ? 'Buat Sesi Event' : 'Buat Sesi CBT'}</h1>
-				<p class="text-sm leading-6 text-slate-600">Buat draft sesi dari paket siap pakai, lalu lanjutkan ke peserta, ruang, pengawas, dan token dari daftar sesi.</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Jadwal dan Token CBT</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Buat Sesi Event' : 'Buat Sesi CBT'}</h1>
+				<p class="text-sm leading-6 text-muted-foreground">Buat draft sesi dari paket siap pakai, lalu lanjutkan ke peserta, ruang, pengawas, dan token dari daftar sesi.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				{#if eventId}
@@ -285,17 +285,17 @@
 	</section>
 
 	{#if eventId}
-		<div class="rounded-xl border border-green-200 bg-green-50/70 p-4 text-sm text-green-950">
+		<div class="rounded-xl border border-success/20 bg-success/10 p-4 text-sm text-success">
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div>
 					<p class="font-semibold">Sesi untuk kegiatan: {eventContext?.title ?? eventId}</p>
-					<p class="mt-1 text-green-800">Payload pembuatan sesi membawa <code class="rounded bg-white px-1">event_id</code>. Paket global atau event lain disembunyikan dari pilihan sesi ini.</p>
+					<p class="mt-1 text-success">Payload pembuatan sesi membawa <code class="rounded bg-card px-1">event_id</code>. Paket global atau event lain disembunyikan dari pilihan sesi ini.</p>
 				</div>
 				<Button href={resolve(`/asesmen/paket/new?event_id=${eventId}`)} variant="outline" size="sm">Buat Paket Event</Button>
 			</div>
 		</div>
 	{:else}
-		<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">Anda sedang membuat sesi global. Dari Kegiatan CBT, gunakan tombol sesi agar pembuatan otomatis tertaut ke kegiatan.</div>
+		<div class="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">Anda sedang membuat sesi global. Dari Kegiatan CBT, gunakan tombol sesi agar pembuatan otomatis tertaut ke kegiatan.</div>
 	{/if}
 
 	{#if operationState}
@@ -304,7 +304,7 @@
 
 	<AsyncContent promise={formPromise} onerror={handleRenderError}>
 		{#snippet pending()}
-			<Card.Root class="border-slate-200 shadow-sm">
+			<Card.Root class="border-border shadow-sm">
 				<Card.Content class="grid gap-3 p-6 sm:grid-cols-2">
 					<Skeleton class="h-10" />
 					<Skeleton class="h-10" />
@@ -319,7 +319,7 @@
 		{/snippet}
 
 		{#snippet children()}
-			<Card.Root class="border-slate-200 shadow-sm">
+			<Card.Root class="border-border shadow-sm">
 				<Card.Header>
 					<Card.Title class="text-base">Buat Sesi Ujian Baru</Card.Title>
 					<Card.Description>Form create-only ini memakai endpoint <code>/api/asesmen/sessions</code> dan quality gate paket dari daftar sesi lama.</Card.Description>
@@ -327,33 +327,33 @@
 				<Card.Content class="space-y-4">
 					<div class="grid gap-3 sm:grid-cols-2">
 						<div>
-							<label for="session-package" class="mb-1 block text-xs text-slate-500">Paket Soal <span class="text-red-500">*</span></label>
+							<label for="session-package" class="mb-1 block text-xs text-muted-foreground">Paket Soal <span class="text-destructive">*</span></label>
 							<select id="session-package" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fPackageId}>
 								<option value="">-- Pilih Paket --</option>
 								{#each packages as pkg (pkg.id)}
 									<option value={pkg.id}>{pkg.title} ({pkg.subject_code}){pkg.is_active ? '' : ' - nonaktif'}</option>
 								{/each}
 							</select>
-							{#if hiddenEventPackageCount > 0}<p class="mt-1 text-[11px] text-sky-700">{hiddenEventPackageCount} paket global/event lain disembunyikan dari pilihan sesi event ini.</p>{/if}
+							{#if hiddenEventPackageCount > 0}<p class="mt-1 text-[11px] text-accent-foreground">{hiddenEventPackageCount} paket global/event lain disembunyikan dari pilihan sesi event ini.</p>{/if}
 						</div>
 						{#if fPackageId}
 							{@const quality = selectedPackageQuality}
-							<div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 sm:col-span-2">
+							<div class="rounded-lg border border-border bg-muted/50 px-3 py-2 sm:col-span-2">
 								<div class="flex flex-wrap items-start justify-between gap-3">
-									<div><p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-700">Quality Gate Paket</p><p class="mt-1 text-sm font-medium text-slate-900">{selectedPackage?.title ?? 'Paket dipilih'}</p></div>
+									<div><p class="text-xs font-semibold uppercase tracking-[0.16em] text-foreground">Quality Gate Paket</p><p class="mt-1 text-sm font-medium text-foreground">{selectedPackage?.title ?? 'Paket dipilih'}</p></div>
 									<div class="flex flex-wrap gap-1.5">
-										<Badge variant="outline" class="bg-white text-xs">{quality.totalCount} soal</Badge>
-										{#each quality.typeBuckets.slice(0, 3) as bucket (bucket.label)}<Badge variant="outline" class="bg-white text-xs">{bucket.label}: {bucket.count}</Badge>{/each}
-										{#if quality.hotsCount > 0}<Badge class="border-amber-200 bg-amber-50 text-xs text-amber-700">{quality.hotsCount} HOTS</Badge>{/if}
-										{#if quality.missingCount > 0}<Badge class="border-amber-200 bg-amber-50 text-xs text-amber-700">{quality.missingCount} metadata kurang</Badge>{/if}
-										{#if quality.unpublishedCount > 0}<Badge class="border-red-200 bg-red-50 text-xs text-red-700">{quality.unpublishedCount} belum terbit</Badge>{/if}
+										<Badge variant="outline" class="bg-card text-xs">{quality.totalCount} soal</Badge>
+										{#each quality.typeBuckets.slice(0, 3) as bucket (bucket.label)}<Badge variant="outline" class="bg-card text-xs">{bucket.label}: {bucket.count}</Badge>{/each}
+										{#if quality.hotsCount > 0}<Badge class="border-warning/30 bg-warning/10 text-xs text-warning">{quality.hotsCount} HOTS</Badge>{/if}
+										{#if quality.missingCount > 0}<Badge class="border-warning/30 bg-warning/10 text-xs text-warning">{quality.missingCount} metadata kurang</Badge>{/if}
+										{#if quality.unpublishedCount > 0}<Badge class="border-destructive/30 bg-destructive/10 text-xs text-destructive">{quality.unpublishedCount} belum terbit</Badge>{/if}
 									</div>
 								</div>
-								{#if selectedPackage && !selectedPackage.is_active}<p class="mt-2 text-xs font-medium text-red-700">Paket nonaktif tidak boleh dijadikan sesi ujian.</p>{:else if quality.totalCount === 0}<p class="mt-2 text-xs font-medium text-red-700">Paket ini belum memiliki soal, sehingga sesi tidak bisa dibuat.</p>{:else if quality.unpublishedCount > 0}<p class="mt-2 text-xs font-medium text-red-700">Rapikan paket dulu. Flutter hanya menyajikan soal terbit.</p>{:else if quality.missingCount > 0}<p class="mt-2 text-xs font-medium text-amber-700">Sesi masih boleh dibuat, tetapi {quality.missingCount} soal belum lengkap CP/TP/KD atau level kognitif.</p>{:else}<p class="mt-2 text-xs font-medium text-emerald-700">Paket siap dipakai untuk draft sesi CBT.</p>{/if}
+								{#if selectedPackage && !selectedPackage.is_active}<p class="mt-2 text-xs font-medium text-destructive">Paket nonaktif tidak boleh dijadikan sesi ujian.</p>{:else if quality.totalCount === 0}<p class="mt-2 text-xs font-medium text-destructive">Paket ini belum memiliki soal, sehingga sesi tidak bisa dibuat.</p>{:else if quality.unpublishedCount > 0}<p class="mt-2 text-xs font-medium text-destructive">Rapikan paket dulu. Flutter hanya menyajikan soal terbit.</p>{:else if quality.missingCount > 0}<p class="mt-2 text-xs font-medium text-warning">Sesi masih boleh dibuat, tetapi {quality.missingCount} soal belum lengkap CP/TP/KD atau level kognitif.</p>{:else}<p class="mt-2 text-xs font-medium text-primary">Paket siap dipakai untuk draft sesi CBT.</p>{/if}
 							</div>
 						{/if}
 						<div>
-							<label for="session-scope" class="mb-1 block text-xs text-slate-500">Cakupan peserta <span class="text-red-500">*</span></label>
+							<label for="session-scope" class="mb-1 block text-xs text-muted-foreground">Cakupan peserta <span class="text-destructive">*</span></label>
 							<select id="session-scope" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={fScopeType} onchange={(event) => updateScopeType(event.currentTarget.value)}>
 								<option value="class">Per kelas</option>
 								<option value="grade">Per tingkat</option>
@@ -362,7 +362,7 @@
 						</div>
 						{#if fScopeType === 'class'}
 							<div>
-								<label for="session-class" class="mb-1 block text-xs text-slate-500">Kelas <span class="text-red-500">*</span></label>
+								<label for="session-class" class="mb-1 block text-xs text-muted-foreground">Kelas <span class="text-destructive">*</span></label>
 								<select id="session-class" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fClassId}>
 									<option value="">-- Pilih Kelas --</option>
 									{#each classes as schoolClass (schoolClass.id)}<option value={schoolClass.id}>{schoolClass.code} — {schoolClass.name}</option>{/each}
@@ -370,34 +370,34 @@
 							</div>
 						{:else if fScopeType === 'grade'}
 							<div>
-								<label for="session-grade" class="mb-1 block text-xs text-slate-500">Tingkat <span class="text-red-500">*</span></label>
+								<label for="session-grade" class="mb-1 block text-xs text-muted-foreground">Tingkat <span class="text-destructive">*</span></label>
 								<select id="session-grade" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fGradeLevel}><option value="VII">VII</option><option value="VIII">VIII</option><option value="IX">IX</option></select>
 							</div>
 						{:else}
-							<div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">Semua siswa aktif di sekolah dapat menjadi peserta sesi ini.</div>
+							<div class="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">Semua siswa aktif di sekolah dapat menjadi peserta sesi ini.</div>
 						{/if}
 						<div>
-							<label for="session-mix-policy" class="mb-1 block text-xs text-slate-500">Mix policy</label>
+							<label for="session-mix-policy" class="mb-1 block text-xs text-muted-foreground">Mix policy</label>
 							<select id="session-mix-policy" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fMixPolicy}><option value="same_class">Tetap per kelas</option><option value="same_grade">Campur dalam tingkat</option><option value="mixed_scope">Campur lintas cakupan</option></select>
-							<p class="mt-1 text-[11px] text-slate-500">Saat cakupan berubah, opsi disetel otomatis lalu tetap bisa disesuaikan operator.</p>
+							<p class="mt-1 text-[11px] text-muted-foreground">Saat cakupan berubah, opsi disetel otomatis lalu tetap bisa disesuaikan operator.</p>
 						</div>
 						<div>
-							<label for="session-assignment-mode" class="mb-1 block text-xs text-slate-500">Mode alokasi ruangan</label>
+							<label for="session-assignment-mode" class="mb-1 block text-xs text-muted-foreground">Mode alokasi ruangan</label>
 							<select id="session-assignment-mode" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fAssignmentMode}><option value="random_balanced">Acak seimbang</option><option value="manual">Manual</option><option value="random_by_gender">Acak per gender</option><option value="random_by_accommodation">Acak akomodasi khusus</option></select>
 						</div>
 						<div class="sm:col-span-2">
-							<label for="session-title" class="mb-1 block text-xs text-slate-500">Nama Sesi <span class="text-red-500">*</span></label>
+							<label for="session-title" class="mb-1 block text-xs text-muted-foreground">Nama Sesi <span class="text-destructive">*</span></label>
 							<Input id="session-title" placeholder="mis: UTS Matematika VII A - Semester 1 2025" bind:value={fTitle} />
 						</div>
-						<div><label for="session-start" class="mb-1 block text-xs text-slate-500">Mulai <span class="text-red-500">*</span></label><Input id="session-start" type="datetime-local" bind:value={fStart} /></div>
-						<div><label for="session-end" class="mb-1 block text-xs text-slate-500">Selesai <span class="text-red-500">*</span></label><Input id="session-end" type="datetime-local" bind:value={fEnd} /></div>
-						<div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900 sm:col-span-2">
+						<div><label for="session-start" class="mb-1 block text-xs text-muted-foreground">Mulai <span class="text-destructive">*</span></label><Input id="session-start" type="datetime-local" bind:value={fStart} /></div>
+						<div><label for="session-end" class="mb-1 block text-xs text-muted-foreground">Selesai <span class="text-destructive">*</span></label><Input id="session-end" type="datetime-local" bind:value={fEnd} /></div>
+						<div class="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs leading-5 text-primary sm:col-span-2">
 							<p class="font-semibold">Jadwal sesi dicatat dan ditampilkan sebagai WITA (Asia/Makassar).</p>
-							{#if browserTimeZoneMismatch}<p class="text-amber-800">Zona waktu browser terdeteksi {browserTimeZone}. Samakan perangkat operator ke Asia/Makassar sebelum menyimpan agar input tidak bergeser.</p>{:else}<p>Pastikan jam mulai dan selesai mengikuti waktu sekolah/WITA sebelum sesi dijadwalkan.</p>{/if}
+							{#if browserTimeZoneMismatch}<p class="text-warning">Zona waktu browser terdeteksi {browserTimeZone}. Samakan perangkat operator ke Asia/Makassar sebelum menyimpan agar input tidak bergeser.</p>{:else}<p>Pastikan jam mulai dan selesai mengikuti waktu sekolah/WITA sebelum sesi dijadwalkan.</p>{/if}
 						</div>
 						<div class="grid gap-3 sm:col-span-2 sm:grid-cols-2">
-							<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-slate-700"><input type="checkbox" bind:checked={fIsSpecialEvent} class="size-4 accent-emerald-700" /> Tandai sebagai sesi khusus</label>
-							<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-slate-700"><input type="checkbox" bind:checked={fAllowCrossGrade} class="size-4 accent-emerald-700" /> Izinkan lintas tingkat</label>
+							<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground"><input type="checkbox" bind:checked={fIsSpecialEvent} class="size-4 accent-emerald-700" /> Tandai sebagai sesi khusus</label>
+							<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground"><input type="checkbox" bind:checked={fAllowCrossGrade} class="size-4 accent-emerald-700" /> Izinkan lintas tingkat</label>
 						</div>
 					</div>
 
@@ -405,7 +405,7 @@
 						<LoadingButton disabled={!canCreateSession} onclick={() => void createSession()} loading={fBusy} loadingLabel="Menyimpan...">Buat Sesi</LoadingButton>
 						<Button href={listHref} variant="outline">Batal</Button>
 					</div>
-					{#if sessionReadinessIssues.length > 0}<div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><span class="font-semibold">Belum siap dibuat:</span> {sessionReadinessIssues.join(', ')}</div>{/if}
+					{#if sessionReadinessIssues.length > 0}<div class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning"><span class="font-semibold">Belum siap dibuat:</span> {sessionReadinessIssues.join(', ')}</div>{/if}
 				</Card.Content>
 			</Card.Root>
 		{/snippet}

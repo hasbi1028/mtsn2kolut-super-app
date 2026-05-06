@@ -21,7 +21,7 @@
       <p class="text-2xl font-bold mt-1">{stats.queued}</p>
     </Card.Content>
   </Card.Root>
-  <Card.Root class={stats.running > 0 ? 'border-green-300' : ''}>
+  <Card.Root class={stats.running > 0 ? 'border-success/20' : ''}>
     <Card.Content class="pt-4 pb-3">
       <p class="text-xs text-muted-foreground">Berjalan</p>
       <div class="flex items-center gap-2 mt-1">
@@ -35,10 +35,10 @@
   <Card.Root>
     <Card.Content class="pt-4 pb-3">
       <p class="text-xs text-muted-foreground">Sukses</p>
-      <p class="text-2xl font-bold text-green-700 mt-1">{stats.success}</p>
+      <p class="text-2xl font-bold text-success mt-1">{stats.success}</p>
     </Card.Content>
   </Card.Root>
-  <Card.Root class={stats.failed > 0 ? 'border-red-200' : ''}>
+  <Card.Root class={stats.failed > 0 ? 'border-destructive/30' : ''}>
     <Card.Content class="pt-4 pb-3">
       <p class="text-xs text-muted-foreground">Gagal</p>
       <p class="text-2xl font-bold {stats.failed > 0 ? 'text-destructive' : ''} mt-1">{stats.failed}</p>

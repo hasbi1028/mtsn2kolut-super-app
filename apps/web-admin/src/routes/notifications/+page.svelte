@@ -147,15 +147,15 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 		<div>
-			<div class="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+			<div class="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
 				<BellIcon class="size-3.5" />
 				Pusat Notifikasi
 			</div>
-			<h1 class="text-xl font-semibold text-slate-900">Notifikasi</h1>
-			<p class="mt-1 max-w-3xl text-sm text-slate-500">Pengingat kerja dan status penting untuk akun ini.</p>
+			<h1 class="text-xl font-semibold text-foreground">Notifikasi</h1>
+			<p class="mt-1 max-w-3xl text-sm text-muted-foreground">Pengingat kerja dan status penting untuk akun ini.</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
-			<label class="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm text-slate-700">
+			<label class="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm text-foreground">
 				<input type="checkbox" bind:checked={unreadOnly} onchange={() => refreshNotifications()} class="size-4 accent-emerald-700" />
 				Belum dibaca
 			</label>
@@ -172,7 +172,7 @@
 
 	<AsyncContent promise={notificationsPromise} onerror={handleRenderError}>
 		{#snippet pending()}
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Content class="space-y-3 p-4">
 					{#each Array.from({ length: 5 }) as _, index (`notification-skeleton-${index}`)}
 						<Skeleton class="h-20 w-full" />
@@ -188,39 +188,39 @@
 		{#snippet children(value)}
 			{@const overview = value as NotificationOverview}
 			<div class="grid gap-3 md:grid-cols-2">
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Belum Dibaca</p>
-						<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.unread}</p>
+						<p class="text-xs text-muted-foreground">Belum Dibaca</p>
+						<p class="mt-2 text-2xl font-semibold text-foreground">{overview.unread}</p>
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Ditampilkan</p>
-						<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.items.length}</p>
+						<p class="text-xs text-muted-foreground">Ditampilkan</p>
+						<p class="mt-2 text-2xl font-semibold text-foreground">{overview.items.length}</p>
 					</Card.Content>
 				</Card.Root>
 			</div>
 
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header>
 					<Card.Title class="text-base">Daftar Notifikasi</Card.Title>
 					<Card.Description>Terurut dari yang terbaru.</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-3">
 					{#each overview.items as item (item.id)}
-						<div class={`rounded-md border p-4 ${item.read_at ? 'border-slate-200 bg-white' : 'border-emerald-200 bg-emerald-50/50'}`}>
+						<div class={`rounded-md border p-4 ${item.read_at ? 'border-border bg-card' : 'border-primary/20 bg-primary/10'}`}>
 							<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 								<div class="min-w-0">
 									<div class="flex flex-wrap items-center gap-2">
 										<Badge variant={categoryVariant(item.category)}>{categoryLabel(item.category)}</Badge>
-										<span class="text-xs text-slate-500">{formatDateTime(item.created_at)} WITA</span>
+										<span class="text-xs text-muted-foreground">{formatDateTime(item.created_at)} WITA</span>
 										{#if !item.read_at}
-											<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Baru</span>
+											<span class="rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">Baru</span>
 										{/if}
 									</div>
-									<p class="mt-2 text-sm font-semibold text-slate-900">{item.title}</p>
-									<p class="mt-1 text-sm text-slate-600">{item.body}</p>
+									<p class="mt-2 text-sm font-semibold text-foreground">{item.title}</p>
+									<p class="mt-1 text-sm text-muted-foreground">{item.body}</p>
 								</div>
 								<div class="flex shrink-0 flex-wrap gap-1.5">
 									{#if item.link_path}
@@ -237,7 +237,7 @@
 							</div>
 						</div>
 					{:else}
-						<div class="rounded-md border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+						<div class="rounded-md border border-dashed border-border bg-muted/50 p-6 text-center text-sm text-muted-foreground">
 							Belum ada notifikasi pada filter ini.
 						</div>
 					{/each}

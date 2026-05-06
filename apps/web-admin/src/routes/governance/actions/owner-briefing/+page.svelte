@@ -325,10 +325,10 @@
 <svelte:head><title>Briefing PIC Tindak Lanjut - MTsN 2 Kolaka Utara</title></svelte:head>
 
 <div class="space-y-6">
-	<div class="no-print flex flex-col gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+	<div class="no-print flex flex-col gap-3 rounded-md border border-border bg-card px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
 		<div>
-			<p class="text-sm font-semibold text-slate-900">Briefing PIC Tindak Lanjut</p>
-			<p class="text-sm text-slate-500">Lembar tugas per PIC/unit untuk menutup gap Renstra/IKU/RKT/SKP/8 SNP.</p>
+			<p class="text-sm font-semibold text-foreground">Briefing PIC Tindak Lanjut</p>
+			<p class="text-sm text-muted-foreground">Lembar tugas per PIC/unit untuk menutup gap Renstra/IKU/RKT/SKP/8 SNP.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button href={resolve('/governance/actions')} variant="outline" size="sm">
@@ -372,29 +372,29 @@
 			{@const briefings = buildOwnerBriefings(data)}
 			{@const visibleBriefings = filterBriefings(briefings)}
 			{@const totals = buildTotals(visibleBriefings)}
-			<main class="print-root mx-auto max-w-6xl space-y-6 bg-white text-slate-950">
-				<section class="print-section rounded-md border border-slate-200 p-5">
+			<main class="print-root mx-auto max-w-6xl space-y-6 bg-card text-foreground">
+				<section class="print-section rounded-md border border-border p-5">
 					<div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
 						<div>
-							<p class="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">{data.schoolProfile.ministry_line}</p>
-							<h1 class="mt-2 flex items-center gap-2 text-2xl font-bold text-slate-950">
-								<ClipboardCheckIcon class="size-6 text-emerald-700" />
+							<p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{data.schoolProfile.ministry_line}</p>
+							<h1 class="mt-2 flex items-center gap-2 text-2xl font-bold text-foreground">
+								<ClipboardCheckIcon class="size-6 text-primary" />
 								Briefing PIC/Unit Tindak Lanjut
 							</h1>
-							<p class="mt-1 text-sm text-slate-600">{data.schoolProfile.name}</p>
-							<p class="mt-1 max-w-2xl text-xs text-slate-500">{schoolAddressLine(data.schoolProfile) || data.schoolProfile.office_line}</p>
+							<p class="mt-1 text-sm text-muted-foreground">{data.schoolProfile.name}</p>
+							<p class="mt-1 max-w-2xl text-xs text-muted-foreground">{schoolAddressLine(data.schoolProfile) || data.schoolProfile.office_line}</p>
 						</div>
-						<div class="rounded-md border border-slate-200 px-4 py-3 text-sm">
-							<p class="font-medium text-slate-900">Waktu cetak</p>
-							<p class="text-slate-600">{formatGeneratedAt(generatedAt)} WITA</p>
+						<div class="rounded-md border border-border px-4 py-3 text-sm">
+							<p class="font-medium text-foreground">Waktu cetak</p>
+							<p class="text-muted-foreground">{formatGeneratedAt(generatedAt)} WITA</p>
 						</div>
 					</div>
 				</section>
 
-				<section class="no-print rounded-md border border-slate-200 p-4">
+				<section class="no-print rounded-md border border-border p-4">
 					<div class="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
 						<div>
-							<label for="owner-briefing-filter" class="text-sm font-medium text-slate-700">PIC atau unit</label>
+							<label for="owner-briefing-filter" class="text-sm font-medium text-foreground">PIC atau unit</label>
 							<select id="owner-briefing-filter" bind:value={ownerFilter} class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 								<option value="">Semua PIC/unit</option>
 								{#each briefings as briefing (briefing.key)}
@@ -408,8 +408,8 @@
 					</div>
 				</section>
 
-				<section class="print-section rounded-md border border-slate-200 p-5">
-					<h2 class="text-base font-semibold text-slate-950">Ringkasan Briefing</h2>
+				<section class="print-section rounded-md border border-border p-5">
+					<h2 class="text-base font-semibold text-foreground">Ringkasan Briefing</h2>
 					<div class="mt-4 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
 						{#each [
 							{ label: 'PIC/Unit', value: totals.owners, note: 'Dengan tugas aktif' },
@@ -419,10 +419,10 @@
 							{ label: 'Menunggu Bukti', value: totals.waitingEvidence, note: 'Perlu validasi' },
 							{ label: 'Tanpa Bukti', value: totals.withoutEvidence, note: 'Belum ada tautan/item' },
 						] as item (item.label)}
-							<div class="rounded-md border border-slate-200 p-4">
-								<p class="text-xs text-slate-500">{item.label}</p>
-								<p class="mt-2 text-2xl font-semibold text-slate-950">{item.value}</p>
-								<p class="mt-1 text-xs text-slate-500">{item.note}</p>
+							<div class="rounded-md border border-border p-4">
+								<p class="text-xs text-muted-foreground">{item.label}</p>
+								<p class="mt-2 text-2xl font-semibold text-foreground">{item.value}</p>
+								<p class="mt-1 text-xs text-muted-foreground">{item.note}</p>
 							</div>
 						{/each}
 					</div>
@@ -432,13 +432,13 @@
 					<EmptyStatePanel title="Tidak ada briefing aktif" description="Belum ada tindak lanjut terbuka untuk PIC/unit yang dipilih." />
 				{:else}
 					{#each visibleBriefings as briefing (briefing.key)}
-						<section class="print-section rounded-md border border-slate-200">
-							<div class="border-b border-slate-200 px-5 py-4">
+						<section class="print-section rounded-md border border-border">
+							<div class="border-b border-border px-5 py-4">
 								<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 									<div>
-										<h2 class="text-base font-semibold text-slate-950">{briefing.label}</h2>
-										<p class="mt-1 text-sm text-slate-500">{briefing.unitLabel}</p>
-										<p class="mt-2 text-xs text-slate-500">Tenggat terdekat: {formatDate(briefing.nextDueDate)}</p>
+										<h2 class="text-base font-semibold text-foreground">{briefing.label}</h2>
+										<p class="mt-1 text-sm text-muted-foreground">{briefing.unitLabel}</p>
+										<p class="mt-2 text-xs text-muted-foreground">Tenggat terdekat: {formatDate(briefing.nextDueDate)}</p>
 									</div>
 									<div class="flex flex-wrap gap-1">
 										<Badge variant="secondary">{briefing.openCount} terbuka</Badge>
@@ -464,10 +464,10 @@
 										{#each briefing.actions as action (action.id)}
 											<Table.Row>
 												<Table.Cell class="min-w-64">
-													<p class="text-sm font-medium text-slate-900">{action.title}</p>
-													<p class="text-xs text-slate-500">{action.period_year} - {sourceLabel(action.source_type)} - {snpLabel(action.snp_standard)}</p>
+													<p class="text-sm font-medium text-foreground">{action.title}</p>
+													<p class="text-xs text-muted-foreground">{action.period_year} - {sourceLabel(action.source_type)} - {snpLabel(action.snp_standard)}</p>
 													{#if action.description}
-														<p class="mt-1 text-xs text-slate-500">{action.description}</p>
+														<p class="mt-1 text-xs text-muted-foreground">{action.description}</p>
 													{/if}
 												</Table.Cell>
 												<Table.Cell>
@@ -477,37 +477,37 @@
 													</div>
 												</Table.Cell>
 												<Table.Cell class="whitespace-nowrap">
-													<p class={isOverdue(action) ? 'text-sm font-medium text-red-700' : 'text-sm text-slate-900'}>{formatDate(action.due_date)}</p>
-													<p class="text-xs text-slate-500">{dueLabel(action)}</p>
+													<p class={isOverdue(action) ? 'text-sm font-medium text-destructive' : 'text-sm text-foreground'}>{formatDate(action.due_date)}</p>
+													<p class="text-xs text-muted-foreground">{dueLabel(action)}</p>
 												</Table.Cell>
-												<Table.Cell class="max-w-md text-sm text-slate-600">
+												<Table.Cell class="max-w-md text-sm text-muted-foreground">
 													<p>{linkedLabel(action)}</p>
-													<p class="mt-1 text-xs text-slate-500">{action.evidence_url || action.evidence_item_title || 'Bukti belum dicatat'}</p>
+													<p class="mt-1 text-xs text-muted-foreground">{action.evidence_url || action.evidence_item_title || 'Bukti belum dicatat'}</p>
 													{#if action.follow_up_notes}
-														<p class="mt-1 text-xs text-slate-500">Catatan: {action.follow_up_notes}</p>
+														<p class="mt-1 text-xs text-muted-foreground">Catatan: {action.follow_up_notes}</p>
 													{/if}
 												</Table.Cell>
-												<Table.Cell class="min-w-56 text-sm text-slate-400">........................................</Table.Cell>
+												<Table.Cell class="min-w-56 text-sm text-muted-foreground">........................................</Table.Cell>
 											</Table.Row>
 										{/each}
 									</Table.Body>
 								</Table.Root>
 							</div>
-							<div class="grid gap-4 border-t border-slate-200 p-5 md:grid-cols-3">
+							<div class="grid gap-4 border-t border-border p-5 md:grid-cols-3">
 								<div>
-									<p class="text-sm font-medium text-slate-900">Arahan Kepala/Staf</p>
-									<p class="mt-6 text-sm text-slate-400">........................................</p>
-									<p class="mt-3 text-sm text-slate-400">........................................</p>
+									<p class="text-sm font-medium text-foreground">Arahan Kepala/Staf</p>
+									<p class="mt-6 text-sm text-muted-foreground">........................................</p>
+									<p class="mt-3 text-sm text-muted-foreground">........................................</p>
 								</div>
 								<div>
-									<p class="text-sm font-medium text-slate-900">Komitmen PIC</p>
-									<p class="mt-6 text-sm text-slate-400">........................................</p>
-									<p class="mt-3 text-sm text-slate-400">........................................</p>
+									<p class="text-sm font-medium text-foreground">Komitmen PIC</p>
+									<p class="mt-6 text-sm text-muted-foreground">........................................</p>
+									<p class="mt-3 text-sm text-muted-foreground">........................................</p>
 								</div>
 								<div>
-									<p class="text-sm font-medium text-slate-900">Paraf/Tanggal</p>
-									<p class="mt-6 text-sm text-slate-400">........................................</p>
-									<p class="mt-3 text-sm text-slate-400">........................................</p>
+									<p class="text-sm font-medium text-foreground">Paraf/Tanggal</p>
+									<p class="mt-6 text-sm text-muted-foreground">........................................</p>
+									<p class="mt-3 text-sm text-muted-foreground">........................................</p>
 								</div>
 							</div>
 						</section>

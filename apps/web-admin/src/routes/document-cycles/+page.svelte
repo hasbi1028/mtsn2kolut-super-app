@@ -678,56 +678,56 @@
 				value: data.stats.active_catalogs,
 				detail: `${data.stats.external_tracker_obligations} jadwal eksternal`,
 				icon: ClipboardListIcon,
-				className: 'text-emerald-700'
+				className: 'text-primary'
 			},
 			{
 				label: 'Total Jadwal',
 				value: data.stats.total_obligations,
 				detail: `Tahun ${periodYear}`,
 				icon: CalendarClockIcon,
-				className: 'text-emerald-700'
+				className: 'text-primary'
 			},
 			{
 				label: 'Sedang Dibuat',
 				value: data.stats.draft_obligations,
 				detail: `${data.stats.not_started_obligations} belum mulai`,
 				icon: FileWarningIcon,
-				className: 'text-amber-700'
+				className: 'text-warning'
 			},
 			{
 				label: 'Menunggu Verifikasi',
 				value: data.stats.waiting_verification_obligations,
 				detail: 'Perlu review kepala',
 				icon: BellIcon,
-				className: 'text-sky-700'
+				className: 'text-accent-foreground'
 			},
 			{
 				label: 'Selesai',
 				value: data.stats.completed_obligations,
 				detail: `${data.stats.linked_archive_obligations} sudah berarsip`,
 				icon: CheckCircle2Icon,
-				className: 'text-emerald-700'
+				className: 'text-primary'
 			},
 			{
 				label: 'Lewat Tempo',
 				value: data.stats.overdue_obligations,
 				detail: 'Butuh tindak lanjut',
 				icon: AlertTriangleIcon,
-				className: 'text-red-700'
+				className: 'text-destructive'
 			},
 			{
 				label: 'Masuk Pengingat',
 				value: data.stats.due_soon_obligations,
 				detail: 'Reminder aktif',
 				icon: BellIcon,
-				className: 'text-amber-700'
+				className: 'text-warning'
 			},
 			{
 				label: 'Belum Ada PIC',
 				value: data.stats.no_pic_obligations,
 				detail: `${data.stats.linked_evidence_obligations} punya bukti SNP`,
 				icon: FileCheck2Icon,
-				className: 'text-slate-700'
+				className: 'text-foreground'
 			}
 		];
 	}
@@ -1057,18 +1057,18 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 		<div>
-			<div class="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+			<div class="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
 				<CalendarClockIcon class="size-3.5" />
 				Radar Dokumen
 			</div>
-			<h1 class="text-xl font-semibold text-slate-900">Siklus Dokumen Madrasah</h1>
-			<p class="mt-1 max-w-3xl text-sm text-slate-500">
+			<h1 class="text-xl font-semibold text-foreground">Siklus Dokumen Madrasah</h1>
+			<p class="mt-1 max-w-3xl text-sm text-muted-foreground">
 				Monitoring dokumen harian, mingguan, bulanan, SKP, Perkin, IKU, RKT, RKJM, Renstra, dan bukti 8 SNP.
 			</p>
 		</div>
 		<div class="flex flex-wrap items-end gap-2">
 			<div class="w-28">
-				<label for="period-year" class="text-xs font-medium text-slate-600">Tahun</label>
+				<label for="period-year" class="text-xs font-medium text-muted-foreground">Tahun</label>
 				<Input id="period-year" type="number" min="2000" bind:value={periodYear} />
 			</div>
 			<LoadingButton variant="outline" onclick={() => void refreshData()} loading={refreshBusy} loadingLabel="Memuat">
@@ -1086,7 +1086,7 @@
 		{#snippet pending()}
 			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 				{#each Array.from({ length: 8 }) as _, index (`document-cycle-stat-skeleton-${index}`)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4">
 							<Skeleton class="h-4 w-28" />
 							<Skeleton class="mt-3 h-8 w-16" />
@@ -1095,7 +1095,7 @@
 					</Card.Root>
 				{/each}
 			</div>
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Content class="space-y-3 p-4">
 					{#each Array.from({ length: 8 }) as _, index (`document-cycle-table-skeleton-${index}`)}
 						<Skeleton class="h-10 w-full" />
@@ -1115,13 +1115,13 @@
 			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 				{#each statCards(data) as card (card.label)}
 					{@const Icon = card.icon}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4">
 							<div class="flex items-start justify-between gap-3">
 								<div>
-									<p class="text-xs text-slate-500">{card.label}</p>
-									<p class="mt-2 text-2xl font-semibold text-slate-900">{card.value}</p>
-									<p class="mt-1 text-xs text-slate-500">{card.detail}</p>
+									<p class="text-xs text-muted-foreground">{card.label}</p>
+									<p class="mt-2 text-2xl font-semibold text-foreground">{card.value}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{card.detail}</p>
 								</div>
 								<Icon class={`size-5 ${card.className}`} />
 							</div>
@@ -1132,7 +1132,7 @@
 
 			<div class="grid gap-6 xl:grid-cols-[1fr_380px]">
 				<div class="space-y-6">
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-3">
 							<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 								<div>
@@ -1162,7 +1162,7 @@
 											<option {value}>{label}</option>
 										{/each}
 									</select>
-									<label class="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm text-slate-700">
+									<label class="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm text-foreground">
 										<input type="checkbox" bind:checked={reminderOnly} class="size-4 accent-emerald-700" />
 										Pengingat saja
 									</label>
@@ -1192,14 +1192,14 @@
 											<Table.Row>
 												<Table.Cell class="min-w-72">
 													<div class="flex items-start gap-3">
-														<div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+														<div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
 															<FileCheck2Icon class="size-4" />
 														</div>
 														<div>
-															<p class="text-sm font-medium text-slate-900">{item.catalog_title}</p>
-															<p class="text-xs text-slate-500">{item.catalog_code} · {domainAreaLabel(item.domain_area)} · {frequencyLabel(item.frequency)} · {snpLabel(item.snp_standard)}</p>
+															<p class="text-sm font-medium text-foreground">{item.catalog_title}</p>
+															<p class="text-xs text-muted-foreground">{item.catalog_code} · {domainAreaLabel(item.domain_area)} · {frequencyLabel(item.frequency)} · {snpLabel(item.snp_standard)}</p>
 															{#if item.regulation_ref}
-																<p class="mt-1 text-xs text-slate-500">{item.regulation_ref}</p>
+																<p class="mt-1 text-xs text-muted-foreground">{item.regulation_ref}</p>
 															{/if}
 															{#if item.external_system}
 																<Badge variant="outline" class="mt-2">{externalSystemLabel(item.external_system)}</Badge>
@@ -1208,16 +1208,16 @@
 													</div>
 												</Table.Cell>
 												<Table.Cell class="whitespace-nowrap">
-													<p class="text-sm text-slate-900">{item.period_label}</p>
-													<p class="text-xs text-slate-500">{formatDate(item.period_start)} - {formatDate(item.period_end)}</p>
+													<p class="text-sm text-foreground">{item.period_label}</p>
+													<p class="text-xs text-muted-foreground">{formatDate(item.period_start)} - {formatDate(item.period_end)}</p>
 												</Table.Cell>
 												<Table.Cell class="min-w-56">
-													<p class="text-sm text-slate-900">{item.responsible_employee_name || 'Belum ditentukan'}</p>
-													<p class="text-xs text-slate-500">{item.owner_unit_name || 'Tanpa unit'}{item.responsible_employee_nip ? ` · ${item.responsible_employee_nip}` : ''}</p>
+													<p class="text-sm text-foreground">{item.responsible_employee_name || 'Belum ditentukan'}</p>
+													<p class="text-xs text-muted-foreground">{item.owner_unit_name || 'Tanpa unit'}{item.responsible_employee_nip ? ` · ${item.responsible_employee_nip}` : ''}</p>
 												</Table.Cell>
 												<Table.Cell class="whitespace-nowrap">
-													<p class={item.is_overdue ? 'text-sm font-medium text-red-700' : 'text-sm text-slate-900'}>Jatuh tempo {formatDate(item.due_date)}</p>
-													<p class="text-xs text-slate-500">Pengingat {formatDate(item.reminder_date)}</p>
+													<p class={item.is_overdue ? 'text-sm font-medium text-destructive' : 'text-sm text-foreground'}>Jatuh tempo {formatDate(item.due_date)}</p>
+													<p class="text-xs text-muted-foreground">Pengingat {formatDate(item.reminder_date)}</p>
 												</Table.Cell>
 												<Table.Cell>
 													<div class="flex flex-col gap-1">
@@ -1246,7 +1246,7 @@
 											</Table.Row>
 										{:else}
 											<Table.Row>
-												<Table.Cell colspan={6} class="py-10 text-center text-sm text-slate-500">
+												<Table.Cell colspan={6} class="py-10 text-center text-sm text-muted-foreground">
 													Belum ada jadwal dokumen untuk filter ini. Jalankan Generate Tahun untuk membuat kewajiban dari katalog aktif.
 												</Table.Cell>
 											</Table.Row>
@@ -1259,56 +1259,56 @@
 				</div>
 
 				<div class="space-y-6">
-					<Card.Root class="border-amber-200 bg-amber-50/40">
+					<Card.Root class="border-warning/30 bg-warning/10">
 						<Card.Header class="pb-2">
 							<div class="flex items-center gap-2">
-								<BellIcon class="size-4 text-amber-700" />
-								<Card.Title class="text-base text-slate-900">Perhatian Kepala Madrasah</Card.Title>
+								<BellIcon class="size-4 text-warning" />
+								<Card.Title class="text-base text-foreground">Perhatian Kepala Madrasah</Card.Title>
 							</div>
 							<Card.Description>Dokumen yang lewat tempo, masuk pengingat, menunggu verifikasi, atau belum punya PIC.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-3">
 							{#each attention.slice(0, 8) as item (item.id)}
-								<button type="button" class="w-full rounded-md border border-amber-100 bg-white p-3 text-left shadow-sm transition hover:border-amber-300" onclick={() => selectObligation(item)}>
+								<button type="button" class="w-full rounded-md border border-warning/30 bg-card p-3 text-left shadow-sm transition hover:border-warning/30" onclick={() => selectObligation(item)}>
 									<div class="flex items-start justify-between gap-3">
 										<div>
-											<p class="text-sm font-medium text-slate-900">{item.catalog_title}</p>
-											<p class="text-xs text-slate-500">{item.period_label} · {item.responsible_employee_name || 'Belum ada PIC'}</p>
+											<p class="text-sm font-medium text-foreground">{item.catalog_title}</p>
+											<p class="text-xs text-muted-foreground">{item.period_label} · {item.responsible_employee_name || 'Belum ada PIC'}</p>
 										</div>
 										<Badge variant={item.is_overdue ? 'destructive' : 'outline'}>{attentionLabel(item)}</Badge>
 									</div>
-									<p class="mt-2 text-xs text-slate-500">Jatuh tempo {formatDate(item.due_date)}</p>
+									<p class="mt-2 text-xs text-muted-foreground">Jatuh tempo {formatDate(item.due_date)}</p>
 								</button>
 							{:else}
-								<div class="rounded-md border border-emerald-100 bg-white p-4 text-sm text-emerald-800">
+								<div class="rounded-md border border-primary/20 bg-card p-4 text-sm text-primary">
 									Tidak ada dokumen yang perlu perhatian khusus pada filter saat ini.
 								</div>
 							{/each}
 						</Card.Content>
 					</Card.Root>
 
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<div class="flex items-center gap-2">
-								<ExternalLinkIcon class="size-4 text-emerald-700" />
+								<ExternalLinkIcon class="size-4 text-primary" />
 								<Card.Title class="text-base">Tracker Kepatuhan Eksternal</Card.Title>
 							</div>
 							<Card.Description>Checklist internal untuk portal resmi; status dan bukti disimpan di madrasah.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-3">
 							{#each externalTrackerRows(data) as tracker (tracker.system)}
-								<div class="rounded-md border border-slate-200 bg-white p-3">
+								<div class="rounded-md border border-border bg-card p-3">
 									<div class="flex items-start justify-between gap-3">
 										<div>
-											<p class="text-sm font-medium text-slate-900">{tracker.label}</p>
-											<p class="text-xs text-slate-500">
+											<p class="text-sm font-medium text-foreground">{tracker.label}</p>
+											<p class="text-xs text-muted-foreground">
 												{tracker.total} jadwal · {tracker.completed} selesai · {tracker.linkedEvidence + tracker.linkedArchive} bukti
 											</p>
 										</div>
 										<Badge variant={trackerStatusVariant(tracker.status)}>{trackerStatusLabel(tracker.status)}</Badge>
 									</div>
 									{#if tracker.overdue > 0}
-										<p class="mt-2 text-xs font-medium text-red-700">{tracker.overdue} lewat tempo/perlu revisi</p>
+										<p class="mt-2 text-xs font-medium text-destructive">{tracker.overdue} lewat tempo/perlu revisi</p>
 									{/if}
 									<Button class="mt-3" type="button" variant="outline" size="sm" disabled={tracker.total === 0} onclick={() => focusExternalTracker(tracker.system)}>
 										<ClipboardListIcon class="mr-2 size-3.5" />
@@ -1320,7 +1320,7 @@
 					</Card.Root>
 
 					<div id="document-cycle-detail-panel">
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Header class="pb-2">
 								<Card.Title class="text-base">Detail Monitoring</Card.Title>
 								<Card.Description>Pilih dokumen dari tabel untuk mengatur PIC, pengingat, tautan bukti, dan catatan verifikasi.</Card.Description>
@@ -1329,46 +1329,46 @@
 							{#if selectedObligation}
 								<form class="space-y-3" onsubmit={(event) => { event.preventDefault(); void saveObligation(); }}>
 									<div>
-										<p class="text-sm font-medium text-slate-900">{selectedObligation.catalog_title}</p>
-										<p class="text-xs text-slate-500">{selectedObligation.period_label}</p>
+										<p class="text-sm font-medium text-foreground">{selectedObligation.catalog_title}</p>
+										<p class="text-xs text-muted-foreground">{selectedObligation.period_label}</p>
 									</div>
-									<div class="grid gap-3 rounded-md border border-slate-200 bg-white p-3 text-sm sm:grid-cols-2">
+									<div class="grid gap-3 rounded-md border border-border bg-card p-3 text-sm sm:grid-cols-2">
 										<div>
-											<p class="text-xs font-medium text-slate-500">Status</p>
+											<p class="text-xs font-medium text-muted-foreground">Status</p>
 											<Badge variant={statusVariant(selectedObligation.status)} class="mt-1">{statusLabel(selectedObligation.status)}</Badge>
 										</div>
 										<div>
-											<p class="text-xs font-medium text-slate-500">Periode</p>
-											<p class="mt-1 text-slate-800">{selectedObligation.period_label} · {formatDate(selectedObligation.period_start)} - {formatDate(selectedObligation.period_end)}</p>
+											<p class="text-xs font-medium text-muted-foreground">Periode</p>
+											<p class="mt-1 text-foreground">{selectedObligation.period_label} · {formatDate(selectedObligation.period_start)} - {formatDate(selectedObligation.period_end)}</p>
 										</div>
 										<div>
-											<p class="text-xs font-medium text-slate-500">PIC Penyusun</p>
-											<p class="mt-1 text-slate-800">{selectedObligation.responsible_employee_name || 'Belum ditentukan'}</p>
+											<p class="text-xs font-medium text-muted-foreground">PIC Penyusun</p>
+											<p class="mt-1 text-foreground">{selectedObligation.responsible_employee_name || 'Belum ditentukan'}</p>
 										</div>
 										<div>
-											<p class="text-xs font-medium text-slate-500">Verifikator</p>
-											<p class="mt-1 text-slate-800">{selectedObligation.verifier_employee_name || 'Belum ditentukan'}</p>
+											<p class="text-xs font-medium text-muted-foreground">Verifikator</p>
+											<p class="mt-1 text-foreground">{selectedObligation.verifier_employee_name || 'Belum ditentukan'}</p>
 										</div>
 										<div>
-											<p class="text-xs font-medium text-slate-500">SNP / Regulasi</p>
-											<p class="mt-1 text-slate-800">{snpLabel(selectedObligation.snp_standard)} · {selectedObligation.regulation_ref || 'Tanpa rujukan khusus'}</p>
+											<p class="text-xs font-medium text-muted-foreground">SNP / Regulasi</p>
+											<p class="mt-1 text-foreground">{snpLabel(selectedObligation.snp_standard)} · {selectedObligation.regulation_ref || 'Tanpa rujukan khusus'}</p>
 										</div>
 										<div>
-											<p class="text-xs font-medium text-slate-500">Arsip Resmi</p>
-											<p class="mt-1 text-slate-800">{selectedObligation.archive_document_title || 'Belum ditautkan'}</p>
+											<p class="text-xs font-medium text-muted-foreground">Arsip Resmi</p>
+											<p class="mt-1 text-foreground">{selectedObligation.archive_document_title || 'Belum ditautkan'}</p>
 										</div>
 										<div class="sm:col-span-2">
-											<p class="text-xs font-medium text-slate-500">Catatan Verifikasi</p>
-											<p class="mt-1 text-slate-800">{selectedObligation.verification_notes || 'Belum ada catatan verifikasi'}</p>
+											<p class="text-xs font-medium text-muted-foreground">Catatan Verifikasi</p>
+											<p class="mt-1 text-foreground">{selectedObligation.verification_notes || 'Belum ada catatan verifikasi'}</p>
 										</div>
 									</div>
 									{#if completionIssues(selectedObligation).length > 0}
-										<div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+										<div class="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
 											<p class="font-medium">Belum siap ditandai selesai.</p>
 											<p class="mt-1">Lengkapi {completionIssues(selectedObligation).join(', ')} lalu simpan detail sebelum finalisasi.</p>
 										</div>
 									{:else}
-										<div class="rounded-md border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
+										<div class="rounded-md border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
 											Dokumen sudah memiliki PIC, verifikator, dan tautan bukti yang bisa ditelusuri.
 										</div>
 									{/if}
@@ -1491,10 +1491,10 @@
 										<label for="obligation-verification-notes" class="text-sm font-medium">Catatan Verifikasi</label>
 										<Textarea id="obligation-verification-notes" rows={3} bind:value={obligationForm.verification_notes} />
 									</div>
-									<div class="rounded-md border border-emerald-100 bg-emerald-50/50 p-3">
+									<div class="rounded-md border border-primary/20 bg-primary/10 p-3">
 										<div class="mb-3">
-											<p class="text-xs font-medium text-emerald-900">Aksi Cepat</p>
-											<p class="text-xs text-emerald-800">Status saat ini: {statusLabel(selectedObligation.status)}</p>
+											<p class="text-xs font-medium text-primary">Aksi Cepat</p>
+											<p class="text-xs text-primary">Status saat ini: {statusLabel(selectedObligation.status)}</p>
 										</div>
 										<div class="flex flex-wrap gap-2">
 											<Button href="/governance" variant="outline" size="sm">
@@ -1555,15 +1555,15 @@
 											{/if}
 										</div>
 									</div>
-									<div class="rounded-md border border-slate-200 bg-slate-50/70 p-3">
+									<div class="rounded-md border border-border bg-muted/50 p-3">
 										<div class="mb-3 flex flex-col gap-3">
 											<div>
-												<p class="text-sm font-medium text-slate-900">Riwayat Audit</p>
-												<p class="text-xs text-slate-500">Jejak perubahan status, update detail, generator, dan reminder PIC.</p>
+												<p class="text-sm font-medium text-foreground">Riwayat Audit</p>
+												<p class="text-xs text-muted-foreground">Jejak perubahan status, update detail, generator, dan reminder PIC.</p>
 											</div>
 											<div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-end">
 												<div>
-													<label for="audit-event-type-filter" class="text-xs font-medium text-slate-600">Jenis Event</label>
+													<label for="audit-event-type-filter" class="text-xs font-medium text-muted-foreground">Jenis Event</label>
 													<select id="audit-event-type-filter" bind:value={auditEventTypeFilter} class="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
 														{#each AUDIT_EVENT_TYPES as [value, label] (value)}
 															<option {value}>{label}</option>
@@ -1571,7 +1571,7 @@
 													</select>
 												</div>
 												<div>
-													<label for="audit-actor-filter" class="text-xs font-medium text-slate-600">Aktor</label>
+													<label for="audit-actor-filter" class="text-xs font-medium text-muted-foreground">Aktor</label>
 													<Input id="audit-actor-filter" class="mt-1" placeholder="username atau system" bind:value={auditActorFilter} />
 												</div>
 												<Button type="button" variant="outline" size="sm" onclick={() => applyAuditFilters()}>
@@ -1587,7 +1587,7 @@
 											{#snippet pending()}
 												<div class="space-y-2">
 													{#each Array.from({ length: 3 }) as _, index (`document-cycle-event-skeleton-${index}`)}
-														<div class="rounded-md border border-slate-200 bg-white p-3">
+														<div class="rounded-md border border-border bg-card p-3">
 															<Skeleton class="h-4 w-32" />
 															<Skeleton class="mt-2 h-3 w-full" />
 														</div>
@@ -1600,31 +1600,31 @@
 											{#snippet children(events)}
 												{@const currentEvents = events as DocumentCycleEvent[]}
 												<div class="mb-3 flex items-center justify-between gap-3">
-													<p class="text-xs text-slate-500">{currentEvents.length} event audit ditampilkan</p>
+													<p class="text-xs text-muted-foreground">{currentEvents.length} event audit ditampilkan</p>
 													<Button type="button" variant="outline" size="sm" disabled={currentEvents.length === 0} onclick={() => exportSelectedAuditCsv(currentEvents)}>
 														<DownloadIcon class="mr-2 size-3.5" />
 														Export CSV
 													</Button>
 												</div>
 												{#if currentEvents.length === 0}
-													<div class="rounded-md border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-500">
+													<div class="rounded-md border border-dashed border-border bg-card p-3 text-sm text-muted-foreground">
 														Belum ada riwayat audit untuk dokumen ini.
 													</div>
 												{:else}
 													<div class="max-h-80 space-y-2 overflow-y-auto pr-1">
 														{#each currentEvents as event (event.id)}
-															<div class="rounded-md border border-slate-200 bg-white p-3">
+															<div class="rounded-md border border-border bg-card p-3">
 																<div class="flex items-start justify-between gap-3">
 																	<Badge variant={eventVariant(event.event_type)}>{eventTypeLabel(event.event_type)}</Badge>
-																	<p class="text-xs text-slate-500">{formatDateTime(event.created_at)}</p>
+																	<p class="text-xs text-muted-foreground">{formatDateTime(event.created_at)}</p>
 																</div>
 																{#if event.from_status || event.to_status}
-																	<p class="mt-2 text-xs text-slate-600">
+																	<p class="mt-2 text-xs text-muted-foreground">
 																		{event.from_status ? statusLabel(event.from_status) : '-'} -> {event.to_status ? statusLabel(event.to_status) : '-'}
 																	</p>
 																{/if}
-																<p class="mt-2 text-sm text-slate-700">{event.notes || 'Tanpa catatan.'}</p>
-																<p class="mt-2 text-xs text-slate-500">{event.actor_username ? `oleh ${event.actor_username}` : 'oleh sistem'}</p>
+																<p class="mt-2 text-sm text-foreground">{event.notes || 'Tanpa catatan.'}</p>
+																<p class="mt-2 text-xs text-muted-foreground">{event.actor_username ? `oleh ${event.actor_username}` : 'oleh sistem'}</p>
 															</div>
 														{/each}
 													</div>
@@ -1637,7 +1637,7 @@
 									</LoadingButton>
 								</form>
 							{:else}
-								<div class="rounded-md border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+								<div class="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
 									Pilih dokumen dari tabel monitoring untuk mengubah jadwal, PIC, atau tautan bukti.
 								</div>
 							{/if}
@@ -1655,7 +1655,7 @@
 					<Tabs.Trigger value="catalog">Katalog</Tabs.Trigger>
 				</Tabs.List>
 				<Tabs.Content value="monitoring">
-					<div class="rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600">
+					<div class="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
 						Alur status modul: Belum Mulai -> Sedang Dibuat -> Menunggu Verifikasi -> Selesai. Tahun {periodYear} memiliki {linkedEvidenceCount(data)} jadwal dengan bukti atau arsip tertaut.
 					</div>
 				</Tabs.Content>
@@ -1663,34 +1663,34 @@
 					{@const allExternalItems = externalChecklistItems(data)}
 					{@const externalItems = filteredExternalChecklistItems(data)}
 					<div class="grid gap-3 md:grid-cols-4">
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Content class="p-4">
-								<p class="text-xs text-slate-500">Ditampilkan</p>
-								<p class="mt-2 text-2xl font-semibold text-slate-900">{externalItems.length}</p>
-								<p class="mt-1 text-xs text-slate-500">dari {allExternalItems.length} checklist</p>
+								<p class="text-xs text-muted-foreground">Ditampilkan</p>
+								<p class="mt-2 text-2xl font-semibold text-foreground">{externalItems.length}</p>
+								<p class="mt-1 text-xs text-muted-foreground">dari {allExternalItems.length} checklist</p>
 							</Card.Content>
 						</Card.Root>
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Content class="p-4">
-								<p class="text-xs text-slate-500">Selesai</p>
-								<p class="mt-2 text-2xl font-semibold text-slate-900">{externalItems.filter((item) => obligationTrackerStatus(item) === 'done').length}</p>
+								<p class="text-xs text-muted-foreground">Selesai</p>
+								<p class="mt-2 text-2xl font-semibold text-foreground">{externalItems.filter((item) => obligationTrackerStatus(item) === 'done').length}</p>
 							</Card.Content>
 						</Card.Root>
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Content class="p-4">
-								<p class="text-xs text-slate-500">Perlu Revisi</p>
-								<p class="mt-2 text-2xl font-semibold text-slate-900">{externalItems.filter((item) => obligationTrackerStatus(item) === 'needs_revision').length}</p>
+								<p class="text-xs text-muted-foreground">Perlu Revisi</p>
+								<p class="mt-2 text-2xl font-semibold text-foreground">{externalItems.filter((item) => obligationTrackerStatus(item) === 'needs_revision').length}</p>
 							</Card.Content>
 						</Card.Root>
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Content class="p-4">
-								<p class="text-xs text-slate-500">Ada Bukti</p>
-								<p class="mt-2 text-2xl font-semibold text-slate-900">{externalItems.filter((item) => item.evidence_item_id || item.archive_document_id).length}</p>
+								<p class="text-xs text-muted-foreground">Ada Bukti</p>
+								<p class="mt-2 text-2xl font-semibold text-foreground">{externalItems.filter((item) => item.evidence_item_id || item.archive_document_id).length}</p>
 							</Card.Content>
 						</Card.Root>
 					</div>
-					<div class="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-white p-3">
-						<label for="external-checklist-status" class="text-sm font-medium text-slate-700">Status checklist</label>
+					<div class="flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-3">
+						<label for="external-checklist-status" class="text-sm font-medium text-foreground">Status checklist</label>
 						<select id="external-checklist-status" bind:value={externalChecklistStatusFilter} class="h-9 rounded-md border border-input bg-background px-3 text-sm">
 							{#each EXTERNAL_CHECKLIST_STATUSES as [value, label] (value)}
 								<option {value}>{label}</option>
@@ -1702,12 +1702,12 @@
 							</Button>
 						{/if}
 					</div>
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 								<div>
 									<div class="flex items-center gap-2">
-										<ExternalLinkIcon class="size-4 text-emerald-700" />
+										<ExternalLinkIcon class="size-4 text-primary" />
 										<Card.Title class="text-base">Checklist Kepatuhan Eksternal</Card.Title>
 									</div>
 									<Card.Description>Status internal untuk SKP, EMIS, SIPKA, SIMAK-BMN, RKAM/BOS, Perkin, IKU, LAKIP/LKj, dan EDM.</Card.Description>
@@ -1737,19 +1737,19 @@
 											<Table.Row>
 												<Table.Cell class="min-w-52">
 													<Badge variant="outline">{externalSystemLabel(item.external_system)}</Badge>
-													<p class="mt-2 text-xs text-slate-500">{domainAreaLabel(item.domain_area)}</p>
+													<p class="mt-2 text-xs text-muted-foreground">{domainAreaLabel(item.domain_area)}</p>
 												</Table.Cell>
 												<Table.Cell class="min-w-72">
-													<p class="text-sm font-medium text-slate-900">{item.catalog_title}</p>
-													<p class="text-xs text-slate-500">{item.period_label} · {item.catalog_code}</p>
+													<p class="text-sm font-medium text-foreground">{item.catalog_title}</p>
+													<p class="text-xs text-muted-foreground">{item.period_label} · {item.catalog_code}</p>
 												</Table.Cell>
 												<Table.Cell>
 													<Badge variant={trackerStatusVariant(trackerStatus)}>{trackerStatusLabel(trackerStatus)}</Badge>
-													<p class="mt-2 text-xs text-slate-500">Alur dokumen: {statusLabel(item.status)}</p>
+													<p class="mt-2 text-xs text-muted-foreground">Alur dokumen: {statusLabel(item.status)}</p>
 												</Table.Cell>
 												<Table.Cell class="min-w-56">
-													<p class="text-sm text-slate-900">{item.responsible_employee_name || 'Belum ada PIC'}</p>
-													<p class={item.is_overdue ? 'mt-1 text-xs font-medium text-red-700' : 'mt-1 text-xs text-slate-500'}>Jatuh tempo {formatDate(item.due_date)}</p>
+													<p class="text-sm text-foreground">{item.responsible_employee_name || 'Belum ada PIC'}</p>
+													<p class={item.is_overdue ? 'mt-1 text-xs font-medium text-destructive' : 'mt-1 text-xs text-muted-foreground'}>Jatuh tempo {formatDate(item.due_date)}</p>
 												</Table.Cell>
 												<Table.Cell class="min-w-64">
 													<div class="flex flex-wrap gap-1.5">
@@ -1757,7 +1757,7 @@
 														<Badge variant={item.archive_document_id ? 'default' : 'outline'}>Arsip</Badge>
 														<Badge variant={item.compliance_action_id ? 'default' : 'outline'}>Aksi</Badge>
 													</div>
-													<p class="mt-2 text-xs text-slate-500">{item.archive_document_title || item.evidence_item_title || item.compliance_action_title || 'Belum ada bukti tertaut'}</p>
+													<p class="mt-2 text-xs text-muted-foreground">{item.archive_document_title || item.evidence_item_title || item.compliance_action_title || 'Belum ada bukti tertaut'}</p>
 												</Table.Cell>
 												<Table.Cell>
 													<Button size="sm" variant="outline" onclick={() => selectObligation(item)}>
@@ -1768,7 +1768,7 @@
 											</Table.Row>
 										{:else}
 											<Table.Row>
-												<Table.Cell colspan={6} class="py-10 text-center text-sm text-slate-500">
+												<Table.Cell colspan={6} class="py-10 text-center text-sm text-muted-foreground">
 													Belum ada checklist eksternal pada filter saat ini.
 												</Table.Cell>
 											</Table.Row>
@@ -1781,35 +1781,35 @@
 				</Tabs.Content>
 				<Tabs.Content value="connections" class="space-y-4">
 					<div class="grid gap-3 md:grid-cols-4">
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Content class="p-4">
-								<p class="text-xs text-slate-500">Dokumen Tata Kelola</p>
-								<p class="mt-2 text-2xl font-semibold text-slate-900">{data.stats.linked_governance_document_obligations}</p>
+								<p class="text-xs text-muted-foreground">Dokumen Tata Kelola</p>
+								<p class="mt-2 text-2xl font-semibold text-foreground">{data.stats.linked_governance_document_obligations}</p>
 							</Card.Content>
 						</Card.Root>
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Content class="p-4">
-								<p class="text-xs text-slate-500">Evidence 8 SNP</p>
-								<p class="mt-2 text-2xl font-semibold text-slate-900">{data.stats.linked_evidence_obligations}</p>
+								<p class="text-xs text-muted-foreground">Evidence 8 SNP</p>
+								<p class="mt-2 text-2xl font-semibold text-foreground">{data.stats.linked_evidence_obligations}</p>
 							</Card.Content>
 						</Card.Root>
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Content class="p-4">
-								<p class="text-xs text-slate-500">Arsip Digital</p>
-								<p class="mt-2 text-2xl font-semibold text-slate-900">{data.stats.linked_archive_obligations}</p>
+								<p class="text-xs text-muted-foreground">Arsip Digital</p>
+								<p class="mt-2 text-2xl font-semibold text-foreground">{data.stats.linked_archive_obligations}</p>
 							</Card.Content>
 						</Card.Root>
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Content class="p-4">
-								<p class="text-xs text-slate-500">Tindak Lanjut</p>
-								<p class="mt-2 text-2xl font-semibold text-slate-900">{data.stats.linked_compliance_action_obligations}</p>
+								<p class="text-xs text-muted-foreground">Tindak Lanjut</p>
+								<p class="mt-2 text-2xl font-semibold text-foreground">{data.stats.linked_compliance_action_obligations}</p>
 							</Card.Content>
 						</Card.Root>
 					</div>
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<div class="flex items-center gap-2">
-								<NetworkIcon class="size-4 text-emerald-700" />
+								<NetworkIcon class="size-4 text-primary" />
 								<Card.Title class="text-base">Peta Keterhubungan Dokumen</Card.Title>
 							</div>
 							<Card.Description>Jejak dari siklus dokumen ke arsip, evidence, RKT/RKJM, SKP, dan tindak lanjut.</Card.Description>
@@ -1831,8 +1831,8 @@
 											{@const score = connectionScore(item)}
 											<Table.Row>
 												<Table.Cell class="min-w-72">
-													<p class="text-sm font-medium text-slate-900">{item.catalog_title}</p>
-													<p class="text-xs text-slate-500">{item.period_label} · {item.catalog_code}</p>
+													<p class="text-sm font-medium text-foreground">{item.catalog_title}</p>
+													<p class="text-xs text-muted-foreground">{item.period_label} · {item.catalog_code}</p>
 												</Table.Cell>
 												<Table.Cell>
 													<Badge variant="outline">{domainAreaLabel(item.domain_area)}</Badge>
@@ -1849,9 +1849,9 @@
 														<Badge variant={item.compliance_action_id ? 'default' : 'outline'}>Aksi</Badge>
 														<Badge variant={item.archive_document_id ? 'default' : 'outline'}>Arsip</Badge>
 													</div>
-													<p class="mt-2 text-xs text-slate-500">{score.done}/{score.total} tautan terisi</p>
+													<p class="mt-2 text-xs text-muted-foreground">{score.done}/{score.total} tautan terisi</p>
 												</Table.Cell>
-												<Table.Cell class="min-w-80 text-xs text-slate-600">
+												<Table.Cell class="min-w-80 text-xs text-muted-foreground">
 													<p>Dokumen: {item.governance_document_title || '-'}</p>
 													<p>RKT/RKJM: {item.work_plan_item_name || '-'}</p>
 													<p>SKP: {item.performance_target_title || '-'}</p>
@@ -1873,7 +1873,7 @@
 					</Card.Root>
 				</Tabs.Content>
 				<Tabs.Content value="catalog" class="space-y-6">
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<Card.Title class="text-base">{editingCatalogId ? 'Edit Katalog Siklus' : 'Tambah Katalog Siklus'}</Card.Title>
 							<Card.Description>Template ini menjadi dasar generator kewajiban dokumen tahunan.</Card.Description>
@@ -1965,7 +1965,7 @@
 										<Input id="catalog-regulation" bind:value={catalogForm.regulation_ref} />
 									</div>
 									<div class="md:col-span-2">
-										<label class="mt-6 inline-flex items-center gap-2 text-sm text-slate-700">
+										<label class="mt-6 inline-flex items-center gap-2 text-sm text-foreground">
 											<input type="checkbox" bind:checked={catalogForm.is_active} class="size-4 accent-emerald-700" />
 											Katalog aktif untuk generator
 										</label>
@@ -1986,7 +1986,7 @@
 						</Card.Content>
 					</Card.Root>
 
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<Card.Title class="text-base">Daftar Katalog</Card.Title>
 							<Card.Description>Dokumen dari siklus MTsN yang menjadi sumber jadwal monitoring.</Card.Description>
@@ -2009,8 +2009,8 @@
 											<Table.Row>
 												<Table.Cell class="font-medium">{catalog.code}</Table.Cell>
 												<Table.Cell class="min-w-80">
-													<p class="text-sm font-medium text-slate-900">{catalog.title}</p>
-													<p class="text-xs text-slate-500">{domainAreaLabel(catalog.domain_area)} · {snpLabel(catalog.snp_standard)} · {catalog.regulation_ref || 'Tanpa rujukan khusus'}</p>
+													<p class="text-sm font-medium text-foreground">{catalog.title}</p>
+													<p class="text-xs text-muted-foreground">{domainAreaLabel(catalog.domain_area)} · {snpLabel(catalog.snp_standard)} · {catalog.regulation_ref || 'Tanpa rujukan khusus'}</p>
 													{#if catalog.external_system}
 														<Badge variant="outline" class="mt-2">{externalSystemLabel(catalog.external_system)}</Badge>
 													{/if}
@@ -2019,12 +2019,12 @@
 													<Badge variant="outline">{frequencyLabel(catalog.frequency)}</Badge>
 												</Table.Cell>
 												<Table.Cell>
-													<p class="text-sm text-slate-900">{catalog.default_responsible_employee_name || 'Belum ditentukan'}</p>
-													<p class="text-xs text-slate-500">{catalog.default_owner_unit_name || 'Tanpa unit'}</p>
+													<p class="text-sm text-foreground">{catalog.default_responsible_employee_name || 'Belum ditentukan'}</p>
+													<p class="text-xs text-muted-foreground">{catalog.default_owner_unit_name || 'Tanpa unit'}</p>
 												</Table.Cell>
 												<Table.Cell class="text-sm">
 													<p>Tempo +{catalog.deadline_days_after_period} hari</p>
-													<p class="text-xs text-slate-500">Ingat -{catalog.reminder_days_before_due} hari</p>
+													<p class="text-xs text-muted-foreground">Ingat -{catalog.reminder_days_before_due} hari</p>
 												</Table.Cell>
 												<Table.Cell>
 													<div class="flex gap-2">

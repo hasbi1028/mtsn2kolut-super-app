@@ -291,25 +291,25 @@
 	}
 
 	const sifatColors: Record<string, string> = {
-		biasa: 'bg-gray-100 text-gray-700 hover:bg-gray-100',
-		penting: 'bg-blue-100 text-blue-800 hover:bg-blue-100',
-		segera: 'bg-orange-100 text-orange-800 hover:bg-orange-100',
-		rahasia: 'bg-red-100 text-red-800 hover:bg-red-100'
+		biasa: 'bg-muted text-foreground hover:bg-muted',
+		penting: 'bg-accent text-accent-foreground hover:bg-accent',
+		segera: 'bg-warning/15 text-warning hover:bg-warning/15',
+		rahasia: 'bg-destructive/15 text-destructive hover:bg-destructive/15'
 	};
 
 	const disposisiStatusColors: Record<string, string> = {
-		terkirim: 'bg-sky-100 text-sky-800 hover:bg-sky-100',
-		dibaca: 'bg-sky-100 text-sky-800 hover:bg-sky-100',
-		ditindaklanjuti: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100',
-		selesai: 'bg-green-100 text-green-800 hover:bg-green-100'
+		terkirim: 'bg-accent text-accent-foreground hover:bg-accent',
+		dibaca: 'bg-accent text-accent-foreground hover:bg-accent',
+		ditindaklanjuti: 'bg-warning/15 text-warning hover:bg-warning/15',
+		selesai: 'bg-success/15 text-success hover:bg-success/15'
 	};
 </script>
 
 <div class="container mx-auto max-w-7xl space-y-6 p-6">
 	<div class="flex items-center justify-between">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900">Surat Masuk</h1>
-			<p class="text-sm text-gray-500">Pencatatan dan pengelolaan surat masuk</p>
+			<h1 class="text-2xl font-bold text-foreground">Surat Masuk</h1>
+			<p class="text-sm text-muted-foreground">Pencatatan dan pengelolaan surat masuk</p>
 		</div>
 		<Button onclick={() => (createOpen = true)}>+ Catat Surat Masuk</Button>
 	</div>
@@ -327,7 +327,7 @@
 				<select
 					bind:value={filterStatus}
 					onchange={() => loadLetters()}
-					class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+					class="rounded-md border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 				>
 					<option value="">Semua Status</option>
 					<option value="baru">Baru</option>
@@ -364,7 +364,7 @@
 				{#snippet children(value)}
 					{@const currentLetters = value as IncomingLetter[]}
 					{#if currentLetters.length === 0}
-						<div class="p-8 text-center text-sm text-gray-500">
+						<div class="p-8 text-center text-sm text-muted-foreground">
 							{search || filterStatus ? 'Tidak ada surat yang sesuai filter.' : 'Belum ada surat masuk yang dicatat.'}
 						</div>
 					{:else}
@@ -384,16 +384,16 @@
 							<Table.Body>
 								{#each currentLetters as letter, i (letter.id)}
 									<Table.Row>
-										<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
-										<Table.Cell class="font-mono text-xs font-medium text-gray-700">{letter.nomor_agenda}</Table.Cell>
-										<Table.Cell class="max-w-[180px] truncate text-xs text-gray-600">{letter.nomor_surat}</Table.Cell>
+										<Table.Cell class="text-muted-foreground">{i + 1}</Table.Cell>
+										<Table.Cell class="font-mono text-xs font-medium text-foreground">{letter.nomor_agenda}</Table.Cell>
+										<Table.Cell class="max-w-[180px] truncate text-xs text-muted-foreground">{letter.nomor_surat}</Table.Cell>
 										<Table.Cell>
-											<p class="text-sm font-medium text-gray-800">{letter.asal}</p>
-											<p class="max-w-xs truncate text-xs text-gray-500">{letter.perihal}</p>
+											<p class="text-sm font-medium text-foreground">{letter.asal}</p>
+											<p class="max-w-xs truncate text-xs text-muted-foreground">{letter.perihal}</p>
 										</Table.Cell>
-										<Table.Cell class="text-sm text-gray-600">{formatDate(letter.tanggal_terima)}</Table.Cell>
+										<Table.Cell class="text-sm text-muted-foreground">{formatDate(letter.tanggal_terima)}</Table.Cell>
 										<Table.Cell>
-											<Badge class={sifatColors[letter.sifat] ?? 'bg-gray-100 text-gray-700 hover:bg-gray-100'}>
+											<Badge class={sifatColors[letter.sifat] ?? 'bg-muted text-foreground hover:bg-muted'}>
 												{letter.sifat}
 											</Badge>
 										</Table.Cell>
@@ -402,7 +402,7 @@
 												value={letter.status}
 												onchange={(e) => updateStatus(letter, (e.target as HTMLSelectElement).value)}
 												disabled={statusBusy[letter.id]}
-												class="rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-600"
+												class="rounded border border-border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
 											>
 												<option value="baru">Baru</option>
 												<option value="didisposisi">Didisposisi</option>
@@ -449,33 +449,33 @@
 		</Dialog.Header>
 		<div class="space-y-3 py-2">
 			<div class="space-y-1">
-				<label for="new-nomor" class="text-sm font-medium text-gray-700">No. Surat <span class="text-red-500">*</span></label>
+				<label for="new-nomor" class="text-sm font-medium text-foreground">No. Surat <span class="text-destructive">*</span></label>
 				<Input id="new-nomor" bind:value={newNomor} placeholder="Nomor surat dari pengirim" />
 			</div>
 			<div class="grid grid-cols-2 gap-3">
 				<div class="space-y-1">
-					<label for="new-tgl-surat" class="text-sm font-medium text-gray-700">Tanggal Surat <span class="text-red-500">*</span></label>
+					<label for="new-tgl-surat" class="text-sm font-medium text-foreground">Tanggal Surat <span class="text-destructive">*</span></label>
 					<Input id="new-tgl-surat" type="date" bind:value={newTglSurat} />
 				</div>
 				<div class="space-y-1">
-					<label for="new-tgl-terima" class="text-sm font-medium text-gray-700">Tanggal Terima <span class="text-red-500">*</span></label>
+					<label for="new-tgl-terima" class="text-sm font-medium text-foreground">Tanggal Terima <span class="text-destructive">*</span></label>
 					<Input id="new-tgl-terima" type="date" bind:value={newTglTerima} />
 				</div>
 			</div>
 			<div class="space-y-1">
-				<label for="new-asal" class="text-sm font-medium text-gray-700">Asal / Pengirim <span class="text-red-500">*</span></label>
+				<label for="new-asal" class="text-sm font-medium text-foreground">Asal / Pengirim <span class="text-destructive">*</span></label>
 				<Input id="new-asal" bind:value={newAsal} placeholder="Instansi atau nama pengirim" />
 			</div>
 			<div class="space-y-1">
-				<label for="new-perihal" class="text-sm font-medium text-gray-700">Perihal <span class="text-red-500">*</span></label>
+				<label for="new-perihal" class="text-sm font-medium text-foreground">Perihal <span class="text-destructive">*</span></label>
 				<Input id="new-perihal" bind:value={newPerihal} placeholder="Perihal / isi singkat surat" />
 			</div>
 			<div class="space-y-1">
-				<label for="new-sifat" class="text-sm font-medium text-gray-700">Sifat</label>
+				<label for="new-sifat" class="text-sm font-medium text-foreground">Sifat</label>
 				<select
 					id="new-sifat"
 					bind:value={newSifat}
-					class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+					class="w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 				>
 					<option value="biasa">Biasa</option>
 					<option value="penting">Penting</option>
@@ -484,7 +484,7 @@
 				</select>
 			</div>
 			<div class="space-y-1">
-				<label for="new-catatan" class="text-sm font-medium text-gray-700">Catatan</label>
+				<label for="new-catatan" class="text-sm font-medium text-foreground">Catatan</label>
 				<Textarea id="new-catatan" bind:value={newCatatan} placeholder="Catatan tambahan (opsional)" rows={2} />
 			</div>
 		</div>
@@ -522,18 +522,18 @@
 					{@const currentDisposisi = rows as DispositionRow[]}
 					{#if currentDisposisi.length > 0}
 						<div class="space-y-2">
-							<p class="text-sm font-medium text-gray-700">Disposisi sebelumnya</p>
+							<p class="text-sm font-medium text-foreground">Disposisi sebelumnya</p>
 							{#each currentDisposisi as d (d.id)}
-								<div class="rounded-md border border-gray-100 bg-gray-50 p-3 text-sm">
+								<div class="rounded-md border border-border bg-muted/50 p-3 text-sm">
 									<div class="flex items-center justify-between">
-										<span class="font-medium text-gray-800">{d.assignee_name || '–'}</span>
+										<span class="font-medium text-foreground">{d.assignee_name || '–'}</span>
 										<Badge class={disposisiStatusColors[d.status] ?? ''} >{d.status}</Badge>
 									</div>
 									{#if d.instruksi}
-										<p class="mt-1 text-gray-600">{d.instruksi}</p>
+										<p class="mt-1 text-muted-foreground">{d.instruksi}</p>
 									{/if}
 									{#if d.catatan_tindak_lanjut}
-										<p class="mt-1 text-gray-500 italic">Tindak lanjut: {d.catatan_tindak_lanjut}</p>
+										<p class="mt-1 text-muted-foreground italic">Tindak lanjut: {d.catatan_tindak_lanjut}</p>
 									{/if}
 								</div>
 							{/each}
@@ -543,14 +543,14 @@
 			</AsyncContent>
 
 			<!-- New disposition form -->
-			<div class="space-y-2 border-t border-gray-100 pt-3">
-				<p class="text-sm font-medium text-gray-700">Buat Disposisi Baru</p>
+			<div class="space-y-2 border-t border-border pt-3">
+				<p class="text-sm font-medium text-foreground">Buat Disposisi Baru</p>
 				<div class="space-y-1">
-					<label for="disp-assignee" class="text-xs text-gray-600">ID Pegawai Penerima <span class="text-red-500">*</span></label>
+					<label for="disp-assignee" class="text-xs text-muted-foreground">ID Pegawai Penerima <span class="text-destructive">*</span></label>
 					<Input id="disp-assignee" bind:value={newDisposisiAssignee} placeholder="UUID pegawai" />
 				</div>
 				<div class="space-y-1">
-					<label for="disp-instruksi" class="text-xs text-gray-600">Instruksi</label>
+					<label for="disp-instruksi" class="text-xs text-muted-foreground">Instruksi</label>
 					<Textarea id="disp-instruksi" bind:value={newDisposisiInstruksi} placeholder="Instruksi disposisi (opsional)" rows={2} />
 				</div>
 			</div>

@@ -216,10 +216,10 @@
 <svelte:head><title>Paket Kepatuhan TU - MTsN 2 Kolaka Utara</title></svelte:head>
 
 <div class="space-y-6">
-	<div class="no-print flex flex-col gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+	<div class="no-print flex flex-col gap-3 rounded-md border border-border bg-card px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
 		<div>
-			<p class="text-sm font-semibold text-slate-900">Paket Kepatuhan Tata Usaha</p>
-			<p class="text-sm text-slate-500">Register administrasi untuk pemeriksaan kepala madrasah dan staf.</p>
+			<p class="text-sm font-semibold text-foreground">Paket Kepatuhan Tata Usaha</p>
+			<p class="text-sm text-muted-foreground">Register administrasi untuk pemeriksaan kepala madrasah dan staf.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button href="/tu" variant="outline" size="sm">
@@ -271,61 +271,61 @@
 			{@const evidenceAttention = evidenceNeeds(data.evidenceItems)}
 			{@const schoolProfile = data.schoolProfile}
 
-			<main class="print-root mx-auto max-w-5xl space-y-6 bg-white text-slate-950">
-				<section class="print-section rounded-md border border-slate-200 bg-white p-5">
+			<main class="print-root mx-auto max-w-5xl space-y-6 bg-card text-foreground">
+				<section class="print-section rounded-md border border-border bg-card p-5">
 					<div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
 						<div>
-							<p class="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">{schoolProfile.ministry_line}</p>
-							<h1 class="mt-2 text-2xl font-bold text-slate-950">Paket Kepatuhan Tata Usaha</h1>
-							<p class="mt-1 text-sm text-slate-600">{schoolProfile.name}</p>
-							<p class="mt-1 max-w-2xl text-xs text-slate-500">{schoolAddressLine(schoolProfile) || schoolProfile.office_line}</p>
+							<p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{schoolProfile.ministry_line}</p>
+							<h1 class="mt-2 text-2xl font-bold text-foreground">Paket Kepatuhan Tata Usaha</h1>
+							<p class="mt-1 text-sm text-muted-foreground">{schoolProfile.name}</p>
+							<p class="mt-1 max-w-2xl text-xs text-muted-foreground">{schoolAddressLine(schoolProfile) || schoolProfile.office_line}</p>
 						</div>
-						<div class="rounded-md border border-slate-200 px-4 py-3 text-sm">
-							<p class="font-medium text-slate-900">Waktu cetak</p>
-							<p class="text-slate-600">{formatGeneratedAt(generatedAt)} WITA</p>
+						<div class="rounded-md border border-border px-4 py-3 text-sm">
+							<p class="font-medium text-foreground">Waktu cetak</p>
+							<p class="text-muted-foreground">{formatGeneratedAt(generatedAt)} WITA</p>
 						</div>
 					</div>
 				</section>
 
-				<section class="print-section rounded-md border border-slate-200 bg-white p-5">
-					<h2 class="text-base font-semibold text-slate-950">Ringkasan Kontrol</h2>
+				<section class="print-section rounded-md border border-border bg-card p-5">
+					<h2 class="text-base font-semibold text-foreground">Ringkasan Kontrol</h2>
 					<div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-						<div class="rounded-md border border-slate-200 p-4">
-							<p class="text-xs text-slate-500">Surat masuk terbuka</p>
+						<div class="rounded-md border border-border p-4">
+							<p class="text-xs text-muted-foreground">Surat masuk terbuka</p>
 							<p class="mt-2 text-2xl font-semibold">{openIncoming.length}</p>
-							<p class="mt-1 text-xs text-slate-500">{data.incomingLetters.length} total register</p>
+							<p class="mt-1 text-xs text-muted-foreground">{data.incomingLetters.length} total register</p>
 						</div>
-						<div class="rounded-md border border-slate-200 p-4">
-							<p class="text-xs text-slate-500">Disposisi terbuka</p>
+						<div class="rounded-md border border-border p-4">
+							<p class="text-xs text-muted-foreground">Disposisi terbuka</p>
 							<p class="mt-2 text-2xl font-semibold">{openDispositions.length}</p>
-							<p class="mt-1 text-xs text-slate-500">{data.dispositions.length} total disposisi</p>
+							<p class="mt-1 text-xs text-muted-foreground">{data.dispositions.length} total disposisi</p>
 						</div>
-						<div class="rounded-md border border-slate-200 p-4">
-							<p class="text-xs text-slate-500">Arsip digital</p>
+						<div class="rounded-md border border-border p-4">
+							<p class="text-xs text-muted-foreground">Arsip digital</p>
 							<p class="mt-2 text-2xl font-semibold">{data.archiveStats.total_documents}</p>
-							<p class="mt-1 text-xs text-slate-500">{formatBytes(data.archiveStats.total_file_size)} tersimpan</p>
+							<p class="mt-1 text-xs text-muted-foreground">{formatBytes(data.archiveStats.total_file_size)} tersimpan</p>
 						</div>
-						<div class="rounded-md border border-slate-200 p-4">
-							<p class="text-xs text-slate-500">Inventaris perhatian</p>
+						<div class="rounded-md border border-border p-4">
+							<p class="text-xs text-muted-foreground">Inventaris perhatian</p>
 							<p class="mt-2 text-2xl font-semibold">{inventoryAttention.length}</p>
-							<p class="mt-1 text-xs text-slate-500">{numberValue(data.inventoryStats.total_unit)} unit tercatat</p>
+							<p class="mt-1 text-xs text-muted-foreground">{numberValue(data.inventoryStats.total_unit)} unit tercatat</p>
 						</div>
-						<div class="rounded-md border border-slate-200 p-4">
-							<p class="text-xs text-slate-500">RKT/RKJM terkendala</p>
+						<div class="rounded-md border border-border p-4">
+							<p class="text-xs text-muted-foreground">RKT/RKJM terkendala</p>
 							<p class="mt-2 text-2xl font-semibold">{workPlan.blocked}</p>
-							<p class="mt-1 text-xs text-slate-500">Realisasi {formatCurrency(workPlan.realization)}</p>
+							<p class="mt-1 text-xs text-muted-foreground">Realisasi {formatCurrency(workPlan.realization)}</p>
 						</div>
-						<div class="rounded-md border border-slate-200 p-4">
-							<p class="text-xs text-slate-500">Bukti mutu perhatian</p>
+						<div class="rounded-md border border-border p-4">
+							<p class="text-xs text-muted-foreground">Bukti mutu perhatian</p>
 							<p class="mt-2 text-2xl font-semibold">{evidenceAttention.length}</p>
-							<p class="mt-1 text-xs text-slate-500">Anggaran {formatCurrency(workPlan.budget)}</p>
+							<p class="mt-1 text-xs text-muted-foreground">Anggaran {formatCurrency(workPlan.budget)}</p>
 						</div>
 					</div>
 				</section>
 
-				<section class="print-section rounded-md border border-slate-200 bg-white">
-					<div class="border-b border-slate-200 px-5 py-4">
-						<h2 class="text-base font-semibold text-slate-950">Register Surat Terbaru</h2>
+				<section class="print-section rounded-md border border-border bg-card">
+					<div class="border-b border-border px-5 py-4">
+						<h2 class="text-base font-semibold text-foreground">Register Surat Terbaru</h2>
 					</div>
 					<div class="overflow-x-auto">
 						<Table.Root>
@@ -342,22 +342,22 @@
 								{#each registerRows as row (row.key)}
 									<Table.Row>
 										<Table.Cell class="whitespace-nowrap text-sm">{row.area}</Table.Cell>
-										<Table.Cell class="min-w-64 text-sm font-medium text-slate-900">{row.title}</Table.Cell>
+										<Table.Cell class="min-w-64 text-sm font-medium text-foreground">{row.title}</Table.Cell>
 										<Table.Cell class="whitespace-nowrap text-sm">{formatDate(row.date)}</Table.Cell>
 										<Table.Cell><Badge variant={statusVariant(row.status)}>{statusLabel(row.status)}</Badge></Table.Cell>
-										<Table.Cell class="text-sm text-slate-600">{row.note || '-'}</Table.Cell>
+										<Table.Cell class="text-sm text-muted-foreground">{row.note || '-'}</Table.Cell>
 									</Table.Row>
 								{:else}
-									<Table.Row><Table.Cell colspan={5} class="text-center text-sm text-slate-500">Belum ada register surat.</Table.Cell></Table.Row>
+									<Table.Row><Table.Cell colspan={5} class="text-center text-sm text-muted-foreground">Belum ada register surat.</Table.Cell></Table.Row>
 								{/each}
 							</Table.Body>
 						</Table.Root>
 					</div>
 				</section>
 
-				<section class="print-section rounded-md border border-slate-200 bg-white">
-					<div class="border-b border-slate-200 px-5 py-4">
-						<h2 class="text-base font-semibold text-slate-950">Disposisi Belum Selesai</h2>
+				<section class="print-section rounded-md border border-border bg-card">
+					<div class="border-b border-border px-5 py-4">
+						<h2 class="text-base font-semibold text-foreground">Disposisi Belum Selesai</h2>
 					</div>
 					<div class="overflow-x-auto">
 						<Table.Root>
@@ -375,15 +375,15 @@
 									<Table.Row>
 										<Table.Cell class="whitespace-nowrap text-sm">{item.nomor_agenda || '-'}</Table.Cell>
 										<Table.Cell>
-											<p class="text-sm font-medium text-slate-900">{item.letter_perihal}</p>
-											<p class="text-xs text-slate-500">{item.letter_asal}</p>
+											<p class="text-sm font-medium text-foreground">{item.letter_perihal}</p>
+											<p class="text-xs text-muted-foreground">{item.letter_asal}</p>
 										</Table.Cell>
 										<Table.Cell class="text-sm">{dispositionNote(item)}</Table.Cell>
 										<Table.Cell class="whitespace-nowrap text-sm">{formatDate(item.disposed_at)}</Table.Cell>
 										<Table.Cell><Badge variant={statusVariant(item.status)}>{statusLabel(item.status)}</Badge></Table.Cell>
 									</Table.Row>
 								{:else}
-									<Table.Row><Table.Cell colspan={5} class="text-center text-sm text-slate-500">Tidak ada disposisi terbuka.</Table.Cell></Table.Row>
+									<Table.Row><Table.Cell colspan={5} class="text-center text-sm text-muted-foreground">Tidak ada disposisi terbuka.</Table.Cell></Table.Row>
 								{/each}
 							</Table.Body>
 						</Table.Root>
@@ -391,9 +391,9 @@
 				</section>
 
 				<section class="print-section grid gap-6 lg:grid-cols-2">
-					<div class="rounded-md border border-slate-200 bg-white">
-						<div class="border-b border-slate-200 px-5 py-4">
-							<h2 class="text-base font-semibold text-slate-950">Arsip dan Retensi</h2>
+					<div class="rounded-md border border-border bg-card">
+						<div class="border-b border-border px-5 py-4">
+							<h2 class="text-base font-semibold text-foreground">Arsip dan Retensi</h2>
 						</div>
 						<div class="overflow-x-auto">
 							<Table.Root>
@@ -408,23 +408,23 @@
 									{#each latestByDate(archiveAttention.length ? archiveAttention : data.archiveDocuments, (item) => item.retention_until || item.received_date, 10) as item (item.id)}
 										<Table.Row>
 											<Table.Cell>
-												<p class="text-sm font-medium text-slate-900">{item.title}</p>
-												<p class="text-xs text-slate-500">{archiveNote(item)}</p>
+												<p class="text-sm font-medium text-foreground">{item.title}</p>
+												<p class="text-xs text-muted-foreground">{archiveNote(item)}</p>
 											</Table.Cell>
 											<Table.Cell class="whitespace-nowrap text-sm">{formatDate(item.retention_until)}</Table.Cell>
 											<Table.Cell><Badge variant={statusVariant(item.status)}>{statusLabel(item.status)}</Badge></Table.Cell>
 										</Table.Row>
 									{:else}
-										<Table.Row><Table.Cell colspan={3} class="text-center text-sm text-slate-500">Belum ada arsip.</Table.Cell></Table.Row>
+										<Table.Row><Table.Cell colspan={3} class="text-center text-sm text-muted-foreground">Belum ada arsip.</Table.Cell></Table.Row>
 									{/each}
 								</Table.Body>
 							</Table.Root>
 						</div>
 					</div>
 
-					<div class="rounded-md border border-slate-200 bg-white">
-						<div class="border-b border-slate-200 px-5 py-4">
-							<h2 class="text-base font-semibold text-slate-950">Inventaris Perhatian</h2>
+					<div class="rounded-md border border-border bg-card">
+						<div class="border-b border-border px-5 py-4">
+							<h2 class="text-base font-semibold text-foreground">Inventaris Perhatian</h2>
 						</div>
 						<div class="overflow-x-auto">
 							<Table.Root>
@@ -439,14 +439,14 @@
 									{#each latestByDate(inventoryAttention, (item) => item.id, 10) as item (item.id)}
 										<Table.Row>
 											<Table.Cell>
-												<p class="text-sm font-medium text-slate-900">{item.kode} - {item.nama}</p>
-												<p class="text-xs text-slate-500">{item.kategori}</p>
+												<p class="text-sm font-medium text-foreground">{item.kode} - {item.nama}</p>
+												<p class="text-xs text-muted-foreground">{item.kategori}</p>
 											</Table.Cell>
 											<Table.Cell><Badge variant={statusVariant(item.kondisi)}>{statusLabel(item.kondisi)}</Badge></Table.Cell>
-											<Table.Cell class="text-sm text-slate-600">{inventoryNote(item)}</Table.Cell>
+											<Table.Cell class="text-sm text-muted-foreground">{inventoryNote(item)}</Table.Cell>
 										</Table.Row>
 									{:else}
-										<Table.Row><Table.Cell colspan={3} class="text-center text-sm text-slate-500">Tidak ada inventaris perhatian.</Table.Cell></Table.Row>
+										<Table.Row><Table.Cell colspan={3} class="text-center text-sm text-muted-foreground">Tidak ada inventaris perhatian.</Table.Cell></Table.Row>
 									{/each}
 								</Table.Body>
 							</Table.Root>
@@ -454,9 +454,9 @@
 					</div>
 				</section>
 
-				<section class="print-section rounded-md border border-slate-200 bg-white">
-					<div class="border-b border-slate-200 px-5 py-4">
-						<h2 class="text-base font-semibold text-slate-950">RKT/RKJM dan Bukti Mutu</h2>
+				<section class="print-section rounded-md border border-border bg-card">
+					<div class="border-b border-border px-5 py-4">
+						<h2 class="text-base font-semibold text-foreground">RKT/RKJM dan Bukti Mutu</h2>
 					</div>
 					<div class="overflow-x-auto">
 						<Table.Root>
@@ -473,8 +473,8 @@
 								{#each latestByDate(workPlanAttention, (item) => item.end_date || item.start_date, 8) as item (item.id)}
 									<Table.Row>
 										<Table.Cell>
-											<p class="text-sm font-medium text-slate-900">{item.activity_code} - {item.activity_name}</p>
-											<p class="text-xs text-slate-500">{item.program_code} - {item.program_name}</p>
+											<p class="text-sm font-medium text-foreground">{item.activity_code} - {item.activity_name}</p>
+											<p class="text-xs text-muted-foreground">{item.program_code} - {item.program_name}</p>
 										</Table.Cell>
 										<Table.Cell class="text-sm">{item.program_snp_standard || '-'}</Table.Cell>
 										<Table.Cell class="text-sm">{item.responsible_employee_name || item.owner_unit_name || '-'}</Table.Cell>
@@ -485,8 +485,8 @@
 								{#each evidenceAttention as item (item.id)}
 									<Table.Row>
 										<Table.Cell>
-											<p class="text-sm font-medium text-slate-900">{item.title}</p>
-											<p class="text-xs text-slate-500">{item.program_code || item.source_module || '-'}</p>
+											<p class="text-sm font-medium text-foreground">{item.title}</p>
+											<p class="text-xs text-muted-foreground">{item.program_code || item.source_module || '-'}</p>
 										</Table.Cell>
 										<Table.Cell class="text-sm">{item.snp_standard || '-'}</Table.Cell>
 										<Table.Cell class="text-sm">{item.owner_unit_name || '-'}</Table.Cell>
@@ -495,7 +495,7 @@
 									</Table.Row>
 								{/each}
 								{#if workPlanAttention.length === 0 && evidenceAttention.length === 0}
-									<Table.Row><Table.Cell colspan={5} class="text-center text-sm text-slate-500">Tidak ada perhatian RKT/RKJM atau bukti mutu.</Table.Cell></Table.Row>
+									<Table.Row><Table.Cell colspan={5} class="text-center text-sm text-muted-foreground">Tidak ada perhatian RKT/RKJM atau bukti mutu.</Table.Cell></Table.Row>
 								{/if}
 							</Table.Body>
 						</Table.Root>

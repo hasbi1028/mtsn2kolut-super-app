@@ -51,8 +51,8 @@
         <p class="mt-1.5 text-xs text-muted-foreground">Worker sinkron otomatis ~30 detik.</p>
       </div>
     </div>
-    <div class="mt-5 border-t border-slate-100 pt-5">
-      <h3 class="text-sm font-semibold text-slate-800">Geolocation PUSAKA</h3>
+    <div class="mt-5 border-t border-border pt-5">
+      <h3 class="text-sm font-semibold text-foreground">Geolocation PUSAKA</h3>
       <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div>
           <label for="pusaka-geo-base-lat" class="mb-1.5 block text-sm font-medium">Latitude Pusat</label>

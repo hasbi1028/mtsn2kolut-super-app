@@ -180,10 +180,10 @@
 	}
 
 	function statusBadgeClass(value: string) {
-		if (value === 'active') return 'border-emerald-200 bg-emerald-100 text-emerald-800';
-		if (value === 'closed') return 'border-slate-200 bg-slate-100 text-slate-700';
-		if (value === 'archived') return 'border-amber-200 bg-amber-100 text-amber-800';
-		return 'border-blue-200 bg-blue-50 text-blue-800';
+		if (value === 'active') return 'border-primary/20 bg-primary/15 text-primary';
+		if (value === 'closed') return 'border-border bg-muted text-foreground';
+		if (value === 'archived') return 'border-warning/30 bg-warning/15 text-warning';
+		return 'border-accent bg-accent/60 text-accent-foreground';
 	}
 
 	function submissionStatusLabel(value: string) {
@@ -194,10 +194,10 @@
 	}
 
 	function submissionStatusBadgeClass(value: string) {
-		if (value === 'reviewed') return 'border-emerald-200 bg-emerald-100 text-emerald-800';
-		if (value === 'submitted') return 'border-blue-200 bg-blue-50 text-blue-800';
-		if (value === 'returned') return 'border-amber-200 bg-amber-100 text-amber-800';
-		return 'border-slate-200 bg-slate-100 text-slate-700';
+		if (value === 'reviewed') return 'border-primary/20 bg-primary/15 text-primary';
+		if (value === 'submitted') return 'border-accent bg-accent/60 text-accent-foreground';
+		if (value === 'returned') return 'border-warning/30 bg-warning/15 text-warning';
+		return 'border-border bg-muted text-foreground';
 	}
 
 	function gradeSyncLabel(item: NonTestAssessment) {
@@ -208,11 +208,11 @@
 
 	function gradeSyncBadgeClass(item: NonTestAssessment) {
 		if (item.grade_component_id && syncFreshnessCount(item) > 0) {
-			return 'border-amber-200 bg-amber-100 text-amber-800';
+			return 'border-warning/30 bg-warning/15 text-warning';
 		}
-		if (item.grade_component_id) return 'border-emerald-200 bg-emerald-100 text-emerald-800';
-		if (item.reviewed_submissions > 0) return 'border-blue-200 bg-blue-50 text-blue-800';
-		return 'border-slate-200 bg-slate-100 text-slate-600';
+		if (item.grade_component_id) return 'border-primary/20 bg-primary/15 text-primary';
+		if (item.reviewed_submissions > 0) return 'border-accent bg-accent/60 text-accent-foreground';
+		return 'border-border bg-muted text-muted-foreground';
 	}
 
 	function canSyncGrade(item: NonTestAssessment) {
@@ -660,9 +660,9 @@
 <div class="space-y-5">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">CBT / Penilaian Manual</p>
-			<h1 class="mt-1 text-2xl font-semibold text-slate-900">Asesmen Non-Tes</h1>
-			<p class="mt-1 max-w-3xl text-sm text-slate-600">
+			<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">CBT / Penilaian Manual</p>
+			<h1 class="mt-1 text-2xl font-semibold text-foreground">Asesmen Non-Tes</h1>
+			<p class="mt-1 max-w-3xl text-sm text-muted-foreground">
 				Kelola praktik, portofolio, proyek, penugasan, dan observasi tanpa mencampurnya dengan bank soal ujian token.
 			</p>
 		</div>
@@ -670,41 +670,41 @@
 	</div>
 
 	<div class="grid gap-3 md:grid-cols-5">
-		<Card.Root class="border-emerald-100 shadow-sm">
+		<Card.Root class="border-primary/20 shadow-sm">
 			<Card.Content class="p-4">
-				<p class="text-xs font-medium uppercase tracking-wider text-slate-500">Total Modul</p>
-				<p class="mt-1 text-2xl font-semibold text-emerald-800">{summary.total}</p>
+				<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Modul</p>
+				<p class="mt-1 text-2xl font-semibold text-primary">{summary.total}</p>
 			</Card.Content>
 		</Card.Root>
-		<Card.Root class="border-emerald-100 shadow-sm">
+		<Card.Root class="border-primary/20 shadow-sm">
 			<Card.Content class="p-4">
-				<p class="text-xs font-medium uppercase tracking-wider text-slate-500">Aktif</p>
-				<p class="mt-1 text-2xl font-semibold text-emerald-800">{summary.active}</p>
+				<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Aktif</p>
+				<p class="mt-1 text-2xl font-semibold text-primary">{summary.active}</p>
 			</Card.Content>
 		</Card.Root>
-		<Card.Root class="border-blue-100 shadow-sm">
+		<Card.Root class="border-accent shadow-sm">
 			<Card.Content class="p-4">
-				<p class="text-xs font-medium uppercase tracking-wider text-slate-500">Draft</p>
-				<p class="mt-1 text-2xl font-semibold text-blue-800">{summary.draft}</p>
+				<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Draft</p>
+				<p class="mt-1 text-2xl font-semibold text-accent-foreground">{summary.draft}</p>
 			</Card.Content>
 		</Card.Root>
-		<Card.Root class={`border-amber-100 shadow-sm ${filterNeedsSync ? 'ring-2 ring-amber-300' : ''}`}>
+		<Card.Root class={`border-warning/30 shadow-sm ${filterNeedsSync ? 'ring-2 ring-warning/30' : ''}`}>
 			<Card.Content class="p-0">
 				<button type="button" class="block w-full p-4 text-left" onclick={toggleNeedsSyncFilter}>
 					<div class="flex items-center justify-between gap-2">
-						<p class="text-xs font-medium uppercase tracking-wider text-slate-500">Perlu Sinkron</p>
+						<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Perlu Sinkron</p>
 						{#if filterNeedsSync}
-							<Badge class="border border-amber-200 bg-amber-100 text-[10px] text-amber-800">Aktif</Badge>
+							<Badge class="border border-warning/30 bg-warning/15 text-[10px] text-warning">Aktif</Badge>
 						{/if}
 					</div>
-					<p class="mt-1 text-2xl font-semibold text-amber-800">{summary.needsSync}</p>
+					<p class="mt-1 text-2xl font-semibold text-warning">{summary.needsSync}</p>
 				</button>
 			</Card.Content>
 		</Card.Root>
-		<Card.Root class="border-slate-200 shadow-sm">
+		<Card.Root class="border-border shadow-sm">
 			<Card.Content class="p-4">
-				<p class="text-xs font-medium uppercase tracking-wider text-slate-500">Ditutup</p>
-				<p class="mt-1 text-2xl font-semibold text-slate-800">{summary.closed}</p>
+				<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Ditutup</p>
+				<p class="mt-1 text-2xl font-semibold text-foreground">{summary.closed}</p>
 			</Card.Content>
 		</Card.Root>
 	</div>
@@ -714,24 +714,24 @@
 	{/if}
 
 	{#if showForm}
-		<Card.Root class="border-emerald-100 shadow-sm">
-			<Card.Header class="border-b border-slate-100 pb-3">
+		<Card.Root class="border-primary/20 shadow-sm">
+			<Card.Header class="border-b border-border pb-3">
 				<div class="flex flex-wrap items-center justify-between gap-3">
 					<div>
 						<Card.Title class="text-base">{editingId ? 'Edit Asesmen Non-Tes' : 'Buat Asesmen Non-Tes'}</Card.Title>
 						<Card.Description>Mode Pemula ringkas; mode Advance membuka rubrik, bukti, dan checklist observasi.</Card.Description>
 					</div>
-					<div class="inline-flex rounded-md border border-slate-200 bg-white p-1">
+					<div class="inline-flex rounded-md border border-border bg-card p-1">
 						<button
 							type="button"
-							class={`rounded px-3 py-1.5 text-xs font-semibold ${formMode === 'beginner' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+							class={`rounded px-3 py-1.5 text-xs font-semibold ${formMode === 'beginner' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}`}
 							onclick={() => (formMode = 'beginner')}
 						>
 							Pemula
 						</button>
 						<button
 							type="button"
-							class={`rounded px-3 py-1.5 text-xs font-semibold ${formMode === 'advance' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+							class={`rounded px-3 py-1.5 text-xs font-semibold ${formMode === 'advance' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}`}
 							onclick={() => (formMode = 'advance')}
 						>
 							Advance
@@ -742,7 +742,7 @@
 			<Card.Content class="space-y-4 p-4">
 				<div class="grid gap-3 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr]">
 					<div>
-						<label for="non-test-subject" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Mata Pelajaran <span class="text-red-500">*</span></label>
+						<label for="non-test-subject" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mata Pelajaran <span class="text-destructive">*</span></label>
 						<select id="non-test-subject" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" bind:value={formSubjectId}>
 							<option value="">-- Pilih Mapel --</option>
 							{#each subjects as subject (subject.id)}
@@ -751,7 +751,7 @@
 						</select>
 					</div>
 					<div>
-						<label for="non-test-class" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Kelas</label>
+						<label for="non-test-class" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Kelas</label>
 						<select id="non-test-class" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" bind:value={formClassId}>
 							<option value="">Semua / belum ditentukan</option>
 							{#each classes as kelas (kelas.id)}
@@ -760,7 +760,7 @@
 						</select>
 					</div>
 					<div>
-						<label for="non-test-type" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Bentuk</label>
+						<label for="non-test-type" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Bentuk</label>
 						<select id="non-test-type" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" bind:value={formType}>
 							{#each ASSESSMENT_TYPES as item (item.value)}
 								<option value={item.value}>{item.label}</option>
@@ -768,7 +768,7 @@
 						</select>
 					</div>
 					<div>
-						<label for="non-test-status" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Status</label>
+						<label for="non-test-status" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</label>
 						<select id="non-test-status" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" bind:value={formStatus}>
 							{#each STATUSES as item (item.value)}
 								<option value={item.value}>{item.label}</option>
@@ -779,31 +779,31 @@
 
 				<div class="grid gap-3 lg:grid-cols-[1fr_12rem_10rem]">
 					<div>
-						<label for="non-test-title" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Judul <span class="text-red-500">*</span></label>
+						<label for="non-test-title" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Judul <span class="text-destructive">*</span></label>
 						<Input id="non-test-title" placeholder="Mis. Praktik membaca teks qiraah" bind:value={formTitle} />
 					</div>
 					<div>
-						<label for="non-test-due" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Tenggat</label>
+						<label for="non-test-due" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tenggat</label>
 						<Input id="non-test-due" type="datetime-local" bind:value={formDueAt} />
 					</div>
 					<div>
-						<label for="non-test-weight" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Bobot</label>
+						<label for="non-test-weight" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Bobot</label>
 						<Input id="non-test-weight" type="number" min={0.1} step={0.1} bind:value={formWeight} />
 					</div>
 				</div>
 
 				<div>
-					<label for="non-test-instruction" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Instruksi Tugas</label>
+					<label for="non-test-instruction" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Instruksi Tugas</label>
 					<Textarea id="non-test-instruction" rows={3} placeholder="Instruksi singkat untuk guru/siswa..." bind:value={formInstruction} />
 				</div>
 
 				<div class="grid gap-3 lg:grid-cols-2">
 					<div>
-						<label for="non-test-rubric" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Rubrik Ringkas</label>
+						<label for="non-test-rubric" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rubrik Ringkas</label>
 						<Textarea id="non-test-rubric" rows={formMode === 'advance' ? 5 : 3} placeholder="Kriteria penilaian utama..." bind:value={formRubric} />
 					</div>
 					<div>
-						<label for="non-test-evidence" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Bukti yang Dikumpulkan</label>
+						<label for="non-test-evidence" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Bukti yang Dikumpulkan</label>
 						<Textarea id="non-test-evidence" rows={formMode === 'advance' ? 5 : 3} placeholder="Foto, dokumen, link portofolio, catatan observasi..." bind:value={formEvidence} />
 					</div>
 				</div>
@@ -811,25 +811,25 @@
 				{#if formMode === 'advance'}
 					<div class="grid gap-3 lg:grid-cols-[1fr_12rem_14rem]">
 						<div>
-							<label for="non-test-description" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Deskripsi Internal</label>
+							<label for="non-test-description" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deskripsi Internal</label>
 							<Textarea id="non-test-description" rows={3} bind:value={formDescription} />
 						</div>
 						<div>
-							<label for="non-test-max-score" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Skor Maks</label>
+							<label for="non-test-max-score" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Skor Maks</label>
 							<Input id="non-test-max-score" type="number" min={1} bind:value={formMaxScore} />
 						</div>
 						<div>
-							<label for="non-test-assessor" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Penilai</label>
+							<label for="non-test-assessor" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Penilai</label>
 							<Input id="non-test-assessor" placeholder="username/penanggung jawab" bind:value={formAssessor} />
 						</div>
 					</div>
 					<div>
-						<label for="non-test-checklist" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Checklist Observasi</label>
+						<label for="non-test-checklist" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Checklist Observasi</label>
 						<Textarea id="non-test-checklist" rows={4} placeholder="Satu indikator per baris" bind:value={checklistText} />
 					</div>
 				{/if}
 
-				<div class="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
+				<div class="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
 					<LoadingButton variant="outline" onclick={() => { showForm = false; resetForm(); }}>Batal</LoadingButton>
 					<LoadingButton onclick={saveAssessment} loading={saving} loadingLabel="Menyimpan...">
 						{editingId ? 'Simpan Perubahan' : 'Simpan Asesmen'}
@@ -839,14 +839,14 @@
 		</Card.Root>
 	{/if}
 
-	<Card.Root class="border-slate-200 shadow-sm">
+	<Card.Root class="border-border shadow-sm">
 		<Card.Content class="grid gap-3 p-4 lg:grid-cols-[1fr_11rem_11rem_13rem_auto_auto_auto] lg:items-end">
 			<div>
-				<label for="non-test-search" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Cari</label>
+				<label for="non-test-search" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cari</label>
 				<Input id="non-test-search" placeholder="Judul, bukti, mapel, kelas..." bind:value={filterSearch} onkeydown={(event) => { if (event.key === 'Enter') applyFilters(); }} />
 			</div>
 			<div>
-				<label for="non-test-filter-status" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Status</label>
+				<label for="non-test-filter-status" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</label>
 				<select id="non-test-filter-status" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" bind:value={filterStatus}>
 					<option value="">Semua</option>
 					{#each STATUSES as item (item.value)}
@@ -855,7 +855,7 @@
 				</select>
 			</div>
 			<div>
-				<label for="non-test-filter-type" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Bentuk</label>
+				<label for="non-test-filter-type" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Bentuk</label>
 				<select id="non-test-filter-type" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" bind:value={filterType}>
 					<option value="">Semua</option>
 					{#each ASSESSMENT_TYPES as item (item.value)}
@@ -864,7 +864,7 @@
 				</select>
 			</div>
 			<div>
-				<label for="non-test-filter-subject" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Mapel</label>
+				<label for="non-test-filter-subject" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mapel</label>
 				<select id="non-test-filter-subject" class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" bind:value={filterSubjectId}>
 					<option value="">Semua</option>
 					{#each subjects as subject (subject.id)}
@@ -882,7 +882,7 @@
 
 	<AsyncContent promise={overviewPromise} onerror={handleRenderError}>
 		{#snippet pending()}
-			<Card.Root class="border-slate-200 shadow-sm">
+			<Card.Root class="border-border shadow-sm">
 				<Card.Content class="space-y-3 p-5">
 					{#each Array.from({ length: 5 }) as _, index (`non-test-skeleton-${index}`)}
 						<div class="grid gap-3 lg:grid-cols-[1fr_8rem_8rem_8rem_10rem_auto] lg:items-center">
@@ -909,7 +909,7 @@
 		{#snippet children(value)}
 			{@const overview = value as AssessmentOverview}
 			{@const currentAssessments = overview.assessments}
-			<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+			<Card.Root class="overflow-hidden border-border shadow-sm">
 				<Card.Header class="pb-2">
 					<div class="flex flex-wrap items-start justify-between gap-2">
 						<div>
@@ -917,7 +917,7 @@
 							<Card.Description>Semua item di sini dinilai manual dan tidak masuk runtime ujian token.</Card.Description>
 						</div>
 						{#if filterNeedsSync}
-							<Badge class="border border-amber-200 bg-amber-100 text-amber-800">Filter Perlu Sinkron</Badge>
+							<Badge class="border border-warning/30 bg-warning/15 text-warning">Filter Perlu Sinkron</Badge>
 						{/if}
 					</div>
 				</Card.Header>
@@ -939,8 +939,8 @@
 									<Table.Row>
 										<Table.Cell>
 											<div>
-												<p class="font-medium text-slate-900">{item.title}</p>
-												<p class="mt-0.5 text-xs text-slate-500">
+												<p class="font-medium text-foreground">{item.title}</p>
+												<p class="mt-0.5 text-xs text-muted-foreground">
 													{item.class_name || 'Lintas kelas'} · Bobot {item.weight} · Skor {item.max_score}
 												</p>
 											</div>
@@ -948,15 +948,15 @@
 										<Table.Cell>
 											<Badge variant="outline" class="text-xs">{item.subject_code}</Badge>
 										</Table.Cell>
-										<Table.Cell class="text-sm text-slate-700">{assessmentTypeLabel(item.assessment_type)}</Table.Cell>
+										<Table.Cell class="text-sm text-foreground">{assessmentTypeLabel(item.assessment_type)}</Table.Cell>
 										<Table.Cell>
 											<Badge class={`border text-xs ${statusBadgeClass(item.status)}`}>{statusLabel(item.status)}</Badge>
 										</Table.Cell>
-										<Table.Cell class="text-sm text-slate-600">
+										<Table.Cell class="text-sm text-muted-foreground">
 											<div class="space-y-1">
 												<p>{item.reviewed_submissions}/{item.total_submissions} dinilai</p>
 												<Badge class={`border text-xs ${gradeSyncBadgeClass(item)}`}>{gradeSyncLabel(item)}</Badge>
-												<p class="max-w-56 text-xs leading-5 text-slate-500">{gradeSyncDescription(item)}</p>
+												<p class="max-w-56 text-xs leading-5 text-muted-foreground">{gradeSyncDescription(item)}</p>
 											</div>
 										</Table.Cell>
 										<Table.Cell>
@@ -1000,7 +1000,7 @@
 									</Table.Row>
 								{:else}
 									<Table.Row>
-										<Table.Cell colspan={6} class="py-8 text-center text-slate-400">Belum ada asesmen non-tes.</Table.Cell>
+										<Table.Cell colspan={6} class="py-8 text-center text-muted-foreground">Belum ada asesmen non-tes.</Table.Cell>
 									</Table.Row>
 								{/each}
 							</Table.Body>
@@ -1009,19 +1009,19 @@
 
 					<div class="space-y-3 p-4 lg:hidden">
 						{#each currentAssessments as item (item.id)}
-							<div class="rounded-lg border border-slate-200 p-3">
+							<div class="rounded-lg border border-border p-3">
 								<div class="flex items-start justify-between gap-3">
 									<div>
-										<p class="font-medium text-slate-900">{item.title}</p>
-										<p class="mt-1 text-xs text-slate-500">{item.subject_code} · {assessmentTypeLabel(item.assessment_type)}</p>
+										<p class="font-medium text-foreground">{item.title}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{item.subject_code} · {assessmentTypeLabel(item.assessment_type)}</p>
 									</div>
 									<Badge class={`border text-xs ${statusBadgeClass(item.status)}`}>{statusLabel(item.status)}</Badge>
 								</div>
-								<div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+								<div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 									<span>{item.reviewed_submissions}/{item.total_submissions} dinilai</span>
 									<Badge class={`border text-xs ${gradeSyncBadgeClass(item)}`}>{gradeSyncLabel(item)}</Badge>
 								</div>
-								<p class="mt-2 text-xs leading-5 text-slate-500">{gradeSyncDescription(item)}</p>
+								<p class="mt-2 text-xs leading-5 text-muted-foreground">{gradeSyncDescription(item)}</p>
 								<div class="mt-3 flex flex-wrap justify-end gap-2">
 									<LoadingButton variant="outline" size="xs" onclick={() => openScoringPanel(item)}>Nilai</LoadingButton>
 									<LoadingButton
@@ -1049,7 +1049,7 @@
 								</div>
 							</div>
 						{:else}
-							<p class="py-6 text-center text-sm text-slate-400">Belum ada asesmen non-tes.</p>
+							<p class="py-6 text-center text-sm text-muted-foreground">Belum ada asesmen non-tes.</p>
 						{/each}
 					</div>
 				</Card.Content>
@@ -1058,11 +1058,11 @@
 	</AsyncContent>
 
 	{#if selectedAssessment}
-		<Card.Root class="border-emerald-100 shadow-sm">
-			<Card.Header class="border-b border-slate-100 pb-3">
+		<Card.Root class="border-primary/20 shadow-sm">
+			<Card.Header class="border-b border-border pb-3">
 				<div class="flex flex-wrap items-start justify-between gap-3">
 					<div>
-						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Panel Koreksi</p>
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Panel Koreksi</p>
 						<Card.Title class="mt-1 text-base">{selectedAssessment.title}</Card.Title>
 						<Card.Description>
 							{selectedAssessment.class_name || 'Lintas kelas'} · Skor maksimum {selectedAssessment.max_score} · {selectedAssessment.reviewed_submissions}/{selectedAssessment.total_submissions} dinilai · {gradeSyncLabel(selectedAssessment)}
@@ -1096,31 +1096,31 @@
 				</div>
 			</Card.Header>
 			<Card.Content class="p-0">
-				<div class="border-b border-slate-100 bg-slate-50/70 p-4">
+				<div class="border-b border-border bg-muted/50 p-4">
 					<div class="grid gap-3 lg:grid-cols-[1fr_12rem_12rem_10rem]">
 						<div>
-							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status Sinkron Gradebook</p>
+							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Status Sinkron Gradebook</p>
 							<div class="mt-2 flex flex-wrap items-center gap-2">
 								<Badge class={`border text-xs ${gradeSyncBadgeClass(selectedAssessment)}`}>{gradeSyncLabel(selectedAssessment)}</Badge>
 								{#if syncFreshnessCount(selectedAssessment) > 0}
 									<Badge variant="outline" class="text-xs">{syncFreshnessCount(selectedAssessment)} nilai berubah</Badge>
 								{/if}
 							</div>
-							<p class="mt-2 text-sm leading-6 text-slate-600">{gradeSyncDescription(selectedAssessment)}</p>
+							<p class="mt-2 text-sm leading-6 text-muted-foreground">{gradeSyncDescription(selectedAssessment)}</p>
 						</div>
 						<div>
-							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Sinkron Terakhir</p>
-							<p class="mt-2 text-sm font-medium text-slate-900">{formatDateTime(selectedAssessment.grade_synced_at)}</p>
-							<p class="text-xs text-slate-500">{selectedAssessment.grade_synced_by || 'Belum ada operator'}</p>
+							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Sinkron Terakhir</p>
+							<p class="mt-2 text-sm font-medium text-foreground">{formatDateTime(selectedAssessment.grade_synced_at)}</p>
+							<p class="text-xs text-muted-foreground">{selectedAssessment.grade_synced_by || 'Belum ada operator'}</p>
 						</div>
 						<div>
-							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Review Terakhir</p>
-							<p class="mt-2 text-sm font-medium text-slate-900">{formatDateTime(selectedAssessment.last_reviewed_at)}</p>
-							<p class="text-xs text-slate-500">{selectedAssessment.reviewed_submissions}/{selectedAssessment.total_submissions} dinilai</p>
+							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Review Terakhir</p>
+							<p class="mt-2 text-sm font-medium text-foreground">{formatDateTime(selectedAssessment.last_reviewed_at)}</p>
+							<p class="text-xs text-muted-foreground">{selectedAssessment.reviewed_submissions}/{selectedAssessment.total_submissions} dinilai</p>
 						</div>
 						<div>
-							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Belum Terkirim</p>
-							<p class={`mt-2 text-2xl font-semibold ${syncFreshnessCount(selectedAssessment) > 0 ? 'text-amber-800' : 'text-emerald-800'}`}>
+							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Belum Terkirim</p>
+							<p class={`mt-2 text-2xl font-semibold ${syncFreshnessCount(selectedAssessment) > 0 ? 'text-warning' : 'text-primary'}`}>
 								{syncFreshnessCount(selectedAssessment)}
 							</p>
 						</div>
@@ -1174,8 +1174,8 @@
 										<Table.Row>
 											<Table.Cell>
 												<div>
-													<p class="font-medium text-slate-900">{row.student_name}</p>
-													<p class="text-xs text-slate-500">{row.nis} · {row.class_name || '-'}</p>
+													<p class="font-medium text-foreground">{row.student_name}</p>
+													<p class="text-xs text-muted-foreground">{row.nis} · {row.class_name || '-'}</p>
 												</div>
 											</Table.Cell>
 											<Table.Cell>
@@ -1220,7 +1220,7 @@
 										</Table.Row>
 									{:else}
 										<Table.Row>
-											<Table.Cell colspan={6} class="py-8 text-center text-slate-400">
+											<Table.Cell colspan={6} class="py-8 text-center text-muted-foreground">
 												Belum ada siswa. Gunakan tombol Siapkan Siswa setelah kelas asesmen dipilih.
 											</Table.Cell>
 										</Table.Row>
@@ -1231,17 +1231,17 @@
 
 						<div class="space-y-3 p-4 lg:hidden">
 							{#each currentSubmissions as row (row.student_id)}
-								<div class="rounded-lg border border-slate-200 p-3">
+								<div class="rounded-lg border border-border p-3">
 									<div class="flex items-start justify-between gap-3">
 										<div>
-											<p class="font-medium text-slate-900">{row.student_name}</p>
-											<p class="text-xs text-slate-500">{row.nis} · {row.class_name || '-'}</p>
+											<p class="font-medium text-foreground">{row.student_name}</p>
+											<p class="text-xs text-muted-foreground">{row.nis} · {row.class_name || '-'}</p>
 										</div>
 										<Badge class={`border text-xs ${submissionStatusBadgeClass(row.status)}`}>{submissionStatusLabel(row.status)}</Badge>
 									</div>
 									<div class="mt-3 grid gap-3">
 										<div>
-											<label for={`mobile-non-test-score-${row.student_id}`} class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Nilai</label>
+											<label for={`mobile-non-test-score-${row.student_id}`} class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nilai</label>
 											<Input
 												id={`mobile-non-test-score-${row.student_id}`}
 												type="number"
@@ -1252,11 +1252,11 @@
 											/>
 										</div>
 										<div>
-											<label for={`mobile-non-test-evidence-${row.student_id}`} class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Catatan Bukti</label>
+											<label for={`mobile-non-test-evidence-${row.student_id}`} class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Catatan Bukti</label>
 											<Input id={`mobile-non-test-evidence-${row.student_id}`} bind:value={submissionDrafts[row.student_id].evidenceNote} />
 										</div>
 										<div>
-											<label for={`mobile-non-test-feedback-${row.student_id}`} class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Feedback</label>
+											<label for={`mobile-non-test-feedback-${row.student_id}`} class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Feedback</label>
 											<Input id={`mobile-non-test-feedback-${row.student_id}`} bind:value={submissionDrafts[row.student_id].feedback} />
 										</div>
 									</div>
@@ -1265,7 +1265,7 @@
 									</div>
 								</div>
 							{:else}
-								<p class="py-6 text-center text-sm text-slate-400">Belum ada siswa. Gunakan tombol Siapkan Siswa setelah kelas asesmen dipilih.</p>
+								<p class="py-6 text-center text-sm text-muted-foreground">Belum ada siswa. Gunakan tombol Siapkan Siswa setelah kelas asesmen dipilih.</p>
 							{/each}
 						</div>
 					{/snippet}

@@ -257,8 +257,8 @@
 <div class="space-y-6 p-6">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Manajemen Orang Tua</h1>
-			<p class="text-sm text-slate-500 mt-1">Kelola data wali murid dan relasi dengan siswa</p>
+			<h1 class="text-2xl font-semibold text-foreground">Manajemen Orang Tua</h1>
+			<p class="text-sm text-muted-foreground mt-1">Kelola data wali murid dan relasi dengan siswa</p>
 		</div>
 		<Button onclick={() => (showForm = !showForm)}>
 			{showForm ? 'Batal' : '+ Tambah Orang Tua'}
@@ -275,15 +275,15 @@
 			<Card.Content class="space-y-4">
 				<div class="grid gap-3 sm:grid-cols-3">
 					<div>
-						<label for="p-nama" class="text-xs text-slate-500 mb-1 block">Nama Lengkap</label>
+						<label for="p-nama" class="text-xs text-muted-foreground mb-1 block">Nama Lengkap</label>
 						<Input id="p-nama" bind:value={fNama} placeholder="Nama Orang Tua" />
 					</div>
 					<div>
-						<label for="p-phone" class="text-xs text-slate-500 mb-1 block">No. HP / WhatsApp</label>
+						<label for="p-phone" class="text-xs text-muted-foreground mb-1 block">No. HP / WhatsApp</label>
 						<Input id="p-phone" bind:value={fPhone} placeholder="08xxx" />
 					</div>
 					<div>
-						<label for="p-addr" class="text-xs text-slate-500 mb-1 block">Alamat</label>
+						<label for="p-addr" class="text-xs text-muted-foreground mb-1 block">Alamat</label>
 						<Input id="p-addr" bind:value={fAddress} placeholder="Alamat lengkap" />
 					</div>
 				</div>
@@ -301,15 +301,15 @@
 		{#snippet pending()}
 			<div class="grid gap-3 md:grid-cols-3">
 				{#each ['Data Orang Tua', 'Siswa Tersedia', 'Relasi Keluarga'] as label (label)}
-					<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+					<div class="rounded-2xl border border-border bg-muted/50 px-4 py-4">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
 						<Skeleton class="mt-3 h-8 w-16" />
 						<Skeleton class="mt-2 h-4 w-44" />
 					</div>
 				{/each}
 			</div>
 
-			<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+			<Card.Root class="overflow-hidden border-border shadow-sm">
 				<Card.Content class="p-0">
 					<div class="space-y-3 p-6">
 						{#each Array.from({ length: 5 }) as _, index (`parent-skeleton-${index}`)}
@@ -336,28 +336,28 @@
 		{#snippet children(value)}
 			{@const overview = value as ParentsOverview}
 			<div class="grid gap-3 md:grid-cols-3">
-				<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Data Orang Tua</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.parents.length}</p>
-					<p class="text-sm text-slate-600">profil wali murid yang sudah tercatat</p>
+				<div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Data Orang Tua</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.parents.length}</p>
+					<p class="text-sm text-muted-foreground">profil wali murid yang sudah tercatat</p>
 				</div>
-				<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Siswa Tersedia</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.students.length}</p>
-					<p class="text-sm text-slate-600">daftar siswa yang bisa ditautkan ke akun orang tua</p>
+				<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Siswa Tersedia</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.students.length}</p>
+					<p class="text-sm text-muted-foreground">daftar siswa yang bisa ditautkan ke akun orang tua</p>
 				</div>
-				<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Relasi Keluarga</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{linkedStudents.length}</p>
-					<p class="text-sm text-slate-600">anak yang sedang tampil pada panel relasi aktif</p>
+				<div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Relasi Keluarga</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{linkedStudents.length}</p>
+					<p class="text-sm text-muted-foreground">anak yang sedang tampil pada panel relasi aktif</p>
 				</div>
 			</div>
 
-			<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+			<Card.Root class="overflow-hidden border-border shadow-sm">
 				<Card.Content class="p-0">
 					<Table.Root>
 						<Table.Header>
-							<Table.Row class="bg-slate-50">
+							<Table.Row class="bg-muted/50">
 								<Table.Head>Nama Orang Tua</Table.Head>
 								<Table.Head>No. HP</Table.Head>
 								<Table.Head>Alamat</Table.Head>
@@ -369,7 +369,7 @@
 								<Table.Row>
 									<Table.Cell class="font-medium">{p.nama}</Table.Cell>
 									<Table.Cell class="text-sm">{p.phone || '—'}</Table.Cell>
-									<Table.Cell class="text-sm text-slate-600">{p.address || '—'}</Table.Cell>
+									<Table.Cell class="text-sm text-muted-foreground">{p.address || '—'}</Table.Cell>
 									<Table.Cell class="text-right">
 										<Button variant="outline" size="sm" onclick={() => openLinkDialog(p)}>
 											Lihat Anak
@@ -418,7 +418,7 @@
 
 			<AsyncContent promise={linkedStudentsPromise} onerror={handleLinkedStudentsRenderError}>
 				{#snippet pending()}
-					<div class="rounded-md border border-slate-200 p-4">
+					<div class="rounded-md border border-border p-4">
 						<div class="space-y-3">
 							{#each Array.from({ length: 3 }) as _, index (`linked-student-skeleton-${index}`)}
 								<div class="grid grid-cols-[1fr_96px_56px] items-center gap-3">
@@ -442,10 +442,10 @@
 
 				{#snippet children(value)}
 					{@const currentLinkedStudents = value as Student[]}
-					<div class="rounded-md border border-slate-200">
+					<div class="rounded-md border border-border">
 						<Table.Root>
 							<Table.Header>
-								<Table.Row class="bg-slate-50">
+								<Table.Row class="bg-muted/50">
 									<Table.Head class="h-9">Nama Siswa</Table.Head>
 									<Table.Head class="h-9">Kelas</Table.Head>
 									<Table.Head class="h-9 text-right">Aksi</Table.Head>
@@ -460,7 +460,7 @@
 											<LoadingButton
 												size="sm"
 												variant="ghost"
-												class="text-red-600 hover:bg-red-50 hover:text-red-700"
+												class="text-destructive hover:bg-destructive/10 hover:text-destructive"
 												onclick={() => unlinkStudent(c.id, c.nama)}
 												loading={unlinkBusyId === c.id}
 												loadingLabel="Melepas..."

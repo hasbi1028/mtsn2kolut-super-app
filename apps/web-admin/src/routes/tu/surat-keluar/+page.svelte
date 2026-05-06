@@ -257,18 +257,18 @@
 	}
 
 	const sifatColors: Record<string, string> = {
-		biasa: 'bg-gray-100 text-gray-700 hover:bg-gray-100',
-		penting: 'bg-blue-100 text-blue-800 hover:bg-blue-100',
-		segera: 'bg-orange-100 text-orange-800 hover:bg-orange-100',
-		rahasia: 'bg-red-100 text-red-800 hover:bg-red-100'
+		biasa: 'bg-muted text-foreground hover:bg-muted',
+		penting: 'bg-accent text-accent-foreground hover:bg-accent',
+		segera: 'bg-warning/15 text-warning hover:bg-warning/15',
+		rahasia: 'bg-destructive/15 text-destructive hover:bg-destructive/15'
 	};
 </script>
 
 <div class="container mx-auto max-w-7xl space-y-6 p-6">
 	<div class="flex items-center justify-between">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900">Surat Keluar</h1>
-			<p class="text-sm text-gray-500">Pencatatan surat keluar dengan penomoran otomatis Kemenag</p>
+			<h1 class="text-2xl font-bold text-foreground">Surat Keluar</h1>
+			<p class="text-sm text-muted-foreground">Pencatatan surat keluar dengan penomoran otomatis Kemenag</p>
 		</div>
 		<Button onclick={() => (createOpen = true)}>+ Catat Surat Keluar</Button>
 	</div>
@@ -310,7 +310,7 @@
 				{#snippet children(value)}
 					{@const currentLetters = (value as OutgoingLettersOverview).letters}
 					{#if currentLetters.length === 0}
-						<div class="p-8 text-center text-sm text-gray-500">
+						<div class="p-8 text-center text-sm text-muted-foreground">
 							{search ? 'Tidak ada surat yang sesuai pencarian.' : 'Belum ada surat keluar yang dicatat.'}
 						</div>
 					{:else}
@@ -328,18 +328,18 @@
 							<Table.Body>
 								{#each currentLetters as letter, i (letter.id)}
 									<Table.Row>
-										<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
+										<Table.Cell class="text-muted-foreground">{i + 1}</Table.Cell>
 										<Table.Cell>
-											<p class="font-mono text-xs font-medium text-gray-800">{letter.nomor_surat}</p>
-											<p class="text-xs text-gray-400">{letter.classification_name || letter.classification_code}</p>
+											<p class="font-mono text-xs font-medium text-foreground">{letter.nomor_surat}</p>
+											<p class="text-xs text-muted-foreground">{letter.classification_name || letter.classification_code}</p>
 										</Table.Cell>
 										<Table.Cell>
-											<p class="text-sm font-medium text-gray-800">{letter.tujuan}</p>
-											<p class="max-w-xs truncate text-xs text-gray-500">{letter.perihal}</p>
+											<p class="text-sm font-medium text-foreground">{letter.tujuan}</p>
+											<p class="max-w-xs truncate text-xs text-muted-foreground">{letter.perihal}</p>
 										</Table.Cell>
-										<Table.Cell class="text-sm text-gray-600">{formatDate(letter.tanggal_surat)}</Table.Cell>
+										<Table.Cell class="text-sm text-muted-foreground">{formatDate(letter.tanggal_surat)}</Table.Cell>
 										<Table.Cell>
-											<Badge class={sifatColors[letter.sifat] ?? 'bg-gray-100 text-gray-700 hover:bg-gray-100'}>
+											<Badge class={sifatColors[letter.sifat] ?? 'bg-muted text-foreground hover:bg-muted'}>
 												{letter.sifat}
 											</Badge>
 										</Table.Cell>
@@ -376,12 +376,12 @@
 		</Dialog.Header>
 		<div class="space-y-3 py-2">
 			<div class="space-y-1">
-				<label for="new-klasifikasi" class="text-sm font-medium text-gray-700">Kode Klasifikasi <span class="text-red-500">*</span></label>
+				<label for="new-klasifikasi" class="text-sm font-medium text-foreground">Kode Klasifikasi <span class="text-destructive">*</span></label>
 				<select
 					id="new-klasifikasi"
 					bind:value={newKlasifikasi}
 					onchange={updatePreview}
-					class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+					class="w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 				>
 					<option value="">-- Pilih kode klasifikasi --</option>
 					{#each classifications as c (c.code)}
@@ -390,34 +390,34 @@
 				</select>
 			</div>
 			<div class="space-y-1">
-				<label for="new-tgl-keluar" class="text-sm font-medium text-gray-700">Tanggal Surat <span class="text-red-500">*</span></label>
+				<label for="new-tgl-keluar" class="text-sm font-medium text-foreground">Tanggal Surat <span class="text-destructive">*</span></label>
 				<Input id="new-tgl-keluar" type="date" bind:value={newTglSurat} oninput={updatePreview} />
 			</div>
 			{#if nomorPreview}
-				<div class="rounded-md bg-green-50 p-3">
-					<p class="text-xs text-gray-500">Nomor surat yang akan digenerate:</p>
-					<p class="font-mono text-sm font-medium text-green-800">{nomorPreview}</p>
+				<div class="rounded-md bg-success/10 p-3">
+					<p class="text-xs text-muted-foreground">Nomor surat yang akan digenerate:</p>
+					<p class="font-mono text-sm font-medium text-success">{nomorPreview}</p>
 				</div>
 			{/if}
 			<div class="space-y-1">
-				<label for="new-manual-nomor" class="text-sm font-medium text-gray-700">Nomor Manual (opsional)</label>
+				<label for="new-manual-nomor" class="text-sm font-medium text-foreground">Nomor Manual (opsional)</label>
 				<Input id="new-manual-nomor" bind:value={newManualNomor} oninput={updatePreview} placeholder="Isi jika ingin pakai nomor kustom" />
-				<p class="text-xs text-gray-400">Kosongkan untuk menggunakan nomor otomatis</p>
+				<p class="text-xs text-muted-foreground">Kosongkan untuk menggunakan nomor otomatis</p>
 			</div>
 			<div class="space-y-1">
-				<label for="new-tujuan" class="text-sm font-medium text-gray-700">Tujuan <span class="text-red-500">*</span></label>
+				<label for="new-tujuan" class="text-sm font-medium text-foreground">Tujuan <span class="text-destructive">*</span></label>
 				<Input id="new-tujuan" bind:value={newTujuan} placeholder="Instansi atau nama tujuan" />
 			</div>
 			<div class="space-y-1">
-				<label for="new-perihal-k" class="text-sm font-medium text-gray-700">Perihal <span class="text-red-500">*</span></label>
+				<label for="new-perihal-k" class="text-sm font-medium text-foreground">Perihal <span class="text-destructive">*</span></label>
 				<Input id="new-perihal-k" bind:value={newPerihal} placeholder="Perihal / isi singkat surat" />
 			</div>
 			<div class="space-y-1">
-				<label for="new-sifat-k" class="text-sm font-medium text-gray-700">Sifat</label>
+				<label for="new-sifat-k" class="text-sm font-medium text-foreground">Sifat</label>
 				<select
 					id="new-sifat-k"
 					bind:value={newSifat}
-					class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+					class="w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 				>
 					<option value="biasa">Biasa</option>
 					<option value="penting">Penting</option>
@@ -426,7 +426,7 @@
 				</select>
 			</div>
 			<div class="space-y-1">
-				<label for="new-catatan-k" class="text-sm font-medium text-gray-700">Catatan</label>
+				<label for="new-catatan-k" class="text-sm font-medium text-foreground">Catatan</label>
 				<Textarea id="new-catatan-k" bind:value={newCatatan} placeholder="Catatan tambahan (opsional)" rows={2} />
 			</div>
 		</div>
@@ -446,23 +446,23 @@
 		</Dialog.Header>
 		<div class="space-y-3 py-2">
 			<div class="space-y-1">
-				<label for="edit-tgl-surat" class="text-sm font-medium text-gray-700">Tanggal Surat</label>
+				<label for="edit-tgl-surat" class="text-sm font-medium text-foreground">Tanggal Surat</label>
 				<Input id="edit-tgl-surat" type="date" bind:value={editTglSurat} />
 			</div>
 			<div class="space-y-1">
-				<label for="edit-tujuan" class="text-sm font-medium text-gray-700">Tujuan <span class="text-red-500">*</span></label>
+				<label for="edit-tujuan" class="text-sm font-medium text-foreground">Tujuan <span class="text-destructive">*</span></label>
 				<Input id="edit-tujuan" bind:value={editTujuan} />
 			</div>
 			<div class="space-y-1">
-				<label for="edit-perihal" class="text-sm font-medium text-gray-700">Perihal <span class="text-red-500">*</span></label>
+				<label for="edit-perihal" class="text-sm font-medium text-foreground">Perihal <span class="text-destructive">*</span></label>
 				<Input id="edit-perihal" bind:value={editPerihal} />
 			</div>
 			<div class="space-y-1">
-				<label for="edit-sifat" class="text-sm font-medium text-gray-700">Sifat</label>
+				<label for="edit-sifat" class="text-sm font-medium text-foreground">Sifat</label>
 				<select
 					id="edit-sifat"
 					bind:value={editSifat}
-					class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+					class="w-full rounded-md border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 				>
 					<option value="biasa">Biasa</option>
 					<option value="penting">Penting</option>
@@ -471,7 +471,7 @@
 				</select>
 			</div>
 			<div class="space-y-1">
-				<label for="edit-catatan" class="text-sm font-medium text-gray-700">Catatan</label>
+				<label for="edit-catatan" class="text-sm font-medium text-foreground">Catatan</label>
 				<Textarea id="edit-catatan" bind:value={editCatatan} rows={2} />
 			</div>
 		</div>

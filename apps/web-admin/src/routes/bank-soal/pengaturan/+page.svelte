@@ -99,17 +99,17 @@
 <svelte:head><title>Pengaturan Bank Soal</title></svelte:head>
 
 <div class="space-y-5 p-4 md:p-6">
-	<section class="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm">
-		<div class="bg-gradient-to-r from-emerald-50 via-white to-slate-50 p-4 md:p-5">
+	<section class="overflow-hidden rounded-2xl border border-primary/20 bg-card shadow-sm">
+		<div class="bg-gradient-to-r from-primary/10 via-card to-muted/50 p-4 md:p-5">
 			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 				<div>
-					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-700">Governance Bank Soal</p>
-					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-slate-950">Pengaturan & SOP</h1>
-					<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Pusat panduan operasional Bank Soal: workflow, standar kualitas, SOP import/review, dan integrasi dengan modul Asesmen.</p>
+					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Governance Bank Soal</p>
+					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Pengaturan & SOP</h1>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pusat panduan operasional Bank Soal: workflow, standar kualitas, SOP import/review, dan integrasi dengan modul Asesmen.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
-					<a href={resolve('/bank-soal')} class="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Dashboard</a>
-					<a href={resolve('/bank-soal/analisis-butir')} class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">Analisis</a>
+					<a href={resolve('/bank-soal')} class="rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50">Dashboard</a>
+					<a href={resolve('/bank-soal/analisis-butir')} class="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">Analisis</a>
 				</div>
 			</div>
 		</div>
@@ -125,51 +125,51 @@
 		{#snippet children()}
 			<section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
 				{#each operationalStatus as item (item.label)}
-					<article class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-						<p class="mt-2 text-3xl font-black text-slate-950">{item.value}</p>
-						<p class="mt-1 text-xs text-slate-500">{item.desc}</p>
+					<article class="rounded-xl border border-border bg-card p-4 shadow-sm">
+						<p class="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{item.label}</p>
+						<p class="mt-2 text-3xl font-black text-foreground">{item.value}</p>
+						<p class="mt-1 text-xs text-muted-foreground">{item.desc}</p>
 					</article>
 				{/each}
 			</section>
 
 			<section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
 				<div class="space-y-4">
-					<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<h2 class="text-base font-bold text-slate-900">Workflow Standar</h2>
-						<p class="mt-1 text-xs text-slate-500">Status ini menjadi acuan operasional saat soal bergerak dari draft sampai siap dipakai.</p>
+					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
+						<h2 class="text-base font-bold text-foreground">Workflow Standar</h2>
+						<p class="mt-1 text-xs text-muted-foreground">Status ini menjadi acuan operasional saat soal bergerak dari draft sampai siap dipakai.</p>
 						<div class="mt-4 grid gap-3 md:grid-cols-5">
 							{#each workflowSteps as step, index (step.label)}
-								<div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+								<div class="rounded-xl border border-border bg-muted/50 p-3">
 									<div class="flex items-center gap-2">
-										<span class="flex size-7 items-center justify-center rounded-full bg-white text-xs font-black text-slate-700">{index + 1}</span>
-										<p class="text-sm font-bold text-slate-900">{step.label}</p>
+										<span class="flex size-7 items-center justify-center rounded-full bg-card text-xs font-black text-foreground">{index + 1}</span>
+										<p class="text-sm font-bold text-foreground">{step.label}</p>
 									</div>
-									<p class="mt-2 text-xs leading-5 text-slate-600">{step.desc}</p>
+									<p class="mt-2 text-xs leading-5 text-muted-foreground">{step.desc}</p>
 								</div>
 							{/each}
 						</div>
 					</div>
 
-					<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<h2 class="text-base font-bold text-slate-900">Standar Kualitas Minimum</h2>
+					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
+						<h2 class="text-base font-bold text-foreground">Standar Kualitas Minimum</h2>
 						<div class="mt-4 grid gap-2 md:grid-cols-2">
 							{#each qualityRules as rule, index (rule)}
-								<div class="rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 text-sm leading-5 text-emerald-950">
-									<span class="mr-2 inline-flex size-5 items-center justify-center rounded-full bg-emerald-700 text-[10px] font-black text-white">{index + 1}</span>{rule}
+								<div class="rounded-lg border border-primary/20 bg-primary/10 p-3 text-sm leading-5 text-primary">
+									<span class="mr-2 inline-flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-primary-foreground">{index + 1}</span>{rule}
 								</div>
 							{/each}
 						</div>
 					</div>
 
-					<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<h2 class="text-base font-bold text-slate-900">Integrasi Modul</h2>
+					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
+						<h2 class="text-base font-bold text-foreground">Integrasi Modul</h2>
 						<div class="mt-4 grid gap-3 md:grid-cols-2">
 							{#each integrations as item (item.path)}
-								<a href={item.path} class="rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
-									<p class="text-sm font-bold text-slate-900">{item.name}</p>
-									<p class="mt-1 text-xs leading-5 text-slate-500">{item.desc}</p>
-									<p class="mt-2 font-mono text-[10px] text-emerald-700">{item.path}</p>
+								<a href={item.path} class="rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
+									<p class="text-sm font-bold text-foreground">{item.name}</p>
+									<p class="mt-1 text-xs leading-5 text-muted-foreground">{item.desc}</p>
+									<p class="mt-2 font-mono text-[10px] text-primary">{item.path}</p>
 								</a>
 							{/each}
 						</div>
@@ -177,31 +177,31 @@
 				</div>
 
 				<aside class="space-y-4">
-					<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<h2 class="text-base font-bold text-slate-900">SOP Operasional</h2>
+					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
+						<h2 class="text-base font-bold text-foreground">SOP Operasional</h2>
 						<div class="mt-3 space-y-3">
 							{#each sopItems as item (item.title)}
-								<div class="rounded-lg border border-slate-100 bg-slate-50 p-3">
+								<div class="rounded-lg border border-border bg-muted/50 p-3">
 									<div class="flex items-start justify-between gap-3">
-										<div><p class="text-sm font-bold text-slate-900">{item.title}</p><p class="mt-1 text-xs leading-5 text-slate-500">{item.desc}</p></div>
-										<span class="rounded-full border border-emerald-200 bg-white px-2 py-1 text-[10px] font-bold uppercase text-emerald-700">{item.status}</span>
+										<div><p class="text-sm font-bold text-foreground">{item.title}</p><p class="mt-1 text-xs leading-5 text-muted-foreground">{item.desc}</p></div>
+										<span class="rounded-full border border-primary/20 bg-card px-2 py-1 text-[10px] font-bold uppercase text-primary">{item.status}</span>
 									</div>
-									<p class="mt-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">PIC: {item.owner}</p>
+									<p class="mt-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">PIC: {item.owner}</p>
 								</div>
 							{/each}
 						</div>
 					</div>
 
-					<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
+					<div class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-warning">
 						<p class="text-sm font-bold">Catatan konfigurasi teknis</p>
-						<p class="mt-2 text-xs leading-5 text-amber-800">Halaman ini masih berupa pusat kontrol operasional berbasis data live. Perubahan aturan sistem yang bersifat mutasi tetap perlu endpoint khusus agar aman, ter-audit, dan tidak mengganggu periode asesmen aktif.</p>
+						<p class="mt-2 text-xs leading-5 text-warning">Halaman ini masih berupa pusat kontrol operasional berbasis data live. Perubahan aturan sistem yang bersifat mutasi tetap perlu endpoint khusus agar aman, ter-audit, dan tidak mengganggu periode asesmen aktif.</p>
 					</div>
 
-					<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<h2 class="text-base font-bold text-slate-900">Rute Aktif</h2>
-						<div class="mt-3 space-y-2 text-xs text-slate-600">
-							<p><span class="font-mono text-emerald-700">/bank-soal/*</span> untuk UI aktif.</p>
-							<p><span class="font-mono text-emerald-700">/api/bank-soal/*</span> untuk BFF aktif.</p>
+					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
+						<h2 class="text-base font-bold text-foreground">Rute Aktif</h2>
+						<div class="mt-3 space-y-2 text-xs text-muted-foreground">
+							<p><span class="font-mono text-primary">/bank-soal/*</span> untuk UI aktif.</p>
+							<p><span class="font-mono text-primary">/api/bank-soal/*</span> untuk BFF aktif.</p>
 							<p>Namespace lama tetap compatibility/deprecated dan tidak dipakai untuk fitur baru.</p>
 						</div>
 					</div>

@@ -97,17 +97,17 @@
 <svelte:head><title>Mapel & KD - Bank Soal</title></svelte:head>
 
 <div class="space-y-5 p-4 md:p-6">
-	<section class="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm">
-		<div class="bg-gradient-to-r from-emerald-50 via-white to-amber-50 p-4 md:p-5">
+	<section class="overflow-hidden rounded-2xl border border-primary/20 bg-card shadow-sm">
+		<div class="bg-gradient-to-r from-primary/10 via-card to-warning/10 p-4 md:p-5">
 			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 				<div>
-					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-700">Advanced Bank Soal</p>
-					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-slate-950">Mapel & KD Coverage</h1>
-					<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Pantau pemerataan bank soal berdasarkan mapel, kelas/fase, KD/CP/TP, materi, dan status review agar repositori soal siap dipakai lintas asesmen.</p>
+					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Advanced Bank Soal</p>
+					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Mapel & KD Coverage</h1>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pantau pemerataan bank soal berdasarkan mapel, kelas/fase, KD/CP/TP, materi, dan status review agar repositori soal siap dipakai lintas asesmen.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
-					<a href={resolve('/bank-soal')} class="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Dashboard</a>
-					<a href={resolve('/bank-soal/tambah')} class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">Tambah Soal</a>
+					<a href={resolve('/bank-soal')} class="rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50">Dashboard</a>
+					<a href={resolve('/bank-soal/tambah')} class="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">Tambah Soal</a>
 				</div>
 			</div>
 		</div>
@@ -122,45 +122,45 @@
 		{/snippet}
 		{#snippet children()}
 			<section class="grid gap-3 md:grid-cols-4">
-				<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Mapel</p><p class="mt-2 text-3xl font-black text-slate-950">{coverageRows.length}</p></div>
-				<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Soal Terpetakan</p><p class="mt-2 text-3xl font-black text-slate-950">{totalMapped}</p></div>
-				<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">KD/CP/TP unik</p><p class="mt-2 text-3xl font-black text-slate-950">{totalKd}</p></div>
-				<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm"><p class="text-[10px] font-bold uppercase tracking-wide text-amber-700">Belum lengkap</p><p class="mt-2 text-3xl font-black text-amber-950">{missingKd}</p></div>
+				<div class="rounded-xl border border-border bg-card p-4 shadow-sm"><p class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Mapel</p><p class="mt-2 text-3xl font-black text-foreground">{coverageRows.length}</p></div>
+				<div class="rounded-xl border border-border bg-card p-4 shadow-sm"><p class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Soal Terpetakan</p><p class="mt-2 text-3xl font-black text-foreground">{totalMapped}</p></div>
+				<div class="rounded-xl border border-border bg-card p-4 shadow-sm"><p class="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">KD/CP/TP unik</p><p class="mt-2 text-3xl font-black text-foreground">{totalKd}</p></div>
+				<div class="rounded-xl border border-warning/30 bg-warning/10 p-4 shadow-sm"><p class="text-[10px] font-bold uppercase tracking-wide text-warning">Belum lengkap</p><p class="mt-2 text-3xl font-black text-warning">{missingKd}</p></div>
 			</section>
 
 			<section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-				<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+				<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 					<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-						<div><h2 class="text-base font-bold text-slate-900">Matriks Mapel & KD</h2><p class="text-xs text-slate-500">Sampel maksimal 300 soal terbaru dari Bank Soal.</p></div>
-						<input bind:value={search} placeholder="Cari mapel..." class="h-9 rounded-md border border-slate-200 px-3 text-sm" />
+						<div><h2 class="text-base font-bold text-foreground">Matriks Mapel & KD</h2><p class="text-xs text-muted-foreground">Sampel maksimal 300 soal terbaru dari Bank Soal.</p></div>
+						<input bind:value={search} placeholder="Cari mapel..." class="h-9 rounded-md border border-border px-3 text-sm" />
 					</div>
-					<div class="mt-4 overflow-hidden rounded-lg border border-slate-200">
-						<div class="grid grid-cols-[minmax(10rem,1.5fr)_repeat(4,minmax(5rem,0.7fr))] bg-slate-50 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+					<div class="mt-4 overflow-hidden rounded-lg border border-border">
+						<div class="grid grid-cols-[minmax(10rem,1.5fr)_repeat(4,minmax(5rem,0.7fr))] bg-muted/50 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
 							<span>Mapel</span><span>Soal</span><span>Review</span><span>KD</span><span>Belum KD</span>
 						</div>
 						{#each filteredRows as row (row.key)}
-							<div class="grid grid-cols-[minmax(10rem,1.5fr)_repeat(4,minmax(5rem,0.7fr))] items-center border-t border-slate-100 px-3 py-3 text-sm">
-								<div class="min-w-0"><p class="truncate font-semibold text-slate-900">{row.subject}</p><p class="truncate text-xs text-slate-500">{row.grades.join(', ') || 'Fase/kelas belum dominan'}</p></div>
-								<span>{row.total}</span><span>{row.approved}</span><span>{row.kdCount}</span><span class={row.missingKd > 0 ? 'font-semibold text-amber-700' : 'text-emerald-700'}>{row.missingKd}</span>
+							<div class="grid grid-cols-[minmax(10rem,1.5fr)_repeat(4,minmax(5rem,0.7fr))] items-center border-t border-border px-3 py-3 text-sm">
+								<div class="min-w-0"><p class="truncate font-semibold text-foreground">{row.subject}</p><p class="truncate text-xs text-muted-foreground">{row.grades.join(', ') || 'Fase/kelas belum dominan'}</p></div>
+								<span>{row.total}</span><span>{row.approved}</span><span>{row.kdCount}</span><span class={row.missingKd > 0 ? 'font-semibold text-warning' : 'text-primary'}>{row.missingKd}</span>
 							</div>
 						{:else}
-							<p class="border-t border-slate-100 p-4 text-sm text-slate-500">Tidak ada mapel sesuai pencarian.</p>
+							<p class="border-t border-border p-4 text-sm text-muted-foreground">Tidak ada mapel sesuai pencarian.</p>
 						{/each}
 					</div>
 				</div>
 
 				<aside class="space-y-4">
-					<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<h2 class="text-base font-bold text-slate-900">Perlu Dilengkapi</h2>
+					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
+						<h2 class="text-base font-bold text-foreground">Perlu Dilengkapi</h2>
 						<div class="mt-3 space-y-2">
 							{#each sparseRows as row (row.key)}
-								<div class="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-950"><div class="flex justify-between gap-3"><span class="font-semibold">{row.subject}</span><span>{row.missingKd || '0'} belum KD</span></div><p class="mt-1 text-xs text-amber-800">{row.total === 0 ? 'Belum ada soal pada sampel.' : `${row.kdCount} KD/CP/TP · ${row.topicCount} materi`}</p></div>
+								<div class="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"><div class="flex justify-between gap-3"><span class="font-semibold">{row.subject}</span><span>{row.missingKd || '0'} belum KD</span></div><p class="mt-1 text-xs text-warning">{row.total === 0 ? 'Belum ada soal pada sampel.' : `${row.kdCount} KD/CP/TP · ${row.topicCount} materi`}</p></div>
 							{:else}
-								<p class="text-sm text-slate-500">Coverage mapel terlihat rapi pada sampel saat ini.</p>
+								<p class="text-sm text-muted-foreground">Coverage mapel terlihat rapi pada sampel saat ini.</p>
 							{/each}
 						</div>
 					</div>
-					<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950"><p class="text-sm font-bold">Rekomendasi</p><p class="mt-2 text-xs leading-5 text-emerald-800">Gunakan halaman ini untuk menentukan mapel/KD prioritas sebelum membuat paket asesmen baru. Lengkapi metadata KD/CP/TP dari komposer agar analisis makin akurat.</p></div>
+					<div class="rounded-xl border border-primary/20 bg-primary/10 p-4 text-primary"><p class="text-sm font-bold">Rekomendasi</p><p class="mt-2 text-xs leading-5 text-primary">Gunakan halaman ini untuk menentukan mapel/KD prioritas sebelum membuat paket asesmen baru. Lengkapi metadata KD/CP/TP dari komposer agar analisis makin akurat.</p></div>
 				</aside>
 			</section>
 		{/snippet}

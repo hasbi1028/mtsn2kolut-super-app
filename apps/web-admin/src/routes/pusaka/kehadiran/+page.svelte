@@ -205,45 +205,45 @@
 
 <div class="space-y-6">
 
-	<div class="flex items-center gap-2 text-sm text-slate-500">
-		<a href={resolve('/pusaka')} class="hover:text-slate-700">PUSAKA</a>
+	<div class="flex items-center gap-2 text-sm text-muted-foreground">
+		<a href={resolve('/pusaka')} class="hover:text-foreground">PUSAKA</a>
 		<span>/</span>
-		<span class="text-slate-700 font-medium">Data Kehadiran</span>
+		<span class="text-foreground font-medium">Data Kehadiran</span>
 	</div>
 
 	<div>
-		<h1 class="text-2xl font-semibold text-slate-800">Data Kehadiran Pegawai</h1>
+		<h1 class="text-2xl font-semibold text-foreground">Data Kehadiran Pegawai</h1>
 		<p class="text-sm text-muted-foreground mt-1">Rekap kehadiran harian dari sistem PUSAKA Kemenag</p>
 	</div>
 
 	<div class="grid gap-4 md:grid-cols-3">
-		<Card.Root class="border-emerald-100 bg-gradient-to-br from-white via-white to-emerald-50/80 md:col-span-2">
+		<Card.Root class="border-primary/20 bg-gradient-to-br from-card via-card to-primary/10 md:col-span-2">
 			<Card.Content class="flex items-start justify-between gap-4 p-5">
 				<div class="space-y-1">
-					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Rekap Harian</p>
-					<p class="text-2xl font-semibold text-slate-900">{total ?? records.length}</p>
-					<p class="text-sm text-slate-600">Rekaman kehadiran pada rentang tanggal terpilih</p>
+					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Rekap Harian</p>
+					<p class="text-2xl font-semibold text-foreground">{total ?? records.length}</p>
+					<p class="text-sm text-muted-foreground">Rekaman kehadiran pada rentang tanggal terpilih</p>
 				</div>
-				<div class="rounded-2xl border border-emerald-200 bg-white/80 px-4 py-3 text-right shadow-sm">
-					<p class="text-xs uppercase tracking-[0.18em] text-slate-500">Status dominan</p>
-					<p class="mt-1 text-base font-semibold text-emerald-800">
+				<div class="rounded-2xl border border-primary/20 bg-card/80 px-4 py-3 text-right shadow-sm">
+					<p class="text-xs uppercase tracking-[0.18em] text-muted-foreground">Status dominan</p>
+					<p class="mt-1 text-base font-semibold text-primary">
 						{records.some((r) => attendanceStatus(r) === 'lengkap') ? 'Lengkap tersedia' : 'Mayoritas check-in'}
 					</p>
 				</div>
 			</Card.Content>
 		</Card.Root>
 
-		<Card.Root class="border-slate-200 bg-white">
+		<Card.Root class="border-border bg-card">
 			<Card.Content class="space-y-2 p-5">
-				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Periode</p>
-				<p class="text-base font-semibold text-slate-900">{startDate || '—'}</p>
-				<p class="text-sm text-slate-500">sampai {endDate || startDate || '—'}</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Periode</p>
+				<p class="text-base font-semibold text-foreground">{startDate || '—'}</p>
+				<p class="text-sm text-muted-foreground">sampai {endDate || startDate || '—'}</p>
 			</Card.Content>
 		</Card.Root>
 	</div>
 
-	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
-		<Card.Header class="border-b border-slate-100 bg-gradient-to-r from-white to-emerald-50/40">
+	<Card.Root class="overflow-hidden border-border shadow-sm">
+		<Card.Header class="border-b border-border bg-gradient-to-r from-card to-primary/10">
 			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 				<div class="grow">
 					<Card.Title>Rekap Kehadiran</Card.Title>
@@ -259,31 +259,31 @@
 				</div>
 				<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto] xl:items-end">
 					<div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-						<Input type="date" bind:value={startDate} class="h-10 min-w-0 bg-white" />
+						<Input type="date" bind:value={startDate} class="h-10 min-w-0 bg-card" />
 						<span class="text-center text-sm text-muted-foreground">s/d</span>
-						<Input type="date" bind:value={endDate} class="h-10 min-w-0 bg-white" />
+						<Input type="date" bind:value={endDate} class="h-10 min-w-0 bg-card" />
 					</div>
 					<LoadingButton class="h-10 w-full sm:w-auto" size="sm" onclick={() => void load()} loading={refreshing} loadingLabel="Memuat..." label="Terapkan" />
 					<div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-						<LoadingButton variant="outline" class="h-10 w-full bg-white sm:w-auto" size="sm" onclick={exportCSV} disabled={records.length === 0} label="↓ CSV" />
-						<div class="col-span-2 flex h-10 overflow-hidden rounded-md border border-slate-200 bg-white sm:col-span-1">
+						<LoadingButton variant="outline" class="h-10 w-full bg-card sm:w-auto" size="sm" onclick={exportCSV} disabled={records.length === 0} label="↓ CSV" />
+						<div class="col-span-2 flex h-10 overflow-hidden rounded-md border border-border bg-card sm:col-span-1">
 							<button
-								class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'normal' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-50'}"
+								class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'normal' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}"
 								onclick={() => viewMode = 'normal'}
 							>
 								<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
 								Normal
 							</button>
-							<div class="w-px bg-slate-200"></div>
+							<div class="w-px bg-border"></div>
 							<button
-								class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'compact' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-50'}"
+								class="flex flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors {viewMode === 'compact' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}"
 								onclick={() => viewMode = 'compact'}
 							>
 								<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 8h18M3 13h18M3 18h18"/></svg>
 								Ringkas
 							</button>
 						</div>
-						<LoadingButton variant="outline" class="h-10 w-full bg-white sm:w-auto" size="sm" href={resolve('/pusaka/antrian')} label="Antrian →" />
+						<LoadingButton variant="outline" class="h-10 w-full bg-card sm:w-auto" size="sm" href={resolve('/pusaka/antrian')} label="Antrian →" />
 					</div>
 				</div>
 			</div>
@@ -295,48 +295,48 @@
 				{@const displayRecords = records.length > 0 ? records : SAMPLE_RECORDS}
 				{@const isSample = records.length === 0}
 				{#if isSample}
-				<div class="flex items-center gap-1.5 border-b border-amber-100 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-700">
+				<div class="flex items-center gap-1.5 border-b border-warning/30 bg-warning/10 px-3 py-1.5 text-[11px] text-warning">
 					<span class="font-semibold">Contoh tampilan</span>
-					<span class="text-amber-500">— data di bawah adalah sampel. Terapkan filter tanggal untuk memuat data nyata.</span>
+					<span class="text-warning">— data di bawah adalah sampel. Terapkan filter tanggal untuk memuat data nyata.</span>
 				</div>
 				{/if}
 				<div class="overflow-x-auto">
 					<table class="w-full border-collapse text-[9px] leading-tight">
 						<thead>
-							<tr class="border-b border-slate-200 bg-slate-50">
-								<th class="w-4 py-1 pl-0.5 pr-0 text-left font-semibold text-slate-500">#</th>
-								<th class="whitespace-nowrap px-0 py-1 text-left font-semibold text-slate-600">Tanggal</th>
-								<th class="px-0 py-1 text-left font-semibold text-slate-600">Nama Pegawai</th>
-								<th class="hidden px-0 py-1 text-left font-semibold text-slate-600 sm:table-cell">NIP</th>
-								<th class="px-0 py-1 text-center font-semibold text-slate-600">Masuk</th>
-								<th class="px-0 py-1 text-center font-semibold text-slate-600">Pulang</th>
-								<th class="py-1 pl-0 pr-0.5 text-center font-semibold text-slate-600">Status</th>
+							<tr class="border-b border-border bg-muted/50">
+								<th class="w-4 py-1 pl-0.5 pr-0 text-left font-semibold text-muted-foreground">#</th>
+								<th class="whitespace-nowrap px-0 py-1 text-left font-semibold text-muted-foreground">Tanggal</th>
+								<th class="px-0 py-1 text-left font-semibold text-muted-foreground">Nama Pegawai</th>
+								<th class="hidden px-0 py-1 text-left font-semibold text-muted-foreground sm:table-cell">NIP</th>
+								<th class="px-0 py-1 text-center font-semibold text-muted-foreground">Masuk</th>
+								<th class="px-0 py-1 text-center font-semibold text-muted-foreground">Pulang</th>
+								<th class="py-1 pl-0 pr-0.5 text-center font-semibold text-muted-foreground">Status</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each displayRecords as r, i (r.id)}
 								{@const s = attendanceStatus(r)}
-								<tr class="border-b border-slate-100 {i % 2 === 1 ? 'bg-slate-50/60' : 'bg-white'} hover:bg-emerald-50/40 {isSample ? 'opacity-75' : ''}">
-									<td class="py-0.5 pl-0.5 pr-0 text-slate-400">{i + 1}</td>
-									<td class="whitespace-nowrap px-0 py-0.5 text-slate-600">{r.tanggal}</td>
-									<td class="px-0 py-0.5 font-medium text-slate-800">{r.employee_nama}</td>
-									<td class="hidden px-0 py-0.5 font-mono text-slate-500 sm:table-cell">{r.employee_nip}</td>
-									<td class="px-0 py-0.5 text-center text-slate-700">{stripWita(r.jam_masuk)}</td>
-									<td class="px-0 py-0.5 text-center text-slate-700">{stripWita(r.jam_pulang)}</td>
+								<tr class="border-b border-border {i % 2 === 1 ? 'bg-muted/50' : 'bg-card'} hover:bg-primary/10 {isSample ? 'opacity-75' : ''}">
+									<td class="py-0.5 pl-0.5 pr-0 text-muted-foreground">{i + 1}</td>
+									<td class="whitespace-nowrap px-0 py-0.5 text-muted-foreground">{r.tanggal}</td>
+									<td class="px-0 py-0.5 font-medium text-foreground">{r.employee_nama}</td>
+									<td class="hidden px-0 py-0.5 font-mono text-muted-foreground sm:table-cell">{r.employee_nip}</td>
+									<td class="px-0 py-0.5 text-center text-foreground">{stripWita(r.jam_masuk)}</td>
+									<td class="px-0 py-0.5 text-center text-foreground">{stripWita(r.jam_pulang)}</td>
 									<td class="py-0.5 pl-0 pr-0.5 text-center">
 										{#if s === 'lengkap'}
-											<span class="inline-block rounded-sm px-0 py-0 text-[7px] font-semibold bg-emerald-100 text-emerald-700">Lengkap</span>
+											<span class="inline-block rounded-sm px-0 py-0 text-[7px] font-semibold bg-primary/15 text-primary">Lengkap</span>
 										{:else if s === 'masuk'}
-											<span class="inline-block rounded-sm px-0 py-0 text-[7px] font-semibold bg-amber-100 text-amber-700">Masuk</span>
+											<span class="inline-block rounded-sm px-0 py-0 text-[7px] font-semibold bg-warning/15 text-warning">Masuk</span>
 										{:else}
-											<span class="inline-block rounded-sm px-0 py-0 text-[7px] font-semibold bg-slate-100 text-slate-500">Belum</span>
+											<span class="inline-block rounded-sm px-0 py-0 text-[7px] font-semibold bg-muted text-muted-foreground">Belum</span>
 										{/if}
 									</td>
 								</tr>
 							{/each}
 						</tbody>
 					</table>
-					<div class="border-t border-slate-100 bg-slate-50/60 px-3 py-1.5 text-right text-[10px] text-slate-400">
+					<div class="border-t border-border bg-muted/50 px-3 py-1.5 text-right text-[10px] text-muted-foreground">
 						{#if isSample}
 							Contoh data (10 sampel)
 						{:else}
@@ -394,9 +394,9 @@
 								<Table.Cell class="text-center text-sm">{stripWita(r.jam_pulang)}</Table.Cell>
 								<Table.Cell class="text-center">
 									{#if s === 'lengkap'}
-										<Badge variant="default" class="bg-emerald-600">Lengkap</Badge>
+										<Badge variant="default" class="bg-primary">Lengkap</Badge>
 									{:else if s === 'masuk'}
-										<Badge variant="outline" class="text-amber-600 border-amber-200">Masuk</Badge>
+										<Badge variant="outline" class="text-warning border-warning/30">Masuk</Badge>
 									{:else}
 										<Badge variant="secondary">Belum</Badge>
 									{/if}
@@ -416,36 +416,36 @@
 					<div class="grid gap-3 p-4 lg:hidden">
 						{#each currentRecords as r, i (r.id)}
 						{@const s = attendanceStatus(r)}
-						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+						<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
-									<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">#{i + 1} • {r.tanggal}</p>
-									<p class="mt-1 text-base font-semibold text-slate-900">{r.employee_nama}</p>
-									<p class="mt-1 break-all font-mono text-xs text-slate-500">{r.employee_nip}</p>
+									<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">#{i + 1} • {r.tanggal}</p>
+									<p class="mt-1 text-base font-semibold text-foreground">{r.employee_nama}</p>
+									<p class="mt-1 break-all font-mono text-xs text-muted-foreground">{r.employee_nip}</p>
 								</div>
 								<div class="shrink-0">
 									{#if s === 'lengkap'}
-										<Badge variant="default" class="bg-emerald-600">Lengkap</Badge>
+										<Badge variant="default" class="bg-primary">Lengkap</Badge>
 									{:else if s === 'masuk'}
-										<Badge variant="outline" class="text-amber-600 border-amber-200">Masuk</Badge>
+										<Badge variant="outline" class="text-warning border-warning/30">Masuk</Badge>
 									{:else}
 										<Badge variant="secondary">Belum</Badge>
 									{/if}
 								</div>
 							</div>
 							<div class="mt-4 grid grid-cols-2 gap-3">
-								<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Masuk</p>
-									<p class="mt-1 text-sm font-medium text-slate-800">{stripWita(r.jam_masuk)}</p>
+								<div class="rounded-xl border border-border bg-muted/50 px-3 py-2">
+									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Masuk</p>
+									<p class="mt-1 text-sm font-medium text-foreground">{stripWita(r.jam_masuk)}</p>
 								</div>
-								<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Pulang</p>
-									<p class="mt-1 text-sm font-medium text-slate-800">{stripWita(r.jam_pulang)}</p>
+								<div class="rounded-xl border border-border bg-muted/50 px-3 py-2">
+									<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Pulang</p>
+									<p class="mt-1 text-sm font-medium text-foreground">{stripWita(r.jam_pulang)}</p>
 								</div>
 							</div>
 						</div>
 					{:else}
-						<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+						<div class="rounded-2xl border border-dashed border-border bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
 							Tidak ada data kehadiran untuk rentang tanggal ini.
 						</div>
 					{/each}

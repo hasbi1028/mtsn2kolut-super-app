@@ -196,12 +196,12 @@
 <svelte:head><title>Penugasan CBT — {info?.title ?? 'Kegiatan'}</title></svelte:head>
 
 <div class="space-y-6 p-6">
-	<div class="flex items-center gap-2 text-sm text-slate-500">
-		<a href={resolve('/asesmen/kegiatan')} class="hover:text-slate-700">Kegiatan Ujian</a>
+	<div class="flex items-center gap-2 text-sm text-muted-foreground">
+		<a href={resolve('/asesmen/kegiatan')} class="hover:text-foreground">Kegiatan Ujian</a>
 		<span>/</span>
-		<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="hover:text-slate-700">{info?.title ?? 'Detail'}</a>
+		<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="hover:text-foreground">{info?.title ?? 'Detail'}</a>
 		<span>/</span>
-		<span class="font-medium text-slate-700">Penugasan</span>
+		<span class="font-medium text-foreground">Penugasan</span>
 	</div>
 
 	<AsyncContent promise={payloadPromise}>
@@ -219,18 +219,18 @@
 			{@const current = value as PagePayload}
 			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 				<div>
-					<p class="text-xs font-bold uppercase tracking-[0.18em] text-green-700">Panitia & Penugasan Soal</p>
-					<h1 class="mt-1 text-2xl font-semibold text-slate-900">{current.info.title}</h1>
-					<p class="mt-1 text-sm text-slate-500">Kelola pembuat soal, reviewer, proktor, pengawas, dan korektor untuk kegiatan CBT ini.</p>
+					<p class="text-xs font-bold uppercase tracking-[0.18em] text-success">Panitia & Penugasan Soal</p>
+					<h1 class="mt-1 text-2xl font-semibold text-foreground">{current.info.title}</h1>
+					<p class="mt-1 text-sm text-muted-foreground">Kelola pembuat soal, reviewer, proktor, pengawas, dan korektor untuk kegiatan CBT ini.</p>
 				</div>
-				<a href={resolve(`/bank-soal/tambah?event_id=${eventId}`)} class="inline-flex rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Buka Komposer Bank Soal</a>
+				<a href={resolve(`/bank-soal/tambah?event_id=${eventId}`)} class="inline-flex rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Buka Komposer Bank Soal</a>
 			</div>
 
-			<section class="rounded-xl border border-green-200 bg-white p-4 shadow-sm">
+			<section class="rounded-xl border border-success/20 bg-card p-4 shadow-sm">
 				<div class="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_11rem_14rem_auto] lg:items-end">
 					<div>
-						<label for="member-user" class="mb-1 block text-xs font-medium text-slate-600">Pengguna</label>
-						<select id="member-user" bind:value={formUserId} class="h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+						<label for="member-user" class="mb-1 block text-xs font-medium text-muted-foreground">Pengguna</label>
+						<select id="member-user" bind:value={formUserId} class="h-9 w-full rounded-md border border-border bg-card px-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
 							<option value="">-- Pilih pengguna --</option>
 							{#each users as user (user.id)}
 								<option value={user.id}>{userDisplayName(user)}</option>
@@ -238,48 +238,48 @@
 						</select>
 					</div>
 					<div>
-						<label for="member-role" class="mb-1 block text-xs font-medium text-slate-600">Peran</label>
-						<select id="member-role" value={formRole} onchange={handleRoleChange} class="h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+						<label for="member-role" class="mb-1 block text-xs font-medium text-muted-foreground">Peran</label>
+						<select id="member-role" value={formRole} onchange={handleRoleChange} class="h-9 w-full rounded-md border border-border bg-card px-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
 							{#each roles as role (role.value)}
 								<option value={role.value}>{role.label}</option>
 							{/each}
 						</select>
 					</div>
 					<div>
-						<label for="member-subject" class="mb-1 block text-xs font-medium text-slate-600">Mapel Penugasan</label>
+						<label for="member-subject" class="mb-1 block text-xs font-medium text-muted-foreground">Mapel Penugasan</label>
 						{#if subjectSelectorAvailable}
-							<select id="member-subject" bind:value={formSubjectId} class="h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+							<select id="member-subject" bind:value={formSubjectId} class="h-9 w-full rounded-md border border-border bg-card px-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
 								<option value="">Semua mapel</option>
 								{#each subjects as subject (subject.id)}
 									<option value={subject.id}>{subject.name}</option>
 								{/each}
 							</select>
 						{:else}
-							<select id="member-subject" value="" disabled class="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 text-sm text-slate-500">
+							<select id="member-subject" value="" disabled class="h-9 w-full rounded-md border border-border bg-muted/50 px-2.5 text-sm text-muted-foreground">
 								<option value="">Tidak berlaku untuk peran ini</option>
 							</select>
 						{/if}
-						<p class="mt-1 text-[11px] text-slate-500">{subjectSelectorHelper}</p>
+						<p class="mt-1 text-[11px] text-muted-foreground">{subjectSelectorHelper}</p>
 					</div>
 					<div class="flex gap-2">
 						{#if editingId}<Button variant="outline" onclick={resetForm} disabled={busy}>Batal</Button>{/if}
-						<LoadingButton onclick={() => void saveMember()} loading={busy} loadingLabel="Menyimpan..." disabled={busy || !formUserId} class="bg-green-700 text-white hover:bg-green-800 disabled:opacity-50">{editingId ? 'Simpan' : 'Tambah'}</LoadingButton>
+						<LoadingButton onclick={() => void saveMember()} loading={busy} loadingLabel="Menyimpan..." disabled={busy || !formUserId} class="bg-success text-background hover:bg-success disabled:opacity-50">{editingId ? 'Simpan' : 'Tambah'}</LoadingButton>
 					</div>
 				</div>
 			</section>
 
-			<section class="rounded-xl border border-slate-200 bg-white shadow-sm">
-				<div class="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-center md:justify-between">
+			<section class="rounded-xl border border-border bg-card shadow-sm">
+				<div class="flex flex-col gap-3 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
 					<div>
-						<h2 class="text-base font-semibold text-slate-900">Daftar Penugasan</h2>
-						<p class="text-sm text-slate-500">{members.length} orang terhubung dengan kegiatan ini.</p>
+						<h2 class="text-base font-semibold text-foreground">Daftar Penugasan</h2>
+						<p class="text-sm text-muted-foreground">{members.length} orang terhubung dengan kegiatan ini.</p>
 					</div>
 					<Input placeholder="Cari nama/peran/mapel..." bind:value={search} class="h-9 md:w-72" />
 				</div>
 				<div class="overflow-x-auto">
 					<Table.Root>
 						<Table.Header>
-							<Table.Row class="bg-slate-50">
+							<Table.Row class="bg-muted/50">
 								<Table.Head>Nama</Table.Head>
 								<Table.Head>Peran</Table.Head>
 								<Table.Head>Mapel</Table.Head>
@@ -289,16 +289,16 @@
 						<Table.Body>
 							{#each filteredMembers as member (member.id)}
 								<Table.Row>
-									<Table.Cell class="font-medium text-slate-800">{memberDisplayName(member)}<div class="text-xs font-normal text-slate-400">{member.username ?? member.user_id}</div></Table.Cell>
-									<Table.Cell><span class="rounded bg-green-50 px-2 py-1 text-xs font-semibold text-green-800">{roleLabel(member.role)}</span></Table.Cell>
-									<Table.Cell class="text-sm text-slate-600">{subjectLabel(member)}</Table.Cell>
+									<Table.Cell class="font-medium text-foreground">{memberDisplayName(member)}<div class="text-xs font-normal text-muted-foreground">{member.username ?? member.user_id}</div></Table.Cell>
+									<Table.Cell><span class="rounded bg-success/10 px-2 py-1 text-xs font-semibold text-success">{roleLabel(member.role)}</span></Table.Cell>
+									<Table.Cell class="text-sm text-muted-foreground">{subjectLabel(member)}</Table.Cell>
 									<Table.Cell class="text-right">
 										<Button variant="outline" size="sm" class="mr-2 h-8" onclick={() => editMember(member)}>Edit</Button>
-										<LoadingButton variant="outline" size="sm" class="h-8 border-red-200 text-red-700 hover:bg-red-50" onclick={() => void deleteMember(member)} loading={deletingId === member.id} loadingLabel="Hapus..." disabled={deletingId !== ''}>Hapus</LoadingButton>
+										<LoadingButton variant="outline" size="sm" class="h-8 border-destructive/30 text-destructive hover:bg-destructive/10" onclick={() => void deleteMember(member)} loading={deletingId === member.id} loadingLabel="Hapus..." disabled={deletingId !== ''}>Hapus</LoadingButton>
 									</Table.Cell>
 								</Table.Row>
 							{:else}
-								<Table.Row><Table.Cell colspan={4} class="py-10 text-center text-sm text-slate-400">Belum ada penugasan.</Table.Cell></Table.Row>
+								<Table.Row><Table.Cell colspan={4} class="py-10 text-center text-sm text-muted-foreground">Belum ada penugasan.</Table.Cell></Table.Row>
 							{/each}
 						</Table.Body>
 					</Table.Root>

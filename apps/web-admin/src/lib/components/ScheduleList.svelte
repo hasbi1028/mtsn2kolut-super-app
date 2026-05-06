@@ -105,11 +105,11 @@
       </div>
       <div class="grid gap-3 md:grid-cols-[1.2fr_0.8fr_auto]">
         <div>
-          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Nama Jadwal Baru</p>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Nama Jadwal Baru</p>
           <Input class="h-10 text-sm" bind:value={newLabel} placeholder="Nama jadwal (opsional)" />
         </div>
         <div>
-          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Jam Rekap</p>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Jam Rekap</p>
           <Input class="h-10 font-mono text-sm" bind:value={newTime} placeholder="HH:MM" type="time" />
         </div>
         <div class="flex items-end gap-2">

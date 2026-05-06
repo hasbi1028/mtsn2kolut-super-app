@@ -204,22 +204,22 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 		<div>
-			<div class="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+			<div class="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
 				<BellIcon class="size-3.5" />
 				Antrian Verifikator
 			</div>
-			<h1 class="text-xl font-semibold text-slate-900">Verifikasi Siklus Dokumen</h1>
-			<p class="mt-1 max-w-3xl text-sm text-slate-500">
+			<h1 class="text-xl font-semibold text-foreground">Verifikasi Siklus Dokumen</h1>
+			<p class="mt-1 max-w-3xl text-sm text-muted-foreground">
 				Dokumen yang sedang menunggu verifikasi sesuai penugasan verifikator.
 			</p>
 		</div>
 		<div class="flex flex-wrap items-end gap-2">
 			<div class="w-28">
-				<label for="verification-period-year" class="text-xs font-medium text-slate-600">Tahun</label>
+				<label for="verification-period-year" class="text-xs font-medium text-muted-foreground">Tahun</label>
 				<Input id="verification-period-year" type="number" min="2000" bind:value={periodYear} />
 			</div>
 			{#if isAdmin}
-				<label class="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm text-slate-700">
+				<label class="inline-flex h-9 items-center gap-2 rounded-md border border-input px-3 text-sm text-foreground">
 					<input type="checkbox" bind:checked={includeAll} class="size-4 accent-emerald-700" />
 					Semua verifikator
 				</label>
@@ -233,7 +233,7 @@
 
 	<AsyncContent promise={queuePromise} onerror={handleRenderError}>
 		{#snippet pending()}
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Content class="space-y-3 p-4">
 					{#each Array.from({ length: 6 }) as _, index (`document-verification-skeleton-${index}`)}
 						<Skeleton class="h-14 w-full" />
@@ -249,30 +249,30 @@
 		{#snippet children(value)}
 			{@const queue = value as DocumentCycleObligation[]}
 			<div class="grid gap-3 md:grid-cols-3">
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Menunggu Verifikasi</p>
-						<p class="mt-2 text-2xl font-semibold text-slate-900">{queue.length}</p>
+						<p class="text-xs text-muted-foreground">Menunggu Verifikasi</p>
+						<p class="mt-2 text-2xl font-semibold text-foreground">{queue.length}</p>
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Lewat Tempo</p>
-						<p class="mt-2 text-2xl font-semibold text-red-700">{queue.filter((item) => item.is_overdue).length}</p>
+						<p class="text-xs text-muted-foreground">Lewat Tempo</p>
+						<p class="mt-2 text-2xl font-semibold text-destructive">{queue.filter((item) => item.is_overdue).length}</p>
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Belum Siap Selesai</p>
-						<p class="mt-2 text-2xl font-semibold text-amber-700">{queue.filter((item) => completionIssues(item).length > 0).length}</p>
+						<p class="text-xs text-muted-foreground">Belum Siap Selesai</p>
+						<p class="mt-2 text-2xl font-semibold text-warning">{queue.filter((item) => completionIssues(item).length > 0).length}</p>
 					</Card.Content>
 				</Card.Root>
 			</div>
 
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header class="pb-3">
 					<div class="flex items-center gap-2">
-						<CalendarClockIcon class="size-4 text-emerald-700" />
+						<CalendarClockIcon class="size-4 text-primary" />
 						<Card.Title class="text-base">Dokumen Menunggu Saya Verifikasi</Card.Title>
 					</div>
 					<Card.Description>Gunakan koreksi draft untuk mengembalikan dokumen ke PIC, atau tandai selesai setelah arsip resmi tertaut.</Card.Description>
@@ -295,12 +295,12 @@
 									<Table.Row>
 										<Table.Cell class="min-w-80">
 											<div class="flex items-start gap-3">
-												<div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+												<div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
 													<BellIcon class="size-4" />
 												</div>
 												<div>
-													<p class="text-sm font-medium text-slate-900">{item.catalog_title}</p>
-													<p class="text-xs text-slate-500">{item.catalog_code} · {item.period_label} · {frequencyLabel(item.frequency)}</p>
+													<p class="text-sm font-medium text-foreground">{item.catalog_title}</p>
+													<p class="text-xs text-muted-foreground">{item.catalog_code} · {item.period_label} · {frequencyLabel(item.frequency)}</p>
 													<div class="mt-2 flex flex-wrap gap-1.5">
 														<Badge variant="outline">{domainAreaLabel(item.domain_area)}</Badge>
 														<Badge variant={statusVariant(item.status)}>{statusLabel(item.status)}</Badge>
@@ -309,14 +309,14 @@
 											</div>
 										</Table.Cell>
 										<Table.Cell class="min-w-56">
-											<p class="text-sm text-slate-900">{item.responsible_employee_name || 'Belum ada PIC'}</p>
-											<p class="text-xs text-slate-500">{item.owner_unit_name || 'Tanpa unit'}{item.responsible_employee_nip ? ` · ${item.responsible_employee_nip}` : ''}</p>
+											<p class="text-sm text-foreground">{item.responsible_employee_name || 'Belum ada PIC'}</p>
+											<p class="text-xs text-muted-foreground">{item.owner_unit_name || 'Tanpa unit'}{item.responsible_employee_nip ? ` · ${item.responsible_employee_nip}` : ''}</p>
 										</Table.Cell>
 										<Table.Cell class="whitespace-nowrap">
-											<p class={item.is_overdue ? 'text-sm font-medium text-red-700' : 'text-sm text-slate-900'}>Jatuh tempo {formatDate(item.due_date)}</p>
-											<p class="text-xs text-slate-500">Pengingat {formatDate(item.reminder_date)}</p>
+											<p class={item.is_overdue ? 'text-sm font-medium text-destructive' : 'text-sm text-foreground'}>Jatuh tempo {formatDate(item.due_date)}</p>
+											<p class="text-xs text-muted-foreground">Pengingat {formatDate(item.reminder_date)}</p>
 											{#if item.is_overdue}
-												<p class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-red-700">
+												<p class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-destructive">
 													<AlertTriangleIcon class="size-3" />
 													Lewat tempo
 												</p>
@@ -328,7 +328,7 @@
 												<Badge variant={item.evidence_item_id ? 'default' : 'outline'}>Evidence</Badge>
 												<Badge variant={item.compliance_action_id ? 'default' : 'outline'}>Aksi</Badge>
 											</div>
-											<p class="mt-2 text-xs text-slate-500">{gaps.length > 0 ? `Kurang ${gaps.join(', ')}` : item.archive_document_title || 'Siap diverifikasi'}</p>
+											<p class="mt-2 text-xs text-muted-foreground">{gaps.length > 0 ? `Kurang ${gaps.join(', ')}` : item.archive_document_title || 'Siap diverifikasi'}</p>
 										</Table.Cell>
 										<Table.Cell>
 											<div class="flex min-w-72 flex-wrap gap-1.5">
@@ -359,7 +359,7 @@
 									</Table.Row>
 								{:else}
 									<Table.Row>
-										<Table.Cell colspan={5} class="py-10 text-center text-sm text-slate-500">
+										<Table.Cell colspan={5} class="py-10 text-center text-sm text-muted-foreground">
 											Tidak ada dokumen yang menunggu verifikasi pada tahun dan cakupan ini.
 										</Table.Cell>
 									</Table.Row>

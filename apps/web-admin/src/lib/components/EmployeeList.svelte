@@ -524,10 +524,10 @@
   function scheduleButtonClass(emp: Employee): string {
     const ci = emp.has_checkin_schedule;
     const co = emp.has_checkout_schedule;
-    if (ci && co)  return 'border-green-400 text-green-700 bg-green-50 hover:bg-green-100';
-    if (ci)        return 'border-amber-400 text-amber-700 bg-amber-50 hover:bg-amber-100';
-    if (co)        return 'border-cyan-400 text-cyan-700 bg-cyan-50 hover:bg-cyan-100';
-    return 'border-slate-300 text-slate-500 hover:bg-slate-50';
+    if (ci && co)  return 'border-success text-success bg-success/10 hover:bg-success/15';
+    if (ci)        return 'border-warning text-warning bg-warning/10 hover:bg-warning/15';
+    if (co)        return 'border-cyan-400 text-accent-foreground bg-accent/60 hover:bg-accent';
+    return 'border-border text-muted-foreground hover:bg-muted/50';
   }
 
   function scheduleButtonLabel(emp: Employee): string {
@@ -552,11 +552,11 @@
       </div>
       <div class="grid gap-3 md:grid-cols-[1.2fr_0.8fr_auto]">
         <div>
-          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Cari Pegawai</p>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Cari Pegawai</p>
           <Input placeholder="Cari nama / NIP..." bind:value={search} class="w-full" />
         </div>
         <div>
-          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status Integrasi</p>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Status Integrasi</p>
           <select bind:value={filterMode} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
             <option value="all">Semua</option>
             <option value="configured">Akun aktif</option>
@@ -595,13 +595,13 @@
       <Table.Body>
         {#each filteredEmployees as e (e.id)}
           {@const si = statusInfo(e)}
-          <Table.Row class={e.active_status === 'running' ? 'bg-amber-50' : ''}>
+          <Table.Row class={e.active_status === 'running' ? 'bg-warning/10' : ''}>
             <Table.Cell>
               <div class="font-medium">{e.nama}</div>
               <div class="text-xs text-muted-foreground font-mono">{e.nip}</div>
               <div class="mt-1">
                 {#if e.is_active}
-                  <Badge variant="outline" class="text-[11px] border-emerald-300 text-emerald-700">Pegawai aktif</Badge>
+                  <Badge variant="outline" class="text-[11px] border-primary/20 text-primary">Pegawai aktif</Badge>
                 {:else}
                   <Badge variant="secondary" class="text-[11px]">Nonaktif / rotasi</Badge>
                 {/if}
@@ -612,7 +612,7 @@
             </Table.Cell>
             <Table.Cell class="text-center">
               {#if isPusakaConfigured(e)}
-                <Badge variant={e.pusaka_is_enabled === false ? 'secondary' : 'outline'} class={e.pusaka_is_enabled === false ? 'text-xs' : 'text-xs border-green-300 text-green-700'}>
+                <Badge variant={e.pusaka_is_enabled === false ? 'secondary' : 'outline'} class={e.pusaka_is_enabled === false ? 'text-xs' : 'text-xs border-success/20 text-success'}>
                   {pusakaStatusLabel(e)}
                 </Badge>
               {:else}
@@ -668,13 +668,13 @@
                 <Button size="sm" variant="outline"
                   onclick={() => openRunConfirm(e, 'checkin')}
                   disabled={busyId === e.id}
-                  class="border-amber-300 text-amber-700 hover:bg-amber-50">
+                  class="border-warning/30 text-warning hover:bg-warning/10">
                   ☀ Masuk
                 </Button>
                 <Button size="sm" variant="outline"
                   onclick={() => openRunConfirm(e, 'checkout')}
                   disabled={busyId === e.id}
-                  class="border-amber-300 text-amber-700 hover:bg-amber-50">
+                  class="border-warning/30 text-warning hover:bg-warning/10">
                   🌙 Pulang
                 </Button>
                 <Button size="sm" variant="outline"
@@ -683,7 +683,7 @@
                   {scheduleButtonLabel(e)}
                 </Button>
                 <LoadingButton size="sm" variant="ghost" onclick={() => doStop(e.id)} loading={busyId === e.id} loadingLabel="Memproses..." disabled={busyId === e.id || !e.active_status}
-                  class="text-amber-700 hover:text-amber-800">
+                  class="text-warning hover:text-warning">
                   ■ Stop
                 </LoadingButton>
               </div>
@@ -720,13 +720,13 @@
       </Dialog.Header>
 
       <div class="py-4 space-y-4">
-        <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div class="rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
           Aksi ini akan langsung menjalankan job ke Pusaka Kemenag dan <strong>tidak bisa dibatalkan</strong> setelah dieksekusi.
           Pastikan waktu dan pegawai sudah benar.
         </div>
         <div class="space-y-1.5">
           <label for="run-confirm-input" class="text-sm font-medium">
-            Ketik <code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs font-bold">SURE</code> untuk melanjutkan
+            Ketik <code class="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-bold">SURE</code> untuk melanjutkan
           </label>
           <Input
             id="run-confirm-input"
@@ -743,7 +743,7 @@
         <Button
           onclick={submitRunConfirm}
           disabled={!canConfirmRun}
-          class={canConfirmRun ? 'bg-amber-600 hover:bg-amber-700 text-white border-transparent' : ''}>
+          class={canConfirmRun ? 'bg-warning hover:bg-warning text-background border-transparent' : ''}>
           Jalankan {runTypeLabel[runConfirm.runType]}
         </Button>
       </Dialog.Footer>
@@ -789,9 +789,9 @@
     <div class="space-y-3 py-2">
       <AsyncContent promise={auditPromise} onerror={handleAuditRenderError}>
         {#snippet pending()}
-          <div class="space-y-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-4">
+          <div class="space-y-3 rounded-md border border-border bg-muted/50 px-3 py-4">
             {#each Array.from({ length: 3 }) as _, index (`audit-skeleton-${index}`)}
-              <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+              <div class="rounded-xl border border-border bg-card px-3 py-3">
                 <div class="flex items-start justify-between gap-3">
                   <div class="space-y-2">
                     <Skeleton class="h-5 w-28" />
@@ -817,24 +817,24 @@
         {/snippet}
         {#snippet children(_logs)}
           {#if auditLogs.length === 0}
-            <div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">Belum ada riwayat akun PUSAKA untuk pegawai ini.</div>
+            <div class="rounded-md border border-border bg-muted/50 px-3 py-6 text-center text-sm text-muted-foreground">Belum ada riwayat akun PUSAKA untuk pegawai ini.</div>
           {:else}
             <div class="space-y-2">
               {#each auditLogs as log (log.id)}
                 {@const meta = auditMeta(log)}
-                <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                <div class="rounded-xl border border-border bg-card px-3 py-3">
                   <div class="flex items-start justify-between gap-3">
                     <div>
-                      <p class="text-sm font-semibold text-slate-900">{auditActionLabel(log.action)}</p>
-                      <p class="mt-1 text-xs text-slate-500">{formatAuditDate(log.created_at)}</p>
+                      <p class="text-sm font-semibold text-foreground">{auditActionLabel(log.action)}</p>
+                      <p class="mt-1 text-xs text-muted-foreground">{formatAuditDate(log.created_at)}</p>
                     </div>
                     <Badge variant="outline" class="text-[11px]">{log.username ?? 'Sistem'}</Badge>
                   </div>
                   {#if meta.pusaka_username}
-                    <p class="mt-2 text-xs text-slate-600">Username: <span class="font-mono">{String(meta.pusaka_username)}</span></p>
+                    <p class="mt-2 text-xs text-muted-foreground">Username: <span class="font-mono">{String(meta.pusaka_username)}</span></p>
                   {/if}
                   {#if typeof meta.is_enabled === 'boolean'}
-                    <p class="mt-1 text-xs text-slate-600">Status akun: {meta.is_enabled ? 'aktif' : 'dinonaktifkan'}</p>
+                    <p class="mt-1 text-xs text-muted-foreground">Status akun: {meta.is_enabled ? 'aktif' : 'dinonaktifkan'}</p>
                   {/if}
                 </div>
               {/each}

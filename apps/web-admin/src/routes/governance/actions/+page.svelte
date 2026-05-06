@@ -947,8 +947,8 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 		<div>
-			<h1 class="text-lg font-semibold text-slate-800">Tindak Lanjut Kepatuhan</h1>
-			<p class="text-sm text-slate-500">Catat PIC, tenggat, bukti, dan status dari gap Renstra/IKU/RKT/SKP/8 SNP.</p>
+			<h1 class="text-lg font-semibold text-foreground">Tindak Lanjut Kepatuhan</h1>
+			<p class="text-sm text-muted-foreground">Catat PIC, tenggat, bukti, dan status dari gap Renstra/IKU/RKT/SKP/8 SNP.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button href={resolve('/governance')} variant="outline" size="sm">
@@ -1020,21 +1020,21 @@
 					{ label: 'Prioritas Tinggi', value: loadedStats.critical_compliance_actions ?? criticalOpenCount, note: 'High/urgent' },
 					{ label: 'Lewat Tenggat', value: overdueCount, note: 'Butuh eskalasi' },
 				] as item (item.label)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4">
-							<p class="text-xs text-slate-500">{item.label}</p>
-							<p class="mt-1 text-2xl font-semibold text-emerald-800">{item.value}</p>
-							<p class="text-xs text-slate-500">{item.note}</p>
+							<p class="text-xs text-muted-foreground">{item.label}</p>
+							<p class="mt-1 text-2xl font-semibold text-primary">{item.value}</p>
+							<p class="text-xs text-muted-foreground">{item.note}</p>
 						</Card.Content>
 					</Card.Root>
 				{/each}
 			</div>
 
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Content class="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
 					<div>
-						<p class="text-sm font-medium text-slate-800">Filter Cepat Eskalasi</p>
-						<p class="text-xs text-slate-500">
+						<p class="text-sm font-medium text-foreground">Filter Cepat Eskalasi</p>
+						<p class="text-xs text-muted-foreground">
 							{registerFocus ? `Fokus aktif: ${registerFocus.label}` : 'Pakai untuk rapat tindak lanjut singkat kepala/staf.'}
 						</p>
 					</div>
@@ -1060,9 +1060,9 @@
 
 			<div class="grid gap-4 xl:grid-cols-[360px_1fr]">
 				<div class="space-y-4">
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-sm font-medium text-slate-700">Saran dari Gap</Card.Title>
+							<Card.Title class="text-sm font-medium text-foreground">Saran dari Gap</Card.Title>
 							<Card.Description>Diambil dari program yang belum lengkap pemetaan IKU/RKT/SKP/bukti.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-2">
@@ -1070,9 +1070,9 @@
 								<EmptyStatePanel compact title="Tidak ada saran baru" description="Semua gap utama sudah punya tindak lanjut aktif atau belum ada program yang perlu dipetakan." />
 							{:else}
 								{#each gapSuggestions as suggestion (suggestion.key)}
-									<div class="rounded-md border border-slate-200 px-3 py-2">
-										<p class="text-sm font-medium text-slate-900">{suggestion.gap}</p>
-										<p class="mt-1 text-xs text-slate-500">{suggestion.program.code} · {suggestion.program.name}</p>
+									<div class="rounded-md border border-border px-3 py-2">
+										<p class="text-sm font-medium text-foreground">{suggestion.gap}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{suggestion.program.code} · {suggestion.program.name}</p>
 										<div class="mt-2 flex items-center justify-between gap-2">
 											<Badge variant={priorityVariant(suggestion.priority)}>{priorityLabel(suggestion.priority)}</Badge>
 											<Button size="sm" variant="outline" onclick={() => openSuggestion(suggestion)}>Jadikan</Button>
@@ -1083,9 +1083,9 @@
 						</Card.Content>
 					</Card.Root>
 
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-sm font-medium text-slate-700">Eskalasi PIC/Unit</Card.Title>
+							<Card.Title class="text-sm font-medium text-foreground">Eskalasi PIC/Unit</Card.Title>
 							<Card.Description>Urutan unit atau PIC yang punya beban tindak lanjut aktif.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-2">
@@ -1093,11 +1093,11 @@
 								<EmptyStatePanel compact title="Tidak ada beban aktif" description="Semua tindak lanjut sudah selesai/dibatalkan atau belum ada register." />
 							{:else}
 								{#each escalationRows as row (row.key)}
-									<div class="rounded-md border border-slate-200 px-3 py-2">
+									<div class="rounded-md border border-border px-3 py-2">
 										<div class="flex items-start justify-between gap-2">
 											<div>
-												<p class="text-sm font-medium text-slate-900">{row.label}</p>
-												<p class="text-xs text-slate-500">{row.unitLabel}</p>
+												<p class="text-sm font-medium text-foreground">{row.label}</p>
+												<p class="text-xs text-muted-foreground">{row.unitLabel}</p>
 											</div>
 											<Button size="sm" variant={focusVariant('owner', row.key)} onclick={() => setRegisterFocus({ kind: 'owner', value: row.key, label: row.label })}>Fokus</Button>
 										</div>
@@ -1107,16 +1107,16 @@
 											{#if row.overdueCount > 0}<Badge variant="destructive">{row.overdueCount} lewat</Badge>{/if}
 											{#if row.waitingEvidenceCount > 0}<Badge variant="outline">{row.waitingEvidenceCount} bukti</Badge>{/if}
 										</div>
-										<p class="mt-2 text-xs text-slate-500">Tenggat terdekat: {dueLabel(row.nextDueDate)}</p>
+										<p class="mt-2 text-xs text-muted-foreground">Tenggat terdekat: {dueLabel(row.nextDueDate)}</p>
 									</div>
 								{/each}
 							{/if}
 						</Card.Content>
 					</Card.Root>
 
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-sm font-medium text-slate-700">Sebaran 8 SNP</Card.Title>
+							<Card.Title class="text-sm font-medium text-foreground">Sebaran 8 SNP</Card.Title>
 							<Card.Description>Standar yang masih punya tindak lanjut aktif.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-2">
@@ -1124,10 +1124,10 @@
 								<EmptyStatePanel compact title="Tidak ada beban SNP" description="Belum ada tindak lanjut aktif yang dikaitkan ke standar." />
 							{:else}
 								{#each snpEscalationRows as row (row.code)}
-									<div class="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2">
+									<div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
 										<div>
-											<p class="text-sm font-medium text-slate-900">{row.label}</p>
-											<p class="text-xs text-slate-500">
+											<p class="text-sm font-medium text-foreground">{row.label}</p>
+											<p class="text-xs text-muted-foreground">
 												{row.openCount} terbuka · {row.criticalCount} tinggi · {row.overdueCount} lewat · {row.waitingEvidenceCount} tunggu bukti
 											</p>
 										</div>
@@ -1139,9 +1139,9 @@
 					</Card.Root>
 				</div>
 
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header class="pb-2">
-						<Card.Title class="text-sm font-medium text-slate-700">Register Tindak Lanjut</Card.Title>
+						<Card.Title class="text-sm font-medium text-foreground">Register Tindak Lanjut</Card.Title>
 						<Card.Description>Daftar kerja korektif dari gap tata kelola madrasah.</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-4">
@@ -1196,7 +1196,7 @@
 									</select>
 								</div>
 							</div>
-							<div class="flex flex-col gap-2 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+							<div class="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
 								<p>
 									Menampilkan {filteredActions.length} dari {actions.length} tindak lanjut{registerFocus ? ` · ${registerFocus.label}` : ''}.
 								</p>
@@ -1225,16 +1225,16 @@
 										{#each filteredActions as action (action.id)}
 											<Table.Row>
 												<Table.Cell class="min-w-[280px]">
-													<p class="text-sm font-medium text-slate-900">{action.title}</p>
-													<p class="text-xs text-slate-500">{action.period_year} · {sourceLabel(action.source_type)} · {snpLabel(action.snp_standard)}</p>
+													<p class="text-sm font-medium text-foreground">{action.title}</p>
+													<p class="text-xs text-muted-foreground">{action.period_year} · {sourceLabel(action.source_type)} · {snpLabel(action.snp_standard)}</p>
 													{#if action.description}
-														<p class="mt-1 text-xs text-slate-500">{action.description}</p>
+														<p class="mt-1 text-xs text-muted-foreground">{action.description}</p>
 													{/if}
 												</Table.Cell>
-												<Table.Cell class="min-w-[230px] text-sm text-slate-700">{linkedLabel(action)}</Table.Cell>
+												<Table.Cell class="min-w-[230px] text-sm text-foreground">{linkedLabel(action)}</Table.Cell>
 												<Table.Cell class="min-w-[170px]">
 													<p class="text-sm">{action.responsible_employee_name || '-'}</p>
-													<p class="text-xs text-slate-500">{action.owner_unit_name || action.responsible_employee_nip || 'Belum ditetapkan'}</p>
+													<p class="text-xs text-muted-foreground">{action.owner_unit_name || action.responsible_employee_nip || 'Belum ditetapkan'}</p>
 												</Table.Cell>
 												<Table.Cell>
 													<div class="flex flex-col gap-1">
@@ -1243,7 +1243,7 @@
 													</div>
 												</Table.Cell>
 												<Table.Cell class="whitespace-nowrap text-sm">
-													<span class={isOverdue(action) ? 'font-medium text-red-700' : 'text-slate-700'}>{formatDate(action.due_date)}</span>
+													<span class={isOverdue(action) ? 'font-medium text-destructive' : 'text-foreground'}>{formatDate(action.due_date)}</span>
 													{#if action.evidence_url}
 														<Button size="sm" variant="outline" onclick={() => openEvidenceUrl(action.evidence_url)}>Bukti</Button>
 													{/if}
@@ -1418,7 +1418,7 @@
 				<Textarea id="evidence-capture-notes" bind:value={evidenceForm.follow_up_notes} rows={4} placeholder="Ringkas hasil tindak lanjut, keputusan rapat, atau kondisi bukti." />
 			</div>
 			{#if evidenceAction}
-				<div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+				<div class="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
 					<p>Status saat ini: {statusLabel(evidenceAction.status)} · Prioritas: {priorityLabel(evidenceAction.priority)}</p>
 					<p>Kaitan: {linkedLabel(evidenceAction)}</p>
 				</div>

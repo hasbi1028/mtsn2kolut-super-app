@@ -262,14 +262,14 @@
 	<!-- Header -->
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Kontrol PUSAKA Kemenag</h1>
+			<h1 class="text-2xl font-semibold text-foreground">Kontrol PUSAKA Kemenag</h1>
 			<p class="text-sm text-muted-foreground mt-1">Monitor dan kontrol sinkronisasi data kehadiran dari PUSAKA Kemenag</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<LoadingButton variant="outline" size="sm" onclick={() => void triggerSched()} loading={busy.sched} loadingLabel="Memproses..." label="⚡ Jalankan Scheduler" />
 			<LoadingButton size="sm" onclick={() => void runRekap()} loading={busy.rekap} loadingLabel="Memproses..." label="▶ Mulai Rekap" />
 			{#if confirmKey === 'cancel_all'}
-				<span class="self-center text-xs text-amber-700">Batalkan semua antrian?</span>
+				<span class="self-center text-xs text-warning">Batalkan semua antrian?</span>
 				<LoadingButton size="sm" variant="destructive" onclick={() => void cancelAll()} loading={busy.cancel_all} loadingLabel="Membatalkan..." label="Ya" />
 				<Button size="sm" variant="ghost" onclick={() => (confirmKey = '')}>Tidak</Button>
 			{:else}
@@ -287,10 +287,10 @@
 
 	<AsyncContent promise={overviewPromise} onerror={handleOverviewRenderError}>
 		{#snippet pending()}
-			<div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+			<div class="space-y-4 rounded-2xl border border-border bg-card p-5">
 				<div class="grid gap-4 sm:grid-cols-3">
 					{#each Array.from({ length: 3 }) as _, index (`pusaka-worker-skeleton-${index}`)}
-						<div class="space-y-3 rounded-xl border border-slate-100 p-4">
+						<div class="space-y-3 rounded-xl border border-border p-4">
 							<Skeleton class="h-4 w-28" />
 							<Skeleton class="h-8 w-20" />
 						</div>
@@ -378,7 +378,7 @@
 	<QueueMonitor stats={currentQueueStats} />
 
 	<!-- Recent jobs -->
-	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+	<Card.Root class="overflow-hidden border-border shadow-sm">
 		<Card.Header class="pb-3">
 			<div class="flex items-center justify-between">
 				<Card.Title class="text-base">Job Terbaru</Card.Title>
@@ -423,12 +423,12 @@
 
 			<div class="grid gap-3 p-4 lg:hidden">
 				{#each currentRecentJobs as j (j.id)}
-					<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+					<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 						<div class="flex items-start justify-between gap-3">
 							<div class="min-w-0">
-								<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{fmtDt(j.created_at)}</p>
-								<p class="mt-1 text-sm font-semibold text-slate-900">{j.nama || j.employee_nama || '—'}</p>
-								<p class="mt-1 text-xs text-slate-500">{j.claimed_by || 'Belum diklaim worker'}</p>
+								<p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{fmtDt(j.created_at)}</p>
+								<p class="mt-1 text-sm font-semibold text-foreground">{j.nama || j.employee_nama || '—'}</p>
+								<p class="mt-1 text-xs text-muted-foreground">{j.claimed_by || 'Belum diklaim worker'}</p>
 							</div>
 							<Badge variant={statusVariant(j.status)}>{statusLabel(j.status)}</Badge>
 						</div>

@@ -102,7 +102,7 @@
 
 <div class="space-y-6">
   <div>
-    <h1 class="text-2xl font-semibold text-slate-800">Master Pegawai</h1>
+    <h1 class="text-2xl font-semibold text-foreground">Master Pegawai</h1>
     <p class="mt-1 text-sm text-muted-foreground">Data seluruh pegawai sekolah. Integrasi akun, jadwal, dan job PUSAKA dikelola terpisah dari area ini.</p>
   </div>
 
@@ -110,14 +110,14 @@
     {#snippet pending()}
       <div class="grid gap-3 md:grid-cols-3">
         {#each Array.from({ length: 3 }) as _, index (`employee-stat-skeleton-${index}`)}
-          <div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+          <div class="rounded-2xl border border-border bg-card px-4 py-4">
             <Skeleton class="h-3 w-28" />
             <Skeleton class="mt-3 h-8 w-16" />
             <Skeleton class="mt-2 h-4 w-44" />
           </div>
         {/each}
       </div>
-      <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <div class="rounded-2xl border border-border bg-card p-5">
         <Skeleton class="h-6 w-40" />
         <Skeleton class="mt-4 h-24 w-full" />
       </div>
@@ -134,22 +134,22 @@
     {#snippet children(value)}
       {@const currentEmployees = value as Employee[]}
       <div class="grid gap-3 md:grid-cols-3">
-        <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Pegawai</p>
-          <p class="mt-2 text-2xl font-semibold text-slate-900">{currentEmployees.length}</p>
-          <p class="text-sm text-slate-600">seluruh profil pegawai yang tercatat</p>
+        <div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Total Pegawai</p>
+          <p class="mt-2 text-2xl font-semibold text-foreground">{currentEmployees.length}</p>
+          <p class="text-sm text-muted-foreground">seluruh profil pegawai yang tercatat</p>
         </div>
-        <div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Pegawai Aktif</p>
-          <p class="mt-2 text-2xl font-semibold text-slate-900">{currentEmployees.filter((item) => item.is_active).length}</p>
-          <p class="text-sm text-slate-600">siap dipakai untuk akun, akademik, dan operasional</p>
+        <div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Pegawai Aktif</p>
+          <p class="mt-2 text-2xl font-semibold text-foreground">{currentEmployees.filter((item) => item.is_active).length}</p>
+          <p class="text-sm text-muted-foreground">siap dipakai untuk akun, akademik, dan operasional</p>
         </div>
-        <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Eligible PUSAKA</p>
-          <p class="mt-2 text-2xl font-semibold text-slate-900">
+        <div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Eligible PUSAKA</p>
+          <p class="mt-2 text-2xl font-semibold text-foreground">
             {currentEmployees.filter((item) => item.employment_type === 'pns' || item.employment_type === 'pppk').length}
           </p>
-          <p class="text-sm text-slate-600">subset yang dapat dikelola di area PUSAKA</p>
+          <p class="text-sm text-muted-foreground">subset yang dapat dikelola di area PUSAKA</p>
         </div>
       </div>
 

@@ -1329,8 +1329,8 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 		<div>
-			<h1 class="text-lg font-semibold text-slate-800">Tata Kelola Madrasah</h1>
-			<p class="text-sm text-slate-500">Struktur organisasi, dokumen perencanaan, indikator kinerja, dan bukti 8 SNP.</p>
+			<h1 class="text-lg font-semibold text-foreground">Tata Kelola Madrasah</h1>
+			<p class="text-sm text-muted-foreground">Struktur organisasi, dokumen perencanaan, indikator kinerja, dan bukti 8 SNP.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button size="sm" onclick={() => openCreate('unit')}>Tambah Unit</Button>
@@ -1359,7 +1359,7 @@
 			<div class="space-y-4">
 				<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
 					{#each Array.from({ length: 8 }) as _, index (`governance-stat-skeleton-${index}`)}
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Content class="space-y-3 p-4">
 								<Skeleton class="h-3 w-24" />
 								<Skeleton class="h-8 w-16" />
@@ -1367,7 +1367,7 @@
 						</Card.Root>
 					{/each}
 				</div>
-				<div class="rounded-2xl border border-slate-200 bg-white p-5">
+				<div class="rounded-2xl border border-border bg-card p-5">
 					<div class="mb-5 flex flex-wrap gap-2">
 						{#each Array.from({ length: 8 }) as _, index (`governance-tab-skeleton-${index}`)}
 							<Skeleton class="h-9 w-28 rounded-full" />
@@ -1425,20 +1425,20 @@
 			{ label: 'TL Kritis', value: loadedStats.critical_compliance_actions },
 			{ label: 'TL Selesai', value: loadedStats.completed_compliance_actions },
 		] as item (item.label)}
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Content class="p-4">
-					<p class="text-xs text-slate-500">{item.label}</p>
-					<p class="mt-1 text-2xl font-bold text-emerald-800">{item.value}</p>
+					<p class="text-xs text-muted-foreground">{item.label}</p>
+					<p class="mt-1 text-2xl font-bold text-primary">{item.value}</p>
 				</Card.Content>
 			</Card.Root>
 		{/each}
 	</div>
 
-	<Card.Root class="border-emerald-200 bg-emerald-50/40">
+	<Card.Root class="border-primary/20 bg-primary/10">
 		<Card.Content class="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
 			<div>
-				<p class="text-sm font-semibold text-emerald-950">Kendali Tindak Lanjut Kepatuhan</p>
-				<p class="text-sm text-emerald-800">
+				<p class="text-sm font-semibold text-primary">Kendali Tindak Lanjut Kepatuhan</p>
+				<p class="text-sm text-primary">
 					{loadedStats.open_compliance_actions} terbuka, {loadedStats.critical_compliance_actions} prioritas tinggi/mendesak, {loadedStats.completed_compliance_actions} selesai.
 				</p>
 			</div>
@@ -1485,9 +1485,9 @@
 			</div>
 
 			<div class="grid gap-4 xl:grid-cols-2">
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header class="pb-2">
-						<Card.Title class="text-sm font-medium text-slate-700">Unit Kerja</Card.Title>
+						<Card.Title class="text-sm font-medium text-foreground">Unit Kerja</Card.Title>
 					</Card.Header>
 					<Card.Content class="p-0">
 						{#if filteredUnits.length === 0}
@@ -1499,10 +1499,10 @@
 									{#each filteredUnits as unit (unit.id)}
 										<Table.Row>
 											<Table.Cell>
-												<p class="text-sm font-medium text-slate-800">{unit.name}</p>
-												<p class="text-xs text-slate-500">{unit.code} · {unit.unit_type}</p>
+												<p class="text-sm font-medium text-foreground">{unit.name}</p>
+												<p class="text-xs text-muted-foreground">{unit.code} · {unit.unit_type}</p>
 											</Table.Cell>
-											<Table.Cell class="text-sm text-slate-600">{unit.parent_unit_name || '-'}</Table.Cell>
+											<Table.Cell class="text-sm text-muted-foreground">{unit.parent_unit_name || '-'}</Table.Cell>
 											<Table.Cell>
 												<div class="flex gap-1">
 													<Button size="sm" variant="outline" onclick={() => openEditUnit(unit)}>Edit</Button>
@@ -1517,9 +1517,9 @@
 					</Card.Content>
 				</Card.Root>
 
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header class="pb-2">
-						<Card.Title class="text-sm font-medium text-slate-700">Jabatan dan Jalur Komando</Card.Title>
+						<Card.Title class="text-sm font-medium text-foreground">Jabatan dan Jalur Komando</Card.Title>
 					</Card.Header>
 					<Card.Content class="p-0">
 						{#if filteredPositions.length === 0}
@@ -1531,12 +1531,12 @@
 									{#each filteredPositions as position (position.id)}
 										<Table.Row>
 											<Table.Cell>
-												<p class="text-sm font-medium text-slate-800">{position.title}</p>
-												<p class="text-xs text-slate-500">{position.unit_name}{position.parent_position_title ? ` · Atasan: ${position.parent_position_title}` : ''}</p>
+												<p class="text-sm font-medium text-foreground">{position.title}</p>
+												<p class="text-xs text-muted-foreground">{position.unit_name}{position.parent_position_title ? ` · Atasan: ${position.parent_position_title}` : ''}</p>
 											</Table.Cell>
-											<Table.Cell class="text-sm text-slate-600">
+											<Table.Cell class="text-sm text-muted-foreground">
 												{position.active_employee_name || '-'}
-												{#if position.active_employee_nip}<span class="block text-xs text-slate-400">{position.active_employee_nip}</span>{/if}
+												{#if position.active_employee_nip}<span class="block text-xs text-muted-foreground">{position.active_employee_nip}</span>{/if}
 											</Table.Cell>
 											<Table.Cell>
 												<div class="flex gap-1">
@@ -1553,9 +1553,9 @@
 				</Card.Root>
 			</div>
 
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header class="pb-2">
-					<Card.Title class="text-sm font-medium text-slate-700">Pejabat Aktif</Card.Title>
+					<Card.Title class="text-sm font-medium text-foreground">Pejabat Aktif</Card.Title>
 				</Card.Header>
 				<Card.Content class="p-0">
 					{#if assignments.length === 0}
@@ -1566,8 +1566,8 @@
 							<Table.Body>
 								{#each assignments as assignment (assignment.id)}
 									<Table.Row>
-										<Table.Cell><p class="text-sm font-medium">{assignment.position_title}</p><p class="text-xs text-slate-500">{assignment.unit_name}</p></Table.Cell>
-										<Table.Cell><p class="text-sm">{assignment.employee_name}</p><p class="text-xs text-slate-500">{assignment.employee_nip}</p></Table.Cell>
+										<Table.Cell><p class="text-sm font-medium">{assignment.position_title}</p><p class="text-xs text-muted-foreground">{assignment.unit_name}</p></Table.Cell>
+										<Table.Cell><p class="text-sm">{assignment.employee_name}</p><p class="text-xs text-muted-foreground">{assignment.employee_nip}</p></Table.Cell>
 										<Table.Cell class="text-sm">{formatDate(assignment.start_date)} - {assignment.end_date ? formatDate(assignment.end_date) : 'Aktif'}</Table.Cell>
 										<Table.Cell>
 											<div class="flex gap-1">
@@ -1589,7 +1589,7 @@
 				<Input placeholder="Cari dokumen, jenis, unit, atau ringkasan" bind:value={documentSearch} class="sm:max-w-sm" />
 				<Button size="sm" onclick={() => openCreate('document')}>Tambah Dokumen</Button>
 			</div>
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Content class="p-0">
 					{#if filteredDocuments.length === 0}
 						<div class="p-4"><EmptyStatePanel compact title="Belum ada dokumen tata kelola" description="Catat visi misi, RKJM, RKT, Renstra, Perkin, IKU, SK, SOP, dan bukti 8 SNP." /></div>
@@ -1599,7 +1599,7 @@
 							<Table.Body>
 								{#each filteredDocuments as document (document.id)}
 									<Table.Row>
-										<Table.Cell><p class="text-sm font-medium">{document.title}</p><p class="text-xs text-slate-500">{docTypeLabel(document.doc_type)} · {document.owner_unit_name || 'Tanpa unit'}</p></Table.Cell>
+										<Table.Cell><p class="text-sm font-medium">{document.title}</p><p class="text-xs text-muted-foreground">{docTypeLabel(document.doc_type)} · {document.owner_unit_name || 'Tanpa unit'}</p></Table.Cell>
 										<Table.Cell class="text-sm">{document.period_year}{document.period_label ? ` · ${document.period_label}` : ''}</Table.Cell>
 										<Table.Cell><Badge variant={document.status === 'final' ? 'default' : 'outline'}>{statusLabel(document.status)}</Badge></Table.Cell>
 										<Table.Cell class="text-sm">{snpLabel(document.snp_standard)}</Table.Cell>
@@ -1638,20 +1638,20 @@
 					{ label: 'Gap', value: alignmentSummary.gaps, note: 'Perlu tindak lanjut' },
 					{ label: 'Terkendala', value: alignmentSummary.blocked, note: 'Status blocked' },
 				] as item (item.label)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4">
-							<p class="text-xs text-slate-500">{item.label}</p>
-							<p class="mt-1 text-2xl font-semibold text-slate-900">{item.value}</p>
-							<p class="text-xs text-slate-500">{item.note}</p>
+							<p class="text-xs text-muted-foreground">{item.label}</p>
+							<p class="mt-1 text-2xl font-semibold text-foreground">{item.value}</p>
+							<p class="text-xs text-muted-foreground">{item.note}</p>
 						</Card.Content>
 					</Card.Root>
 				{/each}
 			</div>
 
 			<div class="grid gap-4 xl:grid-cols-[420px_1fr]">
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header class="pb-2">
-						<Card.Title class="text-sm font-medium text-slate-700">Dokumen Strategis</Card.Title>
+						<Card.Title class="text-sm font-medium text-foreground">Dokumen Strategis</Card.Title>
 						<Card.Description>Visi/Misi, Renstra/RKJM, RKT, Perkin, dan IKU yang menjadi sumber pemetaan.</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-2">
@@ -1659,11 +1659,11 @@
 							<EmptyStatePanel compact title="Belum ada dokumen strategis" description="Tambahkan dokumen visi/misi, Renstra, RKJM, RKT, Perkin, atau IKU sebagai sumber peta." />
 						{:else}
 							{#each strategicDocuments.slice(0, 8) as document (document.id)}
-								<div class="rounded-md border border-slate-200 px-3 py-2">
+								<div class="rounded-md border border-border px-3 py-2">
 									<div class="flex items-start justify-between gap-3">
 										<div>
-											<p class="text-sm font-medium text-slate-900">{document.title}</p>
-											<p class="text-xs text-slate-500">{docTypeLabel(document.doc_type)} · {document.period_year}{document.period_label ? ` · ${document.period_label}` : ''}</p>
+											<p class="text-sm font-medium text-foreground">{document.title}</p>
+											<p class="text-xs text-muted-foreground">{docTypeLabel(document.doc_type)} · {document.period_year}{document.period_label ? ` · ${document.period_label}` : ''}</p>
 										</div>
 										<Badge variant={document.status === 'final' ? 'default' : 'outline'}>{statusLabel(document.status)}</Badge>
 									</div>
@@ -1673,22 +1673,22 @@
 					</Card.Content>
 				</Card.Root>
 
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header class="pb-2">
-						<Card.Title class="text-sm font-medium text-slate-700">Gap Pemetaan</Card.Title>
+						<Card.Title class="text-sm font-medium text-foreground">Gap Pemetaan</Card.Title>
 						<Card.Description>Program yang belum lengkap dari IKU sampai bukti mutu.</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-2">
 						{@const gapRows = filteredAlignmentRows.filter((row) => row.gap_notes.length > 0).slice(0, 8)}
 							{#if gapRows.length === 0}
-								<div class="rounded-md border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Tidak ada gap utama pada filter saat ini.</div>
+								<div class="rounded-md border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">Tidak ada gap utama pada filter saat ini.</div>
 							{:else}
 								{#each gapRows as row (row.key)}
-									<div class="rounded-md border border-slate-200 px-3 py-2">
+									<div class="rounded-md border border-border px-3 py-2">
 										<div class="flex items-start justify-between gap-3">
 											<div>
-												<p class="text-sm font-medium text-slate-900">{row.program_code} · {row.program_name}</p>
-												<p class="mt-1 text-xs text-slate-500">{row.gap_notes.join(' · ')}</p>
+												<p class="text-sm font-medium text-foreground">{row.program_code} · {row.program_name}</p>
+												<p class="mt-1 text-xs text-muted-foreground">{row.gap_notes.join(' · ')}</p>
 											</div>
 											<Badge variant={row.readiness_status === 'terkendala' ? 'destructive' : 'outline'}>{alignmentStatusLabel(row.readiness_status)}</Badge>
 										</div>
@@ -1699,9 +1699,9 @@
 				</Card.Root>
 			</div>
 
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header class="pb-2">
-					<Card.Title class="text-sm font-medium text-slate-700">Peta Renstra/IKU ke RKT, SKP, dan Bukti</Card.Title>
+					<Card.Title class="text-sm font-medium text-foreground">Peta Renstra/IKU ke RKT, SKP, dan Bukti</Card.Title>
 					<Card.Description>Cascading internal sebelum data dirapikan ke administrasi Perkin, IKU, dan SIPKA.</Card.Description>
 				</Card.Header>
 				<Card.Content class="p-0">
@@ -1725,15 +1725,15 @@
 									{#each filteredAlignmentRows as row (row.key)}
 										<Table.Row>
 											<Table.Cell class="min-w-[260px]">
-												<p class="text-sm font-medium text-slate-900">{row.program_code} · {row.program_name}</p>
-												<p class="text-xs text-slate-500">{row.period_year} · {row.iku_code || 'IKU belum diisi'} · {snpLabel(row.snp_standard)}</p>
+												<p class="text-sm font-medium text-foreground">{row.program_code} · {row.program_name}</p>
+												<p class="text-xs text-muted-foreground">{row.period_year} · {row.iku_code || 'IKU belum diisi'} · {snpLabel(row.snp_standard)}</p>
 												{#if row.gap_notes.length > 0}
-													<p class="mt-1 text-xs text-slate-500">{row.gap_notes.join(' · ')}</p>
+													<p class="mt-1 text-xs text-muted-foreground">{row.gap_notes.join(' · ')}</p>
 												{/if}
 											</Table.Cell>
 											<Table.Cell class="min-w-[220px]">
 												<p class="text-sm">{row.source_document_title || '-'}</p>
-												<p class="text-xs text-slate-500">{row.source_document_type ? docTypeLabel(row.source_document_type) : 'Belum dikaitkan dokumen'}</p>
+												<p class="text-xs text-muted-foreground">{row.source_document_type ? docTypeLabel(row.source_document_type) : 'Belum dikaitkan dokumen'}</p>
 											</Table.Cell>
 											<Table.Cell class="min-w-[180px] text-sm">{row.owner_label}</Table.Cell>
 											<Table.Cell class="whitespace-nowrap text-sm">{row.work_plan_done}/{row.work_plan_count} selesai</Table.Cell>
@@ -1741,8 +1741,8 @@
 											<Table.Cell class="whitespace-nowrap text-sm">{row.verified_evidence_count}/{row.evidence_count} valid</Table.Cell>
 											<Table.Cell>
 												<div class="flex items-center gap-2">
-													<div class="h-2 w-20 rounded-full bg-slate-100"><div class="h-2 rounded-full bg-emerald-700" style={`width: ${row.progress_percent}%`}></div></div>
-													<span class="text-xs text-slate-600">{row.progress_percent}%</span>
+													<div class="h-2 w-20 rounded-full bg-muted"><div class="h-2 rounded-full bg-primary" style={`width: ${row.progress_percent}%`}></div></div>
+													<span class="text-xs text-muted-foreground">{row.progress_percent}%</span>
 												</div>
 												<Badge variant={row.readiness_status === 'terkendala' ? 'destructive' : row.readiness_status === 'lengkap' ? 'default' : 'outline'}>{alignmentStatusLabel(row.readiness_status)}</Badge>
 											</Table.Cell>
@@ -1761,7 +1761,7 @@
 				<Input placeholder="Cari program, IKU, indikator, atau unit" bind:value={programSearch} class="sm:max-w-sm" />
 				<Button size="sm" onclick={() => openCreate('program')}>Tambah Program</Button>
 			</div>
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Content class="p-0">
 					{#if filteredPrograms.length === 0}
 						<div class="p-4"><EmptyStatePanel compact title="Belum ada program indikator" description="Tambahkan program untuk memetakan RKT/RKJM ke penanggung jawab, target, dan bukti realisasi." /></div>
@@ -1771,13 +1771,13 @@
 							<Table.Body>
 								{#each filteredPrograms as program (program.id)}
 									<Table.Row>
-										<Table.Cell><p class="text-sm font-medium">{program.code} · {program.name}</p><p class="text-xs text-slate-500">{program.iku_code || 'Tanpa IKU'} · {snpLabel(program.snp_standard)}</p></Table.Cell>
-										<Table.Cell><p class="text-sm">{program.responsible_employee_name || program.responsible_position_title || '-'}</p><p class="text-xs text-slate-500">{program.owner_unit_name || 'Tanpa unit'}</p></Table.Cell>
+										<Table.Cell><p class="text-sm font-medium">{program.code} · {program.name}</p><p class="text-xs text-muted-foreground">{program.iku_code || 'Tanpa IKU'} · {snpLabel(program.snp_standard)}</p></Table.Cell>
+										<Table.Cell><p class="text-sm">{program.responsible_employee_name || program.responsible_position_title || '-'}</p><p class="text-xs text-muted-foreground">{program.owner_unit_name || 'Tanpa unit'}</p></Table.Cell>
 										<Table.Cell class="text-sm">{program.target_value || '-'} {program.target_unit}</Table.Cell>
 										<Table.Cell>
 											<div class="flex items-center gap-2">
-												<div class="h-2 w-20 rounded-full bg-slate-100"><div class="h-2 rounded-full bg-emerald-700" style={`width: ${program.progress_percent}%`}></div></div>
-												<span class="text-xs text-slate-600">{program.progress_percent}%</span>
+												<div class="h-2 w-20 rounded-full bg-muted"><div class="h-2 rounded-full bg-primary" style={`width: ${program.progress_percent}%`}></div></div>
+												<span class="text-xs text-muted-foreground">{program.progress_percent}%</span>
 											</div>
 											<Badge variant={program.status === 'blocked' ? 'destructive' : program.status === 'done' ? 'default' : 'outline'}>{statusLabel(program.status)}</Badge>
 										</Table.Cell>
@@ -1807,38 +1807,38 @@
 				</div>
 			</div>
 			<div class="grid gap-3 md:grid-cols-4">
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Item Tampil</p>
-						<p class="mt-1 text-2xl font-semibold text-slate-900">{filteredWorkPlanItems.length}</p>
-						<p class="text-xs text-slate-500">{totals.done} selesai, {totals.blocked} terkendala</p>
+						<p class="text-xs text-muted-foreground">Item Tampil</p>
+						<p class="mt-1 text-2xl font-semibold text-foreground">{filteredWorkPlanItems.length}</p>
+						<p class="text-xs text-muted-foreground">{totals.done} selesai, {totals.blocked} terkendala</p>
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Total Anggaran</p>
-						<p class="mt-1 text-lg font-semibold text-slate-900">{formatCurrency(totals.budget)}</p>
-						<p class="text-xs text-slate-500">Berdasarkan filter aktif</p>
+						<p class="text-xs text-muted-foreground">Total Anggaran</p>
+						<p class="mt-1 text-lg font-semibold text-foreground">{formatCurrency(totals.budget)}</p>
+						<p class="text-xs text-muted-foreground">Berdasarkan filter aktif</p>
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Realisasi</p>
-						<p class="mt-1 text-lg font-semibold text-emerald-800">{formatCurrency(totals.realization)}</p>
-						<p class="text-xs text-slate-500">Serapan tercatat</p>
+						<p class="text-xs text-muted-foreground">Realisasi</p>
+						<p class="mt-1 text-lg font-semibold text-primary">{formatCurrency(totals.realization)}</p>
+						<p class="text-xs text-muted-foreground">Serapan tercatat</p>
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Sisa Anggaran</p>
-						<p class="mt-1 text-lg font-semibold text-slate-900">{formatCurrency(Math.max(totals.budget - totals.realization, 0))}</p>
-						<p class="text-xs text-slate-500">Belum direalisasikan</p>
+						<p class="text-xs text-muted-foreground">Sisa Anggaran</p>
+						<p class="mt-1 text-lg font-semibold text-foreground">{formatCurrency(Math.max(totals.budget - totals.realization, 0))}</p>
+						<p class="text-xs text-muted-foreground">Belum direalisasikan</p>
 					</Card.Content>
 				</Card.Root>
 			</div>
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header class="pb-2">
-					<Card.Title class="text-sm font-medium text-slate-700">Pelaksanaan RKT/RKJM</Card.Title>
+					<Card.Title class="text-sm font-medium text-foreground">Pelaksanaan RKT/RKJM</Card.Title>
 					<Card.Description>Breakdown program ke kegiatan tahunan, jadwal, anggaran, realisasi, penanggung jawab, dan bukti.</Card.Description>
 				</Card.Header>
 				<Card.Content class="p-0">
@@ -1862,30 +1862,30 @@
 									{#each filteredWorkPlanItems as item (item.id)}
 										<Table.Row>
 											<Table.Cell class="min-w-[260px]">
-												<p class="text-sm font-medium text-slate-900">{item.activity_code} · {item.activity_name}</p>
-												<p class="text-xs text-slate-500">{item.period_year} · {item.owner_unit_name || 'Tanpa unit'} · {item.responsible_employee_name || 'Tanpa PJ'}</p>
+												<p class="text-sm font-medium text-foreground">{item.activity_code} · {item.activity_name}</p>
+												<p class="text-xs text-muted-foreground">{item.period_year} · {item.owner_unit_name || 'Tanpa unit'} · {item.responsible_employee_name || 'Tanpa PJ'}</p>
 												{#if item.notes}
-													<p class="mt-1 text-xs text-slate-500">{item.notes}</p>
+													<p class="mt-1 text-xs text-muted-foreground">{item.notes}</p>
 												{/if}
 											</Table.Cell>
 											<Table.Cell class="min-w-[220px]">
-												<p class="text-sm text-slate-800">{item.program_code}</p>
-												<p class="text-xs text-slate-500">{item.program_name}</p>
+												<p class="text-sm text-foreground">{item.program_code}</p>
+												<p class="text-xs text-muted-foreground">{item.program_name}</p>
 											</Table.Cell>
 											<Table.Cell class="min-w-[200px]">
 												<p class="text-sm">{item.target_volume || '-'} {item.target_unit}</p>
-												<p class="text-xs text-slate-500">{item.output_indicator || 'Tanpa indikator output'}</p>
-												<p class="text-xs text-slate-500">{formatDate(item.start_date)} - {formatDate(item.end_date)}</p>
+												<p class="text-xs text-muted-foreground">{item.output_indicator || 'Tanpa indikator output'}</p>
+												<p class="text-xs text-muted-foreground">{formatDate(item.start_date)} - {formatDate(item.end_date)}</p>
 											</Table.Cell>
 											<Table.Cell class="min-w-[170px]">
 												<p class="text-sm">{formatCurrency(item.budget_amount)}</p>
-												<p class="text-xs text-slate-500">Realisasi {formatCurrency(item.realization_amount)}</p>
-												<p class="text-xs text-slate-500">{item.budget_source || 'Sumber belum diisi'}</p>
+												<p class="text-xs text-muted-foreground">Realisasi {formatCurrency(item.realization_amount)}</p>
+												<p class="text-xs text-muted-foreground">{item.budget_source || 'Sumber belum diisi'}</p>
 											</Table.Cell>
 											<Table.Cell>
 												<div class="flex items-center gap-2">
-													<div class="h-2 w-20 rounded-full bg-slate-100"><div class="h-2 rounded-full bg-emerald-700" style={`width: ${item.progress_percent}%`}></div></div>
-													<span class="text-xs text-slate-600">{item.progress_percent}%</span>
+													<div class="h-2 w-20 rounded-full bg-muted"><div class="h-2 rounded-full bg-primary" style={`width: ${item.progress_percent}%`}></div></div>
+													<span class="text-xs text-muted-foreground">{item.progress_percent}%</span>
 												</div>
 												<Badge variant={item.status === 'blocked' ? 'destructive' : item.status === 'done' ? 'default' : 'outline'}>{statusLabel(item.status)}</Badge>
 											</Table.Cell>
@@ -1893,9 +1893,9 @@
 												{#if item.evidence_url}
 													<Button size="sm" variant="outline" onclick={() => openEvidenceUrl(item.evidence_url)}>Buka</Button>
 												{:else if item.evidence_item_title}
-													<p class="text-xs text-slate-600">{item.evidence_item_title}</p>
+													<p class="text-xs text-muted-foreground">{item.evidence_item_title}</p>
 												{:else}
-													<span class="text-slate-400">-</span>
+													<span class="text-muted-foreground">-</span>
 												{/if}
 											</Table.Cell>
 											<Table.Cell>
@@ -1919,9 +1919,9 @@
 				<Input placeholder="Cari target, indikator, pegawai, atau program" bind:value={performanceSearch} class="sm:max-w-sm" />
 				<Button size="sm" onclick={() => openCreate('performance')}>Tambah Target Kinerja</Button>
 			</div>
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header class="pb-2">
-					<Card.Title class="text-sm font-medium text-slate-700">SKP Mirror Internal</Card.Title>
+					<Card.Title class="text-sm font-medium text-foreground">SKP Mirror Internal</Card.Title>
 					<Card.Description>Target kerja pegawai sebagai bahan pemetaan internal sebelum pengisian sistem resmi eksternal.</Card.Description>
 				</Card.Header>
 				<Card.Content class="p-0">
@@ -1943,20 +1943,20 @@
 									<Table.Row>
 										<Table.Cell>
 											<p class="text-sm font-medium">{target.title}</p>
-											<p class="text-xs text-slate-500">{performanceAspectLabel(target.aspect)} · {target.indicator || 'Tanpa indikator'}</p>
+											<p class="text-xs text-muted-foreground">{performanceAspectLabel(target.aspect)} · {target.indicator || 'Tanpa indikator'}</p>
 										</Table.Cell>
 										<Table.Cell>
 											<p class="text-sm">{target.employee_name}</p>
-											<p class="text-xs text-slate-500">{target.employee_nip}{target.position_title ? ` · ${target.position_title}` : ''}</p>
+											<p class="text-xs text-muted-foreground">{target.employee_nip}{target.position_title ? ` · ${target.position_title}` : ''}</p>
 										</Table.Cell>
 										<Table.Cell>
 											<p class="text-sm">{target.program_code || '-'}</p>
-											<p class="text-xs text-slate-500">{target.program_name || 'Tidak dikaitkan program'}</p>
+											<p class="text-xs text-muted-foreground">{target.program_name || 'Tidak dikaitkan program'}</p>
 										</Table.Cell>
 										<Table.Cell>
 											<div class="flex items-center gap-2">
-												<div class="h-2 w-20 rounded-full bg-slate-100"><div class="h-2 rounded-full bg-emerald-700" style={`width: ${target.progress_percent}%`}></div></div>
-												<span class="text-xs text-slate-600">{target.progress_percent}%</span>
+												<div class="h-2 w-20 rounded-full bg-muted"><div class="h-2 rounded-full bg-primary" style={`width: ${target.progress_percent}%`}></div></div>
+												<span class="text-xs text-muted-foreground">{target.progress_percent}%</span>
 											</div>
 											<Badge variant={target.status === 'blocked' ? 'destructive' : target.status === 'done' ? 'default' : 'outline'}>{statusLabel(target.status)}</Badge>
 										</Table.Cell>
@@ -1980,9 +1980,9 @@
 				<Input placeholder="Cari bukti, status, unit, dokumen, program, atau target" bind:value={evidenceSearch} class="sm:max-w-sm" />
 				<Button size="sm" onclick={() => openCreate('evidence')}>Tambah Bukti Mutu</Button>
 			</div>
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header class="pb-2">
-					<Card.Title class="text-sm font-medium text-slate-700">Register Bukti Mutu</Card.Title>
+					<Card.Title class="text-sm font-medium text-foreground">Register Bukti Mutu</Card.Title>
 					<Card.Description>Daftar bukti pendukung 8 SNP yang terhubung ke dokumen, program, target kinerja, dan unit pemilik.</Card.Description>
 				</Card.Header>
 				<Card.Content class="p-0">
@@ -2004,11 +2004,11 @@
 									<Table.Row>
 										<Table.Cell>
 											<p class="text-sm font-medium">{item.title}</p>
-											<p class="text-xs text-slate-500">{item.period_year} · {evidenceTypeLabel(item.evidence_type)} · {snpLabel(item.snp_standard)}</p>
+											<p class="text-xs text-muted-foreground">{item.period_year} · {evidenceTypeLabel(item.evidence_type)} · {snpLabel(item.snp_standard)}</p>
 										</Table.Cell>
 										<Table.Cell>
 											<p class="text-sm">{evidenceReferenceLabel(item)}</p>
-											<p class="text-xs text-slate-500">{item.owner_unit_name || 'Tanpa unit'} · {item.source_module}</p>
+											<p class="text-xs text-muted-foreground">{item.owner_unit_name || 'Tanpa unit'} · {item.source_module}</p>
 										</Table.Cell>
 										<Table.Cell>
 											<Badge variant={item.status === 'gap' ? 'destructive' : item.status === 'verified' ? 'default' : 'outline'}>{evidenceStatusLabel(item.status)}</Badge>
@@ -2017,7 +2017,7 @@
 											{#if item.evidence_url}
 												<Button size="sm" variant="outline" onclick={() => openEvidenceUrl(item.evidence_url)}>Buka</Button>
 											{:else}
-												<span class="text-slate-400">-</span>
+												<span class="text-muted-foreground">-</span>
 											{/if}
 										</Table.Cell>
 										<Table.Cell>
@@ -2036,9 +2036,9 @@
 		</Tabs.Content>
 
 		<Tabs.Content value="snp" class="space-y-4">
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header class="pb-2">
-					<Card.Title class="text-sm font-medium text-slate-700">Matriks Bukti 8 SNP</Card.Title>
+					<Card.Title class="text-sm font-medium text-foreground">Matriks Bukti 8 SNP</Card.Title>
 					<Card.Description>Ringkasan dokumen, program, dan bukti realisasi per standar nasional pendidikan.</Card.Description>
 				</Card.Header>
 				<Card.Content class="p-0">

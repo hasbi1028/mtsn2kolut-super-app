@@ -280,10 +280,10 @@
 	}
 
 	function lifecycleBadgeClass(status: string) {
-		if (status === 'prospective') return 'bg-sky-100 text-sky-700 border-sky-200';
-		if (status === 'alumni') return 'bg-sky-100 text-sky-700 border-sky-200';
-		if (status === 'mutated') return 'bg-amber-100 text-amber-700 border-amber-200';
-		return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+		if (status === 'prospective') return 'bg-accent text-accent-foreground border-accent';
+		if (status === 'alumni') return 'bg-accent text-accent-foreground border-accent';
+		if (status === 'mutated') return 'bg-warning/15 text-warning border-warning/30';
+		return 'bg-primary/15 text-primary border-primary/20';
 	}
 
 	function parentSummary(student: Student) {
@@ -305,8 +305,8 @@
 <div class="space-y-6">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Data Siswa</h1>
-			<p class="text-sm text-slate-500 mt-1">Kelola daftar siswa aktif madrasah</p>
+			<h1 class="text-2xl font-semibold text-foreground">Data Siswa</h1>
+			<p class="text-sm text-muted-foreground mt-1">Kelola daftar siswa aktif madrasah</p>
 		</div>
 		<Button onclick={() => { if (showForm) resetForm(); else showForm = true; }}>
 			{showForm ? 'Batal' : '+ Tambah Siswa'}
@@ -317,8 +317,8 @@
 		{#snippet pending()}
 			<div class="grid gap-3 md:grid-cols-3">
 				{#each ['Total Siswa', 'Siswa Aktif', 'Relasi Ortu'] as label (label)}
-					<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+					<div class="rounded-2xl border border-border bg-muted/50 px-4 py-4">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
 						<Skeleton class="mt-3 h-8 w-16" />
 						<Skeleton class="mt-2 h-4 w-48" />
 					</div>
@@ -333,27 +333,27 @@
 		{#snippet children(value)}
 			{@const overview = value as StudentsOverview}
 			<div class="grid gap-3 md:grid-cols-3">
-				<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Siswa</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.students.length}</p>
-					<p class="text-sm text-slate-600">seluruh entitas siswa yang sudah tersimpan</p>
+				<div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Total Siswa</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.students.length}</p>
+					<p class="text-sm text-muted-foreground">seluruh entitas siswa yang sudah tersimpan</p>
 				</div>
-				<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Siswa Aktif</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.students.filter((item) => item.status === 'active').length}</p>
-					<p class="text-sm text-slate-600">siap dipakai untuk kelas, nilai, dan CBT</p>
+				<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Siswa Aktif</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.students.filter((item) => item.status === 'active').length}</p>
+					<p class="text-sm text-muted-foreground">siap dipakai untuk kelas, nilai, dan CBT</p>
 				</div>
-				<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Relasi Ortu</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.students.filter((item) => item.linked_parent_count > 0).length}</p>
-					<p class="text-sm text-slate-600">siswa yang sudah terhubung ke akun orang tua</p>
+				<div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Relasi Ortu</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.students.filter((item) => item.linked_parent_count > 0).length}</p>
+					<p class="text-sm text-muted-foreground">siswa yang sudah terhubung ke akun orang tua</p>
 				</div>
 			</div>
 		{/snippet}
 	</AsyncContent>
 
 	{#if showForm}
-		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+		<Card.Root class="overflow-hidden border-border shadow-sm">
 			<Card.Header class="pb-2">
 				<Card.Title class="text-base">{editId ? 'Edit Data Siswa' : 'Tambah Siswa Baru'}</Card.Title>
 			</Card.Header>
@@ -363,8 +363,8 @@
 						<button
 							type="button"
 							class={`rounded-2xl border px-3 py-3 text-left transition-colors ${studentFormStep === step.id
-								? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-								: 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white'}`}
+								? 'border-primary/20 bg-primary/10 text-primary'
+								: 'border-border bg-muted/50 text-muted-foreground hover:bg-card'}`}
 							onclick={() => (studentFormStep = step.id)}
 						>
 							<span class="text-[10px] font-semibold uppercase tracking-[0.18em]">Langkah {index + 1}</span>
@@ -374,23 +374,23 @@
 					{/each}
 				</div>
 
-				<div class="rounded-2xl border border-slate-200 bg-white p-4">
+				<div class="rounded-2xl border border-border bg-card p-4">
 					{#if studentFormStep === 'identity'}
 						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 							<div>
-								<label for="s-nis" class="text-xs text-slate-500 mb-1 block">NIS <span class="text-red-500">*</span></label>
+								<label for="s-nis" class="text-xs text-muted-foreground mb-1 block">NIS <span class="text-destructive">*</span></label>
 								<Input id="s-nis" placeholder="Masukkan NIS siswa" bind:value={formNis} />
 							</div>
 							<div>
-								<label for="s-nisn" class="text-xs text-slate-500 mb-1 block">NISN</label>
+								<label for="s-nisn" class="text-xs text-muted-foreground mb-1 block">NISN</label>
 								<Input id="s-nisn" placeholder="Isi jika sudah tersedia" bind:value={formNisn} />
 							</div>
 							<div class="lg:col-span-2">
-								<label for="s-nama" class="text-xs text-slate-500 mb-1 block">Nama Lengkap <span class="text-red-500">*</span></label>
+								<label for="s-nama" class="text-xs text-muted-foreground mb-1 block">Nama Lengkap <span class="text-destructive">*</span></label>
 								<Input id="s-nama" placeholder="Masukkan nama lengkap siswa" bind:value={formNama} />
 							</div>
 							<div>
-								<label for="s-gender" class="text-xs text-slate-500 mb-1 block">Jenis Kelamin <span class="text-red-500">*</span></label>
+								<label for="s-gender" class="text-xs text-muted-foreground mb-1 block">Jenis Kelamin <span class="text-destructive">*</span></label>
 								<select id="s-gender" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={formGender}>
 									<option value="L">Laki-laki</option>
 									<option value="P">Perempuan</option>
@@ -400,7 +400,7 @@
 					{:else if studentFormStep === 'class'}
 						<div class="grid gap-3 sm:grid-cols-2">
 							<div>
-								<label for="s-class" class="text-xs text-slate-500 mb-1 block">Kelas</label>
+								<label for="s-class" class="text-xs text-muted-foreground mb-1 block">Kelas</label>
 								<select id="s-class" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={formClassId}>
 									<option value="">-- Belum ada kelas --</option>
 									{#each classes as c (c.id)}
@@ -409,7 +409,7 @@
 								</select>
 							</div>
 							<div>
-								<label for="s-status" class="text-xs text-slate-500 mb-1 block">Lifecycle Siswa</label>
+								<label for="s-status" class="text-xs text-muted-foreground mb-1 block">Lifecycle Siswa</label>
 								<select id="s-status" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={formStatus}>
 									<option value="prospective">Calon Siswa</option>
 									<option value="active">Aktif</option>
@@ -421,24 +421,24 @@
 					{:else if studentFormStep === 'guardian'}
 						<div class="grid gap-3 sm:grid-cols-2">
 							<div>
-								<label for="s-wali" class="text-xs text-slate-500 mb-1 block">Nama Wali</label>
+								<label for="s-wali" class="text-xs text-muted-foreground mb-1 block">Nama Wali</label>
 								<Input id="s-wali" placeholder="Nama orang tua atau wali utama" bind:value={formParentName} />
 							</div>
 							<div>
-								<label for="s-hp" class="text-xs text-slate-500 mb-1 block">HP Wali</label>
+								<label for="s-hp" class="text-xs text-muted-foreground mb-1 block">HP Wali</label>
 								<Input id="s-hp" placeholder="Nomor WhatsApp yang aktif" bind:value={formParentPhone} />
 							</div>
 						</div>
 					{:else}
 						<div class="grid gap-3 lg:grid-cols-[1fr_1.2fr]">
 							<div>
-								<label for="s-active" class="text-xs text-slate-500 mb-1 block">Status Aktif</label>
+								<label for="s-active" class="text-xs text-muted-foreground mb-1 block">Status Aktif</label>
 								<select id="s-active" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={formActive}>
 									<option value={true}>Aktif</option>
 									<option value={false}>Nonaktif</option>
 								</select>
 							</div>
-							<div class="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+							<div class="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">
 								<p class="font-semibold">{formNama || 'Nama siswa belum diisi'}</p>
 								<p class="mt-1">NIS {formNis || '-'} · {formClassId ? 'Kelas dipilih' : 'Belum ada kelas'} · {formStatus}</p>
 							</div>
@@ -520,18 +520,18 @@
 										{s.gender === 'L' ? 'L' : 'P'}
 									</Badge>
 								</Table.Cell>
-								<Table.Cell class="text-slate-500">{s.class_code || '—'}</Table.Cell>
-								<Table.Cell class="text-slate-500 text-sm">
+								<Table.Cell class="text-muted-foreground">{s.class_code || '—'}</Table.Cell>
+								<Table.Cell class="text-muted-foreground text-sm">
 									<div class="max-w-56">
 										<p class="truncate">{parentSummary(s)}</p>
 										{#if s.linked_parent_count > 0}
-											<p class="mt-1 text-[11px] text-emerald-700">Tautan akun orang tua aktif</p>
+											<p class="mt-1 text-[11px] text-primary">Tautan akun orang tua aktif</p>
 										{/if}
 									</div>
 								</Table.Cell>
 								<Table.Cell>
 									{#if s.is_active}
-										<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
+										<Badge class="bg-primary/15 text-primary border-primary/20">Aktif</Badge>
 									{:else}
 										<Badge variant="secondary">Nonaktif</Badge>
 									{/if}
@@ -606,14 +606,14 @@
 						{@const activeKey = lifecycleKey(s.id, 'active')}
 						{@const alumniKey = lifecycleKey(s.id, 'alumni')}
 						{@const mutatedKey = lifecycleKey(s.id, 'mutated')}
-						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+						<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
-									<p class="text-sm font-semibold text-slate-900">{s.nama}</p>
-									<p class="mt-1 font-mono text-xs text-slate-500">NIS {s.nis}{s.nisn ? ` • NISN ${s.nisn}` : ''}</p>
+									<p class="text-sm font-semibold text-foreground">{s.nama}</p>
+									<p class="mt-1 font-mono text-xs text-muted-foreground">NIS {s.nis}{s.nisn ? ` • NISN ${s.nisn}` : ''}</p>
 								</div>
 								{#if s.is_active}
-									<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
+									<Badge class="bg-primary/15 text-primary border-primary/20">Aktif</Badge>
 								{:else}
 									<Badge variant="secondary">Nonaktif</Badge>
 								{/if}
@@ -623,9 +623,9 @@
 								<Badge variant="outline" class="text-xs">{s.class_code || 'Belum ada kelas'}</Badge>
 								<Badge class={lifecycleBadgeClass(s.status)}>{s.status}</Badge>
 							</div>
-							<p class="mt-3 text-sm text-slate-600">{parentSummary(s)}</p>
+							<p class="mt-3 text-sm text-muted-foreground">{parentSummary(s)}</p>
 							{#if s.linked_parent_count > 0}
-								<p class="mt-1 text-xs text-emerald-700">Relasi orang tua terhubung ke akun portal</p>
+								<p class="mt-1 text-xs text-primary">Relasi orang tua terhubung ke akun portal</p>
 							{/if}
 							<div class="mt-4 grid grid-cols-2 gap-2">
 								<LoadingButton

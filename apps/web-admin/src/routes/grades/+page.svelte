@@ -1123,13 +1123,13 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
 		<div>
-			<p class="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">Sprint 11</p>
-			<h1 class="text-3xl font-semibold text-slate-900">Grade Management</h1>
-			<p class="mt-1 max-w-3xl text-sm text-slate-600">Kelola komponen penilaian per kelas dan mata pelajaran, input nilai siswa, lalu pantau rekap capaian secara bertahap sebelum rapor final dibentuk.</p>
+			<p class="text-xs font-semibold uppercase tracking-[0.28em] text-primary">Sprint 11</p>
+			<h1 class="text-3xl font-semibold text-foreground">Grade Management</h1>
+			<p class="mt-1 max-w-3xl text-sm text-muted-foreground">Kelola komponen penilaian per kelas dan mata pelajaran, input nilai siswa, lalu pantau rekap capaian secara bertahap sebelum rapor final dibentuk.</p>
 		</div>
 		<div class="grid gap-2 sm:grid-cols-2 lg:w-[32rem]">
 			<div>
-				<label for="assignment-id" class="mb-1 block text-xs font-medium text-slate-500">Pilih Kelas-Mapel</label>
+				<label for="assignment-id" class="mb-1 block text-xs font-medium text-muted-foreground">Pilih Kelas-Mapel</label>
 					<select
 						id="assignment-id"
 						class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -1142,15 +1142,15 @@
 					{/each}
 				</select>
 			</div>
-			<div class="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Cakupan Isi</p>
-				<p class="mt-2 text-2xl font-semibold text-emerald-900">{summary.length}</p>
-				<p class="text-sm text-emerald-800">siswa aktif dalam gradebook terpilih</p>
+			<div class="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3">
+				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Cakupan Isi</p>
+				<p class="mt-2 text-2xl font-semibold text-primary">{summary.length}</p>
+				<p class="text-sm text-primary">siswa aktif dalam gradebook terpilih</p>
 			</div>
 		</div>
 	</div>
 
-	<div class="grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm sm:grid-cols-3">
+	<div class="grid gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm sm:grid-cols-3">
 		{#each [
 			{ id: 'triage', label: 'Triase Rapor', desc: 'Pantau kesiapan lintas kelas-mapel' },
 			{ id: 'gradebook', label: 'Gradebook', desc: 'Kelola komponen dan input nilai' },
@@ -1159,8 +1159,8 @@
 			<button
 				type="button"
 				class={`rounded-xl px-4 py-3 text-left transition-colors ${gradeWorkspace === item.id
-					? 'bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200'
-					: 'text-slate-600 hover:bg-slate-50'}`}
+					? 'bg-primary/10 text-primary ring-1 ring-primary/30'
+					: 'text-muted-foreground hover:bg-muted/50'}`}
 				onclick={() => (gradeWorkspace = item.id as GradeWorkspace)}
 			>
 				<span class="block text-sm font-semibold">{item.label}</span>
@@ -1171,7 +1171,7 @@
 
 	<AsyncContent promise={overviewPromise} onerror={handleOverviewRenderError}>
 		{#snippet pending()}
-			<div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+			<div class="space-y-4 rounded-2xl border border-border bg-card p-5">
 				<div class="grid gap-3 lg:grid-cols-[1.6fr,0.8fr]">
 					<Skeleton class="h-14 w-full" />
 					<Skeleton class="h-20 w-full" />
@@ -1204,34 +1204,34 @@
 		{#if currentAssignmentStatuses.length > 0 && gradeWorkspace === 'triage'}
 			<div class="grid gap-4 xl:grid-cols-[0.88fr_1.12fr]">
 				<div class="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
-					<Card.Root class="border-emerald-100 bg-white">
+					<Card.Root class="border-primary/20 bg-card">
 						<Card.Content class="pt-5">
-							<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Siap Difinalkan</p>
-							<p class="mt-2 text-3xl font-semibold text-slate-900">{readyAssignmentCount}</p>
-							<p class="text-sm text-slate-600">kelas-mapel yang siap masuk checkpoint finalisasi</p>
+							<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Siap Difinalkan</p>
+							<p class="mt-2 text-3xl font-semibold text-foreground">{readyAssignmentCount}</p>
+							<p class="text-sm text-muted-foreground">kelas-mapel yang siap masuk checkpoint finalisasi</p>
 						</Card.Content>
 					</Card.Root>
-					<Card.Root class="border-sky-100 bg-white">
+					<Card.Root class="border-accent bg-card">
 						<Card.Content class="pt-5">
-							<p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Sudah Final</p>
-							<p class="mt-2 text-3xl font-semibold text-slate-900">{finalizedAssignmentCount}</p>
-							<p class="text-sm text-slate-600">assignment yang sudah dikunci dan siap rapor</p>
+							<p class="text-xs font-semibold uppercase tracking-[0.2em] text-accent-foreground">Sudah Final</p>
+							<p class="mt-2 text-3xl font-semibold text-foreground">{finalizedAssignmentCount}</p>
+							<p class="text-sm text-muted-foreground">assignment yang sudah dikunci dan siap rapor</p>
 						</Card.Content>
 					</Card.Root>
-					<Card.Root class="border-amber-100 bg-white">
+					<Card.Root class="border-warning/30 bg-card">
 						<Card.Content class="pt-5">
-							<p class="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Perlu Dilengkapi</p>
-							<p class="mt-2 text-3xl font-semibold text-slate-900">{needsAttentionAssignmentCount}</p>
-							<p class="text-sm text-slate-600">assignment yang masih perlu komponen, publish, atau isi nilai</p>
+							<p class="text-xs font-semibold uppercase tracking-[0.2em] text-warning">Perlu Dilengkapi</p>
+							<p class="mt-2 text-3xl font-semibold text-foreground">{needsAttentionAssignmentCount}</p>
+							<p class="text-sm text-muted-foreground">assignment yang masih perlu komponen, publish, atau isi nilai</p>
 						</Card.Content>
 					</Card.Root>
 					{#if nextReadyAssignment}
-						<Card.Root class="border-slate-200 bg-slate-50/80">
+						<Card.Root class="border-border bg-muted/50">
 							<Card.Content class="space-y-3 pt-5">
 								<div>
-									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Langkah Cepat</p>
-									<p class="mt-2 text-sm font-medium text-slate-900">{nextReadyAssignment.class_code} · {nextReadyAssignment.subject_code}</p>
-									<p class="text-sm text-slate-600">Buka assignment siap-final berikutnya agar operator bisa lanjut checkpoint tanpa mencari manual.</p>
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Langkah Cepat</p>
+									<p class="mt-2 text-sm font-medium text-foreground">{nextReadyAssignment.class_code} · {nextReadyAssignment.subject_code}</p>
+									<p class="text-sm text-muted-foreground">Buka assignment siap-final berikutnya agar operator bisa lanjut checkpoint tanpa mencari manual.</p>
 								</div>
 								<Button variant="outline" onclick={() => focusAssignment(nextReadyAssignment.assignment_id)}>
 									Buka Assignment Siap Final
@@ -1280,7 +1280,7 @@
 							</div>
 							<div class="flex flex-col gap-3 sm:flex-row sm:items-end">
 								<div class="min-w-0 sm:w-56">
-									<label for="assignment-teacher-filter" class="mb-1 block text-xs font-medium text-slate-500">Filter Guru</label>
+									<label for="assignment-teacher-filter" class="mb-1 block text-xs font-medium text-muted-foreground">Filter Guru</label>
 									<select
 										id="assignment-teacher-filter"
 										class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -1293,7 +1293,7 @@
 									</select>
 								</div>
 								<div class="min-w-0 sm:w-72">
-									<label for="assignment-status-query" class="mb-1 block text-xs font-medium text-slate-500">Cari Kelas, Mapel, Guru</label>
+									<label for="assignment-status-query" class="mb-1 block text-xs font-medium text-muted-foreground">Cari Kelas, Mapel, Guru</label>
 									<Input
 										id="assignment-status-query"
 										placeholder="Mis. VIIA, Matematika, Ibu Siti"
@@ -1310,7 +1310,7 @@
 								/>
 							</div>
 						</div>
-							<div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+							<div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 								<Badge variant="outline">Filter: {assignmentFilterLabel(assignmentStatusFilter)}</Badge>
 								<Badge variant="outline">Hasil: {filteredAssignmentStatuses.length}</Badge>
 								<Badge variant="outline">Siap Final: {filteredReadyAssignments.length}</Badge>
@@ -1323,11 +1323,11 @@
 								{/if}
 						</div>
 						{#if filteredReadyAssignments.length > 0}
-							<div class="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+							<div class="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/10 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
 								<div>
-									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Finalisasi Batch</p>
-									<p class="mt-2 text-sm font-medium text-slate-900">{filteredReadyAssignments.length} assignment siap-final ada di hasil filter aktif.</p>
-									<p class="text-sm text-slate-600">Gunakan catatan finalisasi yang sama bila operator ingin menutup checkpoint rapor untuk beberapa kelas-mapel sekaligus.</p>
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Finalisasi Batch</p>
+									<p class="mt-2 text-sm font-medium text-foreground">{filteredReadyAssignments.length} assignment siap-final ada di hasil filter aktif.</p>
+									<p class="text-sm text-muted-foreground">Gunakan catatan finalisasi yang sama bila operator ingin menutup checkpoint rapor untuk beberapa kelas-mapel sekaligus.</p>
 								</div>
 								<LoadingButton
 									loading={batchFinalizationBusy}
@@ -1338,11 +1338,11 @@
 							</div>
 						{/if}
 						{#if filteredFinalizedAssignments.length > 0}
-							<div class="flex flex-col gap-3 rounded-xl border border-sky-200 bg-sky-50/60 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+							<div class="flex flex-col gap-3 rounded-xl border border-accent bg-accent/60 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
 								<div>
-									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Buka Finalisasi Batch</p>
-									<p class="mt-2 text-sm font-medium text-slate-900">{filteredFinalizedAssignments.length} assignment final ada di hasil filter aktif.</p>
-									<p class="text-sm text-slate-600">Gunakan flow ini saat operator perlu membuka kembali beberapa assignment final untuk koreksi terkontrol.</p>
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-accent-foreground">Buka Finalisasi Batch</p>
+									<p class="mt-2 text-sm font-medium text-foreground">{filteredFinalizedAssignments.length} assignment final ada di hasil filter aktif.</p>
+									<p class="text-sm text-muted-foreground">Gunakan flow ini saat operator perlu membuka kembali beberapa assignment final untuk koreksi terkontrol.</p>
 								</div>
 								<LoadingButton
 									variant="outline"
@@ -1354,10 +1354,10 @@
 							</div>
 						{/if}
 						{#if filteredClassSummaries.length > 0}
-							<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+							<div class="rounded-xl border border-border bg-muted/50 p-4">
 								<div class="mb-3">
-									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Ringkasan per Kelas</p>
-									<p class="mt-1 text-sm text-slate-600">Gunakan rollup ini untuk membaca kelas mana yang sudah hampir siap rapor dan mana yang masih tertahan di beberapa mapel.</p>
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Ringkasan per Kelas</p>
+									<p class="mt-1 text-sm text-muted-foreground">Gunakan rollup ini untuk membaca kelas mana yang sudah hampir siap rapor dan mana yang masih tertahan di beberapa mapel.</p>
 								</div>
 								<div class="overflow-x-auto">
 									<Table.Root>
@@ -1373,7 +1373,7 @@
 										</Table.Header>
 										<Table.Body>
 											{#each filteredClassSummaries as item (`${item.class_code}-${item.class_name}`)}
-												<Table.Row class={`${focusedClassSummary && focusedClassSummary.class_code === item.class_code && focusedClassSummary.class_name === item.class_name ? 'bg-emerald-50/70' : ''}`}>
+												<Table.Row class={`${focusedClassSummary && focusedClassSummary.class_code === item.class_code && focusedClassSummary.class_name === item.class_name ? 'bg-primary/10' : ''}`}>
 													<Table.Cell>
 														<button
 															class="text-left"
@@ -1381,8 +1381,8 @@
 																classFocusKey = `${item.class_code}::${item.class_name}`;
 															}}
 														>
-															<div class="font-medium text-slate-900">{item.class_name}</div>
-															<div class="text-xs text-slate-500">{item.class_code}</div>
+															<div class="font-medium text-foreground">{item.class_name}</div>
+															<div class="text-xs text-muted-foreground">{item.class_code}</div>
 														</button>
 													</Table.Cell>
 													<Table.Cell>{item.assignment_count}</Table.Cell>
@@ -1398,11 +1398,11 @@
 							</div>
 						{/if}
 						{#if filteredTeacherSummaries.length > 0}
-							<div class="rounded-xl border border-sky-200 bg-sky-50/50 p-4">
+							<div class="rounded-xl border border-accent bg-accent/60 p-4">
 								<div class="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 									<div>
-										<p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Dashboard Lintas Guru</p>
-										<p class="mt-1 text-sm text-slate-600">Pantau distribusi kesiapan rapor per guru dari hasil filter aktif sebelum turun ke assignment atau kelas tertentu.</p>
+										<p class="text-xs font-semibold uppercase tracking-[0.2em] text-accent-foreground">Dashboard Lintas Guru</p>
+										<p class="mt-1 text-sm text-muted-foreground">Pantau distribusi kesiapan rapor per guru dari hasil filter aktif sebelum turun ke assignment atau kelas tertentu.</p>
 									</div>
 									<LoadingButton
 										variant="outline"
@@ -1427,7 +1427,7 @@
 										<Table.Body>
 											{#each filteredTeacherSummaries as item (item.teacher_name)}
 												<Table.Row>
-													<Table.Cell class="font-medium text-slate-900">{item.teacher_name}</Table.Cell>
+													<Table.Cell class="font-medium text-foreground">{item.teacher_name}</Table.Cell>
 													<Table.Cell>{item.assignment_count}</Table.Cell>
 													<Table.Cell>{item.ready_count}</Table.Cell>
 													<Table.Cell>{item.finalized_count}</Table.Cell>
@@ -1441,12 +1441,12 @@
 							</div>
 						{/if}
 						{#if focusedClassSummary}
-							<div class="rounded-xl border border-emerald-200 bg-white p-4">
+							<div class="rounded-xl border border-primary/20 bg-card p-4">
 								<div class="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 									<div>
-										<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Fokus Wali Kelas</p>
-										<h3 class="mt-1 text-base font-semibold text-slate-900">{focusedClassSummary.class_name} · {focusedClassSummary.class_code}</h3>
-										<p class="text-sm text-slate-600">Ringkasan cepat semua mapel pada kelas aktif dari hasil filter saat ini.</p>
+										<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Fokus Wali Kelas</p>
+										<h3 class="mt-1 text-base font-semibold text-foreground">{focusedClassSummary.class_name} · {focusedClassSummary.class_code}</h3>
+										<p class="text-sm text-muted-foreground">Ringkasan cepat semua mapel pada kelas aktif dari hasil filter saat ini.</p>
 									</div>
 									<div class="flex flex-wrap gap-2">
 										<Badge variant="outline">{focusedClassSummary.assignment_count} mapel</Badge>
@@ -1475,11 +1475,11 @@
 										</Table.Header>
 										<Table.Body>
 											{#each focusedClassAssignments as item (item.assignment_id)}
-												<Table.Row class={item.assignment_id === assignmentId ? 'bg-emerald-50/70' : ''}>
+												<Table.Row class={item.assignment_id === assignmentId ? 'bg-primary/10' : ''}>
 													<Table.Cell>
 														<button class="text-left" onclick={() => focusAssignment(item.assignment_id)}>
-															<div class="font-medium text-slate-900">{item.subject_name}</div>
-															<div class="text-xs text-slate-500">{item.subject_code}</div>
+															<div class="font-medium text-foreground">{item.subject_name}</div>
+															<div class="text-xs text-muted-foreground">{item.subject_code}</div>
 														</button>
 													</Table.Cell>
 													<Table.Cell>{item.teacher_name}</Table.Cell>
@@ -1506,20 +1506,20 @@
 								</Table.Header>
 								<Table.Body>
 									{#each filteredAssignmentStatuses as item (item.assignment_id)}
-										<Table.Row class={item.assignment_id === assignmentId ? 'bg-emerald-50/70' : ''}>
+										<Table.Row class={item.assignment_id === assignmentId ? 'bg-primary/10' : ''}>
 											<Table.Cell>
 												<button
 													class="text-left"
 													onclick={() => focusAssignment(item.assignment_id)}
 												>
-													<div class="font-medium text-slate-900">{item.class_name} · {item.subject_name}</div>
-													<div class="text-xs text-slate-500">{item.class_code} · {item.subject_code} · {item.teacher_name}</div>
+													<div class="font-medium text-foreground">{item.class_name} · {item.subject_name}</div>
+													<div class="text-xs text-muted-foreground">{item.class_code} · {item.subject_code} · {item.teacher_name}</div>
 												</button>
 											</Table.Cell>
 											<Table.Cell>
 												<div class="space-y-2">
 													<Badge variant={assignmentStatusVariant(item)}>{assignmentStatusLabel(item)}</Badge>
-													<p class="text-xs text-slate-500">{assignmentStatusDescription(item)}</p>
+													<p class="text-xs text-muted-foreground">{assignmentStatusDescription(item)}</p>
 												</div>
 											</Table.Cell>
 											<Table.Cell>{item.published_component_count}/{item.component_count}</Table.Cell>
@@ -1548,11 +1548,11 @@
 
 		{#if selectedAssignment && gradeWorkspace !== 'triage'}
 			<div class="grid gap-4 md:grid-cols-3">
-				<Card.Root class="border-emerald-100 bg-white">
+				<Card.Root class="border-primary/20 bg-card">
 					<Card.Content class="pt-5">
-						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Kelas & Mapel</p>
-						<p class="mt-2 text-lg font-semibold text-slate-900">{selectedAssignment.class_name}</p>
-						<p class="text-sm text-slate-600">{selectedAssignment.subject_name} · {selectedAssignment.subject_code}</p>
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Kelas & Mapel</p>
+						<p class="mt-2 text-lg font-semibold text-foreground">{selectedAssignment.class_name}</p>
+						<p class="text-sm text-muted-foreground">{selectedAssignment.subject_name} · {selectedAssignment.subject_code}</p>
 						{#if selectedAssignmentStatus}
 							<div class="mt-3 flex flex-wrap gap-2">
 								<Badge variant={assignmentStatusVariant(selectedAssignmentStatus)}>
@@ -1563,23 +1563,23 @@
 						{/if}
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-amber-100 bg-white">
+				<Card.Root class="border-warning/30 bg-card">
 					<Card.Content class="pt-5">
-						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Komponen Nilai</p>
-						<p class="mt-2 text-3xl font-semibold text-slate-900">{publishedComponentCount}/{components.length}</p>
-						<p class="text-sm text-slate-600">sudah terbit untuk rapor dari total komponen yang disusun</p>
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-warning">Komponen Nilai</p>
+						<p class="mt-2 text-3xl font-semibold text-foreground">{publishedComponentCount}/{components.length}</p>
+						<p class="text-sm text-muted-foreground">sudah terbit untuk rapor dari total komponen yang disusun</p>
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-sky-100 bg-white">
+				<Card.Root class="border-accent bg-card">
 					<Card.Content class="pt-5">
-						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">Progress Pengisian</p>
-						<p class="mt-2 text-3xl font-semibold text-slate-900">{completionRate}%</p>
-						<p class="text-sm text-slate-600">siswa yang sudah punya minimal satu nilai</p>
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-accent-foreground">Progress Pengisian</p>
+						<p class="mt-2 text-3xl font-semibold text-foreground">{completionRate}%</p>
+						<p class="text-sm text-muted-foreground">siswa yang sudah punya minimal satu nilai</p>
 					</Card.Content>
 				</Card.Root>
 			</div>
 
-			<Card.Root class={readyForRapor ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'}>
+			<Card.Root class={readyForRapor ? 'border-primary/20 bg-primary/10' : 'border-warning/30 bg-warning/10'}>
 				<Card.Header class="pb-2">
 					<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 						<div>
@@ -1591,36 +1591,36 @@
 				</Card.Header>
 				<Card.Content class="grid gap-4 md:grid-cols-4">
 					<div>
-						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Komponen Terbit</p>
-						<p class="mt-2 text-2xl font-semibold text-slate-900">{publishedComponentCount}</p>
-						<p class="text-sm text-slate-600">{draftComponentCount} masih draft</p>
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Komponen Terbit</p>
+						<p class="mt-2 text-2xl font-semibold text-foreground">{publishedComponentCount}</p>
+						<p class="text-sm text-muted-foreground">{draftComponentCount} masih draft</p>
 					</div>
 					<div>
-						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Siswa Siap</p>
-						<p class="mt-2 text-2xl font-semibold text-slate-900">{readyStudentCount}/{summary.length}</p>
-						<p class="text-sm text-slate-600">{incompleteStudentCount} siswa belum lengkap</p>
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Siswa Siap</p>
+						<p class="mt-2 text-2xl font-semibold text-foreground">{readyStudentCount}/{summary.length}</p>
+						<p class="text-sm text-muted-foreground">{incompleteStudentCount} siswa belum lengkap</p>
 					</div>
 					<div>
-						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Nilai Belum Masuk</p>
-						<p class="mt-2 text-2xl font-semibold text-slate-900">{missingGradeCount}</p>
-						<p class="text-sm text-slate-600">slot nilai yang masih perlu diisi</p>
+						<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Nilai Belum Masuk</p>
+						<p class="mt-2 text-2xl font-semibold text-foreground">{missingGradeCount}</p>
+						<p class="text-sm text-muted-foreground">slot nilai yang masih perlu diisi</p>
 					</div>
 					<div class="flex items-end">
 						<div class="w-full space-y-3">
 							{#if readyForRapor}
 									<a
 										href={resolve(`/grades/rapor?assignment_id=${assignmentId}`)}
-										class="inline-flex w-full items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+										class="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary"
 									>
 									Buka Cetak Rapor
 								</a>
 							{:else}
-								<div class="rounded-xl border border-dashed border-amber-300 bg-white/70 px-4 py-3 text-sm text-amber-900">
+								<div class="rounded-xl border border-dashed border-warning/30 bg-card/70 px-4 py-3 text-sm text-warning">
 									Selesaikan draft dan lengkapi semua nilai sebelum membuka rapor final.
 								</div>
 							{/if}
 							<div class="space-y-2">
-								<label for="finalize-notes" class="block text-xs font-medium text-slate-500">Catatan Finalisasi</label>
+								<label for="finalize-notes" class="block text-xs font-medium text-muted-foreground">Catatan Finalisasi</label>
 								<Input
 									id="finalize-notes"
 									placeholder="Opsional: catatan verifikasi guru atau wali kelas"
@@ -1629,11 +1629,11 @@
 								/>
 							</div>
 							{#if isFinalized}
-								<div class="rounded-xl border border-emerald-200 bg-white/80 px-4 py-3 text-sm text-emerald-900">
+								<div class="rounded-xl border border-primary/20 bg-card/80 px-4 py-3 text-sm text-primary">
 									<p class="font-medium">Difinalisasi oleh {finalization?.finalized_by || 'operator'}.</p>
-									<p class="mt-1 text-emerald-800">{new Date(finalization?.finalized_at ?? '').toLocaleString('id-ID')}</p>
+									<p class="mt-1 text-primary">{new Date(finalization?.finalized_at ?? '').toLocaleString('id-ID')}</p>
 									{#if finalization?.notes}
-										<p class="mt-2 text-slate-700">{finalization.notes}</p>
+										<p class="mt-2 text-foreground">{finalization.notes}</p>
 									{/if}
 								</div>
 								<LoadingButton
@@ -1669,11 +1669,11 @@
 					<Card.Content class="space-y-4">
 						<div class="grid gap-3 md:grid-cols-4">
 							<div class="md:col-span-2">
-								<label for="component-title" class="mb-1 block text-xs font-medium text-slate-500">Judul Komponen</label>
+								<label for="component-title" class="mb-1 block text-xs font-medium text-muted-foreground">Judul Komponen</label>
 								<Input id="component-title" placeholder="Mis: Tugas Bab 1" bind:value={componentTitle} />
 							</div>
 							<div>
-								<label for="component-category" class="mb-1 block text-xs font-medium text-slate-500">Kategori</label>
+								<label for="component-category" class="mb-1 block text-xs font-medium text-muted-foreground">Kategori</label>
 								<select id="component-category" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={componentCategory}>
 									{#each categoryOptions as item (item.value)}
 										<option value={item.value}>{item.label}</option>
@@ -1681,13 +1681,13 @@
 								</select>
 							</div>
 							<div>
-								<label for="component-weight" class="mb-1 block text-xs font-medium text-slate-500">Bobot</label>
+								<label for="component-weight" class="mb-1 block text-xs font-medium text-muted-foreground">Bobot</label>
 								<Input id="component-weight" type="number" min="0" step="0.1" bind:value={componentWeight} />
 							</div>
 						</div>
 						<div class="grid gap-3 md:grid-cols-[14rem_auto]">
 							<div>
-								<label for="component-max-score" class="mb-1 block text-xs font-medium text-slate-500">Skor Maksimum</label>
+								<label for="component-max-score" class="mb-1 block text-xs font-medium text-muted-foreground">Skor Maksimum</label>
 								<Input id="component-max-score" type="number" min="1" step="0.1" bind:value={componentMaxScore} />
 							</div>
 							<div class="flex items-end gap-2">
@@ -1705,7 +1705,7 @@
 							</div>
 						</div>
 
-						<div class="overflow-x-auto rounded-lg border border-slate-200">
+						<div class="overflow-x-auto rounded-lg border border-border">
 							<Table.Root>
 								<Table.Header>
 									<Table.Row>
@@ -1718,19 +1718,19 @@
 								</Table.Header>
 								<Table.Body>
 									{#each components as item (item.id)}
-										<Table.Row class={componentId === item.id ? 'bg-emerald-50/70' : ''}>
+										<Table.Row class={componentId === item.id ? 'bg-primary/10' : ''}>
 											<Table.Cell>
-												<button class="text-left font-medium text-slate-900 hover:text-emerald-700" onclick={async () => { componentId = item.id; await loadOverview(); }}>
+												<button class="text-left font-medium text-foreground hover:text-primary" onclick={async () => { componentId = item.id; await loadOverview(); }}>
 													{item.title}
 												</button>
 												{#if isNonTestComponent(item)}
 													<div class="mt-2 flex flex-wrap items-center gap-2">
-														<Badge class="border border-emerald-200 bg-emerald-50 text-[10px] font-semibold uppercase tracking-wider text-emerald-800">
+														<Badge class="border border-primary/20 bg-primary/10 text-[10px] font-semibold uppercase tracking-wider text-primary">
 															Non-Tes
 														</Badge>
 														<a
 															href={nonTestSourceHref(item)}
-															class="text-xs font-medium text-emerald-700 hover:text-emerald-900 hover:underline"
+															class="text-xs font-medium text-primary hover:text-primary hover:underline"
 														>
 															{item.source_non_test_title || 'Buka asesmen asal'}
 														</a>
@@ -1802,11 +1802,11 @@
 									{#each summary as row (row.student_id)}
 										<Table.Row>
 											<Table.Cell>
-												<div class="font-medium text-slate-900">{row.nama}</div>
-												<div class="text-xs text-slate-500">{row.nis || row.nisn || 'Tanpa NIS/NISN'}</div>
+												<div class="font-medium text-foreground">{row.nama}</div>
+												<div class="text-xs text-muted-foreground">{row.nis || row.nisn || 'Tanpa NIS/NISN'}</div>
 											</Table.Cell>
 											<Table.Cell>{row.filled_count}/{row.component_count}</Table.Cell>
-											<Table.Cell class="font-semibold text-slate-900">{finalScoreLabel(row.final_score)}</Table.Cell>
+											<Table.Cell class="font-semibold text-foreground">{finalScoreLabel(row.final_score)}</Table.Cell>
 										</Table.Row>
 										{:else}
 											<Table.Row>
@@ -1844,20 +1844,20 @@
 				<Card.Content class="space-y-4 p-0">
 					{#if selectedComponent}
 						{#if isNonTestComponent(selectedComponent)}
-							<div class="mx-6 mt-6 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+							<div class="mx-6 mt-6 rounded-xl border border-primary/20 bg-primary/10 px-4 py-3">
 								<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 									<div>
-										<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Sumber Nilai Non-Tes</p>
-										<p class="mt-1 text-sm font-medium text-slate-900">
+										<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Sumber Nilai Non-Tes</p>
+										<p class="mt-1 text-sm font-medium text-foreground">
 											{selectedComponent.source_non_test_title || nonTestTypeLabel(selectedComponent.source_non_test_type)}
 										</p>
-										<p class="text-sm text-slate-600">
+										<p class="text-sm text-muted-foreground">
 											Komponen ini dibuat dari sinkronisasi asesmen non-tes dan bersifat read-only di gradebook. Koreksi sumber nilai dilakukan dari modul asal lalu dikirim ulang ke nilai.
 										</p>
 									</div>
 									<a
 										href={nonTestSourceHref(selectedComponent)}
-										class="inline-flex items-center justify-center rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50"
+										class="inline-flex items-center justify-center rounded-md border border-primary/20 bg-card px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10"
 									>
 										Buka Asesmen Asal
 									</a>
@@ -1865,11 +1865,11 @@
 							</div>
 						{/if}
 						{#if !isNonTestComponent(selectedComponent)}
-							<div class="mx-6 mt-6 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+							<div class="mx-6 mt-6 flex flex-col gap-3 rounded-xl border border-border bg-muted/50 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
 								<div>
-									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Bulk Input</p>
-									<p class="mt-2 text-lg font-semibold text-slate-900">{dirtyEntryIds.length} perubahan belum disimpan</p>
-									<p class="text-sm text-slate-600">Guru dapat mengubah banyak nilai terlebih dahulu, lalu menyimpan seluruh perubahan untuk komponen ini sekaligus.</p>
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Bulk Input</p>
+									<p class="mt-2 text-lg font-semibold text-foreground">{dirtyEntryIds.length} perubahan belum disimpan</p>
+									<p class="text-sm text-muted-foreground">Guru dapat mengubah banyak nilai terlebih dahulu, lalu menyimpan seluruh perubahan untuk komponen ini sekaligus.</p>
 								</div>
 								<div class="flex flex-wrap gap-2">
 									<Badge variant="outline">{entries.length} siswa</Badge>
@@ -1885,18 +1885,18 @@
 									/>
 								</div>
 							</div>
-							<div class="mx-6 flex flex-col gap-3 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/50 px-4 py-4">
+							<div class="mx-6 flex flex-col gap-3 rounded-xl border border-dashed border-primary/20 bg-primary/10 px-4 py-4">
 								<div>
-									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Quick Fill</p>
-									<p class="mt-2 text-sm text-slate-700">Isi nilai atau catatan massal sebelum melakukan bulk save. Guru bisa menerapkan ke semua siswa atau hanya ke baris yang masih kosong.</p>
+									<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Quick Fill</p>
+									<p class="mt-2 text-sm text-foreground">Isi nilai atau catatan massal sebelum melakukan bulk save. Guru bisa menerapkan ke semua siswa atau hanya ke baris yang masih kosong.</p>
 								</div>
 								<div class="grid gap-3 lg:grid-cols-[12rem_1fr_auto]">
 									<div>
-										<label for="quick-fill-score" class="mb-1 block text-xs font-medium text-slate-500">Nilai Massal</label>
+										<label for="quick-fill-score" class="mb-1 block text-xs font-medium text-muted-foreground">Nilai Massal</label>
 										<Input id="quick-fill-score" type="number" min="0" max={selectedComponent.max_score} step="0.1" bind:value={quickFillScore} />
 									</div>
 									<div>
-										<label for="quick-fill-note" class="mb-1 block text-xs font-medium text-slate-500">Catatan Massal</label>
+										<label for="quick-fill-note" class="mb-1 block text-xs font-medium text-muted-foreground">Catatan Massal</label>
 										<Input id="quick-fill-note" placeholder="Mis: remedial, observasi, atau catatan umum" bind:value={quickFillNote} />
 									</div>
 									<div class="flex items-end gap-2">
@@ -1934,8 +1934,8 @@
 									{#each entries as row (row.student_id)}
 										<Table.Row>
 											<Table.Cell>
-												<div class="font-medium text-slate-900">{row.nama}</div>
-												<div class="text-xs text-slate-500">{row.nis || row.nisn || 'Tanpa NIS/NISN'}</div>
+												<div class="font-medium text-foreground">{row.nama}</div>
+												<div class="text-xs text-muted-foreground">{row.nis || row.nisn || 'Tanpa NIS/NISN'}</div>
 											</Table.Cell>
 											<Table.Cell>
 												<Input
@@ -1981,7 +1981,7 @@
 			</Card.Root>
 			{/if}
 		{:else if gradeWorkspace !== 'triage'}
-			<Card.Root class="border-dashed border-slate-300 bg-white">
+			<Card.Root class="border-dashed border-border bg-card">
 				<Card.Content class="py-10 text-center">
 						<EmptyStatePanel
 							eyebrow="Buka Gradebook"

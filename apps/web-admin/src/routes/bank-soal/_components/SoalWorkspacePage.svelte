@@ -2466,12 +2466,12 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	function workflowClass(status: string): string {
 		const map: Record<string, string> = {
-			draft: 'bg-slate-100 text-slate-600',
-			review: 'bg-yellow-100 text-yellow-700',
-			approved: 'bg-green-100 text-green-700',
-			rejected: 'bg-red-100 text-red-600',
+			draft: 'bg-muted text-muted-foreground',
+			review: 'bg-warning/15 text-warning',
+			approved: 'bg-success/15 text-success',
+			rejected: 'bg-destructive/15 text-destructive',
 		};
-		return map[status] ?? 'bg-slate-100 text-slate-500';
+		return map[status] ?? 'bg-muted text-muted-foreground';
 	}
 
 	function answerKeyLabelForQuestion(q: Question): string {
@@ -2502,10 +2502,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	function composerStageToneClass(tone: ComposerStageCard['tone']): string {
 		const map: Record<ComposerStageCard['tone'], string> = {
-			green: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-			amber: 'border-amber-200 bg-amber-50 text-amber-900',
-			red: 'border-red-200 bg-red-50 text-red-900',
-			slate: 'border-slate-200 bg-slate-50 text-slate-800',
+			green: 'border-primary/20 bg-primary/10 text-primary',
+			amber: 'border-warning/30 bg-warning/10 text-warning',
+			red: 'border-destructive/30 bg-destructive/10 text-destructive',
+			slate: 'border-border bg-muted/50 text-foreground',
 		};
 		return map[tone];
 	}
@@ -2585,14 +2585,14 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	{/if}
 
 	{#if activeMode === 'composer' || activeMode === 'import'}
-		<section class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+		<section class="rounded-xl border border-border bg-card p-3 shadow-sm">
 			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 				<div class="min-w-0">
-					<p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Cakupan soal</p>
-					<h2 class="mt-1 text-sm font-semibold text-slate-800">
+					<p class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Cakupan soal</p>
+					<h2 class="mt-1 text-sm font-semibold text-foreground">
 						{specialEventQuestionMode ? `Khusus ${selectedEventTitle}` : 'Bank soal reusable'}
 					</h2>
-					<p class="mt-1 text-xs leading-5 text-slate-500">
+					<p class="mt-1 text-xs leading-5 text-muted-foreground">
 						{specialEventQuestionMode
 							? 'Soal disimpan untuk kegiatan terpilih dan tidak masuk stok reusable lintas kegiatan.'
 							: 'Soal masuk repositori bersama agar bisa dipakai ulang di paket atau kegiatan lain.'}
@@ -2600,7 +2600,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				</div>
 				<label
 					for="special-event-question-mode"
-					class="flex min-w-[16rem] cursor-pointer items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-950 {(!selectedEventId || Boolean(editingId)) ? 'cursor-not-allowed opacity-60' : ''}"
+					class="flex min-w-[16rem] cursor-pointer items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary {(!selectedEventId || Boolean(editingId)) ? 'cursor-not-allowed opacity-60' : ''}"
 				>
 					<span>Khusus kegiatan ini</span>
 					<input
@@ -2614,9 +2614,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				</label>
 			</div>
 			{#if !selectedEventId}
-				<p class="mt-2 text-xs text-slate-500">Pilih konteks kegiatan dulu bila soal atau CSV memang hanya untuk satu event.</p>
+				<p class="mt-2 text-xs text-muted-foreground">Pilih konteks kegiatan dulu bila soal atau CSV memang hanya untuk satu event.</p>
 			{:else if editingId}
-				<p class="mt-2 text-xs text-slate-500">Cakupan soal yang sudah tersimpan mengikuti data asalnya dan tidak diubah dari komposer cepat.</p>
+				<p class="mt-2 text-xs text-muted-foreground">Cakupan soal yang sudah tersimpan mengikuti data asalnya dan tidak diubah dari komposer cepat.</p>
 			{/if}
 		</section>
 	{/if}
@@ -2677,11 +2677,11 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	{/if}
 
 	{#if activeMode === 'catalog'}
-	<section class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+	<section class="rounded-xl border border-border bg-card p-3 shadow-sm">
 		<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 			<div>
-				<h2 class="text-sm font-semibold text-slate-800">Daftar Soal</h2>
-				<p class="mt-0.5 text-xs text-slate-500">Cari, filter, lalu kelola soal dari tabel utama Bank Soal.</p>
+				<h2 class="text-sm font-semibold text-foreground">Daftar Soal</h2>
+				<p class="mt-0.5 text-xs text-muted-foreground">Cari, filter, lalu kelola soal dari tabel utama Bank Soal.</p>
 			</div>
 			{#if selectedEventId}
 				<Button variant="outline" class="h-8 text-xs" onclick={() => setSelectedEvent('')}>Lepas Filter Kegiatan</Button>
@@ -2701,7 +2701,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 					id="question-workflow-filter"
 					bind:value={filterWorkflow}
 					onchange={onWorkflowFilterChange}
-					class="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+					class="h-8 rounded-md border border-border bg-card px-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 			>
 				<option value="">Semua Status</option>
 				<option value="draft">Draft</option>
@@ -2713,22 +2713,22 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 					<Button variant="outline" class="h-8 text-xs" onclick={clearCatalogQuickFilters}>Bersihkan Filter</Button>
 				{/if}
 				{#if totalItems > 0}
-					<span class="flex items-center text-xs text-slate-400">{totalItems} soal</span>
+					<span class="flex items-center text-xs text-muted-foreground">{totalItems} soal</span>
 				{/if}
 		</div>
 			{#if selectedQuestionIds.length > 0}
-				<div class="mt-3 rounded-lg border border-green-200 bg-green-50 p-3">
+				<div class="mt-3 rounded-lg border border-success/20 bg-success/10 p-3">
 					<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 						<div>
-							<p class="text-sm font-semibold text-green-950">{selectedVisibleCount} soal di halaman ini dipilih</p>
-							<p class="text-xs text-green-800">Siap diputuskan: {selectedReviewEligibleCount}; siap diterbitkan: {selectedPublishEligibleCount}. Aksi yang tidak memenuhi syarat otomatis dilewati.</p>
+							<p class="text-sm font-semibold text-success">{selectedVisibleCount} soal di halaman ini dipilih</p>
+							<p class="text-xs text-success">Siap diputuskan: {selectedReviewEligibleCount}; siap diterbitkan: {selectedPublishEligibleCount}. Aksi yang tidak memenuhi syarat otomatis dilewati.</p>
 						</div>
 					<div class="flex flex-wrap gap-2">
-						<Input placeholder="Catatan untuk Setujui/Minta Revisi..." aria-label="Catatan aksi massal review soal" bind:value={bulkNotes} class="h-8 min-w-56 bg-white text-xs" />
-						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('approve')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-white text-green-800">Setujui</LoadingButton>
-						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('reject')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-white text-red-700">Minta Revisi</LoadingButton>
-						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('publish')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedPublishEligibleCount === 0} class="h-8 bg-white text-green-800">Terbitkan</LoadingButton>
-						<Button variant="outline" size="sm" class="h-8 bg-white" onclick={clearSelection}>Bersihkan</Button>
+						<Input placeholder="Catatan untuk Setujui/Minta Revisi..." aria-label="Catatan aksi massal review soal" bind:value={bulkNotes} class="h-8 min-w-56 bg-card text-xs" />
+						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('approve')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-card text-success">Setujui</LoadingButton>
+						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('reject')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedReviewEligibleCount === 0} class="h-8 bg-card text-destructive">Minta Revisi</LoadingButton>
+						<LoadingButton variant="outline" size="sm" onclick={() => void runBulkWorkflow('publish')} loading={bulkBusy} loadingLabel="Memproses..." disabled={bulkBusy || selectedPublishEligibleCount === 0} class="h-8 bg-card text-success">Terbitkan</LoadingButton>
+						<Button variant="outline" size="sm" class="h-8 bg-card" onclick={clearSelection}>Bersihkan</Button>
 					</div>
 				</div>
 			</div>
@@ -2739,11 +2739,11 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	{#if openMenuId !== ''}
 		<div class="fixed inset-0 z-10" onclick={closeRowMenu} aria-hidden="true"></div>
 	{/if}
-	<div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+	<div class="rounded-lg border border-border bg-card overflow-hidden">
 		<Table.Root>
 				<Table.Header>
-					<Table.Row class="bg-slate-50 text-xs">
-							<Table.Head class="w-12 text-slate-500">
+					<Table.Row class="bg-muted/50 text-xs">
+							<Table.Head class="w-12 text-muted-foreground">
 								<input
 									bind:this={visibleSelectionCheckbox}
 									type="checkbox"
@@ -2754,10 +2754,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 								class="rounded accent-green-700"
 							/>
 						</Table.Head>
-						<Table.Head class="text-slate-500">Isi Soal</Table.Head>
-						<Table.Head class="w-32 text-slate-500">Mapel</Table.Head>
-						<Table.Head class="w-28 hidden sm:table-cell text-slate-500">Status</Table.Head>
-					<Table.Head class="w-44 text-right text-slate-500">Aksi</Table.Head>
+						<Table.Head class="text-muted-foreground">Isi Soal</Table.Head>
+						<Table.Head class="w-32 text-muted-foreground">Mapel</Table.Head>
+						<Table.Head class="w-28 hidden sm:table-cell text-muted-foreground">Status</Table.Head>
+					<Table.Head class="w-44 text-right text-muted-foreground">Aksi</Table.Head>
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
@@ -2790,9 +2790,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 						{@const currentQuestions = overview.questions}
 							{#if currentQuestions.length === 0}
 								<Table.Row>
-									<Table.Cell colspan={5} class="py-10 text-center text-sm text-slate-400">
+									<Table.Cell colspan={5} class="py-10 text-center text-sm text-muted-foreground">
 										Belum ada soal.
-									<button onclick={openCreate} class="text-green-700 underline ml-1"
+									<button onclick={openCreate} class="text-success underline ml-1"
 										>Buat soal pertama →</button
 									>
 								</Table.Cell>
@@ -2800,10 +2800,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 						{:else}
 							{#each currentQuestions as q, i (q.id)}
 								<Table.Row
-									class="hover:bg-slate-50 cursor-pointer"
+									class="hover:bg-muted/50 cursor-pointer"
 									onclick={() => openQuestion(q)}
 								>
-								<Table.Cell class="text-xs text-slate-400">
+								<Table.Cell class="text-xs text-muted-foreground">
 									<input
 										type="checkbox"
 										checked={selectedQuestionIds.includes(q.id)}
@@ -2813,31 +2813,31 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 										class="rounded accent-green-700"
 									/>
 								</Table.Cell>
-									<Table.Cell class="text-sm text-slate-700 max-w-xs">
+									<Table.Cell class="text-sm text-foreground max-w-xs">
 										<div class="truncate">{stemPreview(q)}</div>
 										{#if q.author_username}
-											<div class="text-[10px] text-slate-400 mt-0.5">{q.author_username}</div>
+											<div class="text-[10px] text-muted-foreground mt-0.5">{q.author_username}</div>
 										{/if}
 										<div class="mt-1 flex flex-wrap gap-1">
-											<span class="rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+											<span class="rounded bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
 												{questionTypeLabel(q.question_type)}
 											</span>
-											<span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+											<span class="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
 												{q.suggested_mode ?? q.authoring_mode ?? 'beginner'}
 											</span>
 											{#if questionUsageLocked(q)}
-												<span class="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+												<span class="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
 													Terkunci: {questionUsageText(q)}
 												</span>
 											{/if}
 										</div>
 										{#if q.workflow_status === 'rejected'}
-											<div class="mt-1 rounded border border-red-100 bg-red-50 px-2 py-1 text-[11px] leading-relaxed text-red-800">
+											<div class="mt-1 rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] leading-relaxed text-destructive">
 												<span class="font-semibold">{revisionSourceLabel(q)}:</span> {revisionReason(q)}
 											</div>
 										{/if}
 									</Table.Cell>
-									<Table.Cell class="text-xs text-slate-500 truncate max-w-[8rem]">
+									<Table.Cell class="text-xs text-muted-foreground truncate max-w-[8rem]">
 										{q.subject_name || q.subject_code || '-'}
 									</Table.Cell>
 									<Table.Cell class="hidden sm:table-cell">
@@ -2853,7 +2853,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 												e.stopPropagation();
 												openQuestion(q);
 											}}
-											class="rounded px-2 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-100"
+											class="rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
 										>
 										{isQuickEditable(q) ? 'Edit' : 'Lihat'}
 										</button>
@@ -2864,7 +2864,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 													void submitRevisionForReview(q);
 												}}
 												disabled={!canSubmitRevisionReview(q) || (workflowBusyId !== '' && workflowBusyId !== q.id)}
-												class="rounded px-2 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40"
+												class="rounded px-2 py-1 text-xs text-success transition-colors hover:bg-success/10 disabled:cursor-not-allowed disabled:opacity-40"
 											>
 												{workflowBusyId === q.id ? 'Mengajukan...' : 'Review Ulang'}
 											</button>
@@ -2876,7 +2876,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 													openReviewDecision(q, 'approve');
 												}}
 												disabled={workflowBusyId !== '' && workflowBusyId !== q.id}
-												class="rounded px-2 py-1 text-xs text-amber-700 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40"
+												class="rounded px-2 py-1 text-xs text-warning transition-colors hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-40"
 											>
 												Review
 											</button>
@@ -2888,7 +2888,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 													void publishQuestion(q);
 												}}
 												disabled={workflowBusyId !== '' && workflowBusyId !== q.id}
-												class="rounded px-2 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-40"
+												class="rounded px-2 py-1 text-xs text-success transition-colors hover:bg-success/10 disabled:cursor-not-allowed disabled:opacity-40"
 											>
 												{workflowBusyId === q.id ? 'Terbit...' : 'Terbitkan'}
 											</button>
@@ -2898,18 +2898,18 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 												type="button"
 												onclick={(e) => toggleRowMenu(q.id, e)}
 												aria-label="Aksi lainnya"
-												class="rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
+												class="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
 											>⋯</button>
 											{#if openMenuId === q.id}
 												<div
-													class="absolute right-0 top-full z-20 min-w-[7.5rem] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+													class="absolute right-0 top-full z-20 min-w-[7.5rem] rounded-lg border border-border bg-card py-1 shadow-lg"
 													role="menu"
 												>
 													<button
 														type="button"
 														onclick={(e) => { e.stopPropagation(); closeRowMenu(); void duplicateQuestion(q.id); }}
 														disabled={duplicateBusyId === q.id}
-														class="block w-full px-3 py-1.5 text-left text-xs text-green-700 hover:bg-green-50 disabled:opacity-50"
+														class="block w-full px-3 py-1.5 text-left text-xs text-success hover:bg-success/10 disabled:opacity-50"
 														role="menuitem"
 													>
 														{duplicateBusyId === q.id ? 'Menyalin...' : 'Duplikat'}
@@ -2918,7 +2918,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 														type="button"
 														onclick={(e) => { e.stopPropagation(); closeRowMenu(); void deleteQuestion(q.id); }}
 														disabled={questionUsageLocked(q)}
-														class="block w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+														class="block w-full px-3 py-1.5 text-left text-xs text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
 														role="menuitem"
 													>Hapus</button>
 												</div>
@@ -2936,7 +2936,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	<!-- Pagination -->
 	{#if pageCount > 1}
-		<div class="flex items-center justify-between text-sm text-slate-500">
+		<div class="flex items-center justify-between text-sm text-muted-foreground">
 			<span class="text-xs">{totalItems} soal total</span>
 			<div class="flex items-center gap-1">
 				<Button
@@ -2968,58 +2968,58 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	<Dialog.Content>
 		<div class="w-[min(94vw,42rem)] space-y-4 p-5">
 			<div>
-				<p class="text-xs font-bold uppercase tracking-wider text-green-700">Periksa Satu Soal</p>
-				<h2 class="mt-1 text-base font-semibold text-slate-800">
+				<p class="text-xs font-bold uppercase tracking-wider text-success">Periksa Satu Soal</p>
+				<h2 class="mt-1 text-base font-semibold text-foreground">
 					{reviewDecision === 'approve' ? 'Pilihan saat ini: Setujui Soal' : 'Pilihan saat ini: Minta Revisi Soal'}
 				</h2>
-				<p class="mt-1 text-xs text-slate-500">Baca satu soal ini sampai lengkap, lalu pilih salah satu keputusan yang jelas untuk guru dan admin.</p>
+				<p class="mt-1 text-xs text-muted-foreground">Baca satu soal ini sampai lengkap, lalu pilih salah satu keputusan yang jelas untuk guru dan admin.</p>
 			</div>
 
 			{#if reviewDecisionQuestion}
 				<div class="grid gap-2 text-xs sm:grid-cols-3">
-					<div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+					<div class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-warning">
 						<p class="font-semibold">Status sekarang</p>
 						<p class="mt-0.5">{WORKFLOW_LABEL[reviewDecisionQuestion.workflow_status] ?? reviewDecisionQuestion.workflow_status}</p>
 					</div>
-					<div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-slate-700">
+					<div class="rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground">
 						<p class="font-semibold">Aksi aman</p>
 						<p class="mt-0.5">Setujui atau kembalikan revisi.</p>
 					</div>
-					<div class="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-green-900">
+					<div class="rounded-md border border-success/20 bg-success/10 px-3 py-2 text-success">
 						<p class="font-semibold">Setelah disetujui</p>
 						<p class="mt-0.5">Admin dapat menerbitkan ke paket ujian.</p>
 					</div>
 				</div>
-				<div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-					<div class="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
-						<span class="rounded bg-white px-1.5 py-0.5 font-semibold text-green-700">{questionTypeLabel(reviewDecisionQuestion.question_type)}</span>
+				<div class="rounded-lg border border-border bg-muted/50 p-3">
+					<div class="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+						<span class="rounded bg-card px-1.5 py-0.5 font-semibold text-success">{questionTypeLabel(reviewDecisionQuestion.question_type)}</span>
 						<span>{reviewDecisionQuestion.subject_name || reviewDecisionQuestion.subject_code || 'Mapel belum ada'}</span>
 						<span>{reviewDecisionQuestion.code || 'Tanpa kode'}</span>
 						{#if reviewDecisionQuestion.author_username}<span>Guru: {reviewDecisionQuestion.author_username}</span>{/if}
 					</div>
-					<div class="max-h-64 space-y-3 overflow-auto rounded-md border border-slate-200 bg-white p-3 text-sm">
+					<div class="max-h-64 space-y-3 overflow-auto rounded-md border border-border bg-card p-3 text-sm">
 						{#if reviewDecisionQuestion.stimulus_html}
-							<div class="rounded border border-slate-100 bg-slate-50 p-2">
-								<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Stimulus</p>
-								<RichContent html={reviewDecisionQuestion.stimulus_html} class="prose prose-sm max-w-none text-slate-700 latex-preview" />
+							<div class="rounded border border-border bg-muted/50 p-2">
+								<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Stimulus</p>
+								<RichContent html={reviewDecisionQuestion.stimulus_html} class="prose prose-sm max-w-none text-foreground latex-preview" />
 							</div>
 						{/if}
 						<div>
-							<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pertanyaan</p>
-							<RichContent html={reviewDecisionQuestion.stem_html || reviewDecisionQuestion.question_text || 'Isi soal belum tersedia'} class="prose prose-sm max-w-none text-slate-800 latex-preview" />
+							<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Pertanyaan</p>
+							<RichContent html={reviewDecisionQuestion.stem_html || reviewDecisionQuestion.question_text || 'Isi soal belum tersedia'} class="prose prose-sm max-w-none text-foreground latex-preview" />
 						</div>
 						{#if reviewDecisionQuestion.options.length > 0}
 							<div class="space-y-1.5">
-								<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Opsi / Pasangan</p>
+								<p class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Opsi / Pasangan</p>
 								{#each reviewDecisionQuestion.options as opt, i (`review-option-${reviewDecisionQuestion.id}-${i}`)}
 									{@const secondary = optionSecondaryContent(opt)}
-									<div class="rounded border border-slate-100 bg-slate-50 px-2 py-1.5">
+									<div class="rounded border border-border bg-muted/50 px-2 py-1.5">
 										<div class="flex gap-2">
-											<span class="mt-0.5 text-xs font-bold text-green-700">{opt.label || opt.match_label || i + 1}</span>
-											<div class="min-w-0 flex-1 text-xs text-slate-700">
+											<span class="mt-0.5 text-xs font-bold text-success">{opt.label || opt.match_label || i + 1}</span>
+											<div class="min-w-0 flex-1 text-xs text-foreground">
 												<RichContent html={optionPrimaryContent(opt)} class="latex-preview" />
 												{#if secondary}
-													<div class="mt-1 border-t border-slate-200 pt-1 text-slate-500">
+													<div class="mt-1 border-t border-border pt-1 text-muted-foreground">
 														<RichContent html={secondary} class="latex-preview" />
 													</div>
 												{/if}
@@ -3029,23 +3029,23 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 								{/each}
 							</div>
 						{/if}
-						<div class="space-y-2 rounded border border-green-100 bg-green-50 px-2 py-1.5 text-xs text-green-900">
+						<div class="space-y-2 rounded border border-success/20 bg-success/10 px-2 py-1.5 text-xs text-success">
 							<p><span class="font-semibold">Kunci/Rubrik:</span> {answerKeyLabelForQuestion(reviewDecisionQuestion)}</p>
 							{#if reviewDecisionQuestion.rubric_html}
-								<div class="rounded border border-green-100 bg-white p-2">
-									<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-green-700">Rubrik / Pedoman Koreksi</p>
-									<RichContent html={reviewDecisionQuestion.rubric_html} class="prose prose-sm max-w-none text-green-950 latex-preview" />
+								<div class="rounded border border-success/20 bg-card p-2">
+									<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-success">Rubrik / Pedoman Koreksi</p>
+									<RichContent html={reviewDecisionQuestion.rubric_html} class="prose prose-sm max-w-none text-success latex-preview" />
 								</div>
 							{/if}
 							{#if reviewDecisionQuestion.explanation_html}
-								<div class="rounded border border-slate-100 bg-white p-2">
-									<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Pembahasan / Catatan Internal</p>
-									<RichContent html={reviewDecisionQuestion.explanation_html} class="prose prose-sm max-w-none text-slate-700 latex-preview" />
+								<div class="rounded border border-border bg-card p-2">
+									<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Pembahasan / Catatan Internal</p>
+									<RichContent html={reviewDecisionQuestion.explanation_html} class="prose prose-sm max-w-none text-foreground latex-preview" />
 								</div>
 							{/if}
 						</div>
 						{#if reviewDecisionQuestion.review_notes}
-							<div class="rounded border border-amber-100 bg-amber-50 px-2 py-1.5 text-xs leading-relaxed text-amber-900">
+							<div class="rounded border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs leading-relaxed text-warning">
 								<span class="font-semibold">Catatan sebelumnya:</span> {revisionReason(reviewDecisionQuestion)}
 							</div>
 						{/if}
@@ -3061,11 +3061,11 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				aria-pressed={reviewDecision === 'approve'}
 				aria-label="Pilih keputusan Setujui untuk soal ini"
 				class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'approve'
-						? 'border-green-300 bg-green-50 font-semibold text-green-800'
-						: 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}"
+						? 'border-success/20 bg-success/10 font-semibold text-success'
+						: 'border-border bg-card text-muted-foreground hover:bg-muted/50'}"
 				>
 					Setujui
-					<span class="mt-0.5 block text-[11px] font-normal text-slate-500">Soal masuk status disetujui.</span>
+					<span class="mt-0.5 block text-[11px] font-normal text-muted-foreground">Soal masuk status disetujui.</span>
 				</button>
 			<button
 				type="button"
@@ -3073,17 +3073,17 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				aria-pressed={reviewDecision === 'reject'}
 				aria-label="Pilih keputusan Minta Revisi untuk soal ini"
 				class="rounded-md border px-3 py-2 text-left text-sm transition-colors {reviewDecision === 'reject'
-						? 'border-red-300 bg-red-50 font-semibold text-red-700'
-						: 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}"
+						? 'border-destructive/30 bg-destructive/10 font-semibold text-destructive'
+						: 'border-border bg-card text-muted-foreground hover:bg-muted/50'}"
 				>
 					Minta Revisi
-					<span class="mt-0.5 block text-[11px] font-normal text-slate-500">Kembalikan ke guru dengan catatan.</span>
+					<span class="mt-0.5 block text-[11px] font-normal text-muted-foreground">Kembalikan ke guru dengan catatan.</span>
 				</button>
 			</div>
 
 			<div>
-				<label for="review-decision-notes" class="mb-1 block text-xs font-medium text-slate-600">
-					Catatan Reviewer {#if reviewDecision === 'reject'}<span class="text-red-500">*</span>{/if}
+				<label for="review-decision-notes" class="mb-1 block text-xs font-medium text-muted-foreground">
+					Catatan Reviewer {#if reviewDecision === 'reject'}<span class="text-destructive">*</span>{/if}
 				</label>
 				<Textarea
 					id="review-decision-notes"
@@ -3093,7 +3093,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				/>
 			</div>
 
-			<div class="flex justify-end gap-2 border-t border-slate-100 pt-4">
+			<div class="flex justify-end gap-2 border-t border-border pt-4">
 				<Button variant="outline" onclick={closeReviewDecision} disabled={workflowBusyId !== ''}>
 					Batal
 				</Button>
@@ -3102,7 +3102,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 					loading={workflowBusyId !== ''}
 					loadingLabel="Menyimpan..."
 					disabled={!reviewDecisionQuestion || workflowBusyId !== ''}
-					class={reviewDecision === 'approve' ? 'bg-green-700 text-white hover:bg-green-800' : 'bg-red-600 text-white hover:bg-red-700'}
+					class={reviewDecision === 'approve' ? 'bg-success text-background hover:bg-success' : 'bg-destructive text-destructive-foreground hover:bg-destructive'}
 				>
 					{reviewDecision === 'approve' ? 'Setujui Soal' : 'Minta Revisi'}
 				</LoadingButton>
@@ -3116,42 +3116,42 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		<div class="w-[min(94vw,42rem)] space-y-4 p-5">
 			<div class="flex items-start justify-between gap-3">
 				<div>
-					<p class="text-xs font-bold uppercase tracking-wider text-slate-500">Lihat Soal Terkunci</p>
-					<h2 class="mt-1 text-base font-semibold text-slate-800">Detail Read-only</h2>
-					<p class="mt-1 text-xs text-slate-500">Soal tidak bisa diedit langsung karena sudah dipakai, masuk review/publikasi, atau tipe belum kompatibel dengan editor cepat.</p>
+					<p class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Lihat Soal Terkunci</p>
+					<h2 class="mt-1 text-base font-semibold text-foreground">Detail Read-only</h2>
+					<p class="mt-1 text-xs text-muted-foreground">Soal tidak bisa diedit langsung karena sudah dipakai, masuk review/publikasi, atau tipe belum kompatibel dengan editor cepat.</p>
 				</div>
-				{#if questionPreviewLoading}<span class="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">Memuat detail...</span>{/if}
+				{#if questionPreviewLoading}<span class="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">Memuat detail...</span>{/if}
 			</div>
 
 			{#if questionPreview}
-				<div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-					<div class="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
-						<span class="rounded bg-white px-1.5 py-0.5 font-semibold text-green-700">{questionTypeLabel(questionPreview.question_type)}</span>
+				<div class="rounded-lg border border-border bg-muted/50 p-3">
+					<div class="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+						<span class="rounded bg-card px-1.5 py-0.5 font-semibold text-success">{questionTypeLabel(questionPreview.question_type)}</span>
 						<span>{questionPreview.subject_name || questionPreview.subject_code || 'Mapel belum ada'}</span>
 						<span>{WORKFLOW_LABEL[questionPreview.workflow_status] ?? questionPreview.workflow_status}</span>
 						<span>{questionUsageText(questionPreview)}</span>
 					</div>
-					<div class="max-h-80 space-y-3 overflow-auto rounded-md border border-slate-200 bg-white p-3 text-sm">
+					<div class="max-h-80 space-y-3 overflow-auto rounded-md border border-border bg-card p-3 text-sm">
 						{#if questionPreview.stimulus_html}
-							<div class="rounded border border-slate-100 bg-slate-50 p-2">
-								<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Stimulus</p>
-								<RichContent html={questionPreview.stimulus_html} class="prose prose-sm max-w-none text-slate-700 latex-preview" />
+							<div class="rounded border border-border bg-muted/50 p-2">
+								<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Stimulus</p>
+								<RichContent html={questionPreview.stimulus_html} class="prose prose-sm max-w-none text-foreground latex-preview" />
 							</div>
 						{/if}
 						<div>
-							<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pertanyaan</p>
-							<RichContent html={questionPreview.stem_html || questionPreview.question_text || 'Isi soal belum tersedia'} class="prose prose-sm max-w-none text-slate-800 latex-preview" />
+							<p class="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Pertanyaan</p>
+							<RichContent html={questionPreview.stem_html || questionPreview.question_text || 'Isi soal belum tersedia'} class="prose prose-sm max-w-none text-foreground latex-preview" />
 						</div>
 						{#if questionPreview.options.length > 0}
 							<div class="space-y-1.5">
-								<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Opsi / Pasangan</p>
+								<p class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Opsi / Pasangan</p>
 							{#each questionPreview.options as opt, i (`preview-option-${questionPreview.id}-${i}`)}
 								{@const secondary = optionSecondaryContent(opt)}
-								<div class="rounded border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
-									<span class="font-bold text-green-700">{opt.label || opt.match_label || i + 1}.</span>
+								<div class="rounded border border-border bg-muted/50 px-2 py-1.5 text-xs text-foreground">
+									<span class="font-bold text-success">{opt.label || opt.match_label || i + 1}.</span>
 									<RichContent html={optionPrimaryContent(opt)} class="mt-1 latex-preview" />
 									{#if secondary}
-										<div class="mt-1 border-t border-slate-200 pt-1 text-slate-500">
+										<div class="mt-1 border-t border-border pt-1 text-muted-foreground">
 											<RichContent html={secondary} class="latex-preview" />
 										</div>
 									{/if}
@@ -3159,17 +3159,17 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 								{/each}
 							</div>
 						{/if}
-						<div class="rounded border border-green-100 bg-green-50 px-2 py-1.5 text-xs text-green-900">
+						<div class="rounded border border-success/20 bg-success/10 px-2 py-1.5 text-xs text-success">
 							<span class="font-semibold">Kunci/Rubrik:</span> {answerKeyLabelForQuestion(questionPreview)}
 						</div>
 						{#if questionPreview.rubric_html}
-							<div class="rounded border border-amber-100 bg-amber-50 p-2 text-xs text-amber-950">
+							<div class="rounded border border-warning/30 bg-warning/10 p-2 text-xs text-warning">
 								<p class="mb-1 font-semibold">Rubrik / Pedoman Koreksi</p>
 								<RichContent html={questionPreview.rubric_html} class="prose prose-sm max-w-none latex-preview" />
 							</div>
 						{/if}
 						{#if questionPreview.explanation_html}
-							<div class="rounded border border-slate-100 bg-slate-50 p-2 text-xs text-slate-700">
+							<div class="rounded border border-border bg-muted/50 p-2 text-xs text-foreground">
 								<p class="mb-1 font-semibold">Pembahasan</p>
 								<RichContent html={questionPreview.explanation_html} class="prose prose-sm max-w-none latex-preview" />
 							</div>
@@ -3179,10 +3179,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				</div>
 			{/if}
 
-			<div class="flex justify-end gap-2 border-t border-slate-100 pt-4">
+			<div class="flex justify-end gap-2 border-t border-border pt-4">
 				<Button variant="outline" onclick={closeQuestionPreview}>Tutup</Button>
 				{#if questionPreview}
-					<Button class="bg-green-700 text-white hover:bg-green-800" onclick={duplicatePreviewQuestion}>Duplikat untuk Revisi</Button>
+					<Button class="bg-success text-background hover:bg-success" onclick={duplicatePreviewQuestion}>Duplikat untuk Revisi</Button>
 				{/if}
 			</div>
 		</div>
@@ -3190,26 +3190,26 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 </Dialog.Root>
 
 {#snippet questionTimelinePanel()}
-	<div class="rounded border border-slate-200 bg-white p-2 text-xs">
+	<div class="rounded border border-border bg-card p-2 text-xs">
 		<div class="mb-2 flex items-center justify-between gap-2">
-			<p class="font-semibold uppercase tracking-wider text-slate-500">Timeline Soal</p>
-			{#if questionTimelineLoading}<span class="text-slate-400">Memuat...</span>{/if}
+			<p class="font-semibold uppercase tracking-wider text-muted-foreground">Timeline Soal</p>
+			{#if questionTimelineLoading}<span class="text-muted-foreground">Memuat...</span>{/if}
 		</div>
 		{#if questionTimeline.length > 0}
 			<div class="space-y-2">
 				{#each questionTimeline.slice(0, 8) as item, index (`timeline-${item.id ?? index}`)}
-					<div class="rounded border border-slate-100 bg-slate-50 px-2 py-1.5">
+					<div class="rounded border border-border bg-muted/50 px-2 py-1.5">
 						<div class="flex flex-wrap items-center gap-1.5">
-							<span class="font-semibold text-green-800">{item.action ?? item.status ?? 'Perubahan'}</span>
-							{#if item.actor_username}<span class="text-slate-500">oleh {item.actor_username}</span>{/if}
-							{#if item.created_at}<span class="text-slate-400">{new Date(item.created_at).toLocaleString('id-ID')}</span>{/if}
+							<span class="font-semibold text-success">{item.action ?? item.status ?? 'Perubahan'}</span>
+							{#if item.actor_username}<span class="text-muted-foreground">oleh {item.actor_username}</span>{/if}
+							{#if item.created_at}<span class="text-muted-foreground">{new Date(item.created_at).toLocaleString('id-ID')}</span>{/if}
 						</div>
-						{#if item.notes}<p class="mt-1 text-slate-600">{item.notes}</p>{/if}
+						{#if item.notes}<p class="mt-1 text-muted-foreground">{item.notes}</p>{/if}
 					</div>
 				{/each}
 			</div>
 		{:else}
-			<p class="text-slate-400">Timeline belum tersedia dari backend.</p>
+			<p class="text-muted-foreground">Timeline belum tersedia dari backend.</p>
 		{/if}
 	</div>
 {/snippet}
@@ -3217,163 +3217,163 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 {#snippet composerPreview()}
 	<div class="mb-4">
 		<div class="mb-1 flex items-center justify-between">
-			<span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Kesiapan Review</span>
+			<span class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Kesiapan Review</span>
 			<span
 				class="text-sm font-bold {readinessScore === 100
-					? 'text-green-700'
+					? 'text-success'
 					: readinessScore >= 50
-						? 'text-amber-600'
-						: 'text-red-500'}"
+						? 'text-warning'
+						: 'text-destructive'}"
 			>
 				{readinessScore}%
 			</span>
 		</div>
-		<div class="h-2 overflow-hidden rounded-full bg-slate-200">
+		<div class="h-2 overflow-hidden rounded-full bg-border">
 			<div
 				class="h-2 rounded-full transition-all duration-300 {readinessScore === 100
-					? 'bg-green-600'
+					? 'bg-success'
 					: readinessScore >= 50
-						? 'bg-amber-400'
-						: 'bg-red-400'}"
+						? 'bg-warning'
+						: 'bg-destructive'}"
 				style="width: {readinessScore}%"
 			></div>
 		</div>
 		{#if validationIssues.length > 0}
 			<ul class="mt-1.5 space-y-0.5">
 				{#each validationIssues as issue (`validation-${issue}`)}
-					<li class="text-[10px] text-red-500">• {issue}</li>
+					<li class="text-[10px] text-destructive">• {issue}</li>
 				{/each}
 			</ul>
 		{:else}
-			<p class="mt-1 text-[10px] text-green-600">Soal siap diajukan review.</p>
+			<p class="mt-1 text-[10px] text-success">Soal siap diajukan review.</p>
 		{/if}
 	</div>
 
 	<div class="mb-4">
-		<p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+		<p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
 			Sinyal Kualitas
 		</p>
 		<div class="space-y-2">
 			{#each qualitySignals as sig (sig.label)}
 				<div class="flex items-start gap-2">
-					<span class="mt-0.5 shrink-0 text-sm font-bold {sig.status === 'good' ? 'text-green-600' : 'text-amber-500'}">
+					<span class="mt-0.5 shrink-0 text-sm font-bold {sig.status === 'good' ? 'text-success' : 'text-warning'}">
 						{sig.status === 'good' ? '✓' : '!'}
 					</span>
 					<div>
-						<div class="text-xs font-medium text-slate-700">{sig.label}</div>
-						<div class="text-[10px] text-slate-400">{sig.desc}</div>
+						<div class="text-xs font-medium text-foreground">{sig.label}</div>
+						<div class="text-[10px] text-muted-foreground">{sig.desc}</div>
 					</div>
 				</div>
 			{/each}
 		</div>
 	</div>
 
-	<div class="my-3 border-t border-slate-200"></div>
+	<div class="my-3 border-t border-border"></div>
 
 	<div>
-		<p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+		<p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
 			Preview Siswa
 		</p>
-		<div class="rounded-lg border border-slate-200 bg-white p-3 space-y-3" dir={fIsRtl ? 'rtl' : undefined}>
+		<div class="rounded-lg border border-border bg-card p-3 space-y-3" dir={fIsRtl ? 'rtl' : undefined}>
 			{#if isAdvanceMode && fStimulus}
-				<div class="rounded-md border border-slate-100 bg-slate-50 p-2">
-					<p class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Stimulus</p>
-					<RichContent html={fStimulus} class="prose prose-sm max-w-none text-slate-700 latex-preview text-sm" />
+				<div class="rounded-md border border-border bg-muted/50 p-2">
+					<p class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Stimulus</p>
+					<RichContent html={fStimulus} class="prose prose-sm max-w-none text-foreground latex-preview text-sm" />
 				</div>
 			{/if}
 			{#if fStem}
 				<RichContent
 					html={fStem}
-					class="prose prose-sm max-w-none text-slate-800 latex-preview text-sm"
+					class="prose prose-sm max-w-none text-foreground latex-preview text-sm"
 				/>
 			{:else}
-				<p class="text-xs text-slate-400 italic">Isi soal belum dimasukkan</p>
+				<p class="text-xs text-muted-foreground italic">Isi soal belum dimasukkan</p>
 			{/if}
 
 			{#if isEssay}
-				<div class="space-y-2 border-t border-slate-100 pt-2">
-					<div class="rounded-md border border-dashed border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
+				<div class="space-y-2 border-t border-border pt-2">
+					<div class="rounded-md border border-dashed border-success/20 bg-success/10 px-3 py-2 text-xs text-success">
 						Siswa akan melihat kotak jawaban uraian pada aplikasi ujian.
 					</div>
 					{#if richTextHasContent(fRubric)}
-						<div class="rounded-md border border-amber-100 bg-amber-50 p-2">
-							<p class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700">Pedoman koreksi guru</p>
-							<RichContent html={fRubric} class="prose prose-sm max-w-none text-amber-950 latex-preview text-sm" />
+						<div class="rounded-md border border-warning/30 bg-warning/10 p-2">
+							<p class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-warning">Pedoman koreksi guru</p>
+							<RichContent html={fRubric} class="prose prose-sm max-w-none text-warning latex-preview text-sm" />
 						</div>
 					{/if}
 				</div>
 			{:else if isShortAnswer}
-				<div class="space-y-2 border-t border-slate-100 pt-2">
-					<div class="rounded-md border border-dashed border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
+				<div class="space-y-2 border-t border-border pt-2">
+					<div class="rounded-md border border-dashed border-success/20 bg-success/10 px-3 py-2 text-xs text-success">
 						Siswa akan melihat kolom jawaban isian singkat.
 					</div>
 					{#if shortAnswerAliases.length > 0}
-						<div class="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-							<span class="font-semibold text-slate-500">Jawaban diterima:</span> {shortAnswerAliases.join(' / ')}
+						<div class="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-foreground">
+							<span class="font-semibold text-muted-foreground">Jawaban diterima:</span> {shortAnswerAliases.join(' / ')}
 						</div>
 					{/if}
 				</div>
 			{:else if isMatching}
-				<div class="space-y-3 border-t border-slate-100 pt-2">
-					<div class="rounded-md border border-dashed border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
+				<div class="space-y-3 border-t border-border pt-2">
+					<div class="rounded-md border border-dashed border-success/20 bg-success/10 px-3 py-2 text-xs text-success">
 						Siswa akan memilih nomor pasangan kanan untuk setiap item kiri.
 					</div>
 					<div class="grid grid-cols-1 gap-2 md:grid-cols-2">
 						<div class="space-y-1.5">
-							<p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Kolom Kiri</p>
+							<p class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Kolom Kiri</p>
 							{#each fMatchingPairs as pair, i (`preview-match-left-${i}`)}
-								<div class="flex items-start gap-2 rounded-md border border-slate-100 bg-white px-2 py-1.5 text-xs">
-									<span class="shrink-0 font-bold text-green-700">{optionLabelAt(i)}.</span>
+								<div class="flex items-start gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-xs">
+									<span class="shrink-0 font-bold text-success">{optionLabelAt(i)}.</span>
 									{#if richTextHasContent(pair.left)}
 										<RichContent html={pair.left} class="latex-preview min-w-0 flex-1" />
 									{:else}
-										<span class="italic text-slate-300">(kiri kosong)</span>
+										<span class="italic text-muted-foreground">(kiri kosong)</span>
 									{/if}
 								</div>
 							{/each}
 						</div>
 						<div class="space-y-1.5">
-							<p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Pilihan Kanan</p>
+							<p class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pilihan Kanan</p>
 							{#each fMatchingPairs as pair, i (`preview-match-right-${i}`)}
-								<div class="flex items-start gap-2 rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs">
-									<span class="shrink-0 font-bold text-slate-500">{i + 1}.</span>
+								<div class="flex items-start gap-2 rounded-md border border-border bg-muted/50 px-2 py-1.5 text-xs">
+									<span class="shrink-0 font-bold text-muted-foreground">{i + 1}.</span>
 									{#if richTextHasContent(pair.right)}
 										<RichContent html={pair.right} class="latex-preview min-w-0 flex-1" />
 									{:else}
-										<span class="italic text-slate-300">(kanan kosong)</span>
+										<span class="italic text-muted-foreground">(kanan kosong)</span>
 									{/if}
 								</div>
 							{/each}
 							{#each fMatchingDistractors as distractor, i (`preview-match-distractor-${i}`)}
-								<div class="flex items-start gap-2 rounded-md border border-amber-100 bg-amber-50 px-2 py-1.5 text-xs">
-									<span class="shrink-0 font-bold text-amber-700">{fMatchingPairs.length + i + 1}.</span>
+								<div class="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs">
+									<span class="shrink-0 font-bold text-warning">{fMatchingPairs.length + i + 1}.</span>
 									{#if richTextHasContent(distractor)}
 										<RichContent html={distractor} class="latex-preview min-w-0 flex-1" />
 									{:else}
-										<span class="italic text-amber-400">(distraktor kosong)</span>
+										<span class="italic text-warning">(distraktor kosong)</span>
 									{/if}
 								</div>
 							{/each}
 						</div>
 					</div>
-					<div class="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-						<span class="font-semibold text-slate-500">Kunci otomatis:</span> {buildMatchingAnswerKey(fMatchingPairs.length)}
+					<div class="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-foreground">
+						<span class="font-semibold text-muted-foreground">Kunci otomatis:</span> {buildMatchingAnswerKey(fMatchingPairs.length)}
 					</div>
 				</div>
 			{:else if fOptions.some(richTextHasContent)}
-				<div class="space-y-1.5 border-t border-slate-100 pt-2">
+				<div class="space-y-1.5 border-t border-border pt-2">
 					{#each fOptions as opt, i (`preview-option-${i}`)}
 						{@const label = optionLabelAt(i)}
 						{@const isAnswer = isAnswerLabelSelected(label)}
-						<div class="flex items-start gap-2 text-sm {isAnswer ? 'text-green-700 font-medium' : 'text-slate-700'}">
+						<div class="flex items-start gap-2 text-sm {isAnswer ? 'text-success font-medium' : 'text-foreground'}">
 							<span class="shrink-0 font-bold">{label}.</span>
 							{#if richTextHasContent(opt)}
 								<RichContent html={opt} class="latex-preview min-w-0 flex-1" />
 							{:else}
-								<span class="italic text-slate-300">(kosong)</span>
+								<span class="italic text-muted-foreground">(kosong)</span>
 							{/if}
 							{#if isAnswer}
-								<span class="ml-auto shrink-0 text-xs text-green-500">✓</span>
+								<span class="ml-auto shrink-0 text-xs text-success">✓</span>
 							{/if}
 						</div>
 					{/each}
@@ -3396,7 +3396,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 						<p class="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">{card.label}</p>
 						<p class="mt-1 truncate text-sm font-bold">{card.desc}</p>
 					</div>
-					<span class="shrink-0 rounded-full bg-white/70 px-2 py-1 text-[10px] font-bold uppercase tracking-wide">{card.status}</span>
+					<span class="shrink-0 rounded-full bg-card/70 px-2 py-1 text-[10px] font-bold uppercase tracking-wide">{card.status}</span>
 				</div>
 			</button>
 		{/each}
@@ -3405,23 +3405,23 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 <!-- ── Composer Inline Section ─────────────────────────────────────────────── -->
 {#snippet composerPanel()}
-	<section class="soal-composer-inline relative flex min-h-[42rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm">
-			<div class="shrink-0 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-amber-50 px-4 py-4 md:px-5">
+	<section class="soal-composer-inline relative flex min-h-[42rem] flex-col overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-sm">
+			<div class="shrink-0 border-b border-primary/20 bg-gradient-to-r from-primary/10 via-card to-warning/10 px-4 py-4 md:px-5">
 				<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 					<div class="min-w-0">
-						<p class="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-700">Studio Komposer Bank Soal</p>
+						<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Studio Komposer Bank Soal</p>
 						<div class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-							<h2 class="text-xl font-black uppercase italic tracking-tight text-slate-950">
+							<h2 class="text-xl font-black uppercase italic tracking-tight text-foreground">
 								{editingId ? 'Edit Butir Soal' : 'Penyusunan Soal Baru'}
 							</h2>
 						</div>
-						<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+						<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
 							Susun metadata, naskah, kunci/rubrik, lalu cek preview siswa sebelum diajukan review. Autosave lokal dan Ctrl+S tetap aktif.
 						</p>
 						<div class="mt-3 flex flex-wrap gap-2">
-							<span class="rounded-full border border-emerald-100 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">{composerScopeLabel}</span>
-							<span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{questionTypeConfig.label}</span>
-							<span class="rounded-full border border-amber-100 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">{composerModeLabel}</span>
+							<span class="rounded-full border border-primary/20 bg-card px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">{composerScopeLabel}</span>
+							<span class="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{questionTypeConfig.label}</span>
+							<span class="rounded-full border border-warning/30 bg-card px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-warning">{composerModeLabel}</span>
 						</div>
 					</div>
 					<div class="flex flex-wrap gap-2 lg:justify-end">
@@ -3456,54 +3456,54 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				</div>
 			</div>
 
-			<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 md:p-5">
-				<section class="mb-4 rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+			<div class="min-h-0 flex-1 overflow-y-auto bg-muted/50 p-4 md:p-5">
+				<section class="mb-4 rounded-2xl border border-primary/20 bg-card p-4 shadow-sm">
 					<div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
 						<div>
-							<p class="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-700">Alur penyusunan</p>
-							<h3 class="text-sm font-black uppercase text-slate-900">Klik kartu untuk lompat ke bagian editor</h3>
+							<p class="text-[10px] font-black uppercase tracking-[0.24em] text-primary">Alur penyusunan</p>
+							<h3 class="text-sm font-black uppercase text-foreground">Klik kartu untuk lompat ke bagian editor</h3>
 						</div>
-						<span class="text-xs font-semibold text-slate-500">Kesiapan review {readinessScore}%</span>
+						<span class="text-xs font-semibold text-muted-foreground">Kesiapan review {readinessScore}%</span>
 					</div>
 					{@render composerStageRail()}
 				</section>
 
-				<section class="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+				<section class="mb-4 rounded-xl border border-border bg-card p-4 shadow-sm">
 					<div class="flex flex-wrap items-center gap-2">
 						<div class="flex min-w-[11rem] items-center gap-2">
-							<span class="text-[10px] font-black uppercase tracking-wider text-slate-500">Kesiapan Kirim</span>
-							<div class="h-1.5 w-20 overflow-hidden rounded-full bg-slate-200">
+							<span class="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Kesiapan Kirim</span>
+							<div class="h-1.5 w-20 overflow-hidden rounded-full bg-border">
 								<div
 									class="h-1.5 rounded-full transition-all duration-300 {readinessScore === 100
-										? 'bg-green-600'
+										? 'bg-success'
 										: readinessScore >= 50
-											? 'bg-amber-400'
-											: 'bg-red-400'}"
+											? 'bg-warning'
+											: 'bg-destructive'}"
 									style="width: {readinessScore}%"
 								></div>
 							</div>
-							<span class="text-xs font-bold {readinessScore === 100 ? 'text-green-700' : 'text-red-500'}">{readinessScore}%</span>
+							<span class="text-xs font-bold {readinessScore === 100 ? 'text-success' : 'text-destructive'}">{readinessScore}%</span>
 						</div>
-							<span class="rounded-full border px-2 py-1 text-[10px] font-semibold {validationIssues.length === 0 ? 'border-emerald-100 bg-white text-emerald-700' : 'border-red-100 bg-white text-red-600'}">
+							<span class="rounded-full border px-2 py-1 text-[10px] font-semibold {validationIssues.length === 0 ? 'border-primary/20 bg-card text-primary' : 'border-destructive/30 bg-card text-destructive'}">
 								{validationIssues.length === 0 ? 'Siap review' : `${validationIssues.length} wajib belum lengkap`}
 							</span>
 							{#if firstComposerIssue}
 								<button
 									type="button"
 									onclick={scrollToFirstComposerIssue}
-									class="rounded-full border border-red-100 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700 hover:bg-red-100"
+									class="rounded-full border border-destructive/30 bg-destructive/10 px-2 py-1 text-[10px] font-semibold text-destructive hover:bg-destructive/15"
 								>
 									Lengkapi: {firstComposerIssue.message}
 								</button>
 							{/if}
-							<span class="rounded-full border border-amber-100 bg-white px-2 py-1 text-[10px] font-semibold text-amber-700">
+							<span class="rounded-full border border-warning/30 bg-card px-2 py-1 text-[10px] font-semibold text-warning">
 								{qualityWarningCount} sinyal kualitas perlu cek
 							</span>
-						<span class="rounded-full border border-emerald-100 bg-white px-2 py-1 text-[10px] font-semibold text-emerald-700">
+						<span class="rounded-full border border-primary/20 bg-card px-2 py-1 text-[10px] font-semibold text-primary">
 							{draftStatusLabel()}
 						</span>
 						{#if selectedEventId}
-							<span class="rounded-full border border-emerald-100 bg-white px-2 py-1 text-[10px] font-semibold text-emerald-700">
+							<span class="rounded-full border border-primary/20 bg-card px-2 py-1 text-[10px] font-semibold text-primary">
 								Konteks kegiatan: {selectedEventTitle}
 							</span>
 						{/if}
@@ -3512,60 +3512,60 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 				<div class="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(18rem,0.5fr)]">
 					<div class={`space-y-4 min-w-0 ${composerMobilePanel === 'preview' ? 'hidden lg:block' : 'block'}`}>
-						<section id="composer-metadata" class="scroll-mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-							<div class="mb-3 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
-								<span class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-800">Bentuk Soal</span>
-								<div class="flex flex-wrap rounded-lg border border-slate-200 bg-slate-50 p-1">
+						<section id="composer-metadata" class="scroll-mt-4 rounded-lg border border-border bg-card p-3 shadow-sm">
+							<div class="mb-3 flex flex-wrap items-center gap-2 border-b border-border pb-3">
+								<span class="text-[10px] font-black uppercase tracking-[0.2em] text-foreground">Bentuk Soal</span>
+								<div class="flex flex-wrap rounded-lg border border-border bg-muted/50 p-1">
 									{#each QUESTION_TYPE_CONFIGS as typeConfig (typeConfig.id)}
 										<button
 											type="button"
 											onclick={() => setQuestionType(typeConfig.id)}
 											title={typeConfig.desc}
-											class="h-7 rounded-md px-2.5 text-[10px] font-bold uppercase tracking-wide {fQuestionType === typeConfig.id ? 'bg-green-700 text-white' : 'text-slate-600 hover:bg-white'}"
+											class="h-7 rounded-md px-2.5 text-[10px] font-bold uppercase tracking-wide {fQuestionType === typeConfig.id ? 'bg-success text-background' : 'text-muted-foreground hover:bg-card'}"
 										>
 											{typeConfig.shortLabel}
 										</button>
 									{/each}
 								</div>
-								<span class="ml-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-800">Mode</span>
-								<div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+								<span class="ml-2 text-[10px] font-black uppercase tracking-[0.2em] text-foreground">Mode</span>
+								<div class="inline-flex rounded-lg border border-border bg-muted/50 p-1">
 									<button
 										type="button"
 										onclick={() => setAuthoringMode('beginner')}
-										class="h-7 rounded-md px-3 text-[10px] font-bold uppercase tracking-wide {fAuthoringMode === 'beginner' ? 'bg-green-700 text-white' : 'text-slate-600 hover:bg-white'}"
+										class="h-7 rounded-md px-3 text-[10px] font-bold uppercase tracking-wide {fAuthoringMode === 'beginner' ? 'bg-success text-background' : 'text-muted-foreground hover:bg-card'}"
 									>
 										Pemula
 									</button>
 									<button
 										type="button"
 										onclick={() => setAuthoringMode('advance')}
-										class="h-7 rounded-md px-3 text-[10px] font-bold uppercase tracking-wide {fAuthoringMode === 'advance' ? 'bg-green-700 text-white' : 'text-slate-600 hover:bg-white'}"
+										class="h-7 rounded-md px-3 text-[10px] font-bold uppercase tracking-wide {fAuthoringMode === 'advance' ? 'bg-success text-background' : 'text-muted-foreground hover:bg-card'}"
 									>
 										Advance
 									</button>
 								</div>
-								<span class="text-[11px] text-slate-500">
-									<span class="font-semibold text-slate-700">{questionTypeConfig.label}:</span> {questionTypeConfig.desc}
+								<span class="text-[11px] text-muted-foreground">
+									<span class="font-semibold text-foreground">{questionTypeConfig.label}:</span> {questionTypeConfig.desc}
 								</span>
 							</div>
 							<div class="grid gap-2 lg:grid-cols-[8rem_minmax(0,1fr)_8rem_6.5rem_10.5rem] lg:items-end">
 								<div class="self-center">
-									<h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-800">Metadata</h3>
-									<p class="mt-0.5 text-[10px] text-slate-400">Data wajib</p>
+									<h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-foreground">Metadata</h3>
+									<p class="mt-0.5 text-[10px] text-muted-foreground">Data wajib</p>
 								</div>
 								<div>
 									<div class="mb-1 flex items-center justify-between gap-2">
-										<label for="f-subject" class="block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-										Mata Pelajaran <span class="text-red-500">*</span>
+										<label for="f-subject" class="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+										Mata Pelajaran <span class="text-destructive">*</span>
 									</label>
 										{#if !readinessChecks.subject}
-											<span class="text-[10px] font-semibold text-red-500">Wajib</span>
+											<span class="text-[10px] font-semibold text-destructive">Wajib</span>
 										{/if}
 									</div>
 									<select
 										id="f-subject"
 										bind:value={fSubjectId}
-										class="h-8 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+										class="h-8 w-full rounded-md border border-border bg-card px-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 									>
 										<option value="">-- Pilih Mapel --</option>
 										{#each subjects as s (s.id)}
@@ -3574,13 +3574,13 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 									</select>
 								</div>
 								<div>
-									<label for="f-difficulty" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+									<label for="f-difficulty" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
 										Kesulitan
 									</label>
 									<select
 										id="f-difficulty"
 										bind:value={fDifficulty}
-										class="h-8 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+										class="h-8 w-full rounded-md border border-border bg-card px-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 									>
 										{#each Object.entries(DIFFICULTY_LABEL) as [val, lbl] (val)}
 											<option value={val}>{lbl}</option>
@@ -3588,78 +3588,78 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 									</select>
 								</div>
 								<div>
-									<label for="f-weight" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+									<label for="f-weight" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
 										Bobot lokal (panduan paket)
 									</label>
 									<Input id="f-weight" type="number" min="1" bind:value={fWeight} class="h-8 text-sm font-medium" />
-									<p class="mt-1 text-[10px] text-slate-400">Tidak disimpan backend; hanya catatan saat menyusun paket.</p>
+									<p class="mt-1 text-[10px] text-muted-foreground">Tidak disimpan backend; hanya catatan saat menyusun paket.</p>
 								</div>
-								<label for="f-rtl" class="flex h-8 cursor-pointer items-center justify-between gap-2 rounded-md border border-dashed border-green-200 bg-green-50 px-2.5">
-									<span class="text-[10px] font-black uppercase tracking-wider text-green-800">Mode Arab / RTL</span>
+								<label for="f-rtl" class="flex h-8 cursor-pointer items-center justify-between gap-2 rounded-md border border-dashed border-success/20 bg-success/10 px-2.5">
+									<span class="text-[10px] font-black uppercase tracking-wider text-success">Mode Arab / RTL</span>
 									<input id="f-rtl" type="checkbox" bind:checked={fIsRtl} class="rounded accent-green-700" />
 								</label>
 							</div>
 						</section>
 
 						{#if isAdvanceMode}
-							<section id="composer-advanced" class="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+							<section id="composer-advanced" class="scroll-mt-4 rounded-xl border border-border bg-card p-4 shadow-sm">
 								<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
 									<div>
-										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Detail Advance</h3>
-										<p class="mt-0.5 text-xs text-slate-500">Blueprint, kurikulum, dan alur review.</p>
+										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-foreground">Detail Advance</h3>
+										<p class="mt-0.5 text-xs text-muted-foreground">Blueprint, kurikulum, dan alur review.</p>
 									</div>
-									<label for="f-hots" class="flex h-8 cursor-pointer items-center gap-2 rounded-md border border-green-200 bg-green-50 px-2.5">
+									<label for="f-hots" class="flex h-8 cursor-pointer items-center gap-2 rounded-md border border-success/20 bg-success/10 px-2.5">
 										<input id="f-hots" type="checkbox" bind:checked={fHotsFlag} class="rounded accent-green-700" />
-										<span class="text-[10px] font-black uppercase tracking-wider text-green-800">HOTS</span>
+										<span class="text-[10px] font-black uppercase tracking-wider text-success">HOTS</span>
 									</label>
 								</div>
 								<div class="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
 									<div>
-										<label for="f-grade-level" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Tingkat</label>
+										<label for="f-grade-level" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tingkat</label>
 										<Input id="f-grade-level" type="number" min="1" max="12" bind:value={fGradeLevel} class="h-8 text-sm" />
 									</div>
 									<div>
-										<label for="f-phase" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Fase</label>
+										<label for="f-phase" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Fase</label>
 										<Input id="f-phase" placeholder="Fase D" bind:value={fAcademicPhase} class="h-8 text-sm" />
 									</div>
 									<div>
-										<label for="f-topic" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Topik</label>
+										<label for="f-topic" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Topik</label>
 										<Input id="f-topic" placeholder="Topik materi" bind:value={fMaterialTopic} class="h-8 text-sm" />
 									</div>
 									<div>
-										<label for="f-cognitive" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Kognitif</label>
+										<label for="f-cognitive" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Kognitif</label>
 										<Input id="f-cognitive" placeholder="C3 / HOTS" bind:value={fCognitiveLevel} class="h-8 text-sm" />
 									</div>
 									<div>
-										<label for="f-cp" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">CP</label>
+										<label for="f-cp" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">CP</label>
 										<Input id="f-cp" placeholder="CP ref" bind:value={fCPRef} class="h-8 text-sm" />
 									</div>
 									<div>
-										<label for="f-tp" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">TP</label>
+										<label for="f-tp" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">TP</label>
 										<Input id="f-tp" placeholder="TP ref" bind:value={fTPRef} class="h-8 text-sm" />
 									</div>
 									<div>
-										<label for="f-kd" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">KD</label>
+										<label for="f-kd" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">KD</label>
 										<Input id="f-kd" placeholder="KD ref" bind:value={fKDRef} class="h-8 text-sm" />
 									</div>
 									<div>
-										<label for="f-indicator" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Indikator</label>
+										<label for="f-indicator" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Indikator</label>
 										<Input id="f-indicator" placeholder="Indikator" bind:value={fIndicatorRef} class="h-8 text-sm" />
 									</div>
-									<div class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-										<p class="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Alur</p>
-										<p class="mt-0.5 text-[11px] text-slate-500">Draft dan review dikendalikan dari tombol bawah.</p>
+									<div class="rounded-md border border-border bg-muted/50 px-3 py-2">
+										<p class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Alur</p>
+										<p class="mt-0.5 text-[11px] text-muted-foreground">Draft dan review dikendalikan dari tombol bawah.</p>
 									</div>
 								</div>
 							</section>
 
-							<section id="composer-stimulus" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+							<section id="composer-stimulus" class="scroll-mt-4 space-y-2 rounded-xl border border-border bg-card p-4 shadow-sm">
 								<div class="flex flex-wrap items-center justify-between gap-2">
 									<div>
-										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Stimulus</h3>
-										<p class="mt-0.5 text-xs text-slate-500">Narasi, data, gambar, atau konteks pendukung.</p>
+										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-foreground">Stimulus</h3>
+										<p class="mt-0.5 text-xs text-muted-foreground">Narasi, data, gambar, atau konteks pendukung.</p>
 									</div>
-									<button type="button" onclick={() => (focusedEditor = 'stimulus')} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
+									<button type="button" onclick={() => (focusedEditor = 'stimulus')} class="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50">Fokus</button>
 								</div>
 								<LegacyRichTextEditor
 									bind:value={fStimulus}
@@ -3671,13 +3671,13 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 								/>
 							</section>
 							{/if}
-							<section id="composer-question" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+							<section id="composer-question" class="scroll-mt-4 space-y-2 rounded-xl border border-border bg-card p-4 shadow-sm">
 							<div class="flex flex-wrap items-center justify-between gap-2">
 								<div>
-									<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">{isEssay ? 'Pertanyaan Essay' : isShortAnswer ? 'Pertanyaan Isian Singkat' : isMatching ? 'Instruksi Menjodohkan' : isTrueFalse ? 'Pernyataan Benar/Salah' : isAgreeDisagree ? 'Pernyataan Setuju/Tidak Setuju' : 'Isi Pertanyaan'}</h3>
-									<p class="mt-0.5 text-xs text-slate-500">{questionTypeConfig.studentHint}</p>
+									<h3 class="text-xs font-black uppercase tracking-[0.2em] text-foreground">{isEssay ? 'Pertanyaan Essay' : isShortAnswer ? 'Pertanyaan Isian Singkat' : isMatching ? 'Instruksi Menjodohkan' : isTrueFalse ? 'Pernyataan Benar/Salah' : isAgreeDisagree ? 'Pernyataan Setuju/Tidak Setuju' : 'Isi Pertanyaan'}</h3>
+									<p class="mt-0.5 text-xs text-muted-foreground">{questionTypeConfig.studentHint}</p>
 								</div>
-								<button type="button" onclick={() => (focusedEditor = 'stem')} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
+								<button type="button" onclick={() => (focusedEditor = 'stem')} class="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50">Fokus</button>
 							</div>
 							<LegacyRichTextEditor
 								bind:value={fStem}
@@ -3688,19 +3688,19 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 								onImageUpload={uploadImageInEditor}
 							/>
 							{#if !readinessChecks.stem}
-								<p class="text-[10px] font-semibold text-red-500">Isi pertanyaan minimal 5 karakter atau sisipkan gambar.</p>
+								<p class="text-[10px] font-semibold text-destructive">Isi pertanyaan minimal 5 karakter atau sisipkan gambar.</p>
 							{/if}
 						</section>
 
 						{#if isMatching}
-							<section id="composer-matching" class="scroll-mt-4 space-y-4 border-t border-slate-200 pt-5">
+							<section id="composer-matching" class="scroll-mt-4 space-y-4 border-t border-border pt-5">
 								<div class="flex flex-wrap items-center justify-between gap-3">
 									<div>
-										<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-slate-500">Pasangan Menjodohkan</h3>
-										<p class="mt-1 text-xs text-slate-500">Kolom kiri adalah pernyataan/istilah. Kolom kanan adalah pasangan benar yang akan dipilih siswa.</p>
+										<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-muted-foreground">Pasangan Menjodohkan</h3>
+										<p class="mt-1 text-xs text-muted-foreground">Kolom kiri adalah pernyataan/istilah. Kolom kanan adalah pasangan benar yang akan dipilih siswa.</p>
 									</div>
 									<div class="flex flex-wrap items-center gap-2">
-										<span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">{fMatchingPairs.length} pasangan</span>
+										<span class="rounded-full bg-muted px-2 py-1 text-[10px] font-semibold text-muted-foreground">{fMatchingPairs.length} pasangan</span>
 										<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fMatchingPairs.length <= questionTypeConfig.minOptions} onclick={removeLastMatchingPair}>
 											Kurangi
 										</Button>
@@ -3713,16 +3713,16 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 									{#each fMatchingPairs as pair, i (`matching-pair-${i}`)}
 										{@const leftLabel = optionLabelAt(i)}
 										{@const rightLabel = i + 1}
-										<section class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-											<div class="mb-2 flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+										<section class="rounded-xl border border-border bg-card p-3 shadow-sm">
+											<div class="mb-2 flex items-center justify-between gap-3 border-b border-border pb-2">
 												<div>
-													<p class="text-xs font-black uppercase tracking-[0.2em] text-slate-700">Pasangan {leftLabel} = {rightLabel}</p>
-													<p class="mt-0.5 text-[11px] text-slate-400">Kunci disimpan otomatis sebagai {leftLabel}={rightLabel}</p>
+													<p class="text-xs font-black uppercase tracking-[0.2em] text-foreground">Pasangan {leftLabel} = {rightLabel}</p>
+													<p class="mt-0.5 text-[11px] text-muted-foreground">Kunci disimpan otomatis sebagai {leftLabel}={rightLabel}</p>
 												</div>
 											</div>
 											<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
 												<div>
-													<label for={`matching-left-${i}`} class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Kolom Kiri {leftLabel}</label>
+													<label for={`matching-left-${i}`} class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Kolom Kiri {leftLabel}</label>
 													<LegacyRichTextEditor
 														bind:value={fMatchingPairs[i].left}
 														id={`matching-left-${i}`}
@@ -3732,11 +3732,11 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 														onImageUpload={uploadImageInEditor}
 													/>
 													{#if !richTextHasContent(pair.left)}
-														<p class="mt-1 text-[10px] font-semibold text-red-500">Kolom kiri wajib diisi.</p>
+														<p class="mt-1 text-[10px] font-semibold text-destructive">Kolom kiri wajib diisi.</p>
 													{/if}
 												</div>
 												<div>
-													<label for={`matching-right-${i}`} class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Kolom Kanan {rightLabel}</label>
+													<label for={`matching-right-${i}`} class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Kolom Kanan {rightLabel}</label>
 													<LegacyRichTextEditor
 														bind:value={fMatchingPairs[i].right}
 														id={`matching-right-${i}`}
@@ -3746,18 +3746,18 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 														onImageUpload={uploadImageInEditor}
 													/>
 													{#if !richTextHasContent(pair.right)}
-														<p class="mt-1 text-[10px] font-semibold text-red-500">Kolom kanan wajib diisi.</p>
+														<p class="mt-1 text-[10px] font-semibold text-destructive">Kolom kanan wajib diisi.</p>
 													{/if}
 												</div>
 											</div>
 										</section>
 									{/each}
 								</div>
-								<div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3">
+								<div class="rounded-xl border border-dashed border-border bg-muted/50 p-3">
 									<div class="flex flex-wrap items-center justify-between gap-3">
 										<div>
-											<p class="text-xs font-black uppercase tracking-[0.2em] text-slate-700">Distraktor Kanan Opsional</p>
-											<p class="mt-0.5 text-[11px] text-slate-500">Tambahkan pilihan kanan ekstra agar siswa tidak hanya mencocokkan satu-ke-satu.</p>
+											<p class="text-xs font-black uppercase tracking-[0.2em] text-foreground">Distraktor Kanan Opsional</p>
+											<p class="mt-0.5 text-[11px] text-muted-foreground">Tambahkan pilihan kanan ekstra agar siswa tidak hanya mencocokkan satu-ke-satu.</p>
 										</div>
 										<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fMatchingDistractors.length >= MAX_MATCHING_DISTRACTOR_COUNT} onclick={addMatchingDistractor}>
 											+ Distraktor
@@ -3766,10 +3766,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 									{#if fMatchingDistractors.length > 0}
 										<div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
 											{#each fMatchingDistractors as distractor, i (`matching-distractor-${i}`)}
-												<div class="rounded-lg border border-slate-200 bg-white p-3">
+												<div class="rounded-lg border border-border bg-card p-3">
 													<div class="mb-2 flex items-center justify-between gap-3">
-														<label for={`matching-distractor-${i}`} class="block text-[10px] font-semibold uppercase tracking-wider text-slate-600">Distraktor Kanan {fMatchingPairs.length + i + 1}</label>
-														<button type="button" onclick={() => removeMatchingDistractor(i)} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">
+														<label for={`matching-distractor-${i}`} class="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Distraktor Kanan {fMatchingPairs.length + i + 1}</label>
+														<button type="button" onclick={() => removeMatchingDistractor(i)} class="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50">
 															Hapus
 														</button>
 													</div>
@@ -3782,7 +3782,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 														onImageUpload={uploadImageInEditor}
 													/>
 													{#if !richTextHasContent(distractor)}
-														<p class="mt-1 text-[10px] font-semibold text-amber-600">Isi distraktor atau hapus jika tidak dipakai.</p>
+														<p class="mt-1 text-[10px] font-semibold text-warning">Isi distraktor atau hapus jika tidak dipakai.</p>
 													{/if}
 												</div>
 											{/each}
@@ -3791,16 +3791,16 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 								</div>
 							</section>
 						{:else if hasOptionSection}
-							<section id="composer-options" class="scroll-mt-4 space-y-4 border-t border-slate-200 pt-5">
+							<section id="composer-options" class="scroll-mt-4 space-y-4 border-t border-border pt-5">
 								<div class="text-center">
-									<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-slate-500">
+									<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-muted-foreground">
 										{isMultipleAnswer ? 'Opsi & Kunci Jawaban Ganda' : isTrueFalse ? 'Kunci Benar/Salah' : isAgreeDisagree ? 'Kunci Setuju/Tidak Setuju' : 'Opsi & Kunci Jawaban'}
 									</h3>
-									<p class="mt-1 text-xs text-slate-500">{questionTypeConfig.studentHint}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{questionTypeConfig.studentHint}</p>
 								</div>
 								{#if hasEditableOptions}
 									<div class="flex flex-wrap items-center justify-center gap-2">
-										<span class="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">{fOptions.length} opsi aktif</span>
+										<span class="rounded-full bg-muted px-2 py-1 text-[10px] font-semibold text-muted-foreground">{fOptions.length} opsi aktif</span>
 										<Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[10px]" disabled={fOptions.length <= questionTypeConfig.minOptions} onclick={removeLastOption}>
 											Kurangi
 										</Button>
@@ -3814,20 +3814,20 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 										{@const label = optionLabelAt(i)}
 										{@const isAnswer = isAnswerLabelSelected(label)}
 										<section
-											class="space-y-2 rounded-xl border bg-white p-3 shadow-sm transition-colors {isAnswer
-												? 'border-green-500 ring-4 ring-green-100'
-												: 'border-slate-200 hover:border-slate-300'}"
+											class="space-y-2 rounded-xl border bg-card p-3 shadow-sm transition-colors {isAnswer
+												? 'border-success ring-4 ring-success/30'
+												: 'border-border hover:border-border'}"
 										>
-											<div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+											<div class="flex items-center justify-between gap-3 border-b border-border pb-2">
 												<div>
-													<p class="text-xs font-black uppercase tracking-[0.2em] text-slate-700">Opsi {label}</p>
-													<p class="mt-0.5 text-[11px] text-slate-400">{isAnswer ? 'Ditandai sebagai kunci jawaban' : isFixedPair ? 'Pilihan tetap' : 'Pengecoh / alternatif jawaban'}</p>
+													<p class="text-xs font-black uppercase tracking-[0.2em] text-foreground">Opsi {label}</p>
+													<p class="mt-0.5 text-[11px] text-muted-foreground">{isAnswer ? 'Ditandai sebagai kunci jawaban' : isFixedPair ? 'Pilihan tetap' : 'Pengecoh / alternatif jawaban'}</p>
 												</div>
 												<div class="flex shrink-0 items-center gap-1">
 													{#if hasEditableOptions}
-														<button type="button" onclick={() => (focusedEditor = label)} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
+														<button type="button" onclick={() => (focusedEditor = label)} class="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50">Fokus</button>
 													{/if}
-													<label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {isAnswer ? 'bg-green-600 text-white' : 'hover:bg-green-50'}">
+													<label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {isAnswer ? 'bg-success text-background' : 'hover:bg-success/10'}">
 														{#if isMultipleAnswer}
 															<input
 																type="checkbox"
@@ -3845,7 +3845,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 																class="h-4 w-4 cursor-pointer accent-green-700"
 															/>
 														{/if}
-														<span class="text-[10px] font-black uppercase tracking-widest {isAnswer ? 'text-white' : 'text-slate-500'}">Kunci</span>
+														<span class="text-[10px] font-black uppercase tracking-widest {isAnswer ? 'text-white' : 'text-muted-foreground'}">Kunci</span>
 													</label>
 												</div>
 											</div>
@@ -3860,10 +3860,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 														onImageUpload={uploadImageInEditor}
 													/>
 													{#if !richTextHasContent(fOptions[i])}
-														<p class="mt-1 text-[10px] font-semibold text-red-500">Opsi {label} wajib diisi.</p>
+														<p class="mt-1 text-[10px] font-semibold text-destructive">Opsi {label} wajib diisi.</p>
 													{/if}
 												{:else}
-													<div class="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+													<div class="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm font-semibold text-foreground">
 														{opt}
 													</div>
 												{/if}
@@ -3872,18 +3872,18 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 									{/each}
 								</div>
 								{#if isMultipleAnswer && !answerKeyReady}
-									<p class="text-center text-[10px] font-semibold text-red-500">Pilih minimal dua opsi sebagai kunci jawaban ganda.</p>
+									<p class="text-center text-[10px] font-semibold text-destructive">Pilih minimal dua opsi sebagai kunci jawaban ganda.</p>
 								{/if}
 							</section>
 						{:else if isShortAnswer}
-							<section id="composer-answer" class="scroll-mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+							<section id="composer-answer" class="scroll-mt-4 space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
 								<div>
-									<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">Kunci Isian Singkat</h3>
-									<p class="mt-0.5 text-xs text-slate-500">Pisahkan beberapa jawaban diterima dengan tanda |. Sistem mengabaikan besar/kecil huruf dan spasi ganda.</p>
+									<h3 class="text-xs font-black uppercase tracking-[0.2em] text-foreground">Kunci Isian Singkat</h3>
+									<p class="mt-0.5 text-xs text-muted-foreground">Pisahkan beberapa jawaban diterima dengan tanda |. Sistem mengabaikan besar/kecil huruf dan spasi ganda.</p>
 								</div>
 								<div>
-									<label for="f-short-answer-key" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-										Kunci / Alias Jawaban <span class="text-red-500">*</span>
+									<label for="f-short-answer-key" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+										Kunci / Alias Jawaban <span class="text-destructive">*</span>
 									</label>
 									<Input
 										id="f-short-answer-key"
@@ -3892,21 +3892,21 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 										class="h-9 text-sm font-medium"
 									/>
 									{#if shortAnswerAliases.length > 0}
-										<p class="mt-1 text-[10px] font-semibold text-green-700">{shortAnswerAliases.length} jawaban diterima: {shortAnswerAliases.join(' / ')}</p>
+										<p class="mt-1 text-[10px] font-semibold text-success">{shortAnswerAliases.length} jawaban diterima: {shortAnswerAliases.join(' / ')}</p>
 									{/if}
 									{#if !readinessChecks.answerKey}
-										<p class="mt-1 text-[10px] font-semibold text-red-500">Kunci isian singkat wajib diisi sebelum review.</p>
+										<p class="mt-1 text-[10px] font-semibold text-destructive">Kunci isian singkat wajib diisi sebelum review.</p>
 									{/if}
 								</div>
 							</section>
 						{:else}
-						<section id="composer-rubric" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+						<section id="composer-rubric" class="scroll-mt-4 space-y-2 rounded-xl border border-border bg-card p-4 shadow-sm">
 							<div class="flex flex-wrap items-center justify-between gap-2">
 								<div>
-									<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">{isAdvanceMode ? 'Rubrik Penilaian' : 'Pedoman Jawaban'}</h3>
-									<p class="mt-0.5 text-xs text-slate-500">{isAdvanceMode ? 'Kriteria koreksi, rentang skor, dan catatan penilai.' : 'Panduan singkat agar guru mudah mengoreksi jawaban.'}</p>
+									<h3 class="text-xs font-black uppercase tracking-[0.2em] text-foreground">{isAdvanceMode ? 'Rubrik Penilaian' : 'Pedoman Jawaban'}</h3>
+									<p class="mt-0.5 text-xs text-muted-foreground">{isAdvanceMode ? 'Kriteria koreksi, rentang skor, dan catatan penilai.' : 'Panduan singkat agar guru mudah mengoreksi jawaban.'}</p>
 								</div>
-								<button type="button" onclick={() => (focusedEditor = 'rubric')} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
+								<button type="button" onclick={() => (focusedEditor = 'rubric')} class="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50">Fokus</button>
 							</div>
 							<LegacyRichTextEditor
 								bind:value={fRubric}
@@ -3917,19 +3917,19 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 								onImageUpload={uploadImageInEditor}
 							/>
 							{#if !readinessChecks.rubric}
-								<p class="text-[10px] font-semibold text-red-500">Pedoman/rubrik essay wajib diisi.</p>
+								<p class="text-[10px] font-semibold text-destructive">Pedoman/rubrik essay wajib diisi.</p>
 							{/if}
 						</section>
 						{/if}
 
 							{#if isAdvanceMode}
-								<section id="composer-explanation" class="scroll-mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+								<section id="composer-explanation" class="scroll-mt-4 space-y-2 rounded-xl border border-border bg-card p-4 shadow-sm">
 								<div class="flex flex-wrap items-center justify-between gap-2">
 									<div>
-										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-800">{isEssay ? 'Catatan Pembahasan' : 'Pembahasan'}</h3>
-										<p class="mt-0.5 text-xs text-slate-500">{isEssay ? 'Catatan internal untuk guru/reviewer.' : 'Pembahasan yang membantu review dan bank soal.'}</p>
+										<h3 class="text-xs font-black uppercase tracking-[0.2em] text-foreground">{isEssay ? 'Catatan Pembahasan' : 'Pembahasan'}</h3>
+										<p class="mt-0.5 text-xs text-muted-foreground">{isEssay ? 'Catatan internal untuk guru/reviewer.' : 'Pembahasan yang membantu review dan bank soal.'}</p>
 									</div>
-									<button type="button" onclick={() => (focusedEditor = 'explanation')} class="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-50">Fokus</button>
+									<button type="button" onclick={() => (focusedEditor = 'explanation')} class="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50">Fokus</button>
 								</div>
 								<LegacyRichTextEditor
 									bind:value={fExplanation}
@@ -3943,19 +3943,19 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 							{/if}
 						</div>
 						<aside class={`space-y-4 min-w-0 xl:sticky xl:top-0 xl:self-start ${composerMobilePanel === 'write' ? 'hidden lg:block' : 'block'}`}>
-						<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+						<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 							{@render composerPreview()}
 						</div>
 					</aside>
 				</div>
 			</div>
 
-				<div class="flex shrink-0 flex-col gap-2 border-t border-green-100 bg-white px-4 py-2.5 md:flex-row md:items-center md:justify-between md:px-6">
-					<div class="min-w-0 text-xs text-slate-500">
-						<span class="font-semibold text-green-700">{draftStatusLabel()}</span>
-						<span class="ml-2 text-slate-400">· {draftIssues.length === 0 ? 'Draft bisa disimpan' : draftIssues[0]} · Review {validationIssues.length === 0 ? 'siap' : `${validationIssues.length} wajib belum lengkap`} · Ctrl+S</span>
+				<div class="flex shrink-0 flex-col gap-2 border-t border-success/20 bg-card px-4 py-2.5 md:flex-row md:items-center md:justify-between md:px-6">
+					<div class="min-w-0 text-xs text-muted-foreground">
+						<span class="font-semibold text-success">{draftStatusLabel()}</span>
+						<span class="ml-2 text-muted-foreground">· {draftIssues.length === 0 ? 'Draft bisa disimpan' : draftIssues[0]} · Review {validationIssues.length === 0 ? 'siap' : `${validationIssues.length} wajib belum lengkap`} · Ctrl+S</span>
 						{#if firstComposerIssue}
-							<button type="button" class="ml-2 text-red-600 underline decoration-red-200 underline-offset-2" onclick={scrollToFirstComposerIssue}>
+							<button type="button" class="ml-2 text-destructive underline decoration-red-200 underline-offset-2" onclick={scrollToFirstComposerIssue}>
 								Lengkapi: {firstComposerIssue.message}
 							</button>
 						{/if}
@@ -3983,7 +3983,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 						disabled={!canSubmitReview}
 						loading={composerAction === 'review'}
 						loadingLabel="Mengajukan..."
-						class="h-8 bg-green-700 text-xs text-white hover:bg-green-800 disabled:opacity-50"
+						class="h-8 bg-success text-xs text-background hover:bg-success disabled:opacity-50"
 					>
 						Ajukan Review
 					</LoadingButton>
@@ -3991,18 +3991,18 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			</div>
 
 			{#if focusedEditor}
-				<div class="absolute inset-0 z-20 flex bg-slate-950/35 p-3 md:p-6">
-					<div class="flex min-h-0 w-full flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-						<div class="flex shrink-0 items-center justify-between gap-3 border-b border-green-100 px-4 py-3">
+				<div class="absolute inset-0 z-20 flex bg-foreground/35 p-3 md:p-6">
+					<div class="flex min-h-0 w-full flex-col overflow-hidden rounded-xl bg-card shadow-2xl">
+						<div class="flex shrink-0 items-center justify-between gap-3 border-b border-success/20 px-4 py-3">
 							<div>
-								<p class="text-[10px] font-black uppercase tracking-[0.22em] text-green-700">Mode Fokus</p>
-								<h3 class="text-base font-black uppercase italic text-slate-900">{focusTitle(focusedEditor)}</h3>
+								<p class="text-[10px] font-black uppercase tracking-[0.22em] text-success">Mode Fokus</p>
+								<h3 class="text-base font-black uppercase italic text-foreground">{focusTitle(focusedEditor)}</h3>
 							</div>
 							<Button type="button" variant="outline" size="sm" class="h-8 text-xs" onclick={() => (focusedEditor = null)}>
 								Tutup Fokus
 							</Button>
 						</div>
-						<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4">
+						<div class="min-h-0 flex-1 overflow-y-auto bg-muted/50 p-4">
 							{#if focusedEditor === 'stem'}
 								<LegacyRichTextEditor
 									bind:value={fStem}

@@ -136,11 +136,11 @@
 	function badgeClass(tone: StatusTone) {
 		switch (tone) {
 			case 'good':
-				return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+				return 'border-primary/20 bg-primary/10 text-primary';
 			case 'warning':
-				return 'border-amber-200 bg-amber-50 text-amber-700';
+				return 'border-warning/30 bg-warning/10 text-warning';
 			case 'danger':
-				return 'border-rose-200 bg-rose-50 text-rose-700';
+				return 'border-destructive/30 bg-destructive/10 text-destructive';
 		}
 	}
 
@@ -151,12 +151,12 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<section class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-6 shadow-sm">
+	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Modul 4 dari 5 · Monitoring</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-slate-900">Monitoring CBT Mobile BYOD</h1>
-				<p class="max-w-2xl text-sm leading-6 text-slate-600">
+				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Modul 4 dari 5 · Monitoring</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Monitoring CBT Mobile BYOD</h1>
+				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
 					Mulai dari kebutuhan hari-H: buka sesi aktif, pantau dashboard ruang, lalu gunakan status guide
 					hanya saat pengawas perlu membaca sinyal koneksi siswa.
 				</p>
@@ -170,23 +170,23 @@
 		</div>
 	</section>
 
-	<Card.Root class="border-emerald-200 bg-emerald-50/60 shadow-sm">
+	<Card.Root class="border-primary/20 bg-primary/10 shadow-sm">
 		<Card.Header>
-			<Card.Title class="text-lg text-slate-900">Pantau Ujian Dulu</Card.Title>
+			<Card.Title class="text-lg text-foreground">Pantau Ujian Dulu</Card.Title>
 			<Card.Description>
 				Tiga grup sederhana untuk monitoring: hari-H dulu, panduan setelahnya, perangkat dan kesiapan sebagai dukungan.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="grid gap-4 lg:grid-cols-3">
 			{#each monitoringGroups as group (group.title)}
-				<div class="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm">
-					<p class="text-sm font-semibold text-emerald-950">{group.title}</p>
-					<p class="mt-1 text-sm leading-6 text-slate-600">{group.description}</p>
+				<div class="rounded-2xl border border-primary/20 bg-card p-4 shadow-sm">
+					<p class="text-sm font-semibold text-primary">{group.title}</p>
+					<p class="mt-1 text-sm leading-6 text-muted-foreground">{group.description}</p>
 					<div class="mt-4 space-y-2">
 						{#each group.links as link (link.href)}
-							<a href={resolve((link.href.startsWith('#') ? `/asesmen/aplikasi-siswa${link.href}` : link.href) as '/')} class="block rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-2 text-sm transition hover:border-emerald-200 hover:bg-emerald-50">
-								<span class="font-semibold text-emerald-900">{link.label}</span>
-								<span class="mt-1 block leading-5 text-slate-600">{link.description}</span>
+							<a href={resolve((link.href.startsWith('#') ? `/asesmen/aplikasi-siswa${link.href}` : link.href) as '/')} class="block rounded-xl border border-primary/20 bg-primary/10 px-3 py-2 text-sm transition hover:border-primary/20 hover:bg-primary/10">
+								<span class="font-semibold text-primary">{link.label}</span>
+								<span class="mt-1 block leading-5 text-muted-foreground">{link.description}</span>
 							</a>
 						{/each}
 					</div>
@@ -196,22 +196,22 @@
 	</Card.Root>
 
 	<div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-		<Card.Root id="status-guide" class="border-slate-200 shadow-sm">
+		<Card.Root id="status-guide" class="border-border shadow-sm">
 			<Card.Header>
-				<Card.Title class="text-lg text-slate-900">Arti Status Koneksi Mobile</Card.Title>
+				<Card.Title class="text-lg text-foreground">Arti Status Koneksi Mobile</Card.Title>
 				<Card.Description>
 					Gunakan arti status ini saat mendampingi siswa. Fokus utamanya adalah kapan pengawas cukup memantau dan kapan harus menahan submit.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-4">
 				{#each statuses as status (status.label)}
-					<div class="rounded-2xl border border-slate-200 bg-white p-4">
+					<div class="rounded-2xl border border-border bg-card p-4">
 						<div class="flex flex-wrap items-center gap-3">
 							<Badge class={badgeClass(status.tone)}>{status.label}</Badge>
-							<p class="text-sm font-medium text-slate-700">{status.meaning}</p>
+							<p class="text-sm font-medium text-foreground">{status.meaning}</p>
 						</div>
-						<p class="mt-3 text-sm leading-6 text-slate-600">
-							<span class="font-semibold text-slate-800">Tindakan pengawas:</span> {status.intervention}
+						<p class="mt-3 text-sm leading-6 text-muted-foreground">
+							<span class="font-semibold text-foreground">Tindakan pengawas:</span> {status.intervention}
 						</p>
 					</div>
 				{/each}
@@ -219,9 +219,9 @@
 		</Card.Root>
 
 		<div class="space-y-6">
-			<Card.Root id="submit-checklist" class="border-slate-200 shadow-sm">
+			<Card.Root id="submit-checklist" class="border-border shadow-sm">
 				<Card.Header>
-					<Card.Title class="text-lg text-slate-900">Checklist Sebelum Submit</Card.Title>
+					<Card.Title class="text-lg text-foreground">Checklist Sebelum Submit</Card.Title>
 					<Card.Description>
 						Lima pemeriksaan singkat ini sebaiknya selalu diulang sebelum pengawas mengizinkan siswa menekan kirim ujian.
 					</Card.Description>
@@ -229,8 +229,8 @@
 				<Card.Content>
 					<ul class="space-y-3">
 						{#each preSubmitChecklist as item (item)}
-							<li class="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
-								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700">OK</span>
+							<li class="flex gap-3 rounded-2xl border border-border bg-muted/50 px-4 py-3 text-sm leading-6 text-foreground">
+								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">OK</span>
 								<span>{item}</span>
 							</li>
 						{/each}
@@ -238,9 +238,9 @@
 				</Card.Content>
 			</Card.Root>
 
-			<Card.Root id="trial-flow" class="border-slate-200 shadow-sm">
+			<Card.Root id="trial-flow" class="border-border shadow-sm">
 				<Card.Header>
-					<Card.Title class="text-lg text-slate-900">Alur Trial BYOD</Card.Title>
+					<Card.Title class="text-lg text-foreground">Alur Trial BYOD</Card.Title>
 					<Card.Description>
 						Gunakan urutan ini saat uji coba perangkat siswa agar hasil antar pengawas tetap konsisten.
 					</Card.Description>
@@ -248,8 +248,8 @@
 				<Card.Content>
 					<ol class="space-y-3">
 						{#each trialFlow as item, index (item)}
-							<li class="flex gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
-								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">{index + 1}</span>
+							<li class="flex gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm leading-6 text-foreground">
+								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">{index + 1}</span>
 								<span>{item}</span>
 							</li>
 						{/each}
@@ -259,48 +259,48 @@
 		</div>
 	</div>
 
-	<Card.Root class="border-slate-200 shadow-sm">
+	<Card.Root class="border-border shadow-sm">
 		<Card.Header>
-			<Card.Title class="text-lg text-slate-900">Artefak Operasional</Card.Title>
+			<Card.Title class="text-lg text-foreground">Artefak Operasional</Card.Title>
 			<Card.Description>
 				Gunakan dokumen ini di repo yang sama untuk trial lapangan dan review kompatibilitas backend-mobile.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="grid gap-4 lg:grid-cols-5">
-			<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-				<p class="text-sm font-semibold text-slate-900">Operator Quick Start</p>
-				<p class="mt-2 text-sm leading-6 text-slate-600">
+			<div class="rounded-2xl border border-border bg-muted/50 p-4">
+				<p class="text-sm font-semibold text-foreground">Operator Quick Start</p>
+				<p class="mt-2 text-sm leading-6 text-muted-foreground">
 					Panduan singkat pengawas saat mendampingi siswa, termasuk arti status dan langkah saat koneksi mulai terganggu.
 				</p>
-				<p class="mt-3 font-mono text-xs text-slate-500">apps/mobile/OPERATOR_QUICKSTART.md</p>
+				<p class="mt-3 font-mono text-xs text-muted-foreground">apps/mobile/OPERATOR_QUICKSTART.md</p>
 			</div>
-			<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-				<p class="text-sm font-semibold text-slate-900">BYOD Trial Procedure</p>
-				<p class="mt-2 text-sm leading-6 text-slate-600">
+			<div class="rounded-2xl border border-border bg-muted/50 p-4">
+				<p class="text-sm font-semibold text-foreground">BYOD Trial Procedure</p>
+				<p class="mt-2 text-sm leading-6 text-muted-foreground">
 					Prosedur end-to-end untuk operator, pengawas, siswa, simulasi gangguan, dan keputusan submit readiness.
 				</p>
-				<p class="mt-3 font-mono text-xs text-slate-500">apps/mobile/BYOD_TRIAL_PROCEDURE.md</p>
+				<p class="mt-3 font-mono text-xs text-muted-foreground">apps/mobile/BYOD_TRIAL_PROCEDURE.md</p>
 			</div>
-			<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-				<p class="text-sm font-semibold text-slate-900">Device Test Matrix</p>
-				<p class="mt-2 text-sm leading-6 text-slate-600">
+			<div class="rounded-2xl border border-border bg-muted/50 p-4">
+				<p class="text-sm font-semibold text-foreground">Device Test Matrix</p>
+				<p class="mt-2 text-sm leading-6 text-muted-foreground">
 					Matriks vendor dan model perangkat untuk mencatat hasil uji install, restore, audio, gambar, dan submit.
 				</p>
-				<p class="mt-3 font-mono text-xs text-slate-500">apps/mobile/DEVICE_TEST_MATRIX.md</p>
+				<p class="mt-3 font-mono text-xs text-muted-foreground">apps/mobile/DEVICE_TEST_MATRIX.md</p>
 			</div>
-			<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-				<p class="text-sm font-semibold text-slate-900">Ringkasan Matriks di Admin</p>
-				<p class="mt-2 text-sm leading-6 text-slate-600">
+			<div class="rounded-2xl border border-border bg-muted/50 p-4">
+				<p class="text-sm font-semibold text-foreground">Ringkasan Matriks di Admin</p>
+				<p class="mt-2 text-sm leading-6 text-muted-foreground">
 					Gunakan halaman matriks perangkat di admin untuk membaca struktur evaluasi vendor tanpa keluar dari dashboard.
 				</p>
-				<p class="mt-3 font-mono text-xs text-slate-500">/asesmen/aplikasi-siswa/matrix</p>
+				<p class="mt-3 font-mono text-xs text-muted-foreground">/asesmen/aplikasi-siswa/matrix</p>
 			</div>
-			<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-				<p class="text-sm font-semibold text-slate-900">Readiness Release di Admin</p>
-				<p class="mt-2 text-sm leading-6 text-slate-600">
+			<div class="rounded-2xl border border-border bg-muted/50 p-4">
+				<p class="text-sm font-semibold text-foreground">Readiness Release di Admin</p>
+				<p class="mt-2 text-sm leading-6 text-muted-foreground">
 					Buka ringkasan backend, mobile, dan rollout checklist sebelum perubahan backend exam atau APK dinyatakan siap uji lapangan.
 				</p>
-				<p class="mt-3 font-mono text-xs text-slate-500">/asesmen/aplikasi-siswa/release</p>
+				<p class="mt-3 font-mono text-xs text-muted-foreground">/asesmen/aplikasi-siswa/release</p>
 			</div>
 		</Card.Content>
 	</Card.Root>

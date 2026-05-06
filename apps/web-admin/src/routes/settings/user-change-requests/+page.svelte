@@ -272,8 +272,8 @@
 <div class="space-y-6 p-6">
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Permintaan Perubahan Data Resmi</h1>
-			<p class="mt-1 text-sm text-slate-500">Review perubahan identitas resmi yang diajukan dari halaman Akun Saya.</p>
+			<h1 class="text-2xl font-semibold text-foreground">Permintaan Perubahan Data Resmi</h1>
+			<p class="mt-1 text-sm text-muted-foreground">Review perubahan identitas resmi yang diajukan dari halaman Akun Saya.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button variant="outline" href="/settings/users">Manajemen User</Button>
@@ -292,9 +292,9 @@
 		<Card.Root>
 			<Card.Header class="pb-2">
 				<Card.Description>Menunggu Review</Card.Description>
-				<Card.Title class="text-2xl text-amber-700">
+				<Card.Title class="text-2xl text-warning">
 					{#if pendingSummaryBusy}
-						<span class="text-base text-slate-400">Memuat...</span>
+						<span class="text-base text-muted-foreground">Memuat...</span>
 					{:else}
 						{pendingSummary}
 					{/if}
@@ -304,13 +304,13 @@
 		<Card.Root>
 			<Card.Header class="pb-2">
 				<Card.Description>Tampil di Filter Ini</Card.Description>
-				<Card.Title class="text-2xl text-slate-800">{requests.length}</Card.Title>
+				<Card.Title class="text-2xl text-foreground">{requests.length}</Card.Title>
 			</Card.Header>
 		</Card.Root>
 		<Card.Root>
 			<Card.Header class="pb-2">
 				<Card.Description>Pending di Tabel Ini</Card.Description>
-				<Card.Title class="text-2xl text-slate-800">{visiblePendingCount}</Card.Title>
+				<Card.Title class="text-2xl text-foreground">{visiblePendingCount}</Card.Title>
 			</Card.Header>
 		</Card.Root>
 	</div>
@@ -331,7 +331,7 @@
 
 			<form class="grid gap-3 lg:grid-cols-[minmax(130px,0.8fr)_minmax(140px,0.8fr)_minmax(150px,0.9fr)_minmax(220px,1.4fr)_auto]" onsubmit={(event) => { event.preventDefault(); applyFilters(); }}>
 				<div>
-					<label for="change-request-status" class="mb-1 block text-xs font-medium text-slate-600">Status</label>
+					<label for="change-request-status" class="mb-1 block text-xs font-medium text-muted-foreground">Status</label>
 					<select
 						id="change-request-status"
 						class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -346,7 +346,7 @@
 					</select>
 				</div>
 				<div>
-					<label for="change-request-profile" class="mb-1 block text-xs font-medium text-slate-600">Profil</label>
+					<label for="change-request-profile" class="mb-1 block text-xs font-medium text-muted-foreground">Profil</label>
 					<select
 						id="change-request-profile"
 						class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -359,7 +359,7 @@
 					</select>
 				</div>
 				<div>
-					<label for="change-request-field" class="mb-1 block text-xs font-medium text-slate-600">Field</label>
+					<label for="change-request-field" class="mb-1 block text-xs font-medium text-muted-foreground">Field</label>
 					<select
 						id="change-request-field"
 						class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -372,7 +372,7 @@
 					</select>
 				</div>
 				<div>
-					<label for="change-request-search" class="mb-1 block text-xs font-medium text-slate-600">Cari</label>
+					<label for="change-request-search" class="mb-1 block text-xs font-medium text-muted-foreground">Cari</label>
 					<Input id="change-request-search" bind:value={searchDraft} maxlength={120} placeholder="Nama, username, alasan, atau catatan" />
 				</div>
 				<div class="flex items-end gap-2">
@@ -389,7 +389,7 @@
 				{#snippet pending()}
 					<div class="space-y-3">
 						{#each Array.from({ length: 4 }) as _, index (`change-request-skeleton-${index}`)}
-							<div class="rounded-lg border border-slate-200 p-4">
+							<div class="rounded-lg border border-border p-4">
 								<Skeleton class="h-5 w-48" />
 								<Skeleton class="mt-2 h-4 w-80" />
 								<Skeleton class="mt-3 h-16 w-full" />
@@ -405,16 +405,16 @@
 				{#snippet children(rows)}
 					{@const items = rows as AccountChangeRequest[]}
 					{#if items.length === 0}
-						<div class="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center">
-							<p class="text-sm font-medium text-slate-700">Belum ada permintaan pada filter ini.</p>
-							<p class="mt-1 text-xs text-slate-500">Ubah filter atau reset untuk melihat riwayat lain.</p>
+						<div class="rounded-lg border border-dashed border-border px-4 py-8 text-center">
+							<p class="text-sm font-medium text-foreground">Belum ada permintaan pada filter ini.</p>
+							<p class="mt-1 text-xs text-muted-foreground">Ubah filter atau reset untuk melihat riwayat lain.</p>
 							<Button class="mt-4" type="button" variant="outline" onclick={resetFilters}>Reset Filter</Button>
 						</div>
 					{:else}
 						<div class="hidden overflow-x-auto lg:block">
 							<Table.Root>
 								<Table.Header>
-									<Table.Row class="bg-slate-50">
+									<Table.Row class="bg-muted/50">
 										<Table.Head>Pemohon</Table.Head>
 										<Table.Head>Profil</Table.Head>
 										<Table.Head>Perubahan</Table.Head>
@@ -428,42 +428,42 @@
 									{#each items as request (request.id)}
 										<Table.Row>
 											<Table.Cell>
-												<div class="font-medium text-slate-900">{requesterLabel(request)}</div>
-												<div class="text-xs text-slate-500">{request.requester_username || request.requester_user_id || '—'}</div>
+												<div class="font-medium text-foreground">{requesterLabel(request)}</div>
+												<div class="text-xs text-muted-foreground">{request.requester_username || request.requester_user_id || '—'}</div>
 											</Table.Cell>
 											<Table.Cell>
-												<div class="text-sm text-slate-700">{profileTypeLabel(request.profile_type)}</div>
-												<div class="text-xs text-slate-500">{request.profile_nama || '—'}</div>
+												<div class="text-sm text-foreground">{profileTypeLabel(request.profile_type)}</div>
+												<div class="text-xs text-muted-foreground">{request.profile_nama || '—'}</div>
 											</Table.Cell>
 											<Table.Cell class="max-w-md">
-												<div class="font-medium text-slate-900">{requestFieldLabel(request)}</div>
-												<div class="mt-1 grid grid-cols-[90px_1fr] gap-1 text-xs text-slate-500">
+												<div class="font-medium text-foreground">{requestFieldLabel(request)}</div>
+												<div class="mt-1 grid grid-cols-[90px_1fr] gap-1 text-xs text-muted-foreground">
 													<span>Saat ini</span><span class="break-words">{valueLabel(request.current_value)}</span>
-													<span>Diajukan</span><span class="break-words font-medium text-slate-700">{valueLabel(request.requested_value)}</span>
+													<span>Diajukan</span><span class="break-words font-medium text-foreground">{valueLabel(request.requested_value)}</span>
 												</div>
-												<div class="mt-2 text-xs text-slate-500">{request.reason}</div>
+												<div class="mt-2 text-xs text-muted-foreground">{request.reason}</div>
 											</Table.Cell>
 											<Table.Cell><Badge variant={statusBadgeVariant(request.status)}>{changeRequestStatusLabel(request.status)}</Badge></Table.Cell>
 											<Table.Cell class="min-w-56">
 												<div class="space-y-2">
 													{#each changeRequestTimelineItems(request) as timeline, index (`timeline-${request.id}-${index}`)}
-														<div class="border-l border-slate-200 pl-3">
-															<p class="text-xs font-medium text-slate-700">{timeline.label}</p>
-															<p class="text-[11px] text-slate-500">
+														<div class="border-l border-border pl-3">
+															<p class="text-xs font-medium text-foreground">{timeline.label}</p>
+															<p class="text-[11px] text-muted-foreground">
 																{formatAccountDateTime(timeline.at)}
 																{#if timeline.actor}
-																	<span class="text-slate-300"> · </span>{timeline.actor}
+																	<span class="text-muted-foreground"> · </span>{timeline.actor}
 																{/if}
 															</p>
 															{#if timeline.note}
-																<p class="mt-1 text-[11px] text-slate-500">{timeline.note}</p>
+																<p class="mt-1 text-[11px] text-muted-foreground">{timeline.note}</p>
 															{/if}
 														</div>
 													{/each}
 												</div>
 											</Table.Cell>
 											<Table.Cell class="min-w-64">
-												<label for={`review-note-${request.id}`} class="mb-1 block text-xs font-medium text-slate-600">Catatan admin</label>
+												<label for={`review-note-${request.id}`} class="mb-1 block text-xs font-medium text-muted-foreground">Catatan admin</label>
 												<Textarea
 													id={`review-note-${request.id}`}
 													rows={3}
@@ -496,7 +496,7 @@
 															</Button>
 														</div>
 														{#if stagedReviews[request.id]}
-															<div class="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+															<div class="rounded-md border border-warning/30 bg-warning/10 p-2 text-xs text-warning">
 																<p>Konfirmasi {stagedReviews[request.id] === 'approved' ? 'persetujuan' : 'penolakan'} request ini.</p>
 																<div class="mt-2 flex flex-wrap gap-2">
 																	<LoadingButton
@@ -511,51 +511,51 @@
 															</div>
 														{/if}
 													{:else if request.status !== 'pending'}
-														<p class="text-xs text-slate-500">{request.reviewer_username ? `Direview oleh ${request.reviewer_username}` : 'Sudah diproses'}</p>
+														<p class="text-xs text-muted-foreground">{request.reviewer_username ? `Direview oleh ${request.reviewer_username}` : 'Sudah diproses'}</p>
 													{/if}
 												</div>
 											</Table.Cell>
 										</Table.Row>
 										{#if expandedRows[request.id]}
-											<Table.Row class="bg-slate-50/70">
+											<Table.Row class="bg-muted/50">
 												<Table.Cell colspan={7}>
 													<div class="grid gap-4 p-3 md:grid-cols-3">
 														<div>
-															<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Identitas Pemohon</p>
-															<p class="mt-1 text-sm font-medium text-slate-800">{requesterLabel(request)}</p>
-															<p class="text-xs text-slate-500">Username: {request.requester_username || '—'}</p>
-															<p class="text-xs text-slate-500">User ID: {request.requester_user_id || '—'}</p>
+															<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Identitas Pemohon</p>
+															<p class="mt-1 text-sm font-medium text-foreground">{requesterLabel(request)}</p>
+															<p class="text-xs text-muted-foreground">Username: {request.requester_username || '—'}</p>
+															<p class="text-xs text-muted-foreground">User ID: {request.requester_user_id || '—'}</p>
 														</div>
 														<div>
-															<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Profil dan Field</p>
-															<p class="mt-1 text-sm font-medium text-slate-800">{profileTypeLabel(request.profile_type)} · {request.profile_nama || '—'}</p>
-															<p class="text-xs text-slate-500">Target ID: {targetIDLabel(request)}</p>
-															<p class="text-xs text-slate-500">Field: {requestFieldLabel(request)} ({request.field_key})</p>
+															<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profil dan Field</p>
+															<p class="mt-1 text-sm font-medium text-foreground">{profileTypeLabel(request.profile_type)} · {request.profile_nama || '—'}</p>
+															<p class="text-xs text-muted-foreground">Target ID: {targetIDLabel(request)}</p>
+															<p class="text-xs text-muted-foreground">Field: {requestFieldLabel(request)} ({request.field_key})</p>
 														</div>
 														<div>
-															<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Status Review</p>
-															<p class="mt-1 text-sm font-medium text-slate-800">{changeRequestStatusLabel(request.status)}</p>
-															<p class="text-xs text-slate-500">Reviewer: {request.reviewer_username || '—'}</p>
-															<p class="text-xs text-slate-500">Catatan: {request.review_note || '—'}</p>
+															<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status Review</p>
+															<p class="mt-1 text-sm font-medium text-foreground">{changeRequestStatusLabel(request.status)}</p>
+															<p class="text-xs text-muted-foreground">Reviewer: {request.reviewer_username || '—'}</p>
+															<p class="text-xs text-muted-foreground">Catatan: {request.review_note || '—'}</p>
 														</div>
 														<div class="md:col-span-2">
-															<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Nilai</p>
+															<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nilai</p>
 															<div class="mt-2 grid gap-2 md:grid-cols-2">
-																<div class="rounded-md border border-slate-200 bg-white p-3">
-																	<p class="text-xs text-slate-500">Current value</p>
-																	<p class="mt-1 break-words text-sm text-slate-800">{valueLabel(request.current_value)}</p>
+																<div class="rounded-md border border-border bg-card p-3">
+																	<p class="text-xs text-muted-foreground">Current value</p>
+																	<p class="mt-1 break-words text-sm text-foreground">{valueLabel(request.current_value)}</p>
 																</div>
-																<div class="rounded-md border border-emerald-200 bg-white p-3">
-																	<p class="text-xs text-slate-500">Requested value</p>
-																	<p class="mt-1 break-words text-sm font-medium text-emerald-800">{valueLabel(request.requested_value)}</p>
+																<div class="rounded-md border border-primary/20 bg-card p-3">
+																	<p class="text-xs text-muted-foreground">Requested value</p>
+																	<p class="mt-1 break-words text-sm font-medium text-primary">{valueLabel(request.requested_value)}</p>
 																</div>
 															</div>
-															<p class="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Alasan</p>
-															<p class="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{request.reason || '—'}</p>
+															<p class="mt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Alasan</p>
+															<p class="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{request.reason || '—'}</p>
 														</div>
 														<div>
-															<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Timestamps</p>
-															<div class="mt-1 space-y-1 text-xs text-slate-500">
+															<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Timestamps</p>
+															<div class="mt-1 space-y-1 text-xs text-muted-foreground">
 																<p>Diajukan: {formatAccountDateTime(request.created_at)}</p>
 																<p>Direview: {formatAccountDateTime(request.reviewed_at)}</p>
 																<p>Diperbarui: {formatAccountDateTime(request.updated_at)}</p>
@@ -572,20 +572,20 @@
 
 						<div class="grid gap-3 lg:hidden">
 							{#each items as request (request.id)}
-								<div class="rounded-lg border border-slate-200 p-4">
+								<div class="rounded-lg border border-border p-4">
 									<div class="flex flex-wrap items-center justify-between gap-2">
 										<div>
-											<p class="font-medium text-slate-900">{requesterLabel(request)}</p>
-											<p class="text-xs text-slate-500">{profileTypeLabel(request.profile_type)} · {request.profile_nama || '—'}</p>
+											<p class="font-medium text-foreground">{requesterLabel(request)}</p>
+											<p class="text-xs text-muted-foreground">{profileTypeLabel(request.profile_type)} · {request.profile_nama || '—'}</p>
 										</div>
 										<Badge variant={statusBadgeVariant(request.status)}>{changeRequestStatusLabel(request.status)}</Badge>
 									</div>
-									<p class="mt-3 text-sm font-medium text-slate-900">{requestFieldLabel(request)}</p>
-									<div class="mt-2 grid grid-cols-[88px_1fr] gap-1 text-sm text-slate-600">
+									<p class="mt-3 text-sm font-medium text-foreground">{requestFieldLabel(request)}</p>
+									<div class="mt-2 grid grid-cols-[88px_1fr] gap-1 text-sm text-muted-foreground">
 										<span>Saat ini</span><span class="break-words">{valueLabel(request.current_value)}</span>
-										<span>Diajukan</span><span class="break-words font-medium text-slate-800">{valueLabel(request.requested_value)}</span>
+										<span>Diajukan</span><span class="break-words font-medium text-foreground">{valueLabel(request.requested_value)}</span>
 									</div>
-									<p class="mt-2 whitespace-pre-wrap break-words text-xs text-slate-500">{request.reason}</p>
+									<p class="mt-2 whitespace-pre-wrap break-words text-xs text-muted-foreground">{request.reason}</p>
 
 									<Button class="mt-3" type="button" size="sm" variant="outline" onclick={() => toggleExpanded(request.id)}>
 										{#if expandedRows[request.id]}
@@ -598,23 +598,23 @@
 									</Button>
 
 									{#if expandedRows[request.id]}
-										<div class="mt-3 space-y-3 rounded-md bg-slate-50 p-3">
+										<div class="mt-3 space-y-3 rounded-md bg-muted/50 p-3">
 											<div>
-												<p class="text-xs font-semibold text-slate-500">Pemohon</p>
-												<p class="text-sm text-slate-800">{requesterLabel(request)}</p>
-												<p class="text-xs text-slate-500">{request.requester_username || request.requester_user_id || '—'}</p>
+												<p class="text-xs font-semibold text-muted-foreground">Pemohon</p>
+												<p class="text-sm text-foreground">{requesterLabel(request)}</p>
+												<p class="text-xs text-muted-foreground">{request.requester_username || request.requester_user_id || '—'}</p>
 											</div>
 											<div>
-												<p class="text-xs font-semibold text-slate-500">Profil dan Target</p>
-												<p class="text-sm text-slate-800">{profileTypeLabel(request.profile_type)} · {request.profile_nama || '—'}</p>
-												<p class="text-xs text-slate-500">Target ID: {targetIDLabel(request)}</p>
+												<p class="text-xs font-semibold text-muted-foreground">Profil dan Target</p>
+												<p class="text-sm text-foreground">{profileTypeLabel(request.profile_type)} · {request.profile_nama || '—'}</p>
+												<p class="text-xs text-muted-foreground">Target ID: {targetIDLabel(request)}</p>
 											</div>
 											<div>
-												<p class="text-xs font-semibold text-slate-500">Review</p>
-												<p class="text-sm text-slate-800">{request.reviewer_username || '—'}</p>
-												<p class="text-xs text-slate-500">{request.review_note || 'Belum ada catatan'}</p>
+												<p class="text-xs font-semibold text-muted-foreground">Review</p>
+												<p class="text-sm text-foreground">{request.reviewer_username || '—'}</p>
+												<p class="text-xs text-muted-foreground">{request.review_note || 'Belum ada catatan'}</p>
 											</div>
-											<div class="text-xs text-slate-500">
+											<div class="text-xs text-muted-foreground">
 												<p>Diajukan: {formatAccountDateTime(request.created_at)}</p>
 												<p>Direview: {formatAccountDateTime(request.reviewed_at)}</p>
 												<p>Diperbarui: {formatAccountDateTime(request.updated_at)}</p>
@@ -624,23 +624,23 @@
 
 									<div class="mt-3 space-y-2">
 										{#each changeRequestTimelineItems(request) as timeline, index (`mobile-timeline-${request.id}-${index}`)}
-											<div class="border-l border-slate-200 pl-3">
-												<p class="text-xs font-medium text-slate-700">{timeline.label}</p>
-												<p class="text-[11px] text-slate-500">
+											<div class="border-l border-border pl-3">
+												<p class="text-xs font-medium text-foreground">{timeline.label}</p>
+												<p class="text-[11px] text-muted-foreground">
 													{formatAccountDateTime(timeline.at)}
 													{#if timeline.actor}
-														<span class="text-slate-300"> · </span>{timeline.actor}
+														<span class="text-muted-foreground"> · </span>{timeline.actor}
 													{/if}
 												</p>
 												{#if timeline.note}
-													<p class="mt-1 text-[11px] text-slate-500">{timeline.note}</p>
+													<p class="mt-1 text-[11px] text-muted-foreground">{timeline.note}</p>
 												{/if}
 											</div>
 										{/each}
 									</div>
 									{#if request.status === 'pending' && canReviewProfileChanges}
 										<div class="mt-3 space-y-2">
-											<label for={`mobile-note-${request.id}`} class="block text-xs font-medium text-slate-600">Catatan Review</label>
+											<label for={`mobile-note-${request.id}`} class="block text-xs font-medium text-muted-foreground">Catatan Review</label>
 											<Textarea id={`mobile-note-${request.id}`} rows={3} maxlength={1000} bind:value={reviewNotes[request.id]} />
 											<div class="flex flex-wrap gap-2">
 												<Button size="sm" type="button" onclick={() => stageReview(request, 'approved')}>
@@ -653,7 +653,7 @@
 												</Button>
 											</div>
 											{#if stagedReviews[request.id]}
-												<div class="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+												<div class="rounded-md border border-warning/30 bg-warning/10 p-2 text-xs text-warning">
 													<p>Konfirmasi {stagedReviews[request.id] === 'approved' ? 'persetujuan' : 'penolakan'} request ini.</p>
 													<div class="mt-2 flex flex-wrap gap-2">
 														<LoadingButton

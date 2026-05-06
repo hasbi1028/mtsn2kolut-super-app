@@ -482,8 +482,8 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Data Akademik</h1>
-			<p class="mt-1 text-sm text-slate-500">Kelola tahun ajaran, kelas, dan mata pelajaran</p>
+			<h1 class="text-2xl font-semibold text-foreground">Data Akademik</h1>
+			<p class="mt-1 text-sm text-muted-foreground">Kelola tahun ajaran, kelas, dan mata pelajaran</p>
 		</div>
 		<Button href={`${resolve('/document-cycles')}?domain_area=kurikulum`} variant="outline" size="sm">
 			Siklus Kurikulum
@@ -491,25 +491,25 @@
 	</div>
 
 	<div class="grid gap-3 md:grid-cols-4">
-		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Tahun Ajaran</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{years.length}</p>
-			<p class="text-sm text-slate-600">periode akademik yang sudah tersusun</p>
+		<div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Tahun Ajaran</p>
+			<p class="mt-2 text-2xl font-semibold text-foreground">{years.length}</p>
+			<p class="text-sm text-muted-foreground">periode akademik yang sudah tersusun</p>
 		</div>
-		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Kelas</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{classes.length}</p>
-			<p class="text-sm text-slate-600">rombel aktif yang siap dipakai modul lain</p>
+		<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Kelas</p>
+			<p class="mt-2 text-2xl font-semibold text-foreground">{classes.length}</p>
+			<p class="text-sm text-muted-foreground">rombel aktif yang siap dipakai modul lain</p>
 		</div>
-		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Mata Pelajaran</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{subjects.length}</p>
-			<p class="text-sm text-slate-600">mapel inti untuk jadwal, nilai, dan CBT</p>
+		<div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Mata Pelajaran</p>
+			<p class="mt-2 text-2xl font-semibold text-foreground">{subjects.length}</p>
+			<p class="text-sm text-muted-foreground">mapel inti untuk jadwal, nilai, dan CBT</p>
 		</div>
-		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Slot Jadwal</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{timetableSlots.length}</p>
-			<p class="text-sm text-slate-600">jam pelajaran yang sudah disusun per kelas-mapel</p>
+		<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Slot Jadwal</p>
+			<p class="mt-2 text-2xl font-semibold text-foreground">{timetableSlots.length}</p>
+			<p class="text-sm text-muted-foreground">jam pelajaran yang sudah disusun per kelas-mapel</p>
 		</div>
 	</div>
 
@@ -581,11 +581,11 @@
 										{#each years as y (y.id)}
 											<Table.Row>
 												<Table.Cell class="font-medium">{y.name}</Table.Cell>
-												<Table.Cell class="text-slate-500">{y.start_date?.slice(0,10)}</Table.Cell>
-												<Table.Cell class="text-slate-500">{y.end_date?.slice(0,10)}</Table.Cell>
+												<Table.Cell class="text-muted-foreground">{y.start_date?.slice(0,10)}</Table.Cell>
+												<Table.Cell class="text-muted-foreground">{y.end_date?.slice(0,10)}</Table.Cell>
 												<Table.Cell>
 													{#if y.is_active}
-														<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
+														<Badge class="bg-primary/15 text-primary border-primary/20">Aktif</Badge>
 													{:else}
 														<Badge variant="secondary">Nonaktif</Badge>
 													{/if}
@@ -619,11 +619,11 @@
 						<Card.Content class="space-y-3">
 							<Input id="academic-year-name" placeholder="Contoh: 2025/2026" bind:value={yearName} />
 							<div>
-								<label for="academic-year-start" class="text-xs text-slate-500 mb-1 block">Tanggal Mulai</label>
+								<label for="academic-year-start" class="text-xs text-muted-foreground mb-1 block">Tanggal Mulai</label>
 								<Input id="academic-year-start" type="date" bind:value={yearStart} />
 							</div>
 							<div>
-								<label for="academic-year-end" class="text-xs text-slate-500 mb-1 block">Tanggal Selesai</label>
+								<label for="academic-year-end" class="text-xs text-muted-foreground mb-1 block">Tanggal Selesai</label>
 								<Input id="academic-year-end" type="date" bind:value={yearEnd} />
 							</div>
 							<label class="flex items-center gap-2 text-sm">
@@ -639,20 +639,20 @@
 			<Tabs.Content value="timetable">
 				<div class="space-y-4">
 					<div class="grid gap-3 md:grid-cols-3">
-						<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-							<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Slot</p>
-							<p class="mt-2 text-2xl font-semibold text-slate-900">{timetableSlots.length}</p>
-							<p class="text-sm text-slate-600">seluruh jam pelajaran yang sudah dimasukkan</p>
+						<div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
+							<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Total Slot</p>
+							<p class="mt-2 text-2xl font-semibold text-foreground">{timetableSlots.length}</p>
+							<p class="text-sm text-muted-foreground">seluruh jam pelajaran yang sudah dimasukkan</p>
 						</div>
-						<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-							<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Kelas Tercakup</p>
-							<p class="mt-2 text-2xl font-semibold text-slate-900">{timetableSummary.classesCovered}</p>
-							<p class="text-sm text-slate-600">kelas yang sudah punya slot jadwal</p>
+						<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+							<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Kelas Tercakup</p>
+							<p class="mt-2 text-2xl font-semibold text-foreground">{timetableSummary.classesCovered}</p>
+							<p class="text-sm text-muted-foreground">kelas yang sudah punya slot jadwal</p>
 						</div>
-						<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-							<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Guru Tercakup</p>
-							<p class="mt-2 text-2xl font-semibold text-slate-900">{timetableSummary.teachersCovered}</p>
-							<p class="text-sm text-slate-600">guru yang sudah masuk ke jadwal pelajaran</p>
+						<div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
+							<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Guru Tercakup</p>
+							<p class="mt-2 text-2xl font-semibold text-foreground">{timetableSummary.teachersCovered}</p>
+							<p class="text-sm text-muted-foreground">guru yang sudah masuk ke jadwal pelajaran</p>
 						</div>
 					</div>
 
@@ -666,7 +666,7 @@
 								<Card.Content class="space-y-4 p-4">
 									<div class="grid gap-3 md:grid-cols-[1fr_1fr_1.2fr]">
 										<div>
-											<label for="timetable-class-filter" class="mb-1 block text-xs font-medium text-slate-600">Filter Kelas</label>
+											<label for="timetable-class-filter" class="mb-1 block text-xs font-medium text-muted-foreground">Filter Kelas</label>
 											<select id="timetable-class-filter" bind:value={timetableClassFilter} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 												<option value="">Semua kelas</option>
 												{#each timetableClassOptions as option (option.id)}
@@ -675,7 +675,7 @@
 											</select>
 										</div>
 										<div>
-											<label for="timetable-teacher-filter" class="mb-1 block text-xs font-medium text-slate-600">Filter Guru</label>
+											<label for="timetable-teacher-filter" class="mb-1 block text-xs font-medium text-muted-foreground">Filter Guru</label>
 											<select id="timetable-teacher-filter" bind:value={timetableTeacherFilter} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 												<option value="">Semua guru</option>
 												{#each timetableTeacherOptions as option (option.id)}
@@ -684,7 +684,7 @@
 											</select>
 										</div>
 										<div>
-											<label for="timetable-search" class="mb-1 block text-xs font-medium text-slate-600">Cari Cepat</label>
+											<label for="timetable-search" class="mb-1 block text-xs font-medium text-muted-foreground">Cari Cepat</label>
 											<Input id="timetable-search" bind:value={timetableSearch} placeholder="Cari mapel, ruang, catatan, atau hari..." />
 										</div>
 									</div>
@@ -706,21 +706,21 @@
 											{#each filteredTimetableSlots as slot (slot.id)}
 												<Table.Row>
 													<Table.Cell class="font-medium">{dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`}</Table.Cell>
-													<Table.Cell class="text-slate-600">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)}</Table.Cell>
+													<Table.Cell class="text-muted-foreground">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)}</Table.Cell>
 													<Table.Cell>
 														<div class="space-y-0.5">
-															<p class="font-medium text-slate-900">{slot.class_name}</p>
-															<p class="text-xs text-slate-500">{slot.class_code}</p>
+															<p class="font-medium text-foreground">{slot.class_name}</p>
+															<p class="text-xs text-muted-foreground">{slot.class_code}</p>
 														</div>
 													</Table.Cell>
 													<Table.Cell>
 														<div class="space-y-0.5">
-															<p class="font-medium text-slate-900">{slot.subject_name}</p>
-															<p class="text-xs text-slate-500">{slot.subject_code}</p>
+															<p class="font-medium text-foreground">{slot.subject_name}</p>
+															<p class="text-xs text-muted-foreground">{slot.subject_code}</p>
 														</div>
 													</Table.Cell>
-													<Table.Cell class="text-slate-600">{slot.teacher_name}</Table.Cell>
-													<Table.Cell class="text-slate-600">{slot.room_label || '—'}</Table.Cell>
+													<Table.Cell class="text-muted-foreground">{slot.teacher_name}</Table.Cell>
+													<Table.Cell class="text-muted-foreground">{slot.room_label || '—'}</Table.Cell>
 													<Table.Cell>
 														<div class="flex gap-2">
 															<Button variant="outline" size="xs" onclick={() => editTimetableSlot(slot)}>Edit</Button>
@@ -757,7 +757,7 @@
 							</Card.Header>
 							<Card.Content class="space-y-3">
 								<div>
-									<label for="timetable-assignment" class="mb-1 block text-xs font-medium text-slate-600">Assignment Kelas-Mapel-Guru</label>
+									<label for="timetable-assignment" class="mb-1 block text-xs font-medium text-muted-foreground">Assignment Kelas-Mapel-Guru</label>
 									<select id="timetable-assignment" bind:value={timetableAssignmentId} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 										<option value="">Pilih assignment...</option>
 										{#each assignments as assignment (assignment.id)}
@@ -767,7 +767,7 @@
 								</div>
 								<div class="grid gap-3 sm:grid-cols-2">
 									<div>
-										<label for="timetable-day" class="mb-1 block text-xs font-medium text-slate-600">Hari</label>
+										<label for="timetable-day" class="mb-1 block text-xs font-medium text-muted-foreground">Hari</label>
 										<select id="timetable-day" bind:value={timetableDay} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 											{#each Object.entries(dayLabels) as [day, label] (`day-${day}`)}
 												<option value={day}>{label}</option>
@@ -775,22 +775,22 @@
 										</select>
 									</div>
 									<div>
-										<label for="timetable-room" class="mb-1 block text-xs font-medium text-slate-600">Ruang</label>
+										<label for="timetable-room" class="mb-1 block text-xs font-medium text-muted-foreground">Ruang</label>
 										<Input id="timetable-room" bind:value={timetableRoom} placeholder="Opsional, mis. Lab IPA" />
 									</div>
 								</div>
 								<div class="grid gap-3 sm:grid-cols-2">
 									<div>
-										<label for="timetable-start" class="mb-1 block text-xs font-medium text-slate-600">Mulai</label>
+										<label for="timetable-start" class="mb-1 block text-xs font-medium text-muted-foreground">Mulai</label>
 										<Input id="timetable-start" type="time" bind:value={timetableStart} />
 									</div>
 									<div>
-										<label for="timetable-end" class="mb-1 block text-xs font-medium text-slate-600">Selesai</label>
+										<label for="timetable-end" class="mb-1 block text-xs font-medium text-muted-foreground">Selesai</label>
 										<Input id="timetable-end" type="time" bind:value={timetableEnd} />
 									</div>
 								</div>
 								<div>
-									<label for="timetable-notes" class="mb-1 block text-xs font-medium text-slate-600">Catatan</label>
+									<label for="timetable-notes" class="mb-1 block text-xs font-medium text-muted-foreground">Catatan</label>
 									<Input id="timetable-notes" bind:value={timetableNotes} placeholder="Opsional, mis. blok bergantian dengan kelas lain" />
 								</div>
 								<div class="flex flex-wrap gap-2">
@@ -811,7 +811,7 @@
 						<Card.Content class="space-y-4">
 							<div class="grid gap-3 md:grid-cols-[minmax(0,18rem)_auto] md:items-end">
 								<div>
-									<label for="timetable-focus-class" class="mb-1 block text-xs font-medium text-slate-600">Kelas Fokus</label>
+									<label for="timetable-focus-class" class="mb-1 block text-xs font-medium text-muted-foreground">Kelas Fokus</label>
 									<select id="timetable-focus-class" bind:value={timetableFocusClassId} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" disabled={visibleFocusClassOptions.length === 0}>
 										{#if visibleFocusClassOptions.length === 0}
 											<option value="">Tidak ada kelas pada hasil filter</option>
@@ -824,7 +824,7 @@
 								</div>
 								{#if effectiveFocusClassId}
 									<div class="flex flex-wrap items-center gap-2 md:justify-end">
-										<p class="text-sm text-slate-500">Menampilkan {focusClassTimetableSlots.length} slot untuk kelas terpilih pada hasil filter aktif.</p>
+										<p class="text-sm text-muted-foreground">Menampilkan {focusClassTimetableSlots.length} slot untuk kelas terpilih pada hasil filter aktif.</p>
 										<Button variant="outline" size="sm" onclick={exportFocusedClassTimetable} disabled={focusClassTimetableSlots.length === 0}>
 											Ekspor Jadwal Kelas
 										</Button>
@@ -842,30 +842,30 @@
 								<div class="grid gap-3 lg:grid-cols-3">
 									{#each Object.entries(dayLabels) as [dayKey, label] (`matrix-${dayKey}`)}
 										{@const day = Number(dayKey)}
-										<Card.Root class="border-slate-200 shadow-none">
+										<Card.Root class="border-border shadow-none">
 											<Card.Header class="pb-2">
 												<Card.Title class="text-sm">{label}</Card.Title>
 											</Card.Header>
 											<Card.Content class="space-y-2">
 												{#if groupedFocusSlots(day).length === 0}
-													<div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+													<div class="rounded-xl border border-dashed border-border bg-muted/50 px-3 py-4 text-sm text-muted-foreground">
 														Belum ada slot untuk hari ini.
 													</div>
 												{:else}
 													{#each groupedFocusSlots(day) as slot (slot.id)}
-														<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+														<div class="rounded-xl border border-border bg-muted/50 px-3 py-3">
 															<div class="flex items-start justify-between gap-3">
 																<div>
-																	<p class="font-semibold text-slate-900">{slot.subject_name}</p>
-																	<p class="text-xs text-slate-500">{slot.teacher_name}</p>
+																	<p class="font-semibold text-foreground">{slot.subject_name}</p>
+																	<p class="text-xs text-muted-foreground">{slot.teacher_name}</p>
 																</div>
-																<Badge variant="outline" class="border-emerald-200 text-emerald-700">
+																<Badge variant="outline" class="border-primary/20 text-primary">
 																	{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)}
 																</Badge>
 															</div>
-															<p class="mt-2 text-sm text-slate-600">{slot.room_label || 'Ruang belum diisi'}</p>
+															<p class="mt-2 text-sm text-muted-foreground">{slot.room_label || 'Ruang belum diisi'}</p>
 															{#if slot.notes}
-																<p class="mt-1 text-xs leading-6 text-slate-500">{slot.notes}</p>
+																<p class="mt-1 text-xs leading-6 text-muted-foreground">{slot.notes}</p>
 															{/if}
 														</div>
 													{/each}
@@ -906,10 +906,10 @@
 												<Table.Cell class="font-mono text-sm">{c.code}</Table.Cell>
 												<Table.Cell class="font-medium">{c.name}</Table.Cell>
 												<Table.Cell>{c.level}</Table.Cell>
-												<Table.Cell class="text-slate-500">{c.academic_year_name}</Table.Cell>
+												<Table.Cell class="text-muted-foreground">{c.academic_year_name}</Table.Cell>
 												<Table.Cell>
 													{#if c.is_active}
-														<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
+														<Badge class="bg-primary/15 text-primary border-primary/20">Aktif</Badge>
 													{:else}
 														<Badge variant="secondary">Nonaktif</Badge>
 													{/if}
@@ -942,7 +942,7 @@
 						</Card.Header>
 						<Card.Content class="space-y-3">
 							<div>
-								<label for="class-year-id" class="text-xs text-slate-500 mb-1 block">Tahun Ajaran</label>
+								<label for="class-year-id" class="text-xs text-muted-foreground mb-1 block">Tahun Ajaran</label>
 								<select id="class-year-id" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={classYearId}>
 									<option value="">-- Pilih --</option>
 										{#each years as y (y.id)}
@@ -988,7 +988,7 @@
 												<Table.Cell class="font-medium">{s.name}</Table.Cell>
 												<Table.Cell>
 													{#if s.is_active}
-														<Badge class="bg-emerald-100 text-emerald-700 border-emerald-200">Aktif</Badge>
+														<Badge class="bg-primary/15 text-primary border-primary/20">Aktif</Badge>
 													{:else}
 														<Badge variant="secondary">Nonaktif</Badge>
 													{/if}

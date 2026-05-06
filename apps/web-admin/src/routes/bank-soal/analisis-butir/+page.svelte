@@ -103,17 +103,17 @@
 <svelte:head><title>Analisis Butir - Bank Soal</title></svelte:head>
 
 <div class="space-y-5 p-4 md:p-6">
-	<section class="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm">
-		<div class="bg-gradient-to-r from-emerald-50 via-white to-amber-50 p-4 md:p-5">
+	<section class="overflow-hidden rounded-2xl border border-primary/20 bg-card shadow-sm">
+		<div class="bg-gradient-to-r from-primary/10 via-card to-warning/10 p-4 md:p-5">
 			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 				<div>
-					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-700">Advanced Bank Soal</p>
-					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-slate-950">Analisis Butir</h1>
-					<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Pantau kesiapan kualitas soal dari data yang sudah tersedia: status review, pemakaian paket, level kognitif, tipe soal, dan antrean prioritas revisi.</p>
+					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Advanced Bank Soal</p>
+					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Analisis Butir</h1>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pantau kesiapan kualitas soal dari data yang sudah tersedia: status review, pemakaian paket, level kognitif, tipe soal, dan antrean prioritas revisi.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
-					<a href={resolve('/bank-soal')} class="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Dashboard</a>
-					<a href={resolve('/bank-soal/daftar')} class="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Daftar Soal</a>
+					<a href={resolve('/bank-soal')} class="rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50">Dashboard</a>
+					<a href={resolve('/bank-soal/daftar')} class="rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50">Daftar Soal</a>
 				</div>
 			</div>
 		</div>
@@ -129,23 +129,23 @@
 		{#snippet children()}
 			<section class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
 				{#each insights as item (item.label)}
-					<article class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-						<p class="mt-2 text-3xl font-black text-slate-950">{item.value}</p>
-						<p class="mt-1 text-xs text-slate-500">{item.desc}</p>
+					<article class="rounded-xl border border-border bg-card p-4 shadow-sm">
+						<p class="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{item.label}</p>
+						<p class="mt-2 text-3xl font-black text-foreground">{item.value}</p>
+						<p class="mt-1 text-xs text-muted-foreground">{item.desc}</p>
 					</article>
 				{/each}
 			</section>
 
 			<section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
 				<div class="space-y-4">
-					<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 						<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 							<div>
-								<h2 class="text-base font-bold text-slate-900">Distribusi Tipe Soal</h2>
-								<p class="text-xs text-slate-500">Berdasarkan sampel {filteredQuestions.length} soal terbaru.</p>
+								<h2 class="text-base font-bold text-foreground">Distribusi Tipe Soal</h2>
+								<p class="text-xs text-muted-foreground">Berdasarkan sampel {filteredQuestions.length} soal terbaru.</p>
 							</div>
-							<select bind:value={activeSubject} class="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700">
+							<select bind:value={activeSubject} class="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground">
 								<option value="">Semua mapel</option>
 								{#each subjectOptions as subject (subject)}<option value={subject}>{subject}</option>{/each}
 							</select>
@@ -153,44 +153,44 @@
 						<div class="mt-4 space-y-3">
 							{#each typeBuckets as [type, total] (type)}
 								<div>
-									<div class="mb-1 flex justify-between text-xs"><span class="font-semibold uppercase text-slate-600">{type}</span><span>{total}</span></div>
-									<div class="h-2 rounded-full bg-slate-100"><div class="h-2 rounded-full bg-emerald-500" style={`width: ${Math.min(100, Math.round((total / Math.max(1, filteredQuestions.length)) * 100))}%`}></div></div>
+									<div class="mb-1 flex justify-between text-xs"><span class="font-semibold uppercase text-muted-foreground">{type}</span><span>{total}</span></div>
+									<div class="h-2 rounded-full bg-muted"><div class="h-2 rounded-full bg-primary" style={`width: ${Math.min(100, Math.round((total / Math.max(1, filteredQuestions.length)) * 100))}%`}></div></div>
 								</div>
 							{/each}
 						</div>
 					</div>
 
-					<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<h2 class="text-base font-bold text-slate-900">Prioritas Tindak Lanjut</h2>
-						<p class="mt-1 text-xs text-slate-500">Revisi dan soal lolos review yang belum terlihat pemakaiannya.</p>
-						<div class="mt-4 divide-y divide-slate-100">
+					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
+						<h2 class="text-base font-bold text-foreground">Prioritas Tindak Lanjut</h2>
+						<p class="mt-1 text-xs text-muted-foreground">Revisi dan soal lolos review yang belum terlihat pemakaiannya.</p>
+						<div class="mt-4 divide-y divide-border">
 							{#each priorityItems as question (question.id)}
-								<a href={resolve(`/bank-soal/tambah?question_id=${question.id}`)} class="block py-3 hover:bg-slate-50">
-									<div class="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-500"><span>{subjectName(question)}</span><span>{question.workflow_status || question.status || 'draft'}</span><span>{question.code || 'tanpa kode'}</span></div>
-									<p class="mt-1 line-clamp-2 text-sm font-semibold text-slate-800">{plain(question)}</p>
+								<a href={resolve(`/bank-soal/tambah?question_id=${question.id}`)} class="block py-3 hover:bg-muted/50">
+									<div class="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground"><span>{subjectName(question)}</span><span>{question.workflow_status || question.status || 'draft'}</span><span>{question.code || 'tanpa kode'}</span></div>
+									<p class="mt-1 line-clamp-2 text-sm font-semibold text-foreground">{plain(question)}</p>
 								</a>
 							{:else}
-								<p class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Belum ada prioritas tindak lanjut dari sampel saat ini.</p>
+								<p class="rounded-lg border border-dashed border-border bg-muted/50 p-4 text-sm text-muted-foreground">Belum ada prioritas tindak lanjut dari sampel saat ini.</p>
 							{/each}
 						</div>
 					</div>
 				</div>
 
 				<aside class="space-y-4">
-					<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<h2 class="text-base font-bold text-slate-900">Komposisi Kognitif</h2>
+					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
+						<h2 class="text-base font-bold text-foreground">Komposisi Kognitif</h2>
 						<div class="mt-4 space-y-3">
 							{#each cognitiveBuckets as item (item.cognitive_level ?? 'unset')}
-								<div class="rounded-lg border border-slate-100 bg-slate-50 p-3"><div class="flex justify-between text-sm"><span class="font-semibold">{item.cognitive_level || 'Belum diisi'}</span><span>{item.total}</span></div></div>
+								<div class="rounded-lg border border-border bg-muted/50 p-3"><div class="flex justify-between text-sm"><span class="font-semibold">{item.cognitive_level || 'Belum diisi'}</span><span>{item.total}</span></div></div>
 							{:else}
-								<p class="text-sm text-slate-500">Level kognitif belum cukup tersedia.</p>
+								<p class="text-sm text-muted-foreground">Level kognitif belum cukup tersedia.</p>
 							{/each}
 						</div>
 					</div>
-					<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
+					<div class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-warning">
 						<p class="text-sm font-bold">HOTS / C4-C6</p>
 						<p class="mt-2 text-3xl font-black">{hotsQuestions.length}</p>
-						<p class="mt-1 text-xs text-amber-800">Indikasi dari flag HOTS atau level kognitif C4-C6 pada sampel.</p>
+						<p class="mt-1 text-xs text-warning">Indikasi dari flag HOTS atau level kognitif C4-C6 pada sampel.</p>
 					</div>
 				</aside>
 			</section>

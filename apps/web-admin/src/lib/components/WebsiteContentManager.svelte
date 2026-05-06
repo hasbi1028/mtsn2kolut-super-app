@@ -171,8 +171,8 @@
 
 	function statusBadgeClass(item: WebsiteContent) {
 		const state = itemPresentationStatus(item);
-		if (state === 'published') return 'border-emerald-300 text-emerald-700';
-		if (state === 'scheduled') return 'border-sky-300 text-sky-700';
+		if (state === 'published') return 'border-primary/20 text-primary';
+		if (state === 'scheduled') return 'border-accent text-accent-foreground';
 		return '';
 	}
 
@@ -372,7 +372,7 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">{title}</h1>
+			<h1 class="text-2xl font-semibold text-foreground">{title}</h1>
 			<p class="mt-1 text-sm text-muted-foreground">{description}</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
@@ -390,14 +390,14 @@
 			<div class="space-y-4">
 				<div class="grid gap-3 md:grid-cols-5">
 					{#each Array.from({ length: 5 }) as _, index (`website-stat-skeleton-${index}`)}
-						<div class="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+						<div class="rounded-2xl border border-border bg-card px-4 py-4">
 							<Skeleton class="h-3 w-24" />
 							<Skeleton class="mt-3 h-8 w-14" />
 							<Skeleton class="mt-2 h-4 w-32" />
 						</div>
 					{/each}
 				</div>
-				<Card.Root class="border-slate-200 shadow-sm">
+				<Card.Root class="border-border shadow-sm">
 					<Card.Content class="grid gap-3 p-4 md:grid-cols-[1.2fr_auto]">
 						<div class="space-y-2">
 							<Skeleton class="h-3 w-28" />
@@ -408,7 +408,7 @@
 						</div>
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+				<Card.Root class="overflow-hidden border-border shadow-sm">
 					<Card.Content class="space-y-4 px-5 py-6">
 						{#each Array.from({ length: 4 }) as _, index (`website-content-skeleton-${index}`)}
 							<div class="grid gap-4 lg:grid-cols-[1.3fr,0.7fr,0.8fr] lg:items-start">
@@ -439,37 +439,37 @@
 		{#snippet children(_items)}
 
 	<div class="grid gap-3 md:grid-cols-5">
-		<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Konten</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{items.length}</p>
-			<p class="text-sm text-slate-600">seluruh item pada kategori ini</p>
+		<div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Total Konten</p>
+			<p class="mt-2 text-2xl font-semibold text-foreground">{items.length}</p>
+			<p class="text-sm text-muted-foreground">seluruh item pada kategori ini</p>
 		</div>
-		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Terbit</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{publishedCount}</p>
-			<p class="text-sm text-slate-600">konten yang sudah tampil di website publik</p>
+		<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Terbit</p>
+			<p class="mt-2 text-2xl font-semibold text-foreground">{publishedCount}</p>
+			<p class="text-sm text-muted-foreground">konten yang sudah tampil di website publik</p>
 		</div>
-		<div class="rounded-2xl border border-cyan-100 bg-cyan-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-700">Terjadwal</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{scheduledCount}</p>
-			<p class="text-sm text-slate-600">konten yang akan tayang otomatis sesuai jadwal</p>
+		<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Terjadwal</p>
+			<p class="mt-2 text-2xl font-semibold text-foreground">{scheduledCount}</p>
+			<p class="text-sm text-muted-foreground">konten yang akan tayang otomatis sesuai jadwal</p>
 		</div>
-		<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Draft</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{draftCount}</p>
-			<p class="text-sm text-slate-600">konten yang masih menunggu finalisasi</p>
+		<div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Draft</p>
+			<p class="mt-2 text-2xl font-semibold text-foreground">{draftCount}</p>
+			<p class="text-sm text-muted-foreground">konten yang masih menunggu finalisasi</p>
 		</div>
-		<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Unggulan</p>
-			<p class="mt-2 text-2xl font-semibold text-slate-900">{featuredCount}</p>
-			<p class="text-sm text-slate-600">konten yang ditandai untuk sorotan publik</p>
+		<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+			<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Unggulan</p>
+			<p class="mt-2 text-2xl font-semibold text-foreground">{featuredCount}</p>
+			<p class="text-sm text-muted-foreground">konten yang ditandai untuk sorotan publik</p>
 		</div>
 	</div>
 
-	<Card.Root class="border-slate-200 shadow-sm">
+	<Card.Root class="border-border shadow-sm">
 		<Card.Content class="grid gap-3 p-4 md:grid-cols-[1.2fr_auto]">
 			<div>
-				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Cari Konten</p>
+				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Cari Konten</p>
 				<Input placeholder="Cari judul, slug, atau ringkasan..." bind:value={search} class="w-full" />
 			</div>
 			<div class="flex items-end">
@@ -480,7 +480,7 @@
 		</Card.Content>
 	</Card.Root>
 
-	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+	<Card.Root class="overflow-hidden border-border shadow-sm">
 		<Card.Content class="p-0">
 			{#if filteredItems.length === 0}
 				<div class="p-4">
@@ -493,25 +493,25 @@
 					/>
 				</div>
 			{:else}
-				<div class="divide-y divide-slate-200">
+				<div class="divide-y divide-border">
 					{#each filteredItems as item (item.id)}
 						<div class="grid gap-4 px-5 py-5 lg:grid-cols-[1.3fr,0.7fr,0.8fr] lg:items-start">
 							<div class="space-y-2">
 								<div class="flex flex-wrap items-center gap-2">
-									<h2 class="text-lg font-semibold text-slate-900">{item.title}</h2>
+									<h2 class="text-lg font-semibold text-foreground">{item.title}</h2>
 									<Badge variant={item.status === 'draft' ? 'secondary' : 'outline'} class={statusBadgeClass(item)}>
 										{statusLabel(item)}
 									</Badge>
 									{#if item.is_featured}
-										<Badge variant="outline" class="border-amber-300 text-amber-700">Unggulan</Badge>
+										<Badge variant="outline" class="border-warning/30 text-warning">Unggulan</Badge>
 									{/if}
 								</div>
-								<p class="font-mono text-xs text-slate-500">{publicPath(item)}</p>
-								<p class="text-sm leading-7 text-slate-600">{item.excerpt || 'Belum ada ringkasan.'}</p>
+								<p class="font-mono text-xs text-muted-foreground">{publicPath(item)}</p>
+								<p class="text-sm leading-7 text-muted-foreground">{item.excerpt || 'Belum ada ringkasan.'}</p>
 							</div>
-							<div class="space-y-2 text-sm text-slate-600">
-								<p><span class="font-medium text-slate-900">{itemPresentationStatus(item) === 'scheduled' ? 'Jadwal tayang:' : 'Tayang:'}</span> {fmtDate(item.published_at)}</p>
-								<p><span class="font-medium text-slate-900">Update:</span> {fmtDate(item.updated_at)}</p>
+							<div class="space-y-2 text-sm text-muted-foreground">
+								<p><span class="font-medium text-foreground">{itemPresentationStatus(item) === 'scheduled' ? 'Jadwal tayang:' : 'Tayang:'}</span> {fmtDate(item.published_at)}</p>
+								<p><span class="font-medium text-foreground">Update:</span> {fmtDate(item.updated_at)}</p>
 							</div>
 							<div class="flex flex-wrap justify-start gap-2 lg:justify-end">
 									{#if item.status === 'published'}
@@ -572,40 +572,40 @@
 	<Dialog.Content>
 		<div class="space-y-4">
 			<div>
-				<h2 class="text-base font-semibold text-slate-900">{editingId ? 'Edit Konten' : 'Tambah Konten'}</h2>
-				<p class="mt-1 text-sm text-slate-500">Kelola konten {title.toLowerCase()} dengan alur draft hingga terbit.</p>
+				<h2 class="text-base font-semibold text-foreground">{editingId ? 'Edit Konten' : 'Tambah Konten'}</h2>
+				<p class="mt-1 text-sm text-muted-foreground">Kelola konten {title.toLowerCase()} dengan alur draft hingga terbit.</p>
 			</div>
 
 			<div class="grid gap-3 sm:grid-cols-2">
 				<div class="sm:col-span-2">
-					<label for="website-title" class="mb-1 block text-xs font-medium text-slate-600">Judul</label>
+					<label for="website-title" class="mb-1 block text-xs font-medium text-muted-foreground">Judul</label>
 					<Input id="website-title" bind:value={form.title} />
 				</div>
 				<div>
-					<label for="website-slug" class="mb-1 block text-xs font-medium text-slate-600">Slug</label>
+					<label for="website-slug" class="mb-1 block text-xs font-medium text-muted-foreground">Slug</label>
 					<Input id="website-slug" bind:value={form.slug} placeholder="Biarkan kosong jika ingin dibuat otomatis" />
 				</div>
 				<div>
-					<label for="website-status" class="mb-1 block text-xs font-medium text-slate-600">Status</label>
+					<label for="website-status" class="mb-1 block text-xs font-medium text-muted-foreground">Status</label>
 					<select id="website-status" bind:value={form.status} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 						<option value="draft">Draft</option>
 						<option value="published">Terbit</option>
 					</select>
 				</div>
 				<div class="sm:col-span-2">
-					<label for="website-published-at" class="mb-1 block text-xs font-medium text-slate-600">Jadwal Tayang</label>
+					<label for="website-published-at" class="mb-1 block text-xs font-medium text-muted-foreground">Jadwal Tayang</label>
 					<Input id="website-published-at" type="datetime-local" bind:value={form.published_at} />
-					<p class="mt-1 text-xs text-slate-500">Kosongkan untuk tayang segera saat status diubah ke terbit. Isi jadwal jika konten ingin tayang otomatis di waktu tertentu.</p>
+					<p class="mt-1 text-xs text-muted-foreground">Kosongkan untuk tayang segera saat status diubah ke terbit. Isi jadwal jika konten ingin tayang otomatis di waktu tertentu.</p>
 				</div>
 
 				<!-- Cover Image -->
 				<div class="sm:col-span-2">
-					<label for="website-cover" class="mb-1 block text-xs font-medium text-slate-600">Cover Image</label>
+					<label for="website-cover" class="mb-1 block text-xs font-medium text-muted-foreground">Cover Image</label>
 					<div class="flex gap-2">
 						<Input id="website-cover" bind:value={form.cover_image_url} placeholder="Tempel URL gambar atau unggah file di samping" class="flex-1" />
-						<label class="flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-50 {uploadingCover ? 'opacity-60 pointer-events-none' : ''}">
+						<label class="flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted/50 {uploadingCover ? 'opacity-60 pointer-events-none' : ''}">
 							{#if uploadingCover}
-								<span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent"></span>
+								<span class="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-transparent"></span>
 								Mengunggah...
 							{:else}
 								<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -616,7 +616,7 @@
 					</div>
 					{#if form.cover_image_url}
 						<div class="mt-2">
-							<img src={form.cover_image_url} alt="Cover preview" class="h-24 rounded-md border border-slate-200 object-cover" onerror={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+							<img src={form.cover_image_url} alt="Cover preview" class="h-24 rounded-md border border-border object-cover" onerror={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
 						</div>
 					{/if}
 				</div>
@@ -629,38 +629,38 @@
 						bind:checked={form.is_featured}
 						class="h-4 w-4 rounded border-input accent-emerald-700"
 					/>
-					<label for="website-featured" class="text-sm text-slate-700 cursor-pointer">
+					<label for="website-featured" class="text-sm text-foreground cursor-pointer">
 						Tandai sebagai konten unggulan (ditampilkan di bagian utama homepage)
 					</label>
 				</div>
 
 				<div class="sm:col-span-2">
-					<label for="website-excerpt" class="mb-1 block text-xs font-medium text-slate-600">Ringkasan</label>
-					<p class="mb-1 text-xs text-slate-500">Ringkasan singkat ini dipakai pada daftar konten dan pratinjau publik.</p>
+					<label for="website-excerpt" class="mb-1 block text-xs font-medium text-muted-foreground">Ringkasan</label>
+					<p class="mb-1 text-xs text-muted-foreground">Ringkasan singkat ini dipakai pada daftar konten dan pratinjau publik.</p>
 					<Textarea id="website-excerpt" rows={3} bind:value={form.excerpt} />
 				</div>
 				<div class="sm:col-span-2">
-					<label for="website-content" class="mb-1 block text-xs font-medium text-slate-600">Konten HTML</label>
-					<p class="mb-1 text-xs text-slate-500">Gunakan HTML yang rapi agar tampilan halaman publik tetap nyaman dibaca.</p>
+					<label for="website-content" class="mb-1 block text-xs font-medium text-muted-foreground">Konten HTML</label>
+					<p class="mb-1 text-xs text-muted-foreground">Gunakan HTML yang rapi agar tampilan halaman publik tetap nyaman dibaca.</p>
 					<Textarea id="website-content" rows={12} bind:value={form.content_html} />
 				</div>
 
 				<!-- SEO Section -->
 				<div class="sm:col-span-2">
-					<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Metadata SEO</p>
+					<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Metadata SEO</p>
 					<div class="grid gap-3">
 						<div>
-							<label for="website-meta-title" class="mb-1 block text-xs font-medium text-slate-600">
-								Judul SEO <span class="text-slate-400">(kosongkan = pakai judul utama)</span>
+							<label for="website-meta-title" class="mb-1 block text-xs font-medium text-muted-foreground">
+								Judul SEO <span class="text-muted-foreground">(kosongkan = pakai judul utama)</span>
 							</label>
 							<Input id="website-meta-title" bind:value={form.meta_title} placeholder="Judul untuk mesin pencari..." />
 						</div>
 						<div>
-							<label for="website-meta-desc" class="mb-1 block text-xs font-medium text-slate-600">
-								Deskripsi SEO <span class="text-slate-400">(150–160 karakter ideal)</span>
+							<label for="website-meta-desc" class="mb-1 block text-xs font-medium text-muted-foreground">
+								Deskripsi SEO <span class="text-muted-foreground">(150–160 karakter ideal)</span>
 							</label>
 							<Textarea id="website-meta-desc" rows={2} bind:value={form.meta_description} placeholder="Deskripsi singkat untuk mesin pencari dan media sosial..." />
-							<p class="mt-1 text-right text-xs text-slate-400">{form.meta_description.length} karakter</p>
+							<p class="mt-1 text-right text-xs text-muted-foreground">{form.meta_description.length} karakter</p>
 						</div>
 					</div>
 				</div>

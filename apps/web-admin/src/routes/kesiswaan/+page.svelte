@@ -832,8 +832,8 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 		<div>
-			<h1 class="text-lg font-semibold text-slate-800">Kesiswaan</h1>
-			<p class="text-sm text-slate-500">Profil siswa, poin pelanggaran, prestasi, dan administrasi pembinaan.</p>
+			<h1 class="text-lg font-semibold text-foreground">Kesiswaan</h1>
+			<p class="text-sm text-muted-foreground">Profil siswa, poin pelanggaran, prestasi, dan administrasi pembinaan.</p>
 		</div>
 		{#if canManage}
 			<div class="flex flex-wrap gap-2">
@@ -854,7 +854,7 @@
 		{#snippet pending()}
 			<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
 				{#each Array.from({ length: 7 }) as _, index (`stat-skeleton-${index}`)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4"><Skeleton class="h-4 w-28" /><Skeleton class="mt-3 h-8 w-16" /></Card.Content>
 					</Card.Root>
 				{/each}
@@ -880,10 +880,10 @@
 					{ label: 'BK Terbuka', value: overview.stats.open_counseling_sessions },
 					{ label: 'Mutasi Tahun Ini', value: overview.stats.transfers_this_year },
 				] as item (item.label)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4">
-							<p class="text-xs text-slate-500">{item.label}</p>
-							<p class="mt-1 text-2xl font-bold text-emerald-800">{item.value}</p>
+							<p class="text-xs text-muted-foreground">{item.label}</p>
+							<p class="mt-1 text-2xl font-bold text-primary">{item.value}</p>
 						</Card.Content>
 					</Card.Root>
 				{/each}
@@ -904,7 +904,7 @@
 
 		<AsyncContent promise={pagePromise} onerror={handleRenderError}>
 			{#snippet pending()}
-				<Card.Root class="border-slate-200"><Card.Content class="space-y-3 p-4">{#each Array.from({ length: 6 }) as _, index (`table-skeleton-${index}`)}<Skeleton class="h-10 w-full" />{/each}</Card.Content></Card.Root>
+				<Card.Root class="border-border"><Card.Content class="space-y-3 p-4">{#each Array.from({ length: 6 }) as _, index (`table-skeleton-${index}`)}<Skeleton class="h-10 w-full" />{/each}</Card.Content></Card.Root>
 			{/snippet}
 
 			{#snippet failed(error, reset)}
@@ -915,7 +915,7 @@
 				{@const overview = value as KesiswaanData}
 				<Tabs.Content value="siswa" class="space-y-4">
 					<Input placeholder="Cari nama, NIS, NISN, NIK, atau kelas" bind:value={studentSearch} class="sm:max-w-sm" />
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-0">
 							{#if overview.students.length === 0 || filteredStudents.length === 0}
 								<div class="p-4"><EmptyStatePanel compact title="Belum ada data siswa" description="Data siswa mengikuti master akademik. Lengkapi profil kesiswaan ketika siswa sudah tersedia." /></div>
@@ -928,19 +928,19 @@
 												<Table.Cell>
 													<div class="flex items-center gap-3">
 														{#if student.photo_url}
-															<img src={student.photo_url} alt={student.nama} class="h-10 w-10 rounded-md border border-slate-200 object-cover" />
+															<img src={student.photo_url} alt={student.nama} class="h-10 w-10 rounded-md border border-border object-cover" />
 														{:else}
-															<div class="flex h-10 w-10 items-center justify-center rounded-md border border-slate-200 bg-emerald-50 text-xs font-semibold text-emerald-800">{student.nama.slice(0, 2).toUpperCase()}</div>
+															<div class="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-primary/10 text-xs font-semibold text-primary">{student.nama.slice(0, 2).toUpperCase()}</div>
 														{/if}
 														<div>
-															<p class="text-sm font-medium text-slate-800">{student.nama}</p>
-															<p class="text-xs text-slate-500">{student.nis} · {student.class_code || student.class_name || 'Tanpa kelas'}</p>
+															<p class="text-sm font-medium text-foreground">{student.nama}</p>
+															<p class="text-xs text-muted-foreground">{student.nis} · {student.class_code || student.class_name || 'Tanpa kelas'}</p>
 														</div>
 													</div>
 												</Table.Cell>
 												<Table.Cell class="text-sm">
 													<p>{student.nik || 'NIK belum diisi'}</p>
-													<p class="text-xs text-slate-500">{student.tempat_lahir || '-'}{student.tanggal_lahir ? `, ${formatDate(student.tanggal_lahir)}` : ''}</p>
+													<p class="text-xs text-muted-foreground">{student.tempat_lahir || '-'}{student.tanggal_lahir ? `, ${formatDate(student.tanggal_lahir)}` : ''}</p>
 												</Table.Cell>
 												<Table.Cell><Badge variant={student.total_violation_points > 0 ? 'destructive' : 'outline'}>{student.total_violation_points} poin</Badge></Table.Cell>
 												<Table.Cell class="text-sm">{student.violation_count} pelanggaran · {student.achievement_count} prestasi</Table.Cell>
@@ -961,7 +961,7 @@
 						<Input placeholder="Cari siswa, kategori, tindakan, atau catatan" bind:value={violationSearch} class="sm:max-w-sm" />
 						{#if canManage}<Button size="sm" onclick={() => openCreate('violation')}>Tambah Pelanggaran</Button>{/if}
 					</div>
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-0">
 							{#if filteredViolations.length === 0}
 								<div class="p-4"><EmptyStatePanel compact title="Belum ada catatan pelanggaran" description="Catatan pelanggaran akan otomatis memperbarui total poin siswa." /></div>
@@ -971,8 +971,8 @@
 									<Table.Body>
 										{#each filteredViolations as item (item.id)}
 											<Table.Row>
-												<Table.Cell><p class="text-sm font-medium">{item.student_name}</p><p class="text-xs text-slate-500">{item.student_nis} · {item.class_code || item.class_name || '-'}</p></Table.Cell>
-												<Table.Cell><p class="text-sm">{item.category_name || 'Tanpa kategori'} · {item.points} poin</p><p class="text-xs text-slate-500">{item.description || '-'}</p></Table.Cell>
+												<Table.Cell><p class="text-sm font-medium">{item.student_name}</p><p class="text-xs text-muted-foreground">{item.student_nis} · {item.class_code || item.class_name || '-'}</p></Table.Cell>
+												<Table.Cell><p class="text-sm">{item.category_name || 'Tanpa kategori'} · {item.points} poin</p><p class="text-xs text-muted-foreground">{item.description || '-'}</p></Table.Cell>
 												<Table.Cell class="text-sm">{formatDate(item.incident_date)}</Table.Cell>
 												<Table.Cell><Badge variant={item.status === 'open' ? 'destructive' : item.status === 'resolved' ? 'default' : 'outline'}>{labelOf(VIOLATION_STATUSES, item.status)}</Badge></Table.Cell>
 												{#if canManage}
@@ -994,7 +994,7 @@
 						<Input placeholder="Cari siswa, prestasi, kategori, atau penyelenggara" bind:value={achievementSearch} class="sm:max-w-sm" />
 						{#if canManage}<Button size="sm" onclick={() => openCreate('achievement')}>Tambah Prestasi</Button>{/if}
 					</div>
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-0">
 							{#if filteredAchievements.length === 0}
 								<div class="p-4"><EmptyStatePanel compact title="Belum ada prestasi siswa" description="Catat prestasi siswa dari tingkat sekolah sampai internasional." /></div>
@@ -1004,10 +1004,10 @@
 									<Table.Body>
 										{#each filteredAchievements as item (item.id)}
 											<Table.Row>
-												<Table.Cell><p class="text-sm font-medium">{item.title}</p><p class="text-xs text-slate-500">{formatDate(item.achievement_date)} · {item.category || '-'}</p></Table.Cell>
-												<Table.Cell><p class="text-sm">{item.student_name}</p><p class="text-xs text-slate-500">{item.student_nis} · {item.class_code || item.class_name || '-'}</p></Table.Cell>
+												<Table.Cell><p class="text-sm font-medium">{item.title}</p><p class="text-xs text-muted-foreground">{formatDate(item.achievement_date)} · {item.category || '-'}</p></Table.Cell>
+												<Table.Cell><p class="text-sm">{item.student_name}</p><p class="text-xs text-muted-foreground">{item.student_nis} · {item.class_code || item.class_name || '-'}</p></Table.Cell>
 												<Table.Cell><Badge variant={item.level === 'national' || item.level === 'international' ? 'default' : 'outline'}>{labelOf(ACHIEVEMENT_LEVELS, item.level)}</Badge></Table.Cell>
-												<Table.Cell>{#if item.document_url}<Button size="sm" variant="outline" onclick={() => openURL(item.document_url)}>Buka</Button>{:else}<span class="text-sm text-slate-400">-</span>{/if}</Table.Cell>
+												<Table.Cell>{#if item.document_url}<Button size="sm" variant="outline" onclick={() => openURL(item.document_url)}>Buka</Button>{:else}<span class="text-sm text-muted-foreground">-</span>{/if}</Table.Cell>
 												{#if canManage}
 													<Table.Cell><div class="flex gap-1"><Button size="sm" variant="outline" onclick={() => openEditAchievement(item)}>Edit</Button><Button size="sm" variant="destructive" onclick={() => deleteEntity('achievements', item.id)}>Hapus</Button></div></Table.Cell>
 												{/if}
@@ -1025,14 +1025,14 @@
 						<Input placeholder="Cari kode, kategori, atau deskripsi" bind:value={categorySearch} class="sm:max-w-sm" />
 						{#if canManage}<Button size="sm" onclick={() => openCreate('category')}>Tambah Kategori</Button>{/if}
 					</div>
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-0">
 							<Table.Root>
 								<Table.Header><Table.Row><Table.Head>Kategori</Table.Head><Table.Head>Poin</Table.Head><Table.Head>Tingkat</Table.Head><Table.Head>Status</Table.Head>{#if canManage}<Table.Head class="w-32">Aksi</Table.Head>{/if}</Table.Row></Table.Header>
 								<Table.Body>
 									{#each filteredCategories as item (item.id)}
 										<Table.Row>
-											<Table.Cell><p class="text-sm font-medium">{item.code} · {item.name}</p><p class="text-xs text-slate-500">{item.description || '-'}</p></Table.Cell>
+											<Table.Cell><p class="text-sm font-medium">{item.code} · {item.name}</p><p class="text-xs text-muted-foreground">{item.description || '-'}</p></Table.Cell>
 											<Table.Cell>{item.point}</Table.Cell>
 											<Table.Cell><Badge variant={item.severity === 'berat' ? 'destructive' : item.severity === 'sedang' ? 'default' : 'outline'}>{labelOf(SEVERITIES, item.severity)}</Badge></Table.Cell>
 											<Table.Cell><Badge variant={item.is_active ? 'outline' : 'destructive'}>{item.is_active ? 'Aktif' : 'Nonaktif'}</Badge></Table.Cell>
@@ -1049,7 +1049,7 @@
 
 				<Tabs.Content value="ekskul" class="space-y-4">
 					<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Header>
 								<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 									<div>
@@ -1069,7 +1069,7 @@
 										<Table.Body>
 											{#each filteredExtracurriculars as item (item.id)}
 												<Table.Row>
-													<Table.Cell><p class="text-sm font-medium">{item.code} · {item.name}</p><p class="text-xs text-slate-500">{item.category || '-'} · {item.schedule_text || 'Jadwal belum diisi'}</p></Table.Cell>
+													<Table.Cell><p class="text-sm font-medium">{item.code} · {item.name}</p><p class="text-xs text-muted-foreground">{item.category || '-'} · {item.schedule_text || 'Jadwal belum diisi'}</p></Table.Cell>
 													<Table.Cell><Badge variant="outline">{item.active_member_count} aktif</Badge></Table.Cell>
 													<Table.Cell><Badge variant={item.is_active ? 'outline' : 'destructive'}>{item.is_active ? 'Aktif' : 'Nonaktif'}</Badge></Table.Cell>
 													{#if canManage}
@@ -1083,7 +1083,7 @@
 							</Card.Content>
 						</Card.Root>
 
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Header>
 								<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 									<div>
@@ -1103,8 +1103,8 @@
 										<Table.Body>
 											{#each filteredMembers as item (item.id)}
 												<Table.Row>
-													<Table.Cell><p class="text-sm font-medium">{item.student_name}</p><p class="text-xs text-slate-500">{item.student_nis} · {item.class_code || item.class_name || '-'}</p></Table.Cell>
-													<Table.Cell><p class="text-sm">{item.extracurricular_name}</p><p class="text-xs text-slate-500">{formatDate(item.joined_at)}</p></Table.Cell>
+													<Table.Cell><p class="text-sm font-medium">{item.student_name}</p><p class="text-xs text-muted-foreground">{item.student_nis} · {item.class_code || item.class_name || '-'}</p></Table.Cell>
+													<Table.Cell><p class="text-sm">{item.extracurricular_name}</p><p class="text-xs text-muted-foreground">{formatDate(item.joined_at)}</p></Table.Cell>
 													<Table.Cell><Badge variant="outline">{labelOf(EXTRACURRICULAR_ROLES, item.role)}</Badge></Table.Cell>
 													<Table.Cell><Badge variant={item.status === 'active' ? 'default' : 'outline'}>{labelOf(EXTRACURRICULAR_STATUSES, item.status)}</Badge></Table.Cell>
 													{#if canManage}
@@ -1125,7 +1125,7 @@
 						<Input placeholder="Cari siswa, topik, ringkasan, atau tindak lanjut" bind:value={counselingSearch} class="sm:max-w-sm" />
 						{#if canManage}<Button size="sm" onclick={() => openCreate('counseling')}>Tambah Catatan BK</Button>{/if}
 					</div>
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-0">
 							{#if filteredCounseling.length === 0}
 								<div class="p-4"><EmptyStatePanel compact title="Belum ada catatan BK" description="Catatan rahasia hanya tampil untuk admin dan petugas kesiswaan." /></div>
@@ -1135,8 +1135,8 @@
 									<Table.Body>
 										{#each filteredCounseling as item (item.id)}
 											<Table.Row>
-												<Table.Cell><p class="text-sm font-medium">{item.student_name}</p><p class="text-xs text-slate-500">{item.student_nis} · {item.class_code || item.class_name || '-'}</p></Table.Cell>
-												<Table.Cell><p class="text-sm font-medium">{item.topic}</p><p class="text-xs text-slate-500">{formatDate(item.session_date)} · {item.follow_up || item.summary || '-'}</p></Table.Cell>
+												<Table.Cell><p class="text-sm font-medium">{item.student_name}</p><p class="text-xs text-muted-foreground">{item.student_nis} · {item.class_code || item.class_name || '-'}</p></Table.Cell>
+												<Table.Cell><p class="text-sm font-medium">{item.topic}</p><p class="text-xs text-muted-foreground">{formatDate(item.session_date)} · {item.follow_up || item.summary || '-'}</p></Table.Cell>
 												<Table.Cell><Badge variant={item.status === 'open' || item.status === 'monitoring' ? 'default' : 'outline'}>{labelOf(COUNSELING_STATUSES, item.status)}</Badge></Table.Cell>
 												<Table.Cell><Badge variant={item.is_confidential ? 'destructive' : 'outline'}>{item.is_confidential ? 'Rahasia' : 'Umum'}</Badge></Table.Cell>
 												{#if canManage}
@@ -1156,7 +1156,7 @@
 						<Input placeholder="Cari siswa, sekolah asal/tujuan, alasan, atau dokumen" bind:value={transferSearch} class="sm:max-w-sm" />
 						{#if canManage}<Button size="sm" onclick={() => openCreate('transfer')}>Catat Mutasi</Button>{/if}
 					</div>
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-0">
 							{#if filteredTransfers.length === 0}
 								<div class="p-4"><EmptyStatePanel compact title="Belum ada riwayat mutasi" description="Mutasi keluar otomatis mengubah status siswa menjadi mutasi, sedangkan mutasi masuk mengaktifkan siswa." /></div>
@@ -1166,8 +1166,8 @@
 									<Table.Body>
 										{#each filteredTransfers as item (item.id)}
 											<Table.Row>
-												<Table.Cell><p class="text-sm font-medium">{item.student_name}</p><p class="text-xs text-slate-500">{item.student_nis} · {item.class_code || item.class_name || '-'}</p></Table.Cell>
-												<Table.Cell><Badge variant={item.transfer_type === 'out' ? 'destructive' : 'default'}>{labelOf(TRANSFER_TYPES, item.transfer_type)}</Badge><p class="mt-1 text-xs text-slate-500">{formatDate(item.transfer_date)}</p></Table.Cell>
+												<Table.Cell><p class="text-sm font-medium">{item.student_name}</p><p class="text-xs text-muted-foreground">{item.student_nis} · {item.class_code || item.class_name || '-'}</p></Table.Cell>
+												<Table.Cell><Badge variant={item.transfer_type === 'out' ? 'destructive' : 'default'}>{labelOf(TRANSFER_TYPES, item.transfer_type)}</Badge><p class="mt-1 text-xs text-muted-foreground">{formatDate(item.transfer_date)}</p></Table.Cell>
 												<Table.Cell class="text-sm">{item.transfer_type === 'out' ? item.destination_school : item.previous_school}</Table.Cell>
 												<Table.Cell class="text-sm">{item.document_ref || '-'}</Table.Cell>
 												<Table.Cell><Badge variant="outline">{labelOf(STUDENT_STATUSES, item.student_status)}</Badge></Table.Cell>

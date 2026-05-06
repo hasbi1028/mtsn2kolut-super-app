@@ -108,10 +108,10 @@
       </div>
     </div>
 
-    <div class="mt-4 rounded-xl border border-emerald-200/70 bg-emerald-50/40 p-4">
+    <div class="mt-4 rounded-xl border border-primary/20 bg-primary/10 p-4">
       <div class="space-y-1">
-        <p class="text-sm font-semibold text-slate-900">Integrasi PUSAKA</p>
-        <p class="text-xs text-slate-600">Opsional saat tambah pegawai. Bisa diisi sekarang atau dilengkapi nanti dari halaman PUSAKA.</p>
+        <p class="text-sm font-semibold text-foreground">Integrasi PUSAKA</p>
+        <p class="text-xs text-muted-foreground">Opsional saat tambah pegawai. Bisa diisi sekarang atau dilengkapi nanti dari halaman PUSAKA.</p>
       </div>
 
       {#if pusakaEligible}
@@ -126,7 +126,7 @@
           </div>
         </div>
       {:else}
-        <div class="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+        <div class="mt-4 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           Pegawai dengan status ini tidak otomatis eligible untuk integrasi PUSAKA. Simpan sebagai pegawai umum saja.
         </div>
       {/if}
