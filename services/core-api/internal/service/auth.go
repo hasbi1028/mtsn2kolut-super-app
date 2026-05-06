@@ -37,6 +37,7 @@ type authStore interface {
 	GetUserPermissionCodes(ctx context.Context, userID pgtype.UUID) ([]string, error)
 	AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error
 	IncrementUserAuthVersion(ctx context.Context, id pgtype.UUID) (int32, error)
+	MarkUserLastLogin(ctx context.Context, id pgtype.UUID) error
 	CreateAuthSession(ctx context.Context, arg db.CreateAuthSessionParams) (db.AuthSession, error)
 	GetAuthSession(ctx context.Context, id pgtype.UUID) (db.AuthSession, error)
 	RevokeAuthSession(ctx context.Context, id pgtype.UUID) error
@@ -99,6 +100,9 @@ func (s *Auth) Login(ctx context.Context, username, password string, meta Sessio
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return domain.TokenPair{}, domain.ErrUnauthorized
+	}
+	if err := s.q.MarkUserLastLogin(ctx, user.ID); err != nil {
+		return domain.TokenPair{}, err
 	}
 
 	return s.issueTokenPair(ctx, user, normalizeSessionMeta(meta))

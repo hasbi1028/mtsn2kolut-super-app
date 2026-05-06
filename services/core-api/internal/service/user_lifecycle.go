@@ -16,6 +16,7 @@ import (
 type userLifecycleStore interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (db.GetUserByIDRow, error)
 	UpdateUserStatus(ctx context.Context, arg db.UpdateUserStatusParams) error
+	SoftDeleteUser(ctx context.Context, id pgtype.UUID) error
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
 	IncrementUserAuthVersion(ctx context.Context, userID pgtype.UUID) (int32, error)
 	UpdateUserProfileLink(ctx context.Context, arg db.UpdateUserProfileLinkParams) error
@@ -49,7 +50,18 @@ func NewUserLifecycleWithPool(pool *pgxpool.Pool) *UserLifecycle {
 }
 
 func (s *UserLifecycle) DeleteAsDeactivate(ctx context.Context, id pgtype.UUID, actorID pgtype.UUID) error {
-	return s.setActive(ctx, id, false, actorID)
+	if err := s.ensureCanDeactivate(ctx, id); err != nil {
+		return err
+	}
+	return s.withStore(ctx, func(store userLifecycleStore) error {
+		if err := store.SoftDeleteUser(ctx, id); err != nil {
+			return err
+		}
+		if _, err := store.RevokeAllAuthSessionsForUser(ctx, id); err != nil {
+			return err
+		}
+		return auditUserLifecycle(ctx, store, actorID, "USER_DELETED", "user", uuidEntityID(id), map[string]any{"user_id": uuidEntityID(id), "deleted_at": "now"})
+	})
 }
 
 func (s *UserLifecycle) UpdateStatus(ctx context.Context, id pgtype.UUID, isActive bool, actorID pgtype.UUID) error {
@@ -87,7 +99,7 @@ func (s *UserLifecycle) UpdateProfileLink(ctx context.Context, id pgtype.UUID, l
 		return err
 	}
 	return s.withStore(ctx, func(store userLifecycleStore) error {
-		if err := store.UpdateUserProfileLink(ctx, db.UpdateUserProfileLinkParams{ID: id, EmployeeID: link.EmployeeID, StudentID: link.StudentID, ParentID: link.ParentID}); err != nil {
+		if err := store.UpdateUserProfileLink(ctx, db.UpdateUserProfileLinkParams{ID: id, EmployeeID: link.EmployeeID, StudentID: link.StudentID, ParentID: link.ParentID, DisplayName: pgtype.Text{}}); err != nil {
 			return err
 		}
 		return auditUserLifecycle(ctx, store, actorID, "USER_PROFILE_LINK_UPDATED", "user", uuidEntityID(id), map[string]any{

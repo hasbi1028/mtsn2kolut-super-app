@@ -101,7 +101,13 @@ func (s *EmployeeAccountGenerator) Generate(ctx context.Context, actorID pgtype.
 			if err != nil {
 				return err
 			}
-			row, err := store.CreateUser(ctx, db.CreateUserParams{Username: item.Username, PasswordHash: string(hash), EmployeeID: employeeID, IsActive: true})
+			row, err := store.CreateUser(ctx, db.CreateUserParams{
+				Username:     item.Username,
+				PasswordHash: string(hash),
+				DisplayName:  pgtype.Text{String: item.Nama, Valid: item.Nama != ""},
+				EmployeeID:   employeeID,
+				IsActive:     true,
+			})
 			if err != nil {
 				item.Status = "failed"
 				item.Message = err.Error()

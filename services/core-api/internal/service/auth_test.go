@@ -88,6 +88,7 @@ func (f *fakeStore) GetUserByUsername(ctx context.Context, username string) (db.
 		ID:           u.ID,
 		Username:     u.Username,
 		PasswordHash: u.PasswordHash,
+		DisplayName:  u.DisplayName,
 		EmployeeID:   u.EmployeeID,
 		StudentID:    u.StudentID,
 		ParentID:     u.ParentID,
@@ -111,6 +112,7 @@ func (f *fakeStore) GetUserByID(ctx context.Context, id pgtype.UUID) (db.GetUser
 				ID:           u.ID,
 				Username:     u.Username,
 				PasswordHash: u.PasswordHash,
+				DisplayName:  u.DisplayName,
 				EmployeeID:   u.EmployeeID,
 				StudentID:    u.StudentID,
 				ParentID:     u.ParentID,
@@ -135,6 +137,7 @@ func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db
 		ID:           id,
 		Username:     arg.Username,
 		PasswordHash: arg.PasswordHash,
+		DisplayName:  arg.DisplayName,
 		EmployeeID:   arg.EmployeeID,
 		StudentID:    arg.StudentID,
 		ParentID:     arg.ParentID,
@@ -145,6 +148,7 @@ func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db
 	return db.CreateUserRow{
 		ID:          u.ID,
 		Username:    u.Username,
+		DisplayName: u.DisplayName,
 		EmployeeID:  u.EmployeeID,
 		StudentID:   u.StudentID,
 		ParentID:    u.ParentID,
@@ -197,6 +201,19 @@ func (f *fakeStore) IncrementUserAuthVersion(ctx context.Context, id pgtype.UUID
 		}
 	}
 	return 0, pgx.ErrNoRows
+}
+
+func (f *fakeStore) MarkUserLastLogin(ctx context.Context, id pgtype.UUID) error {
+	now := pgtype.Timestamptz{}
+	_ = now.Scan(time.Now())
+	for key, user := range f.users {
+		if user.ID == id {
+			user.LastLoginAt = now
+			f.users[key] = user
+			return nil
+		}
+	}
+	return pgx.ErrNoRows
 }
 
 func (f *fakeStore) CreateAuthSession(ctx context.Context, arg db.CreateAuthSessionParams) (db.AuthSession, error) {

@@ -33,10 +33,12 @@
 	} from '$lib/client/rbac-users';
 
 	type User = {
-		id: string; username: string; roles: string[];
+		id: string; username: string; display_name?: string | null; roles: string[];
 		employee_id: string | null; student_id: string | null; parent_id: string | null;
 		profile_nama: string | null;
 		is_active: boolean;
+		last_login_at?: string | null;
+		deleted_at?: string | null;
 		created_at: string;
 	};
 	type Employee = { id: string; nama: string; nip: string; };
@@ -62,6 +64,7 @@
 
 	let fUsername = $state('');
 	let fPassword = $state('');
+	let fDisplayName = $state('');
 	let fRoles = $state<string[]>(['guru']);
 	let fEmpId = $state('');
 	let fStuId = $state('');
@@ -182,6 +185,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					username: fUsername, password: fPassword,
+					display_name: fDisplayName || null,
 					roles: fRoles,
 					employee_id: fEmpId || null,
 					student_id: fStuId || null,
@@ -189,7 +193,7 @@
 				}),
 			});
 			await readClientJson<unknown>(res);
-			fUsername = ''; fPassword = ''; fRoles = ['guru']; fEmpId = ''; fStuId = ''; fParId = '';
+			fUsername = ''; fPassword = ''; fDisplayName = ''; fRoles = ['guru']; fEmpId = ''; fStuId = ''; fParId = '';
 			showForm = false;
 			toast.success('Pengguna berhasil dibuat');
 			await refreshOverview();
@@ -251,6 +255,13 @@
 
 	function roleLabel(roleCode: string) {
 		return availableRoles.find((role) => role.value === roleCode)?.label ?? roleCode;
+	}
+
+	function formatDateTime(value?: string | null) {
+		if (!value) return 'Belum pernah login';
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return 'Belum pernah login';
+		return date.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
 	}
 
 	async function updateRolesForUser(user: User, nextRoles: string[]) {
@@ -596,6 +607,10 @@
 							<Input id="u-name" bind:value={fUsername} placeholder="Gunakan nama akun yang mudah dikenali" />
 						</div>
 						<div>
+							<label for="u-display" class="text-xs text-slate-500 mb-1 block">Display Name</label>
+							<Input id="u-display" bind:value={fDisplayName} placeholder="Nama tampil pengguna" />
+						</div>
+						<div>
 							<label for="u-pass" class="text-xs text-slate-500 mb-1 block">Password</label>
 							<Input id="u-pass" type="password" bind:value={fPassword} placeholder="Minimal 8 karakter" />
 						</div>
@@ -810,10 +825,11 @@
 				<Table.Root>
 					<Table.Header>
 						<Table.Row class="bg-slate-50">
-							<Table.Head>Username</Table.Head>
+							<Table.Head>Username / Display Name</Table.Head>
 							<Table.Head>Role Dinamis</Table.Head>
 							<Table.Head>Profil Terhubung</Table.Head>
 							<Table.Head>Status</Table.Head>
+							<Table.Head>Last Login</Table.Head>
 							<Table.Head>Dibuat</Table.Head>
 							<Table.Head>Aksi</Table.Head>
 						</Table.Row>
@@ -821,7 +837,10 @@
 					<Table.Body>
 						{#each overview.users as u (u.id)}
 							<Table.Row>
-								<Table.Cell class="font-medium">{u.username}</Table.Cell>
+								<Table.Cell class="font-medium">
+									<div>{u.username}</div>
+									<div class="mt-1 text-xs font-normal text-slate-500">{u.display_name || u.profile_nama || '—'}</div>
+								</Table.Cell>
 								<Table.Cell>
 									<div class="flex max-w-md flex-wrap gap-1.5">
 										{#each availableRoles as r (r.value)}
@@ -847,6 +866,7 @@
 										{u.is_active ? 'Aktif' : 'Nonaktif'}
 									</Badge>
 								</Table.Cell>
+								<Table.Cell class="text-xs text-slate-500">{formatDateTime(u.last_login_at)}</Table.Cell>
 								<Table.Cell class="text-xs text-slate-400">{new Date(u.created_at).toLocaleDateString()}</Table.Cell>
 								<Table.Cell class="text-right">
 									<div class="flex flex-wrap justify-end gap-2">
@@ -880,7 +900,7 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={6} class="p-4">
+								<Table.Cell colspan={7} class="p-4">
 									<EmptyStatePanel
 										compact
 										title="Belum ada data pengguna"
@@ -899,6 +919,7 @@
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
 									<p class="text-sm font-semibold text-slate-900">{u.username}</p>
+									<p class="mt-1 text-xs text-slate-500">{u.display_name || u.profile_nama || '—'}</p>
 									<div class="mt-1 flex flex-wrap gap-1">
 										{#each availableRoles as r (r.value)}
 											<button
@@ -911,6 +932,7 @@
 										{/each}
 									</div>
 									<p class="mt-2 text-xs text-slate-500">{u.profile_nama || 'Tidak terhubung profil'}</p>
+									<p class="mt-1 text-xs text-slate-400">Last login: {formatDateTime(u.last_login_at)}</p>
 								</div>
 								<Badge variant={u.is_active ? 'outline' : 'destructive'}>{u.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
 							</div>

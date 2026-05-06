@@ -13,10 +13,11 @@ import (
 )
 
 type fakeUserLifecycleStore struct {
-	statusCalls []db.UpdateUserStatusParams
-	statusErr   error
-	revokeCalls []pgtype.UUID
-	revokeErr   error
+	statusCalls     []db.UpdateUserStatusParams
+	softDeleteCalls []pgtype.UUID
+	statusErr       error
+	revokeCalls     []pgtype.UUID
+	revokeErr       error
 
 	userByID db.GetUserByIDRow
 	userErr  error
@@ -42,6 +43,11 @@ func userLifecycleTestUUID(seed byte) pgtype.UUID {
 
 func (f *fakeUserLifecycleStore) UpdateUserStatus(ctx context.Context, arg db.UpdateUserStatusParams) error {
 	f.statusCalls = append(f.statusCalls, arg)
+	return f.statusErr
+}
+
+func (f *fakeUserLifecycleStore) SoftDeleteUser(ctx context.Context, id pgtype.UUID) error {
+	f.softDeleteCalls = append(f.softDeleteCalls, id)
 	return f.statusErr
 }
 
@@ -115,7 +121,7 @@ func TestUserLifecycleRefusesToDeactivateLastActiveAdmin(t *testing.T) {
 	}
 }
 
-func TestUserLifecycleDeleteIsNonDestructiveDeactivate(t *testing.T) {
+func TestUserLifecycleDeleteSoftDeletesAndRevokesSessions(t *testing.T) {
 	userID := userLifecycleTestUUID(121)
 	store := &fakeUserLifecycleStore{adminCount: 2}
 	svc := &UserLifecycle{q: store}
@@ -123,11 +129,17 @@ func TestUserLifecycleDeleteIsNonDestructiveDeactivate(t *testing.T) {
 	if err := svc.DeleteAsDeactivate(context.Background(), userID, userLifecycleTestUUID(128)); err != nil {
 		t.Fatalf("DeleteAsDeactivate() error = %v", err)
 	}
-	if len(store.statusCalls) != 1 || store.statusCalls[0].ID != userID || store.statusCalls[0].IsActive {
-		t.Fatalf("status calls = %+v, want non-destructive inactive update", store.statusCalls)
+	if len(store.softDeleteCalls) != 1 || store.softDeleteCalls[0] != userID {
+		t.Fatalf("soft delete calls = %+v, want one target soft-delete", store.softDeleteCalls)
+	}
+	if len(store.statusCalls) != 0 {
+		t.Fatalf("status calls = %+v, want delete to use deleted_at soft delete", store.statusCalls)
 	}
 	if len(store.revokeCalls) != 1 || store.revokeCalls[0] != userID {
 		t.Fatalf("revoke calls = %+v, want session invalidation", store.revokeCalls)
+	}
+	if len(store.auditCalls) != 1 || store.auditCalls[0].Action != "USER_DELETED" {
+		t.Fatalf("audit calls = %+v, want user deleted audit", store.auditCalls)
 	}
 }
 

@@ -1895,6 +1895,9 @@ type User struct {
 	ParentID     pgtype.UUID        `json:"parent_id"`
 	IsActive     bool               `json:"is_active"`
 	AuthVersion  int32              `json:"auth_version"`
+	DisplayName  pgtype.Text        `json:"display_name"`
+	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type UserAccountRole struct {

@@ -20,9 +20,10 @@ services/core-api/data/
 *.sqlite-shm
 *.sqlite-wal
 
-# Logs & screenshots
+# Logs, screenshots & local temp files
 logs/
 services/logs/
+tmp/
 /.playwright-mcp/
 /login-*.png
 /public-home-*.png

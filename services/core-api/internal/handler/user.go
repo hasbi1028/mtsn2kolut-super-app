@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -100,11 +101,14 @@ func (h *User) List(w http.ResponseWriter, r *http.Request) {
 	type userResponse struct {
 		ID          pgtype.UUID        `json:"id"`
 		Username    string             `json:"username"`
+		DisplayName string             `json:"display_name"`
 		EmployeeID  pgtype.UUID        `json:"employee_id"`
 		StudentID   pgtype.UUID        `json:"student_id"`
 		ParentID    pgtype.UUID        `json:"parent_id"`
 		ProfileNama string             `json:"profile_nama"`
 		IsActive    bool               `json:"is_active"`
+		LastLoginAt pgtype.Timestamptz `json:"last_login_at"`
+		DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 		CreatedAt   pgtype.Timestamptz `json:"created_at"`
 		Roles       []string           `json:"roles"`
 	}
@@ -118,11 +122,14 @@ func (h *User) List(w http.ResponseWriter, r *http.Request) {
 		res[i] = userResponse{
 			ID:          row.ID,
 			Username:    row.Username,
+			DisplayName: row.DisplayName,
 			EmployeeID:  row.EmployeeID,
 			StudentID:   row.StudentID,
 			ParentID:    row.ParentID,
 			ProfileNama: row.ProfileNama,
 			IsActive:    row.IsActive,
+			LastLoginAt: row.LastLoginAt,
+			DeletedAt:   row.DeletedAt,
 			CreatedAt:   row.CreatedAt,
 			Roles:       roles,
 		}
@@ -136,12 +143,13 @@ func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Username   string   `json:"username"`
-		Password   string   `json:"password"`
-		Roles      []string `json:"roles"`
-		EmployeeID string   `json:"employee_id"`
-		StudentID  string   `json:"student_id"`
-		ParentID   string   `json:"parent_id"`
+		Username    string   `json:"username"`
+		Password    string   `json:"password"`
+		DisplayName string   `json:"display_name"`
+		Roles       []string `json:"roles"`
+		EmployeeID  string   `json:"employee_id"`
+		StudentID   string   `json:"student_id"`
+		ParentID    string   `json:"parent_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
@@ -183,8 +191,9 @@ func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 
 	create := func(store userStore) (db.CreateUserRow, error) {
 		row, err := store.CreateUser(r.Context(), db.CreateUserParams{
-			Username:     body.Username,
+			Username:     strings.TrimSpace(body.Username),
 			PasswordHash: string(hash),
+			DisplayName:  pgtype.Text{String: strings.TrimSpace(body.DisplayName), Valid: strings.TrimSpace(body.DisplayName) != ""},
 			EmployeeID:   empID,
 			StudentID:    stuID,
 			ParentID:     parID,
