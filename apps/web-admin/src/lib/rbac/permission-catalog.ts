@@ -49,6 +49,7 @@ export const RBAC_PERMISSION_CATALOG = [
 	{ code: 'notifications.read', module: 'notifications', action: 'read', description: 'Melihat notifikasi.' },
 	{ code: 'parents.manage', module: 'parents', action: 'manage', description: 'Mengelola data orang tua/wali.' },
 	{ code: 'parents.read', module: 'parents', action: 'read', description: 'Melihat data orang tua/wali.' },
+	{ code: 'profile_changes.review', module: 'profile_changes', action: 'review', description: 'Meninjau dan menyetujui permintaan perubahan data resmi profil.' },
 	{ code: 'pusaka.credentials_manage', module: 'pusaka', action: 'credentials_manage', description: 'Mengelola kredensial PUSAKA.' },
 	{ code: 'pusaka.manage', module: 'pusaka', action: 'manage', description: 'Mengelola modul PUSAKA.' },
 	{ code: 'pusaka.read', module: 'pusaka', action: 'read', description: 'Melihat modul PUSAKA.' },

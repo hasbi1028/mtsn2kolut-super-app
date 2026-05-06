@@ -580,6 +580,50 @@ func (ns NullLoanStatusEnum) Value() (driver.Value, error) {
 	return string(ns.LoanStatusEnum), nil
 }
 
+type ProfileChangeRequestStatus string
+
+const (
+	ProfileChangeRequestStatusPending   ProfileChangeRequestStatus = "pending"
+	ProfileChangeRequestStatusApproved  ProfileChangeRequestStatus = "approved"
+	ProfileChangeRequestStatusRejected  ProfileChangeRequestStatus = "rejected"
+	ProfileChangeRequestStatusCancelled ProfileChangeRequestStatus = "cancelled"
+)
+
+func (e *ProfileChangeRequestStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ProfileChangeRequestStatus(s)
+	case string:
+		*e = ProfileChangeRequestStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ProfileChangeRequestStatus: %T", src)
+	}
+	return nil
+}
+
+type NullProfileChangeRequestStatus struct {
+	ProfileChangeRequestStatus ProfileChangeRequestStatus `json:"profile_change_request_status"`
+	Valid                      bool                       `json:"valid"` // Valid is true if ProfileChangeRequestStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullProfileChangeRequestStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.ProfileChangeRequestStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ProfileChangeRequestStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullProfileChangeRequestStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ProfileChangeRequestStatus), nil
+}
+
 type RunTypeEnum string
 
 const (
@@ -1256,6 +1300,7 @@ type Employee struct {
 	Phone          string             `json:"phone"`
 	Email          string             `json:"email"`
 	Address        string             `json:"address"`
+	PhotoUrl       string             `json:"photo_url"`
 }
 
 type EmployeeSchedule struct {
@@ -1688,11 +1733,31 @@ type Parent struct {
 	Address   string             `json:"address"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	PhotoUrl  string             `json:"photo_url"`
 }
 
 type ParentStudent struct {
 	ParentID  pgtype.UUID `json:"parent_id"`
 	StudentID pgtype.UUID `json:"student_id"`
+}
+
+type ProfileChangeRequest struct {
+	ID               pgtype.UUID                `json:"id"`
+	RequesterUserID  pgtype.UUID                `json:"requester_user_id"`
+	ProfileType      string                     `json:"profile_type"`
+	TargetEmployeeID pgtype.UUID                `json:"target_employee_id"`
+	TargetStudentID  pgtype.UUID                `json:"target_student_id"`
+	TargetParentID   pgtype.UUID                `json:"target_parent_id"`
+	FieldKey         string                     `json:"field_key"`
+	CurrentValue     string                     `json:"current_value"`
+	RequestedValue   string                     `json:"requested_value"`
+	Reason           string                     `json:"reason"`
+	Status           ProfileChangeRequestStatus `json:"status"`
+	ReviewerUserID   pgtype.UUID                `json:"reviewer_user_id"`
+	ReviewNote       string                     `json:"review_note"`
+	ReviewedAt       pgtype.Timestamptz         `json:"reviewed_at"`
+	CreatedAt        pgtype.Timestamptz         `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz         `json:"updated_at"`
 }
 
 type PusakaAccount struct {

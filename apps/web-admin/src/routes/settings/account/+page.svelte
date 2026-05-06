@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import FilePenLineIcon from '@lucide/svelte/icons/file-pen-line';
+	import HistoryIcon from '@lucide/svelte/icons/history';
+	import UploadIcon from '@lucide/svelte/icons/upload';
 	import KeyRoundIcon from '@lucide/svelte/icons/key-round';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
 	import MailIcon from '@lucide/svelte/icons/mail';
@@ -22,20 +25,34 @@
 	import { clearCbtComposerDrafts } from '$lib/client/cbt-drafts';
 	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
 	import {
+		accountAvatarUrl,
 		accountDisplayName,
 		accountErrorMessage,
+		accountInitials,
+		changeRequestCanCancel,
+		changeRequestStatusLabel,
 		contactFieldEditable,
 		formatAccountDateTime,
 		hasEditableContact,
 		isCurrentSession,
 		linkedProfileLabel,
+		normalizeAccountChangeHistory,
+		normalizeChangeRequests,
 		normalizeAccountSessions,
+		officialChangeFieldOptions,
+		officialFieldLabel,
 		preferenceItemCount,
+		profileHistoryActionLabel,
+		profileHistoryFieldLabel,
+		profileHistoryStatusLabel,
 		profileTypeLabel,
 		roleLabel,
 		sessionTitle,
+		type AccountChangeHistoryItem,
+		type AccountChangeRequest,
 		type AccountIdentity,
 		type AuthSession,
+		type OfficialChangeFieldOption,
 		type SidebarPreferences
 	} from '$lib/client/account';
 	import { confirmAction } from '$lib/confirm-dialog';
@@ -44,15 +61,28 @@
 		account: AccountIdentity;
 		sessions: AuthSession[];
 		preferences: SidebarPreferences | null;
+		changeFields: OfficialChangeFieldOption[];
+		changeRequests: AccountChangeRequest[];
+		changeHistory: AccountChangeHistoryItem[];
 	};
 
 	let overviewPromise = $state<Promise<AccountOverview> | null>(null);
 	let account = $state<AccountIdentity | null>(null);
 	let sessions = $state<AuthSession[]>([]);
 	let preferences = $state<SidebarPreferences | null>(null);
+	let changeFields = $state<OfficialChangeFieldOption[]>([]);
+	let changeRequests = $state<AccountChangeRequest[]>([]);
+	let changeHistory = $state<AccountChangeHistoryItem[]>([]);
 	let labelDrafts = $state<Record<string, string>>({});
 	let contactForm = $state({ phone: '', email: '', address: '' });
+	let changeRequestForm = $state({ field_key: '', requested_value: '', reason: '' });
+	let changeRequestLoading = $state(false);
+	let cancelChangeRequestLoading = $state<string | null>(null);
 	let contactLoading = $state(false);
+	let avatarFile = $state<File | null>(null);
+	let avatarInput = $state<HTMLInputElement | null>(null);
+	let avatarUploadLoading = $state(false);
+	let avatarDeleteLoading = $state(false);
 	let pwForm = $state({ current: '', next: '', confirm: '' });
 	let pwLoading = $state(false);
 	let logoutAllLoading = $state(false);
@@ -64,12 +94,23 @@
 	const pinnedCount = $derived(preferenceItemCount(preferences?.pinned_items));
 	const recentCount = $derived(preferenceItemCount(preferences?.recent_items));
 	const canEditContact = $derived(hasEditableContact(account?.contact));
+	const officialChangeFields = $derived(officialChangeFieldOptions(changeFields));
+	const canRequestOfficialChange = $derived(officialChangeFields.length > 0);
+	const selectedChangeField = $derived(officialChangeFields.find((field) => field.field_key === changeRequestForm.field_key));
+	const changeRequestValueType = $derived(selectedChangeField?.value_type === 'date' ? 'date' : 'text');
+	const currentAvatarUrl = $derived(accountAvatarUrl(account));
+	const currentAvatarInitials = $derived(accountInitials(account));
+	const selectedAvatarLabel = $derived(avatarFile ? `${avatarFile.name} (${formatAvatarFileSize(avatarFile.size)})` : '');
 
 	function applyOverview(overview: AccountOverview) {
 		account = overview.account;
 		sessions = overview.sessions;
 		preferences = overview.preferences;
+		changeFields = overview.changeFields;
+		changeRequests = overview.changeRequests;
+		changeHistory = overview.changeHistory;
 		contactForm = contactFormFromAccount(overview.account);
+		resetChangeRequestForm(overview.changeFields);
 		labelDrafts = Object.fromEntries(
 			overview.sessions.map((session) => [session.id, session.device_label?.trim() ?? ''])
 		);
@@ -83,9 +124,14 @@
 		};
 	}
 
+	function resetChangeRequestForm(fields: OfficialChangeFieldOption[] = changeFields) {
+		const options = officialChangeFieldOptions(fields);
+		changeRequestForm = { field_key: options[0]?.field_key ?? '', requested_value: '', reason: '' };
+	}
+
 	function currentOverview(): AccountOverview | null {
 		if (!account) return null;
-		return { account, sessions, preferences };
+		return { account, sessions, preferences, changeFields, changeRequests, changeHistory };
 	}
 
 	async function fetchPreferences() {
@@ -97,22 +143,52 @@
 		}
 	}
 
+	async function fetchChangeHistory() {
+		const res = await fetch('/api/auth/account/change-history?per_page=30');
+		const rows = await readClientApiData<AccountChangeHistoryItem[]>(res, 'Gagal memuat riwayat perubahan profil');
+		return normalizeAccountChangeHistory(rows);
+	}
+
+	async function fetchChangeRequestFields() {
+		const res = await fetch('/api/auth/account/change-request-fields');
+		const rows = await readClientApiData<OfficialChangeFieldOption[]>(res, 'Gagal memuat daftar field perubahan data');
+		return officialChangeFieldOptions(rows);
+	}
+
 	async function fetchOverview(): Promise<AccountOverview> {
-		const [accountData, sessionData, preferenceData] = await Promise.all([
+		const [accountData, sessionData, preferenceData, changeFieldData, changeRequestData, changeHistoryData] = await Promise.all([
 			fetch('/api/auth/account').then((response) =>
 				readClientApiData<AccountIdentity>(response, 'Gagal memuat identitas akun')
 			),
 			fetch('/api/auth/sessions').then((response) =>
 				readClientApiData<AuthSession[]>(response, 'Gagal memuat sesi aktif')
 			),
-			fetchPreferences()
+			fetchPreferences(),
+			fetchChangeRequestFields(),
+			fetch('/api/auth/account/change-requests').then((response) =>
+				readClientApiData<AccountChangeRequest[]>(response, 'Gagal memuat permintaan perubahan data')
+			),
+			fetchChangeHistory()
 		]);
 
 		return {
 			account: accountData,
 			sessions: normalizeAccountSessions(sessionData),
-			preferences: preferenceData
+			preferences: preferenceData,
+			changeFields: changeFieldData,
+			changeRequests: normalizeChangeRequests(changeRequestData),
+			changeHistory: changeHistoryData
 		};
+	}
+
+	async function refreshChangeHistory() {
+		try {
+			changeHistory = await fetchChangeHistory();
+			const current = currentOverview();
+			if (current) overviewPromise = Promise.resolve(current);
+		} catch {
+			// Keep the visible account state stable; manual refresh can retry the history card.
+		}
 	}
 
 	function loadOverview() {
@@ -209,11 +285,176 @@
 			contactForm = contactFormFromAccount(updated);
 			const current = currentOverview();
 			if (current) overviewPromise = Promise.resolve(current);
+			void refreshChangeHistory();
 			toast.success('Kontak pribadi berhasil disimpan.');
 		} catch (error) {
 			toast.error(accountErrorMessage(error, 'Gagal menyimpan kontak pribadi'));
 		} finally {
 			contactLoading = false;
+		}
+	}
+
+	async function submitChangeRequest() {
+		if (!account || !canRequestOfficialChange) {
+			toast.error('Akun belum tertaut ke profil resmi yang dapat diajukan perubahannya');
+			return;
+		}
+		const selectedField = officialChangeFields.find((field) => field.field_key === changeRequestForm.field_key);
+		if (!selectedField || !changeRequestForm.requested_value.trim() || !changeRequestForm.reason.trim()) {
+			toast.error('Field resmi, nilai baru, dan alasan wajib diisi');
+			return;
+		}
+
+		changeRequestLoading = true;
+		try {
+			const res = await fetch('/api/auth/account/change-requests', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					profile_type: selectedField.profile_type,
+					field_key: selectedField.field_key,
+					requested_value: changeRequestForm.requested_value,
+					reason: changeRequestForm.reason
+				})
+			});
+			const created = await readClientApiData<AccountChangeRequest>(res, 'Gagal mengirim permintaan perubahan data');
+			changeRequests = [created, ...changeRequests];
+			const current = currentOverview();
+			if (current) overviewPromise = Promise.resolve(current);
+			resetChangeRequestForm();
+			void refreshChangeHistory();
+			toast.success('Permintaan perubahan data resmi dikirim.');
+		} catch (error) {
+			toast.error(accountErrorMessage(error, 'Gagal mengirim permintaan perubahan data'));
+		} finally {
+			changeRequestLoading = false;
+		}
+	}
+
+	async function cancelChangeRequest(request: AccountChangeRequest) {
+		if (!changeRequestCanCancel(request)) return;
+		if (!(await confirmAction({
+			title: 'Batalkan Permintaan',
+			message: `Batalkan permintaan perubahan ${officialFieldLabel(request.field_key)}?`,
+			confirmLabel: 'Batalkan Permintaan',
+			tone: 'warning'
+		}))) return;
+
+		cancelChangeRequestLoading = request.id;
+		try {
+			const res = await fetch(clientApiPath`/api/auth/account/change-requests/${request.id}/cancel`, {
+				method: 'POST'
+			});
+			const updated = await readClientApiData<AccountChangeRequest>(res, 'Gagal membatalkan permintaan');
+			changeRequests = changeRequests.map((item) => (item.id === updated.id ? updated : item));
+			const current = currentOverview();
+			if (current) overviewPromise = Promise.resolve(current);
+			void refreshChangeHistory();
+			toast.success('Permintaan perubahan data dibatalkan.');
+		} catch (error) {
+			toast.error(accountErrorMessage(error, 'Gagal membatalkan permintaan'));
+		} finally {
+			cancelChangeRequestLoading = null;
+		}
+	}
+
+	function changeRequestBadgeVariant(status: string) {
+		if (status === 'approved') return 'secondary';
+		if (status === 'rejected') return 'destructive';
+		return 'outline';
+	}
+
+	function profileHistoryBadgeVariant(status: string) {
+		if (status === 'completed' || status === 'approved') return 'secondary';
+		if (status === 'rejected') return 'destructive';
+		return 'outline';
+	}
+
+	function handleAvatarFileChange(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		avatarFile = input.files?.[0] ?? null;
+	}
+
+	function formatAvatarFileSize(size: number) {
+		if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+		return `${Math.max(1, Math.round(size / 1024))} KB`;
+	}
+
+	function validateAvatarFile(file: File) {
+		const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+		if (!allowedTypes.has(file.type)) {
+			toast.error('Foto profil harus berupa JPG, PNG, atau WebP.');
+			return false;
+		}
+		if (file.size > 2 * 1024 * 1024) {
+			toast.error('Ukuran foto profil maksimal 2 MB.');
+			return false;
+		}
+		return true;
+	}
+
+	function clearAvatarInput() {
+		avatarFile = null;
+		if (avatarInput) avatarInput.value = '';
+	}
+
+	async function uploadAvatar() {
+		if (!avatarFile) {
+			toast.error('Pilih foto profil terlebih dahulu.');
+			return;
+		}
+		if (!validateAvatarFile(avatarFile)) return;
+
+		const form = new FormData();
+		form.set('file', avatarFile);
+		avatarUploadLoading = true;
+		try {
+			const res = await fetch('/api/auth/account/avatar', {
+				method: 'POST',
+				body: form
+			});
+			const updated = await readClientApiData<AccountIdentity>(res, 'Gagal mengunggah foto profil');
+			account = updated;
+			contactForm = contactFormFromAccount(updated);
+			clearAvatarInput();
+			const current = currentOverview();
+			if (current) overviewPromise = Promise.resolve(current);
+			void refreshChangeHistory();
+			toast.success('Foto profil berhasil diperbarui.');
+		} catch (error) {
+			toast.error(accountErrorMessage(error, 'Gagal mengunggah foto profil'));
+		} finally {
+			avatarUploadLoading = false;
+		}
+	}
+
+	async function deleteAvatar() {
+		if (!currentAvatarUrl) {
+			toast.error('Foto profil belum tersedia.');
+			return;
+		}
+		if (!(await confirmAction({
+			title: 'Hapus Foto Profil',
+			message: 'Foto profil akun Anda akan dihapus dari profil tertaut.',
+			confirmLabel: 'Hapus Foto',
+			tone: 'warning'
+		}))) return;
+
+		avatarDeleteLoading = true;
+		try {
+			const res = await fetch('/api/auth/account/avatar', { method: 'DELETE' });
+			const updated = await readClientApiData<AccountIdentity>(res, 'Gagal menghapus foto profil');
+			account = updated;
+			contactForm = contactFormFromAccount(updated);
+			clearAvatarInput();
+			const current = currentOverview();
+			if (current) overviewPromise = Promise.resolve(current);
+			void refreshChangeHistory();
+			toast.success('Foto profil berhasil dihapus.');
+		} catch (error) {
+			toast.error(accountErrorMessage(error, 'Gagal menghapus foto profil'));
+		} finally {
+			avatarDeleteLoading = false;
 		}
 	}
 
@@ -407,6 +648,147 @@
 
 					<Card.Root>
 						<Card.Header class="pb-3">
+							<Card.Title class="text-base">Permintaan Perubahan Data Resmi</Card.Title>
+							<Card.Description>Data resmi tertentu dikoreksi melalui persetujuan admin.</Card.Description>
+						</Card.Header>
+						<Card.Content class="space-y-5">
+							{#if canRequestOfficialChange}
+								<div class="grid grid-cols-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+									<div>
+										<label for="account-change-field" class="mb-1.5 block text-sm font-medium">Field Resmi</label>
+										<select
+											id="account-change-field"
+											class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+											bind:value={changeRequestForm.field_key}
+										>
+											{#each officialChangeFields as field (field.field_key)}
+												<option value={field.field_key}>{field.label}</option>
+											{/each}
+										</select>
+									</div>
+									<div>
+										<label for="account-change-value" class="mb-1.5 block text-sm font-medium">Nilai Baru</label>
+										<Input
+											id="account-change-value"
+											type={changeRequestValueType}
+											bind:value={changeRequestForm.requested_value}
+											maxlength={200}
+											placeholder={changeRequestForm.field_key === 'tanggal_lahir' ? 'YYYY-MM-DD' : 'Tulis data resmi yang benar'}
+										/>
+									</div>
+									<div class="md:col-span-2">
+										<label for="account-change-reason" class="mb-1.5 block text-sm font-medium">Alasan / Rujukan Dokumen</label>
+										<Textarea id="account-change-reason" rows={3} maxlength={1000} bind:value={changeRequestForm.reason} />
+									</div>
+								</div>
+								<LoadingButton
+									onclick={() => void submitChangeRequest()}
+									loading={changeRequestLoading}
+									loadingLabel="Mengirim..."
+									disabled={!changeRequestForm.field_key || !changeRequestForm.requested_value.trim() || !changeRequestForm.reason.trim()}
+								>
+									<FilePenLineIcon class="size-4" />
+									Kirim Permintaan
+								</LoadingButton>
+							{:else}
+								<div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+									Akun tanpa profil pegawai, siswa, atau orang tua belum dapat mengajukan perubahan data resmi.
+								</div>
+							{/if}
+
+							<div class="space-y-3">
+								<div class="flex items-center justify-between gap-3">
+									<p class="text-sm font-semibold text-slate-800">Riwayat Permintaan</p>
+									<Badge variant="outline">{changeRequests.length} permintaan</Badge>
+								</div>
+								{#if changeRequests.length === 0}
+									<p class="rounded-lg border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-500">Belum ada permintaan perubahan data resmi.</p>
+								{:else}
+									<div class="space-y-2">
+										{#each changeRequests as request (request.id)}
+											<div class="rounded-lg border border-slate-200 p-4">
+												<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+													<div class="min-w-0 flex-1">
+														<div class="flex flex-wrap items-center gap-2">
+															<p class="text-sm font-semibold text-slate-900">{officialFieldLabel(request.field_key)}</p>
+															<Badge variant={changeRequestBadgeVariant(request.status)}>{changeRequestStatusLabel(request.status)}</Badge>
+														</div>
+														<p class="mt-2 text-sm text-slate-600">
+															<span class="font-medium">Saat ini:</span> {request.current_value || '—'}
+															<span class="mx-2 text-slate-300">→</span>
+															<span class="font-medium">Usulan:</span> {request.requested_value || '—'}
+														</p>
+														<p class="mt-1 text-xs text-slate-500">{request.reason}</p>
+														{#if request.review_note}
+															<p class="mt-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">Catatan review: {request.review_note}</p>
+														{/if}
+														<p class="mt-2 text-[11px] text-slate-400">Diajukan: {formatAccountDateTime(request.created_at)}</p>
+													</div>
+													{#if changeRequestCanCancel(request)}
+														<LoadingButton
+															variant="outline"
+															size="sm"
+															onclick={() => void cancelChangeRequest(request)}
+															loading={cancelChangeRequestLoading === request.id}
+															loadingLabel="Membatalkan..."
+														>
+															Batalkan
+														</LoadingButton>
+													{/if}
+												</div>
+											</div>
+										{/each}
+									</div>
+								{/if}
+							</div>
+						</Card.Content>
+					</Card.Root>
+
+					<Card.Root>
+						<Card.Header class="pb-3">
+							<div class="flex items-start justify-between gap-3">
+								<div>
+									<Card.Title class="flex items-center gap-2 text-base">
+										<HistoryIcon class="size-4 text-slate-500" />
+										Riwayat Perubahan Profil
+									</Card.Title>
+									<Card.Description>Aktivitas kontak, foto profil, dan permintaan perubahan data resmi.</Card.Description>
+								</div>
+								<Badge variant="outline">{changeHistory.length} aktivitas</Badge>
+							</div>
+						</Card.Header>
+						<Card.Content>
+							{#if changeHistory.length === 0}
+								<p class="rounded-lg border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-500">Belum ada riwayat perubahan profil.</p>
+							{:else}
+								<div class="space-y-2">
+									{#each changeHistory as item, index (`${item.created_at}-${item.action}-${item.field_key}-${index}`)}
+										<div class="rounded-lg border border-slate-200 p-4">
+											<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+												<div class="min-w-0">
+													<div class="flex flex-wrap items-center gap-2">
+														<p class="text-sm font-semibold text-slate-900">{profileHistoryActionLabel(item.action)}</p>
+														<Badge variant={profileHistoryBadgeVariant(item.status)}>{profileHistoryStatusLabel(item.status)}</Badge>
+													</div>
+													<p class="mt-1 text-sm text-slate-600">{profileHistoryFieldLabel(item.field_key)}</p>
+													{#if item.reviewer_username}
+														<p class="mt-1 text-xs text-slate-500">Reviewer: {item.reviewer_username}</p>
+													{/if}
+													{#if item.review_note}
+														<p class="mt-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">Catatan review: {item.review_note}</p>
+													{/if}
+												</div>
+												<p class="shrink-0 text-xs text-slate-500">{formatAccountDateTime(item.created_at)}</p>
+											</div>
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</Card.Content>
+					</Card.Root>
+
+					<Card.Root>
+						<Card.Header class="pb-3">
 							<Card.Title class="text-base">Kontak Pribadi</Card.Title>
 							<Card.Description>Kontak profil tertaut yang aman diperbarui sendiri.</Card.Description>
 						</Card.Header>
@@ -555,6 +937,66 @@
 				</div>
 
 				<div class="space-y-6">
+					<Card.Root>
+						<Card.Header class="pb-3">
+							<Card.Title class="text-base">Foto Profil</Card.Title>
+							<Card.Description>JPG, PNG, atau WebP maksimal 2 MB.</Card.Description>
+						</Card.Header>
+						<Card.Content class="space-y-4">
+							<div class="flex items-center gap-4">
+								{#if currentAvatarUrl}
+									<img src={currentAvatarUrl} alt={`Foto profil ${accountDisplayName(account)}`} class="size-20 rounded-lg border border-slate-200 object-cover" />
+								{:else}
+									<div class="flex size-20 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-xl font-semibold text-emerald-800">
+										{currentAvatarInitials}
+									</div>
+								{/if}
+								<div class="min-w-0">
+									<p class="truncate text-sm font-semibold text-slate-900">{accountDisplayName(account)}</p>
+									<p class="mt-1 text-xs text-slate-500">{currentAvatarUrl ? 'Foto profil aktif' : 'Belum ada foto profil'}</p>
+								</div>
+							</div>
+
+							<div>
+								<label for="account-avatar-file" class="mb-1.5 block text-sm font-medium">Pilih Foto</label>
+								<Input
+									id="account-avatar-file"
+									type="file"
+									accept="image/jpeg,image/png,image/webp"
+									bind:ref={avatarInput}
+									onchange={handleAvatarFileChange}
+								/>
+								{#if selectedAvatarLabel}
+									<p class="mt-1 text-xs text-slate-500">{selectedAvatarLabel}</p>
+								{/if}
+							</div>
+
+							<div class="flex flex-col gap-2 sm:flex-row">
+								<LoadingButton
+									variant="secondary"
+									onclick={() => void uploadAvatar()}
+									loading={avatarUploadLoading}
+									loadingLabel="Mengunggah..."
+									disabled={!avatarFile || avatarDeleteLoading}
+								>
+									<UploadIcon class="size-4" />
+									Unggah Foto
+								</LoadingButton>
+								<LoadingButton
+									variant="outline"
+									onclick={() => void deleteAvatar()}
+									loading={avatarDeleteLoading}
+									loadingLabel="Menghapus..."
+									disabled={!currentAvatarUrl || avatarUploadLoading}
+								>
+									<Trash2Icon class="size-4" />
+									Hapus Foto
+								</LoadingButton>
+							</div>
+							<p class="text-xs text-slate-500">Foto tersimpan di storage lokal backend dan hanya mengubah profil yang tertaut ke akun ini.</p>
+						</Card.Content>
+					</Card.Root>
+
 					<Card.Root>
 						<Card.Header class="pb-3">
 							<Card.Title class="text-base">Preferensi Tampilan</Card.Title>

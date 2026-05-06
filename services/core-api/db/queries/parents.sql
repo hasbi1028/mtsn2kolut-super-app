@@ -1,10 +1,10 @@
 -- name: ListParents :many
-SELECT id, nama, phone, address, created_at, updated_at
+SELECT id, nama, phone, address, created_at, updated_at, photo_url
 FROM parents
 ORDER BY nama ASC;
 
 -- name: GetParent :one
-SELECT id, nama, phone, address, created_at, updated_at
+SELECT id, nama, phone, address, created_at, updated_at, photo_url
 FROM parents
 WHERE id = $1;
 

@@ -8,6 +8,7 @@ describe('route access helpers', () => {
 		expect(isAdminOnlyPath('/settings/account')).toBe(false);
 		expect(isAdminOnlyPath('/api/auth/account')).toBe(false);
 		expect(isAdminOnlyPath('/settings/users')).toBe(true);
+		expect(isAdminOnlyPath('/settings/user-change-requests')).toBe(true);
 	});
 
 	it('matches public paths and prefixes', () => {
@@ -115,19 +116,25 @@ describe('route access helpers', () => {
 		const user = { id: '1', username: 'operator', role: '', roles: [], permissions: ['users.read', 'bank_soal.read', 'asesmen.read'] };
 
 		expect(canAccessProtectedRoute(user, '/settings/users', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(user, '/settings/user-change-requests', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/account', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/api/auth/account', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/api/auth/account/change-request-fields', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/bank-soal/daftar', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/asesmen/kegiatan', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/users', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/user-change-requests', 'GET')).toBe(false);
 	});
 
 	it('keeps mutation route checks permission-specific', () => {
 		const reader = { id: '1', username: 'reader', role: '', roles: [], permissions: ['users.read', 'bank_soal.read', 'asesmen.read'] };
 		const mutator = { id: '2', username: 'mutator', role: '', roles: [], permissions: ['users.create', 'bank_soal.create', 'asesmen.event_manage'] };
+		const profileReviewer = { id: '3', username: 'reviewer', role: '', roles: [], permissions: ['profile_changes.review'] };
 
 		expect(canAccessProtectedRoute(reader, '/api/users', 'POST')).toBe(false);
 		expect(canAccessProtectedRoute(mutator, '/api/users', 'POST')).toBe(true);
+		expect(canAccessProtectedRoute(reader, '/api/users/change-requests/request-1', 'PATCH')).toBe(false);
+		expect(canAccessProtectedRoute(profileReviewer, '/api/users/change-requests/request-1', 'PATCH')).toBe(true);
 		expect(canAccessProtectedRoute(reader, '/api/bank-soal/questions', 'POST')).toBe(false);
 		expect(canAccessProtectedRoute(mutator, '/api/bank-soal/questions', 'POST')).toBe(true);
 		expect(canAccessProtectedRoute(reader, '/api/asesmen/events/event-1/question-targets', 'PUT')).toBe(false);
@@ -136,7 +143,10 @@ describe('route access helpers', () => {
 
 	it('documents route permission requirements for main migrated modules', () => {
 		expect(requiredPermissionsForPath('/settings/users', 'GET')).toEqual(['users.read']);
+		expect(requiredPermissionsForPath('/settings/user-change-requests', 'GET')).toEqual(['users.read']);
 		expect(requiredPermissionsForPath('/api/users', 'POST')).toEqual(['users.create']);
+		expect(requiredPermissionsForPath('/api/users/change-requests', 'GET')).toEqual(['users.read']);
+		expect(requiredPermissionsForPath('/api/users/change-requests/request-1', 'PATCH')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users/user-1/reset-password', 'POST')).toEqual(['users.reset_password']);
 		expect(requiredPermissionsForPath('/api/users/user-1/profile-link', 'PATCH')).toEqual(['users.update']);
 		expect(requiredPermissionsForPath('/api/bank-soal/questions', 'POST')).toEqual(['bank_soal.create']);

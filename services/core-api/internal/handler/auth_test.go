@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -37,9 +39,22 @@ type fakeAuthService struct {
 	accountResult      db.GetUserAccountSummaryRow
 	accountErr         error
 	lastAccountUserID  pgtype.UUID
+	historyResult      []service.AccountChangeHistoryItem
+	historyErr         error
+	lastHistoryUserID  pgtype.UUID
+	lastHistoryLimit   int32
 	updateContactErr   error
 	lastContactUserID  pgtype.UUID
 	lastContactPatch   service.AccountContactPatch
+	saveAvatarInput    service.UploadAccountAvatarInput
+	saveAvatarErr      error
+	deleteAvatarErr    error
+	lastAvatarDeleteID pgtype.UUID
+	avatarPath         string
+	avatarPathFound    bool
+	avatarPathErr      error
+	lastAvatarPathID   pgtype.UUID
+	lastAvatarFilename string
 	revokeErr          error
 	lastRevokeUserID   pgtype.UUID
 	lastRevokeSessID   pgtype.UUID
@@ -89,6 +104,12 @@ func (f *fakeAuthService) GetAccount(ctx context.Context, userID pgtype.UUID) (d
 	return f.accountResult, f.accountErr
 }
 
+func (f *fakeAuthService) ListAccountChangeHistory(ctx context.Context, userID pgtype.UUID, limit int32) ([]service.AccountChangeHistoryItem, error) {
+	f.lastHistoryUserID = userID
+	f.lastHistoryLimit = limit
+	return f.historyResult, f.historyErr
+}
+
 func (f *fakeAuthService) UpdateAccountContact(ctx context.Context, userID pgtype.UUID, patch service.AccountContactPatch) (db.GetUserAccountSummaryRow, error) {
 	f.lastContactUserID = userID
 	f.lastContactPatch = patch
@@ -96,6 +117,28 @@ func (f *fakeAuthService) UpdateAccountContact(ctx context.Context, userID pgtyp
 		return db.GetUserAccountSummaryRow{}, f.updateContactErr
 	}
 	return f.accountResult, nil
+}
+
+func (f *fakeAuthService) SaveAccountAvatar(ctx context.Context, input service.UploadAccountAvatarInput) (db.GetUserAccountSummaryRow, error) {
+	f.saveAvatarInput = input
+	if f.saveAvatarErr != nil {
+		return db.GetUserAccountSummaryRow{}, f.saveAvatarErr
+	}
+	return f.accountResult, nil
+}
+
+func (f *fakeAuthService) DeleteAccountAvatar(ctx context.Context, userID pgtype.UUID) (db.GetUserAccountSummaryRow, error) {
+	f.lastAvatarDeleteID = userID
+	if f.deleteAvatarErr != nil {
+		return db.GetUserAccountSummaryRow{}, f.deleteAvatarErr
+	}
+	return f.accountResult, nil
+}
+
+func (f *fakeAuthService) AccountAvatarPath(ctx context.Context, userID pgtype.UUID, filename string) (string, bool, error) {
+	f.lastAvatarPathID = userID
+	f.lastAvatarFilename = filename
+	return f.avatarPath, f.avatarPathFound, f.avatarPathErr
 }
 
 func (f *fakeAuthService) ListActiveSessions(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error) {
@@ -173,6 +216,25 @@ func mustAuditMeta(t *testing.T, raw []byte) map[string]any {
 		t.Fatalf("json unmarshal failed: %v", err)
 	}
 	return meta
+}
+
+func multipartAvatarRequest(t *testing.T, filename string, content []byte) *http.Request {
+	t.Helper()
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", filename)
+	if err != nil {
+		t.Fatalf("CreateFormFile() error = %v", err)
+	}
+	if _, err := part.Write(content); err != nil {
+		t.Fatalf("part.Write() error = %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("writer.Close() error = %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "http://internal/api/auth/account/avatar", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	return req
 }
 
 func TestAuthUserIDBranches(t *testing.T) {
@@ -428,6 +490,7 @@ func TestAuthGetAccountForwardsCurrentUserAndSanitizesResponse(t *testing.T) {
 			EmployeeID:     employeeID,
 			ProfileType:    "employee",
 			ProfileNama:    "Nama Pegawai",
+			PhotoUrl:       "/api/auth/account/avatar/avatar_guru.png",
 			ContactPhone:   "081234",
 			ContactEmail:   "guru@example.id",
 			ContactAddress: "Kolaka Utara",
@@ -449,7 +512,7 @@ func TestAuthGetAccountForwardsCurrentUserAndSanitizesResponse(t *testing.T) {
 		t.Fatalf("account user id = %v, want %s", svc.lastAccountUserID, userID)
 	}
 	body := rec.Body.String()
-	for _, expected := range []string{"guru.ipa", "Guru IPA", "Nama Pegawai", "employee", "081234", "guru@example.id", "Kolaka Utara", "2026-05-06T07:30:00Z"} {
+	for _, expected := range []string{"guru.ipa", "Guru IPA", "Nama Pegawai", "employee", "/api/auth/account/avatar/avatar_guru.png", `"avatar_url":"/api/auth/account/avatar/avatar_guru.png"`, "081234", "guru@example.id", "Kolaka Utara", "2026-05-06T07:30:00Z"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("GetAccount body = %s, want %q", body, expected)
 		}
@@ -487,6 +550,77 @@ func TestAuthGetAccountMapsUnauthorizedAndInternalError(t *testing.T) {
 	NewAuth(&fakeAuthService{accountErr: context.Canceled}, nil).GetAccount(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("GetAccount(internal) status = %d, want 500; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAuthGetAccountChangeHistoryForwardsCurrentUserAndSanitizesResponse(t *testing.T) {
+	userID := "11111111-1111-1111-1111-111111111111"
+	createdAt := pgtype.Timestamptz{}
+	_ = createdAt.Scan(time.Date(2026, time.May, 7, 8, 0, 0, 0, time.UTC))
+	svc := &fakeAuthService{
+		historyResult: []service.AccountChangeHistoryItem{
+			{
+				Action:           "change_request_approved",
+				FieldKey:         "nama",
+				Status:           "approved",
+				CreatedAt:        createdAt,
+				ReviewerUsername: "admin",
+				ReviewNote:       "Sesuai dokumen",
+			},
+			{
+				Action:    "avatar_delete",
+				FieldKey:  "avatar",
+				Status:    "completed",
+				CreatedAt: createdAt,
+			},
+		},
+	}
+	h := NewAuth(svc, nil)
+	req := httptest.NewRequest(http.MethodGet, "http://internal/api/auth/account/change-history?per_page=2&user_id=22222222-2222-2222-2222-222222222222", nil)
+	req = req.WithContext(withAuthClaims(req.Context(), userID))
+	rec := httptest.NewRecorder()
+
+	h.GetAccountChangeHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if svc.lastHistoryUserID != mustUUID(t, userID) || svc.lastHistoryLimit != 2 {
+		t.Fatalf("history args = %v/%d, want current user and per_page", svc.lastHistoryUserID, svc.lastHistoryLimit)
+	}
+	body := rec.Body.String()
+	for _, expected := range []string{"change_request_approved", "nama", "approved", "admin", "Sesuai dokumen", "avatar_delete", "2026-05-07T08:00:00Z"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("GetAccountChangeHistory body = %s, want %q", body, expected)
+		}
+	}
+	for _, forbidden := range []string{"token", "password", "metadata", "22222222-2222-2222-2222-222222222222"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("GetAccountChangeHistory body = %s, must not expose %q", body, forbidden)
+		}
+	}
+}
+
+func TestAuthGetAccountChangeHistoryMapsUnauthorizedAndInternalError(t *testing.T) {
+	h := NewAuth(&fakeAuthService{}, nil)
+	rec := httptest.NewRecorder()
+	h.GetAccountChangeHistory(rec, httptest.NewRequest(http.MethodGet, "http://internal/api/auth/account/change-history", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("GetAccountChangeHistory(no claims) status = %d, want 401", rec.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://internal/api/auth/account/change-history", nil)
+	req = req.WithContext(withAuthClaims(req.Context(), "11111111-1111-1111-1111-111111111111"))
+	rec = httptest.NewRecorder()
+	NewAuth(&fakeAuthService{historyErr: domain.ErrUnauthorized}, nil).GetAccountChangeHistory(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("GetAccountChangeHistory(unauthorized service) status = %d, want 401", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	NewAuth(&fakeAuthService{historyErr: context.Canceled}, nil).GetAccountChangeHistory(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("GetAccountChangeHistory(internal) status = %d, want 500; body=%s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -560,6 +694,96 @@ func TestAuthUpdateAccountContactRejectsOfficialFieldsAndMapsErrors(t *testing.T
 	NewAuth(&fakeAuthService{updateContactErr: domain.ErrBadRequest}, nil).UpdateAccountContact(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("UpdateAccountContact(bad request) status = %d, want 400", rec.Code)
+	}
+}
+
+func TestAuthAccountAvatarUploadDeleteAndFile(t *testing.T) {
+	userID := "11111111-1111-1111-1111-111111111111"
+	sessionID := "22222222-2222-2222-2222-222222222222"
+	svc := &fakeAuthService{
+		accountResult: db.GetUserAccountSummaryRow{
+			ID:          mustUUID(t, userID),
+			Username:    "guru.ipa",
+			DisplayName: "Guru IPA",
+			ProfileType: "employee",
+			PhotoUrl:    "/api/auth/account/avatar/avatar_baru.png",
+			Roles:       []byte(`["guru"]`),
+		},
+	}
+	audit := &fakeAuthAuditWriter{}
+	h := NewAuth(svc, audit)
+	claimsCtx := context.WithValue(context.Background(), api.ClaimsKey, jwt.MapClaims{
+		"sub":  userID,
+		"uid":  userID,
+		"usr":  "guru.ipa",
+		"ssid": sessionID,
+	})
+	req := multipartAvatarRequest(t, "foto.png", []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"))
+	req = req.WithContext(claimsCtx)
+	rec := httptest.NewRecorder()
+
+	h.UploadAccountAvatar(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("UploadAccountAvatar() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if svc.saveAvatarInput.UserID != mustUUID(t, userID) || svc.saveAvatarInput.MimeType != "image/png" || svc.saveAvatarInput.Ext != ".png" {
+		t.Fatalf("avatar input = %+v, want owned png upload", svc.saveAvatarInput)
+	}
+	if !strings.Contains(rec.Body.String(), `"avatar_url":"/api/auth/account/avatar/avatar_baru.png"`) {
+		t.Fatalf("body = %s, want avatar_url", rec.Body.String())
+	}
+	if len(audit.entries) != 1 || audit.entries[0].Action != "AUTH_ACCOUNT_AVATAR_UPDATE" {
+		t.Fatalf("upload audit entries = %#v", audit.entries)
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "http://internal/api/auth/account/avatar", nil).WithContext(claimsCtx)
+	rec = httptest.NewRecorder()
+	h.DeleteAccountAvatar(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("DeleteAccountAvatar() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if svc.lastAvatarDeleteID != mustUUID(t, userID) {
+		t.Fatalf("delete user id = %v, want %s", svc.lastAvatarDeleteID, userID)
+	}
+	if len(audit.entries) != 2 || audit.entries[1].Action != "AUTH_ACCOUNT_AVATAR_DELETE" {
+		t.Fatalf("delete audit entries = %#v", audit.entries)
+	}
+
+	file, err := os.CreateTemp(t.TempDir(), "avatar-*.png")
+	if err != nil {
+		t.Fatalf("CreateTemp() error = %v", err)
+	}
+	if _, err := file.WriteString("avatar-bytes"); err != nil {
+		t.Fatalf("WriteString() error = %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	svc.avatarPath = file.Name()
+	svc.avatarPathFound = true
+	req = httptest.NewRequest(http.MethodGet, "http://internal/api/auth/account/avatar/avatar_baru.png", nil).WithContext(claimsCtx)
+	req = withRouteParam(req, "filename", "avatar_baru.png")
+	rec = httptest.NewRecorder()
+	h.AccountAvatarFile(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "avatar-bytes" {
+		t.Fatalf("AccountAvatarFile() status/body = %d/%q, want file bytes", rec.Code, rec.Body.String())
+	}
+	if svc.lastAvatarFilename != "avatar_baru.png" || rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("file filename/headers = %q/%q, want scoped nosniff file", svc.lastAvatarFilename, rec.Header().Get("X-Content-Type-Options"))
+	}
+}
+
+func TestAuthAccountAvatarRejectsUnsupportedUpload(t *testing.T) {
+	userID := "11111111-1111-1111-1111-111111111111"
+	req := multipartAvatarRequest(t, "foto.gif", []byte("GIF89a\x01\x00\x01\x00"))
+	req = req.WithContext(withAuthClaims(req.Context(), userID))
+	rec := httptest.NewRecorder()
+
+	NewAuth(&fakeAuthService{}, nil).UploadAccountAvatar(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("UploadAccountAvatar(gif) status = %d, want 400; body=%s", rec.Code, rec.Body.String())
 	}
 }
 

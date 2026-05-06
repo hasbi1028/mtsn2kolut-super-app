@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -27,10 +29,13 @@ type fakeStore struct {
 	employeeContact map[pgtype.UUID]fakeAccountContact
 	studentContact  map[pgtype.UUID]fakeAccountContact
 	parentContact   map[pgtype.UUID]fakeAccountContact
+	accountHistory  []db.ListOwnAccountChangeHistoryRow
+	lastHistoryArgs db.ListOwnAccountChangeHistoryParams
 
 	getUserByUsernameErr error
 	getUserByIDErr       error
 	updateContactErr     error
+	accountHistoryErr    error
 	createUserErr        error
 	updatePasswordErr    error
 	addRoleErr           error
@@ -47,9 +52,10 @@ type fakeStore struct {
 }
 
 type fakeAccountContact struct {
-	phone   string
-	email   string
-	address string
+	phone    string
+	email    string
+	address  string
+	photoURL string
 }
 
 func newFakeStore() *fakeStore {
@@ -173,6 +179,7 @@ func (f *fakeStore) GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (
 				StudentID:      u.StudentID,
 				ParentID:       u.ParentID,
 				ProfileType:    profileType,
+				PhotoUrl:       contact.photoURL,
 				ContactPhone:   contact.phone,
 				ContactEmail:   contact.email,
 				ContactAddress: contact.address,
@@ -226,6 +233,59 @@ func (f *fakeStore) UpdateOwnedParentContact(ctx context.Context, arg db.UpdateO
 		}
 	}
 	return db.UpdateOwnedParentContactRow{}, pgx.ErrNoRows
+}
+
+func (f *fakeStore) UpdateOwnedEmployeeAvatar(ctx context.Context, arg db.UpdateOwnedEmployeeAvatarParams) (string, error) {
+	if f.updateContactErr != nil {
+		return "", f.updateContactErr
+	}
+	for _, user := range f.users {
+		if user.ID == arg.UserID && user.EmployeeID.Valid {
+			contact := f.employeeContact[user.EmployeeID]
+			contact.photoURL = arg.PhotoUrl
+			f.employeeContact[user.EmployeeID] = contact
+			return contact.photoURL, nil
+		}
+	}
+	return "", pgx.ErrNoRows
+}
+
+func (f *fakeStore) UpdateOwnedStudentAvatar(ctx context.Context, arg db.UpdateOwnedStudentAvatarParams) (string, error) {
+	if f.updateContactErr != nil {
+		return "", f.updateContactErr
+	}
+	for _, user := range f.users {
+		if user.ID == arg.UserID && user.StudentID.Valid {
+			contact := f.studentContact[user.StudentID]
+			contact.photoURL = arg.PhotoUrl
+			f.studentContact[user.StudentID] = contact
+			return contact.photoURL, nil
+		}
+	}
+	return "", pgx.ErrNoRows
+}
+
+func (f *fakeStore) UpdateOwnedParentAvatar(ctx context.Context, arg db.UpdateOwnedParentAvatarParams) (string, error) {
+	if f.updateContactErr != nil {
+		return "", f.updateContactErr
+	}
+	for _, user := range f.users {
+		if user.ID == arg.UserID && user.ParentID.Valid {
+			contact := f.parentContact[user.ParentID]
+			contact.photoURL = arg.PhotoUrl
+			f.parentContact[user.ParentID] = contact
+			return contact.photoURL, nil
+		}
+	}
+	return "", pgx.ErrNoRows
+}
+
+func (f *fakeStore) ListOwnAccountChangeHistory(ctx context.Context, arg db.ListOwnAccountChangeHistoryParams) ([]db.ListOwnAccountChangeHistoryRow, error) {
+	f.lastHistoryArgs = arg
+	if f.accountHistoryErr != nil {
+		return nil, f.accountHistoryErr
+	}
+	return f.accountHistory, nil
 }
 
 func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error) {
@@ -562,6 +622,58 @@ func TestAuthGetAccountReturnsSelfSummaryAndMapsMissingUser(t *testing.T) {
 	}
 }
 
+func TestAuthListAccountChangeHistorySanitizesRowsAndCapsLimit(t *testing.T) {
+	store := newFakeStore()
+	userID := documentCycleTestUUID(227)
+	createdAt := pgtype.Timestamptz{}
+	_ = createdAt.Scan(time.Date(2026, time.May, 7, 9, 0, 0, 0, time.UTC))
+	store.accountHistory = []db.ListOwnAccountChangeHistoryRow{
+		{
+			Action:           "AUTH_ACCOUNT_CONTACT_UPDATE",
+			FieldKey:         "contact",
+			Status:           "completed",
+			CreatedAt:        createdAt,
+			ReviewerUsername: "ignored",
+			ReviewNote:       " ignored ",
+		},
+		{
+			Action:           "ACCOUNT_CHANGE_REQUEST_APPROVED",
+			FieldKey:         "nama",
+			Status:           "approved",
+			CreatedAt:        createdAt,
+			ReviewerUsername: " admin ",
+			ReviewNote:       " Sudah sesuai dokumen ",
+		},
+		{
+			Action:   "AUTH_REFRESH",
+			FieldKey: "session",
+			Status:   "completed",
+		},
+	}
+	svc := &Auth{q: store, jwtSecret: []byte("secret")}
+
+	items, err := svc.ListAccountChangeHistory(context.Background(), userID, 1000)
+	if err != nil {
+		t.Fatalf("ListAccountChangeHistory() error = %v", err)
+	}
+	if store.lastHistoryArgs.UserID != userID || store.lastHistoryArgs.LimitCount != 50 {
+		t.Fatalf("history args = %+v, want scoped user and capped limit", store.lastHistoryArgs)
+	}
+	if len(items) != 2 {
+		t.Fatalf("history len = %d, want 2", len(items))
+	}
+	if items[0].Action != "contact_update" || items[0].FieldKey != "contact" || items[0].Status != "completed" {
+		t.Fatalf("contact history item = %+v, want sanitized contact update", items[0])
+	}
+	if items[1].Action != "change_request_approved" || items[1].FieldKey != "nama" || items[1].ReviewerUsername != "admin" || items[1].ReviewNote != "Sudah sesuai dokumen" {
+		t.Fatalf("review history item = %+v, want sanitized review metadata", items[1])
+	}
+
+	if _, err := svc.ListAccountChangeHistory(context.Background(), pgtype.UUID{}, 10); !errors.Is(err, domain.ErrUnauthorized) {
+		t.Fatalf("ListAccountChangeHistory(invalid user) error = %v, want unauthorized", err)
+	}
+}
+
 func TestAuthUpdateAccountContactUsesOwnedLinkedProfileOnly(t *testing.T) {
 	store := newFakeStore()
 	userID := documentCycleTestUUID(221)
@@ -625,6 +737,110 @@ func TestAuthUpdateAccountContactRejectsUnsupportedFieldsAndProfiles(t *testing.
 	store.users["admin-unlinked"] = db.User{ID: unlinkedUserID, Username: "admin-unlinked", IsActive: true}
 	if _, err := svc.UpdateAccountContact(context.Background(), unlinkedUserID, AccountContactPatch{Phone: contactString("0813")}); !errors.Is(err, domain.ErrForbidden) {
 		t.Fatalf("UpdateAccountContact(unlinked) error = %v, want forbidden", err)
+	}
+}
+
+func TestAuthSaveAccountAvatarUsesOwnedLinkedProfileOnly(t *testing.T) {
+	store := newFakeStore()
+	userID := documentCycleTestUUID(231)
+	employeeID := documentCycleTestUUID(232)
+	store.users["guru.ipa"] = db.User{
+		ID:         userID,
+		Username:   "guru.ipa",
+		EmployeeID: employeeID,
+		IsActive:   true,
+	}
+	store.employeeContact[employeeID] = fakeAccountContact{phone: "0812", email: "guru@example.id"}
+	avatarDir := t.TempDir()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), avatarDir: avatarDir}
+
+	row, err := svc.SaveAccountAvatar(context.Background(), UploadAccountAvatarInput{
+		UserID:       userID,
+		OriginalName: "foto profil.png",
+		MimeType:     "image/png",
+		Ext:          ".png",
+		FileSize:     11,
+		File:         strings.NewReader("avatar-data"),
+	})
+	if err != nil {
+		t.Fatalf("SaveAccountAvatar() error = %v", err)
+	}
+	if !strings.HasPrefix(row.PhotoUrl, "/api/auth/account/avatar/avatar_") || !strings.HasSuffix(row.PhotoUrl, ".png") {
+		t.Fatalf("photo url = %q, want generated account avatar URL", row.PhotoUrl)
+	}
+	if store.employeeContact[employeeID].photoURL != row.PhotoUrl {
+		t.Fatalf("stored avatar = %q, want returned URL", store.employeeContact[employeeID].photoURL)
+	}
+	filename, ok := accountAvatarFilename(row.PhotoUrl)
+	if !ok {
+		t.Fatalf("accountAvatarFilename(%q) ok = false", row.PhotoUrl)
+	}
+	data, err := os.ReadFile(filepath.Join(avatarDir, filename))
+	if err != nil {
+		t.Fatalf("ReadFile(stored avatar) error = %v", err)
+	}
+	if string(data) != "avatar-data" {
+		t.Fatalf("stored avatar bytes = %q, want copied file", string(data))
+	}
+	user := store.users["guru.ipa"]
+	if user.EmployeeID != employeeID || user.Username != "guru.ipa" {
+		t.Fatalf("user official/link fields changed: %#v", user)
+	}
+}
+
+func TestAuthDeleteAccountAvatarClearsOwnedProfileAndRemovesStoredFile(t *testing.T) {
+	store := newFakeStore()
+	userID := documentCycleTestUUID(233)
+	parentID := documentCycleTestUUID(234)
+	avatarDir := t.TempDir()
+	oldName := "avatar_lama.webp"
+	oldURL := "/api/auth/account/avatar/" + oldName
+	if err := os.WriteFile(filepath.Join(avatarDir, oldName), []byte("old"), 0o644); err != nil {
+		t.Fatalf("WriteFile(old avatar) error = %v", err)
+	}
+	store.users["ortu"] = db.User{ID: userID, Username: "ortu", ParentID: parentID, IsActive: true}
+	store.parentContact[parentID] = fakeAccountContact{phone: "0812", photoURL: oldURL}
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), avatarDir: avatarDir}
+
+	row, err := svc.DeleteAccountAvatar(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("DeleteAccountAvatar() error = %v", err)
+	}
+	if row.PhotoUrl != "" || store.parentContact[parentID].photoURL != "" {
+		t.Fatalf("photo url after delete = %q/%q, want empty", row.PhotoUrl, store.parentContact[parentID].photoURL)
+	}
+	if _, err := os.Stat(filepath.Join(avatarDir, oldName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("old avatar stat error = %v, want not exist", err)
+	}
+}
+
+func TestAuthAccountAvatarValidationAndPathScope(t *testing.T) {
+	store := newFakeStore()
+	userID := documentCycleTestUUID(235)
+	studentID := documentCycleTestUUID(236)
+	store.users["siswa"] = db.User{ID: userID, Username: "siswa", StudentID: studentID, IsActive: true}
+	store.studentContact[studentID] = fakeAccountContact{photoURL: "/api/auth/account/avatar/avatar_siswa.jpg"}
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), avatarDir: filepath.Join("uploads", "avatars")}
+
+	if _, err := svc.SaveAccountAvatar(context.Background(), UploadAccountAvatarInput{
+		UserID:   userID,
+		MimeType: "image/gif",
+		Ext:      ".gif",
+		FileSize: 10,
+		File:     strings.NewReader("gif"),
+	}); err == nil {
+		t.Fatal("SaveAccountAvatar(gif) error = nil, want validation error")
+	}
+
+	path, ok, err := svc.AccountAvatarPath(context.Background(), userID, "avatar_siswa.jpg")
+	if err != nil || !ok || path != filepath.Join("uploads", "avatars", "avatar_siswa.jpg") {
+		t.Fatalf("AccountAvatarPath(owned) = %q/%v/%v, want scoped path", path, ok, err)
+	}
+	if path, ok, err := svc.AccountAvatarPath(context.Background(), userID, "../avatar_siswa.jpg"); err != nil || ok || path != "" {
+		t.Fatalf("AccountAvatarPath(unsafe) = %q/%v/%v, want empty false nil", path, ok, err)
+	}
+	if path, ok, err := svc.AccountAvatarPath(context.Background(), userID, "avatar_lain.jpg"); err != nil || ok || path != "" {
+		t.Fatalf("AccountAvatarPath(other) = %q/%v/%v, want empty false nil", path, ok, err)
 	}
 }
 

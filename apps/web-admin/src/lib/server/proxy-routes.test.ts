@@ -162,6 +162,23 @@ describe('api proxy route handlers', () => {
 		await expect(res.json()).resolves.toEqual({ username: 'guru.ipa', roles: ['guru'] });
 	});
 
+	it('forwards account change history without accepting arbitrary user ids', async () => {
+		const mod = await import('../../routes/api/auth/account/change-history/+server');
+		const event = createEvent({
+			locals: {
+				user: { id: '1', username: 'guru.ipa', role: 'guru', roles: ['guru'] }
+			},
+			url: new URL('http://localhost/api/auth/account/change-history?per_page=10&user_id=someone-else')
+		});
+		proxyGetMock.mockResolvedValueOnce([{ action: 'contact_update', field_key: 'contact' }]);
+
+		const res = await mod.GET(event as never);
+
+		expect(proxyGetMock).toHaveBeenCalledWith('/api/auth/account/change-history?per_page=10');
+		expect(res.status).toBe(200);
+		await expect(res.json()).resolves.toEqual([{ action: 'contact_update', field_key: 'contact' }]);
+	});
+
 	it('forwards account contact updates without a user id parameter', async () => {
 		const mod = await import('../../routes/api/auth/account/+server');
 		const request = new Request('http://localhost/api/auth/account', {
@@ -208,6 +225,173 @@ describe('api proxy route handlers', () => {
 		expect(proxyPatchMock).not.toHaveBeenCalled();
 		expect(res.status).toBe(400);
 		await expect(res.json()).resolves.toEqual({ error: 'Field username tidak dapat diubah dari akun saya' });
+	});
+
+	it('forwards own official change request list and creation without target ids', async () => {
+		const mod = await import('../../routes/api/auth/account/change-requests/+server');
+		const event = createEvent({
+			locals: {
+				user: { id: '1', username: 'guru.ipa', role: 'guru', roles: ['guru'] }
+			}
+		});
+		proxyGetMock.mockResolvedValueOnce([{ id: 'req-1', status: 'pending' }]);
+
+		let res = await mod.GET(event as never);
+
+		expect(proxyGetMock).toHaveBeenCalledWith('/api/auth/account/change-requests');
+		expect(res.status).toBe(200);
+		await expect(res.json()).resolves.toEqual([{ id: 'req-1', status: 'pending' }]);
+
+		const request = new Request('http://localhost/api/auth/account/change-requests', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ profile_type: 'employee', field_key: 'nama', requested_value: 'Nama Baru', reason: 'Dokumen' })
+		});
+		proxyPostMock.mockResolvedValueOnce({ id: 'req-2', status: 'pending' });
+		res = await mod.POST(createEvent({
+			locals: {
+				user: { id: '1', username: 'guru.ipa', role: 'guru', roles: ['guru'] }
+			},
+			request
+		}) as never);
+
+		expect(readRequestJsonMock).toHaveBeenCalledWith(request);
+		expect(proxyPostMock).toHaveBeenCalledWith('/api/auth/account/change-requests', {
+			profile_type: 'employee',
+			field_key: 'nama',
+			requested_value: 'Nama Baru',
+			reason: 'Dokumen'
+		});
+		expect(res.status).toBe(201);
+
+		const blocked = await mod.POST(createEvent({
+			locals: {
+				user: { id: '1', username: 'guru.ipa', role: 'guru', roles: ['guru'] }
+			},
+			request: new Request('http://localhost/api/auth/account/change-requests', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ target_employee_id: 'emp-1', field_key: 'nama', requested_value: 'X', reason: 'Y' })
+			})
+		}) as never);
+		expect(blocked.status).toBe(400);
+	});
+
+	it('forwards own official change request fields without accepting target query scope', async () => {
+		const mod = await import('../../routes/api/auth/account/change-request-fields/+server');
+		let res = await mod.GET(createEvent() as never);
+		expect(res.status).toBe(401);
+		expect(proxyGetMock).not.toHaveBeenCalled();
+
+		const event = createEvent({
+			locals: {
+				user: { id: '1', username: 'siswa', role: 'siswa', roles: ['siswa'] }
+			},
+			url: new URL('http://localhost/api/auth/account/change-request-fields?user_id=someone-else&profile_type=employee')
+		});
+		proxyGetMock.mockResolvedValueOnce([{ profile_type: 'student', field_key: 'nama', label: 'Nama resmi' }]);
+
+		res = await mod.GET(event as never);
+
+		expect(proxyGetMock).toHaveBeenCalledWith('/api/auth/account/change-request-fields');
+		expect(res.status).toBe(200);
+		await expect(res.json()).resolves.toEqual([{ profile_type: 'student', field_key: 'nama', label: 'Nama resmi' }]);
+	});
+
+	it('forwards own official change request cancellation with an encoded id', async () => {
+		const mod = await import('../../routes/api/auth/account/change-requests/[id]/cancel/+server');
+		const event = createEvent({
+			params: { id: 'req 1/2026' },
+			locals: {
+				user: { id: '1', username: 'guru.ipa', role: 'guru', roles: ['guru'] }
+			}
+		});
+		proxyPostMock.mockResolvedValueOnce({ id: 'req 1/2026', status: 'cancelled' });
+
+		const res = await mod.POST(event as never);
+
+		expect(proxyPostMock).toHaveBeenCalledWith('/api/auth/account/change-requests/req%201%2F2026/cancel', {});
+		expect(res.status).toBe(200);
+		await expect(res.json()).resolves.toEqual({ id: 'req 1/2026', status: 'cancelled' });
+	});
+
+	it('forwards account avatar uploads through the authenticated multipart proxy', async () => {
+		const mod = await import('../../routes/api/auth/account/avatar/+server');
+		const upstream = new Response(JSON.stringify({ data: { avatar_url: '/api/auth/account/avatar/a.png' } }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+		const event = createEvent({
+			locals: {
+				user: { id: '1', username: 'guru.ipa', role: 'guru', roles: ['guru'] }
+			},
+			request: new Request('http://localhost/api/auth/account/avatar', {
+				method: 'POST',
+				body: new FormData()
+			})
+		});
+		proxyFetchMock.mockResolvedValueOnce(upstream);
+
+		const res = await mod.POST(event as never);
+
+		expect(proxyFetchMock).toHaveBeenCalledWith('/api/auth/account/avatar', {
+			method: 'POST',
+			body: expect.any(Object)
+		});
+		expect(jsonProxyResponseMock).toHaveBeenCalledWith(upstream, {
+			fallbackMessage: 'Gagal mengunggah foto profil.'
+		});
+		expect(res).toBe(upstream);
+	});
+
+	it('forwards account avatar deletion without accepting a profile id', async () => {
+		const mod = await import('../../routes/api/auth/account/avatar/+server');
+		const upstream = new Response(JSON.stringify({ data: { avatar_url: '' } }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json' }
+		});
+		const event = createEvent({
+			locals: {
+				user: { id: '1', username: 'guru.ipa', role: 'guru', roles: ['guru'] }
+			},
+			request: new Request('http://localhost/api/auth/account/avatar', { method: 'DELETE' })
+		});
+		proxyFetchMock.mockResolvedValueOnce(upstream);
+
+		const res = await mod.DELETE(event as never);
+
+		expect(proxyFetchMock).toHaveBeenCalledWith('/api/auth/account/avatar', {
+			method: 'DELETE'
+		});
+		expect(jsonProxyResponseMock).toHaveBeenCalledWith(upstream, {
+			fallbackMessage: 'Gagal menghapus foto profil.'
+		});
+		expect(res).toBe(upstream);
+	});
+
+	it('streams account avatar files through the authenticated proxy', async () => {
+		const mod = await import('../../routes/api/auth/account/avatar/[filename]/+server');
+		const upstream = new Response('avatar-bytes', {
+			status: 200,
+			headers: { 'content-type': 'image/png', 'x-content-type-options': 'nosniff' }
+		});
+		const event = createEvent({
+			locals: {
+				user: { id: '1', username: 'guru.ipa', role: 'guru', roles: ['guru'] }
+			},
+			params: { filename: 'avatar a.png' }
+		});
+		proxyFetchMock.mockResolvedValueOnce(upstream);
+
+		const res = await mod.GET(event as never);
+
+		expect(proxyFetchMock).toHaveBeenCalledWith('/api/auth/account/avatar/avatar%20a.png');
+		expect(streamProxyResponseMock).toHaveBeenCalledWith(upstream, {
+			fallbackMessage: 'Gagal mengambil foto profil.',
+			defaultCacheControl: 'private, max-age=3600',
+			headers: ['content-type', 'content-length', 'content-disposition', 'cache-control', 'x-content-type-options']
+		});
+		expect(res).toBe(upstream);
 	});
 
 	it('renames an auth session through the authenticated proxy', async () => {
@@ -717,6 +901,49 @@ describe('api proxy route handlers', () => {
 		expect(res.status).toBe(200);
 		await expect(res.json()).resolves.toEqual({ id: 'user-1', username: 'operator' });
 	}, 10000);
+
+	it('forwards admin official change request queue and review actions', async () => {
+		const listMod = await import('../../routes/api/users/change-requests/+server');
+		const reviewMod = await import('../../routes/api/users/change-requests/[id]/+server');
+		proxyGetMock.mockResolvedValueOnce([{ id: 'req-1', status: 'pending' }]);
+
+		const listRes = await listMod.GET(createEvent({
+			url: new URL('http://localhost/api/users/change-requests?status=pending&page=2')
+		}) as never);
+
+		expect(proxyGetMock).toHaveBeenCalledWith('/api/users/change-requests?status=pending&page=2');
+		expect(listRes.status).toBe(200);
+		await expect(listRes.json()).resolves.toEqual([{ id: 'req-1', status: 'pending' }]);
+
+		const request = new Request('http://localhost/api/users/change-requests/req%201%2F2026', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ status: 'approved', review_note: 'Sesuai dokumen' })
+		});
+		proxyPatchMock.mockResolvedValueOnce({ id: 'req 1/2026', status: 'approved' });
+		const reviewRes = await reviewMod.PATCH(createEvent({
+			params: { id: 'req 1/2026' },
+			request
+		}) as never);
+
+		expect(readRequestJsonMock).toHaveBeenCalledWith(request);
+		expect(proxyPatchMock).toHaveBeenCalledWith('/api/users/change-requests/req%201%2F2026', {
+			status: 'approved',
+			review_note: 'Sesuai dokumen'
+		});
+		expect(reviewRes.status).toBe(200);
+		await expect(reviewRes.json()).resolves.toEqual({ id: 'req 1/2026', status: 'approved' });
+
+		const invalid = await reviewMod.PATCH(createEvent({
+			params: { id: 'req-2' },
+			request: new Request('http://localhost/api/users/change-requests/req-2', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ status: 'cancelled' })
+			})
+		}) as never);
+		expect(invalid.status).toBe(400);
+	});
 
 	it('creates inventory items through the typed JSON body helper', async () => {
 		const mod = await import('../../routes/api/inventory/items/+server');

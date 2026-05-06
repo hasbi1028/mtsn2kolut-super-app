@@ -39,7 +39,7 @@ func main() {
 
 	q := db.New(pool)
 
-	authSvc := service.NewAuth(q, mustEnv("JWT_SECRET"), getEnv("ADMIN_PASSWORD", ""))
+	authSvc := service.NewAuth(q, mustEnv("JWT_SECRET"), getEnv("ADMIN_PASSWORD", ""), getEnv("AVATAR_DIR", "uploads/avatars"))
 	academicSvc := service.NewAcademic(q)
 	gradeSvc := service.NewGrade(q)
 	empSvc := service.NewEmployee(q)
@@ -72,6 +72,7 @@ func main() {
 	studentCertificateSvc := service.NewStudentCertificate(pool)
 	archiveSvc := service.NewArchive(q, getEnv("ARCHIVE_DIR", "data/archives"))
 	rbacSvc := service.NewRBACWithPool(pool)
+	profileChangeRequestSvc := service.NewProfileChangeRequestWithPool(pool)
 	websiteMediaH := handler.NewWebsiteMedia(getEnv("WEBSITE_MEDIA_DIR", "data/website-media"))
 
 	if err := authSvc.SeedAdmin(mainCtx); err != nil {
@@ -119,6 +120,7 @@ func main() {
 	studentCertificateH := handler.NewStudentCertificate(studentCertificateSvc)
 	archiveH := handler.NewArchive(archiveSvc, q)
 	rbacH := handler.NewRBAC(rbacSvc)
+	profileChangeRequestH := handler.NewProfileChangeRequest(profileChangeRequestSvc)
 
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
@@ -186,6 +188,7 @@ func main() {
 	requireUsersResetPassword := mw.RequirePermission("users.reset_password")
 	requireUsersUpdate := mw.RequirePermission("users.update")
 	requireUsersManageRoles := mw.RequirePermission("users.manage_roles")
+	requireProfileChangesReview := mw.RequireAnyPermissionOrRole([]string{service.ProfileChangesReviewPermission}, "admin")
 	requireRolesRead := mw.RequirePermission("roles.read")
 	requireRolesManage := mw.RequirePermission("roles.manage")
 	requireAuditRead := mw.RequirePermission("audit.read")
@@ -195,7 +198,15 @@ func main() {
 		r.Use(mw.JWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession))
 		r.Use(mw.Audit(q))
 		r.Get("/api/auth/account", authH.GetAccount)
+		r.Get("/api/auth/account/change-history", authH.GetAccountChangeHistory)
 		r.Patch("/api/auth/account/contact", authH.UpdateAccountContact)
+		r.Get("/api/auth/account/change-request-fields", profileChangeRequestH.ListSelfRequestableFields)
+		r.Get("/api/auth/account/change-requests", profileChangeRequestH.ListOwn)
+		r.Post("/api/auth/account/change-requests", profileChangeRequestH.CreateOwn)
+		r.Post("/api/auth/account/change-requests/{id}/cancel", profileChangeRequestH.CancelOwn)
+		r.Post("/api/auth/account/avatar", authH.UploadAccountAvatar)
+		r.Delete("/api/auth/account/avatar", authH.DeleteAccountAvatar)
+		r.Get("/api/auth/account/avatar/{filename}", authH.AccountAvatarFile)
 		r.Post("/api/auth/change-password", authH.ChangePassword)
 		r.Post("/api/auth/logout-all", authH.LogoutAll)
 		r.Get("/api/auth/sessions", authH.ListSessions)
@@ -665,6 +676,8 @@ func main() {
 		})
 
 		r.With(requireUsersRead).Get("/api/users", userH.List)
+		r.With(requireUsersRead).Get("/api/users/change-requests", profileChangeRequestH.ListAdmin)
+		r.With(requireProfileChangesReview).Patch("/api/users/change-requests/{id}", profileChangeRequestH.Review)
 		r.With(requireAuditRead).Get("/api/users/audit-logs", userH.ListAuditLogs)
 		r.With(requireUsersCreate).Get("/api/users/generate-from-employees/preview", userH.PreviewEmployeeAccountGeneration)
 		r.With(requireUsersCreate).Post("/api/users/generate-from-employees", userH.GenerateEmployeeAccounts)

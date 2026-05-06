@@ -1,6 +1,6 @@
 # RBAC Permission Catalog — Tahap 9
 
-Dokumen ini adalah katalog operasional permission dinamis MTsN 2 Kolut setelah Dynamic RBAC Tahap 9. Sumber teknis utama tetap migration `services/core-api/db/migrations/069_dynamic_rbac_foundation.sql`; file ini mengunci daftar agar operator dan developer memakai kode permission yang sama.
+Dokumen ini adalah katalog operasional permission dinamis MTsN 2 Kolut setelah Dynamic RBAC Tahap 9. Sumber teknis utama tetap migration `services/core-api/db/migrations/069_dynamic_rbac_foundation.sql` plus seed tambahan staged setelahnya seperti `076_profile_change_review_permission.sql`; file ini mengunci daftar agar operator dan developer memakai kode permission yang sama.
 
 ## Prinsip Stabilization
 
@@ -105,6 +105,10 @@ Legacy role fallback masih aktif untuk compatibility. Target cleanup nanti: audi
 
 - `parents.manage` — Mengelola data orang tua/wali.
 - `parents.read` — Melihat data orang tua/wali.
+
+### profile_changes
+
+- `profile_changes.review` — Meninjau dan menyetujui permintaan perubahan data resmi profil.
 
 ### pusaka
 
