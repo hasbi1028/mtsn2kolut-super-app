@@ -18,6 +18,7 @@
     nama: string;
     unit_kerja: string;
     employment_type: string;
+    tanggal_lahir: string;
     pusaka_eligible: boolean;
     has_pusaka_account: boolean;
     pusaka_is_enabled: boolean;
@@ -42,6 +43,7 @@
     nama: '',
     unit_kerja: '',
     employment_type: 'lainnya',
+    tanggal_lahir: '',
     is_active: true,
   });
 
@@ -63,6 +65,14 @@
     return scoped;
   });
 
+
+  function formatBirthDate(value: string) {
+    if (!value) return '—';
+    const [year, month, day] = value.split('-');
+    if (!year || !month || !day) return value;
+    return `${day}/${month}/${year}`;
+  }
+
   function employmentLabel(value: string) {
     return { pns: 'PNS', pppk: 'PPPK', honorer: 'Honorer', lainnya: 'Lainnya' }[value] ?? value;
   }
@@ -83,6 +93,7 @@
       nama: employee.nama,
       unit_kerja: employee.unit_kerja,
       employment_type: employee.employment_type,
+      tanggal_lahir: employee.tanggal_lahir || '',
       is_active: employee.is_active,
     };
     showEditDialog = true;
@@ -201,6 +212,7 @@
         <Table.Row>
           <Table.Head>Pegawai</Table.Head>
           <Table.Head class="hidden md:table-cell">Unit Kerja</Table.Head>
+          <Table.Head>Tanggal Lahir</Table.Head>
           <Table.Head>Status Kepegawaian</Table.Head>
           <Table.Head>PUSAKA</Table.Head>
           <Table.Head class="text-right">Aksi</Table.Head>
@@ -221,6 +233,7 @@
               </div>
             </Table.Cell>
             <Table.Cell class="hidden md:table-cell text-sm text-muted-foreground">{e.unit_kerja || '—'}</Table.Cell>
+            <Table.Cell class="text-sm text-slate-600">{formatBirthDate(e.tanggal_lahir)}</Table.Cell>
             <Table.Cell>
               <Badge variant="outline">{employmentLabel(e.employment_type)}</Badge>
             </Table.Cell>
@@ -270,7 +283,7 @@
           </Table.Row>
         {:else}
           <Table.Row>
-            <Table.Cell colspan={5} class="p-4">
+            <Table.Cell colspan={6} class="p-4">
               <EmptyStatePanel
                 compact
                 title="Belum ada data pegawai"
@@ -305,6 +318,11 @@
         <div>
           <label for="edit-unit" class="mb-1 block text-xs font-medium text-slate-600">Unit Kerja</label>
           <input id="edit-unit" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.unit_kerja} />
+        </div>
+        <div>
+          <label for="edit-tanggal-lahir" class="mb-1 block text-xs font-medium text-slate-600">Tanggal Lahir</label>
+          <input id="edit-tanggal-lahir" type="date" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.tanggal_lahir} />
+          <p class="mt-1 text-[11px] text-slate-500">Dipakai untuk generate akun otomatis.</p>
         </div>
         <div>
           <label for="edit-type" class="mb-1 block text-xs font-medium text-slate-600">Status Kepegawaian</label>

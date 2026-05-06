@@ -13,6 +13,7 @@
     nama: '',
     unit_kerja: '',
     employment_type: '',
+    tanggal_lahir: '',
     pusaka_username: '',
     pusaka_password: ''
   });
@@ -54,7 +55,7 @@
         body: JSON.stringify(form),
       });
       await readClientJson<unknown>(res);
-      form = { nip: '', nama: '', unit_kerja: '', employment_type: '', pusaka_username: '', pusaka_password: '' };
+      form = { nip: '', nama: '', unit_kerja: '', employment_type: '', tanggal_lahir: '', pusaka_username: '', pusaka_password: '' };
       success = 'Pegawai baru berhasil ditambahkan ke master data. Jika pegawai eligible PUSAKA, akun integrasinya bisa dilengkapi sekarang atau nanti dari menu PUSAKA.';
       onadd?.();
     } catch (error) {
@@ -88,6 +89,12 @@
       <div>
         <label for="f-unit" class="mb-1 block text-xs font-medium text-muted-foreground">Unit Kerja</label>
         <Input id="f-unit" placeholder="Contoh: Tata Usaha atau Kurikulum" bind:value={form.unit_kerja} />
+      </div>
+
+      <div>
+        <label for="f-tanggal-lahir" class="mb-1 block text-xs font-medium text-muted-foreground">Tanggal Lahir</label>
+        <Input id="f-tanggal-lahir" type="date" bind:value={form.tanggal_lahir} />
+        <p class="mt-1 text-[11px] text-muted-foreground">Dipakai untuk generate akun otomatis dari data pegawai.</p>
       </div>
       <div>
         <label for="f-employment-type" class="mb-1 block text-xs font-medium text-muted-foreground">Status Kepegawaian <span class="text-destructive">*</span></label>

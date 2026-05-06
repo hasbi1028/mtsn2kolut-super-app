@@ -14,6 +14,7 @@
     nama: string;
     unit_kerja: string;
     employment_type: string;
+    tanggal_lahir: string;
     pusaka_eligible: boolean;
     has_pusaka_account: boolean;
     pusaka_is_enabled: boolean;
