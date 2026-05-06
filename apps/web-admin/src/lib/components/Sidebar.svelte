@@ -9,6 +9,7 @@
 	import SidebarQuickAccess from '$lib/components/sidebar/SidebarQuickAccess.svelte';
 	import { clearCbtComposerDrafts } from '$lib/client/cbt-drafts';
 	import { fetchSidebarAttention } from '$lib/components/sidebar/sidebar-attention';
+	import { findActiveSidebarHref } from '$lib/components/sidebar/sidebar-active';
 	import { readClientJson } from '$lib/client/api';
 	import {
 		defaultPinnedByRole,
@@ -63,10 +64,6 @@
 	let recentItems = $state<string[]>([]);
 	let pinnedLoaded = $state(false);
 
-	const activeGroup = $derived(
-		nav.find((section) => section.items.some((item) => isActive(item.href)))?.group ?? 'Utama'
-	);
-
 	const visibleNavItems = $derived(
 		nav.flatMap((section) =>
 			section.items.map((item) => ({
@@ -74,6 +71,12 @@
 				group: section.group,
 			}))
 		)
+	);
+
+	const activeHref = $derived(findActiveSidebarHref(page.url.pathname, visibleNavItems));
+
+	const activeGroup = $derived(
+		nav.find((section) => section.items.some((item) => item.href === activeHref))?.group ?? 'Utama'
 	);
 
 	const visibleNavHrefSet = $derived(new Set(visibleNavItems.map((item) => item.href)));
@@ -111,9 +114,7 @@
 	});
 
 	function isActive(href: string) {
-		if (href === '/') return page.url.pathname === '/';
-		if (href === '/asesmen') return page.url.pathname === '/asesmen';
-		return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
+		return activeHref === href;
 	}
 
 	function isGroupOpen(group: string) {
