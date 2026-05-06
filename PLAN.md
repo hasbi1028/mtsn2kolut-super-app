@@ -137,9 +137,9 @@ Three runtime units deployed across 3 VPS:
 - [x] Mobile payload compatibility checklist embedded in `docs/exam-api.md` for backend release discipline
 - [x] Structured release-note template for exam payload changes in `docs/exam-payload-release-template.md`
 - [x] Per-device BYOD test matrix for vendor/model/Android-version comparison during field trials
-- [x] Web-admin `/cbt/byod` summary page for pengawas/operator with mobile status legend, submit checklist, and trial references
-- [x] Web-admin `/cbt/byod/matrix` companion page for vendor/device comparison during BYOD field trials
-- [x] Web-admin `/cbt/byod/release` readiness page for backend/mobile/rollout release checks
+- [x] Web-admin `/asesmen/aplikasi-siswa` summary page for pengawas/operator with mobile status legend, submit checklist, and trial references
+- [x] Web-admin `/asesmen/aplikasi-siswa/matrix` companion page for vendor/device comparison during BYOD field trials
+- [x] Web-admin `/asesmen/aplikasi-siswa/release` readiness page for backend/mobile/rollout release checks
 - [x] Backend exam payload/status hardening so Flutter-critical fields (`session.title`, `is_submitted`, rich content, media/audio URLs) are actually emitted and covered by backend contract tests
 - [x] Handler-level proxy URL tests for exam asset/media absolutization behind `X-Forwarded-*`
 - [x] Handler-level login/status JSON envelope tests so mobile contract is checked at the HTTP response layer too
@@ -1325,12 +1325,12 @@ Three runtime units deployed across 3 VPS:
 
 #### Rekomendasi Lanjutan Setelah Sprint 95
 - [ ] Jalankan checklist staging dengan akun admin/guru real untuk membuktikan hasil CSV dan visibility kunci/token, bukan hanya route/proxy.
-- [ ] Jika route retired masih menerima traffic tinggi dari bookmark lama, tambahkan pesan transisi ringan di `/cbt/soal` saat datang dari redirect.
+- [x] Karena aplikasi belum dirilis, route retired tidak perlu dipertahankan untuk bookmark lama; `/cbt*`, `/api/cbt/*`, dan alias lama Bank Soal sudah dihapus setelah check/unit test/smoke test lulus.
 
 ### ✅ Sprint 96 — Documentation Sync (COMPLETE)
 - [x] Tujuan utama: menyelaraskan `PLAN.md`, `AGENTS.md`, service-level `AGENTS.md`, dan dokumen markdown sumber dengan kondisi repo setelah Sprint 95.
 - [x] Dokumentasi runtime diseragamkan: server deploy tetap 3 VPS (`web-admin`, `core-api`, `pusaka-worker`), sedangkan Flutter berada sebagai client/APK BYOD, bukan VPS keempat.
-- [x] Dokumentasi CBT diseragamkan: `/cbt/soal` adalah UI Bank Soal aktif, `/cbt/questions` hanya redirect legacy, dan `/api/cbt/questions/*` tetap kontrak backend/BFF canonical.
+- [x] Dokumentasi CBT diseragamkan: Bank Soal aktif di `/bank-soal`, `/bank-soal/tambah`, `/bank-soal/impor`, dan `/bank-soal/verifikasi`; route lama `/bank-soal/komposer`, `/bank-soal/import`, `/bank-soal/review`, `/cbt*`, dan external BFF `/api/cbt/*` sudah dihapus karena aplikasi belum dirilis; backend Go internal masih boleh mempertahankan penamaan/path CBT.
 - [x] Dokumentasi operasional CBT ditautkan ke checklist smoke `docs/cbt-smoke-checklist.md` dan kontrak payload Flutter `docs/exam-api.md`.
 - [x] `findings.md` disegarkan: temuan aktif lama Library/Inventory RBAC, stale PUSAKA running job, dan scope foto siswa Kesiswaan sekarang ditandai tertutup karena kode sudah memiliki guard terkait.
 - [x] Dokumentasi mobile BYOD diselaraskan dengan baseline sekarang: token hardening, status sinkron, secure snapshot, guidance panel, dan keterbatasan anti-cheat BYOD.
