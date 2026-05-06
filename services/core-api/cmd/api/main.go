@@ -71,6 +71,7 @@ func main() {
 	kesiswaanSvc := service.NewKesiswaanWithPool(pool, getEnv("STUDENT_PHOTO_DIR", "data/student-photos"))
 	studentCertificateSvc := service.NewStudentCertificate(pool)
 	archiveSvc := service.NewArchive(q, getEnv("ARCHIVE_DIR", "data/archives"))
+	rbacSvc := service.NewRBACWithPool(pool)
 	websiteMediaH := handler.NewWebsiteMedia(getEnv("WEBSITE_MEDIA_DIR", "data/website-media"))
 
 	if err := authSvc.SeedAdmin(mainCtx); err != nil {
@@ -117,6 +118,7 @@ func main() {
 	kesiswaanH := handler.NewKesiswaan(kesiswaanSvc, q)
 	studentCertificateH := handler.NewStudentCertificate(studentCertificateSvc)
 	archiveH := handler.NewArchive(archiveSvc, q)
+	rbacH := handler.NewRBAC(rbacSvc)
 
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
@@ -643,7 +645,13 @@ func main() {
 			r.Get("/api/users/audit-logs", userH.ListAuditLogs)
 			r.Post("/api/users", userH.Create)
 			r.Patch("/api/users/{id}/status", userH.UpdateStatus)
+			r.Patch("/api/users/{id}/roles", rbacH.UpdateUserRoles)
 			r.Delete("/api/users/{id}", userH.Delete)
+
+			r.Get("/api/rbac/roles", rbacH.ListRoles)
+			r.Get("/api/rbac/permissions", rbacH.ListPermissions)
+			r.Get("/api/rbac/matrix", rbacH.ListMatrix)
+			r.Put("/api/rbac/roles/{code}/permissions", rbacH.UpdateRolePermissions)
 
 		})
 	})
