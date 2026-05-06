@@ -152,6 +152,26 @@ func RequireAnyPermission(permissions ...string) func(http.Handler) http.Handler
 	}
 }
 
+// RequireAnyPermissionOrRole is a migration-safe RBAC gate. It prefers dynamic
+// permissions, but still accepts legacy role claims while modules are being
+// migrated from role-only authorization.
+func RequireAnyPermissionOrRole(permissions []string, roles ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := api.ClaimsFromContext(r.Context())
+			if !ok {
+				api.Unauthorized(w)
+				return
+			}
+			if HasAnyPermission(claims, permissions...) || HasAnyRole(claims, roles...) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			api.Forbidden(w)
+		})
+	}
+}
+
 func HasAnyPermission(claims jwt.MapClaims, permissions ...string) bool {
 	for _, expected := range permissions {
 		expected = strings.TrimSpace(expected)
