@@ -14,8 +14,14 @@
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
 	import {
+		createRBACPermission,
+		createRBACRole,
 		fetchRBACMatrix,
 		resetUserPassword,
+		setRBACPermissionActive,
+		setRBACRoleActive,
+		updateRBACPermission,
+		updateRBACRole,
 		updateUserProfileLink,
 		updateUserRoles,
 		type RBACMatrix,
@@ -338,6 +344,132 @@
 		}
 	}
 
+
+	async function createRolePrompt() {
+		const code = window.prompt('Kode role baru (contoh: operator_cbt):')?.trim();
+		if (!code) return;
+		const name = window.prompt('Nama role:', code)?.trim();
+		if (!name) {
+			toast.error('Nama role wajib diisi.');
+			return;
+		}
+		const description = window.prompt('Deskripsi role:', '')?.trim() ?? '';
+		actionBusy = 'rbac:create-role';
+		try {
+			await createRBACRole({ code, name, description });
+			toast.success('Role RBAC berhasil dibuat');
+			await refreshOverview();
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
+		} finally {
+			actionBusy = null;
+		}
+	}
+
+	async function editRolePrompt(role: RBACRole) {
+		if (role.is_system) {
+			toast.error('Role sistem tidak boleh diubah dari UI.');
+			return;
+		}
+		const name = window.prompt(`Nama role ${role.code}:`, role.name || role.code)?.trim();
+		if (!name) return;
+		const description = window.prompt('Deskripsi role:', role.description || '')?.trim() ?? '';
+		actionBusy = `rbac:role:${role.code}`;
+		try {
+			await updateRBACRole(role.code, { name, description });
+			toast.success('Role RBAC diperbarui');
+			await refreshOverview();
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
+		} finally {
+			actionBusy = null;
+		}
+	}
+
+	async function toggleRoleStatus(role: RBACRole) {
+		if (role.is_system && role.is_active !== false) {
+			toast.error('Role sistem tidak boleh dinonaktifkan.');
+			return;
+		}
+		const next = role.is_active === false;
+		if (!(await confirmAction({
+			title: next ? 'Aktifkan Role' : 'Nonaktifkan Role',
+			message: `${next ? 'Aktifkan' : 'Nonaktifkan'} role "${role.code}"? Backend akan menolak jika role masih dipakai user aktif.`,
+			confirmLabel: next ? 'Aktifkan' : 'Nonaktifkan',
+			tone: 'warning'
+		}))) return;
+		actionBusy = `rbac:role-status:${role.code}`;
+		try {
+			await setRBACRoleActive(role.code, next);
+			toast.success(next ? 'Role diaktifkan' : 'Role dinonaktifkan');
+			await refreshOverview();
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
+		} finally {
+			actionBusy = null;
+		}
+	}
+
+	async function createPermissionPrompt() {
+		const code = window.prompt('Kode permission baru (contoh: reports.view):')?.trim();
+		if (!code) return;
+		const [defaultModule = '', defaultAction = ''] = code.split('.');
+		const module = window.prompt('Module permission:', defaultModule)?.trim();
+		const action = window.prompt('Action permission:', defaultAction)?.trim();
+		if (!module || !action) {
+			toast.error('Module dan action permission wajib diisi.');
+			return;
+		}
+		const description = window.prompt('Deskripsi permission:', '')?.trim() ?? '';
+		actionBusy = 'rbac:create-permission';
+		try {
+			await createRBACPermission({ code, module, action, description });
+			toast.success('Permission RBAC berhasil dibuat');
+			await refreshOverview();
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
+		} finally {
+			actionBusy = null;
+		}
+	}
+
+	async function editPermissionPrompt(permission: { code: string; module?: string; action?: string; description?: string }) {
+		const module = window.prompt(`Module permission ${permission.code}:`, permission.module || permission.code.split('.')[0] || '')?.trim();
+		const action = window.prompt('Action permission:', permission.action || permission.code.split('.')[1] || '')?.trim();
+		if (!module || !action) return;
+		const description = window.prompt('Deskripsi permission:', permission.description || '')?.trim() ?? '';
+		actionBusy = `rbac:permission:${permission.code}`;
+		try {
+			await updateRBACPermission(permission.code, { module, action, description });
+			toast.success('Permission RBAC diperbarui');
+			await refreshOverview();
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
+		} finally {
+			actionBusy = null;
+		}
+	}
+
+	async function togglePermissionStatus(permission: { code: string; is_active?: boolean }) {
+		const next = permission.is_active === false;
+		if (!(await confirmAction({
+			title: next ? 'Aktifkan Permission' : 'Nonaktifkan Permission',
+			message: `${next ? 'Aktifkan' : 'Nonaktifkan'} permission "${permission.code}"? Permission kritikal dilindungi backend.`,
+			confirmLabel: next ? 'Aktifkan' : 'Nonaktifkan',
+			tone: 'warning'
+		}))) return;
+		actionBusy = `rbac:permission-status:${permission.code}`;
+		try {
+			await setRBACPermissionActive(permission.code, next);
+			toast.success(next ? 'Permission diaktifkan' : 'Permission dinonaktifkan');
+			await refreshOverview();
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
+		} finally {
+			actionBusy = null;
+		}
+	}
+
 	onMount(() => {
 		void load();
 	});
@@ -481,6 +613,73 @@
 			</Card.Content>
 		</Card.Root>
 	{/if}
+
+
+	<Card.Root class="border-slate-200 shadow-sm">
+		<Card.Header class="flex flex-row items-start justify-between gap-3 pb-2">
+			<div>
+				<Card.Title class="text-base">Manajemen Role & Permission Dinamis</Card.Title>
+				<p class="mt-1 text-sm text-slate-500">CRUD role/permission via RBAC backend. Role sistem dan permission kritikal tetap dilindungi backend.</p>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				<Button variant="outline" onclick={() => void createRolePrompt()} disabled={actionBusy === 'rbac:create-role'}>+ Role</Button>
+				<Button variant="outline" onclick={() => void createPermissionPrompt()} disabled={actionBusy === 'rbac:create-permission'}>+ Permission</Button>
+			</div>
+		</Card.Header>
+		<Card.Content class="grid gap-4 lg:grid-cols-2">
+			<div class="rounded-2xl border border-slate-100 p-4">
+				<div class="mb-3 flex items-center justify-between">
+					<h2 class="text-sm font-semibold text-slate-800">Role</h2>
+					<Badge variant="secondary">{rbac.roles.length} role</Badge>
+				</div>
+				<div class="max-h-80 space-y-2 overflow-auto pr-1">
+					{#each rbac.roles as role (role.code)}
+						<div class="rounded-xl border border-slate-100 bg-slate-50 p-3">
+							<div class="flex items-start justify-between gap-2">
+								<div>
+									<p class="font-medium text-slate-800">{role.name || role.code}</p>
+									<p class="text-xs text-slate-500">{role.code}</p>
+								</div>
+								<div class="flex flex-wrap gap-1">
+									{#if role.is_system}<Badge variant="outline">System</Badge>{/if}
+									<Badge variant={role.is_active === false ? 'destructive' : 'secondary'}>{role.is_active === false ? 'Nonaktif' : 'Aktif'}</Badge>
+								</div>
+							</div>
+							{#if role.description}<p class="mt-2 text-xs text-slate-500">{role.description}</p>{/if}
+							<div class="mt-3 flex flex-wrap gap-2">
+								<Button size="sm" variant="outline" onclick={() => void editRolePrompt(role)} disabled={role.is_system || actionBusy === `rbac:role:${role.code}`}>Edit</Button>
+								<Button size="sm" variant="outline" onclick={() => void toggleRoleStatus(role)} disabled={role.is_system || actionBusy === `rbac:role-status:${role.code}`}>{role.is_active === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+			<div class="rounded-2xl border border-slate-100 p-4">
+				<div class="mb-3 flex items-center justify-between">
+					<h2 class="text-sm font-semibold text-slate-800">Permission</h2>
+					<Badge variant="secondary">{rbac.permissions.length} permission</Badge>
+				</div>
+				<div class="max-h-80 space-y-2 overflow-auto pr-1">
+					{#each rbac.permissions as permission (permission.code)}
+						<div class="rounded-xl border border-slate-100 bg-slate-50 p-3">
+							<div class="flex items-start justify-between gap-2">
+								<div>
+									<p class="font-medium text-slate-800">{permission.code}</p>
+									<p class="text-xs text-slate-500">{permission.module ?? '-'} / {permission.action ?? '-'}</p>
+								</div>
+								<Badge variant={permission.is_active === false ? 'destructive' : 'secondary'}>{permission.is_active === false ? 'Nonaktif' : 'Aktif'}</Badge>
+							</div>
+							{#if permission.description}<p class="mt-2 text-xs text-slate-500">{permission.description}</p>{/if}
+							<div class="mt-3 flex flex-wrap gap-2">
+								<Button size="sm" variant="outline" onclick={() => void editPermissionPrompt(permission)} disabled={actionBusy === `rbac:permission:${permission.code}`}>Edit</Button>
+								<Button size="sm" variant="outline" onclick={() => void togglePermissionStatus(permission)} disabled={actionBusy === `rbac:permission-status:${permission.code}`}>{permission.is_active === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+		</Card.Content>
+	</Card.Root>
 
 	<AsyncContent promise={usersPromise} onerror={handleOverviewRenderError}>
 		{#snippet pending()}

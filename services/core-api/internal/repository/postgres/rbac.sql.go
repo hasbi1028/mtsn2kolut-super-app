@@ -68,6 +68,85 @@ func (q *Queries) CountActiveAdminsByRbac(ctx context.Context) (int64, error) {
 	return column_1, err
 }
 
+const countActiveUsersByRbacRole = `-- name: CountActiveUsersByRbacRole :one
+SELECT count(*)::bigint
+FROM users u
+JOIN rbac_user_roles ur ON ur.user_id = u.id
+JOIN rbac_roles r ON r.id = ur.role_id
+WHERE u.is_active = TRUE
+  AND r.code = $1
+  AND r.is_active = TRUE
+`
+
+func (q *Queries) CountActiveUsersByRbacRole(ctx context.Context, code string) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveUsersByRbacRole, code)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const createRbacPermission = `-- name: CreateRbacPermission :one
+INSERT INTO rbac_permissions (code, module, action, description, is_active)
+VALUES ($1, $2, $3, $4, TRUE)
+RETURNING id, code, module, action, description, is_active, created_at, updated_at
+`
+
+type CreateRbacPermissionParams struct {
+	Code        string `json:"code"`
+	Module      string `json:"module"`
+	Action      string `json:"action"`
+	Description string `json:"description"`
+}
+
+func (q *Queries) CreateRbacPermission(ctx context.Context, arg CreateRbacPermissionParams) (RbacPermission, error) {
+	row := q.db.QueryRow(ctx, createRbacPermission,
+		arg.Code,
+		arg.Module,
+		arg.Action,
+		arg.Description,
+	)
+	var i RbacPermission
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Module,
+		&i.Action,
+		&i.Description,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createRbacRole = `-- name: CreateRbacRole :one
+INSERT INTO rbac_roles (code, name, description, is_system, is_active)
+VALUES ($1, $2, $3, FALSE, TRUE)
+RETURNING id, code, name, description, is_system, is_active, created_at, updated_at
+`
+
+type CreateRbacRoleParams struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+func (q *Queries) CreateRbacRole(ctx context.Context, arg CreateRbacRoleParams) (RbacRole, error) {
+	row := q.db.QueryRow(ctx, createRbacRole, arg.Code, arg.Name, arg.Description)
+	var i RbacRole
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.IsSystem,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const deleteRolePermissions = `-- name: DeleteRolePermissions :exec
 DELETE FROM rbac_role_permissions
 WHERE role_id = (SELECT id FROM rbac_roles WHERE code = $1)
@@ -86,6 +165,50 @@ WHERE user_id = $1
 func (q *Queries) DeleteUserRbacRoles(ctx context.Context, userID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteUserRbacRoles, userID)
 	return err
+}
+
+const getRbacPermissionByCode = `-- name: GetRbacPermissionByCode :one
+SELECT id, code, module, action, description, is_active, created_at, updated_at
+FROM rbac_permissions
+WHERE code = $1
+`
+
+func (q *Queries) GetRbacPermissionByCode(ctx context.Context, code string) (RbacPermission, error) {
+	row := q.db.QueryRow(ctx, getRbacPermissionByCode, code)
+	var i RbacPermission
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Module,
+		&i.Action,
+		&i.Description,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getRbacRoleByCode = `-- name: GetRbacRoleByCode :one
+SELECT id, code, name, description, is_system, is_active, created_at, updated_at
+FROM rbac_roles
+WHERE code = $1
+`
+
+func (q *Queries) GetRbacRoleByCode(ctx context.Context, code string) (RbacRole, error) {
+	row := q.db.QueryRow(ctx, getRbacRoleByCode, code)
+	var i RbacRole
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.IsSystem,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getUserPermissionCodes = `-- name: GetUserPermissionCodes :many
@@ -339,6 +462,133 @@ func (q *Queries) ListUserIDsByRoleCode(ctx context.Context, code string) ([]pgt
 		return nil, err
 	}
 	return items, nil
+}
+
+const setRbacPermissionActive = `-- name: SetRbacPermissionActive :one
+UPDATE rbac_permissions
+SET is_active = $2,
+    updated_at = NOW()
+WHERE code = $1
+RETURNING id, code, module, action, description, is_active, created_at, updated_at
+`
+
+type SetRbacPermissionActiveParams struct {
+	Code     string `json:"code"`
+	IsActive bool   `json:"is_active"`
+}
+
+func (q *Queries) SetRbacPermissionActive(ctx context.Context, arg SetRbacPermissionActiveParams) (RbacPermission, error) {
+	row := q.db.QueryRow(ctx, setRbacPermissionActive, arg.Code, arg.IsActive)
+	var i RbacPermission
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Module,
+		&i.Action,
+		&i.Description,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const setRbacRoleActive = `-- name: SetRbacRoleActive :one
+UPDATE rbac_roles
+SET is_active = $2,
+    updated_at = NOW()
+WHERE code = $1
+RETURNING id, code, name, description, is_system, is_active, created_at, updated_at
+`
+
+type SetRbacRoleActiveParams struct {
+	Code     string `json:"code"`
+	IsActive bool   `json:"is_active"`
+}
+
+func (q *Queries) SetRbacRoleActive(ctx context.Context, arg SetRbacRoleActiveParams) (RbacRole, error) {
+	row := q.db.QueryRow(ctx, setRbacRoleActive, arg.Code, arg.IsActive)
+	var i RbacRole
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.IsSystem,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateRbacPermission = `-- name: UpdateRbacPermission :one
+UPDATE rbac_permissions
+SET module = $2,
+    action = $3,
+    description = $4,
+    updated_at = NOW()
+WHERE code = $1
+RETURNING id, code, module, action, description, is_active, created_at, updated_at
+`
+
+type UpdateRbacPermissionParams struct {
+	Code        string `json:"code"`
+	Module      string `json:"module"`
+	Action      string `json:"action"`
+	Description string `json:"description"`
+}
+
+func (q *Queries) UpdateRbacPermission(ctx context.Context, arg UpdateRbacPermissionParams) (RbacPermission, error) {
+	row := q.db.QueryRow(ctx, updateRbacPermission,
+		arg.Code,
+		arg.Module,
+		arg.Action,
+		arg.Description,
+	)
+	var i RbacPermission
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Module,
+		&i.Action,
+		&i.Description,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateRbacRole = `-- name: UpdateRbacRole :one
+UPDATE rbac_roles
+SET name = $2,
+    description = $3,
+    updated_at = NOW()
+WHERE code = $1
+RETURNING id, code, name, description, is_system, is_active, created_at, updated_at
+`
+
+type UpdateRbacRoleParams struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+func (q *Queries) UpdateRbacRole(ctx context.Context, arg UpdateRbacRoleParams) (RbacRole, error) {
+	row := q.db.QueryRow(ctx, updateRbacRole, arg.Code, arg.Name, arg.Description)
+	var i RbacRole
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.IsSystem,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const userHasRbacRole = `-- name: UserHasRbacRole :one

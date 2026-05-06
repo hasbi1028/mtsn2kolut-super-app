@@ -3,10 +3,61 @@ SELECT id, code, name, description, is_system, is_active, created_at, updated_at
 FROM rbac_roles
 ORDER BY is_system DESC, code;
 
+-- name: GetRbacRoleByCode :one
+SELECT id, code, name, description, is_system, is_active, created_at, updated_at
+FROM rbac_roles
+WHERE code = $1;
+
+-- name: CreateRbacRole :one
+INSERT INTO rbac_roles (code, name, description, is_system, is_active)
+VALUES ($1, $2, $3, FALSE, TRUE)
+RETURNING id, code, name, description, is_system, is_active, created_at, updated_at;
+
+-- name: UpdateRbacRole :one
+UPDATE rbac_roles
+SET name = $2,
+    description = $3,
+    updated_at = NOW()
+WHERE code = $1
+RETURNING id, code, name, description, is_system, is_active, created_at, updated_at;
+
+-- name: SetRbacRoleActive :one
+UPDATE rbac_roles
+SET is_active = $2,
+    updated_at = NOW()
+WHERE code = $1
+RETURNING id, code, name, description, is_system, is_active, created_at, updated_at;
+
 -- name: ListRbacPermissions :many
 SELECT id, code, module, action, description, is_active, created_at, updated_at
 FROM rbac_permissions
 ORDER BY module, code;
+
+-- name: GetRbacPermissionByCode :one
+SELECT id, code, module, action, description, is_active, created_at, updated_at
+FROM rbac_permissions
+WHERE code = $1;
+
+-- name: CreateRbacPermission :one
+INSERT INTO rbac_permissions (code, module, action, description, is_active)
+VALUES ($1, $2, $3, $4, TRUE)
+RETURNING id, code, module, action, description, is_active, created_at, updated_at;
+
+-- name: UpdateRbacPermission :one
+UPDATE rbac_permissions
+SET module = $2,
+    action = $3,
+    description = $4,
+    updated_at = NOW()
+WHERE code = $1
+RETURNING id, code, module, action, description, is_active, created_at, updated_at;
+
+-- name: SetRbacPermissionActive :one
+UPDATE rbac_permissions
+SET is_active = $2,
+    updated_at = NOW()
+WHERE code = $1
+RETURNING id, code, module, action, description, is_active, created_at, updated_at;
 
 -- name: ListRbacRolePermissions :many
 SELECT
@@ -83,6 +134,15 @@ JOIN rbac_user_roles ur ON ur.user_id = u.id
 JOIN rbac_roles r ON r.id = ur.role_id
 WHERE u.is_active = TRUE
   AND r.code = 'admin'
+  AND r.is_active = TRUE;
+
+-- name: CountActiveUsersByRbacRole :one
+SELECT count(*)::bigint
+FROM users u
+JOIN rbac_user_roles ur ON ur.user_id = u.id
+JOIN rbac_roles r ON r.id = ur.role_id
+WHERE u.is_active = TRUE
+  AND r.code = $1
   AND r.is_active = TRUE;
 
 -- name: UserHasRbacRole :one

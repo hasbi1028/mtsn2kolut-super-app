@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -16,7 +17,15 @@ import (
 
 type rbacStore interface {
 	ListRbacRoles(ctx context.Context) ([]db.RbacRole, error)
+	GetRbacRoleByCode(ctx context.Context, code string) (db.RbacRole, error)
+	CreateRbacRole(ctx context.Context, arg db.CreateRbacRoleParams) (db.RbacRole, error)
+	UpdateRbacRole(ctx context.Context, arg db.UpdateRbacRoleParams) (db.RbacRole, error)
+	SetRbacRoleActive(ctx context.Context, arg db.SetRbacRoleActiveParams) (db.RbacRole, error)
 	ListRbacPermissions(ctx context.Context) ([]db.RbacPermission, error)
+	GetRbacPermissionByCode(ctx context.Context, code string) (db.RbacPermission, error)
+	CreateRbacPermission(ctx context.Context, arg db.CreateRbacPermissionParams) (db.RbacPermission, error)
+	UpdateRbacPermission(ctx context.Context, arg db.UpdateRbacPermissionParams) (db.RbacPermission, error)
+	SetRbacPermissionActive(ctx context.Context, arg db.SetRbacPermissionActiveParams) (db.RbacPermission, error)
 	ListRbacRolePermissions(ctx context.Context) ([]db.ListRbacRolePermissionsRow, error)
 	ListRbacUserRoles(ctx context.Context) ([]db.ListRbacUserRolesRow, error)
 	GetUserPermissionCodes(ctx context.Context, userID pgtype.UUID) ([]string, error)
@@ -26,6 +35,7 @@ type rbacStore interface {
 	DeleteUserRbacRoles(ctx context.Context, userID pgtype.UUID) error
 	AddUserRbacRoleByCode(ctx context.Context, arg db.AddUserRbacRoleByCodeParams) error
 	CountActiveAdminsByRbac(ctx context.Context) (int64, error)
+	CountActiveUsersByRbacRole(ctx context.Context, code string) (int64, error)
 	UserHasRbacRole(ctx context.Context, arg db.UserHasRbacRoleParams) (bool, error)
 	CreateAuditLog(ctx context.Context, arg db.CreateAuditLogParams) (db.AuditLog, error)
 }
@@ -45,6 +55,24 @@ type RBACMatrix struct {
 	RolePermissions []db.ListRbacRolePermissionsRow `json:"role_permissions"`
 	UserRoles       []db.ListRbacUserRolesRow       `json:"user_roles"`
 }
+
+type RBACRoleInput struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type RBACPermissionInput struct {
+	Code        string `json:"code"`
+	Module      string `json:"module"`
+	Action      string `json:"action"`
+	Description string `json:"description"`
+}
+
+var (
+	rbacRoleCodePattern       = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	rbacPermissionCodePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`)
+)
 
 func NewRBAC(q *db.Queries) *RBAC { return &RBAC{q: q} }
 
@@ -76,6 +104,137 @@ func (s *RBAC) GetUserPermissions(ctx context.Context, userID pgtype.UUID) ([]st
 
 func (s *RBAC) GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]string, error) {
 	return s.q.GetUserRoleCodesFromRbac(ctx, userID)
+}
+
+func (s *RBAC) CreateRole(ctx context.Context, input RBACRoleInput, actorID pgtype.UUID) (db.RbacRole, error) {
+	input = normalizeRoleInput(input, true)
+	if err := validateRoleInput(input, true); err != nil {
+		return db.RbacRole{}, err
+	}
+	var role db.RbacRole
+	err := s.withRBACStore(ctx, func(store rbacStore) error {
+		created, err := store.CreateRbacRole(ctx, db.CreateRbacRoleParams{Code: input.Code, Name: input.Name, Description: input.Description})
+		if err != nil {
+			return err
+		}
+		role = created
+		return s.audit(ctx, store, actorID, "RBAC_ROLE_CREATED", "rbac_role", role.Code, map[string]any{"code": role.Code, "name": role.Name})
+	})
+	return role, err
+}
+
+func (s *RBAC) UpdateRole(ctx context.Context, roleCode string, input RBACRoleInput, actorID pgtype.UUID) (db.RbacRole, error) {
+	roleCode = normalizeRBACCode(roleCode)
+	input = normalizeRoleInput(input, false)
+	if err := validateRoleInput(input, false); err != nil {
+		return db.RbacRole{}, err
+	}
+	current, err := s.q.GetRbacRoleByCode(ctx, roleCode)
+	if err != nil {
+		return db.RbacRole{}, err
+	}
+	if current.IsSystem {
+		return db.RbacRole{}, fmt.Errorf("role sistem tidak boleh diubah")
+	}
+	var role db.RbacRole
+	err = s.withRBACStore(ctx, func(store rbacStore) error {
+		updated, err := store.UpdateRbacRole(ctx, db.UpdateRbacRoleParams{Code: roleCode, Name: input.Name, Description: input.Description})
+		if err != nil {
+			return err
+		}
+		role = updated
+		return s.audit(ctx, store, actorID, "RBAC_ROLE_UPDATED", "rbac_role", role.Code, map[string]any{"code": role.Code, "name": role.Name})
+	})
+	return role, err
+}
+
+func (s *RBAC) SetRoleActive(ctx context.Context, roleCode string, active bool, actorID pgtype.UUID) error {
+	roleCode = normalizeRBACCode(roleCode)
+	role, err := s.q.GetRbacRoleByCode(ctx, roleCode)
+	if err != nil {
+		return err
+	}
+	if role.IsSystem && !active {
+		return fmt.Errorf("role sistem tidak boleh dinonaktifkan")
+	}
+	if !active {
+		count, err := s.q.CountActiveUsersByRbacRole(ctx, roleCode)
+		if err != nil {
+			return err
+		}
+		if count > 0 {
+			return fmt.Errorf("role masih dipakai user aktif")
+		}
+	}
+	return s.withRBACStore(ctx, func(store rbacStore) error {
+		updated, err := store.SetRbacRoleActive(ctx, db.SetRbacRoleActiveParams{Code: roleCode, IsActive: active})
+		if err != nil {
+			return err
+		}
+		return s.audit(ctx, store, actorID, "RBAC_ROLE_STATUS_UPDATED", "rbac_role", updated.Code, map[string]any{"code": updated.Code, "is_active": updated.IsActive})
+	})
+}
+
+func (s *RBAC) CreatePermission(ctx context.Context, input RBACPermissionInput, actorID pgtype.UUID) (db.RbacPermission, error) {
+	input = normalizePermissionInput(input, true)
+	if err := validatePermissionInput(input, true); err != nil {
+		return db.RbacPermission{}, err
+	}
+	var permission db.RbacPermission
+	err := s.withRBACStore(ctx, func(store rbacStore) error {
+		created, err := store.CreateRbacPermission(ctx, db.CreateRbacPermissionParams{Code: input.Code, Module: input.Module, Action: input.Action, Description: input.Description})
+		if err != nil {
+			return err
+		}
+		permission = created
+		return s.audit(ctx, store, actorID, "RBAC_PERMISSION_CREATED", "rbac_permission", permission.Code, map[string]any{"code": permission.Code, "module": permission.Module, "action": permission.Action})
+	})
+	return permission, err
+}
+
+func (s *RBAC) UpdatePermission(ctx context.Context, code string, input RBACPermissionInput, actorID pgtype.UUID) (db.RbacPermission, error) {
+	code = normalizeRBACCode(code)
+	input = normalizePermissionInput(input, false)
+	if err := validatePermissionInput(input, false); err != nil {
+		return db.RbacPermission{}, err
+	}
+	if _, err := s.q.GetRbacPermissionByCode(ctx, code); err != nil {
+		return db.RbacPermission{}, err
+	}
+	var permission db.RbacPermission
+	err := s.withRBACStore(ctx, func(store rbacStore) error {
+		updated, err := store.UpdateRbacPermission(ctx, db.UpdateRbacPermissionParams{Code: code, Module: input.Module, Action: input.Action, Description: input.Description})
+		if err != nil {
+			return err
+		}
+		permission = updated
+		return s.audit(ctx, store, actorID, "RBAC_PERMISSION_UPDATED", "rbac_permission", permission.Code, map[string]any{"code": permission.Code, "module": permission.Module, "action": permission.Action})
+	})
+	return permission, err
+}
+
+func (s *RBAC) SetPermissionActive(ctx context.Context, code string, active bool, actorID pgtype.UUID) error {
+	code = normalizeRBACCode(code)
+	permission, err := s.q.GetRbacPermissionByCode(ctx, code)
+	if err != nil {
+		return err
+	}
+	if !active && isCriticalRBACPermission(permission.Code) {
+		admins, err := s.q.CountActiveAdminsByRbac(ctx)
+		if err != nil {
+			return err
+		}
+		if admins <= 1 {
+			return fmt.Errorf("permission kritikal admin terakhir tidak boleh dinonaktifkan")
+		}
+	}
+	return s.withRBACStore(ctx, func(store rbacStore) error {
+		updated, err := store.SetRbacPermissionActive(ctx, db.SetRbacPermissionActiveParams{Code: code, IsActive: active})
+		if err != nil {
+			return err
+		}
+		return s.audit(ctx, store, actorID, "RBAC_PERMISSION_STATUS_UPDATED", "rbac_permission", updated.Code, map[string]any{"code": updated.Code, "is_active": updated.IsActive})
+	})
 }
 
 func (s *RBAC) ReplaceRolePermissions(ctx context.Context, roleCode string, permissionCodes []string, actorID pgtype.UUID) error {
@@ -227,6 +386,52 @@ func (s *RBAC) audit(ctx context.Context, store rbacStore, actorID pgtype.UUID, 
 	}
 	_, err = store.CreateAuditLog(ctx, db.CreateAuditLogParams{UserID: actorID, Action: action, EntityType: entityType, EntityID: entityID, Metadata: payload})
 	return err
+}
+
+func normalizeRoleInput(input RBACRoleInput, includeCode bool) RBACRoleInput {
+	if includeCode {
+		input.Code = normalizeRBACCode(input.Code)
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	input.Description = strings.TrimSpace(input.Description)
+	return input
+}
+
+func validateRoleInput(input RBACRoleInput, includeCode bool) error {
+	if includeCode && !rbacRoleCodePattern.MatchString(input.Code) {
+		return fmt.Errorf("kode role tidak valid")
+	}
+	if input.Name == "" {
+		return fmt.Errorf("nama role wajib diisi")
+	}
+	return nil
+}
+
+func normalizePermissionInput(input RBACPermissionInput, includeCode bool) RBACPermissionInput {
+	if includeCode {
+		input.Code = normalizeRBACCode(input.Code)
+	}
+	input.Module = normalizeRBACCode(input.Module)
+	input.Action = normalizeRBACCode(input.Action)
+	input.Description = strings.TrimSpace(input.Description)
+	return input
+}
+
+func validatePermissionInput(input RBACPermissionInput, includeCode bool) error {
+	if includeCode && !rbacPermissionCodePattern.MatchString(input.Code) {
+		return fmt.Errorf("kode permission tidak valid")
+	}
+	if !rbacRoleCodePattern.MatchString(input.Module) {
+		return fmt.Errorf("module permission tidak valid")
+	}
+	if !rbacRoleCodePattern.MatchString(input.Action) {
+		return fmt.Errorf("action permission tidak valid")
+	}
+	return nil
+}
+
+func isCriticalRBACPermission(code string) bool {
+	return containsString([]string{"roles.manage", "users.manage_roles"}, code)
 }
 
 func normalizeRBACCodes(codes []string) []string {

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
 
@@ -17,6 +18,12 @@ type RBACService interface {
 	ListMatrix(ctx context.Context) (service.RBACMatrix, error)
 	GetUserPermissions(ctx context.Context, userID pgtype.UUID) ([]string, error)
 	GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]string, error)
+	CreateRole(ctx context.Context, input service.RBACRoleInput, actorID pgtype.UUID) (db.RbacRole, error)
+	UpdateRole(ctx context.Context, code string, input service.RBACRoleInput, actorID pgtype.UUID) (db.RbacRole, error)
+	SetRoleActive(ctx context.Context, code string, active bool, actorID pgtype.UUID) error
+	CreatePermission(ctx context.Context, input service.RBACPermissionInput, actorID pgtype.UUID) (db.RbacPermission, error)
+	UpdatePermission(ctx context.Context, code string, input service.RBACPermissionInput, actorID pgtype.UUID) (db.RbacPermission, error)
+	SetPermissionActive(ctx context.Context, code string, active bool, actorID pgtype.UUID) error
 	ReplaceRolePermissions(ctx context.Context, roleCode string, permissionCodes []string, actorID pgtype.UUID) error
 	ReplaceUserRoles(ctx context.Context, userID pgtype.UUID, roleCodes []string, actorID pgtype.UUID) error
 }
@@ -64,6 +71,166 @@ func (h *RBAC) ListPermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, matrix.Permissions)
+}
+
+func (h *RBAC) CreateRole(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	var req service.RBACRoleInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.BadRequest(w, "payload tidak valid")
+		return
+	}
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	role, err := h.svc.CreateRole(r.Context(), req, actorID)
+	if err != nil {
+		writeClientError(w, err, "role tidak dapat dibuat")
+		return
+	}
+	api.Created(w, role)
+}
+
+func (h *RBAC) UpdateRole(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	code := strings.TrimSpace(chi.URLParam(r, "code"))
+	if code == "" {
+		api.BadRequest(w, "role wajib diisi")
+		return
+	}
+	var req service.RBACRoleInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.BadRequest(w, "payload tidak valid")
+		return
+	}
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	role, err := h.svc.UpdateRole(r.Context(), code, req, actorID)
+	if err != nil {
+		writeClientError(w, err, "role tidak dapat diperbarui")
+		return
+	}
+	api.OK(w, role)
+}
+
+type updateRBACStatusRequest struct {
+	IsActive bool `json:"is_active"`
+}
+
+func (h *RBAC) SetRoleStatus(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	code := strings.TrimSpace(chi.URLParam(r, "code"))
+	if code == "" {
+		api.BadRequest(w, "role wajib diisi")
+		return
+	}
+	var req updateRBACStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.BadRequest(w, "payload tidak valid")
+		return
+	}
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	if err := h.svc.SetRoleActive(r.Context(), code, req.IsActive, actorID); err != nil {
+		writeClientError(w, err, "status role tidak dapat diperbarui")
+		return
+	}
+	api.OK(w, map[string]any{"ok": true})
+}
+
+func (h *RBAC) CreatePermission(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	var req service.RBACPermissionInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.BadRequest(w, "payload tidak valid")
+		return
+	}
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	permission, err := h.svc.CreatePermission(r.Context(), req, actorID)
+	if err != nil {
+		writeClientError(w, err, "permission tidak dapat dibuat")
+		return
+	}
+	api.Created(w, permission)
+}
+
+func (h *RBAC) UpdatePermission(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	code := strings.TrimSpace(chi.URLParam(r, "code"))
+	if code == "" {
+		api.BadRequest(w, "permission wajib diisi")
+		return
+	}
+	var req service.RBACPermissionInput
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.BadRequest(w, "payload tidak valid")
+		return
+	}
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	permission, err := h.svc.UpdatePermission(r.Context(), code, req, actorID)
+	if err != nil {
+		writeClientError(w, err, "permission tidak dapat diperbarui")
+		return
+	}
+	api.OK(w, permission)
+}
+
+func (h *RBAC) SetPermissionStatus(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	code := strings.TrimSpace(chi.URLParam(r, "code"))
+	if code == "" {
+		api.BadRequest(w, "permission wajib diisi")
+		return
+	}
+	var req updateRBACStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.BadRequest(w, "payload tidak valid")
+		return
+	}
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	if err := h.svc.SetPermissionActive(r.Context(), code, req.IsActive, actorID); err != nil {
+		writeClientError(w, err, "status permission tidak dapat diperbarui")
+		return
+	}
+	api.OK(w, map[string]any{"ok": true})
 }
 
 type updateRolePermissionsRequest struct {
