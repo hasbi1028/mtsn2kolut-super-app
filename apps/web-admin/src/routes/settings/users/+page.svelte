@@ -502,7 +502,7 @@
 	async function runEmployeeGeneration() {
 		if (!(await confirmAction({
 			title: 'Generate Akun Pegawai',
-			message: 'Buat akun untuk pegawai siap generate? Username dan password awal memakai pola NPSN + tanggal lahir + nomor urut, role default guru.',
+			message: 'Buat akun untuk pegawai siap generate? Username dan password awal memakai pola NPSN + 2 digit tahun lahir + nomor urut 3 digit, role default guru.',
 			confirmLabel: 'Generate Akun',
 			tone: 'warning'
 		}))) return;
@@ -682,7 +682,7 @@
 		<Card.Header class="flex flex-row items-start justify-between gap-3 pb-2">
 			<div>
 				<Card.Title class="text-base">Generate Akun dari Data Pegawai</Card.Title>
-				<p class="mt-1 text-sm text-slate-600">Username/password awal: 40406031 + tanggal lahir DDMMYY + nomor urut 3 digit. Role default: guru.</p>
+				<p class="mt-1 text-sm text-slate-600">Username/password awal: NPSN profil madrasah + 2 digit tahun lahir + nomor urut 3 digit. Role default: guru.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				<Button variant="outline" onclick={() => void previewEmployeeGeneration()} disabled={generationBusy !== null}>Preview</Button>
@@ -691,7 +691,8 @@
 			</div>
 		</Card.Header>
 		<Card.Content class="space-y-4">
-			<div class="grid gap-3 md:grid-cols-5">
+			<div class="grid gap-3 md:grid-cols-6">
+				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">NPSN Prefix</p><p class="font-mono text-xl font-semibold">{employeeGeneration?.npsn ?? '—'}</p></div>
 				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Total Pegawai</p><p class="text-xl font-semibold">{employeeGeneration?.total ?? 0}</p></div>
 				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Siap Dibuat</p><p class="text-xl font-semibold text-emerald-700">{employeeGeneration?.ready ?? 0}</p></div>
 				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Dibuat</p><p class="text-xl font-semibold text-sky-700">{employeeGeneration?.created ?? 0}</p></div>

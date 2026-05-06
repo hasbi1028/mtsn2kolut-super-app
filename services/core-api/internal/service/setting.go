@@ -118,7 +118,7 @@ func schoolProfileDefaultMap() map[string]string {
 	return map[string]string{
 		schoolProfilePrefix + "name":          "MTs Negeri 2 Kolaka Utara",
 		schoolProfilePrefix + "nsm":           "",
-		schoolProfilePrefix + "npsn":          "",
+		schoolProfilePrefix + "npsn":          DefaultEmployeeAccountNPSN,
 		schoolProfilePrefix + "ministry_line": "Kementerian Agama Republik Indonesia",
 		schoolProfilePrefix + "office_line":   "Kantor Kementerian Agama Kabupaten Kolaka Utara",
 		schoolProfilePrefix + "address":       "",
