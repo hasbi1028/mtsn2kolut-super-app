@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasAnyRole, isAdminOnlyPath, isGuruSafeAssessmentSupportReadPath, isKesiswaanPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath } from './route-access';
+import { hasAnyRole, isAdminOnlyPath, isBankSoalPath, isGuruSafeAssessmentSupportReadPath, isKesiswaanPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath } from './route-access';
 
 describe('route access helpers', () => {
 	it('keeps settings root available to authenticated non-admin users', () => {
@@ -71,11 +71,18 @@ describe('route access helpers', () => {
 		expect(isAdminOnlyPath('/asesmen/kegiatan/event-1/exam-cards')).toBe(true);
 		expect(isAdminOnlyPath('/api/asesmen/events/event-1')).toBe(true);
 		expect(isAdminOnlyPath('/api/bank-soal/soal-support/subjects')).toBe(false);
+		expect(isBankSoalPath('/bank-soal/analisis-butir')).toBe(true);
+		expect(isBankSoalPath('/api/bank-soal/summary')).toBe(true);
+		expect(isBankSoalPath('/bank-soalship')).toBe(false);
 		expect(isGuruSafeAssessmentSupportReadPath('/api/asesmen/events', 'GET')).toBe(true);
 		expect(isGuruSafeAssessmentSupportReadPath('/api/asesmen/events', 'POST')).toBe(false);
-		expect(isGuruSafeAssessmentSupportReadPath('/api/asesmen/events/event-1', 'GET')).toBe(false);
+		expect(isGuruSafeAssessmentSupportReadPath('/api/asesmen/events/event-1', 'GET')).toBe(true);
 		expect(isGuruSafeAssessmentSupportReadPath('/api/bank-soal/soal-support/subjects', 'GET')).toBe(true);
 		expect(isGuruSafeAssessmentSupportReadPath('/api/asesmen/events/event-1/question-targets', 'GET')).toBe(true);
+		expect(isGuruSafeAssessmentSupportReadPath('/api/asesmen/packages?event_id=event-1', 'GET')).toBe(false);
+		expect(isGuruSafeAssessmentSupportReadPath('/api/asesmen/packages', 'GET')).toBe(true);
+		expect(isGuruSafeAssessmentSupportReadPath('/api/asesmen/sessions/session-1', 'GET')).toBe(true);
+		expect(isGuruSafeAssessmentSupportReadPath('/asesmen/kegiatan/event-1', 'GET')).toBe(true);
 		expect(isGuruSafeAssessmentSupportReadPath('/api/asesmen/events/event-1/question-targets', 'PUT')).toBe(false);
 		expect(isAdminOnlyPath('/asesmen/paket')).toBe(true);
 		expect(isAdminOnlyPath('/asesmen/sesi')).toBe(true);

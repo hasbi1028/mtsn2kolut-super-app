@@ -930,8 +930,17 @@ func sanitizeHTML(value string) string {
 	for _, pattern := range stripDangerousBlockPatterns {
 		value = pattern.ReplaceAllString(value, "")
 	}
+	value = html.UnescapeString(value)
 	value = stripEventHandlers.ReplaceAllString(value, "")
-	value = stripDangerousURLs.ReplaceAllString(value, "")
+	value = stripDangerousAttributes.ReplaceAllString(value, "")
+	value = stripDangerousURLs.ReplaceAllStringFunc(value, func(attr string) string {
+		if strings.Contains(strings.ToLower(html.UnescapeString(attr)), "javascript:") ||
+			strings.Contains(strings.ToLower(html.UnescapeString(attr)), "vbscript:") ||
+			strings.Contains(strings.ToLower(html.UnescapeString(attr)), "data:text/html") {
+			return ""
+		}
+		return attr
+	})
 	return strings.TrimSpace(value)
 }
 

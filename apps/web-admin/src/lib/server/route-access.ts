@@ -48,12 +48,27 @@ const ADMIN_ONLY_PREFIXES = [
 ] as const;
 
 const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS = new Set([
+	'/asesmen/kegiatan',
+	'/asesmen/paket',
+	'/asesmen/sesi',
 	'/api/asesmen/events',
+	'/api/asesmen/packages',
+	'/api/asesmen/sessions',
 	'/api/bank-soal/soal-support/subjects'
 ]);
 
 const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES = [
-	'/api/asesmen/events'
+	'/asesmen/kegiatan',
+	'/asesmen/paket',
+	'/asesmen/sesi',
+	'/api/asesmen/events',
+	'/api/asesmen/packages',
+	'/api/asesmen/sessions'
+] as const;
+
+const BANK_SOAL_PREFIXES = [
+	'/bank-soal',
+	'/api/bank-soal'
 ] as const;
 
 const STAFF_OPERATION_PREFIXES = [
@@ -100,9 +115,11 @@ export function isAdminOnlyPath(pathname: string) {
 export function isGuruSafeAssessmentSupportReadPath(pathname: string, method: string) {
 	if (!isReadMethod(method)) return false;
 	if (GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS.has(pathname)) return true;
-	return GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES.some((prefix) =>
-		matchesPathSegment(pathname, prefix) && pathname.endsWith('/question-targets')
-	);
+	return GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
+}
+
+export function isBankSoalPath(pathname: string) {
+	return BANK_SOAL_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
 }
 
 export function isStaffOperationPath(pathname: string) {

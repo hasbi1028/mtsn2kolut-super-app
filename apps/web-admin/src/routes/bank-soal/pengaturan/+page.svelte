@@ -7,7 +7,7 @@
 	import { readClientApiData } from '$lib/client/api';
 
 	type SummaryResponse = {
-		counts?: Partial<Record<'total' | 'draft' | 'review' | 'revision' | 'approved' | 'published' | 'package_usage', number>>;
+		counts?: Partial<Record<'all' | 'total' | 'draft' | 'review' | 'revision' | 'approved' | 'published' | 'package_usage', number>>;
 		by_subject?: Array<{ subject_name?: string; subject_code?: string; total?: number }>;
 		by_cognitive_level?: Array<{ cognitive_level?: string; total?: number }>;
 	};
@@ -80,7 +80,7 @@
 		});
 	}
 
-	let totalQuestions = $derived(summary.counts?.total ?? 0);
+	let totalQuestions = $derived(summary.counts?.total ?? summary.counts?.all ?? 0);
 	let readyQuestions = $derived((summary.counts?.approved ?? 0) + (summary.counts?.published ?? 0));
 	let pendingReview = $derived(summary.counts?.review ?? 0);
 	let completionRate = $derived(totalQuestions > 0 ? Math.round((readyQuestions / totalQuestions) * 100) : 0);
