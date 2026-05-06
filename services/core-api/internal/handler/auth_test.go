@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +34,9 @@ type fakeAuthService struct {
 	lastLogoutToken    string
 	logoutAllErr       error
 	lastLogoutAllUser  pgtype.UUID
+	accountResult      db.GetUserAccountSummaryRow
+	accountErr         error
+	lastAccountUserID  pgtype.UUID
 	revokeErr          error
 	lastRevokeUserID   pgtype.UUID
 	lastRevokeSessID   pgtype.UUID
@@ -75,6 +79,11 @@ func (f *fakeAuthService) Logout(ctx context.Context, refreshToken string) error
 func (f *fakeAuthService) LogoutAll(ctx context.Context, userID pgtype.UUID) error {
 	f.lastLogoutAllUser = userID
 	return f.logoutAllErr
+}
+
+func (f *fakeAuthService) GetAccount(ctx context.Context, userID pgtype.UUID) (db.GetUserAccountSummaryRow, error) {
+	f.lastAccountUserID = userID
+	return f.accountResult, f.accountErr
 }
 
 func (f *fakeAuthService) ListActiveSessions(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error) {
@@ -390,6 +399,79 @@ func TestAuthLogoutAllUnauthorizedWithoutClaimsAndAuditsWithClaims(t *testing.T)
 	}
 	if len(audit.entries) != 1 || audit.entries[0].Action != "AUTH_LOGOUT_ALL" {
 		t.Fatalf("audit entries = %#v", audit.entries)
+	}
+}
+
+func TestAuthGetAccountForwardsCurrentUserAndSanitizesResponse(t *testing.T) {
+	userID := "11111111-1111-1111-1111-111111111111"
+	employeeID := mustUUID(t, "22222222-2222-2222-2222-222222222222")
+	lastLogin := pgtype.Timestamptz{}
+	_ = lastLogin.Scan(time.Date(2026, time.May, 6, 7, 30, 0, 0, time.UTC))
+	svc := &fakeAuthService{
+		accountResult: db.GetUserAccountSummaryRow{
+			ID:          mustUUID(t, userID),
+			Username:    "guru.ipa",
+			DisplayName: "Guru IPA",
+			Roles:       []byte(`["guru","staf"]`),
+			EmployeeID:  employeeID,
+			ProfileType: "employee",
+			ProfileNama: "Nama Pegawai",
+			IsActive:    true,
+			LastLoginAt: lastLogin,
+		},
+	}
+	h := NewAuth(svc, nil)
+	req := httptest.NewRequest(http.MethodGet, "http://internal/api/auth/account", nil)
+	req = req.WithContext(withAuthClaims(req.Context(), userID))
+	rec := httptest.NewRecorder()
+
+	h.GetAccount(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if svc.lastAccountUserID != mustUUID(t, userID) {
+		t.Fatalf("account user id = %v, want %s", svc.lastAccountUserID, userID)
+	}
+	body := rec.Body.String()
+	for _, expected := range []string{"guru.ipa", "Guru IPA", "Nama Pegawai", "employee", "2026-05-06T07:30:00Z"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("GetAccount body = %s, want %q", body, expected)
+		}
+	}
+	if strings.Contains(body, "password") || strings.Contains(body, "auth_version") {
+		t.Fatalf("GetAccount body = %s, must not expose secret or auth internals", body)
+	}
+}
+
+func TestAuthGetAccountMapsUnauthorizedAndInternalError(t *testing.T) {
+	h := NewAuth(&fakeAuthService{}, nil)
+	rec := httptest.NewRecorder()
+	h.GetAccount(rec, httptest.NewRequest(http.MethodGet, "http://internal/api/auth/account", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("GetAccount(no claims) status = %d, want 401", rec.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://internal/api/auth/account", nil)
+	req = req.WithContext(withAuthClaims(req.Context(), "not-a-uuid"))
+	rec = httptest.NewRecorder()
+	h.GetAccount(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("GetAccount(bad claims) status = %d, want 401", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "http://internal/api/auth/account", nil)
+	req = req.WithContext(withAuthClaims(req.Context(), "11111111-1111-1111-1111-111111111111"))
+	rec = httptest.NewRecorder()
+	NewAuth(&fakeAuthService{accountErr: domain.ErrUnauthorized}, nil).GetAccount(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("GetAccount(unauthorized service) status = %d, want 401", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	NewAuth(&fakeAuthService{accountErr: context.Canceled}, nil).GetAccount(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("GetAccount(internal) status = %d, want 500; body=%s", rec.Code, rec.Body.String())
 	}
 }
 

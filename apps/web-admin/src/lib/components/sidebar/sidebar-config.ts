@@ -109,7 +109,8 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 			group: 'Sistem',
 			items: [
 				{ href: '/notifications', label: 'Notifikasi', icon: 'activity' },
-				{ href: '/settings', label: 'Pengaturan Akun', icon: 'settings' },
+				{ href: '/settings/account', label: 'Akun Saya', icon: 'user-check' },
+				{ href: '/settings', label: 'Pengaturan Sistem', icon: 'settings', roles: ['admin'] },
 				{ href: '/settings/users', label: 'Manajemen User', icon: 'users', roles: ['admin'], permissions: ['users.read'] },
 				{ href: '/settings/audit-logs', label: 'Audit Trail', icon: 'file-text', roles: ['admin'], permissions: ['audit.read'] },
 				{ href: '/settings/school-profile', label: 'Profil Madrasah', icon: 'settings', roles: ['admin'], permissions: ['settings.school_profile'] }

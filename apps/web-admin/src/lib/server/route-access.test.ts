@@ -5,6 +5,8 @@ import { canAccessProtectedRoute, hasAnyPermission, hasAnyRole, isAdminOnlyPath,
 describe('route access helpers', () => {
 	it('keeps settings root available to authenticated non-admin users', () => {
 		expect(isAdminOnlyPath('/settings')).toBe(false);
+		expect(isAdminOnlyPath('/settings/account')).toBe(false);
+		expect(isAdminOnlyPath('/api/auth/account')).toBe(false);
 		expect(isAdminOnlyPath('/settings/users')).toBe(true);
 	});
 
@@ -113,6 +115,8 @@ describe('route access helpers', () => {
 		const user = { id: '1', username: 'operator', role: '', roles: [], permissions: ['users.read', 'bank_soal.read', 'asesmen.read'] };
 
 		expect(canAccessProtectedRoute(user, '/settings/users', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/account', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/api/auth/account', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/bank-soal/daftar', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/asesmen/kegiatan', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/users', 'GET')).toBe(false);

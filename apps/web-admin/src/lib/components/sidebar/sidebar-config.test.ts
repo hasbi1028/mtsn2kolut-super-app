@@ -92,6 +92,8 @@ describe('sidebar assessment configuration', () => {
 		const allItems = sidebarNavGroups.flatMap((group) => group.items);
 		const byHref = new Map(allItems.map((item) => [item.href, item]));
 
+		expect(byHref.get('/settings/account')?.roles).toBeUndefined();
+		expect(byHref.get('/settings')?.roles).toEqual(['admin']);
 		expect(byHref.get('/settings/users')?.permissions).toEqual(['users.read']);
 		expect(byHref.get('/settings/audit-logs')?.permissions).toEqual(['audit.read']);
 		expect(byHref.get('/settings/school-profile')?.permissions).toEqual(['settings.school_profile']);
@@ -99,7 +101,7 @@ describe('sidebar assessment configuration', () => {
 		expect(assessmentItems.find((item) => item.href === '/asesmen/kegiatan')?.permissions).toEqual(['asesmen.event_manage']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/paket')?.permissions).toEqual(['asesmen.package_manage']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/hasil')?.permissions).toEqual(['asesmen.result_read']);
-		expect(allItems.filter((item) => item.permissions?.length).every((item) => item.roles?.length || item.href === '/settings')).toBe(true);
+		expect(allItems.filter((item) => item.permissions?.length).every((item) => item.roles?.length)).toBe(true);
 	});
 
 	it('does not expose the retired question-bank route anywhere in sidebar nav', () => {

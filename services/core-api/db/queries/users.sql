@@ -35,6 +35,32 @@ LEFT JOIN parents p ON p.id = u.parent_id
 WHERE u.deleted_at IS NULL
 ORDER BY u.username ASC;
 
+-- name: GetUserAccountSummary :one
+SELECT
+    u.id,
+    u.username,
+    COALESCE(NULLIF(u.display_name, ''), e.nama, s.nama, p.nama, u.username)::text AS display_name,
+    u.employee_id,
+    u.student_id,
+    u.parent_id,
+    CASE
+        WHEN u.employee_id IS NOT NULL THEN 'employee'
+        WHEN u.student_id IS NOT NULL THEN 'student'
+        WHEN u.parent_id IS NOT NULL THEN 'parent'
+        ELSE ''
+    END::text AS profile_type,
+    COALESCE(e.nama, s.nama, p.nama, '')::text AS profile_nama,
+    u.is_active,
+    u.last_login_at,
+    u.created_at,
+    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+FROM users u
+LEFT JOIN employees e ON e.id = u.employee_id
+LEFT JOIN students s ON s.id = u.student_id
+LEFT JOIN parents p ON p.id = u.parent_id
+WHERE u.id = $1
+  AND u.deleted_at IS NULL;
+
 -- name: CreateUser :one
 INSERT INTO users (username, password_hash, display_name, employee_id, student_id, parent_id, is_active)
 VALUES ($1, $2, $3, $4, $5, $6, $7)

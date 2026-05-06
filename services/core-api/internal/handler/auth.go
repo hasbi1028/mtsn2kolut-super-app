@@ -26,6 +26,7 @@ type authService interface {
 	Refresh(ctx context.Context, refreshToken string, meta service.SessionMeta) (domain.TokenPair, error)
 	Logout(ctx context.Context, refreshToken string) error
 	LogoutAll(ctx context.Context, userID pgtype.UUID) error
+	GetAccount(ctx context.Context, userID pgtype.UUID) (db.GetUserAccountSummaryRow, error)
 	ListActiveSessions(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error)
 	RevokeSession(ctx context.Context, userID, sessionID pgtype.UUID) error
 	UpdateSessionLabel(ctx context.Context, userID, sessionID pgtype.UUID, deviceLabel string) error
@@ -42,6 +43,21 @@ type authSessionResponse struct {
 	LastUsedAt  string `json:"last_used_at,omitempty"`
 	CreatedAt   string `json:"created_at,omitempty"`
 	ExpiresAt   string `json:"expires_at,omitempty"`
+}
+
+type authAccountResponse struct {
+	ID          string   `json:"id"`
+	Username    string   `json:"username"`
+	DisplayName string   `json:"display_name"`
+	Roles       []string `json:"roles"`
+	ProfileType string   `json:"profile_type"`
+	ProfileNama string   `json:"profile_nama"`
+	EmployeeID  string   `json:"employee_id,omitempty"`
+	StudentID   string   `json:"student_id,omitempty"`
+	ParentID    string   `json:"parent_id,omitempty"`
+	IsActive    bool     `json:"is_active"`
+	LastLoginAt string   `json:"last_login_at,omitempty"`
+	CreatedAt   string   `json:"created_at,omitempty"`
 }
 
 type authAuditWriter interface {
@@ -142,6 +158,48 @@ func (h *Auth) LogoutAll(w http.ResponseWriter, r *http.Request) {
 		"scope": "all_sessions",
 	})
 	api.OK(w, map[string]string{"message": "all sessions logged out"})
+}
+
+func (h *Auth) GetAccount(w http.ResponseWriter, r *http.Request) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	userID, err := authUserID(claims)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+
+	row, err := h.svc.GetAccount(r.Context(), userID)
+	if errors.Is(err, domain.ErrUnauthorized) {
+		api.Unauthorized(w)
+		return
+	}
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+
+	roles := make([]string, 0)
+	if len(row.Roles) > 0 {
+		_ = json.Unmarshal(row.Roles, &roles)
+	}
+	api.OK(w, authAccountResponse{
+		ID:          pgUUIDString(row.ID),
+		Username:    row.Username,
+		DisplayName: row.DisplayName,
+		Roles:       roles,
+		ProfileType: row.ProfileType,
+		ProfileNama: row.ProfileNama,
+		EmployeeID:  pgUUIDString(row.EmployeeID),
+		StudentID:   pgUUIDString(row.StudentID),
+		ParentID:    pgUUIDString(row.ParentID),
+		IsActive:    row.IsActive,
+		LastLoginAt: timestamptzRFC3339(row.LastLoginAt),
+		CreatedAt:   timestamptzRFC3339(row.CreatedAt),
+	})
 }
 
 func (h *Auth) ListSessions(w http.ResponseWriter, r *http.Request) {

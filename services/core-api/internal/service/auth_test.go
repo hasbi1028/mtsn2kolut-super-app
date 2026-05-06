@@ -127,6 +127,45 @@ func (f *fakeStore) GetUserByID(ctx context.Context, id pgtype.UUID) (db.GetUser
 	return db.GetUserByIDRow{}, pgx.ErrNoRows
 }
 
+func (f *fakeStore) GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (db.GetUserAccountSummaryRow, error) {
+	if f.getUserByIDErr != nil {
+		return db.GetUserAccountSummaryRow{}, f.getUserByIDErr
+	}
+	for _, u := range f.users {
+		if u.ID == id {
+			roles := f.userRoles[u.ID]
+			rolesJSON, _ := json.Marshal(roles)
+			displayName := u.Username
+			if u.DisplayName.Valid && strings.TrimSpace(u.DisplayName.String) != "" {
+				displayName = strings.TrimSpace(u.DisplayName.String)
+			}
+			profileType := ""
+			switch {
+			case u.EmployeeID.Valid:
+				profileType = "employee"
+			case u.StudentID.Valid:
+				profileType = "student"
+			case u.ParentID.Valid:
+				profileType = "parent"
+			}
+			return db.GetUserAccountSummaryRow{
+				ID:          u.ID,
+				Username:    u.Username,
+				DisplayName: displayName,
+				EmployeeID:  u.EmployeeID,
+				StudentID:   u.StudentID,
+				ParentID:    u.ParentID,
+				ProfileType: profileType,
+				IsActive:    u.IsActive,
+				LastLoginAt: u.LastLoginAt,
+				CreatedAt:   u.CreatedAt,
+				Roles:       rolesJSON,
+			}, nil
+		}
+	}
+	return db.GetUserAccountSummaryRow{}, pgx.ErrNoRows
+}
+
 func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error) {
 	if f.createUserErr != nil {
 		return db.CreateUserRow{}, f.createUserErr
@@ -434,6 +473,33 @@ func TestAuthLoginAccessTokenIncludesRBACPermissions(t *testing.T) {
 		t.Fatalf("permissions claim = %v, want users.read and roles.manage", permissions)
 	}
 }
+
+func TestAuthGetAccountReturnsSelfSummaryAndMapsMissingUser(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "adminpass123"}
+	if err := svc.SeedAdmin(context.Background()); err != nil {
+		t.Fatalf("SeedAdmin() error = %v", err)
+	}
+	u := store.users["admin"]
+	displayName := pgtype.Text{String: "Operator Madrasah", Valid: true}
+	u.DisplayName = displayName
+	store.users["admin"] = u
+
+	row, err := svc.GetAccount(context.Background(), u.ID)
+	if err != nil {
+		t.Fatalf("GetAccount() error = %v", err)
+	}
+	if row.Username != "admin" || row.DisplayName != "Operator Madrasah" {
+		t.Fatalf("GetAccount() = %#v, want admin display summary", row)
+	}
+
+	var missing pgtype.UUID
+	_ = missing.Scan("22222222-2222-2222-2222-222222222222")
+	if _, err := svc.GetAccount(context.Background(), missing); !errors.Is(err, domain.ErrUnauthorized) {
+		t.Fatalf("GetAccount(missing) error = %v, want unauthorized", err)
+	}
+}
+
 func TestAuthRefreshRejectsOldTokenAfterPasswordChange(t *testing.T) {
 	store := newFakeStore()
 	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
