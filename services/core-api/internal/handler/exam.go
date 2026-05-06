@@ -80,9 +80,6 @@ func (h *Exam) Status(w http.ResponseWriter, r *http.Request) {
 		api.Unauthorized(w)
 		return
 	}
-	if !h.allowExamWrite(w, p.ID, "status") {
-		return
-	}
 	result, err := h.svc.GetStatus(r.Context(), p)
 	if err != nil {
 		api.Internal(w, err)

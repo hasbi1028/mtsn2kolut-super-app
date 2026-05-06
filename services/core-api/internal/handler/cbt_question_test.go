@@ -55,7 +55,7 @@ func oversizedCbtQuestionImportRequest(t *testing.T, subjectID pgtype.UUID) *htt
 	if err := writer.Close(); err != nil {
 		t.Fatalf("multipart close error = %v", err)
 	}
-	req := adminRequest(http.MethodPost, "/api/cbt/questions/import/legacy", "")
+	req := adminRequest(http.MethodPost, "/api/cbt/questions/import-legacy", "")
 	req.Body = io.NopCloser(&body)
 	req.ContentLength = int64(body.Len())
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -356,7 +356,7 @@ func TestCbtQuestionDecodeAndInputMapping(t *testing.T) {
 		"writer_notes":"catatan penulis",
 		"review_notes":"catatan review"
 	}`
-	req := httptest.NewRequest(http.MethodPost, "/cbt/questions", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/cbt/questions", strings.NewReader(body))
 	req = req.WithContext(context.WithValue(req.Context(), api.ClaimsKey, jwt.MapClaims{
 		"usr": "guru.ipa",
 		"sub": "fallback-user",
@@ -384,11 +384,11 @@ func TestCbtQuestionDecodeAndInputMapping(t *testing.T) {
 		t.Fatalf("questionInputFromBody() detail = %+v, want mapped difficulty/status/options/media", input)
 	}
 
-	badReq := httptest.NewRequest(http.MethodPost, "/cbt/questions", strings.NewReader(`{"subject_id":"bad"}`))
+	badReq := httptest.NewRequest(http.MethodPost, "/api/cbt/questions", strings.NewReader(`{"subject_id":"bad"}`))
 	if _, err := questionInputFromBody(badReq, cbtQuestionBody{SubjectID: "bad"}, pgtype.UUID{}); err == nil {
 		t.Fatal("questionInputFromBody(invalid subject) error = nil, want parse error")
 	}
-	if _, err := decodeQuestionBody(httptest.NewRequest(http.MethodPost, "/cbt/questions", strings.NewReader(`{`))); err == nil {
+	if _, err := decodeQuestionBody(httptest.NewRequest(http.MethodPost, "/api/cbt/questions", strings.NewReader(`{`))); err == nil {
 		t.Fatal("decodeQuestionBody(invalid JSON) error = nil, want decode error")
 	}
 }
