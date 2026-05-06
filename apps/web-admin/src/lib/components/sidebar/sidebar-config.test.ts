@@ -51,6 +51,7 @@ describe('sidebar assessment configuration', () => {
 		expect(sidebarNavGroups.some((group) => group.group === 'CBT')).toBe(false);
 		expect(sidebarNavGroups.some((group) => group.group === 'Bank Soal & Asesmen')).toBe(false);
 		expect(bankSoalItems.map((item) => item.label)).toEqual([
+			'Dashboard Bank Soal',
 			'Daftar Soal',
 			'Tambah Soal',
 			'Review Soal',
@@ -58,12 +59,14 @@ describe('sidebar assessment configuration', () => {
 		]);
 		expect(bankSoalItems.map((item) => item.href)).toEqual([
 			'/bank-soal',
+			'/bank-soal/daftar',
 			'/bank-soal/tambah',
 			'/bank-soal/verifikasi',
 			'/bank-soal/impor'
 		]);
 		expect(bankSoalItems.every((item) => !item.href.includes('?mode='))).toBe(true);
 		expect(bankSoalItems.map((item) => item.icon)).toEqual([
+			'grid',
 			'book-open',
 			'pen-tool',
 			'clipboard',

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import BankSoalListPage from './_components/BankSoalListPage.svelte';
+	import BankSoalListPage from '../_components/BankSoalListPage.svelte';
 
 	type PageData = {
 		user?: {
@@ -11,4 +11,4 @@
 	let { data }: { data: PageData } = $props();
 </script>
 
-<BankSoalListPage {data} mode="dashboard" />
+<BankSoalListPage {data} mode="list" />

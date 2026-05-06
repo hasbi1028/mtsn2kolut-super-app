@@ -36,6 +36,8 @@
 		};
 	};
 
+	type PageMode = 'dashboard' | 'list' | 'combined';
+
 	type Subject = {
 		id: string;
 		name: string;
@@ -168,7 +170,7 @@
 		tone: string;
 	};
 
-	let { data }: { data: PageData } = $props();
+	let { data, mode = 'combined' }: { data: PageData; mode?: PageMode } = $props();
 
 	const PAGE_SIZE = 12;
 	const emptyCounts: StatusCounts = {
@@ -299,12 +301,15 @@
 	let importHref = $derived(resolve('/bank-soal/impor'));
 	let reviewRouteHref = $derived(reviewHref());
 	let packageHref = $derived(resolve('/asesmen/paket'));
+	let listHref = $derived(resolve('/bank-soal/daftar'));
 	let totalPackageUsage = $derived.by(() =>
 		questions.reduce((sum, question) => sum + (question.package_count ?? question.usage?.package_count ?? 0), 0)
 	);
 	let subjectDistribution = $derived.by(() => buildSubjectDistribution(questions, subjects));
 	let bloomComposition = $derived.by(() => buildBloomComposition(questions));
 	let recentActivities = $derived.by(() => buildRecentActivities(questions));
+	let showDashboard = $derived(mode === 'dashboard' || mode === 'combined');
+	let showList = $derived(mode === 'list' || mode === 'combined');
 	let summaryCards = $derived<SummaryCard[]>([
 		{
 			key: 'all',
@@ -783,6 +788,7 @@
 </svelte:head>
 
 <div class="space-y-5">
+	{#if showDashboard}
 	<section class="overflow-hidden rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-950 via-emerald-900 to-amber-900 text-white shadow-sm">
 		<div class="relative p-5 md:p-6">
 			<div class="absolute right-6 top-6 hidden h-28 w-28 rounded-full bg-amber-300/20 blur-2xl lg:block"></div>
@@ -942,6 +948,10 @@
 				<SparklesIcon class="size-5 text-amber-500" />
 			</div>
 			<div class="mt-4 grid gap-2">
+				<a href={listHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-800"><FileQuestionIcon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Buka daftar soal</span><span class="block text-xs text-slate-500">Kelola filter, status, dan pagination soal</span></span>
+				</a>
 				<a href={composerHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800"><PlusIcon class="size-5" /></span>
 					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Tambah soal baru</span><span class="block text-xs text-slate-500">PG, essay, benar/salah, menjodohkan</span></span>
@@ -962,6 +972,9 @@
 		</div>
 	</section>
 
+	{/if}
+
+	{#if showList}
 	<section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
 		<form class="grid gap-3 lg:grid-cols-[minmax(16rem,1.5fr)_repeat(5,minmax(9rem,1fr))_auto] lg:items-end" onsubmit={applyFilters}>
 			<div class="space-y-1">
@@ -1313,5 +1326,6 @@
 				</Button>
 			</div>
 		</nav>
+	{/if}
 	{/if}
 </div>
