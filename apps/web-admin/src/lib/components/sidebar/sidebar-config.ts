@@ -37,7 +37,8 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Bank Soal',
 		items: [
-			{ href: '/bank-soal', label: 'Daftar Soal', icon: 'book-open', roles: ['admin', 'guru'] },
+			{ href: '/bank-soal', label: 'Dashboard Bank Soal', icon: 'grid', roles: ['admin', 'guru'] },
+			{ href: '/bank-soal/daftar', label: 'Daftar Soal', icon: 'book-open', roles: ['admin', 'guru'] },
 			{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'pen-tool', roles: ['admin', 'guru'] },
 			{ href: '/bank-soal/verifikasi', label: 'Review Soal', icon: 'clipboard', roles: ['admin', 'guru'] },
 			{ href: '/bank-soal/impor', label: 'Impor Soal', icon: 'file-text', roles: ['admin', 'guru'] }
