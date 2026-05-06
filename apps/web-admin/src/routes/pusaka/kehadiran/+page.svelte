@@ -301,35 +301,35 @@
 				</div>
 				{/if}
 				<div class="overflow-x-auto">
-					<table class="w-full border-collapse text-xs">
+					<table class="w-full border-collapse text-[9px] leading-tight">
 						<thead>
 							<tr class="border-b border-slate-200 bg-slate-50">
-								<th class="w-8 py-1.5 pl-3 pr-2 text-left font-semibold text-slate-500">#</th>
-								<th class="whitespace-nowrap py-1.5 px-2 text-left font-semibold text-slate-600">Tanggal</th>
-								<th class="py-1.5 px-2 text-left font-semibold text-slate-600">Nama Pegawai</th>
-								<th class="hidden py-1.5 px-2 text-left font-semibold text-slate-600 sm:table-cell">NIP</th>
-								<th class="py-1.5 px-2 text-center font-semibold text-slate-600">Masuk</th>
-								<th class="py-1.5 px-2 text-center font-semibold text-slate-600">Pulang</th>
-								<th class="py-1.5 pr-3 pl-2 text-center font-semibold text-slate-600">Status</th>
+								<th class="w-4 py-1 pl-0.5 pr-0 text-left font-semibold text-slate-500">#</th>
+								<th class="whitespace-nowrap px-0 py-1 text-left font-semibold text-slate-600">Tanggal</th>
+								<th class="px-0 py-1 text-left font-semibold text-slate-600">Nama Pegawai</th>
+								<th class="hidden px-0 py-1 text-left font-semibold text-slate-600 sm:table-cell">NIP</th>
+								<th class="px-0 py-1 text-center font-semibold text-slate-600">Masuk</th>
+								<th class="px-0 py-1 text-center font-semibold text-slate-600">Pulang</th>
+								<th class="py-1 pl-0 pr-0.5 text-center font-semibold text-slate-600">Status</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each displayRecords as r, i (r.id)}
 								{@const s = attendanceStatus(r)}
 								<tr class="border-b border-slate-100 {i % 2 === 1 ? 'bg-slate-50/60' : 'bg-white'} hover:bg-emerald-50/40 {isSample ? 'opacity-75' : ''}">
-									<td class="py-1 pl-3 pr-2 text-slate-400">{i + 1}</td>
-									<td class="whitespace-nowrap py-1 px-2 text-slate-600">{r.tanggal}</td>
-									<td class="py-1 px-2 font-medium text-slate-800">{r.employee_nama}</td>
-									<td class="hidden py-1 px-2 font-mono text-slate-500 sm:table-cell">{r.employee_nip}</td>
-									<td class="py-1 px-2 text-center text-slate-700">{stripWita(r.jam_masuk)}</td>
-									<td class="py-1 px-2 text-center text-slate-700">{stripWita(r.jam_pulang)}</td>
-									<td class="py-1 pr-3 pl-2 text-center">
+									<td class="py-0.5 pl-0.5 pr-0 text-slate-400">{i + 1}</td>
+									<td class="whitespace-nowrap px-0 py-0.5 text-slate-600">{r.tanggal}</td>
+									<td class="px-0 py-0.5 font-medium text-slate-800">{r.employee_nama}</td>
+									<td class="hidden px-0 py-0.5 font-mono text-slate-500 sm:table-cell">{r.employee_nip}</td>
+									<td class="px-0 py-0.5 text-center text-slate-700">{stripWita(r.jam_masuk)}</td>
+									<td class="px-0 py-0.5 text-center text-slate-700">{stripWita(r.jam_pulang)}</td>
+									<td class="py-0.5 pl-0 pr-0.5 text-center">
 										{#if s === 'lengkap'}
-											<span class="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-700">Lengkap</span>
+											<span class="inline-block rounded-sm px-0 py-0 text-[7px] font-semibold bg-emerald-100 text-emerald-700">Lengkap</span>
 										{:else if s === 'masuk'}
-											<span class="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700">Masuk</span>
+											<span class="inline-block rounded-sm px-0 py-0 text-[7px] font-semibold bg-amber-100 text-amber-700">Masuk</span>
 										{:else}
-											<span class="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-500">Belum</span>
+											<span class="inline-block rounded-sm px-0 py-0 text-[7px] font-semibold bg-slate-100 text-slate-500">Belum</span>
 										{/if}
 									</td>
 								</tr>
