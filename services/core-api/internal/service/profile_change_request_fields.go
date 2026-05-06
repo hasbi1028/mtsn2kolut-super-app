@@ -144,6 +144,39 @@ func findProfileChangeFieldConfig(profileType, fieldKey string, selfRequestOnly 
 	return profileChangeFieldConfig{}, domain.ErrBadRequest
 }
 
+func normalizeProfileChangeFieldFilter(fieldKey string) (string, error) {
+	fieldKey = normalizeProfileChangeFieldKey(fieldKey)
+	if fieldKey == "" || fieldKey == "all" {
+		return "", nil
+	}
+	for _, config := range profileChangeFieldCatalog {
+		if !config.IsActive {
+			continue
+		}
+		if config.matchesFieldKey(fieldKey) {
+			return config.FieldKey, nil
+		}
+	}
+	return "", domain.ErrBadRequest
+}
+
+func profileChangeFieldLabel(profileType, fieldKey string) string {
+	profileType = strings.TrimSpace(strings.ToLower(profileType))
+	fieldKey = normalizeProfileChangeFieldKey(fieldKey)
+	for _, config := range profileChangeFieldCatalog {
+		if !config.IsActive {
+			continue
+		}
+		if profileType != "" && config.ProfileType != profileType {
+			continue
+		}
+		if config.matchesFieldKey(fieldKey) {
+			return config.Label
+		}
+	}
+	return fieldKey
+}
+
 func normalizeOfficialChangeField(profileType, fieldKey string) (string, error) {
 	config, err := findProfileChangeFieldConfig(profileType, fieldKey, true)
 	if err != nil {

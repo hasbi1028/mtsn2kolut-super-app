@@ -24,6 +24,8 @@ type fakeProfileChangeRequestStore struct {
 
 	requests map[pgtype.UUID]db.ProfileChangeRequest
 	audits   []db.CreateAuditLogParams
+	listArg  db.ListProfileChangeRequestsParams
+	countArg db.CountProfileChangeRequestsParams
 
 	employeeName      string
 	employeeBirthdate pgtype.Date
@@ -80,12 +82,14 @@ func (f *fakeProfileChangeRequestStore) ListOwnProfileChangeRequests(ctx context
 	return nil, nil
 }
 
-func (f *fakeProfileChangeRequestStore) ListProfileChangeRequestsAll(ctx context.Context, arg db.ListProfileChangeRequestsAllParams) ([]db.ListProfileChangeRequestsAllRow, error) {
+func (f *fakeProfileChangeRequestStore) ListProfileChangeRequests(ctx context.Context, arg db.ListProfileChangeRequestsParams) ([]db.ListProfileChangeRequestsRow, error) {
+	f.listArg = arg
 	return nil, nil
 }
 
-func (f *fakeProfileChangeRequestStore) ListProfileChangeRequestsByStatus(ctx context.Context, arg db.ListProfileChangeRequestsByStatusParams) ([]db.ListProfileChangeRequestsByStatusRow, error) {
-	return nil, nil
+func (f *fakeProfileChangeRequestStore) CountProfileChangeRequests(ctx context.Context, arg db.CountProfileChangeRequestsParams) (int32, error) {
+	f.countArg = arg
+	return 3, nil
 }
 
 func (f *fakeProfileChangeRequestStore) GetProfileChangeRequestForUpdate(ctx context.Context, id pgtype.UUID) (db.ProfileChangeRequest, error) {
@@ -250,6 +254,39 @@ func TestProfileChangeRequestListSelfRequestableFieldsUsesCatalog(t *testing.T) 
 	}
 	if len(fields) != 0 {
 		t.Fatalf("fields = %+v, want none for unlinked account", fields)
+	}
+}
+
+func TestProfileChangeRequestAdminListFiltersAreNormalized(t *testing.T) {
+	store := newFakeProfileChangeRequestStore()
+	svc := &ProfileChangeRequest{q: store}
+
+	_, err := svc.ListAdmin(context.Background(), ProfileChangeRequestListFilter{
+		Status:      " Pending ",
+		ProfileType: " Student ",
+		FieldKey:    "birth-date",
+		Search:      "  Guru   IPA  ",
+	}, 25, 50)
+	if err != nil {
+		t.Fatalf("ListAdmin() error = %v", err)
+	}
+	if store.listArg.StatusFilter != "pending" || store.listArg.ProfileTypeFilter != "student" || store.listArg.FieldKeyFilter != "tanggal_lahir" || store.listArg.Search != "Guru IPA" || store.listArg.LimitCount != 25 || store.listArg.OffsetCount != 50 {
+		t.Fatalf("list arg = %+v, want normalized filters", store.listArg)
+	}
+
+	count, err := svc.CountAdmin(context.Background(), ProfileChangeRequestListFilter{Status: "all", ProfileType: "employee", FieldKey: "name"})
+	if err != nil {
+		t.Fatalf("CountAdmin() error = %v", err)
+	}
+	if count != 3 || store.countArg.StatusFilter != "" || store.countArg.ProfileTypeFilter != "employee" || store.countArg.FieldKeyFilter != "nama" {
+		t.Fatalf("count=%d arg=%+v, want normalized count filters", count, store.countArg)
+	}
+
+	if _, err := svc.ListAdmin(context.Background(), ProfileChangeRequestListFilter{Status: "unknown"}, 10, 0); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("ListAdmin(invalid status) error = %v, want bad request", err)
+	}
+	if _, err := svc.CountAdmin(context.Background(), ProfileChangeRequestListFilter{ProfileType: "teacher"}); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("CountAdmin(invalid profile) error = %v, want bad request", err)
 	}
 }
 

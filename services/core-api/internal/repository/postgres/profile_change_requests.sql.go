@@ -50,6 +50,58 @@ func (q *Queries) CancelOwnProfileChangeRequest(ctx context.Context, arg CancelO
 	return i, err
 }
 
+const countProfileChangeRequests = `-- name: CountProfileChangeRequests :one
+SELECT COUNT(*)::INT
+FROM profile_change_requests pcr
+JOIN users req ON req.id = pcr.requester_user_id
+LEFT JOIN users reviewer ON reviewer.id = pcr.reviewer_user_id
+LEFT JOIN employees e ON e.id = pcr.target_employee_id
+LEFT JOIN students s ON s.id = pcr.target_student_id
+LEFT JOIN parents p ON p.id = pcr.target_parent_id
+WHERE (
+    $1::TEXT = ''
+    OR pcr.status::TEXT = $1::TEXT
+)
+AND (
+    $2::TEXT = ''
+    OR pcr.profile_type = $2::TEXT
+)
+AND (
+    $3::TEXT = ''
+    OR pcr.field_key = $3::TEXT
+)
+AND (
+    $4::TEXT = ''
+    OR req.username ILIKE '%' || $4::TEXT || '%'
+    OR COALESCE(NULLIF(req.display_name, ''), e.nama, s.nama, p.nama, req.username)::TEXT ILIKE '%' || $4::TEXT || '%'
+    OR COALESCE(e.nama, s.nama, p.nama, '')::TEXT ILIKE '%' || $4::TEXT || '%'
+    OR pcr.field_key ILIKE '%' || $4::TEXT || '%'
+    OR pcr.reason ILIKE '%' || $4::TEXT || '%'
+    OR pcr.review_note ILIKE '%' || $4::TEXT || '%'
+    OR pcr.current_value ILIKE '%' || $4::TEXT || '%'
+    OR pcr.requested_value ILIKE '%' || $4::TEXT || '%'
+)
+`
+
+type CountProfileChangeRequestsParams struct {
+	StatusFilter      string `json:"status_filter"`
+	ProfileTypeFilter string `json:"profile_type_filter"`
+	FieldKeyFilter    string `json:"field_key_filter"`
+	Search            string `json:"search"`
+}
+
+func (q *Queries) CountProfileChangeRequests(ctx context.Context, arg CountProfileChangeRequestsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countProfileChangeRequests,
+		arg.StatusFilter,
+		arg.ProfileTypeFilter,
+		arg.FieldKeyFilter,
+		arg.Search,
+	)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createProfileChangeRequest = `-- name: CreateProfileChangeRequest :one
 INSERT INTO profile_change_requests (
     requester_user_id,
@@ -311,7 +363,7 @@ func (q *Queries) ListOwnProfileChangeRequests(ctx context.Context, requesterUse
 	return items, nil
 }
 
-const listProfileChangeRequestsAll = `-- name: ListProfileChangeRequestsAll :many
+const listProfileChangeRequests = `-- name: ListProfileChangeRequests :many
 SELECT
     pcr.id, pcr.requester_user_id, pcr.profile_type, pcr.target_employee_id, pcr.target_student_id, pcr.target_parent_id, pcr.field_key, pcr.current_value, pcr.requested_value, pcr.reason, pcr.status, pcr.reviewer_user_id, pcr.review_note, pcr.reviewed_at, pcr.created_at, pcr.updated_at,
     req.username AS requester_username,
@@ -324,18 +376,45 @@ LEFT JOIN users reviewer ON reviewer.id = pcr.reviewer_user_id
 LEFT JOIN employees e ON e.id = pcr.target_employee_id
 LEFT JOIN students s ON s.id = pcr.target_student_id
 LEFT JOIN parents p ON p.id = pcr.target_parent_id
+WHERE (
+    $1::TEXT = ''
+    OR pcr.status::TEXT = $1::TEXT
+)
+AND (
+    $2::TEXT = ''
+    OR pcr.profile_type = $2::TEXT
+)
+AND (
+    $3::TEXT = ''
+    OR pcr.field_key = $3::TEXT
+)
+AND (
+    $4::TEXT = ''
+    OR req.username ILIKE '%' || $4::TEXT || '%'
+    OR COALESCE(NULLIF(req.display_name, ''), e.nama, s.nama, p.nama, req.username)::TEXT ILIKE '%' || $4::TEXT || '%'
+    OR COALESCE(e.nama, s.nama, p.nama, '')::TEXT ILIKE '%' || $4::TEXT || '%'
+    OR pcr.field_key ILIKE '%' || $4::TEXT || '%'
+    OR pcr.reason ILIKE '%' || $4::TEXT || '%'
+    OR pcr.review_note ILIKE '%' || $4::TEXT || '%'
+    OR pcr.current_value ILIKE '%' || $4::TEXT || '%'
+    OR pcr.requested_value ILIKE '%' || $4::TEXT || '%'
+)
 ORDER BY
     CASE WHEN pcr.status = 'pending' THEN 0 ELSE 1 END,
     pcr.created_at DESC
-LIMIT $1 OFFSET $2
+LIMIT $6 OFFSET $5
 `
 
-type ListProfileChangeRequestsAllParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+type ListProfileChangeRequestsParams struct {
+	StatusFilter      string `json:"status_filter"`
+	ProfileTypeFilter string `json:"profile_type_filter"`
+	FieldKeyFilter    string `json:"field_key_filter"`
+	Search            string `json:"search"`
+	OffsetCount       int32  `json:"offset_count"`
+	LimitCount        int32  `json:"limit_count"`
 }
 
-type ListProfileChangeRequestsAllRow struct {
+type ListProfileChangeRequestsRow struct {
 	ID                   pgtype.UUID                `json:"id"`
 	RequesterUserID      pgtype.UUID                `json:"requester_user_id"`
 	ProfileType          string                     `json:"profile_type"`
@@ -358,103 +437,22 @@ type ListProfileChangeRequestsAllRow struct {
 	ProfileNama          string                     `json:"profile_nama"`
 }
 
-func (q *Queries) ListProfileChangeRequestsAll(ctx context.Context, arg ListProfileChangeRequestsAllParams) ([]ListProfileChangeRequestsAllRow, error) {
-	rows, err := q.db.Query(ctx, listProfileChangeRequestsAll, arg.Limit, arg.Offset)
+func (q *Queries) ListProfileChangeRequests(ctx context.Context, arg ListProfileChangeRequestsParams) ([]ListProfileChangeRequestsRow, error) {
+	rows, err := q.db.Query(ctx, listProfileChangeRequests,
+		arg.StatusFilter,
+		arg.ProfileTypeFilter,
+		arg.FieldKeyFilter,
+		arg.Search,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListProfileChangeRequestsAllRow{}
+	items := []ListProfileChangeRequestsRow{}
 	for rows.Next() {
-		var i ListProfileChangeRequestsAllRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.RequesterUserID,
-			&i.ProfileType,
-			&i.TargetEmployeeID,
-			&i.TargetStudentID,
-			&i.TargetParentID,
-			&i.FieldKey,
-			&i.CurrentValue,
-			&i.RequestedValue,
-			&i.Reason,
-			&i.Status,
-			&i.ReviewerUserID,
-			&i.ReviewNote,
-			&i.ReviewedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.RequesterUsername,
-			&i.RequesterDisplayName,
-			&i.ReviewerUsername,
-			&i.ProfileNama,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listProfileChangeRequestsByStatus = `-- name: ListProfileChangeRequestsByStatus :many
-SELECT
-    pcr.id, pcr.requester_user_id, pcr.profile_type, pcr.target_employee_id, pcr.target_student_id, pcr.target_parent_id, pcr.field_key, pcr.current_value, pcr.requested_value, pcr.reason, pcr.status, pcr.reviewer_user_id, pcr.review_note, pcr.reviewed_at, pcr.created_at, pcr.updated_at,
-    req.username AS requester_username,
-    COALESCE(NULLIF(req.display_name, ''), e.nama, s.nama, p.nama, req.username)::text AS requester_display_name,
-    reviewer.username AS reviewer_username,
-    COALESCE(e.nama, s.nama, p.nama, '')::text AS profile_nama
-FROM profile_change_requests pcr
-JOIN users req ON req.id = pcr.requester_user_id
-LEFT JOIN users reviewer ON reviewer.id = pcr.reviewer_user_id
-LEFT JOIN employees e ON e.id = pcr.target_employee_id
-LEFT JOIN students s ON s.id = pcr.target_student_id
-LEFT JOIN parents p ON p.id = pcr.target_parent_id
-WHERE pcr.status = $1
-ORDER BY pcr.created_at DESC
-LIMIT $2 OFFSET $3
-`
-
-type ListProfileChangeRequestsByStatusParams struct {
-	Status ProfileChangeRequestStatus `json:"status"`
-	Limit  int32                      `json:"limit"`
-	Offset int32                      `json:"offset"`
-}
-
-type ListProfileChangeRequestsByStatusRow struct {
-	ID                   pgtype.UUID                `json:"id"`
-	RequesterUserID      pgtype.UUID                `json:"requester_user_id"`
-	ProfileType          string                     `json:"profile_type"`
-	TargetEmployeeID     pgtype.UUID                `json:"target_employee_id"`
-	TargetStudentID      pgtype.UUID                `json:"target_student_id"`
-	TargetParentID       pgtype.UUID                `json:"target_parent_id"`
-	FieldKey             string                     `json:"field_key"`
-	CurrentValue         string                     `json:"current_value"`
-	RequestedValue       string                     `json:"requested_value"`
-	Reason               string                     `json:"reason"`
-	Status               ProfileChangeRequestStatus `json:"status"`
-	ReviewerUserID       pgtype.UUID                `json:"reviewer_user_id"`
-	ReviewNote           string                     `json:"review_note"`
-	ReviewedAt           pgtype.Timestamptz         `json:"reviewed_at"`
-	CreatedAt            pgtype.Timestamptz         `json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz         `json:"updated_at"`
-	RequesterUsername    string                     `json:"requester_username"`
-	RequesterDisplayName string                     `json:"requester_display_name"`
-	ReviewerUsername     pgtype.Text                `json:"reviewer_username"`
-	ProfileNama          string                     `json:"profile_nama"`
-}
-
-func (q *Queries) ListProfileChangeRequestsByStatus(ctx context.Context, arg ListProfileChangeRequestsByStatusParams) ([]ListProfileChangeRequestsByStatusRow, error) {
-	rows, err := q.db.Query(ctx, listProfileChangeRequestsByStatus, arg.Status, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListProfileChangeRequestsByStatusRow{}
-	for rows.Next() {
-		var i ListProfileChangeRequestsByStatusRow
+		var i ListProfileChangeRequestsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.RequesterUserID,

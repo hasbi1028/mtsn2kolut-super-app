@@ -4,12 +4,14 @@ export type SidebarAttention = {
 	inventory: number;
 	library: number;
 	pusaka: number;
+	profileChanges: number;
 };
 
 const zeroAttention: SidebarAttention = {
 	inventory: 0,
 	library: 0,
-	pusaka: 0
+	pusaka: 0,
+	profileChanges: 0
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -20,6 +22,10 @@ function canSeeInventoryAttention(roles: string[]) {
 
 function canSeePusakaAttention(roles: string[]) {
 	return roles.includes('admin');
+}
+
+function canSeeProfileChangeAttention(roles: string[], permissions: string[]) {
+	return roles.includes('admin') || permissions.includes('profile_changes.review');
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -42,7 +48,8 @@ function numericStat(payload: JsonRecord | null, key: string): number {
 
 export async function fetchSidebarAttention(
 	fetchImpl: typeof fetch,
-	roles: string[]
+	roles: string[],
+	permissions: string[] = []
 ): Promise<SidebarAttention> {
 	const nextAttention: SidebarAttention = { ...zeroAttention };
 	const requests: Promise<void>[] = [];
@@ -81,6 +88,19 @@ export async function fetchSidebarAttention(
 				})
 				.catch(() => {
 					nextAttention.pusaka = 0;
+				})
+		);
+	}
+
+	if (canSeeProfileChangeAttention(roles, permissions)) {
+		requests.push(
+			fetchImpl('/api/users/change-requests/pending-count')
+				.then(readStatsPayload)
+				.then((payload) => {
+					nextAttention.profileChanges = numericStat(payload, 'pending');
+				})
+				.catch(() => {
+					nextAttention.profileChanges = 0;
 				})
 		);
 	}

@@ -21,8 +21,8 @@ type profileChangeRequestStore interface {
 	GetOwnedParentOfficialProfile(ctx context.Context, id pgtype.UUID) (db.GetOwnedParentOfficialProfileRow, error)
 	CreateProfileChangeRequest(ctx context.Context, arg db.CreateProfileChangeRequestParams) (db.ProfileChangeRequest, error)
 	ListOwnProfileChangeRequests(ctx context.Context, requesterUserID pgtype.UUID) ([]db.ListOwnProfileChangeRequestsRow, error)
-	ListProfileChangeRequestsAll(ctx context.Context, arg db.ListProfileChangeRequestsAllParams) ([]db.ListProfileChangeRequestsAllRow, error)
-	ListProfileChangeRequestsByStatus(ctx context.Context, arg db.ListProfileChangeRequestsByStatusParams) ([]db.ListProfileChangeRequestsByStatusRow, error)
+	ListProfileChangeRequests(ctx context.Context, arg db.ListProfileChangeRequestsParams) ([]db.ListProfileChangeRequestsRow, error)
+	CountProfileChangeRequests(ctx context.Context, arg db.CountProfileChangeRequestsParams) (int32, error)
 	GetProfileChangeRequestForUpdate(ctx context.Context, id pgtype.UUID) (db.ProfileChangeRequest, error)
 	CancelOwnProfileChangeRequest(ctx context.Context, arg db.CancelOwnProfileChangeRequestParams) (db.ProfileChangeRequest, error)
 	ReviewProfileChangeRequest(ctx context.Context, arg db.ReviewProfileChangeRequestParams) (db.ProfileChangeRequest, error)
@@ -58,6 +58,13 @@ type ReviewProfileChangeRequestInput struct {
 	ReviewerPermissions []string
 }
 
+type ProfileChangeRequestListFilter struct {
+	Status      string
+	ProfileType string
+	FieldKey    string
+	Search      string
+}
+
 type ProfileChangeRequestListItem struct {
 	ID                   pgtype.UUID
 	RequesterUserID      pgtype.UUID
@@ -79,6 +86,7 @@ type ProfileChangeRequestListItem struct {
 	RequesterDisplayName string
 	ReviewerUsername     string
 	ProfileNama          string
+	FieldLabel           string
 }
 
 type ownedOfficialProfile struct {
@@ -193,37 +201,95 @@ func (s *ProfileChangeRequest) CancelOwn(ctx context.Context, requesterUserID, i
 	return cancelled, err
 }
 
-func (s *ProfileChangeRequest) ListAdmin(ctx context.Context, status string, limit, offset int32) ([]ProfileChangeRequestListItem, error) {
-	status = strings.TrimSpace(strings.ToLower(status))
-	if status == "" || status == "all" {
-		rows, err := s.q.ListProfileChangeRequestsAll(ctx, db.ListProfileChangeRequestsAllParams{Limit: limit, Offset: offset})
-		if err != nil {
-			return nil, err
-		}
-		items := make([]ProfileChangeRequestListItem, 0, len(rows))
-		for _, row := range rows {
-			items = append(items, listItemFromAllProfileChangeRequestRow(row))
-		}
-		return items, nil
-	}
-
-	requestStatus, err := parseProfileChangeRequestStatus(status)
+func (s *ProfileChangeRequest) ListAdmin(ctx context.Context, filter ProfileChangeRequestListFilter, limit, offset int32) ([]ProfileChangeRequestListItem, error) {
+	params, err := profileChangeRequestListParams(filter, limit, offset)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.q.ListProfileChangeRequestsByStatus(ctx, db.ListProfileChangeRequestsByStatusParams{
-		Status: requestStatus,
-		Limit:  limit,
-		Offset: offset,
-	})
+	rows, err := s.q.ListProfileChangeRequests(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 	items := make([]ProfileChangeRequestListItem, 0, len(rows))
 	for _, row := range rows {
-		items = append(items, listItemFromStatusProfileChangeRequestRow(row))
+		items = append(items, listItemFromProfileChangeRequestRow(row))
 	}
 	return items, nil
+}
+
+func (s *ProfileChangeRequest) CountAdmin(ctx context.Context, filter ProfileChangeRequestListFilter) (int32, error) {
+	normalized, err := normalizeProfileChangeRequestListFilter(filter)
+	if err != nil {
+		return 0, err
+	}
+	return s.q.CountProfileChangeRequests(ctx, db.CountProfileChangeRequestsParams{
+		StatusFilter:      normalized.Status,
+		ProfileTypeFilter: normalized.ProfileType,
+		FieldKeyFilter:    normalized.FieldKey,
+		Search:            normalized.Search,
+	})
+}
+
+func profileChangeRequestListParams(filter ProfileChangeRequestListFilter, limit, offset int32) (db.ListProfileChangeRequestsParams, error) {
+	normalized, err := normalizeProfileChangeRequestListFilter(filter)
+	if err != nil {
+		return db.ListProfileChangeRequestsParams{}, err
+	}
+	if limit < 1 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return db.ListProfileChangeRequestsParams{
+		StatusFilter:      normalized.Status,
+		ProfileTypeFilter: normalized.ProfileType,
+		FieldKeyFilter:    normalized.FieldKey,
+		Search:            normalized.Search,
+		LimitCount:        limit,
+		OffsetCount:       offset,
+	}, nil
+}
+
+func normalizeProfileChangeRequestListFilter(filter ProfileChangeRequestListFilter) (ProfileChangeRequestListFilter, error) {
+	status := strings.TrimSpace(strings.ToLower(filter.Status))
+	if status == "all" {
+		status = ""
+	}
+	if status != "" {
+		parsed, err := parseProfileChangeRequestStatus(status)
+		if err != nil {
+			return ProfileChangeRequestListFilter{}, err
+		}
+		status = string(parsed)
+	}
+
+	profileType := strings.TrimSpace(strings.ToLower(filter.ProfileType))
+	if profileType == "all" {
+		profileType = ""
+	}
+	switch profileType {
+	case "", "employee", "student", "parent":
+	default:
+		return ProfileChangeRequestListFilter{}, domain.ErrBadRequest
+	}
+
+	fieldKey, err := normalizeProfileChangeFieldFilter(filter.FieldKey)
+	if err != nil {
+		return ProfileChangeRequestListFilter{}, err
+	}
+
+	search := strings.Join(strings.Fields(filter.Search), " ")
+	if len(search) > 120 {
+		return ProfileChangeRequestListFilter{}, domain.ErrBadRequest
+	}
+
+	return ProfileChangeRequestListFilter{
+		Status:      status,
+		ProfileType: profileType,
+		FieldKey:    fieldKey,
+		Search:      search,
+	}, nil
 }
 
 func (s *ProfileChangeRequest) Review(ctx context.Context, reviewerUserID, id pgtype.UUID, input ReviewProfileChangeRequestInput) (db.ProfileChangeRequest, error) {
@@ -505,10 +571,11 @@ func listItemFromOwnProfileChangeRequestRow(row db.ListOwnProfileChangeRequestsR
 		RequesterDisplayName: row.RequesterDisplayName,
 		ReviewerUsername:     reviewer,
 		ProfileNama:          row.ProfileNama,
+		FieldLabel:           profileChangeFieldLabel(row.ProfileType, row.FieldKey),
 	}
 }
 
-func listItemFromAllProfileChangeRequestRow(row db.ListProfileChangeRequestsAllRow) ProfileChangeRequestListItem {
+func listItemFromProfileChangeRequestRow(row db.ListProfileChangeRequestsRow) ProfileChangeRequestListItem {
 	reviewer := ""
 	if row.ReviewerUsername.Valid {
 		reviewer = row.ReviewerUsername.String
@@ -534,34 +601,6 @@ func listItemFromAllProfileChangeRequestRow(row db.ListProfileChangeRequestsAllR
 		RequesterDisplayName: row.RequesterDisplayName,
 		ReviewerUsername:     reviewer,
 		ProfileNama:          row.ProfileNama,
-	}
-}
-
-func listItemFromStatusProfileChangeRequestRow(row db.ListProfileChangeRequestsByStatusRow) ProfileChangeRequestListItem {
-	reviewer := ""
-	if row.ReviewerUsername.Valid {
-		reviewer = row.ReviewerUsername.String
-	}
-	return ProfileChangeRequestListItem{
-		ID:                   row.ID,
-		RequesterUserID:      row.RequesterUserID,
-		ProfileType:          row.ProfileType,
-		TargetEmployeeID:     row.TargetEmployeeID,
-		TargetStudentID:      row.TargetStudentID,
-		TargetParentID:       row.TargetParentID,
-		FieldKey:             row.FieldKey,
-		CurrentValue:         row.CurrentValue,
-		RequestedValue:       row.RequestedValue,
-		Reason:               row.Reason,
-		Status:               row.Status,
-		ReviewerUserID:       row.ReviewerUserID,
-		ReviewNote:           row.ReviewNote,
-		ReviewedAt:           row.ReviewedAt,
-		CreatedAt:            row.CreatedAt,
-		UpdatedAt:            row.UpdatedAt,
-		RequesterUsername:    row.RequesterUsername,
-		RequesterDisplayName: row.RequesterDisplayName,
-		ReviewerUsername:     reviewer,
-		ProfileNama:          row.ProfileNama,
+		FieldLabel:           profileChangeFieldLabel(row.ProfileType, row.FieldKey),
 	}
 }

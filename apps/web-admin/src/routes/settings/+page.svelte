@@ -48,6 +48,12 @@
     appSettings: WorkerSettingState;
     schedules: Schedule[];
     sessions: AuthSession[];
+    pendingProfileChanges: number;
+  };
+
+  type PendingProfileChangesPayload = {
+    pending?: number;
+    count?: number;
   };
 
   type SchedulePayload = {
@@ -61,6 +67,7 @@
   let appSettings = $state<WorkerSettingState>(emptyWorkerSettings());
   let schedules   = $state<Schedule[]>([]);
   let sessions    = $state<AuthSession[]>([]);
+  let pendingProfileChanges = $state(0);
   let pwForm      = $state({ current: '', next: '', confirm: '' });
   let pwLoading   = $state(false);
   let logoutAllLoading = $state(false);
@@ -71,6 +78,9 @@
   const currentSessionId = $derived(page.data.user?.session_id ?? '');
   const isAdmin = $derived(
     Boolean(page.data.user?.roles?.includes('admin') || page.data.user?.role === 'admin')
+  );
+  const canReviewProfileChanges = $derived(
+    Boolean(isAdmin || page.data.user?.permissions?.includes('profile_changes.review'))
   );
 
   function emptyWorkerSettings(): WorkerSettingState {
@@ -101,28 +111,42 @@
     appSettings = overview.appSettings;
     schedules = overview.schedules;
     sessions = overview.sessions;
+    pendingProfileChanges = overview.pendingProfileChanges;
     labelDrafts = Object.fromEntries(
       overview.sessions.map((session) => [session.id, session.device_label || ''])
     );
   }
 
   function currentSettingsOverview(): SettingsOverview {
-    return { appSettings, schedules, sessions };
+    return { appSettings, schedules, sessions, pendingProfileChanges };
+  }
+
+  async function fetchPendingProfileChanges() {
+    if (!canReviewProfileChanges) return 0;
+    const data = await fetch('/api/users/change-requests/pending-count').then((response) =>
+      readClientApiData<PendingProfileChangesPayload>(response, 'Gagal memuat jumlah permintaan perubahan data')
+    );
+    const pending = Number(data.pending ?? data.count ?? 0);
+    return Number.isFinite(pending) ? pending : 0;
   }
 
   async function fetchSettingsOverview(): Promise<SettingsOverview> {
     if (!isAdmin) {
-      const sessionData = await fetch('/api/auth/sessions').then((response) =>
-        readClientApiData<AuthSession[]>(response, 'Gagal memuat sesi aktif')
-      );
+      const [sessionData, pendingCount] = await Promise.all([
+        fetch('/api/auth/sessions').then((response) =>
+          readClientApiData<AuthSession[]>(response, 'Gagal memuat sesi aktif')
+        ),
+        fetchPendingProfileChanges()
+      ]);
       return {
         appSettings: emptyWorkerSettings(),
         schedules: [],
-        sessions: normalizeSessions(sessionData)
+        sessions: normalizeSessions(sessionData),
+        pendingProfileChanges: pendingCount
       };
     }
 
-    const [sessionData, settingsData, scheduleData] = await Promise.all([
+    const [sessionData, settingsData, scheduleData, pendingCount] = await Promise.all([
       fetch('/api/auth/sessions').then((response) =>
         readClientApiData<AuthSession[]>(response, 'Gagal memuat sesi aktif')
       ),
@@ -131,13 +155,15 @@
       ),
       fetch('/api/pusaka/schedules').then((response) =>
         readClientApiData<SchedulePayload | Schedule[]>(response, 'Gagal memuat jadwal PUSAKA')
-      )
+      ),
+      fetchPendingProfileChanges()
     ]);
 
     return {
       appSettings: { ...emptyWorkerSettings(), ...(settingsData ?? {}) },
       schedules: normalizeSchedules(scheduleData),
-      sessions: normalizeSessions(sessionData)
+      sessions: normalizeSessions(sessionData),
+      pendingProfileChanges: pendingCount
     };
   }
 
@@ -368,6 +394,22 @@
       <RecoveryPanel title="Pengaturan Belum Tersaji" message={settingsErrorMessage(error)} onRetry={() => retrySettings(reset)} />
     {/snippet}
     {#snippet children(_value)}
+
+  {#if canReviewProfileChanges}
+    <Card.Root>
+      <Card.Header class="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <Card.Title class="text-base">Permintaan Perubahan Data</Card.Title>
+          <Card.Description>
+            {pendingProfileChanges} permintaan resmi menunggu review admin.
+          </Card.Description>
+        </div>
+        <Button href="/settings/user-change-requests" variant={pendingProfileChanges > 0 ? 'default' : 'outline'}>
+          Buka Review
+        </Button>
+      </Card.Header>
+    </Card.Root>
+  {/if}
 
   {#if isAdmin}
     <WorkerSettings bind:settings={appSettings} onsave={saveSettings} />
