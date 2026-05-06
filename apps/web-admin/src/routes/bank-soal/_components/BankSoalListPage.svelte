@@ -16,6 +16,7 @@
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import RefreshCcwIcon from '@lucide/svelte/icons/refresh-ccw';
 	import SearchIcon from '@lucide/svelte/icons/search';
+	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import UploadIcon from '@lucide/svelte/icons/upload';
 	import * as Table from '$lib/components/ui/table';
@@ -310,6 +311,7 @@
 	let reviewRouteHref = $derived(reviewHref());
 	let analysisHref = $derived(resolve('/bank-soal/analisis-butir'));
 	let mapelKdHref = $derived(resolve('/bank-soal/mapel-kd'));
+	let settingsHref = $derived(resolve('/bank-soal/pengaturan'));
 	let packageHref = $derived(resolve('/asesmen/paket'));
 	let listHref = $derived(resolve('/bank-soal/daftar'));
 	let summarySubjectDistribution = $state<SubjectDistribution[]>([]);
@@ -1033,6 +1035,10 @@
 				<a href={mapelKdHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-lime-100 text-lime-800"><Layers3Icon class="size-5" /></span>
 					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Mapel & KD</span><span class="block text-xs text-slate-500">Cek coverage metadata dan materi</span></span>
+				</a>
+				<a href={settingsHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-slate-800"><SettingsIcon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Pengaturan & SOP</span><span class="block text-xs text-slate-500">Workflow, standar kualitas, dan integrasi</span></span>
 				</a>
 			</div>
 		</div>
