@@ -1,0 +1,11 @@
+[Unit]
+Description=Run mtsn2kolut-super-app PostgreSQL backup every day at midnight
+
+[Timer]
+OnCalendar=*-*-* 00:00:00
+Persistent=true
+Unit=mtsn2kolut-postgresql-backup.service
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

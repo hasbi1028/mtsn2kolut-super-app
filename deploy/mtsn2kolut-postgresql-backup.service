@@ -1,0 +1,15 @@
+[Unit]
+Description=Backup PostgreSQL database for mtsn2kolut-super-app
+Documentation=file:/home/servermtsn2kolut/mtsn2kolut-super-app/deploy/backup-postgresql.sh
+Wants=postgresql.service
+After=postgresql.service network-online.target
+
+[Service]
+Type=oneshot
+User=servermtsn2kolut
+Group=servermtsn2kolut
+WorkingDirectory=/home/servermtsn2kolut/mtsn2kolut-super-app
+ExecStart=/home/servermtsn2kolut/mtsn2kolut-super-app/deploy/backup-postgresql.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
