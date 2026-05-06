@@ -61,14 +61,15 @@ func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) 
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (username, password_hash, employee_id, student_id, parent_id, is_active)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, username, employee_id, student_id, parent_id, is_active, auth_version, created_at, updated_at
+INSERT INTO users (username, password_hash, display_name, employee_id, student_id, parent_id, is_active)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, username, display_name, employee_id, student_id, parent_id, is_active, auth_version, last_login_at, deleted_at, created_at, updated_at
 `
 
 type CreateUserParams struct {
 	Username     string      `json:"username"`
 	PasswordHash string      `json:"password_hash"`
+	DisplayName  pgtype.Text `json:"display_name"`
 	EmployeeID   pgtype.UUID `json:"employee_id"`
 	StudentID    pgtype.UUID `json:"student_id"`
 	ParentID     pgtype.UUID `json:"parent_id"`
@@ -78,11 +79,14 @@ type CreateUserParams struct {
 type CreateUserRow struct {
 	ID          pgtype.UUID        `json:"id"`
 	Username    string             `json:"username"`
+	DisplayName pgtype.Text        `json:"display_name"`
 	EmployeeID  pgtype.UUID        `json:"employee_id"`
 	StudentID   pgtype.UUID        `json:"student_id"`
 	ParentID    pgtype.UUID        `json:"parent_id"`
 	IsActive    bool               `json:"is_active"`
 	AuthVersion int32              `json:"auth_version"`
+	LastLoginAt pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
@@ -91,6 +95,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 	row := q.db.QueryRow(ctx, createUser,
 		arg.Username,
 		arg.PasswordHash,
+		arg.DisplayName,
 		arg.EmployeeID,
 		arg.StudentID,
 		arg.ParentID,
@@ -100,11 +105,14 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 	err := row.Scan(
 		&i.ID,
 		&i.Username,
+		&i.DisplayName,
 		&i.EmployeeID,
 		&i.StudentID,
 		&i.ParentID,
 		&i.IsActive,
 		&i.AuthVersion,
+		&i.LastLoginAt,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -126,23 +134,28 @@ func (q *Queries) DeleteOldAuditLogs(ctx context.Context) (int64, error) {
 
 const getUserByID = `-- name: GetUserByID :one
 SELECT 
-    u.id, u.username, u.password_hash, 
+    u.id, u.username, u.password_hash,
+    u.display_name,
     u.employee_id, u.student_id, u.parent_id,
-    u.is_active, u.auth_version, u.created_at, u.updated_at,
+    u.is_active, u.auth_version, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
     (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
 FROM users u
 WHERE u.id = $1
+  AND u.deleted_at IS NULL
 `
 
 type GetUserByIDRow struct {
 	ID           pgtype.UUID        `json:"id"`
 	Username     string             `json:"username"`
 	PasswordHash string             `json:"password_hash"`
+	DisplayName  pgtype.Text        `json:"display_name"`
 	EmployeeID   pgtype.UUID        `json:"employee_id"`
 	StudentID    pgtype.UUID        `json:"student_id"`
 	ParentID     pgtype.UUID        `json:"parent_id"`
 	IsActive     bool               `json:"is_active"`
 	AuthVersion  int32              `json:"auth_version"`
+	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	Roles        []byte             `json:"roles"`
@@ -155,11 +168,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDR
 		&i.ID,
 		&i.Username,
 		&i.PasswordHash,
+		&i.DisplayName,
 		&i.EmployeeID,
 		&i.StudentID,
 		&i.ParentID,
 		&i.IsActive,
 		&i.AuthVersion,
+		&i.LastLoginAt,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Roles,
@@ -169,23 +185,28 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDR
 
 const getUserByUsername = `-- name: GetUserByUsername :one
 SELECT 
-    u.id, u.username, u.password_hash, 
+    u.id, u.username, u.password_hash,
+    u.display_name,
     u.employee_id, u.student_id, u.parent_id,
-    u.is_active, u.auth_version, u.created_at, u.updated_at,
+    u.is_active, u.auth_version, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
     (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
 FROM users u
 WHERE u.username = $1
+  AND u.deleted_at IS NULL
 `
 
 type GetUserByUsernameRow struct {
 	ID           pgtype.UUID        `json:"id"`
 	Username     string             `json:"username"`
 	PasswordHash string             `json:"password_hash"`
+	DisplayName  pgtype.Text        `json:"display_name"`
 	EmployeeID   pgtype.UUID        `json:"employee_id"`
 	StudentID    pgtype.UUID        `json:"student_id"`
 	ParentID     pgtype.UUID        `json:"parent_id"`
 	IsActive     bool               `json:"is_active"`
 	AuthVersion  int32              `json:"auth_version"`
+	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	Roles        []byte             `json:"roles"`
@@ -198,11 +219,14 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUs
 		&i.ID,
 		&i.Username,
 		&i.PasswordHash,
+		&i.DisplayName,
 		&i.EmployeeID,
 		&i.StudentID,
 		&i.ParentID,
 		&i.IsActive,
 		&i.AuthVersion,
+		&i.LastLoginAt,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Roles,
@@ -239,6 +263,7 @@ UPDATE users
 SET auth_version = auth_version + 1,
     updated_at = NOW()
 WHERE id = $1
+  AND deleted_at IS NULL
 RETURNING auth_version
 `
 
@@ -325,7 +350,7 @@ WITH active_employees AS (
         END AS generated_username,
         linked.id AS existing_user_id
     FROM active_employees ae
-    LEFT JOIN users linked ON linked.employee_id = ae.id
+    LEFT JOIN users linked ON linked.employee_id = ae.id AND linked.deleted_at IS NULL
 )
 SELECT
     c.employee_id,
@@ -337,7 +362,7 @@ SELECT
     c.existing_user_id,
     username_user.id AS username_user_id
 FROM candidates c
-LEFT JOIN users username_user ON username_user.username = c.generated_username AND c.generated_username <> ''
+LEFT JOIN users username_user ON username_user.username = c.generated_username AND c.generated_username <> '' AND username_user.deleted_at IS NULL
 ORDER BY c.nomor_urut ASC
 `
 
@@ -452,25 +477,31 @@ func (q *Queries) ListEntityAuditLogs(ctx context.Context, arg ListEntityAuditLo
 
 const listUsers = `-- name: ListUsers :many
 SELECT 
-    u.id, u.username, u.employee_id, u.student_id, u.parent_id,
+    u.id, u.username,
+    COALESCE(NULLIF(u.display_name, ''), e.nama, s.nama, p.nama, u.username) AS display_name,
+    u.employee_id, u.student_id, u.parent_id,
     COALESCE(e.nama, s.nama, p.nama, '') AS profile_nama,
-    u.is_active, u.created_at,
+    u.is_active, u.last_login_at, u.deleted_at, u.created_at,
     (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
 FROM users u
 LEFT JOIN employees e ON e.id = u.employee_id
 LEFT JOIN students s ON s.id = u.student_id
 LEFT JOIN parents p ON p.id = u.parent_id
+WHERE u.deleted_at IS NULL
 ORDER BY u.username ASC
 `
 
 type ListUsersRow struct {
 	ID          pgtype.UUID        `json:"id"`
 	Username    string             `json:"username"`
+	DisplayName string             `json:"display_name"`
 	EmployeeID  pgtype.UUID        `json:"employee_id"`
 	StudentID   pgtype.UUID        `json:"student_id"`
 	ParentID    pgtype.UUID        `json:"parent_id"`
 	ProfileNama string             `json:"profile_nama"`
 	IsActive    bool               `json:"is_active"`
+	LastLoginAt pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	Roles       []byte             `json:"roles"`
 }
@@ -487,11 +518,14 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.Username,
+			&i.DisplayName,
 			&i.EmployeeID,
 			&i.StudentID,
 			&i.ParentID,
 			&i.ProfileNama,
 			&i.IsActive,
+			&i.LastLoginAt,
+			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.Roles,
 		); err != nil {
@@ -506,9 +540,10 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 }
 
 const listUsersByEmployeeID = `-- name: ListUsersByEmployeeID :many
-SELECT id, username, password_hash, employee_id, created_at, updated_at, student_id, parent_id, is_active
+SELECT id, username, password_hash, display_name, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version, last_login_at, deleted_at
 FROM users
 WHERE employee_id = $1
+  AND deleted_at IS NULL
 ORDER BY created_at ASC
 `
 
@@ -516,12 +551,16 @@ type ListUsersByEmployeeIDRow struct {
 	ID           pgtype.UUID        `json:"id"`
 	Username     string             `json:"username"`
 	PasswordHash string             `json:"password_hash"`
+	DisplayName  pgtype.Text        `json:"display_name"`
 	EmployeeID   pgtype.UUID        `json:"employee_id"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	StudentID    pgtype.UUID        `json:"student_id"`
 	ParentID     pgtype.UUID        `json:"parent_id"`
 	IsActive     bool               `json:"is_active"`
+	AuthVersion  int32              `json:"auth_version"`
+	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 }
 
 func (q *Queries) ListUsersByEmployeeID(ctx context.Context, employeeID pgtype.UUID) ([]ListUsersByEmployeeIDRow, error) {
@@ -537,12 +576,16 @@ func (q *Queries) ListUsersByEmployeeID(ctx context.Context, employeeID pgtype.U
 			&i.ID,
 			&i.Username,
 			&i.PasswordHash,
+			&i.DisplayName,
 			&i.EmployeeID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.StudentID,
 			&i.ParentID,
 			&i.IsActive,
+			&i.AuthVersion,
+			&i.LastLoginAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -555,9 +598,10 @@ func (q *Queries) ListUsersByEmployeeID(ctx context.Context, employeeID pgtype.U
 }
 
 const listUsersByStudentID = `-- name: ListUsersByStudentID :many
-SELECT id, username, password_hash, employee_id, created_at, updated_at, student_id, parent_id, is_active
+SELECT id, username, password_hash, display_name, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version, last_login_at, deleted_at
 FROM users
 WHERE student_id = $1
+  AND deleted_at IS NULL
 ORDER BY created_at ASC
 `
 
@@ -565,12 +609,16 @@ type ListUsersByStudentIDRow struct {
 	ID           pgtype.UUID        `json:"id"`
 	Username     string             `json:"username"`
 	PasswordHash string             `json:"password_hash"`
+	DisplayName  pgtype.Text        `json:"display_name"`
 	EmployeeID   pgtype.UUID        `json:"employee_id"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 	StudentID    pgtype.UUID        `json:"student_id"`
 	ParentID     pgtype.UUID        `json:"parent_id"`
 	IsActive     bool               `json:"is_active"`
+	AuthVersion  int32              `json:"auth_version"`
+	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 }
 
 func (q *Queries) ListUsersByStudentID(ctx context.Context, studentID pgtype.UUID) ([]ListUsersByStudentIDRow, error) {
@@ -586,12 +634,16 @@ func (q *Queries) ListUsersByStudentID(ctx context.Context, studentID pgtype.UUI
 			&i.ID,
 			&i.Username,
 			&i.PasswordHash,
+			&i.DisplayName,
 			&i.EmployeeID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.StudentID,
 			&i.ParentID,
 			&i.IsActive,
+			&i.AuthVersion,
+			&i.LastLoginAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -601,6 +653,19 @@ func (q *Queries) ListUsersByStudentID(ctx context.Context, studentID pgtype.UUI
 		return nil, err
 	}
 	return items, nil
+}
+
+const markUserLastLogin = `-- name: MarkUserLastLogin :exec
+UPDATE users
+SET last_login_at = NOW(),
+    updated_at = NOW()
+WHERE id = $1
+  AND deleted_at IS NULL
+`
+
+func (q *Queries) MarkUserLastLogin(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markUserLastLogin, id)
+	return err
 }
 
 const removeAllUserRoles = `-- name: RemoveAllUserRoles :exec
@@ -626,10 +691,26 @@ func (q *Queries) RemoveUserRole(ctx context.Context, arg RemoveUserRoleParams) 
 	return err
 }
 
+const softDeleteUser = `-- name: SoftDeleteUser :exec
+UPDATE users
+SET is_active = FALSE,
+    deleted_at = COALESCE(deleted_at, NOW()),
+    auth_version = auth_version + 1,
+    updated_at = NOW()
+WHERE id = $1
+  AND deleted_at IS NULL
+`
+
+func (q *Queries) SoftDeleteUser(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, softDeleteUser, id)
+	return err
+}
+
 const updateUserPassword = `-- name: UpdateUserPassword :exec
 UPDATE users
 SET password_hash = $2, updated_at = NOW()
 WHERE id = $1
+  AND deleted_at IS NULL
 `
 
 type UpdateUserPasswordParams struct {
@@ -647,15 +728,18 @@ UPDATE users
 SET employee_id = $2,
     student_id = $3,
     parent_id = $4,
+    display_name = COALESCE(NULLIF(display_name, ''), $5),
     updated_at = NOW()
 WHERE id = $1
+  AND deleted_at IS NULL
 `
 
 type UpdateUserProfileLinkParams struct {
-	ID         pgtype.UUID `json:"id"`
-	EmployeeID pgtype.UUID `json:"employee_id"`
-	StudentID  pgtype.UUID `json:"student_id"`
-	ParentID   pgtype.UUID `json:"parent_id"`
+	ID          pgtype.UUID `json:"id"`
+	EmployeeID  pgtype.UUID `json:"employee_id"`
+	StudentID   pgtype.UUID `json:"student_id"`
+	ParentID    pgtype.UUID `json:"parent_id"`
+	DisplayName pgtype.Text `json:"display_name"`
 }
 
 func (q *Queries) UpdateUserProfileLink(ctx context.Context, arg UpdateUserProfileLinkParams) error {
@@ -664,6 +748,7 @@ func (q *Queries) UpdateUserProfileLink(ctx context.Context, arg UpdateUserProfi
 		arg.EmployeeID,
 		arg.StudentID,
 		arg.ParentID,
+		arg.DisplayName,
 	)
 	return err
 }
@@ -671,9 +756,11 @@ func (q *Queries) UpdateUserProfileLink(ctx context.Context, arg UpdateUserProfi
 const updateUserStatus = `-- name: UpdateUserStatus :exec
 UPDATE users
 SET is_active = $2,
+    deleted_at = CASE WHEN $2 = TRUE THEN NULL ELSE deleted_at END,
     auth_version = CASE WHEN is_active = TRUE AND $2 = FALSE THEN auth_version + 1 ELSE auth_version END,
     updated_at = NOW()
 WHERE id = $1
+  AND deleted_at IS NULL
 `
 
 type UpdateUserStatusParams struct {
