@@ -173,6 +173,8 @@ func main() {
 	requireUsersRead := mw.RequirePermission("users.read")
 	requireUsersCreate := mw.RequirePermission("users.create")
 	requireUsersDeactivate := mw.RequirePermission("users.deactivate")
+	requireUsersResetPassword := mw.RequirePermission("users.reset_password")
+	requireUsersUpdate := mw.RequirePermission("users.update")
 	requireUsersManageRoles := mw.RequirePermission("users.manage_roles")
 	requireRolesRead := mw.RequirePermission("roles.read")
 	requireRolesManage := mw.RequirePermission("roles.manage")
@@ -654,6 +656,8 @@ func main() {
 		r.With(requireAuditRead).Get("/api/users/audit-logs", userH.ListAuditLogs)
 		r.With(requireUsersCreate).Post("/api/users", userH.Create)
 		r.With(requireUsersDeactivate).Patch("/api/users/{id}/status", userH.UpdateStatus)
+		r.With(requireUsersResetPassword).Post("/api/users/{id}/reset-password", userH.ResetPassword)
+		r.With(requireUsersUpdate).Patch("/api/users/{id}/profile-link", userH.UpdateProfileLink)
 		r.With(requireUsersManageRoles).Patch("/api/users/{id}/roles", rbacH.UpdateUserRoles)
 		r.With(requireUsersDeactivate).Delete("/api/users/{id}", userH.Delete)
 

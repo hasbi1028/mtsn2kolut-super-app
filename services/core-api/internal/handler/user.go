@@ -25,8 +25,10 @@ type userStore interface {
 }
 
 type userLifecycleService interface {
-	DeleteAsDeactivate(ctx context.Context, id pgtype.UUID) error
-	UpdateStatus(ctx context.Context, id pgtype.UUID, isActive bool) error
+	DeleteAsDeactivate(ctx context.Context, id pgtype.UUID, actorID pgtype.UUID) error
+	UpdateStatus(ctx context.Context, id pgtype.UUID, isActive bool, actorID pgtype.UUID) error
+	ResetPassword(ctx context.Context, id pgtype.UUID, newPassword string, actorID pgtype.UUID) error
+	UpdateProfileLink(ctx context.Context, id pgtype.UUID, link service.ProfileLink, actorID pgtype.UUID) error
 }
 
 type userTxStarter interface {
@@ -250,8 +252,13 @@ func (h *User) Delete(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid id")
 		return
 	}
-	if err := h.lifecycle.DeleteAsDeactivate(r.Context(), id); err != nil {
-		api.Internal(w, err)
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	if err := h.lifecycle.DeleteAsDeactivate(r.Context(), id, actorID); err != nil {
+		writeDomainOrInternal(w, err, "user tidak dapat dinonaktifkan")
 		return
 	}
 	api.NoContent(w)
@@ -274,14 +281,104 @@ func (h *User) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	if err := h.lifecycle.UpdateStatus(r.Context(), id, body.IsActive); err != nil {
-		api.Internal(w, err)
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	if err := h.lifecycle.UpdateStatus(r.Context(), id, body.IsActive, actorID); err != nil {
+		writeDomainOrInternal(w, err, "status user tidak dapat diperbarui")
 		return
 	}
 	api.OK(w, map[string]any{
 		"id":        id,
 		"is_active": body.IsActive,
 	})
+}
+
+func (h *User) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	if err := h.lifecycle.ResetPassword(r.Context(), id, body.Password, actorID); err != nil {
+		writeDomainOrInternal(w, err, "password user tidak dapat direset")
+		return
+	}
+	api.OK(w, map[string]any{"ok": true})
+}
+
+func (h *User) UpdateProfileLink(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body struct {
+		EmployeeID string `json:"employee_id"`
+		StudentID  string `json:"student_id"`
+		ParentID   string `json:"parent_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	link, err := profileLinkFromRequest(body.EmployeeID, body.StudentID, body.ParentID)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	if err := h.lifecycle.UpdateProfileLink(r.Context(), id, link, actorID); err != nil {
+		writeDomainOrInternal(w, err, "tautan profil user tidak dapat diperbarui")
+		return
+	}
+	api.OK(w, map[string]any{"ok": true})
+}
+
+func profileLinkFromRequest(employeeID, studentID, parentID string) (service.ProfileLink, error) {
+	var link service.ProfileLink
+	if employeeID != "" {
+		if err := link.EmployeeID.Scan(employeeID); err != nil {
+			return service.ProfileLink{}, httpError("employee_id tidak valid")
+		}
+	}
+	if studentID != "" {
+		if err := link.StudentID.Scan(studentID); err != nil {
+			return service.ProfileLink{}, httpError("student_id tidak valid")
+		}
+	}
+	if parentID != "" {
+		if err := link.ParentID.Scan(parentID); err != nil {
+			return service.ProfileLink{}, httpError("parent_id tidak valid")
+		}
+	}
+	return link, nil
 }
 
 func (h *User) ListAuditLogs(w http.ResponseWriter, r *http.Request) {

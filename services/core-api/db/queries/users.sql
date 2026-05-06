@@ -52,6 +52,14 @@ SET is_active = $2,
     updated_at = NOW()
 WHERE id = $1;
 
+-- name: UpdateUserProfileLink :exec
+UPDATE users
+SET employee_id = $2,
+    student_id = $3,
+    parent_id = $4,
+    updated_at = NOW()
+WHERE id = $1;
+
 -- name: GetUserRoles :many
 SELECT role FROM user_account_roles WHERE user_id = $1;
 
