@@ -34,6 +34,7 @@ type authStore interface {
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error)
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
 	GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error)
+	GetUserPermissionCodes(ctx context.Context, userID pgtype.UUID) ([]string, error)
 	AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error
 	IncrementUserAuthVersion(ctx context.Context, id pgtype.UUID) (int32, error)
 	CreateAuthSession(ctx context.Context, arg db.CreateAuthSessionParams) (db.AuthSession, error)
@@ -311,19 +312,25 @@ func (s *Auth) issueTokenPair(ctx context.Context, user authUserRecord, meta Ses
 	if len(roleStrs) > 0 {
 		primaryRole = roleStrs[0]
 	}
+	permissions, err := s.q.GetUserPermissionCodes(ctx, user.ID)
+	if err != nil {
+		return domain.TokenPair{}, err
+	}
+	permissions = normalizeStringSet(permissions)
 
 	userID := pgUUIDString(user.ID)
 	claims := jwt.MapClaims{
-		"sub":   userID,
-		"uid":   userID,
-		"usr":   user.Username,
-		"ssid":  pgUUIDString(sessionID),
-		"role":  primaryRole, // backward compatibility
-		"roles": roleStrs,
-		"type":  "access",
-		"ver":   int64(user.AuthVersion),
-		"iat":   now.Unix(),
-		"exp":   now.Add(accessTokenTTL).Unix(),
+		"sub":         userID,
+		"uid":         userID,
+		"usr":         user.Username,
+		"ssid":        pgUUIDString(sessionID),
+		"role":        primaryRole, // backward compatibility
+		"roles":       roleStrs,
+		"permissions": permissions,
+		"type":        "access",
+		"ver":         int64(user.AuthVersion),
+		"iat":         now.Unix(),
+		"exp":         now.Add(accessTokenTTL).Unix(),
 	}
 
 	if user.EmployeeID.Valid {
@@ -374,6 +381,23 @@ func (s *Auth) issueTokenPair(ctx context.Context, user authUserRecord, meta Ses
 	}
 
 	return domain.TokenPair{AccessToken: accessSigned, RefreshToken: refreshSigned}, nil
+}
+
+func normalizeStringSet(values []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 func decodeSidebarPreferences(pinnedJSON, recentJSON []byte) (SidebarPreferences, error) {

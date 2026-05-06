@@ -131,6 +131,54 @@ func HasAnyRole(claims jwt.MapClaims, roles ...string) bool {
 	return false
 }
 
+func RequirePermission(permission string) func(http.Handler) http.Handler {
+	return RequireAnyPermission(permission)
+}
+
+func RequireAnyPermission(permissions ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := api.ClaimsFromContext(r.Context())
+			if !ok {
+				api.Unauthorized(w)
+				return
+			}
+			if !HasAnyPermission(claims, permissions...) {
+				api.Forbidden(w)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func HasAnyPermission(claims jwt.MapClaims, permissions ...string) bool {
+	for _, expected := range permissions {
+		expected = strings.TrimSpace(expected)
+		if expected == "" {
+			continue
+		}
+		if rawPermissions, ok := claims["permissions"].([]any); ok {
+			for _, permission := range rawPermissions {
+				if value, ok := permission.(string); ok && value == expected {
+					return true
+				}
+			}
+		}
+		if rawPermissions, ok := claims["permissions"].([]string); ok {
+			for _, permission := range rawPermissions {
+				if permission == expected {
+					return true
+				}
+			}
+		}
+		if permission, _ := claims["permission"].(string); permission == expected {
+			return true
+		}
+	}
+	return false
+}
+
 func WorkerKey(key string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
