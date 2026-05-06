@@ -37,19 +37,21 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
 		group: 'Bank Soal',
 		items: [
-			{ href: '/cbt/bank-soal', label: 'Daftar Soal', icon: 'book-open', roles: ['admin', 'guru'] },
-			{ href: '/cbt/soal', label: 'Tambah Soal', icon: 'pen-tool', roles: ['admin', 'guru'] },
-			{ href: '/cbt/soal/review', label: 'Review Soal', icon: 'clipboard', roles: ['admin', 'guru'] },
-			{ href: '/cbt/soal/import', label: 'Impor Soal', icon: 'file-text', roles: ['admin', 'guru'] }
+			{ href: '/bank-soal', label: 'Daftar Soal', icon: 'book-open', roles: ['admin', 'guru'] },
+			{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'pen-tool', roles: ['admin', 'guru'] },
+			{ href: '/bank-soal/verifikasi', label: 'Review Soal', icon: 'clipboard', roles: ['admin', 'guru'] },
+			{ href: '/bank-soal/impor', label: 'Impor Soal', icon: 'file-text', roles: ['admin', 'guru'] }
 		]
 	},
 	{
 		group: 'Asesmen',
 		items: [
-			{ href: '/cbt', label: 'Dashboard Asesmen', icon: 'grid', roles: ['admin', 'guru', 'staf'] },
-			{ href: '/cbt/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'] },
-			{ href: '/cbt/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'] },
-			{ href: '/cbt/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'] }
+			{ href: '/asesmen', label: 'Dashboard Asesmen', icon: 'grid', roles: ['admin', 'guru', 'staf'] },
+			{ href: '/asesmen/paket', label: 'Paket Soal', icon: 'book-open', roles: ['admin'] },
+			{ href: '/asesmen/kegiatan', label: 'Kegiatan', icon: 'calendar', roles: ['admin'] },
+			{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'] },
+			{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'] },
+			{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'] }
 		]
 	},
 	{
@@ -111,8 +113,8 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	];
 
 export const defaultPinnedByRole: Record<string, string[]> = {
-	admin: ['/cbt/persiapan', '/grades', '/settings'],
-	guru: ['/cbt/pelaksanaan', '/cbt/persiapan', '/grades', '/jadwal'],
+	admin: ['/asesmen/persiapan', '/grades', '/settings'],
+	guru: ['/asesmen/pelaksanaan', '/asesmen/persiapan', '/grades', '/jadwal'],
 	staf: ['/document-cycles', '/inventory', '/library'],
 	kesiswaan: ['/kesiswaan', '/students']
 };

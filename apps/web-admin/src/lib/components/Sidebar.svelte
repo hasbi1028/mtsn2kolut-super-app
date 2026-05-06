@@ -112,7 +112,7 @@
 
 	function isActive(href: string) {
 		if (href === '/') return page.url.pathname === '/';
-		if (href === '/cbt') return page.url.pathname === '/cbt';
+		if (href === '/asesmen') return page.url.pathname === '/asesmen';
 		return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
 	}
 
