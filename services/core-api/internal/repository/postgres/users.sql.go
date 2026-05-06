@@ -563,6 +563,32 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 	return err
 }
 
+const updateUserProfileLink = `-- name: UpdateUserProfileLink :exec
+UPDATE users
+SET employee_id = $2,
+    student_id = $3,
+    parent_id = $4,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateUserProfileLinkParams struct {
+	ID         pgtype.UUID `json:"id"`
+	EmployeeID pgtype.UUID `json:"employee_id"`
+	StudentID  pgtype.UUID `json:"student_id"`
+	ParentID   pgtype.UUID `json:"parent_id"`
+}
+
+func (q *Queries) UpdateUserProfileLink(ctx context.Context, arg UpdateUserProfileLinkParams) error {
+	_, err := q.db.Exec(ctx, updateUserProfileLink,
+		arg.ID,
+		arg.EmployeeID,
+		arg.StudentID,
+		arg.ParentID,
+	)
+	return err
+}
+
 const updateUserStatus = `-- name: UpdateUserStatus :exec
 UPDATE users
 SET is_active = $2,

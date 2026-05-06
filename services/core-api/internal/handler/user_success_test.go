@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
+	"mtsn2kolut-super-app/backend/internal/service"
 )
 
 type fakeUserStore struct {
@@ -30,10 +31,20 @@ type fakeUserStore struct {
 
 type fakeUserLifecycle struct {
 	deleteID       pgtype.UUID
+	deleteActorID  pgtype.UUID
 	deleteErr      error
 	statusID       pgtype.UUID
+	statusActorID  pgtype.UUID
 	statusIsActive bool
 	statusErr      error
+	resetID        pgtype.UUID
+	resetActorID   pgtype.UUID
+	resetPassword  string
+	resetErr       error
+	profileID      pgtype.UUID
+	profileActorID pgtype.UUID
+	profileLink    service.ProfileLink
+	profileErr     error
 }
 
 func (f *fakeUserStore) ListUsers(ctx context.Context) ([]db.ListUsersRow, error) {
@@ -51,15 +62,31 @@ func (f *fakeUserStore) AddUserRole(ctx context.Context, arg db.AddUserRoleParam
 	return f.roleErr
 }
 
-func (f *fakeUserLifecycle) DeleteAsDeactivate(ctx context.Context, id pgtype.UUID) error {
+func (f *fakeUserLifecycle) DeleteAsDeactivate(ctx context.Context, id pgtype.UUID, actorID pgtype.UUID) error {
 	f.deleteID = id
+	f.deleteActorID = actorID
 	return f.deleteErr
 }
 
-func (f *fakeUserLifecycle) UpdateStatus(ctx context.Context, id pgtype.UUID, isActive bool) error {
+func (f *fakeUserLifecycle) UpdateStatus(ctx context.Context, id pgtype.UUID, isActive bool, actorID pgtype.UUID) error {
 	f.statusID = id
+	f.statusActorID = actorID
 	f.statusIsActive = isActive
 	return f.statusErr
+}
+
+func (f *fakeUserLifecycle) ResetPassword(ctx context.Context, id pgtype.UUID, newPassword string, actorID pgtype.UUID) error {
+	f.resetID = id
+	f.resetPassword = newPassword
+	f.resetActorID = actorID
+	return f.resetErr
+}
+
+func (f *fakeUserLifecycle) UpdateProfileLink(ctx context.Context, id pgtype.UUID, link service.ProfileLink, actorID pgtype.UUID) error {
+	f.profileID = id
+	f.profileLink = link
+	f.profileActorID = actorID
+	return f.profileErr
 }
 
 func (f *fakeUserStore) ListAuditLogs(ctx context.Context, arg db.ListAuditLogsParams) ([]db.ListAuditLogsRow, error) {
@@ -69,6 +96,7 @@ func (f *fakeUserStore) ListAuditLogs(ctx context.Context, arg db.ListAuditLogsP
 
 func TestUserSuccessHandlersForwardPayloads(t *testing.T) {
 	userID := handlerTestUUID(231)
+	employeeID := handlerTestUUID(237)
 	roleJSON, _ := json.Marshal([]string{"admin", "staf"})
 	store := &fakeUserStore{
 		listRows:  []db.ListUsersRow{{ID: userID, Username: "admin", Roles: roleJSON}},
@@ -124,6 +152,20 @@ func TestUserSuccessHandlersForwardPayloads(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	req = withRouteParam(adminRequest(http.MethodPost, "/api/users/"+userID.String()+"/reset-password", `{"password":"newSecret123"}`), "id", userID.String())
+	h.ResetPassword(rec, req)
+	if rec.Code != http.StatusOK || lifecycle.resetID != userID || lifecycle.resetPassword != "newSecret123" {
+		t.Fatalf("ResetPassword() status/arg = %d/%v/%q", rec.Code, lifecycle.resetID, lifecycle.resetPassword)
+	}
+
+	rec = httptest.NewRecorder()
+	req = withRouteParam(adminRequest(http.MethodPatch, "/api/users/"+userID.String()+"/profile-link", `{"employee_id":"`+employeeID.String()+`"}`), "id", userID.String())
+	h.UpdateProfileLink(rec, req)
+	if rec.Code != http.StatusOK || lifecycle.profileID != userID || lifecycle.profileLink.EmployeeID != employeeID {
+		t.Fatalf("UpdateProfileLink() status/arg = %d/%v/%+v", rec.Code, lifecycle.profileID, lifecycle.profileLink)
+	}
+
+	rec = httptest.NewRecorder()
 	h.ListAuditLogs(rec, adminRequest(http.MethodGet, "/api/settings/audit-logs?page=2&per_page=25", ""))
 	if rec.Code != http.StatusOK || store.auditArg.Limit != 25 || store.auditArg.Offset != 25 {
 		t.Fatalf("ListAuditLogs() status/arg = %d/%+v", rec.Code, store.auditArg)
@@ -168,6 +210,15 @@ func TestUserValidationAndStoreErrors(t *testing.T) {
 		{name: "status invalid id", handler: (*User).UpdateStatus, req: withRouteParam(adminRequest(http.MethodPatch, "/api/users/bad/status", `{}`), "id", "bad"), wantStatus: http.StatusBadRequest},
 		{name: "status invalid json", handler: (*User).UpdateStatus, req: withRouteParam(adminRequest(http.MethodPatch, "/api/users/"+userID.String()+"/status", `{`), "id", userID.String()), wantStatus: http.StatusBadRequest},
 		{name: "status service error", handler: (*User).UpdateStatus, lifecycle: &fakeUserLifecycle{statusErr: errDB}, req: withRouteParam(adminRequest(http.MethodPatch, "/api/users/"+userID.String()+"/status", `{"is_active":true}`), "id", userID.String()), wantStatus: http.StatusInternalServerError},
+		{name: "reset password forbidden", handler: (*User).ResetPassword, req: withRouteParam(plainRequest(http.MethodPost, "/api/users/"+userID.String()+"/reset-password", `{}`), "id", userID.String()), wantStatus: http.StatusForbidden},
+		{name: "reset password invalid id", handler: (*User).ResetPassword, req: withRouteParam(adminRequest(http.MethodPost, "/api/users/bad/reset-password", `{}`), "id", "bad"), wantStatus: http.StatusBadRequest},
+		{name: "reset password invalid json", handler: (*User).ResetPassword, req: withRouteParam(adminRequest(http.MethodPost, "/api/users/"+userID.String()+"/reset-password", `{`), "id", userID.String()), wantStatus: http.StatusBadRequest},
+		{name: "reset password service error", handler: (*User).ResetPassword, lifecycle: &fakeUserLifecycle{resetErr: errDB}, req: withRouteParam(adminRequest(http.MethodPost, "/api/users/"+userID.String()+"/reset-password", `{"password":"newSecret123"}`), "id", userID.String()), wantStatus: http.StatusInternalServerError},
+		{name: "profile link forbidden", handler: (*User).UpdateProfileLink, req: withRouteParam(plainRequest(http.MethodPatch, "/api/users/"+userID.String()+"/profile-link", `{}`), "id", userID.String()), wantStatus: http.StatusForbidden},
+		{name: "profile link invalid id", handler: (*User).UpdateProfileLink, req: withRouteParam(adminRequest(http.MethodPatch, "/api/users/bad/profile-link", `{}`), "id", "bad"), wantStatus: http.StatusBadRequest},
+		{name: "profile link invalid json", handler: (*User).UpdateProfileLink, req: withRouteParam(adminRequest(http.MethodPatch, "/api/users/"+userID.String()+"/profile-link", `{`), "id", userID.String()), wantStatus: http.StatusBadRequest},
+		{name: "profile link invalid uuid", handler: (*User).UpdateProfileLink, req: withRouteParam(adminRequest(http.MethodPatch, "/api/users/"+userID.String()+"/profile-link", `{"employee_id":"bad"}`), "id", userID.String()), wantStatus: http.StatusBadRequest},
+		{name: "profile link service error", handler: (*User).UpdateProfileLink, lifecycle: &fakeUserLifecycle{profileErr: errDB}, req: withRouteParam(adminRequest(http.MethodPatch, "/api/users/"+userID.String()+"/profile-link", `{"employee_id":"`+employeeID.String()+`"}`), "id", userID.String()), wantStatus: http.StatusInternalServerError},
 		{name: "audit forbidden", handler: (*User).ListAuditLogs, req: plainRequest(http.MethodGet, "/api/settings/audit-logs", ""), wantStatus: http.StatusForbidden},
 		{name: "audit store error", handler: (*User).ListAuditLogs, store: &fakeUserStore{auditErr: errDB}, req: adminRequest(http.MethodGet, "/api/settings/audit-logs", ""), wantStatus: http.StatusInternalServerError},
 		{name: "create valid parent link surfaces role add error", handler: (*User).Create, store: &fakeUserStore{roleErr: errDB}, req: adminRequest(http.MethodPost, "/api/users", `{"username":"ortu","password":"secret123","roles":["ortu"],"parent_id":"`+parentID.String()+`"}`), wantStatus: http.StatusInternalServerError},
