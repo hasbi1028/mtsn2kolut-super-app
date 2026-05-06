@@ -308,6 +308,8 @@
 	let composerHref = $derived(resolve('/bank-soal/tambah'));
 	let importHref = $derived(resolve('/bank-soal/impor'));
 	let reviewRouteHref = $derived(reviewHref());
+	let analysisHref = $derived(resolve('/bank-soal/analisis-butir'));
+	let mapelKdHref = $derived(resolve('/bank-soal/mapel-kd'));
 	let packageHref = $derived(resolve('/asesmen/paket'));
 	let listHref = $derived(resolve('/bank-soal/daftar'));
 	let summarySubjectDistribution = $state<SubjectDistribution[]>([]);
@@ -1023,6 +1025,14 @@
 				<a href={reviewRouteHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-800"><ClipboardCheckIcon class="size-5" /></span>
 					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Review antrean</span><span class="block text-xs text-slate-500">Setujui atau kembalikan untuk revisi</span></span>
+				</a>
+				<a href={analysisHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-800"><BarChart3Icon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Analisis butir</span><span class="block text-xs text-slate-500">Pantau kualitas, HOTS, dan pemakaian soal</span></span>
+				</a>
+				<a href={mapelKdHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-lime-100 text-lime-800"><Layers3Icon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Mapel & KD</span><span class="block text-xs text-slate-500">Cek coverage metadata dan materi</span></span>
 				</a>
 			</div>
 		</div>

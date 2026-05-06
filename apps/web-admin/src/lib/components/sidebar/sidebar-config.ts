@@ -41,7 +41,9 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 			{ href: '/bank-soal/daftar', label: 'Daftar Soal', icon: 'book-open', roles: ['admin', 'guru'] },
 			{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'pen-tool', roles: ['admin', 'guru'] },
 			{ href: '/bank-soal/verifikasi', label: 'Review Soal', icon: 'clipboard', roles: ['admin', 'guru'] },
-			{ href: '/bank-soal/impor', label: 'Impor Soal', icon: 'file-text', roles: ['admin', 'guru'] }
+			{ href: '/bank-soal/impor', label: 'Impor Soal', icon: 'file-text', roles: ['admin', 'guru'] },
+			{ href: '/bank-soal/analisis-butir', label: 'Analisis Butir', icon: 'activity', roles: ['admin', 'guru'] },
+			{ href: '/bank-soal/mapel-kd', label: 'Mapel & KD', icon: 'layers', roles: ['admin', 'guru'] }
 		]
 	},
 	{
