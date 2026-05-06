@@ -9,7 +9,7 @@ SQLC_BIN       := $(TOOLS_BIN)/sqlc
 
 # ── Install ──────────────────────────────────────────────────────────────────
 
-.PHONY: install install-web install-worker install-backend install-db-scripts
+.PHONY: install install-web install-worker install-backend install-db-scripts install-bun-dev
 
 install: install-web install-worker install-backend install-db-scripts
 
@@ -25,9 +25,12 @@ install-backend:
 install-db-scripts:
 	cd $(DB_SCRIPTS_DIR) && npm install
 
+install-bun-dev:
+	bun install --no-save
+
 # ── Dev ──────────────────────────────────────────────────────────────────────
 
-.PHONY: dev-web dev-worker dev-backend
+.PHONY: dev-web dev-worker dev-backend dev-web-bun dev-worker-bun
 
 dev-web:
 	cd $(WEB_DIR) && npm run dev
@@ -35,28 +38,46 @@ dev-web:
 dev-worker:
 	cd $(WORKER_DIR) && npm run dev
 
+dev-web-bun:
+	cd $(WEB_DIR) && bun run dev
+
+dev-worker-bun:
+	cd $(WORKER_DIR) && bun run dev
+
 dev-backend:
 	cd $(BACKEND_DIR) && ./start-dev.sh
 
 # ── Check / Test ─────────────────────────────────────────────────────────────
 
-.PHONY: check check-web check-worker check-mobile test-web test-worker test-mobile test-backend coverage-backend-unit coverage-backend-unit-88 vet-backend audit-web lint-backend lint ci-check
+.PHONY: check check-web check-web-bun check-worker check-worker-bun check-mobile test-web test-web-bun test-worker test-worker-bun test-mobile test-backend coverage-backend-unit coverage-backend-unit-88 vet-backend audit-web lint-backend lint ci-check
 .PHONY: ops-health ops-health-backend ops-health-frontend ops-health-worker ops-backup
 
 check-web:
 	cd $(WEB_DIR) && npm run check
 
+check-web-bun:
+	cd $(WEB_DIR) && bun run check
+
 test-web:
 	cd $(WEB_DIR) && npm run test:unit
 
+test-web-bun:
+	cd $(WEB_DIR) && bun run test:unit
+
 check-worker:
 	cd $(WORKER_DIR) && ./node_modules/.bin/tsc --noEmit
+
+check-worker-bun:
+	cd $(WORKER_DIR) && bun run check
 
 check-mobile:
 	cd apps/mobile && flutter analyze
 
 test-worker:
 	cd $(WORKER_DIR) && npm run test
+
+test-worker-bun:
+	cd $(WORKER_DIR) && bun run test
 
 test-mobile:
 	cd apps/mobile && flutter test
@@ -245,11 +266,14 @@ help:
 	@echo "  install-worker         npm install services/pusaka-worker"
 	@echo "  install-backend        go mod download services/core-api"
 	@echo "  install-db-scripts     npm install services/core-api/db/scripts"
+	@echo "  install-bun-dev        optional local Bun install without replacing npm lock"
 	@echo ""
 	@echo "Dev:"
 	@echo "  dev-backend            go run ./cmd/api"
 	@echo "  dev-web                npm run dev"
 	@echo "  dev-worker             npm run dev"
+	@echo "  dev-web-bun            optional Bun dev runner for web-admin only"
+	@echo "  dev-worker-bun         optional Bun script runner; worker runtime remains Node/tsx"
 	@echo ""
 	@echo "Verify:"
 	@echo "  check                  web check + web unit + worker typecheck + worker tests + backend tests + mobile tests + vet + npm audit"
@@ -258,6 +282,8 @@ help:
 	@echo "  coverage-backend-unit-88  same coverage scope with 88% threshold"
 	@echo "  lint                   golangci-lint run (falls back if not installed)"
 	@echo "  check-mobile           flutter analyze apps/mobile"
+	@echo "  check-web-bun          optional Bun runner for Svelte check"
+	@echo "  test-web-bun           optional Bun runner for Vitest"
 	@echo "  test-mobile            flutter test apps/mobile"
 	@echo "  db-sqlc                install repo-local sqlc if needed, then regenerate sqlc code"
 	@echo "  db-migrate             apply PostgreSQL migrations using DATABASE_URL"
