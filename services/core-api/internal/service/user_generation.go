@@ -3,8 +3,11 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
@@ -16,6 +19,7 @@ const DefaultEmployeeAccountNPSN = "40406031"
 const DefaultEmployeeAccountRole = "guru"
 
 type employeeAccountGenerationStore interface {
+	GetSetting(ctx context.Context, key string) (db.AppSetting, error)
 	ListEmployeeAccountGenerationCandidates(ctx context.Context, npsn string) ([]db.ListEmployeeAccountGenerationCandidatesRow, error)
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error)
 	AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error
@@ -66,19 +70,21 @@ func NewEmployeeAccountGeneratorWithPool(pool *pgxpool.Pool) *EmployeeAccountGen
 }
 
 func (s *EmployeeAccountGenerator) Preview(ctx context.Context) (EmployeeAccountGenerationResult, error) {
-	rows, err := s.q.ListEmployeeAccountGenerationCandidates(ctx, s.npsn)
+	npsn := s.resolveNPSN(ctx)
+	rows, err := s.q.ListEmployeeAccountGenerationCandidates(ctx, npsn)
 	if err != nil {
 		return EmployeeAccountGenerationResult{}, err
 	}
-	return s.buildResult(rows, false), nil
+	return s.buildResult(rows, false, npsn), nil
 }
 
 func (s *EmployeeAccountGenerator) Generate(ctx context.Context, actorID pgtype.UUID) (EmployeeAccountGenerationResult, error) {
-	rows, err := s.q.ListEmployeeAccountGenerationCandidates(ctx, s.npsn)
+	npsn := s.resolveNPSN(ctx)
+	rows, err := s.q.ListEmployeeAccountGenerationCandidates(ctx, npsn)
 	if err != nil {
 		return EmployeeAccountGenerationResult{}, err
 	}
-	result := s.buildResult(rows, true)
+	result := s.buildResult(rows, true, npsn)
 	if result.Ready == 0 {
 		return result, nil
 	}
@@ -149,8 +155,8 @@ func (s *EmployeeAccountGenerator) Generate(ctx context.Context, actorID pgtype.
 	return result, err
 }
 
-func (s *EmployeeAccountGenerator) buildResult(rows []db.ListEmployeeAccountGenerationCandidatesRow, includePassword bool) EmployeeAccountGenerationResult {
-	result := EmployeeAccountGenerationResult{NPSN: s.npsn, DefaultRole: s.role, PasswordSameAsUser: true, Items: make([]EmployeeAccountGenerationItem, 0, len(rows))}
+func (s *EmployeeAccountGenerator) buildResult(rows []db.ListEmployeeAccountGenerationCandidatesRow, includePassword bool, npsn string) EmployeeAccountGenerationResult {
+	result := EmployeeAccountGenerationResult{NPSN: npsn, DefaultRole: s.role, PasswordSameAsUser: true, Items: make([]EmployeeAccountGenerationItem, 0, len(rows))}
 	for _, row := range rows {
 		item := EmployeeAccountGenerationItem{EmployeeID: uuidEntityID(row.EmployeeID), NIP: row.Nip, Nama: row.Nama, TanggalLahir: accountGenerationDateString(row.TanggalLahir), NomorUrut: row.NomorUrut, Username: row.GeneratedUsername, Role: s.role}
 		switch {
@@ -180,6 +186,24 @@ func (s *EmployeeAccountGenerator) buildResult(rows []db.ListEmployeeAccountGene
 	}
 	result.Total = len(result.Items)
 	return result
+}
+
+func (s *EmployeeAccountGenerator) resolveNPSN(ctx context.Context) string {
+	fallback := strings.TrimSpace(s.npsn)
+	if fallback == "" {
+		fallback = DefaultEmployeeAccountNPSN
+	}
+	setting, err := s.q.GetSetting(ctx, schoolProfilePrefix+"npsn")
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fallback
+		}
+		return fallback
+	}
+	if npsn := strings.TrimSpace(setting.Value); npsn != "" {
+		return npsn
+	}
+	return fallback
 }
 
 func uuidFromString(value string) (pgtype.UUID, error) {

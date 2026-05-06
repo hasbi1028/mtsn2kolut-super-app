@@ -334,36 +334,60 @@ WITH active_employees AS (
         e.nip,
         e.nama,
         e.tanggal_lahir,
-        row_number() OVER (ORDER BY e.nama ASC, e.id ASC)::int AS nomor_urut
+        CASE
+            WHEN e.tanggal_lahir IS NULL THEN ''::text
+            ELSE to_char(e.tanggal_lahir, 'YY')
+        END AS birth_year_suffix
     FROM employees e
     WHERE e.is_active = TRUE
-), candidates AS (
+), linked_employees AS (
     SELECT
-        ae.id AS employee_id,
-        ae.nip,
-        ae.nama,
-        ae.tanggal_lahir,
-        ae.nomor_urut,
-        CASE
-            WHEN ae.tanggal_lahir IS NULL THEN ''::text
-            ELSE ($1::text || to_char(ae.tanggal_lahir, 'DDMMYY') || lpad(ae.nomor_urut::text, 3, '0'))::text
-        END AS generated_username,
+        ae.id, ae.nip, ae.nama, ae.tanggal_lahir, ae.birth_year_suffix,
         linked.id AS existing_user_id
     FROM active_employees ae
     LEFT JOIN users linked ON linked.employee_id = ae.id AND linked.deleted_at IS NULL
+), existing_sequences AS (
+    SELECT
+        substring(u.username FROM length($1::text) + 1 FOR 2) AS birth_year_suffix,
+        max(substring(u.username FROM length($1::text) + 3 FOR 3)::int)::int AS max_sequence
+    FROM users u
+    WHERE u.username ~ ('^' || $1::text || '[0-9]{5}$')
+    GROUP BY substring(u.username FROM length($1::text) + 1 FOR 2)
+), sequenced_candidates AS (
+    SELECT
+        le.id AS employee_id,
+        le.nip,
+        le.nama,
+        le.tanggal_lahir,
+        le.birth_year_suffix,
+        le.existing_user_id,
+        CASE
+            WHEN le.tanggal_lahir IS NULL OR le.existing_user_id IS NOT NULL THEN 0
+            ELSE (COALESCE(es.max_sequence, 0) + sum(CASE WHEN le.tanggal_lahir IS NOT NULL AND le.existing_user_id IS NULL THEN 1 ELSE 0 END) OVER (
+                PARTITION BY le.birth_year_suffix
+                ORDER BY le.nama ASC, le.id ASC
+            ))::int
+        END AS nomor_urut
+    FROM linked_employees le
+    LEFT JOIN existing_sequences es ON es.birth_year_suffix = le.birth_year_suffix
 )
 SELECT
-    c.employee_id,
-    c.nip,
-    c.nama,
-    c.tanggal_lahir,
-    c.nomor_urut,
-    c.generated_username,
-    c.existing_user_id,
+    sc.employee_id,
+    sc.nip,
+    sc.nama,
+    sc.tanggal_lahir,
+    sc.nomor_urut,
+    CASE
+        WHEN sc.tanggal_lahir IS NULL OR sc.existing_user_id IS NOT NULL THEN ''::text
+        ELSE ($1::text || sc.birth_year_suffix || lpad(sc.nomor_urut::text, 3, '0'))::text
+    END AS generated_username,
+    sc.existing_user_id,
     username_user.id AS username_user_id
-FROM candidates c
-LEFT JOIN users username_user ON username_user.username = c.generated_username AND c.generated_username <> '' AND username_user.deleted_at IS NULL
-ORDER BY c.nomor_urut ASC
+FROM sequenced_candidates sc
+LEFT JOIN users username_user ON username_user.username = ($1::text || sc.birth_year_suffix || lpad(sc.nomor_urut::text, 3, '0'))
+    AND sc.nomor_urut > 0
+    AND username_user.deleted_at IS NULL
+ORDER BY sc.birth_year_suffix ASC NULLS LAST, sc.nomor_urut ASC, sc.nama ASC, sc.employee_id ASC
 `
 
 type ListEmployeeAccountGenerationCandidatesRow struct {
