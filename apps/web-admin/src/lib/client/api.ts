@@ -66,7 +66,7 @@ export async function readClientApiData<T>(
 			if (envelope.data === undefined) throw new Error(fallbackMessage);
 			return envelope.data;
 		}
-		if ('items' in payload && !('meta' in payload)) {
+		if ('items' in payload && !('meta' in payload) && Object.keys(payload).every((key) => ['items', 'error', 'message'].includes(key))) {
 			const envelope = payload as ApiEnvelope<T>;
 			if (envelope.items === undefined) throw new Error(fallbackMessage);
 			return envelope.items;
