@@ -19,7 +19,8 @@ var stripDangerousBlockPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?is)<embed[^>]*>.*?</embed>`),
 }
 var stripEventHandlers = regexp.MustCompile(`(?i)\s+on[a-z]+\s*=\s*(".*?"|'.*?'|[^\s>]+)`)
-var stripDangerousURLs = regexp.MustCompile(`(?i)\s(href|src)\s*=\s*(['"])\s*javascript:[^'"]*['"]`)
+var stripDangerousURLs = regexp.MustCompile(`(?i)\s(?:href|src|xlink:href)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)`)
+var stripDangerousAttributes = regexp.MustCompile(`(?i)\s(?:srcdoc|style|formaction|poster)\s*=\s*(?:".*?"|'.*?'|[^\s>]+)`)
 var importAnswerTokenSeparators = regexp.MustCompile(`[,\|;/+\s]+`)
 var importMatchingPairSeparators = regexp.MustCompile(`[;,|]+`)
 

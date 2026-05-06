@@ -28,7 +28,7 @@
 	};
 	type QuestionListResponse = { items?: Question[]; meta?: { total?: number } };
 	type SummaryResponse = {
-		counts?: Partial<Record<'total' | 'review' | 'approved' | 'published' | 'revision' | 'package_usage', number>>;
+		counts?: Partial<Record<'all' | 'total' | 'review' | 'approved' | 'published' | 'revision' | 'package_usage', number>>;
 		by_subject?: Array<{ subject_name?: string; subject_code?: string; total?: number }>;
 		by_cognitive_level?: Array<{ cognitive_level?: string; total?: number }>;
 	};
@@ -76,7 +76,7 @@
 	}
 
 	let filteredQuestions = $derived(activeSubject ? questions.filter((question) => subjectName(question) === activeSubject) : questions);
-	let totalQuestions = $derived(summary.counts?.total ?? questions.length);
+	let totalQuestions = $derived(summary.counts?.total ?? summary.counts?.all ?? questions.length);
 	let reviewedQuestions = $derived((summary.counts?.approved ?? 0) + (summary.counts?.published ?? 0));
 	let usedQuestions = $derived(questions.filter((question) => packageCount(question) > 0 || answerCount(question) > 0).length || (summary.counts?.package_usage ?? 0));
 	let revisionQuestions = $derived(questions.filter((question) => question.workflow_status === 'revision' || question.workflow_status === 'rejected'));

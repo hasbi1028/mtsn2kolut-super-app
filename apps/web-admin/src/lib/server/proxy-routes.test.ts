@@ -1113,6 +1113,31 @@ describe('api proxy route handlers', () => {
 		await expect(validRes.json()).resolves.toEqual({ id: 'q-2' });
 	});
 
+
+	it('falls back to aggregated Bank Soal summary when legacy backend treats summary as an id', async () => {
+		const mod = await import('../../routes/api/bank-soal/summary/+server');
+		const event = createEvent({ url: new URL('http://localhost/api/bank-soal/summary') });
+		proxyGetMock.mockRejectedValueOnce(new MockApiError(400, 'invalid id'));
+		proxyGetMock.mockResolvedValueOnce({
+			items: [
+				{ id: 'q-1', subject_id: 'ipa', subject_name: 'IPA', workflow_status: 'approved', status: 'published', cognitive_level: 'C4', package_count: 1 },
+				{ id: 'q-2', subject_id: 'mtk', subject_name: 'Matematika', workflow_status: 'review', status: 'draft', cognitive_level: 'C2', package_count: 0 }
+			],
+			meta: { total: 2 }
+		});
+
+		const res = await mod.GET(event as never);
+
+		expect(proxyGetMock).toHaveBeenNthCalledWith(1, backendCbtPath('/questions/summary'));
+		expect(proxyGetMock).toHaveBeenNthCalledWith(2, backendCbtPath('/questions?limit=500&page=1'));
+		expect(res.status).toBe(200);
+		await expect(res.json()).resolves.toMatchObject({
+			counts: { all: 2, total: 2, review: 1, approved: 1, published: 1, package_usage: 1 },
+			by_subject: expect.arrayContaining([expect.objectContaining({ subject_name: 'IPA', total: 1 })]),
+			by_cognitive_level: expect.arrayContaining([expect.objectContaining({ cognitive_level: 'C4', total: 1 })])
+		});
+	});
+
 	it('streams Bank Soal asset files through the backend asset proxy handler', async () => {
 		const mod = await import('../../routes/api/bank-soal/assets/[id]/file/+server');
 		const upstream = new Response(new Uint8Array([1, 2, 3]), {

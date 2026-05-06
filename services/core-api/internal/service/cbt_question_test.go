@@ -746,9 +746,9 @@ func TestNormalizeQuestionInputSanitizesDangerousHTML(t *testing.T) {
 		AuthoringMode:  "advance",
 		QuestionType:   "multiple_choice",
 		StemHTML:       `<p onclick="alert(1)">Halo</p><script>alert(2)</script>`,
-		StimulusHTML:   `<img src="javascript:alert(1)" onerror="alert(1)">`,
+		StimulusHTML:   `<img src="javascript:alert(1)" onerror="alert(1)" style="background:url(javascript:alert(2))">`,
 		QuestionText:   "",
-		Options:        []QuestionOption{{Label: "A", HTML: `<span onclick="x()">Aman</span>`}, {Label: "B", Text: "B"}},
+		Options:        []QuestionOption{{Label: "A", HTML: `<span onclick="x()"><a href=javascript:alert(1)>Aman</a></span>`}, {Label: "B", Text: "B"}},
 		AnswerKey:      "A",
 		Difficulty:     db.CbtQuestionDifficultyEnumMedium,
 		Status:         db.CbtQuestionStatusEnumDraft,
@@ -765,7 +765,7 @@ func TestNormalizeQuestionInputSanitizesDangerousHTML(t *testing.T) {
 	if got.StimulusHTML != `<img>` {
 		t.Fatalf("StimulusHTML = %q, want sanitized img", got.StimulusHTML)
 	}
-	if got.Options[0].HTML != `<span>Aman</span>` {
+	if got.Options[0].HTML != `<span><a>Aman</a></span>` {
 		t.Fatalf("Option HTML = %q, want sanitized span", got.Options[0].HTML)
 	}
 }

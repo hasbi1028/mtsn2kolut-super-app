@@ -9,7 +9,7 @@ Dokumen ini merangkum hasil integrasi bertahap Bank Soal standalone pada web-adm
 | Dashboard | `/bank-soal` | KPI, distribusi, aktivitas, shortcut operasional | `/api/bank-soal/summary`, `/api/bank-soal/questions` |
 | Daftar soal | `/bank-soal/daftar` | Search, filter, pagination, aksi per soal | `/api/bank-soal/questions` |
 | Komposer | `/bank-soal/tambah` | Buat/edit soal, autosave, preview siswa, draft/review | `/api/bank-soal/questions`, workflow/timeline aliases |
-| Import | `/bank-soal/impor` | Template, upload, preview dry-run, import final | `/api/bank-soal/template`, `/api/bank-soal/import-legacy` |
+| Import | `/bank-soal/impor` | Template, upload, preview dry-run, import final | `/api/bank-soal/questions/template`, `/api/bank-soal/questions/import-legacy` |
 | Review | `/bank-soal/verifikasi` | Queue review, approve/revisi, timeline, catatan reviewer | `/api/bank-soal/questions`, workflow/timeline aliases |
 | Analisis butir | `/bank-soal/analisis-butir` | Distribusi tipe/status/HOTS dan tindak lanjut | `/api/bank-soal/questions`, `/api/bank-soal/summary` |
 | Mapel & KD | `/bank-soal/mapel-kd` | Coverage mapel, KD/CP/TP, metadata belum lengkap | `/api/bank-soal/soal-support/subjects`, `/api/bank-soal/questions` |
