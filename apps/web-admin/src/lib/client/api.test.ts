@@ -10,9 +10,9 @@ import {
 
 describe('client API helpers', () => {
 	it('encodes dynamic client path segments', () => {
-		const path = clientApiPath`/api/cbt/sessions/${'session 1/2026'}/participants/${'siswa?1'}/seat`;
+		const path = clientApiPath`/api/asesmen/sessions/${'session 1/2026'}/participants/${'siswa?1'}/seat`;
 
-		expect(path).toBe('/api/cbt/sessions/session%201%2F2026/participants/siswa%3F1/seat');
+		expect(path).toBe('/api/asesmen/sessions/session%201%2F2026/participants/siswa%3F1/seat');
 	});
 
 	it('appends client query strings only when present', () => {
@@ -21,7 +21,7 @@ describe('client API helpers', () => {
 			entity: 'timetables',
 			id: 'slot 1/2026'
 		}))).toBe('/api/academic?entity=timetables&id=slot+1%2F2026');
-		expect(clientApiPathWithQuery('/api/cbt/questions', '?limit=20')).toBe('/api/cbt/questions?limit=20');
+		expect(clientApiPathWithQuery('/api/bank-soal/questions', '?limit=20')).toBe('/api/bank-soal/questions?limit=20');
 	});
 
 	it('reads successful JSON payloads without assuming an envelope', async () => {

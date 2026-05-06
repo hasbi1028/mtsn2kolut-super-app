@@ -76,9 +76,9 @@ describe('server api helpers', () => {
 	});
 
 	it('apiPath encodes interpolated route params as path segments', () => {
-		const path = apiPath`/api/cbt/sessions/${'session 1/2026'}/participants/${'siswa?1'}/seat`;
+		const path = apiPath`/api/asesmen/sessions/${'session 1/2026'}/participants/${'siswa?1'}/seat`;
 
-		expect(path).toBe('/api/cbt/sessions/session%201%2F2026/participants/siswa%3F1/seat');
+		expect(path).toBe('/api/asesmen/sessions/session%201%2F2026/participants/siswa%3F1/seat');
 	});
 
 	it('apiPathWithQuery appends query strings only when present', () => {
@@ -397,7 +397,7 @@ describe('server api helpers', () => {
 	it('proxy.fetch forces the real access token and never falls back to an internal key', async () => {
 		const eventFetch = vi.fn<typeof fetch>().mockResolvedValue(okResponse({ ok: true }));
 
-		await proxy(fakeEvent(eventFetch, 'real-user-token')).fetch('/api/cbt/questions', {
+		await proxy(fakeEvent(eventFetch, 'real-user-token')).fetch('/api/bank-soal/questions', {
 			method: 'POST',
 			headers: {
 				Authorization: 'Bearer caller-override',
@@ -406,7 +406,7 @@ describe('server api helpers', () => {
 		});
 
 		expect(eventFetch).toHaveBeenCalledWith(
-			expect.stringContaining('/api/cbt/questions'),
+			expect.stringContaining('/api/bank-soal/questions'),
 			expect.objectContaining({
 				method: 'POST',
 				headers: {
@@ -421,22 +421,22 @@ describe('server api helpers', () => {
 		const event = fakeEvent(eventFetch, 'initial-token');
 		const client = proxy(event);
 
-		await client.fetch('/api/cbt/assets');
+		await client.fetch('/api/bank-soal/assets');
 		event.locals.accessToken = 'rotated-token';
-		await client.fetch('/api/cbt/assets', {
+		await client.fetch('/api/bank-soal/assets', {
 			headers: { Authorization: 'Bearer caller-override' }
 		});
 
 		expect(eventFetch).toHaveBeenNthCalledWith(
 			1,
-			expect.stringContaining('/api/cbt/assets'),
+			expect.stringContaining('/api/bank-soal/assets'),
 			expect.objectContaining({
 				headers: { Authorization: 'Bearer initial-token' }
 			})
 		);
 		expect(eventFetch).toHaveBeenNthCalledWith(
 			2,
-			expect.stringContaining('/api/cbt/assets'),
+			expect.stringContaining('/api/bank-soal/assets'),
 			expect.objectContaining({
 				headers: { Authorization: 'Bearer rotated-token' }
 			})

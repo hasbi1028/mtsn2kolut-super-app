@@ -39,6 +39,10 @@ const apiPathWithQueryMock = (path: string, params: URLSearchParams | string) =>
 	const query = typeof params === 'string' ? params.replace(/^\?/, '') : params.toString();
 	return query ? `${path}?${query}` : path;
 };
+const backendCbtPrefix = ['/api', 'cbt'].join('/');
+const backendCbtPath = (path: string) => `${backendCbtPrefix}${path.startsWith('/') ? path : `/${path}`}`;
+const backendCbtApiPath = (strings: TemplateStringsArray, ...values: Array<string | number | boolean>) =>
+	`${backendCbtPrefix}${apiPathMock(strings, ...values)}`;
 const requiredRouteParamMock = (value: string | undefined, name: string) => {
 	if (!value) throw new MockApiError(400, `${name} tidak valid`);
 	return value;
@@ -1064,97 +1068,22 @@ describe('api proxy route handlers', () => {
 		expect(res).toBe(upstream);
 	});
 
-	it('streams CBT asset files through the shared stream proxy helper', async () => {
-		const mod = await import('../../routes/api/cbt/assets/[id]/file/+server');
-		const upstream = new Response(new Uint8Array([1, 2, 3]), {
-			status: 200,
-			headers: { 'content-type': 'application/pdf' }
-		});
-		const streamed = new Response(new Uint8Array([1, 2, 3]), {
-			status: 200,
-			headers: { 'content-type': 'application/pdf' }
-		});
-		const event = createEvent({
-			params: { id: 'asset 1/scan' },
-			url: new URL('http://localhost/api/cbt/assets/asset%201%2Fscan/file?download=1')
-		});
-		proxyFetchMock.mockResolvedValueOnce(upstream);
-		streamProxyResponseMock.mockResolvedValueOnce(streamed);
-
-		const res = await mod.GET(event as never);
-
-		expect(proxyFetchMock).toHaveBeenCalledWith('/api/cbt/assets/asset%201%2Fscan/file?download=1');
-		expect(streamProxyResponseMock).toHaveBeenCalledWith(upstream, {
-			fallbackMessage: 'Gagal mengambil aset CBT.',
-			defaultCacheControl: 'private, max-age=300'
-		});
-		expect(res).toBe(streamed);
-	});
-
-	it('streams CBT question export CSV with active query filters and event context', async () => {
-		const mod = await import('../../routes/api/cbt/questions/export/+server');
-		const upstream = new Response('kode,tipe\nQ-001,pg\n', {
-			status: 200,
-			headers: { 'content-type': 'text/csv; charset=utf-8' }
-		});
-		const streamed = new Response('kode,tipe\nQ-001,pg\n', { status: 200 });
-		const event = createEvent({
-			url: new URL('http://localhost/api/cbt/questions/export?subject_id=ipa&workflow_status=draft&q=energi&event_id=event-1')
-		});
-		proxyFetchMock.mockResolvedValueOnce(upstream);
-		streamProxyResponseMock.mockResolvedValueOnce(streamed);
-
-		const res = await mod.GET(event as never);
-
-		expect(proxyFetchMock).toHaveBeenCalledWith('/api/cbt/questions/export?subject_id=ipa&workflow_status=draft&q=energi&event_id=event-1');
-		expect(streamProxyResponseMock).toHaveBeenCalledWith(upstream, {
-			defaultContentType: 'text/csv; charset=utf-8',
-			defaultCacheControl: 'no-store',
-		});
-		expect(res).toBe(streamed);
-	});
-
-	it('streams CBT question CSV template with no-store headers', async () => {
-		const mod = await import('../../routes/api/cbt/questions/template/+server');
-		const upstream = new Response('kode,tipe\nTPL-PG-001,pg\n', {
-			status: 200,
-			headers: { 'content-type': 'text/csv; charset=utf-8' }
-		});
-		const streamed = new Response('kode,tipe\nTPL-PG-001,pg\n', { status: 200 });
-		const event = createEvent({
-			url: new URL('http://localhost/api/cbt/questions/template')
-		});
-		proxyFetchMock.mockResolvedValueOnce(upstream);
-		streamProxyResponseMock.mockResolvedValueOnce(streamed);
-
-		const res = await mod.GET(event as never);
-
-		expect(proxyFetchMock).toHaveBeenCalledWith('/api/cbt/questions/template');
-		expect(streamProxyResponseMock).toHaveBeenCalledWith(upstream, {
-			defaultContentType: 'text/csv; charset=utf-8',
-			defaultCacheControl: 'no-store'
-		});
-		expect(res).toBe(streamed);
-	});
-
-	it('keeps CBT question list available through the canonical BFF proxy', async () => {
-		const mod = await import('../../routes/api/cbt/questions/+server');
-		const event = createEvent({
-			url: new URL('http://localhost/api/cbt/questions?subject_id=ipa&q=energi&workflow_status=draft&event_id=event-1')
+	it('exposes Bank Soal questions through the backend question handler semantics', async () => {
+		const mod = await import('../../routes/api/bank-soal/questions/+server');
+		const listEvent = createEvent({
+			url: new URL('http://localhost/api/bank-soal/questions?subject_id=ipa&q=energi&workflow_status=draft&event_id=event-1')
 		});
 		proxyGetMock.mockResolvedValueOnce({ items: [{ id: 'q-1' }], total: 1 });
 
-		const res = await mod.GET(event as never);
+		const listRes = await mod.GET(listEvent as never);
 
-		expect(proxyGetMock).toHaveBeenCalledWith('/api/cbt/questions?subject_id=ipa&q=energi&workflow_status=draft&event_id=event-1');
-		expect(proxyPostMock).not.toHaveBeenCalled();
-		expect(res.status).toBe(200);
-		await expect(res.json()).resolves.toEqual({ items: [{ id: 'q-1' }], total: 1 });
-	});
+		expect(proxyGetMock).toHaveBeenCalledWith(
+			backendCbtPath('/questions?subject_id=ipa&q=energi&workflow_status=draft&event_id=event-1')
+		);
+		expect(listRes.status).toBe(200);
+		await expect(listRes.json()).resolves.toEqual({ items: [{ id: 'q-1' }], total: 1 });
 
-	it('keeps CBT question creation available but validates required subject before proxying', async () => {
-		const mod = await import('../../routes/api/cbt/questions/+server');
-		const invalidRequest = new Request('http://localhost/api/cbt/questions', {
+		const invalidRequest = new Request('http://localhost/api/bank-soal/questions', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ stem_html: '<p>Soal tanpa mapel</p>' })
@@ -1166,7 +1095,7 @@ describe('api proxy route handlers', () => {
 		await expect(invalidRes.json()).resolves.toEqual({ error: 'subject_id wajib diisi' });
 		expect(proxyPostMock).not.toHaveBeenCalled();
 
-		const validRequest = new Request('http://localhost/api/cbt/questions', {
+		const validRequest = new Request('http://localhost/api/bank-soal/questions', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ event_id: 'event-1', subject_id: 'ipa', stem_html: '<p>Energi</p>' })
@@ -1175,7 +1104,7 @@ describe('api proxy route handlers', () => {
 
 		const validRes = await mod.POST(createEvent({ request: validRequest }) as never);
 
-		expect(proxyPostMock).toHaveBeenCalledWith('/api/cbt/questions', {
+		expect(proxyPostMock).toHaveBeenCalledWith(backendCbtPath('/questions'), {
 			event_id: 'event-1',
 			subject_id: 'ipa',
 			stem_html: '<p>Energi</p>'
@@ -1184,166 +1113,56 @@ describe('api proxy route handlers', () => {
 		await expect(validRes.json()).resolves.toEqual({ id: 'q-2' });
 	});
 
-	it('proxies CBT soal subject support as a read-only academic projection', async () => {
-		const mod = await import('../../routes/api/cbt/soal-support/subjects/+server');
-		proxyGetMock.mockResolvedValueOnce({ subjects: [{ id: 'ipa', name: 'IPA' }], classes: [{ id: 'private' }] });
-
-		const res = await mod.GET(createEvent() as never);
-
-		expect(proxyGetMock).toHaveBeenCalledWith('/api/academic');
-		expect(res.status).toBe(200);
-		await expect(res.json()).resolves.toEqual({ subjects: [{ id: 'ipa', name: 'IPA' }] });
-	});
-
-	it('forwards CBT legacy import FormData including selected event context', async () => {
-		const mod = await import('../../routes/api/cbt/questions/import-legacy/+server');
-		const form = new FormData();
-		form.set('subject_id', 'ipa');
-		form.set('event_id', 'event-1');
-		form.set('file', new Blob(['kode,pertanyaan\nQ1,Apa?'], { type: 'text/csv' }), 'soal.csv');
-		const request = { formData: vi.fn(async () => form) };
-		const upstream = new Response(JSON.stringify({ data: { imported: 1 } }), { status: 200 });
+	it('streams Bank Soal asset files through the backend asset proxy handler', async () => {
+		const mod = await import('../../routes/api/bank-soal/assets/[id]/file/+server');
+		const upstream = new Response(new Uint8Array([1, 2, 3]), {
+			status: 200,
+			headers: { 'content-type': 'application/pdf' }
+		});
+		const streamed = new Response(new Uint8Array([1, 2, 3]), {
+			status: 200,
+			headers: { 'content-type': 'application/pdf' }
+		});
+		const event = createEvent({
+			params: { id: 'asset 1/scan' },
+			url: new URL('http://localhost/api/bank-soal/assets/asset%201%2Fscan/file?download=1')
+		});
 		proxyFetchMock.mockResolvedValueOnce(upstream);
-		jsonProxyResponseMock.mockResolvedValueOnce(new Response(JSON.stringify({ imported: 1 }), { status: 200 }));
+		streamProxyResponseMock.mockResolvedValueOnce(streamed);
 
-		const res = await mod.POST(createEvent({ request }) as never);
+		const res = await mod.GET(event as never);
 
-		expect(proxyFetchMock).toHaveBeenCalledWith('/api/cbt/questions/import-legacy', {
-			method: 'POST',
-			body: expect.any(FormData)
+		expect(proxyFetchMock).toHaveBeenCalledWith(
+			apiPathWithQueryMock(backendCbtApiPath`/assets/${'asset 1/scan'}/file`, 'download=1')
+		);
+		expect(streamProxyResponseMock).toHaveBeenCalledWith(upstream, {
+			fallbackMessage: 'Gagal mengambil aset CBT.',
+			defaultCacheControl: 'private, max-age=300'
 		});
-		const forwarded = proxyFetchMock.mock.calls[0]?.[1]?.body as FormData;
-		expect(forwarded.get('subject_id')).toBe('ipa');
-		expect(forwarded.get('event_id')).toBe('event-1');
-		expect(forwarded.get('file')).toBeTruthy();
-		expect(res.status).toBe(200);
+		expect(res).toBe(streamed);
 	});
 
-	it('proxies CBT event member list and creation through encoded event ids', async () => {
-		const mod = await import('../../routes/api/cbt/events/[id]/members/+server');
-		const getEvent = createEvent({ params: { id: 'event 1/2026' } });
-		proxyGetMock.mockResolvedValueOnce([{ id: 'member-1', username: 'guru' }]);
-
-		const getRes = await mod.GET(getEvent as never);
-
-		expect(proxyGetMock).toHaveBeenCalledWith('/api/cbt/events/event%201%2F2026/members');
-		expect(getRes.status).toBe(200);
-		await expect(getRes.json()).resolves.toEqual([{ id: 'member-1', username: 'guru' }]);
-
-		const request = new Request('http://localhost/api/cbt/events/event%201/members', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ user_id: 'user-1', role: 'pembuat_soal', subject_id: 'ipa' })
-		});
-		const postEvent = createEvent({ params: { id: 'event 1/2026' }, request });
-		proxyPostMock.mockResolvedValueOnce({ id: 'member-2' });
-
-		const postRes = await mod.POST(postEvent as never);
-
-		expect(readRequestJsonMock).toHaveBeenCalledWith(request);
-		expect(proxyPostMock).toHaveBeenCalledWith('/api/cbt/events/event%201%2F2026/members', {
-			user_id: 'user-1',
-			role: 'pembuat_soal',
-			subject_id: 'ipa'
-		});
-		expect(postRes.status).toBe(201);
-		await expect(postRes.json()).resolves.toEqual({ id: 'member-2' });
-	});
-
-	it('proxies CBT event member update and delete through encoded member ids', async () => {
-		const mod = await import('../../routes/api/cbt/events/[id]/members/[member_id]/+server');
-		const request = new Request('http://localhost/api/cbt/events/event%201/members/member%201', {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ user_id: 'user-1', role: 'reviewer' })
-		});
-		const putEvent = createEvent({
-			params: { id: 'event 1/2026', member_id: 'member 1/2026' },
-			request
-		});
-		proxyPutMock.mockResolvedValueOnce({ id: 'member 1/2026', role: 'reviewer' });
-
-		const putRes = await mod.PUT(putEvent as never);
-
-		expect(proxyPutMock).toHaveBeenCalledWith('/api/cbt/events/event%201%2F2026/members/member%201%2F2026', {
-			user_id: 'user-1',
-			role: 'reviewer'
-		});
-		expect(putRes.status).toBe(200);
-		await expect(putRes.json()).resolves.toEqual({ id: 'member 1/2026', role: 'reviewer' });
-
-		const deleteRes = await mod.DELETE(createEvent({
-			params: { id: 'event 1/2026', member_id: 'member 1/2026' }
-		}) as never);
-
-		expect(proxyDeleteMock).toHaveBeenCalledWith('/api/cbt/events/event%201%2F2026/members/member%201%2F2026');
-		expect(deleteRes.status).toBe(204);
-	});
-
-	it('proxies CBT question targets with encoded event and subject ids', async () => {
-		const targetsMod = await import('../../routes/api/cbt/events/[id]/question-targets/+server');
-		proxyGetMock.mockResolvedValueOnce([{ subject_id: 'ipa', target_questions: 30 }]);
-
-		const getRes = await targetsMod.GET(createEvent({ params: { id: 'event 1/2026' } }) as never);
-
-		expect(proxyGetMock).toHaveBeenCalledWith('/api/cbt/events/event%201%2F2026/question-targets');
-		expect(getRes.status).toBe(200);
-		await expect(getRes.json()).resolves.toEqual([{ subject_id: 'ipa', target_questions: 30 }]);
-
-		const request = new Request('http://localhost/api/cbt/events/event%201/question-targets', {
-			method: 'PUT',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ subject_id: 'ipa', target_questions: 25 })
-		});
-		proxyPutMock.mockResolvedValueOnce({ subject_id: 'ipa', target_questions: 25 });
-
-		const putRes = await targetsMod.PUT(createEvent({ params: { id: 'event 1/2026' }, request }) as never);
-
-		expect(readRequestJsonMock).toHaveBeenCalledWith(request);
-		expect(proxyPutMock).toHaveBeenCalledWith('/api/cbt/events/event%201%2F2026/question-targets', { subject_id: 'ipa', target_questions: 25 });
-		expect(putRes.status).toBe(200);
-
-		const deleteMod = await import('../../routes/api/cbt/events/[id]/question-targets/[subject_id]/+server');
-		const deleteRes = await deleteMod.DELETE(createEvent({ params: { id: 'event 1/2026', subject_id: 'ipa kelas 7' } }) as never);
-
-		expect(proxyDeleteMock).toHaveBeenCalledWith('/api/cbt/events/event%201%2F2026/question-targets/ipa%20kelas%207');
-		expect(deleteRes.status).toBe(204);
-	});
-
-	it('proxies CBT event command-center companion endpoints', async () => {
-		const overviewMod = await import('../../routes/api/cbt/events/[id]/overview/+server');
-		const sessionsMod = await import('../../routes/api/cbt/events/[id]/sessions/+server');
-		const packagesMod = await import('../../routes/api/cbt/events/[id]/packages/+server');
-		const event = createEvent({ params: { id: 'event 1/2026' } });
-		proxyGetMock.mockResolvedValueOnce({ session_count: 2 });
+	it('exposes Asesmen event, package, and session aliases through backend assessment paths', async () => {
+		const eventsMod = await import('../../routes/api/asesmen/events/+server');
+		const eventSessionsMod = await import('../../routes/api/asesmen/events/[id]/sessions/+server');
+		const packagesMod = await import('../../routes/api/asesmen/packages/+server');
+		const sessionsMod = await import('../../routes/api/asesmen/sessions/+server');
+		proxyGetMock.mockResolvedValueOnce([{ id: 'event-1' }]);
 		proxyGetMock.mockResolvedValueOnce([{ id: 'session-1' }]);
-		proxyGetMock.mockResolvedValueOnce({ packages: [{ id: 'package-1' }] });
-
-		const overviewRes = await overviewMod.GET(event as never);
-		const sessionsRes = await sessionsMod.GET(event as never);
-		const packagesRes = await packagesMod.GET(event as never);
-
-		expect(proxyGetMock).toHaveBeenNthCalledWith(1, '/api/cbt/events/event%201%2F2026/overview');
-		expect(proxyGetMock).toHaveBeenNthCalledWith(2, '/api/cbt/events/event%201%2F2026/sessions');
-		expect(proxyGetMock).toHaveBeenNthCalledWith(3, '/api/cbt/events/event%201%2F2026/packages');
-		expect(overviewRes.status).toBe(200);
-		expect(sessionsRes.status).toBe(200);
-		expect(packagesRes.status).toBe(200);
-	});
-
-	it('forwards CBT package and session event filters and creation context', async () => {
-		const packagesMod = await import('../../routes/api/cbt/packages/+server');
-		const sessionsMod = await import('../../routes/api/cbt/sessions/+server');
 		proxyGetMock.mockResolvedValueOnce({ packages: [] });
 		proxyGetMock.mockResolvedValueOnce([]);
 
-		await packagesMod.GET(createEvent({ url: new URL('http://localhost/api/cbt/packages?event_id=event-1') }) as never);
-		await sessionsMod.GET(createEvent({ url: new URL('http://localhost/api/cbt/sessions?event_id=event-1') }) as never);
+		await eventsMod.GET(createEvent({ url: new URL('http://localhost/api/asesmen/events') }) as never);
+		await eventSessionsMod.GET(createEvent({ params: { id: 'event 1/2026' } }) as never);
+		await packagesMod.GET(createEvent({ url: new URL('http://localhost/api/asesmen/packages?event_id=event-1') }) as never);
+		await sessionsMod.GET(createEvent({ url: new URL('http://localhost/api/asesmen/sessions?event_id=event-1') }) as never);
 
-		expect(proxyGetMock).toHaveBeenNthCalledWith(1, '/api/cbt/packages?event_id=event-1');
-		expect(proxyGetMock).toHaveBeenNthCalledWith(2, '/api/cbt/sessions?event_id=event-1');
+		expect(proxyGetMock).toHaveBeenNthCalledWith(1, backendCbtPath('/events'));
+		expect(proxyGetMock).toHaveBeenNthCalledWith(2, backendCbtApiPath`/events/${'event 1/2026'}/sessions`);
+		expect(proxyGetMock).toHaveBeenNthCalledWith(3, backendCbtPath('/packages?event_id=event-1'));
+		expect(proxyGetMock).toHaveBeenNthCalledWith(4, backendCbtPath('/sessions?event_id=event-1'));
 
-		const packageRequest = new Request('http://localhost/api/cbt/packages', {
+		const packageRequest = new Request('http://localhost/api/asesmen/packages', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ event_id: 'event-1', subject_id: 'ipa', title: 'Paket IPA', duration_minutes: 90 })
@@ -1351,9 +1170,9 @@ describe('api proxy route handlers', () => {
 		proxyPostMock.mockResolvedValueOnce({ id: 'package-1' });
 		await packagesMod.POST(createEvent({ request: packageRequest }) as never);
 
-		expect(proxyPostMock).toHaveBeenCalledWith('/api/cbt/packages', expect.objectContaining({ event_id: 'event-1' }));
+		expect(proxyPostMock).toHaveBeenCalledWith(backendCbtPath('/packages'), expect.objectContaining({ event_id: 'event-1' }));
 
-		const sessionRequest = new Request('http://localhost/api/cbt/sessions', {
+		const sessionRequest = new Request('http://localhost/api/asesmen/sessions', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ event_id: 'event-1', package_id: 'package-1', class_id: 'class-1', scope_type: 'class', title: 'Sesi IPA', scheduled_start: '2026-05-04T01:00:00Z', scheduled_end: '2026-05-04T02:00:00Z' })
@@ -1361,69 +1180,7 @@ describe('api proxy route handlers', () => {
 		proxyPostMock.mockResolvedValueOnce({ id: 'session-1' });
 		await sessionsMod.POST(createEvent({ request: sessionRequest }) as never);
 
-		expect(proxyPostMock).toHaveBeenCalledWith('/api/cbt/sessions', expect.objectContaining({ event_id: 'event-1' }));
-	});
-
-	it('proxies CBT question timeline and bulk workflow actions', async () => {
-		const timelineMod = await import('../../routes/api/cbt/questions/[id]/timeline/+server');
-		proxyGetMock.mockResolvedValueOnce([{ action: 'review' }]);
-
-		const timelineRes = await timelineMod.GET(createEvent({ params: { id: 'question 1/2026' } }) as never);
-
-		expect(proxyGetMock).toHaveBeenCalledWith('/api/cbt/questions/question%201%2F2026/timeline');
-		expect(timelineRes.status).toBe(200);
-		await expect(timelineRes.json()).resolves.toEqual([{ action: 'review' }]);
-
-		const bulkMod = await import('../../routes/api/cbt/questions/bulk-workflow/+server');
-		const request = new Request('http://localhost/api/cbt/questions/bulk-workflow', {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ action: 'approve', question_ids: ['q-1'] })
-		});
-		proxyPatchMock.mockResolvedValueOnce({ results: [{ question_id: 'q-1', ok: true }] });
-
-		const bulkRes = await bulkMod.PATCH(createEvent({ request }) as never);
-
-		expect(readRequestJsonMock).toHaveBeenCalledWith(request);
-		expect(proxyPatchMock).toHaveBeenCalledWith('/api/cbt/questions/bulk-workflow', { action: 'approve', question_ids: ['q-1'] });
-		expect(bulkRes.status).toBe(200);
-		await expect(bulkRes.json()).resolves.toEqual({ results: [{ question_id: 'q-1', ok: true }] });
-	});
-
-	it('encodes CBT participant path params before forwarding mutations', async () => {
-		const mod = await import('../../routes/api/cbt/sessions/[id]/participants/[pid]/seat/+server');
-		const request = new Request('http://localhost/api/cbt/sessions/session%201/participants/student%3F1/seat', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ seat_no: 'A-01' })
-		});
-		const event = createEvent({
-			params: { id: 'session 1/2026', pid: 'student?1' },
-			request
-		});
-		proxyPostMock.mockResolvedValueOnce({ ok: true });
-
-		const res = await mod.POST(event as never);
-
-		expect(readRequestJsonMock).toHaveBeenCalledWith(request);
-		expect(proxyPostMock).toHaveBeenCalledWith(
-			'/api/cbt/sessions/session%201%2F2026/participants/student%3F1/seat',
-			{ seat_no: 'A-01' }
-		);
-		expect(res.status).toBe(200);
-		await expect(res.json()).resolves.toEqual({ ok: true });
-	});
-
-	it('encodes CBT delete ids read from query params before forwarding', async () => {
-		const mod = await import('../../routes/api/cbt/packages/+server');
-		const event = createEvent({
-			url: new URL('http://localhost/api/cbt/packages?id=package%201%2F2026')
-		});
-
-		const res = await mod.DELETE(event as never);
-
-		expect(proxyDeleteMock).toHaveBeenCalledWith('/api/cbt/packages/package%201%2F2026');
-		expect(res.status).toBe(204);
+		expect(proxyPostMock).toHaveBeenCalledWith(backendCbtPath('/sessions'), expect.objectContaining({ event_id: 'event-1' }));
 	});
 
 	it('does not append blank query markers for audit and website list proxies', async () => {

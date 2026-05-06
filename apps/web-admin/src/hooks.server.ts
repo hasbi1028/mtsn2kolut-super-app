@@ -5,7 +5,7 @@ import { env } from '$env/dynamic/private';
 import { ApiError, AuthValidationUnavailableError, apiRefreshWithFetch, getVerifiedUserFromAccessToken } from '$lib/server/api';
 import type { TokenPair } from '$lib/server/api';
 import { hasRefreshToken, isAccessTokenValid, getUserFromToken } from '$lib/server/auth';
-import { hasAnyRole, isAdminOnlyPath, isGuruSafeCbtSupportReadPath, isKesiswaanPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath } from '$lib/server/route-access';
+import { hasAnyRole, isAdminOnlyPath, isGuruSafeAssessmentSupportReadPath, isKesiswaanPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath } from '$lib/server/route-access';
 
 const API_BASE = (env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 
@@ -167,7 +167,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		
 		if (!isAdmin) {
 			const isAdminPath = isAdminOnlyPath(event.url.pathname);
-			if (isAdminPath && !isGuruSafeCbtSupportReadPath(event.url.pathname, event.request.method)) {
+			if (isAdminPath && !isGuruSafeAssessmentSupportReadPath(event.url.pathname, event.request.method)) {
 				if (event.url.pathname.startsWith('/api/')) {
 					throw error(403, 'forbidden: admin role required');
 				}
@@ -211,7 +211,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	return resolve(event);
+	return await resolve(event);
 };
 
 export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {

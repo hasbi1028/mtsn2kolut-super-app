@@ -28,9 +28,9 @@ const ADMIN_ONLY_PREFIXES = [
 	'/parents',
 	'/pusaka',
 	'/website',
-	'/cbt/events',
-	'/cbt/packages',
-	'/cbt/sessions',
+	'/asesmen/kegiatan',
+	'/asesmen/paket',
+	'/asesmen/sesi',
 	'/settings/users',
 	'/settings/audit-logs',
 	'/settings/school-profile',
@@ -41,19 +41,19 @@ const ADMIN_ONLY_PREFIXES = [
 	'/api/pusaka',
 	'/api/website',
 	'/api/school-profile',
-	'/api/cbt/events',
-	'/api/cbt/packages',
-	'/api/cbt/sessions',
+	'/api/asesmen/events',
+	'/api/asesmen/packages',
+	'/api/asesmen/sessions',
 	'/api/scheduler/tick'
 ] as const;
 
-const GURU_SAFE_CBT_SUPPORT_READ_PATHS = new Set([
-	'/api/cbt/events',
-	'/api/cbt/soal-support/subjects'
+const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS = new Set([
+	'/api/asesmen/events',
+	'/api/bank-soal/soal-support/subjects'
 ]);
 
-const GURU_SAFE_CBT_SUPPORT_READ_PREFIXES = [
-	'/api/cbt/events'
+const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES = [
+	'/api/asesmen/events'
 ] as const;
 
 const STAFF_OPERATION_PREFIXES = [
@@ -97,10 +97,10 @@ export function isAdminOnlyPath(pathname: string) {
 	return ADMIN_ONLY_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
 }
 
-export function isGuruSafeCbtSupportReadPath(pathname: string, method: string) {
+export function isGuruSafeAssessmentSupportReadPath(pathname: string, method: string) {
 	if (!isReadMethod(method)) return false;
-	if (GURU_SAFE_CBT_SUPPORT_READ_PATHS.has(pathname)) return true;
-	return GURU_SAFE_CBT_SUPPORT_READ_PREFIXES.some((prefix) =>
+	if (GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS.has(pathname)) return true;
+	return GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES.some((prefix) =>
 		matchesPathSegment(pathname, prefix) && pathname.endsWith('/question-targets')
 	);
 }
