@@ -35,7 +35,7 @@
 
 {#if items.length > 0}
 	<div>
-		<p class={`mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 ${desktopExpanded ? 'block' : 'block lg:hidden'}`}>
+		<p class={`mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground ${desktopExpanded ? 'block' : 'block lg:hidden'}`}>
 			Akses Cepat
 		</p>
 		<ul class="space-y-0.5">
@@ -52,8 +52,8 @@
 							class={`flex min-w-0 flex-1 items-center rounded-md py-1.5 text-sm font-medium transition-colors
 								${desktopExpanded ? 'gap-2.5 px-2' : 'gap-2.5 px-2 lg:justify-center lg:px-0'}
 								${isActive(item.href)
-									? 'bg-green-50 text-green-800'
-									: 'text-slate-600 hover:bg-green-50/60 hover:text-slate-800'}`}
+									? 'bg-accent text-accent-foreground'
+									: 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
 						>
 							<SidebarIcon name={item.icon} active={isActive(item.href)} />
 							<span class={`truncate ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{item.label}</span>
@@ -63,7 +63,7 @@
 								<div class="flex items-center gap-0.5">
 									<button
 										type="button"
-										class="inline-flex rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+										class="inline-flex rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
 										onclick={() => movePinned(item.href, -1)}
 										disabled={!canMovePinned(item.href, -1)}
 										aria-label={`Naikkan ${item.label} dalam akses cepat`}
@@ -74,7 +74,7 @@
 									</button>
 									<button
 										type="button"
-										class="inline-flex rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+										class="inline-flex rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
 										onclick={() => movePinned(item.href, 1)}
 										disabled={!canMovePinned(item.href, 1)}
 										aria-label={`Turunkan ${item.label} dalam akses cepat`}
@@ -87,7 +87,7 @@
 							{/if}
 							<button
 								type="button"
-								class={`shrink-0 rounded-md p-1 text-amber-500 hover:bg-amber-50 hover:text-amber-600 ${desktopExpanded ? 'inline-flex' : 'inline-flex lg:hidden'}`}
+								class={`shrink-0 rounded-md p-1 text-warning hover:bg-warning/10 hover:text-warning ${desktopExpanded ? 'inline-flex' : 'inline-flex lg:hidden'}`}
 								onclick={() => togglePin(item.href)}
 								aria-label={pinButtonLabel(item)}
 							>
@@ -97,7 +97,7 @@
 							</button>
 						{/if}
 						{#if !desktopExpanded}
-							<div class="pointer-events-none absolute left-full top-1/2 z-40 ml-3 hidden -translate-y-1/2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm lg:group-hover:block">
+							<div class="pointer-events-none absolute left-full top-1/2 z-40 ml-3 hidden -translate-y-1/2 rounded-md border border-border bg-popover px-2 py-1 text-xs font-medium text-popover-foreground shadow-sm lg:group-hover:block">
 								{railTooltip(item, item.group)}
 							</div>
 						{/if}

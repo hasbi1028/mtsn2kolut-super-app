@@ -7,6 +7,7 @@
 	import SidebarIcon from '$lib/components/sidebar/SidebarIcon.svelte';
 	import SidebarNavSection from '$lib/components/sidebar/SidebarNavSection.svelte';
 	import SidebarQuickAccess from '$lib/components/sidebar/SidebarQuickAccess.svelte';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { clearCbtComposerDrafts } from '$lib/client/cbt-drafts';
 	import { fetchSidebarAttention } from '$lib/components/sidebar/sidebar-attention';
 	import { filterSidebarNavGroupsByAccess } from '$lib/components/sidebar/sidebar-access';
@@ -473,9 +474,9 @@
 {/if}
 
 <!-- Mobile topbar -->
-<header class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-3 border-b border-slate-200 bg-white px-4 lg:hidden">
+<header class="fixed inset-x-0 top-0 z-20 flex h-14 w-full items-center gap-3 border-b border-border bg-card px-4 text-card-foreground lg:hidden">
 	<button
-		class="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"
+		class="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
 		onclick={() => (open = !open)}
 		aria-label="Toggle menu"
 	>
@@ -485,33 +486,34 @@
 	</button>
 	<button
 		type="button"
-		class="inline-flex h-8 items-center rounded-lg border border-slate-200 px-3 text-xs font-medium text-slate-500 hover:bg-slate-50"
+		class="inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
 		onclick={openCommandPalette}
 	>
 		Cari menu
 	</button>
-	<span class="text-sm font-semibold text-slate-700">MTSN 2 Kolaka Utara</span>
+	<span class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">MTSN 2 Kolaka Utara</span>
+	<ThemeToggle expanded={false} variant="ghost" size="icon-sm" />
 </header>
 
 <!-- Sidebar -->
 <aside
-	class={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-slate-200 bg-white
+	class={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-border bg-card text-card-foreground
 	       transition-transform duration-200
 	       ${open ? 'translate-x-0' : '-translate-x-full'}
 	       ${desktopExpanded ? 'lg:w-60' : 'lg:w-[5.5rem]'}
 	       lg:translate-x-0`}
 >
 	<!-- Brand -->
-	<div class={`flex h-14 shrink-0 items-center border-b border-slate-200 ${desktopExpanded ? 'gap-2.5 px-4' : 'justify-center px-3'}`}>
-		<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-green-700 text-white text-xs font-bold shrink-0">
+	<div class={`flex h-14 shrink-0 items-center border-b border-border ${desktopExpanded ? 'gap-2.5 px-4' : 'justify-center px-3'}`}>
+		<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
 			MTs
 		</div>
 		<div class={`min-w-0 ${desktopExpanded ? 'block' : 'block lg:hidden'}`}>
-			<p class="truncate text-sm font-semibold text-slate-800">MTSN 2 Kolut</p>
-			<p class="truncate text-xs text-slate-400">Kolaka Utara</p>
+			<p class="truncate text-sm font-semibold text-foreground">MTSN 2 Kolut</p>
+			<p class="truncate text-xs text-muted-foreground">Kolaka Utara</p>
 		</div>
 		<button
-			class={`ml-auto hidden rounded-md p-1.5 text-slate-500 hover:bg-slate-100 lg:inline-flex ${desktopExpanded ? '' : 'ml-0'}`}
+			class={`ml-auto hidden rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground lg:inline-flex ${desktopExpanded ? '' : 'ml-0'}`}
 			onclick={() => (desktopExpanded = !desktopExpanded)}
 			aria-label={desktopExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
 		>
@@ -526,12 +528,12 @@
 		<div class={desktopExpanded ? 'block' : 'block lg:hidden'}>
 			<button
 				type="button"
-				class="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-600 transition-colors hover:bg-white hover:text-slate-800"
+				class="flex w-full items-center justify-between rounded-xl border border-border bg-muted/40 px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
 				onclick={openCommandPalette}
 				aria-label="Buka pencarian menu"
 			>
 				<span>Cari menu atau modul…</span>
-				<span class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">Ctrl K</span>
+				<span class="rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">Ctrl K</span>
 			</button>
 		</div>
 		<SidebarQuickAccess
@@ -568,13 +570,14 @@
 	</nav>
 
 	<!-- Footer -->
-	<div class="shrink-0 border-t border-slate-200 p-3">
+	<div class="shrink-0 space-y-2 border-t border-border p-3">
+		<ThemeToggle expanded={desktopExpanded} variant="outline" size="sm" class={desktopExpanded ? 'w-full justify-start' : 'w-full lg:justify-center'} />
 		{#if user}
 			<button
 				onclick={logout}
 				title={!desktopExpanded ? 'Keluar' : undefined}
-				class={`flex w-full items-center rounded-md py-1.5 text-sm text-slate-500 transition-colors
-				       hover:bg-red-50 hover:text-red-600 ${desktopExpanded ? 'gap-2 px-2' : 'justify-center px-0'}`}
+				class={`flex w-full items-center rounded-md py-1.5 text-sm text-muted-foreground transition-colors
+				       hover:bg-destructive/10 hover:text-destructive ${desktopExpanded ? 'gap-2 px-2' : 'justify-center px-0'}`}
 			>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

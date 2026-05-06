@@ -22,6 +22,7 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { clearCbtComposerDrafts } from '$lib/client/cbt-drafts';
 	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
 	import {
@@ -101,6 +102,14 @@
 	const currentAvatarUrl = $derived(accountAvatarUrl(account));
 	const currentAvatarInitials = $derived(accountInitials(account));
 	const selectedAvatarLabel = $derived(avatarFile ? `${avatarFile.name} (${formatAvatarFileSize(avatarFile.size)})` : '');
+
+	const infoPanelClass = 'rounded-lg border border-border bg-card/70 p-4';
+	const compactPanelClass = 'rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground';
+	const emptyPanelClass = 'rounded-lg border border-dashed border-border bg-muted/20 px-4 py-4 text-sm text-muted-foreground';
+	const labelClass = 'text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground';
+	const valueClass = 'mt-2 text-sm font-semibold text-foreground';
+	const noteClass = 'mt-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground';
+	const chevronClass = 'mx-2 text-muted-foreground/50';
 
 	function applyOverview(overview: AccountOverview) {
 		account = overview.account;
@@ -549,7 +558,7 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Akun Saya</h1>
+			<h1 class="text-2xl font-semibold text-foreground">Akun Saya</h1>
 			<p class="mt-1 text-sm text-muted-foreground">Identitas login, password, sesi perangkat, dan preferensi pribadi.</p>
 		</div>
 		<Button variant="outline" onclick={() => void refreshOverview(true)} disabled={refreshLoading}>
@@ -569,7 +578,7 @@
 					<Card.Content>
 						<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 							{#each Array.from({ length: 4 }) as _, index (`account-field-skeleton-${index}`)}
-								<div class="rounded-lg border border-slate-200 p-4">
+								<div class={infoPanelClass}>
 									<Skeleton class="h-4 w-24" />
 									<Skeleton class="mt-3 h-5 w-44" />
 								</div>
@@ -584,7 +593,7 @@
 					</Card.Header>
 					<Card.Content class="space-y-3">
 						{#each Array.from({ length: 2 }) as _, index (`account-session-skeleton-${index}`)}
-							<div class="rounded-lg border border-slate-200 p-4">
+							<div class={infoPanelClass}>
 								<Skeleton class="h-5 w-40" />
 								<Skeleton class="mt-2 h-4 w-56" />
 							</div>
@@ -607,16 +616,16 @@
 						</Card.Header>
 						<Card.Content>
 							<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-								<div class="rounded-lg border border-slate-200 p-4">
-									<p class="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Nama tampil</p>
-									<p class="mt-2 text-sm font-semibold text-slate-900">{accountDisplayName(account)}</p>
+								<div class={infoPanelClass}>
+									<p class={labelClass}>Nama tampil</p>
+									<p class={valueClass}>{accountDisplayName(account)}</p>
 								</div>
-								<div class="rounded-lg border border-slate-200 p-4">
-									<p class="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Username</p>
-									<p class="mt-2 text-sm font-semibold text-slate-900">{account.username}</p>
+								<div class={infoPanelClass}>
+									<p class={labelClass}>Username</p>
+									<p class={valueClass}>{account.username}</p>
 								</div>
-								<div class="rounded-lg border border-slate-200 p-4">
-									<p class="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Role</p>
+								<div class={infoPanelClass}>
+									<p class={labelClass}>Role</p>
 									<div class="mt-2 flex flex-wrap gap-2">
 										{#if account.roles.length === 0}
 											<Badge variant="outline">Belum ada role</Badge>
@@ -627,18 +636,18 @@
 										{/if}
 									</div>
 								</div>
-								<div class="rounded-lg border border-slate-200 p-4">
-									<p class="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Profil tertaut</p>
-									<p class="mt-2 text-sm font-semibold text-slate-900">{linkedProfileLabel(account)}</p>
-									<p class="mt-1 text-xs text-slate-500">{profileTypeLabel(account.profile_type)}</p>
+								<div class={infoPanelClass}>
+									<p class={labelClass}>Profil tertaut</p>
+									<p class={valueClass}>{linkedProfileLabel(account)}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{profileTypeLabel(account.profile_type)}</p>
 								</div>
-								<div class="rounded-lg border border-slate-200 p-4">
-									<p class="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Login terakhir</p>
-									<p class="mt-2 text-sm font-semibold text-slate-900">{formatAccountDateTime(account.last_login_at)}</p>
+								<div class={infoPanelClass}>
+									<p class={labelClass}>Login terakhir</p>
+									<p class={valueClass}>{formatAccountDateTime(account.last_login_at)}</p>
 								</div>
-								<div class="rounded-lg border border-slate-200 p-4">
-									<p class="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Status akun</p>
-									<p class="mt-2 text-sm font-semibold {account.is_active === false ? 'text-red-700' : 'text-green-700'}">
+								<div class={infoPanelClass}>
+									<p class={labelClass}>Status akun</p>
+									<p class="mt-2 text-sm font-semibold {account.is_active === false ? 'text-destructive' : 'text-primary'}">
 										{account.is_active === false ? 'Nonaktif' : 'Aktif'}
 									</p>
 								</div>
@@ -658,7 +667,7 @@
 										<label for="account-change-field" class="mb-1.5 block text-sm font-medium">Field Resmi</label>
 										<select
 											id="account-change-field"
-											class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+											class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
 											bind:value={changeRequestForm.field_key}
 										>
 											{#each officialChangeFields as field (field.field_key)}
@@ -691,38 +700,38 @@
 									Kirim Permintaan
 								</LoadingButton>
 							{:else}
-								<div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+								<div class={compactPanelClass}>
 									Akun tanpa profil pegawai, siswa, atau orang tua belum dapat mengajukan perubahan data resmi.
 								</div>
 							{/if}
 
 							<div class="space-y-3">
 								<div class="flex items-center justify-between gap-3">
-									<p class="text-sm font-semibold text-slate-800">Riwayat Permintaan</p>
+									<p class="text-sm font-semibold text-foreground">Riwayat Permintaan</p>
 									<Badge variant="outline">{changeRequests.length} permintaan</Badge>
 								</div>
 								{#if changeRequests.length === 0}
-									<p class="rounded-lg border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-500">Belum ada permintaan perubahan data resmi.</p>
+									<p class={emptyPanelClass}>Belum ada permintaan perubahan data resmi.</p>
 								{:else}
 									<div class="space-y-2">
 										{#each changeRequests as request (request.id)}
-											<div class="rounded-lg border border-slate-200 p-4">
+											<div class={infoPanelClass}>
 												<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 													<div class="min-w-0 flex-1">
 														<div class="flex flex-wrap items-center gap-2">
-															<p class="text-sm font-semibold text-slate-900">{officialFieldLabel(request.field_key)}</p>
+															<p class="text-sm font-semibold text-foreground">{officialFieldLabel(request.field_key)}</p>
 															<Badge variant={changeRequestBadgeVariant(request.status)}>{changeRequestStatusLabel(request.status)}</Badge>
 														</div>
-														<p class="mt-2 text-sm text-slate-600">
+														<p class="mt-2 text-sm text-muted-foreground">
 															<span class="font-medium">Saat ini:</span> {request.current_value || '—'}
-															<span class="mx-2 text-slate-300">→</span>
+															<span class={chevronClass}>→</span>
 															<span class="font-medium">Usulan:</span> {request.requested_value || '—'}
 														</p>
-														<p class="mt-1 text-xs text-slate-500">{request.reason}</p>
+														<p class="mt-1 text-xs text-muted-foreground">{request.reason}</p>
 														{#if request.review_note}
-															<p class="mt-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">Catatan review: {request.review_note}</p>
+															<p class={noteClass}>Catatan review: {request.review_note}</p>
 														{/if}
-														<p class="mt-2 text-[11px] text-slate-400">Diajukan: {formatAccountDateTime(request.created_at)}</p>
+														<p class="mt-2 text-[11px] text-muted-foreground">Diajukan: {formatAccountDateTime(request.created_at)}</p>
 													</div>
 													{#if changeRequestCanCancel(request)}
 														<LoadingButton
@@ -749,7 +758,7 @@
 							<div class="flex items-start justify-between gap-3">
 								<div>
 									<Card.Title class="flex items-center gap-2 text-base">
-										<HistoryIcon class="size-4 text-slate-500" />
+										<HistoryIcon class="size-4 text-muted-foreground" />
 										Riwayat Perubahan Profil
 									</Card.Title>
 									<Card.Description>Aktivitas kontak, foto profil, dan permintaan perubahan data resmi.</Card.Description>
@@ -759,26 +768,26 @@
 						</Card.Header>
 						<Card.Content>
 							{#if changeHistory.length === 0}
-								<p class="rounded-lg border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-500">Belum ada riwayat perubahan profil.</p>
+								<p class={emptyPanelClass}>Belum ada riwayat perubahan profil.</p>
 							{:else}
 								<div class="space-y-2">
 									{#each changeHistory as item, index (`${item.created_at}-${item.action}-${item.field_key}-${index}`)}
-										<div class="rounded-lg border border-slate-200 p-4">
+										<div class={infoPanelClass}>
 											<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 												<div class="min-w-0">
 													<div class="flex flex-wrap items-center gap-2">
-														<p class="text-sm font-semibold text-slate-900">{profileHistoryActionLabel(item.action)}</p>
+														<p class="text-sm font-semibold text-foreground">{profileHistoryActionLabel(item.action)}</p>
 														<Badge variant={profileHistoryBadgeVariant(item.status)}>{profileHistoryStatusLabel(item.status)}</Badge>
 													</div>
-													<p class="mt-1 text-sm text-slate-600">{profileHistoryFieldLabel(item.field_key)}</p>
+													<p class="mt-1 text-sm text-muted-foreground">{profileHistoryFieldLabel(item.field_key)}</p>
 													{#if item.reviewer_username}
-														<p class="mt-1 text-xs text-slate-500">Reviewer: {item.reviewer_username}</p>
+														<p class="mt-1 text-xs text-muted-foreground">Reviewer: {item.reviewer_username}</p>
 													{/if}
 													{#if item.review_note}
-														<p class="mt-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">Catatan review: {item.review_note}</p>
+														<p class={noteClass}>Catatan review: {item.review_note}</p>
 													{/if}
 												</div>
-												<p class="shrink-0 text-xs text-slate-500">{formatAccountDateTime(item.created_at)}</p>
+												<p class="shrink-0 text-xs text-muted-foreground">{formatAccountDateTime(item.created_at)}</p>
 											</div>
 										</div>
 									{/each}
@@ -798,7 +807,7 @@
 									{#if contactFieldEditable(account.contact, 'phone')}
 										<div>
 											<label for="account-contact-phone" class="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
-												<PhoneIcon class="size-4 text-slate-500" />
+												<PhoneIcon class="size-4 text-muted-foreground" />
 												Nomor HP/WA
 											</label>
 											<Input id="account-contact-phone" bind:value={contactForm.phone} autocomplete="tel" maxlength={40} placeholder="08xxxxxxxxxx" />
@@ -807,7 +816,7 @@
 									{#if contactFieldEditable(account.contact, 'email')}
 										<div>
 											<label for="account-contact-email" class="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
-												<MailIcon class="size-4 text-slate-500" />
+												<MailIcon class="size-4 text-muted-foreground" />
 												Email
 											</label>
 											<Input id="account-contact-email" type="email" bind:value={contactForm.email} autocomplete="email" maxlength={254} placeholder="nama@example.id" />
@@ -816,7 +825,7 @@
 									{#if contactFieldEditable(account.contact, 'address')}
 										<div class="md:col-span-2">
 											<label for="account-contact-address" class="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
-												<MapPinIcon class="size-4 text-slate-500" />
+												<MapPinIcon class="size-4 text-muted-foreground" />
 												Alamat Kontak
 											</label>
 											<Textarea id="account-contact-address" bind:value={contactForm.address} rows={3} maxlength={500} />
@@ -828,7 +837,7 @@
 									Simpan Kontak
 								</LoadingButton>
 							{:else}
-								<div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+								<div class={compactPanelClass}>
 									Kontak pribadi belum tersedia untuk akun tanpa profil tertaut.
 								</div>
 							{/if}
@@ -873,16 +882,16 @@
 							{:else}
 								<div class="space-y-3">
 									{#each sessions as session (session.id)}
-										<div class="rounded-lg border border-slate-200 p-4">
+										<div class={infoPanelClass}>
 											<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 												<div class="min-w-0 flex-1 space-y-2">
 													<div class="flex flex-wrap items-center gap-2">
-														<p class="text-sm font-semibold text-slate-900">{sessionTitle(session)}</p>
+														<p class="text-sm font-semibold text-foreground">{sessionTitle(session)}</p>
 														{#if isCurrentSession(session, currentSessionId)}
 															<Badge variant="secondary">Perangkat Ini</Badge>
 														{/if}
 													</div>
-													<div class="grid grid-cols-1 gap-2 text-xs text-slate-500 sm:grid-cols-2">
+													<div class="grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-2">
 														<p>Terakhir aktif: {formatAccountDateTime(session.last_used_at)}</p>
 														<p>Berlaku sampai: {formatAccountDateTime(session.expires_at)}</p>
 														{#if session.ip_address}
@@ -893,10 +902,10 @@
 														{/if}
 													</div>
 													{#if session.user_agent}
-														<p class="line-clamp-2 text-[11px] text-slate-400">{session.user_agent}</p>
+														<p class="line-clamp-2 text-[11px] text-muted-foreground">{session.user_agent}</p>
 													{/if}
 													<div class="pt-2">
-														<label for={`account-session-label-${session.id}`} class="mb-1 block text-xs font-medium text-slate-600">Nama perangkat</label>
+														<label for={`account-session-label-${session.id}`} class="mb-1 block text-xs font-medium text-muted-foreground">Nama perangkat</label>
 														<div class="flex flex-col gap-2 sm:flex-row">
 															<Input
 																id={`account-session-label-${session.id}`}
@@ -945,15 +954,15 @@
 						<Card.Content class="space-y-4">
 							<div class="flex items-center gap-4">
 								{#if currentAvatarUrl}
-									<img src={currentAvatarUrl} alt={`Foto profil ${accountDisplayName(account)}`} class="size-20 rounded-lg border border-slate-200 object-cover" />
+									<img src={currentAvatarUrl} alt={`Foto profil ${accountDisplayName(account)}`} class="size-20 rounded-lg border border-border object-cover" />
 								{:else}
-									<div class="flex size-20 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-xl font-semibold text-emerald-800">
+									<div class="flex size-20 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-xl font-semibold text-primary">
 										{currentAvatarInitials}
 									</div>
 								{/if}
 								<div class="min-w-0">
-									<p class="truncate text-sm font-semibold text-slate-900">{accountDisplayName(account)}</p>
-									<p class="mt-1 text-xs text-slate-500">{currentAvatarUrl ? 'Foto profil aktif' : 'Belum ada foto profil'}</p>
+									<p class="truncate text-sm font-semibold text-foreground">{accountDisplayName(account)}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{currentAvatarUrl ? 'Foto profil aktif' : 'Belum ada foto profil'}</p>
 								</div>
 							</div>
 
@@ -967,7 +976,7 @@
 									onchange={handleAvatarFileChange}
 								/>
 								{#if selectedAvatarLabel}
-									<p class="mt-1 text-xs text-slate-500">{selectedAvatarLabel}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{selectedAvatarLabel}</p>
 								{/if}
 							</div>
 
@@ -993,27 +1002,34 @@
 									Hapus Foto
 								</LoadingButton>
 							</div>
-							<p class="text-xs text-slate-500">Foto tersimpan di storage lokal backend dan hanya mengubah profil yang tertaut ke akun ini.</p>
+							<p class="text-xs text-muted-foreground">Foto tersimpan di storage lokal backend dan hanya mengubah profil yang tertaut ke akun ini.</p>
 						</Card.Content>
 					</Card.Root>
 
 					<Card.Root>
 						<Card.Header class="pb-3">
 							<Card.Title class="text-base">Preferensi Tampilan</Card.Title>
-							<Card.Description>Preferensi yang tersedia saat ini mengikuti pengaturan sidebar.</Card.Description>
+							<Card.Description>Tema aplikasi dan personalisasi sidebar tersimpan di browser dan akun.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-3">
-							<div class="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">
-								<span class="text-sm text-slate-600">Akses cepat</span>
-								<span class="text-sm font-semibold text-slate-900">{preferences ? `${pinnedCount} item` : 'Belum tersedia'}</span>
+							<div class={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between ${compactPanelClass}`}>
+								<div>
+									<span class="text-sm font-medium text-foreground">Tema aplikasi</span>
+									<p class="mt-1 text-xs text-muted-foreground">Ikuti sistem, terang, atau gelap.</p>
+								</div>
+								<ThemeToggle />
 							</div>
-							<div class="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">
-								<span class="text-sm text-slate-600">Riwayat navigasi</span>
-								<span class="text-sm font-semibold text-slate-900">{preferences ? `${recentCount} item` : 'Belum tersedia'}</span>
+							<div class={`flex items-center justify-between ${compactPanelClass}`}>
+								<span class="text-sm text-muted-foreground">Akses cepat</span>
+								<span class="text-sm font-semibold text-foreground">{preferences ? `${pinnedCount} item` : 'Belum tersedia'}</span>
 							</div>
-							<div class="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">
-								<span class="text-sm text-slate-600">Preferensi lain</span>
-								<span class="text-sm font-semibold text-slate-500">Belum tersedia</span>
+							<div class={`flex items-center justify-between ${compactPanelClass}`}>
+								<span class="text-sm text-muted-foreground">Riwayat navigasi</span>
+								<span class="text-sm font-semibold text-foreground">{preferences ? `${recentCount} item` : 'Belum tersedia'}</span>
+							</div>
+							<div class={`flex items-center justify-between ${compactPanelClass}`}>
+								<span class="text-sm text-muted-foreground">Preferensi lain</span>
+								<span class="text-sm font-semibold text-muted-foreground">Belum tersedia</span>
 							</div>
 						</Card.Content>
 					</Card.Root>

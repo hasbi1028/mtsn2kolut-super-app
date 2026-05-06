@@ -70,18 +70,18 @@
 
 	function badgeToneClasses(kind: 'quick' | 'recent' | 'active') {
 		if (kind === 'quick') {
-			return 'bg-amber-100 text-amber-700';
+			return 'bg-warning/15 text-warning';
 		}
 		if (kind === 'recent') {
-			return 'bg-slate-100 text-slate-600';
+			return 'bg-muted text-muted-foreground';
 		}
-		return 'bg-green-100 text-green-700';
+		return 'bg-primary/15 text-primary';
 	}
 
 	function cardClasses(href: string) {
 		return isActive(href)
-			? 'border-green-200 bg-green-50 text-green-900'
-			: 'border-slate-200 bg-white hover:bg-slate-50';
+			? 'border-primary/30 bg-accent text-accent-foreground'
+			: 'border-border bg-card hover:bg-muted/60';
 	}
 
 	function openPalette() {
@@ -124,7 +124,7 @@
 
 				{#if pinnedItems.length > 0}
 					<div class="space-y-2">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Akses Cepat</p>
+						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Akses Cepat</p>
 						<div class="space-y-2">
 							{#each pinnedItems as item (item.href)}
 								<button
@@ -139,9 +139,9 @@
 												Cepat
 											</span>
 										</div>
-										<p class="mt-1 text-xs text-slate-500">{item.group} · {item.href}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{item.group} · {item.href}</p>
 									</div>
-									<svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<svg class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 									</svg>
 								</button>
@@ -153,10 +153,10 @@
 				{#if recentItems.length > 0 && !query.trim()}
 					<div class="space-y-2">
 						<div class="flex items-center justify-between">
-							<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Terakhir Dibuka</p>
+							<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Terakhir Dibuka</p>
 							<button
 								type="button"
-								class="text-xs font-medium text-slate-500 hover:text-slate-700"
+								class="text-xs font-medium text-muted-foreground hover:text-foreground"
 								onclick={clearRecent}
 							>
 								Bersihkan
@@ -176,9 +176,9 @@
 												Baru
 											</span>
 										</div>
-										<p class="mt-1 text-xs text-slate-500">{item.group} · {item.href}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{item.group} · {item.href}</p>
 									</div>
-									<svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<svg class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 									</svg>
 								</button>
@@ -188,12 +188,12 @@
 				{/if}
 
 				{#if filteredItems.length === 0}
-					<div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+					<div class="rounded-xl border border-border bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
 						Tidak ada menu yang cocok dengan pencarian.
 					</div>
 				{:else if allMenuItems.length > 0}
 					<div class="space-y-2">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Semua Menu</p>
+						<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Semua Menu</p>
 						<div class="max-h-[420px] space-y-2 overflow-y-auto pr-1">
 							{#each allMenuItems as item (item.href)}
 								<button
@@ -210,9 +210,9 @@
 												</span>
 											{/if}
 										</div>
-										<p class="mt-1 text-xs text-slate-500">{item.group} · {item.href}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{item.group} · {item.href}</p>
 									</div>
-									<svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<svg class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 									</svg>
 								</button>
@@ -241,9 +241,9 @@
 											</span>
 										{/if}
 									</div>
-									<p class="mt-1 text-xs text-slate-500">{item.group} · {item.href}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{item.group} · {item.href}</p>
 								</div>
-								<svg class="mt-0.5 h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<svg class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
 								</svg>
 							</button>

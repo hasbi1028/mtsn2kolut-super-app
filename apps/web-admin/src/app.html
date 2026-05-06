@@ -5,6 +5,33 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
 		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.15/dist/katex.min.css" crossorigin="anonymous" />
+		<script>
+			(function () {
+				var storageKey = 'mtsn2kolut:web-admin:theme';
+				var preference = 'system';
+				try {
+					var stored = window.localStorage.getItem(storageKey);
+					if (stored === 'light' || stored === 'dark' || stored === 'system') {
+						preference = stored;
+					}
+				} catch (error) {
+					preference = 'system';
+				}
+
+				var systemDark = false;
+				try {
+					systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+				} catch (error) {
+					systemDark = false;
+				}
+
+				var resolved = preference === 'dark' || (preference === 'system' && systemDark) ? 'dark' : 'light';
+				document.documentElement.classList.toggle('dark', resolved === 'dark');
+				document.documentElement.dataset.theme = preference;
+				document.documentElement.dataset.resolvedTheme = resolved;
+				document.documentElement.style.colorScheme = resolved;
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
