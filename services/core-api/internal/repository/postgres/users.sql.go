@@ -163,6 +163,12 @@ SELECT
         WHEN u.parent_id IS NOT NULL THEN p.address
         ELSE ''
     END::text AS contact_address,
+    CASE
+        WHEN u.employee_id IS NOT NULL THEN e.photo_url
+        WHEN u.student_id IS NOT NULL THEN s.photo_url
+        WHEN u.parent_id IS NOT NULL THEN p.photo_url
+        ELSE ''
+    END::text AS photo_url,
     u.is_active,
     u.last_login_at,
     u.created_at,
@@ -187,6 +193,7 @@ type GetUserAccountSummaryRow struct {
 	ContactPhone   string             `json:"contact_phone"`
 	ContactEmail   string             `json:"contact_email"`
 	ContactAddress string             `json:"contact_address"`
+	PhotoUrl       string             `json:"photo_url"`
 	IsActive       bool               `json:"is_active"`
 	LastLoginAt    pgtype.Timestamptz `json:"last_login_at"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
@@ -208,6 +215,7 @@ func (q *Queries) GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (Ge
 		&i.ContactPhone,
 		&i.ContactEmail,
 		&i.ContactAddress,
+		&i.PhotoUrl,
 		&i.IsActive,
 		&i.LastLoginAt,
 		&i.CreatedAt,
@@ -583,6 +591,118 @@ func (q *Queries) ListEntityAuditLogs(ctx context.Context, arg ListEntityAuditLo
 	return items, nil
 }
 
+const listOwnAccountChangeHistory = `-- name: ListOwnAccountChangeHistory :many
+WITH relevant_audit AS (
+    SELECT a.id, a.user_id, a.action, a.entity_type, a.entity_id, a.metadata, a.created_at
+    FROM audit_logs a
+    LEFT JOIN profile_change_requests pcr
+        ON pcr.id::text = COALESCE(NULLIF(a.metadata->>'request_id', ''), a.entity_id)
+    WHERE a.action IN (
+        'AUTH_ACCOUNT_CONTACT_UPDATE',
+        'AUTH_ACCOUNT_AVATAR_UPDATE',
+        'AUTH_ACCOUNT_AVATAR_DELETE',
+        'ACCOUNT_CHANGE_REQUEST_CREATED',
+        'ACCOUNT_CHANGE_REQUEST_CANCELLED',
+        'ACCOUNT_CHANGE_REQUEST_APPROVED',
+        'ACCOUNT_CHANGE_REQUEST_REJECTED'
+    )
+      AND (
+        (
+            a.action IN (
+                'AUTH_ACCOUNT_CONTACT_UPDATE',
+                'AUTH_ACCOUNT_AVATAR_UPDATE',
+                'AUTH_ACCOUNT_AVATAR_DELETE'
+            )
+            AND a.user_id = $2
+        )
+        OR (
+            a.action IN (
+                'ACCOUNT_CHANGE_REQUEST_CREATED',
+                'ACCOUNT_CHANGE_REQUEST_CANCELLED',
+                'ACCOUNT_CHANGE_REQUEST_APPROVED',
+                'ACCOUNT_CHANGE_REQUEST_REJECTED'
+            )
+            AND (
+                a.metadata->>'requester_user_id' = $2::text
+                OR pcr.requester_user_id = $2
+            )
+        )
+      )
+)
+SELECT
+    a.action,
+    CASE
+        WHEN a.action = 'AUTH_ACCOUNT_CONTACT_UPDATE' THEN 'contact'
+        WHEN a.action IN ('AUTH_ACCOUNT_AVATAR_UPDATE', 'AUTH_ACCOUNT_AVATAR_DELETE') THEN 'avatar'
+        ELSE COALESCE(NULLIF(a.metadata->>'field_key', ''), pcr.field_key, '')
+    END::text AS field_key,
+    CASE
+        WHEN a.action = 'ACCOUNT_CHANGE_REQUEST_CREATED' THEN 'pending'
+        WHEN a.action = 'ACCOUNT_CHANGE_REQUEST_CANCELLED' THEN 'cancelled'
+        WHEN a.action = 'ACCOUNT_CHANGE_REQUEST_APPROVED' THEN 'approved'
+        WHEN a.action = 'ACCOUNT_CHANGE_REQUEST_REJECTED' THEN 'rejected'
+        ELSE 'completed'
+    END::text AS status,
+    a.created_at,
+    CASE
+        WHEN a.action IN ('ACCOUNT_CHANGE_REQUEST_APPROVED', 'ACCOUNT_CHANGE_REQUEST_REJECTED') THEN COALESCE(reviewer.username, '')
+        ELSE ''
+    END::text AS reviewer_username,
+    CASE
+        WHEN a.action IN ('ACCOUNT_CHANGE_REQUEST_APPROVED', 'ACCOUNT_CHANGE_REQUEST_REJECTED') THEN COALESCE(pcr.review_note, '')
+        ELSE ''
+    END::text AS review_note
+FROM relevant_audit a
+LEFT JOIN profile_change_requests pcr
+    ON pcr.id::text = COALESCE(NULLIF(a.metadata->>'request_id', ''), a.entity_id)
+LEFT JOIN users reviewer
+    ON reviewer.id = a.user_id
+   AND a.action IN ('ACCOUNT_CHANGE_REQUEST_APPROVED', 'ACCOUNT_CHANGE_REQUEST_REJECTED')
+ORDER BY a.created_at DESC
+LIMIT $1::int
+`
+
+type ListOwnAccountChangeHistoryParams struct {
+	LimitCount int32       `json:"limit_count"`
+	UserID     pgtype.UUID `json:"user_id"`
+}
+
+type ListOwnAccountChangeHistoryRow struct {
+	Action           string             `json:"action"`
+	FieldKey         string             `json:"field_key"`
+	Status           string             `json:"status"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ReviewerUsername string             `json:"reviewer_username"`
+	ReviewNote       string             `json:"review_note"`
+}
+
+func (q *Queries) ListOwnAccountChangeHistory(ctx context.Context, arg ListOwnAccountChangeHistoryParams) ([]ListOwnAccountChangeHistoryRow, error) {
+	rows, err := q.db.Query(ctx, listOwnAccountChangeHistory, arg.LimitCount, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOwnAccountChangeHistoryRow{}
+	for rows.Next() {
+		var i ListOwnAccountChangeHistoryRow
+		if err := rows.Scan(
+			&i.Action,
+			&i.FieldKey,
+			&i.Status,
+			&i.CreatedAt,
+			&i.ReviewerUsername,
+			&i.ReviewNote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT 
     u.id, u.username,
@@ -814,6 +934,32 @@ func (q *Queries) SoftDeleteUser(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const updateOwnedEmployeeAvatar = `-- name: UpdateOwnedEmployeeAvatar :one
+UPDATE employees e
+SET photo_url = $1,
+    updated_at = NOW()
+WHERE e.id = (
+    SELECT u.employee_id
+    FROM users u
+    WHERE u.id = $2
+      AND u.deleted_at IS NULL
+      AND u.employee_id IS NOT NULL
+)
+RETURNING e.photo_url
+`
+
+type UpdateOwnedEmployeeAvatarParams struct {
+	PhotoUrl string      `json:"photo_url"`
+	UserID   pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) UpdateOwnedEmployeeAvatar(ctx context.Context, arg UpdateOwnedEmployeeAvatarParams) (string, error) {
+	row := q.db.QueryRow(ctx, updateOwnedEmployeeAvatar, arg.PhotoUrl, arg.UserID)
+	var photo_url string
+	err := row.Scan(&photo_url)
+	return photo_url, err
+}
+
 const updateOwnedEmployeeContact = `-- name: UpdateOwnedEmployeeContact :one
 UPDATE employees e
 SET phone = $1,
@@ -855,6 +1001,32 @@ func (q *Queries) UpdateOwnedEmployeeContact(ctx context.Context, arg UpdateOwne
 	return i, err
 }
 
+const updateOwnedParentAvatar = `-- name: UpdateOwnedParentAvatar :one
+UPDATE parents p
+SET photo_url = $1,
+    updated_at = NOW()
+WHERE p.id = (
+    SELECT u.parent_id
+    FROM users u
+    WHERE u.id = $2
+      AND u.deleted_at IS NULL
+      AND u.parent_id IS NOT NULL
+)
+RETURNING p.photo_url
+`
+
+type UpdateOwnedParentAvatarParams struct {
+	PhotoUrl string      `json:"photo_url"`
+	UserID   pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) UpdateOwnedParentAvatar(ctx context.Context, arg UpdateOwnedParentAvatarParams) (string, error) {
+	row := q.db.QueryRow(ctx, updateOwnedParentAvatar, arg.PhotoUrl, arg.UserID)
+	var photo_url string
+	err := row.Scan(&photo_url)
+	return photo_url, err
+}
+
 const updateOwnedParentContact = `-- name: UpdateOwnedParentContact :one
 UPDATE parents p
 SET phone = $1,
@@ -887,6 +1059,32 @@ func (q *Queries) UpdateOwnedParentContact(ctx context.Context, arg UpdateOwnedP
 	var i UpdateOwnedParentContactRow
 	err := row.Scan(&i.ContactPhone, &i.ContactEmail, &i.ContactAddress)
 	return i, err
+}
+
+const updateOwnedStudentAvatar = `-- name: UpdateOwnedStudentAvatar :one
+UPDATE students s
+SET photo_url = $1,
+    updated_at = NOW()
+WHERE s.id = (
+    SELECT u.student_id
+    FROM users u
+    WHERE u.id = $2
+      AND u.deleted_at IS NULL
+      AND u.student_id IS NOT NULL
+)
+RETURNING s.photo_url
+`
+
+type UpdateOwnedStudentAvatarParams struct {
+	PhotoUrl string      `json:"photo_url"`
+	UserID   pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) UpdateOwnedStudentAvatar(ctx context.Context, arg UpdateOwnedStudentAvatarParams) (string, error) {
+	row := q.db.QueryRow(ctx, updateOwnedStudentAvatar, arg.PhotoUrl, arg.UserID)
+	var photo_url string
+	err := row.Scan(&photo_url)
+	return photo_url, err
 }
 
 const updateOwnedStudentContact = `-- name: UpdateOwnedStudentContact :one

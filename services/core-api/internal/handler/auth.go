@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -27,7 +30,11 @@ type authService interface {
 	Logout(ctx context.Context, refreshToken string) error
 	LogoutAll(ctx context.Context, userID pgtype.UUID) error
 	GetAccount(ctx context.Context, userID pgtype.UUID) (db.GetUserAccountSummaryRow, error)
+	ListAccountChangeHistory(ctx context.Context, userID pgtype.UUID, limit int32) ([]service.AccountChangeHistoryItem, error)
 	UpdateAccountContact(ctx context.Context, userID pgtype.UUID, patch service.AccountContactPatch) (db.GetUserAccountSummaryRow, error)
+	SaveAccountAvatar(ctx context.Context, input service.UploadAccountAvatarInput) (db.GetUserAccountSummaryRow, error)
+	DeleteAccountAvatar(ctx context.Context, userID pgtype.UUID) (db.GetUserAccountSummaryRow, error)
+	AccountAvatarPath(ctx context.Context, userID pgtype.UUID, filename string) (string, bool, error)
 	ListActiveSessions(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error)
 	RevokeSession(ctx context.Context, userID, sessionID pgtype.UUID) error
 	UpdateSessionLabel(ctx context.Context, userID, sessionID pgtype.UUID, deviceLabel string) error
@@ -53,6 +60,8 @@ type authAccountResponse struct {
 	Roles       []string                   `json:"roles"`
 	ProfileType string                     `json:"profile_type"`
 	ProfileNama string                     `json:"profile_nama"`
+	PhotoURL    string                     `json:"photo_url"`
+	AvatarURL   string                     `json:"avatar_url"`
 	Contact     authAccountContactResponse `json:"contact"`
 	EmployeeID  string                     `json:"employee_id,omitempty"`
 	StudentID   string                     `json:"student_id,omitempty"`
@@ -67,6 +76,24 @@ type authAccountContactResponse struct {
 	Email          string   `json:"email,omitempty"`
 	Address        string   `json:"address"`
 	EditableFields []string `json:"editable_fields"`
+}
+
+type authAccountChangeHistoryResponse struct {
+	Action           string `json:"action"`
+	FieldKey         string `json:"field_key"`
+	Status           string `json:"status"`
+	CreatedAt        string `json:"created_at"`
+	ReviewerUsername string `json:"reviewer_username,omitempty"`
+	ReviewNote       string `json:"review_note,omitempty"`
+}
+
+const maxAccountAvatarUploadBytes int64 = 2 * 1024 * 1024
+
+var accountAvatarUploadTypes = map[string]string{
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".png":  "image/png",
+	".webp": "image/webp",
 }
 
 type authAuditWriter interface {
@@ -194,6 +221,26 @@ func (h *Auth) GetAccount(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, authAccountResponseFromRow(row))
 }
 
+func (h *Auth) GetAccountChangeHistory(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.currentAccountUserID(w, r)
+	if !ok {
+		return
+	}
+	limit := int32(pageSize(r.URL.Query().Get("per_page"), 30))
+
+	items, err := h.svc.ListAccountChangeHistory(r.Context(), userID, limit)
+	if errors.Is(err, domain.ErrUnauthorized) {
+		api.Unauthorized(w)
+		return
+	}
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+
+	api.OK(w, authAccountChangeHistoryResponses(items))
+}
+
 func (h *Auth) UpdateAccountContact(w http.ResponseWriter, r *http.Request) {
 	claims, ok := api.ClaimsFromContext(r.Context())
 	if !ok {
@@ -234,6 +281,116 @@ func (h *Auth) UpdateAccountContact(w http.ResponseWriter, r *http.Request) {
 		"fields":       contactPatchFields(patch),
 	})
 	api.OK(w, authAccountResponseFromRow(row))
+}
+
+func (h *Auth) UploadAccountAvatar(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.currentAccountUserID(w, r)
+	if !ok {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 3<<20)
+	if err := r.ParseMultipartForm(3 << 20); err != nil {
+		api.BadRequest(w, "multipart form tidak valid (maks 2 MB)")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		api.BadRequest(w, "file wajib diisi")
+		return
+	}
+	defer file.Close()
+
+	validated, err := validateUploadedFile(header.Filename, file, maxAccountAvatarUploadBytes, true)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+	if !accountAvatarUploadAllowed(validated) {
+		api.BadRequest(w, "hanya file JPG, PNG, atau WebP yang diperbolehkan")
+		return
+	}
+
+	row, err := h.svc.SaveAccountAvatar(r.Context(), service.UploadAccountAvatarInput{
+		UserID:       userID,
+		OriginalName: header.Filename,
+		MimeType:     validated.MimeType,
+		Ext:          validated.Ext,
+		FileSize:     int64(len(validated.Data)),
+		File:         bytes.NewReader(validated.Data),
+	})
+	if errors.Is(err, domain.ErrUnauthorized) {
+		api.Unauthorized(w)
+		return
+	}
+	if errors.Is(err, domain.ErrForbidden) {
+		api.Forbidden(w)
+		return
+	}
+	if errors.Is(err, domain.ErrBadRequest) {
+		api.BadRequest(w, "foto profil tidak valid")
+		return
+	}
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+
+	h.auditClaimsEvent(r.Context(), "AUTH_ACCOUNT_AVATAR_UPDATE", map[string]any{
+		"profile_type": row.ProfileType,
+		"photo_url":    row.PhotoUrl,
+	})
+	api.OK(w, authAccountResponseFromRow(row))
+}
+
+func (h *Auth) DeleteAccountAvatar(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.currentAccountUserID(w, r)
+	if !ok {
+		return
+	}
+
+	row, err := h.svc.DeleteAccountAvatar(r.Context(), userID)
+	if errors.Is(err, domain.ErrUnauthorized) {
+		api.Unauthorized(w)
+		return
+	}
+	if errors.Is(err, domain.ErrForbidden) {
+		api.Forbidden(w)
+		return
+	}
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+
+	h.auditClaimsEvent(r.Context(), "AUTH_ACCOUNT_AVATAR_DELETE", map[string]any{
+		"profile_type": row.ProfileType,
+	})
+	api.OK(w, authAccountResponseFromRow(row))
+}
+
+func (h *Auth) AccountAvatarFile(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.currentAccountUserID(w, r)
+	if !ok {
+		return
+	}
+	filename := chi.URLParam(r, "filename")
+	path, found, err := h.svc.AccountAvatarPath(r.Context(), userID, filename)
+	if errors.Is(err, domain.ErrUnauthorized) {
+		api.Unauthorized(w)
+		return
+	}
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	if !found {
+		api.NotFound(w)
+		return
+	}
+	secureFileResponseHeaders(w, mime.TypeByExtension(strings.ToLower(filepath.Ext(filename))), filename)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	http.ServeFile(w, r, path)
 }
 
 func (h *Auth) ListSessions(w http.ResponseWriter, r *http.Request) {
@@ -468,6 +625,25 @@ func authUserID(claims map[string]any) (pgtype.UUID, error) {
 	return userID, nil
 }
 
+func (h *Auth) currentAccountUserID(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return pgtype.UUID{}, false
+	}
+	userID, err := authUserID(claims)
+	if err != nil {
+		api.Unauthorized(w)
+		return pgtype.UUID{}, false
+	}
+	return userID, true
+}
+
+func accountAvatarUploadAllowed(upload validatedUpload) bool {
+	expectedMime, ok := accountAvatarUploadTypes[strings.ToLower(upload.Ext)]
+	return ok && expectedMime == upload.MimeType
+}
+
 func authAccountResponseFromRow(row db.GetUserAccountSummaryRow) authAccountResponse {
 	roles := make([]string, 0)
 	if len(row.Roles) > 0 {
@@ -480,6 +656,8 @@ func authAccountResponseFromRow(row db.GetUserAccountSummaryRow) authAccountResp
 		Roles:       roles,
 		ProfileType: row.ProfileType,
 		ProfileNama: row.ProfileNama,
+		PhotoURL:    row.PhotoUrl,
+		AvatarURL:   row.PhotoUrl,
 		Contact: authAccountContactResponse{
 			Phone:          row.ContactPhone,
 			Email:          row.ContactEmail,
@@ -493,6 +671,21 @@ func authAccountResponseFromRow(row db.GetUserAccountSummaryRow) authAccountResp
 		LastLoginAt: timestamptzRFC3339(row.LastLoginAt),
 		CreatedAt:   timestamptzRFC3339(row.CreatedAt),
 	}
+}
+
+func authAccountChangeHistoryResponses(items []service.AccountChangeHistoryItem) []authAccountChangeHistoryResponse {
+	responses := make([]authAccountChangeHistoryResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, authAccountChangeHistoryResponse{
+			Action:           item.Action,
+			FieldKey:         item.FieldKey,
+			Status:           item.Status,
+			CreatedAt:        timestamptzRFC3339(item.CreatedAt),
+			ReviewerUsername: item.ReviewerUsername,
+			ReviewNote:       item.ReviewNote,
+		})
+	}
+	return responses
 }
 
 func contactEditableFields(profileType string) []string {

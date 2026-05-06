@@ -543,9 +543,12 @@
 			<h1 class="text-2xl font-semibold text-slate-800">Manajemen Pengguna</h1>
 			<p class="text-sm text-slate-500 mt-1">Kelola akun akses sistem dengan RBAC terpadu</p>
 		</div>
-		<Button onclick={() => (showForm = !showForm)}>
-			{showForm ? 'Batal' : '+ Tambah Pengguna'}
-		</Button>
+		<div class="flex flex-wrap gap-2">
+			<Button variant="outline" href="/settings/user-change-requests">Permintaan Data Resmi</Button>
+			<Button onclick={() => (showForm = !showForm)}>
+				{showForm ? 'Batal' : '+ Tambah Pengguna'}
+			</Button>
+		</div>
 	</div>
 
 	<AsyncContent promise={usersPromise} onerror={handleOverviewRenderError}>

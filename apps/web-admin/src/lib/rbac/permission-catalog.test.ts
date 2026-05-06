@@ -7,7 +7,10 @@ import { requiredPermissionsForPath } from '$lib/server/route-access';
 import { RBAC_PERMISSION_CATALOG, permissionCatalogCodes, permissionLabel } from './permission-catalog';
 
 const repoRoot = resolve(__dirname, '../../../../..');
-const migration = readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/069_dynamic_rbac_foundation.sql'), 'utf8');
+const migration = [
+	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/069_dynamic_rbac_foundation.sql'), 'utf8'),
+	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/076_profile_change_review_permission.sql'), 'utf8')
+].join('\n');
 const docs = readFileSync(resolve(repoRoot, 'docs/rbac-permission-catalog.md'), 'utf8');
 
 function seededPermissionCodes() {
@@ -15,7 +18,7 @@ function seededPermissionCodes() {
 }
 
 describe('RBAC permission catalog stabilization', () => {
-	it('keeps the frontend catalog in lockstep with migration 069 seed permissions', () => {
+	it('keeps the frontend catalog in lockstep with seeded permissions', () => {
 		const seeded = seededPermissionCodes().sort();
 		expect(seeded.length).toBeGreaterThan(50);
 		expect(permissionCatalogCodes()).toEqual(seeded);

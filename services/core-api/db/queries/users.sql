@@ -66,6 +66,12 @@ SELECT
         WHEN u.parent_id IS NOT NULL THEN p.address
         ELSE ''
     END::text AS contact_address,
+    CASE
+        WHEN u.employee_id IS NOT NULL THEN e.photo_url
+        WHEN u.student_id IS NOT NULL THEN s.photo_url
+        WHEN u.parent_id IS NOT NULL THEN p.photo_url
+        ELSE ''
+    END::text AS photo_url,
     u.is_active,
     u.last_login_at,
     u.created_at,
@@ -119,6 +125,45 @@ WHERE p.id = (
       AND u.parent_id IS NOT NULL
 )
 RETURNING p.phone AS contact_phone, ''::text AS contact_email, p.address AS contact_address;
+
+-- name: UpdateOwnedEmployeeAvatar :one
+UPDATE employees e
+SET photo_url = sqlc.arg(photo_url),
+    updated_at = NOW()
+WHERE e.id = (
+    SELECT u.employee_id
+    FROM users u
+    WHERE u.id = sqlc.arg(user_id)
+      AND u.deleted_at IS NULL
+      AND u.employee_id IS NOT NULL
+)
+RETURNING e.photo_url;
+
+-- name: UpdateOwnedStudentAvatar :one
+UPDATE students s
+SET photo_url = sqlc.arg(photo_url),
+    updated_at = NOW()
+WHERE s.id = (
+    SELECT u.student_id
+    FROM users u
+    WHERE u.id = sqlc.arg(user_id)
+      AND u.deleted_at IS NULL
+      AND u.student_id IS NOT NULL
+)
+RETURNING s.photo_url;
+
+-- name: UpdateOwnedParentAvatar :one
+UPDATE parents p
+SET photo_url = sqlc.arg(photo_url),
+    updated_at = NOW()
+WHERE p.id = (
+    SELECT u.parent_id
+    FROM users u
+    WHERE u.id = sqlc.arg(user_id)
+      AND u.deleted_at IS NULL
+      AND u.parent_id IS NOT NULL
+)
+RETURNING p.photo_url;
 
 -- name: CreateUser :one
 INSERT INTO users (username, password_hash, display_name, employee_id, student_id, parent_id, is_active)
@@ -227,6 +272,76 @@ WHERE (
   )
 ORDER BY a.created_at DESC
 LIMIT $3 OFFSET $4;
+
+-- name: ListOwnAccountChangeHistory :many
+WITH relevant_audit AS (
+    SELECT a.*
+    FROM audit_logs a
+    LEFT JOIN profile_change_requests pcr
+        ON pcr.id::text = COALESCE(NULLIF(a.metadata->>'request_id', ''), a.entity_id)
+    WHERE a.action IN (
+        'AUTH_ACCOUNT_CONTACT_UPDATE',
+        'AUTH_ACCOUNT_AVATAR_UPDATE',
+        'AUTH_ACCOUNT_AVATAR_DELETE',
+        'ACCOUNT_CHANGE_REQUEST_CREATED',
+        'ACCOUNT_CHANGE_REQUEST_CANCELLED',
+        'ACCOUNT_CHANGE_REQUEST_APPROVED',
+        'ACCOUNT_CHANGE_REQUEST_REJECTED'
+    )
+      AND (
+        (
+            a.action IN (
+                'AUTH_ACCOUNT_CONTACT_UPDATE',
+                'AUTH_ACCOUNT_AVATAR_UPDATE',
+                'AUTH_ACCOUNT_AVATAR_DELETE'
+            )
+            AND a.user_id = sqlc.arg(user_id)
+        )
+        OR (
+            a.action IN (
+                'ACCOUNT_CHANGE_REQUEST_CREATED',
+                'ACCOUNT_CHANGE_REQUEST_CANCELLED',
+                'ACCOUNT_CHANGE_REQUEST_APPROVED',
+                'ACCOUNT_CHANGE_REQUEST_REJECTED'
+            )
+            AND (
+                a.metadata->>'requester_user_id' = sqlc.arg(user_id)::text
+                OR pcr.requester_user_id = sqlc.arg(user_id)
+            )
+        )
+      )
+)
+SELECT
+    a.action,
+    CASE
+        WHEN a.action = 'AUTH_ACCOUNT_CONTACT_UPDATE' THEN 'contact'
+        WHEN a.action IN ('AUTH_ACCOUNT_AVATAR_UPDATE', 'AUTH_ACCOUNT_AVATAR_DELETE') THEN 'avatar'
+        ELSE COALESCE(NULLIF(a.metadata->>'field_key', ''), pcr.field_key, '')
+    END::text AS field_key,
+    CASE
+        WHEN a.action = 'ACCOUNT_CHANGE_REQUEST_CREATED' THEN 'pending'
+        WHEN a.action = 'ACCOUNT_CHANGE_REQUEST_CANCELLED' THEN 'cancelled'
+        WHEN a.action = 'ACCOUNT_CHANGE_REQUEST_APPROVED' THEN 'approved'
+        WHEN a.action = 'ACCOUNT_CHANGE_REQUEST_REJECTED' THEN 'rejected'
+        ELSE 'completed'
+    END::text AS status,
+    a.created_at,
+    CASE
+        WHEN a.action IN ('ACCOUNT_CHANGE_REQUEST_APPROVED', 'ACCOUNT_CHANGE_REQUEST_REJECTED') THEN COALESCE(reviewer.username, '')
+        ELSE ''
+    END::text AS reviewer_username,
+    CASE
+        WHEN a.action IN ('ACCOUNT_CHANGE_REQUEST_APPROVED', 'ACCOUNT_CHANGE_REQUEST_REJECTED') THEN COALESCE(pcr.review_note, '')
+        ELSE ''
+    END::text AS review_note
+FROM relevant_audit a
+LEFT JOIN profile_change_requests pcr
+    ON pcr.id::text = COALESCE(NULLIF(a.metadata->>'request_id', ''), a.entity_id)
+LEFT JOIN users reviewer
+    ON reviewer.id = a.user_id
+   AND a.action IN ('ACCOUNT_CHANGE_REQUEST_APPROVED', 'ACCOUNT_CHANGE_REQUEST_REJECTED')
+ORDER BY a.created_at DESC
+LIMIT sqlc.arg(limit_count)::int;
 
 -- name: DeleteOldAuditLogs :execrows
 DELETE FROM audit_logs

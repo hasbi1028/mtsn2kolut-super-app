@@ -14,7 +14,7 @@ import (
 const createParent = `-- name: CreateParent :one
 INSERT INTO parents (nama, phone, address)
 VALUES ($1, $2, $3)
-RETURNING id, nama, phone, address, created_at, updated_at
+RETURNING id, nama, phone, address, created_at, updated_at, photo_url
 `
 
 type CreateParentParams struct {
@@ -33,6 +33,7 @@ func (q *Queries) CreateParent(ctx context.Context, arg CreateParentParams) (Par
 		&i.Address,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PhotoUrl,
 	)
 	return i, err
 }
@@ -47,7 +48,7 @@ func (q *Queries) DeleteParent(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getParent = `-- name: GetParent :one
-SELECT id, nama, phone, address, created_at, updated_at
+SELECT id, nama, phone, address, created_at, updated_at, photo_url
 FROM parents
 WHERE id = $1
 `
@@ -62,6 +63,7 @@ func (q *Queries) GetParent(ctx context.Context, id pgtype.UUID) (Parent, error)
 		&i.Address,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PhotoUrl,
 	)
 	return i, err
 }
@@ -125,7 +127,7 @@ func (q *Queries) ListParentChildren(ctx context.Context, parentID pgtype.UUID) 
 }
 
 const listParents = `-- name: ListParents :many
-SELECT id, nama, phone, address, created_at, updated_at
+SELECT id, nama, phone, address, created_at, updated_at, photo_url
 FROM parents
 ORDER BY nama ASC
 `
@@ -146,6 +148,7 @@ func (q *Queries) ListParents(ctx context.Context) ([]Parent, error) {
 			&i.Address,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PhotoUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -209,7 +212,7 @@ const updateParent = `-- name: UpdateParent :one
 UPDATE parents
 SET nama = $2, phone = $3, address = $4, updated_at = NOW()
 WHERE id = $1
-RETURNING id, nama, phone, address, created_at, updated_at
+RETURNING id, nama, phone, address, created_at, updated_at, photo_url
 `
 
 type UpdateParentParams struct {
@@ -234,6 +237,7 @@ func (q *Queries) UpdateParent(ctx context.Context, arg UpdateParentParams) (Par
 		&i.Address,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PhotoUrl,
 	)
 	return i, err
 }

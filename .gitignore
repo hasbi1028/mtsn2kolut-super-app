@@ -13,6 +13,8 @@ services/core-api/postgres_data/
 # Database & data (sensitive)
 apps/web-admin/data/
 services/core-api/data/
+uploads/
+services/core-api/uploads/
 *.db
 *.sqlite
 *.db-shm

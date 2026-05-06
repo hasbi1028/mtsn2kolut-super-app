@@ -95,6 +95,7 @@ describe('sidebar assessment configuration', () => {
 		expect(byHref.get('/settings/account')?.roles).toBeUndefined();
 		expect(byHref.get('/settings')?.roles).toEqual(['admin']);
 		expect(byHref.get('/settings/users')?.permissions).toEqual(['users.read']);
+		expect(byHref.get('/settings/user-change-requests')?.permissions).toEqual(['users.read']);
 		expect(byHref.get('/settings/audit-logs')?.permissions).toEqual(['audit.read']);
 		expect(byHref.get('/settings/school-profile')?.permissions).toEqual(['settings.school_profile']);
 		expect(bankSoalItems.every((item) => item.permissions?.includes('bank_soal.read'))).toBe(true);

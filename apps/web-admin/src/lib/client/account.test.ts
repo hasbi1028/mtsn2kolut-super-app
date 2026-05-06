@@ -2,15 +2,27 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	accountDisplayName,
+	accountAvatarUrl,
+	accountInitials,
 	accountErrorMessage,
+	changeRequestTimelineItems,
+	changeRequestCanCancel,
+	changeRequestStatusLabel,
 	contactFieldEditable,
 	editableContactFields,
 	formatAccountDateTime,
 	hasEditableContact,
 	isCurrentSession,
 	linkedProfileLabel,
+	normalizeAccountChangeHistory,
+	normalizeChangeRequests,
 	normalizeAccountSessions,
+	officialChangeFieldOptions,
+	officialFieldLabel,
 	preferenceItemCount,
+	profileHistoryActionLabel,
+	profileHistoryFieldLabel,
+	profileHistoryStatusLabel,
 	profileTypeLabel,
 	roleLabel,
 	sessionTitle
@@ -36,6 +48,18 @@ describe('account client helpers', () => {
 			profile_type: 'employee',
 			profile_nama: 'Nama Guru'
 		})).toBe('Pegawai: Nama Guru');
+		expect(accountAvatarUrl({
+			id: 'u1',
+			username: 'guru.ipa',
+			roles: ['guru'],
+			photo_url: '/api/auth/account/avatar/a.jpg'
+		})).toBe('/api/auth/account/avatar/a.jpg');
+		expect(accountInitials({
+			id: 'u1',
+			username: 'guru.ipa',
+			display_name: 'Guru IPA',
+			roles: ['guru']
+		})).toBe('GI');
 	});
 
 	it('formats WITA timestamps with a stable empty fallback', () => {
@@ -61,6 +85,57 @@ describe('account client helpers', () => {
 		expect(contactFieldEditable(contact, 'role')).toBe(false);
 		expect(hasEditableContact(contact)).toBe(true);
 		expect(hasEditableContact({ editable_fields: [] })).toBe(false);
+	});
+
+	it('maps official change request fields and statuses conservatively', () => {
+		expect(officialFieldLabel('nama')).toBe('Nama resmi');
+		expect(officialFieldLabel('nip')).toBe('nip');
+		expect(changeRequestStatusLabel('pending')).toBe('Menunggu');
+		expect(changeRequestCanCancel({ status: 'pending' })).toBe(true);
+		expect(changeRequestCanCancel({ status: 'approved' })).toBe(false);
+		expect(officialChangeFieldOptions([
+			{ profile_type: 'student', field_key: 'nama', label: 'Nama dari backend', value_type: 'text', self_requestable: true, is_active: true },
+			{ profile_type: 'student', field_key: 'tanggal_lahir', label: '', value_type: 'date', self_requestable: true, is_active: true },
+			{ profile_type: 'student', field_key: 'nisn', label: 'NISN', value_type: 'text', self_requestable: false, is_active: true }
+		])).toEqual([
+			{ profile_type: 'student', field_key: 'nama', label: 'Nama dari backend', value_type: 'text', self_requestable: true, is_active: true },
+			{ profile_type: 'student', field_key: 'tanggal_lahir', label: 'Tanggal lahir', value_type: 'date', self_requestable: true, is_active: true }
+		]);
+		expect(officialChangeFieldOptions(null)).toEqual([]);
+		expect(normalizeChangeRequests(null)).toEqual([]);
+		expect(normalizeChangeRequests([{ id: 'r1', profile_type: 'employee', field_key: 'nama', current_value: 'A', requested_value: 'B', reason: 'dokumen', status: 'pending' }])).toHaveLength(1);
+	});
+
+	it('maps profile change history and request timeline labels safely', () => {
+		expect(profileHistoryActionLabel('contact_update')).toBe('Kontak pribadi diperbarui');
+		expect(profileHistoryActionLabel('unknown_action')).toBe('unknown_action');
+		expect(profileHistoryFieldLabel('avatar')).toBe('Foto profil');
+		expect(profileHistoryFieldLabel('tanggal_lahir')).toBe('Tanggal lahir');
+		expect(profileHistoryStatusLabel('completed')).toBe('Selesai');
+		expect(normalizeAccountChangeHistory(null)).toEqual([]);
+		expect(normalizeAccountChangeHistory([
+			{ action: 'avatar_delete', field_key: 'avatar', status: 'completed', created_at: '2026-05-07T00:00:00Z' },
+			{ action: '', field_key: 'ignored', status: 'completed' },
+			{ action: 'bad', field_key: 'bad', status: '' }
+		])).toHaveLength(1);
+
+		const timeline = changeRequestTimelineItems({
+			id: 'r1',
+			profile_type: 'employee',
+			field_key: 'nama',
+			current_value: 'A',
+			requested_value: 'B',
+			reason: 'dokumen',
+			status: 'approved',
+			requester_display_name: 'Guru IPA',
+			reviewer_username: 'admin',
+			review_note: 'Sesuai dokumen',
+			created_at: '2026-05-06T00:00:00Z',
+			reviewed_at: '2026-05-07T00:00:00Z'
+		});
+		expect(timeline.map((item) => item.label)).toEqual(['Diajukan', 'Review Disetujui']);
+		expect(timeline[1].actor).toBe('admin');
+		expect(timeline[1].note).toBe('Sesuai dokumen');
 	});
 
 	it('keeps mutation error messages controlled', () => {

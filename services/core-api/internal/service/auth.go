@@ -9,6 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +38,10 @@ type authStore interface {
 	UpdateOwnedEmployeeContact(ctx context.Context, arg db.UpdateOwnedEmployeeContactParams) (db.UpdateOwnedEmployeeContactRow, error)
 	UpdateOwnedStudentContact(ctx context.Context, arg db.UpdateOwnedStudentContactParams) (db.UpdateOwnedStudentContactRow, error)
 	UpdateOwnedParentContact(ctx context.Context, arg db.UpdateOwnedParentContactParams) (db.UpdateOwnedParentContactRow, error)
+	UpdateOwnedEmployeeAvatar(ctx context.Context, arg db.UpdateOwnedEmployeeAvatarParams) (string, error)
+	UpdateOwnedStudentAvatar(ctx context.Context, arg db.UpdateOwnedStudentAvatarParams) (string, error)
+	UpdateOwnedParentAvatar(ctx context.Context, arg db.UpdateOwnedParentAvatarParams) (string, error)
+	ListOwnAccountChangeHistory(ctx context.Context, arg db.ListOwnAccountChangeHistoryParams) ([]db.ListOwnAccountChangeHistoryRow, error)
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error)
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
 	GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error)
@@ -71,6 +78,7 @@ type Auth struct {
 	q             authStore
 	jwtSecret     []byte
 	adminPassword string
+	avatarDir     string
 }
 
 type SessionMeta struct {
@@ -90,8 +98,35 @@ type AccountContactPatch struct {
 	Address *string
 }
 
-func NewAuth(q *db.Queries, jwtSecret, adminPassword string) *Auth {
-	return &Auth{q: q, jwtSecret: []byte(jwtSecret), adminPassword: adminPassword}
+type AccountChangeHistoryItem struct {
+	Action           string
+	FieldKey         string
+	Status           string
+	CreatedAt        pgtype.Timestamptz
+	ReviewerUsername string
+	ReviewNote       string
+}
+
+type UploadAccountAvatarInput struct {
+	UserID       pgtype.UUID
+	OriginalName string
+	MimeType     string
+	Ext          string
+	FileSize     int64
+	File         io.Reader
+}
+
+const maxAccountAvatarBytes int64 = 2 * 1024 * 1024
+
+var allowedAccountAvatarTypes = map[string]string{
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".png":  "image/png",
+	".webp": "image/webp",
+}
+
+func NewAuth(q *db.Queries, jwtSecret, adminPassword string, avatarDir ...string) *Auth {
+	return &Auth{q: q, jwtSecret: []byte(jwtSecret), adminPassword: adminPassword, avatarDir: normalizeAvatarDir(avatarDir...)}
 }
 
 func (s *Auth) Login(ctx context.Context, username, password string, meta SessionMeta) (domain.TokenPair, error) {
@@ -205,6 +240,27 @@ func (s *Auth) GetAccount(ctx context.Context, userID pgtype.UUID) (db.GetUserAc
 	return row, err
 }
 
+func (s *Auth) ListAccountChangeHistory(ctx context.Context, userID pgtype.UUID, limit int32) ([]AccountChangeHistoryItem, error) {
+	if !userID.Valid {
+		return nil, domain.ErrUnauthorized
+	}
+	rows, err := s.q.ListOwnAccountChangeHistory(ctx, db.ListOwnAccountChangeHistoryParams{
+		UserID:     userID,
+		LimitCount: normalizeAccountChangeHistoryLimit(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]AccountChangeHistoryItem, 0, len(rows))
+	for _, row := range rows {
+		item, ok := accountChangeHistoryItemFromRow(row)
+		if ok {
+			items = append(items, item)
+		}
+	}
+	return items, nil
+}
+
 func (s *Auth) UpdateAccountContact(ctx context.Context, userID pgtype.UUID, patch AccountContactPatch) (db.GetUserAccountSummaryRow, error) {
 	current, err := s.GetAccount(ctx, userID)
 	if err != nil {
@@ -263,6 +319,84 @@ func (s *Auth) UpdateAccountContact(ctx context.Context, userID pgtype.UUID, pat
 		return db.GetUserAccountSummaryRow{}, err
 	}
 	return s.GetAccount(ctx, userID)
+}
+
+func (s *Auth) SaveAccountAvatar(ctx context.Context, input UploadAccountAvatarInput) (db.GetUserAccountSummaryRow, error) {
+	if err := validateAccountAvatar(input); err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	current, err := s.GetAccount(ctx, input.UserID)
+	if err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	if current.ProfileType != "employee" && current.ProfileType != "student" && current.ProfileType != "parent" {
+		return db.GetUserAccountSummaryRow{}, domain.ErrForbidden
+	}
+
+	avatarDir := s.accountAvatarDir()
+	if err := os.MkdirAll(avatarDir, 0o755); err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	token, err := randomHex(16)
+	if err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	storedName := "avatar_" + token + strings.ToLower(input.Ext)
+	absPath, err := filepath.Abs(filepath.Join(avatarDir, storedName))
+	if err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	out, err := os.Create(absPath)
+	if err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	copyErr := func() error {
+		defer out.Close()
+		_, err := io.Copy(out, input.File)
+		return err
+	}()
+	if copyErr != nil {
+		_ = os.Remove(absPath)
+		return db.GetUserAccountSummaryRow{}, copyErr
+	}
+
+	photoURL := accountAvatarURL(storedName)
+	if err := s.updateOwnedAccountAvatarURL(ctx, input.UserID, current.ProfileType, photoURL); err != nil {
+		_ = os.Remove(absPath)
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	s.removeStoredAccountAvatar(current.PhotoUrl)
+	return s.GetAccount(ctx, input.UserID)
+}
+
+func (s *Auth) DeleteAccountAvatar(ctx context.Context, userID pgtype.UUID) (db.GetUserAccountSummaryRow, error) {
+	current, err := s.GetAccount(ctx, userID)
+	if err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	if current.ProfileType != "employee" && current.ProfileType != "student" && current.ProfileType != "parent" {
+		return db.GetUserAccountSummaryRow{}, domain.ErrForbidden
+	}
+	if err := s.updateOwnedAccountAvatarURL(ctx, userID, current.ProfileType, ""); err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	s.removeStoredAccountAvatar(current.PhotoUrl)
+	return s.GetAccount(ctx, userID)
+}
+
+func (s *Auth) AccountAvatarPath(ctx context.Context, userID pgtype.UUID, filename string) (string, bool, error) {
+	filename = strings.TrimSpace(filename)
+	if filename == "" || strings.Contains(filename, "/") || strings.Contains(filename, "..") {
+		return "", false, nil
+	}
+	current, err := s.GetAccount(ctx, userID)
+	if err != nil {
+		return "", false, err
+	}
+	if current.PhotoUrl != accountAvatarURL(filename) {
+		return "", false, nil
+	}
+	return filepath.Join(s.accountAvatarDir(), filename), true, nil
 }
 
 func (s *Auth) RevokeSession(ctx context.Context, userID, sessionID pgtype.UUID) error {
@@ -482,6 +616,70 @@ func normalizeStringSet(values []string) []string {
 	return out
 }
 
+func normalizeAccountChangeHistoryLimit(limit int32) int32 {
+	if limit < 1 {
+		return 30
+	}
+	if limit > 50 {
+		return 50
+	}
+	return limit
+}
+
+func accountChangeHistoryItemFromRow(row db.ListOwnAccountChangeHistoryRow) (AccountChangeHistoryItem, bool) {
+	action := normalizeAccountChangeHistoryAction(row.Action)
+	if action == "" {
+		return AccountChangeHistoryItem{}, false
+	}
+	return AccountChangeHistoryItem{
+		Action:           action,
+		FieldKey:         normalizeAccountChangeHistoryField(row.FieldKey),
+		Status:           normalizeAccountChangeHistoryStatus(row.Status),
+		CreatedAt:        row.CreatedAt,
+		ReviewerUsername: strings.TrimSpace(row.ReviewerUsername),
+		ReviewNote:       strings.TrimSpace(row.ReviewNote),
+	}, true
+}
+
+func normalizeAccountChangeHistoryAction(action string) string {
+	switch strings.TrimSpace(action) {
+	case "AUTH_ACCOUNT_CONTACT_UPDATE":
+		return "contact_update"
+	case "AUTH_ACCOUNT_AVATAR_UPDATE":
+		return "avatar_update"
+	case "AUTH_ACCOUNT_AVATAR_DELETE":
+		return "avatar_delete"
+	case "ACCOUNT_CHANGE_REQUEST_CREATED":
+		return "change_request_created"
+	case "ACCOUNT_CHANGE_REQUEST_CANCELLED":
+		return "change_request_cancelled"
+	case "ACCOUNT_CHANGE_REQUEST_APPROVED":
+		return "change_request_approved"
+	case "ACCOUNT_CHANGE_REQUEST_REJECTED":
+		return "change_request_rejected"
+	default:
+		return ""
+	}
+}
+
+func normalizeAccountChangeHistoryField(fieldKey string) string {
+	switch strings.TrimSpace(strings.ToLower(fieldKey)) {
+	case "contact", "avatar", "nama", "tanggal_lahir", "parent_name":
+		return strings.TrimSpace(strings.ToLower(fieldKey))
+	default:
+		return ""
+	}
+}
+
+func normalizeAccountChangeHistoryStatus(status string) string {
+	switch strings.TrimSpace(strings.ToLower(status)) {
+	case "pending", "approved", "rejected", "cancelled", "completed":
+		return strings.TrimSpace(strings.ToLower(status))
+	default:
+		return "completed"
+	}
+}
+
 func decodeSidebarPreferences(pinnedJSON, recentJSON []byte) (SidebarPreferences, error) {
 	var prefs SidebarPreferences
 	if len(pinnedJSON) > 0 {
@@ -690,6 +888,90 @@ func looksLikeEmail(email string) bool {
 	}
 	at := strings.Index(email, "@")
 	return at > 0 && at < len(email)-1 && strings.Contains(email[at+1:], ".")
+}
+
+func (s *Auth) updateOwnedAccountAvatarURL(ctx context.Context, userID pgtype.UUID, profileType, photoURL string) error {
+	var err error
+	switch profileType {
+	case "employee":
+		_, err = s.q.UpdateOwnedEmployeeAvatar(ctx, db.UpdateOwnedEmployeeAvatarParams{
+			UserID:   userID,
+			PhotoUrl: photoURL,
+		})
+	case "student":
+		_, err = s.q.UpdateOwnedStudentAvatar(ctx, db.UpdateOwnedStudentAvatarParams{
+			UserID:   userID,
+			PhotoUrl: photoURL,
+		})
+	case "parent":
+		_, err = s.q.UpdateOwnedParentAvatar(ctx, db.UpdateOwnedParentAvatarParams{
+			UserID:   userID,
+			PhotoUrl: photoURL,
+		})
+	default:
+		return domain.ErrForbidden
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrForbidden
+	}
+	return err
+}
+
+func validateAccountAvatar(input UploadAccountAvatarInput) error {
+	if !input.UserID.Valid {
+		return domain.ErrUnauthorized
+	}
+	if input.File == nil {
+		return fmt.Errorf("file wajib diisi")
+	}
+	if input.FileSize <= 0 {
+		return fmt.Errorf("ukuran file tidak valid")
+	}
+	if input.FileSize > maxAccountAvatarBytes {
+		return fmt.Errorf("ukuran foto maksimal 2MB")
+	}
+	ext := strings.ToLower(strings.TrimSpace(input.Ext))
+	expectedMime, ok := allowedAccountAvatarTypes[ext]
+	if !ok || expectedMime != input.MimeType {
+		return fmt.Errorf("hanya file JPG, PNG, atau WebP yang diperbolehkan")
+	}
+	return nil
+}
+
+func normalizeAvatarDir(values ...string) string {
+	if len(values) > 0 && strings.TrimSpace(values[0]) != "" {
+		return strings.TrimSpace(values[0])
+	}
+	return "uploads/avatars"
+}
+
+func (s *Auth) accountAvatarDir() string {
+	return normalizeAvatarDir(s.avatarDir)
+}
+
+func accountAvatarURL(filename string) string {
+	return "/api/auth/account/avatar/" + filename
+}
+
+func accountAvatarFilename(photoURL string) (string, bool) {
+	const prefix = "/api/auth/account/avatar/"
+	photoURL = strings.TrimSpace(photoURL)
+	if !strings.HasPrefix(photoURL, prefix) {
+		return "", false
+	}
+	filename := strings.TrimPrefix(photoURL, prefix)
+	if filename == "" || strings.Contains(filename, "/") || strings.Contains(filename, "..") {
+		return "", false
+	}
+	return filename, true
+}
+
+func (s *Auth) removeStoredAccountAvatar(photoURL string) {
+	filename, ok := accountAvatarFilename(photoURL)
+	if !ok {
+		return
+	}
+	_ = os.Remove(filepath.Join(s.accountAvatarDir(), filename))
 }
 
 func validatePassword(username, password string) error {
