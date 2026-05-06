@@ -5,12 +5,20 @@ export type AccountIdentity = {
 	roles: string[];
 	profile_type?: string | null;
 	profile_nama?: string | null;
+	contact?: AccountContact | null;
 	employee_id?: string | null;
 	student_id?: string | null;
 	parent_id?: string | null;
 	is_active?: boolean;
 	last_login_at?: string | null;
 	created_at?: string | null;
+};
+
+export type AccountContact = {
+	phone?: string | null;
+	email?: string | null;
+	address?: string | null;
+	editable_fields?: string[];
 };
 
 export type AuthSession = {
@@ -68,6 +76,21 @@ export function linkedProfileLabel(account: AccountIdentity | null | undefined) 
 	if (profileName) return `${profileType}: ${profileName}`;
 	if (account.employee_id || account.student_id || account.parent_id) return `${profileType}: tertaut`;
 	return 'Tidak tertaut';
+}
+
+export function editableContactFields(contact: AccountContact | null | undefined) {
+	const fields = contact?.editable_fields;
+	if (!Array.isArray(fields)) return [];
+	const allowed = new Set(['phone', 'email', 'address']);
+	return fields.filter((field) => allowed.has(field));
+}
+
+export function contactFieldEditable(contact: AccountContact | null | undefined, field: string) {
+	return editableContactFields(contact).includes(field);
+}
+
+export function hasEditableContact(contact: AccountContact | null | undefined) {
+	return editableContactFields(contact).length > 0;
 }
 
 export function formatAccountDateTime(value: string | null | undefined, emptyLabel = 'Belum tercatat') {

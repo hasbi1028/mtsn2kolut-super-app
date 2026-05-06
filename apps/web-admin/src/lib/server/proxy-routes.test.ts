@@ -162,6 +162,54 @@ describe('api proxy route handlers', () => {
 		await expect(res.json()).resolves.toEqual({ username: 'guru.ipa', roles: ['guru'] });
 	});
 
+	it('forwards account contact updates without a user id parameter', async () => {
+		const mod = await import('../../routes/api/auth/account/+server');
+		const request = new Request('http://localhost/api/auth/account', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ phone: '0812', email: 'guru@example.id', address: 'Kolaka Utara' })
+		});
+		const event = createEvent({
+			locals: {
+				user: { id: '1', username: 'guru.ipa', role: 'guru', roles: ['guru'] }
+			},
+			request
+		});
+		proxyPatchMock.mockResolvedValueOnce({ username: 'guru.ipa', contact: { phone: '0812' } });
+
+		const res = await mod.PATCH(event as never);
+
+		expect(readRequestJsonMock).toHaveBeenCalledWith(request);
+		expect(proxyPatchMock).toHaveBeenCalledWith('/api/auth/account/contact', {
+			phone: '0812',
+			email: 'guru@example.id',
+			address: 'Kolaka Utara'
+		});
+		expect(res.status).toBe(200);
+		await expect(res.json()).resolves.toEqual({ username: 'guru.ipa', contact: { phone: '0812' } });
+	});
+
+	it('rejects account contact updates that try to edit official fields', async () => {
+		const mod = await import('../../routes/api/auth/account/+server');
+		const request = new Request('http://localhost/api/auth/account', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ username: 'baru', role: 'admin' })
+		});
+		const event = createEvent({
+			locals: {
+				user: { id: '1', username: 'guru.ipa', role: 'guru', roles: ['guru'] }
+			},
+			request
+		});
+
+		const res = await mod.PATCH(event as never);
+
+		expect(proxyPatchMock).not.toHaveBeenCalled();
+		expect(res.status).toBe(400);
+		await expect(res.json()).resolves.toEqual({ error: 'Field username tidak dapat diubah dari akun saya' });
+	});
+
 	it('renames an auth session through the authenticated proxy', async () => {
 		const mod = await import('../../routes/api/auth/sessions/[id]/+server');
 		const request = new Request('http://localhost/api/auth/sessions/sess%201%2F2026', {

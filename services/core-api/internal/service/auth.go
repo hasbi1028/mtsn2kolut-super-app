@@ -32,6 +32,9 @@ type authStore interface {
 	GetUserByUsername(ctx context.Context, username string) (db.GetUserByUsernameRow, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (db.GetUserByIDRow, error)
 	GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (db.GetUserAccountSummaryRow, error)
+	UpdateOwnedEmployeeContact(ctx context.Context, arg db.UpdateOwnedEmployeeContactParams) (db.UpdateOwnedEmployeeContactRow, error)
+	UpdateOwnedStudentContact(ctx context.Context, arg db.UpdateOwnedStudentContactParams) (db.UpdateOwnedStudentContactRow, error)
+	UpdateOwnedParentContact(ctx context.Context, arg db.UpdateOwnedParentContactParams) (db.UpdateOwnedParentContactRow, error)
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error)
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
 	GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error)
@@ -79,6 +82,12 @@ type SessionMeta struct {
 type SidebarPreferences struct {
 	PinnedItems []string `json:"pinned_items"`
 	RecentItems []string `json:"recent_items"`
+}
+
+type AccountContactPatch struct {
+	Phone   *string
+	Email   *string
+	Address *string
 }
 
 func NewAuth(q *db.Queries, jwtSecret, adminPassword string) *Auth {
@@ -194,6 +203,66 @@ func (s *Auth) GetAccount(ctx context.Context, userID pgtype.UUID) (db.GetUserAc
 		return db.GetUserAccountSummaryRow{}, domain.ErrUnauthorized
 	}
 	return row, err
+}
+
+func (s *Auth) UpdateAccountContact(ctx context.Context, userID pgtype.UUID, patch AccountContactPatch) (db.GetUserAccountSummaryRow, error) {
+	current, err := s.GetAccount(ctx, userID)
+	if err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+
+	phone, err := normalizeContactPatchValue(patch.Phone, current.ContactPhone, 40)
+	if err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	email, err := normalizeContactPatchValue(patch.Email, current.ContactEmail, 254)
+	if err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	address, err := normalizeContactPatchValue(patch.Address, current.ContactAddress, 500)
+	if err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	if patch.Email != nil && email != "" && !looksLikeEmail(email) {
+		return db.GetUserAccountSummaryRow{}, domain.ErrBadRequest
+	}
+
+	switch current.ProfileType {
+	case "employee":
+		_, err = s.q.UpdateOwnedEmployeeContact(ctx, db.UpdateOwnedEmployeeContactParams{
+			UserID:  userID,
+			Phone:   phone,
+			Email:   email,
+			Address: address,
+		})
+	case "student":
+		if patch.Email != nil {
+			return db.GetUserAccountSummaryRow{}, domain.ErrBadRequest
+		}
+		_, err = s.q.UpdateOwnedStudentContact(ctx, db.UpdateOwnedStudentContactParams{
+			UserID:  userID,
+			Phone:   phone,
+			Address: address,
+		})
+	case "parent":
+		if patch.Email != nil {
+			return db.GetUserAccountSummaryRow{}, domain.ErrBadRequest
+		}
+		_, err = s.q.UpdateOwnedParentContact(ctx, db.UpdateOwnedParentContactParams{
+			UserID:  userID,
+			Phone:   phone,
+			Address: address,
+		})
+	default:
+		return db.GetUserAccountSummaryRow{}, domain.ErrForbidden
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.GetUserAccountSummaryRow{}, domain.ErrForbidden
+	}
+	if err != nil {
+		return db.GetUserAccountSummaryRow{}, err
+	}
+	return s.GetAccount(ctx, userID)
 }
 
 func (s *Auth) RevokeSession(ctx context.Context, userID, sessionID pgtype.UUID) error {
@@ -602,6 +671,25 @@ func asInt64(v any) (int64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func normalizeContactPatchValue(value *string, current string, maxLen int) (string, error) {
+	if value == nil {
+		return strings.TrimSpace(current), nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if len(trimmed) > maxLen {
+		return "", domain.ErrBadRequest
+	}
+	return trimmed, nil
+}
+
+func looksLikeEmail(email string) bool {
+	if strings.ContainsAny(email, " \t\r\n") {
+		return false
+	}
+	at := strings.Index(email, "@")
+	return at > 0 && at < len(email)-1 && strings.Contains(email[at+1:], ".")
 }
 
 func validatePassword(username, password string) error {

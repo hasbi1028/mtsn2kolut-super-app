@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
 	accountDisplayName,
 	accountErrorMessage,
+	contactFieldEditable,
+	editableContactFields,
 	formatAccountDateTime,
+	hasEditableContact,
 	isCurrentSession,
 	linkedProfileLabel,
 	normalizeAccountSessions,
@@ -49,6 +52,15 @@ describe('account client helpers', () => {
 		expect(isCurrentSession({ id: 's1' }, 's1')).toBe(true);
 		expect(isCurrentSession({ id: 's1' }, 's2')).toBe(false);
 		expect(preferenceItemCount(['/', '', '/settings/account'])).toBe(2);
+	});
+
+	it('keeps contact editability limited to supported fields', () => {
+		const contact = { phone: '0812', email: 'guru@example.id', editable_fields: ['phone', 'email', 'role'] };
+		expect(editableContactFields(contact)).toEqual(['phone', 'email']);
+		expect(contactFieldEditable(contact, 'phone')).toBe(true);
+		expect(contactFieldEditable(contact, 'role')).toBe(false);
+		expect(hasEditableContact(contact)).toBe(true);
+		expect(hasEditableContact({ editable_fields: [] })).toBe(false);
 	});
 
 	it('keeps mutation error messages controlled', () => {

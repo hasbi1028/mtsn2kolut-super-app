@@ -3,6 +3,9 @@
 	import { page } from '$app/state';
 	import KeyRoundIcon from '@lucide/svelte/icons/key-round';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
+	import MailIcon from '@lucide/svelte/icons/mail';
+	import MapPinIcon from '@lucide/svelte/icons/map-pin';
+	import PhoneIcon from '@lucide/svelte/icons/phone';
 	import RefreshCcwIcon from '@lucide/svelte/icons/refresh-ccw';
 	import SaveIcon from '@lucide/svelte/icons/save';
 	import Trash2Icon from '@lucide/svelte/icons/trash-2';
@@ -11,6 +14,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from '$lib/components/ui/sonner';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
@@ -20,7 +24,9 @@
 	import {
 		accountDisplayName,
 		accountErrorMessage,
+		contactFieldEditable,
 		formatAccountDateTime,
+		hasEditableContact,
 		isCurrentSession,
 		linkedProfileLabel,
 		normalizeAccountSessions,
@@ -45,6 +51,8 @@
 	let sessions = $state<AuthSession[]>([]);
 	let preferences = $state<SidebarPreferences | null>(null);
 	let labelDrafts = $state<Record<string, string>>({});
+	let contactForm = $state({ phone: '', email: '', address: '' });
+	let contactLoading = $state(false);
 	let pwForm = $state({ current: '', next: '', confirm: '' });
 	let pwLoading = $state(false);
 	let logoutAllLoading = $state(false);
@@ -55,14 +63,24 @@
 	const currentSessionId = $derived(page.data.user?.session_id ?? '');
 	const pinnedCount = $derived(preferenceItemCount(preferences?.pinned_items));
 	const recentCount = $derived(preferenceItemCount(preferences?.recent_items));
+	const canEditContact = $derived(hasEditableContact(account?.contact));
 
 	function applyOverview(overview: AccountOverview) {
 		account = overview.account;
 		sessions = overview.sessions;
 		preferences = overview.preferences;
+		contactForm = contactFormFromAccount(overview.account);
 		labelDrafts = Object.fromEntries(
 			overview.sessions.map((session) => [session.id, session.device_label?.trim() ?? ''])
 		);
+	}
+
+	function contactFormFromAccount(identity: AccountIdentity) {
+		return {
+			phone: identity.contact?.phone ?? '',
+			email: identity.contact?.email ?? '',
+			address: identity.contact?.address ?? ''
+		};
 	}
 
 	function currentOverview(): AccountOverview | null {
@@ -165,6 +183,37 @@
 			toast.error(accountErrorMessage(error, 'Gagal mengubah password'));
 		} finally {
 			pwLoading = false;
+		}
+	}
+
+	async function saveContact() {
+		if (!account?.contact || !hasEditableContact(account.contact)) {
+			toast.error('Kontak pribadi belum tersedia untuk akun ini');
+			return;
+		}
+
+		const payload: Record<string, string> = {};
+		if (contactFieldEditable(account.contact, 'phone')) payload.phone = contactForm.phone;
+		if (contactFieldEditable(account.contact, 'email')) payload.email = contactForm.email;
+		if (contactFieldEditable(account.contact, 'address')) payload.address = contactForm.address;
+
+		contactLoading = true;
+		try {
+			const res = await fetch('/api/auth/account', {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			const updated = await readClientApiData<AccountIdentity>(res, 'Gagal menyimpan kontak pribadi');
+			account = updated;
+			contactForm = contactFormFromAccount(updated);
+			const current = currentOverview();
+			if (current) overviewPromise = Promise.resolve(current);
+			toast.success('Kontak pribadi berhasil disimpan.');
+		} catch (error) {
+			toast.error(accountErrorMessage(error, 'Gagal menyimpan kontak pribadi'));
+		} finally {
+			contactLoading = false;
 		}
 	}
 
@@ -353,6 +402,54 @@
 									</p>
 								</div>
 							</div>
+						</Card.Content>
+					</Card.Root>
+
+					<Card.Root>
+						<Card.Header class="pb-3">
+							<Card.Title class="text-base">Kontak Pribadi</Card.Title>
+							<Card.Description>Kontak profil tertaut yang aman diperbarui sendiri.</Card.Description>
+						</Card.Header>
+						<Card.Content>
+							{#if canEditContact}
+								<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+									{#if contactFieldEditable(account.contact, 'phone')}
+										<div>
+											<label for="account-contact-phone" class="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
+												<PhoneIcon class="size-4 text-slate-500" />
+												Nomor HP/WA
+											</label>
+											<Input id="account-contact-phone" bind:value={contactForm.phone} autocomplete="tel" maxlength={40} placeholder="08xxxxxxxxxx" />
+										</div>
+									{/if}
+									{#if contactFieldEditable(account.contact, 'email')}
+										<div>
+											<label for="account-contact-email" class="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
+												<MailIcon class="size-4 text-slate-500" />
+												Email
+											</label>
+											<Input id="account-contact-email" type="email" bind:value={contactForm.email} autocomplete="email" maxlength={254} placeholder="nama@example.id" />
+										</div>
+									{/if}
+									{#if contactFieldEditable(account.contact, 'address')}
+										<div class="md:col-span-2">
+											<label for="account-contact-address" class="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
+												<MapPinIcon class="size-4 text-slate-500" />
+												Alamat Kontak
+											</label>
+											<Textarea id="account-contact-address" bind:value={contactForm.address} rows={3} maxlength={500} />
+										</div>
+									{/if}
+								</div>
+								<LoadingButton class="mt-4" onclick={() => void saveContact()} loading={contactLoading} loadingLabel="Menyimpan...">
+									<SaveIcon class="size-4" />
+									Simpan Kontak
+								</LoadingButton>
+							{:else}
+								<div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+									Kontak pribadi belum tersedia untuk akun tanpa profil tertaut.
+								</div>
+							{/if}
 						</Card.Content>
 					</Card.Root>
 

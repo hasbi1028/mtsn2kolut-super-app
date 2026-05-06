@@ -25,7 +25,7 @@ func (q *Queries) CountEmployees(ctx context.Context) (int64, error) {
 const createEmployee = `-- name: CreateEmployee :one
 INSERT INTO employees (id, nip, nama, unit_kerja, employment_type, tanggal_lahir, is_active)
 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
-RETURNING id, nip, nama, unit_kerja, is_active, created_at, updated_at, employment_type, tanggal_lahir
+RETURNING id, nip, nama, unit_kerja, is_active, created_at, updated_at, employment_type, tanggal_lahir, phone, email, address
 `
 
 type CreateEmployeeParams struct {
@@ -57,6 +57,9 @@ func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) 
 		&i.UpdatedAt,
 		&i.EmploymentType,
 		&i.TanggalLahir,
+		&i.Phone,
+		&i.Email,
+		&i.Address,
 	)
 	return i, err
 }
@@ -435,7 +438,7 @@ SET nip             = $2,
     is_active       = $7,
     updated_at      = NOW()
 WHERE id = $1
-RETURNING id, nip, nama, unit_kerja, is_active, created_at, updated_at, employment_type, tanggal_lahir
+RETURNING id, nip, nama, unit_kerja, is_active, created_at, updated_at, employment_type, tanggal_lahir, phone, email, address
 `
 
 type UpdateEmployeeParams struct {
@@ -469,6 +472,9 @@ func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) 
 		&i.UpdatedAt,
 		&i.EmploymentType,
 		&i.TanggalLahir,
+		&i.Phone,
+		&i.Email,
+		&i.Address,
 	)
 	return i, err
 }

@@ -147,6 +147,22 @@ SELECT
         ELSE ''
     END::text AS profile_type,
     COALESCE(e.nama, s.nama, p.nama, '')::text AS profile_nama,
+    CASE
+        WHEN u.employee_id IS NOT NULL THEN e.phone
+        WHEN u.student_id IS NOT NULL THEN s.phone
+        WHEN u.parent_id IS NOT NULL THEN p.phone
+        ELSE ''
+    END::text AS contact_phone,
+    CASE
+        WHEN u.employee_id IS NOT NULL THEN e.email
+        ELSE ''
+    END::text AS contact_email,
+    CASE
+        WHEN u.employee_id IS NOT NULL THEN e.address
+        WHEN u.student_id IS NOT NULL THEN s.alamat
+        WHEN u.parent_id IS NOT NULL THEN p.address
+        ELSE ''
+    END::text AS contact_address,
     u.is_active,
     u.last_login_at,
     u.created_at,
@@ -160,18 +176,21 @@ WHERE u.id = $1
 `
 
 type GetUserAccountSummaryRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	Username    string             `json:"username"`
-	DisplayName string             `json:"display_name"`
-	EmployeeID  pgtype.UUID        `json:"employee_id"`
-	StudentID   pgtype.UUID        `json:"student_id"`
-	ParentID    pgtype.UUID        `json:"parent_id"`
-	ProfileType string             `json:"profile_type"`
-	ProfileNama string             `json:"profile_nama"`
-	IsActive    bool               `json:"is_active"`
-	LastLoginAt pgtype.Timestamptz `json:"last_login_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	Roles       []byte             `json:"roles"`
+	ID             pgtype.UUID        `json:"id"`
+	Username       string             `json:"username"`
+	DisplayName    string             `json:"display_name"`
+	EmployeeID     pgtype.UUID        `json:"employee_id"`
+	StudentID      pgtype.UUID        `json:"student_id"`
+	ParentID       pgtype.UUID        `json:"parent_id"`
+	ProfileType    string             `json:"profile_type"`
+	ProfileNama    string             `json:"profile_nama"`
+	ContactPhone   string             `json:"contact_phone"`
+	ContactEmail   string             `json:"contact_email"`
+	ContactAddress string             `json:"contact_address"`
+	IsActive       bool               `json:"is_active"`
+	LastLoginAt    pgtype.Timestamptz `json:"last_login_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Roles          []byte             `json:"roles"`
 }
 
 func (q *Queries) GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (GetUserAccountSummaryRow, error) {
@@ -186,6 +205,9 @@ func (q *Queries) GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (Ge
 		&i.ParentID,
 		&i.ProfileType,
 		&i.ProfileNama,
+		&i.ContactPhone,
+		&i.ContactEmail,
+		&i.ContactAddress,
 		&i.IsActive,
 		&i.LastLoginAt,
 		&i.CreatedAt,
@@ -790,6 +812,115 @@ WHERE id = $1
 func (q *Queries) SoftDeleteUser(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, softDeleteUser, id)
 	return err
+}
+
+const updateOwnedEmployeeContact = `-- name: UpdateOwnedEmployeeContact :one
+UPDATE employees e
+SET phone = $1,
+    email = $2,
+    address = $3,
+    updated_at = NOW()
+WHERE e.id = (
+    SELECT u.employee_id
+    FROM users u
+    WHERE u.id = $4
+      AND u.deleted_at IS NULL
+      AND u.employee_id IS NOT NULL
+)
+RETURNING e.phone AS contact_phone, e.email AS contact_email, e.address AS contact_address
+`
+
+type UpdateOwnedEmployeeContactParams struct {
+	Phone   string      `json:"phone"`
+	Email   string      `json:"email"`
+	Address string      `json:"address"`
+	UserID  pgtype.UUID `json:"user_id"`
+}
+
+type UpdateOwnedEmployeeContactRow struct {
+	ContactPhone   string `json:"contact_phone"`
+	ContactEmail   string `json:"contact_email"`
+	ContactAddress string `json:"contact_address"`
+}
+
+func (q *Queries) UpdateOwnedEmployeeContact(ctx context.Context, arg UpdateOwnedEmployeeContactParams) (UpdateOwnedEmployeeContactRow, error) {
+	row := q.db.QueryRow(ctx, updateOwnedEmployeeContact,
+		arg.Phone,
+		arg.Email,
+		arg.Address,
+		arg.UserID,
+	)
+	var i UpdateOwnedEmployeeContactRow
+	err := row.Scan(&i.ContactPhone, &i.ContactEmail, &i.ContactAddress)
+	return i, err
+}
+
+const updateOwnedParentContact = `-- name: UpdateOwnedParentContact :one
+UPDATE parents p
+SET phone = $1,
+    address = $2,
+    updated_at = NOW()
+WHERE p.id = (
+    SELECT u.parent_id
+    FROM users u
+    WHERE u.id = $3
+      AND u.deleted_at IS NULL
+      AND u.parent_id IS NOT NULL
+)
+RETURNING p.phone AS contact_phone, ''::text AS contact_email, p.address AS contact_address
+`
+
+type UpdateOwnedParentContactParams struct {
+	Phone   string      `json:"phone"`
+	Address string      `json:"address"`
+	UserID  pgtype.UUID `json:"user_id"`
+}
+
+type UpdateOwnedParentContactRow struct {
+	ContactPhone   string `json:"contact_phone"`
+	ContactEmail   string `json:"contact_email"`
+	ContactAddress string `json:"contact_address"`
+}
+
+func (q *Queries) UpdateOwnedParentContact(ctx context.Context, arg UpdateOwnedParentContactParams) (UpdateOwnedParentContactRow, error) {
+	row := q.db.QueryRow(ctx, updateOwnedParentContact, arg.Phone, arg.Address, arg.UserID)
+	var i UpdateOwnedParentContactRow
+	err := row.Scan(&i.ContactPhone, &i.ContactEmail, &i.ContactAddress)
+	return i, err
+}
+
+const updateOwnedStudentContact = `-- name: UpdateOwnedStudentContact :one
+UPDATE students s
+SET phone = $1,
+    alamat = $2,
+    updated_at = NOW()
+WHERE s.id = (
+    SELECT u.student_id
+    FROM users u
+    WHERE u.id = $3
+      AND u.deleted_at IS NULL
+      AND u.student_id IS NOT NULL
+)
+RETURNING s.phone AS contact_phone, ''::text AS contact_email, s.alamat AS contact_address
+`
+
+type UpdateOwnedStudentContactParams struct {
+	Phone   string      `json:"phone"`
+	Address string      `json:"address"`
+	UserID  pgtype.UUID `json:"user_id"`
+}
+
+type UpdateOwnedStudentContactRow struct {
+	ContactPhone   string `json:"contact_phone"`
+	ContactEmail   string `json:"contact_email"`
+	ContactAddress string `json:"contact_address"`
+}
+
+func (q *Queries) UpdateOwnedStudentContact(ctx context.Context, arg UpdateOwnedStudentContactParams) (UpdateOwnedStudentContactRow, error) {
+	row := q.db.QueryRow(ctx, updateOwnedStudentContact, arg.Phone, arg.Address, arg.UserID)
+	var i UpdateOwnedStudentContactRow
+	err := row.Scan(&i.ContactPhone, &i.ContactEmail, &i.ContactAddress)
+	return i, err
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec
