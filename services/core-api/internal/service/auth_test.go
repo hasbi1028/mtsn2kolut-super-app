@@ -18,11 +18,12 @@ import (
 )
 
 type fakeStore struct {
-	settings     map[string]string
-	users        map[string]db.User
-	userRoles    map[pgtype.UUID][]db.UserRole
-	authSessions map[pgtype.UUID]db.AuthSession
-	uiPrefs      map[pgtype.UUID]db.UserUiPreference
+	settings        map[string]string
+	users           map[string]db.User
+	userRoles       map[pgtype.UUID][]db.UserRole
+	userPermissions map[pgtype.UUID][]string
+	authSessions    map[pgtype.UUID]db.AuthSession
+	uiPrefs         map[pgtype.UUID]db.UserUiPreference
 
 	getUserByUsernameErr error
 	getUserByIDErr       error
@@ -43,11 +44,12 @@ type fakeStore struct {
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		settings:     map[string]string{},
-		users:        map[string]db.User{},
-		userRoles:    map[pgtype.UUID][]db.UserRole{},
-		authSessions: map[pgtype.UUID]db.AuthSession{},
-		uiPrefs:      map[pgtype.UUID]db.UserUiPreference{},
+		settings:        map[string]string{},
+		users:           map[string]db.User{},
+		userRoles:       map[pgtype.UUID][]db.UserRole{},
+		userPermissions: map[pgtype.UUID][]string{},
+		authSessions:    map[pgtype.UUID]db.AuthSession{},
+		uiPrefs:         map[pgtype.UUID]db.UserUiPreference{},
 	}
 }
 
@@ -169,6 +171,10 @@ func (f *fakeStore) UpdateUserPassword(ctx context.Context, arg db.UpdateUserPas
 
 func (f *fakeStore) GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error) {
 	return f.userRoles[userID], nil
+}
+
+func (f *fakeStore) GetUserPermissionCodes(ctx context.Context, userID pgtype.UUID) ([]string, error) {
+	return f.userPermissions[userID], nil
 }
 
 func (f *fakeStore) AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error {
@@ -382,6 +388,35 @@ func TestAuthSeedAdminCreatesUser(t *testing.T) {
 	}
 }
 
+func TestAuthLoginAccessTokenIncludesRBACPermissions(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
+	if err := svc.SeedAdmin(context.Background()); err != nil {
+		t.Fatalf("SeedAdmin() error = %v", err)
+	}
+	u := store.users["admin"]
+	store.userPermissions[u.ID] = []string{"users.read", "roles.manage"}
+
+	pair, err := svc.Login(context.Background(), "admin", "admin", SessionMeta{})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	claims := jwt.MapClaims{}
+	if _, _, err := new(jwt.Parser).ParseUnverified(pair.AccessToken, claims); err != nil {
+		t.Fatalf("ParseUnverified(access) error = %v", err)
+	}
+	permissions, ok := claims["permissions"].([]any)
+	if !ok {
+		t.Fatalf("permissions claim type = %T, want []any", claims["permissions"])
+	}
+	got := map[string]bool{}
+	for _, permission := range permissions {
+		got[permission.(string)] = true
+	}
+	if !got["users.read"] || !got["roles.manage"] {
+		t.Fatalf("permissions claim = %v, want users.read and roles.manage", permissions)
+	}
+}
 func TestAuthRefreshRejectsOldTokenAfterPasswordChange(t *testing.T) {
 	store := newFakeStore()
 	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}

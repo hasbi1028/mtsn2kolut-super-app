@@ -170,6 +170,14 @@ func main() {
 	requireCbtOps := mw.RequireAnyRole("admin", "guru", "staf")
 	requireStaff := mw.RequireAnyRole("admin", "staf")
 	requireKesiswaanManage := mw.RequireAnyRole("admin", "kesiswaan")
+	requireUsersRead := mw.RequirePermission("users.read")
+	requireUsersCreate := mw.RequirePermission("users.create")
+	requireUsersDeactivate := mw.RequirePermission("users.deactivate")
+	requireUsersManageRoles := mw.RequirePermission("users.manage_roles")
+	requireRolesRead := mw.RequirePermission("roles.read")
+	requireRolesManage := mw.RequirePermission("roles.manage")
+	requireAuditRead := mw.RequirePermission("audit.read")
+	requireSchoolProfileSettings := mw.RequirePermission("settings.school_profile")
 
 	r.Group(func(r chi.Router) {
 		r.Use(mw.JWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession))
@@ -186,7 +194,7 @@ func main() {
 		r.Post("/api/notifications/read-all", notificationH.MarkAllRead)
 		r.Post("/api/notifications/{id}/read", notificationH.MarkRead)
 		r.Get("/api/school-profile", settH.SchoolProfile)
-		r.With(requireAdmin).Put("/api/school-profile", settH.UpdateSchoolProfile)
+		r.With(requireSchoolProfileSettings).Put("/api/school-profile", settH.UpdateSchoolProfile)
 
 		// Employees are admin-only
 		r.Group(func(r chi.Router) {
@@ -607,7 +615,7 @@ func main() {
 		r.Get("/api/kesiswaan/student-transfers", kesiswaanH.ListStudentTransfers)
 		r.With(requireKesiswaanManage).Post("/api/kesiswaan/student-transfers", kesiswaanH.CreateStudentTransfer)
 
-		// Jobs / Attendance / Schedules / Settings / Users — admin-only
+		// Jobs / Attendance / Schedules / Settings — admin-only; Users/RBAC pilot use dynamic permissions.
 		r.Group(func(r chi.Router) {
 			r.Use(requireAdmin)
 
@@ -640,20 +648,19 @@ func main() {
 
 			r.Post("/api/pusaka/scheduler/tick", pusakaSchedulerH.Tick)
 			r.Get("/api/pusaka/worker/status", pusakaWorkerH.GetStatus)
-
-			r.Get("/api/users", userH.List)
-			r.Get("/api/users/audit-logs", userH.ListAuditLogs)
-			r.Post("/api/users", userH.Create)
-			r.Patch("/api/users/{id}/status", userH.UpdateStatus)
-			r.Patch("/api/users/{id}/roles", rbacH.UpdateUserRoles)
-			r.Delete("/api/users/{id}", userH.Delete)
-
-			r.Get("/api/rbac/roles", rbacH.ListRoles)
-			r.Get("/api/rbac/permissions", rbacH.ListPermissions)
-			r.Get("/api/rbac/matrix", rbacH.ListMatrix)
-			r.Put("/api/rbac/roles/{code}/permissions", rbacH.UpdateRolePermissions)
-
 		})
+
+		r.With(requireUsersRead).Get("/api/users", userH.List)
+		r.With(requireAuditRead).Get("/api/users/audit-logs", userH.ListAuditLogs)
+		r.With(requireUsersCreate).Post("/api/users", userH.Create)
+		r.With(requireUsersDeactivate).Patch("/api/users/{id}/status", userH.UpdateStatus)
+		r.With(requireUsersManageRoles).Patch("/api/users/{id}/roles", rbacH.UpdateUserRoles)
+		r.With(requireUsersDeactivate).Delete("/api/users/{id}", userH.Delete)
+
+		r.With(requireRolesRead).Get("/api/rbac/roles", rbacH.ListRoles)
+		r.With(requireRolesRead).Get("/api/rbac/permissions", rbacH.ListPermissions)
+		r.With(requireRolesRead).Get("/api/rbac/matrix", rbacH.ListMatrix)
+		r.With(requireRolesManage).Put("/api/rbac/roles/{code}/permissions", rbacH.UpdateRolePermissions)
 	})
 
 	r.Group(func(r chi.Router) {

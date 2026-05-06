@@ -108,8 +108,8 @@ describe('route access helpers', () => {
 	});
 
 	it('checks role membership from user payloads', () => {
-		expect(hasAnyRole({ id: '1', username: 'guru', role: 'guru', roles: [] }, ['guru'])).toBe(true);
-		expect(hasAnyRole({ id: '1', username: 'staf', role: '', roles: ['guru', 'staf'] }, ['admin', 'staf'])).toBe(true);
-		expect(hasAnyRole({ id: '1', username: 'ortu', role: 'ortu', roles: [] }, ['admin', 'guru'])).toBe(false);
+		expect(hasAnyRole({ id: '1', username: 'guru', role: 'guru', roles: [], permissions: [] }, ['guru'])).toBe(true);
+		expect(hasAnyRole({ id: '1', username: 'staf', role: '', roles: ['guru', 'staf'], permissions: [] }, ['admin', 'staf'])).toBe(true);
+		expect(hasAnyRole({ id: '1', username: 'ortu', role: 'ortu', roles: [], permissions: [] }, ['admin', 'guru'])).toBe(false);
 	});
 });

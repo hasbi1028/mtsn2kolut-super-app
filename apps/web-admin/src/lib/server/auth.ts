@@ -6,6 +6,7 @@ export type JwtPayload = {
 	usr?: string;
 	role?: string;
 	roles?: string[];
+	permissions?: string[];
 	ssid?: string;
 	eid?: string;
 	sid?: string;
@@ -17,6 +18,7 @@ export type AuthUser = {
 	username: string;
 	role: string;
 	roles: string[];
+	permissions: string[];
 	session_id?: string;
 	employee_id?: string;
 	student_id?: string;
@@ -61,6 +63,7 @@ export function getUserFromToken(token: string | undefined): AuthUser | null {
 		username: p.usr ?? '',
 		role,
 		roles: p.roles ?? (role ? [role] : []),
+		permissions: p.permissions ?? [],
 		session_id: p.ssid,
 		employee_id: p.eid,
 		student_id: p.sid,
