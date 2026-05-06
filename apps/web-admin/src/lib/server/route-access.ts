@@ -66,10 +66,7 @@ const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES = [
 	'/api/asesmen/sessions'
 ] as const;
 
-const BANK_SOAL_PREFIXES = [
-	'/bank-soal',
-	'/api/bank-soal'
-] as const;
+const BANK_SOAL_PREFIXES = ['/bank-soal', '/api/bank-soal'] as const;
 
 const STAFF_OPERATION_PREFIXES = [
 	'/document-cycles',
@@ -103,9 +100,19 @@ export function userRoles(user: AuthUser | undefined): string[] {
 	return user.roles.length > 0 ? user.roles : user.role ? [user.role] : [];
 }
 
+export function userPermissions(user: AuthUser | undefined): string[] {
+	if (!user) return [];
+	return (user.permissions ?? []).map((permission) => permission.trim()).filter(Boolean);
+}
+
 export function hasAnyRole(user: AuthUser | undefined, allowed: readonly string[]) {
 	const roles = userRoles(user);
 	return allowed.some((role) => roles.includes(role));
+}
+
+export function hasAnyPermission(user: AuthUser | undefined, allowed: readonly string[]) {
+	const permissions = userPermissions(user);
+	return allowed.some((permission) => permissions.includes(permission));
 }
 
 export function isAdminOnlyPath(pathname: string) {
@@ -140,4 +147,88 @@ export function isStudentApiPath(pathname: string) {
 
 export function isReadMethod(method: string) {
 	return method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+}
+
+function usersPermission(pathname: string, method: string): string[] | undefined {
+	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/reset-password')) return ['users.reset_password'];
+	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/profile-link')) return ['users.update'];
+	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/roles')) return ['users.manage_roles'];
+	if (matchesPathSegment(pathname, '/settings/users')) return ['users.read'];
+	if (matchesPathSegment(pathname, '/api/users')) {
+		if (isReadMethod(method)) return ['users.read'];
+		if (method === 'POST') return ['users.create'];
+		if (method === 'DELETE') return ['users.deactivate'];
+		if (method === 'PATCH' || method === 'PUT') return ['users.update', 'users.deactivate', 'users.manage_roles'];
+	}
+	return undefined;
+}
+
+function bankSoalPermission(pathname: string, method: string): string[] | undefined {
+	if (!isBankSoalPath(pathname)) return undefined;
+	if (!pathname.startsWith('/api/')) return ['bank_soal.read'];
+	if (isReadMethod(method)) return ['bank_soal.read'];
+	if (method === 'POST') return ['bank_soal.create'];
+	if (method === 'DELETE') return ['bank_soal.delete'];
+	if (method === 'PATCH' || method === 'PUT') return ['bank_soal.update', 'bank_soal.review', 'bank_soal.publish'];
+	return ['bank_soal.read'];
+}
+
+function asesmenPermission(pathname: string, method: string): string[] | undefined {
+	if (matchesPathSegment(pathname, '/asesmen/hasil')) return ['asesmen.result_read'];
+	if (matchesPathSegment(pathname, '/asesmen/pelaksanaan') || matchesPathSegment(pathname, '/asesmen/pengawasan')) return ['asesmen.proctor'];
+	if (matchesPathSegment(pathname, '/asesmen/paket') || matchesPathSegment(pathname, '/api/asesmen/packages')) {
+		return isReadMethod(method) && pathname.startsWith('/api/') ? ['asesmen.read'] : ['asesmen.package_manage'];
+	}
+	if (matchesPathSegment(pathname, '/asesmen/kegiatan') || matchesPathSegment(pathname, '/api/asesmen/events')) {
+		return isReadMethod(method) && pathname.startsWith('/api/') ? ['asesmen.read'] : ['asesmen.event_manage'];
+	}
+	if (matchesPathSegment(pathname, '/asesmen/sesi') || matchesPathSegment(pathname, '/api/asesmen/sessions')) {
+		return isReadMethod(method) && pathname.startsWith('/api/') ? ['asesmen.read'] : ['asesmen.proctor'];
+	}
+	if (matchesPathSegment(pathname, '/asesmen')) return ['asesmen.read'];
+	return undefined;
+}
+
+function staffOperationPermission(pathname: string, method: string): string[] | undefined {
+	if (!isStaffOperationPath(pathname)) return undefined;
+	if (matchesPathSegment(pathname, '/library') || matchesPathSegment(pathname, '/api/library')) return isReadMethod(method) ? ['library.read'] : ['library.manage'];
+	if (matchesPathSegment(pathname, '/inventory') || matchesPathSegment(pathname, '/api/inventory')) return isReadMethod(method) ? ['inventory.read'] : ['inventory.manage'];
+	if (matchesPathSegment(pathname, '/document-cycles') || matchesPathSegment(pathname, '/api/document-cycles')) return isReadMethod(method) ? ['document_cycles.read'] : ['document_cycles.manage'];
+	if (matchesPathSegment(pathname, '/governance') || matchesPathSegment(pathname, '/api/governance')) return isReadMethod(method) ? ['governance.read'] : ['governance.manage'];
+	if (matchesPathSegment(pathname, '/tu') || matchesPathSegment(pathname, '/api/tu')) return isReadMethod(method) ? ['letters.read'] : ['letters.manage'];
+	return undefined;
+}
+
+export function requiredPermissionsForPath(pathname: string, method: string): string[] {
+	if (matchesPathSegment(pathname, '/settings/audit-logs')) return ['audit.read'];
+	if (matchesPathSegment(pathname, '/settings/school-profile') || matchesPathSegment(pathname, '/api/school-profile')) return ['settings.school_profile'];
+	if (matchesPathSegment(pathname, '/api/rbac')) return isReadMethod(method) ? ['roles.read'] : ['roles.manage'];
+	if (matchesPathSegment(pathname, '/parents') || matchesPathSegment(pathname, '/api/parents')) return isReadMethod(method) ? ['parents.read'] : ['parents.manage'];
+	if (matchesPathSegment(pathname, '/academic') || matchesPathSegment(pathname, '/api/academic')) return isReadMethod(method) ? ['academic.read'] : ['academic.manage'];
+	if (matchesPathSegment(pathname, '/pusaka') || matchesPathSegment(pathname, '/api/pusaka')) return isReadMethod(method) ? ['pusaka.read'] : ['pusaka.manage'];
+	if (matchesPathSegment(pathname, '/website') || matchesPathSegment(pathname, '/api/website')) return isReadMethod(method) ? ['website.read'] : ['website.manage'];
+	if (isKesiswaanPath(pathname)) return isReadMethod(method) ? ['students.read'] : ['students.manage'];
+	if (isStudentPagePath(pathname) || isStudentApiPath(pathname)) return isReadMethod(method) ? ['students.read'] : ['students.manage'];
+	return usersPermission(pathname, method)
+		?? bankSoalPermission(pathname, method)
+		?? asesmenPermission(pathname, method)
+		?? staffOperationPermission(pathname, method)
+		?? [];
+}
+
+export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: string, method: string): boolean {
+	if (isPublicPath(pathname)) return true;
+	if (!user) return false;
+	if (hasAnyRole(user, ['admin'])) return true;
+
+	const requiredPermissions = requiredPermissionsForPath(pathname, method);
+	if (requiredPermissions.length > 0 && hasAnyPermission(user, requiredPermissions)) return true;
+
+	if (isAdminOnlyPath(pathname) && !isGuruSafeAssessmentSupportReadPath(pathname, method)) return false;
+	if (isBankSoalPath(pathname)) return hasAnyRole(user, ['guru']);
+	if (isStaffOperationPath(pathname)) return hasAnyRole(user, ['staf']);
+	if (isKesiswaanPath(pathname)) return hasAnyRole(user, isReadMethod(method) ? ['kesiswaan', 'guru'] : ['kesiswaan']);
+	if (isStudentPagePath(pathname)) return hasAnyRole(user, ['kesiswaan']);
+	if (isStudentApiPath(pathname)) return hasAnyRole(user, isReadMethod(method) ? ['kesiswaan', 'guru'] : ['kesiswaan']);
+	return true;
 }

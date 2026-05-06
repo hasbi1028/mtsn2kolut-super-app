@@ -86,6 +86,22 @@ describe('sidebar assessment configuration', () => {
 		expect(bankSoalItems.some((item) => item.href === '/cbt/questions')).toBe(false);
 	});
 
+
+
+	it('adds permission metadata for migrated RBAC-aware modules while keeping role fallback', () => {
+		const allItems = sidebarNavGroups.flatMap((group) => group.items);
+		const byHref = new Map(allItems.map((item) => [item.href, item]));
+
+		expect(byHref.get('/settings/users')?.permissions).toEqual(['users.read']);
+		expect(byHref.get('/settings/audit-logs')?.permissions).toEqual(['audit.read']);
+		expect(byHref.get('/settings/school-profile')?.permissions).toEqual(['settings.school_profile']);
+		expect(bankSoalItems.every((item) => item.permissions?.includes('bank_soal.read'))).toBe(true);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/kegiatan')?.permissions).toEqual(['asesmen.event_manage']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/paket')?.permissions).toEqual(['asesmen.package_manage']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/hasil')?.permissions).toEqual(['asesmen.result_read']);
+		expect(allItems.filter((item) => item.permissions?.length).every((item) => item.roles?.length || item.href === '/settings')).toBe(true);
+	});
+
 	it('does not expose the retired question-bank route anywhere in sidebar nav', () => {
 		const allItems = sidebarNavGroups.flatMap((group) => group.items);
 		expect(allItems.some((item) => item.href.startsWith('/cbt/questions'))).toBe(false);
