@@ -46,6 +46,7 @@ export type AccountChangeRequest = {
 	target_student_id?: string | null;
 	target_parent_id?: string | null;
 	field_key: string;
+	field_label?: string | null;
 	current_value: string;
 	requested_value: string;
 	reason: string;

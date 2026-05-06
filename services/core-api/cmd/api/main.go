@@ -676,7 +676,9 @@ func main() {
 		})
 
 		r.With(requireUsersRead).Get("/api/users", userH.List)
-		r.With(requireUsersRead).Get("/api/users/change-requests", profileChangeRequestH.ListAdmin)
+		r.With(requireProfileChangesReview).Get("/api/users/change-requests", profileChangeRequestH.ListAdmin)
+		r.With(requireProfileChangesReview).Get("/api/users/change-requests/pending-count", profileChangeRequestH.CountPendingAdmin)
+		r.With(requireProfileChangesReview).Get("/api/users/change-requests/export", profileChangeRequestH.ExportAdminCSV)
 		r.With(requireProfileChangesReview).Patch("/api/users/change-requests/{id}", profileChangeRequestH.Review)
 		r.With(requireAuditRead).Get("/api/users/audit-logs", userH.ListAuditLogs)
 		r.With(requireUsersCreate).Get("/api/users/generate-from-employees/preview", userH.PreviewEmployeeAccountGeneration)

@@ -30,6 +30,7 @@
 	let inventoryAttention = $state(0);
 	let libraryAttention = $state(0);
 	let pusakaAttention = $state(0);
+	let profileChangeAttention = $state(0);
 	let attentionRefreshInFlight: Promise<void> | null = null;
 	let lastAttentionLoadedAt = 0;
 	let remotePrefsLoaded = false;
@@ -213,20 +214,23 @@
 		if (href === '/inventory/items') return inventoryAttention;
 		if (href === '/library/loans') return libraryAttention;
 		if (href === '/pusaka/antrian') return pusakaAttention;
+		if (href === '/settings/user-change-requests') return profileChangeAttention;
 		return 0;
 	}
 
 	function groupBadge(group: string) {
 		if (group === 'Aset & Layanan') return inventoryAttention + libraryAttention;
 		if (group === 'Pegawai & PUSAKA') return pusakaAttention;
+		if (group === 'Sistem') return profileChangeAttention;
 		return 0;
 	}
 
 	async function loadSidebarAttention() {
-		const attention = await fetchSidebarAttention(fetch, userRoles);
+		const attention = await fetchSidebarAttention(fetch, userRoles, userPermissions);
 		inventoryAttention = attention.inventory;
 		libraryAttention = attention.library;
 		pusakaAttention = attention.pusaka;
+		profileChangeAttention = attention.profileChanges;
 	}
 
 	async function refreshSidebarAttention(force = false) {

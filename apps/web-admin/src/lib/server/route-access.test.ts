@@ -113,7 +113,7 @@ describe('route access helpers', () => {
 
 
 	it('allows protected routes by dynamic permissions before legacy role fallback', () => {
-		const user = { id: '1', username: 'operator', role: '', roles: [], permissions: ['users.read', 'bank_soal.read', 'asesmen.read'] };
+		const user = { id: '1', username: 'operator', role: '', roles: [], permissions: ['users.read', 'bank_soal.read', 'asesmen.read', 'profile_changes.review'] };
 
 		expect(canAccessProtectedRoute(user, '/settings/users', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/settings/user-change-requests', 'GET')).toBe(true);
@@ -135,6 +135,8 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute(mutator, '/api/users', 'POST')).toBe(true);
 		expect(canAccessProtectedRoute(reader, '/api/users/change-requests/request-1', 'PATCH')).toBe(false);
 		expect(canAccessProtectedRoute(profileReviewer, '/api/users/change-requests/request-1', 'PATCH')).toBe(true);
+		expect(canAccessProtectedRoute(profileReviewer, '/api/users/change-requests/pending-count', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(profileReviewer, '/api/users/change-requests/export', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(reader, '/api/bank-soal/questions', 'POST')).toBe(false);
 		expect(canAccessProtectedRoute(mutator, '/api/bank-soal/questions', 'POST')).toBe(true);
 		expect(canAccessProtectedRoute(reader, '/api/asesmen/events/event-1/question-targets', 'PUT')).toBe(false);
@@ -143,9 +145,11 @@ describe('route access helpers', () => {
 
 	it('documents route permission requirements for main migrated modules', () => {
 		expect(requiredPermissionsForPath('/settings/users', 'GET')).toEqual(['users.read']);
-		expect(requiredPermissionsForPath('/settings/user-change-requests', 'GET')).toEqual(['users.read']);
+		expect(requiredPermissionsForPath('/settings/user-change-requests', 'GET')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users', 'POST')).toEqual(['users.create']);
-		expect(requiredPermissionsForPath('/api/users/change-requests', 'GET')).toEqual(['users.read']);
+		expect(requiredPermissionsForPath('/api/users/change-requests', 'GET')).toEqual(['profile_changes.review']);
+		expect(requiredPermissionsForPath('/api/users/change-requests/pending-count', 'GET')).toEqual(['profile_changes.review']);
+		expect(requiredPermissionsForPath('/api/users/change-requests/export', 'GET')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users/change-requests/request-1', 'PATCH')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users/user-1/reset-password', 'POST')).toEqual(['users.reset_password']);
 		expect(requiredPermissionsForPath('/api/users/user-1/profile-link', 'PATCH')).toEqual(['users.update']);

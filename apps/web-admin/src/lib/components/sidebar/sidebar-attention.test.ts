@@ -14,17 +14,22 @@ describe('fetchSidebarAttention', () => {
 			if (url === '/api/pusaka/jobs/stats') {
 				return new Response(JSON.stringify({ failed: 4 }), { status: 200 });
 			}
+			if (url === '/api/users/change-requests/pending-count') {
+				return new Response(JSON.stringify({ data: { pending: 5 } }), { status: 200 });
+			}
 			return new Response(JSON.stringify({ error: 'unexpected route' }), { status: 404 });
 		});
 
 		const attention = await fetchSidebarAttention(fetchMock, ['admin']);
 
 		expect(fetchMock).toHaveBeenCalledWith('/api/pusaka/jobs/stats');
+		expect(fetchMock).toHaveBeenCalledWith('/api/users/change-requests/pending-count');
 		expect(fetchMock).not.toHaveBeenCalledWith('/api/queue/stats');
 		expect(attention).toEqual({
 			inventory: 2,
 			library: 4,
-			pusaka: 4
+			pusaka: 4,
+			profileChanges: 5
 		});
 	});
 
@@ -38,7 +43,23 @@ describe('fetchSidebarAttention', () => {
 		expect(attention).toEqual({
 			inventory: 0,
 			library: 0,
-			pusaka: 0
+			pusaka: 0,
+			profileChanges: 0
 		});
+	});
+
+	it('lets profile change reviewers see profile request attention without admin role', async () => {
+		const fetchMock = vi.fn<typeof fetch>(async (input) => {
+			if (String(input) === '/api/users/change-requests/pending-count') {
+				return new Response(JSON.stringify({ pending: 2 }), { status: 200 });
+			}
+			return new Response(JSON.stringify({ error: 'unexpected route' }), { status: 404 });
+		});
+
+		const attention = await fetchSidebarAttention(fetchMock, [], ['profile_changes.review']);
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock).toHaveBeenCalledWith('/api/users/change-requests/pending-count');
+		expect(attention.profileChanges).toBe(2);
 	});
 });

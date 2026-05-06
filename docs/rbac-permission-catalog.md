@@ -110,6 +110,8 @@ Legacy role fallback masih aktif untuk compatibility. Target cleanup nanti: audi
 
 - `profile_changes.review` — Meninjau dan menyetujui permintaan perubahan data resmi profil.
 
+Reviewer perubahan profil dapat membuka `/settings/user-change-requests`, mengambil daftar/filter, melihat pending count, dan export CSV aman melalui `/api/users/change-requests*`. Legacy role `admin` tetap menjadi fallback kompatibilitas selama migrasi RBAC.
+
 ### pusaka
 
 - `pusaka.credentials_manage` — Mengelola kredensial PUSAKA.

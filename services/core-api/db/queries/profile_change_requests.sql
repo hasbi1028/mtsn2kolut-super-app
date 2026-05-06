@@ -69,7 +69,7 @@ LEFT JOIN parents p ON p.id = pcr.target_parent_id
 WHERE pcr.requester_user_id = $1
 ORDER BY pcr.created_at DESC;
 
--- name: ListProfileChangeRequestsAll :many
+-- name: ListProfileChangeRequests :many
 SELECT
     pcr.*,
     req.username AS requester_username,
@@ -82,27 +82,65 @@ LEFT JOIN users reviewer ON reviewer.id = pcr.reviewer_user_id
 LEFT JOIN employees e ON e.id = pcr.target_employee_id
 LEFT JOIN students s ON s.id = pcr.target_student_id
 LEFT JOIN parents p ON p.id = pcr.target_parent_id
+WHERE (
+    sqlc.arg(status_filter)::TEXT = ''
+    OR pcr.status::TEXT = sqlc.arg(status_filter)::TEXT
+)
+AND (
+    sqlc.arg(profile_type_filter)::TEXT = ''
+    OR pcr.profile_type = sqlc.arg(profile_type_filter)::TEXT
+)
+AND (
+    sqlc.arg(field_key_filter)::TEXT = ''
+    OR pcr.field_key = sqlc.arg(field_key_filter)::TEXT
+)
+AND (
+    sqlc.arg(search)::TEXT = ''
+    OR req.username ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR COALESCE(NULLIF(req.display_name, ''), e.nama, s.nama, p.nama, req.username)::TEXT ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR COALESCE(e.nama, s.nama, p.nama, '')::TEXT ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR pcr.field_key ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR pcr.reason ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR pcr.review_note ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR pcr.current_value ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR pcr.requested_value ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+)
 ORDER BY
     CASE WHEN pcr.status = 'pending' THEN 0 ELSE 1 END,
     pcr.created_at DESC
-LIMIT $1 OFFSET $2;
+LIMIT sqlc.arg(limit_count) OFFSET sqlc.arg(offset_count);
 
--- name: ListProfileChangeRequestsByStatus :many
-SELECT
-    pcr.*,
-    req.username AS requester_username,
-    COALESCE(NULLIF(req.display_name, ''), e.nama, s.nama, p.nama, req.username)::text AS requester_display_name,
-    reviewer.username AS reviewer_username,
-    COALESCE(e.nama, s.nama, p.nama, '')::text AS profile_nama
+-- name: CountProfileChangeRequests :one
+SELECT COUNT(*)::INT
 FROM profile_change_requests pcr
 JOIN users req ON req.id = pcr.requester_user_id
 LEFT JOIN users reviewer ON reviewer.id = pcr.reviewer_user_id
 LEFT JOIN employees e ON e.id = pcr.target_employee_id
 LEFT JOIN students s ON s.id = pcr.target_student_id
 LEFT JOIN parents p ON p.id = pcr.target_parent_id
-WHERE pcr.status = $1
-ORDER BY pcr.created_at DESC
-LIMIT $2 OFFSET $3;
+WHERE (
+    sqlc.arg(status_filter)::TEXT = ''
+    OR pcr.status::TEXT = sqlc.arg(status_filter)::TEXT
+)
+AND (
+    sqlc.arg(profile_type_filter)::TEXT = ''
+    OR pcr.profile_type = sqlc.arg(profile_type_filter)::TEXT
+)
+AND (
+    sqlc.arg(field_key_filter)::TEXT = ''
+    OR pcr.field_key = sqlc.arg(field_key_filter)::TEXT
+)
+AND (
+    sqlc.arg(search)::TEXT = ''
+    OR req.username ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR COALESCE(NULLIF(req.display_name, ''), e.nama, s.nama, p.nama, req.username)::TEXT ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR COALESCE(e.nama, s.nama, p.nama, '')::TEXT ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR pcr.field_key ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR pcr.reason ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR pcr.review_note ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR pcr.current_value ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+    OR pcr.requested_value ILIKE '%' || sqlc.arg(search)::TEXT || '%'
+);
 
 -- name: GetProfileChangeRequestForUpdate :one
 SELECT *

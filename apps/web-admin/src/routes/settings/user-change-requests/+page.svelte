@@ -1,12 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import CheckIcon from '@lucide/svelte/icons/check';
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+	import ChevronUpIcon from '@lucide/svelte/icons/chevron-up';
+	import DownloadIcon from '@lucide/svelte/icons/download';
 	import RefreshCcwIcon from '@lucide/svelte/icons/refresh-ccw';
+	import SearchIcon from '@lucide/svelte/icons/search';
 	import XIcon from '@lucide/svelte/icons/x';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from '$lib/components/ui/sonner';
@@ -24,31 +30,96 @@
 		type AccountChangeRequest
 	} from '$lib/client/account';
 
+	type ReviewStatus = 'approved' | 'rejected';
+
+	type PendingCountPayload = {
+		pending?: number;
+		count?: number;
+	};
+
 	let requestsPromise = $state<Promise<AccountChangeRequest[]> | null>(null);
 	let requests = $state<AccountChangeRequest[]>([]);
 	let statusFilter = $state('pending');
+	let profileFilter = $state('all');
+	let fieldFilter = $state('all');
+	let searchDraft = $state('');
+	let appliedSearch = $state('');
+	let pendingSummary = $state(0);
+	let pendingSummaryBusy = $state(false);
 	let reviewNotes = $state<Record<string, string>>({});
+	let stagedReviews = $state<Record<string, ReviewStatus | undefined>>({});
+	let expandedRows = $state<Record<string, boolean>>({});
 	let reviewBusy = $state<string | null>(null);
 	let refreshBusy = $state(false);
+	let exportBusy = $state(false);
 
-	const pendingCount = $derived(requests.filter((request) => request.status === 'pending').length);
+	const canReviewProfileChanges = $derived(Boolean(
+		page.data.user?.role === 'admin'
+		|| page.data.user?.roles?.includes('admin')
+		|| page.data.user?.permissions?.includes('profile_changes.review')
+	));
+	const visiblePendingCount = $derived(requests.filter((request) => request.status === 'pending').length);
+	const activeFilterCount = $derived([
+		statusFilter !== 'pending',
+		profileFilter !== 'all',
+		fieldFilter !== 'all',
+		appliedSearch.trim() !== ''
+	].filter(Boolean).length);
+
+	const profileOptions = [
+		{ value: 'all', label: 'Semua profil' },
+		{ value: 'employee', label: 'Pegawai' },
+		{ value: 'student', label: 'Siswa' },
+		{ value: 'parent', label: 'Orang Tua' }
+	];
+
+	const fieldOptions = [
+		{ value: 'all', label: 'Semua field' },
+		{ value: 'nama', label: 'Nama resmi' },
+		{ value: 'tanggal_lahir', label: 'Tanggal lahir' },
+		{ value: 'parent_name', label: 'Nama orang tua/wali' }
+	];
+
+	function buildFilterParams(includePaging = true) {
+		const params = new URLSearchParams();
+		if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
+		if (profileFilter && profileFilter !== 'all') params.set('profile_type', profileFilter);
+		if (fieldFilter && fieldFilter !== 'all') params.set('field', fieldFilter);
+		if (appliedSearch.trim()) params.set('search', appliedSearch.trim());
+		if (includePaging) params.set('per_page', '100');
+		return params;
+	}
 
 	async function fetchRequests(): Promise<AccountChangeRequest[]> {
-		const params = new URLSearchParams();
-		if (statusFilter) params.set('status', statusFilter);
-		params.set('per_page', '100');
-		const res = await fetch(clientApiPathWithQuery('/api/users/change-requests', params));
+		const res = await fetch(clientApiPathWithQuery('/api/users/change-requests', buildFilterParams()));
 		return await readClientApiData<AccountChangeRequest[]>(res, 'Gagal memuat permintaan perubahan data');
+	}
+
+	async function fetchPendingSummary() {
+		if (!canReviewProfileChanges) return;
+		pendingSummaryBusy = true;
+		try {
+			const res = await fetch(clientApiPathWithQuery('/api/users/change-requests/pending-count', new URLSearchParams()));
+			const payload = await readClientApiData<PendingCountPayload>(res, 'Gagal memuat jumlah permintaan');
+			const next = Number(payload.pending ?? payload.count ?? 0);
+			pendingSummary = Number.isFinite(next) ? next : 0;
+		} catch {
+			pendingSummary = 0;
+		} finally {
+			pendingSummaryBusy = false;
+		}
 	}
 
 	function applyRequests(rows: AccountChangeRequest[]) {
 		requests = rows;
 		reviewNotes = Object.fromEntries(rows.map((request) => [request.id, request.review_note ?? '']));
+		stagedReviews = {};
 		return rows;
 	}
 
 	function loadRequests() {
 		requestsPromise = fetchRequests().then(applyRequests);
+		void fetchPendingSummary();
 	}
 
 	async function refreshRequests(showFailureToast = false) {
@@ -57,12 +128,27 @@
 			const rows = await fetchRequests();
 			applyRequests(rows);
 			requestsPromise = Promise.resolve(rows);
+			await fetchPendingSummary();
 		} catch (error) {
 			requestsPromise = Promise.resolve(requests);
 			if (showFailureToast) toast.error(accountErrorMessage(error, 'Gagal menyegarkan permintaan'));
 		} finally {
 			refreshBusy = false;
 		}
+	}
+
+	function applyFilters() {
+		appliedSearch = searchDraft.trim();
+		loadRequests();
+	}
+
+	function resetFilters() {
+		statusFilter = 'pending';
+		profileFilter = 'all';
+		fieldFilter = 'all';
+		searchDraft = '';
+		appliedSearch = '';
+		loadRequests();
 	}
 
 	function retryRequests(reset?: () => void) {
@@ -75,7 +161,28 @@
 		reset();
 	}
 
-	async function reviewRequest(request: AccountChangeRequest, status: 'approved' | 'rejected') {
+	function stageReview(request: AccountChangeRequest, status: ReviewStatus) {
+		const note = (reviewNotes[request.id] ?? '').trim();
+		if (status === 'rejected' && !note) {
+			toast.error('Catatan wajib diisi saat menolak permintaan');
+			return;
+		}
+		stagedReviews = { ...stagedReviews, [request.id]: status };
+	}
+
+	function clearStagedReview(requestID: string) {
+		stagedReviews = { ...stagedReviews, [requestID]: undefined };
+	}
+
+	function stagedReviewStatus(requestID: string): ReviewStatus {
+		return stagedReviews[requestID] === 'rejected' ? 'rejected' : 'approved';
+	}
+
+	async function reviewRequest(request: AccountChangeRequest, status: ReviewStatus) {
+		if (!canReviewProfileChanges) {
+			toast.error('Akun ini tidak memiliki izin review perubahan data');
+			return;
+		}
 		const note = (reviewNotes[request.id] ?? '').trim();
 		if (status === 'rejected' && !note) {
 			toast.error('Catatan wajib diisi saat menolak permintaan');
@@ -95,13 +202,64 @@
 			toast.error(accountErrorMessage(error, 'Gagal memproses review permintaan'));
 		} finally {
 			reviewBusy = null;
+			clearStagedReview(request.id);
 		}
+	}
+
+	async function exportRequests() {
+		exportBusy = true;
+		try {
+			const res = await fetch(clientApiPathWithQuery('/api/users/change-requests/export', buildFilterParams(false)));
+			if (!res.ok) {
+				const payload = await res.json().catch(() => null) as { error?: string; message?: string } | null;
+				throw new Error(payload?.error || payload?.message || 'Export permintaan perubahan data gagal');
+			}
+			const blob = await res.blob();
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = url;
+			anchor.download = exportFilename(res.headers.get('content-disposition'));
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			URL.revokeObjectURL(url);
+			toast.success('Export CSV disiapkan');
+		} catch (error) {
+			toast.error(accountErrorMessage(error, 'Export permintaan perubahan data gagal'));
+		} finally {
+			exportBusy = false;
+		}
+	}
+
+	function exportFilename(disposition: string | null) {
+		const match = /filename="?([^";]+)"?/i.exec(disposition ?? '');
+		return match?.[1] ?? 'profile-change-requests.csv';
 	}
 
 	function statusBadgeVariant(status: string) {
 		if (status === 'approved') return 'secondary';
 		if (status === 'rejected') return 'destructive';
 		return 'outline';
+	}
+
+	function requestFieldLabel(request: AccountChangeRequest) {
+		return request.field_label?.trim() || officialFieldLabel(request.field_key);
+	}
+
+	function valueLabel(value: string | null | undefined) {
+		return value?.trim() || '—';
+	}
+
+	function requesterLabel(request: AccountChangeRequest) {
+		return request.requester_display_name || request.requester_username || request.requester_user_id || 'Pengguna';
+	}
+
+	function targetIDLabel(request: AccountChangeRequest) {
+		return request.target_employee_id || request.target_student_id || request.target_parent_id || '—';
+	}
+
+	function toggleExpanded(requestID: string) {
+		expandedRows = { ...expandedRows, [requestID]: !expandedRows[requestID] };
 	}
 
 	onMount(() => {
@@ -119,6 +277,10 @@
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button variant="outline" href="/settings/users">Manajemen User</Button>
+			<LoadingButton variant="outline" onclick={() => void exportRequests()} loading={exportBusy} loadingLabel="Export..." label="Export CSV">
+				<DownloadIcon class="size-4" />
+				Export CSV
+			</LoadingButton>
 			<Button variant="outline" onclick={() => void refreshRequests(true)} disabled={refreshBusy}>
 				<RefreshCcwIcon class={`size-4 ${refreshBusy ? 'animate-spin' : ''}`} />
 				Refresh
@@ -126,27 +288,101 @@
 		</div>
 	</div>
 
+	<div class="grid gap-3 md:grid-cols-3">
+		<Card.Root>
+			<Card.Header class="pb-2">
+				<Card.Description>Menunggu Review</Card.Description>
+				<Card.Title class="text-2xl text-amber-700">
+					{#if pendingSummaryBusy}
+						<span class="text-base text-slate-400">Memuat...</span>
+					{:else}
+						{pendingSummary}
+					{/if}
+				</Card.Title>
+			</Card.Header>
+		</Card.Root>
+		<Card.Root>
+			<Card.Header class="pb-2">
+				<Card.Description>Tampil di Filter Ini</Card.Description>
+				<Card.Title class="text-2xl text-slate-800">{requests.length}</Card.Title>
+			</Card.Header>
+		</Card.Root>
+		<Card.Root>
+			<Card.Header class="pb-2">
+				<Card.Description>Pending di Tabel Ini</Card.Description>
+				<Card.Title class="text-2xl text-slate-800">{visiblePendingCount}</Card.Title>
+			</Card.Header>
+		</Card.Root>
+	</div>
+
 	<Card.Root>
-		<Card.Header class="flex flex-col gap-3 pb-3 md:flex-row md:items-center md:justify-between">
-			<div>
-				<Card.Title class="text-base">Antrian Review</Card.Title>
-				<Card.Description>{pendingCount} permintaan menunggu dari filter saat ini.</Card.Description>
+		<Card.Header class="space-y-4 pb-3">
+			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+				<div>
+					<Card.Title class="text-base">Antrian Review</Card.Title>
+					<Card.Description>
+						{activeFilterCount > 0 ? `${activeFilterCount} filter aktif.` : 'Menampilkan permintaan yang menunggu review.'}
+					</Card.Description>
+				</div>
+				{#if !canReviewProfileChanges}
+					<Badge variant="destructive">Tidak punya izin review</Badge>
+				{/if}
 			</div>
-			<div>
-				<label for="change-request-status" class="mb-1 block text-xs font-medium text-slate-600">Status</label>
-				<select
-					id="change-request-status"
-					class="h-10 rounded-md border border-input bg-background px-3 text-sm"
-					bind:value={statusFilter}
-					onchange={() => loadRequests()}
-				>
-					<option value="pending">Menunggu</option>
-					<option value="all">Semua</option>
-					<option value="approved">Disetujui</option>
-					<option value="rejected">Ditolak</option>
-					<option value="cancelled">Dibatalkan</option>
-				</select>
-			</div>
+
+			<form class="grid gap-3 lg:grid-cols-[minmax(130px,0.8fr)_minmax(140px,0.8fr)_minmax(150px,0.9fr)_minmax(220px,1.4fr)_auto]" onsubmit={(event) => { event.preventDefault(); applyFilters(); }}>
+				<div>
+					<label for="change-request-status" class="mb-1 block text-xs font-medium text-slate-600">Status</label>
+					<select
+						id="change-request-status"
+						class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+						bind:value={statusFilter}
+						onchange={applyFilters}
+					>
+						<option value="pending">Menunggu</option>
+						<option value="all">Semua</option>
+						<option value="approved">Disetujui</option>
+						<option value="rejected">Ditolak</option>
+						<option value="cancelled">Dibatalkan</option>
+					</select>
+				</div>
+				<div>
+					<label for="change-request-profile" class="mb-1 block text-xs font-medium text-slate-600">Profil</label>
+					<select
+						id="change-request-profile"
+						class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+						bind:value={profileFilter}
+						onchange={applyFilters}
+					>
+						{#each profileOptions as option (option.value)}
+							<option value={option.value}>{option.label}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label for="change-request-field" class="mb-1 block text-xs font-medium text-slate-600">Field</label>
+					<select
+						id="change-request-field"
+						class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+						bind:value={fieldFilter}
+						onchange={applyFilters}
+					>
+						{#each fieldOptions as option (option.value)}
+							<option value={option.value}>{option.label}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label for="change-request-search" class="mb-1 block text-xs font-medium text-slate-600">Cari</label>
+					<Input id="change-request-search" bind:value={searchDraft} maxlength={120} placeholder="Nama, username, alasan, atau catatan" />
+				</div>
+				<div class="flex items-end gap-2">
+					<Button type="submit" variant="secondary">
+						<SearchIcon class="size-4" />
+						Cari
+					</Button>
+					<Button type="button" variant="outline" onclick={resetFilters}>Reset</Button>
+				</div>
+			</form>
 		</Card.Header>
 		<Card.Content>
 			<AsyncContent promise={requestsPromise} onerror={handleRenderError}>
@@ -169,7 +405,11 @@
 				{#snippet children(rows)}
 					{@const items = rows as AccountChangeRequest[]}
 					{#if items.length === 0}
-						<p class="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">Belum ada permintaan pada filter ini.</p>
+						<div class="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center">
+							<p class="text-sm font-medium text-slate-700">Belum ada permintaan pada filter ini.</p>
+							<p class="mt-1 text-xs text-slate-500">Ubah filter atau reset untuk melihat riwayat lain.</p>
+							<Button class="mt-4" type="button" variant="outline" onclick={resetFilters}>Reset Filter</Button>
+						</div>
 					{:else}
 						<div class="hidden overflow-x-auto lg:block">
 							<Table.Root>
@@ -188,7 +428,7 @@
 									{#each items as request (request.id)}
 										<Table.Row>
 											<Table.Cell>
-												<div class="font-medium text-slate-900">{request.requester_display_name || request.requester_username || 'Pengguna'}</div>
+												<div class="font-medium text-slate-900">{requesterLabel(request)}</div>
 												<div class="text-xs text-slate-500">{request.requester_username || request.requester_user_id || '—'}</div>
 											</Table.Cell>
 											<Table.Cell>
@@ -196,10 +436,12 @@
 												<div class="text-xs text-slate-500">{request.profile_nama || '—'}</div>
 											</Table.Cell>
 											<Table.Cell class="max-w-md">
-												<div class="font-medium text-slate-900">{officialFieldLabel(request.field_key)}</div>
-												<div class="mt-1 text-xs text-slate-500">{request.current_value || '—'} → {request.requested_value || '—'}</div>
-												<div class="mt-1 text-xs text-slate-500">{request.reason}</div>
-												<div class="mt-1 text-[11px] text-slate-400">{formatAccountDateTime(request.created_at)}</div>
+												<div class="font-medium text-slate-900">{requestFieldLabel(request)}</div>
+												<div class="mt-1 grid grid-cols-[90px_1fr] gap-1 text-xs text-slate-500">
+													<span>Saat ini</span><span class="break-words">{valueLabel(request.current_value)}</span>
+													<span>Diajukan</span><span class="break-words font-medium text-slate-700">{valueLabel(request.requested_value)}</span>
+												</div>
+												<div class="mt-2 text-xs text-slate-500">{request.reason}</div>
 											</Table.Cell>
 											<Table.Cell><Badge variant={statusBadgeVariant(request.status)}>{changeRequestStatusLabel(request.status)}</Badge></Table.Cell>
 											<Table.Cell class="min-w-56">
@@ -221,42 +463,108 @@
 												</div>
 											</Table.Cell>
 											<Table.Cell class="min-w-64">
+												<label for={`review-note-${request.id}`} class="mb-1 block text-xs font-medium text-slate-600">Catatan admin</label>
 												<Textarea
+													id={`review-note-${request.id}`}
 													rows={3}
 													maxlength={1000}
 													bind:value={reviewNotes[request.id]}
-													disabled={request.status !== 'pending'}
+													disabled={request.status !== 'pending' || !canReviewProfileChanges}
 													placeholder="Catatan admin"
 												/>
 											</Table.Cell>
 											<Table.Cell>
-												{#if request.status === 'pending'}
-													<div class="flex flex-col gap-2">
-														<LoadingButton
-															size="sm"
-															onclick={() => void reviewRequest(request, 'approved')}
-															loading={reviewBusy === `approved:${request.id}`}
-															loadingLabel="Menyetujui..."
-														>
-															<CheckIcon class="size-3.5" />
-															Setujui
-														</LoadingButton>
-														<LoadingButton
-															size="sm"
-															variant="outline"
-															onclick={() => void reviewRequest(request, 'rejected')}
-															loading={reviewBusy === `rejected:${request.id}`}
-															loadingLabel="Menolak..."
-														>
-															<XIcon class="size-3.5" />
-															Tolak
-														</LoadingButton>
-													</div>
-												{:else}
-													<p class="text-xs text-slate-500">{request.reviewer_username ? `Direview oleh ${request.reviewer_username}` : 'Sudah diproses'}</p>
-												{/if}
+												<div class="flex flex-col gap-2">
+													<Button type="button" size="sm" variant="outline" onclick={() => toggleExpanded(request.id)}>
+														{#if expandedRows[request.id]}
+															<ChevronUpIcon class="size-3.5" />
+															Tutup
+														{:else}
+															<ChevronDownIcon class="size-3.5" />
+															Detail
+														{/if}
+													</Button>
+													{#if request.status === 'pending' && canReviewProfileChanges}
+														<div class="flex flex-col gap-2">
+															<Button size="sm" type="button" onclick={() => stageReview(request, 'approved')}>
+																<CheckIcon class="size-3.5" />
+																Setujui
+															</Button>
+															<Button size="sm" type="button" variant="outline" onclick={() => stageReview(request, 'rejected')}>
+																<XIcon class="size-3.5" />
+																Tolak
+															</Button>
+														</div>
+														{#if stagedReviews[request.id]}
+															<div class="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+																<p>Konfirmasi {stagedReviews[request.id] === 'approved' ? 'persetujuan' : 'penolakan'} request ini.</p>
+																<div class="mt-2 flex flex-wrap gap-2">
+																	<LoadingButton
+																		size="sm"
+																		onclick={() => void reviewRequest(request, stagedReviewStatus(request.id))}
+																		loading={reviewBusy === `${stagedReviews[request.id]}:${request.id}`}
+																		loadingLabel="Memproses..."
+																		label="Konfirmasi"
+																	/>
+																	<Button type="button" size="sm" variant="outline" onclick={() => clearStagedReview(request.id)}>Batal</Button>
+																</div>
+															</div>
+														{/if}
+													{:else if request.status !== 'pending'}
+														<p class="text-xs text-slate-500">{request.reviewer_username ? `Direview oleh ${request.reviewer_username}` : 'Sudah diproses'}</p>
+													{/if}
+												</div>
 											</Table.Cell>
 										</Table.Row>
+										{#if expandedRows[request.id]}
+											<Table.Row class="bg-slate-50/70">
+												<Table.Cell colspan={7}>
+													<div class="grid gap-4 p-3 md:grid-cols-3">
+														<div>
+															<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Identitas Pemohon</p>
+															<p class="mt-1 text-sm font-medium text-slate-800">{requesterLabel(request)}</p>
+															<p class="text-xs text-slate-500">Username: {request.requester_username || '—'}</p>
+															<p class="text-xs text-slate-500">User ID: {request.requester_user_id || '—'}</p>
+														</div>
+														<div>
+															<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Profil dan Field</p>
+															<p class="mt-1 text-sm font-medium text-slate-800">{profileTypeLabel(request.profile_type)} · {request.profile_nama || '—'}</p>
+															<p class="text-xs text-slate-500">Target ID: {targetIDLabel(request)}</p>
+															<p class="text-xs text-slate-500">Field: {requestFieldLabel(request)} ({request.field_key})</p>
+														</div>
+														<div>
+															<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Status Review</p>
+															<p class="mt-1 text-sm font-medium text-slate-800">{changeRequestStatusLabel(request.status)}</p>
+															<p class="text-xs text-slate-500">Reviewer: {request.reviewer_username || '—'}</p>
+															<p class="text-xs text-slate-500">Catatan: {request.review_note || '—'}</p>
+														</div>
+														<div class="md:col-span-2">
+															<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Nilai</p>
+															<div class="mt-2 grid gap-2 md:grid-cols-2">
+																<div class="rounded-md border border-slate-200 bg-white p-3">
+																	<p class="text-xs text-slate-500">Current value</p>
+																	<p class="mt-1 break-words text-sm text-slate-800">{valueLabel(request.current_value)}</p>
+																</div>
+																<div class="rounded-md border border-emerald-200 bg-white p-3">
+																	<p class="text-xs text-slate-500">Requested value</p>
+																	<p class="mt-1 break-words text-sm font-medium text-emerald-800">{valueLabel(request.requested_value)}</p>
+																</div>
+															</div>
+															<p class="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Alasan</p>
+															<p class="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700">{request.reason || '—'}</p>
+														</div>
+														<div>
+															<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Timestamps</p>
+															<div class="mt-1 space-y-1 text-xs text-slate-500">
+																<p>Diajukan: {formatAccountDateTime(request.created_at)}</p>
+																<p>Direview: {formatAccountDateTime(request.reviewed_at)}</p>
+																<p>Diperbarui: {formatAccountDateTime(request.updated_at)}</p>
+															</div>
+														</div>
+													</div>
+												</Table.Cell>
+											</Table.Row>
+										{/if}
 									{/each}
 								</Table.Body>
 							</Table.Root>
@@ -267,14 +575,53 @@
 								<div class="rounded-lg border border-slate-200 p-4">
 									<div class="flex flex-wrap items-center justify-between gap-2">
 										<div>
-											<p class="font-medium text-slate-900">{request.requester_display_name || request.requester_username || 'Pengguna'}</p>
+											<p class="font-medium text-slate-900">{requesterLabel(request)}</p>
 											<p class="text-xs text-slate-500">{profileTypeLabel(request.profile_type)} · {request.profile_nama || '—'}</p>
 										</div>
 										<Badge variant={statusBadgeVariant(request.status)}>{changeRequestStatusLabel(request.status)}</Badge>
 									</div>
-									<p class="mt-3 text-sm font-medium text-slate-900">{officialFieldLabel(request.field_key)}</p>
-									<p class="mt-1 text-sm text-slate-600">{request.current_value || '—'} → {request.requested_value || '—'}</p>
-									<p class="mt-1 text-xs text-slate-500">{request.reason}</p>
+									<p class="mt-3 text-sm font-medium text-slate-900">{requestFieldLabel(request)}</p>
+									<div class="mt-2 grid grid-cols-[88px_1fr] gap-1 text-sm text-slate-600">
+										<span>Saat ini</span><span class="break-words">{valueLabel(request.current_value)}</span>
+										<span>Diajukan</span><span class="break-words font-medium text-slate-800">{valueLabel(request.requested_value)}</span>
+									</div>
+									<p class="mt-2 whitespace-pre-wrap break-words text-xs text-slate-500">{request.reason}</p>
+
+									<Button class="mt-3" type="button" size="sm" variant="outline" onclick={() => toggleExpanded(request.id)}>
+										{#if expandedRows[request.id]}
+											<ChevronUpIcon class="size-3.5" />
+											Tutup Detail
+										{:else}
+											<ChevronDownIcon class="size-3.5" />
+											Detail
+										{/if}
+									</Button>
+
+									{#if expandedRows[request.id]}
+										<div class="mt-3 space-y-3 rounded-md bg-slate-50 p-3">
+											<div>
+												<p class="text-xs font-semibold text-slate-500">Pemohon</p>
+												<p class="text-sm text-slate-800">{requesterLabel(request)}</p>
+												<p class="text-xs text-slate-500">{request.requester_username || request.requester_user_id || '—'}</p>
+											</div>
+											<div>
+												<p class="text-xs font-semibold text-slate-500">Profil dan Target</p>
+												<p class="text-sm text-slate-800">{profileTypeLabel(request.profile_type)} · {request.profile_nama || '—'}</p>
+												<p class="text-xs text-slate-500">Target ID: {targetIDLabel(request)}</p>
+											</div>
+											<div>
+												<p class="text-xs font-semibold text-slate-500">Review</p>
+												<p class="text-sm text-slate-800">{request.reviewer_username || '—'}</p>
+												<p class="text-xs text-slate-500">{request.review_note || 'Belum ada catatan'}</p>
+											</div>
+											<div class="text-xs text-slate-500">
+												<p>Diajukan: {formatAccountDateTime(request.created_at)}</p>
+												<p>Direview: {formatAccountDateTime(request.reviewed_at)}</p>
+												<p>Diperbarui: {formatAccountDateTime(request.updated_at)}</p>
+											</div>
+										</div>
+									{/if}
+
 									<div class="mt-3 space-y-2">
 										{#each changeRequestTimelineItems(request) as timeline, index (`mobile-timeline-${request.id}-${index}`)}
 											<div class="border-l border-slate-200 pl-3">
@@ -291,20 +638,35 @@
 											</div>
 										{/each}
 									</div>
-									{#if request.status === 'pending'}
+									{#if request.status === 'pending' && canReviewProfileChanges}
 										<div class="mt-3 space-y-2">
 											<label for={`mobile-note-${request.id}`} class="block text-xs font-medium text-slate-600">Catatan Review</label>
 											<Textarea id={`mobile-note-${request.id}`} rows={3} maxlength={1000} bind:value={reviewNotes[request.id]} />
 											<div class="flex flex-wrap gap-2">
-												<LoadingButton size="sm" onclick={() => void reviewRequest(request, 'approved')} loading={reviewBusy === `approved:${request.id}`} loadingLabel="Menyetujui...">
+												<Button size="sm" type="button" onclick={() => stageReview(request, 'approved')}>
 													<CheckIcon class="size-3.5" />
 													Setujui
-												</LoadingButton>
-												<LoadingButton size="sm" variant="outline" onclick={() => void reviewRequest(request, 'rejected')} loading={reviewBusy === `rejected:${request.id}`} loadingLabel="Menolak...">
+												</Button>
+												<Button size="sm" type="button" variant="outline" onclick={() => stageReview(request, 'rejected')}>
 													<XIcon class="size-3.5" />
 													Tolak
-												</LoadingButton>
+												</Button>
 											</div>
+											{#if stagedReviews[request.id]}
+												<div class="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+													<p>Konfirmasi {stagedReviews[request.id] === 'approved' ? 'persetujuan' : 'penolakan'} request ini.</p>
+													<div class="mt-2 flex flex-wrap gap-2">
+														<LoadingButton
+															size="sm"
+															onclick={() => void reviewRequest(request, stagedReviewStatus(request.id))}
+															loading={reviewBusy === `${stagedReviews[request.id]}:${request.id}`}
+															loadingLabel="Memproses..."
+															label="Konfirmasi"
+														/>
+														<Button type="button" size="sm" variant="outline" onclick={() => clearStagedReview(request.id)}>Batal</Button>
+													</div>
+												</div>
+											{/if}
 										</div>
 									{/if}
 								</div>

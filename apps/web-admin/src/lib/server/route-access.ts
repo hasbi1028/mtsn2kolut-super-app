@@ -151,11 +151,11 @@ export function isReadMethod(method: string) {
 }
 
 function usersPermission(pathname: string, method: string): string[] | undefined {
-	if (matchesPathSegment(pathname, '/api/users/change-requests') && !isReadMethod(method)) return ['profile_changes.review'];
+	if (matchesPathSegment(pathname, '/api/users/change-requests')) return ['profile_changes.review'];
 	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/reset-password')) return ['users.reset_password'];
 	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/profile-link')) return ['users.update'];
 	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/roles')) return ['users.manage_roles'];
-	if (matchesPathSegment(pathname, '/settings/user-change-requests')) return ['users.read'];
+	if (matchesPathSegment(pathname, '/settings/user-change-requests')) return ['profile_changes.review'];
 	if (matchesPathSegment(pathname, '/settings/users')) return ['users.read'];
 	if (matchesPathSegment(pathname, '/api/users')) {
 		if (isReadMethod(method)) return ['users.read'];

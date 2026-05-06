@@ -36,11 +36,14 @@ type fakeProfileChangeRequestService struct {
 	cancelUserID pgtype.UUID
 	cancelID     pgtype.UUID
 
-	listAdminResult []service.ProfileChangeRequestListItem
-	listAdminErr    error
-	listAdminStatus string
-	listAdminLimit  int32
-	listAdminOffset int32
+	listAdminResult  []service.ProfileChangeRequestListItem
+	listAdminErr     error
+	listAdminFilter  service.ProfileChangeRequestListFilter
+	listAdminLimit   int32
+	listAdminOffset  int32
+	countAdminResult int32
+	countAdminErr    error
+	countAdminFilter service.ProfileChangeRequestListFilter
 
 	reviewResult db.ProfileChangeRequest
 	reviewErr    error
@@ -71,11 +74,16 @@ func (f *fakeProfileChangeRequestService) CancelOwn(ctx context.Context, request
 	return f.cancelResult, f.cancelErr
 }
 
-func (f *fakeProfileChangeRequestService) ListAdmin(ctx context.Context, status string, limit, offset int32) ([]service.ProfileChangeRequestListItem, error) {
-	f.listAdminStatus = status
+func (f *fakeProfileChangeRequestService) ListAdmin(ctx context.Context, filter service.ProfileChangeRequestListFilter, limit, offset int32) ([]service.ProfileChangeRequestListItem, error) {
+	f.listAdminFilter = filter
 	f.listAdminLimit = limit
 	f.listAdminOffset = offset
 	return f.listAdminResult, f.listAdminErr
+}
+
+func (f *fakeProfileChangeRequestService) CountAdmin(ctx context.Context, filter service.ProfileChangeRequestListFilter) (int32, error) {
+	f.countAdminFilter = filter
+	return f.countAdminResult, f.countAdminErr
 }
 
 func (f *fakeProfileChangeRequestService) Review(ctx context.Context, reviewerUserID, id pgtype.UUID, input service.ReviewProfileChangeRequestInput) (db.ProfileChangeRequest, error) {
@@ -199,13 +207,14 @@ func TestProfileChangeRequestListAdminForwardsFiltersAndShapesRows(t *testing.T)
 			ProfileType:          "employee",
 			ProfileNama:          "Guru IPA",
 			FieldKey:             "nama",
+			FieldLabel:           "Nama resmi",
 			CurrentValue:         "Lama",
 			RequestedValue:       "Baru",
 			Status:               db.ProfileChangeRequestStatusPending,
 		}},
 	}
 	h := NewProfileChangeRequest(svc)
-	req := httptest.NewRequest(http.MethodGet, "/api/users/change-requests?status=pending&page=2&per_page=10", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/users/change-requests?status=pending&profile_type=employee&field=nama&search=guru&page=2&per_page=10", nil)
 	rec := httptest.NewRecorder()
 
 	h.ListAdmin(rec, req)
@@ -213,11 +222,59 @@ func TestProfileChangeRequestListAdminForwardsFiltersAndShapesRows(t *testing.T)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("ListAdmin() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
-	if svc.listAdminStatus != "pending" || svc.listAdminLimit != 10 || svc.listAdminOffset != 10 {
-		t.Fatalf("list args = %q/%d/%d, want pending/10/10", svc.listAdminStatus, svc.listAdminLimit, svc.listAdminOffset)
+	if svc.listAdminFilter.Status != "pending" || svc.listAdminFilter.ProfileType != "employee" || svc.listAdminFilter.FieldKey != "nama" || svc.listAdminFilter.Search != "guru" || svc.listAdminLimit != 10 || svc.listAdminOffset != 10 {
+		t.Fatalf("list args = %+v/%d/%d, want filters/10/10", svc.listAdminFilter, svc.listAdminLimit, svc.listAdminOffset)
 	}
-	if !strings.Contains(rec.Body.String(), `"requester_username":"guru.ipa"`) || !strings.Contains(rec.Body.String(), requestID.String()) {
-		t.Fatalf("body = %s, want requester/request id", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), `"requester_username":"guru.ipa"`) || !strings.Contains(rec.Body.String(), `"field_label":"Nama resmi"`) || !strings.Contains(rec.Body.String(), requestID.String()) {
+		t.Fatalf("body = %s, want requester/field label/request id", rec.Body.String())
+	}
+}
+
+func TestProfileChangeRequestPendingCountAndExport(t *testing.T) {
+	requestID := mustUUID(t, "22222222-2222-2222-2222-222222222222")
+	svc := &fakeProfileChangeRequestService{
+		countAdminResult: 7,
+		listAdminResult: []service.ProfileChangeRequestListItem{{
+			ID:                   requestID,
+			RequesterUserID:      mustUUID(t, "11111111-1111-1111-1111-111111111111"),
+			RequesterUsername:    "guru.ipa",
+			RequesterDisplayName: "Guru IPA",
+			ProfileType:          "student",
+			ProfileNama:          "Ahmad Fauzi",
+			FieldKey:             "tanggal_lahir",
+			FieldLabel:           "Tanggal lahir",
+			CurrentValue:         "2010-01-02",
+			RequestedValue:       "2011-03-04",
+			Reason:               "=Nomor dokumen 123456789",
+			Status:               db.ProfileChangeRequestStatusPending,
+		}},
+	}
+	h := NewProfileChangeRequest(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users/change-requests/pending-count?profile_type=student", nil)
+	rec := httptest.NewRecorder()
+	h.CountPendingAdmin(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"pending":7`) {
+		t.Fatalf("CountPendingAdmin() status=%d body=%s, want pending count", rec.Code, rec.Body.String())
+	}
+	if svc.countAdminFilter.Status != "pending" || svc.countAdminFilter.ProfileType != "student" {
+		t.Fatalf("count filter = %+v, want pending student", svc.countAdminFilter)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/users/change-requests/export?status=pending", nil)
+	rec = httptest.NewRecorder()
+	h.ExportAdminCSV(rec, req)
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Content-Type"), "text/csv") {
+		t.Fatalf("ExportAdminCSV() status=%d content-type=%q body=%s", rec.Code, rec.Header().Get("Content-Type"), body)
+	}
+	for _, expected := range []string{"request_id,status,created_at", "Tanggal lahir", "2010-**-**", "2011-**-**", "'=Nomor dokumen ****"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("export body = %s, want %q", body, expected)
+		}
+	}
+	if strings.Contains(body, "123456789") {
+		t.Fatalf("export body = %s, contains unmasked document number", body)
 	}
 }
 

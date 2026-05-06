@@ -904,16 +904,41 @@ describe('api proxy route handlers', () => {
 
 	it('forwards admin official change request queue and review actions', async () => {
 		const listMod = await import('../../routes/api/users/change-requests/+server');
+		const countMod = await import('../../routes/api/users/change-requests/pending-count/+server');
+		const exportMod = await import('../../routes/api/users/change-requests/export/+server');
 		const reviewMod = await import('../../routes/api/users/change-requests/[id]/+server');
 		proxyGetMock.mockResolvedValueOnce([{ id: 'req-1', status: 'pending' }]);
 
 		const listRes = await listMod.GET(createEvent({
-			url: new URL('http://localhost/api/users/change-requests?status=pending&page=2')
+			url: new URL('http://localhost/api/users/change-requests?status=pending&page=2&profile_type=student&field=nama&search=guru')
 		}) as never);
 
-		expect(proxyGetMock).toHaveBeenCalledWith('/api/users/change-requests?status=pending&page=2');
+		expect(proxyGetMock).toHaveBeenCalledWith('/api/users/change-requests?status=pending&page=2&profile_type=student&field=nama&search=guru');
 		expect(listRes.status).toBe(200);
 		await expect(listRes.json()).resolves.toEqual([{ id: 'req-1', status: 'pending' }]);
+
+		proxyGetMock.mockResolvedValueOnce({ pending: 3 });
+		const countRes = await countMod.GET(createEvent({
+			url: new URL('http://localhost/api/users/change-requests/pending-count')
+		}) as never);
+		expect(proxyGetMock).toHaveBeenCalledWith('/api/users/change-requests/pending-count');
+		expect(countRes.status).toBe(200);
+		await expect(countRes.json()).resolves.toEqual({ pending: 3 });
+
+		const csvResponse = new Response('request_id,status\nreq-1,pending\n', {
+			status: 200,
+			headers: { 'content-type': 'text/csv' }
+		});
+		proxyFetchMock.mockResolvedValueOnce(csvResponse);
+		const exportRes = await exportMod.GET(createEvent({
+			url: new URL('http://localhost/api/users/change-requests/export?status=pending')
+		}) as never);
+		expect(proxyFetchMock).toHaveBeenCalledWith('/api/users/change-requests/export?status=pending');
+		expect(streamProxyResponseMock).toHaveBeenCalledWith(csvResponse, {
+			defaultContentType: 'text/csv; charset=utf-8',
+			defaultCacheControl: 'no-store'
+		});
+		expect(exportRes.status).toBe(200);
 
 		const request = new Request('http://localhost/api/users/change-requests/req%201%2F2026', {
 			method: 'PATCH',
