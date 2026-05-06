@@ -3,7 +3,13 @@ import {
 	buildProfileLinkPayload,
 	buildUserRolePayload,
 	fetchRBACMatrix,
+	createRBACPermission,
+	createRBACRole,
 	resetUserPassword,
+	setRBACPermissionActive,
+	setRBACRoleActive,
+	updateRBACPermission,
+	updateRBACRole,
 	updateUserProfileLink,
 	updateUserRoles
 } from './rbac-users';
@@ -59,4 +65,25 @@ describe('rbac user management client helpers', () => {
 		await expect(fetchRBACMatrix(fetcher)).resolves.toEqual(matrix);
 		expect(fetcher).toHaveBeenCalledWith('/api/rbac/matrix');
 	});
+
+	it('sends CRUD role and permission requests to RBAC management endpoints', async () => {
+		const fetcher = vi
+			.fn()
+			.mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ data: { ok: true } }), { status: 200 })));
+
+		await createRBACRole({ code: 'operator_cbt', name: 'Operator CBT', description: 'Kelola CBT' }, fetcher);
+		await updateRBACRole('operator_cbt', { name: 'Operator Asesmen', description: 'Kelola Asesmen' }, fetcher);
+		await setRBACRoleActive('operator_cbt', false, fetcher);
+		await createRBACPermission({ code: 'reports.view', module: 'reports', action: 'view', description: 'Lihat laporan' }, fetcher);
+		await updateRBACPermission('reports.view', { module: 'reports', action: 'read', description: 'Baca laporan' }, fetcher);
+		await setRBACPermissionActive('reports.view', false, fetcher);
+
+		expect(fetcher).toHaveBeenNthCalledWith(1, '/api/rbac/roles', expect.objectContaining({ method: 'POST' }));
+		expect(fetcher).toHaveBeenNthCalledWith(2, '/api/rbac/roles/operator_cbt', expect.objectContaining({ method: 'PUT' }));
+		expect(fetcher).toHaveBeenNthCalledWith(3, '/api/rbac/roles/operator_cbt/status', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ is_active: false }) }));
+		expect(fetcher).toHaveBeenNthCalledWith(4, '/api/rbac/permissions', expect.objectContaining({ method: 'POST' }));
+		expect(fetcher).toHaveBeenNthCalledWith(5, '/api/rbac/permissions/reports.view', expect.objectContaining({ method: 'PUT' }));
+		expect(fetcher).toHaveBeenNthCalledWith(6, '/api/rbac/permissions/reports.view/status', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ is_active: false }) }));
+	});
+
 });

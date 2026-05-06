@@ -30,6 +30,18 @@ type fakeRBACService struct {
 	replaceRoleCodes []string
 	replaceUserActor pgtype.UUID
 	replaceUserErr   error
+
+	createdRoleInput       service.RBACRoleInput
+	createdRoleActor       pgtype.UUID
+	updatedRoleCode        string
+	updatedRoleInput       service.RBACRoleInput
+	roleStatusCode         string
+	roleStatusActive       bool
+	createdPermissionInput service.RBACPermissionInput
+	updatedPermissionCode  string
+	updatedPermissionInput service.RBACPermissionInput
+	permissionStatusCode   string
+	permissionStatusActive bool
 }
 
 func (f *fakeRBACService) ListMatrix(ctx context.Context) (service.RBACMatrix, error) {
@@ -52,6 +64,36 @@ func (f *fakeRBACService) ReplaceUserRoles(ctx context.Context, userID pgtype.UU
 	f.replaceRoleCodes = append([]string(nil), roleCodes...)
 	f.replaceUserActor = actorID
 	return f.replaceUserErr
+}
+
+func (f *fakeRBACService) CreateRole(ctx context.Context, input service.RBACRoleInput, actorID pgtype.UUID) (db.RbacRole, error) {
+	f.createdRoleInput = input
+	f.createdRoleActor = actorID
+	return db.RbacRole{Code: input.Code, Name: input.Name, Description: input.Description, IsActive: true}, f.err
+}
+func (f *fakeRBACService) UpdateRole(ctx context.Context, code string, input service.RBACRoleInput, actorID pgtype.UUID) (db.RbacRole, error) {
+	f.updatedRoleCode = code
+	f.updatedRoleInput = input
+	return db.RbacRole{Code: code, Name: input.Name, Description: input.Description, IsActive: true}, f.err
+}
+func (f *fakeRBACService) SetRoleActive(ctx context.Context, code string, active bool, actorID pgtype.UUID) error {
+	f.roleStatusCode = code
+	f.roleStatusActive = active
+	return f.err
+}
+func (f *fakeRBACService) CreatePermission(ctx context.Context, input service.RBACPermissionInput, actorID pgtype.UUID) (db.RbacPermission, error) {
+	f.createdPermissionInput = input
+	return db.RbacPermission{Code: input.Code, Module: input.Module, Action: input.Action, Description: input.Description, IsActive: true}, f.err
+}
+func (f *fakeRBACService) UpdatePermission(ctx context.Context, code string, input service.RBACPermissionInput, actorID pgtype.UUID) (db.RbacPermission, error) {
+	f.updatedPermissionCode = code
+	f.updatedPermissionInput = input
+	return db.RbacPermission{Code: code, Module: input.Module, Action: input.Action, Description: input.Description, IsActive: true}, f.err
+}
+func (f *fakeRBACService) SetPermissionActive(ctx context.Context, code string, active bool, actorID pgtype.UUID) error {
+	f.permissionStatusCode = code
+	f.permissionStatusActive = active
+	return f.err
 }
 
 func TestRBACHandlerListsMatrixRolesAndPermissions(t *testing.T) {
@@ -115,6 +157,61 @@ func TestRBACHandlerUpdatesRolePermissionsAndUserRoles(t *testing.T) {
 	}
 	if svc.replaceUserID != userID || !reflect.DeepEqual(svc.replaceRoleCodes, []string{"guru", "staf"}) || svc.replaceUserActor != adminID {
 		t.Fatalf("user role args = %v/%v/%v", svc.replaceUserID, svc.replaceRoleCodes, svc.replaceUserActor)
+	}
+}
+
+func TestRBACHandlerRoleAndPermissionCRUD(t *testing.T) {
+	adminID := handlerTestUUID(95)
+	svc := &fakeRBACService{}
+	h := &RBAC{svc: svc}
+
+	rec := httptest.NewRecorder()
+	h.CreateRole(rec, adminRBACRequest(http.MethodPost, "/api/rbac/roles", `{"code":"operator_cbt","name":"Operator CBT","description":"Kelola CBT"}`, adminID))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("CreateRole() status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	if svc.createdRoleInput.Code != "operator_cbt" || svc.createdRoleActor != adminID {
+		t.Fatalf("CreateRole args = %+v actor=%v", svc.createdRoleInput, svc.createdRoleActor)
+	}
+
+	rec = httptest.NewRecorder()
+	req := withRouteParam(adminRBACRequest(http.MethodPut, "/api/rbac/roles/operator_cbt", `{"name":"Operator Asesmen","description":"Kelola Asesmen"}`, adminID), "code", "operator_cbt")
+	h.UpdateRole(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("UpdateRole() status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if svc.updatedRoleCode != "operator_cbt" || svc.updatedRoleInput.Name != "Operator Asesmen" {
+		t.Fatalf("UpdateRole args = code=%q input=%+v", svc.updatedRoleCode, svc.updatedRoleInput)
+	}
+
+	rec = httptest.NewRecorder()
+	req = withRouteParam(adminRBACRequest(http.MethodPatch, "/api/rbac/roles/operator_cbt/status", `{"is_active":false}`, adminID), "code", "operator_cbt")
+	h.SetRoleStatus(rec, req)
+	if rec.Code != http.StatusOK || svc.roleStatusCode != "operator_cbt" || svc.roleStatusActive {
+		t.Fatalf("SetRoleStatus status=%d code=%q active=%v body=%s", rec.Code, svc.roleStatusCode, svc.roleStatusActive, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.CreatePermission(rec, adminRBACRequest(http.MethodPost, "/api/rbac/permissions", `{"code":"reports.view","module":"reports","action":"view","description":"Lihat laporan"}`, adminID))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("CreatePermission() status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	if svc.createdPermissionInput.Code != "reports.view" {
+		t.Fatalf("CreatePermission args = %+v", svc.createdPermissionInput)
+	}
+
+	rec = httptest.NewRecorder()
+	req = withRouteParam(adminRBACRequest(http.MethodPut, "/api/rbac/permissions/reports.view", `{"module":"reports","action":"read","description":"Baca laporan"}`, adminID), "code", "reports.view")
+	h.UpdatePermission(rec, req)
+	if rec.Code != http.StatusOK || svc.updatedPermissionCode != "reports.view" || svc.updatedPermissionInput.Action != "read" {
+		t.Fatalf("UpdatePermission status=%d code=%q input=%+v body=%s", rec.Code, svc.updatedPermissionCode, svc.updatedPermissionInput, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	req = withRouteParam(adminRBACRequest(http.MethodPatch, "/api/rbac/permissions/reports.view/status", `{"is_active":false}`, adminID), "code", "reports.view")
+	h.SetPermissionStatus(rec, req)
+	if rec.Code != http.StatusOK || svc.permissionStatusCode != "reports.view" || svc.permissionStatusActive {
+		t.Fatalf("SetPermissionStatus status=%d code=%q active=%v body=%s", rec.Code, svc.permissionStatusCode, svc.permissionStatusActive, rec.Body.String())
 	}
 }
 

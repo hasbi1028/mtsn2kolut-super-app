@@ -672,7 +672,13 @@ func main() {
 		r.With(requireUsersDeactivate).Delete("/api/users/{id}", userH.Delete)
 
 		r.With(requireRolesRead).Get("/api/rbac/roles", rbacH.ListRoles)
+		r.With(requireRolesManage).Post("/api/rbac/roles", rbacH.CreateRole)
+		r.With(requireRolesManage).Put("/api/rbac/roles/{code}", rbacH.UpdateRole)
+		r.With(requireRolesManage).Patch("/api/rbac/roles/{code}/status", rbacH.SetRoleStatus)
 		r.With(requireRolesRead).Get("/api/rbac/permissions", rbacH.ListPermissions)
+		r.With(requireRolesManage).Post("/api/rbac/permissions", rbacH.CreatePermission)
+		r.With(requireRolesManage).Put("/api/rbac/permissions/{code}", rbacH.UpdatePermission)
+		r.With(requireRolesManage).Patch("/api/rbac/permissions/{code}/status", rbacH.SetPermissionStatus)
 		r.With(requireRolesRead).Get("/api/rbac/matrix", rbacH.ListMatrix)
 		r.With(requireRolesManage).Put("/api/rbac/roles/{code}/permissions", rbacH.UpdateRolePermissions)
 	})

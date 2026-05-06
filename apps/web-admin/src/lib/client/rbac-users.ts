@@ -13,6 +13,7 @@ export type RBACPermission = {
 	name?: string;
 	description?: string;
 	module?: string;
+	action?: string;
 	is_active?: boolean;
 };
 
@@ -26,6 +27,19 @@ export type ProfileLinkPayloadInput = {
 	employee_id?: string | null;
 	student_id?: string | null;
 	parent_id?: string | null;
+};
+
+export type RBACRoleInput = {
+	code?: string;
+	name?: string;
+	description?: string;
+};
+
+export type RBACPermissionInput = {
+	code?: string;
+	module?: string;
+	action?: string;
+	description?: string;
 };
 
 export type FetchLike = typeof fetch;
@@ -51,6 +65,15 @@ export function buildProfileLinkPayload(input: ProfileLinkPayloadInput) {
 	};
 }
 
+async function writeRBAC<T>(url: string, method: string, payload: unknown, fetcher: FetchLike) {
+	const res = await fetcher(url, {
+		method,
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload)
+	});
+	return readClientApiData<T>(res, 'Gagal menyimpan data RBAC.');
+}
+
 export async function fetchRBACMatrix(fetcher: FetchLike = fetch) {
 	const res = await fetcher('/api/rbac/matrix');
 	return (
@@ -60,6 +83,30 @@ export async function fetchRBACMatrix(fetcher: FetchLike = fetch) {
 			role_permissions: {}
 		}
 	);
+}
+
+export async function createRBACRole(input: RBACRoleInput, fetcher: FetchLike = fetch) {
+	return writeRBAC<RBACRole>('/api/rbac/roles', 'POST', input, fetcher);
+}
+
+export async function updateRBACRole(code: string, input: RBACRoleInput, fetcher: FetchLike = fetch) {
+	return writeRBAC<RBACRole>(`/api/rbac/roles/${code}`, 'PUT', input, fetcher);
+}
+
+export async function setRBACRoleActive(code: string, isActive: boolean, fetcher: FetchLike = fetch) {
+	return writeRBAC<unknown>(`/api/rbac/roles/${code}/status`, 'PATCH', { is_active: isActive }, fetcher);
+}
+
+export async function createRBACPermission(input: RBACPermissionInput, fetcher: FetchLike = fetch) {
+	return writeRBAC<RBACPermission>('/api/rbac/permissions', 'POST', input, fetcher);
+}
+
+export async function updateRBACPermission(code: string, input: RBACPermissionInput, fetcher: FetchLike = fetch) {
+	return writeRBAC<RBACPermission>(`/api/rbac/permissions/${code}`, 'PUT', input, fetcher);
+}
+
+export async function setRBACPermissionActive(code: string, isActive: boolean, fetcher: FetchLike = fetch) {
+	return writeRBAC<unknown>(`/api/rbac/permissions/${code}/status`, 'PATCH', { is_active: isActive }, fetcher);
 }
 
 export async function updateUserRoles(userID: string, roles: string[], fetcher: FetchLike = fetch) {
