@@ -52,9 +52,19 @@ describe('route access helpers', () => {
 	it('keeps Bank Soal and Asesmen route boundaries explicit for admin and guru access', () => {
 		expect(isPublicPath('/bank-soal')).toBe(false);
 		expect(isAdminOnlyPath('/bank-soal')).toBe(false);
-		expect(isAdminOnlyPath('/bank-soal/tambah')).toBe(false);
-		expect(isAdminOnlyPath('/bank-soal/impor')).toBe(false);
-		expect(isAdminOnlyPath('/bank-soal/verifikasi')).toBe(false);
+		const finalBankSoalRoutes = [
+			'/bank-soal',
+			'/bank-soal/daftar',
+			'/bank-soal/tambah',
+			'/bank-soal/verifikasi',
+			'/bank-soal/impor',
+			'/bank-soal/analisis-butir',
+			'/bank-soal/mapel-kd',
+			'/bank-soal/pengaturan'
+		];
+		expect(finalBankSoalRoutes.map((route) => [route, isAdminOnlyPath(route)])).toEqual(
+			finalBankSoalRoutes.map((route) => [route, false])
+		);
 		expect(isAdminOnlyPath('/api/bank-soal/questions')).toBe(false);
 		expect(isAdminOnlyPath('/api/bank-soal/questions/export')).toBe(false);
 		expect(isAdminOnlyPath('/asesmen/kegiatan')).toBe(true);
