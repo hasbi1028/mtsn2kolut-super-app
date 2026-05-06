@@ -134,8 +134,8 @@
 <div class="container mx-auto max-w-7xl space-y-6 p-6">
 	<div class="flex items-center justify-between">
 		<div>
-			<h1 class="text-2xl font-bold text-gray-900">Disposisi Surat</h1>
-			<p class="text-sm text-gray-500">Daftar semua disposisi surat masuk</p>
+			<h1 class="text-2xl font-bold text-foreground">Disposisi Surat</h1>
+			<p class="text-sm text-muted-foreground">Daftar semua disposisi surat masuk</p>
 		</div>
 		<LoadingButton variant="outline" onclick={() => void refreshDispositionsList()} loading={refreshBusy} loadingLabel="Memuat...">Refresh</LoadingButton>
 	</div>
@@ -144,12 +144,12 @@
 	<Card.Root>
 		<Card.Content class="pt-4">
 			<div class="flex items-center gap-3">
-				<label for="filter-status" class="text-sm font-medium text-gray-700 shrink-0">Status</label>
+				<label for="filter-status" class="text-sm font-medium text-foreground shrink-0">Status</label>
 				<select
 					id="filter-status"
 					bind:value={filterStatus}
 					onchange={() => loadDispositions()}
-					class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+					class="rounded-md border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 				>
 					<option value="">Semua Status</option>
 					<option value="terkirim">Terkirim</option>
@@ -186,7 +186,7 @@
 				{#snippet children(value)}
 					{@const currentDispositions = value as DispositionRow[]}
 					{#if currentDispositions.length === 0}
-						<div class="p-8 text-center text-sm text-gray-500">
+						<div class="p-8 text-center text-sm text-muted-foreground">
 							{filterStatus ? 'Tidak ada disposisi dengan status ini.' : 'Belum ada disposisi.'}
 						</div>
 					{:else}
@@ -205,23 +205,23 @@
 							<Table.Body>
 								{#each currentDispositions as d, i (d.id)}
 									<Table.Row>
-										<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
-										<Table.Cell class="font-mono text-xs font-medium text-gray-700">{d.nomor_agenda}</Table.Cell>
+										<Table.Cell class="text-muted-foreground">{i + 1}</Table.Cell>
+										<Table.Cell class="font-mono text-xs font-medium text-foreground">{d.nomor_agenda}</Table.Cell>
 										<Table.Cell>
-											<p class="text-sm font-medium text-gray-800 max-w-xs truncate">{d.letter_perihal}</p>
-											<p class="text-xs text-gray-400">{d.letter_asal}</p>
+											<p class="text-sm font-medium text-foreground max-w-xs truncate">{d.letter_perihal}</p>
+											<p class="text-xs text-muted-foreground">{d.letter_asal}</p>
 										</Table.Cell>
-										<Table.Cell class="text-sm text-gray-700">{d.assignee_name || '–'}</Table.Cell>
-										<Table.Cell class="max-w-xs truncate text-sm text-gray-600">
-											{#if d.instruksi}{d.instruksi}{:else}<span class="italic text-gray-400">–</span>{/if}
+										<Table.Cell class="text-sm text-foreground">{d.assignee_name || '–'}</Table.Cell>
+										<Table.Cell class="max-w-xs truncate text-sm text-muted-foreground">
+											{#if d.instruksi}{d.instruksi}{:else}<span class="italic text-muted-foreground">–</span>{/if}
 										</Table.Cell>
-										<Table.Cell class="text-sm text-gray-600">{formatDate(d.disposed_at)}</Table.Cell>
+										<Table.Cell class="text-sm text-muted-foreground">{formatDate(d.disposed_at)}</Table.Cell>
 										<Table.Cell>
 											<select
 												value={d.status}
 												onchange={(e) => updateStatus(d, (e.target as HTMLSelectElement).value)}
 												disabled={updateBusy[d.id]}
-												class="rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-600"
+												class="rounded border border-border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
 											>
 												<option value="terkirim">Terkirim</option>
 												<option value="dibaca">Dibaca</option>

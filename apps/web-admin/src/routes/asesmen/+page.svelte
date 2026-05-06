@@ -177,12 +177,12 @@
 </svelte:head>
 
 <div class="space-y-8">
-	<section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+	<section class="rounded-3xl border border-border bg-card p-6 shadow-sm md:p-8">
 		<div class="max-w-4xl space-y-4">
-			<p class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">Beranda CBT</p>
+			<p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Beranda CBT</p>
 			<div class="space-y-3">
-				<h1 class="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Apa yang perlu dikerjakan hari ini?</h1>
-				<p class="max-w-2xl text-base leading-7 text-slate-600">
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Apa yang perlu dikerjakan hari ini?</h1>
+				<p class="max-w-2xl text-base leading-7 text-muted-foreground">
 					{roleName}: {roleDescription}
 				</p>
 			</div>
@@ -191,16 +191,16 @@
 
 	<section aria-labelledby="cbt-phases-title" class="space-y-4">
 		<div class="space-y-1">
-			<p class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">3 fase besar</p>
-			<h2 id="cbt-phases-title" class="text-2xl font-semibold tracking-tight text-slate-950">Alur CBT dibuat sederhana</h2>
+			<p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">3 fase besar</p>
+			<h2 id="cbt-phases-title" class="text-2xl font-semibold tracking-tight text-foreground">Alur CBT dibuat sederhana</h2>
 		</div>
 
 		<div class="grid gap-3 md:grid-cols-3">
 			{#each phases as phase (phase.number)}
-				<div class="rounded-2xl border border-slate-200 bg-white p-5">
-					<div class="flex h-9 w-9 items-center justify-center rounded-full border border-emerald-200 text-sm font-semibold text-emerald-800">{phase.number}</div>
-					<h3 class="mt-4 text-lg font-semibold text-slate-950">{phase.title}</h3>
-					<p class="mt-2 text-sm leading-6 text-slate-600">{phase.description}</p>
+				<div class="rounded-2xl border border-border bg-card p-5">
+					<div class="flex h-9 w-9 items-center justify-center rounded-full border border-primary/20 text-sm font-semibold text-primary">{phase.number}</div>
+					<h3 class="mt-4 text-lg font-semibold text-foreground">{phase.title}</h3>
+					<p class="mt-2 text-sm leading-6 text-muted-foreground">{phase.description}</p>
 				</div>
 			{/each}
 		</div>
@@ -209,35 +209,35 @@
 	<section aria-labelledby="cbt-tasks-title" class="space-y-4">
 		<div class="flex flex-wrap items-end justify-between gap-3">
 			<div class="space-y-1">
-				<p class="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-800">Pilih tugas</p>
-				<h2 id="cbt-tasks-title" class="text-2xl font-semibold tracking-tight text-slate-950">Pintasan sesuai peran</h2>
+				<p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Pilih tugas</p>
+				<h2 id="cbt-tasks-title" class="text-2xl font-semibold tracking-tight text-foreground">Pintasan sesuai peran</h2>
 			</div>
-			<p class="text-sm text-slate-500">Maksimal 4 tugas utama ditampilkan.</p>
+			<p class="text-sm text-muted-foreground">Maksimal 4 tugas utama ditampilkan.</p>
 		</div>
 
 		{#if visibleTasks.length > 0}
 			<div class="grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-4">
 				{#each visibleTasks as task (task.title)}
-					<Card.Root class="flex h-full min-h-[17rem] flex-col border-slate-200 bg-white shadow-sm transition hover:border-emerald-300 hover:shadow-md">
+					<Card.Root class="flex h-full min-h-[17rem] flex-col border-border bg-card shadow-sm transition hover:border-primary/20 hover:shadow-md">
 						<Card.Header class="flex-1 space-y-4 p-5">
-							<p class="w-fit rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-800">
+							<p class="w-fit rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
 								{task.phase}
 							</p>
 							<div class="space-y-3">
-								<Card.Title class="min-h-14 text-xl leading-7 text-slate-950">{task.title}</Card.Title>
+								<Card.Title class="min-h-14 text-xl leading-7 text-foreground">{task.title}</Card.Title>
 								<Card.Description class="min-h-20 text-sm leading-6">{task.description}</Card.Description>
 							</div>
 						</Card.Header>
-						<Card.Footer class="mt-auto border-t border-slate-100 p-5 pt-4">
+						<Card.Footer class="mt-auto border-t border-border p-5 pt-4">
 							<Button href={resolve(task.href)} class="w-full">Buka</Button>
 						</Card.Footer>
 					</Card.Root>
 				{/each}
 			</div>
 		{:else}
-			<Card.Root class="border-dashed border-slate-300 bg-slate-50 shadow-sm">
+			<Card.Root class="border-dashed border-border bg-muted/50 shadow-sm">
 				<Card.Header>
-					<Card.Title class="text-lg text-slate-950">Tidak ada tugas CBT untuk peran ini</Card.Title>
+					<Card.Title class="text-lg text-foreground">Tidak ada tugas CBT untuk peran ini</Card.Title>
 					<Card.Description>Halaman ini tidak membuka modul yang tidak relevan dengan role aktif.</Card.Description>
 				</Card.Header>
 				<Card.Footer>
@@ -248,10 +248,10 @@
 	</section>
 
 	{#if visibleSecondaryLinks.length > 0}
-		<nav aria-label="Tautan CBT lainnya" class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-200 pt-4 text-sm">
-			<span class="font-medium text-slate-500">Tautan lain:</span>
+		<nav aria-label="Tautan CBT lainnya" class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-4 text-sm">
+			<span class="font-medium text-muted-foreground">Tautan lain:</span>
 			{#each visibleSecondaryLinks as link (link.href)}
-				<a href={resolve(link.href)} class="font-medium text-emerald-800 underline-offset-4 hover:underline">{link.label}</a>
+				<a href={resolve(link.href)} class="font-medium text-primary underline-offset-4 hover:underline">{link.label}</a>
 			{/each}
 		</nav>
 	{/if}

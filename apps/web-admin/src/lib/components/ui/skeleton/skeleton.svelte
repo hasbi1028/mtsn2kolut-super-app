@@ -12,7 +12,7 @@
 
 <div
 	class={cn(
-		'animate-pulse bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 bg-[length:200%_100%]',
+		'animate-pulse bg-gradient-to-r from-muted via-accent/50 to-muted bg-[length:200%_100%]',
 		rounded,
 		className
 	)}

@@ -311,8 +311,8 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
 		<div class="space-y-1">
-			<p class="text-sm font-medium text-emerald-700">Tata Usaha</p>
-			<h1 class="text-2xl font-semibold tracking-normal text-slate-950">Surat Keterangan Siswa</h1>
+			<p class="text-sm font-medium text-primary">Tata Usaha</p>
+			<h1 class="text-2xl font-semibold tracking-normal text-foreground">Surat Keterangan Siswa</h1>
 			<p class="max-w-3xl text-sm leading-6 text-muted-foreground">
 				Penerbitan surat keterangan siswa memakai nomor surat keluar pusat dengan klasifikasi PP.00.4.
 			</p>
@@ -394,9 +394,9 @@
 							</div>
 
 							{#if selectedStudent}
-								<div class="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
+								<div class="rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">
 									<p class="font-medium">{selectedStudent.nama}</p>
-									<p class="mt-1 text-emerald-800">
+									<p class="mt-1 text-primary">
 										NIS {selectedStudent.nis || '-'} · NISN {selectedStudent.nisn || '-'} · {selectedStudent.class_name || 'Tanpa kelas'}
 									</p>
 								</div>
@@ -494,7 +494,7 @@
 										{#each overview.certificates as certificate (certificate.id)}
 											<Table.Row>
 												<Table.Cell class="min-w-52">
-													<p class="font-medium text-slate-950">{certificate.nomor_surat}</p>
+													<p class="font-medium text-foreground">{certificate.nomor_surat}</p>
 													<p class="text-xs text-muted-foreground">{formatDate(certificate.tanggal_surat)} · {certificate.classification_code}</p>
 												</Table.Cell>
 												<Table.Cell class="min-w-48">

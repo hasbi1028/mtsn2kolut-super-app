@@ -145,8 +145,8 @@
 	<div class="mx-auto max-w-6xl space-y-6 p-6 print:p-0">
 		<div class="flex items-center justify-between print:hidden">
 			<div>
-				<h1 class="text-2xl font-semibold text-slate-900">Berita Acara Sesi Ujian</h1>
-				<p class="text-sm text-slate-500">Siap dicetak untuk pengawas dan arsip madrasah.</p>
+				<h1 class="text-2xl font-semibold text-foreground">Berita Acara Sesi Ujian</h1>
+				<p class="text-sm text-muted-foreground">Siap dicetak untuk pengawas dan arsip madrasah.</p>
 			</div>
 			<Button onclick={() => window.print()}>
 				<PrinterIcon class="mr-2 size-4" />
@@ -154,13 +154,13 @@
 			</Button>
 		</div>
 
-		<section class="rounded-lg border border-emerald-200 bg-white p-6 text-center shadow-sm">
-			<p class="text-sm font-semibold uppercase text-slate-900">{schoolProfile.ministry_line}</p>
-			<p class="text-sm font-semibold uppercase text-slate-900">{schoolProfile.office_line}</p>
-			<h1 class="mt-1 text-xl font-bold uppercase text-slate-950">{schoolProfile.name}</h1>
-			<p class="mt-1 text-xs leading-5 text-slate-600">{schoolAddressLine(schoolProfile) || 'Alamat madrasah belum diisi'}</p>
+		<section class="rounded-lg border border-primary/20 bg-card p-6 text-center shadow-sm">
+			<p class="text-sm font-semibold uppercase text-foreground">{schoolProfile.ministry_line}</p>
+			<p class="text-sm font-semibold uppercase text-foreground">{schoolProfile.office_line}</p>
+			<h1 class="mt-1 text-xl font-bold uppercase text-foreground">{schoolProfile.name}</h1>
+			<p class="mt-1 text-xs leading-5 text-muted-foreground">{schoolAddressLine(schoolProfile) || 'Alamat madrasah belum diisi'}</p>
 			{#if schoolProfile.nsm || schoolProfile.npsn}
-				<p class="text-xs text-slate-600">
+				<p class="text-xs text-muted-foreground">
 					{#if schoolProfile.nsm}NSM {schoolProfile.nsm}{/if}
 					{#if schoolProfile.nsm && schoolProfile.npsn} · {/if}
 					{#if schoolProfile.npsn}NPSN {schoolProfile.npsn}{/if}
@@ -168,9 +168,9 @@
 			{/if}
 		</section>
 
-		<section class="rounded-lg border border-emerald-200 bg-white p-6 shadow-sm">
-			<h2 class="text-xl font-semibold text-slate-900">{currentSession.title}</h2>
-			<div class="mt-3 grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+		<section class="rounded-lg border border-primary/20 bg-card p-6 shadow-sm">
+			<h2 class="text-xl font-semibold text-foreground">{currentSession.title}</h2>
+			<div class="mt-3 grid gap-2 text-sm text-foreground md:grid-cols-2">
 				<p><span class="font-medium">Paket:</span> {currentSession.package_title}</p>
 				<p><span class="font-medium">Kelas/Scope:</span> {currentSession.class_code || currentSession.scope_ref || currentSession.scope_type || '—'}</p>
 				<p><span class="font-medium">Mulai:</span> {fmtDt(currentSession.scheduled_start)}</p>
@@ -179,25 +179,25 @@
 		</section>
 
 		<section class="grid gap-4 md:grid-cols-3">
-			<div class="rounded-lg border border-emerald-200 bg-white p-5 shadow-sm">
-				<p class="text-sm text-slate-500">Total peserta</p>
-				<p class="mt-2 text-3xl font-bold text-emerald-950">{currentParticipants.length}</p>
+			<div class="rounded-lg border border-primary/20 bg-card p-5 shadow-sm">
+				<p class="text-sm text-muted-foreground">Total peserta</p>
+				<p class="mt-2 text-3xl font-bold text-primary">{currentParticipants.length}</p>
 			</div>
-			<div class="rounded-lg border border-emerald-200 bg-white p-5 shadow-sm">
-				<p class="text-sm text-slate-500">Sudah submit</p>
-				<p class="mt-2 text-3xl font-bold text-emerald-950">{currentParticipants.filter((p) => p.submitted_at).length}</p>
+			<div class="rounded-lg border border-primary/20 bg-card p-5 shadow-sm">
+				<p class="text-sm text-muted-foreground">Sudah submit</p>
+				<p class="mt-2 text-3xl font-bold text-primary">{currentParticipants.filter((p) => p.submitted_at).length}</p>
 			</div>
-			<div class="rounded-lg border border-emerald-200 bg-white p-5 shadow-sm">
-				<p class="text-sm text-slate-500">Ruangan aktif</p>
-				<p class="mt-2 text-3xl font-bold text-emerald-950">{currentRooms.length}</p>
+			<div class="rounded-lg border border-primary/20 bg-card p-5 shadow-sm">
+				<p class="text-sm text-muted-foreground">Ruangan aktif</p>
+				<p class="mt-2 text-3xl font-bold text-primary">{currentRooms.length}</p>
 			</div>
 		</section>
 
-		<section class="rounded-lg border border-emerald-200 bg-white p-6 shadow-sm">
-			<h3 class="text-lg font-semibold text-slate-900">Distribusi Ruangan</h3>
+		<section class="rounded-lg border border-primary/20 bg-card p-6 shadow-sm">
+			<h3 class="text-lg font-semibold text-foreground">Distribusi Ruangan</h3>
 			<div class="mt-4 overflow-x-auto">
 				<table class="min-w-full text-sm">
-					<thead class="bg-emerald-50 text-left text-slate-600">
+					<thead class="bg-primary/10 text-left text-muted-foreground">
 						<tr>
 							<th class="px-3 py-2">Ruangan</th>
 							<th class="px-3 py-2">Kapasitas</th>
@@ -217,11 +217,11 @@
 			</div>
 		</section>
 
-		<section class="rounded-lg border border-emerald-200 bg-white p-6 shadow-sm">
-			<h3 class="text-lg font-semibold text-slate-900">Daftar Hadir dan Token</h3>
+		<section class="rounded-lg border border-primary/20 bg-card p-6 shadow-sm">
+			<h3 class="text-lg font-semibold text-foreground">Daftar Hadir dan Token</h3>
 			<div class="mt-4 overflow-x-auto">
 				<table class="min-w-full text-sm">
-					<thead class="bg-emerald-50 text-left text-slate-600">
+					<thead class="bg-primary/10 text-left text-muted-foreground">
 						<tr>
 							<th class="px-3 py-2">NIS</th>
 							<th class="px-3 py-2">Nama</th>
@@ -247,11 +247,11 @@
 			</div>
 		</section>
 
-		<section class="grid gap-8 rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-700 md:grid-cols-2">
+		<section class="grid gap-8 rounded-lg border border-border bg-card p-6 text-sm text-foreground md:grid-cols-2">
 			<div class="text-center">
 				<p>Mengetahui,</p>
 				<p>Kepala Madrasah</p>
-				<div class="mt-16 border-t border-slate-700 pt-2">
+				<div class="mt-16 border-t border-foreground pt-2">
 					<p class="font-semibold">{schoolProfile.head_name || '........................................'}</p>
 					<p>NIP. {schoolProfile.head_nip || '................................'}</p>
 				</div>
@@ -259,7 +259,7 @@
 			<div class="text-center">
 				<p>Pengawas Ruang,</p>
 				<p>{currentSession.class_code || currentSession.scope_ref || '................................'}</p>
-				<div class="mt-16 border-t border-slate-700 pt-2">
+				<div class="mt-16 border-t border-foreground pt-2">
 					<p class="font-semibold">........................................</p>
 					<p>NIP. ................................</p>
 				</div>

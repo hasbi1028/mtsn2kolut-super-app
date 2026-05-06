@@ -166,7 +166,7 @@
 
 <div class="tiptap-editor-wrapper overflow-hidden rounded-md border border-input bg-background">
 	<!-- Toolbar -->
-	<div class="flex flex-wrap items-center gap-0.5 border-b bg-slate-50 px-2 py-1">
+	<div class="flex flex-wrap items-center gap-0.5 border-b bg-muted/50 px-2 py-1">
 		<!-- History -->
 		<button
 			type="button"
@@ -299,13 +299,13 @@
 			>A<span class="ml-0.5 inline-block h-1.5 w-4 rounded-sm bg-current"></span></button>
 			{#if showColorPicker}
 				<div
-					class="absolute left-0 top-full z-20 mt-1 flex flex-wrap gap-1 rounded-md border bg-white p-2 shadow-lg"
+					class="absolute left-0 top-full z-20 mt-1 flex flex-wrap gap-1 rounded-md border bg-card p-2 shadow-lg"
 					style="width:130px"
 				>
 					{#each colors as color (color)}
 						<button
 							type="button"
-							class="h-5 w-5 rounded border border-slate-200"
+							class="h-5 w-5 rounded border border-border"
 							style="background:{color}"
 							title={color}
 							aria-label={`Pilih warna ${color}`}
@@ -317,7 +317,7 @@
 					{/each}
 					<button
 						type="button"
-						class="mt-1 w-full rounded border border-slate-200 px-1 py-0.5 text-xs text-slate-600 hover:bg-slate-100"
+						class="mt-1 w-full rounded border border-border px-1 py-0.5 text-xs text-muted-foreground hover:bg-muted"
 						onclick={() => {
 							editor?.chain().focus().unsetColor().run();
 							showColorPicker = false;
@@ -389,28 +389,28 @@
 		onclick={(e) => { if (e.target === e.currentTarget) showMathDialog = false; }}
 		onkeydown={(e) => { if (e.key === 'Escape') showMathDialog = false; }}
 	>
-		<div class="w-full max-w-md rounded-xl border bg-white p-5 shadow-xl">
-			<h3 class="mb-3 text-sm font-semibold text-slate-900">
+		<div class="w-full max-w-md rounded-xl border bg-card p-5 shadow-xl">
+			<h3 class="mb-3 text-sm font-semibold text-foreground">
 				Masukkan LaTeX — {mathMode === 'inline' ? 'Inline (dalam kalimat)' : 'Blok (baris sendiri)'}
 			</h3>
 			<textarea
-				class="block w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+				class="block w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring"
 				rows={3}
 				placeholder={mathMode === 'inline' ? 'x^2 + 5x + 6 = 0' : '\\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}'}
 				bind:value={mathInput}
 				onkeydown={(e) => { if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); insertMath(); } }}
 			></textarea>
-			<p class="mt-1 text-xs text-slate-500">Tekan Ctrl+Enter untuk sisipkan. Gunakan sintaks LaTeX standar.</p>
+			<p class="mt-1 text-xs text-muted-foreground">Tekan Ctrl+Enter untuk sisipkan. Gunakan sintaks LaTeX standar.</p>
 			<div class="mt-3 flex gap-2">
 				<button
 					type="button"
 					onclick={insertMath}
-					class="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+					class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
 				>Sisipkan</button>
 				<button
 					type="button"
 					onclick={() => (showMathDialog = false)}
-					class="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+					class="rounded-md border border-border px-4 py-2 text-sm text-foreground hover:bg-muted/50"
 				>Batal</button>
 			</div>
 		</div>
@@ -426,7 +426,7 @@
 	:global(.tiptap-content .ProseMirror p.is-editor-empty:first-child::before) {
 		content: attr(data-placeholder);
 		float: left;
-		color: #94a3b8;
+		color: var(--muted-foreground);
 		pointer-events: none;
 		height: 0;
 	}
@@ -446,13 +446,13 @@
 
 	/* Table */
 	:global(.tiptap-content table) { border-collapse: collapse; width: 100%; margin: 0.5rem 0; }
-	:global(.tiptap-content td, .tiptap-content th) { border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 0.875rem; }
-	:global(.tiptap-content th) { background: #f8fafc; font-weight: 600; }
-	:global(.tiptap-content .selectedCell) { background: #dbeafe; }
+	:global(.tiptap-content td, .tiptap-content th) { border: 1px solid var(--border); padding: 6px 10px; font-size: 0.875rem; }
+	:global(.tiptap-content th) { background: var(--muted); font-weight: 600; }
+	:global(.tiptap-content .selectedCell) { background: var(--accent); }
 
 	/* Image */
 	:global(.tiptap-content img) { max-width: 100%; border-radius: 4px; margin: 4px 0; }
-	:global(.tiptap-content img.ProseMirror-selectednode) { outline: 2px solid #059669; }
+	:global(.tiptap-content img.ProseMirror-selectednode) { outline: 2px solid var(--ring); }
 
 	/* Math */
 	:global(.tiptap-content .math-inline, .tiptap-content .math-node) {
@@ -463,15 +463,15 @@
 		padding: 0 2px;
 	}
 	:global(.tiptap-content .math-inline:hover, .tiptap-content .math-node:hover) {
-		background: #ecfdf5;
-		outline: 1px solid #6ee7b7;
+		background: var(--accent);
+		outline: 1px solid var(--ring);
 	}
 	:global(.tiptap-content .math-block) {
 		display: block;
 		text-align: center;
 		margin: 0.75rem 0;
 		padding: 0.5rem;
-		background: #f8fafc;
+		background: var(--muted);
 		border-radius: 4px;
 		overflow-x: auto;
 	}
@@ -481,11 +481,11 @@
 		padding: 3px 7px;
 		border-radius: 4px;
 		font-size: 0.8rem;
-		color: #374151;
+		color: var(--foreground);
 		line-height: 1.4;
 		white-space: nowrap;
 	}
-	:global(.toolbar-btn:hover) { background: #e2e8f0; }
-	:global(.toolbar-btn.active) { background: #d1fae5; color: #065f46; }
-	:global(.divider) { width: 1px; height: 1rem; background: #cbd5e1; margin: 0 2px; }
+	:global(.toolbar-btn:hover) { background: var(--muted); }
+	:global(.toolbar-btn.active) { background: var(--primary); color: var(--primary-foreground); }
+	:global(.divider) { width: 1px; height: 1rem; background: var(--border); margin: 0 2px; }
 </style>

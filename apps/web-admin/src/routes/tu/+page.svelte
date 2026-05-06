@@ -182,8 +182,8 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 		<div>
-			<h1 class="text-lg font-semibold text-slate-800">Dashboard Tata Usaha</h1>
-			<p class="text-sm text-slate-500">Kontrol harian surat, disposisi, arsip, inventaris, dan bukti kerja madrasah.</p>
+			<h1 class="text-lg font-semibold text-foreground">Dashboard Tata Usaha</h1>
+			<p class="text-sm text-muted-foreground">Kontrol harian surat, disposisi, arsip, inventaris, dan bukti kerja madrasah.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button href={`${resolve('/document-cycles')}?domain_area=tu`} variant="outline" size="sm">
@@ -209,7 +209,7 @@
 		{#snippet pending()}
 			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 				{#each Array.from({ length: 8 }) as _, index (`tu-dashboard-stat-skeleton-${index}`)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4">
 							<Skeleton class="h-4 w-28" />
 							<Skeleton class="mt-3 h-8 w-16" />
@@ -219,14 +219,14 @@
 				{/each}
 			</div>
 			<div class="grid gap-6 xl:grid-cols-[1fr_360px]">
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="space-y-3 p-4">
 						{#each Array.from({ length: 6 }) as _, index (`tu-dashboard-main-skeleton-${index}`)}
 							<Skeleton class="h-10 w-full" />
 						{/each}
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="space-y-3 p-4">
 						{#each Array.from({ length: 5 }) as _, index (`tu-dashboard-side-skeleton-${index}`)}
 							<Skeleton class="h-10 w-full" />
@@ -259,17 +259,17 @@
 					{ label: 'RKT Terkendala', value: workPlan.blocked, detail: `${formatCurrency(workPlan.realization)} realisasi`, href: '/governance', icon: AlertTriangleIcon },
 				] as item (item.label)}
 					{@const Icon = item.icon}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4">
 							<div class="flex items-start justify-between gap-3">
 								<div>
-									<p class="text-xs text-slate-500">{item.label}</p>
-									<p class="mt-2 text-2xl font-semibold text-slate-900">{item.value}</p>
-									<p class="mt-1 text-xs text-slate-500">{item.detail}</p>
+									<p class="text-xs text-muted-foreground">{item.label}</p>
+									<p class="mt-2 text-2xl font-semibold text-foreground">{item.value}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{item.detail}</p>
 								</div>
-								<Icon class="size-5 text-emerald-700" />
+								<Icon class="size-5 text-primary" />
 							</div>
-							<Button href={item.href} variant="ghost" size="sm" class="mt-3 px-0 text-emerald-700">Buka modul</Button>
+							<Button href={item.href} variant="ghost" size="sm" class="mt-3 px-0 text-primary">Buka modul</Button>
 						</Card.Content>
 					</Card.Root>
 				{/each}
@@ -277,7 +277,7 @@
 
 			<div class="grid gap-6 xl:grid-cols-[1fr_380px]">
 				<div class="space-y-6">
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<Card.Title class="text-base">Register Terbaru</Card.Title>
 							<Card.Description>Aktivitas administrasi yang paling baru masuk lintas modul TU.</Card.Description>
@@ -301,10 +301,10 @@
 											...latestByDate(data.archiveDocuments, (item) => item.received_date, 4).map((item) => ({ key: `archive-${item.id}`, type: 'Arsip', title: item.title, meta: archiveMeta(item), date: item.received_date, status: item.status })),
 										].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10) as row (row.key)}
 											<Table.Row>
-												<Table.Cell class="whitespace-nowrap text-sm text-slate-600">{row.type}</Table.Cell>
+												<Table.Cell class="whitespace-nowrap text-sm text-muted-foreground">{row.type}</Table.Cell>
 												<Table.Cell>
-													<p class="text-sm font-medium text-slate-900">{row.title}</p>
-													<p class="text-xs text-slate-500">{row.meta}</p>
+													<p class="text-sm font-medium text-foreground">{row.title}</p>
+													<p class="text-xs text-muted-foreground">{row.meta}</p>
 												</Table.Cell>
 												<Table.Cell class="whitespace-nowrap text-sm">{formatDate(row.date)}</Table.Cell>
 												<Table.Cell><Badge variant={statusVariant(row.status)}>{statusLabel(row.status)}</Badge></Table.Cell>
@@ -316,7 +316,7 @@
 						</Card.Content>
 					</Card.Root>
 
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<Card.Title class="text-base">RKT/RKJM dan Anggaran</Card.Title>
 							<Card.Description>Kontrol bukti program yang perlu terlihat saat audit administrasi.</Card.Description>
@@ -336,18 +336,18 @@
 										{#each latestByDate(data.workPlanItems, (item) => item.end_date || item.start_date, 8) as item (item.id)}
 											<Table.Row>
 												<Table.Cell>
-													<p class="text-sm font-medium text-slate-900">{item.activity_code} - {item.activity_name}</p>
-													<p class="text-xs text-slate-500">{item.program_code} - {item.program_name}</p>
+													<p class="text-sm font-medium text-foreground">{item.activity_code} - {item.activity_name}</p>
+													<p class="text-xs text-muted-foreground">{item.program_code} - {item.program_name}</p>
 												</Table.Cell>
 												<Table.Cell class="text-sm">{item.responsible_employee_name || item.owner_unit_name || '-'}</Table.Cell>
 												<Table.Cell>
 													<p class="text-sm">{formatCurrency(item.budget_amount)}</p>
-													<p class="text-xs text-slate-500">Realisasi {formatCurrency(item.realization_amount)}</p>
+													<p class="text-xs text-muted-foreground">Realisasi {formatCurrency(item.realization_amount)}</p>
 												</Table.Cell>
 												<Table.Cell>
 													<div class="flex items-center gap-2">
-														<div class="h-2 w-20 rounded-full bg-slate-100"><div class="h-2 rounded-full bg-emerald-700" style={`width: ${item.progress_percent}%`}></div></div>
-														<span class="text-xs text-slate-600">{item.progress_percent}%</span>
+														<div class="h-2 w-20 rounded-full bg-muted"><div class="h-2 rounded-full bg-primary" style={`width: ${item.progress_percent}%`}></div></div>
+														<span class="text-xs text-muted-foreground">{item.progress_percent}%</span>
 													</div>
 													<Badge variant={statusVariant(item.status)}>{statusLabel(item.status)}</Badge>
 												</Table.Cell>
@@ -361,21 +361,21 @@
 				</div>
 
 				<div class="space-y-6">
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<Card.Title class="text-base">Perlu Perhatian</Card.Title>
 							<Card.Description>Daftar operasional yang belum selesai atau perlu tindak lanjut.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-3">
 							{#if attention.length === 0}
-								<div class="rounded-md border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Tidak ada perhatian utama dari data saat ini.</div>
+								<div class="rounded-md border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary">Tidak ada perhatian utama dari data saat ini.</div>
 							{:else}
 								{#each attention as item (item.key)}
-										<a href={resolve(item.href)} class="block rounded-md border border-slate-200 px-4 py-3 hover:bg-slate-50">
+										<a href={resolve(item.href)} class="block rounded-md border border-border px-4 py-3 hover:bg-muted/50">
 										<div class="flex items-start justify-between gap-3">
 											<div>
-												<p class="text-sm font-medium text-slate-900">{item.title}</p>
-												<p class="mt-1 text-xs text-slate-500">{item.meta}</p>
+												<p class="text-sm font-medium text-foreground">{item.title}</p>
+												<p class="mt-1 text-xs text-muted-foreground">{item.meta}</p>
 											</div>
 											<Badge variant={item.level === 'danger' ? 'destructive' : 'secondary'}>{item.level === 'danger' ? 'Prioritas' : 'Pantau'}</Badge>
 										</div>
@@ -385,20 +385,20 @@
 						</Card.Content>
 					</Card.Root>
 
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<Card.Title class="text-base">Inventaris dan Arsip</Card.Title>
 							<Card.Description>Barang dan dokumen yang mendukung kesiapan administrasi.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-4">
 							<div>
-								<p class="text-xs font-medium text-slate-500">Inventaris Perhatian</p>
+								<p class="text-xs font-medium text-muted-foreground">Inventaris Perhatian</p>
 								<div class="mt-2 space-y-2">
 									{#each data.inventoryItems.filter(isInventoryAttention).slice(0, 5) as item (item.id)}
-										<div class="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2">
+										<div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
 											<div>
-												<p class="text-sm font-medium text-slate-900">{item.nama}</p>
-												<p class="text-xs text-slate-500">{item.lokasi || 'Lokasi belum diisi'} - {item.jumlah_baik}/{item.jumlah_total} {item.satuan}</p>
+												<p class="text-sm font-medium text-foreground">{item.nama}</p>
+												<p class="text-xs text-muted-foreground">{item.lokasi || 'Lokasi belum diisi'} - {item.jumlah_baik}/{item.jumlah_total} {item.satuan}</p>
 											</div>
 											<Badge variant={item.kondisi === 'rusak' ? 'destructive' : 'outline'}>{inventoryAttentionLabel(item)}</Badge>
 										</div>
@@ -406,12 +406,12 @@
 								</div>
 							</div>
 							<div>
-								<p class="text-xs font-medium text-slate-500">Arsip Retensi Dekat</p>
+								<p class="text-xs font-medium text-muted-foreground">Arsip Retensi Dekat</p>
 								<div class="mt-2 space-y-2">
 									{#each data.archiveDocuments.filter((item) => isArchiveRetentionAttention(item)).slice(0, 5) as item (item.id)}
-										<div class="rounded-md border border-slate-200 px-3 py-2">
-											<p class="text-sm font-medium text-slate-900">{item.title}</p>
-											<p class="text-xs text-slate-500">{item.category_code} - retensi {formatDate(item.retention_until)}</p>
+										<div class="rounded-md border border-border px-3 py-2">
+											<p class="text-sm font-medium text-foreground">{item.title}</p>
+											<p class="text-xs text-muted-foreground">{item.category_code} - retensi {formatDate(item.retention_until)}</p>
 										</div>
 									{/each}
 								</div>

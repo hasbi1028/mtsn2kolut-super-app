@@ -176,7 +176,7 @@
       </div>
       <div class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
         <div>
-          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Filter Unit Kerja</p>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Filter Unit Kerja</p>
           <select bind:value={filterUnitKerja} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
             <option value="">Semua unit</option>
             {#each unitKerjaOptions as unit (unit)}
@@ -185,7 +185,7 @@
           </select>
         </div>
         <div>
-          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status Kepegawaian</p>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Status Kepegawaian</p>
           <select bind:value={filterEmploymentType} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
             <option value="">Semua status</option>
             <option value="pns">PNS</option>
@@ -226,14 +226,14 @@
               <div class="font-mono text-xs text-muted-foreground">{e.nip}</div>
               <div class="mt-1">
                 {#if e.is_active}
-                  <Badge variant="outline" class="text-[11px] border-emerald-300 text-emerald-700">Aktif</Badge>
+                  <Badge variant="outline" class="text-[11px] border-primary/20 text-primary">Aktif</Badge>
                 {:else}
                   <Badge variant="secondary" class="text-[11px]">Nonaktif</Badge>
                 {/if}
               </div>
             </Table.Cell>
             <Table.Cell class="hidden md:table-cell text-sm text-muted-foreground">{e.unit_kerja || '—'}</Table.Cell>
-            <Table.Cell class="text-sm text-slate-600">{formatBirthDate(e.tanggal_lahir)}</Table.Cell>
+            <Table.Cell class="text-sm text-muted-foreground">{formatBirthDate(e.tanggal_lahir)}</Table.Cell>
             <Table.Cell>
               <Badge variant="outline">{employmentLabel(e.employment_type)}</Badge>
             </Table.Cell>
@@ -241,7 +241,7 @@
               {#if e.pusaka_eligible}
                 {#if e.has_pusaka_account}
                   {#if e.pusaka_is_enabled}
-                    <Badge variant="outline" class="border-emerald-300 text-emerald-700">Terkonfigurasi & aktif</Badge>
+                    <Badge variant="outline" class="border-primary/20 text-primary">Terkonfigurasi & aktif</Badge>
                   {:else}
                     <Badge variant="secondary">Terkonfigurasi, dinonaktifkan</Badge>
                   {/if}
@@ -255,7 +255,7 @@
             <Table.Cell class="text-right">
               {#if confirmId === e.id}
                 <div class="flex flex-wrap items-center justify-end gap-2">
-                  <span class="text-xs text-amber-700">Hapus pegawai ini?</span>
+                  <span class="text-xs text-warning">Hapus pegawai ini?</span>
                   <LoadingButton size="sm" variant="destructive" onclick={() => doDelete(e.id)} loading={busyId === e.id} loadingLabel="Menghapus..." disabled={busyId === e.id}>
                     Ya, Hapus
                   </LoadingButton>
@@ -302,30 +302,30 @@
   <Dialog.Content>
     <div class="space-y-4">
       <div>
-        <h2 class="text-base font-semibold text-slate-900">Edit Pegawai</h2>
-        <p class="mt-1 text-sm text-slate-500">Perbarui data umum pegawai tanpa masuk ke area operasional PUSAKA.</p>
+        <h2 class="text-base font-semibold text-foreground">Edit Pegawai</h2>
+        <p class="mt-1 text-sm text-muted-foreground">Perbarui data umum pegawai tanpa masuk ke area operasional PUSAKA.</p>
       </div>
 
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
-          <label for="edit-nip" class="mb-1 block text-xs font-medium text-slate-600">NIP</label>
+          <label for="edit-nip" class="mb-1 block text-xs font-medium text-muted-foreground">NIP</label>
           <input id="edit-nip" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.nip} />
         </div>
         <div>
-          <label for="edit-nama" class="mb-1 block text-xs font-medium text-slate-600">Nama</label>
+          <label for="edit-nama" class="mb-1 block text-xs font-medium text-muted-foreground">Nama</label>
           <input id="edit-nama" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.nama} />
         </div>
         <div>
-          <label for="edit-unit" class="mb-1 block text-xs font-medium text-slate-600">Unit Kerja</label>
+          <label for="edit-unit" class="mb-1 block text-xs font-medium text-muted-foreground">Unit Kerja</label>
           <input id="edit-unit" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.unit_kerja} />
         </div>
         <div>
-          <label for="edit-tanggal-lahir" class="mb-1 block text-xs font-medium text-slate-600">Tanggal Lahir</label>
+          <label for="edit-tanggal-lahir" class="mb-1 block text-xs font-medium text-muted-foreground">Tanggal Lahir</label>
           <input id="edit-tanggal-lahir" type="date" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.tanggal_lahir} />
-          <p class="mt-1 text-[11px] text-slate-500">Dipakai untuk generate akun otomatis.</p>
+          <p class="mt-1 text-[11px] text-muted-foreground">Dipakai untuk generate akun otomatis.</p>
         </div>
         <div>
-          <label for="edit-type" class="mb-1 block text-xs font-medium text-slate-600">Status Kepegawaian</label>
+          <label for="edit-type" class="mb-1 block text-xs font-medium text-muted-foreground">Status Kepegawaian</label>
           <select id="edit-type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.employment_type}>
             <option value="pns">PNS</option>
             <option value="pppk">PPPK</option>
@@ -335,7 +335,7 @@
         </div>
       </div>
 
-      <label class="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700">
+      <label class="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground">
         <input type="checkbox" bind:checked={editForm.is_active} />
         Pegawai aktif
       </label>

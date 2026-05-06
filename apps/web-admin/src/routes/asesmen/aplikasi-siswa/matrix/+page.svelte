@@ -69,9 +69,9 @@
 	];
 
 	function badgeClass(value: string) {
-		if (value === 'Lulus') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-		if (value === 'Perlu perhatian') return 'border-amber-200 bg-amber-50 text-amber-700';
-		return 'border-rose-200 bg-rose-50 text-rose-700';
+		if (value === 'Lulus') return 'border-primary/20 bg-primary/10 text-primary';
+		if (value === 'Perlu perhatian') return 'border-warning/30 bg-warning/10 text-warning';
+		return 'border-destructive/30 bg-destructive/10 text-destructive';
 	}
 </script>
 
@@ -80,12 +80,12 @@
 </svelte:head>
 
 <div class="space-y-6">
-	<section class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-6 shadow-sm">
+	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Perangkat & Kesiapan · Monitoring</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-slate-900">Perbandingan Perangkat BYOD</h1>
-				<p class="max-w-2xl text-sm leading-6 text-slate-600">
+				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Perangkat & Kesiapan · Monitoring</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Perbandingan Perangkat BYOD</h1>
+				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
 					Bagian pendukung setelah monitoring hari-H. Gunakan untuk membaca kesiapan perangkat siswa:
 					install, login, restore, media, koneksi, dan submit.
 				</p>
@@ -98,33 +98,33 @@
 		</div>
 	</section>
 
-	<Card.Root class="border-emerald-200 bg-emerald-50/60 shadow-sm">
+	<Card.Root class="border-primary/20 bg-primary/10 shadow-sm">
 		<Card.Content class="grid gap-4 pt-6 md:grid-cols-3">
 			<div>
-				<p class="text-sm font-semibold text-emerald-950">Pantau Ujian</p>
-				<p class="mt-1 text-sm leading-6 text-slate-600">Untuk hari-H, mulai dari Monitoring, sesi hari ini, atau dashboard ruang.</p>
+				<p class="text-sm font-semibold text-primary">Pantau Ujian</p>
+				<p class="mt-1 text-sm leading-6 text-muted-foreground">Untuk hari-H, mulai dari Monitoring, sesi hari ini, atau dashboard ruang.</p>
 			</div>
 			<div>
-				<p class="text-sm font-semibold text-emerald-950">Panduan BYOD</p>
-				<p class="mt-1 text-sm leading-6 text-slate-600">Status guide dan checklist submit tetap berada di halaman Monitoring.</p>
+				<p class="text-sm font-semibold text-primary">Panduan BYOD</p>
+				<p class="mt-1 text-sm leading-6 text-muted-foreground">Status guide dan checklist submit tetap berada di halaman Monitoring.</p>
 			</div>
 			<div>
-				<p class="text-sm font-semibold text-emerald-950">Perangkat & Kesiapan</p>
-				<p class="mt-1 text-sm leading-6 text-slate-600">Halaman ini hanya untuk pembanding perangkat dan catatan kesiapan teknis.</p>
+				<p class="text-sm font-semibold text-primary">Perangkat & Kesiapan</p>
+				<p class="mt-1 text-sm leading-6 text-muted-foreground">Halaman ini hanya untuk pembanding perangkat dan catatan kesiapan teknis.</p>
 			</div>
 		</Card.Content>
 	</Card.Root>
 
 	<div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-		<Card.Root class="border-slate-200 shadow-sm">
+		<Card.Root class="border-border shadow-sm">
 			<Card.Header>
-				<Card.Title class="text-lg text-slate-900">Template Contoh Matriks Perangkat</Card.Title>
+				<Card.Title class="text-lg text-foreground">Template Contoh Matriks Perangkat</Card.Title>
 				<Card.Description>
 					Baris di bawah adalah contoh/template, bukan hasil sertifikasi perangkat resmi sekolah.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-4">
-				<div class="overflow-x-auto rounded-2xl border border-slate-200">
+				<div class="overflow-x-auto rounded-2xl border border-border">
 					<Table.Root>
 						<Table.Header>
 							<Table.Row>
@@ -144,7 +144,7 @@
 						<Table.Body>
 							{#each templateRows as row (row.vendor + row.model)}
 								<Table.Row>
-									<Table.Cell class="font-medium text-slate-900">{row.vendor}</Table.Cell>
+									<Table.Cell class="font-medium text-foreground">{row.vendor}</Table.Cell>
 									<Table.Cell>{row.model}</Table.Cell>
 									<Table.Cell>{row.android}</Table.Cell>
 									<Table.Cell>{row.ram}</Table.Cell>
@@ -154,13 +154,13 @@
 									<Table.Cell><Badge class={badgeClass(row.restore)}>{row.restore}</Badge></Table.Cell>
 									<Table.Cell><Badge class={badgeClass(row.audio)}>{row.audio}</Badge></Table.Cell>
 									<Table.Cell><Badge class={badgeClass(row.submit)}>{row.submit}</Badge></Table.Cell>
-									<Table.Cell class="min-w-56 text-sm text-slate-600">{row.note}</Table.Cell>
+									<Table.Cell class="min-w-56 text-sm text-muted-foreground">{row.note}</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>
 					</Table.Root>
 				</div>
-				<p class="text-xs leading-5 text-slate-500">
+				<p class="text-xs leading-5 text-muted-foreground">
 					Format sumber resminya tetap ada di <span class="font-mono">apps/mobile/DEVICE_TEST_MATRIX.md</span>.
 					Halaman ini disediakan agar pengawas dan operator bisa membaca struktur penilaian tanpa keluar dari web admin.
 				</p>
@@ -168,9 +168,9 @@
 		</Card.Root>
 
 		<div class="space-y-6">
-			<Card.Root class="border-slate-200 shadow-sm">
+			<Card.Root class="border-border shadow-sm">
 				<Card.Header>
-					<Card.Title class="text-lg text-slate-900">Fokus Uji Minimal</Card.Title>
+					<Card.Title class="text-lg text-foreground">Fokus Uji Minimal</Card.Title>
 					<Card.Description>
 						Lima poin ini yang paling penting saat membandingkan perangkat siswa sebelum masuk uji yang lebih besar.
 					</Card.Description>
@@ -178,8 +178,8 @@
 				<Card.Content>
 					<ul class="space-y-3">
 						{#each focusChecks as item (item)}
-							<li class="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
-								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700">UJI</span>
+							<li class="flex gap-3 rounded-2xl border border-border bg-muted/50 px-4 py-3 text-sm leading-6 text-foreground">
+								<span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">UJI</span>
 								<span>{item}</span>
 							</li>
 						{/each}
@@ -187,29 +187,29 @@
 				</Card.Content>
 			</Card.Root>
 
-			<Card.Root class="border-slate-200 shadow-sm">
+			<Card.Root class="border-border shadow-sm">
 				<Card.Header>
-					<Card.Title class="text-lg text-slate-900">Interpretasi Hasil</Card.Title>
+					<Card.Title class="text-lg text-foreground">Interpretasi Hasil</Card.Title>
 					<Card.Description>
 						Gunakan klasifikasi ini agar keputusan perangkat yang layak dipakai tetap konsisten antar operator.
 					</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-4">
-					<div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-						<p class="text-sm font-semibold text-emerald-800">Layak dipakai produksi awal</p>
-						<p class="mt-2 text-sm leading-6 text-emerald-900/80">
+					<div class="rounded-2xl border border-primary/20 bg-primary/10 p-4">
+						<p class="text-sm font-semibold text-primary">Layak dipakai produksi awal</p>
+						<p class="mt-2 text-sm leading-6 text-primary/80">
 							Fungsi inti lulus, restore stabil, submit sehat, dan perangkat tidak sering masuk status Menurun.
 						</p>
 					</div>
-					<div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-						<p class="text-sm font-semibold text-amber-800">Layak dengan catatan</p>
-						<p class="mt-2 text-sm leading-6 text-amber-900/80">
+					<div class="rounded-2xl border border-warning/30 bg-warning/10 p-4">
+						<p class="text-sm font-semibold text-warning">Layak dengan catatan</p>
+						<p class="mt-2 text-sm leading-6 text-warning/80">
 							Fungsi inti jalan, tetapi ada issue minor seperti audio lambat atau perlu refresh manual sesekali.
 						</p>
 					</div>
-					<div class="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-						<p class="text-sm font-semibold text-rose-800">Tidak direkomendasikan</p>
-						<p class="mt-2 text-sm leading-6 text-rose-900/80">
+					<div class="rounded-2xl border border-destructive/30 bg-destructive/10 p-4">
+						<p class="text-sm font-semibold text-destructive">Tidak direkomendasikan</p>
+						<p class="mt-2 text-sm leading-6 text-destructive/80">
 							Login, restore, atau submit sering gagal walau perangkat lain pada jaringan yang sama berjalan baik.
 						</p>
 					</div>

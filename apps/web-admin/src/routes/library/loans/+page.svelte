@@ -284,8 +284,8 @@
 <div class="space-y-4">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Peminjaman Buku</h1>
-			<p class="text-sm text-slate-500">Kelola sirkulasi buku, pengembalian, dan status denda anggota perpustakaan.</p>
+			<h1 class="text-2xl font-semibold text-foreground">Peminjaman Buku</h1>
+			<p class="text-sm text-muted-foreground">Kelola sirkulasi buku, pengembalian, dan status denda anggota perpustakaan.</p>
 		</div>
 		<Button onclick={() => { resetLoanForm(); showLoanDialog = true; }} size="sm">+ Pinjam Buku</Button>
 	</div>
@@ -294,8 +294,8 @@
 		{#snippet pending()}
 			<div class="grid gap-3 md:grid-cols-3">
 				{#each ['Pinjaman Aktif', 'Terlambat', 'Buku Siap Pinjam'] as label (label)}
-					<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+					<div class="rounded-2xl border border-border bg-muted/50 px-4 py-4">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
 						<Skeleton class="mt-3 h-8 w-16" />
 						<Skeleton class="mt-2 h-4 w-52" />
 					</div>
@@ -314,31 +314,31 @@
 		{#snippet children(value)}
 			{@const overview = value as LoansOverview}
 			<div class="grid gap-3 md:grid-cols-3">
-				<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Pinjaman Aktif</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.loans.filter((item) => item.status === 'active').length}</p>
-					<p class="text-sm text-slate-600">transaksi yang masih berjalan saat ini</p>
+				<div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Pinjaman Aktif</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.loans.filter((item) => item.status === 'active').length}</p>
+					<p class="text-sm text-muted-foreground">transaksi yang masih berjalan saat ini</p>
 				</div>
-				<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Terlambat</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.loans.filter((item) => item.is_overdue && item.status === 'active').length}</p>
-					<p class="text-sm text-slate-600">pinjaman aktif yang melewati jatuh tempo</p>
+				<div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Terlambat</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.loans.filter((item) => item.is_overdue && item.status === 'active').length}</p>
+					<p class="text-sm text-muted-foreground">pinjaman aktif yang melewati jatuh tempo</p>
 				</div>
-				<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Buku Siap Pinjam</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.books.filter((item) => item.tersedia > 0).length}</p>
-					<p class="text-sm text-slate-600">judul yang masih punya stok untuk dipinjam</p>
+				<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Buku Siap Pinjam</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.books.filter((item) => item.tersedia > 0).length}</p>
+					<p class="text-sm text-muted-foreground">judul yang masih punya stok untuk dipinjam</p>
 				</div>
 			</div>
 		{/snippet}
 	</AsyncContent>
 
-	<Card.Root class="border-slate-200 shadow-sm">
+	<Card.Root class="border-border shadow-sm">
 		<Card.Content class="p-2">
 			<div class="flex flex-wrap gap-1">
 				{#each [['active', 'Aktif'], ['', 'Semua'], ['returned', 'Dikembalikan']] as [val, label] (val)}
 					<button
-						class="rounded-full px-4 py-2 text-sm font-medium transition-colors {tabStatus === val ? 'bg-emerald-700 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'}"
+						class="rounded-full px-4 py-2 text-sm font-medium transition-colors {tabStatus === val ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
 						onclick={() => (tabStatus = val as 'active' | 'returned' | '')}
 					>{label}</button>
 				{/each}
@@ -346,7 +346,7 @@
 		</Card.Content>
 	</Card.Root>
 
-	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+	<Card.Root class="overflow-hidden border-border shadow-sm">
 		<Card.Content class="p-0">
 			<AsyncContent promise={loansPromise} onerror={handleLoansRenderError}>
 				{#snippet pending()}
@@ -393,7 +393,7 @@
 					{:else}
 						<Table.Root>
 							<Table.Header>
-								<Table.Row class="bg-slate-50 text-xs">
+								<Table.Row class="bg-muted/50 text-xs">
 									<Table.Head>Buku</Table.Head>
 									<Table.Head>Anggota</Table.Head>
 									<Table.Head>Dipinjam</Table.Head>
@@ -408,15 +408,15 @@
 									<Table.Row class="text-sm">
 										<Table.Cell>
 											<p class="font-medium max-w-[140px] truncate" title={loan.book_judul}>{loan.book_judul}</p>
-											<p class="text-xs text-slate-400 font-mono">{loan.book_kode}</p>
+											<p class="text-xs text-muted-foreground font-mono">{loan.book_kode}</p>
 										</Table.Cell>
 										<Table.Cell>
 											<p class="max-w-[120px] truncate" title={loan.member_nama}>{loan.member_nama}</p>
-											<p class="text-xs text-slate-400">{loan.member_nip_nis}</p>
+											<p class="text-xs text-muted-foreground">{loan.member_nip_nis}</p>
 										</Table.Cell>
-										<Table.Cell class="text-xs text-slate-600">{formatDate(loan.dipinjam_at)}</Table.Cell>
+										<Table.Cell class="text-xs text-muted-foreground">{formatDate(loan.dipinjam_at)}</Table.Cell>
 										<Table.Cell>
-											<span class={loan.is_overdue ? 'text-red-600 font-semibold' : 'text-slate-700'}>
+											<span class={loan.is_overdue ? 'text-destructive font-semibold' : 'text-foreground'}>
 												{formatDate(loan.jatuh_tempo)}
 											</span>
 										</Table.Cell>
@@ -426,19 +426,19 @@
 											{:else if loan.is_overdue}
 												<Badge variant="destructive" class="text-xs">Terlambat</Badge>
 											{:else}
-												<Badge class="bg-blue-100 text-blue-800 text-xs hover:bg-blue-100">Aktif</Badge>
+												<Badge class="bg-accent text-accent-foreground text-xs hover:bg-accent">Aktif</Badge>
 											{/if}
 										</Table.Cell>
 										<Table.Cell class="text-xs">
 											{#if loan.denda_total > 0}
-												<span class={loan.denda_lunas ? 'text-slate-400 line-through' : 'text-orange-600 font-medium'}>
+												<span class={loan.denda_lunas ? 'text-muted-foreground line-through' : 'text-warning font-medium'}>
 													{formatRupiah(loan.denda_total)}
 												</span>
 												{#if loan.denda_lunas}
-													<span class="ml-1 text-green-600">✓</span>
+													<span class="ml-1 text-success">✓</span>
 												{/if}
 											{:else}
-												<span class="text-slate-400">-</span>
+												<span class="text-muted-foreground">-</span>
 											{/if}
 										</Table.Cell>
 										<Table.Cell class="text-right">
@@ -468,18 +468,18 @@
 			<Dialog.Title>Pinjam Buku</Dialog.Title>
 		</Dialog.Header>
 		<!-- Mode toggle -->
-		<div class="flex items-center gap-2 border-b border-slate-100 pb-3">
-			<span class="text-xs text-slate-500">Mode:</span>
+		<div class="flex items-center gap-2 border-b border-border pb-3">
+			<span class="text-xs text-muted-foreground">Mode:</span>
 			{#each [['beginner', 'Cepat'], ['advance', 'Lengkap']] as [val, label] (val)}
 				<button
-					class="rounded-full border px-3 py-1 text-xs transition-colors {loanFormMode === val ? 'bg-green-700 text-white border-green-700' : 'border-slate-300 text-slate-600 hover:border-slate-400'}"
+					class="rounded-full border px-3 py-1 text-xs transition-colors {loanFormMode === val ? 'bg-success text-background border-success' : 'border-border text-muted-foreground hover:border-border'}"
 					onclick={() => (loanFormMode = val as 'beginner' | 'advance')}
 				>{label}</button>
 			{/each}
 			{#if loanFormMode === 'beginner'}
-				<span class="text-xs text-slate-400">— 7 hari, langsung pinjam</span>
+				<span class="text-xs text-muted-foreground">— 7 hari, langsung pinjam</span>
 			{:else}
-				<span class="text-xs text-slate-400">— atur durasi & catatan</span>
+				<span class="text-xs text-muted-foreground">— atur durasi & catatan</span>
 			{/if}
 		</div>
 
@@ -490,7 +490,7 @@
 				<div class="flex gap-2">
 					{#each [['student', 'Siswa'], ['employee', 'Pegawai']] as [val, label] (val)}
 						<button
-							class="rounded-full border px-3 py-1 text-xs transition-colors {fMemberType === val ? 'bg-green-700 text-white border-green-700' : 'bg-white text-slate-600 border-slate-300'}"
+							class="rounded-full border px-3 py-1 text-xs transition-colors {fMemberType === val ? 'bg-success text-background border-success' : 'bg-card text-muted-foreground border-border'}"
 							onclick={() => { fMemberType = val as 'student' | 'employee'; fMemberId = ''; fMemberLabel = ''; fMemberSearch = ''; }}
 						>{label}</button>
 					{/each}
@@ -499,50 +499,50 @@
 
 			<!-- Member search -->
 			<div class="space-y-1">
-				<label for="m-search" class="block text-sm font-medium">Cari Anggota <span class="text-red-500">*</span></label>
+				<label for="m-search" class="block text-sm font-medium">Cari Anggota <span class="text-destructive">*</span></label>
 				<Input id="m-search" bind:value={fMemberSearch} placeholder={fMemberType === 'student' ? 'Nama atau NIS siswa…' : 'Nama atau NIP pegawai…'} />
 				{#if fMemberSearch && !fMemberId}
-					<div class="mt-1 rounded-md border border-slate-200 bg-white shadow-sm">
+					<div class="mt-1 rounded-md border border-border bg-card shadow-sm">
 						{#each (fMemberType === 'student' ? filteredStudents : filteredEmployees) as m (m.id)}
 							<button
-								class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 text-left"
+								class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 text-left"
 								onclick={() => selectMember(m.id, m.nama, (m as Student).nis ?? (m as Employee).nip)}
 							>
 								<span class="font-medium">{m.nama}</span>
-								<span class="text-xs text-slate-400">{(m as Student).nis ?? (m as Employee).nip}</span>
+								<span class="text-xs text-muted-foreground">{(m as Student).nis ?? (m as Employee).nip}</span>
 							</button>
 						{:else}
-							<p class="px-3 py-2 text-sm text-slate-400">Tidak ditemukan</p>
+							<p class="px-3 py-2 text-sm text-muted-foreground">Tidak ditemukan</p>
 						{/each}
 					</div>
 				{/if}
 				{#if fMemberId}
-					<p class="text-xs text-green-700">✓ {fMemberLabel}</p>
+					<p class="text-xs text-success">✓ {fMemberLabel}</p>
 				{/if}
 			</div>
 
 			<!-- Book search -->
 			<div class="space-y-1">
-				<label for="b-search" class="block text-sm font-medium">Cari Buku <span class="text-red-500">*</span></label>
+				<label for="b-search" class="block text-sm font-medium">Cari Buku <span class="text-destructive">*</span></label>
 				<Input id="b-search" bind:value={fBookSearch} placeholder="Judul atau kode buku (hanya yang tersedia)…" />
 				{#if fBookSearch && !fBookId}
-					<div class="mt-1 rounded-md border border-slate-200 bg-white shadow-sm">
+					<div class="mt-1 rounded-md border border-border bg-card shadow-sm">
 						{#each availableBooks as b (b.id)}
 							<button
-								class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 text-left"
+								class="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 text-left"
 								onclick={() => selectBook(b.id, b.kode, b.judul)}
 							>
-								<span class="font-mono text-xs text-slate-400">{b.kode}</span>
+								<span class="font-mono text-xs text-muted-foreground">{b.kode}</span>
 								<span class="font-medium">{b.judul}</span>
-								<span class="ml-auto text-xs text-green-700">{b.tersedia} tersedia</span>
+								<span class="ml-auto text-xs text-success">{b.tersedia} tersedia</span>
 							</button>
 						{:else}
-							<p class="px-3 py-2 text-sm text-slate-400">Tidak ditemukan atau stok habis</p>
+							<p class="px-3 py-2 text-sm text-muted-foreground">Tidak ditemukan atau stok habis</p>
 						{/each}
 					</div>
 				{/if}
 				{#if fBookId}
-					<p class="text-xs text-green-700">✓ {fBookLabel}</p>
+					<p class="text-xs text-success">✓ {fBookLabel}</p>
 				{/if}
 			</div>
 
@@ -551,10 +551,10 @@
 				<div class="space-y-1">
 					<label for="due-days" class="block text-sm font-medium">Durasi Pinjam (hari)</label>
 					<Input id="due-days" type="number" min="1" max="30" bind:value={fDueDays} />
-					<p class="text-xs text-slate-400">Maksimum 30 hari. Default: 7 hari.</p>
+					<p class="text-xs text-muted-foreground">Maksimum 30 hari. Default: 7 hari.</p>
 				</div>
 			{:else}
-				<p class="text-xs text-slate-500 bg-slate-50 rounded px-3 py-2">Durasi pinjam: <strong>7 hari</strong>. Pilih mode Lengkap untuk mengubah.</p>
+				<p class="text-xs text-muted-foreground bg-muted/50 rounded px-3 py-2">Durasi pinjam: <strong>7 hari</strong>. Pilih mode Lengkap untuk mengubah.</p>
 			{/if}
 		</div>
 		<Dialog.Footer>
@@ -573,17 +573,17 @@
 			<Dialog.Title>Konfirmasi Pengembalian</Dialog.Title>
 		</Dialog.Header>
 		{#if returnLoan}
-			<div class="space-y-2 text-sm text-slate-700">
+			<div class="space-y-2 text-sm text-foreground">
 				<p><span class="font-medium">Buku:</span> {returnLoan.book_judul}</p>
 				<p><span class="font-medium">Anggota:</span> {returnLoan.member_nama}</p>
 				<p><span class="font-medium">Jatuh Tempo:</span> {formatDate(returnLoan.jatuh_tempo)}</p>
 				{#if estimatedDenda > 0}
-					<div class="rounded-md bg-orange-50 border border-orange-200 p-3">
-						<p class="font-medium text-orange-700">Denda Keterlambatan</p>
-						<p class="text-orange-600 text-lg font-bold">{formatRupiah(estimatedDenda)}</p>
+					<div class="rounded-md bg-warning/10 border border-warning/30 p-3">
+						<p class="font-medium text-warning">Denda Keterlambatan</p>
+						<p class="text-warning text-lg font-bold">{formatRupiah(estimatedDenda)}</p>
 					</div>
 				{:else}
-					<p class="text-green-700">Pengembalian tepat waktu — tidak ada denda.</p>
+					<p class="text-success">Pengembalian tepat waktu — tidak ada denda.</p>
 				{/if}
 			</div>
 		{/if}

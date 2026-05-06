@@ -137,29 +137,29 @@
 
 <div class="space-y-6">
 
-	<div class="flex items-center gap-2 text-sm text-slate-500">
-		<a href={resolve('/pusaka')} class="hover:text-slate-700">PUSAKA</a>
+	<div class="flex items-center gap-2 text-sm text-muted-foreground">
+		<a href={resolve('/pusaka')} class="hover:text-foreground">PUSAKA</a>
 		<span>/</span>
-		<span class="text-slate-700 font-medium">Ringkasan Kehadiran</span>
+		<span class="text-foreground font-medium">Ringkasan Kehadiran</span>
 	</div>
 
 	<div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Ringkasan Kehadiran</h1>
-			<p class="text-sm text-slate-500 mt-1">Akumulasi kehadiran pegawai dari PUSAKA Kemenag dalam periode tertentu</p>
+			<h1 class="text-2xl font-semibold text-foreground">Ringkasan Kehadiran</h1>
+			<p class="text-sm text-muted-foreground mt-1">Akumulasi kehadiran pegawai dari PUSAKA Kemenag dalam periode tertentu</p>
 		</div>
 		<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_auto_auto] xl:items-end">
 			<div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-				<Input type="date" bind:value={startDate} class="h-10 min-w-0 bg-white" />
+				<Input type="date" bind:value={startDate} class="h-10 min-w-0 bg-card" />
 				<span class="text-center text-sm text-muted-foreground">s/d</span>
-				<Input type="date" bind:value={endDate} class="h-10 min-w-0 bg-white" />
+				<Input type="date" bind:value={endDate} class="h-10 min-w-0 bg-card" />
 			</div>
 			<LoadingButton class="h-10 w-full sm:w-auto" onclick={() => void load()} loading={refreshing} loadingLabel="Memuat..." label="Tampilkan" />
 			<LoadingButton class="h-10 w-full sm:w-auto" variant="outline" onclick={exportCSV} disabled={summary.length === 0} label="↓ CSV" />
 		</div>
 	</div>
 
-	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+	<Card.Root class="overflow-hidden border-border shadow-sm">
 		<Card.Content class="p-0">
 			<AsyncContent promise={summaryPromise} onerror={handleSummaryRenderError}>
 				{#snippet pending()}
@@ -187,13 +187,13 @@
 			<div class="hidden overflow-x-auto lg:block">
 			<Table.Root>
 				<Table.Header>
-					<Table.Row class="bg-slate-50">
+					<Table.Row class="bg-muted/50">
 						<Table.Head>Nama Pegawai</Table.Head>
 						<Table.Head>NIP</Table.Head>
 						<Table.Head class="text-center">Total Hari</Table.Head>
 						<Table.Head class="text-center">Lengkap</Table.Head>
-						<Table.Head class="text-center text-amber-600">Tanpa Pulang</Table.Head>
-						<Table.Head class="text-center text-red-600">Tanpa Masuk</Table.Head>
+						<Table.Head class="text-center text-warning">Tanpa Pulang</Table.Head>
+						<Table.Head class="text-center text-destructive">Tanpa Masuk</Table.Head>
 						<Table.Head class="text-center">% Kehadiran</Table.Head>
 					</Table.Row>
 				</Table.Header>
@@ -202,18 +202,18 @@
 						{@const percent = r.total_days > 0 ? (r.complete_days / r.total_days) * 100 : 0}
 						<Table.Row>
 							<Table.Cell class="font-medium">{r.employee_nama}</Table.Cell>
-							<Table.Cell class="font-mono text-xs text-slate-500">{r.employee_nip}</Table.Cell>
+							<Table.Cell class="font-mono text-xs text-muted-foreground">{r.employee_nip}</Table.Cell>
 							<Table.Cell class="text-center">{r.total_days}</Table.Cell>
-							<Table.Cell class="text-center font-semibold text-green-700">{r.complete_days}</Table.Cell>
-							<Table.Cell class="text-center text-amber-600">{r.missing_checkout}</Table.Cell>
-							<Table.Cell class="text-center text-red-600">{r.missing_checkin}</Table.Cell>
+							<Table.Cell class="text-center font-semibold text-success">{r.complete_days}</Table.Cell>
+							<Table.Cell class="text-center text-warning">{r.missing_checkout}</Table.Cell>
+							<Table.Cell class="text-center text-destructive">{r.missing_checkin}</Table.Cell>
 							<Table.Cell class="text-center">
 								<div class="flex items-center justify-center gap-2">
-									<div class="w-12 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-										<div class="h-full rounded-full bg-green-500" style="width:{Math.min(percent,100).toFixed(0)}%"></div>
+									<div class="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
+										<div class="h-full rounded-full bg-success" style="width:{Math.min(percent,100).toFixed(0)}%"></div>
 									</div>
 									<Badge variant={percent >= 80 ? 'default' : percent >= 50 ? 'outline' : 'destructive'}
-										class={percent >= 80 ? 'bg-green-600' : ''}>
+										class={percent >= 80 ? 'bg-success' : ''}>
 										{percent.toFixed(0)}%
 									</Badge>
 								</div>
@@ -233,25 +233,25 @@
 			<div class="grid gap-3 p-4 lg:hidden">
 				{#each currentSummary as r (r.employee_id)}
 					{@const percent = r.total_days > 0 ? (r.complete_days / r.total_days) * 100 : 0}
-					<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+					<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 						<div class="flex items-start justify-between gap-3">
 							<div class="min-w-0">
-								<p class="text-sm font-semibold text-slate-900">{r.employee_nama}</p>
-								<p class="mt-1 break-all font-mono text-xs text-slate-500">{r.employee_nip}</p>
+								<p class="text-sm font-semibold text-foreground">{r.employee_nama}</p>
+								<p class="mt-1 break-all font-mono text-xs text-muted-foreground">{r.employee_nip}</p>
 							</div>
-							<Badge variant={percent >= 80 ? 'default' : percent >= 50 ? 'outline' : 'destructive'} class={percent >= 80 ? 'bg-green-600' : ''}>
+							<Badge variant={percent >= 80 ? 'default' : percent >= 50 ? 'outline' : 'destructive'} class={percent >= 80 ? 'bg-success' : ''}>
 								{percent.toFixed(0)}%
 							</Badge>
 						</div>
 						<div class="mt-4 grid grid-cols-2 gap-3 text-sm">
-							<div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-xs uppercase tracking-[0.16em] text-slate-400">Total</span><p class="mt-1 font-semibold text-slate-800">{r.total_days}</p></div>
-							<div class="rounded-xl border border-slate-200 bg-emerald-50 px-3 py-2"><span class="text-xs uppercase tracking-[0.16em] text-emerald-500">Lengkap</span><p class="mt-1 font-semibold text-emerald-700">{r.complete_days}</p></div>
-							<div class="rounded-xl border border-slate-200 bg-amber-50 px-3 py-2"><span class="text-xs uppercase tracking-[0.16em] text-amber-500">Tanpa Pulang</span><p class="mt-1 font-semibold text-amber-700">{r.missing_checkout}</p></div>
-							<div class="rounded-xl border border-slate-200 bg-red-50 px-3 py-2"><span class="text-xs uppercase tracking-[0.16em] text-red-500">Tanpa Masuk</span><p class="mt-1 font-semibold text-red-700">{r.missing_checkin}</p></div>
+							<div class="rounded-xl border border-border bg-muted/50 px-3 py-2"><span class="text-xs uppercase tracking-[0.16em] text-muted-foreground">Total</span><p class="mt-1 font-semibold text-foreground">{r.total_days}</p></div>
+							<div class="rounded-xl border border-border bg-primary/10 px-3 py-2"><span class="text-xs uppercase tracking-[0.16em] text-primary">Lengkap</span><p class="mt-1 font-semibold text-primary">{r.complete_days}</p></div>
+							<div class="rounded-xl border border-border bg-warning/10 px-3 py-2"><span class="text-xs uppercase tracking-[0.16em] text-warning">Tanpa Pulang</span><p class="mt-1 font-semibold text-warning">{r.missing_checkout}</p></div>
+							<div class="rounded-xl border border-border bg-destructive/10 px-3 py-2"><span class="text-xs uppercase tracking-[0.16em] text-destructive">Tanpa Masuk</span><p class="mt-1 font-semibold text-destructive">{r.missing_checkin}</p></div>
 						</div>
 					</div>
 				{:else}
-					<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+					<div class="rounded-2xl border border-dashed border-border bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
 						Pilih rentang tanggal dan klik Tampilkan.
 					</div>
 				{/each}

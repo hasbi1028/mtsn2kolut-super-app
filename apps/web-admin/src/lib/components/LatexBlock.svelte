@@ -13,7 +13,7 @@
 				trust: false,
 			});
 		} catch {
-			return `<span class="text-rose-600 font-mono text-xs">${src}</span>`;
+			return `<span class="text-destructive font-mono text-xs">${src}</span>`;
 		}
 	});
 </script>

@@ -202,14 +202,14 @@
 </script>
 
 <div
-	class="legacy-rich-editor overflow-hidden rounded-md border border-slate-200 bg-white text-slate-900 shadow-sm"
+	class="legacy-rich-editor overflow-hidden rounded-md border border-border bg-card text-foreground shadow-sm"
 	class:legacy-rich-editor--compact={compact}
 	class:legacy-rich-editor--resizable={resizable}
 >
 	{#if selectedImage}
 		<div
 			bind:this={controlsElement}
-			class="border-b border-green-100 bg-green-50 px-3 py-2"
+			class="border-b border-success/20 bg-success/10 px-3 py-2"
 			onfocusin={() => (isAdjustingImage = true)}
 			onfocusout={(event) => {
 				const nextTarget = event.relatedTarget;
@@ -220,7 +220,7 @@
 		>
 			<div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
 				<div class="flex flex-wrap items-center gap-1.5">
-					<span class="text-[10px] font-semibold uppercase text-green-900">Ukuran Gambar</span>
+					<span class="text-[10px] font-semibold uppercase text-success">Ukuran Gambar</span>
 					{#each imageSizePresets as preset (preset.width)}
 						<Button
 							type="button"
@@ -241,7 +241,7 @@
 						max="1200"
 						step="10"
 						bind:value={manualWidth}
-						class="h-7 w-24 bg-white text-xs"
+						class="h-7 w-24 bg-card text-xs"
 						onkeydown={(event) => {
 							if (event.key === 'Enter') {
 								event.preventDefault();
@@ -249,7 +249,7 @@
 							}
 						}}
 					/>
-					<span class="text-[10px] font-semibold uppercase text-green-900">px</span>
+					<span class="text-[10px] font-semibold uppercase text-success">px</span>
 					<Button
 						type="button"
 						size="sm"
@@ -270,14 +270,14 @@
 <style>
 	:global(.legacy-rich-editor .ql-toolbar.ql-snow) {
 		border: none !important;
-		border-bottom: 1px solid #d1fae5 !important;
-		background: #f0fdf4 !important;
+		border-bottom: 1px solid var(--border) !important;
+		background: var(--muted) !important;
 		padding: 8px !important;
 	}
 	:global(.legacy-rich-editor .ql-container.ql-snow) {
 		border: none !important;
-		background: #ffffff !important;
-		color: #0f172a !important;
+		background: var(--card) !important;
+		color: var(--foreground) !important;
 		font-family: inherit !important;
 		font-size: 14px !important;
 	}
@@ -333,16 +333,16 @@
 		vertical-align: middle;
 	}
 	:global(.legacy-rich-editor .ql-snow .ql-stroke) {
-		stroke: #166534 !important;
+		stroke: var(--primary) !important;
 	}
 	:global(.legacy-rich-editor .ql-snow .ql-fill) {
-		fill: #166534 !important;
+		fill: var(--primary) !important;
 	}
 	:global(.legacy-rich-editor .ql-snow .ql-picker) {
-		color: #166534 !important;
+		color: var(--primary) !important;
 	}
 	:global(.legacy-rich-editor .ql-editor.ql-blank::before) {
-		color: #94a3b8 !important;
+		color: var(--muted-foreground) !important;
 		font-style: normal !important;
 	}
 </style>

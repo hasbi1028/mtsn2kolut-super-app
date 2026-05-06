@@ -306,34 +306,34 @@
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
 		{#if isGuru}
 			<div>
-				<h1 class="text-2xl font-semibold text-slate-800">Jadwal Mengajar</h1>
+				<h1 class="text-2xl font-semibold text-foreground">Jadwal Mengajar</h1>
 				<p class="mt-1 text-sm text-muted-foreground">Lihat slot mengajar mingguan Anda dalam tampilan yang lebih penuh daripada ringkasan dashboard.</p>
 			</div>
 			<Button variant="outline" onclick={exportGuruTimetable} disabled={guruTimetable.length === 0}>Ekspor CSV</Button>
 		{:else if isSiswa}
 			<div>
-				<h1 class="text-2xl font-semibold text-slate-800">Jadwal Pelajaran</h1>
+				<h1 class="text-2xl font-semibold text-foreground">Jadwal Pelajaran</h1>
 				<p class="mt-1 text-sm text-muted-foreground">Pantau jadwal pelajaran mingguan berdasarkan kelas yang sedang aktif.</p>
 			</div>
 			<Button variant="outline" onclick={exportStudentTimetable} disabled={(studentPortal?.timetable.length ?? 0) === 0}>Ekspor CSV</Button>
 		{:else}
 			<div>
-				<h1 class="text-2xl font-semibold text-slate-800">Jadwal Anak</h1>
+				<h1 class="text-2xl font-semibold text-foreground">Jadwal Anak</h1>
 				<p class="mt-1 text-sm text-muted-foreground">Lihat ringkasan jadwal pelajaran setiap anak yang sudah terhubung ke akun orang tua ini.</p>
 			</div>
 			<Button variant="outline" onclick={exportParentTimetable} disabled={(parentPortal?.timetable.length ?? 0) === 0}>Ekspor CSV</Button>
 		{/if}
 	</div>
 
-	<Card.Root class="border-slate-200">
+	<Card.Root class="border-border">
 		<Card.Content class="flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:justify-between">
 			<div>
-				<p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Filter Hari</p>
-				<p class="mt-1 text-sm text-slate-500">Fokuskan tampilan dan ekspor ke satu hari tertentu bila diperlukan.</p>
+				<p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Filter Hari</p>
+				<p class="mt-1 text-sm text-muted-foreground">Fokuskan tampilan dan ekspor ke satu hari tertentu bila diperlukan.</p>
 			</div>
 			<div class="grid w-full gap-3 sm:w-auto sm:grid-cols-2 lg:grid-cols-3">
 				<div class="w-full sm:w-56">
-					<label for="day-filter" class="mb-1 block text-xs font-medium text-slate-600">Hari</label>
+					<label for="day-filter" class="mb-1 block text-xs font-medium text-muted-foreground">Hari</label>
 					<select id="day-filter" bind:value={selectedDay} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 						<option value="all">Semua Hari</option>
 						{#each Object.entries(dayLabels) as [day, label] (`day-option-${day}`)}
@@ -343,7 +343,7 @@
 				</div>
 				{#if isGuru}
 					<div class="w-full sm:w-56">
-						<label for="guru-class-filter" class="mb-1 block text-xs font-medium text-slate-600">Kelas</label>
+						<label for="guru-class-filter" class="mb-1 block text-xs font-medium text-muted-foreground">Kelas</label>
 						<select id="guru-class-filter" bind:value={selectedGuruClass} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 							<option value="all">Semua Kelas</option>
 							{#each guruClassOptions as option (option.code)}
@@ -352,7 +352,7 @@
 						</select>
 					</div>
 					<div class="w-full sm:w-56">
-						<label for="guru-subject-filter" class="mb-1 block text-xs font-medium text-slate-600">Mapel</label>
+						<label for="guru-subject-filter" class="mb-1 block text-xs font-medium text-muted-foreground">Mapel</label>
 						<select id="guru-subject-filter" bind:value={selectedGuruSubject} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 							<option value="all">Semua Mapel</option>
 							{#each guruSubjectOptions as option (option.code)}
@@ -369,7 +369,7 @@
 		{#snippet pending()}
 			<div class="grid gap-4 md:grid-cols-3">
 				{#each Array.from({ length: 3 }) as _, i (`loading-summary-${i}`)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="space-y-3 p-5">
 							<Skeleton class="h-4 w-24" />
 							<Skeleton class="h-8 w-16" />
@@ -379,7 +379,7 @@
 				{/each}
 			</div>
 
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Content class="space-y-4 p-5">
 					{#each Array.from({ length: 4 }) as _, i (`loading-day-${i}`)}
 						<div class="space-y-3">
@@ -408,12 +408,12 @@
 				<EmptyStatePanel compact title="Jadwal belum tersedia" description="Akun ini belum memiliki peran portal jadwal yang aktif." />
 			{:else if isGuru}
 		<div class="grid gap-4 md:grid-cols-3">
-			<Card.Root class="border-slate-200"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Total Slot</p><p class="mt-2 text-3xl font-semibold text-slate-900">{guruSummary.totalSlots}</p></Card.Content></Card.Root>
-			<Card.Root class="border-slate-200"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Kelas Diajar</p><p class="mt-2 text-3xl font-semibold text-slate-900">{guruSummary.totalClasses}</p></Card.Content></Card.Root>
-			<Card.Root class="border-slate-200"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Hari Aktif</p><p class="mt-2 text-3xl font-semibold text-slate-900">{guruSummary.activeDays}</p></Card.Content></Card.Root>
+			<Card.Root class="border-border"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Total Slot</p><p class="mt-2 text-3xl font-semibold text-foreground">{guruSummary.totalSlots}</p></Card.Content></Card.Root>
+			<Card.Root class="border-border"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Kelas Diajar</p><p class="mt-2 text-3xl font-semibold text-foreground">{guruSummary.totalClasses}</p></Card.Content></Card.Root>
+			<Card.Root class="border-border"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Hari Aktif</p><p class="mt-2 text-3xl font-semibold text-foreground">{guruSummary.activeDays}</p></Card.Content></Card.Root>
 		</div>
 
-		<Card.Root class="border-slate-200">
+		<Card.Root class="border-border">
 			<Card.Header>
 				<Card.Title class="text-base">Minggu Mengajar</Card.Title>
 				<Card.Description>Disusun per hari agar lebih cepat dipindai saat mempersiapkan pembelajaran.</Card.Description>
@@ -423,24 +423,24 @@
 					{#each guruGroups as group (group.day)}
 						<div class="space-y-3">
 							<div class="flex items-center justify-between gap-3">
-								<h2 class="text-sm font-semibold text-slate-900">{group.label}</h2>
+								<h2 class="text-sm font-semibold text-foreground">{group.label}</h2>
 								<Badge variant="outline">{group.slots.length} slot</Badge>
 							</div>
 							{#if group.slots.length > 0}
 								<div class="grid gap-3 lg:grid-cols-2">
 									{#each group.slots as slot (slot.id)}
-										<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-											<p class="text-sm font-semibold text-slate-900">{slot.subject_name}</p>
-											<p class="mt-1 text-xs text-slate-500">{slot.class_name}</p>
-											<p class="mt-2 text-sm text-slate-600">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
+										<div class="rounded-2xl border border-border bg-muted/50 p-4">
+											<p class="text-sm font-semibold text-foreground">{slot.subject_name}</p>
+											<p class="mt-1 text-xs text-muted-foreground">{slot.class_name}</p>
+											<p class="mt-2 text-sm text-muted-foreground">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
 											{#if slot.notes}
-												<p class="mt-2 text-xs text-slate-500">{slot.notes}</p>
+												<p class="mt-2 text-xs text-muted-foreground">{slot.notes}</p>
 											{/if}
 										</div>
 									{/each}
 								</div>
 							{:else}
-								<div class="rounded-xl border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">Tidak ada slot mengajar pada hari ini.</div>
+								<div class="rounded-xl border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">Tidak ada slot mengajar pada hari ini.</div>
 							{/if}
 						</div>
 					{/each}
@@ -451,24 +451,24 @@
 		</Card.Root>
 	{:else if isSiswa}
 		<div class="grid gap-4 md:grid-cols-3">
-			<Card.Root class="border-slate-200"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Total Slot</p><p class="mt-2 text-3xl font-semibold text-slate-900">{studentSummary.totalSlots}</p></Card.Content></Card.Root>
-			<Card.Root class="border-slate-200"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Hari Aktif</p><p class="mt-2 text-3xl font-semibold text-slate-900">{studentSummary.activeDays}</p></Card.Content></Card.Root>
-			<Card.Root class="border-slate-200"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Kontak Wali</p><p class="mt-2 text-3xl font-semibold text-slate-900">{studentSummary.totalParents}</p></Card.Content></Card.Root>
+			<Card.Root class="border-border"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Total Slot</p><p class="mt-2 text-3xl font-semibold text-foreground">{studentSummary.totalSlots}</p></Card.Content></Card.Root>
+			<Card.Root class="border-border"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Hari Aktif</p><p class="mt-2 text-3xl font-semibold text-foreground">{studentSummary.activeDays}</p></Card.Content></Card.Root>
+			<Card.Root class="border-border"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Kontak Wali</p><p class="mt-2 text-3xl font-semibold text-foreground">{studentSummary.totalParents}</p></Card.Content></Card.Root>
 		</div>
 
-		<Card.Root class="border-slate-200">
+		<Card.Root class="border-border">
 			<Card.Header>
 				<Card.Title class="text-base">Informasi Siswa</Card.Title>
 				<Card.Description>{studentPortal?.student.nama} · {studentPortal?.student.class_name || 'Belum ada kelas'}</Card.Description>
 			</Card.Header>
 			<Card.Content class="grid gap-3 md:grid-cols-3">
-				<div class="rounded-xl border border-slate-200 bg-slate-50 p-4"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">NIS</p><p class="mt-2 text-sm font-semibold text-slate-900">{studentPortal?.student.nis || '—'}</p></div>
-				<div class="rounded-xl border border-slate-200 bg-slate-50 p-4"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Kelas</p><p class="mt-2 text-sm font-semibold text-slate-900">{studentPortal?.student.class_name || 'Belum ada kelas'}</p></div>
-				<div class="rounded-xl border border-slate-200 bg-slate-50 p-4"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Status</p><p class="mt-2 text-sm font-semibold text-slate-900">{studentPortal?.student.status || '—'}</p></div>
+				<div class="rounded-xl border border-border bg-muted/50 p-4"><p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">NIS</p><p class="mt-2 text-sm font-semibold text-foreground">{studentPortal?.student.nis || '—'}</p></div>
+				<div class="rounded-xl border border-border bg-muted/50 p-4"><p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Kelas</p><p class="mt-2 text-sm font-semibold text-foreground">{studentPortal?.student.class_name || 'Belum ada kelas'}</p></div>
+				<div class="rounded-xl border border-border bg-muted/50 p-4"><p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Status</p><p class="mt-2 text-sm font-semibold text-foreground">{studentPortal?.student.status || '—'}</p></div>
 			</Card.Content>
 		</Card.Root>
 
-		<Card.Root class="border-slate-200">
+		<Card.Root class="border-border">
 			<Card.Header>
 				<Card.Title class="text-base">Minggu Pelajaran</Card.Title>
 				<Card.Description>Jadwal pelajaran disusun per hari untuk memudahkan persiapan belajar.</Card.Description>
@@ -478,29 +478,29 @@
 					{#each studentGroups as group (group.day)}
 						<div class="space-y-3">
 							<div class="flex items-center justify-between gap-3">
-								<h2 class="text-sm font-semibold text-slate-900">{group.label}</h2>
+								<h2 class="text-sm font-semibold text-foreground">{group.label}</h2>
 								<Badge variant="outline">{group.slots.length} slot</Badge>
 							</div>
 							{#if group.slots.length > 0}
 								<div class="grid gap-3 lg:grid-cols-2">
 									{#each group.slots as slot (slot.id)}
-										<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+										<div class="rounded-2xl border border-border bg-muted/50 p-4">
 											<div class="flex items-start justify-between gap-3">
 												<div>
-													<p class="text-sm font-semibold text-slate-900">{slot.subject_name}</p>
-													<p class="mt-1 text-xs text-slate-500">{slot.teacher_name}</p>
+													<p class="text-sm font-semibold text-foreground">{slot.subject_name}</p>
+													<p class="mt-1 text-xs text-muted-foreground">{slot.teacher_name}</p>
 												</div>
 												<Badge variant="outline">{slot.class_code}</Badge>
 											</div>
-											<p class="mt-2 text-sm text-slate-600">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
+											<p class="mt-2 text-sm text-muted-foreground">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
 											{#if slot.notes}
-												<p class="mt-2 text-xs text-slate-500">{slot.notes}</p>
+												<p class="mt-2 text-xs text-muted-foreground">{slot.notes}</p>
 											{/if}
 										</div>
 									{/each}
 								</div>
 							{:else}
-								<div class="rounded-xl border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">Tidak ada pelajaran pada hari ini.</div>
+								<div class="rounded-xl border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">Tidak ada pelajaran pada hari ini.</div>
 							{/if}
 						</div>
 					{/each}
@@ -511,12 +511,12 @@
 		</Card.Root>
 	{:else}
 		<div class="grid gap-4 md:grid-cols-3">
-			<Card.Root class="border-slate-200"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Anak Terhubung</p><p class="mt-2 text-3xl font-semibold text-slate-900">{parentSummary.totalChildren}</p></Card.Content></Card.Root>
-			<Card.Root class="border-slate-200"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Total Slot</p><p class="mt-2 text-3xl font-semibold text-slate-900">{parentSummary.totalSlots}</p></Card.Content></Card.Root>
-			<Card.Root class="border-slate-200"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Anak dengan Jadwal</p><p class="mt-2 text-3xl font-semibold text-slate-900">{parentSummary.activeChildren}</p></Card.Content></Card.Root>
+			<Card.Root class="border-border"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Anak Terhubung</p><p class="mt-2 text-3xl font-semibold text-foreground">{parentSummary.totalChildren}</p></Card.Content></Card.Root>
+			<Card.Root class="border-border"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Total Slot</p><p class="mt-2 text-3xl font-semibold text-foreground">{parentSummary.totalSlots}</p></Card.Content></Card.Root>
+			<Card.Root class="border-border"><Card.Content class="p-5"><p class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Anak dengan Jadwal</p><p class="mt-2 text-3xl font-semibold text-foreground">{parentSummary.activeChildren}</p></Card.Content></Card.Root>
 		</div>
 
-		<Card.Root class="border-slate-200">
+		<Card.Root class="border-border">
 			<Card.Header>
 				<Card.Title class="text-base">Jadwal per Anak</Card.Title>
 				<Card.Description>Setiap anak ditampilkan terpisah agar wali lebih mudah memeriksa ritme belajar mingguan.</Card.Description>
@@ -524,11 +524,11 @@
 			<Card.Content class="space-y-5">
 				{#if visibleParentTimetable.length > 0 && parentGroups.length > 0}
 					{#each parentGroups as group (`child-${group.child.id}`)}
-						<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+						<div class="rounded-2xl border border-border bg-muted/50 p-4">
 							<div class="flex items-start justify-between gap-3">
 								<div>
-									<p class="text-sm font-semibold text-slate-900">{group.child.nama}</p>
-									<p class="mt-1 text-xs text-slate-500">{group.child.class_name || 'Belum ada kelas'}</p>
+									<p class="text-sm font-semibold text-foreground">{group.child.nama}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{group.child.class_name || 'Belum ada kelas'}</p>
 								</div>
 								<Badge variant="outline">{group.days.reduce((sum, day) => sum + day.slots.length, 0)} slot</Badge>
 							</div>
@@ -537,24 +537,24 @@
 								{#each group.days as day (day.day)}
 									<div class="space-y-2">
 										<div class="flex items-center justify-between gap-3">
-											<h2 class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{day.label}</h2>
+											<h2 class="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">{day.label}</h2>
 											<Badge variant="outline">{day.slots.length}</Badge>
 										</div>
 										{#if day.slots.length > 0}
 											<div class="grid gap-3 lg:grid-cols-2">
 												{#each day.slots as slot (slot.id)}
-													<div class="rounded-xl border border-slate-200 bg-white p-3">
-														<p class="text-sm font-semibold text-slate-900">{slot.subject_name}</p>
-														<p class="mt-1 text-xs text-slate-500">{slot.teacher_name}</p>
-														<p class="mt-2 text-sm text-slate-600">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
+													<div class="rounded-xl border border-border bg-card p-3">
+														<p class="text-sm font-semibold text-foreground">{slot.subject_name}</p>
+														<p class="mt-1 text-xs text-muted-foreground">{slot.teacher_name}</p>
+														<p class="mt-2 text-sm text-muted-foreground">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
 														{#if slot.notes}
-															<p class="mt-2 text-xs text-slate-500">{slot.notes}</p>
+															<p class="mt-2 text-xs text-muted-foreground">{slot.notes}</p>
 														{/if}
 													</div>
 												{/each}
 											</div>
 										{:else}
-											<div class="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-500">Tidak ada jadwal untuk hari ini.</div>
+											<div class="rounded-xl border border-dashed border-border bg-card px-4 py-4 text-sm text-muted-foreground">Tidak ada jadwal untuk hari ini.</div>
 										{/if}
 									</div>
 								{/each}

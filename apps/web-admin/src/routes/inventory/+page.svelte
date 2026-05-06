@@ -137,11 +137,11 @@
 
 	function statCards(stats: Stats) {
 		return [
-			{ label: 'Total Jenis', value: stats.total_jenis, color: 'text-slate-700' },
-			{ label: 'Total Unit', value: stats.total_unit, color: 'text-slate-700' },
-			{ label: 'Unit Layak', value: stats.total_layak, color: 'text-green-700' },
-			{ label: 'Perlu Restok', value: stats.perlu_restok, color: stats.perlu_restok ? 'text-amber-700' : 'text-slate-700' },
-			{ label: 'Perlu Perawatan', value: stats.perlu_perawatan, color: stats.perlu_perawatan ? 'text-red-700' : 'text-slate-700' },
+			{ label: 'Total Jenis', value: stats.total_jenis, color: 'text-foreground' },
+			{ label: 'Total Unit', value: stats.total_unit, color: 'text-foreground' },
+			{ label: 'Unit Layak', value: stats.total_layak, color: 'text-success' },
+			{ label: 'Perlu Restok', value: stats.perlu_restok, color: stats.perlu_restok ? 'text-warning' : 'text-foreground' },
+			{ label: 'Perlu Perawatan', value: stats.perlu_perawatan, color: stats.perlu_perawatan ? 'text-destructive' : 'text-foreground' },
 		];
 	}
 
@@ -195,8 +195,8 @@
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<div>
-			<h1 class="text-lg font-semibold text-slate-800">Inventaris</h1>
-			<p class="text-sm text-slate-500">Ringkasan barang sekolah, stok layak pakai, dan item yang butuh perhatian.</p>
+			<h1 class="text-lg font-semibold text-foreground">Inventaris</h1>
+			<p class="text-sm text-muted-foreground">Ringkasan barang sekolah, stok layak pakai, dan item yang butuh perhatian.</p>
 		</div>
 		<div class="flex gap-2">
 			<Button href={`${resolve('/document-cycles')}?domain_area=sarpras&external_system=simak_bmn`} variant="outline" size="sm">Siklus Sarpras</Button>
@@ -208,9 +208,9 @@
 		{#snippet pending()}
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
 				{#each ['Total Jenis', 'Total Unit', 'Unit Layak', 'Perlu Restok', 'Perlu Perawatan'] as label (label)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4">
-							<p class="text-xs text-slate-500">{label}</p>
+							<p class="text-xs text-muted-foreground">{label}</p>
 							<Skeleton class="mt-2 h-8 w-16" />
 						</Card.Content>
 					</Card.Root>
@@ -219,7 +219,7 @@
 
 			<div class="grid gap-6 lg:grid-cols-2">
 				{#each ['inventory-stock-skeleton', 'inventory-condition-skeleton'] as key (key)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<Skeleton class="h-5 w-40" />
 						</Card.Header>
@@ -238,7 +238,7 @@
 				{/each}
 			</div>
 
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header class="pb-2">
 					<Skeleton class="h-5 w-40" />
 				</Card.Header>
@@ -273,36 +273,36 @@
 
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
 				{#each statCards(overview.stats) as card (card.label)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4">
-							<p class="text-xs text-slate-500">{card.label}</p>
+							<p class="text-xs text-muted-foreground">{card.label}</p>
 							<p class="mt-1 text-2xl font-bold {card.color}">{card.value}</p>
 						</Card.Content>
 					</Card.Root>
 				{/each}
 			</div>
 
-			<Card.Root class="border-emerald-200">
+			<Card.Root class="border-primary/20">
 				<Card.Header class="pb-2">
-					<Card.Title class="text-sm font-medium text-slate-700">Master Ruangan Fisik</Card.Title>
-					<p class="text-xs text-slate-500">Dipakai CBT sebagai sumber ruangan fisik/aset sebelum menjadi ruang ujian per sesi.</p>
+					<Card.Title class="text-sm font-medium text-foreground">Master Ruangan Fisik</Card.Title>
+					<p class="text-xs text-muted-foreground">Dipakai CBT sebagai sumber ruangan fisik/aset sebelum menjadi ruang ujian per sesi.</p>
 				</Card.Header>
 				<Card.Content class="space-y-4">
 					<div class="grid gap-3 md:grid-cols-[120px_1fr_1fr_150px_110px_auto] md:items-end">
 						<div>
-							<label for="room-code" class="mb-1 block text-xs font-medium text-slate-600">Kode</label>
+							<label for="room-code" class="mb-1 block text-xs font-medium text-muted-foreground">Kode</label>
 							<Input id="room-code" bind:value={roomCode} placeholder="LAB-A" />
 						</div>
 						<div>
-							<label for="room-name" class="mb-1 block text-xs font-medium text-slate-600">Nama Ruangan</label>
+							<label for="room-name" class="mb-1 block text-xs font-medium text-muted-foreground">Nama Ruangan</label>
 							<Input id="room-name" bind:value={roomName} placeholder="Lab Komputer A" />
 						</div>
 						<div>
-							<label for="room-building" class="mb-1 block text-xs font-medium text-slate-600">Gedung/Lokasi</label>
+							<label for="room-building" class="mb-1 block text-xs font-medium text-muted-foreground">Gedung/Lokasi</label>
 							<Input id="room-building" bind:value={roomBuilding} placeholder="Gedung utama" />
 						</div>
 						<div>
-							<label for="room-type" class="mb-1 block text-xs font-medium text-slate-600">Tipe</label>
+							<label for="room-type" class="mb-1 block text-xs font-medium text-muted-foreground">Tipe</label>
 							<select id="room-type" bind:value={roomType} class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
 								<option value="kelas">Kelas</option>
 								<option value="laboratorium">Laboratorium</option>
@@ -312,7 +312,7 @@
 							</select>
 						</div>
 						<div>
-							<label for="room-capacity" class="mb-1 block text-xs font-medium text-slate-600">Kapasitas CBT</label>
+							<label for="room-capacity" class="mb-1 block text-xs font-medium text-muted-foreground">Kapasitas CBT</label>
 							<Input id="room-capacity" type="number" bind:value={roomCapacity} min={1} />
 						</div>
 						<LoadingButton onclick={() => void createSchoolRoom()} loading={roomBusy} loadingLabel="Menyimpan..." disabled={roomBusy || !roomCode.trim() || !roomName.trim()}>
@@ -325,7 +325,7 @@
 					{:else}
 						<Table.Root>
 							<Table.Header>
-								<Table.Row class="bg-emerald-50 text-xs">
+								<Table.Row class="bg-primary/10 text-xs">
 									<Table.Head>Kode</Table.Head>
 									<Table.Head>Ruangan</Table.Head>
 									<Table.Head>Tipe</Table.Head>
@@ -339,7 +339,7 @@
 										<Table.Cell class="font-mono text-xs">{room.code}</Table.Cell>
 										<Table.Cell class="font-medium">
 											{room.name}
-											<div class="text-xs text-slate-400">{room.building || 'Lokasi belum diisi'}</div>
+											<div class="text-xs text-muted-foreground">{room.building || 'Lokasi belum diisi'}</div>
 										</Table.Cell>
 										<Table.Cell>{room.room_type}</Table.Cell>
 										<Table.Cell>{room.exam_capacity}</Table.Cell>
@@ -357,9 +357,9 @@
 			</Card.Root>
 
 			<div class="grid gap-6 lg:grid-cols-2">
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header class="pb-2">
-						<Card.Title class="text-sm font-medium text-slate-700">Barang Perlu Restok</Card.Title>
+						<Card.Title class="text-sm font-medium text-foreground">Barang Perlu Restok</Card.Title>
 					</Card.Header>
 					<Card.Content class="p-0">
 						{#if stockRows.length === 0}
@@ -369,7 +369,7 @@
 						{:else}
 							<Table.Root>
 								<Table.Header>
-									<Table.Row class="bg-slate-50 text-xs">
+									<Table.Row class="bg-muted/50 text-xs">
 										<Table.Head>Barang</Table.Head>
 										<Table.Head>Lokasi</Table.Head>
 										<Table.Head>Stok Layak</Table.Head>
@@ -380,12 +380,12 @@
 										<Table.Row class="text-sm">
 											<Table.Cell class="font-medium">
 												<span class="block truncate max-w-[180px]" title={item.nama}>{item.nama}</span>
-												<span class="text-xs text-slate-400">{item.kode}</span>
+												<span class="text-xs text-muted-foreground">{item.kode}</span>
 											</Table.Cell>
 											<Table.Cell>{item.lokasi || '—'}</Table.Cell>
 											<Table.Cell>
-												<span class="font-medium text-amber-700">{item.jumlah_baik} {item.satuan}</span>
-												<span class="ml-1 text-xs text-slate-400">min. {item.min_stock}</span>
+												<span class="font-medium text-warning">{item.jumlah_baik} {item.satuan}</span>
+												<span class="ml-1 text-xs text-muted-foreground">min. {item.min_stock}</span>
 											</Table.Cell>
 										</Table.Row>
 									{/each}
@@ -395,9 +395,9 @@
 					</Card.Content>
 				</Card.Root>
 
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header class="pb-2">
-						<Card.Title class="text-sm font-medium text-slate-700">Barang Perlu Perhatian</Card.Title>
+						<Card.Title class="text-sm font-medium text-foreground">Barang Perlu Perhatian</Card.Title>
 					</Card.Header>
 					<Card.Content class="p-0">
 						{#if attentionRows.length === 0}
@@ -407,7 +407,7 @@
 						{:else}
 							<Table.Root>
 								<Table.Header>
-									<Table.Row class="bg-slate-50 text-xs">
+									<Table.Row class="bg-muted/50 text-xs">
 										<Table.Head>Barang</Table.Head>
 										<Table.Head>Kondisi</Table.Head>
 										<Table.Head>Jumlah Baik</Table.Head>
@@ -418,7 +418,7 @@
 										<Table.Row class="text-sm">
 											<Table.Cell class="font-medium">
 												<span class="block truncate max-w-[180px]" title={item.nama}>{item.nama}</span>
-												<span class="text-xs text-slate-400">{item.kode}</span>
+												<span class="text-xs text-muted-foreground">{item.kode}</span>
 											</Table.Cell>
 											<Table.Cell>
 												<Badge variant={item.kondisi === 'rusak' ? 'destructive' : 'outline'}>
@@ -435,9 +435,9 @@
 				</Card.Root>
 			</div>
 
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header class="pb-2">
-					<Card.Title class="text-sm font-medium text-slate-700">Ringkasan per Lokasi</Card.Title>
+					<Card.Title class="text-sm font-medium text-foreground">Ringkasan per Lokasi</Card.Title>
 				</Card.Header>
 				<Card.Content class="p-0">
 					{#if locationRows.length === 0}
@@ -447,7 +447,7 @@
 					{:else}
 						<Table.Root>
 							<Table.Header>
-								<Table.Row class="bg-slate-50 text-xs">
+								<Table.Row class="bg-muted/50 text-xs">
 									<Table.Head>Lokasi</Table.Head>
 									<Table.Head>Jenis Barang</Table.Head>
 									<Table.Head>Total Unit</Table.Head>

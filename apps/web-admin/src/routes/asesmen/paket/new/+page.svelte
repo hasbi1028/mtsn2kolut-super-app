@@ -337,12 +337,12 @@
 <svelte:head><title>{eventId ? 'Buat Paket Event CBT' : 'Buat Paket CBT'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
-	<section class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-6 shadow-sm">
+	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-2">
-				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Keranjang Soal CBT</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-slate-950">{eventId ? 'Buat Paket Event' : 'Buat Paket Soal'}</h1>
-				<p class="text-sm leading-6 text-slate-600">Pilih soal terbit dari Bank Soal, atur bobot, lalu simpan paket untuk dipakai saat membuat sesi.</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Keranjang Soal CBT</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Buat Paket Event' : 'Buat Paket Soal'}</h1>
+				<p class="text-sm leading-6 text-muted-foreground">Pilih soal terbit dari Bank Soal, atur bobot, lalu simpan paket untuk dipakai saat membuat sesi.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				{#if eventId}
@@ -354,9 +354,9 @@
 	</section>
 
 	{#if eventId}
-		<div class="rounded-xl border border-green-200 bg-green-50/70 p-4 text-sm text-green-950">
+		<div class="rounded-xl border border-success/20 bg-success/10 p-4 text-sm text-success">
 			<p class="font-semibold">Paket untuk kegiatan: {eventContext?.title ?? eventId}</p>
-			<p class="mt-1 text-green-800">Payload pembuatan paket membawa <code class="rounded bg-white px-1">event_id</code>. Pool soal memakai soal reusable dan soal khusus kegiatan ini.</p>
+			<p class="mt-1 text-success">Payload pembuatan paket membawa <code class="rounded bg-card px-1">event_id</code>. Pool soal memakai soal reusable dan soal khusus kegiatan ini.</p>
 		</div>
 	{/if}
 
@@ -366,7 +366,7 @@
 
 	<AsyncContent promise={formPromise} onerror={handleRenderError}>
 		{#snippet pending()}
-			<Card.Root class="border-slate-200 shadow-sm">
+			<Card.Root class="border-border shadow-sm">
 				<Card.Content class="space-y-3 p-6">
 					<Skeleton class="h-10" />
 					<Skeleton class="h-10" />
@@ -380,7 +380,7 @@
 		{/snippet}
 
 		{#snippet children()}
-			<Card.Root class="border-emerald-200 shadow-sm">
+			<Card.Root class="border-primary/20 shadow-sm">
 				<Card.Header>
 					<Card.Title class="text-base">Builder Paket</Card.Title>
 					<Card.Description>Form create-only ini memakai endpoint <code>/api/asesmen/packages</code> dan filter soal yang sama dengan builder lama.</Card.Description>
@@ -388,7 +388,7 @@
 				<Card.Content class="space-y-4">
 					<div class="grid gap-3 sm:grid-cols-2">
 						<div>
-							<label for="package-subject-id" class="mb-1 block text-xs text-slate-500">Mata Pelajaran <span class="text-red-500">*</span></label>
+							<label for="package-subject-id" class="mb-1 block text-xs text-muted-foreground">Mata Pelajaran <span class="text-destructive">*</span></label>
 							<select id="package-subject-id" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fSubjectId} onchange={handleSubjectChange}>
 								<option value="">-- Pilih --</option>
 								{#each subjects as subject (subject.id)}
@@ -397,11 +397,11 @@
 							</select>
 						</div>
 						<div>
-							<label for="package-title" class="mb-1 block text-xs text-slate-500">Nama Paket <span class="text-red-500">*</span></label>
+							<label for="package-title" class="mb-1 block text-xs text-muted-foreground">Nama Paket <span class="text-destructive">*</span></label>
 							<Input id="package-title" placeholder="mis: UTS Matematika Sem 1 2025" bind:value={fTitle} />
 						</div>
 						<div>
-							<label for="package-duration" class="mb-1 block text-xs text-slate-500">Durasi (menit) <span class="text-red-500">*</span></label>
+							<label for="package-duration" class="mb-1 block text-xs text-muted-foreground">Durasi (menit) <span class="text-destructive">*</span></label>
 							<Input id="package-duration" type="number" min={10} max={300} bind:value={fDuration} />
 						</div>
 						<div class="flex items-end gap-4 pb-1">
@@ -411,15 +411,15 @@
 					</div>
 
 					<div>
-						<label for="package-description" class="mb-1 block text-xs text-slate-500">Deskripsi (opsional)</label>
+						<label for="package-description" class="mb-1 block text-xs text-muted-foreground">Deskripsi (opsional)</label>
 						<Textarea id="package-description" placeholder="Keterangan paket ujian..." rows={2} bind:value={fDescription} />
 					</div>
 
 					{#if fSubjectId}
 						<div>
 							<div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-								<div class="text-xs text-slate-500">Pilih Soal dari Bank Soal ({questionPool.length} soal terbit sesuai cakupan){#if selectedQuestions.length > 0} — <span class="font-medium text-green-700">{selectedQuestions.length} dipilih</span>{/if}</div>
-								<details class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+								<div class="text-xs text-muted-foreground">Pilih Soal dari Bank Soal ({questionPool.length} soal terbit sesuai cakupan){#if selectedQuestions.length > 0} — <span class="font-medium text-success">{selectedQuestions.length} dipilih</span>{/if}</div>
+								<details class="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-foreground">
 									<summary class="cursor-pointer font-medium">Info pool soal</summary>
 									<div class="mt-2 space-y-2 leading-5">
 										<p>{questionPool.length} soal terbit tersedia, {availableBlueprintMissingCount} metadata kurang, {availableHotsCount} HOTS.</p>
@@ -429,23 +429,23 @@
 								</details>
 							</div>
 							{#if hiddenScopedQuestionCount > 0}
-								<div class="mb-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">{hiddenScopedQuestionCount} soal terbit disembunyikan karena {eventId ? 'tertaut ke kegiatan lain' : 'khusus kegiatan tertentu'}.</div>
+								<div class="mb-2 rounded-md border border-accent bg-accent/60 px-3 py-2 text-xs text-accent-foreground">{hiddenScopedQuestionCount} soal terbit disembunyikan karena {eventId ? 'tertaut ke kegiatan lain' : 'khusus kegiatan tertentu'}.</div>
 							{/if}
 							{#if questionPool.length === 0}
-								<p class="rounded-md border py-4 text-center text-sm text-slate-400">Belum ada soal berstatus "Terbit" untuk mata pelajaran ini dalam cakupan paket ini.</p>
+								<p class="rounded-md border py-4 text-center text-sm text-muted-foreground">Belum ada soal berstatus "Terbit" untuk mata pelajaran ini dalam cakupan paket ini.</p>
 							{:else}
 								<div class="max-h-72 overflow-y-auto rounded-md border">
 									{#each questionPool as question (question.id)}
-										<label class="flex cursor-pointer items-start gap-3 border-b px-3 py-2 last:border-b-0 hover:bg-slate-50">
+										<label class="flex cursor-pointer items-start gap-3 border-b px-3 py-2 last:border-b-0 hover:bg-muted/50">
 											<input type="checkbox" checked={fSelectedIds.has(question.id)} onchange={() => toggleQuestion(question.id)} class="mt-0.5 rounded" />
 											<div class="min-w-0 flex-1">
 												<p class="line-clamp-1 text-sm">{question.question_text}</p>
 												<div class="mt-0.5 flex flex-wrap gap-1">
-													{#if question.code}<span class="font-mono text-xs text-slate-400">{question.code}</span>{/if}
+													{#if question.code}<span class="font-mono text-xs text-muted-foreground">{question.code}</span>{/if}
 													<Badge variant="outline" class="py-0 text-xs">{questionTypeLabel(question.question_type)}</Badge>
 													<Badge variant="outline" class="py-0 text-xs">{difficultyLabel(question.difficulty)}</Badge>
-													<Badge class="border-green-200 bg-green-50 py-0 text-xs text-green-700">{questionReviewLabel(question)}</Badge>
-													{#each questionReadinessIssues(question) as issue (`${question.id}-${issue}`)}<Badge class="border-amber-200 bg-amber-50 py-0 text-xs text-amber-700">{issue}</Badge>{/each}
+													<Badge class="border-success/20 bg-success/10 py-0 text-xs text-success">{questionReviewLabel(question)}</Badge>
+													{#each questionReadinessIssues(question) as issue (`${question.id}-${issue}`)}<Badge class="border-warning/30 bg-warning/10 py-0 text-xs text-warning">{issue}</Badge>{/each}
 												</div>
 											</div>
 										</label>
@@ -454,33 +454,33 @@
 							{/if}
 
 							{#if selectedQuestions.length > 0}
-								<div class="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
+								<div class="mt-3 rounded-lg border border-primary/20 bg-primary/10 p-3">
 									<div class="flex flex-wrap items-start justify-between gap-2">
 										<div>
-											<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-900">Keranjang Paket</p>
-											<p class="mt-1 text-xs text-emerald-800">{selectedQuestions.length} soal dipilih dengan bobot total {selectedWeightTotal}.</p>
+											<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Keranjang Paket</p>
+											<p class="mt-1 text-xs text-primary">{selectedQuestions.length} soal dipilih dengan bobot total {selectedWeightTotal}.</p>
 										</div>
-										<span class="rounded-full border border-emerald-200 bg-white px-2 py-1 text-xs font-medium text-emerald-700">{selectedBlueprintMissingCount > 0 ? `${selectedBlueprintMissingCount} metadata kurang` : 'Metadata siap'}</span>
+										<span class="rounded-full border border-primary/20 bg-card px-2 py-1 text-xs font-medium text-primary">{selectedBlueprintMissingCount > 0 ? `${selectedBlueprintMissingCount} metadata kurang` : 'Metadata siap'}</span>
 									</div>
-									<div class="mt-3 overflow-hidden rounded-md border border-emerald-100 bg-white">
-										<div class="grid grid-cols-[1fr_5rem] gap-2 border-b bg-emerald-50 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-900"><span>Soal Terpilih</span><span class="text-right">Bobot</span></div>
+									<div class="mt-3 overflow-hidden rounded-md border border-primary/20 bg-card">
+										<div class="grid grid-cols-[1fr_5rem] gap-2 border-b bg-primary/10 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary"><span>Soal Terpilih</span><span class="text-right">Bobot</span></div>
 										<div class="max-h-40 overflow-y-auto">
 											{#each selectedQuestions as question (question.id)}
 												<div class="grid grid-cols-[1fr_5rem] items-center gap-2 border-b px-2 py-1.5 last:border-b-0">
-													<div class="min-w-0"><p class="truncate text-xs font-medium text-slate-700">{question.code || 'Tanpa kode'} · {question.question_text}</p><p class="text-[11px] text-slate-500">{questionTypeLabel(question.question_type)} · {difficultyLabel(question.difficulty)}</p></div>
+													<div class="min-w-0"><p class="truncate text-xs font-medium text-foreground">{question.code || 'Tanpa kode'} · {question.question_text}</p><p class="text-[11px] text-muted-foreground">{questionTypeLabel(question.question_type)} · {difficultyLabel(question.difficulty)}</p></div>
 													<Input aria-label={`Bobot ${question.code || question.question_text}`} class="h-8 text-right text-xs" type="number" min={1} max={100} value={questionWeightValue(question.id)} oninput={(event) => setQuestionWeight(question.id, Number(event.currentTarget.value))} />
 												</div>
 											{/each}
 										</div>
 									</div>
-									<details class="mt-3 rounded-md border border-emerald-100 bg-white px-3 py-2 text-xs text-slate-700">
-										<summary class="cursor-pointer font-semibold text-slate-700">Ringkasan blueprint dan mutu</summary>
+									<details class="mt-3 rounded-md border border-primary/20 bg-card px-3 py-2 text-xs text-foreground">
+										<summary class="cursor-pointer font-semibold text-foreground">Ringkasan blueprint dan mutu</summary>
 										<div class="mt-3 space-y-2">
 											<p>Bentuk soal: {selectedTypeBuckets.map((bucket) => `${bucket.label}: ${bucket.count}`).join(', ') || '-'}</p>
 											<p>Level kognitif: {selectedCognitiveBuckets.map((bucket) => `${bucket.label}: ${bucket.count}`).join(', ') || '-'}</p>
-											<div class="max-h-40 overflow-y-auto rounded-md border border-emerald-100 bg-white">
+											<div class="max-h-40 overflow-y-auto rounded-md border border-primary/20 bg-card">
 												{#each selectedBlueprintMatrix as row (row.key)}
-													<div class="grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 {row.missing ? 'bg-amber-50/70' : ''}"><span class="truncate" title={row.cp}>{row.cp}</span><span class="truncate" title={row.cognitive}>{row.cognitive}</span><span class="text-right font-semibold">{row.count}</span></div>
+													<div class="grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b px-2 py-1.5 text-xs last:border-b-0 {row.missing ? 'bg-warning/10' : ''}"><span class="truncate" title={row.cp}>{row.cp}</span><span class="truncate" title={row.cognitive}>{row.cognitive}</span><span class="text-right font-semibold">{row.count}</span></div>
 												{/each}
 											</div>
 										</div>
@@ -488,9 +488,9 @@
 								</div>
 							{/if}
 							{#if packageReadinessIssues.length > 0}
-								<div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><span class="font-semibold">Belum siap dibuat:</span> {packageReadinessIssues.join(', ')}</div>
+								<div class="mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning"><span class="font-semibold">Belum siap dibuat:</span> {packageReadinessIssues.join(', ')}</div>
 							{:else}
-								<div class="mt-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs font-medium text-green-800">Paket siap dibuat dengan soal terbit yang sudah terpilih.</div>
+								<div class="mt-3 rounded-md border border-success/20 bg-success/10 px-3 py-2 text-xs font-medium text-success">Paket siap dibuat dengan soal terbit yang sudah terpilih.</div>
 							{/if}
 						</div>
 					{/if}

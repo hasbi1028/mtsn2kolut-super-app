@@ -321,10 +321,10 @@
 <svelte:head><title>Briefing Bukti Tindak Lanjut - MTsN 2 Kolaka Utara</title></svelte:head>
 
 <div class="space-y-6">
-	<div class="no-print flex flex-col gap-3 rounded-md border border-slate-200 bg-white px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+	<div class="no-print flex flex-col gap-3 rounded-md border border-border bg-card px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
 		<div>
-			<p class="text-sm font-semibold text-slate-900">Briefing Bukti Tindak Lanjut</p>
-			<p class="text-sm text-slate-500">Lembar kerja untuk menutup kekurangan bukti pada action kepatuhan.</p>
+			<p class="text-sm font-semibold text-foreground">Briefing Bukti Tindak Lanjut</p>
+			<p class="text-sm text-muted-foreground">Lembar kerja untuk menutup kekurangan bukti pada action kepatuhan.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button href={resolve('/governance/actions')} variant="outline" size="sm">
@@ -368,29 +368,29 @@
 			{@const buckets = bucketActions(data)}
 			{@const visibleBuckets = filterBuckets(buckets)}
 			{@const totals = buildTotals(data)}
-			<main class="print-root mx-auto max-w-6xl space-y-6 bg-white text-slate-950">
-				<section class="print-section rounded-md border border-slate-200 p-5">
+			<main class="print-root mx-auto max-w-6xl space-y-6 bg-card text-foreground">
+				<section class="print-section rounded-md border border-border p-5">
 					<div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
 						<div>
-							<p class="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">{data.schoolProfile.ministry_line}</p>
-							<h1 class="mt-2 flex items-center gap-2 text-2xl font-bold text-slate-950">
-								<ClipboardCheckIcon class="size-6 text-emerald-700" />
+							<p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{data.schoolProfile.ministry_line}</p>
+							<h1 class="mt-2 flex items-center gap-2 text-2xl font-bold text-foreground">
+								<ClipboardCheckIcon class="size-6 text-primary" />
 								Briefing Bukti Tindak Lanjut
 							</h1>
-							<p class="mt-1 text-sm text-slate-600">{data.schoolProfile.name}</p>
-							<p class="mt-1 max-w-2xl text-xs text-slate-500">{schoolAddressLine(data.schoolProfile) || data.schoolProfile.office_line}</p>
+							<p class="mt-1 text-sm text-muted-foreground">{data.schoolProfile.name}</p>
+							<p class="mt-1 max-w-2xl text-xs text-muted-foreground">{schoolAddressLine(data.schoolProfile) || data.schoolProfile.office_line}</p>
 						</div>
-						<div class="rounded-md border border-slate-200 px-4 py-3 text-sm">
-							<p class="font-medium text-slate-900">Waktu cetak</p>
-							<p class="text-slate-600">{formatGeneratedAt(generatedAt)} WITA</p>
+						<div class="rounded-md border border-border px-4 py-3 text-sm">
+							<p class="font-medium text-foreground">Waktu cetak</p>
+							<p class="text-muted-foreground">{formatGeneratedAt(generatedAt)} WITA</p>
 						</div>
 					</div>
 				</section>
 
-				<section class="no-print rounded-md border border-slate-200 p-4">
+				<section class="no-print rounded-md border border-border p-4">
 					<div class="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
 						<div>
-							<label for="evidence-bucket-filter" class="text-sm font-medium text-slate-700">Fokus bukti</label>
+							<label for="evidence-bucket-filter" class="text-sm font-medium text-foreground">Fokus bukti</label>
 							<select id="evidence-bucket-filter" bind:value={bucketFilter} class="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 								<option value="">Semua fokus</option>
 								{#each buckets as bucket (bucket.key)}
@@ -404,8 +404,8 @@
 					</div>
 				</section>
 
-				<section class="print-section rounded-md border border-slate-200 p-5">
-					<h2 class="text-base font-semibold text-slate-950">Ringkasan Bukti</h2>
+				<section class="print-section rounded-md border border-border p-5">
+					<h2 class="text-base font-semibold text-foreground">Ringkasan Bukti</h2>
 					<div class="mt-4 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
 						{#each [
 							{ label: 'Action Terbuka', value: totals.open, note: 'Belum selesai' },
@@ -415,10 +415,10 @@
 							{ label: 'Kritis Tanpa Bukti', value: totals.missingCritical, note: 'High/urgent' },
 							{ label: 'Bukti Tercatat', value: totals.recorded, note: 'Masih terbuka' },
 						] as item (item.label)}
-							<div class="rounded-md border border-slate-200 p-4">
-								<p class="text-xs text-slate-500">{item.label}</p>
-								<p class="mt-2 text-2xl font-semibold text-slate-950">{item.value}</p>
-								<p class="mt-1 text-xs text-slate-500">{item.note}</p>
+							<div class="rounded-md border border-border p-4">
+								<p class="text-xs text-muted-foreground">{item.label}</p>
+								<p class="mt-2 text-2xl font-semibold text-foreground">{item.value}</p>
+								<p class="mt-1 text-xs text-muted-foreground">{item.note}</p>
 							</div>
 						{/each}
 					</div>
@@ -426,48 +426,48 @@
 
 				<section class="print-section grid gap-4 lg:grid-cols-2">
 					{#each visibleBuckets as bucket (bucket.key)}
-						<div class="rounded-md border border-slate-200">
-							<div class="border-b border-slate-200 px-5 py-4">
+						<div class="rounded-md border border-border">
+							<div class="border-b border-border px-5 py-4">
 								<div class="flex items-start justify-between gap-3">
 									<div>
-										<h2 class="text-base font-semibold text-slate-950">{bucket.label}</h2>
-										<p class="mt-1 text-xs text-slate-500">{bucket.description}</p>
+										<h2 class="text-base font-semibold text-foreground">{bucket.label}</h2>
+										<p class="mt-1 text-xs text-muted-foreground">{bucket.description}</p>
 									</div>
 									<Badge variant={bucketVariant(bucket.key)}>{bucket.actions.length}</Badge>
 								</div>
 							</div>
 							<div class="space-y-2 p-5">
 								{#each bucket.actions.slice(0, 8) as action (action.id)}
-									<div class="rounded-md border border-slate-200 px-3 py-2">
+									<div class="rounded-md border border-border px-3 py-2">
 										<div class="flex items-start justify-between gap-3">
 											<div>
-												<p class="text-sm font-medium text-slate-900">{action.title}</p>
-												<p class="mt-1 text-xs text-slate-500">{ownerLabel(action)} - {snpLabel(action.snp_standard)}</p>
+												<p class="text-sm font-medium text-foreground">{action.title}</p>
+												<p class="mt-1 text-xs text-muted-foreground">{ownerLabel(action)} - {snpLabel(action.snp_standard)}</p>
 											</div>
 											<div class="flex flex-col items-end gap-1">
 												<Badge variant={priorityVariant(action.priority)}>{priorityLabel(action.priority)}</Badge>
 												<Badge variant={statusVariant(action.status)}>{actionStatusLabel(action.status)}</Badge>
 											</div>
 										</div>
-										<p class={isOverdue(action) ? 'mt-2 text-xs font-medium text-red-700' : 'mt-2 text-xs text-slate-500'}>
+										<p class={isOverdue(action) ? 'mt-2 text-xs font-medium text-destructive' : 'mt-2 text-xs text-muted-foreground'}>
 											{formatDate(action.due_date)} - {dueLabel(action)}
 										</p>
-										<p class="mt-1 text-xs text-slate-500">{evidenceLabel(action)}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{evidenceLabel(action)}</p>
 									</div>
 								{:else}
 									<EmptyStatePanel compact title="Tidak ada item" description="Tidak ada tindak lanjut pada fokus bukti ini." />
 								{/each}
 								{#if bucket.actions.length > 8}
-									<p class="text-xs text-slate-500">+{bucket.actions.length - 8} item lain di tabel detail/export CSV.</p>
+									<p class="text-xs text-muted-foreground">+{bucket.actions.length - 8} item lain di tabel detail/export CSV.</p>
 								{/if}
 							</div>
 						</div>
 					{/each}
 				</section>
 
-				<section class="print-section rounded-md border border-slate-200">
-					<div class="border-b border-slate-200 px-5 py-4">
-						<h2 class="text-base font-semibold text-slate-950">Daftar Validasi Bukti</h2>
+				<section class="print-section rounded-md border border-border">
+					<div class="border-b border-border px-5 py-4">
+						<h2 class="text-base font-semibold text-foreground">Daftar Validasi Bukti</h2>
 					</div>
 					<div class="overflow-x-auto">
 						<Table.Root>
@@ -488,12 +488,12 @@
 											<Badge variant={bucketVariant(row.bucket.key)}>{row.bucket.label}</Badge>
 										</Table.Cell>
 										<Table.Cell class="min-w-64">
-											<p class="text-sm font-medium text-slate-900">{row.action.title}</p>
-											<p class="text-xs text-slate-500">{row.action.period_year} - {sourceLabel(row.action.source_type)} - {snpLabel(row.action.snp_standard)}</p>
+											<p class="text-sm font-medium text-foreground">{row.action.title}</p>
+											<p class="text-xs text-muted-foreground">{row.action.period_year} - {sourceLabel(row.action.source_type)} - {snpLabel(row.action.snp_standard)}</p>
 										</Table.Cell>
 										<Table.Cell class="min-w-44">
-											<p class="text-sm text-slate-900">{ownerLabel(row.action)}</p>
-											<p class="text-xs text-slate-500">{ownerUnitLabel(row.action)}</p>
+											<p class="text-sm text-foreground">{ownerLabel(row.action)}</p>
+											<p class="text-xs text-muted-foreground">{ownerUnitLabel(row.action)}</p>
 										</Table.Cell>
 										<Table.Cell>
 											<div class="flex flex-col gap-1">
@@ -501,17 +501,17 @@
 												<Badge variant={priorityVariant(row.action.priority)}>{priorityLabel(row.action.priority)}</Badge>
 											</div>
 										</Table.Cell>
-										<Table.Cell class="max-w-md text-sm text-slate-600">
+										<Table.Cell class="max-w-md text-sm text-muted-foreground">
 											<p>{evidenceLabel(row.action)}</p>
-											<p class="mt-1 text-xs text-slate-500">{linkedLabel(row.action)}</p>
-											<p class={isOverdue(row.action) ? 'mt-1 text-xs font-medium text-red-700' : 'mt-1 text-xs text-slate-500'}>
+											<p class="mt-1 text-xs text-muted-foreground">{linkedLabel(row.action)}</p>
+											<p class={isOverdue(row.action) ? 'mt-1 text-xs font-medium text-destructive' : 'mt-1 text-xs text-muted-foreground'}>
 												{formatDate(row.action.due_date)} - {dueLabel(row.action)}
 											</p>
 										</Table.Cell>
-										<Table.Cell class="min-w-56 text-sm text-slate-400">........................................</Table.Cell>
+										<Table.Cell class="min-w-56 text-sm text-muted-foreground">........................................</Table.Cell>
 									</Table.Row>
 								{:else}
-									<Table.Row><Table.Cell colspan={6} class="text-center text-sm text-slate-500">Tidak ada tindak lanjut aktif untuk divalidasi.</Table.Cell></Table.Row>
+									<Table.Row><Table.Cell colspan={6} class="text-center text-sm text-muted-foreground">Tidak ada tindak lanjut aktif untuk divalidasi.</Table.Cell></Table.Row>
 								{/each}
 							</Table.Body>
 						</Table.Root>

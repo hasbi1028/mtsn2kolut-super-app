@@ -149,13 +149,13 @@
 
 	function statusClass(status: string) {
 		const classes: Record<string, string> = {
-			active: 'border-emerald-300 bg-emerald-50 text-emerald-700',
-			scheduled: 'border-blue-200 bg-blue-50 text-blue-700',
-			draft: 'border-slate-200 bg-slate-50 text-slate-600',
-			finished: 'border-slate-300 bg-slate-100 text-slate-600',
-			cancelled: 'border-red-200 bg-red-50 text-red-700',
+			active: 'border-primary/20 bg-primary/10 text-primary',
+			scheduled: 'border-accent bg-accent/60 text-accent-foreground',
+			draft: 'border-border bg-muted/50 text-muted-foreground',
+			finished: 'border-border bg-muted text-muted-foreground',
+			cancelled: 'border-destructive/30 bg-destructive/10 text-destructive',
 		};
-		return classes[status] ?? 'border-slate-200 bg-white text-slate-600';
+		return classes[status] ?? 'border-border bg-card text-muted-foreground';
 	}
 
 	function roomRoleLabel(role: string) {
@@ -183,9 +183,9 @@
 	}
 
 	function attentionClass(room: ProctorRoom) {
-		if (room.suspicious_count > 0) return 'border-red-200 bg-red-50 text-red-700';
-		if (room.missing_seat_count > 0 || room.proctor_count === 0) return 'border-amber-200 bg-amber-50 text-amber-700';
-		return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+		if (room.suspicious_count > 0) return 'border-destructive/30 bg-destructive/10 text-destructive';
+		if (room.missing_seat_count > 0 || room.proctor_count === 0) return 'border-warning/30 bg-warning/10 text-warning';
+		return 'border-primary/20 bg-primary/10 text-primary';
 	}
 </script>
 
@@ -226,11 +226,11 @@
 	{#snippet children(value)}
 		{@const loadedRooms = value as ProctorRoom[]}
 		<div class="space-y-5 p-4 md:p-6">
-			<section class="flex flex-col gap-4 border-b border-emerald-100 pb-5 lg:flex-row lg:items-end lg:justify-between">
+			<section class="flex flex-col gap-4 border-b border-primary/20 pb-5 lg:flex-row lg:items-end lg:justify-between">
 				<div class="max-w-3xl space-y-2">
-					<p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">CBT / Pengawas Ruang</p>
-					<h1 class="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">Ruang Pengawas CBT</h1>
-					<p class="text-sm leading-6 text-slate-600">
+					<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">CBT / Pengawas Ruang</p>
+					<h1 class="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Ruang Pengawas CBT</h1>
+					<p class="text-sm leading-6 text-muted-foreground">
 						Satu layar untuk menemukan ruang ujian yang perlu dipantau, membuka dashboard live, dan kembali ke Monitoring BYOD saat butuh status guide.
 					</p>
 				</div>
@@ -241,47 +241,47 @@
 			</section>
 
 			<section class="grid gap-3 md:grid-cols-5">
-				<div class="border border-emerald-100 bg-white p-4 shadow-sm">
-					<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Ruang</p>
-					<p class="mt-1 text-2xl font-bold text-slate-900">{stats.total}</p>
+				<div class="border border-primary/20 bg-card p-4 shadow-sm">
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ruang</p>
+					<p class="mt-1 text-2xl font-bold text-foreground">{stats.total}</p>
 				</div>
-				<div class="border border-emerald-100 bg-white p-4 shadow-sm">
-					<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Aktif</p>
-					<p class="mt-1 text-2xl font-bold text-emerald-700">{stats.active}</p>
+				<div class="border border-primary/20 bg-card p-4 shadow-sm">
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Aktif</p>
+					<p class="mt-1 text-2xl font-bold text-primary">{stats.active}</p>
 				</div>
-				<div class="border border-emerald-100 bg-white p-4 shadow-sm">
-					<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Terjadwal</p>
-					<p class="mt-1 text-2xl font-bold text-blue-700">{stats.scheduled}</p>
+				<div class="border border-primary/20 bg-card p-4 shadow-sm">
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Terjadwal</p>
+					<p class="mt-1 text-2xl font-bold text-accent-foreground">{stats.scheduled}</p>
 				</div>
-				<div class="border border-emerald-100 bg-white p-4 shadow-sm">
-					<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Peserta</p>
-					<p class="mt-1 text-2xl font-bold text-slate-900">{stats.participants}</p>
+				<div class="border border-primary/20 bg-card p-4 shadow-sm">
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Peserta</p>
+					<p class="mt-1 text-2xl font-bold text-foreground">{stats.participants}</p>
 				</div>
-				<div class="border border-emerald-100 bg-white p-4 shadow-sm">
-					<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Atensi</p>
-					<p class="mt-1 text-2xl font-bold text-amber-700">{stats.attention}</p>
+				<div class="border border-primary/20 bg-card p-4 shadow-sm">
+					<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Atensi</p>
+					<p class="mt-1 text-2xl font-bold text-warning">{stats.attention}</p>
 				</div>
 			</section>
 
-			<section class="grid gap-3 border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_220px]">
+			<section class="grid gap-3 border border-border bg-card p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_220px]">
 				<div>
-					<label for="proctor-room-search" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cari ruang / sesi / token</label>
+					<label for="proctor-room-search" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cari ruang / sesi / token</label>
 					<div class="relative">
-						<SearchIcon class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+						<SearchIcon class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 						<input
 							id="proctor-room-search"
 							bind:value={query}
-							class="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+							class="h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring"
 							placeholder="Cari ruang, paket, token, atau pengawas"
 						/>
 					</div>
 				</div>
 				<div>
-					<label for="proctor-room-status" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Status sesi</label>
+					<label for="proctor-room-status" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status sesi</label>
 					<select
 						id="proctor-room-status"
 						bind:value={statusFilter}
-						class="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+						class="h-10 w-full rounded-md border border-border bg-card px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring"
 					>
 						{#each statusOptions as option (option.value)}
 							<option value={option.value}>{option.label}</option>
@@ -303,52 +303,52 @@
 			{:else}
 				<section class="grid gap-3 xl:grid-cols-2">
 					{#each filteredRooms as room (room.id)}
-						<article class="border border-emerald-100 bg-white p-4 shadow-sm">
+						<article class="border border-primary/20 bg-card p-4 shadow-sm">
 							<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 								<div class="min-w-0 space-y-2">
 									<div class="flex flex-wrap items-center gap-2">
 										<Badge variant="outline" class={statusClass(room.session_status)}>{statusLabel(room.session_status)}</Badge>
 										<Badge variant="outline" class={attentionClass(room)}>{readinessText(room)}</Badge>
 										{#if room.actor_role}
-											<Badge variant="outline" class="border-emerald-200 text-emerald-700">{roomRoleLabel(room.actor_role)}</Badge>
+											<Badge variant="outline" class="border-primary/20 text-primary">{roomRoleLabel(room.actor_role)}</Badge>
 										{/if}
 									</div>
 									<div>
-										<h2 class="text-lg font-semibold text-slate-900">{room.room_name}</h2>
-										<p class="text-sm text-slate-600">{room.session_title}</p>
-										<p class="mt-1 text-xs text-slate-500">{room.package_title} · {fmtDate(room.scheduled_start)}</p>
+										<h2 class="text-lg font-semibold text-foreground">{room.room_name}</h2>
+										<p class="text-sm text-muted-foreground">{room.session_title}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{room.package_title} · {fmtDate(room.scheduled_start)}</p>
 									</div>
 								</div>
-								<div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-center">
-									<p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Token Ruang</p>
-									<p class="font-mono text-lg font-bold tracking-[0.16em] text-emerald-950">{room.room_token || '—'}</p>
+								<div class="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-center">
+									<p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">Token Ruang</p>
+									<p class="font-mono text-lg font-bold tracking-[0.16em] text-primary">{room.room_token || '—'}</p>
 								</div>
 							</div>
 
 							<div class="mt-4 grid gap-2 text-sm sm:grid-cols-4">
-								<div class="border border-slate-200 bg-slate-50 p-3">
-									<p class="text-[11px] uppercase tracking-wide text-slate-500">Peserta</p>
-									<p class="font-semibold text-slate-900">{room.participant_count}</p>
+								<div class="border border-border bg-muted/50 p-3">
+									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Peserta</p>
+									<p class="font-semibold text-foreground">{room.participant_count}</p>
 								</div>
-								<div class="border border-slate-200 bg-slate-50 p-3">
-									<p class="text-[11px] uppercase tracking-wide text-slate-500">Online</p>
-									<p class="font-semibold text-emerald-700">{room.online_count}</p>
+								<div class="border border-border bg-muted/50 p-3">
+									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Online</p>
+									<p class="font-semibold text-primary">{room.online_count}</p>
 								</div>
-								<div class="border border-slate-200 bg-slate-50 p-3">
-									<p class="text-[11px] uppercase tracking-wide text-slate-500">Submit</p>
-									<p class="font-semibold text-slate-900">{room.submitted_count}</p>
+								<div class="border border-border bg-muted/50 p-3">
+									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Submit</p>
+									<p class="font-semibold text-foreground">{room.submitted_count}</p>
 								</div>
-								<div class="border border-slate-200 bg-slate-50 p-3">
-									<p class="text-[11px] uppercase tracking-wide text-slate-500">Atensi</p>
-									<p class="font-semibold text-amber-700">{room.suspicious_count}</p>
+								<div class="border border-border bg-muted/50 p-3">
+									<p class="text-[11px] uppercase tracking-wide text-muted-foreground">Atensi</p>
+									<p class="font-semibold text-warning">{room.suspicious_count}</p>
 								</div>
 							</div>
 
-							<div class="mt-4 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
-								<p><span class="font-semibold text-slate-700">Lokasi:</span> {roomLocation(room)}</p>
-								<p><span class="font-semibold text-slate-700">Pengawas:</span> {room.proctor_names || 'Belum ditugaskan'}</p>
-								<p><span class="font-semibold text-slate-700">Durasi:</span> {room.duration_minutes} menit</p>
-								<p><span class="font-semibold text-slate-700">Selesai:</span> {fmtDate(room.scheduled_end)}</p>
+							<div class="mt-4 grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
+								<p><span class="font-semibold text-foreground">Lokasi:</span> {roomLocation(room)}</p>
+								<p><span class="font-semibold text-foreground">Pengawas:</span> {room.proctor_names || 'Belum ditugaskan'}</p>
+								<p><span class="font-semibold text-foreground">Durasi:</span> {room.duration_minutes} menit</p>
+								<p><span class="font-semibold text-foreground">Selesai:</span> {fmtDate(room.scheduled_end)}</p>
 							</div>
 
 							<div class="mt-4 flex flex-wrap gap-2">
@@ -369,18 +369,18 @@
 					{/each}
 				</section>
 
-				<section class="border border-slate-200 bg-white shadow-sm">
-					<div class="flex items-center justify-between gap-3 border-b border-slate-100 p-4">
+				<section class="border border-border bg-card shadow-sm">
+					<div class="flex items-center justify-between gap-3 border-b border-border p-4">
 						<div>
-							<h2 class="text-base font-semibold text-slate-900">Tabel Ringkas Ruang</h2>
-							<p class="text-xs text-slate-500">Tampilan padat untuk membandingkan ruang ujian dan status operasional.</p>
+							<h2 class="text-base font-semibold text-foreground">Tabel Ringkas Ruang</h2>
+							<p class="text-xs text-muted-foreground">Tampilan padat untuk membandingkan ruang ujian dan status operasional.</p>
 						</div>
 						<Badge variant="outline">{filteredRooms.length} ruang</Badge>
 					</div>
 					<div class="overflow-x-auto">
 						<Table.Root>
 							<Table.Header>
-								<Table.Row class="bg-green-50">
+								<Table.Row class="bg-success/10">
 									<Table.Head>Ruang</Table.Head>
 									<Table.Head>Sesi</Table.Head>
 									<Table.Head>Status</Table.Head>
@@ -395,18 +395,18 @@
 								{#each filteredRooms as room (room.id)}
 									<Table.Row>
 										<Table.Cell>
-											<div class="font-medium text-slate-900">{room.room_name}</div>
-											<div class="font-mono text-xs text-slate-500">Token {room.room_token || '—'}</div>
+											<div class="font-medium text-foreground">{room.room_name}</div>
+											<div class="font-mono text-xs text-muted-foreground">Token {room.room_token || '—'}</div>
 										</Table.Cell>
 										<Table.Cell>
-											<div class="font-medium text-slate-800">{room.session_title}</div>
-											<div class="text-xs text-slate-500">{fmtDate(room.scheduled_start)}</div>
+											<div class="font-medium text-foreground">{room.session_title}</div>
+											<div class="text-xs text-muted-foreground">{fmtDate(room.scheduled_start)}</div>
 										</Table.Cell>
 										<Table.Cell><Badge variant="outline" class={statusClass(room.session_status)}>{statusLabel(room.session_status)}</Badge></Table.Cell>
 										<Table.Cell class="text-center font-mono">{room.participant_count}</Table.Cell>
-										<Table.Cell class="text-center font-mono text-emerald-700">{room.online_count}</Table.Cell>
-										<Table.Cell class="text-center font-mono text-amber-700">{room.suspicious_count + room.missing_seat_count}</Table.Cell>
-										<Table.Cell class="max-w-64 truncate text-sm text-slate-600">{room.proctor_names || '—'}</Table.Cell>
+										<Table.Cell class="text-center font-mono text-primary">{room.online_count}</Table.Cell>
+										<Table.Cell class="text-center font-mono text-warning">{room.suspicious_count + room.missing_seat_count}</Table.Cell>
+										<Table.Cell class="max-w-64 truncate text-sm text-muted-foreground">{room.proctor_names || '—'}</Table.Cell>
 										<Table.Cell class="text-right">
 											<div class="flex flex-wrap justify-end gap-2">
 												<Button size="sm" href={resolve(`/asesmen/sesi/${room.session_id}/rooms/${room.id}/proctoring`)} variant="outline">Dashboard</Button>

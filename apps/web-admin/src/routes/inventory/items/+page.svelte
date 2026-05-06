@@ -420,8 +420,8 @@
 <div class="space-y-4">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Daftar Barang</h1>
-			<p class="text-sm text-slate-500">Kelola master inventaris sekolah, lokasi penyimpanan, kondisi, dan batas restok.</p>
+			<h1 class="text-2xl font-semibold text-foreground">Daftar Barang</h1>
+			<p class="text-sm text-muted-foreground">Kelola master inventaris sekolah, lokasi penyimpanan, kondisi, dan batas restok.</p>
 		</div>
 		<div class="flex gap-2">
 			<Button variant="outline" onclick={exportCsv} size="sm" disabled={filtered.length === 0}>Ekspor CSV</Button>
@@ -431,11 +431,11 @@
 	</div>
 
 	{#if selectedIds.length > 0}
-		<Card.Root class="border-sky-200 bg-sky-50 shadow-sm">
+		<Card.Root class="border-accent bg-accent/60 shadow-sm">
 			<Card.Content class="flex flex-wrap items-center justify-between gap-3 p-4">
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Seleksi Batch Aktif</p>
-					<p class="mt-1 text-sm text-slate-700">{selectedIds.length} barang dipilih untuk mutasi lokasi atau kondisi.</p>
+					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-accent-foreground">Seleksi Batch Aktif</p>
+					<p class="mt-1 text-sm text-foreground">{selectedIds.length} barang dipilih untuk mutasi lokasi atau kondisi.</p>
 				</div>
 				<div class="flex gap-2">
 					<Button variant="outline" size="sm" onclick={() => (selectedIds = [])}>Kosongkan Pilihan</Button>
@@ -449,8 +449,8 @@
 		{#snippet pending()}
 			<div class="grid gap-3 md:grid-cols-3">
 				{#each ['Total Jenis', 'Hasil Filter', 'Perlu Restok'] as label (label)}
-					<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+					<div class="rounded-2xl border border-border bg-muted/50 px-4 py-4">
+						<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
 						<Skeleton class="mt-3 h-8 w-16" />
 						<Skeleton class="mt-2 h-4 w-52" />
 					</div>
@@ -470,33 +470,33 @@
 			{@const currentItems = value as Item[]}
 			{@const currentFiltered = filterItems(currentItems)}
 			<div class="grid gap-3 md:grid-cols-3">
-				<div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Total Jenis</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{currentItems.length}</p>
-					<p class="text-sm text-slate-600">barang inventaris yang sudah tercatat</p>
+				<div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Total Jenis</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{currentItems.length}</p>
+					<p class="text-sm text-muted-foreground">barang inventaris yang sudah tercatat</p>
 				</div>
-				<div class="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">Hasil Filter</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{currentFiltered.length}</p>
-					<p class="text-sm text-slate-600">barang yang cocok dengan filter aktif</p>
+				<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Hasil Filter</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{currentFiltered.length}</p>
+					<p class="text-sm text-muted-foreground">barang yang cocok dengan filter aktif</p>
 				</div>
-				<div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700">Perlu Restok</p>
-					<p class="mt-2 text-2xl font-semibold text-slate-900">{currentItems.filter((item) => item.jumlah_baik <= item.min_stock).length}</p>
-					<p class="text-sm text-slate-600">barang yang sudah menyentuh batas minimum</p>
+				<div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
+					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Perlu Restok</p>
+					<p class="mt-2 text-2xl font-semibold text-foreground">{currentItems.filter((item) => item.jumlah_baik <= item.min_stock).length}</p>
+					<p class="text-sm text-muted-foreground">barang yang sudah menyentuh batas minimum</p>
 				</div>
 			</div>
 		{/snippet}
 	</AsyncContent>
 
-	<Card.Root class="border-slate-200 shadow-sm">
+	<Card.Root class="border-border shadow-sm">
 		<Card.Content class="grid gap-3 p-4 md:grid-cols-3">
 			<div>
-				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Cari Barang</p>
+				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Cari Barang</p>
 				<Input class="w-full" placeholder="Cari nama, kode, atau lokasi…" bind:value={search} />
 			</div>
 			<div>
-				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Filter Kategori</p>
+				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Filter Kategori</p>
 				<select bind:value={filterKategori} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 					<option value="">Semua Kategori</option>
 					{#each KATEGORI_LIST as kategori (kategori)}
@@ -505,7 +505,7 @@
 				</select>
 			</div>
 			<div>
-				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Filter Kondisi</p>
+				<p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Filter Kondisi</p>
 				<select bind:value={filterKondisi} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 					<option value="">Semua Kondisi</option>
 					{#each KONDISI_LIST as kondisi (kondisi)}
@@ -516,7 +516,7 @@
 		</Card.Content>
 	</Card.Root>
 
-	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+	<Card.Root class="overflow-hidden border-border shadow-sm">
 		<Card.Content class="p-0">
 			<AsyncContent promise={itemsPromise} onerror={handleItemsRenderError}>
 				{#snippet pending()}
@@ -560,11 +560,11 @@
 					{:else}
 						<Table.Root>
 							<Table.Header>
-								<Table.Row class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+								<Table.Row class="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
 									<Table.Head class="w-12">
 										<input
 											type="checkbox"
-											class="h-4 w-4 rounded border-slate-300"
+											class="h-4 w-4 rounded border-border"
 											checked={currentFiltered.length > 0 && currentFiltered.every((item) => selectedIds.includes(item.id))}
 											onchange={(event) => toggleSelectAllVisible((event.currentTarget as HTMLInputElement).checked)}
 										/>
@@ -583,15 +583,15 @@
 										<Table.Cell>
 											<input
 												type="checkbox"
-												class="h-4 w-4 rounded border-slate-300"
+												class="h-4 w-4 rounded border-border"
 												checked={isSelected(item.id)}
 												onchange={(event) => toggleSelected(item.id, (event.currentTarget as HTMLInputElement).checked)}
 											/>
 										</Table.Cell>
-										<Table.Cell class="font-mono text-xs text-slate-600">{item.kode}</Table.Cell>
+										<Table.Cell class="font-mono text-xs text-muted-foreground">{item.kode}</Table.Cell>
 										<Table.Cell>
-											<p class="font-medium text-slate-900">{item.nama}</p>
-											<p class="text-xs text-slate-500">{item.kategori} · {item.satuan}</p>
+											<p class="font-medium text-foreground">{item.nama}</p>
+											<p class="text-xs text-muted-foreground">{item.kategori} · {item.satuan}</p>
 										</Table.Cell>
 										<Table.Cell>
 											<Badge variant={item.kondisi === 'rusak' ? 'destructive' : 'outline'}>
@@ -599,8 +599,8 @@
 											</Badge>
 										</Table.Cell>
 										<Table.Cell>
-											<p class="font-medium text-slate-900">{item.jumlah_baik} / {item.jumlah_total}</p>
-											<p class="text-xs text-slate-500">min. {item.min_stock}</p>
+											<p class="font-medium text-foreground">{item.jumlah_baik} / {item.jumlah_total}</p>
+											<p class="text-xs text-muted-foreground">min. {item.min_stock}</p>
 										</Table.Cell>
 										<Table.Cell>{item.lokasi || '—'}</Table.Cell>
 										<Table.Cell class="text-right">
@@ -639,18 +639,18 @@
 
 				<div class="grid gap-4 md:grid-cols-2">
 					<div>
-						<label for="kode" class="mb-1 block text-xs font-medium text-slate-600">Kode</label>
+						<label for="kode" class="mb-1 block text-xs font-medium text-muted-foreground">Kode</label>
 						<Input id="kode" bind:value={fKode} placeholder="INV-001" />
 					</div>
 					<div>
-						<label for="nama" class="mb-1 block text-xs font-medium text-slate-600">Nama Barang</label>
+						<label for="nama" class="mb-1 block text-xs font-medium text-muted-foreground">Nama Barang</label>
 						<Input id="nama" bind:value={fNama} placeholder="Proyektor Kelas 8A" />
 					</div>
 				</div>
 
 				<div class="grid gap-4 md:grid-cols-2">
 					<div>
-						<label for="kategori" class="mb-1 block text-xs font-medium text-slate-600">Kategori</label>
+						<label for="kategori" class="mb-1 block text-xs font-medium text-muted-foreground">Kategori</label>
 						<select id="kategori" bind:value={fKategori} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 							{#each KATEGORI_LIST as kategori (kategori)}
 								<option value={kategori}>{kategori.charAt(0).toUpperCase() + kategori.slice(1)}</option>
@@ -658,7 +658,7 @@
 						</select>
 					</div>
 					<div>
-						<label for="lokasi" class="mb-1 block text-xs font-medium text-slate-600">Lokasi</label>
+						<label for="lokasi" class="mb-1 block text-xs font-medium text-muted-foreground">Lokasi</label>
 						<Input id="lokasi" bind:value={fLokasi} placeholder="Gudang Utama / Kelas / Lab" />
 					</div>
 				</div>
@@ -666,7 +666,7 @@
 				{#if formMode === 'advance'}
 					<div class="grid gap-4 md:grid-cols-3">
 						<div>
-							<label for="kondisi" class="mb-1 block text-xs font-medium text-slate-600">Kondisi</label>
+							<label for="kondisi" class="mb-1 block text-xs font-medium text-muted-foreground">Kondisi</label>
 							<select id="kondisi" bind:value={fKondisi} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 								{#each KONDISI_LIST as kondisi (kondisi)}
 									<option value={kondisi}>{conditionLabel(kondisi)}</option>
@@ -674,11 +674,11 @@
 							</select>
 						</div>
 						<div>
-							<label for="satuan" class="mb-1 block text-xs font-medium text-slate-600">Satuan</label>
+							<label for="satuan" class="mb-1 block text-xs font-medium text-muted-foreground">Satuan</label>
 							<Input id="satuan" bind:value={fSatuan} placeholder="unit / pcs / set" />
 						</div>
 						<div>
-							<label for="min-stock" class="mb-1 block text-xs font-medium text-slate-600">Batas Restok</label>
+							<label for="min-stock" class="mb-1 block text-xs font-medium text-muted-foreground">Batas Restok</label>
 							<Input id="min-stock" type="number" bind:value={fMinStock} min="0" />
 						</div>
 					</div>
@@ -686,18 +686,18 @@
 
 				<div class="grid gap-4 md:grid-cols-2">
 					<div>
-						<label for="jumlah-total" class="mb-1 block text-xs font-medium text-slate-600">Jumlah Total</label>
+						<label for="jumlah-total" class="mb-1 block text-xs font-medium text-muted-foreground">Jumlah Total</label>
 						<Input id="jumlah-total" type="number" bind:value={fJumlahTotal} min="1" />
 					</div>
 					<div>
-						<label for="jumlah-baik" class="mb-1 block text-xs font-medium text-slate-600">Jumlah Kondisi Baik</label>
+						<label for="jumlah-baik" class="mb-1 block text-xs font-medium text-muted-foreground">Jumlah Kondisi Baik</label>
 						<Input id="jumlah-baik" type="number" bind:value={fJumlahBaik} min="0" max={fJumlahTotal} />
 					</div>
 				</div>
 
 				{#if formMode === 'advance'}
 					<div>
-						<label for="catatan" class="mb-1 block text-xs font-medium text-slate-600">Catatan</label>
+						<label for="catatan" class="mb-1 block text-xs font-medium text-muted-foreground">Catatan</label>
 						<Input id="catatan" bind:value={fCatatan} placeholder="Mis. butuh servis lampu atau dipakai bersama lintas kelas" />
 					</div>
 				{/if}
@@ -722,9 +722,9 @@
 			</Dialog.Header>
 
 			<div class="space-y-4">
-				<div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Barang Terpilih</p>
-					<p class="mt-1 text-sm text-slate-700">
+				<div class="rounded-xl border border-border bg-muted/50 p-3">
+					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Barang Terpilih</p>
+					<p class="mt-1 text-sm text-foreground">
 						{selectedItems.slice(0, 4).map((item) => item.nama).join(', ')}
 						{#if selectedItems.length > 4}
 							, dan {selectedItems.length - 4} barang lainnya
@@ -734,11 +734,11 @@
 
 				<div class="grid gap-4 md:grid-cols-2">
 					<div>
-						<label for="batch-lokasi" class="mb-1 block text-xs font-medium text-slate-600">Lokasi Baru</label>
+						<label for="batch-lokasi" class="mb-1 block text-xs font-medium text-muted-foreground">Lokasi Baru</label>
 						<Input id="batch-lokasi" bind:value={batchLokasi} placeholder="Kosongkan jika lokasi tidak diubah" />
 					</div>
 					<div>
-						<label for="batch-kondisi" class="mb-1 block text-xs font-medium text-slate-600">Kondisi Baru</label>
+						<label for="batch-kondisi" class="mb-1 block text-xs font-medium text-muted-foreground">Kondisi Baru</label>
 						<select id="batch-kondisi" bind:value={batchKondisi} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
 							<option value="">Tidak diubah</option>
 							{#each KONDISI_LIST as kondisi (kondisi)}
@@ -748,7 +748,7 @@
 					</div>
 				</div>
 
-				<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-slate-700">
+				<div class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">
 					Mutasi batch ini cocok untuk perpindahan antarruang atau penyamaan status kondisi setelah pengecekan lapangan. Jika hanya satu barang yang berubah, tetap lebih aman memakai tombol edit per barang.
 				</div>
 
@@ -778,7 +778,7 @@
 					{#snippet pending()}
 						<div class="space-y-3">
 							{#each Array.from({ length: 4 }) as _, index (`inventory-history-skeleton-${index}`)}
-								<div class="rounded-xl border border-slate-200 p-3">
+								<div class="rounded-xl border border-border p-3">
 									<Skeleton class="h-4 w-24" />
 									<Skeleton class="mt-2 h-4 w-full" />
 									<Skeleton class="mt-2 h-3 w-36" />
@@ -796,13 +796,13 @@
 						{:else}
 							<div class="max-h-[420px] space-y-3 overflow-y-auto pr-1">
 								{#each currentEvents as event (event.id)}
-									<div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+									<div class="rounded-xl border border-border bg-muted/50 p-3">
 										<div class="flex items-start justify-between gap-3">
 											<Badge variant="outline">{actionLabel(event.action)}</Badge>
-											<p class="text-xs text-slate-500">{formatDateTime(event.created_at)}</p>
+											<p class="text-xs text-muted-foreground">{formatDateTime(event.created_at)}</p>
 										</div>
-										<p class="mt-2 text-sm text-slate-700">{event.summary}</p>
-										<p class="mt-2 text-xs text-slate-500">
+										<p class="mt-2 text-sm text-foreground">{event.summary}</p>
+										<p class="mt-2 text-xs text-muted-foreground">
 											{event.actor_username ? `oleh ${event.actor_username}` : 'oleh sistem'}
 										</p>
 									</div>

@@ -62,9 +62,9 @@
 	<div class="mx-auto max-w-5xl space-y-6">
 		<section class="space-y-4">
 			<div class="space-y-2">
-				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">CBT · Hasil</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-slate-900">Hasil CBT</h1>
-				<p class="max-w-2xl text-sm leading-6 text-slate-600">
+				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">CBT · Hasil</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Hasil CBT</h1>
+				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
 					{#if userRoles.includes('admin')}
 						Pilih pekerjaan hasil yang ingin dibuka. Rekap kegiatan, hasil sesi, dan analisis soal tetap berada di halaman detail yang sudah tersedia.
 					{:else}
@@ -79,13 +79,13 @@
 			{#each resultPaths as path (path.title)}
 				<a
 					href={resolve(path.href)}
-					class="group block h-full rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2"
+					class="group block h-full rounded-xl focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
 				>
 					<Card.Root
-						class="h-full border-slate-200 bg-white shadow-sm transition group-hover:border-emerald-300 group-hover:shadow-md"
+						class="h-full border-border bg-card shadow-sm transition group-hover:border-primary/20 group-hover:shadow-md"
 					>
 						<Card.Header class="space-y-3 p-6">
-							<Card.Title class="text-2xl text-slate-900">{path.title}</Card.Title>
+							<Card.Title class="text-2xl text-foreground">{path.title}</Card.Title>
 							<Card.Description class="text-sm leading-6">{path.description}</Card.Description>
 						</Card.Header>
 					</Card.Root>
@@ -95,15 +95,15 @@
 	</div>
 {:else}
 	<div class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 py-16 text-center">
-		<div class="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-			<h2 class="text-xl font-semibold text-slate-900">Akses terbatas</h2>
-			<p class="mt-3 text-sm leading-6 text-slate-600">
+		<div class="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
+			<h2 class="text-xl font-semibold text-foreground">Akses terbatas</h2>
+			<p class="mt-3 text-sm leading-6 text-muted-foreground">
 				Halaman Hasil hanya tersedia untuk admin dan guru. Silakan gunakan akun guru Anda atau hubungi administrator.
 			</p>
 			<div class="mt-6">
 				<a
 					href={resolve('/asesmen')}
-					class="inline-flex rounded-md border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-50"
+					class="inline-flex rounded-md border border-primary/20 bg-card px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/10"
 				>
 					Kembali ke Dashboard CBT
 				</a>

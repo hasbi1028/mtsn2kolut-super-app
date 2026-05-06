@@ -119,12 +119,12 @@
 <svelte:head><title>Buat Kegiatan CBT — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
-	<section class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 p-6 shadow-sm">
+	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-2">
-				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Create Flow CBT</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-slate-950">Buat Kegiatan CBT</h1>
-				<p class="text-sm leading-6 text-slate-600">Isi identitas kegiatan sekali, lalu lanjutkan ke paket, sesi, peserta, dan token dari daftar kegiatan.</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Create Flow CBT</p>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Buat Kegiatan CBT</h1>
+				<p class="text-sm leading-6 text-muted-foreground">Isi identitas kegiatan sekali, lalu lanjutkan ke paket, sesi, peserta, dan token dari daftar kegiatan.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">
 				<Button href={resolve('/asesmen/persiapan')} variant="outline">Persiapan CBT</Button>
@@ -135,7 +135,7 @@
 
 	<AsyncContent promise={formPromise} onerror={handleRenderError}>
 		{#snippet pending()}
-			<Card.Root class="border-slate-200 shadow-sm">
+			<Card.Root class="border-border shadow-sm">
 				<Card.Content class="grid gap-3 p-6 sm:grid-cols-2">
 					<Skeleton class="h-10 sm:col-span-2" />
 					<Skeleton class="h-10" />
@@ -150,7 +150,7 @@
 		{/snippet}
 
 		{#snippet children()}
-			<Card.Root class="border-slate-200 shadow-sm">
+			<Card.Root class="border-border shadow-sm">
 				<Card.Header>
 					<Card.Title class="text-base">Identitas Kegiatan</Card.Title>
 					<Card.Description>Payload mengikuti endpoint <code>/api/asesmen/events</code> yang dipakai form lama.</Card.Description>
@@ -158,11 +158,11 @@
 				<Card.Content class="space-y-4">
 					<div class="grid gap-3 sm:grid-cols-2">
 						<div class="sm:col-span-2">
-							<label for="event-title" class="mb-1 block text-xs text-slate-500">Judul Kegiatan <span class="text-red-500">*</span></label>
+							<label for="event-title" class="mb-1 block text-xs text-muted-foreground">Judul Kegiatan <span class="text-destructive">*</span></label>
 							<Input id="event-title" placeholder="mis: UTS Semester Ganjil 2025/2026" bind:value={fTitle} />
 						</div>
 						<div>
-							<label for="event-year" class="mb-1 block text-xs text-slate-500">Tahun Ajaran <span class="text-red-500">*</span></label>
+							<label for="event-year" class="mb-1 block text-xs text-muted-foreground">Tahun Ajaran <span class="text-destructive">*</span></label>
 							<select id="event-year" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fYearId}>
 								<option value="">-- Pilih --</option>
 								{#each years as year (year.id)}
@@ -171,7 +171,7 @@
 							</select>
 						</div>
 						<div>
-							<label for="event-type" class="mb-1 block text-xs text-slate-500">Jenis Ujian</label>
+							<label for="event-type" class="mb-1 block text-xs text-muted-foreground">Jenis Ujian</label>
 							<select id="event-type" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fType}>
 								{#each Object.entries(typeLabel) as [value, label] (value)}
 									<option value={value}>{label}</option>
@@ -179,7 +179,7 @@
 							</select>
 						</div>
 						<div>
-							<label for="event-scope" class="mb-1 block text-xs text-slate-500">Cakupan</label>
+							<label for="event-scope" class="mb-1 block text-xs text-muted-foreground">Cakupan</label>
 							<select id="event-scope" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fScope}>
 								{#each Object.entries(scopeLabel) as [value, label] (value)}
 									<option value={value}>{label}</option>
@@ -187,7 +187,7 @@
 							</select>
 						</div>
 						<div>
-							<label for="event-status" class="mb-1 block text-xs text-slate-500">Status Awal</label>
+							<label for="event-status" class="mb-1 block text-xs text-muted-foreground">Status Awal</label>
 							<select id="event-status" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fStatus}>
 								{#each Object.entries(statusLabel) as [value, label] (value)}
 									<option value={value}>{label}</option>
@@ -195,16 +195,16 @@
 							</select>
 						</div>
 						<fieldset class="sm:col-span-2">
-							<legend class="mb-2 block text-xs text-slate-500">Tingkat yang diikutkan</legend>
+							<legend class="mb-2 block text-xs text-muted-foreground">Tingkat yang diikutkan</legend>
 							<div class="grid gap-2 sm:grid-cols-3">
 								{#each gradeOptions as level (level)}
-									<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-slate-700">
+									<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground">
 										<input type="checkbox" checked={fTargetLevels.includes(level)} onchange={(event) => toggleTargetLevel(level, event.currentTarget.checked)} class="size-4 accent-emerald-700" />
 										<span>Tingkat {level}</span>
 									</label>
 								{/each}
 							</div>
-							<p class="mt-2 text-xs text-slate-500">Kosong berarti mengikuti cakupan biasa. Isi untuk kegiatan yang hanya berlaku bagi tingkat tertentu.</p>
+							<p class="mt-2 text-xs text-muted-foreground">Kosong berarti mengikuti cakupan biasa. Isi untuk kegiatan yang hanya berlaku bagi tingkat tertentu.</p>
 						</fieldset>
 					</div>
 

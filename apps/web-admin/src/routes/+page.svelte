@@ -274,14 +274,14 @@
 	<PublicHome home={data.publicHome} />
 {:else}
 	<div class="space-y-6">
-		<div class="overflow-hidden rounded-[1.75rem] border border-emerald-100 bg-[linear-gradient(135deg,_#f0fdf4_0%,_#ffffff_52%,_#fff7ed_100%)] shadow-sm">
+		<div class="overflow-hidden rounded-[1.75rem] border border-border bg-card shadow-sm">
 			<div class="grid gap-5 p-5 md:grid-cols-[1fr_auto] md:p-6">
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.26em] text-emerald-700">{dashboardEyebrow}</p>
-					<h1 class="mt-3 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">{dashboardTitle}</h1>
-					<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{dashboardDescription}</p>
+					<p class="text-xs font-semibold uppercase tracking-[0.26em] text-primary">{dashboardEyebrow}</p>
+					<h1 class="mt-3 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{dashboardTitle}</h1>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{dashboardDescription}</p>
 					<div class="mt-4 flex flex-wrap gap-2">
-						<Badge class="border-emerald-200 bg-emerald-50 text-emerald-800">Role: {dashboardRoleLabel}</Badge>
+						<Badge class="border-primary/20 bg-primary/10 text-primary">Role: {dashboardRoleLabel}</Badge>
 						<Badge variant="outline">MTsN 2 Kolaka Utara</Badge>
 						<Badge variant="outline">WITA</Badge>
 					</div>
@@ -303,7 +303,7 @@
 			{#if isSiswa}
 				<div class="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
 					{#each Array.from({ length: 2 }) as _, index (`student-dashboard-skeleton-${index}`)}
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Header class="space-y-2">
 								<Skeleton class="h-6 w-40" />
 								<Skeleton class="h-4 w-56" />
@@ -319,7 +319,7 @@
 			{:else if isParent}
 				<div class="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
 					{#each Array.from({ length: 2 }) as _, index (`parent-dashboard-skeleton-${index}`)}
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Header class="space-y-2">
 								<Skeleton class="h-6 w-36" />
 								<Skeleton class="h-4 w-44" />
@@ -335,7 +335,7 @@
 			{:else if isGuru}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 					{#each Array.from({ length: 4 }) as _, index (`guru-stat-skeleton-${index}`)}
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Content class="space-y-2 pt-4">
 								<Skeleton class="h-4 w-28" />
 								<Skeleton class="h-8 w-16" />
@@ -346,7 +346,7 @@
 		{:else if isAdmin}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 					{#each Array.from({ length: 4 }) as _, index (`admin-stat-skeleton-${index}`)}
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Content class="space-y-2 pt-4">
 								<Skeleton class="h-4 w-28" />
 								<Skeleton class="h-8 w-16" />
@@ -358,10 +358,10 @@
 		{/snippet}
 
 		{#snippet failed(error, reset)}
-			<Card.Root class="border-amber-200 bg-amber-50/60">
+			<Card.Root class="border-warning/30 bg-warning/10">
 				<Card.Header>
-					<Card.Title class="text-base text-amber-900">Dashboard belum berhasil dimuat</Card.Title>
-					<Card.Description class="text-amber-800">
+					<Card.Title class="text-base text-warning">Dashboard belum berhasil dimuat</Card.Title>
+					<Card.Description class="text-warning">
 						{dashboardErrorMessage(error)}
 					</Card.Description>
 				</Card.Header>
@@ -390,7 +390,7 @@
 
 			{#if isSiswa && studentPortal}
 				<div class="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
-			<Card.Root class="border-emerald-100">
+			<Card.Root class="border-primary/20">
 				<Card.Header>
 					<Card.Title class="text-base">Profil Akademik</Card.Title>
 					<Card.Description>{studentPortal.student.nama} · NIS {studentPortal.student.nis}</Card.Description>
@@ -398,17 +398,17 @@
 				<Card.Content class="space-y-3">
 					<div class="flex flex-wrap gap-2">
 						<Badge variant="outline">{studentPortal.student.class_code || studentPortal.student.class_name || 'Belum ada kelas'}</Badge>
-						<Badge class={studentPortal.student.status === 'active' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600'}>{studentPortal.student.status}</Badge>
+						<Badge class={studentPortal.student.status === 'active' ? 'bg-primary/15 text-primary border-primary/20' : 'bg-muted text-muted-foreground'}>{studentPortal.student.status}</Badge>
 					</div>
-					<p class="text-sm text-slate-600">Kontak wali utama: {studentPortal.student.parent_phone || 'belum diisi'}</p>
+					<p class="text-sm text-muted-foreground">Kontak wali utama: {studentPortal.student.parent_phone || 'belum diisi'}</p>
 					{#if studentPortal.parents.length > 0}
-						<div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Wali Terhubung</p>
+						<div class="rounded-xl border border-border bg-muted/50 p-3">
+							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Wali Terhubung</p>
 							<div class="mt-2 space-y-2">
 								{#each studentPortal.parents as parent (parent.id)}
 									<div class="flex items-center justify-between gap-3 text-sm">
-										<span class="font-medium text-slate-900">{parent.nama}</span>
-										<span class="text-slate-500">{parent.phone || '—'}</span>
+										<span class="font-medium text-foreground">{parent.nama}</span>
+										<span class="text-muted-foreground">{parent.phone || '—'}</span>
 									</div>
 								{/each}
 							</div>
@@ -417,7 +417,7 @@
 				</Card.Content>
 			</Card.Root>
 
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header>
 					<Card.Title class="text-base">Ujian Saya</Card.Title>
 					<Card.Description>Sesi terbaru yang terdaftar untuk akun ini.</Card.Description>
@@ -425,13 +425,13 @@
 				<Card.Content class="space-y-3">
 					{#if studentPortal.sessions.length > 0}
 						{#each studentPortal.sessions.slice(0, 4) as session (session.participant_id)}
-							<div class="rounded-xl border border-slate-200 bg-white p-3">
+							<div class="rounded-xl border border-border bg-card p-3">
 								<div class="flex items-start justify-between gap-3">
-									<p class="text-sm font-medium text-slate-900">{session.session_title}</p>
+									<p class="text-sm font-medium text-foreground">{session.session_title}</p>
 									<Badge variant="outline">{session.session_status}</Badge>
 								</div>
-								<p class="mt-2 text-xs text-slate-500">{fmtDateTime(session.scheduled_start)}</p>
-								<p class="mt-1 text-xs text-slate-500">Ruang {session.room_name || '—'} · Meja {session.seat_no ?? '—'}</p>
+								<p class="mt-2 text-xs text-muted-foreground">{fmtDateTime(session.scheduled_start)}</p>
+								<p class="mt-1 text-xs text-muted-foreground">Ruang {session.room_name || '—'} · Meja {session.seat_no ?? '—'}</p>
 							</div>
 						{/each}
 					{:else}
@@ -445,7 +445,7 @@
 			</Card.Root>
 				</div>
 
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 			<Card.Header>
 				<Card.Title class="text-base">Jadwal Pelajaran Minggu Ini</Card.Title>
 				<Card.Description>Slot belajar yang tersusun untuk kelas {studentPortal.student.class_code || studentPortal.student.class_name || 'aktif'}.</Card.Description>
@@ -454,17 +454,17 @@
 				{#if studentPortal.timetable.length > 0}
 					<div class="grid gap-3 lg:grid-cols-2">
 						{#each studentPortal.timetable as slot (slot.id)}
-							<div class="rounded-xl border border-slate-200 bg-white p-3">
+							<div class="rounded-xl border border-border bg-card p-3">
 								<div class="flex items-start justify-between gap-3">
 									<div>
-										<p class="text-sm font-medium text-slate-900">{slot.subject_name}</p>
-										<p class="mt-1 text-xs text-slate-500">{slot.teacher_name}</p>
+										<p class="text-sm font-medium text-foreground">{slot.subject_name}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{slot.teacher_name}</p>
 									</div>
 									<Badge variant="outline">{dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`}</Badge>
 								</div>
-								<p class="mt-2 text-xs text-slate-500">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
+								<p class="mt-2 text-xs text-muted-foreground">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
 								{#if slot.notes}
-									<p class="mt-1 text-xs text-slate-500">{slot.notes}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{slot.notes}</p>
 								{/if}
 							</div>
 						{/each}
@@ -482,18 +482,18 @@
 
 			{#if isParent && parentPortal}
 				<div class="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
-			<Card.Root class="border-emerald-100">
+			<Card.Root class="border-primary/20">
 				<Card.Header>
 					<Card.Title class="text-base">Profil Wali</Card.Title>
 					<Card.Description>{parentPortal.parent.nama}</Card.Description>
 				</Card.Header>
-				<Card.Content class="space-y-2 text-sm text-slate-600">
+				<Card.Content class="space-y-2 text-sm text-muted-foreground">
 					<p>Nomor HP: {parentPortal.parent.phone || 'belum diisi'}</p>
 					<p>Alamat: {parentPortal.parent.address || 'belum diisi'}</p>
 				</Card.Content>
 			</Card.Root>
 
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header>
 					<Card.Title class="text-base">Anak Terhubung</Card.Title>
 					<Card.Description>Data siswa yang sudah ditautkan ke akun orang tua ini.</Card.Description>
@@ -501,11 +501,11 @@
 				<Card.Content class="space-y-3">
 					{#if parentPortal.children.length > 0}
 						{#each parentPortal.children as child (child.id)}
-							<div class="rounded-xl border border-slate-200 bg-white p-3">
+							<div class="rounded-xl border border-border bg-card p-3">
 								<div class="flex items-start justify-between gap-3">
 									<div>
-										<p class="text-sm font-medium text-slate-900">{child.nama}</p>
-										<p class="mt-1 text-xs text-slate-500">NIS {child.nis}</p>
+										<p class="text-sm font-medium text-foreground">{child.nama}</p>
+										<p class="mt-1 text-xs text-muted-foreground">NIS {child.nis}</p>
 									</div>
 									<Badge variant="outline">{child.class_name || 'Belum ada kelas'}</Badge>
 								</div>
@@ -522,7 +522,7 @@
 			</Card.Root>
 				</div>
 
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 			<Card.Header>
 				<Card.Title class="text-base">Jadwal Anak</Card.Title>
 				<Card.Description>Ringkasan slot pelajaran untuk setiap anak yang sudah terhubung ke akun orang tua ini.</Card.Description>
@@ -530,11 +530,11 @@
 			<Card.Content class="space-y-4">
 				{#if parentTimetableByChild.length > 0}
 					{#each parentTimetableByChild as item (`parent-timetable-${item.child.id}`)}
-						<div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+						<div class="rounded-2xl border border-border bg-muted/50 p-4">
 							<div class="flex items-start justify-between gap-3">
 								<div>
-									<p class="text-sm font-semibold text-slate-900">{item.child.nama}</p>
-									<p class="mt-1 text-xs text-slate-500">{item.child.class_name || 'Belum ada kelas'}</p>
+									<p class="text-sm font-semibold text-foreground">{item.child.nama}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{item.child.class_name || 'Belum ada kelas'}</p>
 								</div>
 								<Badge variant="outline">{item.slots.length} slot</Badge>
 							</div>
@@ -542,23 +542,23 @@
 							{#if item.slots.length > 0}
 								<div class="mt-3 grid gap-3 lg:grid-cols-2">
 									{#each item.slots as slot (slot.id)}
-										<div class="rounded-xl border border-slate-200 bg-white p-3">
+										<div class="rounded-xl border border-border bg-card p-3">
 											<div class="flex items-start justify-between gap-3">
 												<div>
-													<p class="text-sm font-medium text-slate-900">{slot.subject_name}</p>
-													<p class="mt-1 text-xs text-slate-500">{slot.teacher_name}</p>
+													<p class="text-sm font-medium text-foreground">{slot.subject_name}</p>
+													<p class="mt-1 text-xs text-muted-foreground">{slot.teacher_name}</p>
 												</div>
 												<Badge variant="outline">{dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`}</Badge>
 											</div>
-											<p class="mt-2 text-xs text-slate-500">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
+											<p class="mt-2 text-xs text-muted-foreground">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
 											{#if slot.notes}
-												<p class="mt-1 text-xs text-slate-500">{slot.notes}</p>
+												<p class="mt-1 text-xs text-muted-foreground">{slot.notes}</p>
 											{/if}
 										</div>
 									{/each}
 								</div>
 							{:else}
-								<div class="mt-3 rounded-xl border border-dashed border-slate-300 bg-white px-3 py-4 text-sm text-slate-500">
+								<div class="mt-3 rounded-xl border border-dashed border-border bg-card px-3 py-4 text-sm text-muted-foreground">
 									Jadwal untuk anak ini belum tersedia.
 								</div>
 							{/if}
@@ -577,13 +577,13 @@
 
 			{#if isGuru && guruStats}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sesi CBT Berjalan</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.active_sessions}</p></Card.Content></Card.Root>
-			<Card.Root class="border-amber-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Esai Belum Dikoreksi</p><p class="mt-1 text-3xl font-bold text-amber-700">{guruStats.ungraded_essays}</p></Card.Content></Card.Root>
-			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Siswa Terpantau</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.my_students}</p></Card.Content></Card.Root>
-			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Diampu</p><p class="mt-1 text-3xl font-bold text-green-800">{guruStats.my_subjects}</p></Card.Content></Card.Root>
+			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sesi CBT Berjalan</p><p class="mt-1 text-3xl font-bold text-success">{guruStats.active_sessions}</p></Card.Content></Card.Root>
+			<Card.Root class="border-warning/30"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Esai Belum Dikoreksi</p><p class="mt-1 text-3xl font-bold text-warning">{guruStats.ungraded_essays}</p></Card.Content></Card.Root>
+			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Siswa Terpantau</p><p class="mt-1 text-3xl font-bold text-success">{guruStats.my_students}</p></Card.Content></Card.Root>
+			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Diampu</p><p class="mt-1 text-3xl font-bold text-success">{guruStats.my_subjects}</p></Card.Content></Card.Root>
 				</div>
 
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 			<Card.Header>
 				<Card.Title class="text-base">Jadwal Mengajar</Card.Title>
 				<Card.Description>Ringkasan slot kelas-mapel yang sudah dijadwalkan untuk guru pada minggu berjalan.</Card.Description>
@@ -592,17 +592,17 @@
 				{#if guruTimetable.length > 0}
 					<div class="grid gap-3 lg:grid-cols-2">
 						{#each guruTimetable as slot (slot.id)}
-							<div class="rounded-xl border border-slate-200 bg-white p-3">
+							<div class="rounded-xl border border-border bg-card p-3">
 								<div class="flex items-start justify-between gap-3">
 									<div>
-										<p class="text-sm font-medium text-slate-900">{slot.subject_name}</p>
-										<p class="mt-1 text-xs text-slate-500">{slot.class_code} · {slot.class_name}</p>
+										<p class="text-sm font-medium text-foreground">{slot.subject_name}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{slot.class_code} · {slot.class_name}</p>
 									</div>
 									<Badge variant="outline">{dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`}</Badge>
 								</div>
-								<p class="mt-2 text-xs text-slate-500">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
+								<p class="mt-2 text-xs text-muted-foreground">{fmtTime(slot.start_time)}–{fmtTime(slot.end_time)} · {slot.room_label || 'Ruang belum diisi'}</p>
 								{#if slot.notes}
-									<p class="mt-1 text-xs text-slate-500">{slot.notes}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{slot.notes}</p>
 								{/if}
 							</div>
 						{/each}
@@ -620,15 +620,15 @@
 
 			{#if isAdmin}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Siswa</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_students ?? '—'}</p></Card.Content></Card.Root>
-			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Kelas Aktif</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_classes ?? '—'}</p></Card.Content></Card.Root>
-			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Aktif</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_subjects ?? '—'}</p></Card.Content></Card.Root>
-			<Card.Root class="border-green-100"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tahun Ajaran</p><p class="mt-1 text-3xl font-bold text-green-800">{academicStats?.total_years ?? '—'}</p></Card.Content></Card.Root>
+			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Total Siswa</p><p class="mt-1 text-3xl font-bold text-success">{academicStats?.total_students ?? '—'}</p></Card.Content></Card.Root>
+			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Kelas Aktif</p><p class="mt-1 text-3xl font-bold text-success">{academicStats?.total_classes ?? '—'}</p></Card.Content></Card.Root>
+			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapel Aktif</p><p class="mt-1 text-3xl font-bold text-success">{academicStats?.total_subjects ?? '—'}</p></Card.Content></Card.Root>
+			<Card.Root class="border-success/20"><Card.Content class="pt-4"><p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tahun Ajaran</p><p class="mt-1 text-3xl font-bold text-success">{academicStats?.total_years ?? '—'}</p></Card.Content></Card.Root>
 				</div>
 			{/if}
 
 			{#if isStaff}
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 			<Card.Header>
 				<Card.Title class="text-base">Akses Cepat Staf</Card.Title>
 				<Card.Description>Menu yang paling sering dipakai untuk layanan data orang tua dan siswa.</Card.Description>
@@ -644,7 +644,7 @@
 			{/if}
 
 			{#if isAdmin}
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 			<Card.Header class="pb-3">
 				<div class="flex items-center justify-between">
 					<div>

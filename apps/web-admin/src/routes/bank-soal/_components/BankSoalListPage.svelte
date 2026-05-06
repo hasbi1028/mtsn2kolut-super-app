@@ -252,11 +252,11 @@
 	};
 
 	const subjectChartColors = [
-		'bg-sky-500',
-		'bg-emerald-500',
+		'bg-accent',
+		'bg-primary',
 		'bg-rose-500',
 		'bg-violet-500',
-		'bg-amber-500',
+		'bg-warning',
 		'bg-cyan-500',
 		'bg-lime-600',
 		'bg-orange-600'
@@ -721,10 +721,10 @@
 	}
 
 	function activityToneClass(tone: string): string {
-		if (tone === 'approved' || tone === 'published') return 'border-emerald-200 bg-emerald-50 text-emerald-800';
-		if (tone === 'review') return 'border-amber-200 bg-amber-50 text-amber-800';
-		if (tone === 'rejected') return 'border-red-200 bg-red-50 text-red-700';
-		return 'border-slate-200 bg-slate-50 text-slate-700';
+		if (tone === 'approved' || tone === 'published') return 'border-primary/20 bg-primary/10 text-primary';
+		if (tone === 'review') return 'border-warning/30 bg-warning/10 text-warning';
+		if (tone === 'rejected') return 'border-destructive/30 bg-destructive/10 text-destructive';
+		return 'border-border bg-muted/50 text-foreground';
 	}
 
 	function compactText(value: string | undefined | null, fallback = '-'): string {
@@ -799,34 +799,34 @@
 	function workflowBadgeClass(value: string | undefined): string {
 		switch (value) {
 			case 'review':
-				return 'border-amber-200 bg-amber-50 text-amber-800';
+				return 'border-warning/30 bg-warning/10 text-warning';
 			case 'approved':
-				return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+				return 'border-primary/20 bg-primary/10 text-primary';
 			case 'rejected':
-				return 'border-red-200 bg-red-50 text-red-700';
+				return 'border-destructive/30 bg-destructive/10 text-destructive';
 			case 'draft':
-				return 'border-slate-200 bg-slate-50 text-slate-700';
+				return 'border-border bg-muted/50 text-foreground';
 			default:
-				return 'border-slate-200 bg-white text-slate-600';
+				return 'border-border bg-card text-muted-foreground';
 		}
 	}
 
 	function publicationBadgeClass(value: string | undefined): string {
-		if (value === 'published') return 'border-green-200 bg-green-50 text-green-800';
-		return 'border-slate-200 bg-white text-slate-600';
+		if (value === 'published') return 'border-success/20 bg-success/10 text-success';
+		return 'border-border bg-card text-muted-foreground';
 	}
 
 	function summaryCardClass(card: SummaryCard): string {
-		const active = card.active ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-emerald-200 hover:bg-emerald-50/40';
+		const active = card.active ? 'border-primary bg-primary/10 shadow-sm' : 'border-border bg-card hover:border-primary/20 hover:bg-primary/10';
 		return `rounded-lg border p-4 text-left transition ${active}`;
 	}
 
 	function summaryValueClass(card: SummaryCard): string {
-		if (card.tone === 'amber') return 'text-amber-800';
-		if (card.tone === 'red') return 'text-red-700';
-		if (card.tone === 'green') return 'text-green-800';
-		if (card.tone === 'emerald') return 'text-emerald-800';
-		return 'text-slate-900';
+		if (card.tone === 'amber') return 'text-warning';
+		if (card.tone === 'red') return 'text-destructive';
+		if (card.tone === 'green') return 'text-success';
+		if (card.tone === 'emerald') return 'text-primary';
+		return 'text-foreground';
 	}
 
 	function handleQuestionsRenderError(error: unknown, reset: () => void) {
@@ -849,14 +849,14 @@
 
 <div class="space-y-5">
 	{#if showDashboard}
-	<section class="overflow-hidden rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-950 via-emerald-900 to-amber-900 text-white shadow-sm">
+	<section class="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-emerald-950 via-emerald-900 to-amber-900 text-white shadow-sm">
 		<div class="relative p-5 md:p-6">
 			<div class="absolute right-6 top-6 hidden h-28 w-28 rounded-full bg-amber-300/20 blur-2xl lg:block"></div>
 			<div class="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
 				<div class="max-w-3xl space-y-3">
 					<div class="flex flex-wrap items-center gap-2">
 						<Badge variant="outline" class="border-white/25 bg-white/10 text-white">SCS · Bank Soal</Badge>
-						<Badge variant="outline" class="border-emerald-200/40 bg-emerald-200/15 text-emerald-50">{roleLabel}</Badge>
+						<Badge variant="outline" class="border-primary/20 bg-emerald-200/15 text-emerald-50">{roleLabel}</Badge>
 					</div>
 					<div>
 						<h1 class="text-2xl font-semibold tracking-tight md:text-3xl">Dashboard Bank Soal</h1>
@@ -879,7 +879,7 @@
 						<UploadIcon class="size-4" />
 						Impor
 					</Button>
-					<Button href={composerHref} class="bg-white text-emerald-950 hover:bg-emerald-50">
+					<Button href={composerHref} class="bg-card text-primary hover:bg-primary/10">
 						<PlusIcon class="size-4" />
 						Soal Baru
 					</Button>
@@ -891,80 +891,80 @@
 	<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ringkasan utama bank soal">
 		<button type="button" class={summaryCardClass(summaryCards[0])} aria-pressed={summaryCards[0].active} onclick={() => setSummaryFilter('all')}>
 			<div class="flex items-center justify-between gap-3">
-				<span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Total Soal</span>
-				<FileQuestionIcon class="size-5 text-emerald-700" />
+				<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total Soal</span>
+				<FileQuestionIcon class="size-5 text-primary" />
 			</div>
 			<span class={`mt-2 block text-3xl font-semibold ${summaryValueClass(summaryCards[0])}`}>{counts.all}</span>
-			<span class="mt-1 block text-xs text-slate-500">stok sesuai filter aktif</span>
+			<span class="mt-1 block text-xs text-muted-foreground">stok sesuai filter aktif</span>
 		</button>
 		<button type="button" class={summaryCardClass(summaryCards[4])} aria-pressed={summaryCards[4].active} onclick={() => setSummaryFilter('approved')}>
 			<div class="flex items-center justify-between gap-3">
-				<span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Telah Direview</span>
-				<BookOpenCheckIcon class="size-5 text-emerald-700" />
+				<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Telah Direview</span>
+				<BookOpenCheckIcon class="size-5 text-primary" />
 			</div>
 			<span class={`mt-2 block text-3xl font-semibold ${summaryValueClass(summaryCards[4])}`}>{counts.approved + counts.published}</span>
-			<span class="mt-1 block text-xs text-slate-500">disetujui atau sudah terbit</span>
+			<span class="mt-1 block text-xs text-muted-foreground">disetujui atau sudah terbit</span>
 		</button>
-		<a href={packageHref} class="rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-emerald-200 hover:bg-emerald-50/40">
+		<a href={packageHref} class="rounded-lg border border-border bg-card p-4 text-left transition hover:border-primary/20 hover:bg-primary/10">
 			<div class="flex items-center justify-between gap-3">
-				<span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Dipakai di Paket</span>
-				<PackageIcon class="size-5 text-amber-700" />
+				<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dipakai di Paket</span>
+				<PackageIcon class="size-5 text-warning" />
 			</div>
-			<span class="mt-2 block text-3xl font-semibold text-slate-900">{totalPackageUsage}</span>
-			<span class="mt-1 block text-xs text-slate-500">estimasi dari daftar termuat</span>
+			<span class="mt-2 block text-3xl font-semibold text-foreground">{totalPackageUsage}</span>
+			<span class="mt-1 block text-xs text-muted-foreground">estimasi dari daftar termuat</span>
 		</a>
 		<button type="button" class={summaryCardClass(summaryCards[2])} aria-pressed={summaryCards[2].active} onclick={() => setSummaryFilter('review')}>
 			<div class="flex items-center justify-between gap-3">
-				<span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Menunggu Review</span>
-				<ClipboardCheckIcon class="size-5 text-amber-700" />
+				<span class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Menunggu Review</span>
+				<ClipboardCheckIcon class="size-5 text-warning" />
 			</div>
 			<span class={`mt-2 block text-3xl font-semibold ${summaryValueClass(summaryCards[2])}`}>{counts.review}</span>
-			<span class="mt-1 block text-xs text-slate-500">perlu keputusan reviewer</span>
+			<span class="mt-1 block text-xs text-muted-foreground">perlu keputusan reviewer</span>
 		</button>
 	</section>
 
 	<section class="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-		<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+		<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 			<div class="flex items-start justify-between gap-3">
 				<div>
-					<h2 class="text-base font-semibold text-slate-900">Distribusi soal per mata pelajaran</h2>
-					<p class="mt-1 text-xs text-slate-500">Diurutkan dari daftar soal yang sedang termuat</p>
+					<h2 class="text-base font-semibold text-foreground">Distribusi soal per mata pelajaran</h2>
+					<p class="mt-1 text-xs text-muted-foreground">Diurutkan dari daftar soal yang sedang termuat</p>
 				</div>
-				<BarChart3Icon class="size-5 text-slate-400" />
+				<BarChart3Icon class="size-5 text-muted-foreground" />
 			</div>
 			{#if subjectDistribution.length > 0}
 				<div class="mt-5 flex h-44 items-end gap-2">
 					{#each subjectDistribution as item (item.name)}
 						<div class="flex min-w-0 flex-1 flex-col items-center gap-2" title={`${item.name}: ${item.value} soal`}>
-							<div class="flex h-32 w-full items-end justify-center rounded-t bg-slate-50 px-1">
+							<div class="flex h-32 w-full items-end justify-center rounded-t bg-muted/50 px-1">
 								<div class={`w-full max-w-8 rounded-t ${item.color}`} style={`height: ${Math.max(12, Math.round((item.value / Math.max(...subjectDistribution.map((entry) => entry.value), 1)) * 100))}%`}></div>
 							</div>
-							<span class="max-w-full truncate font-mono text-[10px] uppercase tracking-wide text-slate-500">{item.label}</span>
+							<span class="max-w-full truncate font-mono text-[10px] uppercase tracking-wide text-muted-foreground">{item.label}</span>
 						</div>
 					{/each}
 				</div>
 			{:else}
-				<p class="mt-6 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Distribusi mapel akan muncul setelah daftar soal dimuat.</p>
+				<p class="mt-6 rounded-lg border border-dashed border-border bg-muted/50 p-4 text-sm text-muted-foreground">Distribusi mapel akan muncul setelah daftar soal dimuat.</p>
 			{/if}
 		</div>
 
-		<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+		<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 			<div class="flex items-start justify-between gap-3">
 				<div>
-					<h2 class="text-base font-semibold text-slate-900">Komposisi level kognitif</h2>
-					<p class="mt-1 text-xs text-slate-500">Taksonomi Bloom C1-C6</p>
+					<h2 class="text-base font-semibold text-foreground">Komposisi level kognitif</h2>
+					<p class="mt-1 text-xs text-muted-foreground">Taksonomi Bloom C1-C6</p>
 				</div>
-				<Layers3Icon class="size-5 text-slate-400" />
+				<Layers3Icon class="size-5 text-muted-foreground" />
 			</div>
 			<div class="mt-4 space-y-3">
 				{#each bloomComposition as item (item.key)}
 					<div>
 						<div class="mb-1 flex items-center justify-between gap-3 text-xs">
-							<span class="font-medium text-slate-700">{item.label}</span>
-							<span class="font-mono text-slate-500">{item.value} · {item.percent}%</span>
+							<span class="font-medium text-foreground">{item.label}</span>
+							<span class="font-mono text-muted-foreground">{item.value} · {item.percent}%</span>
 						</div>
-						<div class="h-2 rounded-full bg-slate-100">
-							<div class="h-2 rounded-full bg-emerald-700" style={`width: ${Math.max(item.percent, item.value > 0 ? 6 : 0)}%`}></div>
+						<div class="h-2 rounded-full bg-muted">
+							<div class="h-2 rounded-full bg-primary" style={`width: ${Math.max(item.percent, item.value > 0 ? 6 : 0)}%`}></div>
 						</div>
 					</div>
 				{/each}
@@ -973,72 +973,72 @@
 	</section>
 
 	<section class="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-		<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+		<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 			<div class="flex items-start justify-between gap-3">
 				<div>
-					<h2 class="text-base font-semibold text-slate-900">Aktivitas Terbaru</h2>
-					<p class="mt-1 text-xs text-slate-500">Perubahan terbaru dari daftar soal yang termuat</p>
+					<h2 class="text-base font-semibold text-foreground">Aktivitas Terbaru</h2>
+					<p class="mt-1 text-xs text-muted-foreground">Perubahan terbaru dari daftar soal yang termuat</p>
 				</div>
-				<HistoryIcon class="size-5 text-slate-400" />
+				<HistoryIcon class="size-5 text-muted-foreground" />
 			</div>
 			{#if recentActivities.length > 0}
-				<div class="mt-4 divide-y divide-slate-100">
+				<div class="mt-4 divide-y divide-border">
 					{#each recentActivities as item (item.id)}
 						<div class="flex items-center gap-3 py-3">
-							<div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-xs font-semibold text-emerald-800">{item.actor.slice(0, 2).toUpperCase()}</div>
+							<div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{item.actor.slice(0, 2).toUpperCase()}</div>
 							<div class="min-w-0 flex-1">
-								<p class="truncate text-sm text-slate-700"><span class="font-semibold text-slate-900">{item.actor}</span> {item.action} <span class="font-mono text-xs">{item.object}</span></p>
-								<p class="mt-0.5 text-xs text-slate-500">{item.time}</p>
+								<p class="truncate text-sm text-foreground"><span class="font-semibold text-foreground">{item.actor}</span> {item.action} <span class="font-mono text-xs">{item.object}</span></p>
+								<p class="mt-0.5 text-xs text-muted-foreground">{item.time}</p>
 							</div>
 							<Badge variant="outline" class={activityToneClass(item.tone)}>{workflowLabel(item.tone)}</Badge>
 						</div>
 					{/each}
 				</div>
 			{:else}
-				<p class="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Aktivitas terbaru akan muncul setelah ada soal yang dimuat atau diperbarui.</p>
+				<p class="mt-4 rounded-lg border border-dashed border-border bg-muted/50 p-4 text-sm text-muted-foreground">Aktivitas terbaru akan muncul setelah ada soal yang dimuat atau diperbarui.</p>
 			{/if}
 		</div>
 
-		<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+		<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 			<div class="flex items-start justify-between gap-3">
 				<div>
-					<h2 class="text-base font-semibold text-slate-900">Aksi Cepat</h2>
-					<p class="mt-1 text-xs text-slate-500">Shortcut workflow utama Bank Soal</p>
+					<h2 class="text-base font-semibold text-foreground">Aksi Cepat</h2>
+					<p class="mt-1 text-xs text-muted-foreground">Shortcut workflow utama Bank Soal</p>
 				</div>
-				<SparklesIcon class="size-5 text-amber-500" />
+				<SparklesIcon class="size-5 text-warning" />
 			</div>
 			<div class="mt-4 grid gap-2">
-				<a href={listHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
+				<a href={listHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-800"><FileQuestionIcon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Buka daftar soal</span><span class="block text-xs text-slate-500">Kelola filter, status, dan pagination soal</span></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Buka daftar soal</span><span class="block text-xs text-muted-foreground">Kelola filter, status, dan pagination soal</span></span>
 				</a>
-				<a href={composerHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
-					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800"><PlusIcon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Tambah soal baru</span><span class="block text-xs text-slate-500">PG, essay, benar/salah, menjodohkan</span></span>
+				<a href={composerHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary"><PlusIcon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Tambah soal baru</span><span class="block text-xs text-muted-foreground">PG, essay, benar/salah, menjodohkan</span></span>
 				</a>
-				<a href={packageHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
-					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800"><PackageIcon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Buat paket asesmen</span><span class="block text-xs text-slate-500">Gunakan soal terbit di modul Asesmen</span></span>
+				<a href={packageHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning"><PackageIcon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Buat paket asesmen</span><span class="block text-xs text-muted-foreground">Gunakan soal terbit di modul Asesmen</span></span>
 				</a>
-				<a href={importHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
-					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-800"><UploadIcon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Import dari Word/Excel</span><span class="block text-xs text-slate-500">Preview, mapping, lalu konfirmasi</span></span>
+				<a href={importHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground"><UploadIcon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Import dari Word/Excel</span><span class="block text-xs text-muted-foreground">Preview, mapping, lalu konfirmasi</span></span>
 				</a>
-				<a href={reviewRouteHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
-					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-800"><ClipboardCheckIcon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Review antrean</span><span class="block text-xs text-slate-500">Setujui atau kembalikan untuk revisi</span></span>
+				<a href={reviewRouteHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-destructive/15 text-destructive"><ClipboardCheckIcon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Review antrean</span><span class="block text-xs text-muted-foreground">Setujui atau kembalikan untuk revisi</span></span>
 				</a>
-				<a href={analysisHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
+				<a href={analysisHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-800"><BarChart3Icon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Analisis butir</span><span class="block text-xs text-slate-500">Pantau kualitas, HOTS, dan pemakaian soal</span></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Analisis butir</span><span class="block text-xs text-muted-foreground">Pantau kualitas, HOTS, dan pemakaian soal</span></span>
 				</a>
-				<a href={mapelKdHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
-					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-lime-100 text-lime-800"><Layers3Icon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Mapel & KD</span><span class="block text-xs text-slate-500">Cek coverage metadata dan materi</span></span>
+				<a href={mapelKdHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary"><Layers3Icon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Mapel & KD</span><span class="block text-xs text-muted-foreground">Cek coverage metadata dan materi</span></span>
 				</a>
-				<a href={settingsHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
-					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-slate-800"><SettingsIcon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Pengaturan & SOP</span><span class="block text-xs text-slate-500">Workflow, standar kualitas, dan integrasi</span></span>
+				<a href={settingsHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-border text-foreground"><SettingsIcon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Pengaturan & SOP</span><span class="block text-xs text-muted-foreground">Workflow, standar kualitas, dan integrasi</span></span>
 				</a>
 			</div>
 		</div>
@@ -1047,12 +1047,12 @@
 	{/if}
 
 	{#if showList}
-	<section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+	<section class="rounded-lg border border-border bg-card p-4 shadow-sm">
 		<form class="grid gap-3 lg:grid-cols-[minmax(16rem,1.5fr)_repeat(5,minmax(9rem,1fr))_auto] lg:items-end" onsubmit={applyFilters}>
 			<div class="space-y-1">
-				<label for="bank-soal-search" class="text-xs font-semibold text-slate-600">Cari soal</label>
+				<label for="bank-soal-search" class="text-xs font-semibold text-muted-foreground">Cari soal</label>
 				<div class="relative">
-					<SearchIcon class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+					<SearchIcon class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 					<Input
 						id="bank-soal-search"
 						value={search}
@@ -1064,12 +1064,12 @@
 			</div>
 
 			<div class="space-y-1">
-				<label for="bank-soal-subject" class="text-xs font-semibold text-slate-600">Mata pelajaran</label>
+				<label for="bank-soal-subject" class="text-xs font-semibold text-muted-foreground">Mata pelajaran</label>
 				<select
 					id="bank-soal-subject"
 					bind:value={subjectFilter}
 					onchange={() => load(1, true)}
-					class="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+					class="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 				>
 					<option value="">Semua mapel</option>
 					{#each subjects as subject (subject.id)}
@@ -1079,12 +1079,12 @@
 			</div>
 
 			<div class="space-y-1">
-				<label for="bank-soal-workflow" class="text-xs font-semibold text-slate-600">Alur</label>
+				<label for="bank-soal-workflow" class="text-xs font-semibold text-muted-foreground">Alur</label>
 				<select
 					id="bank-soal-workflow"
 					bind:value={workflowFilter}
 					onchange={() => load(1, true)}
-					class="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+					class="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 				>
 					{#each workflowOptions as option (option.value)}
 						<option value={option.value}>{option.label}</option>
@@ -1093,12 +1093,12 @@
 			</div>
 
 			<div class="space-y-1">
-				<label for="bank-soal-publication" class="text-xs font-semibold text-slate-600">Publikasi</label>
+				<label for="bank-soal-publication" class="text-xs font-semibold text-muted-foreground">Publikasi</label>
 				<select
 					id="bank-soal-publication"
 					bind:value={publicationFilter}
 					onchange={() => load(1, true)}
-					class="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+					class="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 				>
 					{#each publicationOptions as option (option.value)}
 						<option value={option.value}>{option.label}</option>
@@ -1107,12 +1107,12 @@
 			</div>
 
 			<div class="space-y-1">
-				<label for="bank-soal-type" class="text-xs font-semibold text-slate-600">Tipe</label>
+				<label for="bank-soal-type" class="text-xs font-semibold text-muted-foreground">Tipe</label>
 				<select
 					id="bank-soal-type"
 					bind:value={questionTypeFilter}
 					onchange={() => load(1, true)}
-					class="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+					class="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 				>
 					{#each questionTypeOptions as option (option.value)}
 						<option value={option.value}>{option.label}</option>
@@ -1121,12 +1121,12 @@
 			</div>
 
 			<div class="space-y-1">
-				<label for="bank-soal-hots" class="text-xs font-semibold text-slate-600">HOTS</label>
+				<label for="bank-soal-hots" class="text-xs font-semibold text-muted-foreground">HOTS</label>
 				<select
 					id="bank-soal-hots"
 					bind:value={hotsFilter}
 					onchange={() => load(1, true)}
-					class="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+					class="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 				>
 					{#each hotsOptions as option (option.value)}
 						<option value={option.value}>{option.label}</option>
@@ -1153,25 +1153,25 @@
 		</form>
 
 		{#if hasFilters}
-			<div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+			<div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 				<span>
 					Filter aktif{selectedSubject ? `: ${selectedSubject.name}` : ''}
 				</span>
-				<Button variant="ghost" size="sm" class="h-7 text-emerald-800" onclick={clearFilters}>Bersihkan filter</Button>
+				<Button variant="ghost" size="sm" class="h-7 text-primary" onclick={clearFilters}>Bersihkan filter</Button>
 			</div>
 		{/if}
 	</section>
 
 	<AsyncContent promise={questionsPromise} onerror={handleQuestionsRenderError}>
 		{#snippet pending()}
-			<section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+			<section class="rounded-lg border border-border bg-card p-4 shadow-sm">
 				<div class="flex items-center justify-between">
 					<Skeleton class="h-5 w-40" />
 					<Skeleton class="h-5 w-24" />
 				</div>
 				<div class="mt-4 space-y-3">
 					{#each Array.from({ length: 6 }) as _, index (`bank-soal-skeleton-${index}`)}
-						<div class="rounded-lg border border-slate-100 p-4">
+						<div class="rounded-lg border border-border p-4">
 							<Skeleton class="h-4 w-28" />
 							<Skeleton class="mt-3 h-5 w-full max-w-2xl" />
 							<div class="mt-3 flex gap-2">
@@ -1186,7 +1186,7 @@
 		{/snippet}
 
 		{#snippet failed(error, reset)}
-			<section class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+			<section class="rounded-lg border border-border bg-card p-5 shadow-sm">
 				<RecoveryPanel
 					title="Daftar soal belum dapat dimuat"
 					message={error instanceof Error ? error.message : 'Gagal memuat daftar soal'}
@@ -1201,31 +1201,31 @@
 		{#snippet children(value)}
 			{@const overview = value as BankSoalOverview}
 			{@const currentQuestions = overview.questions}
-			<section class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-				<div class="flex flex-col gap-2 border-b border-slate-200 p-4 md:flex-row md:items-center md:justify-between">
+			<section class="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+				<div class="flex flex-col gap-2 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
 					<div>
-						<h2 class="text-base font-semibold text-slate-900">Soal Tersedia</h2>
-						<p class="mt-1 text-xs text-slate-500">
+						<h2 class="text-base font-semibold text-foreground">Soal Tersedia</h2>
+						<p class="mt-1 text-xs text-muted-foreground">
 							{totalItems === 0 ? 'Tidak ada soal pada filter ini' : `${resultStart}-${resultEnd} dari ${totalItems} soal`}
 						</p>
 					</div>
 					<div class="flex flex-wrap gap-2">
-						<Badge variant="outline" class="border-slate-200 bg-slate-50 text-slate-700">{PAGE_SIZE} per halaman</Badge>
+						<Badge variant="outline" class="border-border bg-muted/50 text-foreground">{PAGE_SIZE} per halaman</Badge>
 						{#if selectedSubject}
-							<Badge variant="outline" class="border-emerald-200 bg-emerald-50 text-emerald-800">{selectedSubject.name}</Badge>
+							<Badge variant="outline" class="border-primary/20 bg-primary/10 text-primary">{selectedSubject.name}</Badge>
 						{/if}
 					</div>
 				</div>
 
 				{#if currentQuestions.length === 0}
 					<div class="flex flex-col items-center px-6 py-12 text-center">
-						<div class="flex size-12 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800">
+						<div class="flex size-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
 							<FileQuestionIcon class="size-6" />
 						</div>
-						<h2 class="mt-4 text-lg font-semibold text-slate-900">
+						<h2 class="mt-4 text-lg font-semibold text-foreground">
 							{hasFilters ? 'Soal tidak ditemukan' : 'Belum ada soal di Bank Soal'}
 						</h2>
-						<p class="mt-2 max-w-md text-sm leading-6 text-slate-600">
+						<p class="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
 							{hasFilters
 								? 'Coba longgarkan filter atau cari dengan kode, materi, dan isi soal yang lebih umum.'
 								: 'Mulai dari komposer untuk menulis soal pertama, atau impor CSV dari arsip soal lama.'}
@@ -1248,33 +1248,33 @@
 					<div class="hidden md:block">
 						<Table.Root>
 							<Table.Header>
-								<Table.Row class="bg-slate-50">
-									<Table.Head class="w-[44%] text-slate-600">Soal</Table.Head>
-									<Table.Head class="w-[18%] text-slate-600">Mapel & Level</Table.Head>
-									<Table.Head class="w-[16%] text-slate-600">Status</Table.Head>
-									<Table.Head class="w-[12%] text-slate-600">Pemakaian</Table.Head>
-									<Table.Head class="w-[10%] text-right text-slate-600">Aksi</Table.Head>
+								<Table.Row class="bg-muted/50">
+									<Table.Head class="w-[44%] text-muted-foreground">Soal</Table.Head>
+									<Table.Head class="w-[18%] text-muted-foreground">Mapel & Level</Table.Head>
+									<Table.Head class="w-[16%] text-muted-foreground">Status</Table.Head>
+									<Table.Head class="w-[12%] text-muted-foreground">Pemakaian</Table.Head>
+									<Table.Head class="w-[10%] text-right text-muted-foreground">Aksi</Table.Head>
 								</Table.Row>
 							</Table.Header>
 							<Table.Body>
 								{#each currentQuestions as question (question.id)}
-									<Table.Row class="align-top hover:bg-slate-50">
+									<Table.Row class="align-top hover:bg-muted/50">
 										<Table.Cell>
 											<div class="space-y-2">
 												<div class="flex flex-wrap items-center gap-2">
-													<span class="font-mono text-xs font-semibold text-emerald-800">{compactText(question.code, 'Tanpa kode')}</span>
-													<Badge variant="outline" class="border-slate-200 bg-white text-slate-600">
+													<span class="font-mono text-xs font-semibold text-primary">{compactText(question.code, 'Tanpa kode')}</span>
+													<Badge variant="outline" class="border-border bg-card text-muted-foreground">
 														{questionTypeLabel(question.question_type)}
 													</Badge>
 													{#if question.hots_flag}
-														<Badge variant="outline" class="border-amber-200 bg-amber-50 text-amber-800">HOTS</Badge>
+														<Badge variant="outline" class="border-warning/30 bg-warning/10 text-warning">HOTS</Badge>
 													{/if}
 													{#if questionUsageLocked(question)}
-														<Badge variant="outline" class="border-red-200 bg-red-50 text-red-700">Terkunci</Badge>
+														<Badge variant="outline" class="border-destructive/30 bg-destructive/10 text-destructive">Terkunci</Badge>
 													{/if}
 												</div>
-												<p class="line-clamp-2 text-sm leading-6 text-slate-800">{questionPreview(question)}</p>
-												<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+												<p class="line-clamp-2 text-sm leading-6 text-foreground">{questionPreview(question)}</p>
+												<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
 													<span>{compactText(question.author_username, 'Penulis belum tercatat')}</span>
 													<span>{difficultyLabel(question.difficulty)}</span>
 													<span>{compactText(question.material_topic, 'Materi belum diisi')}</span>
@@ -1282,11 +1282,11 @@
 												</div>
 											</div>
 										</Table.Cell>
-										<Table.Cell class="text-sm text-slate-700">
-											<div class="font-medium text-slate-900">{subjectLabel(question)}</div>
-											<div class="mt-1 text-xs text-slate-500">{gradeLabel(question)}</div>
+										<Table.Cell class="text-sm text-foreground">
+											<div class="font-medium text-foreground">{subjectLabel(question)}</div>
+											<div class="mt-1 text-xs text-muted-foreground">{gradeLabel(question)}</div>
 											{#if question.cognitive_level}
-												<div class="mt-1 text-xs text-slate-500">{question.cognitive_level}</div>
+												<div class="mt-1 text-xs text-muted-foreground">{question.cognitive_level}</div>
 											{/if}
 										</Table.Cell>
 										<Table.Cell>
@@ -1299,7 +1299,7 @@
 												</Badge>
 											</div>
 										</Table.Cell>
-										<Table.Cell class="text-sm text-slate-600">
+										<Table.Cell class="text-sm text-muted-foreground">
 											{questionUsageText(question)}
 										</Table.Cell>
 										<Table.Cell class="text-right">
@@ -1321,40 +1321,40 @@
 						</Table.Root>
 					</div>
 
-					<div class="divide-y divide-slate-100 md:hidden">
+					<div class="divide-y divide-border md:hidden">
 						{#each currentQuestions as question (question.id)}
 							<article class="space-y-3 p-4">
 								<div class="flex items-start justify-between gap-3">
 									<div class="min-w-0">
-										<p class="font-mono text-xs font-semibold text-emerald-800">{compactText(question.code, 'Tanpa kode')}</p>
-										<h2 class="mt-1 line-clamp-3 text-sm font-semibold leading-6 text-slate-900">{questionPreview(question)}</h2>
+										<p class="font-mono text-xs font-semibold text-primary">{compactText(question.code, 'Tanpa kode')}</p>
+										<h2 class="mt-1 line-clamp-3 text-sm font-semibold leading-6 text-foreground">{questionPreview(question)}</h2>
 									</div>
 									<Badge variant="outline" class={workflowBadgeClass(question.workflow_status)}>
 										{workflowLabel(question.workflow_status)}
 									</Badge>
 								</div>
 								<div class="flex flex-wrap gap-1.5">
-									<Badge variant="outline" class="border-slate-200 bg-white text-slate-600">{questionTypeLabel(question.question_type)}</Badge>
+									<Badge variant="outline" class="border-border bg-card text-muted-foreground">{questionTypeLabel(question.question_type)}</Badge>
 									<Badge variant="outline" class={publicationBadgeClass(question.status)}>{publicationLabel(question.status)}</Badge>
 									{#if question.hots_flag}
-										<Badge variant="outline" class="border-amber-200 bg-amber-50 text-amber-800">HOTS</Badge>
+										<Badge variant="outline" class="border-warning/30 bg-warning/10 text-warning">HOTS</Badge>
 									{/if}
 								</div>
-								<dl class="grid grid-cols-2 gap-2 text-xs text-slate-500">
+								<dl class="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
 									<div>
-										<dt class="font-semibold text-slate-600">Mapel</dt>
+										<dt class="font-semibold text-muted-foreground">Mapel</dt>
 										<dd class="mt-0.5">{subjectLabel(question)}</dd>
 									</div>
 									<div>
-										<dt class="font-semibold text-slate-600">Level</dt>
+										<dt class="font-semibold text-muted-foreground">Level</dt>
 										<dd class="mt-0.5">{gradeLabel(question)}</dd>
 									</div>
 									<div>
-										<dt class="font-semibold text-slate-600">Pemakaian</dt>
+										<dt class="font-semibold text-muted-foreground">Pemakaian</dt>
 										<dd class="mt-0.5">{questionUsageText(question)}</dd>
 									</div>
 									<div>
-										<dt class="font-semibold text-slate-600">Dibuat</dt>
+										<dt class="font-semibold text-muted-foreground">Dibuat</dt>
 										<dd class="mt-0.5">{formatDate(question.created_at)}</dd>
 									</div>
 								</dl>
@@ -1376,7 +1376,7 @@
 	</AsyncContent>
 
 	{#if totalItems > PAGE_SIZE}
-		<nav class="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600 shadow-sm sm:flex-row sm:items-center sm:justify-between" aria-label="Navigasi halaman daftar soal">
+		<nav class="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 text-sm text-muted-foreground shadow-sm sm:flex-row sm:items-center sm:justify-between" aria-label="Navigasi halaman daftar soal">
 			<span>{resultStart}-{resultEnd} dari {totalItems} soal</span>
 			<div class="flex items-center gap-2">
 				<Button
@@ -1387,7 +1387,7 @@
 					<ChevronLeftIcon class="size-4" />
 					Sebelumnya
 				</Button>
-				<span class="min-w-20 text-center text-xs font-semibold text-slate-500">Hal {currentPage} / {pageCount}</span>
+				<span class="min-w-20 text-center text-xs font-semibold text-muted-foreground">Hal {currentPage} / {pageCount}</span>
 				<Button
 					variant="outline"
 					disabled={currentPage >= pageCount || refreshing}

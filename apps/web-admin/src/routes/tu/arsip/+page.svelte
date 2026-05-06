@@ -504,8 +504,8 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 		<div>
-			<h1 class="text-lg font-semibold text-slate-800">Arsip Tata Usaha</h1>
-			<p class="text-sm text-slate-500">Register digital arsip madrasah, kategori klasifikasi, lokasi simpan, dan masa retensi.</p>
+			<h1 class="text-lg font-semibold text-foreground">Arsip Tata Usaha</h1>
+			<p class="text-sm text-muted-foreground">Register digital arsip madrasah, kategori klasifikasi, lokasi simpan, dan masa retensi.</p>
 		</div>
 		<LoadingButton variant="outline" size="sm" loading={refreshBusy} loadingLabel="Memuat..." onclick={() => void refreshArchive()}>
 			<RefreshCcwIcon class="mr-2 size-4" />
@@ -517,7 +517,7 @@
 		{#snippet pending()}
 			<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 				{#each Array.from({ length: 4 }) as _, index (`archive-stat-skeleton-${index}`)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4">
 							<Skeleton class="h-4 w-28" />
 							<Skeleton class="mt-3 h-8 w-16" />
@@ -526,7 +526,7 @@
 				{/each}
 			</div>
 			<div class="grid gap-6 lg:grid-cols-[1fr_360px]">
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header>
 						<Skeleton class="h-5 w-40" />
 					</Card.Header>
@@ -536,7 +536,7 @@
 						{/each}
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header>
 						<Skeleton class="h-5 w-40" />
 					</Card.Header>
@@ -556,39 +556,39 @@
 		{#snippet children(value)}
 			{@const overview = value as ArchiveOverview}
 			<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Total Dokumen</p>
-						<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.stats.total_documents}</p>
-						<p class="mt-1 text-xs text-slate-500">{overview.stats.documents_this_year} dokumen tahun ini</p>
+						<p class="text-xs text-muted-foreground">Total Dokumen</p>
+						<p class="mt-2 text-2xl font-semibold text-foreground">{overview.stats.total_documents}</p>
+						<p class="mt-1 text-xs text-muted-foreground">{overview.stats.documents_this_year} dokumen tahun ini</p>
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Kategori Aktif</p>
-						<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.stats.active_categories}</p>
-						<p class="mt-1 text-xs text-slate-500">Berbasis klasifikasi TU</p>
+						<p class="text-xs text-muted-foreground">Kategori Aktif</p>
+						<p class="mt-2 text-2xl font-semibold text-foreground">{overview.stats.active_categories}</p>
+						<p class="mt-1 text-xs text-muted-foreground">Berbasis klasifikasi TU</p>
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Status Arsip</p>
-						<p class="mt-2 text-2xl font-semibold text-slate-900">{overview.stats.active_documents}</p>
-						<p class="mt-1 text-xs text-slate-500">{overview.stats.borrowed_documents} dipinjam, {overview.stats.disposed_documents} dimusnahkan</p>
+						<p class="text-xs text-muted-foreground">Status Arsip</p>
+						<p class="mt-2 text-2xl font-semibold text-foreground">{overview.stats.active_documents}</p>
+						<p class="mt-1 text-xs text-muted-foreground">{overview.stats.borrowed_documents} dipinjam, {overview.stats.disposed_documents} dimusnahkan</p>
 					</Card.Content>
 				</Card.Root>
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="p-4">
-						<p class="text-xs text-slate-500">Ukuran File</p>
-						<p class="mt-2 text-2xl font-semibold text-slate-900">{formatBytes(overview.stats.total_file_size)}</p>
-						<p class="mt-1 text-xs text-slate-500">Tersimpan di backend</p>
+						<p class="text-xs text-muted-foreground">Ukuran File</p>
+						<p class="mt-2 text-2xl font-semibold text-foreground">{formatBytes(overview.stats.total_file_size)}</p>
+						<p class="mt-1 text-xs text-muted-foreground">Tersimpan di backend</p>
 					</Card.Content>
 				</Card.Root>
 			</div>
 
 			<div class="grid gap-6 xl:grid-cols-[1fr_420px]">
 				<div class="space-y-6">
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="space-y-4">
 							<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
 								<div>
@@ -597,17 +597,17 @@
 								</div>
 								<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-[220px_150px_170px_150px_auto]">
 									<div>
-										<label for="archive-search" class="text-xs font-medium text-slate-600">Cari arsip</label>
+										<label for="archive-search" class="text-xs font-medium text-muted-foreground">Cari arsip</label>
 										<div class="relative mt-1">
-											<SearchIcon class="absolute left-2.5 top-2.5 size-4 text-slate-400" />
+											<SearchIcon class="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
 											<Input id="archive-search" class="pl-8" placeholder="Judul, nomor, tag" bind:value={search} />
 										</div>
 									</div>
 									<div>
-										<label for="archive-status-filter" class="text-xs font-medium text-slate-600">Status</label>
+										<label for="archive-status-filter" class="text-xs font-medium text-muted-foreground">Status</label>
 										<select
 											id="archive-status-filter"
-											class="mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+											class="mt-1 h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground"
 											bind:value={status}
 										>
 											{#each STATUS_OPTIONS as option (option[0])}
@@ -616,10 +616,10 @@
 										</select>
 									</div>
 									<div>
-										<label for="archive-category-filter" class="text-xs font-medium text-slate-600">Kategori</label>
+										<label for="archive-category-filter" class="text-xs font-medium text-muted-foreground">Kategori</label>
 										<select
 											id="archive-category-filter"
-											class="mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+											class="mt-1 h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground"
 											bind:value={categoryFilter}
 										>
 											<option value="">Semua kategori</option>
@@ -629,10 +629,10 @@
 										</select>
 									</div>
 									<div>
-										<label for="archive-classification-filter" class="text-xs font-medium text-slate-600">Klasifikasi</label>
+										<label for="archive-classification-filter" class="text-xs font-medium text-muted-foreground">Klasifikasi</label>
 										<select
 											id="archive-classification-filter"
-											class="mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+											class="mt-1 h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground"
 											bind:value={classificationFilter}
 										>
 											<option value="">Semua kode</option>
@@ -650,10 +650,10 @@
 						</Card.Header>
 						<Card.Content class="p-0">
 							{#if overview.documents.length === 0}
-								<div class="border-t border-slate-100 px-6 py-10 text-center">
-									<ArchiveIcon class="mx-auto size-8 text-emerald-700" />
-									<p class="mt-3 text-sm font-semibold text-slate-800">Belum ada arsip sesuai filter.</p>
-									<p class="mt-1 text-sm text-slate-500">Unggah dokumen pertama atau ubah filter register.</p>
+								<div class="border-t border-border px-6 py-10 text-center">
+									<ArchiveIcon class="mx-auto size-8 text-primary" />
+									<p class="mt-3 text-sm font-semibold text-foreground">Belum ada arsip sesuai filter.</p>
+									<p class="mt-1 text-sm text-muted-foreground">Unggah dokumen pertama atau ubah filter register.</p>
 								</div>
 							{:else}
 								<div class="overflow-x-auto">
@@ -672,27 +672,27 @@
 											{#each overview.documents as document (document.id)}
 												<Table.Row>
 													<Table.Cell class="min-w-[260px]">
-														<p class="font-medium text-slate-900">{document.title}</p>
-														<p class="mt-1 text-xs text-slate-500">{document.archive_number || 'Tanpa nomor arsip'}</p>
+														<p class="font-medium text-foreground">{document.title}</p>
+														<p class="mt-1 text-xs text-muted-foreground">{document.archive_number || 'Tanpa nomor arsip'}</p>
 														{#if document.summary}
-															<p class="mt-1 max-w-xl text-xs text-slate-500">{document.summary}</p>
+															<p class="mt-1 max-w-xl text-xs text-muted-foreground">{document.summary}</p>
 														{/if}
 													</Table.Cell>
 													<Table.Cell>
-														<p class="text-sm text-slate-800">{document.category_code}</p>
-														<p class="text-xs text-slate-500">{document.classification_code || '-'}</p>
+														<p class="text-sm text-foreground">{document.category_code}</p>
+														<p class="text-xs text-muted-foreground">{document.classification_code || '-'}</p>
 													</Table.Cell>
 													<Table.Cell>
-														<p class="text-sm text-slate-800">{displayDate(document.received_date)}</p>
-														<p class="text-xs text-slate-500">Retensi {displayDate(document.retention_until)}</p>
+														<p class="text-sm text-foreground">{displayDate(document.received_date)}</p>
+														<p class="text-xs text-muted-foreground">Retensi {displayDate(document.retention_until)}</p>
 													</Table.Cell>
 													<Table.Cell>
 														<Badge variant={statusVariant(document.status)}>{statusLabel(document.status)}</Badge>
-														<p class="mt-1 text-xs text-slate-500">{document.storage_location || 'Lokasi belum diisi'}</p>
+														<p class="mt-1 text-xs text-muted-foreground">{document.storage_location || 'Lokasi belum diisi'}</p>
 													</Table.Cell>
 													<Table.Cell>
-														<p class="text-sm text-slate-800">{formatBytes(document.file_size)}</p>
-														<p class="text-xs text-slate-500">{document.original_name}</p>
+														<p class="text-sm text-foreground">{formatBytes(document.file_size)}</p>
+														<p class="text-xs text-muted-foreground">{document.original_name}</p>
 													</Table.Cell>
 													<Table.Cell class="text-right">
 														<div class="flex justify-end gap-2">
@@ -709,7 +709,7 @@
 																loading={deleteBusy[document.id] === true}
 																onclick={() => void deleteDocument(document.id)}
 															>
-																<Trash2Icon class="size-4 text-red-600" />
+																<Trash2Icon class="size-4 text-destructive" />
 															</LoadingButton>
 														</div>
 													</Table.Cell>
@@ -722,7 +722,7 @@
 						</Card.Content>
 					</Card.Root>
 
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header>
 							<Card.Title class="text-base">Kategori Arsip</Card.Title>
 							<Card.Description>Kategori mengikat dokumen ke klasifikasi, retensi, dan kelompok administrasi TU.</Card.Description>
@@ -744,12 +744,12 @@
 										{#each overview.categories as category (category.id)}
 											<Table.Row>
 												<Table.Cell>
-													<p class="font-medium text-slate-900">{category.code}</p>
+													<p class="font-medium text-foreground">{category.code}</p>
 													<Badge variant={category.is_active ? 'default' : 'secondary'}>{category.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
 												</Table.Cell>
 												<Table.Cell>
-													<p class="text-sm text-slate-800">{category.name}</p>
-													<p class="text-xs text-slate-500">{category.description || '-'}</p>
+													<p class="text-sm text-foreground">{category.name}</p>
+													<p class="text-xs text-muted-foreground">{category.description || '-'}</p>
 												</Table.Cell>
 												<Table.Cell>{category.classification_code || '-'}</Table.Cell>
 												<Table.Cell>{category.retention_years} tahun</Table.Cell>
@@ -766,7 +766,7 @@
 															loading={deleteBusy[category.id] === true}
 															onclick={() => void deleteCategory(category.id)}
 														>
-															<Trash2Icon class="size-4 text-red-600" />
+															<Trash2Icon class="size-4 text-destructive" />
 														</LoadingButton>
 													</div>
 												</Table.Cell>
@@ -780,7 +780,7 @@
 				</div>
 
 				<div class="space-y-6">
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header>
 							<Card.Title class="text-base">{editingDocumentId ? 'Edit Metadata Arsip' : 'Unggah Arsip'}</Card.Title>
 							<Card.Description>{editingDocumentId ? 'Ubah metadata tanpa mengganti file tersimpan.' : 'Unggah file PDF, gambar, dokumen Office, teks, atau ZIP maksimal 25MB.'}</Card.Description>
@@ -794,10 +794,10 @@
 								}}
 							>
 								<div>
-									<label for="archive-category" class="text-sm font-medium text-slate-700">Kategori</label>
+									<label for="archive-category" class="text-sm font-medium text-foreground">Kategori</label>
 									<select
 										id="archive-category"
-										class="mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+										class="mt-1 h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground"
 										bind:value={documentForm.category_id}
 									>
 										<option value="">Pilih kategori</option>
@@ -807,19 +807,19 @@
 									</select>
 								</div>
 								<div>
-									<label for="archive-title" class="text-sm font-medium text-slate-700">Judul Arsip</label>
+									<label for="archive-title" class="text-sm font-medium text-foreground">Judul Arsip</label>
 									<Input id="archive-title" class="mt-1" bind:value={documentForm.title} placeholder="Contoh: Surat undangan rapat komite" />
 								</div>
 								<div class="grid gap-3 sm:grid-cols-2">
 									<div>
-										<label for="archive-number" class="text-sm font-medium text-slate-700">Nomor Arsip</label>
+										<label for="archive-number" class="text-sm font-medium text-foreground">Nomor Arsip</label>
 										<Input id="archive-number" class="mt-1" bind:value={documentForm.archive_number} placeholder="Opsional" />
 									</div>
 									<div>
-										<label for="archive-status" class="text-sm font-medium text-slate-700">Status</label>
+										<label for="archive-status" class="text-sm font-medium text-foreground">Status</label>
 										<select
 											id="archive-status"
-											class="mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+											class="mt-1 h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground"
 											bind:value={documentForm.status}
 										>
 											{#each STATUS_OPTIONS.filter((option) => option[0]) as option (option[0])}
@@ -830,35 +830,35 @@
 								</div>
 								<div class="grid gap-3 sm:grid-cols-2">
 									<div>
-										<label for="archive-document-date" class="text-sm font-medium text-slate-700">Tanggal Dokumen</label>
+										<label for="archive-document-date" class="text-sm font-medium text-foreground">Tanggal Dokumen</label>
 										<Input id="archive-document-date" class="mt-1" type="date" bind:value={documentForm.document_date} />
 									</div>
 									<div>
-										<label for="archive-received-date" class="text-sm font-medium text-slate-700">Tanggal Terima/Simpan</label>
+										<label for="archive-received-date" class="text-sm font-medium text-foreground">Tanggal Terima/Simpan</label>
 										<Input id="archive-received-date" class="mt-1" type="date" bind:value={documentForm.received_date} />
 									</div>
 								</div>
 								<div class="grid gap-3 sm:grid-cols-2">
 									<div>
-										<label for="archive-retention-until" class="text-sm font-medium text-slate-700">Retensi Sampai</label>
+										<label for="archive-retention-until" class="text-sm font-medium text-foreground">Retensi Sampai</label>
 										<Input id="archive-retention-until" class="mt-1" type="date" bind:value={documentForm.retention_until} />
 									</div>
 									<div>
-										<label for="archive-storage-location" class="text-sm font-medium text-slate-700">Lokasi Fisik</label>
+										<label for="archive-storage-location" class="text-sm font-medium text-foreground">Lokasi Fisik</label>
 										<Input id="archive-storage-location" class="mt-1" bind:value={documentForm.storage_location} placeholder="Lemari A / Rak 2" />
 									</div>
 								</div>
 								<div>
-									<label for="archive-tags" class="text-sm font-medium text-slate-700">Tag</label>
+									<label for="archive-tags" class="text-sm font-medium text-foreground">Tag</label>
 									<Input id="archive-tags" class="mt-1" bind:value={documentForm.tags} placeholder="surat, komite, 2026" />
 								</div>
 								<div>
-									<label for="archive-summary" class="text-sm font-medium text-slate-700">Ringkasan</label>
+									<label for="archive-summary" class="text-sm font-medium text-foreground">Ringkasan</label>
 									<Textarea id="archive-summary" class="mt-1 min-h-20" bind:value={documentForm.summary} placeholder="Catatan singkat isi arsip" />
 								</div>
 								{#if !editingDocumentId}
 									<div>
-										<label for="archive-file" class="text-sm font-medium text-slate-700">File Arsip</label>
+										<label for="archive-file" class="text-sm font-medium text-foreground">File Arsip</label>
 										<Input
 											id="archive-file"
 											bind:ref={fileInput}
@@ -868,7 +868,7 @@
 											onchange={handleFileChange}
 										/>
 										{#if selectedFile}
-											<p class="mt-1 text-xs text-slate-500">{selectedFile.name} - {formatBytes(selectedFile.size)}</p>
+											<p class="mt-1 text-xs text-muted-foreground">{selectedFile.name} - {formatBytes(selectedFile.size)}</p>
 										{/if}
 									</div>
 								{/if}
@@ -890,7 +890,7 @@
 						</Card.Content>
 					</Card.Root>
 
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header>
 							<Card.Title class="text-base">{editingCategoryId ? 'Edit Kategori' : 'Tambah Kategori'}</Card.Title>
 							<Card.Description>Kategori membantu arsip mengikuti klasifikasi dan jadwal retensi administrasi.</Card.Description>
@@ -905,23 +905,23 @@
 							>
 								<div class="grid gap-3 sm:grid-cols-2">
 									<div>
-										<label for="archive-category-code" class="text-sm font-medium text-slate-700">Kode</label>
+										<label for="archive-category-code" class="text-sm font-medium text-foreground">Kode</label>
 										<Input id="archive-category-code" class="mt-1" bind:value={categoryForm.code} placeholder="ARS-SM" />
 									</div>
 									<div>
-										<label for="archive-category-retention" class="text-sm font-medium text-slate-700">Retensi Tahun</label>
+										<label for="archive-category-retention" class="text-sm font-medium text-foreground">Retensi Tahun</label>
 										<Input id="archive-category-retention" class="mt-1" type="number" min="0" bind:value={categoryForm.retention_years} />
 									</div>
 								</div>
 								<div>
-									<label for="archive-category-name" class="text-sm font-medium text-slate-700">Nama Kategori</label>
+									<label for="archive-category-name" class="text-sm font-medium text-foreground">Nama Kategori</label>
 									<Input id="archive-category-name" class="mt-1" bind:value={categoryForm.name} placeholder="Surat Masuk" />
 								</div>
 								<div>
-									<label for="archive-category-classification" class="text-sm font-medium text-slate-700">Kode Klasifikasi</label>
+									<label for="archive-category-classification" class="text-sm font-medium text-foreground">Kode Klasifikasi</label>
 									<select
 										id="archive-category-classification"
-										class="mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-800"
+										class="mt-1 h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground"
 										bind:value={categoryForm.classification_code}
 									>
 										{#each CLASSIFICATION_OPTIONS as option (option[0])}
@@ -930,11 +930,11 @@
 									</select>
 								</div>
 								<div>
-									<label for="archive-category-description" class="text-sm font-medium text-slate-700">Deskripsi</label>
+									<label for="archive-category-description" class="text-sm font-medium text-foreground">Deskripsi</label>
 									<Textarea id="archive-category-description" class="mt-1 min-h-20" bind:value={categoryForm.description} />
 								</div>
-								<label class="flex items-center gap-2 text-sm text-slate-700" for="archive-category-active">
-									<input id="archive-category-active" type="checkbox" class="size-4 rounded border-slate-300" bind:checked={categoryForm.is_active} />
+								<label class="flex items-center gap-2 text-sm text-foreground" for="archive-category-active">
+									<input id="archive-category-active" type="checkbox" class="size-4 rounded border-border" bind:checked={categoryForm.is_active} />
 									Kategori aktif
 								</label>
 								<div class="flex flex-wrap justify-end gap-2">

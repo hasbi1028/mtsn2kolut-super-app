@@ -54,11 +54,11 @@
 	}
 
 	function methodColor(action: string) {
-		if (action.startsWith('AUTH_')) return 'bg-amber-100 text-amber-800 border-amber-200';
-		if (action === 'POST') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-		if (action === 'PUT' || action === 'PATCH') return 'bg-blue-100 text-blue-700 border-blue-200';
-		if (action === 'DELETE') return 'bg-red-100 text-red-700 border-red-200';
-		return 'bg-slate-100 text-slate-700 border-slate-200';
+		if (action.startsWith('AUTH_')) return 'bg-warning/15 text-warning border-warning/30';
+		if (action === 'POST') return 'bg-primary/15 text-primary border-primary/20';
+		if (action === 'PUT' || action === 'PATCH') return 'bg-accent text-accent-foreground border-accent';
+		if (action === 'DELETE') return 'bg-destructive/15 text-destructive border-destructive/30';
+		return 'bg-muted text-foreground border-border';
 	}
 
 	function fmtDt(iso: string) {
@@ -169,7 +169,7 @@
 <div class="space-y-6 p-6">
 	<div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
 		<div>
-			<h1 class="text-2xl font-bold text-[oklch(0.38_0.13_145)]">Audit Trail</h1>
+			<h1 class="text-2xl font-bold text-primary">Audit Trail</h1>
 			<p class="text-sm text-muted-foreground mt-1">
 				Riwayat semua perubahan data oleh pengguna sistem
 			</p>
@@ -202,7 +202,7 @@
 		</div>
 	</div>
 
-	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+	<Card.Root class="overflow-hidden border-border shadow-sm">
 		<Card.Content class="p-0">
 			<AsyncContent promise={logsPromise} onerror={handleLogsRenderError}>
 				{#snippet pending()}
@@ -233,7 +233,7 @@
 					<div class="hidden overflow-x-auto lg:block">
 					<Table.Root>
 						<Table.Header>
-							<Table.Row class="bg-green-50">
+							<Table.Row class="bg-success/10">
 								<Table.Head>Waktu</Table.Head>
 								<Table.Head>Pengguna</Table.Head>
 								<Table.Head>Aksi</Table.Head>
@@ -244,7 +244,7 @@
 						</Table.Header>
 						<Table.Body>
 							{#each currentLogs as log (log.id)}
-								<Table.Row class="hover:bg-green-50/40">
+								<Table.Row class="hover:bg-success/10">
 									<Table.Cell class="text-xs text-muted-foreground whitespace-nowrap">{fmtDt(log.created_at)}</Table.Cell>
 									<Table.Cell class="font-medium text-sm">{log.username ?? '—'}</Table.Cell>
 									<Table.Cell>
@@ -265,19 +265,19 @@
 
 					<div class="grid gap-3 p-4 lg:hidden">
 						{#each currentLogs as log (log.id)}
-							<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+							<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 								<div class="flex items-start justify-between gap-3">
 									<div class="min-w-0">
-										<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{fmtDt(log.created_at)}</p>
-										<p class="mt-1 text-sm font-semibold text-slate-900">{log.username ?? '—'}</p>
-										<p class="mt-1 text-sm text-slate-600">{log.entity_type}</p>
+										<p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{fmtDt(log.created_at)}</p>
+										<p class="mt-1 text-sm font-semibold text-foreground">{log.username ?? '—'}</p>
+										<p class="mt-1 text-sm text-muted-foreground">{log.entity_type}</p>
 									</div>
 									<Badge variant="outline" class="text-xs font-mono {methodColor(log.action)}">{log.action}</Badge>
 								</div>
-								<p class="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs font-mono text-slate-600 break-all">
+								<p class="mt-3 rounded-xl bg-muted/50 px-3 py-2 text-xs font-mono text-muted-foreground break-all">
 									{authSummary(log) || metaPath(log.metadata) || log.entity_id}
 								</p>
-								<p class="mt-3 text-xs text-slate-500">Status {metaStatus(log.metadata) ?? '—'}</p>
+								<p class="mt-3 text-xs text-muted-foreground">Status {metaStatus(log.metadata) ?? '—'}</p>
 							</div>
 						{/each}
 					</div>

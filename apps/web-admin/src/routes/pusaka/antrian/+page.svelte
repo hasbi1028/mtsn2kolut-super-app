@@ -156,22 +156,22 @@
 
 <div class="space-y-6">
 
-	<div class="flex items-center gap-2 text-sm text-slate-500">
-		<a href={resolve('/pusaka')} class="hover:text-slate-700">PUSAKA</a>
+	<div class="flex items-center gap-2 text-sm text-muted-foreground">
+		<a href={resolve('/pusaka')} class="hover:text-foreground">PUSAKA</a>
 		<span>/</span>
-		<span class="text-slate-700 font-medium">Antrian Job</span>
+		<span class="text-foreground font-medium">Antrian Job</span>
 	</div>
 
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-2xl font-semibold text-slate-800">Antrian Job PUSAKA</h1>
+			<h1 class="text-2xl font-semibold text-foreground">Antrian Job PUSAKA</h1>
 			<p class="text-sm text-muted-foreground mt-1">Auto-refresh setiap 10 detik</p>
 		</div>
 		<LoadingButton variant="outline" size="sm" onclick={() => void refreshJobs(true)} loading={refreshing} loadingLabel="Memuat..." label="↺ Refresh" />
 	</div>
 
 	<!-- Filters -->
-	<Card.Root class="border-slate-200 shadow-sm">
+	<Card.Root class="border-border shadow-sm">
 		<Card.Content class="pt-4 pb-3">
 			<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[auto_1fr_1fr_auto] xl:items-end">
 				<div class="text-sm text-muted-foreground">Filter</div>
@@ -201,7 +201,7 @@
 		</Card.Content>
 	</Card.Root>
 
-	<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+	<Card.Root class="overflow-hidden border-border shadow-sm">
 		<Card.Content class="p-0">
 			<AsyncContent promise={jobsPromise} onerror={handleJobRenderError}>
 				{#snippet pending()}
@@ -272,22 +272,22 @@
 
 					<div class="grid gap-3 p-4 lg:hidden">
 						{#each currentJobs as job (job.id)}
-							<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+							<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 								<div class="flex items-start justify-between gap-3">
 									<div class="min-w-0">
-										<p class="text-sm font-semibold text-slate-900">{job.nama || job.nip || '—'}</p>
-										<p class="mt-1 text-xs text-slate-500">{fmtDt(job.created_at)}</p>
+										<p class="text-sm font-semibold text-foreground">{job.nama || job.nip || '—'}</p>
+										<p class="mt-1 text-xs text-muted-foreground">{fmtDt(job.created_at)}</p>
 									</div>
 									<Badge variant={statusVariant(job.status)}>{statusLabel(job.status)}</Badge>
 								</div>
 								<div class="mt-3 flex items-center gap-2">
 									<Badge variant="outline">{runTypeLabel(job.run_type)}</Badge>
-									<span class="text-xs text-slate-500">Percobaan {job.attempts}/{job.max_attempts}</span>
+									<span class="text-xs text-muted-foreground">Percobaan {job.attempts}/{job.max_attempts}</span>
 								</div>
-								<p class="mt-3 text-xs text-slate-500">Diperbarui {fmtDt(job.updated_at)}</p>
+								<p class="mt-3 text-xs text-muted-foreground">Diperbarui {fmtDt(job.updated_at)}</p>
 							</div>
 						{:else}
-							<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+							<div class="rounded-2xl border border-dashed border-border bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
 								Tidak ada job ditemukan.
 							</div>
 						{/each}

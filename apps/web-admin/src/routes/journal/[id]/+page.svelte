@@ -192,13 +192,13 @@
 	}
 
 	const statusColors: Record<string, string> = {
-		hadir: 'bg-green-600 text-white hover:bg-green-700',
-		sakit: 'bg-yellow-500 text-white hover:bg-yellow-600',
-		izin: 'bg-sky-500 text-white hover:bg-sky-600',
-		alpha: 'bg-red-600 text-white hover:bg-red-700'
+		hadir: 'bg-success text-background hover:bg-success',
+		sakit: 'bg-warning text-background hover:bg-warning/90',
+		izin: 'bg-accent text-accent-foreground hover:bg-accent/90',
+		alpha: 'bg-destructive text-destructive-foreground hover:bg-destructive'
 	};
 
-	const statusInactive = 'bg-gray-100 text-gray-600 hover:bg-gray-200';
+	const statusInactive = 'bg-muted text-muted-foreground hover:bg-muted';
 </script>
 
 <div class="container mx-auto max-w-5xl space-y-6 p-6">
@@ -233,13 +233,13 @@
 						<div class="flex items-center gap-2">
 							<Badge variant="outline" class="text-base font-semibold">Pertemuan ke-{currentDetail.session.pertemuan_ke}</Badge>
 							{#if currentDetail.session.guru_hadir}
-								<Badge class="bg-green-100 text-green-800 hover:bg-green-100">Guru Hadir</Badge>
+								<Badge class="bg-success/15 text-success hover:bg-success/15">Guru Hadir</Badge>
 							{:else}
-								<Badge class="bg-red-100 text-red-800 hover:bg-red-100">Guru Tidak Hadir</Badge>
+								<Badge class="bg-destructive/15 text-destructive hover:bg-destructive/15">Guru Tidak Hadir</Badge>
 							{/if}
 						</div>
-						<p class="text-lg font-medium text-gray-800">{formatTanggal(currentDetail.session.tanggal)}</p>
-						<p class="text-sm text-gray-500">
+						<p class="text-lg font-medium text-foreground">{formatTanggal(currentDetail.session.tanggal)}</p>
+						<p class="text-sm text-muted-foreground">
 							{currentDetail.session.class_name} ({currentDetail.session.class_code}) &nbsp;·&nbsp;
 							{currentDetail.session.subject_name} &nbsp;·&nbsp;
 							{currentDetail.session.teacher_name}
@@ -254,15 +254,15 @@
 				{#if editMode}
 					<div class="space-y-3">
 						<div class="space-y-1">
-							<label for="edit-materi" class="text-sm font-medium text-gray-700">Materi</label>
+							<label for="edit-materi" class="text-sm font-medium text-foreground">Materi</label>
 							<Textarea id="edit-materi" bind:value={editMateri} rows={3} />
 						</div>
 						<div class="space-y-1">
-							<label for="edit-kegiatan" class="text-sm font-medium text-gray-700">Kegiatan</label>
+							<label for="edit-kegiatan" class="text-sm font-medium text-foreground">Kegiatan</label>
 							<Textarea id="edit-kegiatan" bind:value={editKegiatan} rows={3} />
 						</div>
 						<div class="space-y-1">
-							<label for="edit-catatan" class="text-sm font-medium text-gray-700">Catatan</label>
+							<label for="edit-catatan" class="text-sm font-medium text-foreground">Catatan</label>
 							<Textarea id="edit-catatan" bind:value={editCatatan} rows={2} />
 						</div>
 						<div class="flex items-center gap-3">
@@ -270,9 +270,9 @@
 								id="edit-guru-hadir"
 								type="checkbox"
 								bind:checked={editGuruHadir}
-								class="h-4 w-4 rounded border-gray-300 text-green-600"
+								class="h-4 w-4 rounded border-border text-success"
 							/>
-							<label for="edit-guru-hadir" class="text-sm font-medium text-gray-700">Guru hadir mengajar</label>
+							<label for="edit-guru-hadir" class="text-sm font-medium text-foreground">Guru hadir mengajar</label>
 						</div>
 						<div class="flex justify-end">
 							<LoadingButton loading={editBusy} onclick={() => void saveSession()}>Simpan Perubahan</LoadingButton>
@@ -281,17 +281,17 @@
 				{:else}
 					<div class="grid gap-3 text-sm">
 						<div>
-							<p class="font-medium text-gray-700">Materi</p>
-							<p class="text-gray-600 whitespace-pre-wrap">{currentDetail.session.materi || '–'}</p>
+							<p class="font-medium text-foreground">Materi</p>
+							<p class="text-muted-foreground whitespace-pre-wrap">{currentDetail.session.materi || '–'}</p>
 						</div>
 						<div>
-							<p class="font-medium text-gray-700">Kegiatan</p>
-							<p class="text-gray-600 whitespace-pre-wrap">{currentDetail.session.kegiatan || '–'}</p>
+							<p class="font-medium text-foreground">Kegiatan</p>
+							<p class="text-muted-foreground whitespace-pre-wrap">{currentDetail.session.kegiatan || '–'}</p>
 						</div>
 						{#if currentDetail.session.catatan}
 							<div>
-								<p class="font-medium text-gray-700">Catatan</p>
-								<p class="text-gray-600 whitespace-pre-wrap">{currentDetail.session.catatan}</p>
+								<p class="font-medium text-foreground">Catatan</p>
+								<p class="text-muted-foreground whitespace-pre-wrap">{currentDetail.session.catatan}</p>
 							</div>
 						{/if}
 					</div>
@@ -309,7 +309,7 @@
 			</Card.Header>
 			<Card.Content class="p-0">
 				{#if currentDetail.attendances.length === 0}
-					<div class="p-8 text-center text-sm text-gray-500">Tidak ada siswa yang terdaftar.</div>
+					<div class="p-8 text-center text-sm text-muted-foreground">Tidak ada siswa yang terdaftar.</div>
 				{:else}
 					<Table.Root>
 						<Table.Header>
@@ -325,9 +325,9 @@
 							{#each currentDetail.attendances as att, i (att.student_id)}
 								{@const cur = attendanceState[att.student_id] ?? { status: att.status, catatan: att.catatan }}
 								<Table.Row>
-									<Table.Cell class="text-gray-500">{i + 1}</Table.Cell>
+									<Table.Cell class="text-muted-foreground">{i + 1}</Table.Cell>
 									<Table.Cell class="font-medium">{att.nama}</Table.Cell>
-									<Table.Cell class="text-sm text-gray-500">{att.nis}</Table.Cell>
+									<Table.Cell class="text-sm text-muted-foreground">{att.nis}</Table.Cell>
 									<Table.Cell>
 										<div class="flex gap-1">
 											{#each ['hadir', 'sakit', 'izin', 'alpha'] as s (s)}
@@ -351,7 +351,7 @@
 												};
 											}}
 											placeholder="Catatan (opsional)"
-											class="w-full rounded border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-green-600"
+											class="w-full rounded border border-border px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
 										/>
 									</Table.Cell>
 								</Table.Row>
@@ -361,7 +361,7 @@
 				{/if}
 			</Card.Content>
 			{#if currentDetail.attendances.length > 0}
-				<div class="flex justify-end border-t border-gray-100 p-4">
+				<div class="flex justify-end border-t border-border p-4">
 					<LoadingButton loading={saveBusy} onclick={() => void saveAttendances()}>Simpan Kehadiran</LoadingButton>
 				</div>
 			{/if}

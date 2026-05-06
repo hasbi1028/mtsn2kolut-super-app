@@ -184,11 +184,11 @@
 	});
 
 	function statusClass(s: string) {
-		if (s === 'active') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-		if (s === 'finished') return 'bg-slate-100 text-slate-500 border-slate-200';
-		if (s === 'cancelled') return 'bg-red-100 text-red-700 border-red-200';
-		if (s === 'scheduled') return 'bg-green-100 text-green-800 border-green-200';
-		return 'bg-amber-100 text-amber-700 border-amber-200';
+		if (s === 'active') return 'bg-primary/15 text-primary border-primary/20';
+		if (s === 'finished') return 'bg-muted text-muted-foreground border-border';
+		if (s === 'cancelled') return 'bg-destructive/15 text-destructive border-destructive/30';
+		if (s === 'scheduled') return 'bg-success/15 text-success border-success/20';
+		return 'bg-warning/15 text-warning border-warning/30';
 	}
 
 	function fmtDt(iso: string) {
@@ -454,10 +454,10 @@
 	}
 
 	function scheduleStateClass(state: SessionScheduleState) {
-		if (state === 'overdue') return 'border-red-200 bg-red-50 text-red-700';
-		if (state === 'today' || state === 'running_window') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-		if (state === 'upcoming') return 'border-sky-200 bg-sky-50 text-sky-700';
-		return 'border-slate-200 bg-slate-50 text-slate-600';
+		if (state === 'overdue') return 'border-destructive/30 bg-destructive/10 text-destructive';
+		if (state === 'today' || state === 'running_window') return 'border-primary/20 bg-primary/10 text-primary';
+		if (state === 'upcoming') return 'border-accent bg-accent/60 text-accent-foreground';
+		return 'border-border bg-muted/50 text-muted-foreground';
 	}
 
 	function scheduleQuickAction(session: ExamSession, state: SessionScheduleState): ScheduleQuickAction | null {
@@ -475,20 +475,20 @@
 	}
 
 	function readinessBoardCardClass(tone: ReadinessBoardTone, active: boolean) {
-		const base = 'rounded-lg border p-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700';
-		if (active) return `${base} border-emerald-300 bg-emerald-50 text-emerald-950`;
-		if (tone === 'danger') return `${base} border-red-100 bg-white hover:border-red-200 hover:bg-red-50`;
-		if (tone === 'success') return `${base} border-emerald-100 bg-white hover:border-emerald-200 hover:bg-emerald-50`;
-		if (tone === 'warning') return `${base} border-amber-100 bg-white hover:border-amber-200 hover:bg-amber-50`;
-		return `${base} border-sky-100 bg-white hover:border-sky-200 hover:bg-sky-50`;
+		const base = 'rounded-lg border p-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
+		if (active) return `${base} border-primary/20 bg-primary/10 text-primary`;
+		if (tone === 'danger') return `${base} border-destructive/30 bg-card hover:border-destructive/30 hover:bg-destructive/10`;
+		if (tone === 'success') return `${base} border-primary/20 bg-card hover:border-primary/20 hover:bg-primary/10`;
+		if (tone === 'warning') return `${base} border-warning/30 bg-card hover:border-warning/30 hover:bg-warning/10`;
+		return `${base} border-accent bg-card hover:border-accent hover:bg-accent/60`;
 	}
 
 	function scheduleBoardCardClass(tone: ScheduleBoardTone, active: boolean) {
-		const base = 'rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700';
-		if (active) return `${base} border-emerald-300 bg-emerald-50 text-emerald-950`;
-		if (tone === 'danger') return `${base} border-red-100 bg-white hover:border-red-200 hover:bg-red-50`;
-		if (tone === 'success') return `${base} border-emerald-100 bg-white hover:border-emerald-200 hover:bg-emerald-50`;
-		return `${base} border-sky-100 bg-white hover:border-sky-200 hover:bg-sky-50`;
+		const base = 'rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
+		if (active) return `${base} border-primary/20 bg-primary/10 text-primary`;
+		if (tone === 'danger') return `${base} border-destructive/30 bg-card hover:border-destructive/30 hover:bg-destructive/10`;
+		if (tone === 'success') return `${base} border-primary/20 bg-card hover:border-primary/20 hover:bg-primary/10`;
+		return `${base} border-accent bg-card hover:border-accent hover:bg-accent/60`;
 	}
 
 	function isSessionReadinessFilter(value: string | null): value is SessionReadinessFilter {
@@ -574,9 +574,9 @@
 	}
 
 	function nextActionClass(tone: NextSessionAction['tone']) {
-		if (tone === 'danger') return 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100';
-		if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100';
-		return 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
+		if (tone === 'danger') return 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15';
+		if (tone === 'warning') return 'border-warning/30 bg-warning/10 text-warning hover:bg-warning/15';
+		return 'border-primary/20 bg-primary/10 text-primary hover:bg-primary/15';
 	}
 
 	function buildSessionReadinessIssues() {
@@ -890,39 +890,39 @@
 <div class="space-y-6">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<p class="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">Kegiatan & Sesi</p>
-			<h1 class="text-2xl font-semibold text-slate-800">Sesi CBT</h1>
-			<p class="text-sm text-slate-500 mt-1">Daftar sesi ujian sebagai bagian dari alur Kegiatan & Sesi{eventId ? ' untuk kegiatan ini' : ''}.</p>
+			<p class="text-xs font-semibold uppercase tracking-[0.16em] text-success">Kegiatan & Sesi</p>
+			<h1 class="text-2xl font-semibold text-foreground">Sesi CBT</h1>
+			<p class="text-sm text-muted-foreground mt-1">Daftar sesi ujian sebagai bagian dari alur Kegiatan & Sesi{eventId ? ' untuk kegiatan ini' : ''}.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			{#if eventId}
-				<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex items-center rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Kegiatan</a>
+				<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex items-center rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Kembali ke Kegiatan</a>
 			{/if}
 			<Button href={createSessionHref}>+ Sesi</Button>
 		</div>
 	</div>
 
 	{#if eventId}
-		<div class="rounded-xl border border-green-200 bg-green-50/70 p-4 text-sm text-green-950">
+		<div class="rounded-xl border border-success/20 bg-success/10 p-4 text-sm text-success">
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<div>
 					<p class="font-semibold">Sesi untuk kegiatan: {eventContext?.title ?? eventId}</p>
-					<p class="mt-1 text-green-800">Daftar sesi dan payload pembuatan sesi membawa <code class="rounded bg-white px-1">event_id</code>. Item global atau event lain disembunyikan agar tidak terbaca sebagai sesi kegiatan ini.</p>
+					<p class="mt-1 text-success">Daftar sesi dan payload pembuatan sesi membawa <code class="rounded bg-card px-1">event_id</code>. Item global atau event lain disembunyikan agar tidak terbaca sebagai sesi kegiatan ini.</p>
 				</div>
-				<a href={resolve(`/asesmen/paket?event_id=${eventId}`)} class="rounded-md border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Paket Event</a>
+				<a href={resolve(`/asesmen/paket?event_id=${eventId}`)} class="rounded-md border border-success/20 bg-card px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Paket Event</a>
 			</div>
 		</div>
 	{:else}
-		<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+		<div class="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
 			Anda sedang melihat sesi global. Dari Kegiatan & Sesi, gunakan tombol Sesi agar pembuatan sesi otomatis terhubung ke kegiatan.
 		</div>
 	{/if}
 
 	{#if hiddenEventSessionCount > 0 || hiddenEventPackageCount > 0}
-		<div class="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+		<div class="rounded-xl border border-accent bg-accent/60 px-4 py-3 text-sm text-accent-foreground">
 			<p class="font-semibold">Item di luar event disembunyikan dari layar ini.</p>
 			<p class="mt-1">
-				{hiddenEventSessionCount} sesi dan {hiddenEventPackageCount} paket global/event lain tidak ditampilkan karena <code class="rounded bg-white px-1">event_id</code> tidak sama dengan kegiatan aktif.
+				{hiddenEventSessionCount} sesi dan {hiddenEventPackageCount} paket global/event lain tidak ditampilkan karena <code class="rounded bg-card px-1">event_id</code> tidak sama dengan kegiatan aktif.
 			</p>
 		</div>
 	{/if}
@@ -939,7 +939,7 @@
 			<Card.Content class="space-y-4">
 				<div class="grid gap-3 sm:grid-cols-2">
 					<div>
-						<label for="session-package" class="text-xs text-slate-500 mb-1 block">Paket Soal <span class="text-red-500">*</span></label>
+						<label for="session-package" class="text-xs text-muted-foreground mb-1 block">Paket Soal <span class="text-destructive">*</span></label>
 						<select id="session-package" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fPackageId}>
 							<option value="">-- Pilih Paket --</option>
 							{#each packages as p (p.id)}
@@ -947,48 +947,48 @@
 							{/each}
 						</select>
 						{#if hiddenEventPackageCount > 0}
-							<p class="mt-1 text-[11px] text-sky-700">{hiddenEventPackageCount} paket global/event lain disembunyikan dari pilihan sesi event ini.</p>
+							<p class="mt-1 text-[11px] text-accent-foreground">{hiddenEventPackageCount} paket global/event lain disembunyikan dari pilihan sesi event ini.</p>
 						{/if}
 					</div>
 					{#if fPackageId}
 						{@const quality = selectedPackageQuality}
-						<div class="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+						<div class="sm:col-span-2 rounded-lg border border-border bg-muted/50 px-3 py-2">
 							<div class="flex flex-wrap items-start justify-between gap-3">
 								<div>
-									<p class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-700">Quality Gate Paket</p>
-									<p class="mt-1 text-sm font-medium text-slate-900">{selectedPackage?.title ?? 'Paket dipilih'}</p>
+									<p class="text-xs font-semibold uppercase tracking-[0.16em] text-foreground">Quality Gate Paket</p>
+									<p class="mt-1 text-sm font-medium text-foreground">{selectedPackage?.title ?? 'Paket dipilih'}</p>
 								</div>
 								<div class="flex flex-wrap gap-1.5">
-									<Badge variant="outline" class="bg-white text-xs">{quality.totalCount} soal</Badge>
+									<Badge variant="outline" class="bg-card text-xs">{quality.totalCount} soal</Badge>
 									{#each quality.typeBuckets.slice(0, 3) as bucket (bucket.label)}
-										<Badge variant="outline" class="bg-white text-xs">{bucket.label}: {bucket.count}</Badge>
+										<Badge variant="outline" class="bg-card text-xs">{bucket.label}: {bucket.count}</Badge>
 									{/each}
 									{#if quality.hotsCount > 0}
-										<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">{quality.hotsCount} HOTS</Badge>
+										<Badge class="border-warning/30 bg-warning/10 text-warning text-xs">{quality.hotsCount} HOTS</Badge>
 									{/if}
 									{#if quality.missingCount > 0}
-										<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">{quality.missingCount} metadata kurang</Badge>
+										<Badge class="border-warning/30 bg-warning/10 text-warning text-xs">{quality.missingCount} metadata kurang</Badge>
 									{/if}
 									{#if quality.unpublishedCount > 0}
-										<Badge class="border-red-200 bg-red-50 text-red-700 text-xs">{quality.unpublishedCount} belum terbit</Badge>
+										<Badge class="border-destructive/30 bg-destructive/10 text-destructive text-xs">{quality.unpublishedCount} belum terbit</Badge>
 									{/if}
 								</div>
 							</div>
 							{#if selectedPackage && !selectedPackage.is_active}
-								<p class="mt-2 text-xs font-medium text-red-700">Paket nonaktif tidak boleh dijadikan sesi ujian.</p>
+								<p class="mt-2 text-xs font-medium text-destructive">Paket nonaktif tidak boleh dijadikan sesi ujian.</p>
 							{:else if quality.totalCount === 0}
-								<p class="mt-2 text-xs font-medium text-red-700">Paket ini belum memiliki soal, sehingga sesi tidak bisa dibuat.</p>
+								<p class="mt-2 text-xs font-medium text-destructive">Paket ini belum memiliki soal, sehingga sesi tidak bisa dibuat.</p>
 							{:else if quality.unpublishedCount > 0}
-								<p class="mt-2 text-xs font-medium text-red-700">Rapikan paket dulu. Flutter hanya menyajikan soal terbit, jadi soal belum terbit akan membuat jumlah soal sesi tidak konsisten.</p>
+								<p class="mt-2 text-xs font-medium text-destructive">Rapikan paket dulu. Flutter hanya menyajikan soal terbit, jadi soal belum terbit akan membuat jumlah soal sesi tidak konsisten.</p>
 							{:else if quality.missingCount > 0}
-								<p class="mt-2 text-xs font-medium text-amber-700">Sesi masih boleh dibuat, tetapi {quality.missingCount} soal belum lengkap CP/TP/KD atau level kognitif.</p>
+								<p class="mt-2 text-xs font-medium text-warning">Sesi masih boleh dibuat, tetapi {quality.missingCount} soal belum lengkap CP/TP/KD atau level kognitif.</p>
 							{:else}
-								<p class="mt-2 text-xs font-medium text-emerald-700">Paket siap dipakai untuk draft sesi CBT.</p>
+								<p class="mt-2 text-xs font-medium text-primary">Paket siap dipakai untuk draft sesi CBT.</p>
 							{/if}
 						</div>
 					{/if}
 					<div>
-						<label for="session-scope" class="text-xs text-slate-500 mb-1 block">Cakupan peserta <span class="text-red-500">*</span></label>
+						<label for="session-scope" class="text-xs text-muted-foreground mb-1 block">Cakupan peserta <span class="text-destructive">*</span></label>
 						<select
 							id="session-scope"
 							class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -1002,7 +1002,7 @@
 					</div>
 					{#if fScopeType === 'class'}
 						<div>
-							<label for="session-class" class="text-xs text-slate-500 mb-1 block">Kelas <span class="text-red-500">*</span></label>
+							<label for="session-class" class="text-xs text-muted-foreground mb-1 block">Kelas <span class="text-destructive">*</span></label>
 							<select id="session-class" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fClassId}>
 								<option value="">-- Pilih Kelas --</option>
 								{#each classes as c (c.id)}
@@ -1012,7 +1012,7 @@
 						</div>
 					{:else if fScopeType === 'grade'}
 						<div>
-							<label for="session-grade" class="text-xs text-slate-500 mb-1 block">Tingkat <span class="text-red-500">*</span></label>
+							<label for="session-grade" class="text-xs text-muted-foreground mb-1 block">Tingkat <span class="text-destructive">*</span></label>
 							<select id="session-grade" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fGradeLevel}>
 								<option value="VII">VII</option>
 								<option value="VIII">VIII</option>
@@ -1020,21 +1020,21 @@
 							</select>
 						</div>
 					{:else}
-						<div class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+						<div class="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary">
 							Semua siswa aktif di sekolah dapat menjadi peserta sesi ini.
 						</div>
 					{/if}
 					<div>
-						<label for="session-mix-policy" class="text-xs text-slate-500 mb-1 block">Mix policy</label>
+						<label for="session-mix-policy" class="text-xs text-muted-foreground mb-1 block">Mix policy</label>
 						<select id="session-mix-policy" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fMixPolicy}>
 							<option value="same_class">Tetap per kelas</option>
 							<option value="same_grade">Campur dalam tingkat</option>
 							<option value="mixed_scope">Campur lintas cakupan</option>
 						</select>
-						<p class="mt-1 text-[11px] text-slate-500">Nilai ini dikirim ke backend. Saat cakupan berubah, opsi disetel otomatis lalu tetap bisa disesuaikan operator.</p>
+						<p class="mt-1 text-[11px] text-muted-foreground">Nilai ini dikirim ke backend. Saat cakupan berubah, opsi disetel otomatis lalu tetap bisa disesuaikan operator.</p>
 					</div>
 					<div>
-						<label for="session-assignment-mode" class="text-xs text-slate-500 mb-1 block">Mode alokasi ruangan</label>
+						<label for="session-assignment-mode" class="text-xs text-muted-foreground mb-1 block">Mode alokasi ruangan</label>
 						<select id="session-assignment-mode" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fAssignmentMode}>
 							<option value="random_balanced">Acak seimbang</option>
 							<option value="manual">Manual</option>
@@ -1043,31 +1043,31 @@
 						</select>
 					</div>
 					<div class="sm:col-span-2">
-						<label for="session-title" class="text-xs text-slate-500 mb-1 block">Nama Sesi <span class="text-red-500">*</span></label>
+						<label for="session-title" class="text-xs text-muted-foreground mb-1 block">Nama Sesi <span class="text-destructive">*</span></label>
 						<Input id="session-title" placeholder="mis: UTS Matematika VII A - Semester 1 2025" bind:value={fTitle} />
 					</div>
 					<div>
-						<label for="session-start" class="text-xs text-slate-500 mb-1 block">Mulai <span class="text-red-500">*</span></label>
+						<label for="session-start" class="text-xs text-muted-foreground mb-1 block">Mulai <span class="text-destructive">*</span></label>
 						<Input id="session-start" type="datetime-local" bind:value={fStart} />
 					</div>
 					<div>
-						<label for="session-end" class="text-xs text-slate-500 mb-1 block">Selesai <span class="text-red-500">*</span></label>
+						<label for="session-end" class="text-xs text-muted-foreground mb-1 block">Selesai <span class="text-destructive">*</span></label>
 						<Input id="session-end" type="datetime-local" bind:value={fEnd} />
 					</div>
-					<div class="sm:col-span-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900">
+					<div class="sm:col-span-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs leading-5 text-primary">
 						<p class="font-semibold">Jadwal sesi dicatat dan ditampilkan sebagai WITA (Asia/Makassar).</p>
 						{#if browserTimeZoneMismatch}
-							<p class="text-amber-800">Zona waktu browser terdeteksi {browserTimeZone}. Samakan perangkat operator ke Asia/Makassar sebelum menyimpan agar input <code class="rounded bg-white px-1">datetime-local</code> tidak bergeser.</p>
+							<p class="text-warning">Zona waktu browser terdeteksi {browserTimeZone}. Samakan perangkat operator ke Asia/Makassar sebelum menyimpan agar input <code class="rounded bg-card px-1">datetime-local</code> tidak bergeser.</p>
 						{:else}
 							<p>Pastikan jam mulai dan selesai mengikuti waktu sekolah/WITA sebelum sesi dijadwalkan.</p>
 						{/if}
 					</div>
 					<div class="sm:col-span-2 grid gap-3 sm:grid-cols-2">
-						<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-slate-700">
+						<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground">
 							<input type="checkbox" bind:checked={fIsSpecialEvent} class="size-4 accent-emerald-700" />
 							Tandai sebagai sesi khusus
 						</label>
-						<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-slate-700">
+						<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground">
 							<input type="checkbox" bind:checked={fAllowCrossGrade} class="size-4 accent-emerald-700" />
 							Izinkan lintas tingkat
 						</label>
@@ -1085,7 +1085,7 @@
 					<Button variant="outline" onclick={() => (showForm = false)}>Batal</Button>
 				</div>
 				{#if sessionReadinessIssues.length > 0}
-					<div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+					<div class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
 						<span class="font-semibold">Belum siap dibuat:</span>
 						<span>{sessionReadinessIssues.join(', ')}</span>
 					</div>
@@ -1096,15 +1096,15 @@
 
 	<!-- Enroll modal -->
 	{#if enrollSession}
-		<Card.Root class="border-green-200 bg-green-50">
+		<Card.Root class="border-success/20 bg-success/10">
 			<Card.Header class="pb-2">
-				<Card.Title class="text-base text-green-900">Daftarkan Siswa ke Sesi</Card.Title>
-				<p class="text-sm text-green-700 mt-0.5">{enrollSession.title}</p>
+				<Card.Title class="text-base text-success">Daftarkan Siswa ke Sesi</Card.Title>
+				<p class="text-sm text-success mt-0.5">{enrollSession.title}</p>
 			</Card.Header>
 			<Card.Content class="space-y-3">
-				<p class="text-sm text-slate-600">Tentukan kelompok peserta untuk sesi ini. Ruangan tetap bisa diacak terpisah setelah peserta terdaftar.</p>
+				<p class="text-sm text-muted-foreground">Tentukan kelompok peserta untuk sesi ini. Ruangan tetap bisa diacak terpisah setelah peserta terdaftar.</p>
 				<div>
-					<label for="enroll-scope" class="text-xs text-slate-500 mb-1 block">Cakupan peserta</label>
+					<label for="enroll-scope" class="text-xs text-muted-foreground mb-1 block">Cakupan peserta</label>
 					<select id="enroll-scope" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={enrollScopeType}>
 						<option value="class">Per kelas</option>
 						<option value="grade">Per tingkat</option>
@@ -1113,7 +1113,7 @@
 				</div>
 				{#if enrollScopeType === 'class'}
 					<div>
-						<label for="enroll-class" class="text-xs text-slate-500 mb-1 block">Pilih Kelas</label>
+						<label for="enroll-class" class="text-xs text-muted-foreground mb-1 block">Pilih Kelas</label>
 						<select id="enroll-class" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={enrollClassId}>
 							<option value="">-- Pilih Kelas --</option>
 							{#each classes as c (c.id)}
@@ -1123,7 +1123,7 @@
 					</div>
 				{:else if enrollScopeType === 'grade'}
 					<div>
-						<label for="enroll-grade" class="text-xs text-slate-500 mb-1 block">Pilih Tingkat</label>
+						<label for="enroll-grade" class="text-xs text-muted-foreground mb-1 block">Pilih Tingkat</label>
 						<select id="enroll-grade" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={enrollGradeLevel}>
 							<option value="VII">VII</option>
 							<option value="VIII">VIII</option>
@@ -1131,7 +1131,7 @@
 						</select>
 					</div>
 				{:else}
-					<div class="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-700">
+					<div class="rounded-md border border-primary/20 bg-card px-3 py-2 text-sm text-foreground">
 						Semua siswa aktif di sekolah akan didaftarkan ke sesi ini.
 					</div>
 				{/if}
@@ -1151,14 +1151,14 @@
 	{/if}
 
 	{#if scheduleSession}
-		<Card.Root class="border-amber-200 bg-amber-50">
+		<Card.Root class="border-warning/30 bg-warning/10">
 			<Card.Header class="pb-2">
-				<Card.Title class="text-base text-amber-950">Ubah Jadwal Sesi</Card.Title>
-				<p class="text-sm text-amber-800 mt-0.5">{scheduleSession.title}</p>
+				<Card.Title class="text-base text-warning">Ubah Jadwal Sesi</Card.Title>
+				<p class="text-sm text-warning mt-0.5">{scheduleSession.title}</p>
 			</Card.Header>
 			<Card.Content class="space-y-3">
-				<p class="text-sm text-slate-600">Geser jadwal untuk sesi draft atau terjadwal. Setelah disimpan, cek lagi kesiapan ruang dan pengawas.</p>
-				<div class="rounded-md border border-amber-200 bg-white px-3 py-2 text-xs leading-5 text-amber-900">
+				<p class="text-sm text-muted-foreground">Geser jadwal untuk sesi draft atau terjadwal. Setelah disimpan, cek lagi kesiapan ruang dan pengawas.</p>
+				<div class="rounded-md border border-warning/30 bg-card px-3 py-2 text-xs leading-5 text-warning">
 					<p class="font-semibold">Jadwal sesi menggunakan WITA (Asia/Makassar).</p>
 					{#if browserTimeZoneMismatch}
 						<p>Browser operator saat ini terdeteksi {browserTimeZone}. Koreksi zona waktu perangkat ke Asia/Makassar sebelum menyimpan perubahan jadwal.</p>
@@ -1168,11 +1168,11 @@
 				</div>
 				<div class="grid gap-3 sm:grid-cols-2">
 					<div>
-						<label for="quick-schedule-start" class="text-xs text-slate-500 mb-1 block">Mulai <span class="text-red-500">*</span></label>
+						<label for="quick-schedule-start" class="text-xs text-muted-foreground mb-1 block">Mulai <span class="text-destructive">*</span></label>
 						<Input id="quick-schedule-start" type="datetime-local" bind:value={scheduleStart} />
 					</div>
 					<div>
-						<label for="quick-schedule-end" class="text-xs text-slate-500 mb-1 block">Selesai <span class="text-red-500">*</span></label>
+						<label for="quick-schedule-end" class="text-xs text-muted-foreground mb-1 block">Selesai <span class="text-destructive">*</span></label>
 						<Input id="quick-schedule-end" type="datetime-local" bind:value={scheduleEnd} />
 					</div>
 				</div>
@@ -1196,7 +1196,7 @@
 			<div class="space-y-4">
 				<div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
 					{#each Array.from({ length: 5 }) as _, index (`cbt-session-stat-skeleton-${index}`)}
-						<Card.Root class="border-slate-200">
+						<Card.Root class="border-border">
 							<Card.Content class="space-y-2 p-4">
 								<Skeleton class="h-4 w-24" />
 								<Skeleton class="h-7 w-16" />
@@ -1204,7 +1204,7 @@
 						</Card.Root>
 					{/each}
 				</div>
-				<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+				<Card.Root class="overflow-hidden border-border shadow-sm">
 					<Card.Content class="space-y-3 p-6">
 						{#each Array.from({ length: 5 }) as _, index (`cbt-session-row-skeleton-${index}`)}
 							<div class="grid gap-3 lg:grid-cols-[1.1fr_1fr_0.85fr_0.9fr_0.45fr_1fr_0.65fr_auto] lg:items-center">
@@ -1253,22 +1253,22 @@
 					>
 						<div class="flex items-start justify-between gap-2">
 							<div>
-								<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{card.label}</p>
-								<p class="mt-1 text-2xl font-semibold text-slate-900">{card.count}</p>
+								<p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{card.label}</p>
+								<p class="mt-1 text-2xl font-semibold text-foreground">{card.count}</p>
 							</div>
 							{#if readinessFilter === card.filter}
-								<span class="rounded bg-emerald-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">Aktif</span>
+								<span class="rounded bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary-foreground">Aktif</span>
 							{/if}
 						</div>
-						<p class="mt-1 text-xs text-slate-500">{card.helper}</p>
+						<p class="mt-1 text-xs text-muted-foreground">{card.helper}</p>
 					</button>
 				{/each}
 			</div>
-			<div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+			<div class="rounded-lg border border-border bg-card p-3 shadow-sm">
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<div>
-						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">Jadwal Sesi</p>
-						<p class="mt-0.5 text-xs text-slate-500">Urutan waktu pelaksanaan CBT</p>
+						<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Jadwal Sesi</p>
+						<p class="mt-0.5 text-xs text-muted-foreground">Urutan waktu pelaksanaan CBT</p>
 					</div>
 					{#if scheduleFilter !== 'all'}
 						<Button variant="outline" size="sm" onclick={() => setSessionScheduleFilter('all')}>
@@ -1286,19 +1286,19 @@
 						>
 							<div class="flex items-start justify-between gap-2">
 								<div>
-									<p class="text-xs font-semibold text-slate-700">{card.label}</p>
-									<p class="text-xl font-semibold text-slate-900">{card.count}</p>
+									<p class="text-xs font-semibold text-foreground">{card.label}</p>
+									<p class="text-xl font-semibold text-foreground">{card.count}</p>
 								</div>
 								{#if scheduleFilter === card.filter}
-									<span class="rounded bg-emerald-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white">Aktif</span>
+									<span class="rounded bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary-foreground">Aktif</span>
 								{/if}
 							</div>
-							<p class="mt-0.5 text-xs text-slate-500">{card.helper}</p>
+							<p class="mt-0.5 text-xs text-muted-foreground">{card.helper}</p>
 						</button>
 					{/each}
 				</div>
 			</div>
-		<Card.Root class="overflow-hidden border-slate-200 shadow-sm">
+		<Card.Root class="overflow-hidden border-border shadow-sm">
 			<Card.Header class="space-y-3 pb-3">
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<Card.Title class="text-base">Sesi dalam Kegiatan ({visibleSessions.length}/{currentSessions.length})</Card.Title>
@@ -1315,11 +1315,11 @@
 					{#each readinessFilterOptions as option (option.filter)}
 						<button
 							type="button"
-							class="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors {readinessFilter === option.filter ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}"
+							class="inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors {readinessFilter === option.filter ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:bg-muted/50'}"
 							onclick={() => setSessionReadinessFilter(option.filter)}
 						>
 							<span>{option.label}</span>
-							<span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">{option.count}</span>
+							<span class="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{option.count}</span>
 						</button>
 					{/each}
 				</div>
@@ -1353,27 +1353,27 @@
 									<p class="truncate">{s.title}</p>
 								</Table.Cell>
 								<Table.Cell class="max-w-44">
-									<p class="truncate text-sm text-slate-600">{s.package_title}</p>
+									<p class="truncate text-sm text-muted-foreground">{s.package_title}</p>
 									<div class="mt-1 flex flex-wrap gap-1">
-										<Badge variant="outline" class="bg-white text-[11px]">{rowPackageQuality.totalCount} soal</Badge>
+										<Badge variant="outline" class="bg-card text-[11px]">{rowPackageQuality.totalCount} soal</Badge>
 										{#if rowPackageIssues.length > 0}
-											<Badge class="border-red-200 bg-red-50 text-[11px] text-red-700">{rowPackageIssues.join(', ')}</Badge>
+											<Badge class="border-destructive/30 bg-destructive/10 text-[11px] text-destructive">{rowPackageIssues.join(', ')}</Badge>
 										{:else if rowPackageQuality.missingCount > 0}
-											<Badge class="border-amber-200 bg-amber-50 text-[11px] text-amber-700">{rowPackageQuality.missingCount} metadata kurang</Badge>
+											<Badge class="border-warning/30 bg-warning/10 text-[11px] text-warning">{rowPackageQuality.missingCount} metadata kurang</Badge>
 										{:else}
-											<Badge class="border-emerald-200 bg-emerald-50 text-[11px] text-emerald-700">Paket siap</Badge>
+											<Badge class="border-primary/20 bg-primary/10 text-[11px] text-primary">Paket siap</Badge>
 										{/if}
 									</div>
 								</Table.Cell>
 								<Table.Cell>
 									<div class="space-y-1">
 										<Badge variant="outline" class="text-xs">{scopeSummary(s)}</Badge>
-										<p class="text-[11px] text-slate-500">{mixPolicyLabel(s.mix_policy)}</p>
+										<p class="text-[11px] text-muted-foreground">{mixPolicyLabel(s.mix_policy)}</p>
 									</div>
 								</Table.Cell>
 								<Table.Cell class="whitespace-nowrap">
 									<div class="space-y-1">
-										<p class="text-xs text-slate-500">{fmtDt(s.scheduled_start)}</p>
+										<p class="text-xs text-muted-foreground">{fmtDt(s.scheduled_start)}</p>
 										<Badge class="{scheduleStateClass(rowScheduleState)} text-[11px]">{scheduleStateLabel(rowScheduleState)}</Badge>
 										{#if rowScheduleQuickAction?.kind === 'schedule'}
 											<button
@@ -1404,17 +1404,17 @@
 								<Table.Cell>
 									<div class="flex max-w-60 flex-wrap gap-1">
 										{#if rowReadinessIssues.length === 0}
-											<Badge class="border-emerald-200 bg-emerald-50 text-[11px] text-emerald-700">Siap mulai</Badge>
+											<Badge class="border-primary/20 bg-primary/10 text-[11px] text-primary">Siap mulai</Badge>
 										{:else}
-											<Badge class="{rowPackageIssues.length > 0 ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-700'} text-[11px]">
+											<Badge class="{rowPackageIssues.length > 0 ? 'border-destructive/30 bg-destructive/10 text-destructive' : 'border-warning/30 bg-warning/10 text-warning'} text-[11px]">
 												{rowReadinessIssues.length} atensi
 											</Badge>
 										{/if}
-										<Badge variant="outline" class="bg-white text-[11px]">{s.room_count} ruang / {s.total_capacity} kursi</Badge>
-										<Badge variant="outline" class="bg-white text-[11px]">{s.assigned_participant_count}/{s.participant_count} ditempatkan</Badge>
-										<Badge variant="outline" class="bg-white text-[11px]">{s.proctor_assignment_count} pengawas</Badge>
+										<Badge variant="outline" class="bg-card text-[11px]">{s.room_count} ruang / {s.total_capacity} kursi</Badge>
+										<Badge variant="outline" class="bg-card text-[11px]">{s.assigned_participant_count}/{s.participant_count} ditempatkan</Badge>
+										<Badge variant="outline" class="bg-card text-[11px]">{s.proctor_assignment_count} pengawas</Badge>
 										{#each rowReadinessIssues.slice(0, 2) as issue (issue)}
-											<span class="text-[11px] text-slate-500">{issue}</span>
+											<span class="text-[11px] text-muted-foreground">{issue}</span>
 										{/each}
 										{#if rowNextAction.kind === 'enroll'}
 											<button
@@ -1467,7 +1467,7 @@
 											<LoadingButton size="xs" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
 										{/if}
 										{#if s.status === 'finished' || s.status === 'active'}
-											<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-slate-700 transition-colors">
+											<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
 												Detail
 											</a>
 										{/if}
@@ -1476,7 +1476,7 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={8} class="text-center text-slate-400 py-8">
+								<Table.Cell colspan={8} class="text-center text-muted-foreground py-8">
 									{currentSessions.length === 0 ? 'Belum ada sesi ujian' : 'Tidak ada sesi pada filter ini'}
 								</Table.Cell>
 							</Table.Row>
@@ -1494,11 +1494,11 @@
 						{@const rowNextAction = nextSessionAction(s)}
 						{@const rowScheduleState = sessionScheduleState(s)}
 						{@const rowScheduleQuickAction = scheduleQuickAction(s, rowScheduleState)}
-						<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+						<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
-									<p class="text-sm font-semibold text-slate-900">{s.title}</p>
-									<p class="mt-1 text-xs text-slate-500">{s.package_title}</p>
+									<p class="text-sm font-semibold text-foreground">{s.title}</p>
+									<p class="mt-1 text-xs text-muted-foreground">{s.package_title}</p>
 								</div>
 								<Badge class={statusClass(s.status)}>{sessionActionLabel(s.status)}</Badge>
 							</div>
@@ -1508,26 +1508,26 @@
 								<Badge variant="secondary">{s.participant_count} peserta</Badge>
 							</div>
 							<div class="mt-2 flex flex-wrap items-center gap-1.5">
-								<Badge variant="outline" class="bg-white text-xs">{rowPackageQuality.totalCount} soal</Badge>
+								<Badge variant="outline" class="bg-card text-xs">{rowPackageQuality.totalCount} soal</Badge>
 								{#if rowPackageIssues.length > 0}
-									<Badge class="border-red-200 bg-red-50 text-red-700 text-xs">{rowPackageIssues.join(', ')}</Badge>
+									<Badge class="border-destructive/30 bg-destructive/10 text-destructive text-xs">{rowPackageIssues.join(', ')}</Badge>
 								{:else if rowPackageQuality.missingCount > 0}
-									<Badge class="border-amber-200 bg-amber-50 text-amber-700 text-xs">{rowPackageQuality.missingCount} metadata kurang</Badge>
+									<Badge class="border-warning/30 bg-warning/10 text-warning text-xs">{rowPackageQuality.missingCount} metadata kurang</Badge>
 								{:else}
-									<Badge class="border-emerald-200 bg-emerald-50 text-emerald-700 text-xs">Paket siap</Badge>
+									<Badge class="border-primary/20 bg-primary/10 text-primary text-xs">Paket siap</Badge>
 								{/if}
 							</div>
 							<div class="mt-2 flex flex-wrap items-center gap-1.5">
 								{#if rowReadinessIssues.length === 0}
-									<Badge class="border-emerald-200 bg-emerald-50 text-emerald-700 text-xs">Siap mulai</Badge>
+									<Badge class="border-primary/20 bg-primary/10 text-primary text-xs">Siap mulai</Badge>
 								{:else}
-									<Badge class="{rowPackageIssues.length > 0 ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-700'} text-xs">{rowReadinessIssues.length} atensi</Badge>
+									<Badge class="{rowPackageIssues.length > 0 ? 'border-destructive/30 bg-destructive/10 text-destructive' : 'border-warning/30 bg-warning/10 text-warning'} text-xs">{rowReadinessIssues.length} atensi</Badge>
 								{/if}
-								<Badge variant="outline" class="bg-white text-xs">{s.room_count} ruang / {s.total_capacity} kursi</Badge>
-								<Badge variant="outline" class="bg-white text-xs">{s.assigned_participant_count}/{s.participant_count} ditempatkan</Badge>
-								<Badge variant="outline" class="bg-white text-xs">{s.proctor_assignment_count} pengawas</Badge>
+								<Badge variant="outline" class="bg-card text-xs">{s.room_count} ruang / {s.total_capacity} kursi</Badge>
+								<Badge variant="outline" class="bg-card text-xs">{s.assigned_participant_count}/{s.participant_count} ditempatkan</Badge>
+								<Badge variant="outline" class="bg-card text-xs">{s.proctor_assignment_count} pengawas</Badge>
 								{#each rowReadinessIssues.slice(0, 2) as issue (issue)}
-									<span class="text-xs text-slate-500">{issue}</span>
+									<span class="text-xs text-muted-foreground">{issue}</span>
 								{/each}
 								{#if rowNextAction.kind === 'enroll'}
 									<button
@@ -1549,7 +1549,7 @@
 								{/if}
 							</div>
 							<div class="mt-3 flex flex-wrap items-center gap-2">
-								<p class="text-xs text-slate-500">{fmtDt(s.scheduled_start)}</p>
+								<p class="text-xs text-muted-foreground">{fmtDt(s.scheduled_start)}</p>
 								<Badge class="{scheduleStateClass(rowScheduleState)} text-xs">{scheduleStateLabel(rowScheduleState)}</Badge>
 								{#if rowScheduleQuickAction?.kind === 'schedule'}
 									<button
@@ -1596,14 +1596,14 @@
 									<LoadingButton size="sm" onclick={() => updateStatus(s.id, 'finished')} loading={statusBusyId === s.id} disabled={statusBusyId !== '' && statusBusyId !== s.id} loadingLabel="Memproses...">Selesaikan</LoadingButton>
 								{/if}
 								{#if s.status === 'finished' || s.status === 'active'}
-									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-slate-700 transition-colors">
+									<a href={resolve(`/asesmen/sesi/${s.id}`)} class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium border border-input bg-background hover:bg-muted text-foreground transition-colors">
 										Detail
 									</a>
 								{/if}
 							</div>
 						</div>
 					{:else}
-						<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+						<div class="rounded-2xl border border-dashed border-border bg-muted/50 px-4 py-10 text-center text-sm text-muted-foreground">
 							{currentSessions.length === 0 ? 'Belum ada sesi ujian' : 'Tidak ada sesi pada filter ini'}
 						</div>
 					{/each}

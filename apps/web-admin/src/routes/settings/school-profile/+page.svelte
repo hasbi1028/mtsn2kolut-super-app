@@ -116,8 +116,8 @@
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 		<div>
-			<h1 class="text-lg font-semibold text-slate-800">Profil Madrasah</h1>
-			<p class="text-sm text-slate-500">Identitas resmi untuk kop surat, paket cetak, dan tanda tangan kepala madrasah.</p>
+			<h1 class="text-lg font-semibold text-foreground">Profil Madrasah</h1>
+			<p class="text-sm text-muted-foreground">Identitas resmi untuk kop surat, paket cetak, dan tanda tangan kepala madrasah.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button href="/settings" variant="outline" size="sm">
@@ -138,7 +138,7 @@
 	<AsyncContent promise={profilePromise} onerror={handleProfileRenderError}>
 		{#snippet pending()}
 			<div class="grid gap-6 xl:grid-cols-[1fr_360px]">
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Content class="space-y-3 p-4">
 						{#each Array.from({ length: 10 }) as _, index (`school-profile-skeleton-${index}`)}
 							<Skeleton class="h-10 w-full" />
@@ -153,7 +153,7 @@
 		{/snippet}
 		{#snippet children(_profile)}
 		<div class="grid gap-6 xl:grid-cols-[1fr_380px]">
-			<Card.Root class="border-slate-200">
+			<Card.Root class="border-border">
 				<Card.Header class="pb-2">
 					<Card.Title class="text-base">Identitas Satuan Kerja</Card.Title>
 					<Card.Description>Data ini dipakai sebagai sumber kop resmi pada permukaan cetak aplikasi.</Card.Description>
@@ -221,7 +221,7 @@
 			</Card.Root>
 
 			<div class="space-y-6">
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header class="pb-2">
 						<Card.Title class="text-base">Kepala Madrasah</Card.Title>
 						<Card.Description>Digunakan untuk blok tanda tangan surat dan paket cetak.</Card.Description>
@@ -238,18 +238,18 @@
 					</Card.Content>
 				</Card.Root>
 
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header class="pb-2">
 						<Card.Title class="text-base">Pratinjau Kop</Card.Title>
 						<Card.Description>Tampilan ringkas yang akan dibawa ke halaman cetak.</Card.Description>
 					</Card.Header>
 					<Card.Content>
-						<div class="rounded-md border border-slate-200 bg-white p-5 text-center text-slate-950">
+						<div class="rounded-md border border-border bg-card p-5 text-center text-foreground">
 							<p class="text-xs font-semibold uppercase">{profile.ministry_line || '-'}</p>
 							<p class="text-xs font-semibold uppercase">{profile.office_line || '-'}</p>
 							<p class="mt-1 text-lg font-bold uppercase">{profile.name || '-'}</p>
 							<p class="mt-1 text-xs leading-5">{schoolAddressLine(profile) || 'Alamat belum diisi'}</p>
-							<p class="mt-1 text-xs text-slate-600">
+							<p class="mt-1 text-xs text-muted-foreground">
 								{#if profile.nsm}NSM {profile.nsm}{/if}
 								{#if profile.nsm && profile.npsn} · {/if}
 								{#if profile.npsn}NPSN {profile.npsn}{/if}

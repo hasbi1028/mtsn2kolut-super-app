@@ -211,15 +211,15 @@
 		{@const room = detail.room}
 		{@const participants = detail.participants}
 		{@const proctors = detail.proctors}
-		<div class="mx-auto max-w-6xl space-y-5 p-6 text-slate-900 print:max-w-none print:space-y-4 print:p-0">
+		<div class="mx-auto max-w-6xl space-y-5 p-6 text-foreground print:max-w-none print:space-y-4 print:p-0">
 			<div class="flex items-center justify-between gap-3 print:hidden">
 				<div>
-					<a href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring`)} class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+					<a href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring`)} class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
 						<ArrowLeftIcon class="size-3.5" />
 						Kembali ke dashboard ruang
 					</a>
 					<h1 class="mt-2 text-2xl font-semibold tracking-tight">Paket Pengawas Ruang CBT</h1>
-					<p class="text-sm text-slate-500">Daftar hadir, token, denah meja, kontak operator, dan checklist kesiapan.</p>
+					<p class="text-sm text-muted-foreground">Daftar hadir, token, denah meja, kontak operator, dan checklist kesiapan.</p>
 				</div>
 				<Button onclick={() => window.print()}>
 					<PrinterIcon class="mr-2 size-4" />
@@ -227,13 +227,13 @@
 				</Button>
 			</div>
 
-			<section class="border border-emerald-200 bg-white p-5 text-center shadow-sm print:border-slate-300 print:shadow-none">
-				<p class="text-xs font-semibold uppercase text-slate-900">{schoolProfile.ministry_line}</p>
-				<p class="text-xs font-semibold uppercase text-slate-900">{schoolProfile.office_line}</p>
-				<h2 class="mt-1 text-lg font-bold uppercase text-slate-950">{schoolProfile.name}</h2>
-				<p class="mt-1 text-[11px] leading-5 text-slate-600">{schoolAddressLine(schoolProfile) || 'Alamat madrasah belum diisi'}</p>
+			<section class="border border-primary/20 bg-card p-5 text-center shadow-sm print:border-border print:shadow-none">
+				<p class="text-xs font-semibold uppercase text-foreground">{schoolProfile.ministry_line}</p>
+				<p class="text-xs font-semibold uppercase text-foreground">{schoolProfile.office_line}</p>
+				<h2 class="mt-1 text-lg font-bold uppercase text-foreground">{schoolProfile.name}</h2>
+				<p class="mt-1 text-[11px] leading-5 text-muted-foreground">{schoolAddressLine(schoolProfile) || 'Alamat madrasah belum diisi'}</p>
 				{#if schoolProfile.nsm || schoolProfile.npsn}
-					<p class="text-[11px] text-slate-600">
+					<p class="text-[11px] text-muted-foreground">
 						{#if schoolProfile.nsm}NSM {schoolProfile.nsm}{/if}
 						{#if schoolProfile.nsm && schoolProfile.npsn} · {/if}
 						{#if schoolProfile.npsn}NPSN {schoolProfile.npsn}{/if}
@@ -241,9 +241,9 @@
 				{/if}
 			</section>
 
-			<section class="grid gap-4 border border-slate-300 bg-white p-5 print:grid-cols-[minmax(0,1fr)_220px]">
+			<section class="grid gap-4 border border-border bg-card p-5 print:grid-cols-[minmax(0,1fr)_220px]">
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Paket Pengawas Ruang CBT</p>
+					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Paket Pengawas Ruang CBT</p>
 					<h2 class="mt-2 text-xl font-bold uppercase">{room.session_title}</h2>
 					<div class="mt-4 grid gap-2 text-sm md:grid-cols-2">
 						<p><span class="font-semibold">Paket:</span> {room.package_title}</p>
@@ -254,38 +254,38 @@
 						<p><span class="font-semibold">Lokasi:</span> {roomLocation(room)}</p>
 					</div>
 				</div>
-				<div class="border border-emerald-300 bg-emerald-50 p-4 text-center">
-					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800">Token Ruang</p>
-					<p class="mt-3 font-mono text-3xl font-bold tracking-[0.18em] text-emerald-950">{room.room_token || '—'}</p>
-					<p class="mt-3 text-[11px] leading-4 text-emerald-800">Dipakai untuk identifikasi ruang dan koordinasi pengawas. Token siswa tetap tercantum pada daftar hadir.</p>
+				<div class="border border-primary/20 bg-primary/10 p-4 text-center">
+					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Token Ruang</p>
+					<p class="mt-3 font-mono text-3xl font-bold tracking-[0.18em] text-primary">{room.room_token || '—'}</p>
+					<p class="mt-3 text-[11px] leading-4 text-primary">Dipakai untuk identifikasi ruang dan koordinasi pengawas. Token siswa tetap tercantum pada daftar hadir.</p>
 				</div>
 			</section>
 
 			<section class="grid gap-3 md:grid-cols-4 print:grid-cols-4">
-				<div class="border border-slate-300 bg-white p-3">
-					<p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Peserta</p>
+				<div class="border border-border bg-card p-3">
+					<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Peserta</p>
 					<p class="mt-1 text-2xl font-bold">{participants.length}</p>
 				</div>
-				<div class="border border-slate-300 bg-white p-3">
-					<p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Kapasitas</p>
+				<div class="border border-border bg-card p-3">
+					<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Kapasitas</p>
 					<p class="mt-1 text-2xl font-bold">{room.capacity}</p>
 				</div>
-				<div class="border border-slate-300 bg-white p-3">
-					<p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Submit</p>
+				<div class="border border-border bg-card p-3">
+					<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Submit</p>
 					<p class="mt-1 text-2xl font-bold">{room.submitted_count}</p>
 				</div>
-				<div class="border border-slate-300 bg-white p-3">
-					<p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Atensi</p>
+				<div class="border border-border bg-card p-3">
+					<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Atensi</p>
 					<p class="mt-1 text-2xl font-bold">{room.suspicious_count}</p>
 				</div>
 			</section>
 
 			<section class="grid gap-4 md:grid-cols-[minmax(0,1fr)_320px] print:grid-cols-[minmax(0,1fr)_300px]">
-				<div class="border border-slate-300 bg-white p-4">
+				<div class="border border-border bg-card p-4">
 					<h3 class="text-sm font-bold uppercase tracking-[0.16em]">Pengawas Ruang</h3>
 					<div class="mt-3 overflow-x-auto">
 						<table class="min-w-full text-left text-xs">
-							<thead class="bg-slate-100 text-slate-600">
+							<thead class="bg-muted text-muted-foreground">
 								<tr>
 									<th class="border px-2 py-1.5">Nama</th>
 									<th class="border px-2 py-1.5">NIP</th>
@@ -303,7 +303,7 @@
 									</tr>
 								{:else}
 									<tr>
-										<td colspan="4" class="border px-2 py-4 text-center text-amber-700">Pengawas ruang belum ditugaskan</td>
+										<td colspan="4" class="border px-2 py-4 text-center text-warning">Pengawas ruang belum ditugaskan</td>
 									</tr>
 								{/each}
 							</tbody>
@@ -311,22 +311,22 @@
 					</div>
 				</div>
 
-				<div class="border border-slate-300 bg-white p-4">
+				<div class="border border-border bg-card p-4">
 					<h3 class="text-sm font-bold uppercase tracking-[0.16em]">Kontak Operator</h3>
 					<div class="mt-3 space-y-3 text-xs">
-						<p class="border-b border-slate-300 pb-2">Operator CBT: ........................................</p>
-						<p class="border-b border-slate-300 pb-2">Nomor HP: ............................................</p>
-						<p class="border-b border-slate-300 pb-2">Waktu eskalasi: ......................................</p>
-						<p class="min-h-16 border border-slate-300 p-2 text-slate-500">Catatan gangguan / arahan operator</p>
+						<p class="border-b border-border pb-2">Operator CBT: ........................................</p>
+						<p class="border-b border-border pb-2">Nomor HP: ............................................</p>
+						<p class="border-b border-border pb-2">Waktu eskalasi: ......................................</p>
+						<p class="min-h-16 border border-border p-2 text-muted-foreground">Catatan gangguan / arahan operator</p>
 					</div>
 				</div>
 			</section>
 
-			<section class="border border-slate-300 bg-white p-4">
+			<section class="border border-border bg-card p-4">
 				<h3 class="text-sm font-bold uppercase tracking-[0.16em]">Daftar Hadir dan Token Siswa</h3>
 				<div class="mt-3 overflow-x-auto">
 					<table class="min-w-full text-left text-[11px]">
-						<thead class="bg-slate-100 text-slate-600">
+						<thead class="bg-muted text-muted-foreground">
 							<tr>
 								<th class="border px-2 py-1.5 text-center">No</th>
 								<th class="border px-2 py-1.5 text-center">Meja</th>
@@ -340,7 +340,7 @@
 						</thead>
 						<tbody>
 							{#each participants as participant, index (participant.participant_id)}
-								<tr class={participant.suspicious_flag ? 'bg-amber-50' : ''}>
+								<tr class={participant.suspicious_flag ? 'bg-warning/10' : ''}>
 									<td class="border px-2 py-1.5 text-center">{index + 1}</td>
 									<td class="border px-2 py-1.5 text-center font-mono">{participant.seat_no ?? '—'}</td>
 									<td class="border px-2 py-1.5 font-mono">{participant.nis}</td>
@@ -352,7 +352,7 @@
 								</tr>
 							{:else}
 								<tr>
-									<td colspan="8" class="border px-2 py-6 text-center text-slate-500">Belum ada peserta di ruang ini</td>
+									<td colspan="8" class="border px-2 py-6 text-center text-muted-foreground">Belum ada peserta di ruang ini</td>
 								</tr>
 							{/each}
 						</tbody>
@@ -361,27 +361,27 @@
 			</section>
 
 			<section class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] print:grid-cols-[minmax(0,1fr)_330px]">
-				<div class="border border-slate-300 bg-white p-4">
+				<div class="border border-border bg-card p-4">
 					<h3 class="text-sm font-bold uppercase tracking-[0.16em]">Denah Meja Sederhana</h3>
 					<div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 print:grid-cols-4">
 						{#each participants as participant (participant.participant_id)}
-							<div class="min-h-20 border border-slate-300 bg-slate-50 p-2 text-[11px] break-inside-avoid">
+							<div class="min-h-20 border border-border bg-muted/50 p-2 text-[11px] break-inside-avoid">
 								<p class="font-bold">Meja {participant.seat_no ?? '—'}</p>
 								<p class="mt-1 line-clamp-2 font-medium">{participant.nama}</p>
-								<p class="font-mono text-slate-500">{participant.nis}</p>
+								<p class="font-mono text-muted-foreground">{participant.nis}</p>
 							</div>
 						{:else}
-							<p class="col-span-full border border-dashed border-slate-300 p-4 text-center text-xs text-slate-500">Denah belum tersedia karena peserta belum ditempatkan.</p>
+							<p class="col-span-full border border-dashed border-border p-4 text-center text-xs text-muted-foreground">Denah belum tersedia karena peserta belum ditempatkan.</p>
 						{/each}
 					</div>
 				</div>
 
-				<div class="border border-slate-300 bg-white p-4">
+				<div class="border border-border bg-card p-4">
 					<h3 class="text-sm font-bold uppercase tracking-[0.16em]">Checklist Kesiapan</h3>
 					<div class="mt-3 space-y-2 text-xs">
 						{#each checklistItems as item (item)}
 							<div class="flex items-start gap-2">
-								<span class="mt-0.5 inline-block size-4 border border-slate-400"></span>
+								<span class="mt-0.5 inline-block size-4 border border-border"></span>
 								<span>{item}</span>
 							</div>
 						{/each}
@@ -389,11 +389,11 @@
 				</div>
 			</section>
 
-			<section class="grid gap-8 border border-slate-300 bg-white p-5 text-sm md:grid-cols-2 print:grid-cols-2">
+			<section class="grid gap-8 border border-border bg-card p-5 text-sm md:grid-cols-2 print:grid-cols-2">
 				<div class="text-center">
 					<p>Mengetahui,</p>
 					<p>Kepala Madrasah</p>
-					<div class="mt-16 border-t border-slate-700 pt-2">
+					<div class="mt-16 border-t border-foreground pt-2">
 						<p class="font-semibold">{schoolProfile.head_name || '........................................'}</p>
 						<p>NIP. {schoolProfile.head_nip || '................................'}</p>
 					</div>
@@ -401,7 +401,7 @@
 				<div class="text-center">
 					<p>Pengawas Ruang,</p>
 					<p>{room.room_name}</p>
-					<div class="mt-16 border-t border-slate-700 pt-2">
+					<div class="mt-16 border-t border-foreground pt-2">
 						<p class="font-semibold">........................................</p>
 						<p>NIP. ................................</p>
 					</div>

@@ -86,12 +86,12 @@
 
 	function statCards(stats: Stats) {
 		return [
-			{ label: 'Total Judul', value: stats.total_judul, color: 'text-slate-700' },
-			{ label: 'Total Eksemplar', value: stats.total_eksemplar, color: 'text-slate-700' },
-			{ label: 'Tersedia', value: stats.total_tersedia, color: 'text-green-700' },
-			{ label: 'Dipinjam', value: stats.sedang_dipinjam, color: 'text-blue-700' },
-			{ label: 'Terlambat', value: stats.terlambat, color: stats.terlambat ? 'text-red-600' : 'text-slate-700' },
-			{ label: 'Denda Belum Lunas', value: stats.denda_belum_lunas, color: stats.denda_belum_lunas ? 'text-orange-600' : 'text-slate-700' },
+			{ label: 'Total Judul', value: stats.total_judul, color: 'text-foreground' },
+			{ label: 'Total Eksemplar', value: stats.total_eksemplar, color: 'text-foreground' },
+			{ label: 'Tersedia', value: stats.total_tersedia, color: 'text-success' },
+			{ label: 'Dipinjam', value: stats.sedang_dipinjam, color: 'text-accent-foreground' },
+			{ label: 'Terlambat', value: stats.terlambat, color: stats.terlambat ? 'text-destructive' : 'text-foreground' },
+			{ label: 'Denda Belum Lunas', value: stats.denda_belum_lunas, color: stats.denda_belum_lunas ? 'text-warning' : 'text-foreground' },
 		];
 	}
 
@@ -109,8 +109,8 @@
 <div class="space-y-6">
 	<div class="flex items-center justify-between">
 		<div>
-			<h1 class="text-lg font-semibold text-slate-800">Perpustakaan</h1>
-			<p class="text-sm text-slate-500">Ringkasan operasional perpustakaan hari ini</p>
+			<h1 class="text-lg font-semibold text-foreground">Perpustakaan</h1>
+			<p class="text-sm text-muted-foreground">Ringkasan operasional perpustakaan hari ini</p>
 		</div>
 		<div class="flex gap-2">
 			<Button href="/library/books" variant="outline" size="sm">Katalog Buku</Button>
@@ -122,9 +122,9 @@
 		{#snippet pending()}
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
 				{#each ['Total Judul', 'Total Eksemplar', 'Tersedia', 'Dipinjam', 'Terlambat', 'Denda Belum Lunas'] as label (label)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4">
-							<p class="text-xs text-slate-500">{label}</p>
+							<p class="text-xs text-muted-foreground">{label}</p>
 							<Skeleton class="mt-2 h-8 w-16" />
 						</Card.Content>
 					</Card.Root>
@@ -133,7 +133,7 @@
 
 			<div class="grid gap-6 lg:grid-cols-2">
 				{#each ['active-loan-skeleton', 'overdue-loan-skeleton'] as key (key)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Header class="pb-2">
 							<Skeleton class="h-5 w-44" />
 						</Card.Header>
@@ -165,9 +165,9 @@
 			{@const overview = value as LibraryOverview}
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
 				{#each statCards(overview.stats) as card (card.label)}
-					<Card.Root class="border-slate-200">
+					<Card.Root class="border-border">
 						<Card.Content class="p-4">
-							<p class="text-xs text-slate-500">{card.label}</p>
+							<p class="text-xs text-muted-foreground">{card.label}</p>
 							<p class="mt-1 text-2xl font-bold {card.color}">{card.value}</p>
 						</Card.Content>
 					</Card.Root>
@@ -175,9 +175,9 @@
 			</div>
 
 			<div class="grid gap-6 lg:grid-cols-2">
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header class="pb-2">
-						<Card.Title class="text-sm font-medium text-slate-700">Pinjaman Aktif Terbaru</Card.Title>
+						<Card.Title class="text-sm font-medium text-foreground">Pinjaman Aktif Terbaru</Card.Title>
 					</Card.Header>
 					<Card.Content class="p-0">
 						{#if overview.activeLoans.length === 0}
@@ -191,7 +191,7 @@
 						{:else}
 							<Table.Root>
 								<Table.Header>
-									<Table.Row class="bg-slate-50 text-xs">
+									<Table.Row class="bg-muted/50 text-xs">
 										<Table.Head>Buku</Table.Head>
 										<Table.Head>Anggota</Table.Head>
 										<Table.Head>Jatuh Tempo</Table.Head>
@@ -202,14 +202,14 @@
 										<Table.Row class="text-sm">
 											<Table.Cell class="font-medium">
 												<span class="block truncate max-w-[160px]" title={loan.book_judul}>{loan.book_judul}</span>
-												<span class="text-xs text-slate-400">{loan.book_kode}</span>
+												<span class="text-xs text-muted-foreground">{loan.book_kode}</span>
 											</Table.Cell>
 											<Table.Cell>
 												<span class="block truncate max-w-[120px]" title={loan.member_nama}>{loan.member_nama}</span>
-												<span class="text-xs text-slate-400">{loan.member_nip_nis}</span>
+												<span class="text-xs text-muted-foreground">{loan.member_nip_nis}</span>
 											</Table.Cell>
 											<Table.Cell>
-												<span class={loan.is_overdue ? 'text-red-600 font-medium' : ''}>
+												<span class={loan.is_overdue ? 'text-destructive font-medium' : ''}>
 													{formatDate(loan.jatuh_tempo)}
 												</span>
 											</Table.Cell>
@@ -221,9 +221,9 @@
 					</Card.Content>
 				</Card.Root>
 
-				<Card.Root class="border-slate-200">
+				<Card.Root class="border-border">
 					<Card.Header class="pb-2">
-						<Card.Title class="text-sm font-medium text-slate-700">
+						<Card.Title class="text-sm font-medium text-foreground">
 							Keterlambatan
 							{#if overview.overdueLoans.length > 0}
 								<Badge variant="destructive" class="ml-2 text-xs">{overview.overdueLoans.length}</Badge>
@@ -242,7 +242,7 @@
 						{:else}
 							<Table.Root>
 								<Table.Header>
-									<Table.Row class="bg-slate-50 text-xs">
+									<Table.Row class="bg-muted/50 text-xs">
 										<Table.Head>Buku</Table.Head>
 										<Table.Head>Anggota</Table.Head>
 										<Table.Head>Jatuh Tempo</Table.Head>
@@ -253,16 +253,16 @@
 										<Table.Row class="text-sm">
 											<Table.Cell class="font-medium">
 												<span class="block truncate max-w-[160px]" title={loan.book_judul}>{loan.book_judul}</span>
-												<span class="text-xs text-slate-400">{loan.book_kode}</span>
+												<span class="text-xs text-muted-foreground">{loan.book_kode}</span>
 											</Table.Cell>
 											<Table.Cell>
 												<span class="block truncate max-w-[120px]" title={loan.member_nama}>{loan.member_nama}</span>
-												<span class="text-xs text-slate-400">{loan.member_nip_nis}</span>
+												<span class="text-xs text-muted-foreground">{loan.member_nip_nis}</span>
 											</Table.Cell>
-											<Table.Cell class="text-red-600 font-medium text-xs">
+											<Table.Cell class="text-destructive font-medium text-xs">
 												{formatDate(loan.jatuh_tempo)}
 												{#if loan.denda_total > 0}
-													<span class="block text-orange-600">{formatRupiah(loan.denda_total)}</span>
+													<span class="block text-warning">{formatRupiah(loan.denda_total)}</span>
 												{/if}
 											</Table.Cell>
 										</Table.Row>
