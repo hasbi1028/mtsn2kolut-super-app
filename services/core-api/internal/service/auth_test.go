@@ -24,9 +24,13 @@ type fakeStore struct {
 	userPermissions map[pgtype.UUID][]string
 	authSessions    map[pgtype.UUID]db.AuthSession
 	uiPrefs         map[pgtype.UUID]db.UserUiPreference
+	employeeContact map[pgtype.UUID]fakeAccountContact
+	studentContact  map[pgtype.UUID]fakeAccountContact
+	parentContact   map[pgtype.UUID]fakeAccountContact
 
 	getUserByUsernameErr error
 	getUserByIDErr       error
+	updateContactErr     error
 	createUserErr        error
 	updatePasswordErr    error
 	addRoleErr           error
@@ -42,6 +46,12 @@ type fakeStore struct {
 	upsertPrefsErr       error
 }
 
+type fakeAccountContact struct {
+	phone   string
+	email   string
+	address string
+}
+
 func newFakeStore() *fakeStore {
 	return &fakeStore{
 		settings:        map[string]string{},
@@ -50,6 +60,9 @@ func newFakeStore() *fakeStore {
 		userPermissions: map[pgtype.UUID][]string{},
 		authSessions:    map[pgtype.UUID]db.AuthSession{},
 		uiPrefs:         map[pgtype.UUID]db.UserUiPreference{},
+		employeeContact: map[pgtype.UUID]fakeAccountContact{},
+		studentContact:  map[pgtype.UUID]fakeAccountContact{},
+		parentContact:   map[pgtype.UUID]fakeAccountContact{},
 	}
 }
 
@@ -140,30 +153,79 @@ func (f *fakeStore) GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (
 				displayName = strings.TrimSpace(u.DisplayName.String)
 			}
 			profileType := ""
+			contact := fakeAccountContact{}
 			switch {
 			case u.EmployeeID.Valid:
 				profileType = "employee"
+				contact = f.employeeContact[u.EmployeeID]
 			case u.StudentID.Valid:
 				profileType = "student"
+				contact = f.studentContact[u.StudentID]
 			case u.ParentID.Valid:
 				profileType = "parent"
+				contact = f.parentContact[u.ParentID]
 			}
 			return db.GetUserAccountSummaryRow{
-				ID:          u.ID,
-				Username:    u.Username,
-				DisplayName: displayName,
-				EmployeeID:  u.EmployeeID,
-				StudentID:   u.StudentID,
-				ParentID:    u.ParentID,
-				ProfileType: profileType,
-				IsActive:    u.IsActive,
-				LastLoginAt: u.LastLoginAt,
-				CreatedAt:   u.CreatedAt,
-				Roles:       rolesJSON,
+				ID:             u.ID,
+				Username:       u.Username,
+				DisplayName:    displayName,
+				EmployeeID:     u.EmployeeID,
+				StudentID:      u.StudentID,
+				ParentID:       u.ParentID,
+				ProfileType:    profileType,
+				ContactPhone:   contact.phone,
+				ContactEmail:   contact.email,
+				ContactAddress: contact.address,
+				IsActive:       u.IsActive,
+				LastLoginAt:    u.LastLoginAt,
+				CreatedAt:      u.CreatedAt,
+				Roles:          rolesJSON,
 			}, nil
 		}
 	}
 	return db.GetUserAccountSummaryRow{}, pgx.ErrNoRows
+}
+
+func (f *fakeStore) UpdateOwnedEmployeeContact(ctx context.Context, arg db.UpdateOwnedEmployeeContactParams) (db.UpdateOwnedEmployeeContactRow, error) {
+	if f.updateContactErr != nil {
+		return db.UpdateOwnedEmployeeContactRow{}, f.updateContactErr
+	}
+	for _, user := range f.users {
+		if user.ID == arg.UserID && user.EmployeeID.Valid {
+			contact := fakeAccountContact{phone: arg.Phone, email: arg.Email, address: arg.Address}
+			f.employeeContact[user.EmployeeID] = contact
+			return db.UpdateOwnedEmployeeContactRow{ContactPhone: contact.phone, ContactEmail: contact.email, ContactAddress: contact.address}, nil
+		}
+	}
+	return db.UpdateOwnedEmployeeContactRow{}, pgx.ErrNoRows
+}
+
+func (f *fakeStore) UpdateOwnedStudentContact(ctx context.Context, arg db.UpdateOwnedStudentContactParams) (db.UpdateOwnedStudentContactRow, error) {
+	if f.updateContactErr != nil {
+		return db.UpdateOwnedStudentContactRow{}, f.updateContactErr
+	}
+	for _, user := range f.users {
+		if user.ID == arg.UserID && user.StudentID.Valid {
+			contact := fakeAccountContact{phone: arg.Phone, address: arg.Address}
+			f.studentContact[user.StudentID] = contact
+			return db.UpdateOwnedStudentContactRow{ContactPhone: contact.phone, ContactEmail: "", ContactAddress: contact.address}, nil
+		}
+	}
+	return db.UpdateOwnedStudentContactRow{}, pgx.ErrNoRows
+}
+
+func (f *fakeStore) UpdateOwnedParentContact(ctx context.Context, arg db.UpdateOwnedParentContactParams) (db.UpdateOwnedParentContactRow, error) {
+	if f.updateContactErr != nil {
+		return db.UpdateOwnedParentContactRow{}, f.updateContactErr
+	}
+	for _, user := range f.users {
+		if user.ID == arg.UserID && user.ParentID.Valid {
+			contact := fakeAccountContact{phone: arg.Phone, address: arg.Address}
+			f.parentContact[user.ParentID] = contact
+			return db.UpdateOwnedParentContactRow{ContactPhone: contact.phone, ContactEmail: "", ContactAddress: contact.address}, nil
+		}
+	}
+	return db.UpdateOwnedParentContactRow{}, pgx.ErrNoRows
 }
 
 func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error) {
@@ -498,6 +560,76 @@ func TestAuthGetAccountReturnsSelfSummaryAndMapsMissingUser(t *testing.T) {
 	if _, err := svc.GetAccount(context.Background(), missing); !errors.Is(err, domain.ErrUnauthorized) {
 		t.Fatalf("GetAccount(missing) error = %v, want unauthorized", err)
 	}
+}
+
+func TestAuthUpdateAccountContactUsesOwnedLinkedProfileOnly(t *testing.T) {
+	store := newFakeStore()
+	userID := documentCycleTestUUID(221)
+	employeeID := documentCycleTestUUID(222)
+	store.users["guru.ipa"] = db.User{
+		ID:         userID,
+		Username:   "guru.ipa",
+		EmployeeID: employeeID,
+		IsActive:   true,
+	}
+	store.employeeContact[employeeID] = fakeAccountContact{
+		phone:   "0812000",
+		email:   "lama@example.id",
+		address: "Alamat lama",
+	}
+	svc := &Auth{q: store, jwtSecret: []byte("secret")}
+
+	row, err := svc.UpdateAccountContact(context.Background(), userID, AccountContactPatch{
+		Phone:   contactString(" 081234567890 "),
+		Email:   contactString(" guru@example.id "),
+		Address: contactString(" Kolaka Utara "),
+	})
+	if err != nil {
+		t.Fatalf("UpdateAccountContact() error = %v", err)
+	}
+	if row.ContactPhone != "081234567890" || row.ContactEmail != "guru@example.id" || row.ContactAddress != "Kolaka Utara" {
+		t.Fatalf("updated contact = %q/%q/%q, want trimmed contact", row.ContactPhone, row.ContactEmail, row.ContactAddress)
+	}
+	user := store.users["guru.ipa"]
+	if user.EmployeeID != employeeID || user.Username != "guru.ipa" {
+		t.Fatalf("user official/link fields changed: %#v", user)
+	}
+
+	otherUserID := documentCycleTestUUID(223)
+	if _, err := svc.UpdateAccountContact(context.Background(), otherUserID, AccountContactPatch{Phone: contactString("0813")}); !errors.Is(err, domain.ErrUnauthorized) {
+		t.Fatalf("UpdateAccountContact(other user) error = %v, want unauthorized", err)
+	}
+}
+
+func TestAuthUpdateAccountContactRejectsUnsupportedFieldsAndProfiles(t *testing.T) {
+	store := newFakeStore()
+	studentUserID := documentCycleTestUUID(224)
+	studentID := documentCycleTestUUID(225)
+	store.users["siswa"] = db.User{ID: studentUserID, Username: "siswa", StudentID: studentID, IsActive: true}
+	store.studentContact[studentID] = fakeAccountContact{phone: "0812", address: "Alamat siswa"}
+	svc := &Auth{q: store, jwtSecret: []byte("secret")}
+
+	if _, err := svc.UpdateAccountContact(context.Background(), studentUserID, AccountContactPatch{Email: contactString("siswa@example.id")}); !errors.Is(err, domain.ErrBadRequest) {
+		t.Fatalf("UpdateAccountContact(student email) error = %v, want bad request", err)
+	}
+
+	row, err := svc.UpdateAccountContact(context.Background(), studentUserID, AccountContactPatch{Address: contactString(" Dusun Baru ")})
+	if err != nil {
+		t.Fatalf("UpdateAccountContact(student address) error = %v", err)
+	}
+	if row.ContactPhone != "0812" || row.ContactAddress != "Dusun Baru" {
+		t.Fatalf("student contact = %q/%q, want preserved phone and updated address", row.ContactPhone, row.ContactAddress)
+	}
+
+	unlinkedUserID := documentCycleTestUUID(226)
+	store.users["admin-unlinked"] = db.User{ID: unlinkedUserID, Username: "admin-unlinked", IsActive: true}
+	if _, err := svc.UpdateAccountContact(context.Background(), unlinkedUserID, AccountContactPatch{Phone: contactString("0813")}); !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("UpdateAccountContact(unlinked) error = %v, want forbidden", err)
+	}
+}
+
+func contactString(value string) *string {
+	return &value
 }
 
 func TestAuthRefreshRejectsOldTokenAfterPasswordChange(t *testing.T) {

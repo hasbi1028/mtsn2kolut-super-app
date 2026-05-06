@@ -195,6 +195,7 @@ func main() {
 		r.Use(mw.JWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession))
 		r.Use(mw.Audit(q))
 		r.Get("/api/auth/account", authH.GetAccount)
+		r.Patch("/api/auth/account/contact", authH.UpdateAccountContact)
 		r.Post("/api/auth/change-password", authH.ChangePassword)
 		r.Post("/api/auth/logout-all", authH.LogoutAll)
 		r.Get("/api/auth/sessions", authH.ListSessions)

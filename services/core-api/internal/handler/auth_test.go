@@ -37,6 +37,9 @@ type fakeAuthService struct {
 	accountResult      db.GetUserAccountSummaryRow
 	accountErr         error
 	lastAccountUserID  pgtype.UUID
+	updateContactErr   error
+	lastContactUserID  pgtype.UUID
+	lastContactPatch   service.AccountContactPatch
 	revokeErr          error
 	lastRevokeUserID   pgtype.UUID
 	lastRevokeSessID   pgtype.UUID
@@ -84,6 +87,15 @@ func (f *fakeAuthService) LogoutAll(ctx context.Context, userID pgtype.UUID) err
 func (f *fakeAuthService) GetAccount(ctx context.Context, userID pgtype.UUID) (db.GetUserAccountSummaryRow, error) {
 	f.lastAccountUserID = userID
 	return f.accountResult, f.accountErr
+}
+
+func (f *fakeAuthService) UpdateAccountContact(ctx context.Context, userID pgtype.UUID, patch service.AccountContactPatch) (db.GetUserAccountSummaryRow, error) {
+	f.lastContactUserID = userID
+	f.lastContactPatch = patch
+	if f.updateContactErr != nil {
+		return db.GetUserAccountSummaryRow{}, f.updateContactErr
+	}
+	return f.accountResult, nil
 }
 
 func (f *fakeAuthService) ListActiveSessions(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error) {
@@ -409,15 +421,18 @@ func TestAuthGetAccountForwardsCurrentUserAndSanitizesResponse(t *testing.T) {
 	_ = lastLogin.Scan(time.Date(2026, time.May, 6, 7, 30, 0, 0, time.UTC))
 	svc := &fakeAuthService{
 		accountResult: db.GetUserAccountSummaryRow{
-			ID:          mustUUID(t, userID),
-			Username:    "guru.ipa",
-			DisplayName: "Guru IPA",
-			Roles:       []byte(`["guru","staf"]`),
-			EmployeeID:  employeeID,
-			ProfileType: "employee",
-			ProfileNama: "Nama Pegawai",
-			IsActive:    true,
-			LastLoginAt: lastLogin,
+			ID:             mustUUID(t, userID),
+			Username:       "guru.ipa",
+			DisplayName:    "Guru IPA",
+			Roles:          []byte(`["guru","staf"]`),
+			EmployeeID:     employeeID,
+			ProfileType:    "employee",
+			ProfileNama:    "Nama Pegawai",
+			ContactPhone:   "081234",
+			ContactEmail:   "guru@example.id",
+			ContactAddress: "Kolaka Utara",
+			IsActive:       true,
+			LastLoginAt:    lastLogin,
 		},
 	}
 	h := NewAuth(svc, nil)
@@ -434,7 +449,7 @@ func TestAuthGetAccountForwardsCurrentUserAndSanitizesResponse(t *testing.T) {
 		t.Fatalf("account user id = %v, want %s", svc.lastAccountUserID, userID)
 	}
 	body := rec.Body.String()
-	for _, expected := range []string{"guru.ipa", "Guru IPA", "Nama Pegawai", "employee", "2026-05-06T07:30:00Z"} {
+	for _, expected := range []string{"guru.ipa", "Guru IPA", "Nama Pegawai", "employee", "081234", "guru@example.id", "Kolaka Utara", "2026-05-06T07:30:00Z"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("GetAccount body = %s, want %q", body, expected)
 		}
@@ -472,6 +487,79 @@ func TestAuthGetAccountMapsUnauthorizedAndInternalError(t *testing.T) {
 	NewAuth(&fakeAuthService{accountErr: context.Canceled}, nil).GetAccount(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("GetAccount(internal) status = %d, want 500; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAuthUpdateAccountContactForwardsCurrentUserAndAudits(t *testing.T) {
+	userID := "11111111-1111-1111-1111-111111111111"
+	svc := &fakeAuthService{
+		accountResult: db.GetUserAccountSummaryRow{
+			ID:             mustUUID(t, userID),
+			Username:       "guru.ipa",
+			DisplayName:    "Guru IPA",
+			ProfileType:    "employee",
+			ProfileNama:    "Nama Pegawai",
+			ContactPhone:   "081234567890",
+			ContactEmail:   "guru@example.id",
+			ContactAddress: "Kolaka Utara",
+			Roles:          []byte(`["guru"]`),
+		},
+	}
+	audit := &fakeAuthAuditWriter{}
+	h := NewAuth(svc, audit)
+	req := httptest.NewRequest(http.MethodPatch, "http://internal/api/auth/account/contact", bytes.NewBufferString(`{"phone":" 081234567890 ","email":"guru@example.id","address":"Kolaka Utara"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(withAuthClaims(req.Context(), userID))
+	rec := httptest.NewRecorder()
+
+	h.UpdateAccountContact(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if svc.lastContactUserID != mustUUID(t, userID) {
+		t.Fatalf("contact user id = %v, want %s", svc.lastContactUserID, userID)
+	}
+	if svc.lastContactPatch.Phone == nil || *svc.lastContactPatch.Phone != " 081234567890 " {
+		t.Fatalf("phone patch = %#v, want raw phone", svc.lastContactPatch.Phone)
+	}
+	if !strings.Contains(rec.Body.String(), `"editable_fields":["phone","email","address"]`) {
+		t.Fatalf("body = %s, want employee editable fields", rec.Body.String())
+	}
+	if len(audit.entries) != 1 || audit.entries[0].Action != "AUTH_ACCOUNT_CONTACT_UPDATE" {
+		t.Fatalf("audit entries = %#v", audit.entries)
+	}
+	meta := mustAuditMeta(t, audit.entries[0].Metadata)
+	if meta["profile_type"] != "employee" {
+		t.Fatalf("audit metadata = %+v, want profile type", meta)
+	}
+}
+
+func TestAuthUpdateAccountContactRejectsOfficialFieldsAndMapsErrors(t *testing.T) {
+	userID := "11111111-1111-1111-1111-111111111111"
+	req := httptest.NewRequest(http.MethodPatch, "http://internal/api/auth/account/contact", bytes.NewBufferString(`{"username":"baru"}`))
+	req = req.WithContext(withAuthClaims(req.Context(), userID))
+	rec := httptest.NewRecorder()
+
+	NewAuth(&fakeAuthService{}, nil).UpdateAccountContact(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("UpdateAccountContact(official field) status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPatch, "http://internal/api/auth/account/contact", bytes.NewBufferString(`{"phone":"0812"}`))
+	req = req.WithContext(withAuthClaims(req.Context(), userID))
+	rec = httptest.NewRecorder()
+	NewAuth(&fakeAuthService{updateContactErr: domain.ErrForbidden}, nil).UpdateAccountContact(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("UpdateAccountContact(forbidden) status = %d, want 403", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPatch, "http://internal/api/auth/account/contact", bytes.NewBufferString(`{"email":"bad"}`))
+	req = req.WithContext(withAuthClaims(req.Context(), userID))
+	rec = httptest.NewRecorder()
+	NewAuth(&fakeAuthService{updateContactErr: domain.ErrBadRequest}, nil).UpdateAccountContact(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("UpdateAccountContact(bad request) status = %d, want 400", rec.Code)
 	}
 }
 

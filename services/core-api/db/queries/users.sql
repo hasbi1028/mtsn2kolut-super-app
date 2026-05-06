@@ -50,6 +50,22 @@ SELECT
         ELSE ''
     END::text AS profile_type,
     COALESCE(e.nama, s.nama, p.nama, '')::text AS profile_nama,
+    CASE
+        WHEN u.employee_id IS NOT NULL THEN e.phone
+        WHEN u.student_id IS NOT NULL THEN s.phone
+        WHEN u.parent_id IS NOT NULL THEN p.phone
+        ELSE ''
+    END::text AS contact_phone,
+    CASE
+        WHEN u.employee_id IS NOT NULL THEN e.email
+        ELSE ''
+    END::text AS contact_email,
+    CASE
+        WHEN u.employee_id IS NOT NULL THEN e.address
+        WHEN u.student_id IS NOT NULL THEN s.alamat
+        WHEN u.parent_id IS NOT NULL THEN p.address
+        ELSE ''
+    END::text AS contact_address,
     u.is_active,
     u.last_login_at,
     u.created_at,
@@ -60,6 +76,49 @@ LEFT JOIN students s ON s.id = u.student_id
 LEFT JOIN parents p ON p.id = u.parent_id
 WHERE u.id = $1
   AND u.deleted_at IS NULL;
+
+-- name: UpdateOwnedEmployeeContact :one
+UPDATE employees e
+SET phone = sqlc.arg(phone),
+    email = sqlc.arg(email),
+    address = sqlc.arg(address),
+    updated_at = NOW()
+WHERE e.id = (
+    SELECT u.employee_id
+    FROM users u
+    WHERE u.id = sqlc.arg(user_id)
+      AND u.deleted_at IS NULL
+      AND u.employee_id IS NOT NULL
+)
+RETURNING e.phone AS contact_phone, e.email AS contact_email, e.address AS contact_address;
+
+-- name: UpdateOwnedStudentContact :one
+UPDATE students s
+SET phone = sqlc.arg(phone),
+    alamat = sqlc.arg(address),
+    updated_at = NOW()
+WHERE s.id = (
+    SELECT u.student_id
+    FROM users u
+    WHERE u.id = sqlc.arg(user_id)
+      AND u.deleted_at IS NULL
+      AND u.student_id IS NOT NULL
+)
+RETURNING s.phone AS contact_phone, ''::text AS contact_email, s.alamat AS contact_address;
+
+-- name: UpdateOwnedParentContact :one
+UPDATE parents p
+SET phone = sqlc.arg(phone),
+    address = sqlc.arg(address),
+    updated_at = NOW()
+WHERE p.id = (
+    SELECT u.parent_id
+    FROM users u
+    WHERE u.id = sqlc.arg(user_id)
+      AND u.deleted_at IS NULL
+      AND u.parent_id IS NOT NULL
+)
+RETURNING p.phone AS contact_phone, ''::text AS contact_email, p.address AS contact_address;
 
 -- name: CreateUser :one
 INSERT INTO users (username, password_hash, display_name, employee_id, student_id, parent_id, is_active)

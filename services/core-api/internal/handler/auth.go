@@ -27,6 +27,7 @@ type authService interface {
 	Logout(ctx context.Context, refreshToken string) error
 	LogoutAll(ctx context.Context, userID pgtype.UUID) error
 	GetAccount(ctx context.Context, userID pgtype.UUID) (db.GetUserAccountSummaryRow, error)
+	UpdateAccountContact(ctx context.Context, userID pgtype.UUID, patch service.AccountContactPatch) (db.GetUserAccountSummaryRow, error)
 	ListActiveSessions(ctx context.Context, userID pgtype.UUID) ([]db.AuthSession, error)
 	RevokeSession(ctx context.Context, userID, sessionID pgtype.UUID) error
 	UpdateSessionLabel(ctx context.Context, userID, sessionID pgtype.UUID, deviceLabel string) error
@@ -46,18 +47,26 @@ type authSessionResponse struct {
 }
 
 type authAccountResponse struct {
-	ID          string   `json:"id"`
-	Username    string   `json:"username"`
-	DisplayName string   `json:"display_name"`
-	Roles       []string `json:"roles"`
-	ProfileType string   `json:"profile_type"`
-	ProfileNama string   `json:"profile_nama"`
-	EmployeeID  string   `json:"employee_id,omitempty"`
-	StudentID   string   `json:"student_id,omitempty"`
-	ParentID    string   `json:"parent_id,omitempty"`
-	IsActive    bool     `json:"is_active"`
-	LastLoginAt string   `json:"last_login_at,omitempty"`
-	CreatedAt   string   `json:"created_at,omitempty"`
+	ID          string                     `json:"id"`
+	Username    string                     `json:"username"`
+	DisplayName string                     `json:"display_name"`
+	Roles       []string                   `json:"roles"`
+	ProfileType string                     `json:"profile_type"`
+	ProfileNama string                     `json:"profile_nama"`
+	Contact     authAccountContactResponse `json:"contact"`
+	EmployeeID  string                     `json:"employee_id,omitempty"`
+	StudentID   string                     `json:"student_id,omitempty"`
+	ParentID    string                     `json:"parent_id,omitempty"`
+	IsActive    bool                       `json:"is_active"`
+	LastLoginAt string                     `json:"last_login_at,omitempty"`
+	CreatedAt   string                     `json:"created_at,omitempty"`
+}
+
+type authAccountContactResponse struct {
+	Phone          string   `json:"phone"`
+	Email          string   `json:"email,omitempty"`
+	Address        string   `json:"address"`
+	EditableFields []string `json:"editable_fields"`
 }
 
 type authAuditWriter interface {
@@ -182,24 +191,49 @@ func (h *Auth) GetAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	roles := make([]string, 0)
-	if len(row.Roles) > 0 {
-		_ = json.Unmarshal(row.Roles, &roles)
+	api.OK(w, authAccountResponseFromRow(row))
+}
+
+func (h *Auth) UpdateAccountContact(w http.ResponseWriter, r *http.Request) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
 	}
-	api.OK(w, authAccountResponse{
-		ID:          pgUUIDString(row.ID),
-		Username:    row.Username,
-		DisplayName: row.DisplayName,
-		Roles:       roles,
-		ProfileType: row.ProfileType,
-		ProfileNama: row.ProfileNama,
-		EmployeeID:  pgUUIDString(row.EmployeeID),
-		StudentID:   pgUUIDString(row.StudentID),
-		ParentID:    pgUUIDString(row.ParentID),
-		IsActive:    row.IsActive,
-		LastLoginAt: timestamptzRFC3339(row.LastLoginAt),
-		CreatedAt:   timestamptzRFC3339(row.CreatedAt),
+	userID, err := authUserID(claims)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+
+	patch, ok := decodeAccountContactPatch(w, r)
+	if !ok {
+		return
+	}
+
+	row, err := h.svc.UpdateAccountContact(r.Context(), userID, patch)
+	if errors.Is(err, domain.ErrUnauthorized) {
+		api.Unauthorized(w)
+		return
+	}
+	if errors.Is(err, domain.ErrForbidden) {
+		api.Forbidden(w)
+		return
+	}
+	if errors.Is(err, domain.ErrBadRequest) {
+		api.BadRequest(w, "kontak pribadi tidak valid")
+		return
+	}
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+
+	h.auditClaimsEvent(r.Context(), "AUTH_ACCOUNT_CONTACT_UPDATE", map[string]any{
+		"profile_type": row.ProfileType,
+		"fields":       contactPatchFields(patch),
 	})
+	api.OK(w, authAccountResponseFromRow(row))
 }
 
 func (h *Auth) ListSessions(w http.ResponseWriter, r *http.Request) {
@@ -432,6 +466,99 @@ func authUserID(claims map[string]any) (pgtype.UUID, error) {
 		return pgtype.UUID{}, domain.ErrUnauthorized
 	}
 	return userID, nil
+}
+
+func authAccountResponseFromRow(row db.GetUserAccountSummaryRow) authAccountResponse {
+	roles := make([]string, 0)
+	if len(row.Roles) > 0 {
+		_ = json.Unmarshal(row.Roles, &roles)
+	}
+	return authAccountResponse{
+		ID:          pgUUIDString(row.ID),
+		Username:    row.Username,
+		DisplayName: row.DisplayName,
+		Roles:       roles,
+		ProfileType: row.ProfileType,
+		ProfileNama: row.ProfileNama,
+		Contact: authAccountContactResponse{
+			Phone:          row.ContactPhone,
+			Email:          row.ContactEmail,
+			Address:        row.ContactAddress,
+			EditableFields: contactEditableFields(row.ProfileType),
+		},
+		EmployeeID:  pgUUIDString(row.EmployeeID),
+		StudentID:   pgUUIDString(row.StudentID),
+		ParentID:    pgUUIDString(row.ParentID),
+		IsActive:    row.IsActive,
+		LastLoginAt: timestamptzRFC3339(row.LastLoginAt),
+		CreatedAt:   timestamptzRFC3339(row.CreatedAt),
+	}
+}
+
+func contactEditableFields(profileType string) []string {
+	switch profileType {
+	case "employee":
+		return []string{"phone", "email", "address"}
+	case "student", "parent":
+		return []string{"phone", "address"}
+	default:
+		return []string{}
+	}
+}
+
+func decodeAccountContactPatch(w http.ResponseWriter, r *http.Request) (service.AccountContactPatch, bool) {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		api.BadRequest(w, "invalid json")
+		return service.AccountContactPatch{}, false
+	}
+
+	var patch service.AccountContactPatch
+	for key, value := range raw {
+		parsed, err := decodeContactString(value)
+		if err != nil {
+			api.BadRequest(w, "kontak pribadi tidak valid")
+			return service.AccountContactPatch{}, false
+		}
+		switch key {
+		case "phone":
+			patch.Phone = parsed
+		case "email":
+			patch.Email = parsed
+		case "address":
+			patch.Address = parsed
+		default:
+			api.BadRequest(w, "field "+key+" tidak dapat diubah dari akun saya")
+			return service.AccountContactPatch{}, false
+		}
+	}
+	return patch, true
+}
+
+func decodeContactString(raw json.RawMessage) (*string, error) {
+	if strings.TrimSpace(string(raw)) == "null" {
+		empty := ""
+		return &empty, nil
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, err
+	}
+	return &value, nil
+}
+
+func contactPatchFields(patch service.AccountContactPatch) []string {
+	fields := make([]string, 0, 3)
+	if patch.Phone != nil {
+		fields = append(fields, "phone")
+	}
+	if patch.Email != nil {
+		fields = append(fields, "email")
+	}
+	if patch.Address != nil {
+		fields = append(fields, "address")
+	}
+	return fields
 }
 
 func sessionMetaFromRequest(r *http.Request) service.SessionMeta {
