@@ -77,6 +77,13 @@ describe('client API helpers', () => {
 		await expect(readClientApiData(response, 'Gagal memuat daftar')).resolves.toEqual(payload);
 	});
 
+	it('preserves domain payloads that include a real top-level items field', async () => {
+		const payload = { npsn: '40406031', total: 34, ready: 34, items: [{ username: '4040603167001' }] };
+		const response = new Response(JSON.stringify(payload), { status: 200 });
+
+		await expect(readClientApiData(response, 'Gagal memuat preview')).resolves.toEqual(payload);
+	});
+
 	it('rejects successful API envelopes that still carry an error field', async () => {
 		const response = new Response(JSON.stringify({ error: 'Operasi ditolak' }), { status: 200 });
 
