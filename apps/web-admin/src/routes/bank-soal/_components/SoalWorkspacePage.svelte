@@ -71,6 +71,7 @@
 	type WorkspaceRoute = '/bank-soal' | '/bank-soal/tambah' | '/bank-soal/impor' | '/bank-soal/verifikasi';
 	type AuthoringMode = 'beginner' | 'advance';
 	type ComposerIssueHint = { message: string; targetId: string };
+type ComposerStageCard = { label: string; desc: string; status: string; tone: 'green' | 'amber' | 'red' | 'slate'; targetId: string };
 	type RevisionSourceFilter = '' | 'item_analysis' | 'reviewer' | 'workflow';
 	type ReviewDecision = 'approve' | 'reject';
 	type BulkWorkflowAction = 'approve' | 'reject' | 'publish';
@@ -519,6 +520,39 @@
 		{ label: 'Menunggu Review', value: reviewCount, tone: 'amber', helper: `${visibleReviewCount} tampil`, workflowStatus: 'review', status: '', active: filterWorkflow === 'review' && !filterStatus },
 		{ label: 'Disetujui', value: approvedCount, tone: 'green', helper: `${visibleApprovedCount} siap terbit`, workflowStatus: 'approved', status: 'draft', active: filterWorkflow === 'approved' && filterStatus === 'draft' },
 		{ label: 'Terbit', value: publishedCount, tone: 'emerald', helper: 'siap dipakai paket', workflowStatus: '', status: 'published', active: !filterWorkflow && filterStatus === 'published' },
+	]);
+	let selectedSubject = $derived(subjects.find((subject) => subject.id === fSubjectId) ?? null);
+	let composerModeLabel = $derived(fAuthoringMode === 'advance' ? 'Mode advance' : 'Mode pemula');
+	let composerScopeLabel = $derived(specialEventQuestionMode ? `Khusus ${selectedEventTitle}` : 'Bank soal reusable');
+	let composerStageCards = $derived.by<ComposerStageCard[]>(() => [
+		{
+			label: 'Metadata',
+			desc: selectedSubject ? `${selectedSubject.name} · ${DIFFICULTY_LABEL[fDifficulty] ?? fDifficulty}` : 'Pilih mapel, jenis, kesulitan',
+			status: readinessChecks.subject ? 'Lengkap' : 'Wajib',
+			tone: readinessChecks.subject ? 'green' : 'red',
+			targetId: 'composer-metadata',
+		},
+		{
+			label: isAdvanceMode ? 'Blueprint' : 'Mode Singkat',
+			desc: isAdvanceMode ? `${fCognitiveLevel.trim() || 'Kognitif belum diisi'} · ${fMaterialTopic.trim() || 'Topik belum diisi'}` : 'CP/TP/KD disembunyikan agar cepat',
+			status: isAdvanceMode ? (fCognitiveLevel.trim() ? 'Terarah' : 'Opsional') : 'Pemula',
+			tone: !isAdvanceMode || fCognitiveLevel.trim() ? 'green' : 'amber',
+			targetId: isAdvanceMode ? 'composer-advanced' : 'composer-question',
+		},
+		{
+			label: 'Naskah',
+			desc: stemText ? `${stemText.length} karakter pertanyaan` : 'Tulis pertanyaan utama',
+			status: readinessChecks.stem ? 'Terisi' : 'Wajib',
+			tone: readinessChecks.stem ? 'green' : 'red',
+			targetId: 'composer-question',
+		},
+		{
+			label: isEssay ? 'Rubrik' : isShortAnswer ? 'Kunci' : isMatching ? 'Pasangan' : 'Opsi',
+			desc: isEssay ? 'Pedoman koreksi uraian' : isShortAnswer ? `${shortAnswerAliases.length} alias jawaban` : isMatching ? `${fMatchingPairs.length} pasangan` : `${fOptions.length} opsi aktif`,
+			status: readinessChecks.options && readinessChecks.answerKey && readinessChecks.rubric ? 'Valid' : 'Cek lagi',
+			tone: readinessChecks.options && readinessChecks.answerKey && readinessChecks.rubric ? 'green' : 'amber',
+			targetId: isMatching ? 'composer-matching' : isShortAnswer ? 'composer-answer' : isEssay ? 'composer-rubric' : 'composer-options',
+		},
 	]);
 
 	let stemText = $derived(htmlToPlainText(fStem));
@@ -2466,6 +2500,20 @@
 		return option.match_html || option.match_text || '';
 	}
 
+	function composerStageToneClass(tone: ComposerStageCard['tone']): string {
+		const map: Record<ComposerStageCard['tone'], string> = {
+			green: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+			amber: 'border-amber-200 bg-amber-50 text-amber-900',
+			red: 'border-red-200 bg-red-50 text-red-900',
+			slate: 'border-slate-200 bg-slate-50 text-slate-800',
+		};
+		return map[tone];
+	}
+
+	function scrollToComposerSection(targetId: string) {
+		document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
+
 	onMount(() => {
 		const params = new URLSearchParams(window.location.search);
 		const questionId = params.get('question_id');
@@ -3335,16 +3383,45 @@
 	</div>
 {/snippet}
 
+{#snippet composerStageRail()}
+	<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+		{#each composerStageCards as card (card.label)}
+			<button
+				type="button"
+				onclick={() => scrollToComposerSection(card.targetId)}
+				class={`rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${composerStageToneClass(card.tone)}`}
+			>
+				<div class="flex items-start justify-between gap-3">
+					<div class="min-w-0">
+						<p class="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">{card.label}</p>
+						<p class="mt-1 truncate text-sm font-bold">{card.desc}</p>
+					</div>
+					<span class="shrink-0 rounded-full bg-white/70 px-2 py-1 text-[10px] font-bold uppercase tracking-wide">{card.status}</span>
+				</div>
+			</button>
+		{/each}
+	</div>
+{/snippet}
+
 <!-- ── Composer Inline Section ─────────────────────────────────────────────── -->
 {#snippet composerPanel()}
 	<section class="soal-composer-inline relative flex min-h-[42rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-sm">
-			<div class="shrink-0 border-b border-slate-200 bg-white px-4 py-3 md:px-5">
-				<div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+			<div class="shrink-0 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-amber-50 px-4 py-4 md:px-5">
+				<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
 					<div class="min-w-0">
-						<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-							<h2 class="text-base font-black uppercase italic tracking-tight text-slate-900">
+						<p class="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-700">Studio Komposer Bank Soal</p>
+						<div class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+							<h2 class="text-xl font-black uppercase italic tracking-tight text-slate-950">
 								{editingId ? 'Edit Butir Soal' : 'Penyusunan Soal Baru'}
 							</h2>
+						</div>
+						<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+							Susun metadata, naskah, kunci/rubrik, lalu cek preview siswa sebelum diajukan review. Autosave lokal dan Ctrl+S tetap aktif.
+						</p>
+						<div class="mt-3 flex flex-wrap gap-2">
+							<span class="rounded-full border border-emerald-100 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">{composerScopeLabel}</span>
+							<span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-600">{questionTypeConfig.label}</span>
+							<span class="rounded-full border border-amber-100 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">{composerModeLabel}</span>
 						</div>
 					</div>
 					<div class="flex flex-wrap gap-2 lg:justify-end">
@@ -3380,6 +3457,17 @@
 			</div>
 
 			<div class="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 p-4 md:p-5">
+				<section class="mb-4 rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+					<div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+						<div>
+							<p class="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-700">Alur penyusunan</p>
+							<h3 class="text-sm font-black uppercase text-slate-900">Klik kartu untuk lompat ke bagian editor</h3>
+						</div>
+						<span class="text-xs font-semibold text-slate-500">Kesiapan review {readinessScore}%</span>
+					</div>
+					{@render composerStageRail()}
+				</section>
+
 				<section class="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 					<div class="flex flex-wrap items-center gap-2">
 						<div class="flex min-w-[11rem] items-center gap-2">
