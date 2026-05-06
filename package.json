@@ -8,7 +8,13 @@
   ],
   "scripts": {
     "check:web": "npm --prefix apps/web-admin run check",
+    "check:web:bun": "cd apps/web-admin && bun run check",
     "check:worker": "cd services/pusaka-worker && ./node_modules/.bin/tsc --noEmit",
+    "check:worker:bun": "cd services/pusaka-worker && bun run check",
+    "dev:web:bun": "cd apps/web-admin && bun run dev",
+    "dev:worker:bun": "cd services/pusaka-worker && bun run dev",
+    "test:web:bun": "cd apps/web-admin && bun run test:unit",
+    "test:worker:bun": "cd services/pusaka-worker && bun run test",
     "test:backend": "cd services/core-api && go test ./...",
     "db:migrate": "npm --prefix services/core-api/db/scripts run migrate:pg",
     "db:seed:mobile-cbt": "npm --prefix services/core-api/db/scripts run seed:mobile-cbt"
