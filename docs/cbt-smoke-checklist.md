@@ -1,6 +1,6 @@
 # CBT Smoke Checklist — Readiness, Visibility, Runtime, and Security
 
-Status: sinkron per 2026-05-04. Gunakan checklist ini sebelum ujian besar, setelah deploy backend/frontend CBT, setelah migration CBT, dan sebelum sesi aktif dibuka untuk siswa.
+Status: sinkron per 2026-05-06. Gunakan checklist ini sebelum ujian besar, setelah deploy backend/frontend CBT, setelah migration CBT, dan sebelum sesi aktif dibuka untuk siswa.
 
 Checklist ini melengkapi test otomatis dan `docs/cbt-operator-runbook.md`. Fokusnya adalah memastikan setup ujian siap, batas role admin/guru/event member benar, token/kunci jawaban tidak bocor, Flutter bisa menjalankan alur kritis, dan runtime submit/scoring tidak regress.
 
@@ -13,7 +13,7 @@ Checklist ini melengkapi test otomatis dan `docs/cbt-operator-runbook.md`. Fokus
 - [ ] Backup PostgreSQL sudah dibuat sebelum migration dengan `make ops-backup` atau script backup setara.
 - [ ] Tidak ada jendela ujian aktif saat migration berjalan.
 - [ ] Frontend web-admin sudah deploy dari commit yang sama atau lebih baru dari backend.
-- [ ] Bookmark lama `/cbt/questions` redirect ke `/cbt/soal`.
+- [ ] Bookmark lama `/cbt/questions`, `/cbt/soal*`, dan `/bank-soal/komposer|import|review` redirect ke `/bank-soal/*` baru sesuai mode aman yang dipertahankan.
 - [ ] `make ops-health` atau health check manual sudah hijau setelah restart.
 
 Catatan token migration:
@@ -49,7 +49,7 @@ Verifikasi role dari migration `062_cbt_event_members_question_scope.sql`:
 
 - [ ] Tahun ajaran, kelas, mapel, siswa, guru, dan assignment guru-mapel sudah benar.
 - [ ] Event CBT sudah dibuat dan memuat timeline yang sesuai.
-- [ ] Soal sudah diinput/import melalui `/cbt/soal`, bukan melalui edit database manual.
+- [ ] Soal sudah diinput melalui `/bank-soal/tambah` atau diimpor melalui `/bank-soal/impor`, bukan melalui edit database manual.
 - [ ] Soal yang masuk paket sudah direview/published sesuai workflow.
 - [ ] Paket ujian berisi soal sesuai mapel, kelas/grade/custom scope, bobot, dan jumlah soal yang disepakati.
 - [ ] Sesi ujian memakai paket final, jadwal WITA benar, dan belum aktif sebelum token/room/seat siap.
@@ -80,7 +80,7 @@ Verifikasi role dari migration `062_cbt_event_members_question_scope.sql`:
 ### 7. Bank Soal: Label dan Export Admin
 
 1. Login sebagai `admin`.
-2. Buka `/cbt/soal`.
+2. Buka `/bank-soal`.
 3. Pastikan tombol export tertulis `Export CSV`.
 4. Jalankan export dengan filter aktif yang kecil, misalnya satu mapel.
 5. Buka CSV hasil download.
@@ -95,7 +95,7 @@ Kriteria lulus:
 ### 8. Bank Soal: Label dan Export Guru
 
 1. Login sebagai `guru_a`.
-2. Buka `/cbt/soal`.
+2. Buka `/bank-soal`.
 3. Pastikan tombol export tertulis `Export Soal Saya`.
 4. Jalankan export pada filter yang sama.
 5. Buka CSV hasil download.

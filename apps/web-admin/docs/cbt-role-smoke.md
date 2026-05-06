@@ -6,11 +6,11 @@ This is a staging/manual-friendly smoke scaffold for the web-admin CBT role flow
 
 The smoke script checks:
 
-- admin login can reach `/cbt/soal`
-- guru login can reach `/cbt/soal`
-- admin can reach `/cbt/events`
-- guru is forbidden from `/cbt/events`
-- retired `/cbt/questions` redirects to `/cbt/soal`, preserving `question_id` and retained `mode`, while dropping retired experiment modes
+- admin login can reach `/bank-soal/tambah`
+- guru login can reach `/bank-soal/tambah`
+- admin can reach `/asesmen/kegiatan`
+- guru is blocked from `/asesmen/kegiatan`
+- retired `/cbt/questions` redirects to `/bank-soal/*`, preserving important query values while dropping retired experiment modes
 
 ## Requirements
 

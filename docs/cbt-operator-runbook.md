@@ -1,6 +1,6 @@
 # CBT Operator Runbook
 
-Status: sinkron per 2026-05-04. Gunakan runbook ini sebagai alur end-to-end operator untuk menyiapkan CBT, menjalankan ujian, dan menutup sesi tanpa melanggar boundary backend, BFF, dan Flutter BYOD.
+Status: sinkron per 2026-05-06. Gunakan runbook ini sebagai alur end-to-end operator untuk menyiapkan CBT, menjalankan ujian, dan menutup sesi tanpa melanggar boundary backend, BFF, dan Flutter BYOD.
 
 Runbook ini melengkapi `docs/cbt-smoke-checklist.md`, `docs/exam-api.md`, `apps/mobile/RELEASE_CHECKLIST.md`, dan `apps/mobile/BYOD_TRIAL_PROCEDURE.md`.
 
@@ -24,7 +24,7 @@ Kriteria siap:
 
 - [ ] Tidak ada siswa ujian tanpa kelas/scope yang benar.
 - [ ] Akun panitia/operator dapat login web-admin.
-- [ ] Guru pembuat soal dan reviewer dapat membuka `/cbt/soal` sesuai scope.
+- [ ] Guru pembuat soal dapat membuka `/bank-soal/tambah` dan reviewer dapat membuka `/bank-soal/verifikasi` sesuai scope.
 - [ ] Pengawas/proktor punya akun operasional bila dashboard pengawas dipakai.
 
 ## 2. Role Event CBT
@@ -78,10 +78,10 @@ Kriteria siap:
 
 ## 5. Upload atau Import Soal
 
-1. Buka `/cbt/soal` sebagai pembuat soal atau admin.
+1. Buka `/bank-soal/tambah` sebagai pembuat soal atau admin.
 2. Pilih mode `beginner` untuk input cepat atau `advance` untuk metadata lengkap.
 3. Isi stem, stimulus, opsi, kunci, rubrik, bobot, CP/TP/KD, tingkat kesulitan, dan tag sesuai kebutuhan.
-4. Untuk import, gunakan template CSV yang berlaku dan cek hasil preview/import.
+4. Untuk import, buka `/bank-soal/impor`, gunakan template CSV yang berlaku, dan cek hasil preview/import.
 5. Unggah media hanya melalui fitur aset backend; jangan menyisipkan file dari storage publik di luar allowlist.
 6. Simpan draft dan cek readiness score serta preview KaTeX/RTL bila ada konten matematika atau Arab.
 

@@ -48,7 +48,8 @@ async function assertForbidden(page, path, label) {
 	const status = response?.status() ?? 0;
 	const body = await page.locator('body').innerText().catch(() => '');
 	const forbiddenText = /forbidden|tidak diizinkan|admin role required|403/i.test(body);
-	if (status !== 403 && !forbiddenText) {
+	const finalPath = new URL(page.url()).pathname;
+	if (status !== 403 && !forbiddenText && finalPath !== '/') {
 		throw new Error(`${label} was not forbidden; final URL ${page.url()} status ${status}`);
 	}
 }
@@ -56,14 +57,14 @@ async function assertForbidden(page, path, label) {
 async function assertQuestionsRedirect(page) {
 	await page.goto(absolutePath('/cbt/questions?question_id=abc-123&mode=review&unsafe=ignored'), { waitUntil: 'networkidle' });
 	const redirected = new URL(page.url());
-	if (redirected.pathname !== '/cbt/soal') throw new Error(`/cbt/questions did not redirect to /cbt/soal: ${page.url()}`);
+	if (redirected.pathname !== '/bank-soal/verifikasi') throw new Error(`/cbt/questions did not redirect to /bank-soal/verifikasi: ${page.url()}`);
 	if (redirected.searchParams.get('question_id') !== 'abc-123') throw new Error('redirect did not preserve question_id');
-	if (redirected.searchParams.get('mode') !== 'review') throw new Error('redirect did not preserve retained mode');
+	if (redirected.searchParams.has('mode')) throw new Error('redirect preserved mode after mapping it to a concrete route');
 	if (redirected.searchParams.has('unsafe')) throw new Error('redirect preserved unexpected query parameter');
 
 	await page.goto(absolutePath('/cbt/questions?question_id=abc-123&mode=studio'), { waitUntil: 'networkidle' });
 	const retiredMode = new URL(page.url());
-	if (retiredMode.pathname !== '/cbt/soal') throw new Error('retired mode redirect did not land on /cbt/soal');
+	if (retiredMode.pathname !== '/bank-soal/tambah') throw new Error('retired mode redirect did not land on /bank-soal/tambah');
 	if (retiredMode.searchParams.has('mode')) throw new Error('retired experiment mode was preserved');
 }
 
@@ -84,7 +85,7 @@ async function runForRole(browser, role, credentials, checks) {
 	const page = await context.newPage();
 	page.setDefaultTimeout(timeout);
 	try {
-		await login(page, credentials.username, credentials.password, '/cbt/soal');
+		await login(page, credentials.username, credentials.password, '/bank-soal/tambah');
 		for (const check of checks) await check(page);
 	} finally {
 		await context.close();
@@ -100,8 +101,8 @@ try {
 		username: process.env.WEB_ADMIN_SMOKE_ADMIN_USERNAME,
 		password: process.env.WEB_ADMIN_SMOKE_ADMIN_PASSWORD,
 	}, [
-		(page) => assertReachable(page, '/cbt/soal', 'admin /cbt/soal'),
-		(page) => assertReachable(page, '/cbt/events', 'admin /cbt/events'),
+		(page) => assertReachable(page, '/bank-soal/tambah', 'admin /bank-soal/tambah'),
+		(page) => assertReachable(page, '/asesmen/kegiatan', 'admin /asesmen/kegiatan'),
 		(page) => assertQuestionsRedirect(page),
 	]);
 
@@ -109,8 +110,8 @@ try {
 		username: process.env.WEB_ADMIN_SMOKE_GURU_USERNAME,
 		password: process.env.WEB_ADMIN_SMOKE_GURU_PASSWORD,
 	}, [
-		(page) => assertReachable(page, '/cbt/soal', 'guru /cbt/soal'),
-		(page) => assertForbidden(page, '/cbt/events', 'guru /cbt/events'),
+		(page) => assertReachable(page, '/bank-soal/tambah', 'guru /bank-soal/tambah'),
+		(page) => assertForbidden(page, '/asesmen/kegiatan', 'guru /asesmen/kegiatan'),
 	]);
 } finally {
 	await browser.close();

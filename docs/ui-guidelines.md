@@ -12,9 +12,10 @@ This product serves MTs Negeri 2 Kolaka Utara. The interface should feel:
 
 ## Current UI Baseline
 
-As of 2026-05-03:
+As of 2026-05-06:
 
-- CBT Bank Soal uses `/cbt/soal` as the active UI; `/cbt/questions` is a retired redirect only.
+- Bank Soal uses standalone UI routes: `/bank-soal`, `/bank-soal/tambah`, `/bank-soal/impor`, and `/bank-soal/verifikasi`; `/bank-soal/komposer`, `/bank-soal/import`, `/bank-soal/review`, `/cbt/soal*`, `/cbt/bank-soal*`, and `/cbt/questions*` are compatibility redirects only.
+- Assessment operations use `/asesmen/*` user-facing routes; legacy operational `/cbt*` routes are redirects and should not appear in active navigation.
 - CBT authoring should stay compact, teacher-friendly, and mode-based (`Pemula` / `Advance`).
 - CBT operational screens should prioritize readiness, role visibility, token safety, proctor action clarity, and print-friendly artifacts.
 - BYOD helper surfaces should use direct Indonesian guidance for siswa/pengawas instead of security claims that cannot be guaranteed on student-owned devices.

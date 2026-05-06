@@ -11,13 +11,14 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 | **Pusaka Worker** | `services/pusaka-worker` | TypeScript + Playwright (Chromium) | Async job consumer for PUSAKA attendance automation |
 | **Flutter App** | `apps/mobile` | Flutter | Student-facing CBT exam client |
 
-## Current Baseline — 2026-05-05
+## Current Baseline — 2026-05-06
 
 - Latest completed roadmap checkpoint: Sprint 96 Documentation Sync. Significant additional modules have shipped since the last AGENTS.md sync — see Completed Sprints for the full ledger.
 - Server deployment topology is still 3 VPS targets: frontend, backend, and worker. `apps/mobile` is a student BYOD APK/client, not a VPS runtime.
-- `/cbt/soal` is the only active web-admin question-bank UI. `/cbt/questions` is retained only as a legacy redirect to `/cbt/soal`.
-- `/api/cbt/questions/*` remains the canonical backend/BFF data contract for question CRUD, workflow, duplicate/revision, import/export, and package usage.
-- CBT web-admin navigation now uses role-based hub pages: `/cbt` (launcher), `/cbt/persiapan` (preparation workflow), `/cbt/pelaksanaan` (day-of execution), and `/cbt/hasil` (results). Sub-hubs `/cbt/bank-soal`, `/cbt/kegiatan`, and `/cbt/paket-soal` bridge between the launcher and operational routes.
+- `/bank-soal` is the active standalone Bank Soal list route. `/bank-soal/tambah`, `/bank-soal/impor`, and `/bank-soal/verifikasi` own authoring, import, and review/verification UI.
+- `/bank-soal/komposer`, `/bank-soal/import`, `/bank-soal/review`, `/cbt/soal*`, `/cbt/bank-soal*`, and `/cbt/questions*` are compatibility redirects to `/bank-soal/*`.
+- BFF aliases `/api/bank-soal/*` and `/api/asesmen/*` are available for the UI domain split and are required for new web-admin client code. During the transition, `/api/cbt/*` and `/api/cbt/questions/*` remain live deprecated compatibility contracts to the same Go API semantics and are not removed yet.
+- Assessment web-admin navigation uses role-based hub pages: `/asesmen` (launcher), `/asesmen/persiapan` (preparation workflow), `/asesmen/pelaksanaan` (day-of execution), and `/asesmen/hasil` (results). Assessment focuses on paket, kegiatan/event, sesi, pengawasan, pelaksanaan, hasil, aplikasi siswa, and non-test assessment; Bank Soal stands outside the assessment route tree.
 - CBT runtime hardening is active: exam tokens are strong random hex values, answer keys/tokens are role-redacted, duplicate submit is explicit, and scoring must not mark unsubmitted participants as submitted.
 - PUSAKA worker jobs have stale-running recovery in the backend claim/scheduler path; the worker still must report complete/fail explicitly.
 - Library and Inventory are admin/staf scoped in both backend route grouping and SvelteKit navigation/proxy gate.
@@ -91,12 +92,12 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Mobile operator-settings baseline:** the exam login screen may keep API base URL override support for trials, but it should stay in an operator/debug surface rather than as a primary student-facing field.
 - **CBT UI direction:** educational, institutional, and operator-friendly for MTsN 2 Kolaka Utara. Avoid generic SaaS dashboards for exam operations and printable artifacts.
 - **Public site direction:** educational, institutional, and trustworthy for MTsN 2 Kolaka Utara. Public routes must feel like a real school website, not a reused admin dashboard shell.
-- **Question bank UI canonical route:** `/cbt/soal` is the only active web-admin question-bank UI. The old `/cbt/questions` UI is retired and must redirect to `/cbt/soal`; do not add new internal links or features there. The backend/BFF `/api/cbt/questions/*` contract remains canonical for question data, validation, workflow, duplicate, import, and package usage.
-- **Question bank retired-route guard:** keep test coverage around `/cbt/questions` redirect semantics so legacy bookmarks preserve `question_id` and retained modes while retired experiment modes do not re-enter the product.
+- **Question bank UI canonical routes:** `/bank-soal` is Daftar Soal, `/bank-soal/tambah` is Tambah/Editor Soal, `/bank-soal/impor` is Impor Soal, and `/bank-soal/verifikasi` is Review/Verifikasi Soal. Old Bank Soal paths (`/bank-soal/komposer`, `/bank-soal/import`, `/bank-soal/review`, `/cbt/soal*`, `/cbt/bank-soal*`, `/cbt/questions*`) are thin compatibility redirects only. New web-admin clients must use `/api/bank-soal/questions/*`; BFF `/api/cbt/questions/*` stays as deprecated compatibility to the unchanged backend semantics.
+- **Question bank retired-route guard:** keep test coverage around `/cbt/questions` and `/cbt/soal*` redirect semantics so legacy bookmarks preserve `question_id` and retained modes while retired experiment modes do not re-enter the product.
 - **Question bank authoring uses two UX modes:** `beginner` for quick teacher input with minimal required fields, and `advance` for full blueprint/workflow authoring. Both modes must write to the same backend model and API contract.
-- **`/cbt/soal` is the Komposer Soal route** — a dedicated question composer with template quick-start, real-time readiness scoring, quality signals, split preview with KaTeX rendering, RTL toggle for Arabic questions, and localStorage draft autosave. It proxies all data through the existing Go API BFF; no direct DB access, no new backend routes.
-- **CBT navigation uses role-based hub pages.** `/cbt` is the role-aware launcher (admin/guru/staf). `/cbt/persiapan` is the step-by-step preparation hub (admin/guru). `/cbt/pelaksanaan` is the day-of execution hub (admin/guru/staf). `/cbt/hasil` is the results hub (admin/guru). Sub-hubs `/cbt/bank-soal`, `/cbt/kegiatan`, and `/cbt/paket-soal` are navigational bridges only — they do not own data routes.
-- **Non-test assessment authoring is separate from CBT.** `/cbt/non-test` (and its BFF/API routes) owns penilaian non-tes lifecycle and grade sync; do not mix non-test routes with live exam session logic.
+- **`/bank-soal/tambah` is the Tambah/Editor Soal route** — a dedicated question composer with template quick-start, real-time readiness scoring, quality signals, split preview with KaTeX rendering, RTL toggle for Arabic questions, and localStorage draft autosave. It proxies all data through the existing Go API BFF; no direct DB access, no new backend routes.
+- **Assessment navigation uses role-based hub pages.** `/asesmen` is the role-aware launcher (admin/guru/staf). `/asesmen/persiapan` is the step-by-step preparation hub (admin/guru). `/asesmen/pelaksanaan` is the day-of execution hub (admin/guru/staf). `/asesmen/hasil` is the results hub (admin/guru). `/asesmen/paket`, `/asesmen/kegiatan`, `/asesmen/sesi`, `/asesmen/pengawasan`, `/asesmen/aplikasi-siswa`, and `/asesmen/non-tes` are canonical user-facing assessment routes; legacy `/cbt*` routes redirect to the matching `/asesmen*` or Bank Soal target.
+- **Non-test assessment authoring is separate from live exam sessions.** `/asesmen/non-tes` and `/api/asesmen/non-test-assessments/*` own the new web-admin penilaian non-tes lifecycle and grade sync; deprecated `/api/cbt/non-test-assessments/*` BFF compatibility remains live for old clients. Do not mix non-test routes with live exam session logic.
 - **`/library/*` is the library module** — accessible to `admin` and `staf` roles only. Member data reuses existing `students` and `employees` tables; no separate member table. All forms use beginner/advance mode toggles consistent with the CBT question bank UX pattern.
 - **Custom local Dialog component** — `Dialog.Root` accepts only `open: $bindable(bool)` and `children`. `Dialog.Content` and `Dialog.Description` do not accept a `class` prop. Use `bind:open={boolState}` with separate bool state variables; no `onOpenChange` callback.
 - **Public shell boundary:** unauthenticated public pages (`/`, `/profil`, `/berita`, `/pengumuman`, `/ppdb`, `/kontak`) must render in the public website shell, while authenticated admin/guru pages continue to use the admin shell.
@@ -123,12 +124,14 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 ## Delivery & Operational Rules
 
 - **Prefer safe, staged migration over rewrites.** One sprint at a time.
+- **Use multi-agent parallel work for complex development/review.** For broad codebase exploration, review, diagnosis, or multi-area implementation, split work across available OpenCode subagents in parallel, then consolidate findings before editing. Keep direct single-agent work for small, obvious changes.
 - **Do not collapse service boundaries for convenience.** Each unit has a clear role.
 - **Isolate PUSAKA by contract first.** Only move storage or package ownership further when the boundary is already stable and pain is proven.
 - **Preserve deployability to 3 VPS targets.** Every change should be safe for independent rollout.
 - **Prioritize correctness, operational safety, and maintainability.**
 - **No deployment automation/CD yet** — lightweight CI checks may exist, but deploy remains `git pull` + `make build` + `pm2 restart` per VPS (documented in `deploy/DEPLOY.md`).
 - **No Dockerfiles for runtime deployment** — services run natively with PM2 process manager; local database containers are dev-only helpers, not deployment topology.
+- **Bun is development-only acceleration.** Bun may be used for local install, dev server, check, and test loops through explicit `*-bun` commands. Do not switch production runtime, PM2 commands, deployment docs, or official lockfile ownership to Bun without a dedicated decision and staging soak test. `package-lock.json` remains the canonical npm lockfile.
 
 ## Product Roadmap
 
@@ -239,9 +242,9 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **Status error baseline** — `GET /api/exam/status` should also have explicit unexpected-error `500` coverage, because mobile resume and BYOD health logic depend heavily on that one read path staying deterministic.
 - **Exam-payload release-template baseline** — `docs/exam-payload-release-template.md` should exist as the structured release-note template for backend payload changes that may affect the Flutter exam client.
 - **Device-matrix baseline** — `apps/mobile/DEVICE_TEST_MATRIX.md` should exist as the structured per-vendor/per-device scorecard for BYOD field trials so hardware issues are tracked systematically, not only via ad-hoc notes.
-- **Admin BYOD summary baseline** — `/cbt/byod` should exist in the web admin as a compact operator-facing summary of mobile status meanings, submit readiness, and trial references without requiring a new backend service.
-- **Admin BYOD matrix baseline** — `/cbt/byod/matrix` should exist in the web admin as a readable companion view for the per-device BYOD test matrix, again without requiring a backend feature or new persistence.
-- **Admin BYOD release baseline** — `/cbt/byod/release` should exist in the web admin as the operator-facing readiness summary for backend payload checks, mobile verification, and rollout preparation.
+- **Admin BYOD summary baseline** — `/asesmen/aplikasi-siswa` should exist in the web admin as a compact operator-facing summary of mobile status meanings, submit readiness, and trial references without requiring a new backend service.
+- **Admin BYOD matrix baseline** — `/asesmen/aplikasi-siswa/matrix` should exist in the web admin as a readable companion view for the per-device BYOD test matrix, again without requiring a backend feature or new persistence.
+- **Admin BYOD release baseline** — `/asesmen/aplikasi-siswa/release` should exist in the web admin as the operator-facing readiness summary for backend payload checks, mobile verification, and rollout preparation.
 
 ### ✅ Sprint 15 — Library System (Done)
 - **Library schema** — `library_books` and `library_loans` tables (migration 027). No separate member table; loans reference existing `students` and `employees` via FK.
@@ -313,7 +316,7 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 ### ✅ Sprints 62L–Q — Non-Test Assessments (Done)
 - **Non-test assessment schema** — workflow penilaian non-tes terpisah dari live exam CBT. Migration 056.
 - **Grade sync** — nilai non-tes bisa disinkronkan ke rapor/gradebook. Migration 057.
-- **Frontend** — `/cbt/non-test` mencakup roster, scoring, traceability sumber nilai, dan sync freshness.
+- **Frontend** — `/asesmen/non-tes` mencakup roster, scoring, traceability sumber nilai, dan sync freshness.
 
 ### ✅ Sprints 63–96 — CBT Operational Hardening & Navigation Hubs (Done)
 - **CBT Rooms & Proctoring (Sprints 63–65)** — pengawas ruang, room handover, dan berita acara. Migrations 058–059.
@@ -322,8 +325,8 @@ This monorepo powers the academic and operational systems for MTs Negeri 2 Kolak
 - **CBT Seat Invariants (migration 061)** — validasi seat positif dan unique `(room_id, seat_no)` di level database.
 - **CBT Event Members & Subject Scope (migration 062)** — roles `panitia/pembuat_soal/reviewer/proktor/pengawas/korektor`; hanya `pembuat_soal`, `reviewer`, `korektor` yang boleh membawa `subject_id`.
 - **CBT Package Event Linkage (migration 066)** — paket terhubung eksplisit ke event. Duration bounds (migration 063), question targets audit (migration 065).
-- **CBT Navigation Hubs** — `/cbt` (role-based launcher untuk admin/guru/staf), `/cbt/persiapan` (preparation workflow hub), `/cbt/pelaksanaan` (execution hub), `/cbt/hasil` (results hub). Sub-hubs `/cbt/bank-soal`, `/cbt/kegiatan`, `/cbt/paket-soal` sebagai jembatan navigasi tanpa data route sendiri.
-- **CBT Smoke Checklist & Retired Route Guard (Sprints 94–95)** — checklist operasional wajib dan test coverage redirect `/cbt/questions` → `/cbt/soal`.
+- **Assessment Navigation Hubs** — `/asesmen` (role-based launcher untuk admin/guru/staf), `/asesmen/persiapan` (preparation workflow hub), `/asesmen/pelaksanaan` (execution hub), `/asesmen/hasil` (results hub). Canonical subroutes include `/asesmen/paket`, `/asesmen/kegiatan`, `/asesmen/sesi`, `/asesmen/pengawasan`, `/asesmen/aplikasi-siswa`, and `/asesmen/non-tes`; Bank Soal berdiri di `/bank-soal`.
+- **CBT Smoke Checklist & Retired Route Guard (Sprints 94–95)** — checklist operasional wajib dan test coverage redirect `/cbt/questions` → `/bank-soal/*`.
 - **SvelteKit BFF Async Boundary (Sprint 57)** — `<svelte:boundary>` aktif di screen data remote.
 
 ### 📋 Planned Future Phases

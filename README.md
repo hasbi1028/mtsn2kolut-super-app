@@ -17,13 +17,14 @@ Prinsip boundary yang dipakai:
 
 ## Status Terkini
 
-Sinkron per 2026-05-03:
+Sinkron per 2026-05-06:
 
 - roadmap aktif ada di [PLAN.md](/home/hasbiopm/mtsn2kolut-super-app/PLAN.md) dan sudah mencapai Sprint 96 Documentation Sync
 - server tetap dideploy ke 3 VPS: frontend, backend, dan worker
 - Flutter CBT adalah client/APK siswa, bukan VPS runtime
-- Bank Soal web-admin aktif ada di `/cbt/soal`; `/cbt/questions` hanya redirect legacy
-- kontrak data Bank Soal tetap lewat `/api/cbt/questions/*`
+- Bank Soal web-admin aktif sebagai modul standalone di `/bank-soal`, `/bank-soal/tambah`, `/bank-soal/impor`, dan `/bank-soal/verifikasi`; route lama `/bank-soal/komposer`, `/bank-soal/import`, `/bank-soal/review`, dan Bank Soal di `/cbt*` hanya redirect kompatibilitas
+- Asesmen web-admin aktif di `/asesmen`, `/asesmen/persiapan`, `/asesmen/paket`, `/asesmen/kegiatan`, `/asesmen/sesi`, `/asesmen/pengawasan`, `/asesmen/pelaksanaan`, `/asesmen/hasil`, `/asesmen/aplikasi-siswa`, dan `/asesmen/non-tes`; route operasional `/cbt*` lama redirect ke route baru sesuai konteks
+- client web-admin baru wajib memakai alias BFF `/api/bank-soal/*` untuk Bank Soal dan `/api/asesmen/*` untuk Asesmen; `/api/cbt/*` masih hidup sebagai compatibility deprecated namespace dan belum dihapus
 - smoke operasional CBT ada di [docs/cbt-smoke-checklist.md](/home/hasbiopm/mtsn2kolut-super-app/docs/cbt-smoke-checklist.md)
 - ledger review aktif ada di [findings.md](/home/hasbiopm/mtsn2kolut-super-app/findings.md)
 
@@ -130,6 +131,24 @@ Perintah ini menjalankan:
 - `svelte-check` untuk `apps/web-admin`
 - `tsc --noEmit` untuk worker
 - `go test ./...` untuk `services/core-api`
+
+## Bun Opsional Untuk Development
+
+Bun boleh dipakai sebagai runner lokal agar loop development web-admin lebih cepat. Ini tidak mengubah jalur produksi: deploy/PM2 tetap memakai Node/npm sesuai kontrak deploy.
+
+```bash
+make install-bun-dev
+make dev-web-bun
+make check-web-bun
+make test-web-bun
+```
+
+Catatan:
+
+- gunakan target `*-bun` hanya untuk development lokal
+- jangan pakai Bun untuk runtime produksi web-admin/worker sebelum ada keputusan eksplisit dan uji staging
+- `bun.lock` di-ignore agar lockfile resmi repo tetap `package-lock.json`
+- worker tetap berjalan lewat script `tsx`; target Bun hanya mempercepat pemanggilan script, bukan mengganti runtime Playwright produksi
 
 ## Endpoint ownership
 
