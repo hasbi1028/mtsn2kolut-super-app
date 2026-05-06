@@ -8,11 +8,13 @@ This app is the SvelteKit admin frontend for MTs Negeri 2 Kolaka Utara.
 - Act as a thin BFF/proxy to the Go API where needed.
 - Own cookies, session handling, and frontend UX.
 
-## Current Baseline — 2026-05-03
+## Current Baseline — 2026-05-06
 
-- `/cbt/soal` is the only active Bank Soal UI.
-- `/cbt/questions` is retired and must stay a redirect to `/cbt/soal`.
-- BFF `/api/cbt/questions/*` routes remain thin proxies/stream proxies to Go API.
+- `/bank-soal` is the active standalone Bank Soal list/landing route.
+- `/bank-soal/tambah`, `/bank-soal/verifikasi`, and `/bank-soal/impor` own authoring, review/verification, and import UI.
+- `/bank-soal/komposer`, `/bank-soal/review`, `/bank-soal/import`, `/cbt/soal*`, `/cbt/bank-soal*`, and `/cbt/questions*` are compatibility redirects to `/bank-soal/*`.
+- `/asesmen` is the active assessment launcher; legacy `/cbt*` operational routes redirect to `/asesmen*` or Bank Soal according to context.
+- Active frontend fetches use `/api/bank-soal/*` for Bank Soal and `/api/asesmen/*` for assessment. `/api/cbt/*` routes remain live deprecated compatibility proxies to the same Go API semantics for legacy clients, redirects, proxy tests, and staged transition safety.
 - Library and Inventory paths are gated for `admin` and `staf` in hooks/route-access helpers.
 - Kesiswaan and staff operation gates in SvelteKit are UX/BFF guards; backend role gates remain the source of truth.
 
@@ -38,11 +40,11 @@ This app is the SvelteKit admin frontend for MTs Negeri 2 Kolaka Utara.
 - Tables, forms, schedule views, and monitoring screens should feel dependable and easy to scan.
 - Important states must be obvious: active, inactive, draft, published, scheduled, running, success, failed.
 - Mobile support must remain acceptable even for admin pages.
-- CBT authoring should remain compact and mode-based so teachers are not overwhelmed.
+- Bank Soal authoring should remain compact and mode-based so teachers are not overwhelmed.
 
 ## Technical Direction
 
 - Keep pages and components simple to reason about.
 - Reuse shared UI primitives before adding one-off patterns.
 - Validate Svelte files before finalizing edits.
-- Keep unit coverage around retired route redirects and BFF stream/proxy contracts when changing CBT routes.
+- Keep unit coverage around retired route redirects and BFF stream/proxy contracts when changing Bank Soal or assessment routes.

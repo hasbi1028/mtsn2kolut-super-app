@@ -13,15 +13,28 @@ The monorepo is for source organization, not for collapsing runtime topology. Th
 
 ## Current Baseline
 
-As of 2026-05-03:
+As of 2026-05-06:
 
 - `services/core-api` remains the only PostgreSQL owner for the implemented system.
 - `apps/web-admin` remains a BFF/UI layer and must not read or write database state directly.
 - `services/pusaka-worker` talks directly to `/api/pusaka/worker/*` and never owns business state.
 - `apps/mobile` talks to the exam API using exam tokens and BYOD-oriented safeguards.
-- `/cbt/soal` is the active question-bank UI. `/cbt/questions` is a legacy redirect only.
-- `/api/cbt/questions/*` remains the canonical question data/workflow/import/export contract.
+- `/bank-soal`, `/bank-soal/tambah`, `/bank-soal/impor`, and `/bank-soal/verifikasi` are the active question-bank UI routes. `/bank-soal/komposer`, `/bank-soal/import`, `/bank-soal/review`, `/cbt/soal*`, `/cbt/bank-soal*`, and `/cbt/questions*` are legacy compatibility redirects only.
+- `/asesmen` and its subroutes are the active web-admin assessment UI. Legacy operational `/cbt*` routes redirect to `/asesmen*` or Bank Soal according to context.
+- Active web-admin Bank Soal UI fetches use `/api/bank-soal/*`; active assessment UI fetches use `/api/asesmen/*`. `/api/cbt/*` remains live only as a deprecated BFF compatibility/proxy namespace to the same Go API semantics for legacy clients, route access tests, mobile asset compatibility, and staged transition safety.
 - Manual CBT smoke rehearsal is documented in `docs/cbt-smoke-checklist.md`.
+
+## API Compatibility Status
+
+As of 2026-05-06, new web-admin client code must use `/api/bank-soal/*` for Bank Soal and `/api/asesmen/*` for assessment. The SvelteKit BFF still keeps 66 legacy `/api/cbt/*` route handlers so old bookmarks, tests, and staged clients continue to work, but responses served through the `/api/cbt/*` namespace carry compatibility deprecation headers. The new alias namespaces must not carry those headers.
+
+Audit summary for remaining `/api/cbt` references in `apps/web-admin/src`:
+
+- Legacy BFF routes: `src/routes/api/cbt/**` continues to proxy to the unchanged Go API.
+- New BFF aliases: `src/routes/api/bank-soal/**` and `src/routes/api/asesmen/**` re-export the same handler semantics while presenting the new client-facing namespaces.
+- Route access and proxy tests: `src/lib/server/route-access*.ts`, `src/lib/server/proxy-routes.test.ts`, and retired `/cbt*` redirect tests keep coverage for old and new paths.
+- Active UI/client compatibility guard: `src/lib/client/active-api-aliases.test.ts` prevents active Svelte pages/components from fetching `/api/cbt`.
+- Mobile/client compatibility: the Go exam API may still return `/api/cbt/assets/*/file` media URLs for Flutter exam payloads; this web-admin BFF deprecation does not change that backend contract.
 
 ## Ownership Boundaries
 
