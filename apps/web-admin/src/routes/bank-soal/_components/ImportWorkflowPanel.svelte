@@ -67,6 +67,13 @@
 	let importFileSizeLabel = $derived(formatFileSize(importFileSize));
 	let importFileStateLabel = $derived(importDryRunDone ? (hasImportErrors ? 'Perlu perbaikan' : 'Preview bersih') : 'Belum preview');
 
+	let importSteps = $derived([
+		{ label: '1. Template', desc: 'Pakai struktur CSV resmi agar kolom tipe, kunci, dan opsi konsisten.', ready: true },
+		{ label: '2. Mapel & File', desc: importSubjectId && hasImportFile ? `${importFileName || 'CSV dipilih'} · ${importFileSizeLabel}` : 'Pilih mata pelajaran dan unggah CSV.', ready: Boolean(importSubjectId && hasImportFile) },
+		{ label: '3. Preview Dry-run', desc: importDryRunDone ? (hasImportErrors ? 'Ada error yang perlu diperbaiki.' : `${readyImportCount} soal siap diimport.`) : 'Wajib sebelum import final.', ready: importDryRunDone && !hasImportErrors },
+		{ label: '4. Konfirmasi', desc: canConfirmImport ? 'Import final sudah aman dijalankan.' : 'Menunggu preview bersih.', ready: canConfirmImport },
+	]);
+
 	function handleSubjectChange(event: Event) {
 		onSubjectChange((event.currentTarget as HTMLSelectElement).value);
 	}
@@ -78,22 +85,37 @@
 	}
 </script>
 
-<section class="rounded-xl border border-slate-200 bg-white shadow-sm" aria-labelledby="legacy-import-title">
-	<div class="space-y-4 p-4 md:p-5">
-		<div>
-			<p class="text-xs font-bold uppercase tracking-wider text-green-700">Upload CSV</p>
-			<h2 id="legacy-import-title" class="mt-1 text-base font-semibold text-slate-800">Masukkan banyak soal sekaligus</h2>
-			<p class="mt-1 text-xs text-slate-500">{importIntroCopy}</p>
-			<div class="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-				<p><span class="font-semibold text-slate-900">Tujuan import:</span> {selectedImportContext}</p>
-				<p class="mt-1 text-slate-500">{importScopeCopy}</p>
+<section class="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm" aria-labelledby="legacy-import-title">
+	<div class="border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-amber-50 p-4 md:p-5">
+		<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+			<div class="min-w-0">
+				<p class="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-700">Studio Import Bank Soal</p>
+				<h2 id="legacy-import-title" class="mt-1 text-xl font-black uppercase italic tracking-tight text-slate-950">Masukkan banyak soal sekaligus</h2>
+				<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{importIntroCopy}</p>
+				<div class="mt-3 flex flex-wrap gap-2">
+					<span class="rounded-full border border-emerald-100 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">{selectedImportContext}</span>
+					<span class="rounded-full border border-amber-100 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">{importScopeCopy}</span>
+				</div>
 			</div>
-		</div>
-		<div class="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-			<LoadingButton variant="outline" size="sm" onclick={onTemplate} loading={templateBusy} loadingLabel="Mengunduh..." class="h-8 bg-white text-xs">
-				Download Template
+			<LoadingButton variant="outline" size="sm" onclick={onTemplate} loading={templateBusy} loadingLabel="Mengunduh..." class="h-9 shrink-0 bg-white text-xs">
+				Download Template CSV
 			</LoadingButton>
-			<span>Kolom tipe boleh kosong untuk PG lama, atau diisi: pg_kompleks, benar_salah, setuju_tidak_setuju, isian, essay, menjodohkan.</span>
+		</div>
+	</div>
+	<div class="space-y-4 p-4 md:p-5">
+		<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+			{#each importSteps as step (step.label)}
+				<div class="rounded-xl border p-3 {step.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-slate-200 bg-slate-50 text-slate-700'}">
+					<div class="flex items-start justify-between gap-2">
+						<p class="text-[10px] font-black uppercase tracking-[0.18em]">{step.label}</p>
+						<span class="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold">{step.ready ? 'OK' : 'Menunggu'}</span>
+					</div>
+					<p class="mt-2 text-xs leading-5 opacity-80">{step.desc}</p>
+				</div>
+			{/each}
+		</div>
+		<div class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+			<span class="font-semibold text-slate-900">Format tipe:</span> boleh kosong untuk PG lama, atau diisi: pg_kompleks, benar_salah, setuju_tidak_setuju, isian, essay, menjodohkan.
 		</div>
 		<div class="grid gap-3 md:grid-cols-2">
 			<div>
