@@ -664,6 +664,8 @@ func main() {
 
 		r.With(requireUsersRead).Get("/api/users", userH.List)
 		r.With(requireAuditRead).Get("/api/users/audit-logs", userH.ListAuditLogs)
+		r.With(requireUsersCreate).Get("/api/users/generate-from-employees/preview", userH.PreviewEmployeeAccountGeneration)
+		r.With(requireUsersCreate).Post("/api/users/generate-from-employees", userH.GenerateEmployeeAccounts)
 		r.With(requireUsersCreate).Post("/api/users", userH.Create)
 		r.With(requireUsersDeactivate).Patch("/api/users/{id}/status", userH.UpdateStatus)
 		r.With(requireUsersResetPassword).Post("/api/users/{id}/reset-password", userH.ResetPassword)

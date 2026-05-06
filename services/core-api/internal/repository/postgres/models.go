@@ -1252,6 +1252,7 @@ type Employee struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	EmploymentType string             `json:"employment_type"`
+	TanggalLahir   pgtype.Date        `json:"tanggal_lahir"`
 }
 
 type EmployeeSchedule struct {

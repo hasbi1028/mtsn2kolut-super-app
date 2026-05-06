@@ -1,5 +1,5 @@
 -- name: ListEmployees :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
        COALESCE(pa.pusaka_username, '') AS pusaka_username,
        COALESCE(pa.pusaka_password, '') AS pusaka_password,
        COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled,
@@ -9,7 +9,7 @@ LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
 ORDER BY nama ASC;
 
 -- name: ListActiveEmployees :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
        COALESCE(pa.pusaka_username, '') AS pusaka_username,
        COALESCE(pa.pusaka_password, '') AS pusaka_password,
        COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled,
@@ -23,7 +23,7 @@ WHERE e.is_active = TRUE
 ORDER BY nama ASC;
 
 -- name: GetEmployee :one
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
        COALESCE(pa.pusaka_username, '') AS pusaka_username,
        COALESCE(pa.pusaka_password, '') AS pusaka_password,
        COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled,
@@ -33,8 +33,8 @@ LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
 WHERE e.id = $1;
 
 -- name: CreateEmployee :one
-INSERT INTO employees (id, nip, nama, unit_kerja, employment_type, is_active)
-VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
+INSERT INTO employees (id, nip, nama, unit_kerja, employment_type, tanggal_lahir, is_active)
+VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: UpdateEmployee :one
@@ -43,7 +43,8 @@ SET nip             = $2,
     nama            = $3,
     unit_kerja      = $4,
     employment_type = $5,
-    is_active       = $6,
+    tanggal_lahir   = $6,
+    is_active       = $7,
     updated_at      = NOW()
 WHERE id = $1
 RETURNING *;
@@ -55,7 +56,7 @@ DELETE FROM employees WHERE id = $1;
 SELECT COUNT(*) FROM employees;
 
 -- name: ListEmployeesWithStatus :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir, COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
   COALESCE(
     (SELECT j.status::text FROM jobs j
      WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
@@ -87,7 +88,7 @@ LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
 ORDER BY e.created_at DESC;
 
 -- name: ListPusakaEligibleEmployeesWithStatus :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir, COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
   COALESCE(
     (SELECT j.status::text FROM jobs j
      WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
