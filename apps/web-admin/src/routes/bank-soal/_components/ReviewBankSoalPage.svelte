@@ -141,6 +141,18 @@
 		}
 	}
 
+	let reviewChecklist = $derived.by(() => {
+		const q = activeQuestion;
+		return [
+			{ label: 'Naskah', desc: q ? `${stemPreview(q).length} karakter` : 'Belum ada soal aktif', ok: Boolean(q && stemPreview(q).length >= 5) },
+			{ label: 'Kunci/Rubrik', desc: q?.answer_key || q?.rubric_html ? 'Tersedia untuk reviewer' : 'Belum terlihat', ok: Boolean(q?.answer_key || q?.rubric_html) },
+			{ label: 'Pembahasan', desc: q?.explanation_html ? 'Ada pembahasan/catatan' : 'Opsional', ok: Boolean(q?.explanation_html) },
+			{ label: 'Catatan', desc: notes.trim() ? `${notes.trim().length} karakter catatan` : 'Opsional approve, wajib reject', ok: notes.trim().length >= 8 },
+		];
+	});
+	let reviewReadyCount = $derived(reviewChecklist.filter((item) => item.ok).length);
+	let reviewerDecisionHint = $derived(notes.trim().length >= 8 ? 'Catatan cukup untuk revisi' : 'Isi minimal 8 karakter bila meminta revisi');
+
 	onMount(() => {
 		void fetchEventContext().then((context) => { eventContext = context; });
 		loadQueue();
@@ -149,18 +161,28 @@
 
 	<svelte:head><title>Review Bank Soal</title></svelte:head>
 
-<div class="space-y-5 p-6">
-	<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-		<div>
-			<p class="text-xs font-bold uppercase tracking-[0.18em] text-green-700">Ruang Review Fokus</p>
-			<h1 class="mt-1 text-2xl font-semibold text-slate-900">Periksa Bank Soal</h1>
-			<p class="mt-1 max-w-2xl text-sm text-slate-500">Tampilan ini memusatkan reviewer pada satu soal dari repositori reusable, kunci/rubrik, pembahasan, dan timeline sebelum mengambil keputusan.</p>
-		</div>
-		<div class="flex flex-wrap gap-2">
-			{#if eventId}
-				<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Event</a>
-			{/if}
-			<a href={resolve('/bank-soal')} class="inline-flex rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-muted">Kembali ke Bank Soal</a>
+<div class="space-y-5 p-4 md:p-6">
+	<div class="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm">
+		<div class="bg-gradient-to-r from-emerald-50 via-white to-amber-50 p-4 md:p-5">
+			<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+				<div class="min-w-0">
+					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-700">Ruang Review Fokus</p>
+					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-slate-950">Periksa Bank Soal</h1>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Reviewer memeriksa naskah, opsi/kunci, rubrik, pembahasan, dan timeline sebelum menyetujui atau mengembalikan soal dengan catatan revisi.</p>
+					<div class="mt-3 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-wide">
+						<span class="rounded-full border border-emerald-100 bg-white px-2.5 py-1 text-emerald-700">{queue.length} antrean aktif</span>
+						<span class="rounded-full border border-amber-100 bg-white px-2.5 py-1 text-amber-700">Checklist {reviewReadyCount}/{reviewChecklist.length}</span>
+						{#if eventId}<span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600">Event scoped</span>{/if}
+					</div>
+				</div>
+				<div class="flex flex-wrap gap-2">
+					{#if eventId}
+						<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100">Kembali ke Event</a>
+					{/if}
+					<a href={resolve('/bank-soal/daftar')} class="inline-flex rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-muted">Daftar Soal</a>
+					<a href={resolve('/bank-soal')} class="inline-flex rounded-md border border-input bg-background px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-muted">Dashboard</a>
+				</div>
+			</div>
 		</div>
 	</div>
 
@@ -182,44 +204,52 @@
 			{#if !activeQuestion}
 				<div class="rounded-xl border border-green-200 bg-green-50 p-6 text-center text-green-900">Tidak ada soal yang menunggu review.</div>
 			{:else}
-				<section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-					<article class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-						<div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-							<span class="rounded bg-green-50 px-2 py-1 font-semibold text-green-800">{activeQuestion.question_type}</span>
-							<span>{activeQuestion.subject_name ?? activeQuestion.subject_code ?? 'Mapel belum ada'}</span>
-							<span>{activeQuestion.code ?? 'Tanpa kode'}</span>
-							{#if activeQuestion.author_username}<span>Guru: {activeQuestion.author_username}</span>{/if}
+				<section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+					<article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+						<div class="border-b border-slate-100 bg-slate-50/80 p-4">
+							<div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+								<span class="rounded bg-green-50 px-2 py-1 font-semibold text-green-800">{activeQuestion.question_type}</span>
+								<span>{activeQuestion.subject_name ?? activeQuestion.subject_code ?? 'Mapel belum ada'}</span>
+								<span>{activeQuestion.code ?? 'Tanpa kode'}</span>
+								{#if activeQuestion.author_username}<span>Guru: {activeQuestion.author_username}</span>{/if}
+							</div>
+							<h2 class="mt-2 line-clamp-2 text-lg font-bold text-slate-900">{stemPreview(activeQuestion)}</h2>
 						</div>
-						<div class="mt-4 space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-							{#if activeQuestion.stimulus_html}<div class="rounded border border-slate-100 bg-white p-3"><p class="mb-1 text-xs font-semibold text-slate-500">Stimulus</p><RichContent html={activeQuestion.stimulus_html} class="prose prose-sm max-w-none latex-preview" /></div>{/if}
-							<div class="rounded border border-slate-100 bg-white p-3"><p class="mb-1 text-xs font-semibold text-slate-500">Pertanyaan</p><RichContent html={activeQuestion.stem_html || activeQuestion.question_text || stemPreview(activeQuestion)} class="prose prose-sm max-w-none latex-preview" /></div>
+						<div class="space-y-4 bg-slate-50/60 p-4">
+							{#if activeQuestion.stimulus_html}<div class="rounded-xl border border-slate-100 bg-white p-3"><p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Stimulus</p><RichContent html={activeQuestion.stimulus_html} class="prose prose-sm max-w-none latex-preview" /></div>{/if}
+							<div class="rounded-xl border border-slate-100 bg-white p-3"><p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Pertanyaan</p><RichContent html={activeQuestion.stem_html || activeQuestion.question_text || stemPreview(activeQuestion)} class="prose prose-sm max-w-none latex-preview" /></div>
 							{#if activeQuestion.options?.length}
-								<div class="rounded border border-slate-100 bg-white p-3">
-									<p class="mb-2 text-xs font-semibold text-slate-500">Opsi / Pasangan</p>
-									<div class="space-y-2">
+								<div class="rounded-xl border border-slate-100 bg-white p-3">
+									<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Opsi / Pasangan</p>
+									<div class="grid gap-2 md:grid-cols-2">
 										{#each activeQuestion.options as option, index (`review-option-${activeQuestion.id}-${index}`)}
-											<div class="rounded border border-slate-100 bg-slate-50 px-2 py-1.5 text-sm"><span class="font-bold text-green-700">{option.label || option.match_label || index + 1}.</span><RichContent html={optionContent(option)} class="mt-1 latex-preview" /></div>
+											<div class="rounded-lg border border-slate-100 bg-slate-50 px-2 py-1.5 text-sm"><span class="font-bold text-green-700">{option.label || option.match_label || index + 1}.</span><RichContent html={optionContent(option)} class="mt-1 latex-preview" /></div>
 										{/each}
 									</div>
 								</div>
 							{/if}
-							<div class="rounded border border-green-100 bg-green-50 p-3 text-sm text-green-950"><span class="font-semibold">Kunci/Rubrik:</span> {activeQuestion.answer_key || (activeQuestion.rubric_html ? 'Rubrik tersedia' : 'Tidak tersedia')}</div>
-							{#if activeQuestion.rubric_html}<div class="rounded border border-amber-100 bg-amber-50 p-3"><p class="mb-1 text-xs font-semibold text-amber-700">Rubrik</p><RichContent html={activeQuestion.rubric_html} class="prose prose-sm max-w-none latex-preview" /></div>{/if}
-							{#if activeQuestion.explanation_html}<div class="rounded border border-slate-100 bg-white p-3"><p class="mb-1 text-xs font-semibold text-slate-500">Pembahasan</p><RichContent html={activeQuestion.explanation_html} class="prose prose-sm max-w-none latex-preview" /></div>{/if}
+							<div class="rounded-xl border border-green-100 bg-green-50 p-3 text-sm text-green-950"><span class="font-semibold">Kunci/Rubrik:</span> {activeQuestion.answer_key || (activeQuestion.rubric_html ? 'Rubrik tersedia' : 'Tidak tersedia')}</div>
+							{#if activeQuestion.rubric_html}<div class="rounded-xl border border-amber-100 bg-amber-50 p-3"><p class="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-700">Rubrik</p><RichContent html={activeQuestion.rubric_html} class="prose prose-sm max-w-none latex-preview" /></div>{/if}
+							{#if activeQuestion.explanation_html}<div class="rounded-xl border border-slate-100 bg-white p-3"><p class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Pembahasan</p><RichContent html={activeQuestion.explanation_html} class="prose prose-sm max-w-none latex-preview" /></div>{/if}
 						</div>
-						<div class="mt-4">
+						<div class="border-t border-slate-100 bg-white p-4">
 							<label for="review-notes" class="mb-1 block text-sm font-medium text-slate-700">Catatan keputusan</label>
 							<Textarea id="review-notes" rows={3} bind:value={notes} placeholder="Wajib untuk reject, opsional untuk approve." />
-						</div>
-						<div class="mt-4 flex flex-wrap justify-between gap-2 border-t border-slate-100 pt-4">
-							<div class="flex gap-2"><Button variant="outline" onclick={() => move(-1)} disabled={activeIndex === 0}>Sebelumnya</Button><Button variant="outline" onclick={() => move(1)} disabled={activeIndex >= queue.length - 1}>Berikutnya</Button></div>
-							<div class="flex gap-2"><LoadingButton variant="outline" onclick={() => void decide('reject')} loading={busyAction === 'reject'} loadingLabel="Mengirim..." disabled={busyAction !== ''} class="border-red-200 text-red-700 hover:bg-red-50">Minta Revisi</LoadingButton><LoadingButton onclick={() => void decide('approve')} loading={busyAction === 'approve'} loadingLabel="Menyetujui..." disabled={busyAction !== ''} class="bg-green-700 text-white hover:bg-green-800">Setujui</LoadingButton></div>
+							<p class="mt-1 text-xs text-slate-500">{reviewerDecisionHint}</p>
+							<div class="mt-4 flex flex-wrap justify-between gap-2 border-t border-slate-100 pt-4">
+								<div class="flex gap-2"><Button variant="outline" onclick={() => move(-1)} disabled={activeIndex === 0}>Sebelumnya</Button><Button variant="outline" onclick={() => move(1)} disabled={activeIndex >= queue.length - 1}>Berikutnya</Button></div>
+								<div class="flex gap-2"><LoadingButton variant="outline" onclick={() => void decide('reject')} loading={busyAction === 'reject'} loadingLabel="Mengirim..." disabled={busyAction !== ''} class="border-red-200 text-red-700 hover:bg-red-50">Minta Revisi</LoadingButton><LoadingButton onclick={() => void decide('approve')} loading={busyAction === 'approve'} loadingLabel="Menyetujui..." disabled={busyAction !== ''} class="bg-green-700 text-white hover:bg-green-800">Setujui</LoadingButton></div>
+							</div>
 						</div>
 					</article>
 					<aside class="space-y-3">
-						<div class="rounded-xl border border-green-200 bg-green-50 p-4 text-green-950"><p class="text-sm font-semibold">Posisi Review</p><p class="mt-1 text-2xl font-bold">{activeIndex + 1}/{queue.length}</p></div>
-						<div class="rounded-xl border border-slate-200 bg-white p-4"><p class="mb-2 text-sm font-semibold text-slate-800">Timeline</p>{#if timeline.length > 0}<div class="space-y-2">{#each timeline.slice(0, 8) as item, index (`timeline-${item.id ?? index}`)}<div class="rounded border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs"><p class="font-semibold text-green-800">{item.action ?? item.status ?? 'Perubahan'}</p>{#if item.notes}<p class="mt-1 text-slate-600">{item.notes}</p>{/if}{#if item.created_at}<p class="mt-1 text-slate-400">{new Date(item.created_at).toLocaleString('id-ID')}</p>{/if}</div>{/each}</div>{:else}<p class="text-xs text-slate-400">Timeline belum tersedia.</p>{/if}</div>
-						<div class="rounded-xl border border-slate-200 bg-white p-0"><Table.Root><Table.Body>{#each queue.slice(0, 8) as item, index (item.id)}<Table.Row class={index === activeIndex ? 'bg-green-50' : ''}><Table.Cell><button type="button" class="block w-full text-left text-xs" onclick={() => { activeIndex = index; void loadActiveDetail(); }}>{stemPreview(item).slice(0, 64)}</button></Table.Cell></Table.Row>{/each}</Table.Body></Table.Root></div>
+						<div class="rounded-xl border border-green-200 bg-green-50 p-4 text-green-950"><p class="text-sm font-semibold">Posisi Review</p><p class="mt-1 text-2xl font-bold">{activeIndex + 1}/{queue.length}</p><p class="mt-1 text-xs text-green-800">Gunakan tombol berikutnya/sebelumnya atau pilih antrean di bawah.</p></div>
+						<div class="rounded-xl border border-slate-200 bg-white p-4">
+							<p class="mb-2 text-sm font-semibold text-slate-800">Checklist Reviewer</p>
+							<div class="space-y-2">{#each reviewChecklist as item (item.label)}<div class="rounded-lg border px-3 py-2 text-xs {item.ok ? 'border-emerald-100 bg-emerald-50 text-emerald-900' : 'border-amber-100 bg-amber-50 text-amber-900'}"><div class="flex items-center justify-between gap-2"><span class="font-semibold">{item.label}</span><span>{item.ok ? 'OK' : 'Cek'}</span></div><p class="mt-1 opacity-80">{item.desc}</p></div>{/each}</div>
+						</div>
+						<div class="rounded-xl border border-slate-200 bg-white p-4"><p class="mb-2 text-sm font-semibold text-slate-800">Timeline</p>{#if timeline.length > 0}<div class="space-y-2">{#each timeline.slice(0, 8) as item, index (`timeline-${item.id ?? index}`)}<div class="rounded border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs"><div class="flex flex-wrap items-center gap-1"><p class="font-semibold text-green-800">{item.action ?? item.status ?? 'Perubahan'}</p>{#if item.actor_username}<span class="text-slate-400">oleh {item.actor_username}</span>{/if}</div>{#if item.notes}<p class="mt-1 text-slate-600">{item.notes}</p>{/if}{#if item.created_at}<p class="mt-1 text-slate-400">{new Date(item.created_at).toLocaleString('id-ID')}</p>{/if}</div>{/each}</div>{:else}<p class="text-xs text-slate-400">Timeline belum tersedia.</p>{/if}</div>
+						<div class="overflow-hidden rounded-xl border border-slate-200 bg-white"><div class="border-b border-slate-100 px-3 py-2 text-sm font-semibold text-slate-800">Antrean Review</div><Table.Root><Table.Body>{#each queue.slice(0, 8) as item, index (item.id)}<Table.Row class={index === activeIndex ? 'bg-green-50' : ''}><Table.Cell><button type="button" class="block w-full text-left text-xs" onclick={() => { activeIndex = index; void loadActiveDetail(); }}>{stemPreview(item).slice(0, 64)}</button></Table.Cell></Table.Row>{/each}</Table.Body></Table.Root></div>
 					</aside>
 				</section>
 			{/if}
