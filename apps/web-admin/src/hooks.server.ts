@@ -5,7 +5,7 @@ import { env } from '$env/dynamic/private';
 import { ApiError, AuthValidationUnavailableError, apiRefreshWithFetch, getVerifiedUserFromAccessToken } from '$lib/server/api';
 import type { TokenPair } from '$lib/server/api';
 import { hasRefreshToken, isAccessTokenValid, getUserFromToken } from '$lib/server/auth';
-import { hasAnyRole, isAdminOnlyPath, isBankSoalPath, isGuruSafeAssessmentSupportReadPath, isKesiswaanPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath } from '$lib/server/route-access';
+import { canAccessProtectedRoute, isPublicPath } from '$lib/server/route-access';
 
 const API_BASE = (env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 
@@ -161,64 +161,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 		throw redirect(302, `/login?from=${from}`);
 	}
 
-	// Role gate: check if user has admin role in roles array
-	if (event.locals.user) {
-		const isAdmin = hasAnyRole(event.locals.user, ['admin']);
-		
-		if (!isAdmin) {
-			const isAdminPath = isAdminOnlyPath(event.url.pathname);
-			if (isAdminPath && !isGuruSafeAssessmentSupportReadPath(event.url.pathname, event.request.method)) {
-				if (event.url.pathname.startsWith('/api/')) {
-					throw error(403, 'forbidden: admin role required');
-				}
-				throw redirect(302, '/');
-			}
+	// Permission-aware gate: prefer dynamic RBAC permissions, keep legacy role fallback during migration.
+	if (event.locals.user && !canAccessProtectedRoute(event.locals.user, event.url.pathname, event.request.method)) {
+		if (event.url.pathname.startsWith('/api/')) {
+			throw error(403, 'forbidden: insufficient permission');
 		}
-
-		if (isBankSoalPath(event.url.pathname)) {
-			const allowed = isAdmin || hasAnyRole(event.locals.user, ['guru']);
-			if (!allowed) {
-				if (event.url.pathname.startsWith('/api/')) {
-					throw error(403, 'forbidden: bank soal role required');
-				}
-				throw redirect(302, '/');
-			}
-		}
-
-		if (isStaffOperationPath(event.url.pathname)) {
-			const allowed = isAdmin || hasAnyRole(event.locals.user, ['staf']);
-			if (!allowed) {
-				if (event.url.pathname.startsWith('/api/')) {
-					throw error(403, 'forbidden: staf role required');
-				}
-				throw redirect(302, '/');
-			}
-		}
-
-		if (isKesiswaanPath(event.url.pathname)) {
-			const allowed = isAdmin || hasAnyRole(event.locals.user, isReadMethod(event.request.method) ? ['kesiswaan', 'guru'] : ['kesiswaan']);
-			if (!allowed) {
-				if (event.url.pathname.startsWith('/api/')) {
-					throw error(403, 'forbidden: kesiswaan role required');
-				}
-				throw redirect(302, '/');
-			}
-		}
-
-		if (isStudentPagePath(event.url.pathname)) {
-			const allowed = isAdmin || hasAnyRole(event.locals.user, ['kesiswaan']);
-			if (!allowed) throw redirect(302, '/');
-		}
-
-		if (isStudentApiPath(event.url.pathname)) {
-			const allowedRoles = isReadMethod(event.request.method) ? ['kesiswaan', 'guru'] : ['kesiswaan'];
-			const allowed = isAdmin || hasAnyRole(event.locals.user, allowedRoles);
-			if (!allowed) {
-				throw error(403, isReadMethod(event.request.method)
-					? 'forbidden: student read role required'
-					: 'forbidden: student mutation role required');
-			}
-		}
+		throw redirect(302, '/');
 	}
 
 	return await resolve(event);

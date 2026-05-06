@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasAnyRole, isAdminOnlyPath, isBankSoalPath, isGuruSafeAssessmentSupportReadPath, isKesiswaanPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath } from './route-access';
+import { canAccessProtectedRoute, hasAnyPermission, hasAnyRole, isAdminOnlyPath, isBankSoalPath, isGuruSafeAssessmentSupportReadPath, isKesiswaanPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath, requiredPermissionsForPath } from './route-access';
 
 describe('route access helpers', () => {
 	it('keeps settings root available to authenticated non-admin users', () => {
@@ -107,9 +107,43 @@ describe('route access helpers', () => {
 		expect(isReadMethod('PATCH')).toBe(false);
 	});
 
+
+
+	it('allows protected routes by dynamic permissions before legacy role fallback', () => {
+		const user = { id: '1', username: 'operator', role: '', roles: [], permissions: ['users.read', 'bank_soal.read', 'asesmen.read'] };
+
+		expect(canAccessProtectedRoute(user, '/settings/users', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(user, '/bank-soal/daftar', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(user, '/asesmen/kegiatan', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/users', 'GET')).toBe(false);
+	});
+
+	it('keeps mutation route checks permission-specific', () => {
+		const reader = { id: '1', username: 'reader', role: '', roles: [], permissions: ['users.read', 'bank_soal.read', 'asesmen.read'] };
+		const mutator = { id: '2', username: 'mutator', role: '', roles: [], permissions: ['users.create', 'bank_soal.create', 'asesmen.event_manage'] };
+
+		expect(canAccessProtectedRoute(reader, '/api/users', 'POST')).toBe(false);
+		expect(canAccessProtectedRoute(mutator, '/api/users', 'POST')).toBe(true);
+		expect(canAccessProtectedRoute(reader, '/api/bank-soal/questions', 'POST')).toBe(false);
+		expect(canAccessProtectedRoute(mutator, '/api/bank-soal/questions', 'POST')).toBe(true);
+		expect(canAccessProtectedRoute(reader, '/api/asesmen/events/event-1/question-targets', 'PUT')).toBe(false);
+		expect(canAccessProtectedRoute(mutator, '/api/asesmen/events/event-1/question-targets', 'PUT')).toBe(true);
+	});
+
+	it('documents route permission requirements for main migrated modules', () => {
+		expect(requiredPermissionsForPath('/settings/users', 'GET')).toEqual(['users.read']);
+		expect(requiredPermissionsForPath('/api/users', 'POST')).toEqual(['users.create']);
+		expect(requiredPermissionsForPath('/api/users/user-1/reset-password', 'POST')).toEqual(['users.reset_password']);
+		expect(requiredPermissionsForPath('/api/users/user-1/profile-link', 'PATCH')).toEqual(['users.update']);
+		expect(requiredPermissionsForPath('/api/bank-soal/questions', 'POST')).toEqual(['bank_soal.create']);
+		expect(requiredPermissionsForPath('/api/asesmen/packages', 'POST')).toEqual(['asesmen.package_manage']);
+		expect(requiredPermissionsForPath('/api/asesmen/events/event-1', 'PATCH')).toEqual(['asesmen.event_manage']);
+	});
+
 	it('checks role membership from user payloads', () => {
 		expect(hasAnyRole({ id: '1', username: 'guru', role: 'guru', roles: [], permissions: [] }, ['guru'])).toBe(true);
 		expect(hasAnyRole({ id: '1', username: 'staf', role: '', roles: ['guru', 'staf'], permissions: [] }, ['admin', 'staf'])).toBe(true);
 		expect(hasAnyRole({ id: '1', username: 'ortu', role: 'ortu', roles: [], permissions: [] }, ['admin', 'guru'])).toBe(false);
+		expect(hasAnyPermission({ id: '1', username: 'rbac', role: '', roles: [], permissions: [' users.read '] }, ['users.read'])).toBe(true);
 	});
 });
