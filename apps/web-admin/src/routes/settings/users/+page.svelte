@@ -16,7 +16,10 @@
 	import {
 		createRBACPermission,
 		createRBACRole,
+		employeeAccountGenerationCSV,
 		fetchRBACMatrix,
+		generateEmployeeAccounts,
+		previewEmployeeAccountGeneration,
 		resetUserPassword,
 		setRBACPermissionActive,
 		setRBACRoleActive,
@@ -25,7 +28,8 @@
 		updateUserProfileLink,
 		updateUserRoles,
 		type RBACMatrix,
-		type RBACRole
+		type RBACRole,
+		type EmployeeAccountGenerationResult
 	} from '$lib/client/rbac-users';
 
 	type User = {
@@ -64,6 +68,8 @@
 	let fParId = $state('');
 	let fBusy = $state(false);
 	let actionBusy = $state<string | null>(null);
+	let employeeGeneration = $state<EmployeeAccountGenerationResult | null>(null);
+	let generationBusy = $state<string | null>(null);
 	let formHint = $derived.by(() => {
 		if (fRoles.includes('siswa')) return 'Akun siswa wajib ditautkan ke satu profil siswa.';
 		if (fRoles.includes('ortu')) return 'Akun orang tua wajib ditautkan ke satu profil orang tua.';
@@ -470,6 +476,49 @@
 		}
 	}
 
+	async function previewEmployeeGeneration() {
+		generationBusy = 'preview';
+		try {
+			employeeGeneration = await previewEmployeeAccountGeneration();
+			toast.success('Preview generate akun pegawai dimuat');
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
+		} finally {
+			generationBusy = null;
+		}
+	}
+
+	async function runEmployeeGeneration() {
+		if (!(await confirmAction({
+			title: 'Generate Akun Pegawai',
+			message: 'Buat akun untuk pegawai siap generate? Username dan password awal memakai pola NPSN + tanggal lahir + nomor urut, role default guru.',
+			confirmLabel: 'Generate Akun',
+			tone: 'warning'
+		}))) return;
+		generationBusy = 'generate';
+		try {
+			employeeGeneration = await generateEmployeeAccounts();
+			toast.success(`${employeeGeneration.created} akun pegawai berhasil dibuat`);
+			await refreshOverview();
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
+		} finally {
+			generationBusy = null;
+		}
+	}
+
+	function downloadEmployeeGenerationCSV() {
+		if (!employeeGeneration) return;
+		const csv = employeeAccountGenerationCSV(employeeGeneration);
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+		const url = URL.createObjectURL(blob);
+		const anchor = document.createElement('a');
+		anchor.href = url;
+		anchor.download = `akun-pegawai-${new Date().toISOString().slice(0, 10)}.csv`;
+		anchor.click();
+		URL.revokeObjectURL(url);
+	}
+
 	onMount(() => {
 		void load();
 	});
@@ -614,6 +663,58 @@
 		</Card.Root>
 	{/if}
 
+	<Card.Root class="border-emerald-100 bg-emerald-50/40 shadow-sm">
+		<Card.Header class="flex flex-row items-start justify-between gap-3 pb-2">
+			<div>
+				<Card.Title class="text-base">Generate Akun dari Data Pegawai</Card.Title>
+				<p class="mt-1 text-sm text-slate-600">Username/password awal: 40406031 + tanggal lahir DDMMYY + nomor urut 3 digit. Role default: guru.</p>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				<Button variant="outline" onclick={() => void previewEmployeeGeneration()} disabled={generationBusy !== null}>Preview</Button>
+				<Button onclick={() => void runEmployeeGeneration()} disabled={generationBusy !== null || !employeeGeneration || employeeGeneration.ready === 0}>Generate Akun</Button>
+				<Button variant="outline" onclick={downloadEmployeeGenerationCSV} disabled={!employeeGeneration}>Download CSV</Button>
+			</div>
+		</Card.Header>
+		<Card.Content class="space-y-4">
+			<div class="grid gap-3 md:grid-cols-5">
+				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Total Pegawai</p><p class="text-xl font-semibold">{employeeGeneration?.total ?? 0}</p></div>
+				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Siap Dibuat</p><p class="text-xl font-semibold text-emerald-700">{employeeGeneration?.ready ?? 0}</p></div>
+				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Dibuat</p><p class="text-xl font-semibold text-sky-700">{employeeGeneration?.created ?? 0}</p></div>
+				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Dilewati</p><p class="text-xl font-semibold text-amber-700">{employeeGeneration?.skipped ?? 0}</p></div>
+				<div class="rounded-xl border bg-white p-3"><p class="text-[11px] uppercase tracking-wide text-slate-500">Gagal</p><p class="text-xl font-semibold text-red-700">{employeeGeneration?.failed ?? 0}</p></div>
+			</div>
+			{#if generationBusy}
+				<p class="text-sm text-slate-600">Memproses {generationBusy === 'preview' ? 'preview' : 'generate'} akun pegawai...</p>
+			{:else if !employeeGeneration}
+				<EmptyStatePanel title="Belum Ada Preview" description="Klik Preview untuk melihat pegawai aktif yang siap dibuatkan akun otomatis." />
+			{:else}
+				<div class="max-h-96 overflow-auto rounded-2xl border bg-white">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row class="bg-slate-50">
+								<Table.Head>Pegawai</Table.Head>
+								<Table.Head>Tanggal Lahir</Table.Head>
+								<Table.Head>Username</Table.Head>
+								<Table.Head>Password Awal</Table.Head>
+								<Table.Head>Status</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each employeeGeneration.items as item (item.employee_id)}
+								<Table.Row>
+									<Table.Cell><div class="font-medium">{item.nama}</div><div class="text-xs text-slate-500">{item.nip}</div></Table.Cell>
+									<Table.Cell>{item.tanggal_lahir || '—'}</Table.Cell>
+									<Table.Cell class="font-mono text-xs">{item.username || '—'}</Table.Cell>
+									<Table.Cell class="font-mono text-xs">{item.password || (item.status === 'ready' ? 'ditampilkan setelah generate' : '—')}</Table.Cell>
+									<Table.Cell><Badge variant={item.status === 'created' || item.status === 'ready' ? 'secondary' : item.status === 'failed' ? 'destructive' : 'outline'}>{item.status}</Badge><div class="mt-1 text-xs text-slate-500">{item.message}</div></Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
 
 	<Card.Root class="border-slate-200 shadow-sm">
 		<Card.Header class="flex flex-row items-start justify-between gap-3 pb-2">

@@ -42,6 +42,34 @@ export type RBACPermissionInput = {
 	description?: string;
 };
 
+
+export type EmployeeAccountGenerationItem = {
+	employee_id: string;
+	nip: string;
+	nama: string;
+	tanggal_lahir?: string;
+	nomor_urut: number;
+	username: string;
+	password?: string;
+	role: string;
+	status: 'ready' | 'created' | 'skipped' | 'failed';
+	message: string;
+	existing_user_id?: string;
+	username_user_id?: string;
+};
+
+export type EmployeeAccountGenerationResult = {
+	npsn: string;
+	default_role: string;
+	password_same_as_username: boolean;
+	total: number;
+	ready: number;
+	created: number;
+	skipped: number;
+	failed: number;
+	items: EmployeeAccountGenerationItem[];
+};
+
 export type FetchLike = typeof fetch;
 
 function cleanString(value: string | null | undefined) {
@@ -138,4 +166,30 @@ export async function updateUserProfileLink(
 		body: JSON.stringify(buildProfileLinkPayload(payload))
 	});
 	await readClientJson<unknown>(res);
+}
+
+export async function previewEmployeeAccountGeneration(fetcher: FetchLike = fetch) {
+	const res = await fetcher('/api/users/generate-from-employees/preview');
+	return readClientApiData<EmployeeAccountGenerationResult>(res, 'Gagal memuat preview generate akun pegawai.');
+}
+
+export async function generateEmployeeAccounts(fetcher: FetchLike = fetch) {
+	const res = await fetcher('/api/users/generate-from-employees', { method: 'POST' });
+	return readClientApiData<EmployeeAccountGenerationResult>(res, 'Gagal generate akun pegawai.');
+}
+
+export function employeeAccountGenerationCSV(result: EmployeeAccountGenerationResult) {
+	const headers = ['nama', 'nip', 'tanggal_lahir', 'username', 'password_awal', 'role', 'status', 'keterangan'];
+	const escape = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+	const rows = result.items.map((item) => [
+		item.nama,
+		item.nip,
+		item.tanggal_lahir ?? '',
+		item.username,
+		item.password ?? '',
+		item.role,
+		item.status,
+		item.message
+	]);
+	return [headers, ...rows].map((row) => row.map(escape).join(',')).join('\n');
 }

@@ -37,6 +37,7 @@ type fakeEmployeeService struct {
 	createNama            string
 	createUnitKerja       string
 	createEmploymentType  string
+	createTanggalLahir    pgtype.Date
 	createPusakaUsername  string
 	createPusakaPassword  string
 	createIsActive        bool
@@ -94,11 +95,12 @@ func (f *fakeEmployeeService) Get(_ context.Context, id pgtype.UUID) (db.GetEmpl
 	return f.getRow, f.getErr
 }
 
-func (f *fakeEmployeeService) Create(_ context.Context, nip, nama, unitKerja, employmentType, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error) {
+func (f *fakeEmployeeService) Create(_ context.Context, nip, nama, unitKerja, employmentType string, tanggalLahir pgtype.Date, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error) {
 	f.createNip = nip
 	f.createNama = nama
 	f.createUnitKerja = unitKerja
 	f.createEmploymentType = employmentType
+	f.createTanggalLahir = tanggalLahir
 	f.createPusakaUsername = pusakaUsername
 	f.createPusakaPassword = pusakaPassword
 	f.createIsActive = isActive

@@ -23,17 +23,18 @@ func (q *Queries) CountEmployees(ctx context.Context) (int64, error) {
 }
 
 const createEmployee = `-- name: CreateEmployee :one
-INSERT INTO employees (id, nip, nama, unit_kerja, employment_type, is_active)
-VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
-RETURNING id, nip, nama, unit_kerja, is_active, created_at, updated_at, employment_type
+INSERT INTO employees (id, nip, nama, unit_kerja, employment_type, tanggal_lahir, is_active)
+VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+RETURNING id, nip, nama, unit_kerja, is_active, created_at, updated_at, employment_type, tanggal_lahir
 `
 
 type CreateEmployeeParams struct {
-	Nip            string `json:"nip"`
-	Nama           string `json:"nama"`
-	UnitKerja      string `json:"unit_kerja"`
-	EmploymentType string `json:"employment_type"`
-	IsActive       bool   `json:"is_active"`
+	Nip            string      `json:"nip"`
+	Nama           string      `json:"nama"`
+	UnitKerja      string      `json:"unit_kerja"`
+	EmploymentType string      `json:"employment_type"`
+	TanggalLahir   pgtype.Date `json:"tanggal_lahir"`
+	IsActive       bool        `json:"is_active"`
 }
 
 func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) (Employee, error) {
@@ -42,6 +43,7 @@ func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) 
 		arg.Nama,
 		arg.UnitKerja,
 		arg.EmploymentType,
+		arg.TanggalLahir,
 		arg.IsActive,
 	)
 	var i Employee
@@ -54,6 +56,7 @@ func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.EmploymentType,
+		&i.TanggalLahir,
 	)
 	return i, err
 }
@@ -68,7 +71,7 @@ func (q *Queries) DeleteEmployee(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getEmployee = `-- name: GetEmployee :one
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
        COALESCE(pa.pusaka_username, '') AS pusaka_username,
        COALESCE(pa.pusaka_password, '') AS pusaka_password,
        COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled,
@@ -84,6 +87,7 @@ type GetEmployeeRow struct {
 	Nama            string             `json:"nama"`
 	UnitKerja       string             `json:"unit_kerja"`
 	EmploymentType  string             `json:"employment_type"`
+	TanggalLahir    pgtype.Date        `json:"tanggal_lahir"`
 	PusakaUsername  string             `json:"pusaka_username"`
 	PusakaPassword  string             `json:"pusaka_password"`
 	PusakaIsEnabled bool               `json:"pusaka_is_enabled"`
@@ -101,6 +105,7 @@ func (q *Queries) GetEmployee(ctx context.Context, id pgtype.UUID) (GetEmployeeR
 		&i.Nama,
 		&i.UnitKerja,
 		&i.EmploymentType,
+		&i.TanggalLahir,
 		&i.PusakaUsername,
 		&i.PusakaPassword,
 		&i.PusakaIsEnabled,
@@ -112,7 +117,7 @@ func (q *Queries) GetEmployee(ctx context.Context, id pgtype.UUID) (GetEmployeeR
 }
 
 const listActiveEmployees = `-- name: ListActiveEmployees :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
        COALESCE(pa.pusaka_username, '') AS pusaka_username,
        COALESCE(pa.pusaka_password, '') AS pusaka_password,
        COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled,
@@ -132,6 +137,7 @@ type ListActiveEmployeesRow struct {
 	Nama            string             `json:"nama"`
 	UnitKerja       string             `json:"unit_kerja"`
 	EmploymentType  string             `json:"employment_type"`
+	TanggalLahir    pgtype.Date        `json:"tanggal_lahir"`
 	PusakaUsername  string             `json:"pusaka_username"`
 	PusakaPassword  string             `json:"pusaka_password"`
 	PusakaIsEnabled bool               `json:"pusaka_is_enabled"`
@@ -155,6 +161,7 @@ func (q *Queries) ListActiveEmployees(ctx context.Context) ([]ListActiveEmployee
 			&i.Nama,
 			&i.UnitKerja,
 			&i.EmploymentType,
+			&i.TanggalLahir,
 			&i.PusakaUsername,
 			&i.PusakaPassword,
 			&i.PusakaIsEnabled,
@@ -173,7 +180,7 @@ func (q *Queries) ListActiveEmployees(ctx context.Context) ([]ListActiveEmployee
 }
 
 const listEmployees = `-- name: ListEmployees :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
        COALESCE(pa.pusaka_username, '') AS pusaka_username,
        COALESCE(pa.pusaka_password, '') AS pusaka_password,
        COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled,
@@ -189,6 +196,7 @@ type ListEmployeesRow struct {
 	Nama            string             `json:"nama"`
 	UnitKerja       string             `json:"unit_kerja"`
 	EmploymentType  string             `json:"employment_type"`
+	TanggalLahir    pgtype.Date        `json:"tanggal_lahir"`
 	PusakaUsername  string             `json:"pusaka_username"`
 	PusakaPassword  string             `json:"pusaka_password"`
 	PusakaIsEnabled bool               `json:"pusaka_is_enabled"`
@@ -212,6 +220,7 @@ func (q *Queries) ListEmployees(ctx context.Context) ([]ListEmployeesRow, error)
 			&i.Nama,
 			&i.UnitKerja,
 			&i.EmploymentType,
+			&i.TanggalLahir,
 			&i.PusakaUsername,
 			&i.PusakaPassword,
 			&i.PusakaIsEnabled,
@@ -230,7 +239,7 @@ func (q *Queries) ListEmployees(ctx context.Context) ([]ListEmployeesRow, error)
 }
 
 const listEmployeesWithStatus = `-- name: ListEmployeesWithStatus :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir, COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
   COALESCE(
     (SELECT j.status::text FROM jobs j
      WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
@@ -268,6 +277,7 @@ type ListEmployeesWithStatusRow struct {
 	Nama                string             `json:"nama"`
 	UnitKerja           string             `json:"unit_kerja"`
 	EmploymentType      string             `json:"employment_type"`
+	TanggalLahir        pgtype.Date        `json:"tanggal_lahir"`
 	PusakaUsername      string             `json:"pusaka_username"`
 	PusakaIsEnabled     bool               `json:"pusaka_is_enabled"`
 	IsActive            bool               `json:"is_active"`
@@ -297,6 +307,7 @@ func (q *Queries) ListEmployeesWithStatus(ctx context.Context) ([]ListEmployeesW
 			&i.Nama,
 			&i.UnitKerja,
 			&i.EmploymentType,
+			&i.TanggalLahir,
 			&i.PusakaUsername,
 			&i.PusakaIsEnabled,
 			&i.IsActive,
@@ -321,7 +332,7 @@ func (q *Queries) ListEmployeesWithStatus(ctx context.Context) ([]ListEmployeesW
 }
 
 const listPusakaEligibleEmployeesWithStatus = `-- name: ListPusakaEligibleEmployeesWithStatus :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
+SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir, COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
   COALESCE(
     (SELECT j.status::text FROM jobs j
      WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
@@ -360,6 +371,7 @@ type ListPusakaEligibleEmployeesWithStatusRow struct {
 	Nama                string             `json:"nama"`
 	UnitKerja           string             `json:"unit_kerja"`
 	EmploymentType      string             `json:"employment_type"`
+	TanggalLahir        pgtype.Date        `json:"tanggal_lahir"`
 	PusakaUsername      string             `json:"pusaka_username"`
 	PusakaIsEnabled     bool               `json:"pusaka_is_enabled"`
 	IsActive            bool               `json:"is_active"`
@@ -389,6 +401,7 @@ func (q *Queries) ListPusakaEligibleEmployeesWithStatus(ctx context.Context) ([]
 			&i.Nama,
 			&i.UnitKerja,
 			&i.EmploymentType,
+			&i.TanggalLahir,
 			&i.PusakaUsername,
 			&i.PusakaIsEnabled,
 			&i.IsActive,
@@ -418,10 +431,11 @@ SET nip             = $2,
     nama            = $3,
     unit_kerja      = $4,
     employment_type = $5,
-    is_active       = $6,
+    tanggal_lahir   = $6,
+    is_active       = $7,
     updated_at      = NOW()
 WHERE id = $1
-RETURNING id, nip, nama, unit_kerja, is_active, created_at, updated_at, employment_type
+RETURNING id, nip, nama, unit_kerja, is_active, created_at, updated_at, employment_type, tanggal_lahir
 `
 
 type UpdateEmployeeParams struct {
@@ -430,6 +444,7 @@ type UpdateEmployeeParams struct {
 	Nama           string      `json:"nama"`
 	UnitKerja      string      `json:"unit_kerja"`
 	EmploymentType string      `json:"employment_type"`
+	TanggalLahir   pgtype.Date `json:"tanggal_lahir"`
 	IsActive       bool        `json:"is_active"`
 }
 
@@ -440,6 +455,7 @@ func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) 
 		arg.Nama,
 		arg.UnitKerja,
 		arg.EmploymentType,
+		arg.TanggalLahir,
 		arg.IsActive,
 	)
 	var i Employee
@@ -452,6 +468,7 @@ func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.EmploymentType,
+		&i.TanggalLahir,
 	)
 	return i, err
 }

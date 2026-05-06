@@ -115,3 +115,40 @@ LIMIT $3 OFFSET $4;
 -- name: DeleteOldAuditLogs :execrows
 DELETE FROM audit_logs
 WHERE created_at < NOW() - INTERVAL '90 days';
+-- name: ListEmployeeAccountGenerationCandidates :many
+WITH active_employees AS (
+    SELECT
+        e.id,
+        e.nip,
+        e.nama,
+        e.tanggal_lahir,
+        row_number() OVER (ORDER BY e.nama ASC, e.id ASC)::int AS nomor_urut
+    FROM employees e
+    WHERE e.is_active = TRUE
+), candidates AS (
+    SELECT
+        ae.id AS employee_id,
+        ae.nip,
+        ae.nama,
+        ae.tanggal_lahir,
+        ae.nomor_urut,
+        CASE
+            WHEN ae.tanggal_lahir IS NULL THEN ''::text
+            ELSE (sqlc.arg(npsn)::text || to_char(ae.tanggal_lahir, 'DDMMYY') || lpad(ae.nomor_urut::text, 3, '0'))::text
+        END AS generated_username,
+        linked.id AS existing_user_id
+    FROM active_employees ae
+    LEFT JOIN users linked ON linked.employee_id = ae.id
+)
+SELECT
+    c.employee_id,
+    c.nip,
+    c.nama,
+    c.tanggal_lahir,
+    c.nomor_urut,
+    c.generated_username,
+    c.existing_user_id,
+    username_user.id AS username_user_id
+FROM candidates c
+LEFT JOIN users username_user ON username_user.username = c.generated_username AND c.generated_username <> ''
+ORDER BY c.nomor_urut ASC;

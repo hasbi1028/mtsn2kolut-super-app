@@ -31,6 +31,11 @@ type userLifecycleService interface {
 	UpdateProfileLink(ctx context.Context, id pgtype.UUID, link service.ProfileLink, actorID pgtype.UUID) error
 }
 
+type employeeAccountGenerationService interface {
+	Preview(ctx context.Context) (service.EmployeeAccountGenerationResult, error)
+	Generate(ctx context.Context, actorID pgtype.UUID) (service.EmployeeAccountGenerationResult, error)
+}
+
 type userTxStarter interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 }
@@ -38,13 +43,47 @@ type userTxStarter interface {
 type User struct {
 	q         userStore
 	lifecycle userLifecycleService
+	generator employeeAccountGenerationService
 	tx        userTxStarter
 }
 
-func NewUser(q *db.Queries) *User { return &User{q: q, lifecycle: service.NewUserLifecycle(q)} }
+func NewUser(q *db.Queries) *User {
+	return &User{q: q, lifecycle: service.NewUserLifecycle(q), generator: service.NewEmployeeAccountGenerator(q)}
+}
 
 func NewUserWithPool(pool *pgxpool.Pool) *User {
-	return &User{q: db.New(pool), lifecycle: service.NewUserLifecycleWithPool(pool), tx: pool}
+	return &User{q: db.New(pool), lifecycle: service.NewUserLifecycleWithPool(pool), generator: service.NewEmployeeAccountGeneratorWithPool(pool), tx: pool}
+}
+
+func (h *User) PreviewEmployeeAccountGeneration(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	result, err := h.generator.Preview(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *User) GenerateEmployeeAccounts(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	result, err := h.generator.Generate(r.Context(), actorID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, result)
 }
 
 func (h *User) List(w http.ResponseWriter, r *http.Request) {

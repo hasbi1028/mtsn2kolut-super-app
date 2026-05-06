@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -24,7 +25,7 @@ type employeeService interface {
 	ListWithStatus(ctx context.Context) ([]db.ListEmployeesWithStatusRow, error)
 	ListPusakaEligibleWithStatus(ctx context.Context) ([]db.ListPusakaEligibleEmployeesWithStatusRow, error)
 	Get(ctx context.Context, id pgtype.UUID) (db.GetEmployeeRow, error)
-	Create(ctx context.Context, nip, nama, unitKerja, employmentType, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error)
+	Create(ctx context.Context, nip, nama, unitKerja, employmentType string, tanggalLahir pgtype.Date, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error)
 	Update(ctx context.Context, p db.UpdateEmployeeParams) (db.GetEmployeeRow, error)
 	Delete(ctx context.Context, id pgtype.UUID) error
 	SetActive(ctx context.Context, id pgtype.UUID, isActive bool) error
@@ -48,6 +49,7 @@ type employeeResponse struct {
 	IsActive         bool               `json:"is_active"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	TanggalLahir     string             `json:"tanggal_lahir"`
 }
 
 func NewEmployee(svc *service.Employee) *Employee { return &Employee{svc: svc} }
@@ -159,6 +161,7 @@ func (h *Employee) Create(w http.ResponseWriter, r *http.Request) {
 		Nama           string `json:"nama"`
 		UnitKerja      string `json:"unit_kerja"`
 		EmploymentType string `json:"employment_type"`
+		TanggalLahir   string `json:"tanggal_lahir"`
 		PusakaUsername string `json:"pusaka_username"`
 		PusakaPassword string `json:"pusaka_password"`
 		IsActive       bool   `json:"is_active"`
@@ -167,7 +170,12 @@ func (h *Employee) Create(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	emp, err := h.svc.Create(r.Context(), body.Nip, body.Nama, body.UnitKerja, body.EmploymentType, body.PusakaUsername, body.PusakaPassword, body.IsActive)
+	tanggalLahir, err := parseEmployeeDate(body.TanggalLahir)
+	if err != nil {
+		api.BadRequest(w, "tanggal_lahir tidak valid")
+		return
+	}
+	emp, err := h.svc.Create(r.Context(), body.Nip, body.Nama, body.UnitKerja, body.EmploymentType, tanggalLahir, body.PusakaUsername, body.PusakaPassword, body.IsActive)
 	if err != nil {
 		writeEmployeeClientError(w, err, "Data pegawai tidak valid")
 		return
@@ -185,12 +193,32 @@ func (h *Employee) Update(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid id")
 		return
 	}
-	var p db.UpdateEmployeeParams
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+	var body struct {
+		Nip            string `json:"nip"`
+		Nama           string `json:"nama"`
+		UnitKerja      string `json:"unit_kerja"`
+		EmploymentType string `json:"employment_type"`
+		TanggalLahir   string `json:"tanggal_lahir"`
+		IsActive       bool   `json:"is_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	p.ID = id
+	tanggalLahir, err := parseEmployeeDate(body.TanggalLahir)
+	if err != nil {
+		api.BadRequest(w, "tanggal_lahir tidak valid")
+		return
+	}
+	p := db.UpdateEmployeeParams{
+		ID:             id,
+		Nip:            body.Nip,
+		Nama:           body.Nama,
+		UnitKerja:      body.UnitKerja,
+		EmploymentType: body.EmploymentType,
+		TanggalLahir:   tanggalLahir,
+		IsActive:       body.IsActive,
+	}
 	emp, err := h.svc.Update(r.Context(), p)
 	if errors.Is(err, pgx.ErrNoRows) {
 		api.NotFound(w)
@@ -299,6 +327,7 @@ func (h *Employee) UpdatePusakaCredentials(w http.ResponseWriter, r *http.Reques
 		Nama:           emp.Nama,
 		UnitKerja:      emp.UnitKerja,
 		EmploymentType: emp.EmploymentType,
+		TanggalLahir:   emp.TanggalLahir,
 		IsActive:       emp.IsActive,
 	})
 	if err != nil {
@@ -405,6 +434,24 @@ func (h *Employee) ListPusakaAuditLogs(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, rows)
 }
 
+func employeeDateString(value pgtype.Date) string {
+	if !value.Valid {
+		return ""
+	}
+	return value.Time.Format("2006-01-02")
+}
+
+func parseEmployeeDate(value string) (pgtype.Date, error) {
+	if value == "" {
+		return pgtype.Date{}, nil
+	}
+	parsed, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return pgtype.Date{}, err
+	}
+	return pgtype.Date{Time: parsed, Valid: true}, nil
+}
+
 func parseUUID(s string) (pgtype.UUID, error) {
 	var u pgtype.UUID
 	return u, u.Scan(s)
@@ -431,6 +478,7 @@ func sanitizeEmployee(emp db.GetEmployeeRow) employeeResponse {
 		IsActive:         emp.IsActive,
 		CreatedAt:        emp.CreatedAt,
 		UpdatedAt:        emp.UpdatedAt,
+		TanggalLahir:     employeeDateString(emp.TanggalLahir),
 	}
 }
 
@@ -450,6 +498,7 @@ func sanitizeEmployees(employees []db.ListEmployeesRow) []employeeResponse {
 			IsActive:         emp.IsActive,
 			CreatedAt:        emp.CreatedAt,
 			UpdatedAt:        emp.UpdatedAt,
+			TanggalLahir:     employeeDateString(emp.TanggalLahir),
 		})
 	}
 	return items

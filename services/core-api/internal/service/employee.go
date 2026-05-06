@@ -63,7 +63,7 @@ func (s *Employee) Get(ctx context.Context, id pgtype.UUID) (db.GetEmployeeRow, 
 	return s.q.GetEmployee(ctx, id)
 }
 
-func (s *Employee) Create(ctx context.Context, nip, nama, unitKerja, employmentType, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error) {
+func (s *Employee) Create(ctx context.Context, nip, nama, unitKerja, employmentType string, tanggalLahir pgtype.Date, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error) {
 	normalizedType := normalizeEmploymentType(employmentType)
 	if normalizedType == "" {
 		return db.GetEmployeeRow{}, errors.New("invalid employment type")
@@ -76,6 +76,7 @@ func (s *Employee) Create(ctx context.Context, nip, nama, unitKerja, employmentT
 		Nama:           nama,
 		UnitKerja:      unitKerja,
 		EmploymentType: normalizedType,
+		TanggalLahir:   tanggalLahir,
 		IsActive:       isActive,
 	})
 	if err != nil {
@@ -175,6 +176,7 @@ func (s *Employee) SetActive(ctx context.Context, id pgtype.UUID, isActive bool)
 		Nama:           emp.Nama,
 		UnitKerja:      emp.UnitKerja,
 		EmploymentType: emp.EmploymentType,
+		TanggalLahir:   emp.TanggalLahir,
 		IsActive:       isActive,
 	}); err != nil {
 		return err
