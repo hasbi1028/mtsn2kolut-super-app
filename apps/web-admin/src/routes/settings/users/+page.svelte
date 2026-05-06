@@ -13,6 +13,14 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
+	import {
+		fetchRBACMatrix,
+		resetUserPassword,
+		updateUserProfileLink,
+		updateUserRoles,
+		type RBACMatrix,
+		type RBACRole
+	} from '$lib/client/rbac-users';
 
 	type User = {
 		id: string; username: string; roles: string[];
@@ -30,12 +38,14 @@
 		employees: Employee[];
 		students: Student[];
 		parents: Parent[];
+		rbac: RBACMatrix;
 	};
 
 	let users = $state<User[]>([]);
 	let employees = $state<Employee[]>([]);
 	let students = $state<Student[]>([]);
 	let parents = $state<Parent[]>([]);
+	let rbac = $state<RBACMatrix>({ roles: [], permissions: [], role_permissions: {} });
 	let usersPromise = $state<Promise<UsersOverview> | null>(null);
 	let usersRequestId = 0;
 	let showForm = $state(false);
@@ -47,6 +57,7 @@
 	let fStuId = $state('');
 	let fParId = $state('');
 	let fBusy = $state(false);
+	let actionBusy = $state<string | null>(null);
 	let formHint = $derived.by(() => {
 		if (fRoles.includes('siswa')) return 'Akun siswa wajib ditautkan ke satu profil siswa.';
 		if (fRoles.includes('ortu')) return 'Akun orang tua wajib ditautkan ke satu profil orang tua.';
@@ -54,7 +65,7 @@
 		return 'Akun admin murni boleh tanpa tautan profil.';
 	});
 
-	const availableRoles = [
+	const fallbackRoles = [
 		{ value: 'admin', label: 'Administrator' },
 		{ value: 'guru', label: 'Guru' },
 		{ value: 'staf', label: 'Staf' },
@@ -62,21 +73,29 @@
 		{ value: 'siswa', label: 'Siswa' },
 		{ value: 'ortu', label: 'Orang Tua' },
 	];
+	const availableRoles = $derived.by(() => {
+		const activeRoles = (rbac.roles ?? [])
+			.filter((role: RBACRole) => role.is_active !== false)
+			.map((role: RBACRole) => ({ value: role.code, label: role.name || role.code }));
+		return activeRoles.length ? activeRoles : fallbackRoles;
+	});
 
 	function applyOverview(overview: UsersOverview) {
 		users = overview.users;
 		employees = overview.employees;
 		students = overview.students;
 		parents = overview.parents;
+		rbac = overview.rbac;
 		return overview;
 	}
 
 	async function fetchOverview(): Promise<UsersOverview> {
-		const [usersRes, employeesRes, studentsRes, parentsRes] = await Promise.all([
+		const [usersRes, employeesRes, studentsRes, parentsRes, nextRBAC] = await Promise.all([
 			fetch('/api/users'),
 			fetch('/api/employees'),
 			fetch('/api/students'),
 			fetch('/api/parents'),
+			fetchRBACMatrix(),
 		]);
 		const [nextUsers, nextEmployees, nextStudents, nextParents] = await Promise.all([
 			readClientApiData<User[]>(usersRes, 'Gagal memuat data pengguna.'),
@@ -89,6 +108,7 @@
 			employees: nextEmployees ?? [],
 			students: nextStudents ?? [],
 			parents: nextParents ?? [],
+			rbac: nextRBAC,
 		};
 	}
 
@@ -101,11 +121,11 @@
 		usersPromise = fetchOverview()
 			.then((overview) => {
 				if (requestId === usersRequestId) return applyOverview(overview);
-				return { users, employees, students, parents };
+				return { users, employees, students, parents, rbac };
 			})
 			.catch((error: unknown) => {
 				if (requestId === usersRequestId) throw error;
-				return { users, employees, students, parents };
+				return { users, employees, students, parents, rbac };
 			});
 	}
 
@@ -119,7 +139,7 @@
 			}
 		} catch (error) {
 			if (requestId !== usersRequestId) return;
-			usersPromise = Promise.resolve({ users, employees, students, parents });
+			usersPromise = Promise.resolve({ users, employees, students, parents, rbac });
 			toast.error(overviewErrorMessage(error));
 		}
 	}
@@ -214,6 +234,100 @@
 		}
 		toast.success(next ? 'Akun diaktifkan' : 'Akun dinonaktifkan');
 		await refreshOverview();
+	}
+
+
+	function roleLabel(roleCode: string) {
+		return availableRoles.find((role) => role.value === roleCode)?.label ?? roleCode;
+	}
+
+	async function updateRolesForUser(user: User, nextRoles: string[]) {
+		const roles = Array.from(new Set(nextRoles.filter(Boolean)));
+		if (roles.length === 0) {
+			toast.error('Minimal satu role wajib dipilih.');
+			return;
+		}
+		if (user.roles.includes('admin') && !roles.includes('admin')) {
+			if (!(await confirmAction({
+				title: 'Lepas Role Admin',
+				message: `Lepas role admin dari "${user.username}"? Backend tetap akan menolak jika ini admin aktif terakhir.`,
+				confirmLabel: 'Update Role',
+				tone: 'warning'
+			}))) return;
+		}
+		actionBusy = `roles:${user.id}`;
+		try {
+			await updateUserRoles(user.id, roles);
+			toast.success('Role pengguna diperbarui');
+			await refreshOverview();
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
+		} finally {
+			actionBusy = null;
+		}
+	}
+
+	async function toggleExistingUserRole(user: User, role: string) {
+		const current = user.roles ?? [];
+		const nextRoles = current.includes(role) ? current.filter((value) => value !== role) : [...current, role];
+		await updateRolesForUser(user, nextRoles);
+	}
+
+	async function resetPasswordForUser(user: User) {
+		const password = window.prompt(`Password baru untuk ${user.username} (minimal 8 karakter):`);
+		if (password === null) return;
+		if (password.trim().length < 8) {
+			toast.error('Password minimal 8 karakter.');
+			return;
+		}
+		if (!(await confirmAction({
+			title: 'Reset Password',
+			message: `Reset password untuk "${user.username}"? Semua session aktif user akan dicabut.`,
+			confirmLabel: 'Reset Password',
+			tone: 'warning'
+		}))) return;
+		actionBusy = `password:${user.id}`;
+		try {
+			await resetUserPassword(user.id, password.trim());
+			toast.success('Password berhasil direset dan session user dicabut');
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
+		} finally {
+			actionBusy = null;
+		}
+	}
+
+	async function updateProfileForUser(user: User) {
+		const type = window.prompt('Jenis profil: employee, student, parent, atau kosong untuk melepas tautan', user.employee_id ? 'employee' : user.student_id ? 'student' : user.parent_id ? 'parent' : '');
+		if (type === null) return;
+		const normalizedType = type.trim().toLowerCase();
+		let profileID = '';
+		if (normalizedType) {
+			profileID = window.prompt('Masukkan UUID profil tujuan:', user.employee_id || user.student_id || user.parent_id || '')?.trim() ?? '';
+			if (!profileID) {
+				toast.error('UUID profil wajib diisi.');
+				return;
+			}
+		}
+		const payload = {
+			employee_id: normalizedType === 'employee' ? profileID : null,
+			student_id: normalizedType === 'student' ? profileID : null,
+			parent_id: normalizedType === 'parent' ? profileID : null
+		};
+		if (normalizedType && !['employee', 'student', 'parent'].includes(normalizedType)) {
+			toast.error('Jenis profil tidak valid. Gunakan employee, student, atau parent.');
+			return;
+		}
+		actionBusy = `profile:${user.id}`;
+		try {
+			await updateUserProfileLink(user.id, payload);
+			toast.success('Tautan profil diperbarui');
+			await refreshOverview();
+		} catch (error) {
+			toast.error(overviewErrorMessage(error));
+		} finally {
+			actionBusy = null;
+		}
 	}
 
 	function toggleRole(role: string) {
@@ -397,11 +511,11 @@
 					<Table.Header>
 						<Table.Row class="bg-slate-50">
 							<Table.Head>Username</Table.Head>
-							<Table.Head>Roles</Table.Head>
+							<Table.Head>Role Dinamis</Table.Head>
 							<Table.Head>Profil Terhubung</Table.Head>
 							<Table.Head>Status</Table.Head>
 							<Table.Head>Dibuat</Table.Head>
-							<Table.Head></Table.Head>
+							<Table.Head>Aksi</Table.Head>
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
@@ -409,13 +523,25 @@
 							<Table.Row>
 								<Table.Cell class="font-medium">{u.username}</Table.Cell>
 								<Table.Cell>
-									<div class="flex flex-wrap gap-1">
-										{#each u.roles || [] as r (r)}
-											<Badge variant={r === 'admin' ? 'default' : 'secondary'} class="text-[10px] uppercase">{r}</Badge>
+									<div class="flex max-w-md flex-wrap gap-1.5">
+										{#each availableRoles as r (r.value)}
+											<button
+												class={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase transition-colors ${u.roles?.includes(r.value) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-200 bg-white text-slate-500 hover:border-green-300 hover:text-green-700'}`}
+												disabled={actionBusy === `roles:${u.id}`}
+												title={`Toggle role ${r.label}`}
+												onclick={() => void toggleExistingUserRole(u, r.value)}
+											>
+												{roleLabel(r.value)}
+											</button>
 										{/each}
 									</div>
 								</Table.Cell>
-								<Table.Cell class="text-sm text-slate-600">{u.profile_nama || '—'}</Table.Cell>
+								<Table.Cell class="text-sm text-slate-600">
+									<div>{u.profile_nama || '—'}</div>
+									<div class="mt-1 text-[11px] text-slate-400">
+										{u.employee_id ? 'Pegawai' : u.student_id ? 'Siswa' : u.parent_id ? 'Orang tua' : 'Belum ditautkan'}
+									</div>
+								</Table.Cell>
 								<Table.Cell>
 									<Badge variant={u.is_active ? 'outline' : 'destructive'}>
 										{u.is_active ? 'Aktif' : 'Nonaktif'}
@@ -423,7 +549,23 @@
 								</Table.Cell>
 								<Table.Cell class="text-xs text-slate-400">{new Date(u.created_at).toLocaleDateString()}</Table.Cell>
 								<Table.Cell class="text-right">
-									<div class="flex justify-end gap-2">
+									<div class="flex flex-wrap justify-end gap-2">
+										<Button
+											variant="outline"
+											size="sm"
+											disabled={actionBusy === `password:${u.id}`}
+											onclick={() => void resetPasswordForUser(u)}
+										>
+											Reset PW
+										</Button>
+										<Button
+											variant="outline"
+											size="sm"
+											disabled={actionBusy === `profile:${u.id}`}
+											onclick={() => void updateProfileForUser(u)}
+										>
+											Profil
+										</Button>
 										<Button
 											variant="outline"
 											size="sm"
@@ -458,15 +600,39 @@
 								<div class="min-w-0">
 									<p class="text-sm font-semibold text-slate-900">{u.username}</p>
 									<div class="mt-1 flex flex-wrap gap-1">
-										{#each u.roles || [] as r (r)}
-											<Badge variant={r === 'admin' ? 'default' : 'secondary'} class="text-[10px] capitalize">{r}</Badge>
+										{#each availableRoles as r (r.value)}
+											<button
+												class={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${u.roles?.includes(r.value) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-200 bg-white text-slate-500'}`}
+												disabled={actionBusy === `roles:${u.id}`}
+												onclick={() => void toggleExistingUserRole(u, r.value)}
+											>
+												{roleLabel(r.value)}
+											</button>
 										{/each}
 									</div>
 									<p class="mt-2 text-xs text-slate-500">{u.profile_nama || 'Tidak terhubung profil'}</p>
 								</div>
 								<Badge variant={u.is_active ? 'outline' : 'destructive'}>{u.is_active ? 'Aktif' : 'Nonaktif'}</Badge>
 							</div>
-							<div class="mt-4 flex gap-2">
+							<div class="mt-4 flex flex-wrap gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									class="flex-1 justify-center"
+									disabled={actionBusy === `password:${u.id}`}
+									onclick={() => void resetPasswordForUser(u)}
+								>
+									Reset PW
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									class="flex-1 justify-center"
+									disabled={actionBusy === `profile:${u.id}`}
+									onclick={() => void updateProfileForUser(u)}
+								>
+									Profil
+								</Button>
 								<Button
 									variant="outline"
 									size="sm"

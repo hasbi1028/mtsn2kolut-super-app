@@ -9,6 +9,7 @@
 	import SidebarQuickAccess from '$lib/components/sidebar/SidebarQuickAccess.svelte';
 	import { clearCbtComposerDrafts } from '$lib/client/cbt-drafts';
 	import { fetchSidebarAttention } from '$lib/components/sidebar/sidebar-attention';
+	import { filterSidebarNavGroupsByAccess } from '$lib/components/sidebar/sidebar-access';
 	import { findActiveSidebarHref } from '$lib/components/sidebar/sidebar-active';
 	import { readClientJson } from '$lib/client/api';
 	import {
@@ -21,7 +22,7 @@
 		user,
 		desktopExpanded = $bindable(true)
 	}: {
-		user?: { id: string; username: string; role: string; roles?: string[]; employee_id?: string };
+		user?: { id: string; username: string; role: string; roles?: string[]; permissions?: string[]; employee_id?: string };
 		desktopExpanded?: boolean;
 	} = $props();
 	let open = $state(false);
@@ -43,17 +44,8 @@
 	};
 
 	const userRoles = $derived(user?.roles || (user?.role ? [user.role] : []));
-	const nav = $derived(
-		sidebarNavGroups
-			.map((g) => ({
-				...g,
-				items: g.items.filter((i) => {
-					if (!i.roles) return true;
-					return i.roles.some((r) => userRoles.includes(r));
-				}),
-			}))
-			.filter((g) => g.items.length > 0)
-	);
+	const userPermissions = $derived(user?.permissions || []);
+	const nav = $derived(filterSidebarNavGroupsByAccess(sidebarNavGroups, userRoles, userPermissions));
 
 	const PINNED_STORAGE_KEY_PREFIX = 'sidebar:pinned-items';
 	const RECENT_STORAGE_KEY_PREFIX = 'sidebar:recent-items';
