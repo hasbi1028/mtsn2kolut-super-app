@@ -41,7 +41,8 @@ Jangan menambahkan fitur baru pada namespace legacy/retired:
 7. Mapel & KD `/bank-soal/mapel-kd` menampilkan coverage metadata kurikulum.
 8. Pengaturan `/bank-soal/pengaturan` menjadi referensi SOP workflow dan standar kualitas.
 9. Paket asesmen tetap berada di `/asesmen/paket`, bukan di Bank Soal storage.
-10. Jalankan validasi:
+10. Guard test akses memastikan semua route final Bank Soal tetap bisa diakses role guru/admin dan tidak ikut admin-only Asesmen.
+11. Jalankan validasi:
 
 ```bash
 npm --prefix apps/web-admin run check
