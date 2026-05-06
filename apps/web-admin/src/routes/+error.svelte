@@ -40,7 +40,7 @@
 				</button>
 			{/if}
 			<a href={resolve('/login')} class="rounded-full border border-border px-5 py-3 text-sm font-semibold text-foreground hover:bg-muted/50">
-				Login Admin
+				Masuk
 			</a>
 		</div>
 	</div>
