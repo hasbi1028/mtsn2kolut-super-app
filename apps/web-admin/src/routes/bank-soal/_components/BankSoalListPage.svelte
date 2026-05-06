@@ -112,6 +112,13 @@
 		message?: string;
 	};
 
+	type BankSoalSummaryResponse = {
+		counts?: Partial<Record<StatusKey | 'package_usage', number>>;
+		by_subject?: Array<{ subject_id?: string; subject_name?: string; subject_code?: string; total?: number }>;
+		by_cognitive_level?: Array<{ cognitive_level?: string; total?: number }>;
+		recent?: Question[];
+	};
+
 	type WorkflowFilter = '' | 'draft' | 'review' | 'approved' | 'rejected';
 	type PublicationFilter = '' | 'draft' | 'published';
 	type QuestionTypeFilter =
@@ -136,6 +143,7 @@
 		page: number;
 		limit: number;
 		offset: number;
+		summary?: BankSoalSummaryResponse;
 	};
 
 	type SummaryCard = {
@@ -302,6 +310,10 @@
 	let reviewRouteHref = $derived(reviewHref());
 	let packageHref = $derived(resolve('/asesmen/paket'));
 	let listHref = $derived(resolve('/bank-soal/daftar'));
+	let summarySubjectDistribution = $state<SubjectDistribution[]>([]);
+	let summaryBloomComposition = $state<BloomComposition[]>([]);
+	let summaryRecentActivities = $state<ActivityItem[]>([]);
+	let summaryPackageUsage = $state(0);
 	let totalPackageUsage = $derived.by(() =>
 		questions.reduce((sum, question) => sum + (question.package_count ?? question.usage?.package_count ?? 0), 0)
 	);
@@ -420,25 +432,68 @@
 		return payload.subjects ?? [];
 	}
 
+	async function fetchQuestionSummary(): Promise<BankSoalSummaryResponse> {
+		return fetch('/api/bank-soal/summary').then((response) =>
+			readClientApiData<BankSoalSummaryResponse>(response, 'Gagal memuat ringkasan bank soal')
+		);
+	}
+
+	function applySummaryPayload(summary: BankSoalSummaryResponse | undefined) {
+		if (!summary) return;
+		if (summary.counts) {
+			counts = {
+				all: summary.counts.all ?? counts.all,
+				draft: summary.counts.draft ?? counts.draft,
+				review: summary.counts.review ?? counts.review,
+				rejected: summary.counts.rejected ?? counts.rejected,
+				approved: summary.counts.approved ?? counts.approved,
+				published: summary.counts.published ?? counts.published
+			};
+			summaryPackageUsage = summary.counts.package_usage ?? summaryPackageUsage;
+		}
+		summarySubjectDistribution = (summary.by_subject ?? [])
+			.slice(0, 8)
+			.map((item, index) => {
+				const name = item.subject_name || item.subject_code || 'Tanpa Mapel';
+				return {
+					label: shortSubjectLabel(name),
+					name,
+					value: item.total ?? 0,
+					color: subjectChartColors[index % subjectChartColors.length]
+				};
+			});
+		const bloomTotal = Math.max(1, (summary.by_cognitive_level ?? []).reduce((sum, item) => sum + (item.total ?? 0), 0));
+		summaryBloomComposition = (summary.by_cognitive_level ?? []).map((item) => {
+			const key = normalizeBloomLevel(item.cognitive_level);
+			const value = item.total ?? 0;
+			return { key, label: bloomLabels[key] ?? key, value, percent: Math.round((value / bloomTotal) * 100) };
+		});
+		summaryRecentActivities = buildRecentActivities(summary.recent ?? []);
+	}
+
 	async function fetchOverview(page = currentPage): Promise<BankSoalOverview> {
-		const countKeys: StatusKey[] = ['all', 'draft', 'review', 'rejected', 'approved', 'published'];
-		const [questionPayload, loadedSubjects, ...countValues] = await Promise.all([
+		const [questionPayload, loadedSubjects, summaryPayload] = await Promise.all([
 			fetchQuestionList(page),
 			subjects.length > 0 ? Promise.resolve(subjects) : fetchSubjects(),
-			...countKeys.map((key) => fetchQuestionCount(key))
+			fetchQuestionSummary()
 		]);
-		const nextCounts = { ...emptyCounts };
-		countKeys.forEach((key, index) => {
-			nextCounts[key] = countValues[index] ?? 0;
-		});
+		const summaryCounts = summaryPayload.counts ?? {};
 		return {
 			questions: questionPayload.items ?? [],
 			subjects: loadedSubjects,
-			totalItems: questionPayload.meta?.total ?? questionPayload.items?.length ?? 0,
-			counts: nextCounts,
+			totalItems: questionPayload.meta?.total ?? summaryCounts.all ?? questionPayload.items?.length ?? 0,
+			counts: {
+				all: summaryCounts.all ?? 0,
+				draft: summaryCounts.draft ?? 0,
+				review: summaryCounts.review ?? 0,
+				rejected: summaryCounts.rejected ?? 0,
+				approved: summaryCounts.approved ?? 0,
+				published: summaryCounts.published ?? 0
+			},
 			page,
 			limit: questionPayload.meta?.limit ?? PAGE_SIZE,
-			offset: questionPayload.meta?.offset ?? Math.max(0, (page - 1) * PAGE_SIZE)
+			offset: questionPayload.meta?.offset ?? Math.max(0, (page - 1) * PAGE_SIZE),
+			summary: summaryPayload
 		};
 	}
 
@@ -454,12 +509,13 @@
 		};
 	}
 
-	function applyOverview(overview: BankSoalOverview) {
+	function applyOverview(overview: BankSoalOverview, summary?: BankSoalSummaryResponse) {
 		questions = overview.questions;
 		subjects = overview.subjects;
 		totalItems = overview.totalItems;
 		counts = overview.counts;
 		currentPage = overview.page;
+		applySummaryPayload(summary);
 	}
 
 	function syncUrl(page: number) {
@@ -485,7 +541,7 @@
 		const promise = fetchOverview(nextPage)
 			.then((overview) => {
 				if (activeRequestId !== requestId) return currentOverview();
-				applyOverview(overview);
+				applyOverview(overview, overview.summary);
 				return overview;
 			})
 			.catch((error: unknown) => {

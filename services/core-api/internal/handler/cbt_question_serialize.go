@@ -11,6 +11,7 @@ import (
 	"mtsn2kolut-super-app/backend/internal/api"
 	mw "mtsn2kolut-super-app/backend/internal/middleware"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
+	"mtsn2kolut-super-app/backend/internal/service"
 )
 
 func cbtQuestionUsageLocked(packageCount, answerCount int32) bool {
@@ -73,6 +74,56 @@ func cbtAuditAuthoringEvent(audit cbtAuthoringAuditWriter, ctx context.Context, 
 		EntityID:   entityID,
 		Metadata:   rawMeta,
 	})
+}
+
+func serializeQuestionSummary(summary service.CbtQuestionSummary) map[string]any {
+	bySubject := make([]map[string]any, 0, len(summary.BySubject))
+	for _, row := range summary.BySubject {
+		bySubject = append(bySubject, map[string]any{
+			"subject_id":   pgUUIDString(row.SubjectID),
+			"subject_name": row.SubjectName,
+			"subject_code": row.SubjectCode,
+			"total":        row.Total,
+		})
+	}
+	byCognitive := make([]map[string]any, 0, len(summary.ByCognitiveLevel))
+	for _, row := range summary.ByCognitiveLevel {
+		byCognitive = append(byCognitive, map[string]any{
+			"cognitive_level": row.CognitiveLevel,
+			"total":           row.Total,
+		})
+	}
+	recent := make([]map[string]any, 0, len(summary.Recent))
+	for _, row := range summary.Recent {
+		recent = append(recent, map[string]any{
+			"id":                pgUUIDString(row.ID),
+			"code":              row.Code,
+			"subject_id":        pgUUIDString(row.SubjectID),
+			"subject_name":      row.SubjectName,
+			"subject_code":      row.SubjectCode,
+			"material_topic":    row.MaterialTopic,
+			"workflow_status":   row.WorkflowStatus,
+			"status":            row.Status,
+			"author_username":   row.AuthorUsername,
+			"reviewer_username": row.ReviewerUsername,
+			"created_at":        row.CreatedAt,
+			"updated_at":        row.UpdatedAt,
+		})
+	}
+	return map[string]any{
+		"counts": map[string]any{
+			"all":           summary.Counts.Total,
+			"draft":         summary.Counts.Draft,
+			"review":        summary.Counts.Review,
+			"rejected":      summary.Counts.Rejected,
+			"approved":      summary.Counts.Approved,
+			"published":     summary.Counts.Published,
+			"package_usage": summary.Counts.PackageUsage,
+		},
+		"by_subject":         bySubject,
+		"by_cognitive_level": byCognitive,
+		"recent":             recent,
+	}
 }
 
 func serializeQuestionListRow(row db.ListCbtQuestionsFilteredRow, includeAnswerKey ...bool) map[string]any {

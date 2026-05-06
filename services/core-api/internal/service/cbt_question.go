@@ -27,6 +27,10 @@ type cbtQuestionStore interface {
 	ListCbtQuestions(ctx context.Context, arg db.ListCbtQuestionsParams) ([]db.ListCbtQuestionsRow, error)
 	ListCbtQuestionsFiltered(ctx context.Context, arg db.ListCbtQuestionsFilteredParams) ([]db.ListCbtQuestionsFilteredRow, error)
 	CountCbtQuestionsFiltered(ctx context.Context, arg db.CountCbtQuestionsFilteredParams) (int64, error)
+	GetCbtQuestionSummaryCounts(ctx context.Context, arg db.GetCbtQuestionSummaryCountsParams) (db.GetCbtQuestionSummaryCountsRow, error)
+	ListCbtQuestionSummaryBySubject(ctx context.Context, arg db.ListCbtQuestionSummaryBySubjectParams) ([]db.ListCbtQuestionSummaryBySubjectRow, error)
+	ListCbtQuestionSummaryByCognitiveLevel(ctx context.Context, arg db.ListCbtQuestionSummaryByCognitiveLevelParams) ([]db.ListCbtQuestionSummaryByCognitiveLevelRow, error)
+	ListCbtQuestionSummaryRecent(ctx context.Context, arg db.ListCbtQuestionSummaryRecentParams) ([]db.ListCbtQuestionSummaryRecentRow, error)
 	ListCbtEventMembersByUser(ctx context.Context, userID pgtype.UUID) ([]db.CbtEventMember, error)
 	ListCbtEventMembersByUsername(ctx context.Context, username string) ([]db.CbtEventMember, error)
 	ListCbtQuestionStemTextsBySubject(ctx context.Context, subjectID pgtype.UUID) ([]db.ListCbtQuestionStemTextsBySubjectRow, error)
@@ -183,6 +187,35 @@ type BulkCbtQuestionWorkflowResult struct {
 	Success int                           `json:"success"`
 	Failed  int                           `json:"failed"`
 	Items   []BulkCbtQuestionWorkflowItem `json:"items"`
+}
+
+type CbtQuestionSummary struct {
+	Counts           db.GetCbtQuestionSummaryCountsRow
+	BySubject        []db.ListCbtQuestionSummaryBySubjectRow
+	ByCognitiveLevel []db.ListCbtQuestionSummaryByCognitiveLevelRow
+	Recent           []db.ListCbtQuestionSummaryRecentRow
+}
+
+func (s *CbtQuestion) Summary(ctx context.Context, actor CbtQuestionActor) (CbtQuestionSummary, error) {
+	actor = normalizeCbtQuestionActor(actor)
+	base := db.GetCbtQuestionSummaryCountsParams{IsAdmin: actor.IsAdmin(), ActorUsername: actor.Username, ActorUserID: actor.UserID}
+	counts, err := s.q.GetCbtQuestionSummaryCounts(ctx, base)
+	if err != nil {
+		return CbtQuestionSummary{}, err
+	}
+	bySubject, err := s.q.ListCbtQuestionSummaryBySubject(ctx, db.ListCbtQuestionSummaryBySubjectParams(base))
+	if err != nil {
+		return CbtQuestionSummary{}, err
+	}
+	byCognitiveLevel, err := s.q.ListCbtQuestionSummaryByCognitiveLevel(ctx, db.ListCbtQuestionSummaryByCognitiveLevelParams(base))
+	if err != nil {
+		return CbtQuestionSummary{}, err
+	}
+	recent, err := s.q.ListCbtQuestionSummaryRecent(ctx, db.ListCbtQuestionSummaryRecentParams(base))
+	if err != nil {
+		return CbtQuestionSummary{}, err
+	}
+	return CbtQuestionSummary{Counts: counts, BySubject: bySubject, ByCognitiveLevel: byCognitiveLevel, Recent: recent}, nil
 }
 
 func (s *CbtQuestion) ListFiltered(ctx context.Context, in ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error) {

@@ -497,3 +497,95 @@ WHERE ep.session_id = sqlc.arg(session_id)
   AND q.question_type = 'essay'
   AND sa.manual_score IS NULL
 ORDER BY q.code, s.nama;
+
+
+-- name: GetCbtQuestionSummaryCounts :one
+SELECT
+  COUNT(*)::bigint AS total,
+  COUNT(*) FILTER (WHERE q.status = 'draft')::bigint AS draft,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'review')::bigint AS review,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'rejected')::bigint AS rejected,
+  COUNT(*) FILTER (WHERE q.workflow_status = 'approved')::bigint AS approved,
+  COUNT(*) FILTER (WHERE q.status = 'published')::bigint AS published,
+  COALESCE(SUM(pkg_usage.package_count), 0)::bigint AS package_usage
+FROM cbt_questions q
+LEFT JOIN LATERAL (
+  SELECT COUNT(*)::bigint AS package_count
+  FROM cbt_package_questions pq
+  WHERE pq.question_id = q.id
+) pkg_usage ON TRUE
+WHERE TRUE
+  AND (
+    sqlc.arg(is_admin)::bool
+    OR q.status = 'published'
+    OR q.author_username = sqlc.arg(actor_username)::text
+    OR EXISTS (
+      SELECT 1 FROM cbt_event_members m
+      WHERE m.event_id = q.event_id
+        AND m.user_id = sqlc.arg(actor_user_id)::uuid
+        AND m.role IN ('reviewer', 'panitia')
+        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+  );
+
+-- name: ListCbtQuestionSummaryBySubject :many
+SELECT q.subject_id, s.name AS subject_name, s.code AS subject_code, COUNT(*)::bigint AS total
+FROM cbt_questions q
+JOIN subjects s ON s.id = q.subject_id
+WHERE TRUE
+  AND (
+    sqlc.arg(is_admin)::bool
+    OR q.status = 'published'
+    OR q.author_username = sqlc.arg(actor_username)::text
+    OR EXISTS (
+      SELECT 1 FROM cbt_event_members m
+      WHERE m.event_id = q.event_id
+        AND m.user_id = sqlc.arg(actor_user_id)::uuid
+        AND m.role IN ('reviewer', 'panitia')
+        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+  )
+GROUP BY q.subject_id, s.name, s.code
+ORDER BY total DESC, s.name ASC
+LIMIT 8;
+
+-- name: ListCbtQuestionSummaryByCognitiveLevel :many
+SELECT COALESCE(NULLIF(btrim(q.cognitive_level), ''), 'Belum diisi') AS cognitive_level, COUNT(*)::bigint AS total
+FROM cbt_questions q
+WHERE TRUE
+  AND (
+    sqlc.arg(is_admin)::bool
+    OR q.status = 'published'
+    OR q.author_username = sqlc.arg(actor_username)::text
+    OR EXISTS (
+      SELECT 1 FROM cbt_event_members m
+      WHERE m.event_id = q.event_id
+        AND m.user_id = sqlc.arg(actor_user_id)::uuid
+        AND m.role IN ('reviewer', 'panitia')
+        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+  )
+GROUP BY COALESCE(NULLIF(btrim(q.cognitive_level), ''), 'Belum diisi')
+ORDER BY total DESC, cognitive_level ASC;
+
+-- name: ListCbtQuestionSummaryRecent :many
+SELECT q.id, q.code, q.subject_id, s.name AS subject_name, s.code AS subject_code,
+       q.material_topic, q.workflow_status, q.status, q.author_username,
+       q.reviewer_username, q.created_at, q.updated_at
+FROM cbt_questions q
+JOIN subjects s ON s.id = q.subject_id
+WHERE TRUE
+  AND (
+    sqlc.arg(is_admin)::bool
+    OR q.status = 'published'
+    OR q.author_username = sqlc.arg(actor_username)::text
+    OR EXISTS (
+      SELECT 1 FROM cbt_event_members m
+      WHERE m.event_id = q.event_id
+        AND m.user_id = sqlc.arg(actor_user_id)::uuid
+        AND m.role IN ('reviewer', 'panitia')
+        AND (m.subject_id IS NULL OR m.subject_id = q.subject_id)
+    )
+  )
+ORDER BY q.updated_at DESC, q.created_at DESC
+LIMIT 5;

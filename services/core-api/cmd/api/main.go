@@ -248,6 +248,7 @@ func main() {
 		r.With(requireAdmin).Delete("/api/website/content/{id}", websiteH.Delete)
 		r.With(requireAdmin).Post("/api/website/media", websiteMediaH.Upload)
 
+		r.With(requireCbt).Get("/api/cbt/questions/summary", questionH.Summary)
 		r.With(requireCbt).Get("/api/cbt/questions", questionH.List)
 		r.With(requireCbt).Post("/api/cbt/questions", questionH.Create)
 		r.With(requireCbt).Patch("/api/cbt/questions/bulk-workflow", questionH.BulkWorkflowAction)
