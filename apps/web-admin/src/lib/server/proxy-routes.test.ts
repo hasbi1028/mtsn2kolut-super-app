@@ -1225,4 +1225,70 @@ describe('api proxy route handlers', () => {
 		expect(auditRes.status).toBe(200);
 		expect(websiteRes.status).toBe(200);
 	});
+
+	it('forwards RBAC matrix and CRUD management routes through the authenticated proxy', async () => {
+		const matrixMod = await import('../../routes/api/rbac/matrix/+server');
+		const rolesMod = await import('../../routes/api/rbac/roles/+server');
+		const roleMod = await import('../../routes/api/rbac/roles/[code]/+server');
+		const roleStatusMod = await import('../../routes/api/rbac/roles/[code]/status/+server');
+		const permissionsMod = await import('../../routes/api/rbac/permissions/+server');
+		const permissionMod = await import('../../routes/api/rbac/permissions/[code]/+server');
+		const permissionStatusMod = await import('../../routes/api/rbac/permissions/[code]/status/+server');
+
+		proxyGetMock.mockResolvedValueOnce({ roles: [], permissions: [], role_permissions: {} });
+		await matrixMod.GET(createEvent() as never);
+		expect(proxyGetMock).toHaveBeenLastCalledWith('/api/rbac/matrix');
+
+		const roleBody = { code: 'operator', name: 'Operator' };
+		const roleRequest = new Request('http://localhost/api/rbac/roles', { method: 'POST', body: JSON.stringify(roleBody) });
+		await rolesMod.POST(createEvent({ request: roleRequest }) as never);
+		expect(proxyPostMock).toHaveBeenLastCalledWith('/api/rbac/roles', roleBody);
+
+		const updateRoleBody = { name: 'Operator Baru' };
+		const updateRoleRequest = new Request('http://localhost/api/rbac/roles/operator', { method: 'PUT', body: JSON.stringify(updateRoleBody) });
+		await roleMod.PUT(createEvent({ params: { code: 'operator' }, request: updateRoleRequest }) as never);
+		expect(proxyPutMock).toHaveBeenLastCalledWith('/api/rbac/roles/operator', updateRoleBody);
+
+		const statusBody = { is_active: false };
+		const statusRequest = new Request('http://localhost/api/rbac/roles/operator/status', { method: 'PATCH', body: JSON.stringify(statusBody) });
+		await roleStatusMod.PATCH(createEvent({ params: { code: 'operator' }, request: statusRequest }) as never);
+		expect(proxyPatchMock).toHaveBeenLastCalledWith('/api/rbac/roles/operator/status', statusBody);
+
+		const permissionBody = { code: 'reports.view', module: 'reports', action: 'view', description: 'Lihat laporan' };
+		const permissionRequest = new Request('http://localhost/api/rbac/permissions', { method: 'POST', body: JSON.stringify(permissionBody) });
+		await permissionsMod.POST(createEvent({ request: permissionRequest }) as never);
+		expect(proxyPostMock).toHaveBeenLastCalledWith('/api/rbac/permissions', permissionBody);
+
+		const updatePermissionBody = { description: 'Lihat laporan madrasah' };
+		const updatePermissionRequest = new Request('http://localhost/api/rbac/permissions/reports.view', { method: 'PUT', body: JSON.stringify(updatePermissionBody) });
+		await permissionMod.PUT(createEvent({ params: { code: 'reports.view' }, request: updatePermissionRequest }) as never);
+		expect(proxyPutMock).toHaveBeenLastCalledWith('/api/rbac/permissions/reports.view', updatePermissionBody);
+
+		const permissionStatusBody = { is_active: true };
+		const permissionStatusRequest = new Request('http://localhost/api/rbac/permissions/reports.view/status', { method: 'PATCH', body: JSON.stringify(permissionStatusBody) });
+		await permissionStatusMod.PATCH(createEvent({ params: { code: 'reports.view' }, request: permissionStatusRequest }) as never);
+		expect(proxyPatchMock).toHaveBeenLastCalledWith('/api/rbac/permissions/reports.view/status', permissionStatusBody);
+	});
+
+	it('forwards user lifecycle RBAC routes required by user management UI', async () => {
+		const rolesMod = await import('../../routes/api/users/[id]/roles/+server');
+		const resetMod = await import('../../routes/api/users/[id]/reset-password/+server');
+		const profileMod = await import('../../routes/api/users/[id]/profile-link/+server');
+
+		const rolesBody = { roles: ['guru'] };
+		const rolesRequest = new Request('http://localhost/api/users/user-1/roles', { method: 'PATCH', body: JSON.stringify(rolesBody) });
+		await rolesMod.PATCH(createEvent({ params: { id: 'user-1' }, request: rolesRequest }) as never);
+		expect(proxyPatchMock).toHaveBeenLastCalledWith('/api/users/user-1/roles', rolesBody);
+
+		const resetBody = { password: 'secret12345' };
+		const resetRequest = new Request('http://localhost/api/users/user-1/reset-password', { method: 'POST', body: JSON.stringify(resetBody) });
+		await resetMod.POST(createEvent({ params: { id: 'user-1' }, request: resetRequest }) as never);
+		expect(proxyPostMock).toHaveBeenLastCalledWith('/api/users/user-1/reset-password', resetBody);
+
+		const profileBody = { employee_id: 'employee-1', student_id: null, parent_id: null };
+		const profileRequest = new Request('http://localhost/api/users/user-1/profile-link', { method: 'PATCH', body: JSON.stringify(profileBody) });
+		await profileMod.PATCH(createEvent({ params: { id: 'user-1' }, request: profileRequest }) as never);
+		expect(proxyPatchMock).toHaveBeenLastCalledWith('/api/users/user-1/profile-link', profileBody);
+	});
+
 });
