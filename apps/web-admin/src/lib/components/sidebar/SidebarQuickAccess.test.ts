@@ -10,11 +10,12 @@ vi.mock('$app/paths', () => ({
 const baseItems: Array<{
 	href: string;
 	label: string;
-	icon: 'grid' | 'clipboard' | 'calendar';
+	icon: 'grid' | 'clipboard' | 'calendar' | 'book-open';
 	pinnable?: boolean;
 	group: string;
 }> = [
 	{ href: '/', label: 'Dashboard', icon: 'grid', pinnable: false, group: 'Utama' },
+	{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'book-open', group: 'Bank Soal' },
 	{ href: '/grades', label: 'Nilai', icon: 'clipboard', group: 'Akademik' },
 	{ href: '/jadwal', label: 'Jadwal', icon: 'calendar', group: 'Akademik' }
 ];
@@ -45,6 +46,15 @@ describe('SidebarQuickAccess', () => {
 		expect(screen.getByText('Dashboard')).toBeTruthy();
 		expect(screen.getByText('Nilai')).toBeTruthy();
 		expect(screen.queryByLabelText('Pin Dashboard')).toBeNull();
+	});
+
+	it('renders standalone Bank Soal quick links without legacy query-mode routes', () => {
+		renderQuickAccess();
+
+		expect(screen.getByRole('link', { name: /Tambah Soal/ }).getAttribute('href')).toBe('/bank-soal/tambah');
+		expect(document.body.textContent).not.toContain('/cbt/soal');
+		expect(document.body.textContent).not.toContain('/cbt/questions');
+		expect(document.body.textContent).not.toContain('?mode=');
 	});
 
 	it('triggers move and pin handlers for pinned items', async () => {

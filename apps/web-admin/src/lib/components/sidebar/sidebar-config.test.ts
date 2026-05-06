@@ -8,6 +8,8 @@ describe('sidebar assessment configuration', () => {
 	it('keeps assessment navigation aligned to the three-phase workflow', () => {
 		expect(assessmentItems.map((item) => item.label)).toEqual([
 			'Dashboard Asesmen',
+			'Paket Soal',
+			'Kegiatan',
 			'Persiapan',
 			'Pelaksanaan',
 			'Hasil'
@@ -16,28 +18,33 @@ describe('sidebar assessment configuration', () => {
 
 	it('does not expose Bank Soal authoring links in the assessment group', () => {
 		expect(assessmentItems.map((item) => item.href)).toEqual([
-			'/cbt',
-			'/cbt/persiapan',
-			'/cbt/pelaksanaan',
-			'/cbt/hasil'
+			'/asesmen',
+			'/asesmen/paket',
+			'/asesmen/kegiatan',
+			'/asesmen/persiapan',
+			'/asesmen/pelaksanaan',
+			'/asesmen/hasil'
 		]);
-		expect(assessmentItems).toHaveLength(4);
+		expect(assessmentItems).toHaveLength(6);
 		expect(new Set(assessmentItems.map((item) => item.href)).size).toBe(assessmentItems.length);
 		expect(assessmentItems.some((item) => item.href === '/cbt/soal')).toBe(false);
 		expect(assessmentItems.some((item) => item.href === '/cbt/bank-soal')).toBe(false);
 		expect(assessmentItems.some((item) => item.href === '/cbt/questions')).toBe(false);
+		expect(assessmentItems.some((item) => item.href.startsWith('/bank-soal'))).toBe(false);
 		expect(assessmentItems.some((item) => item.href.includes('[id]'))).toBe(false);
 	});
 
 	it('keeps assessment phase visibility aligned to role scope', () => {
-		expect(assessmentItems.find((item) => item.href === '/cbt')?.roles).toEqual(['admin', 'guru', 'staf']);
-		expect(assessmentItems.find((item) => item.href === '/cbt/persiapan')?.roles).toEqual(['admin', 'guru']);
-		expect(assessmentItems.find((item) => item.href === '/cbt/pelaksanaan')?.roles).toEqual(['admin', 'guru', 'staf']);
-		expect(assessmentItems.find((item) => item.href === '/cbt/hasil')?.roles).toEqual(['admin', 'guru']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen')?.roles).toEqual(['admin', 'guru', 'staf']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/paket')?.roles).toEqual(['admin']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/kegiatan')?.roles).toEqual(['admin']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/persiapan')?.roles).toEqual(['admin', 'guru']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/pelaksanaan')?.roles).toEqual(['admin', 'guru', 'staf']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/hasil')?.roles).toEqual(['admin', 'guru']);
 		expect(assessmentItems.flatMap((item) => item.roles ?? [])).not.toContain('reviewer');
 	});
 
-	it('separates Bank Soal as a UX group without changing canonical CBT routes', () => {
+	it('separates Bank Soal as a standalone module outside CBT routes', () => {
 		expect(sidebarNavGroups.findIndex((group) => group.group === 'Bank Soal')).toBeLessThan(
 			sidebarNavGroups.findIndex((group) => group.group === 'Asesmen')
 		);
@@ -50,10 +57,10 @@ describe('sidebar assessment configuration', () => {
 			'Impor Soal'
 		]);
 		expect(bankSoalItems.map((item) => item.href)).toEqual([
-			'/cbt/bank-soal',
-			'/cbt/soal',
-			'/cbt/soal/review',
-			'/cbt/soal/import'
+			'/bank-soal',
+			'/bank-soal/tambah',
+			'/bank-soal/verifikasi',
+			'/bank-soal/impor'
 		]);
 		expect(bankSoalItems.every((item) => !item.href.includes('?mode='))).toBe(true);
 		expect(bankSoalItems.map((item) => item.icon)).toEqual([
@@ -63,6 +70,7 @@ describe('sidebar assessment configuration', () => {
 			'file-text'
 		]);
 		expect(bankSoalItems.every((item) => item.roles?.includes('admin') && item.roles.includes('guru'))).toBe(true);
+		expect(bankSoalItems.every((item) => !item.href.startsWith('/cbt/'))).toBe(true);
 		expect(bankSoalItems.some((item) => item.href === '/cbt/questions')).toBe(false);
 	});
 

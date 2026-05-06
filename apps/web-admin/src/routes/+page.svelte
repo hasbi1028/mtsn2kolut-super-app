@@ -8,7 +8,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import PublicHome from '$lib/components/PublicHome.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
-	import { readClientApiData } from '$lib/client/api';
+	import { clientApiPath, readClientApiData } from '$lib/client/api';
 
 	type WebsiteContent = {
 		id: string;
@@ -86,6 +86,7 @@
 	}
 
 	interface CbtSessionSummary {
+		id: string;
 		status: string;
 		package_title?: string;
 	}
@@ -143,6 +144,13 @@
 		return readClientApiData<T>(res, `Respons ${path} tidak valid.`);
 	}
 
+	async function loadUngradedEssaysForSessions(sessions: CbtSessionSummary[]): Promise<EssayQueueItem[]> {
+		const essayLists = await Promise.all(
+			sessions.map((session) => fetchJSON<EssayQueueItem[]>(clientApiPath`/api/asesmen/sessions/${session.id}/ungraded-essays`))
+		);
+		return essayLists.flat();
+	}
+
 	function fmtDateTime(iso: string) {
 		if (!iso) return '—';
 		return new Date(iso).toLocaleString('id-ID', {
@@ -170,12 +178,12 @@
 
 	async function loadDashboard(): Promise<DashboardPayload> {
 		if (isGuru) {
-			const [sessions, essays, students, timetable] = await Promise.all([
-				fetchJSON<CbtSessionSummary[]>('/api/cbt/sessions'),
-				fetchJSON<EssayQueueItem[]>('/api/cbt/sessions/my-essays'),
+			const [sessions, students, timetable] = await Promise.all([
+				fetchJSON<CbtSessionSummary[]>('/api/asesmen/sessions'),
 				fetchJSON<StudentSummary[]>('/api/students'),
 				fetchJSON<{ timetable: TimetableEntry[] }>('/api/portal/guru/timetable'),
 			]);
+			const essays = await loadUngradedEssaysForSessions(sessions);
 			const activeSessions = sessions.filter((session) => session.status === 'active' || session.status === 'scheduled');
 			const subjects = new Set(activeSessions.map((session) => session.package_title));
 			return {

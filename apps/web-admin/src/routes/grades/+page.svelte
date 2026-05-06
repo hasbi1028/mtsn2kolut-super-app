@@ -382,7 +382,7 @@
 
 	function nonTestSourceHref(component: GradeComponent) {
 		const sourceId = component.source_non_test_assessment_id;
-		return sourceId ? resolve(`/cbt/non-test?assessment_id=${sourceId}`) : resolve('/cbt/non-test');
+		return sourceId ? resolve(`/asesmen/non-tes?assessment_id=${sourceId}`) : resolve('/asesmen/non-tes');
 	}
 
 	function nonTestGradeLockMessage() {
