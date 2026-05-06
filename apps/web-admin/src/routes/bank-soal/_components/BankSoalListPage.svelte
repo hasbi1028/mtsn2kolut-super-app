@@ -3,14 +3,20 @@
 	import { resolve } from '$app/paths';
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+	import BarChart3Icon from '@lucide/svelte/icons/bar-chart-3';
+	import BookOpenCheckIcon from '@lucide/svelte/icons/book-open-check';
 	import ClipboardCheckIcon from '@lucide/svelte/icons/clipboard-check';
 	import EyeIcon from '@lucide/svelte/icons/eye';
 	import FileQuestionIcon from '@lucide/svelte/icons/file-question';
+	import HistoryIcon from '@lucide/svelte/icons/history';
+	import Layers3Icon from '@lucide/svelte/icons/layers-3';
 	import ListFilterIcon from '@lucide/svelte/icons/list-filter';
+	import PackageIcon from '@lucide/svelte/icons/package';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import RefreshCcwIcon from '@lucide/svelte/icons/refresh-ccw';
 	import SearchIcon from '@lucide/svelte/icons/search';
+	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import UploadIcon from '@lucide/svelte/icons/upload';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
@@ -139,6 +145,29 @@
 		active: boolean;
 	};
 
+	type SubjectDistribution = {
+		label: string;
+		name: string;
+		value: number;
+		color: string;
+	};
+
+	type BloomComposition = {
+		key: string;
+		label: string;
+		value: number;
+		percent: number;
+	};
+
+	type ActivityItem = {
+		id: string;
+		actor: string;
+		action: string;
+		object: string;
+		time: string;
+		tone: string;
+	};
+
 	let { data }: { data: PageData } = $props();
 
 	const PAGE_SIZE = 12;
@@ -211,6 +240,27 @@
 		hard: 'Sulit'
 	};
 
+	const subjectChartColors = [
+		'bg-sky-500',
+		'bg-emerald-500',
+		'bg-rose-500',
+		'bg-violet-500',
+		'bg-amber-500',
+		'bg-cyan-500',
+		'bg-lime-600',
+		'bg-orange-600'
+	];
+
+	const bloomOrder = ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'];
+	const bloomLabels: Record<string, string> = {
+		C1: 'C1 · Mengingat',
+		C2: 'C2 · Memahami',
+		C3: 'C3 · Menerapkan',
+		C4: 'C4 · Menganalisis',
+		C5: 'C5 · Mengevaluasi',
+		C6: 'C6 · Mencipta'
+	};
+
 	let search = $state('');
 	let subjectFilter = $state('');
 	let workflowFilter = $state<WorkflowFilter>('');
@@ -247,6 +297,14 @@
 	let selectedSubject = $derived(subjects.find((subject) => subject.id === subjectFilter) ?? null);
 	let composerHref = $derived(resolve('/bank-soal/tambah'));
 	let importHref = $derived(resolve('/bank-soal/impor'));
+	let reviewRouteHref = $derived(reviewHref());
+	let packageHref = $derived(resolve('/asesmen/paket'));
+	let totalPackageUsage = $derived.by(() =>
+		questions.reduce((sum, question) => sum + (question.package_count ?? question.usage?.package_count ?? 0), 0)
+	);
+	let subjectDistribution = $derived.by(() => buildSubjectDistribution(questions, subjects));
+	let bloomComposition = $derived.by(() => buildBloomComposition(questions));
+	let recentActivities = $derived.by(() => buildRecentActivities(questions));
 	let summaryCards = $derived<SummaryCard[]>([
 		{
 			key: 'all',
@@ -519,6 +577,91 @@
 		return text.length > 180 ? `${text.slice(0, 180)}...` : text;
 	}
 
+	function normalizeBloomLevel(value: string | undefined | null): string {
+		const upper = (value ?? '').toUpperCase();
+		const match = upper.match(/C[1-6]/);
+		return match?.[0] ?? 'Lainnya';
+	}
+
+	function shortSubjectLabel(value: string): string {
+		const compact = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+		return (compact || 'MAPEL').slice(0, 4);
+	}
+
+	function buildSubjectDistribution(items: Question[], loadedSubjects: Subject[]): SubjectDistribution[] {
+		const subjectNames = new Map<string, string>();
+		loadedSubjects.forEach((subject) => {
+			subjectNames.set(subject.id, subject.name);
+		});
+
+		const totals = new Map<string, { name: string; value: number }>();
+		items.forEach((question) => {
+			const key = question.subject_id || question.subject_name || 'unknown';
+			const name = question.subject_name || (question.subject_id ? subjectNames.get(question.subject_id) : '') || 'Tanpa Mapel';
+			const current = totals.get(key) ?? { name, value: 0 };
+			current.value += 1;
+			totals.set(key, current);
+		});
+
+		return Array.from(totals.values())
+			.sort((a, b) => b.value - a.value)
+			.slice(0, 8)
+			.map((item, index) => ({
+				label: shortSubjectLabel(item.name),
+				name: item.name,
+				value: item.value,
+				color: subjectChartColors[index % subjectChartColors.length]
+			}));
+	}
+
+	function buildBloomComposition(items: Question[]): BloomComposition[] {
+		const totals = new Map<string, number>();
+		items.forEach((question) => {
+			const key = normalizeBloomLevel(question.cognitive_level);
+			totals.set(key, (totals.get(key) ?? 0) + 1);
+		});
+		const total = Math.max(1, Array.from(totals.values()).reduce((sum, value) => sum + value, 0));
+		const ordered = [...bloomOrder, ...Array.from(totals.keys()).filter((key) => !bloomOrder.includes(key))];
+		return ordered.map((key) => {
+			const value = totals.get(key) ?? 0;
+			return {
+				key,
+				label: bloomLabels[key] ?? key,
+				value,
+				percent: Math.round((value / total) * 100)
+			};
+		});
+	}
+
+	function buildRecentActivities(items: Question[]): ActivityItem[] {
+		return [...items]
+			.sort((a, b) => new Date(b.updated_at ?? b.created_at ?? 0).getTime() - new Date(a.updated_at ?? a.created_at ?? 0).getTime())
+			.slice(0, 5)
+			.map((question) => ({
+				id: question.id,
+				actor: compactText(question.author_username || question.reviewer_username, 'Tim Bank Soal'),
+				action: activityAction(question),
+				object: `${compactText(question.code, 'Tanpa kode')} · ${compactText(question.material_topic || question.subject_name, 'Soal')}`,
+				time: formatDate(question.updated_at || question.created_at),
+				tone: question.workflow_status ?? question.status ?? 'draft'
+			}));
+	}
+
+	function activityAction(question: Question): string {
+		if (question.workflow_status === 'review') return 'mengirim untuk review';
+		if (question.workflow_status === 'approved') return 'menyetujui';
+		if (question.workflow_status === 'rejected') return 'meminta revisi';
+		if (question.status === 'published') return 'menerbitkan';
+		return 'memperbarui draft';
+	}
+
+	function activityToneClass(tone: string): string {
+		if (tone === 'approved' || tone === 'published') return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+		if (tone === 'review') return 'border-amber-200 bg-amber-50 text-amber-800';
+		if (tone === 'rejected') return 'border-red-200 bg-red-50 text-red-700';
+		return 'border-slate-200 bg-slate-50 text-slate-700';
+	}
+
 	function compactText(value: string | undefined | null, fallback = '-'): string {
 		const trimmed = (value ?? '').trim();
 		return trimmed || fallback;
@@ -640,43 +783,183 @@
 </svelte:head>
 
 <div class="space-y-5">
-	<section class="rounded-lg border border-emerald-100 bg-white p-5 shadow-sm">
-		<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-			<div class="max-w-3xl space-y-2">
-				<p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Bank Soal</p>
-				<div class="flex flex-wrap items-center gap-3">
-					<h1 class="text-2xl font-semibold tracking-tight text-slate-950 md:text-3xl">Daftar Soal</h1>
-					<Badge variant="outline" class="border-emerald-200 bg-emerald-50 text-emerald-800">{roleLabel}</Badge>
+	<section class="overflow-hidden rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-950 via-emerald-900 to-amber-900 text-white shadow-sm">
+		<div class="relative p-5 md:p-6">
+			<div class="absolute right-6 top-6 hidden h-28 w-28 rounded-full bg-amber-300/20 blur-2xl lg:block"></div>
+			<div class="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+				<div class="max-w-3xl space-y-3">
+					<div class="flex flex-wrap items-center gap-2">
+						<Badge variant="outline" class="border-white/25 bg-white/10 text-white">SCS · Bank Soal</Badge>
+						<Badge variant="outline" class="border-emerald-200/40 bg-emerald-200/15 text-emerald-50">{roleLabel}</Badge>
+					</div>
+					<div>
+						<h1 class="text-2xl font-semibold tracking-tight md:text-3xl">Dashboard Bank Soal</h1>
+						<p class="mt-2 max-w-2xl text-sm leading-6 text-emerald-50/85">
+							Ringkasan koleksi soal MTsN 2 Kolaka Utara: tulis, review, impor, dan siapkan butir terbaik untuk paket asesmen.
+						</p>
+					</div>
+					<div class="flex flex-wrap gap-2 text-xs text-emerald-50/80">
+						<span class="rounded-full bg-white/10 px-3 py-1">Tahun Pelajaran 2025/2026</span>
+						<span class="rounded-full bg-white/10 px-3 py-1">Semester berjalan</span>
+						<span class="rounded-full bg-white/10 px-3 py-1">{subjects.length} mapel terdaftar</span>
+					</div>
 				</div>
-				<p class="max-w-2xl text-sm leading-6 text-slate-600">
-					Repositori soal untuk guru dan admin. Soal dirapikan, direview, lalu diterbitkan agar siap dipakai saat paket CBT dirakit.
-				</p>
-			</div>
-			<div class="flex flex-wrap gap-2">
-				<Button href={reviewHref()} variant="outline" class="border-amber-200 text-amber-800 hover:bg-amber-50">
-					<ClipboardCheckIcon class="size-4" />
-					Review
-				</Button>
-				<Button href={importHref} variant="outline" class="border-emerald-200 text-emerald-800 hover:bg-emerald-50">
-					<UploadIcon class="size-4" />
-					Impor
-				</Button>
-				<Button href={composerHref}>
-					<PlusIcon class="size-4" />
-					Tambah Soal
-				</Button>
+				<div class="flex flex-wrap gap-2">
+					<Button href={reviewRouteHref} variant="outline" class="border-white/30 bg-white/10 text-white hover:bg-white/20">
+						<ClipboardCheckIcon class="size-4" />
+						Review
+					</Button>
+					<Button href={importHref} variant="outline" class="border-white/30 bg-white/10 text-white hover:bg-white/20">
+						<UploadIcon class="size-4" />
+						Impor
+					</Button>
+					<Button href={composerHref} class="bg-white text-emerald-950 hover:bg-emerald-50">
+						<PlusIcon class="size-4" />
+						Soal Baru
+					</Button>
+				</div>
 			</div>
 		</div>
 	</section>
 
-	<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6" aria-label="Ringkasan status soal">
-		{#each summaryCards as card (card.key)}
-			<button type="button" class={summaryCardClass(card)} aria-pressed={card.active} onclick={() => setSummaryFilter(card.key)}>
-				<span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{card.label}</span>
-				<span class={`mt-2 block text-2xl font-semibold ${summaryValueClass(card)}`}>{card.value}</span>
-				<span class="mt-1 block text-xs text-slate-500">{card.helper}</span>
-			</button>
-		{/each}
+	<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ringkasan utama bank soal">
+		<button type="button" class={summaryCardClass(summaryCards[0])} aria-pressed={summaryCards[0].active} onclick={() => setSummaryFilter('all')}>
+			<div class="flex items-center justify-between gap-3">
+				<span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Total Soal</span>
+				<FileQuestionIcon class="size-5 text-emerald-700" />
+			</div>
+			<span class={`mt-2 block text-3xl font-semibold ${summaryValueClass(summaryCards[0])}`}>{counts.all}</span>
+			<span class="mt-1 block text-xs text-slate-500">stok sesuai filter aktif</span>
+		</button>
+		<button type="button" class={summaryCardClass(summaryCards[4])} aria-pressed={summaryCards[4].active} onclick={() => setSummaryFilter('approved')}>
+			<div class="flex items-center justify-between gap-3">
+				<span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Telah Direview</span>
+				<BookOpenCheckIcon class="size-5 text-emerald-700" />
+			</div>
+			<span class={`mt-2 block text-3xl font-semibold ${summaryValueClass(summaryCards[4])}`}>{counts.approved + counts.published}</span>
+			<span class="mt-1 block text-xs text-slate-500">disetujui atau sudah terbit</span>
+		</button>
+		<a href={packageHref} class="rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-emerald-200 hover:bg-emerald-50/40">
+			<div class="flex items-center justify-between gap-3">
+				<span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Dipakai di Paket</span>
+				<PackageIcon class="size-5 text-amber-700" />
+			</div>
+			<span class="mt-2 block text-3xl font-semibold text-slate-900">{totalPackageUsage}</span>
+			<span class="mt-1 block text-xs text-slate-500">estimasi dari daftar termuat</span>
+		</a>
+		<button type="button" class={summaryCardClass(summaryCards[2])} aria-pressed={summaryCards[2].active} onclick={() => setSummaryFilter('review')}>
+			<div class="flex items-center justify-between gap-3">
+				<span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Menunggu Review</span>
+				<ClipboardCheckIcon class="size-5 text-amber-700" />
+			</div>
+			<span class={`mt-2 block text-3xl font-semibold ${summaryValueClass(summaryCards[2])}`}>{counts.review}</span>
+			<span class="mt-1 block text-xs text-slate-500">perlu keputusan reviewer</span>
+		</button>
+	</section>
+
+	<section class="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+		<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+			<div class="flex items-start justify-between gap-3">
+				<div>
+					<h2 class="text-base font-semibold text-slate-900">Distribusi soal per mata pelajaran</h2>
+					<p class="mt-1 text-xs text-slate-500">Diurutkan dari daftar soal yang sedang termuat</p>
+				</div>
+				<BarChart3Icon class="size-5 text-slate-400" />
+			</div>
+			{#if subjectDistribution.length > 0}
+				<div class="mt-5 flex h-44 items-end gap-2">
+					{#each subjectDistribution as item (item.name)}
+						<div class="flex min-w-0 flex-1 flex-col items-center gap-2" title={`${item.name}: ${item.value} soal`}>
+							<div class="flex h-32 w-full items-end justify-center rounded-t bg-slate-50 px-1">
+								<div class={`w-full max-w-8 rounded-t ${item.color}`} style={`height: ${Math.max(12, Math.round((item.value / Math.max(...subjectDistribution.map((entry) => entry.value), 1)) * 100))}%`}></div>
+							</div>
+							<span class="max-w-full truncate font-mono text-[10px] uppercase tracking-wide text-slate-500">{item.label}</span>
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<p class="mt-6 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Distribusi mapel akan muncul setelah daftar soal dimuat.</p>
+			{/if}
+		</div>
+
+		<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+			<div class="flex items-start justify-between gap-3">
+				<div>
+					<h2 class="text-base font-semibold text-slate-900">Komposisi level kognitif</h2>
+					<p class="mt-1 text-xs text-slate-500">Taksonomi Bloom C1-C6</p>
+				</div>
+				<Layers3Icon class="size-5 text-slate-400" />
+			</div>
+			<div class="mt-4 space-y-3">
+				{#each bloomComposition as item (item.key)}
+					<div>
+						<div class="mb-1 flex items-center justify-between gap-3 text-xs">
+							<span class="font-medium text-slate-700">{item.label}</span>
+							<span class="font-mono text-slate-500">{item.value} · {item.percent}%</span>
+						</div>
+						<div class="h-2 rounded-full bg-slate-100">
+							<div class="h-2 rounded-full bg-emerald-700" style={`width: ${Math.max(item.percent, item.value > 0 ? 6 : 0)}%`}></div>
+						</div>
+					</div>
+				{/each}
+			</div>
+		</div>
+	</section>
+
+	<section class="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
+		<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+			<div class="flex items-start justify-between gap-3">
+				<div>
+					<h2 class="text-base font-semibold text-slate-900">Aktivitas Terbaru</h2>
+					<p class="mt-1 text-xs text-slate-500">Perubahan terbaru dari daftar soal yang termuat</p>
+				</div>
+				<HistoryIcon class="size-5 text-slate-400" />
+			</div>
+			{#if recentActivities.length > 0}
+				<div class="mt-4 divide-y divide-slate-100">
+					{#each recentActivities as item (item.id)}
+						<div class="flex items-center gap-3 py-3">
+							<div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-xs font-semibold text-emerald-800">{item.actor.slice(0, 2).toUpperCase()}</div>
+							<div class="min-w-0 flex-1">
+								<p class="truncate text-sm text-slate-700"><span class="font-semibold text-slate-900">{item.actor}</span> {item.action} <span class="font-mono text-xs">{item.object}</span></p>
+								<p class="mt-0.5 text-xs text-slate-500">{item.time}</p>
+							</div>
+							<Badge variant="outline" class={activityToneClass(item.tone)}>{workflowLabel(item.tone)}</Badge>
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<p class="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Aktivitas terbaru akan muncul setelah ada soal yang dimuat atau diperbarui.</p>
+			{/if}
+		</div>
+
+		<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+			<div class="flex items-start justify-between gap-3">
+				<div>
+					<h2 class="text-base font-semibold text-slate-900">Aksi Cepat</h2>
+					<p class="mt-1 text-xs text-slate-500">Shortcut workflow utama Bank Soal</p>
+				</div>
+				<SparklesIcon class="size-5 text-amber-500" />
+			</div>
+			<div class="mt-4 grid gap-2">
+				<a href={composerHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800"><PlusIcon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Tambah soal baru</span><span class="block text-xs text-slate-500">PG, essay, benar/salah, menjodohkan</span></span>
+				</a>
+				<a href={packageHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800"><PackageIcon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Buat paket asesmen</span><span class="block text-xs text-slate-500">Gunakan soal terbit di modul Asesmen</span></span>
+				</a>
+				<a href={importHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-800"><UploadIcon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Import dari Word/Excel</span><span class="block text-xs text-slate-500">Preview, mapping, lalu konfirmasi</span></span>
+				</a>
+				<a href={reviewRouteHref} class="group flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 transition hover:border-emerald-200 hover:bg-emerald-50">
+					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-800"><ClipboardCheckIcon class="size-5" /></span>
+					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Review antrean</span><span class="block text-xs text-slate-500">Setujui atau kembalikan untuk revisi</span></span>
+				</a>
+			</div>
+		</div>
 	</section>
 
 	<section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
