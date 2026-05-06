@@ -57,7 +57,8 @@ describe('sidebar assessment configuration', () => {
 			'Review Soal',
 			'Impor Soal',
 			'Analisis Butir',
-			'Mapel & KD'
+			'Mapel & KD',
+			'Pengaturan Bank Soal'
 		]);
 		expect(bankSoalItems.map((item) => item.href)).toEqual([
 			'/bank-soal',
@@ -66,7 +67,8 @@ describe('sidebar assessment configuration', () => {
 			'/bank-soal/verifikasi',
 			'/bank-soal/impor',
 			'/bank-soal/analisis-butir',
-			'/bank-soal/mapel-kd'
+			'/bank-soal/mapel-kd',
+			'/bank-soal/pengaturan'
 		]);
 		expect(bankSoalItems.every((item) => !item.href.includes('?mode='))).toBe(true);
 		expect(bankSoalItems.map((item) => item.icon)).toEqual([
@@ -76,7 +78,8 @@ describe('sidebar assessment configuration', () => {
 			'clipboard',
 			'file-text',
 			'activity',
-			'layers'
+			'layers',
+			'settings'
 		]);
 		expect(bankSoalItems.every((item) => item.roles?.includes('admin') && item.roles.includes('guru'))).toBe(true);
 		expect(bankSoalItems.every((item) => !item.href.startsWith('/cbt/'))).toBe(true);
