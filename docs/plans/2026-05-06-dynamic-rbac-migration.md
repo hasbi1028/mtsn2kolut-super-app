@@ -820,11 +820,39 @@ npm --prefix apps/web-admin run build
 
 ---
 
-## Phase 8 — Cleanup and Compatibility Removal
+## Phase 8 — CRUD Role & Permission Management
 
-Only start after all phases above are deployed and verified.
+Implemented in commit `d841b1c`: backend CRUD role/permission endpoints, service/handler safety guards, audit actions, frontend RBAC client helpers, and transitional management controls in `/settings/users`.
 
-### Task 8.1: Decide retirement of old `user_account_roles`
+### Task 8.1: Dynamic role and permission management
+
+**Objective:** allow authorized operators to create/update/activate/deactivate custom roles and permissions without code changes while preserving backend safety invariants.
+
+**Implemented files:**
+
+- `services/core-api/db/queries/rbac.sql`
+- `services/core-api/internal/service/rbac.go`
+- `services/core-api/internal/handler/rbac.go`
+- `apps/web-admin/src/lib/client/rbac-users.ts`
+- `apps/web-admin/src/routes/settings/users/+page.svelte`
+
+---
+
+## Phase 9 — Final Stabilization & Cleanup Readiness
+
+Phase 9 does **not** remove legacy role fallback yet. It freezes the permission catalog, documents the remaining compatibility policy, and adds regression tests so route/sidebar permission strings cannot drift from DB seed permissions.
+
+### Task 9.1: Permission catalog and guard tests
+
+**Objective:** make permission codes operator-visible and testable across DB seed, frontend route guards, and sidebar metadata.
+
+**Files:**
+
+- Add: `docs/rbac-permission-catalog.md`
+- Add: `apps/web-admin/src/lib/rbac/permission-catalog.ts`
+- Add: `apps/web-admin/src/lib/rbac/permission-catalog.test.ts`
+
+### Task 9.2: Decide retirement of old `user_account_roles`
 
 **Objective:** Remove old enum role dependency only after dynamic RBAC is proven.
 
@@ -836,7 +864,7 @@ Only start after all phases above are deployed and verified.
 
 Recommended: Option A first, then Option B/C in a separate cleanup sprint.
 
-### Task 8.2: Remove frontend role fallbacks
+### Task 9.3: Future removal of frontend role fallbacks
 
 **Objective:** Ensure all UI uses `permissions` only.
 
@@ -966,9 +994,8 @@ Dynamic RBAC migration is complete when:
 - Existing users are backfilled into dynamic role assignments.
 - Login/current user responses include `permissions`.
 - Backend can protect routes with `RequirePermission`/`RequireAnyPermission`.
-- `/settings/users` supports safe dynamic role assignment.
-- `/settings/roles` supports role-permission matrix management.
-- Sidebar and frontend route guards use permissions.
+- `/settings/users` supports safe dynamic role assignment plus transitional role/permission management controls.
+- Sidebar and frontend route guards use permissions with documented legacy role fallback.
 - Last active admin cannot be deactivated, deleted, or stripped of role-management capability.
 - Role/permission changes are audit logged.
 - Role/permission changes invalidate affected user sessions or auth versions.
