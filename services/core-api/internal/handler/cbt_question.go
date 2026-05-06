@@ -24,6 +24,7 @@ type cbtAuthoringAuditWriter interface {
 
 type cbtQuestionService interface {
 	ListFiltered(ctx context.Context, in service.ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error)
+	Summary(ctx context.Context, actor service.CbtQuestionActor) (service.CbtQuestionSummary, error)
 	GetDetail(ctx context.Context, id pgtype.UUID, actor service.CbtQuestionActor) (db.GetCbtQuestionDetailRow, error)
 	Create(ctx context.Context, input service.SaveCbtQuestionInput) (db.CbtQuestion, error)
 	Update(ctx context.Context, input service.SaveCbtQuestionInput) (db.CbtQuestion, error)
@@ -96,6 +97,19 @@ type cbtQuestionBody struct {
 	WorkflowStatus  string                   `json:"workflow_status"`
 	WriterNotes     string                   `json:"writer_notes"`
 	ReviewNotes     string                   `json:"review_notes"`
+}
+
+func (h *CbtQuestion) Summary(w http.ResponseWriter, r *http.Request) {
+	if !cbtAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	summary, err := h.svc.Summary(r.Context(), cbtQuestionActorFromRequest(r))
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, serializeQuestionSummary(summary))
 }
 
 func (h *CbtQuestion) List(w http.ResponseWriter, r *http.Request) {

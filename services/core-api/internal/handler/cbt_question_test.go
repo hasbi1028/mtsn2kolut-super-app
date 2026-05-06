@@ -139,6 +139,18 @@ type fakeCbtQuestionService struct {
 	bulkInput  service.BulkCbtQuestionWorkflowInput
 	bulkResult service.BulkCbtQuestionWorkflowResult
 	bulkErr    error
+
+	summaryActor  service.CbtQuestionActor
+	summaryResult service.CbtQuestionSummary
+	summaryErr    error
+}
+
+func (f *fakeCbtQuestionService) Summary(_ context.Context, actor service.CbtQuestionActor) (service.CbtQuestionSummary, error) {
+	f.summaryActor = actor
+	if f.summaryErr != nil {
+		return service.CbtQuestionSummary{}, f.summaryErr
+	}
+	return f.summaryResult, nil
 }
 
 func (f *fakeCbtQuestionService) ListFiltered(_ context.Context, in service.ListCbtQuestionsInput) ([]db.ListCbtQuestionsFilteredRow, int64, error) {
