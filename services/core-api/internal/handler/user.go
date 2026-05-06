@@ -104,6 +104,7 @@ func (h *User) List(w http.ResponseWriter, r *http.Request) {
 		StudentID   pgtype.UUID        `json:"student_id"`
 		ParentID    pgtype.UUID        `json:"parent_id"`
 		ProfileNama string             `json:"profile_nama"`
+		IsActive    bool               `json:"is_active"`
 		CreatedAt   pgtype.Timestamptz `json:"created_at"`
 		Roles       []string           `json:"roles"`
 	}
@@ -121,6 +122,7 @@ func (h *User) List(w http.ResponseWriter, r *http.Request) {
 			StudentID:   row.StudentID,
 			ParentID:    row.ParentID,
 			ProfileNama: row.ProfileNama,
+			IsActive:    row.IsActive,
 			CreatedAt:   row.CreatedAt,
 			Roles:       roles,
 		}
