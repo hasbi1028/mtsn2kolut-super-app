@@ -10,7 +10,7 @@
   .title {
     font-size: 1.05rem;
     font-weight: 600;
-    color: oklch(0.18 0.02 145);
+    color: var(--foreground);
     margin: 0 0 4px;
   }
 </style>

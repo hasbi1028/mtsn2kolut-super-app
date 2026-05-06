@@ -38,13 +38,13 @@
 <div>
 	<button
 		type="button"
-		class={`mb-1 flex w-full items-center rounded-md px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 transition-colors hover:bg-slate-50 ${desktopExpanded ? 'flex' : 'flex lg:hidden'}`}
+		class={`mb-1 flex w-full items-center rounded-md px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted ${desktopExpanded ? 'flex' : 'flex lg:hidden'}`}
 		onclick={() => toggleGroup(section.group)}
 		aria-expanded={isGroupOpen(section.group)}
 	>
 		<span class="truncate">{section.group}</span>
 		{#if groupBadge(section.group) > 0 && desktopExpanded}
-			<span class="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-amber-700">
+			<span class="ml-2 rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-warning">
 				{groupBadge(section.group)}
 			</span>
 		{/if}
@@ -67,13 +67,13 @@
 							class={`flex min-w-0 flex-1 items-center rounded-md py-1.5 text-sm font-medium transition-colors
 								${desktopExpanded ? 'gap-2.5 px-2' : 'gap-2.5 px-2 lg:justify-center lg:px-0'}
 								${isActive(item.href)
-									? 'bg-green-50 text-green-800'
-									: 'text-slate-600 hover:bg-green-50/60 hover:text-slate-800'}`}
+									? 'bg-accent text-accent-foreground'
+									: 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
 						>
 							<SidebarIcon name={item.icon} active={isActive(item.href)} />
 							<span class={`truncate ${desktopExpanded ? 'inline' : 'inline lg:hidden'}`}>{item.label}</span>
 							{#if navBadge(item.href) > 0 && desktopExpanded}
-								<span class="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+								<span class="ml-auto rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
 									{navBadge(item.href)}
 								</span>
 							{/if}
@@ -81,7 +81,7 @@
 						{#if item.pinnable !== false}
 							<button
 								type="button"
-								class={`shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-600 ${desktopExpanded ? 'inline-flex' : 'inline-flex lg:hidden'}`}
+								class={`shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-warning/10 hover:text-warning ${desktopExpanded ? 'inline-flex' : 'inline-flex lg:hidden'}`}
 								onclick={() => togglePin(item.href)}
 								aria-label={pinButtonLabel(item)}
 							>
@@ -91,7 +91,7 @@
 							</button>
 						{/if}
 						{#if !desktopExpanded}
-							<div class="pointer-events-none absolute left-full top-1/2 z-40 hidden -translate-y-1/2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm lg:group-hover:block lg:ml-3">
+							<div class="pointer-events-none absolute left-full top-1/2 z-40 hidden -translate-y-1/2 rounded-md border border-border bg-popover px-2 py-1 text-xs font-medium text-popover-foreground shadow-sm lg:group-hover:block lg:ml-3">
 								{railTooltip(item, section.group)}
 							</div>
 						{/if}

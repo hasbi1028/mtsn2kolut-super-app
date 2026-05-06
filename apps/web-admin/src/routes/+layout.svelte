@@ -52,7 +52,7 @@
 		{@render children()}
 	</PublicSiteShell>
 {:else}
-	<div class="flex min-h-screen bg-slate-50">
+	<div class="flex min-h-screen bg-background text-foreground">
 		<Sidebar bind:desktopExpanded={desktopSidebarExpanded} user={data.user} />
 		<!--
 			lg:pl-60      — offset for expanded fixed sidebar on desktop

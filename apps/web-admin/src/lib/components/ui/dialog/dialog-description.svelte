@@ -9,7 +9,7 @@
 <style>
   .desc {
     font-size: 0.85rem;
-    color: oklch(0.5 0.02 145);
+    color: var(--muted-foreground);
     margin: 0;
   }
 </style>
