@@ -160,10 +160,13 @@ func main() {
 	r.With(publicSiteRateLimit).Get("/api/public/site/pages/{slug}", websiteH.GetPublishedPage)
 	r.Get("/api/website/media/{filename}", websiteMediaH.File)
 
-	// CBT asset files are not public-by-obscurity. They may be accessed either by
-	// authenticated admin/guru requests or by active exam participants using the
-	// exam token attached to exam payload asset URLs.
-	r.With(mw.ExamTokenOrJWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession, examSvc.GetParticipantByToken)).Get("/api/cbt/assets/{id}/file", questionAssetH.File)
+	// CBT/Bank Soal asset files are not public-by-obscurity. They may be accessed
+	// either by authenticated admin/guru requests or by active exam participants
+	// using the exam token attached to exam payload asset URLs. Keep both native
+	// Bank Soal and legacy CBT paths wired to the same guard/handler.
+	assetFileGuard := mw.ExamTokenOrJWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession, examSvc.GetParticipantByToken)
+	r.With(assetFileGuard).Get("/api/cbt/assets/{id}/file", questionAssetH.File)
+	r.With(assetFileGuard).Get("/api/bank-soal/assets/{id}/file", questionAssetH.File)
 
 	// Exam endpoints — authenticated via X-Exam-Token (no JWT needed)
 	r.With(examLoginRateLimit).Post("/api/exam/login", examH.Login)
@@ -462,15 +465,15 @@ func main() {
 		r.With(requireBankSoalAssetUpload).Post("/api/bank-soal/assets", questionAssetH.Upload)
 
 		// Native Asesmen API aliases — /api/cbt remains compatibility only.
-		r.With(requireCbt).Get("/api/asesmen/non-test-assessments", nonTestAssessmentH.List)
-		r.With(requireCbt).Post("/api/asesmen/non-test-assessments", nonTestAssessmentH.Create)
-		r.With(requireCbt).Get("/api/asesmen/non-test-assessments/{id}", nonTestAssessmentH.Get)
-		r.With(requireCbt).Put("/api/asesmen/non-test-assessments/{id}", nonTestAssessmentH.Update)
-		r.With(requireCbt).Delete("/api/asesmen/non-test-assessments/{id}", nonTestAssessmentH.Delete)
-		r.With(requireCbt).Post("/api/asesmen/non-test-assessments/{id}/sync-grade", nonTestAssessmentH.SyncGrade)
-		r.With(requireCbt).Get("/api/asesmen/non-test-assessments/{id}/submissions", nonTestAssessmentH.ListSubmissions)
-		r.With(requireCbt).Post("/api/asesmen/non-test-assessments/{id}/submissions/generate", nonTestAssessmentH.GenerateSubmissions)
-		r.With(requireCbt).Post("/api/asesmen/non-test-assessments/{id}/submissions", nonTestAssessmentH.UpsertSubmission)
+		r.With(requireAsesmenRead).Get("/api/asesmen/non-test-assessments", nonTestAssessmentH.List)
+		r.With(requireAsesmenScore).Post("/api/asesmen/non-test-assessments", nonTestAssessmentH.Create)
+		r.With(requireAsesmenRead).Get("/api/asesmen/non-test-assessments/{id}", nonTestAssessmentH.Get)
+		r.With(requireAsesmenScore).Put("/api/asesmen/non-test-assessments/{id}", nonTestAssessmentH.Update)
+		r.With(requireAsesmenScore).Delete("/api/asesmen/non-test-assessments/{id}", nonTestAssessmentH.Delete)
+		r.With(requireAsesmenScore, requireGradesManage).Post("/api/asesmen/non-test-assessments/{id}/sync-grade", nonTestAssessmentH.SyncGrade)
+		r.With(requireAsesmenRead).Get("/api/asesmen/non-test-assessments/{id}/submissions", nonTestAssessmentH.ListSubmissions)
+		r.With(requireAsesmenScore).Post("/api/asesmen/non-test-assessments/{id}/submissions/generate", nonTestAssessmentH.GenerateSubmissions)
+		r.With(requireAsesmenScore).Post("/api/asesmen/non-test-assessments/{id}/submissions", nonTestAssessmentH.UpsertSubmission)
 		r.With(requireCbt).Get("/api/asesmen/packages", packageH.List)
 		r.With(requireAsesmenPackageManage).Post("/api/asesmen/packages", packageH.Create)
 		r.With(requireAsesmenPackageManage).Delete("/api/asesmen/packages/{id}", packageH.Delete)
