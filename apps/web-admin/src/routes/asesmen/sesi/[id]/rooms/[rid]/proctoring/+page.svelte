@@ -155,6 +155,7 @@
 		dashboardPromise = loadDashboard();
 		void loadHandover();
 		interval = setInterval(() => {
+			if (typeof document !== 'undefined' && document.hidden) return;
 			void refreshDashboard(true);
 		}, 15000);
 	});
