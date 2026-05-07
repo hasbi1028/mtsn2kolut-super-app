@@ -8,9 +8,12 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import {
+		createRBACPermission,
 		createRBACRole,
 		fetchRBACMatrix,
+		setRBACPermissionActive,
 		setRBACRoleActive,
+		updateRBACPermission,
 		updateRBACRole,
 		updateRBACRolePermissions,
 		type RBACMatrix,
@@ -33,6 +36,15 @@
 		sanitizeRoleMetadataPayload,
 		type RoleMetadataDraft
 	} from '$lib/rbac/roles';
+	import {
+		buildPermissionMetadataDraft,
+		canTogglePermissionStatus,
+		filterPermissionCatalog,
+		normalizePermissionSegment,
+		permissionMetadataChanged,
+		sanitizePermissionMetadataPayload,
+		type PermissionMetadataDraft
+	} from '$lib/rbac/permissions';
 
 	type RBACOverview = {
 		matrix: RBACMatrix;
@@ -56,6 +68,15 @@
 	let roleFormError = $state('');
 	let roleActionLoading = $state(false);
 	let roleStatusTarget = $state('');
+	let permissionFormMode = $state<'create' | 'edit'>('create');
+	let permissionDraft = $state<PermissionMetadataDraft>({ module: '', action: '', description: '' });
+	let permissionFormError = $state('');
+	let permissionActionLoading = $state(false);
+	let permissionStatusTarget = $state('');
+	let permissionCatalogSearch = $state('');
+	let permissionCatalogModule = $state('all');
+	let permissionCatalogStatus = $state<'all' | 'active' | 'inactive'>('all');
+	let selectedPermissionCode = $state('');
 
 	const roles = $derived(overview?.matrix.roles ?? []);
 	const permissions = $derived(overview?.matrix.permissions ?? []);
@@ -79,6 +100,21 @@
 		roleDraftPayload.code.length > 0 &&
 		roleDraftPayload.name.length > 0 &&
 		(roleFormMode === 'create' || (canEditRoleMetadata(selectedRole) && roleMetadataChanged(selectedRole, roleDraft)))
+	);
+	const selectedPermission = $derived(permissions.find((permission: RBACPermission) => permission.code === selectedPermissionCode) ?? null);
+	const permissionDraftPayload = $derived(sanitizePermissionMetadataPayload(permissionDraft));
+	const canSavePermissionDraft = $derived(
+		permissionDraftPayload.code.length > 0 &&
+		permissionDraftPayload.module.length > 0 &&
+		permissionDraftPayload.action.length > 0 &&
+		(permissionFormMode === 'create' || permissionMetadataChanged(selectedPermission, permissionDraft))
+	);
+	const visiblePermissionCatalog = $derived(
+		filterPermissionCatalog(permissions, {
+			module: permissionCatalogModule,
+			status: permissionCatalogStatus,
+			query: permissionCatalogSearch
+		})
 	);
 
 	function buildOverview(matrix: RBACMatrix): RBACOverview {
@@ -205,6 +241,88 @@
 			roleFormError = error instanceof Error ? error.message : 'Gagal memperbarui status role.';
 		} finally {
 			roleStatusTarget = '';
+		}
+	}
+
+	function startCreatePermission() {
+		permissionFormMode = 'create';
+		permissionDraft = { module: '', action: '', description: '' };
+		selectedPermissionCode = '';
+		permissionFormError = '';
+		mutationMessage = '';
+		mutationError = '';
+	}
+
+	function startEditPermission(permission: RBACPermission) {
+		permissionFormMode = 'edit';
+		selectedPermissionCode = permission.code;
+		permissionDraft = buildPermissionMetadataDraft(permission);
+		permissionFormError = '';
+		mutationMessage = '';
+		mutationError = '';
+	}
+
+	function updatePermissionModuleDraft(value: string) {
+		permissionDraft = { ...permissionDraft, module: normalizePermissionSegment(value) };
+	}
+
+	function updatePermissionActionDraft(value: string) {
+		permissionDraft = { ...permissionDraft, action: normalizePermissionSegment(value) };
+	}
+
+	async function savePermissionMetadata() {
+		permissionFormError = '';
+		mutationMessage = '';
+		mutationError = '';
+		const payload = sanitizePermissionMetadataPayload(permissionDraft);
+		if (!payload.code || !payload.module || !payload.action) {
+			permissionFormError = 'Module dan action permission wajib diisi.';
+			return;
+		}
+		permissionActionLoading = true;
+		try {
+			if (permissionFormMode === 'create') {
+				await createRBACPermission(payload);
+				selectedPermissionCode = payload.code;
+				mutationMessage = `Permission ${payload.code} berhasil dibuat. Tambahkan ke role melalui matrix akses bila diperlukan.`;
+			} else if (selectedPermission) {
+				await updateRBACPermission(selectedPermission.code, {
+					module: payload.module,
+					action: payload.action,
+					description: payload.description
+				});
+				selectedPermissionCode = payload.code || selectedPermission.code;
+				mutationMessage = `Metadata permission ${selectedPermission.code} berhasil diperbarui.`;
+			}
+			await loadRBACOverview();
+			permissionFormMode = 'edit';
+			const refreshed = permissions.find((permission: RBACPermission) => permission.code === selectedPermissionCode);
+			permissionDraft = buildPermissionMetadataDraft(refreshed ?? selectedPermission);
+		} catch (error) {
+			permissionFormError = error instanceof Error ? error.message : 'Gagal menyimpan metadata permission.';
+		} finally {
+			permissionActionLoading = false;
+		}
+	}
+
+	async function togglePermissionActive(permission: RBACPermission) {
+		if (!canTogglePermissionStatus(permission)) {
+			permissionFormError = 'Permission kritikal tidak dapat dinonaktifkan dari UI untuk mencegah lockout admin.';
+			return;
+		}
+		permissionFormError = '';
+		mutationMessage = '';
+		mutationError = '';
+		permissionStatusTarget = permission.code;
+		try {
+			await setRBACPermissionActive(permission.code, permission.is_active === false);
+			mutationMessage = `Status permission ${permission.code} berhasil diperbarui.`;
+			selectedPermissionCode = permission.code;
+			await loadRBACOverview();
+		} catch (error) {
+			permissionFormError = error instanceof Error ? error.message : 'Gagal memperbarui status permission.';
+		} finally {
+			permissionStatusTarget = '';
 		}
 	}
 
@@ -506,6 +624,89 @@
 				</Card.Content>
 			</Card.Root>
 		</div>
+
+		<Card.Root class="border-border shadow-sm">
+			<Card.Header>
+				<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+					<div>
+						<Card.Title>Katalog Permission</Card.Title>
+						<p class="mt-1 text-sm text-muted-foreground">Kelola permission dinamis. Permission kritikal diberi guard UI tambahan dan backend tetap menjadi sumber kebenaran.</p>
+					</div>
+					<Button variant="outline" onclick={startCreatePermission} disabled={permissionActionLoading}>Permission Baru</Button>
+				</div>
+			</Card.Header>
+			<Card.Content class="space-y-5">
+				<div class="rounded-2xl border border-border bg-muted/20 p-4">
+					<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+						<div>
+							<p class="text-sm font-semibold text-foreground">{permissionFormMode === 'create' ? 'Tambah Permission' : 'Edit Permission'}</p>
+							<p class="text-xs text-muted-foreground">Kode permission dibentuk otomatis dari module.action.</p>
+						</div>
+						<Badge variant={permissionDraftPayload.code ? 'secondary' : 'outline'}>{permissionDraftPayload.code || 'module.action'}</Badge>
+					</div>
+					<div class="mt-4 grid gap-3 md:grid-cols-3">
+						<div class="space-y-1">
+							<label for="permission-module" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Module</label>
+							<Input id="permission-module" value={permissionDraft.module} oninput={(event) => updatePermissionModuleDraft(event.currentTarget.value)} placeholder="bank_soal" disabled={permissionActionLoading} />
+						</div>
+						<div class="space-y-1">
+							<label for="permission-action" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Action</label>
+							<Input id="permission-action" value={permissionDraft.action} oninput={(event) => updatePermissionActionDraft(event.currentTarget.value)} placeholder="publish" disabled={permissionActionLoading} />
+						</div>
+						<div class="space-y-1">
+							<label for="permission-description" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deskripsi</label>
+							<Input id="permission-description" bind:value={permissionDraft.description} placeholder="Keterangan singkat" disabled={permissionActionLoading} />
+						</div>
+					</div>
+					{#if permissionFormError}
+						<div class="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{permissionFormError}</div>
+					{/if}
+					<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
+						<p class="text-xs text-muted-foreground">Setelah permission dibuat, centang permission tersebut pada role yang membutuhkan akses.</p>
+						<Button onclick={() => void savePermissionMetadata()} disabled={!canSavePermissionDraft || permissionActionLoading}>{permissionActionLoading ? 'Menyimpan…' : (permissionFormMode === 'create' ? 'Buat Permission' : 'Simpan Permission')}</Button>
+					</div>
+				</div>
+
+				<div class="grid gap-3 md:grid-cols-[1fr_180px_180px]">
+					<Input bind:value={permissionCatalogSearch} placeholder="Cari permission/module/action" />
+					<select bind:value={permissionCatalogModule} class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]">
+						<option value="all">Semua module</option>
+						{#each moduleOptions as module (module)}<option value={module}>{module}</option>{/each}
+					</select>
+					<select bind:value={permissionCatalogStatus} class="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]">
+						<option value="all">Semua status</option>
+						<option value="active">Aktif</option>
+						<option value="inactive">Nonaktif</option>
+					</select>
+				</div>
+
+				<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+					{#each visiblePermissionCatalog as permission (permission.code)}
+						<div class={`rounded-2xl border p-4 ${permission.is_active === false ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-card'}`}>
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									<p class="break-all text-sm font-semibold text-foreground">{permission.code}</p>
+									<p class="text-xs text-muted-foreground">{permission.module || permission.code.split('.')[0]} · {permission.action || permission.code.split('.').slice(1).join('.')}</p>
+								</div>
+								<div class="flex flex-wrap justify-end gap-1">
+									{#if isCriticalPermission(permission.code)}<Badge variant="destructive">Kritikal</Badge>{/if}
+									<Badge variant={permission.is_active === false ? 'destructive' : 'secondary'}>{permission.is_active === false ? 'Nonaktif' : 'Aktif'}</Badge>
+								</div>
+							</div>
+							{#if permission.name || permission.description}<p class="mt-2 text-sm text-muted-foreground">{permission.description || permission.name}</p>{/if}
+							<div class="mt-4 flex flex-wrap justify-end gap-2">
+								<Button size="sm" variant="outline" onclick={() => startEditPermission(permission)} disabled={permissionActionLoading || permissionStatusTarget === permission.code}>Edit</Button>
+								<Button size="sm" variant={permission.is_active === false ? 'secondary' : 'outline'} onclick={() => void togglePermissionActive(permission)} disabled={!canTogglePermissionStatus(permission) || permissionActionLoading || permissionStatusTarget === permission.code}>
+									{permissionStatusTarget === permission.code ? 'Memproses…' : (permission.is_active === false ? 'Aktifkan' : 'Nonaktifkan')}
+								</Button>
+							</div>
+						</div>
+					{:else}
+						<EmptyStatePanel title="Permission tidak ditemukan" description="Ubah filter katalog permission." compact />
+					{/each}
+				</div>
+			</Card.Content>
+		</Card.Root>
 	{/if}
 </section>
 
