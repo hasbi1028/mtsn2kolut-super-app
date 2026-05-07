@@ -62,6 +62,15 @@ Sebelum restart produksi, cek `TRUSTED_PROXY_CIDRS` di backend, samakan `WORKER_
 **Tindakan:**
 Pertimbangkan constraint database unik untuk `(room_id, seat_no)` ketika format seat number sudah stabil di operasional.
 
+### Low — Drill restore PostgreSQL secara periodik
+
+**Area:** backup operations.
+
+**Status:** `make ops-backup` sekarang memanggil `deploy/backup-postgresql.sh` (custom-format dump dengan SHA-256 checksum, retention 30 hari, `flock` overlap guard). Restore drill prosedur tertulis di `deploy/DEPLOY.md`.
+
+**Tindakan:**
+Jalankan restore drill ke database staging tiap rilis besar atau minimal kuartalan. Catat RTO aktual sebagai baseline.
+
 ### Low — Tunda CBT Engine sampai rehearsal/load signal cukup
 
 **Area:** arsitektur CBT runtime.

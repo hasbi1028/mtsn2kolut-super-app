@@ -238,7 +238,7 @@ ops-health-worker:
 	./deploy/scripts/health-check.sh worker
 
 ops-backup:
-	./deploy/scripts/backup.sh
+	./deploy/backup-postgresql.sh
 
 # ── Clean ────────────────────────────────────────────────────────────────────
 
