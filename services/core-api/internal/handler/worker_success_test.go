@@ -141,6 +141,13 @@ func TestPusakaWorkerSuccessHandlersForwardPayloads(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	req = withRouteParam(httptest.NewRequest(http.MethodPost, "/api/pusaka/worker/jobs/"+jobID.String()+"/fail", strings.NewReader(`{"worker_id":"worker-1","error":"timeout","retry_after_secs":180}`)), "id", jobID.String())
+	h.Fail(rec, req)
+	if rec.Code != http.StatusNoContent || jobs.failRetry.String != "180" {
+		t.Fatalf("Fail(numeric retry) status/retry = %d/%q, want 204/180", rec.Code, jobs.failRetry.String)
+	}
+
+	rec = httptest.NewRecorder()
 	h.UpsertAttendance(rec, httptest.NewRequest(http.MethodPost, "/api/pusaka/worker/attendance", strings.NewReader(`{"employee_id":"`+employeeID.String()+`","tanggal":"2026-05-02","jam_masuk":"07:20","jam_pulang":"14:45","source_job_id":"`+sourceJobID.String()+`"}`)))
 	if rec.Code != http.StatusOK || attendance.upsertArg.EmployeeID != employeeID || attendance.upsertArg.SourceJobID != sourceJobID {
 		t.Fatalf("UpsertAttendance() status/arg = %d/%+v", rec.Code, attendance.upsertArg)
@@ -302,6 +309,27 @@ func TestPusakaWorkerValidationAndServiceErrors(t *testing.T) {
 		h.Fail(rec, req)
 		if rec.Code != http.StatusNoContent || jobs.failRetry.String != "60" {
 			t.Fatalf("Fail(default retry) status/retry = %d/%q, want 204/60", rec.Code, jobs.failRetry.String)
+		}
+
+		rec = httptest.NewRecorder()
+		req = withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/fail", strings.NewReader(`{"worker_id":"worker-1","error":"timeout","retry_after_secs":120}`)), "id", jobID.String())
+		h.Fail(rec, req)
+		if rec.Code != http.StatusNoContent || jobs.failRetry.String != "120" {
+			t.Fatalf("Fail(numeric retry) status/retry = %d/%q, want 204/120", rec.Code, jobs.failRetry.String)
+		}
+
+		for name, retryBody := range map[string]string{
+			"negative":  `-1`,
+			"decimal":   `1.5`,
+			"text":      `"soon"`,
+			"too large": `86401`,
+		} {
+			rec = httptest.NewRecorder()
+			req = withRouteParam(httptest.NewRequest(http.MethodPost, "/job/"+jobID.String()+"/fail", strings.NewReader(`{"worker_id":"worker-1","error":"timeout","retry_after_secs":`+retryBody+`}`)), "id", jobID.String())
+			h.Fail(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("Fail(invalid retry %s) status = %d, want 400", name, rec.Code)
+			}
 		}
 
 		jobs.failErr = errors.New("fail failed")

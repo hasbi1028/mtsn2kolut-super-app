@@ -19,9 +19,17 @@ export const POST = async (event: RequestEvent) => {
 			parent_name: optionalStringField(body, 'parent_name'),
 			parent_phone: optionalStringField(body, 'parent_phone'),
 		};
+		const clientAddress = event.getClientAddress();
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json',
+			'X-Client-IP': clientAddress,
+			'X-Forwarded-For': clientAddress
+		};
+		const userAgent = event.request.headers.get('user-agent');
+		if (userAgent) headers['X-Client-User-Agent'] = userAgent;
 		const res = await event.fetch(`${BASE}/api/public/register-student`, {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
+			headers,
 			body: JSON.stringify(payload),
 		});
 		return await jsonProxyResponse<Record<string, unknown>>(res, { status: 201 });

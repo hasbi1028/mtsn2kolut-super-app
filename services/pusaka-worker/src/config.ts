@@ -70,7 +70,7 @@ function normalizeBackendUrl(raw: string): string {
   return `${url.origin}${pathname}`;
 }
 
-function isLocalOrTestEnv(backendUrl: string): boolean {
+function isExplicitLocalOrTestEnv(): boolean {
   if (['test', 'local', 'development'].includes(NODE_ENV)) {
     return true;
   }
@@ -80,13 +80,16 @@ function isLocalOrTestEnv(backendUrl: string): boolean {
   if (['test', 'local', 'development'].includes(APP_ENV)) {
     return true;
   }
-  const hostname = parseBackendUrl(backendUrl).hostname.toLowerCase();
-  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1';
+  return false;
 }
 
-export const BACKEND_URL = normalizeBackendUrl(process.env.BACKEND_URL ?? 'http://localhost:8080');
+const RAW_BACKEND_URL = process.env.BACKEND_URL;
+if (!RAW_BACKEND_URL && !isExplicitLocalOrTestEnv()) {
+  throw new Error('Invalid worker config: BACKEND_URL is required outside local/test/development');
+}
+export const BACKEND_URL = normalizeBackendUrl(RAW_BACKEND_URL ?? 'http://localhost:8080');
 export const WORKER_API_KEY = process.env.WORKER_API_KEY ?? '';
-if (!WORKER_API_KEY && !isLocalOrTestEnv(BACKEND_URL)) {
+if (!WORKER_API_KEY && !isExplicitLocalOrTestEnv()) {
   throw new Error('Invalid worker config: WORKER_API_KEY is required');
 }
 export const WORKER_ID =

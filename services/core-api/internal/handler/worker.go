@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -115,23 +117,28 @@ func (h *PusakaWorker) Fail(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 	var body struct {
-		WorkerID       string `json:"worker_id"`
-		Error          string `json:"error"`
-		RetryAfterSecs string `json:"retry_after_secs"`
+		WorkerID       string          `json:"worker_id"`
+		Error          string          `json:"error"`
+		RetryAfterSecs json.RawMessage `json:"retry_after_secs"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	if body.RetryAfterSecs == "" {
-		body.RetryAfterSecs = "60"
+	retryAfterSecs, err := parseWorkerRetryAfterSecs(body.RetryAfterSecs)
+	if err != nil {
+		api.BadRequest(w, "invalid retry_after_secs")
+		return
+	}
+	if retryAfterSecs == "" {
+		retryAfterSecs = "60"
 	}
 	workerID := workerIDFromRequest(r, body.WorkerID)
 	if workerID == "" {
 		api.BadRequest(w, "worker_id required")
 		return
 	}
-	retryAfter := pgtype.Text{String: body.RetryAfterSecs, Valid: true}
+	retryAfter := pgtype.Text{String: retryAfterSecs, Valid: true}
 	if err := h.jobs.Fail(r.Context(), id, workerID, body.Error, retryAfter); err != nil {
 		if errors.Is(err, domain.ErrConflict) {
 			api.Conflict(w, "job is not running for this worker")
@@ -141,6 +148,33 @@ func (h *PusakaWorker) Fail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.NoContent(w)
+}
+
+func parseWorkerRetryAfterSecs(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 || strings.TrimSpace(string(raw)) == "null" {
+		return "", nil
+	}
+	var rawValue string
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		rawValue = strings.TrimSpace(text)
+	} else {
+		var number json.Number
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		if err := decoder.Decode(&number); err != nil {
+			return "", errors.New("retry_after_secs must be string or number")
+		}
+		rawValue = number.String()
+	}
+	if rawValue == "" {
+		return "", nil
+	}
+	retryAfter, err := strconv.Atoi(rawValue)
+	if err != nil || retryAfter < 0 || retryAfter > 86400 {
+		return "", errors.New("retry_after_secs must be an integer between 0 and 86400")
+	}
+	return strconv.Itoa(retryAfter), nil
 }
 
 func workerIDFromRequest(r *http.Request, bodyWorkerID string) string {

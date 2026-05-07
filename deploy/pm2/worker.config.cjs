@@ -11,7 +11,7 @@ module.exports = {
       interpreter: 'node',
       env_file: path.join(rootDir, 'services/pusaka-worker/.env'),
       env: {
-        WORKER_ID: 'worker-vps1',
+        NODE_ENV: 'production',
         WORKER_CONCURRENCY: '5',
         HEADLESS: 'true',
         POLL_MS: '8000',
@@ -26,6 +26,7 @@ module.exports = {
       autorestart: true,
       watch: false,
       max_memory_restart: '600M',
+      kill_timeout: 20000,
       error_file: path.join(rootDir, 'logs/worker-error.log'),
       out_file: path.join(rootDir, 'logs/worker-out.log'),
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'

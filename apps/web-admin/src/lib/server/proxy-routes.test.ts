@@ -91,6 +91,7 @@ function createEvent(overrides: Record<string, unknown> = {}) {
 		params: {},
 		request: new Request('http://localhost/test'),
 		fetch: vi.fn(),
+		getClientAddress: () => '127.0.0.1',
 		cookies: {
 			get: (key: string) => cookieValues[key],
 			delete: (key: string, opts: { path: string }) => {
@@ -843,7 +844,11 @@ describe('api proxy route handlers', () => {
 		expect(readRequestJsonMock).toHaveBeenCalledWith(request);
 		expect(eventFetch).toHaveBeenCalledWith('http://127.0.0.1:8080/api/public/register-student', {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
+			headers: {
+				'Content-Type': 'application/json',
+				'X-Client-IP': '127.0.0.1',
+				'X-Forwarded-For': '127.0.0.1'
+			},
 			body: JSON.stringify({
 				nis: '1234567890',
 				nama: 'Siswa Baru',

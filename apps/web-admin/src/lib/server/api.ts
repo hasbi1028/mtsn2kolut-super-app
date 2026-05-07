@@ -327,7 +327,10 @@ type ClientMeta = {
 function clientMetaHeaders(meta?: ClientMeta): Record<string, string> {
 	const headers: Record<string, string> = {};
 	if (meta?.userAgent) headers['X-Client-User-Agent'] = meta.userAgent;
-	if (meta?.ipAddress) headers['X-Client-IP'] = meta.ipAddress;
+	if (meta?.ipAddress) {
+		headers['X-Client-IP'] = meta.ipAddress;
+		headers['X-Forwarded-For'] = meta.ipAddress;
+	}
 	return headers;
 }
 
