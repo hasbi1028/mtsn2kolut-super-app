@@ -65,6 +65,7 @@ export class WorkerSupervisor {
 
   start(): void {
     void this.syncRuntimeConfig();
+    void this.heartbeatLoop();
     this.configTimer = this.deps.setInterval(() => {
       void this.syncRuntimeConfig();
     }, CONFIG_SYNC_MS);
@@ -372,19 +373,21 @@ export class WorkerSupervisor {
     );
     const uniqueJobIds = Array.from(new Set(activeJobIds));
 
-    for (const jobId of uniqueJobIds) {
-      try {
-        await this.deps.failJob(jobId, 'worker shutdown timeout');
-        this.shutdownReportedJobIds.add(jobId);
-        this.deps.log('WARN', 'active job failed during shutdown timeout', {
-          job_id: jobId,
-        });
-      } catch (error) {
-        this.deps.log('ERROR', 'active job shutdown fail report failed', {
-          job_id: jobId,
-          error: (error as Error)?.message ?? String(error),
-        });
-      }
-    }
+    await Promise.allSettled(
+      uniqueJobIds.map(async (jobId) => {
+        try {
+          await this.deps.failJob(jobId, 'worker shutdown timeout');
+          this.shutdownReportedJobIds.add(jobId);
+          this.deps.log('WARN', 'active job failed during shutdown timeout', {
+            job_id: jobId,
+          });
+        } catch (error) {
+          this.deps.log('ERROR', 'active job shutdown fail report failed', {
+            job_id: jobId,
+            error: (error as Error)?.message ?? String(error),
+          });
+        }
+      }),
+    );
   }
 }
