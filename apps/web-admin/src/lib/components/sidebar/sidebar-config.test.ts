@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { sidebarNavGroups } from './sidebar-config';
+import { dashboardNavItem, sidebarNavGroups } from './sidebar-config';
 
 const assessmentItems = sidebarNavGroups.find((group) => group.group === 'Asesmen')?.items ?? [];
 const bankSoalItems = sidebarNavGroups.find((group) => group.group === 'Bank Soal')?.items ?? [];
 
 describe('sidebar assessment configuration', () => {
+	it('keeps Dashboard only as the quick-access root item, not duplicated in a Utama group', () => {
+		expect(dashboardNavItem).toMatchObject({ href: '/', label: 'Dashboard', pinnable: false });
+		expect(sidebarNavGroups.some((group) => group.group === 'Utama')).toBe(false);
+		expect(sidebarNavGroups.flatMap((group) => group.items).some((item) => item.href === '/')).toBe(false);
+	});
+
 	it('keeps assessment navigation aligned to the three-phase workflow', () => {
 		expect(assessmentItems.map((item) => item.label)).toEqual([
 			'Dashboard Asesmen',
