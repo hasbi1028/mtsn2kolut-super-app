@@ -1134,6 +1134,7 @@
 				await Promise.all([loadProctoring(), loadProctoringEvents()]);
 				if (!procInterval) {
 					procInterval = setInterval(() => {
+						if (typeof document !== 'undefined' && document.hidden) return;
 						void loadProctoring().catch((error) => toast.error(detailErrorMessage(error)));
 					}, 15000);
 				}

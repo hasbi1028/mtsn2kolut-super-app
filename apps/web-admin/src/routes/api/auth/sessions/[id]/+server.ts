@@ -10,6 +10,13 @@ export const DELETE: RequestHandler = async (event) => {
 	try {
 		const id = requiredRouteParam(event.params.id, 'id');
 		await proxy(event).del(apiPath`/api/auth/sessions/${id}`);
+		// If the user just revoked their own active session, drop the cookies
+		// immediately so this browser sees the logout state without waiting for
+		// the access token to expire.
+		if (event.locals.user.session_id && event.locals.user.session_id === id) {
+			event.cookies.delete('access_token', { path: '/' });
+			event.cookies.delete('refresh_token', { path: '/' });
+		}
 		return json({ ok: true });
 	} catch (e) {
 		if (e instanceof ApiError && e.status === 401) {
