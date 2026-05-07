@@ -41,6 +41,7 @@ func main() {
 
 	authSvc := service.NewAuth(q, mustEnv("JWT_SECRET"), getEnv("ADMIN_PASSWORD", ""), getEnv("AVATAR_DIR", "uploads/avatars"))
 	academicSvc := service.NewAcademic(q)
+	rombelSvc := service.NewRombel(q)
 	gradeSvc := service.NewGrade(q)
 	empSvc := service.NewEmployee(q)
 	studentSvc := service.NewStudent(q)
@@ -87,6 +88,7 @@ func main() {
 
 	authH := handler.NewAuth(authSvc, q)
 	academicH := handler.NewAcademic(academicSvc)
+	rombelH := handler.NewRombel(rombelSvc)
 	gradeH := handler.NewGrade(gradeSvc, q)
 	empH := handler.NewEmployee(empSvc)
 	healthH := handler.NewHealth(pool, pusakaJobSvc, settSvc)
@@ -241,6 +243,13 @@ func main() {
 
 		r.Get("/api/academic", academicH.Overview)
 		r.Get("/api/academic/stats", academicH.GetStats)
+		r.Get("/api/academic/rombel", rombelH.List)
+		r.Get("/api/academic/rombel/{id}", rombelH.Get)
+		r.Get("/api/academic/rombel/{id}/students", rombelH.ListStudents)
+		r.Get("/api/academic/rombel/{id}/homeroom-assignments", rombelH.ListHomeroomAssignments)
+		r.With(requireAcademicManage).Post("/api/academic/rombel/{id}/homeroom-assignments", rombelH.CreateHomeroomAssignment)
+		r.With(requireAcademicManage).Put("/api/academic/rombel/{id}/homeroom-assignments/{assignmentID}", rombelH.UpdateHomeroomAssignment)
+		r.With(requireAcademicManage).Delete("/api/academic/rombel/{id}/homeroom-assignments/{assignmentID}", rombelH.DeleteHomeroomAssignment)
 		r.With(requireAcademicManage).Post("/api/academic/{entity}", academicH.Create)
 		r.With(requireAcademicManage).Put("/api/academic/{entity}/{id}", academicH.Update)
 		r.With(requireAcademicManage).Delete("/api/academic/{entity}/{id}", academicH.Delete)

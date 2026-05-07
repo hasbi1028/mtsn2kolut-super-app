@@ -1179,6 +1179,19 @@ type CertificateTemplate struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type ClassHomeroomAssignment struct {
+	ID             pgtype.UUID        `json:"id"`
+	ClassID        pgtype.UUID        `json:"class_id"`
+	EmployeeID     pgtype.UUID        `json:"employee_id"`
+	AcademicYearID pgtype.UUID        `json:"academic_year_id"`
+	StartDate      pgtype.Date        `json:"start_date"`
+	EndDate        pgtype.Date        `json:"end_date"`
+	IsActive       bool               `json:"is_active"`
+	Notes          string             `json:"notes"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
 type ClassJournalAttendance struct {
 	ID        pgtype.UUID             `json:"id"`
 	SessionID pgtype.UUID             `json:"session_id"`
@@ -1730,18 +1743,26 @@ type OutgoingLetterSequence struct {
 }
 
 type Parent struct {
-	ID        pgtype.UUID        `json:"id"`
-	Nama      string             `json:"nama"`
-	Phone     string             `json:"phone"`
-	Address   string             `json:"address"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	PhotoUrl  string             `json:"photo_url"`
+	ID         pgtype.UUID        `json:"id"`
+	Nama       string             `json:"nama"`
+	Phone      string             `json:"phone"`
+	Address    string             `json:"address"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	PhotoUrl   string             `json:"photo_url"`
+	Occupation string             `json:"occupation"`
+	IncomeBand string             `json:"income_band"`
+	Nik        string             `json:"nik"`
 }
 
 type ParentStudent struct {
-	ParentID  pgtype.UUID `json:"parent_id"`
-	StudentID pgtype.UUID `json:"student_id"`
+	ParentID         pgtype.UUID        `json:"parent_id"`
+	StudentID        pgtype.UUID        `json:"student_id"`
+	Relationship     interface{}        `json:"relationship"`
+	IsPrimaryContact bool               `json:"is_primary_contact"`
+	Notes            string             `json:"notes"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 }
 
 type ProfileChangeRequest struct {

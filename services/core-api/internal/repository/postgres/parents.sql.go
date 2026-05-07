@@ -14,7 +14,7 @@ import (
 const createParent = `-- name: CreateParent :one
 INSERT INTO parents (nama, phone, address)
 VALUES ($1, $2, $3)
-RETURNING id, nama, phone, address, created_at, updated_at, photo_url
+RETURNING id, nama, phone, address, created_at, updated_at, photo_url, occupation, income_band, nik
 `
 
 type CreateParentParams struct {
@@ -34,6 +34,39 @@ func (q *Queries) CreateParent(ctx context.Context, arg CreateParentParams) (Par
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PhotoUrl,
+		&i.Occupation,
+		&i.IncomeBand,
+		&i.Nik,
+	)
+	return i, err
+}
+
+const createParentFromNormalization = `-- name: CreateParentFromNormalization :one
+INSERT INTO parents (nama, phone, address)
+VALUES ($1, $2, $3)
+RETURNING id, nama, phone, address, created_at, updated_at, photo_url, occupation, income_band, nik
+`
+
+type CreateParentFromNormalizationParams struct {
+	Nama    string `json:"nama"`
+	Phone   string `json:"phone"`
+	Address string `json:"address"`
+}
+
+func (q *Queries) CreateParentFromNormalization(ctx context.Context, arg CreateParentFromNormalizationParams) (Parent, error) {
+	row := q.db.QueryRow(ctx, createParentFromNormalization, arg.Nama, arg.Phone, arg.Address)
+	var i Parent
+	err := row.Scan(
+		&i.ID,
+		&i.Nama,
+		&i.Phone,
+		&i.Address,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PhotoUrl,
+		&i.Occupation,
+		&i.IncomeBand,
+		&i.Nik,
 	)
 	return i, err
 }
@@ -47,8 +80,53 @@ func (q *Queries) DeleteParent(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const findParentForNormalization = `-- name: FindParentForNormalization :one
+SELECT id, nama, phone, address, created_at, updated_at, photo_url, occupation, income_band, nik
+FROM parents
+WHERE LOWER(REGEXP_REPLACE(BTRIM(nama), '\s+', ' ', 'g')) = LOWER(REGEXP_REPLACE(BTRIM($1), '\s+', ' ', 'g'))
+  AND (
+    BTRIM(COALESCE($2, '')) = ''
+    OR phone = ''
+    OR REGEXP_REPLACE(phone, '\D', '', 'g') = REGEXP_REPLACE($2, '\D', '', 'g')
+  )
+  AND (
+    BTRIM(COALESCE($3, '')) = ''
+    OR address = ''
+    OR LOWER(REGEXP_REPLACE(BTRIM(address), '\s+', ' ', 'g')) = LOWER(REGEXP_REPLACE(BTRIM($3), '\s+', ' ', 'g'))
+  )
+ORDER BY
+  CASE WHEN REGEXP_REPLACE(phone, '\D', '', 'g') <> '' AND REGEXP_REPLACE(phone, '\D', '', 'g') = REGEXP_REPLACE($2, '\D', '', 'g') THEN 0 ELSE 1 END,
+  CASE WHEN address <> '' AND LOWER(REGEXP_REPLACE(BTRIM(address), '\s+', ' ', 'g')) = LOWER(REGEXP_REPLACE(BTRIM($3), '\s+', ' ', 'g')) THEN 0 ELSE 1 END,
+  created_at ASC
+LIMIT 1
+`
+
+type FindParentForNormalizationParams struct {
+	Nama    string      `json:"nama"`
+	Phone   interface{} `json:"phone"`
+	Address interface{} `json:"address"`
+}
+
+func (q *Queries) FindParentForNormalization(ctx context.Context, arg FindParentForNormalizationParams) (Parent, error) {
+	row := q.db.QueryRow(ctx, findParentForNormalization, arg.Nama, arg.Phone, arg.Address)
+	var i Parent
+	err := row.Scan(
+		&i.ID,
+		&i.Nama,
+		&i.Phone,
+		&i.Address,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PhotoUrl,
+		&i.Occupation,
+		&i.IncomeBand,
+		&i.Nik,
+	)
+	return i, err
+}
+
 const getParent = `-- name: GetParent :one
-SELECT id, nama, phone, address, created_at, updated_at, photo_url
+SELECT id, nama, phone, address, created_at, updated_at, photo_url, occupation, income_band, nik
 FROM parents
 WHERE id = $1
 `
@@ -64,6 +142,9 @@ func (q *Queries) GetParent(ctx context.Context, id pgtype.UUID) (Parent, error)
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PhotoUrl,
+		&i.Occupation,
+		&i.IncomeBand,
+		&i.Nik,
 	)
 	return i, err
 }
@@ -85,7 +166,8 @@ func (q *Queries) LinkParentStudent(ctx context.Context, arg LinkParentStudentPa
 }
 
 const listParentChildren = `-- name: ListParentChildren :many
-SELECT s.id, s.nis, s.nama, s.class_id, c.name as class_name
+SELECT s.id, s.nis, s.nama, s.class_id, c.name as class_name,
+       ps.relationship, ps.is_primary_contact, ps.notes
 FROM students s
 JOIN parent_students ps ON ps.student_id = s.id
 LEFT JOIN school_classes c ON c.id = s.class_id
@@ -93,11 +175,14 @@ WHERE ps.parent_id = $1
 `
 
 type ListParentChildrenRow struct {
-	ID        pgtype.UUID `json:"id"`
-	Nis       string      `json:"nis"`
-	Nama      string      `json:"nama"`
-	ClassID   pgtype.UUID `json:"class_id"`
-	ClassName pgtype.Text `json:"class_name"`
+	ID               pgtype.UUID `json:"id"`
+	Nis              string      `json:"nis"`
+	Nama             string      `json:"nama"`
+	ClassID          pgtype.UUID `json:"class_id"`
+	ClassName        pgtype.Text `json:"class_name"`
+	Relationship     interface{} `json:"relationship"`
+	IsPrimaryContact bool        `json:"is_primary_contact"`
+	Notes            string      `json:"notes"`
 }
 
 func (q *Queries) ListParentChildren(ctx context.Context, parentID pgtype.UUID) ([]ListParentChildrenRow, error) {
@@ -115,6 +200,9 @@ func (q *Queries) ListParentChildren(ctx context.Context, parentID pgtype.UUID) 
 			&i.Nama,
 			&i.ClassID,
 			&i.ClassName,
+			&i.Relationship,
+			&i.IsPrimaryContact,
+			&i.Notes,
 		); err != nil {
 			return nil, err
 		}
@@ -127,7 +215,7 @@ func (q *Queries) ListParentChildren(ctx context.Context, parentID pgtype.UUID) 
 }
 
 const listParents = `-- name: ListParents :many
-SELECT id, nama, phone, address, created_at, updated_at, photo_url
+SELECT id, nama, phone, address, created_at, updated_at, photo_url, occupation, income_band, nik
 FROM parents
 ORDER BY nama ASC
 `
@@ -149,6 +237,9 @@ func (q *Queries) ListParents(ctx context.Context) ([]Parent, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.PhotoUrl,
+			&i.Occupation,
+			&i.IncomeBand,
+			&i.Nik,
 		); err != nil {
 			return nil, err
 		}
@@ -161,16 +252,24 @@ func (q *Queries) ListParents(ctx context.Context) ([]Parent, error) {
 }
 
 const listStudentParents = `-- name: ListStudentParents :many
-SELECT p.id, p.nama, p.phone
+SELECT p.id, p.nama, p.phone, p.address, p.occupation, p.income_band, p.nik,
+       ps.relationship, ps.is_primary_contact, ps.notes
 FROM parents p
 JOIN parent_students ps ON ps.parent_id = p.id
 WHERE ps.student_id = $1
 `
 
 type ListStudentParentsRow struct {
-	ID    pgtype.UUID `json:"id"`
-	Nama  string      `json:"nama"`
-	Phone string      `json:"phone"`
+	ID               pgtype.UUID `json:"id"`
+	Nama             string      `json:"nama"`
+	Phone            string      `json:"phone"`
+	Address          string      `json:"address"`
+	Occupation       string      `json:"occupation"`
+	IncomeBand       string      `json:"income_band"`
+	Nik              string      `json:"nik"`
+	Relationship     interface{} `json:"relationship"`
+	IsPrimaryContact bool        `json:"is_primary_contact"`
+	Notes            string      `json:"notes"`
 }
 
 func (q *Queries) ListStudentParents(ctx context.Context, studentID pgtype.UUID) ([]ListStudentParentsRow, error) {
@@ -182,7 +281,18 @@ func (q *Queries) ListStudentParents(ctx context.Context, studentID pgtype.UUID)
 	items := []ListStudentParentsRow{}
 	for rows.Next() {
 		var i ListStudentParentsRow
-		if err := rows.Scan(&i.ID, &i.Nama, &i.Phone); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nama,
+			&i.Phone,
+			&i.Address,
+			&i.Occupation,
+			&i.IncomeBand,
+			&i.Nik,
+			&i.Relationship,
+			&i.IsPrimaryContact,
+			&i.Notes,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -212,7 +322,7 @@ const updateParent = `-- name: UpdateParent :one
 UPDATE parents
 SET nama = $2, phone = $3, address = $4, updated_at = NOW()
 WHERE id = $1
-RETURNING id, nama, phone, address, created_at, updated_at, photo_url
+RETURNING id, nama, phone, address, created_at, updated_at, photo_url, occupation, income_band, nik
 `
 
 type UpdateParentParams struct {
@@ -238,6 +348,49 @@ func (q *Queries) UpdateParent(ctx context.Context, arg UpdateParentParams) (Par
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.PhotoUrl,
+		&i.Occupation,
+		&i.IncomeBand,
+		&i.Nik,
+	)
+	return i, err
+}
+
+const upsertParentStudentRelationship = `-- name: UpsertParentStudentRelationship :one
+INSERT INTO parent_students (parent_id, student_id, relationship, is_primary_contact, notes)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (parent_id, student_id) DO UPDATE
+SET relationship = EXCLUDED.relationship,
+    is_primary_contact = EXCLUDED.is_primary_contact,
+    notes = EXCLUDED.notes,
+    updated_at = NOW()
+RETURNING parent_id, student_id, relationship, is_primary_contact, notes, created_at, updated_at
+`
+
+type UpsertParentStudentRelationshipParams struct {
+	ParentID         pgtype.UUID `json:"parent_id"`
+	StudentID        pgtype.UUID `json:"student_id"`
+	Relationship     interface{} `json:"relationship"`
+	IsPrimaryContact bool        `json:"is_primary_contact"`
+	Notes            string      `json:"notes"`
+}
+
+func (q *Queries) UpsertParentStudentRelationship(ctx context.Context, arg UpsertParentStudentRelationshipParams) (ParentStudent, error) {
+	row := q.db.QueryRow(ctx, upsertParentStudentRelationship,
+		arg.ParentID,
+		arg.StudentID,
+		arg.Relationship,
+		arg.IsPrimaryContact,
+		arg.Notes,
+	)
+	var i ParentStudent
+	err := row.Scan(
+		&i.ParentID,
+		&i.StudentID,
+		&i.Relationship,
+		&i.IsPrimaryContact,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
