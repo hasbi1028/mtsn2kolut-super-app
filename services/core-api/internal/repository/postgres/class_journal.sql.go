@@ -25,24 +25,26 @@ func (q *Queries) CountJournalSessionsForAssignment(ctx context.Context, assignm
 
 const createJournalSession = `-- name: CreateJournalSession :one
 INSERT INTO class_journal_sessions
-    (assignment_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, guru_hadir)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, assignment_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, guru_hadir, created_at, updated_at
+    (assignment_id, timetable_slot_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, guru_hadir)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, assignment_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, guru_hadir, created_at, updated_at, timetable_slot_id
 `
 
 type CreateJournalSessionParams struct {
-	AssignmentID pgtype.UUID `json:"assignment_id"`
-	Tanggal      pgtype.Date `json:"tanggal"`
-	PertemuanKe  int32       `json:"pertemuan_ke"`
-	Materi       string      `json:"materi"`
-	Kegiatan     string      `json:"kegiatan"`
-	Catatan      string      `json:"catatan"`
-	GuruHadir    bool        `json:"guru_hadir"`
+	AssignmentID    pgtype.UUID `json:"assignment_id"`
+	TimetableSlotID pgtype.UUID `json:"timetable_slot_id"`
+	Tanggal         pgtype.Date `json:"tanggal"`
+	PertemuanKe     int32       `json:"pertemuan_ke"`
+	Materi          string      `json:"materi"`
+	Kegiatan        string      `json:"kegiatan"`
+	Catatan         string      `json:"catatan"`
+	GuruHadir       bool        `json:"guru_hadir"`
 }
 
 func (q *Queries) CreateJournalSession(ctx context.Context, arg CreateJournalSessionParams) (ClassJournalSession, error) {
 	row := q.db.QueryRow(ctx, createJournalSession,
 		arg.AssignmentID,
+		arg.TimetableSlotID,
 		arg.Tanggal,
 		arg.PertemuanKe,
 		arg.Materi,
@@ -62,6 +64,7 @@ func (q *Queries) CreateJournalSession(ctx context.Context, arg CreateJournalSes
 		&i.GuruHadir,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TimetableSlotID,
 	)
 	return i, err
 }
@@ -77,7 +80,7 @@ func (q *Queries) DeleteJournalSession(ctx context.Context, id pgtype.UUID) erro
 
 const getJournalSession = `-- name: GetJournalSession :one
 SELECT
-    s.id, s.assignment_id, s.tanggal, s.pertemuan_ke,
+    s.id, s.assignment_id, s.timetable_slot_id, s.tanggal, s.pertemuan_ke,
     s.materi, s.kegiatan, s.catatan, s.guru_hadir,
     s.created_at, s.updated_at,
     csa.class_id, c.name AS class_name, c.code AS class_code,
@@ -94,6 +97,7 @@ WHERE s.id = $1
 type GetJournalSessionRow struct {
 	ID                pgtype.UUID        `json:"id"`
 	AssignmentID      pgtype.UUID        `json:"assignment_id"`
+	TimetableSlotID   pgtype.UUID        `json:"timetable_slot_id"`
 	Tanggal           pgtype.Date        `json:"tanggal"`
 	PertemuanKe       int32              `json:"pertemuan_ke"`
 	Materi            string             `json:"materi"`
@@ -117,6 +121,7 @@ func (q *Queries) GetJournalSession(ctx context.Context, id pgtype.UUID) (GetJou
 	err := row.Scan(
 		&i.ID,
 		&i.AssignmentID,
+		&i.TimetableSlotID,
 		&i.Tanggal,
 		&i.PertemuanKe,
 		&i.Materi,
@@ -141,6 +146,7 @@ SELECT id
 FROM class_journal_sessions
 WHERE assignment_id = $1
   AND tanggal = $2
+  AND timetable_slot_id IS NULL
 `
 
 type GetJournalSessionIDByAssignmentDateParams struct {
@@ -150,6 +156,25 @@ type GetJournalSessionIDByAssignmentDateParams struct {
 
 func (q *Queries) GetJournalSessionIDByAssignmentDate(ctx context.Context, arg GetJournalSessionIDByAssignmentDateParams) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, getJournalSessionIDByAssignmentDate, arg.AssignmentID, arg.Tanggal)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getJournalSessionIDByTimetableSlotDate = `-- name: GetJournalSessionIDByTimetableSlotDate :one
+SELECT id
+FROM class_journal_sessions
+WHERE timetable_slot_id = $1
+  AND tanggal = $2
+`
+
+type GetJournalSessionIDByTimetableSlotDateParams struct {
+	TimetableSlotID pgtype.UUID `json:"timetable_slot_id"`
+	Tanggal         pgtype.Date `json:"tanggal"`
+}
+
+func (q *Queries) GetJournalSessionIDByTimetableSlotDate(ctx context.Context, arg GetJournalSessionIDByTimetableSlotDateParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getJournalSessionIDByTimetableSlotDate, arg.TimetableSlotID, arg.Tanggal)
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -276,7 +301,7 @@ func (q *Queries) ListJournalAttendances(ctx context.Context, sessionID pgtype.U
 
 const listJournalSessions = `-- name: ListJournalSessions :many
 SELECT
-    s.id, s.assignment_id, s.tanggal, s.pertemuan_ke,
+    s.id, s.assignment_id, s.timetable_slot_id, s.tanggal, s.pertemuan_ke,
     s.materi, s.kegiatan, s.catatan, s.guru_hadir,
     s.created_at, s.updated_at,
     c.name AS class_name, c.code AS class_code,
@@ -292,20 +317,21 @@ ORDER BY s.tanggal DESC, s.pertemuan_ke DESC
 `
 
 type ListJournalSessionsRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	AssignmentID pgtype.UUID        `json:"assignment_id"`
-	Tanggal      pgtype.Date        `json:"tanggal"`
-	PertemuanKe  int32              `json:"pertemuan_ke"`
-	Materi       string             `json:"materi"`
-	Kegiatan     string             `json:"kegiatan"`
-	Catatan      string             `json:"catatan"`
-	GuruHadir    bool               `json:"guru_hadir"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	ClassName    string             `json:"class_name"`
-	ClassCode    string             `json:"class_code"`
-	SubjectName  string             `json:"subject_name"`
-	TeacherName  string             `json:"teacher_name"`
+	ID              pgtype.UUID        `json:"id"`
+	AssignmentID    pgtype.UUID        `json:"assignment_id"`
+	TimetableSlotID pgtype.UUID        `json:"timetable_slot_id"`
+	Tanggal         pgtype.Date        `json:"tanggal"`
+	PertemuanKe     int32              `json:"pertemuan_ke"`
+	Materi          string             `json:"materi"`
+	Kegiatan        string             `json:"kegiatan"`
+	Catatan         string             `json:"catatan"`
+	GuruHadir       bool               `json:"guru_hadir"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ClassName       string             `json:"class_name"`
+	ClassCode       string             `json:"class_code"`
+	SubjectName     string             `json:"subject_name"`
+	TeacherName     string             `json:"teacher_name"`
 }
 
 func (q *Queries) ListJournalSessions(ctx context.Context, assignmentID pgtype.UUID) ([]ListJournalSessionsRow, error) {
@@ -320,6 +346,7 @@ func (q *Queries) ListJournalSessions(ctx context.Context, assignmentID pgtype.U
 		if err := rows.Scan(
 			&i.ID,
 			&i.AssignmentID,
+			&i.TimetableSlotID,
 			&i.Tanggal,
 			&i.PertemuanKe,
 			&i.Materi,
@@ -343,11 +370,37 @@ func (q *Queries) ListJournalSessions(ctx context.Context, assignmentID pgtype.U
 	return items, nil
 }
 
+const lockJournalAssignmentForUpdate = `-- name: LockJournalAssignmentForUpdate :one
+SELECT id
+FROM class_subject_assignments
+WHERE id = $1
+FOR UPDATE
+`
+
+func (q *Queries) LockJournalAssignmentForUpdate(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, lockJournalAssignmentForUpdate, id)
+	err := row.Scan(&id)
+	return id, err
+}
+
+const nextJournalMeetingNumber = `-- name: NextJournalMeetingNumber :one
+SELECT (COALESCE(MAX(pertemuan_ke), 0) + 1)::int
+FROM class_journal_sessions
+WHERE assignment_id = $1
+`
+
+func (q *Queries) NextJournalMeetingNumber(ctx context.Context, assignmentID pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, nextJournalMeetingNumber, assignmentID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const updateJournalSession = `-- name: UpdateJournalSession :one
 UPDATE class_journal_sessions
 SET materi = $2, kegiatan = $3, catatan = $4, guru_hadir = $5, updated_at = NOW()
 WHERE id = $1
-RETURNING id, assignment_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, guru_hadir, created_at, updated_at
+RETURNING id, assignment_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, guru_hadir, created_at, updated_at, timetable_slot_id
 `
 
 type UpdateJournalSessionParams struct {
@@ -378,13 +431,24 @@ func (q *Queries) UpdateJournalSession(ctx context.Context, arg UpdateJournalSes
 		&i.GuruHadir,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TimetableSlotID,
 	)
 	return i, err
 }
 
 const upsertJournalAttendance = `-- name: UpsertJournalAttendance :one
 INSERT INTO class_journal_attendances (session_id, student_id, status, catatan)
-VALUES ($1, $2, $3, $4)
+SELECT
+    $1::uuid,
+    st.id,
+    $2::journal_attendance_status,
+    $3::text
+FROM class_journal_sessions s
+JOIN class_subject_assignments csa ON csa.id = s.assignment_id
+JOIN students st ON st.id = $4::uuid
+    AND st.class_id = csa.class_id
+    AND st.is_active = TRUE
+WHERE s.id = $1::uuid
 ON CONFLICT (session_id, student_id) DO UPDATE
     SET status     = EXCLUDED.status,
         catatan    = EXCLUDED.catatan,
@@ -394,17 +458,17 @@ RETURNING id, session_id, student_id, status, catatan, created_at, updated_at
 
 type UpsertJournalAttendanceParams struct {
 	SessionID pgtype.UUID             `json:"session_id"`
-	StudentID pgtype.UUID             `json:"student_id"`
 	Status    JournalAttendanceStatus `json:"status"`
 	Catatan   string                  `json:"catatan"`
+	StudentID pgtype.UUID             `json:"student_id"`
 }
 
 func (q *Queries) UpsertJournalAttendance(ctx context.Context, arg UpsertJournalAttendanceParams) (ClassJournalAttendance, error) {
 	row := q.db.QueryRow(ctx, upsertJournalAttendance,
 		arg.SessionID,
-		arg.StudentID,
 		arg.Status,
 		arg.Catatan,
+		arg.StudentID,
 	)
 	var i ClassJournalAttendance
 	err := row.Scan(

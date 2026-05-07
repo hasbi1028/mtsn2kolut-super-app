@@ -9,7 +9,8 @@ import { RBAC_PERMISSION_CATALOG, permissionCatalogCodes, permissionLabel } from
 const repoRoot = resolve(__dirname, '../../../../..');
 const migration = [
 	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/069_dynamic_rbac_foundation.sql'), 'utf8'),
-	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/076_profile_change_review_permission.sql'), 'utf8')
+	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/076_profile_change_review_permission.sql'), 'utf8'),
+	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/079_journal_timetable_slot_scope.sql'), 'utf8')
 ].join('\n');
 const docs = readFileSync(resolve(repoRoot, 'docs/rbac-permission-catalog.md'), 'utf8');
 
@@ -42,6 +43,7 @@ describe('RBAC permission catalog stabilization', () => {
 			['/api/rbac/permissions/reports.view/status', 'PATCH'],
 			['/api/users/user-1/reset-password', 'POST'],
 			['/api/bank-soal/questions', 'POST'],
+			['/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST'],
 			['/api/asesmen/packages', 'POST'],
 			['/api/tu/archives/documents', 'POST'],
 			['/api/pusaka/settings', 'PUT']

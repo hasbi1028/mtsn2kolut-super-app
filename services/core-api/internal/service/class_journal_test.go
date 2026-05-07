@@ -9,12 +9,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
 type fakeClassJournalStore struct {
 	countSessions int32
 	countErr      error
+	nextMeeting   int32
+	nextErr       error
+	lockIDs       []pgtype.UUID
+	lockErr       error
 
 	createArg db.CreateJournalSessionParams
 	createRow db.ClassJournalSession
@@ -26,6 +31,10 @@ type fakeClassJournalStore struct {
 	sessionByDateArg db.GetJournalSessionIDByAssignmentDateParams
 	sessionByDateID  pgtype.UUID
 	sessionByDateErr error
+
+	sessionBySlotArg db.GetJournalSessionIDByTimetableSlotDateParams
+	sessionBySlotID  pgtype.UUID
+	sessionBySlotErr error
 
 	timetableArg db.GetRombelTimetableSlotParams
 	timetableRow db.GetRombelTimetableSlotRow
@@ -67,6 +76,24 @@ func (f *fakeClassJournalStore) CountJournalSessionsForAssignment(ctx context.Co
 	return f.countSessions, f.countErr
 }
 
+func (f *fakeClassJournalStore) LockJournalAssignmentForUpdate(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+	f.lockIDs = append(f.lockIDs, id)
+	if f.lockErr != nil {
+		return pgtype.UUID{}, f.lockErr
+	}
+	return id, nil
+}
+
+func (f *fakeClassJournalStore) NextJournalMeetingNumber(ctx context.Context, assignmentID pgtype.UUID) (int32, error) {
+	if f.nextErr != nil {
+		return 0, f.nextErr
+	}
+	if f.nextMeeting == 0 {
+		return 1, nil
+	}
+	return f.nextMeeting, nil
+}
+
 func (f *fakeClassJournalStore) CreateJournalSession(ctx context.Context, arg db.CreateJournalSessionParams) (db.ClassJournalSession, error) {
 	f.createArg = arg
 	if f.createErr != nil {
@@ -88,6 +115,14 @@ func (f *fakeClassJournalStore) GetJournalSessionIDByAssignmentDate(ctx context.
 		return pgtype.UUID{}, f.sessionByDateErr
 	}
 	return f.sessionByDateID, nil
+}
+
+func (f *fakeClassJournalStore) GetJournalSessionIDByTimetableSlotDate(ctx context.Context, arg db.GetJournalSessionIDByTimetableSlotDateParams) (pgtype.UUID, error) {
+	f.sessionBySlotArg = arg
+	if f.sessionBySlotErr != nil {
+		return pgtype.UUID{}, f.sessionBySlotErr
+	}
+	return f.sessionBySlotID, nil
 }
 
 func (f *fakeClassJournalStore) GetRombelTimetableSlot(ctx context.Context, arg db.GetRombelTimetableSlotParams) (db.GetRombelTimetableSlotRow, error) {
@@ -225,7 +260,7 @@ func TestClassJournalCreateSessionTrimsAndSeedsAttendances(t *testing.T) {
 	firstStudentID := documentCycleTestUUID(55)
 	secondStudentID := documentCycleTestUUID(56)
 	store := &fakeClassJournalStore{
-		countSessions: 2,
+		nextMeeting: 3,
 		assignmentRow: db.GetClassSubjectAssignmentRow{
 			ID:                assignmentID,
 			ClassID:           classID,
@@ -264,6 +299,9 @@ func TestClassJournalCreateSessionTrimsAndSeedsAttendances(t *testing.T) {
 	}
 	if store.createArg.PertemuanKe != 3 {
 		t.Fatalf("pertemuan_ke = %d, want 3", store.createArg.PertemuanKe)
+	}
+	if len(store.lockIDs) != 1 || store.lockIDs[0] != assignmentID {
+		t.Fatalf("assignment locks = %v, want assignment %v locked before meeting allocation", store.lockIDs, assignmentID)
 	}
 	if store.createArg.Materi != "Pecahan" || store.createArg.Kegiatan != "Diskusi kelompok" || store.createArg.Catatan != "Catatan wali kelas" {
 		t.Fatalf("create arg was not normalized: %+v", store.createArg)
@@ -311,8 +349,9 @@ func TestClassJournalOpenSessionFromTimetableSlotReturnsExisting(t *testing.T) {
 			AssignmentID:      assignmentID,
 			TeacherEmployeeID: teacherID,
 			SubjectName:       "IPA",
+			DayOfWeek:         3,
 		},
-		sessionByDateID: sessionID,
+		sessionBySlotID: sessionID,
 		sessionRow: db.GetJournalSessionRow{
 			ID:                sessionID,
 			AssignmentID:      assignmentID,
@@ -338,8 +377,8 @@ func TestClassJournalOpenSessionFromTimetableSlotReturnsExisting(t *testing.T) {
 	if store.timetableArg.ClassID != classID || store.timetableArg.ID != slotID {
 		t.Fatalf("timetable arg = %+v, want scoped class/slot", store.timetableArg)
 	}
-	if store.sessionByDateArg.AssignmentID != assignmentID || store.sessionByDateArg.Tanggal != tanggal {
-		t.Fatalf("session by date arg = %+v, want assignment/date", store.sessionByDateArg)
+	if store.sessionBySlotArg.TimetableSlotID != slotID || store.sessionBySlotArg.Tanggal != tanggal {
+		t.Fatalf("session by slot/date arg = %+v, want slot/date", store.sessionBySlotArg)
 	}
 	if store.createArg.AssignmentID.Valid {
 		t.Fatalf("create arg = %+v, want no create for existing session", store.createArg)
@@ -355,9 +394,9 @@ func TestClassJournalOpenSessionFromTimetableSlotCreatesAndSeeds(t *testing.T) {
 	studentID := documentCycleTestUUID(92)
 	tanggal := documentCycleTestDate(2026, 5, 7)
 	store := &fakeClassJournalStore{
-		countSessions:    4,
-		sessionByDateErr: pgx.ErrNoRows,
-		timetableRow:     db.GetRombelTimetableSlotRow{ID: slotID, ClassID: classID, AssignmentID: assignmentID, TeacherEmployeeID: teacherID},
+		nextMeeting:      5,
+		sessionBySlotErr: pgx.ErrNoRows,
+		timetableRow:     db.GetRombelTimetableSlotRow{ID: slotID, ClassID: classID, AssignmentID: assignmentID, TeacherEmployeeID: teacherID, DayOfWeek: 4},
 		createRow:        db.ClassJournalSession{ID: sessionID, AssignmentID: assignmentID, PertemuanKe: 5},
 		studentsRows:     []db.ListActiveStudentsByClassIDRow{{ID: studentID, Nama: "Siswa A"}},
 		sessionRow:       db.GetJournalSessionRow{ID: sessionID, AssignmentID: assignmentID, TeacherEmployeeID: teacherID, Materi: "Pecahan"},
@@ -374,6 +413,9 @@ func TestClassJournalOpenSessionFromTimetableSlotCreatesAndSeeds(t *testing.T) {
 	}
 	if store.createArg.AssignmentID != assignmentID || store.createArg.Tanggal != tanggal || store.createArg.PertemuanKe != 5 {
 		t.Fatalf("create arg = %+v, want assignment/date/pertemuan from slot", store.createArg)
+	}
+	if store.createArg.TimetableSlotID != slotID {
+		t.Fatalf("create timetable_slot_id = %v, want %v", store.createArg.TimetableSlotID, slotID)
 	}
 	if store.createArg.Materi != "Pecahan" || store.createArg.Kegiatan != "Diskusi" || store.createArg.Catatan != "Siap" || store.createArg.GuruHadir {
 		t.Fatalf("create arg normalization = %+v, want trimmed values and guru_hadir false", store.createArg)
@@ -402,6 +444,53 @@ func TestClassJournalOpenSessionFromTimetableSlotRejectsTeacherMismatch(t *testi
 	}
 }
 
+func TestClassJournalOpenSessionFromTimetableSlotRejectsDateMismatch(t *testing.T) {
+	classID := documentCycleTestUUID(104)
+	slotID := documentCycleTestUUID(105)
+	assignmentID := documentCycleTestUUID(106)
+	teacherID := documentCycleTestUUID(107)
+	store := &fakeClassJournalStore{
+		timetableRow: db.GetRombelTimetableSlotRow{
+			ID:                slotID,
+			ClassID:           classID,
+			AssignmentID:      assignmentID,
+			TeacherEmployeeID: teacherID,
+			DayOfWeek:         1,
+		},
+	}
+	svc := &ClassJournal{q: store}
+
+	_, err := svc.OpenSessionFromTimetableSlot(context.Background(), classID, slotID, documentCycleTestDate(2026, 5, 7), "", "", "", true, teacherID)
+	if !errors.Is(err, domain.ErrBadRequest) || !strings.Contains(err.Error(), "tidak sesuai hari jadwal") {
+		t.Fatalf("OpenSessionFromTimetableSlot() date mismatch error = %v, want ErrBadRequest mismatch", err)
+	}
+	if len(store.lockIDs) != 0 || store.createArg.AssignmentID.Valid {
+		t.Fatalf("store lock/create = %v/%+v, want no mutation on date mismatch", store.lockIDs, store.createArg)
+	}
+}
+
+func TestClassJournalOpenSessionFromTimetableSlotRejectsSunday(t *testing.T) {
+	classID := documentCycleTestUUID(108)
+	slotID := documentCycleTestUUID(109)
+	assignmentID := documentCycleTestUUID(110)
+	teacherID := documentCycleTestUUID(111)
+	store := &fakeClassJournalStore{
+		timetableRow: db.GetRombelTimetableSlotRow{
+			ID:                slotID,
+			ClassID:           classID,
+			AssignmentID:      assignmentID,
+			TeacherEmployeeID: teacherID,
+			DayOfWeek:         1,
+		},
+	}
+	svc := &ClassJournal{q: store}
+
+	_, err := svc.OpenSessionFromTimetableSlot(context.Background(), classID, slotID, documentCycleTestDate(2026, 5, 10), "", "", "", true, teacherID)
+	if !errors.Is(err, domain.ErrBadRequest) || !strings.Contains(err.Error(), "hari Minggu") {
+		t.Fatalf("OpenSessionFromTimetableSlot() sunday error = %v, want ErrBadRequest sunday", err)
+	}
+}
+
 func TestClassJournalOpenSessionFromTimetableSlotReturnsAttendanceSeedError(t *testing.T) {
 	classID := documentCycleTestUUID(98)
 	slotID := documentCycleTestUUID(99)
@@ -411,8 +500,9 @@ func TestClassJournalOpenSessionFromTimetableSlotReturnsAttendanceSeedError(t *t
 	studentID := documentCycleTestUUID(103)
 	expectedErr := errors.New("attendance seed failed")
 	store := &fakeClassJournalStore{
-		sessionByDateErr: pgx.ErrNoRows,
-		timetableRow:     db.GetRombelTimetableSlotRow{ID: slotID, ClassID: classID, AssignmentID: assignmentID, TeacherEmployeeID: teacherID},
+		nextMeeting:      1,
+		sessionBySlotErr: pgx.ErrNoRows,
+		timetableRow:     db.GetRombelTimetableSlotRow{ID: slotID, ClassID: classID, AssignmentID: assignmentID, TeacherEmployeeID: teacherID, DayOfWeek: 6},
 		createRow:        db.ClassJournalSession{ID: sessionID, AssignmentID: assignmentID},
 		studentsRows:     []db.ListActiveStudentsByClassIDRow{{ID: studentID, Nama: "Siswa A"}},
 		upsertErr:        expectedErr,
@@ -506,6 +596,14 @@ func TestClassJournalRejectsTeacherMismatchAndInvalidAttendance(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "status kehadiran tidak valid") {
 		t.Fatalf("BulkUpsertAttendances() error = %v, want invalid status", err)
 	}
+
+	store.upsertErr = pgx.ErrNoRows
+	err = svc.BulkUpsertAttendances(context.Background(), sessionID, []JournalAttendanceEntry{
+		{StudentID: documentCycleTestUUID(112).String(), Status: "hadir"},
+	}, teacherID)
+	if !errors.Is(err, domain.ErrBadRequest) || !strings.Contains(err.Error(), "bukan anggota rombel") {
+		t.Fatalf("BulkUpsertAttendances() cross-class error = %v, want ErrBadRequest scoped student", err)
+	}
 }
 
 func TestClassJournalPropagatesOverviewAndDetailStoreErrors(t *testing.T) {
@@ -572,10 +670,10 @@ func TestClassJournalCreateSessionErrorBranches(t *testing.T) {
 
 	svc = &ClassJournal{q: &fakeClassJournalStore{
 		assignmentRow: db.GetClassSubjectAssignmentRow{ID: assignmentID, TeacherEmployeeID: teacherID},
-		countErr:      expectedErr,
+		nextErr:       expectedErr,
 	}}
 	if _, err := svc.CreateSession(ctx, assignmentID, documentCycleTestDate(2026, 5, 4), "materi", "", "", true, teacherID); !errors.Is(err, expectedErr) {
-		t.Fatalf("CreateSession() count error = %v, want %v", err, expectedErr)
+		t.Fatalf("CreateSession() meeting number error = %v, want %v", err, expectedErr)
 	}
 
 	svc = &ClassJournal{q: &fakeClassJournalStore{

@@ -2,15 +2,26 @@
 SELECT COUNT(*)::int FROM class_journal_sessions
 WHERE assignment_id = $1;
 
+-- name: LockJournalAssignmentForUpdate :one
+SELECT id
+FROM class_subject_assignments
+WHERE id = $1
+FOR UPDATE;
+
+-- name: NextJournalMeetingNumber :one
+SELECT (COALESCE(MAX(pertemuan_ke), 0) + 1)::int
+FROM class_journal_sessions
+WHERE assignment_id = $1;
+
 -- name: CreateJournalSession :one
 INSERT INTO class_journal_sessions
-    (assignment_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, guru_hadir)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, assignment_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, guru_hadir, created_at, updated_at;
+    (assignment_id, timetable_slot_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, guru_hadir)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, assignment_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, guru_hadir, created_at, updated_at, timetable_slot_id;
 
 -- name: GetJournalSession :one
 SELECT
-    s.id, s.assignment_id, s.tanggal, s.pertemuan_ke,
+    s.id, s.assignment_id, s.timetable_slot_id, s.tanggal, s.pertemuan_ke,
     s.materi, s.kegiatan, s.catatan, s.guru_hadir,
     s.created_at, s.updated_at,
     csa.class_id, c.name AS class_name, c.code AS class_code,
@@ -27,11 +38,18 @@ WHERE s.id = $1;
 SELECT id
 FROM class_journal_sessions
 WHERE assignment_id = $1
+  AND tanggal = $2
+  AND timetable_slot_id IS NULL;
+
+-- name: GetJournalSessionIDByTimetableSlotDate :one
+SELECT id
+FROM class_journal_sessions
+WHERE timetable_slot_id = $1
   AND tanggal = $2;
 
 -- name: ListJournalSessions :many
 SELECT
-    s.id, s.assignment_id, s.tanggal, s.pertemuan_ke,
+    s.id, s.assignment_id, s.timetable_slot_id, s.tanggal, s.pertemuan_ke,
     s.materi, s.kegiatan, s.catatan, s.guru_hadir,
     s.created_at, s.updated_at,
     c.name AS class_name, c.code AS class_code,
@@ -49,14 +67,24 @@ ORDER BY s.tanggal DESC, s.pertemuan_ke DESC;
 UPDATE class_journal_sessions
 SET materi = $2, kegiatan = $3, catatan = $4, guru_hadir = $5, updated_at = NOW()
 WHERE id = $1
-RETURNING id, assignment_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, guru_hadir, created_at, updated_at;
+RETURNING id, assignment_id, tanggal, pertemuan_ke, materi, kegiatan, catatan, guru_hadir, created_at, updated_at, timetable_slot_id;
 
 -- name: DeleteJournalSession :exec
 DELETE FROM class_journal_sessions WHERE id = $1;
 
 -- name: UpsertJournalAttendance :one
 INSERT INTO class_journal_attendances (session_id, student_id, status, catatan)
-VALUES ($1, $2, $3, $4)
+SELECT
+    sqlc.arg(session_id)::uuid,
+    st.id,
+    sqlc.arg(status)::journal_attendance_status,
+    sqlc.arg(catatan)::text
+FROM class_journal_sessions s
+JOIN class_subject_assignments csa ON csa.id = s.assignment_id
+JOIN students st ON st.id = sqlc.arg(student_id)::uuid
+    AND st.class_id = csa.class_id
+    AND st.is_active = TRUE
+WHERE s.id = sqlc.arg(session_id)::uuid
 ON CONFLICT (session_id, student_id) DO UPDATE
     SET status     = EXCLUDED.status,
         catatan    = EXCLUDED.catatan,

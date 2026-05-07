@@ -94,6 +94,10 @@ WHERE ts.day_of_week = sqlc.arg(day_of_week)
     OR ts.id <> sqlc.arg(exclude_slot_id)
   );
 
+-- name: LockTimetableMutationScope :one
+SELECT 1::bigint
+FROM pg_advisory_xact_lock(hashtextextended(sqlc.arg(lock_key)::text, 0));
+
 -- name: CountTimetableRoomConflicts :one
 SELECT COUNT(*)::int
 FROM timetable_slots ts

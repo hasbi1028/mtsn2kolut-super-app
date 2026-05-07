@@ -470,6 +470,8 @@ type fakeAcademicStore struct {
 	getAssignID      pgtype.UUID
 	getAssignRow     db.GetClassSubjectAssignmentRow
 	getAssignErr     error
+	lockKeys         []string
+	lockErr          error
 	conflictArgs     []db.CountTimetableConflictsParams
 	conflictCount    int32
 	conflictErr      error
@@ -573,6 +575,14 @@ func (f *fakeAcademicStore) GetClassSubjectAssignment(ctx context.Context, id pg
 	return f.getAssignRow, nil
 }
 
+func (f *fakeAcademicStore) LockTimetableMutationScope(ctx context.Context, lockKey string) (int64, error) {
+	f.lockKeys = append(f.lockKeys, lockKey)
+	if f.lockErr != nil {
+		return 0, f.lockErr
+	}
+	return 1, nil
+}
+
 func (f *fakeAcademicStore) CountTimetableConflicts(ctx context.Context, arg db.CountTimetableConflictsParams) (int32, error) {
 	f.conflictArgs = append(f.conflictArgs, arg)
 	return f.conflictCount, f.conflictErr
@@ -668,6 +678,9 @@ func TestAcademicServiceForwardsStoreCallsAndChecksTimetableAvailability(t *test
 	if len(store.roomArgs) != 1 || store.roomArgs[0].RoomLabel != "R1" {
 		t.Fatalf("CountTimetableRoomConflicts() args = %+v, want trimmed room", store.roomArgs)
 	}
+	if len(store.lockKeys) != 3 {
+		t.Fatalf("LockTimetableMutationScope() keys = %+v, want class/teacher/room locks", store.lockKeys)
+	}
 
 	if _, err := svc.UpdateTimetableSlot(context.Background(), db.UpdateTimetableSlotParams{ID: slotID, AssignmentID: assignmentID, DayOfWeek: 2, StartTime: start, EndTime: end, RoomLabel: "R2", Notes: "siang"}); err != nil {
 		t.Fatalf("UpdateTimetableSlot() error = %v", err)
@@ -725,6 +738,12 @@ func TestAcademicTimetableAvailabilityFailures(t *testing.T) {
 		t.Fatalf("UpdateTimetableSlot(get slot error) = %v, want slot missing", err)
 	}
 	store := baseStore()
+	store.lockErr = errors.New("lock failed")
+	svc = &Academic{q: store}
+	if _, err := svc.CreateTimetableSlot(context.Background(), slot); err == nil || err.Error() != "lock failed" {
+		t.Fatalf("CreateTimetableSlot(lock error) = %v, want lock failed", err)
+	}
+	store = baseStore()
 	store.conflictErr = errors.New("count failed")
 	svc = &Academic{q: store}
 	if _, err := svc.CreateTimetableSlot(context.Background(), slot); err == nil || err.Error() != "count failed" {

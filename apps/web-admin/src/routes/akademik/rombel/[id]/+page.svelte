@@ -527,6 +527,11 @@
 			toast.error(journalOpenError);
 			return;
 		}
+		if (!isJournalDateCompatible(slot)) {
+			journalOpenError = `Tanggal jurnal harus jatuh pada hari ${dayLabels[slot.day_of_week] ?? 'jadwal'} untuk slot ini.`;
+			toast.error(journalOpenError);
+			return;
+		}
 		openJournalBusySlotId = slot.id;
 		journalOpenError = '';
 		try {
@@ -560,6 +565,18 @@
 			month: '2-digit',
 			day: '2-digit',
 		}).format(new Date());
+	}
+
+	function journalDateDayOfWeek(value: string) {
+		const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+		if (!match) return 0;
+		const [, year, month, day] = match;
+		return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))).getUTCDay();
+	}
+
+	function isJournalDateCompatible(slot: TimetableSlot) {
+		const day = journalDateDayOfWeek(journalDate);
+		return day >= 1 && day <= 6 && day === slot.day_of_week;
 	}
 
 	function fmtDate(value: string | null | undefined) {
@@ -1239,6 +1256,11 @@
 															{#if slot.notes}
 																<p class="mt-2 rounded-md bg-background px-2 py-1 text-xs text-muted-foreground">{slot.notes}</p>
 															{/if}
+															{#if journalDate && !isJournalDateCompatible(slot)}
+																<p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+																	Jurnal slot ini hanya bisa dibuka pada hari {dayLabels[slot.day_of_week] ?? 'jadwal'}.
+																</p>
+															{/if}
 														</div>
 														<div class="flex shrink-0 flex-wrap gap-2">
 															<LoadingButton
@@ -1247,7 +1269,7 @@
 																size="xs"
 																loading={openJournalBusySlotId === slot.id}
 																loadingLabel="Membuka..."
-																disabled={!journalDate || timetableSaveBusy || deleteTimetableBusyId !== '' || (openJournalBusySlotId !== '' && openJournalBusySlotId !== slot.id)}
+																disabled={!journalDate || !isJournalDateCompatible(slot) || timetableSaveBusy || deleteTimetableBusyId !== '' || (openJournalBusySlotId !== '' && openJournalBusySlotId !== slot.id)}
 																onclick={() => void openJournalFromTimetableSlot(slot)}
 															>
 																<BookOpen class="mr-1 size-3.5" />

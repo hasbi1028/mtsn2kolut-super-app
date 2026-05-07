@@ -331,3 +331,49 @@ func TestClassJournalOpenSessionFromTimetableSlotUnauthenticated(t *testing.T) {
 		t.Fatalf("status = %d, want 401; body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestClassJournalHandlersRejectScopedPermissionWithoutEmployeeID(t *testing.T) {
+	assignmentID := handlerTestUUID(12)
+	h := &ClassJournal{svc: &fakeClassJournalService{ClassJournal: &service.ClassJournal{}}}
+	req := httptest.NewRequest(http.MethodGet, "/api/class-journal?assignment_id="+assignmentID.String(), nil)
+	req = withClaims(req, jwt.MapClaims{
+		"permissions": []any{"journal.read"},
+	})
+	rec := httptest.NewRecorder()
+
+	h.Overview(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("Overview status = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestClassJournalHandlersAllowManageAllWithoutEmployeeID(t *testing.T) {
+	classID := handlerTestUUID(13)
+	slotID := handlerTestUUID(14)
+	sessionID := handlerTestUUID(15)
+	fake := &fakeClassJournalService{
+		ClassJournal: &service.ClassJournal{},
+		openResult: service.JournalSessionOpenResult{
+			Session: db.GetJournalSessionRow{ID: sessionID},
+			Created: false,
+		},
+	}
+	h := &ClassJournal{svc: fake}
+	req := httptest.NewRequest(http.MethodPost, "/api/academic/rombel/"+classID.String()+"/timetable-slots/"+slotID.String()+"/journal-session", strings.NewReader(`{"date":"2026-05-07"}`))
+	req = withClaims(req, jwt.MapClaims{
+		"permissions": []any{"journal.manage_all"},
+		"usr":         "operator.jurnal",
+	})
+	req = withRouteParams(req, "id", classID.String(), "slotID", slotID.String())
+	rec := httptest.NewRecorder()
+
+	h.OpenSessionFromTimetableSlot(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("OpenSessionFromTimetableSlot status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.openEmployeeID.Valid {
+		t.Fatalf("open employee scope = %v, want all-scope invalid employee id", fake.openEmployeeID)
+	}
+}

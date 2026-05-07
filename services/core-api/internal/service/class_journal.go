@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -16,9 +17,12 @@ import (
 
 type classJournalStore interface {
 	CountJournalSessionsForAssignment(ctx context.Context, assignmentID pgtype.UUID) (int32, error)
+	LockJournalAssignmentForUpdate(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error)
+	NextJournalMeetingNumber(ctx context.Context, assignmentID pgtype.UUID) (int32, error)
 	CreateJournalSession(ctx context.Context, arg db.CreateJournalSessionParams) (db.ClassJournalSession, error)
 	GetJournalSession(ctx context.Context, id pgtype.UUID) (db.GetJournalSessionRow, error)
 	GetJournalSessionIDByAssignmentDate(ctx context.Context, arg db.GetJournalSessionIDByAssignmentDateParams) (pgtype.UUID, error)
+	GetJournalSessionIDByTimetableSlotDate(ctx context.Context, arg db.GetJournalSessionIDByTimetableSlotDateParams) (pgtype.UUID, error)
 	ListJournalSessions(ctx context.Context, assignmentID pgtype.UUID) ([]db.ListJournalSessionsRow, error)
 	UpdateJournalSession(ctx context.Context, arg db.UpdateJournalSessionParams) (db.ClassJournalSession, error)
 	DeleteJournalSession(ctx context.Context, id pgtype.UUID) error
@@ -139,19 +143,23 @@ func (s *ClassJournal) CreateSession(ctx context.Context, assignmentID pgtype.UU
 			return fmt.Errorf("akses ditolak")
 		}
 
-		count, err := store.CountJournalSessionsForAssignment(ctx, assignmentID)
+		if _, err := store.LockJournalAssignmentForUpdate(ctx, assignmentID); err != nil {
+			return err
+		}
+		nextMeeting, err := store.NextJournalMeetingNumber(ctx, assignmentID)
 		if err != nil {
 			return err
 		}
 
 		session, err := store.CreateJournalSession(ctx, db.CreateJournalSessionParams{
-			AssignmentID: assignmentID,
-			Tanggal:      tanggal,
-			PertemuanKe:  count + 1,
-			Materi:       strings.TrimSpace(materi),
-			Kegiatan:     strings.TrimSpace(kegiatan),
-			Catatan:      strings.TrimSpace(catatan),
-			GuruHadir:    guruHadir,
+			AssignmentID:    assignmentID,
+			TimetableSlotID: pgtype.UUID{},
+			Tanggal:         tanggal,
+			PertemuanKe:     nextMeeting,
+			Materi:          strings.TrimSpace(materi),
+			Kegiatan:        strings.TrimSpace(kegiatan),
+			Catatan:         strings.TrimSpace(catatan),
+			GuruHadir:       guruHadir,
 		})
 		if err != nil {
 			if strings.Contains(err.Error(), "uq_journal_session_date") || strings.Contains(err.Error(), "unique") {
@@ -187,34 +195,42 @@ func (s *ClassJournal) OpenSessionFromTimetableSlot(ctx context.Context, classID
 	if employeeID.Valid && slot.TeacherEmployeeID != employeeID {
 		return JournalSessionOpenResult{}, fmt.Errorf("%w: akses ditolak", domain.ErrForbidden)
 	}
-
-	existing, err := s.getSessionByAssignmentDate(ctx, slot.AssignmentID, tanggal, employeeID)
-	if err == nil {
-		return JournalSessionOpenResult{
-			Session:       existing.Session,
-			Attendances:   existing.Attendances,
-			TimetableSlot: slot,
-			Created:       false,
-		}, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if err := validateJournalDateMatchesTimetableSlot(tanggal, slot.DayOfWeek); err != nil {
 		return JournalSessionOpenResult{}, err
 	}
 
 	var result JournalSessionOpenResult
 	err = s.withClassJournalStore(ctx, func(store classJournalStore) error {
-		count, err := store.CountJournalSessionsForAssignment(ctx, slot.AssignmentID)
+		if _, err := store.LockJournalAssignmentForUpdate(ctx, slot.AssignmentID); err != nil {
+			return err
+		}
+		existing, err := getSessionByTimetableSlotDateWithStore(ctx, store, slotID, tanggal, employeeID)
+		if err == nil {
+			result = JournalSessionOpenResult{
+				Session:       existing.Session,
+				Attendances:   existing.Attendances,
+				TimetableSlot: slot,
+				Created:       false,
+			}
+			return nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+
+		nextMeeting, err := store.NextJournalMeetingNumber(ctx, slot.AssignmentID)
 		if err != nil {
 			return err
 		}
 		session, err := store.CreateJournalSession(ctx, db.CreateJournalSessionParams{
-			AssignmentID: slot.AssignmentID,
-			Tanggal:      tanggal,
-			PertemuanKe:  count + 1,
-			Materi:       strings.TrimSpace(materi),
-			Kegiatan:     strings.TrimSpace(kegiatan),
-			Catatan:      strings.TrimSpace(catatan),
-			GuruHadir:    guruHadir,
+			AssignmentID:    slot.AssignmentID,
+			TimetableSlotID: slotID,
+			Tanggal:         tanggal,
+			PertemuanKe:     nextMeeting,
+			Materi:          strings.TrimSpace(materi),
+			Kegiatan:        strings.TrimSpace(kegiatan),
+			Catatan:         strings.TrimSpace(catatan),
+			GuruHadir:       guruHadir,
 		})
 		if err != nil {
 			return err
@@ -238,7 +254,7 @@ func (s *ClassJournal) OpenSessionFromTimetableSlot(ctx context.Context, classID
 	})
 	if err != nil {
 		if isJournalDuplicateDateError(err) {
-			existing, getErr := s.getSessionByAssignmentDate(ctx, slot.AssignmentID, tanggal, employeeID)
+			existing, getErr := s.getSessionByTimetableSlotDate(ctx, slotID, tanggal, employeeID)
 			if getErr == nil {
 				return JournalSessionOpenResult{
 					Session:       existing.Session,
@@ -257,10 +273,25 @@ func (s *ClassJournal) getSessionByAssignmentDate(ctx context.Context, assignmen
 	return getSessionByAssignmentDateWithStore(ctx, s.q, assignmentID, tanggal, employeeID)
 }
 
+func (s *ClassJournal) getSessionByTimetableSlotDate(ctx context.Context, slotID pgtype.UUID, tanggal pgtype.Date, employeeID pgtype.UUID) (JournalSessionDetail, error) {
+	return getSessionByTimetableSlotDateWithStore(ctx, s.q, slotID, tanggal, employeeID)
+}
+
 func getSessionByAssignmentDateWithStore(ctx context.Context, store classJournalStore, assignmentID pgtype.UUID, tanggal pgtype.Date, employeeID pgtype.UUID) (JournalSessionDetail, error) {
 	sessionID, err := store.GetJournalSessionIDByAssignmentDate(ctx, db.GetJournalSessionIDByAssignmentDateParams{
 		AssignmentID: assignmentID,
 		Tanggal:      tanggal,
+	})
+	if err != nil {
+		return JournalSessionDetail{}, err
+	}
+	return getJournalSessionWithStore(ctx, store, sessionID, employeeID)
+}
+
+func getSessionByTimetableSlotDateWithStore(ctx context.Context, store classJournalStore, slotID pgtype.UUID, tanggal pgtype.Date, employeeID pgtype.UUID) (JournalSessionDetail, error) {
+	sessionID, err := store.GetJournalSessionIDByTimetableSlotDate(ctx, db.GetJournalSessionIDByTimetableSlotDateParams{
+		TimetableSlotID: slotID,
+		Tanggal:         tanggal,
 	})
 	if err != nil {
 		return JournalSessionDetail{}, err
@@ -321,6 +352,9 @@ func (s *ClassJournal) BulkUpsertAttendances(ctx context.Context, sessionID pgty
 			Status:    status,
 			Catatan:   strings.TrimSpace(e.Catatan),
 		}); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fmt.Errorf("%w: student_id tidak aktif atau bukan anggota rombel sesi jurnal", domain.ErrBadRequest)
+			}
 			return err
 		}
 	}
@@ -373,6 +407,20 @@ func normalizeJournalAttendanceStatus(raw string) (db.JournalAttendanceStatus, e
 	default:
 		return "", fmt.Errorf("status kehadiran tidak valid: %s", raw)
 	}
+}
+
+func validateJournalDateMatchesTimetableSlot(tanggal pgtype.Date, dayOfWeek int16) error {
+	if !tanggal.Valid {
+		return fmt.Errorf("%w: tanggal jurnal wajib valid", domain.ErrBadRequest)
+	}
+	weekday := tanggal.Time.Weekday()
+	if weekday == time.Sunday {
+		return fmt.Errorf("%w: tanggal jurnal tidak boleh hari Minggu", domain.ErrBadRequest)
+	}
+	if int16(weekday) != dayOfWeek {
+		return fmt.Errorf("%w: tanggal jurnal tidak sesuai hari jadwal", domain.ErrBadRequest)
+	}
+	return nil
 }
 
 func isJournalDuplicateDateError(err error) bool {
