@@ -157,6 +157,81 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 	return i, err
 }
 
+const createUserWithMustChangePassword = `-- name: CreateUserWithMustChangePassword :one
+INSERT INTO users (username, password_hash, display_name, employee_id, student_id, parent_id, is_active, must_change_password, password_changed_at)
+VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8,
+    CASE WHEN $8::boolean THEN NULL ELSE NOW() END
+)
+RETURNING id, username, display_name, employee_id, student_id, parent_id, is_active, auth_version, must_change_password, password_changed_at, last_login_at, deleted_at, created_at, updated_at
+`
+
+type CreateUserWithMustChangePasswordParams struct {
+	Username           string      `json:"username"`
+	PasswordHash       string      `json:"password_hash"`
+	DisplayName        pgtype.Text `json:"display_name"`
+	EmployeeID         pgtype.UUID `json:"employee_id"`
+	StudentID          pgtype.UUID `json:"student_id"`
+	ParentID           pgtype.UUID `json:"parent_id"`
+	IsActive           bool        `json:"is_active"`
+	MustChangePassword bool        `json:"must_change_password"`
+}
+
+type CreateUserWithMustChangePasswordRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	Username           string             `json:"username"`
+	DisplayName        pgtype.Text        `json:"display_name"`
+	EmployeeID         pgtype.UUID        `json:"employee_id"`
+	StudentID          pgtype.UUID        `json:"student_id"`
+	ParentID           pgtype.UUID        `json:"parent_id"`
+	IsActive           bool               `json:"is_active"`
+	AuthVersion        int32              `json:"auth_version"`
+	MustChangePassword bool               `json:"must_change_password"`
+	PasswordChangedAt  pgtype.Timestamptz `json:"password_changed_at"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateUserWithMustChangePassword(ctx context.Context, arg CreateUserWithMustChangePasswordParams) (CreateUserWithMustChangePasswordRow, error) {
+	row := q.db.QueryRow(ctx, createUserWithMustChangePassword,
+		arg.Username,
+		arg.PasswordHash,
+		arg.DisplayName,
+		arg.EmployeeID,
+		arg.StudentID,
+		arg.ParentID,
+		arg.IsActive,
+		arg.MustChangePassword,
+	)
+	var i CreateUserWithMustChangePasswordRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.DisplayName,
+		&i.EmployeeID,
+		&i.StudentID,
+		&i.ParentID,
+		&i.IsActive,
+		&i.AuthVersion,
+		&i.MustChangePassword,
+		&i.PasswordChangedAt,
+		&i.LastLoginAt,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const deleteOldAuditLogs = `-- name: DeleteOldAuditLogs :execrows
 DELETE FROM audit_logs
 WHERE created_at < NOW() - INTERVAL '90 days'
@@ -774,6 +849,223 @@ func (q *Queries) ListOwnAccountChangeHistory(ctx context.Context, arg ListOwnAc
 			&i.CreatedAt,
 			&i.ReviewerUsername,
 			&i.ReviewNote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listParentAccountGenerationCandidates = `-- name: ListParentAccountGenerationCandidates :many
+WITH child_counts AS (
+    SELECT
+        ps.parent_id,
+        count(*)::int AS child_count
+    FROM parent_students ps
+    GROUP BY ps.parent_id
+), basis_children AS (
+    SELECT DISTINCT ON (ps.parent_id)
+        ps.parent_id,
+        s.id AS basis_student_id,
+        COALESCE(s.nisn, '')::text AS basis_student_nisn
+    FROM parent_students ps
+    JOIN students s ON s.id = ps.student_id
+    ORDER BY
+        ps.parent_id,
+        ps.is_primary_contact DESC,
+        CASE WHEN btrim(COALESCE(s.nisn, '')) <> '' THEN 0 ELSE 1 END,
+        s.nama ASC,
+        s.id ASC
+), parent_candidates AS (
+    SELECT
+        p.id AS parent_id,
+        p.nama,
+        COALESCE(p.phone, '')::text AS phone,
+        COALESCE(child_counts.child_count, 0)::int AS child_count,
+        basis_children.basis_student_id,
+        COALESCE(basis_children.basis_student_nisn, '')::text AS basis_student_nisn,
+        regexp_replace(COALESCE(p.phone, ''), '\D', '', 'g')::text AS phone_digits
+    FROM parents p
+    LEFT JOIN child_counts ON child_counts.parent_id = p.id
+    LEFT JOIN basis_children ON basis_children.parent_id = p.id
+), linked_parents AS (
+    SELECT
+        parent_candidates.parent_id, parent_candidates.nama, parent_candidates.phone, parent_candidates.child_count, parent_candidates.basis_student_id, parent_candidates.basis_student_nisn, parent_candidates.phone_digits,
+        CASE
+            WHEN btrim(parent_candidates.basis_student_nisn) <> '' THEN ('ortu' || btrim(parent_candidates.basis_student_nisn))::text
+            WHEN parent_candidates.phone_digits <> '' THEN ('ortu' || right(parent_candidates.phone_digits, 8))::text
+            ELSE ''::text
+        END AS base_username,
+        linked.id AS existing_user_id,
+        COALESCE(linked.username, '')::text AS existing_username
+    FROM parent_candidates
+    LEFT JOIN users linked
+        ON linked.parent_id = parent_candidates.parent_id
+       AND linked.deleted_at IS NULL
+)
+SELECT
+    linked_parents.parent_id,
+    linked_parents.nama,
+    linked_parents.phone,
+    linked_parents.child_count,
+    linked_parents.basis_student_id,
+    linked_parents.basis_student_nisn,
+    linked_parents.base_username,
+    linked_parents.existing_user_id,
+    linked_parents.existing_username,
+    username_user.id AS username_user_id,
+    ARRAY(
+        SELECT u.username
+        FROM users u
+        WHERE linked_parents.base_username <> ''
+          AND u.deleted_at IS NULL
+          AND (
+            u.username = linked_parents.base_username
+            OR u.username LIKE linked_parents.base_username || '-__'
+          )
+        ORDER BY u.username ASC
+    )::text[] AS username_collisions
+FROM linked_parents
+LEFT JOIN users username_user
+    ON username_user.username = linked_parents.base_username
+   AND linked_parents.base_username <> ''
+   AND username_user.deleted_at IS NULL
+ORDER BY linked_parents.nama ASC, linked_parents.parent_id ASC
+`
+
+type ListParentAccountGenerationCandidatesRow struct {
+	ParentID           pgtype.UUID `json:"parent_id"`
+	Nama               string      `json:"nama"`
+	Phone              string      `json:"phone"`
+	ChildCount         int32       `json:"child_count"`
+	BasisStudentID     pgtype.UUID `json:"basis_student_id"`
+	BasisStudentNisn   string      `json:"basis_student_nisn"`
+	BaseUsername       string      `json:"base_username"`
+	ExistingUserID     pgtype.UUID `json:"existing_user_id"`
+	ExistingUsername   string      `json:"existing_username"`
+	UsernameUserID     pgtype.UUID `json:"username_user_id"`
+	UsernameCollisions []string    `json:"username_collisions"`
+}
+
+func (q *Queries) ListParentAccountGenerationCandidates(ctx context.Context) ([]ListParentAccountGenerationCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listParentAccountGenerationCandidates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListParentAccountGenerationCandidatesRow{}
+	for rows.Next() {
+		var i ListParentAccountGenerationCandidatesRow
+		if err := rows.Scan(
+			&i.ParentID,
+			&i.Nama,
+			&i.Phone,
+			&i.ChildCount,
+			&i.BasisStudentID,
+			&i.BasisStudentNisn,
+			&i.BaseUsername,
+			&i.ExistingUserID,
+			&i.ExistingUsername,
+			&i.UsernameUserID,
+			&i.UsernameCollisions,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStudentAccountGenerationCandidates = `-- name: ListStudentAccountGenerationCandidates :many
+WITH active_students AS (
+    SELECT
+        s.id AS student_id,
+        COALESCE(s.nis, '')::text AS nis,
+        COALESCE(s.nisn, '')::text AS nisn,
+        s.nama,
+        CASE
+            WHEN btrim(COALESCE(s.nisn, '')) <> '' THEN btrim(s.nisn)
+            WHEN btrim(COALESCE(s.nis, '')) <> '' THEN ('s' || btrim(s.nis))::text
+            ELSE ''::text
+        END AS base_username
+    FROM students s
+    WHERE s.is_active = TRUE
+), linked_students AS (
+    SELECT
+        active_students.student_id, active_students.nis, active_students.nisn, active_students.nama, active_students.base_username,
+        linked.id AS existing_user_id,
+        COALESCE(linked.username, '')::text AS existing_username
+    FROM active_students
+    LEFT JOIN users linked
+        ON linked.student_id = active_students.student_id
+       AND linked.deleted_at IS NULL
+)
+SELECT
+    linked_students.student_id,
+    linked_students.nis,
+    linked_students.nisn,
+    linked_students.nama,
+    linked_students.base_username,
+    linked_students.existing_user_id,
+    linked_students.existing_username,
+    username_user.id AS username_user_id,
+    ARRAY(
+        SELECT u.username
+        FROM users u
+        WHERE linked_students.base_username <> ''
+          AND u.deleted_at IS NULL
+          AND (
+            u.username = linked_students.base_username
+            OR u.username LIKE linked_students.base_username || '-__'
+          )
+        ORDER BY u.username ASC
+    )::text[] AS username_collisions
+FROM linked_students
+LEFT JOIN users username_user
+    ON username_user.username = linked_students.base_username
+   AND linked_students.base_username <> ''
+   AND username_user.deleted_at IS NULL
+ORDER BY linked_students.nama ASC, linked_students.student_id ASC
+`
+
+type ListStudentAccountGenerationCandidatesRow struct {
+	StudentID          pgtype.UUID `json:"student_id"`
+	Nis                string      `json:"nis"`
+	Nisn               string      `json:"nisn"`
+	Nama               string      `json:"nama"`
+	BaseUsername       string      `json:"base_username"`
+	ExistingUserID     pgtype.UUID `json:"existing_user_id"`
+	ExistingUsername   string      `json:"existing_username"`
+	UsernameUserID     pgtype.UUID `json:"username_user_id"`
+	UsernameCollisions []string    `json:"username_collisions"`
+}
+
+func (q *Queries) ListStudentAccountGenerationCandidates(ctx context.Context) ([]ListStudentAccountGenerationCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listStudentAccountGenerationCandidates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStudentAccountGenerationCandidatesRow{}
+	for rows.Next() {
+		var i ListStudentAccountGenerationCandidatesRow
+		if err := rows.Scan(
+			&i.StudentID,
+			&i.Nis,
+			&i.Nisn,
+			&i.Nama,
+			&i.BaseUsername,
+			&i.ExistingUserID,
+			&i.ExistingUsername,
+			&i.UsernameUserID,
+			&i.UsernameCollisions,
 		); err != nil {
 			return nil, err
 		}

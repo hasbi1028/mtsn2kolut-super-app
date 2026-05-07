@@ -212,6 +212,21 @@ INSERT INTO users (username, password_hash, display_name, employee_id, student_i
 VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, NULL)
 RETURNING id, username, display_name, employee_id, student_id, parent_id, is_active, auth_version, must_change_password, password_changed_at, last_login_at, deleted_at, created_at, updated_at;
 
+-- name: CreateUserWithMustChangePassword :one
+INSERT INTO users (username, password_hash, display_name, employee_id, student_id, parent_id, is_active, must_change_password, password_changed_at)
+VALUES (
+    sqlc.arg(username),
+    sqlc.arg(password_hash),
+    sqlc.arg(display_name),
+    sqlc.arg(employee_id),
+    sqlc.arg(student_id),
+    sqlc.arg(parent_id),
+    sqlc.arg(is_active),
+    sqlc.arg(must_change_password),
+    CASE WHEN sqlc.arg(must_change_password)::boolean THEN NULL ELSE NOW() END
+)
+RETURNING id, username, display_name, employee_id, student_id, parent_id, is_active, auth_version, must_change_password, password_changed_at, last_login_at, deleted_at, created_at, updated_at;
+
 -- name: UpdateUserPassword :exec
 UPDATE users
 SET password_hash = $2, updated_at = NOW()
@@ -499,3 +514,130 @@ LEFT JOIN users username_user ON username_user.username = (sqlc.arg(npsn)::text 
     AND sc.nomor_urut > 0
     AND username_user.deleted_at IS NULL
 ORDER BY sc.birth_year_suffix ASC NULLS LAST, sc.nomor_urut ASC, sc.nama ASC, sc.employee_id ASC;
+
+-- name: ListStudentAccountGenerationCandidates :many
+WITH active_students AS (
+    SELECT
+        s.id AS student_id,
+        COALESCE(s.nis, '')::text AS nis,
+        COALESCE(s.nisn, '')::text AS nisn,
+        s.nama,
+        CASE
+            WHEN btrim(COALESCE(s.nisn, '')) <> '' THEN btrim(s.nisn)
+            WHEN btrim(COALESCE(s.nis, '')) <> '' THEN ('s' || btrim(s.nis))::text
+            ELSE ''::text
+        END AS base_username
+    FROM students s
+    WHERE s.is_active = TRUE
+), linked_students AS (
+    SELECT
+        active_students.*,
+        linked.id AS existing_user_id,
+        COALESCE(linked.username, '')::text AS existing_username
+    FROM active_students
+    LEFT JOIN users linked
+        ON linked.student_id = active_students.student_id
+       AND linked.deleted_at IS NULL
+)
+SELECT
+    linked_students.student_id,
+    linked_students.nis,
+    linked_students.nisn,
+    linked_students.nama,
+    linked_students.base_username,
+    linked_students.existing_user_id,
+    linked_students.existing_username,
+    username_user.id AS username_user_id,
+    ARRAY(
+        SELECT u.username
+        FROM users u
+        WHERE linked_students.base_username <> ''
+          AND u.deleted_at IS NULL
+          AND (
+            u.username = linked_students.base_username
+            OR u.username LIKE linked_students.base_username || '-__'
+          )
+        ORDER BY u.username ASC
+    )::text[] AS username_collisions
+FROM linked_students
+LEFT JOIN users username_user
+    ON username_user.username = linked_students.base_username
+   AND linked_students.base_username <> ''
+   AND username_user.deleted_at IS NULL
+ORDER BY linked_students.nama ASC, linked_students.student_id ASC;
+
+-- name: ListParentAccountGenerationCandidates :many
+WITH child_counts AS (
+    SELECT
+        ps.parent_id,
+        count(*)::int AS child_count
+    FROM parent_students ps
+    GROUP BY ps.parent_id
+), basis_children AS (
+    SELECT DISTINCT ON (ps.parent_id)
+        ps.parent_id,
+        s.id AS basis_student_id,
+        COALESCE(s.nisn, '')::text AS basis_student_nisn
+    FROM parent_students ps
+    JOIN students s ON s.id = ps.student_id
+    ORDER BY
+        ps.parent_id,
+        ps.is_primary_contact DESC,
+        CASE WHEN btrim(COALESCE(s.nisn, '')) <> '' THEN 0 ELSE 1 END,
+        s.nama ASC,
+        s.id ASC
+), parent_candidates AS (
+    SELECT
+        p.id AS parent_id,
+        p.nama,
+        COALESCE(p.phone, '')::text AS phone,
+        COALESCE(child_counts.child_count, 0)::int AS child_count,
+        basis_children.basis_student_id,
+        COALESCE(basis_children.basis_student_nisn, '')::text AS basis_student_nisn,
+        regexp_replace(COALESCE(p.phone, ''), '\D', '', 'g')::text AS phone_digits
+    FROM parents p
+    LEFT JOIN child_counts ON child_counts.parent_id = p.id
+    LEFT JOIN basis_children ON basis_children.parent_id = p.id
+), linked_parents AS (
+    SELECT
+        parent_candidates.*,
+        CASE
+            WHEN btrim(parent_candidates.basis_student_nisn) <> '' THEN ('ortu' || btrim(parent_candidates.basis_student_nisn))::text
+            WHEN parent_candidates.phone_digits <> '' THEN ('ortu' || right(parent_candidates.phone_digits, 8))::text
+            ELSE ''::text
+        END AS base_username,
+        linked.id AS existing_user_id,
+        COALESCE(linked.username, '')::text AS existing_username
+    FROM parent_candidates
+    LEFT JOIN users linked
+        ON linked.parent_id = parent_candidates.parent_id
+       AND linked.deleted_at IS NULL
+)
+SELECT
+    linked_parents.parent_id,
+    linked_parents.nama,
+    linked_parents.phone,
+    linked_parents.child_count,
+    linked_parents.basis_student_id,
+    linked_parents.basis_student_nisn,
+    linked_parents.base_username,
+    linked_parents.existing_user_id,
+    linked_parents.existing_username,
+    username_user.id AS username_user_id,
+    ARRAY(
+        SELECT u.username
+        FROM users u
+        WHERE linked_parents.base_username <> ''
+          AND u.deleted_at IS NULL
+          AND (
+            u.username = linked_parents.base_username
+            OR u.username LIKE linked_parents.base_username || '-__'
+          )
+        ORDER BY u.username ASC
+    )::text[] AS username_collisions
+FROM linked_parents
+LEFT JOIN users username_user
+    ON username_user.username = linked_parents.base_username
+   AND linked_parents.base_username <> ''
+   AND username_user.deleted_at IS NULL
+ORDER BY linked_parents.nama ASC, linked_parents.parent_id ASC;

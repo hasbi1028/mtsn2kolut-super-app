@@ -204,6 +204,26 @@ func TestUserLifecycleResetPasswordHashesPasswordRevokesSessionsAndAudits(t *tes
 	}
 }
 
+func TestUserLifecycleForcePasswordChangeMarksUserRevokesSessionsAndAudits(t *testing.T) {
+	userID := userLifecycleTestUUID(140)
+	actorID := userLifecycleTestUUID(141)
+	store := &fakeUserLifecycleStore{userByID: db.GetUserByIDRow{ID: userID, Username: "siswa.1"}}
+	svc := &UserLifecycle{q: store}
+
+	if err := svc.ForcePasswordChange(context.Background(), userID, actorID); err != nil {
+		t.Fatalf("ForcePasswordChange() error = %v", err)
+	}
+	if len(store.mustChangePasswordIDs) != 1 || store.mustChangePasswordIDs[0] != userID {
+		t.Fatalf("must-change calls = %+v, want target user", store.mustChangePasswordIDs)
+	}
+	if len(store.versionCalls) != 1 || store.versionCalls[0] != userID || len(store.revokeCalls) != 1 || store.revokeCalls[0] != userID {
+		t.Fatalf("version/revoke calls = %+v/%+v", store.versionCalls, store.revokeCalls)
+	}
+	if len(store.auditCalls) != 1 || store.auditCalls[0].Action != "USER_FORCE_PASSWORD_CHANGE" || store.auditCalls[0].UserID != actorID {
+		t.Fatalf("audit calls = %+v, want force-password audit by actor", store.auditCalls)
+	}
+}
+
 func TestUserLifecycleUpdateProfileLinkValidatesSingleProfileAndAudits(t *testing.T) {
 	userID := userLifecycleTestUUID(133)
 	actorID := userLifecycleTestUUID(134)

@@ -14,6 +14,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	mw "mtsn2kolut-super-app/backend/internal/middleware"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
@@ -30,6 +31,7 @@ type userLifecycleService interface {
 	DeleteAsDeactivate(ctx context.Context, id pgtype.UUID, actorID pgtype.UUID) error
 	UpdateStatus(ctx context.Context, id pgtype.UUID, isActive bool, actorID pgtype.UUID) error
 	ResetPassword(ctx context.Context, id pgtype.UUID, newPassword string, actorID pgtype.UUID) error
+	ForcePasswordChange(ctx context.Context, id pgtype.UUID, actorID pgtype.UUID) error
 	UpdateProfileLink(ctx context.Context, id pgtype.UUID, link service.ProfileLink, actorID pgtype.UUID) error
 }
 
@@ -38,23 +40,48 @@ type employeeAccountGenerationService interface {
 	Generate(ctx context.Context, actorID pgtype.UUID) (service.EmployeeAccountGenerationResult, error)
 }
 
+type studentAccountGenerationService interface {
+	Preview(ctx context.Context) (service.StudentAccountGenerationResult, error)
+	Generate(ctx context.Context, actorID pgtype.UUID) (service.StudentAccountGenerationResult, error)
+}
+
+type parentAccountGenerationService interface {
+	Preview(ctx context.Context) (service.ParentAccountGenerationResult, error)
+	Generate(ctx context.Context, actorID pgtype.UUID) (service.ParentAccountGenerationResult, error)
+}
+
 type userTxStarter interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
 type User struct {
-	q         userStore
-	lifecycle userLifecycleService
-	generator employeeAccountGenerationService
-	tx        userTxStarter
+	q                userStore
+	lifecycle        userLifecycleService
+	generator        employeeAccountGenerationService
+	studentGenerator studentAccountGenerationService
+	parentGenerator  parentAccountGenerationService
+	tx               userTxStarter
 }
 
 func NewUser(q *db.Queries) *User {
-	return &User{q: q, lifecycle: service.NewUserLifecycle(q), generator: service.NewEmployeeAccountGenerator(q)}
+	return &User{
+		q:                q,
+		lifecycle:        service.NewUserLifecycle(q),
+		generator:        service.NewEmployeeAccountGenerator(q),
+		studentGenerator: service.NewStudentAccountGenerator(q),
+		parentGenerator:  service.NewParentAccountGenerator(q),
+	}
 }
 
 func NewUserWithPool(pool *pgxpool.Pool) *User {
-	return &User{q: db.New(pool), lifecycle: service.NewUserLifecycleWithPool(pool), generator: service.NewEmployeeAccountGeneratorWithPool(pool), tx: pool}
+	return &User{
+		q:                db.New(pool),
+		lifecycle:        service.NewUserLifecycleWithPool(pool),
+		generator:        service.NewEmployeeAccountGeneratorWithPool(pool),
+		studentGenerator: service.NewStudentAccountGeneratorWithPool(pool),
+		parentGenerator:  service.NewParentAccountGeneratorWithPool(pool),
+		tx:               pool,
+	}
 }
 
 func (h *User) PreviewEmployeeAccountGeneration(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +108,64 @@ func (h *User) GenerateEmployeeAccounts(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	result, err := h.generator.Generate(r.Context(), actorID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *User) PreviewStudentAccounts(w http.ResponseWriter, r *http.Request) {
+	if !userPermissionAccessAllowed(w, r, "student_accounts.manage") {
+		return
+	}
+	result, err := h.studentGenerator.Preview(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *User) GenerateStudentAccounts(w http.ResponseWriter, r *http.Request) {
+	if !userPermissionAccessAllowed(w, r, "student_accounts.manage") {
+		return
+	}
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	result, err := h.studentGenerator.Generate(r.Context(), actorID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *User) PreviewParentAccounts(w http.ResponseWriter, r *http.Request) {
+	if !userPermissionAccessAllowed(w, r, "parent_accounts.manage") {
+		return
+	}
+	result, err := h.parentGenerator.Preview(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *User) GenerateParentAccounts(w http.ResponseWriter, r *http.Request) {
+	if !userPermissionAccessAllowed(w, r, "parent_accounts.manage") {
+		return
+	}
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	result, err := h.parentGenerator.Generate(r.Context(), actorID)
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -378,6 +463,27 @@ func (h *User) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]any{"ok": true})
 }
 
+func (h *User) ForcePasswordChange(w http.ResponseWriter, r *http.Request) {
+	if !userPermissionAccessAllowed(w, r, "users.reset_password") {
+		return
+	}
+	id, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	actorID, err := currentActorUUID(r)
+	if err != nil {
+		api.Unauthorized(w)
+		return
+	}
+	if err := h.lifecycle.ForcePasswordChange(r.Context(), id, actorID); err != nil {
+		writeDomainOrInternal(w, err, "user wajib ganti password tidak dapat diperbarui")
+		return
+	}
+	api.OK(w, map[string]any{"ok": true})
+}
+
 func (h *User) UpdateProfileLink(w http.ResponseWriter, r *http.Request) {
 	if !adminAccessAllowed(r) {
 		api.Forbidden(w)
@@ -453,4 +559,17 @@ func (h *User) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, rows)
+}
+
+func userPermissionAccessAllowed(w http.ResponseWriter, r *http.Request, permission string) bool {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return false
+	}
+	if mw.HasAnyRole(claims, "admin") || mw.HasAnyPermission(claims, permission) {
+		return true
+	}
+	api.Forbidden(w)
+	return false
 }
