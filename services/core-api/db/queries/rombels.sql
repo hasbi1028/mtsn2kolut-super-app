@@ -110,6 +110,96 @@ JOIN employees e ON e.id = csa.teacher_employee_id
 WHERE csa.class_id = $1
 ORDER BY sub.name ASC, e.nama ASC;
 
+-- name: GetRombelSubjectAssignment :one
+SELECT
+    csa.id,
+    csa.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    csa.subject_id,
+    sub.name AS subject_name,
+    sub.code AS subject_code,
+    csa.teacher_employee_id,
+    e.nama AS teacher_name,
+    csa.created_at,
+    csa.updated_at
+FROM class_subject_assignments csa
+JOIN school_classes c ON c.id = csa.class_id
+JOIN subjects sub ON sub.id = csa.subject_id
+JOIN employees e ON e.id = csa.teacher_employee_id
+WHERE csa.class_id = sqlc.arg(class_id)
+  AND csa.id = sqlc.arg(id);
+
+-- name: CreateRombelSubjectAssignment :one
+WITH inserted AS (
+    INSERT INTO class_subject_assignments (id, class_id, subject_id, teacher_employee_id)
+    VALUES (
+        gen_random_uuid(),
+        sqlc.arg(class_id),
+        sqlc.arg(subject_id),
+        sqlc.arg(teacher_employee_id)
+    )
+    RETURNING *
+)
+SELECT
+    inserted.id,
+    inserted.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    inserted.subject_id,
+    sub.name AS subject_name,
+    sub.code AS subject_code,
+    inserted.teacher_employee_id,
+    e.nama AS teacher_name,
+    inserted.created_at,
+    inserted.updated_at
+FROM inserted
+JOIN school_classes c ON c.id = inserted.class_id
+JOIN subjects sub ON sub.id = inserted.subject_id
+JOIN employees e ON e.id = inserted.teacher_employee_id;
+
+-- name: UpdateRombelSubjectAssignment :one
+WITH updated AS (
+    UPDATE class_subject_assignments
+    SET subject_id = sqlc.arg(subject_id),
+        teacher_employee_id = sqlc.arg(teacher_employee_id),
+        updated_at = NOW()
+    WHERE class_subject_assignments.class_id = sqlc.arg(class_id)
+      AND class_subject_assignments.id = sqlc.arg(id)
+    RETURNING *
+)
+SELECT
+    updated.id,
+    updated.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    updated.subject_id,
+    sub.name AS subject_name,
+    sub.code AS subject_code,
+    updated.teacher_employee_id,
+    e.nama AS teacher_name,
+    updated.created_at,
+    updated.updated_at
+FROM updated
+JOIN school_classes c ON c.id = updated.class_id
+JOIN subjects sub ON sub.id = updated.subject_id
+JOIN employees e ON e.id = updated.teacher_employee_id;
+
+-- name: CountRombelSubjectAssignmentDependents :one
+SELECT
+    (SELECT COUNT(*) FROM timetable_slots WHERE assignment_id = csa.id)::int AS total_timetable_slots,
+    (SELECT COUNT(*) FROM class_journal_sessions WHERE assignment_id = csa.id)::int AS total_journal_sessions,
+    (SELECT COUNT(*) FROM grade_components WHERE assignment_id = csa.id)::int AS total_grade_components,
+    (SELECT COUNT(*) FROM grade_assignment_finalizations WHERE assignment_id = csa.id)::int AS total_grade_finalizations
+FROM class_subject_assignments csa
+WHERE csa.class_id = sqlc.arg(class_id)
+  AND csa.id = sqlc.arg(id);
+
+-- name: DeleteRombelSubjectAssignment :execrows
+DELETE FROM class_subject_assignments
+WHERE class_id = sqlc.arg(class_id)
+  AND id = sqlc.arg(id);
+
 -- name: ListRombelTimetableSlots :many
 SELECT
     ts.id,

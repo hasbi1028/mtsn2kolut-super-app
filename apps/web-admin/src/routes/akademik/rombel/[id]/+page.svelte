@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { ArrowLeft, RefreshCw, Search, UserCheck } from '@lucide/svelte';
+	import { ArrowLeft, Pencil, RefreshCw, Search, Trash2, UserCheck } from '@lucide/svelte';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Table from '$lib/components/ui/table';
@@ -17,6 +17,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
+	import { confirmAction } from '$lib/confirm-dialog';
 	import {
 		buildHomeroomEmployeeOptions,
 		employeeOptionSubtitle,
@@ -24,6 +25,11 @@
 		filterHomeroomEmployeeOptions,
 		type HomeroomEmployeeOption
 	} from '$lib/client/rombel-homeroom';
+	import {
+		availableRombelSubjectOptions,
+		buildRombelSubjectOptions,
+		subjectOptionLabel
+	} from '$lib/client/rombel-subject-assignments';
 
 	type RombelDetail = {
 		id: string;
@@ -71,6 +77,7 @@
 
 	type SubjectAssignment = {
 		id: string;
+		subject_id: string;
 		subject_name: string;
 		subject_code: string;
 		teacher_employee_id: string;
@@ -109,6 +116,17 @@
 		is_active: boolean;
 	};
 
+	type SubjectRow = {
+		id: string;
+		code: string;
+		name: string;
+		is_active: boolean;
+	};
+
+	type AcademicSubjectsPayload = {
+		subjects?: SubjectRow[];
+	};
+
 	type RombelDetailPayload = {
 		rombel: RombelDetail;
 		students: RombelStudent[];
@@ -140,6 +158,17 @@
 	let employeesLoaded = $state(false);
 	let employeesError = $state('');
 	let employeeSearch = $state('');
+	let subjectRows = $state<SubjectRow[]>([]);
+	let subjectsLoading = $state(false);
+	let subjectsLoaded = $state(false);
+	let subjectsError = $state('');
+	let subjectRequestId = 0;
+	let subjectAssignmentSubjectId = $state('');
+	let subjectAssignmentTeacherId = $state('');
+	let editingSubjectAssignmentId = $state('');
+	let subjectTeacherSearch = $state('');
+	let subjectAssignmentSaveBusy = $state(false);
+	let deleteSubjectAssignmentBusyId = $state('');
 
 	const rombel = $derived(detail?.rombel ?? null);
 	const activeHomeroom = $derived(detail?.homeroom_assignments.find((item) => item.is_active) ?? null);
@@ -151,6 +180,19 @@
 	const filteredEmployeeOptions = $derived(filterHomeroomEmployeeOptions(employeeOptions, employeeSearch));
 	const selectedEmployeeOption = $derived(employeeOptions.find((option) => option.id === homeroomEmployeeId) ?? null);
 	const canSaveHomeroom = $derived(Boolean(classId && selectedEmployeeOption));
+	const subjectOptions = $derived(buildRombelSubjectOptions({
+		subjects: subjectRows,
+		assignments: detail?.subject_assignments ?? []
+	}));
+	const availableSubjectOptions = $derived(availableRombelSubjectOptions(
+		subjectOptions,
+		detail?.subject_assignments ?? [],
+		editingSubjectAssignmentId
+	));
+	const selectedSubjectOption = $derived(subjectOptions.find((option) => option.id === subjectAssignmentSubjectId) ?? null);
+	const filteredSubjectTeacherOptions = $derived(filterHomeroomEmployeeOptions(employeeOptions, subjectTeacherSearch));
+	const selectedSubjectTeacherOption = $derived(employeeOptions.find((option) => option.id === subjectAssignmentTeacherId) ?? null);
+	const canSaveSubjectAssignment = $derived(Boolean(classId && selectedSubjectOption && selectedSubjectTeacherOption));
 	const parentRows = $derived.by(() =>
 		(detail?.students ?? []).flatMap((student) =>
 			student.parents.map((parent) => ({ student, parent }))
@@ -169,11 +211,21 @@
 		);
 	}
 
+	async function fetchSubjects(): Promise<SubjectRow[]> {
+		const payload = await fetch('/api/academic').then((response) =>
+			readClientApiData<AcademicSubjectsPayload>(response, 'Gagal memuat daftar mata pelajaran')
+		);
+		return Array.isArray(payload.subjects) ? payload.subjects : [];
+	}
+
 	function applyDetail(payload: RombelDetailPayload) {
 		detail = payload;
 		const active = payload.homeroom_assignments.find((item) => item.is_active);
 		homeroomEmployeeId = active?.employee_id ?? '';
 		homeroomNotes = active?.notes ?? '';
+		if (editingSubjectAssignmentId && !payload.subject_assignments.some((item) => item.id === editingSubjectAssignmentId)) {
+			resetSubjectAssignmentForm();
+		}
 	}
 
 	function loadDetail() {
@@ -208,13 +260,36 @@
 		}
 	}
 
+	async function loadSubjects() {
+		const current = ++subjectRequestId;
+		subjectsLoading = true;
+		subjectsError = '';
+		try {
+			const items = await fetchSubjects();
+			if (current === subjectRequestId) {
+				subjectRows = items;
+				subjectsLoaded = true;
+			}
+		} catch (error) {
+			if (current === subjectRequestId) {
+				subjectsError = errorMessage(error, 'Daftar mata pelajaran belum dapat dimuat.');
+			}
+		} finally {
+			if (current === subjectRequestId) {
+				subjectsLoading = false;
+			}
+		}
+	}
+
 	async function refreshDetail() {
 		refreshBusy = true;
 		try {
 			loadDetail();
 			const employeesPromise = loadEmployees();
+			const subjectsPromise = loadSubjects();
 			await detailPromise;
 			await employeesPromise;
+			await subjectsPromise;
 		} finally {
 			refreshBusy = false;
 		}
@@ -247,6 +322,72 @@
 			toast.error(errorMessage(error, 'Gagal menyimpan wali kelas'));
 		} finally {
 			saveBusy = false;
+		}
+	}
+
+	function resetSubjectAssignmentForm() {
+		editingSubjectAssignmentId = '';
+		subjectAssignmentSubjectId = '';
+		subjectAssignmentTeacherId = '';
+		subjectTeacherSearch = '';
+	}
+
+	function editSubjectAssignment(assignment: SubjectAssignment) {
+		editingSubjectAssignmentId = assignment.id;
+		subjectAssignmentSubjectId = assignment.subject_id;
+		subjectAssignmentTeacherId = assignment.teacher_employee_id;
+		subjectTeacherSearch = '';
+	}
+
+	async function saveSubjectAssignment() {
+		if (!canSaveSubjectAssignment) return;
+		subjectAssignmentSaveBusy = true;
+		try {
+			const body = JSON.stringify({
+				subject_id: subjectAssignmentSubjectId,
+				teacher_employee_id: subjectAssignmentTeacherId,
+			});
+			const response = await fetch(
+				editingSubjectAssignmentId
+					? `/api/academic/rombel/${classId}/subject-assignments/${editingSubjectAssignmentId}`
+					: `/api/academic/rombel/${classId}/subject-assignments`,
+				{
+					method: editingSubjectAssignmentId ? 'PUT' : 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body,
+				}
+			);
+			await readClientJson<unknown>(response);
+			toast.success(editingSubjectAssignmentId ? 'Guru mapel diperbarui' : 'Guru mapel ditambahkan');
+			resetSubjectAssignmentForm();
+			await refreshDetail();
+		} catch (error) {
+			toast.error(errorMessage(error, 'Gagal menyimpan guru mapel'));
+		} finally {
+			subjectAssignmentSaveBusy = false;
+		}
+	}
+
+	async function deleteSubjectAssignment(assignment: SubjectAssignment) {
+		if (!(await confirmAction({
+			title: 'Hapus Guru Mapel',
+			message: `Hapus penugasan ${assignment.subject_name} - ${assignment.teacher_name}?`,
+			confirmLabel: 'Hapus',
+			tone: 'danger'
+		}))) return;
+		deleteSubjectAssignmentBusyId = assignment.id;
+		try {
+			const response = await fetch(`/api/academic/rombel/${classId}/subject-assignments/${assignment.id}`, { method: 'DELETE' });
+			await readClientJson<unknown>(response);
+			toast.success('Guru mapel dihapus');
+			if (editingSubjectAssignmentId === assignment.id) {
+				resetSubjectAssignmentForm();
+			}
+			await refreshDetail();
+		} catch (error) {
+			toast.error(errorMessage(error, 'Gagal menghapus guru mapel'));
+		} finally {
+			deleteSubjectAssignmentBusyId = '';
 		}
 	}
 
@@ -287,6 +428,7 @@
 	onMount(() => {
 		loadDetail();
 		void loadEmployees();
+		void loadSubjects();
 	});
 </script>
 
@@ -660,39 +802,210 @@
 				</Tabs.Content>
 
 				<Tabs.Content value="teachers">
-					<Card.Root>
-						<Card.Header>
-							<Card.Title class="text-base">Guru Mapel</Card.Title>
-						</Card.Header>
-						<Card.Content class="p-0">
-							<div class="overflow-x-auto">
-								<Table.Root>
-									<Table.Header>
-										<Table.Row>
-											<Table.Head>Mata Pelajaran</Table.Head>
-											<Table.Head>Kode</Table.Head>
-											<Table.Head>Guru</Table.Head>
-										</Table.Row>
-									</Table.Header>
-									<Table.Body>
-										{#each detail.subject_assignments as assignment (assignment.id)}
+					<div class="grid gap-4 lg:grid-cols-3">
+						<Card.Root class="lg:col-span-2">
+							<Card.Header>
+								<Card.Title class="text-base">Guru Mapel</Card.Title>
+								<Card.Description>Pasangan mata pelajaran dan guru pengampu pada rombel ini.</Card.Description>
+							</Card.Header>
+							<Card.Content class="p-0">
+								<div class="overflow-x-auto">
+									<Table.Root>
+										<Table.Header>
 											<Table.Row>
-												<Table.Cell class="font-medium">{assignment.subject_name}</Table.Cell>
-												<Table.Cell class="text-muted-foreground">{assignment.subject_code}</Table.Cell>
-												<Table.Cell>{assignment.teacher_name}</Table.Cell>
+												<Table.Head>Mata Pelajaran</Table.Head>
+												<Table.Head>Kode</Table.Head>
+												<Table.Head>Guru</Table.Head>
+												<Table.Head class="text-right">Aksi</Table.Head>
 											</Table.Row>
-										{:else}
-											<Table.Row>
-												<Table.Cell colspan={3} class="p-4">
-													<EmptyStatePanel compact title="Belum ada guru mapel" description="Assignment kelas-mapel-guru akan tampil di bagian ini." />
-												</Table.Cell>
-											</Table.Row>
-										{/each}
-									</Table.Body>
-								</Table.Root>
-							</div>
-						</Card.Content>
-					</Card.Root>
+										</Table.Header>
+										<Table.Body>
+											{#each detail.subject_assignments as assignment (assignment.id)}
+												<Table.Row>
+													<Table.Cell class="font-medium">{assignment.subject_name}</Table.Cell>
+													<Table.Cell class="text-muted-foreground">{assignment.subject_code}</Table.Cell>
+													<Table.Cell>{assignment.teacher_name}</Table.Cell>
+													<Table.Cell>
+														<div class="flex justify-end gap-2">
+															<Button
+																type="button"
+																variant="outline"
+																size="xs"
+																onclick={() => editSubjectAssignment(assignment)}
+																disabled={subjectAssignmentSaveBusy || deleteSubjectAssignmentBusyId !== ''}
+															>
+																<Pencil class="mr-1 size-3.5" />
+																Edit
+															</Button>
+															<LoadingButton
+																type="button"
+																variant="destructive"
+																size="xs"
+																loading={deleteSubjectAssignmentBusyId === assignment.id}
+																loadingLabel="Hapus..."
+																disabled={subjectAssignmentSaveBusy || (deleteSubjectAssignmentBusyId !== '' && deleteSubjectAssignmentBusyId !== assignment.id)}
+																onclick={() => void deleteSubjectAssignment(assignment)}
+															>
+																<Trash2 class="mr-1 size-3.5" />
+																Hapus
+															</LoadingButton>
+														</div>
+													</Table.Cell>
+												</Table.Row>
+											{:else}
+												<Table.Row>
+													<Table.Cell colspan={4} class="p-4">
+														<EmptyStatePanel compact title="Belum ada guru mapel" description="Tambahkan mata pelajaran dan guru pengampu untuk rombel ini." />
+													</Table.Cell>
+												</Table.Row>
+											{/each}
+										</Table.Body>
+									</Table.Root>
+								</div>
+							</Card.Content>
+						</Card.Root>
+
+						<Card.Root>
+							<Card.Header>
+								<Card.Title class="text-base">{editingSubjectAssignmentId ? 'Perbarui Guru Mapel' : 'Tambah Guru Mapel'}</Card.Title>
+								<Card.Description>Pilih mapel aktif dan pegawai aktif sebagai guru pengampu.</Card.Description>
+							</Card.Header>
+							<Card.Content class="space-y-3">
+								{#if subjectsError}
+									<div class="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+										<p class="font-medium">Daftar mata pelajaran belum dapat dimuat.</p>
+										<p class="mt-1 text-xs text-destructive/80">
+											{subjectOptions.length > 0
+												? 'Opsi sementara memakai mata pelajaran yang sudah tercatat pada rombel ini.'
+												: subjectsError}
+										</p>
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											class="mt-3 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+											disabled={subjectsLoading}
+											onclick={() => void loadSubjects()}
+										>
+											<RefreshCw class={`mr-2 size-4 ${subjectsLoading ? 'animate-spin' : ''}`} />
+											Muat Ulang Mapel
+										</Button>
+									</div>
+								{/if}
+
+								<div class="space-y-1.5">
+									<label for="subject-assignment-subject" class="block text-xs font-medium text-muted-foreground">Mata Pelajaran</label>
+									{#if subjectsLoading && !subjectsLoaded && subjectOptions.length === 0}
+										<Skeleton class="h-10 w-full" />
+									{:else}
+										<select
+											id="subject-assignment-subject"
+											bind:value={subjectAssignmentSubjectId}
+											class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+											disabled={availableSubjectOptions.length === 0 || subjectAssignmentSaveBusy}
+										>
+											<option value="">Pilih mapel</option>
+											{#each availableSubjectOptions as subject (subject.id)}
+												<option value={subject.id}>{subjectOptionLabel(subject)}{subject.isFallback ? ' - dari rombel' : ''}</option>
+											{/each}
+										</select>
+									{/if}
+								</div>
+
+								<div class="space-y-1.5">
+									<label for="subject-teacher-search" class="block text-xs font-medium text-muted-foreground">Cari Guru</label>
+									<div class="relative">
+										<Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+										<Input
+											id="subject-teacher-search"
+											bind:value={subjectTeacherSearch}
+											placeholder="Nama, UID, NIP, atau tipe pegawai"
+											class="pl-8"
+											disabled={employeesLoading && !employeesLoaded && employeeOptions.length === 0}
+										/>
+									</div>
+								</div>
+
+								<div class="space-y-1.5">
+									<label for="subject-assignment-teacher" class="block text-xs font-medium text-muted-foreground">Guru Pengampu</label>
+									{#if employeesLoading && !employeesLoaded && employeeOptions.length === 0}
+										<Skeleton class="h-10 w-full" />
+									{:else}
+										<select
+											id="subject-assignment-teacher"
+											bind:value={subjectAssignmentTeacherId}
+											class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+											disabled={filteredSubjectTeacherOptions.length === 0 || subjectAssignmentSaveBusy}
+										>
+											<option value="">Pilih guru</option>
+											{#each filteredSubjectTeacherOptions as option (option.id)}
+												<option value={option.id}>{option.name} - {employeeOptionSubtitle(option)}</option>
+											{/each}
+										</select>
+									{/if}
+								</div>
+
+								{#if selectedSubjectOption || selectedSubjectTeacherOption}
+									<div class="rounded-lg border border-primary/20 bg-primary/10 p-3 text-sm">
+										<div class="flex items-start gap-2">
+											<UserCheck class="mt-0.5 size-4 shrink-0 text-primary" />
+											<div class="min-w-0 space-y-1">
+												<p class="font-medium text-foreground">{selectedSubjectOption ? subjectOptionLabel(selectedSubjectOption) : 'Mapel belum dipilih'}</p>
+												<p class="text-xs text-muted-foreground">
+													{selectedSubjectTeacherOption ? `${selectedSubjectTeacherOption.name} - ${employeeOptionSubtitle(selectedSubjectTeacherOption)}` : 'Guru pengampu belum dipilih'}
+												</p>
+											</div>
+										</div>
+									</div>
+								{/if}
+
+								{#if employeesError && employeeOptions.length === 0}
+									<div class="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+										<p class="font-medium">Daftar pegawai aktif belum dapat dimuat.</p>
+										<p class="mt-1 text-xs text-destructive/80">{employeesError}</p>
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											class="mt-3 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+											disabled={employeesLoading}
+											onclick={() => void loadEmployees()}
+										>
+											<RefreshCw class={`mr-2 size-4 ${employeesLoading ? 'animate-spin' : ''}`} />
+											Muat Ulang Pegawai
+										</Button>
+									</div>
+								{/if}
+
+								{#if availableSubjectOptions.length === 0 && !subjectsLoading}
+									<EmptyStatePanel compact title="Tidak ada mapel tersedia" description="Semua mata pelajaran aktif sudah memiliki guru pada rombel ini." />
+								{:else if subjectTeacherSearch && filteredSubjectTeacherOptions.length === 0}
+									<EmptyStatePanel compact title="Guru tidak ditemukan" description="Ubah kata kunci pencarian untuk melihat opsi guru lain." />
+								{/if}
+
+								<div class="flex gap-2">
+									<LoadingButton
+										class="flex-1"
+										loading={subjectAssignmentSaveBusy}
+										loadingLabel="Menyimpan..."
+										disabled={!canSaveSubjectAssignment || deleteSubjectAssignmentBusyId !== ''}
+										onclick={() => void saveSubjectAssignment()}
+										label={editingSubjectAssignmentId ? 'Simpan Perubahan' : 'Tambah Guru Mapel'}
+									/>
+									{#if editingSubjectAssignmentId}
+										<Button
+											type="button"
+											variant="outline"
+											disabled={subjectAssignmentSaveBusy}
+											onclick={resetSubjectAssignmentForm}
+										>
+											Batal
+										</Button>
+									{/if}
+								</div>
+							</Card.Content>
+						</Card.Root>
+					</div>
 				</Tabs.Content>
 
 				<Tabs.Content value="schedule">

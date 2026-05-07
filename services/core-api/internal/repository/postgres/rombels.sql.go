@@ -11,6 +11,41 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countRombelSubjectAssignmentDependents = `-- name: CountRombelSubjectAssignmentDependents :one
+SELECT
+    (SELECT COUNT(*) FROM timetable_slots WHERE assignment_id = csa.id)::int AS total_timetable_slots,
+    (SELECT COUNT(*) FROM class_journal_sessions WHERE assignment_id = csa.id)::int AS total_journal_sessions,
+    (SELECT COUNT(*) FROM grade_components WHERE assignment_id = csa.id)::int AS total_grade_components,
+    (SELECT COUNT(*) FROM grade_assignment_finalizations WHERE assignment_id = csa.id)::int AS total_grade_finalizations
+FROM class_subject_assignments csa
+WHERE csa.class_id = $1
+  AND csa.id = $2
+`
+
+type CountRombelSubjectAssignmentDependentsParams struct {
+	ClassID pgtype.UUID `json:"class_id"`
+	ID      pgtype.UUID `json:"id"`
+}
+
+type CountRombelSubjectAssignmentDependentsRow struct {
+	TotalTimetableSlots     int32 `json:"total_timetable_slots"`
+	TotalJournalSessions    int32 `json:"total_journal_sessions"`
+	TotalGradeComponents    int32 `json:"total_grade_components"`
+	TotalGradeFinalizations int32 `json:"total_grade_finalizations"`
+}
+
+func (q *Queries) CountRombelSubjectAssignmentDependents(ctx context.Context, arg CountRombelSubjectAssignmentDependentsParams) (CountRombelSubjectAssignmentDependentsRow, error) {
+	row := q.db.QueryRow(ctx, countRombelSubjectAssignmentDependents, arg.ClassID, arg.ID)
+	var i CountRombelSubjectAssignmentDependentsRow
+	err := row.Scan(
+		&i.TotalTimetableSlots,
+		&i.TotalJournalSessions,
+		&i.TotalGradeComponents,
+		&i.TotalGradeFinalizations,
+	)
+	return i, err
+}
+
 const createHomeroomAssignment = `-- name: CreateHomeroomAssignment :one
 WITH deactivate_existing AS (
     UPDATE class_homeroom_assignments
@@ -113,6 +148,74 @@ func (q *Queries) CreateHomeroomAssignment(ctx context.Context, arg CreateHomero
 	return i, err
 }
 
+const createRombelSubjectAssignment = `-- name: CreateRombelSubjectAssignment :one
+WITH inserted AS (
+    INSERT INTO class_subject_assignments (id, class_id, subject_id, teacher_employee_id)
+    VALUES (
+        gen_random_uuid(),
+        $1,
+        $2,
+        $3
+    )
+    RETURNING id, class_id, subject_id, teacher_employee_id, created_at, updated_at
+)
+SELECT
+    inserted.id,
+    inserted.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    inserted.subject_id,
+    sub.name AS subject_name,
+    sub.code AS subject_code,
+    inserted.teacher_employee_id,
+    e.nama AS teacher_name,
+    inserted.created_at,
+    inserted.updated_at
+FROM inserted
+JOIN school_classes c ON c.id = inserted.class_id
+JOIN subjects sub ON sub.id = inserted.subject_id
+JOIN employees e ON e.id = inserted.teacher_employee_id
+`
+
+type CreateRombelSubjectAssignmentParams struct {
+	ClassID           pgtype.UUID `json:"class_id"`
+	SubjectID         pgtype.UUID `json:"subject_id"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+}
+
+type CreateRombelSubjectAssignmentRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	ClassID           pgtype.UUID        `json:"class_id"`
+	ClassName         string             `json:"class_name"`
+	ClassCode         string             `json:"class_code"`
+	SubjectID         pgtype.UUID        `json:"subject_id"`
+	SubjectName       string             `json:"subject_name"`
+	SubjectCode       string             `json:"subject_code"`
+	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName       string             `json:"teacher_name"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateRombelSubjectAssignment(ctx context.Context, arg CreateRombelSubjectAssignmentParams) (CreateRombelSubjectAssignmentRow, error) {
+	row := q.db.QueryRow(ctx, createRombelSubjectAssignment, arg.ClassID, arg.SubjectID, arg.TeacherEmployeeID)
+	var i CreateRombelSubjectAssignmentRow
+	err := row.Scan(
+		&i.ID,
+		&i.ClassID,
+		&i.ClassName,
+		&i.ClassCode,
+		&i.SubjectID,
+		&i.SubjectName,
+		&i.SubjectCode,
+		&i.TeacherEmployeeID,
+		&i.TeacherName,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const deleteHomeroomAssignment = `-- name: DeleteHomeroomAssignment :exec
 DELETE FROM class_homeroom_assignments
 WHERE id = $1
@@ -121,6 +224,25 @@ WHERE id = $1
 func (q *Queries) DeleteHomeroomAssignment(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteHomeroomAssignment, id)
 	return err
+}
+
+const deleteRombelSubjectAssignment = `-- name: DeleteRombelSubjectAssignment :execrows
+DELETE FROM class_subject_assignments
+WHERE class_id = $1
+  AND id = $2
+`
+
+type DeleteRombelSubjectAssignmentParams struct {
+	ClassID pgtype.UUID `json:"class_id"`
+	ID      pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) DeleteRombelSubjectAssignment(ctx context.Context, arg DeleteRombelSubjectAssignmentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteRombelSubjectAssignment, arg.ClassID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getRombelDetail = `-- name: GetRombelDetail :one
@@ -210,6 +332,65 @@ func (q *Queries) GetRombelDetail(ctx context.Context, id pgtype.UUID) (GetRombe
 		&i.TotalSubjectTeachers,
 		&i.TotalSubjectAssignments,
 		&i.TotalTimetableSlots,
+	)
+	return i, err
+}
+
+const getRombelSubjectAssignment = `-- name: GetRombelSubjectAssignment :one
+SELECT
+    csa.id,
+    csa.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    csa.subject_id,
+    sub.name AS subject_name,
+    sub.code AS subject_code,
+    csa.teacher_employee_id,
+    e.nama AS teacher_name,
+    csa.created_at,
+    csa.updated_at
+FROM class_subject_assignments csa
+JOIN school_classes c ON c.id = csa.class_id
+JOIN subjects sub ON sub.id = csa.subject_id
+JOIN employees e ON e.id = csa.teacher_employee_id
+WHERE csa.class_id = $1
+  AND csa.id = $2
+`
+
+type GetRombelSubjectAssignmentParams struct {
+	ClassID pgtype.UUID `json:"class_id"`
+	ID      pgtype.UUID `json:"id"`
+}
+
+type GetRombelSubjectAssignmentRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	ClassID           pgtype.UUID        `json:"class_id"`
+	ClassName         string             `json:"class_name"`
+	ClassCode         string             `json:"class_code"`
+	SubjectID         pgtype.UUID        `json:"subject_id"`
+	SubjectName       string             `json:"subject_name"`
+	SubjectCode       string             `json:"subject_code"`
+	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName       string             `json:"teacher_name"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetRombelSubjectAssignment(ctx context.Context, arg GetRombelSubjectAssignmentParams) (GetRombelSubjectAssignmentRow, error) {
+	row := q.db.QueryRow(ctx, getRombelSubjectAssignment, arg.ClassID, arg.ID)
+	var i GetRombelSubjectAssignmentRow
+	err := row.Scan(
+		&i.ID,
+		&i.ClassID,
+		&i.ClassName,
+		&i.ClassCode,
+		&i.SubjectID,
+		&i.SubjectName,
+		&i.SubjectCode,
+		&i.TeacherEmployeeID,
+		&i.TeacherName,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -713,6 +894,79 @@ func (q *Queries) UpdateHomeroomAssignment(ctx context.Context, arg UpdateHomero
 		&i.EndDate,
 		&i.IsActive,
 		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateRombelSubjectAssignment = `-- name: UpdateRombelSubjectAssignment :one
+WITH updated AS (
+    UPDATE class_subject_assignments
+    SET subject_id = $1,
+        teacher_employee_id = $2,
+        updated_at = NOW()
+    WHERE class_subject_assignments.class_id = $3
+      AND class_subject_assignments.id = $4
+    RETURNING id, class_id, subject_id, teacher_employee_id, created_at, updated_at
+)
+SELECT
+    updated.id,
+    updated.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    updated.subject_id,
+    sub.name AS subject_name,
+    sub.code AS subject_code,
+    updated.teacher_employee_id,
+    e.nama AS teacher_name,
+    updated.created_at,
+    updated.updated_at
+FROM updated
+JOIN school_classes c ON c.id = updated.class_id
+JOIN subjects sub ON sub.id = updated.subject_id
+JOIN employees e ON e.id = updated.teacher_employee_id
+`
+
+type UpdateRombelSubjectAssignmentParams struct {
+	SubjectID         pgtype.UUID `json:"subject_id"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+	ClassID           pgtype.UUID `json:"class_id"`
+	ID                pgtype.UUID `json:"id"`
+}
+
+type UpdateRombelSubjectAssignmentRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	ClassID           pgtype.UUID        `json:"class_id"`
+	ClassName         string             `json:"class_name"`
+	ClassCode         string             `json:"class_code"`
+	SubjectID         pgtype.UUID        `json:"subject_id"`
+	SubjectName       string             `json:"subject_name"`
+	SubjectCode       string             `json:"subject_code"`
+	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName       string             `json:"teacher_name"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdateRombelSubjectAssignment(ctx context.Context, arg UpdateRombelSubjectAssignmentParams) (UpdateRombelSubjectAssignmentRow, error) {
+	row := q.db.QueryRow(ctx, updateRombelSubjectAssignment,
+		arg.SubjectID,
+		arg.TeacherEmployeeID,
+		arg.ClassID,
+		arg.ID,
+	)
+	var i UpdateRombelSubjectAssignmentRow
+	err := row.Scan(
+		&i.ID,
+		&i.ClassID,
+		&i.ClassName,
+		&i.ClassCode,
+		&i.SubjectID,
+		&i.SubjectName,
+		&i.SubjectCode,
+		&i.TeacherEmployeeID,
+		&i.TeacherName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
