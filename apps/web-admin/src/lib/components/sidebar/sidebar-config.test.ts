@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dashboardNavItem, sidebarNavGroups } from './sidebar-config';
 
+const academicItems = sidebarNavGroups.find((group) => group.group === 'Akademik & Pembelajaran')?.items ?? [];
 const assessmentItems = sidebarNavGroups.find((group) => group.group === 'Asesmen')?.items ?? [];
 const bankSoalItems = sidebarNavGroups.find((group) => group.group === 'Bank Soal')?.items ?? [];
 
@@ -9,6 +10,17 @@ describe('sidebar assessment configuration', () => {
 		expect(dashboardNavItem).toMatchObject({ href: '/', label: 'Dashboard', pinnable: false });
 		expect(sidebarNavGroups.some((group) => group.group === 'Utama')).toBe(false);
 		expect(sidebarNavGroups.flatMap((group) => group.items).some((item) => item.href === '/')).toBe(false);
+	});
+
+	it('exposes Rombel under Akademik with RBAC fallback and permission metadata', () => {
+		const rombel = academicItems.find((item) => item.href === '/akademik/rombel');
+		expect(rombel).toMatchObject({
+			label: 'Rombel',
+			icon: 'layers',
+			roles: ['admin', 'guru', 'kesiswaan'],
+			permissions: ['academic.read']
+		});
+		expect(academicItems.filter((item) => item.href === '/akademik/rombel')).toHaveLength(1);
 	});
 
 	it('keeps assessment navigation aligned to the three-phase workflow', () => {

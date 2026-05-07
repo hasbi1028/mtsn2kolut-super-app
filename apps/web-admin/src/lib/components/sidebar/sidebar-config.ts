@@ -19,6 +19,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 		group: 'Akademik & Pembelajaran',
 		items: [
 			{ href: '/academic', label: 'Data Akademik', icon: 'book-open', roles: ['admin'], permissions: ['academic.read'] },
+			{ href: '/akademik/rombel', label: 'Rombel', icon: 'layers', roles: ['admin', 'guru', 'kesiswaan'], permissions: ['academic.read'] },
 			{ href: '/jadwal', label: 'Jadwal', icon: 'calendar', roles: ['guru', 'siswa', 'ortu'] },
 			{ href: '/grades', label: 'Nilai', icon: 'clipboard', roles: ['admin', 'guru'] },
 			{ href: '/grades/rapor', label: 'Cetak Rapor', icon: 'printer', roles: ['admin', 'guru'] },
@@ -118,8 +119,8 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 	];
 
 export const defaultPinnedByRole: Record<string, string[]> = {
-	admin: ['/asesmen/persiapan', '/grades', '/settings'],
+	admin: ['/asesmen/persiapan', '/grades', '/akademik/rombel', '/settings'],
 	guru: ['/asesmen/pelaksanaan', '/asesmen/persiapan', '/grades', '/jadwal'],
 	staf: ['/document-cycles', '/inventory', '/library'],
-	kesiswaan: ['/kesiswaan', '/students']
+	kesiswaan: ['/kesiswaan', '/students', '/akademik/rombel']
 };
