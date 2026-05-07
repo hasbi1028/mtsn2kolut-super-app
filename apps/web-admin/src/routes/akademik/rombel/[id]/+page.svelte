@@ -2,19 +2,28 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { ArrowLeft, RefreshCw } from '@lucide/svelte';
+	import { ArrowLeft, RefreshCw, Search, UserCheck } from '@lucide/svelte';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import { toast } from '$lib/components/ui/sonner';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
+	import {
+		buildHomeroomEmployeeOptions,
+		employeeOptionSubtitle,
+		employmentTypeLabel,
+		filterHomeroomEmployeeOptions,
+		type HomeroomEmployeeOption
+	} from '$lib/client/rombel-homeroom';
 
 	type RombelDetail = {
 		id: string;
@@ -91,6 +100,15 @@
 		notes: string;
 	};
 
+	type EmployeeRow = {
+		id: string;
+		pegawai_uid: string;
+		nip: string;
+		nama: string;
+		employment_type: string;
+		is_active: boolean;
+	};
+
 	type RombelDetailPayload = {
 		rombel: RombelDetail;
 		students: RombelStudent[];
@@ -112,26 +130,27 @@
 	let detail = $state<RombelDetailPayload | null>(null);
 	let detailPromise = $state<Promise<RombelDetailPayload> | null>(null);
 	let requestId = 0;
+	let employeeRequestId = 0;
 	let refreshBusy = $state(false);
 	let saveBusy = $state(false);
 	let homeroomEmployeeId = $state('');
 	let homeroomNotes = $state('');
+	let employeeRows = $state<EmployeeRow[]>([]);
+	let employeesLoading = $state(false);
+	let employeesLoaded = $state(false);
+	let employeesError = $state('');
+	let employeeSearch = $state('');
 
 	const rombel = $derived(detail?.rombel ?? null);
 	const activeHomeroom = $derived(detail?.homeroom_assignments.find((item) => item.is_active) ?? null);
-	const teacherOptions = $derived.by(() => {
-		const rows = detail?.subject_assignments ?? [];
-		const options = new Map<string, { id: string; name: string }>();
-		for (const assignment of rows) {
-			if (assignment.teacher_employee_id && assignment.teacher_name) {
-				options.set(assignment.teacher_employee_id, { id: assignment.teacher_employee_id, name: assignment.teacher_name });
-			}
-		}
-		if (activeHomeroom?.employee_id && activeHomeroom.employee_name) {
-			options.set(activeHomeroom.employee_id, { id: activeHomeroom.employee_id, name: activeHomeroom.employee_name });
-		}
-		return Array.from(options.values()).sort((a, b) => a.name.localeCompare(b.name, 'id-ID'));
-	});
+	const employeeOptions = $derived(buildHomeroomEmployeeOptions({
+		employees: employeeRows,
+		subjectAssignments: detail?.subject_assignments ?? [],
+		activeHomeroom
+	}));
+	const filteredEmployeeOptions = $derived(filterHomeroomEmployeeOptions(employeeOptions, employeeSearch));
+	const selectedEmployeeOption = $derived(employeeOptions.find((option) => option.id === homeroomEmployeeId) ?? null);
+	const canSaveHomeroom = $derived(Boolean(classId && selectedEmployeeOption));
 	const parentRows = $derived.by(() =>
 		(detail?.students ?? []).flatMap((student) =>
 			student.parents.map((parent) => ({ student, parent }))
@@ -141,6 +160,12 @@
 	async function fetchDetail(): Promise<RombelDetailPayload> {
 		return await fetch(`/api/academic/rombel/${classId}`).then((response) =>
 			readClientApiData<RombelDetailPayload>(response, 'Gagal memuat detail rombel')
+		);
+	}
+
+	async function fetchEmployees(): Promise<EmployeeRow[]> {
+		return await fetch('/api/employees').then((response) =>
+			readClientApiData<EmployeeRow[]>(response, 'Gagal memuat daftar pegawai aktif')
 		);
 	}
 
@@ -162,18 +187,41 @@
 		});
 	}
 
+	async function loadEmployees() {
+		const current = ++employeeRequestId;
+		employeesLoading = true;
+		employeesError = '';
+		try {
+			const items = await fetchEmployees();
+			if (current === employeeRequestId) {
+				employeeRows = items;
+				employeesLoaded = true;
+			}
+		} catch (error) {
+			if (current === employeeRequestId) {
+				employeesError = errorMessage(error, 'Daftar pegawai aktif belum dapat dimuat.');
+			}
+		} finally {
+			if (current === employeeRequestId) {
+				employeesLoading = false;
+			}
+		}
+	}
+
 	async function refreshDetail() {
 		refreshBusy = true;
 		try {
 			loadDetail();
+			const employeesPromise = loadEmployees();
 			await detailPromise;
+			await employeesPromise;
 		} finally {
 			refreshBusy = false;
 		}
 	}
 
 	async function saveHomeroom() {
-		if (!homeroomEmployeeId || !classId) return;
+		if (!canSaveHomeroom) return;
 		saveBusy = true;
 		try {
 			const body = JSON.stringify({
@@ -224,11 +272,22 @@
 		return labels[value] ?? (value || '-');
 	}
 
+	function employeeSourceLabel(option: HomeroomEmployeeOption) {
+		return option.isActiveEmployee ? 'Pegawai aktif' : 'Fallback rombel';
+	}
+
+	function selectHomeroomEmployee(option: HomeroomEmployeeOption) {
+		homeroomEmployeeId = option.id;
+	}
+
 	function handleRenderError(error: unknown) {
 		console.error('Rombel detail render failed', error);
 	}
 
-	onMount(loadDetail);
+	onMount(() => {
+		loadDetail();
+		void loadEmployees();
+	});
 </script>
 
 <svelte:head>
@@ -472,36 +531,126 @@
 						<Card.Root>
 							<Card.Header>
 								<Card.Title class="text-base">{activeHomeroom ? 'Perbarui Wali Kelas' : 'Tetapkan Wali Kelas'}</Card.Title>
-								<Card.Description>Opsi guru diambil dari guru mapel yang sudah terhubung ke rombel ini.</Card.Description>
+								<Card.Description>Pilih dari pegawai aktif. Guru mapel dan wali aktif saat ini tetap muncul sebagai fallback.</Card.Description>
 							</Card.Header>
 							<Card.Content class="space-y-3">
-								<div>
-									<label for="homeroom-employee" class="mb-1 block text-xs font-medium text-muted-foreground">Guru</label>
-									<select
-										id="homeroom-employee"
-										bind:value={homeroomEmployeeId}
-										class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-									>
-										<option value="">Pilih guru</option>
-										{#each teacherOptions as teacher (teacher.id)}
-											<option value={teacher.id}>{teacher.name}</option>
-										{/each}
-									</select>
+								<div class="space-y-1.5">
+									<label for="homeroom-employee-search" class="block text-xs font-medium text-muted-foreground">Cari Pegawai</label>
+									<div class="relative">
+										<Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+										<Input
+											id="homeroom-employee-search"
+											bind:value={employeeSearch}
+											placeholder="Nama, UID, NIP, atau tipe pegawai"
+											class="pl-8"
+											disabled={employeesLoading && !employeesLoaded && employeeOptions.length === 0}
+										/>
+									</div>
+								</div>
+
+								{#if selectedEmployeeOption}
+									<div class="rounded-lg border border-primary/20 bg-primary/10 p-3 text-sm">
+										<div class="flex items-start gap-2">
+											<UserCheck class="mt-0.5 size-4 shrink-0 text-primary" />
+											<div class="min-w-0 space-y-1">
+												<p class="font-medium text-foreground">{selectedEmployeeOption.name}</p>
+												<p class="text-xs text-muted-foreground">{employeeOptionSubtitle(selectedEmployeeOption)}</p>
+												<Badge class="border-primary/20 bg-primary/15 text-primary">{employeeSourceLabel(selectedEmployeeOption)}</Badge>
+											</div>
+										</div>
+									</div>
+								{/if}
+
+								{#if employeesError}
+									<div class="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+										<p class="font-medium">Daftar pegawai aktif belum dapat dimuat.</p>
+										<p class="mt-1 text-xs text-destructive/80">
+											{employeeOptions.length > 0
+												? 'Opsi sementara memakai guru mapel dan wali kelas yang sudah tercatat pada rombel ini.'
+												: employeesError}
+										</p>
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											class="mt-3 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+											disabled={employeesLoading}
+											onclick={() => void loadEmployees()}
+										>
+											<RefreshCw class={`mr-2 size-4 ${employeesLoading ? 'animate-spin' : ''}`} />
+											Muat Ulang Pegawai
+										</Button>
+									</div>
+								{/if}
+
+								<div class="space-y-2">
+									<div class="flex items-center justify-between gap-3">
+										<p class="text-xs font-medium text-muted-foreground">Opsi Wali Kelas</p>
+										{#if employeesLoading && employeesLoaded}
+											<span class="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+												<span class="size-3 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+												Memperbarui
+											</span>
+										{/if}
+									</div>
+									{#if employeesLoading && !employeesLoaded && employeeOptions.length === 0}
+										<div class="space-y-2 rounded-lg border border-border p-2">
+											<Skeleton class="h-12 w-full" />
+											<Skeleton class="h-12 w-full" />
+											<Skeleton class="h-12 w-full" />
+										</div>
+									{:else if employeeOptions.length === 0}
+										<EmptyStatePanel
+											compact
+											title="Belum ada opsi wali kelas"
+											description={employeesError
+												? 'Muat ulang daftar pegawai, atau hubungi admin jika endpoint pegawai tidak dapat diakses.'
+												: 'Tambahkan pegawai aktif lebih dulu agar wali kelas bisa dipilih.'}
+										/>
+									{:else if filteredEmployeeOptions.length === 0}
+										<EmptyStatePanel compact title="Pegawai tidak ditemukan" description="Ubah kata kunci pencarian untuk melihat opsi wali kelas lain." />
+									{:else}
+										<div class="max-h-72 overflow-y-auto rounded-lg border border-border p-1">
+											{#each filteredEmployeeOptions as option (option.id)}
+												<button
+													type="button"
+													class={`flex w-full items-start justify-between gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+														homeroomEmployeeId === option.id
+															? 'border-primary bg-primary/10 text-foreground'
+															: 'border-transparent text-foreground hover:bg-accent hover:text-accent-foreground'
+													}`}
+													aria-pressed={homeroomEmployeeId === option.id}
+													aria-label={`Pilih ${option.name} sebagai wali kelas`}
+													onclick={() => selectHomeroomEmployee(option)}
+												>
+													<span class="min-w-0">
+														<span class="block truncate font-medium">{option.name}</span>
+														<span class="block truncate text-xs text-muted-foreground">{employeeOptionSubtitle(option)}</span>
+													</span>
+													<span class="flex shrink-0 flex-col items-end gap-1">
+														<Badge variant={option.isActiveEmployee ? 'secondary' : 'outline'}>{employeeSourceLabel(option)}</Badge>
+														{#if employmentTypeLabel(option.employmentType)}
+															<span class="text-xs text-muted-foreground">{employmentTypeLabel(option.employmentType)}</span>
+														{/if}
+													</span>
+												</button>
+											{/each}
+										</div>
+									{/if}
 								</div>
 								<div>
 									<label for="homeroom-notes" class="mb-1 block text-xs font-medium text-muted-foreground">Catatan</label>
-									<textarea
+									<Textarea
 										id="homeroom-notes"
 										bind:value={homeroomNotes}
-										rows="3"
-										class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-									></textarea>
+										rows={3}
+									/>
 								</div>
 								<LoadingButton
 									class="w-full"
 									loading={saveBusy}
 									loadingLabel="Menyimpan..."
-									disabled={!homeroomEmployeeId || teacherOptions.length === 0}
+									disabled={!canSaveHomeroom}
 									onclick={() => void saveHomeroom()}
 									label="Simpan Wali Kelas"
 								/>
