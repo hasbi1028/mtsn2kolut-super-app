@@ -269,6 +269,9 @@ func TestClassJournalRejectsInvalidRequests(t *testing.T) {
 		{name: "create invalid assignment", fn: h.CreateSession, method: http.MethodPost, target: "/class-journal/sessions", body: `{"assignment_id":"bad","tanggal":"2026-05-01"}`, wantStatus: http.StatusBadRequest},
 		{name: "create missing date", fn: h.CreateSession, method: http.MethodPost, target: "/class-journal/sessions", body: `{"assignment_id":"` + validID + `"}`, wantStatus: http.StatusBadRequest},
 		{name: "create invalid date", fn: h.CreateSession, method: http.MethodPost, target: "/class-journal/sessions", body: `{"assignment_id":"` + validID + `","tanggal":"bad"}`, wantStatus: http.StatusBadRequest},
+		{name: "open timetable invalid json", fn: h.OpenSessionFromTimetableSlot, method: http.MethodPost, target: "/academic/rombel/" + validID + "/timetable-slots/" + validID + "/journal-session", body: `{`, id: validID, wantStatus: http.StatusBadRequest},
+		{name: "open timetable missing date", fn: h.OpenSessionFromTimetableSlot, method: http.MethodPost, target: "/academic/rombel/" + validID + "/timetable-slots/" + validID + "/journal-session", body: `{}`, id: validID, wantStatus: http.StatusBadRequest},
+		{name: "open timetable invalid date", fn: h.OpenSessionFromTimetableSlot, method: http.MethodPost, target: "/academic/rombel/" + validID + "/timetable-slots/" + validID + "/journal-session", body: `{"date":"bad"}`, id: validID, wantStatus: http.StatusBadRequest},
 		{name: "get invalid id", fn: h.GetSession, method: http.MethodGet, target: "/class-journal/sessions/bad", id: "bad", wantStatus: http.StatusBadRequest},
 		{name: "update invalid id", fn: h.UpdateSession, method: http.MethodPut, target: "/class-journal/sessions/bad", body: `{}`, id: "bad", wantStatus: http.StatusBadRequest},
 		{name: "update invalid json", fn: h.UpdateSession, method: http.MethodPut, target: "/class-journal/sessions/" + validID, body: `{`, id: validID, wantStatus: http.StatusBadRequest},
@@ -284,7 +287,7 @@ func TestClassJournalRejectsInvalidRequests(t *testing.T) {
 				req = adminRequest(tt.method, tt.target, tt.body)
 			}
 			if tt.id != "" {
-				req = withRouteParam(req, "id", tt.id)
+				req = withRouteParams(req, "id", tt.id, "slotID", tt.id)
 			}
 			tt.fn(rec, req)
 			if rec.Code != tt.wantStatus {

@@ -23,6 +23,12 @@ JOIN subjects subj ON subj.id = csa.subject_id
 JOIN employees e ON e.id = csa.teacher_employee_id
 WHERE s.id = $1;
 
+-- name: GetJournalSessionIDByAssignmentDate :one
+SELECT id
+FROM class_journal_sessions
+WHERE assignment_id = $1
+  AND tanggal = $2;
+
 -- name: ListJournalSessions :many
 SELECT
     s.id, s.assignment_id, s.tanggal, s.pertemuan_ke,

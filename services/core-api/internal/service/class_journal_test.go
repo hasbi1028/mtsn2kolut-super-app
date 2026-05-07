@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -21,6 +22,14 @@ type fakeClassJournalStore struct {
 
 	sessionRow db.GetJournalSessionRow
 	sessionErr error
+
+	sessionByDateArg db.GetJournalSessionIDByAssignmentDateParams
+	sessionByDateID  pgtype.UUID
+	sessionByDateErr error
+
+	timetableArg db.GetRombelTimetableSlotParams
+	timetableRow db.GetRombelTimetableSlotRow
+	timetableErr error
 
 	listSessionsArg  pgtype.UUID
 	listSessionsRows []db.ListJournalSessionsRow
@@ -71,6 +80,22 @@ func (f *fakeClassJournalStore) GetJournalSession(ctx context.Context, id pgtype
 		return db.GetJournalSessionRow{}, f.sessionErr
 	}
 	return f.sessionRow, nil
+}
+
+func (f *fakeClassJournalStore) GetJournalSessionIDByAssignmentDate(ctx context.Context, arg db.GetJournalSessionIDByAssignmentDateParams) (pgtype.UUID, error) {
+	f.sessionByDateArg = arg
+	if f.sessionByDateErr != nil {
+		return pgtype.UUID{}, f.sessionByDateErr
+	}
+	return f.sessionByDateID, nil
+}
+
+func (f *fakeClassJournalStore) GetRombelTimetableSlot(ctx context.Context, arg db.GetRombelTimetableSlotParams) (db.GetRombelTimetableSlotRow, error) {
+	f.timetableArg = arg
+	if f.timetableErr != nil {
+		return db.GetRombelTimetableSlotRow{}, f.timetableErr
+	}
+	return f.timetableRow, nil
 }
 
 func (f *fakeClassJournalStore) ListJournalSessions(ctx context.Context, assignmentID pgtype.UUID) ([]db.ListJournalSessionsRow, error) {
@@ -269,6 +294,111 @@ func TestClassJournalCreateSessionMapsDuplicateDate(t *testing.T) {
 	_, err := svc.CreateSession(context.Background(), documentCycleTestUUID(58), documentCycleTestDate(2026, 5, 3), "materi", "", "", true, pgtype.UUID{})
 	if err == nil || !strings.Contains(err.Error(), "tanggal ini sudah ada") {
 		t.Fatalf("CreateSession() error = %v, want duplicate-date message", err)
+	}
+}
+
+func TestClassJournalOpenSessionFromTimetableSlotReturnsExisting(t *testing.T) {
+	classID := documentCycleTestUUID(81)
+	slotID := documentCycleTestUUID(82)
+	assignmentID := documentCycleTestUUID(83)
+	sessionID := documentCycleTestUUID(84)
+	teacherID := documentCycleTestUUID(85)
+	tanggal := documentCycleTestDate(2026, 5, 6)
+	store := &fakeClassJournalStore{
+		timetableRow: db.GetRombelTimetableSlotRow{
+			ID:                slotID,
+			ClassID:           classID,
+			AssignmentID:      assignmentID,
+			TeacherEmployeeID: teacherID,
+			SubjectName:       "IPA",
+		},
+		sessionByDateID: sessionID,
+		sessionRow: db.GetJournalSessionRow{
+			ID:                sessionID,
+			AssignmentID:      assignmentID,
+			TeacherEmployeeID: teacherID,
+			Materi:            "Ekosistem",
+		},
+		attendanceRows: []db.ListJournalAttendancesRow{
+			{SessionID: sessionID, StudentID: documentCycleTestUUID(86), Status: db.JournalAttendanceStatusHadir},
+		},
+	}
+	svc := &ClassJournal{q: store}
+
+	result, err := svc.OpenSessionFromTimetableSlot(context.Background(), classID, slotID, tanggal, "  Materi baru  ", "", "", true, teacherID)
+	if err != nil {
+		t.Fatalf("OpenSessionFromTimetableSlot() error = %v", err)
+	}
+	if result.Created {
+		t.Fatal("Created = true, want false for existing assignment/date session")
+	}
+	if result.Session.ID != sessionID || result.TimetableSlot.ID != slotID || len(result.Attendances) != 1 {
+		t.Fatalf("result = %+v, want existing session detail and slot", result)
+	}
+	if store.timetableArg.ClassID != classID || store.timetableArg.ID != slotID {
+		t.Fatalf("timetable arg = %+v, want scoped class/slot", store.timetableArg)
+	}
+	if store.sessionByDateArg.AssignmentID != assignmentID || store.sessionByDateArg.Tanggal != tanggal {
+		t.Fatalf("session by date arg = %+v, want assignment/date", store.sessionByDateArg)
+	}
+	if store.createArg.AssignmentID.Valid {
+		t.Fatalf("create arg = %+v, want no create for existing session", store.createArg)
+	}
+}
+
+func TestClassJournalOpenSessionFromTimetableSlotCreatesAndSeeds(t *testing.T) {
+	classID := documentCycleTestUUID(87)
+	slotID := documentCycleTestUUID(88)
+	assignmentID := documentCycleTestUUID(89)
+	sessionID := documentCycleTestUUID(90)
+	teacherID := documentCycleTestUUID(91)
+	studentID := documentCycleTestUUID(92)
+	tanggal := documentCycleTestDate(2026, 5, 7)
+	store := &fakeClassJournalStore{
+		countSessions:    4,
+		sessionByDateErr: pgx.ErrNoRows,
+		timetableRow:     db.GetRombelTimetableSlotRow{ID: slotID, ClassID: classID, AssignmentID: assignmentID, TeacherEmployeeID: teacherID},
+		createRow:        db.ClassJournalSession{ID: sessionID, AssignmentID: assignmentID, PertemuanKe: 5},
+		studentsRows:     []db.ListActiveStudentsByClassIDRow{{ID: studentID, Nama: "Siswa A"}},
+		sessionRow:       db.GetJournalSessionRow{ID: sessionID, AssignmentID: assignmentID, TeacherEmployeeID: teacherID, Materi: "Pecahan"},
+		attendanceRows:   []db.ListJournalAttendancesRow{{SessionID: sessionID, StudentID: studentID, Status: db.JournalAttendanceStatusHadir}},
+	}
+	svc := &ClassJournal{q: store}
+
+	result, err := svc.OpenSessionFromTimetableSlot(context.Background(), classID, slotID, tanggal, "  Pecahan  ", "  Diskusi  ", "  Siap  ", false, teacherID)
+	if err != nil {
+		t.Fatalf("OpenSessionFromTimetableSlot() error = %v", err)
+	}
+	if !result.Created || result.Session.ID != sessionID {
+		t.Fatalf("result = %+v, want created session %v", result, sessionID)
+	}
+	if store.createArg.AssignmentID != assignmentID || store.createArg.Tanggal != tanggal || store.createArg.PertemuanKe != 5 {
+		t.Fatalf("create arg = %+v, want assignment/date/pertemuan from slot", store.createArg)
+	}
+	if store.createArg.Materi != "Pecahan" || store.createArg.Kegiatan != "Diskusi" || store.createArg.Catatan != "Siap" || store.createArg.GuruHadir {
+		t.Fatalf("create arg normalization = %+v, want trimmed values and guru_hadir false", store.createArg)
+	}
+	if store.studentsArg != classID || len(store.upsertArgs) != 1 || store.upsertArgs[0].StudentID != studentID {
+		t.Fatalf("attendance seed args class=%v upserts=%+v, want one class student", store.studentsArg, store.upsertArgs)
+	}
+}
+
+func TestClassJournalOpenSessionFromTimetableSlotRejectsTeacherMismatch(t *testing.T) {
+	teacherID := documentCycleTestUUID(93)
+	otherTeacherID := documentCycleTestUUID(94)
+	store := &fakeClassJournalStore{
+		timetableRow: db.GetRombelTimetableSlotRow{
+			ID:                documentCycleTestUUID(95),
+			ClassID:           documentCycleTestUUID(96),
+			AssignmentID:      documentCycleTestUUID(97),
+			TeacherEmployeeID: otherTeacherID,
+		},
+	}
+	svc := &ClassJournal{q: store}
+
+	_, err := svc.OpenSessionFromTimetableSlot(context.Background(), store.timetableRow.ClassID, store.timetableRow.ID, documentCycleTestDate(2026, 5, 8), "", "", "", true, teacherID)
+	if err == nil || !strings.Contains(err.Error(), "akses ditolak") {
+		t.Fatalf("OpenSessionFromTimetableSlot() error = %v, want akses ditolak", err)
 	}
 }
 

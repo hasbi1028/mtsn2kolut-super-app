@@ -202,11 +202,16 @@ function staffOperationPermission(pathname: string, method: string): string[] | 
 	return undefined;
 }
 
+function isRombelTimetableJournalSessionPath(pathname: string): boolean {
+	return /^\/api\/academic\/rombel\/[^/]+\/timetable-slots\/[^/]+\/journal-session\/?$/.test(pathname.split('?')[0] ?? pathname);
+}
+
 export function requiredPermissionsForPath(pathname: string, method: string): string[] {
 	if (matchesPathSegment(pathname, '/settings/audit-logs')) return ['audit.read'];
 	if (matchesPathSegment(pathname, '/settings/school-profile') || matchesPathSegment(pathname, '/api/school-profile')) return ['settings.school_profile'];
 	if (matchesPathSegment(pathname, '/api/rbac')) return isReadMethod(method) ? ['roles.read'] : ['roles.manage'];
 	if (matchesPathSegment(pathname, '/parents') || matchesPathSegment(pathname, '/api/parents')) return isReadMethod(method) ? ['parents.read'] : ['parents.manage'];
+	if (isRombelTimetableJournalSessionPath(pathname)) return ['journal.manage'];
 	if (matchesPathSegment(pathname, '/academic') || matchesPathSegment(pathname, '/api/academic')) return isReadMethod(method) ? ['academic.read'] : ['academic.manage'];
 	if (matchesPathSegment(pathname, '/pusaka') || matchesPathSegment(pathname, '/api/pusaka')) return isReadMethod(method) ? ['pusaka.read'] : ['pusaka.manage'];
 	if (matchesPathSegment(pathname, '/website') || matchesPathSegment(pathname, '/api/website')) return isReadMethod(method) ? ['website.read'] : ['website.manage'];
@@ -226,6 +231,7 @@ export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: st
 
 	const requiredPermissions = requiredPermissionsForPath(pathname, method);
 	if (requiredPermissions.length > 0 && hasAnyPermission(user, requiredPermissions)) return true;
+	if (isRombelTimetableJournalSessionPath(pathname)) return hasAnyRole(user, ['guru']);
 
 	if (isAdminOnlyPath(pathname) && !isGuruSafeAssessmentSupportReadPath(pathname, method)) return false;
 	if (isBankSoalPath(pathname)) return hasAnyRole(user, ['guru']);

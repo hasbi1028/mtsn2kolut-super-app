@@ -256,6 +256,7 @@ func main() {
 		r.With(requireAcademicManage).Post("/api/academic/rombel/{id}/timetable-slots", rombelH.CreateTimetableSlot)
 		r.With(requireAcademicManage).Put("/api/academic/rombel/{id}/timetable-slots/{slotID}", rombelH.UpdateTimetableSlot)
 		r.With(requireAcademicManage).Delete("/api/academic/rombel/{id}/timetable-slots/{slotID}", rombelH.DeleteTimetableSlot)
+		r.Post("/api/academic/rombel/{id}/timetable-slots/{slotID}/journal-session", journalH.OpenSessionFromTimetableSlot)
 		r.Get("/api/academic/rombel/{id}/homeroom-assignments", rombelH.ListHomeroomAssignments)
 		r.With(requireAcademicManage).Post("/api/academic/rombel/{id}/homeroom-assignments", rombelH.CreateHomeroomAssignment)
 		r.With(requireAcademicManage).Put("/api/academic/rombel/{id}/homeroom-assignments/{assignmentID}", rombelH.UpdateHomeroomAssignment)

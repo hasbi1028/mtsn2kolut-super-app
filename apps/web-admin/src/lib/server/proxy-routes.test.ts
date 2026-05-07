@@ -1288,6 +1288,42 @@ describe('api proxy route handlers', () => {
 		expect(deleteRes.status).toBe(204);
 	});
 
+	it('forwards rombel timetable journal-session open through encoded nested paths', async () => {
+		const mod = await import('../../routes/api/academic/rombel/[id]/timetable-slots/[slotID]/journal-session/+server');
+		proxyPostMock.mockResolvedValueOnce({ created: true, session: { id: 'journal 1/2026' } });
+		const request = new Request('http://localhost/api/academic/rombel/class%201%2F2026/timetable-slots/slot%201%2F2026/journal-session', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ date: '2026-05-07' })
+		});
+		const event = createEvent({
+			locals: { user: { role: 'guru', roles: ['guru'] } },
+			params: { id: 'class 1/2026', slotID: 'slot 1/2026' },
+			request
+		});
+
+		const res = await mod.POST(event as never);
+
+		expect(readRequestJsonMock).toHaveBeenCalledWith(request);
+		expect(proxyPostMock).toHaveBeenCalledWith('/api/academic/rombel/class%201%2F2026/timetable-slots/slot%201%2F2026/journal-session', {
+			date: '2026-05-07'
+		});
+		expect(res.status).toBe(201);
+		await expect(res.json()).resolves.toEqual({ created: true, session: { id: 'journal 1/2026' } });
+	});
+
+	it('rejects rombel timetable journal-session open without a signed-in user', async () => {
+		const mod = await import('../../routes/api/academic/rombel/[id]/timetable-slots/[slotID]/journal-session/+server');
+		const res = await mod.POST(createEvent({
+			params: { id: 'class 1/2026', slotID: 'slot 1/2026' },
+			request: new Request('http://localhost/test', { method: 'POST', body: '{}' })
+		}) as never);
+
+		expect(res.status).toBe(401);
+		expect(proxyPostMock).not.toHaveBeenCalled();
+		await expect(res.json()).resolves.toEqual({ error: 'unauthorized' });
+	});
+
 	it('encodes student lifecycle ids read from query params before forwarding', async () => {
 		const mod = await import('../../routes/api/students/+server');
 		proxyPatchMock.mockResolvedValueOnce({ id: 'student 1/2026', status: 'inactive' });
