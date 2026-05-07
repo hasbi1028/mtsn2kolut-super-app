@@ -13,6 +13,13 @@ import 'exam_shell_widgets.dart';
 import '../widgets/audio_prompt_card.dart';
 import '../widgets/rich_exam_text.dart';
 
+// Caps to keep answers within the backend MaxBytesReader budget (64 KB) and
+// give students a clear UX before the server rejects an oversized payload.
+// Essay answers use a conservative character cap because UTF-8 and JSON escaping
+// can make serialized payloads larger than the visible character count.
+const int kShortAnswerMaxChars = 256;
+const int kEssayAnswerMaxChars = 16000;
+
 class ExamShellScreen extends StatefulWidget {
   const ExamShellScreen({
     super.key,
@@ -1758,6 +1765,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           TextField(
             controller: controller,
             textInputAction: TextInputAction.done,
+            maxLength: kShortAnswerMaxChars,
             decoration: const InputDecoration(
               labelText: 'Jawaban singkat',
               hintText: 'Tulis jawaban singkat Anda...',
@@ -1783,6 +1791,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             controller: controller,
             maxLines: null,
             expands: true,
+            maxLength: kEssayAnswerMaxChars,
             decoration: const InputDecoration(
               alignLabelWithHint: true,
               labelText: 'Jawaban uraian',

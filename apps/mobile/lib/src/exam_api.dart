@@ -29,7 +29,11 @@ class ExamApiClient {
        ),
        _httpClient = httpClient ?? HttpClient() {
     _httpClient.connectionTimeout = const Duration(seconds: 10);
+    _httpClient.userAgent = userAgent;
   }
+
+  static const String userAgent =
+      'MTsN2Kolut-CBT/1.0 (Flutter; Android; BYOD)';
 
   final String baseUrl;
   final String? deviceFingerprint;
