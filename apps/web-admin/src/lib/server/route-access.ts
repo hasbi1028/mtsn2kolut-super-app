@@ -168,12 +168,33 @@ function usersPermission(pathname: string, method: string): string[] | undefined
 
 function bankSoalPermission(pathname: string, method: string): string[] | undefined {
 	if (!isBankSoalPath(pathname)) return undefined;
-	if (!pathname.startsWith('/api/')) return ['bank_soal.read'];
+	if (!pathname.startsWith('/api/')) {
+		if (matchesPathSegment(pathname, '/bank-soal/tambah')) return ['bank_soal.create'];
+		if (matchesPathSegment(pathname, '/bank-soal/verifikasi')) return ['bank_soal.review'];
+		if (matchesPathSegment(pathname, '/bank-soal/impor')) return ['bank_soal.import'];
+		if (matchesPathSegment(pathname, '/bank-soal/pengaturan')) return ['bank_soal.settings'];
+		return ['bank_soal.read'];
+	}
 	if (isReadMethod(method)) return ['bank_soal.read'];
+	if (matchesPathSegment(pathname, '/api/bank-soal/questions/import-legacy')) return ['bank_soal.import'];
+	if (matchesPathSegment(pathname, '/api/bank-soal/questions/bulk-workflow')) return ['bank_soal.update', 'bank_soal.review', 'bank_soal.publish'];
+	if (matchesPathSegment(pathname, '/api/bank-soal/assets') && method === 'POST') return ['bank_soal.create', 'bank_soal.update'];
+	if (matchesPathSegment(pathname, '/api/bank-soal/questions') && pathname.endsWith('/duplicate') && method === 'POST') return ['bank_soal.create'];
+	if (matchesPathSegment(pathname, '/api/bank-soal/questions') && pathname.endsWith('/revision') && method === 'POST') return ['bank_soal.update'];
+	if (matchesPathSegment(pathname, '/api/bank-soal/questions') && pathname.endsWith('/workflow')) return ['bank_soal.update', 'bank_soal.review', 'bank_soal.publish'];
 	if (method === 'POST') return ['bank_soal.create'];
 	if (method === 'DELETE') return ['bank_soal.delete'];
 	if (method === 'PATCH' || method === 'PUT') return ['bank_soal.update', 'bank_soal.review', 'bank_soal.publish'];
 	return ['bank_soal.read'];
+}
+
+function isBankSoalGuruFallbackPath(pathname: string, method: string) {
+	if (!isReadMethod(method)) return false;
+	if (pathname.startsWith('/api/')) return true;
+	return !matchesPathSegment(pathname, '/bank-soal/tambah')
+		&& !matchesPathSegment(pathname, '/bank-soal/verifikasi')
+		&& !matchesPathSegment(pathname, '/bank-soal/impor')
+		&& !matchesPathSegment(pathname, '/bank-soal/pengaturan');
 }
 
 function asesmenPermission(pathname: string, method: string): string[] | undefined {
@@ -234,7 +255,7 @@ export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: st
 	if (isRombelTimetableJournalSessionPath(pathname)) return hasAnyRole(user, ['guru']);
 
 	if (isAdminOnlyPath(pathname) && !isGuruSafeAssessmentSupportReadPath(pathname, method)) return false;
-	if (isBankSoalPath(pathname)) return hasAnyRole(user, ['guru']);
+	if (isBankSoalPath(pathname)) return isBankSoalGuruFallbackPath(pathname, method) && hasAnyRole(user, ['guru']);
 	if (isStaffOperationPath(pathname)) return hasAnyRole(user, ['staf']);
 	if (isKesiswaanPath(pathname)) return hasAnyRole(user, isReadMethod(method) ? ['kesiswaan', 'guru'] : ['kesiswaan']);
 	if (isStudentPagePath(pathname)) return hasAnyRole(user, ['kesiswaan']);

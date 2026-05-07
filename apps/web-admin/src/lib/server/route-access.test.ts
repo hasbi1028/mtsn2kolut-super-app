@@ -130,6 +130,7 @@ describe('route access helpers', () => {
 		const reader = { id: '1', username: 'reader', role: '', roles: [], permissions: ['users.read', 'bank_soal.read', 'asesmen.read'] };
 		const mutator = { id: '2', username: 'mutator', role: '', roles: [], permissions: ['users.create', 'bank_soal.create', 'asesmen.event_manage'] };
 		const profileReviewer = { id: '3', username: 'reviewer', role: '', roles: [], permissions: ['profile_changes.review'] };
+		const plainGuru = { id: '4', username: 'guru', role: 'guru', roles: ['guru'], permissions: [] };
 
 		expect(canAccessProtectedRoute(reader, '/api/users', 'POST')).toBe(false);
 		expect(canAccessProtectedRoute(mutator, '/api/users', 'POST')).toBe(true);
@@ -139,6 +140,17 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute(profileReviewer, '/api/users/change-requests/export', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(reader, '/api/bank-soal/questions', 'POST')).toBe(false);
 		expect(canAccessProtectedRoute(mutator, '/api/bank-soal/questions', 'POST')).toBe(true);
+		expect(canAccessProtectedRoute(plainGuru, '/api/bank-soal/questions', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(plainGuru, '/api/bank-soal/questions', 'POST')).toBe(false);
+		expect(canAccessProtectedRoute(plainGuru, '/api/bank-soal/questions/question-1', 'PUT')).toBe(false);
+		expect(canAccessProtectedRoute(plainGuru, '/api/bank-soal/questions/question-1/workflow', 'PATCH')).toBe(false);
+		expect(canAccessProtectedRoute(plainGuru, '/api/bank-soal/questions/question-1', 'DELETE')).toBe(false);
+		expect(canAccessProtectedRoute(plainGuru, '/bank-soal/daftar', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(plainGuru, '/bank-soal/tambah', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(mutator, '/bank-soal/tambah', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(plainGuru, '/bank-soal/verifikasi', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(plainGuru, '/bank-soal/impor', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(plainGuru, '/bank-soal/pengaturan', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute({ id: '4', username: 'guru', role: 'guru', roles: ['guru'], permissions: [] }, '/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toBe(true);
 		expect(canAccessProtectedRoute({ id: '5', username: 'journal-all', role: '', roles: [], permissions: ['journal.manage_all'] }, '/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toBe(true);
 		expect(canAccessProtectedRoute(reader, '/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toBe(false);
@@ -156,7 +168,18 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/api/users/change-requests/request-1', 'PATCH')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users/user-1/reset-password', 'POST')).toEqual(['users.reset_password']);
 		expect(requiredPermissionsForPath('/api/users/user-1/profile-link', 'PATCH')).toEqual(['users.update']);
+		expect(requiredPermissionsForPath('/bank-soal/tambah', 'GET')).toEqual(['bank_soal.create']);
+		expect(requiredPermissionsForPath('/bank-soal/verifikasi', 'GET')).toEqual(['bank_soal.review']);
+		expect(requiredPermissionsForPath('/bank-soal/impor', 'GET')).toEqual(['bank_soal.import']);
+		expect(requiredPermissionsForPath('/bank-soal/pengaturan', 'GET')).toEqual(['bank_soal.settings']);
 		expect(requiredPermissionsForPath('/api/bank-soal/questions', 'POST')).toEqual(['bank_soal.create']);
+		expect(requiredPermissionsForPath('/api/bank-soal/questions/import-legacy', 'POST')).toEqual(['bank_soal.import']);
+		expect(requiredPermissionsForPath('/api/bank-soal/questions/bulk-workflow', 'PATCH')).toEqual(['bank_soal.update', 'bank_soal.review', 'bank_soal.publish']);
+		expect(requiredPermissionsForPath('/api/bank-soal/questions/question-1/workflow', 'PATCH')).toEqual(['bank_soal.update', 'bank_soal.review', 'bank_soal.publish']);
+		expect(requiredPermissionsForPath('/api/bank-soal/questions/question-1/duplicate', 'POST')).toEqual(['bank_soal.create']);
+		expect(requiredPermissionsForPath('/api/bank-soal/questions/question-1/revision', 'POST')).toEqual(['bank_soal.update']);
+		expect(requiredPermissionsForPath('/api/bank-soal/questions/question-1', 'DELETE')).toEqual(['bank_soal.delete']);
+		expect(requiredPermissionsForPath('/api/bank-soal/assets', 'POST')).toEqual(['bank_soal.create', 'bank_soal.update']);
 		expect(requiredPermissionsForPath('/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toEqual(['journal.manage', 'journal.manage_all']);
 		expect(requiredPermissionsForPath('/api/asesmen/packages', 'POST')).toEqual(['asesmen.package_manage']);
 		expect(requiredPermissionsForPath('/api/asesmen/events/event-1', 'PATCH')).toEqual(['asesmen.event_manage']);

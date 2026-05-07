@@ -56,14 +56,19 @@ func (s *CbtQuestion) createWithAudit(ctx context.Context, input SaveCbtQuestion
 	if err != nil {
 		return db.CbtQuestion{}, err
 	}
-	row, err := s.q.CreateCbtQuestion(ctx, params)
-	if err != nil {
-		return db.CbtQuestion{}, err
-	}
-	if err := s.logQuestionAudit(ctx, row.ID, actor.Username, action, note, metadata); err != nil {
-		return db.CbtQuestion{}, err
-	}
-	return row, nil
+	return s.withMutationStore(ctx, func(store cbtQuestionStore) (db.CbtQuestion, error) {
+		if err := s.validateMediaAssetIDs(ctx, store, input.MediaAssetIDs, pgtype.UUID{}, actor); err != nil {
+			return db.CbtQuestion{}, err
+		}
+		row, err := store.CreateCbtQuestion(ctx, params)
+		if err != nil {
+			return db.CbtQuestion{}, err
+		}
+		if err := logQuestionAudit(ctx, store, row.ID, actor.Username, action, note, metadata); err != nil {
+			return db.CbtQuestion{}, err
+		}
+		return row, nil
+	})
 }
 
 func createInputBypassesWorkflow(input SaveCbtQuestionInput) bool {
@@ -94,14 +99,19 @@ func (s *CbtQuestion) updateWithAudit(ctx context.Context, input SaveCbtQuestion
 	if err != nil {
 		return db.CbtQuestion{}, err
 	}
-	row, err := s.q.UpdateCbtQuestion(ctx, params)
-	if err != nil {
-		return db.CbtQuestion{}, err
-	}
-	if err := s.logQuestionAudit(ctx, row.ID, actor.Username, action, note, metadata); err != nil {
-		return db.CbtQuestion{}, err
-	}
-	return row, nil
+	return s.withMutationStore(ctx, func(store cbtQuestionStore) (db.CbtQuestion, error) {
+		if err := s.validateMediaAssetIDs(ctx, store, input.MediaAssetIDs, current.ID, actor); err != nil {
+			return db.CbtQuestion{}, err
+		}
+		row, err := store.UpdateCbtQuestion(ctx, params)
+		if err != nil {
+			return db.CbtQuestion{}, err
+		}
+		if err := logQuestionAudit(ctx, store, row.ID, actor.Username, action, note, metadata); err != nil {
+			return db.CbtQuestion{}, err
+		}
+		return row, nil
+	})
 }
 
 func (s *CbtQuestion) Delete(ctx context.Context, id pgtype.UUID) error {
@@ -120,10 +130,12 @@ func (s *CbtQuestion) DeleteWithActor(ctx context.Context, id pgtype.UUID, actor
 	if questionUsageLocked(current.PackageCount, current.AnswerCount) {
 		return fmt.Errorf("%w: soal sudah masuk paket ujian atau memiliki jawaban siswa. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
 	}
-	if err := s.logQuestionAudit(ctx, id, actor.Username, "delete", "", nil); err != nil {
-		return err
-	}
-	return s.q.DeleteCbtQuestion(ctx, id)
+	return s.withMutationStoreExec(ctx, func(store cbtQuestionStore) error {
+		if err := logQuestionAudit(ctx, store, id, actor.Username, "delete", "", nil); err != nil {
+			return err
+		}
+		return store.DeleteCbtQuestion(ctx, id)
+	})
 }
 
 func questionUsageLocked(packageCount, answerCount int32) bool {
@@ -189,7 +201,7 @@ func cbtQuestionUUIDString(id pgtype.UUID) string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", id.Bytes[0:4], id.Bytes[4:6], id.Bytes[6:8], id.Bytes[8:10], id.Bytes[10:16])
 }
 
-func (s *CbtQuestion) logQuestionAudit(ctx context.Context, questionID pgtype.UUID, actorUsername string, action string, note string, metadata map[string]any) error {
+func logQuestionAudit(ctx context.Context, store cbtQuestionStore, questionID pgtype.UUID, actorUsername string, action string, note string, metadata map[string]any) error {
 	action = strings.TrimSpace(action)
 	if !questionID.Valid || action == "" {
 		return nil
@@ -201,7 +213,7 @@ func (s *CbtQuestion) logQuestionAudit(ctx context.Context, questionID pgtype.UU
 	if err != nil {
 		return err
 	}
-	_, err = s.q.CreateCbtQuestionAuditLog(ctx, db.CreateCbtQuestionAuditLogParams{
+	_, err = store.CreateCbtQuestionAuditLog(ctx, db.CreateCbtQuestionAuditLogParams{
 		QuestionID:    questionID,
 		ActorUsername: strings.TrimSpace(actorUsername),
 		Action:        action,
@@ -209,6 +221,58 @@ func (s *CbtQuestion) logQuestionAudit(ctx context.Context, questionID pgtype.UU
 		Metadata:      raw,
 	})
 	return err
+}
+
+func (s *CbtQuestion) validateMediaAssetIDs(ctx context.Context, store cbtQuestionStore, rawIDs []string, questionID pgtype.UUID, actor CbtQuestionActor) error {
+	ids := normalizeStringList(rawIDs)
+	for _, rawID := range ids {
+		assetID, err := parseMediaAssetUUID(rawID)
+		if err != nil {
+			return fmt.Errorf("%w: media_asset_ids harus berisi UUID valid", domain.ErrBadRequest)
+		}
+		asset, err := store.GetCbtQuestionAsset(ctx, assetID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return fmt.Errorf("%w: media_asset_ids berisi aset yang tidak ditemukan", domain.ErrBadRequest)
+			}
+			return err
+		}
+		if asset.QuestionID.Valid && !sameUUID(asset.QuestionID, questionID) {
+			return fmt.Errorf("%w: media_asset_ids berisi aset dari soal lain", domain.ErrBadRequest)
+		}
+		if !actor.IsAdmin() && strings.TrimSpace(asset.UploadedBy) != actor.Username {
+			return fmt.Errorf("%w: media_asset_ids berisi aset yang bukan milik pengguna", domain.ErrForbidden)
+		}
+	}
+	return nil
+}
+
+func parseMediaAssetUUID(value string) (pgtype.UUID, error) {
+	var id pgtype.UUID
+	if err := id.Scan(strings.TrimSpace(value)); err != nil {
+		return pgtype.UUID{}, err
+	}
+	if !id.Valid {
+		return pgtype.UUID{}, fmt.Errorf("uuid kosong")
+	}
+	return id, nil
+}
+
+func normalizeStringList(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
 }
 
 func memberSubjectMatches(memberSubjectID pgtype.UUID, subjectID pgtype.UUID) bool {
@@ -449,6 +513,7 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	out.ApproverUsername = strings.TrimSpace(out.ApproverUsername)
 	out.WriterNotes = strings.TrimSpace(out.WriterNotes)
 	out.ReviewNotes = strings.TrimSpace(out.ReviewNotes)
+	out.MediaAssetIDs = normalizeStringList(out.MediaAssetIDs)
 
 	if out.Difficulty == "" {
 		out.Difficulty = db.CbtQuestionDifficultyEnumMedium
@@ -508,7 +573,11 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 	if out.QuestionType == "short_answer" {
 		out.AnswerKey = normalizeShortAnswerKey(out.AnswerKey)
 	} else if out.QuestionType == "matching" {
-		out.AnswerKey = normalizeMatchingAnswerKey(out.AnswerKey, countMatchingPairs(normalizedOptions))
+		answerKey, err := normalizeMatchingAnswerKey(out.AnswerKey, countMatchingPairs(normalizedOptions))
+		if err != nil {
+			return SaveCbtQuestionInput{}, err
+		}
+		out.AnswerKey = answerKey
 	} else {
 		out.AnswerKey = strings.TrimSpace(strings.ToUpper(out.AnswerKey))
 	}
@@ -632,6 +701,10 @@ func validateMatchingQuestion(options []QuestionOption, answerKey string) error 
 	if pairCount < 2 {
 		return fmt.Errorf("menjodohkan membutuhkan minimal 2 pasangan")
 	}
+	remainingRightLabels := make(map[string]bool, len(correctRightLabels))
+	for right := range correctRightLabels {
+		remainingRightLabels[right] = true
+	}
 	for _, pair := range strings.Split(answerKey, ";") {
 		parts := strings.Split(pair, "=")
 		if len(parts) != 2 {
@@ -639,12 +712,13 @@ func validateMatchingQuestion(options []QuestionOption, answerKey string) error 
 		}
 		left := strings.TrimSpace(strings.ToUpper(parts[0]))
 		right := strings.TrimSpace(parts[1])
-		if !leftLabels[left] || !correctRightLabels[right] {
+		if !leftLabels[left] || !remainingRightLabels[right] {
 			return fmt.Errorf("answer_key menjodohkan harus sesuai label pasangan")
 		}
 		delete(leftLabels, left)
+		delete(remainingRightLabels, right)
 	}
-	if len(leftLabels) != 0 {
+	if len(leftLabels) != 0 || len(remainingRightLabels) != 0 {
 		return fmt.Errorf("answer_key menjodohkan harus memetakan semua pasangan")
 	}
 	return nil
@@ -672,11 +746,14 @@ func normalizeShortAnswerKey(value string) string {
 	return strings.Join(aliases, "|")
 }
 
-func normalizeMatchingAnswerKey(value string, optionCount int) string {
-	if optionCount <= 0 {
-		return ""
+func normalizeMatchingAnswerKey(value string, optionCount int) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
 	}
-	fallback := buildMatchingAnswerKey(optionCount)
+	if optionCount <= 0 {
+		return "", fmt.Errorf("answer_key menjodohkan tidak valid")
+	}
 	pairs := strings.Split(value, ";")
 	labels := make(map[string]bool, optionCount)
 	matches := make(map[string]string, optionCount)
@@ -686,28 +763,28 @@ func normalizeMatchingAnswerKey(value string, optionCount int) string {
 	for _, pair := range pairs {
 		parts := strings.Split(pair, "=")
 		if len(parts) != 2 {
-			continue
+			return "", fmt.Errorf("answer_key menjodohkan tidak valid")
 		}
 		left := strings.TrimSpace(strings.ToUpper(parts[0]))
 		right := strings.TrimSpace(parts[1])
 		if !labels[left] {
-			continue
+			return "", fmt.Errorf("answer_key menjodohkan harus sesuai label pasangan")
 		}
 		rightIndex, err := strconv.Atoi(right)
 		if err != nil || rightIndex < 1 || rightIndex > optionCount {
-			continue
+			return "", fmt.Errorf("answer_key menjodohkan harus sesuai label pasangan")
 		}
 		matches[left] = strconv.Itoa(rightIndex)
 	}
 	if len(matches) != optionCount {
-		return fallback
+		return "", fmt.Errorf("answer_key menjodohkan harus memetakan semua pasangan")
 	}
 	ordered := make([]string, 0, optionCount)
 	for i := 0; i < optionCount; i++ {
 		left := string(rune('A' + i))
 		ordered = append(ordered, fmt.Sprintf("%s=%s", left, matches[left]))
 	}
-	return strings.Join(ordered, ";")
+	return strings.Join(ordered, ";"), nil
 }
 
 func buildMatchingAnswerKey(optionCount int) string {

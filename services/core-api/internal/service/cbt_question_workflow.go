@@ -164,7 +164,7 @@ func (s *CbtQuestion) Reject(ctx context.Context, id pgtype.UUID, actor CbtQuest
 
 func (s *CbtQuestion) Publish(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) (db.CbtQuestion, error) {
 	actor = normalizeCbtQuestionActor(actor)
-	if !actor.IsAdmin() {
+	if !actor.CanPublishBankSoal() {
 		return db.CbtQuestion{}, domain.ErrForbidden
 	}
 	current, err := s.q.GetCbtQuestion(ctx, id)
@@ -175,14 +175,17 @@ func (s *CbtQuestion) Publish(ctx context.Context, id pgtype.UUID, actor CbtQues
 		return db.CbtQuestion{}, fmt.Errorf("%w: hanya soal approved yang dapat dipublish", domain.ErrConflict)
 	}
 	input := questionInputFromCurrent(current, actor.Username)
-	input.Actor = actor
+	// Publish already checked bank_soal.publish/admin above. Use an internal admin-scoped
+	// actor for the shared update path so permission-based publishers can transition
+	// approved questions without being blocked by author-only draft modification rules.
+	input.Actor = CbtQuestionActor{UserID: actor.UserID, Username: actor.Username, Roles: []string{"admin"}, Permissions: actor.Permissions}
 	input.Status = db.CbtQuestionStatusEnumPublished
 	return s.updateWithAudit(ctx, input, "publish", "", map[string]any{"status": db.CbtQuestionStatusEnumPublished})
 }
 
 func (s *CbtQuestion) Archive(ctx context.Context, id pgtype.UUID, actor CbtQuestionActor) (db.CbtQuestion, error) {
 	actor = normalizeCbtQuestionActor(actor)
-	if !actor.IsAdmin() {
+	if !actor.CanPublishBankSoal() {
 		return db.CbtQuestion{}, domain.ErrForbidden
 	}
 	current, err := s.q.GetCbtQuestion(ctx, id)
@@ -193,7 +196,9 @@ func (s *CbtQuestion) Archive(ctx context.Context, id pgtype.UUID, actor CbtQues
 		return db.CbtQuestion{}, fmt.Errorf("%w: soal sudah masuk paket ujian atau memiliki jawaban siswa. Duplikat soal untuk membuat revisi baru", domain.ErrConflict)
 	}
 	input := questionInputFromCurrent(current, actor.Username)
-	input.Actor = actor
+	// Archive shares the publish-level privilege and uses the update path; keep the
+	// human actor username for audit while bypassing author-only draft modification rules.
+	input.Actor = CbtQuestionActor{UserID: actor.UserID, Username: actor.Username, Roles: []string{"admin"}, Permissions: actor.Permissions}
 	input.Status = db.CbtQuestionStatusEnumArchived
 	return s.Update(ctx, input)
 }

@@ -99,7 +99,10 @@ describe('sidebar assessment configuration', () => {
 			'layers',
 			'settings'
 		]);
-		expect(bankSoalItems.every((item) => item.roles?.includes('admin') && item.roles.includes('guru'))).toBe(true);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/verifikasi')?.roles).toEqual(['admin']);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/impor')?.roles).toEqual(['admin']);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/pengaturan')?.roles).toEqual(['admin']);
+		expect(bankSoalItems.filter((item) => !['/bank-soal/verifikasi', '/bank-soal/impor', '/bank-soal/pengaturan'].includes(item.href)).every((item) => item.roles?.includes('admin') && item.roles.includes('guru'))).toBe(true);
 		expect(bankSoalItems.every((item) => !item.href.startsWith('/cbt/'))).toBe(true);
 		expect(bankSoalItems.some((item) => item.href === '/cbt/questions')).toBe(false);
 	});
@@ -116,7 +119,11 @@ describe('sidebar assessment configuration', () => {
 		expect(byHref.get('/settings/user-change-requests')?.permissions).toEqual(['profile_changes.review']);
 		expect(byHref.get('/settings/audit-logs')?.permissions).toEqual(['audit.read']);
 		expect(byHref.get('/settings/school-profile')?.permissions).toEqual(['settings.school_profile']);
-		expect(bankSoalItems.every((item) => item.permissions?.includes('bank_soal.read'))).toBe(true);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/tambah')?.permissions).toEqual(['bank_soal.create']);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review']);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/impor')?.permissions).toEqual(['bank_soal.import']);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/pengaturan')?.permissions).toEqual(['bank_soal.settings']);
+		expect(bankSoalItems.filter((item) => !['/bank-soal/tambah', '/bank-soal/verifikasi', '/bank-soal/impor', '/bank-soal/pengaturan'].includes(item.href)).every((item) => item.permissions?.includes('bank_soal.read'))).toBe(true);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/kegiatan')?.permissions).toEqual(['asesmen.event_manage']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/paket')?.permissions).toEqual(['asesmen.package_manage']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/hasil')?.permissions).toEqual(['asesmen.result_read']);

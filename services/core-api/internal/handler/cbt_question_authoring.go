@@ -245,7 +245,21 @@ func cbtQuestionActorFromRequest(r *http.Request) service.CbtQuestionActor {
 	if role, _ := claims["role"].(string); role != "" {
 		roles = append(roles, role)
 	}
-	return service.CbtQuestionActor{UserID: userID, Username: currentUsername(r), Roles: roles}
+	permissions := []string{}
+	if raw, ok := claims["permissions"].([]any); ok {
+		for _, value := range raw {
+			if permission, ok := value.(string); ok {
+				permissions = append(permissions, permission)
+			}
+		}
+	}
+	if raw, ok := claims["permissions"].([]string); ok {
+		permissions = append(permissions, raw...)
+	}
+	if permission, _ := claims["permission"].(string); permission != "" {
+		permissions = append(permissions, permission)
+	}
+	return service.CbtQuestionActor{UserID: userID, Username: currentUsername(r), Roles: roles, Permissions: permissions}
 }
 
 func currentUsername(r *http.Request) string {
