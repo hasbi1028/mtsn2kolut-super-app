@@ -19,6 +19,23 @@ describe('cbt backend path dispatch', () => {
 		expect(cbtBackendPath('/non-test-assessments/nta-1/sync-grade')).toBe(
 			'/api/asesmen/non-test-assessments/nta-1/sync-grade'
 		);
+		expect(cbtBackendPath('/proctoring/my-rooms')).toBe('/api/asesmen/proctoring/my-rooms');
+	});
+
+	it('rejects unsafe or unsupported backend paths before dispatching', () => {
+		for (const path of [
+			'/users',
+			'/questions/../users',
+			'/questions/%2e%2e/users',
+			'/questions/%2F/users',
+			'/questions/%5C/users',
+			'/questions//asset',
+			'/questions?limit=1',
+			'/questions#fragment',
+			'\\questions'
+		]) {
+			expect(() => cbtBackendPath(path)).toThrow();
+		}
 	});
 
 	it('preserves query strings after dispatching to the selected backend namespace', () => {

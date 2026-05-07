@@ -65,8 +65,7 @@ const GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES = [
 	'/asesmen/paket',
 	'/asesmen/sesi',
 	'/api/asesmen/events',
-	'/api/asesmen/packages',
-	'/api/asesmen/sessions'
+	'/api/asesmen/packages'
 ] as const;
 
 const BANK_SOAL_PREFIXES = ['/bank-soal', '/api/bank-soal'] as const;
@@ -126,6 +125,7 @@ export function isAdminOnlyPath(pathname: string) {
 
 export function isGuruSafeAssessmentSupportReadPath(pathname: string, method: string) {
 	if (!isReadMethod(method)) return false;
+	if (isSensitiveAssessmentReadPath(pathname)) return false;
 	if (GURU_SAFE_ASSESSMENT_SUPPORT_READ_PATHS.has(pathname)) return true;
 	return GURU_SAFE_ASSESSMENT_SUPPORT_READ_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
 }
@@ -224,17 +224,45 @@ function isBankSoalGuruFallbackPath(pathname: string, method: string) {
 		&& !matchesPathSegment(pathname, '/bank-soal/pengaturan');
 }
 
+function isSensitiveAssessmentReadPath(pathname: string): boolean {
+	const cleanPath = pathname.split('?')[0] ?? pathname;
+	return /^\/api\/asesmen\/events\/[^/]+\/results\/?$/.test(cleanPath)
+		|| /^\/api\/asesmen\/sessions\/[^/]+\/results\/?$/.test(cleanPath)
+		|| /^\/api\/asesmen\/sessions\/[^/]+\/item-analysis\/?$/.test(cleanPath)
+		|| /^\/api\/asesmen\/sessions\/[^/]+\/operational-recap\/?$/.test(cleanPath)
+		|| /^\/api\/asesmen\/sessions\/[^/]+\/ungraded-essays\/?$/.test(cleanPath)
+		|| /^\/api\/asesmen\/sessions\/[^/]+\/score\/?$/.test(cleanPath)
+		|| /^\/api\/asesmen\/sessions\/[^/]+\/answers\/[^/]+\/grade-essay\/?$/.test(cleanPath)
+		|| /^\/api\/asesmen\/sessions\/[^/]+\/proctoring(?:\/.*)?$/.test(cleanPath)
+		|| /^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/proctoring\/?$/.test(cleanPath)
+		|| /^\/api\/asesmen\/sessions\/[^/]+\/audit-logs\/?$/.test(cleanPath);
+}
+
 function asesmenPermission(pathname: string, method: string): string[] | undefined {
 	if (matchesPathSegment(pathname, '/asesmen/hasil')) return ['asesmen.result_read'];
 	if (matchesPathSegment(pathname, '/asesmen/pelaksanaan') || matchesPathSegment(pathname, '/asesmen/pengawasan')) return ['asesmen.proctor'];
+	if (/^\/api\/asesmen\/events\/[^/]+\/results\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/(results|item-analysis|operational-recap)\/?$/.test(pathname)) {
+		return ['asesmen.result_read'];
+	}
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/(ungraded-essays|score)\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/answers\/[^/]+\/grade-essay\/?$/.test(pathname)) {
+		return ['asesmen.score'];
+	}
+	if (/^\/api\/asesmen\/sessions\/[^/]+\/proctoring(?:\/.*)?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/rooms\/[^/]+\/proctoring\/?$/.test(pathname) || /^\/api\/asesmen\/sessions\/[^/]+\/audit-logs\/?$/.test(pathname)) {
+		return ['asesmen.proctor'];
+	}
+	if (matchesPathSegment(pathname, '/asesmen/non-tes') || matchesPathSegment(pathname, '/api/asesmen/non-test-assessments')) {
+		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.score'];
+	}
+	if (matchesPathSegment(pathname, '/asesmen/aplikasi-siswa')) return ['asesmen.read'];
+	if (matchesPathSegment(pathname, '/api/asesmen/proctoring')) return ['asesmen.proctor'];
 	if (matchesPathSegment(pathname, '/asesmen/paket') || matchesPathSegment(pathname, '/api/asesmen/packages')) {
-		return isReadMethod(method) && pathname.startsWith('/api/') ? ['asesmen.read'] : ['asesmen.package_manage'];
+		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.package_manage'];
 	}
 	if (matchesPathSegment(pathname, '/asesmen/kegiatan') || matchesPathSegment(pathname, '/api/asesmen/events')) {
-		return isReadMethod(method) && pathname.startsWith('/api/') ? ['asesmen.read'] : ['asesmen.event_manage'];
+		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.event_manage'];
 	}
 	if (matchesPathSegment(pathname, '/asesmen/sesi') || matchesPathSegment(pathname, '/api/asesmen/sessions')) {
-		return isReadMethod(method) && pathname.startsWith('/api/') ? ['asesmen.read'] : ['asesmen.proctor'];
+		return isReadMethod(method) ? ['asesmen.read'] : ['asesmen.proctor'];
 	}
 	if (matchesPathSegment(pathname, '/asesmen')) return ['asesmen.read'];
 	return undefined;
@@ -286,6 +314,7 @@ export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: st
 	if (isRombelTimetableJournalSessionPath(pathname)) return hasAnyRole(user, ['guru']);
 
 	if (isAdminOnlyPath(pathname) && !isGuruSafeAssessmentSupportReadPath(pathname, method)) return false;
+	if (isGuruSafeAssessmentSupportReadPath(pathname, method)) return hasAnyRole(user, ['guru']);
 	if (isBankSoalPath(pathname)) return isBankSoalGuruFallbackPath(pathname, method) && hasAnyRole(user, ['guru']);
 	if (isStaffOperationPath(pathname)) return hasAnyRole(user, ['staf']);
 	if (isStudentPortalPath(pathname)) return hasAnyRole(user, ['siswa']);
@@ -293,5 +322,9 @@ export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: st
 	if (isKesiswaanPath(pathname)) return hasAnyRole(user, isReadMethod(method) ? ['kesiswaan', 'guru'] : ['kesiswaan']);
 	if (isStudentPagePath(pathname)) return hasAnyRole(user, ['kesiswaan']);
 	if (isStudentApiPath(pathname)) return hasAnyRole(user, isReadMethod(method) ? ['kesiswaan', 'guru'] : ['kesiswaan']);
-	return true;
+
+	// Default-authenticated surfaces such as /settings/account remain available,
+	// but paths with explicit permission metadata must fail closed when the user
+	// lacks both dynamic permission and legacy fallback role.
+	return requiredPermissions.length === 0;
 }

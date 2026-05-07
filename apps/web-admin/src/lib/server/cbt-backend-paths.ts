@@ -6,21 +6,45 @@ const BANK_SOAL_SEGMENT = 'bank-soal';
 const ASESMEN_PREFIX = `${BACKEND_API_ROOT}/${ASESMEN_SEGMENT}`;
 const BANK_SOAL_PREFIX = `${BACKEND_API_ROOT}/${BANK_SOAL_SEGMENT}`;
 
-// Top-level segments owned by Bank Soal in the Go backend. Anything else
-// dispatched through this helper goes to the Asesmen namespace.
+// Top-level segments owned by Bank Soal in the Go backend.
 const BANK_SOAL_TOP_SEGMENTS = new Set(['questions', 'assets', 'soal-support']);
+const ASESMEN_TOP_SEGMENTS = new Set(['events', 'packages', 'sessions', 'non-test-assessments', 'proctoring']);
+
+function normalizeInternalPath(path: string): string {
+	if (path.includes('?') || path.includes('#') || path.includes('\\')) {
+		throw new Error('cbt backend path must be a relative API path without query, hash, or backslash');
+	}
+	const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+	const lowerPath = normalizedPath.toLowerCase();
+	if (
+		normalizedPath.includes('//')
+		|| lowerPath.includes('%2e')
+		|| lowerPath.includes('%2f')
+		|| lowerPath.includes('%5c')
+	) {
+		throw new Error('cbt backend path contains unsafe traversal or encoded separators');
+	}
+	const segments = normalizedPath.slice(1).split('/');
+	if (segments.length === 0 || !segments[0] || segments.some((segment) => segment === '.' || segment === '..')) {
+		throw new Error('cbt backend path must contain safe non-empty segments');
+	}
+	return normalizedPath;
+}
 
 function dispatchPrefix(path: string): string {
-	const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-	const firstSegment = normalizedPath.slice(1).split(/[/?#]/)[0] ?? '';
+	const normalizedPath = normalizeInternalPath(path);
+	const firstSegment = normalizedPath.slice(1).split('/')[0] ?? '';
 	if (BANK_SOAL_TOP_SEGMENTS.has(firstSegment)) {
 		return BANK_SOAL_PREFIX;
 	}
-	return ASESMEN_PREFIX;
+	if (ASESMEN_TOP_SEGMENTS.has(firstSegment)) {
+		return ASESMEN_PREFIX;
+	}
+	throw new Error(`unsupported CBT backend path segment: ${firstSegment}`);
 }
 
 export function cbtBackendPath(path: string): string {
-	const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+	const normalizedPath = normalizeInternalPath(path);
 	return `${dispatchPrefix(normalizedPath)}${normalizedPath}`;
 }
 

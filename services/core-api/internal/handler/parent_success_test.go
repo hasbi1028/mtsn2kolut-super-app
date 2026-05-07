@@ -6,8 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mtsn2kolut-super-app/backend/internal/api"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -140,4 +142,42 @@ func TestParentSuccessHandlersForwardPayloads(t *testing.T) {
 	if rec.Code != http.StatusOK || svc.childrenParentID != parentID {
 		t.Fatalf("ListChildren() status/id = %d/%v", rec.Code, svc.childrenParentID)
 	}
+}
+
+func TestParentAccessAllowsDynamicParentPermissions(t *testing.T) {
+	svc := &fakeParentService{}
+	h := &Parent{svc: svc}
+
+	rec := httptest.NewRecorder()
+	h.List(rec, parentPermissionRequest(http.MethodGet, "/api/parents", "", "parents.read"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("List() with parents.read status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.Create(rec, parentPermissionRequest(http.MethodPost, "/api/parents", `{"nama":"Wali","phone":"0813","address":"Kolaka"}`, "parents.manage"))
+	if rec.Code != http.StatusCreated || svc.createNama != "Wali" {
+		t.Fatalf("Create() with parents.manage status/arg = %d/%q, want created", rec.Code, svc.createNama)
+	}
+
+	rec = httptest.NewRecorder()
+	h.Create(rec, parentPermissionRequest(http.MethodPost, "/api/parents", `{"nama":"Read Only","phone":"0814","address":"Kolaka"}`, "parents.read"))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("Create() with parents.read status = %d, want 403", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	h.List(rec, parentPermissionRequest(http.MethodGet, "/api/parents", "", "students.read"))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("List() without parent permission status = %d, want 403", rec.Code)
+	}
+}
+
+func parentPermissionRequest(method, target, body string, permissions ...string) *http.Request {
+	req := adminRequest(method, target, body)
+	claims := jwt.MapClaims{"roles": []any{}, "permissions": make([]any, 0, len(permissions))}
+	for _, permission := range permissions {
+		claims["permissions"] = append(claims["permissions"].([]any), permission)
+	}
+	return req.WithContext(context.WithValue(req.Context(), api.ClaimsKey, claims))
 }

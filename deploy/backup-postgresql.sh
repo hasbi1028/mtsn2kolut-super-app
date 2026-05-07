@@ -36,14 +36,32 @@ set -a
 source "$ENV_FILE"
 set +a
 
+DB_DSN="${DATABASE_URL:-}"
 DB_NAME="${POSTGRES_DB:-pusaka}"
 DB_USER="${POSTGRES_USER:-pusaka}"
 DB_HOST="127.0.0.1"
 DB_PORT="${POSTGRES_PORT:-5432}"
 DB_PASSWORD="${POSTGRES_PASSWORD:-}"
 
-if [[ -z "$DB_PASSWORD" ]]; then
-  log "ERROR: POSTGRES_PASSWORD is empty in $ENV_FILE"
+if [[ -n "$DB_DSN" ]]; then
+  mapfile -t DB_URL_PARTS < <(python3 - <<'PY'
+import os
+from urllib.parse import unquote, urlparse
+url = urlparse(os.environ['DATABASE_URL'])
+print(unquote(url.path.lstrip('/') or ''))
+print(unquote(url.username or ''))
+print(unquote(url.hostname or ''))
+print(str(url.port or ''))
+print(unquote(url.password or ''))
+PY
+  )
+  DB_NAME="${DB_URL_PARTS[0]:-$DB_NAME}"
+  DB_USER="${DB_URL_PARTS[1]:-$DB_USER}"
+  DB_HOST="${DB_URL_PARTS[2]:-$DB_HOST}"
+  DB_PORT="${DB_URL_PARTS[3]:-$DB_PORT}"
+  DB_PASSWORD="${DB_URL_PARTS[4]:-$DB_PASSWORD}"
+elif [[ -z "$DB_PASSWORD" ]]; then
+  log "ERROR: DATABASE_URL or POSTGRES_PASSWORD must be set in $ENV_FILE"
   exit 1
 fi
 
@@ -55,10 +73,7 @@ LOG_FILE="$LOG_DIR/postgresql-backup.log"
 
 {
   log "Starting PostgreSQL backup: database=$DB_NAME host=$DB_HOST port=$DB_PORT user=$DB_USER"
-
   export PGPASSWORD="$DB_PASSWORD"
-
-  # Custom format (-Fc) is compressed and supports selective restore via pg_restore.
   pg_dump \
     --host="$DB_HOST" \
     --port="$DB_PORT" \
@@ -67,11 +82,11 @@ LOG_FILE="$LOG_DIR/postgresql-backup.log"
     --format=custom \
     --verbose \
     --file="$BACKUP_FILE"
-
   unset PGPASSWORD
 
   sha256sum "$BACKUP_FILE" > "$SHA_FILE"
   ln -sfn "$BACKUP_FILE" "$LATEST_LINK"
+  (cd "$BACKUP_DIR" && sha256sum latest.dump > latest.dump.sha256)
 
   BACKUP_SIZE="$(du -h "$BACKUP_FILE" | awk '{print $1}')"
   log "Backup completed: $BACKUP_FILE ($BACKUP_SIZE)"

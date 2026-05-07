@@ -1687,8 +1687,8 @@ describe('api proxy route handlers', () => {
 			headers: { 'content-type': 'application/pdf' }
 		});
 		const event = createEvent({
-			params: { id: 'asset 1/scan' },
-			url: new URL('http://localhost/api/bank-soal/assets/asset%201%2Fscan/file?download=1')
+			params: { id: 'asset 1 scan' },
+			url: new URL('http://localhost/api/bank-soal/assets/asset%201%20scan/file?download=1')
 		});
 		proxyFetchMock.mockResolvedValueOnce(upstream);
 		streamProxyResponseMock.mockResolvedValueOnce(streamed);
@@ -1696,7 +1696,7 @@ describe('api proxy route handlers', () => {
 		const res = await mod.GET(event as never);
 
 		expect(proxyFetchMock).toHaveBeenCalledWith(
-			apiPathWithQueryMock(backendCbtApiPath`/assets/${'asset 1/scan'}/file`, 'download=1')
+			apiPathWithQueryMock(backendCbtApiPath`/assets/${'asset 1 scan'}/file`, 'download=1')
 		);
 		expect(streamProxyResponseMock).toHaveBeenCalledWith(upstream, {
 			fallbackMessage: 'Gagal mengambil aset CBT.',
@@ -1716,12 +1716,12 @@ describe('api proxy route handlers', () => {
 		proxyGetMock.mockResolvedValueOnce([]);
 
 		await eventsMod.GET(createEvent({ url: new URL('http://localhost/api/asesmen/events') }) as never);
-		await eventSessionsMod.GET(createEvent({ params: { id: 'event 1/2026' } }) as never);
+		await eventSessionsMod.GET(createEvent({ params: { id: 'event 1 2026' } }) as never);
 		await packagesMod.GET(createEvent({ url: new URL('http://localhost/api/asesmen/packages?event_id=event-1') }) as never);
 		await sessionsMod.GET(createEvent({ url: new URL('http://localhost/api/asesmen/sessions?event_id=event-1') }) as never);
 
 		expect(proxyGetMock).toHaveBeenNthCalledWith(1, backendCbtPath('/events'));
-		expect(proxyGetMock).toHaveBeenNthCalledWith(2, backendCbtApiPath`/events/${'event 1/2026'}/sessions`);
+		expect(proxyGetMock).toHaveBeenNthCalledWith(2, backendCbtApiPath`/events/${'event 1 2026'}/sessions`);
 		expect(proxyGetMock).toHaveBeenNthCalledWith(3, backendCbtPath('/packages?event_id=event-1'));
 		expect(proxyGetMock).toHaveBeenNthCalledWith(4, backendCbtPath('/sessions?event_id=event-1'));
 

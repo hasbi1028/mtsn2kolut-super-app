@@ -32,7 +32,7 @@ type Parent struct {
 func NewParent(svc *service.Parent) *Parent { return &Parent{svc: svc} }
 
 func (h *Parent) List(w http.ResponseWriter, r *http.Request) {
-	if !parentAccessAllowed(r) {
+	if !parentAccessAllowed(r, "parents.read", "parents.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -45,7 +45,7 @@ func (h *Parent) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Parent) Get(w http.ResponseWriter, r *http.Request) {
-	if !parentAccessAllowed(r) {
+	if !parentAccessAllowed(r, "parents.read", "parents.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -63,7 +63,7 @@ func (h *Parent) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Parent) Create(w http.ResponseWriter, r *http.Request) {
-	if !parentAccessAllowed(r) {
+	if !parentAccessAllowed(r, "parents.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -85,7 +85,7 @@ func (h *Parent) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Parent) Update(w http.ResponseWriter, r *http.Request) {
-	if !parentAccessAllowed(r) {
+	if !parentAccessAllowed(r, "parents.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -112,7 +112,7 @@ func (h *Parent) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Parent) Delete(w http.ResponseWriter, r *http.Request) {
-	if !parentAccessAllowed(r) {
+	if !parentAccessAllowed(r, "parents.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -129,7 +129,7 @@ func (h *Parent) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Parent) LinkStudent(w http.ResponseWriter, r *http.Request) {
-	if !parentAccessAllowed(r) {
+	if !parentAccessAllowed(r, "parents.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -154,7 +154,7 @@ func (h *Parent) LinkStudent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Parent) UnlinkStudent(w http.ResponseWriter, r *http.Request) {
-	if !parentAccessAllowed(r) {
+	if !parentAccessAllowed(r, "parents.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -182,16 +182,16 @@ func (h *Parent) UnlinkStudent(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]string{"status": "unlinked"})
 }
 
-func parentAccessAllowed(r *http.Request) bool {
+func parentAccessAllowed(r *http.Request, permissions ...string) bool {
 	claims, ok := api.ClaimsFromContext(r.Context())
 	if !ok {
 		return false
 	}
-	return mw.HasAnyRole(claims, "admin")
+	return mw.HasAnyRole(claims, "admin") || mw.HasAnyPermission(claims, permissions...)
 }
 
 func (h *Parent) ListChildren(w http.ResponseWriter, r *http.Request) {
-	if !parentAccessAllowed(r) {
+	if !parentAccessAllowed(r, "parents.read", "parents.manage") {
 		api.Forbidden(w)
 		return
 	}

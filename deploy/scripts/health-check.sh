@@ -90,7 +90,9 @@ check_bank_soal_routes() {
     done
 }
 
-# Function to check worker health (via PM2)
+# Function to check worker health (via PM2). A deeper heartbeat/API-key check is
+# available in the web admin status UI, but this gate must at least fail if PM2
+# cannot prove the supervised worker process is online.
 check_worker() {
     echo -n "Checking worker... "
     if ! pm2 describe mtsn2kolut-pusaka-worker > /dev/null 2>&1; then
@@ -105,19 +107,39 @@ check_worker() {
     return 1
 }
 
+run_all_checks() {
+    local failed=0
+
+    check_backend || failed=1
+    check_frontend || failed=1
+    check_worker || failed=1
+
+    if [ "$failed" -ne 0 ]; then
+        echo ""
+        echo -e "${RED}Health check failed. See service status above.${NC}"
+        return 1
+    fi
+
+    echo ""
+    echo -e "${GREEN}All health checks passed.${NC}"
+}
+
 # Main execution
 case "$SERVICE" in
-    backend|all)
-        check_backend || [[ "$SERVICE" == "all" ]] || exit 1
+    backend)
+        check_backend
         ;;
-    frontend|all)
-        check_frontend || [[ "$SERVICE" == "all" ]] || exit 1
+    frontend)
+        check_frontend
         ;;
     bank-soal)
         check_bank_soal_routes
         ;;
-    worker|all)
-        check_worker || [[ "$SERVICE" == "all" ]] || exit 1
+    worker)
+        check_worker
+        ;;
+    all)
+        run_all_checks
         ;;
     *)
         echo "Usage: $0 [backend|frontend|worker|bank-soal|all]"
@@ -127,7 +149,7 @@ esac
 
 echo ""
 if [ "$SERVICE" = "all" ]; then
-    echo -e "${YELLOW}Health check completed. Check individual service status above.${NC}"
+    echo -e "${YELLOW}Health check completed.${NC}"
 else
     echo -e "${YELLOW}Health check for $SERVICE completed.${NC}"
 fi
