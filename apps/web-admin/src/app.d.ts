@@ -1,5 +1,6 @@
 import type { AuthUser } from '$lib/server/auth';
 import type { TokenPair } from '$lib/server/api';
+import type { AccountIdentity } from '$lib/client/account';
 
 declare global {
 	namespace App {
@@ -11,6 +12,7 @@ declare global {
 		}
 		interface PageData {
 			user?: AuthUser;
+			account?: AccountIdentity | null;
 		}
 	}
 }
