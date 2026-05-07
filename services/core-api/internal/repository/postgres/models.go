@@ -1289,7 +1289,7 @@ type DocumentCycleObligation struct {
 
 type Employee struct {
 	ID             pgtype.UUID        `json:"id"`
-	Nip            string             `json:"nip"`
+	Nip            pgtype.Text        `json:"nip"`
 	Nama           string             `json:"nama"`
 	UnitKerja      string             `json:"unit_kerja"`
 	IsActive       bool               `json:"is_active"`
@@ -1301,6 +1301,9 @@ type Employee struct {
 	Email          string             `json:"email"`
 	Address        string             `json:"address"`
 	PhotoUrl       string             `json:"photo_url"`
+	PegawaiUid     string             `json:"pegawai_uid"`
+	JenisKelamin   pgtype.Text        `json:"jenis_kelamin"`
+	TempatLahir    pgtype.Text        `json:"tempat_lahir"`
 }
 
 type EmployeeSchedule struct {

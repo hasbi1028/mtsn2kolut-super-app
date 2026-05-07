@@ -14,6 +14,8 @@
     unit_kerja: '',
     employment_type: '',
     tanggal_lahir: '',
+    jenis_kelamin: '',
+    tempat_lahir: '',
     pusaka_username: '',
     pusaka_password: ''
   });
@@ -31,9 +33,9 @@
   }
 
   async function submit() {
-    if (!form.nip || !form.nama || !form.employment_type) {
+    if (!form.nama || !form.employment_type) {
       success = '';
-      showError('NIP, Nama, dan status kepegawaian wajib diisi.');
+      showError('Nama dan status kepegawaian wajib diisi.');
       return;
     }
     if ((form.pusaka_username && !form.pusaka_password) || (!form.pusaka_username && form.pusaka_password)) {
@@ -55,8 +57,8 @@
         body: JSON.stringify(form),
       });
       await readClientJson<unknown>(res);
-      form = { nip: '', nama: '', unit_kerja: '', employment_type: '', tanggal_lahir: '', pusaka_username: '', pusaka_password: '' };
-      success = 'Pegawai baru berhasil ditambahkan ke master data. Jika pegawai eligible PUSAKA, akun integrasinya bisa dilengkapi sekarang atau nanti dari menu PUSAKA.';
+      form = { nip: '', nama: '', unit_kerja: '', employment_type: '', tanggal_lahir: '', jenis_kelamin: '', tempat_lahir: '', pusaka_username: '', pusaka_password: '' };
+      success = 'Pegawai baru berhasil ditambahkan ke master data. ID pegawai dibuat otomatis; jika eligible PUSAKA, akun integrasinya bisa dilengkapi sekarang atau nanti dari menu PUSAKA.';
       onadd?.();
     } catch (error) {
       showError(mutationErrorMessage(error, 'Gagal menyimpan pegawai.'));
@@ -79,8 +81,8 @@
     {/if}
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <div>
-        <label for="f-nip" class="mb-1 block text-xs font-medium text-muted-foreground">NIP <span class="text-destructive">*</span></label>
-        <Input id="f-nip" placeholder="Masukkan NIP pegawai" bind:value={form.nip} />
+        <label for="f-nip" class="mb-1 block text-xs font-medium text-muted-foreground">NIP</label>
+        <Input id="f-nip" placeholder="Opsional untuk honorer" bind:value={form.nip} />
       </div>
       <div>
         <label for="f-nama" class="mb-1 block text-xs font-medium text-muted-foreground">Nama <span class="text-destructive">*</span></label>
@@ -92,9 +94,21 @@
       </div>
 
       <div>
+        <label for="f-tempat-lahir" class="mb-1 block text-xs font-medium text-muted-foreground">Tempat Lahir</label>
+        <Input id="f-tempat-lahir" placeholder="Contoh: Olo-oloho" bind:value={form.tempat_lahir} />
+      </div>
+      <div>
         <label for="f-tanggal-lahir" class="mb-1 block text-xs font-medium text-muted-foreground">Tanggal Lahir</label>
         <Input id="f-tanggal-lahir" type="date" bind:value={form.tanggal_lahir} />
-        <p class="mt-1 text-[11px] text-muted-foreground">Dipakai untuk generate akun otomatis dari data pegawai.</p>
+        <p class="mt-1 text-[11px] text-muted-foreground">Dipakai untuk membuat ID pegawai otomatis.</p>
+      </div>
+      <div>
+        <label for="f-jenis-kelamin" class="mb-1 block text-xs font-medium text-muted-foreground">Jenis Kelamin</label>
+        <select id="f-jenis-kelamin" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={form.jenis_kelamin}>
+          <option value="">Belum diisi</option>
+          <option value="L">Laki-laki</option>
+          <option value="P">Perempuan</option>
+        </select>
       </div>
       <div>
         <label for="f-employment-type" class="mb-1 block text-xs font-medium text-muted-foreground">Status Kepegawaian <span class="text-destructive">*</span></label>

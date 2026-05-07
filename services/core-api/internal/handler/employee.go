@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
@@ -25,7 +26,7 @@ type employeeService interface {
 	ListWithStatus(ctx context.Context) ([]db.ListEmployeesWithStatusRow, error)
 	ListPusakaEligibleWithStatus(ctx context.Context) ([]db.ListPusakaEligibleEmployeesWithStatusRow, error)
 	Get(ctx context.Context, id pgtype.UUID) (db.GetEmployeeRow, error)
-	Create(ctx context.Context, nip, nama, unitKerja, employmentType string, tanggalLahir pgtype.Date, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error)
+	Create(ctx context.Context, nip, nama, unitKerja, employmentType string, tanggalLahir pgtype.Date, jenisKelamin, tempatLahir, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error)
 	Update(ctx context.Context, p db.UpdateEmployeeParams) (db.GetEmployeeRow, error)
 	Delete(ctx context.Context, id pgtype.UUID) error
 	SetActive(ctx context.Context, id pgtype.UUID, isActive bool) error
@@ -38,10 +39,13 @@ type employeeService interface {
 
 type employeeResponse struct {
 	ID               pgtype.UUID        `json:"id"`
+	PegawaiUID       string             `json:"pegawai_uid"`
 	Nip              string             `json:"nip"`
 	Nama             string             `json:"nama"`
 	UnitKerja        string             `json:"unit_kerja"`
 	EmploymentType   string             `json:"employment_type"`
+	JenisKelamin     string             `json:"jenis_kelamin"`
+	TempatLahir      string             `json:"tempat_lahir"`
 	PusakaUsername   string             `json:"pusaka_username"`
 	PusakaIsEnabled  bool               `json:"pusaka_is_enabled"`
 	PusakaEligible   bool               `json:"pusaka_eligible"`
@@ -63,6 +67,8 @@ func employeeClientMessage(err error, fallback string) string {
 		return "akun PUSAKA hanya untuk pegawai PNS atau PPPK"
 	case "invalid employment type":
 		return "jenis kepegawaian tidak valid"
+	case "invalid gender":
+		return "jenis kelamin tidak valid"
 	case "disable or remove the pusaka account before changing employee type":
 		return "nonaktifkan atau hapus akun PUSAKA sebelum mengubah jenis kepegawaian"
 	case "pusaka account is not configured":
@@ -73,6 +79,24 @@ func employeeClientMessage(err error, fallback string) string {
 }
 
 func writeEmployeeClientError(w http.ResponseWriter, err error, fallback string) {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23505":
+			switch pgErr.ConstraintName {
+			case "uq_employees_nip_not_empty", "employees_nip_key":
+				api.Conflict(w, "NIP sudah terdaftar")
+			case "uq_employees_pegawai_uid":
+				api.Conflict(w, "ID pegawai bertabrakan, coba ulangi")
+			default:
+				api.Conflict(w, "data pegawai sudah terdaftar")
+			}
+			return
+		case "23514":
+			api.BadRequest(w, employeeClientMessage(err, fallback))
+			return
+		}
+	}
 	api.BadRequest(w, employeeClientMessage(err, fallback))
 }
 
@@ -162,6 +186,8 @@ func (h *Employee) Create(w http.ResponseWriter, r *http.Request) {
 		UnitKerja      string `json:"unit_kerja"`
 		EmploymentType string `json:"employment_type"`
 		TanggalLahir   string `json:"tanggal_lahir"`
+		JenisKelamin   string `json:"jenis_kelamin"`
+		TempatLahir    string `json:"tempat_lahir"`
 		PusakaUsername string `json:"pusaka_username"`
 		PusakaPassword string `json:"pusaka_password"`
 		IsActive       bool   `json:"is_active"`
@@ -175,7 +201,7 @@ func (h *Employee) Create(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "tanggal_lahir tidak valid")
 		return
 	}
-	emp, err := h.svc.Create(r.Context(), body.Nip, body.Nama, body.UnitKerja, body.EmploymentType, tanggalLahir, body.PusakaUsername, body.PusakaPassword, body.IsActive)
+	emp, err := h.svc.Create(r.Context(), body.Nip, body.Nama, body.UnitKerja, body.EmploymentType, tanggalLahir, body.JenisKelamin, body.TempatLahir, body.PusakaUsername, body.PusakaPassword, body.IsActive)
 	if err != nil {
 		writeEmployeeClientError(w, err, "Data pegawai tidak valid")
 		return
@@ -199,6 +225,8 @@ func (h *Employee) Update(w http.ResponseWriter, r *http.Request) {
 		UnitKerja      string `json:"unit_kerja"`
 		EmploymentType string `json:"employment_type"`
 		TanggalLahir   string `json:"tanggal_lahir"`
+		JenisKelamin   string `json:"jenis_kelamin"`
+		TempatLahir    string `json:"tempat_lahir"`
 		IsActive       bool   `json:"is_active"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -217,6 +245,8 @@ func (h *Employee) Update(w http.ResponseWriter, r *http.Request) {
 		UnitKerja:      body.UnitKerja,
 		EmploymentType: body.EmploymentType,
 		TanggalLahir:   tanggalLahir,
+		JenisKelamin:   body.JenisKelamin,
+		TempatLahir:    body.TempatLahir,
 		IsActive:       body.IsActive,
 	}
 	emp, err := h.svc.Update(r.Context(), p)
@@ -328,6 +358,8 @@ func (h *Employee) UpdatePusakaCredentials(w http.ResponseWriter, r *http.Reques
 		UnitKerja:      emp.UnitKerja,
 		EmploymentType: emp.EmploymentType,
 		TanggalLahir:   emp.TanggalLahir,
+		JenisKelamin:   emp.JenisKelamin,
+		TempatLahir:    emp.TempatLahir,
 		IsActive:       emp.IsActive,
 	})
 	if err != nil {
@@ -467,10 +499,13 @@ func pgUUIDString(u pgtype.UUID) string {
 func sanitizeEmployee(emp db.GetEmployeeRow) employeeResponse {
 	return employeeResponse{
 		ID:               emp.ID,
+		PegawaiUID:       emp.PegawaiUid,
 		Nip:              emp.Nip,
 		Nama:             emp.Nama,
 		UnitKerja:        emp.UnitKerja,
 		EmploymentType:   emp.EmploymentType,
+		JenisKelamin:     emp.JenisKelamin,
+		TempatLahir:      emp.TempatLahir,
 		PusakaUsername:   emp.PusakaUsername,
 		PusakaIsEnabled:  emp.PusakaIsEnabled,
 		PusakaEligible:   emp.EmploymentType == "pns" || emp.EmploymentType == "pppk",
@@ -487,10 +522,13 @@ func sanitizeEmployees(employees []db.ListEmployeesRow) []employeeResponse {
 	for _, emp := range employees {
 		items = append(items, employeeResponse{
 			ID:               emp.ID,
+			PegawaiUID:       emp.PegawaiUid,
 			Nip:              emp.Nip,
 			Nama:             emp.Nama,
 			UnitKerja:        emp.UnitKerja,
 			EmploymentType:   emp.EmploymentType,
+			JenisKelamin:     emp.JenisKelamin,
+			TempatLahir:      emp.TempatLahir,
 			PusakaUsername:   emp.PusakaUsername,
 			PusakaIsEnabled:  emp.PusakaIsEnabled,
 			PusakaEligible:   emp.EmploymentType == "pns" || emp.EmploymentType == "pppk",

@@ -38,6 +38,8 @@ type fakeEmployeeService struct {
 	createUnitKerja       string
 	createEmploymentType  string
 	createTanggalLahir    pgtype.Date
+	createJenisKelamin    string
+	createTempatLahir     string
 	createPusakaUsername  string
 	createPusakaPassword  string
 	createIsActive        bool
@@ -95,12 +97,14 @@ func (f *fakeEmployeeService) Get(_ context.Context, id pgtype.UUID) (db.GetEmpl
 	return f.getRow, f.getErr
 }
 
-func (f *fakeEmployeeService) Create(_ context.Context, nip, nama, unitKerja, employmentType string, tanggalLahir pgtype.Date, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error) {
+func (f *fakeEmployeeService) Create(_ context.Context, nip, nama, unitKerja, employmentType string, tanggalLahir pgtype.Date, jenisKelamin, tempatLahir, pusakaUsername, pusakaPassword string, isActive bool) (db.GetEmployeeRow, error) {
 	f.createNip = nip
 	f.createNama = nama
 	f.createUnitKerja = unitKerja
 	f.createEmploymentType = employmentType
 	f.createTanggalLahir = tanggalLahir
+	f.createJenisKelamin = jenisKelamin
+	f.createTempatLahir = tempatLahir
 	f.createPusakaUsername = pusakaUsername
 	f.createPusakaPassword = pusakaPassword
 	f.createIsActive = isActive
@@ -163,10 +167,13 @@ func (f *fakeEmployeeService) ListPusakaAuditLogs(_ context.Context, employeeID 
 func employeeTestRow(id pgtype.UUID, nama, employmentType string) db.GetEmployeeRow {
 	return db.GetEmployeeRow{
 		ID:              id,
+		PegawaiUid:      "4040603180001",
 		Nip:             "198001012006041001",
 		Nama:            nama,
 		UnitKerja:       "MTsN 2 Kolaka Utara",
 		EmploymentType:  employmentType,
+		JenisKelamin:    "L",
+		TempatLahir:     "Kolaka",
 		PusakaUsername:  "guru.pns",
 		PusakaPassword:  "secret-password",
 		PusakaIsEnabled: true,
@@ -262,12 +269,12 @@ func TestEmployeeCreateGetUpdateDeleteAndStatus(t *testing.T) {
 	h := &Employee{svc: fake}
 
 	rec := httptest.NewRecorder()
-	h.Create(rec, adminRequest(http.MethodPost, "/api/employees", `{"nip":"1980","nama":"Guru Baru","unit_kerja":"TU","employment_type":"pppk","pusaka_username":"baru","pusaka_password":"rahasia","is_active":true}`))
+	h.Create(rec, adminRequest(http.MethodPost, "/api/employees", `{"nip":"1980","nama":"Guru Baru","unit_kerja":"TU","employment_type":"pppk","tanggal_lahir":"1980-01-02","jenis_kelamin":"P","tempat_lahir":"Kolaka","pusaka_username":"baru","pusaka_password":"rahasia","is_active":true}`))
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("Create status = %d, want 201; body=%s", rec.Code, rec.Body.String())
 	}
-	if fake.createNip != "1980" || fake.createNama != "Guru Baru" || fake.createUnitKerja != "TU" || fake.createEmploymentType != "pppk" || fake.createPusakaUsername != "baru" || fake.createPusakaPassword != "rahasia" || !fake.createIsActive {
-		t.Fatalf("Create forwarded = (%q, %q, %q, %q, %q, %q, %v)", fake.createNip, fake.createNama, fake.createUnitKerja, fake.createEmploymentType, fake.createPusakaUsername, fake.createPusakaPassword, fake.createIsActive)
+	if fake.createNip != "1980" || fake.createNama != "Guru Baru" || fake.createUnitKerja != "TU" || fake.createEmploymentType != "pppk" || fake.createJenisKelamin != "P" || fake.createTempatLahir != "Kolaka" || fake.createPusakaUsername != "baru" || fake.createPusakaPassword != "rahasia" || !fake.createIsActive {
+		t.Fatalf("Create forwarded = (%q, %q, %q, %q, %q, %q, %q, %q, %v)", fake.createNip, fake.createNama, fake.createUnitKerja, fake.createEmploymentType, fake.createJenisKelamin, fake.createTempatLahir, fake.createPusakaUsername, fake.createPusakaPassword, fake.createIsActive)
 	}
 
 	rec = httptest.NewRecorder()
@@ -280,12 +287,15 @@ func TestEmployeeCreateGetUpdateDeleteAndStatus(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.Update(rec, withRouteParam(adminRequest(http.MethodPatch, "/api/employees/"+id.String(), `{"nip":"1990","nama":"Guru Revisi","unit_kerja":"Kurikulum","employment_type":"pns","is_active":false}`), "id", id.String()))
+	h.Update(rec, withRouteParam(adminRequest(http.MethodPatch, "/api/employees/"+id.String(), `{"nip":"1990","nama":"Guru Revisi","unit_kerja":"Kurikulum","employment_type":"pns","tanggal_lahir":"1980-01-02","jenis_kelamin":"L","tempat_lahir":"Kolaka","is_active":false}`), "id", id.String()))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Update status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
 	if fake.updateArg.ID != id || fake.updateArg.Nip != "1990" || fake.updateArg.Nama != "Guru Revisi" || fake.updateArg.UnitKerja != "Kurikulum" || fake.updateArg.EmploymentType != "pns" || fake.updateArg.IsActive {
 		t.Fatalf("Update params = %+v, want route id and decoded payload", fake.updateArg)
+	}
+	if fake.updateArg.JenisKelamin != "L" || fake.updateArg.TempatLahir != "Kolaka" {
+		t.Fatalf("Update identity params = %+v, want gender/place", fake.updateArg)
 	}
 
 	rec = httptest.NewRecorder()

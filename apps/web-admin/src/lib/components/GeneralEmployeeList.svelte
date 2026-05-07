@@ -14,11 +14,14 @@
 
   interface Employee {
     id: string;
+    pegawai_uid: string;
     nip: string;
     nama: string;
     unit_kerja: string;
     employment_type: string;
     tanggal_lahir: string;
+    jenis_kelamin: string;
+    tempat_lahir: string;
     pusaka_eligible: boolean;
     has_pusaka_account: boolean;
     pusaka_is_enabled: boolean;
@@ -44,6 +47,8 @@
     unit_kerja: '',
     employment_type: 'lainnya',
     tanggal_lahir: '',
+    jenis_kelamin: '',
+    tempat_lahir: '',
     is_active: true,
   });
 
@@ -77,6 +82,10 @@
     return { pns: 'PNS', pppk: 'PPPK', honorer: 'Honorer', lainnya: 'Lainnya' }[value] ?? value;
   }
 
+  function genderLabel(value: string) {
+    return { L: 'Laki-laki', P: 'Perempuan' }[value] ?? '—';
+  }
+
   function showError(message: string) {
     toast.error(message);
   }
@@ -94,6 +103,8 @@
       unit_kerja: employee.unit_kerja,
       employment_type: employee.employment_type,
       tanggal_lahir: employee.tanggal_lahir || '',
+      jenis_kelamin: employee.jenis_kelamin || '',
+      tempat_lahir: employee.tempat_lahir || '',
       is_active: employee.is_active,
     };
     showEditDialog = true;
@@ -212,7 +223,7 @@
         <Table.Row>
           <Table.Head>Pegawai</Table.Head>
           <Table.Head class="hidden md:table-cell">Unit Kerja</Table.Head>
-          <Table.Head>Tanggal Lahir</Table.Head>
+          <Table.Head>Identitas</Table.Head>
           <Table.Head>Status Kepegawaian</Table.Head>
           <Table.Head>PUSAKA</Table.Head>
           <Table.Head class="text-right">Aksi</Table.Head>
@@ -223,7 +234,8 @@
           <Table.Row>
             <Table.Cell>
               <div class="font-medium">{e.nama}</div>
-              <div class="font-mono text-xs text-muted-foreground">{e.nip}</div>
+              <div class="font-mono text-xs text-primary">{e.pegawai_uid}</div>
+              <div class="text-xs text-muted-foreground">NIP {e.nip || '—'}</div>
               <div class="mt-1">
                 {#if e.is_active}
                   <Badge variant="outline" class="text-[11px] border-primary/20 text-primary">Aktif</Badge>
@@ -233,7 +245,10 @@
               </div>
             </Table.Cell>
             <Table.Cell class="hidden md:table-cell text-sm text-muted-foreground">{e.unit_kerja || '—'}</Table.Cell>
-            <Table.Cell class="text-sm text-muted-foreground">{formatBirthDate(e.tanggal_lahir)}</Table.Cell>
+            <Table.Cell class="text-sm text-muted-foreground">
+              <div>{e.tempat_lahir || '—'}, {formatBirthDate(e.tanggal_lahir)}</div>
+              <div class="text-xs">{genderLabel(e.jenis_kelamin)}</div>
+            </Table.Cell>
             <Table.Cell>
               <Badge variant="outline">{employmentLabel(e.employment_type)}</Badge>
             </Table.Cell>
@@ -308,8 +323,12 @@
 
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
+          <label for="edit-pegawai-uid" class="mb-1 block text-xs font-medium text-muted-foreground">ID Pegawai</label>
+          <input id="edit-pegawai-uid" class="w-full rounded-md border border-input bg-muted px-3 py-2 font-mono text-sm text-muted-foreground" value={editingEmployee?.pegawai_uid ?? ''} readonly />
+        </div>
+        <div>
           <label for="edit-nip" class="mb-1 block text-xs font-medium text-muted-foreground">NIP</label>
-          <input id="edit-nip" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.nip} />
+          <input id="edit-nip" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="Opsional untuk honorer" bind:value={editForm.nip} />
         </div>
         <div>
           <label for="edit-nama" class="mb-1 block text-xs font-medium text-muted-foreground">Nama</label>
@@ -320,9 +339,21 @@
           <input id="edit-unit" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.unit_kerja} />
         </div>
         <div>
+          <label for="edit-tempat-lahir" class="mb-1 block text-xs font-medium text-muted-foreground">Tempat Lahir</label>
+          <input id="edit-tempat-lahir" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.tempat_lahir} />
+        </div>
+        <div>
           <label for="edit-tanggal-lahir" class="mb-1 block text-xs font-medium text-muted-foreground">Tanggal Lahir</label>
           <input id="edit-tanggal-lahir" type="date" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.tanggal_lahir} />
-          <p class="mt-1 text-[11px] text-muted-foreground">Dipakai untuk generate akun otomatis.</p>
+          <p class="mt-1 text-[11px] text-muted-foreground">ID pegawai baru memakai tahun lahir saat dibuat.</p>
+        </div>
+        <div>
+          <label for="edit-jenis-kelamin" class="mb-1 block text-xs font-medium text-muted-foreground">Jenis Kelamin</label>
+          <select id="edit-jenis-kelamin" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={editForm.jenis_kelamin}>
+            <option value="">Belum diisi</option>
+            <option value="L">Laki-laki</option>
+            <option value="P">Perempuan</option>
+          </select>
         </div>
         <div>
           <label for="edit-type" class="mb-1 block text-xs font-medium text-muted-foreground">Status Kepegawaian</label>

@@ -350,7 +350,7 @@ WHERE created_at < NOW() - INTERVAL '90 days';
 WITH active_employees AS (
     SELECT
         e.id,
-        e.nip,
+        COALESCE(e.nip, '')::text AS nip,
         e.nama,
         e.tanggal_lahir,
         CASE

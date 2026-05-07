@@ -1067,7 +1067,7 @@ func (q *Queries) ListCbtProctorRooms(ctx context.Context, arg ListCbtProctorRoo
 }
 
 const listCbtRoomProctors = `-- name: ListCbtRoomProctors :many
-SELECT rp.id, rp.exam_room_id, rp.employee_id, e.nip, e.nama,
+SELECT rp.id, rp.exam_room_id, rp.employee_id, COALESCE(e.nip, '')::text AS nip, e.nama,
        rp.role, rp.assigned_by, rp.assigned_at
 FROM cbt_room_proctors rp
 JOIN employees e ON e.id = rp.employee_id

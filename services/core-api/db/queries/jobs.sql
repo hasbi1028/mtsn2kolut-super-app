@@ -1,5 +1,5 @@
 -- name: ListJobs :many
-SELECT j.id, j.employee_id, e.nama AS employee_nama, e.nip AS employee_nip,
+SELECT j.id, j.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        j.run_type, j.status, j.error_message,
        j.claimed_by, j.claimed_at, j.attempts, j.max_attempts,
        j.next_retry_at, j.created_at, j.updated_at
@@ -9,7 +9,7 @@ ORDER BY j.created_at DESC
 LIMIT $1 OFFSET $2;
 
 -- name: ListJobsByStatus :many
-SELECT j.id, j.employee_id, e.nama AS employee_nama, e.nip AS employee_nip,
+SELECT j.id, j.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        j.run_type, j.status, j.error_message,
        j.claimed_by, j.claimed_at, j.attempts, j.max_attempts,
        j.next_retry_at, j.created_at, j.updated_at

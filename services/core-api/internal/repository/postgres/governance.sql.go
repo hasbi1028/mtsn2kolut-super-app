@@ -760,7 +760,7 @@ SELECT
     p.title AS position_title,
     u.name AS unit_name,
     e.nama AS employee_name,
-    e.nip AS employee_nip,
+    COALESCE(e.nip, '')::text AS employee_nip,
     ol.nomor_surat AS decree_nomor_surat
 FROM governance_assignments ga
 JOIN governance_positions p ON p.id = ga.position_id
@@ -774,7 +774,7 @@ WHERE (
     p.title ILIKE '%' || $2 || '%' OR
     u.name ILIKE '%' || $2 || '%' OR
     e.nama ILIKE '%' || $2 || '%' OR
-    e.nip ILIKE '%' || $2 || '%'
+    COALESCE(e.nip, '') ILIKE '%' || $2 || '%'
 )
 ORDER BY ga.end_date NULLS FIRST, ga.start_date DESC, u.sort_order, p.sort_order
 `
@@ -867,7 +867,7 @@ SELECT
     gei.title AS evidence_item_title,
     u.name AS owner_unit_name,
     e.nama AS responsible_employee_name,
-    e.nip AS responsible_employee_nip
+    COALESCE(e.nip, '')::text AS responsible_employee_nip
 FROM governance_compliance_actions gca
 LEFT JOIN governance_programs gp ON gp.id = gca.program_id
 LEFT JOIN governance_documents gd ON gd.id = gca.document_id
@@ -959,7 +959,7 @@ type ListGovernanceComplianceActionsRow struct {
 	EvidenceItemTitle       pgtype.Text        `json:"evidence_item_title"`
 	OwnerUnitName           pgtype.Text        `json:"owner_unit_name"`
 	ResponsibleEmployeeName pgtype.Text        `json:"responsible_employee_name"`
-	ResponsibleEmployeeNip  pgtype.Text        `json:"responsible_employee_nip"`
+	ResponsibleEmployeeNip  string             `json:"responsible_employee_nip"`
 }
 
 func (q *Queries) ListGovernanceComplianceActions(ctx context.Context, arg ListGovernanceComplianceActionsParams) ([]ListGovernanceComplianceActionsRow, error) {
@@ -1115,7 +1115,7 @@ func (q *Queries) ListGovernanceDocuments(ctx context.Context, arg ListGovernanc
 }
 
 const listGovernanceEmployeeOptions = `-- name: ListGovernanceEmployeeOptions :many
-SELECT id, nip, nama, unit_kerja
+SELECT id, COALESCE(nip, '')::text AS nip, nama, unit_kerja
 FROM employees
 WHERE is_active = TRUE
 ORDER BY nama ASC
@@ -1279,7 +1279,7 @@ SELECT
     gpt.target_unit, gpt.status, gpt.progress_percent, gpt.evidence_url,
     gpt.review_notes, gpt.due_date, gpt.created_by_user_id, gpt.created_at, gpt.updated_at,
     e.nama AS employee_name,
-    e.nip AS employee_nip,
+    COALESCE(e.nip, '')::text AS employee_nip,
     p.title AS position_title,
     gp.code AS program_code,
     gp.name AS program_name,
@@ -1294,7 +1294,7 @@ WHERE (
     gpt.title ILIKE '%' || $1 || '%' OR
     gpt.indicator ILIKE '%' || $1 || '%' OR
     e.nama ILIKE '%' || $1 || '%' OR
-    e.nip ILIKE '%' || $1 || '%' OR
+    COALESCE(e.nip, '') ILIKE '%' || $1 || '%' OR
     gp.code ILIKE '%' || $1 || '%' OR
     gp.name ILIKE '%' || $1 || '%'
 ) AND (
@@ -1400,7 +1400,7 @@ SELECT
     u.name AS unit_name,
     pp.title AS parent_position_title,
     ae.nama AS active_employee_name,
-    ae.nip AS active_employee_nip
+    COALESCE(ae.nip, '')::text AS active_employee_nip
 FROM governance_positions p
 JOIN governance_units u ON u.id = p.unit_id
 LEFT JOIN governance_positions pp ON pp.id = p.parent_position_id
@@ -1430,7 +1430,7 @@ type ListGovernancePositionsRow struct {
 	UnitName            string             `json:"unit_name"`
 	ParentPositionTitle pgtype.Text        `json:"parent_position_title"`
 	ActiveEmployeeName  pgtype.Text        `json:"active_employee_name"`
-	ActiveEmployeeNip   pgtype.Text        `json:"active_employee_nip"`
+	ActiveEmployeeNip   string             `json:"active_employee_nip"`
 }
 
 func (q *Queries) ListGovernancePositions(ctx context.Context, search string) ([]ListGovernancePositionsRow, error) {
@@ -1798,7 +1798,7 @@ SELECT
     gd.title AS source_document_title,
     u.name AS owner_unit_name,
     e.nama AS responsible_employee_name,
-    e.nip AS responsible_employee_nip,
+    COALESCE(e.nip, '')::text AS responsible_employee_nip,
     gei.title AS evidence_item_title
 FROM governance_work_plan_items gwpi
 JOIN governance_programs gp ON gp.id = gwpi.program_id
@@ -1863,7 +1863,7 @@ type ListGovernanceWorkPlanItemsRow struct {
 	SourceDocumentTitle     pgtype.Text        `json:"source_document_title"`
 	OwnerUnitName           pgtype.Text        `json:"owner_unit_name"`
 	ResponsibleEmployeeName pgtype.Text        `json:"responsible_employee_name"`
-	ResponsibleEmployeeNip  pgtype.Text        `json:"responsible_employee_nip"`
+	ResponsibleEmployeeNip  string             `json:"responsible_employee_nip"`
 	EvidenceItemTitle       pgtype.Text        `json:"evidence_item_title"`
 }
 
