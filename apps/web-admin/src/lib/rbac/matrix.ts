@@ -21,11 +21,20 @@ function sortedUnique(values: Array<string | null | undefined>) {
 	return Array.from(new Set(values.map((value) => (value ?? '').trim()).filter(Boolean))).sort();
 }
 
+export function normalizePermissionDraft(values: Array<string | null | undefined>) {
+	return sortedUnique(values);
+}
+
 function inferModule(permission: Pick<RBACPermission, 'code' | 'module'>) {
 	const module = (permission.module ?? '').trim();
 	if (module) return module;
 	return permission.code.split('.')[0] || 'lainnya';
 }
+
+export type PermissionFilter = {
+	module?: string;
+	query?: string;
+};
 
 export function rolePermissionMap(matrix: Pick<RBACMatrix, 'roles' | 'role_permissions'>): Record<string, string[]> {
 	const result: Record<string, string[]> = {};
@@ -70,6 +79,21 @@ export function permissionsByModule(permissions: RBACPermission[]): Record<strin
 			.sort(([a], [b]) => a.localeCompare(b))
 			.map(([module, values]) => [module, [...values].sort((a, b) => a.code.localeCompare(b.code))])
 	);
+}
+
+export function filterPermissions(permissions: RBACPermission[], filter: PermissionFilter = {}) {
+	const moduleFilter = (filter.module ?? 'all').trim();
+	const query = (filter.query ?? '').trim().toLocaleLowerCase('id-ID');
+	return [...(permissions ?? [])]
+		.filter((permission) => {
+			if (moduleFilter && moduleFilter !== 'all' && inferModule(permission) !== moduleFilter) return false;
+			if (!query) return true;
+			const haystack = [permission.code, permission.name, permission.description]
+				.map((value) => (value ?? '').toLocaleLowerCase('id-ID'))
+				.join(' ');
+			return haystack.includes(query);
+		})
+		.sort((a, b) => a.code.localeCompare(b.code));
 }
 
 export function isCriticalPermission(code: string) {
