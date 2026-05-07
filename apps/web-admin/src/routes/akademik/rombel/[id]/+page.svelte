@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { ArrowLeft, Clock, Pencil, Plus, RefreshCw, Search, Trash2, UserCheck, X } from '@lucide/svelte';
+	import { ArrowLeft, BookOpen, Clock, Pencil, Plus, RefreshCw, Search, Trash2, UserCheck, X } from '@lucide/svelte';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Table from '$lib/components/ui/table';
@@ -16,7 +17,7 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
-	import { readClientApiData, readClientJson } from '$lib/client/api';
+	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import {
 		buildHomeroomEmployeeOptions,
@@ -136,6 +137,14 @@
 		homeroom_assignments: HomeroomAssignment[];
 	};
 
+	type JournalSessionOpenResponse = {
+		created?: boolean;
+		session?: {
+			id?: string;
+		};
+		id?: string;
+	};
+
 	const classId = $derived(page.params.id ?? '');
 	const dayLabels: Record<number, string> = {
 		1: 'Senin',
@@ -179,6 +188,9 @@
 	let timetableNotes = $state('');
 	let timetableSaveBusy = $state(false);
 	let deleteTimetableBusyId = $state('');
+	let journalDate = $state(todayWita());
+	let openJournalBusySlotId = $state('');
+	let journalOpenError = $state('');
 
 	const rombel = $derived(detail?.rombel ?? null);
 	const activeHomeroom = $derived(detail?.homeroom_assignments.find((item) => item.is_active) ?? null);
@@ -509,9 +521,45 @@
 		}
 	}
 
+	async function openJournalFromTimetableSlot(slot: TimetableSlot) {
+		if (!journalDate) {
+			journalOpenError = 'Tanggal jurnal wajib dipilih.';
+			toast.error(journalOpenError);
+			return;
+		}
+		openJournalBusySlotId = slot.id;
+		journalOpenError = '';
+		try {
+			const response = await fetch(clientApiPath`/api/academic/rombel/${classId}/timetable-slots/${slot.id}/journal-session`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ date: journalDate }),
+			});
+			const payload = await readClientApiData<JournalSessionOpenResponse>(response, 'Gagal membuka jurnal dari jadwal');
+			const sessionId = payload.session?.id ?? payload.id ?? '';
+			if (!sessionId) throw new Error('Respons sesi jurnal tidak lengkap');
+			toast.success(payload.created ? 'Sesi jurnal dibuat' : 'Sesi jurnal sudah ada');
+			await goto(clientApiPath`/journal/${sessionId}`);
+		} catch (error) {
+			journalOpenError = errorMessage(error, 'Gagal membuka jurnal dari jadwal');
+			toast.error(journalOpenError);
+		} finally {
+			openJournalBusySlotId = '';
+		}
+	}
+
 	function errorMessage(error: unknown, fallback: string) {
 		if (error instanceof Error && error.message.trim()) return error.message;
 		return fallback;
+	}
+
+	function todayWita() {
+		return new Intl.DateTimeFormat('en-CA', {
+			timeZone: 'Asia/Makassar',
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+		}).format(new Date());
 	}
 
 	function fmtDate(value: string | null | undefined) {
@@ -1138,10 +1186,37 @@
 					<div class="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
 						<Card.Root>
 							<Card.Header>
-								<Card.Title class="text-base">Jadwal Mingguan</Card.Title>
-								<Card.Description>Slot pelajaran rombel dikelompokkan per hari dan diurutkan berdasarkan jam mulai.</Card.Description>
+								<div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+									<div class="min-w-0">
+										<Card.Title class="text-base">Jadwal Mingguan</Card.Title>
+										<Card.Description>Slot pelajaran rombel dikelompokkan per hari dan diurutkan berdasarkan jam mulai.</Card.Description>
+									</div>
+									<div class="flex flex-wrap items-end gap-2">
+										<div class="space-y-1.5">
+											<label for="journal-slot-date" class="block text-xs font-medium text-muted-foreground">Tanggal jurnal</label>
+											<Input id="journal-slot-date" type="date" bind:value={journalDate} class="h-9 w-40" disabled={openJournalBusySlotId !== ''} />
+										</div>
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onclick={() => {
+												journalDate = todayWita();
+												journalOpenError = '';
+											}}
+											disabled={openJournalBusySlotId !== ''}
+										>
+											Hari ini
+										</Button>
+									</div>
+								</div>
 							</Card.Header>
 							<Card.Content class="space-y-3">
+								{#if journalOpenError}
+									<p role="alert" class="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+										{journalOpenError}
+									</p>
+								{/if}
 								{#if detail.timetable_slots.length > 0}
 									{#each timetableDayGroups as group (group.day)}
 										<section class="rounded-lg border border-border bg-muted/20 p-3">
@@ -1165,13 +1240,25 @@
 																<p class="mt-2 rounded-md bg-background px-2 py-1 text-xs text-muted-foreground">{slot.notes}</p>
 															{/if}
 														</div>
-														<div class="flex shrink-0 gap-2">
+														<div class="flex shrink-0 flex-wrap gap-2">
+															<LoadingButton
+																type="button"
+																variant="outline"
+																size="xs"
+																loading={openJournalBusySlotId === slot.id}
+																loadingLabel="Membuka..."
+																disabled={!journalDate || timetableSaveBusy || deleteTimetableBusyId !== '' || (openJournalBusySlotId !== '' && openJournalBusySlotId !== slot.id)}
+																onclick={() => void openJournalFromTimetableSlot(slot)}
+															>
+																<BookOpen class="mr-1 size-3.5" />
+																Jurnal
+															</LoadingButton>
 															<Button
 																type="button"
 																variant="outline"
 																size="xs"
 																onclick={() => editTimetableSlot(slot)}
-																disabled={timetableSaveBusy || deleteTimetableBusyId !== ''}
+																disabled={timetableSaveBusy || deleteTimetableBusyId !== '' || openJournalBusySlotId !== ''}
 															>
 																<Pencil class="mr-1 size-3.5" />
 																Edit
@@ -1182,7 +1269,7 @@
 																size="xs"
 																loading={deleteTimetableBusyId === slot.id}
 																loadingLabel="Hapus..."
-																disabled={timetableSaveBusy || (deleteTimetableBusyId !== '' && deleteTimetableBusyId !== slot.id)}
+																disabled={timetableSaveBusy || openJournalBusySlotId !== '' || (deleteTimetableBusyId !== '' && deleteTimetableBusyId !== slot.id)}
 																onclick={() => void deleteTimetableSlot(slot)}
 															>
 																<Trash2 class="mr-1 size-3.5" />

@@ -23,6 +23,7 @@ type ClassJournal struct {
 type classJournalService interface {
 	Overview(ctx context.Context, assignmentID, employeeID pgtype.UUID) (service.JournalOverview, error)
 	CreateSession(ctx context.Context, assignmentID pgtype.UUID, tanggal pgtype.Date, materi, kegiatan, catatan string, guruHadir bool, employeeID pgtype.UUID) (service.JournalSessionDetail, error)
+	OpenSessionFromTimetableSlot(ctx context.Context, classID, slotID pgtype.UUID, tanggal pgtype.Date, materi, kegiatan, catatan string, guruHadir bool, employeeID pgtype.UUID) (service.JournalSessionOpenResult, error)
 	GetSession(ctx context.Context, id, employeeID pgtype.UUID) (service.JournalSessionDetail, error)
 	UpdateSession(ctx context.Context, id pgtype.UUID, materi, kegiatan, catatan string, guruHadir bool, employeeID pgtype.UUID) (db.ClassJournalSession, error)
 	DeleteSession(ctx context.Context, id, employeeID pgtype.UUID) error
@@ -99,6 +100,74 @@ func (h *ClassJournal) CreateSession(w http.ResponseWriter, r *http.Request) {
 		"materi":        body.Materi,
 	})
 	api.Created(w, detail)
+}
+
+func (h *ClassJournal) OpenSessionFromTimetableSlot(w http.ResponseWriter, r *http.Request) {
+	if !journalAccessAllowedOrUnauthorized(w, r) {
+		return
+	}
+	classID, slotID, ok := parseRombelTimetableSlotRoute(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Date      string `json:"date"`
+		Tanggal   string `json:"tanggal"`
+		Topic     string `json:"topic"`
+		Materi    string `json:"materi"`
+		Kegiatan  string `json:"kegiatan"`
+		Notes     string `json:"notes"`
+		Catatan   string `json:"catatan"`
+		GuruHadir *bool  `json:"guru_hadir"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	dateValue := strings.TrimSpace(body.Date)
+	if dateValue == "" {
+		dateValue = strings.TrimSpace(body.Tanggal)
+	}
+	if dateValue == "" {
+		api.BadRequest(w, "date wajib diisi")
+		return
+	}
+	var tanggal pgtype.Date
+	if err := tanggal.Scan(dateValue); err != nil {
+		api.BadRequest(w, "format date tidak valid (gunakan YYYY-MM-DD)")
+		return
+	}
+	materi := body.Materi
+	if strings.TrimSpace(materi) == "" {
+		materi = body.Topic
+	}
+	catatan := body.Catatan
+	if strings.TrimSpace(catatan) == "" {
+		catatan = body.Notes
+	}
+	guruHadir := true
+	if body.GuruHadir != nil {
+		guruHadir = *body.GuruHadir
+	}
+
+	result, err := h.svc.OpenSessionFromTimetableSlot(r.Context(), classID, slotID, tanggal, materi, body.Kegiatan, catatan, guruHadir, journalEmployeeID(r))
+	if err != nil {
+		writeClientError(w, err, "Sesi jurnal dari jadwal rombel tidak valid")
+		return
+	}
+	cbtAuditAuthoringEvent(h.audit, r.Context(), "CLASS_JOURNAL_SESSION_OPEN_FROM_TIMETABLE", "class_journal_session", pgUUIDString(result.Session.ID), map[string]any{
+		"assignment_id":     pgUUIDString(result.Session.AssignmentID),
+		"timetable_slot_id": pgUUIDString(slotID),
+		"class_id":          pgUUIDString(classID),
+		"tanggal":           dateValue,
+		"created":           result.Created,
+		"opened_by":         currentUsername(r),
+	})
+	if result.Created {
+		api.Created(w, result)
+		return
+	}
+	api.OK(w, result)
 }
 
 func (h *ClassJournal) GetSession(w http.ResponseWriter, r *http.Request) {
@@ -206,6 +275,18 @@ func journalAccessAllowed(r *http.Request) bool {
 		return mw.HasAnyRole(claims, "admin", "guru")
 	}
 	return false
+}
+
+func journalAccessAllowedOrUnauthorized(w http.ResponseWriter, r *http.Request) bool {
+	if _, ok := api.ClaimsFromContext(r.Context()); !ok {
+		api.Unauthorized(w)
+		return false
+	}
+	if !journalAccessAllowed(r) {
+		api.Forbidden(w)
+		return false
+	}
+	return true
 }
 
 func journalEmployeeID(r *http.Request) pgtype.UUID {

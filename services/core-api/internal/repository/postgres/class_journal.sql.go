@@ -136,6 +136,25 @@ func (q *Queries) GetJournalSession(ctx context.Context, id pgtype.UUID) (GetJou
 	return i, err
 }
 
+const getJournalSessionIDByAssignmentDate = `-- name: GetJournalSessionIDByAssignmentDate :one
+SELECT id
+FROM class_journal_sessions
+WHERE assignment_id = $1
+  AND tanggal = $2
+`
+
+type GetJournalSessionIDByAssignmentDateParams struct {
+	AssignmentID pgtype.UUID `json:"assignment_id"`
+	Tanggal      pgtype.Date `json:"tanggal"`
+}
+
+func (q *Queries) GetJournalSessionIDByAssignmentDate(ctx context.Context, arg GetJournalSessionIDByAssignmentDateParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getJournalSessionIDByAssignmentDate, arg.AssignmentID, arg.Tanggal)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const listJournalAttendanceSummary = `-- name: ListJournalAttendanceSummary :many
 SELECT
     st.id          AS student_id,

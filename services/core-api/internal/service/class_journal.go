@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -14,6 +17,7 @@ type classJournalStore interface {
 	CountJournalSessionsForAssignment(ctx context.Context, assignmentID pgtype.UUID) (int32, error)
 	CreateJournalSession(ctx context.Context, arg db.CreateJournalSessionParams) (db.ClassJournalSession, error)
 	GetJournalSession(ctx context.Context, id pgtype.UUID) (db.GetJournalSessionRow, error)
+	GetJournalSessionIDByAssignmentDate(ctx context.Context, arg db.GetJournalSessionIDByAssignmentDateParams) (pgtype.UUID, error)
 	ListJournalSessions(ctx context.Context, assignmentID pgtype.UUID) ([]db.ListJournalSessionsRow, error)
 	UpdateJournalSession(ctx context.Context, arg db.UpdateJournalSessionParams) (db.ClassJournalSession, error)
 	DeleteJournalSession(ctx context.Context, id pgtype.UUID) error
@@ -23,6 +27,7 @@ type classJournalStore interface {
 	ListActiveStudentsByClassID(ctx context.Context, classID pgtype.UUID) ([]db.ListActiveStudentsByClassIDRow, error)
 	ListClassSubjectAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
 	GetClassSubjectAssignment(ctx context.Context, id pgtype.UUID) (db.GetClassSubjectAssignmentRow, error)
+	GetRombelTimetableSlot(ctx context.Context, arg db.GetRombelTimetableSlotParams) (db.GetRombelTimetableSlotRow, error)
 }
 
 type ClassJournal struct{ q classJournalStore }
@@ -32,6 +37,13 @@ func NewClassJournal(q *db.Queries) *ClassJournal { return &ClassJournal{q: q} }
 type JournalSessionDetail struct {
 	Session     db.GetJournalSessionRow        `json:"session"`
 	Attendances []db.ListJournalAttendancesRow `json:"attendances"`
+}
+
+type JournalSessionOpenResult struct {
+	Session       db.GetJournalSessionRow        `json:"session"`
+	Attendances   []db.ListJournalAttendancesRow `json:"attendances"`
+	TimetableSlot db.GetRombelTimetableSlotRow   `json:"timetable_slot"`
+	Created       bool                           `json:"created"`
 }
 
 type JournalOverview struct {
@@ -143,6 +155,98 @@ func (s *ClassJournal) CreateSession(ctx context.Context, assignmentID pgtype.UU
 	return s.GetSession(ctx, session.ID, employeeID)
 }
 
+func (s *ClassJournal) OpenSessionFromTimetableSlot(ctx context.Context, classID, slotID pgtype.UUID, tanggal pgtype.Date, materi, kegiatan, catatan string, guruHadir bool, employeeID pgtype.UUID) (JournalSessionOpenResult, error) {
+	slot, err := s.q.GetRombelTimetableSlot(ctx, db.GetRombelTimetableSlotParams{
+		ClassID: classID,
+		ID:      slotID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return JournalSessionOpenResult{}, fmt.Errorf("%w: slot jadwal rombel tidak ditemukan", domain.ErrNotFound)
+		}
+		return JournalSessionOpenResult{}, err
+	}
+	if employeeID.Valid && slot.TeacherEmployeeID != employeeID {
+		return JournalSessionOpenResult{}, fmt.Errorf("%w: akses ditolak", domain.ErrForbidden)
+	}
+
+	existing, err := s.getSessionByAssignmentDate(ctx, slot.AssignmentID, tanggal, employeeID)
+	if err == nil {
+		return JournalSessionOpenResult{
+			Session:       existing.Session,
+			Attendances:   existing.Attendances,
+			TimetableSlot: slot,
+			Created:       false,
+		}, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return JournalSessionOpenResult{}, err
+	}
+
+	count, err := s.q.CountJournalSessionsForAssignment(ctx, slot.AssignmentID)
+	if err != nil {
+		return JournalSessionOpenResult{}, err
+	}
+	session, err := s.q.CreateJournalSession(ctx, db.CreateJournalSessionParams{
+		AssignmentID: slot.AssignmentID,
+		Tanggal:      tanggal,
+		PertemuanKe:  count + 1,
+		Materi:       strings.TrimSpace(materi),
+		Kegiatan:     strings.TrimSpace(kegiatan),
+		Catatan:      strings.TrimSpace(catatan),
+		GuruHadir:    guruHadir,
+	})
+	if err != nil {
+		if isJournalDuplicateDateError(err) {
+			existing, getErr := s.getSessionByAssignmentDate(ctx, slot.AssignmentID, tanggal, employeeID)
+			if getErr == nil {
+				return JournalSessionOpenResult{
+					Session:       existing.Session,
+					Attendances:   existing.Attendances,
+					TimetableSlot: slot,
+					Created:       false,
+				}, nil
+			}
+		}
+		return JournalSessionOpenResult{}, err
+	}
+
+	students, err := s.q.ListActiveStudentsByClassID(ctx, slot.ClassID)
+	if err != nil {
+		return JournalSessionOpenResult{}, err
+	}
+	for _, st := range students {
+		_, _ = s.q.UpsertJournalAttendance(ctx, db.UpsertJournalAttendanceParams{
+			SessionID: session.ID,
+			StudentID: st.ID,
+			Status:    db.JournalAttendanceStatusHadir,
+			Catatan:   "",
+		})
+	}
+
+	detail, err := s.GetSession(ctx, session.ID, employeeID)
+	if err != nil {
+		return JournalSessionOpenResult{}, err
+	}
+	return JournalSessionOpenResult{
+		Session:       detail.Session,
+		Attendances:   detail.Attendances,
+		TimetableSlot: slot,
+		Created:       true,
+	}, nil
+}
+
+func (s *ClassJournal) getSessionByAssignmentDate(ctx context.Context, assignmentID pgtype.UUID, tanggal pgtype.Date, employeeID pgtype.UUID) (JournalSessionDetail, error) {
+	sessionID, err := s.q.GetJournalSessionIDByAssignmentDate(ctx, db.GetJournalSessionIDByAssignmentDateParams{
+		AssignmentID: assignmentID,
+		Tanggal:      tanggal,
+	})
+	if err != nil {
+		return JournalSessionDetail{}, err
+	}
+	return s.GetSession(ctx, sessionID, employeeID)
+}
+
 func (s *ClassJournal) UpdateSession(ctx context.Context, id pgtype.UUID, materi, kegiatan, catatan string, guruHadir bool, employeeID pgtype.UUID) (db.ClassJournalSession, error) {
 	session, err := s.q.GetJournalSession(ctx, id)
 	if err != nil {
@@ -215,6 +319,16 @@ func normalizeJournalAttendanceStatus(raw string) (db.JournalAttendanceStatus, e
 	default:
 		return "", fmt.Errorf("status kehadiran tidak valid: %s", raw)
 	}
+}
+
+func isJournalDuplicateDateError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "uq_journal_session_date") ||
+		strings.Contains(message, "duplicate") ||
+		strings.Contains(message, "unique")
 }
 
 func filterJournalAssignmentsByTeacher(all []db.ListClassSubjectAssignmentsRow, employeeID pgtype.UUID) []db.ListClassSubjectAssignmentsRow {

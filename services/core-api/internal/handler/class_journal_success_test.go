@@ -31,6 +31,16 @@ type fakeClassJournalService struct {
 	createEmployeeID     pgtype.UUID
 	createResult         service.JournalSessionDetail
 	createErr            error
+	openClassID          pgtype.UUID
+	openSlotID           pgtype.UUID
+	openTanggal          pgtype.Date
+	openMateri           string
+	openKegiatan         string
+	openCatatan          string
+	openGuruHadir        bool
+	openEmployeeID       pgtype.UUID
+	openResult           service.JournalSessionOpenResult
+	openErr              error
 	getID                pgtype.UUID
 	getEmployeeID        pgtype.UUID
 	getResult            service.JournalSessionDetail
@@ -67,6 +77,18 @@ func (f *fakeClassJournalService) CreateSession(_ context.Context, assignmentID 
 	f.createGuruHadir = guruHadir
 	f.createEmployeeID = employeeID
 	return f.createResult, f.createErr
+}
+
+func (f *fakeClassJournalService) OpenSessionFromTimetableSlot(_ context.Context, classID, slotID pgtype.UUID, tanggal pgtype.Date, materi, kegiatan, catatan string, guruHadir bool, employeeID pgtype.UUID) (service.JournalSessionOpenResult, error) {
+	f.openClassID = classID
+	f.openSlotID = slotID
+	f.openTanggal = tanggal
+	f.openMateri = materi
+	f.openKegiatan = kegiatan
+	f.openCatatan = catatan
+	f.openGuruHadir = guruHadir
+	f.openEmployeeID = employeeID
+	return f.openResult, f.openErr
 }
 
 func (f *fakeClassJournalService) GetSession(_ context.Context, id, employeeID pgtype.UUID) (service.JournalSessionDetail, error) {
@@ -127,6 +149,12 @@ func TestClassJournalSuccessHandlersForwardPayloads(t *testing.T) {
 			Session:     db.GetJournalSessionRow{ID: sessionID, AssignmentID: assignmentID, Materi: "Ekosistem"},
 			Attendances: []db.ListJournalAttendancesRow{{StudentID: studentID, Nama: "Siswa", Status: db.JournalAttendanceStatusHadir}},
 		},
+		openResult: service.JournalSessionOpenResult{
+			Session:       db.GetJournalSessionRow{ID: sessionID, AssignmentID: assignmentID, Materi: "Ekosistem"},
+			Attendances:   []db.ListJournalAttendancesRow{{StudentID: studentID, Nama: "Siswa", Status: db.JournalAttendanceStatusHadir}},
+			TimetableSlot: db.GetRombelTimetableSlotRow{ID: handlerTestUUID(7), AssignmentID: assignmentID, SubjectName: "IPA"},
+			Created:       true,
+		},
 		getResult: service.JournalSessionDetail{
 			Session:     db.GetJournalSessionRow{ID: sessionID, AssignmentID: assignmentID, Materi: "Ekosistem"},
 			Attendances: []db.ListJournalAttendancesRow{{StudentID: studentID, Nama: "Siswa", Status: db.JournalAttendanceStatusHadir}},
@@ -157,6 +185,20 @@ func TestClassJournalSuccessHandlersForwardPayloads(t *testing.T) {
 		t.Fatalf("CreateSession audit = %#v, want create audit", audit.entries)
 	}
 
+	classID := handlerTestUUID(8)
+	slotID := handlerTestUUID(9)
+	rec = httptest.NewRecorder()
+	h.OpenSessionFromTimetableSlot(rec, withRouteParams(guruJournalRequest(http.MethodPost, "/api/academic/rombel/"+classID.String()+"/timetable-slots/"+slotID.String()+"/journal-session", `{"date":"2026-05-02","topic":"Bilangan","kegiatan":"Latihan","notes":"Ruang 2","guru_hadir":false}`, employeeID), "id", classID.String(), "slotID", slotID.String()))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("OpenSessionFromTimetableSlot status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.openClassID != classID || fake.openSlotID != slotID || fake.openEmployeeID != employeeID || fake.openMateri != "Bilangan" || fake.openKegiatan != "Latihan" || fake.openCatatan != "Ruang 2" || fake.openGuruHadir || !fake.openTanggal.Valid {
+		t.Fatalf("OpenSessionFromTimetableSlot forwarded class=%v slot=%v employee=%v date=%v materi=%q kegiatan=%q catatan=%q hadir=%v", fake.openClassID, fake.openSlotID, fake.openEmployeeID, fake.openTanggal, fake.openMateri, fake.openKegiatan, fake.openCatatan, fake.openGuruHadir)
+	}
+	if len(audit.entries) != 2 || audit.entries[1].Action != "CLASS_JOURNAL_SESSION_OPEN_FROM_TIMETABLE" {
+		t.Fatalf("OpenSessionFromTimetableSlot audit = %#v, want open audit", audit.entries)
+	}
+
 	rec = httptest.NewRecorder()
 	h.GetSession(rec, withRouteParam(guruJournalRequest(http.MethodGet, "/api/class-journal/sessions/"+sessionID.String(), "", employeeID), "id", sessionID.String()))
 	if rec.Code != http.StatusOK {
@@ -174,7 +216,7 @@ func TestClassJournalSuccessHandlersForwardPayloads(t *testing.T) {
 	if fake.updateID != sessionID || fake.updateEmployeeID != employeeID || fake.updateMateri != "Ekosistem revisi" || fake.updateKegiatan != "Praktik" || fake.updateCatatan != "Lengkap" || !fake.updateGuruHadir {
 		t.Fatalf("UpdateSession forwarded id=%v employee=%v materi=%q kegiatan=%q catatan=%q hadir=%v", fake.updateID, fake.updateEmployeeID, fake.updateMateri, fake.updateKegiatan, fake.updateCatatan, fake.updateGuruHadir)
 	}
-	if len(audit.entries) != 2 || audit.entries[1].Action != "CLASS_JOURNAL_SESSION_UPDATE" {
+	if len(audit.entries) != 3 || audit.entries[2].Action != "CLASS_JOURNAL_SESSION_UPDATE" {
 		t.Fatalf("UpdateSession audit = %#v, want update audit", audit.entries)
 	}
 
@@ -186,7 +228,7 @@ func TestClassJournalSuccessHandlersForwardPayloads(t *testing.T) {
 	if fake.bulkID != sessionID || fake.bulkEmployeeID != employeeID || len(fake.bulkEntries) != 1 || fake.bulkEntries[0].StudentID != studentID.String() {
 		t.Fatalf("BulkUpsertAttendances params = (%v, %v, %+v), want one forwarded entry", fake.bulkID, fake.bulkEmployeeID, fake.bulkEntries)
 	}
-	if len(audit.entries) != 3 || audit.entries[2].Action != "CLASS_JOURNAL_ATTENDANCE_BULK_UPSERT" {
+	if len(audit.entries) != 4 || audit.entries[3].Action != "CLASS_JOURNAL_ATTENDANCE_BULK_UPSERT" {
 		t.Fatalf("BulkUpsertAttendances audit = %#v, want bulk audit", audit.entries)
 	}
 
@@ -198,7 +240,7 @@ func TestClassJournalSuccessHandlersForwardPayloads(t *testing.T) {
 	if fake.deleteID != sessionID || fake.deleteEmployeeID.Valid {
 		t.Fatalf("DeleteSession params = (%v, %v), want admin delete with empty employee scope", fake.deleteID, fake.deleteEmployeeID)
 	}
-	if len(audit.entries) != 4 || audit.entries[3].Action != "CLASS_JOURNAL_SESSION_DELETE" {
+	if len(audit.entries) != 5 || audit.entries[4].Action != "CLASS_JOURNAL_SESSION_DELETE" {
 		t.Fatalf("DeleteSession audit = %#v, want delete audit", audit.entries)
 	}
 }
@@ -226,6 +268,13 @@ func TestClassJournalHandlersMapServiceErrors(t *testing.T) {
 			handler:    (*ClassJournal).CreateSession,
 			svc:        &fakeClassJournalService{ClassJournal: &service.ClassJournal{}, createErr: errors.New("akses ditolak")},
 			req:        guruJournalRequest(http.MethodPost, "/api/class-journal/sessions", `{"assignment_id":"`+assignmentID.String()+`","tanggal":"2026-05-01"}`, employeeID),
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "open from timetable forbidden",
+			handler:    (*ClassJournal).OpenSessionFromTimetableSlot,
+			svc:        &fakeClassJournalService{ClassJournal: &service.ClassJournal{}, openErr: errors.New("akses ditolak")},
+			req:        withRouteParams(guruJournalRequest(http.MethodPost, "/api/academic/rombel/"+assignmentID.String()+"/timetable-slots/"+sessionID.String()+"/journal-session", `{"date":"2026-05-01"}`, employeeID), "id", assignmentID.String(), "slotID", sessionID.String()),
 			wantStatus: http.StatusForbidden,
 		},
 		{
@@ -266,5 +315,19 @@ func TestClassJournalHandlersMapServiceErrors(t *testing.T) {
 				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
 			}
 		})
+	}
+}
+
+func TestClassJournalOpenSessionFromTimetableSlotUnauthenticated(t *testing.T) {
+	classID := handlerTestUUID(10)
+	slotID := handlerTestUUID(11)
+	h := &ClassJournal{svc: &fakeClassJournalService{ClassJournal: &service.ClassJournal{}}}
+	req := withRouteParams(httptest.NewRequest(http.MethodPost, "/api/academic/rombel/"+classID.String()+"/timetable-slots/"+slotID.String()+"/journal-session", strings.NewReader(`{"date":"2026-05-01"}`)), "id", classID.String(), "slotID", slotID.String())
+	rec := httptest.NewRecorder()
+
+	h.OpenSessionFromTimetableSlot(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401; body=%s", rec.Code, rec.Body.String())
 	}
 }
