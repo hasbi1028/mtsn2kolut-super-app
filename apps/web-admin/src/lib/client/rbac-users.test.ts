@@ -13,9 +13,11 @@ import {
 	setRBACRoleActive,
 	updateRBACPermission,
 	updateRBACRole,
+	updateRBACRolePermissions,
 	updateUserProfileLink,
 	updateUserRoles
 } from './rbac-users';
+import { diffPermissions, isCriticalPermission, permissionsByModule, rolePermissionMap } from '$lib/rbac/matrix';
 
 describe('rbac user management client helpers', () => {
 	it('normalizes dynamic role payloads for PATCH /api/users/{id}/roles', async () => {
@@ -77,6 +79,7 @@ describe('rbac user management client helpers', () => {
 		await createRBACRole({ code: 'operator_cbt', name: 'Operator CBT', description: 'Kelola CBT' }, fetcher);
 		await updateRBACRole('operator_cbt', { name: 'Operator Asesmen', description: 'Kelola Asesmen' }, fetcher);
 		await setRBACRoleActive('operator_cbt', false, fetcher);
+		await updateRBACRolePermissions('operator_cbt', ['bank_soal.read', 'bank_soal.review', 'bank_soal.read'], fetcher);
 		await createRBACPermission({ code: 'reports.view', module: 'reports', action: 'view', description: 'Lihat laporan' }, fetcher);
 		await updateRBACPermission('reports.view', { module: 'reports', action: 'read', description: 'Baca laporan' }, fetcher);
 		await setRBACPermissionActive('reports.view', false, fetcher);
@@ -84,9 +87,37 @@ describe('rbac user management client helpers', () => {
 		expect(fetcher).toHaveBeenNthCalledWith(1, '/api/rbac/roles', expect.objectContaining({ method: 'POST' }));
 		expect(fetcher).toHaveBeenNthCalledWith(2, '/api/rbac/roles/operator_cbt', expect.objectContaining({ method: 'PUT' }));
 		expect(fetcher).toHaveBeenNthCalledWith(3, '/api/rbac/roles/operator_cbt/status', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ is_active: false }) }));
-		expect(fetcher).toHaveBeenNthCalledWith(4, '/api/rbac/permissions', expect.objectContaining({ method: 'POST' }));
-		expect(fetcher).toHaveBeenNthCalledWith(5, '/api/rbac/permissions/reports.view', expect.objectContaining({ method: 'PUT' }));
-		expect(fetcher).toHaveBeenNthCalledWith(6, '/api/rbac/permissions/reports.view/status', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ is_active: false }) }));
+		expect(fetcher).toHaveBeenNthCalledWith(4, '/api/rbac/roles/operator_cbt/permissions', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ permissions: ['bank_soal.read', 'bank_soal.review'] }) }));
+		expect(fetcher).toHaveBeenNthCalledWith(5, '/api/rbac/permissions', expect.objectContaining({ method: 'POST' }));
+		expect(fetcher).toHaveBeenNthCalledWith(6, '/api/rbac/permissions/reports.view', expect.objectContaining({ method: 'PUT' }));
+		expect(fetcher).toHaveBeenNthCalledWith(7, '/api/rbac/permissions/reports.view/status', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ is_active: false }) }));
+	});
+
+	it('normalizes role-permission rows into map and computes matrix diffs', () => {
+		const map = rolePermissionMap({
+			roles: [{ code: 'guru' }, { code: 'reviewer' }],
+			role_permissions: [
+				{ role_code: 'guru', permission_code: 'bank_soal.read' },
+				{ role_code: 'guru', permission_code: 'bank_soal.read' },
+				{ role_code: 'guru', permission_code: 'bank_soal.create' }
+			]
+		});
+		expect(map).toEqual({ guru: ['bank_soal.create', 'bank_soal.read'], reviewer: [] });
+		expect(diffPermissions(['bank_soal.read'], ['bank_soal.read', 'bank_soal.publish'])).toEqual({
+			added: ['bank_soal.publish'],
+			removed: []
+		});
+		expect(permissionsByModule([
+			{ code: 'users.read', module: 'users' },
+			{ code: 'bank_soal.read', module: 'bank_soal' },
+			{ code: 'misc.view' }
+		])).toEqual({
+			bank_soal: [{ code: 'bank_soal.read', module: 'bank_soal' }],
+			misc: [{ code: 'misc.view' }],
+			users: [{ code: 'users.read', module: 'users' }]
+		});
+		expect(isCriticalPermission('roles.manage')).toBe(true);
+		expect(isCriticalPermission('bank_soal.read')).toBe(false);
 	});
 
 	it('previews/generates employee accounts and exports initial password CSV', async () => {
