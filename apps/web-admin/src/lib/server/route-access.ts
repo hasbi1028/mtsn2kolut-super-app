@@ -32,6 +32,7 @@ const ADMIN_ONLY_PREFIXES = [
 	'/asesmen/paket',
 	'/asesmen/sesi',
 	'/settings/users',
+	'/settings/rbac',
 	'/settings/user-change-requests',
 	'/settings/audit-logs',
 	'/settings/school-profile',
@@ -40,6 +41,7 @@ const ADMIN_ONLY_PREFIXES = [
 	'/api/parents',
 	'/api/users',
 	'/api/pusaka',
+	'/api/rbac',
 	'/api/website',
 	'/api/school-profile',
 	'/api/asesmen/events',
@@ -229,6 +231,7 @@ function isRombelTimetableJournalSessionPath(pathname: string): boolean {
 
 export function requiredPermissionsForPath(pathname: string, method: string): string[] {
 	if (matchesPathSegment(pathname, '/settings/audit-logs')) return ['audit.read'];
+	if (matchesPathSegment(pathname, '/settings/rbac')) return ['roles.read'];
 	if (matchesPathSegment(pathname, '/settings/school-profile') || matchesPathSegment(pathname, '/api/school-profile')) return ['settings.school_profile'];
 	if (matchesPathSegment(pathname, '/api/rbac')) return isReadMethod(method) ? ['roles.read'] : ['roles.manage'];
 	if (matchesPathSegment(pathname, '/parents') || matchesPathSegment(pathname, '/api/parents')) return isReadMethod(method) ? ['parents.read'] : ['parents.manage'];

@@ -116,6 +116,11 @@ describe('sidebar assessment configuration', () => {
 		expect(byHref.get('/settings/account')?.roles).toBeUndefined();
 		expect(byHref.get('/settings')?.roles).toEqual(['admin']);
 		expect(byHref.get('/settings/users')?.permissions).toEqual(['users.read']);
+		expect(byHref.get('/settings/rbac')).toMatchObject({
+			label: 'Manajemen RBAC',
+			roles: ['admin'],
+			permissions: ['roles.read']
+		});
 		expect(byHref.get('/settings/user-change-requests')?.permissions).toEqual(['profile_changes.review']);
 		expect(byHref.get('/settings/audit-logs')?.permissions).toEqual(['audit.read']);
 		expect(byHref.get('/settings/school-profile')?.permissions).toEqual(['settings.school_profile']);
