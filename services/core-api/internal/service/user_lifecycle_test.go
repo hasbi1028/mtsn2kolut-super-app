@@ -26,10 +26,11 @@ type fakeUserLifecycleStore struct {
 	adminCount   int64
 	roleErr      error
 
-	passwordCalls []db.UpdateUserPasswordParams
-	passwordErr   error
-	versionCalls  []pgtype.UUID
-	versionErr    error
+	passwordCalls         []db.UpdateUserPasswordParams
+	mustChangePasswordIDs []pgtype.UUID
+	passwordErr           error
+	versionCalls          []pgtype.UUID
+	versionErr            error
 
 	profileCalls []db.UpdateUserProfileLinkParams
 	profileErr   error
@@ -70,6 +71,11 @@ func (f *fakeUserLifecycleStore) CountActiveAdminsByRbac(ctx context.Context) (i
 
 func (f *fakeUserLifecycleStore) UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error {
 	f.passwordCalls = append(f.passwordCalls, arg)
+	return f.passwordErr
+}
+
+func (f *fakeUserLifecycleStore) MarkUserMustChangePassword(ctx context.Context, id pgtype.UUID) error {
+	f.mustChangePasswordIDs = append(f.mustChangePasswordIDs, id)
 	return f.passwordErr
 }
 
@@ -186,6 +192,9 @@ func TestUserLifecycleResetPasswordHashesPasswordRevokesSessionsAndAudits(t *tes
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(store.passwordCalls[0].PasswordHash), []byte("newSecret123")); err != nil {
 		t.Fatalf("stored password is not bcrypt hash of new password: %v", err)
+	}
+	if len(store.mustChangePasswordIDs) != 1 || store.mustChangePasswordIDs[0] != userID {
+		t.Fatalf("must-change calls = %+v, want password reset to force password change", store.mustChangePasswordIDs)
 	}
 	if len(store.versionCalls) != 1 || store.versionCalls[0] != userID || len(store.revokeCalls) != 1 || store.revokeCalls[0] != userID {
 		t.Fatalf("version/revoke calls = %+v/%+v", store.versionCalls, store.revokeCalls)

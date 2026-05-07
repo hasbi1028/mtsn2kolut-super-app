@@ -65,9 +65,27 @@ func JWT(secret string, currentVersion authVersionProvider, validateSession acce
 					}
 				}
 			}
+			if mustChangePassword(claims) && !mustChangePasswordAllowedPath(r.URL.Path) {
+				api.Forbidden(w)
+				return
+			}
 			ctx := context.WithValue(r.Context(), api.ClaimsKey, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
+	}
+}
+
+func mustChangePassword(claims jwt.MapClaims) bool {
+	value, _ := claims["must_change_password"].(bool)
+	return value
+}
+
+func mustChangePasswordAllowedPath(path string) bool {
+	switch path {
+	case "/api/auth/account", "/api/auth/change-password", "/api/auth/logout-all", "/api/auth/sessions":
+		return true
+	default:
+		return strings.HasPrefix(path, "/api/auth/sessions/")
 	}
 }
 
@@ -217,8 +235,10 @@ func WorkerKey(key string) func(http.Handler) http.Handler {
 
 func bearerToken(r *http.Request) string {
 	h := r.Header.Get("Authorization")
-	if strings.HasPrefix(h, "Bearer ") {
-		return strings.TrimPrefix(h, "Bearer ")
+	// RFC 7235 declares the auth scheme name case-insensitive; some clients
+	// (and proxies) send "bearer" or "BEARER".
+	if len(h) >= 7 && strings.EqualFold(h[:7], "Bearer ") {
+		return strings.TrimSpace(h[7:])
 	}
 	return ""
 }

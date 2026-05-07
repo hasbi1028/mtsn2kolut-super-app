@@ -54,21 +54,23 @@ type authSessionResponse struct {
 }
 
 type authAccountResponse struct {
-	ID          string                     `json:"id"`
-	Username    string                     `json:"username"`
-	DisplayName string                     `json:"display_name"`
-	Roles       []string                   `json:"roles"`
-	ProfileType string                     `json:"profile_type"`
-	ProfileNama string                     `json:"profile_nama"`
-	PhotoURL    string                     `json:"photo_url"`
-	AvatarURL   string                     `json:"avatar_url"`
-	Contact     authAccountContactResponse `json:"contact"`
-	EmployeeID  string                     `json:"employee_id,omitempty"`
-	StudentID   string                     `json:"student_id,omitempty"`
-	ParentID    string                     `json:"parent_id,omitempty"`
-	IsActive    bool                       `json:"is_active"`
-	LastLoginAt string                     `json:"last_login_at,omitempty"`
-	CreatedAt   string                     `json:"created_at,omitempty"`
+	ID                 string                     `json:"id"`
+	Username           string                     `json:"username"`
+	DisplayName        string                     `json:"display_name"`
+	Roles              []string                   `json:"roles"`
+	ProfileType        string                     `json:"profile_type"`
+	ProfileNama        string                     `json:"profile_nama"`
+	PhotoURL           string                     `json:"photo_url"`
+	AvatarURL          string                     `json:"avatar_url"`
+	Contact            authAccountContactResponse `json:"contact"`
+	EmployeeID         string                     `json:"employee_id,omitempty"`
+	StudentID          string                     `json:"student_id,omitempty"`
+	ParentID           string                     `json:"parent_id,omitempty"`
+	IsActive           bool                       `json:"is_active"`
+	MustChangePassword bool                       `json:"must_change_password"`
+	PasswordChangedAt  string                     `json:"password_changed_at,omitempty"`
+	LastLoginAt        string                     `json:"last_login_at,omitempty"`
+	CreatedAt          string                     `json:"created_at,omitempty"`
 }
 
 type authAccountContactResponse struct {
@@ -103,6 +105,7 @@ type authAuditWriter interface {
 func NewAuth(svc authService, audit authAuditWriter) *Auth { return &Auth{svc: svc, audit: audit} }
 
 func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -131,6 +134,7 @@ func (h *Auth) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Auth) Refresh(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	var body struct {
 		RefreshToken string `json:"refresh_token"`
 	}
@@ -156,6 +160,7 @@ func (h *Auth) Refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Auth) Logout(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	var body struct {
 		RefreshToken string `json:"refresh_token"`
 	}
@@ -561,6 +566,7 @@ func (h *Auth) UpdateSidebarPreferences(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	var body struct {
 		Username    string `json:"username"`
 		OldPassword string `json:"old_password"`
@@ -597,7 +603,7 @@ func (h *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, domain.ErrWeakPassword) {
-		api.BadRequest(w, "password baru minimal 8 karakter, tidak boleh sama dengan username, dan tidak boleh hanya angka")
+		api.BadRequest(w, "password baru minimal 8 karakter dan maksimal 72 karakter, tidak boleh sama dengan username, dan tidak boleh hanya angka")
 		return
 	}
 	if err != nil {
@@ -660,12 +666,14 @@ func authAccountResponseFromRow(row db.GetUserAccountSummaryRow) authAccountResp
 			Address:        row.ContactAddress,
 			EditableFields: contactEditableFields(row.ProfileType),
 		},
-		EmployeeID:  pgUUIDString(row.EmployeeID),
-		StudentID:   pgUUIDString(row.StudentID),
-		ParentID:    pgUUIDString(row.ParentID),
-		IsActive:    row.IsActive,
-		LastLoginAt: timestamptzRFC3339(row.LastLoginAt),
-		CreatedAt:   timestamptzRFC3339(row.CreatedAt),
+		EmployeeID:         pgUUIDString(row.EmployeeID),
+		StudentID:          pgUUIDString(row.StudentID),
+		ParentID:           pgUUIDString(row.ParentID),
+		IsActive:           row.IsActive,
+		MustChangePassword: row.MustChangePassword,
+		PasswordChangedAt:  timestamptzRFC3339(row.PasswordChangedAt),
+		LastLoginAt:        timestamptzRFC3339(row.LastLoginAt),
+		CreatedAt:          timestamptzRFC3339(row.CreatedAt),
 	}
 }
 
