@@ -282,7 +282,7 @@ func (s *RBAC) ReplaceRolePermissions(ctx context.Context, roleCode string, perm
 			return fmt.Errorf("permission %s tidak dikenal atau tidak aktif", code)
 		}
 	}
-	if roleCode == "admin" && !containsAll(permissionCodes, []string{"roles.manage", "users.manage_roles"}) {
+	if roleCode == "admin" && !containsAll(permissionCodes, activeCriticalPermissionCodes(permissions)) {
 		admins, err := s.q.CountActiveAdminsByRbac(ctx)
 		if err != nil {
 			return err
@@ -488,8 +488,27 @@ func validatePermissionInput(input RBACPermissionInput, includeCode bool) error 
 	return nil
 }
 
+var criticalRBACPermissionCodes = []string{
+	"roles.manage",
+	"users.manage_roles",
+	"users.manage",
+	"permissions.manage",
+	"rbac.manage",
+}
+
 func isCriticalRBACPermission(code string) bool {
-	return containsString([]string{"roles.manage", "users.manage_roles"}, code)
+	return containsString(criticalRBACPermissionCodes, code)
+}
+
+func activeCriticalPermissionCodes(permissions map[string]db.RbacPermission) []string {
+	out := make([]string, 0, len(criticalRBACPermissionCodes))
+	for _, code := range criticalRBACPermissionCodes {
+		permission, ok := permissions[code]
+		if ok && permission.IsActive {
+			out = append(out, code)
+		}
+	}
+	return out
 }
 
 func normalizeRBACCodes(codes []string) []string {
