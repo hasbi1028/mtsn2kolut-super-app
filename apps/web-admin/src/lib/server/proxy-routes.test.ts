@@ -1170,6 +1170,59 @@ describe('api proxy route handlers', () => {
 		await expect(res.json()).resolves.toEqual({ id: 'slot 1/2026', subject: 'Matematika' });
 	});
 
+	it('forwards rombel subject-assignment CRUD through encoded nested paths', async () => {
+		const collection = await import('../../routes/api/academic/rombel/[id]/subject-assignments/+server');
+		const item = await import('../../routes/api/academic/rombel/[id]/subject-assignments/[assignmentID]/+server');
+		proxyGetMock.mockResolvedValueOnce([{ id: 'assignment 1/2026' }]);
+		proxyPostMock.mockResolvedValueOnce({ id: 'assignment 1/2026' });
+		proxyPutMock.mockResolvedValueOnce({ id: 'assignment 1/2026', subject_id: 'subject-2' });
+		proxyDeleteMock.mockResolvedValueOnce(null);
+
+		const collectionEvent = createEvent({ params: { id: 'class 1/2026' } });
+		const getRes = await collection.GET(collectionEvent as never);
+
+		expect(proxyGetMock).toHaveBeenCalledWith('/api/academic/rombel/class%201%2F2026/subject-assignments');
+		expect(getRes.status).toBe(200);
+		await expect(getRes.json()).resolves.toEqual([{ id: 'assignment 1/2026' }]);
+
+		const postRequest = new Request('http://localhost/api/academic/rombel/class%201%2F2026/subject-assignments', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ subject_id: 'subject-1', teacher_employee_id: 'teacher-1' })
+		});
+		const postRes = await collection.POST(createEvent({ params: { id: 'class 1/2026' }, request: postRequest }) as never);
+
+		expect(readRequestJsonMock).toHaveBeenCalledWith(postRequest);
+		expect(proxyPostMock).toHaveBeenCalledWith('/api/academic/rombel/class%201%2F2026/subject-assignments', {
+			subject_id: 'subject-1',
+			teacher_employee_id: 'teacher-1'
+		});
+		expect(postRes.status).toBe(201);
+
+		const putRequest = new Request('http://localhost/api/academic/rombel/class%201%2F2026/subject-assignments/assignment%201%2F2026', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ subject_id: 'subject-2', teacher_employee_id: 'teacher-2' })
+		});
+		const itemEvent = createEvent({
+			params: { id: 'class 1/2026', assignmentID: 'assignment 1/2026' },
+			request: putRequest
+		});
+		const putRes = await item.PUT(itemEvent as never);
+
+		expect(readRequestJsonMock).toHaveBeenCalledWith(putRequest);
+		expect(proxyPutMock).toHaveBeenCalledWith('/api/academic/rombel/class%201%2F2026/subject-assignments/assignment%201%2F2026', {
+			subject_id: 'subject-2',
+			teacher_employee_id: 'teacher-2'
+		});
+		expect(putRes.status).toBe(200);
+
+		const deleteRes = await item.DELETE(itemEvent as never);
+
+		expect(proxyDeleteMock).toHaveBeenCalledWith('/api/academic/rombel/class%201%2F2026/subject-assignments/assignment%201%2F2026');
+		expect(deleteRes.status).toBe(204);
+	});
+
 	it('encodes student lifecycle ids read from query params before forwarding', async () => {
 		const mod = await import('../../routes/api/students/+server');
 		proxyPatchMock.mockResolvedValueOnce({ id: 'student 1/2026', status: 'inactive' });

@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -12,6 +14,11 @@ type rombelStore interface {
 	GetRombelDetail(ctx context.Context, id pgtype.UUID) (db.GetRombelDetailRow, error)
 	ListStudentsByClassWithParents(ctx context.Context, classID pgtype.UUID) ([]db.ListStudentsByClassWithParentsRow, error)
 	ListRombelSubjectAssignments(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelSubjectAssignmentsRow, error)
+	GetRombelSubjectAssignment(ctx context.Context, arg db.GetRombelSubjectAssignmentParams) (db.GetRombelSubjectAssignmentRow, error)
+	CreateRombelSubjectAssignment(ctx context.Context, arg db.CreateRombelSubjectAssignmentParams) (db.CreateRombelSubjectAssignmentRow, error)
+	UpdateRombelSubjectAssignment(ctx context.Context, arg db.UpdateRombelSubjectAssignmentParams) (db.UpdateRombelSubjectAssignmentRow, error)
+	CountRombelSubjectAssignmentDependents(ctx context.Context, arg db.CountRombelSubjectAssignmentDependentsParams) (db.CountRombelSubjectAssignmentDependentsRow, error)
+	DeleteRombelSubjectAssignment(ctx context.Context, arg db.DeleteRombelSubjectAssignmentParams) (int64, error)
 	ListRombelTimetableSlots(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelTimetableSlotsRow, error)
 	ListHomeroomAssignmentsByClass(ctx context.Context, classID pgtype.UUID) ([]db.ListHomeroomAssignmentsByClassRow, error)
 	CreateHomeroomAssignment(ctx context.Context, arg db.CreateHomeroomAssignmentParams) (db.CreateHomeroomAssignmentRow, error)
@@ -39,6 +46,65 @@ func (s *Rombel) ListStudentsWithParents(ctx context.Context, classID pgtype.UUI
 
 func (s *Rombel) ListSubjectAssignments(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelSubjectAssignmentsRow, error) {
 	return s.q.ListRombelSubjectAssignments(ctx, classID)
+}
+
+func (s *Rombel) GetSubjectAssignment(ctx context.Context, arg db.GetRombelSubjectAssignmentParams) (db.GetRombelSubjectAssignmentRow, error) {
+	return s.q.GetRombelSubjectAssignment(ctx, arg)
+}
+
+func (s *Rombel) CreateSubjectAssignment(ctx context.Context, arg db.CreateRombelSubjectAssignmentParams) (db.CreateRombelSubjectAssignmentRow, error) {
+	return s.q.CreateRombelSubjectAssignment(ctx, arg)
+}
+
+func (s *Rombel) UpdateSubjectAssignment(ctx context.Context, arg db.UpdateRombelSubjectAssignmentParams) (db.UpdateRombelSubjectAssignmentRow, error) {
+	current, err := s.q.GetRombelSubjectAssignment(ctx, db.GetRombelSubjectAssignmentParams{
+		ClassID: arg.ClassID,
+		ID:      arg.ID,
+	})
+	if err != nil {
+		return db.UpdateRombelSubjectAssignmentRow{}, err
+	}
+	if !sameRombelUUID(current.SubjectID, arg.SubjectID) {
+		counts, err := s.q.CountRombelSubjectAssignmentDependents(ctx, db.CountRombelSubjectAssignmentDependentsParams{
+			ClassID: arg.ClassID,
+			ID:      arg.ID,
+		})
+		if err != nil {
+			return db.UpdateRombelSubjectAssignmentRow{}, err
+		}
+		if counts.TotalTimetableSlots > 0 || counts.TotalJournalSessions > 0 || counts.TotalGradeComponents > 0 || counts.TotalGradeFinalizations > 0 {
+			return db.UpdateRombelSubjectAssignmentRow{}, fmt.Errorf("%w: mata pelajaran tidak dapat diganti karena penugasan sudah dipakai oleh jadwal, jurnal, atau nilai", domain.ErrConflict)
+		}
+	}
+	return s.q.UpdateRombelSubjectAssignment(ctx, arg)
+}
+
+func (s *Rombel) DeleteSubjectAssignment(ctx context.Context, arg db.DeleteRombelSubjectAssignmentParams) error {
+	counts, err := s.q.CountRombelSubjectAssignmentDependents(ctx, db.CountRombelSubjectAssignmentDependentsParams{
+		ClassID: arg.ClassID,
+		ID:      arg.ID,
+	})
+	if err != nil {
+		return err
+	}
+	if counts.TotalTimetableSlots > 0 || counts.TotalJournalSessions > 0 || counts.TotalGradeComponents > 0 || counts.TotalGradeFinalizations > 0 {
+		return fmt.Errorf("%w: penugasan guru mapel masih dipakai oleh jadwal, jurnal, atau nilai", domain.ErrConflict)
+	}
+	rows, err := s.q.DeleteRombelSubjectAssignment(ctx, arg)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func sameRombelUUID(a, b pgtype.UUID) bool {
+	if a.Valid != b.Valid {
+		return false
+	}
+	return a.Bytes == b.Bytes
 }
 
 func (s *Rombel) ListTimetableSlots(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelTimetableSlotsRow, error) {

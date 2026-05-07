@@ -22,6 +22,10 @@ type rombelService interface {
 	Get(ctx context.Context, id pgtype.UUID) (db.GetRombelDetailRow, error)
 	ListStudentsWithParents(ctx context.Context, classID pgtype.UUID) ([]db.ListStudentsByClassWithParentsRow, error)
 	ListSubjectAssignments(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelSubjectAssignmentsRow, error)
+	GetSubjectAssignment(ctx context.Context, arg db.GetRombelSubjectAssignmentParams) (db.GetRombelSubjectAssignmentRow, error)
+	CreateSubjectAssignment(ctx context.Context, arg db.CreateRombelSubjectAssignmentParams) (db.CreateRombelSubjectAssignmentRow, error)
+	UpdateSubjectAssignment(ctx context.Context, arg db.UpdateRombelSubjectAssignmentParams) (db.UpdateRombelSubjectAssignmentRow, error)
+	DeleteSubjectAssignment(ctx context.Context, arg db.DeleteRombelSubjectAssignmentParams) error
 	ListTimetableSlots(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelTimetableSlotsRow, error)
 	ListHomeroomAssignments(ctx context.Context, classID pgtype.UUID) ([]db.ListHomeroomAssignmentsByClassRow, error)
 	CreateHomeroomAssignment(ctx context.Context, arg db.CreateHomeroomAssignmentParams) (db.CreateHomeroomAssignmentRow, error)
@@ -128,6 +132,111 @@ func (h *Rombel) ListHomeroomAssignments(w http.ResponseWriter, r *http.Request)
 	api.OK(w, rows)
 }
 
+func (h *Rombel) ListSubjectAssignments(w http.ResponseWriter, r *http.Request) {
+	if !rombelReadAllowed(w, r) {
+		return
+	}
+	classID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	rows, err := h.svc.ListSubjectAssignments(r.Context(), classID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *Rombel) GetSubjectAssignment(w http.ResponseWriter, r *http.Request) {
+	if !rombelReadAllowed(w, r) {
+		return
+	}
+	classID, assignmentID, ok := parseRombelAssignmentRoute(w, r)
+	if !ok {
+		return
+	}
+	row, err := h.svc.GetSubjectAssignment(r.Context(), db.GetRombelSubjectAssignmentParams{
+		ClassID: classID,
+		ID:      assignmentID,
+	})
+	if err != nil {
+		writeClientError(w, err, "Penugasan guru mapel tidak ditemukan")
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Rombel) CreateSubjectAssignment(w http.ResponseWriter, r *http.Request) {
+	if !rombelManageAllowed(w, r) {
+		return
+	}
+	classID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body subjectAssignmentRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	arg, ok := parseCreateSubjectAssignment(w, classID, body)
+	if !ok {
+		return
+	}
+	row, err := h.svc.CreateSubjectAssignment(r.Context(), arg)
+	if err != nil {
+		writeClientError(w, err, "Data guru mapel tidak valid")
+		return
+	}
+	api.Created(w, row)
+}
+
+func (h *Rombel) UpdateSubjectAssignment(w http.ResponseWriter, r *http.Request) {
+	if !rombelManageAllowed(w, r) {
+		return
+	}
+	classID, assignmentID, ok := parseRombelAssignmentRoute(w, r)
+	if !ok {
+		return
+	}
+	var body subjectAssignmentRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	arg, ok := parseUpdateSubjectAssignment(w, classID, assignmentID, body)
+	if !ok {
+		return
+	}
+	row, err := h.svc.UpdateSubjectAssignment(r.Context(), arg)
+	if err != nil {
+		writeClientError(w, err, "Data guru mapel tidak valid")
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Rombel) DeleteSubjectAssignment(w http.ResponseWriter, r *http.Request) {
+	if !rombelManageAllowed(w, r) {
+		return
+	}
+	classID, assignmentID, ok := parseRombelAssignmentRoute(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.DeleteSubjectAssignment(r.Context(), db.DeleteRombelSubjectAssignmentParams{
+		ClassID: classID,
+		ID:      assignmentID,
+	}); err != nil {
+		writeClientError(w, err, "Penghapusan guru mapel tidak valid")
+		return
+	}
+	api.NoContent(w)
+}
+
 func (h *Rombel) CreateHomeroomAssignment(w http.ResponseWriter, r *http.Request) {
 	if !rombelManageAllowed(w, r) {
 		return
@@ -203,6 +312,11 @@ type homeroomAssignmentRequest struct {
 	EndDate        string `json:"end_date"`
 	IsActive       *bool  `json:"is_active"`
 	Notes          string `json:"notes"`
+}
+
+type subjectAssignmentRequest struct {
+	SubjectID         string `json:"subject_id"`
+	TeacherEmployeeID string `json:"teacher_employee_id"`
 }
 
 type rombelStudentParent struct {
@@ -325,6 +439,59 @@ func parseUpdateHomeroomAssignment(w http.ResponseWriter, assignmentID pgtype.UU
 		HomeroomIsActive: active,
 		Notes:            strings.TrimSpace(body.Notes),
 	}, true
+}
+
+func parseCreateSubjectAssignment(w http.ResponseWriter, classID pgtype.UUID, body subjectAssignmentRequest) (db.CreateRombelSubjectAssignmentParams, bool) {
+	subjectID, teacherID, ok := parseSubjectAssignmentBody(w, body)
+	if !ok {
+		return db.CreateRombelSubjectAssignmentParams{}, false
+	}
+	return db.CreateRombelSubjectAssignmentParams{
+		ClassID:           classID,
+		SubjectID:         subjectID,
+		TeacherEmployeeID: teacherID,
+	}, true
+}
+
+func parseUpdateSubjectAssignment(w http.ResponseWriter, classID pgtype.UUID, assignmentID pgtype.UUID, body subjectAssignmentRequest) (db.UpdateRombelSubjectAssignmentParams, bool) {
+	subjectID, teacherID, ok := parseSubjectAssignmentBody(w, body)
+	if !ok {
+		return db.UpdateRombelSubjectAssignmentParams{}, false
+	}
+	return db.UpdateRombelSubjectAssignmentParams{
+		ClassID:           classID,
+		ID:                assignmentID,
+		SubjectID:         subjectID,
+		TeacherEmployeeID: teacherID,
+	}, true
+}
+
+func parseSubjectAssignmentBody(w http.ResponseWriter, body subjectAssignmentRequest) (pgtype.UUID, pgtype.UUID, bool) {
+	subjectID, err := parseUUID(body.SubjectID)
+	if err != nil {
+		api.BadRequest(w, "subject_id invalid")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	teacherID, err := parseUUID(body.TeacherEmployeeID)
+	if err != nil {
+		api.BadRequest(w, "teacher_employee_id invalid")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	return subjectID, teacherID, true
+}
+
+func parseRombelAssignmentRoute(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, bool) {
+	classID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	assignmentID, err := parseUUID(chi.URLParam(r, "assignmentID"))
+	if err != nil {
+		api.BadRequest(w, "invalid assignment_id")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	return classID, assignmentID, true
 }
 
 func parseOptionalUUIDParam(w http.ResponseWriter, value string, field string) (pgtype.UUID, bool) {
