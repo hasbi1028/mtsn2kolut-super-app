@@ -40,6 +40,7 @@ func NewPusakaWorker(jobs *service.PusakaJob, att *service.PusakaAttendance, set
 }
 
 func (h *PusakaWorker) Claim(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	var body struct {
 		WorkerID string `json:"worker_id"`
 	}
@@ -66,6 +67,7 @@ func (h *PusakaWorker) Complete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
 	// Optional attendance data in body
 	var body struct {
 		WorkerID  string `json:"worker_id"`
@@ -111,6 +113,7 @@ func (h *PusakaWorker) Fail(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid id")
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 	var body struct {
 		WorkerID       string `json:"worker_id"`
 		Error          string `json:"error"`
@@ -148,6 +151,7 @@ func workerIDFromRequest(r *http.Request, bodyWorkerID string) string {
 }
 
 func (h *PusakaWorker) UpsertAttendance(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	var body struct {
 		EmployeeID  string `json:"employee_id"`
 		Tanggal     string `json:"tanggal"`
@@ -215,6 +219,7 @@ func (h *PusakaWorker) Config(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PusakaWorker) Heartbeat(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	var body struct {
 		WorkerID         string `json:"worker_id"`
 		ActiveConsumers  int    `json:"active_consumers"`
