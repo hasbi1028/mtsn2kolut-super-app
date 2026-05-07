@@ -416,6 +416,50 @@ describe('SvelteKit handle auth gate', () => {
 		expect(event.cookies.delete).not.toHaveBeenCalled();
 	});
 
+	it('redirects first-login users away from portal pages until password change', async () => {
+		const { handle } = await loadHooks();
+		const access = token('access', {
+			uid: 'u1',
+			role: 'siswa',
+			roles: ['siswa'],
+			permissions: ['student_portal.read'],
+			must_change_password: true
+		});
+		const event = makeHandleEvent(access, undefined, 'http://localhost/portal/siswa');
+		event.fetch.mockResolvedValueOnce(validationOkResponse());
+		const resolve = vi.fn(async () => new Response('ok'));
+
+		await expect(handle({ event, resolve } as never)).rejects.toMatchObject({
+			status: 302,
+			location: '/settings/account'
+		});
+		expect(resolve).not.toHaveBeenCalled();
+	});
+
+	it('allows first-login users to open account settings and blocks other protected APIs', async () => {
+		const { handle } = await loadHooks();
+		const access = token('access', {
+			uid: 'u1',
+			role: 'siswa',
+			roles: ['siswa'],
+			permissions: ['student_portal.read'],
+			must_change_password: true
+		});
+		const settingsEvent = makeHandleEvent(access, undefined, 'http://localhost/settings/account');
+		settingsEvent.fetch.mockResolvedValueOnce(validationOkResponse());
+		const resolve = vi.fn(async () => new Response('ok'));
+
+		const response = await handle({ event: settingsEvent, resolve } as never);
+		expect(response.status).toBe(200);
+		expect(resolve).toHaveBeenCalled();
+
+		const apiEvent = makeHandleEvent(access, undefined, 'http://localhost/api/portal/siswa/profile');
+		apiEvent.fetch.mockResolvedValueOnce(validationOkResponse());
+		await expect(handle({ event: apiEvent, resolve: vi.fn(async () => new Response('ok')) } as never)).rejects.toMatchObject({
+			status: 403
+		});
+	});
+
 	const roleCases = [
 		{ path: '/settings/account', roles: ['guru'], allowed: true, api: false },
 		{ path: '/api/auth/account', roles: ['guru'], allowed: true, api: true },

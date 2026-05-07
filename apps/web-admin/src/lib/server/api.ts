@@ -292,6 +292,7 @@ export function proxy(event: RequestEvent) {
 export type TokenPair = {
 	access_token: string;
 	refresh_token: string;
+	must_change_password?: boolean;
 };
 
 type ClientMeta = {

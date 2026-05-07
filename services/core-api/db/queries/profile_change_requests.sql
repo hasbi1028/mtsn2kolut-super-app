@@ -13,7 +13,9 @@ SELECT
     s.id,
     s.nama,
     s.tanggal_lahir,
-    s.parent_name
+    s.parent_name,
+    s.phone,
+    s.alamat
 FROM users u
 JOIN students s ON s.id = u.student_id
 WHERE u.id = $1
@@ -22,11 +24,32 @@ WHERE u.id = $1
 -- name: GetOwnedParentOfficialProfile :one
 SELECT
     p.id,
-    p.nama
+    p.nama,
+    p.phone,
+    p.address,
+    p.occupation,
+    p.nik
 FROM users u
 JOIN parents p ON p.id = u.parent_id
 WHERE u.id = $1
   AND u.deleted_at IS NULL;
+
+-- name: GetParentOwnedChildOfficialProfile :one
+SELECT
+    s.id,
+    s.nama,
+    s.tanggal_lahir,
+    s.parent_name,
+    s.phone,
+    s.alamat
+FROM users u
+JOIN parent_students ps ON ps.parent_id = u.parent_id
+JOIN students s ON s.id = ps.student_id
+WHERE u.id = sqlc.arg(requester_user_id)
+  AND s.id = sqlc.arg(target_student_id)
+  AND u.deleted_at IS NULL
+  AND u.is_active = TRUE
+  AND u.parent_id IS NOT NULL;
 
 -- name: CreateProfileChangeRequest :one
 INSERT INTO profile_change_requests (
@@ -198,8 +221,44 @@ SET parent_name = $2,
     updated_at = NOW()
 WHERE id = $1;
 
+-- name: UpdateStudentOfficialPhone :execrows
+UPDATE students
+SET phone = $2,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: UpdateStudentOfficialAddress :execrows
+UPDATE students
+SET alamat = $2,
+    updated_at = NOW()
+WHERE id = $1;
+
 -- name: UpdateParentOfficialName :execrows
 UPDATE parents
 SET nama = $2,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: UpdateParentOfficialPhone :execrows
+UPDATE parents
+SET phone = $2,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: UpdateParentOfficialAddress :execrows
+UPDATE parents
+SET address = $2,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: UpdateParentOfficialOccupation :execrows
+UPDATE parents
+SET occupation = $2,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: UpdateParentOfficialNik :execrows
+UPDATE parents
+SET nik = $2,
     updated_at = NOW()
 WHERE id = $1;

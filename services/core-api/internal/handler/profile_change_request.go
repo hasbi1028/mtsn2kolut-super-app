@@ -77,20 +77,31 @@ func (h *ProfileChangeRequest) CreateOwn(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var body struct {
-		ProfileType    string `json:"profile_type"`
-		FieldKey       string `json:"field_key"`
-		RequestedValue string `json:"requested_value"`
-		Reason         string `json:"reason"`
+		ProfileType     string `json:"profile_type"`
+		TargetStudentID string `json:"target_student_id"`
+		FieldKey        string `json:"field_key"`
+		RequestedValue  string `json:"requested_value"`
+		Reason          string `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		api.BadRequest(w, "invalid json")
 		return
 	}
+	var targetStudentID pgtype.UUID
+	if strings.TrimSpace(body.TargetStudentID) != "" {
+		parsed, err := parseUUID(body.TargetStudentID)
+		if err != nil {
+			api.BadRequest(w, "invalid target_student_id")
+			return
+		}
+		targetStudentID = parsed
+	}
 	row, err := h.svc.Create(r.Context(), userID, service.CreateProfileChangeRequestInput{
-		ProfileType:    body.ProfileType,
-		FieldKey:       body.FieldKey,
-		RequestedValue: body.RequestedValue,
-		Reason:         body.Reason,
+		ProfileType:     body.ProfileType,
+		TargetStudentID: targetStudentID,
+		FieldKey:        body.FieldKey,
+		RequestedValue:  body.RequestedValue,
+		Reason:          body.Reason,
 	})
 	if err != nil {
 		writeDomainOrInternal(w, err, "permintaan perubahan data tidak valid")

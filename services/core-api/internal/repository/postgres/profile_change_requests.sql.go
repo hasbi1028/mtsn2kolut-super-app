@@ -201,7 +201,11 @@ func (q *Queries) GetOwnedEmployeeOfficialProfile(ctx context.Context, id pgtype
 const getOwnedParentOfficialProfile = `-- name: GetOwnedParentOfficialProfile :one
 SELECT
     p.id,
-    p.nama
+    p.nama,
+    p.phone,
+    p.address,
+    p.occupation,
+    p.nik
 FROM users u
 JOIN parents p ON p.id = u.parent_id
 WHERE u.id = $1
@@ -209,14 +213,25 @@ WHERE u.id = $1
 `
 
 type GetOwnedParentOfficialProfileRow struct {
-	ID   pgtype.UUID `json:"id"`
-	Nama string      `json:"nama"`
+	ID         pgtype.UUID `json:"id"`
+	Nama       string      `json:"nama"`
+	Phone      string      `json:"phone"`
+	Address    string      `json:"address"`
+	Occupation string      `json:"occupation"`
+	Nik        string      `json:"nik"`
 }
 
 func (q *Queries) GetOwnedParentOfficialProfile(ctx context.Context, id pgtype.UUID) (GetOwnedParentOfficialProfileRow, error) {
 	row := q.db.QueryRow(ctx, getOwnedParentOfficialProfile, id)
 	var i GetOwnedParentOfficialProfileRow
-	err := row.Scan(&i.ID, &i.Nama)
+	err := row.Scan(
+		&i.ID,
+		&i.Nama,
+		&i.Phone,
+		&i.Address,
+		&i.Occupation,
+		&i.Nik,
+	)
 	return i, err
 }
 
@@ -225,7 +240,9 @@ SELECT
     s.id,
     s.nama,
     s.tanggal_lahir,
-    s.parent_name
+    s.parent_name,
+    s.phone,
+    s.alamat
 FROM users u
 JOIN students s ON s.id = u.student_id
 WHERE u.id = $1
@@ -237,6 +254,8 @@ type GetOwnedStudentOfficialProfileRow struct {
 	Nama         string      `json:"nama"`
 	TanggalLahir pgtype.Date `json:"tanggal_lahir"`
 	ParentName   string      `json:"parent_name"`
+	Phone        string      `json:"phone"`
+	Alamat       string      `json:"alamat"`
 }
 
 func (q *Queries) GetOwnedStudentOfficialProfile(ctx context.Context, id pgtype.UUID) (GetOwnedStudentOfficialProfileRow, error) {
@@ -247,6 +266,54 @@ func (q *Queries) GetOwnedStudentOfficialProfile(ctx context.Context, id pgtype.
 		&i.Nama,
 		&i.TanggalLahir,
 		&i.ParentName,
+		&i.Phone,
+		&i.Alamat,
+	)
+	return i, err
+}
+
+const getParentOwnedChildOfficialProfile = `-- name: GetParentOwnedChildOfficialProfile :one
+SELECT
+    s.id,
+    s.nama,
+    s.tanggal_lahir,
+    s.parent_name,
+    s.phone,
+    s.alamat
+FROM users u
+JOIN parent_students ps ON ps.parent_id = u.parent_id
+JOIN students s ON s.id = ps.student_id
+WHERE u.id = $1
+  AND s.id = $2
+  AND u.deleted_at IS NULL
+  AND u.is_active = TRUE
+  AND u.parent_id IS NOT NULL
+`
+
+type GetParentOwnedChildOfficialProfileParams struct {
+	RequesterUserID pgtype.UUID `json:"requester_user_id"`
+	TargetStudentID pgtype.UUID `json:"target_student_id"`
+}
+
+type GetParentOwnedChildOfficialProfileRow struct {
+	ID           pgtype.UUID `json:"id"`
+	Nama         string      `json:"nama"`
+	TanggalLahir pgtype.Date `json:"tanggal_lahir"`
+	ParentName   string      `json:"parent_name"`
+	Phone        string      `json:"phone"`
+	Alamat       string      `json:"alamat"`
+}
+
+func (q *Queries) GetParentOwnedChildOfficialProfile(ctx context.Context, arg GetParentOwnedChildOfficialProfileParams) (GetParentOwnedChildOfficialProfileRow, error) {
+	row := q.db.QueryRow(ctx, getParentOwnedChildOfficialProfile, arg.RequesterUserID, arg.TargetStudentID)
+	var i GetParentOwnedChildOfficialProfileRow
+	err := row.Scan(
+		&i.ID,
+		&i.Nama,
+		&i.TanggalLahir,
+		&i.ParentName,
+		&i.Phone,
+		&i.Alamat,
 	)
 	return i, err
 }
@@ -573,6 +640,26 @@ func (q *Queries) UpdateEmployeeOfficialName(ctx context.Context, arg UpdateEmpl
 	return result.RowsAffected(), nil
 }
 
+const updateParentOfficialAddress = `-- name: UpdateParentOfficialAddress :execrows
+UPDATE parents
+SET address = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateParentOfficialAddressParams struct {
+	ID      pgtype.UUID `json:"id"`
+	Address string      `json:"address"`
+}
+
+func (q *Queries) UpdateParentOfficialAddress(ctx context.Context, arg UpdateParentOfficialAddressParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateParentOfficialAddress, arg.ID, arg.Address)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateParentOfficialName = `-- name: UpdateParentOfficialName :execrows
 UPDATE parents
 SET nama = $2,
@@ -587,6 +674,86 @@ type UpdateParentOfficialNameParams struct {
 
 func (q *Queries) UpdateParentOfficialName(ctx context.Context, arg UpdateParentOfficialNameParams) (int64, error) {
 	result, err := q.db.Exec(ctx, updateParentOfficialName, arg.ID, arg.Nama)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateParentOfficialNik = `-- name: UpdateParentOfficialNik :execrows
+UPDATE parents
+SET nik = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateParentOfficialNikParams struct {
+	ID  pgtype.UUID `json:"id"`
+	Nik string      `json:"nik"`
+}
+
+func (q *Queries) UpdateParentOfficialNik(ctx context.Context, arg UpdateParentOfficialNikParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateParentOfficialNik, arg.ID, arg.Nik)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateParentOfficialOccupation = `-- name: UpdateParentOfficialOccupation :execrows
+UPDATE parents
+SET occupation = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateParentOfficialOccupationParams struct {
+	ID         pgtype.UUID `json:"id"`
+	Occupation string      `json:"occupation"`
+}
+
+func (q *Queries) UpdateParentOfficialOccupation(ctx context.Context, arg UpdateParentOfficialOccupationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateParentOfficialOccupation, arg.ID, arg.Occupation)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateParentOfficialPhone = `-- name: UpdateParentOfficialPhone :execrows
+UPDATE parents
+SET phone = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateParentOfficialPhoneParams struct {
+	ID    pgtype.UUID `json:"id"`
+	Phone string      `json:"phone"`
+}
+
+func (q *Queries) UpdateParentOfficialPhone(ctx context.Context, arg UpdateParentOfficialPhoneParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateParentOfficialPhone, arg.ID, arg.Phone)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateStudentOfficialAddress = `-- name: UpdateStudentOfficialAddress :execrows
+UPDATE students
+SET alamat = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateStudentOfficialAddressParams struct {
+	ID     pgtype.UUID `json:"id"`
+	Alamat string      `json:"alamat"`
+}
+
+func (q *Queries) UpdateStudentOfficialAddress(ctx context.Context, arg UpdateStudentOfficialAddressParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateStudentOfficialAddress, arg.ID, arg.Alamat)
 	if err != nil {
 		return 0, err
 	}
@@ -647,6 +814,26 @@ type UpdateStudentOfficialParentNameParams struct {
 
 func (q *Queries) UpdateStudentOfficialParentName(ctx context.Context, arg UpdateStudentOfficialParentNameParams) (int64, error) {
 	result, err := q.db.Exec(ctx, updateStudentOfficialParentName, arg.ID, arg.ParentName)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateStudentOfficialPhone = `-- name: UpdateStudentOfficialPhone :execrows
+UPDATE students
+SET phone = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateStudentOfficialPhoneParams struct {
+	ID    pgtype.UUID `json:"id"`
+	Phone string      `json:"phone"`
+}
+
+func (q *Queries) UpdateStudentOfficialPhone(ctx context.Context, arg UpdateStudentOfficialPhoneParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateStudentOfficialPhone, arg.ID, arg.Phone)
 	if err != nil {
 		return 0, err
 	}

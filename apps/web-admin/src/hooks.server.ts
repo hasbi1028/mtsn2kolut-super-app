@@ -5,7 +5,7 @@ import { env } from '$env/dynamic/private';
 import { ApiError, AuthValidationUnavailableError, apiRefreshWithFetch, getVerifiedUserFromAccessToken } from '$lib/server/api';
 import type { TokenPair } from '$lib/server/api';
 import { hasRefreshToken, isAccessTokenValid, getUserFromToken } from '$lib/server/auth';
-import { canAccessProtectedRoute, isPublicPath } from '$lib/server/route-access';
+import { canAccessProtectedRoute, isMustChangePasswordAllowedPath, isPublicPath } from '$lib/server/route-access';
 
 const API_BASE = (env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 
@@ -159,6 +159,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 		const from = encodeURIComponent(event.url.pathname + event.url.search);
 		throw redirect(302, `/login?from=${from}`);
+	}
+
+	if (event.locals.user?.must_change_password && !isMustChangePasswordAllowedPath(event.url.pathname, event.request.method)) {
+		if (event.url.pathname.startsWith('/api/')) {
+			throw error(403, 'password change required');
+		}
+		throw redirect(302, '/settings/account');
 	}
 
 	// Permission-aware gate: prefer dynamic RBAC permissions, keep legacy role fallback during migration.

@@ -18,9 +18,11 @@ type fakeProfileChangeRequestStore struct {
 	employeeProfile db.GetOwnedEmployeeOfficialProfileRow
 	studentProfile  db.GetOwnedStudentOfficialProfileRow
 	parentProfile   db.GetOwnedParentOfficialProfileRow
+	childProfile    db.GetParentOwnedChildOfficialProfileRow
 	employeeErr     error
 	studentErr      error
 	parentErr       error
+	childErr        error
 
 	requests map[pgtype.UUID]db.ProfileChangeRequest
 	audits   []db.CreateAuditLogParams
@@ -32,7 +34,13 @@ type fakeProfileChangeRequestStore struct {
 	studentName       string
 	studentBirthdate  pgtype.Date
 	studentParentName string
+	studentPhone      string
+	studentAddress    string
 	parentName        string
+	parentPhone       string
+	parentAddress     string
+	parentOccupation  string
+	parentNik         string
 }
 
 func newFakeProfileChangeRequestStore() *fakeProfileChangeRequestStore {
@@ -40,6 +48,7 @@ func newFakeProfileChangeRequestStore() *fakeProfileChangeRequestStore {
 		employeeErr: pgx.ErrNoRows,
 		studentErr:  pgx.ErrNoRows,
 		parentErr:   pgx.ErrNoRows,
+		childErr:    pgx.ErrNoRows,
 		requests:    map[pgtype.UUID]db.ProfileChangeRequest{},
 	}
 }
@@ -54,6 +63,10 @@ func (f *fakeProfileChangeRequestStore) GetOwnedStudentOfficialProfile(ctx conte
 
 func (f *fakeProfileChangeRequestStore) GetOwnedParentOfficialProfile(ctx context.Context, id pgtype.UUID) (db.GetOwnedParentOfficialProfileRow, error) {
 	return f.parentProfile, f.parentErr
+}
+
+func (f *fakeProfileChangeRequestStore) GetParentOwnedChildOfficialProfile(ctx context.Context, arg db.GetParentOwnedChildOfficialProfileParams) (db.GetParentOwnedChildOfficialProfileRow, error) {
+	return f.childProfile, f.childErr
 }
 
 func (f *fakeProfileChangeRequestStore) CreateProfileChangeRequest(ctx context.Context, arg db.CreateProfileChangeRequestParams) (db.ProfileChangeRequest, error) {
@@ -148,8 +161,38 @@ func (f *fakeProfileChangeRequestStore) UpdateStudentOfficialParentName(ctx cont
 	return 1, nil
 }
 
+func (f *fakeProfileChangeRequestStore) UpdateStudentOfficialPhone(ctx context.Context, arg db.UpdateStudentOfficialPhoneParams) (int64, error) {
+	f.studentPhone = arg.Phone
+	return 1, nil
+}
+
+func (f *fakeProfileChangeRequestStore) UpdateStudentOfficialAddress(ctx context.Context, arg db.UpdateStudentOfficialAddressParams) (int64, error) {
+	f.studentAddress = arg.Alamat
+	return 1, nil
+}
+
 func (f *fakeProfileChangeRequestStore) UpdateParentOfficialName(ctx context.Context, arg db.UpdateParentOfficialNameParams) (int64, error) {
 	f.parentName = arg.Nama
+	return 1, nil
+}
+
+func (f *fakeProfileChangeRequestStore) UpdateParentOfficialPhone(ctx context.Context, arg db.UpdateParentOfficialPhoneParams) (int64, error) {
+	f.parentPhone = arg.Phone
+	return 1, nil
+}
+
+func (f *fakeProfileChangeRequestStore) UpdateParentOfficialAddress(ctx context.Context, arg db.UpdateParentOfficialAddressParams) (int64, error) {
+	f.parentAddress = arg.Address
+	return 1, nil
+}
+
+func (f *fakeProfileChangeRequestStore) UpdateParentOfficialOccupation(ctx context.Context, arg db.UpdateParentOfficialOccupationParams) (int64, error) {
+	f.parentOccupation = arg.Occupation
+	return 1, nil
+}
+
+func (f *fakeProfileChangeRequestStore) UpdateParentOfficialNik(ctx context.Context, arg db.UpdateParentOfficialNikParams) (int64, error) {
+	f.parentNik = arg.Nik
 	return 1, nil
 }
 
@@ -236,6 +279,8 @@ func TestProfileChangeRequestListSelfRequestableFieldsUsesCatalog(t *testing.T) 
 		"student:nama:text:profile_changes.review",
 		"student:tanggal_lahir:date:profile_changes.review",
 		"student:parent_name:text:profile_changes.review",
+		"student:phone:text:profile_changes.review",
+		"student:alamat:text:profile_changes.review",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("fields = %v, want %v", got, want)
@@ -254,6 +299,90 @@ func TestProfileChangeRequestListSelfRequestableFieldsUsesCatalog(t *testing.T) 
 	}
 	if len(fields) != 0 {
 		t.Fatalf("fields = %+v, want none for unlinked account", fields)
+	}
+}
+
+func TestProfileChangeRequestParentChildRequestRequiresRelation(t *testing.T) {
+	store := newFakeProfileChangeRequestStore()
+	userID := documentCycleTestUUID(61)
+	childID := documentCycleTestUUID(62)
+	store.childErr = nil
+	store.childProfile = db.GetParentOwnedChildOfficialProfileRow{
+		ID:     childID,
+		Nama:   "Siswa Anak",
+		Phone:  "081234",
+		Alamat: "Alamat lama",
+	}
+	svc := &ProfileChangeRequest{q: store}
+
+	row, err := svc.Create(context.Background(), userID, CreateProfileChangeRequestInput{
+		ProfileType:     "student",
+		TargetStudentID: childID,
+		FieldKey:        "alamat",
+		RequestedValue:  "Alamat baru",
+		Reason:          "Kartu keluarga diperbarui",
+	})
+	if err != nil {
+		t.Fatalf("Create(parent child) error = %v", err)
+	}
+	if row.ProfileType != "student" || row.TargetStudentID != childID || row.CurrentValue != "Alamat lama" || row.RequestedValue != "Alamat baru" {
+		t.Fatalf("created row = %+v, want scoped child address request", row)
+	}
+
+	store = newFakeProfileChangeRequestStore()
+	svc = &ProfileChangeRequest{q: store}
+	_, err = svc.Create(context.Background(), userID, CreateProfileChangeRequestInput{
+		ProfileType:     "student",
+		TargetStudentID: childID,
+		FieldKey:        "phone",
+		RequestedValue:  "089999",
+		Reason:          "Nomor anak diganti",
+	})
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("Create(unlinked child) error = %v, want forbidden", err)
+	}
+}
+
+func TestProfileChangeRequestReviewAppliesStudentAndParentScopedFields(t *testing.T) {
+	store := newFakeProfileChangeRequestStore()
+	svc := &ProfileChangeRequest{q: store}
+	reviewerID := documentCycleTestUUID(63)
+	studentReqID := documentCycleTestUUID(64)
+	parentReqID := documentCycleTestUUID(65)
+	studentID := documentCycleTestUUID(66)
+	parentID := documentCycleTestUUID(67)
+	store.requests[studentReqID] = db.ProfileChangeRequest{
+		ID:              studentReqID,
+		RequesterUserID: documentCycleTestUUID(68),
+		ProfileType:     "student",
+		TargetStudentID: studentID,
+		FieldKey:        "phone",
+		CurrentValue:    "081234",
+		RequestedValue:  "089999",
+		Status:          db.ProfileChangeRequestStatusPending,
+	}
+	store.requests[parentReqID] = db.ProfileChangeRequest{
+		ID:              parentReqID,
+		RequesterUserID: documentCycleTestUUID(69),
+		ProfileType:     "parent",
+		TargetParentID:  parentID,
+		FieldKey:        "occupation",
+		CurrentValue:    "Petani",
+		RequestedValue:  "Wiraswasta",
+		Status:          db.ProfileChangeRequestStatusPending,
+	}
+
+	if _, err := svc.Review(context.Background(), reviewerID, studentReqID, ReviewProfileChangeRequestInput{Status: "approved", ReviewerRoles: []string{"admin"}}); err != nil {
+		t.Fatalf("Review(student phone) error = %v", err)
+	}
+	if store.studentPhone != "089999" {
+		t.Fatalf("studentPhone = %q, want approved value", store.studentPhone)
+	}
+	if _, err := svc.Review(context.Background(), reviewerID, parentReqID, ReviewProfileChangeRequestInput{Status: "approved", ReviewerRoles: []string{"admin"}}); err != nil {
+		t.Fatalf("Review(parent occupation) error = %v", err)
+	}
+	if store.parentOccupation != "Wiraswasta" {
+		t.Fatalf("parentOccupation = %q, want approved value", store.parentOccupation)
 	}
 }
 

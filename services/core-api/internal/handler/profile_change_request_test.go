@@ -130,6 +130,45 @@ func TestProfileChangeRequestCreateOwnForwardsJWTUserAndBody(t *testing.T) {
 	}
 }
 
+func TestProfileChangeRequestCreateOwnForwardsParentChildTarget(t *testing.T) {
+	userID := "11111111-1111-1111-1111-111111111111"
+	childID := "22222222-2222-2222-2222-222222222222"
+	svc := &fakeProfileChangeRequestService{
+		createResult: db.ProfileChangeRequest{
+			ID:              mustUUID(t, "33333333-3333-3333-3333-333333333333"),
+			RequesterUserID: mustUUID(t, userID),
+			ProfileType:     "student",
+			TargetStudentID: mustUUID(t, childID),
+			FieldKey:        "alamat",
+			CurrentValue:    "Alamat lama",
+			RequestedValue:  "Alamat baru",
+			Reason:          "KK terbaru",
+			Status:          db.ProfileChangeRequestStatusPending,
+		},
+	}
+	h := NewProfileChangeRequest(svc)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/account/change-requests", bytes.NewBufferString(`{"profile_type":"student","target_student_id":"`+childID+`","field_key":"alamat","requested_value":"Alamat baru","reason":"KK terbaru"}`))
+	req = req.WithContext(withAuthClaims(req.Context(), userID))
+	rec := httptest.NewRecorder()
+
+	h.CreateOwn(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	if svc.createInput.TargetStudentID != mustUUID(t, childID) {
+		t.Fatalf("target student id = %v, want %s", svc.createInput.TargetStudentID, childID)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/auth/account/change-requests", bytes.NewBufferString(`{"profile_type":"student","target_student_id":"not-a-uuid","field_key":"alamat","requested_value":"Alamat baru","reason":"KK terbaru"}`))
+	req = req.WithContext(withAuthClaims(req.Context(), userID))
+	rec = httptest.NewRecorder()
+	h.CreateOwn(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid target status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestProfileChangeRequestSelfRoutesMapUnauthorizedAndCancel(t *testing.T) {
 	h := NewProfileChangeRequest(&fakeProfileChangeRequestService{})
 	rec := httptest.NewRecorder()

@@ -12,6 +12,8 @@ export type AccountIdentity = {
 	student_id?: string | null;
 	parent_id?: string | null;
 	is_active?: boolean;
+	must_change_password?: boolean;
+	password_changed_at?: string | null;
 	last_login_at?: string | null;
 	created_at?: string | null;
 };
@@ -109,7 +111,12 @@ const profileTypeLabels: Record<string, string> = {
 const officialFieldLabels: Record<string, string> = {
 	nama: 'Nama resmi',
 	tanggal_lahir: 'Tanggal lahir',
-	parent_name: 'Nama orang tua/wali'
+	parent_name: 'Nama orang tua/wali',
+	phone: 'Nomor HP',
+	alamat: 'Alamat siswa',
+	address: 'Alamat orang tua/wali',
+	occupation: 'Pekerjaan orang tua/wali',
+	nik: 'NIK orang tua/wali'
 };
 
 const profileHistoryFieldLabels: Record<string, string> = {
