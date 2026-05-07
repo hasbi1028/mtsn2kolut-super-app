@@ -9,6 +9,7 @@
 
   type Employee = {
     id: string;
+    pegawai_uid: string;
     nip: string;
     nama: string;
     unit_kerja: string;

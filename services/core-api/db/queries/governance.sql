@@ -25,7 +25,7 @@ SELECT
     (SELECT COUNT(*) FROM governance_compliance_actions WHERE priority IN ('high', 'urgent') AND status NOT IN ('done', 'cancelled')) AS critical_compliance_actions;
 
 -- name: ListGovernanceEmployeeOptions :many
-SELECT id, nip, nama, unit_kerja
+SELECT id, COALESCE(nip, '')::text AS nip, nama, unit_kerja
 FROM employees
 WHERE is_active = TRUE
 ORDER BY nama ASC;
@@ -73,7 +73,7 @@ SELECT
     u.name AS unit_name,
     pp.title AS parent_position_title,
     ae.nama AS active_employee_name,
-    ae.nip AS active_employee_nip
+    COALESCE(ae.nip, '')::text AS active_employee_nip
 FROM governance_positions p
 JOIN governance_units u ON u.id = p.unit_id
 LEFT JOIN governance_positions pp ON pp.id = p.parent_position_id
@@ -118,7 +118,7 @@ SELECT
     p.title AS position_title,
     u.name AS unit_name,
     e.nama AS employee_name,
-    e.nip AS employee_nip,
+    COALESCE(e.nip, '')::text AS employee_nip,
     ol.nomor_surat AS decree_nomor_surat
 FROM governance_assignments ga
 JOIN governance_positions p ON p.id = ga.position_id
@@ -132,7 +132,7 @@ WHERE (
     p.title ILIKE '%' || sqlc.arg(search) || '%' OR
     u.name ILIKE '%' || sqlc.arg(search) || '%' OR
     e.nama ILIKE '%' || sqlc.arg(search) || '%' OR
-    e.nip ILIKE '%' || sqlc.arg(search) || '%'
+    COALESCE(e.nip, '') ILIKE '%' || sqlc.arg(search) || '%'
 )
 ORDER BY ga.end_date NULLS FIRST, ga.start_date DESC, u.sort_order, p.sort_order;
 
@@ -305,7 +305,7 @@ SELECT
     gd.title AS source_document_title,
     u.name AS owner_unit_name,
     e.nama AS responsible_employee_name,
-    e.nip AS responsible_employee_nip,
+    COALESCE(e.nip, '')::text AS responsible_employee_nip,
     gei.title AS evidence_item_title
 FROM governance_work_plan_items gwpi
 JOIN governance_programs gp ON gp.id = gwpi.program_id
@@ -381,7 +381,7 @@ SELECT
     gpt.target_unit, gpt.status, gpt.progress_percent, gpt.evidence_url,
     gpt.review_notes, gpt.due_date, gpt.created_by_user_id, gpt.created_at, gpt.updated_at,
     e.nama AS employee_name,
-    e.nip AS employee_nip,
+    COALESCE(e.nip, '')::text AS employee_nip,
     p.title AS position_title,
     gp.code AS program_code,
     gp.name AS program_name,
@@ -396,7 +396,7 @@ WHERE (
     gpt.title ILIKE '%' || sqlc.arg(search) || '%' OR
     gpt.indicator ILIKE '%' || sqlc.arg(search) || '%' OR
     e.nama ILIKE '%' || sqlc.arg(search) || '%' OR
-    e.nip ILIKE '%' || sqlc.arg(search) || '%' OR
+    COALESCE(e.nip, '') ILIKE '%' || sqlc.arg(search) || '%' OR
     gp.code ILIKE '%' || sqlc.arg(search) || '%' OR
     gp.name ILIKE '%' || sqlc.arg(search) || '%'
 ) AND (
@@ -538,7 +538,7 @@ SELECT
     gei.title AS evidence_item_title,
     u.name AS owner_unit_name,
     e.nama AS responsible_employee_name,
-    e.nip AS responsible_employee_nip
+    COALESCE(e.nip, '')::text AS responsible_employee_nip
 FROM governance_compliance_actions gca
 LEFT JOIN governance_programs gp ON gp.id = gca.program_id
 LEFT JOIN governance_documents gd ON gd.id = gca.document_id

@@ -43,7 +43,7 @@ const getMonthlyAttendanceSummary = `-- name: GetMonthlyAttendanceSummary :many
 SELECT 
     e.id AS employee_id,
     e.nama AS employee_nama,
-    e.nip AS employee_nip,
+    COALESCE(e.nip, '')::text AS employee_nip,
     COUNT(ar.id)::int AS total_days,
     COUNT(CASE WHEN ar.jam_masuk != '' AND ar.jam_pulang != '' THEN 1 END)::int AS complete_days,
     COUNT(CASE WHEN ar.jam_masuk != '' AND ar.jam_pulang = '' THEN 1 END)::int AS missing_checkout,
@@ -100,7 +100,7 @@ func (q *Queries) GetMonthlyAttendanceSummary(ctx context.Context, arg GetMonthl
 }
 
 const listAttendance = `-- name: ListAttendance :many
-SELECT ar.id, ar.employee_id, e.nama AS employee_nama, e.nip AS employee_nip,
+SELECT ar.id, ar.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        ar.tanggal, ar.jam_masuk, ar.jam_pulang, ar.source_job_id,
        ar.created_at, ar.updated_at
 FROM attendance_records ar
@@ -159,7 +159,7 @@ func (q *Queries) ListAttendance(ctx context.Context, arg ListAttendanceParams) 
 }
 
 const listAttendanceByDate = `-- name: ListAttendanceByDate :many
-SELECT ar.id, ar.employee_id, e.nama AS employee_nama, e.nip AS employee_nip,
+SELECT ar.id, ar.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        ar.tanggal, ar.jam_masuk, ar.jam_pulang, ar.source_job_id,
        ar.created_at, ar.updated_at
 FROM attendance_records ar
@@ -213,7 +213,7 @@ func (q *Queries) ListAttendanceByDate(ctx context.Context, tanggal pgtype.Date)
 }
 
 const listAttendanceByEmployee = `-- name: ListAttendanceByEmployee :many
-SELECT ar.id, ar.employee_id, e.nama AS employee_nama, e.nip AS employee_nip,
+SELECT ar.id, ar.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        ar.tanggal, ar.jam_masuk, ar.jam_pulang, ar.source_job_id,
        ar.created_at, ar.updated_at
 FROM attendance_records ar
@@ -274,7 +274,7 @@ func (q *Queries) ListAttendanceByEmployee(ctx context.Context, arg ListAttendan
 }
 
 const listAttendanceInRange = `-- name: ListAttendanceInRange :many
-SELECT ar.id, ar.employee_id, e.nama AS employee_nama, e.nip AS employee_nip,
+SELECT ar.id, ar.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        ar.tanggal, ar.jam_masuk, ar.jam_pulang, ar.source_job_id,
        ar.created_at, ar.updated_at
 FROM attendance_records ar

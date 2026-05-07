@@ -62,6 +62,8 @@ type fakeEmployeeStore struct {
 	withStatusRows  []db.ListEmployeesWithStatusRow
 	entityAuditArg  db.ListEntityAuditLogsParams
 	entityAuditRows []db.ListEntityAuditLogsRow
+	setting         db.AppSetting
+	settingErr      error
 }
 
 func (f *fakeEmployeeStore) ListEmployees(ctx context.Context) ([]db.ListEmployeesRow, error) {
@@ -88,12 +90,12 @@ func (f *fakeEmployeeStore) GetEmployee(ctx context.Context, id pgtype.UUID) (db
 	return employee, nil
 }
 
-func (f *fakeEmployeeStore) CreateEmployee(ctx context.Context, arg db.CreateEmployeeParams) (db.Employee, error) {
+func (f *fakeEmployeeStore) CreateEmployee(ctx context.Context, arg db.CreateEmployeeParams) (pgtype.UUID, error) {
 	f.createArg = arg
 	if f.createErr != nil {
-		return db.Employee{}, f.createErr
+		return pgtype.UUID{}, f.createErr
 	}
-	return db.Employee{ID: f.createID, Nip: arg.Nip, Nama: arg.Nama, UnitKerja: arg.UnitKerja, EmploymentType: arg.EmploymentType, TanggalLahir: arg.TanggalLahir, IsActive: arg.IsActive}, nil
+	return f.createID, nil
 }
 
 func (f *fakeEmployeeStore) UpsertPusakaAccount(ctx context.Context, arg db.UpsertPusakaAccountParams) (db.PusakaAccount, error) {
@@ -104,12 +106,12 @@ func (f *fakeEmployeeStore) UpsertPusakaAccount(ctx context.Context, arg db.Upse
 	return db.PusakaAccount{EmployeeID: arg.EmployeeID, PusakaUsername: arg.PusakaUsername, PusakaPassword: arg.PusakaPassword, IsEnabled: arg.IsEnabled}, nil
 }
 
-func (f *fakeEmployeeStore) UpdateEmployee(ctx context.Context, arg db.UpdateEmployeeParams) (db.Employee, error) {
+func (f *fakeEmployeeStore) UpdateEmployee(ctx context.Context, arg db.UpdateEmployeeParams) (pgtype.UUID, error) {
 	f.updateArg = arg
 	if f.updateErr != nil {
-		return db.Employee{}, f.updateErr
+		return pgtype.UUID{}, f.updateErr
 	}
-	return db.Employee{ID: arg.ID, Nip: arg.Nip, Nama: arg.Nama, UnitKerja: arg.UnitKerja, EmploymentType: arg.EmploymentType, TanggalLahir: arg.TanggalLahir, IsActive: arg.IsActive}, nil
+	return arg.ID, nil
 }
 
 func (f *fakeEmployeeStore) DeletePusakaAccountByEmployeeID(ctx context.Context, employeeID pgtype.UUID) error {
@@ -145,6 +147,16 @@ func (f *fakeEmployeeStore) ListEntityAuditLogs(ctx context.Context, arg db.List
 	return f.entityAuditRows, nil
 }
 
+func (f *fakeEmployeeStore) GetSetting(ctx context.Context, key string) (db.AppSetting, error) {
+	if f.settingErr != nil {
+		return db.AppSetting{}, f.settingErr
+	}
+	if f.setting.Key == "" {
+		return db.AppSetting{Key: key, Value: DefaultEmployeeAccountNPSN}, nil
+	}
+	return f.setting, nil
+}
+
 func TestEmployeeServiceForwardsStoreCallsAndPusakaRules(t *testing.T) {
 	employeeID := documentCycleTestUUID(241)
 	userID := documentCycleTestUUID(242)
@@ -177,22 +189,28 @@ func TestEmployeeServiceForwardsStoreCallsAndPusakaRules(t *testing.T) {
 	if got, err := svc.Get(context.Background(), employeeID); err != nil || got.ID != employeeID {
 		t.Fatalf("Get() = %+v/%v, want employee", got, err)
 	}
-	if _, err := svc.Create(context.Background(), "1980", "Guru", "MTsN", " PPPK ", birthDate, "akun", "rahasia", true); err != nil {
+	if _, err := svc.Create(context.Background(), "1980", "Guru", "MTsN", " PPPK ", birthDate, "L", "Kolaka", "akun", "rahasia", true); err != nil {
 		t.Fatalf("Create(pppk pusaka) error = %v", err)
 	}
-	if store.createArg.EmploymentType != "pppk" || store.createArg.Nama != "Guru" || store.createArg.TanggalLahir != birthDate {
+	if store.createArg.EmploymentType != "pppk" || store.createArg.Nama != "Guru" || store.createArg.TanggalLahir != birthDate || store.createArg.JenisKelamin != "L" || store.createArg.TempatLahir != "Kolaka" || store.createArg.Npsn != DefaultEmployeeAccountNPSN {
 		t.Fatalf("Create() arg = %+v, want normalized employee", store.createArg)
 	}
 	if len(store.upsertArgs) != 1 || store.upsertArgs[0].EmployeeID != employeeID || store.upsertArgs[0].PusakaUsername != "akun" || !store.upsertArgs[0].IsEnabled {
 		t.Fatalf("Create() upsert args = %+v, want pusaka account", store.upsertArgs)
 	}
-	if _, err := svc.Create(context.Background(), "1981", "Staf", "TU", "honorer", pgtype.Date{}, "", "", true); err != nil {
+	if _, err := svc.Create(context.Background(), "", "Staf", "TU", "honorer", pgtype.Date{}, "", "", "", "", true); err != nil {
 		t.Fatalf("Create(honorer no pusaka) error = %v", err)
 	}
-	if _, err := svc.Create(context.Background(), "1982", "Kontrak", "TU", "kontrak", pgtype.Date{}, "", "", true); err == nil || err.Error() != "invalid employment type" {
+	if store.createArg.Nip != "" {
+		t.Fatalf("Create(honorer) NIP = %q, want optional empty NIP", store.createArg.Nip)
+	}
+	if _, err := svc.Create(context.Background(), "1982", "Kontrak", "TU", "kontrak", pgtype.Date{}, "", "", "", "", true); err == nil || err.Error() != "invalid employment type" {
 		t.Fatalf("Create(invalid type) = %v, want invalid employment type", err)
 	}
-	if _, err := svc.Create(context.Background(), "1983", "Honorer", "TU", "honorer", pgtype.Date{}, "akun", "", true); err == nil || err.Error() != "only pns or pppk employees can have pusaka accounts" {
+	if _, err := svc.Create(context.Background(), "1983", "Honorer", "TU", "honorer", pgtype.Date{}, "X", "", "", "", true); err == nil || err.Error() != "invalid gender" {
+		t.Fatalf("Create(invalid gender) = %v, want invalid gender", err)
+	}
+	if _, err := svc.Create(context.Background(), "1983", "Honorer", "TU", "honorer", pgtype.Date{}, "", "", "akun", "", true); err == nil || err.Error() != "only pns or pppk employees can have pusaka accounts" {
 		t.Fatalf("Create(noneligible pusaka) = %v, want eligibility error", err)
 	}
 
@@ -201,6 +219,9 @@ func TestEmployeeServiceForwardsStoreCallsAndPusakaRules(t *testing.T) {
 	}
 	if store.updateArg.EmploymentType != "pns" || store.updateArg.Nama != "Guru Baru" {
 		t.Fatalf("Update() arg = %+v, want normalized update", store.updateArg)
+	}
+	if _, err := svc.Update(context.Background(), db.UpdateEmployeeParams{ID: employeeID, EmploymentType: "pns", JenisKelamin: "X"}); err == nil || err.Error() != "invalid gender" {
+		t.Fatalf("Update(invalid gender) = %v, want invalid gender", err)
 	}
 	if _, err := svc.Update(context.Background(), db.UpdateEmployeeParams{ID: employeeID, EmploymentType: "kontrak"}); err == nil || err.Error() != "invalid employment type" {
 		t.Fatalf("Update(invalid type) = %v, want invalid employment type", err)
@@ -281,12 +302,12 @@ func TestEmployeeServicePropagatesStoreErrors(t *testing.T) {
 	svc := &Employee{q: store}
 
 	store.createErr = errors.New("create failed")
-	if _, err := svc.Create(context.Background(), "1", "Guru", "MTsN", "pns", pgtype.Date{}, "", "", true); err == nil || err.Error() != "create failed" {
+	if _, err := svc.Create(context.Background(), "1", "Guru", "MTsN", "pns", pgtype.Date{}, "", "", "", "", true); err == nil || err.Error() != "create failed" {
 		t.Fatalf("Create(store error) = %v, want create failed", err)
 	}
 	store.createErr = nil
 	store.upsertErr = errors.New("upsert failed")
-	if _, err := svc.Create(context.Background(), "1", "Guru", "MTsN", "pns", pgtype.Date{}, "akun", "secret", true); err == nil || err.Error() != "upsert failed" {
+	if _, err := svc.Create(context.Background(), "1", "Guru", "MTsN", "pns", pgtype.Date{}, "", "", "akun", "secret", true); err == nil || err.Error() != "upsert failed" {
 		t.Fatalf("Create(upsert error) = %v, want upsert failed", err)
 	}
 	store.upsertErr = nil

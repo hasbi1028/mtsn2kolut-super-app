@@ -423,7 +423,7 @@ const listEmployeeAccountGenerationCandidates = `-- name: ListEmployeeAccountGen
 WITH active_employees AS (
     SELECT
         e.id,
-        e.nip,
+        COALESCE(e.nip, '')::text AS nip,
         e.nama,
         e.tanggal_lahir,
         CASE

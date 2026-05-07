@@ -18,6 +18,7 @@
 
   interface Employee {
     id: string;
+    pegawai_uid: string;
     nip: string;
     nama: string;
     unit_kerja: string;
@@ -120,6 +121,7 @@
     if (!normalizedSearch) return scoped;
     return scoped.filter((employee) =>
       employee.nama.toLowerCase().includes(normalizedSearch) ||
+      employee.pegawai_uid.toLowerCase().includes(normalizedSearch) ||
       employee.nip.toLowerCase().includes(normalizedSearch)
     );
   });
@@ -553,7 +555,7 @@
       <div class="grid gap-3 md:grid-cols-[1.2fr_0.8fr_auto]">
         <div>
           <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Cari Pegawai</p>
-          <Input placeholder="Cari nama / NIP..." bind:value={search} class="w-full" />
+          <Input placeholder="Cari nama / ID / NIP..." bind:value={search} class="w-full" />
         </div>
         <div>
           <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Status Integrasi</p>
@@ -585,7 +587,7 @@
     <Table.Root>
       <Table.Header>
         <Table.Row>
-          <Table.Head>Nama / NIP</Table.Head>
+          <Table.Head>Nama / ID Pegawai</Table.Head>
           <Table.Head class="hidden sm:table-cell">Unit Kerja</Table.Head>
           <Table.Head class="text-center">Pusaka</Table.Head>
           <Table.Head class="text-center">Status</Table.Head>
@@ -598,7 +600,8 @@
           <Table.Row class={e.active_status === 'running' ? 'bg-warning/10' : ''}>
             <Table.Cell>
               <div class="font-medium">{e.nama}</div>
-              <div class="text-xs text-muted-foreground font-mono">{e.nip}</div>
+              <div class="text-xs text-primary font-mono">{e.pegawai_uid}</div>
+              <div class="text-xs text-muted-foreground">NIP {e.nip || '—'}</div>
               <div class="mt-1">
                 {#if e.is_active}
                   <Badge variant="outline" class="text-[11px] border-primary/20 text-primary">Pegawai aktif</Badge>

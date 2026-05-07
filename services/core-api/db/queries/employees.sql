@@ -1,5 +1,7 @@
 -- name: ListEmployees :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
+SELECT e.id, e.pegawai_uid, COALESCE(e.nip, '')::text AS nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
+       COALESCE(e.jenis_kelamin, '')::text AS jenis_kelamin,
+       COALESCE(e.tempat_lahir, '')::text AS tempat_lahir,
        COALESCE(pa.pusaka_username, '') AS pusaka_username,
        COALESCE(pa.pusaka_password, '') AS pusaka_password,
        COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled,
@@ -9,7 +11,9 @@ LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
 ORDER BY nama ASC;
 
 -- name: ListActiveEmployees :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
+SELECT e.id, e.pegawai_uid, COALESCE(e.nip, '')::text AS nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
+       COALESCE(e.jenis_kelamin, '')::text AS jenis_kelamin,
+       COALESCE(e.tempat_lahir, '')::text AS tempat_lahir,
        COALESCE(pa.pusaka_username, '') AS pusaka_username,
        COALESCE(pa.pusaka_password, '') AS pusaka_password,
        COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled,
@@ -23,7 +27,9 @@ WHERE e.is_active = TRUE
 ORDER BY nama ASC;
 
 -- name: GetEmployee :one
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
+SELECT e.id, e.pegawai_uid, COALESCE(e.nip, '')::text AS nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
+       COALESCE(e.jenis_kelamin, '')::text AS jenis_kelamin,
+       COALESCE(e.tempat_lahir, '')::text AS tempat_lahir,
        COALESCE(pa.pusaka_username, '') AS pusaka_username,
        COALESCE(pa.pusaka_password, '') AS pusaka_password,
        COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled,
@@ -33,21 +39,52 @@ LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
 WHERE e.id = $1;
 
 -- name: CreateEmployee :one
-INSERT INTO employees (id, nip, nama, unit_kerja, employment_type, tanggal_lahir, is_active)
-VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
-RETURNING *;
+WITH input AS (
+  SELECT
+    sqlc.arg(npsn)::text AS npsn,
+    NULLIF(btrim(sqlc.arg(nip)::text), '') AS nip,
+    btrim(sqlc.arg(nama)::text) AS nama,
+    btrim(sqlc.arg(unit_kerja)::text) AS unit_kerja,
+    sqlc.arg(employment_type)::text AS employment_type,
+    sqlc.arg(tanggal_lahir)::date AS tanggal_lahir,
+    NULLIF(btrim(sqlc.arg(jenis_kelamin)::text), '') AS jenis_kelamin,
+    NULLIF(btrim(sqlc.arg(tempat_lahir)::text), '') AS tempat_lahir,
+    sqlc.arg(is_active)::boolean AS is_active
+),
+prefix AS (
+  SELECT
+    input.*,
+    (input.npsn || COALESCE(to_char(input.tanggal_lahir, 'YY'), '00'))::text AS uid_prefix
+  FROM input
+),
+next_uid AS (
+  SELECT
+    prefix.*,
+    (prefix.uid_prefix || lpad((COALESCE(max(substring(e.pegawai_uid FROM length(prefix.uid_prefix) + 1 FOR 3)::int), 0) + 1)::text, 3, '0'))::text AS pegawai_uid
+  FROM prefix
+  LEFT JOIN employees e
+    ON e.pegawai_uid ~ ('^' || prefix.uid_prefix || '[0-9]{3}$')
+  GROUP BY prefix.npsn, prefix.nip, prefix.nama, prefix.unit_kerja, prefix.employment_type,
+           prefix.tanggal_lahir, prefix.jenis_kelamin, prefix.tempat_lahir, prefix.is_active, prefix.uid_prefix
+)
+INSERT INTO employees (id, pegawai_uid, nip, nama, unit_kerja, employment_type, tanggal_lahir, jenis_kelamin, tempat_lahir, is_active)
+SELECT gen_random_uuid(), pegawai_uid, nip, nama, unit_kerja, employment_type, tanggal_lahir, jenis_kelamin, tempat_lahir, is_active
+FROM next_uid
+RETURNING id;
 
 -- name: UpdateEmployee :one
 UPDATE employees
-SET nip             = $2,
-    nama            = $3,
-    unit_kerja      = $4,
-    employment_type = $5,
-    tanggal_lahir   = $6,
-    is_active       = $7,
+SET nip             = NULLIF(btrim(sqlc.arg(nip)::text), ''),
+    nama            = btrim(sqlc.arg(nama)::text),
+    unit_kerja      = btrim(sqlc.arg(unit_kerja)::text),
+    employment_type = sqlc.arg(employment_type)::text,
+    tanggal_lahir   = sqlc.arg(tanggal_lahir)::date,
+    jenis_kelamin   = NULLIF(btrim(sqlc.arg(jenis_kelamin)::text), ''),
+    tempat_lahir    = NULLIF(btrim(sqlc.arg(tempat_lahir)::text), ''),
+    is_active       = sqlc.arg(is_active)::boolean,
     updated_at      = NOW()
-WHERE id = $1
-RETURNING *;
+WHERE id = sqlc.arg(id)::uuid
+RETURNING id;
 
 -- name: DeleteEmployee :exec
 DELETE FROM employees WHERE id = $1;
@@ -56,7 +93,10 @@ DELETE FROM employees WHERE id = $1;
 SELECT COUNT(*) FROM employees;
 
 -- name: ListEmployeesWithStatus :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir, COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
+SELECT e.id, e.pegawai_uid, COALESCE(e.nip, '')::text AS nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
+  COALESCE(e.jenis_kelamin, '')::text AS jenis_kelamin,
+  COALESCE(e.tempat_lahir, '')::text AS tempat_lahir,
+  COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
   COALESCE(
     (SELECT j.status::text FROM jobs j
      WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')
@@ -88,7 +128,10 @@ LEFT JOIN pusaka_accounts pa ON pa.employee_id = e.id
 ORDER BY e.created_at DESC;
 
 -- name: ListPusakaEligibleEmployeesWithStatus :many
-SELECT e.id, e.nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir, COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
+SELECT e.id, e.pegawai_uid, COALESCE(e.nip, '')::text AS nip, e.nama, e.unit_kerja, e.employment_type, e.tanggal_lahir,
+  COALESCE(e.jenis_kelamin, '')::text AS jenis_kelamin,
+  COALESCE(e.tempat_lahir, '')::text AS tempat_lahir,
+  COALESCE(pa.pusaka_username, '') AS pusaka_username, COALESCE(pa.is_enabled, FALSE) AS pusaka_is_enabled, e.is_active, e.created_at,
   COALESCE(
     (SELECT j.status::text FROM jobs j
      WHERE j.employee_id = e.id AND (j.status = 'queued' OR j.status = 'running')

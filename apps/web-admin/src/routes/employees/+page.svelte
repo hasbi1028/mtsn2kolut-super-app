@@ -10,11 +10,14 @@
 
   type Employee = {
     id: string;
+    pegawai_uid: string;
     nip: string;
     nama: string;
     unit_kerja: string;
     employment_type: string;
     tanggal_lahir: string;
+    jenis_kelamin: string;
+    tempat_lahir: string;
     pusaka_eligible: boolean;
     has_pusaka_account: boolean;
     pusaka_is_enabled: boolean;
