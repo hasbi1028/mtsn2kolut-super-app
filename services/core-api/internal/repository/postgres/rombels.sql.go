@@ -216,6 +216,112 @@ func (q *Queries) CreateRombelSubjectAssignment(ctx context.Context, arg CreateR
 	return i, err
 }
 
+const createRombelTimetableSlot = `-- name: CreateRombelTimetableSlot :one
+WITH inserted AS (
+    INSERT INTO timetable_slots (assignment_id, day_of_week, start_time, end_time, room_label, notes)
+    SELECT
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6
+    WHERE EXISTS (
+        SELECT 1
+        FROM class_subject_assignments csa
+        WHERE csa.id = $1
+          AND csa.class_id = $7
+    )
+    RETURNING id, assignment_id, day_of_week, start_time, end_time, room_label, notes, created_at, updated_at
+)
+SELECT
+    inserted.id,
+    inserted.assignment_id,
+    inserted.day_of_week,
+    inserted.start_time,
+    inserted.end_time,
+    inserted.room_label,
+    inserted.notes,
+    inserted.created_at,
+    inserted.updated_at,
+    csa.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    csa.subject_id,
+    sub.name AS subject_name,
+    sub.code AS subject_code,
+    csa.teacher_employee_id,
+    e.nama AS teacher_name
+FROM inserted
+JOIN class_subject_assignments csa ON csa.id = inserted.assignment_id
+JOIN school_classes c ON c.id = csa.class_id
+JOIN subjects sub ON sub.id = csa.subject_id
+JOIN employees e ON e.id = csa.teacher_employee_id
+`
+
+type CreateRombelTimetableSlotParams struct {
+	AssignmentID pgtype.UUID `json:"assignment_id"`
+	DayOfWeek    int16       `json:"day_of_week"`
+	StartTime    pgtype.Time `json:"start_time"`
+	EndTime      pgtype.Time `json:"end_time"`
+	RoomLabel    string      `json:"room_label"`
+	Notes        string      `json:"notes"`
+	ClassID      pgtype.UUID `json:"class_id"`
+}
+
+type CreateRombelTimetableSlotRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	AssignmentID      pgtype.UUID        `json:"assignment_id"`
+	DayOfWeek         int16              `json:"day_of_week"`
+	StartTime         pgtype.Time        `json:"start_time"`
+	EndTime           pgtype.Time        `json:"end_time"`
+	RoomLabel         string             `json:"room_label"`
+	Notes             string             `json:"notes"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	ClassID           pgtype.UUID        `json:"class_id"`
+	ClassName         string             `json:"class_name"`
+	ClassCode         string             `json:"class_code"`
+	SubjectID         pgtype.UUID        `json:"subject_id"`
+	SubjectName       string             `json:"subject_name"`
+	SubjectCode       string             `json:"subject_code"`
+	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName       string             `json:"teacher_name"`
+}
+
+func (q *Queries) CreateRombelTimetableSlot(ctx context.Context, arg CreateRombelTimetableSlotParams) (CreateRombelTimetableSlotRow, error) {
+	row := q.db.QueryRow(ctx, createRombelTimetableSlot,
+		arg.AssignmentID,
+		arg.DayOfWeek,
+		arg.StartTime,
+		arg.EndTime,
+		arg.RoomLabel,
+		arg.Notes,
+		arg.ClassID,
+	)
+	var i CreateRombelTimetableSlotRow
+	err := row.Scan(
+		&i.ID,
+		&i.AssignmentID,
+		&i.DayOfWeek,
+		&i.StartTime,
+		&i.EndTime,
+		&i.RoomLabel,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ClassID,
+		&i.ClassName,
+		&i.ClassCode,
+		&i.SubjectID,
+		&i.SubjectName,
+		&i.SubjectCode,
+		&i.TeacherEmployeeID,
+		&i.TeacherName,
+	)
+	return i, err
+}
+
 const deleteHomeroomAssignment = `-- name: DeleteHomeroomAssignment :exec
 DELETE FROM class_homeroom_assignments
 WHERE id = $1
@@ -239,6 +345,27 @@ type DeleteRombelSubjectAssignmentParams struct {
 
 func (q *Queries) DeleteRombelSubjectAssignment(ctx context.Context, arg DeleteRombelSubjectAssignmentParams) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteRombelSubjectAssignment, arg.ClassID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteRombelTimetableSlot = `-- name: DeleteRombelTimetableSlot :execrows
+DELETE FROM timetable_slots ts
+USING class_subject_assignments csa
+WHERE csa.id = ts.assignment_id
+  AND csa.class_id = $1
+  AND ts.id = $2
+`
+
+type DeleteRombelTimetableSlotParams struct {
+	ClassID pgtype.UUID `json:"class_id"`
+	ID      pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) DeleteRombelTimetableSlot(ctx context.Context, arg DeleteRombelTimetableSlotParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteRombelTimetableSlot, arg.ClassID, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -391,6 +518,84 @@ func (q *Queries) GetRombelSubjectAssignment(ctx context.Context, arg GetRombelS
 		&i.TeacherName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getRombelTimetableSlot = `-- name: GetRombelTimetableSlot :one
+SELECT
+    ts.id,
+    ts.assignment_id,
+    ts.day_of_week,
+    ts.start_time,
+    ts.end_time,
+    ts.room_label,
+    ts.notes,
+    ts.created_at,
+    ts.updated_at,
+    csa.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    csa.subject_id,
+    sub.name AS subject_name,
+    sub.code AS subject_code,
+    csa.teacher_employee_id,
+    e.nama AS teacher_name
+FROM timetable_slots ts
+JOIN class_subject_assignments csa ON csa.id = ts.assignment_id
+JOIN school_classes c ON c.id = csa.class_id
+JOIN subjects sub ON sub.id = csa.subject_id
+JOIN employees e ON e.id = csa.teacher_employee_id
+WHERE csa.class_id = $1
+  AND ts.id = $2
+`
+
+type GetRombelTimetableSlotParams struct {
+	ClassID pgtype.UUID `json:"class_id"`
+	ID      pgtype.UUID `json:"id"`
+}
+
+type GetRombelTimetableSlotRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	AssignmentID      pgtype.UUID        `json:"assignment_id"`
+	DayOfWeek         int16              `json:"day_of_week"`
+	StartTime         pgtype.Time        `json:"start_time"`
+	EndTime           pgtype.Time        `json:"end_time"`
+	RoomLabel         string             `json:"room_label"`
+	Notes             string             `json:"notes"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	ClassID           pgtype.UUID        `json:"class_id"`
+	ClassName         string             `json:"class_name"`
+	ClassCode         string             `json:"class_code"`
+	SubjectID         pgtype.UUID        `json:"subject_id"`
+	SubjectName       string             `json:"subject_name"`
+	SubjectCode       string             `json:"subject_code"`
+	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName       string             `json:"teacher_name"`
+}
+
+func (q *Queries) GetRombelTimetableSlot(ctx context.Context, arg GetRombelTimetableSlotParams) (GetRombelTimetableSlotRow, error) {
+	row := q.db.QueryRow(ctx, getRombelTimetableSlot, arg.ClassID, arg.ID)
+	var i GetRombelTimetableSlotRow
+	err := row.Scan(
+		&i.ID,
+		&i.AssignmentID,
+		&i.DayOfWeek,
+		&i.StartTime,
+		&i.EndTime,
+		&i.RoomLabel,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ClassID,
+		&i.ClassName,
+		&i.ClassCode,
+		&i.SubjectID,
+		&i.SubjectName,
+		&i.SubjectCode,
+		&i.TeacherEmployeeID,
+		&i.TeacherName,
 	)
 	return i, err
 }
@@ -969,6 +1174,118 @@ func (q *Queries) UpdateRombelSubjectAssignment(ctx context.Context, arg UpdateR
 		&i.TeacherName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateRombelTimetableSlot = `-- name: UpdateRombelTimetableSlot :one
+WITH updated AS (
+    UPDATE timetable_slots
+    SET assignment_id = $1,
+        day_of_week = $2,
+        start_time = $3,
+        end_time = $4,
+        room_label = $5,
+        notes = $6,
+        updated_at = NOW()
+    FROM class_subject_assignments current_assignment
+    WHERE timetable_slots.id = $7
+      AND current_assignment.id = timetable_slots.assignment_id
+      AND current_assignment.class_id = $8
+      AND EXISTS (
+          SELECT 1
+          FROM class_subject_assignments next_assignment
+          WHERE next_assignment.id = $1
+            AND next_assignment.class_id = $8
+      )
+    RETURNING timetable_slots.id, timetable_slots.assignment_id, timetable_slots.day_of_week, timetable_slots.start_time, timetable_slots.end_time, timetable_slots.room_label, timetable_slots.notes, timetable_slots.created_at, timetable_slots.updated_at
+)
+SELECT
+    updated.id,
+    updated.assignment_id,
+    updated.day_of_week,
+    updated.start_time,
+    updated.end_time,
+    updated.room_label,
+    updated.notes,
+    updated.created_at,
+    updated.updated_at,
+    csa.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    csa.subject_id,
+    sub.name AS subject_name,
+    sub.code AS subject_code,
+    csa.teacher_employee_id,
+    e.nama AS teacher_name
+FROM updated
+JOIN class_subject_assignments csa ON csa.id = updated.assignment_id
+JOIN school_classes c ON c.id = csa.class_id
+JOIN subjects sub ON sub.id = csa.subject_id
+JOIN employees e ON e.id = csa.teacher_employee_id
+`
+
+type UpdateRombelTimetableSlotParams struct {
+	AssignmentID pgtype.UUID `json:"assignment_id"`
+	DayOfWeek    int16       `json:"day_of_week"`
+	StartTime    pgtype.Time `json:"start_time"`
+	EndTime      pgtype.Time `json:"end_time"`
+	RoomLabel    string      `json:"room_label"`
+	Notes        string      `json:"notes"`
+	ID           pgtype.UUID `json:"id"`
+	ClassID      pgtype.UUID `json:"class_id"`
+}
+
+type UpdateRombelTimetableSlotRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	AssignmentID      pgtype.UUID        `json:"assignment_id"`
+	DayOfWeek         int16              `json:"day_of_week"`
+	StartTime         pgtype.Time        `json:"start_time"`
+	EndTime           pgtype.Time        `json:"end_time"`
+	RoomLabel         string             `json:"room_label"`
+	Notes             string             `json:"notes"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	ClassID           pgtype.UUID        `json:"class_id"`
+	ClassName         string             `json:"class_name"`
+	ClassCode         string             `json:"class_code"`
+	SubjectID         pgtype.UUID        `json:"subject_id"`
+	SubjectName       string             `json:"subject_name"`
+	SubjectCode       string             `json:"subject_code"`
+	TeacherEmployeeID pgtype.UUID        `json:"teacher_employee_id"`
+	TeacherName       string             `json:"teacher_name"`
+}
+
+func (q *Queries) UpdateRombelTimetableSlot(ctx context.Context, arg UpdateRombelTimetableSlotParams) (UpdateRombelTimetableSlotRow, error) {
+	row := q.db.QueryRow(ctx, updateRombelTimetableSlot,
+		arg.AssignmentID,
+		arg.DayOfWeek,
+		arg.StartTime,
+		arg.EndTime,
+		arg.RoomLabel,
+		arg.Notes,
+		arg.ID,
+		arg.ClassID,
+	)
+	var i UpdateRombelTimetableSlotRow
+	err := row.Scan(
+		&i.ID,
+		&i.AssignmentID,
+		&i.DayOfWeek,
+		&i.StartTime,
+		&i.EndTime,
+		&i.RoomLabel,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ClassID,
+		&i.ClassName,
+		&i.ClassCode,
+		&i.SubjectID,
+		&i.SubjectName,
+		&i.SubjectCode,
+		&i.TeacherEmployeeID,
+		&i.TeacherName,
 	)
 	return i, err
 }

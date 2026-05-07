@@ -12,12 +12,17 @@ import (
 )
 
 type fakeRombelService struct {
-	listSubjectClassID pgtype.UUID
-	getSubjectArg      db.GetRombelSubjectAssignmentParams
-	createSubjectArg   db.CreateRombelSubjectAssignmentParams
-	updateSubjectArg   db.UpdateRombelSubjectAssignmentParams
-	deleteSubjectArg   db.DeleteRombelSubjectAssignmentParams
-	err                error
+	listSubjectClassID   pgtype.UUID
+	getSubjectArg        db.GetRombelSubjectAssignmentParams
+	createSubjectArg     db.CreateRombelSubjectAssignmentParams
+	updateSubjectArg     db.UpdateRombelSubjectAssignmentParams
+	deleteSubjectArg     db.DeleteRombelSubjectAssignmentParams
+	listTimetableClassID pgtype.UUID
+	getTimetableArg      db.GetRombelTimetableSlotParams
+	createTimetableArg   db.CreateRombelTimetableSlotParams
+	updateTimetableArg   db.UpdateRombelTimetableSlotParams
+	deleteTimetableArg   db.DeleteRombelTimetableSlotParams
+	err                  error
 }
 
 func (f *fakeRombelService) List(context.Context) ([]db.ListRombelsRow, error) {
@@ -87,8 +92,55 @@ func (f *fakeRombelService) DeleteSubjectAssignment(_ context.Context, arg db.De
 	return f.err
 }
 
-func (f *fakeRombelService) ListTimetableSlots(context.Context, pgtype.UUID) ([]db.ListRombelTimetableSlotsRow, error) {
-	return []db.ListRombelTimetableSlotsRow{}, f.err
+func (f *fakeRombelService) ListTimetableSlots(_ context.Context, classID pgtype.UUID) ([]db.ListRombelTimetableSlotsRow, error) {
+	f.listTimetableClassID = classID
+	if f.err != nil {
+		return nil, f.err
+	}
+	return []db.ListRombelTimetableSlotsRow{{ID: handlerTestUUID(205), ClassID: classID, SubjectName: "Matematika"}}, nil
+}
+
+func (f *fakeRombelService) GetTimetableSlot(_ context.Context, arg db.GetRombelTimetableSlotParams) (db.GetRombelTimetableSlotRow, error) {
+	f.getTimetableArg = arg
+	if f.err != nil {
+		return db.GetRombelTimetableSlotRow{}, f.err
+	}
+	return db.GetRombelTimetableSlotRow{ID: arg.ID, ClassID: arg.ClassID, SubjectName: "Matematika"}, nil
+}
+
+func (f *fakeRombelService) CreateTimetableSlot(_ context.Context, arg db.CreateRombelTimetableSlotParams) (db.CreateRombelTimetableSlotRow, error) {
+	f.createTimetableArg = arg
+	if f.err != nil {
+		return db.CreateRombelTimetableSlotRow{}, f.err
+	}
+	return db.CreateRombelTimetableSlotRow{
+		ID:           handlerTestUUID(206),
+		ClassID:      arg.ClassID,
+		AssignmentID: arg.AssignmentID,
+		DayOfWeek:    arg.DayOfWeek,
+		RoomLabel:    arg.RoomLabel,
+		Notes:        arg.Notes,
+	}, nil
+}
+
+func (f *fakeRombelService) UpdateTimetableSlot(_ context.Context, arg db.UpdateRombelTimetableSlotParams) (db.UpdateRombelTimetableSlotRow, error) {
+	f.updateTimetableArg = arg
+	if f.err != nil {
+		return db.UpdateRombelTimetableSlotRow{}, f.err
+	}
+	return db.UpdateRombelTimetableSlotRow{
+		ID:           arg.ID,
+		ClassID:      arg.ClassID,
+		AssignmentID: arg.AssignmentID,
+		DayOfWeek:    arg.DayOfWeek,
+		RoomLabel:    arg.RoomLabel,
+		Notes:        arg.Notes,
+	}, nil
+}
+
+func (f *fakeRombelService) DeleteTimetableSlot(_ context.Context, arg db.DeleteRombelTimetableSlotParams) error {
+	f.deleteTimetableArg = arg
+	return f.err
 }
 
 func (f *fakeRombelService) ListHomeroomAssignments(context.Context, pgtype.UUID) ([]db.ListHomeroomAssignmentsByClassRow, error) {
@@ -177,6 +229,110 @@ func TestRombelSubjectAssignmentsValidationAndAuth(t *testing.T) {
 			name:       "delete invalid class id",
 			fn:         h.DeleteSubjectAssignment,
 			req:        withRouteParams(adminRequest(http.MethodDelete, "/api/academic/rombel/bad/subject-assignments/"+assignmentID.String(), ""), "id", "bad", "assignmentID", assignmentID.String()),
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			tt.fn(rec, tt.req)
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestRombelTimetableSlotsSuccess(t *testing.T) {
+	classID := handlerTestUUID(230)
+	assignmentID := handlerTestUUID(231)
+	slotID := handlerTestUUID(232)
+	fake := &fakeRombelService{}
+	h := &Rombel{svc: fake}
+
+	rec := httptest.NewRecorder()
+	h.ListTimetableSlots(rec, withRouteParam(adminRequest(http.MethodGet, "/api/academic/rombel/"+classID.String()+"/timetable-slots", ""), "id", classID.String()))
+	if rec.Code != http.StatusOK || fake.listTimetableClassID != classID {
+		t.Fatalf("ListTimetableSlots() status/class = %d/%s, want 200/%s; body=%s", rec.Code, fake.listTimetableClassID.String(), classID.String(), rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	req := withRouteParams(adminRequest(http.MethodGet, "/api/academic/rombel/"+classID.String()+"/timetable-slots/"+slotID.String(), ""), "id", classID.String(), "slotID", slotID.String())
+	h.GetTimetableSlot(rec, req)
+	if rec.Code != http.StatusOK || fake.getTimetableArg.ClassID != classID || fake.getTimetableArg.ID != slotID {
+		t.Fatalf("GetTimetableSlot() status/arg = %d/%+v, want 200 scoped get arg", rec.Code, fake.getTimetableArg)
+	}
+
+	body := `{"assignment_id":"` + assignmentID.String() + `","day_of_week":2,"start_time":"07:30","end_time":"08:50","room":"Lab IPA","notes":"Praktikum"}`
+	rec = httptest.NewRecorder()
+	h.CreateTimetableSlot(rec, withRouteParam(adminRequest(http.MethodPost, "/api/academic/rombel/"+classID.String()+"/timetable-slots", body), "id", classID.String()))
+	if rec.Code != http.StatusCreated || fake.createTimetableArg.ClassID != classID || fake.createTimetableArg.AssignmentID != assignmentID || fake.createTimetableArg.DayOfWeek != 2 || fake.createTimetableArg.RoomLabel != "Lab IPA" || fake.createTimetableArg.Notes != "Praktikum" {
+		t.Fatalf("CreateTimetableSlot() status/arg = %d/%+v, want 201 scoped create arg", rec.Code, fake.createTimetableArg)
+	}
+
+	body = `{"assignment_id":"` + assignmentID.String() + `","day_of_week":3,"start_time":"09:00","end_time":"10:20","room_label":"Ruang 2","notes":"Ulangan"}`
+	rec = httptest.NewRecorder()
+	req = withRouteParams(adminRequest(http.MethodPut, "/api/academic/rombel/"+classID.String()+"/timetable-slots/"+slotID.String(), body), "id", classID.String(), "slotID", slotID.String())
+	h.UpdateTimetableSlot(rec, req)
+	if rec.Code != http.StatusOK || fake.updateTimetableArg.ClassID != classID || fake.updateTimetableArg.ID != slotID || fake.updateTimetableArg.AssignmentID != assignmentID || fake.updateTimetableArg.DayOfWeek != 3 || fake.updateTimetableArg.RoomLabel != "Ruang 2" {
+		t.Fatalf("UpdateTimetableSlot() status/arg = %d/%+v, want 200 scoped update arg", rec.Code, fake.updateTimetableArg)
+	}
+
+	rec = httptest.NewRecorder()
+	req = withRouteParams(adminRequest(http.MethodDelete, "/api/academic/rombel/"+classID.String()+"/timetable-slots/"+slotID.String(), ""), "id", classID.String(), "slotID", slotID.String())
+	h.DeleteTimetableSlot(rec, req)
+	if rec.Code != http.StatusNoContent || fake.deleteTimetableArg.ClassID != classID || fake.deleteTimetableArg.ID != slotID {
+		t.Fatalf("DeleteTimetableSlot() status/arg = %d/%+v, want 204 scoped delete arg", rec.Code, fake.deleteTimetableArg)
+	}
+}
+
+func TestRombelTimetableSlotsValidationAndAuth(t *testing.T) {
+	classID := handlerTestUUID(240)
+	assignmentID := handlerTestUUID(241)
+	slotID := handlerTestUUID(242)
+	h := &Rombel{svc: &fakeRombelService{}}
+
+	tests := []struct {
+		name       string
+		fn         func(http.ResponseWriter, *http.Request)
+		req        *http.Request
+		wantStatus int
+	}{
+		{
+			name:       "create unauthenticated returns 401",
+			fn:         h.CreateTimetableSlot,
+			req:        withRouteParam(httptest.NewRequest(http.MethodPost, "/api/academic/rombel/"+classID.String()+"/timetable-slots", nil), "id", classID.String()),
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "create invalid assignment",
+			fn:         h.CreateTimetableSlot,
+			req:        withRouteParam(adminRequest(http.MethodPost, "/api/academic/rombel/"+classID.String()+"/timetable-slots", `{"assignment_id":"bad","day_of_week":2,"start_time":"07:30","end_time":"08:50"}`), "id", classID.String()),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "create invalid day",
+			fn:         h.CreateTimetableSlot,
+			req:        withRouteParam(adminRequest(http.MethodPost, "/api/academic/rombel/"+classID.String()+"/timetable-slots", `{"assignment_id":"`+assignmentID.String()+`","day_of_week":7,"start_time":"07:30","end_time":"08:50"}`), "id", classID.String()),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "create invalid range",
+			fn:         h.CreateTimetableSlot,
+			req:        withRouteParam(adminRequest(http.MethodPost, "/api/academic/rombel/"+classID.String()+"/timetable-slots", `{"assignment_id":"`+assignmentID.String()+`","day_of_week":2,"start_time":"08:50","end_time":"07:30"}`), "id", classID.String()),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "update invalid slot id",
+			fn:         h.UpdateTimetableSlot,
+			req:        withRouteParams(adminRequest(http.MethodPut, "/api/academic/rombel/"+classID.String()+"/timetable-slots/bad", `{}`), "id", classID.String(), "slotID", "bad"),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "delete invalid class id",
+			fn:         h.DeleteTimetableSlot,
+			req:        withRouteParams(adminRequest(http.MethodDelete, "/api/academic/rombel/bad/timetable-slots/"+slotID.String(), ""), "id", "bad", "slotID", slotID.String()),
 			wantStatus: http.StatusBadRequest,
 		},
 	}

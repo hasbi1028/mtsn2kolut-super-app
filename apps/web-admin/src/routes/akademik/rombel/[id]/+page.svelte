@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { ArrowLeft, Pencil, RefreshCw, Search, Trash2, UserCheck } from '@lucide/svelte';
+	import { ArrowLeft, Clock, Pencil, Plus, RefreshCw, Search, Trash2, UserCheck, X } from '@lucide/svelte';
 	import * as Card from '$lib/components/ui/card';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import * as Table from '$lib/components/ui/table';
@@ -86,6 +86,7 @@
 
 	type TimetableSlot = {
 		id: string;
+		assignment_id: string;
 		day_of_week: number;
 		start_time: string;
 		end_time: string;
@@ -169,6 +170,15 @@
 	let subjectTeacherSearch = $state('');
 	let subjectAssignmentSaveBusy = $state(false);
 	let deleteSubjectAssignmentBusyId = $state('');
+	let editingTimetableSlotId = $state('');
+	let timetableAssignmentId = $state('');
+	let timetableDay = $state('1');
+	let timetableStart = $state('');
+	let timetableEnd = $state('');
+	let timetableRoom = $state('');
+	let timetableNotes = $state('');
+	let timetableSaveBusy = $state(false);
+	let deleteTimetableBusyId = $state('');
 
 	const rombel = $derived(detail?.rombel ?? null);
 	const activeHomeroom = $derived(detail?.homeroom_assignments.find((item) => item.is_active) ?? null);
@@ -193,6 +203,25 @@
 	const filteredSubjectTeacherOptions = $derived(filterHomeroomEmployeeOptions(employeeOptions, subjectTeacherSearch));
 	const selectedSubjectTeacherOption = $derived(employeeOptions.find((option) => option.id === subjectAssignmentTeacherId) ?? null);
 	const canSaveSubjectAssignment = $derived(Boolean(classId && selectedSubjectOption && selectedSubjectTeacherOption));
+	const selectedTimetableAssignment = $derived((detail?.subject_assignments ?? []).find((assignment) => assignment.id === timetableAssignmentId) ?? null);
+	const canSaveTimetableSlot = $derived(Boolean(
+		classId &&
+		timetableAssignmentId &&
+		timetableStart &&
+		timetableEnd &&
+		Number(timetableDay) >= 1 &&
+		Number(timetableDay) <= 6
+	));
+	const timetableDayGroups = $derived.by(() => {
+		const slots = [...(detail?.timetable_slots ?? [])].sort(compareTimetableSlots);
+		return Object.entries(dayLabels)
+			.map(([day, label]) => ({
+				day: Number(day),
+				label,
+				slots: slots.filter((slot) => slot.day_of_week === Number(day))
+			}))
+			.filter((group) => group.slots.length > 0);
+	});
 	const parentRows = $derived.by(() =>
 		(detail?.students ?? []).flatMap((student) =>
 			student.parents.map((parent) => ({ student, parent }))
@@ -225,6 +254,15 @@
 		homeroomNotes = active?.notes ?? '';
 		if (editingSubjectAssignmentId && !payload.subject_assignments.some((item) => item.id === editingSubjectAssignmentId)) {
 			resetSubjectAssignmentForm();
+		}
+		if (editingTimetableSlotId && !payload.timetable_slots.some((item) => item.id === editingTimetableSlotId)) {
+			resetTimetableSlotForm();
+		}
+		if (timetableAssignmentId && !payload.subject_assignments.some((item) => item.id === timetableAssignmentId)) {
+			resetTimetableSlotForm();
+		}
+		if (!timetableAssignmentId && payload.subject_assignments.length > 0) {
+			timetableAssignmentId = payload.subject_assignments[0].id;
 		}
 	}
 
@@ -391,6 +429,86 @@
 		}
 	}
 
+	function resetTimetableSlotForm() {
+		editingTimetableSlotId = '';
+		timetableAssignmentId = detail?.subject_assignments[0]?.id ?? '';
+		timetableDay = '1';
+		timetableStart = '';
+		timetableEnd = '';
+		timetableRoom = '';
+		timetableNotes = '';
+	}
+
+	function editTimetableSlot(slot: TimetableSlot) {
+		editingTimetableSlotId = slot.id;
+		timetableAssignmentId = slot.assignment_id;
+		timetableDay = String(slot.day_of_week);
+		timetableStart = fmtTime(slot.start_time);
+		timetableEnd = fmtTime(slot.end_time);
+		timetableRoom = slot.room_label ?? '';
+		timetableNotes = slot.notes ?? '';
+	}
+
+	async function saveTimetableSlot() {
+		if (!canSaveTimetableSlot) return;
+		if (timetableStart >= timetableEnd) {
+			toast.error('Jam selesai harus setelah jam mulai');
+			return;
+		}
+		timetableSaveBusy = true;
+		try {
+			const body = JSON.stringify({
+				assignment_id: timetableAssignmentId,
+				day_of_week: Number(timetableDay),
+				start_time: timetableStart,
+				end_time: timetableEnd,
+				room: timetableRoom,
+				notes: timetableNotes,
+			});
+			const response = await fetch(
+				editingTimetableSlotId
+					? `/api/academic/rombel/${classId}/timetable-slots/${editingTimetableSlotId}`
+					: `/api/academic/rombel/${classId}/timetable-slots`,
+				{
+					method: editingTimetableSlotId ? 'PUT' : 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body,
+				}
+			);
+			await readClientJson<unknown>(response);
+			toast.success(editingTimetableSlotId ? 'Slot jadwal diperbarui' : 'Slot jadwal ditambahkan');
+			resetTimetableSlotForm();
+			await refreshDetail();
+		} catch (error) {
+			toast.error(errorMessage(error, 'Gagal menyimpan slot jadwal'));
+		} finally {
+			timetableSaveBusy = false;
+		}
+	}
+
+	async function deleteTimetableSlot(slot: TimetableSlot) {
+		if (!(await confirmAction({
+			title: 'Hapus Slot Jadwal',
+			message: `Hapus jadwal ${slot.subject_name} pada ${dayLabels[slot.day_of_week] ?? `hari ${slot.day_of_week}`} pukul ${fmtTime(slot.start_time)}-${fmtTime(slot.end_time)}?`,
+			confirmLabel: 'Hapus',
+			tone: 'danger'
+		}))) return;
+		deleteTimetableBusyId = slot.id;
+		try {
+			const response = await fetch(`/api/academic/rombel/${classId}/timetable-slots/${slot.id}`, { method: 'DELETE' });
+			await readClientJson<unknown>(response);
+			toast.success('Slot jadwal dihapus');
+			if (editingTimetableSlotId === slot.id) {
+				resetTimetableSlotForm();
+			}
+			await refreshDetail();
+		} catch (error) {
+			toast.error(errorMessage(error, 'Gagal menghapus slot jadwal'));
+		} finally {
+			deleteTimetableBusyId = '';
+		}
+	}
+
 	function errorMessage(error: unknown, fallback: string) {
 		if (error instanceof Error && error.message.trim()) return error.message;
 		return fallback;
@@ -402,6 +520,14 @@
 
 	function fmtTime(value: string) {
 		return value.slice(0, 5);
+	}
+
+	function compareTimetableSlots(a: TimetableSlot, b: TimetableSlot) {
+		return a.day_of_week - b.day_of_week || fmtTime(a.start_time).localeCompare(fmtTime(b.start_time)) || a.subject_name.localeCompare(b.subject_name);
+	}
+
+	function subjectAssignmentScheduleLabel(assignment: SubjectAssignment) {
+		return `${assignment.subject_name} (${assignment.subject_code}) - ${assignment.teacher_name}`;
 	}
 
 	function genderLabel(value: string) {
@@ -1009,43 +1135,182 @@
 				</Tabs.Content>
 
 				<Tabs.Content value="schedule">
-					<Card.Root>
-						<Card.Header>
-							<Card.Title class="text-base">Jadwal Rombel</Card.Title>
-						</Card.Header>
-						<Card.Content class="p-0">
-							<div class="overflow-x-auto">
-								<Table.Root>
-									<Table.Header>
-										<Table.Row>
-											<Table.Head>Hari</Table.Head>
-											<Table.Head>Waktu</Table.Head>
-											<Table.Head>Mata Pelajaran</Table.Head>
-											<Table.Head>Guru</Table.Head>
-											<Table.Head>Ruang</Table.Head>
-										</Table.Row>
-									</Table.Header>
-									<Table.Body>
-										{#each detail.timetable_slots as slot (slot.id)}
-											<Table.Row>
-												<Table.Cell class="font-medium">{dayLabels[slot.day_of_week] ?? `Hari ${slot.day_of_week}`}</Table.Cell>
-												<Table.Cell class="text-muted-foreground">{fmtTime(slot.start_time)}-{fmtTime(slot.end_time)}</Table.Cell>
-												<Table.Cell>{slot.subject_name}</Table.Cell>
-												<Table.Cell class="text-muted-foreground">{slot.teacher_name}</Table.Cell>
-												<Table.Cell class="text-muted-foreground">{slot.room_label || '-'}</Table.Cell>
-											</Table.Row>
-										{:else}
-											<Table.Row>
-												<Table.Cell colspan={5} class="p-4">
-													<EmptyStatePanel compact title="Belum ada slot jadwal" description="Jadwal mingguan akan tampil setelah slot dibuat." />
-												</Table.Cell>
-											</Table.Row>
-										{/each}
-									</Table.Body>
-								</Table.Root>
-							</div>
-						</Card.Content>
-					</Card.Root>
+					<div class="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+						<Card.Root>
+							<Card.Header>
+								<Card.Title class="text-base">Jadwal Mingguan</Card.Title>
+								<Card.Description>Slot pelajaran rombel dikelompokkan per hari dan diurutkan berdasarkan jam mulai.</Card.Description>
+							</Card.Header>
+							<Card.Content class="space-y-3">
+								{#if detail.timetable_slots.length > 0}
+									{#each timetableDayGroups as group (group.day)}
+										<section class="rounded-lg border border-border bg-muted/20 p-3">
+											<div class="flex flex-wrap items-center justify-between gap-2">
+												<h3 class="text-sm font-semibold text-foreground">{group.label}</h3>
+												<Badge variant="secondary">{group.slots.length} slot</Badge>
+											</div>
+											<div class="mt-3 divide-y divide-border">
+												{#each group.slots as slot (slot.id)}
+													<div class="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 md:flex-row md:items-center md:justify-between">
+														<div class="min-w-0">
+															<div class="flex flex-wrap items-center gap-2">
+																<Badge variant="outline">{fmtTime(slot.start_time)}-{fmtTime(slot.end_time)}</Badge>
+																{#if slot.room_label}
+																	<Badge variant="secondary">{slot.room_label}</Badge>
+																{/if}
+															</div>
+															<p class="mt-2 text-sm font-semibold text-foreground">{slot.subject_name} <span class="font-normal text-muted-foreground">({slot.subject_code})</span></p>
+															<p class="mt-1 text-sm text-muted-foreground">{slot.teacher_name}</p>
+															{#if slot.notes}
+																<p class="mt-2 rounded-md bg-background px-2 py-1 text-xs text-muted-foreground">{slot.notes}</p>
+															{/if}
+														</div>
+														<div class="flex shrink-0 gap-2">
+															<Button
+																type="button"
+																variant="outline"
+																size="xs"
+																onclick={() => editTimetableSlot(slot)}
+																disabled={timetableSaveBusy || deleteTimetableBusyId !== ''}
+															>
+																<Pencil class="mr-1 size-3.5" />
+																Edit
+															</Button>
+															<LoadingButton
+																type="button"
+																variant="destructive"
+																size="xs"
+																loading={deleteTimetableBusyId === slot.id}
+																loadingLabel="Hapus..."
+																disabled={timetableSaveBusy || (deleteTimetableBusyId !== '' && deleteTimetableBusyId !== slot.id)}
+																onclick={() => void deleteTimetableSlot(slot)}
+															>
+																<Trash2 class="mr-1 size-3.5" />
+																Hapus
+															</LoadingButton>
+														</div>
+													</div>
+												{/each}
+											</div>
+										</section>
+									{/each}
+								{:else}
+									<EmptyStatePanel compact title="Belum ada slot jadwal" description="Jadwal mingguan akan tampil setelah slot dibuat dari Guru Mapel rombel ini." />
+								{/if}
+							</Card.Content>
+						</Card.Root>
+
+						<Card.Root>
+							<Card.Header>
+								<Card.Title class="text-base">{editingTimetableSlotId ? 'Edit Slot Jadwal' : 'Tambah Slot Jadwal'}</Card.Title>
+								<Card.Description>Pilih Guru Mapel rombel, hari, waktu, ruang, dan catatan operasional.</Card.Description>
+							</Card.Header>
+							<Card.Content class="space-y-3">
+								{#if detail.subject_assignments.length === 0}
+									<EmptyStatePanel compact title="Guru Mapel Belum Tersedia" description="Tambahkan Guru Mapel terlebih dahulu sebelum menyusun jadwal mingguan rombel." />
+								{:else}
+									<div class="space-y-1.5">
+										<label for="timetable-assignment" class="block text-xs font-medium text-muted-foreground">Guru Mapel</label>
+										<select
+											id="timetable-assignment"
+											bind:value={timetableAssignmentId}
+											class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+											disabled={timetableSaveBusy}
+										>
+											<option value="">Pilih guru mapel</option>
+											{#each detail.subject_assignments as assignment (assignment.id)}
+												<option value={assignment.id}>{subjectAssignmentScheduleLabel(assignment)}</option>
+											{/each}
+										</select>
+									</div>
+
+									<div class="grid gap-3 sm:grid-cols-2">
+										<div class="space-y-1.5">
+											<label for="timetable-day" class="block text-xs font-medium text-muted-foreground">Hari</label>
+											<select
+												id="timetable-day"
+												bind:value={timetableDay}
+												class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+												disabled={timetableSaveBusy}
+											>
+												{#each Object.entries(dayLabels) as [day, label] (day)}
+													<option value={day}>{label}</option>
+												{/each}
+											</select>
+										</div>
+										<div class="space-y-1.5">
+											<label for="timetable-room" class="block text-xs font-medium text-muted-foreground">Ruang</label>
+											<Input id="timetable-room" bind:value={timetableRoom} placeholder="Opsional, mis. Lab IPA" disabled={timetableSaveBusy} />
+										</div>
+									</div>
+
+									<div class="grid gap-3 sm:grid-cols-2">
+										<div class="space-y-1.5">
+											<label for="timetable-start" class="block text-xs font-medium text-muted-foreground">Jam Mulai</label>
+											<Input id="timetable-start" type="time" bind:value={timetableStart} disabled={timetableSaveBusy} />
+										</div>
+										<div class="space-y-1.5">
+											<label for="timetable-end" class="block text-xs font-medium text-muted-foreground">Jam Selesai</label>
+											<Input id="timetable-end" type="time" bind:value={timetableEnd} disabled={timetableSaveBusy} />
+										</div>
+									</div>
+
+									<div class="space-y-1.5">
+										<label for="timetable-notes" class="block text-xs font-medium text-muted-foreground">Catatan</label>
+										<Textarea
+											id="timetable-notes"
+											bind:value={timetableNotes}
+											rows={3}
+											placeholder="Opsional, mis. blok bergantian dengan kelas lain"
+											disabled={timetableSaveBusy}
+										/>
+									</div>
+
+									{#if selectedTimetableAssignment}
+										<div class="rounded-lg border border-primary/20 bg-primary/10 p-3 text-sm">
+											<div class="flex items-start gap-2">
+												<Clock class="mt-0.5 size-4 shrink-0 text-primary" />
+												<div class="min-w-0">
+													<p class="font-medium text-foreground">{selectedTimetableAssignment.subject_name}</p>
+													<p class="mt-1 text-xs text-muted-foreground">{selectedTimetableAssignment.teacher_name} - {dayLabels[Number(timetableDay)] ?? 'Hari belum dipilih'} {timetableStart || '--:--'}-{timetableEnd || '--:--'}</p>
+												</div>
+											</div>
+										</div>
+									{/if}
+
+									<div class="flex gap-2">
+										<LoadingButton
+											type="button"
+											class="flex-1"
+											loading={timetableSaveBusy}
+											loadingLabel="Menyimpan..."
+											disabled={!canSaveTimetableSlot || deleteTimetableBusyId !== ''}
+											onclick={() => void saveTimetableSlot()}
+										>
+											{#if editingTimetableSlotId}
+												<Pencil class="mr-2 size-4" />
+												Simpan Perubahan
+											{:else}
+												<Plus class="mr-2 size-4" />
+												Tambah Slot
+											{/if}
+										</LoadingButton>
+										{#if editingTimetableSlotId}
+											<Button
+												type="button"
+												variant="outline"
+												disabled={timetableSaveBusy}
+												onclick={resetTimetableSlotForm}
+											>
+												<X class="mr-2 size-4" />
+												Batal
+											</Button>
+										{/if}
+									</div>
+								{/if}
+							</Card.Content>
+						</Card.Root>
+					</div>
 				</Tabs.Content>
 			</Tabs.Root>
 		{/if}

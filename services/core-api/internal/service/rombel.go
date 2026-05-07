@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"mtsn2kolut-super-app/backend/internal/domain"
@@ -20,6 +21,12 @@ type rombelStore interface {
 	CountRombelSubjectAssignmentDependents(ctx context.Context, arg db.CountRombelSubjectAssignmentDependentsParams) (db.CountRombelSubjectAssignmentDependentsRow, error)
 	DeleteRombelSubjectAssignment(ctx context.Context, arg db.DeleteRombelSubjectAssignmentParams) (int64, error)
 	ListRombelTimetableSlots(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelTimetableSlotsRow, error)
+	GetRombelTimetableSlot(ctx context.Context, arg db.GetRombelTimetableSlotParams) (db.GetRombelTimetableSlotRow, error)
+	CreateRombelTimetableSlot(ctx context.Context, arg db.CreateRombelTimetableSlotParams) (db.CreateRombelTimetableSlotRow, error)
+	UpdateRombelTimetableSlot(ctx context.Context, arg db.UpdateRombelTimetableSlotParams) (db.UpdateRombelTimetableSlotRow, error)
+	DeleteRombelTimetableSlot(ctx context.Context, arg db.DeleteRombelTimetableSlotParams) (int64, error)
+	CountTimetableConflicts(ctx context.Context, arg db.CountTimetableConflictsParams) (int32, error)
+	CountTimetableRoomConflicts(ctx context.Context, arg db.CountTimetableRoomConflictsParams) (int32, error)
 	ListHomeroomAssignmentsByClass(ctx context.Context, classID pgtype.UUID) ([]db.ListHomeroomAssignmentsByClassRow, error)
 	CreateHomeroomAssignment(ctx context.Context, arg db.CreateHomeroomAssignmentParams) (db.CreateHomeroomAssignmentRow, error)
 	UpdateHomeroomAssignment(ctx context.Context, arg db.UpdateHomeroomAssignmentParams) (db.UpdateHomeroomAssignmentRow, error)
@@ -109,6 +116,79 @@ func sameRombelUUID(a, b pgtype.UUID) bool {
 
 func (s *Rombel) ListTimetableSlots(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelTimetableSlotsRow, error) {
 	return s.q.ListRombelTimetableSlots(ctx, classID)
+}
+
+func (s *Rombel) GetTimetableSlot(ctx context.Context, arg db.GetRombelTimetableSlotParams) (db.GetRombelTimetableSlotRow, error) {
+	return s.q.GetRombelTimetableSlot(ctx, arg)
+}
+
+func (s *Rombel) CreateTimetableSlot(ctx context.Context, arg db.CreateRombelTimetableSlotParams) (db.CreateRombelTimetableSlotRow, error) {
+	if err := s.ensureTimetableSlotAvailable(ctx, arg.ClassID, arg.AssignmentID, arg.DayOfWeek, arg.StartTime, arg.EndTime, arg.RoomLabel, pgtype.UUID{}); err != nil {
+		return db.CreateRombelTimetableSlotRow{}, err
+	}
+	return s.q.CreateRombelTimetableSlot(ctx, arg)
+}
+
+func (s *Rombel) UpdateTimetableSlot(ctx context.Context, arg db.UpdateRombelTimetableSlotParams) (db.UpdateRombelTimetableSlotRow, error) {
+	if _, err := s.q.GetRombelTimetableSlot(ctx, db.GetRombelTimetableSlotParams{
+		ClassID: arg.ClassID,
+		ID:      arg.ID,
+	}); err != nil {
+		return db.UpdateRombelTimetableSlotRow{}, err
+	}
+	if err := s.ensureTimetableSlotAvailable(ctx, arg.ClassID, arg.AssignmentID, arg.DayOfWeek, arg.StartTime, arg.EndTime, arg.RoomLabel, arg.ID); err != nil {
+		return db.UpdateRombelTimetableSlotRow{}, err
+	}
+	return s.q.UpdateRombelTimetableSlot(ctx, arg)
+}
+
+func (s *Rombel) DeleteTimetableSlot(ctx context.Context, arg db.DeleteRombelTimetableSlotParams) error {
+	rows, err := s.q.DeleteRombelTimetableSlot(ctx, arg)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (s *Rombel) ensureTimetableSlotAvailable(ctx context.Context, classID, assignmentID pgtype.UUID, dayOfWeek int16, startTime, endTime pgtype.Time, roomLabel string, excludeSlotID pgtype.UUID) error {
+	assignment, err := s.q.GetRombelSubjectAssignment(ctx, db.GetRombelSubjectAssignmentParams{
+		ClassID: classID,
+		ID:      assignmentID,
+	})
+	if err != nil {
+		return err
+	}
+	conflicts, err := s.q.CountTimetableConflicts(ctx, db.CountTimetableConflictsParams{
+		DayOfWeek:         dayOfWeek,
+		StartTime:         startTime,
+		EndTime:           endTime,
+		ClassID:           assignment.ClassID,
+		TeacherEmployeeID: assignment.TeacherEmployeeID,
+		ExcludeSlotID:     excludeSlotID,
+	})
+	if err != nil {
+		return err
+	}
+	if conflicts > 0 {
+		return fmt.Errorf("%w: slot bentrok dengan jadwal kelas atau guru pada waktu yang sama", domain.ErrConflict)
+	}
+	roomConflicts, err := s.q.CountTimetableRoomConflicts(ctx, db.CountTimetableRoomConflictsParams{
+		DayOfWeek:     dayOfWeek,
+		StartTime:     startTime,
+		EndTime:       endTime,
+		RoomLabel:     strings.TrimSpace(roomLabel),
+		ExcludeSlotID: excludeSlotID,
+	})
+	if err != nil {
+		return err
+	}
+	if roomConflicts > 0 {
+		return fmt.Errorf("%w: slot bentrok dengan penggunaan ruang pada waktu yang sama", domain.ErrConflict)
+	}
+	return nil
 }
 
 func (s *Rombel) ListHomeroomAssignments(ctx context.Context, classID pgtype.UUID) ([]db.ListHomeroomAssignmentsByClassRow, error) {

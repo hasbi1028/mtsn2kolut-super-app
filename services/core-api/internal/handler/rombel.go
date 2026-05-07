@@ -27,6 +27,10 @@ type rombelService interface {
 	UpdateSubjectAssignment(ctx context.Context, arg db.UpdateRombelSubjectAssignmentParams) (db.UpdateRombelSubjectAssignmentRow, error)
 	DeleteSubjectAssignment(ctx context.Context, arg db.DeleteRombelSubjectAssignmentParams) error
 	ListTimetableSlots(ctx context.Context, classID pgtype.UUID) ([]db.ListRombelTimetableSlotsRow, error)
+	GetTimetableSlot(ctx context.Context, arg db.GetRombelTimetableSlotParams) (db.GetRombelTimetableSlotRow, error)
+	CreateTimetableSlot(ctx context.Context, arg db.CreateRombelTimetableSlotParams) (db.CreateRombelTimetableSlotRow, error)
+	UpdateTimetableSlot(ctx context.Context, arg db.UpdateRombelTimetableSlotParams) (db.UpdateRombelTimetableSlotRow, error)
+	DeleteTimetableSlot(ctx context.Context, arg db.DeleteRombelTimetableSlotParams) error
 	ListHomeroomAssignments(ctx context.Context, classID pgtype.UUID) ([]db.ListHomeroomAssignmentsByClassRow, error)
 	CreateHomeroomAssignment(ctx context.Context, arg db.CreateHomeroomAssignmentParams) (db.CreateHomeroomAssignmentRow, error)
 	UpdateHomeroomAssignment(ctx context.Context, arg db.UpdateHomeroomAssignmentParams) (db.UpdateHomeroomAssignmentRow, error)
@@ -149,6 +153,42 @@ func (h *Rombel) ListSubjectAssignments(w http.ResponseWriter, r *http.Request) 
 	api.OK(w, rows)
 }
 
+func (h *Rombel) ListTimetableSlots(w http.ResponseWriter, r *http.Request) {
+	if !rombelReadAllowed(w, r) {
+		return
+	}
+	classID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	rows, err := h.svc.ListTimetableSlots(r.Context(), classID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, rows)
+}
+
+func (h *Rombel) GetTimetableSlot(w http.ResponseWriter, r *http.Request) {
+	if !rombelReadAllowed(w, r) {
+		return
+	}
+	classID, slotID, ok := parseRombelTimetableSlotRoute(w, r)
+	if !ok {
+		return
+	}
+	row, err := h.svc.GetTimetableSlot(r.Context(), db.GetRombelTimetableSlotParams{
+		ClassID: classID,
+		ID:      slotID,
+	})
+	if err != nil {
+		writeClientError(w, err, "Slot jadwal rombel tidak ditemukan")
+		return
+	}
+	api.OK(w, row)
+}
+
 func (h *Rombel) GetSubjectAssignment(w http.ResponseWriter, r *http.Request) {
 	if !rombelReadAllowed(w, r) {
 		return
@@ -237,6 +277,75 @@ func (h *Rombel) DeleteSubjectAssignment(w http.ResponseWriter, r *http.Request)
 	api.NoContent(w)
 }
 
+func (h *Rombel) CreateTimetableSlot(w http.ResponseWriter, r *http.Request) {
+	if !rombelManageAllowed(w, r) {
+		return
+	}
+	classID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
+	var body timetableSlotRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	arg, ok := parseCreateTimetableSlot(w, classID, body)
+	if !ok {
+		return
+	}
+	row, err := h.svc.CreateTimetableSlot(r.Context(), arg)
+	if err != nil {
+		writeClientError(w, err, "Jadwal rombel tidak valid")
+		return
+	}
+	api.Created(w, row)
+}
+
+func (h *Rombel) UpdateTimetableSlot(w http.ResponseWriter, r *http.Request) {
+	if !rombelManageAllowed(w, r) {
+		return
+	}
+	classID, slotID, ok := parseRombelTimetableSlotRoute(w, r)
+	if !ok {
+		return
+	}
+	var body timetableSlotRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	arg, ok := parseUpdateTimetableSlot(w, classID, slotID, body)
+	if !ok {
+		return
+	}
+	row, err := h.svc.UpdateTimetableSlot(r.Context(), arg)
+	if err != nil {
+		writeClientError(w, err, "Jadwal rombel tidak valid")
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Rombel) DeleteTimetableSlot(w http.ResponseWriter, r *http.Request) {
+	if !rombelManageAllowed(w, r) {
+		return
+	}
+	classID, slotID, ok := parseRombelTimetableSlotRoute(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.DeleteTimetableSlot(r.Context(), db.DeleteRombelTimetableSlotParams{
+		ClassID: classID,
+		ID:      slotID,
+	}); err != nil {
+		writeClientError(w, err, "Penghapusan jadwal rombel tidak valid")
+		return
+	}
+	api.NoContent(w)
+}
+
 func (h *Rombel) CreateHomeroomAssignment(w http.ResponseWriter, r *http.Request) {
 	if !rombelManageAllowed(w, r) {
 		return
@@ -317,6 +426,16 @@ type homeroomAssignmentRequest struct {
 type subjectAssignmentRequest struct {
 	SubjectID         string `json:"subject_id"`
 	TeacherEmployeeID string `json:"teacher_employee_id"`
+}
+
+type timetableSlotRequest struct {
+	AssignmentID string `json:"assignment_id"`
+	DayOfWeek    int16  `json:"day_of_week"`
+	StartTime    string `json:"start_time"`
+	EndTime      string `json:"end_time"`
+	Room         string `json:"room"`
+	RoomLabel    string `json:"room_label"`
+	Notes        string `json:"notes"`
 }
 
 type rombelStudentParent struct {
@@ -480,6 +599,73 @@ func parseSubjectAssignmentBody(w http.ResponseWriter, body subjectAssignmentReq
 	return subjectID, teacherID, true
 }
 
+func parseCreateTimetableSlot(w http.ResponseWriter, classID pgtype.UUID, body timetableSlotRequest) (db.CreateRombelTimetableSlotParams, bool) {
+	assignmentID, dayOfWeek, startTime, endTime, roomLabel, notes, ok := parseTimetableSlotBody(w, body)
+	if !ok {
+		return db.CreateRombelTimetableSlotParams{}, false
+	}
+	return db.CreateRombelTimetableSlotParams{
+		ClassID:      classID,
+		AssignmentID: assignmentID,
+		DayOfWeek:    dayOfWeek,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		RoomLabel:    roomLabel,
+		Notes:        notes,
+	}, true
+}
+
+func parseUpdateTimetableSlot(w http.ResponseWriter, classID pgtype.UUID, slotID pgtype.UUID, body timetableSlotRequest) (db.UpdateRombelTimetableSlotParams, bool) {
+	assignmentID, dayOfWeek, startTime, endTime, roomLabel, notes, ok := parseTimetableSlotBody(w, body)
+	if !ok {
+		return db.UpdateRombelTimetableSlotParams{}, false
+	}
+	return db.UpdateRombelTimetableSlotParams{
+		ClassID:      classID,
+		ID:           slotID,
+		AssignmentID: assignmentID,
+		DayOfWeek:    dayOfWeek,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		RoomLabel:    roomLabel,
+		Notes:        notes,
+	}, true
+}
+
+func parseTimetableSlotBody(w http.ResponseWriter, body timetableSlotRequest) (pgtype.UUID, int16, pgtype.Time, pgtype.Time, string, string, bool) {
+	assignmentID, err := parseUUID(body.AssignmentID)
+	if err != nil {
+		api.BadRequest(w, "assignment_id invalid")
+		return pgtype.UUID{}, 0, pgtype.Time{}, pgtype.Time{}, "", "", false
+	}
+	if body.DayOfWeek < 1 || body.DayOfWeek > 6 {
+		api.BadRequest(w, "day_of_week harus 1-6")
+		return pgtype.UUID{}, 0, pgtype.Time{}, pgtype.Time{}, "", "", false
+	}
+	startTime, err := service.ParseAcademicTimeInput(body.StartTime)
+	if err != nil {
+		api.BadRequest(w, "start_time invalid")
+		return pgtype.UUID{}, 0, pgtype.Time{}, pgtype.Time{}, "", "", false
+	}
+	endTime, err := service.ParseAcademicTimeInput(body.EndTime)
+	if err != nil {
+		api.BadRequest(w, "end_time invalid")
+		return pgtype.UUID{}, 0, pgtype.Time{}, pgtype.Time{}, "", "", false
+	}
+	if startTime.Microseconds >= endTime.Microseconds {
+		api.BadRequest(w, "rentang waktu tidak valid")
+		return pgtype.UUID{}, 0, pgtype.Time{}, pgtype.Time{}, "", "", false
+	}
+	return assignmentID, body.DayOfWeek, startTime, endTime, timetableRoomLabel(body), strings.TrimSpace(body.Notes), true
+}
+
+func timetableRoomLabel(body timetableSlotRequest) string {
+	if room := strings.TrimSpace(body.Room); room != "" {
+		return room
+	}
+	return strings.TrimSpace(body.RoomLabel)
+}
+
 func parseRombelAssignmentRoute(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, bool) {
 	classID, err := parseUUID(chi.URLParam(r, "id"))
 	if err != nil {
@@ -492,6 +678,20 @@ func parseRombelAssignmentRoute(w http.ResponseWriter, r *http.Request) (pgtype.
 		return pgtype.UUID{}, pgtype.UUID{}, false
 	}
 	return classID, assignmentID, true
+}
+
+func parseRombelTimetableSlotRoute(w http.ResponseWriter, r *http.Request) (pgtype.UUID, pgtype.UUID, bool) {
+	classID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	slotID, err := parseUUID(chi.URLParam(r, "slotID"))
+	if err != nil {
+		api.BadRequest(w, "invalid slot_id")
+		return pgtype.UUID{}, pgtype.UUID{}, false
+	}
+	return classID, slotID, true
 }
 
 func parseOptionalUUIDParam(w http.ResponseWriter, value string, field string) (pgtype.UUID, bool) {
