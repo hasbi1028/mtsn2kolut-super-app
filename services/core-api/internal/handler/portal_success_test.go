@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -20,6 +21,7 @@ type fakePortalService struct {
 	teacherTimetableID  pgtype.UUID
 	parentOverviewID    pgtype.UUID
 	parentTimetableID   pgtype.UUID
+	studentSessions     []db.ListStudentExamSessionsRow
 	studentOverviewErr  error
 	studentTimetableErr error
 	teacherTimetableErr error
@@ -29,7 +31,7 @@ type fakePortalService struct {
 
 func (f *fakePortalService) StudentOverview(ctx context.Context, studentID pgtype.UUID) (db.GetStudentByIDRow, []db.ListStudentParentsRow, []db.ListStudentExamSessionsRow, error) {
 	f.studentOverviewID = studentID
-	return db.GetStudentByIDRow{ID: studentID, Nama: "Siswa A"}, []db.ListStudentParentsRow{}, []db.ListStudentExamSessionsRow{}, f.studentOverviewErr
+	return db.GetStudentByIDRow{ID: studentID, Nama: "Siswa A"}, []db.ListStudentParentsRow{}, f.studentSessions, f.studentOverviewErr
 }
 
 func (f *fakePortalService) StudentTimetable(ctx context.Context, studentID pgtype.UUID) ([]db.ListStudentTimetableRow, error) {
@@ -60,6 +62,14 @@ func portalClaimsRequest(role, claimKey string, id pgtype.UUID) *http.Request {
 	}))
 }
 
+func portalPermissionClaimsRequest(permission, claimKey string, id pgtype.UUID) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/api/portal", nil)
+	return req.WithContext(context.WithValue(req.Context(), api.ClaimsKey, jwt.MapClaims{
+		"permissions": []any{permission},
+		claimKey:      id.String(),
+	}))
+}
+
 func TestPortalSuccessHandlersForwardScopedIDs(t *testing.T) {
 	studentID := handlerTestUUID(200)
 	employeeID := handlerTestUUID(201)
@@ -74,6 +84,12 @@ func TestPortalSuccessHandlersForwardScopedIDs(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	h.StudentMe(rec, portalPermissionClaimsRequest("student_portal.read", "sid", studentID))
+	if rec.Code != http.StatusOK || svc.studentOverviewID != studentID || svc.studentTimetableID != studentID {
+		t.Fatalf("StudentMe(permission) status/ids = %d/%v/%v, want 200/%v", rec.Code, svc.studentOverviewID, svc.studentTimetableID, studentID)
+	}
+
+	rec = httptest.NewRecorder()
 	h.TeacherTimetable(rec, portalClaimsRequest("guru", "eid", employeeID))
 	if rec.Code != http.StatusOK || svc.teacherTimetableID != employeeID {
 		t.Fatalf("TeacherTimetable() status/id = %d/%v, want 200/%v", rec.Code, svc.teacherTimetableID, employeeID)
@@ -83,6 +99,33 @@ func TestPortalSuccessHandlersForwardScopedIDs(t *testing.T) {
 	h.ParentMe(rec, portalClaimsRequest("ortu", "pid", parentID))
 	if rec.Code != http.StatusOK || svc.parentOverviewID != parentID || svc.parentTimetableID != parentID {
 		t.Fatalf("ParentMe() status/ids = %d/%v/%v, want 200/%v", rec.Code, svc.parentOverviewID, svc.parentTimetableID, parentID)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ParentMe(rec, portalPermissionClaimsRequest("parent_portal.read", "pid", parentID))
+	if rec.Code != http.StatusOK || svc.parentOverviewID != parentID || svc.parentTimetableID != parentID {
+		t.Fatalf("ParentMe(permission) status/ids = %d/%v/%v, want 200/%v", rec.Code, svc.parentOverviewID, svc.parentTimetableID, parentID)
+	}
+}
+
+func TestLegacyStudentPortalRedactsExamTokens(t *testing.T) {
+	studentID := handlerTestUUID(206)
+	svc := &fakePortalService{studentSessions: []db.ListStudentExamSessionsRow{{
+		SessionID:     handlerTestUUID(207),
+		SessionTitle:  "Ujian IPA",
+		Token:         "secret-exam-token",
+		SessionStatus: db.CbtSessionStatusEnumFinished,
+	}}}
+	rec := httptest.NewRecorder()
+
+	(&Portal{svc: svc}).StudentMe(rec, portalClaimsRequest("siswa", "sid", studentID))
+
+	if rec.Code != http.StatusOK || svc.studentOverviewID != studentID || svc.studentTimetableID != studentID {
+		t.Fatalf("StudentMe() status/ids = %d/%v/%v, want 200/%v; body=%s", rec.Code, svc.studentOverviewID, svc.studentTimetableID, studentID, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if strings.Contains(strings.ToLower(body), "token") || strings.Contains(body, "secret-exam-token") {
+		t.Fatalf("StudentMe() exposed exam token data: %s", body)
 	}
 }
 

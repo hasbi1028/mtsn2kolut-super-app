@@ -16,6 +16,13 @@ export const dashboardNavItem: SidebarNavItem = { href: '/', label: 'Dashboard',
 
 export const sidebarNavGroups: SidebarNavGroup[] = [
 	{
+		group: 'Portal',
+		items: [
+			{ href: '/portal/siswa', label: 'Portal Siswa', icon: 'book-open', roles: ['siswa'], permissions: ['student_portal.read'] },
+			{ href: '/portal/orang-tua', label: 'Portal Orang Tua', icon: 'user-group', roles: ['ortu'], permissions: ['parent_portal.read'] }
+		]
+	},
+	{
 		group: 'Akademik & Pembelajaran',
 		items: [
 			{ href: '/academic', label: 'Data Akademik', icon: 'book-open', roles: ['admin'], permissions: ['academic.read'] },
@@ -123,5 +130,7 @@ export const defaultPinnedByRole: Record<string, string[]> = {
 	admin: ['/asesmen/persiapan', '/grades', '/akademik/rombel', '/settings'],
 	guru: ['/asesmen/pelaksanaan', '/asesmen/persiapan', '/grades', '/jadwal'],
 	staf: ['/document-cycles', '/inventory', '/library'],
-	kesiswaan: ['/kesiswaan', '/students', '/akademik/rombel']
+	kesiswaan: ['/kesiswaan', '/students', '/akademik/rombel'],
+	siswa: ['/portal/siswa', '/jadwal'],
+	ortu: ['/portal/orang-tua', '/jadwal']
 };

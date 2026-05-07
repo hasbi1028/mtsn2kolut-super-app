@@ -1728,7 +1728,7 @@ SELECT
   ep.seat_no,
   ep.joined_at,
   ep.submitted_at,
-  ep.score,
+  CASE WHEN s.status = 'finished' THEN ep.score ELSE NULL::numeric END AS score,
   s.title AS session_title,
   s.status AS session_status,
   s.scheduled_start,

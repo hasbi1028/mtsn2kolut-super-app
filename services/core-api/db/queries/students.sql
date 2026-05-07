@@ -32,6 +32,14 @@ LEFT JOIN LATERAL (
 ) lp ON TRUE
 WHERE s.id = $1;
 
+-- name: GetPortalStudentIDByUserID :one
+SELECT u.student_id
+FROM users u
+WHERE u.id = $1
+  AND u.deleted_at IS NULL
+  AND u.is_active = TRUE
+  AND u.student_id IS NOT NULL;
+
 -- name: CreateStudent :one
 INSERT INTO students (nis, nisn, nama, gender, parent_name, parent_phone, class_id, is_active, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)

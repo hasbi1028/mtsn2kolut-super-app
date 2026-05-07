@@ -39,10 +39,22 @@ const apiPathWithQueryMock = (path: string, params: URLSearchParams | string) =>
 	const query = typeof params === 'string' ? params.replace(/^\?/, '') : params.toString();
 	return query ? `${path}?${query}` : path;
 };
-const backendCbtPrefix = ['/api', 'cbt'].join('/');
-const backendCbtPath = (path: string) => `${backendCbtPrefix}${path.startsWith('/') ? path : `/${path}`}`;
-const backendCbtApiPath = (strings: TemplateStringsArray, ...values: Array<string | number | boolean>) =>
-	`${backendCbtPrefix}${apiPathMock(strings, ...values)}`;
+const backendAsesmenPrefix = '/api/asesmen';
+const backendBankSoalPrefix = '/api/bank-soal';
+const BANK_SOAL_TOP_SEGMENTS = new Set(['questions', 'assets', 'soal-support']);
+const backendCbtPrefixFor = (path: string) => {
+	const normalized = path.startsWith('/') ? path : `/${path}`;
+	const firstSegment = normalized.slice(1).split(/[/?#]/)[0] ?? '';
+	return BANK_SOAL_TOP_SEGMENTS.has(firstSegment) ? backendBankSoalPrefix : backendAsesmenPrefix;
+};
+const backendCbtPath = (path: string) => {
+	const normalized = path.startsWith('/') ? path : `/${path}`;
+	return `${backendCbtPrefixFor(normalized)}${normalized}`;
+};
+const backendCbtApiPath = (strings: TemplateStringsArray, ...values: Array<string | number | boolean>) => {
+	const rendered = apiPathMock(strings, ...values);
+	return `${backendCbtPrefixFor(rendered)}${rendered}`;
+};
 const requiredRouteParamMock = (value: string | undefined, name: string) => {
 	if (!value) throw new MockApiError(400, `${name} tidak valid`);
 	return value;
@@ -1794,6 +1806,47 @@ describe('api proxy route handlers', () => {
 		const profileRequest = new Request('http://localhost/api/users/user-1/profile-link', { method: 'PATCH', body: JSON.stringify(profileBody) });
 		await profileMod.PATCH(createEvent({ params: { id: 'user-1' }, request: profileRequest }) as never);
 		expect(proxyPatchMock).toHaveBeenLastCalledWith('/api/users/user-1/profile-link', profileBody);
+	});
+
+	it('forwards student and parent account generation routes through the authenticated proxy', async () => {
+		const studentPreviewMod = await import('../../routes/api/users/student-accounts/preview/+server');
+		const studentGenerateMod = await import('../../routes/api/users/student-accounts/generate/+server');
+		const parentPreviewMod = await import('../../routes/api/users/parent-accounts/preview/+server');
+		const parentGenerateMod = await import('../../routes/api/users/parent-accounts/generate/+server');
+
+		proxyGetMock.mockResolvedValueOnce({ role: 'siswa', ready: 1 });
+		await studentPreviewMod.GET(createEvent() as never);
+		expect(proxyGetMock).toHaveBeenLastCalledWith('/api/users/student-accounts/preview');
+
+		proxyPostMock.mockResolvedValueOnce({ role: 'siswa', created: 1 });
+		await studentGenerateMod.POST(createEvent() as never);
+		expect(proxyPostMock).toHaveBeenLastCalledWith('/api/users/student-accounts/generate', {});
+
+		proxyGetMock.mockResolvedValueOnce({ role: 'ortu', ready: 1 });
+		await parentPreviewMod.GET(createEvent() as never);
+		expect(proxyGetMock).toHaveBeenLastCalledWith('/api/users/parent-accounts/preview');
+
+		proxyPostMock.mockResolvedValueOnce({ role: 'ortu', created: 1 });
+		await parentGenerateMod.POST(createEvent() as never);
+		expect(proxyPostMock).toHaveBeenLastCalledWith('/api/users/parent-accounts/generate', {});
+	});
+
+	it('forwards student portal self-data routes without accepting student_id from the browser path', async () => {
+		const profileMod = await import('../../routes/api/portal/siswa/profile/+server');
+		const scheduleMod = await import('../../routes/api/portal/siswa/schedule/+server');
+		const resultsMod = await import('../../routes/api/portal/siswa/results/+server');
+
+		proxyGetMock.mockResolvedValueOnce({ student: { nama: 'Siswa A' } });
+		await profileMod.GET(createEvent({ url: new URL('http://localhost/api/portal/siswa/profile?student_id=other') }) as never);
+		expect(proxyGetMock).toHaveBeenLastCalledWith('/api/portal/student/profile');
+
+		proxyGetMock.mockResolvedValueOnce({ schedule: [] });
+		await scheduleMod.GET(createEvent({ url: new URL('http://localhost/api/portal/siswa/schedule?student_id=other') }) as never);
+		expect(proxyGetMock).toHaveBeenLastCalledWith('/api/portal/student/schedule');
+
+		proxyGetMock.mockResolvedValueOnce({ results: [] });
+		await resultsMod.GET(createEvent({ url: new URL('http://localhost/api/portal/siswa/results?student_id=other') }) as never);
+		expect(proxyGetMock).toHaveBeenLastCalledWith('/api/portal/student/results');
 	});
 
 });

@@ -87,6 +87,8 @@ const STAFF_OPERATION_PREFIXES = [
 const KESISWAAN_PREFIXES = ['/kesiswaan', '/api/kesiswaan'] as const;
 const STUDENT_PAGE_PREFIXES = ['/students'] as const;
 const STUDENT_API_PREFIXES = ['/api/students'] as const;
+const STUDENT_PORTAL_PREFIXES = ['/portal/siswa', '/api/portal/siswa', '/api/portal/student'] as const;
+const PARENT_PORTAL_PREFIXES = ['/portal/orang-tua', '/api/portal/orang-tua', '/api/portal/parent'] as const;
 
 function matchesPathSegment(pathname: string, prefix: string) {
 	const normalizedPrefix = prefix === '/' ? '/' : prefix.replace(/\/$/, '');
@@ -148,11 +150,21 @@ export function isStudentApiPath(pathname: string) {
 	return STUDENT_API_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
 }
 
+export function isStudentPortalPath(pathname: string) {
+	return STUDENT_PORTAL_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
+}
+
+export function isParentPortalPath(pathname: string) {
+	return PARENT_PORTAL_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix));
+}
+
 export function isReadMethod(method: string) {
 	return method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
 }
 
 function usersPermission(pathname: string, method: string): string[] | undefined {
+	if (matchesPathSegment(pathname, '/api/users/student-accounts')) return ['student_accounts.manage'];
+	if (matchesPathSegment(pathname, '/api/users/parent-accounts')) return ['parent_accounts.manage'];
 	if (matchesPathSegment(pathname, '/api/users/change-requests')) return ['profile_changes.review'];
 	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/reset-password')) return ['users.reset_password'];
 	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/profile-link')) return ['users.update'];
@@ -239,6 +251,8 @@ export function requiredPermissionsForPath(pathname: string, method: string): st
 	if (matchesPathSegment(pathname, '/academic') || matchesPathSegment(pathname, '/api/academic')) return isReadMethod(method) ? ['academic.read'] : ['academic.manage'];
 	if (matchesPathSegment(pathname, '/pusaka') || matchesPathSegment(pathname, '/api/pusaka')) return isReadMethod(method) ? ['pusaka.read'] : ['pusaka.manage'];
 	if (matchesPathSegment(pathname, '/website') || matchesPathSegment(pathname, '/api/website')) return isReadMethod(method) ? ['website.read'] : ['website.manage'];
+	if (isStudentPortalPath(pathname)) return ['student_portal.read'];
+	if (isParentPortalPath(pathname)) return ['parent_portal.read'];
 	if (isKesiswaanPath(pathname)) return isReadMethod(method) ? ['students.read'] : ['students.manage'];
 	if (isStudentPagePath(pathname) || isStudentApiPath(pathname)) return isReadMethod(method) ? ['students.read'] : ['students.manage'];
 	return usersPermission(pathname, method)
@@ -260,6 +274,8 @@ export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: st
 	if (isAdminOnlyPath(pathname) && !isGuruSafeAssessmentSupportReadPath(pathname, method)) return false;
 	if (isBankSoalPath(pathname)) return isBankSoalGuruFallbackPath(pathname, method) && hasAnyRole(user, ['guru']);
 	if (isStaffOperationPath(pathname)) return hasAnyRole(user, ['staf']);
+	if (isStudentPortalPath(pathname)) return hasAnyRole(user, ['siswa']);
+	if (isParentPortalPath(pathname)) return hasAnyRole(user, ['ortu']);
 	if (isKesiswaanPath(pathname)) return hasAnyRole(user, isReadMethod(method) ? ['kesiswaan', 'guru'] : ['kesiswaan']);
 	if (isStudentPagePath(pathname)) return hasAnyRole(user, ['kesiswaan']);
 	if (isStudentApiPath(pathname)) return hasAnyRole(user, isReadMethod(method) ? ['kesiswaan', 'guru'] : ['kesiswaan']);
