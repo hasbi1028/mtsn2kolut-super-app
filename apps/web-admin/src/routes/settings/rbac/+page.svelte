@@ -8,7 +8,10 @@
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import {
+		createRBACRole,
 		fetchRBACMatrix,
+		setRBACRoleActive,
+		updateRBACRole,
 		updateRBACRolePermissions,
 		type RBACMatrix,
 		type RBACRole,
@@ -22,6 +25,14 @@
 		permissionsByModule,
 		rolePermissionMap
 	} from '$lib/rbac/matrix';
+	import {
+		buildRoleMetadataDraft,
+		canEditRoleMetadata,
+		normalizeRoleCode,
+		roleMetadataChanged,
+		sanitizeRoleMetadataPayload,
+		type RoleMetadataDraft
+	} from '$lib/rbac/roles';
 
 	type RBACOverview = {
 		matrix: RBACMatrix;
@@ -40,6 +51,11 @@
 	let permissionSearch = $state('');
 	let moduleFilter = $state('all');
 	let confirmOpen = $state(false);
+	let roleFormMode = $state<'create' | 'edit'>('create');
+	let roleDraft = $state<RoleMetadataDraft>({ code: '', name: '', description: '' });
+	let roleFormError = $state('');
+	let roleActionLoading = $state(false);
+	let roleStatusTarget = $state('');
 
 	const roles = $derived(overview?.matrix.roles ?? []);
 	const permissions = $derived(overview?.matrix.permissions ?? []);
@@ -58,6 +74,12 @@
 		permissionsByModule(filterPermissions(activePermissions, { module: moduleFilter, query: permissionSearch }))
 	);
 	const moduleOptions = $derived(Object.keys(overview?.permissionsByModule ?? {}));
+	const roleDraftPayload = $derived(sanitizeRoleMetadataPayload(roleDraft));
+	const canSaveRoleDraft = $derived(
+		roleDraftPayload.code.length > 0 &&
+		roleDraftPayload.name.length > 0 &&
+		(roleFormMode === 'create' || (canEditRoleMetadata(selectedRole) && roleMetadataChanged(selectedRole, roleDraft)))
+	);
 
 	function buildOverview(matrix: RBACMatrix): RBACOverview {
 		return {
@@ -99,7 +121,91 @@
 		setDraftFromRole(role.code);
 		mutationMessage = '';
 		mutationError = '';
+		roleFormError = '';
 		confirmOpen = false;
+		roleFormMode = canEditRoleMetadata(role) ? 'edit' : 'create';
+		roleDraft = canEditRoleMetadata(role) ? buildRoleMetadataDraft(role) : { code: '', name: '', description: '' };
+	}
+
+	function startCreateRole() {
+		roleFormMode = 'create';
+		roleDraft = { code: '', name: '', description: '' };
+		roleFormError = '';
+		mutationMessage = '';
+		mutationError = '';
+	}
+
+	function startEditRole(role: RBACRole) {
+		if (!canEditRoleMetadata(role)) {
+			roleFormError = 'Role sistem tidak dapat diedit metadata/statusnya. Permission tetap dapat diatur melalui matrix dengan guard backend.';
+			return;
+		}
+		selectedRoleCode = role.code;
+		setDraftFromRole(role.code);
+		roleFormMode = 'edit';
+		roleDraft = buildRoleMetadataDraft(role);
+		roleFormError = '';
+		mutationMessage = '';
+		mutationError = '';
+	}
+
+	function updateRoleCodeDraft(value: string) {
+		roleDraft = { ...roleDraft, code: normalizeRoleCode(value) };
+	}
+
+	async function saveRoleMetadata() {
+		roleFormError = '';
+		mutationMessage = '';
+		mutationError = '';
+		const payload = sanitizeRoleMetadataPayload(roleDraft);
+		if (!payload.code || !payload.name) {
+			roleFormError = 'Kode role dan nama role wajib diisi.';
+			return;
+		}
+		if (roleFormMode === 'edit' && !canEditRoleMetadata(selectedRole)) {
+			roleFormError = 'Role sistem tidak dapat diedit metadata/statusnya.';
+			return;
+		}
+		roleActionLoading = true;
+		try {
+			if (roleFormMode === 'create') {
+				await createRBACRole(payload);
+				selectedRoleCode = payload.code;
+				mutationMessage = `Role ${payload.name} berhasil dibuat. Atur permission role pada matrix akses sebelum digunakan.`;
+			} else if (selectedRole) {
+				await updateRBACRole(selectedRole.code, { name: payload.name, description: payload.description });
+				mutationMessage = `Metadata role ${payload.name} berhasil diperbarui.`;
+			}
+			await loadRBACOverview();
+			roleFormMode = 'edit';
+			const refreshed = roles.find((role: RBACRole) => role.code === selectedRoleCode);
+			roleDraft = buildRoleMetadataDraft(refreshed ?? selectedRole);
+		} catch (error) {
+			roleFormError = error instanceof Error ? error.message : 'Gagal menyimpan metadata role.';
+		} finally {
+			roleActionLoading = false;
+		}
+	}
+
+	async function toggleRoleActive(role: RBACRole) {
+		if (!canEditRoleMetadata(role)) {
+			roleFormError = 'Role sistem tidak dapat dinonaktifkan dari UI.';
+			return;
+		}
+		roleFormError = '';
+		mutationMessage = '';
+		mutationError = '';
+		roleStatusTarget = role.code;
+		try {
+			await setRBACRoleActive(role.code, role.is_active === false);
+			mutationMessage = `Status role ${role.name || role.code} berhasil diperbarui.`;
+			selectedRoleCode = role.code;
+			await loadRBACOverview();
+		} catch (error) {
+			roleFormError = error instanceof Error ? error.message : 'Gagal memperbarui status role.';
+		} finally {
+			roleStatusTarget = '';
+		}
 	}
 
 	function hasDraftPermission(code: string) {
@@ -227,7 +333,37 @@
 					<Card.Title>Role</Card.Title>
 					<p class="text-sm text-muted-foreground">Gunakan “Edit Info” untuk metadata role custom. Role sistem terkunci untuk info/status, tetapi permission dapat diatur dengan guard backend.</p>
 				</Card.Header>
-				<Card.Content class="space-y-3">
+				<Card.Content class="space-y-4">
+					<div class="rounded-2xl border border-border bg-muted/20 p-4">
+						<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+							<div>
+								<p class="text-sm font-semibold text-foreground">{roleFormMode === 'create' ? 'Tambah Role Custom' : 'Edit Info Role Custom'}</p>
+								<p class="text-xs text-muted-foreground">Role sistem tidak bisa diedit metadata/statusnya dari UI; backend tetap menjadi guard utama.</p>
+							</div>
+							<Button variant="outline" onclick={startCreateRole} disabled={roleActionLoading}>Role Baru</Button>
+						</div>
+						<div class="mt-4 grid gap-3 md:grid-cols-2">
+							<div class="space-y-1">
+								<label for="role-code" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Kode Role</label>
+								<Input id="role-code" value={roleDraft.code} oninput={(event) => updateRoleCodeDraft(event.currentTarget.value)} placeholder="operator_asesmen" disabled={roleFormMode === 'edit' || roleActionLoading} />
+							</div>
+							<div class="space-y-1">
+								<label for="role-name" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nama Role</label>
+								<Input id="role-name" bind:value={roleDraft.name} placeholder="Operator Asesmen" disabled={roleActionLoading} />
+							</div>
+							<div class="space-y-1 md:col-span-2">
+								<label for="role-description" class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deskripsi</label>
+								<Input id="role-description" bind:value={roleDraft.description} placeholder="Ringkasan kewenangan role" disabled={roleActionLoading} />
+							</div>
+						</div>
+						{#if roleFormError}
+							<div class="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{roleFormError}</div>
+						{/if}
+						<div class="mt-4 flex flex-wrap items-center justify-between gap-2">
+							<p class="text-xs text-muted-foreground">Kode disimpan dalam format slug snake_case. Permission role diatur terpisah pada matrix akses.</p>
+							<Button onclick={() => void saveRoleMetadata()} disabled={!canSaveRoleDraft || roleActionLoading}>{roleActionLoading ? 'Menyimpan…' : (roleFormMode === 'create' ? 'Buat Role' : 'Simpan Info Role')}</Button>
+						</div>
+					</div>
 					{#each roles as role (role.code)}
 						<button
 							type="button"
@@ -247,6 +383,12 @@
 							{#if role.description}<p class="mt-2 text-sm text-muted-foreground">{role.description}</p>{/if}
 							<p class="mt-3 text-xs font-medium text-muted-foreground">{rolePermissionCount(role)} permission aktif/terpasang</p>
 						</button>
+						<div class="flex flex-wrap justify-end gap-2 rounded-2xl border border-border/70 bg-muted/20 px-3 py-2">
+							<Button size="sm" variant="outline" onclick={() => startEditRole(role)} disabled={!canEditRoleMetadata(role) || roleActionLoading || roleStatusTarget === role.code}>Edit Info</Button>
+							<Button size="sm" variant={role.is_active === false ? 'secondary' : 'outline'} onclick={() => void toggleRoleActive(role)} disabled={!canEditRoleMetadata(role) || roleActionLoading || roleStatusTarget === role.code}>
+								{roleStatusTarget === role.code ? 'Memproses…' : (role.is_active === false ? 'Aktifkan' : 'Nonaktifkan')}
+							</Button>
+						</div>
 					{:else}
 						<EmptyStatePanel title="Belum ada role" description="Matrix RBAC belum mengembalikan data role." compact />
 					{/each}
