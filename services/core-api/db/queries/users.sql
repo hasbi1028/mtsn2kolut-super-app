@@ -4,7 +4,17 @@ SELECT
     u.display_name,
     u.employee_id, u.student_id, u.parent_id,
     u.is_active, u.auth_version, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
-    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+    COALESCE(
+      (
+        SELECT json_agg(r.code ORDER BY r.code)
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id
+          AND r.is_active = TRUE
+      ),
+      (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id),
+      '[]'::json
+    ) as roles
 FROM users u
 WHERE u.username = $1
   AND u.deleted_at IS NULL;
@@ -15,7 +25,17 @@ SELECT
     u.display_name,
     u.employee_id, u.student_id, u.parent_id,
     u.is_active, u.auth_version, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
-    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+    COALESCE(
+      (
+        SELECT json_agg(r.code ORDER BY r.code)
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id
+          AND r.is_active = TRUE
+      ),
+      (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id),
+      '[]'::json
+    ) as roles
 FROM users u
 WHERE u.id = $1
   AND u.deleted_at IS NULL;
@@ -27,7 +47,17 @@ SELECT
     u.employee_id, u.student_id, u.parent_id,
     COALESCE(e.nama, s.nama, p.nama, '') AS profile_nama,
     u.is_active, u.last_login_at, u.deleted_at, u.created_at,
-    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+    COALESCE(
+      (
+        SELECT json_agg(r.code ORDER BY r.code)
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id
+          AND r.is_active = TRUE
+      ),
+      (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id),
+      '[]'::json
+    ) as roles
 FROM users u
 LEFT JOIN employees e ON e.id = u.employee_id
 LEFT JOIN students s ON s.id = u.student_id
@@ -75,7 +105,17 @@ SELECT
     u.is_active,
     u.last_login_at,
     u.created_at,
-    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+    COALESCE(
+      (
+        SELECT json_agg(r.code ORDER BY r.code)
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id
+          AND r.is_active = TRUE
+      ),
+      (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id),
+      '[]'::json
+    ) as roles
 FROM users u
 LEFT JOIN employees e ON e.id = u.employee_id
 LEFT JOIN students s ON s.id = u.student_id
@@ -224,6 +264,19 @@ SELECT role FROM user_account_roles WHERE user_id = $1;
 
 -- name: AddUserRole :exec
 INSERT INTO user_account_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING;
+
+-- name: SyncLegacyUserRolesFromRbac :exec
+WITH legacy_roles AS (
+  SELECT r.code::user_role AS role
+  FROM rbac_user_roles ur
+  JOIN rbac_roles r ON r.id = ur.role_id
+  WHERE ur.user_id = sqlc.arg(user_id)
+    AND r.code IN ('admin', 'guru', 'staf', 'kesiswaan', 'siswa', 'ortu')
+)
+INSERT INTO user_account_roles (user_id, role)
+SELECT sqlc.arg(user_id), role
+FROM legacy_roles
+ON CONFLICT DO NOTHING;
 
 -- name: ListUsersByStudentID :many
 SELECT id, username, password_hash, display_name, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version, last_login_at, deleted_at

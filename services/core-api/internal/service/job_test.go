@@ -37,9 +37,17 @@ type fakeJobStore struct {
 	statusCountErr  error
 	statsRow        db.GetJobStatsRow
 	completeArg     db.CompleteJobParams
+	completeRows    int64
+	completeErr     error
 	failArg         db.FailJobParams
 	getID           pgtype.UUID
 	getRow          db.GetJobRow
+	getErr          error
+	runningArg      db.GetRunningJobForWorkerParams
+	runningRow      db.GetRunningJobForWorkerRow
+	runningErr      error
+	upsertArg       db.UpsertAttendanceParams
+	upsertErr       error
 	cancelEmployee  pgtype.UUID
 	cancelCount     int64
 	cancelAllCount  int64
@@ -97,6 +105,12 @@ func (f *fakeJobStore) RecoverStaleRunningJobs(ctx context.Context, staleAfterSe
 
 func (f *fakeJobStore) CompleteJob(ctx context.Context, arg db.CompleteJobParams) (int64, error) {
 	f.completeArg = arg
+	if f.completeErr != nil {
+		return 0, f.completeErr
+	}
+	if f.completeRows != 0 {
+		return f.completeRows, nil
+	}
 	return 1, nil
 }
 
@@ -107,7 +121,26 @@ func (f *fakeJobStore) FailJob(ctx context.Context, arg db.FailJobParams) (int64
 
 func (f *fakeJobStore) GetJob(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error) {
 	f.getID = id
+	if f.getErr != nil {
+		return db.GetJobRow{}, f.getErr
+	}
 	return f.getRow, nil
+}
+
+func (f *fakeJobStore) GetRunningJobForWorker(ctx context.Context, arg db.GetRunningJobForWorkerParams) (db.GetRunningJobForWorkerRow, error) {
+	f.runningArg = arg
+	if f.runningErr != nil {
+		return db.GetRunningJobForWorkerRow{}, f.runningErr
+	}
+	return f.runningRow, nil
+}
+
+func (f *fakeJobStore) UpsertAttendance(ctx context.Context, arg db.UpsertAttendanceParams) (db.AttendanceRecord, error) {
+	f.upsertArg = arg
+	if f.upsertErr != nil {
+		return db.AttendanceRecord{}, f.upsertErr
+	}
+	return db.AttendanceRecord{EmployeeID: arg.EmployeeID, Tanggal: arg.Tanggal, JamMasuk: arg.JamMasuk, JamPulang: arg.JamPulang, SourceJobID: arg.SourceJobID}, nil
 }
 
 func (f *fakeJobStore) ListActiveEmployees(ctx context.Context) ([]db.ListActiveEmployeesRow, error) {
@@ -364,5 +397,74 @@ func TestJobListStatsAndStateMutationsForwardStoreCalls(t *testing.T) {
 	}
 	if canceled != 5 {
 		t.Fatalf("CancelAll() = %d, want 5", canceled)
+	}
+}
+
+func TestJobCompleteWithAttendanceLocksJobUpsertsAttendanceAndCompletes(t *testing.T) {
+	jobID := pgtype.UUID{Bytes: [16]byte{10}, Valid: true}
+	employeeID := pgtype.UUID{Bytes: [16]byte{11}, Valid: true}
+	tanggal := pgtype.Date{Time: time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC), Valid: true}
+	store := &fakeJobStore{
+		runningRow: db.GetRunningJobForWorkerRow{ID: jobID, EmployeeID: employeeID, Status: db.JobStatusEnumRunning, ClaimedBy: "worker-1"},
+	}
+	svc := &PusakaJob{q: store}
+
+	err := svc.CompleteWithAttendance(context.Background(), jobID, "worker-1", &PusakaJobAttendanceInput{
+		Tanggal:   tanggal,
+		JamMasuk:  "07:10",
+		JamPulang: "15:00",
+	})
+	if err != nil {
+		t.Fatalf("CompleteWithAttendance() error = %v", err)
+	}
+	if store.runningArg.ID != jobID || store.runningArg.ClaimedBy != "worker-1" {
+		t.Fatalf("GetRunningJobForWorker() arg = %+v, want job/worker lock", store.runningArg)
+	}
+	if store.upsertArg.EmployeeID != employeeID || store.upsertArg.Tanggal != tanggal || store.upsertArg.JamMasuk != "07:10" || store.upsertArg.JamPulang != "15:00" || store.upsertArg.SourceJobID != jobID {
+		t.Fatalf("UpsertAttendance() arg = %+v, want locked job employee attendance", store.upsertArg)
+	}
+	if store.completeArg.ID != jobID || store.completeArg.ClaimedBy != "worker-1" {
+		t.Fatalf("CompleteJob() arg = %+v, want job/worker", store.completeArg)
+	}
+}
+
+func TestJobCompleteWithAttendanceReturnsSeedErrorBeforeComplete(t *testing.T) {
+	jobID := pgtype.UUID{Bytes: [16]byte{12}, Valid: true}
+	employeeID := pgtype.UUID{Bytes: [16]byte{13}, Valid: true}
+	expectedErr := errors.New("attendance failed")
+	store := &fakeJobStore{
+		runningRow: db.GetRunningJobForWorkerRow{ID: jobID, EmployeeID: employeeID, Status: db.JobStatusEnumRunning, ClaimedBy: "worker-1"},
+		upsertErr:  expectedErr,
+	}
+	svc := &PusakaJob{q: store}
+
+	err := svc.CompleteWithAttendance(context.Background(), jobID, "worker-1", &PusakaJobAttendanceInput{
+		Tanggal: pgtype.Date{Time: time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC), Valid: true},
+	})
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("CompleteWithAttendance() error = %v, want %v", err, expectedErr)
+	}
+	if store.completeArg.ID.Valid {
+		t.Fatalf("CompleteJob() arg = %+v, want not called after attendance failure", store.completeArg)
+	}
+}
+
+func TestJobCompleteWithAttendanceMapsMissingRunningJobToConflictOrIdempotentSuccess(t *testing.T) {
+	jobID := pgtype.UUID{Bytes: [16]byte{14}, Valid: true}
+	store := &fakeJobStore{
+		runningErr: pgx.ErrNoRows,
+		getRow:     db.GetJobRow{ID: jobID, Status: db.JobStatusEnumRunning},
+	}
+	svc := &PusakaJob{q: store}
+
+	err := svc.CompleteWithAttendance(context.Background(), jobID, "worker-1", &PusakaJobAttendanceInput{Tanggal: pgtype.Date{Valid: true}})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("CompleteWithAttendance(conflict) error = %v, want ErrConflict", err)
+	}
+
+	store.getRow.Status = db.JobStatusEnumSuccess
+	err = svc.CompleteWithAttendance(context.Background(), jobID, "worker-1", &PusakaJobAttendanceInput{Tanggal: pgtype.Date{Valid: true}})
+	if err != nil {
+		t.Fatalf("CompleteWithAttendance(already success) error = %v, want nil", err)
 	}
 }

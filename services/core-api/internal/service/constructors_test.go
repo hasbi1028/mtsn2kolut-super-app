@@ -18,6 +18,9 @@ func TestServiceConstructorsReturnUsableInstances(t *testing.T) {
 	if svc := NewClassJournal(nil); svc == nil {
 		t.Fatal("NewClassJournal(nil) = nil, want service")
 	}
+	if svc := NewClassJournalWithPool(nil); svc == nil || svc.q == nil {
+		t.Fatal("NewClassJournalWithPool(nil) = nil, want service with query store")
+	}
 	if svc := NewDocumentCycle(nil); svc == nil {
 		t.Fatal("NewDocumentCycle(nil) = nil, want service")
 	}
@@ -26,6 +29,9 @@ func TestServiceConstructorsReturnUsableInstances(t *testing.T) {
 	}
 	if svc := NewPusakaJob(nil); svc == nil {
 		t.Fatal("NewPusakaJob(nil) = nil, want service")
+	}
+	if svc := NewPusakaJobWithPool(nil); svc == nil || svc.q == nil {
+		t.Fatal("NewPusakaJobWithPool(nil) = nil, want service with query store")
 	}
 	if svc := NewKesiswaan(nil, ""); svc == nil || svc.photoDir != "data/student-photos" {
 		t.Fatalf("NewKesiswaan(empty) = %+v, want default photo dir", svc)

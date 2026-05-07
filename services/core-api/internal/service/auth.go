@@ -45,8 +45,10 @@ type authStore interface {
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error)
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
 	GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error)
+	GetUserRoleCodesFromRbac(ctx context.Context, userID pgtype.UUID) ([]string, error)
 	GetUserPermissionCodes(ctx context.Context, userID pgtype.UUID) ([]string, error)
 	AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error
+	AddUserRbacRoleByCode(ctx context.Context, arg db.AddUserRbacRoleByCodeParams) error
 	IncrementUserAuthVersion(ctx context.Context, id pgtype.UUID) (int32, error)
 	MarkUserLastLogin(ctx context.Context, id pgtype.UUID) error
 	CreateAuthSession(ctx context.Context, arg db.CreateAuthSessionParams) (db.AuthSession, error)
@@ -509,18 +511,25 @@ func (s *Auth) issueTokenPair(ctx context.Context, user authUserRecord, meta Ses
 		return domain.TokenPair{}, err
 	}
 
-	var roleStrs []string
-	if len(user.Roles) > 0 {
-		_ = json.Unmarshal(user.Roles, &roleStrs)
+	roleStrs, err := s.q.GetUserRoleCodesFromRbac(ctx, user.ID)
+	if err != nil {
+		return domain.TokenPair{}, err
 	}
-
+	roleStrs = normalizeStringSet(roleStrs)
 	if len(roleStrs) == 0 {
-		// Fallback to fetch roles if not joined or empty
-		roles, err := s.q.GetUserRoles(ctx, user.ID)
-		if err == nil {
+		if len(user.Roles) > 0 {
+			_ = json.Unmarshal(user.Roles, &roleStrs)
+			roleStrs = normalizeStringSet(roleStrs)
+		}
+		if len(roleStrs) == 0 {
+			roles, err := s.q.GetUserRoles(ctx, user.ID)
+			if err != nil {
+				return domain.TokenPair{}, err
+			}
 			for _, r := range roles {
 				roleStrs = append(roleStrs, string(r))
 			}
+			roleStrs = normalizeStringSet(roleStrs)
 		}
 	}
 
@@ -760,16 +769,28 @@ func (s *Auth) SeedAdmin(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		return s.q.AddUserRole(ctx, db.AddUserRoleParams{
+		if err := s.q.AddUserRole(ctx, db.AddUserRoleParams{
 			UserID: user.ID,
 			Role:   db.UserRoleAdmin,
+		}); err != nil {
+			return err
+		}
+		return s.q.AddUserRbacRoleByCode(ctx, db.AddUserRbacRoleByCodeParams{
+			UserID: user.ID,
+			Code:   string(db.UserRoleAdmin),
 		})
 	}
 
 	// Ensure admin has admin role
-	return s.q.AddUserRole(ctx, db.AddUserRoleParams{
+	if err := s.q.AddUserRole(ctx, db.AddUserRoleParams{
 		UserID: existing.ID,
 		Role:   db.UserRoleAdmin,
+	}); err != nil {
+		return err
+	}
+	return s.q.AddUserRbacRoleByCode(ctx, db.AddUserRbacRoleByCodeParams{
+		UserID: existing.ID,
+		Code:   string(db.UserRoleAdmin),
 	})
 }
 
@@ -1094,7 +1115,7 @@ func authUserFromUsernameRow(row db.GetUserByUsernameRow) authUserRecord {
 		ParentID:     row.ParentID,
 		IsActive:     row.IsActive,
 		AuthVersion:  row.AuthVersion,
-		Roles:        row.Roles,
+		Roles:        authRolesBytes(row.Roles),
 	}
 }
 
@@ -1108,7 +1129,24 @@ func authUserFromIDRow(row db.GetUserByIDRow) authUserRecord {
 		ParentID:     row.ParentID,
 		IsActive:     row.IsActive,
 		AuthVersion:  row.AuthVersion,
-		Roles:        row.Roles,
+		Roles:        authRolesBytes(row.Roles),
+	}
+}
+
+func authRolesBytes(value any) []byte {
+	switch v := value.(type) {
+	case nil:
+		return nil
+	case []byte:
+		return v
+	case string:
+		return []byte(v)
+	default:
+		payload, err := json.Marshal(v)
+		if err != nil {
+			return nil
+		}
+		return payload
 	}
 }
 

@@ -22,6 +22,7 @@ type fakeUserStore struct {
 	createArg db.CreateUserParams
 	createErr error
 	roles     []db.AddUserRoleParams
+	rbacRoles []db.AddUserRbacRoleByCodeParams
 	roleErr   error
 
 	auditArg  db.ListAuditLogsParams
@@ -59,6 +60,11 @@ func (f *fakeUserStore) CreateUser(ctx context.Context, arg db.CreateUserParams)
 
 func (f *fakeUserStore) AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error {
 	f.roles = append(f.roles, arg)
+	return f.roleErr
+}
+
+func (f *fakeUserStore) AddUserRbacRoleByCode(ctx context.Context, arg db.AddUserRbacRoleByCodeParams) error {
+	f.rbacRoles = append(f.rbacRoles, arg)
 	return f.roleErr
 }
 
@@ -125,8 +131,8 @@ func TestUserSuccessHandlersForwardPayloads(t *testing.T) {
 
 	rec = httptest.NewRecorder()
 	h.Create(rec, adminRequest(http.MethodPost, "/api/users", `{"username":"operator","password":"secret123","roles":["admin"]}`))
-	if rec.Code != http.StatusCreated || store.createArg.Username != "operator" || !store.createArg.IsActive || store.createArg.PasswordHash == "" || len(store.roles) != 1 || store.roles[0].Role != db.UserRoleAdmin {
-		t.Fatalf("Create() status/arg/roles = %d/%+v/%+v", rec.Code, store.createArg, store.roles)
+	if rec.Code != http.StatusCreated || store.createArg.Username != "operator" || !store.createArg.IsActive || store.createArg.PasswordHash == "" || len(store.roles) != 1 || store.roles[0].Role != db.UserRoleAdmin || len(store.rbacRoles) != 1 || store.rbacRoles[0].Code != "admin" {
+		t.Fatalf("Create() status/arg/roles/rbac = %d/%+v/%+v/%+v", rec.Code, store.createArg, store.roles, store.rbacRoles)
 	}
 	var created map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {

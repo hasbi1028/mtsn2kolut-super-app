@@ -272,7 +272,7 @@ func (h *ClassJournal) BulkUpsertAttendances(w http.ResponseWriter, r *http.Requ
 
 func journalAccessAllowed(r *http.Request) bool {
 	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
-		return mw.HasAnyRole(claims, "admin", "guru")
+		return mw.HasAnyRole(claims, "admin", "guru") || mw.HasAnyPermission(claims, "journal.read", "journal.manage")
 	}
 	return false
 }

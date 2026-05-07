@@ -127,6 +127,27 @@ WHERE r.code = $2
   AND r.is_active = TRUE
 ON CONFLICT (user_id, role_id) DO NOTHING;
 
+-- name: ListActiveUserIDsByRoleCodeAnyStatus :many
+SELECT ur.user_id
+FROM rbac_user_roles ur
+JOIN rbac_roles r ON r.id = ur.role_id
+JOIN users u ON u.id = ur.user_id
+WHERE r.code = $1
+  AND u.is_active = TRUE
+ORDER BY ur.user_id;
+
+-- name: ListActiveUserIDsByPermissionCode :many
+SELECT DISTINCT ur.user_id
+FROM rbac_user_roles ur
+JOIN rbac_roles r ON r.id = ur.role_id
+JOIN rbac_role_permissions rp ON rp.role_id = r.id
+JOIN rbac_permissions p ON p.id = rp.permission_id
+JOIN users u ON u.id = ur.user_id
+WHERE p.code = $1
+  AND r.is_active = TRUE
+  AND u.is_active = TRUE
+ORDER BY ur.user_id;
+
 -- name: CountActiveAdminsByRbac :one
 SELECT count(*)::bigint
 FROM users u

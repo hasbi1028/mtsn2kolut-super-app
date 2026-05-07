@@ -4,6 +4,7 @@ bun.lock
 
 # Build output
 apps/web-admin/build/
+services/pusaka-worker/dist/
 services/core-api/bin/
 .tools/
 

@@ -286,7 +286,7 @@ func gradeAccessAllowed(r *http.Request) bool {
 	if !ok {
 		return false
 	}
-	return mw.HasAnyRole(claims, "admin", "guru")
+	return mw.HasAnyRole(claims, "admin", "guru") || mw.HasAnyPermission(claims, "grades.read", "grades.manage")
 }
 
 func currentGradeUsername(r *http.Request) string {

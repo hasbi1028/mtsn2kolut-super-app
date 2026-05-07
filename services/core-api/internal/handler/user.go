@@ -22,6 +22,7 @@ type userStore interface {
 	ListUsers(ctx context.Context) ([]db.ListUsersRow, error)
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error)
 	AddUserRole(ctx context.Context, arg db.AddUserRoleParams) error
+	AddUserRbacRoleByCode(ctx context.Context, arg db.AddUserRbacRoleByCodeParams) error
 	ListAuditLogs(ctx context.Context, arg db.ListAuditLogsParams) ([]db.ListAuditLogsRow, error)
 }
 
@@ -115,10 +116,6 @@ func (h *User) List(w http.ResponseWriter, r *http.Request) {
 
 	res := make([]userResponse, len(rows))
 	for i, row := range rows {
-		var roles []string
-		if len(row.Roles) > 0 {
-			_ = json.Unmarshal(row.Roles, &roles)
-		}
 		res[i] = userResponse{
 			ID:          row.ID,
 			Username:    row.Username,
@@ -131,7 +128,7 @@ func (h *User) List(w http.ResponseWriter, r *http.Request) {
 			LastLoginAt: row.LastLoginAt,
 			DeletedAt:   row.DeletedAt,
 			CreatedAt:   row.CreatedAt,
-			Roles:       roles,
+			Roles:       stringSliceFromJSONValue(row.Roles),
 		}
 	}
 	api.OK(w, res)
@@ -206,6 +203,12 @@ func (h *User) Create(w http.ResponseWriter, r *http.Request) {
 			if err := store.AddUserRole(r.Context(), db.AddUserRoleParams{
 				UserID: row.ID,
 				Role:   db.UserRole(rStr),
+			}); err != nil {
+				return db.CreateUserRow{}, err
+			}
+			if err := store.AddUserRbacRoleByCode(r.Context(), db.AddUserRbacRoleByCodeParams{
+				UserID: row.ID,
+				Code:   rStr,
 			}); err != nil {
 				return db.CreateUserRow{}, err
 			}

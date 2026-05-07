@@ -297,6 +297,56 @@ func (q *Queries) GetJobStats(ctx context.Context) (GetJobStatsRow, error) {
 	return i, err
 }
 
+const getRunningJobForWorker = `-- name: GetRunningJobForWorker :one
+SELECT id, employee_id, run_type, status, error_message, claimed_by, claimed_at,
+       attempts, max_attempts, next_retry_at, created_at, updated_at
+FROM jobs
+WHERE id = $1
+  AND status = 'running'
+  AND claimed_by = $2
+FOR UPDATE
+`
+
+type GetRunningJobForWorkerParams struct {
+	ID        pgtype.UUID `json:"id"`
+	ClaimedBy string      `json:"claimed_by"`
+}
+
+type GetRunningJobForWorkerRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	EmployeeID   pgtype.UUID        `json:"employee_id"`
+	RunType      RunTypeEnum        `json:"run_type"`
+	Status       JobStatusEnum      `json:"status"`
+	ErrorMessage string             `json:"error_message"`
+	ClaimedBy    string             `json:"claimed_by"`
+	ClaimedAt    pgtype.Timestamptz `json:"claimed_at"`
+	Attempts     int32              `json:"attempts"`
+	MaxAttempts  int32              `json:"max_attempts"`
+	NextRetryAt  pgtype.Timestamptz `json:"next_retry_at"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetRunningJobForWorker(ctx context.Context, arg GetRunningJobForWorkerParams) (GetRunningJobForWorkerRow, error) {
+	row := q.db.QueryRow(ctx, getRunningJobForWorker, arg.ID, arg.ClaimedBy)
+	var i GetRunningJobForWorkerRow
+	err := row.Scan(
+		&i.ID,
+		&i.EmployeeID,
+		&i.RunType,
+		&i.Status,
+		&i.ErrorMessage,
+		&i.ClaimedBy,
+		&i.ClaimedAt,
+		&i.Attempts,
+		&i.MaxAttempts,
+		&i.NextRetryAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listJobs = `-- name: ListJobs :many
 SELECT j.id, j.employee_id, e.nama AS employee_nama, COALESCE(e.nip, '')::text AS employee_nip,
        j.run_type, j.status, j.error_message,

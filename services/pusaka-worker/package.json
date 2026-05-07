@@ -2,10 +2,11 @@
   "name": "mtsn2kolut-pusaka-worker",
   "version": "1.0.0",
   "description": "",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
     "check": "tsc --noEmit",
     "test": "node --import tsx --test src/**/*.test.ts"
   },

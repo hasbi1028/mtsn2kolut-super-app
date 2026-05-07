@@ -23,6 +23,7 @@ type fakeStore struct {
 	settings        map[string]string
 	users           map[string]db.User
 	userRoles       map[pgtype.UUID][]db.UserRole
+	userRBACRoles   map[pgtype.UUID][]string
 	userPermissions map[pgtype.UUID][]string
 	authSessions    map[pgtype.UUID]db.AuthSession
 	uiPrefs         map[pgtype.UUID]db.UserUiPreference
@@ -63,6 +64,7 @@ func newFakeStore() *fakeStore {
 		settings:        map[string]string{},
 		users:           map[string]db.User{},
 		userRoles:       map[pgtype.UUID][]db.UserRole{},
+		userRBACRoles:   map[pgtype.UUID][]string{},
 		userPermissions: map[pgtype.UUID][]string{},
 		authSessions:    map[pgtype.UUID]db.AuthSession{},
 		uiPrefs:         map[pgtype.UUID]db.UserUiPreference{},
@@ -338,6 +340,10 @@ func (f *fakeStore) GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.
 	return f.userRoles[userID], nil
 }
 
+func (f *fakeStore) GetUserRoleCodesFromRbac(ctx context.Context, userID pgtype.UUID) ([]string, error) {
+	return f.userRBACRoles[userID], nil
+}
+
 func (f *fakeStore) GetUserPermissionCodes(ctx context.Context, userID pgtype.UUID) ([]string, error) {
 	return f.userPermissions[userID], nil
 }
@@ -347,6 +353,14 @@ func (f *fakeStore) AddUserRole(ctx context.Context, arg db.AddUserRoleParams) e
 		return f.addRoleErr
 	}
 	f.userRoles[arg.UserID] = append(f.userRoles[arg.UserID], arg.Role)
+	return nil
+}
+
+func (f *fakeStore) AddUserRbacRoleByCode(ctx context.Context, arg db.AddUserRbacRoleByCodeParams) error {
+	if f.addRoleErr != nil {
+		return f.addRoleErr
+	}
+	f.userRBACRoles[arg.UserID] = append(f.userRBACRoles[arg.UserID], arg.Code)
 	return nil
 }
 
@@ -561,8 +575,38 @@ func TestAuthSeedAdminCreatesUser(t *testing.T) {
 	if !hasAdmin {
 		t.Fatal("admin role not assigned")
 	}
+	if got := store.userRBACRoles[u.ID]; len(got) != 1 || got[0] != "admin" {
+		t.Fatalf("admin dynamic roles = %v, want [admin]", got)
+	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte("admin")); err != nil {
 		t.Fatalf("admin password hash mismatch: %v", err)
+	}
+}
+
+func TestAuthLoginUsesDynamicRBACRolesBeforeLegacyRoles(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
+	if err := svc.SeedAdmin(context.Background()); err != nil {
+		t.Fatalf("SeedAdmin() error = %v", err)
+	}
+	u := store.users["admin"]
+	store.userRoles[u.ID] = []db.UserRole{db.UserRoleGuru}
+	store.userRBACRoles[u.ID] = []string{"staf"}
+
+	pair, err := svc.Login(context.Background(), "admin", "admin", SessionMeta{})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	claims := jwt.MapClaims{}
+	if _, _, err := new(jwt.Parser).ParseUnverified(pair.AccessToken, claims); err != nil {
+		t.Fatalf("ParseUnverified(access) error = %v", err)
+	}
+	if claims["role"] != "staf" {
+		t.Fatalf("role claim = %v, want dynamic RBAC role staf", claims["role"])
+	}
+	roles, ok := claims["roles"].([]any)
+	if !ok || len(roles) != 1 || roles[0] != "staf" {
+		t.Fatalf("roles claim = %#v, want [staf]", claims["roles"])
 	}
 }
 

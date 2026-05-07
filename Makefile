@@ -114,7 +114,7 @@ build-web:
 	cd $(WEB_DIR) && npm run build
 
 build-worker:
-	@echo "worker: no build step (tsx runs TypeScript directly)"
+	cd $(WORKER_DIR) && npm run build
 
 build-backend:
 	cd $(BACKEND_DIR) && go build -o bin/api ./cmd/api
@@ -245,7 +245,7 @@ ops-backup:
 .PHONY: clean clean-build
 
 clean-build:
-	rm -rf $(WEB_DIR)/build $(BACKEND_DIR)/bin
+	rm -rf $(WEB_DIR)/build $(WORKER_DIR)/dist $(BACKEND_DIR)/bin
 
 clean: clean-build
 
@@ -273,7 +273,7 @@ help:
 	@echo "  dev-web                npm run dev"
 	@echo "  dev-worker             npm run dev"
 	@echo "  dev-web-bun            optional Bun dev runner for web-admin only"
-	@echo "  dev-worker-bun         optional Bun script runner; worker runtime remains Node/tsx"
+	@echo "  dev-worker-bun         optional Bun script runner; worker production runtime remains Node/dist"
 	@echo ""
 	@echo "Verify:"
 	@echo "  check                  web check + web unit + worker typecheck + worker tests + backend tests + mobile tests + vet + npm audit"
@@ -298,7 +298,7 @@ help:
 	@echo "  deploy/DEPLOY.md       step-by-step deploy contract for 3 VPS"
 	@echo ""
 	@echo "Build:"
-	@echo "  build                  build web + backend"
+	@echo "  build                  build web + worker + backend"
 	@echo "  mobile-release-apk     build Flutter APK release; requires API_BASE_URL=https://..."
 	@echo "  start-web              start SvelteKit production server"
 	@echo "  start-worker           start Playwright worker"
