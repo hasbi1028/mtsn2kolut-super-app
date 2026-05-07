@@ -9,20 +9,27 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/microcosm-cc/bluemonday"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
 var websiteStripHTMLTags = regexp.MustCompile(`(?s)<[^>]*>`)
-var websiteStripDangerousBlocks = []*regexp.Regexp{
-	regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`),
-	regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`),
-	regexp.MustCompile(`(?is)<iframe[^>]*>.*?</iframe>`),
-	regexp.MustCompile(`(?is)<object[^>]*>.*?</object>`),
-	regexp.MustCompile(`(?is)<embed[^>]*>.*?</embed>`),
-}
-var websiteStripEventHandlers = regexp.MustCompile(`(?i)\s+on[a-z]+\s*=\s*(".*?"|'.*?'|[^\s>]+)`)
-var websiteStripDangerousURLs = regexp.MustCompile(`(?i)\s(href|src)\s*=\s*(['"])\s*javascript:[^'"]*['"]`)
 var websiteSlugNoise = regexp.MustCompile(`[^a-z0-9]+`)
+
+// websiteHTMLPolicy is an allowlist sanitizer for editorial website content.
+// It accepts the safe subset of UGC HTML and additionally permits a handful of
+// formatting tags/attributes that the editorial UI emits.
+var websiteHTMLPolicy = func() *bluemonday.Policy {
+	p := bluemonday.UGCPolicy()
+	// Allow basic figure/figcaption used by image embeds.
+	p.AllowElements("figure", "figcaption")
+	// Allow simple text alignment via class names.
+	p.AllowAttrs("class").OnElements("p", "span", "div", "h1", "h2", "h3", "h4", "h5", "h6")
+	// UGCPolicy already enforces rel=nofollow + URL scheme allowlist, blocks
+	// javascript:/data:/vbscript:, drops event handlers, and rejects any tag/
+	// attribute outside its allowlist. It also rejects style attributes.
+	return p
+}()
 
 type websiteStore interface {
 	ListWebsiteContents(ctx context.Context, arg db.ListWebsiteContentsParams) ([]db.ListWebsiteContentsRow, error)
@@ -319,13 +326,7 @@ func parseWebsitePublishedAt(raw string) (pgtype.Timestamptz, error) {
 }
 
 func sanitizeWebsiteHTML(raw string) string {
-	cleaned := strings.TrimSpace(raw)
-	for _, pattern := range websiteStripDangerousBlocks {
-		cleaned = pattern.ReplaceAllString(cleaned, "")
-	}
-	cleaned = websiteStripEventHandlers.ReplaceAllString(cleaned, "")
-	cleaned = websiteStripDangerousURLs.ReplaceAllString(cleaned, ` $1="#"`)
-	return strings.TrimSpace(cleaned)
+	return strings.TrimSpace(websiteHTMLPolicy.Sanitize(raw))
 }
 
 func plainExcerpt(raw string) string {

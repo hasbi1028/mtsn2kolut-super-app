@@ -33,6 +33,7 @@ type examService interface {
 }
 
 func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	var body struct {
 		Token             string `json:"token"`
 		DeviceFingerprint string `json:"device_fingerprint"`
@@ -114,6 +115,7 @@ func (h *Exam) RecordEvent(w http.ResponseWriter, r *http.Request) {
 	if !h.allowExamWrite(w, p.ID, "event") {
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 	var body struct {
 		EventType string         `json:"event_type"`
 		Data      map[string]any `json:"data"`
@@ -142,6 +144,7 @@ func (h *Exam) SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 	if !h.allowExamWrite(w, p.ID, "answer") {
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	var body struct {
 		QuestionID string `json:"question_id"`
 		Answer     string `json:"answer"`

@@ -261,13 +261,30 @@ func TestWebsiteNormalizeParseAndTextHelpers(t *testing.T) {
 	}
 
 	cleaned := sanitizeWebsiteHTML(`<p onclick="alert(1)">A<script>x</script><a href="javascript:alert(1)">B</a><img src='javascript:evil()' onerror=boom></p>`)
-	for _, blocked := range []string{"script", "onclick", "onerror", "javascript:"} {
+	for _, blocked := range []string{"script", "onclick", "onerror", "javascript:", "vbscript:", "data:"} {
 		if strings.Contains(strings.ToLower(cleaned), blocked) {
 			t.Fatalf("sanitizeWebsiteHTML() = %q, still contains %q", cleaned, blocked)
 		}
 	}
-	if !strings.Contains(cleaned, `href="#"`) || !strings.Contains(cleaned, `src="#"`) {
-		t.Fatalf("sanitizeWebsiteHTML() = %q, want dangerous URLs replaced", cleaned)
+	// Bluemonday drops dangerous tags/attributes entirely instead of substituting placeholders.
+	// Anchor text content is preserved, but the tag itself is stripped when its href is unsafe.
+	if !strings.Contains(cleaned, "A") || !strings.Contains(cleaned, "B") {
+		t.Fatalf("sanitizeWebsiteHTML() = %q, want preserved text content", cleaned)
+	}
+
+	// Additional XSS bypass surface that the previous regex-based sanitizer missed.
+	for _, raw := range []string{
+		`<a href="DATA:text/html,<script>alert(1)</script>">x</a>`,
+		`<a href="VBScript:msgbox('xss')">x</a>`,
+		`<p style="background:url(javascript:alert(1))">x</p>`,
+		`<svg onload=alert(1)>x</svg>`,
+	} {
+		got := strings.ToLower(sanitizeWebsiteHTML(raw))
+		for _, blocked := range []string{"javascript:", "vbscript:", "data:text/html", "onload=", "<script", "<svg"} {
+			if strings.Contains(got, blocked) {
+				t.Fatalf("sanitizeWebsiteHTML(%q) = %q, still contains %q", raw, got, blocked)
+			}
+		}
 	}
 	if got := plainExcerpt("<p>Satu&nbsp;dua</p><p>tiga</p>"); got != "Satu dua tiga" {
 		t.Fatalf("plainExcerpt() = %q, want normalized text", got)

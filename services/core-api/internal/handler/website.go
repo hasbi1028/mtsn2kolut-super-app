@@ -64,6 +64,7 @@ func (h *Website) Create(w http.ResponseWriter, r *http.Request) {
 		api.Forbidden(w)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 256<<10)
 	var body struct {
 		Kind            string `json:"kind"`
 		Title           string `json:"title"`
@@ -112,6 +113,7 @@ func (h *Website) Update(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid id")
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 256<<10)
 	var body struct {
 		Kind            string `json:"kind"`
 		Title           string `json:"title"`

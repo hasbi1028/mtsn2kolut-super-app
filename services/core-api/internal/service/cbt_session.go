@@ -2,10 +2,11 @@ package service
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"sort"
 	"strconv"
 	"strings"
@@ -914,7 +915,7 @@ func shuffleRooms(ctx context.Context, q cbtRoomShuffleStore, sessionID pgtype.U
 		return nil
 	}
 
-	indices := rand.Perm(len(participants))
+	indices := cryptoPermInts(len(participants))
 
 	slot := 0
 	for _, room := range rooms {
@@ -1341,11 +1342,35 @@ func (s *CbtSession) GetParticipantAnswers(ctx context.Context, participantID pg
 	return rows, nil
 }
 
-// shuffleUUIDs returns a new slice with UUIDs in random order.
+// shuffleUUIDs returns a new slice with UUIDs in random order using crypto/rand.
 func shuffleUUIDs(ids []pgtype.UUID) []pgtype.UUID {
 	out := make([]pgtype.UUID, len(ids))
 	copy(out, ids)
-	rand.Shuffle(len(out), func(i, j int) { out[i], out[j] = out[j], out[i] })
+	for i := len(out) - 1; i > 0; i-- {
+		value, err := cryptorand.Int(cryptorand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			return out
+		}
+		j := int(value.Int64())
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}
+
+// cryptoPermInts returns [0,n) shuffled via Fisher–Yates seeded by crypto/rand.
+func cryptoPermInts(n int) []int {
+	out := make([]int, n)
+	for i := range out {
+		out[i] = i
+	}
+	for i := n - 1; i > 0; i-- {
+		value, err := cryptorand.Int(cryptorand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			return out
+		}
+		j := int(value.Int64())
+		out[i], out[j] = out[j], out[i]
+	}
 	return out
 }
 
