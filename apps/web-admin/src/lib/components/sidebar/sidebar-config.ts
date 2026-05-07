@@ -12,11 +12,9 @@ export type SidebarNavGroup = {
 	items: SidebarNavItem[];
 };
 
+export const dashboardNavItem: SidebarNavItem = { href: '/', label: 'Dashboard', icon: 'grid', pinnable: false };
+
 export const sidebarNavGroups: SidebarNavGroup[] = [
-	{
-		group: 'Utama',
-		items: [{ href: '/', label: 'Dashboard', icon: 'grid', pinnable: false }]
-	},
 	{
 		group: 'Akademik & Pembelajaran',
 		items: [

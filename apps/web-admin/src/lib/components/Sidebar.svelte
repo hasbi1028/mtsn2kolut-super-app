@@ -15,6 +15,7 @@
 	import { readClientJson } from '$lib/client/api';
 	import type { AccountIdentity } from '$lib/client/account';
 	import {
+		dashboardNavItem,
 		defaultPinnedByRole,
 		sidebarNavGroups,
 		type SidebarNavItem
@@ -61,14 +62,15 @@
 	let recentItems = $state<string[]>([]);
 	let pinnedLoaded = $state(false);
 
-	const visibleNavItems = $derived(
-		nav.flatMap((section) =>
+	const visibleNavItems = $derived([
+		{ ...dashboardNavItem, group: 'Akses Cepat' },
+		...nav.flatMap((section) =>
 			section.items.map((item) => ({
 				...item,
 				group: section.group,
 			}))
 		)
-	);
+	]);
 
 	const activeHref = $derived(findActiveSidebarHref(page.url.pathname, visibleNavItems));
 
