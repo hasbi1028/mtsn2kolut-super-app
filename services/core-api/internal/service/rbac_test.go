@@ -268,15 +268,26 @@ func TestRBACReplaceUserRolesSucceedsAndAudits(t *testing.T) {
 func TestRBACReplaceRolePermissionsProtectsCriticalAdminPermissions(t *testing.T) {
 	actorID := rbacTestUUID(15)
 	store := &fakeRBACStore{
-		roles:       []db.RbacRole{{Code: "admin", IsActive: true}, {Code: "guru", IsActive: true}},
-		permissions: []db.RbacPermission{{Code: "roles.manage", IsActive: true}, {Code: "users.manage_roles", IsActive: true}, {Code: "users.read", IsActive: true}},
+		roles: []db.RbacRole{{Code: "admin", IsActive: true}, {Code: "guru", IsActive: true}},
+		permissions: []db.RbacPermission{
+			{Code: "roles.manage", IsActive: true},
+			{Code: "users.manage_roles", IsActive: true},
+			{Code: "users.manage", IsActive: true},
+			{Code: "users.read", IsActive: true},
+		},
 		activeAdmins: 1,
-		usersByRole: map[string][]pgtype.UUID{"guru": {rbacTestUUID(16)}},
+		usersByRole:  map[string][]pgtype.UUID{"guru": {rbacTestUUID(16)}},
 	}
 	svc := &RBAC{q: store}
 
 	if err := svc.ReplaceRolePermissions(context.Background(), "admin", []string{"users.read"}, actorID); err == nil {
 		t.Fatal("ReplaceRolePermissions(admin loses critical permissions) error = nil, want safety error")
+	}
+	if err := svc.ReplaceRolePermissions(context.Background(), "admin", []string{"roles.manage", "users.manage_roles", "users.read"}, actorID); err == nil {
+		t.Fatal("ReplaceRolePermissions(last admin loses users.manage) error = nil, want safety error")
+	}
+	if len(store.deletedRolePerms) != 0 || len(store.addedRolePerms) != 0 {
+		t.Fatalf("mutations after failed admin validation = deleted %v added %v, want none", store.deletedRolePerms, store.addedRolePerms)
 	}
 	if err := svc.ReplaceRolePermissions(context.Background(), "guru", []string{"users.read", "users.read"}, actorID); err != nil {
 		t.Fatalf("ReplaceRolePermissions(guru) error = %v", err)
