@@ -87,7 +87,7 @@ VPS worker:
 ```bash
 cd /path/to/mtsn2kolut-super-app
 git pull
-cd services/pusaka-worker && npm install
+cd services/pusaka-worker && npm install && npm run build
 cd /path/to/mtsn2kolut-super-app
 pm2 start deploy/pm2/worker.config.cjs || pm2 restart deploy/pm2/worker.config.cjs
 ```
@@ -320,7 +320,7 @@ Jika deploy frontend gagal:
 Jika deploy worker gagal:
 
 1. checkout commit sebelumnya
-2. jalankan `npm install` bila lockfile berubah
+2. jalankan `npm install && npm run build` bila source, dependency, atau lockfile worker berubah
 3. restart PM2 worker
 
 ## Rules yang tidak boleh dilanggar

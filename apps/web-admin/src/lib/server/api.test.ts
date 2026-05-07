@@ -168,6 +168,20 @@ describe('server api helpers', () => {
 		}))).rejects.toBeInstanceOf(RequestPayloadError);
 	});
 
+	it('limits JSON request bodies before parsing in BFF helpers', async () => {
+		await expect(readRequestJson(new Request('http://localhost/api/test', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'Content-Length': '20' },
+			body: JSON.stringify({ title: 'Dokumen' })
+		}), 8)).rejects.toBeInstanceOf(RequestPayloadError);
+
+		await expect(readOptionalRequestJson(new Request('http://localhost/api/test', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ title: 'Dokumen' })
+		}), {}, 8)).rejects.toBeInstanceOf(RequestPayloadError);
+	});
+
 	it('readOptionalRequestJson accepts empty bodies but rejects malformed non-empty JSON', async () => {
 		await expect(readOptionalRequestJson(new Request('http://localhost/api/test', {
 			method: 'POST'

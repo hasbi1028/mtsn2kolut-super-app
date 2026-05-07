@@ -66,8 +66,7 @@ module.exports = {
     {
       name: 'mtsn2kolut-pusaka-worker',
       cwd: './services/pusaka-worker',
-      script: 'node_modules/.bin/tsx',
-      args: 'src/index.ts',
+      script: 'dist/index.js',
       interpreter: 'node',
       env_file: path.join(rootDir, 'services/pusaka-worker/.env'),
       // Nilai sensitif (BACKEND_URL, WORKER_API_KEY) diambil dari worker/.env

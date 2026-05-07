@@ -7,6 +7,7 @@ const BASE = (env.API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 const GENERIC_UPSTREAM_ERROR = 'Layanan backend sedang bermasalah. Silakan coba beberapa saat lagi.';
 const INVALID_UPSTREAM_JSON = 'Respons backend kosong atau bukan JSON';
 export const AUTH_VALIDATION_PROBE_PATH = '/api/auth/sessions';
+export const DEFAULT_JSON_BODY_LIMIT_BYTES = 1024 * 1024;
 type Fetcher = typeof fetch;
 
 export class ApiError extends Error {
@@ -61,23 +62,46 @@ export function publicHeaders(): Record<string, string> {
 	return { 'Content-Type': 'application/json' };
 }
 
-export async function readRequestJson<T>(request: Request): Promise<T> {
+export async function readRequestJson<T>(request: Request, maxBytes = DEFAULT_JSON_BODY_LIMIT_BYTES): Promise<T> {
 	try {
-		return await request.json() as T;
+		return JSON.parse(await readLimitedRequestText(request, maxBytes)) as T;
 	} catch (e) {
 		if (isMalformedJsonError(e)) throw new RequestPayloadError();
 		throw e;
 	}
 }
 
-export async function readOptionalRequestJson<T>(request: Request, fallback: T): Promise<T> {
-	const text = await request.text();
+export async function readOptionalRequestJson<T>(request: Request, fallback: T, maxBytes = DEFAULT_JSON_BODY_LIMIT_BYTES): Promise<T> {
+	const text = await readLimitedRequestText(request, maxBytes);
 	if (!text.trim()) return fallback;
 	try {
 		return JSON.parse(text) as T;
 	} catch {
 		throw new RequestPayloadError();
 	}
+}
+
+async function readLimitedRequestText(request: Request, maxBytes: number): Promise<string> {
+	const contentLength = request.headers.get('content-length');
+	if (contentLength && Number(contentLength) > maxBytes) {
+		throw new RequestPayloadError('Payload JSON terlalu besar');
+	}
+	if (!request.body) return '';
+
+	const reader = request.body.getReader();
+	const decoder = new TextDecoder();
+	let size = 0;
+	let text = '';
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		size += value.byteLength;
+		if (size > maxBytes) {
+			throw new RequestPayloadError('Payload JSON terlalu besar');
+		}
+		text += decoder.decode(value, { stream: true });
+	}
+	return text + decoder.decode();
 }
 
 function extractMessage(payload: unknown): string | undefined {
