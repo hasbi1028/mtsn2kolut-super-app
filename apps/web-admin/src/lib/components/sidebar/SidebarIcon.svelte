@@ -69,6 +69,11 @@
 	{:else if name === 'mail-forward'}
 		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
 		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12l3 3-3 3" />
+	{:else if name === 'archive'}
+		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M5 7l1 13h12l1-13M8 7V4h8v3M10 11h4" />
+	{:else if name === 'shield'}
+		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-5" />
 	{:else if name === 'printer'}
 		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9V4h12v5M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
 		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 14h12v6H6z" />

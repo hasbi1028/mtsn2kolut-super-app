@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dashboardNavItem, sidebarNavGroups } from './sidebar-config';
+import sidebarIconSource from './SidebarIcon.svelte?raw';
 
 const academicItems = sidebarNavGroups.find((group) => group.group === 'Akademik & Pembelajaran')?.items ?? [];
 const assessmentItems = sidebarNavGroups.find((group) => group.group === 'Asesmen')?.items ?? [];
@@ -108,6 +109,17 @@ describe('sidebar assessment configuration', () => {
 	});
 
 
+
+	it('keeps every configured sidebar icon backed by a rendered SVG branch', () => {
+		const configuredIcons = new Set([
+			dashboardNavItem.icon,
+			...sidebarNavGroups.flatMap((group) => group.items.map((item) => item.icon))
+		]);
+
+		for (const icon of configuredIcons) {
+			expect(sidebarIconSource).toContain(`name === '${icon}'`);
+		}
+	});
 
 	it('adds permission metadata for migrated RBAC-aware modules while keeping role fallback', () => {
 		const allItems = sidebarNavGroups.flatMap((group) => group.items);
