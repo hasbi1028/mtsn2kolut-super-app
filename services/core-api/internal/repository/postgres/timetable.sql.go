@@ -444,6 +444,18 @@ func (q *Queries) ListTimetableSlots(ctx context.Context) ([]ListTimetableSlotsR
 	return items, nil
 }
 
+const lockTimetableMutationScope = `-- name: LockTimetableMutationScope :one
+SELECT 1::bigint
+FROM pg_advisory_xact_lock(hashtextextended($1::text, 0))
+`
+
+func (q *Queries) LockTimetableMutationScope(ctx context.Context, lockKey string) (int64, error) {
+	row := q.db.QueryRow(ctx, lockTimetableMutationScope, lockKey)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const updateTimetableSlot = `-- name: UpdateTimetableSlot :one
 UPDATE timetable_slots
 SET assignment_id = $2,

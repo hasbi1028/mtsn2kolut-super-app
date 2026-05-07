@@ -211,7 +211,7 @@ export function requiredPermissionsForPath(pathname: string, method: string): st
 	if (matchesPathSegment(pathname, '/settings/school-profile') || matchesPathSegment(pathname, '/api/school-profile')) return ['settings.school_profile'];
 	if (matchesPathSegment(pathname, '/api/rbac')) return isReadMethod(method) ? ['roles.read'] : ['roles.manage'];
 	if (matchesPathSegment(pathname, '/parents') || matchesPathSegment(pathname, '/api/parents')) return isReadMethod(method) ? ['parents.read'] : ['parents.manage'];
-	if (isRombelTimetableJournalSessionPath(pathname)) return ['journal.manage'];
+	if (isRombelTimetableJournalSessionPath(pathname)) return ['journal.manage', 'journal.manage_all'];
 	if (matchesPathSegment(pathname, '/academic') || matchesPathSegment(pathname, '/api/academic')) return isReadMethod(method) ? ['academic.read'] : ['academic.manage'];
 	if (matchesPathSegment(pathname, '/pusaka') || matchesPathSegment(pathname, '/api/pusaka')) return isReadMethod(method) ? ['pusaka.read'] : ['pusaka.manage'];
 	if (matchesPathSegment(pathname, '/website') || matchesPathSegment(pathname, '/api/website')) return isReadMethod(method) ? ['website.read'] : ['website.manage'];

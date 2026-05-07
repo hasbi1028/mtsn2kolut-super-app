@@ -39,8 +39,8 @@ func NewClassJournal(svc *service.ClassJournal, audit ...cbtAuthoringAuditWriter
 }
 
 func (h *ClassJournal) Overview(w http.ResponseWriter, r *http.Request) {
-	if !journalAccessAllowed(r) {
-		api.Forbidden(w)
+	employeeID, ok := journalReadScope(w, r)
+	if !ok {
 		return
 	}
 	assignmentID, err := optionalUUID(r.URL.Query().Get("assignment_id"))
@@ -48,7 +48,6 @@ func (h *ClassJournal) Overview(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "assignment_id tidak valid")
 		return
 	}
-	employeeID := journalEmployeeID(r)
 	data, err := h.svc.Overview(r.Context(), assignmentID, employeeID)
 	if err != nil {
 		api.Internal(w, err)
@@ -58,8 +57,8 @@ func (h *ClassJournal) Overview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ClassJournal) CreateSession(w http.ResponseWriter, r *http.Request) {
-	if !journalAccessAllowed(r) {
-		api.Forbidden(w)
+	employeeID, ok := journalManageScope(w, r)
+	if !ok {
 		return
 	}
 	var body struct {
@@ -88,7 +87,6 @@ func (h *ClassJournal) CreateSession(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "format tanggal tidak valid (gunakan YYYY-MM-DD)")
 		return
 	}
-	employeeID := journalEmployeeID(r)
 	detail, err := h.svc.CreateSession(r.Context(), assignmentID, tanggal, body.Materi, body.Kegiatan, body.Catatan, body.GuruHadir, employeeID)
 	if err != nil {
 		writeClientError(w, err, "Data sesi jurnal tidak valid")
@@ -103,7 +101,8 @@ func (h *ClassJournal) CreateSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ClassJournal) OpenSessionFromTimetableSlot(w http.ResponseWriter, r *http.Request) {
-	if !journalAccessAllowedOrUnauthorized(w, r) {
+	employeeID, ok := journalManageScopeOrUnauthorized(w, r)
+	if !ok {
 		return
 	}
 	classID, slotID, ok := parseRombelTimetableSlotRoute(w, r)
@@ -150,7 +149,7 @@ func (h *ClassJournal) OpenSessionFromTimetableSlot(w http.ResponseWriter, r *ht
 		guruHadir = *body.GuruHadir
 	}
 
-	result, err := h.svc.OpenSessionFromTimetableSlot(r.Context(), classID, slotID, tanggal, materi, body.Kegiatan, catatan, guruHadir, journalEmployeeID(r))
+	result, err := h.svc.OpenSessionFromTimetableSlot(r.Context(), classID, slotID, tanggal, materi, body.Kegiatan, catatan, guruHadir, employeeID)
 	if err != nil {
 		writeClientError(w, err, "Sesi jurnal dari jadwal rombel tidak valid")
 		return
@@ -171,8 +170,8 @@ func (h *ClassJournal) OpenSessionFromTimetableSlot(w http.ResponseWriter, r *ht
 }
 
 func (h *ClassJournal) GetSession(w http.ResponseWriter, r *http.Request) {
-	if !journalAccessAllowed(r) {
-		api.Forbidden(w)
+	employeeID, ok := journalReadScope(w, r)
+	if !ok {
 		return
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
@@ -180,7 +179,7 @@ func (h *ClassJournal) GetSession(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "id tidak valid")
 		return
 	}
-	detail, err := h.svc.GetSession(r.Context(), id, journalEmployeeID(r))
+	detail, err := h.svc.GetSession(r.Context(), id, employeeID)
 	if err != nil {
 		api.Internal(w, err)
 		return
@@ -189,8 +188,8 @@ func (h *ClassJournal) GetSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ClassJournal) UpdateSession(w http.ResponseWriter, r *http.Request) {
-	if !journalAccessAllowed(r) {
-		api.Forbidden(w)
+	employeeID, ok := journalManageScope(w, r)
+	if !ok {
 		return
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
@@ -208,7 +207,6 @@ func (h *ClassJournal) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	employeeID := journalEmployeeID(r)
 	row, err := h.svc.UpdateSession(r.Context(), id, body.Materi, body.Kegiatan, body.Catatan, body.GuruHadir, employeeID)
 	if err != nil {
 		writeClientError(w, err, "Perubahan sesi jurnal tidak valid")
@@ -242,8 +240,8 @@ func (h *ClassJournal) DeleteSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ClassJournal) BulkUpsertAttendances(w http.ResponseWriter, r *http.Request) {
-	if !journalAccessAllowed(r) {
-		api.Forbidden(w)
+	employeeID, ok := journalManageScope(w, r)
+	if !ok {
 		return
 	}
 	id, err := parseUUID(chi.URLParam(r, "id"))
@@ -258,7 +256,6 @@ func (h *ClassJournal) BulkUpsertAttendances(w http.ResponseWriter, r *http.Requ
 		api.BadRequest(w, "invalid json")
 		return
 	}
-	employeeID := journalEmployeeID(r)
 	if err := h.svc.BulkUpsertAttendances(r.Context(), id, body.Entries, employeeID); err != nil {
 		writeClientError(w, err, "Data kehadiran jurnal tidak valid")
 		return
@@ -271,47 +268,79 @@ func (h *ClassJournal) BulkUpsertAttendances(w http.ResponseWriter, r *http.Requ
 }
 
 func journalAccessAllowed(r *http.Request) bool {
-	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
-		return mw.HasAnyRole(claims, "admin", "guru") || mw.HasAnyPermission(claims, "journal.read", "journal.manage")
-	}
-	return false
+	_, ok := journalScope(r, false)
+	return ok
 }
 
-func journalAccessAllowedOrUnauthorized(w http.ResponseWriter, r *http.Request) bool {
+func journalReadScope(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
+	return writeJournalScope(w, r, false)
+}
+
+func journalManageScope(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
+	return writeJournalScope(w, r, true)
+}
+
+func journalManageScopeOrUnauthorized(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
+	return writeJournalScopeWithMissingClaimsStatus(w, r, true, http.StatusUnauthorized)
+}
+
+func writeJournalScope(w http.ResponseWriter, r *http.Request, manage bool) (pgtype.UUID, bool) {
+	return writeJournalScopeWithMissingClaimsStatus(w, r, manage, http.StatusForbidden)
+}
+
+func writeJournalScopeWithMissingClaimsStatus(w http.ResponseWriter, r *http.Request, manage bool, missingClaimsStatus int) (pgtype.UUID, bool) {
 	if _, ok := api.ClaimsFromContext(r.Context()); !ok {
-		api.Unauthorized(w)
-		return false
+		if missingClaimsStatus == http.StatusUnauthorized {
+			api.Unauthorized(w)
+		} else {
+			api.Forbidden(w)
+		}
+		return pgtype.UUID{}, false
 	}
-	if !journalAccessAllowed(r) {
+	employeeID, ok := journalScope(r, manage)
+	if !ok {
 		api.Forbidden(w)
-		return false
+		return pgtype.UUID{}, false
 	}
-	return true
+	return employeeID, true
+}
+
+func journalScope(r *http.Request, manage bool) (pgtype.UUID, bool) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		return pgtype.UUID{}, false
+	}
+	if mw.HasAnyRole(claims, "admin") {
+		return pgtype.UUID{}, true
+	}
+	if manage {
+		if mw.HasAnyPermission(claims, "journal.manage_all") {
+			return pgtype.UUID{}, true
+		}
+		if !mw.HasAnyRole(claims, "guru") && !mw.HasAnyPermission(claims, "journal.manage") {
+			return pgtype.UUID{}, false
+		}
+	} else {
+		if mw.HasAnyPermission(claims, "journal.read_all", "journal.manage_all") {
+			return pgtype.UUID{}, true
+		}
+		if !mw.HasAnyRole(claims, "guru") && !mw.HasAnyPermission(claims, "journal.read", "journal.manage") {
+			return pgtype.UUID{}, false
+		}
+	}
+	employeeID := journalEmployeeID(r)
+	return employeeID, employeeID.Valid
 }
 
 func journalEmployeeID(r *http.Request) pgtype.UUID {
 	if claims, ok := api.ClaimsFromContext(r.Context()); ok {
-		if mw.HasAnyRole(claims, "admin") {
+		if mw.HasAnyRole(claims, "admin") || mw.HasAnyPermission(claims, "journal.read_all", "journal.manage_all") {
 			return pgtype.UUID{}
 		}
-		isGuru := false
-		if rawRoles, ok := claims["roles"].([]any); ok {
-			for _, role := range rawRoles {
-				if role == "guru" {
-					isGuru = true
-					break
-				}
-			}
-		}
-		if role, _ := claims["role"].(string); role == "guru" {
-			isGuru = true
-		}
-		if isGuru {
-			if eid, _ := claims["eid"].(string); eid != "" {
-				var id pgtype.UUID
-				if err := id.Scan(strings.TrimSpace(eid)); err == nil {
-					return id
-				}
+		if eid, _ := claims["eid"].(string); eid != "" {
+			var id pgtype.UUID
+			if err := id.Scan(strings.TrimSpace(eid)); err == nil {
+				return id
 			}
 		}
 	}

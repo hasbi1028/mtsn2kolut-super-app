@@ -80,7 +80,9 @@ Legacy role fallback masih aktif untuk compatibility. Target cleanup nanti: audi
 ### journal
 
 - `journal.manage` — Mengelola jurnal kelas.
+- `journal.manage_all` — Mengelola seluruh jurnal kelas lintas guru.
 - `journal.read` — Melihat jurnal kelas.
+- `journal.read_all` — Melihat seluruh jurnal kelas lintas guru.
 
 ### kesiswaan
 

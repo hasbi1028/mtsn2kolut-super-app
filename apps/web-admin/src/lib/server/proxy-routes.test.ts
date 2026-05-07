@@ -1324,6 +1324,24 @@ describe('api proxy route handlers', () => {
 		await expect(res.json()).resolves.toEqual({ error: 'unauthorized' });
 	});
 
+	it('allows rombel timetable journal-session open for journal manage permissions', async () => {
+		const mod = await import('../../routes/api/academic/rombel/[id]/timetable-slots/[slotID]/journal-session/+server');
+		proxyPostMock.mockResolvedValueOnce({ created: false, session: { id: 'journal-1' } });
+		const request = new Request('http://localhost/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ date: '2026-05-07' })
+		});
+		const res = await mod.POST(createEvent({
+			locals: { user: { role: '', roles: [], permissions: ['journal.manage_all'] } },
+			params: { id: 'class-1', slotID: 'slot-1' },
+			request
+		}) as never);
+
+		expect(proxyPostMock).toHaveBeenCalledWith('/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', { date: '2026-05-07' });
+		expect(res.status).toBe(200);
+	});
+
 	it('encodes student lifecycle ids read from query params before forwarding', async () => {
 		const mod = await import('../../routes/api/students/+server');
 		proxyPatchMock.mockResolvedValueOnce({ id: 'student 1/2026', status: 'inactive' });

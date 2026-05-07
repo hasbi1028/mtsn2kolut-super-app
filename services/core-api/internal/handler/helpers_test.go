@@ -209,6 +209,37 @@ func TestTeacherClaimHelpersRespectRolesArrayAndRoleFallback(t *testing.T) {
 	if got := journalEmployeeID(req); !got.Valid {
 		t.Fatal("journalEmployeeID(role fallback) invalid, want valid")
 	}
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(context.WithValue(req.Context(), api.ClaimsKey, jwt.MapClaims{
+		"permissions": []any{"journal.read"},
+	}))
+	if journalAccessAllowed(req) {
+		t.Fatal("journalAccessAllowed(journal.read without eid) = true, want false")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(context.WithValue(req.Context(), api.ClaimsKey, jwt.MapClaims{
+		"permissions": []any{"journal.read"},
+		"eid":         "00000000-0000-0000-0000-000000000006",
+	}))
+	if !journalAccessAllowed(req) {
+		t.Fatal("journalAccessAllowed(journal.read with eid) = false, want true")
+	}
+	if got := journalEmployeeID(req); !got.Valid {
+		t.Fatal("journalEmployeeID(journal.read with eid) invalid, want scoped employee")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(context.WithValue(req.Context(), api.ClaimsKey, jwt.MapClaims{
+		"permissions": []any{"journal.read_all"},
+	}))
+	if !journalAccessAllowed(req) {
+		t.Fatal("journalAccessAllowed(journal.read_all without eid) = false, want true")
+	}
+	if got := journalEmployeeID(req); got.Valid {
+		t.Fatal("journalEmployeeID(journal.read_all) valid, want all-scope")
+	}
 }
 
 func TestSensitiveAccessHelpersDenyWithoutClaims(t *testing.T) {

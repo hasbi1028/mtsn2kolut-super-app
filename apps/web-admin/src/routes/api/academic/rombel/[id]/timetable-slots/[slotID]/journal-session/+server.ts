@@ -10,7 +10,9 @@ function journalAccessError(event: RequestEvent): Response | null {
 	const user = event.locals.user;
 	if (!user) return json({ error: 'unauthorized' }, { status: 401 });
 	const roles = user.roles ?? (user.role ? [user.role] : []);
+	const permissions = user.permissions ?? [];
 	if (roles.includes('admin') || roles.includes('guru')) return null;
+	if (permissions.includes('journal.manage') || permissions.includes('journal.manage_all')) return null;
 	return json({ error: 'forbidden' }, { status: 403 });
 }
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
 
@@ -29,15 +30,24 @@ type academicStore interface {
 	DeleteClassSubjectAssignment(ctx context.Context, id pgtype.UUID) error
 	DeleteTimetableSlot(ctx context.Context, id pgtype.UUID) error
 	GetClassSubjectAssignment(ctx context.Context, id pgtype.UUID) (db.GetClassSubjectAssignmentRow, error)
+	LockTimetableMutationScope(ctx context.Context, lockKey string) (int64, error)
 	CountTimetableConflicts(ctx context.Context, arg db.CountTimetableConflictsParams) (int32, error)
 	CountTimetableRoomConflicts(ctx context.Context, arg db.CountTimetableRoomConflictsParams) (int32, error)
 }
 
 type Academic struct {
-	q academicStore
+	q  academicStore
+	tx classJournalTxStarter
 }
 
 func NewAcademic(q *db.Queries) *Academic { return &Academic{q: q} }
+
+func NewAcademicWithPool(pool *pgxpool.Pool) *Academic {
+	if pool == nil {
+		return &Academic{q: db.New(nil)}
+	}
+	return &Academic{q: db.New(pool), tx: pool}
+}
 
 func (s *Academic) ListYears(ctx context.Context) ([]db.AcademicYear, error) {
 	return s.q.ListAcademicYears(ctx)
@@ -80,20 +90,32 @@ func (s *Academic) CreateAssignment(ctx context.Context, p db.CreateClassSubject
 }
 
 func (s *Academic) CreateTimetableSlot(ctx context.Context, p db.CreateTimetableSlotParams) (db.TimetableSlot, error) {
-	if err := s.ensureTimetableSlotAvailable(ctx, p.AssignmentID, p.DayOfWeek, p.StartTime, p.EndTime, p.RoomLabel, pgtype.UUID{}); err != nil {
-		return db.TimetableSlot{}, err
-	}
-	return s.q.CreateTimetableSlot(ctx, p)
+	var row db.TimetableSlot
+	err := s.withAcademicStore(ctx, func(store academicStore) error {
+		if err := s.ensureTimetableSlotAvailable(ctx, store, p.AssignmentID, p.DayOfWeek, p.StartTime, p.EndTime, p.RoomLabel, pgtype.UUID{}); err != nil {
+			return err
+		}
+		var err error
+		row, err = store.CreateTimetableSlot(ctx, p)
+		return err
+	})
+	return row, err
 }
 
 func (s *Academic) UpdateTimetableSlot(ctx context.Context, p db.UpdateTimetableSlotParams) (db.TimetableSlot, error) {
-	if _, err := s.q.GetTimetableSlot(ctx, p.ID); err != nil {
-		return db.TimetableSlot{}, err
-	}
-	if err := s.ensureTimetableSlotAvailable(ctx, p.AssignmentID, p.DayOfWeek, p.StartTime, p.EndTime, p.RoomLabel, p.ID); err != nil {
-		return db.TimetableSlot{}, err
-	}
-	return s.q.UpdateTimetableSlot(ctx, p)
+	var row db.TimetableSlot
+	err := s.withAcademicStore(ctx, func(store academicStore) error {
+		if _, err := store.GetTimetableSlot(ctx, p.ID); err != nil {
+			return err
+		}
+		if err := s.ensureTimetableSlotAvailable(ctx, store, p.AssignmentID, p.DayOfWeek, p.StartTime, p.EndTime, p.RoomLabel, p.ID); err != nil {
+			return err
+		}
+		var err error
+		row, err = store.UpdateTimetableSlot(ctx, p)
+		return err
+	})
+	return row, err
 }
 
 func (s *Academic) DeleteYear(ctx context.Context, id pgtype.UUID) error {
@@ -116,12 +138,15 @@ func (s *Academic) DeleteTimetableSlot(ctx context.Context, id pgtype.UUID) erro
 	return s.q.DeleteTimetableSlot(ctx, id)
 }
 
-func (s *Academic) ensureTimetableSlotAvailable(ctx context.Context, assignmentID pgtype.UUID, dayOfWeek int16, startTime, endTime pgtype.Time, roomLabel string, excludeSlotID pgtype.UUID) error {
-	assignment, err := s.q.GetClassSubjectAssignment(ctx, assignmentID)
+func (s *Academic) ensureTimetableSlotAvailable(ctx context.Context, store academicStore, assignmentID pgtype.UUID, dayOfWeek int16, startTime, endTime pgtype.Time, roomLabel string, excludeSlotID pgtype.UUID) error {
+	assignment, err := store.GetClassSubjectAssignment(ctx, assignmentID)
 	if err != nil {
 		return fmt.Errorf("assignment tidak ditemukan")
 	}
-	conflicts, err := s.q.CountTimetableConflicts(ctx, db.CountTimetableConflictsParams{
+	if err := lockTimetableMutationScopes(ctx, store, dayOfWeek, assignment.ClassID, assignment.TeacherEmployeeID, roomLabel); err != nil {
+		return err
+	}
+	conflicts, err := store.CountTimetableConflicts(ctx, db.CountTimetableConflictsParams{
 		DayOfWeek:         dayOfWeek,
 		StartTime:         startTime,
 		EndTime:           endTime,
@@ -135,7 +160,7 @@ func (s *Academic) ensureTimetableSlotAvailable(ctx context.Context, assignmentI
 	if conflicts > 0 {
 		return fmt.Errorf("slot bentrok dengan jadwal kelas atau guru pada waktu yang sama")
 	}
-	roomConflicts, err := s.q.CountTimetableRoomConflicts(ctx, db.CountTimetableRoomConflictsParams{
+	roomConflicts, err := store.CountTimetableRoomConflicts(ctx, db.CountTimetableRoomConflictsParams{
 		DayOfWeek:     dayOfWeek,
 		StartTime:     startTime,
 		EndTime:       endTime,
@@ -149,6 +174,21 @@ func (s *Academic) ensureTimetableSlotAvailable(ctx context.Context, assignmentI
 		return fmt.Errorf("slot bentrok dengan penggunaan ruang pada waktu yang sama")
 	}
 	return nil
+}
+
+func (s *Academic) withAcademicStore(ctx context.Context, fn func(academicStore) error) error {
+	if s.tx == nil {
+		return fn(s.q)
+	}
+	tx, err := s.tx.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err := fn(db.New(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func ParseAcademicTimeInput(value string) (pgtype.Time, error) {

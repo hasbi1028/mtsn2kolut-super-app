@@ -1203,16 +1203,17 @@ type ClassJournalAttendance struct {
 }
 
 type ClassJournalSession struct {
-	ID           pgtype.UUID        `json:"id"`
-	AssignmentID pgtype.UUID        `json:"assignment_id"`
-	Tanggal      pgtype.Date        `json:"tanggal"`
-	PertemuanKe  int32              `json:"pertemuan_ke"`
-	Materi       string             `json:"materi"`
-	Kegiatan     string             `json:"kegiatan"`
-	Catatan      string             `json:"catatan"`
-	GuruHadir    bool               `json:"guru_hadir"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID              pgtype.UUID        `json:"id"`
+	AssignmentID    pgtype.UUID        `json:"assignment_id"`
+	Tanggal         pgtype.Date        `json:"tanggal"`
+	PertemuanKe     int32              `json:"pertemuan_ke"`
+	Materi          string             `json:"materi"`
+	Kegiatan        string             `json:"kegiatan"`
+	Catatan         string             `json:"catatan"`
+	GuruHadir       bool               `json:"guru_hadir"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	TimetableSlotID pgtype.UUID        `json:"timetable_slot_id"`
 }
 
 type ClassSubjectAssignment struct {
