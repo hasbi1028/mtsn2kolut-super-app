@@ -3,16 +3,17 @@
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import AccountMenu from '$lib/components/AccountMenu.svelte';
 	import SidebarCommandPalette from '$lib/components/sidebar/SidebarCommandPalette.svelte';
 	import SidebarIcon from '$lib/components/sidebar/SidebarIcon.svelte';
 	import SidebarNavSection from '$lib/components/sidebar/SidebarNavSection.svelte';
 	import SidebarQuickAccess from '$lib/components/sidebar/SidebarQuickAccess.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
-	import { clearCbtComposerDrafts } from '$lib/client/cbt-drafts';
 	import { fetchSidebarAttention } from '$lib/components/sidebar/sidebar-attention';
 	import { filterSidebarNavGroupsByAccess } from '$lib/components/sidebar/sidebar-access';
 	import { findActiveSidebarHref } from '$lib/components/sidebar/sidebar-active';
 	import { readClientJson } from '$lib/client/api';
+	import type { AccountIdentity } from '$lib/client/account';
 	import {
 		defaultPinnedByRole,
 		sidebarNavGroups,
@@ -21,9 +22,11 @@
 
 	let {
 		user,
+		account = null,
 		desktopExpanded = $bindable(true)
 	}: {
 		user?: { id: string; username: string; role: string; roles?: string[]; permissions?: string[]; employee_id?: string };
+		account?: AccountIdentity | null;
 		desktopExpanded?: boolean;
 	} = $props();
 	let open = $state(false);
@@ -451,14 +454,6 @@
 		}
 	});
 
-	async function logout() {
-		try {
-			await fetch('/api/auth/logout', { method: 'POST' });
-		} finally {
-			clearCbtComposerDrafts();
-			location.href = '/login';
-		}
-	}
 </script>
 
 <!-- Mobile overlay -->
@@ -492,7 +487,14 @@
 		Cari menu
 	</button>
 	<span class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">MTSN 2 Kolaka Utara</span>
-	<ThemeToggle expanded={false} variant="ghost" size="icon-sm" />
+	{#if user}
+		<AccountMenu
+			{user}
+			{account}
+			menuId="mobile-topbar-account-menu"
+			buttonClass="border-transparent bg-transparent shadow-none hover:bg-muted"
+		/>
+	{/if}
 </header>
 
 <!-- Sidebar -->
@@ -573,18 +575,16 @@
 	<div class="shrink-0 space-y-2 border-t border-border p-3">
 		<ThemeToggle expanded={desktopExpanded} variant="outline" size="sm" class={desktopExpanded ? 'w-full justify-start' : 'w-full lg:justify-center'} />
 		{#if user}
-			<button
-				onclick={logout}
-				title={!desktopExpanded ? 'Keluar' : undefined}
-				class={`flex w-full items-center rounded-md py-1.5 text-sm text-muted-foreground transition-colors
-				       hover:bg-destructive/10 hover:text-destructive ${desktopExpanded ? 'gap-2 px-2' : 'justify-center px-0'}`}
-			>
-				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-						d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-				</svg>
-				<span class={desktopExpanded ? 'inline' : 'inline lg:hidden'}>Keluar</span>
-			</button>
+			<AccountMenu
+				{user}
+				{account}
+				showName={desktopExpanded}
+				menuSide="top"
+				align="start"
+				menuId="desktop-sidebar-account-menu"
+				class="w-full"
+				buttonClass={desktopExpanded ? 'w-full justify-start' : 'w-full justify-center'}
+			/>
 		{/if}
 	</div>
 </aside>

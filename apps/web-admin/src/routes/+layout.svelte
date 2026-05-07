@@ -53,7 +53,7 @@
 	</PublicSiteShell>
 {:else}
 	<div class="flex min-h-screen bg-background text-foreground">
-		<Sidebar bind:desktopExpanded={desktopSidebarExpanded} user={data.user} />
+		<Sidebar bind:desktopExpanded={desktopSidebarExpanded} user={data.user} account={data.account} />
 		<!--
 			lg:pl-60      — offset for expanded fixed sidebar on desktop
 			lg:pl-[5.5rem] — offset for collapsed fixed sidebar on desktop
