@@ -205,3 +205,47 @@ func TestRequireAnyPermissionOrRoleRejectsMissingPermissionAndRole(t *testing.T)
 		t.Fatalf("RequireAnyPermissionOrRole(missing) status = %d, want 403", rec.Code)
 	}
 }
+
+func TestJWTBlocksMustChangePasswordExceptSafeAuthPaths(t *testing.T) {
+	secret := "secret"
+	token := signedTestAccessToken(t, secret, jwt.MapClaims{
+		"sub":                  "11111111-1111-1111-1111-111111111111",
+		"type":                 "access",
+		"ver":                  float64(1),
+		"ssid":                 "22222222-2222-2222-2222-222222222222",
+		"must_change_password": true,
+	})
+	mw := JWT(secret, func(context.Context, string) (int64, error) { return 1, nil }, func(context.Context, string, string) (bool, error) { return true, nil })
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+
+	for _, tt := range []struct {
+		path string
+		want int
+	}{
+		{path: "/api/students", want: http.StatusForbidden},
+		{path: "/api/auth/account", want: http.StatusNoContent},
+		{path: "/api/auth/change-password", want: http.StatusNoContent},
+		{path: "/api/auth/logout-all", want: http.StatusNoContent},
+		{path: "/api/auth/sessions", want: http.StatusNoContent},
+		{path: "/api/auth/sessions/22222222-2222-2222-2222-222222222222", want: http.StatusNoContent},
+	} {
+		t.Run(tt.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != tt.want {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tt.want, rec.Body.String())
+			}
+		})
+	}
+}
+
+func signedTestAccessToken(t *testing.T, secret string, claims jwt.MapClaims) string {
+	t.Helper()
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+	if err != nil {
+		t.Fatalf("SignedString() error = %v", err)
+	}
+	return token
+}

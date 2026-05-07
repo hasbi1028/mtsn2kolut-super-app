@@ -1978,19 +1978,21 @@ type TimetableSlot struct {
 }
 
 type User struct {
-	ID           pgtype.UUID        `json:"id"`
-	Username     string             `json:"username"`
-	PasswordHash string             `json:"password_hash"`
-	EmployeeID   pgtype.UUID        `json:"employee_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	StudentID    pgtype.UUID        `json:"student_id"`
-	ParentID     pgtype.UUID        `json:"parent_id"`
-	IsActive     bool               `json:"is_active"`
-	AuthVersion  int32              `json:"auth_version"`
-	DisplayName  pgtype.Text        `json:"display_name"`
-	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
-	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+	ID                 pgtype.UUID        `json:"id"`
+	Username           string             `json:"username"`
+	PasswordHash       string             `json:"password_hash"`
+	EmployeeID         pgtype.UUID        `json:"employee_id"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	StudentID          pgtype.UUID        `json:"student_id"`
+	ParentID           pgtype.UUID        `json:"parent_id"`
+	IsActive           bool               `json:"is_active"`
+	AuthVersion        int32              `json:"auth_version"`
+	DisplayName        pgtype.Text        `json:"display_name"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	MustChangePassword bool               `json:"must_change_password"`
+	PasswordChangedAt  pgtype.Timestamptz `json:"password_changed_at"`
 }
 
 type UserAccountRole struct {

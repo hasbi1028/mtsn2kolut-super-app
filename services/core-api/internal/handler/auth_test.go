@@ -517,7 +517,9 @@ func TestAuthGetAccountForwardsCurrentUserAndSanitizesResponse(t *testing.T) {
 			t.Fatalf("GetAccount body = %s, want %q", body, expected)
 		}
 	}
-	if strings.Contains(body, "password") || strings.Contains(body, "auth_version") {
+	secretFreeBody := strings.ReplaceAll(body, "must_change_password", "")
+	secretFreeBody = strings.ReplaceAll(secretFreeBody, "password_changed_at", "")
+	if strings.Contains(secretFreeBody, "password") || strings.Contains(body, "auth_version") {
 		t.Fatalf("GetAccount body = %s, must not expose secret or auth internals", body)
 	}
 }
@@ -999,7 +1001,7 @@ func TestAuthChangePasswordMapsSuspendedAndWeakPassword(t *testing.T) {
 		msg  string
 	}{
 		{name: "suspended", err: domain.ErrSuspended, code: http.StatusForbidden, msg: "account is suspended"},
-		{name: "weak_password", err: domain.ErrWeakPassword, code: http.StatusBadRequest, msg: "password baru minimal 8 karakter, tidak boleh sama dengan username, dan tidak boleh hanya angka"},
+		{name: "weak_password", err: domain.ErrWeakPassword, code: http.StatusBadRequest, msg: "password baru minimal 8 karakter dan maksimal 72 karakter, tidak boleh sama dengan username, dan tidak boleh hanya angka"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewAuth(&fakeAuthService{changePasswordErr: tt.err}, nil)

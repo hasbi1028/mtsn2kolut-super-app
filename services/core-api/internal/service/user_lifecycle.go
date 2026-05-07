@@ -18,6 +18,7 @@ type userLifecycleStore interface {
 	UpdateUserStatus(ctx context.Context, arg db.UpdateUserStatusParams) error
 	SoftDeleteUser(ctx context.Context, id pgtype.UUID) error
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
+	MarkUserMustChangePassword(ctx context.Context, id pgtype.UUID) error
 	IncrementUserAuthVersion(ctx context.Context, userID pgtype.UUID) (int32, error)
 	UpdateUserProfileLink(ctx context.Context, arg db.UpdateUserProfileLinkParams) error
 	RevokeAllAuthSessionsForUser(ctx context.Context, userID pgtype.UUID) (int64, error)
@@ -82,6 +83,9 @@ func (s *UserLifecycle) ResetPassword(ctx context.Context, id pgtype.UUID, newPa
 	}
 	return s.withStore(ctx, func(store userLifecycleStore) error {
 		if err := store.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{ID: id, PasswordHash: string(hash)}); err != nil {
+			return err
+		}
+		if err := store.MarkUserMustChangePassword(ctx, id); err != nil {
 			return err
 		}
 		if _, err := store.IncrementUserAuthVersion(ctx, id); err != nil {

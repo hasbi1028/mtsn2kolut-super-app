@@ -106,18 +106,20 @@ func (f *fakeStore) GetUserByUsername(ctx context.Context, username string) (db.
 	roles := f.userRoles[u.ID]
 	rolesJSON, _ := json.Marshal(roles)
 	return db.GetUserByUsernameRow{
-		ID:           u.ID,
-		Username:     u.Username,
-		PasswordHash: u.PasswordHash,
-		DisplayName:  u.DisplayName,
-		EmployeeID:   u.EmployeeID,
-		StudentID:    u.StudentID,
-		ParentID:     u.ParentID,
-		IsActive:     u.IsActive,
-		AuthVersion:  u.AuthVersion,
-		CreatedAt:    u.CreatedAt,
-		UpdatedAt:    u.UpdatedAt,
-		Roles:        rolesJSON,
+		ID:                 u.ID,
+		Username:           u.Username,
+		PasswordHash:       u.PasswordHash,
+		DisplayName:        u.DisplayName,
+		EmployeeID:         u.EmployeeID,
+		StudentID:          u.StudentID,
+		ParentID:           u.ParentID,
+		IsActive:           u.IsActive,
+		AuthVersion:        u.AuthVersion,
+		MustChangePassword: u.MustChangePassword,
+		PasswordChangedAt:  u.PasswordChangedAt,
+		CreatedAt:          u.CreatedAt,
+		UpdatedAt:          u.UpdatedAt,
+		Roles:              rolesJSON,
 	}, nil
 }
 
@@ -130,18 +132,20 @@ func (f *fakeStore) GetUserByID(ctx context.Context, id pgtype.UUID) (db.GetUser
 			roles := f.userRoles[u.ID]
 			rolesJSON, _ := json.Marshal(roles)
 			return db.GetUserByIDRow{
-				ID:           u.ID,
-				Username:     u.Username,
-				PasswordHash: u.PasswordHash,
-				DisplayName:  u.DisplayName,
-				EmployeeID:   u.EmployeeID,
-				StudentID:    u.StudentID,
-				ParentID:     u.ParentID,
-				IsActive:     u.IsActive,
-				AuthVersion:  u.AuthVersion,
-				CreatedAt:    u.CreatedAt,
-				UpdatedAt:    u.UpdatedAt,
-				Roles:        rolesJSON,
+				ID:                 u.ID,
+				Username:           u.Username,
+				PasswordHash:       u.PasswordHash,
+				DisplayName:        u.DisplayName,
+				EmployeeID:         u.EmployeeID,
+				StudentID:          u.StudentID,
+				ParentID:           u.ParentID,
+				IsActive:           u.IsActive,
+				AuthVersion:        u.AuthVersion,
+				MustChangePassword: u.MustChangePassword,
+				PasswordChangedAt:  u.PasswordChangedAt,
+				CreatedAt:          u.CreatedAt,
+				UpdatedAt:          u.UpdatedAt,
+				Roles:              rolesJSON,
 			}, nil
 		}
 	}
@@ -174,21 +178,23 @@ func (f *fakeStore) GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (
 				contact = f.parentContact[u.ParentID]
 			}
 			return db.GetUserAccountSummaryRow{
-				ID:             u.ID,
-				Username:       u.Username,
-				DisplayName:    displayName,
-				EmployeeID:     u.EmployeeID,
-				StudentID:      u.StudentID,
-				ParentID:       u.ParentID,
-				ProfileType:    profileType,
-				PhotoUrl:       contact.photoURL,
-				ContactPhone:   contact.phone,
-				ContactEmail:   contact.email,
-				ContactAddress: contact.address,
-				IsActive:       u.IsActive,
-				LastLoginAt:    u.LastLoginAt,
-				CreatedAt:      u.CreatedAt,
-				Roles:          rolesJSON,
+				ID:                 u.ID,
+				Username:           u.Username,
+				DisplayName:        displayName,
+				EmployeeID:         u.EmployeeID,
+				StudentID:          u.StudentID,
+				ParentID:           u.ParentID,
+				ProfileType:        profileType,
+				PhotoUrl:           contact.photoURL,
+				ContactPhone:       contact.phone,
+				ContactEmail:       contact.email,
+				ContactAddress:     contact.address,
+				IsActive:           u.IsActive,
+				MustChangePassword: u.MustChangePassword,
+				PasswordChangedAt:  u.PasswordChangedAt,
+				LastLoginAt:        u.LastLoginAt,
+				CreatedAt:          u.CreatedAt,
+				Roles:              rolesJSON,
 			}, nil
 		}
 	}
@@ -297,28 +303,30 @@ func (f *fakeStore) CreateUser(ctx context.Context, arg db.CreateUserParams) (db
 	var id pgtype.UUID
 	_ = id.Scan("11111111-1111-1111-1111-111111111111")
 	u := db.User{
-		ID:           id,
-		Username:     arg.Username,
-		PasswordHash: arg.PasswordHash,
-		DisplayName:  arg.DisplayName,
-		EmployeeID:   arg.EmployeeID,
-		StudentID:    arg.StudentID,
-		ParentID:     arg.ParentID,
-		IsActive:     arg.IsActive,
-		AuthVersion:  0,
+		ID:                 id,
+		Username:           arg.Username,
+		PasswordHash:       arg.PasswordHash,
+		DisplayName:        arg.DisplayName,
+		EmployeeID:         arg.EmployeeID,
+		StudentID:          arg.StudentID,
+		ParentID:           arg.ParentID,
+		IsActive:           arg.IsActive,
+		AuthVersion:        0,
+		MustChangePassword: true,
 	}
 	f.users[arg.Username] = u
 	return db.CreateUserRow{
-		ID:          u.ID,
-		Username:    u.Username,
-		DisplayName: u.DisplayName,
-		EmployeeID:  u.EmployeeID,
-		StudentID:   u.StudentID,
-		ParentID:    u.ParentID,
-		IsActive:    u.IsActive,
-		AuthVersion: u.AuthVersion,
-		CreatedAt:   u.CreatedAt,
-		UpdatedAt:   u.UpdatedAt,
+		ID:                 u.ID,
+		Username:           u.Username,
+		DisplayName:        u.DisplayName,
+		EmployeeID:         u.EmployeeID,
+		StudentID:          u.StudentID,
+		ParentID:           u.ParentID,
+		IsActive:           u.IsActive,
+		AuthVersion:        u.AuthVersion,
+		MustChangePassword: u.MustChangePassword,
+		CreatedAt:          u.CreatedAt,
+		UpdatedAt:          u.UpdatedAt,
 	}, nil
 }
 
@@ -329,6 +337,64 @@ func (f *fakeStore) UpdateUserPassword(ctx context.Context, arg db.UpdateUserPas
 	for k, u := range f.users {
 		if u.ID == arg.ID {
 			u.PasswordHash = arg.PasswordHash
+			f.users[k] = u
+			return nil
+		}
+	}
+	return pgx.ErrNoRows
+}
+
+func (f *fakeStore) ChangeUserPasswordAndInvalidate(ctx context.Context, arg db.ChangeUserPasswordAndInvalidateParams) (int32, error) {
+	if f.updatePasswordErr != nil {
+		return 0, f.updatePasswordErr
+	}
+	for k, u := range f.users {
+		if u.ID == arg.ID {
+			if f.revokeAllErr != nil {
+				return 0, f.revokeAllErr
+			}
+			if f.incrementVersionErr != nil {
+				return 0, f.incrementVersionErr
+			}
+			u.PasswordHash = arg.PasswordHash
+			u.MustChangePassword = false
+			now := pgtype.Timestamptz{}
+			_ = now.Scan(time.Now())
+			u.PasswordChangedAt = now
+			u.AuthVersion++
+			f.users[k] = u
+			for sid, session := range f.authSessions {
+				if session.UserID == arg.ID && !session.RevokedAt.Valid {
+					revokedAt := pgtype.Timestamptz{}
+					_ = revokedAt.Scan(time.Now())
+					session.RevokedAt = revokedAt
+					f.authSessions[sid] = session
+				}
+			}
+			return u.AuthVersion, nil
+		}
+	}
+	return 0, pgx.ErrNoRows
+}
+
+func (f *fakeStore) MarkUserPasswordChanged(ctx context.Context, id pgtype.UUID) error {
+	for k, u := range f.users {
+		if u.ID == id {
+			u.MustChangePassword = false
+			now := pgtype.Timestamptz{}
+			_ = now.Scan(time.Now())
+			u.PasswordChangedAt = now
+			f.users[k] = u
+			return nil
+		}
+	}
+	return pgx.ErrNoRows
+}
+
+func (f *fakeStore) MarkUserMustChangePassword(ctx context.Context, id pgtype.UUID) error {
+	for k, u := range f.users {
+		if u.ID == id {
+			u.MustChangePassword = true
 			f.users[k] = u
 			return nil
 		}
@@ -1048,6 +1114,54 @@ func TestAuthSeedAdminDoesNotOverwriteExistingPassword(t *testing.T) {
 	}
 }
 
+func TestAuthMustChangePasswordContract(t *testing.T) {
+	store := newFakeStore()
+	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
+
+	if err := svc.SeedAdmin(context.Background()); err != nil {
+		t.Fatalf("SeedAdmin() error = %v", err)
+	}
+
+	admin := store.users["admin"]
+	if !admin.MustChangePassword {
+		t.Fatal("newly seeded admin MustChangePassword = false, want true")
+	}
+
+	pair, err := svc.Login(context.Background(), "admin", "admin", SessionMeta{})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	if !pair.MustChangePassword {
+		t.Fatal("TokenPair.MustChangePassword = false, want true")
+	}
+	claims := jwt.MapClaims{}
+	if _, _, err := new(jwt.Parser).ParseUnverified(pair.AccessToken, claims); err != nil {
+		t.Fatalf("ParseUnverified(access) error = %v", err)
+	}
+	if got, _ := claims["must_change_password"].(bool); !got {
+		t.Fatalf("access claim must_change_password = %v, want true", claims["must_change_password"])
+	}
+
+	if err := svc.ChangePassword(context.Background(), "admin", "admin", "newpass123"); err != nil {
+		t.Fatalf("ChangePassword() error = %v", err)
+	}
+	admin = store.users["admin"]
+	if admin.MustChangePassword {
+		t.Fatal("MustChangePassword remains true after password change")
+	}
+	if !admin.PasswordChangedAt.Valid {
+		t.Fatal("PasswordChangedAt not set after password change")
+	}
+
+	pair, err = svc.Login(context.Background(), "admin", "newpass123", SessionMeta{})
+	if err != nil {
+		t.Fatalf("Login(after change) error = %v", err)
+	}
+	if pair.MustChangePassword {
+		t.Fatal("TokenPair.MustChangePassword = true after password change, want false")
+	}
+}
+
 func TestAuthLogoutRevokesRefreshSession(t *testing.T) {
 	store := newFakeStore()
 	svc := &Auth{q: store, jwtSecret: []byte("secret"), adminPassword: "admin"}
@@ -1475,9 +1589,16 @@ func TestAuthAdditionalErrorBranches(t *testing.T) {
 	if err := svc.ChangePassword(ctx, "admin", "adminpass123", "newpass123"); !errors.Is(err, expectedErr) {
 		t.Fatalf("ChangePassword(update error) = %v, want %v", err, expectedErr)
 	}
+	// updatePasswordErr aborted before mutating the hash, so old password still works.
 	store.updatePasswordErr = nil
+	store.revokeAllErr = expectedErr
+	if err := svc.ChangePassword(ctx, "admin", "adminpass123", "newpass-rev"); !errors.Is(err, expectedErr) {
+		t.Fatalf("ChangePassword(revoke error) = %v, want %v", err, expectedErr)
+	}
+	// Combined password change/invalidate query aborts before mutating the hash.
+	store.revokeAllErr = nil
 	store.incrementVersionErr = expectedErr
-	if err := svc.ChangePassword(ctx, "admin", "adminpass123", "newpass123"); !errors.Is(err, expectedErr) {
+	if err := svc.ChangePassword(ctx, "admin", "adminpass123", "newpass-inc"); !errors.Is(err, expectedErr) {
 		t.Fatalf("ChangePassword(increment error) = %v, want %v", err, expectedErr)
 	}
 }

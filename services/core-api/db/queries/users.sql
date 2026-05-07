@@ -3,7 +3,7 @@ SELECT
     u.id, u.username, u.password_hash,
     u.display_name,
     u.employee_id, u.student_id, u.parent_id,
-    u.is_active, u.auth_version, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
+    u.is_active, u.auth_version, u.must_change_password, u.password_changed_at, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
     COALESCE(
       (
         SELECT json_agg(r.code ORDER BY r.code)
@@ -24,7 +24,7 @@ SELECT
     u.id, u.username, u.password_hash,
     u.display_name,
     u.employee_id, u.student_id, u.parent_id,
-    u.is_active, u.auth_version, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
+    u.is_active, u.auth_version, u.must_change_password, u.password_changed_at, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
     COALESCE(
       (
         SELECT json_agg(r.code ORDER BY r.code)
@@ -46,7 +46,7 @@ SELECT
     COALESCE(NULLIF(u.display_name, ''), e.nama, s.nama, p.nama, u.username) AS display_name,
     u.employee_id, u.student_id, u.parent_id,
     COALESCE(e.nama, s.nama, p.nama, '') AS profile_nama,
-    u.is_active, u.last_login_at, u.deleted_at, u.created_at,
+    u.is_active, u.must_change_password, u.password_changed_at, u.last_login_at, u.deleted_at, u.created_at,
     COALESCE(
       (
         SELECT json_agg(r.code ORDER BY r.code)
@@ -103,6 +103,8 @@ SELECT
         ELSE ''
     END::text AS photo_url,
     u.is_active,
+    u.must_change_password,
+    u.password_changed_at,
     u.last_login_at,
     u.created_at,
     COALESCE(
@@ -206,13 +208,50 @@ WHERE p.id = (
 RETURNING p.photo_url;
 
 -- name: CreateUser :one
-INSERT INTO users (username, password_hash, display_name, employee_id, student_id, parent_id, is_active)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, username, display_name, employee_id, student_id, parent_id, is_active, auth_version, last_login_at, deleted_at, created_at, updated_at;
+INSERT INTO users (username, password_hash, display_name, employee_id, student_id, parent_id, is_active, must_change_password, password_changed_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, NULL)
+RETURNING id, username, display_name, employee_id, student_id, parent_id, is_active, auth_version, must_change_password, password_changed_at, last_login_at, deleted_at, created_at, updated_at;
 
 -- name: UpdateUserPassword :exec
 UPDATE users
 SET password_hash = $2, updated_at = NOW()
+WHERE id = $1
+  AND deleted_at IS NULL;
+
+-- name: ChangeUserPasswordAndInvalidate :one
+WITH updated AS (
+  UPDATE users
+  SET password_hash = sqlc.arg(password_hash),
+      must_change_password = FALSE,
+      password_changed_at = NOW(),
+      auth_version = auth_version + 1,
+      updated_at = NOW()
+  WHERE users.id = sqlc.arg(id)
+    AND users.deleted_at IS NULL
+  RETURNING users.id, users.auth_version
+), revoked AS (
+  UPDATE auth_sessions
+  SET revoked_at = NOW(),
+      updated_at = NOW()
+  WHERE user_id = (SELECT updated.id FROM updated)
+    AND revoked_at IS NULL
+  RETURNING auth_sessions.id
+)
+SELECT updated.auth_version FROM updated;
+
+-- name: MarkUserPasswordChanged :exec
+UPDATE users
+SET must_change_password = FALSE,
+    password_changed_at = NOW(),
+    updated_at = NOW()
+WHERE id = $1
+  AND deleted_at IS NULL;
+
+-- name: MarkUserMustChangePassword :exec
+UPDATE users
+SET must_change_password = TRUE,
+    password_changed_at = NULL,
+    updated_at = NOW()
 WHERE id = $1
   AND deleted_at IS NULL;
 
@@ -279,14 +318,14 @@ FROM legacy_roles
 ON CONFLICT DO NOTHING;
 
 -- name: ListUsersByStudentID :many
-SELECT id, username, password_hash, display_name, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version, last_login_at, deleted_at
+SELECT id, username, password_hash, display_name, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version, must_change_password, password_changed_at, last_login_at, deleted_at
 FROM users
 WHERE student_id = $1
   AND deleted_at IS NULL
 ORDER BY created_at ASC;
 
 -- name: ListUsersByEmployeeID :many
-SELECT id, username, password_hash, display_name, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version, last_login_at, deleted_at
+SELECT id, username, password_hash, display_name, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version, must_change_password, password_changed_at, last_login_at, deleted_at
 FROM users
 WHERE employee_id = $1
   AND deleted_at IS NULL

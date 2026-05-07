@@ -44,6 +44,9 @@ type authStore interface {
 	ListOwnAccountChangeHistory(ctx context.Context, arg db.ListOwnAccountChangeHistoryParams) ([]db.ListOwnAccountChangeHistoryRow, error)
 	CreateUser(ctx context.Context, arg db.CreateUserParams) (db.CreateUserRow, error)
 	UpdateUserPassword(ctx context.Context, arg db.UpdateUserPasswordParams) error
+	ChangeUserPasswordAndInvalidate(ctx context.Context, arg db.ChangeUserPasswordAndInvalidateParams) (int32, error)
+	MarkUserPasswordChanged(ctx context.Context, id pgtype.UUID) error
+	MarkUserMustChangePassword(ctx context.Context, id pgtype.UUID) error
 	GetUserRoles(ctx context.Context, userID pgtype.UUID) ([]db.UserRole, error)
 	GetUserRoleCodesFromRbac(ctx context.Context, userID pgtype.UUID) ([]string, error)
 	GetUserPermissionCodes(ctx context.Context, userID pgtype.UUID) ([]string, error)
@@ -65,15 +68,16 @@ type authStore interface {
 }
 
 type authUserRecord struct {
-	ID           pgtype.UUID
-	Username     string
-	PasswordHash string
-	EmployeeID   pgtype.UUID
-	StudentID    pgtype.UUID
-	ParentID     pgtype.UUID
-	IsActive     bool
-	AuthVersion  int32
-	Roles        []byte
+	ID                 pgtype.UUID
+	Username           string
+	PasswordHash       string
+	EmployeeID         pgtype.UUID
+	StudentID          pgtype.UUID
+	ParentID           pgtype.UUID
+	IsActive           bool
+	AuthVersion        int32
+	MustChangePassword bool
+	Roles              []byte
 }
 
 type Auth struct {
@@ -494,14 +498,10 @@ func (s *Auth) ChangePassword(ctx context.Context, username, oldPassword, newPas
 		return err
 	}
 
-	if err := s.q.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
-		ID:           user.ID,
-		PasswordHash: string(hash),
-	}); err != nil {
+	if _, err := s.q.ChangeUserPasswordAndInvalidate(ctx, db.ChangeUserPasswordAndInvalidateParams{ID: user.ID, PasswordHash: string(hash)}); err != nil {
 		return err
 	}
-	_, err = s.q.IncrementUserAuthVersion(ctx, user.ID)
-	return err
+	return nil
 }
 
 func (s *Auth) issueTokenPair(ctx context.Context, user authUserRecord, meta SessionMeta) (domain.TokenPair, error) {
@@ -545,17 +545,18 @@ func (s *Auth) issueTokenPair(ctx context.Context, user authUserRecord, meta Ses
 
 	userID := pgUUIDString(user.ID)
 	claims := jwt.MapClaims{
-		"sub":         userID,
-		"uid":         userID,
-		"usr":         user.Username,
-		"ssid":        pgUUIDString(sessionID),
-		"role":        primaryRole, // backward compatibility
-		"roles":       roleStrs,
-		"permissions": permissions,
-		"type":        "access",
-		"ver":         int64(user.AuthVersion),
-		"iat":         now.Unix(),
-		"exp":         now.Add(accessTokenTTL).Unix(),
+		"sub":                  userID,
+		"uid":                  userID,
+		"usr":                  user.Username,
+		"ssid":                 pgUUIDString(sessionID),
+		"role":                 primaryRole, // backward compatibility
+		"roles":                roleStrs,
+		"permissions":          permissions,
+		"must_change_password": user.MustChangePassword,
+		"type":                 "access",
+		"ver":                  int64(user.AuthVersion),
+		"iat":                  now.Unix(),
+		"exp":                  now.Add(accessTokenTTL).Unix(),
 	}
 
 	if user.EmployeeID.Valid {
@@ -605,7 +606,7 @@ func (s *Auth) issueTokenPair(ctx context.Context, user authUserRecord, meta Ses
 		return domain.TokenPair{}, err
 	}
 
-	return domain.TokenPair{AccessToken: accessSigned, RefreshToken: refreshSigned}, nil
+	return domain.TokenPair{AccessToken: accessSigned, RefreshToken: refreshSigned, MustChangePassword: user.MustChangePassword}, nil
 }
 
 func normalizeStringSet(values []string) []string {
@@ -1000,6 +1001,13 @@ func validatePassword(username, password string) error {
 	if len(trimmed) < 8 {
 		return domain.ErrWeakPassword
 	}
+	// bcrypt silently truncates inputs longer than 72 bytes, which would let two
+	// different passwords share the same hash if they share a 72-byte prefix.
+	// Reject up front so the user gets a clear error instead of a confusing
+	// "password works on first try, fails on retype" symptom.
+	if len(trimmed) > 72 {
+		return domain.ErrWeakPassword
+	}
 
 	lowerPassword := strings.ToLower(trimmed)
 	lowerUsername := strings.ToLower(strings.TrimSpace(username))
@@ -1107,29 +1115,31 @@ func userIDFromClaims(claims jwt.MapClaims) (pgtype.UUID, error) {
 
 func authUserFromUsernameRow(row db.GetUserByUsernameRow) authUserRecord {
 	return authUserRecord{
-		ID:           row.ID,
-		Username:     row.Username,
-		PasswordHash: row.PasswordHash,
-		EmployeeID:   row.EmployeeID,
-		StudentID:    row.StudentID,
-		ParentID:     row.ParentID,
-		IsActive:     row.IsActive,
-		AuthVersion:  row.AuthVersion,
-		Roles:        authRolesBytes(row.Roles),
+		ID:                 row.ID,
+		Username:           row.Username,
+		PasswordHash:       row.PasswordHash,
+		EmployeeID:         row.EmployeeID,
+		StudentID:          row.StudentID,
+		ParentID:           row.ParentID,
+		IsActive:           row.IsActive,
+		AuthVersion:        row.AuthVersion,
+		MustChangePassword: row.MustChangePassword,
+		Roles:              authRolesBytes(row.Roles),
 	}
 }
 
 func authUserFromIDRow(row db.GetUserByIDRow) authUserRecord {
 	return authUserRecord{
-		ID:           row.ID,
-		Username:     row.Username,
-		PasswordHash: row.PasswordHash,
-		EmployeeID:   row.EmployeeID,
-		StudentID:    row.StudentID,
-		ParentID:     row.ParentID,
-		IsActive:     row.IsActive,
-		AuthVersion:  row.AuthVersion,
-		Roles:        authRolesBytes(row.Roles),
+		ID:                 row.ID,
+		Username:           row.Username,
+		PasswordHash:       row.PasswordHash,
+		EmployeeID:         row.EmployeeID,
+		StudentID:          row.StudentID,
+		ParentID:           row.ParentID,
+		IsActive:           row.IsActive,
+		AuthVersion:        row.AuthVersion,
+		MustChangePassword: row.MustChangePassword,
+		Roles:              authRolesBytes(row.Roles),
 	}
 }
 

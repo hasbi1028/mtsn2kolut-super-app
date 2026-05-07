@@ -14,6 +14,7 @@ var (
 )
 
 type TokenPair struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	AccessToken        string `json:"access_token"`
+	RefreshToken       string `json:"refresh_token"`
+	MustChangePassword bool   `json:"must_change_password"`
 }

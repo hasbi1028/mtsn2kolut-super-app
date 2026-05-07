@@ -25,6 +25,40 @@ func (q *Queries) AddUserRole(ctx context.Context, arg AddUserRoleParams) error 
 	return err
 }
 
+const changeUserPasswordAndInvalidate = `-- name: ChangeUserPasswordAndInvalidate :one
+WITH updated AS (
+  UPDATE users
+  SET password_hash = $1,
+      must_change_password = FALSE,
+      password_changed_at = NOW(),
+      auth_version = auth_version + 1,
+      updated_at = NOW()
+  WHERE users.id = $2
+    AND users.deleted_at IS NULL
+  RETURNING users.id, users.auth_version
+), revoked AS (
+  UPDATE auth_sessions
+  SET revoked_at = NOW(),
+      updated_at = NOW()
+  WHERE user_id = (SELECT updated.id FROM updated)
+    AND revoked_at IS NULL
+  RETURNING auth_sessions.id
+)
+SELECT updated.auth_version FROM updated
+`
+
+type ChangeUserPasswordAndInvalidateParams struct {
+	PasswordHash string      `json:"password_hash"`
+	ID           pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) ChangeUserPasswordAndInvalidate(ctx context.Context, arg ChangeUserPasswordAndInvalidateParams) (int32, error) {
+	row := q.db.QueryRow(ctx, changeUserPasswordAndInvalidate, arg.PasswordHash, arg.ID)
+	var auth_version int32
+	err := row.Scan(&auth_version)
+	return auth_version, err
+}
+
 const createAuditLog = `-- name: CreateAuditLog :one
 INSERT INTO audit_logs (user_id, action, entity_type, entity_id, metadata)
 VALUES ($1, $2, $3, $4, $5)
@@ -61,9 +95,9 @@ func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) 
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (username, password_hash, display_name, employee_id, student_id, parent_id, is_active)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, username, display_name, employee_id, student_id, parent_id, is_active, auth_version, last_login_at, deleted_at, created_at, updated_at
+INSERT INTO users (username, password_hash, display_name, employee_id, student_id, parent_id, is_active, must_change_password, password_changed_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, NULL)
+RETURNING id, username, display_name, employee_id, student_id, parent_id, is_active, auth_version, must_change_password, password_changed_at, last_login_at, deleted_at, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -77,18 +111,20 @@ type CreateUserParams struct {
 }
 
 type CreateUserRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	Username    string             `json:"username"`
-	DisplayName pgtype.Text        `json:"display_name"`
-	EmployeeID  pgtype.UUID        `json:"employee_id"`
-	StudentID   pgtype.UUID        `json:"student_id"`
-	ParentID    pgtype.UUID        `json:"parent_id"`
-	IsActive    bool               `json:"is_active"`
-	AuthVersion int32              `json:"auth_version"`
-	LastLoginAt pgtype.Timestamptz `json:"last_login_at"`
-	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID                 pgtype.UUID        `json:"id"`
+	Username           string             `json:"username"`
+	DisplayName        pgtype.Text        `json:"display_name"`
+	EmployeeID         pgtype.UUID        `json:"employee_id"`
+	StudentID          pgtype.UUID        `json:"student_id"`
+	ParentID           pgtype.UUID        `json:"parent_id"`
+	IsActive           bool               `json:"is_active"`
+	AuthVersion        int32              `json:"auth_version"`
+	MustChangePassword bool               `json:"must_change_password"`
+	PasswordChangedAt  pgtype.Timestamptz `json:"password_changed_at"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
@@ -111,6 +147,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.ParentID,
 		&i.IsActive,
 		&i.AuthVersion,
+		&i.MustChangePassword,
+		&i.PasswordChangedAt,
 		&i.LastLoginAt,
 		&i.DeletedAt,
 		&i.CreatedAt,
@@ -170,6 +208,8 @@ SELECT
         ELSE ''
     END::text AS photo_url,
     u.is_active,
+    u.must_change_password,
+    u.password_changed_at,
     u.last_login_at,
     u.created_at,
     COALESCE(
@@ -192,22 +232,24 @@ WHERE u.id = $1
 `
 
 type GetUserAccountSummaryRow struct {
-	ID             pgtype.UUID        `json:"id"`
-	Username       string             `json:"username"`
-	DisplayName    string             `json:"display_name"`
-	EmployeeID     pgtype.UUID        `json:"employee_id"`
-	StudentID      pgtype.UUID        `json:"student_id"`
-	ParentID       pgtype.UUID        `json:"parent_id"`
-	ProfileType    string             `json:"profile_type"`
-	ProfileNama    string             `json:"profile_nama"`
-	ContactPhone   string             `json:"contact_phone"`
-	ContactEmail   string             `json:"contact_email"`
-	ContactAddress string             `json:"contact_address"`
-	PhotoUrl       string             `json:"photo_url"`
-	IsActive       bool               `json:"is_active"`
-	LastLoginAt    pgtype.Timestamptz `json:"last_login_at"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	Roles          interface{}        `json:"roles"`
+	ID                 pgtype.UUID        `json:"id"`
+	Username           string             `json:"username"`
+	DisplayName        string             `json:"display_name"`
+	EmployeeID         pgtype.UUID        `json:"employee_id"`
+	StudentID          pgtype.UUID        `json:"student_id"`
+	ParentID           pgtype.UUID        `json:"parent_id"`
+	ProfileType        string             `json:"profile_type"`
+	ProfileNama        string             `json:"profile_nama"`
+	ContactPhone       string             `json:"contact_phone"`
+	ContactEmail       string             `json:"contact_email"`
+	ContactAddress     string             `json:"contact_address"`
+	PhotoUrl           string             `json:"photo_url"`
+	IsActive           bool               `json:"is_active"`
+	MustChangePassword bool               `json:"must_change_password"`
+	PasswordChangedAt  pgtype.Timestamptz `json:"password_changed_at"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	Roles              interface{}        `json:"roles"`
 }
 
 func (q *Queries) GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (GetUserAccountSummaryRow, error) {
@@ -227,6 +269,8 @@ func (q *Queries) GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (Ge
 		&i.ContactAddress,
 		&i.PhotoUrl,
 		&i.IsActive,
+		&i.MustChangePassword,
+		&i.PasswordChangedAt,
 		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.Roles,
@@ -239,7 +283,7 @@ SELECT
     u.id, u.username, u.password_hash,
     u.display_name,
     u.employee_id, u.student_id, u.parent_id,
-    u.is_active, u.auth_version, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
+    u.is_active, u.auth_version, u.must_change_password, u.password_changed_at, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
     COALESCE(
       (
         SELECT json_agg(r.code ORDER BY r.code)
@@ -257,20 +301,22 @@ WHERE u.id = $1
 `
 
 type GetUserByIDRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	Username     string             `json:"username"`
-	PasswordHash string             `json:"password_hash"`
-	DisplayName  pgtype.Text        `json:"display_name"`
-	EmployeeID   pgtype.UUID        `json:"employee_id"`
-	StudentID    pgtype.UUID        `json:"student_id"`
-	ParentID     pgtype.UUID        `json:"parent_id"`
-	IsActive     bool               `json:"is_active"`
-	AuthVersion  int32              `json:"auth_version"`
-	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
-	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	Roles        interface{}        `json:"roles"`
+	ID                 pgtype.UUID        `json:"id"`
+	Username           string             `json:"username"`
+	PasswordHash       string             `json:"password_hash"`
+	DisplayName        pgtype.Text        `json:"display_name"`
+	EmployeeID         pgtype.UUID        `json:"employee_id"`
+	StudentID          pgtype.UUID        `json:"student_id"`
+	ParentID           pgtype.UUID        `json:"parent_id"`
+	IsActive           bool               `json:"is_active"`
+	AuthVersion        int32              `json:"auth_version"`
+	MustChangePassword bool               `json:"must_change_password"`
+	PasswordChangedAt  pgtype.Timestamptz `json:"password_changed_at"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	Roles              interface{}        `json:"roles"`
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDRow, error) {
@@ -286,6 +332,8 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDR
 		&i.ParentID,
 		&i.IsActive,
 		&i.AuthVersion,
+		&i.MustChangePassword,
+		&i.PasswordChangedAt,
 		&i.LastLoginAt,
 		&i.DeletedAt,
 		&i.CreatedAt,
@@ -300,7 +348,7 @@ SELECT
     u.id, u.username, u.password_hash,
     u.display_name,
     u.employee_id, u.student_id, u.parent_id,
-    u.is_active, u.auth_version, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
+    u.is_active, u.auth_version, u.must_change_password, u.password_changed_at, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
     COALESCE(
       (
         SELECT json_agg(r.code ORDER BY r.code)
@@ -318,20 +366,22 @@ WHERE u.username = $1
 `
 
 type GetUserByUsernameRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	Username     string             `json:"username"`
-	PasswordHash string             `json:"password_hash"`
-	DisplayName  pgtype.Text        `json:"display_name"`
-	EmployeeID   pgtype.UUID        `json:"employee_id"`
-	StudentID    pgtype.UUID        `json:"student_id"`
-	ParentID     pgtype.UUID        `json:"parent_id"`
-	IsActive     bool               `json:"is_active"`
-	AuthVersion  int32              `json:"auth_version"`
-	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
-	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	Roles        interface{}        `json:"roles"`
+	ID                 pgtype.UUID        `json:"id"`
+	Username           string             `json:"username"`
+	PasswordHash       string             `json:"password_hash"`
+	DisplayName        pgtype.Text        `json:"display_name"`
+	EmployeeID         pgtype.UUID        `json:"employee_id"`
+	StudentID          pgtype.UUID        `json:"student_id"`
+	ParentID           pgtype.UUID        `json:"parent_id"`
+	IsActive           bool               `json:"is_active"`
+	AuthVersion        int32              `json:"auth_version"`
+	MustChangePassword bool               `json:"must_change_password"`
+	PasswordChangedAt  pgtype.Timestamptz `json:"password_changed_at"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	Roles              interface{}        `json:"roles"`
 }
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUserByUsernameRow, error) {
@@ -347,6 +397,8 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUs
 		&i.ParentID,
 		&i.IsActive,
 		&i.AuthVersion,
+		&i.MustChangePassword,
+		&i.PasswordChangedAt,
 		&i.LastLoginAt,
 		&i.DeletedAt,
 		&i.CreatedAt,
@@ -739,7 +791,7 @@ SELECT
     COALESCE(NULLIF(u.display_name, ''), e.nama, s.nama, p.nama, u.username) AS display_name,
     u.employee_id, u.student_id, u.parent_id,
     COALESCE(e.nama, s.nama, p.nama, '') AS profile_nama,
-    u.is_active, u.last_login_at, u.deleted_at, u.created_at,
+    u.is_active, u.must_change_password, u.password_changed_at, u.last_login_at, u.deleted_at, u.created_at,
     COALESCE(
       (
         SELECT json_agg(r.code ORDER BY r.code)
@@ -760,18 +812,20 @@ ORDER BY u.username ASC
 `
 
 type ListUsersRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	Username    string             `json:"username"`
-	DisplayName string             `json:"display_name"`
-	EmployeeID  pgtype.UUID        `json:"employee_id"`
-	StudentID   pgtype.UUID        `json:"student_id"`
-	ParentID    pgtype.UUID        `json:"parent_id"`
-	ProfileNama string             `json:"profile_nama"`
-	IsActive    bool               `json:"is_active"`
-	LastLoginAt pgtype.Timestamptz `json:"last_login_at"`
-	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	Roles       interface{}        `json:"roles"`
+	ID                 pgtype.UUID        `json:"id"`
+	Username           string             `json:"username"`
+	DisplayName        string             `json:"display_name"`
+	EmployeeID         pgtype.UUID        `json:"employee_id"`
+	StudentID          pgtype.UUID        `json:"student_id"`
+	ParentID           pgtype.UUID        `json:"parent_id"`
+	ProfileNama        string             `json:"profile_nama"`
+	IsActive           bool               `json:"is_active"`
+	MustChangePassword bool               `json:"must_change_password"`
+	PasswordChangedAt  pgtype.Timestamptz `json:"password_changed_at"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	Roles              interface{}        `json:"roles"`
 }
 
 func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
@@ -792,6 +846,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 			&i.ParentID,
 			&i.ProfileNama,
 			&i.IsActive,
+			&i.MustChangePassword,
+			&i.PasswordChangedAt,
 			&i.LastLoginAt,
 			&i.DeletedAt,
 			&i.CreatedAt,
@@ -808,7 +864,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 }
 
 const listUsersByEmployeeID = `-- name: ListUsersByEmployeeID :many
-SELECT id, username, password_hash, display_name, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version, last_login_at, deleted_at
+SELECT id, username, password_hash, display_name, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version, must_change_password, password_changed_at, last_login_at, deleted_at
 FROM users
 WHERE employee_id = $1
   AND deleted_at IS NULL
@@ -816,19 +872,21 @@ ORDER BY created_at ASC
 `
 
 type ListUsersByEmployeeIDRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	Username     string             `json:"username"`
-	PasswordHash string             `json:"password_hash"`
-	DisplayName  pgtype.Text        `json:"display_name"`
-	EmployeeID   pgtype.UUID        `json:"employee_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	StudentID    pgtype.UUID        `json:"student_id"`
-	ParentID     pgtype.UUID        `json:"parent_id"`
-	IsActive     bool               `json:"is_active"`
-	AuthVersion  int32              `json:"auth_version"`
-	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
-	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+	ID                 pgtype.UUID        `json:"id"`
+	Username           string             `json:"username"`
+	PasswordHash       string             `json:"password_hash"`
+	DisplayName        pgtype.Text        `json:"display_name"`
+	EmployeeID         pgtype.UUID        `json:"employee_id"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	StudentID          pgtype.UUID        `json:"student_id"`
+	ParentID           pgtype.UUID        `json:"parent_id"`
+	IsActive           bool               `json:"is_active"`
+	AuthVersion        int32              `json:"auth_version"`
+	MustChangePassword bool               `json:"must_change_password"`
+	PasswordChangedAt  pgtype.Timestamptz `json:"password_changed_at"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
 }
 
 func (q *Queries) ListUsersByEmployeeID(ctx context.Context, employeeID pgtype.UUID) ([]ListUsersByEmployeeIDRow, error) {
@@ -852,6 +910,8 @@ func (q *Queries) ListUsersByEmployeeID(ctx context.Context, employeeID pgtype.U
 			&i.ParentID,
 			&i.IsActive,
 			&i.AuthVersion,
+			&i.MustChangePassword,
+			&i.PasswordChangedAt,
 			&i.LastLoginAt,
 			&i.DeletedAt,
 		); err != nil {
@@ -866,7 +926,7 @@ func (q *Queries) ListUsersByEmployeeID(ctx context.Context, employeeID pgtype.U
 }
 
 const listUsersByStudentID = `-- name: ListUsersByStudentID :many
-SELECT id, username, password_hash, display_name, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version, last_login_at, deleted_at
+SELECT id, username, password_hash, display_name, employee_id, created_at, updated_at, student_id, parent_id, is_active, auth_version, must_change_password, password_changed_at, last_login_at, deleted_at
 FROM users
 WHERE student_id = $1
   AND deleted_at IS NULL
@@ -874,19 +934,21 @@ ORDER BY created_at ASC
 `
 
 type ListUsersByStudentIDRow struct {
-	ID           pgtype.UUID        `json:"id"`
-	Username     string             `json:"username"`
-	PasswordHash string             `json:"password_hash"`
-	DisplayName  pgtype.Text        `json:"display_name"`
-	EmployeeID   pgtype.UUID        `json:"employee_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	StudentID    pgtype.UUID        `json:"student_id"`
-	ParentID     pgtype.UUID        `json:"parent_id"`
-	IsActive     bool               `json:"is_active"`
-	AuthVersion  int32              `json:"auth_version"`
-	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
-	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
+	ID                 pgtype.UUID        `json:"id"`
+	Username           string             `json:"username"`
+	PasswordHash       string             `json:"password_hash"`
+	DisplayName        pgtype.Text        `json:"display_name"`
+	EmployeeID         pgtype.UUID        `json:"employee_id"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	StudentID          pgtype.UUID        `json:"student_id"`
+	ParentID           pgtype.UUID        `json:"parent_id"`
+	IsActive           bool               `json:"is_active"`
+	AuthVersion        int32              `json:"auth_version"`
+	MustChangePassword bool               `json:"must_change_password"`
+	PasswordChangedAt  pgtype.Timestamptz `json:"password_changed_at"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt          pgtype.Timestamptz `json:"deleted_at"`
 }
 
 func (q *Queries) ListUsersByStudentID(ctx context.Context, studentID pgtype.UUID) ([]ListUsersByStudentIDRow, error) {
@@ -910,6 +972,8 @@ func (q *Queries) ListUsersByStudentID(ctx context.Context, studentID pgtype.UUI
 			&i.ParentID,
 			&i.IsActive,
 			&i.AuthVersion,
+			&i.MustChangePassword,
+			&i.PasswordChangedAt,
 			&i.LastLoginAt,
 			&i.DeletedAt,
 		); err != nil {
@@ -933,6 +997,34 @@ WHERE id = $1
 
 func (q *Queries) MarkUserLastLogin(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, markUserLastLogin, id)
+	return err
+}
+
+const markUserMustChangePassword = `-- name: MarkUserMustChangePassword :exec
+UPDATE users
+SET must_change_password = TRUE,
+    password_changed_at = NULL,
+    updated_at = NOW()
+WHERE id = $1
+  AND deleted_at IS NULL
+`
+
+func (q *Queries) MarkUserMustChangePassword(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markUserMustChangePassword, id)
+	return err
+}
+
+const markUserPasswordChanged = `-- name: MarkUserPasswordChanged :exec
+UPDATE users
+SET must_change_password = FALSE,
+    password_changed_at = NOW(),
+    updated_at = NOW()
+WHERE id = $1
+  AND deleted_at IS NULL
+`
+
+func (q *Queries) MarkUserPasswordChanged(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markUserPasswordChanged, id)
 	return err
 }
 
