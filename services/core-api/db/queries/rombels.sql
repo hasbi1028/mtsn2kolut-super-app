@@ -227,6 +227,128 @@ JOIN employees e ON e.id = csa.teacher_employee_id
 WHERE csa.class_id = $1
 ORDER BY ts.day_of_week ASC, ts.start_time ASC, sub.name ASC;
 
+-- name: GetRombelTimetableSlot :one
+SELECT
+    ts.id,
+    ts.assignment_id,
+    ts.day_of_week,
+    ts.start_time,
+    ts.end_time,
+    ts.room_label,
+    ts.notes,
+    ts.created_at,
+    ts.updated_at,
+    csa.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    csa.subject_id,
+    sub.name AS subject_name,
+    sub.code AS subject_code,
+    csa.teacher_employee_id,
+    e.nama AS teacher_name
+FROM timetable_slots ts
+JOIN class_subject_assignments csa ON csa.id = ts.assignment_id
+JOIN school_classes c ON c.id = csa.class_id
+JOIN subjects sub ON sub.id = csa.subject_id
+JOIN employees e ON e.id = csa.teacher_employee_id
+WHERE csa.class_id = sqlc.arg(class_id)
+  AND ts.id = sqlc.arg(id);
+
+-- name: CreateRombelTimetableSlot :one
+WITH inserted AS (
+    INSERT INTO timetable_slots (assignment_id, day_of_week, start_time, end_time, room_label, notes)
+    SELECT
+        sqlc.arg(assignment_id),
+        sqlc.arg(day_of_week),
+        sqlc.arg(start_time),
+        sqlc.arg(end_time),
+        sqlc.arg(room_label),
+        sqlc.arg(notes)
+    WHERE EXISTS (
+        SELECT 1
+        FROM class_subject_assignments csa
+        WHERE csa.id = sqlc.arg(assignment_id)
+          AND csa.class_id = sqlc.arg(class_id)
+    )
+    RETURNING *
+)
+SELECT
+    inserted.id,
+    inserted.assignment_id,
+    inserted.day_of_week,
+    inserted.start_time,
+    inserted.end_time,
+    inserted.room_label,
+    inserted.notes,
+    inserted.created_at,
+    inserted.updated_at,
+    csa.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    csa.subject_id,
+    sub.name AS subject_name,
+    sub.code AS subject_code,
+    csa.teacher_employee_id,
+    e.nama AS teacher_name
+FROM inserted
+JOIN class_subject_assignments csa ON csa.id = inserted.assignment_id
+JOIN school_classes c ON c.id = csa.class_id
+JOIN subjects sub ON sub.id = csa.subject_id
+JOIN employees e ON e.id = csa.teacher_employee_id;
+
+-- name: UpdateRombelTimetableSlot :one
+WITH updated AS (
+    UPDATE timetable_slots
+    SET assignment_id = sqlc.arg(assignment_id),
+        day_of_week = sqlc.arg(day_of_week),
+        start_time = sqlc.arg(start_time),
+        end_time = sqlc.arg(end_time),
+        room_label = sqlc.arg(room_label),
+        notes = sqlc.arg(notes),
+        updated_at = NOW()
+    FROM class_subject_assignments current_assignment
+    WHERE timetable_slots.id = sqlc.arg(id)
+      AND current_assignment.id = timetable_slots.assignment_id
+      AND current_assignment.class_id = sqlc.arg(class_id)
+      AND EXISTS (
+          SELECT 1
+          FROM class_subject_assignments next_assignment
+          WHERE next_assignment.id = sqlc.arg(assignment_id)
+            AND next_assignment.class_id = sqlc.arg(class_id)
+      )
+    RETURNING timetable_slots.*
+)
+SELECT
+    updated.id,
+    updated.assignment_id,
+    updated.day_of_week,
+    updated.start_time,
+    updated.end_time,
+    updated.room_label,
+    updated.notes,
+    updated.created_at,
+    updated.updated_at,
+    csa.class_id,
+    c.name AS class_name,
+    c.code AS class_code,
+    csa.subject_id,
+    sub.name AS subject_name,
+    sub.code AS subject_code,
+    csa.teacher_employee_id,
+    e.nama AS teacher_name
+FROM updated
+JOIN class_subject_assignments csa ON csa.id = updated.assignment_id
+JOIN school_classes c ON c.id = csa.class_id
+JOIN subjects sub ON sub.id = csa.subject_id
+JOIN employees e ON e.id = csa.teacher_employee_id;
+
+-- name: DeleteRombelTimetableSlot :execrows
+DELETE FROM timetable_slots ts
+USING class_subject_assignments csa
+WHERE csa.id = ts.assignment_id
+  AND csa.class_id = sqlc.arg(class_id)
+  AND ts.id = sqlc.arg(id);
+
 -- name: ListHomeroomAssignmentsByClass :many
 SELECT
     cha.id,

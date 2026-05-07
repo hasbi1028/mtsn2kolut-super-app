@@ -1223,6 +1223,71 @@ describe('api proxy route handlers', () => {
 		expect(deleteRes.status).toBe(204);
 	});
 
+	it('forwards rombel timetable-slot CRUD through encoded nested paths', async () => {
+		const collection = await import('../../routes/api/academic/rombel/[id]/timetable-slots/+server');
+		const item = await import('../../routes/api/academic/rombel/[id]/timetable-slots/[slotID]/+server');
+		proxyGetMock
+			.mockResolvedValueOnce([{ id: 'slot 1/2026' }])
+			.mockResolvedValueOnce({ id: 'slot 1/2026' });
+		proxyPostMock.mockResolvedValueOnce({ id: 'slot 1/2026' });
+		proxyPutMock.mockResolvedValueOnce({ id: 'slot 1/2026', room: 'Lab IPA' });
+		proxyDeleteMock.mockResolvedValueOnce(null);
+
+		const collectionEvent = createEvent({ params: { id: 'class 1/2026' } });
+		const getRes = await collection.GET(collectionEvent as never);
+
+		expect(proxyGetMock).toHaveBeenCalledWith('/api/academic/rombel/class%201%2F2026/timetable-slots');
+		expect(getRes.status).toBe(200);
+		await expect(getRes.json()).resolves.toEqual([{ id: 'slot 1/2026' }]);
+
+		const postRequest = new Request('http://localhost/api/academic/rombel/class%201%2F2026/timetable-slots', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ assignment_id: 'assignment-1', day_of_week: 2, start_time: '07:30', end_time: '08:50' })
+		});
+		const postRes = await collection.POST(createEvent({ params: { id: 'class 1/2026' }, request: postRequest }) as never);
+
+		expect(readRequestJsonMock).toHaveBeenCalledWith(postRequest);
+		expect(proxyPostMock).toHaveBeenCalledWith('/api/academic/rombel/class%201%2F2026/timetable-slots', {
+			assignment_id: 'assignment-1',
+			day_of_week: 2,
+			start_time: '07:30',
+			end_time: '08:50'
+		});
+		expect(postRes.status).toBe(201);
+
+		const putRequest = new Request('http://localhost/api/academic/rombel/class%201%2F2026/timetable-slots/slot%201%2F2026', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ assignment_id: 'assignment-1', day_of_week: 3, start_time: '09:00', end_time: '10:20', room: 'Lab IPA' })
+		});
+		const itemEvent = createEvent({
+			params: { id: 'class 1/2026', slotID: 'slot 1/2026' },
+			request: putRequest
+		});
+		const itemGetRes = await item.GET(itemEvent as never);
+
+		expect(proxyGetMock).toHaveBeenCalledWith('/api/academic/rombel/class%201%2F2026/timetable-slots/slot%201%2F2026');
+		expect(itemGetRes.status).toBe(200);
+
+		const putRes = await item.PUT(itemEvent as never);
+
+		expect(readRequestJsonMock).toHaveBeenCalledWith(putRequest);
+		expect(proxyPutMock).toHaveBeenCalledWith('/api/academic/rombel/class%201%2F2026/timetable-slots/slot%201%2F2026', {
+			assignment_id: 'assignment-1',
+			day_of_week: 3,
+			start_time: '09:00',
+			end_time: '10:20',
+			room: 'Lab IPA'
+		});
+		expect(putRes.status).toBe(200);
+
+		const deleteRes = await item.DELETE(itemEvent as never);
+
+		expect(proxyDeleteMock).toHaveBeenCalledWith('/api/academic/rombel/class%201%2F2026/timetable-slots/slot%201%2F2026');
+		expect(deleteRes.status).toBe(204);
+	});
+
 	it('encodes student lifecycle ids read from query params before forwarding', async () => {
 		const mod = await import('../../routes/api/students/+server');
 		proxyPatchMock.mockResolvedValueOnce({ id: 'student 1/2026', status: 'inactive' });
