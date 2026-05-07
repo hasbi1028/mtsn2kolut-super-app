@@ -22,4 +22,19 @@ describe('getUserFromToken', () => {
 
 		expect(user?.permissions).toEqual(['users.read', 'roles.manage']);
 	});
+
+	it('returns the first-login password change flag from the access token', () => {
+		const user = getUserFromToken(
+			token({
+				type: 'access',
+				uid: 'user-1',
+				usr: 'siswa001',
+				role: 'siswa',
+				roles: ['siswa'],
+				must_change_password: true
+			})
+		);
+
+		expect(user?.must_change_password).toBe(true);
+	});
 });

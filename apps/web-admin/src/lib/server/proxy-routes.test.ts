@@ -239,7 +239,7 @@ describe('api proxy route handlers', () => {
 		await expect(res.json()).resolves.toEqual({ error: 'Field username tidak dapat diubah dari akun saya' });
 	});
 
-	it('forwards own official change request list and creation without target ids', async () => {
+	it('forwards own official change requests and scoped child target ids', async () => {
 		const mod = await import('../../routes/api/auth/account/change-requests/+server');
 		const event = createEvent({
 			locals: {
@@ -273,6 +273,33 @@ describe('api proxy route handlers', () => {
 			field_key: 'nama',
 			requested_value: 'Nama Baru',
 			reason: 'Dokumen'
+		});
+		expect(res.status).toBe(201);
+
+		const childRequest = new Request('http://localhost/api/auth/account/change-requests', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				profile_type: 'student',
+				target_student_id: 'child-1',
+				field_key: 'alamat',
+				requested_value: 'Alamat Baru',
+				reason: 'KK terbaru'
+			})
+		});
+		proxyPostMock.mockResolvedValueOnce({ id: 'req-3', status: 'pending' });
+		res = await mod.POST(createEvent({
+			locals: {
+				user: { id: '1', username: 'ortu.ipa', role: 'ortu', roles: ['ortu'] }
+			},
+			request: childRequest
+		}) as never);
+		expect(proxyPostMock).toHaveBeenLastCalledWith('/api/auth/account/change-requests', {
+			profile_type: 'student',
+			target_student_id: 'child-1',
+			field_key: 'alamat',
+			requested_value: 'Alamat Baru',
+			reason: 'KK terbaru'
 		});
 		expect(res.status).toBe(201);
 

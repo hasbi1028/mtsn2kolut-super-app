@@ -162,6 +162,19 @@ export function isReadMethod(method: string) {
 	return method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
 }
 
+export function isMustChangePasswordAllowedPath(pathname: string, method: string) {
+	if (isPublicPath(pathname)) return true;
+	if (pathname.startsWith('/_app/') || pathname === '/favicon.svg' || pathname === '/manifest.webmanifest') return true;
+	if (pathname === '/settings/account' && isReadMethod(method)) return true;
+	if (pathname === '/api/auth/account' && isReadMethod(method)) return true;
+	if (pathname === '/api/auth/change-password' && method === 'POST') return true;
+	if (pathname === '/api/auth/logout' && method === 'POST') return true;
+	if (pathname === '/api/auth/logout-all' && method === 'POST') return true;
+	if (pathname === '/api/auth/sessions' && isReadMethod(method)) return true;
+	if (matchesPathSegment(pathname, '/api/auth/sessions') && (isReadMethod(method) || method === 'DELETE')) return true;
+	return false;
+}
+
 function usersPermission(pathname: string, method: string): string[] | undefined {
 	if (matchesPathSegment(pathname, '/api/users/student-accounts')) return ['student_accounts.manage'];
 	if (matchesPathSegment(pathname, '/api/users/parent-accounts')) return ['parent_accounts.manage'];
@@ -265,6 +278,7 @@ export function requiredPermissionsForPath(pathname: string, method: string): st
 export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: string, method: string): boolean {
 	if (isPublicPath(pathname)) return true;
 	if (!user) return false;
+	if (user.must_change_password && !isMustChangePasswordAllowedPath(pathname, method)) return false;
 	if (hasAnyRole(user, ['admin'])) return true;
 
 	const requiredPermissions = requiredPermissionsForPath(pathname, method);

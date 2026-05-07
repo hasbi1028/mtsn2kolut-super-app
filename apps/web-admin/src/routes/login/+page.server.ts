@@ -14,12 +14,14 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const username = String(data.get('username') ?? '').trim();
 		const password = String(data.get('password') ?? '');
+		let mustChangePassword = false;
 
 		try {
 			const pair = await apiLoginWithFetch(fetch, username, password, {
 				userAgent: request.headers.get('user-agent') ?? '',
 				ipAddress: getClientAddress(),
 			});
+			mustChangePassword = pair.must_change_password === true;
 			cookies.set('access_token', pair.access_token, {
 				path: '/', httpOnly: true, sameSite: 'lax',
 				secure: !dev,
@@ -41,6 +43,6 @@ export const actions: Actions = {
 		}
 
 
-		throw redirect(302, safeSameOriginRedirectPath(url.searchParams.get('from')));
+		throw redirect(302, mustChangePassword ? '/settings/account' : safeSameOriginRedirectPath(url.searchParams.get('from')));
 	},
 };

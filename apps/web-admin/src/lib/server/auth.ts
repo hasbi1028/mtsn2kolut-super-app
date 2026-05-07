@@ -7,6 +7,7 @@ export type JwtPayload = {
 	role?: string;
 	roles?: string[];
 	permissions?: string[];
+	must_change_password?: boolean;
 	ssid?: string;
 	eid?: string;
 	sid?: string;
@@ -19,6 +20,7 @@ export type AuthUser = {
 	role: string;
 	roles: string[];
 	permissions: string[];
+	must_change_password?: boolean;
 	session_id?: string;
 	employee_id?: string;
 	student_id?: string;
@@ -64,6 +66,7 @@ export function getUserFromToken(token: string | undefined): AuthUser | null {
 		role,
 		roles: p.roles ?? (role ? [role] : []),
 		permissions: p.permissions ?? [],
+		must_change_password: p.must_change_password ?? false,
 		session_id: p.ssid,
 		employee_id: p.eid,
 		student_id: p.sid,

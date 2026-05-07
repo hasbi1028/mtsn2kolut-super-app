@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { proxy, ApiError, handleRouteError, readRequestJson } from '$lib/server/api';
 
-const SELF_CHANGE_REQUEST_FIELDS = new Set(['profile_type', 'field_key', 'requested_value', 'reason']);
+const SELF_CHANGE_REQUEST_FIELDS = new Set(['profile_type', 'target_student_id', 'field_key', 'requested_value', 'reason']);
 
 function sanitizeCreatePayload(body: Record<string, unknown>) {
 	const payload: Record<string, string> = {};

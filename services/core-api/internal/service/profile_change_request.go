@@ -19,6 +19,7 @@ type profileChangeRequestStore interface {
 	GetOwnedEmployeeOfficialProfile(ctx context.Context, id pgtype.UUID) (db.GetOwnedEmployeeOfficialProfileRow, error)
 	GetOwnedStudentOfficialProfile(ctx context.Context, id pgtype.UUID) (db.GetOwnedStudentOfficialProfileRow, error)
 	GetOwnedParentOfficialProfile(ctx context.Context, id pgtype.UUID) (db.GetOwnedParentOfficialProfileRow, error)
+	GetParentOwnedChildOfficialProfile(ctx context.Context, arg db.GetParentOwnedChildOfficialProfileParams) (db.GetParentOwnedChildOfficialProfileRow, error)
 	CreateProfileChangeRequest(ctx context.Context, arg db.CreateProfileChangeRequestParams) (db.ProfileChangeRequest, error)
 	ListOwnProfileChangeRequests(ctx context.Context, requesterUserID pgtype.UUID) ([]db.ListOwnProfileChangeRequestsRow, error)
 	ListProfileChangeRequests(ctx context.Context, arg db.ListProfileChangeRequestsParams) ([]db.ListProfileChangeRequestsRow, error)
@@ -31,7 +32,13 @@ type profileChangeRequestStore interface {
 	UpdateStudentOfficialName(ctx context.Context, arg db.UpdateStudentOfficialNameParams) (int64, error)
 	UpdateStudentOfficialBirthdate(ctx context.Context, arg db.UpdateStudentOfficialBirthdateParams) (int64, error)
 	UpdateStudentOfficialParentName(ctx context.Context, arg db.UpdateStudentOfficialParentNameParams) (int64, error)
+	UpdateStudentOfficialPhone(ctx context.Context, arg db.UpdateStudentOfficialPhoneParams) (int64, error)
+	UpdateStudentOfficialAddress(ctx context.Context, arg db.UpdateStudentOfficialAddressParams) (int64, error)
 	UpdateParentOfficialName(ctx context.Context, arg db.UpdateParentOfficialNameParams) (int64, error)
+	UpdateParentOfficialPhone(ctx context.Context, arg db.UpdateParentOfficialPhoneParams) (int64, error)
+	UpdateParentOfficialAddress(ctx context.Context, arg db.UpdateParentOfficialAddressParams) (int64, error)
+	UpdateParentOfficialOccupation(ctx context.Context, arg db.UpdateParentOfficialOccupationParams) (int64, error)
+	UpdateParentOfficialNik(ctx context.Context, arg db.UpdateParentOfficialNikParams) (int64, error)
 	CreateAuditLog(ctx context.Context, arg db.CreateAuditLogParams) (db.AuditLog, error)
 }
 
@@ -45,10 +52,11 @@ type ProfileChangeRequest struct {
 }
 
 type CreateProfileChangeRequestInput struct {
-	ProfileType    string
-	FieldKey       string
-	RequestedValue string
-	Reason         string
+	ProfileType     string
+	TargetStudentID pgtype.UUID
+	FieldKey        string
+	RequestedValue  string
+	Reason          string
 }
 
 type ReviewProfileChangeRequestInput struct {
@@ -113,7 +121,7 @@ func (s *ProfileChangeRequest) Create(ctx context.Context, requesterUserID pgtyp
 
 	var created db.ProfileChangeRequest
 	err := s.withStore(ctx, func(store profileChangeRequestStore) error {
-		owned, err := s.loadOwnedOfficialProfile(ctx, store, requesterUserID, input.ProfileType)
+		owned, err := s.loadOwnedOfficialProfile(ctx, store, requesterUserID, input.ProfileType, input.TargetStudentID)
 		if err != nil {
 			return err
 		}
@@ -168,7 +176,7 @@ func (s *ProfileChangeRequest) ListOwn(ctx context.Context, requesterUserID pgty
 }
 
 func (s *ProfileChangeRequest) ListSelfRequestableFields(ctx context.Context, requesterUserID pgtype.UUID) ([]ProfileChangeRequestField, error) {
-	owned, err := s.loadOwnedOfficialProfile(ctx, s.q, requesterUserID, "")
+	owned, err := s.loadOwnedOfficialProfile(ctx, s.q, requesterUserID, "", pgtype.UUID{})
 	if errors.Is(err, domain.ErrForbidden) {
 		return []ProfileChangeRequestField{}, nil
 	}
@@ -369,10 +377,33 @@ func (s *ProfileChangeRequest) withStore(ctx context.Context, fn func(profileCha
 	return tx.Commit(ctx)
 }
 
-func (s *ProfileChangeRequest) loadOwnedOfficialProfile(ctx context.Context, store profileChangeRequestStore, userID pgtype.UUID, requestedProfileType string) (ownedOfficialProfile, error) {
+func (s *ProfileChangeRequest) loadOwnedOfficialProfile(ctx context.Context, store profileChangeRequestStore, userID pgtype.UUID, requestedProfileType string, targetStudentID pgtype.UUID) (ownedOfficialProfile, error) {
 	requestedProfileType = strings.TrimSpace(strings.ToLower(requestedProfileType))
 	if requestedProfileType != "" && requestedProfileType != "employee" && requestedProfileType != "student" && requestedProfileType != "parent" {
 		return ownedOfficialProfile{}, domain.ErrBadRequest
+	}
+	if targetStudentID.Valid && requestedProfileType != "" && requestedProfileType != "student" {
+		return ownedOfficialProfile{}, domain.ErrBadRequest
+	}
+	if targetStudentID.Valid {
+		row, err := store.GetParentOwnedChildOfficialProfile(ctx, db.GetParentOwnedChildOfficialProfileParams{
+			RequesterUserID: userID,
+			TargetStudentID: targetStudentID,
+		})
+		if err == nil {
+			return ownedOfficialProfile{
+				profileType:     "student",
+				targetStudentID: row.ID,
+				currentValues: map[string]string{
+					"nama":          row.Nama,
+					"tanggal_lahir": profileChangeDateString(row.TanggalLahir),
+					"parent_name":   row.ParentName,
+					"phone":         row.Phone,
+					"alamat":        row.Alamat,
+				},
+			}, nil
+		}
+		return ownedOfficialProfile{}, mapOwnedProfileError(err)
 	}
 	if requestedProfileType == "" || requestedProfileType == "employee" {
 		row, err := store.GetOwnedEmployeeOfficialProfile(ctx, userID)
@@ -400,6 +431,8 @@ func (s *ProfileChangeRequest) loadOwnedOfficialProfile(ctx context.Context, sto
 					"nama":          row.Nama,
 					"tanggal_lahir": profileChangeDateString(row.TanggalLahir),
 					"parent_name":   row.ParentName,
+					"phone":         row.Phone,
+					"alamat":        row.Alamat,
 				},
 			}, nil
 		}
@@ -414,7 +447,11 @@ func (s *ProfileChangeRequest) loadOwnedOfficialProfile(ctx context.Context, sto
 				profileType:    "parent",
 				targetParentID: row.ID,
 				currentValues: map[string]string{
-					"nama": row.Nama,
+					"nama":       row.Nama,
+					"phone":      row.Phone,
+					"address":    row.Address,
+					"occupation": row.Occupation,
+					"nik":        row.Nik,
 				},
 			}, nil
 		}
@@ -490,13 +527,26 @@ func applyApprovedProfileChangeRequest(ctx context.Context, store profileChangeR
 			affected, err = store.UpdateStudentOfficialBirthdate(ctx, db.UpdateStudentOfficialBirthdateParams{ID: row.TargetStudentID, TanggalLahir: mustDate(value)})
 		case "parent_name":
 			affected, err = store.UpdateStudentOfficialParentName(ctx, db.UpdateStudentOfficialParentNameParams{ID: row.TargetStudentID, ParentName: value})
+		case "phone":
+			affected, err = store.UpdateStudentOfficialPhone(ctx, db.UpdateStudentOfficialPhoneParams{ID: row.TargetStudentID, Phone: value})
+		case "alamat":
+			affected, err = store.UpdateStudentOfficialAddress(ctx, db.UpdateStudentOfficialAddressParams{ID: row.TargetStudentID, Alamat: value})
 		}
 	case "parent":
 		if !row.TargetParentID.Valid {
 			return domain.ErrBadRequest
 		}
-		if field.FieldKey == "nama" {
+		switch field.FieldKey {
+		case "nama":
 			affected, err = store.UpdateParentOfficialName(ctx, db.UpdateParentOfficialNameParams{ID: row.TargetParentID, Nama: value})
+		case "phone":
+			affected, err = store.UpdateParentOfficialPhone(ctx, db.UpdateParentOfficialPhoneParams{ID: row.TargetParentID, Phone: value})
+		case "address":
+			affected, err = store.UpdateParentOfficialAddress(ctx, db.UpdateParentOfficialAddressParams{ID: row.TargetParentID, Address: value})
+		case "occupation":
+			affected, err = store.UpdateParentOfficialOccupation(ctx, db.UpdateParentOfficialOccupationParams{ID: row.TargetParentID, Occupation: value})
+		case "nik":
+			affected, err = store.UpdateParentOfficialNik(ctx, db.UpdateParentOfficialNikParams{ID: row.TargetParentID, Nik: value})
 		}
 	default:
 		return domain.ErrBadRequest

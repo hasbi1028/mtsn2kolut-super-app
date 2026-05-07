@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canAccessProtectedRoute, hasAnyPermission, hasAnyRole, isAdminOnlyPath, isBankSoalPath, isGuruSafeAssessmentSupportReadPath, isKesiswaanPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath, requiredPermissionsForPath } from './route-access';
+import { canAccessProtectedRoute, hasAnyPermission, hasAnyRole, isAdminOnlyPath, isBankSoalPath, isGuruSafeAssessmentSupportReadPath, isKesiswaanPath, isMustChangePasswordAllowedPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath, requiredPermissionsForPath } from './route-access';
 
 describe('route access helpers', () => {
 	it('keeps settings root available to authenticated non-admin users', () => {
@@ -154,6 +154,26 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute(studentPermission, '/api/portal/student/me', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(ortu, '/api/portal/siswa/profile', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(ortu, '/api/portal/student/me', 'GET')).toBe(false);
+	});
+
+	it('limits first-login users to password change and logout surfaces', () => {
+		const mustChangeUser = {
+			id: '1',
+			username: 'siswa',
+			role: 'siswa',
+			roles: ['siswa'],
+			permissions: ['student_portal.read'],
+			must_change_password: true
+		};
+
+		expect(isMustChangePasswordAllowedPath('/settings/account', 'GET')).toBe(true);
+		expect(isMustChangePasswordAllowedPath('/api/auth/account', 'GET')).toBe(true);
+		expect(isMustChangePasswordAllowedPath('/api/auth/change-password', 'POST')).toBe(true);
+		expect(isMustChangePasswordAllowedPath('/api/auth/logout', 'POST')).toBe(true);
+		expect(isMustChangePasswordAllowedPath('/api/auth/preferences/sidebar', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(mustChangeUser, '/settings/account', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(mustChangeUser, '/portal/siswa', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ ...mustChangeUser, must_change_password: false }, '/portal/siswa', 'GET')).toBe(true);
 	});
 
 	it('keeps mutation route checks permission-specific', () => {

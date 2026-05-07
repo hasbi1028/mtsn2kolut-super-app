@@ -92,6 +92,7 @@
 	let refreshLoading = $state(false);
 
 	const currentSessionId = $derived(page.data.user?.session_id ?? '');
+	const requiresPasswordChange = $derived(Boolean(page.data.user?.must_change_password || account?.must_change_password));
 	const pinnedCount = $derived(preferenceItemCount(preferences?.pinned_items));
 	const recentCount = $derived(preferenceItemCount(preferences?.recent_items));
 	const canEditContact = $derived(hasEditableContact(account?.contact));
@@ -165,10 +166,24 @@
 	}
 
 	async function fetchOverview(): Promise<AccountOverview> {
-		const [accountData, sessionData, preferenceData, changeFieldData, changeRequestData, changeHistoryData] = await Promise.all([
-			fetch('/api/auth/account').then((response) =>
-				readClientApiData<AccountIdentity>(response, 'Gagal memuat identitas akun')
-			),
+		const accountData = await fetch('/api/auth/account').then((response) =>
+			readClientApiData<AccountIdentity>(response, 'Gagal memuat identitas akun')
+		);
+		if (page.data.user?.must_change_password || accountData.must_change_password) {
+			const sessionData = await fetch('/api/auth/sessions').then((response) =>
+				readClientApiData<AuthSession[]>(response, 'Gagal memuat sesi aktif')
+			);
+			return {
+				account: accountData,
+				sessions: normalizeAccountSessions(sessionData),
+				preferences: null,
+				changeFields: [],
+				changeRequests: [],
+				changeHistory: []
+			};
+		}
+
+		const [sessionData, preferenceData, changeFieldData, changeRequestData, changeHistoryData] = await Promise.all([
 			fetch('/api/auth/sessions').then((response) =>
 				readClientApiData<AuthSession[]>(response, 'Gagal memuat sesi aktif')
 			),
@@ -607,6 +622,73 @@
 		{/snippet}
 		{#snippet children(_overview)}
 			{#if account}
+			{#if requiresPasswordChange}
+			<div class="mx-auto max-w-3xl space-y-6">
+				<Card.Root class="border-warning/30 bg-warning/10">
+					<Card.Header class="pb-3">
+						<Card.Title class="text-base">Ganti Password Pertama</Card.Title>
+						<Card.Description>Akun dengan password sementara hanya dapat membuka halaman ini dan logout sampai password diganti.</Card.Description>
+					</Card.Header>
+					<Card.Content>
+						<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+							<div class={infoPanelClass}>
+								<p class={labelClass}>Username</p>
+								<p class={valueClass}>{account.username}</p>
+							</div>
+							<div class={infoPanelClass}>
+								<p class={labelClass}>Profil tertaut</p>
+								<p class={valueClass}>{linkedProfileLabel(account)}</p>
+								<p class="mt-1 text-xs text-muted-foreground">{profileTypeLabel(account.profile_type)}</p>
+							</div>
+						</div>
+					</Card.Content>
+				</Card.Root>
+
+				<Card.Root>
+					<Card.Header class="pb-3">
+						<Card.Title class="text-base">Ubah Password</Card.Title>
+						<Card.Description>Gunakan password baru minimal 8 karakter. Setelah tersimpan, login ulang untuk membuka portal.</Card.Description>
+					</Card.Header>
+					<Card.Content>
+						<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+							<div>
+								<label for="account-pw-current-required" class="mb-1.5 block text-sm font-medium">Password Saat Ini</label>
+								<Input id="account-pw-current-required" type="password" bind:value={pwForm.current} autocomplete="current-password" />
+							</div>
+							<div>
+								<label for="account-pw-next-required" class="mb-1.5 block text-sm font-medium">Password Baru</label>
+								<Input id="account-pw-next-required" type="password" bind:value={pwForm.next} autocomplete="new-password" />
+							</div>
+							<div>
+								<label for="account-pw-confirm-required" class="mb-1.5 block text-sm font-medium">Konfirmasi Password</label>
+								<Input id="account-pw-confirm-required" type="password" bind:value={pwForm.confirm} autocomplete="new-password" />
+							</div>
+						</div>
+						<LoadingButton class="mt-4" onclick={() => void changePassword()} loading={pwLoading} loadingLabel="Menyimpan...">
+							<KeyRoundIcon class="size-4" />
+							Simpan Password
+						</LoadingButton>
+					</Card.Content>
+				</Card.Root>
+
+				<Card.Root>
+					<Card.Header class="pb-3">
+						<Card.Title class="text-base">Logout</Card.Title>
+						<Card.Description>Keluar dari sesi saat ini jika perlu bantuan operator sebelum mengganti password.</Card.Description>
+					</Card.Header>
+					<Card.Content>
+						<LoadingButton variant="outline" onclick={async () => {
+							await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+							clearCbtComposerDrafts();
+							window.location.href = '/login';
+						}}>
+							<LogOutIcon class="size-4" />
+							Logout
+						</LoadingButton>
+					</Card.Content>
+				</Card.Root>
+			</div>
+			{:else}
 			<div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
 				<div class="space-y-6">
 					<Card.Root>
@@ -1048,6 +1130,7 @@
 					</Card.Root>
 				</div>
 			</div>
+			{/if}
 			{:else}
 				<RecoveryPanel title="Akun Belum Tersaji" message="Data akun belum tersedia. Coba muat ulang halaman." onRetry={() => void refreshOverview(true)} />
 			{/if}

@@ -149,6 +149,110 @@ func (q *Queries) GetParent(ctx context.Context, id pgtype.UUID) (Parent, error)
 	return i, err
 }
 
+const getParentPortalChildAccess = `-- name: GetParentPortalChildAccess :one
+SELECT ps.student_id
+FROM parent_students ps
+WHERE ps.parent_id = $1
+  AND ps.student_id = $2
+`
+
+type GetParentPortalChildAccessParams struct {
+	ParentID  pgtype.UUID `json:"parent_id"`
+	StudentID pgtype.UUID `json:"student_id"`
+}
+
+func (q *Queries) GetParentPortalChildAccess(ctx context.Context, arg GetParentPortalChildAccessParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getParentPortalChildAccess, arg.ParentID, arg.StudentID)
+	var student_id pgtype.UUID
+	err := row.Scan(&student_id)
+	return student_id, err
+}
+
+const getParentPortalChildProfile = `-- name: GetParentPortalChildProfile :one
+SELECT s.id, s.nis, s.nisn, s.nama, s.gender, s.parent_name, s.parent_phone,
+       s.class_id, c.name AS class_name, c.code AS class_code,
+       COALESCE(lp.linked_parent_names, '') AS linked_parent_names,
+       COALESCE(lp.linked_parent_count, 0) AS linked_parent_count,
+       s.is_active, s.status, s.created_at, s.updated_at
+FROM students s
+JOIN parent_students parent_scope
+  ON parent_scope.student_id = s.id
+ AND parent_scope.parent_id = $1
+LEFT JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN LATERAL (
+  SELECT STRING_AGG(p.nama, ', ' ORDER BY p.nama) AS linked_parent_names,
+         COUNT(*)::bigint AS linked_parent_count
+  FROM parent_students ps
+  JOIN parents p ON p.id = ps.parent_id
+  WHERE ps.student_id = s.id
+) lp ON TRUE
+WHERE s.id = $2
+`
+
+type GetParentPortalChildProfileParams struct {
+	ParentID  pgtype.UUID `json:"parent_id"`
+	StudentID pgtype.UUID `json:"student_id"`
+}
+
+type GetParentPortalChildProfileRow struct {
+	ID                pgtype.UUID        `json:"id"`
+	Nis               string             `json:"nis"`
+	Nisn              string             `json:"nisn"`
+	Nama              string             `json:"nama"`
+	Gender            GenderEnum         `json:"gender"`
+	ParentName        string             `json:"parent_name"`
+	ParentPhone       string             `json:"parent_phone"`
+	ClassID           pgtype.UUID        `json:"class_id"`
+	ClassName         pgtype.Text        `json:"class_name"`
+	ClassCode         pgtype.Text        `json:"class_code"`
+	LinkedParentNames []byte             `json:"linked_parent_names"`
+	LinkedParentCount int64              `json:"linked_parent_count"`
+	IsActive          bool               `json:"is_active"`
+	Status            StudentStatusEnum  `json:"status"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetParentPortalChildProfile(ctx context.Context, arg GetParentPortalChildProfileParams) (GetParentPortalChildProfileRow, error) {
+	row := q.db.QueryRow(ctx, getParentPortalChildProfile, arg.ParentID, arg.StudentID)
+	var i GetParentPortalChildProfileRow
+	err := row.Scan(
+		&i.ID,
+		&i.Nis,
+		&i.Nisn,
+		&i.Nama,
+		&i.Gender,
+		&i.ParentName,
+		&i.ParentPhone,
+		&i.ClassID,
+		&i.ClassName,
+		&i.ClassCode,
+		&i.LinkedParentNames,
+		&i.LinkedParentCount,
+		&i.IsActive,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getPortalParentIDByUserID = `-- name: GetPortalParentIDByUserID :one
+SELECT u.parent_id
+FROM users u
+WHERE u.id = $1
+  AND u.deleted_at IS NULL
+  AND u.is_active = TRUE
+  AND u.parent_id IS NOT NULL
+`
+
+func (q *Queries) GetPortalParentIDByUserID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getPortalParentIDByUserID, id)
+	var parent_id pgtype.UUID
+	err := row.Scan(&parent_id)
+	return parent_id, err
+}
+
 const linkParentStudent = `-- name: LinkParentStudent :exec
 INSERT INTO parent_students (parent_id, student_id)
 VALUES ($1, $2)
@@ -203,6 +307,165 @@ func (q *Queries) ListParentChildren(ctx context.Context, parentID pgtype.UUID) 
 			&i.Relationship,
 			&i.IsPrimaryContact,
 			&i.Notes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listParentPortalChildExamSessions = `-- name: ListParentPortalChildExamSessions :many
+SELECT
+  ep.id AS participant_id,
+  ep.session_id,
+  ep.room_id,
+  ep.seat_no,
+  ep.joined_at,
+  ep.submitted_at,
+  CASE WHEN s.status = 'finished' THEN ep.score ELSE NULL::numeric END AS score,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(r.room_name, '') AS room_name
+FROM parent_students parent_scope
+JOIN cbt_exam_participants ep ON ep.student_id = parent_scope.student_id
+JOIN cbt_exam_sessions s ON s.id = ep.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE parent_scope.parent_id = $1
+  AND parent_scope.student_id = $2
+ORDER BY s.scheduled_start DESC
+`
+
+type ListParentPortalChildExamSessionsParams struct {
+	ParentID  pgtype.UUID `json:"parent_id"`
+	StudentID pgtype.UUID `json:"student_id"`
+}
+
+type ListParentPortalChildExamSessionsRow struct {
+	ParticipantID   pgtype.UUID          `json:"participant_id"`
+	SessionID       pgtype.UUID          `json:"session_id"`
+	RoomID          pgtype.UUID          `json:"room_id"`
+	SeatNo          pgtype.Int4          `json:"seat_no"`
+	JoinedAt        pgtype.Timestamptz   `json:"joined_at"`
+	SubmittedAt     pgtype.Timestamptz   `json:"submitted_at"`
+	Score           pgtype.Numeric       `json:"score"`
+	SessionTitle    string               `json:"session_title"`
+	SessionStatus   CbtSessionStatusEnum `json:"session_status"`
+	ScheduledStart  pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd    pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageTitle    string               `json:"package_title"`
+	DurationMinutes int32                `json:"duration_minutes"`
+	RoomName        string               `json:"room_name"`
+}
+
+func (q *Queries) ListParentPortalChildExamSessions(ctx context.Context, arg ListParentPortalChildExamSessionsParams) ([]ListParentPortalChildExamSessionsRow, error) {
+	rows, err := q.db.Query(ctx, listParentPortalChildExamSessions, arg.ParentID, arg.StudentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListParentPortalChildExamSessionsRow{}
+	for rows.Next() {
+		var i ListParentPortalChildExamSessionsRow
+		if err := rows.Scan(
+			&i.ParticipantID,
+			&i.SessionID,
+			&i.RoomID,
+			&i.SeatNo,
+			&i.JoinedAt,
+			&i.SubmittedAt,
+			&i.Score,
+			&i.SessionTitle,
+			&i.SessionStatus,
+			&i.ScheduledStart,
+			&i.ScheduledEnd,
+			&i.PackageTitle,
+			&i.DurationMinutes,
+			&i.RoomName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listParentPortalChildTimetable = `-- name: ListParentPortalChildTimetable :many
+SELECT ts.id, ts.assignment_id, ts.day_of_week, ts.start_time, ts.end_time, ts.room_label, ts.notes,
+       c.id AS class_id, c.name AS class_name, c.code AS class_code,
+       s.id AS subject_id, s.name AS subject_name, s.code AS subject_code,
+       e.id AS teacher_employee_id, e.nama AS teacher_name
+FROM parent_students parent_scope
+JOIN students st ON st.id = parent_scope.student_id
+JOIN school_classes c ON c.id = st.class_id
+JOIN class_subject_assignments a ON a.class_id = c.id
+JOIN timetable_slots ts ON ts.assignment_id = a.id
+JOIN subjects s ON s.id = a.subject_id
+JOIN employees e ON e.id = a.teacher_employee_id
+WHERE parent_scope.parent_id = $1
+  AND parent_scope.student_id = $2
+ORDER BY ts.day_of_week ASC, ts.start_time ASC, s.name ASC
+`
+
+type ListParentPortalChildTimetableParams struct {
+	ParentID  pgtype.UUID `json:"parent_id"`
+	StudentID pgtype.UUID `json:"student_id"`
+}
+
+type ListParentPortalChildTimetableRow struct {
+	ID                pgtype.UUID `json:"id"`
+	AssignmentID      pgtype.UUID `json:"assignment_id"`
+	DayOfWeek         int16       `json:"day_of_week"`
+	StartTime         pgtype.Time `json:"start_time"`
+	EndTime           pgtype.Time `json:"end_time"`
+	RoomLabel         string      `json:"room_label"`
+	Notes             string      `json:"notes"`
+	ClassID           pgtype.UUID `json:"class_id"`
+	ClassName         string      `json:"class_name"`
+	ClassCode         string      `json:"class_code"`
+	SubjectID         pgtype.UUID `json:"subject_id"`
+	SubjectName       string      `json:"subject_name"`
+	SubjectCode       string      `json:"subject_code"`
+	TeacherEmployeeID pgtype.UUID `json:"teacher_employee_id"`
+	TeacherName       string      `json:"teacher_name"`
+}
+
+func (q *Queries) ListParentPortalChildTimetable(ctx context.Context, arg ListParentPortalChildTimetableParams) ([]ListParentPortalChildTimetableRow, error) {
+	rows, err := q.db.Query(ctx, listParentPortalChildTimetable, arg.ParentID, arg.StudentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListParentPortalChildTimetableRow{}
+	for rows.Next() {
+		var i ListParentPortalChildTimetableRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AssignmentID,
+			&i.DayOfWeek,
+			&i.StartTime,
+			&i.EndTime,
+			&i.RoomLabel,
+			&i.Notes,
+			&i.ClassID,
+			&i.ClassName,
+			&i.ClassCode,
+			&i.SubjectID,
+			&i.SubjectName,
+			&i.SubjectCode,
+			&i.TeacherEmployeeID,
+			&i.TeacherName,
 		); err != nil {
 			return nil, err
 		}

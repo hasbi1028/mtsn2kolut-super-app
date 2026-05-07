@@ -8,6 +8,14 @@ SELECT id, nama, phone, address, created_at, updated_at, photo_url, occupation, 
 FROM parents
 WHERE id = $1;
 
+-- name: GetPortalParentIDByUserID :one
+SELECT u.parent_id
+FROM users u
+WHERE u.id = $1
+  AND u.deleted_at IS NULL
+  AND u.is_active = TRUE
+  AND u.parent_id IS NOT NULL;
+
 -- name: CreateParent :one
 INSERT INTO parents (nama, phone, address)
 VALUES ($1, $2, $3)
@@ -48,6 +56,73 @@ FROM students s
 JOIN parent_students ps ON ps.student_id = s.id
 LEFT JOIN school_classes c ON c.id = s.class_id
 WHERE ps.parent_id = $1;
+
+-- name: GetParentPortalChildAccess :one
+SELECT ps.student_id
+FROM parent_students ps
+WHERE ps.parent_id = sqlc.arg(parent_id)
+  AND ps.student_id = sqlc.arg(student_id);
+
+-- name: GetParentPortalChildProfile :one
+SELECT s.id, s.nis, s.nisn, s.nama, s.gender, s.parent_name, s.parent_phone,
+       s.class_id, c.name AS class_name, c.code AS class_code,
+       COALESCE(lp.linked_parent_names, '') AS linked_parent_names,
+       COALESCE(lp.linked_parent_count, 0) AS linked_parent_count,
+       s.is_active, s.status, s.created_at, s.updated_at
+FROM students s
+JOIN parent_students parent_scope
+  ON parent_scope.student_id = s.id
+ AND parent_scope.parent_id = sqlc.arg(parent_id)
+LEFT JOIN school_classes c ON c.id = s.class_id
+LEFT JOIN LATERAL (
+  SELECT STRING_AGG(p.nama, ', ' ORDER BY p.nama) AS linked_parent_names,
+         COUNT(*)::bigint AS linked_parent_count
+  FROM parent_students ps
+  JOIN parents p ON p.id = ps.parent_id
+  WHERE ps.student_id = s.id
+) lp ON TRUE
+WHERE s.id = sqlc.arg(student_id);
+
+-- name: ListParentPortalChildTimetable :many
+SELECT ts.id, ts.assignment_id, ts.day_of_week, ts.start_time, ts.end_time, ts.room_label, ts.notes,
+       c.id AS class_id, c.name AS class_name, c.code AS class_code,
+       s.id AS subject_id, s.name AS subject_name, s.code AS subject_code,
+       e.id AS teacher_employee_id, e.nama AS teacher_name
+FROM parent_students parent_scope
+JOIN students st ON st.id = parent_scope.student_id
+JOIN school_classes c ON c.id = st.class_id
+JOIN class_subject_assignments a ON a.class_id = c.id
+JOIN timetable_slots ts ON ts.assignment_id = a.id
+JOIN subjects s ON s.id = a.subject_id
+JOIN employees e ON e.id = a.teacher_employee_id
+WHERE parent_scope.parent_id = sqlc.arg(parent_id)
+  AND parent_scope.student_id = sqlc.arg(student_id)
+ORDER BY ts.day_of_week ASC, ts.start_time ASC, s.name ASC;
+
+-- name: ListParentPortalChildExamSessions :many
+SELECT
+  ep.id AS participant_id,
+  ep.session_id,
+  ep.room_id,
+  ep.seat_no,
+  ep.joined_at,
+  ep.submitted_at,
+  CASE WHEN s.status = 'finished' THEN ep.score ELSE NULL::numeric END AS score,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(r.room_name, '') AS room_name
+FROM parent_students parent_scope
+JOIN cbt_exam_participants ep ON ep.student_id = parent_scope.student_id
+JOIN cbt_exam_sessions s ON s.id = ep.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE parent_scope.parent_id = sqlc.arg(parent_id)
+  AND parent_scope.student_id = sqlc.arg(student_id)
+ORDER BY s.scheduled_start DESC;
 
 -- name: ListStudentParents :many
 SELECT p.id, p.nama, p.phone, p.address, p.occupation, p.income_band, p.nik,
