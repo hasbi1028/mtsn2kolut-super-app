@@ -36,6 +36,44 @@ func TestNativeBankSoalRoutesUseGranularQuestionPermissions(t *testing.T) {
 			t.Fatalf("native Bank Soal API block missing granular guard %q:\n%s", want, block)
 		}
 	}
+	assetFileGuard := `assetFileGuard := mw.ExamTokenOrJWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession, examSvc.GetParticipantByToken)`
+	assetFileAlias := `r.With(assetFileGuard).Get("/api/bank-soal/assets/{id}/file"`
+	if !strings.Contains(source, assetFileGuard) || !strings.Contains(source, assetFileAlias) {
+		t.Fatalf("native Bank Soal asset file alias must use the same ExamTokenOrJWT guard as the legacy CBT file route")
+	}
+}
+
+func TestNativeAsesmenNonTestRoutesMatchLegacyGranularGuards(t *testing.T) {
+	raw, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	source := string(raw)
+	start := strings.Index(source, "// Native Asesmen API aliases")
+	end := strings.Index(source, `r.With(requireCbt).Get("/api/asesmen/packages"`)
+	if start < 0 || end <= start {
+		t.Fatalf("native Asesmen non-test route block not found")
+	}
+	block := source[start:end]
+	if strings.Contains(block, "With(requireCbt)") {
+		t.Fatalf("native Asesmen non-test routes must not use broad requireCbt guards:\n%s", block)
+	}
+	required := []string{
+		`r.With(requireAsesmenRead).Get("/api/asesmen/non-test-assessments"`,
+		`r.With(requireAsesmenScore).Post("/api/asesmen/non-test-assessments"`,
+		`r.With(requireAsesmenRead).Get("/api/asesmen/non-test-assessments/{id}"`,
+		`r.With(requireAsesmenScore).Put("/api/asesmen/non-test-assessments/{id}"`,
+		`r.With(requireAsesmenScore).Delete("/api/asesmen/non-test-assessments/{id}"`,
+		`r.With(requireAsesmenScore, requireGradesManage).Post("/api/asesmen/non-test-assessments/{id}/sync-grade"`,
+		`r.With(requireAsesmenRead).Get("/api/asesmen/non-test-assessments/{id}/submissions"`,
+		`r.With(requireAsesmenScore).Post("/api/asesmen/non-test-assessments/{id}/submissions/generate"`,
+		`r.With(requireAsesmenScore).Post("/api/asesmen/non-test-assessments/{id}/submissions"`,
+	}
+	for _, want := range required {
+		if !strings.Contains(block, want) {
+			t.Fatalf("native Asesmen non-test API block missing guard %q:\n%s", want, block)
+		}
+	}
 }
 
 func TestQuestionServiceUsesPoolBackedTransactionsInAPI(t *testing.T) {
