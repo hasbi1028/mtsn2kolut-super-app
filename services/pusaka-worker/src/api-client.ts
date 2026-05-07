@@ -276,7 +276,7 @@ export async function failJob(jobId: string, error: string, retryAfterSecs = 0):
         {
           method: 'POST',
           headers: workerHeaders(),
-          body: JSON.stringify({ worker_id: WORKER_ID, error, retry_after_secs: retryAfterSecs }),
+          body: JSON.stringify({ worker_id: WORKER_ID, error, retry_after_secs: String(retryAfterSecs) }),
         },
       );
       if (response.ok) {

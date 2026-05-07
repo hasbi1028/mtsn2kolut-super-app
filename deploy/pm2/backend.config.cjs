@@ -19,6 +19,7 @@ module.exports = {
       autorestart: true,
       watch: false,
       max_memory_restart: '256M',
+      kill_timeout: 20000,
       error_file: path.join(rootDir, 'logs/backend-error.log'),
       out_file: path.join(rootDir, 'logs/backend-out.log'),
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z'

@@ -237,6 +237,9 @@ func TestUserLifecycleUpdateProfileLinkValidatesSingleProfileAndAudits(t *testin
 	if len(store.profileCalls) != 1 || store.profileCalls[0].ID != userID || store.profileCalls[0].EmployeeID != employeeID {
 		t.Fatalf("profile calls = %+v, want employee link", store.profileCalls)
 	}
+	if len(store.versionCalls) != 1 || store.versionCalls[0] != userID || len(store.revokeCalls) != 1 || store.revokeCalls[0] != userID {
+		t.Fatalf("version/revoke calls = %+v/%+v, want profile relink to invalidate sessions", store.versionCalls, store.revokeCalls)
+	}
 	if len(store.auditCalls) != 1 || store.auditCalls[0].Action != "USER_PROFILE_LINK_UPDATED" {
 		t.Fatalf("audit calls = %+v, want profile link audit", store.auditCalls)
 	}

@@ -275,6 +275,8 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/portal/orang-tua', 'GET')).toEqual(['parent_portal.read']);
 		expect(requiredPermissionsForPath('/api/portal/orang-tua/children', 'GET')).toEqual(['parent_portal.read']);
 		expect(requiredPermissionsForPath('/api/portal/parent/me', 'GET')).toEqual(['parent_portal.read']);
+		expect(requiredPermissionsForPath('/tu/arsip', 'GET')).toEqual(['archives.read']);
+		expect(requiredPermissionsForPath('/api/tu/archives/documents', 'POST')).toEqual(['archives.manage']);
 	});
 
 	it('checks role membership from user payloads', () => {

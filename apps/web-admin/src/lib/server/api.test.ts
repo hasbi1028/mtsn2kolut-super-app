@@ -117,7 +117,8 @@ describe('server api helpers', () => {
 				headers: {
 					'Content-Type': 'application/json',
 					'X-Client-User-Agent': 'vitest-agent',
-					'X-Client-IP': '127.0.0.1'
+					'X-Client-IP': '127.0.0.1',
+					'X-Forwarded-For': '127.0.0.1'
 				},
 				body: JSON.stringify({ username: 'admin', password: 'secret' })
 			})

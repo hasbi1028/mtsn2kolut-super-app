@@ -130,6 +130,13 @@ func TestParentSuccessHandlersForwardPayloads(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
+	req = withRouteParam(adminRequest(http.MethodPost, "/api/parents/bad/link", `{"student_id":"`+studentID.String()+`"}`), "id", "bad")
+	h.LinkStudent(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("LinkStudent(invalid parent id) status = %d, want 400", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
 	req = withRouteParam(adminRequest(http.MethodPost, "/api/parents/"+parentID.String()+"/unlink", `{"student_id":"`+studentID.String()+`"}`), "id", parentID.String())
 	h.UnlinkStudent(rec, req)
 	if rec.Code != http.StatusOK || svc.unlinkParentID != parentID || svc.unlinkStudentID != studentID {

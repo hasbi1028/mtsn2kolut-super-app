@@ -133,7 +133,11 @@ func (h *Parent) LinkStudent(w http.ResponseWriter, r *http.Request) {
 		api.Forbidden(w)
 		return
 	}
-	parentID, _ := parseUUID(chi.URLParam(r, "id"))
+	parentID, err := parseUUID(chi.URLParam(r, "id"))
+	if err != nil {
+		api.BadRequest(w, "invalid id")
+		return
+	}
 	var body struct {
 		StudentID string `json:"student_id"`
 	}

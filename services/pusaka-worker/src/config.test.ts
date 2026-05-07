@@ -39,6 +39,20 @@ test('production-like config requires WORKER_API_KEY without leaking values', ()
   assert.doesNotMatch(result.stderr, /api\.example\.invalid/);
 });
 
+test('production-like config requires explicit BACKEND_URL without falling back to localhost', () => {
+  const result = importConfig({
+    NODE_ENV: 'production',
+    WORKER_ENV: 'production',
+    APP_ENV: 'production',
+    BACKEND_URL: '',
+    WORKER_API_KEY: 'worker-key',
+  });
+
+  assert.equal(result.status, 42);
+  assert.match(result.stderr, /BACKEND_URL is required/);
+  assert.doesNotMatch(result.stderr, /worker-key/);
+});
+
 test('numeric config rejects invalid values with sanitized message', () => {
   const result = importConfig({
     NODE_ENV: 'test',

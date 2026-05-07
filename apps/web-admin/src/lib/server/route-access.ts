@@ -274,6 +274,7 @@ function staffOperationPermission(pathname: string, method: string): string[] | 
 	if (matchesPathSegment(pathname, '/inventory') || matchesPathSegment(pathname, '/api/inventory')) return isReadMethod(method) ? ['inventory.read'] : ['inventory.manage'];
 	if (matchesPathSegment(pathname, '/document-cycles') || matchesPathSegment(pathname, '/api/document-cycles')) return isReadMethod(method) ? ['document_cycles.read'] : ['document_cycles.manage'];
 	if (matchesPathSegment(pathname, '/governance') || matchesPathSegment(pathname, '/api/governance')) return isReadMethod(method) ? ['governance.read'] : ['governance.manage'];
+	if (matchesPathSegment(pathname, '/tu/arsip') || matchesPathSegment(pathname, '/api/tu/archives')) return isReadMethod(method) ? ['archives.read'] : ['archives.manage'];
 	if (matchesPathSegment(pathname, '/tu') || matchesPathSegment(pathname, '/api/tu')) return isReadMethod(method) ? ['letters.read'] : ['letters.manage'];
 	return undefined;
 }

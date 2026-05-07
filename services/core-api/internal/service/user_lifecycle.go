@@ -125,6 +125,12 @@ func (s *UserLifecycle) UpdateProfileLink(ctx context.Context, id pgtype.UUID, l
 		if err := store.UpdateUserProfileLink(ctx, db.UpdateUserProfileLinkParams{ID: id, EmployeeID: link.EmployeeID, StudentID: link.StudentID, ParentID: link.ParentID, DisplayName: pgtype.Text{}}); err != nil {
 			return err
 		}
+		if _, err := store.IncrementUserAuthVersion(ctx, id); err != nil {
+			return err
+		}
+		if _, err := store.RevokeAllAuthSessionsForUser(ctx, id); err != nil {
+			return err
+		}
 		return auditUserLifecycle(ctx, store, actorID, "USER_PROFILE_LINK_UPDATED", "user", uuidEntityID(id), map[string]any{
 			"user_id":     uuidEntityID(id),
 			"employee_id": uuidEntityID(link.EmployeeID),

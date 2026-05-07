@@ -209,7 +209,7 @@ test('failJob retries bounded non-2xx responses and returns true on success', as
 	assert.equal(String(fetchCalls[0]?.input).includes('/api/pusaka/worker/jobs/job-1/fail'), true);
 	assert.equal((fetchCalls[0]?.init?.headers as Record<string, string>)?.['x-worker-id']?.length > 0, true);
 	assert.match(String(fetchCalls[0]?.init?.body), /"worker_id":"/);
-	assert.match(String(fetchCalls[0]?.init?.body), /"retry_after_secs":0/);
+	assert.match(String(fetchCalls[0]?.init?.body), /"retry_after_secs":"0"/);
 });
 
 test('failJob throws after bounded report retries fail', async () => {
