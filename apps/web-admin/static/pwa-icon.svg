@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MTsN 2 Kolaka Utara">
+	<rect width="512" height="512" rx="96" fill="#166534"/>
+	<path d="M104 164h304v52H104z" fill="#f8faf7"/>
+	<path d="M128 232h72v132h-72zM220 232h72v132h-72zM312 232h72v132h-72z" fill="#f8faf7"/>
+	<path d="M96 386h320v38H96z" fill="#d9eadf"/>
+	<path d="M256 76l172 68H84z" fill="#d9eadf"/>
+	<text x="256" y="316" text-anchor="middle" font-family="Arial, sans-serif" font-size="60" font-weight="800" fill="#166534">2</text>
+</svg>

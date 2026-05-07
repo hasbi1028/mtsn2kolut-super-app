@@ -20,8 +20,25 @@
 	import SoalContextPanel from './SoalContextPanel.svelte';
 	import SoalShellHeader from './SoalShellHeader.svelte';
 	import SoalStatusCards from './SoalStatusCards.svelte';
+	import {
+		bankSoalQueueAuthRequiredMessage,
+		buildBankSoalQuestionSyncInput,
+		shouldQueueBankSoalQuestionSave,
+	} from '$lib/client/bank-soal-composer-offline';
+	import {
+		clearBankSoalDraftPayloads,
+		deleteBankSoalDraftPayload,
+		enqueueBankSoalQuestionSync,
+		isAuthExpiredSyncStatus,
+		listBankSoalQuestionSyncQueue,
+		loadBankSoalDraftPayload,
+		markBankSoalQuestionSyncFailed,
+		migrateLegacyBankSoalDrafts,
+		removeBankSoalQuestionSyncItem,
+		saveBankSoalDraftPayload,
+		type BankSoalQuestionSyncItem,
+	} from '$lib/client/bank-soal-offline';
 	import { questionExportButtonLabel, questionExportSuccessMessage } from '$lib/cbt/question-export-ui';
-	import { clearCbtComposerDrafts } from '$lib/client/cbt-drafts';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { htmlToPlainText } from '$lib/utils/html-text';
@@ -191,6 +208,42 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		hotsFlag: boolean;
 		workflowStatus: string;
 		savedAt: string;
+	};
+	type QuestionPayloadOption = {
+		label: string;
+		text: string;
+		html: string;
+		match_label?: string;
+		match_text?: string;
+		match_html?: string;
+		is_distractor?: boolean;
+	};
+	type QuestionSavePayload = {
+		event_id?: string;
+		authoring_mode: AuthoringMode;
+		subject_id: string;
+		question_text: string;
+		question_type: ComposerQuestionType;
+		stem_html: string;
+		stimulus_html: string;
+		explanation_html: string;
+		rubric_html: string;
+		options: QuestionPayloadOption[];
+		answer_key: string;
+		difficulty: string;
+		status: 'draft';
+		workflow_status: 'draft' | 'review';
+		grade_level: number;
+		academic_phase: string;
+		cp_ref: string;
+		tp_ref: string;
+		kd_ref: string;
+		indicator_ref: string;
+		material_topic: string;
+		cognitive_level: string;
+		hots_flag: boolean;
+		writer_notes: string;
+		review_notes: string;
 	};
 	type OptionLabel = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 	type LegacyImportResult = {
@@ -420,6 +473,12 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let bulkBusy = $state(false);
 	let bulkNotes = $state('');
 	let openMenuId = $state('');
+	let isOnline = $state(true);
+	let offlineQueueItems = $state<BankSoalQuestionSyncItem<QuestionSavePayload>[]>([]);
+	let offlineSyncBusy = $state(false);
+	let offlineStatus = $state('');
+	let offlineAuthRequired = $state(false);
+	let offlineLastSyncAt = $state<string | null>(null);
 
 	// ── Form fields ────────────────────────────────────────────────────────────
 	let fSubjectId = $state('');
@@ -514,6 +573,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let selectedQuestions = $derived(questions.filter((question) => selectedQuestionIds.includes(question.id)));
 	let selectedReviewEligibleCount = $derived(selectedQuestions.filter(canDecideReview).length);
 	let selectedPublishEligibleCount = $derived(selectedQuestions.filter(canPublishQuestion).length);
+	let offlineQueueCount = $derived(offlineQueueItems.length);
+	let offlineReviewQueueCount = $derived(offlineQueueItems.filter((item) => item.intent === 'review').length);
+	let offlineDraftQueueCount = $derived(offlineQueueItems.filter((item) => item.intent === 'draft').length);
+	let canSyncOfflineQueue = $derived(isOnline && offlineQueueCount > 0 && !offlineSyncBusy);
 	let statusCards = $derived([
 		{ label: 'Draft', value: draftCount, tone: 'slate', helper: 'soal masih disusun', workflowStatus: 'draft', status: '', active: filterWorkflow === 'draft' && !filterStatus },
 		{ label: 'Perlu Revisi', value: revisionTotal, tone: 'red', helper: `${visibleRevisionCount} tampil`, workflowStatus: 'rejected', status: '', active: filterWorkflow === 'rejected' && !filterStatus },
@@ -849,12 +912,11 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	function saveDraftSnapshot(draftKey: string, signature: string) {
 		lastDraftSig = signature;
-		try {
-			localStorage.setItem(draftKey, JSON.stringify(buildDraftPayload()));
-			markDraftAutosaved();
-		} catch {
-			/* ignore storage errors */
-		}
+		void saveBankSoalDraftPayload(draftKey, buildDraftPayload())
+			.then(() => markDraftAutosaved())
+			.catch(() => {
+				/* ignore storage errors */
+			});
 	}
 
 	$effect(() => {
@@ -871,11 +933,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		};
 	});
 
-	function restoreDraft(): boolean {
+	async function restoreDraft(): Promise<boolean> {
 		try {
-			const raw = localStorage.getItem(activeDraftKey);
-			if (!raw) return false;
-			const d = JSON.parse(raw) as {
+			const d = await loadBankSoalDraftPayload<{
 				eventId?: string;
 				specialEventMode?: boolean;
 				subjectId?: string;
@@ -903,7 +963,8 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				hotsFlag?: boolean;
 				workflowStatus?: string;
 				savedAt?: string;
-			};
+			}>(activeDraftKey);
+			if (!d) return false;
 			if (!selectedEventId && d.eventId) selectedEventId = d.eventId;
 			specialEventQuestionMode = !editingId && Boolean(d.specialEventMode && (selectedEventId || d.eventId));
 			fSubjectId = d.subjectId ?? '';
@@ -938,23 +999,19 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		}
 	}
 
-	function clearDraft() {
-		try {
-			localStorage.removeItem(activeDraftKey);
-		} catch {
-			/* ignore */
-		}
+	async function clearDraft() {
+		await deleteBankSoalDraftPayload(activeDraftKey);
 		lastDraftSig = '';
 		draftStatus = '';
 		draftSavedAt = null;
 	}
 
-	function clearAllLocalDrafts() {
-		const count = clearCbtComposerDrafts();
+	async function clearAllLocalDrafts() {
+		const count = await clearBankSoalDraftPayloads();
 		lastDraftSig = '';
 		draftStatus = '';
 		draftSavedAt = null;
-		toast.success(count > 0 ? `${count} draft lokal CBT dihapus dari perangkat ini` : 'Tidak ada draft lokal CBT di perangkat ini');
+		toast.success(count > 0 ? `${count} draft lokal Bank Soal dihapus dari perangkat ini` : 'Tidak ada draft lokal Bank Soal di perangkat ini');
 	}
 
 	// ── API ────────────────────────────────────────────────────────────────────
@@ -1156,6 +1213,118 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		return fallback;
 	}
 
+	function browserOnline(): boolean {
+		if (typeof navigator === 'undefined') return true;
+		return navigator.onLine;
+	}
+
+	function updateOnlineStatus() {
+		isOnline = browserOnline();
+	}
+
+	function requireOnlineAction(label: string): boolean {
+		updateOnlineStatus();
+		if (isOnline) return true;
+		toast.warning(`${label} harus online dan tidak masuk antrian offline.`);
+		return false;
+	}
+
+	async function refreshOfflineQueueState() {
+		const items = await listBankSoalQuestionSyncQueue<QuestionSavePayload>();
+		offlineQueueItems = items;
+		offlineAuthRequired = items.some((item) => item.authRequired);
+	}
+
+	async function queueQuestionSave(payload: QuestionSavePayload, intent: ComposerSaveIntent, authRequired = false) {
+		const draftKey = activeDraftKey;
+		await saveBankSoalDraftPayload(draftKey, buildDraftPayload());
+		const input = buildBankSoalQuestionSyncInput({
+			draftKey,
+			editingId,
+			intent,
+			payload,
+		});
+		await enqueueBankSoalQuestionSync<QuestionSavePayload>({
+			...input,
+			lastError: authRequired ? 'Sesi perlu masuk ulang sebelum sinkronisasi.' : 'Menunggu koneksi untuk sinkronisasi.',
+			authRequired,
+		});
+		await refreshOfflineQueueState();
+		offlineStatus = authRequired ? bankSoalQueueAuthRequiredMessage(offlineQueueCount) : 'Perubahan disimpan di antrian lokal.';
+		offlineAuthRequired = authRequired || offlineAuthRequired;
+		draftStatus = authRequired ? 'Antrian menunggu login ulang' : 'Tersimpan di antrian offline';
+		draftSavedAt = new Date().toISOString();
+		toast.warning(authRequired ? offlineStatus : 'Perubahan Bank Soal disimpan lokal dan akan disinkronkan saat online.');
+	}
+
+	async function syncBankSoalOfflineQueue(manual = false) {
+		if (offlineSyncBusy) return;
+		updateOnlineStatus();
+		if (!isOnline) {
+			if (manual) toast.warning('Perangkat masih offline. Antrian Bank Soal tetap tersimpan lokal.');
+			offlineStatus = 'Menunggu koneksi untuk sinkronisasi.';
+			return;
+		}
+		const items = await listBankSoalQuestionSyncQueue<QuestionSavePayload>();
+		if (items.length === 0) {
+			offlineQueueItems = [];
+			offlineAuthRequired = false;
+			offlineStatus = manual ? 'Tidak ada antrian Bank Soal.' : offlineStatus;
+			return;
+		}
+		offlineSyncBusy = true;
+		offlineStatus = 'Menyinkronkan antrian Bank Soal...';
+		let synced = 0;
+		let failed = 0;
+		let authBlocked = false;
+		try {
+			for (const item of items) {
+				let responseReceived = false;
+				try {
+					const response = await fetch(item.endpoint, {
+						method: item.method,
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify(item.payload),
+					});
+					responseReceived = true;
+					if (isAuthExpiredSyncStatus(response.status)) {
+						await markBankSoalQuestionSyncFailed(item.id, 'Sesi berakhir. Masuk ulang lalu sinkronkan lagi.', true);
+						authBlocked = true;
+						break;
+					}
+					await readClientJson<unknown>(response);
+					await removeBankSoalQuestionSyncItem(item.id);
+					await deleteBankSoalDraftPayload(item.draftKey);
+					synced += 1;
+				} catch (error) {
+					failed += 1;
+					const message = responseReceived
+						? mutationErrorMessage(error, 'Sinkronisasi Bank Soal gagal')
+						: 'Koneksi belum stabil. Sinkronisasi ditunda.';
+					await markBankSoalQuestionSyncFailed(item.id, message, false);
+					if (!browserOnline()) break;
+				}
+			}
+			await refreshOfflineQueueState();
+			if (synced > 0) {
+				offlineLastSyncAt = new Date().toISOString();
+				toast.success(`${synced} perubahan Bank Soal berhasil disinkronkan`);
+				await refreshOverview(1);
+			}
+			if (authBlocked) {
+				offlineStatus = bankSoalQueueAuthRequiredMessage(offlineQueueCount);
+				toast.warning(offlineStatus);
+			} else if (failed > 0) {
+				offlineStatus = `${failed} perubahan belum tersinkron. Coba lagi saat koneksi stabil.`;
+				if (manual) toast.warning(offlineStatus);
+			} else if (synced > 0) {
+				offlineStatus = 'Antrian Bank Soal selesai disinkronkan.';
+			}
+		} finally {
+			offlineSyncBusy = false;
+		}
+	}
+
 	function moduleRoute(mode: ModuleMode): WorkspaceRoute {
 		if (mode === 'catalog') return '/bank-soal';
 		if (mode === 'review') return '/bank-soal/verifikasi';
@@ -1274,6 +1443,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	async function runBulkWorkflow(action: BulkWorkflowAction) {
+		if (!requireOnlineAction('Aksi review/publikasi')) return;
 		const ids = action === 'publish'
 			? selectedQuestions.filter(canPublishQuestion).map((question) => question.id)
 			: selectedQuestions.filter(canDecideReview).map((question) => question.id);
@@ -1844,7 +2014,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		setModuleMode('composer');
 		// Delay to let state settle before restoring
 		setTimeout(() => {
-			if (!restoreDraft()) draftStatus = '';
+			void restoreDraft().then((restored) => {
+				if (!restored) draftStatus = '';
+			});
 		}, 50);
 	}
 
@@ -1893,7 +2065,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			composerMobilePanel = 'write';
 			setModuleMode('composer');
 			setTimeout(() => {
-				if (restoreDraft()) toast.info('Draft edit lokal dipulihkan otomatis.');
+				void restoreDraft().then((restored) => {
+					if (restored) toast.info('Draft edit lokal dipulihkan otomatis.');
+				});
 			}, 50);
 		} catch (error) {
 			toast.error(mutationErrorMessage(error, 'Gagal memuat detail soal. Form memakai data ringkas dari daftar.'));
@@ -1958,7 +2132,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			tone: 'danger'
 		});
 		if (!confirmed) return;
-		clearDraft();
+		await clearDraft();
 		closeComposer();
 	}
 
@@ -1985,6 +2159,18 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			return `${draftStatus || 'Draft tersimpan'}${clock ? ` ${clock}` : ''}`;
 		}
 		return draftStatus || 'Editor legacy siap untuk buat/edit soal.';
+	}
+
+	function offlineLastSyncLabel(): string {
+		if (!offlineLastSyncAt) return '';
+		const synced = new Date(offlineLastSyncAt);
+		if (Number.isNaN(synced.getTime())) return '';
+		return synced.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+	}
+
+	function offlineRetryLoginHref(): string {
+		const from = typeof window === 'undefined' ? '/bank-soal/tambah' : `${window.location.pathname}${window.location.search}`;
+		return `${resolve('/login')}?from=${encodeURIComponent(from)}`;
 	}
 
 	function focusTitle(editor: FocusedEditor) {
@@ -2046,7 +2232,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		importFile = file;
 	}
 
-	function buildPayloadOptions() {
+	function buildPayloadOptions(): QuestionPayloadOption[] {
 		const config = getQuestionTypeConfig(fQuestionType);
 		if (config.answerMode === 'fixed_pair') {
 			return (config.fixedOptions ?? []).map((text, i) => ({
@@ -2094,6 +2280,37 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		return normalizeAnswerKey(fAnswerKey, fQuestionType, answerItemCountForType(fQuestionType));
 	}
 
+	function buildQuestionSavePayload(isReview: boolean): QuestionSavePayload {
+		return {
+			...(!editingId && specialEventAttachId ? { event_id: specialEventAttachId } : {}),
+			...(editingId && editingEventId ? { event_id: editingEventId } : {}),
+			authoring_mode: fAuthoringMode,
+			subject_id: fSubjectId,
+			question_text: htmlToPlainText(fStem),
+			question_type: fQuestionType,
+			stem_html: fStem,
+			stimulus_html: fStimulus,
+			explanation_html: fExplanation,
+			rubric_html: requiresRubric ? fRubric : '',
+			options: buildPayloadOptions(),
+			answer_key: buildPayloadAnswerKey(),
+			difficulty: fDifficulty,
+			status: 'draft',
+			workflow_status: isReview ? 'review' : 'draft',
+			grade_level: fGradeLevel,
+			academic_phase: fAcademicPhase,
+			cp_ref: fCPRef,
+			tp_ref: fTPRef,
+			kd_ref: fKDRef,
+			indicator_ref: fIndicatorRef,
+			material_topic: fMaterialTopic,
+			cognitive_level: fCognitiveLevel,
+			hots_flag: fHotsFlag,
+			writer_notes: isAdvanceMode ? 'Disusun dari komposer soal mode advance.' : '',
+			review_notes: '',
+		};
+	}
+
 	async function saveQuestion(intent: ComposerSaveIntent = 'draft') {
 		const isReview = intent === 'review';
 		if (isReview && !canSubmitReview) {
@@ -2113,50 +2330,45 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		}
 		composerBusy = true;
 		composerAction = intent;
+		const payload = buildQuestionSavePayload(isReview);
+		let responseReceived = false;
+		let responseStatus: number | undefined;
 		try {
-			const payload = {
-				...(!editingId && specialEventAttachId ? { event_id: specialEventAttachId } : {}),
-				...(editingId && editingEventId ? { event_id: editingEventId } : {}),
-				authoring_mode: fAuthoringMode,
-				subject_id: fSubjectId,
-				question_text: htmlToPlainText(fStem),
-				question_type: fQuestionType,
-				stem_html: fStem,
-				stimulus_html: fStimulus,
-				explanation_html: fExplanation,
-				rubric_html: requiresRubric ? fRubric : '',
-				options: buildPayloadOptions(),
-				answer_key: buildPayloadAnswerKey(),
-				difficulty: fDifficulty,
-				status: 'draft',
-				workflow_status: isReview ? 'review' : 'draft',
-				grade_level: fGradeLevel,
-				academic_phase: fAcademicPhase,
-				cp_ref: fCPRef,
-				tp_ref: fTPRef,
-				kd_ref: fKDRef,
-				indicator_ref: fIndicatorRef,
-				material_topic: fMaterialTopic,
-				cognitive_level: fCognitiveLevel,
-				hots_flag: fHotsFlag,
-				writer_notes: isAdvanceMode ? 'Disusun dari komposer soal mode advance.' : '',
-				review_notes: '',
-			};
-
-			const url = editingId ? clientApiPath`/api/bank-soal/questions/${editingId}` : '/api/bank-soal/questions';
-			const method = editingId ? 'PUT' : 'POST';
-			const res = await fetch(url, {
-				method,
+			const syncInput = buildBankSoalQuestionSyncInput({
+				draftKey: activeDraftKey,
+				editingId,
+				intent,
+				payload,
+			});
+			if (!browserOnline()) {
+				await queueQuestionSave(payload, intent, false);
+				closeComposer();
+				return;
+			}
+			const res = await fetch(syncInput.endpoint, {
+				method: syncInput.method,
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload),
 			});
+			responseReceived = true;
+			responseStatus = res.status;
+			if (isAuthExpiredSyncStatus(res.status)) {
+				await queueQuestionSave(payload, intent, true);
+				closeComposer();
+				return;
+			}
 			await readClientJson<unknown>(res);
 
-			clearDraft();
+			await clearDraft();
 			toast.success(isReview ? 'Soal diajukan review' : editingId ? 'Draft soal berhasil diperbarui' : 'Draft soal berhasil dibuat');
 			closeComposer();
 			await refreshOverview(1);
 		} catch (e) {
+			if (shouldQueueBankSoalQuestionSave({ isOnline: browserOnline(), responseReceived, responseStatus })) {
+				await queueQuestionSave(payload, intent, false);
+				closeComposer();
+				return;
+			}
 			toast.error(mutationErrorMessage(e, 'Gagal menyimpan soal'));
 		} finally {
 			composerBusy = false;
@@ -2165,6 +2377,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	async function importLegacyCSV(dryRun = false) {
+		if (!requireOnlineAction('Import CSV Bank Soal')) return;
 		if (!importSubjectId) {
 			toast.error('Pilih mata pelajaran untuk import');
 			return;
@@ -2246,6 +2459,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	async function exportQuestionsCSV() {
+		if (!requireOnlineAction('Export Bank Soal')) return;
 		exportBusy = true;
 		try {
 			const params = buildQuestionParams(1);
@@ -2262,6 +2476,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	async function downloadQuestionsTemplateCSV() {
+		if (!requireOnlineAction('Download template CSV')) return;
 		templateBusy = true;
 		try {
 			const response = await fetch('/api/bank-soal/questions/template');
@@ -2289,6 +2504,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	async function submitRevisionForReview(q: Question) {
+		if (!requireOnlineAction('Ajukan review ulang')) return;
 		if (!canSubmitRevisionReview(q)) {
 			toast.warning('Revisi ini belum aman diajukan review ulang.');
 			return;
@@ -2354,6 +2570,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	async function submitReviewDecision() {
+		if (!requireOnlineAction('Keputusan reviewer')) return;
 		const q = reviewDecisionQuestion;
 		if (!q) return;
 		if (!canDecideReview(q)) {
@@ -2384,6 +2601,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	async function publishQuestion(q: Question) {
+		if (!requireOnlineAction('Publikasi soal')) return;
 		if (!canPublishQuestion(q)) {
 			toast.warning('Soal ini belum siap diterbitkan.');
 			return;
@@ -2525,15 +2743,43 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		}
 		load();
 		void refreshEventMembers();
+		updateOnlineStatus();
+		void migrateLegacyBankSoalDrafts().then(() => refreshOfflineQueueState()).then(() => {
+			if (browserOnline() && offlineQueueCount > 0) void syncBankSoalOfflineQueue(false);
+		});
 		if (routeMode === 'composer' && questionId) void openQuestionFromRouteParam(questionId);
 		else if (routeMode === 'composer') {
 			setTimeout(() => {
-				if (!restoreDraft()) draftStatus = '';
+				void restoreDraft().then((restored) => {
+					if (!restored) draftStatus = '';
+				});
 			}, 50);
 		}
+		const handleOnline = () => {
+			updateOnlineStatus();
+			offlineStatus = 'Koneksi kembali. Antrian dapat disinkronkan.';
+			void syncBankSoalOfflineQueue(false);
+		};
+		const handleOffline = () => {
+			updateOnlineStatus();
+			offlineStatus = 'Mode offline aktif. Simpan draft masuk antrian lokal.';
+		};
+		const handleVisibility = () => {
+			if (document.visibilityState !== 'visible') return;
+			updateOnlineStatus();
+			void refreshOfflineQueueState().then(() => {
+				if (browserOnline() && offlineQueueCount > 0) void syncBankSoalOfflineQueue(false);
+			});
+		};
 		window.addEventListener('keydown', handleComposerKeydown);
+		window.addEventListener('online', handleOnline);
+		window.addEventListener('offline', handleOffline);
+		document.addEventListener('visibilitychange', handleVisibility);
 		return () => {
 			window.removeEventListener('keydown', handleComposerKeydown);
+			window.removeEventListener('online', handleOnline);
+			window.removeEventListener('offline', handleOffline);
+			document.removeEventListener('visibilitychange', handleVisibility);
 		};
 	});
 </script>
@@ -2582,6 +2828,58 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	{#if activeMode === 'composer'}
 		<ComposerDraftNotice onClear={clearAllLocalDrafts} />
+	{/if}
+
+	{#if activeMode === 'composer' || offlineQueueCount > 0 || !isOnline}
+		<section class="rounded-lg border p-3 text-sm shadow-sm {offlineAuthRequired
+			? 'border-destructive/30 bg-destructive/10 text-destructive'
+			: !isOnline
+				? 'border-warning/30 bg-warning/10 text-warning'
+				: offlineQueueCount > 0
+					? 'border-primary/20 bg-primary/10 text-primary'
+					: 'border-border bg-card text-muted-foreground'}">
+			<div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+				<div class="min-w-0">
+					<div class="flex flex-wrap items-center gap-2">
+						<span class="rounded-full border border-current/25 bg-card px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+							{isOnline ? 'Online' : 'Offline'}
+						</span>
+						<span class="rounded-full border border-current/25 bg-card px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+							{offlineQueueCount} antrian
+						</span>
+						{#if offlineLastSyncLabel()}
+							<span class="rounded-full border border-current/25 bg-card px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+								Sinkron {offlineLastSyncLabel()}
+							</span>
+						{/if}
+					</div>
+					<p class="mt-1 font-semibold">
+						{offlineStatus || (offlineQueueCount > 0 ? 'Perubahan lokal menunggu sinkronisasi.' : 'Komposer siap menyimpan draft lokal.')}
+					</p>
+					<p class="mt-0.5 text-xs opacity-80">
+						Draft: {offlineDraftQueueCount} · Review: {offlineReviewQueueCount}. Token login tidak disimpan di IndexedDB; sinkronisasi tetap lewat sesi httpOnly.
+					</p>
+				</div>
+				<div class="flex shrink-0 flex-wrap gap-2">
+					{#if offlineAuthRequired}
+						<a href={offlineRetryLoginHref()} class="inline-flex h-8 items-center rounded-md border border-current/30 bg-card px-3 text-xs font-semibold hover:bg-muted/50">
+							Masuk Ulang
+						</a>
+					{/if}
+					<LoadingButton
+						variant="outline"
+						size="sm"
+						class="h-8 bg-card text-xs"
+						onclick={() => void syncBankSoalOfflineQueue(true)}
+						loading={offlineSyncBusy}
+						loadingLabel="Sinkron..."
+						disabled={!canSyncOfflineQueue}
+					>
+						Sinkronkan
+					</LoadingButton>
+				</div>
+			</div>
+		</section>
 	{/if}
 
 	{#if activeMode === 'composer' || activeMode === 'import'}
