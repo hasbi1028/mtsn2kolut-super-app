@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -14,6 +16,12 @@
 	import SuccessPanel from '$lib/components/SuccessPanel.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
+	import {
+		generateParentAccounts,
+		previewParentAccounts,
+		type ParentAccountGenerationCandidate,
+		type ParentAccountGenerationResult
+	} from '$lib/client/account-generation';
 
 	type Parent = {
 		id: string;
@@ -54,6 +62,14 @@
 	let fBusy = $state(false);
 	let linkBusy = $state(false);
 	let unlinkBusyId = $state<string | null>(null);
+	let parentAccountBusy = $state<'preview' | 'generate' | ''>('');
+	let parentAccountPreview = $state<ParentAccountGenerationResult | null>(null);
+	let parentAccountResult = $state<ParentAccountGenerationResult | null>(null);
+
+	const userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
+	const userPermissions = $derived(page.data.user?.permissions ?? []);
+	const canManageParentAccounts = $derived(userRoles.includes('admin') || userPermissions.includes('parent_accounts.manage'));
+	const parentAccountSummary = $derived(parentAccountResult ?? parentAccountPreview);
 
 	async function ensureMutationOk(response: Response, fallbackMessage: string) {
 		try {
@@ -247,6 +263,60 @@
 		} finally { unlinkBusyId = null; }
 	}
 
+	function parentAccountCandidate(parent: Parent): ParentAccountGenerationCandidate | undefined {
+		return parentAccountSummary?.candidates.find((candidate) => candidate.parent_id === parent.id);
+	}
+
+	function accountStatusLabel(candidate: ParentAccountGenerationCandidate | undefined) {
+		if (!candidate) return 'Belum dicek';
+		if (candidate.status === 'created') return 'Akun dibuat';
+		if (candidate.status === 'ready') return 'Siap dibuat';
+		if (candidate.status === 'skipped') return 'Dilewati';
+		return 'Gagal';
+	}
+
+	function accountStatusClass(candidate: ParentAccountGenerationCandidate | undefined) {
+		if (!candidate) return 'bg-muted text-muted-foreground border-border';
+		if (candidate.status === 'created') return 'bg-primary/15 text-primary border-primary/20';
+		if (candidate.status === 'ready') return 'bg-accent text-accent-foreground border-accent';
+		if (candidate.status === 'failed') return 'bg-destructive/10 text-destructive border-destructive/20';
+		return 'bg-muted text-muted-foreground border-border';
+	}
+
+	async function previewAccounts() {
+		if (!canManageParentAccounts) return;
+		parentAccountBusy = 'preview';
+		try {
+			parentAccountPreview = await previewParentAccounts();
+			parentAccountResult = null;
+			toast.success('Preview akun orang tua siap ditinjau');
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal memuat preview akun orang tua.'));
+		} finally {
+			parentAccountBusy = '';
+		}
+	}
+
+	async function generateAccounts() {
+		if (!canManageParentAccounts) return;
+		if (!(await confirmAction({
+			title: 'Generate Akun Orang Tua',
+			message: 'Password hanya tampil sekali. Simpan/unduh hasil generate sekarang.',
+			confirmLabel: 'Generate Akun',
+			tone: 'warning'
+		}))) return;
+		parentAccountBusy = 'generate';
+		try {
+			parentAccountResult = await generateParentAccounts();
+			parentAccountPreview = parentAccountResult;
+			toast.success('Generate akun orang tua selesai');
+		} catch (error) {
+			toast.error(mutationErrorMessage(error, 'Gagal generate akun orang tua.'));
+		} finally {
+			parentAccountBusy = '';
+		}
+	}
+
 	onMount(() => {
 		void load();
 	});
@@ -268,6 +338,89 @@
 	{#if success}
 		<SuccessPanel title="Relasi Berhasil Diperbarui" message={success} />
 	{/if}
+
+	<Card.Root class="overflow-hidden border-border shadow-sm">
+		<Card.Header class="pb-3">
+			<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+				<div>
+					<Card.Title class="text-base">Akun Orang Tua/Wali</Card.Title>
+					<p class="mt-1 text-sm text-muted-foreground">Password hanya tampil sekali. Simpan/unduh hasil generate sekarang.</p>
+					<p class="mt-1 text-sm text-muted-foreground">Akun wajib mengganti password saat login pertama.</p>
+					<p class="mt-1 text-sm text-muted-foreground">Data resmi tetap dikunci dan perubahan melalui approval.</p>
+				</div>
+				<div class="flex flex-wrap gap-2">
+					<LoadingButton
+						variant="outline"
+						loading={parentAccountBusy === 'preview'}
+						loadingLabel="Memuat..."
+						disabled={!canManageParentAccounts || parentAccountBusy !== ''}
+						onclick={() => void previewAccounts()}
+						label="Preview akun orang tua"
+					/>
+					<LoadingButton
+						loading={parentAccountBusy === 'generate'}
+						loadingLabel="Generate..."
+						disabled={!canManageParentAccounts || parentAccountBusy !== ''}
+						onclick={() => void generateAccounts()}
+						label="Generate akun orang tua"
+					/>
+				</div>
+			</div>
+			{#if !canManageParentAccounts}
+				<p class="mt-3 rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
+					Aksi akun orang tua memerlukan permission parent_accounts.manage.
+				</p>
+			{/if}
+		</Card.Header>
+		{#if parentAccountSummary}
+			<Card.Content class="border-t border-border p-0">
+				<div class="grid gap-3 border-b border-border p-4 sm:grid-cols-4">
+					<div>
+						<p class="text-xs text-muted-foreground">Total</p>
+						<p class="text-xl font-semibold">{parentAccountSummary.total}</p>
+					</div>
+					<div>
+						<p class="text-xs text-muted-foreground">Siap</p>
+						<p class="text-xl font-semibold">{parentAccountSummary.ready}</p>
+					</div>
+					<div>
+						<p class="text-xs text-muted-foreground">Dibuat</p>
+						<p class="text-xl font-semibold">{parentAccountSummary.created}</p>
+					</div>
+					<div>
+						<p class="text-xs text-muted-foreground">Dilewati/Gagal</p>
+						<p class="text-xl font-semibold">{parentAccountSummary.skipped + parentAccountSummary.failed}</p>
+					</div>
+				</div>
+				<div class="max-h-80 overflow-auto">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row>
+								<Table.Head>Nama Orang Tua</Table.Head>
+								<Table.Head>Username</Table.Head>
+								<Table.Head>Password awal</Table.Head>
+								<Table.Head>Anak terhubung</Table.Head>
+								<Table.Head>Status akun</Table.Head>
+								<Table.Head>Keterangan</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each parentAccountSummary.candidates as candidate (candidate.parent_id)}
+								<Table.Row>
+									<Table.Cell class="font-medium">{candidate.nama}</Table.Cell>
+									<Table.Cell class="font-mono text-sm">{candidate.generated_username || '—'}</Table.Cell>
+									<Table.Cell class="font-mono text-sm">{candidate.temporary_password || '—'}</Table.Cell>
+									<Table.Cell>{candidate.child_count}</Table.Cell>
+									<Table.Cell><Badge class={accountStatusClass(candidate)}>{accountStatusLabel(candidate)}</Badge></Table.Cell>
+									<Table.Cell class="text-sm text-muted-foreground">{candidate.reason || '—'}</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				</div>
+			</Card.Content>
+		{/if}
+	</Card.Root>
 
 	{#if showForm}
 		<Card.Root>
@@ -361,15 +514,22 @@
 								<Table.Head>Nama Orang Tua</Table.Head>
 								<Table.Head>No. HP</Table.Head>
 								<Table.Head>Alamat</Table.Head>
+								<Table.Head>Status akun</Table.Head>
+								<Table.Head>Username</Table.Head>
+								<Table.Head>Anak terhubung</Table.Head>
 								<Table.Head class="text-right">Aksi</Table.Head>
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
 							{#each overview.parents as p (p.id)}
+								{@const accountCandidate = parentAccountCandidate(p)}
 								<Table.Row>
 									<Table.Cell class="font-medium">{p.nama}</Table.Cell>
 									<Table.Cell class="text-sm">{p.phone || '—'}</Table.Cell>
 									<Table.Cell class="text-sm text-muted-foreground">{p.address || '—'}</Table.Cell>
+									<Table.Cell><Badge class={accountStatusClass(accountCandidate)}>{accountStatusLabel(accountCandidate)}</Badge></Table.Cell>
+									<Table.Cell class="font-mono text-sm">{accountCandidate?.generated_username || '—'}</Table.Cell>
+									<Table.Cell>{accountCandidate?.child_count ?? '—'}</Table.Cell>
 									<Table.Cell class="text-right">
 										<Button variant="outline" size="sm" onclick={() => openLinkDialog(p)}>
 											Lihat Anak
@@ -378,7 +538,7 @@
 								</Table.Row>
 							{:else}
 								<Table.Row>
-									<Table.Cell colspan={4} class="p-4">
+									<Table.Cell colspan={7} class="p-4">
 										<EmptyStatePanel
 											compact
 											title="Belum ada data orang tua"

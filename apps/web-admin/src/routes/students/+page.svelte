@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
@@ -13,6 +14,12 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
+	import {
+		generateStudentAccounts,
+		previewStudentAccounts,
+		type StudentAccountGenerationCandidate,
+		type StudentAccountGenerationResult
+	} from '$lib/client/account-generation';
 
 	type Student = {
 		id: string; nis: string; nisn: string; nama: string; gender: string;
@@ -51,6 +58,9 @@
 	let studentFormStep = $state<StudentFormStep>('identity');
 	let deleteBusyId = $state('');
 	let lifecycleBusyKey = $state('');
+	let studentAccountBusy = $state<'preview' | 'generate' | ''>('');
+	let studentAccountPreview = $state<StudentAccountGenerationResult | null>(null);
+	let studentAccountResult = $state<StudentAccountGenerationResult | null>(null);
 
 	const studentFormSteps: Array<{ id: StudentFormStep; label: string; description: string }> = [
 		{ id: 'identity', label: 'Identitas', description: 'NIS, NISN, nama, dan gender' },
@@ -60,6 +70,10 @@
 	];
 
 	const studentFormStepIndex = $derived(studentFormSteps.findIndex((step) => step.id === studentFormStep));
+	const userRoles = $derived(page.data.user?.roles ?? (page.data.user?.role ? [page.data.user.role] : []));
+	const userPermissions = $derived(page.data.user?.permissions ?? []);
+	const canManageStudentAccounts = $derived(userRoles.includes('admin') || userPermissions.includes('student_accounts.manage'));
+	const studentAccountSummary = $derived(studentAccountResult ?? studentAccountPreview);
 
 	let filtered = $derived(
 		search.trim()
@@ -295,6 +309,60 @@
 		return student.parent_name || 'Wali belum diisi';
 	}
 
+	function studentAccountCandidate(student: Student): StudentAccountGenerationCandidate | undefined {
+		return studentAccountSummary?.candidates.find((candidate) => candidate.student_id === student.id);
+	}
+
+	function accountStatusLabel(candidate: StudentAccountGenerationCandidate | undefined) {
+		if (!candidate) return 'Belum dicek';
+		if (candidate.status === 'created') return 'Akun dibuat';
+		if (candidate.status === 'ready') return 'Siap dibuat';
+		if (candidate.status === 'skipped') return 'Dilewati';
+		return 'Gagal';
+	}
+
+	function accountStatusClass(candidate: StudentAccountGenerationCandidate | undefined) {
+		if (!candidate) return 'bg-muted text-muted-foreground border-border';
+		if (candidate.status === 'created') return 'bg-primary/15 text-primary border-primary/20';
+		if (candidate.status === 'ready') return 'bg-accent text-accent-foreground border-accent';
+		if (candidate.status === 'failed') return 'bg-destructive/10 text-destructive border-destructive/20';
+		return 'bg-muted text-muted-foreground border-border';
+	}
+
+	async function previewAccounts() {
+		if (!canManageStudentAccounts) return;
+		studentAccountBusy = 'preview';
+		try {
+			studentAccountPreview = await previewStudentAccounts();
+			studentAccountResult = null;
+			showToast('Preview akun siswa siap ditinjau');
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal memuat preview akun siswa.'));
+		} finally {
+			studentAccountBusy = '';
+		}
+	}
+
+	async function generateAccounts() {
+		if (!canManageStudentAccounts) return;
+		if (!(await confirmAction({
+			title: 'Generate Akun Siswa',
+			message: 'Password hanya tampil sekali. Simpan/unduh hasil generate sekarang.',
+			confirmLabel: 'Generate Akun',
+			tone: 'warning'
+		}))) return;
+		studentAccountBusy = 'generate';
+		try {
+			studentAccountResult = await generateStudentAccounts();
+			studentAccountPreview = studentAccountResult;
+			showToast('Generate akun siswa selesai');
+		} catch (error) {
+			showError(mutationErrorMessage(error, 'Gagal generate akun siswa.'));
+		} finally {
+			studentAccountBusy = '';
+		}
+	}
+
 	onMount(() => {
 		void load();
 	});
@@ -351,6 +419,87 @@
 			</div>
 		{/snippet}
 	</AsyncContent>
+
+	<Card.Root class="overflow-hidden border-border shadow-sm">
+		<Card.Header class="pb-3">
+			<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+				<div>
+					<Card.Title class="text-base">Akun Siswa</Card.Title>
+					<p class="mt-1 text-sm text-muted-foreground">Password hanya tampil sekali. Simpan/unduh hasil generate sekarang.</p>
+					<p class="mt-1 text-sm text-muted-foreground">Akun wajib mengganti password saat login pertama.</p>
+					<p class="mt-1 text-sm text-muted-foreground">Data resmi tetap dikunci dan perubahan melalui approval.</p>
+				</div>
+				<div class="flex flex-wrap gap-2">
+					<LoadingButton
+						variant="outline"
+						loading={studentAccountBusy === 'preview'}
+						loadingLabel="Memuat..."
+						disabled={!canManageStudentAccounts || studentAccountBusy !== ''}
+						onclick={() => void previewAccounts()}
+						label="Preview akun siswa"
+					/>
+					<LoadingButton
+						loading={studentAccountBusy === 'generate'}
+						loadingLabel="Generate..."
+						disabled={!canManageStudentAccounts || studentAccountBusy !== ''}
+						onclick={() => void generateAccounts()}
+						label="Generate akun siswa"
+					/>
+				</div>
+			</div>
+			{#if !canManageStudentAccounts}
+				<p class="mt-3 rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
+					Aksi akun siswa memerlukan permission student_accounts.manage.
+				</p>
+			{/if}
+		</Card.Header>
+		{#if studentAccountSummary}
+			<Card.Content class="border-t border-border p-0">
+				<div class="grid gap-3 border-b border-border p-4 sm:grid-cols-4">
+					<div>
+						<p class="text-xs text-muted-foreground">Total</p>
+						<p class="text-xl font-semibold">{studentAccountSummary.total}</p>
+					</div>
+					<div>
+						<p class="text-xs text-muted-foreground">Siap</p>
+						<p class="text-xl font-semibold">{studentAccountSummary.ready}</p>
+					</div>
+					<div>
+						<p class="text-xs text-muted-foreground">Dibuat</p>
+						<p class="text-xl font-semibold">{studentAccountSummary.created}</p>
+					</div>
+					<div>
+						<p class="text-xs text-muted-foreground">Dilewati/Gagal</p>
+						<p class="text-xl font-semibold">{studentAccountSummary.skipped + studentAccountSummary.failed}</p>
+					</div>
+				</div>
+				<div class="max-h-80 overflow-auto">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row>
+								<Table.Head>Nama</Table.Head>
+								<Table.Head>Username</Table.Head>
+								<Table.Head>Password awal</Table.Head>
+								<Table.Head>Status akun</Table.Head>
+								<Table.Head>Keterangan</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each studentAccountSummary.candidates as candidate (candidate.student_id)}
+								<Table.Row>
+									<Table.Cell class="font-medium">{candidate.nama}</Table.Cell>
+									<Table.Cell class="font-mono text-sm">{candidate.generated_username || '—'}</Table.Cell>
+									<Table.Cell class="font-mono text-sm">{candidate.temporary_password || '—'}</Table.Cell>
+									<Table.Cell><Badge class={accountStatusClass(candidate)}>{accountStatusLabel(candidate)}</Badge></Table.Cell>
+									<Table.Cell class="text-sm text-muted-foreground">{candidate.reason || '—'}</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				</div>
+			</Card.Content>
+		{/if}
+	</Card.Root>
 
 	{#if showForm}
 		<Card.Root class="overflow-hidden border-border shadow-sm">
@@ -504,6 +653,9 @@
 							<Table.Head>Wali</Table.Head>
 							<Table.Head>Status</Table.Head>
 							<Table.Head>Lifecycle</Table.Head>
+							<Table.Head>Status akun</Table.Head>
+							<Table.Head>Username</Table.Head>
+							<Table.Head>Role</Table.Head>
 							<Table.Head class="text-right">Aksi</Table.Head>
 						</Table.Row>
 					</Table.Header>
@@ -512,6 +664,7 @@
 							{@const activeKey = lifecycleKey(s.id, 'active')}
 							{@const alumniKey = lifecycleKey(s.id, 'alumni')}
 							{@const mutatedKey = lifecycleKey(s.id, 'mutated')}
+							{@const accountCandidate = studentAccountCandidate(s)}
 							<Table.Row>
 								<Table.Cell class="font-mono text-sm">{s.nis}</Table.Cell>
 								<Table.Cell class="font-medium">{s.nama}</Table.Cell>
@@ -539,6 +692,11 @@
 								<Table.Cell>
 									<Badge class={lifecycleBadgeClass(s.status)}>{s.status}</Badge>
 								</Table.Cell>
+								<Table.Cell>
+									<Badge class={accountStatusClass(accountCandidate)}>{accountStatusLabel(accountCandidate)}</Badge>
+								</Table.Cell>
+								<Table.Cell class="font-mono text-sm">{accountCandidate?.generated_username || '—'}</Table.Cell>
+								<Table.Cell class="text-sm">{accountCandidate?.role || '—'}</Table.Cell>
 								<Table.Cell class="text-right">
 									<div class="flex gap-2 justify-end">
 										<LoadingButton
@@ -579,7 +737,7 @@
 							</Table.Row>
 						{:else}
 							<Table.Row>
-								<Table.Cell colspan={8} class="p-4">
+								<Table.Cell colspan={11} class="p-4">
 										<EmptyStatePanel
 											compact
 											eyebrow={search ? 'Filter Tidak Menemukan Hasil' : 'Mulai Data Pokok'}
@@ -606,6 +764,7 @@
 						{@const activeKey = lifecycleKey(s.id, 'active')}
 						{@const alumniKey = lifecycleKey(s.id, 'alumni')}
 						{@const mutatedKey = lifecycleKey(s.id, 'mutated')}
+						{@const accountCandidate = studentAccountCandidate(s)}
 						<div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
@@ -622,7 +781,11 @@
 								<Badge variant="outline" class="text-xs">{s.gender === 'L' ? 'Laki-laki' : 'Perempuan'}</Badge>
 								<Badge variant="outline" class="text-xs">{s.class_code || 'Belum ada kelas'}</Badge>
 								<Badge class={lifecycleBadgeClass(s.status)}>{s.status}</Badge>
+								<Badge class={accountStatusClass(accountCandidate)}>{accountStatusLabel(accountCandidate)}</Badge>
 							</div>
+							<p class="mt-2 font-mono text-xs text-muted-foreground">
+								Username {accountCandidate?.generated_username || '—'} · Role {accountCandidate?.role || '—'}
+							</p>
 							<p class="mt-3 text-sm text-muted-foreground">{parentSummary(s)}</p>
 							{#if s.linked_parent_count > 0}
 								<p class="mt-1 text-xs text-primary">Relasi orang tua terhubung ke akun portal</p>

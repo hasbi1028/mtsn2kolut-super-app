@@ -77,6 +77,22 @@ func (q *Queries) DeleteStudent(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const getPortalStudentIDByUserID = `-- name: GetPortalStudentIDByUserID :one
+SELECT u.student_id
+FROM users u
+WHERE u.id = $1
+  AND u.deleted_at IS NULL
+  AND u.is_active = TRUE
+  AND u.student_id IS NOT NULL
+`
+
+func (q *Queries) GetPortalStudentIDByUserID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getPortalStudentIDByUserID, id)
+	var student_id pgtype.UUID
+	err := row.Scan(&student_id)
+	return student_id, err
+}
+
 const getStudentByID = `-- name: GetStudentByID :one
 SELECT s.id, s.nis, s.nisn, s.nama, s.gender, s.parent_name, s.parent_phone,
        s.class_id, c.name AS class_name, c.code AS class_code,

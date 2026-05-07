@@ -1,6 +1,6 @@
 # RBAC Permission Catalog — Tahap 9
 
-Dokumen ini adalah katalog operasional permission dinamis MTsN 2 Kolut setelah Dynamic RBAC Tahap 9. Sumber teknis utama tetap migration `services/core-api/db/migrations/069_dynamic_rbac_foundation.sql` plus seed tambahan staged setelahnya seperti `076_profile_change_review_permission.sql`; file ini mengunci daftar agar operator dan developer memakai kode permission yang sama.
+Dokumen ini adalah katalog operasional permission dinamis MTsN 2 Kolut setelah Dynamic RBAC Tahap 9. Sumber teknis utama tetap migration `services/core-api/db/migrations/069_dynamic_rbac_foundation.sql` plus seed tambahan staged setelahnya seperti `076_profile_change_review_permission.sql` dan `081_student_parent_account_portal.sql`; file ini mengunci daftar agar operator dan developer memakai kode permission yang sama.
 
 ## Prinsip Stabilization
 
@@ -103,6 +103,20 @@ Legacy role fallback masih aktif untuk compatibility. Target cleanup nanti: audi
 
 - `notifications.read` — Melihat notifikasi.
 
+### parent_accounts
+
+- `parent_accounts.manage` — Membuat, reset, dan menonaktifkan akun orang tua/wali.
+
+### parent_portal
+
+- `parent_portal.child_attendance_read` — Melihat kehadiran anak yang terhubung.
+- `parent_portal.child_grades_read` — Melihat hasil/nilai anak yang sudah dirilis.
+- `parent_portal.child_profile_read` — Melihat profil anak yang terhubung.
+- `parent_portal.child_schedule_read` — Melihat jadwal anak yang terhubung.
+- `parent_portal.children_read` — Melihat daftar anak yang terhubung.
+- `parent_portal.profile_change_request` — Mengajukan perubahan data orang tua/anak melalui approval.
+- `parent_portal.read` — Mengakses portal orang tua/wali.
+
 ### parents
 
 - `parents.manage` — Mengelola data orang tua/wali.
@@ -130,6 +144,19 @@ Reviewer perubahan profil dapat membuka `/settings/user-change-requests`, mengam
 
 - `settings.account` — Mengelola pengaturan akun sendiri.
 - `settings.school_profile` — Mengelola profil madrasah.
+
+### student_accounts
+
+- `student_accounts.manage` — Membuat, reset, dan menonaktifkan akun siswa.
+
+### student_portal
+
+- `student_portal.assessment_take` — Mengikuti asesmen sebagai siswa.
+- `student_portal.grades_read` — Melihat hasil/nilai siswa sendiri yang sudah dirilis.
+- `student_portal.profile_change_request` — Mengajukan perubahan data resmi siswa sendiri.
+- `student_portal.profile_read` — Melihat profil siswa sendiri.
+- `student_portal.read` — Mengakses portal siswa.
+- `student_portal.schedule_read` — Melihat jadwal siswa sendiri.
 
 ### students
 

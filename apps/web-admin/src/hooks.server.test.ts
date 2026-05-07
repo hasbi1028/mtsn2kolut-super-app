@@ -463,6 +463,12 @@ describe('SvelteKit handle auth gate', () => {
 		{ path: '/api/students', roles: ['staf'], allowed: false, api: true, method: 'GET' },
 		{ path: '/api/students', roles: ['guru'], allowed: false, api: true, method: 'POST' },
 		{ path: '/api/students', roles: ['kesiswaan'], allowed: true, api: true, method: 'POST' },
+		{ path: '/portal/siswa', roles: ['siswa'], allowed: true, api: false },
+		{ path: '/portal/siswa', roles: ['ortu'], allowed: false, api: false },
+		{ path: '/portal/orang-tua', roles: ['ortu'], allowed: true, api: false },
+		{ path: '/portal/orang-tua', roles: ['siswa'], allowed: false, api: false },
+		{ path: '/api/portal/siswa/profile', roles: ['siswa'], allowed: true, api: true },
+		{ path: '/api/portal/siswa/results', roles: ['ortu'], allowed: false, api: true },
 		{ path: '/api/scheduler/tick', roles: ['staf'], allowed: false, api: true },
 		{ path: '/api/scheduler/tick', roles: ['admin'], allowed: true, api: true },
 	] as const;

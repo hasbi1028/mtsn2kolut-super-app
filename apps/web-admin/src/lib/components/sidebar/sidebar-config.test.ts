@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { filterSidebarNavGroupsByAccess } from './sidebar-access';
 import { dashboardNavItem, sidebarNavGroups } from './sidebar-config';
 import sidebarIconSource from './SidebarIcon.svelte?raw';
 
 const academicItems = sidebarNavGroups.find((group) => group.group === 'Akademik & Pembelajaran')?.items ?? [];
 const assessmentItems = sidebarNavGroups.find((group) => group.group === 'Asesmen')?.items ?? [];
 const bankSoalItems = sidebarNavGroups.find((group) => group.group === 'Bank Soal')?.items ?? [];
+const portalItems = sidebarNavGroups.find((group) => group.group === 'Portal')?.items ?? [];
 
 describe('sidebar assessment configuration', () => {
 	it('keeps Dashboard only as the quick-access root item, not duplicated in a Utama group', () => {
@@ -145,6 +147,34 @@ describe('sidebar assessment configuration', () => {
 		expect(assessmentItems.find((item) => item.href === '/asesmen/paket')?.permissions).toEqual(['asesmen.package_manage']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/hasil')?.permissions).toEqual(['asesmen.result_read']);
 		expect(allItems.filter((item) => item.permissions?.length).every((item) => item.roles?.length)).toBe(true);
+	});
+
+	it('exposes student and parent portal entries only to matching roles or permissions', () => {
+		const allItems = sidebarNavGroups.flatMap((group) => group.items);
+		const byHref = new Map(allItems.map((item) => [item.href, item]));
+		const visibleHrefs = (roles: string[], permissions: string[] = []) =>
+			filterSidebarNavGroupsByAccess(sidebarNavGroups, roles, permissions)
+				.flatMap((group) => group.items.map((item) => item.href));
+
+		expect(portalItems.map((item) => item.href)).toEqual(['/portal/siswa', '/portal/orang-tua']);
+		expect(byHref.get('/portal/siswa')).toMatchObject({
+			label: 'Portal Siswa',
+			icon: 'book-open',
+			roles: ['siswa'],
+			permissions: ['student_portal.read']
+		});
+		expect(byHref.get('/portal/orang-tua')).toMatchObject({
+			label: 'Portal Orang Tua',
+			icon: 'user-group',
+			roles: ['ortu'],
+			permissions: ['parent_portal.read']
+		});
+		expect(visibleHrefs(['siswa'])).toContain('/portal/siswa');
+		expect(visibleHrefs(['siswa'])).not.toContain('/portal/orang-tua');
+		expect(visibleHrefs(['ortu'])).toContain('/portal/orang-tua');
+		expect(visibleHrefs(['ortu'])).not.toContain('/portal/siswa');
+		expect(visibleHrefs([], ['student_portal.read'])).toContain('/portal/siswa');
+		expect(visibleHrefs([], ['parent_portal.read'])).toContain('/portal/orang-tua');
 	});
 
 	it('does not expose the retired question-bank route anywhere in sidebar nav', () => {

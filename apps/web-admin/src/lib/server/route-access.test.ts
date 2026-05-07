@@ -133,6 +133,29 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/user-change-requests', 'GET')).toBe(false);
 	});
 
+	it('guards student and parent portal routes by dedicated portal roles or permissions', () => {
+		const siswa = { id: '1', username: 'siswa', role: 'siswa', roles: ['siswa'], permissions: [] };
+		const ortu = { id: '2', username: 'ortu', role: 'ortu', roles: ['ortu'], permissions: [] };
+		const studentPermission = { id: '3', username: 'student-perm', role: '', roles: [], permissions: ['student_portal.read'] };
+		const parentPermission = { id: '4', username: 'parent-perm', role: '', roles: [], permissions: ['parent_portal.read'] };
+
+		expect(canAccessProtectedRoute(undefined, '/portal/siswa', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(siswa, '/portal/siswa', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(studentPermission, '/portal/siswa', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(ortu, '/portal/siswa', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ ...ortu, roles: ['admin'] }, '/portal/siswa', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(ortu, '/portal/orang-tua', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(parentPermission, '/portal/orang-tua', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(parentPermission, '/api/portal/parent/me', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(siswa, '/portal/orang-tua', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(siswa, '/api/portal/parent/me', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(siswa, '/api/portal/siswa/profile', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(siswa, '/api/portal/student/me', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(studentPermission, '/api/portal/student/me', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(ortu, '/api/portal/siswa/profile', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(ortu, '/api/portal/student/me', 'GET')).toBe(false);
+	});
+
 	it('keeps mutation route checks permission-specific', () => {
 		const reader = { id: '1', username: 'reader', role: '', roles: [], permissions: ['users.read', 'bank_soal.read', 'asesmen.read'] };
 		const mutator = { id: '2', username: 'mutator', role: '', roles: [], permissions: ['users.create', 'bank_soal.create', 'asesmen.event_manage'] };
@@ -172,6 +195,10 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/api/rbac/roles/guru/permissions', 'PUT')).toEqual(['roles.manage']);
 		expect(requiredPermissionsForPath('/settings/user-change-requests', 'GET')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users', 'POST')).toEqual(['users.create']);
+		expect(requiredPermissionsForPath('/api/users/student-accounts/preview', 'GET')).toEqual(['student_accounts.manage']);
+		expect(requiredPermissionsForPath('/api/users/student-accounts/generate', 'POST')).toEqual(['student_accounts.manage']);
+		expect(requiredPermissionsForPath('/api/users/parent-accounts/preview', 'GET')).toEqual(['parent_accounts.manage']);
+		expect(requiredPermissionsForPath('/api/users/parent-accounts/generate', 'POST')).toEqual(['parent_accounts.manage']);
 		expect(requiredPermissionsForPath('/api/users/change-requests', 'GET')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users/change-requests/pending-count', 'GET')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users/change-requests/export', 'GET')).toEqual(['profile_changes.review']);
@@ -193,6 +220,12 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toEqual(['journal.manage', 'journal.manage_all']);
 		expect(requiredPermissionsForPath('/api/asesmen/packages', 'POST')).toEqual(['asesmen.package_manage']);
 		expect(requiredPermissionsForPath('/api/asesmen/events/event-1', 'PATCH')).toEqual(['asesmen.event_manage']);
+		expect(requiredPermissionsForPath('/portal/siswa', 'GET')).toEqual(['student_portal.read']);
+		expect(requiredPermissionsForPath('/api/portal/siswa/results', 'GET')).toEqual(['student_portal.read']);
+		expect(requiredPermissionsForPath('/api/portal/student/me', 'GET')).toEqual(['student_portal.read']);
+		expect(requiredPermissionsForPath('/portal/orang-tua', 'GET')).toEqual(['parent_portal.read']);
+		expect(requiredPermissionsForPath('/api/portal/orang-tua/children', 'GET')).toEqual(['parent_portal.read']);
+		expect(requiredPermissionsForPath('/api/portal/parent/me', 'GET')).toEqual(['parent_portal.read']);
 	});
 
 	it('checks role membership from user payloads', () => {

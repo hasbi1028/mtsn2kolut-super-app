@@ -27,7 +27,7 @@ type Portal struct {
 func NewPortal(svc *service.Portal) *Portal { return &Portal{svc: svc} }
 
 func (h *Portal) StudentMe(w http.ResponseWriter, r *http.Request) {
-	if !portalHasAnyRole(r, "siswa") {
+	if !portalHasAnyRoleOrPermission(r, []string{"siswa"}, []string{"student_portal.read"}) {
 		api.Forbidden(w)
 		return
 	}
@@ -59,7 +59,7 @@ func (h *Portal) StudentMe(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, map[string]any{
 		"student":   student,
 		"parents":   parents,
-		"sessions":  sessions,
+		"sessions":  studentPortalResults(sessions),
 		"timetable": timetable,
 	})
 }
@@ -95,7 +95,7 @@ func (h *Portal) TeacherTimetable(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Portal) ParentMe(w http.ResponseWriter, r *http.Request) {
-	if !portalHasAnyRole(r, "ortu") {
+	if !portalHasAnyRoleOrPermission(r, []string{"ortu"}, []string{"parent_portal.read"}) {
 		api.Forbidden(w)
 		return
 	}
@@ -137,4 +137,12 @@ func portalHasAnyRole(r *http.Request, roles ...string) bool {
 		return false
 	}
 	return mw.HasAnyRole(claims, roles...)
+}
+
+func portalHasAnyRoleOrPermission(r *http.Request, roles []string, permissions []string) bool {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		return false
+	}
+	return mw.HasAnyRole(claims, roles...) || mw.HasAnyPermission(claims, permissions...)
 }

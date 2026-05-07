@@ -10,7 +10,8 @@ const repoRoot = resolve(__dirname, '../../../../..');
 const migration = [
 	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/069_dynamic_rbac_foundation.sql'), 'utf8'),
 	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/076_profile_change_review_permission.sql'), 'utf8'),
-	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/079_journal_timetable_slot_scope.sql'), 'utf8')
+	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/079_journal_timetable_slot_scope.sql'), 'utf8'),
+	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/081_student_parent_account_portal.sql'), 'utf8')
 ].join('\n');
 const docs = readFileSync(resolve(repoRoot, 'docs/rbac-permission-catalog.md'), 'utf8');
 
