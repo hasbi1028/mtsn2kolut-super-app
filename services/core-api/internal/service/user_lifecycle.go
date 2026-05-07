@@ -98,6 +98,25 @@ func (s *UserLifecycle) ResetPassword(ctx context.Context, id pgtype.UUID, newPa
 	})
 }
 
+func (s *UserLifecycle) ForcePasswordChange(ctx context.Context, id pgtype.UUID, actorID pgtype.UUID) error {
+	user, err := s.q.GetUserByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	return s.withStore(ctx, func(store userLifecycleStore) error {
+		if err := store.MarkUserMustChangePassword(ctx, id); err != nil {
+			return err
+		}
+		if _, err := store.IncrementUserAuthVersion(ctx, id); err != nil {
+			return err
+		}
+		if _, err := store.RevokeAllAuthSessionsForUser(ctx, id); err != nil {
+			return err
+		}
+		return auditUserLifecycle(ctx, store, actorID, "USER_FORCE_PASSWORD_CHANGE", "user", uuidEntityID(id), map[string]any{"user_id": uuidEntityID(id), "username": user.Username})
+	})
+}
+
 func (s *UserLifecycle) UpdateProfileLink(ctx context.Context, id pgtype.UUID, link ProfileLink, actorID pgtype.UUID) error {
 	if err := validateProfileLink(link); err != nil {
 		return err

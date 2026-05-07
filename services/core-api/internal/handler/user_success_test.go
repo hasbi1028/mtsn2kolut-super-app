@@ -31,21 +31,24 @@ type fakeUserStore struct {
 }
 
 type fakeUserLifecycle struct {
-	deleteID       pgtype.UUID
-	deleteActorID  pgtype.UUID
-	deleteErr      error
-	statusID       pgtype.UUID
-	statusActorID  pgtype.UUID
-	statusIsActive bool
-	statusErr      error
-	resetID        pgtype.UUID
-	resetActorID   pgtype.UUID
-	resetPassword  string
-	resetErr       error
-	profileID      pgtype.UUID
-	profileActorID pgtype.UUID
-	profileLink    service.ProfileLink
-	profileErr     error
+	deleteID             pgtype.UUID
+	deleteActorID        pgtype.UUID
+	deleteErr            error
+	statusID             pgtype.UUID
+	statusActorID        pgtype.UUID
+	statusIsActive       bool
+	statusErr            error
+	resetID              pgtype.UUID
+	resetActorID         pgtype.UUID
+	resetPassword        string
+	resetErr             error
+	forcePasswordID      pgtype.UUID
+	forcePasswordActorID pgtype.UUID
+	forcePasswordErr     error
+	profileID            pgtype.UUID
+	profileActorID       pgtype.UUID
+	profileLink          service.ProfileLink
+	profileErr           error
 }
 
 func (f *fakeUserStore) ListUsers(ctx context.Context) ([]db.ListUsersRow, error) {
@@ -86,6 +89,12 @@ func (f *fakeUserLifecycle) ResetPassword(ctx context.Context, id pgtype.UUID, n
 	f.resetPassword = newPassword
 	f.resetActorID = actorID
 	return f.resetErr
+}
+
+func (f *fakeUserLifecycle) ForcePasswordChange(ctx context.Context, id pgtype.UUID, actorID pgtype.UUID) error {
+	f.forcePasswordID = id
+	f.forcePasswordActorID = actorID
+	return f.forcePasswordErr
 }
 
 func (f *fakeUserLifecycle) UpdateProfileLink(ctx context.Context, id pgtype.UUID, link service.ProfileLink, actorID pgtype.UUID) error {
