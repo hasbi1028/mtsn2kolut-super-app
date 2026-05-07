@@ -8,6 +8,7 @@ describe('route access helpers', () => {
 		expect(isAdminOnlyPath('/settings/account')).toBe(false);
 		expect(isAdminOnlyPath('/api/auth/account')).toBe(false);
 		expect(isAdminOnlyPath('/settings/users')).toBe(true);
+		expect(isAdminOnlyPath('/settings/rbac')).toBe(true);
 		expect(isAdminOnlyPath('/settings/user-change-requests')).toBe(true);
 	});
 
@@ -116,6 +117,7 @@ describe('route access helpers', () => {
 		const user = { id: '1', username: 'operator', role: '', roles: [], permissions: ['users.read', 'bank_soal.read', 'asesmen.read', 'profile_changes.review'] };
 
 		expect(canAccessProtectedRoute(user, '/settings/users', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...user, permissions: [...user.permissions, 'roles.read'] }, '/settings/rbac', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/settings/user-change-requests', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/account', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/api/auth/account', 'GET')).toBe(true);
@@ -123,6 +125,11 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute(user, '/bank-soal/daftar', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/asesmen/kegiatan', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/users', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/rbac', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ id: '6', username: 'rbac-reader', role: '', roles: [], permissions: ['roles.read'] }, '/settings/rbac', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ id: '7', username: 'plain-guru', role: 'guru', roles: ['guru'], permissions: [] }, '/settings/rbac', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ id: '8', username: 'rbac-mutator', role: '', roles: [], permissions: ['roles.manage'] }, '/api/rbac/roles/guru/permissions', 'PUT')).toBe(true);
+		expect(canAccessProtectedRoute({ id: '9', username: 'rbac-reader', role: '', roles: [], permissions: ['roles.read'] }, '/api/rbac/roles/guru/permissions', 'PUT')).toBe(false);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/user-change-requests', 'GET')).toBe(false);
 	});
 
@@ -160,6 +167,9 @@ describe('route access helpers', () => {
 
 	it('documents route permission requirements for main migrated modules', () => {
 		expect(requiredPermissionsForPath('/settings/users', 'GET')).toEqual(['users.read']);
+		expect(requiredPermissionsForPath('/settings/rbac', 'GET')).toEqual(['roles.read']);
+		expect(requiredPermissionsForPath('/api/rbac/matrix', 'GET')).toEqual(['roles.read']);
+		expect(requiredPermissionsForPath('/api/rbac/roles/guru/permissions', 'PUT')).toEqual(['roles.manage']);
 		expect(requiredPermissionsForPath('/settings/user-change-requests', 'GET')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users', 'POST')).toEqual(['users.create']);
 		expect(requiredPermissionsForPath('/api/users/change-requests', 'GET')).toEqual(['profile_changes.review']);
