@@ -5,7 +5,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 )
@@ -37,6 +39,7 @@ type cbtQuestionStore interface {
 	ListCbtQuestionStemTextsBySubject(ctx context.Context, subjectID pgtype.UUID) ([]db.ListCbtQuestionStemTextsBySubjectRow, error)
 	GetCbtQuestion(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionRow, error)
 	GetCbtQuestionDetail(ctx context.Context, id pgtype.UUID) (db.GetCbtQuestionDetailRow, error)
+	GetCbtQuestionAsset(ctx context.Context, id pgtype.UUID) (db.CbtQuestionAsset, error)
 	CreateCbtQuestion(ctx context.Context, arg db.CreateCbtQuestionParams) (db.CbtQuestion, error)
 	UpdateCbtQuestion(ctx context.Context, arg db.UpdateCbtQuestionParams) (db.CbtQuestion, error)
 	DeleteCbtQuestion(ctx context.Context, id pgtype.UUID) error
@@ -44,11 +47,69 @@ type cbtQuestionStore interface {
 	ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAuditLog, error)
 }
 
+type cbtQuestionTxStarter interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
 type CbtQuestion struct {
-	q cbtQuestionStore
+	q  cbtQuestionStore
+	tx cbtQuestionTxStarter
 }
 
 func NewCbtQuestion(q *db.Queries) *CbtQuestion { return &CbtQuestion{q: q} }
+
+func NewCbtQuestionWithPool(pool *pgxpool.Pool) *CbtQuestion {
+	return &CbtQuestion{q: db.New(pool), tx: pool}
+}
+
+func (s *CbtQuestion) withMutationStore(ctx context.Context, fn func(cbtQuestionStore) (db.CbtQuestion, error)) (db.CbtQuestion, error) {
+	if s.tx == nil {
+		return fn(s.q)
+	}
+	tx, err := s.tx.Begin(ctx)
+	if err != nil {
+		return db.CbtQuestion{}, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+	row, err := fn(db.New(tx))
+	if err != nil {
+		return db.CbtQuestion{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return db.CbtQuestion{}, err
+	}
+	committed = true
+	return row, nil
+}
+
+func (s *CbtQuestion) withMutationStoreExec(ctx context.Context, fn func(cbtQuestionStore) error) error {
+	if s.tx == nil {
+		return fn(s.q)
+	}
+	tx, err := s.tx.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+	if err := fn(db.New(tx)); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
 
 type QuestionOption struct {
 	Label        string `json:"label"`
@@ -106,9 +167,10 @@ type SaveCbtQuestionInput struct {
 }
 
 type CbtQuestionActor struct {
-	UserID   pgtype.UUID
-	Username string
-	Roles    []string
+	UserID      pgtype.UUID
+	Username    string
+	Roles       []string
+	Permissions []string
 }
 
 func (a CbtQuestionActor) HasRole(target string) bool {
@@ -122,6 +184,23 @@ func (a CbtQuestionActor) HasRole(target string) bool {
 		}
 	}
 	return false
+}
+
+func (a CbtQuestionActor) HasPermission(target string) bool {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return false
+	}
+	for _, permission := range a.Permissions {
+		if strings.TrimSpace(permission) == target {
+			return true
+		}
+	}
+	return false
+}
+
+func (a CbtQuestionActor) CanPublishBankSoal() bool {
+	return a.IsAdmin() || a.HasPermission("bank_soal.publish")
 }
 
 func (a CbtQuestionActor) IsAdmin() bool {

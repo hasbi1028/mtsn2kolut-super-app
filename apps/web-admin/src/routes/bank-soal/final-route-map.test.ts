@@ -33,7 +33,9 @@ describe('Bank Soal final route map', () => {
 		const bankSoalItems = sidebarNavGroups.find((group) => group.group === 'Bank Soal')?.items ?? [];
 		expect(bankSoalItems.map((item) => item.href)).toEqual(finalBankSoalRoutes);
 		expect(new Set(bankSoalItems.map((item) => item.href)).size).toBe(finalBankSoalRoutes.length);
-		expect(bankSoalItems.every((item) => item.roles?.includes('admin') && item.roles.includes('guru'))).toBe(true);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review']);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/impor')?.permissions).toEqual(['bank_soal.import']);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/pengaturan')?.permissions).toEqual(['bank_soal.settings']);
 	});
 
 	it('keeps final routes free from legacy CBT/mode naming', () => {

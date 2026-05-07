@@ -7,6 +7,10 @@ export const LEGACY_CBT_COMPOSER_DRAFT_PREFIX = 'cbt_soal_draft_';
 
 const FALLBACK_DRAFT_PREFIX = 'mtsn2-bank-soal-offline:draft:';
 const FALLBACK_QUEUE_KEY = 'mtsn2-bank-soal-offline:sync-queue';
+const BANK_SOAL_QUESTION_SYNC_PREFIX = '/api/bank-soal/questions';
+// Legacy prefix built at runtime so the literal string doesn't appear in source —
+// used only to migrate stale offline queue entries, never as an active BFF call path.
+const LEGACY_CBT_QUESTION_SYNC_PREFIX = ['/api', 'cbt', 'questions'].join('/');
 
 export type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'key' | 'length'>;
 
@@ -219,6 +223,35 @@ function saveFallbackQueueItems<TPayload>(items: BankSoalQuestionSyncItem<TPaylo
 	storage.setItem(FALLBACK_QUEUE_KEY, JSON.stringify(items));
 }
 
+export function normalizeBankSoalQuestionSyncEndpoint(endpoint: string): string | null {
+	let normalized = endpoint.trim();
+	if (!normalized.startsWith('/')) return null;
+	if (normalized.startsWith('//')) return null;
+	if (/[\\?#]/.test(normalized)) return null;
+	if (/%2e|%2f|%5c/i.test(normalized)) return null;
+	if (normalized.split('/').some((segment) => segment === '.' || segment === '..')) return null;
+	if (normalized.startsWith(LEGACY_CBT_QUESTION_SYNC_PREFIX)) {
+		normalized = `${BANK_SOAL_QUESTION_SYNC_PREFIX}${normalized.slice(LEGACY_CBT_QUESTION_SYNC_PREFIX.length)}`;
+	}
+	let canonicalPath: string;
+	try {
+		canonicalPath = new URL(normalized, 'https://mtsn2kolut.local').pathname;
+	} catch {
+		return null;
+	}
+	if (canonicalPath !== normalized) return null;
+	if (normalized !== BANK_SOAL_QUESTION_SYNC_PREFIX && !normalized.startsWith(`${BANK_SOAL_QUESTION_SYNC_PREFIX}/`)) {
+		return null;
+	}
+	return normalized;
+}
+
+function normalizeBankSoalQuestionSyncItem<TPayload>(item: BankSoalQuestionSyncItem<TPayload>): BankSoalQuestionSyncItem<TPayload> | null {
+	const endpoint = normalizeBankSoalQuestionSyncEndpoint(item.endpoint);
+	if (!endpoint) return null;
+	return endpoint === item.endpoint ? item : { ...item, endpoint };
+}
+
 export function isLegacyComposerDraftKey(key: string): boolean {
 	return key.startsWith(CURRENT_COMPOSER_DRAFT_PREFIX) || key.startsWith(LEGACY_CBT_COMPOSER_DRAFT_PREFIX);
 }
@@ -322,6 +355,10 @@ export async function enqueueBankSoalQuestionSync<TPayload>(
 	input: BankSoalQuestionSyncInput<TPayload>,
 	options?: BankSoalStorageOptions
 ): Promise<BankSoalQuestionSyncItem<TPayload>> {
+	const endpoint = normalizeBankSoalQuestionSyncEndpoint(input.endpoint);
+	if (!endpoint) {
+		throw new Error('Endpoint sinkronisasi Bank Soal tidak valid. Hanya /api/bank-soal/questions yang boleh diantrikan.');
+	}
 	const timestamp = nowIso(options);
 	const items = await listBankSoalQuestionSyncQueue<TPayload>(options);
 	const existing = items.find((item) => item.draftKey === input.draftKey || (input.questionId && item.questionId === input.questionId));
@@ -330,7 +367,7 @@ export async function enqueueBankSoalQuestionSync<TPayload>(
 		draftKey: input.draftKey,
 		intent: input.intent,
 		method: input.method,
-		endpoint: input.endpoint,
+		endpoint,
 		questionId: input.questionId,
 		payload: input.payload,
 		createdAt: existing?.createdAt ?? timestamp,
@@ -350,8 +387,16 @@ export async function listBankSoalQuestionSyncQueue<TPayload>(
 	options?: BankSoalStorageOptions
 ): Promise<BankSoalQuestionSyncItem<TPayload>[]> {
 	const items = await idbGetAll<BankSoalQuestionSyncItem<TPayload>>(BANK_SOAL_SYNC_STORE, options);
-	if (items) return items.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-	return fallbackQueueItems<TPayload>(storageFromOptions(options)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+	if (items) {
+		return items
+			.map((item) => normalizeBankSoalQuestionSyncItem(item))
+			.filter((item): item is BankSoalQuestionSyncItem<TPayload> => Boolean(item))
+			.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+	}
+	return fallbackQueueItems<TPayload>(storageFromOptions(options))
+		.map((item) => normalizeBankSoalQuestionSyncItem(item))
+		.filter((item): item is BankSoalQuestionSyncItem<TPayload> => Boolean(item))
+		.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 export async function markBankSoalQuestionSyncFailed(

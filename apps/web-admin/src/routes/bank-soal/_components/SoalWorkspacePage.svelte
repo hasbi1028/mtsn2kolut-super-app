@@ -39,6 +39,7 @@
 		type BankSoalQuestionSyncItem,
 	} from '$lib/client/bank-soal-offline';
 	import { questionExportButtonLabel, questionExportSuccessMessage } from '$lib/cbt/question-export-ui';
+	import { canDeleteBankSoal, canPublishBankSoal, canReviewBankSoal } from '$lib/bank-soal/access';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { htmlToPlainText } from '$lib/utils/html-text';
@@ -171,6 +172,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		user?: {
 			role?: string;
 			roles?: string[];
+			permissions?: string[];
 		};
 	};
 	type AcademicPayload = {
@@ -538,7 +540,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let pageCount = $derived(Math.max(1, Math.ceil(totalItems / PAGE_SIZE)));
 	let lockedCount = $derived(questions.filter(questionUsageLocked).length);
 	let roles = $derived(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
-	let canReviewWorkflow = $derived(roles.includes('admin'));
+	let canReviewWorkflow = $derived(canReviewBankSoal(data.user));
+	let canPublishWorkflow = $derived(canPublishBankSoal(data.user));
+	let canDeleteQuestion = $derived(canDeleteBankSoal(data.user));
 	let selectedEvent = $derived(events.find((event) => event.id === selectedEventId) ?? null);
 	let selectedEventTitle = $derived(selectedEvent?.title ?? 'Bank soal reusable');
 	let specialEventAttachId = $derived(specialEventQuestionMode && selectedEventId ? selectedEventId : '');
@@ -1895,7 +1899,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	function canPublishQuestion(q: Question): boolean {
-		return canReviewWorkflow && q.workflow_status === 'approved' && q.status === 'draft' && !questionUsageLocked(q);
+		return canPublishWorkflow && q.workflow_status === 'approved' && q.status === 'draft' && !questionUsageLocked(q);
 	}
 
 	function isQuickEditable(q: Question): boolean {
@@ -2534,7 +2538,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 
 	function openReviewDecision(q: Question, decision: ReviewDecision) {
 		if (!canReviewWorkflow) {
-			toast.warning('Hanya admin yang dapat memutuskan review soal.');
+			toast.warning('Anda belum memiliki izin review soal.');
 			return;
 		}
 		if (q.workflow_status !== 'review' || q.status !== 'draft') {
@@ -3212,13 +3216,15 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 													>
 														{duplicateBusyId === q.id ? 'Menyalin...' : 'Duplikat'}
 													</button>
-													<button
-														type="button"
-														onclick={(e) => { e.stopPropagation(); closeRowMenu(); void deleteQuestion(q.id); }}
-														disabled={questionUsageLocked(q)}
-														class="block w-full px-3 py-1.5 text-left text-xs text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
-														role="menuitem"
-													>Hapus</button>
+													{#if canDeleteQuestion}
+														<button
+															type="button"
+															onclick={(e) => { e.stopPropagation(); closeRowMenu(); void deleteQuestion(q.id); }}
+															disabled={questionUsageLocked(q)}
+															class="block w-full px-3 py-1.5 text-left text-xs text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
+															role="menuitem"
+														>Hapus</button>
+													{/if}
 												</div>
 											{/if}
 										</div>

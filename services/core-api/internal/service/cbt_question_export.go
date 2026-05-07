@@ -39,7 +39,7 @@ func (s *CbtQuestion) ExportCSV(ctx context.Context, in ListCbtQuestionsInput) (
 		return ExportCbtQuestionsCSVResult{}, err
 	}
 	return ExportCbtQuestionsCSVResult{
-		Filename: fmt.Sprintf("bank-soal-cbt-%s.csv", time.Now().Format("20060102-150405")),
+		Filename: fmt.Sprintf("bank-soal-%s.csv", time.Now().Format("20060102-150405")),
 		Content:  []byte(builder.String()),
 		Count:    len(rows),
 	}, nil
@@ -59,7 +59,7 @@ func (s *CbtQuestion) TemplateCSV() (ExportCbtQuestionsCSVResult, error) {
 		return ExportCbtQuestionsCSVResult{}, err
 	}
 	return ExportCbtQuestionsCSVResult{
-		Filename: "template-bank-soal-cbt.csv",
+		Filename: "template-bank-soal.csv",
 		Content:  []byte(builder.String()),
 		Count:    len(records) - 1,
 	}, nil

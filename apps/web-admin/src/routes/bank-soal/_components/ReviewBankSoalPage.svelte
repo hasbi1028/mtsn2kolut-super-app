@@ -11,9 +11,11 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import RichContent from '$lib/components/RichContent.svelte';
 	import { toast } from '$lib/components/ui/sonner';
+	import { canReviewBankSoal, type BankSoalAccessUser } from '$lib/bank-soal/access';
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { htmlToPlainText } from '$lib/utils/html-text';
 
+	type PageData = { user?: BankSoalAccessUser };
 	type OptionItem = { label?: string; text?: string; html?: string; latex?: string; match_label?: string; match_text?: string; match_html?: string; is_distractor?: boolean };
 	type Question = {
 		id: string;
@@ -37,6 +39,7 @@
 	type TimelineItem = { id?: string; action?: string; status?: string; notes?: string; actor_username?: string; created_at?: string };
 	type EventContext = { id: string; title: string; status: string; academic_year_name?: string };
 
+	let { data }: { data?: PageData } = $props();
 	let queuePromise = $state<Promise<QuestionListResponse> | null>(null);
 	let queue = $state<Question[]>([]);
 	let eventContext = $state<EventContext | null>(null);
@@ -50,6 +53,7 @@
 	const requestedQuestionId = page.url.searchParams.get('question_id') ?? '';
 
 	let activeQuestion = $derived(activeDetail ?? queue[activeIndex] ?? null);
+	let canReview = $derived(canReviewBankSoal(data?.user));
 
 	function errorMessage(error: unknown, fallback: string) {
 		return error instanceof Error && error.message.trim() ? error.message : fallback;
@@ -118,6 +122,10 @@
 
 	async function decide(action: 'approve' | 'reject') {
 		if (!activeQuestion) return;
+		if (!canReview) {
+			toast.warning('Aksi reviewer membutuhkan permission Bank Soal review.');
+			return;
+		}
 		const trimmed = notes.trim();
 		if (action === 'reject' && trimmed.length < 8) {
 			toast.warning('Catatan revisi minimal 8 karakter.');
@@ -233,12 +241,21 @@
 							{#if activeQuestion.explanation_html}<div class="rounded-xl border border-border bg-card p-3"><p class="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pembahasan</p><RichContent html={activeQuestion.explanation_html} class="prose prose-sm max-w-none latex-preview" /></div>{/if}
 						</div>
 						<div class="border-t border-border bg-card p-4">
-							<label for="review-notes" class="mb-1 block text-sm font-medium text-foreground">Catatan keputusan</label>
-							<Textarea id="review-notes" rows={3} bind:value={notes} placeholder="Wajib untuk reject, opsional untuk approve." />
-							<p class="mt-1 text-xs text-muted-foreground">{reviewerDecisionHint}</p>
+							{#if canReview}
+								<label for="review-notes" class="mb-1 block text-sm font-medium text-foreground">Catatan keputusan</label>
+								<Textarea id="review-notes" rows={3} bind:value={notes} placeholder="Wajib untuk reject, opsional untuk approve." />
+								<p class="mt-1 text-xs text-muted-foreground">{reviewerDecisionHint}</p>
+							{:else}
+								<div class="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+									<p class="font-semibold">Mode baca antrean review</p>
+									<p class="mt-1 text-xs">Keputusan approve/reject membutuhkan permission reviewer Bank Soal.</p>
+								</div>
+							{/if}
 							<div class="mt-4 flex flex-wrap justify-between gap-2 border-t border-border pt-4">
 								<div class="flex gap-2"><Button variant="outline" onclick={() => move(-1)} disabled={activeIndex === 0}>Sebelumnya</Button><Button variant="outline" onclick={() => move(1)} disabled={activeIndex >= queue.length - 1}>Berikutnya</Button></div>
-								<div class="flex gap-2"><LoadingButton variant="outline" onclick={() => void decide('reject')} loading={busyAction === 'reject'} loadingLabel="Mengirim..." disabled={busyAction !== ''} class="border-destructive/30 text-destructive hover:bg-destructive/10">Minta Revisi</LoadingButton><LoadingButton onclick={() => void decide('approve')} loading={busyAction === 'approve'} loadingLabel="Menyetujui..." disabled={busyAction !== ''} class="bg-success text-background hover:bg-success">Setujui</LoadingButton></div>
+								{#if canReview}
+									<div class="flex gap-2"><LoadingButton variant="outline" onclick={() => void decide('reject')} loading={busyAction === 'reject'} loadingLabel="Mengirim..." disabled={busyAction !== ''} class="border-destructive/30 text-destructive hover:bg-destructive/10">Minta Revisi</LoadingButton><LoadingButton onclick={() => void decide('approve')} loading={busyAction === 'approve'} loadingLabel="Menyetujui..." disabled={busyAction !== ''} class="bg-success text-background hover:bg-success">Setujui</LoadingButton></div>
+								{/if}
 							</div>
 						</div>
 					</article>

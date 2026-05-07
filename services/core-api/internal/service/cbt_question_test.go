@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/domain"
@@ -35,9 +36,12 @@ type fakeQuestionStore struct {
 
 	deleteID          pgtype.UUID
 	deleteCalls       int
+	assets            map[pgtype.UUID]db.CbtQuestionAsset
+	assetErr          error
 	membersByUser     []db.CbtEventMember
 	membersByUsername []db.CbtEventMember
 	auditLogs         []db.CbtQuestionAuditLog
+	auditErr          error
 	auditCalls        int
 	summaryCounts     db.GetCbtQuestionSummaryCountsRow
 	summarySubjects   []db.ListCbtQuestionSummaryBySubjectRow
@@ -98,6 +102,18 @@ func (f *fakeQuestionStore) GetCbtQuestionDetail(ctx context.Context, id pgtype.
 	return f.detail, nil
 }
 
+func (f *fakeQuestionStore) GetCbtQuestionAsset(ctx context.Context, id pgtype.UUID) (db.CbtQuestionAsset, error) {
+	if f.assetErr != nil {
+		return db.CbtQuestionAsset{}, f.assetErr
+	}
+	if f.assets != nil {
+		if asset, ok := f.assets[id]; ok {
+			return asset, nil
+		}
+	}
+	return db.CbtQuestionAsset{}, pgx.ErrNoRows
+}
+
 func (f *fakeQuestionStore) CreateCbtQuestion(ctx context.Context, arg db.CreateCbtQuestionParams) (db.CbtQuestion, error) {
 	f.createParams = arg
 	f.createCalls++
@@ -126,6 +142,9 @@ func (f *fakeQuestionStore) DeleteCbtQuestion(ctx context.Context, id pgtype.UUI
 
 func (f *fakeQuestionStore) CreateCbtQuestionAuditLog(ctx context.Context, arg db.CreateCbtQuestionAuditLogParams) (db.CbtQuestionAuditLog, error) {
 	f.auditCalls++
+	if f.auditErr != nil {
+		return db.CbtQuestionAuditLog{}, f.auditErr
+	}
 	row := db.CbtQuestionAuditLog{QuestionID: arg.QuestionID, ActorUsername: arg.ActorUsername, Action: arg.Action, Note: arg.Note, Metadata: arg.Metadata}
 	f.auditLogs = append(f.auditLogs, row)
 	return row, nil
@@ -133,6 +152,15 @@ func (f *fakeQuestionStore) CreateCbtQuestionAuditLog(ctx context.Context, arg d
 
 func (f *fakeQuestionStore) ListCbtQuestionTimeline(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAuditLog, error) {
 	return f.auditLogs, nil
+}
+
+func mustQuestionUUID(t *testing.T, value string) pgtype.UUID {
+	t.Helper()
+	var id pgtype.UUID
+	if err := id.Scan(value); err != nil {
+		t.Fatalf("scan uuid %q: %v", value, err)
+	}
+	return id
 }
 
 func TestNewCbtQuestionAndReadDelegation(t *testing.T) {
@@ -171,12 +199,16 @@ func TestNewCbtQuestionAndReadDelegation(t *testing.T) {
 }
 
 func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
+	assetID := mustQuestionUUID(t, "11111111-1111-4111-8111-111111111111")
 	store := &fakeQuestionStore{
 		filteredRows: []db.ListCbtQuestionsFilteredRow{{ID: pgtype.UUID{Valid: true}, Code: "Q-1"}},
 		count:        7,
 		createRow: db.CbtQuestion{
 			ID:           pgtype.UUID{Valid: true},
 			QuestionText: "Soal mudah",
+		},
+		assets: map[pgtype.UUID]db.CbtQuestionAsset{
+			assetID: {ID: assetID, UploadedBy: "guru"},
 		},
 	}
 	svc := &CbtQuestion{q: store}
@@ -217,7 +249,7 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 		OptionC:        " C ",
 		OptionD:        " D ",
 		AnswerKey:      " b ",
-		MediaAssetIDs:  []string{"asset-1"},
+		MediaAssetIDs:  []string{"11111111-1111-4111-8111-111111111111"},
 		AuthorUsername: " guru ",
 		Actor:          CbtQuestionActor{Username: "guru", Roles: []string{"guru"}},
 	})
@@ -233,7 +265,7 @@ func TestCbtQuestionFilterCreateAndDeleteDelegation(t *testing.T) {
 	if store.createParams.OptionA != "A" || store.createParams.OptionD != "D" || store.createParams.Version != 1 || store.createParams.AuthorUsername != "guru" {
 		t.Fatalf("Create() params = %+v, want legacy options/version/author", store.createParams)
 	}
-	if string(store.createParams.MediaAssetIds) != `["asset-1"]` {
+	if string(store.createParams.MediaAssetIds) != `["11111111-1111-4111-8111-111111111111"]` {
 		t.Fatalf("Create() media_asset_ids = %s, want asset JSON", string(store.createParams.MediaAssetIds))
 	}
 
@@ -286,6 +318,99 @@ func TestCbtQuestionCreateRejectsDirectApprovalBypass(t *testing.T) {
 	if store.createCalls != 1 {
 		t.Fatalf("Create direct bypass create calls = %d, want only initial valid create", store.createCalls)
 	}
+}
+
+func TestCbtQuestionMediaAssetIDsAreValidated(t *testing.T) {
+	assetID := mustQuestionUUID(t, "22222222-2222-4222-8222-222222222222")
+	questionID := mustQuestionUUID(t, "33333333-3333-4333-8333-333333333333")
+	otherQuestionID := mustQuestionUUID(t, "44444444-4444-4444-8444-444444444444")
+	base := SaveCbtQuestionInput{
+		SubjectID:      pgtype.UUID{Bytes: [16]byte{7}, Valid: true},
+		AuthoringMode:  "advance",
+		QuestionType:   "multiple_choice",
+		QuestionText:   "Soal lengkap",
+		Options:        []QuestionOption{{Label: "A", Text: "A"}, {Label: "B", Text: "B"}, {Label: "C", Text: "C"}, {Label: "D", Text: "D"}},
+		AnswerKey:      "A",
+		Status:         db.CbtQuestionStatusEnumDraft,
+		WorkflowStatus: "draft",
+		Actor:          CbtQuestionActor{Username: "admin", Roles: []string{"admin"}},
+	}
+
+	t.Run("rejects invalid uuid before create", func(t *testing.T) {
+		store := &fakeQuestionStore{createRow: db.CbtQuestion{ID: questionID}}
+		svc := &CbtQuestion{q: store}
+		input := base
+		input.MediaAssetIDs = []string{"asset-1"}
+
+		_, err := svc.Create(context.Background(), input)
+		if !errors.Is(err, domain.ErrBadRequest) {
+			t.Fatalf("Create(invalid asset id) error = %v, want ErrBadRequest", err)
+		}
+		if store.createCalls != 0 {
+			t.Fatalf("Create(invalid asset id) calls = %d, want 0", store.createCalls)
+		}
+	})
+
+	t.Run("rejects missing asset before create", func(t *testing.T) {
+		store := &fakeQuestionStore{createRow: db.CbtQuestion{ID: questionID}}
+		svc := &CbtQuestion{q: store}
+		input := base
+		input.MediaAssetIDs = []string{"22222222-2222-4222-8222-222222222222"}
+
+		_, err := svc.Create(context.Background(), input)
+		if !errors.Is(err, domain.ErrBadRequest) {
+			t.Fatalf("Create(missing asset) error = %v, want ErrBadRequest", err)
+		}
+		if store.createCalls != 0 {
+			t.Fatalf("Create(missing asset) calls = %d, want 0", store.createCalls)
+		}
+	})
+
+	t.Run("rejects asset already bound to another question", func(t *testing.T) {
+		store := &fakeQuestionStore{
+			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "draft"},
+			assets: map[pgtype.UUID]db.CbtQuestionAsset{
+				assetID: {ID: assetID, QuestionID: otherQuestionID, UploadedBy: "guru"},
+			},
+		}
+		svc := &CbtQuestion{q: store}
+		input := base
+		input.ID = questionID
+		input.AuthorUsername = "guru"
+		input.Actor = CbtQuestionActor{Username: "guru", Roles: []string{"guru"}}
+		input.MediaAssetIDs = []string{"22222222-2222-4222-8222-222222222222"}
+
+		_, err := svc.Update(context.Background(), input)
+		if !errors.Is(err, domain.ErrBadRequest) {
+			t.Fatalf("Update(cross question asset) error = %v, want ErrBadRequest", err)
+		}
+		if store.updateCalls != 0 {
+			t.Fatalf("Update(cross question asset) calls = %d, want 0", store.updateCalls)
+		}
+	})
+
+	t.Run("allows asset bound to same question and actor", func(t *testing.T) {
+		store := &fakeQuestionStore{
+			current: db.GetCbtQuestionRow{ID: questionID, AuthorUsername: "guru", Status: db.CbtQuestionStatusEnumDraft, WorkflowStatus: "draft"},
+			assets: map[pgtype.UUID]db.CbtQuestionAsset{
+				assetID: {ID: assetID, QuestionID: questionID, UploadedBy: "guru"},
+			},
+		}
+		svc := &CbtQuestion{q: store}
+		input := base
+		input.ID = questionID
+		input.AuthorUsername = "guru"
+		input.Actor = CbtQuestionActor{Username: "guru", Roles: []string{"guru"}}
+		input.MediaAssetIDs = []string{" 22222222-2222-4222-8222-222222222222 "}
+
+		_, err := svc.Update(context.Background(), input)
+		if err != nil {
+			t.Fatalf("Update(same question asset) error = %v", err)
+		}
+		if store.updateCalls != 1 || string(store.updateParams.MediaAssetIds) != `["22222222-2222-4222-8222-222222222222"]` {
+			t.Fatalf("Update(same question asset) calls/media = %d/%s, want one normalized asset", store.updateCalls, string(store.updateParams.MediaAssetIds))
+		}
+	})
 }
 
 func TestCbtQuestionDeleteWithActorRequiresModifyAccess(t *testing.T) {
@@ -641,7 +766,7 @@ func TestCbtQuestionExportCSVMapsStructuredTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExportCSV() error = %v", err)
 	}
-	if got.Count != 2 || !strings.HasPrefix(got.Filename, "bank-soal-cbt-") {
+	if got.Count != 2 || !strings.HasPrefix(got.Filename, "bank-soal-") {
 		t.Fatalf("ExportCSV() result = %+v, want count and generated filename", got)
 	}
 	if store.listFilterArg.LimitCount != 2000 || store.listFilterArg.WorkflowStatus != "draft" || store.listFilterArg.AuthorUsername != "guru.ipa" {
@@ -693,7 +818,7 @@ func TestCbtQuestionTemplateCSVRoundtripsThroughImport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TemplateCSV() error = %v", err)
 	}
-	if template.Count < 6 || template.Filename != "template-bank-soal-cbt.csv" {
+	if template.Count < 6 || template.Filename != "template-bank-soal.csv" {
 		t.Fatalf("TemplateCSV() result = %+v, want sample rows and stable filename", template)
 	}
 	records, err := csv.NewReader(strings.NewReader(string(template.Content))).ReadAll()
@@ -887,6 +1012,33 @@ func TestCbtQuestionWorkflowActions(t *testing.T) {
 		}
 		if store.updateParams.ApproverUsername != "kepala" || !store.updateParams.ApprovedAt.Valid {
 			t.Fatalf("Publish() approver = %q/%v, want kepala with timestamp", store.updateParams.ApproverUsername, store.updateParams.ApprovedAt)
+		}
+	})
+
+	t.Run("publish allows granular permission without admin role", func(t *testing.T) {
+		approved := current
+		approved.WorkflowStatus = "approved"
+		store := &fakeQuestionStore{current: approved}
+		svc := &CbtQuestion{q: store}
+
+		_, err := svc.Publish(context.Background(), questionID, CbtQuestionActor{Username: "publisher", Permissions: []string{"bank_soal.publish"}})
+		if err != nil {
+			t.Fatalf("Publish(permission) error = %v", err)
+		}
+		if store.updateParams.Status != db.CbtQuestionStatusEnumPublished || store.updateParams.ApproverUsername != "publisher" {
+			t.Fatalf("Publish(permission) params = %+v, want published by publisher", store.updateParams)
+		}
+	})
+
+	t.Run("publish rejects reviewer without publish permission", func(t *testing.T) {
+		approved := current
+		approved.WorkflowStatus = "approved"
+		store := &fakeQuestionStore{current: approved}
+		svc := &CbtQuestion{q: store}
+
+		_, err := svc.Publish(context.Background(), questionID, CbtQuestionActor{Username: "reviewer", Permissions: []string{"bank_soal.review"}})
+		if !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("Publish(reviewer) error = %v, want ErrForbidden", err)
 		}
 	})
 
@@ -1214,6 +1366,48 @@ func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
 			wantErr: "setiap pasangan menjodohkan wajib memiliki kolom kiri dan kanan",
 		},
 		{
+			name: "matching rejects invalid non-empty draft key",
+			input: SaveCbtQuestionInput{
+				SubjectID:     pgtype.UUID{Valid: true},
+				AuthoringMode: "advance",
+				QuestionType:  "matching",
+				QuestionText:  "Cocokkan",
+				Options: []QuestionOption{
+					{Label: "A", Text: "Satu", MatchLabel: "1", MatchText: "One"},
+					{Label: "B", Text: "Dua", MatchLabel: "2", MatchText: "Two"},
+				},
+				AnswerKey:      "A=1;B=9",
+				Status:         db.CbtQuestionStatusEnumDraft,
+				WorkflowStatus: "draft",
+			},
+			wantErr: "answer_key menjodohkan harus sesuai label pasangan",
+		},
+		{
+			name: "matching review requires answer key",
+			input: SaveCbtQuestionInput{
+				SubjectID:      pgtype.UUID{Valid: true},
+				AuthoringMode:  "advance",
+				QuestionType:   "matching",
+				QuestionText:   "Cocokkan",
+				Options:        []QuestionOption{{Label: "A", Text: "Satu", MatchLabel: "1", MatchText: "One"}, {Label: "B", Text: "Dua", MatchLabel: "2", MatchText: "Two"}},
+				WorkflowStatus: "review",
+			},
+			wantErr: "answer_key menjodohkan tidak valid",
+		},
+		{
+			name: "matching rejects duplicated right key",
+			input: SaveCbtQuestionInput{
+				SubjectID:      pgtype.UUID{Valid: true},
+				AuthoringMode:  "advance",
+				QuestionType:   "matching",
+				QuestionText:   "Cocokkan",
+				Options:        []QuestionOption{{Label: "A", Text: "Satu", MatchLabel: "1", MatchText: "One"}, {Label: "B", Text: "Dua", MatchLabel: "2", MatchText: "Two"}},
+				AnswerKey:      "A=1;B=1",
+				WorkflowStatus: "review",
+			},
+			wantErr: "answer_key menjodohkan harus sesuai label pasangan",
+		},
+		{
 			name: "unsupported type",
 			input: SaveCbtQuestionInput{
 				SubjectID:     pgtype.UUID{Valid: true},
@@ -1246,6 +1440,21 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 	}
 	if draft.WorkflowStatus != "draft" || len(draft.Options) != 0 {
 		t.Fatalf("normalizeQuestionInput(draft partial) workflow/options = %q/%d, want draft/0", draft.WorkflowStatus, len(draft.Options))
+	}
+
+	matchingDraft, err := normalizeQuestionInput(SaveCbtQuestionInput{
+		SubjectID:     pgtype.UUID{Valid: true},
+		AuthoringMode: "advance",
+		QuestionType:  "matching",
+		QuestionText:  "Draft menjodohkan",
+		Options:       []QuestionOption{{Label: "A", Text: "Satu"}, {Label: "B", Text: "Dua"}},
+		Status:        db.CbtQuestionStatusEnumDraft,
+	})
+	if err != nil {
+		t.Fatalf("normalizeQuestionInput(matching draft empty key) error = %v", err)
+	}
+	if matchingDraft.AnswerKey != "" {
+		t.Fatalf("normalizeQuestionInput(matching draft empty key) answer = %q, want empty draft key", matchingDraft.AnswerKey)
 	}
 
 	trueFalse, err := normalizeQuestionInput(SaveCbtQuestionInput{

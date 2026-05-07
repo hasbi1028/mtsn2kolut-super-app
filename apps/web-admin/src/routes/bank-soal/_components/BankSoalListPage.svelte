@@ -28,12 +28,14 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
+	import { canImportBankSoal, canManageBankSoalSettings, canReviewBankSoal } from '$lib/bank-soal/access';
 	import { htmlToPlainText } from '$lib/utils/html-text';
 
 	type PageData = {
 		user?: {
 			role?: string;
 			roles?: string[];
+			permissions?: string[];
 		};
 	};
 
@@ -289,6 +291,9 @@
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 	let roles = $derived(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
+	let canImport = $derived(canImportBankSoal(data.user));
+	let canReview = $derived(canReviewBankSoal(data.user));
+	let canSettings = $derived(canManageBankSoalSettings(data.user));
 	let roleLabel = $derived.by(() => {
 		if (roles.includes('admin')) return 'Admin';
 		if (roles.includes('guru')) return 'Guru';
@@ -871,14 +876,18 @@
 					</div>
 				</div>
 				<div class="flex flex-wrap gap-2">
-					<Button href={reviewRouteHref} variant="outline" class="border-white/30 bg-white/10 text-white hover:bg-white/20">
-						<ClipboardCheckIcon class="size-4" />
-						Review
-					</Button>
-					<Button href={importHref} variant="outline" class="border-white/30 bg-white/10 text-white hover:bg-white/20">
-						<UploadIcon class="size-4" />
-						Impor
-					</Button>
+					{#if canReview}
+						<Button href={reviewRouteHref} variant="outline" class="border-white/30 bg-white/10 text-white hover:bg-white/20">
+							<ClipboardCheckIcon class="size-4" />
+							Review
+						</Button>
+					{/if}
+					{#if canImport}
+						<Button href={importHref} variant="outline" class="border-white/30 bg-white/10 text-white hover:bg-white/20">
+							<UploadIcon class="size-4" />
+							Impor
+						</Button>
+					{/if}
 					<Button href={composerHref} class="bg-card text-primary hover:bg-primary/10">
 						<PlusIcon class="size-4" />
 						Soal Baru
@@ -1020,14 +1029,18 @@
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning"><PackageIcon class="size-5" /></span>
 					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Buat paket asesmen</span><span class="block text-xs text-muted-foreground">Gunakan soal terbit di modul Asesmen</span></span>
 				</a>
-				<a href={importHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
-					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground"><UploadIcon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Import dari Word/Excel</span><span class="block text-xs text-muted-foreground">Preview, mapping, lalu konfirmasi</span></span>
-				</a>
-				<a href={reviewRouteHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
-					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-destructive/15 text-destructive"><ClipboardCheckIcon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Review antrean</span><span class="block text-xs text-muted-foreground">Setujui atau kembalikan untuk revisi</span></span>
-				</a>
+				{#if canImport}
+					<a href={importHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
+						<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground"><UploadIcon class="size-5" /></span>
+						<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Import dari Word/Excel</span><span class="block text-xs text-muted-foreground">Preview, mapping, lalu konfirmasi</span></span>
+					</a>
+				{/if}
+				{#if canReview}
+					<a href={reviewRouteHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
+						<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-destructive/15 text-destructive"><ClipboardCheckIcon class="size-5" /></span>
+						<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Review antrean</span><span class="block text-xs text-muted-foreground">Setujui atau kembalikan untuk revisi</span></span>
+					</a>
+				{/if}
 				<a href={analysisHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-800"><BarChart3Icon class="size-5" /></span>
 					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Analisis butir</span><span class="block text-xs text-muted-foreground">Pantau kualitas, HOTS, dan pemakaian soal</span></span>
@@ -1036,10 +1049,12 @@
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary"><Layers3Icon class="size-5" /></span>
 					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Mapel & KD</span><span class="block text-xs text-muted-foreground">Cek coverage metadata dan materi</span></span>
 				</a>
-				<a href={settingsHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
-					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-border text-foreground"><SettingsIcon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Pengaturan & SOP</span><span class="block text-xs text-muted-foreground">Workflow, standar kualitas, dan integrasi</span></span>
-				</a>
+				{#if canSettings}
+					<a href={settingsHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
+						<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-border text-foreground"><SettingsIcon class="size-5" /></span>
+						<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Pengaturan & SOP</span><span class="block text-xs text-muted-foreground">Workflow, standar kualitas, dan integrasi</span></span>
+					</a>
+				{/if}
 			</div>
 		</div>
 	</section>
@@ -1238,10 +1253,12 @@
 								<PlusIcon class="size-4" />
 								Tambah Soal
 							</Button>
-							<Button href={importHref} variant="outline">
-								<UploadIcon class="size-4" />
-								Impor CSV
-							</Button>
+							{#if canImport}
+								<Button href={importHref} variant="outline">
+									<UploadIcon class="size-4" />
+									Impor CSV
+								</Button>
+							{/if}
 						</div>
 					</div>
 				{:else}
