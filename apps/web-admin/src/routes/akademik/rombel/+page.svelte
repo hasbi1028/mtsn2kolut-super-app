@@ -141,7 +141,7 @@
 		<Card.Root>
 			<Card.Header>
 				<Card.Title class="text-base">Daftar Rombel</Card.Title>
-				<Card.Description>Gunakan detail rombel untuk melihat siswa, orang tua, wali kelas, guru mapel, dan jadwal.</Card.Description>
+				<Card.Description>Gunakan detail rombel untuk melihat siswa, orang tua, wali kelas, guru mapel, jadwal, dan menetapkan wali kelas yang masih kosong.</Card.Description>
 			</Card.Header>
 			<Card.Content class="p-0">
 				<div class="overflow-x-auto">
@@ -172,7 +172,10 @@
 										{#if rombel.homeroom_teacher_name}
 											{rombel.homeroom_teacher_name}
 										{:else}
-											<span class="text-muted-foreground">Belum ditetapkan</span>
+											<div class="space-y-0.5">
+												<span class="block text-muted-foreground">Belum ditetapkan</span>
+												<span class="block text-xs text-primary">Atur dari halaman detail</span>
+											</div>
 										{/if}
 									</Table.Cell>
 									<Table.Cell class="text-right tabular-nums">{rombel.total_students}</Table.Cell>
