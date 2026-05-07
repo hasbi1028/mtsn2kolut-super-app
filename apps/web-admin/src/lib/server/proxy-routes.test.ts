@@ -1730,6 +1730,7 @@ describe('api proxy route handlers', () => {
 		const rolesMod = await import('../../routes/api/rbac/roles/+server');
 		const roleMod = await import('../../routes/api/rbac/roles/[code]/+server');
 		const roleStatusMod = await import('../../routes/api/rbac/roles/[code]/status/+server');
+		const rolePermissionMod = await import('../../routes/api/rbac/roles/[code]/permissions/+server');
 		const permissionsMod = await import('../../routes/api/rbac/permissions/+server');
 		const permissionMod = await import('../../routes/api/rbac/permissions/[code]/+server');
 		const permissionStatusMod = await import('../../routes/api/rbac/permissions/[code]/status/+server');
@@ -1752,6 +1753,11 @@ describe('api proxy route handlers', () => {
 		const statusRequest = new Request('http://localhost/api/rbac/roles/operator/status', { method: 'PATCH', body: JSON.stringify(statusBody) });
 		await roleStatusMod.PATCH(createEvent({ params: { code: 'operator' }, request: statusRequest }) as never);
 		expect(proxyPatchMock).toHaveBeenLastCalledWith('/api/rbac/roles/operator/status', statusBody);
+
+		const rolePermissionBody = { permissions: ['bank_soal.read', 'bank_soal.review'] };
+		const rolePermissionRequest = new Request('http://localhost/api/rbac/roles/operator/permissions', { method: 'PUT', body: JSON.stringify(rolePermissionBody) });
+		await rolePermissionMod.PUT(createEvent({ params: { code: 'operator' }, request: rolePermissionRequest }) as never);
+		expect(proxyPutMock).toHaveBeenLastCalledWith('/api/rbac/roles/operator/permissions', rolePermissionBody);
 
 		const permissionBody = { code: 'reports.view', module: 'reports', action: 'view', description: 'Lihat laporan' };
 		const permissionRequest = new Request('http://localhost/api/rbac/permissions', { method: 'POST', body: JSON.stringify(permissionBody) });

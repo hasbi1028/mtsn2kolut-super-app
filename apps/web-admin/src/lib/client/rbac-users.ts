@@ -17,10 +17,15 @@ export type RBACPermission = {
 	is_active?: boolean;
 };
 
+export type RBACRolePermission = {
+	role_code: string;
+	permission_code: string;
+};
+
 export type RBACMatrix = {
 	roles: RBACRole[];
 	permissions: RBACPermission[];
-	role_permissions: Record<string, string[]>;
+	role_permissions: RBACRolePermission[] | Record<string, string[]>;
 };
 
 export type ProfileLinkPayloadInput = {
@@ -85,6 +90,10 @@ export function buildUserRolePayload(roles: string[]) {
 	return { roles: uniqueNonEmpty(roles) };
 }
 
+export function buildRolePermissionPayload(permissions: string[]) {
+	return { permissions: uniqueNonEmpty(permissions) };
+}
+
 export function buildProfileLinkPayload(input: ProfileLinkPayloadInput) {
 	return {
 		employee_id: cleanString(input.employee_id),
@@ -123,6 +132,10 @@ export async function updateRBACRole(code: string, input: RBACRoleInput, fetcher
 
 export async function setRBACRoleActive(code: string, isActive: boolean, fetcher: FetchLike = fetch) {
 	return writeRBAC<unknown>(`/api/rbac/roles/${code}/status`, 'PATCH', { is_active: isActive }, fetcher);
+}
+
+export async function updateRBACRolePermissions(code: string, permissions: string[], fetcher: FetchLike = fetch) {
+	return writeRBAC<unknown>(`/api/rbac/roles/${code}/permissions`, 'PUT', buildRolePermissionPayload(permissions), fetcher);
 }
 
 export async function createRBACPermission(input: RBACPermissionInput, fetcher: FetchLike = fetch) {
