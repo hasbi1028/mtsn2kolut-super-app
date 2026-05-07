@@ -34,9 +34,16 @@ type rbacStore interface {
 	AddRolePermissionByCode(ctx context.Context, arg db.AddRolePermissionByCodeParams) error
 	DeleteUserRbacRoles(ctx context.Context, userID pgtype.UUID) error
 	AddUserRbacRoleByCode(ctx context.Context, arg db.AddUserRbacRoleByCodeParams) error
+	RemoveAllUserRoles(ctx context.Context, userID pgtype.UUID) error
+	SyncLegacyUserRolesFromRbac(ctx context.Context, userID pgtype.UUID) error
+	IncrementUserAuthVersion(ctx context.Context, userID pgtype.UUID) (int32, error)
+	RevokeAllAuthSessionsForUser(ctx context.Context, userID pgtype.UUID) (int64, error)
 	CountActiveAdminsByRbac(ctx context.Context) (int64, error)
 	CountActiveUsersByRbacRole(ctx context.Context, code string) (int64, error)
 	UserHasRbacRole(ctx context.Context, arg db.UserHasRbacRoleParams) (bool, error)
+	ListUserIDsByRoleCode(ctx context.Context, code string) ([]pgtype.UUID, error)
+	ListActiveUserIDsByRoleCodeAnyStatus(ctx context.Context, code string) ([]pgtype.UUID, error)
+	ListActiveUserIDsByPermissionCode(ctx context.Context, code string) ([]pgtype.UUID, error)
 	CreateAuditLog(ctx context.Context, arg db.CreateAuditLogParams) (db.AuditLog, error)
 }
 
@@ -167,8 +174,15 @@ func (s *RBAC) SetRoleActive(ctx context.Context, roleCode string, active bool, 
 		}
 	}
 	return s.withRBACStore(ctx, func(store rbacStore) error {
+		affectedUsers, err := store.ListActiveUserIDsByRoleCodeAnyStatus(ctx, roleCode)
+		if err != nil {
+			return err
+		}
 		updated, err := store.SetRbacRoleActive(ctx, db.SetRbacRoleActiveParams{Code: roleCode, IsActive: active})
 		if err != nil {
+			return err
+		}
+		if err := invalidateUsersForRBACChange(ctx, store, affectedUsers); err != nil {
 			return err
 		}
 		return s.audit(ctx, store, actorID, "RBAC_ROLE_STATUS_UPDATED", "rbac_role", updated.Code, map[string]any{"code": updated.Code, "is_active": updated.IsActive})
@@ -229,8 +243,15 @@ func (s *RBAC) SetPermissionActive(ctx context.Context, code string, active bool
 		}
 	}
 	return s.withRBACStore(ctx, func(store rbacStore) error {
+		affectedUsers, err := store.ListActiveUserIDsByPermissionCode(ctx, code)
+		if err != nil {
+			return err
+		}
 		updated, err := store.SetRbacPermissionActive(ctx, db.SetRbacPermissionActiveParams{Code: code, IsActive: active})
 		if err != nil {
+			return err
+		}
+		if err := invalidateUsersForRBACChange(ctx, store, affectedUsers); err != nil {
 			return err
 		}
 		return s.audit(ctx, store, actorID, "RBAC_PERMISSION_STATUS_UPDATED", "rbac_permission", updated.Code, map[string]any{"code": updated.Code, "is_active": updated.IsActive})
@@ -272,6 +293,10 @@ func (s *RBAC) ReplaceRolePermissions(ctx context.Context, roleCode string, perm
 	}
 
 	return s.withRBACStore(ctx, func(store rbacStore) error {
+		affectedUsers, err := store.ListUserIDsByRoleCode(ctx, roleCode)
+		if err != nil {
+			return err
+		}
 		if err := store.DeleteRolePermissions(ctx, roleCode); err != nil {
 			return err
 		}
@@ -279,6 +304,9 @@ func (s *RBAC) ReplaceRolePermissions(ctx context.Context, roleCode string, perm
 			if err := store.AddRolePermissionByCode(ctx, db.AddRolePermissionByCodeParams{Code: roleCode, Code_2: code}); err != nil {
 				return err
 			}
+		}
+		if err := invalidateUsersForRBACChange(ctx, store, affectedUsers); err != nil {
+			return err
 		}
 		return s.audit(ctx, store, actorID, "RBAC_ROLE_PERMISSIONS_UPDATED", "rbac_role", roleCode, map[string]any{"role": roleCode, "permissions": permissionCodes})
 	})
@@ -300,6 +328,15 @@ func (s *RBAC) ReplaceUserRoles(ctx context.Context, userID pgtype.UUID, roleCod
 			if err := store.AddUserRbacRoleByCode(ctx, db.AddUserRbacRoleByCodeParams{UserID: userID, Code: code}); err != nil {
 				return err
 			}
+		}
+		if err := store.RemoveAllUserRoles(ctx, userID); err != nil {
+			return err
+		}
+		if err := store.SyncLegacyUserRolesFromRbac(ctx, userID); err != nil {
+			return err
+		}
+		if err := invalidateUsersForRBACChange(ctx, store, []pgtype.UUID{userID}); err != nil {
+			return err
 		}
 		return s.audit(ctx, store, actorID, "USER_ROLES_UPDATED", "user", uuidEntityID(userID), map[string]any{"user_id": uuidEntityID(userID), "roles": roleCodes})
 	})
@@ -386,6 +423,27 @@ func (s *RBAC) audit(ctx context.Context, store rbacStore, actorID pgtype.UUID, 
 	}
 	_, err = store.CreateAuditLog(ctx, db.CreateAuditLogParams{UserID: actorID, Action: action, EntityType: entityType, EntityID: entityID, Metadata: payload})
 	return err
+}
+
+func invalidateUsersForRBACChange(ctx context.Context, store rbacStore, userIDs []pgtype.UUID) error {
+	seen := map[string]struct{}{}
+	for _, userID := range userIDs {
+		key := uuidEntityID(userID)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if _, err := store.IncrementUserAuthVersion(ctx, userID); err != nil {
+			return err
+		}
+		if _, err := store.RevokeAllAuthSessionsForUser(ctx, userID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func normalizeRoleInput(input RBACRoleInput, includeCode bool) RBACRoleInput {

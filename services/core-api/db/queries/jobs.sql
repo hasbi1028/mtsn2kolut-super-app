@@ -95,6 +95,15 @@ WHERE id = $1
   AND status = 'running'
   AND claimed_by = $2;
 
+-- name: GetRunningJobForWorker :one
+SELECT id, employee_id, run_type, status, error_message, claimed_by, claimed_at,
+       attempts, max_attempts, next_retry_at, created_at, updated_at
+FROM jobs
+WHERE id = $1
+  AND status = 'running'
+  AND claimed_by = $2
+FOR UPDATE;
+
 -- name: FailJob :execrows
 UPDATE jobs
 SET status        = 'failed',

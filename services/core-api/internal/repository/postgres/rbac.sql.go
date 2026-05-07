@@ -272,6 +272,69 @@ func (q *Queries) GetUserRoleCodesFromRbac(ctx context.Context, userID pgtype.UU
 	return items, nil
 }
 
+const listActiveUserIDsByPermissionCode = `-- name: ListActiveUserIDsByPermissionCode :many
+SELECT DISTINCT ur.user_id
+FROM rbac_user_roles ur
+JOIN rbac_roles r ON r.id = ur.role_id
+JOIN rbac_role_permissions rp ON rp.role_id = r.id
+JOIN rbac_permissions p ON p.id = rp.permission_id
+JOIN users u ON u.id = ur.user_id
+WHERE p.code = $1
+  AND r.is_active = TRUE
+  AND u.is_active = TRUE
+ORDER BY ur.user_id
+`
+
+func (q *Queries) ListActiveUserIDsByPermissionCode(ctx context.Context, code string) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listActiveUserIDsByPermissionCode, code)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var user_id pgtype.UUID
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listActiveUserIDsByRoleCodeAnyStatus = `-- name: ListActiveUserIDsByRoleCodeAnyStatus :many
+SELECT ur.user_id
+FROM rbac_user_roles ur
+JOIN rbac_roles r ON r.id = ur.role_id
+JOIN users u ON u.id = ur.user_id
+WHERE r.code = $1
+  AND u.is_active = TRUE
+ORDER BY ur.user_id
+`
+
+func (q *Queries) ListActiveUserIDsByRoleCodeAnyStatus(ctx context.Context, code string) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listActiveUserIDsByRoleCodeAnyStatus, code)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var user_id pgtype.UUID
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRbacPermissions = `-- name: ListRbacPermissions :many
 SELECT id, code, module, action, description, is_active, created_at, updated_at
 FROM rbac_permissions

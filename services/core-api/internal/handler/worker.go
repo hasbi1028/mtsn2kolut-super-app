@@ -19,8 +19,8 @@ import (
 
 type pusakaWorkerJobService interface {
 	Claim(ctx context.Context, workerID string) (db.ClaimJobRow, error)
-	Get(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error)
 	Complete(ctx context.Context, id pgtype.UUID, workerID string) error
+	CompleteWithAttendance(ctx context.Context, id pgtype.UUID, workerID string, attendance *service.PusakaJobAttendanceInput) error
 	Fail(ctx context.Context, id pgtype.UUID, workerID string, errorMessage string, retryAfter pgtype.Text) error
 	Stats(ctx context.Context) (db.GetJobStatsRow, error)
 }
@@ -80,31 +80,21 @@ func (h *PusakaWorker) Complete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var attendance *service.PusakaJobAttendanceInput
 	if body.Tanggal != "" {
-		// Need employee_id from job for attendance upsert
-		job, err := h.jobs.Get(r.Context(), id)
-		if err != nil {
-			api.Internal(w, err)
-			return
-		}
 		var tanggal pgtype.Date
 		if err := tanggal.Scan(body.Tanggal); err != nil {
 			api.BadRequest(w, "invalid tanggal")
 			return
 		}
-		if _, err := h.att.Upsert(r.Context(), db.UpsertAttendanceParams{
-			EmployeeID:  job.EmployeeID,
-			Tanggal:     tanggal,
-			JamMasuk:    body.JamMasuk,
-			JamPulang:   body.JamPulang,
-			SourceJobID: id,
-		}); err != nil {
-			api.Internal(w, err)
-			return
+		attendance = &service.PusakaJobAttendanceInput{
+			Tanggal:   tanggal,
+			JamMasuk:  body.JamMasuk,
+			JamPulang: body.JamPulang,
 		}
 	}
 
-	if err := h.jobs.Complete(r.Context(), id, workerID); err != nil {
+	if err := h.jobs.CompleteWithAttendance(r.Context(), id, workerID, attendance); err != nil {
 		if errors.Is(err, domain.ErrConflict) {
 			api.Conflict(w, "job is not running for this worker")
 			return

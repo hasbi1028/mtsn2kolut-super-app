@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mtsn2kolut-super-app/backend/internal/domain"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -15,7 +16,8 @@ import (
 const defaultRunningJobStaleAfter = 30 * time.Minute
 
 type PusakaJob struct {
-	q jobStore
+	q  jobStore
+	tx pusakaJobTxStarter
 }
 
 type jobStore interface {
@@ -35,7 +37,30 @@ type jobStore interface {
 	CancelAllJobs(ctx context.Context) (int64, error)
 }
 
+type pusakaJobCompletionStore interface {
+	jobStore
+	GetRunningJobForWorker(ctx context.Context, arg db.GetRunningJobForWorkerParams) (db.GetRunningJobForWorkerRow, error)
+	UpsertAttendance(ctx context.Context, arg db.UpsertAttendanceParams) (db.AttendanceRecord, error)
+}
+
+type pusakaJobTxStarter interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+type PusakaJobAttendanceInput struct {
+	Tanggal   pgtype.Date
+	JamMasuk  string
+	JamPulang string
+}
+
 func NewPusakaJob(q *db.Queries) *PusakaJob { return &PusakaJob{q: q} }
+
+func NewPusakaJobWithPool(pool *pgxpool.Pool) *PusakaJob {
+	if pool == nil {
+		return &PusakaJob{q: db.New(nil)}
+	}
+	return &PusakaJob{q: db.New(pool), tx: pool}
+}
 
 func (s *PusakaJob) List(ctx context.Context, status string, limit, offset int32) ([]db.ListJobsRow, int64, error) {
 	if status != "" {
@@ -114,13 +139,47 @@ func (s *PusakaJob) Complete(ctx context.Context, id pgtype.UUID, workerID strin
 		return err
 	}
 	if affected == 0 {
-		job, err := s.q.GetJob(ctx, id)
-		if err == nil && job.Status == db.JobStatusEnumSuccess {
-			return nil
-		}
-		return domain.ErrConflict
+		return completeJobConflict(ctx, s.q, id)
 	}
 	return nil
+}
+
+func (s *PusakaJob) CompleteWithAttendance(ctx context.Context, id pgtype.UUID, workerID string, attendance *PusakaJobAttendanceInput) error {
+	if attendance == nil {
+		return s.Complete(ctx, id, workerID)
+	}
+
+	return s.withCompletionStore(ctx, func(store pusakaJobCompletionStore) error {
+		job, err := store.GetRunningJobForWorker(ctx, db.GetRunningJobForWorkerParams{
+			ID:        id,
+			ClaimedBy: workerID,
+		})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return completeJobConflict(ctx, store, id)
+			}
+			return err
+		}
+
+		if _, err := store.UpsertAttendance(ctx, db.UpsertAttendanceParams{
+			EmployeeID:  job.EmployeeID,
+			Tanggal:     attendance.Tanggal,
+			JamMasuk:    attendance.JamMasuk,
+			JamPulang:   attendance.JamPulang,
+			SourceJobID: id,
+		}); err != nil {
+			return err
+		}
+
+		affected, err := store.CompleteJob(ctx, db.CompleteJobParams{ID: id, ClaimedBy: workerID})
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return domain.ErrConflict
+		}
+		return nil
+	})
 }
 
 func (s *PusakaJob) Fail(ctx context.Context, id pgtype.UUID, workerID string, errMsg string, retryAfterSecs pgtype.Text) error {
@@ -141,6 +200,33 @@ func (s *PusakaJob) Fail(ctx context.Context, id pgtype.UUID, workerID string, e
 		return domain.ErrConflict
 	}
 	return nil
+}
+
+func (s *PusakaJob) withCompletionStore(ctx context.Context, fn func(pusakaJobCompletionStore) error) error {
+	if s.tx == nil {
+		store, ok := s.q.(pusakaJobCompletionStore)
+		if !ok {
+			return errors.New("job store does not support attendance completion")
+		}
+		return fn(store)
+	}
+	tx, err := s.tx.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err := fn(db.New(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func completeJobConflict(ctx context.Context, store jobStore, id pgtype.UUID) error {
+	job, err := store.GetJob(ctx, id)
+	if err == nil && job.Status == db.JobStatusEnumSuccess {
+		return nil
+	}
+	return domain.ErrConflict
 }
 
 func (s *PusakaJob) Get(ctx context.Context, id pgtype.UUID) (db.GetJobRow, error) {

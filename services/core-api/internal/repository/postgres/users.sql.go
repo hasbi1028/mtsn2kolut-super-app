@@ -172,7 +172,17 @@ SELECT
     u.is_active,
     u.last_login_at,
     u.created_at,
-    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+    COALESCE(
+      (
+        SELECT json_agg(r.code ORDER BY r.code)
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id
+          AND r.is_active = TRUE
+      ),
+      (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id),
+      '[]'::json
+    ) as roles
 FROM users u
 LEFT JOIN employees e ON e.id = u.employee_id
 LEFT JOIN students s ON s.id = u.student_id
@@ -197,7 +207,7 @@ type GetUserAccountSummaryRow struct {
 	IsActive       bool               `json:"is_active"`
 	LastLoginAt    pgtype.Timestamptz `json:"last_login_at"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	Roles          []byte             `json:"roles"`
+	Roles          interface{}        `json:"roles"`
 }
 
 func (q *Queries) GetUserAccountSummary(ctx context.Context, id pgtype.UUID) (GetUserAccountSummaryRow, error) {
@@ -230,7 +240,17 @@ SELECT
     u.display_name,
     u.employee_id, u.student_id, u.parent_id,
     u.is_active, u.auth_version, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
-    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+    COALESCE(
+      (
+        SELECT json_agg(r.code ORDER BY r.code)
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id
+          AND r.is_active = TRUE
+      ),
+      (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id),
+      '[]'::json
+    ) as roles
 FROM users u
 WHERE u.id = $1
   AND u.deleted_at IS NULL
@@ -250,7 +270,7 @@ type GetUserByIDRow struct {
 	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	Roles        []byte             `json:"roles"`
+	Roles        interface{}        `json:"roles"`
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDRow, error) {
@@ -281,7 +301,17 @@ SELECT
     u.display_name,
     u.employee_id, u.student_id, u.parent_id,
     u.is_active, u.auth_version, u.last_login_at, u.deleted_at, u.created_at, u.updated_at,
-    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+    COALESCE(
+      (
+        SELECT json_agg(r.code ORDER BY r.code)
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id
+          AND r.is_active = TRUE
+      ),
+      (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id),
+      '[]'::json
+    ) as roles
 FROM users u
 WHERE u.username = $1
   AND u.deleted_at IS NULL
@@ -301,7 +331,7 @@ type GetUserByUsernameRow struct {
 	DeletedAt    pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	Roles        []byte             `json:"roles"`
+	Roles        interface{}        `json:"roles"`
 }
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUserByUsernameRow, error) {
@@ -710,7 +740,17 @@ SELECT
     u.employee_id, u.student_id, u.parent_id,
     COALESCE(e.nama, s.nama, p.nama, '') AS profile_nama,
     u.is_active, u.last_login_at, u.deleted_at, u.created_at,
-    (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id) as roles
+    COALESCE(
+      (
+        SELECT json_agg(r.code ORDER BY r.code)
+        FROM rbac_user_roles ur
+        JOIN rbac_roles r ON r.id = ur.role_id
+        WHERE ur.user_id = u.id
+          AND r.is_active = TRUE
+      ),
+      (SELECT json_agg(role) FROM user_account_roles WHERE user_id = u.id),
+      '[]'::json
+    ) as roles
 FROM users u
 LEFT JOIN employees e ON e.id = u.employee_id
 LEFT JOIN students s ON s.id = u.student_id
@@ -731,7 +771,7 @@ type ListUsersRow struct {
 	LastLoginAt pgtype.Timestamptz `json:"last_login_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	Roles       []byte             `json:"roles"`
+	Roles       interface{}        `json:"roles"`
 }
 
 func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
@@ -931,6 +971,25 @@ WHERE id = $1
 
 func (q *Queries) SoftDeleteUser(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, softDeleteUser, id)
+	return err
+}
+
+const syncLegacyUserRolesFromRbac = `-- name: SyncLegacyUserRolesFromRbac :exec
+WITH legacy_roles AS (
+  SELECT r.code::user_role AS role
+  FROM rbac_user_roles ur
+  JOIN rbac_roles r ON r.id = ur.role_id
+  WHERE ur.user_id = $1
+    AND r.code IN ('admin', 'guru', 'staf', 'kesiswaan', 'siswa', 'ortu')
+)
+INSERT INTO user_account_roles (user_id, role)
+SELECT $1, role
+FROM legacy_roles
+ON CONFLICT DO NOTHING
+`
+
+func (q *Queries) SyncLegacyUserRolesFromRbac(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, syncLegacyUserRolesFromRbac, userID)
 	return err
 }
 

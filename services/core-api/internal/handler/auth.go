@@ -645,15 +645,11 @@ func accountAvatarUploadAllowed(upload validatedUpload) bool {
 }
 
 func authAccountResponseFromRow(row db.GetUserAccountSummaryRow) authAccountResponse {
-	roles := make([]string, 0)
-	if len(row.Roles) > 0 {
-		_ = json.Unmarshal(row.Roles, &roles)
-	}
 	return authAccountResponse{
 		ID:          pgUUIDString(row.ID),
 		Username:    row.Username,
 		DisplayName: row.DisplayName,
-		Roles:       roles,
+		Roles:       stringSliceFromJSONValue(row.Roles),
 		ProfileType: row.ProfileType,
 		ProfileNama: row.ProfileNama,
 		PhotoURL:    row.PhotoUrl,
@@ -671,6 +667,30 @@ func authAccountResponseFromRow(row db.GetUserAccountSummaryRow) authAccountResp
 		LastLoginAt: timestamptzRFC3339(row.LastLoginAt),
 		CreatedAt:   timestamptzRFC3339(row.CreatedAt),
 	}
+}
+
+func stringSliceFromJSONValue(value any) []string {
+	out := make([]string, 0)
+	var payload []byte
+	switch v := value.(type) {
+	case nil:
+		return out
+	case []byte:
+		payload = v
+	case string:
+		payload = []byte(v)
+	default:
+		var err error
+		payload, err = json.Marshal(v)
+		if err != nil {
+			return out
+		}
+	}
+	if len(payload) == 0 {
+		return out
+	}
+	_ = json.Unmarshal(payload, &out)
+	return out
 }
 
 func authAccountChangeHistoryResponses(items []service.AccountChangeHistoryItem) []authAccountChangeHistoryResponse {

@@ -43,6 +43,14 @@ func hasAnyRole(r *http.Request, allowed ...string) bool {
 	return mw.HasAnyRole(claims, allowed...)
 }
 
+func hasAnyPermission(r *http.Request, allowed ...string) bool {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		return false
+	}
+	return mw.HasAnyPermission(claims, allowed...)
+}
+
 func cbtAuditAuthoringEvent(audit cbtAuthoringAuditWriter, ctx context.Context, action, entityType, entityID string, extra map[string]any) {
 	if audit == nil {
 		return

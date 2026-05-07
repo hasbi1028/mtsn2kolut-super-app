@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	mw "mtsn2kolut-super-app/backend/internal/middleware"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
 )
@@ -35,7 +36,7 @@ type RBAC struct {
 func NewRBAC(svc RBACService) *RBAC { return &RBAC{svc: svc} }
 
 func (h *RBAC) ListMatrix(w http.ResponseWriter, r *http.Request) {
-	if !adminAccessAllowed(r) {
+	if !rbacAccessAllowed(r, "roles.read", "roles.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -48,7 +49,7 @@ func (h *RBAC) ListMatrix(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RBAC) ListRoles(w http.ResponseWriter, r *http.Request) {
-	if !adminAccessAllowed(r) {
+	if !rbacAccessAllowed(r, "roles.read", "roles.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -61,7 +62,7 @@ func (h *RBAC) ListRoles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RBAC) ListPermissions(w http.ResponseWriter, r *http.Request) {
-	if !adminAccessAllowed(r) {
+	if !rbacAccessAllowed(r, "roles.read", "roles.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -74,7 +75,7 @@ func (h *RBAC) ListPermissions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RBAC) CreateRole(w http.ResponseWriter, r *http.Request) {
-	if !adminAccessAllowed(r) {
+	if !rbacAccessAllowed(r, "roles.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -97,7 +98,7 @@ func (h *RBAC) CreateRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RBAC) UpdateRole(w http.ResponseWriter, r *http.Request) {
-	if !adminAccessAllowed(r) {
+	if !rbacAccessAllowed(r, "roles.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -129,7 +130,7 @@ type updateRBACStatusRequest struct {
 }
 
 func (h *RBAC) SetRoleStatus(w http.ResponseWriter, r *http.Request) {
-	if !adminAccessAllowed(r) {
+	if !rbacAccessAllowed(r, "roles.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -156,7 +157,7 @@ func (h *RBAC) SetRoleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RBAC) CreatePermission(w http.ResponseWriter, r *http.Request) {
-	if !adminAccessAllowed(r) {
+	if !rbacAccessAllowed(r, "roles.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -179,7 +180,7 @@ func (h *RBAC) CreatePermission(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RBAC) UpdatePermission(w http.ResponseWriter, r *http.Request) {
-	if !adminAccessAllowed(r) {
+	if !rbacAccessAllowed(r, "roles.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -207,7 +208,7 @@ func (h *RBAC) UpdatePermission(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RBAC) SetPermissionStatus(w http.ResponseWriter, r *http.Request) {
-	if !adminAccessAllowed(r) {
+	if !rbacAccessAllowed(r, "roles.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -238,7 +239,7 @@ type updateRolePermissionsRequest struct {
 }
 
 func (h *RBAC) UpdateRolePermissions(w http.ResponseWriter, r *http.Request) {
-	if !adminAccessAllowed(r) {
+	if !rbacAccessAllowed(r, "roles.manage") {
 		api.Forbidden(w)
 		return
 	}
@@ -273,7 +274,7 @@ type updateUserRolesRequest struct {
 }
 
 func (h *RBAC) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
-	if !adminAccessAllowed(r) {
+	if !rbacAccessAllowed(r, "users.manage_roles") {
 		api.Forbidden(w)
 		return
 	}
@@ -301,6 +302,14 @@ func (h *RBAC) UpdateUserRoles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, map[string]any{"ok": true})
+}
+
+func rbacAccessAllowed(r *http.Request, permissions ...string) bool {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		return false
+	}
+	return mw.HasAnyRole(claims, "admin") || mw.HasAnyPermission(claims, permissions...)
 }
 
 func currentActorUUID(r *http.Request) (pgtype.UUID, error) {

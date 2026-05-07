@@ -41,11 +41,11 @@ func (h *CbtQuestion) BulkWorkflowAction(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	action := strings.TrimSpace(body.Action)
-	if action == "publish" && !hasAnyRole(r, "admin") {
+	if action == "publish" && !hasAnyPermission(r, "bank_soal.publish") && !hasAnyRole(r, "admin") {
 		api.Forbidden(w)
 		return
 	}
-	if (action == "approve" || action == "reject") && !hasAnyRole(r, "admin", "guru") {
+	if (action == "approve" || action == "reject") && !hasAnyPermission(r, "bank_soal.review") && !hasAnyRole(r, "admin", "guru") {
 		api.Forbidden(w)
 		return
 	}
@@ -83,7 +83,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 	actor := cbtQuestionActorFromRequest(r)
 	switch strings.TrimSpace(body.Action) {
 	case "submit_review":
-		if !hasAnyRole(r, "admin", "guru") {
+		if !hasAnyPermission(r, "bank_soal.update", "bank_soal.review") && !hasAnyRole(r, "admin", "guru") {
 			api.Forbidden(w)
 			return
 		}
@@ -101,7 +101,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		})
 		api.OK(w, serializeQuestionModel(row))
 	case "approve":
-		if !hasAnyRole(r, "admin", "guru") {
+		if !hasAnyPermission(r, "bank_soal.review") && !hasAnyRole(r, "admin", "guru") {
 			api.Forbidden(w)
 			return
 		}
@@ -120,7 +120,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		})
 		api.OK(w, serializeQuestionModel(row))
 	case "reject":
-		if !hasAnyRole(r, "admin", "guru") {
+		if !hasAnyPermission(r, "bank_soal.review") && !hasAnyRole(r, "admin", "guru") {
 			api.Forbidden(w)
 			return
 		}
@@ -139,7 +139,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		})
 		api.OK(w, serializeQuestionModel(row))
 	case "publish":
-		if !hasAnyRole(r, "admin") {
+		if !hasAnyPermission(r, "bank_soal.publish") && !hasAnyRole(r, "admin") {
 			api.Forbidden(w)
 			return
 		}
@@ -153,7 +153,7 @@ func (h *CbtQuestion) WorkflowAction(w http.ResponseWriter, r *http.Request) {
 		})
 		api.OK(w, serializeQuestionModel(row))
 	case "archive":
-		if !hasAnyRole(r, "admin") {
+		if !hasAnyPermission(r, "bank_soal.publish") && !hasAnyRole(r, "admin") {
 			api.Forbidden(w)
 			return
 		}

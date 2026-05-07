@@ -21,6 +21,8 @@ type fakeRBACStore struct {
 	activeAdmins      int64
 	activeUsersByRole map[string]int64
 	userHasRole       bool
+	usersByRole       map[string][]pgtype.UUID
+	usersByPermission map[string][]pgtype.UUID
 
 	listRolesErr           error
 	listPermissionsErr     error
@@ -32,6 +34,10 @@ type fakeRBACStore struct {
 	addRolePermErr         error
 	deleteUserRolesErr     error
 	addUserRoleErr         error
+	removeLegacyRolesErr   error
+	syncLegacyRolesErr     error
+	incrementVersionErr    error
+	revokeSessionsErr      error
 	countAdminsErr         error
 	userHasRoleErr         error
 	createRoleErr          error
@@ -44,7 +50,11 @@ type fakeRBACStore struct {
 	deletedRolePerms     []string
 	addedRolePerms       []db.AddRolePermissionByCodeParams
 	deletedUserRoles     []pgtype.UUID
+	deletedLegacyRoles   []pgtype.UUID
+	syncedLegacyRoles    []pgtype.UUID
 	addedUserRoles       []db.AddUserRbacRoleByCodeParams
+	versionedUsers       []pgtype.UUID
+	revokedUsers         []pgtype.UUID
 	createdRoles         []db.CreateRbacRoleParams
 	updatedRoles         []db.UpdateRbacRoleParams
 	setRoleActiveParams  []db.SetRbacRoleActiveParams
@@ -134,6 +144,22 @@ func (f *fakeRBACStore) AddUserRbacRoleByCode(ctx context.Context, arg db.AddUse
 	f.addedUserRoles = append(f.addedUserRoles, arg)
 	return f.addUserRoleErr
 }
+func (f *fakeRBACStore) RemoveAllUserRoles(ctx context.Context, userID pgtype.UUID) error {
+	f.deletedLegacyRoles = append(f.deletedLegacyRoles, userID)
+	return f.removeLegacyRolesErr
+}
+func (f *fakeRBACStore) SyncLegacyUserRolesFromRbac(ctx context.Context, userID pgtype.UUID) error {
+	f.syncedLegacyRoles = append(f.syncedLegacyRoles, userID)
+	return f.syncLegacyRolesErr
+}
+func (f *fakeRBACStore) IncrementUserAuthVersion(ctx context.Context, userID pgtype.UUID) (int32, error) {
+	f.versionedUsers = append(f.versionedUsers, userID)
+	return 1, f.incrementVersionErr
+}
+func (f *fakeRBACStore) RevokeAllAuthSessionsForUser(ctx context.Context, userID pgtype.UUID) (int64, error) {
+	f.revokedUsers = append(f.revokedUsers, userID)
+	return 1, f.revokeSessionsErr
+}
 func (f *fakeRBACStore) CountActiveAdminsByRbac(ctx context.Context) (int64, error) {
 	return f.activeAdmins, f.countAdminsErr
 }
@@ -145,6 +171,15 @@ func (f *fakeRBACStore) CountActiveUsersByRbacRole(ctx context.Context, code str
 }
 func (f *fakeRBACStore) UserHasRbacRole(ctx context.Context, arg db.UserHasRbacRoleParams) (bool, error) {
 	return f.userHasRole, f.userHasRoleErr
+}
+func (f *fakeRBACStore) ListUserIDsByRoleCode(ctx context.Context, code string) ([]pgtype.UUID, error) {
+	return f.usersByRole[code], nil
+}
+func (f *fakeRBACStore) ListActiveUserIDsByRoleCodeAnyStatus(ctx context.Context, code string) ([]pgtype.UUID, error) {
+	return f.usersByRole[code], nil
+}
+func (f *fakeRBACStore) ListActiveUserIDsByPermissionCode(ctx context.Context, code string) ([]pgtype.UUID, error) {
+	return f.usersByPermission[code], nil
 }
 func (f *fakeRBACStore) CreateAuditLog(ctx context.Context, arg db.CreateAuditLogParams) (db.AuditLog, error) {
 	f.auditActions = append(f.auditActions, arg.Action)
@@ -216,8 +251,14 @@ func TestRBACReplaceUserRolesSucceedsAndAudits(t *testing.T) {
 	if len(store.deletedUserRoles) != 1 || store.deletedUserRoles[0] != userID {
 		t.Fatalf("deleted user roles = %v, want target user", store.deletedUserRoles)
 	}
+	if len(store.deletedLegacyRoles) != 1 || store.deletedLegacyRoles[0] != userID || len(store.syncedLegacyRoles) != 1 || store.syncedLegacyRoles[0] != userID {
+		t.Fatalf("legacy role sync calls = deleted %v synced %v, want target user", store.deletedLegacyRoles, store.syncedLegacyRoles)
+	}
 	if got := len(store.addedUserRoles); got != 2 {
 		t.Fatalf("added user roles len = %d, want de-duplicated 2: %+v", got, store.addedUserRoles)
+	}
+	if len(store.versionedUsers) != 1 || store.versionedUsers[0] != userID || len(store.revokedUsers) != 1 || store.revokedUsers[0] != userID {
+		t.Fatalf("token invalidation calls = versioned %v revoked %v, want target user", store.versionedUsers, store.revokedUsers)
 	}
 	if !reflect.DeepEqual(store.auditActions, []string{"USER_ROLES_UPDATED"}) {
 		t.Fatalf("audit actions = %v, want USER_ROLES_UPDATED", store.auditActions)
@@ -227,9 +268,10 @@ func TestRBACReplaceUserRolesSucceedsAndAudits(t *testing.T) {
 func TestRBACReplaceRolePermissionsProtectsCriticalAdminPermissions(t *testing.T) {
 	actorID := rbacTestUUID(15)
 	store := &fakeRBACStore{
-		roles:        []db.RbacRole{{Code: "admin", IsActive: true}, {Code: "guru", IsActive: true}},
-		permissions:  []db.RbacPermission{{Code: "roles.manage", IsActive: true}, {Code: "users.manage_roles", IsActive: true}, {Code: "users.read", IsActive: true}},
+		roles:       []db.RbacRole{{Code: "admin", IsActive: true}, {Code: "guru", IsActive: true}},
+		permissions: []db.RbacPermission{{Code: "roles.manage", IsActive: true}, {Code: "users.manage_roles", IsActive: true}, {Code: "users.read", IsActive: true}},
 		activeAdmins: 1,
+		usersByRole: map[string][]pgtype.UUID{"guru": {rbacTestUUID(16)}},
 	}
 	svc := &RBAC{q: store}
 
@@ -241,6 +283,9 @@ func TestRBACReplaceRolePermissionsProtectsCriticalAdminPermissions(t *testing.T
 	}
 	if len(store.deletedRolePerms) != 1 || store.deletedRolePerms[0] != "guru" || len(store.addedRolePerms) != 1 {
 		t.Fatalf("role permission mutations = deleted %v added %v", store.deletedRolePerms, store.addedRolePerms)
+	}
+	if len(store.versionedUsers) != 1 || store.versionedUsers[0] != rbacTestUUID(16) || len(store.revokedUsers) != 1 || store.revokedUsers[0] != rbacTestUUID(16) {
+		t.Fatalf("role permission invalidation = versioned %v revoked %v, want affected guru user", store.versionedUsers, store.revokedUsers)
 	}
 }
 
@@ -311,8 +356,9 @@ func TestRBACCreateAndUpdatePermissionAudits(t *testing.T) {
 func TestRBACSetPermissionActiveProtectsCriticalPermissions(t *testing.T) {
 	actorID := rbacTestUUID(23)
 	store := &fakeRBACStore{
-		permissions:  []db.RbacPermission{{Code: "roles.manage", IsActive: true}, {Code: "reports.view", IsActive: true}},
-		activeAdmins: 1,
+		permissions:       []db.RbacPermission{{Code: "roles.manage", IsActive: true}, {Code: "reports.view", IsActive: true}},
+		activeAdmins:      1,
+		usersByPermission: map[string][]pgtype.UUID{"reports.view": {rbacTestUUID(24)}},
 	}
 	svc := &RBAC{q: store}
 
@@ -324,5 +370,8 @@ func TestRBACSetPermissionActiveProtectsCriticalPermissions(t *testing.T) {
 	}
 	if !reflect.DeepEqual(store.auditActions, []string{"RBAC_PERMISSION_STATUS_UPDATED"}) {
 		t.Fatalf("audit actions = %v, want permission status audit", store.auditActions)
+	}
+	if len(store.versionedUsers) != 1 || store.versionedUsers[0] != rbacTestUUID(24) || len(store.revokedUsers) != 1 || store.revokedUsers[0] != rbacTestUUID(24) {
+		t.Fatalf("permission invalidation = versioned %v revoked %v, want affected permission user", store.versionedUsers, store.revokedUsers)
 	}
 }

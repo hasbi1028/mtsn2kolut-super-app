@@ -402,6 +402,32 @@ func TestClassJournalOpenSessionFromTimetableSlotRejectsTeacherMismatch(t *testi
 	}
 }
 
+func TestClassJournalOpenSessionFromTimetableSlotReturnsAttendanceSeedError(t *testing.T) {
+	classID := documentCycleTestUUID(98)
+	slotID := documentCycleTestUUID(99)
+	assignmentID := documentCycleTestUUID(100)
+	sessionID := documentCycleTestUUID(101)
+	teacherID := documentCycleTestUUID(102)
+	studentID := documentCycleTestUUID(103)
+	expectedErr := errors.New("attendance seed failed")
+	store := &fakeClassJournalStore{
+		sessionByDateErr: pgx.ErrNoRows,
+		timetableRow:     db.GetRombelTimetableSlotRow{ID: slotID, ClassID: classID, AssignmentID: assignmentID, TeacherEmployeeID: teacherID},
+		createRow:        db.ClassJournalSession{ID: sessionID, AssignmentID: assignmentID},
+		studentsRows:     []db.ListActiveStudentsByClassIDRow{{ID: studentID, Nama: "Siswa A"}},
+		upsertErr:        expectedErr,
+	}
+	svc := &ClassJournal{q: store}
+
+	_, err := svc.OpenSessionFromTimetableSlot(context.Background(), classID, slotID, documentCycleTestDate(2026, 5, 9), "Materi", "", "", true, teacherID)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("OpenSessionFromTimetableSlot() error = %v, want %v", err, expectedErr)
+	}
+	if len(store.upsertArgs) != 1 || store.upsertArgs[0].SessionID != sessionID || store.upsertArgs[0].StudentID != studentID {
+		t.Fatalf("attendance seed args = %+v, want attempted seed before returning error", store.upsertArgs)
+	}
+}
+
 func TestClassJournalUpdateDeleteAndBulkUpsert(t *testing.T) {
 	teacherID := documentCycleTestUUID(59)
 	sessionID := documentCycleTestUUID(60)
@@ -567,6 +593,16 @@ func TestClassJournalCreateSessionErrorBranches(t *testing.T) {
 	}}
 	if _, err := svc.CreateSession(ctx, assignmentID, documentCycleTestDate(2026, 5, 4), "materi", "", "", true, teacherID); !errors.Is(err, expectedErr) {
 		t.Fatalf("CreateSession() students error = %v, want %v", err, expectedErr)
+	}
+
+	svc = &ClassJournal{q: &fakeClassJournalStore{
+		assignmentRow: db.GetClassSubjectAssignmentRow{ID: assignmentID, ClassID: classID, TeacherEmployeeID: teacherID},
+		createRow:     db.ClassJournalSession{ID: sessionID, AssignmentID: assignmentID},
+		studentsRows:  []db.ListActiveStudentsByClassIDRow{{ID: documentCycleTestUUID(79), Nama: "Siswa A"}},
+		upsertErr:     expectedErr,
+	}}
+	if _, err := svc.CreateSession(ctx, assignmentID, documentCycleTestDate(2026, 5, 4), "materi", "", "", true, teacherID); !errors.Is(err, expectedErr) {
+		t.Fatalf("CreateSession() attendance seed error = %v, want %v", err, expectedErr)
 	}
 
 	svc = &ClassJournal{q: &fakeClassJournalStore{
