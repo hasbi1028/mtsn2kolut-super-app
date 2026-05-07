@@ -6,11 +6,13 @@
 	import RouteProgress from '$lib/components/RouteProgress.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import { Sonner } from '$lib/components/ui/sonner';
+	import { registerWebAdminPwa } from '$lib/client/pwa';
 	import '../app.css';
 	import { navigating, page } from '$app/state';
 
 	let { children, data } = $props();
 	let isLogin = $derived(page.url.pathname === '/login');
+	let pwaRegistrationStarted = $state(false);
 	const publicExactPaths = new Set(['/', '/ppdb', '/profil', '/berita', '/pengumuman', '/kontak']);
 	const publicPrefixPaths = ['/berita/', '/pengumuman/'];
 	let isPublicSite = $derived.by(() => {
@@ -35,10 +37,25 @@
 		if (typeof window === 'undefined') return;
 		window.localStorage.setItem(sidebarExpandedStorageKey(), desktopSidebarExpanded ? '1' : '0');
 	});
+
+	$effect(() => {
+		if (typeof window === 'undefined' || pwaRegistrationStarted) return;
+		if (!data.user || isLogin || isPublicSite) return;
+		pwaRegistrationStarted = true;
+		void registerWebAdminPwa({
+			isAuthenticated: Boolean(data.user),
+			isLogin,
+			isPublicSite,
+			location: window.location,
+			serviceWorker: navigator.serviceWorker
+		});
+	});
 </script>
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
+	<link rel="manifest" href="/manifest.webmanifest" />
+	<meta name="theme-color" content="#166534" />
 </svelte:head>
 
 <Sonner />
