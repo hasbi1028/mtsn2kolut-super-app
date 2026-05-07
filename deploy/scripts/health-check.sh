@@ -93,25 +93,16 @@ check_bank_soal_routes() {
 # Function to check worker health (via PM2)
 check_worker() {
     echo -n "Checking worker... "
-    if pm2 describe mtsn2kolut-pusaka-worker > /dev/null 2>&1; then
-        status=$(pm2 mks)
-        if echo "$status" | grep -q "mtsn2kolut-pusaka-worker"; then
-            # Get the specific process status
-            if pm2 show mtsn2kolut-pusaka-worker | grep -q "status.*online"; then
-                echo -e "${GREEN}OK${NC}"
-                return 0
-            else
-                echo -e "${YELLOW}NOT ONLINE${NC}"
-                return 1
-            fi
-        else
-            echo -e "${RED}NOT FOUND${NC}"
-            return 1
-        fi
-    else
+    if ! pm2 describe mtsn2kolut-pusaka-worker > /dev/null 2>&1; then
         echo -e "${RED}NOT FOUND${NC}"
         return 1
     fi
+    if pm2 show mtsn2kolut-pusaka-worker 2>/dev/null | grep -q "status.*online"; then
+        echo -e "${GREEN}OK${NC}"
+        return 0
+    fi
+    echo -e "${YELLOW}NOT ONLINE${NC}"
+    return 1
 }
 
 # Main execution

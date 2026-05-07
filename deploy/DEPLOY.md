@@ -241,19 +241,43 @@ Dari root repo:
 make ops-backup
 ```
 
-Opsional override retention:
+`make ops-backup` memanggil `deploy/backup-postgresql.sh`, yang juga dipakai oleh systemd timer di VPS backend. Output:
+
+- `~/backups/mtsn2kolut-super-app/postgresql/<db>_<timestamp>.dump` (custom format, bisa dipulihkan selektif via `pg_restore`).
+- `<dump>.sha256` checksum.
+- `latest.dump` symlink ke dump terbaru.
+- Log eksekusi di `~/backups/mtsn2kolut-super-app/logs/postgresql-backup.log`.
+- Retention 30 hari otomatis.
+
+Script ini memakai `flock` agar tidak overlap dengan jalankan ganda (systemd timer + manual `make ops-backup`).
+
+### Restore drill (uji rutin di staging)
+
+Lakukan restore drill secara periodik (mis. tiap rilis besar) agar backup terbukti dapat dipakai:
 
 ```bash
-BACKUP_RETENTION_DAYS=14 make ops-backup
+# 1. Identifikasi dump terbaru
+ls -lh ~/backups/mtsn2kolut-super-app/postgresql/latest.dump
+sha256sum -c ~/backups/mtsn2kolut-super-app/postgresql/latest.dump.sha256
+
+# 2. Buat database staging kosong (JANGAN ke database produksi)
+createdb -h 127.0.0.1 -U pusaka pusaka_restore_drill
+
+# 3. Restore dump
+PGPASSWORD=*** pg_restore \
+  --host=127.0.0.1 --username=pusaka --dbname=pusaka_restore_drill \
+  --no-owner --no-privileges --clean --if-exists \
+  ~/backups/mtsn2kolut-super-app/postgresql/latest.dump
+
+# 4. Smoke check — jumlah row tabel kunci
+psql -h 127.0.0.1 -U pusaka pusaka_restore_drill -c "SELECT count(*) FROM users;"
+psql -h 127.0.0.1 -U pusaka pusaka_restore_drill -c "SELECT count(*) FROM cbt_questions;"
+
+# 5. Bersihkan database drill
+dropdb -h 127.0.0.1 -U pusaka pusaka_restore_drill
 ```
 
-Contoh cron ringan di VPS backend:
-
-```bash
-0 2 * * * cd /path/to/mtsn2kolut-super-app && BACKUP_RETENTION_DAYS=14 ./deploy/scripts/backup.sh /backups/mtsn2kolut >> /var/log/mtsn2kolut-backup.log 2>&1
-```
-
-Backup ini menghasilkan dump PostgreSQL terkompresi `.sql.gz` dan membersihkan file yang lebih tua dari retention window.
+Catat waktu restore aktual sebagai RTO baseline. Bila restore gagal atau checksum mismatch, perbaiki source backup pipeline sebelum next deploy.
 
 ## CI ringan
 
