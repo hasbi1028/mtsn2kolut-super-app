@@ -1,4 +1,5 @@
 import type { SidebarNavGroup, SidebarNavItem } from './sidebar-config';
+import { evaluateSidebarItemAccess } from '$lib/rbac/ui-policy';
 
 function normalize(values: readonly string[] | undefined) {
 	return (values ?? []).map((value) => value.trim()).filter(Boolean);
@@ -23,10 +24,7 @@ export function itemAllowedByAccess(
 	userRoles: readonly string[] | undefined,
 	userPermissions: readonly string[] | undefined
 ) {
-	if (item.permissions && item.permissions.length > 0) {
-		return hasAnyPermission(userPermissions, item.permissions) || hasAnyRole(userRoles, item.roles);
-	}
-	return hasAnyRole(userRoles, item.roles);
+	return evaluateSidebarItemAccess(item, userRoles ?? [], userPermissions ?? []).allowed;
 }
 
 export function filterSidebarNavGroupsByAccess(

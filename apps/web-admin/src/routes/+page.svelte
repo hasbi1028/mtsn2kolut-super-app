@@ -9,6 +9,7 @@
 	import PublicHome from '$lib/components/PublicHome.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
+	import { dashboardDataAccessForUser, visibleDashboardWidgetsForUser } from '$lib/rbac/dashboard-policy';
 
 	type WebsiteContent = {
 		id: string;
@@ -22,7 +23,7 @@
 
 	let { data }: {
 		data: {
-			user?: { role?: string; roles?: string[]; employee_id?: string; student_id?: string; parent_id?: string };
+			user?: { role?: string; roles?: string[]; permissions?: string[]; employee_id?: string; student_id?: string; parent_id?: string };
 			publicHome?: {
 				posts: WebsiteContent[];
 				featuredPosts: WebsiteContent[];
@@ -101,10 +102,20 @@
 
 	interface DashboardPayload {
 		academicStats: AcademicStats | null;
+		bankSoal: BankSoalDashboard | null;
 		guruStats: GuruStats | null;
 		guruTimetable: TimetableEntry[];
 		studentPortal: StudentPortalData | null;
 		parentPortal: ParentPortalData | null;
+	}
+
+	interface BankSoalDashboard {
+		canRead: boolean;
+		canCreate: boolean;
+		canReview: boolean;
+		canImport: boolean;
+		canAnalytics: boolean;
+		canSettings: boolean;
 	}
 
 	let dashboardPromise = $state<Promise<DashboardPayload> | null>(null);
@@ -116,25 +127,34 @@
 	const isParent = $derived(roles.includes('ortu'));
 	const isAdmin = $derived(roles.includes('admin'));
 	const isStaff = $derived(roles.includes('staf'));
+	const dashboardAccess = $derived(dashboardDataAccessForUser(data.user));
+	const dashboardWidgets = $derived(visibleDashboardWidgetsForUser(data.user));
+	const hasTeacherDashboard = $derived(dashboardWidgets.some((widget) => widget.id.startsWith('teacher-')));
+	const hasBankSoalDashboard = $derived(dashboardWidgets.some((widget) => widget.id.startsWith('bank-soal-')));
 	const dashboardEyebrow = $derived.by(() => {
 		if (isGuru) return 'Ruang Kerja Guru';
 		if (isSiswa) return 'Portal Siswa';
 		if (isParent) return 'Portal Orang Tua';
 		if (isStaff) return 'Ruang Kerja Staf';
+		if (hasBankSoalDashboard) return 'Bank Soal';
 		return 'Pusat Operasi Madrasah';
 	});
 	const dashboardTitle = $derived.by(() => {
+		if (isGuru && !hasTeacherDashboard && hasBankSoalDashboard) return 'Dasbor Bank Soal';
 		if (isGuru) return 'Dasbor Guru';
 		if (isSiswa) return 'Dasbor Siswa';
 		if (isParent) return 'Dasbor Orang Tua';
 		if (isStaff) return 'Dasbor Staf';
+		if (hasBankSoalDashboard && !dashboardAccess.academicStats) return 'Dasbor Bank Soal';
 		return 'Dasbor Utama';
 	});
 	const dashboardDescription = $derived.by(() => {
+		if (isGuru && !hasTeacherDashboard && hasBankSoalDashboard) return 'Shortcut penyusunan dan pengelolaan Bank Soal sesuai permission yang aktif pada akun ini.';
 		if (isGuru) return 'Ringkasan kelas, aktivitas CBT, jadwal mengajar, dan pekerjaan koreksi yang perlu diperhatikan hari ini.';
 		if (isSiswa) return 'Lihat identitas akademik, sesi ujian yang terdaftar, jadwal belajar, dan informasi wali yang terhubung.';
 		if (isParent) return 'Pantau data putra-putri yang terhubung, jadwal anak, dan informasi dasar wali dari satu tempat.';
 		if (isStaff) return 'Akses cepat ke layanan operasional sekolah, dokumen, arsip, perpustakaan, dan data akademik pendukung.';
+		if (hasBankSoalDashboard && !dashboardAccess.academicStats) return 'Shortcut penyusunan dan pengelolaan Bank Soal sesuai permission yang aktif pada akun ini.';
 		return 'Ringkasan akademik dan operasional MTs Negeri 2 Kolaka Utara untuk pengambilan keputusan harian.';
 	});
 	const dashboardRoleLabel = $derived(roles.length > 0 ? roles.join(' / ') : 'pengguna');
@@ -176,67 +196,69 @@
 		return value.slice(0, 5);
 	}
 
-	async function loadDashboard(): Promise<DashboardPayload> {
-		if (isGuru) {
-			const [sessions, students, timetable] = await Promise.all([
-				fetchJSON<CbtSessionSummary[]>('/api/asesmen/sessions'),
-				fetchJSON<StudentSummary[]>('/api/students'),
-				fetchJSON<{ timetable: TimetableEntry[] }>('/api/portal/guru/timetable'),
-			]);
-			const essays = await loadUngradedEssaysForSessions(sessions);
-			const activeSessions = sessions.filter((session) => session.status === 'active' || session.status === 'scheduled');
-			const subjects = new Set(activeSessions.map((session) => session.package_title));
-			return {
-				academicStats: null,
-				guruTimetable: timetable.timetable ?? [],
-				guruStats: {
-					active_sessions: activeSessions.length,
-					ungraded_essays: essays.length,
-					my_students: students.length,
-					my_subjects: subjects.size,
-				},
-				studentPortal: null,
-				parentPortal: null,
-			};
-		}
+	function hasPermission(permission: string) {
+		if (isAdmin) return true;
+		return (data.user?.permissions ?? []).includes(permission);
+	}
 
-		if (isSiswa) {
-			return {
-				academicStats: null,
-				guruStats: null,
-				guruTimetable: [],
-				studentPortal: await fetchJSON<StudentPortalData>('/api/portal/student/me'),
-				parentPortal: null,
-			};
-		}
+	function bankSoalDashboard(): BankSoalDashboard | null {
+		if (!dashboardAccess.bankSoal) return null;
+		return {
+			canRead: hasPermission('bank_soal.read'),
+			canCreate: hasPermission('bank_soal.create'),
+			canReview: hasPermission('bank_soal.review') || hasPermission('bank_soal.publish'),
+			canImport: hasPermission('bank_soal.import'),
+			canAnalytics: hasPermission('bank_soal.analytics'),
+			canSettings: hasPermission('bank_soal.settings')
+		};
+	}
 
-		if (isParent) {
-			return {
-				academicStats: null,
-				guruStats: null,
-				guruTimetable: [],
-				studentPortal: null,
-				parentPortal: await fetchJSON<ParentPortalData>('/api/portal/parent/me'),
-			};
-		}
-
-		if (isAdmin) {
-			return {
-				academicStats: await fetchJSON<AcademicStats>('/api/academic/stats'),
-				guruStats: null,
-				guruTimetable: [],
-				studentPortal: null,
-				parentPortal: null,
-			};
-		}
-
+	function emptyDashboardPayload(): DashboardPayload {
 		return {
 			academicStats: null,
+			bankSoal: bankSoalDashboard(),
 			guruStats: null,
 			guruTimetable: [],
 			studentPortal: null,
-			parentPortal: null,
+			parentPortal: null
 		};
+	}
+
+	async function loadDashboard(): Promise<DashboardPayload> {
+		const payload = emptyDashboardPayload();
+
+		if (dashboardAccess.studentPortal) {
+			payload.studentPortal = await fetchJSON<StudentPortalData>('/api/portal/student/me');
+			return payload;
+		}
+
+		if (dashboardAccess.parentPortal) {
+			payload.parentPortal = await fetchJSON<ParentPortalData>('/api/portal/parent/me');
+			return payload;
+		}
+
+		const [sessions, students, timetable, academicStats] = await Promise.all([
+			dashboardAccess.assessmentSessions ? fetchJSON<CbtSessionSummary[]>('/api/asesmen/sessions') : Promise.resolve([]),
+			dashboardAccess.studentSummary ? fetchJSON<StudentSummary[]>('/api/students') : Promise.resolve([]),
+			dashboardAccess.teacherTimetable ? fetchJSON<{ timetable: TimetableEntry[] }>('/api/portal/guru/timetable') : Promise.resolve({ timetable: [] }),
+			dashboardAccess.academicStats ? fetchJSON<AcademicStats>('/api/academic/stats') : Promise.resolve(null)
+		]);
+
+		payload.academicStats = academicStats;
+		payload.guruTimetable = timetable.timetable ?? [];
+
+		if (dashboardAccess.assessmentSessions || dashboardAccess.studentSummary || dashboardAccess.teacherTimetable) {
+			const essays = dashboardAccess.ungradedEssays ? await loadUngradedEssaysForSessions(sessions) : [];
+			const activeSessions = sessions.filter((session) => session.status === 'active' || session.status === 'scheduled');
+			const subjects = new Set(activeSessions.map((session) => session.package_title));
+			payload.guruStats = {
+				active_sessions: activeSessions.length,
+				ungraded_essays: essays.length,
+				my_students: students.length,
+				my_subjects: subjects.size
+			};
+		}
+		return payload;
 	}
 
 	function refreshDashboard() {
@@ -332,7 +354,7 @@
 						</Card.Root>
 					{/each}
 				</div>
-			{:else if isGuru}
+			{:else if isGuru && hasTeacherDashboard}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 					{#each Array.from({ length: 4 }) as _, index (`guru-stat-skeleton-${index}`)}
 						<Card.Root class="border-border">
@@ -381,6 +403,7 @@
 			{@const guruStats = dashboard.guruStats}
 			{@const guruTimetable = dashboard.guruTimetable}
 			{@const academicStats = dashboard.academicStats}
+			{@const bankSoal = dashboard.bankSoal}
 			{@const parentTimetableByChild = parentPortal
 				? parentPortal.children.map((child) => ({
 						child,
@@ -615,6 +638,29 @@
 					/>
 				{/if}
 			</Card.Content>
+				</Card.Root>
+			{/if}
+
+			{#if bankSoal}
+				<Card.Root class="border-primary/20">
+					<Card.Header>
+						<Card.Title class="text-base">Bank Soal</Card.Title>
+						<Card.Description>Shortcut yang tersedia mengikuti permission Bank Soal pada akun ini.</Card.Description>
+					</Card.Header>
+					<Card.Content>
+						<div class="flex flex-wrap gap-2">
+							{#if bankSoal.canRead}
+								<Button variant="default" size="sm" href="/bank-soal">Dashboard Bank Soal</Button>
+								<Button variant="outline" size="sm" href="/bank-soal/daftar">Daftar Soal</Button>
+								<Button variant="outline" size="sm" href="/bank-soal/mapel-kd">Mapel & KD</Button>
+							{/if}
+							{#if bankSoal.canCreate}<Button variant="outline" size="sm" href="/bank-soal/tambah">Tambah Soal</Button>{/if}
+							{#if bankSoal.canReview}<Button variant="outline" size="sm" href="/bank-soal/verifikasi">Review Soal</Button>{/if}
+							{#if bankSoal.canImport}<Button variant="outline" size="sm" href="/bank-soal/impor">Impor Soal</Button>{/if}
+							{#if bankSoal.canAnalytics}<Button variant="outline" size="sm" href="/bank-soal/analisis-butir">Analisis Butir</Button>{/if}
+							{#if bankSoal.canSettings}<Button variant="outline" size="sm" href="/bank-soal/pengaturan">Pengaturan</Button>{/if}
+						</div>
+					</Card.Content>
 				</Card.Root>
 			{/if}
 

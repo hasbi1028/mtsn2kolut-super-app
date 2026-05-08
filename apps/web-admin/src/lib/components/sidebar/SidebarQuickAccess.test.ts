@@ -11,13 +11,14 @@ const baseItems: Array<{
 	href: string;
 	label: string;
 	icon: 'grid' | 'clipboard' | 'calendar' | 'book-open';
+	permissions: string[];
 	pinnable?: boolean;
 	group: string;
 }> = [
-	{ href: '/', label: 'Dashboard', icon: 'grid', pinnable: false, group: 'Utama' },
-	{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'book-open', group: 'Bank Soal' },
-	{ href: '/grades', label: 'Nilai', icon: 'clipboard', group: 'Akademik' },
-	{ href: '/jadwal', label: 'Jadwal', icon: 'calendar', group: 'Akademik' }
+	{ href: '/', label: 'Dashboard', icon: 'grid', permissions: ['dashboard.read'], pinnable: false, group: 'Utama' },
+	{ href: '/bank-soal/tambah', label: 'Tambah Soal', icon: 'book-open', permissions: ['bank_soal.create'], group: 'Bank Soal' },
+	{ href: '/grades', label: 'Nilai', icon: 'clipboard', permissions: ['grades.read'], group: 'Akademik' },
+	{ href: '/jadwal', label: 'Jadwal', icon: 'calendar', permissions: ['academic.read'], group: 'Akademik' }
 ];
 
 function renderQuickAccess() {

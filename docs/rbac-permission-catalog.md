@@ -1,17 +1,18 @@
 # RBAC Permission Catalog — Tahap 9
 
-Dokumen ini adalah katalog operasional permission dinamis MTsN 2 Kolut setelah Dynamic RBAC Tahap 9. Sumber teknis utama tetap migration `services/core-api/db/migrations/069_dynamic_rbac_foundation.sql` plus seed tambahan staged setelahnya seperti `076_profile_change_review_permission.sql` dan `081_student_parent_account_portal.sql`; file ini mengunci daftar agar operator dan developer memakai kode permission yang sama.
+Dokumen ini adalah katalog operasional permission dinamis MTsN 2 Kolut setelah Dynamic RBAC Tahap 9. Sumber teknis utama tetap migration `services/core-api/db/migrations/069_dynamic_rbac_foundation.sql` plus seed tambahan staged setelahnya seperti `076_profile_change_review_permission.sql`, `081_student_parent_account_portal.sql`, dan `082_employee_rbac_permissions.sql`; file ini mengunci daftar agar operator dan developer memakai kode permission yang sama.
 
 ## Prinsip Stabilization
 
 - Backend tetap source of truth untuk authorization.
 - Frontend hanya menyembunyikan/menampilkan menu berdasarkan permission.
-- Legacy role fallback masih dipertahankan selama transisi; jangan hapus `admin/guru/staf/kesiswaan/siswa/ortu` sebelum cleanup terpisah.
+- UI menu dan dashboard memakai permission-first. Fallback role generik hanya dipertahankan untuk admin dan fallback portal siswa/orang tua yang eksplisit.
+- Legacy role fallback backend masih dipertahankan di beberapa handler selama transisi; jangan hapus `admin/guru/staf/kesiswaan/siswa/ortu` sebelum cleanup terpisah.
 - Mutation role/permission harus diaudit dan dilindungi guard admin terakhir.
 
 ## Legacy role fallback
 
-Legacy role fallback masih aktif untuk compatibility. Target cleanup nanti: audit route yang masih role-only, tambah seeded permission jika perlu, lalu hapus fallback secara staged setelah tidak ada sesi/token lama yang bergantung pada role hardcoded.
+Legacy role fallback masih aktif untuk compatibility backend tertentu. UI baru tidak memakai role `guru` sebagai pengganti permission menu/dashboard; role fallback UI yang tersisa harus dinyatakan eksplisit, terutama `siswa`/`ortu` untuk portal. Target cleanup nanti: audit route yang masih role-only, tambah seeded permission jika perlu, lalu hapus fallback secara staged setelah tidak ada sesi/token lama yang bergantung pada role hardcoded.
 
 ## Permission Seed
 
@@ -61,6 +62,11 @@ Legacy role fallback masih aktif untuk compatibility. Target cleanup nanti: audi
 
 - `document_cycles.manage` — Mengelola siklus dokumen.
 - `document_cycles.read` — Melihat siklus dokumen.
+
+### employees
+
+- `employees.manage` — Mengelola data master pegawai.
+- `employees.read` — Melihat data master pegawai.
 
 ### governance
 
