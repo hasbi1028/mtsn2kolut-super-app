@@ -4,6 +4,8 @@ Gunakan matriks ini saat uji perangkat Android siswa. Tujuannya agar hasil uji b
 
 Status: sinkron Phase 13 Mobile Release Candidate and Device Matrix per 2026-05-08. Matriks ini dipakai bersama release checklist dan prosedur BYOD; hasilnya menjadi bukti operasional, bukan jaminan kiosk penuh.
 
+Manual evidence status: `pending_manual_evidence` until real Android devices are tested by operator/pengawas. Current status fields must be updated in the evidence bundle before final go/no-go.
+
 ## Phase 13 Mobile Release Candidate and Device Matrix
 
 Sebelum rehearsal operator, catat release candidate yang diuji:
@@ -25,6 +27,15 @@ Skenario wajib per RC:
 - device mismatch.
 - screenshot protection / `FLAG_SECURE`.
 - network disturbance.
+
+## Two-vendor manual placeholders
+
+These rows are placeholders for manual evidence. Replace Vendor A and Vendor B with real devices from at least two Android vendors before sign-off.
+
+| Evidence row | Vendor placeholder | Current status | Requires physical Android device | Operator/reviewer | Notes |
+|--------------|--------------------|----------------|----------------------------------|-------------------|-------|
+| Device 1 | Vendor A | pending_manual_evidence | ya | | isi setelah uji perangkat nyata |
+| Device 2 | Vendor B | pending_manual_evidence | ya | | isi setelah uji perangkat nyata |
 
 ## Cara Pakai
 
