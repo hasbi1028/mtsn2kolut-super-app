@@ -125,6 +125,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
             initialPayload: payload,
             deviceFingerprint: snapshot.deviceFingerprint,
             restoredSnapshot: snapshot,
+            initialResumeCheckRequired: true,
             sessionStore: _sessionStore,
           ),
         ),

@@ -4,6 +4,7 @@ import antiCheatRoadmap from '../../../../../docs/flutter-anti-cheat-roadmap.md?
 import examApiDoc from '../../../../../docs/exam-api.md?raw';
 import phase0Doc from '../../../../../docs/cbt-proposal-integration-phase-0.md?raw';
 import phase12Doc from '../../../../../docs/cbt-proposal-integration-phase-1-2.md?raw';
+import phase34Doc from '../../../../../docs/cbt-proposal-integration-phase-3-4.md?raw';
 
 describe('CBT proposal integration documentation guard', () => {
 	it('locks the monorepo runtime ownership for proposal integration', () => {
@@ -152,5 +153,35 @@ describe('CBT proposal integration documentation guard', () => {
 		]) {
 			expect(phase12Doc).toContain(phrase);
 		}
+	});
+
+	it('locks Phase 3 backend runtime hardening and Phase 4 Flutter BYOD resilience', () => {
+		for (const phrase of [
+			'Phase 3 - Backend Runtime Hardening',
+			'Body limit mobile-facing',
+			'`POST /api/exam/login`: 4 KiB',
+			'`POST /api/exam/event`: 16 KiB',
+			'`POST /api/exam/answer`: 64 KiB serialized JSON',
+			'`POST /api/exam/heartbeat` dan `POST /api/exam/submit`: empty body atau `{}` saja, maksimum 1 KiB',
+			'`413 request body too large`',
+			'`401 unauthorized` untuk token/fingerprint yang belum membentuk participant context sah',
+			'`409 token already bound to another device` hanya untuk mismatch',
+			'Phase 4 - Flutter BYOD Anti-Cheat and Resilience',
+			'apps/mobile/lib/src/exam_events.dart',
+			'Helper event menyaring field sensitif seperti token, password, dan answer key',
+			'Resume gate tidak lagi dibuka bila status refresh gagal',
+			'Restore dari snapshot masuk ke exam shell dengan `initialResumeCheckRequired: true`',
+			'Pending-answer flush yang mendapat `409 exam already submitted` diperlakukan sebagai terminal server state',
+			'`409 token already bound to another device` tetap menjaga jawaban pending lokal agar tidak hilang',
+			'Batas jawaban uraian Flutter dikunci konservatif pada 15.000 karakter',
+			'`ExamApiClient` menghitung exact serialized UTF-8 JSON body',
+			'Tidak mengklaim BYOD sebagai kiosk penuh'
+		]) {
+			expect(phase34Doc).toContain(phrase);
+		}
+		expect(examApiDoc).toContain('Request JSON runtime harus berupa satu JSON object tanpa trailing payload');
+		expect(examApiDoc).toContain('`POST /api/exam/answer` | 64 KiB serialized JSON');
+		expect(examApiDoc).toContain('`413 Payload Too Large`');
+		expect(examApiDoc).toContain('android:student-phone:install-...');
 	});
 });

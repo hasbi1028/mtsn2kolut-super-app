@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../exam_api.dart';
 import '../exam_error_messages.dart';
+import '../exam_events.dart';
 import '../exam_session_store.dart';
 import '../models.dart';
 import 'exam_completed_screen.dart';
@@ -18,7 +19,7 @@ import '../widgets/rich_exam_text.dart';
 // Essay answers use a conservative character cap because UTF-8 and JSON escaping
 // can make serialized payloads larger than the visible character count.
 const int kShortAnswerMaxChars = 256;
-const int kEssayAnswerMaxChars = 16000;
+const int kEssayAnswerMaxChars = 15000;
 
 class ExamShellScreen extends StatefulWidget {
   const ExamShellScreen({
@@ -175,13 +176,12 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         });
       }
       unawaited(
-        widget.client.sendEvent(
+        widget.client.sendExamEvent(
           token: widget.examToken,
-          eventType: 'app_switch',
-          data: <String, Object?>{
-            'state': state.name,
-            'device_fingerprint': widget.deviceFingerprint,
-          },
+          event: ExamClientEvents.appSwitch(
+            state: state.name,
+            deviceFingerprint: widget.deviceFingerprint,
+          ),
         ),
       );
       unawaited(_persistSnapshot());
@@ -235,14 +235,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     });
   }
 
-  Future<void> _syncStatus() async {
+  Future<bool> _syncStatus() async {
     setState(() {
       _isSyncingStatus = true;
     });
     try {
       final status = await widget.client.getStatus(widget.examToken);
       if (!mounted) {
-        return;
+        return false;
       }
       setState(() {
         _answeredCount = status.answeredCount;
@@ -252,14 +252,27 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       _markServerContact();
       if (status.isSubmitted) {
         await _finishExam(wasAutoSubmitted: false);
-        return;
+        return true;
       }
       if (_pendingAnswers.isNotEmpty) {
         await _flushPendingAnswers();
       }
+      return true;
+    } on ExamApiException catch (error) {
+      if (!mounted) {
+        return false;
+      }
+      setState(() {
+        _consecutiveSyncFailures += 1;
+        _lastSyncFailureAt = DateTime.now();
+        _errorMessage = statusFailureMessage(error);
+        _serverNotice = statusFailureNotice(error);
+      });
+      unawaited(_handleConnectionAttentionSignals());
+      return false;
     } catch (_) {
       if (!mounted) {
-        return;
+        return false;
       }
       setState(() {
         _consecutiveSyncFailures += 1;
@@ -267,6 +280,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _errorMessage = 'Status server belum bisa diperbarui.';
       });
       unawaited(_handleConnectionAttentionSignals());
+      return false;
     } finally {
       if (mounted) {
         setState(() {
@@ -289,30 +303,35 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       });
     }
     await widget.client
-        .sendEvent(
+        .sendExamEvent(
           token: widget.examToken,
-          eventType: 'warning',
-          data: <String, Object?>{
-            'reason': 'resume_exam',
-            'resume_attempt_count': _resumeAttemptCount + 1,
-          },
+          event: ExamClientEvents.resumeGate(
+            resumeAttemptCount: _resumeAttemptCount + 1,
+          ),
         )
         .catchError((_) {});
     _resumeAttemptCount += 1;
     if (_resumeAttemptCount > 1) {
       await widget.client
-          .sendEvent(
+          .sendExamEvent(
             token: widget.examToken,
-            eventType: 'warning',
-            data: <String, Object?>{
-              'reason': 'repeat_resume_attempt',
-              'resume_attempt_count': _resumeAttemptCount,
-            },
+            event: ExamClientEvents.repeatResumeAttempt(
+              resumeAttemptCount: _resumeAttemptCount,
+            ),
           )
           .catchError((_) {});
     }
-    await _syncStatus();
+    final statusRefreshed = await _syncStatus();
     if (!mounted) {
+      return;
+    }
+    if (!statusRefreshed) {
+      setState(() {
+        _isResumingExam = false;
+        _resumeCheckRequired = true;
+        _statusMessage =
+            'Status ujian belum berhasil dicek ulang. Tetap di mode aman dan minta pengawas membantu koneksi.';
+      });
       return;
     }
     setState(() {
@@ -356,6 +375,24 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _pendingAnswers.remove(entry.key);
         syncedCount += 1;
         _markServerContact();
+      } on ExamApiException catch (error) {
+        if (error.isAlreadySubmittedConflict) {
+          final statusRefreshed = await _syncStatus();
+          if (_isSubmitted) {
+            _pendingAnswers.remove(entry.key);
+            await _persistSnapshot();
+            return true;
+          }
+          return statusRefreshed && _pendingAnswers.isEmpty;
+        }
+        if (mounted) {
+          setState(() {
+            _consecutiveSyncFailures += 1;
+            _lastSyncFailureAt = DateTime.now();
+          });
+        }
+        await _handleConnectionAttentionSignals();
+        break;
       } catch (_) {
         if (mounted) {
           setState(() {
@@ -436,14 +473,17 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       if (!mounted) {
         return;
       }
-      if (error.statusCode == 409) {
+      if (error.isAlreadySubmittedConflict) {
         setState(() {
-          _pendingAnswers.remove(question.id);
+          _pendingAnswers[question.id] = answer;
           _errorMessage = null;
           _statusMessage = answerFailureMessage(error);
           _serverNotice = answerFailureNotice(error);
         });
         await _syncStatus();
+        if (_isSubmitted) {
+          _pendingAnswers.remove(question.id);
+        }
         if (!_isSubmitted) {
           await _persistSnapshot();
         }
@@ -458,13 +498,11 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _serverNotice = answerFailureNotice(error);
       });
       await widget.client
-          .sendEvent(
+          .sendExamEvent(
             token: widget.examToken,
-            eventType: 'warning',
-            data: <String, Object?>{
-              'reason': 'answer_saved_local_only',
-              'question_id': question.id,
-            },
+            event: ExamClientEvents.answerSavedLocalOnly(
+              questionId: question.id,
+            ),
           )
           .catchError((_) {});
       await _handleConnectionAttentionSignals();
@@ -487,6 +525,23 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _errorMessage = question.isShortAnswer
             ? 'Isi jawaban singkat terlebih dahulu.'
             : 'Isi jawaban uraian terlebih dahulu.';
+      });
+      return;
+    }
+
+    if (!ExamApiClient.isAnswerBodyWithinLimit(
+      questionId: question.id,
+      answer: answer,
+    )) {
+      setState(() {
+        _errorMessage =
+            'Jawaban terlalu panjang untuk dikirim ke server. Ringkas jawaban sebelum menyimpan.';
+        _serverNotice = const ExamGuidanceNotice(
+          title: 'Jawaban melebihi batas kirim',
+          message:
+              'Aplikasi menahan jawaban ini agar tidak menjadi pending permanen. Ringkas isi jawaban, lalu simpan ulang sebelum mengirim ujian.',
+          tone: ExamGuidanceTone.warning,
+        );
       });
       return;
     }
@@ -573,15 +628,12 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         });
         await _persistSnapshot();
         await widget.client
-            .sendEvent(
+            .sendExamEvent(
               token: widget.examToken,
-              eventType: 'warning',
-              data: <String, Object?>{
-                'reason': autoSubmit
-                    ? 'auto_submit_blocked_pending_sync'
-                    : 'submit_blocked_pending_sync',
-                'pending_count': _pendingAnswers.length,
-              },
+              event: ExamClientEvents.submitBlockedPendingSync(
+                pendingCount: _pendingAnswers.length,
+                autoSubmit: autoSubmit,
+              ),
             )
             .catchError((_) {});
         return;
@@ -594,13 +646,11 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             'Mode koneksi menurun sedang aktif. Perbarui status dan tunggu sinkron pulih sebelum mengirim ujian.';
       });
       await widget.client
-          .sendEvent(
+          .sendExamEvent(
             token: widget.examToken,
-            eventType: 'warning',
-            data: <String, Object?>{
-              'reason': 'submit_blocked_degraded_mode',
-              'failure_count': _consecutiveSyncFailures,
-            },
+            event: ExamClientEvents.submitBlockedDegradedMode(
+              failureCount: _consecutiveSyncFailures,
+            ),
           )
           .catchError((_) {});
       return;
@@ -654,17 +704,16 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       }
       await _finishExam(wasAutoSubmitted: autoSubmit);
       if (!autoSubmit) {
-        await widget.client.sendEvent(
+        await widget.client.sendExamEvent(
           token: widget.examToken,
-          eventType: 'warning',
-          data: const <String, Object?>{'reason': 'manual_submit'},
+          event: ExamClientEvents.manualSubmit(),
         );
       }
     } on ExamApiException catch (error) {
       if (!mounted) {
         return;
       }
-      if (error.statusCode == 409) {
+      if (error.isAlreadySubmittedConflict) {
         await _finishExam(wasAutoSubmitted: autoSubmit);
         return;
       }
@@ -713,13 +762,11 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     }
     _hasReportedDegradedMode = true;
     await widget.client
-        .sendEvent(
+        .sendExamEvent(
           token: widget.examToken,
-          eventType: 'warning',
-          data: <String, Object?>{
-            'reason': 'degraded_mode_entered',
-            'failure_count': _consecutiveSyncFailures,
-          },
+          event: ExamClientEvents.degradedModeEntered(
+            failureCount: _consecutiveSyncFailures,
+          ),
         )
         .catchError((_) {});
   }
@@ -731,16 +778,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     }
     _hasReportedStaleAttention = true;
     await widget.client
-        .sendEvent(
+        .sendExamEvent(
           token: widget.examToken,
-          eventType: 'warning',
-          data: <String, Object?>{
-            'reason': 'stale_connection_attention',
-            'seconds_since_last_contact': DateTime.now()
+          event: ExamClientEvents.staleConnectionAttention(
+            secondsSinceLastContact: DateTime.now()
                 .difference(_lastServerContactAt!)
                 .inSeconds,
-            'failure_count': _consecutiveSyncFailures,
-          },
+            failureCount: _consecutiveSyncFailures,
+          ),
         )
         .catchError((_) {});
   }
@@ -752,16 +797,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     }
     _hasReportedEscalatedStaleAttention = true;
     await widget.client
-        .sendEvent(
+        .sendExamEvent(
           token: widget.examToken,
-          eventType: 'warning',
-          data: <String, Object?>{
-            'reason': 'stale_connection_escalated',
-            'seconds_since_last_contact': DateTime.now()
+          event: ExamClientEvents.staleConnectionEscalated(
+            secondsSinceLastContact: DateTime.now()
                 .difference(_lastServerContactAt!)
                 .inSeconds,
-            'failure_count': _consecutiveSyncFailures,
-          },
+            failureCount: _consecutiveSyncFailures,
+          ),
         )
         .catchError((_) {});
   }
@@ -852,10 +895,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         }
         final messenger = ScaffoldMessenger.of(context);
         try {
-          await widget.client.sendEvent(
+          await widget.client.sendExamEvent(
             token: widget.examToken,
-            eventType: 'warning',
-            data: const <String, Object?>{'reason': 'back_button_attempt'},
+            event: ExamClientEvents.backButtonAttempt(),
           );
         } catch (_) {
           // Back blocking is a local safety control; telemetry must not break it.

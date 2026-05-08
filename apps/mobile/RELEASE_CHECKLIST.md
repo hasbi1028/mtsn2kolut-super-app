@@ -66,8 +66,11 @@ build/app/outputs/flutter-apk/app-release.apk
 - [ ] jawaban uraian tersimpan
 - [ ] heartbeat tidak gagal terus-menerus
 - [ ] restore sesi bekerja setelah app ditutup/buka lagi
+- [ ] restore sesi lama melewati resume gate dan status check sebelum siswa lanjut
 - [ ] submit berhasil saat koneksi stabil
 - [ ] panel warning muncul saat jaringan dimatikan sementara
+- [ ] event BYOD yang dikirim app tidak berisi token ujian mentah, password, atau answer key
+- [ ] batas jawaban uraian tetap aman di bawah budget serialized JSON 64 KiB endpoint `answer`
 - [ ] smoke admin/guru di `docs/cbt-smoke-checklist.md` tidak menemukan kebocoran token/kunci jawaban
 
 ## Distribusi Internal

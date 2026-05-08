@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -23,6 +25,13 @@ type Exam struct {
 
 func NewExam(svc *service.Exam) *Exam { return &Exam{svc: svc, writeLimiter: newExamWriteLimiter()} }
 
+const (
+	examLoginBodyLimit  int64 = 4 << 10
+	examEventBodyLimit  int64 = 16 << 10
+	examAnswerBodyLimit int64 = 64 << 10
+	examEmptyBodyLimit  int64 = 1 << 10
+)
+
 type examService interface {
 	Login(ctx context.Context, token, deviceFingerprint, loginIP string) (service.LoginResult, error)
 	GetStatus(ctx context.Context, p db.GetParticipantByTokenRow) (service.StatusResult, error)
@@ -33,23 +42,22 @@ type examService interface {
 }
 
 func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	var body struct {
 		Token             string `json:"token"`
 		DeviceFingerprint string `json:"device_fingerprint"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+	if !decodeExamJSON(w, r, examLoginBodyLimit, &body) {
 		return
 	}
-	if body.Token == "" {
+	token := strings.TrimSpace(body.Token)
+	if token == "" {
 		api.BadRequest(w, "token required")
 		return
 	}
 
 	ip := trustedClientIP(r)
 
-	result, err := h.svc.Login(r.Context(), body.Token, body.DeviceFingerprint, ip)
+	result, err := h.svc.Login(r.Context(), token, body.DeviceFingerprint, ip)
 	if err != nil {
 		switch err {
 		case service.ErrExamNotFound:
@@ -99,6 +107,9 @@ func (h *Exam) Heartbeat(w http.ResponseWriter, r *http.Request) {
 	if !h.allowExamWrite(w, p.ID, "heartbeat") {
 		return
 	}
+	if !validateOptionalEmptyExamJSONBody(w, r, examEmptyBodyLimit) {
+		return
+	}
 	if err := h.svc.Heartbeat(r.Context(), p.ID); err != nil {
 		api.Internal(w, err)
 		return
@@ -115,20 +126,19 @@ func (h *Exam) RecordEvent(w http.ResponseWriter, r *http.Request) {
 	if !h.allowExamWrite(w, p.ID, "event") {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 	var body struct {
 		EventType string         `json:"event_type"`
 		Data      map[string]any `json:"data"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+	if !decodeExamJSON(w, r, examEventBodyLimit, &body) {
 		return
 	}
-	if strings.TrimSpace(body.EventType) == "" {
+	eventType := strings.TrimSpace(body.EventType)
+	if eventType == "" {
 		api.BadRequest(w, "event_type required")
 		return
 	}
-	if err := h.svc.RecordClientEvent(r.Context(), p.ID, body.EventType, body.Data); err != nil {
+	if err := h.svc.RecordClientEvent(r.Context(), p.ID, eventType, body.Data); err != nil {
 		api.Internal(w, err)
 		return
 	}
@@ -144,13 +154,11 @@ func (h *Exam) SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 	if !h.allowExamWrite(w, p.ID, "answer") {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	var body struct {
 		QuestionID string `json:"question_id"`
 		Answer     string `json:"answer"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		api.BadRequest(w, "invalid json")
+	if !decodeExamJSON(w, r, examAnswerBodyLimit, &body) {
 		return
 	}
 	questionID, err := parseUUID(body.QuestionID)
@@ -185,6 +193,9 @@ func (h *Exam) Submit(w http.ResponseWriter, r *http.Request) {
 	if !h.allowExamWrite(w, p.ID, "submit") {
 		return
 	}
+	if !validateOptionalEmptyExamJSONBody(w, r, examEmptyBodyLimit) {
+		return
+	}
 	if err := h.svc.Submit(r.Context(), p); err != nil {
 		switch err {
 		case service.ErrExamAlreadySubmit:
@@ -199,6 +210,55 @@ func (h *Exam) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, map[string]string{"status": "submitted"})
+}
+
+func decodeExamJSON(w http.ResponseWriter, r *http.Request, limit int64, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(dst); err != nil {
+		writeExamDecodeError(w, err)
+		return false
+	}
+
+	var extra json.RawMessage
+	if err := dec.Decode(&extra); err != io.EOF {
+		writeExamDecodeError(w, err)
+		return false
+	}
+	return true
+}
+
+func validateOptionalEmptyExamJSONBody(w http.ResponseWriter, r *http.Request, limit int64) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	dec := json.NewDecoder(r.Body)
+	var body map[string]json.RawMessage
+	if err := dec.Decode(&body); err != nil {
+		if errors.Is(err, io.EOF) {
+			return true
+		}
+		writeExamDecodeError(w, err)
+		return false
+	}
+
+	var extra json.RawMessage
+	if err := dec.Decode(&extra); err != io.EOF {
+		writeExamDecodeError(w, err)
+		return false
+	}
+	if body == nil || len(body) > 0 {
+		api.BadRequest(w, "request body must be empty")
+		return false
+	}
+	return true
+}
+
+func writeExamDecodeError(w http.ResponseWriter, err error) {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		api.Err(w, http.StatusRequestEntityTooLarge, "request body too large")
+		return
+	}
+	api.BadRequest(w, "invalid json")
 }
 
 func absolutizeExamLoginResult(r *http.Request, result *service.LoginResult) {

@@ -13,8 +13,21 @@ Sinkron per 2026-05-08:
 - Error semantics yang penting untuk mobile harus stabil: `404` token tidak ditemukan, `403` sesi tidak aktif/waktu tertutup, `409` device mismatch atau sudah submitted, dan `401` jika konteks peserta hilang.
 - Endpoint `answer` dan `submit` harus menjaga response sukses `data.status = recorded|submitted`.
 - Endpoint `heartbeat` dan `event` harus menjaga response sukses `data.status = ok|recorded`.
+- Request JSON runtime harus berupa satu JSON object tanpa trailing payload. Body terlalu besar dikembalikan sebagai `413 request body too large`.
 - Perubahan payload wajib direview dengan `docs/exam-payload-release-template.md`.
 - Fase 1 integrasi proposal mengunci endpoint runtime Flutter tetap di `/api/exam/*`; Web Admin tidak membuat public route tree `/api/cbt/**` baru untuk runtime siswa.
+
+## Batas Body Request
+
+| Endpoint | Batas |
+| --- | --- |
+| `POST /api/exam/login` | 4 KiB serialized JSON |
+| `POST /api/exam/event` | 16 KiB serialized JSON |
+| `POST /api/exam/answer` | 64 KiB serialized JSON |
+| `POST /api/exam/heartbeat` | empty body atau `{}` saja, maksimum 1 KiB |
+| `POST /api/exam/submit` | empty body atau `{}` saja, maksimum 1 KiB |
+
+Body yang melewati batas di atas mengembalikan `413` dengan error generic `request body too large`. Flutter harus menjaga limit jawaban uraian tetap aman di bawah budget serialized JSON endpoint `answer`.
 
 ## Base URL
 `https://api-cbt.mtsn2kolut.sch.id` (Sesuaikan dengan environment)
@@ -36,7 +49,7 @@ Mendaftarkan perangkat dan mendapatkan data soal.
 ```json
 {
   "token": "a1b2c3d4",
-  "device_fingerprint": "unique-device-id-or-imei"
+  "device_fingerprint": "android:student-phone:install-..."
 }
 ```
 - **Success Response (200 OK):**
@@ -75,6 +88,7 @@ Mendaftarkan perangkat dan mendapatkan data soal.
   - `404 Not Found`: Token tidak ditemukan.
   - `403 Forbidden`: Sesi ujian belum aktif, belum mulai, atau window sudah tertutup.
   - `409 Conflict`: Token sudah terikat dengan perangkat lain atau ujian sudah submitted.
+  - `413 Payload Too Large`: Body login melewati 4 KiB.
   - `500 Internal Server Error`: Error internal dengan pesan generic `internal server error`.
 
 ### Payload Kompatibilitas Mobile
@@ -137,7 +151,8 @@ Mengecek sisa waktu dan progres pengerjaan di server.
 }
 ```
 - **Error Responses:**
-  - `401 Unauthorized`: Header token/fingerprint tidak membentuk konteks peserta yang sah.
+  - `401 Unauthorized`: Header token/fingerprint belum membentuk konteks peserta yang sah, termasuk fingerprint kosong atau belum terikat setelah login valid.
+  - `409 Conflict`: Token sudah terikat ke fingerprint perangkat lain.
   - `500 Internal Server Error`: Error internal dengan pesan generic `internal server error`.
 
 ---
@@ -148,6 +163,7 @@ Wajib dipanggil secara berkala (misal setiap 30-60 detik) untuk menandakan siswa
 - **Endpoint:** `POST /api/exam/heartbeat`
 - **Headers:** `X-Exam-Token`, `X-Device-Fingerprint`
 - **Response:** `200 OK`
+- **Body:** kosong atau `{}`.
 - **Success Envelope:**
 ```json
 {
@@ -155,8 +171,11 @@ Wajib dipanggil secara berkala (misal setiap 30-60 detik) untuk menandakan siswa
 }
 ```
 - **Error Responses:**
-  - `401 Unauthorized`: Header token/fingerprint tidak membentuk konteks peserta yang sah.
+  - `400 Bad Request`: Body bukan empty object.
+  - `401 Unauthorized`: Header token/fingerprint belum membentuk konteks peserta yang sah.
+  - `409 Conflict`: Token sudah terikat ke fingerprint perangkat lain.
   - `429 Too Many Requests`: Heartbeat terlalu sering untuk peserta/action yang sama.
+  - `413 Payload Too Large`: Body heartbeat melewati 1 KiB.
   - `500 Internal Server Error`: Error internal dengan pesan generic `internal server error`.
 
 ---
@@ -182,8 +201,10 @@ Mencatat aktivitas mencurigakan atau perpindahan status aplikasi.
 ```
 - **Error Responses:**
   - `400 Bad Request`: JSON tidak valid atau `event_type` kosong.
-  - `401 Unauthorized`: Header token/fingerprint tidak membentuk konteks peserta yang sah.
+  - `401 Unauthorized`: Header token/fingerprint belum membentuk konteks peserta yang sah.
+  - `409 Conflict`: Token sudah terikat ke fingerprint perangkat lain.
   - `429 Too Many Requests`: Event terlalu sering untuk peserta/action yang sama.
+  - `413 Payload Too Large`: Body event melewati 16 KiB.
   - `500 Internal Server Error`: Error internal dengan pesan generic `internal server error`.
 
 ### Taxonomy Event BYOD Flutter
@@ -239,10 +260,11 @@ Mengirim jawaban untuk satu soal. Panggil setiap kali siswa memilih/mengubah jaw
 ```
 - **Error Responses:**
   - `400 Bad Request`: JSON tidak valid, `question_id` malformed, atau soal bukan bagian dari ujian peserta.
-  - `401 Unauthorized`: Header token/fingerprint tidak membentuk konteks peserta yang sah.
+  - `401 Unauthorized`: Header token/fingerprint belum membentuk konteks peserta yang sah.
   - `403 Forbidden`: Sesi belum mulai atau waktu ujian sudah habis.
   - `409 Conflict`: Ujian sudah disubmit sebelumnya.
   - `429 Too Many Requests`: Save answer terlalu sering untuk peserta/action yang sama.
+  - `413 Payload Too Large`: Body answer melewati 64 KiB serialized JSON.
   - `500 Internal Server Error`: Error internal dengan pesan generic `internal server error`.
 - **Success Envelope:**
 ```json
@@ -258,6 +280,7 @@ Finalisasi pengerjaan. Setelah ini, token tidak bisa digunakan lagi untuk menjaw
 
 - **Endpoint:** `POST /api/exam/submit`
 - **Headers:** `X-Exam-Token`, `X-Device-Fingerprint`
+- **Body:** kosong atau `{}`.
 - **Response:** `200 OK`
 - **Success Envelope:**
 ```json
@@ -266,10 +289,12 @@ Finalisasi pengerjaan. Setelah ini, token tidak bisa digunakan lagi untuk menjaw
 }
 ```
 - **Error Responses:**
-  - `401 Unauthorized`: Header token/fingerprint tidak membentuk konteks peserta yang sah.
+  - `400 Bad Request`: Body bukan empty object.
+  - `401 Unauthorized`: Header token/fingerprint belum membentuk konteks peserta yang sah.
   - `403 Forbidden`: Sesi belum mulai atau waktu ujian sudah tertutup.
   - `409 Conflict`: Ujian sudah disubmit sebelumnya.
   - `429 Too Many Requests`: Submit terlalu sering untuk peserta/action yang sama.
+  - `413 Payload Too Large`: Body submit melewati 1 KiB.
   - `500 Internal Server Error`: Error internal dengan pesan generic `internal server error`.
 
 ---
@@ -285,6 +310,7 @@ Gunakan daftar ini saat mengubah endpoint exam agar app Flutter tidak diam-diam 
 - [ ] perubahan event type/warning semantics tetap backward-compatible
 - [ ] perubahan error code login/status/submit sudah ditinjau dampaknya ke restore flow
 - [ ] `answer`, `submit`, `heartbeat`, dan `event` masih mengembalikan success envelope yang sama
+- [ ] request body caps tetap selaras dengan Flutter, terutama batas serialized JSON `answer` 64 KiB, cap uraian mobile konservatif 15.000 karakter, dan guard exact serialized UTF-8 body di `ExamApiClient`
 - [ ] token/kunci jawaban tidak bocor melalui payload siswa atau URL media
 
 Untuk rilis yang lebih formal, gunakan template:

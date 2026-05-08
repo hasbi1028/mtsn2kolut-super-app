@@ -112,12 +112,68 @@ bool shouldClearSnapshotAfterRestoreFailure(ExamApiException error) {
   return error.statusCode == 403 || error.statusCode == 404;
 }
 
+String statusFailureMessage(ExamApiException error) {
+  if (error.statusCode == null) {
+    return 'Status server belum bisa diperbarui karena perangkat belum terhubung. Tetap di layar ujian dan minta pengawas memeriksa koneksi.';
+  }
+
+  switch (error.statusCode) {
+    case 401:
+      return 'Konteks sesi perangkat tidak sah. Minta pengawas memeriksa token dan perangkat sebelum melanjutkan.';
+    case 403:
+      return 'Sesi ujian tidak lagi aktif menurut server. Tunggu arahan pengawas sebelum melanjutkan.';
+    case 409:
+      return 'Token sesi ini terdeteksi aktif di perangkat lain. Jangan lanjutkan dari perangkat ini sebelum pengawas memverifikasi.';
+    default:
+      return 'Status server belum bisa diperbarui. ${error.message}';
+  }
+}
+
+ExamGuidanceNotice? statusFailureNotice(ExamApiException error) {
+  if (error.statusCode == null) {
+    return const ExamGuidanceNotice(
+      title: 'Status belum tersinkron',
+      message:
+          'Pengawas perlu memastikan perangkat kembali menjangkau server sebelum peserta keluar dari mode aman atau mengirim ujian.',
+      tone: ExamGuidanceTone.warning,
+    );
+  }
+
+  switch (error.statusCode) {
+    case 401:
+      return const ExamGuidanceNotice(
+        title: 'Konteks peserta tidak sah',
+        message:
+            'Perangkat belum membentuk konteks peserta yang valid. Pengawas sebaiknya memeriksa token, fingerprint, dan status reset akses.',
+        tone: ExamGuidanceTone.danger,
+      );
+    case 403:
+      return const ExamGuidanceNotice(
+        title: 'Sesi tidak aktif',
+        message:
+            'Server menolak status karena sesi belum aktif atau sudah ditutup. Peserta sebaiknya menunggu keputusan pengawas.',
+        tone: ExamGuidanceTone.warning,
+      );
+    case 409:
+      return const ExamGuidanceNotice(
+        title: 'Perangkat berbeda terdeteksi',
+        message:
+            'Jangan lanjutkan ujian dari perangkat ini sebelum pengawas memastikan apakah token perlu direset atau peserta kembali ke perangkat awal.',
+        tone: ExamGuidanceTone.danger,
+      );
+    default:
+      return null;
+  }
+}
+
 String answerFailureMessage(ExamApiException error) {
   if (error.statusCode == null) {
     return 'Perangkat sedang kehilangan koneksi ke server ujian. Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.';
   }
 
   switch (error.statusCode) {
+    case 401:
+      return 'Sesi perangkat belum sah untuk mengirim jawaban. Jawaban tetap disimpan lokal sambil menunggu pemeriksaan pengawas.';
     case 403:
       return 'Waktu ujian sudah berakhir. Jawaban tetap disimpan di perangkat ini, tetapi pengawas perlu memastikan apakah sesi masih bisa dipulihkan.';
     case 409:
@@ -138,6 +194,13 @@ ExamGuidanceNotice? answerFailureNotice(ExamApiException error) {
   }
 
   switch (error.statusCode) {
+    case 401:
+      return const ExamGuidanceNotice(
+        title: 'Sesi perangkat perlu diverifikasi',
+        message:
+            'Jawaban lokal tetap disimpan, tetapi server belum menerima konteks peserta yang sah. Pengawas perlu memeriksa token dan perangkat.',
+        tone: ExamGuidanceTone.danger,
+      );
     case 403:
       return const ExamGuidanceNotice(
         title: 'Waktu ujian sudah berakhir',
@@ -168,6 +231,8 @@ String submitFailureMessage(
   }
 
   switch (error.statusCode) {
+    case 401:
+      return 'Sesi perangkat belum sah untuk submit. Tetap di layar ini dan minta pengawas memeriksa token atau reset akses.';
     case 403:
       return autoSubmit
           ? 'Waktu ujian sudah habis, tetapi server belum menerima submit otomatis. Segera minta pengawas memeriksa koneksi dan status sesi.'
@@ -196,6 +261,13 @@ ExamGuidanceNotice? submitFailureNotice(
   }
 
   switch (error.statusCode) {
+    case 401:
+      return const ExamGuidanceNotice(
+        title: 'Submit ditahan karena konteks peserta',
+        message:
+            'Server belum menerima konteks peserta yang sah. Pengawas perlu memeriksa token, perangkat, atau reset akses sebelum peserta mencoba lagi.',
+        tone: ExamGuidanceTone.danger,
+      );
     case 403:
       return ExamGuidanceNotice(
         title: autoSubmit

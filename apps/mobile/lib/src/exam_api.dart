@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'exam_events.dart';
 import 'models.dart';
 
 class ExamApiException implements Exception {
@@ -11,6 +12,11 @@ class ExamApiException implements Exception {
 
   final String message;
   final int? statusCode;
+
+  bool get isAlreadySubmittedConflict {
+    return statusCode == 409 &&
+        message.trim().toLowerCase().contains('already submitted');
+  }
 
   @override
   String toString() => 'ExamApiException($statusCode): $message';
@@ -34,6 +40,7 @@ class ExamApiClient {
 
   static const String userAgent =
       'MTsN2Kolut-CBT/1.0 (Flutter; Android; BYOD)';
+  static const int maxAnswerBodyBytes = 64 * 1024;
 
   final String baseUrl;
   final String? deviceFingerprint;
@@ -169,11 +176,41 @@ class ExamApiClient {
     _expectDataStatus(payload, 'recorded');
   }
 
+  Future<void> sendExamEvent({
+    required String token,
+    required ExamClientEvent event,
+  }) {
+    return sendEvent(token: token, eventType: event.eventType, data: event.data);
+  }
+
+  static int answerBodyByteLength({
+    required String questionId,
+    required String answer,
+  }) {
+    return utf8.encode(
+      jsonEncode(<String, Object?>{'question_id': questionId, 'answer': answer}),
+    ).length;
+  }
+
+  static bool isAnswerBodyWithinLimit({
+    required String questionId,
+    required String answer,
+  }) {
+    return answerBodyByteLength(questionId: questionId, answer: answer) <=
+        maxAnswerBodyBytes;
+  }
+
   Future<void> saveAnswer({
     required String token,
     required String questionId,
     required String answer,
   }) async {
+    if (!isAnswerBodyWithinLimit(questionId: questionId, answer: answer)) {
+      throw const ExamApiException(
+        'Jawaban terlalu panjang untuk dikirim ke server ujian.',
+        statusCode: 413,
+      );
+    }
     final payload = await _sendJson(
       'POST',
       '/api/exam/answer',

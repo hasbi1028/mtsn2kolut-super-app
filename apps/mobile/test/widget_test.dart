@@ -22,6 +22,33 @@ void main() {
     expect(find.text('Alamat server API'), findsNothing);
   });
 
+  test('essay answer cap stays below backend serialized 64 KiB budget', () {
+    final maxVisibleAnswer = List.filled(kEssayAnswerMaxChars, 'a').join();
+    expect(
+      ExamApiClient.isAnswerBodyWithinLimit(
+        questionId: 'question-short-1',
+        answer: maxVisibleAnswer,
+      ),
+      isTrue,
+    );
+
+    // Character-count limits alone are not enough: escaped/control-heavy input
+    // can exceed the exact serialized JSON body budget while still being below
+    // the visible character cap. The API helper must catch that before submit.
+    final escapedHeavyAnswer = List.filled(
+      kEssayAnswerMaxChars - 1,
+      '\u0000',
+    ).join();
+    expect(escapedHeavyAnswer.length, lessThanOrEqualTo(kEssayAnswerMaxChars));
+    expect(
+      ExamApiClient.isAnswerBodyWithinLimit(
+        questionId: 'question-short-1',
+        answer: escapedHeavyAnswer,
+      ),
+      isFalse,
+    );
+  });
+
   testWidgets('login token field accepts 32-character backend hex token', (
     tester,
   ) async {
@@ -1141,6 +1168,47 @@ void main() {
   );
 
   testWidgets(
+    'exam shell preserves local answer on device-mismatch conflict',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final store = _MemoryExamSessionStore();
+      final client = _RecordingExamApiClient(
+        baseUrl: 'http://127.0.0.1:65535',
+        saveAnswerError: const ExamApiException(
+          'token already bound to another device',
+          statusCode: 409,
+        ),
+      );
+
+      await tester.pumpWidget(
+        _TestApp(
+          child: ExamShellScreen(
+            client: client,
+            examToken: 'abc12345',
+            deviceFingerprint: 'android:test',
+            autoStartRuntime: false,
+            sessionStore: store,
+            initialPayload: _sampleLoginPayload(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('4'));
+      await tester.pumpAndSettle();
+
+      final snapshot = await store.loadSnapshot();
+      expect(client.saveAnswerCount, 1);
+      expect(find.text('Ujian berhasil dikirim.'), findsNothing);
+      expect(snapshot?.answers, containsPair('question-1', 'D'));
+      expect(snapshot?.pendingAnswers, containsPair('question-1', 'D'));
+    },
+  );
+
+  testWidgets(
     'exam shell treats submitted status as terminal and clears snapshot',
     (tester) async {
       tester.view.physicalSize = const Size(1440, 2200);
@@ -1494,6 +1562,148 @@ void main() {
     expect(find.text('Memeriksa status...'), findsOneWidget);
   });
 
+  testWidgets('exam shell keeps resume gate when status refresh fails', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final client = _RecordingExamApiClient(
+      baseUrl: 'http://127.0.0.1:65535',
+      statusError: const ExamApiException('transport'),
+    );
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialResumeCheckRequired: true,
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.tap(find.text('Lanjutkan dengan pengecekan'));
+    await tester.pumpAndSettle();
+
+    expect(client.statusCount, 1);
+    expect(find.text('Mode ujian diamankan'), findsOneWidget);
+    expect(find.text('Lanjutkan dengan pengecekan'), findsOneWidget);
+    expect(
+      find.textContaining('Status ujian belum berhasil dicek ulang'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('exam shell treats pending answer flush 409 as terminal', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = _MemoryExamSessionStore(
+      initialSnapshot: _sampleSnapshot(
+        answers: const <String, String>{'question-1': 'B'},
+        pendingAnswers: const <String, String>{'question-1': 'B'},
+      ),
+    );
+    final client = _RecordingExamApiClient(
+      baseUrl: 'http://127.0.0.1:65535',
+      saveAnswerError: const ExamApiException(
+        'already submitted',
+        statusCode: 409,
+      ),
+      statusPayload: const ExamStatusPayload(
+        answeredCount: 1,
+        totalQuestions: 1,
+        timeRemainingSeconds: 0,
+        isSubmitted: true,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          sessionStore: store,
+          restoredSnapshot: _sampleSnapshot(
+            answers: const <String, String>{'question-1': 'B'},
+            pendingAnswers: const <String, String>{'question-1': 'B'},
+          ),
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.tap(find.text('Kirim Ujian'));
+    await tester.pumpAndSettle();
+
+    expect(client.saveAnswerCount, 1);
+    expect(client.statusCount, 1);
+    expect(find.text('Ujian berhasil dikirim.'), findsOneWidget);
+    expect(await store.loadSnapshot(), isNull);
+  });
+
+  testWidgets('exam shell preserves pending flush on device mismatch 409', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = _MemoryExamSessionStore(
+      initialSnapshot: _sampleSnapshot(
+        answers: const <String, String>{'question-1': 'B'},
+        pendingAnswers: const <String, String>{'question-1': 'B'},
+      ),
+    );
+    final client = _RecordingExamApiClient(
+      baseUrl: 'http://127.0.0.1:65535',
+      saveAnswerError: const ExamApiException(
+        'token already bound to another device',
+        statusCode: 409,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          sessionStore: store,
+          restoredSnapshot: _sampleSnapshot(
+            answers: const <String, String>{'question-1': 'B'},
+            pendingAnswers: const <String, String>{'question-1': 'B'},
+          ),
+          initialPayload: _sampleLoginPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.tap(find.text('Kirim Ujian'));
+    await tester.pumpAndSettle();
+
+    final snapshot = await store.loadSnapshot();
+    expect(client.saveAnswerCount, 1);
+    expect(find.text('Ujian berhasil dikirim.'), findsNothing);
+    expect(snapshot?.pendingAnswers, containsPair('question-1', 'B'));
+    expect(find.textContaining('Masih ada jawaban yang belum tersinkron'), findsOneWidget);
+  });
+
   testWidgets('exam shell blocks empty question payload safely', (
     tester,
   ) async {
@@ -1555,6 +1765,7 @@ class _RecordingExamApiClient extends ExamApiClient {
       timeRemainingSeconds: 0,
       isSubmitted: false,
     ),
+    this.statusError,
     this.submitError,
     this.saveAnswerError,
   });
@@ -1566,6 +1777,7 @@ class _RecordingExamApiClient extends ExamApiClient {
   int saveAnswerCount = 0;
   final bool throwOnEvent;
   final ExamStatusPayload statusPayload;
+  final ExamApiException? statusError;
   final ExamApiException? submitError;
   final ExamApiException? saveAnswerError;
 
@@ -1577,6 +1789,10 @@ class _RecordingExamApiClient extends ExamApiClient {
   @override
   Future<ExamStatusPayload> getStatus(String token) async {
     statusCount += 1;
+    final error = statusError;
+    if (error != null) {
+      throw error;
+    }
     return statusPayload;
   }
 

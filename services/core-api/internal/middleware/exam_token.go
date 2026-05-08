@@ -16,6 +16,14 @@ const (
 	DeviceFingerprintHdr string         = "X-Device-Fingerprint"
 )
 
+type examDeviceMatchState int
+
+const (
+	examDeviceMatchOK examDeviceMatchState = iota
+	examDeviceMatchMissingContext
+	examDeviceMatchMismatch
+)
+
 type ParticipantLookup func(ctx context.Context, token string) (db.GetParticipantByTokenRow, error)
 
 // ExamToken validates the X-Exam-Token and device fingerprint headers, then
@@ -37,8 +45,13 @@ func ExamToken(lookup ParticipantLookup) func(http.Handler) http.Handler {
 				api.Forbidden(w)
 				return
 			}
-			if !examDeviceMatchesRequest(r, p) {
+			switch examDeviceMatchForRequest(r, p) {
+			case examDeviceMatchOK:
+			case examDeviceMatchMismatch:
 				api.Err(w, http.StatusConflict, "token already bound to another device")
+				return
+			default:
+				api.Unauthorized(w)
 				return
 			}
 			ctx := context.WithValue(r.Context(), ExamParticipantKey, p)
@@ -47,12 +60,19 @@ func ExamToken(lookup ParticipantLookup) func(http.Handler) http.Handler {
 	}
 }
 
-func examDeviceMatchesRequest(r *http.Request, p db.GetParticipantByTokenRow) bool {
+func examDeviceMatchForRequest(r *http.Request, p db.GetParticipantByTokenRow) examDeviceMatchState {
 	bound := strings.TrimSpace(p.DeviceFingerprint.String)
 	if !p.DeviceFingerprint.Valid || bound == "" {
-		return false
+		return examDeviceMatchMissingContext
 	}
-	return strings.TrimSpace(r.Header.Get(DeviceFingerprintHdr)) == bound
+	requested := strings.TrimSpace(r.Header.Get(DeviceFingerprintHdr))
+	if requested == "" {
+		return examDeviceMatchMissingContext
+	}
+	if requested != bound {
+		return examDeviceMatchMismatch
+	}
+	return examDeviceMatchOK
 }
 
 // ParticipantFromContext retrieves the exam participant injected by ExamToken middleware.
@@ -83,8 +103,13 @@ func ExamTokenOrJWT(
 					api.Forbidden(w)
 					return
 				}
-				if !examDeviceMatchesRequest(r, p) {
+				switch examDeviceMatchForRequest(r, p) {
+				case examDeviceMatchOK:
+				case examDeviceMatchMismatch:
 					api.Err(w, http.StatusConflict, "token already bound to another device")
+					return
+				default:
+					api.Unauthorized(w)
 					return
 				}
 				ctx := context.WithValue(r.Context(), ExamParticipantKey, p)

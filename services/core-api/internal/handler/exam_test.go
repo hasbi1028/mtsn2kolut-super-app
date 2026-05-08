@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -504,6 +505,65 @@ func TestExamLoginRequiresToken(t *testing.T) {
 	}
 }
 
+func TestExamLoginHardensJSONBody(t *testing.T) {
+	t.Run("rejects oversized body", func(t *testing.T) {
+		svc := &fakeExamService{}
+		h := &Exam{svc: svc}
+		body := bytes.NewBufferString(`{"token":"` + strings.Repeat("a", 5000) + `","device_fingerprint":"device-1"}`)
+		req := httptest.NewRequest("POST", "http://internal/api/exam/login", body)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		h.Login(rec, req)
+
+		if rec.Code != http.StatusRequestEntityTooLarge {
+			t.Fatalf("status = %d, want 413; body=%s", rec.Code, rec.Body.String())
+		}
+		if svc.lastLoginToken != "" {
+			t.Fatalf("service Login called with token %q, want blocked before service", svc.lastLoginToken)
+		}
+	})
+
+	t.Run("rejects trailing json", func(t *testing.T) {
+		h := &Exam{svc: &fakeExamService{}}
+		req := httptest.NewRequest("POST", "http://internal/api/exam/login", bytes.NewBufferString(`{"token":"a1b2c3d4","device_fingerprint":"device-1"} {}`))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		h.Login(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("json unmarshal failed: %v", err)
+		}
+		if payload.Error != "invalid json" {
+			t.Fatalf("error = %q, want invalid json", payload.Error)
+		}
+	})
+
+	t.Run("trims token before service lookup", func(t *testing.T) {
+		svc := &fakeExamService{}
+		h := &Exam{svc: svc}
+		req := httptest.NewRequest("POST", "http://internal/api/exam/login", bytes.NewBufferString(`{"token":"  a1b2c3d4  ","device_fingerprint":"device-1"}`))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		h.Login(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+		}
+		if svc.lastLoginToken != "a1b2c3d4" {
+			t.Fatalf("login token = %q, want trimmed token", svc.lastLoginToken)
+		}
+	})
+}
+
 func TestExamStatusRequiresParticipantContext(t *testing.T) {
 	h := &Exam{svc: &fakeExamService{}}
 	req := httptest.NewRequest("GET", "http://internal/api/exam/status", nil)
@@ -667,6 +727,25 @@ func TestExamSubmitAnswerRejectsInvalidQuestionID(t *testing.T) {
 	}
 }
 
+func TestExamSubmitAnswerRejectsOversizedBody(t *testing.T) {
+	participant := db.GetParticipantByTokenRow{}
+	svc := &fakeExamService{}
+	h := &Exam{svc: svc}
+	req := httptest.NewRequest("POST", "http://internal/api/exam/answer", bytes.NewBufferString(`{"question_id":"11111111-1111-1111-1111-111111111111","answer":"`+strings.Repeat("x", 70<<10)+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	rec := httptest.NewRecorder()
+
+	h.SubmitAnswer(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413; body=%s", rec.Code, rec.Body.String())
+	}
+	if svc.lastAnswerText != "" {
+		t.Fatalf("service SubmitAnswer called with answer length %d, want blocked before service", len(svc.lastAnswerText))
+	}
+}
+
 func TestExamSubmitAnswerWritesWrappedJSON(t *testing.T) {
 	participant := db.GetParticipantByTokenRow{}
 	svc := &fakeExamService{}
@@ -762,7 +841,7 @@ func TestExamSubmitMapsKnownServiceErrors(t *testing.T) {
 func TestExamSubmitWritesWrappedJSON(t *testing.T) {
 	participant := db.GetParticipantByTokenRow{}
 	h := &Exam{svc: &fakeExamService{}}
-	req := httptest.NewRequest("POST", "http://internal/api/exam/submit", nil)
+	req := httptest.NewRequest("POST", "http://internal/api/exam/submit", bytes.NewBufferString(`{}`))
 	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
 	rec := httptest.NewRecorder()
 
@@ -781,6 +860,44 @@ func TestExamSubmitWritesWrappedJSON(t *testing.T) {
 	if payload.Data["status"] != "submitted" {
 		t.Fatalf("status = %q, want %q", payload.Data["status"], "submitted")
 	}
+}
+
+func TestExamSubmitRejectsUnexpectedOrOversizedBody(t *testing.T) {
+	participant := db.GetParticipantByTokenRow{ID: handlerTestUUID(132)}
+
+	t.Run("rejects non empty json object", func(t *testing.T) {
+		svc := &fakeExamService{}
+		h := &Exam{svc: svc}
+		req := httptest.NewRequest("POST", "http://internal/api/exam/submit", bytes.NewBufferString(`{"force":true}`))
+		req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+		rec := httptest.NewRecorder()
+
+		h.Submit(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+		}
+		if svc.submitCalls != 0 {
+			t.Fatalf("Submit service calls = %d, want blocked before service", svc.submitCalls)
+		}
+	})
+
+	t.Run("rejects oversized body", func(t *testing.T) {
+		svc := &fakeExamService{}
+		h := &Exam{svc: svc}
+		req := httptest.NewRequest("POST", "http://internal/api/exam/submit", bytes.NewBufferString(`{"padding":"`+strings.Repeat("x", 2<<10)+`"}`))
+		req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+		rec := httptest.NewRecorder()
+
+		h.Submit(rec, req)
+
+		if rec.Code != http.StatusRequestEntityTooLarge {
+			t.Fatalf("status = %d, want 413; body=%s", rec.Code, rec.Body.String())
+		}
+		if svc.submitCalls != 0 {
+			t.Fatalf("Submit service calls = %d, want blocked before service", svc.submitCalls)
+		}
+	})
 }
 
 func TestExamSubmitUsesWriteLimiter(t *testing.T) {
@@ -882,7 +999,7 @@ func TestExamRecordEventRequiresParticipantContext(t *testing.T) {
 func TestExamHeartbeatWritesWrappedSuccessJSON(t *testing.T) {
 	h := &Exam{svc: &fakeExamService{}}
 	var participant db.GetParticipantByTokenRow
-	req := httptest.NewRequest("POST", "http://internal/api/exam/heartbeat", nil)
+	req := httptest.NewRequest("POST", "http://internal/api/exam/heartbeat", bytes.NewBufferString(`{}`))
 	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
 	rec := httptest.NewRecorder()
 
@@ -901,6 +1018,61 @@ func TestExamHeartbeatWritesWrappedSuccessJSON(t *testing.T) {
 	if payload.Data["status"] != "ok" {
 		t.Fatalf("status = %q, want %q", payload.Data["status"], "ok")
 	}
+}
+
+func TestExamHeartbeatRejectsUnexpectedOrOversizedBody(t *testing.T) {
+	participant := db.GetParticipantByTokenRow{ID: handlerTestUUID(133)}
+
+	t.Run("rejects non empty json object", func(t *testing.T) {
+		svc := &fakeExamService{}
+		h := &Exam{svc: svc}
+		req := httptest.NewRequest("POST", "http://internal/api/exam/heartbeat", bytes.NewBufferString(`{"status":"manual"}`))
+		req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+		rec := httptest.NewRecorder()
+
+		h.Heartbeat(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+		}
+		if svc.lastHeartbeatParticipantID.Valid {
+			t.Fatalf("Heartbeat service called with participant %s, want blocked before service", svc.lastHeartbeatParticipantID.String())
+		}
+	})
+
+	t.Run("rejects json null", func(t *testing.T) {
+		svc := &fakeExamService{}
+		h := &Exam{svc: svc}
+		req := httptest.NewRequest("POST", "http://internal/api/exam/heartbeat", bytes.NewBufferString(`null`))
+		req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+		rec := httptest.NewRecorder()
+
+		h.Heartbeat(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+		}
+		if svc.lastHeartbeatParticipantID.Valid {
+			t.Fatalf("Heartbeat service called with participant %s, want blocked before service", svc.lastHeartbeatParticipantID.String())
+		}
+	})
+
+	t.Run("rejects oversized body", func(t *testing.T) {
+		svc := &fakeExamService{}
+		h := &Exam{svc: svc}
+		req := httptest.NewRequest("POST", "http://internal/api/exam/heartbeat", bytes.NewBufferString(`{"padding":"`+strings.Repeat("x", 2<<10)+`"}`))
+		req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+		rec := httptest.NewRecorder()
+
+		h.Heartbeat(rec, req)
+
+		if rec.Code != http.StatusRequestEntityTooLarge {
+			t.Fatalf("status = %d, want 413; body=%s", rec.Code, rec.Body.String())
+		}
+		if svc.lastHeartbeatParticipantID.Valid {
+			t.Fatalf("Heartbeat service called with participant %s, want blocked before service", svc.lastHeartbeatParticipantID.String())
+		}
+	})
 }
 
 func TestExamHeartbeatMapsUnexpectedServiceError(t *testing.T) {
@@ -958,6 +1130,60 @@ func TestExamRecordEventWritesWrappedSuccessJSON(t *testing.T) {
 	if reason, _ := svc.lastEventData["reason"].(string); reason != "test" {
 		t.Fatalf("event data reason = %v, want test", svc.lastEventData["reason"])
 	}
+}
+
+func TestExamRecordEventHardensJSONBody(t *testing.T) {
+	participant := db.GetParticipantByTokenRow{}
+
+	t.Run("rejects oversized body", func(t *testing.T) {
+		svc := &fakeExamService{}
+		h := &Exam{svc: svc}
+		req := httptest.NewRequest("POST", "http://internal/api/exam/event", bytes.NewBufferString(`{"event_type":"warning","data":{"padding":"`+strings.Repeat("x", 20<<10)+`"}}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+		rec := httptest.NewRecorder()
+
+		h.RecordEvent(rec, req)
+
+		if rec.Code != http.StatusRequestEntityTooLarge {
+			t.Fatalf("status = %d, want 413; body=%s", rec.Code, rec.Body.String())
+		}
+		if svc.lastEventType != "" {
+			t.Fatalf("service RecordClientEvent called with event type %q, want blocked before service", svc.lastEventType)
+		}
+	})
+
+	t.Run("rejects trailing json", func(t *testing.T) {
+		h := &Exam{svc: &fakeExamService{}}
+		req := httptest.NewRequest("POST", "http://internal/api/exam/event", bytes.NewBufferString(`{"event_type":"warning","data":{"reason":"test"}} {}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+		rec := httptest.NewRecorder()
+
+		h.RecordEvent(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("trims event type before service write", func(t *testing.T) {
+		svc := &fakeExamService{}
+		h := &Exam{svc: svc}
+		req := httptest.NewRequest("POST", "http://internal/api/exam/event", bytes.NewBufferString(`{"event_type":"  warning  ","data":{"reason":"test"}}`))
+		req.Header.Set("Content-Type", "application/json")
+		req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+		rec := httptest.NewRecorder()
+
+		h.RecordEvent(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+		}
+		if svc.lastEventType != "warning" {
+			t.Fatalf("event type = %q, want trimmed warning", svc.lastEventType)
+		}
+	})
 }
 
 func TestExamRecordEventMapsUnexpectedServiceError(t *testing.T) {
