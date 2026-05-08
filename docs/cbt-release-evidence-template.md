@@ -9,7 +9,7 @@ Gunakan template ini untuk arsip operational readiness CBT. Template ini bukan i
 - Reviewer:
 - Branch:
 - Commit:
-- Phase baseline: Phase 5 commit `bec16c8` + Phase 6 evidence automation + Phase 8 manifest/checksum/secret-scan hardening + Phase 9 commit `bf9df69` post-deploy smoke/runbook hardening + Phase 10 handoff package + Phase 11 archive/retention rules after Phase 10 handoff + Phase 12 evidence index/retrieval policy after Phase 11 archive/retention + Phase 13 Mobile Release Candidate and Device Matrix + Phase 14 Operator Rehearsal and Proctor Evidence + Phase 15 Final CBT Release Readiness Sign-off.
+- Phase baseline: Phase 5 commit `bec16c8` + Phase 6 evidence automation + Phase 8 manifest/checksum/secret-scan hardening + Phase 9 commit `bf9df69` post-deploy smoke/runbook hardening + Phase 10 handoff package + Phase 11 archive/retention rules after Phase 10 handoff + Phase 12 evidence index/retrieval policy after Phase 11 archive/retention + Phase 13 Mobile Release Candidate and Device Matrix + Phase 14 Operator Rehearsal and Proctor Evidence + Phase 15 Final CBT Release Readiness Sign-off + Phase 23-26 evidence/analytics/report guard + Phase 27-30 rehearsal/DR/security/mobile RC evidence.
 - Final baseline marker:
   - `CBT Phase 15 final baseline`
 - Keputusan rilis: lanjut / tunda / rehearsal ulang.
@@ -74,6 +74,14 @@ Gunakan bagian ini setelah final audit proposal dan final readiness evidence dib
   - role/scope/token boundary:
   - event/audit evidence:
   - go/no-go:
+- Phase 27-30 evidence:
+  - Phase 27 operator rehearsal status:
+  - Phase 28 backup verification status:
+  - Phase 29 security and ISO-control alignment status:
+  - Phase 30 mobile RC build status:
+  - APK SHA-256 hash:
+  - backup checksum:
+  - ISO certification claim made: tidak.
 - Decision hygiene:
   - default generated sign-off must be `pending_manual_signoff` when manual evidence is missing.
   - generated readiness may use `ready_for_rehearsal` only when operator flags manual evidence complete.
@@ -566,6 +574,85 @@ Phase 26 report template matrix:
 - CSV Excel-compatible path available where safe: pass / fail / pending.
 - no broad token spreadsheet export: ya / tidak.
 - no new binary PDF/XLSX endpoint introduced without approved safe pattern: ya / tidak.
+
+## Phase 27-30 Rehearsal, DR, Security, and Mobile RC Evidence
+
+Isi bagian ini setelah operator rehearsal, backup/DR evidence, security alignment evidence, dan mobile RC package evidence direview. Phase 27-30 adalah docs/evidence/checklist/safe guards only.
+
+Phase 27 Operator Rehearsal Workflow Completion:
+
+- Operator Rehearsal Workflow Completion status: pending_manual_evidence / complete_by_operator.
+- Bank Soal to Asesmen Persiapan to Pelaksanaan/Pengawasan to Flutter APK to Hasil/Post-exam review captured: ya / tidak.
+- operator rehearsal evidence bundle:
+- proctor evidence:
+- role/scope/token boundary:
+- event/audit evidence:
+- go/no-go rehearsal:
+- blockers:
+- accepted risks:
+- operator:
+- pengawas:
+- reviewer:
+- rollback owner:
+- follow-up owner:
+
+Phase 28 Infrastructure, Backup, Restore, and DR Evidence:
+
+- Infrastructure, Backup, Restore, and DR Evidence status: pending_manual_evidence / verified_read_only / complete_by_operator.
+- backup path:
+- latest symlink:
+- backup timestamp:
+- backup file size:
+- checksum file:
+- computed SHA-256:
+- `sha256sum -c`: pass / fail / skipped.
+- `pg_restore --list`: pass / fail / skipped.
+- restore rehearsal target:
+- restore rehearsal status: not run / isolated scratch DB / offline target.
+- Do not restore over live DB: ya / tidak.
+- RTO baseline:
+- RPO baseline:
+- DR owner:
+- last successful restore drill date:
+- `make ops-health`: pass / fail / skipped.
+
+Phase 29 Security and ISO-Control Alignment Evidence:
+
+- Security and ISO-Control Alignment Evidence status: pending_manual_evidence / reviewed.
+- control alignment, not certification: ya / tidak.
+- No ISO certification claim: ya / tidak.
+- RBAC controls:
+- rate limit and trusted proxy:
+- token/device binding:
+- audit trail:
+- evidence redaction:
+- backup/restore:
+- generated evidence secret scan:
+- security residual risks:
+- owner follow-up:
+
+Phase 30 Mobile RC Build and Release Package Evidence:
+
+- Mobile RC Build and Release Package status: skipped / build_pass / build_fail / pending_manual_device_evidence.
+- RC identifier:
+- commit hash:
+- version name/code:
+- APK SHA-256 hash:
+- APK path:
+- APK file size:
+- signing status:
+- `API_BASE_URL`:
+- Flutter SDK path:
+- Flutter version:
+- `flutter analyze`: pass / fail / skipped.
+- `flutter test`: pass / fail / skipped.
+- `flutter build apk --release`: pass / fail / skipped.
+- `sha256sum build/app/outputs/flutter-apk/app-release.apk`: pass / fail / skipped.
+- Android `INTERNET` permission: pass / fail.
+- Android `allowBackup=false`: pass / fail.
+- Device matrix status:
+- minimum two Android vendors: pass / fail / belum diuji.
+- real-device PASS claimed only after physical Android operator test: ya / tidak.
 
 ## Acceptance Decision
 

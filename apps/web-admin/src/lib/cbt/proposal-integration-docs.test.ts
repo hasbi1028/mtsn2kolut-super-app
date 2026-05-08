@@ -20,6 +20,7 @@ import proposalGapAuditDoc from '../../../../../docs/cbt-proposal-gap-audit.md?r
 import proposalTraceabilityDoc from '../../../../../docs/cbt-proposal-100-percent-traceability.md?raw';
 import phase1922Doc from '../../../../../docs/cbt-proposal-integration-phase-19-22.md?raw';
 import phase2326Doc from '../../../../../docs/cbt-proposal-integration-phase-23-26.md?raw';
+import phase2730Doc from '../../../../../docs/cbt-proposal-integration-phase-27-30.md?raw';
 import hotspotDecisionDoc from '../../../../../docs/cbt-hotspot-design-decision.md?raw';
 import uploadAnswerPolicyDoc from '../../../../../docs/cbt-upload-answer-policy.md?raw';
 import mediaPromptPolicyDoc from '../../../../../docs/cbt-media-prompt-response-policy.md?raw';
@@ -135,6 +136,34 @@ interface FinalEvidenceReport {
 		command: string;
 		scope: string;
 	}>;
+	phase_27_30: {
+		operator_rehearsal_workflow: {
+			status: string;
+			requires_live_operator_rehearsal: boolean;
+			manual_evidence_required: boolean;
+			flow: string;
+		};
+		backup_restore_dr: {
+			status: string;
+			checksum_status: string;
+			pg_restore_list_status: string;
+			do_not_restore_over_live_db: boolean;
+		};
+		security_iso_control_alignment: {
+			control_alignment_not_certification: boolean;
+			no_iso_certification_claim: boolean;
+			evidence_topics: string[];
+		};
+		mobile_rc_build: {
+			status: string;
+			apk_sha256: string;
+			device_matrix_status: string;
+			minimum_android_vendors: number;
+			real_device_pass_claimed: boolean;
+			manifest_internet_permission: string;
+			manifest_allow_backup_false: string;
+		};
+	};
 	secret_scan: {
 		status: string;
 	};
@@ -388,6 +417,110 @@ describe('CBT proposal integration documentation guard', () => {
 		}
 
 		for (const doc of [phase2326Doc, finalReleaseEvidenceDoc, releaseEvidenceTemplateDoc]) {
+			expect(doc).not.toContain('POST /api/cbt/login');
+			expect(doc).not.toContain('GET /api/cbt/status');
+		}
+	});
+
+	it('locks Phase 27-30 rehearsal, DR, security, and mobile RC evidence boundaries', () => {
+		for (const phrase of [
+			'Phase 27-30',
+			'Rehearsal, DR, Security, and Mobile RC Evidence',
+			'docs, evidence, checklist, and safe guard scope',
+			'Operator Rehearsal Workflow Completion',
+			'Bank Soal to Asesmen Persiapan to Pelaksanaan/Pengawasan to Flutter APK to Hasil/Post-exam review',
+			'manual evidence required',
+			'operator rehearsal',
+			'go/no-go rehearsal',
+			'proctor evidence',
+			'Infrastructure, Backup, Restore, and DR Evidence',
+			'backup path',
+			'latest symlink',
+			'checksum',
+			'restore rehearsal',
+			'Do not restore over live DB',
+			'make ops-health',
+			'Security and ISO-Control Alignment Evidence',
+			'control alignment, not certification',
+			'No ISO certification claim',
+			'RBAC controls',
+			'rate limit',
+			'token/device binding',
+			'audit trail',
+			'evidence redaction',
+			'backup/restore',
+			'secret scan',
+			'Mobile RC Build and Release Package',
+			'APK SHA-256 hash',
+			'version name/code',
+			'commit hash',
+			'signing status',
+			'API_BASE_URL',
+			'minimum two Android vendors',
+			'real-device PASS claimed only after physical Android operator test',
+			'flutter build apk --release',
+			'sha256sum build/app/outputs/flutter-apk/app-release.apk',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`'
+		]) {
+			expect(phase2730Doc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 27-30 follow-up status',
+			'Operator Rehearsal Workflow Completion',
+			'Infrastructure, Backup, Restore, and DR Evidence',
+			'Do not restore over live DB',
+			'Security and ISO-Control Alignment Evidence',
+			'control alignment, not certification',
+			'No ISO certification claim',
+			'Mobile RC Build and Release Package',
+			'APK SHA-256 hash'
+		]) {
+			expect(proposalGapAuditDoc).toContain(phrase);
+			expect(proposalTraceabilityDoc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 27-30 evidence status',
+			'backup verification may record backup path, latest symlink, checksum',
+			'Do not restore over live DB',
+			'control alignment, not certification',
+			'No ISO certification claim is made',
+			'APK build status',
+			'A successful build/hash does not claim real-device PASS'
+		]) {
+			expect(finalReleaseEvidenceDoc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 27-30 Rehearsal, DR, Security, and Mobile RC Evidence',
+			'Operator Rehearsal Workflow Completion',
+			'Infrastructure, Backup, Restore, and DR Evidence',
+			'Do not restore over live DB',
+			'Security and ISO-Control Alignment Evidence',
+			'control alignment, not certification',
+			'No ISO certification claim',
+			'Mobile RC Build and Release Package',
+			'APK SHA-256 hash',
+			'real-device PASS claimed only after physical Android operator test'
+		]) {
+			expect(releaseEvidenceTemplateDoc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 30 Mobile RC Build and Release Package',
+			'APK SHA-256 hash',
+			'signing status',
+			'API_BASE_URL',
+			'real-device PASS claimed only after physical Android operator test',
+			'minimum two Android vendors'
+		]) {
+			expect(deviceTestMatrixDoc).toContain(phrase);
+			expect(releaseChecklistDoc).toContain(phrase);
+		}
+
+		for (const doc of [phase2730Doc, finalReleaseEvidenceDoc, releaseEvidenceTemplateDoc]) {
 			expect(doc).not.toContain('POST /api/cbt/login');
 			expect(doc).not.toContain('GET /api/cbt/status');
 		}
@@ -1258,6 +1391,17 @@ describe('CBT proposal integration documentation guard', () => {
 			'--manual-operator-rehearsal-complete',
 			'--manual-final-signoff-complete',
 			'--run-ops-health',
+			'--backup-artifact',
+			'--run-mobile-rc-build',
+			'--mobile-api-base-url',
+			'Phase 27 Operator Rehearsal Workflow Completion',
+			'Phase 28 Infrastructure, Backup, Restore, and DR Evidence',
+			'Phase 29 Security and ISO-Control Alignment Evidence',
+			'Phase 30 Mobile RC Build and Release Package',
+			'pg_restore --list',
+			'Do not restore over live DB',
+			'No ISO certification claim',
+			'real_device_pass_claimed',
 			'ready_for_rehearsal',
 			'pending_manual_signoff',
 			'redact_stream',
@@ -1272,6 +1416,7 @@ describe('CBT proposal integration documentation guard', () => {
 			/\bmake\s+db-migrate\b/i,
 			/\bnpm\s+run\s+db:migrate\b/i,
 			/\bpsql\b[^\n]*(ALTER|UPDATE|DELETE|INSERT|DROP|TRUNCATE|CREATE)\b/i,
+			/\bpg_restore\b[^\n]*(--dbname|-d)\b/i,
 			/\bdeploy\/backup-postgresql\.sh\b/,
 			/\bprintenv\b/,
 			/\benv\s*\|/
@@ -1308,6 +1453,11 @@ describe('CBT proposal integration documentation guard', () => {
 			expect(markdown).toContain('pending_manual_signoff');
 			expect(markdown).toContain('physical Android devices');
 			expect(markdown).toContain('operator rehearsal');
+			expect(markdown).toContain('Phase 27 Operator Rehearsal Workflow Completion');
+			expect(markdown).toContain('Phase 28 Infrastructure, Backup, Restore, and DR Evidence');
+			expect(markdown).toContain('Phase 29 Security and ISO-Control Alignment Evidence');
+			expect(markdown).toContain('Phase 30 Mobile RC Build and Release Package');
+			expect(markdown).toContain('Real-device PASS claimed: `false`');
 			expect(markdown).not.toContain('/api/cbt/login');
 			expect(markdown).not.toContain('/api/cbt/status');
 
@@ -1342,11 +1492,18 @@ describe('CBT proposal integration documentation guard', () => {
 			expect(evidence.docs['proposal_gap_audit']?.exists).toBe(true);
 			expect(evidence.docs['final_release_evidence']?.exists).toBe(true);
 			expect(evidence.docs['device_test_matrix']?.exists).toBe(true);
+			expect(evidence.docs['phase_27_30']?.exists).toBe(true);
 			expect(evidence.automated_evidence.find((item) => item.name === 'git-diff-check')?.status).toMatch(/^(pass|fail)$/);
 			expect(evidence.automated_evidence.find((item) => item.name === 'docs-existence')?.status).toBe('pass');
 			expect(evidence.health_commands.find((item) => item.name === 'make ops-health')?.status).toBe('skipped');
 			expect(evidence.tests_manifest.map((item) => item.command)).toContain(
 				'cd apps/web-admin && npm run test:unit -- src/lib/cbt/proposal-integration-docs.test.ts'
+			);
+			expect(evidence.tests_manifest.map((item) => item.command)).toContain(
+				'deploy/scripts/cbt-final-readiness.sh --backup-artifact <dump>'
+			);
+			expect(evidence.tests_manifest.map((item) => item.command)).toContain(
+				'deploy/scripts/cbt-final-readiness.sh --run-mobile-rc-build --mobile-api-base-url https://api.sekolah.example'
 			);
 			expect(evidence.manual_evidence.device_matrix.status).toBe('pending_manual_evidence');
 			expect(evidence.manual_evidence.device_matrix.requires_physical_android_devices).toBe(true);
@@ -1354,6 +1511,18 @@ describe('CBT proposal integration documentation guard', () => {
 			expect(evidence.manual_evidence.operator_rehearsal.status).toBe('pending_manual_evidence');
 			expect(evidence.manual_evidence.operator_rehearsal.requires_live_operator_rehearsal).toBe(true);
 			expect(evidence.manual_evidence.final_signoff.status).toBe('pending_manual_signoff');
+			expect(evidence.phase_27_30.operator_rehearsal_workflow.status).toBe('pending_manual_evidence');
+			expect(evidence.phase_27_30.operator_rehearsal_workflow.manual_evidence_required).toBe(true);
+			expect(evidence.phase_27_30.backup_restore_dr.status).toBe('skipped');
+			expect(evidence.phase_27_30.backup_restore_dr.do_not_restore_over_live_db).toBe(true);
+			expect(evidence.phase_27_30.security_iso_control_alignment.control_alignment_not_certification).toBe(true);
+			expect(evidence.phase_27_30.security_iso_control_alignment.no_iso_certification_claim).toBe(true);
+			expect(evidence.phase_27_30.security_iso_control_alignment.evidence_topics).toContain('RBAC controls');
+			expect(evidence.phase_27_30.mobile_rc_build.status).toBe('skipped');
+			expect(evidence.phase_27_30.mobile_rc_build.manifest_internet_permission).toBe('pass');
+			expect(evidence.phase_27_30.mobile_rc_build.manifest_allow_backup_false).toBe('pass');
+			expect(evidence.phase_27_30.mobile_rc_build.minimum_android_vendors).toBe(2);
+			expect(evidence.phase_27_30.mobile_rc_build.real_device_pass_claimed).toBe(false);
 			expect(evidence.secret_scan.status).toBe('pass');
 
 			expect(signoff.go_no_go).toBe('pending_manual_signoff');
@@ -1391,9 +1560,44 @@ describe('CBT proposal integration documentation guard', () => {
 			expect(evidence.manual_evidence.device_matrix.status).toBe('complete_by_operator_flag');
 			expect(evidence.manual_evidence.operator_rehearsal.status).toBe('complete_by_operator_flag');
 			expect(evidence.manual_evidence.final_signoff.status).toBe('complete_by_operator_flag');
+			expect(evidence.phase_27_30.operator_rehearsal_workflow.status).toBe('complete_by_operator_flag');
+			expect(evidence.phase_27_30.mobile_rc_build.device_matrix_status).toBe('complete_by_operator_flag');
 			expect(signoff.go_no_go).toBe('ready_for_rehearsal');
 			expect(signoff.production_go).toBe(false);
 			expect(signoff.blockers).toEqual([]);
+		},
+		30_000
+	);
+
+	it(
+		'records Phase 28/30 evidence failures without live restore or device PASS claims',
+		async () => {
+			const outputDir = await makeTempOutputDir();
+			await runFinalReadiness([
+				'--output',
+				outputDir,
+				'--backup-artifact',
+				'tmp/missing-backup-for-phase-28.dump',
+				'--run-mobile-rc-build',
+				'--mobile-api-base-url',
+				'http://api.sekolah.example'
+			]);
+
+			const evidence = JSON.parse(
+				await readFile(path.join(outputDir, 'cbt-final-evidence.json'), 'utf8')
+			) as FinalEvidenceReport;
+			const signoff = JSON.parse(
+				await readFile(path.join(outputDir, 'cbt-final-signoff.json'), 'utf8')
+			) as FinalSignoffReport;
+
+			expect(evidence.phase_27_30.backup_restore_dr.status).toBe('fail');
+			expect(evidence.phase_27_30.backup_restore_dr.checksum_status).toBe('skipped');
+			expect(evidence.phase_27_30.backup_restore_dr.pg_restore_list_status).toBe('skipped');
+			expect(evidence.phase_27_30.backup_restore_dr.do_not_restore_over_live_db).toBe(true);
+			expect(evidence.phase_27_30.mobile_rc_build.status).toBe('fail');
+			expect(evidence.phase_27_30.mobile_rc_build.real_device_pass_claimed).toBe(false);
+			expect(evidence.phase_27_30.mobile_rc_build.minimum_android_vendors).toBe(2);
+			expect(signoff.production_go).toBe(false);
 		},
 		30_000
 	);
