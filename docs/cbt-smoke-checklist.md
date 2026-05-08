@@ -1,40 +1,50 @@
-# CBT Smoke Checklist — Readiness, Visibility, Runtime, and Security
+# CBT Smoke Checklist - Phase 5 Rehearsal and Rollout
 
-Status: sinkron per 2026-05-06. Gunakan checklist ini sebelum ujian besar, setelah deploy backend/frontend CBT, setelah migration CBT, dan sebelum sesi aktif dibuka untuk siswa.
+Status: Phase 5 rehearsal checklist, 2026-05-08.
 
-Checklist ini melengkapi test otomatis dan `docs/cbt-operator-runbook.md`. Fokusnya adalah memastikan setup ujian siap, batas role admin/guru/event member benar, token/kunci jawaban tidak bocor, Flutter bisa menjalankan alur kritis, dan runtime submit/scoring tidak regress.
+Checklist ini dipakai untuk Phase 5 - Rehearsal, Rollout, and Post-Exam Review sebelum ujian besar dan untuk post-exam review setelah sesi selesai. Alur yang diuji adalah Bank Soal -> Asesmen Persiapan -> Pelaksanaan/Pengawasan -> Flutter APK -> Hasil/Post-exam review.
 
-## Phase 1 — Readiness Setup
+Dokumen ini adalah `docs/cbt-smoke-checklist.md`. Gunakan bersama `docs/cbt-proposal-integration-phase-5.md`, `docs/exam-api.md`, dan `apps/mobile/RELEASE_CHECKLIST.md`.
 
-### 1. Deploy dan Migration
+Checklist ini mempertahankan guard operasional lama: event member role dan subject scope, export/detail Bank Soal admin/guru/guru non-penulis, berita acara/minutes token visibility, duplicate `(room_id, seat_no)`, serta endpoint/security boundary checks.
 
-- [ ] Backend Go sudah deploy dan health check hijau.
-- [ ] Migration CBT terbaru dijalankan dari backend path, bukan dari frontend/worker.
-- [ ] Backup PostgreSQL sudah dibuat sebelum migration dengan `make ops-backup` atau script backup setara.
-- [ ] Tidak ada jendela ujian aktif saat migration berjalan.
-- [ ] Frontend web-admin sudah deploy dari commit yang sama atau lebih baru dari backend.
-- [ ] Bookmark lama `/cbt/questions`, `/cbt/soal*`, dan `/bank-soal/komposer|import|review` redirect ke `/bank-soal/*` baru sesuai mode aman yang dipertahankan.
-- [ ] `make ops-health` atau health check manual sudah hijau setelah restart.
+## Boundary Wajib
 
-Catatan token migration:
+- [ ] Tidak deploy, tidak PM2 restart, dan tidak mengganti process manager dari checklist ini.
+- [ ] Tidak menjalankan `make db-migrate`, migrasi live, atau ad hoc `ALTER TABLE` dari checklist ini.
+- [ ] Tidak membuat public SvelteKit route tree `/api/cbt/**` baru; namespace itu hanya compatibility/deprecated path yang sudah ada.
+- [ ] Tidak membawa PocketBase, SQLite, atau Alpine menjadi runtime CBT.
+- [ ] Flutter berbicara langsung ke `services/core-api` melalui `/api/exam/*`, bukan melalui SvelteKit BFF.
+- [ ] Rehearsal memakai data uji atau sesi yang memang disetujui operator; jangan memakai token ujian aktif tanpa izin panitia.
+- [ ] BYOD tidak setara kiosk penuh; device-owner bukan baseline untuk perangkat siswa pribadi.
 
-- [ ] Operator memahami bahwa `060_cbt_exam_token_hardening.sql` tidak merotasi token yang sudah ada.
-- [ ] Cetak ulang kartu hanya dilakukan setelah regenerasi/repair token eksplisit, atau setelah perubahan data kartu seperti ruang/seat.
-- [ ] Jika migration 060 gagal karena duplikasi token, hanya token sesi draft/scheduled yang terdampak yang diregenerasi/diperbaiki, lalu kartu terdampak dicetak ulang.
+## 1. Preflight Operasional
 
-### 2. Data Uji dan Akun Role
+Catat semua hasil preflight sebelum membuka rehearsal.
 
-- [ ] Tersedia akun `admin` sebagai panitia/operator.
-- [ ] Tersedia `guru_a` sebagai pembuat minimal satu soal.
-- [ ] Tersedia `guru_b` sebagai guru lain pada mapel/scope berbeda atau bukan penulis soal `guru_a`.
-- [ ] Tersedia akun/penetapan operasional untuk proktor atau pengawas jika dashboard ruang diuji.
-- [ ] Tersedia minimal dua peserta uji dari kelas/scope yang benar.
-- [ ] Tersedia minimal satu ruang uji dengan seat yang bisa diverifikasi.
-- [ ] Tersedia minimal satu soal objektif dan satu soal essay/uraian untuk menguji kunci, rubrik, grading, dan skor.
+- [ ] Environment dicatat: staging/produksi, tanggal, jam WITA, operator, pengawas, dan ruang uji.
+- [ ] Commit backend, web-admin, dan APK Flutter yang diuji dicatat.
+- [ ] Health check backend hijau dan response tidak menunjukkan koneksi database bermasalah.
+- [ ] Audit log dapat dibaca oleh role berwenang dan mutasi rehearsal terbaru masuk sebagai event/audit yang wajar.
+- [ ] Server log backend dapat diakses oleh operator teknis, tidak menunjukkan panic berulang, error database, atau raw secret/token.
+- [ ] Server log frontend dapat diakses bila perlu untuk investigasi BFF, tidak menunjukkan proxy loop atau auth cookie error berulang.
+- [ ] Backup PostgreSQL terbaru sudah ada, timestamp-nya sesuai jendela release yang disetujui, dan lokasi/penanggung jawab restore dicatat.
+- [ ] Migration state sudah diverifikasi sebagai sesuai release yang diuji; bila ada migration pending atau status tidak jelas, hentikan rehearsal dan eskalasi.
+- [ ] Tidak ada perintah migrasi, deploy, PM2 restart, atau rollback database yang dijalankan sebagai bagian checklist ini.
 
-### 3. Event Member Role dan Subject Scope
+## 2. Akun, Data Uji, dan Scope
 
-Verifikasi role dari migration `062_cbt_event_members_question_scope.sql`:
+- [ ] Akun `admin` atau panitia tersedia untuk setup penuh.
+- [ ] Akun `guru` tersedia untuk authoring/review soal sesuai mapel.
+- [ ] Akun pengawas/proktor tersedia untuk dashboard pelaksanaan.
+- [ ] Minimal dua peserta uji tersedia pada kelas/scope yang benar.
+- [ ] Minimal satu ruang dan seat peserta dapat diverifikasi.
+- [ ] Ada minimal satu soal objektif dan satu soal uraian untuk menguji kunci, rubrik, scoring, dan status submit.
+- [ ] Operator memahami bahwa data rehearsal yang menyentuh siswa nyata tetap harus diperlakukan sebagai data sekolah.
+
+## 3. Event Member Role dan Subject Scope
+
+Verifikasi assignment operasional sebelum Bank Soal/Pelaksanaan diuji.
 
 - [ ] `panitia` terdaftar sebagai pengelola event tanpa `subject_id`.
 - [ ] `pembuat_soal` terdaftar sesuai mapel yang ditugaskan.
@@ -45,204 +55,134 @@ Verifikasi role dari migration `062_cbt_event_members_question_scope.sql`:
 - [ ] Tidak ada assignment dobel untuk kombinasi event, user, role, dan subject yang sama.
 - [ ] Role `panitia`, `proktor`, dan `pengawas` tidak membawa `subject_id`; subject scope hanya dipakai untuk `pembuat_soal`, `reviewer`, dan `korektor`.
 
-### 4. Master Data, Event, Paket, dan Sesi
+## 4. Bank Soal
 
-- [ ] Tahun ajaran, kelas, mapel, siswa, guru, dan assignment guru-mapel sudah benar.
-- [ ] Event CBT sudah dibuat dan memuat timeline yang sesuai.
-- [ ] Soal sudah diinput melalui `/bank-soal/tambah` atau diimpor melalui `/bank-soal/impor`, bukan melalui edit database manual.
-- [ ] Soal yang masuk paket sudah direview/published sesuai workflow.
-- [ ] Paket ujian berisi soal sesuai mapel, kelas/grade/custom scope, bobot, dan jumlah soal yang disepakati.
-- [ ] Sesi ujian memakai paket final, jadwal WITA benar, dan belum aktif sebelum token/room/seat siap.
-- [ ] Peserta sesi sesuai daftar panitia dan tidak dobel.
+Jalankan dari route canonical `/bank-soal/*`.
 
-### 5. Ruang, Seat, Proktor, dan Kartu
-
-- [ ] Setiap peserta uji punya ruang yang benar.
-- [ ] Jika memakai seat, semua `seat_no` bernilai positif.
-- [ ] Tidak ada duplikasi `(room_id, seat_no)` dalam ruang yang sama.
-- [ ] Proktor/pengawas menerima daftar ruang, daftar hadir, denah/seat, kontak eskalasi, dan prosedur reset akses.
-- [ ] Token baru yang dibagikan untuk uji adalah 32 karakter hex.
-- [ ] Kartu/token dicetak dari data terbaru setelah perubahan token/room/seat terakhir.
-
-### 6. Flutter Release APK dan BYOD Trial Setup
-
-- [ ] APK release dibangun dengan HTTPS `API_BASE_URL`, misalnya `make mobile-release-apk API_BASE_URL=https://api.sekolah.example`.
-- [ ] `flutter analyze` atau `make check-mobile` lulus.
-- [ ] `flutter test` atau `make test-mobile` lulus.
-- [ ] Permission Android `INTERNET` terverifikasi pada manifest/APK.
-- [ ] APK signing sesuai prosedur release internal sekolah dan versi build dicatat.
-- [ ] Minimal dua sampai tiga perangkat nyata lintas vendor tersedia untuk trial.
-- [ ] `apps/mobile/DEVICE_TEST_MATRIX.md` disiapkan untuk mencatat hasil perangkat.
-- [ ] Pengawas memahami label koneksi `Tersambung`, `Sinkron`, `Cek Ulang`, `Lokal`, `Gangguan`, `Waspada`, dan `Menurun`.
-
-## Phase 2 — Runtime and Security Smoke
-
-### 7. Bank Soal: Label dan Export Admin
-
-1. Login sebagai `admin`.
-2. Buka `/bank-soal`.
-3. Pastikan tombol export tertulis `Export CSV`.
-4. Jalankan export dengan filter aktif yang kecil, misalnya satu mapel.
-5. Buka CSV hasil download.
+- [ ] Buat soal baru melalui `/bank-soal/tambah` atau pilih soal rehearsal yang sudah ada.
+- [ ] Bila memakai impor, gunakan `/bank-soal/impor`; jangan edit database langsung.
+- [ ] Verifikasi/review soal melalui `/bank-soal/verifikasi`.
+- [ ] Pastikan rich content, KaTeX, RTL/Arab bila relevan, media, dan preview tampil.
+- [ ] Admin export menampilkan label `Export CSV`, berisi soal sesuai filter admin, dan kolom kunci/rubrik hanya sesuai hak admin.
+- [ ] Guru penulis export menampilkan label `Export Soal Saya`, hanya berisi soal milik/scope guru tersebut, dan tidak membuka soal guru lain.
+- [ ] Admin dapat melihat kunci jawaban/rubrik pada detail soal sesuai kewenangan.
+- [ ] Guru penulis dapat melihat kunci/rubrik soal sendiri sesuai workflow edit/review yang berlaku.
+- [ ] Guru non-penulis tidak melihat kunci jawaban atau rubrik soal di luar scope, termasuk melalui detail dan export.
 
 Kriteria lulus:
 
-- [ ] CSV berhasil diunduh.
-- [ ] CSV berisi soal sesuai filter admin.
-- [ ] Kolom kunci/jawaban terisi sesuai data soal.
-- [ ] Tidak ada error toast atau response 403.
+- [ ] Soal masuk paket dari workflow web-admin yang sah.
+- [ ] Kunci jawaban hanya terlihat untuk role/scope yang berwenang.
+- [ ] Tidak ada fetch baru ke public `/api/cbt/**` untuk alur Bank Soal.
 
-### 8. Bank Soal: Label dan Export Guru
+## 5. Asesmen Persiapan
 
-1. Login sebagai `guru_a`.
-2. Buka `/bank-soal`.
-3. Pastikan tombol export tertulis `Export Soal Saya`.
-4. Jalankan export pada filter yang sama.
-5. Buka CSV hasil download.
+Jalankan dari `/asesmen/persiapan` dan route canonical terkait.
 
-Kriteria lulus:
-
-- [ ] CSV berhasil diunduh.
-- [ ] CSV hanya berisi soal dengan penulis `guru_a` atau scope yang memang diizinkan.
-- [ ] Soal milik `guru_b` atau guru lain tidak ikut keluar bila tidak termasuk scope.
-- [ ] Toast sukses menyebut `soal saya`.
-- [ ] Tidak ada kunci/token lintas scope yang ikut terbuka.
-
-### 9. Bank Soal: Kunci Jawaban Detail
-
-Admin:
-
-1. Login sebagai `admin`.
-2. Buka detail/edit soal milik `guru_a`.
+- [ ] Paket dibuat dari soal final/reviewed.
+- [ ] Kegiatan/event dibuat dengan timeline WITA yang benar.
+- [ ] Sesi ujian memakai paket final, jadwal benar, durasi benar, dan status belum dibuka sebelum siap.
+- [ ] Peserta, ruang, seat, proktor, dan pengawas sesuai daftar panitia.
+- [ ] Jika memakai seat, semua `seat_no` bernilai positif dan tidak ada duplikasi `(room_id, seat_no)` dalam ruang yang sama.
+- [ ] Kartu/token dicetak setelah perubahan token/room/seat terakhir.
+- [ ] Token ujian yang dibagikan untuk uji adalah token backend terbaru.
+- [ ] Data persiapan tidak dibuat melalui PocketBase, SQLite, import runtime liar, atau edit SQL manual.
 
 Kriteria lulus:
 
-- [ ] Kunci jawaban/rubrik terlihat sesuai data soal.
+- [ ] Sesi rehearsal siap dibuka tanpa data peserta dobel.
+- [ ] Kartu/token, ruang, dan seat cocok dengan web-admin.
+- [ ] Tidak ada duplikasi `(room_id, seat_no)` pada ruang yang sama.
+- [ ] Audit log mencatat mutasi setup penting.
 
-Guru penulis:
+## 6. Pelaksanaan dan Pengawasan
 
-1. Login sebagai `guru_a`.
-2. Buka soal yang ditulis oleh `guru_a`.
+Jalankan dari `/asesmen/pelaksanaan` dan `/asesmen/pengawasan`.
 
-Kriteria lulus:
-
-- [ ] Kunci jawaban soal sendiri terlihat.
-- [ ] Edit tetap mengikuti guard soal terkunci/published sesuai workflow.
-
-Guru non-penulis:
-
-1. Login sebagai `guru_b`.
-2. Buka detail soal milik `guru_a` dari route yang masih bisa dibaca oleh scope guru.
-
-Kriteria lulus:
-
-- [ ] Kunci jawaban kosong/tidak terbuka.
-- [ ] Metadata yang aman tetap terbaca bila memang guru punya akses baca.
-- [ ] Tidak ada cara melihat kunci melalui export guru.
-
-### 10. Berita Acara / Minutes: Token Peserta
-
-Admin:
-
-1. Login sebagai `admin`.
-2. Buka detail sesi uji.
-3. Buka/cetak berita acara atau endpoint minutes.
+- [ ] Dashboard pengawas menampilkan sesi, ruang, peserta, status login, heartbeat, dan submit.
+- [ ] Pengawas dapat membedakan status koneksi Flutter: `Tersambung`, `Lokal`, `Gangguan`, `Waspada`, dan `Menurun`.
+- [ ] Simulasikan app-switch/resume pada satu perangkat uji.
+- [ ] Simulasikan network disturbance singkat bila aman.
+- [ ] Pastikan warning/event BYOD terlihat di dashboard atau evidence backend.
+- [ ] Admin dapat melihat/mencetak token peserta pada berita acara/minutes untuk kebutuhan operasional sah.
+- [ ] Guru/pengawas hanya melihat peserta sesuai scope sesi/ruang dan token peserta tidak tampil atau bernilai kosong bila role tidak berwenang.
+- [ ] Pastikan token peserta tidak bocor ke role yang tidak berwenang.
 
 Kriteria lulus:
 
-- [ ] Token peserta terlihat untuk kebutuhan cetak operasional.
-- [ ] Peserta, ruang, dan seat tampil sesuai sesi.
+- [ ] Status peserta berubah tanpa menghapus jawaban lokal yang belum sync.
+- [ ] Warning BYOD muncul sebagai evidence, bukan klaim kiosk penuh.
+- [ ] Pengawas punya prosedur eskalasi bila perangkat tetap `Menurun`.
+- [ ] Berita acara/minutes menjaga boundary token: admin operasional boleh mencetak, role lain hanya sesuai kewenangan.
 
-Guru/pengawas:
+## 7. Flutter APK dan Perangkat Nyata
 
-1. Login sebagai guru/pengawas yang hanya berhak pada sesi/ruang terkait.
-2. Buka berita acara atau data peserta sesi.
+Gunakan `apps/mobile/RELEASE_CHECKLIST.md` sebagai checklist build/release. Flutter SDK bisa tidak tersedia di host yang menjalankan checklist ini; bila begitu, catat sebagai blocker validasi mobile dan jalankan quality gate di mesin lain/CI sebelum APK dipakai untuk ujian resmi.
 
-Kriteria lulus:
-
-- [ ] Token peserta tidak tampil atau bernilai kosong.
-- [ ] Peserta yang tampil sesuai scope guru/pengawas, bukan semua peserta lintas sesi/mapel.
-
-### 11. Flutter Token Login dan BYOD Runtime
-
-1. Pakai kartu ujian/token terbaru setelah regenerasi/repair eksplisit atau perubahan room/seat terakhir.
-2. Login dari perangkat pertama dengan base URL HTTPS.
-3. Coba login token yang sama dari perangkat kedua.
-4. Buka payload soal, termasuk rich content/media/audio bila sesi uji memilikinya.
-5. Lakukan heartbeat, simpan jawaban, app-switch/resume, dan status refresh.
-6. Submit final dari perangkat yang valid.
-
-Kriteria lulus:
-
-- [ ] Token 32 karakter dapat login pada perangkat pertama.
-- [ ] Token yang sudah device-bound tidak dapat dipakai perangkat lain tanpa prosedur reset yang sah.
-- [ ] Payload soal tampil dan tidak membocorkan kunci jawaban.
-- [ ] Heartbeat dan simpan jawaban sukses.
-- [ ] Resume gate dan status koneksi menampilkan guidance yang dapat dipahami.
-- [ ] Submit sukses hanya sekali.
+- [ ] APK yang diuji dicatat versi, commit, signing mode, dan `API_BASE_URL`.
+- [ ] Minimal dua perangkat nyata lintas vendor Android dipakai.
 - [ ] Hasil perangkat dicatat di `apps/mobile/DEVICE_TEST_MATRIX.md`.
-
-### 12. Runtime: Skor, Grading, dan Status Submit
-
-1. Pastikan ada peserta uji yang sudah mulai ujian tetapi belum final submit.
-2. Dari admin/korektor berwenang, nilai satu jawaban essay peserta tersebut.
-3. Jalankan hitung skor sesi jika tersedia.
-4. Cek daftar peserta dan status peserta.
-5. Minta peserta melanjutkan ujian atau menyimpan jawaban lagi.
-
-Kriteria lulus:
-
-- [ ] Grading essay tidak mengisi `submitted_at` untuk peserta yang belum submit.
-- [ ] Hitung skor tidak mengisi `submitted_at` untuk peserta yang belum submit.
-- [ ] Peserta belum submit masih bisa menyimpan jawaban dan final submit sesuai jadwal.
-- [ ] Duplicate final submit ditolak sebagai konflik yang terkendali, bukan 500.
-
-### 13. Runtime: Room, Seat, and Proctoring Integrity
-
-1. Buka detail sesi/ruang sebagai admin atau proktor/pengawas berwenang.
-2. Cocokkan peserta, room, seat, dan daftar hadir.
-3. Pantau heartbeat/status koneksi selama perangkat uji login.
-4. Simulasikan satu gangguan ringan seperti app-switch atau koneksi putus sementara bila aman.
-
-Kriteria lulus:
-
-- [ ] Dashboard/detail ruang menampilkan peserta sesuai scope.
-- [ ] Seat tidak dobel dalam ruang.
-- [ ] Status koneksi berubah secara wajar dan tidak menghapus jawaban lokal yang belum sync.
-- [ ] Warning event/guidance muncul untuk kondisi BYOD yang berisiko.
-
-### 14. Security Boundary Checks
-
-- [ ] Guru non-penulis tidak melihat kunci jawaban soal orang lain.
-- [ ] Guru/pengawas tidak melihat token peserta kecuali role/scope memang mengizinkan secara eksplisit.
-- [ ] Flutter payload siswa tidak memuat kunci jawaban, token peserta lain, atau metadata admin.
+- [ ] Login token berhasil pada perangkat pertama.
+- [ ] Device mismatch untuk token yang sudah terikat menghasilkan error terkendali.
+- [ ] Heartbeat berhasil dan timestamp kontak terakhir berubah.
+- [ ] Answer save untuk pilihan ganda dan uraian berhasil.
+- [ ] Restore setelah app ditutup/buka lagi melewati status check.
+- [ ] Network disturbance memunculkan warning yang dapat dipahami siswa/pengawas.
+- [ ] Submit final berhasil sekali pada koneksi yang sehat.
+- [ ] Duplicate submit ditolak sebagai konflik terkendali.
+- [ ] Payload/event tidak memuat token ujian mentah, password, atau answer key.
 - [ ] Asset soal hanya terbuka untuk JWT role berwenang atau exam-token peserta aktif sesuai paketnya.
-- [ ] Login token gagal dengan status yang terkendali untuk token tidak ada, sesi tidak aktif, device mismatch, atau participant context hilang.
-- [ ] Endpoint answer/submit/heartbeat/event tidak menerima request tanpa konteks peserta yang sah.
+- [ ] Endpoint `answer`, `submit`, `heartbeat`, dan `event` menolak request tanpa konteks peserta yang sah.
 
-## Phase 3 — Evidence and Decision
+Kriteria lulus:
 
-### 15. Evidence Wajib Dicatat
+- [ ] Flutter berbicara langsung ke `services/core-api` melalui `/api/exam/*`.
+- [ ] Tidak ada runtime siswa melalui public `/api/cbt/login` atau `/api/cbt/status`.
+- [ ] BYOD limitation tercatat: `FLAG_SECURE` dan telemetry adalah deterrence/evidence, bukan kiosk guarantee.
 
-Catat hasil smoke test dalam tiket/deployment note:
+## 8. Hasil dan Post-Exam Review
 
-- tanggal dan jam uji
-- environment: staging atau produksi
-- commit backend/frontend/mobile APK
-- akun role yang dipakai
-- event, paket, sesi, ruang, dan peserta uji
-- hasil preflight token/seat bila migration dijalankan
-- hasil export admin dan guru
-- screenshot label export admin/guru
-- screenshot detail soal admin/guru penulis/guru non-penulis
-- screenshot berita acara/minutes admin vs guru/pengawas
-- hasil uji token Flutter, heartbeat, answer save, resume, dan submit
-- hasil uji grading sebelum submit
-- device matrix ringkas untuk perangkat trial
-- daftar temuan dan keputusan: lulus / lulus dengan catatan / tunda deploy
+Jalankan setelah peserta uji submit atau sesi ditutup sesuai prosedur.
 
-### 16. Keputusan
+- [ ] `/asesmen/hasil` menampilkan peserta, status submit, skor objektif, dan follow-up uraian.
+- [ ] Koreksi uraian tidak menandai peserta belum submit sebagai sudah submit.
+- [ ] Export hasil diuji dengan scope admin/guru yang sesuai.
+- [ ] Event anti-cheat, heartbeat risk, device mismatch, dan network warning direview bersama pengawas.
+- [ ] Audit log mutasi penting direview: setup sesi, perubahan token/room/seat, submit, scoring, export.
+- [ ] Server log dicek ulang untuk 500, panic, request oversized, atau auth/rate-limit anomaly selama rehearsal.
+- [ ] Temuan dipisah menjadi blocker ujian, catatan operasional, dan backlog produk.
 
-- [ ] Lulus: boleh lanjut ujian/deploy.
-- [ ] Lulus dengan catatan: boleh lanjut jika temuan tidak menyentuh token, kunci jawaban, submit, sinkron jawaban, atau akses lintas role.
-- [ ] Tunda: wajib jika ada kebocoran kunci/token, peserta belum submit terkunci, token Flutter tidak bisa login/simpan/submit, seat peserta rancu, atau migration preflight gagal.
+Kriteria lulus:
+
+- [ ] Data hasil dapat direview tanpa membuka kunci jawaban ke role yang tidak sah.
+- [ ] Evidence post-exam cukup untuk keputusan lanjut/tunda.
+- [ ] Tidak ada raw internal error detail muncul di response pengguna.
+
+## 9. Rollback Plan
+
+Rollback plan harus disetujui sebelum rehearsal dianggap lulus.
+
+- [ ] Jika login token, answer save, submit, atau proctor dashboard gagal kritis: hentikan sesi baru dan jangan buka gelombang berikutnya.
+- [ ] Jika APK release bermasalah: distribusikan APK sebelumnya yang sudah lulus rehearsal, lalu ulangi device test minimal.
+- [ ] Jika web-admin bermasalah tetapi backend dan Flutter masih aman: tahan perubahan operasional baru, pakai prosedur pengawas yang sudah disetujui, dan eskalasi teknis.
+- [ ] Jika backend runtime ujian bermasalah: pertahankan data backend, jangan hapus jawaban/token/audit, dan ambil evidence log untuk perbaikan.
+- [ ] Jangan rollback database dengan ad hoc SQL. Ikuti prosedur release resmi dan backup/restore yang disetujui penanggung jawab backend.
+- [ ] Komunikasikan status ke operator, pengawas, dan panitia sebelum siswa berikutnya menerima token.
+
+## 10. Acceptance Evidence
+
+Lampirkan evidence berikut pada tiket/release note internal.
+
+- [ ] Tanggal, jam WITA, environment, operator, dan pengawas.
+- [ ] Commit backend, web-admin, dan APK Flutter.
+- [ ] Hasil health check, audit log, server log, backup, dan migration state.
+- [ ] Screenshot Bank Soal, Asesmen Persiapan, Pelaksanaan/Pengawasan, dan Hasil.
+- [ ] Event/paket/sesi/ruang/peserta uji yang dipakai.
+- [ ] Kartu/token yang diuji dan catatan bila token/room/seat berubah.
+- [ ] Device matrix ringkas untuk perangkat nyata.
+- [ ] Hasil login token, heartbeat, answer save, restore, network disturbance, warning, dan submit.
+- [ ] Hasil review token/kunci jawaban tidak bocor.
+- [ ] Rollback plan yang dipakai bila ada temuan.
+- [ ] Keputusan akhir: lulus, lulus dengan catatan, atau tunda.
+
+Keputusan wajib tunda bila ada kebocoran token/kunci jawaban, jawaban tidak tersimpan, submit final tidak dapat dipercaya, status peserta salah, role melihat data lintas scope, atau migration state tidak jelas.

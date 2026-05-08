@@ -380,7 +380,6 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           final statusRefreshed = await _syncStatus();
           if (_isSubmitted) {
             _pendingAnswers.remove(entry.key);
-            await _persistSnapshot();
             return true;
           }
           return statusRefreshed && _pendingAnswers.isEmpty;

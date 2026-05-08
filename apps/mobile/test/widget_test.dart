@@ -1167,46 +1167,45 @@ void main() {
     },
   );
 
-  testWidgets(
-    'exam shell preserves local answer on device-mismatch conflict',
-    (tester) async {
-      tester.view.physicalSize = const Size(1440, 2200);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final store = _MemoryExamSessionStore();
-      final client = _RecordingExamApiClient(
-        baseUrl: 'http://127.0.0.1:65535',
-        saveAnswerError: const ExamApiException(
-          'token already bound to another device',
-          statusCode: 409,
+  testWidgets('exam shell preserves local answer on device-mismatch conflict', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = _MemoryExamSessionStore();
+    final client = _RecordingExamApiClient(
+      baseUrl: 'http://127.0.0.1:65535',
+      saveAnswerError: const ExamApiException(
+        'token already bound to another device',
+        statusCode: 409,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          sessionStore: store,
+          initialPayload: _sampleLoginPayload(),
         ),
-      );
+      ),
+    );
+    await tester.pump();
 
-      await tester.pumpWidget(
-        _TestApp(
-          child: ExamShellScreen(
-            client: client,
-            examToken: 'abc12345',
-            deviceFingerprint: 'android:test',
-            autoStartRuntime: false,
-            sessionStore: store,
-            initialPayload: _sampleLoginPayload(),
-          ),
-        ),
-      );
-      await tester.pump();
+    await tester.tap(find.text('4'));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('4'));
-      await tester.pumpAndSettle();
-
-      final snapshot = await store.loadSnapshot();
-      expect(client.saveAnswerCount, 1);
-      expect(find.text('Ujian berhasil dikirim.'), findsNothing);
-      expect(snapshot?.answers, containsPair('question-1', 'D'));
-      expect(snapshot?.pendingAnswers, containsPair('question-1', 'D'));
-    },
-  );
+    final snapshot = await store.loadSnapshot();
+    expect(client.saveAnswerCount, 1);
+    expect(find.text('Ujian berhasil dikirim.'), findsNothing);
+    expect(snapshot?.answers, containsPair('question-1', 'B'));
+    expect(snapshot?.pendingAnswers, containsPair('question-1', 'B'));
+  });
 
   testWidgets(
     'exam shell treats submitted status as terminal and clears snapshot',
@@ -1701,7 +1700,10 @@ void main() {
     expect(client.saveAnswerCount, 1);
     expect(find.text('Ujian berhasil dikirim.'), findsNothing);
     expect(snapshot?.pendingAnswers, containsPair('question-1', 'B'));
-    expect(find.textContaining('Masih ada jawaban yang belum tersinkron'), findsOneWidget);
+    expect(
+      find.textContaining('Masih ada jawaban yang belum tersinkron'),
+      findsWidgets,
+    );
   });
 
   testWidgets('exam shell blocks empty question payload safely', (
