@@ -117,15 +117,19 @@ class ExamQuestion {
   final String stimulusAudioUrl;
   final List<ExamOption> options;
 
+  String get _normalizedQuestionType => questionType.trim().toLowerCase();
+
   bool get isEssay =>
-      questionType == 'essay' || (questionType.isEmpty && options.isEmpty);
-  bool get isShortAnswer => questionType == 'short_answer';
-  bool get isMultipleAnswer => questionType == 'multiple_answer';
-  bool get isTrueFalse => questionType == 'true_false';
-  bool get isMatching => questionType == 'matching';
-  bool get isOrdering => questionType == 'ordering';
+      _normalizedQuestionType == 'essay' ||
+      (questionType.trim().isEmpty && options.isEmpty);
+  bool get isShortAnswer => _normalizedQuestionType == 'short_answer';
+  bool get isMultipleAnswer => _normalizedQuestionType == 'multiple_answer';
+  bool get isTrueFalse => _normalizedQuestionType == 'true_false';
+  bool get isAgreeDisagree => _normalizedQuestionType == 'agree_disagree';
+  bool get isMatching => _normalizedQuestionType == 'matching';
+  bool get isOrdering => _normalizedQuestionType == 'ordering';
   bool get isUnsupportedRuntime {
-    final normalized = questionType.trim().toLowerCase();
+    final normalized = _normalizedQuestionType;
     return normalized == 'hotspot' ||
         normalized == 'upload_answer' ||
         normalized == 'file_upload';

@@ -1182,6 +1182,135 @@ void main() {
     expect(client.lastSavedAnswer, 'B');
   });
 
+  testWidgets('exam shell renders agree/disagree fallback choices', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleAgreeDisagreePayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Setuju'), findsOneWidget);
+    expect(find.text('Tidak Setuju'), findsOneWidget);
+    expect(find.text('A'), findsOneWidget);
+    expect(find.text('B'), findsOneWidget);
+    expect(find.byType(Checkbox), findsNothing);
+  });
+
+  testWidgets('exam shell saves agree/disagree fallback answer label', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleAgreeDisagreePayload(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('0 / 1'), findsOneWidget);
+
+    await tester.tap(find.text('Tidak Setuju'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(client.saveAnswerCount, 1);
+    expect(client.lastSavedQuestionId, 'question-agree-disagree-1');
+    expect(client.lastSavedAnswer, 'B');
+    expect(find.text('1 / 1'), findsOneWidget);
+  });
+
+  testWidgets('exam shell restores agree/disagree saved answer', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          restoredSnapshot: _sampleSnapshot(
+            answers: const <String, String>{'question-agree-disagree-1': 'A'},
+          ),
+          initialPayload: _sampleAgreeDisagreePayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Setuju'), findsOneWidget);
+    expect(find.text('Tidak Setuju'), findsOneWidget);
+    expect(find.text('1 / 1'), findsOneWidget);
+  });
+
+  testWidgets('exam shell preserves backend agree/disagree options', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleAgreeDisagreeWithBackendOptionsPayload(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Setuju'), findsNothing);
+    expect(find.text('Tidak Setuju'), findsNothing);
+    expect(find.text('Sangat Setuju'), findsOneWidget);
+    expect(find.text('Sangat Tidak Setuju'), findsOneWidget);
+
+    await tester.tap(find.text('Sangat Tidak Setuju'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(client.saveAnswerCount, 1);
+    expect(client.lastSavedQuestionId, 'question-agree-disagree-2');
+    expect(client.lastSavedAnswer, 'TS');
+  });
+
   testWidgets(
     'exam shell renders unsupported hotspot as manual-supervisor panel',
     (tester) async {
@@ -2606,6 +2735,73 @@ ExamLoginPayload _sampleTrueFalseWithBackendOptionsPayload() {
         options: [
           ExamOption(label: 'A', text: 'Benar dari naskah'),
           ExamOption(label: 'B', text: 'Salah dari naskah'),
+        ],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _sampleAgreeDisagreePayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-agree-disagree-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'Akidah Akhlak Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-agree-disagree-1',
+        questionType: 'agree_disagree',
+        questionText: 'Saya menjaga kebersihan kelas setiap hari.',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: '',
+        stimulusMediaUrl: '',
+        stemAudioUrl: '',
+        stimulusAudioUrl: '',
+        options: [],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _sampleAgreeDisagreeWithBackendOptionsPayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-agree-disagree-2',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'Akidah Akhlak Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-agree-disagree-2',
+        questionType: 'agree_disagree',
+        questionText: 'Saya menjaga kebersihan kelas setiap hari.',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: '',
+        stimulusMediaUrl: '',
+        stemAudioUrl: '',
+        stimulusAudioUrl: '',
+        options: [
+          ExamOption(label: 'SS', text: 'Sangat Setuju'),
+          ExamOption(label: 'TS', text: 'Sangat Tidak Setuju'),
         ],
       ),
     ],
