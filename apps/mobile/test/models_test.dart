@@ -181,6 +181,31 @@ void main() {
       expect(trueFalse.isOrdering, isFalse);
       expect(trueFalse.options, isEmpty);
     });
+
+    test('detects unsupported proposal runtime question types', () {
+      for (final questionType in const [
+        'hotspot',
+        'upload_answer',
+        'file_upload',
+      ]) {
+        final question = ExamQuestion.fromJson({
+          'id': '$questionType-1',
+          'question_type': questionType,
+          'question_text': 'Soal proposal belum didukung runtime siswa.',
+          'options': const [
+            {'label': 'A', 'text': 'Pilihan tidak boleh ditampilkan'},
+          ],
+        });
+
+        expect(question.questionType, questionType);
+        expect(question.isUnsupportedRuntime, isTrue);
+        expect(question.isTextAnswer, isFalse);
+        expect(question.isEssay, isFalse);
+        expect(question.isMultipleAnswer, isFalse);
+        expect(question.isMatching, isFalse);
+        expect(question.isOrdering, isFalse);
+      }
+    });
   });
 
   group('ExamStatusPayload.fromJson', () {

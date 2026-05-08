@@ -120,10 +120,11 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     _playedAudioQuestionIds = Set<String>.from(
       widget.restoredSnapshot?.playedAudioQuestionIds ?? const <String>[],
     );
+    _dropUnsupportedRuntimeAnswers();
     _essayControllers = widget.initialPayload.questions
         .map((_) => TextEditingController())
         .toList();
-    _answeredCount = widget.initialPayload.answeredCount;
+    _answeredCount = _clampAnsweredCount(widget.initialPayload.answeredCount);
     _timeRemainingSeconds = widget.initialPayload.timeRemainingSeconds;
     _currentQuestionIndex = _clampQuestionIndex(
       widget.restoredSnapshot?.currentQuestionIndex ?? 0,
@@ -148,11 +149,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _essayControllers[i].text = _answers[question.id] ?? '';
       }
     }
-    if (_answers.isNotEmpty) {
-      final localAnsweredCount = _calculateAnsweredCount();
-      if (localAnsweredCount > _answeredCount) {
-        _answeredCount = localAnsweredCount;
-      }
+    final localAnsweredCount = _calculateAnsweredCount();
+    if (localAnsweredCount > _answeredCount) {
+      _answeredCount = _clampAnsweredCount(localAnsweredCount);
     }
     if (widget.autoStartRuntime && widget.initialPayload.questions.isNotEmpty) {
       _startCountdown();
@@ -160,6 +159,35 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       _syncStatus();
     }
     unawaited(_persistSnapshot());
+  }
+
+  void _dropUnsupportedRuntimeAnswers() {
+    final unsupportedQuestionIds = widget.initialPayload.questions
+        .where((question) => question.isUnsupportedRuntime)
+        .map((question) => question.id)
+        .toSet();
+    if (unsupportedQuestionIds.isEmpty) {
+      return;
+    }
+    _answers.removeWhere(
+      (questionId, _) => unsupportedQuestionIds.contains(questionId),
+    );
+    _pendingAnswers.removeWhere(
+      (questionId, _) => unsupportedQuestionIds.contains(questionId),
+    );
+  }
+
+  int _clampAnsweredCount(int answeredCount) {
+    if (answeredCount <= 0) {
+      return 0;
+    }
+    final supportedQuestionCount = widget.initialPayload.questions
+        .where((question) => !question.isUnsupportedRuntime)
+        .length;
+    if (answeredCount > supportedQuestionCount) {
+      return supportedQuestionCount;
+    }
+    return answeredCount;
   }
 
   @override
@@ -256,7 +284,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         return false;
       }
       setState(() {
-        _answeredCount = status.answeredCount;
+        _answeredCount = _clampAnsweredCount(status.answeredCount);
         _timeRemainingSeconds = status.timeRemainingSeconds;
         _isSubmitted = status.isSubmitted;
       });
@@ -1448,7 +1476,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             ],
             const SizedBox(height: 22),
             Expanded(
-              child: question.isTextAnswer
+              child: question.isUnsupportedRuntime
+                  ? _buildUnsupportedRuntimeQuestion(theme, question)
+                  : question.isTextAnswer
                   ? _buildTextAnswerQuestion(theme, question)
                   : question.isOrdering
                   ? _buildOrderingQuestion(theme, question)
@@ -1529,6 +1559,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   }
 
   bool _isAnswerComplete(ExamQuestion question, String answer) {
+    if (question.isUnsupportedRuntime) {
+      return false;
+    }
     if (answer.trim().isEmpty) {
       return false;
     }
@@ -1755,6 +1788,54 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildUnsupportedRuntimeQuestion(
+    ThemeData theme,
+    ExamQuestion question,
+  ) {
+    final typeLabel = question.questionType.trim().isEmpty
+        ? '-'
+        : question.questionType.trim();
+    return ListView(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8E1),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.amber.shade700),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.support_agent, color: Colors.amber.shade900, size: 32),
+              const SizedBox(height: 12),
+              Text(
+                'Tipe soal belum didukung aplikasi siswa',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: Colors.amber.shade900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Panggil pengawas untuk membantu pencatatan manual pada soal ini.',
+                style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'question_type: $typeLabel',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
