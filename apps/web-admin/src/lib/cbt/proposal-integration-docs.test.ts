@@ -26,6 +26,7 @@ const testFileDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testFileDir, '../../../../..');
 const preflightScriptPath = path.join(repoRoot, 'deploy/scripts/cbt-release-preflight.sh');
 const phase9DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-9.md');
+const phase10DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-10.md');
 const makefilePath = path.join(repoRoot, 'Makefile');
 const tempOutputDirs: string[] = [];
 
@@ -539,6 +540,55 @@ describe('CBT proposal integration documentation guard', () => {
 			expect(recipe).toContain(`bash deploy/scripts/health-check.sh ${service}`);
 			expect(recipe).not.toContain(`./deploy/scripts/health-check.sh ${service}`);
 		}
+	});
+
+	it('locks Phase 10 as post-deploy evidence handoff hardening only', async () => {
+		const phase10Doc = await readFile(phase10DocPath, 'utf8');
+
+		for (const phrase of [
+			'Phase 10 - Post-Deploy Evidence Handoff Hardening',
+			'commit `bf9df69`',
+			'handoff package after successful deploy/smoke',
+			'commit hash',
+			'PM2 status summary placeholders',
+			'health smoke outputs',
+			'manifest/checksum evidence',
+			'rollback owner',
+			'follow-up owner',
+			'secret hygiene',
+			'docs/tests/ops evidence tooling only',
+			'No product runtime',
+			'No DB schema/migrations',
+			'No deploy automation that restarts PM2',
+			'No live DB writes',
+			'No `/api/cbt` public routes',
+			'Tidak deploy',
+			'Tidak PM2 restart',
+			'Tidak menjalankan `make db-migrate`',
+			'Tidak menjalankan migrasi live',
+			'Tidak menjalankan ad hoc SQL',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`'
+		]) {
+			expect(phase10Doc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 9/10 Post-Deploy Handoff',
+			'Phase 9 commit `bf9df69`',
+			'Phase 10 handoff package',
+			'PM2 status summary placeholders',
+			'Health smoke outputs',
+			'Manifest/checksum evidence',
+			'Rollback owner',
+			'Follow-up owner',
+			'Secret hygiene'
+		]) {
+			expect(releaseEvidenceTemplateDoc).toContain(phrase);
+		}
+
+		expect(phase10Doc).not.toContain('POST /api/cbt/login');
+		expect(phase10Doc).not.toContain('GET /api/cbt/status');
 	});
 
 	it(
