@@ -13,7 +13,12 @@ describe('cbt backend path dispatch', () => {
 	});
 
 	it('routes Asesmen-owned paths to the native Asesmen API namespace', () => {
+		expect(cbtBackendPath('/events')).toBe('/api/asesmen/events');
+		expect(cbtBackendPath('/events/event-1/results')).toBe('/api/asesmen/events/event-1/results');
 		expect(cbtBackendPath('/sessions')).toBe('/api/asesmen/sessions');
+		expect(cbtBackendPath('/sessions/session-1/rooms/readiness')).toBe(
+			'/api/asesmen/sessions/session-1/rooms/readiness'
+		);
 		expect(cbtBackendPath('/packages')).toBe('/api/asesmen/packages');
 		expect(cbtBackendPath('/non-test-assessments')).toBe('/api/asesmen/non-test-assessments');
 		expect(cbtBackendPath('/non-test-assessments/nta-1/sync-grade')).toBe(
@@ -45,5 +50,27 @@ describe('cbt backend path dispatch', () => {
 		expect(cbtBackendPathWithQuery('/sessions', 'status=active')).toBe(
 			'/api/asesmen/sessions?status=active'
 		);
+	});
+
+	it('never dispatches active Bank Soal or Asesmen clients back to the legacy CBT API namespace', () => {
+		const activeWorkflowPaths = [
+			'/questions',
+			'/questions/export',
+			'/assets/asset-1/file',
+			'/soal-support/subjects',
+			'/events',
+			'/events/event-1/members',
+			'/packages',
+			'/sessions',
+			'/sessions/session-1/proctoring/events',
+			'/sessions/session-1/results',
+			'/sessions/session-1/rooms/readiness',
+			'/proctoring/my-rooms',
+			'/non-test-assessments'
+		];
+
+		for (const path of activeWorkflowPaths) {
+			expect(cbtBackendPath(path), path).not.toMatch(/^\/api\/cbt(?:\/|$)/);
+		}
 	});
 });

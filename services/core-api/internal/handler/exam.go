@@ -164,6 +164,8 @@ func (h *Exam) SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 			api.Err(w, http.StatusConflict, "exam already submitted")
 		case service.ErrExamWindowClosed:
 			api.Err(w, http.StatusForbidden, "exam window has closed")
+		case service.ErrExamNotStarted:
+			api.Err(w, http.StatusForbidden, "exam session has not started")
 		case service.ErrExamQuestionScope:
 			api.Err(w, http.StatusBadRequest, "question is not part of this exam")
 		default:
@@ -189,6 +191,8 @@ func (h *Exam) Submit(w http.ResponseWriter, r *http.Request) {
 			api.Err(w, http.StatusConflict, "exam already submitted")
 		case service.ErrExamWindowClosed:
 			api.Err(w, http.StatusForbidden, "exam window has closed")
+		case service.ErrExamNotStarted:
+			api.Err(w, http.StatusForbidden, "exam session has not started")
 		default:
 			api.Internal(w, err)
 		}

@@ -28,10 +28,15 @@ type fakeExamService struct {
 	lastLoginToken             string
 	lastLoginDeviceFingerprint string
 	lastLoginIP                string
+	lastStatusParticipantID    pgtype.UUID
+	lastHeartbeatParticipantID pgtype.UUID
+	lastEventParticipantID     pgtype.UUID
 	lastEventType              string
 	lastEventData              map[string]any
+	lastAnswerParticipantID    pgtype.UUID
 	lastAnswerQuestionID       pgtype.UUID
 	lastAnswerText             string
+	lastSubmitParticipantID    pgtype.UUID
 	submitCalls                int
 }
 
@@ -43,26 +48,31 @@ func (f *fakeExamService) Login(ctx context.Context, token, deviceFingerprint, l
 }
 
 func (f *fakeExamService) GetStatus(ctx context.Context, p db.GetParticipantByTokenRow) (service.StatusResult, error) {
+	f.lastStatusParticipantID = p.ID
 	return f.statusResult, f.statusErr
 }
 
 func (f *fakeExamService) Heartbeat(ctx context.Context, participantID pgtype.UUID) error {
+	f.lastHeartbeatParticipantID = participantID
 	return f.heartbeatErr
 }
 
 func (f *fakeExamService) RecordClientEvent(ctx context.Context, participantID pgtype.UUID, eventType string, data map[string]any) error {
+	f.lastEventParticipantID = participantID
 	f.lastEventType = eventType
 	f.lastEventData = data
 	return f.eventErr
 }
 
 func (f *fakeExamService) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, questionID pgtype.UUID, answer string) error {
+	f.lastAnswerParticipantID = p.ID
 	f.lastAnswerQuestionID = questionID
 	f.lastAnswerText = answer
 	return f.answerErr
 }
 
 func (f *fakeExamService) Submit(ctx context.Context, p db.GetParticipantByTokenRow) error {
+	f.lastSubmitParticipantID = p.ID
 	f.submitCalls++
 	return f.submitErr
 }
@@ -175,8 +185,14 @@ func TestExamLoginWritesWrappedJSONWithAbsoluteMediaURLs(t *testing.T) {
 			Questions: []service.ExamQuestion{
 				{
 					ID:               "q-1",
+					QuestionType:     "multiple_choice",
 					QuestionText:     "Soal 1",
+					Options:          json.RawMessage(`[{"label":"A","text":"Satu"},{"label":"B","text":"Dua"}]`),
+					StemHTML:         "<p>Soal 1</p>",
+					StimulusHTML:     "<p>Bacaan singkat</p>",
 					StemMediaURL:     "/api/cbt/assets/image-1/file",
+					StimulusMediaURL: "/api/cbt/assets/image-2/file",
+					StemAudioURL:     "/api/cbt/assets/audio-2/file",
 					StimulusAudioURL: "/api/cbt/assets/audio-1/file",
 				},
 			},
@@ -215,8 +231,30 @@ func TestExamLoginWritesWrappedJSONWithAbsoluteMediaURLs(t *testing.T) {
 	if payload.Data.Questions[0].StemMediaURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/image-1/file" {
 		t.Fatalf("StemMediaURL = %q", payload.Data.Questions[0].StemMediaURL)
 	}
+	if payload.Data.Questions[0].StimulusMediaURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/image-2/file" {
+		t.Fatalf("StimulusMediaURL = %q", payload.Data.Questions[0].StimulusMediaURL)
+	}
+	if payload.Data.Questions[0].StemAudioURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/audio-2/file" {
+		t.Fatalf("StemAudioURL = %q", payload.Data.Questions[0].StemAudioURL)
+	}
 	if payload.Data.Questions[0].StimulusAudioURL != "https://cbt.mtsn2kolut.sch.id/api/cbt/assets/audio-1/file" {
 		t.Fatalf("StimulusAudioURL = %q", payload.Data.Questions[0].StimulusAudioURL)
+	}
+	if payload.Data.Questions[0].QuestionType != "multiple_choice" {
+		t.Fatalf("QuestionType = %q", payload.Data.Questions[0].QuestionType)
+	}
+	if payload.Data.Questions[0].StemHTML != "<p>Soal 1</p>" {
+		t.Fatalf("StemHTML = %q", payload.Data.Questions[0].StemHTML)
+	}
+	if payload.Data.Questions[0].StimulusHTML != "<p>Bacaan singkat</p>" {
+		t.Fatalf("StimulusHTML = %q", payload.Data.Questions[0].StimulusHTML)
+	}
+	var options []map[string]string
+	if err := json.Unmarshal(payload.Data.Questions[0].Options, &options); err != nil {
+		t.Fatalf("question options unmarshal failed: %v", err)
+	}
+	if len(options) != 2 || options[1]["label"] != "B" || options[1]["text"] != "Dua" {
+		t.Fatalf("question options = %+v, want mobile option label/text contract", options)
 	}
 	if svc.lastLoginToken != "a1b2c3d4" {
 		t.Fatalf("login token = %q, want %q", svc.lastLoginToken, "a1b2c3d4")
@@ -226,6 +264,47 @@ func TestExamLoginWritesWrappedJSONWithAbsoluteMediaURLs(t *testing.T) {
 	}
 	if svc.lastLoginIP != "203.0.113.10" {
 		t.Fatalf("login ip = %q, want %q", svc.lastLoginIP, "203.0.113.10")
+	}
+}
+
+func TestExamTokenScopedEndpointsForwardParticipantContext(t *testing.T) {
+	participant := db.GetParticipantByTokenRow{ID: handlerTestUUID(131)}
+	svc := &fakeExamService{}
+	h := &Exam{svc: svc}
+
+	req := httptest.NewRequest("GET", "http://internal/api/exam/status", nil)
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	h.Status(httptest.NewRecorder(), req)
+
+	req = httptest.NewRequest("POST", "http://internal/api/exam/heartbeat", nil)
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	h.Heartbeat(httptest.NewRecorder(), req)
+
+	req = httptest.NewRequest("POST", "http://internal/api/exam/event", bytes.NewBufferString(`{"event_type":"warning","data":{"reason":"manual_submit"}}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	h.RecordEvent(httptest.NewRecorder(), req)
+
+	req = httptest.NewRequest("POST", "http://internal/api/exam/answer", bytes.NewBufferString(`{"question_id":"11111111-1111-1111-1111-111111111111","answer":"B"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	h.SubmitAnswer(httptest.NewRecorder(), req)
+
+	req = httptest.NewRequest("POST", "http://internal/api/exam/submit", nil)
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	h.Submit(httptest.NewRecorder(), req)
+
+	want := participant.ID.String()
+	for endpoint, got := range map[string]string{
+		"status":    svc.lastStatusParticipantID.String(),
+		"heartbeat": svc.lastHeartbeatParticipantID.String(),
+		"event":     svc.lastEventParticipantID.String(),
+		"answer":    svc.lastAnswerParticipantID.String(),
+		"submit":    svc.lastSubmitParticipantID.String(),
+	} {
+		if got != want {
+			t.Fatalf("%s participant id = %q, want %q", endpoint, got, want)
+		}
 	}
 }
 
@@ -492,6 +571,12 @@ func TestExamSubmitAnswerMapsKnownServiceErrors(t *testing.T) {
 			wantError:  "exam window has closed",
 		},
 		{
+			name:       "session not started",
+			err:        service.ErrExamNotStarted,
+			wantStatus: 403,
+			wantError:  "exam session has not started",
+		},
+		{
 			name:       "question outside exam",
 			err:        service.ErrExamQuestionScope,
 			wantStatus: 400,
@@ -634,6 +719,12 @@ func TestExamSubmitMapsKnownServiceErrors(t *testing.T) {
 			err:        service.ErrExamWindowClosed,
 			wantStatus: 403,
 			wantError:  "exam window has closed",
+		},
+		{
+			name:       "session not started",
+			err:        service.ErrExamNotStarted,
+			wantStatus: 403,
+			wantError:  "exam session has not started",
 		},
 		{
 			name:       "unexpected error",
