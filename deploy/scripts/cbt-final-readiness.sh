@@ -10,12 +10,17 @@ RUN_OPS_HEALTH=0
 MANUAL_DEVICE_MATRIX_COMPLETE=0
 MANUAL_OPERATOR_REHEARSAL_COMPLETE=0
 MANUAL_FINAL_SIGNOFF_COMPLETE=0
+BACKUP_ARTIFACT=""
+RUN_MOBILE_RC_BUILD=0
+MOBILE_API_BASE_URL=""
+DEFAULT_FLUTTER_BIN_DIR="/home/servermtsn2kolut/development/flutter/bin"
 
 PROPOSAL_SOURCE="/home/servermtsn2kolut/.hermes/document_cache/doc_2954fa0c7a5c_Proposal_Sistem_CBT_MTsN2_Kolaka_Utara.docx"
 GAP_AUDIT_DOC="docs/cbt-proposal-gap-audit.md"
 FINAL_EVIDENCE_DOC="docs/cbt-release-final-evidence.md"
 EVIDENCE_TEMPLATE_DOC="docs/cbt-release-evidence-template.md"
 DEVICE_MATRIX_DOC="apps/mobile/DEVICE_TEST_MATRIX.md"
+PHASE_2730_DOC="docs/cbt-proposal-integration-phase-27-30.md"
 SCRIPT_DOC="deploy/scripts/cbt-final-readiness.sh"
 
 GAP_AUDIT_JSON=""
@@ -26,6 +31,28 @@ LOG_DIR=""
 SECRET_SCAN_STATUS="pending"
 SECRET_SCAN_FINDINGS=()
 SECRET_SCAN_FILES=()
+
+BACKUP_VERIFY_STATUS="skipped"
+BACKUP_VERIFY_DETAIL="not requested; provide --backup-artifact for read-only checksum/list verification"
+BACKUP_VERIFY_PATH=""
+BACKUP_VERIFY_LOG=""
+BACKUP_VERIFY_SHA256=""
+BACKUP_VERIFY_BYTES=""
+BACKUP_CHECKSUM_STATUS="skipped"
+BACKUP_PG_RESTORE_LIST_STATUS="skipped"
+
+MOBILE_RC_STATUS="skipped"
+MOBILE_RC_DETAIL="not requested; run with --run-mobile-rc-build and --mobile-api-base-url"
+MOBILE_RC_LOG=""
+MOBILE_RC_APK_PATH="apps/mobile/build/app/outputs/flutter-apk/app-release.apk"
+MOBILE_RC_SHA256=""
+MOBILE_RC_BYTES=""
+MOBILE_RC_SIGNING_STATUS="unknown"
+MOBILE_RC_VERSION_NAME_CODE=""
+MOBILE_RC_FLUTTER_BIN=""
+MOBILE_RC_FLUTTER_VERSION=""
+MOBILE_RC_MANIFEST_INTERNET="pending"
+MOBILE_RC_MANIFEST_ALLOW_BACKUP_FALSE="pending"
 
 AUTOMATED_NAMES=()
 AUTOMATED_STATUSES=()
@@ -47,13 +74,16 @@ tmp/cbt-final-readiness inside the repository.
 Options:
   --output <dir>                         Write evidence to a caller-provided directory.
   --run-ops-health                       Run read-only `make ops-health` and capture status.
+  --backup-artifact <dump>               Verify a PostgreSQL custom dump with checksum/list checks only. Do not restore over live DB.
+  --run-mobile-rc-build                  Build Flutter release APK and record hash/status.
+  --mobile-api-base-url <url>            HTTPS API base URL for --run-mobile-rc-build.
   --manual-device-matrix-complete        Mark physical Android device matrix evidence complete.
   --manual-operator-rehearsal-complete   Mark operator rehearsal evidence complete.
   --manual-final-signoff-complete        Mark final operator sign-off evidence complete.
   -h, --help                             Show this help.
 
-The script does not deploy, change PM2 process state, run migrations, mutate SQL state, or
-change product runtime. It writes generated evidence only.
+The script does not deploy, change PM2 process state, run migrations, mutate SQL state,
+restore over live DB, or change product runtime. It writes generated evidence only.
 USAGE
 }
 
@@ -73,6 +103,20 @@ while [ "$#" -gt 0 ]; do
 		--run-ops-health)
 			RUN_OPS_HEALTH=1
 			shift
+			;;
+		--backup-artifact)
+			[ "$#" -ge 2 ] || fail_usage "--backup-artifact requires a dump path"
+			BACKUP_ARTIFACT="$2"
+			shift 2
+			;;
+		--run-mobile-rc-build)
+			RUN_MOBILE_RC_BUILD=1
+			shift
+			;;
+		--mobile-api-base-url)
+			[ "$#" -ge 2 ] || fail_usage "--mobile-api-base-url requires a URL"
+			MOBILE_API_BASE_URL="$2"
+			shift 2
 			;;
 		--manual-device-matrix-complete)
 			MANUAL_DEVICE_MATRIX_COMPLETE=1
@@ -143,6 +187,26 @@ relative_output_path() {
 		printf '%s\n' "${path#"$OUTPUT_DIR/"}"
 	else
 		printf '%s\n' "$path"
+	fi
+}
+
+resolve_input_path() {
+	local requested="$1"
+	if [[ "$requested" == /* ]]; then
+		printf '%s\n' "$requested"
+	else
+		printf '%s/%s\n' "$REPO_ROOT" "$requested"
+	fi
+}
+
+sha256_file() {
+	local file="$1"
+	if command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$file" | awk '{print $1}'
+	elif command -v shasum >/dev/null 2>&1; then
+		shasum -a 256 "$file" | awk '{print $1}'
+	else
+		printf ''
 	fi
 }
 
@@ -217,6 +281,207 @@ run_health_command() {
 	fi
 }
 
+verify_backup_artifact() {
+	local backup_path=""
+	local log_path="${LOG_DIR}/backup-verify.log"
+	local tmp_log="${LOG_DIR}/backup-verify.tmp"
+	local checksum_sidecar=""
+	local checksum_status=0
+	local list_status=0
+
+	if [ -z "$BACKUP_ARTIFACT" ]; then
+		return
+	fi
+
+	backup_path="$(resolve_input_path "$BACKUP_ARTIFACT")"
+	BACKUP_VERIFY_PATH="$backup_path"
+
+	if [ ! -f "$backup_path" ]; then
+		BACKUP_VERIFY_STATUS="fail"
+		BACKUP_VERIFY_DETAIL="backup artifact not found"
+		{
+			printf 'backup_artifact=%s\n' "$backup_path"
+			printf 'status=missing\n'
+			printf 'do_not_restore_over_live_db=true\n'
+		} > "$log_path"
+		BACKUP_VERIFY_LOG="$(relative_output_path "$log_path")"
+		return
+	fi
+
+	BACKUP_VERIFY_SHA256="$(sha256_file "$backup_path")"
+	BACKUP_VERIFY_BYTES="$(wc -c < "$backup_path" | tr -d '[:space:]')"
+
+	checksum_sidecar="${backup_path}.sha256"
+	if [ -f "$checksum_sidecar" ]; then
+		set +e
+		(
+			cd "$(dirname "$backup_path")"
+			sha256sum -c "$(basename "$checksum_sidecar")"
+		) > "$tmp_log" 2>&1
+		checksum_status=$?
+		set -e
+		if [ "$checksum_status" -eq 0 ]; then
+			BACKUP_CHECKSUM_STATUS="pass"
+		else
+			BACKUP_CHECKSUM_STATUS="fail"
+		fi
+	else
+		printf 'checksum_sidecar=missing\n' > "$tmp_log"
+		BACKUP_CHECKSUM_STATUS="skipped"
+	fi
+
+	if command -v pg_restore >/dev/null 2>&1; then
+		set +e
+		pg_restore --list "$backup_path" >> "$tmp_log" 2>&1
+		list_status=$?
+		set -e
+		if [ "$list_status" -eq 0 ]; then
+			BACKUP_PG_RESTORE_LIST_STATUS="pass"
+		else
+			BACKUP_PG_RESTORE_LIST_STATUS="fail"
+		fi
+	else
+		printf 'pg_restore_list=skipped_missing_pg_restore\n' >> "$tmp_log"
+		BACKUP_PG_RESTORE_LIST_STATUS="skipped"
+	fi
+
+	{
+		printf 'backup_artifact=%s\n' "$backup_path"
+		printf 'backup_file=%s\n' "$(basename "$backup_path")"
+		printf 'bytes=%s\n' "$BACKUP_VERIFY_BYTES"
+		printf 'sha256=%s\n' "$BACKUP_VERIFY_SHA256"
+		printf 'checksum_status=%s\n' "$BACKUP_CHECKSUM_STATUS"
+		printf 'pg_restore_list_status=%s\n' "$BACKUP_PG_RESTORE_LIST_STATUS"
+		printf 'do_not_restore_over_live_db=true\n'
+		cat "$tmp_log"
+	} | redact_stream > "$log_path"
+	rm -f "$tmp_log"
+
+	BACKUP_VERIFY_LOG="$(relative_output_path "$log_path")"
+	if [ "$BACKUP_CHECKSUM_STATUS" = "fail" ] || [ "$BACKUP_PG_RESTORE_LIST_STATUS" = "fail" ]; then
+		BACKUP_VERIFY_STATUS="fail"
+		BACKUP_VERIFY_DETAIL="backup verification had checksum or pg_restore list failures"
+	elif [ "$BACKUP_CHECKSUM_STATUS" = "skipped" ] || [ "$BACKUP_PG_RESTORE_LIST_STATUS" = "skipped" ]; then
+		BACKUP_VERIFY_STATUS="partial"
+		BACKUP_VERIFY_DETAIL="backup artifact inspected; one or more optional verification steps skipped"
+	else
+		BACKUP_VERIFY_STATUS="pass"
+		BACKUP_VERIFY_DETAIL="backup checksum and pg_restore list verification completed"
+	fi
+}
+
+detect_mobile_manifest_checks() {
+	local manifest="${REPO_ROOT}/apps/mobile/android/app/src/main/AndroidManifest.xml"
+	if grep -q 'android.permission.INTERNET' "$manifest"; then
+		MOBILE_RC_MANIFEST_INTERNET="pass"
+	else
+		MOBILE_RC_MANIFEST_INTERNET="fail"
+	fi
+
+	if grep -q 'android:allowBackup="false"' "$manifest"; then
+		MOBILE_RC_MANIFEST_ALLOW_BACKUP_FALSE="pass"
+	else
+		MOBILE_RC_MANIFEST_ALLOW_BACKUP_FALSE="fail"
+	fi
+}
+
+detect_mobile_signing_status() {
+	local key_properties="${REPO_ROOT}/apps/mobile/android/key.properties"
+	if [ -f "$key_properties" ]; then
+		MOBILE_RC_SIGNING_STATUS="release_keystore_configured_file"
+	elif [ -n "${ANDROID_KEYSTORE_PATH:-}" ] && \
+		[ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ] && \
+		[ -n "${ANDROID_KEY_ALIAS:-}" ] && \
+		[ -n "${ANDROID_KEY_PASSWORD:-}" ]; then
+		MOBILE_RC_SIGNING_STATUS="release_keystore_configured_env"
+	else
+		MOBILE_RC_SIGNING_STATUS="debug_signing_fallback_for_internal_testing_only"
+	fi
+}
+
+resolve_flutter_bin() {
+	if [ -x "${DEFAULT_FLUTTER_BIN_DIR}/flutter" ]; then
+		printf '%s\n' "${DEFAULT_FLUTTER_BIN_DIR}/flutter"
+	elif command -v flutter >/dev/null 2>&1; then
+		command -v flutter
+	else
+		printf ''
+	fi
+}
+
+run_mobile_rc_build() {
+	local flutter_bin=""
+	local tmp_log="${LOG_DIR}/mobile-rc-build.tmp"
+	local log_path="${LOG_DIR}/mobile-rc-build.log"
+	local status=0
+	local apk_abs="${REPO_ROOT}/${MOBILE_RC_APK_PATH}"
+
+	detect_mobile_manifest_checks
+	detect_mobile_signing_status
+	MOBILE_RC_VERSION_NAME_CODE="$(awk -F ': ' '/^version:/ {print $2; exit}' "${REPO_ROOT}/apps/mobile/pubspec.yaml" 2>/dev/null || true)"
+
+	if [ "$RUN_MOBILE_RC_BUILD" -ne 1 ]; then
+		return
+	fi
+
+	if [ -z "$MOBILE_API_BASE_URL" ]; then
+		MOBILE_RC_STATUS="fail"
+		MOBILE_RC_DETAIL="--mobile-api-base-url is required for mobile RC build evidence"
+		return
+	fi
+	case "$MOBILE_API_BASE_URL" in
+		https://*) ;;
+		*)
+			MOBILE_RC_STATUS="fail"
+			MOBILE_RC_DETAIL="mobile RC build requires https:// API_BASE_URL"
+			return
+			;;
+	esac
+
+	flutter_bin="$(resolve_flutter_bin)"
+	MOBILE_RC_FLUTTER_BIN="$flutter_bin"
+	if [ -z "$flutter_bin" ]; then
+		MOBILE_RC_STATUS="blocked_missing_flutter"
+		MOBILE_RC_DETAIL="Flutter SDK not available on this host"
+		return
+	fi
+
+	set +e
+	(
+		cd "${REPO_ROOT}/apps/mobile"
+		"$flutter_bin" --version
+		"$flutter_bin" build apk --release --dart-define=API_BASE_URL="$MOBILE_API_BASE_URL"
+	) > "$tmp_log" 2>&1
+	status=$?
+	set -e
+
+	MOBILE_RC_FLUTTER_VERSION="$(sed -n '1p' "$tmp_log" | tr -d '\r')"
+	case "$MOBILE_RC_FLUTTER_VERSION" in
+		Flutter*) ;;
+		*) MOBILE_RC_FLUTTER_VERSION="unavailable";;
+	esac
+	redact_stream < "$tmp_log" > "$log_path"
+	rm -f "$tmp_log"
+	MOBILE_RC_LOG="$(relative_output_path "$log_path")"
+
+	if [ "$status" -ne 0 ]; then
+		MOBILE_RC_STATUS="fail"
+		MOBILE_RC_DETAIL="flutter build apk exited $status"
+		return
+	fi
+
+	if [ ! -f "$apk_abs" ]; then
+		MOBILE_RC_STATUS="fail"
+		MOBILE_RC_DETAIL="flutter build completed but APK artifact was not found"
+		return
+	fi
+
+	MOBILE_RC_SHA256="$(sha256_file "$apk_abs")"
+	MOBILE_RC_BYTES="$(wc -c < "$apk_abs" | tr -d '[:space:]')"
+	MOBILE_RC_STATUS="pass"
+	MOBILE_RC_DETAIL="flutter release APK built and SHA-256 recorded"
+}
+
 doc_exists_json_entry() {
 	local key="$1"
 	local doc_path="$2"
@@ -228,7 +493,7 @@ doc_exists_json_entry() {
 }
 
 all_required_docs_exist() {
-	for doc_path in "$GAP_AUDIT_DOC" "$FINAL_EVIDENCE_DOC" "$EVIDENCE_TEMPLATE_DOC" "$DEVICE_MATRIX_DOC" "$SCRIPT_DOC"; do
+	for doc_path in "$GAP_AUDIT_DOC" "$FINAL_EVIDENCE_DOC" "$EVIDENCE_TEMPLATE_DOC" "$DEVICE_MATRIX_DOC" "$PHASE_2730_DOC" "$SCRIPT_DOC"; do
 		[ -f "${REPO_ROOT}/${doc_path}" ] || return 1
 	done
 	return 0
@@ -277,9 +542,9 @@ write_gap_audit_json() {
 		write_matrix_row "Audit trail" "4.5.3 Audit Trail & Evidensi, 5.3 Audit Log" "Partial" "Audit middleware, CBT event telemetry, auth audit events, session/room audit routes, and evidence templates exist." "Use generated readiness/evidence plus ops archive; hash-chain audit needs separate design." ","
 		write_matrix_row "Analytics" "8.1 Analitik Butir Soal" "Partial" "Results hubs, scoring, item-analysis route, essay grading, and grade sync foundations exist." "Keep item-analysis evidence in post-exam review and expand metrics with validated formulas/tests." ","
 		write_matrix_row "Reports" "8.2 Laporan yang Tersedia" "Partial" "CSV exports, exam cards, minutes, operational recap, session/event results, and evidence templates exist." "Use current artifacts for release; track PDF/Excel executive reports as backlog." ","
-		write_matrix_row "ISO controls" "5.3, 6.1, 6.2, 6.3" "Partial" "RBAC, refresh sessions, auth audit, rate limiting, upload hygiene, generic 500 hygiene, docs guard, checksums, and secret-scan evidence exist." "Record ISO as control alignment, not certification; attach manual security/ops evidence before external claims." ","
-		write_matrix_row "Infrastructure" "5.1 Stack Teknologi, 5.2 Arsitektur Sistem, 9.2 Kebutuhan Infrastruktur" "Out of scope adapted" "Approved runtime is 3 VPS targets with SvelteKit, Go, PostgreSQL, PUSAKA worker, Flutter APK, native PM2." "Preserve service boundaries and gather read-only ops-health evidence; do not introduce PocketBase/runtime SQLite." ","
-		write_matrix_row "Risks" "11 Manajemen Risiko" "Planned manual evidence" "Some mitigations exist: server-side timer, pending answers, heartbeat, restore, auth hardening, runbooks, and audit templates." "Complete device matrix, operator rehearsal, evidence review, and final go/no-go sign-off before production acceptance." ""
+		write_matrix_row "ISO controls" "5.3, 6.1, 6.2, 6.3" "Partial" "RBAC, refresh sessions, auth audit, rate limiting, trusted proxy, upload hygiene, generic 500 hygiene, docs guard, checksums, and secret-scan evidence exist." "Record ISO as control alignment, not certification; attach manual security/ops evidence before external claims." ","
+		write_matrix_row "Infrastructure" "5.1 Stack Teknologi, 5.2 Arsitektur Sistem, 9.2 Kebutuhan Infrastruktur" "Out of scope adapted" "Approved runtime is 3 VPS targets with SvelteKit, Go, PostgreSQL, PUSAKA worker, Flutter APK, native PM2. Phase 28 can verify backup checksum and pg_restore --list without live restore." "Preserve service boundaries and gather read-only ops-health and backup verification evidence; do not restore over live DB." ","
+		write_matrix_row "Risks" "11 Manajemen Risiko" "Planned manual evidence" "Some mitigations exist: server-side timer, pending answers, heartbeat, restore, auth hardening, runbooks, audit templates, and Phase 27-30 evidence checklists." "Complete device matrix, operator rehearsal, backup/DR review, security alignment, mobile RC build/hash evidence, and final go/no-go sign-off before production acceptance." ""
 		printf '  ],\n'
 		printf '  "boundary": {\n'
 		printf '    "public_api_cbt_route_tree_required": false,\n'
@@ -331,6 +596,7 @@ write_final_evidence_json() {
 		doc_exists_json_entry "final_release_evidence" "$FINAL_EVIDENCE_DOC"; printf ',\n'
 		doc_exists_json_entry "release_evidence_template" "$EVIDENCE_TEMPLATE_DOC"; printf ',\n'
 		doc_exists_json_entry "device_test_matrix" "$DEVICE_MATRIX_DOC"; printf ',\n'
+		doc_exists_json_entry "phase_27_30" "$PHASE_2730_DOC"; printf ',\n'
 		doc_exists_json_entry "final_readiness_script" "$SCRIPT_DOC"; printf '\n'
 		printf '  },\n'
 		printf '  "automated_evidence": [\n'
@@ -376,6 +642,8 @@ write_final_evidence_json() {
 		done
 		printf '  ],\n'
 		write_tests_manifest_json
+		printf ',\n'
+		write_phase_27_30_json
 		printf ',\n'
 		printf '  "secret_scan": { "status": "%s" }\n' "$(json_escape "$SECRET_SCAN_STATUS")"
 		printf '}\n'
@@ -429,8 +697,75 @@ write_tests_manifest_json() {
       "name": "ops health",
       "command": "make ops-health",
       "scope": "read-only ops health status"
+    },
+    {
+      "name": "backup verification",
+      "command": "deploy/scripts/cbt-final-readiness.sh --backup-artifact <dump>",
+      "scope": "read-only checksum and pg_restore --list verification; no live restore"
+    },
+    {
+      "name": "mobile RC build",
+      "command": "deploy/scripts/cbt-final-readiness.sh --run-mobile-rc-build --mobile-api-base-url https://api.sekolah.example",
+      "scope": "Flutter release APK build and SHA-256 evidence; no device PASS claim"
     }
   ]
+JSON
+}
+
+write_phase_27_30_json() {
+	local operator_status=""
+	local device_status=""
+	operator_status="$(manual_status "$MANUAL_OPERATOR_REHEARSAL_COMPLETE")"
+	device_status="$(manual_status "$MANUAL_DEVICE_MATRIX_COMPLETE")"
+
+	cat <<JSON
+  "phase_27_30": {
+    "operator_rehearsal_workflow": {
+      "phase": "Phase 27 Operator Rehearsal Workflow Completion",
+      "status": "$(json_escape "$operator_status")",
+      "requires_live_operator_rehearsal": true,
+      "flow": "Bank Soal to Asesmen Persiapan to Pelaksanaan/Pengawasan to Flutter APK to Hasil/Post-exam review",
+      "manual_evidence_required": true
+    },
+    "backup_restore_dr": {
+      "phase": "Phase 28 Infrastructure, Backup, Restore, and DR Evidence",
+      "status": "$(json_escape "$BACKUP_VERIFY_STATUS")",
+      "detail": "$(json_escape "$BACKUP_VERIFY_DETAIL")",
+      "backup_artifact": "$(json_escape "$BACKUP_VERIFY_PATH")",
+      "bytes": "$(json_escape "$BACKUP_VERIFY_BYTES")",
+      "sha256": "$(json_escape "$BACKUP_VERIFY_SHA256")",
+      "checksum_status": "$(json_escape "$BACKUP_CHECKSUM_STATUS")",
+      "pg_restore_list_status": "$(json_escape "$BACKUP_PG_RESTORE_LIST_STATUS")",
+      "log": "$(json_escape "$BACKUP_VERIFY_LOG")",
+      "do_not_restore_over_live_db": true
+    },
+    "security_iso_control_alignment": {
+      "phase": "Phase 29 Security and ISO-Control Alignment Evidence",
+      "status": "documented_control_alignment_not_certification",
+      "control_alignment_not_certification": true,
+      "no_iso_certification_claim": true,
+      "evidence_topics": ["RBAC controls", "rate limit", "token/device binding", "audit trail", "evidence redaction", "backup/restore", "secret scan"]
+    },
+    "mobile_rc_build": {
+      "phase": "Phase 30 Mobile RC Build and Release Package",
+      "status": "$(json_escape "$MOBILE_RC_STATUS")",
+      "detail": "$(json_escape "$MOBILE_RC_DETAIL")",
+      "api_base_url": "$(json_escape "$MOBILE_API_BASE_URL")",
+      "version_name_code": "$(json_escape "$MOBILE_RC_VERSION_NAME_CODE")",
+      "apk_path": "$(json_escape "$MOBILE_RC_APK_PATH")",
+      "apk_bytes": "$(json_escape "$MOBILE_RC_BYTES")",
+      "apk_sha256": "$(json_escape "$MOBILE_RC_SHA256")",
+      "signing_status": "$(json_escape "$MOBILE_RC_SIGNING_STATUS")",
+      "flutter_bin": "$(json_escape "$MOBILE_RC_FLUTTER_BIN")",
+      "flutter_version": "$(json_escape "$MOBILE_RC_FLUTTER_VERSION")",
+      "manifest_internet_permission": "$(json_escape "$MOBILE_RC_MANIFEST_INTERNET")",
+      "manifest_allow_backup_false": "$(json_escape "$MOBILE_RC_MANIFEST_ALLOW_BACKUP_FALSE")",
+      "log": "$(json_escape "$MOBILE_RC_LOG")",
+      "device_matrix_status": "$(json_escape "$device_status")",
+      "minimum_android_vendors": 2,
+      "real_device_pass_claimed": false
+    }
+  }
 JSON
 }
 
@@ -546,8 +881,23 @@ write_markdown() {
 		printf '%s\n' "- \`cbt-final-signoff.json\`"
 		printf '%s\n\n' "- \`cbt-final-readiness.md\`"
 
+		printf '## Phase 27-30 Evidence\n\n'
+		printf '| Phase | Status | Detail | Log |\n'
+		printf '|-------|--------|--------|-----|\n'
+		printf '| Phase 27 Operator Rehearsal Workflow Completion | `%s` | Bank Soal to Asesmen Persiapan to Pelaksanaan/Pengawasan to Flutter APK to Hasil/Post-exam review |  |\n' "$operator_status"
+		printf '| Phase 28 Infrastructure, Backup, Restore, and DR Evidence | `%s` | %s | %s |\n' "$BACKUP_VERIFY_STATUS" "${BACKUP_VERIFY_DETAIL//|/\\|}" "$BACKUP_VERIFY_LOG"
+		printf '| Phase 29 Security and ISO-Control Alignment Evidence | `documented_control_alignment_not_certification` | control alignment, not certification; No ISO certification claim |  |\n'
+		printf '| Phase 30 Mobile RC Build and Release Package | `%s` | %s | %s |\n' "$MOBILE_RC_STATUS" "${MOBILE_RC_DETAIL//|/\\|}" "$MOBILE_RC_LOG"
+		if [ -n "$MOBILE_RC_SHA256" ]; then
+			printf '\n%s\n' "- APK SHA-256 hash: \`${MOBILE_RC_SHA256}\`"
+		fi
+		if [ -n "$BACKUP_VERIFY_SHA256" ]; then
+			printf '%s\n' "- Backup SHA-256 hash: \`${BACKUP_VERIFY_SHA256}\`"
+		fi
+		printf '%s\n\n' "- Real-device PASS claimed: \`false\`"
+
 		printf '## Boundary\n\n'
-		printf '%s\n' '- Tidak deploy, tidak mengubah proses PM2, tidak migration, tidak live DB write, dan tidak live exam mutation.'
+		printf '%s\n' '- Tidak deploy, tidak mengubah proses PM2, tidak migration, tidak live DB write, tidak live exam mutation, dan tidak restore over live DB.'
 		printf '%s\n' '- Tidak membuat public SvelteKit route tree `/api/cbt/**` baru.'
 		printf '%s\n' '- Flutter tetap memakai `services/core-api` `/api/exam/*` untuk runtime siswa.'
 		printf '%s\n' '- This host can generate automated evidence, but physical Android devices and operator rehearsal remain manual evidence until recorded.'
@@ -612,13 +962,15 @@ fi
 run_logged_command "git-diff-check" "$REPO_ROOT" "git diff --check" git diff --check
 
 if all_required_docs_exist; then
-	record_automated "docs-existence" "pass" "final audit, final evidence, template, device matrix, and script docs exist" ""
+	record_automated "docs-existence" "pass" "final audit, final evidence, template, device matrix, Phase 27-30, and script docs exist" ""
 else
 	record_automated "docs-existence" "fail" "one or more final audit/readiness docs are missing" ""
 fi
 
 record_automated "tests-manifest" "recorded" "validation command manifest written to cbt-final-evidence.json" ""
 run_health_command
+verify_backup_artifact
+run_mobile_rc_build
 
 write_gap_audit_json
 write_final_evidence_json

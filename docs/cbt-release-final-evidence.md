@@ -2,9 +2,9 @@
 
 Status: final release evidence baseline, 2026-05-08.
 
-Current commit baseline: `488e105` (`Phase 19-22`).
+Current source baseline before Phase 27-30 commit: `5d54c36` (`Phase 23-26`).
 
-This document records the current final evidence split after CBT Phase 15. It does not perform deploy, PM2 restart, migration, live database writes, live exam mutation, or public CBT route work.
+This document records the current final evidence split after CBT Phase 30 evidence hardening. It does not perform deploy, PM2 restart, migration, live database writes, live exam mutation, live DB restore, or public CBT route work.
 
 ## Automated evidence completed on this host
 
@@ -55,10 +55,34 @@ Tidak ada klaim production go tanpa evidence perangkat nyata dan rehearsal opera
 - Phase 25 analytics/item analysis: difficulty index, discrimination index, distractor/answer distribution, unanswered count, and per-type accuracy are the accepted metrics. Cronbach alpha is `documented_deferred_until_formula_and_dataset_are_tested`.
 - Phase 26 reports: official parity is print HTML / browser PDF plus CSV Excel-compatible exports where safe; no new binary PDF/XLSX endpoint and no broad token spreadsheet export.
 
+## Phase 27-30 evidence status
+
+- Phase 27 Operator Rehearsal Workflow Completion: the checklist must cover Bank Soal to Asesmen Persiapan to Pelaksanaan/Pengawasan to Flutter APK to Hasil/Post-exam review, proctor evidence, role/scope/token boundary, event/audit evidence, and go/no-go rehearsal. Status stays `pending_manual_evidence` until the operator/pengawas attach the actual rehearsal record.
+- Phase 28 Infrastructure, Backup, Restore, and DR Evidence: backup verification may record backup path, latest symlink, checksum, `sha256sum -c`, and `pg_restore --list` status. Do not restore over live DB; restore drills must use an isolated scratch database or offline target and are not claimed by this repository unless real ops evidence is attached.
+- Phase 29 Security and ISO-Control Alignment Evidence: security evidence is control alignment, not certification. No ISO certification claim is made. Evidence should cover RBAC controls, rate limit/trusted proxy, token/device binding, audit trail, backup/restore, evidence redaction, and secret scan.
+- Phase 30 Mobile RC Build and Release Package Evidence: APK build status, APK SHA-256 hash, version name/code, commit hash, signing status, `API_BASE_URL`, manifest checks, and quality gate status may be recorded. A successful build/hash does not claim real-device PASS; physical Android evidence remains `pending_manual_evidence` until tested on minimum two Android vendors.
+
 ## Final readiness command
 
 ```bash
 deploy/scripts/cbt-final-readiness.sh --output tmp/cbt-final-readiness
+```
+
+Optional backup verification evidence:
+
+```bash
+deploy/scripts/cbt-final-readiness.sh \
+  --output tmp/cbt-final-readiness \
+  --backup-artifact /path/to/latest.dump
+```
+
+Optional mobile RC build/hash evidence:
+
+```bash
+deploy/scripts/cbt-final-readiness.sh \
+  --output tmp/cbt-final-readiness \
+  --run-mobile-rc-build \
+  --mobile-api-base-url https://api.sekolah.example
 ```
 
 Optional manual flags for an operator-created bundle:

@@ -1,10 +1,10 @@
 # CBT Smoke Checklist - Phase 5 Rehearsal and Rollout
 
-Status: Phase 14 Operator Rehearsal and Proctor Evidence checklist, 2026-05-08.
+Status: Phase 27 Operator Rehearsal Workflow Completion checklist, 2026-05-08.
 
 Checklist ini dipakai untuk Phase 5 - Rehearsal, Rollout, and Post-Exam Review sebelum ujian besar dan untuk post-exam review setelah sesi selesai. Alur yang diuji adalah Bank Soal -> Asesmen Persiapan -> Pelaksanaan/Pengawasan -> Flutter APK -> Hasil/Post-exam review.
 
-Phase 14 Operator Rehearsal and Proctor Evidence mengunci alur final: Bank Soal to Asesmen Persiapan to Pelaksanaan/Pengawasan to Flutter APK to Hasil/Post-exam review. Bagian ini menambahkan proctor evidence, role/scope/token boundary, event/audit evidence, dan go/no-go rehearsal tanpa deploy, migrasi, live DB write, atau route runtime baru.
+Phase 14 Operator Rehearsal and Proctor Evidence mengunci alur final: Bank Soal to Asesmen Persiapan to Pelaksanaan/Pengawasan to Flutter APK to Hasil/Post-exam review. Phase 27 Operator Rehearsal Workflow Completion memperluasnya menjadi checklist evidence final dengan proctor evidence, role/scope/token boundary, event/audit evidence, go/no-go rehearsal, backup/DR context, security control-alignment notes, dan mobile RC package reference tanpa deploy, migrasi, live DB write, atau route runtime baru.
 
 Dokumen ini adalah `docs/cbt-smoke-checklist.md`. Gunakan bersama `docs/cbt-proposal-integration-phase-5.md`, `docs/exam-api.md`, dan `apps/mobile/RELEASE_CHECKLIST.md`.
 
@@ -17,6 +17,13 @@ Checklist ini mempertahankan guard operasional lama: event member role dan subje
 - [ ] role/scope/token boundary diverifikasi untuk admin/panitia, guru, pengawas/proktor, token visibility, kunci jawaban, dan rubrik.
 - [ ] event/audit evidence tersedia untuk Bank Soal, Asesmen Persiapan, Pelaksanaan/Pengawasan, Flutter APK exam events, dan Hasil/Post-exam review.
 - [ ] go/no-go rehearsal dicatat dengan operator, pengawas, reviewer, rollback owner, blockers, accepted operational notes, dan follow-up owner.
+
+## Phase 27-30 Evidence References
+
+- [ ] Phase 27 Operator Rehearsal Workflow Completion evidence bundle location dicatat.
+- [ ] Phase 28 backup/DR evidence reference dicatat tanpa restore over live DB.
+- [ ] Phase 29 security and ISO-control alignment evidence dicatat sebagai control alignment, not certification.
+- [ ] Phase 30 mobile RC build/release package evidence mencatat APK SHA-256 hash/status bila build tersedia.
 
 ## Boundary Wajib
 
@@ -39,6 +46,9 @@ Catat semua hasil preflight sebelum membuka rehearsal.
 - [ ] Server log backend dapat diakses oleh operator teknis, tidak menunjukkan panic berulang, error database, atau raw secret/token.
 - [ ] Server log frontend dapat diakses bila perlu untuk investigasi BFF, tidak menunjukkan proxy loop atau auth cookie error berulang.
 - [ ] Backup PostgreSQL terbaru sudah ada, timestamp-nya sesuai jendela release yang disetujui, dan lokasi/penanggung jawab restore dicatat.
+- [ ] Backup path, latest symlink, checksum, dan hasil `sha256sum -c` atau alasan skipped dicatat.
+- [ ] Jika dump custom PostgreSQL tersedia, hasil `pg_restore --list` atau alasan skipped dicatat.
+- [ ] Do not restore over live DB; restore rehearsal hanya boleh ke isolated scratch database/offline target dengan owner eksplisit.
 - [ ] Migration state sudah diverifikasi sebagai sesuai release yang diuji; bila ada migration pending atau status tidak jelas, hentikan rehearsal dan eskalasi.
 - [ ] Tidak ada perintah migrasi, deploy, PM2 restart, atau rollback database yang dijalankan sebagai bagian checklist ini.
 
@@ -130,6 +140,9 @@ Kriteria lulus:
 Gunakan `apps/mobile/RELEASE_CHECKLIST.md` sebagai checklist build/release. Flutter SDK bisa tidak tersedia di host yang menjalankan checklist ini; bila begitu, catat sebagai blocker validasi mobile dan jalankan quality gate di mesin lain/CI sebelum APK dipakai untuk ujian resmi.
 
 - [ ] APK yang diuji dicatat versi, commit, signing mode, dan `API_BASE_URL`.
+- [ ] Phase 30 Mobile RC Build and Release Package evidence mencatat RC identifier, version name/code, commit hash, signing status, APK path, APK file size, APK SHA-256 hash, `API_BASE_URL`, dan build log/status.
+- [ ] Build/hash evidence tidak dipakai sebagai real-device PASS.
+- [ ] real-device PASS claimed only after physical Android operator test pada minimum two Android vendors.
 - [ ] Minimal dua perangkat nyata lintas vendor Android dipakai.
 - [ ] Hasil perangkat dicatat di `apps/mobile/DEVICE_TEST_MATRIX.md`.
 - [ ] Login token berhasil pada perangkat pertama.

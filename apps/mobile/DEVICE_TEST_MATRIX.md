@@ -2,11 +2,13 @@
 
 Gunakan matriks ini saat uji perangkat Android siswa. Tujuannya agar hasil uji bisa dibandingkan antar vendor, versi Android, dan jenis koneksi.
 
-Status: sinkron Phase 24 Anti-Cheat BYOD Evidence Completion per 2026-05-08. Matriks ini dipakai bersama release checklist dan prosedur BYOD; hasilnya menjadi bukti operasional, bukan jaminan kiosk penuh.
+Status: sinkron Phase 24 Anti-Cheat BYOD Evidence Completion + Phase 30 Mobile RC Build and Release Package per 2026-05-08. Matriks ini dipakai bersama release checklist dan prosedur BYOD; hasilnya menjadi bukti operasional, bukan jaminan kiosk penuh.
 
 Manual evidence status: `pending_manual_evidence` until real Android devices are tested by operator/pengawas. Current status fields must be updated in the evidence bundle before final go/no-go.
 
 Phase 24 rule: No fabricated real-device PASS. Real-device PASS cannot be claimed from repository docs, emulator-only checks, or generated templates. Keep rows pending/manual until an operator tests physical Android devices and signs the evidence bundle.
+
+Phase 30 rule: Mobile RC Build and Release Package evidence may record build status, APK path, APK file size, APK SHA-256 hash, signing status, `API_BASE_URL`, version name/code, commit hash, and manifest checks. Build/hash evidence is not device PASS. `real-device PASS claimed only after physical Android operator test` on minimum two Android vendors.
 
 ## Phase 13 Mobile Release Candidate and Device Matrix
 
@@ -54,6 +56,29 @@ Evidence wajib tetap manual untuk minimal dua vendor Android nyata:
 - device mismatch `409`.
 - stale connection warning.
 - final submit saat koneksi sehat.
+
+## Phase 30 RC package evidence
+
+Isi bagian ini untuk APK yang benar-benar akan dipakai dalam rehearsal perangkat.
+
+- RC identifier:
+- commit hash:
+- version name/code:
+- APK path:
+- APK file size:
+- APK SHA-256 hash:
+- signing status: release keystore / debug signing untuk uji teknis internal saja / unknown.
+- `API_BASE_URL`:
+- Flutter SDK path:
+  - `/home/servermtsn2kolut/development/flutter/bin`
+- Flutter version:
+- `flutter analyze`: pass / fail / skipped.
+- `flutter test`: pass / fail / skipped.
+- `flutter build apk --release`: pass / fail / skipped.
+- `sha256sum build/app/outputs/flutter-apk/app-release.apk`: pass / fail / skipped.
+- Android `INTERNET` permission: pass / fail.
+- Android `allowBackup=false`: pass / fail.
+- minimum two Android vendors: pending_manual_evidence / complete_by_operator.
 
 ## Two-vendor manual placeholders
 

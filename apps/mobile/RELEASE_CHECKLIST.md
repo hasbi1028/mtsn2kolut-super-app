@@ -2,7 +2,7 @@
 
 Checklist ini untuk operator sekolah saat menyiapkan APK Android internal bagi siswa BYOD dan menjalankan Phase 5 rehearsal.
 
-Status: sinkron Phase 24 Anti-Cheat BYOD Evidence Completion per 2026-05-08. Gunakan bersama `docs/exam-api.md`, `docs/cbt-proposal-integration-phase-5.md`, `docs/cbt-proposal-integration-phase-13.md`, `docs/cbt-proposal-integration-phase-23-26.md`, `docs/cbt-smoke-checklist.md`, dan `docs/cbt-operator-runbook.md`.
+Status: sinkron Phase 30 Mobile RC Build and Release Package per 2026-05-08. Gunakan bersama `docs/exam-api.md`, `docs/cbt-proposal-integration-phase-5.md`, `docs/cbt-proposal-integration-phase-13.md`, `docs/cbt-proposal-integration-phase-23-26.md`, `docs/cbt-proposal-integration-phase-27-30.md`, `docs/cbt-smoke-checklist.md`, dan `docs/cbt-operator-runbook.md`.
 
 ## Boundary Phase 5
 
@@ -41,6 +41,28 @@ Isi bagian ini untuk APK yang benar-benar dipasang pada perangkat uji.
 - [ ] `FLAG_SECURE` screenshot/recent-preview deterrence dicatat sebagai bukti terbatas, bukan kiosk guarantee.
 - [ ] app switch event, resume gate, heartbeat loss, pending answer recovery, manual submit guard, device mismatch `409`, stale connection warning, dan final submit koneksi sehat tercatat.
 - [ ] RC identifier, signing mode, `API_BASE_URL`, dan APK SHA-256 hash sama antara checklist, device matrix, dan evidence bundle.
+
+## Phase 30 Mobile RC Build and Release Package
+
+- [ ] RC identifier:
+- [ ] commit hash:
+- [ ] version name/code:
+- [ ] APK path:
+- [ ] APK file size:
+- [ ] APK SHA-256 hash:
+- [ ] signing status: release keystore / debug signing untuk uji teknis internal saja / unknown.
+- [ ] `API_BASE_URL`:
+- [ ] Flutter SDK path:
+  - `/home/servermtsn2kolut/development/flutter/bin`
+- [ ] Flutter version:
+- [ ] `flutter analyze`: pass / fail / skipped.
+- [ ] `flutter test`: pass / fail / skipped.
+- [ ] `flutter build apk --release`: pass / fail / skipped.
+- [ ] `sha256sum build/app/outputs/flutter-apk/app-release.apk`: pass / fail / skipped.
+- [ ] Android manifest `INTERNET` permission: pass / fail.
+- [ ] Android `android:allowBackup="false"`: pass / fail.
+- [ ] real-device PASS claimed only after physical Android operator test.
+- [ ] minimum two Android vendors tetap `pending_manual_evidence` sampai perangkat nyata diuji.
 
 ## Sebelum Build
 
