@@ -29,9 +29,12 @@ import finalReleaseEvidenceDoc from '../../../../../docs/cbt-release-final-evide
 import releaseEvidenceTemplateDoc from '../../../../../docs/cbt-release-evidence-template.md?raw';
 import smokeChecklistDoc from '../../../../../docs/cbt-smoke-checklist.md?raw';
 import finalReadinessScript from '../../../../../deploy/scripts/cbt-final-readiness.sh?raw';
+import healthCheckScript from '../../../../../deploy/scripts/health-check.sh?raw';
 import releasePreflightScript from '../../../../../deploy/scripts/cbt-release-preflight.sh?raw';
 import releaseChecklistDoc from '../../../../../apps/mobile/RELEASE_CHECKLIST.md?raw';
 import deviceTestMatrixDoc from '../../../../../apps/mobile/DEVICE_TEST_MATRIX.md?raw';
+import securityRbacHardeningDoc from '../../../../../docs/cbt-security-rbac-hardening-plan.md?raw';
+import securitySmokeMatrixDoc from '../../../../../docs/cbt-security-smoke-matrix.md?raw';
 
 const execFileAsync = promisify(execFile);
 const testFileDir = path.dirname(fileURLToPath(import.meta.url));
@@ -232,6 +235,7 @@ function targetRecipe(makefile: string, target: string) {
 
 afterEach(async () => {
 	await Promise.all(tempOutputDirs.splice(0).map((outputDir) => rm(outputDir, { recursive: true, force: true })));
+
 });
 
 describe('CBT proposal integration documentation guard', () => {
@@ -1751,4 +1755,60 @@ describe('CBT proposal integration documentation guard', () => {
 		},
 		30_000
 	);
+
+	it('locks Plan B1-B4 CBT security and RBAC hardening evidence', () => {
+		for (const phrase of [
+			'Plan B1 — RBAC/API Surface Inventory',
+			'Plan B2 — Protected Route Smoke Matrix',
+			'Plan B3 — Evidence Export Redaction and CSV Safety',
+			'Plan B4 — Backend Exam Token/Device Boundary Review',
+			'public `/api/cbt/**` route tree remains forbidden',
+			'`/api/cbt/questions` is not public `200`',
+			'Flutter student runtime remains `/api/exam/*`',
+			'Web Admin BFF routes use `/api/bank-soal/*` and `/api/asesmen/*`',
+			'Exam tokens, passwords, bearer tokens, API keys, and raw secrets must be redacted',
+			'CSV injection cells starting with `=`, `+`, `-`, `@`, tab, CR, or LF must be escaped',
+			'Unauthenticated Web Admin pages must return `302`',
+			'Unauthenticated protected BFF/API routes must return `401`'
+		]) {
+			expect(securityRbacHardeningDoc).toContain(phrase);
+		}
+
+		expect(securityRbacHardeningDoc).toContain('| Area | Web Admin route | BFF route | Core API endpoint | Required access | Unauthenticated smoke | Export/evidence rule |');
+		expect(securityRbacHardeningDoc).toContain('/bank-soal/tambah');
+		expect(securityRbacHardeningDoc).toContain('bank_soal.create');
+		expect(securityRbacHardeningDoc).toContain('/asesmen/sesi/[id]/rooms/[rid]/proctoring');
+		expect(securityRbacHardeningDoc).toContain('asesmen.proctor');
+		expect(securityRbacHardeningDoc).toContain('/api/exam/status');
+		expect(securityRbacHardeningDoc).toContain('exam token middleware');
+		expect(securityRbacHardeningDoc).toContain('device mismatch returns `409`');
+		expect(securityRbacHardeningDoc).toContain('submitted or closed sessions fail closed');
+	});
+
+	it('locks the focused CBT security smoke matrix and health-check entry point', () => {
+		for (const phrase of [
+			'cbt-security',
+			'/bank-soal/tambah',
+			'/bank-soal/verifikasi',
+			'/asesmen/pengawasan',
+			'/asesmen/hasil',
+			'/api/bank-soal/summary',
+			'/api/exam/status',
+			'Expected unauthenticated status',
+			'302',
+			'401',
+			'does not print token/header/body output',
+			'/api/cbt/questions',
+			'not public `200`'
+		]) {
+			expect(securitySmokeMatrixDoc).toContain(phrase);
+		}
+		expect(healthCheckScript).toContain('check_cbt_security_routes');
+		expect(healthCheckScript).toContain('cbt-security');
+		expect(healthCheckScript).toContain('/api/exam/status');
+		expect(healthCheckScript).toContain('expected 401');
+		expect(healthCheckScript).toContain('check_http_not_status');
+		expect(healthCheckScript).toContain('/api/cbt/questions not public 200');
+	});
+
 });

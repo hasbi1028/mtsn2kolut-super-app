@@ -155,10 +155,11 @@ export function summarizeProctorEvidence(input: ProctorEvidenceSummaryInput): Pr
 	};
 }
 
-export function buildProctorEvidenceCsvRows(input: ProctorEvidenceCsvInput): unknown[][] {
+export function buildProctorEvidenceCsvRows(input: ProctorEvidenceCsvInput): string[][] {
 	const generatedAt = (input.generatedAt ?? new Date()).toISOString();
-	const rows: unknown[][] = [['section', 'category', 'timestamp', 'participant', 'nis', 'detail']];
-	rows.push(['summary', 'room', generatedAt, '', '', `${input.sessionTitle} / ${input.roomName}`]);
+	const rows: string[][] = [['section', 'category', 'timestamp', 'participant', 'nis', 'detail']];
+	rows.push(['summary', 'session', generatedAt, '', '', input.sessionTitle]);
+	rows.push(['summary', 'room', generatedAt, '', '', input.roomName]);
 	rows.push(['summary', 'proctors', generatedAt, '', '', input.proctors.filter(Boolean).join('; ') || 'Belum ada pengawas']);
 
 	for (const participant of input.participants) {
@@ -183,7 +184,7 @@ export function buildProctorEvidenceCsvRows(input: ProctorEvidenceCsvInput): unk
 		]);
 	}
 
-	return rows;
+	return rows.map((row) => row.map((cell) => safeEvidenceCsvCell(cell)));
 }
 
 function proctorEventDetail(event: ProctorEvidenceEvent): string {
@@ -191,11 +192,53 @@ function proctorEventDetail(event: ProctorEvidenceEvent): string {
 	const reason = stringValue(data.reason);
 	const parts = [proctorEventLabel(event)];
 	if (reason && proctorEventLabel(event).toLowerCase() !== reason.toLowerCase()) parts.push(`reason=${reason}`);
-	for (const key of ['state', 'pending_count', 'failure_count', 'seconds_since_last_contact', 'actor']) {
+	for (const key of [
+		'state',
+		'pending_count',
+		'failure_count',
+		'seconds_since_last_contact',
+		'actor',
+		'token',
+		'access_token',
+		'refresh_token',
+		'exam_token',
+		'password',
+		'api_key',
+		'secret',
+		'authorization',
+		'bearer',
+		'device_fingerprint'
+	]) {
 		const value = data[key];
-		if (value !== undefined && value !== null && value !== '') parts.push(`${key}=${String(value)}`);
+		if (value !== undefined && value !== null && value !== '') parts.push(`${key}=${redactEvidenceValue(key, value)}`);
 	}
 	return parts.join('; ');
+}
+
+
+const SENSITIVE_EVIDENCE_KEY_PATTERN = /(?:^|_)(?:token|access_token|refresh_token|exam_token|password|passwd|secret|api_key|bearer|authorization|device_fingerprint)(?:$|_)/i;
+const SENSITIVE_EVIDENCE_VALUE_PATTERN = /\b(?:token|access_token|refresh_token|exam_token|password|passwd|secret|api[_-]?key|authorization|device_fingerprint)\s*[:=]\s*[^;\s,]+|\bBearer\s+[^;\s,]+/gi;
+const CSV_INJECTION_PREFIX = /^[=+\-@\t\r\n]/;
+
+function redactEvidenceValue(key: string, value: unknown): string {
+	if (SENSITIVE_EVIDENCE_KEY_PATTERN.test(key)) return '[redacted]';
+	return sanitizeSensitiveEvidenceString(String(value));
+}
+
+function safeEvidenceCsvCell(value: unknown): string {
+	let cell = typeof value === 'string' ? value : String(value ?? '');
+	cell = sanitizeSensitiveEvidenceString(cell);
+	if (CSV_INJECTION_PREFIX.test(cell)) return `'${cell}`;
+	return cell;
+}
+
+function sanitizeSensitiveEvidenceString(value: string): string {
+	return value.replace(SENSITIVE_EVIDENCE_VALUE_PATTERN, (match) => {
+		const separator = match.includes(':') ? ':' : match.includes('=') ? '=' : '';
+		if (match.toLowerCase().startsWith('bearer ')) return 'Bearer [redacted]';
+		const key = separator ? match.slice(0, match.indexOf(separator)).trim() : match;
+		return `${key}${separator}[redacted]`;
+	});
 }
 
 function emptyCounts(): Record<ProctorEvidenceCategory, number> {

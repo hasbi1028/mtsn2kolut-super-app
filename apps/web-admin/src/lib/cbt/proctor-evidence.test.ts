@@ -144,4 +144,65 @@ describe('CBT proctor evidence helpers', () => {
 			'Submit manual'
 		);
 	});
+
+	it('redacts sensitive evidence values and escapes CSV injection cells', () => {
+		const rows = buildProctorEvidenceCsvRows({
+			generatedAt: new Date('2026-05-08T08:10:00Z'),
+			sessionTitle: '=HYPERLINK("https://evil.test","click")',
+			roomName: '+SUM(1,1)',
+			proctors: ['@Pengawas'],
+			participants: [
+				{
+					participant_id: 'p1',
+					nama: '-Aminah',
+					nis: '24001',
+					submitted_at: null,
+					last_heartbeat: '2026-05-08T08:09:00Z',
+					app_switch_count: 0,
+					screenshot_attempt: 0,
+					suspicious_flag: false,
+					answered_count: 3,
+					score: null
+				}
+			],
+			events: [
+				{
+					event_type: 'warning',
+					created_at: '2026-05-08T08:00:00Z',
+					nama: '\tBudi',
+					nis: '\r24002',
+					event_data: {
+						reason: 'manual_submit token=inline-token-should-not-leak',
+						actor: 'Bearer actor-token-should-not-leak',
+						token: 'EXAM-TOKEN-SHOULD-NOT-LEAK',
+						password: 'super-secret-password',
+						api_key: 'secret-api-key',
+						authorization: 'Bearer auth-token-should-not-leak',
+						access_token: 'access-token-should-not-leak',
+						device_fingerprint: 'raw-device-fingerprint'
+					}
+				}
+			]
+		});
+
+		const flattened = rows.flat().join(' ');
+		expect(flattened).not.toContain('EXAM-TOKEN-SHOULD-NOT-LEAK');
+		expect(flattened).not.toContain('super-secret-password');
+		expect(flattened).not.toContain('secret-api-key');
+		expect(flattened).not.toContain('raw-device-fingerprint');
+		expect(flattened).not.toContain('actor-token-should-not-leak');
+		expect(flattened).not.toContain('inline-token-should-not-leak');
+		expect(flattened).not.toContain('auth-token-should-not-leak');
+		expect(flattened).not.toContain('access-token-should-not-leak');
+		expect(flattened).toContain('[redacted]');
+
+		for (const value of rows.flat()) {
+			if (typeof value !== 'string') continue;
+			expect(value).not.toMatch(/^[=+\-@\t\r\n]/);
+		}
+		expect(flattened).toContain("'=HYPERLINK");
+		expect(flattened).toContain("'+SUM");
+		expect(flattened).toContain("'@Pengawas");
+	});
+
 });

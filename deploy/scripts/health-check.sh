@@ -1,7 +1,7 @@
 #!/bin/bash
 # Health check script for mtsn2kolut-super-app services
 # Usage: ./deploy/scripts/health-check.sh [service]
-# service: backend | frontend | worker | bank-soal | all
+# service: backend | frontend | worker | bank-soal | cbt-security | all
 
 set -euo pipefail
 
@@ -90,6 +90,65 @@ check_bank_soal_routes() {
     done
 }
 
+check_http_status() {
+    local label="$1"
+    local url="$2"
+    local expected="$3"
+    echo -n "  ${label}... "
+    if response=$(curl -s -m "$TIMEOUT" -w "%{http_code}" "$url" -o /dev/null); then
+        if [ "$response" -eq "$expected" ]; then
+            echo -e "${GREEN}OK${NC} (HTTP $response, expected $expected)"
+            return 0
+        fi
+        echo -e "${RED}FAIL${NC} (HTTP $response, expected $expected)"
+        return 1
+    fi
+    echo -e "${RED}FAIL${NC} (timeout or connection error, expected $expected)"
+    return 1
+}
+
+
+check_http_not_status() {
+    local label="$1"
+    local url="$2"
+    local forbidden="$3"
+    echo -n "  ${label}... "
+    if response=$(curl -s -m "$TIMEOUT" -w "%{http_code}" "$url" -o /dev/null); then
+        if [ "$response" -ne "$forbidden" ]; then
+            echo -e "${GREEN}OK${NC} (HTTP $response, not public $forbidden)"
+            return 0
+        fi
+        echo -e "${RED}FAIL${NC} (HTTP $response, public route regression)"
+        return 1
+    fi
+    echo -e "${RED}FAIL${NC} (timeout or connection error, forbidden $forbidden)"
+    return 1
+}
+
+# Focused CBT security smoke. It validates status codes only; no token/header/body
+# output is printed, so the smoke remains safe for release evidence logs.
+check_cbt_security_routes() {
+    echo "Checking CBT security protected routes..."
+    local failed=0
+    local page_routes=(
+        "/bank-soal"
+        "/bank-soal/tambah"
+        "/bank-soal/verifikasi"
+        "/bank-soal/impor"
+        "/bank-soal/analisis-butir"
+        "/asesmen"
+        "/asesmen/pengawasan"
+        "/asesmen/hasil"
+    )
+    for route in "${page_routes[@]}"; do
+        check_http_status "$route expected 302" "http://localhost:8021${route}" 302 || failed=1
+    done
+    check_http_status "/api/bank-soal/summary expected 401" "http://localhost:8021/api/bank-soal/summary" 401 || failed=1
+    check_http_status "/api/exam/status expected 401" "http://localhost:8080/api/exam/status" 401 || failed=1
+    check_http_not_status "/api/cbt/questions not public 200" "http://localhost:8021/api/cbt/questions" 200 || failed=1
+    return "$failed"
+}
+
 # Function to check worker health (via PM2). A deeper heartbeat/API-key check is
 # available in the web admin status UI, but this gate must at least fail if PM2
 # cannot prove the supervised worker process is online.
@@ -135,6 +194,9 @@ case "$SERVICE" in
     bank-soal)
         check_bank_soal_routes
         ;;
+    cbt-security)
+        check_cbt_security_routes
+        ;;
     worker)
         check_worker
         ;;
@@ -142,7 +204,7 @@ case "$SERVICE" in
         run_all_checks
         ;;
     *)
-        echo "Usage: $0 [backend|frontend|worker|bank-soal|all]"
+        echo "Usage: $0 [backend|frontend|worker|bank-soal|cbt-security|all]"
         exit 1
         ;;
 esac
