@@ -43,6 +43,42 @@ Gunakan template ini untuk arsip operational readiness CBT. Template ini bukan i
   - output tidak boleh memuat password, token mentah, API key, answer key, atau secret lain.
   - secret scan preflight harus `pass`; jika `fail`, bundle menjadi blocker sampai evidence dibersihkan dan dibuat ulang.
 
+## Final audit/readiness artifacts
+
+Gunakan bagian ini setelah final audit proposal dan final readiness evidence dibuat. Bagian ini membedakan automated evidence completed dari manual evidence requiring physical Android devices and operator rehearsal.
+
+- Proposal gap audit:
+  - `docs/cbt-proposal-gap-audit.md`
+- Final release evidence:
+  - `docs/cbt-release-final-evidence.md`
+- Final readiness command:
+  - `deploy/scripts/cbt-final-readiness.sh --output <path>`
+- Generated final readiness artifacts:
+  - `cbt-proposal-gap-audit.json`
+  - `cbt-final-evidence.json`
+  - `cbt-final-signoff.json`
+  - `cbt-final-readiness.md`
+- automated evidence completed:
+  - current git commit/branch:
+  - docs existence:
+  - `git diff --check`:
+  - tests manifest:
+  - safe health command status:
+  - generated evidence secret scan:
+- manual evidence requiring physical Android devices and operator rehearsal:
+  - device matrix status:
+  - operator rehearsal status:
+  - final sign-off status:
+  - minimum two Android vendors:
+  - proctor evidence:
+  - role/scope/token boundary:
+  - event/audit evidence:
+  - go/no-go:
+- Decision hygiene:
+  - default generated sign-off must be `pending_manual_signoff` when manual evidence is missing.
+  - generated readiness may use `ready_for_rehearsal` only when operator flags manual evidence complete.
+  - generated readiness must not claim production go from this host alone.
+
 ## Commit dan Status Git
 
 - `git rev-parse HEAD`:

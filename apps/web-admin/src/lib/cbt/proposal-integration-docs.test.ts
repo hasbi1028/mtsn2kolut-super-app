@@ -16,8 +16,11 @@ import phase5Doc from '../../../../../docs/cbt-proposal-integration-phase-5.md?r
 import phase6Doc from '../../../../../docs/cbt-proposal-integration-phase-6.md?raw';
 import phase7Doc from '../../../../../docs/cbt-proposal-integration-phase-7.md?raw';
 import phase8Doc from '../../../../../docs/cbt-proposal-integration-phase-8.md?raw';
+import proposalGapAuditDoc from '../../../../../docs/cbt-proposal-gap-audit.md?raw';
+import finalReleaseEvidenceDoc from '../../../../../docs/cbt-release-final-evidence.md?raw';
 import releaseEvidenceTemplateDoc from '../../../../../docs/cbt-release-evidence-template.md?raw';
 import smokeChecklistDoc from '../../../../../docs/cbt-smoke-checklist.md?raw';
+import finalReadinessScript from '../../../../../deploy/scripts/cbt-final-readiness.sh?raw';
 import releasePreflightScript from '../../../../../deploy/scripts/cbt-release-preflight.sh?raw';
 import releaseChecklistDoc from '../../../../../apps/mobile/RELEASE_CHECKLIST.md?raw';
 import deviceTestMatrixDoc from '../../../../../apps/mobile/DEVICE_TEST_MATRIX.md?raw';
@@ -26,6 +29,7 @@ const execFileAsync = promisify(execFile);
 const testFileDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testFileDir, '../../../../..');
 const preflightScriptPath = path.join(repoRoot, 'deploy/scripts/cbt-release-preflight.sh');
+const finalReadinessScriptPath = path.join(repoRoot, 'deploy/scripts/cbt-final-readiness.sh');
 const phase9DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-9.md');
 const phase10DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-10.md');
 const phase11DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-11.md');
@@ -73,6 +77,78 @@ interface PreflightManifest {
 	};
 }
 
+interface FinalGapAuditReport {
+	proposal_source: string;
+	status_vocabulary: string[];
+	matrix: Array<{
+		area: string;
+		proposal_section: string;
+		status: string;
+		next_action: string;
+	}>;
+	boundary: {
+		public_api_cbt_route_tree_required: boolean;
+		student_runtime_api: string;
+	};
+	secret_scan: {
+		status: string;
+	};
+}
+
+interface FinalEvidenceReport {
+	output_dir: string;
+	commit: string;
+	docs: Record<string, { path: string; exists: boolean }>;
+	automated_evidence: Array<{
+		name: string;
+		status: string;
+		detail: string;
+		log?: string;
+	}>;
+	manual_evidence: {
+		device_matrix: {
+			status: string;
+			requires_physical_android_devices: boolean;
+			minimum_vendors: number;
+		};
+		operator_rehearsal: {
+			status: string;
+			requires_live_operator_rehearsal: boolean;
+		};
+		final_signoff: {
+			status: string;
+		};
+	};
+	health_commands: Array<{
+		name: string;
+		status: string;
+		detail: string;
+	}>;
+	tests_manifest: Array<{
+		name: string;
+		command: string;
+		scope: string;
+	}>;
+	secret_scan: {
+		status: string;
+	};
+}
+
+interface FinalSignoffReport {
+	go_no_go: string;
+	production_go: boolean;
+	manual_inputs: {
+		device_matrix_complete: boolean;
+		operator_rehearsal_complete: boolean;
+		final_signoff_complete: boolean;
+	};
+	blockers: string[];
+	boundary: {
+		public_api_cbt_route_tree_required: boolean;
+		student_runtime_api: string;
+	};
+}
+
 async function makeTempOutputDir() {
 	const tempRoot = path.join(repoRoot, 'tmp');
 	await mkdir(tempRoot, { recursive: true });
@@ -83,6 +159,14 @@ async function makeTempOutputDir() {
 
 async function runPreflight(args: string[]) {
 	return execFileAsync(preflightScriptPath, args, {
+		cwd: repoRoot,
+		timeout: 30_000,
+		maxBuffer: 8 * 1024 * 1024
+	});
+}
+
+async function runFinalReadiness(args: string[]) {
+	return execFileAsync(finalReadinessScriptPath, args, {
 		cwd: repoRoot,
 		timeout: 30_000,
 		maxBuffer: 8 * 1024 * 1024
@@ -886,6 +970,240 @@ describe('CBT proposal integration documentation guard', () => {
 		expect(phase15Doc).not.toContain('POST /api/cbt/login');
 		expect(phase15Doc).not.toContain('GET /api/cbt/status');
 	});
+
+	it('locks the final proposal gap audit and release evidence docs', () => {
+		for (const phrase of [
+			'CBT Proposal Gap Audit',
+			'Proposal source',
+			'doc_2954fa0c7a5c_Proposal_Sistem_CBT_MTsN2_Kolaka_Utara.docx',
+			'feature-by-feature matrix',
+			'Implemented',
+			'Partial',
+			'Planned manual evidence',
+			'Out of scope adapted',
+			'Multi-mode assessment',
+			'Question types',
+			'Anti-cheat layers',
+			'Room management',
+			'Proctor dashboard',
+			'Audit trail',
+			'Analytics',
+			'Reports',
+			'ISO controls',
+			'Infrastructure',
+			'Risks',
+			'PocketBase / Alpine.js / SQLite proposal stack is adapted',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`'
+		]) {
+			expect(proposalGapAuditDoc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'CBT Final Release Evidence',
+			'Current commit baseline',
+			'c823183',
+			'Automated evidence completed on this host',
+			'Manual evidence requiring physical Android devices and operator rehearsal',
+			'Device matrix',
+			'Operator rehearsal',
+			'Final go/no-go sign-off',
+			'pending_manual_evidence',
+			'pending_manual_signoff',
+			'deploy/scripts/cbt-final-readiness.sh',
+			'cbt-proposal-gap-audit.json',
+			'cbt-final-evidence.json',
+			'cbt-final-signoff.json',
+			'cbt-final-readiness.md',
+			'Tidak ada klaim production go tanpa evidence perangkat nyata dan rehearsal operator'
+		]) {
+			expect(finalReleaseEvidenceDoc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Final audit/readiness artifacts',
+			'docs/cbt-proposal-gap-audit.md',
+			'docs/cbt-release-final-evidence.md',
+			'deploy/scripts/cbt-final-readiness.sh',
+			'automated evidence completed',
+			'manual evidence requiring physical Android devices and operator rehearsal'
+		]) {
+			expect(releaseEvidenceTemplateDoc).toContain(phrase);
+		}
+
+		for (const doc of [proposalGapAuditDoc, finalReleaseEvidenceDoc, releaseEvidenceTemplateDoc]) {
+			expect(doc).not.toContain('POST /api/cbt/login');
+			expect(doc).not.toContain('GET /api/cbt/status');
+		}
+	});
+
+	it('keeps the device matrix explicit about two-vendor manual evidence status', () => {
+		for (const phrase of [
+			'Manual evidence status',
+			'pending_manual_evidence',
+			'Two-vendor manual placeholders',
+			'Vendor A',
+			'Vendor B',
+			'Current status',
+			'Requires physical Android device',
+			'Operator/reviewer',
+			'minimum two Android vendors'
+		]) {
+			expect(deviceTestMatrixDoc).toContain(phrase);
+		}
+	});
+
+	it('guards the read-only CBT final readiness script', () => {
+		for (const phrase of [
+			'set -euo pipefail',
+			'DEFAULT_OUTPUT_DIR="${REPO_ROOT}/tmp/cbt-final-readiness"',
+			'cbt-proposal-gap-audit.json',
+			'cbt-final-evidence.json',
+			'cbt-final-signoff.json',
+			'cbt-final-readiness.md',
+			'--manual-device-matrix-complete',
+			'--manual-operator-rehearsal-complete',
+			'--manual-final-signoff-complete',
+			'--run-ops-health',
+			'ready_for_rehearsal',
+			'pending_manual_signoff',
+			'redact_stream',
+			'scan_generated_evidence_for_secrets',
+			'public_api_cbt_route_tree_required'
+		]) {
+			expect(finalReadinessScript).toContain(phrase);
+		}
+
+		for (const forbiddenPattern of [
+			/\bpm2\s+(restart|reload|stop|delete|start)\b/i,
+			/\bmake\s+db-migrate\b/i,
+			/\bnpm\s+run\s+db:migrate\b/i,
+			/\bpsql\b[^\n]*(ALTER|UPDATE|DELETE|INSERT|DROP|TRUNCATE|CREATE)\b/i,
+			/\bdeploy\/backup-postgresql\.sh\b/,
+			/\bprintenv\b/,
+			/\benv\s*\|/
+		]) {
+			expect(finalReadinessScript).not.toMatch(forbiddenPattern);
+		}
+	});
+
+	it(
+		'executes the CBT final readiness script with pending manual evidence by default',
+		async () => {
+			const outputDir = await makeTempOutputDir();
+			const { stdout, stderr } = await runFinalReadiness(['--output', outputDir]);
+
+			expect(stderr).toBe('');
+			expect(stdout).toContain('CBT final readiness evidence written');
+			expect(stdout).toContain(path.join(outputDir, 'cbt-proposal-gap-audit.json'));
+			expect(stdout).toContain(path.join(outputDir, 'cbt-final-evidence.json'));
+			expect(stdout).toContain(path.join(outputDir, 'cbt-final-signoff.json'));
+			expect(stdout).toContain(path.join(outputDir, 'cbt-final-readiness.md'));
+
+			const markdown = await readFile(path.join(outputDir, 'cbt-final-readiness.md'), 'utf8');
+			const gapAudit = JSON.parse(
+				await readFile(path.join(outputDir, 'cbt-proposal-gap-audit.json'), 'utf8')
+			) as FinalGapAuditReport;
+			const evidence = JSON.parse(
+				await readFile(path.join(outputDir, 'cbt-final-evidence.json'), 'utf8')
+			) as FinalEvidenceReport;
+			const signoff = JSON.parse(
+				await readFile(path.join(outputDir, 'cbt-final-signoff.json'), 'utf8')
+			) as FinalSignoffReport;
+
+			expect(markdown).toContain('# CBT Final Readiness Evidence');
+			expect(markdown).toContain('pending_manual_signoff');
+			expect(markdown).toContain('physical Android devices');
+			expect(markdown).toContain('operator rehearsal');
+			expect(markdown).not.toContain('/api/cbt/login');
+			expect(markdown).not.toContain('/api/cbt/status');
+
+			expect(gapAudit.proposal_source).toContain(
+				'doc_2954fa0c7a5c_Proposal_Sistem_CBT_MTsN2_Kolaka_Utara.docx'
+			);
+			expect(gapAudit.status_vocabulary).toEqual([
+				'Implemented',
+				'Partial',
+				'Planned manual evidence',
+				'Out of scope adapted'
+			]);
+			expect(gapAudit.matrix.map((row) => row.area)).toEqual([
+				'Multi-mode assessment',
+				'Question types',
+				'Anti-cheat layers',
+				'Room management',
+				'Proctor dashboard',
+				'Audit trail',
+				'Analytics',
+				'Reports',
+				'ISO controls',
+				'Infrastructure',
+				'Risks'
+			]);
+			expect(gapAudit.matrix.every((row) => row.next_action.length > 0)).toBe(true);
+			expect(gapAudit.boundary.public_api_cbt_route_tree_required).toBe(false);
+			expect(gapAudit.boundary.student_runtime_api).toBe('/api/exam/*');
+			expect(gapAudit.secret_scan.status).toBe('pass');
+
+			expect(evidence.output_dir).toBe(outputDir);
+			expect(evidence.docs['proposal_gap_audit']?.exists).toBe(true);
+			expect(evidence.docs['final_release_evidence']?.exists).toBe(true);
+			expect(evidence.docs['device_test_matrix']?.exists).toBe(true);
+			expect(evidence.automated_evidence.find((item) => item.name === 'git-diff-check')?.status).toMatch(/^(pass|fail)$/);
+			expect(evidence.automated_evidence.find((item) => item.name === 'docs-existence')?.status).toBe('pass');
+			expect(evidence.health_commands.find((item) => item.name === 'make ops-health')?.status).toBe('skipped');
+			expect(evidence.tests_manifest.map((item) => item.command)).toContain(
+				'cd apps/web-admin && npm run test:unit -- src/lib/cbt/proposal-integration-docs.test.ts'
+			);
+			expect(evidence.manual_evidence.device_matrix.status).toBe('pending_manual_evidence');
+			expect(evidence.manual_evidence.device_matrix.requires_physical_android_devices).toBe(true);
+			expect(evidence.manual_evidence.device_matrix.minimum_vendors).toBe(2);
+			expect(evidence.manual_evidence.operator_rehearsal.status).toBe('pending_manual_evidence');
+			expect(evidence.manual_evidence.operator_rehearsal.requires_live_operator_rehearsal).toBe(true);
+			expect(evidence.manual_evidence.final_signoff.status).toBe('pending_manual_signoff');
+			expect(evidence.secret_scan.status).toBe('pass');
+
+			expect(signoff.go_no_go).toBe('pending_manual_signoff');
+			expect(signoff.production_go).toBe(false);
+			expect(signoff.manual_inputs.device_matrix_complete).toBe(false);
+			expect(signoff.manual_inputs.operator_rehearsal_complete).toBe(false);
+			expect(signoff.manual_inputs.final_signoff_complete).toBe(false);
+			expect(signoff.blockers).toContain('manual device matrix evidence pending');
+			expect(signoff.blockers).toContain('operator rehearsal evidence pending');
+			expect(signoff.boundary.public_api_cbt_route_tree_required).toBe(false);
+			expect(signoff.boundary.student_runtime_api).toBe('/api/exam/*');
+		},
+		30_000
+	);
+
+	it(
+		'allows manual CBT final readiness flags without claiming production go',
+		async () => {
+			const outputDir = await makeTempOutputDir();
+			await runFinalReadiness([
+				'--output',
+				outputDir,
+				'--manual-device-matrix-complete',
+				'--manual-operator-rehearsal-complete',
+				'--manual-final-signoff-complete'
+			]);
+
+			const evidence = JSON.parse(
+				await readFile(path.join(outputDir, 'cbt-final-evidence.json'), 'utf8')
+			) as FinalEvidenceReport;
+			const signoff = JSON.parse(
+				await readFile(path.join(outputDir, 'cbt-final-signoff.json'), 'utf8')
+			) as FinalSignoffReport;
+
+			expect(evidence.manual_evidence.device_matrix.status).toBe('complete_by_operator_flag');
+			expect(evidence.manual_evidence.operator_rehearsal.status).toBe('complete_by_operator_flag');
+			expect(evidence.manual_evidence.final_signoff.status).toBe('complete_by_operator_flag');
+			expect(signoff.go_no_go).toBe('ready_for_rehearsal');
+			expect(signoff.production_go).toBe(false);
+			expect(signoff.blockers).toEqual([]);
+		},
+		30_000
+	);
 
 	it(
 		'executes the CBT release preflight verifier in a temporary ignored output directory',
