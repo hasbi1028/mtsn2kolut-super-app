@@ -21,6 +21,11 @@ import '../widgets/rich_exam_text.dart';
 const int kShortAnswerMaxChars = 256;
 const int kEssayAnswerMaxChars = 15000;
 
+const List<ExamOption> _defaultTrueFalseOptions = [
+  ExamOption(label: 'true', text: 'Benar'),
+  ExamOption(label: 'false', text: 'Salah'),
+];
+
 class ExamShellScreen extends StatefulWidget {
   const ExamShellScreen({
     super.key,
@@ -1679,12 +1684,20 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     await _selectOption(question, selected.join(','));
   }
 
+  List<ExamOption> _objectiveOptionsFor(ExamQuestion question) {
+    if (question.isTrueFalse && question.options.isEmpty) {
+      return _defaultTrueFalseOptions;
+    }
+    return question.options;
+  }
+
   Widget _buildObjectiveQuestion(ThemeData theme, ExamQuestion question) {
+    final options = _objectiveOptionsFor(question);
     return ListView.separated(
-      itemCount: question.options.length,
+      itemCount: options.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
-        final option = question.options[index];
+        final option = options[index];
         final selected = question.isMultipleAnswer
             ? _selectedOptionLabels(question).contains(option.label)
             : _answers[question.id] == option.label;
@@ -1716,7 +1729,13 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                   foregroundColor: selected
                       ? theme.colorScheme.onPrimary
                       : theme.colorScheme.primary,
-                  child: Text(option.label),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: Text(option.label),
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(

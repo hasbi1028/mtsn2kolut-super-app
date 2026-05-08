@@ -1059,6 +1059,129 @@ void main() {
     expect(find.text('Pilihan A'), findsOneWidget);
   });
 
+  testWidgets('exam shell renders true/false fallback choices', (tester) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleTrueFalsePayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Benar'), findsOneWidget);
+    expect(find.text('Salah'), findsOneWidget);
+    expect(find.text('true'), findsOneWidget);
+    expect(find.text('false'), findsOneWidget);
+    expect(find.byType(Checkbox), findsNothing);
+  });
+
+  testWidgets('exam shell saves true/false fallback answer', (tester) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleTrueFalsePayload(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('0 / 1'), findsOneWidget);
+
+    await tester.tap(find.text('Benar'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(client.saveAnswerCount, 1);
+    expect(client.lastSavedQuestionId, 'question-true-false-1');
+    expect(client.lastSavedAnswer, 'true');
+    expect(find.text('1 / 1'), findsOneWidget);
+  });
+
+  testWidgets('exam shell restores true/false saved answer', (tester) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          restoredSnapshot: _sampleSnapshot(
+            answers: const <String, String>{'question-true-false-1': 'false'},
+          ),
+          initialPayload: _sampleTrueFalsePayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Benar'), findsOneWidget);
+    expect(find.text('Salah'), findsOneWidget);
+    expect(find.text('1 / 1'), findsOneWidget);
+  });
+
+  testWidgets('exam shell keeps backend true/false options compatible', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleTrueFalseWithBackendOptionsPayload(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('true'), findsNothing);
+    expect(find.text('false'), findsNothing);
+    expect(find.text('Benar dari naskah'), findsOneWidget);
+    expect(find.text('Salah dari naskah'), findsOneWidget);
+
+    await tester.tap(find.text('Salah dari naskah'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(client.saveAnswerCount, 1);
+    expect(client.lastSavedQuestionId, 'question-true-false-2');
+    expect(client.lastSavedAnswer, 'B');
+  });
+
   testWidgets('exam shell renders short answer as compact text input', (
     tester,
   ) async {
@@ -2297,6 +2420,73 @@ ExamLoginPayload _sampleMultipleAnswerPayload() {
           ExamOption(label: 'B', text: 'Pilihan B'),
           ExamOption(label: 'C', text: 'Pilihan C'),
           ExamOption(label: 'D', text: 'Pilihan D'),
+        ],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _sampleTrueFalsePayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-true-false-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'IPA Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-true-false-1',
+        questionType: 'true_false',
+        questionText: 'Fotosintesis menghasilkan oksigen.',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: '',
+        stimulusMediaUrl: '',
+        stemAudioUrl: '',
+        stimulusAudioUrl: '',
+        options: [],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _sampleTrueFalseWithBackendOptionsPayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-true-false-2',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'IPA Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-true-false-2',
+        questionType: 'true_false',
+        questionText: 'Air mendidih pada suhu ruang.',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: '',
+        stimulusMediaUrl: '',
+        stemAudioUrl: '',
+        stimulusAudioUrl: '',
+        options: [
+          ExamOption(label: 'A', text: 'Benar dari naskah'),
+          ExamOption(label: 'B', text: 'Salah dari naskah'),
         ],
       ),
     ],
