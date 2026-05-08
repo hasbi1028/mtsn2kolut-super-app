@@ -1367,6 +1367,193 @@ void main() {
     expect(find.text('Distraktor kanan'), findsOneWidget);
   });
 
+  testWidgets('exam shell renders ordering question with reorder controls', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleOrderingPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Urutan jawaban'), findsOneWidget);
+    expect(find.text('Langkah pertama'), findsOneWidget);
+    expect(find.text('Langkah kedua'), findsOneWidget);
+    expect(find.text('Langkah ketiga'), findsOneWidget);
+    expect(find.byTooltip('Turunkan A'), findsOneWidget);
+    expect(find.byTooltip('Naikkan B'), findsOneWidget);
+  });
+
+  testWidgets('exam shell sends ordering answer as comma-separated labels', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleOrderingPayload(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('0 / 1'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Turunkan A'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(client.saveAnswerCount, 1);
+    expect(client.lastSavedQuestionId, 'question-ordering-1');
+    expect(client.lastSavedAnswer, 'B,A,C');
+    expect(find.text('1 / 1'), findsOneWidget);
+  });
+
+  testWidgets('exam shell saves current ordering answer without moving option', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          initialPayload: _sampleOrderingPayload(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('0 / 1'), findsOneWidget);
+
+    await tester.tap(find.text('Simpan urutan saat ini'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(client.saveAnswerCount, 1);
+    expect(client.lastSavedQuestionId, 'question-ordering-1');
+    expect(client.lastSavedAnswer, 'A,B,C');
+    expect(find.text('1 / 1'), findsOneWidget);
+  });
+
+  testWidgets('exam shell restores ordering answer in saved order', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          restoredSnapshot: _sampleSnapshot(
+            answers: const <String, String>{'question-ordering-1': 'C,A,B'},
+          ),
+          initialPayload: _sampleOrderingPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    final thirdTop = tester.getTopLeft(find.text('Langkah ketiga')).dy;
+    final firstTop = tester.getTopLeft(find.text('Langkah pertama')).dy;
+    final secondTop = tester.getTopLeft(find.text('Langkah kedua')).dy;
+    expect(thirdTop, lessThan(firstTop));
+    expect(firstTop, lessThan(secondTop));
+    expect(find.text('1 / 1'), findsOneWidget);
+  });
+
+  testWidgets('exam shell keeps partial ordering answer incomplete', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          restoredSnapshot: _sampleSnapshot(
+            answers: const <String, String>{'question-ordering-1': 'B,A'},
+          ),
+          initialPayload: _sampleOrderingPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('0 / 1'), findsOneWidget);
+  });
+
+  testWidgets('exam shell keeps duplicate ordering answer incomplete', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: ExamApiClient(baseUrl: 'http://127.0.0.1:65535'),
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          restoredSnapshot: _sampleSnapshot(
+            answers: const <String, String>{'question-ordering-1': 'A,A,B'},
+          ),
+          initialPayload: _sampleOrderingPayload(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('0 / 1'), findsOneWidget);
+  });
+
   testWidgets('exam shell renders stale supervisor attention panel', (
     tester,
   ) async {
@@ -1777,6 +1964,8 @@ class _RecordingExamApiClient extends ExamApiClient {
   int submitCount = 0;
   int eventCount = 0;
   int saveAnswerCount = 0;
+  String? lastSavedQuestionId;
+  String? lastSavedAnswer;
   final bool throwOnEvent;
   final ExamStatusPayload statusPayload;
   final ExamApiException? statusError;
@@ -1814,6 +2003,8 @@ class _RecordingExamApiClient extends ExamApiClient {
     required String answer,
   }) async {
     saveAnswerCount += 1;
+    lastSavedQuestionId = questionId;
+    lastSavedAnswer = answer;
     final error = saveAnswerError;
     if (error != null) {
       throw error;
@@ -2190,6 +2381,42 @@ ExamLoginPayload _sampleMatchingPayload() {
             matchText: 'Distraktor kanan',
             isDistractor: true,
           ),
+        ],
+      ),
+    ],
+    answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _sampleOrderingPayload() {
+  return ExamLoginPayload(
+    participantId: 'participant-ordering-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'IPA Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: const [
+      ExamQuestion(
+        id: 'question-ordering-1',
+        questionType: 'ordering',
+        questionText: 'Urutkan langkah kerja ilmiah berikut.',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: '',
+        stimulusMediaUrl: '',
+        stemAudioUrl: '',
+        stimulusAudioUrl: '',
+        options: [
+          ExamOption(label: 'A', text: 'Langkah pertama'),
+          ExamOption(label: 'B', text: 'Langkah kedua'),
+          ExamOption(label: 'C', text: 'Langkah ketiga'),
         ],
       ),
     ],

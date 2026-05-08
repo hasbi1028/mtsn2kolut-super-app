@@ -148,6 +148,23 @@ void main() {
       expect(matching.options.last.isDistractor, isTrue);
       expect(matching.options.last.matchText, 'Distraktor kanan');
     });
+
+    test('detects ordering questions as non-text runtime questions', () {
+      final ordering = ExamQuestion.fromJson({
+        'id': 'ordering-1',
+        'question_type': 'ordering',
+        'question_text': 'Urutkan langkah berikut.',
+        'options': [
+          {'label': 'A', 'text': 'Langkah pertama'},
+          {'label': 'B', 'text': 'Langkah kedua'},
+          {'label': 'C', 'text': 'Langkah ketiga'},
+        ],
+      });
+
+      expect(ordering.isOrdering, isTrue);
+      expect(ordering.isTextAnswer, isFalse);
+      expect(ordering.isMatching, isFalse);
+    });
   });
 
   group('ExamStatusPayload.fromJson', () {
