@@ -38,4 +38,16 @@ describe('Bank Soal browser E2E smoke coverage contract', () => {
 		expect(source).toContain('/api/bank-soal/assets');
 		expect(source).toContain('/api/cbt/questions');
 	});
+
+	it('can opt into the controlled DB seed defaults for manual smoke runs', () => {
+		const source = script();
+		expect(source).toContain('WEB_ADMIN_BANK_SOAL_E2E_USE_SEEDED_DEFAULTS');
+		expect(source).toContain('BANK_SOAL_E2E_PASSWORD');
+		expect(source).toContain('seededDefaultPassword = process.env.BANK_SOAL_E2E_PASSWORD');
+		expect(source).not.toMatch(/seededDefaultPassword\s*=\s*process\.env\.BANK_SOAL_E2E_PASSWORD\s*\?\?/);
+		for (const persona of ['ADMIN', 'CREATOR', 'REVIEWER', 'IMPORTER', 'READONLY', 'NO_ACCESS']) {
+			expect(source).toContain(`BANK_SOAL_E2E_${persona}_USERNAME`);
+			expect(source).toContain(`BANK_SOAL_E2E_${persona}_PASSWORD`);
+		}
+	});
 });
