@@ -48,3 +48,10 @@ Status vocabulary:
 ## Release conclusion
 
 The proposal is broadly aligned with the current CBT direction, but release acceptance must separate implemented automated evidence from manual evidence. The current host can generate audit/readiness artifacts and run static/test/build checks. It cannot prove physical Android behavior, pengawas practice, LAN/power resilience, or final operational go/no-go without real devices and operator rehearsal.
+
+## Phase 16-18 follow-up status (2026-05-08)
+
+- Phase 16 traceability matrix added: `docs/cbt-proposal-100-percent-traceability.md` maps proposal requirements to owner module, acceptance evidence, blocking status, and target phase.
+- Phase 17 question type contract hardened for `multiple_choice`, `multiple_answer`, `essay`, `short_answer`, `matching`, `ordering`, `true_false`, and `agree_disagree`.
+- Phase 18 ordering completion: ordering now has an explicit Web Admin/Core API/Flutter contract with comma-separated exact sequence labels such as `B,A,C`; scoring must preserve sequence, unlike `multiple_answer` which is sorted label-set scoring.
+- Remaining proposal parity items stay tracked: `hotspot`, `upload_answer` / `file_upload`, audio/video policy, analytics/report parity, anti-cheat physical Android evidence, operator rehearsal, backup/restore evidence, and final sign-off.
