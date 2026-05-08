@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +15,14 @@ afterEach(() => {
 });
 
 describe('/bank-soal health dashboard', () => {
+	it('keeps /bank-soal root as a single health dashboard surface without the legacy dashboard duplicate', () => {
+		const pageSource = readFileSync(path.resolve(process.cwd(), 'src/routes/bank-soal/+page.svelte'), 'utf8');
+
+		expect(pageSource).toContain('BankSoalHealthDashboard');
+		expect(pageSource).not.toContain('BankSoalListPage');
+		expect(pageSource).not.toContain('mode="dashboard"');
+	});
+
 	it('loads summary and sampled questions through Bank Soal BFF routes only', async () => {
 		const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
 			const url = String(input);
