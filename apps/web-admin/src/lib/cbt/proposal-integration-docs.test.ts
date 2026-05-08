@@ -18,6 +18,10 @@ import phase7Doc from '../../../../../docs/cbt-proposal-integration-phase-7.md?r
 import phase8Doc from '../../../../../docs/cbt-proposal-integration-phase-8.md?raw';
 import proposalGapAuditDoc from '../../../../../docs/cbt-proposal-gap-audit.md?raw';
 import proposalTraceabilityDoc from '../../../../../docs/cbt-proposal-100-percent-traceability.md?raw';
+import phase1922Doc from '../../../../../docs/cbt-proposal-integration-phase-19-22.md?raw';
+import hotspotDecisionDoc from '../../../../../docs/cbt-hotspot-design-decision.md?raw';
+import uploadAnswerPolicyDoc from '../../../../../docs/cbt-upload-answer-policy.md?raw';
+import mediaPromptPolicyDoc from '../../../../../docs/cbt-media-prompt-response-policy.md?raw';
 import finalReleaseEvidenceDoc from '../../../../../docs/cbt-release-final-evidence.md?raw';
 import releaseEvidenceTemplateDoc from '../../../../../docs/cbt-release-evidence-template.md?raw';
 import smokeChecklistDoc from '../../../../../docs/cbt-smoke-checklist.md?raw';
@@ -225,6 +229,77 @@ describe('CBT proposal integration documentation guard', () => {
 
 		expect(proposalGapAuditDoc).toContain('Phase 16-18 follow-up status');
 		expect(proposalGapAuditDoc).toContain('ordering now has an explicit Web Admin/Core API/Flutter contract');
+	});
+
+	it('locks Phase 19-22 fixed-pair and deferred high-risk question decisions', () => {
+		for (const phrase of [
+			'Phase 19-22',
+			'true_false',
+			'`A=Benar`',
+			'`B=Salah`',
+			'agree_disagree',
+			'`A=Setuju`',
+			'`B=Tidak Setuju`',
+			'no fake hotspot',
+			'hotspot_safe_status: adapted_deferred',
+			'upload_answer_safe_status: policy_deferred',
+			'recording_answer_safe_status: policy_deferred',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Tidak mengubah schema database atau migration'
+		]) {
+			expect(phase1922Doc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Hotspot Design Decision',
+			'Decision: adapted/out-of-scope for BYOD CBT v1',
+			'No fake hotspot runtime',
+			'hotspot_safe_status: adapted_deferred',
+			'coordinate system',
+			'image asset requirement',
+			'scoring tolerance',
+			'Flutter unsupported guard',
+			'no schema migration in Phase 20'
+		]) {
+			expect(hotspotDecisionDoc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'CBT Upload/File Answer Policy',
+			'upload_answer_safe_status: policy_deferred',
+			'No upload-answer runtime is enabled by this policy alone',
+			'max size',
+			'allowed MIME',
+			'storage location',
+			'retention',
+			'access control',
+			'virus/abuse review',
+			'manual review'
+		]) {
+			expect(uploadAnswerPolicyDoc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'CBT Media Prompt and Response Policy',
+			'Audio/video prompt',
+			'stem_audio_url',
+			'stimulus_audio_url',
+			'one-time play indicator',
+			'Video prompt is adapted/deferred',
+			'recording_answer_safe_status: policy_deferred',
+			'Do not add recording upload unless covered by the upload/file answer policy'
+		]) {
+			expect(mediaPromptPolicyDoc).toContain(phrase);
+		}
+
+		for (const doc of [phase1922Doc, hotspotDecisionDoc, uploadAnswerPolicyDoc, mediaPromptPolicyDoc]) {
+			expect(doc).not.toContain('POST /api/cbt/login');
+			expect(doc).not.toContain('GET /api/cbt/status');
+		}
+
+		expect(proposalTraceabilityDoc).toContain('Phase 19-22 decision status');
+		expect(proposalGapAuditDoc).toContain('Phase 19-22 follow-up status');
 	});
 	it('locks the monorepo runtime ownership for proposal integration', () => {
 		for (const phrase of [

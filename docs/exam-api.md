@@ -273,6 +273,23 @@ Mengirim jawaban untuk satu soal. Panggil setiap kali siswa memilih/mengubah jaw
 }
 ```
 
+### Format Jawaban Soal
+
+Flutter harus mengirim format jawaban yang selaras dengan Web Admin/Core API:
+
+| `question_type` | Format `answer` |
+| --- | --- |
+| `multiple_choice` | satu label opsi, contoh `B` |
+| `multiple_answer` | label dipisah koma dan disortir deterministik, contoh `A,C` |
+| `ordering` | label dipisah koma dalam urutan final siswa, contoh `B,A,C` |
+| `matching` | pasangan kiri=kanan dipisah titik koma, contoh `A=1;B=2` |
+| `short_answer` | teks pendek siswa |
+| `essay` | teks uraian siswa, tetap di bawah budget 64 KiB serialized JSON |
+| `true_false` | fixed pair `A=Benar`, `B=Salah`; backend scoring masih toleran terhadap cache lama `true`/`false` |
+| `agree_disagree` | fixed pair `A=Setuju`, `B=Tidak Setuju` |
+
+`hotspot`, `upload_answer`, dan `file_upload` tidak boleh dikirim sebagai jawaban palsu. Flutter menampilkan guard pengawas/manual sampai ada desain schema/API/storage/scoring yang disetujui.
+
 ---
 
 ## 6. Submit Ujian
@@ -311,6 +328,8 @@ Gunakan daftar ini saat mengubah endpoint exam agar app Flutter tidak diam-diam 
 - [ ] perubahan error code login/status/submit sudah ditinjau dampaknya ke restore flow
 - [ ] `answer`, `submit`, `heartbeat`, dan `event` masih mengembalikan success envelope yang sama
 - [ ] request body caps tetap selaras dengan Flutter, terutama batas serialized JSON `answer` 64 KiB, cap uraian mobile konservatif 15.000 karakter, dan guard exact serialized UTF-8 body di `ExamApiClient`
+- [ ] fixed-pair `true_false` tetap `A=Benar` / `B=Salah` dan `agree_disagree` tetap `A=Setuju` / `B=Tidak Setuju`
+- [ ] hotspot, upload/file answer, video prompt, dan recording answer tidak diklaim sebagai runtime sebelum desain/policy serta tes aman tersedia
 - [ ] token/kunci jawaban tidak bocor melalui payload siswa atau URL media
 
 Untuk rilis yang lebih formal, gunakan template:

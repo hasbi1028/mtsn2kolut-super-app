@@ -1081,12 +1081,14 @@ void main() {
 
     expect(find.text('Benar'), findsOneWidget);
     expect(find.text('Salah'), findsOneWidget);
-    expect(find.text('true'), findsOneWidget);
-    expect(find.text('false'), findsOneWidget);
+    expect(find.text('A'), findsOneWidget);
+    expect(find.text('B'), findsOneWidget);
     expect(find.byType(Checkbox), findsNothing);
   });
 
-  testWidgets('exam shell saves true/false fallback answer', (tester) async {
+  testWidgets('exam shell saves true/false fallback answer label', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1440, 2200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -1114,7 +1116,7 @@ void main() {
 
     expect(client.saveAnswerCount, 1);
     expect(client.lastSavedQuestionId, 'question-true-false-1');
-    expect(client.lastSavedAnswer, 'true');
+    expect(client.lastSavedAnswer, 'A');
     expect(find.text('1 / 1'), findsOneWidget);
   });
 
@@ -1132,7 +1134,7 @@ void main() {
           deviceFingerprint: 'android:test',
           autoStartRuntime: false,
           restoredSnapshot: _sampleSnapshot(
-            answers: const <String, String>{'question-true-false-1': 'false'},
+            answers: const <String, String>{'question-true-false-1': 'B'},
           ),
           initialPayload: _sampleTrueFalsePayload(),
         ),

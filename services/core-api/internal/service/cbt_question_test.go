@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -1607,6 +1608,26 @@ func TestCbtQuestionNormalizeAndEncodingHelpers(t *testing.T) {
 	}
 	if got := mergeNotes("lama", " "); got != "lama" {
 		t.Fatalf("mergeNotes(empty incoming) = %q, want existing", got)
+	}
+}
+
+func TestCbtFixedPairScoringSqlContract(t *testing.T) {
+	sqlBytes, err := os.ReadFile("../../db/queries/cbt_sessions.sql")
+	if err != nil {
+		t.Fatalf("Read cbt_sessions.sql error = %v", err)
+	}
+	sqlText := string(sqlBytes)
+
+	for _, phrase := range []string{
+		"WHEN q.question_type = 'true_false' THEN",
+		"WHEN lower(btrim(sa.answer)) = 'true' THEN 'A'",
+		"WHEN lower(btrim(sa.answer)) = 'false' THEN 'B'",
+		"WHEN q.question_type = 'agree_disagree' THEN",
+		"upper(btrim(sa.answer)) = upper(btrim(q.answer_key))",
+	} {
+		if !strings.Contains(sqlText, phrase) {
+			t.Fatalf("cbt_sessions.sql missing fixed-pair scoring phrase %q", phrase)
+		}
 	}
 }
 
