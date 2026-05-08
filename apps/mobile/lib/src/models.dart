@@ -122,6 +122,7 @@ class ExamQuestion {
   bool get isShortAnswer => questionType == 'short_answer';
   bool get isMultipleAnswer => questionType == 'multiple_answer';
   bool get isMatching => questionType == 'matching';
+  bool get isOrdering => questionType == 'ordering';
   bool get isTextAnswer => isEssay || isShortAnswer;
   bool get hasRichContent =>
       stemHtml.trim().isNotEmpty || stimulusHtml.trim().isNotEmpty;

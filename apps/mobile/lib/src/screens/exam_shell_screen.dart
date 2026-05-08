@@ -143,6 +143,12 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _essayControllers[i].text = _answers[question.id] ?? '';
       }
     }
+    if (_answers.isNotEmpty) {
+      final localAnsweredCount = _calculateAnsweredCount();
+      if (localAnsweredCount > _answeredCount) {
+        _answeredCount = localAnsweredCount;
+      }
+    }
     if (widget.autoStartRuntime && widget.initialPayload.questions.isNotEmpty) {
       _startCountdown();
       _startHeartbeat();
@@ -1439,6 +1445,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             Expanded(
               child: question.isTextAnswer
                   ? _buildTextAnswerQuestion(theme, question)
+                  : question.isOrdering
+                  ? _buildOrderingQuestion(theme, question)
                   : question.isMatching
                   ? _buildMatchingQuestion(theme, question)
                   : _buildObjectiveQuestion(theme, question),
@@ -1519,6 +1527,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     if (answer.trim().isEmpty) {
       return false;
     }
+    if (question.isOrdering) {
+      return _isOrderingAnswerComplete(question, answer);
+    }
     if (!question.isMatching) {
       return true;
     }
@@ -1548,6 +1559,90 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       pairs[left] = right;
     }
     return pairs;
+  }
+
+  List<String> _selectedOrderingLabelsFromRaw(String raw) {
+    return raw
+        .split(',')
+        .map((label) => label.trim())
+        .where((label) => label.isNotEmpty)
+        .toList();
+  }
+
+  List<String> _orderingOptionLabels(ExamQuestion question) {
+    return question.options
+        .map((option) => option.label.trim())
+        .where((label) => label.isNotEmpty)
+        .toList();
+  }
+
+  bool _isOrderingAnswerComplete(ExamQuestion question, String answer) {
+    final requiredLabels = _orderingOptionLabels(question);
+    final requiredSet = requiredLabels.toSet();
+    if (requiredLabels.isEmpty || requiredSet.length != requiredLabels.length) {
+      return false;
+    }
+
+    final selectedLabels = _selectedOrderingLabelsFromRaw(answer);
+    final selectedSet = selectedLabels.toSet();
+    return selectedLabels.length == requiredLabels.length &&
+        selectedSet.length == selectedLabels.length &&
+        requiredSet.every(selectedSet.contains);
+  }
+
+  List<ExamOption> _orderedOptions(ExamQuestion question) {
+    final optionsByLabel = <String, ExamOption>{};
+    for (final option in question.options) {
+      final label = option.label.trim();
+      if (label.isNotEmpty && !optionsByLabel.containsKey(label)) {
+        optionsByLabel[label] = option;
+      }
+    }
+
+    final orderedOptions = <ExamOption>[];
+    final usedLabels = <String>{};
+    for (final label in _selectedOrderingLabelsFromRaw(
+      _answers[question.id] ?? '',
+    )) {
+      final option = optionsByLabel[label];
+      if (option != null && usedLabels.add(label)) {
+        orderedOptions.add(option);
+      }
+    }
+
+    for (final option in question.options) {
+      final label = option.label.trim();
+      if (label.isNotEmpty && usedLabels.add(label)) {
+        orderedOptions.add(option);
+      }
+    }
+    return orderedOptions;
+  }
+
+  String _encodeOrderingOptions(List<ExamOption> options) {
+    return options
+        .map((option) => option.label.trim())
+        .where((label) => label.isNotEmpty)
+        .join(',');
+  }
+
+  Future<void> _moveOrderingOption(
+    ExamQuestion question,
+    int fromIndex,
+    int delta,
+  ) async {
+    final orderedOptions = _orderedOptions(question);
+    final targetIndex = fromIndex + delta;
+    if (fromIndex < 0 ||
+        fromIndex >= orderedOptions.length ||
+        targetIndex < 0 ||
+        targetIndex >= orderedOptions.length) {
+      return;
+    }
+
+    final moved = orderedOptions.removeAt(fromIndex);
+    orderedOptions.insert(targetIndex, moved);
+    await _selectOption(question, _encodeOrderingOptions(orderedOptions));
   }
 
   Future<void> _selectMatchingPair(
@@ -1786,6 +1881,117 @@ class _ExamShellScreenState extends State<ExamShellScreen>
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildOrderingQuestion(ThemeData theme, ExamQuestion question) {
+    final orderedOptions = _orderedOptions(question);
+
+    return ListView(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF6F8F3),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Urutan jawaban',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Susun pilihan dari atas ke bawah sesuai urutan jawaban.',
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _isSavingAnswer || _isSubmitted
+                ? null
+                : () => _selectOption(
+                    question,
+                    _encodeOrderingOptions(_orderedOptions(question)),
+                  ),
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Simpan urutan saat ini'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ...List.generate(orderedOptions.length, (index) {
+          final option = orderedOptions[index];
+          final label = option.label.trim();
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: theme.colorScheme.outlineVariant),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: theme.colorScheme.onPrimary,
+                    child: Text('${index + 1}'),
+                  ),
+                  const SizedBox(width: 12),
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: const Color(0xFFF6F8F3),
+                    foregroundColor: theme.colorScheme.primary,
+                    child: Text(label),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: RichExamText(
+                      content: option.text,
+                      style: theme.textTheme.bodyLarge?.copyWith(height: 1.45),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Naikkan $label',
+                        onPressed: _isSubmitted || index == 0
+                            ? null
+                            : () => _moveOrderingOption(question, index, -1),
+                        icon: const Icon(Icons.keyboard_arrow_up),
+                      ),
+                      IconButton(
+                        tooltip: 'Turunkan $label',
+                        onPressed:
+                            _isSubmitted || index == orderedOptions.length - 1
+                            ? null
+                            : () => _moveOrderingOption(question, index, 1),
+                        icon: const Icon(Icons.keyboard_arrow_down),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
       ],
     );
   }
