@@ -16,6 +16,7 @@
 	import {
 		employeeAccountGenerationCSV,
 		fetchRBACMatrix,
+		fetchUserProfileCandidates,
 		generateEmployeeAccounts,
 		previewEmployeeAccountGeneration,
 		resetUserPassword,
@@ -23,7 +24,8 @@
 		updateUserRoles,
 		type RBACMatrix,
 		type RBACRole,
-		type EmployeeAccountGenerationResult
+		type EmployeeAccountGenerationResult,
+		type UserProfileCandidate
 	} from '$lib/client/rbac-users';
 
 	type User = {
@@ -35,22 +37,17 @@
 		deleted_at?: string | null;
 		created_at: string;
 	};
-	type Employee = { id: string; nama: string; nip: string; };
-	type Student = { id: string; nama: string; nis: string; };
-	type Parent = { id: string; nama: string; phone: string; };
+	type Rombel = { id: string; name: string; code?: string | null; is_active?: boolean; total_students?: number; };
+	type CandidateMode = 'employee' | 'student' | 'parent' | 'none';
 
 	type UsersOverview = {
 		users: User[];
-		employees: Employee[];
-		students: Student[];
-		parents: Parent[];
+		rombels: Rombel[];
 		rbac: RBACMatrix;
 	};
 
 	let users = $state<User[]>([]);
-	let employees = $state<Employee[]>([]);
-	let students = $state<Student[]>([]);
-	let parents = $state<Parent[]>([]);
+	let rombels = $state<Rombel[]>([]);
 	let rbac = $state<RBACMatrix>({ roles: [], permissions: [], role_permissions: {} });
 	let usersPromise = $state<Promise<UsersOverview> | null>(null);
 	let usersRequestId = 0;
@@ -67,12 +64,43 @@
 	let actionBusy = $state<string | null>(null);
 	let employeeGeneration = $state<EmployeeAccountGenerationResult | null>(null);
 	let generationBusy = $state<string | null>(null);
+	let candidateClassId = $state('');
+	let candidateSearch = $state('');
+	let includeLinkedCandidates = $state(false);
+	let profileCandidates = $state<UserProfileCandidate[]>([]);
+	let profileCandidatesBusy = $state(false);
+	let profileCandidatesError = $state('');
+	let profileDisplayNameAutofill = $state('');
+	let profileCandidatesRequestId = 0;
 	let formHint = $derived.by(() => {
 		if (fRoles.includes('siswa')) return 'Akun siswa wajib ditautkan ke satu profil siswa.';
 		if (fRoles.includes('ortu')) return 'Akun orang tua wajib ditautkan ke satu profil orang tua.';
 		if (fRoles.includes('guru') || fRoles.includes('staf') || fRoles.includes('kesiswaan')) return 'Akun guru/staf/kesiswaan wajib ditautkan ke satu profil pegawai.';
 		return 'Akun admin murni boleh tanpa tautan profil.';
 	});
+
+
+	const candidateMode = $derived.by<CandidateMode>(() => {
+		if (fRoles.includes('siswa')) return 'student';
+		if (fRoles.includes('ortu')) return 'parent';
+		if (fRoles.includes('guru') || fRoles.includes('staf') || fRoles.includes('kesiswaan')) return 'employee';
+		return 'none';
+	});
+	const candidateRole = $derived.by(() => {
+		if (candidateMode === 'student') return 'siswa';
+		if (candidateMode === 'parent') return 'ortu';
+		if (candidateMode === 'employee') return fRoles.includes('kesiswaan') ? 'kesiswaan' : fRoles.includes('staf') ? 'staf' : 'guru';
+		return '';
+	});
+	const candidateRequiresClass = $derived(candidateMode === 'student' || candidateMode === 'parent');
+	const candidateCanLoad = $derived(candidateMode !== 'none' && (!candidateRequiresClass || Boolean(candidateClassId)));
+	const selectedCandidateId = $derived(candidateMode === 'employee' ? fEmpId : candidateMode === 'student' ? fStuId : candidateMode === 'parent' ? fParId : '');
+	const selectedCandidate = $derived.by(() => profileCandidates.find((item) => item.id === selectedCandidateId));
+	const profileLinkMissing = $derived(
+		(candidateMode === 'employee' && !fEmpId) ||
+		(candidateMode === 'student' && !fStuId) ||
+		(candidateMode === 'parent' && !fParId)
+	);
 
 	const fallbackRoles = [
 		{ value: 'admin', label: 'Administrator' },
@@ -91,50 +119,36 @@
 
 	function applyOverview(overview: UsersOverview) {
 		users = overview.users;
-		employees = overview.employees;
-		students = overview.students;
-		parents = overview.parents;
+		rombels = overview.rombels;
 		rbac = overview.rbac;
 		return overview;
 	}
 
 	async function fetchOverview(): Promise<UsersOverview> {
-		const [usersRes, employeesRes, studentsRes, parentsRes, nextRBAC] = await Promise.all([
+		const [usersRes, rombelsRes, nextRBAC] = await Promise.all([
 			fetch('/api/users'),
-			fetch('/api/employees'),
-			fetch('/api/students'),
-			fetch('/api/parents'),
+			fetch('/api/academic/rombel'),
 			fetchRBACMatrix(),
 		]);
-		const [nextUsers, nextEmployees, nextStudents, nextParents] = await Promise.all([
+		const [nextUsers, nextRombels] = await Promise.all([
 			readClientApiData<User[]>(usersRes, 'Gagal memuat data pengguna.'),
-			readClientApiData<Employee[]>(employeesRes, 'Gagal memuat data pegawai.'),
-			readClientApiData<Student[]>(studentsRes, 'Gagal memuat data siswa.'),
-			readClientApiData<Parent[]>(parentsRes, 'Gagal memuat data orang tua.'),
+			readClientApiData<Rombel[]>(rombelsRes, 'Gagal memuat data kelas.'),
 		]);
-		return {
-			users: nextUsers ?? [],
-			employees: nextEmployees ?? [],
-			students: nextStudents ?? [],
-			parents: nextParents ?? [],
-			rbac: nextRBAC,
-		};
+		return { users: nextUsers ?? [], rombels: nextRombels ?? [], rbac: nextRBAC };
 	}
 
 	function load() {
 		const requestId = ++usersRequestId;
 		users = [];
-		employees = [];
-		students = [];
-		parents = [];
+		rombels = [];
 		usersPromise = fetchOverview()
 			.then((overview) => {
 				if (requestId === usersRequestId) return applyOverview(overview);
-				return { users, employees, students, parents, rbac };
+				return { users, rombels, rbac };
 			})
 			.catch((error: unknown) => {
 				if (requestId === usersRequestId) throw error;
-				return { users, employees, students, parents, rbac };
+				return { users, rombels, rbac };
 			});
 	}
 
@@ -148,7 +162,7 @@
 			}
 		} catch (error) {
 			if (requestId !== usersRequestId) return;
-			usersPromise = Promise.resolve({ users, employees, students, parents, rbac });
+			usersPromise = Promise.resolve({ users, rombels, rbac });
 			toast.error(overviewErrorMessage(error));
 		}
 	}
@@ -165,6 +179,67 @@
 
 	function handleOverviewRenderError(error: unknown) {
 		console.error('Users overview render failed', error);
+	}
+
+
+	function clearProfileSelection() {
+		fEmpId = '';
+		fStuId = '';
+		fParId = '';
+	}
+
+	function candidateLabel(candidate: UserProfileCandidate) {
+		const suffix = candidate.identifier ? ` (${candidate.identifier})` : '';
+		return `${candidate.nama}${suffix}`;
+	}
+
+	function candidateDescription(candidate: UserProfileCandidate) {
+		if (candidate.profile_type === 'parent' && candidate.children?.length) {
+			return `Anak: ${candidate.children.map((child) => child.nama).join(', ')}`;
+		}
+		return candidate.class_name ? `Kelas ${candidate.class_name}` : candidate.profile_type;
+	}
+
+	function selectProfileCandidate(candidate: UserProfileCandidate) {
+		clearProfileSelection();
+		if (candidate.profile_type === 'employee') fEmpId = candidate.id;
+		if (candidate.profile_type === 'student') fStuId = candidate.id;
+		if (candidate.profile_type === 'parent') fParId = candidate.id;
+		if (!fDisplayName || fDisplayName === profileDisplayNameAutofill) fDisplayName = candidate.nama;
+		profileDisplayNameAutofill = candidate.nama;
+	}
+
+	async function loadProfileCandidates() {
+		const requestId = ++profileCandidatesRequestId;
+		const role = candidateRole;
+		const classId = candidateClassId;
+		const query = candidateSearch;
+		const includeLinked = includeLinkedCandidates;
+		const requiresClass = candidateRequiresClass;
+		if (!candidateCanLoad) {
+			profileCandidates = [];
+			profileCandidatesError = requiresClass ? 'Pilih kelas terlebih dahulu.' : '';
+			return;
+		}
+		profileCandidatesBusy = true;
+		profileCandidatesError = '';
+		try {
+			const response = await fetchUserProfileCandidates({
+				role,
+				class_id: requiresClass ? classId : null,
+				q: query,
+				include_linked: includeLinked,
+				limit: 50
+			});
+			if (requestId !== profileCandidatesRequestId || role !== candidateRole || classId !== candidateClassId || query !== candidateSearch || includeLinked !== includeLinkedCandidates) return;
+			profileCandidates = response?.candidates ?? [];
+		} catch (error) {
+			if (requestId !== profileCandidatesRequestId) return;
+			profileCandidates = [];
+			profileCandidatesError = overviewErrorMessage(error);
+		} finally {
+			if (requestId === profileCandidatesRequestId) profileCandidatesBusy = false;
+		}
 	}
 
 	async function createUser() {
@@ -187,7 +262,7 @@
 				}),
 			});
 			await readClientJson<unknown>(res);
-			fUsername = ''; fPassword = ''; fDisplayName = ''; fRoles = ['guru']; fEmpId = ''; fStuId = ''; fParId = '';
+			fUsername = ''; fPassword = ''; fDisplayName = ''; profileDisplayNameAutofill = ''; fRoles = ['guru']; clearProfileSelection(); candidateClassId = ''; candidateSearch = ''; profileCandidates = [];
 			showForm = false;
 			toast.success('Pengguna berhasil dibuat');
 			await refreshOverview();
@@ -349,10 +424,15 @@
 
 	function toggleRole(role: string) {
 		if (fRoles.includes(role)) {
-			fRoles = fRoles.filter(r => r !== role);
+			fRoles = fRoles.filter((item) => item !== role);
 		} else {
 			fRoles = [...fRoles, role];
 		}
+		clearProfileSelection();
+		profileCandidatesRequestId += 1; profileCandidatesBusy = false;
+		profileCandidates = [];
+		profileCandidatesError = '';
+		profileDisplayNameAutofill = '';
 	}
 
 
@@ -502,46 +582,54 @@
 						</div>
 					</div>
 
-					<div class="space-y-3">
-						{#if fRoles.includes('guru') || fRoles.includes('staf') || fRoles.includes('kesiswaan')}
+					<div class="space-y-3 rounded-2xl border bg-muted/20 p-4">
+						<p class="text-sm font-semibold text-foreground">Tarik Data Profil</p>
+						{#if candidateMode === 'employee'}
+							<p class="text-xs text-muted-foreground">Guru only — tarik data pegawai/guru aktif.</p>
+						{:else if candidateMode === 'student'}
+							<p class="text-xs text-muted-foreground">Siswa per kelas — Pilih kelas terlebih dahulu untuk menarik siswa.</p>
+						{:else if candidateMode === 'parent'}
+							<p class="text-xs text-muted-foreground">Ortu per kelas anak — Pilih kelas anak untuk menarik orang tua/wali terkait.</p>
+						{:else}
+							<p class="text-xs text-muted-foreground">Role admin murni tidak wajib ditautkan ke profil.</p>
+						{/if}
+
+						{#if candidateRequiresClass}
 							<div>
-								<label for="u-emp" class="text-xs text-muted-foreground mb-1 block">Hubungkan ke Pegawai</label>
-								<select id="u-emp" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fEmpId}>
-									<option value="">-- Pilih Pegawai --</option>
-									{#each employees as e (e.id)}
-										<option value={e.id}>{e.nama} ({e.nip})</option>
+								<label for="candidate-class" class="mb-1 block text-xs text-muted-foreground">Kelas/Rombel</label>
+								<select id="candidate-class" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={candidateClassId} onchange={() => { clearProfileSelection(); profileCandidatesRequestId += 1; profileCandidatesBusy = false; profileCandidates = []; }}>
+									<option value="">-- Pilih Kelas --</option>
+									{#each rombels.filter((item) => item.is_active !== false) as kelas (kelas.id)}
+										<option value={kelas.id}>{kelas.name || kelas.code} {kelas.total_students ? `(${kelas.total_students} siswa)` : ''}</option>
 									{/each}
 								</select>
 							</div>
 						{/if}
 
-						{#if fRoles.includes('siswa')}
-							<div>
-								<label for="u-stu" class="text-xs text-muted-foreground mb-1 block">Hubungkan ke Siswa</label>
-								<select id="u-stu" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fStuId}>
-									<option value="">-- Pilih Siswa --</option>
-									{#each students as s (s.id)}
-										<option value={s.id}>{s.nama} ({s.nis})</option>
-									{/each}
-								</select>
-							</div>
+						<div class="flex gap-2">
+							<Input bind:value={candidateSearch} placeholder={candidateMode === 'parent' ? 'Cari nama ortu/anak' : 'Cari nama/NIP/NISN'} />
+							<Button variant="outline" onclick={() => void loadProfileCandidates()} disabled={!candidateCanLoad || profileCandidatesBusy}>{profileCandidatesBusy ? 'Memuat...' : 'Tarik Data'}</Button>
+						</div>
+						<label class="flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" bind:checked={includeLinkedCandidates} onchange={() => { profileCandidatesRequestId += 1; profileCandidatesBusy = false; profileCandidates = []; }} /> Tampilkan yang sudah tertaut</label>
+
+						{#if profileCandidatesError}
+							<p class="text-xs text-destructive">{profileCandidatesError}</p>
+						{:else if selectedCandidate}
+							<p class="text-xs text-success">Terpilih: {selectedCandidate.nama}</p>
 						{/if}
 
-						{#if fRoles.includes('ortu')}
-							<div>
-								<label for="u-par" class="text-xs text-muted-foreground mb-1 block">Hubungkan ke Orang Tua</label>
-								<select id="u-par" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={fParId}>
-									<option value="">-- Pilih Orang Tua --</option>
-									{#each parents as p (p.id)}
-										<option value={p.id}>{p.nama} ({p.phone})</option>
-									{/each}
-								</select>
-							</div>
-						{/if}
+						<div class="max-h-64 space-y-2 overflow-auto">
+							{#each profileCandidates as candidate (candidate.id)}
+								<button class={`w-full rounded-xl border p-3 text-left text-sm transition ${selectedCandidateId === candidate.id ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-muted/60'}`} onclick={() => selectProfileCandidate(candidate)}>
+									<div class="flex items-center justify-between gap-2"><span class="font-medium">{candidateLabel(candidate)}</span><Badge variant={candidate.is_linked ? 'outline' : 'secondary'}>{candidate.is_linked ? 'Sudah punya akun' : 'Belum punya akun'}</Badge></div>
+									<p class="mt-1 text-xs text-muted-foreground">{candidateDescription(candidate)}</p>
+								</button>
+							{/each}
+						</div>
 					</div>
 				</div>
 				<div class="flex gap-2">
-					<LoadingButton onclick={() => void createUser()} loading={fBusy} disabled={fBusy || !fUsername || !fPassword || fRoles.length === 0}>
+					<LoadingButton onclick={() => void createUser()} loading={fBusy} disabled={fBusy || !fUsername || !fPassword || fRoles.length === 0 || profileLinkMissing}>
 						Simpan Pengguna
 					</LoadingButton>
 					<Button variant="outline" onclick={() => (showForm = false)}>Batal</Button>

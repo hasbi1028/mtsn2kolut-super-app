@@ -178,6 +178,7 @@ export function isMustChangePasswordAllowedPath(pathname: string, method: string
 function usersPermission(pathname: string, method: string): string[] | undefined {
 	if (matchesPathSegment(pathname, '/api/users/student-accounts')) return ['student_accounts.manage'];
 	if (matchesPathSegment(pathname, '/api/users/parent-accounts')) return ['parent_accounts.manage'];
+	if (matchesPathSegment(pathname, '/api/users/profile-candidates')) return ['users.create'];
 	if (matchesPathSegment(pathname, '/api/users/change-requests')) return ['profile_changes.review'];
 	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/reset-password')) return ['users.reset_password'];
 	if (matchesPathSegment(pathname, '/api/users') && pathname.endsWith('/profile-link')) return ['users.update'];

@@ -679,6 +679,74 @@ func (q *Queries) ListEmployeeAccountGenerationCandidates(ctx context.Context, n
 	return items, nil
 }
 
+const listEmployeeProfileCandidates = `-- name: ListEmployeeProfileCandidates :many
+SELECT
+    e.id,
+    e.nama,
+    COALESCE(NULLIF(e.nip, ''), e.pegawai_uid, '')::text AS identifier,
+    linked.id AS linked_user_id,
+    COALESCE(linked.username, '')::text AS linked_username
+FROM employees e
+LEFT JOIN LATERAL (
+    SELECT u.id, u.username
+    FROM users u
+    WHERE u.employee_id = e.id
+      AND u.deleted_at IS NULL
+    ORDER BY u.created_at DESC, u.id DESC
+    LIMIT 1
+) linked ON TRUE
+WHERE e.is_active = TRUE
+  AND ($1::boolean OR linked.id IS NULL)
+  AND (
+    btrim($2::text) = ''
+    OR e.nama ILIKE ('%' || btrim($2::text) || '%')
+    OR COALESCE(e.nip, '') ILIKE ('%' || btrim($2::text) || '%')
+    OR COALESCE(e.pegawai_uid, '') ILIKE ('%' || btrim($2::text) || '%')
+  )
+ORDER BY e.nama ASC, e.id ASC
+LIMIT $3::int
+`
+
+type ListEmployeeProfileCandidatesParams struct {
+	IncludeLinked bool   `json:"include_linked"`
+	Q             string `json:"q"`
+	LimitCount    int32  `json:"limit_count"`
+}
+
+type ListEmployeeProfileCandidatesRow struct {
+	ID             pgtype.UUID `json:"id"`
+	Nama           string      `json:"nama"`
+	Identifier     string      `json:"identifier"`
+	LinkedUserID   pgtype.UUID `json:"linked_user_id"`
+	LinkedUsername string      `json:"linked_username"`
+}
+
+func (q *Queries) ListEmployeeProfileCandidates(ctx context.Context, arg ListEmployeeProfileCandidatesParams) ([]ListEmployeeProfileCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listEmployeeProfileCandidates, arg.IncludeLinked, arg.Q, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListEmployeeProfileCandidatesRow{}
+	for rows.Next() {
+		var i ListEmployeeProfileCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nama,
+			&i.Identifier,
+			&i.LinkedUserID,
+			&i.LinkedUsername,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEntityAuditLogs = `-- name: ListEntityAuditLogs :many
 SELECT a.id, a.user_id, u.username, a.action, a.entity_type, a.entity_id, a.metadata, a.created_at
 FROM audit_logs a
@@ -983,6 +1051,120 @@ func (q *Queries) ListParentAccountGenerationCandidates(ctx context.Context) ([]
 	return items, nil
 }
 
+const listParentProfileCandidatesByChildClass = `-- name: ListParentProfileCandidatesByChildClass :many
+WITH matching_parents AS (
+    SELECT
+        p.id,
+        p.nama,
+        COALESCE(p.phone, '')::text AS identifier,
+        linked.id AS linked_user_id,
+        COALESCE(linked.username, '')::text AS linked_username
+    FROM parents p
+    JOIN parent_students ps
+        ON ps.parent_id = p.id
+    JOIN students s
+        ON s.id = ps.student_id
+    LEFT JOIN LATERAL (
+        SELECT u.id, u.username
+        FROM users u
+        WHERE u.parent_id = p.id
+          AND u.deleted_at IS NULL
+        ORDER BY u.created_at DESC, u.id DESC
+        LIMIT 1
+    ) linked ON TRUE
+    WHERE s.is_active = TRUE
+      AND s.status = 'active'
+      AND s.class_id = $1
+      AND ($2::boolean OR linked.id IS NULL)
+      AND (
+        btrim($3::text) = ''
+        OR p.nama ILIKE ('%' || btrim($3::text) || '%')
+        OR COALESCE(p.phone, '') ILIKE ('%' || btrim($3::text) || '%')
+        OR s.nama ILIKE ('%' || btrim($3::text) || '%')
+        OR s.nis ILIKE ('%' || btrim($3::text) || '%')
+        OR COALESCE(s.nisn, '') ILIKE ('%' || btrim($3::text) || '%')
+      )
+    GROUP BY p.id, p.nama, p.phone, linked.id, linked.username
+    ORDER BY p.nama ASC, p.id ASC
+    LIMIT $4::int
+)
+SELECT
+    mp.id,
+    mp.nama,
+    mp.identifier,
+    s.class_id AS class_id,
+    COALESCE(NULLIF(c.name, ''), c.code, '')::text AS class_name,
+    mp.linked_user_id,
+    mp.linked_username,
+    s.id AS child_id,
+    s.nama AS child_nama
+FROM matching_parents mp
+JOIN parent_students ps
+    ON ps.parent_id = mp.id
+JOIN students s
+    ON s.id = ps.student_id
+JOIN school_classes c
+    ON c.id = s.class_id
+WHERE s.is_active = TRUE
+  AND s.status = 'active'
+  AND s.class_id = $1
+ORDER BY mp.nama ASC, mp.id ASC, ps.is_primary_contact DESC, s.nama ASC, s.id ASC
+`
+
+type ListParentProfileCandidatesByChildClassParams struct {
+	ClassID       pgtype.UUID `json:"class_id"`
+	IncludeLinked bool        `json:"include_linked"`
+	Q             string      `json:"q"`
+	LimitCount    int32       `json:"limit_count"`
+}
+
+type ListParentProfileCandidatesByChildClassRow struct {
+	ID             pgtype.UUID `json:"id"`
+	Nama           string      `json:"nama"`
+	Identifier     string      `json:"identifier"`
+	ClassID        pgtype.UUID `json:"class_id"`
+	ClassName      string      `json:"class_name"`
+	LinkedUserID   pgtype.UUID `json:"linked_user_id"`
+	LinkedUsername string      `json:"linked_username"`
+	ChildID        pgtype.UUID `json:"child_id"`
+	ChildNama      string      `json:"child_nama"`
+}
+
+func (q *Queries) ListParentProfileCandidatesByChildClass(ctx context.Context, arg ListParentProfileCandidatesByChildClassParams) ([]ListParentProfileCandidatesByChildClassRow, error) {
+	rows, err := q.db.Query(ctx, listParentProfileCandidatesByChildClass,
+		arg.ClassID,
+		arg.IncludeLinked,
+		arg.Q,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListParentProfileCandidatesByChildClassRow{}
+	for rows.Next() {
+		var i ListParentProfileCandidatesByChildClassRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nama,
+			&i.Identifier,
+			&i.ClassID,
+			&i.ClassName,
+			&i.LinkedUserID,
+			&i.LinkedUsername,
+			&i.ChildID,
+			&i.ChildNama,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStudentAccountGenerationCandidates = `-- name: ListStudentAccountGenerationCandidates :many
 WITH active_students AS (
     SELECT
@@ -1066,6 +1248,90 @@ func (q *Queries) ListStudentAccountGenerationCandidates(ctx context.Context) ([
 			&i.ExistingUsername,
 			&i.UsernameUserID,
 			&i.UsernameCollisions,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStudentProfileCandidatesByClass = `-- name: ListStudentProfileCandidatesByClass :many
+SELECT
+    s.id,
+    s.nama,
+    COALESCE(NULLIF(s.nisn, ''), s.nis, '')::text AS identifier,
+    s.class_id AS class_id,
+    COALESCE(NULLIF(c.name, ''), c.code, '')::text AS class_name,
+    linked.id AS linked_user_id,
+    COALESCE(linked.username, '')::text AS linked_username
+FROM students s
+JOIN school_classes c
+    ON c.id = s.class_id
+LEFT JOIN LATERAL (
+    SELECT u.id, u.username
+    FROM users u
+    WHERE u.student_id = s.id
+      AND u.deleted_at IS NULL
+    ORDER BY u.created_at DESC, u.id DESC
+    LIMIT 1
+) linked ON TRUE
+WHERE s.is_active = TRUE
+  AND s.status = 'active'
+  AND s.class_id = $1
+  AND ($2::boolean OR linked.id IS NULL)
+  AND (
+    btrim($3::text) = ''
+    OR s.nama ILIKE ('%' || btrim($3::text) || '%')
+    OR s.nis ILIKE ('%' || btrim($3::text) || '%')
+    OR COALESCE(s.nisn, '') ILIKE ('%' || btrim($3::text) || '%')
+  )
+ORDER BY s.nama ASC, s.id ASC
+LIMIT $4::int
+`
+
+type ListStudentProfileCandidatesByClassParams struct {
+	ClassID       pgtype.UUID `json:"class_id"`
+	IncludeLinked bool        `json:"include_linked"`
+	Q             string      `json:"q"`
+	LimitCount    int32       `json:"limit_count"`
+}
+
+type ListStudentProfileCandidatesByClassRow struct {
+	ID             pgtype.UUID `json:"id"`
+	Nama           string      `json:"nama"`
+	Identifier     string      `json:"identifier"`
+	ClassID        pgtype.UUID `json:"class_id"`
+	ClassName      string      `json:"class_name"`
+	LinkedUserID   pgtype.UUID `json:"linked_user_id"`
+	LinkedUsername string      `json:"linked_username"`
+}
+
+func (q *Queries) ListStudentProfileCandidatesByClass(ctx context.Context, arg ListStudentProfileCandidatesByClassParams) ([]ListStudentProfileCandidatesByClassRow, error) {
+	rows, err := q.db.Query(ctx, listStudentProfileCandidatesByClass,
+		arg.ClassID,
+		arg.IncludeLinked,
+		arg.Q,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStudentProfileCandidatesByClassRow{}
+	for rows.Next() {
+		var i ListStudentProfileCandidatesByClassRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nama,
+			&i.Identifier,
+			&i.ClassID,
+			&i.ClassName,
+			&i.LinkedUserID,
+			&i.LinkedUsername,
 		); err != nil {
 			return nil, err
 		}

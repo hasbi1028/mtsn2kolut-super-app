@@ -75,6 +75,40 @@ export type EmployeeAccountGenerationResult = {
 	items: EmployeeAccountGenerationItem[];
 };
 
+export type UserProfileCandidateChild = {
+	id: string;
+	nama: string;
+	class_name?: string;
+};
+
+export type UserProfileCandidate = {
+	id: string;
+	profile_type: 'employee' | 'student' | 'parent' | string;
+	nama: string;
+	identifier?: string;
+	class_id?: string;
+	class_name?: string;
+	linked_user_id?: string;
+	linked_username?: string;
+	is_linked?: boolean;
+	children?: UserProfileCandidateChild[];
+};
+
+export type UserProfileCandidatesResponse = {
+	role: string;
+	profile: 'employee' | 'student' | 'parent' | string;
+	class_id?: string;
+	candidates: UserProfileCandidate[];
+};
+
+export type UserProfileCandidateParams = {
+	role: string;
+	class_id?: string | null;
+	q?: string | null;
+	include_linked?: boolean;
+	limit?: number;
+};
+
 export type FetchLike = typeof fetch;
 
 function cleanString(value: string | null | undefined) {
@@ -120,6 +154,19 @@ export async function fetchRBACMatrix(fetcher: FetchLike = fetch) {
 			role_permissions: {}
 		}
 	);
+}
+
+export async function fetchUserProfileCandidates(params: UserProfileCandidateParams, fetcher: FetchLike = fetch) {
+	const query = new URLSearchParams();
+	query.set('role', params.role.trim());
+	const classID = cleanString(params.class_id);
+	if (classID) query.set('class_id', classID);
+	const q = cleanString(params.q);
+	if (q) query.set('q', q);
+	if (typeof params.include_linked === 'boolean') query.set('include_linked', String(params.include_linked));
+	if (typeof params.limit === 'number' && Number.isFinite(params.limit)) query.set('limit', String(Math.trunc(params.limit)));
+	const res = await fetcher(`/api/users/profile-candidates?${query.toString()}`);
+	return readClientApiData<UserProfileCandidatesResponse>(res, 'Gagal memuat kandidat profil pengguna.');
 }
 
 export async function createRBACRole(input: RBACRoleInput, fetcher: FetchLike = fetch) {

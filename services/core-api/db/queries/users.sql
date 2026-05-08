@@ -364,6 +364,125 @@ LEFT JOIN users u ON u.id = a.user_id
 ORDER BY a.created_at DESC
 LIMIT $1 OFFSET $2;
 
+-- name: ListEmployeeProfileCandidates :many
+SELECT
+    e.id,
+    e.nama,
+    COALESCE(NULLIF(e.nip, ''), e.pegawai_uid, '')::text AS identifier,
+    linked.id AS linked_user_id,
+    COALESCE(linked.username, '')::text AS linked_username
+FROM employees e
+LEFT JOIN LATERAL (
+    SELECT u.id, u.username
+    FROM users u
+    WHERE u.employee_id = e.id
+      AND u.deleted_at IS NULL
+    ORDER BY u.created_at DESC, u.id DESC
+    LIMIT 1
+) linked ON TRUE
+WHERE e.is_active = TRUE
+  AND (sqlc.arg(include_linked)::boolean OR linked.id IS NULL)
+  AND (
+    btrim(sqlc.arg(q)::text) = ''
+    OR e.nama ILIKE ('%' || btrim(sqlc.arg(q)::text) || '%')
+    OR COALESCE(e.nip, '') ILIKE ('%' || btrim(sqlc.arg(q)::text) || '%')
+    OR COALESCE(e.pegawai_uid, '') ILIKE ('%' || btrim(sqlc.arg(q)::text) || '%')
+  )
+ORDER BY e.nama ASC, e.id ASC
+LIMIT sqlc.arg(limit_count)::int;
+
+-- name: ListStudentProfileCandidatesByClass :many
+SELECT
+    s.id,
+    s.nama,
+    COALESCE(NULLIF(s.nisn, ''), s.nis, '')::text AS identifier,
+    s.class_id AS class_id,
+    COALESCE(NULLIF(c.name, ''), c.code, '')::text AS class_name,
+    linked.id AS linked_user_id,
+    COALESCE(linked.username, '')::text AS linked_username
+FROM students s
+JOIN school_classes c
+    ON c.id = s.class_id
+LEFT JOIN LATERAL (
+    SELECT u.id, u.username
+    FROM users u
+    WHERE u.student_id = s.id
+      AND u.deleted_at IS NULL
+    ORDER BY u.created_at DESC, u.id DESC
+    LIMIT 1
+) linked ON TRUE
+WHERE s.is_active = TRUE
+  AND s.status = 'active'
+  AND s.class_id = sqlc.arg(class_id)
+  AND (sqlc.arg(include_linked)::boolean OR linked.id IS NULL)
+  AND (
+    btrim(sqlc.arg(q)::text) = ''
+    OR s.nama ILIKE ('%' || btrim(sqlc.arg(q)::text) || '%')
+    OR s.nis ILIKE ('%' || btrim(sqlc.arg(q)::text) || '%')
+    OR COALESCE(s.nisn, '') ILIKE ('%' || btrim(sqlc.arg(q)::text) || '%')
+  )
+ORDER BY s.nama ASC, s.id ASC
+LIMIT sqlc.arg(limit_count)::int;
+
+-- name: ListParentProfileCandidatesByChildClass :many
+WITH matching_parents AS (
+    SELECT
+        p.id,
+        p.nama,
+        COALESCE(p.phone, '')::text AS identifier,
+        linked.id AS linked_user_id,
+        COALESCE(linked.username, '')::text AS linked_username
+    FROM parents p
+    JOIN parent_students ps
+        ON ps.parent_id = p.id
+    JOIN students s
+        ON s.id = ps.student_id
+    LEFT JOIN LATERAL (
+        SELECT u.id, u.username
+        FROM users u
+        WHERE u.parent_id = p.id
+          AND u.deleted_at IS NULL
+        ORDER BY u.created_at DESC, u.id DESC
+        LIMIT 1
+    ) linked ON TRUE
+    WHERE s.is_active = TRUE
+      AND s.status = 'active'
+      AND s.class_id = sqlc.arg(class_id)
+      AND (sqlc.arg(include_linked)::boolean OR linked.id IS NULL)
+      AND (
+        btrim(sqlc.arg(q)::text) = ''
+        OR p.nama ILIKE ('%' || btrim(sqlc.arg(q)::text) || '%')
+        OR COALESCE(p.phone, '') ILIKE ('%' || btrim(sqlc.arg(q)::text) || '%')
+        OR s.nama ILIKE ('%' || btrim(sqlc.arg(q)::text) || '%')
+        OR s.nis ILIKE ('%' || btrim(sqlc.arg(q)::text) || '%')
+        OR COALESCE(s.nisn, '') ILIKE ('%' || btrim(sqlc.arg(q)::text) || '%')
+      )
+    GROUP BY p.id, p.nama, p.phone, linked.id, linked.username
+    ORDER BY p.nama ASC, p.id ASC
+    LIMIT sqlc.arg(limit_count)::int
+)
+SELECT
+    mp.id,
+    mp.nama,
+    mp.identifier,
+    s.class_id AS class_id,
+    COALESCE(NULLIF(c.name, ''), c.code, '')::text AS class_name,
+    mp.linked_user_id,
+    mp.linked_username,
+    s.id AS child_id,
+    s.nama AS child_nama
+FROM matching_parents mp
+JOIN parent_students ps
+    ON ps.parent_id = mp.id
+JOIN students s
+    ON s.id = ps.student_id
+JOIN school_classes c
+    ON c.id = s.class_id
+WHERE s.is_active = TRUE
+  AND s.status = 'active'
+  AND s.class_id = sqlc.arg(class_id)
+ORDER BY mp.nama ASC, mp.id ASC, ps.is_primary_contact DESC, s.nama ASC, s.id ASC;
+
 -- name: ListEntityAuditLogs :many
 SELECT a.id, a.user_id, u.username, a.action, a.entity_type, a.entity_id, a.metadata, a.created_at
 FROM audit_logs a
