@@ -9,7 +9,7 @@ Gunakan template ini untuk arsip operational readiness CBT. Template ini bukan i
 - Reviewer:
 - Branch:
 - Commit:
-- Phase baseline: Phase 5 commit `bec16c8` + Phase 6 evidence automation + Phase 8 manifest/checksum/secret-scan hardening + Phase 9 commit `bf9df69` post-deploy smoke/runbook hardening + Phase 10 handoff package + Phase 11 archive/retention rules after Phase 10 handoff.
+- Phase baseline: Phase 5 commit `bec16c8` + Phase 6 evidence automation + Phase 8 manifest/checksum/secret-scan hardening + Phase 9 commit `bf9df69` post-deploy smoke/runbook hardening + Phase 10 handoff package + Phase 11 archive/retention rules after Phase 10 handoff + Phase 12 evidence index/retrieval policy after Phase 11 archive/retention.
 - Keputusan rilis: lanjut / tunda / rehearsal ulang.
 
 ## Boundary Wajib
@@ -241,6 +241,67 @@ Deletion/expiry log placeholder:
 | Date | Archive path | Action | Authorized by | Performed by | Reason | SHA-256 manifest checked | Notes |
 |------|--------------|--------|---------------|--------------|--------|--------------------------|-------|
 | | | review / extend / delete | | | | ya / tidak | |
+
+## Phase 12 Evidence Index and Retrieval
+
+Isi bagian ini setelah Phase 11 archive/retention record tersedia dan evidence perlu ditemukan kembali melalui redacted index. Phase 12 evidence index/retrieval policy after Phase 11 archive/retention adalah dokumentasi ops/read-only, bukan search service atau deploy automation.
+
+- Index storage location:
+- Outside public web roots: ya / tidak.
+- Outside Git-tracked tmp/generated evidence paths: ya / tidak.
+- Not committed tmp data except template docs: ya / tidak.
+- Index owner:
+- Reviewer:
+
+Index fields:
+
+| Release id | Commit | Date | Archive path | Manifest SHA-256 | Owner | Retention status | Access classification | Notes |
+|------------|--------|------|--------------|------------------|-------|------------------|-----------------------|-------|
+| | | | | | | active / hold / under review / expired / stale / missing | restricted / confidential / other | |
+
+Redaction/search boundary:
+
+- Search uses redacted metadata only: release id, commit, date, owner, retention status, access classification, manifest SHA-256.
+- No raw secrets: ya / tidak.
+- No full logs: ya / tidak.
+- No env, `.env`, `printenv`, PM2 env dump, database dump, or full request headers: ya / tidak.
+- No password/token/API key/worker key/answer key/JWT mentah: ya / tidak.
+- Archive path is redacted or ops-local, not a public URL: ya / tidak.
+
+Lookup/read-back workflow:
+
+- Index lookup by release id / commit / date:
+- Owner and retention status checked: ya / tidak.
+- Access classification checked: ya / tidak.
+- Archive opened read-only from ops-controlled storage: ya / tidak.
+- Minimum evidence needed identified: ya / tidak.
+- Read-back result:
+- Notes:
+
+Checksum verification before retrieval:
+
+- Recomputed `cbt-release-manifest.json` SHA-256:
+- Matches index Manifest SHA-256: ya / tidak.
+- Manifest parseable as JSON: ya / tidak.
+- Manifest algorithm is `sha256`: ya / tidak.
+- Required artifact checksums recomputed before retrieval: ya / tidak.
+- Secret scan status is `pass`: ya / tidak.
+- Retrieval allowed: ya / tidak.
+
+Access request/audit placeholders:
+
+| Date | Release id | Commit | Requester | Purpose | Owner approval | Reviewer | Result | Notes |
+|------|------------|--------|-----------|---------|----------------|----------|--------|-------|
+| | | | | | approved / rejected / pending | | retrieved / denied / stale / missing | |
+
+Stale/missing archive handling:
+
+- Index row status: active / stale / missing / hold / expired.
+- Archive path exists: ya / tidak.
+- Manifest SHA-256 matches index: ya / tidak.
+- Retrieval restricted pending owner review: ya / tidak / n/a.
+- Owner follow-up:
+- Resolution notes:
 
 ## Acceptance Decision
 

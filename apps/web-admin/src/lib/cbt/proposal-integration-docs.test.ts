@@ -28,6 +28,7 @@ const preflightScriptPath = path.join(repoRoot, 'deploy/scripts/cbt-release-pref
 const phase9DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-9.md');
 const phase10DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-10.md');
 const phase11DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-11.md');
+const phase12DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-12.md');
 const makefilePath = path.join(repoRoot, 'Makefile');
 const tempOutputDirs: string[] = [];
 
@@ -646,6 +647,68 @@ describe('CBT proposal integration documentation guard', () => {
 
 		expect(phase11Doc).not.toContain('POST /api/cbt/login');
 		expect(phase11Doc).not.toContain('GET /api/cbt/status');
+	});
+
+	it('locks Phase 12 as redacted evidence index and retrieval hardening only', async () => {
+		const phase12Doc = await readFile(phase12DocPath, 'utf8');
+
+		for (const phrase of [
+			'Phase 12 - Evidence Index and Retrieval Hardening',
+			'commit `0d9391f`',
+			'redacted evidence index/search and retrieval policy after Phase 11 archive/retention',
+			'index fields',
+			'release id',
+			'commit',
+			'date',
+			'archive path',
+			'manifest sha256',
+			'owner',
+			'retention status',
+			'access classification',
+			'no raw secrets',
+			'no full logs',
+			'no env',
+			'stored outside public web roots',
+			'not committed tmp data except template docs',
+			'lookup/read-back workflow',
+			'access request/audit placeholders',
+			'stale/missing archive handling',
+			'checksum verification before retrieval',
+			'docs/tests/ops evidence policy only',
+			'No product runtime',
+			'No DB schema/migrations',
+			'No deploy automation that restarts PM2',
+			'No live DB writes',
+			'No `/api/cbt` public routes',
+			'Tidak deploy',
+			'Tidak PM2 restart',
+			'Tidak menjalankan `make db-migrate`',
+			'Tidak menjalankan migrasi live',
+			'Tidak menjalankan ad hoc SQL',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`'
+		]) {
+			expect(phase12Doc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 12 Evidence Index and Retrieval',
+			'Phase 12 evidence index/retrieval policy after Phase 11 archive/retention',
+			'Index storage location',
+			'Index fields',
+			'Release id',
+			'Manifest SHA-256',
+			'Access classification',
+			'Lookup/read-back workflow',
+			'Access request/audit placeholders',
+			'Stale/missing archive handling',
+			'Checksum verification before retrieval'
+		]) {
+			expect(releaseEvidenceTemplateDoc).toContain(phrase);
+		}
+
+		expect(phase12Doc).not.toContain('POST /api/cbt/login');
+		expect(phase12Doc).not.toContain('GET /api/cbt/status');
 	});
 
 	it(
