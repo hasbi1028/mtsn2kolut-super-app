@@ -4,6 +4,17 @@ const baseURL = (process.env.WEB_ADMIN_BANK_SOAL_E2E_BASE_URL ?? process.env.WEB
 const headless = process.env.WEB_ADMIN_BANK_SOAL_E2E_HEADLESS !== 'false';
 const timeout = Number(process.env.WEB_ADMIN_BANK_SOAL_E2E_TIMEOUT_MS ?? process.env.WEB_ADMIN_SMOKE_TIMEOUT_MS ?? 20000);
 const allowSkip = process.env.WEB_ADMIN_BANK_SOAL_E2E_ALLOW_SKIP !== 'false';
+const useSeededDefaults = process.env.WEB_ADMIN_BANK_SOAL_E2E_USE_SEEDED_DEFAULTS === 'true';
+const seededUsernamePrefix = process.env.BANK_SOAL_E2E_USERNAME_PREFIX ?? 'e2e_bank_soal_';
+const seededDefaultPassword = process.env.BANK_SOAL_E2E_PASSWORD;
+const seededCredentialEnvNames = {
+	'admin': { USERNAME: 'BANK_SOAL_E2E_ADMIN_USERNAME', PASSWORD: 'BANK_SOAL_E2E_ADMIN_PASSWORD' },
+	'creator': { USERNAME: 'BANK_SOAL_E2E_CREATOR_USERNAME', PASSWORD: 'BANK_SOAL_E2E_CREATOR_PASSWORD' },
+	'reviewer': { USERNAME: 'BANK_SOAL_E2E_REVIEWER_USERNAME', PASSWORD: 'BANK_SOAL_E2E_REVIEWER_PASSWORD' },
+	'importer': { USERNAME: 'BANK_SOAL_E2E_IMPORTER_USERNAME', PASSWORD: 'BANK_SOAL_E2E_IMPORTER_PASSWORD' },
+	'readonly': { USERNAME: 'BANK_SOAL_E2E_READONLY_USERNAME', PASSWORD: 'BANK_SOAL_E2E_READONLY_PASSWORD' },
+	'no-access': { USERNAME: 'BANK_SOAL_E2E_NO_ACCESS_USERNAME', PASSWORD: 'BANK_SOAL_E2E_NO_ACCESS_PASSWORD' },
+};
 
 const finalRoutes = [
 	'/bank-soal',
@@ -71,13 +82,32 @@ function envName(persona, suffix) {
 	return `WEB_ADMIN_BANK_SOAL_E2E_${personas[persona].envPrefix}_${suffix}`;
 }
 
+function seedEnvName(persona, suffix) {
+	return seededCredentialEnvNames[persona][suffix];
+}
+
+function seededCredential(persona, suffix) {
+	if (!useSeededDefaults) return undefined;
+	if (suffix === 'USERNAME') {
+		return process.env[seedEnvName(persona, suffix)] ?? `${seededUsernamePrefix}${persona.replaceAll('-', '_')}`;
+	}
+	if (suffix === 'PASSWORD') {
+		return process.env[seedEnvName(persona, suffix)] ?? seededDefaultPassword;
+	}
+	return undefined;
+}
+
+function credential(persona, suffix) {
+	return process.env[envName(persona, suffix)] ?? seededCredential(persona, suffix);
+}
+
 function collectMissingEnv() {
 	const missing = [];
 	if (!baseURL) missing.push('WEB_ADMIN_BANK_SOAL_E2E_BASE_URL or WEB_ADMIN_SMOKE_BASE_URL');
 	for (const persona of Object.keys(personas)) {
 		for (const suffix of ['USERNAME', 'PASSWORD']) {
 			const name = envName(persona, suffix);
-			if (!process.env[name]) missing.push(name);
+			if (!credential(persona, suffix)) missing.push(useSeededDefaults ? `${name} or ${seedEnvName(persona, suffix)}` : name);
 		}
 	}
 	return missing;
@@ -109,8 +139,8 @@ function absolutePath(path) {
 }
 
 async function login(page, persona) {
-	const username = process.env[envName(persona, 'USERNAME')];
-	const password = process.env[envName(persona, 'PASSWORD')];
+	const username = credential(persona, 'USERNAME');
+	const password = credential(persona, 'PASSWORD');
 	await page.goto(absolutePath(`/login?from=${encodeURIComponent('/bank-soal')}`), { waitUntil: 'domcontentloaded' });
 	await page.locator('input[name="username"]').fill(username);
 	await page.locator('input[name="password"]').fill(password);
