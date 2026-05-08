@@ -20,6 +20,7 @@ import releaseEvidenceTemplateDoc from '../../../../../docs/cbt-release-evidence
 import smokeChecklistDoc from '../../../../../docs/cbt-smoke-checklist.md?raw';
 import releasePreflightScript from '../../../../../deploy/scripts/cbt-release-preflight.sh?raw';
 import releaseChecklistDoc from '../../../../../apps/mobile/RELEASE_CHECKLIST.md?raw';
+import deviceTestMatrixDoc from '../../../../../apps/mobile/DEVICE_TEST_MATRIX.md?raw';
 
 const execFileAsync = promisify(execFile);
 const testFileDir = path.dirname(fileURLToPath(import.meta.url));
@@ -29,6 +30,9 @@ const phase9DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-9
 const phase10DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-10.md');
 const phase11DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-11.md');
 const phase12DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-12.md');
+const phase13DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-13.md');
+const phase14DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-14.md');
+const phase15DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-15.md');
 const makefilePath = path.join(repoRoot, 'Makefile');
 const tempOutputDirs: string[] = [];
 
@@ -709,6 +713,178 @@ describe('CBT proposal integration documentation guard', () => {
 
 		expect(phase12Doc).not.toContain('POST /api/cbt/login');
 		expect(phase12Doc).not.toContain('GET /api/cbt/status');
+	});
+
+	it('locks Phase 13 as mobile release candidate and device matrix hardening only', async () => {
+		const phase13Doc = await readFile(phase13DocPath, 'utf8');
+
+		for (const phrase of [
+			'Phase 13 - Mobile Release Candidate and Device Matrix',
+			'commit `a3e99bd`',
+			'Mobile Release Candidate and Device Matrix',
+			'docs/tests/ops readiness only',
+			'RC identifier',
+			'APK SHA-256 hash',
+			'signing mode',
+			'`API_BASE_URL`',
+			'minimum two Android vendors',
+			'background/resume',
+			'heartbeat',
+			'pending answer',
+			'submit guard',
+			'device mismatch',
+			'screenshot protection / `FLAG_SECURE`',
+			'network disturbance',
+			'/home/servermtsn2kolut/development/flutter/bin',
+			'apps/mobile/DEVICE_TEST_MATRIX.md',
+			'apps/mobile/RELEASE_CHECKLIST.md',
+			'docs/cbt-release-evidence-template.md',
+			'No product runtime',
+			'No DB schema/migrations',
+			'No deploy automation that restarts PM2',
+			'No live DB writes',
+			'No `/api/cbt` public routes',
+			'Tidak deploy',
+			'Tidak PM2 restart',
+			'Tidak menjalankan `make db-migrate`',
+			'Tidak menjalankan migrasi live',
+			'Tidak menjalankan ad hoc SQL',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`'
+		]) {
+			expect(phase13Doc).toContain(phrase);
+		}
+
+		for (const doc of [releaseChecklistDoc, releaseEvidenceTemplateDoc, deviceTestMatrixDoc]) {
+			for (const phrase of [
+				'Phase 13 Mobile Release Candidate and Device Matrix',
+				'RC identifier',
+				'APK SHA-256 hash',
+				'signing mode',
+				'`API_BASE_URL`',
+				'minimum two Android vendors',
+				'background/resume',
+				'heartbeat',
+				'pending answer',
+				'submit guard',
+				'device mismatch',
+				'screenshot protection / `FLAG_SECURE`',
+				'network disturbance',
+				'/home/servermtsn2kolut/development/flutter/bin'
+			]) {
+				expect(doc).toContain(phrase);
+			}
+		}
+
+		expect(phase13Doc).not.toContain('POST /api/cbt/login');
+		expect(phase13Doc).not.toContain('GET /api/cbt/status');
+	});
+
+	it('locks Phase 14 as operator rehearsal and proctor evidence hardening only', async () => {
+		const phase14Doc = await readFile(phase14DocPath, 'utf8');
+
+		for (const phrase of [
+			'Phase 14 - Operator Rehearsal and Proctor Evidence',
+			'operator rehearsal and proctor evidence hardening only',
+			'Bank Soal to Asesmen Persiapan to Pelaksanaan/Pengawasan to Flutter APK to Hasil/Post-exam review',
+			'proctor evidence',
+			'role/scope/token boundary',
+			'event/audit evidence',
+			'go/no-go rehearsal',
+			'Bank Soal',
+			'Asesmen Persiapan',
+			'Pelaksanaan/Pengawasan',
+			'Flutter APK',
+			'Hasil/Post-exam review',
+			'docs/cbt-smoke-checklist.md',
+			'docs/cbt-release-evidence-template.md',
+			'No product runtime',
+			'No DB schema/migrations',
+			'No deploy automation that restarts PM2',
+			'No live DB writes',
+			'No `/api/cbt` public routes',
+			'Tidak deploy',
+			'Tidak PM2 restart',
+			'Tidak menjalankan `make db-migrate`',
+			'Tidak menjalankan migrasi live',
+			'Tidak menjalankan ad hoc SQL',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`'
+		]) {
+			expect(phase14Doc).toContain(phrase);
+		}
+
+		for (const doc of [smokeChecklistDoc, releaseEvidenceTemplateDoc]) {
+			for (const phrase of [
+				'Phase 14 Operator Rehearsal and Proctor Evidence',
+				'Bank Soal to Asesmen Persiapan to Pelaksanaan/Pengawasan to Flutter APK to Hasil/Post-exam review',
+				'proctor evidence',
+				'role/scope/token boundary',
+				'event/audit evidence',
+				'go/no-go rehearsal'
+			]) {
+				expect(doc).toContain(phrase);
+			}
+		}
+
+		expect(phase14Doc).not.toContain('POST /api/cbt/login');
+		expect(phase14Doc).not.toContain('GET /api/cbt/status');
+	});
+
+	it('locks Phase 15 as final CBT release readiness sign-off only', async () => {
+		const phase15Doc = await readFile(phase15DocPath, 'utf8');
+
+		for (const phrase of [
+			'Phase 15 - Final CBT Release Readiness Sign-off',
+			'Final CBT Release Readiness Sign-off',
+			'Phase 0-15',
+			'go/no-go',
+			'rollback owner',
+			'evidence bundle',
+			'validation commands',
+			'final baseline marker',
+			'CBT Phase 15 final baseline',
+			'docs/cbt-release-evidence-template.md',
+			'git diff --check',
+			'npm run test:unit -- src/lib/cbt/proposal-integration-docs.test.ts',
+			'npm run check',
+			'npm run test:unit',
+			'make ops-health',
+			'go test ./...',
+			'go build -o /dev/null ./cmd/api',
+			'/home/servermtsn2kolut/development/flutter/bin/flutter analyze',
+			'/home/servermtsn2kolut/development/flutter/bin/flutter test',
+			'No product runtime',
+			'No DB schema/migrations',
+			'No deploy automation that restarts PM2',
+			'No live DB writes',
+			'No `/api/cbt` public routes',
+			'Tidak deploy',
+			'Tidak PM2 restart',
+			'Tidak menjalankan `make db-migrate`',
+			'Tidak menjalankan migrasi live',
+			'Tidak menjalankan ad hoc SQL',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`'
+		]) {
+			expect(phase15Doc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 15 Final CBT Release Readiness Sign-off',
+			'Final sign-off summary Phase 0-15',
+			'go/no-go',
+			'rollback owner',
+			'evidence bundle',
+			'validation commands',
+			'final baseline marker',
+			'CBT Phase 15 final baseline'
+		]) {
+			expect(releaseEvidenceTemplateDoc).toContain(phrase);
+		}
+
+		expect(phase15Doc).not.toContain('POST /api/cbt/login');
+		expect(phase15Doc).not.toContain('GET /api/cbt/status');
 	});
 
 	it(

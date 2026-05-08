@@ -2,7 +2,7 @@
 
 Checklist ini untuk operator sekolah saat menyiapkan APK Android internal bagi siswa BYOD dan menjalankan Phase 5 rehearsal.
 
-Status: sinkron Phase 5 per 2026-05-08. Gunakan bersama `docs/exam-api.md`, `docs/cbt-proposal-integration-phase-5.md`, `docs/cbt-smoke-checklist.md`, dan `docs/cbt-operator-runbook.md`.
+Status: sinkron Phase 13 Mobile Release Candidate and Device Matrix per 2026-05-08. Gunakan bersama `docs/exam-api.md`, `docs/cbt-proposal-integration-phase-5.md`, `docs/cbt-proposal-integration-phase-13.md`, `docs/cbt-smoke-checklist.md`, dan `docs/cbt-operator-runbook.md`.
 
 ## Boundary Phase 5
 
@@ -12,6 +12,25 @@ Status: sinkron Phase 5 per 2026-05-08. Gunakan bersama `docs/exam-api.md`, `doc
 - [ ] Tidak membawa PocketBase, SQLite, atau Alpine menjadi runtime CBT.
 - [ ] Flutter berbicara langsung ke `services/core-api` melalui `/api/exam/*`, bukan melalui SvelteKit BFF.
 - [ ] BYOD tidak setara kiosk penuh; device-owner bukan baseline untuk perangkat siswa pribadi.
+
+## Phase 13 Mobile Release Candidate and Device Matrix
+
+Isi bagian ini untuk APK yang benar-benar dipasang pada perangkat uji.
+
+- [ ] RC identifier:
+- [ ] APK SHA-256 hash:
+- [ ] signing mode: release keystore / debug signing untuk uji teknis internal saja.
+- [ ] `API_BASE_URL`:
+- [ ] Flutter SDK absolute path:
+  - `/home/servermtsn2kolut/development/flutter/bin`
+- [ ] minimum two Android vendors dicatat di `apps/mobile/DEVICE_TEST_MATRIX.md`.
+- [ ] background/resume diuji dan melewati resume/status gate.
+- [ ] heartbeat memperbarui last-contact atau menampilkan warning terkendali.
+- [ ] pending answer tetap tersimpan saat koneksi terganggu.
+- [ ] submit guard menahan submit saat pending sync/degraded mode belum pulih.
+- [ ] device mismatch menghasilkan guidance `409` terkendali.
+- [ ] screenshot protection / `FLAG_SECURE` diverifikasi sebagai deterrence/evidence, bukan kiosk guarantee.
+- [ ] network disturbance menghasilkan status yang dipahami siswa/pengawas.
 
 ## Sebelum Build
 
@@ -70,9 +89,11 @@ build/app/outputs/flutter-apk/app-release.apk
 ## Verifikasi Lapangan Minimal
 
 - [ ] install APK di minimal 2 vendor Android berbeda sebagai perangkat nyata Phase 5 rehearsal
+- [ ] minimum two Android vendors terisi lengkap dengan RC identifier, APK SHA-256 hash, signing mode, dan `API_BASE_URL`
 - [ ] hasil perangkat nyata dicatat di `DEVICE_TEST_MATRIX.md`, termasuk vendor, OS, koneksi, restore, dan submit
 - [ ] login token berhasil
 - [ ] skenario ringkas Phase 5 rehearsal tercatat: login token, heartbeat, answer save, restore, network disturbance, warning, submit
+- [ ] skenario Phase 13 tercatat: background/resume, heartbeat, pending answer, submit guard, device mismatch, screenshot protection / `FLAG_SECURE`, network disturbance
 - [ ] login dengan token 32 karakter dari kartu ujian berhasil
 - [ ] jawaban pilihan ganda tersimpan
 - [ ] jawaban uraian tersimpan
