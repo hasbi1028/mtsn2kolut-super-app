@@ -1412,7 +1412,7 @@ func TestNormalizeQuestionInputValidationMatrix(t *testing.T) {
 			input: SaveCbtQuestionInput{
 				SubjectID:     pgtype.UUID{Valid: true},
 				AuthoringMode: "advance",
-				QuestionType:  "ordering",
+				QuestionType:  "hotspot",
 				QuestionText:  "Cocokkan",
 			},
 			wantErr: "question_type tidak didukung",
@@ -1657,4 +1657,78 @@ func mustBytes(t *testing.T, value []byte, err error) []byte {
 		t.Fatalf("unexpected encode error: %v", err)
 	}
 	return value
+}
+
+func TestNormalizeQuestionInputQuestionTypeContracts(t *testing.T) {
+	base := SaveCbtQuestionInput{
+		SubjectID:      pgtype.UUID{Valid: true},
+		AuthoringMode:  "beginner",
+		QuestionText:   "Kontrak tipe soal harus deterministik",
+		WorkflowStatus: "review",
+		Options: []QuestionOption{
+			{Label: "A", Text: "Alpha"},
+			{Label: "B", Text: "Beta"},
+			{Label: "C", Text: "Gamma"},
+			{Label: "D", Text: "Delta"},
+		},
+	}
+
+	t.Run("multiple answer sorts labels deterministically", func(t *testing.T) {
+		input := base
+		input.QuestionType = "multiple_answer"
+		input.AnswerKey = " c, a "
+		got, err := normalizeQuestionInput(input)
+		if err != nil {
+			t.Fatalf("normalizeQuestionInput() error = %v", err)
+		}
+		if got.AnswerKey != "A,C" {
+			t.Fatalf("AnswerKey = %q, want A,C", got.AnswerKey)
+		}
+	})
+
+	t.Run("ordering preserves exact sequence and requires every label once", func(t *testing.T) {
+		input := base
+		input.QuestionType = "ordering"
+		input.AnswerKey = " B, A, D, C "
+		got, err := normalizeQuestionInput(input)
+		if err != nil {
+			t.Fatalf("normalizeQuestionInput() error = %v", err)
+		}
+		if got.AnswerKey != "B,A,D,C" {
+			t.Fatalf("AnswerKey = %q, want B,A,D,C", got.AnswerKey)
+		}
+
+		input.AnswerKey = "B,A,A,C"
+		if _, err := normalizeQuestionInput(input); err == nil {
+			t.Fatalf("normalizeQuestionInput() duplicate ordering labels succeeded, want error")
+		}
+	})
+
+	t.Run("fixed pairs keep canonical labels and options", func(t *testing.T) {
+		input := base
+		input.Options = nil
+		input.QuestionType = "agree_disagree"
+		input.AnswerKey = " b "
+		got, err := normalizeQuestionInput(input)
+		if err != nil {
+			t.Fatalf("normalizeQuestionInput() error = %v", err)
+		}
+		if got.AnswerKey != "B" || len(got.Options) != 2 || got.Options[0].Text != "Setuju" || got.Options[1].Text != "Tidak Setuju" {
+			t.Fatalf("fixed pair contract = key %q options %+v", got.AnswerKey, got.Options)
+		}
+	})
+
+	t.Run("short answer aliases are normalized", func(t *testing.T) {
+		input := base
+		input.QuestionType = "short_answer"
+		input.Options = nil
+		input.AnswerKey = " Fotosintesis | foto  sintesis | fotosintesis "
+		got, err := normalizeQuestionInput(input)
+		if err != nil {
+			t.Fatalf("normalizeQuestionInput() error = %v", err)
+		}
+		if got.AnswerKey != "Fotosintesis|foto sintesis" {
+			t.Fatalf("AnswerKey = %q, want normalized aliases", got.AnswerKey)
+		}
+	})
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -578,6 +579,14 @@ func normalizeQuestionInput(input SaveCbtQuestionInput) (SaveCbtQuestionInput, e
 			return SaveCbtQuestionInput{}, err
 		}
 		out.AnswerKey = answerKey
+	} else if out.QuestionType == "ordering" {
+		answerKey, err := normalizeOrderingAnswerKey(out.AnswerKey, len(normalizedOptions))
+		if err != nil {
+			return SaveCbtQuestionInput{}, err
+		}
+		out.AnswerKey = answerKey
+	} else if out.QuestionType == "multiple_answer" {
+		out.AnswerKey = normalizeMultipleAnswerKey(out.AnswerKey)
 	} else {
 		out.AnswerKey = strings.TrimSpace(strings.ToUpper(out.AnswerKey))
 	}
@@ -598,7 +607,7 @@ func validateQuestion(input SaveCbtQuestionInput) error {
 	}
 
 	switch input.QuestionType {
-	case "multiple_choice", "single_choice", "multiple_answer", "true_false", "agree_disagree":
+	case "multiple_choice", "single_choice", "multiple_answer", "true_false", "agree_disagree", "ordering":
 		if !requiresCompleteContent {
 			return nil
 		}
@@ -652,19 +661,27 @@ func validateObjectiveAnswerKey(options []QuestionOption, answerKey string, ques
 	}
 
 	keys := []string{answerKey}
-	if questionType == "multiple_answer" {
+	if questionType == "multiple_answer" || questionType == "ordering" {
 		keys = strings.Split(answerKey, ",")
 	}
+	seen := map[string]bool{}
 	validKeyCount := 0
 	for _, key := range keys {
 		key = strings.TrimSpace(strings.ToUpper(key))
 		if key == "" || !available[key] {
 			return fmt.Errorf("answer_key harus sesuai label opsi yang tersedia")
 		}
+		if seen[key] {
+			return fmt.Errorf("answer_key tidak boleh memuat label duplikat")
+		}
+		seen[key] = true
 		validKeyCount++
 	}
 	if questionType == "multiple_answer" && validKeyCount < 2 {
 		return fmt.Errorf("multiple_answer membutuhkan minimal 2 kunci jawaban")
+	}
+	if questionType == "ordering" && validKeyCount != len(available) {
+		return fmt.Errorf("ordering membutuhkan urutan semua label opsi")
 	}
 	return nil
 }
@@ -743,6 +760,9 @@ func firstQuestionOptionContent(values ...string) string {
 
 func normalizeShortAnswerKey(value string) string {
 	aliases := shortAnswerAliases(value)
+	for i, alias := range aliases {
+		aliases[i] = strings.Join(strings.Fields(strings.ReplaceAll(alias, "\u00a0", " ")), " ")
+	}
 	return strings.Join(aliases, "|")
 }
 
@@ -795,6 +815,46 @@ func buildMatchingAnswerKey(optionCount int) string {
 	return strings.Join(pairs, ";")
 }
 
+func normalizeMultipleAnswerKey(value string) string {
+	parts := strings.Split(value, ",")
+	seen := map[string]bool{}
+	labels := make([]string, 0, len(parts))
+	for _, part := range parts {
+		label := strings.TrimSpace(strings.ToUpper(part))
+		if label == "" || seen[label] {
+			continue
+		}
+		seen[label] = true
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+	return strings.Join(labels, ",")
+}
+
+func normalizeOrderingAnswerKey(value string, optionCount int) (string, error) {
+	labels := make(map[string]bool, optionCount)
+	for i := 0; i < optionCount; i++ {
+		labels[string(rune('A'+i))] = true
+	}
+	ordered := make([]string, 0, optionCount)
+	seen := map[string]bool{}
+	for _, part := range strings.Split(value, ",") {
+		label := strings.TrimSpace(strings.ToUpper(part))
+		if label == "" {
+			continue
+		}
+		if !labels[label] || seen[label] {
+			return "", fmt.Errorf("answer_key ordering harus memuat tiap label opsi tepat satu kali")
+		}
+		seen[label] = true
+		ordered = append(ordered, label)
+	}
+	if len(ordered) != optionCount {
+		return "", fmt.Errorf("answer_key ordering harus memuat semua label opsi")
+	}
+	return strings.Join(ordered, ","), nil
+}
+
 func countMatchingPairs(options []QuestionOption) int {
 	count := 0
 	for _, option := range options {
@@ -830,7 +890,7 @@ func normalizeShortAnswerComparable(value string) string {
 
 func beginnerSupportsQuestionType(questionType string) bool {
 	switch questionType {
-	case "multiple_choice", "multiple_answer", "true_false", "agree_disagree", "matching", "short_answer", "essay":
+	case "multiple_choice", "multiple_answer", "true_false", "agree_disagree", "matching", "ordering", "short_answer", "essay":
 		return true
 	default:
 		return false
@@ -842,7 +902,7 @@ func normalizeQuestionType(value string) string {
 	switch normalized {
 	case "", "multiple_choice", "single_choice":
 		return "multiple_choice"
-	case "multiple_answer", "true_false", "agree_disagree", "matching", "short_answer", "essay":
+	case "multiple_answer", "true_false", "agree_disagree", "matching", "ordering", "short_answer", "essay":
 		return normalized
 	default:
 		return normalized

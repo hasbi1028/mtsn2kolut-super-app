@@ -17,6 +17,7 @@ import phase6Doc from '../../../../../docs/cbt-proposal-integration-phase-6.md?r
 import phase7Doc from '../../../../../docs/cbt-proposal-integration-phase-7.md?raw';
 import phase8Doc from '../../../../../docs/cbt-proposal-integration-phase-8.md?raw';
 import proposalGapAuditDoc from '../../../../../docs/cbt-proposal-gap-audit.md?raw';
+import proposalTraceabilityDoc from '../../../../../docs/cbt-proposal-100-percent-traceability.md?raw';
 import finalReleaseEvidenceDoc from '../../../../../docs/cbt-release-final-evidence.md?raw';
 import releaseEvidenceTemplateDoc from '../../../../../docs/cbt-release-evidence-template.md?raw';
 import smokeChecklistDoc from '../../../../../docs/cbt-smoke-checklist.md?raw';
@@ -199,6 +200,32 @@ afterEach(async () => {
 });
 
 describe('CBT proposal integration documentation guard', () => {
+
+	it('locks Phase 16-18 traceability and question type contract boundaries', () => {
+		for (const phrase of [
+			'CBT Proposal 100 Percent Traceability Matrix',
+			'Implemented runtime',
+			'Adapted/out-of-scope',
+			'PocketBase / Alpine.js / SQLite proposal stack',
+			'Public `/api/cbt/**` route tree',
+			'multiple_choice',
+			'multiple_answer',
+			'essay',
+			'short_answer',
+			'matching',
+			'ordering',
+			'true_false',
+			'agree_disagree',
+			'comma-separated labels in exact sequence',
+			'`B,A,C`',
+			'Flutter uses `/api/exam/*`'
+		]) {
+			expect(proposalTraceabilityDoc).toContain(phrase);
+		}
+
+		expect(proposalGapAuditDoc).toContain('Phase 16-18 follow-up status');
+		expect(proposalGapAuditDoc).toContain('ordering now has an explicit Web Admin/Core API/Flutter contract');
+	});
 	it('locks the monorepo runtime ownership for proposal integration', () => {
 		for (const phrase of [
 			'Web Admin',

@@ -93,9 +93,9 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	type RevisionSourceFilter = '' | 'item_analysis' | 'reviewer' | 'workflow';
 	type ReviewDecision = 'approve' | 'reject';
 	type BulkWorkflowAction = 'approve' | 'reject' | 'publish';
-	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'agree_disagree' | 'matching' | 'short_answer' | 'essay';
+	type ComposerQuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'agree_disagree' | 'matching' | 'ordering' | 'short_answer' | 'essay';
 	type ComposerSaveIntent = 'draft' | 'review';
-	type AnswerMode = 'single_option' | 'multi_option' | 'fixed_pair' | 'matching' | 'short_text' | 'rubric';
+	type AnswerMode = 'single_option' | 'multi_option' | 'fixed_pair' | 'matching' | 'ordering' | 'short_text' | 'rubric';
 	type QuestionTypeConfig = {
 		id: ComposerQuestionType;
 		label: string;
@@ -355,6 +355,16 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 			answerMode: 'matching',
 			minOptions: MIN_MATCHING_PAIR_COUNT,
 			maxOptions: MAX_MATCHING_PAIR_COUNT,
+		},
+		{
+			id: 'ordering',
+			label: 'Mengurutkan',
+			shortLabel: 'Urutan',
+			desc: 'Siswa menyusun opsi sesuai urutan kunci.',
+			studentHint: 'Siswa mengurutkan semua opsi jawaban.',
+			answerMode: 'ordering',
+			minOptions: MIN_OPTION_COUNT,
+			maxOptions: MAX_OPTION_COUNT,
 		},
 		{
 			id: 'short_answer',
@@ -634,20 +644,23 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	let isAgreeDisagree = $derived(fQuestionType === 'agree_disagree');
 	let isFixedPair = $derived(questionTypeConfig.answerMode === 'fixed_pair');
 	let isMatching = $derived(questionTypeConfig.answerMode === 'matching');
+	let isOrdering = $derived(questionTypeConfig.answerMode === 'ordering');
 	let isShortAnswer = $derived(questionTypeConfig.answerMode === 'short_text');
 	let hasOptionSection = $derived(
 		questionTypeConfig.answerMode === 'single_option' ||
 			questionTypeConfig.answerMode === 'multi_option' ||
+			questionTypeConfig.answerMode === 'ordering' ||
 			isFixedPair
 	);
 	let hasEditableOptions = $derived(
 		questionTypeConfig.answerMode === 'single_option' ||
-			questionTypeConfig.answerMode === 'multi_option'
+			questionTypeConfig.answerMode === 'multi_option' ||
+			questionTypeConfig.answerMode === 'ordering'
 	);
 	let requiresRubric = $derived(questionTypeConfig.answerMode === 'rubric');
 	let isAdvanceMode = $derived(fAuthoringMode === 'advance');
 	let activeOptionLabels = $derived(ANSWER_LABELS.slice(0, fOptions.length));
-	let selectedAnswerLabels = $derived(answerKeyLabels(fAnswerKey, activeOptionLabels));
+	let selectedAnswerLabels = $derived(isOrdering ? orderingAnswerKeyLabels(fAnswerKey, activeOptionLabels) : answerKeyLabels(fAnswerKey, activeOptionLabels));
 	let optionPlainTexts = $derived(fOptions.map((option) => htmlToPlainText(option)));
 	let optionHasImages = $derived(fOptions.map((option) => option.includes('<img')));
 	let matchingLeftTexts = $derived(fMatchingPairs.map((pair) => htmlToPlainText(pair.left)));
@@ -665,6 +678,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		if (isMatching) return matchingPairsReady;
 		if (isShortAnswer) return shortAnswerAliases.length > 0;
 		if (isMultipleAnswer) return selectedAnswerLabels.length >= 2;
+		if (isOrdering) return selectedAnswerLabels.length === fOptions.length;
 		return selectedAnswerLabels.length === 1;
 	});
 	let rubricReady = $derived(!requiresRubric || rubricText.length >= 5 || fRubric.includes('<img'));
@@ -1679,20 +1693,21 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		const config = getQuestionTypeConfig(type);
 		if (config.answerMode === 'single_option' || config.answerMode === 'fixed_pair') return 'A';
 		if (config.answerMode === 'matching') return buildMatchingAnswerKey(DEFAULT_MATCHING_PAIR_COUNT);
+		if (config.answerMode === 'ordering') return normalizeOrderingAnswerKey('', config.minOptions);
 		return '';
 	}
 
 	function defaultOptionsForQuestionType(type: ComposerQuestionType): string[] {
 		const config = getQuestionTypeConfig(type);
 		if (config.answerMode === 'fixed_pair') return [...(config.fixedOptions ?? [])];
-		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') return [];
+		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option' && config.answerMode !== 'ordering') return [];
 		return Array.from({ length: config.minOptions }, () => '');
 	}
 
 	function normalizeOptionCount(options: string[], type: ComposerQuestionType = fQuestionType): string[] {
 		const config = getQuestionTypeConfig(type);
 		if (config.answerMode === 'fixed_pair') return [...(config.fixedOptions ?? [])];
-		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') return [];
+		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option' && config.answerMode !== 'ordering') return [];
 		let normalized = options.slice(0, config.maxOptions);
 		while (normalized.length < config.minOptions) normalized = [...normalized, ''];
 		return normalized;
@@ -1747,6 +1762,23 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		return keys.sort((a, b) => ANSWER_LABELS.indexOf(a) - ANSWER_LABELS.indexOf(b));
 	}
 
+	function orderingAnswerKeyLabels(value: string | undefined, labels: OptionLabel[]): OptionLabel[] {
+		const ordered: OptionLabel[] = [];
+		for (const raw of (value ?? '').split(',')) {
+			const label = raw.trim().toUpperCase() as OptionLabel;
+			if (!labels.includes(label) || ordered.includes(label)) continue;
+			ordered.push(label);
+		}
+		for (const label of labels) {
+			if (!ordered.includes(label)) ordered.push(label);
+		}
+		return ordered;
+	}
+
+	function normalizeOrderingAnswerKey(value: string | undefined, optionCount: number): string {
+		return orderingAnswerKeyLabels(value, ANSWER_LABELS.slice(0, optionCount)).join(',');
+	}
+
 	function fixedOptionTextForKey(key: string): string {
 		const label = key.trim().toUpperCase() as OptionLabel;
 		const index = activeOptionLabels.indexOf(label);
@@ -1795,6 +1827,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		if (config.answerMode === 'rubric') return '';
 		if (config.answerMode === 'short_text') return parseShortAnswerAliases(value).join('|');
 		if (config.answerMode === 'matching') return normalizeMatchingAnswerKey(value, optionCount);
+		if (config.answerMode === 'ordering') return normalizeOrderingAnswerKey(value, optionCount);
 		const labels = ANSWER_LABELS.slice(0, optionCount);
 		const keys = answerKeyLabels(value, labels);
 		if (config.answerMode === 'multi_option') return keys.join(',');
@@ -1806,6 +1839,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 	}
 
 	function toggleAnswerLabel(label: OptionLabel) {
+		if (isOrdering) {
+			fAnswerKey = normalizeOrderingAnswerKey(fAnswerKey || activeOptionLabels.join(','), fOptions.length);
+			return;
+		}
 		if (!isMultipleAnswer) {
 			fAnswerKey = label;
 			return;
@@ -1817,26 +1854,39 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 		fAnswerKey = normalizeAnswerKey(next.join(','), fQuestionType, fOptions.length);
 	}
 
+	function moveOrderingAnswerLabel(label: OptionLabel, delta: -1 | 1) {
+		if (!isOrdering) return;
+		const ordered = orderingAnswerKeyLabels(fAnswerKey, activeOptionLabels);
+		const index = ordered.indexOf(label);
+		const nextIndex = index + delta;
+		if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) return;
+		[ordered[index], ordered[nextIndex]] = [ordered[nextIndex], ordered[index]];
+		fAnswerKey = ordered.join(',');
+	}
+
 	function editorAllowedForQuestionType(editor: FocusedEditor, type: ComposerQuestionType): boolean {
 		if (editor === 'stem' || editor === 'stimulus' || editor === 'explanation') return true;
 		if (editor === 'rubric') return getQuestionTypeConfig(type).answerMode === 'rubric';
-		return getQuestionTypeConfig(type).answerMode === 'single_option' || getQuestionTypeConfig(type).answerMode === 'multi_option';
+		return getQuestionTypeConfig(type).answerMode === 'single_option' || getQuestionTypeConfig(type).answerMode === 'multi_option' || getQuestionTypeConfig(type).answerMode === 'ordering';
 	}
 
 	function addOption() {
 		const config = getQuestionTypeConfig(fQuestionType);
-		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') return;
+		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option' && config.answerMode !== 'ordering') return;
 		if (fOptions.length >= config.maxOptions) return;
 		fOptions = [...fOptions, ''];
+		if (config.answerMode === 'ordering') fAnswerKey = normalizeOrderingAnswerKey(fAnswerKey, fOptions.length);
 	}
 
 	function removeLastOption() {
 		const config = getQuestionTypeConfig(fQuestionType);
-		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') return;
+		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option' && config.answerMode !== 'ordering') return;
 		if (fOptions.length <= config.minOptions) return;
 		const removedLabel = optionLabelAt(fOptions.length - 1);
 		fOptions = fOptions.slice(0, -1);
-		if (answerKeyLabels(fAnswerKey, ANSWER_LABELS).includes(removedLabel)) {
+		if (config.answerMode === 'ordering') {
+			fAnswerKey = normalizeOrderingAnswerKey(fAnswerKey, fOptions.length);
+		} else if (answerKeyLabels(fAnswerKey, ANSWER_LABELS).includes(removedLabel)) {
 			fAnswerKey = normalizeAnswerKey(fAnswerKey, fQuestionType, fOptions.length);
 		}
 	}
@@ -2267,7 +2317,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 				})),
 			];
 		}
-		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option') {
+		if (config.answerMode !== 'single_option' && config.answerMode !== 'multi_option' && config.answerMode !== 'ordering') {
 			return [];
 		}
 		return fOptions.map((html, i) => ({
@@ -4098,7 +4148,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 							<section id="composer-options" class="scroll-mt-4 space-y-4 border-t border-border pt-5">
 								<div class="text-center">
 									<h3 class="text-xs font-black uppercase italic tracking-[0.26em] text-muted-foreground">
-										{isMultipleAnswer ? 'Opsi & Kunci Jawaban Ganda' : isTrueFalse ? 'Kunci Benar/Salah' : isAgreeDisagree ? 'Kunci Setuju/Tidak Setuju' : 'Opsi & Kunci Jawaban'}
+										{isOrdering ? 'Opsi & Urutan Kunci' : isMultipleAnswer ? 'Opsi & Kunci Jawaban Ganda' : isTrueFalse ? 'Kunci Benar/Salah' : isAgreeDisagree ? 'Kunci Setuju/Tidak Setuju' : 'Opsi & Kunci Jawaban'}
 									</h3>
 									<p class="mt-1 text-xs text-muted-foreground">{questionTypeConfig.studentHint}</p>
 								</div>
@@ -4125,32 +4175,40 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 											<div class="flex items-center justify-between gap-3 border-b border-border pb-2">
 												<div>
 													<p class="text-xs font-black uppercase tracking-[0.2em] text-foreground">Opsi {label}</p>
-													<p class="mt-0.5 text-[11px] text-muted-foreground">{isAnswer ? 'Ditandai sebagai kunci jawaban' : isFixedPair ? 'Pilihan tetap' : 'Pengecoh / alternatif jawaban'}</p>
+													<p class="mt-0.5 text-[11px] text-muted-foreground">{isAnswer ? (isOrdering ? `Urutan kunci: ${selectedAnswerLabels.indexOf(label) + 1}` : 'Ditandai sebagai kunci jawaban') : isFixedPair ? 'Pilihan tetap' : 'Pengecoh / alternatif jawaban'}</p>
 												</div>
 												<div class="flex shrink-0 items-center gap-1">
+													{#if isOrdering}
+														<button type="button" onclick={() => moveOrderingAnswerLabel(label, -1)} disabled={selectedAnswerLabels.indexOf(label) <= 0} class="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-40">Naik</button>
+														<button type="button" onclick={() => moveOrderingAnswerLabel(label, 1)} disabled={selectedAnswerLabels.indexOf(label) >= selectedAnswerLabels.length - 1} class="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-40">Turun</button>
+													{/if}
 													{#if hasEditableOptions}
 														<button type="button" onclick={() => (focusedEditor = label)} class="rounded-md border border-border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/50">Fokus</button>
 													{/if}
-													<label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {isAnswer ? 'bg-success text-background' : 'hover:bg-success/10'}">
-														{#if isMultipleAnswer}
-															<input
-																type="checkbox"
-																checked={isAnswer}
-																onchange={() => toggleAnswerLabel(label)}
-																class="h-4 w-4 cursor-pointer accent-green-700"
-															/>
-														{:else}
-															<input
-																type="radio"
-																name="answer-key"
-																value={label}
-																checked={isAnswer}
-																onchange={() => toggleAnswerLabel(label)}
-																class="h-4 w-4 cursor-pointer accent-green-700"
-															/>
-														{/if}
-														<span class="text-[10px] font-black uppercase tracking-widest {isAnswer ? 'text-white' : 'text-muted-foreground'}">Kunci</span>
-													</label>
+													{#if isOrdering}
+														<span class="rounded-lg bg-success px-2 py-1.5 text-[10px] font-black uppercase tracking-widest text-white">Urutan {selectedAnswerLabels.indexOf(label) + 1}</span>
+													{:else}
+														<label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {isAnswer ? 'bg-success text-background' : 'hover:bg-success/10'}">
+															{#if isMultipleAnswer}
+																<input
+																	type="checkbox"
+																	checked={isAnswer}
+																	onchange={() => toggleAnswerLabel(label)}
+																	class="h-4 w-4 cursor-pointer accent-green-700"
+																/>
+															{:else}
+																<input
+																	type="radio"
+																	name="answer-key"
+																	value={label}
+																	checked={isAnswer}
+																	onchange={() => toggleAnswerLabel(label)}
+																	class="h-4 w-4 cursor-pointer accent-green-700"
+																/>
+															{/if}
+															<span class="text-[10px] font-black uppercase tracking-widest {isAnswer ? 'text-white' : 'text-muted-foreground'}">Kunci</span>
+														</label>
+													{/if}
 												</div>
 											</div>
 											<div dir={fIsRtl ? 'rtl' : undefined}>

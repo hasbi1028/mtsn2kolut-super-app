@@ -1952,6 +1952,10 @@ SET is_correct = CASE
   WHEN q.question_type = 'matching' THEN
     (array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(sa.answer, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';') =
      array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(q.answer_key, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';'))
+  -- ordering: answer is comma-separated labels and must match the exact sequence.
+  WHEN q.question_type = 'ordering' THEN
+    (array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(sa.answer, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ',') =
+     array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(q.answer_key, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ','))
   -- short_answer: answer_key may contain accepted aliases separated by "|";
   -- normalize case, repeated whitespace, and non-breaking spaces before matching.
   WHEN q.question_type = 'short_answer' THEN EXISTS (
@@ -2062,6 +2066,9 @@ SET is_correct = CASE
   WHEN q.question_type = 'matching' THEN
     (array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(sa.answer, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';') =
      array_to_string(ARRAY(SELECT upper(btrim(pair)) FROM unnest(string_to_array(q.answer_key, ';')) AS key(pair) WHERE btrim(pair) <> '' ORDER BY 1), ';'))
+  WHEN q.question_type = 'ordering' THEN
+    (array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(sa.answer, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ',') =
+     array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(q.answer_key, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ','))
   WHEN q.question_type = 'short_answer' THEN EXISTS (
     SELECT 1
     FROM unnest(string_to_array(q.answer_key, '|')) AS accepted(answer)
