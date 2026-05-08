@@ -9,7 +9,9 @@ Gunakan template ini untuk arsip operational readiness CBT. Template ini bukan i
 - Reviewer:
 - Branch:
 - Commit:
-- Phase baseline: Phase 5 commit `bec16c8` + Phase 6 evidence automation + Phase 8 manifest/checksum/secret-scan hardening + Phase 9 commit `bf9df69` post-deploy smoke/runbook hardening + Phase 10 handoff package + Phase 11 archive/retention rules after Phase 10 handoff + Phase 12 evidence index/retrieval policy after Phase 11 archive/retention.
+- Phase baseline: Phase 5 commit `bec16c8` + Phase 6 evidence automation + Phase 8 manifest/checksum/secret-scan hardening + Phase 9 commit `bf9df69` post-deploy smoke/runbook hardening + Phase 10 handoff package + Phase 11 archive/retention rules after Phase 10 handoff + Phase 12 evidence index/retrieval policy after Phase 11 archive/retention + Phase 13 Mobile Release Candidate and Device Matrix + Phase 14 Operator Rehearsal and Proctor Evidence + Phase 15 Final CBT Release Readiness Sign-off.
+- Final baseline marker:
+  - `CBT Phase 15 final baseline`
 - Keputusan rilis: lanjut / tunda / rehearsal ulang.
 
 ## Boundary Wajib
@@ -89,13 +91,50 @@ Gunakan template ini untuk arsip operational readiness CBT. Template ini bukan i
 ## Mobile Evidence
 
 - APK/release candidate identifier:
+- RC identifier:
+- APK SHA-256 hash:
+- signing mode:
+- `API_BASE_URL`:
 - Flutter SDK tersedia di host evidence: ya / tidak.
+- Flutter SDK absolute path:
+  - `/home/servermtsn2kolut/development/flutter/bin`
 - `flutter analyze`: pass / fail / skipped.
 - `flutter test`: pass / fail / skipped.
 - Device matrix updated:
   - `apps/mobile/DEVICE_TEST_MATRIX.md`
 - Minimal dua perangkat nyata lintas vendor: pass / fail / belum diuji.
+- minimum two Android vendors: pass / fail / belum diuji.
+- background/resume:
+- heartbeat:
+- pending answer:
+- submit guard:
+- device mismatch:
+- screenshot protection / `FLAG_SECURE`:
+- network disturbance:
 - BYOD risks observed:
+
+## Phase 13 Mobile Release Candidate and Device Matrix
+
+Isi bagian ini untuk APK final candidate sebelum operator rehearsal.
+
+- RC identifier:
+- APK SHA-256 hash:
+- signing mode: release keystore / debug signing untuk uji teknis internal saja.
+- `API_BASE_URL`:
+- Flutter SDK absolute path:
+  - `/home/servermtsn2kolut/development/flutter/bin`
+- Device matrix file:
+  - `apps/mobile/DEVICE_TEST_MATRIX.md`
+- minimum two Android vendors: pass / fail / belum diuji.
+- background/resume: pass / fail / belum diuji.
+- heartbeat: pass / fail / belum diuji.
+- pending answer: pass / fail / belum diuji.
+- submit guard: pass / fail / belum diuji.
+- device mismatch: pass / fail / belum diuji.
+- screenshot protection / `FLAG_SECURE`: pass / fail / belum diuji.
+- network disturbance: pass / fail / belum diuji.
+- RC accepted for rehearsal: ya / tidak.
+- Notes:
 
 ## Backend dan Web Evidence
 
@@ -302,6 +341,130 @@ Stale/missing archive handling:
 - Retrieval restricted pending owner review: ya / tidak / n/a.
 - Owner follow-up:
 - Resolution notes:
+
+## Phase 14 Operator Rehearsal and Proctor Evidence
+
+Isi bagian ini setelah rehearsal operator final selesai. Phase 14 Operator Rehearsal and Proctor Evidence adalah bukti manual/read-only, bukan instruksi deploy.
+
+- Operator flow:
+  - Bank Soal to Asesmen Persiapan to Pelaksanaan/Pengawasan to Flutter APK to Hasil/Post-exam review.
+- proctor evidence:
+- role/scope/token boundary:
+- event/audit evidence:
+- go/no-go rehearsal:
+- operator:
+- pengawas:
+- reviewer:
+- rollback owner:
+- blockers:
+- accepted operational notes:
+- follow-up owner:
+
+Operator flow evidence:
+
+- Bank Soal authoring/import/review captured: ya / tidak.
+- Asesmen Persiapan paket/kegiatan/sesi setup captured: ya / tidak.
+- Pelaksanaan/Pengawasan heartbeat/status/warning captured: ya / tidak.
+- Flutter APK login, answer save, restore, warning, and submit captured: ya / tidak.
+- Hasil/Post-exam review captured: ya / tidak.
+
+Proctor evidence:
+
+- heartbeat and connection status captured: ya / tidak.
+- background/resume warning/event captured: ya / tidak.
+- pending answer or network disturbance evidence captured: ya / tidak.
+- submit guard and device mismatch evidence captured: ya / tidak.
+- screenshot protection / `FLAG_SECURE` checked as deterrence evidence: ya / tidak.
+- evidence redacted for token/password/API key/JWT/answer key: ya / tidak.
+
+Role/scope/token boundary:
+
+- admin/panitia token authority checked: ya / tidak.
+- guru subject/class scope checked: ya / tidak.
+- pengawas/proktor session/room scope checked: ya / tidak.
+- token visibility restricted to authorized operational contexts: ya / tidak.
+- answer key/rubric visibility restricted: ya / tidak.
+- Flutter student runtime remains `/api/exam/*`: ya / tidak.
+
+Event/audit evidence:
+
+- Bank Soal audit/event:
+- Asesmen Persiapan audit/event:
+- Pelaksanaan/Pengawasan audit/event:
+- Flutter APK exam event:
+- Hasil/Post-exam audit/event:
+
+## Phase 15 Final CBT Release Readiness Sign-off
+
+Isi bagian ini sebagai keputusan akhir setelah Phase 13 mobile RC evidence dan Phase 14 rehearsal evidence lengkap.
+
+- Final sign-off summary Phase 0-15:
+- go/no-go:
+- decision date/time WITA:
+- operator:
+- reviewer:
+- rollback owner:
+- follow-up owner:
+- evidence bundle:
+- validation commands:
+- final baseline marker:
+  - `CBT Phase 15 final baseline`
+
+Phase 0-15 summary:
+
+| Phase | Evidence status | Notes |
+|-------|-----------------|-------|
+| Phase 0 architecture alignment and guard | pass / fail / n/a | |
+| Phase 1 exam API contract stabilization | pass / fail / n/a | |
+| Phase 2 Web Admin workflow alignment | pass / fail / n/a | |
+| Phase 3 backend runtime hardening | pass / fail / n/a | |
+| Phase 4 Flutter BYOD anti-cheat and resilience | pass / fail / n/a | |
+| Phase 5 rehearsal, rollout, and post-exam review | pass / fail / n/a | |
+| Phase 6 production readiness evidence automation | pass / fail / n/a | |
+| Phase 7 release preflight verifier/test hardening | pass / fail / n/a | |
+| Phase 8 manifest/checksum/secret-scan hardening | pass / fail / n/a | |
+| Phase 9 live deploy smoke/runbook hardening | pass / fail / n/a | |
+| Phase 10 post-deploy evidence handoff | pass / fail / n/a | |
+| Phase 11 evidence archive and retention | pass / fail / n/a | |
+| Phase 12 evidence index and retrieval | pass / fail / n/a | |
+| Phase 13 mobile release candidate and device matrix | pass / fail / n/a | |
+| Phase 14 operator rehearsal and proctor evidence | pass / fail / n/a | |
+| Phase 15 final CBT release readiness sign-off | pass / fail / n/a | |
+
+Evidence bundle:
+
+- completed evidence template: ada / tidak.
+- `cbt-release-preflight.md`: ada / tidak.
+- `cbt-release-preflight.json`: ada / tidak.
+- `cbt-release-manifest.json`: ada / tidak.
+- optional validation logs actually run: ada / tidak / skipped.
+- Phase 13 device matrix: ada / tidak.
+- Phase 14 proctor evidence: ada / tidak.
+- archive path:
+- manifest SHA-256:
+- redacted index lookup reference:
+
+Validation commands:
+
+```bash
+git diff --check
+cd apps/web-admin && npm run test:unit -- src/lib/cbt/proposal-integration-docs.test.ts
+cd apps/web-admin && npm run check
+cd apps/web-admin && npm run test:unit
+make ops-health
+cd services/core-api && go test ./...
+cd services/core-api && go build -o /dev/null ./cmd/api
+cd apps/mobile && /home/servermtsn2kolut/development/flutter/bin/flutter analyze
+cd apps/mobile && /home/servermtsn2kolut/development/flutter/bin/flutter test
+```
+
+Final sign-off:
+
+- go/no-go:
+- rollback owner:
+- accepted risks:
+- blocker list:
+- final baseline marker present: ya / tidak.
 
 ## Acceptance Decision
 

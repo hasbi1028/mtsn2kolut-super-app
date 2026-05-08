@@ -1,12 +1,22 @@
 # CBT Smoke Checklist - Phase 5 Rehearsal and Rollout
 
-Status: Phase 5 rehearsal checklist, 2026-05-08.
+Status: Phase 14 Operator Rehearsal and Proctor Evidence checklist, 2026-05-08.
 
 Checklist ini dipakai untuk Phase 5 - Rehearsal, Rollout, and Post-Exam Review sebelum ujian besar dan untuk post-exam review setelah sesi selesai. Alur yang diuji adalah Bank Soal -> Asesmen Persiapan -> Pelaksanaan/Pengawasan -> Flutter APK -> Hasil/Post-exam review.
+
+Phase 14 Operator Rehearsal and Proctor Evidence mengunci alur final: Bank Soal to Asesmen Persiapan to Pelaksanaan/Pengawasan to Flutter APK to Hasil/Post-exam review. Bagian ini menambahkan proctor evidence, role/scope/token boundary, event/audit evidence, dan go/no-go rehearsal tanpa deploy, migrasi, live DB write, atau route runtime baru.
 
 Dokumen ini adalah `docs/cbt-smoke-checklist.md`. Gunakan bersama `docs/cbt-proposal-integration-phase-5.md`, `docs/exam-api.md`, dan `apps/mobile/RELEASE_CHECKLIST.md`.
 
 Checklist ini mempertahankan guard operasional lama: event member role dan subject scope, export/detail Bank Soal admin/guru/guru non-penulis, berita acara/minutes token visibility, duplicate `(room_id, seat_no)`, serta endpoint/security boundary checks.
+
+## Phase 14 Operator Rehearsal and Proctor Evidence
+
+- [ ] Bank Soal to Asesmen Persiapan to Pelaksanaan/Pengawasan to Flutter APK to Hasil/Post-exam review selesai dari route canonical.
+- [ ] proctor evidence memuat sesi, ruang, peserta uji, perangkat, heartbeat/status, warning, pengawas, operator, dan reviewer.
+- [ ] role/scope/token boundary diverifikasi untuk admin/panitia, guru, pengawas/proktor, token visibility, kunci jawaban, dan rubrik.
+- [ ] event/audit evidence tersedia untuk Bank Soal, Asesmen Persiapan, Pelaksanaan/Pengawasan, Flutter APK exam events, dan Hasil/Post-exam review.
+- [ ] go/no-go rehearsal dicatat dengan operator, pengawas, reviewer, rollback owner, blockers, accepted operational notes, dan follow-up owner.
 
 ## Boundary Wajib
 
