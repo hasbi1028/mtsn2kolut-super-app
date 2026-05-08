@@ -2,7 +2,7 @@
 
 Checklist ini untuk operator sekolah saat menyiapkan APK Android internal bagi siswa BYOD dan menjalankan Phase 5 rehearsal.
 
-Status: sinkron Phase 13 Mobile Release Candidate and Device Matrix per 2026-05-08. Gunakan bersama `docs/exam-api.md`, `docs/cbt-proposal-integration-phase-5.md`, `docs/cbt-proposal-integration-phase-13.md`, `docs/cbt-smoke-checklist.md`, dan `docs/cbt-operator-runbook.md`.
+Status: sinkron Phase 24 Anti-Cheat BYOD Evidence Completion per 2026-05-08. Gunakan bersama `docs/exam-api.md`, `docs/cbt-proposal-integration-phase-5.md`, `docs/cbt-proposal-integration-phase-13.md`, `docs/cbt-proposal-integration-phase-23-26.md`, `docs/cbt-smoke-checklist.md`, dan `docs/cbt-operator-runbook.md`.
 
 ## Boundary Phase 5
 
@@ -31,6 +31,16 @@ Isi bagian ini untuk APK yang benar-benar dipasang pada perangkat uji.
 - [ ] device mismatch menghasilkan guidance `409` terkendali.
 - [ ] screenshot protection / `FLAG_SECURE` diverifikasi sebagai deterrence/evidence, bukan kiosk guarantee.
 - [ ] network disturbance menghasilkan status yang dipahami siswa/pengawas.
+
+## Phase 24 Anti-Cheat BYOD Evidence Completion
+
+- [ ] Manual evidence status masih `pending_manual_evidence` sampai perangkat Android nyata diuji.
+- [ ] No fabricated real-device PASS; hasil lulus hanya boleh ditulis setelah operator/pengawas menguji perangkat fisik.
+- [ ] Tidak ada klaim real-device PASS dari emulator, template, atau dokumentasi saja.
+- [ ] Minimal dua vendor Android nyata diuji oleh operator/pengawas.
+- [ ] `FLAG_SECURE` screenshot/recent-preview deterrence dicatat sebagai bukti terbatas, bukan kiosk guarantee.
+- [ ] app switch event, resume gate, heartbeat loss, pending answer recovery, manual submit guard, device mismatch `409`, stale connection warning, dan final submit koneksi sehat tercatat.
+- [ ] RC identifier, signing mode, `API_BASE_URL`, dan APK SHA-256 hash sama antara checklist, device matrix, dan evidence bundle.
 
 ## Sebelum Build
 
@@ -64,6 +74,12 @@ Flutter SDK bisa tidak tersedia di host yang menjalankan checklist dokumentasi a
 
 ```bash
 flutter build apk --release --dart-define=API_BASE_URL=https://api.sekolah.example
+```
+
+Hash APK yang benar-benar diuji:
+
+```bash
+sha256sum build/app/outputs/flutter-apk/app-release.apk
 ```
 
 Shortcut dari root repo:

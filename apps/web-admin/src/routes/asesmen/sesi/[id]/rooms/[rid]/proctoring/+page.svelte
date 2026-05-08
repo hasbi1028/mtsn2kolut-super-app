@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FileDownIcon from '@lucide/svelte/icons/file-down';
 	import PrinterIcon from '@lucide/svelte/icons/printer';
 	import { onDestroy, onMount } from 'svelte';
 	import { page } from '$app/state';
@@ -15,6 +16,15 @@
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { clientApiPath, readClientApiData, readClientJson } from '$lib/client/api';
+	import { csvRow } from '$lib/csv';
+	import {
+		PROCTOR_EVIDENCE_CATEGORIES,
+		buildProctorEvidenceCsvRows,
+		classifyProctorEvent,
+		proctorEventLabel,
+		summarizeProctorEvidence,
+		type ProctorEvidenceCategory
+	} from '$lib/cbt/proctor-evidence';
 
 	type RoomDashboard = {
 		id: string;
@@ -150,6 +160,7 @@
 		}
 		return { online, stale, offline, submitted };
 	});
+	let evidenceSummary = $derived.by(() => summarizeProctorEvidence({ participants, events, hasPrintPack: true }));
 
 	onMount(() => {
 		dashboardPromise = loadDashboard();
@@ -254,19 +265,52 @@
 		return 'border-destructive/30 bg-destructive/10 text-destructive';
 	}
 
-	function eventLabel(type: string) {
-		const labels: Record<string, string> = {
-			login: 'Login',
+	function evidenceCategoryLabel(category: ProctorEvidenceCategory | null) {
+		const labels: Record<ProctorEvidenceCategory, string> = {
 			heartbeat: 'Heartbeat',
-			app_switch: 'Keluar Aplikasi',
-			screenshot_attempt: 'Percobaan Screenshot',
-			resume: 'Kembali Ujian',
-			answer_save: 'Simpan Jawaban',
-			submit: 'Submit',
-			proctor_reset_access: 'Reset Akses',
-			proctor_force_submit: 'Paksa Submit',
+			app_background_resume: 'Background/resume',
+			device_mismatch: 'Device mismatch',
+			submit_guard: 'Submit guard',
+			stale_connection: 'Koneksi stale',
+			warning: 'Warning',
+			force_submit: 'Paksa submit',
+			reset_access: 'Reset akses',
+			export_print: 'Export/print',
 		};
-		return labels[type] ?? type.replaceAll('_', ' ');
+		return category ? labels[category] : 'Event lain';
+	}
+
+	function evidenceCategoryClass(category: ProctorEvidenceCategory | null) {
+		if (category === 'device_mismatch' || category === 'submit_guard' || category === 'stale_connection') {
+			return 'border-warning/30 bg-warning/10 text-warning';
+		}
+		if (category === 'force_submit' || category === 'reset_access') return 'border-destructive/30 bg-destructive/10 text-destructive';
+		if (category === 'heartbeat' || category === 'export_print') return 'border-primary/20 bg-primary/10 text-primary';
+		return 'border-border bg-card text-muted-foreground';
+	}
+
+	function exportEvidenceCSV() {
+		if (!room) return;
+		const rows = buildProctorEvidenceCsvRows({
+			sessionTitle: room.session_title,
+			roomName: room.room_name,
+			proctors: proctors.map((proctor) => proctor.nama),
+			participants,
+			events,
+		});
+		const csv = rows.map((row) => csvRow(row)).join('\n');
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `bukti_pengawas_${safeFileName(room.session_title)}_${safeFileName(room.room_name)}.csv`;
+		link.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function safeFileName(value: string) {
+		const safe = value.trim().replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+		return safe || 'cbt';
 	}
 
 	async function flagParticipant(row: ProctoringRow, flag: boolean) {
@@ -403,6 +447,10 @@
 			{#if backgroundBusy}
 				<Badge variant="outline" class="border-primary/20 text-primary">Memperbarui</Badge>
 			{/if}
+			<Button variant="outline" onclick={exportEvidenceCSV} disabled={!room}>
+				<FileDownIcon class="mr-2 size-4" />
+				Export Evidence CSV
+			</Button>
 			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>
 				<PrinterIcon class="mr-2 size-4" />
 				Paket Cetak
@@ -512,6 +560,22 @@
 							<p class="mt-1 text-sm text-foreground">Durasi paket {room.duration_minutes} menit</p>
 							<p class="text-xs text-muted-foreground">{room.is_locked ? 'Ruang dikunci' : 'Ruang masih dapat diperbarui operator'}</p>
 						</div>
+					</Card.Content>
+				</Card.Root>
+
+				<Card.Root class="border-primary/20">
+					<Card.Header class="pb-3">
+						<Card.Title>Mode Bukti Pengawas</Card.Title>
+						<Card.Description>Ringkasan evidence ruang dari heartbeat, warning BYOD, tindakan pengawas, dan paket export/print.</Card.Description>
+					</Card.Header>
+					<Card.Content class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+						{#each PROCTOR_EVIDENCE_CATEGORIES as category (category)}
+							<div class="rounded-lg border border-border bg-card p-3">
+								<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{evidenceCategoryLabel(category)}</p>
+								<p class="mt-1 text-xl font-bold text-foreground">{evidenceSummary.counts[category]}</p>
+								<p class="text-[11px] text-muted-foreground">{evidenceSummary.missingCategories.includes(category) ? 'Belum ada bukti di data aktif' : 'Tercatat di evidence ruang'}</p>
+							</div>
+						{/each}
 					</Card.Content>
 				</Card.Root>
 
@@ -679,14 +743,18 @@
 					<Card.Root class="border-primary/20">
 						<Card.Header>
 							<Card.Title>Log Ruang</Card.Title>
-							<Card.Description>Aktivitas terakhir dari peserta ruang ini.</Card.Description>
+							<Card.Description>Aktivitas terakhir dari peserta ruang ini, dikategorikan sebagai evidence operasional BYOD.</Card.Description>
 						</Card.Header>
 						<Card.Content class="space-y-3">
 							{#each events.slice(0, 15) as event (event.id)}
+								{@const eventCategory = classifyProctorEvent(event)}
 								<div class="rounded-lg border border-border p-3">
 									<div class="flex items-center justify-between gap-2">
 										<p class="text-sm font-medium text-foreground">{event.nama}</p>
-										<Badge variant="outline" class="text-[11px]">{eventLabel(event.event_type)}</Badge>
+										<div class="flex flex-wrap justify-end gap-1">
+											<Badge variant="outline" class={evidenceCategoryClass(eventCategory)}>{evidenceCategoryLabel(eventCategory)}</Badge>
+											<Badge variant="outline" class="text-[11px]">{proctorEventLabel(event)}</Badge>
+										</div>
 									</div>
 									<p class="mt-1 text-xs text-muted-foreground">{event.nis} · {fmtDate(event.created_at)}</p>
 								</div>
