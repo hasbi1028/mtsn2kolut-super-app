@@ -21,6 +21,7 @@ FINAL_EVIDENCE_DOC="docs/cbt-release-final-evidence.md"
 EVIDENCE_TEMPLATE_DOC="docs/cbt-release-evidence-template.md"
 DEVICE_MATRIX_DOC="apps/mobile/DEVICE_TEST_MATRIX.md"
 PHASE_2730_DOC="docs/cbt-proposal-integration-phase-27-30.md"
+PHASE_3132_DOC="docs/cbt-proposal-integration-phase-31-32.md"
 SCRIPT_DOC="deploy/scripts/cbt-final-readiness.sh"
 
 GAP_AUDIT_JSON=""
@@ -493,7 +494,7 @@ doc_exists_json_entry() {
 }
 
 all_required_docs_exist() {
-	for doc_path in "$GAP_AUDIT_DOC" "$FINAL_EVIDENCE_DOC" "$EVIDENCE_TEMPLATE_DOC" "$DEVICE_MATRIX_DOC" "$PHASE_2730_DOC" "$SCRIPT_DOC"; do
+	for doc_path in "$GAP_AUDIT_DOC" "$FINAL_EVIDENCE_DOC" "$EVIDENCE_TEMPLATE_DOC" "$DEVICE_MATRIX_DOC" "$PHASE_2730_DOC" "$PHASE_3132_DOC" "$SCRIPT_DOC"; do
 		[ -f "${REPO_ROOT}/${doc_path}" ] || return 1
 	done
 	return 0
@@ -597,6 +598,7 @@ write_final_evidence_json() {
 		doc_exists_json_entry "release_evidence_template" "$EVIDENCE_TEMPLATE_DOC"; printf ',\n'
 		doc_exists_json_entry "device_test_matrix" "$DEVICE_MATRIX_DOC"; printf ',\n'
 		doc_exists_json_entry "phase_27_30" "$PHASE_2730_DOC"; printf ',\n'
+		doc_exists_json_entry "phase_31_32" "$PHASE_3132_DOC"; printf ',\n'
 		doc_exists_json_entry "final_readiness_script" "$SCRIPT_DOC"; printf '\n'
 		printf '  },\n'
 		printf '  "automated_evidence": [\n'
@@ -962,7 +964,7 @@ fi
 run_logged_command "git-diff-check" "$REPO_ROOT" "git diff --check" git diff --check
 
 if all_required_docs_exist; then
-	record_automated "docs-existence" "pass" "final audit, final evidence, template, device matrix, Phase 27-30, and script docs exist" ""
+	record_automated "docs-existence" "pass" "final audit, final evidence, template, device matrix, Phase 27-30, Phase 31-32, and script docs exist" ""
 else
 	record_automated "docs-existence" "fail" "one or more final audit/readiness docs are missing" ""
 fi

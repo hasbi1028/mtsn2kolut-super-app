@@ -76,3 +76,10 @@ Ordering is completed as a monorepo contract without schema migration: Web Admin
 - Phase 28 Infrastructure, Backup, Restore, and DR Evidence records backup path, latest symlink, checksum, `sha256sum -c`, `pg_restore --list`, RTO/RPO notes, and DR owner. Do not restore over live DB.
 - Phase 29 Security and ISO-Control Alignment Evidence is control alignment, not certification. No ISO certification claim is made by repository evidence.
 - Phase 30 Mobile RC Build and Release Package records RC identifier, commit hash, version name/code, signing status, `API_BASE_URL`, APK SHA-256 hash, and build status. Real-device PASS claimed only after physical Android operator test on minimum two Android vendors.
+
+## Phase 31-32 follow-up status - deployed candidate and go/no-go boundary
+
+- Phase 31 Final Production Deployment Candidate deployed commit `e005134` to the live PM2 runtime after explicit user approval, with clean worktree preflight, backend/web/worker builds, PostgreSQL backup, `make db-migrate`, PM2 restart/save, and smoke checks.
+- Phase 31 smoke evidence: backend `/health` `200`, web root `200`, protected pages `302`, protected BFF/API endpoints `401`, and `bash deploy/scripts/health-check.sh all` PASS.
+- Phase 32 Final Go/No-Go Sign-Off keeps the final claim auditable: automated/deployment evidence is complete, but `production_go` remains `false` until physical Android device matrix, operator rehearsal, and explicit final sign-off are complete.
+- Final safe claim must describe proposal items as implemented runtime, implemented with evidence, adapted by approved architecture, or out-of-scope with formal rationale; no ISO certification or full BYOD kiosk claim is made.

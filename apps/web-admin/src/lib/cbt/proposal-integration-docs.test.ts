@@ -21,6 +21,7 @@ import proposalTraceabilityDoc from '../../../../../docs/cbt-proposal-100-percen
 import phase1922Doc from '../../../../../docs/cbt-proposal-integration-phase-19-22.md?raw';
 import phase2326Doc from '../../../../../docs/cbt-proposal-integration-phase-23-26.md?raw';
 import phase2730Doc from '../../../../../docs/cbt-proposal-integration-phase-27-30.md?raw';
+import phase3132Doc from '../../../../../docs/cbt-proposal-integration-phase-31-32.md?raw';
 import hotspotDecisionDoc from '../../../../../docs/cbt-hotspot-design-decision.md?raw';
 import uploadAnswerPolicyDoc from '../../../../../docs/cbt-upload-answer-policy.md?raw';
 import mediaPromptPolicyDoc from '../../../../../docs/cbt-media-prompt-response-policy.md?raw';
@@ -525,6 +526,28 @@ describe('CBT proposal integration documentation guard', () => {
 			expect(doc).not.toContain('GET /api/cbt/status');
 		}
 	});
+
+	it('locks Phase 31-32 deployment candidate and final sign-off boundaries', () => {
+		for (const phrase of [
+			'Phase 31 — Final Production Deployment Candidate',
+			'Phase 32 — Final Go/No-Go Sign-Off',
+			'PostgreSQL backup before deploy: PASS',
+			'pm2 save',
+			'`production_go`: must remain `false`',
+			'pending_manual_evidence',
+			'pending_manual_signoff',
+			'Flutter student runtime remains Core API `/api/exam/*`',
+			'No ad hoc SQL or live DB restore was performed'
+		]) {
+			expect(phase3132Doc).toContain(phrase);
+		}
+
+		expect(finalReadinessScript).toContain('PHASE_3132_DOC="docs/cbt-proposal-integration-phase-31-32.md"');
+		expect(finalReadinessScript).toContain('doc_exists_json_entry "phase_31_32" "$PHASE_3132_DOC"');
+		expect(proposalTraceabilityDoc).toContain('Phase 31-32 follow-up status');
+		expect(proposalGapAuditDoc).toContain('Phase 31-32 deployment/sign-off status');
+	});
+
 	it('locks the monorepo runtime ownership for proposal integration', () => {
 		for (const phrase of [
 			'Web Admin',
@@ -1328,7 +1351,7 @@ describe('CBT proposal integration documentation guard', () => {
 		for (const phrase of [
 			'CBT Final Release Evidence',
 			'Current commit baseline',
-			'488e105',
+			'e005134',
 			'Automated evidence completed on this host',
 			'Manual evidence requiring physical Android devices and operator rehearsal',
 			'Device matrix',
