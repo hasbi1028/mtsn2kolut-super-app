@@ -1182,6 +1182,124 @@ void main() {
     expect(client.lastSavedAnswer, 'B');
   });
 
+  testWidgets(
+    'exam shell renders unsupported hotspot as manual-supervisor panel',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final store = _MemoryExamSessionStore();
+      final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
+
+      await tester.pumpWidget(
+        _TestApp(
+          child: ExamShellScreen(
+            client: client,
+            examToken: 'abc12345',
+            deviceFingerprint: 'android:test',
+            autoStartRuntime: false,
+            sessionStore: store,
+            initialPayload: _sampleUnsupportedRuntimePayload('hotspot'),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.text('Tipe soal belum didukung aplikasi siswa'),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Panggil pengawas untuk membantu pencatatan manual pada soal ini.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('question_type: hotspot'), findsOneWidget);
+      expect(find.text('Area peta A'), findsNothing);
+      expect(find.text('Area peta B'), findsNothing);
+      expect(find.text('0 / 1'), findsOneWidget);
+      expect(client.saveAnswerCount, 0);
+
+      final snapshot = await store.loadSnapshot();
+      expect(snapshot?.answers, isEmpty);
+      expect(snapshot?.pendingAnswers, isEmpty);
+    },
+  );
+
+  testWidgets('exam shell does not count restored upload answer as answered', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
+
+    await tester.pumpWidget(
+      _TestApp(
+        child: ExamShellScreen(
+          client: client,
+          examToken: 'abc12345',
+          deviceFingerprint: 'android:test',
+          autoStartRuntime: false,
+          restoredSnapshot: _sampleSnapshot(
+            answers: const <String, String>{
+              'question-unsupported-1': 'local-file-name.pdf',
+            },
+          ),
+          initialPayload: _sampleUnsupportedRuntimePayload('upload_answer'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.text('Tipe soal belum didukung aplikasi siswa'),
+      findsOneWidget,
+    );
+    expect(find.text('question_type: upload_answer'), findsOneWidget);
+    expect(find.text('0 / 1'), findsOneWidget);
+    expect(client.saveAnswerCount, 0);
+  });
+
+  testWidgets(
+    'exam shell clamps aggregate answered count for unsupported upload answer',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
+
+      await tester.pumpWidget(
+        _TestApp(
+          child: ExamShellScreen(
+            client: client,
+            examToken: 'abc12345',
+            deviceFingerprint: 'android:test',
+            autoStartRuntime: false,
+            initialPayload: _sampleUnsupportedRuntimePayload(
+              'upload_answer',
+              answeredCount: 1,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.text('Tipe soal belum didukung aplikasi siswa'),
+        findsOneWidget,
+      );
+      expect(find.text('question_type: upload_answer'), findsOneWidget);
+      expect(find.text('0 / 1'), findsOneWidget);
+      expect(find.text('1 / 1'), findsNothing);
+      expect(client.saveAnswerCount, 0);
+    },
+  );
+
   testWidgets('exam shell renders short answer as compact text input', (
     tester,
   ) async {
@@ -1554,39 +1672,40 @@ void main() {
     expect(find.text('1 / 1'), findsOneWidget);
   });
 
-  testWidgets('exam shell saves current ordering answer without moving option', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1440, 2200);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
+  testWidgets(
+    'exam shell saves current ordering answer without moving option',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 2200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final client = _RecordingExamApiClient(baseUrl: 'http://127.0.0.1:65535');
 
-    await tester.pumpWidget(
-      _TestApp(
-        child: ExamShellScreen(
-          client: client,
-          examToken: 'abc12345',
-          deviceFingerprint: 'android:test',
-          autoStartRuntime: false,
-          initialPayload: _sampleOrderingPayload(),
+      await tester.pumpWidget(
+        _TestApp(
+          child: ExamShellScreen(
+            client: client,
+            examToken: 'abc12345',
+            deviceFingerprint: 'android:test',
+            autoStartRuntime: false,
+            initialPayload: _sampleOrderingPayload(),
+          ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    expect(find.text('0 / 1'), findsOneWidget);
+      expect(find.text('0 / 1'), findsOneWidget);
 
-    await tester.tap(find.text('Simpan urutan saat ini'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.text('Simpan urutan saat ini'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
-    expect(client.saveAnswerCount, 1);
-    expect(client.lastSavedQuestionId, 'question-ordering-1');
-    expect(client.lastSavedAnswer, 'A,B,C');
-    expect(find.text('1 / 1'), findsOneWidget);
-  });
+      expect(client.saveAnswerCount, 1);
+      expect(client.lastSavedQuestionId, 'question-ordering-1');
+      expect(client.lastSavedAnswer, 'A,B,C');
+      expect(find.text('1 / 1'), findsOneWidget);
+    },
+  );
 
   testWidgets('exam shell restores ordering answer in saved order', (
     tester,
@@ -2491,6 +2610,44 @@ ExamLoginPayload _sampleTrueFalseWithBackendOptionsPayload() {
       ),
     ],
     answeredCount: 0,
+    totalQuestions: 1,
+    timeRemainingSeconds: 1800,
+  );
+}
+
+ExamLoginPayload _sampleUnsupportedRuntimePayload(
+  String questionType, {
+  int answeredCount = 0,
+}) {
+  return ExamLoginPayload(
+    participantId: 'participant-unsupported-1',
+    student: const ExamStudent(nis: '24001', nama: 'Siti Aminah'),
+    session: ExamSession(
+      id: 'session-1',
+      title: 'IPA Kelas VIII',
+      scheduledStart: DateTime.parse('2026-05-01T08:00:00+08:00'),
+      scheduledEnd: DateTime.parse('2026-05-01T09:30:00+08:00'),
+      durationMinutes: 90,
+    ),
+    room: const ExamRoom(roomName: 'Lab 1'),
+    questions: [
+      ExamQuestion(
+        id: 'question-unsupported-1',
+        questionType: questionType,
+        questionText: 'Tandai bagian gambar sesuai instruksi.',
+        stemHtml: '',
+        stimulusHtml: '',
+        stemMediaUrl: '',
+        stimulusMediaUrl: '',
+        stemAudioUrl: '',
+        stimulusAudioUrl: '',
+        options: const [
+          ExamOption(label: 'A', text: 'Area peta A'),
+          ExamOption(label: 'B', text: 'Area peta B'),
+        ],
+      ),
+    ],
+    answeredCount: answeredCount,
     totalQuestions: 1,
     timeRemainingSeconds: 1800,
   );

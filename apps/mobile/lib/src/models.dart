@@ -124,6 +124,13 @@ class ExamQuestion {
   bool get isTrueFalse => questionType == 'true_false';
   bool get isMatching => questionType == 'matching';
   bool get isOrdering => questionType == 'ordering';
+  bool get isUnsupportedRuntime {
+    final normalized = questionType.trim().toLowerCase();
+    return normalized == 'hotspot' ||
+        normalized == 'upload_answer' ||
+        normalized == 'file_upload';
+  }
+
   bool get isTextAnswer => isEssay || isShortAnswer;
   bool get hasRichContent =>
       stemHtml.trim().isNotEmpty || stimulusHtml.trim().isNotEmpty;
