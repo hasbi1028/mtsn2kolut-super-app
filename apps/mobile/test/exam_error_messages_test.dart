@@ -119,12 +119,57 @@ void main() {
       );
     });
 
+    test('status failure maps transport and participant-context states', () {
+      expect(
+        statusFailureMessage(
+          const ExamApiException('transport', statusCode: null),
+        ),
+        'Status server belum bisa diperbarui karena perangkat belum terhubung. Tetap di layar ujian dan minta pengawas memeriksa koneksi.',
+      );
+      expect(
+        statusFailureMessage(const ExamApiException('backend', statusCode: 401)),
+        'Konteks sesi perangkat tidak sah. Minta pengawas memeriksa token dan perangkat sebelum melanjutkan.',
+      );
+      expect(
+        statusFailureMessage(const ExamApiException('backend', statusCode: 403)),
+        'Sesi ujian tidak lagi aktif menurut server. Tunggu arahan pengawas sebelum melanjutkan.',
+      );
+      expect(
+        statusFailureMessage(const ExamApiException('backend', statusCode: 409)),
+        'Token sesi ini terdeteksi aktif di perangkat lain. Jangan lanjutkan dari perangkat ini sebelum pengawas memverifikasi.',
+      );
+
+      final transportNotice = statusFailureNotice(
+        const ExamApiException('transport', statusCode: null),
+      );
+      expect(transportNotice?.title, 'Status belum tersinkron');
+      expect(transportNotice?.tone, ExamGuidanceTone.warning);
+
+      final unauthorizedNotice = statusFailureNotice(
+        const ExamApiException('backend', statusCode: 401),
+      );
+      expect(unauthorizedNotice?.title, 'Konteks peserta tidak sah');
+      expect(unauthorizedNotice?.tone, ExamGuidanceTone.danger);
+
+      final mismatchNotice = statusFailureNotice(
+        const ExamApiException('backend', statusCode: 409),
+      );
+      expect(mismatchNotice?.title, 'Perangkat berbeda terdeteksi');
+      expect(mismatchNotice?.tone, ExamGuidanceTone.danger);
+    });
+
     test('answer failure maps common status codes', () {
       expect(
         answerFailureMessage(
           const ExamApiException('transport', statusCode: null),
         ),
         'Perangkat sedang kehilangan koneksi ke server ujian. Jawaban tetap disimpan di perangkat dan akan dicoba sinkron ulang.',
+      );
+      expect(
+        answerFailureMessage(
+          const ExamApiException('backend', statusCode: 401),
+        ),
+        'Sesi perangkat belum sah untuk mengirim jawaban. Jawaban tetap disimpan lokal sambil menunggu pemeriksaan pengawas.',
       );
       expect(
         answerFailureMessage(
@@ -150,6 +195,12 @@ void main() {
       );
       expect(transportNotice?.title, 'Jawaban tersimpan lokal');
       expect(transportNotice?.tone, ExamGuidanceTone.warning);
+
+      final unauthorizedNotice = answerFailureNotice(
+        const ExamApiException('backend', statusCode: 401),
+      );
+      expect(unauthorizedNotice?.title, 'Sesi perangkat perlu diverifikasi');
+      expect(unauthorizedNotice?.tone, ExamGuidanceTone.danger);
 
       final warningNotice = answerFailureNotice(
         const ExamApiException('backend', statusCode: 403),
@@ -178,6 +229,13 @@ void main() {
           autoSubmit: true,
         ),
         'Submit otomatis belum bisa dikirim karena perangkat kehilangan koneksi ke server ujian. Segera minta pengawas memeriksa jaringan.',
+      );
+      expect(
+        submitFailureMessage(
+          const ExamApiException('backend', statusCode: 401),
+          autoSubmit: false,
+        ),
+        'Sesi perangkat belum sah untuk submit. Tetap di layar ini dan minta pengawas memeriksa token atau reset akses.',
       );
       expect(
         submitFailureMessage(
@@ -214,6 +272,13 @@ void main() {
       );
       expect(transportNotice?.title, 'Submit otomatis tertunda karena koneksi');
       expect(transportNotice?.tone, ExamGuidanceTone.warning);
+
+      final unauthorizedNotice = submitFailureNotice(
+        const ExamApiException('backend', statusCode: 401),
+        autoSubmit: false,
+      );
+      expect(unauthorizedNotice?.title, 'Submit ditahan karena konteks peserta');
+      expect(unauthorizedNotice?.tone, ExamGuidanceTone.danger);
 
       final warningNotice = submitFailureNotice(
         const ExamApiException('backend', statusCode: 403),

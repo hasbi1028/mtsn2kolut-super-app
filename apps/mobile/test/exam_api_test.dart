@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/src/exam_api.dart';
+import 'package:mobile/src/exam_events.dart';
 
 void main() {
   group('ExamApiClient', () {
@@ -30,6 +31,26 @@ void main() {
         'X-Device-Fingerprint': deviceFingerprint,
       });
       expect(client.examAssetHeaders(''), isEmpty);
+    });
+
+    test('already-submitted conflict is distinguished from device mismatch', () {
+      expect(
+        const ExamApiException('exam already submitted', statusCode: 409)
+            .isAlreadySubmittedConflict,
+        isTrue,
+      );
+      expect(
+        const ExamApiException(
+          'token already bound to another device',
+          statusCode: 409,
+        ).isAlreadySubmittedConflict,
+        isFalse,
+      );
+      expect(
+        const ExamApiException('exam already submitted', statusCode: 403)
+            .isAlreadySubmittedConflict,
+        isFalse,
+      );
     });
 
     test('normalizes and rejects unsafe operator base URLs', () {
@@ -333,6 +354,38 @@ void main() {
       );
     });
 
+    test('saveAnswer enforces exact serialized answer body byte limit', () async {
+      final client = ExamApiClient(
+        baseUrl: baseUrl,
+        deviceFingerprint: deviceFingerprint,
+      );
+      final escapedControlAnswer = List.filled(12000, '\u0000').join();
+
+      expect(
+        ExamApiClient.answerBodyByteLength(
+          questionId: 'question-7',
+          answer: escapedControlAnswer,
+        ),
+        greaterThan(ExamApiClient.maxAnswerBodyBytes),
+      );
+      expect(
+        () => client.saveAnswer(
+          token: 'token-1',
+          questionId: 'question-7',
+          answer: escapedControlAnswer,
+        ),
+        throwsA(
+          isA<ExamApiException>()
+              .having((error) => error.statusCode, 'statusCode', 413)
+              .having(
+                (error) => error.message,
+                'message',
+                contains('terlalu panjang'),
+              ),
+        ),
+      );
+    });
+
     test('sendEvent sends event type and data payload contract', () async {
       server.listen((request) async {
         expect(request.uri.path, '/api/exam/event');
@@ -368,6 +421,42 @@ void main() {
         token: 'token-1',
         eventType: 'repeat_resume_attempt',
         data: const <String, Object?>{'count': 2, 'source': 'resume_gate'},
+      );
+    });
+
+    test('sendExamEvent sends sanitized taxonomy payload contract', () async {
+      server.listen((request) async {
+        expect(request.uri.path, '/api/exam/event');
+        expect(request.method, 'POST');
+        expect(request.headers.value('X-Exam-Token'), 'token-1');
+
+        final rawBody = await utf8.decoder.bind(request).join();
+        expect(jsonDecode(rawBody), <String, dynamic>{
+          'event_type': 'warning',
+          'data': <String, dynamic>{
+            'reason': 'submit_blocked_degraded_mode',
+            'failure_count': 4,
+          },
+        });
+
+        request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType.json
+          ..write(
+            jsonEncode({
+              'data': {'status': 'recorded'},
+            }),
+          );
+        await request.response.close();
+      });
+
+      final client = ExamApiClient(
+        baseUrl: baseUrl,
+        deviceFingerprint: deviceFingerprint,
+      );
+      await client.sendExamEvent(
+        token: 'token-1',
+        event: ExamClientEvents.submitBlockedDegradedMode(failureCount: 4),
       );
     });
 

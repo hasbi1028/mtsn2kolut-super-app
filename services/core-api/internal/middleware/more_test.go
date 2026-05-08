@@ -366,6 +366,34 @@ func TestExamTokenMiddlewareBranches(t *testing.T) {
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("ExamToken(device mismatch) status = %d, want 409", rec.Code)
 	}
+
+	missingFingerprint := ExamToken(func(context.Context, string) (db.GetParticipantByTokenRow, error) {
+		return db.GetParticipantByTokenRow{
+			SessionStatus:     db.CbtSessionStatusEnumActive,
+			DeviceFingerprint: pgtype.Text{String: "device-1", Valid: true},
+		}, nil
+	})(next)
+	req = httptest.NewRequest(http.MethodPost, "/exam", nil)
+	req.Header.Set("X-Exam-Token", "token-4")
+	rec = httptest.NewRecorder()
+	missingFingerprint.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("ExamToken(missing fingerprint) status = %d, want 401", rec.Code)
+	}
+
+	unbound := ExamToken(func(context.Context, string) (db.GetParticipantByTokenRow, error) {
+		return db.GetParticipantByTokenRow{
+			SessionStatus: db.CbtSessionStatusEnumActive,
+		}, nil
+	})(next)
+	req = httptest.NewRequest(http.MethodPost, "/exam", nil)
+	req.Header.Set("X-Exam-Token", "token-5")
+	req.Header.Set(DeviceFingerprintHdr, "device-1")
+	rec = httptest.NewRecorder()
+	unbound.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("ExamToken(unbound participant) status = %d, want 401", rec.Code)
+	}
 }
 
 func TestRequestLogPassesResponseThrough(t *testing.T) {
