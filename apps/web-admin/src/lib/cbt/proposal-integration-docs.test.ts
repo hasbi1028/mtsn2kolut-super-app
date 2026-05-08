@@ -27,6 +27,7 @@ const repoRoot = path.resolve(testFileDir, '../../../../..');
 const preflightScriptPath = path.join(repoRoot, 'deploy/scripts/cbt-release-preflight.sh');
 const phase9DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-9.md');
 const phase10DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-10.md');
+const phase11DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-11.md');
 const makefilePath = path.join(repoRoot, 'Makefile');
 const tempOutputDirs: string[] = [];
 
@@ -589,6 +590,62 @@ describe('CBT proposal integration documentation guard', () => {
 
 		expect(phase10Doc).not.toContain('POST /api/cbt/login');
 		expect(phase10Doc).not.toContain('GET /api/cbt/status');
+	});
+
+	it('locks Phase 11 as evidence archive and retention hardening only', async () => {
+		const phase11Doc = await readFile(phase11DocPath, 'utf8');
+
+		for (const phrase of [
+			'Phase 11 - Evidence Archive and Retention Hardening',
+			'commit `64da343`',
+			'archive/retention rules after Phase 10 handoff',
+			'ops-controlled storage',
+			'not committed tmp',
+			'archive path convention',
+			'required artifacts',
+			'SHA-256 manifest verification',
+			'retention owner',
+			'retention period placeholder',
+			'redaction/no secrets',
+			'access control',
+			'restore/read-back check',
+			'deletion/expiry log placeholder',
+			'docs/tests/ops evidence tooling only',
+			'No product runtime',
+			'No DB schema/migrations',
+			'No deploy automation that restarts PM2',
+			'No live DB writes',
+			'No `/api/cbt` public routes',
+			'Tidak deploy',
+			'Tidak PM2 restart',
+			'Tidak menjalankan `make db-migrate`',
+			'Tidak menjalankan migrasi live',
+			'Tidak menjalankan ad hoc SQL',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`'
+		]) {
+			expect(phase11Doc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 11 Evidence Archive and Retention',
+			'Phase 11 archive/retention rules after Phase 10 handoff',
+			'Ops-controlled archive path',
+			'Not committed tmp',
+			'Required artifacts',
+			'SHA-256 manifest verification',
+			'Retention owner',
+			'Retention period placeholder',
+			'Redaction/no secrets',
+			'Access control',
+			'Restore/read-back check',
+			'Deletion/expiry log placeholder'
+		]) {
+			expect(releaseEvidenceTemplateDoc).toContain(phrase);
+		}
+
+		expect(phase11Doc).not.toContain('POST /api/cbt/login');
+		expect(phase11Doc).not.toContain('GET /api/cbt/status');
 	});
 
 	it(

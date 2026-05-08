@@ -9,7 +9,7 @@ Gunakan template ini untuk arsip operational readiness CBT. Template ini bukan i
 - Reviewer:
 - Branch:
 - Commit:
-- Phase baseline: Phase 5 commit `bec16c8` + Phase 6 evidence automation + Phase 8 manifest/checksum/secret-scan hardening + Phase 9 commit `bf9df69` post-deploy smoke/runbook hardening + Phase 10 handoff package.
+- Phase baseline: Phase 5 commit `bec16c8` + Phase 6 evidence automation + Phase 8 manifest/checksum/secret-scan hardening + Phase 9 commit `bf9df69` post-deploy smoke/runbook hardening + Phase 10 handoff package + Phase 11 archive/retention rules after Phase 10 handoff.
 - Keputusan rilis: lanjut / tunda / rehearsal ulang.
 
 ## Boundary Wajib
@@ -164,6 +164,83 @@ Secret hygiene:
 - Tidak ada password/token/API key/worker key/answer key/JWT mentah di handoff: ya / tidak.
 - Tidak ada DB DSN, `.env`, `printenv`, PM2 env dump, atau full request header di handoff: ya / tidak.
 - Semua host credential dan bearer value tetap redacted: ya / tidak.
+
+## Phase 11 Evidence Archive and Retention
+
+Isi bagian ini setelah Phase 10 handoff package lengkap dan evidence bundle siap dipindahkan dari staging ke arsip. Phase 11 archive/retention rules after Phase 10 handoff adalah dokumentasi ops/read-only, bukan deploy automation.
+
+- Ops-controlled archive path:
+- Not committed tmp: ya / tidak.
+- Archive path convention:
+  - `<ops-controlled-storage>/cbt-evidence/<yyyy>/<yyyy-mm-dd>-<release-id>-<short-commit>/`
+- Archive created by:
+- Archive reviewed by:
+- Archive timestamp:
+- Release identifier:
+- Short commit:
+
+Required artifacts:
+
+- `cbt-release-preflight.md`: ada / tidak.
+- `cbt-release-preflight.json`: ada / tidak.
+- `cbt-release-manifest.json`: ada / tidak.
+- `logs/git-head.log`: ada / tidak.
+- `logs/git-status.log`: ada / tidak.
+- `logs/git-diff-check.log`: ada / tidak.
+- selected optional validation logs actually run: ada / tidak / skipped.
+- completed release evidence template copy: ada / tidak.
+- Phase 10 handoff package: ada / tidak.
+
+SHA-256 manifest verification:
+
+- Manifest parseable as JSON: ya / tidak.
+- Algorithm is `sha256`: ya / tidak.
+- Required artifacts listed: ya / tidak.
+- SHA-256 values are 64 lowercase hex characters: ya / tidak.
+- Recomputed checksums match archived files: ya / tidak.
+- Secret scan status is `pass`: ya / tidak.
+- Verification notes:
+
+Retention owner:
+
+- Owner:
+- Reviewer:
+- Retention period placeholder:
+- Review date:
+- Expiry date placeholder:
+- Hold/exception reason:
+
+Redaction/no secrets:
+
+- No password/token/API key/worker key/answer key/JWT mentah: ya / tidak.
+- No DB DSN, `.env`, `printenv`, PM2 env dump, full request header, or database dump: ya / tidak.
+- Bearer values and host credentials redacted: ya / tidak.
+- Contaminated artifact rejected or rebuilt if found: ya / tidak / n/a.
+
+Access control:
+
+- Owner group:
+- Allowed readers:
+- Allowed writers:
+- Public web exposure checked: ya / tidak.
+- Repository commit exposure checked: ya / tidak.
+- Archive is outside public web roots and Git-tracked tmp paths: ya / tidak.
+
+Restore/read-back check:
+
+- Archive opened from a fresh shell/session: ya / tidak.
+- `cbt-release-manifest.json` readable: ya / tidak.
+- SHA-256 recomputed for markdown, JSON, and at least one log: ya / tidak.
+- Completed evidence template readable without live service access: ya / tidak.
+- Phase 10 handoff package matches release identifier and commit: ya / tidak.
+- Read-back result: pass / fail.
+- Notes:
+
+Deletion/expiry log placeholder:
+
+| Date | Archive path | Action | Authorized by | Performed by | Reason | SHA-256 manifest checked | Notes |
+|------|--------------|--------|---------------|--------------|--------|--------------------------|-------|
+| | | review / extend / delete | | | | ya / tidak | |
 
 ## Acceptance Decision
 
