@@ -9,7 +9,7 @@ Gunakan template ini untuk arsip operational readiness CBT. Template ini bukan i
 - Reviewer:
 - Branch:
 - Commit:
-- Phase baseline: Phase 5 commit `bec16c8` + Phase 6 evidence automation + Phase 8 manifest/checksum/secret-scan hardening.
+- Phase baseline: Phase 5 commit `bec16c8` + Phase 6 evidence automation + Phase 8 manifest/checksum/secret-scan hardening + Phase 9 commit `bf9df69` post-deploy smoke/runbook hardening + Phase 10 handoff package.
 - Keputusan rilis: lanjut / tunda / rehearsal ulang.
 
 ## Boundary Wajib
@@ -120,6 +120,50 @@ Gunakan template ini untuk arsip operational readiness CBT. Template ini bukan i
 - Audit log tersedia untuk role berwenang: ya / tidak.
 - Server log dicek untuk panic berulang dan secret leakage: ya / tidak.
 - Temuan:
+
+## Phase 9/10 Post-Deploy Handoff
+
+Isi bagian ini setelah deploy manual selesai, post-deploy smoke lulus, dan evidence bundle siap diarsipkan. Bagian ini adalah Phase 10 handoff package, bukan instruksi deploy.
+
+- Phase 9 commit `bf9df69` smoke/runbook baseline diverifikasi: ya / tidak.
+- Commit hash deployed:
+- Branch:
+- Evidence timestamp:
+- Operator:
+- Reviewer:
+- Rollback owner:
+- Follow-up owner:
+- Keputusan handoff: lanjut / tunda / rollback.
+
+PM2 status summary placeholders:
+
+| Target | Process name | Status | Restarts | Uptime | Notes |
+|--------|--------------|--------|----------|--------|-------|
+| Backend VPS | | | | | |
+| Frontend VPS | | | | | |
+| Worker VPS | | | | | |
+
+Health smoke outputs:
+
+- `make ops-health`:
+- `make ops-health-backend`:
+- `make ops-health-frontend`:
+- `make ops-health-worker`:
+- `bash deploy/scripts/health-check.sh bank-soal`:
+
+Manifest/checksum evidence:
+
+- `cbt-release-preflight.md` reviewed: ya / tidak.
+- `cbt-release-preflight.json` parseable: ya / tidak.
+- `cbt-release-manifest.json` reviewed: ya / tidak.
+- SHA-256 checksum evidence complete: ya / tidak.
+- Secret scan status: pass / fail.
+
+Secret hygiene:
+
+- Tidak ada password/token/API key/worker key/answer key/JWT mentah di handoff: ya / tidak.
+- Tidak ada DB DSN, `.env`, `printenv`, PM2 env dump, atau full request header di handoff: ya / tidak.
+- Semua host credential dan bearer value tetap redacted: ya / tidak.
 
 ## Acceptance Decision
 
