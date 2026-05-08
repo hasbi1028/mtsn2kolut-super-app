@@ -6,7 +6,10 @@ import phase0Doc from '../../../../../docs/cbt-proposal-integration-phase-0.md?r
 import phase12Doc from '../../../../../docs/cbt-proposal-integration-phase-1-2.md?raw';
 import phase34Doc from '../../../../../docs/cbt-proposal-integration-phase-3-4.md?raw';
 import phase5Doc from '../../../../../docs/cbt-proposal-integration-phase-5.md?raw';
+import phase6Doc from '../../../../../docs/cbt-proposal-integration-phase-6.md?raw';
+import releaseEvidenceTemplateDoc from '../../../../../docs/cbt-release-evidence-template.md?raw';
 import smokeChecklistDoc from '../../../../../docs/cbt-smoke-checklist.md?raw';
+import releasePreflightScript from '../../../../../deploy/scripts/cbt-release-preflight.sh?raw';
 import releaseChecklistDoc from '../../../../../apps/mobile/RELEASE_CHECKLIST.md?raw';
 
 describe('CBT proposal integration documentation guard', () => {
@@ -251,6 +254,89 @@ describe('CBT proposal integration documentation guard', () => {
 			'Catat sebagai blocker validasi mobile'
 		]) {
 			expect(releaseChecklistDoc).toContain(phrase);
+		}
+	});
+
+	it('locks Phase 6 as operational release-evidence automation only', () => {
+		for (const phrase of [
+			'Phase 6 - Production Readiness Evidence Automation',
+			'operational release-evidence automation/guard',
+			'roadmap resmi tetap Phase 0 sampai Phase 5',
+			'Release Evidence Bundle',
+			'Preflight Commands',
+			'No-Deploy / No-Migration Boundary',
+			'Acceptance Criteria',
+			'docs/cbt-release-evidence-template.md',
+			'deploy/scripts/cbt-release-preflight.sh',
+			'/home/servermtsn2kolut/development/flutter/bin',
+			'Tidak deploy',
+			'Tidak PM2 restart',
+			'Tidak menjalankan `make db-migrate`',
+			'Tidak menjalankan migrasi live',
+			'Tidak menjalankan ad hoc SQL',
+			'Tidak menjalankan `psql` untuk `ALTER`, `UPDATE`, `DELETE`, `INSERT`, atau DDL/DML lain',
+			'Flutter berbicara langsung ke `services/core-api` melalui `/api/exam/*`',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru'
+		]) {
+			expect(phase6Doc).toContain(phrase);
+		}
+		expect(phase6Doc).not.toContain('POST /api/cbt/login');
+		expect(phase6Doc).not.toContain('GET /api/cbt/status');
+	});
+
+	it('keeps the CBT release evidence template focused on non-destructive proof', () => {
+		for (const phrase of [
+			'CBT Release Evidence Template',
+			'Commit dan Status Git',
+			'Output Preflight',
+			'No deploy, no PM2 restart, no `make db-migrate`',
+			'No live migration dan no ad hoc SQL',
+			'Flutter SDK path',
+			'/home/servermtsn2kolut/development/flutter/bin',
+			'`/api/exam/*`',
+			'Tidak ada runtime siswa melalui `/api/cbt/login` atau `/api/cbt/status`',
+			'deploy/scripts/cbt-release-preflight.sh',
+			'Markdown evidence',
+			'JSON evidence',
+			'Keputusan rilis'
+		]) {
+			expect(releaseEvidenceTemplateDoc).toContain(phrase);
+		}
+	});
+
+	it('guards the read-only CBT release preflight script', () => {
+		for (const phrase of [
+			'set -euo pipefail',
+			'DEFAULT_FLUTTER_BIN_DIR="/home/servermtsn2kolut/development/flutter/bin"',
+			'docs/cbt-release-evidence-template.md',
+			'cbt-release-preflight.md',
+			'cbt-release-preflight.json',
+			'--run-web-docs-guard',
+			'--run-web-check',
+			'--run-flutter-doctor',
+			'--run-flutter-analyze',
+			'--run-flutter-test',
+			'--run-go-test',
+			'--run-go-build',
+			'npm run test:unit -- src/lib/cbt/proposal-integration-docs.test.ts',
+			'go build -o /dev/null ./cmd/api',
+			'redact_stream',
+			'run_optional_command'
+		]) {
+			expect(releasePreflightScript).toContain(phrase);
+		}
+
+		for (const forbiddenPattern of [
+			/\bpm2\s+(restart|reload|stop|delete|start)\b/i,
+			/\bmake\s+db-migrate\b/i,
+			/\bnpm\s+run\s+db:migrate\b/i,
+			/\bpsql\b[^\n]*(ALTER|UPDATE|DELETE|INSERT|DROP|TRUNCATE|CREATE)\b/i,
+			/\bdeploy\/scripts\/health-check\.sh\b/,
+			/\bdeploy\/backup-postgresql\.sh\b/,
+			/\bprintenv\b/,
+			/\benv\s*\|/
+		]) {
+			expect(releasePreflightScript).not.toMatch(forbiddenPattern);
 		}
 	});
 });
