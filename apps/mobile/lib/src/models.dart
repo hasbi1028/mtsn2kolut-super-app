@@ -121,6 +121,7 @@ class ExamQuestion {
       questionType == 'essay' || (questionType.isEmpty && options.isEmpty);
   bool get isShortAnswer => questionType == 'short_answer';
   bool get isMultipleAnswer => questionType == 'multiple_answer';
+  bool get isTrueFalse => questionType == 'true_false';
   bool get isMatching => questionType == 'matching';
   bool get isOrdering => questionType == 'ordering';
   bool get isTextAnswer => isEssay || isShortAnswer;

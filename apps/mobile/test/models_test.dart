@@ -165,6 +165,22 @@ void main() {
       expect(ordering.isTextAnswer, isFalse);
       expect(ordering.isMatching, isFalse);
     });
+
+    test('detects true/false questions as objective runtime questions', () {
+      final trueFalse = ExamQuestion.fromJson({
+        'id': 'true-false-1',
+        'question_type': 'true_false',
+        'question_text': 'Fotosintesis menghasilkan oksigen.',
+        'options': const [],
+      });
+
+      expect(trueFalse.questionType, 'true_false');
+      expect(trueFalse.isTrueFalse, isTrue);
+      expect(trueFalse.isTextAnswer, isFalse);
+      expect(trueFalse.isMatching, isFalse);
+      expect(trueFalse.isOrdering, isFalse);
+      expect(trueFalse.options, isEmpty);
+    });
   });
 
   group('ExamStatusPayload.fromJson', () {
