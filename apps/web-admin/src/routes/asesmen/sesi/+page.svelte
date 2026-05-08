@@ -1064,11 +1064,11 @@
 					</div>
 					<div class="sm:col-span-2 grid gap-3 sm:grid-cols-2">
 						<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground">
-							<input type="checkbox" bind:checked={fIsSpecialEvent} class="size-4 accent-emerald-700" />
+							<input type="checkbox" bind:checked={fIsSpecialEvent} class="size-4 accent-primary" />
 							Tandai sebagai sesi khusus
 						</label>
 						<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground">
-							<input type="checkbox" bind:checked={fAllowCrossGrade} class="size-4 accent-emerald-700" />
+							<input type="checkbox" bind:checked={fAllowCrossGrade} class="size-4 accent-primary" />
 							Izinkan lintas tingkat
 						</label>
 					</div>

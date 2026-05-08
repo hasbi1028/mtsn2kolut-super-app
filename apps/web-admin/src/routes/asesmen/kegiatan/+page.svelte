@@ -329,7 +329,7 @@
 										type="checkbox"
 										checked={fTargetLevels.includes(level)}
 										onchange={(event) => toggleTargetLevel(level, (event.currentTarget as HTMLInputElement).checked)}
-										class="size-4 accent-emerald-700"
+										class="size-4 accent-primary"
 									/>
 									<span>Tingkat {level}</span>
 								</label>

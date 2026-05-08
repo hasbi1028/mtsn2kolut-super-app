@@ -145,6 +145,24 @@ describe('CBT proctor evidence helpers', () => {
 		);
 	});
 
+	it('provides C2 operator-facing evidence labels, summaries, and guidance without token wording', async () => {
+		const { proctorEvidenceCategoryLabel, proctorEvidenceCategorySummary, proctorOperatorGuidance } = await import(
+			'./proctor-evidence'
+		);
+		expect(proctorEvidenceCategoryLabel('heartbeat')).toBe('Online/heartbeat OK');
+		expect(proctorEvidenceCategorySummary('stale_connection')).toContain('stale');
+		expect(proctorEvidenceCategoryLabel('app_background_resume')).toBe('Background/resume');
+		expect(proctorEvidenceCategoryLabel('device_mismatch')).toBe('Device mismatch');
+		expect(proctorEvidenceCategoryLabel('force_submit')).toBe('Submitted/force submitted');
+		expect(proctorEvidenceCategoryLabel(null)).toBe('Event lain');
+		expect(proctorOperatorGuidance.map((item) => item.title)).toEqual([
+			'Kapan memperingatkan siswa',
+			'Kapan reset akses',
+			'Kapan paksa submit'
+		]);
+		expect(JSON.stringify(proctorOperatorGuidance)).not.toMatch(/token\s*=/i);
+	});
+
 	it('redacts sensitive evidence values and escapes CSV injection cells', () => {
 		const rows = buildProctorEvidenceCsvRows({
 			generatedAt: new Date('2026-05-08T08:10:00Z'),

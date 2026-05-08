@@ -18,7 +18,11 @@
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { cbtRoomSetupErrorMessage, roomReadinessMessage, roomReadinessTone, type CbtRoomReadiness } from '$lib/client/cbt-room-readiness';
 	import { csvRow } from '$lib/csv';
-	import { summarizeItemAnalysisEvidence } from '$lib/cbt/item-analysis-evidence';
+	import {
+		formatItemAnalysisAccuracyLabel,
+		itemAnalysisEmptyStateCopy,
+		summarizeItemAnalysisEvidence
+	} from '$lib/cbt/item-analysis-evidence';
 
 	type SessionInfo = {
 		id: string; title: string; package_title: string; duration_minutes: number;
@@ -680,6 +684,10 @@
 		};
 	});
 	let itemAnalysisEvidence = $derived(summarizeItemAnalysisEvidence(itemAnalysis));
+
+	function itemAnalysisAccuracyLabel(row: { questionType: string; accuracy: number; answeredCount: number; correctCount: number }) {
+		return formatItemAnalysisAccuracyLabel(row);
+	}
 
 	function showToast(msg: string, ok = true) {
 		if (ok) toast.success(msg);
@@ -1683,7 +1691,7 @@
 					{#each commandCenterMetrics as metric (metric.label)}
 						<button
 							type="button"
-							class="rounded-md border border-white/80 bg-card px-3 py-2 text-left shadow-sm transition hover:border-primary/20 hover:bg-primary/10"
+							class="rounded-md border border-border bg-card px-3 py-2 text-left shadow-sm transition hover:border-primary/20 hover:bg-primary/10"
 							onclick={() => switchTab(metric.tab)}
 						>
 							<span class="block text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{metric.label}</span>
@@ -1896,7 +1904,7 @@
 										<Table.Cell class="text-center">{row.itemCount}</Table.Cell>
 										<Table.Cell class="text-center">{row.answeredCount}/{row.submittedCount}</Table.Cell>
 										<Table.Cell class="text-center">{row.unansweredCount}</Table.Cell>
-										<Table.Cell class="text-center font-semibold text-primary">{percent(row.accuracy)}</Table.Cell>
+										<Table.Cell class="text-center font-semibold text-primary">{percent(row.accuracy)}<span class="sr-only">{itemAnalysisAccuracyLabel(row)}</span></Table.Cell>
 										<Table.Cell class="text-center">{percent(row.averageDifficulty)}</Table.Cell>
 										<Table.Cell class="text-center">{percent(row.averageDiscrimination)}</Table.Cell>
 									</Table.Row>
@@ -1996,7 +2004,7 @@
 								</Table.Row>
 							{:else}
 								<Table.Row>
-									<Table.Cell colspan={9} class="py-10 text-center text-muted-foreground">Analisis butir belum tersedia. Pastikan paket memiliki soal dan klik refresh setelah skor dihitung.</Table.Cell>
+									<Table.Cell colspan={9} class="py-10 text-center text-muted-foreground">{itemAnalysisEmptyStateCopy}</Table.Cell>
 								</Table.Row>
 							{/each}
 						</Table.Body>

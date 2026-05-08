@@ -96,3 +96,17 @@ export const CBT_REPORT_TEMPLATE_MATRIX: CbtReportTemplate[] = [
 export function reportTemplateByKey(key: CbtReportTemplateKey) {
 	return CBT_REPORT_TEMPLATE_MATRIX.find((item) => item.key === key);
 }
+
+export function reportTemplateExportGuidance(template: CbtReportTemplate): string {
+	const pdfGuidance =
+		template.pdfMode === 'print_html_or_browser_pdf'
+			? 'Print HTML/browser PDF dari halaman resmi Web Admin.'
+			: 'Arsip Markdown/JSON terkontrol operator, bukan generated PDF publik.';
+	const excelGuidance =
+		template.excelMode === 'csv_excel_compatible'
+			? 'CSV/JSON aman Excel tersedia tanpa token mentah.'
+			: template.excelMode === 'not_applicable_sensitive_tokens'
+				? 'Ekspor spreadsheet luas dinonaktifkan karena memuat material sensitif.'
+				: 'Manifest JSON evidence dipakai untuk arsip, bukan spreadsheet nilai.';
+	return `${template.title}: ${pdfGuidance} ${excelGuidance}`;
+}

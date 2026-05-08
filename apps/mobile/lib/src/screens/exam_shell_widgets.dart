@@ -211,7 +211,7 @@ class ConnectionWarningCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Koneksi perlu diperhatikan',
+            'Perlu sinkron',
             style: theme.textTheme.titleMedium?.copyWith(
               color: const Color(0xFF9A6700),
               fontWeight: FontWeight.w800,
@@ -335,7 +335,7 @@ class DegradedModeCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Mode koneksi menurun aktif',
+            'Perlu pengawas',
             style: theme.textTheme.titleMedium?.copyWith(
               color: Colors.red.shade700,
               fontWeight: FontWeight.w800,
@@ -344,8 +344,8 @@ class DegradedModeCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             pendingCount > 0
-                ? 'Sinkron gagal $failureCount kali berturut-turut dan masih ada $pendingCount jawaban lokal. Kirim ujian ditahan sampai koneksi minimal pulih.'
-                : 'Sinkron gagal $failureCount kali berturut-turut. Perbarui status dulu sebelum mengirim ujian.',
+                ? 'Sinkron gagal $failureCount kali berturut-turut dan masih ada $pendingCount jawaban aman di perangkat ini. Kirim ujian ditahan sampai sinkron pulih dan pengawas memeriksa perangkat.'
+                : 'Sinkron gagal $failureCount kali berturut-turut. Perbarui status bersama pengawas sebelum mengirim ujian.',
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
           const SizedBox(height: 12),
@@ -413,8 +413,8 @@ class SupervisorAttentionCard extends StatelessWidget {
         children: [
           Text(
             escalated
-                ? 'Pengawas harus segera intervensi'
-                : 'Perlu intervensi pengawas',
+                ? 'Perlu pengawas segera'
+                : 'Perlu pengawas',
             style: theme.textTheme.titleMedium?.copyWith(
               color: titleColor,
               fontWeight: FontWeight.w800,
@@ -423,8 +423,8 @@ class SupervisorAttentionCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             escalated
-                ? 'Status koneksi bertahan di level waspada selama $staleDuration sejak kontak server terakhir pukul $lastContactAt. Pengawas sebaiknya segera memeriksa perangkat, jaringan, dan memastikan sinkron ulang berhasil sebelum peserta melanjutkan tanpa pengawasan.'
-                : 'Status koneksi berada di level waspada selama $staleDuration sejak kontak server terakhir pukul $lastContactAt. Minta pengawas memeriksa jaringan perangkat lalu lakukan sinkron ulang.',
+                ? 'Kontak server terlalu lama tidak diperbarui selama $staleDuration sejak pukul $lastContactAt. Pengawas harus segera memeriksa perangkat, jaringan, dan memastikan sinkron ulang berhasil sebelum peserta melanjutkan.'
+                : 'Kontak server terlalu lama tidak diperbarui selama $staleDuration sejak pukul $lastContactAt. Minta pengawas memeriksa jaringan perangkat lalu lakukan sinkron ulang.',
             style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
           ),
           const SizedBox(height: 10),
