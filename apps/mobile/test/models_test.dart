@@ -182,6 +182,36 @@ void main() {
       expect(trueFalse.options, isEmpty);
     });
 
+    test('detects agree/disagree questions as objective runtime questions', () {
+      final agreeDisagree = ExamQuestion.fromJson({
+        'id': 'agree-disagree-1',
+        'question_type': ' agree_disagree ',
+        'question_text': 'Saya menjaga kebersihan kelas.',
+        'options': const [],
+      });
+
+      expect(agreeDisagree.questionType, ' agree_disagree ');
+      expect(agreeDisagree.isAgreeDisagree, isTrue);
+      expect(agreeDisagree.isTextAnswer, isFalse);
+      expect(agreeDisagree.isMatching, isFalse);
+      expect(agreeDisagree.isOrdering, isFalse);
+      expect(agreeDisagree.isUnsupportedRuntime, isFalse);
+      expect(agreeDisagree.options, isEmpty);
+    });
+
+    test('normalizes question type getters without rewriting raw payload', () {
+      final trueFalse = ExamQuestion.fromJson({
+        'id': 'true-false-uppercase-1',
+        'question_type': ' TRUE_FALSE ',
+        'question_text': 'Fotosintesis menghasilkan oksigen.',
+        'options': const [],
+      });
+
+      expect(trueFalse.questionType, ' TRUE_FALSE ');
+      expect(trueFalse.isTrueFalse, isTrue);
+      expect(trueFalse.isTextAnswer, isFalse);
+    });
+
     test('detects unsupported proposal runtime question types', () {
       for (final questionType in const [
         'hotspot',

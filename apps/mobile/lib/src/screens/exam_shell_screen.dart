@@ -26,6 +26,11 @@ const List<ExamOption> _defaultTrueFalseOptions = [
   ExamOption(label: 'false', text: 'Salah'),
 ];
 
+const List<ExamOption> _defaultAgreeDisagreeOptions = [
+  ExamOption(label: 'A', text: 'Setuju'),
+  ExamOption(label: 'B', text: 'Tidak Setuju'),
+];
+
 class ExamShellScreen extends StatefulWidget {
   const ExamShellScreen({
     super.key,
@@ -1720,6 +1725,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   List<ExamOption> _objectiveOptionsFor(ExamQuestion question) {
     if (question.isTrueFalse && question.options.isEmpty) {
       return _defaultTrueFalseOptions;
+    }
+    if (question.isAgreeDisagree && question.options.isEmpty) {
+      return _defaultAgreeDisagreeOptions;
     }
     return question.options;
   }
