@@ -321,7 +321,7 @@ fi
 	printf '%s\n\n' "- Output directory: \`${OUTPUT_DIR}\`"
 
 	printf '## Safety Scope\n\n'
-	printf '%s\n' '- This is read-only release evidence collection for CBT Phase 6.'
+	printf '%s\n' '- This is read-only release evidence collection; Phase 7 verifier/test hardening only strengthens tests around this verifier.'
 	printf '%s\n' '- It writes markdown/json/log evidence only under the output directory.'
 	printf '%s\n' '- It does not perform deployment, process manager changes, database migrations, SQL mutation, or runtime state changes.'
 	printf '%s\n\n' '- Flutter runtime evidence remains scoped to `services/core-api` `/api/exam/*`.'

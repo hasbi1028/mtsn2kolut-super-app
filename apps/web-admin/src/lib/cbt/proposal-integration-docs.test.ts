@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
+import { afterEach, describe, expect, it } from 'vitest';
 
 import antiCheatRoadmap from '../../../../../docs/flutter-anti-cheat-roadmap.md?raw';
 import examApiDoc from '../../../../../docs/exam-api.md?raw';
@@ -7,10 +14,72 @@ import phase12Doc from '../../../../../docs/cbt-proposal-integration-phase-1-2.m
 import phase34Doc from '../../../../../docs/cbt-proposal-integration-phase-3-4.md?raw';
 import phase5Doc from '../../../../../docs/cbt-proposal-integration-phase-5.md?raw';
 import phase6Doc from '../../../../../docs/cbt-proposal-integration-phase-6.md?raw';
+import phase7Doc from '../../../../../docs/cbt-proposal-integration-phase-7.md?raw';
 import releaseEvidenceTemplateDoc from '../../../../../docs/cbt-release-evidence-template.md?raw';
 import smokeChecklistDoc from '../../../../../docs/cbt-smoke-checklist.md?raw';
 import releasePreflightScript from '../../../../../deploy/scripts/cbt-release-preflight.sh?raw';
 import releaseChecklistDoc from '../../../../../apps/mobile/RELEASE_CHECKLIST.md?raw';
+
+const execFileAsync = promisify(execFile);
+const testFileDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(testFileDir, '../../../../..');
+const preflightScriptPath = path.join(repoRoot, 'deploy/scripts/cbt-release-preflight.sh');
+const tempOutputDirs: string[] = [];
+
+interface CommandFailure extends Error {
+	code?: number | string;
+	stdout?: string;
+	stderr?: string;
+}
+
+interface PreflightCheck {
+	name: string;
+	status: string;
+	detail: string;
+	log: string;
+}
+
+interface PreflightReport {
+	output_dir: string;
+	overall_status: string;
+	evidence_template: string;
+	checks: PreflightCheck[];
+}
+
+async function makeTempOutputDir() {
+	const tempRoot = path.join(repoRoot, 'tmp');
+	await mkdir(tempRoot, { recursive: true });
+	const outputDir = await mkdtemp(path.join(tempRoot, 'cbt-release-preflight-vitest-'));
+	tempOutputDirs.push(outputDir);
+	return outputDir;
+}
+
+async function runPreflight(args: string[]) {
+	return execFileAsync(preflightScriptPath, args, {
+		cwd: repoRoot,
+		timeout: 30_000,
+		maxBuffer: 8 * 1024 * 1024
+	});
+}
+
+async function expectPreflightFailure(args: string[]) {
+	try {
+		await runPreflight(args);
+	} catch (error) {
+		const failure = error as CommandFailure;
+		return {
+			code: failure.code,
+			stdout: failure.stdout ?? '',
+			stderr: failure.stderr ?? ''
+		};
+	}
+
+	throw new Error(`Expected preflight to fail for args: ${args.join(' ')}`);
+}
+
+afterEach(async () => {
+	await Promise.all(tempOutputDirs.splice(0).map((outputDir) => rm(outputDir, { recursive: true, force: true })));
+});
 
 describe('CBT proposal integration documentation guard', () => {
 	it('locks the monorepo runtime ownership for proposal integration', () => {
@@ -339,4 +408,107 @@ describe('CBT proposal integration documentation guard', () => {
 			expect(releasePreflightScript).not.toMatch(forbiddenPattern);
 		}
 	});
+
+	it('locks Phase 7 as verifier and regression-test hardening only', () => {
+		for (const phrase of [
+			'Phase 7 - Release Preflight Verifier and Test Hardening',
+			'verifier/test hardening',
+			'bukan product roadmap baru',
+			'bukan deploy',
+			'deploy/scripts/cbt-release-preflight.sh',
+			'apps/web-admin/src/lib/cbt/proposal-integration-docs.test.ts',
+			'temporary ignored output directory under `tmp/`',
+			'JSON evidence remains parseable',
+			'optional checks stay skipped by default',
+			'refuses non-empty output directories',
+			'refuses unknown flags',
+			'Tidak deploy',
+			'Tidak PM2 restart',
+			'Tidak menjalankan `make db-migrate`',
+			'Tidak menjalankan migrasi live',
+			'Tidak menjalankan ad hoc SQL',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`'
+		]) {
+			expect(phase7Doc).toContain(phrase);
+		}
+
+		expect(phase7Doc).not.toContain('POST /api/cbt/login');
+		expect(phase7Doc).not.toContain('GET /api/cbt/status');
+	});
+
+	it(
+		'executes the CBT release preflight verifier in a temporary ignored output directory',
+		async () => {
+			const outputDir = await makeTempOutputDir();
+			const { stdout, stderr } = await runPreflight(['--output', outputDir]);
+
+			expect(stderr).toBe('');
+			expect(stdout).toContain('CBT release preflight evidence written');
+			expect(stdout).toContain(path.join(outputDir, 'cbt-release-preflight.md'));
+			expect(stdout).toContain(path.join(outputDir, 'cbt-release-preflight.json'));
+			expect(stdout).toContain(path.join(outputDir, 'logs'));
+
+			const markdown = await readFile(path.join(outputDir, 'cbt-release-preflight.md'), 'utf8');
+			const jsonText = await readFile(path.join(outputDir, 'cbt-release-preflight.json'), 'utf8');
+			const report = JSON.parse(jsonText) as PreflightReport;
+			const checksByName = new Map(report.checks.map((check) => [check.name, check]));
+
+			expect(markdown).toContain('# CBT Release Preflight Evidence');
+			expect(markdown).toContain('Phase 7 verifier/test hardening');
+			expect(markdown).toContain('It writes markdown/json/log evidence only under the output directory.');
+			expect(markdown).toContain('It does not perform deployment, process manager changes, database migrations, SQL mutation, or runtime state changes.');
+			expect(markdown).toContain('`services/core-api` `/api/exam/*`');
+			expect(markdown).not.toContain('/api/cbt/login');
+			expect(markdown).not.toContain('/api/cbt/status');
+
+			expect(report.output_dir).toBe(outputDir);
+			expect(report.overall_status).toBe('pass');
+			expect(report.evidence_template).toBe('docs/cbt-release-evidence-template.md');
+			expect(report.checks.length).toBeGreaterThan(8);
+
+			for (const checkName of ['git-head', 'git-status', 'git-diff-check']) {
+				const check = checksByName.get(checkName);
+				expect(check?.status).toBe('pass');
+				expect(check?.log).toBe(`logs/${checkName}.log`);
+				expect(existsSync(path.join(outputDir, `logs/${checkName}.log`))).toBe(true);
+			}
+
+			for (const checkName of [
+				'web-docs-guard',
+				'web-check',
+				'go-test',
+				'go-build',
+				'flutter-doctor',
+				'flutter-analyze',
+				'flutter-test'
+			]) {
+				const check = checksByName.get(checkName);
+				expect(check?.status).toBe('skipped');
+				expect(check?.detail).toContain('not requested');
+				expect(check?.log).toBe('');
+			}
+		},
+		30_000
+	);
+
+	it(
+		'refuses unsafe CBT release preflight invocation shapes',
+		async () => {
+			const nonEmptyOutputDir = await makeTempOutputDir();
+			await writeFile(path.join(nonEmptyOutputDir, 'existing.txt'), 'keep');
+
+			const nonEmptyFailure = await expectPreflightFailure(['--output', nonEmptyOutputDir]);
+			expect(nonEmptyFailure.code).toBe(2);
+			expect(nonEmptyFailure.stderr).toContain('output directory must be empty');
+			expect(existsSync(path.join(nonEmptyOutputDir, 'cbt-release-preflight.md'))).toBe(false);
+			expect(existsSync(path.join(nonEmptyOutputDir, 'cbt-release-preflight.json'))).toBe(false);
+
+			const unknownFlagFailure = await expectPreflightFailure(['--unknown-phase-7-flag']);
+			expect(unknownFlagFailure.code).toBe(2);
+			expect(unknownFlagFailure.stderr).toContain('unknown option: --unknown-phase-7-flag');
+			expect(unknownFlagFailure.stderr).toContain('Usage: deploy/scripts/cbt-release-preflight.sh');
+		},
+		30_000
+	);
 });
