@@ -38,8 +38,7 @@ class ExamApiClient {
     _httpClient.userAgent = userAgent;
   }
 
-  static const String userAgent =
-      'MTsN2Kolut-CBT/1.0 (Flutter; Android; BYOD)';
+  static const String userAgent = 'MTsN2Kolut-CBT/1.0 (Flutter; Android; BYOD)';
   static const int maxAnswerBodyBytes = 64 * 1024;
 
   final String baseUrl;
@@ -180,16 +179,25 @@ class ExamApiClient {
     required String token,
     required ExamClientEvent event,
   }) {
-    return sendEvent(token: token, eventType: event.eventType, data: event.data);
+    return sendEvent(
+      token: token,
+      eventType: event.eventType,
+      data: event.data,
+    );
   }
 
   static int answerBodyByteLength({
     required String questionId,
     required String answer,
   }) {
-    return utf8.encode(
-      jsonEncode(<String, Object?>{'question_id': questionId, 'answer': answer}),
-    ).length;
+    return utf8
+        .encode(
+          jsonEncode(<String, Object?>{
+            'question_id': questionId,
+            'answer': answer,
+          }),
+        )
+        .length;
   }
 
   static bool isAnswerBodyWithinLimit({

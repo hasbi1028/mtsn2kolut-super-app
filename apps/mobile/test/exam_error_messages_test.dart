@@ -127,15 +127,21 @@ void main() {
         'Status server belum bisa diperbarui karena perangkat belum terhubung. Tetap di layar ujian dan minta pengawas memeriksa koneksi.',
       );
       expect(
-        statusFailureMessage(const ExamApiException('backend', statusCode: 401)),
+        statusFailureMessage(
+          const ExamApiException('backend', statusCode: 401),
+        ),
         'Konteks sesi perangkat tidak sah. Minta pengawas memeriksa token dan perangkat sebelum melanjutkan.',
       );
       expect(
-        statusFailureMessage(const ExamApiException('backend', statusCode: 403)),
+        statusFailureMessage(
+          const ExamApiException('backend', statusCode: 403),
+        ),
         'Sesi ujian tidak lagi aktif menurut server. Tunggu arahan pengawas sebelum melanjutkan.',
       );
       expect(
-        statusFailureMessage(const ExamApiException('backend', statusCode: 409)),
+        statusFailureMessage(
+          const ExamApiException('backend', statusCode: 409),
+        ),
         'Token sesi ini terdeteksi aktif di perangkat lain. Jangan lanjutkan dari perangkat ini sebelum pengawas memverifikasi.',
       );
 
@@ -277,7 +283,10 @@ void main() {
         const ExamApiException('backend', statusCode: 401),
         autoSubmit: false,
       );
-      expect(unauthorizedNotice?.title, 'Submit ditahan karena konteks peserta');
+      expect(
+        unauthorizedNotice?.title,
+        'Submit ditahan karena konteks peserta',
+      );
       expect(unauthorizedNotice?.tone, ExamGuidanceTone.danger);
 
       final warningNotice = submitFailureNotice(

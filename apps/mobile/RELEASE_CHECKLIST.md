@@ -1,8 +1,17 @@
 # Release Checklist — Flutter CBT BYOD
 
-Checklist ini untuk operator sekolah saat menyiapkan APK Android internal bagi siswa BYOD.
+Checklist ini untuk operator sekolah saat menyiapkan APK Android internal bagi siswa BYOD dan menjalankan Phase 5 rehearsal.
 
-Status: sinkron per 2026-05-04. Gunakan bersama `docs/exam-api.md`, `docs/cbt-operator-runbook.md`, dan `docs/cbt-smoke-checklist.md`.
+Status: sinkron Phase 5 per 2026-05-08. Gunakan bersama `docs/exam-api.md`, `docs/cbt-proposal-integration-phase-5.md`, `docs/cbt-smoke-checklist.md`, dan `docs/cbt-operator-runbook.md`.
+
+## Boundary Phase 5
+
+- [ ] Tidak deploy, tidak PM2 restart, dan tidak mengganti runtime dari checklist mobile ini.
+- [ ] Tidak menjalankan `make db-migrate`, migration live, atau ad hoc SQL dari checklist mobile ini.
+- [ ] Tidak membuat public SvelteKit route tree `/api/cbt/**` baru untuk runtime siswa.
+- [ ] Tidak membawa PocketBase, SQLite, atau Alpine menjadi runtime CBT.
+- [ ] Flutter berbicara langsung ke `services/core-api` melalui `/api/exam/*`, bukan melalui SvelteKit BFF.
+- [ ] BYOD tidak setara kiosk penuh; device-owner bukan baseline untuk perangkat siswa pribadi.
 
 ## Sebelum Build
 
@@ -29,6 +38,8 @@ flutter test
 ```
 
 Semua harus hijau sebelum build APK.
+
+Flutter SDK bisa tidak tersedia di host yang menjalankan checklist dokumentasi atau rehearsal. Catat sebagai blocker validasi mobile pada host tersebut, lalu jalankan quality gate di mesin operator/CI yang memiliki Flutter SDK sebelum APK dipakai untuk ujian resmi.
 
 ## Build APK
 
@@ -58,9 +69,10 @@ build/app/outputs/flutter-apk/app-release.apk
 
 ## Verifikasi Lapangan Minimal
 
-- [ ] install APK di minimal 2 vendor Android berbeda
+- [ ] install APK di minimal 2 vendor Android berbeda sebagai perangkat nyata Phase 5 rehearsal
 - [ ] hasil perangkat nyata dicatat di `DEVICE_TEST_MATRIX.md`, termasuk vendor, OS, koneksi, restore, dan submit
 - [ ] login token berhasil
+- [ ] skenario ringkas Phase 5 rehearsal tercatat: login token, heartbeat, answer save, restore, network disturbance, warning, submit
 - [ ] login dengan token 32 karakter dari kartu ujian berhasil
 - [ ] jawaban pilihan ganda tersimpan
 - [ ] jawaban uraian tersimpan
@@ -72,6 +84,7 @@ build/app/outputs/flutter-apk/app-release.apk
 - [ ] event BYOD yang dikirim app tidak berisi token ujian mentah, password, atau answer key
 - [ ] batas jawaban uraian tetap aman di bawah budget serialized JSON 64 KiB endpoint `answer`
 - [ ] smoke admin/guru di `docs/cbt-smoke-checklist.md` tidak menemukan kebocoran token/kunci jawaban
+- [ ] Flutter tetap memakai `/api/exam/*`; tidak ada runtime siswa melalui route login/status di namespace `/api/cbt`
 
 ## Distribusi Internal
 

@@ -5,6 +5,9 @@ import examApiDoc from '../../../../../docs/exam-api.md?raw';
 import phase0Doc from '../../../../../docs/cbt-proposal-integration-phase-0.md?raw';
 import phase12Doc from '../../../../../docs/cbt-proposal-integration-phase-1-2.md?raw';
 import phase34Doc from '../../../../../docs/cbt-proposal-integration-phase-3-4.md?raw';
+import phase5Doc from '../../../../../docs/cbt-proposal-integration-phase-5.md?raw';
+import smokeChecklistDoc from '../../../../../docs/cbt-smoke-checklist.md?raw';
+import releaseChecklistDoc from '../../../../../apps/mobile/RELEASE_CHECKLIST.md?raw';
 
 describe('CBT proposal integration documentation guard', () => {
 	it('locks the monorepo runtime ownership for proposal integration', () => {
@@ -183,5 +186,71 @@ describe('CBT proposal integration documentation guard', () => {
 		expect(examApiDoc).toContain('`POST /api/exam/answer` | 64 KiB serialized JSON');
 		expect(examApiDoc).toContain('`413 Payload Too Large`');
 		expect(examApiDoc).toContain('android:student-phone:install-...');
+	});
+
+	it('locks Phase 5 rehearsal, rollout, and post-exam review documentation', () => {
+		for (const phrase of [
+			'Phase 5 - Rehearsal, Rollout, and Post-Exam Review',
+			'docs/cbt-smoke-checklist.md',
+			'docs/exam-api.md',
+			'apps/mobile/RELEASE_CHECKLIST.md',
+			'Bank Soal -> Asesmen Persiapan -> Pelaksanaan/Pengawasan -> Flutter APK -> Hasil/Post-exam review',
+			'health check',
+			'audit log',
+			'server log',
+			'backup',
+			'migration state',
+			'Rollback plan',
+			'hentikan sesi baru',
+			'pertahankan data backend',
+			'distribusikan APK sebelumnya',
+			'event member role dan subject scope',
+			'export/detail Bank Soal admin/guru/guru non-penulis',
+			'berita acara/minutes token visibility',
+			'duplicate `(room_id, seat_no)`',
+			'endpoint/security boundary checks',
+			'Flutter SDK bisa tidak tersedia di host'
+		]) {
+			expect(phase5Doc).toContain(phrase);
+			expect(smokeChecklistDoc).toContain(phrase);
+		}
+	});
+
+	it('keeps Phase 5 inside existing monorepo runtime and route boundaries', () => {
+		for (const doc of [phase5Doc, smokeChecklistDoc, releaseChecklistDoc]) {
+			for (const phrase of [
+				'PocketBase',
+				'SQLite',
+				'Alpine',
+				'Flutter berbicara langsung ke `services/core-api` melalui `/api/exam/*`',
+				'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+				'Tidak menjalankan `make db-migrate`',
+				'Tidak deploy, tidak PM2 restart'
+			]) {
+				expect(doc).toContain(phrase);
+			}
+			expect(doc).not.toContain('POST /api/cbt/login');
+			expect(doc).not.toContain('GET /api/cbt/status');
+		}
+	});
+
+	it('aligns the Flutter release checklist with Phase 5 BYOD rehearsal limits', () => {
+		for (const phrase of [
+			'Phase 5 rehearsal',
+			'perangkat nyata',
+			'BYOD tidak setara kiosk penuh',
+			'device-owner bukan baseline',
+			'login token',
+			'heartbeat',
+			'answer save',
+			'restore',
+			'network disturbance',
+			'warning',
+			'submit',
+			'Flutter SDK bisa tidak tersedia di host',
+			'Catat sebagai blocker validasi mobile'
+		]) {
+			expect(releaseChecklistDoc).toContain(phrase);
+		}
 	});
 });

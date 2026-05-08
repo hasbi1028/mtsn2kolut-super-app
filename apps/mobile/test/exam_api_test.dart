@@ -33,25 +33,32 @@ void main() {
       expect(client.examAssetHeaders(''), isEmpty);
     });
 
-    test('already-submitted conflict is distinguished from device mismatch', () {
-      expect(
-        const ExamApiException('exam already submitted', statusCode: 409)
-            .isAlreadySubmittedConflict,
-        isTrue,
-      );
-      expect(
-        const ExamApiException(
-          'token already bound to another device',
-          statusCode: 409,
-        ).isAlreadySubmittedConflict,
-        isFalse,
-      );
-      expect(
-        const ExamApiException('exam already submitted', statusCode: 403)
-            .isAlreadySubmittedConflict,
-        isFalse,
-      );
-    });
+    test(
+      'already-submitted conflict is distinguished from device mismatch',
+      () {
+        expect(
+          const ExamApiException(
+            'exam already submitted',
+            statusCode: 409,
+          ).isAlreadySubmittedConflict,
+          isTrue,
+        );
+        expect(
+          const ExamApiException(
+            'token already bound to another device',
+            statusCode: 409,
+          ).isAlreadySubmittedConflict,
+          isFalse,
+        );
+        expect(
+          const ExamApiException(
+            'exam already submitted',
+            statusCode: 403,
+          ).isAlreadySubmittedConflict,
+          isFalse,
+        );
+      },
+    );
 
     test('normalizes and rejects unsafe operator base URLs', () {
       expect(
@@ -354,37 +361,40 @@ void main() {
       );
     });
 
-    test('saveAnswer enforces exact serialized answer body byte limit', () async {
-      final client = ExamApiClient(
-        baseUrl: baseUrl,
-        deviceFingerprint: deviceFingerprint,
-      );
-      final escapedControlAnswer = List.filled(12000, '\u0000').join();
+    test(
+      'saveAnswer enforces exact serialized answer body byte limit',
+      () async {
+        final client = ExamApiClient(
+          baseUrl: baseUrl,
+          deviceFingerprint: deviceFingerprint,
+        );
+        final escapedControlAnswer = List.filled(12000, '\u0000').join();
 
-      expect(
-        ExamApiClient.answerBodyByteLength(
-          questionId: 'question-7',
-          answer: escapedControlAnswer,
-        ),
-        greaterThan(ExamApiClient.maxAnswerBodyBytes),
-      );
-      expect(
-        () => client.saveAnswer(
-          token: 'token-1',
-          questionId: 'question-7',
-          answer: escapedControlAnswer,
-        ),
-        throwsA(
-          isA<ExamApiException>()
-              .having((error) => error.statusCode, 'statusCode', 413)
-              .having(
-                (error) => error.message,
-                'message',
-                contains('terlalu panjang'),
-              ),
-        ),
-      );
-    });
+        expect(
+          ExamApiClient.answerBodyByteLength(
+            questionId: 'question-7',
+            answer: escapedControlAnswer,
+          ),
+          greaterThan(ExamApiClient.maxAnswerBodyBytes),
+        );
+        expect(
+          () => client.saveAnswer(
+            token: 'token-1',
+            questionId: 'question-7',
+            answer: escapedControlAnswer,
+          ),
+          throwsA(
+            isA<ExamApiException>()
+                .having((error) => error.statusCode, 'statusCode', 413)
+                .having(
+                  (error) => error.message,
+                  'message',
+                  contains('terlalu panjang'),
+                ),
+          ),
+        );
+      },
+    );
 
     test('sendEvent sends event type and data payload contract', () async {
       server.listen((request) async {
