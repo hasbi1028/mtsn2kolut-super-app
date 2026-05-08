@@ -15,6 +15,7 @@ import phase34Doc from '../../../../../docs/cbt-proposal-integration-phase-3-4.m
 import phase5Doc from '../../../../../docs/cbt-proposal-integration-phase-5.md?raw';
 import phase6Doc from '../../../../../docs/cbt-proposal-integration-phase-6.md?raw';
 import phase7Doc from '../../../../../docs/cbt-proposal-integration-phase-7.md?raw';
+import phase8Doc from '../../../../../docs/cbt-proposal-integration-phase-8.md?raw';
 import releaseEvidenceTemplateDoc from '../../../../../docs/cbt-release-evidence-template.md?raw';
 import smokeChecklistDoc from '../../../../../docs/cbt-smoke-checklist.md?raw';
 import releasePreflightScript from '../../../../../deploy/scripts/cbt-release-preflight.sh?raw';
@@ -44,6 +45,23 @@ interface PreflightReport {
 	overall_status: string;
 	evidence_template: string;
 	checks: PreflightCheck[];
+}
+
+interface PreflightManifestArtifact {
+	path: string;
+	kind: string;
+	sha256: string;
+	bytes: number;
+}
+
+interface PreflightManifest {
+	output_dir: string;
+	algorithm: string;
+	artifacts: PreflightManifestArtifact[];
+	secret_scan: {
+		status: string;
+		scanned_files: string[];
+	};
 }
 
 async function makeTempOutputDir() {
@@ -380,6 +398,7 @@ describe('CBT proposal integration documentation guard', () => {
 			'docs/cbt-release-evidence-template.md',
 			'cbt-release-preflight.md',
 			'cbt-release-preflight.json',
+			'cbt-release-manifest.json',
 			'--run-web-docs-guard',
 			'--run-web-check',
 			'--run-flutter-doctor',
@@ -390,6 +409,8 @@ describe('CBT proposal integration documentation guard', () => {
 			'npm run test:unit -- src/lib/cbt/proposal-integration-docs.test.ts',
 			'go build -o /dev/null ./cmd/api',
 			'redact_stream',
+			'scan_generated_evidence_for_secrets',
+			'write_manifest',
 			'run_optional_command'
 		]) {
 			expect(releasePreflightScript).toContain(phrase);
@@ -437,6 +458,33 @@ describe('CBT proposal integration documentation guard', () => {
 		expect(phase7Doc).not.toContain('GET /api/cbt/status');
 	});
 
+	it('locks Phase 8 as release manifest, checksum, and secret-scan hardening only', () => {
+		for (const phrase of [
+			'Phase 8 - Release Evidence Manifest and Secret-Scan Hardening',
+			'manifest/checksum/secret-scan hardening only',
+			'bukan product roadmap baru',
+			'bukan deploy',
+			'bukan runtime CBT',
+			'deploy/scripts/cbt-release-preflight.sh',
+			'cbt-release-manifest.json',
+			'SHA-256',
+			'secret scan',
+			'markdown/json/log evidence',
+			'Tidak deploy',
+			'Tidak PM2 restart',
+			'Tidak menjalankan `make db-migrate`',
+			'Tidak menjalankan migrasi live',
+			'Tidak menjalankan ad hoc SQL',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`'
+		]) {
+			expect(phase8Doc).toContain(phrase);
+		}
+
+		expect(phase8Doc).not.toContain('POST /api/cbt/login');
+		expect(phase8Doc).not.toContain('GET /api/cbt/status');
+	});
+
 	it(
 		'executes the CBT release preflight verifier in a temporary ignored output directory',
 		async () => {
@@ -447,15 +495,21 @@ describe('CBT proposal integration documentation guard', () => {
 			expect(stdout).toContain('CBT release preflight evidence written');
 			expect(stdout).toContain(path.join(outputDir, 'cbt-release-preflight.md'));
 			expect(stdout).toContain(path.join(outputDir, 'cbt-release-preflight.json'));
+			expect(stdout).toContain(path.join(outputDir, 'cbt-release-manifest.json'));
 			expect(stdout).toContain(path.join(outputDir, 'logs'));
 
 			const markdown = await readFile(path.join(outputDir, 'cbt-release-preflight.md'), 'utf8');
 			const jsonText = await readFile(path.join(outputDir, 'cbt-release-preflight.json'), 'utf8');
+			const manifestText = await readFile(path.join(outputDir, 'cbt-release-manifest.json'), 'utf8');
 			const report = JSON.parse(jsonText) as PreflightReport;
+			const manifest = JSON.parse(manifestText) as PreflightManifest;
 			const checksByName = new Map(report.checks.map((check) => [check.name, check]));
+			const manifestArtifactsByPath = new Map(
+				manifest.artifacts.map((artifact) => [artifact.path, artifact])
+			);
 
 			expect(markdown).toContain('# CBT Release Preflight Evidence');
-			expect(markdown).toContain('Phase 7 verifier/test hardening');
+			expect(markdown).toContain('Phase 8 manifest/checksum/secret-scan hardening');
 			expect(markdown).toContain('It writes markdown/json/log evidence only under the output directory.');
 			expect(markdown).toContain('It does not perform deployment, process manager changes, database migrations, SQL mutation, or runtime state changes.');
 			expect(markdown).toContain('`services/core-api` `/api/exam/*`');
@@ -466,6 +520,29 @@ describe('CBT proposal integration documentation guard', () => {
 			expect(report.overall_status).toBe('pass');
 			expect(report.evidence_template).toBe('docs/cbt-release-evidence-template.md');
 			expect(report.checks.length).toBeGreaterThan(8);
+			expect(checksByName.get('secret-scan')?.status).toBe('pass');
+			expect(checksByName.get('secret-scan')?.detail).toContain('generated evidence scanned');
+
+			expect(manifest.output_dir).toBe(outputDir);
+			expect(manifest.algorithm).toBe('sha256');
+			expect(manifest.secret_scan.status).toBe('pass');
+			expect(manifest.secret_scan.scanned_files).toContain('cbt-release-preflight.md');
+			expect(manifest.secret_scan.scanned_files).toContain('cbt-release-preflight.json');
+			expect(manifest.secret_scan.scanned_files).toContain('logs/git-head.log');
+
+			for (const artifactPath of [
+				'cbt-release-preflight.md',
+				'cbt-release-preflight.json',
+				'logs/git-head.log',
+				'logs/git-status.log',
+				'logs/git-diff-check.log'
+			]) {
+				const artifact = manifestArtifactsByPath.get(artifactPath);
+				expect(artifact?.kind).toMatch(/^(markdown|json|log)$/);
+				expect(artifact?.sha256).toMatch(/^[a-f0-9]{64}$/);
+				expect(artifact?.bytes).toBeGreaterThanOrEqual(0);
+				expect(existsSync(path.join(outputDir, artifactPath))).toBe(true);
+			}
 
 			for (const checkName of ['git-head', 'git-status', 'git-diff-check']) {
 				const check = checksByName.get(checkName);
@@ -503,11 +580,34 @@ describe('CBT proposal integration documentation guard', () => {
 			expect(nonEmptyFailure.stderr).toContain('output directory must be empty');
 			expect(existsSync(path.join(nonEmptyOutputDir, 'cbt-release-preflight.md'))).toBe(false);
 			expect(existsSync(path.join(nonEmptyOutputDir, 'cbt-release-preflight.json'))).toBe(false);
+			expect(existsSync(path.join(nonEmptyOutputDir, 'cbt-release-manifest.json'))).toBe(false);
 
 			const unknownFlagFailure = await expectPreflightFailure(['--unknown-phase-7-flag']);
 			expect(unknownFlagFailure.code).toBe(2);
 			expect(unknownFlagFailure.stderr).toContain('unknown option: --unknown-phase-7-flag');
 			expect(unknownFlagFailure.stderr).toContain('Usage: deploy/scripts/cbt-release-preflight.sh');
+		},
+		30_000
+	);
+
+	it(
+		'fails the CBT release preflight when generated evidence contains synthetic secret-like text',
+		async () => {
+			const outputDir = await makeTempOutputDir();
+			const failure = await expectPreflightFailure(['--output', outputDir, '--test-only-write-secret-leak']);
+
+			expect(failure.code).toBe(1);
+			expect(failure.stderr).toContain('secret scan failed');
+			expect(failure.stderr).toContain('logs/test-only-secret-leak.log');
+			expect(existsSync(path.join(outputDir, 'logs/test-only-secret-leak.log'))).toBe(true);
+			expect(existsSync(path.join(outputDir, 'cbt-release-manifest.json'))).toBe(true);
+
+			const report = JSON.parse(
+				await readFile(path.join(outputDir, 'cbt-release-preflight.json'), 'utf8')
+			) as PreflightReport;
+			const secretScan = report.checks.find((check) => check.name === 'secret-scan');
+			expect(report.overall_status).toBe('failed');
+			expect(secretScan?.status).toBe('fail');
 		},
 		30_000
 	);
