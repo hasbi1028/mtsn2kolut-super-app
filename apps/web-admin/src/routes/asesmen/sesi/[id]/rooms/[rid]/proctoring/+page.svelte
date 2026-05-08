@@ -22,6 +22,9 @@
 		buildProctorEvidenceCsvRows,
 		classifyProctorEvent,
 		proctorEventLabel,
+		proctorEvidenceCategoryLabel,
+		proctorEvidenceCategorySummary,
+		proctorOperatorGuidance,
 		summarizeProctorEvidence,
 		type ProctorEvidenceCategory
 	} from '$lib/cbt/proctor-evidence';
@@ -266,18 +269,11 @@
 	}
 
 	function evidenceCategoryLabel(category: ProctorEvidenceCategory | null) {
-		const labels: Record<ProctorEvidenceCategory, string> = {
-			heartbeat: 'Heartbeat',
-			app_background_resume: 'Background/resume',
-			device_mismatch: 'Device mismatch',
-			submit_guard: 'Submit guard',
-			stale_connection: 'Koneksi stale',
-			warning: 'Warning',
-			force_submit: 'Paksa submit',
-			reset_access: 'Reset akses',
-			export_print: 'Export/print',
-		};
-		return category ? labels[category] : 'Event lain';
+		return proctorEvidenceCategoryLabel(category);
+	}
+
+	function evidenceCategoryDescription(category: ProctorEvidenceCategory | null) {
+		return proctorEvidenceCategorySummary(category);
 	}
 
 	function evidenceCategoryClass(category: ProctorEvidenceCategory | null) {
@@ -449,7 +445,7 @@
 			{/if}
 			<Button variant="outline" onclick={exportEvidenceCSV} disabled={!room}>
 				<FileDownIcon class="mr-2 size-4" />
-				Export Evidence CSV
+				Export Evidence CSV (tanpa token)
 			</Button>
 			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>
 				<PrinterIcon class="mr-2 size-4" />
@@ -573,7 +569,23 @@
 							<div class="rounded-lg border border-border bg-card p-3">
 								<p class="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{evidenceCategoryLabel(category)}</p>
 								<p class="mt-1 text-xl font-bold text-foreground">{evidenceSummary.counts[category]}</p>
-								<p class="text-[11px] text-muted-foreground">{evidenceSummary.missingCategories.includes(category) ? 'Belum ada bukti di data aktif' : 'Tercatat di evidence ruang'}</p>
+								<p class="text-[11px] text-muted-foreground">{evidenceCategoryDescription(category)}</p>
+								<p class="mt-1 text-[11px] text-muted-foreground">{evidenceSummary.missingCategories.includes(category) ? 'Belum ada bukti di data aktif' : 'Tercatat di evidence ruang'}</p>
+							</div>
+						{/each}
+					</Card.Content>
+				</Card.Root>
+
+				<Card.Root class="border-primary/20">
+					<Card.Header class="pb-3">
+						<Card.Title>Panduan Tindakan Pengawas</Card.Title>
+						<Card.Description>Kapan memberi peringatan, reset akses, atau paksa submit saat rehearsal ruang.</Card.Description>
+					</Card.Header>
+					<Card.Content class="grid gap-3 md:grid-cols-3">
+						{#each proctorOperatorGuidance as item (item.title)}
+							<div class="rounded-lg border border-border bg-muted/40 p-3">
+								<p class="text-sm font-semibold text-foreground">{item.title}</p>
+								<p class="mt-1 text-xs leading-5 text-muted-foreground">{item.description}</p>
 							</div>
 						{/each}
 					</Card.Content>
@@ -601,27 +613,27 @@
 							<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
 								<div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
 									<label for="handover-attendance" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
-										<input id="handover-attendance" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.attendance_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.attendance_checked = event.currentTarget.checked)} />
+										<input id="handover-attendance" type="checkbox" class="mt-0.5 size-4 accent-primary" checked={handover.attendance_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.attendance_checked = event.currentTarget.checked)} />
 										<span><span class="font-semibold text-foreground">Daftar hadir</span><br /><span class="text-xs text-muted-foreground">Paraf/kehadiran peserta sudah dicek.</span></span>
 									</label>
 									<label for="handover-submitted" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
-										<input id="handover-submitted" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.all_submitted_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.all_submitted_checked = event.currentTarget.checked)} />
+										<input id="handover-submitted" type="checkbox" class="mt-0.5 size-4 accent-primary" checked={handover.all_submitted_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.all_submitted_checked = event.currentTarget.checked)} />
 										<span><span class="font-semibold text-foreground">Submit akhir</span><br /><span class="text-xs text-muted-foreground">{participantStats.submitted}/{room.participant_count} peserta tercatat.</span></span>
 									</label>
 									<label for="handover-device" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
-										<input id="handover-device" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.device_issue_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.device_issue_checked = event.currentTarget.checked)} />
+										<input id="handover-device" type="checkbox" class="mt-0.5 size-4 accent-primary" checked={handover.device_issue_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.device_issue_checked = event.currentTarget.checked)} />
 										<span><span class="font-semibold text-foreground">Gangguan dicatat</span><br /><span class="text-xs text-muted-foreground">{room.suspicious_count} atensi, {room.missing_seat_count} meja kosong.</span></span>
 									</label>
 									<label for="handover-clean" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
-										<input id="handover-clean" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.room_clean_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.room_clean_checked = event.currentTarget.checked)} />
+										<input id="handover-clean" type="checkbox" class="mt-0.5 size-4 accent-primary" checked={handover.room_clean_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.room_clean_checked = event.currentTarget.checked)} />
 										<span><span class="font-semibold text-foreground">Ruang rapi</span><br /><span class="text-xs text-muted-foreground">Meja, kursi, listrik, dan jaringan dicek.</span></span>
 									</label>
 									<label for="handover-token" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
-										<input id="handover-token" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.token_returned_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.token_returned_checked = event.currentTarget.checked)} />
+										<input id="handover-token" type="checkbox" class="mt-0.5 size-4 accent-primary" checked={handover.token_returned_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.token_returned_checked = event.currentTarget.checked)} />
 										<span><span class="font-semibold text-foreground">Token/berkas</span><br /><span class="text-xs text-muted-foreground">Token ruang dan berkas pengawas dikembalikan.</span></span>
 									</label>
 									<label for="handover-assets" class="flex min-h-14 items-start gap-3 rounded-lg border border-border bg-card p-3 text-sm text-foreground">
-										<input id="handover-assets" type="checkbox" class="mt-0.5 size-4 accent-emerald-700" checked={handover.assets_returned_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.assets_returned_checked = event.currentTarget.checked)} />
+										<input id="handover-assets" type="checkbox" class="mt-0.5 size-4 accent-primary" checked={handover.assets_returned_checked} disabled={handoverLocked || handoverBusy} onchange={(event) => handover && (handover.assets_returned_checked = event.currentTarget.checked)} />
 										<span><span class="font-semibold text-foreground">Aset cadangan</span><br /><span class="text-xs text-muted-foreground">Perangkat pinjaman/cadangan sudah kembali.</span></span>
 									</label>
 								</div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CBT_REPORT_TEMPLATE_MATRIX, reportTemplateByKey } from './report-template-matrix';
+import { CBT_REPORT_TEMPLATE_MATRIX, reportTemplateByKey, reportTemplateExportGuidance } from './report-template-matrix';
 
 describe('CBT report template matrix', () => {
 	it('defines the official Phase 26 report set', () => {
@@ -34,5 +34,11 @@ describe('CBT report template matrix', () => {
 		}
 		expect(reportTemplateByKey('proctor_event_recap')?.redaction).toContain('no raw token');
 		expect(reportTemplateByKey('item_analysis')?.redaction).toContain('answer key role redaction');
+	});
+
+	it('provides C3 print and spreadsheet guidance without claiming generated PDF parity', () => {
+		expect(reportTemplateExportGuidance(reportTemplateByKey('session_results')!)).toContain('Print HTML/browser PDF');
+		expect(reportTemplateExportGuidance(reportTemplateByKey('session_results')!)).toContain('CSV/JSON aman Excel');
+		expect(reportTemplateExportGuidance(reportTemplateByKey('exam_cards')!)).toContain('spreadsheet luas dinonaktifkan');
 	});
 });

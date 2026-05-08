@@ -30,7 +30,7 @@ class ExamStatusGuideScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 const _GuideCard(
-                  title: 'Tersambung',
+                  title: 'Aman',
                   subtitle: 'Kondisi stabil',
                   description:
                       'Perangkat terakhir berhasil terhubung ke server dan tidak ada jawaban lokal yang tertahan.',
@@ -39,30 +39,30 @@ class ExamStatusGuideScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 const _GuideCard(
-                  title: 'Lokal',
-                  subtitle: 'Masih aman, tetapi perlu sinkron',
+                  title: 'Perlu sinkron',
+                  subtitle: 'Jawaban aman di perangkat',
                   description:
-                      'Sebagian jawaban masih tersimpan di perangkat dan akan dicoba sinkron ulang. Siswa tetap harus berada di layar ujian.',
+                      'Sebagian jawaban masih tersimpan di perangkat dan perlu dikirim ulang ke server. Siswa tetap berada di layar ujian.',
                   tone: _GuideTone.warning,
                   icon: Icons.save_outlined,
                 ),
                 const SizedBox(height: 14),
                 const _GuideCard(
-                  title: 'Gangguan',
-                  subtitle: 'Server belum responsif',
+                  title: 'Perlu pengawas',
+                  subtitle: 'Koneksi atau sesi perlu dicek',
                   description:
-                      'Aplikasi baru saja gagal memperbarui status atau menyimpan jawaban ke server. Pengawas perlu memperhatikan koneksi perangkat.',
+                      'Aplikasi mendeteksi sesi perlu dicek ulang, kontak server sudah stale, atau koneksi berulang kali gagal.',
                   tone: _GuideTone.danger,
                   icon: Icons.cloud_off,
                 ),
                 const SizedBox(height: 14),
                 const _GuideCard(
-                  title: 'Menurun',
-                  subtitle: 'Perlu tindakan sebelum submit',
+                  title: 'Tidak didukung aplikasi siswa',
+                  subtitle: 'Butuh prosedur ruang',
                   description:
-                      'Gangguan sinkron sudah berulang beberapa kali. Submit manual memang ditahan sampai perangkat berhasil memulihkan status atau sinkron jawaban.',
+                      'Tipe soal tertentu seperti hotspot atau unggah berkas belum dijawab langsung di aplikasi siswa. Pengawas perlu mencatat tindak lanjut sesuai prosedur.',
                   tone: _GuideTone.danger,
-                  icon: Icons.sync_problem,
+                  icon: Icons.support_agent,
                 ),
                 const SizedBox(height: 24),
                 Container(
@@ -83,7 +83,7 @@ class ExamStatusGuideScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Jika status berubah ke `Menurun`, minta siswa tetap berada di layar ujian, tekan tombol sinkron ulang, dan tunggu sampai status kembali membaik sebelum mengizinkan submit.',
+                        'Jika status berubah ke Perlu pengawas, minta siswa tetap berada di layar ujian, tekan tombol sinkron ulang, dan tunggu sampai status kembali Aman atau Perlu sinkron selesai sebelum mengizinkan submit.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           height: 1.55,
                         ),

@@ -89,24 +89,24 @@ class ExamShellConnectionViewModel {
 
   String get syncStatusLabel {
     if (isResumingExam || resumeCheckRequired) {
-      return 'Cek Ulang';
+      return 'Perlu pengawas';
     }
     if (isDegradedMode) {
-      return 'Menurun';
+      return 'Perlu pengawas';
     }
     if (lastContactIsStale) {
-      return 'Waspada';
+      return 'Perlu pengawas';
     }
     if (isSavingAnswer || isSyncingStatus) {
-      return 'Sinkron';
+      return 'Perlu sinkron';
     }
     if (pendingAnswerCount > 0) {
-      return 'Lokal';
+      return 'Perlu sinkron';
     }
     if (hasError) {
-      return 'Gangguan';
+      return 'Perlu pengawas';
     }
-    return 'Tersambung';
+    return 'Aman';
   }
 
   SyncTone get syncStatusTone {
@@ -124,34 +124,34 @@ class ExamShellConnectionViewModel {
 
   String get connectionHealthTitle {
     if (isDegradedMode) {
-      return 'Menurun';
+      return 'Perlu pengawas';
     }
     if (lastContactIsStale) {
-      return 'Waspada';
+      return 'Perlu pengawas';
     }
     if (hasError) {
-      return 'Gangguan';
+      return 'Perlu pengawas';
     }
     if (pendingAnswerCount > 0) {
-      return 'Lokal';
+      return 'Perlu sinkron';
     }
-    return 'Tersambung';
+    return 'Aman';
   }
 
   String get connectionHealthDescription {
     if (isDegradedMode) {
-      return 'Sinkron berulang kali gagal. Submit manual ditahan sampai koneksi membaik.';
+      return 'Kirim ujian ditahan sampai sinkron pulih. Tetap di layar ujian dan panggil pengawas untuk memeriksa koneksi.';
     }
     if (lastContactIsStale) {
-      return 'Perangkat sudah cukup lama tidak menyentuh server. Perbarui status agar pengawas tahu koneksi masih sehat.';
+      return 'Kontak server terlalu lama tidak diperbarui. Minta pengawas memeriksa jaringan perangkat sebelum peserta melanjutkan tanpa pemantauan.';
     }
     if (hasError) {
-      return 'Server belum merespons stabil. Pantau jaringan dan coba sinkron ulang.';
+      return 'Server belum merespons stabil. Pengawas perlu memeriksa koneksi lalu coba sinkron ulang.';
     }
     if (pendingAnswerCount > 0) {
-      return '$pendingAnswerCount jawaban masih aman di perangkat dan menunggu sinkron.';
+      return '$pendingAnswerCount jawaban masih aman di perangkat ini dan perlu sinkron ke server.';
     }
-    return 'Perangkat terakhir berhasil terhubung ke server tanpa jawaban lokal tertahan.';
+    return 'Aman. Perangkat terakhir berhasil terhubung ke server tanpa jawaban lokal tertahan.';
   }
 
   HealthTone get connectionHealthTone {

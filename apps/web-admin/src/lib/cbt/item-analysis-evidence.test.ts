@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { CRONBACH_ALPHA_STATUS, itemAnalysisMetricInventory, summarizeItemAnalysisEvidence } from './item-analysis-evidence';
+import {
+	CRONBACH_ALPHA_STATUS,
+	formatItemAnalysisAccuracyLabel,
+	itemAnalysisEmptyStateCopy,
+	itemAnalysisMetricInventory,
+	summarizeItemAnalysisEvidence
+} from './item-analysis-evidence';
 
 describe('CBT item-analysis evidence helpers', () => {
 	it('summarizes unanswered count and per-type accuracy without fake psychometrics', () => {
@@ -65,5 +71,16 @@ describe('CBT item-analysis evidence helpers', () => {
 			status: 'deferred',
 			guard: 'No value is emitted until a formula and fixed validation dataset are implemented and tested.'
 		});
+	});
+
+	it('provides C3 operator-friendly accuracy labels and empty-state copy', () => {
+		expect(
+			formatItemAnalysisAccuracyLabel({ questionType: 'multiple_choice', accuracy: 0.625, answeredCount: 8, correctCount: 5 })
+		).toBe('Pilihan ganda: 62.5% benar (5/8 terjawab benar)');
+		expect(
+			formatItemAnalysisAccuracyLabel({ questionType: 'essay', accuracy: 0, answeredCount: 0, correctCount: 0 })
+		).toBe('Uraian: belum cukup respons untuk akurasi per tipe');
+		expect(itemAnalysisEmptyStateCopy).toContain('Belum cukup respons');
+		expect(itemAnalysisEmptyStateCopy).toContain('tidak membuat analitik palsu');
 	});
 });

@@ -31,6 +31,26 @@ export type ItemAnalysisEvidenceSummary = {
 	perType: ItemAnalysisPerTypeSummary[];
 };
 
+const QUESTION_TYPE_LABELS: Record<string, string> = {
+	multiple_choice: 'Pilihan ganda',
+	multiple_answer: 'Pilihan majemuk',
+	true_false: 'Benar/Salah',
+	agree_disagree: 'Setuju/Tidak setuju',
+	matching: 'Menjodohkan',
+	ordering: 'Mengurutkan',
+	short_answer: 'Jawaban singkat',
+	essay: 'Uraian'
+};
+
+export const itemAnalysisEmptyStateCopy =
+	'Belum cukup respons untuk membaca pola hasil. Sistem tidak membuat analitik palsu; tunggu peserta submit atau gunakan rekap dasar yang sudah tersedia.';
+
+export function formatItemAnalysisAccuracyLabel(input: Pick<ItemAnalysisPerTypeSummary, 'questionType' | 'accuracy' | 'answeredCount' | 'correctCount'>): string {
+	const label = QUESTION_TYPE_LABELS[input.questionType] ?? input.questionType.replaceAll('_', ' ');
+	if (input.answeredCount <= 0) return `${label}: belum cukup respons untuk akurasi per tipe`;
+	return `${label}: ${(input.accuracy * 100).toFixed(1)}% benar (${input.correctCount}/${input.answeredCount} terjawab benar)`;
+}
+
 export function summarizeItemAnalysisEvidence(rows: readonly ItemAnalysisEvidenceRow[]): ItemAnalysisEvidenceSummary {
 	const buckets = new Map<string, ItemAnalysisPerTypeSummary & { difficultyTotal: number; discriminationTotal: number }>();
 	let unansweredCount = 0;

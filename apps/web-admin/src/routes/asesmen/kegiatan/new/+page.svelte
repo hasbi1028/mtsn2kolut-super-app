@@ -199,7 +199,7 @@
 							<div class="grid gap-2 sm:grid-cols-3">
 								{#each gradeOptions as level (level)}
 									<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground">
-										<input type="checkbox" checked={fTargetLevels.includes(level)} onchange={(event) => toggleTargetLevel(level, event.currentTarget.checked)} class="size-4 accent-emerald-700" />
+										<input type="checkbox" checked={fTargetLevels.includes(level)} onchange={(event) => toggleTargetLevel(level, event.currentTarget.checked)} class="size-4 accent-primary" />
 										<span>Tingkat {level}</span>
 									</label>
 								{/each}

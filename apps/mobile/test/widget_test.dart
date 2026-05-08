@@ -545,7 +545,7 @@ void main() {
     expect(find.text('Bahasa Indonesia Kelas VIII'), findsOneWidget);
   });
 
-  testWidgets('status guide screen renders all byod status cards', (
+  testWidgets('status guide screen renders C1 byod status labels', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 2600);
@@ -558,11 +558,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('Panduan Status Ujian'), findsOneWidget);
-    expect(find.text('Tersambung'), findsOneWidget);
-    expect(find.text('Lokal'), findsOneWidget);
-    expect(find.text('Gangguan'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Menurun'), 200);
-    expect(find.text('Menurun'), findsOneWidget);
+    expect(find.text('Aman'), findsOneWidget);
+    expect(find.text('Perlu sinkron'), findsOneWidget);
+    expect(find.text('Perlu pengawas'), findsOneWidget);
+    expect(find.text('Tidak didukung aplikasi siswa'), findsOneWidget);
     expect(find.text('Catatan untuk pengawas'), findsOneWidget);
   });
 
@@ -753,7 +752,7 @@ void main() {
     expect(find.text('Audio soal sudah diputar'), findsOneWidget);
   });
 
-  testWidgets('exam shell shows sync chip tersambung for healthy state', (
+  testWidgets('exam shell shows sync chip aman for healthy state', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 2200);
@@ -775,10 +774,10 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('Tersambung'), findsWidgets);
+    expect(find.text('Aman'), findsWidgets);
   });
 
-  testWidgets('exam shell shows sync chip lokal when pending answers exist', (
+  testWidgets('exam shell shows sync chip perlu sinkron when pending answers exist', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 2200);
@@ -803,10 +802,14 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('Lokal'), findsWidgets);
+    expect(find.text('Perlu sinkron'), findsWidgets);
+    expect(
+      find.textContaining('jawaban aman, perlu sinkron'),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('exam shell shows sync chip waspada for stale contact', (
+  testWidgets('exam shell shows sync chip perlu pengawas for stale contact', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 2200);
@@ -833,10 +836,14 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('Waspada'), findsWidgets);
+    expect(find.text('Perlu pengawas'), findsWidgets);
+    expect(
+      find.textContaining('Kontak server terlalu lama tidak diperbarui'),
+      findsWidgets,
+    );
   });
 
-  testWidgets('exam shell shows sync chip menurun for degraded mode', (
+  testWidgets('exam shell shows sync chip perlu pengawas for degraded mode', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 2200);
@@ -865,7 +872,11 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('Menurun'), findsWidgets);
+    expect(find.text('Perlu pengawas'), findsWidgets);
+    expect(
+      find.textContaining('Kirim ujian ditahan sampai sinkron pulih'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('exam shell shows sync chip sinkron while syncing status', (
@@ -891,10 +902,10 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('Sinkron'), findsOneWidget);
+    expect(find.text('Perlu sinkron'), findsOneWidget);
   });
 
-  testWidgets('exam shell shows sync chip cek ulang during resume gate', (
+  testWidgets('exam shell shows sync chip perlu pengawas during resume gate', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 2200);
@@ -917,7 +928,11 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('Cek Ulang'), findsOneWidget);
+    expect(find.text('Perlu pengawas'), findsWidgets);
+    expect(
+      find.textContaining('Pengawas perlu memastikan siswa boleh melanjutkan'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('exam shell shows sync chip gangguan for generic error state', (
@@ -943,7 +958,7 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('Gangguan'), findsWidgets);
+    expect(find.text('Perlu pengawas'), findsWidgets);
   });
 
   testWidgets('exam shell renders media card when question has media url', (
@@ -1337,13 +1352,10 @@ void main() {
       );
       await tester.pump();
 
-      expect(
-        find.text('Tipe soal belum didukung aplikasi siswa'),
-        findsOneWidget,
-      );
+      expect(find.text('Tidak didukung aplikasi siswa'), findsOneWidget);
       expect(
         find.text(
-          'Panggil pengawas untuk membantu pencatatan manual pada soal ini.',
+          'Soal tipe ini belum bisa dijawab langsung di aplikasi siswa. Panggil pengawas agar jawaban atau tindak lanjut dicatat sesuai prosedur ruang.',
         ),
         findsOneWidget,
       );
@@ -1387,7 +1399,7 @@ void main() {
     await tester.pump();
 
     expect(
-      find.text('Tipe soal belum didukung aplikasi siswa'),
+      find.text('Tidak didukung aplikasi siswa'),
       findsOneWidget,
     );
     expect(find.text('question_type: upload_answer'), findsOneWidget);
@@ -1421,7 +1433,7 @@ void main() {
       await tester.pump();
 
       expect(
-        find.text('Tipe soal belum didukung aplikasi siswa'),
+        find.text('Tidak didukung aplikasi siswa'),
         findsOneWidget,
       );
       expect(find.text('question_type: upload_answer'), findsOneWidget);
@@ -1956,10 +1968,10 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('Perlu intervensi pengawas'), findsOneWidget);
+    expect(find.text('Perlu pengawas'), findsWidgets);
     expect(
-      find.textContaining('Status koneksi berada di level waspada'),
-      findsOneWidget,
+      find.textContaining('Kontak server terlalu lama tidak diperbarui'),
+      findsWidgets,
     );
     expect(
       find.textContaining('Jika kondisi ini bertahan sampai 4 menit'),
@@ -1997,7 +2009,7 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('Mode koneksi menurun aktif'), findsOneWidget);
+    expect(find.text('Perlu pengawas'), findsWidgets);
     expect(
       find.textContaining('Sinkron gagal 3 kali berturut-turut'),
       findsOneWidget,
@@ -2036,7 +2048,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Koneksi perlu diperhatikan'), findsOneWidget);
+    expect(find.text('Perlu sinkron'), findsWidgets);
     expect(
       find.textContaining(
         'Perangkat mengalami 2 gangguan sinkron berturut-turut',
@@ -2075,11 +2087,14 @@ void main() {
     expect(find.text('Mode ujian diamankan'), findsOneWidget);
     expect(
       find.text(
-        'Aplikasi mendeteksi perpindahan dari mode ujian. Lanjutkan hanya jika pengawas mengizinkan.',
+        'Aplikasi mendeteksi perpindahan dari mode ujian. Pengawas perlu memastikan siswa boleh melanjutkan sebelum sesi dibuka lagi.',
       ),
       findsOneWidget,
     );
-    expect(find.text('1 jawaban lokal menunggu sinkron.'), findsOneWidget);
+    expect(
+      find.text('1 jawaban aman di perangkat ini dan perlu sinkron.'),
+      findsOneWidget,
+    );
     expect(find.text('Lanjutkan dengan pengecekan'), findsOneWidget);
   });
 
@@ -2113,11 +2128,14 @@ void main() {
     expect(find.text('Mode ujian diamankan'), findsOneWidget);
     expect(
       find.text(
-        'Sistem sedang memeriksa ulang status peserta dan mencoba menyinkronkan jawaban lokal.',
+        'Sistem sedang memeriksa ulang status peserta dan mencoba menyinkronkan jawaban lokal. Pengawas perlu memastikan siswa boleh melanjutkan setelah status kembali aman.',
       ),
       findsOneWidget,
     );
-    expect(find.text('1 jawaban lokal menunggu sinkron.'), findsOneWidget);
+    expect(
+      find.text('1 jawaban aman di perangkat ini dan perlu sinkron.'),
+      findsOneWidget,
+    );
     expect(find.text('Memeriksa status...'), findsOneWidget);
   });
 

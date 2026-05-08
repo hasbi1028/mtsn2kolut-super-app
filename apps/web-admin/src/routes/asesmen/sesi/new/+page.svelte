@@ -396,8 +396,8 @@
 							{#if browserTimeZoneMismatch}<p class="text-warning">Zona waktu browser terdeteksi {browserTimeZone}. Samakan perangkat operator ke Asia/Makassar sebelum menyimpan agar input tidak bergeser.</p>{:else}<p>Pastikan jam mulai dan selesai mengikuti waktu sekolah/WITA sebelum sesi dijadwalkan.</p>{/if}
 						</div>
 						<div class="grid gap-3 sm:col-span-2 sm:grid-cols-2">
-							<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground"><input type="checkbox" bind:checked={fIsSpecialEvent} class="size-4 accent-emerald-700" /> Tandai sebagai sesi khusus</label>
-							<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground"><input type="checkbox" bind:checked={fAllowCrossGrade} class="size-4 accent-emerald-700" /> Izinkan lintas tingkat</label>
+							<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground"><input type="checkbox" bind:checked={fIsSpecialEvent} class="size-4 accent-primary" /> Tandai sebagai sesi khusus</label>
+							<label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground"><input type="checkbox" bind:checked={fAllowCrossGrade} class="size-4 accent-primary" /> Izinkan lintas tingkat</label>
 						</div>
 					</div>
 

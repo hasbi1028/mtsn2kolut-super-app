@@ -40,6 +40,58 @@ export type ProctorEvidenceSummary = {
 	missingCategories: ProctorEvidenceCategory[];
 };
 
+export type ProctorOperatorGuidanceItem = {
+	title: string;
+	description: string;
+};
+
+const PROCTOR_EVIDENCE_CATEGORY_LABELS: Record<ProctorEvidenceCategory, string> = {
+	heartbeat: 'Online/heartbeat OK',
+	app_background_resume: 'Background/resume',
+	device_mismatch: 'Device mismatch',
+	submit_guard: 'Submit guard',
+	stale_connection: 'Stale connection',
+	warning: 'Peringatan pengawas',
+	force_submit: 'Submitted/force submitted',
+	reset_access: 'Reset akses',
+	export_print: 'Export/print token-free'
+};
+
+const PROCTOR_EVIDENCE_CATEGORY_SUMMARIES: Record<ProctorEvidenceCategory, string> = {
+	heartbeat: 'Heartbeat aktif atau kontak server terakhir masih sehat.',
+	app_background_resume: 'Aplikasi sempat background/resume; verifikasi siswa tetap mengikuti arahan ruang.',
+	device_mismatch: 'Perangkat tidak sesuai binding sesi; reset akses hanya setelah verifikasi identitas.',
+	submit_guard: 'Submit ditahan karena pending sinkron/degraded mode; tunggu jawaban aman terkirim.',
+	stale_connection: 'Koneksi stale atau heartbeat tertunda; pengawas perlu cek jaringan/perangkat.',
+	warning: 'Peringatan BYOD atau catatan manual dari runtime ujian.',
+	force_submit: 'Submit manual/force submit sudah tercatat sebagai tindakan pengawas.',
+	reset_access: 'Akses perangkat direset oleh pengawas setelah verifikasi ruang.',
+	export_print: 'Bukti cetak/export tersedia tanpa dump token mentah.'
+};
+
+export const proctorOperatorGuidance: ProctorOperatorGuidanceItem[] = [
+	{
+		title: 'Kapan memperingatkan siswa',
+		description: 'Saat app background/resume, heartbeat mulai stale, atau ada percobaan screenshot/app switch berulang.'
+	},
+	{
+		title: 'Kapan reset akses',
+		description: 'Saat perangkat sah perlu login ulang setelah pengawas memverifikasi identitas, ruang, dan alasan gangguan.'
+	},
+	{
+		title: 'Kapan paksa submit',
+		description: 'Saat ruang harus ditutup dan pengawas sudah memastikan jawaban tersinkron atau prosedur manual dicatat.'
+	}
+];
+
+export function proctorEvidenceCategoryLabel(category: ProctorEvidenceCategory | null): string {
+	return category ? PROCTOR_EVIDENCE_CATEGORY_LABELS[category] : 'Event lain';
+}
+
+export function proctorEvidenceCategorySummary(category: ProctorEvidenceCategory | null): string {
+	return category ? PROCTOR_EVIDENCE_CATEGORY_SUMMARIES[category] : 'Event tidak masuk kategori utama evidence.';
+}
+
 type ProctorEvidenceSummaryInput = {
 	participants: ProctorEvidenceParticipant[];
 	events: ProctorEvidenceEvent[];

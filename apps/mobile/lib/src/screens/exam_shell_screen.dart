@@ -374,7 +374,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _isResumingExam = false;
         _resumeCheckRequired = true;
         _statusMessage =
-            'Status ujian belum berhasil dicek ulang. Tetap di mode aman dan minta pengawas membantu koneksi.';
+            'Status ujian belum berhasil dicek ulang. Pengawas perlu memastikan siswa boleh melanjutkan setelah koneksi pulih.';
       });
       return;
     }
@@ -383,7 +383,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       _resumeCheckRequired = false;
       _statusMessage = _pendingAnswers.isEmpty
           ? 'Status ujian sudah diperbarui. Anda dapat melanjutkan.'
-          : 'Status ujian diperbarui, tetapi masih ada jawaban lokal yang menunggu sinkron.';
+          : 'Status ujian diperbarui, tetapi masih ada jawaban aman di perangkat ini yang perlu sinkron.';
     });
   }
 
@@ -659,13 +659,13 @@ class _ExamShellScreenState extends State<ExamShellScreen>
           _isSubmitPendingIntervention = true;
           _errorMessage = autoSubmit
               ? 'Waktu habis, tetapi masih ada jawaban lokal yang belum diterima server. Tetap di layar ini, minta pengawas memeriksa koneksi, lalu tekan perbarui status atau coba kirim ulang setelah sinkron pulih.'
-              : 'Masih ada jawaban yang belum tersinkron ke server. Tunggu koneksi stabil lalu coba kirim lagi.';
+              : 'Masih ada jawaban yang belum tersinkron ke server. Jawaban tetap aman di perangkat ini; tunggu koneksi stabil lalu coba kirim lagi.';
           _serverNotice = ExamGuidanceNotice(
             title: autoSubmit
                 ? 'Submit otomatis ditahan'
                 : 'Submit ditahan sementara',
             message:
-                'Snapshot jawaban lokal tetap disimpan di perangkat ini. Jangan menutup aplikasi sampai pengawas memastikan sinkronisasi pulih atau memberikan instruksi lanjutan.',
+                'Jawaban tetap aman di perangkat ini. Jangan menutup aplikasi sampai pengawas memastikan sinkronisasi pulih atau memberikan instruksi lanjutan.',
             tone: ExamGuidanceTone.danger,
           );
         });
@@ -686,7 +686,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     if (!autoSubmit && _isDegradedMode) {
       setState(() {
         _errorMessage =
-            'Mode koneksi menurun sedang aktif. Perbarui status dan tunggu sinkron pulih sebelum mengirim ujian.';
+            'Perlu pengawas. Kirim ujian ditahan sampai sinkron pulih.';
       });
       await widget.client
           .sendExamEvent(
@@ -1050,8 +1050,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                                 const SizedBox(height: 10),
                                 Text(
                                   _isResumingExam
-                                      ? 'Sistem sedang memeriksa ulang status peserta dan mencoba menyinkronkan jawaban lokal.'
-                                      : 'Aplikasi mendeteksi perpindahan dari mode ujian. Lanjutkan hanya jika pengawas mengizinkan.',
+                                      ? 'Sistem sedang memeriksa ulang status peserta dan mencoba menyinkronkan jawaban lokal. Pengawas perlu memastikan siswa boleh melanjutkan setelah status kembali aman.'
+                                      : 'Aplikasi mendeteksi perpindahan dari mode ujian. Pengawas perlu memastikan siswa boleh melanjutkan sebelum sesi dibuka lagi.',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     height: 1.5,
                                   ),
@@ -1059,7 +1059,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                                 if (_pendingAnswers.isNotEmpty) ...[
                                   const SizedBox(height: 12),
                                   Text(
-                                    '${_pendingAnswers.length} jawaban lokal menunggu sinkron.',
+                                    '${_pendingAnswers.length} jawaban aman di perangkat ini dan perlu sinkron.',
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.primary,
                                       fontWeight: FontWeight.w700,
@@ -1321,7 +1321,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               if (_pendingAnswers.isNotEmpty) ...[
                 StatTile(
                   label: 'Jawaban lokal',
-                  value: '${_pendingAnswers.length} menunggu sinkron',
+                  value: '${_pendingAnswers.length} jawaban aman, perlu sinkron',
                   accent: true,
                 ),
                 const SizedBox(height: 12),
@@ -1334,7 +1334,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                 InlineMessage(
                   tone: BannerTone.error,
                   message:
-                      'Submit final sedang ditahan sampai semua jawaban lokal tersinkron ke server.',
+                      'Submit final sedang ditahan sampai semua jawaban lokal tersinkron ke server. Jawaban masih aman di perangkat ini.',
                 ),
                 const SizedBox(height: 12),
               ],
@@ -1822,7 +1822,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               Icon(Icons.support_agent, color: Colors.amber.shade900, size: 32),
               const SizedBox(height: 12),
               Text(
-                'Tipe soal belum didukung aplikasi siswa',
+                'Tidak didukung aplikasi siswa',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: Colors.amber.shade900,
@@ -1830,7 +1830,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                'Panggil pengawas untuk membantu pencatatan manual pada soal ini.',
+                'Soal tipe ini belum bisa dijawab langsung di aplikasi siswa. Panggil pengawas agar jawaban atau tindak lanjut dicatat sesuai prosedur ruang.',
                 style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
               ),
               const SizedBox(height: 12),
