@@ -22,8 +22,8 @@ const int kShortAnswerMaxChars = 256;
 const int kEssayAnswerMaxChars = 15000;
 
 const List<ExamOption> _defaultTrueFalseOptions = [
-  ExamOption(label: 'true', text: 'Benar'),
-  ExamOption(label: 'false', text: 'Salah'),
+  ExamOption(label: 'A', text: 'Benar'),
+  ExamOption(label: 'B', text: 'Salah'),
 ];
 
 const List<ExamOption> _defaultAgreeDisagreeOptions = [

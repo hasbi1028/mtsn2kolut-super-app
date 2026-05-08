@@ -502,6 +502,29 @@ Final sign-off:
 - blocker list:
 - final baseline marker present: ya / tidak.
 
+## Phase 19-22 Fixed Pair and High-Risk Question Decisions
+
+Isi bagian ini saat review proposal question-type parity setelah baseline `cebd789`.
+
+- Phase 19 fixed-pair evidence:
+  - `true_false` labels `A=Benar`, `B=Salah`: pass / fail / n/a.
+  - `agree_disagree` labels `A=Setuju`, `B=Tidak Setuju`: pass / fail / n/a.
+  - Flutter fallback submits Web Admin/Core API labels: pass / fail / n/a.
+  - backend scoring compatibility for old `true`/`false` true_false cache: pass / fail / n/a.
+- Phase 20 hotspot decision:
+  - `hotspot_safe_status: adapted_deferred`.
+  - no fake hotspot runtime: pass / fail / n/a.
+  - design doc: `docs/cbt-hotspot-design-decision.md`.
+- Phase 21 upload/file answer policy:
+  - `upload_answer_safe_status: policy_deferred`.
+  - policy doc: `docs/cbt-upload-answer-policy.md`.
+  - no upload runtime enabled without secure storage/auth/MIME/size/retention/review tests: pass / fail / n/a.
+- Phase 22 media prompt/response policy:
+  - existing image/audio prompt fields reviewed: pass / fail / n/a.
+  - `recording_answer_safe_status: policy_deferred`.
+  - policy doc: `docs/cbt-media-prompt-response-policy.md`.
+  - no recording upload enabled outside upload/file answer policy: pass / fail / n/a.
+
 ## Acceptance Decision
 
 Lanjut bila:

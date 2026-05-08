@@ -20,11 +20,11 @@ Dokumen ini mengunci definisi “100% implementasi proposal” untuk Sistem CBT 
 | Question types: short_answer | Web Admin / Core API | Implemented runtime | Alias answer key separated by `|`, whitespace/case normalization in scoring | Not blocking after Phase 17 hardening | Phase 17 |
 | Question types: matching | Web Admin / Core API | Implemented runtime | Pair answer key `A=1;B=2`, pair scoring sorted by left label | Not blocking | Phase 17 |
 | Question types: ordering | Web Admin / Core API / Flutter | Implemented runtime | Authoring contract, answer key and Flutter answer format comma-separated labels like `B,A,C`, scoring exact sequence | Not blocking after Phase 18 | Phase 18 |
-| Question types: true_false | Web Admin / Core API / Flutter | Implemented runtime | Fixed pair `A=Benar`, `B=Salah`, label-compatible Flutter fallback | Not blocking | Phase 17 / Phase 19 |
+| Question types: true_false | Web Admin / Core API / Flutter | Implemented runtime | Fixed pair `A=Benar`, `B=Salah`, Flutter fallback submits `A`/`B`, backend scoring tolerates legacy `true`/`false` cached answers | Not blocking | Phase 17 / Phase 19 |
 | Question types: agree_disagree | Web Admin / Core API / Flutter | Implemented runtime | Fixed pair `A=Setuju`, `B=Tidak Setuju`, label-compatible Flutter fallback | Not blocking | Phase 17 / Phase 19 |
-| Question types: hotspot | Flutter / Web Admin / Core API | Adapted/out-of-scope for v1 unless explicitly approved | Flutter unsupported guard; decision record required before schema/UI/scoring | Feature parity blocker only if user chooses hotspot v1 | Phase 20 |
-| Question types: upload_answer / file_upload | Flutter / Web Admin / Core API / Ops | Adapted/out-of-scope for v1 unless storage policy approved | Flutter unsupported guard; storage/MIME/retention/manual review policy required | Feature parity blocker only if proposal file answer is mandatory | Phase 21 |
-| Audio/video prompt/response | Web Admin / Flutter / Ops | Needs runtime implementation or adapted policy | Media prompt policy, storage and offline APK constraints | Deferred until policy | Phase 22 |
+| Question types: hotspot | Flutter / Web Admin / Core API | Adapted/out-of-scope for BYOD CBT v1 | `docs/cbt-hotspot-design-decision.md`; `hotspot_safe_status: adapted_deferred`; Flutter unsupported guard; no fake hotspot | Feature parity blocker only if user chooses hotspot v1 after schema/UI/scoring design | Phase 20 |
+| Question types: upload_answer / file_upload | Flutter / Web Admin / Core API / Ops | Policy deferred | `docs/cbt-upload-answer-policy.md`; `upload_answer_safe_status: policy_deferred`; no upload runtime until secure storage/auth/MIME/size/retention/review tests exist | Feature parity blocker only if proposal file answer is mandatory | Phase 21 |
+| Audio/video prompt/response | Web Admin / Flutter / Ops | Prompt partial; recording policy deferred | Existing image/audio prompt fields; `docs/cbt-media-prompt-response-policy.md`; `recording_answer_safe_status: policy_deferred`; no recording upload outside file-answer policy | Deferred for recording; prompt media remains bounded to existing fields | Phase 22 |
 | Anti-cheat BYOD layers | Flutter / Core API / Ops | Implemented docs/evidence + partial runtime | Lifecycle telemetry, screenshot protection where OS allows, heartbeat, submit guard, audit event | Needs manual evidence on physical Android devices | Phase 24 |
 | Proctoring dashboard | Web Admin / Core API | Implemented runtime + needs evidence mode | Room dashboard, participant events, suspicious flag, handover recap | Needs operator rehearsal evidence | Phase 23 / Phase 27 |
 | Reports | Web Admin / Core API | Partial | Session results and item analysis exist; PDF/Excel parity still needs final export evidence | Blocking for full proposal reporting parity | Phase 26 |
@@ -54,3 +54,10 @@ Canonical supported types for end-to-end hardening are: `multiple_choice`, `mult
 ## Phase 18 ordering completion boundary
 
 Ordering is completed as a monorepo contract without schema migration: Web Admin authoring exposes `ordering`, Core API validates all option labels exactly once, scoring checks exact comma-separated sequence, and Flutter already submits/restores the same format. Result display can use the existing participant answer/key fields until Phase 26 report export polish.
+
+## Phase 19-22 decision status
+
+- Phase 19 fixed-pair alignment: `true_false` uses `A=Benar`, `B=Salah`; `agree_disagree` uses `A=Setuju`, `B=Tidak Setuju`. Flutter fallback now matches Web Admin/Core API labels, while backend scoring remains tolerant of old `true`/`false` cached true/false answers.
+- Phase 20 hotspot: `hotspot_safe_status: adapted_deferred`; no fake hotspot runtime, no schema migration, and no tap-coordinate scoring until a separate approved design exists.
+- Phase 21 upload/file answer: `upload_answer_safe_status: policy_deferred`; no runtime upload endpoint, Flutter picker, storage path, or reviewer download UI until secure storage/auth/MIME/size/retention/review tests exist.
+- Phase 22 media prompt/response: existing image/audio prompt fields remain the bounded runtime surface; video prompt is adapted/deferred and recording answers use `recording_answer_safe_status: policy_deferred`.

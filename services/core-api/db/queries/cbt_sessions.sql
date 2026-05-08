@@ -425,6 +425,16 @@ SET is_correct = CASE
   WHEN q.question_type = 'ordering' THEN
     (array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(sa.answer, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ',') =
      array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(q.answer_key, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ','))
+  -- true_false: canonical Web Admin labels are A=Benar and B=Salah.
+  -- Legacy mobile snapshots may still contain true/false from the earlier fallback.
+  WHEN q.question_type = 'true_false' THEN
+    (CASE
+      WHEN lower(btrim(sa.answer)) = 'true' THEN 'A'
+      WHEN lower(btrim(sa.answer)) = 'false' THEN 'B'
+      ELSE upper(btrim(sa.answer))
+    END = upper(btrim(q.answer_key)))
+  -- agree_disagree: canonical Web Admin labels are A=Setuju and B=Tidak Setuju.
+  WHEN q.question_type = 'agree_disagree' THEN upper(btrim(sa.answer)) = upper(btrim(q.answer_key))
   -- short_answer: answer_key may contain accepted aliases separated by "|";
   -- normalize case, repeated whitespace, and non-breaking spaces before matching.
   WHEN q.question_type = 'short_answer' THEN EXISTS (
@@ -457,6 +467,13 @@ SET is_correct = CASE
   WHEN q.question_type = 'ordering' THEN
     (array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(sa.answer, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ',') =
      array_to_string(ARRAY(SELECT upper(btrim(label)) FROM unnest(string_to_array(q.answer_key, ',')) WITH ORDINALITY AS key(label, ord) WHERE btrim(label) <> '' ORDER BY ord), ','))
+  WHEN q.question_type = 'true_false' THEN
+    (CASE
+      WHEN lower(btrim(sa.answer)) = 'true' THEN 'A'
+      WHEN lower(btrim(sa.answer)) = 'false' THEN 'B'
+      ELSE upper(btrim(sa.answer))
+    END = upper(btrim(q.answer_key)))
+  WHEN q.question_type = 'agree_disagree' THEN upper(btrim(sa.answer)) = upper(btrim(q.answer_key))
   WHEN q.question_type = 'short_answer' THEN EXISTS (
     SELECT 1
     FROM unnest(string_to_array(q.answer_key, '|')) AS accepted(answer)
