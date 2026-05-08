@@ -61,7 +61,7 @@ func (h *CbtQuestionAsset) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 		questionID = parsed
 	}
-	if !h.requireQuestionAssetScope(w, r, questionID) {
+	if !h.requireQuestionAssetScope(w, r, questionID, "bank_soal.create", "bank_soal.update") {
 		return
 	}
 
@@ -111,7 +111,7 @@ func (h *CbtQuestionAsset) List(w http.ResponseWriter, r *http.Request) {
 		api.BadRequest(w, "question_id invalid")
 		return
 	}
-	if !h.requireQuestionAssetScope(w, r, questionID) {
+	if !h.requireQuestionAssetScope(w, r, questionID, "bank_soal.read", "bank_soal.create", "bank_soal.update", "bank_soal.review", "bank_soal.publish") {
 		return
 	}
 	rows, err := h.svc.ListByQuestion(r.Context(), questionID)
@@ -134,15 +134,18 @@ func (h *CbtQuestionAsset) List(w http.ResponseWriter, r *http.Request) {
 	api.OK(w, items)
 }
 
-func (h *CbtQuestionAsset) requireQuestionAssetScope(w http.ResponseWriter, r *http.Request, questionID pgtype.UUID) bool {
+func (h *CbtQuestionAsset) requireQuestionAssetScope(w http.ResponseWriter, r *http.Request, questionID pgtype.UUID, allowedPermissions ...string) bool {
 	if hasAnyRole(r, "admin") {
 		return true
 	}
-	if !hasAnyRole(r, "guru") {
+	if !questionID.Valid {
+		if hasAnyPermission(r, "bank_soal.create") {
+			return true
+		}
 		api.Forbidden(w)
 		return false
 	}
-	if !questionID.Valid {
+	if !hasAnyRole(r, "guru") {
 		api.Forbidden(w)
 		return false
 	}
@@ -184,7 +187,7 @@ func (h *CbtQuestionAsset) File(w http.ResponseWriter, r *http.Request) {
 			api.Forbidden(w)
 			return
 		}
-	} else if !h.requireQuestionAssetScope(w, r, asset.QuestionID) {
+	} else if !h.requireQuestionAssetScope(w, r, asset.QuestionID, "bank_soal.read", "bank_soal.create", "bank_soal.update", "bank_soal.review", "bank_soal.publish") {
 		return
 	}
 	f, err := h.svc.Open(asset)

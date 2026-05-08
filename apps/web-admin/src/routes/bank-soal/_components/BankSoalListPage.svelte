@@ -28,7 +28,7 @@
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
-	import { canImportBankSoal, canManageBankSoalSettings, canReviewBankSoal } from '$lib/bank-soal/access';
+	import { canCreateBankSoal, canImportBankSoal, canManageBankSoalSettings, canReviewBankSoal } from '$lib/bank-soal/access';
 	import { htmlToPlainText } from '$lib/utils/html-text';
 
 	type PageData = {
@@ -291,6 +291,7 @@
 	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 	let roles = $derived(data.user?.roles ?? (data.user?.role ? [data.user.role] : []));
+	let canCreate = $derived(canCreateBankSoal(data.user));
 	let canImport = $derived(canImportBankSoal(data.user));
 	let canReview = $derived(canReviewBankSoal(data.user));
 	let canSettings = $derived(canManageBankSoalSettings(data.user));
@@ -888,10 +889,12 @@
 							Impor
 						</Button>
 					{/if}
-					<Button href={composerHref} class="bg-card text-primary hover:bg-primary/10">
-						<PlusIcon class="size-4" />
-						Soal Baru
-					</Button>
+					{#if canCreate}
+						<Button href={composerHref} class="bg-card text-primary hover:bg-primary/10">
+							<PlusIcon class="size-4" />
+							Soal Baru
+						</Button>
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -1021,10 +1024,12 @@
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-800"><FileQuestionIcon class="size-5" /></span>
 					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Buka daftar soal</span><span class="block text-xs text-muted-foreground">Kelola filter, status, dan pagination soal</span></span>
 				</a>
-				<a href={composerHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
-					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary"><PlusIcon class="size-5" /></span>
-					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Tambah soal baru</span><span class="block text-xs text-muted-foreground">PG, essay, benar/salah, menjodohkan</span></span>
-				</a>
+				{#if canCreate}
+					<a href={composerHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
+						<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary"><PlusIcon class="size-5" /></span>
+						<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Tambah soal baru</span><span class="block text-xs text-muted-foreground">PG, essay, benar/salah, menjodohkan</span></span>
+					</a>
+				{/if}
 				<a href={packageHref} class="group flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
 					<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning"><PackageIcon class="size-5" /></span>
 					<span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-foreground">Buat paket asesmen</span><span class="block text-xs text-muted-foreground">Gunakan soal terbit di modul Asesmen</span></span>
@@ -1249,10 +1254,12 @@
 							{#if hasFilters}
 								<Button variant="outline" onclick={clearFilters}>Bersihkan filter</Button>
 							{/if}
-							<Button href={composerHref}>
-								<PlusIcon class="size-4" />
-								Tambah Soal
-							</Button>
+							{#if canCreate}
+								<Button href={composerHref}>
+									<PlusIcon class="size-4" />
+									Tambah Soal
+								</Button>
+							{/if}
 							{#if canImport}
 								<Button href={importHref} variant="outline">
 									<UploadIcon class="size-4" />
