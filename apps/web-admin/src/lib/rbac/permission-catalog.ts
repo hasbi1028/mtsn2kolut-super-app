@@ -32,6 +32,8 @@ export const RBAC_PERMISSION_CATALOG = [
 	{ code: 'dashboard.read', module: 'dashboard', action: 'read', description: 'Melihat dashboard utama.' },
 	{ code: 'document_cycles.manage', module: 'document_cycles', action: 'manage', description: 'Mengelola siklus dokumen.' },
 	{ code: 'document_cycles.read', module: 'document_cycles', action: 'read', description: 'Melihat siklus dokumen.' },
+	{ code: 'employees.manage', module: 'employees', action: 'manage', description: 'Mengelola data master pegawai.' },
+	{ code: 'employees.read', module: 'employees', action: 'read', description: 'Melihat data master pegawai.' },
 	{ code: 'governance.manage', module: 'governance', action: 'manage', description: 'Mengelola tata kelola.' },
 	{ code: 'governance.read', module: 'governance', action: 'read', description: 'Melihat tata kelola.' },
 	{ code: 'grades.manage', module: 'grades', action: 'manage', description: 'Mengelola nilai/rapor.' },

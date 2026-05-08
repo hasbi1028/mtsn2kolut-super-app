@@ -10,7 +10,7 @@ const portalItems = sidebarNavGroups.find((group) => group.group === 'Portal')?.
 
 describe('sidebar assessment configuration', () => {
 	it('keeps Dashboard only as the quick-access root item, not duplicated in a Utama group', () => {
-		expect(dashboardNavItem).toMatchObject({ href: '/', label: 'Dashboard', pinnable: false });
+		expect(dashboardNavItem).toMatchObject({ href: '/', label: 'Dashboard', permissions: ['dashboard.read'], pinnable: false });
 		expect(sidebarNavGroups.some((group) => group.group === 'Utama')).toBe(false);
 		expect(sidebarNavGroups.flatMap((group) => group.items).some((item) => item.href === '/')).toBe(false);
 	});
@@ -127,8 +127,12 @@ describe('sidebar assessment configuration', () => {
 		const allItems = sidebarNavGroups.flatMap((group) => group.items);
 		const byHref = new Map(allItems.map((item) => [item.href, item]));
 
-		expect(byHref.get('/settings/account')?.roles).toBeUndefined();
-		expect(byHref.get('/settings')?.roles).toEqual(['admin']);
+		expect(allItems.every((item) => item.permissions.length > 0)).toBe(true);
+		expect(byHref.get('/settings/account')).toMatchObject({
+			permissions: ['settings.account'],
+			allowAuthenticatedFallback: true
+		});
+		expect(byHref.get('/settings')?.permissions).toEqual(['settings.account']);
 		expect(byHref.get('/settings/users')?.permissions).toEqual(['users.read']);
 		expect(byHref.get('/settings/rbac')).toMatchObject({
 			label: 'Manajemen RBAC',
@@ -141,12 +145,38 @@ describe('sidebar assessment configuration', () => {
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/tambah')?.permissions).toEqual(['bank_soal.create']);
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review']);
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/impor')?.permissions).toEqual(['bank_soal.import']);
+		expect(bankSoalItems.find((item) => item.href === '/bank-soal/analisis-butir')?.permissions).toEqual(['bank_soal.analytics']);
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/pengaturan')?.permissions).toEqual(['bank_soal.settings']);
-		expect(bankSoalItems.filter((item) => !['/bank-soal/tambah', '/bank-soal/verifikasi', '/bank-soal/impor', '/bank-soal/pengaturan'].includes(item.href)).every((item) => item.permissions?.includes('bank_soal.read'))).toBe(true);
+		expect(bankSoalItems.filter((item) => !['/bank-soal/tambah', '/bank-soal/verifikasi', '/bank-soal/impor', '/bank-soal/analisis-butir', '/bank-soal/pengaturan'].includes(item.href)).every((item) => item.permissions.includes('bank_soal.read'))).toBe(true);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/kegiatan')?.permissions).toEqual(['asesmen.event_manage']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/paket')?.permissions).toEqual(['asesmen.package_manage']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/hasil')?.permissions).toEqual(['asesmen.result_read']);
-		expect(allItems.filter((item) => item.permissions?.length).every((item) => item.roles?.length)).toBe(true);
+	});
+
+	it('hides guru role-only academic, student, assessment, and bank-soal surfaces without permissions', () => {
+		const visibleHrefs = filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], [])
+			.flatMap((group) => group.items.map((item) => item.href));
+
+		expect(visibleHrefs).toEqual(['/settings/account']);
+		expect(visibleHrefs).not.toContain('/jadwal');
+		expect(visibleHrefs).not.toContain('/students');
+		expect(visibleHrefs).not.toContain('/bank-soal');
+		expect(visibleHrefs).not.toContain('/bank-soal/tambah');
+		expect(visibleHrefs).not.toContain('/asesmen/pelaksanaan');
+		expect(visibleHrefs).not.toContain('/asesmen/hasil');
+	});
+
+	it('shows only Bank Soal and account surfaces for a guru with Bank Soal read/create permissions', () => {
+		const visibleHrefs = filterSidebarNavGroupsByAccess(sidebarNavGroups, ['guru'], ['bank_soal.read', 'bank_soal.create'])
+			.flatMap((group) => group.items.map((item) => item.href));
+
+		expect(visibleHrefs).toEqual([
+			'/bank-soal',
+			'/bank-soal/daftar',
+			'/bank-soal/tambah',
+			'/bank-soal/mapel-kd',
+			'/settings/account'
+		]);
 	});
 
 	it('exposes student and parent portal entries only to matching roles or permissions', () => {
@@ -161,12 +191,14 @@ describe('sidebar assessment configuration', () => {
 			label: 'Portal Siswa',
 			icon: 'book-open',
 			roles: ['siswa'],
+			roleFallbacks: ['siswa'],
 			permissions: ['student_portal.read']
 		});
 		expect(byHref.get('/portal/orang-tua')).toMatchObject({
 			label: 'Portal Orang Tua',
 			icon: 'user-group',
 			roles: ['ortu'],
+			roleFallbacks: ['ortu'],
 			permissions: ['parent_portal.read']
 		});
 		expect(visibleHrefs(['siswa'])).toContain('/portal/siswa');

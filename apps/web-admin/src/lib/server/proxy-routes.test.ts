@@ -1354,7 +1354,7 @@ describe('api proxy route handlers', () => {
 			body: JSON.stringify({ date: '2026-05-07' })
 		});
 		const event = createEvent({
-			locals: { user: { role: 'guru', roles: ['guru'] } },
+			locals: { user: { role: 'guru', roles: ['guru'], permissions: ['journal.manage'] } },
 			params: { id: 'class 1/2026', slotID: 'slot 1/2026' },
 			request
 		});

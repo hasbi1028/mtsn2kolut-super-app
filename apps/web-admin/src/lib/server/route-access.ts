@@ -88,6 +88,10 @@ const STUDENT_PAGE_PREFIXES = ['/students'] as const;
 const STUDENT_API_PREFIXES = ['/api/students'] as const;
 const STUDENT_PORTAL_PREFIXES = ['/portal/siswa', '/api/portal/siswa', '/api/portal/student'] as const;
 const PARENT_PORTAL_PREFIXES = ['/portal/orang-tua', '/api/portal/orang-tua', '/api/portal/parent'] as const;
+const SCHEDULE_PAGE_PREFIXES = ['/jadwal'] as const;
+const GRADES_PREFIXES = ['/grades', '/api/grades'] as const;
+const JOURNAL_PREFIXES = ['/journal', '/api/journal'] as const;
+const EMPLOYEE_PREFIXES = ['/employees', '/api/employees'] as const;
 
 function matchesPathSegment(pathname: string, prefix: string) {
 	const normalizedPrefix = prefix === '/' ? '/' : prefix.replace(/\/$/, '');
@@ -194,6 +198,15 @@ function usersPermission(pathname: string, method: string): string[] | undefined
 	return undefined;
 }
 
+function settingsPermission(pathname: string): string[] | undefined {
+	if (matchesPathSegment(pathname, '/settings/account')) return undefined;
+	if (matchesPathSegment(pathname, '/settings/audit-logs')) return ['audit.read'];
+	if (matchesPathSegment(pathname, '/settings/rbac')) return ['roles.read'];
+	if (matchesPathSegment(pathname, '/settings/school-profile') || matchesPathSegment(pathname, '/api/school-profile')) return ['settings.school_profile'];
+	if (pathname === '/settings') return ['settings.account'];
+	return undefined;
+}
+
 function bankSoalPermission(pathname: string, method: string): string[] | undefined {
 	if (!isBankSoalPath(pathname)) return undefined;
 	if (!pathname.startsWith('/api/')) {
@@ -201,6 +214,7 @@ function bankSoalPermission(pathname: string, method: string): string[] | undefi
 		if (matchesPathSegment(pathname, '/bank-soal/verifikasi')) return ['bank_soal.review'];
 		if (matchesPathSegment(pathname, '/bank-soal/impor')) return ['bank_soal.import'];
 		if (matchesPathSegment(pathname, '/bank-soal/pengaturan')) return ['bank_soal.settings'];
+		if (matchesPathSegment(pathname, '/bank-soal/analisis-butir')) return ['bank_soal.analytics'];
 		return ['bank_soal.read'];
 	}
 	if (isReadMethod(method)) return ['bank_soal.read'];
@@ -280,25 +294,52 @@ function staffOperationPermission(pathname: string, method: string): string[] | 
 	return undefined;
 }
 
+function schedulePermission(pathname: string): string[] | undefined {
+	if (!SCHEDULE_PAGE_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix))) return undefined;
+	return ['academic.read', 'student_portal.schedule_read', 'parent_portal.child_schedule_read'];
+}
+
+function gradesPermission(pathname: string, method: string): string[] | undefined {
+	if (!GRADES_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix))) return undefined;
+	return isReadMethod(method) ? ['grades.read', 'grades.manage'] : ['grades.manage'];
+}
+
+function journalPermission(pathname: string, method: string): string[] | undefined {
+	if (!JOURNAL_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix))) return undefined;
+	return isReadMethod(method)
+		? ['journal.read', 'journal.manage', 'journal.read_all', 'journal.manage_all']
+		: ['journal.manage', 'journal.manage_all'];
+}
+
+function employeePermission(pathname: string, method: string): string[] | undefined {
+	if (!EMPLOYEE_PREFIXES.some((prefix) => matchesPathSegment(pathname, prefix))) return undefined;
+	return isReadMethod(method) ? ['employees.read', 'employees.manage'] : ['employees.manage'];
+}
+
 function isRombelTimetableJournalSessionPath(pathname: string): boolean {
 	return /^\/api\/academic\/rombel\/[^/]+\/timetable-slots\/[^/]+\/journal-session\/?$/.test(pathname.split('?')[0] ?? pathname);
 }
 
 export function requiredPermissionsForPath(pathname: string, method: string): string[] {
-	if (matchesPathSegment(pathname, '/settings/audit-logs')) return ['audit.read'];
-	if (matchesPathSegment(pathname, '/settings/rbac')) return ['roles.read'];
-	if (matchesPathSegment(pathname, '/settings/school-profile') || matchesPathSegment(pathname, '/api/school-profile')) return ['settings.school_profile'];
+	const settings = settingsPermission(pathname);
+	if (settings) return settings;
 	if (matchesPathSegment(pathname, '/api/rbac')) return isReadMethod(method) ? ['roles.read'] : ['roles.manage'];
 	if (matchesPathSegment(pathname, '/parents') || matchesPathSegment(pathname, '/api/parents')) return isReadMethod(method) ? ['parents.read'] : ['parents.manage'];
 	if (isRombelTimetableJournalSessionPath(pathname)) return ['journal.manage', 'journal.manage_all'];
-	if (matchesPathSegment(pathname, '/academic') || matchesPathSegment(pathname, '/api/academic')) return isReadMethod(method) ? ['academic.read'] : ['academic.manage'];
+	if (matchesPathSegment(pathname, '/academic') || matchesPathSegment(pathname, '/akademik') || matchesPathSegment(pathname, '/api/academic')) return isReadMethod(method) ? ['academic.read'] : ['academic.manage'];
 	if (matchesPathSegment(pathname, '/pusaka') || matchesPathSegment(pathname, '/api/pusaka')) return isReadMethod(method) ? ['pusaka.read'] : ['pusaka.manage'];
 	if (matchesPathSegment(pathname, '/website') || matchesPathSegment(pathname, '/api/website')) return isReadMethod(method) ? ['website.read'] : ['website.manage'];
+	if (matchesPathSegment(pathname, '/notifications') || matchesPathSegment(pathname, '/api/notifications')) return ['notifications.read'];
+	if (matchesPathSegment(pathname, '/api/portal/guru/timetable')) return ['academic.read', 'journal.read', 'journal.manage', 'journal.read_all', 'journal.manage_all'];
 	if (isStudentPortalPath(pathname)) return ['student_portal.read'];
 	if (isParentPortalPath(pathname)) return ['parent_portal.read'];
-	if (isKesiswaanPath(pathname)) return isReadMethod(method) ? ['students.read'] : ['students.manage'];
+	if (isKesiswaanPath(pathname)) return isReadMethod(method) ? ['kesiswaan.read', 'students.read'] : ['kesiswaan.manage', 'students.manage'];
 	if (isStudentPagePath(pathname) || isStudentApiPath(pathname)) return isReadMethod(method) ? ['students.read'] : ['students.manage'];
 	return usersPermission(pathname, method)
+		?? schedulePermission(pathname)
+		?? gradesPermission(pathname, method)
+		?? journalPermission(pathname, method)
+		?? employeePermission(pathname, method)
 		?? bankSoalPermission(pathname, method)
 		?? asesmenPermission(pathname, method)
 		?? staffOperationPermission(pathname, method)
@@ -313,17 +354,10 @@ export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: st
 
 	const requiredPermissions = requiredPermissionsForPath(pathname, method);
 	if (requiredPermissions.length > 0 && hasAnyPermission(user, requiredPermissions)) return true;
-	if (isRombelTimetableJournalSessionPath(pathname)) return hasAnyRole(user, ['guru']);
 
 	if (isAdminOnlyPath(pathname) && !isGuruSafeAssessmentSupportReadPath(pathname, method)) return false;
-	if (isGuruSafeAssessmentSupportReadPath(pathname, method)) return hasAnyRole(user, ['guru']);
-	if (isBankSoalPath(pathname)) return isBankSoalGuruFallbackPath(pathname, method) && hasAnyRole(user, ['guru']);
-	if (isStaffOperationPath(pathname)) return hasAnyRole(user, ['staf']);
 	if (isStudentPortalPath(pathname)) return hasAnyRole(user, ['siswa']);
 	if (isParentPortalPath(pathname)) return hasAnyRole(user, ['ortu']);
-	if (isKesiswaanPath(pathname)) return hasAnyRole(user, isReadMethod(method) ? ['kesiswaan', 'guru'] : ['kesiswaan']);
-	if (isStudentPagePath(pathname)) return hasAnyRole(user, ['kesiswaan']);
-	if (isStudentApiPath(pathname)) return hasAnyRole(user, isReadMethod(method) ? ['kesiswaan', 'guru'] : ['kesiswaan']);
 
 	// Default-authenticated surfaces such as /settings/account remain available,
 	// but paths with explicit permission metadata must fail closed when the user

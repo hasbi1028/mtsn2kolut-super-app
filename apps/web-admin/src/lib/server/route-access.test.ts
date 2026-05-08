@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { canAccessProtectedRoute, hasAnyPermission, hasAnyRole, isAdminOnlyPath, isBankSoalPath, isGuruSafeAssessmentSupportReadPath, isKesiswaanPath, isMustChangePasswordAllowedPath, isPublicPath, isReadMethod, isStaffOperationPath, isStudentApiPath, isStudentPagePath, requiredPermissionsForPath } from './route-access';
 
 describe('route access helpers', () => {
-	it('keeps settings root available to authenticated non-admin users', () => {
+	it('keeps account settings available while gating system settings', () => {
 		expect(isAdminOnlyPath('/settings')).toBe(false);
 		expect(isAdminOnlyPath('/settings/account')).toBe(false);
 		expect(isAdminOnlyPath('/api/auth/account')).toBe(false);
@@ -122,6 +122,8 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute({ ...user, permissions: [...user.permissions, 'roles.read'] }, '/settings/rbac', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/settings/user-change-requests', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/account', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ ...user, permissions: ['settings.account'] }, '/settings', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/api/auth/account', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/api/auth/account/change-request-fields', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(user, '/bank-soal/daftar', 'GET')).toBe(true);
@@ -192,18 +194,19 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute(profileReviewer, '/api/users/change-requests/export', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(reader, '/api/bank-soal/questions', 'POST')).toBe(false);
 		expect(canAccessProtectedRoute(mutator, '/api/bank-soal/questions', 'POST')).toBe(true);
-		expect(canAccessProtectedRoute(plainGuru, '/api/bank-soal/questions', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(plainGuru, '/api/bank-soal/questions', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(plainGuru, '/api/bank-soal/questions', 'POST')).toBe(false);
 		expect(canAccessProtectedRoute(plainGuru, '/api/bank-soal/questions/question-1', 'PUT')).toBe(false);
 		expect(canAccessProtectedRoute(plainGuru, '/api/bank-soal/questions/question-1/workflow', 'PATCH')).toBe(false);
 		expect(canAccessProtectedRoute(plainGuru, '/api/bank-soal/questions/question-1', 'DELETE')).toBe(false);
-		expect(canAccessProtectedRoute(plainGuru, '/bank-soal/daftar', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(plainGuru, '/bank-soal/daftar', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ ...plainGuru, permissions: ['bank_soal.read'] }, '/bank-soal/daftar', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(plainGuru, '/bank-soal/tambah', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(mutator, '/bank-soal/tambah', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(plainGuru, '/bank-soal/verifikasi', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(plainGuru, '/bank-soal/impor', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(plainGuru, '/bank-soal/pengaturan', 'GET')).toBe(false);
-		expect(canAccessProtectedRoute({ id: '4', username: 'guru', role: 'guru', roles: ['guru'], permissions: [] }, '/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toBe(true);
+		expect(canAccessProtectedRoute({ id: '4', username: 'guru', role: 'guru', roles: ['guru'], permissions: [] }, '/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toBe(false);
 		expect(canAccessProtectedRoute({ id: '5', username: 'journal-all', role: '', roles: [], permissions: ['journal.manage_all'] }, '/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toBe(true);
 		expect(canAccessProtectedRoute(reader, '/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toBe(false);
 		expect(canAccessProtectedRoute(reader, '/api/asesmen/events/event-1/question-targets', 'PUT')).toBe(false);
@@ -227,11 +230,27 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute({ ...reader, permissions: ['asesmen.proctor'] }, '/api/asesmen/sessions/session-1/proctoring/events', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...reader, permissions: ['asesmen.proctor'] }, '/api/asesmen/sessions/session-1/rooms/room-1/proctoring', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute({ ...reader, permissions: ['asesmen.score'] }, '/api/asesmen/sessions/session-1/ungraded-essays', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...plainGuru, permissions: ['academic.read'] }, '/jadwal', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(plainGuru, '/jadwal', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ ...plainGuru, permissions: ['grades.read'] }, '/grades', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(plainGuru, '/grades', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ ...plainGuru, permissions: ['journal.manage'] }, '/journal', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(plainGuru, '/journal', 'GET')).toBe(false);
 	});
 
 	it('documents route permission requirements for main migrated modules', () => {
 		expect(requiredPermissionsForPath('/settings/users', 'GET')).toEqual(['users.read']);
+		expect(requiredPermissionsForPath('/settings', 'GET')).toEqual(['settings.account']);
 		expect(requiredPermissionsForPath('/settings/rbac', 'GET')).toEqual(['roles.read']);
+		expect(requiredPermissionsForPath('/notifications', 'GET')).toEqual(['notifications.read']);
+		expect(requiredPermissionsForPath('/api/notifications', 'GET')).toEqual(['notifications.read']);
+		expect(requiredPermissionsForPath('/jadwal', 'GET')).toEqual(['academic.read', 'student_portal.schedule_read', 'parent_portal.child_schedule_read']);
+		expect(requiredPermissionsForPath('/grades', 'GET')).toEqual(['grades.read', 'grades.manage']);
+		expect(requiredPermissionsForPath('/api/grades/components', 'POST')).toEqual(['grades.manage']);
+		expect(requiredPermissionsForPath('/journal', 'GET')).toEqual(['journal.read', 'journal.manage', 'journal.read_all', 'journal.manage_all']);
+		expect(requiredPermissionsForPath('/api/journal/sessions', 'POST')).toEqual(['journal.manage', 'journal.manage_all']);
+		expect(requiredPermissionsForPath('/employees', 'GET')).toEqual(['employees.read', 'employees.manage']);
+		expect(requiredPermissionsForPath('/api/employees/employee-1', 'PUT')).toEqual(['employees.manage']);
 		expect(requiredPermissionsForPath('/api/rbac/matrix', 'GET')).toEqual(['roles.read']);
 		expect(requiredPermissionsForPath('/api/rbac/roles/guru/permissions', 'PUT')).toEqual(['roles.manage']);
 		expect(requiredPermissionsForPath('/settings/user-change-requests', 'GET')).toEqual(['profile_changes.review']);

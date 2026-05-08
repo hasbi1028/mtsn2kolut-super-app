@@ -202,6 +202,7 @@ func main() {
 	requireStudentsManage := mw.RequireAnyPermissionOrRole([]string{"students.manage"}, "admin", "kesiswaan")
 	requireParentsManage := mw.RequireAnyPermissionOrRole([]string{"parents.manage"}, "admin", "kesiswaan")
 	requireWebsiteManage := mw.RequireAnyPermissionOrRole([]string{"website.manage"}, "admin")
+	requirePusakaRead := mw.RequireAnyPermissionOrRole([]string{"pusaka.read", "pusaka.manage", "pusaka.sync", "pusaka.credentials_manage"}, "admin")
 	requirePusakaManage := mw.RequireAnyPermissionOrRole([]string{"pusaka.manage", "pusaka.sync", "pusaka.credentials_manage"}, "admin")
 	requireAsesmenPackageManage := mw.RequireAnyPermissionOrRole([]string{"asesmen.package_manage"}, "admin")
 	requireAsesmenEventManage := mw.RequireAnyPermissionOrRole([]string{"asesmen.event_manage"}, "admin")
@@ -224,6 +225,8 @@ func main() {
 	requireRolesManage := mw.RequirePermission("roles.manage")
 	requireAuditRead := mw.RequirePermission("audit.read")
 	requireSchoolProfileSettings := mw.RequirePermission("settings.school_profile")
+	requireEmployeesRead := mw.RequireAnyPermissionOrRole([]string{"employees.read", "employees.manage"}, "admin")
+	requireEmployeesManage := mw.RequireAnyPermissionOrRole([]string{"employees.manage"}, "admin")
 
 	r.Group(func(r chi.Router) {
 		r.Use(mw.JWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession))
@@ -252,22 +255,21 @@ func main() {
 		r.Get("/api/school-profile", settH.SchoolProfile)
 		r.With(requireSchoolProfileSettings).Put("/api/school-profile", settH.UpdateSchoolProfile)
 
-		// Employees are admin-only
+		// Employees use dynamic RBAC; admin keeps the default grant.
 		r.Group(func(r chi.Router) {
-			r.Use(requireAdmin)
-			r.Get("/api/employees", empH.List)
-			r.Post("/api/employees", empH.Create)
-			r.Get("/api/employees/{id}", empH.Get)
-			r.Put("/api/employees/{id}", empH.Update)
-			r.Patch("/api/employees/{id}/status", empH.UpdateStatus)
-			r.Delete("/api/employees/{id}", empH.Delete)
-			r.Get("/api/pusaka/employees", empH.ListPusakaEligibleWithStatus)
-			r.Patch("/api/pusaka/employees/{id}/account-status", empH.UpdatePusakaAccountStatus)
-			r.Delete("/api/pusaka/employees/{id}/account", empH.DeletePusakaAccount)
-			r.Get("/api/pusaka/employees/{id}/audit-logs", empH.ListPusakaAuditLogs)
-			r.Get("/api/pusaka/employees/{id}/schedules", empSchedH.List)
-			r.Post("/api/pusaka/employees/{id}/schedules", empSchedH.Upsert)
-			r.Delete("/api/pusaka/employees/{id}/schedules/{scheduleId}", empSchedH.Delete)
+			r.With(requireEmployeesRead).Get("/api/employees", empH.List)
+			r.With(requireEmployeesManage).Post("/api/employees", empH.Create)
+			r.With(requireEmployeesRead).Get("/api/employees/{id}", empH.Get)
+			r.With(requireEmployeesManage).Put("/api/employees/{id}", empH.Update)
+			r.With(requireEmployeesManage).Patch("/api/employees/{id}/status", empH.UpdateStatus)
+			r.With(requireEmployeesManage).Delete("/api/employees/{id}", empH.Delete)
+			r.With(requirePusakaRead).Get("/api/pusaka/employees", empH.ListPusakaEligibleWithStatus)
+			r.With(requirePusakaManage).Patch("/api/pusaka/employees/{id}/account-status", empH.UpdatePusakaAccountStatus)
+			r.With(requirePusakaManage).Delete("/api/pusaka/employees/{id}/account", empH.DeletePusakaAccount)
+			r.With(requirePusakaRead).Get("/api/pusaka/employees/{id}/audit-logs", empH.ListPusakaAuditLogs)
+			r.With(requirePusakaRead).Get("/api/pusaka/employees/{id}/schedules", empSchedH.List)
+			r.With(requirePusakaManage).Post("/api/pusaka/employees/{id}/schedules", empSchedH.Upsert)
+			r.With(requirePusakaManage).Delete("/api/pusaka/employees/{id}/schedules/{scheduleId}", empSchedH.Delete)
 		})
 
 		r.Get("/api/academic", academicH.Overview)

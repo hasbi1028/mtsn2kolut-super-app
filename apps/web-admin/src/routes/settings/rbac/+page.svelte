@@ -45,6 +45,7 @@
 		sanitizePermissionMetadataPayload,
 		type PermissionMetadataDraft
 	} from '$lib/rbac/permissions';
+	import { buildUIPolicyPreview } from '$lib/rbac/ui-policy';
 
 	type RBACOverview = {
 		matrix: RBACMatrix;
@@ -116,6 +117,7 @@
 			query: permissionCatalogSearch
 		})
 	);
+	const uiPolicyPreview = $derived(selectedRole ? buildUIPolicyPreview(selectedRole.code, normalizedDraftPermissions) : null);
 
 	function buildOverview(matrix: RBACMatrix): RBACOverview {
 		return {
@@ -328,6 +330,14 @@
 
 	function hasDraftPermission(code: string) {
 		return normalizedDraftPermissions.includes(code);
+	}
+
+	function permissionListLabel(permissions: readonly string[]) {
+		return permissions.length > 0 ? permissions.join(', ') : 'Tidak ada permission eksplisit';
+	}
+
+	function statusLabel(allowed: boolean) {
+		return allowed ? 'Terlihat' : 'Tersembunyi';
 	}
 
 	function togglePermission(code: string, checked: boolean) {
@@ -618,6 +628,102 @@
 								</div>
 							{/if}
 						</div>
+
+						{#if uiPolicyPreview}
+							<div class="rounded-2xl border border-border bg-card p-4">
+								<div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+									<div>
+										<p class="text-sm font-semibold text-foreground">Preview Menu & Dashboard</p>
+										<p class="text-xs text-muted-foreground">Dihitung dari draft permission role saat ini sebelum disimpan.</p>
+									</div>
+									<div class="flex flex-wrap gap-2">
+										<Badge variant="secondary">{uiPolicyPreview.visibleMenuItems.length} menu terlihat</Badge>
+										<Badge variant="outline">{uiPolicyPreview.visibleDashboardWidgets.length} widget terlihat</Badge>
+									</div>
+								</div>
+
+								<div class="mt-4 grid gap-4 xl:grid-cols-2">
+									<div class="space-y-3">
+										<div class="flex items-center justify-between gap-2">
+											<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Menu Terlihat</p>
+											<Badge variant="outline">{uiPolicyPreview.visibleMenuItems.length}</Badge>
+										</div>
+										<div class="max-h-80 space-y-2 overflow-auto pr-1">
+											{#each uiPolicyPreview.visibleMenuItems as item (`visible-menu-${item.href}`)}
+												<div class="rounded-xl border border-primary/20 bg-primary/5 p-3">
+													<div class="flex items-start justify-between gap-3">
+														<div class="min-w-0">
+															<p class="text-sm font-semibold text-foreground">{item.label}</p>
+															<p class="text-xs text-muted-foreground">{item.group} · {item.href}</p>
+														</div>
+														<Badge variant="secondary">{statusLabel(item.evaluation.allowed)}</Badge>
+													</div>
+													<p class="mt-2 break-words text-xs text-muted-foreground">Butuh: {permissionListLabel(item.evaluation.requiredPermissions)}</p>
+												</div>
+											{:else}
+												<EmptyStatePanel title="Tidak ada menu terlihat" description="Draft permission belum membuka menu selain akses dasar." compact />
+											{/each}
+										</div>
+									</div>
+
+									<div class="space-y-3">
+										<div class="flex items-center justify-between gap-2">
+											<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Menu Tersembunyi</p>
+											<Badge variant="outline">{uiPolicyPreview.hiddenMenuItems.length}</Badge>
+										</div>
+										<div class="max-h-80 space-y-2 overflow-auto pr-1">
+											{#each uiPolicyPreview.hiddenMenuItems.slice(0, 12) as item (`hidden-menu-${item.href}`)}
+												<div class="rounded-xl border border-border bg-muted/30 p-3">
+													<div class="flex items-start justify-between gap-3">
+														<div class="min-w-0">
+															<p class="text-sm font-semibold text-foreground">{item.label}</p>
+															<p class="text-xs text-muted-foreground">{item.group} · {item.href}</p>
+														</div>
+														<Badge variant="outline">{statusLabel(item.evaluation.allowed)}</Badge>
+													</div>
+													<p class="mt-2 break-words text-xs text-muted-foreground">Butuh: {permissionListLabel(item.evaluation.requiredPermissions)}</p>
+												</div>
+											{:else}
+												<EmptyStatePanel title="Semua menu terlihat" description="Draft permission membuka seluruh menu yang terdaftar." compact />
+											{/each}
+											{#if uiPolicyPreview.hiddenMenuItems.length > 12}
+												<p class="text-xs text-muted-foreground">+{uiPolicyPreview.hiddenMenuItems.length - 12} menu lain tersembunyi.</p>
+											{/if}
+										</div>
+									</div>
+								</div>
+
+								<div class="mt-4 grid gap-3 md:grid-cols-2">
+									<div class="rounded-2xl border border-border bg-muted/20 p-4">
+										<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Widget Dashboard Terlihat</p>
+										<div class="mt-3 space-y-2">
+											{#each uiPolicyPreview.visibleDashboardWidgets as widget (`visible-widget-${widget.id}`)}
+												<div class="rounded-xl border border-primary/20 bg-primary/5 p-3">
+													<p class="text-sm font-semibold text-foreground">{widget.label}</p>
+													<p class="mt-1 text-xs text-muted-foreground">{widget.description}</p>
+													<p class="mt-2 break-words text-xs text-muted-foreground">Butuh: {permissionListLabel(widget.evaluation.requiredPermissions)}</p>
+												</div>
+											{:else}
+												<EmptyStatePanel title="Tidak ada widget terlihat" description="Draft permission belum membuka widget dashboard khusus." compact />
+											{/each}
+										</div>
+									</div>
+
+									<div class="rounded-2xl border border-border bg-muted/20 p-4">
+										<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Widget Dashboard Tersembunyi</p>
+										<div class="mt-3 space-y-2">
+											{#each uiPolicyPreview.hiddenDashboardWidgets as widget (`hidden-widget-${widget.id}`)}
+												<div class="rounded-xl border border-border bg-card p-3">
+													<p class="text-sm font-semibold text-foreground">{widget.label}</p>
+													<p class="mt-1 text-xs text-muted-foreground">{widget.description}</p>
+													<p class="mt-2 break-words text-xs text-muted-foreground">Butuh: {permissionListLabel(widget.evaluation.requiredPermissions)}</p>
+												</div>
+											{/each}
+										</div>
+									</div>
+								</div>
+							</div>
+						{/if}
 					{:else}
 						<EmptyStatePanel title="Pilih role" description="Pilih salah satu role untuk melihat dan mengatur permission." compact />
 					{/if}
