@@ -226,16 +226,16 @@ db-schema:
 # ── Ops Hardening ────────────────────────────────────────────────────────────
 
 ops-health:
-	./deploy/scripts/health-check.sh all
+	bash deploy/scripts/health-check.sh all
 
 ops-health-backend:
-	./deploy/scripts/health-check.sh backend
+	bash deploy/scripts/health-check.sh backend
 
 ops-health-frontend:
-	./deploy/scripts/health-check.sh frontend
+	bash deploy/scripts/health-check.sh frontend
 
 ops-health-worker:
-	./deploy/scripts/health-check.sh worker
+	bash deploy/scripts/health-check.sh worker
 
 ops-backup:
 	./deploy/backup-postgresql.sh

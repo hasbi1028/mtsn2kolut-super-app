@@ -25,6 +25,8 @@ const execFileAsync = promisify(execFile);
 const testFileDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testFileDir, '../../../../..');
 const preflightScriptPath = path.join(repoRoot, 'deploy/scripts/cbt-release-preflight.sh');
+const phase9DocPath = path.join(repoRoot, 'docs/cbt-proposal-integration-phase-9.md');
+const makefilePath = path.join(repoRoot, 'Makefile');
 const tempOutputDirs: string[] = [];
 
 interface CommandFailure extends Error {
@@ -93,6 +95,12 @@ async function expectPreflightFailure(args: string[]) {
 	}
 
 	throw new Error(`Expected preflight to fail for args: ${args.join(' ')}`);
+}
+
+function targetRecipe(makefile: string, target: string) {
+	const match = new RegExp(`^${target}:\\n((?:\\t[^\\n]*\\n)+)`, 'm').exec(makefile);
+	expect(match, `${target} target should exist with a tab-indented recipe`).not.toBeNull();
+	return match?.[1] ?? '';
 }
 
 afterEach(async () => {
@@ -483,6 +491,54 @@ describe('CBT proposal integration documentation guard', () => {
 
 		expect(phase8Doc).not.toContain('POST /api/cbt/login');
 		expect(phase8Doc).not.toContain('GET /api/cbt/status');
+	});
+
+	it('locks Phase 9 as live deploy smoke and Makefile health runbook hardening only', async () => {
+		const phase9Doc = await readFile(phase9DocPath, 'utf8');
+
+		for (const phrase of [
+			'Phase 9 - Live Deploy Smoke and Runbook Hardening',
+			'commit `231d908`',
+			'live deploy',
+			'`make ops-health` failed because `deploy/scripts/health-check.sh` was not executable',
+			'`bash deploy/scripts/health-check.sh all` passed',
+			'Makefile health fix',
+			'ops-health targets invoke `deploy/scripts/health-check.sh` through `bash`',
+			'does not require executable bit',
+			'post-deploy smoke',
+			'docs/tests/ops script/Makefile only',
+			'deploy/scripts/cbt-release-preflight.sh',
+			'boundary remains intact',
+			'No secrets',
+			'Tidak deploy',
+			'Tidak PM2 restart',
+			'Tidak menjalankan `make db-migrate`',
+			'Tidak menjalankan migrasi live',
+			'Tidak menjalankan ad hoc SQL',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`'
+		]) {
+			expect(phase9Doc).toContain(phrase);
+		}
+
+		expect(phase9Doc).not.toContain('POST /api/cbt/login');
+		expect(phase9Doc).not.toContain('GET /api/cbt/status');
+	});
+
+	it('keeps ops-health Makefile targets independent from health-check executable bit', async () => {
+		const makefile = await readFile(makefilePath, 'utf8');
+		const expectedHealthTargets = new Map([
+			['ops-health', 'all'],
+			['ops-health-backend', 'backend'],
+			['ops-health-frontend', 'frontend'],
+			['ops-health-worker', 'worker']
+		]);
+
+		for (const [target, service] of expectedHealthTargets) {
+			const recipe = targetRecipe(makefile, target);
+			expect(recipe).toContain(`bash deploy/scripts/health-check.sh ${service}`);
+			expect(recipe).not.toContain(`./deploy/scripts/health-check.sh ${service}`);
+		}
 	});
 
 	it(
