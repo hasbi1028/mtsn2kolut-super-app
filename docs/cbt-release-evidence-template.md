@@ -9,7 +9,7 @@ Gunakan template ini untuk arsip operational readiness CBT. Template ini bukan i
 - Reviewer:
 - Branch:
 - Commit:
-- Phase baseline: Phase 5 commit `bec16c8` + Phase 6 evidence automation.
+- Phase baseline: Phase 5 commit `bec16c8` + Phase 6 evidence automation + Phase 8 manifest/checksum/secret-scan hardening.
 - Keputusan rilis: lanjut / tunda / rehearsal ulang.
 
 ## Boundary Wajib
@@ -33,10 +33,13 @@ Gunakan template ini untuk arsip operational readiness CBT. Template ini bukan i
   - `cbt-release-preflight.md`
 - JSON evidence:
   - `cbt-release-preflight.json`
+- Manifest/checksum evidence:
+  - `cbt-release-manifest.json`
 - Log directory:
   - `logs/`
 - Catatan secret hygiene:
   - output tidak boleh memuat password, token mentah, API key, answer key, atau secret lain.
+  - secret scan preflight harus `pass`; jika `fail`, bundle menjadi blocker sampai evidence dibersihkan dan dibuat ulang.
 
 ## Commit dan Status Git
 
@@ -67,6 +70,21 @@ Gunakan template ini untuk arsip operational readiness CBT. Template ini bukan i
 | Flutter doctor | `cd apps/mobile && flutter doctor` | pass / fail / skipped | |
 | Flutter analyze | `cd apps/mobile && flutter analyze` | pass / fail / skipped | |
 | Flutter test | `cd apps/mobile && flutter test` | pass / fail / skipped | |
+| Secret scan | generated markdown/json/log evidence | pass / fail | |
+
+## Manifest dan Checksums
+
+- `cbt-release-manifest.json` tersedia: ya / tidak.
+- Manifest parseable sebagai JSON: ya / tidak.
+- Algorithm: `sha256`.
+- Artifact wajib tercatat:
+  - `cbt-release-preflight.md`
+  - `cbt-release-preflight.json`
+  - `logs/git-head.log`
+  - `logs/git-status.log`
+  - `logs/git-diff-check.log`
+- Semua checksum berbentuk SHA-256 64 hex: ya / tidak.
+- Secret scan status di manifest: pass / fail.
 
 ## Mobile Evidence
 
@@ -107,7 +125,9 @@ Gunakan template ini untuk arsip operational readiness CBT. Template ini bukan i
 
 Lanjut bila:
 
-- evidence bundle markdown/json tersedia.
+- evidence bundle markdown/json/manifest tersedia.
+- manifest memuat checksum SHA-256 untuk markdown/json/log evidence.
+- secret scan generated evidence lulus.
 - command yang dipilih operator lulus atau skipped dengan alasan tertulis.
 - Flutter mobile final tidak dianggap lulus jika SDK/check mobile belum tersedia.
 - tidak ada pelanggaran no deploy/no restart/no migration boundary.

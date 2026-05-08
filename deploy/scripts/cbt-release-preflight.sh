@@ -15,6 +15,7 @@ RUN_FLUTTER_ANALYZE=0
 RUN_FLUTTER_TEST=0
 RUN_GO_TEST=0
 RUN_GO_BUILD=0
+TEST_ONLY_WRITE_SECRET_LEAK=0
 
 WEB_DOCS_GUARD_DISPLAY="npm run test:unit -- src/lib/cbt/proposal-integration-docs.test.ts"
 WEB_CHECK_DISPLAY="npm run check"
@@ -29,6 +30,9 @@ CHECK_STATUSES=()
 CHECK_DETAILS=()
 CHECK_LOGS=()
 OVERALL_STATUS="pass"
+SECRET_SCAN_STATUS="pending"
+SECRET_SCAN_FILES=()
+SECRET_SCAN_FINDINGS=()
 
 usage() {
 	cat <<'USAGE'
@@ -46,6 +50,9 @@ Options:
   --run-go-test             Run Go unit tests for services/core-api.
   --run-go-build            Run a core-api build check to /dev/null.
   --all-safe-checks         Enable every optional non-destructive check above.
+  --test-only-write-secret-leak
+                            Test-only hook: write synthetic secret-like evidence
+                            under the output directory so the scanner must fail.
   -h, --help                Show this help.
 
 This script writes evidence only. It does not perform deployment, process
@@ -104,6 +111,10 @@ while [ "$#" -gt 0 ]; do
 			RUN_GO_BUILD=1
 			shift
 			;;
+		--test-only-write-secret-leak)
+			TEST_ONLY_WRITE_SECRET_LEAK=1
+			shift
+			;;
 		-h|--help)
 			usage
 			exit 0
@@ -129,6 +140,7 @@ OUTPUT_DIR="$(resolve_output_dir "$OUTPUT_DIR")"
 LOG_DIR="${OUTPUT_DIR}/logs"
 MARKDOWN_REPORT="${OUTPUT_DIR}/cbt-release-preflight.md"
 JSON_REPORT="${OUTPUT_DIR}/cbt-release-preflight.json"
+MANIFEST_REPORT="${OUTPUT_DIR}/cbt-release-manifest.json"
 
 if [ -e "$OUTPUT_DIR" ] && [ ! -d "$OUTPUT_DIR" ]; then
 	printf 'ERROR: output path exists but is not a directory: %s\n' "$OUTPUT_DIR" >&2
@@ -145,7 +157,7 @@ mkdir -p "$LOG_DIR"
 redact_stream() {
 	sed -E \
 		-e 's/(Authorization:[[:space:]]*[Bb]earer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/g' \
-		-e 's/((token|password|secret|api[_-]?key|answer[_-]?key)[[:space:]]*[:=][[:space:]]*)[^[:space:],}]+/\1[REDACTED]/Ig'
+		-e 's/((token|password|secret|api[ _-]?key|answer[ _-]?key)[[:space:]]*[:=][[:space:]]*)[^[:space:],}]+/\1[REDACTED]/Ig'
 }
 
 json_escape() {
@@ -156,6 +168,17 @@ json_escape() {
 	value="${value//$'\r'/\\r}"
 	value="${value//$'\t'/\\t}"
 	printf '%s' "$value"
+}
+
+relative_output_path() {
+	local path="$1"
+	if [ -z "$path" ]; then
+		printf ''
+	elif [[ "$path" == "$OUTPUT_DIR/"* ]]; then
+		printf '%s\n' "${path#"$OUTPUT_DIR/"}"
+	else
+		printf '%s\n' "$path"
+	fi
 }
 
 record_check() {
@@ -175,14 +198,207 @@ record_check() {
 }
 
 relative_log_path() {
-	local path="$1"
-	if [ -z "$path" ]; then
-		printf ''
-	elif [[ "$path" == "$OUTPUT_DIR/"* ]]; then
-		printf '%s\n' "${path#"$OUTPUT_DIR/"}"
-	else
-		printf '%s\n' "$path"
+	relative_output_path "$1"
+}
+
+scan_secret_pattern() {
+	local file="$1"
+	local rel_path="$2"
+	local label="$3"
+	local pattern="$4"
+	local line_no=""
+
+	while IFS=: read -r line_no _; do
+		[ -n "$line_no" ] || continue
+		SECRET_SCAN_FINDINGS+=("${rel_path}:${line_no}:${label}")
+	done < <(LC_ALL=C grep -EIn "$pattern" "$file" 2>/dev/null | grep -Fv '[REDACTED]' || true)
+}
+
+scan_generated_evidence_for_secrets() {
+	SECRET_SCAN_FILES=()
+	SECRET_SCAN_FINDINGS=()
+
+	local file=""
+	local rel_path=""
+	local auth_pattern='Authorization:[[:space:]]*[Bb]earer[[:space:]]+[^[:space:]]+'
+	local key_pattern="[\"']?(token|password|secret|api[ _-]?key|answer[ _-]?key)[\"']?[[:space:]]*[:=][[:space:]]*[\"']?[^\"'[:space:],}]+"
+
+	while IFS= read -r file; do
+		[ -n "$file" ] || continue
+		rel_path="$(relative_output_path "$file")"
+		SECRET_SCAN_FILES+=("$rel_path")
+		scan_secret_pattern "$file" "$rel_path" "authorization-bearer" "$auth_pattern"
+		scan_secret_pattern "$file" "$rel_path" "sensitive-assignment" "$key_pattern"
+	done < <(find "$OUTPUT_DIR" -type f \( -name '*.md' -o -name '*.json' -o -name '*.log' \) ! -path "$MANIFEST_REPORT" -print | LC_ALL=C sort)
+
+	if [ "${#SECRET_SCAN_FINDINGS[@]}" -gt 0 ]; then
+		SECRET_SCAN_STATUS="fail"
+		printf 'ERROR: secret scan failed; generated evidence contains unredacted sensitive-looking values:\n' >&2
+		local finding=""
+		for finding in "${SECRET_SCAN_FINDINGS[@]}"; do
+			printf '  %s\n' "$finding" >&2
+		done
+		return 1
 	fi
+
+	SECRET_SCAN_STATUS="pass"
+	return 0
+}
+
+sha256_file() {
+	local file="$1"
+	if command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$file" | awk '{print $1}'
+	elif command -v shasum >/dev/null 2>&1; then
+		shasum -a 256 "$file" | awk '{print $1}'
+	else
+		printf 'ERROR: sha256sum or shasum is required to write %s\n' "$MANIFEST_REPORT" >&2
+		exit 2
+	fi
+}
+
+file_size_bytes() {
+	wc -c < "$1" | tr -d '[:space:]'
+}
+
+artifact_kind() {
+	case "$1" in
+		*.md) printf 'markdown' ;;
+		*.json) printf 'json' ;;
+		*.log) printf 'log' ;;
+		*) printf 'artifact' ;;
+	esac
+}
+
+write_manifest() {
+	local artifacts=()
+	local file=""
+	while IFS= read -r file; do
+		[ -n "$file" ] || continue
+		artifacts+=("$file")
+	done < <(find "$OUTPUT_DIR" -type f \( -name '*.md' -o -name '*.json' -o -name '*.log' \) ! -path "$MANIFEST_REPORT" -print | LC_ALL=C sort)
+
+	{
+		printf '{\n'
+		printf '  "generated_at": "%s",\n' "$(json_escape "$GENERATED_AT")"
+		printf '  "repo_root": "%s",\n' "$(json_escape "$REPO_ROOT")"
+		printf '  "branch": "%s",\n' "$(json_escape "${BRANCH_NAME:-unknown}")"
+		printf '  "commit": "%s",\n' "$(json_escape "${HEAD_SHA:-unknown}")"
+		printf '  "output_dir": "%s",\n' "$(json_escape "$OUTPUT_DIR")"
+		printf '  "algorithm": "sha256",\n'
+		printf '  "secret_scan": {\n'
+		printf '    "status": "%s",\n' "$(json_escape "$SECRET_SCAN_STATUS")"
+		printf '    "scanned_files": [\n'
+		for i in "${!SECRET_SCAN_FILES[@]}"; do
+			printf '      "%s"' "$(json_escape "${SECRET_SCAN_FILES[$i]}")"
+			if [ "$i" -eq "$((${#SECRET_SCAN_FILES[@]} - 1))" ]; then
+				printf '\n'
+			else
+				printf ',\n'
+			fi
+		done
+		printf '    ],\n'
+		printf '    "findings": [\n'
+		for i in "${!SECRET_SCAN_FINDINGS[@]}"; do
+			printf '      "%s"' "$(json_escape "${SECRET_SCAN_FINDINGS[$i]}")"
+			if [ "$i" -eq "$((${#SECRET_SCAN_FINDINGS[@]} - 1))" ]; then
+				printf '\n'
+			else
+				printf ',\n'
+			fi
+		done
+		printf '    ]\n'
+		printf '  },\n'
+		printf '  "artifacts": [\n'
+		for i in "${!artifacts[@]}"; do
+			local rel_path=""
+			local kind=""
+			local size=""
+			local checksum=""
+			rel_path="$(relative_output_path "${artifacts[$i]}")"
+			kind="$(artifact_kind "$rel_path")"
+			size="$(file_size_bytes "${artifacts[$i]}")"
+			checksum="$(sha256_file "${artifacts[$i]}")"
+			printf '    {\n'
+			printf '      "path": "%s",\n' "$(json_escape "$rel_path")"
+			printf '      "kind": "%s",\n' "$(json_escape "$kind")"
+			printf '      "bytes": %s,\n' "$size"
+			printf '      "sha256": "%s"\n' "$(json_escape "$checksum")"
+			if [ "$i" -eq "$((${#artifacts[@]} - 1))" ]; then
+				printf '    }\n'
+			else
+				printf '    },\n'
+			fi
+		done
+		printf '  ]\n'
+		printf '}\n'
+	} > "$MANIFEST_REPORT"
+}
+
+write_markdown_report() {
+	{
+		printf '# CBT Release Preflight Evidence\n\n'
+		printf '%s\n' "- Generated at: \`${GENERATED_AT}\`"
+		printf '%s\n' "- Repository: \`${REPO_ROOT}\`"
+		printf '%s\n' "- Branch: \`${BRANCH_NAME:-unknown}\`"
+		printf '%s\n' "- Commit: \`${HEAD_SHA:-unknown}\`"
+		printf '%s\n' "- Overall status: \`${OVERALL_STATUS}\`"
+		printf '%s\n' "- Evidence template: \`${EVIDENCE_TEMPLATE}\`"
+		printf '%s\n\n' "- Output directory: \`${OUTPUT_DIR}\`"
+
+		printf '## Safety Scope\n\n'
+		printf '%s\n' '- This is read-only release evidence collection; Phase 8 manifest/checksum/secret-scan hardening only strengthens this verifier evidence.'
+		printf '%s\n' '- It writes markdown/json/log evidence only under the output directory.'
+		printf '%s\n' '- It also writes `cbt-release-manifest.json` with SHA-256 checksums for generated markdown/json/log evidence.'
+		printf '%s\n' '- It fails if generated evidence still contains unredacted token/password/secret/API key/answer key patterns.'
+		printf '%s\n' '- It does not perform deployment, process manager changes, database migrations, SQL mutation, or runtime state changes.'
+		printf '%s\n\n' '- Flutter runtime evidence remains scoped to `services/core-api` `/api/exam/*`.'
+
+		printf '## Checks\n\n'
+		printf '| Check | Status | Detail | Log |\n'
+		printf '|-------|--------|--------|-----|\n'
+		for i in "${!CHECK_NAMES[@]}"; do
+			printf '| `%s` | `%s` | %s | %s |\n' \
+				"${CHECK_NAMES[$i]}" \
+				"${CHECK_STATUSES[$i]}" \
+				"${CHECK_DETAILS[$i]//|/\\|}" \
+				"${CHECK_LOGS[$i]:-}"
+		done
+
+		printf '\n## Notes\n\n'
+		printf '%s\n' "- Skipped optional checks are not release approval; record the reason in \`${EVIDENCE_TEMPLATE}\`."
+		printf '%s\n' "- Verify \`$(basename "$MANIFEST_REPORT")\` before archiving the evidence bundle."
+		printf '%s\n' '- If a requested check or the secret scan failed, treat this bundle as a blocker until reviewed.'
+	} > "$MARKDOWN_REPORT"
+}
+
+write_json_report() {
+	{
+		printf '{\n'
+		printf '  "generated_at": "%s",\n' "$(json_escape "$GENERATED_AT")"
+		printf '  "repo_root": "%s",\n' "$(json_escape "$REPO_ROOT")"
+		printf '  "branch": "%s",\n' "$(json_escape "${BRANCH_NAME:-unknown}")"
+		printf '  "commit": "%s",\n' "$(json_escape "${HEAD_SHA:-unknown}")"
+		printf '  "overall_status": "%s",\n' "$(json_escape "$OVERALL_STATUS")"
+		printf '  "evidence_template": "%s",\n' "$(json_escape "$EVIDENCE_TEMPLATE")"
+		printf '  "output_dir": "%s",\n' "$(json_escape "$OUTPUT_DIR")"
+		printf '  "manifest": "%s",\n' "$(json_escape "$(basename "$MANIFEST_REPORT")")"
+		printf '  "checks": [\n'
+		for i in "${!CHECK_NAMES[@]}"; do
+			printf '    {\n'
+			printf '      "name": "%s",\n' "$(json_escape "${CHECK_NAMES[$i]}")"
+			printf '      "status": "%s",\n' "$(json_escape "${CHECK_STATUSES[$i]}")"
+			printf '      "detail": "%s",\n' "$(json_escape "${CHECK_DETAILS[$i]}")"
+			printf '      "log": "%s"\n' "$(json_escape "${CHECK_LOGS[$i]:-}")"
+			if [ "$i" -eq "$((${#CHECK_NAMES[@]} - 1))" ]; then
+				printf '    }\n'
+			else
+				printf '    },\n'
+			fi
+		done
+		printf '  ]\n'
+		printf '}\n'
+	} > "$JSON_REPORT"
 }
 
 run_logged_command() {
@@ -310,67 +526,27 @@ else
 	fi
 fi
 
-{
-	printf '# CBT Release Preflight Evidence\n\n'
-	printf '%s\n' "- Generated at: \`${GENERATED_AT}\`"
-	printf '%s\n' "- Repository: \`${REPO_ROOT}\`"
-	printf '%s\n' "- Branch: \`${BRANCH_NAME:-unknown}\`"
-	printf '%s\n' "- Commit: \`${HEAD_SHA:-unknown}\`"
-	printf '%s\n' "- Overall status: \`${OVERALL_STATUS}\`"
-	printf '%s\n' "- Evidence template: \`${EVIDENCE_TEMPLATE}\`"
-	printf '%s\n\n' "- Output directory: \`${OUTPUT_DIR}\`"
+if [ "$TEST_ONLY_WRITE_SECRET_LEAK" -eq 1 ]; then
+	printf 'api_key = test-only-unredacted-value\n' > "${LOG_DIR}/test-only-secret-leak.log"
+fi
 
-	printf '## Safety Scope\n\n'
-	printf '%s\n' '- This is read-only release evidence collection; Phase 7 verifier/test hardening only strengthens tests around this verifier.'
-	printf '%s\n' '- It writes markdown/json/log evidence only under the output directory.'
-	printf '%s\n' '- It does not perform deployment, process manager changes, database migrations, SQL mutation, or runtime state changes.'
-	printf '%s\n\n' '- Flutter runtime evidence remains scoped to `services/core-api` `/api/exam/*`.'
+write_markdown_report
+write_json_report
 
-	printf '## Checks\n\n'
-	printf '| Check | Status | Detail | Log |\n'
-	printf '|-------|--------|--------|-----|\n'
-	for i in "${!CHECK_NAMES[@]}"; do
-		printf '| `%s` | `%s` | %s | %s |\n' \
-			"${CHECK_NAMES[$i]}" \
-			"${CHECK_STATUSES[$i]}" \
-			"${CHECK_DETAILS[$i]//|/\\|}" \
-			"${CHECK_LOGS[$i]:-}"
-	done
+if scan_generated_evidence_for_secrets; then
+	record_check "secret-scan" "pass" "generated evidence scanned for unredacted token/password/secret/API key/answer key patterns" ""
+else
+	record_check "secret-scan" "fail" "generated evidence contains unredacted sensitive-looking values; review stderr findings by file, line, and pattern" ""
+fi
 
-	printf '\n## Notes\n\n'
-	printf '%s\n' "- Skipped optional checks are not release approval; record the reason in \`${EVIDENCE_TEMPLATE}\`."
-	printf '%s\n' '- If a requested check failed, treat this bundle as a blocker until reviewed.'
-} > "$MARKDOWN_REPORT"
-
-{
-	printf '{\n'
-	printf '  "generated_at": "%s",\n' "$(json_escape "$GENERATED_AT")"
-	printf '  "repo_root": "%s",\n' "$(json_escape "$REPO_ROOT")"
-	printf '  "branch": "%s",\n' "$(json_escape "${BRANCH_NAME:-unknown}")"
-	printf '  "commit": "%s",\n' "$(json_escape "${HEAD_SHA:-unknown}")"
-	printf '  "overall_status": "%s",\n' "$(json_escape "$OVERALL_STATUS")"
-	printf '  "evidence_template": "%s",\n' "$(json_escape "$EVIDENCE_TEMPLATE")"
-	printf '  "output_dir": "%s",\n' "$(json_escape "$OUTPUT_DIR")"
-	printf '  "checks": [\n'
-	for i in "${!CHECK_NAMES[@]}"; do
-		printf '    {\n'
-		printf '      "name": "%s",\n' "$(json_escape "${CHECK_NAMES[$i]}")"
-		printf '      "status": "%s",\n' "$(json_escape "${CHECK_STATUSES[$i]}")"
-		printf '      "detail": "%s",\n' "$(json_escape "${CHECK_DETAILS[$i]}")"
-		printf '      "log": "%s"\n' "$(json_escape "${CHECK_LOGS[$i]:-}")"
-		if [ "$i" -eq "$((${#CHECK_NAMES[@]} - 1))" ]; then
-			printf '    }\n'
-		else
-			printf '    },\n'
-		fi
-	done
-	printf '  ]\n'
-	printf '}\n'
-} > "$JSON_REPORT"
+write_markdown_report
+write_json_report
+write_manifest
 
 printf 'CBT release preflight evidence written:\n'
 printf '  Markdown: %s\n' "$MARKDOWN_REPORT"
 printf '  JSON:     %s\n' "$JSON_REPORT"
+printf '  Manifest: %s\n' "$MANIFEST_REPORT"
 printf '  Logs:     %s\n' "$LOG_DIR"
 
 if [ "$OVERALL_STATUS" = "failed" ]; then
