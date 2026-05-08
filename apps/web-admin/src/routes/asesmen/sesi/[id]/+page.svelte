@@ -469,6 +469,25 @@
 		return typeof value === 'object' && value !== null;
 	}
 
+	const sensitiveEvidenceValuePattern = /\b(?:authorization)\s*[:=]\s*(?:Bearer\s+)?[^;\s,]+|\bBearer\s+[^;\s,]+|\b(?:token|access_token|refresh_token|exam_token|password|passwd|secret|api[_-]?key|api\s+key|device[_-]?fingerprint|deviceFingerprint)\s*[:=]\s*[^;\s,]+/gi;
+
+	function sanitizeOperationalEvidenceNote(value: unknown) {
+		if (value === null || value === undefined) return '';
+		return String(value).replace(sensitiveEvidenceValuePattern, (match) => {
+			if (match.toLowerCase().startsWith('bearer ')) return 'Bearer [redacted]';
+			const colonIndex = match.indexOf(':');
+			const equalsIndex = match.indexOf('=');
+			const separatorIndex = colonIndex === -1
+				? equalsIndex
+				: equalsIndex === -1
+					? colonIndex
+					: Math.min(colonIndex, equalsIndex);
+			if (separatorIndex === -1) return '[redacted]';
+			const key = match.slice(0, separatorIndex).trim();
+			return `${key}${match[separatorIndex]}[redacted]`;
+		});
+	}
+
 	function percent(value: number) {
 		if (!Number.isFinite(value)) return '0%';
 		return `${Math.round(value * 100)}%`;
@@ -1487,9 +1506,9 @@
 			room.reset_access_count,
 			room.app_switch_count,
 			room.screenshot_attempt_count,
-			room.incident_notes,
-			room.operator_notes,
-			room.handover_notes,
+			sanitizeOperationalEvidenceNote(room.incident_notes),
+			sanitizeOperationalEvidenceNote(room.operator_notes),
+			sanitizeOperationalEvidenceNote(room.handover_notes),
 		]));
 		const summary = csvRow([
 			`TOTAL ${operationalRecap.session_title}`,

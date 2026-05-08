@@ -41,6 +41,8 @@ class ExamClientEvents {
       eventType: typeAppSwitch,
       data: _sanitizeData(<String, Object?>{
         'state': state,
+        // Device fingerprint is used only for runtime binding checks. Do not
+        // persist it into proctor/evidence telemetry payloads.
         'device_fingerprint': deviceFingerprint,
       }),
     );
@@ -175,6 +177,7 @@ class ExamClientEvents {
     final normalized = key.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
     return normalized.contains('token') ||
         normalized.contains('password') ||
-        normalized.contains('answerkey');
+        normalized.contains('answerkey') ||
+        normalized.contains('devicefingerprint');
   }
 }

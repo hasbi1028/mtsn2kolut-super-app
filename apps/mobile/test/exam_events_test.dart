@@ -45,21 +45,21 @@ void main() {
       );
     });
 
-    test('keeps app switch as a first-class event with fingerprint hint', () {
-      expect(
-        ExamClientEvents.appSwitch(
-          state: 'paused',
-          deviceFingerprint: 'android:test',
-        ).toJson(),
-        <String, Object?>{
-          'event_type': 'app_switch',
-          'data': <String, Object?>{
-            'state': 'paused',
-            'device_fingerprint': 'android:test',
+    test(
+      'keeps app switch as a first-class event without persisting fingerprint',
+      () {
+        expect(
+          ExamClientEvents.appSwitch(
+            state: 'paused',
+            deviceFingerprint: 'android:test',
+          ).toJson(),
+          <String, Object?>{
+            'event_type': 'app_switch',
+            'data': <String, Object?>{'state': 'paused'},
           },
-        },
-      );
-    });
+        );
+      },
+    );
 
     test('strips sensitive fields from nested telemetry payloads', () {
       final event = ExamClientEvents.warning(
@@ -68,13 +68,19 @@ void main() {
           'exam_token': 'secret-token',
           'password': 'secret-password',
           'answer_key': 'A',
+          'device_fingerprint': 'android:fingerprint',
           'safe_count': 1,
           'nested': <String, Object?>{
             'refresh_token': 'secret-refresh',
+            'deviceFingerprint': 'nested-fingerprint',
             'status': 'blocked',
           },
           'list': <Object?>[
-            <String, Object?>{'token': 'secret-list', 'reason': 'safe'},
+            <String, Object?>{
+              'token': 'secret-list',
+              'device_fingerprint': 'list-fingerprint',
+              'reason': 'safe',
+            },
           ],
         },
       );
