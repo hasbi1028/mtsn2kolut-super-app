@@ -2,9 +2,11 @@
 
 Gunakan matriks ini saat uji perangkat Android siswa. Tujuannya agar hasil uji bisa dibandingkan antar vendor, versi Android, dan jenis koneksi.
 
-Status: sinkron Phase 13 Mobile Release Candidate and Device Matrix per 2026-05-08. Matriks ini dipakai bersama release checklist dan prosedur BYOD; hasilnya menjadi bukti operasional, bukan jaminan kiosk penuh.
+Status: sinkron Phase 24 Anti-Cheat BYOD Evidence Completion per 2026-05-08. Matriks ini dipakai bersama release checklist dan prosedur BYOD; hasilnya menjadi bukti operasional, bukan jaminan kiosk penuh.
 
 Manual evidence status: `pending_manual_evidence` until real Android devices are tested by operator/pengawas. Current status fields must be updated in the evidence bundle before final go/no-go.
+
+Phase 24 rule: No fabricated real-device PASS. Real-device PASS cannot be claimed from repository docs, emulator-only checks, or generated templates. Keep rows pending/manual until an operator tests physical Android devices and signs the evidence bundle.
 
 ## Phase 13 Mobile Release Candidate and Device Matrix
 
@@ -27,6 +29,31 @@ Skenario wajib per RC:
 - device mismatch.
 - screenshot protection / `FLAG_SECURE`.
 - network disturbance.
+
+## Phase 24 deterministic build and hash instructions
+
+Jalankan di mesin operator/CI yang memiliki Flutter SDK, lalu salin RC identifier dan hash ke matriks ini.
+
+```bash
+cd apps/mobile
+/home/servermtsn2kolut/development/flutter/bin/flutter pub get
+/home/servermtsn2kolut/development/flutter/bin/flutter analyze
+/home/servermtsn2kolut/development/flutter/bin/flutter test
+/home/servermtsn2kolut/development/flutter/bin/flutter build apk --release --dart-define=API_BASE_URL=https://api.sekolah.example
+sha256sum build/app/outputs/flutter-apk/app-release.apk
+```
+
+Evidence wajib tetap manual untuk minimal dua vendor Android nyata:
+
+- `FLAG_SECURE` screenshot/recent-preview deterrence.
+- app switch event.
+- resume gate.
+- heartbeat loss.
+- pending answer recovery.
+- manual submit guard.
+- device mismatch `409`.
+- stale connection warning.
+- final submit saat koneksi sehat.
 
 ## Two-vendor manual placeholders
 

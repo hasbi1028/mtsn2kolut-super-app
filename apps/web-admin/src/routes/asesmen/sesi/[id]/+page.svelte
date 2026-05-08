@@ -18,6 +18,7 @@
 	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { cbtRoomSetupErrorMessage, roomReadinessMessage, roomReadinessTone, type CbtRoomReadiness } from '$lib/client/cbt-room-readiness';
 	import { csvRow } from '$lib/csv';
+	import { summarizeItemAnalysisEvidence } from '$lib/cbt/item-analysis-evidence';
 
 	type SessionInfo = {
 		id: string; title: string; package_title: string; duration_minutes: number;
@@ -678,6 +679,7 @@
 			lowDiscrimination,
 		};
 	});
+	let itemAnalysisEvidence = $derived(summarizeItemAnalysisEvidence(itemAnalysis));
 
 	function showToast(msg: string, ok = true) {
 		if (ok) toast.success(msg);
@@ -1867,6 +1869,43 @@
 					</Card.Root>
 				{/each}
 			</div>
+
+			{#if itemAnalysisEvidence.perType.length > 0}
+				<Card.Root class="border-success/20">
+					<Card.Header class="pb-2">
+						<Card.Title class="text-base">Akurasi per Tipe Soal</Card.Title>
+						<p class="text-xs text-muted-foreground">Ringkasan ini memakai metrik analisis butir yang sudah tersedia; tidak menghitung Cronbach alpha atau psikometri yang belum tervalidasi.</p>
+					</Card.Header>
+					<Card.Content class="overflow-x-auto p-0">
+						<Table.Root>
+							<Table.Header>
+								<Table.Row class="bg-success/10">
+									<Table.Head>Tipe</Table.Head>
+									<Table.Head class="text-center">Butir</Table.Head>
+									<Table.Head class="text-center">Dijawab</Table.Head>
+									<Table.Head class="text-center">Kosong</Table.Head>
+									<Table.Head class="text-center">Akurasi</Table.Head>
+									<Table.Head class="text-center">Kesukaran</Table.Head>
+									<Table.Head class="text-center">Daya Pembeda</Table.Head>
+								</Table.Row>
+							</Table.Header>
+							<Table.Body>
+								{#each itemAnalysisEvidence.perType as row (row.questionType)}
+									<Table.Row>
+										<Table.Cell class="font-medium text-foreground">{questionTypeLabel(row.questionType)}</Table.Cell>
+										<Table.Cell class="text-center">{row.itemCount}</Table.Cell>
+										<Table.Cell class="text-center">{row.answeredCount}/{row.submittedCount}</Table.Cell>
+										<Table.Cell class="text-center">{row.unansweredCount}</Table.Cell>
+										<Table.Cell class="text-center font-semibold text-primary">{percent(row.accuracy)}</Table.Cell>
+										<Table.Cell class="text-center">{percent(row.averageDifficulty)}</Table.Cell>
+										<Table.Cell class="text-center">{percent(row.averageDiscrimination)}</Table.Cell>
+									</Table.Row>
+								{/each}
+							</Table.Body>
+						</Table.Root>
+					</Card.Content>
+				</Card.Root>
+			{/if}
 
 			<Card.Root class="border-success/20">
 				<Card.Header class="pb-2">

@@ -19,6 +19,7 @@ import phase8Doc from '../../../../../docs/cbt-proposal-integration-phase-8.md?r
 import proposalGapAuditDoc from '../../../../../docs/cbt-proposal-gap-audit.md?raw';
 import proposalTraceabilityDoc from '../../../../../docs/cbt-proposal-100-percent-traceability.md?raw';
 import phase1922Doc from '../../../../../docs/cbt-proposal-integration-phase-19-22.md?raw';
+import phase2326Doc from '../../../../../docs/cbt-proposal-integration-phase-23-26.md?raw';
 import hotspotDecisionDoc from '../../../../../docs/cbt-hotspot-design-decision.md?raw';
 import uploadAnswerPolicyDoc from '../../../../../docs/cbt-upload-answer-policy.md?raw';
 import mediaPromptPolicyDoc from '../../../../../docs/cbt-media-prompt-response-policy.md?raw';
@@ -300,6 +301,96 @@ describe('CBT proposal integration documentation guard', () => {
 
 		expect(proposalTraceabilityDoc).toContain('Phase 19-22 decision status');
 		expect(proposalGapAuditDoc).toContain('Phase 19-22 follow-up status');
+	});
+
+	it('locks Phase 23-26 proctor evidence, BYOD evidence, analytics, and report boundaries', () => {
+		for (const phrase of [
+			'Phase 23-26',
+			'HEAD `488e105` Phase 19-22',
+			'Proctor Dashboard Full Evidence Mode',
+			'heartbeat',
+			'app background/resume',
+			'device mismatch',
+			'submit guard',
+			'stale connection',
+			'warning',
+			'force submit',
+			'reset access',
+			'export/print evidence',
+			'no screen preview',
+			'no remote desktop',
+			'anti_cheat_byod_manual_status: pending_manual_evidence',
+			'real_device_pass_claim: forbidden_until_operator_tested',
+			'sha256sum build/app/outputs/flutter-apk/app-release.apk',
+			'Cronbach alpha: documented_deferred_until_formula_and_dataset_are_tested',
+			'No fake psychometrics',
+			'Reports PDF/Excel Parity',
+			'print HTML / browser PDF',
+			'CSV Excel-compatible',
+			'No new binary PDF/XLSX endpoint',
+			'no broad token spreadsheet export',
+			'Tidak membuat public SvelteKit route tree `/api/cbt/**` baru',
+			'Flutter tetap berbicara langsung ke `services/core-api` melalui `/api/exam/*`'
+		]) {
+			expect(phase2326Doc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 23-26 follow-up status',
+			'Screen preview and remote desktop remain explicit non-goals',
+			'Deterministic build/hash instructions are documented without claiming PASS',
+			'Cronbach alpha remains deferred',
+			'official template matrix maps PDF to print HTML/browser PDF and Excel to CSV-safe exports'
+		]) {
+			expect(proposalGapAuditDoc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 23-26 evidence, analytics, and reports',
+			'device mismatch',
+			'Build/hash instructions do not imply a real-device PASS',
+			'Cronbach alpha: documented_deferred_until_formula_and_dataset_are_tested',
+			'PDF parity is print HTML/browser PDF',
+			'sensitive token reports remain print-only or role-bound'
+		]) {
+			expect(proposalTraceabilityDoc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 24 Anti-Cheat BYOD Evidence Completion',
+			'pending_manual_evidence',
+			'No fabricated real-device PASS',
+			'sha256sum build/app/outputs/flutter-apk/app-release.apk',
+			'minimum two Android vendors'
+		]) {
+			expect(deviceTestMatrixDoc).toContain(phrase);
+			expect(releaseChecklistDoc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 23-26 evidence status',
+			'no screen preview and no remote desktop',
+			'no fabricated real-device PASS',
+			'Cronbach alpha is `documented_deferred_until_formula_and_dataset_are_tested`',
+			'no new binary PDF/XLSX endpoint'
+		]) {
+			expect(finalReleaseEvidenceDoc).toContain(phrase);
+		}
+
+		for (const phrase of [
+			'Phase 23-26 Evidence, Analytics, and Reports',
+			'device mismatch `409` evidence captured without exposing full fingerprint',
+			'real-device PASS claimed only after physical Android operator test',
+			'Cronbach alpha remains documented/deferred unless real tested implementation exists',
+			'no broad token spreadsheet export'
+		]) {
+			expect(releaseEvidenceTemplateDoc).toContain(phrase);
+		}
+
+		for (const doc of [phase2326Doc, finalReleaseEvidenceDoc, releaseEvidenceTemplateDoc]) {
+			expect(doc).not.toContain('POST /api/cbt/login');
+			expect(doc).not.toContain('GET /api/cbt/status');
+		}
 	});
 	it('locks the monorepo runtime ownership for proposal integration', () => {
 		for (const phrase of [
@@ -1104,7 +1195,7 @@ describe('CBT proposal integration documentation guard', () => {
 		for (const phrase of [
 			'CBT Final Release Evidence',
 			'Current commit baseline',
-			'c823183',
+			'488e105',
 			'Automated evidence completed on this host',
 			'Manual evidence requiring physical Android devices and operator rehearsal',
 			'Device matrix',

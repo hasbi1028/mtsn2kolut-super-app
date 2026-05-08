@@ -525,6 +525,48 @@ Isi bagian ini saat review proposal question-type parity setelah baseline `cebd7
   - policy doc: `docs/cbt-media-prompt-response-policy.md`.
   - no recording upload enabled outside upload/file answer policy: pass / fail / n/a.
 
+## Phase 23-26 Evidence, Analytics, and Reports
+
+Isi bagian ini setelah evidence mode, BYOD device evidence, analytics, dan report matrix direview.
+
+Phase 23 proctor evidence mode:
+
+- heartbeat captured in dashboard/evidence CSV: pass / fail / pending.
+- app background/resume captured: pass / fail / pending.
+- device mismatch `409` evidence captured without exposing full fingerprint: pass / fail / pending.
+- submit guard warning captured: pass / fail / pending.
+- stale connection warning captured: pass / fail / pending.
+- warning telemetry captured: pass / fail / pending.
+- force submit action evidence captured: pass / fail / pending.
+- reset access action evidence captured: pass / fail / pending.
+- export/print evidence captured: pass / fail / pending.
+- no screen preview / no remote desktop claim: ya / tidak.
+
+Phase 24 anti-cheat BYOD evidence:
+
+- `anti_cheat_byod_manual_status`: pending_manual_evidence / complete_by_operator.
+- real-device PASS claimed only after physical Android operator test: ya / tidak.
+- minimum two Android vendors tested: ya / tidak.
+- APK SHA-256 hash:
+- `API_BASE_URL`:
+
+Phase 25 analytics/item analysis:
+
+- difficulty index: pass / fail / n/a.
+- discrimination index with sample guard: pass / fail / n/a.
+- distractor / answer distribution: pass / fail / n/a.
+- unanswered count: pass / fail / n/a.
+- per-type accuracy: pass / fail / n/a.
+- Cronbach alpha remains documented/deferred unless real tested implementation exists: ya / tidak.
+
+Phase 26 report template matrix:
+
+- official template matrix reviewed: pass / fail / pending.
+- print HTML / browser PDF path available where safe: pass / fail / pending.
+- CSV Excel-compatible path available where safe: pass / fail / pending.
+- no broad token spreadsheet export: ya / tidak.
+- no new binary PDF/XLSX endpoint introduced without approved safe pattern: ya / tidak.
+
 ## Acceptance Decision
 
 Lanjut bila:
