@@ -4,7 +4,7 @@ Dokumentasi ini merinci API yang digunakan oleh portal siswa (Flutter) untuk men
 
 ## Status Kontrak Saat Ini
 
-Sinkron per 2026-05-03:
+Sinkron per 2026-05-08:
 
 - Flutter memakai token ujian, bukan JWT admin.
 - Token ujian backend memakai hex acak kuat dan tidak boleh disisipkan ke URL media.
@@ -14,6 +14,7 @@ Sinkron per 2026-05-03:
 - Endpoint `answer` dan `submit` harus menjaga response sukses `data.status = recorded|submitted`.
 - Endpoint `heartbeat` dan `event` harus menjaga response sukses `data.status = ok|recorded`.
 - Perubahan payload wajib direview dengan `docs/exam-payload-release-template.md`.
+- Fase 1 integrasi proposal mengunci endpoint runtime Flutter tetap di `/api/exam/*`; Web Admin tidak membuat public route tree `/api/cbt/**` baru untuk runtime siswa.
 
 ## Base URL
 `https://api-cbt.mtsn2kolut.sch.id` (Sesuaikan dengan environment)
@@ -72,8 +73,9 @@ Mendaftarkan perangkat dan mendapatkan data soal.
 ```
 - **Error Responses:**
   - `404 Not Found`: Token tidak ditemukan.
-  - `403 Forbidden`: Sesi ujian belum aktif atau sudah berakhir.
-  - `409 Conflict`: Token sudah terikat dengan perangkat lain.
+  - `403 Forbidden`: Sesi ujian belum aktif, belum mulai, atau window sudah tertutup.
+  - `409 Conflict`: Token sudah terikat dengan perangkat lain atau ujian sudah submitted.
+  - `500 Internal Server Error`: Error internal dengan pesan generic `internal server error`.
 
 ### Payload Kompatibilitas Mobile
 
@@ -134,6 +136,9 @@ Mengecek sisa waktu dan progres pengerjaan di server.
   }
 }
 ```
+- **Error Responses:**
+  - `401 Unauthorized`: Header token/fingerprint tidak membentuk konteks peserta yang sah.
+  - `500 Internal Server Error`: Error internal dengan pesan generic `internal server error`.
 
 ---
 
@@ -149,6 +154,10 @@ Wajib dipanggil secara berkala (misal setiap 30-60 detik) untuk menandakan siswa
   "data": { "status": "ok" }
 }
 ```
+- **Error Responses:**
+  - `401 Unauthorized`: Header token/fingerprint tidak membentuk konteks peserta yang sah.
+  - `429 Too Many Requests`: Heartbeat terlalu sering untuk peserta/action yang sama.
+  - `500 Internal Server Error`: Error internal dengan pesan generic `internal server error`.
 
 ---
 
@@ -171,6 +180,48 @@ Mencatat aktivitas mencurigakan atau perpindahan status aplikasi.
   "data": { "status": "recorded" }
 }
 ```
+- **Error Responses:**
+  - `400 Bad Request`: JSON tidak valid atau `event_type` kosong.
+  - `401 Unauthorized`: Header token/fingerprint tidak membentuk konteks peserta yang sah.
+  - `429 Too Many Requests`: Event terlalu sering untuk peserta/action yang sama.
+  - `500 Internal Server Error`: Error internal dengan pesan generic `internal server error`.
+
+### Taxonomy Event BYOD Flutter
+
+Backend menerima event client sebagai evidence proctor/audit dan tetap client-safe. Event data tidak boleh berisi password, token ujian mentah di nested payload, answer key, credential admin, atau data perangkat yang lebih sensitif dari fingerprint telemetry yang sudah disepakati.
+
+Payload event umum:
+
+```json
+{
+  "event_type": "warning",
+  "data": {
+    "reason": "stale_connection_attention",
+    "seconds_since_last_contact": 95,
+    "failure_count": 3
+  }
+}
+```
+
+Taxonomy yang saat ini dipakai atau disiapkan untuk Flutter BYOD:
+
+| `event_type` | `data.reason` / data utama | Tujuan operasional |
+|--------------|----------------------------|--------------------|
+| `app_switch` | `state`, `device_fingerprint` | App meninggalkan/berubah lifecycle dari permukaan ujian. |
+| `warning` | `resume_exam` | Resume gate berjalan setelah app kembali foreground. |
+| `warning` | `repeat_resume_attempt` | Resume terjadi lebih dari sekali dan perlu korelasi pengawas. |
+| `warning` | `answer_saved_local_only` | Jawaban tersimpan lokal karena sync gagal. |
+| `warning` | `submit_blocked_pending_sync` | Submit manual ditahan sampai pending answer sync aman. |
+| `warning` | `auto_submit_blocked_pending_sync` | Auto-submit waktu habis tertahan karena pending answer belum aman. |
+| `warning` | `submit_blocked_degraded_mode` | Submit manual ditahan karena koneksi menurun. |
+| `warning` | `degraded_mode_entered` | Perangkat memasuki mode koneksi menurun. |
+| `warning` | `stale_connection_attention` | Kontak server stale dan pengawas perlu memperhatikan. |
+| `warning` | `stale_connection_escalated` | Stale sudah urgent dan butuh intervensi pengawas/proktor. |
+| `warning` | `back_button_attempt` | Siswa mencoba tombol kembali saat ujian berjalan. |
+| `warning` | `manual_submit` | Submit manual berhasil dikirim. |
+| `screenshot_attempt` | platform signal bila tersedia | Sinyal deterrence; bukan bukti lengkap pada BYOD. |
+
+Event eksplisit seperti `heartbeat_failed`, `heartbeat_recovered`, `restore_attempted`, dan `restore_failed` boleh ditambahkan secara backward-compatible setelah Flutter mengirim payload yang stabil.
 
 ---
 
@@ -187,8 +238,12 @@ Mengirim jawaban untuk satu soal. Panggil setiap kali siswa memilih/mengubah jaw
 }
 ```
 - **Error Responses:**
-  - `403 Forbidden`: Waktu ujian sudah habis.
+  - `400 Bad Request`: JSON tidak valid, `question_id` malformed, atau soal bukan bagian dari ujian peserta.
+  - `401 Unauthorized`: Header token/fingerprint tidak membentuk konteks peserta yang sah.
+  - `403 Forbidden`: Sesi belum mulai atau waktu ujian sudah habis.
   - `409 Conflict`: Ujian sudah disubmit sebelumnya.
+  - `429 Too Many Requests`: Save answer terlalu sering untuk peserta/action yang sama.
+  - `500 Internal Server Error`: Error internal dengan pesan generic `internal server error`.
 - **Success Envelope:**
 ```json
 {
@@ -211,8 +266,11 @@ Finalisasi pengerjaan. Setelah ini, token tidak bisa digunakan lagi untuk menjaw
 }
 ```
 - **Error Responses:**
-  - `403 Forbidden`: Waktu ujian sudah tertutup.
+  - `401 Unauthorized`: Header token/fingerprint tidak membentuk konteks peserta yang sah.
+  - `403 Forbidden`: Sesi belum mulai atau waktu ujian sudah tertutup.
   - `409 Conflict`: Ujian sudah disubmit sebelumnya.
+  - `429 Too Many Requests`: Submit terlalu sering untuk peserta/action yang sama.
+  - `500 Internal Server Error`: Error internal dengan pesan generic `internal server error`.
 
 ---
 

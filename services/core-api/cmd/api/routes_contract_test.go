@@ -85,3 +85,34 @@ func TestQuestionServiceUsesPoolBackedTransactionsInAPI(t *testing.T) {
 		t.Fatalf("API must construct CbtQuestion with pool-backed transaction support")
 	}
 }
+
+func TestExamMobileRoutesRemainTokenScoped(t *testing.T) {
+	raw, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	source := string(raw)
+	start := strings.Index(source, "// Exam endpoints")
+	end := strings.Index(source, "requireAdmin :=")
+	if start < 0 || end <= start {
+		t.Fatalf("exam route block not found")
+	}
+	block := source[start:end]
+	required := []string{
+		`r.With(examLoginRateLimit).Post("/api/exam/login", examH.Login)`,
+		`r.Use(examTokenMW)`,
+		`r.Get("/api/exam/status", examH.Status)`,
+		`r.Post("/api/exam/heartbeat", examH.Heartbeat)`,
+		`r.Post("/api/exam/event", examH.RecordEvent)`,
+		`r.Post("/api/exam/answer", examH.SubmitAnswer)`,
+		`r.Post("/api/exam/submit", examH.Submit)`,
+	}
+	for _, want := range required {
+		if !strings.Contains(block, want) {
+			t.Fatalf("exam route block missing %q:\n%s", want, block)
+		}
+	}
+	if strings.Contains(block, `"/api/cbt/exam`) || strings.Contains(block, `"/api/cbt/student`) {
+		t.Fatalf("mobile exam runtime must stay on /api/exam/*, not new /api/cbt/* routes:\n%s", block)
+	}
+}
