@@ -2,9 +2,9 @@
 
 Status: final release evidence baseline, 2026-05-08.
 
-Current source baseline before Phase 27-30 commit: `5d54c36` (`Phase 23-26`).
+Current commit baseline before Phase 31-32 evidence commit: `e005134` (`Phase 27-30`).
 
-This document records the current final evidence split after CBT Phase 30 evidence hardening. It does not perform deploy, PM2 restart, migration, live database writes, live exam mutation, live DB restore, or public CBT route work.
+This document records the current final evidence split after CBT Phase 32 deployment-candidate/sign-off hardening. Phase 31 deployed the candidate after explicit user approval with backup, build, migration reconciliation, PM2 restart/save, and smoke checks. Phase 32 keeps final production acceptance gated by physical Android device evidence, operator rehearsal, and explicit go/no-go sign-off.
 
 ## Automated evidence completed on this host
 

@@ -76,3 +76,9 @@ The proposal is broadly aligned with the current CBT direction, but release acce
 - Phase 28 Infrastructure, Backup, Restore, and DR Evidence: backup verification may record backup path, latest symlink, checksum, `sha256sum -c`, and `pg_restore --list` status. Do not restore over live DB; this repository does not claim a restore drill unless isolated ops evidence is attached.
 - Phase 29 Security and ISO-Control Alignment Evidence: security evidence is control alignment, not certification. No ISO certification claim is made from repository evidence alone.
 - Phase 30 Mobile RC Build and Release Package Evidence: final readiness evidence may record APK build status and APK SHA-256 hash, but real-device PASS remains forbidden until tested on minimum two Android vendors by operator/pengawas.
+
+## Phase 31-32 deployment/sign-off status
+
+- Phase 31 deployed the current production candidate after explicit approval: backup PASS, build PASS, migration reconcile/apply PASS, PM2 restart/save PASS, smoke PASS.
+- Phase 32 final go/no-go remains safe: automated/deployment evidence is complete, but physical Android device matrix, operator rehearsal, and explicit final sign-off remain required before `production_go=true`.
+- No public `/api/cbt/**` runtime route tree, PocketBase/SQLite/Alpine runtime, ISO certification claim, full BYOD kiosk claim, or live DB restore is introduced.

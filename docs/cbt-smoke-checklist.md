@@ -209,3 +209,14 @@ Lampirkan evidence berikut pada tiket/release note internal.
 - [ ] Keputusan akhir: lulus, lulus dengan catatan, atau tunda.
 
 Keputusan wajib tunda bila ada kebocoran token/kunci jawaban, jawaban tidak tersimpan, submit final tidak dapat dipercaya, status peserta salah, role melihat data lintas scope, atau migration state tidak jelas.
+
+## Phase 31 production candidate smoke evidence
+
+- [x] Backend `/health`: `200`.
+- [x] Web root `http://127.0.0.1:8021/`: `200`.
+- [x] Protected `/settings/rbac`: `302` unauthenticated redirect.
+- [x] Protected `/api/bank-soal/summary`: `401` unauthenticated.
+- [x] Core API `/api/exam/status` without token: `401`.
+- [x] `/bank-soal`: `302` unauthenticated redirect.
+- [x] `/asesmen`: `302` unauthenticated redirect.
+- [x] `bash deploy/scripts/health-check.sh all`: PASS.
