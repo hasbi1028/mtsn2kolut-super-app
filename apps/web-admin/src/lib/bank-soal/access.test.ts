@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { canDeleteBankSoal, canImportBankSoal, canManageBankSoalSettings, canPublishBankSoal, canReviewBankSoal } from './access';
+import { canCreateBankSoal, canDeleteBankSoal, canImportBankSoal, canManageBankSoalSettings, canPublishBankSoal, canReviewBankSoal } from './access';
 
 describe('bank soal permission helpers', () => {
 	it('does not treat plain guru role as reviewer/import/settings authority', () => {
 		const guru = { role: 'guru', roles: ['guru'], permissions: [] };
 
+		expect(canCreateBankSoal(guru)).toBe(false);
 		expect(canReviewBankSoal(guru)).toBe(false);
 		expect(canImportBankSoal(guru)).toBe(false);
 		expect(canManageBankSoalSettings(guru)).toBe(false);
@@ -14,6 +15,8 @@ describe('bank soal permission helpers', () => {
 	});
 
 	it('allows admin and granular permissions for privileged Bank Soal actions', () => {
+		expect(canCreateBankSoal({ role: 'admin', roles: ['admin'], permissions: [] })).toBe(true);
+		expect(canCreateBankSoal({ role: '', roles: [], permissions: ['bank_soal.create'] })).toBe(true);
 		expect(canReviewBankSoal({ role: 'admin', roles: ['admin'], permissions: [] })).toBe(true);
 		expect(canReviewBankSoal({ role: '', roles: [], permissions: ['bank_soal.review'] })).toBe(true);
 		expect(canImportBankSoal({ role: '', roles: [], permissions: ['bank_soal.import'] })).toBe(true);

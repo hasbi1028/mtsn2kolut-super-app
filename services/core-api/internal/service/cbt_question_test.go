@@ -613,6 +613,14 @@ func TestCbtQuestionCreateAllowsGuruReusableAndRejectsNonGuru(t *testing.T) {
 		t.Fatalf("Create(guru reusable) calls/event = %d/%+v, want one global reusable create", store.createCalls, store.createHistory[0].EventID)
 	}
 
+	permissionOnly := base
+	permissionOnly.AuthorUsername = "creator.permission"
+	permissionOnly.Actor = CbtQuestionActor{Username: "creator.permission", Roles: []string{}, Permissions: []string{"bank_soal.create"}}
+	_, err = svc.Create(context.Background(), permissionOnly)
+	if err != nil {
+		t.Fatalf("Create(permission-only reusable) error = %v", err)
+	}
+
 	blocked := base
 	blocked.AuthorUsername = "staf.tu"
 	blocked.Actor = CbtQuestionActor{Username: "staf.tu", Roles: []string{"staf"}}

@@ -5,6 +5,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
+	import { canCreateBankSoal, type BankSoalAccessUser } from '$lib/bank-soal/access';
 
 	type Subject = { id: string; name: string; code?: string };
 	type Question = {
@@ -26,7 +27,10 @@
 	type SubjectPayload = { subjects?: Subject[] };
 	type QuestionListResponse = { items?: Question[]; meta?: { total?: number } };
 	type Payload = { subjects: Subject[]; questions: Question[] };
+	type PageData = { user?: BankSoalAccessUser };
 	type CoverageRow = { key: string; subject: string; total: number; approved: number; kdCount: number; topicCount: number; missingKd: number; levels: string[]; grades: string[] };
+
+	let { data }: { data: PageData } = $props();
 
 	let promise = $state<Promise<Payload> | null>(null);
 	let subjects = $state<Subject[]>([]);
@@ -90,6 +94,7 @@
 	let totalKd = $derived(coverageRows.reduce((sum, row) => sum + row.kdCount, 0));
 	let missingKd = $derived(coverageRows.reduce((sum, row) => sum + row.missingKd, 0));
 	let sparseRows = $derived(coverageRows.filter((row) => row.total === 0 || row.missingKd > 0).slice(0, 8));
+	let canCreate = $derived(canCreateBankSoal(data.user));
 
 	onMount(load);
 </script>
@@ -107,7 +112,9 @@
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<a href={resolve('/bank-soal')} class="rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50">Dashboard</a>
-					<a href={resolve('/bank-soal/tambah')} class="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">Tambah Soal</a>
+					{#if canCreate}
+						<a href={resolve('/bank-soal/tambah')} class="rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-sm font-semibold text-primary hover:bg-primary/15">Tambah Soal</a>
+					{/if}
 				</div>
 			</div>
 		</div>

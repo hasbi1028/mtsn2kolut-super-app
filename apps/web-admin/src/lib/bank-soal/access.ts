@@ -22,6 +22,10 @@ function hasPermission(user: BankSoalAccessUser | undefined, permission: string)
 	return permissionsOf(user).includes(permission);
 }
 
+export function canCreateBankSoal(user?: BankSoalAccessUser): boolean {
+	return hasRole(user, 'admin') || hasPermission(user, 'bank_soal.create');
+}
+
 export function canReviewBankSoal(user?: BankSoalAccessUser): boolean {
 	return hasRole(user, 'admin') || hasPermission(user, 'bank_soal.review') || hasPermission(user, 'bank_soal.publish');
 }

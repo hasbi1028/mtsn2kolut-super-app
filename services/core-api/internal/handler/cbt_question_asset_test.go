@@ -368,6 +368,27 @@ func TestCbtQuestionAssetRequireScopeBranches(t *testing.T) {
 			wantStatus: http.StatusForbidden,
 		},
 		{
+			name:       "permission-only creator cannot bypass scoped question ownership",
+			claims:     jwt.MapClaims{"roles": []any{}, "permissions": []any{"bank_soal.create"}, "usr": "creator"},
+			questionID: questionID,
+			svc:        &fakeCbtQuestionAssetService{questionErr: errors.New("should not be called")},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "permission-only read cannot bypass scoped question ownership",
+			claims:     jwt.MapClaims{"roles": []any{}, "permissions": []any{"bank_soal.read"}, "usr": "reader"},
+			questionID: questionID,
+			svc:        &fakeCbtQuestionAssetService{questionErr: errors.New("should not be called")},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "permission-only creator can stage orphan asset",
+			claims:     jwt.MapClaims{"roles": []any{}, "permissions": []any{"bank_soal.create"}, "usr": "creator"},
+			questionID: pgtype.UUID{},
+			svc:        &fakeCbtQuestionAssetService{},
+			wantOK:     true,
+		},
+		{
 			name:       "guru orphan asset forbidden",
 			claims:     jwt.MapClaims{"roles": []any{"guru"}, "usr": "guru.ipa"},
 			questionID: pgtype.UUID{},
@@ -411,7 +432,7 @@ func TestCbtQuestionAssetRequireScopeBranches(t *testing.T) {
 				req = withClaims(req, tt.claims)
 			}
 			rec := httptest.NewRecorder()
-			gotOK := (&CbtQuestionAsset{svc: tt.svc}).requireQuestionAssetScope(rec, req, tt.questionID)
+			gotOK := (&CbtQuestionAsset{svc: tt.svc}).requireQuestionAssetScope(rec, req, tt.questionID, "bank_soal.read", "bank_soal.create", "bank_soal.update", "bank_soal.review", "bank_soal.publish")
 			if gotOK != tt.wantOK {
 				t.Fatalf("requireQuestionAssetScope() = %v, want %v", gotOK, tt.wantOK)
 			}

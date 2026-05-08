@@ -5,6 +5,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { readClientApiData } from '$lib/client/api';
+	import { canCreateBankSoal, canImportBankSoal, canReviewBankSoal, type BankSoalAccessUser } from '$lib/bank-soal/access';
 
 	type SummaryResponse = {
 		counts?: Partial<Record<'all' | 'total' | 'draft' | 'review' | 'revision' | 'approved' | 'published' | 'package_usage', number>>;
@@ -20,6 +21,7 @@
 		summary: SummaryResponse;
 		subjects: SubjectPayload['subjects'];
 	};
+	type PageData = { user?: BankSoalAccessUser };
 
 	type SopItem = {
 		title: string;
@@ -53,12 +55,14 @@
 	];
 
 	const integrations = [
-		{ name: 'Daftar Soal', path: resolve('/bank-soal/daftar'), desc: 'Sumber data utama untuk pencarian, filter, pagination, dan aksi per soal.' },
-		{ name: 'Komposer', path: resolve('/bank-soal/tambah'), desc: 'Pembuatan/edit soal dengan autosave, shortcut, validasi, dan preview siswa.' },
-		{ name: 'Review', path: resolve('/bank-soal/verifikasi'), desc: 'Antrean verifikasi, catatan reviewer, timeline, approve/revisi.' },
-		{ name: 'Import', path: resolve('/bank-soal/impor'), desc: 'Preview dry-run dan import final dari Word/Excel/template.' },
-		{ name: 'Asesmen Paket', path: resolve('/asesmen/paket'), desc: 'Pemakaian soal terbit ke paket asesmen.' }
-	];
+		{ name: 'Daftar Soal', path: resolve('/bank-soal/daftar'), desc: 'Sumber data utama untuk pencarian, filter, pagination, dan aksi per soal.', required: 'read' },
+		{ name: 'Komposer', path: resolve('/bank-soal/tambah'), desc: 'Pembuatan/edit soal dengan autosave, shortcut, validasi, dan preview siswa.', required: 'create' },
+		{ name: 'Review', path: resolve('/bank-soal/verifikasi'), desc: 'Antrean verifikasi, catatan reviewer, timeline, approve/revisi.', required: 'review' },
+		{ name: 'Import', path: resolve('/bank-soal/impor'), desc: 'Preview dry-run dan import final dari Word/Excel/template.', required: 'import' },
+		{ name: 'Asesmen Paket', path: resolve('/asesmen/paket'), desc: 'Pemakaian soal terbit ke paket asesmen.', required: 'read' }
+	] as const;
+
+	let { data }: { data: PageData } = $props();
 
 	let promise = $state<Promise<Payload> | null>(null);
 	let summary = $state<SummaryResponse>({});
@@ -92,6 +96,12 @@
 		{ label: 'Coverage Mapel', value: subjectCoverage, desc: 'Mapel muncul pada ringkasan/sumber akademik' },
 		{ label: 'Level Kognitif', value: cognitiveCoverage, desc: 'Kategori Bloom/C-level berisi soal' }
 	]);
+	let visibleIntegrations = $derived(integrations.filter((item) => {
+		if (item.required === 'create') return canCreateBankSoal(data.user);
+		if (item.required === 'review') return canReviewBankSoal(data.user);
+		if (item.required === 'import') return canImportBankSoal(data.user);
+		return true;
+	}));
 
 	onMount(load);
 </script>
@@ -165,7 +175,7 @@
 					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
 						<h2 class="text-base font-bold text-foreground">Integrasi Modul</h2>
 						<div class="mt-4 grid gap-3 md:grid-cols-2">
-							{#each integrations as item (item.path)}
+							{#each visibleIntegrations as item (item.path)}
 								<a href={item.path} class="rounded-lg border border-border bg-muted/50 p-3 transition hover:border-primary/20 hover:bg-primary/10">
 									<p class="text-sm font-bold text-foreground">{item.name}</p>
 									<p class="mt-1 text-xs leading-5 text-muted-foreground">{item.desc}</p>

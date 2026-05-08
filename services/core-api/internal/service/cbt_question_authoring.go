@@ -155,7 +155,7 @@ func (s *CbtQuestion) requireCreateQuestion(ctx context.Context, actor CbtQuesti
 		return nil
 	}
 	if !eventID.Valid {
-		if actor.HasRole("guru") || actor.HasRole("teacher") {
+		if actor.HasRole("guru") || actor.HasRole("teacher") || actor.HasPermission("bank_soal.create") {
 			return nil
 		}
 		return domain.ErrForbidden
