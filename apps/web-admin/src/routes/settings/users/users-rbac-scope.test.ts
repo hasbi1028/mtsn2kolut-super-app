@@ -15,4 +15,20 @@ describe('/settings/users RBAC scope', () => {
 		expect(pageSource).not.toContain("window.prompt('Kode role baru");
 		expect(pageSource).not.toContain("window.prompt('Kode permission baru");
 	});
+
+	it('uses role-scoped profile candidates instead of eager all-profile pulls', () => {
+		expect(pageSource).toContain('fetchUserProfileCandidates');
+		expect(pageSource).toContain('loadProfileCandidates');
+		expect(pageSource).toContain('candidateRequiresClass');
+		expect(pageSource).not.toContain("fetch('/api/employees')");
+		expect(pageSource).not.toContain("fetch('/api/students')");
+		expect(pageSource).not.toContain("fetch('/api/parents')");
+	});
+
+	it('surfaces class-aware profile picker copy for siswa and orang tua roles', () => {
+		expect(pageSource).toContain('Siswa per kelas');
+		expect(pageSource).toContain('Ortu per kelas anak');
+		expect(pageSource).toContain('Pilih kelas terlebih dahulu untuk menarik siswa');
+		expect(pageSource).toContain('Pilih kelas anak untuk menarik orang tua/wali terkait');
+	});
 });

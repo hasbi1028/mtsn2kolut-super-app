@@ -925,6 +925,19 @@ describe('api proxy route handlers', () => {
 		expect(proxyPostMock).not.toHaveBeenCalled();
 	});
 
+	it('forwards role-scoped profile candidate reads with query string intact', async () => {
+		const mod = await import('../../routes/api/users/profile-candidates/+server');
+		proxyGetMock.mockResolvedValueOnce({ role: 'siswa', candidates: [] });
+
+		const res = await mod.GET(createEvent({
+			url: new URL('http://localhost/api/users/profile-candidates?role=siswa&class_id=class-1&q=ahmad&include_linked=false&limit=20')
+		}) as never);
+
+		expect(proxyGetMock).toHaveBeenCalledWith('/api/users/profile-candidates?role=siswa&class_id=class-1&q=ahmad&include_linked=false&limit=20');
+		expect(res.status).toBe(200);
+		await expect(res.json()).resolves.toEqual({ role: 'siswa', candidates: [] });
+	}, 10000);
+
 	it('creates users through the typed JSON body helper', async () => {
 		const mod = await import('../../routes/api/users/+server');
 		proxyPostMock.mockResolvedValueOnce({ id: 'user-1', username: 'operator' });
@@ -1861,6 +1874,19 @@ describe('api proxy route handlers', () => {
 		proxyPostMock.mockResolvedValueOnce({ role: 'ortu', created: 1 });
 		await parentGenerateMod.POST(createEvent() as never);
 		expect(proxyPostMock).toHaveBeenLastCalledWith('/api/users/parent-accounts/generate', {});
+	});
+
+	it('forwards role-scoped user profile candidates with query filters intact', async () => {
+		const mod = await import('../../routes/api/users/profile-candidates/+server');
+		proxyGetMock.mockResolvedValueOnce({ role: 'siswa', candidates: [] });
+
+		const res = await mod.GET(createEvent({
+			url: new URL('http://localhost/api/users/profile-candidates?role=siswa&class_id=class-1&q=ahmad&include_linked=false&limit=20')
+		}) as never);
+
+		expect(proxyGetMock).toHaveBeenLastCalledWith('/api/users/profile-candidates?role=siswa&class_id=class-1&q=ahmad&include_linked=false&limit=20');
+		expect(res.status).toBe(200);
+		await expect(res.json()).resolves.toEqual({ role: 'siswa', candidates: [] });
 	});
 
 	it('forwards student portal self-data routes without accepting student_id from the browser path', async () => {

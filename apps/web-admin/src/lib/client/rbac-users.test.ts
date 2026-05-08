@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	buildProfileLinkPayload,
 	buildUserRolePayload,
+	fetchUserProfileCandidates,
 	fetchRBACMatrix,
 	employeeAccountGenerationCSV,
 	generateEmployeeAccounts,
@@ -69,6 +70,30 @@ describe('rbac user management client helpers', () => {
 
 		await expect(fetchRBACMatrix(fetcher)).resolves.toEqual(matrix);
 		expect(fetcher).toHaveBeenCalledWith('/api/rbac/matrix');
+	});
+
+	it('fetches role-scoped profile candidates without credential parameters', async () => {
+		const payload = {
+			role: 'ortu',
+			profile: 'parent',
+			class_id: 'class-1',
+			candidates: [
+				{ id: 'parent-1', profile_type: 'parent', nama: 'Wali Ahmad', identifier: '******7890', is_linked: false, children: [] }
+			]
+		};
+		const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: payload }), { status: 200 }));
+
+		await expect(fetchUserProfileCandidates({
+			role: 'ortu',
+			class_id: 'class-1',
+			q: ' wali ',
+			include_linked: false,
+			limit: 20
+		}, fetcher)).resolves.toEqual(payload);
+
+		expect(fetcher).toHaveBeenCalledWith('/api/users/profile-candidates?role=ortu&class_id=class-1&q=wali&include_linked=false&limit=20');
+		expect(fetcher.mock.calls[0][0]).not.toContain('password');
+		expect(fetcher.mock.calls[0][0]).not.toContain('secret');
 	});
 
 	it('sends CRUD role and permission requests to RBAC management endpoints', async () => {

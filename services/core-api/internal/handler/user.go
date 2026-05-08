@@ -3,8 +3,10 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -14,6 +16,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"mtsn2kolut-super-app/backend/internal/api"
+	"mtsn2kolut-super-app/backend/internal/domain"
 	mw "mtsn2kolut-super-app/backend/internal/middleware"
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
 	"mtsn2kolut-super-app/backend/internal/service"
@@ -50,37 +53,44 @@ type parentAccountGenerationService interface {
 	Generate(ctx context.Context, actorID pgtype.UUID) (service.ParentAccountGenerationResult, error)
 }
 
+type userProfileCandidatesService interface {
+	List(ctx context.Context, filter service.UserProfileCandidateFilter) (service.UserProfileCandidatesResult, error)
+}
+
 type userTxStarter interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
 type User struct {
-	q                userStore
-	lifecycle        userLifecycleService
-	generator        employeeAccountGenerationService
-	studentGenerator studentAccountGenerationService
-	parentGenerator  parentAccountGenerationService
-	tx               userTxStarter
+	q                 userStore
+	lifecycle         userLifecycleService
+	generator         employeeAccountGenerationService
+	studentGenerator  studentAccountGenerationService
+	parentGenerator   parentAccountGenerationService
+	profileCandidates userProfileCandidatesService
+	tx                userTxStarter
 }
 
 func NewUser(q *db.Queries) *User {
 	return &User{
-		q:                q,
-		lifecycle:        service.NewUserLifecycle(q),
-		generator:        service.NewEmployeeAccountGenerator(q),
-		studentGenerator: service.NewStudentAccountGenerator(q),
-		parentGenerator:  service.NewParentAccountGenerator(q),
+		q:                 q,
+		lifecycle:         service.NewUserLifecycle(q),
+		generator:         service.NewEmployeeAccountGenerator(q),
+		studentGenerator:  service.NewStudentAccountGenerator(q),
+		parentGenerator:   service.NewParentAccountGenerator(q),
+		profileCandidates: service.NewUserProfileCandidateService(q),
 	}
 }
 
 func NewUserWithPool(pool *pgxpool.Pool) *User {
 	return &User{
-		q:                db.New(pool),
-		lifecycle:        service.NewUserLifecycleWithPool(pool),
-		generator:        service.NewEmployeeAccountGeneratorWithPool(pool),
-		studentGenerator: service.NewStudentAccountGeneratorWithPool(pool),
-		parentGenerator:  service.NewParentAccountGeneratorWithPool(pool),
-		tx:               pool,
+		q:                 db.New(pool),
+		lifecycle:         service.NewUserLifecycleWithPool(pool),
+		generator:         service.NewEmployeeAccountGeneratorWithPool(pool),
+		studentGenerator:  service.NewStudentAccountGeneratorWithPool(pool),
+		parentGenerator:   service.NewParentAccountGeneratorWithPool(pool),
+		profileCandidates: service.NewUserProfileCandidateService(db.New(pool)),
+		tx:                pool,
 	}
 }
 
@@ -166,6 +176,38 @@ func (h *User) GenerateParentAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.parentGenerator.Generate(r.Context(), actorID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *User) ListProfileCandidates(w http.ResponseWriter, r *http.Request) {
+	if !userPermissionAccessAllowed(w, r, "users.create") {
+		return
+	}
+	q := r.URL.Query()
+	limit := int32(50)
+	if rawLimit := strings.TrimSpace(q.Get("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed < 0 {
+			api.BadRequest(w, "limit tidak valid")
+			return
+		}
+		limit = int32(parsed)
+	}
+	result, err := h.profileCandidates.List(r.Context(), service.UserProfileCandidateFilter{
+		Role:          q.Get("role"),
+		ClassID:       q.Get("class_id"),
+		Query:         q.Get("q"),
+		IncludeLinked: strings.EqualFold(q.Get("include_linked"), "true") || q.Get("include_linked") == "1",
+		Limit:         limit,
+	})
+	if errors.Is(err, domain.ErrBadRequest) {
+		api.BadRequest(w, "filter kandidat profil tidak valid")
+		return
+	}
 	if err != nil {
 		api.Internal(w, err)
 		return
