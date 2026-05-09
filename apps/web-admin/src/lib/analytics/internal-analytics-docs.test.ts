@@ -49,6 +49,23 @@ describe('internal analytics phase 0 documentation contract', () => {
 		}
 	});
 
+	it('documents Phase 2 as Core API ingestion minimum only', () => {
+		for (const phrase of [
+			'Fase 2 - Core API ingestion minimum',
+			'JWT protected',
+			'event allowlist',
+			'forbidden sensitive keys',
+			'body cap',
+			'tidak menambahkan BFF route',
+			'tidak menambahkan frontend tracking',
+			'tidak menjalankan migration live',
+			'tidak deploy',
+			'tidak restart PM2'
+		]) {
+			expect(analyticsPlanDoc.toLowerCase()).toContain(phrase.toLowerCase());
+		}
+	});
+
 	it('keeps the event allowlist and forbidden sensitive keys explicit', () => {
 		for (const phrase of [
 			'event allowlist',

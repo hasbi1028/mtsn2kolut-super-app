@@ -1,6 +1,6 @@
 # Rencana Internal Analytics MTsN 2 Kolaka Utara
 
-Status: Tahap/Fase 1, schema/migration/query contract. Fase 0 menetapkan arah, batas, dan readiness: Fase 0 tidak menambahkan runtime ingestion table, Fase 0 tidak menambahkan migration, API handler, BFF route, tracking frontend, dependency, deploy, atau restart PM2. Fase 1 menambahkan schema analytics internal melalui migration draft dan sqlc query contract saja.
+Status: Tahap/Fase 2, Core API ingestion minimum. Fase 0 menetapkan arah, batas, dan readiness: Fase 0 tidak menambahkan runtime ingestion table, Fase 0 tidak menambahkan migration, API handler, BFF route, tracking frontend, dependency, deploy, atau restart PM2. Fase 1 menambahkan schema analytics internal melalui migration draft dan sqlc query contract saja. Fase 2 menambahkan endpoint ingestion minimum di Core API, tetapi tetap tidak menjalankan migration live, tidak deploy, tidak restart PM2, tidak menambahkan BFF route, dan tidak menambahkan frontend tracking.
 
 ## Prinsip Utama
 
@@ -55,6 +55,29 @@ Batas Fase 1:
 - tidak menambahkan BFF route.
 - tidak menambahkan frontend tracking.
 - tidak menambahkan worker/runtime handler.
+- tidak menjalankan migration live.
+- tidak deploy.
+- tidak restart PM2.
+
+## Catatan Implementasi Fase 2
+
+Fase 2 - Core API ingestion minimum menambahkan jalur tulis awal di `services/core-api` saja. Endpoint ingestion bersifat JWT protected untuk seluruh event pada fase ini sehingga tidak ada public unauthenticated collector. Handler memakai body cap kecil, strict JSON object decoding, dan response receipt aman yang hanya berisi id event, nama event, group, `occurred_at`, dan `retention_expires_at`.
+
+Validasi Fase 2 berada di service Core API:
+
+- event allowlist hardcoded dari `docs/internal-analytics-event-catalog.md`.
+- `event_group` harus cocok dengan group katalog event.
+- `source_surface` wajib salah satu dari `public_website`, `web_admin`, `core_api`, `mobile_app`, atau `system`.
+- metadata wajib object/map, punya batas ukuran, dan ditolak bila mengandung forbidden sensitive keys secara case-insensitive termasuk variasi token, cookie, authorization, secret/API key, NIK/NIP/NISN, device fingerprint, kredensial PUSAKA, raw IP, raw user agent, SQL, stack trace, request body, response body, atau raw payload.
+- `retention_expires_at` default memakai server time: public 90 hari, internal 180 hari, dan security 180 hari.
+
+Batas Fase 2:
+
+- tidak menambahkan dashboard/read API.
+- tidak menambahkan export API.
+- tidak menambahkan retention job atau rollup runtime.
+- tidak menambahkan BFF route.
+- tidak menambahkan frontend tracking.
 - tidak menjalankan migration live.
 - tidak deploy.
 - tidak restart PM2.
@@ -140,10 +163,10 @@ Fase 0 ini hanya membuat kontrak. Tahap berikutnya wajib tetap kecil dan dapat d
    - Rancang tabel event/aggregate internal dengan retensi sejak awal.
    - Tambahkan migration hanya setelah katalog event stabil.
    - Tambahkan sqlc query eksplisit, tanpa ORM.
-2. **Phase 2 - Core API ingestion minimum**
+2. **Fase 2 - Core API ingestion minimum**
    - Tambahkan endpoint ingestion internal untuk event allowlisted.
    - Validasi metadata per event group dan tolak forbidden sensitive keys.
-   - Tambahkan rate limit dan ukuran payload maksimum.
+   - Endpoint awal bersifat JWT protected, memakai body cap, dan belum membuka public unauthenticated ingestion.
 3. **Phase 3 - BFF proxy contract**
    - Tambahkan route BFF yang meneruskan event ke Core API.
    - Forward JWT user asli untuk internal app event.

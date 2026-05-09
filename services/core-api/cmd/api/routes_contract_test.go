@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -114,5 +115,68 @@ func TestExamMobileRoutesRemainTokenScoped(t *testing.T) {
 	}
 	if strings.Contains(block, `"/api/cbt/exam`) || strings.Contains(block, `"/api/cbt/student`) {
 		t.Fatalf("mobile exam runtime must stay on /api/exam/*, not new /api/cbt/* routes:\n%s", block)
+	}
+}
+
+func TestInternalAnalyticsIngestionRouteStaysJWTProtected(t *testing.T) {
+	raw, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	source := string(raw)
+	jwtStart := strings.Index(source, "r.Use(mw.JWT(jwtSecret")
+	workerStart := strings.Index(source, "r.Use(mw.WorkerKey(workerKey))")
+	if jwtStart < 0 || workerStart <= jwtStart {
+		t.Fatalf("authenticated route block not found")
+	}
+	authenticatedBlock := source[jwtStart:workerStart]
+	const analyticsRoute = `r.Post("/api/internal-analytics/events", internalAnalyticsH.CreateEvent)`
+	if !strings.Contains(authenticatedBlock, analyticsRoute) {
+		t.Fatalf("internal analytics ingestion route must be registered only inside the JWT-authenticated API block")
+	}
+	if strings.Contains(source[:jwtStart], "/api/internal-analytics/events") {
+		t.Fatalf("internal analytics ingestion must not be exposed before JWT middleware")
+	}
+	if strings.Contains(source, "/api/public/internal-analytics") || strings.Contains(source, "/api/public/analytics") {
+		t.Fatalf("phase 2 must not expose public unauthenticated analytics ingestion")
+	}
+}
+
+func TestInternalAnalyticsPhase2DoesNotAddWebAdminBFFOrTracking(t *testing.T) {
+	root := filepath.Clean("../../../../apps/web-admin/src")
+	forbiddenNeedles := []string{
+		"/api/internal-analytics/events",
+		"internal-analytics/events",
+		"navigator.sendBeacon",
+		"sendBeacon(",
+		"posthog",
+		"plausible",
+		"gtag(",
+		"GoogleAnalytics",
+	}
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if strings.HasSuffix(path, ".test.ts") || strings.HasSuffix(path, ".spec.ts") {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		source := string(raw)
+		for _, needle := range forbiddenNeedles {
+			if strings.Contains(source, needle) {
+				t.Fatalf("phase 2 must not add Web Admin BFF/frontend tracking; found %q in %s", needle, path)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("scan web-admin source: %v", err)
 	}
 }

@@ -63,6 +63,7 @@ func main() {
 	empSchedSvc := service.NewEmployeeSchedule(q)
 	settSvc := service.NewSetting(q)
 	auditSvc := service.NewAudit(q)
+	internalAnalyticsSvc := service.NewInternalAnalytics(q)
 	pusakaSchedulerSvc := service.NewPusakaScheduler(q, pusakaJobSvc, settSvc, auditSvc)
 	notificationSvc := service.NewNotification(q)
 	librarySvc := service.NewLibrary(q)
@@ -113,6 +114,7 @@ func main() {
 	pusakaScheduleH := handler.NewPusakaSchedule(pusakaScheduleSvc)
 	empSchedH := handler.NewEmployeeSchedule(empSchedSvc)
 	settH := handler.NewSetting(settSvc)
+	internalAnalyticsH := handler.NewInternalAnalytics(internalAnalyticsSvc)
 	pusakaSchedulerH := handler.NewPusakaScheduler(pusakaSchedulerSvc)
 	pusakaWorkerH := handler.NewPusakaWorker(pusakaJobSvc, pusakaAttendanceSvc, settSvc)
 	notificationH := handler.NewNotification(notificationSvc)
@@ -252,6 +254,7 @@ func main() {
 		r.Get("/api/notifications/unread-count", notificationH.CountUnread)
 		r.Post("/api/notifications/read-all", notificationH.MarkAllRead)
 		r.Post("/api/notifications/{id}/read", notificationH.MarkRead)
+		r.Post("/api/internal-analytics/events", internalAnalyticsH.CreateEvent)
 		r.Get("/api/school-profile", settH.SchoolProfile)
 		r.With(requireSchoolProfileSettings).Put("/api/school-profile", settH.UpdateSchoolProfile)
 
