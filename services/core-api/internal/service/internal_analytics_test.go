@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -121,6 +122,10 @@ func newTestInternalAnalytics(store *fakeInternalAnalyticsStore) *InternalAnalyt
 		q:   store,
 		now: fixedAnalyticsNow,
 	}
+}
+
+func internalAnalyticsSchemaMissingErr() error {
+	return &pgconn.PgError{Code: "42P01", Message: "relation internal_analytics_daily_aggregates does not exist"}
 }
 
 func expectInternalAnalyticsValidationCode(t *testing.T, err error, code string) {
@@ -350,6 +355,26 @@ func TestInternalAnalyticsListsDailyAggregatesWithoutRawMetadata(t *testing.T) {
 	}
 }
 
+func TestInternalAnalyticsListsDailyAggregatesReturnsEmptyWhenSchemaMissing(t *testing.T) {
+	store := &fakeInternalAnalyticsStore{dailyErr: internalAnalyticsSchemaMissingErr()}
+	svc := newTestInternalAnalytics(store)
+
+	result, err := svc.ListDailyAggregates(context.Background(), InternalAnalyticsDailyQuery{
+		EventGroup: "dashboard",
+		Days:       14,
+		Limit:      25,
+	})
+	if err != nil {
+		t.Fatalf("ListDailyAggregates() error = %v, want nil schema fallback", err)
+	}
+	if result.Days != 14 || result.EventGroup != "dashboard" {
+		t.Fatalf("daily fallback = %+v, want query context preserved", result)
+	}
+	if result.Items == nil || len(result.Items) != 0 {
+		t.Fatalf("daily fallback items = %#v, want empty slice", result.Items)
+	}
+}
+
 func TestInternalAnalyticsSummaryAggregatesCountsByGroupAndEvent(t *testing.T) {
 	store := &fakeInternalAnalyticsStore{
 		dailyRows: []db.InternalAnalyticsDailyAggregate{
@@ -375,6 +400,22 @@ func TestInternalAnalyticsSummaryAggregatesCountsByGroupAndEvent(t *testing.T) {
 	}
 	if len(store.dailyCalls) != 1 || store.dailyCalls[0].LimitCount != 10000 {
 		t.Fatalf("summary daily call = %+v, want bounded aggregate read", store.dailyCalls)
+	}
+}
+
+func TestInternalAnalyticsSummaryReturnsEmptyWhenSchemaMissing(t *testing.T) {
+	store := &fakeInternalAnalyticsStore{dailyErr: internalAnalyticsSchemaMissingErr()}
+	svc := newTestInternalAnalytics(store)
+
+	summary, err := svc.Summary(context.Background(), InternalAnalyticsSummaryQuery{Days: 7, EventGroup: "dashboard"})
+	if err != nil {
+		t.Fatalf("Summary() error = %v, want nil schema fallback", err)
+	}
+	if summary.Days != 7 || summary.EventGroup != "dashboard" || summary.TotalCount != 0 {
+		t.Fatalf("summary fallback = %+v, want empty aggregate summary", summary)
+	}
+	if summary.Groups == nil || summary.TopEvents == nil || len(summary.Groups) != 0 || len(summary.TopEvents) != 0 {
+		t.Fatalf("summary fallback slices = groups=%#v top=%#v, want empty slices", summary.Groups, summary.TopEvents)
 	}
 }
 
@@ -445,6 +486,35 @@ func TestInternalAnalyticsExportAggregatesCSVUsesOnlyAggregatesAndAudits(t *test
 	}
 	if strings.Contains(string(audit.Metadata), "actor_user_id") || strings.Contains(string(audit.Metadata), "metadata") {
 		t.Fatalf("audit metadata leaked raw identifiers: %s", string(audit.Metadata))
+	}
+}
+
+func TestInternalAnalyticsExportAggregatesCSVReturnsHeaderWhenSchemaMissing(t *testing.T) {
+	store := &fakeInternalAnalyticsStore{
+		err:      internalAnalyticsSchemaMissingErr(),
+		dailyErr: internalAnalyticsSchemaMissingErr(),
+	}
+	svc := newTestInternalAnalytics(store)
+
+	exported, err := svc.ExportAggregatesCSV(context.Background(), InternalAnalyticsExportQuery{
+		Days:        7,
+		EventGroup:  "dashboard",
+		ActorUserID: serviceTestUUID(19),
+		ActorRole:   "admin",
+	})
+	if err != nil {
+		t.Fatalf("ExportAggregatesCSV() error = %v, want nil schema fallback", err)
+	}
+	records, err := csv.NewReader(bytes.NewReader(exported.Content)).ReadAll()
+	if err != nil {
+		t.Fatalf("export CSV is not parseable: %v\n%s", err, string(exported.Content))
+	}
+	wantHeader := []string{"aggregate_date", "event_group", "event_name", "source_surface", "role", "result", "count"}
+	if len(records) != 1 || strings.Join(records[0], ",") != strings.Join(wantHeader, ",") {
+		t.Fatalf("CSV records = %v, want header-only aggregate export", records)
+	}
+	if len(store.calls) != 1 || len(store.dailyCalls) != 1 {
+		t.Fatalf("store calls = audit:%d daily:%d, want attempted audit and empty aggregate read", len(store.calls), len(store.dailyCalls))
 	}
 }
 

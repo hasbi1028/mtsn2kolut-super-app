@@ -1,9 +1,14 @@
+import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { apiPathWithQuery, handleRouteError, proxy, streamProxyResponse } from '$lib/server/api';
 
 const ALLOWED_EXPORT_QUERY_KEYS = ['event_group', 'event_name', 'source_surface', 'role', 'result', 'days', 'limit', 'offset'] as const;
 
 export const GET: RequestHandler = async (event) => {
+	if (!event.locals.user) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
 	try {
 		const params = new URLSearchParams();
 		for (const key of ALLOWED_EXPORT_QUERY_KEYS) {
