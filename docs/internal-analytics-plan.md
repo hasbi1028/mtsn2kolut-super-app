@@ -1,6 +1,6 @@
 # Rencana Internal Analytics MTsN 2 Kolaka Utara
 
-Status: Tahap/Fase 0, kontrak implementasi. Dokumen ini hanya menetapkan arah, batas, dan readiness. Tidak ada runtime ingestion table, migration, API handler, BFF route, tracking frontend, dependency, deploy, atau restart PM2 pada fase ini.
+Status: Tahap/Fase 1, schema/migration/query contract. Fase 0 menetapkan arah, batas, dan readiness: Fase 0 tidak menambahkan runtime ingestion table, Fase 0 tidak menambahkan migration, API handler, BFF route, tracking frontend, dependency, deploy, atau restart PM2. Fase 1 menambahkan schema analytics internal melalui migration draft dan sqlc query contract saja.
 
 ## Prinsip Utama
 
@@ -40,6 +40,24 @@ Alur target:
 - Tidak ada SDK analytics pihak ketiga di frontend, backend, worker, atau mobile.
 - Deploy order masa depan tetap: backend code, migration, backend restart dan health check, frontend, worker bila perlu.
 - Fase 0 ini tidak melakukan deploy, tidak menjalankan migration, tidak mengubah PM2, dan tidak menulis data produksi.
+
+## Catatan Implementasi Fase 1
+
+Fase 1 menambahkan schema analytics internal sebagai kontrak data-layer awal, bukan runtime tracking. Perubahan dibatasi pada:
+
+- migration draft `services/core-api/db/migrations/083_internal_analytics_schema.sql` untuk tabel event mentah dan agregat harian internal analytics.
+- sqlc query source `services/core-api/db/queries/internal_analytics.sql` untuk create analytics event, get event by id, list events for rollup, delete expired events, upsert daily aggregate, dan list daily aggregates.
+- guard test murah yang memastikan schema privacy-first, retensi, indeks, agregat, pemisahan dari `audit_logs`, dan kontrak query tetap ada.
+
+Batas Fase 1:
+
+- tidak menambahkan ingestion API.
+- tidak menambahkan BFF route.
+- tidak menambahkan frontend tracking.
+- tidak menambahkan worker/runtime handler.
+- tidak menjalankan migration live.
+- tidak deploy.
+- tidak restart PM2.
 
 ## RBAC Permissions Yang Direncanakan
 
@@ -118,7 +136,7 @@ Data yang tidak boleh direncanakan tanpa review keamanan lanjutan:
 
 Fase 0 ini hanya membuat kontrak. Tahap berikutnya wajib tetap kecil dan dapat direview:
 
-1. **Phase 1 - Schema design dan migration draft**
+1. **Fase 1 - Schema design dan migration draft**
    - Rancang tabel event/aggregate internal dengan retensi sejak awal.
    - Tambahkan migration hanya setelah katalog event stabil.
    - Tambahkan sqlc query eksplisit, tanpa ORM.
