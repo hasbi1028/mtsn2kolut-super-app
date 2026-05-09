@@ -1,0 +1,168 @@
+# Rencana Internal Analytics MTsN 2 Kolaka Utara
+
+Status: Tahap/Fase 0, kontrak implementasi. Dokumen ini hanya menetapkan arah, batas, dan readiness. Tidak ada runtime ingestion table, migration, API handler, BFF route, tracking frontend, dependency, deploy, atau restart PM2 pada fase ini.
+
+## Prinsip Utama
+
+- **internal-only, no third-party analytics**: seluruh pengukuran aktivitas tetap berada di sistem MTsN 2 Kolaka Utara. Tidak memakai Google Analytics, Meta Pixel, Plausible Cloud, PostHog Cloud, Hotjar, CDN tracker, atau beacon pihak ketiga.
+- **privacy-first**: analytics dipakai untuk evaluasi layanan sekolah, keamanan operasional, dan perbaikan alur kerja. Analytics bukan alat pemantauan personal yang mengumpulkan rahasia, kredensial, atau identitas sensitif penuh.
+- **PostgreSQL/Core API ownership**: semua data analytics masa depan hanya boleh ditulis dan dibaca melalui `services/core-api`. PostgreSQL tetap dimiliki Core API. `apps/web-admin` hanya BFF/UI dan tidak boleh menulis langsung ke database.
+- **event allowlist**: hanya event yang tercatat di `docs/internal-analytics-event-catalog.md` yang boleh dikirim. Event baru harus masuk dokumen katalog dulu sebelum implementasi runtime.
+- **separation from audit_logs**: analytics tidak menggantikan `audit_logs`. Audit tetap menjadi catatan mutasi keamanan/kepatuhan. Analytics hanya agregasi aktivitas produk dan sinyal operasional yang sudah disanitasi.
+- **phased plan**: implementasi wajib bertahap dari kontrak, schema, ingestion, dashboard, retensi, sampai review keamanan. Tidak boleh langsung menambahkan tracking luas tanpa guard dan uji.
+
+## Arsitektur Internal
+
+Alur target:
+
+1. **SvelteKit/BFF (`apps/web-admin`)**
+   - UI admin/guru/staf dan public website hanya mengirim event allowlisted ke BFF route analytics yang akan dibuat pada fase berikutnya.
+   - BFF meneruskan JWT user asli untuk event internal setelah login.
+   - Public website hanya mengirim event publik minim identitas, tanpa raw IP dan tanpa raw user agent dari browser.
+2. **Go Core API (`services/core-api`)**
+   - Menjadi satu-satunya pemilik validasi event, sanitasi metadata, rate limit, role gate, dan penyimpanan.
+   - Handler tetap tipis: parse request, panggil service analytics, map response.
+   - Service analytics masa depan wajib menolak event di luar allowlist dan metadata yang mengandung forbidden sensitive keys.
+3. **PostgreSQL**
+   - Menyimpan event dan agregat hanya setelah ada migration resmi.
+   - Tidak ada runtime database access dari Web Admin, worker, atau Flutter.
+   - Retensi dan agregasi wajib dirancang sejak schema pertama, bukan ditambahkan belakangan.
+4. **Web Admin Dashboard**
+   - Dashboard internal akan membaca agregat melalui Core API.
+   - Tampilan awal fokus pada tren publik, kesehatan operasional modul, dan sinyal keamanan yang sudah diringkas.
+   - Export hanya untuk role dengan permission eksplisit.
+
+## Batas Deployment
+
+- Frontend, backend, dan worker tetap deployment terpisah sesuai 3 VPS target.
+- Analytics public/internal tidak boleh melewati PUSAKA worker.
+- `services/pusaka-worker` tetap API client untuk PUSAKA saja dan tidak menjadi collector analytics.
+- Tidak ada SDK analytics pihak ketiga di frontend, backend, worker, atau mobile.
+- Deploy order masa depan tetap: backend code, migration, backend restart dan health check, frontend, worker bila perlu.
+- Fase 0 ini tidak melakukan deploy, tidak menjalankan migration, tidak mengubah PM2, dan tidak menulis data produksi.
+
+## RBAC Permissions Yang Direncanakan
+
+Permission berikut adalah kontrak rencana. Fase 0 tidak menambah seed permission atau route guard runtime.
+
+| Permission | Rencana akses | Catatan |
+|------------|---------------|---------|
+| `analytics.read` | Membaca dashboard analytics internal dan ringkasan publik. | Cocok untuk admin dan staf/operator yang diberi mandat. |
+| `analytics.export` | Mengekspor laporan analytics yang sudah diagregasi. | Harus dibatasi, tercatat di audit, dan tidak berisi field sensitif. |
+| `analytics.manage` | Mengelola konfigurasi analytics internal seperti retensi, allowlist aktif, dan sampling. | Admin terbatas. Perubahan harus masuk audit. |
+| `analytics.security_read` | Membaca panel sinyal keamanan analytics. | Untuk admin atau staf keamanan yang ditunjuk. Tidak membuka rahasia mentah. |
+
+Aturan RBAC:
+
+- Route analytics masa depan wajib memakai permission eksplisit, bukan hanya role nama besar.
+- Fallback role lama boleh ada hanya sebagai masa transisi dan harus terdokumentasi.
+- Export wajib membutuhkan `analytics.export`, meskipun user sudah punya `analytics.read`.
+- Panel security membutuhkan `analytics.security_read`, bukan otomatis terbuka untuk semua pembaca analytics.
+
+## Privacy-First Rules
+
+- Jangan simpan password, token, cookie, authorization header, secret, API key, kredensial PUSAKA, raw IP, raw user agent, atau device fingerprint.
+- Jangan simpan NIK, NIP, atau NISN penuh di event analytics. Jika perlu korelasi operasional, gunakan ID internal yang sudah ada dan role-gated, atau hash harian yang tidak dapat dibalik setelah disetujui fase keamanan.
+- Metadata harus berbentuk allowlist per event group, bukan dump payload request.
+- Public website analytics harus tetap agregat dan minim identitas.
+- Internal app analytics boleh membawa `module`, `route_group`, `role`, `permission_code`, atau status hasil aksi selama tidak membawa isi jawaban, rahasia, atau identitas sensitif penuh.
+- Error analytics hanya menyimpan kode/status dan kategori yang aman, bukan stack trace, SQL, body request, atau pesan error internal mentah.
+- Export harus berisi agregat, bukan event mentah per individu, kecuali ada kebutuhan investigasi yang disetujui dan dijaga permission khusus.
+
+## Pemisahan Dari audit_logs
+
+`audit_logs` tetap menjadi sumber catatan resmi untuk mutasi dan aksi keamanan:
+
+- login, logout, refresh, revoke session, perubahan role, perubahan permission, CRUD penting, dan aksi administratif tetap dicatat sebagai audit.
+- analytics dapat menghitung tren dari event operasional, tetapi tidak menjadi bukti kepatuhan utama.
+- analytics tidak boleh menghapus atau melemahkan kewajiban audit middleware.
+- analytics security panel boleh merujuk agregasi sinyal dari audit di masa depan, tetapi penyimpanan dan kontrak maknanya tetap terpisah.
+
+Perbedaan kontrak:
+
+| Area | audit_logs | internal analytics |
+|------|------------|--------------------|
+| Tujuan | Bukti mutasi, keamanan, kepatuhan | Tren penggunaan, kesehatan alur, sinyal operasional |
+| Detail | Aksi spesifik yang wajib diaudit | Event allowlisted yang disanitasi |
+| Akses | Admin/security sesuai kebijakan audit | Permission analytics terpisah |
+| Retensi | Mengikuti kebijakan audit | Agregasi dan expiry lebih agresif |
+| Export | Bukti audit terbatas | Laporan agregat terbatas |
+
+## Prinsip Retensi
+
+- Retensi event mentah harus singkat dan punya expiry otomatis sejak fase schema pertama.
+- Agregat harian/bulanan boleh disimpan lebih lama karena sudah mengurangi risiko identitas.
+- Public analytics sebaiknya lebih cepat diagregasi daripada internal app analytics.
+- Security analytics boleh punya retensi berbeda, tetapi tetap tanpa rahasia mentah.
+- Retensi harus dapat dijelaskan di dashboard admin dan runbook operator.
+- Delete/rollup job masa depan harus idempotent, terjadwal, dan terukur di health/readiness.
+
+Rencana default yang harus divalidasi pada fase schema:
+
+- event mentah public: 30-90 hari.
+- event mentah internal: 90-180 hari bila benar-benar diperlukan.
+- agregat harian: 12-24 bulan.
+- agregat bulanan: sesuai kebutuhan laporan sekolah.
+
+## Batas Data Awal
+
+Data yang boleh direncanakan:
+
+- route group, event name, module, role, permission code, result status, response class, duration bucket, date bucket, content category, file type, CTA key, export type, and sanitized error category.
+
+Data yang tidak boleh direncanakan tanpa review keamanan lanjutan:
+
+- raw request body, raw query string, full URL dengan parameter sensitif, full IP, raw UA, exact GPS, isi jawaban siswa, isi soal penuh, isi dokumen, kredensial PUSAKA, secret, atau identifier nasional penuh.
+
+## Staged Phases 1-10
+
+Fase 0 ini hanya membuat kontrak. Tahap berikutnya wajib tetap kecil dan dapat direview:
+
+1. **Phase 1 - Schema design dan migration draft**
+   - Rancang tabel event/aggregate internal dengan retensi sejak awal.
+   - Tambahkan migration hanya setelah katalog event stabil.
+   - Tambahkan sqlc query eksplisit, tanpa ORM.
+2. **Phase 2 - Core API ingestion minimum**
+   - Tambahkan endpoint ingestion internal untuk event allowlisted.
+   - Validasi metadata per event group dan tolak forbidden sensitive keys.
+   - Tambahkan rate limit dan ukuran payload maksimum.
+3. **Phase 3 - BFF proxy contract**
+   - Tambahkan route BFF yang meneruskan event ke Core API.
+   - Forward JWT user asli untuk internal app event.
+   - Public event tetap minim identitas.
+4. **Phase 4 - Public website instrumentation**
+   - Instrumentasi page view, CTA, dan download publik yang sudah allowlisted.
+   - Tidak ada third-party script.
+   - Pastikan consent/copy publik sesuai kebutuhan sekolah.
+5. **Phase 5 - Internal app instrumentation**
+   - Instrumentasi dashboard, bank soal, asesmen, PUSAKA, users/RBAC, dan security event sesuai katalog.
+   - Mulai dari event agregat bernilai tinggi, bukan semua klik.
+6. **Phase 6 - Dashboard read model**
+   - Tambahkan API read aggregate dan dashboard Web Admin.
+   - Terapkan `analytics.read` dan `analytics.security_read`.
+   - Tampilkan skeleton/loading sesuai baseline UI.
+7. **Phase 7 - Export dan reporting**
+   - Tambahkan export agregat dengan `analytics.export`.
+   - Catat export sebagai audit event.
+   - Pastikan export tidak memuat event mentah sensitif.
+8. **Phase 8 - Retention, rollup, dan cleanup**
+   - Jalankan job rollup/cleanup backend.
+   - Tambahkan health/readiness untuk backlog cleanup.
+   - Dokumentasikan recovery bila cleanup gagal.
+9. **Phase 9 - Security review dan abuse hardening**
+   - Review forbidden sensitive keys, rate limit, trusted proxy behavior, dan payload rejection.
+   - Tambahkan test regresi untuk bocor metadata.
+   - Pastikan analytics tidak menjadi jalur eksfiltrasi.
+10. **Phase 10 - Operational readiness dan handoff**
+   - Lengkapi runbook, smoke checklist, dashboard owner, retensi final, dan rollback.
+   - Tetapkan siapa yang boleh membaca, export, manage, dan membaca security analytics.
+   - Siapkan bukti bahwa implementasi tetap 100% internal.
+
+## Readiness Gate Fase 0
+
+Fase 0 dianggap selesai bila:
+
+- `docs/internal-analytics-plan.md` menjelaskan arsitektur internal-only dan no third-party.
+- `docs/internal-analytics-event-catalog.md` menetapkan event allowlist dan forbidden sensitive keys.
+- Docs guard Web Admin memastikan kontrak privacy-first, Core API/PostgreSQL ownership, RBAC analytics permissions, audit_logs separation, dan phased plan tetap ada.
+- Tidak ada migration, API runtime, BFF route, dependency, tracking frontend, deploy, atau PM2 restart yang ikut berubah.
