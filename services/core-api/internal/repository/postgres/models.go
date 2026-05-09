@@ -1586,6 +1586,39 @@ type IncomingLetterSequence struct {
 	LastSeq int32 `json:"last_seq"`
 }
 
+type InternalAnalyticsDailyAggregate struct {
+	AggregateDate   pgtype.Date        `json:"aggregate_date"`
+	EventGroup      string             `json:"event_group"`
+	EventName       string             `json:"event_name"`
+	SourceSurface   string             `json:"source_surface"`
+	Role            string             `json:"role"`
+	Result          string             `json:"result"`
+	Count           int64              `json:"count"`
+	TotalDurationMs pgtype.Int8        `json:"total_duration_ms"`
+	Metadata        []byte             `json:"metadata"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type InternalAnalyticsEvent struct {
+	ID                 pgtype.UUID        `json:"id"`
+	EventName          string             `json:"event_name"`
+	EventGroup         string             `json:"event_group"`
+	OccurredAt         pgtype.Timestamptz `json:"occurred_at"`
+	SourceSurface      string             `json:"source_surface"`
+	ActorUserID        pgtype.UUID        `json:"actor_user_id"`
+	ActorRole          pgtype.Text        `json:"actor_role"`
+	PermissionCode     pgtype.Text        `json:"permission_code"`
+	RouteGroup         pgtype.Text        `json:"route_group"`
+	Module             pgtype.Text        `json:"module"`
+	Result             pgtype.Text        `json:"result"`
+	StatusCodeClass    pgtype.Text        `json:"status_code_class"`
+	DurationBucket     pgtype.Text        `json:"duration_bucket"`
+	Metadata           []byte             `json:"metadata"`
+	RetentionExpiresAt pgtype.Timestamptz `json:"retention_expires_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+}
+
 type InventoryItem struct {
 	ID          pgtype.UUID        `json:"id"`
 	Kode        string             `json:"kode"`

@@ -18,11 +18,34 @@ describe('internal analytics phase 0 documentation contract', () => {
 			'Go Core API',
 			'PostgreSQL',
 			'Web Admin Dashboard',
-			'Tidak ada runtime ingestion table',
-			'Tidak ada migration',
+			'Fase 0 tidak menambahkan runtime ingestion table',
+			'Fase 0 tidak menambahkan migration',
 			'Tidak ada SDK analytics pihak ketiga'
 		]) {
 			expect(analyticsPlanDoc).toContain(phrase);
+		}
+	});
+
+	it('keeps Phase 1 limited to schema, migration draft, and sqlc query contract', () => {
+		for (const phrase of [
+			'Fase 1 - Schema design dan migration draft',
+			'Fase 1 menambahkan schema analytics internal',
+			'083_internal_analytics_schema.sql',
+			'internal_analytics.sql',
+			'create analytics event',
+			'get event by id',
+			'list events for rollup',
+			'delete expired events',
+			'upsert daily aggregate',
+			'list daily aggregates',
+			'tidak menambahkan ingestion API',
+			'tidak menambahkan BFF route',
+			'tidak menambahkan frontend tracking',
+			'tidak menjalankan migration live',
+			'tidak deploy',
+			'tidak restart PM2'
+		]) {
+			expect(analyticsPlanDoc.toLowerCase()).toContain(phrase.toLowerCase());
 		}
 	});
 
