@@ -27,8 +27,13 @@ describe('dashboard permission policy', () => {
 		expect(dashboardDataAccessForUser({ role: 'ortu', roles: ['ortu'], permissions: [] }).parentPortal).toBe(true);
 	});
 
-	it('preserves admin operational dashboard access without enabling personal portal widgets', () => {
-		const access = dashboardDataAccessForUser({ role: 'admin', roles: ['admin'], permissions: [] });
+	it('preserves admin operational dashboard access without enabling personal portal data fetches, even when portal permissions are present', () => {
+		const adminWithPortalPermissions = {
+			role: 'admin',
+			roles: ['admin'],
+			permissions: ['student_portal.read', 'parent_portal.read']
+		};
+		const access = dashboardDataAccessForUser(adminWithPortalPermissions);
 
 		expect(access.academicStats).toBe(true);
 		expect(access.bankSoal).toBe(true);
