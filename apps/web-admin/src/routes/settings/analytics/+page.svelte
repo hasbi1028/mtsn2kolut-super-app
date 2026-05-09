@@ -1,10 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import DownloadIcon from '@lucide/svelte/icons/download';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { toast } from '$lib/components/ui/sonner';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
 
@@ -50,6 +53,7 @@
 	let analyticsPromise = $state<Promise<AnalyticsOverview> | null>(null);
 	let selectedGroup = $state('');
 	let days = $state(30);
+	let exportBusy = $state(false);
 
 	const groupOptions = [
 		{ value: '', label: 'Semua' },
@@ -62,9 +66,14 @@
 		{ value: 'security', label: 'Security' }
 	];
 
-	function loadAnalytics() {
-		const params = new URLSearchParams({ days: String(days), limit: '60' });
+	function analyticsParams(limit: string) {
+		const params = new URLSearchParams({ days: String(days), limit });
 		if (selectedGroup) params.set('event_group', selectedGroup);
+		return params;
+	}
+
+	function loadAnalytics() {
+		const params = analyticsParams('60');
 		analyticsPromise = Promise.all([
 			fetch(clientApiPathWithQuery('/api/internal-analytics/summary', params)).then((response) => readClientApiData<Summary>(response, 'Gagal memuat ringkasan analytics internal.')),
 			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', params)).then((response) => readClientApiData<DailyResult>(response, 'Gagal memuat tren harian analytics internal.'))
@@ -96,6 +105,36 @@
 		return groupOptions.find((option) => option.value === value)?.label ?? value;
 	}
 
+	function exportFilename(disposition: string | null) {
+		const match = /filename="?([^";]+)"?/i.exec(disposition ?? '');
+		return match?.[1] ?? 'internal-analytics-aggregate.csv';
+	}
+
+	async function exportAggregates() {
+		exportBusy = true;
+		try {
+			const response = await fetch(clientApiPathWithQuery('/api/internal-analytics/export', analyticsParams('10000')));
+			if (!response.ok) {
+				const payload = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+				throw new Error(payload?.error || payload?.message || 'Export analytics internal gagal.');
+			}
+			const blob = await response.blob();
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = url;
+			anchor.download = exportFilename(response.headers.get('content-disposition'));
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			URL.revokeObjectURL(url);
+			toast.success('Export CSV agregat disiapkan.');
+		} catch (error) {
+			toast.error(analyticsErrorMessage(error));
+		} finally {
+			exportBusy = false;
+		}
+	}
+
 	function handleRenderError(error: unknown) {
 		console.error('Internal analytics render failed', error);
 	}
@@ -118,20 +157,26 @@
 				Ringkasan agregat pemakaian modul untuk evaluasi layanan sekolah. Data mentah dan detail sensitif tidak ditampilkan di halaman ini.
 			</p>
 		</div>
-		<div class="flex flex-wrap items-center gap-2">
-			{#each groupOptions as option (option.value)}
-				<Button
-					type="button"
-					size="sm"
-					variant={selectedGroup === option.value ? 'default' : 'outline'}
-					onclick={() => {
-						selectedGroup = option.value;
-						loadAnalytics();
-					}}
-				>
-					{option.label}
-				</Button>
-			{/each}
+		<div class="flex flex-col gap-3 lg:items-end">
+			<LoadingButton variant="outline" onclick={() => void exportAggregates()} loading={exportBusy} loadingLabel="Export..." label="Export CSV Agregat">
+				<DownloadIcon class="size-4" />
+				Export CSV Agregat
+			</LoadingButton>
+			<div class="flex flex-wrap items-center gap-2">
+				{#each groupOptions as option (option.value)}
+					<Button
+						type="button"
+						size="sm"
+						variant={selectedGroup === option.value ? 'default' : 'outline'}
+						onclick={() => {
+							selectedGroup = option.value;
+							loadAnalytics();
+						}}
+					>
+						{option.label}
+					</Button>
+				{/each}
+			</div>
 		</div>
 	</div>
 

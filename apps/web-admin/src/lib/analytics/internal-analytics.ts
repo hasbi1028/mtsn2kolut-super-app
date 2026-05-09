@@ -8,7 +8,8 @@ export const INTERNAL_ANALYTICS_EVENT_GROUPS = {
 	'users.list_view': 'users',
 	'rbac.roles_view': 'rbac',
 	'rbac.permission_denied': 'rbac',
-	'security.forbidden': 'security'
+	'security.forbidden': 'security',
+	'security.export_requested': 'security'
 } as const;
 
 const FORBIDDEN_KEYS = new Set([
@@ -39,6 +40,7 @@ const FORBIDDEN_KEYS = new Set([
 	'nip_full',
 	'device_fingerprint',
 	'fingerprint',
+	'device_fingerprint_hash',
 	'raw_ip',
 	'ip_address_raw',
 	'remote_addr',
@@ -47,6 +49,10 @@ const FORBIDDEN_KEYS = new Set([
 	'user_agent_raw',
 	'ua_raw',
 	'user_agent',
+	'query_string',
+	'raw_query',
+	'url',
+	'full_url',
 	'search',
 	'query',
 	'query_string',
@@ -171,7 +177,11 @@ function sanitizeAnalyticsValue(value: unknown): AnalyticsMetadataValue | undefi
 }
 
 function normalizeAnalyticsKey(key: string) {
-	return key.trim().toLowerCase().replace(/[-.\s]+/g, '_').replace(/^_+|_+$/g, '');
+	return key.trim()
+		.replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+		.toLowerCase()
+		.replace(/[-.\s]+/g, '_')
+		.replace(/^_+|_+$/g, '');
 }
 
 function routeGroupFromPath(pathname: string | undefined) {

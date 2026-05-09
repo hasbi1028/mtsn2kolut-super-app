@@ -289,6 +289,35 @@ describe('api proxy route handlers', () => {
 		expect(proxyGetMock).toHaveBeenNthCalledWith(2, '/api/internal-analytics/daily?event_group=dashboard&days=14');
 	});
 
+	it('streams internal analytics aggregate export through authenticated BFF route', async () => {
+		const mod = await import('../../routes/api/internal-analytics/export/+server');
+		const upstream = new Response('aggregate_date,event_group,count\n2026-05-09,dashboard,3\n', {
+			status: 200,
+			headers: {
+				'content-type': 'text/csv; charset=utf-8',
+				'content-disposition': 'attachment; filename="internal-analytics-aggregate.csv"'
+			}
+		});
+		const event = createEvent({
+			locals: {
+				user: { id: '1', username: 'exporter', role: '', roles: [], permissions: ['analytics.export'] }
+			},
+			url: new URL('http://localhost/api/internal-analytics/export?event_group=dashboard&days=30&metadata=blocked')
+		});
+		proxyFetchMock.mockResolvedValueOnce(upstream);
+		streamProxyResponseMock.mockResolvedValueOnce(upstream);
+
+		const res = await mod.GET(event as never);
+
+		expect(proxyFetchMock).toHaveBeenCalledWith('/api/internal-analytics/export?event_group=dashboard&days=30');
+		expect(streamProxyResponseMock).toHaveBeenCalledWith(upstream, {
+			defaultContentType: 'text/csv; charset=utf-8',
+			defaultCacheControl: 'no-store'
+		});
+		expect(res.status).toBe(200);
+		expect(proxyGetMock).not.toHaveBeenCalled();
+	});
+
 	it('rejects account contact updates that try to edit official fields', async () => {
 		const mod = await import('../../routes/api/auth/account/+server');
 		const request = new Request('http://localhost/api/auth/account', {

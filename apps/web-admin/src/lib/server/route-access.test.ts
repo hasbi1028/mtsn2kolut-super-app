@@ -140,6 +140,7 @@ describe('route access helpers', () => {
 	it('keeps internal analytics routes authenticated and read dashboard permission-scoped', () => {
 		const plainUser = { id: '1', username: 'plain', role: 'guru', roles: ['guru'], permissions: [] };
 		const analyticsReader = { id: '2', username: 'reader', role: '', roles: [], permissions: ['analytics.read'] };
+		const analyticsExporter = { id: '3', username: 'exporter', role: '', roles: [], permissions: ['analytics.export'] };
 
 		expect(isPublicPath('/api/internal-analytics/events')).toBe(false);
 		expect(requiredPermissionsForPath('/api/internal-analytics/events', 'POST')).toEqual([]);
@@ -149,9 +150,12 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/settings/analytics', 'GET')).toEqual(['analytics.read']);
 		expect(requiredPermissionsForPath('/api/internal-analytics/summary', 'GET')).toEqual(['analytics.read']);
 		expect(requiredPermissionsForPath('/api/internal-analytics/daily', 'GET')).toEqual(['analytics.read']);
+		expect(requiredPermissionsForPath('/api/internal-analytics/export', 'GET')).toEqual(['analytics.export']);
 		expect(canAccessProtectedRoute(plainUser, '/settings/analytics', 'GET')).toBe(false);
 		expect(canAccessProtectedRoute(analyticsReader, '/settings/analytics', 'GET')).toBe(true);
 		expect(canAccessProtectedRoute(analyticsReader, '/api/internal-analytics/summary', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(analyticsReader, '/api/internal-analytics/export', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(analyticsExporter, '/api/internal-analytics/export', 'GET')).toBe(true);
 	});
 
 	it('guards student and parent portal routes by dedicated portal roles or permissions', () => {
@@ -271,6 +275,7 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/api/employees/employee-1', 'PUT')).toEqual(['employees.manage']);
 		expect(requiredPermissionsForPath('/api/rbac/matrix', 'GET')).toEqual(['roles.read']);
 		expect(requiredPermissionsForPath('/api/internal-analytics/daily', 'GET')).toEqual(['analytics.read']);
+		expect(requiredPermissionsForPath('/api/internal-analytics/export', 'GET')).toEqual(['analytics.export']);
 		expect(requiredPermissionsForPath('/api/rbac/roles/guru/permissions', 'PUT')).toEqual(['roles.manage']);
 		expect(requiredPermissionsForPath('/settings/user-change-requests', 'GET')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users', 'POST')).toEqual(['users.create']);

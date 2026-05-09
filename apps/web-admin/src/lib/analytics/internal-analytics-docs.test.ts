@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import analyticsCatalogDoc from '../../../../../docs/internal-analytics-event-catalog.md?raw';
 import analyticsPlanDoc from '../../../../../docs/internal-analytics-plan.md?raw';
+import analyticsRunbookDoc from '../../../../../docs/internal-analytics-runbook.md?raw';
 
-describe('internal analytics phase 0 documentation contract', () => {
+describe('internal analytics documentation contract', () => {
 	it('keeps the internal-only architecture and readiness boundaries explicit', () => {
 		for (const phrase of [
 			'internal-only, no third-party analytics',
@@ -90,6 +91,57 @@ describe('internal analytics phase 0 documentation contract', () => {
 		}
 	});
 
+	it('documents Phase 7 through Phase 10 readiness boundaries', () => {
+		for (const phrase of [
+			'Status: Fase 10 selesai',
+			'Fase 7 - Export dan reporting',
+			'CSV aggregate summary/daily counts only',
+			'analytics.export',
+			'security.export_requested',
+			'CSV injection safe',
+			'Fase 8 - Retention, rollup, dan cleanup',
+			'manual admin/ops invocation only',
+			'expired_event_backlog_count',
+			'oldest_expired_event_at',
+			'Fase 9 - Security review dan abuse hardening',
+			'trusted-proxy-aware rate limit',
+			'body cap tetap 16 KiB',
+			'Fase 10 - Operational readiness dan handoff',
+			'docs/internal-analytics-runbook.md',
+			'tidak deploy',
+			'tidak restart PM2',
+			'tidak menjalankan live migration',
+			'tidak menjalankan cleanup terhadap live DB',
+			'tidak membuka public unauthenticated collector',
+			'tidak menambahkan raw event export',
+			'tidak menambahkan third-party analytics'
+		]) {
+			expect(analyticsPlanDoc.toLowerCase()).toContain(phrase.toLowerCase());
+		}
+	});
+
+	it('keeps the operations runbook explicit and 100 percent internal', () => {
+		for (const phrase of [
+			'Internal Analytics Runbook',
+			'Owner',
+			'Web Admin -> BFF -> Go Core API -> PostgreSQL',
+			'analytics.read',
+			'analytics.export',
+			'Export policy',
+			'aggregate_date,event_group,event_name,source_surface,role,result,count',
+			'Retention and cleanup',
+			'Smoke checklist',
+			'Rollback',
+			'Recovery',
+			'100% internal evidence',
+			'no public collector',
+			'no raw event export',
+			'no third-party analytics'
+		]) {
+			expect(analyticsRunbookDoc.toLowerCase()).toContain(phrase.toLowerCase());
+		}
+	});
+
 	it('keeps the event allowlist and forbidden sensitive keys explicit', () => {
 		for (const phrase of [
 			'event allowlist',
@@ -122,9 +174,14 @@ describe('internal analytics phase 0 documentation contract', () => {
 			'nip',
 			'nisn',
 			'device_fingerprint',
+			'deviceFingerprint',
 			'credential_pusaka',
 			'raw_ip',
-			'raw_user_agent'
+			'raw_user_agent',
+			'rawUserAgent',
+			'query_string',
+			'rawQuery',
+			'full_url'
 		]) {
 			expect(analyticsCatalogDoc.toLowerCase()).toContain(phrase.toLowerCase());
 		}

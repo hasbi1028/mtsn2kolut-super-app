@@ -20,15 +20,19 @@ type fakeInternalAnalyticsService struct {
 	input         service.CreateInternalAnalyticsEventInput
 	dailyInput    service.InternalAnalyticsDailyQuery
 	summaryInput  service.InternalAnalyticsSummaryQuery
+	exportInput   service.InternalAnalyticsExportQuery
 	row           service.InternalAnalyticsEventReceipt
 	dailyResult   service.InternalAnalyticsDailyResult
 	summary       service.InternalAnalyticsSummary
+	exportResult  service.InternalAnalyticsExport
 	err           error
 	dailyErr      error
 	summaryErr    error
+	exportErr     error
 	called        bool
 	dailyCalled   bool
 	summaryCalled bool
+	exportCalled  bool
 }
 
 func (f *fakeInternalAnalyticsService) CreateEvent(_ context.Context, in service.CreateInternalAnalyticsEventInput) (service.InternalAnalyticsEventReceipt, error) {
@@ -86,6 +90,21 @@ func (f *fakeInternalAnalyticsService) Summary(_ context.Context, in service.Int
 		}
 	}
 	return f.summary, nil
+}
+
+func (f *fakeInternalAnalyticsService) ExportAggregatesCSV(_ context.Context, in service.InternalAnalyticsExportQuery) (service.InternalAnalyticsExport, error) {
+	f.exportCalled = true
+	f.exportInput = in
+	if f.exportErr != nil {
+		return service.InternalAnalyticsExport{}, f.exportErr
+	}
+	if len(f.exportResult.Content) == 0 {
+		f.exportResult = service.InternalAnalyticsExport{
+			Filename: "internal-analytics-aggregate-2026-05-09.csv",
+			Content:  []byte("aggregate_date,event_group,event_name,source_surface,role,result,count\n2026-05-09,dashboard,dashboard.view,web_admin,admin,success,5\n"),
+		}
+	}
+	return f.exportResult, nil
 }
 
 func analyticsRequest(body string) *http.Request {
@@ -281,5 +300,45 @@ func TestInternalAnalyticsHandlerReturnsSummary(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "metadata") || strings.Contains(rec.Body.String(), "actor_user_id") {
 		t.Fatalf("summary response leaked raw event fields: %s", rec.Body.String())
+	}
+}
+
+func TestInternalAnalyticsHandlerExportsAggregateCSV(t *testing.T) {
+	fake := &fakeInternalAnalyticsService{}
+	h := &InternalAnalytics{svc: fake}
+	req := httptest.NewRequest(http.MethodGet, "/api/internal-analytics/export?event_group=dashboard&days=7&limit=100", nil)
+	req = withClaims(req, jwt.MapClaims{
+		"sub":   "01000000-0000-0000-0000-000000000001",
+		"roles": []any{"admin"},
+	})
+	rec := httptest.NewRecorder()
+
+	h.ExportAggregates(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if !fake.exportCalled {
+		t.Fatalf("export service was not called")
+	}
+	if fake.exportInput.EventGroup != "dashboard" || fake.exportInput.Days != 7 || fake.exportInput.Limit != 100 {
+		t.Fatalf("export input = %+v, want query filters", fake.exportInput)
+	}
+	if !fake.exportInput.ActorUserID.Valid || fake.exportInput.ActorRole != "admin" {
+		t.Fatalf("export actor = %v/%q, want JWT actor context", fake.exportInput.ActorUserID, fake.exportInput.ActorRole)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/csv; charset=utf-8" {
+		t.Fatalf("content-type = %q, want CSV", got)
+	}
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("nosniff header = %q, want nosniff", got)
+	}
+	if !strings.Contains(rec.Header().Get("Content-Disposition"), "attachment") {
+		t.Fatalf("content-disposition = %q, want attachment", rec.Header().Get("Content-Disposition"))
+	}
+	for _, forbidden := range []string{"metadata", "actor_user_id", "session_id", "raw_user_agent", "ip_address", "user_agent"} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Fatalf("export response leaked %q: %s", forbidden, rec.Body.String())
+		}
 	}
 }

@@ -48,6 +48,13 @@ LIMIT LEAST(GREATEST(sqlc.arg(limit_count)::INT, 1), 10000);
 DELETE FROM internal_analytics_events
 WHERE retention_expires_at <= sqlc.arg(cutoff_at);
 
+-- name: GetInternalAnalyticsExpiredEventBacklog :one
+SELECT
+  COUNT(*)::BIGINT AS expired_count,
+  MIN(retention_expires_at) AS oldest_expired_at
+FROM internal_analytics_events
+WHERE retention_expires_at <= sqlc.arg(cutoff_at);
+
 -- name: UpsertInternalAnalyticsDailyAggregate :one
 INSERT INTO internal_analytics_daily_aggregates (
   aggregate_date,

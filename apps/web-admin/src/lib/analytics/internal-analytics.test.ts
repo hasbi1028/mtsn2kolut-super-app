@@ -40,6 +40,47 @@ describe('internal analytics client helper', () => {
 		expect(JSON.stringify(payload)).not.toContain('utm_source');
 	});
 
+	it('drops expanded sensitive key variants before internal analytics fetch', () => {
+		const payload = buildInternalAnalyticsPayload('security.forbidden', {
+			pathname: '/settings/analytics',
+			metadata: {
+				token: 'secret',
+				Authorization: 'Bearer abc',
+				bearer: 'abc',
+				cookie: 'sid=abc',
+				NIP: '199001012020011001',
+				nisn: '1234567890',
+				nik: '7400000000000001',
+				deviceFingerprint: 'fingerprint',
+				'device-fingerprint': 'fingerprint',
+				rawUserAgent: 'Mozilla/5.0',
+				raw_user_agent: 'Mozilla/5.0',
+				query_string: '?token=secret',
+				rawQuery: '?nip=secret',
+				full_url: 'https://example.test/path?token=secret',
+				safe_bucket: 'blocked'
+			}
+		});
+
+		expect(payload.metadata).toEqual({ safe_bucket: 'blocked' });
+		expect(JSON.stringify(payload)).not.toContain('Bearer');
+		expect(JSON.stringify(payload)).not.toContain('199001');
+		expect(JSON.stringify(payload)).not.toContain('fingerprint');
+		expect(JSON.stringify(payload)).not.toContain('Mozilla');
+		expect(JSON.stringify(payload)).not.toContain('token=secret');
+	});
+
+	it('allows aggregate export instrumentation but rejects raw export event names', async () => {
+		const fetcher = vi.fn().mockResolvedValue(new Response('{}', { status: 201 }));
+
+		await expect(trackInternalAnalyticsEvent('security.export_requested', {
+			metadata: { export_type: 'aggregate_csv' }
+		}, fetcher)).resolves.toBe(true);
+		await expect(trackInternalAnalyticsEvent('analytics.raw_export', {}, fetcher)).resolves.toBe(false);
+
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+
 	it('rejects non-allowlisted internal analytics event names before fetch', async () => {
 		const fetcher = vi.fn();
 

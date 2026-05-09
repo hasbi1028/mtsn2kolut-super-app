@@ -45,6 +45,7 @@ Legacy role fallback masih aktif untuk compatibility backend tertentu. UI baru t
 ### analytics
 
 - `analytics.read` — Melihat dashboard analytics internal yang hanya berisi agregat.
+- `analytics.export` — Mengekspor laporan analytics agregat tanpa event mentah atau metadata sensitif.
 - `analytics.security_read` — Melihat sinyal keamanan analytics yang sudah diagregasi.
 
 ### bank_soal

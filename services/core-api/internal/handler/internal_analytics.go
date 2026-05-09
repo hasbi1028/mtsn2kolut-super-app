@@ -28,6 +28,7 @@ type internalAnalyticsService interface {
 	CreateEvent(ctx context.Context, in service.CreateInternalAnalyticsEventInput) (service.InternalAnalyticsEventReceipt, error)
 	ListDailyAggregates(ctx context.Context, in service.InternalAnalyticsDailyQuery) (service.InternalAnalyticsDailyResult, error)
 	Summary(ctx context.Context, in service.InternalAnalyticsSummaryQuery) (service.InternalAnalyticsSummary, error)
+	ExportAggregatesCSV(ctx context.Context, in service.InternalAnalyticsExportQuery) (service.InternalAnalyticsExport, error)
 }
 
 func NewInternalAnalytics(svc *service.InternalAnalytics) *InternalAnalytics {
@@ -114,6 +115,44 @@ func (h *InternalAnalytics) Summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, result)
+}
+
+func (h *InternalAnalytics) ExportAggregates(w http.ResponseWriter, r *http.Request) {
+	claims, ok := api.ClaimsFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	query, ok := parseInternalAnalyticsDailyQuery(w, r)
+	if !ok {
+		return
+	}
+	exported, err := h.svc.ExportAggregatesCSV(r.Context(), service.InternalAnalyticsExportQuery{
+		EventGroup:    query.EventGroup,
+		EventName:     query.EventName,
+		SourceSurface: query.SourceSurface,
+		Role:          query.Role,
+		Result:        query.Result,
+		Days:          query.Days,
+		Limit:         query.Limit,
+		Offset:        query.Offset,
+		ActorUserID:   internalAnalyticsActorUserID(claims),
+		ActorRole:     internalAnalyticsActorRole(claims),
+	})
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	filename := strings.ReplaceAll(exported.Filename, `"`, "")
+	if filename == "" {
+		filename = "internal-analytics-aggregate.csv"
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(exported.Content)
 }
 
 func parseInternalAnalyticsDailyQuery(w http.ResponseWriter, r *http.Request) (service.InternalAnalyticsDailyQuery, bool) {

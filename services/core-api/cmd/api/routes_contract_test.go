@@ -130,7 +130,7 @@ func TestInternalAnalyticsIngestionRouteStaysJWTProtected(t *testing.T) {
 		t.Fatalf("authenticated route block not found")
 	}
 	authenticatedBlock := source[jwtStart:workerStart]
-	const analyticsRoute = `r.Post("/api/internal-analytics/events", internalAnalyticsH.CreateEvent)`
+	const analyticsRoute = `r.With(analyticsIngestionRateLimit).Post("/api/internal-analytics/events", internalAnalyticsH.CreateEvent)`
 	if !strings.Contains(authenticatedBlock, analyticsRoute) {
 		t.Fatalf("internal analytics ingestion route must be registered only inside the JWT-authenticated API block")
 	}
@@ -167,6 +167,45 @@ func TestInternalAnalyticsReadRoutesUseAnalyticsReadPermission(t *testing.T) {
 	}
 	if strings.Contains(source[:jwtStart], "/api/internal-analytics/summary") || strings.Contains(source[:jwtStart], "/api/internal-analytics/daily") {
 		t.Fatalf("internal analytics read routes must not be exposed before JWT middleware")
+	}
+}
+
+func TestInternalAnalyticsExportRouteUsesExportPermissionAndRateLimitedIngestion(t *testing.T) {
+	raw, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	source := string(raw)
+	jwtStart := strings.Index(source, "r.Use(mw.JWT(jwtSecret")
+	workerStart := strings.Index(source, "r.Use(mw.WorkerKey(workerKey))")
+	if jwtStart < 0 || workerStart <= jwtStart {
+		t.Fatalf("authenticated route block not found")
+	}
+	authenticatedBlock := source[jwtStart:workerStart]
+	if !strings.Contains(source, `analyticsIngestionRateLimit := ratelimit.RateLimitWithTrustedProxies`) {
+		t.Fatalf("internal analytics ingestion must use existing trusted-proxy-aware rate limiter")
+	}
+	if !strings.Contains(source, `requireAnalyticsExport := mw.RequireAnyPermissionOrRole([]string{"analytics.export"}, "admin")`) {
+		t.Fatalf("internal analytics export route must define analytics.export permission-first guard with admin fallback")
+	}
+	required := []string{
+		`r.With(analyticsIngestionRateLimit).Post("/api/internal-analytics/events", internalAnalyticsH.CreateEvent)`,
+		`r.With(requireAnalyticsExport).Get("/api/internal-analytics/export", internalAnalyticsH.ExportAggregates)`,
+	}
+	for _, want := range required {
+		if !strings.Contains(authenticatedBlock, want) {
+			t.Fatalf("internal analytics route contract missing %q inside JWT block", want)
+		}
+	}
+	for _, forbidden := range []string{
+		`"/api/internal-analytics/events/export"`,
+		`"/api/internal-analytics/raw"`,
+		`"/api/internal-analytics/metadata"`,
+		`GetInternalAnalyticsEvent`,
+	} {
+		if strings.Contains(authenticatedBlock, forbidden) {
+			t.Fatalf("internal analytics must not expose raw event route/helper %q", forbidden)
+		}
 	}
 }
 
@@ -234,5 +273,51 @@ func TestInternalAnalyticsFrontendDoesNotAddPublicCollectorOrThirdPartyTracking(
 	})
 	if err != nil {
 		t.Fatalf("scan web-admin source: %v", err)
+	}
+}
+
+func TestInternalAnalyticsNoThirdPartyAnalyticsDependenciesAcrossRuntimeUnits(t *testing.T) {
+	root := filepath.Clean("../../../..")
+	forbiddenNeedles := []string{
+		"posthog",
+		"plausible",
+		"google-analytics",
+		"@vercel/analytics",
+		"hotjar",
+		"gtag(",
+		"GoogleAnalytics",
+		"navigator.sendBeacon",
+	}
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		slash := filepath.ToSlash(path)
+		if d.IsDir() {
+			if strings.Contains(slash, "/node_modules") || strings.Contains(slash, "/.git") || strings.Contains(slash, "/.svelte-kit") || strings.Contains(slash, "/build") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !(strings.HasSuffix(path, "package.json") || strings.HasSuffix(path, ".svelte") || strings.HasSuffix(path, ".ts") || strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".dart") || strings.HasSuffix(path, ".html")) {
+			return nil
+		}
+		if strings.HasSuffix(path, ".test.ts") || strings.HasSuffix(path, ".spec.ts") {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		source := string(raw)
+		for _, needle := range forbiddenNeedles {
+			if strings.Contains(source, needle) {
+				t.Fatalf("internal analytics must stay first-party only; found %q in %s", needle, path)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("scan runtime units: %v", err)
 	}
 }

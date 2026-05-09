@@ -269,3 +269,36 @@ Fase 0 dianggap selesai bila:
 - `docs/internal-analytics-event-catalog.md` menetapkan event allowlist dan forbidden sensitive keys.
 - Docs guard Web Admin memastikan kontrak privacy-first, Core API/PostgreSQL ownership, RBAC analytics permissions, audit_logs separation, dan phased plan tetap ada.
 - Tidak ada migration, API runtime, BFF route, dependency, tracking frontend, deploy, atau PM2 restart yang ikut berubah.
+
+
+## Status Implementasi Fase 7-10
+
+Status: Fase 10 selesai. Implementasi akhir tetap internal-only, no third-party analytics, privacy-first, dan berjalan melalui SvelteKit/BFF -> Go Core API -> PostgreSQL tanpa akses DB langsung dari Web Admin.
+
+### Fase 7 - Export dan reporting
+
+- Export hanya CSV aggregate summary/daily counts only melalui Core API dan BFF `/api/internal-analytics/export`.
+- Permission `analytics.export` ditambahkan di migration `084_internal_analytics_permissions.sql` dan grant awal admin.
+- Export tidak memuat metadata, `actor_user_id`, `session_id`, raw IP, raw user agent, token, cookie, NIP/NISN/NIK, atau raw payload.
+- CSV injection safe: sel berawalan `=`, `+`, `-`, `@`, tab, CR, atau LF diberi prefix aman.
+- Permintaan export dicatat sebagai event audit analytics `security.export_requested` dengan metadata agregat aman saja.
+
+### Fase 8 - Retention, rollup, dan cleanup
+
+- Rollup dan cleanup backend memakai `retention_expires_at`, `ListInternalAnalyticsEventsForRollup`, `UpsertInternalAnalyticsDailyAggregate`, dan `DeleteExpiredInternalAnalyticsEvents`.
+- Cleanup bersifat manual admin/ops invocation only; tidak ada scheduler otomatis baru di fase ini.
+- Health/readiness menampilkan `expired_event_backlog_count` dan `oldest_expired_event_at` sebagai agregat operasional tanpa metadata mentah.
+- Recovery bila cleanup gagal didokumentasikan di `docs/internal-analytics-runbook.md`.
+
+### Fase 9 - Security review dan abuse hardening
+
+- Forbidden sensitive keys diperluas untuk token, authorization, bearer, cookie, NIP, NISN, NIK, device fingerprint variants, raw user agent, `query_string`, `rawQuery`, dan `full_url`.
+- Ingestion tetap JWT protected dan body cap tetap 16 KiB di Core API/BFF.
+- Rate limit mengikuti middleware trusted-proxy-aware rate limit pada route ingestion; tidak melemahkan auth.
+- Guard memastikan tidak ada public unauthenticated collector, tidak ada raw event export, dan tidak ada third-party analytics.
+
+### Fase 10 - Operational readiness dan handoff
+
+- Runbook operasional ada di `docs/internal-analytics-runbook.md`.
+- Owner, permission `analytics.read`, `analytics.export`, `analytics.security_read`, export policy, retensi, smoke checklist, rollback, recovery, dan bukti 100% internal terdokumentasi.
+- Boundary sesi ini: tidak deploy, tidak restart PM2, tidak menjalankan live migration, tidak menjalankan cleanup terhadap live DB, tidak membuka public unauthenticated collector, tidak menambahkan raw event export, dan tidak menambahkan third-party analytics.

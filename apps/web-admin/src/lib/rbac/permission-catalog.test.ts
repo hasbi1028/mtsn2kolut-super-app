@@ -30,6 +30,7 @@ describe('RBAC permission catalog stabilization', () => {
 		expect(RBAC_PERMISSION_CATALOG.every((permission) => permission.code === `${permission.module}.${permission.action}`)).toBe(true);
 		expect(permissionLabel('roles.manage')).toContain('roles.manage');
 		expect(permissionLabel('analytics.read')).toContain('dashboard analytics internal');
+		expect(permissionLabel('analytics.export')).toContain('laporan analytics agregat');
 		expect(permissionLabel('analytics.security_read')).toContain('sinyal keamanan analytics');
 	});
 
