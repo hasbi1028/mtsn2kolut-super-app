@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "mtsn2kolut-super-app/backend/internal/repository/postgres"
@@ -390,6 +392,9 @@ func (s *InternalAnalytics) ListDailyAggregates(ctx context.Context, in Internal
 		LimitCount:    query.Limit,
 	})
 	if err != nil {
+		if isInternalAnalyticsSchemaUnavailable(err) {
+			return emptyInternalAnalyticsDailyResult(query), nil
+		}
 		return InternalAnalyticsDailyResult{}, err
 	}
 	items := make([]InternalAnalyticsDailyItem, 0, len(rows))
@@ -461,7 +466,9 @@ func (s *InternalAnalytics) Summary(ctx context.Context, in InternalAnalyticsSum
 
 func (s *InternalAnalytics) ExportAggregatesCSV(ctx context.Context, in InternalAnalyticsExportQuery) (InternalAnalyticsExport, error) {
 	if err := s.recordAggregateExportEvent(ctx, in); err != nil {
-		return InternalAnalyticsExport{}, err
+		if !isInternalAnalyticsSchemaUnavailable(err) {
+			return InternalAnalyticsExport{}, err
+		}
 	}
 	query := InternalAnalyticsDailyQuery{
 		EventGroup:    in.EventGroup,
@@ -510,6 +517,16 @@ func (s *InternalAnalytics) ExportAggregatesCSV(ctx context.Context, in Internal
 		Filename: fmt.Sprintf("internal-analytics-aggregate-%s.csv", s.clockNow().Format("20060102")),
 		Content:  buf.Bytes(),
 	}, nil
+}
+
+func emptyInternalAnalyticsDailyResult(query InternalAnalyticsDailyQuery) InternalAnalyticsDailyResult {
+	return InternalAnalyticsDailyResult{
+		Days:          query.Days,
+		EventGroup:    query.EventGroup,
+		EventName:     query.EventName,
+		SourceSurface: query.SourceSurface,
+		Items:         []InternalAnalyticsDailyItem{},
+	}
 }
 
 func (s *InternalAnalytics) RollupAndCleanup(ctx context.Context, in InternalAnalyticsRollupCleanupInput) (InternalAnalyticsRollupCleanupResult, error) {
@@ -759,6 +776,19 @@ func formatInternalAnalyticsDate(value pgtype.Date) string {
 
 func internalAnalyticsValidation(code, field string) *InternalAnalyticsValidationError {
 	return &InternalAnalyticsValidationError{Code: code, Field: field}
+}
+
+func isInternalAnalyticsSchemaUnavailable(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	switch pgErr.Code {
+	case "42P01", "42703":
+		return true
+	default:
+		return false
+	}
 }
 
 func findForbiddenInternalAnalyticsMetadataKey(value any) (string, bool) {

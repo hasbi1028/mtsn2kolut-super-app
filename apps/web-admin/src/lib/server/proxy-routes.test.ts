@@ -318,6 +318,20 @@ describe('api proxy route handlers', () => {
 		expect(proxyGetMock).not.toHaveBeenCalled();
 	});
 
+	it('rejects unauthenticated internal analytics aggregate export before proxying', async () => {
+		const mod = await import('../../routes/api/internal-analytics/export/+server');
+		const event = createEvent({
+			url: new URL('http://localhost/api/internal-analytics/export?event_group=dashboard&days=30')
+		});
+
+		const res = await mod.GET(event as never);
+
+		expect(res.status).toBe(401);
+		await expect(res.json()).resolves.toEqual({ error: 'Unauthorized' });
+		expect(proxyFetchMock).not.toHaveBeenCalled();
+		expect(streamProxyResponseMock).not.toHaveBeenCalled();
+	});
+
 	it('rejects account contact updates that try to edit official fields', async () => {
 		const mod = await import('../../routes/api/auth/account/+server');
 		const request = new Request('http://localhost/api/auth/account', {

@@ -9,48 +9,17 @@
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import {
+		hasInternalAnalyticsData,
+		internalAnalyticsExportFilename,
+		normalizeInternalAnalyticsOverview,
+		type InternalAnalyticsDailyResult,
+		type InternalAnalyticsOverview,
+		type InternalAnalyticsSummary
+	} from '$lib/analytics/internal-analytics-dashboard';
 	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
 
-	type SummaryGroup = {
-		event_group: string;
-		count: number;
-	};
-
-	type SummaryEvent = {
-		event_name: string;
-		event_group: string;
-		count: number;
-	};
-
-	type Summary = {
-		days: number;
-		total_count: number;
-		groups: SummaryGroup[];
-		top_events: SummaryEvent[];
-	};
-
-	type DailyItem = {
-		aggregate_date: string;
-		event_group: string;
-		event_name: string;
-		source_surface: string;
-		role?: string;
-		result?: string;
-		count: number;
-	};
-
-	type DailyResult = {
-		days: number;
-		event_group?: string;
-		items: DailyItem[];
-	};
-
-	type AnalyticsOverview = {
-		summary: Summary;
-		daily: DailyResult;
-	};
-
-	let analyticsPromise = $state<Promise<AnalyticsOverview> | null>(null);
+	let analyticsPromise = $state<Promise<InternalAnalyticsOverview> | null>(null);
 	let selectedGroup = $state('');
 	let days = $state(30);
 	let exportBusy = $state(false);
@@ -73,11 +42,13 @@
 	}
 
 	function loadAnalytics() {
+		const activeDays = days;
+		const activeGroup = selectedGroup;
 		const params = analyticsParams('60');
 		analyticsPromise = Promise.all([
-			fetch(clientApiPathWithQuery('/api/internal-analytics/summary', params)).then((response) => readClientApiData<Summary>(response, 'Gagal memuat ringkasan analytics internal.')),
-			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', params)).then((response) => readClientApiData<DailyResult>(response, 'Gagal memuat tren harian analytics internal.'))
-		]).then(([summary, daily]) => ({ summary, daily }));
+			fetch(clientApiPathWithQuery('/api/internal-analytics/summary', params)).then((response) => readClientApiData<InternalAnalyticsSummary>(response, 'Gagal memuat ringkasan analytics internal.')),
+			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', params)).then((response) => readClientApiData<InternalAnalyticsDailyResult>(response, 'Gagal memuat tren harian analytics internal.'))
+		]).then(([summary, daily]) => normalizeInternalAnalyticsOverview(summary, daily, activeDays, activeGroup));
 	}
 
 	function analyticsErrorMessage(error: unknown) {
@@ -105,11 +76,6 @@
 		return groupOptions.find((option) => option.value === value)?.label ?? value;
 	}
 
-	function exportFilename(disposition: string | null) {
-		const match = /filename="?([^";]+)"?/i.exec(disposition ?? '');
-		return match?.[1] ?? 'internal-analytics-aggregate.csv';
-	}
-
 	async function exportAggregates() {
 		exportBusy = true;
 		try {
@@ -122,7 +88,7 @@
 			const url = URL.createObjectURL(blob);
 			const anchor = document.createElement('a');
 			anchor.href = url;
-			anchor.download = exportFilename(response.headers.get('content-disposition'));
+			anchor.download = internalAnalyticsExportFilename(response.headers.get('content-disposition'));
 			document.body.appendChild(anchor);
 			anchor.click();
 			anchor.remove();
@@ -202,7 +168,7 @@
 		{/snippet}
 
 		{#snippet children(value)}
-			{@const overview = value as AnalyticsOverview}
+			{@const overview = value as InternalAnalyticsOverview}
 			{@const summary = overview.summary}
 			{@const daily = overview.daily}
 
@@ -235,6 +201,17 @@
 					</Card.Content>
 				</Card.Root>
 			</div>
+
+			{#if !hasInternalAnalyticsData(overview)}
+				<Card.Root class="border-dashed bg-muted/30">
+					<Card.Content class="space-y-2 pt-6">
+						<p class="text-sm font-medium text-foreground">Belum ada agregat analytics internal.</p>
+						<p class="text-sm text-muted-foreground">
+							Halaman siap digunakan, tetapi periode atau filter ini belum memiliki data agregat yang dapat ditampilkan.
+						</p>
+					</Card.Content>
+				</Card.Root>
+			{/if}
 
 			<div class="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
 				<Card.Root>
