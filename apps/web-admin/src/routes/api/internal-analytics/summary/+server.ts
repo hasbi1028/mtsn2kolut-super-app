@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { ApiError, apiPathWithQuery, handleRouteError, proxy } from '$lib/server/api';
 
-const ALLOWED_SUMMARY_QUERY_KEYS = ['event_group', 'days'] as const;
+const ALLOWED_SUMMARY_QUERY_KEYS = ['event_group', 'source_surface', 'role', 'result', 'days'] as const;
 
 export const GET: RequestHandler = async (event) => {
 	if (!event.locals.user) {

@@ -9,6 +9,7 @@ const PUBLIC_EXACT_PATHS = new Set([
 	'/pengumuman',
 	'/kontak',
 	'/api/auth/logout',
+	'/api/public/analytics/events',
 	'/api/public/register-student',
 	'/api/public/site/posts',
 	'/api/public/site/announcements'

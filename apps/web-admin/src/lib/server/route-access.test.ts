@@ -142,6 +142,7 @@ describe('route access helpers', () => {
 		const analyticsReader = { id: '2', username: 'reader', role: '', roles: [], permissions: ['analytics.read'] };
 		const analyticsExporter = { id: '3', username: 'exporter', role: '', roles: [], permissions: ['analytics.export'] };
 
+		expect(isPublicPath('/api/public/analytics/events')).toBe(true);
 		expect(isPublicPath('/api/internal-analytics/events')).toBe(false);
 		expect(requiredPermissionsForPath('/api/internal-analytics/events', 'POST')).toEqual([]);
 		expect(canAccessProtectedRoute(undefined, '/api/internal-analytics/events', 'POST')).toBe(false);

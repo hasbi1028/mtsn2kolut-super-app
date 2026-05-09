@@ -149,6 +149,23 @@ func TestInternalKeyOrJWTAndWorkerKey(t *testing.T) {
 		t.Fatalf("InternalKeyOrJWT(jwt) status = %d, want 204", rec.Code)
 	}
 
+	internalOnly := InternalKey("public-analytics-key")(next)
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/internal-analytics/public-events", nil)
+	req.Header.Set("X-Internal-Key", "public-analytics-key")
+	internalOnly.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("InternalKey(valid) status = %d, want 204", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/internal-analytics/public-events", nil)
+	req.Header.Set("X-Internal-Key", "wrong")
+	internalOnly.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("InternalKey(invalid) status = %d, want 401", rec.Code)
+	}
+
 	worker := WorkerKey("worker-secret")(next)
 	for _, req := range []*http.Request{
 		httptest.NewRequest(http.MethodPost, "/worker", nil),
