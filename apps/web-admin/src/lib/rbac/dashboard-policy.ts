@@ -135,8 +135,10 @@ export function dashboardDataAccessForUser(user: UIAccessSubject | undefined): D
 	const admin = hasAdminRole(user);
 	const roles = rolesForAccess(user);
 	const isGuru = roles.includes('guru');
-	const canUseStudentPortal = dashboardWidgetEvaluation(DASHBOARD_WIDGETS.find((widget) => widget.id === 'student-portal')!, user).allowed;
-	const canUseParentPortal = dashboardWidgetEvaluation(DASHBOARD_WIDGETS.find((widget) => widget.id === 'parent-portal')!, user).allowed;
+	const isSiswa = roles.includes('siswa');
+	const isParent = roles.includes('ortu');
+	const canUseStudentPortal = isSiswa && dashboardWidgetEvaluation(DASHBOARD_WIDGETS.find((widget) => widget.id === 'student-portal')!, user).allowed;
+	const canUseParentPortal = isParent && dashboardWidgetEvaluation(DASHBOARD_WIDGETS.find((widget) => widget.id === 'parent-portal')!, user).allowed;
 	const hasAssessment = isGuru && hasPermission(user, ['asesmen.read', 'asesmen.proctor', 'asesmen.result_read', 'asesmen.score']);
 	const hasStudents = isGuru && hasPermission(user, ['students.read']);
 	const hasTimetable = isGuru && hasPermission(user, ['academic.read', 'journal.read', 'journal.manage', 'journal.read_all', 'journal.manage_all']);
