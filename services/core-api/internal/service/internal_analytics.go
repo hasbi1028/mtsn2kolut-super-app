@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -28,6 +30,10 @@ const (
 type internalAnalyticsStore interface {
 	CreateInternalAnalyticsEvent(ctx context.Context, arg db.CreateInternalAnalyticsEventParams) (db.InternalAnalyticsEvent, error)
 	ListInternalAnalyticsDailyAggregates(ctx context.Context, arg db.ListInternalAnalyticsDailyAggregatesParams) ([]db.InternalAnalyticsDailyAggregate, error)
+	ListInternalAnalyticsEventsForRollup(ctx context.Context, arg db.ListInternalAnalyticsEventsForRollupParams) ([]db.InternalAnalyticsEvent, error)
+	UpsertInternalAnalyticsDailyAggregate(ctx context.Context, arg db.UpsertInternalAnalyticsDailyAggregateParams) (db.InternalAnalyticsDailyAggregate, error)
+	DeleteExpiredInternalAnalyticsEvents(ctx context.Context, cutoffAt pgtype.Timestamptz) (int64, error)
+	GetInternalAnalyticsExpiredEventBacklog(ctx context.Context, cutoffAt pgtype.Timestamptz) (db.GetInternalAnalyticsExpiredEventBacklogRow, error)
 }
 
 type InternalAnalytics struct {
@@ -77,6 +83,46 @@ type InternalAnalyticsDailyQuery struct {
 type InternalAnalyticsSummaryQuery struct {
 	Days       int32
 	EventGroup string
+}
+
+type InternalAnalyticsExportQuery struct {
+	EventGroup    string
+	EventName     string
+	SourceSurface string
+	Role          string
+	Result        string
+	Days          int32
+	Limit         int32
+	Offset        int32
+	ActorUserID   pgtype.UUID
+	ActorRole     string
+}
+
+type InternalAnalyticsExport struct {
+	Filename string
+	Content  []byte
+}
+
+type InternalAnalyticsRollupCleanupInput struct {
+	StartAt  time.Time
+	EndAt    time.Time
+	CutoffAt time.Time
+	Limit    int32
+}
+
+type InternalAnalyticsRollupCleanupResult struct {
+	StartAt              time.Time `json:"start_at"`
+	EndAt                time.Time `json:"end_at"`
+	CutoffAt             time.Time `json:"cutoff_at"`
+	EventsScanned        int64     `json:"events_scanned"`
+	AggregatesUpserted   int64     `json:"aggregates_upserted"`
+	ExpiredEventsDeleted int64     `json:"expired_events_deleted"`
+	LimitReached         bool      `json:"limit_reached"`
+}
+
+type InternalAnalyticsExpiredBacklog struct {
+	ExpiredEventBacklogCount int64      `json:"expired_event_backlog_count"`
+	OldestExpiredEventAt     *time.Time `json:"oldest_expired_event_at,omitempty"`
 }
 
 type InternalAnalyticsDailyResult struct {
@@ -236,6 +282,7 @@ var internalAnalyticsForbiddenMetadataKeys = map[string]struct{}{
 	"device_fingerprint":              {},
 	"fingerprint":                     {},
 	"device_id_hash_from_fingerprint": {},
+	"device_fingerprint_hash":         {},
 	"pusaka_username":                 {},
 	"pusaka_password":                 {},
 	"pusaka_credential":               {},
@@ -246,7 +293,13 @@ var internalAnalyticsForbiddenMetadataKeys = map[string]struct{}{
 	"x_forwarded_for_raw":             {},
 	"raw_user_agent":                  {},
 	"user_agent_raw":                  {},
+	"user_agent":                      {},
 	"ua_raw":                          {},
+	"query":                           {},
+	"query_string":                    {},
+	"raw_query":                       {},
+	"url":                             {},
+	"full_url":                        {},
 	"sql":                             {},
 	"stack_trace":                     {},
 	"request_body":                    {},
@@ -406,6 +459,161 @@ func (s *InternalAnalytics) Summary(ctx context.Context, in InternalAnalyticsSum
 	}, nil
 }
 
+func (s *InternalAnalytics) ExportAggregatesCSV(ctx context.Context, in InternalAnalyticsExportQuery) (InternalAnalyticsExport, error) {
+	if err := s.recordAggregateExportEvent(ctx, in); err != nil {
+		return InternalAnalyticsExport{}, err
+	}
+	query := InternalAnalyticsDailyQuery{
+		EventGroup:    in.EventGroup,
+		EventName:     in.EventName,
+		SourceSurface: in.SourceSurface,
+		Role:          in.Role,
+		Result:        in.Result,
+		Days:          in.Days,
+		Limit:         in.Limit,
+		Offset:        in.Offset,
+	}
+	if query.Limit <= 0 {
+		query.Limit = 10000
+	}
+	daily, err := s.ListDailyAggregates(ctx, query)
+	if err != nil {
+		return InternalAnalyticsExport{}, err
+	}
+
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+	header := []string{"aggregate_date", "event_group", "event_name", "source_surface", "role", "result", "count"}
+	if err := writer.Write(header); err != nil {
+		return InternalAnalyticsExport{}, err
+	}
+	for _, item := range daily.Items {
+		record := []string{
+			safeInternalAnalyticsCSVCell(item.AggregateDate),
+			safeInternalAnalyticsCSVCell(item.EventGroup),
+			safeInternalAnalyticsCSVCell(item.EventName),
+			safeInternalAnalyticsCSVCell(item.SourceSurface),
+			safeInternalAnalyticsCSVCell(item.Role),
+			safeInternalAnalyticsCSVCell(item.Result),
+			fmt.Sprintf("%d", item.Count),
+		}
+		if err := writer.Write(record); err != nil {
+			return InternalAnalyticsExport{}, err
+		}
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return InternalAnalyticsExport{}, err
+	}
+
+	return InternalAnalyticsExport{
+		Filename: fmt.Sprintf("internal-analytics-aggregate-%s.csv", s.clockNow().Format("20060102")),
+		Content:  buf.Bytes(),
+	}, nil
+}
+
+func (s *InternalAnalytics) RollupAndCleanup(ctx context.Context, in InternalAnalyticsRollupCleanupInput) (InternalAnalyticsRollupCleanupResult, error) {
+	if s == nil || s.q == nil {
+		return InternalAnalyticsRollupCleanupResult{}, fmt.Errorf("internal analytics store unavailable")
+	}
+	normalized := normalizeInternalAnalyticsRollupCleanupInput(in, s.clockNow())
+	rows, err := s.q.ListInternalAnalyticsEventsForRollup(ctx, db.ListInternalAnalyticsEventsForRollupParams{
+		StartAt:    pgtype.Timestamptz{Time: normalized.StartAt, Valid: true},
+		EndAt:      pgtype.Timestamptz{Time: normalized.EndAt, Valid: true},
+		LimitCount: normalized.Limit,
+	})
+	if err != nil {
+		return InternalAnalyticsRollupCleanupResult{}, err
+	}
+
+	counts := map[internalAnalyticsAggregateKey]int64{}
+	for _, row := range rows {
+		if !row.OccurredAt.Valid {
+			continue
+		}
+		key := internalAnalyticsAggregateKey{
+			date:          internalAnalyticsDateOnly(row.OccurredAt.Time),
+			eventGroup:    row.EventGroup,
+			eventName:     row.EventName,
+			sourceSurface: row.SourceSurface,
+			role:          pgTextString(row.ActorRole),
+			result:        pgTextString(row.Result),
+		}
+		counts[key]++
+	}
+
+	keys := make([]internalAnalyticsAggregateKey, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i].sortKey() < keys[j].sortKey()
+	})
+	for _, key := range keys {
+		if _, err := s.q.UpsertInternalAnalyticsDailyAggregate(ctx, db.UpsertInternalAnalyticsDailyAggregateParams{
+			AggregateDate:   pgtype.Date{Time: key.date, Valid: true},
+			EventGroup:      key.eventGroup,
+			EventName:       key.eventName,
+			SourceSurface:   key.sourceSurface,
+			Role:            key.role,
+			Result:          key.result,
+			EventCount:      counts[key],
+			TotalDurationMs: pgtype.Int8{},
+			Metadata:        []byte(`{}`),
+		}); err != nil {
+			return InternalAnalyticsRollupCleanupResult{}, err
+		}
+	}
+
+	deleted, err := s.q.DeleteExpiredInternalAnalyticsEvents(ctx, pgtype.Timestamptz{Time: normalized.CutoffAt, Valid: true})
+	if err != nil {
+		return InternalAnalyticsRollupCleanupResult{}, err
+	}
+	return InternalAnalyticsRollupCleanupResult{
+		StartAt:              normalized.StartAt,
+		EndAt:                normalized.EndAt,
+		CutoffAt:             normalized.CutoffAt,
+		EventsScanned:        int64(len(rows)),
+		AggregatesUpserted:   int64(len(keys)),
+		ExpiredEventsDeleted: deleted,
+		LimitReached:         len(rows) == int(normalized.Limit),
+	}, nil
+}
+
+func (s *InternalAnalytics) ExpiredBacklog(ctx context.Context) (InternalAnalyticsExpiredBacklog, error) {
+	if s == nil || s.q == nil {
+		return InternalAnalyticsExpiredBacklog{}, fmt.Errorf("internal analytics store unavailable")
+	}
+	cutoff := s.clockNow()
+	row, err := s.q.GetInternalAnalyticsExpiredEventBacklog(ctx, pgtype.Timestamptz{Time: cutoff, Valid: true})
+	if err != nil {
+		return InternalAnalyticsExpiredBacklog{}, err
+	}
+	return InternalAnalyticsExpiredBacklog{
+		ExpiredEventBacklogCount: row.ExpiredCount,
+		OldestExpiredEventAt:     internalAnalyticsNullableTime(row.OldestExpiredAt),
+	}, nil
+}
+
+func (s *InternalAnalytics) recordAggregateExportEvent(ctx context.Context, in InternalAnalyticsExportQuery) error {
+	_, err := s.CreateEvent(ctx, CreateInternalAnalyticsEventInput{
+		EventName:     "security.export_requested",
+		EventGroup:    "security",
+		SourceSurface: "core_api",
+		ActorUserID:   in.ActorUserID,
+		ActorRole:     in.ActorRole,
+		Module:        "internal_analytics",
+		Result:        "success",
+		Metadata: map[string]any{
+			"export_type":    "aggregate_csv",
+			"event_group":    strings.TrimSpace(in.EventGroup),
+			"source_surface": strings.TrimSpace(in.SourceSurface),
+			"days":           normalizeInternalAnalyticsDailyQuery(InternalAnalyticsDailyQuery{Days: in.Days}).Days,
+		},
+	})
+	return err
+}
+
 func (s *InternalAnalytics) clockNow() time.Time {
 	if s != nil && s.now != nil {
 		return s.now().UTC()
@@ -455,6 +663,33 @@ func normalizeInternalAnalyticsDailyQuery(in InternalAnalyticsDailyQuery) Intern
 	}
 }
 
+func normalizeInternalAnalyticsRollupCleanupInput(in InternalAnalyticsRollupCleanupInput, now time.Time) InternalAnalyticsRollupCleanupInput {
+	now = now.UTC()
+	endAt := in.EndAt.UTC()
+	if endAt.IsZero() {
+		endAt = internalAnalyticsDateOnly(now)
+	}
+	startAt := in.StartAt.UTC()
+	if startAt.IsZero() {
+		startAt = endAt.AddDate(0, 0, -1)
+	}
+	if !endAt.After(startAt) {
+		endAt = startAt.Add(24 * time.Hour)
+	}
+	cutoffAt := in.CutoffAt.UTC()
+	if cutoffAt.IsZero() {
+		cutoffAt = now
+	}
+	limit := in.Limit
+	if limit <= 0 {
+		limit = 10000
+	}
+	if limit > 10000 {
+		limit = 10000
+	}
+	return InternalAnalyticsRollupCleanupInput{StartAt: startAt, EndAt: endAt, CutoffAt: cutoffAt, Limit: limit}
+}
+
 func internalAnalyticsDateOnly(value time.Time) time.Time {
 	utc := value.UTC()
 	return time.Date(utc.Year(), utc.Month(), utc.Day(), 0, 0, 0, 0, time.UTC)
@@ -463,6 +698,26 @@ func internalAnalyticsDateOnly(value time.Time) time.Time {
 func internalAnalyticsText(value string) pgtype.Text {
 	value = strings.TrimSpace(value)
 	return pgtype.Text{String: value, Valid: value != ""}
+}
+
+type internalAnalyticsAggregateKey struct {
+	date          time.Time
+	eventGroup    string
+	eventName     string
+	sourceSurface string
+	role          string
+	result        string
+}
+
+func (k internalAnalyticsAggregateKey) sortKey() string {
+	return k.date.Format("2006-01-02") + "\x00" + k.eventGroup + "\x00" + k.eventName + "\x00" + k.sourceSurface + "\x00" + k.role + "\x00" + k.result
+}
+
+func pgTextString(value pgtype.Text) string {
+	if !value.Valid {
+		return ""
+	}
+	return strings.TrimSpace(value.String)
 }
 
 func mapInternalAnalyticsReceipt(row db.InternalAnalyticsEvent) InternalAnalyticsEventReceipt {
@@ -529,7 +784,60 @@ func findForbiddenInternalAnalyticsMetadataKey(value any) (string, bool) {
 }
 
 func normalizeInternalAnalyticsMetadataKey(key string) string {
-	normalized := strings.ToLower(strings.TrimSpace(key))
+	normalized := camelToSnakeInternalAnalyticsKey(strings.TrimSpace(key))
+	normalized = strings.ToLower(normalized)
 	normalized = strings.NewReplacer("-", "_", " ", "_", ".", "_").Replace(normalized)
 	return strings.Trim(normalized, "_")
+}
+
+func camelToSnakeInternalAnalyticsKey(key string) string {
+	var b strings.Builder
+	var previous rune
+	for i, r := range key {
+		if i > 0 && r >= 'A' && r <= 'Z' && ((previous >= 'a' && previous <= 'z') || (previous >= '0' && previous <= '9')) {
+			b.WriteRune('_')
+		}
+		b.WriteRune(r)
+		previous = r
+	}
+	return b.String()
+}
+
+func safeInternalAnalyticsCSVCell(value string) string {
+	if value == "" {
+		return ""
+	}
+	switch value[0] {
+	case '=', '+', '-', '@', '\t', '\r', '\n':
+		return "'" + value
+	default:
+		return value
+	}
+}
+
+func internalAnalyticsNullableTime(value any) *time.Time {
+	switch typed := value.(type) {
+	case nil:
+		return nil
+	case time.Time:
+		if typed.IsZero() {
+			return nil
+		}
+		t := typed.UTC()
+		return &t
+	case pgtype.Timestamptz:
+		if !typed.Valid || typed.Time.IsZero() {
+			return nil
+		}
+		t := typed.Time.UTC()
+		return &t
+	case *time.Time:
+		if typed == nil || typed.IsZero() {
+			return nil
+		}
+		t := typed.UTC()
+		return &t
+	default:
+		return nil
+	}
 }

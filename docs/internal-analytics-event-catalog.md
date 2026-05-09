@@ -22,11 +22,11 @@ Kontrak ini secara eksplisit melarang penyimpanan dan pengiriman field berikut d
 - `token`, `access_token`, `refresh_token`, `exam_token`, `csrf_token`, `session_token`
 - `cookie`, `set_cookie`, `authorization`, `auth_header`, `bearer`, `jwt`
 - `nik`, `nip_full`, `nip`, `nisn_full`, `nisn`
-- `device_fingerprint`, `fingerprint`, `device_id_hash_from_fingerprint`
+- `device_fingerprint`, `deviceFingerprint`, `device-fingerprint`, `fingerprint`, `device_id_hash_from_fingerprint`
 - `pusaka_username`, `pusaka_password`, `pusaka_credential`, `credential_pusaka`
 - `raw_ip`, `ip_address_raw`, `remote_addr`, `x_forwarded_for_raw`
-- `raw_user_agent`, `user_agent_raw`, `ua_raw`
-- `sql`, `stack_trace`, `request_body`, `response_body`, `raw_payload`
+- `raw_user_agent`, `rawUserAgent`, `user_agent_raw`, `ua_raw`
+- `query_string`, `rawQuery`, `full_url`, `url_query`, `sql`, `stack_trace`, `request_body`, `response_body`, `raw_payload`
 
 Larangan makna, bukan hanya nama field:
 
@@ -49,6 +49,9 @@ Field berikut boleh dipakai lintas group bila relevan:
 - `result`
 - `status_code_class`
 - `duration_bucket`
+- `export_type`
+- `event_group`
+- `days`
 - `source_surface`
 - `feature_key`
 - `date_bucket`

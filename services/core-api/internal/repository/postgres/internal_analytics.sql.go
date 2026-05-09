@@ -142,6 +142,26 @@ func (q *Queries) GetInternalAnalyticsEvent(ctx context.Context, id pgtype.UUID)
 	return i, err
 }
 
+const getInternalAnalyticsExpiredEventBacklog = `-- name: GetInternalAnalyticsExpiredEventBacklog :one
+SELECT
+  COUNT(*)::BIGINT AS expired_count,
+  MIN(retention_expires_at) AS oldest_expired_at
+FROM internal_analytics_events
+WHERE retention_expires_at <= $1
+`
+
+type GetInternalAnalyticsExpiredEventBacklogRow struct {
+	ExpiredCount    int64       `json:"expired_count"`
+	OldestExpiredAt interface{} `json:"oldest_expired_at"`
+}
+
+func (q *Queries) GetInternalAnalyticsExpiredEventBacklog(ctx context.Context, cutoffAt pgtype.Timestamptz) (GetInternalAnalyticsExpiredEventBacklogRow, error) {
+	row := q.db.QueryRow(ctx, getInternalAnalyticsExpiredEventBacklog, cutoffAt)
+	var i GetInternalAnalyticsExpiredEventBacklogRow
+	err := row.Scan(&i.ExpiredCount, &i.OldestExpiredAt)
+	return i, err
+}
+
 const listInternalAnalyticsDailyAggregates = `-- name: ListInternalAnalyticsDailyAggregates :many
 SELECT aggregate_date, event_group, event_name, source_surface, role, result, count, total_duration_ms, metadata, created_at, updated_at
 FROM internal_analytics_daily_aggregates

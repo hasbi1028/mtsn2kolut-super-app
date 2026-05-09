@@ -7,6 +7,7 @@ import (
 )
 
 const internalAnalyticsMigrationPath = "../../../db/migrations/083_internal_analytics_schema.sql"
+const internalAnalyticsPermissionsMigrationPath = "../../../db/migrations/084_internal_analytics_permissions.sql"
 const internalAnalyticsQueriesPath = "../../../db/queries/internal_analytics.sql"
 
 func readLowerFile(t *testing.T, path string) string {
@@ -124,11 +125,32 @@ func TestInternalAnalyticsPhase1SqlcQueryContract(t *testing.T) {
 		"do update set",
 		"-- name: listinternalanalyticsdailyaggregates :many",
 		"from internal_analytics_daily_aggregates",
+		"-- name: getinternalanalyticsexpiredeventbacklog :one",
+		"count(*)::bigint as expired_count",
+		"min(retention_expires_at) as oldest_expired_at",
 	}
 
 	for _, needle := range required {
 		if !strings.Contains(sql, needle) {
 			t.Fatalf("internal analytics sqlc query contract missing %q", needle)
+		}
+	}
+}
+
+func TestInternalAnalyticsPermissionsSeedIncludesExportForAdmin(t *testing.T) {
+	sql := readLowerFile(t, internalAnalyticsPermissionsMigrationPath)
+
+	for _, needle := range []string{
+		"('analytics.read', 'analytics', 'read'",
+		"('analytics.export', 'analytics', 'export'",
+		"('analytics.security_read', 'analytics', 'security_read'",
+		"on conflict (code) do update",
+		"where r.code = 'admin'",
+		"p.code in ('analytics.read', 'analytics.export', 'analytics.security_read')",
+		"on conflict (role_id, permission_id) do nothing",
+	} {
+		if !strings.Contains(sql, needle) {
+			t.Fatalf("internal analytics permissions migration missing %q", needle)
 		}
 	}
 }

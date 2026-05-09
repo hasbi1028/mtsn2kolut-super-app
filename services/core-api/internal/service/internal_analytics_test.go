@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -14,12 +16,23 @@ import (
 )
 
 type fakeInternalAnalyticsStore struct {
-	calls      []db.CreateInternalAnalyticsEventParams
-	dailyCalls []db.ListInternalAnalyticsDailyAggregatesParams
-	row        db.InternalAnalyticsEvent
-	dailyRows  []db.InternalAnalyticsDailyAggregate
-	err        error
-	dailyErr   error
+	calls        []db.CreateInternalAnalyticsEventParams
+	dailyCalls   []db.ListInternalAnalyticsDailyAggregatesParams
+	rollupCalls  []db.ListInternalAnalyticsEventsForRollupParams
+	upsertCalls  []db.UpsertInternalAnalyticsDailyAggregateParams
+	deleteCalls  []pgtype.Timestamptz
+	backlogCalls []pgtype.Timestamptz
+	row          db.InternalAnalyticsEvent
+	dailyRows    []db.InternalAnalyticsDailyAggregate
+	rollupRows   []db.InternalAnalyticsEvent
+	backlogRow   db.GetInternalAnalyticsExpiredEventBacklogRow
+	deleted      int64
+	err          error
+	dailyErr     error
+	rollupErr    error
+	upsertErr    error
+	deleteErr    error
+	backlogErr   error
 }
 
 func (f *fakeInternalAnalyticsStore) CreateInternalAnalyticsEvent(_ context.Context, arg db.CreateInternalAnalyticsEventParams) (db.InternalAnalyticsEvent, error) {
@@ -52,6 +65,47 @@ func (f *fakeInternalAnalyticsStore) ListInternalAnalyticsDailyAggregates(_ cont
 		return nil, f.dailyErr
 	}
 	return f.dailyRows, nil
+}
+
+func (f *fakeInternalAnalyticsStore) ListInternalAnalyticsEventsForRollup(_ context.Context, arg db.ListInternalAnalyticsEventsForRollupParams) ([]db.InternalAnalyticsEvent, error) {
+	f.rollupCalls = append(f.rollupCalls, arg)
+	if f.rollupErr != nil {
+		return nil, f.rollupErr
+	}
+	return f.rollupRows, nil
+}
+
+func (f *fakeInternalAnalyticsStore) UpsertInternalAnalyticsDailyAggregate(_ context.Context, arg db.UpsertInternalAnalyticsDailyAggregateParams) (db.InternalAnalyticsDailyAggregate, error) {
+	f.upsertCalls = append(f.upsertCalls, arg)
+	if f.upsertErr != nil {
+		return db.InternalAnalyticsDailyAggregate{}, f.upsertErr
+	}
+	return db.InternalAnalyticsDailyAggregate{
+		AggregateDate: arg.AggregateDate,
+		EventGroup:    arg.EventGroup,
+		EventName:     arg.EventName,
+		SourceSurface: arg.SourceSurface,
+		Role:          arg.Role,
+		Result:        arg.Result,
+		Count:         arg.EventCount,
+		Metadata:      arg.Metadata,
+	}, nil
+}
+
+func (f *fakeInternalAnalyticsStore) DeleteExpiredInternalAnalyticsEvents(_ context.Context, cutoffAt pgtype.Timestamptz) (int64, error) {
+	f.deleteCalls = append(f.deleteCalls, cutoffAt)
+	if f.deleteErr != nil {
+		return 0, f.deleteErr
+	}
+	return f.deleted, nil
+}
+
+func (f *fakeInternalAnalyticsStore) GetInternalAnalyticsExpiredEventBacklog(_ context.Context, cutoffAt pgtype.Timestamptz) (db.GetInternalAnalyticsExpiredEventBacklogRow, error) {
+	f.backlogCalls = append(f.backlogCalls, cutoffAt)
+	if f.backlogErr != nil {
+		return db.GetInternalAnalyticsExpiredEventBacklogRow{}, f.backlogErr
+	}
+	return f.backlogRow, nil
 }
 
 func fixedAnalyticsNow() time.Time {
@@ -321,5 +375,197 @@ func TestInternalAnalyticsSummaryAggregatesCountsByGroupAndEvent(t *testing.T) {
 	}
 	if len(store.dailyCalls) != 1 || store.dailyCalls[0].LimitCount != 10000 {
 		t.Fatalf("summary daily call = %+v, want bounded aggregate read", store.dailyCalls)
+	}
+}
+
+func TestInternalAnalyticsExportAggregatesCSVUsesOnlyAggregatesAndAudits(t *testing.T) {
+	store := &fakeInternalAnalyticsStore{
+		dailyRows: []db.InternalAnalyticsDailyAggregate{
+			{
+				AggregateDate: pgtype.Date{Time: time.Date(2026, 5, 9, 0, 0, 0, 0, time.UTC), Valid: true},
+				EventGroup:    "dashboard",
+				EventName:     "=dashboard.view",
+				SourceSurface: "+web_admin",
+				Role:          "-admin",
+				Result:        "@success",
+				Count:         12,
+				Metadata:      []byte(`{"raw_user_agent":"must-not-leak","actor_user_id":"must-not-leak"}`),
+			},
+		},
+	}
+	svc := newTestInternalAnalytics(store)
+
+	exported, err := svc.ExportAggregatesCSV(context.Background(), InternalAnalyticsExportQuery{
+		Days:        7,
+		EventGroup:  "dashboard",
+		ActorUserID: serviceTestUUID(19),
+		ActorRole:   "admin",
+	})
+	if err != nil {
+		t.Fatalf("ExportAggregatesCSV() error = %v", err)
+	}
+	if exported.Filename == "" || !strings.Contains(exported.Filename, "internal-analytics-aggregate") {
+		t.Fatalf("filename = %q, want aggregate analytics CSV filename", exported.Filename)
+	}
+	csvText := string(exported.Content)
+	for _, forbidden := range []string{"metadata", "actor_user_id", "raw_user_agent", "must-not-leak", "session_id", "ip_address", "user_agent"} {
+		if strings.Contains(csvText, forbidden) {
+			t.Fatalf("export leaked forbidden field %q in CSV:\n%s", forbidden, csvText)
+		}
+	}
+	records, err := csv.NewReader(bytes.NewReader(exported.Content)).ReadAll()
+	if err != nil {
+		t.Fatalf("export CSV is not parseable: %v\n%s", err, csvText)
+	}
+	wantHeader := []string{"aggregate_date", "event_group", "event_name", "source_surface", "role", "result", "count"}
+	if got := strings.Join(records[0], ","); got != strings.Join(wantHeader, ",") {
+		t.Fatalf("CSV header = %v, want %v", records[0], wantHeader)
+	}
+	for _, cell := range records[1][2:6] {
+		if !strings.HasPrefix(cell, "'") {
+			t.Fatalf("CSV cell %q was not formula-injection escaped", cell)
+		}
+	}
+	if len(store.dailyCalls) != 1 || store.dailyCalls[0].EventGroup != "dashboard" || store.dailyCalls[0].LimitCount != 10000 {
+		t.Fatalf("daily aggregate export call = %+v, want bounded aggregate-only read", store.dailyCalls)
+	}
+	if len(store.calls) != 1 {
+		t.Fatalf("analytics audit event calls = %d, want 1", len(store.calls))
+	}
+	audit := store.calls[0]
+	if audit.EventName != "security.export_requested" || audit.EventGroup != "security" || audit.SourceSurface != "core_api" {
+		t.Fatalf("audit event = %+v, want security.export_requested from core_api", audit)
+	}
+	var auditMetadata map[string]any
+	if err := json.Unmarshal(audit.Metadata, &auditMetadata); err != nil {
+		t.Fatalf("audit metadata json = %v", err)
+	}
+	if auditMetadata["export_type"] != "aggregate_csv" || auditMetadata["event_group"] != "dashboard" || auditMetadata["days"].(float64) != 7 {
+		t.Fatalf("audit metadata = %+v, want safe aggregate export metadata", auditMetadata)
+	}
+	if strings.Contains(string(audit.Metadata), "actor_user_id") || strings.Contains(string(audit.Metadata), "metadata") {
+		t.Fatalf("audit metadata leaked raw identifiers: %s", string(audit.Metadata))
+	}
+}
+
+func TestInternalAnalyticsRollupAndCleanupAggregatesEventsAndDeletesExpired(t *testing.T) {
+	startAt := time.Date(2026, 5, 8, 0, 0, 0, 0, time.UTC)
+	endAt := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
+	cutoffAt := time.Date(2026, 5, 9, 10, 0, 0, 0, time.UTC)
+	store := &fakeInternalAnalyticsStore{
+		deleted: 4,
+		rollupRows: []db.InternalAnalyticsEvent{
+			{
+				EventName:     "dashboard.view",
+				EventGroup:    "dashboard",
+				OccurredAt:    pgtype.Timestamptz{Time: time.Date(2026, 5, 8, 3, 0, 0, 0, time.UTC), Valid: true},
+				SourceSurface: "web_admin",
+				ActorRole:     pgtype.Text{String: "admin", Valid: true},
+				Result:        pgtype.Text{String: "success", Valid: true},
+				Metadata:      []byte(`{"raw_user_agent":"ignored"}`),
+			},
+			{
+				EventName:     "dashboard.view",
+				EventGroup:    "dashboard",
+				OccurredAt:    pgtype.Timestamptz{Time: time.Date(2026, 5, 8, 4, 0, 0, 0, time.UTC), Valid: true},
+				SourceSurface: "web_admin",
+				ActorRole:     pgtype.Text{String: "admin", Valid: true},
+				Result:        pgtype.Text{String: "success", Valid: true},
+			},
+			{
+				EventName:     "security.forbidden",
+				EventGroup:    "security",
+				OccurredAt:    pgtype.Timestamptz{Time: time.Date(2026, 5, 9, 1, 0, 0, 0, time.UTC), Valid: true},
+				SourceSurface: "core_api",
+				Result:        pgtype.Text{String: "blocked", Valid: true},
+			},
+		},
+	}
+	svc := newTestInternalAnalytics(store)
+
+	result, err := svc.RollupAndCleanup(context.Background(), InternalAnalyticsRollupCleanupInput{
+		StartAt:  startAt,
+		EndAt:    endAt,
+		CutoffAt: cutoffAt,
+		Limit:    500,
+	})
+	if err != nil {
+		t.Fatalf("RollupAndCleanup() error = %v", err)
+	}
+	if result.EventsScanned != 3 || result.AggregatesUpserted != 2 || result.ExpiredEventsDeleted != 4 {
+		t.Fatalf("rollup result = %+v, want scanned/upserted/deleted counts", result)
+	}
+	if len(store.rollupCalls) != 1 || !store.rollupCalls[0].StartAt.Time.Equal(startAt) || !store.rollupCalls[0].EndAt.Time.Equal(endAt) || store.rollupCalls[0].LimitCount != 500 {
+		t.Fatalf("rollup query = %+v, want bounded requested window", store.rollupCalls)
+	}
+	if len(store.upsertCalls) != 2 {
+		t.Fatalf("upsert calls = %d, want 2 aggregate keys", len(store.upsertCalls))
+	}
+	first := store.upsertCalls[0]
+	if first.EventName != "dashboard.view" || first.EventCount != 2 || first.Role != "admin" || first.Result != "success" {
+		t.Fatalf("first aggregate upsert = %+v, want grouped dashboard count", first)
+	}
+	if strings.Contains(string(first.Metadata), "raw_user_agent") {
+		t.Fatalf("aggregate metadata must stay empty/safe, got %s", string(first.Metadata))
+	}
+	if len(store.deleteCalls) != 1 || !store.deleteCalls[0].Time.Equal(cutoffAt) {
+		t.Fatalf("delete calls = %+v, want explicit cutoff", store.deleteCalls)
+	}
+}
+
+func TestInternalAnalyticsExpiredBacklogSummaryIsAggregateOnly(t *testing.T) {
+	oldest := time.Date(2026, 5, 1, 2, 0, 0, 0, time.UTC)
+	store := &fakeInternalAnalyticsStore{
+		backlogRow: db.GetInternalAnalyticsExpiredEventBacklogRow{
+			ExpiredCount:    9,
+			OldestExpiredAt: pgtype.Timestamptz{Time: oldest, Valid: true},
+		},
+	}
+	svc := newTestInternalAnalytics(store)
+
+	backlog, err := svc.ExpiredBacklog(context.Background())
+	if err != nil {
+		t.Fatalf("ExpiredBacklog() error = %v", err)
+	}
+	if backlog.ExpiredEventBacklogCount != 9 || backlog.OldestExpiredEventAt == nil || !backlog.OldestExpiredEventAt.Equal(oldest) {
+		t.Fatalf("backlog = %+v, want aggregate expired count and oldest date", backlog)
+	}
+	if len(store.backlogCalls) != 1 || !store.backlogCalls[0].Time.Equal(fixedAnalyticsNow()) {
+		t.Fatalf("backlog calls = %+v, want current clock cutoff", store.backlogCalls)
+	}
+}
+
+func TestInternalAnalyticsRejectsExpandedSensitiveMetadataKeys(t *testing.T) {
+	tests := []string{
+		"token",
+		"Authorization",
+		"bearer",
+		"cookie",
+		"NIP",
+		"nisn",
+		"nik",
+		"deviceFingerprint",
+		"device-fingerprint",
+		"rawUserAgent",
+		"raw_user_agent",
+		"query_string",
+		"rawQuery",
+		"full_url",
+	}
+	for _, key := range tests {
+		t.Run(key, func(t *testing.T) {
+			store := &fakeInternalAnalyticsStore{}
+			svc := newTestInternalAnalytics(store)
+			_, err := svc.CreateEvent(context.Background(), CreateInternalAnalyticsEventInput{
+				EventName:     "security.validation_rejected",
+				EventGroup:    "security",
+				SourceSurface: "core_api",
+				Metadata:      map[string]any{key: "must-not-store"},
+			})
+			expectInternalAnalyticsValidationCode(t, err, InternalAnalyticsErrForbiddenMetadataKey)
+			if len(store.calls) != 0 {
+				t.Fatalf("store called for forbidden metadata key %q", key)
+			}
+		})
 	}
 }

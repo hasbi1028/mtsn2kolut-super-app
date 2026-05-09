@@ -325,6 +325,7 @@ export function requiredPermissionsForPath(pathname: string, method: string): st
 	const settings = settingsPermission(pathname);
 	if (settings) return settings;
 	if (matchesPathSegment(pathname, '/api/internal-analytics/events')) return [];
+	if (matchesPathSegment(pathname, '/api/internal-analytics/export')) return ['analytics.export'];
 	if (matchesPathSegment(pathname, '/api/internal-analytics')) return isReadMethod(method) ? ['analytics.read'] : ['analytics.read'];
 	if (matchesPathSegment(pathname, '/api/rbac')) return isReadMethod(method) ? ['roles.read'] : ['roles.manage'];
 	if (matchesPathSegment(pathname, '/parents') || matchesPathSegment(pathname, '/api/parents')) return isReadMethod(method) ? ['parents.read'] : ['parents.manage'];
