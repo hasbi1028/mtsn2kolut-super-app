@@ -1,6 +1,6 @@
 # RBAC Permission Catalog — Tahap 9
 
-Dokumen ini adalah katalog operasional permission dinamis MTsN 2 Kolut setelah Dynamic RBAC Tahap 9. Sumber teknis utama tetap migration `services/core-api/db/migrations/069_dynamic_rbac_foundation.sql` plus seed tambahan staged setelahnya seperti `076_profile_change_review_permission.sql`, `081_student_parent_account_portal.sql`, dan `082_employee_rbac_permissions.sql`; file ini mengunci daftar agar operator dan developer memakai kode permission yang sama.
+Dokumen ini adalah katalog operasional permission dinamis MTsN 2 Kolut setelah Dynamic RBAC Tahap 9. Sumber teknis utama tetap migration `services/core-api/db/migrations/069_dynamic_rbac_foundation.sql` plus seed tambahan staged setelahnya seperti `076_profile_change_review_permission.sql`, `081_student_parent_account_portal.sql`, `082_employee_rbac_permissions.sql`, dan `084_internal_analytics_permissions.sql`; file ini mengunci daftar agar operator dan developer memakai kode permission yang sama.
 
 ## Prinsip Stabilization
 
@@ -41,6 +41,11 @@ Legacy role fallback masih aktif untuk compatibility backend tertentu. UI baru t
 ### audit
 
 - `audit.read` — Melihat audit log sistem.
+
+### analytics
+
+- `analytics.read` — Melihat dashboard analytics internal yang hanya berisi agregat.
+- `analytics.security_read` — Melihat sinyal keamanan analytics yang sudah diagregasi.
 
 ### bank_soal
 

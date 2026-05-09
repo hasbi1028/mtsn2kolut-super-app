@@ -142,11 +142,64 @@ func TestInternalAnalyticsIngestionRouteStaysJWTProtected(t *testing.T) {
 	}
 }
 
-func TestInternalAnalyticsPhase2DoesNotAddWebAdminBFFOrTracking(t *testing.T) {
+func TestInternalAnalyticsReadRoutesUseAnalyticsReadPermission(t *testing.T) {
+	raw, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	source := string(raw)
+	jwtStart := strings.Index(source, "r.Use(mw.JWT(jwtSecret")
+	workerStart := strings.Index(source, "r.Use(mw.WorkerKey(workerKey))")
+	if jwtStart < 0 || workerStart <= jwtStart {
+		t.Fatalf("authenticated route block not found")
+	}
+	authenticatedBlock := source[jwtStart:workerStart]
+	if !strings.Contains(source, `requireAnalyticsRead := mw.RequireAnyPermissionOrRole([]string{"analytics.read"}, "admin")`) {
+		t.Fatalf("internal analytics read routes must define an analytics.read permission-first guard with admin fallback")
+	}
+	for _, want := range []string{
+		`r.With(requireAnalyticsRead).Get("/api/internal-analytics/summary", internalAnalyticsH.Summary)`,
+		`r.With(requireAnalyticsRead).Get("/api/internal-analytics/daily", internalAnalyticsH.ListDailyAggregates)`,
+	} {
+		if !strings.Contains(authenticatedBlock, want) {
+			t.Fatalf("internal analytics read route contract missing %q inside JWT block", want)
+		}
+	}
+	if strings.Contains(source[:jwtStart], "/api/internal-analytics/summary") || strings.Contains(source[:jwtStart], "/api/internal-analytics/daily") {
+		t.Fatalf("internal analytics read routes must not be exposed before JWT middleware")
+	}
+}
+
+func TestInternalAnalyticsPhase3BFFIsOnlyInternalWebAdminCollector(t *testing.T) {
+	routePath := filepath.Clean("../../../../apps/web-admin/src/routes/api/internal-analytics/events/+server.ts")
+	raw, err := os.ReadFile(routePath)
+	if err != nil {
+		t.Fatalf("phase 3 must add Web Admin BFF proxy route: %v", err)
+	}
+	source := string(raw)
+	required := []string{
+		"proxy(event).post('/api/internal-analytics/events'",
+		"readRequestJson",
+		"event.locals.user",
+	}
+	for _, want := range required {
+		if !strings.Contains(source, want) {
+			t.Fatalf("internal analytics BFF route missing %q", want)
+		}
+	}
+	forbidden := []string{"X-Internal-Key", "metadata)", "console.log", "navigator.sendBeacon", "sendBeacon("}
+	for _, needle := range forbidden {
+		if strings.Contains(source, needle) {
+			t.Fatalf("internal analytics BFF route must not contain %q", needle)
+		}
+	}
+}
+
+func TestInternalAnalyticsFrontendDoesNotAddPublicCollectorOrThirdPartyTracking(t *testing.T) {
 	root := filepath.Clean("../../../../apps/web-admin/src")
 	forbiddenNeedles := []string{
-		"/api/internal-analytics/events",
-		"internal-analytics/events",
+		"/api/public/internal-analytics",
+		"/api/public/analytics",
 		"navigator.sendBeacon",
 		"sendBeacon(",
 		"posthog",
@@ -168,10 +221,13 @@ func TestInternalAnalyticsPhase2DoesNotAddWebAdminBFFOrTracking(t *testing.T) {
 		if err != nil {
 			return err
 		}
+		if strings.Contains(filepath.ToSlash(path), "/routes/api/internal-analytics/events/+server.ts") {
+			return nil
+		}
 		source := string(raw)
 		for _, needle := range forbiddenNeedles {
 			if strings.Contains(source, needle) {
-				t.Fatalf("phase 2 must not add Web Admin BFF/frontend tracking; found %q in %s", needle, path)
+				t.Fatalf("internal analytics must not add public collector or third-party tracking; found %q in %s", needle, path)
 			}
 		}
 		return nil

@@ -15,6 +15,7 @@
 	import OperationStatusPanel from '$lib/components/OperationStatusPanel.svelte';
 	import { confirmChallenge } from '$lib/confirm-dialog';
 	import { readClientApiData } from '$lib/client/api';
+	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
 
 	interface QueueStats {
 		queued: number; running: number; success: number;
@@ -249,6 +250,10 @@
 	}
 
 	onMount(() => {
+		void trackInternalAnalyticsEvent('pusaka.dashboard_view', {
+			pathname: window.location.pathname,
+			metadata: { page_key: 'pusaka' }
+		});
 		void loadOverview();
 		const itv = setInterval(() => void refreshOverview(false), 10_000);
 		return () => clearInterval(itv);

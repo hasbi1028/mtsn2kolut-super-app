@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,8 @@ type InternalAnalytics struct {
 
 type internalAnalyticsService interface {
 	CreateEvent(ctx context.Context, in service.CreateInternalAnalyticsEventInput) (service.InternalAnalyticsEventReceipt, error)
+	ListDailyAggregates(ctx context.Context, in service.InternalAnalyticsDailyQuery) (service.InternalAnalyticsDailyResult, error)
+	Summary(ctx context.Context, in service.InternalAnalyticsSummaryQuery) (service.InternalAnalyticsSummary, error)
 }
 
 func NewInternalAnalytics(svc *service.InternalAnalytics) *InternalAnalytics {
@@ -82,6 +85,87 @@ func (h *InternalAnalytics) CreateEvent(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	api.Created(w, row)
+}
+
+func (h *InternalAnalytics) ListDailyAggregates(w http.ResponseWriter, r *http.Request) {
+	query, ok := parseInternalAnalyticsDailyQuery(w, r)
+	if !ok {
+		return
+	}
+	result, err := h.svc.ListDailyAggregates(r.Context(), query)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, result)
+}
+
+func (h *InternalAnalytics) Summary(w http.ResponseWriter, r *http.Request) {
+	days, ok := parseInternalAnalyticsPositiveInt(w, r, "days", 30, 180)
+	if !ok {
+		return
+	}
+	result, err := h.svc.Summary(r.Context(), service.InternalAnalyticsSummaryQuery{
+		Days:       int32(days),
+		EventGroup: strings.TrimSpace(r.URL.Query().Get("event_group")),
+	})
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, result)
+}
+
+func parseInternalAnalyticsDailyQuery(w http.ResponseWriter, r *http.Request) (service.InternalAnalyticsDailyQuery, bool) {
+	days, ok := parseInternalAnalyticsPositiveInt(w, r, "days", 30, 180)
+	if !ok {
+		return service.InternalAnalyticsDailyQuery{}, false
+	}
+	limit, ok := parseInternalAnalyticsPositiveInt(w, r, "limit", 500, 10000)
+	if !ok {
+		return service.InternalAnalyticsDailyQuery{}, false
+	}
+	offset, ok := parseInternalAnalyticsNonNegativeInt(w, r, "offset", 0, 100000)
+	if !ok {
+		return service.InternalAnalyticsDailyQuery{}, false
+	}
+	values := r.URL.Query()
+	return service.InternalAnalyticsDailyQuery{
+		EventGroup:    strings.TrimSpace(values.Get("event_group")),
+		EventName:     strings.TrimSpace(values.Get("event_name")),
+		SourceSurface: strings.TrimSpace(values.Get("source_surface")),
+		Role:          strings.TrimSpace(values.Get("role")),
+		Result:        strings.TrimSpace(values.Get("result")),
+		Days:          int32(days),
+		Limit:         int32(limit),
+		Offset:        int32(offset),
+	}, true
+}
+
+func parseInternalAnalyticsPositiveInt(w http.ResponseWriter, r *http.Request, key string, fallback int, max int) (int, bool) {
+	raw := strings.TrimSpace(r.URL.Query().Get(key))
+	if raw == "" {
+		return fallback, true
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 || value > max {
+		api.BadRequest(w, key+" tidak valid")
+		return 0, false
+	}
+	return value, true
+}
+
+func parseInternalAnalyticsNonNegativeInt(w http.ResponseWriter, r *http.Request, key string, fallback int, max int) (int, bool) {
+	raw := strings.TrimSpace(r.URL.Query().Get(key))
+	if raw == "" {
+		return fallback, true
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 || value > max {
+		api.BadRequest(w, key+" tidak valid")
+		return 0, false
+	}
+	return value, true
 }
 
 func decodeInternalAnalyticsJSON(w http.ResponseWriter, r *http.Request, body *internalAnalyticsEventRequest) (map[string]any, bool) {

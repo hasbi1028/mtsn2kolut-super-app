@@ -17,10 +17,18 @@ import (
 )
 
 type fakeInternalAnalyticsService struct {
-	input  service.CreateInternalAnalyticsEventInput
-	row    service.InternalAnalyticsEventReceipt
-	err    error
-	called bool
+	input         service.CreateInternalAnalyticsEventInput
+	dailyInput    service.InternalAnalyticsDailyQuery
+	summaryInput  service.InternalAnalyticsSummaryQuery
+	row           service.InternalAnalyticsEventReceipt
+	dailyResult   service.InternalAnalyticsDailyResult
+	summary       service.InternalAnalyticsSummary
+	err           error
+	dailyErr      error
+	summaryErr    error
+	called        bool
+	dailyCalled   bool
+	summaryCalled bool
 }
 
 func (f *fakeInternalAnalyticsService) CreateEvent(_ context.Context, in service.CreateInternalAnalyticsEventInput) (service.InternalAnalyticsEventReceipt, error) {
@@ -39,6 +47,45 @@ func (f *fakeInternalAnalyticsService) CreateEvent(_ context.Context, in service
 		}
 	}
 	return f.row, nil
+}
+
+func (f *fakeInternalAnalyticsService) ListDailyAggregates(_ context.Context, in service.InternalAnalyticsDailyQuery) (service.InternalAnalyticsDailyResult, error) {
+	f.dailyCalled = true
+	f.dailyInput = in
+	if f.dailyErr != nil {
+		return service.InternalAnalyticsDailyResult{}, f.dailyErr
+	}
+	if f.dailyResult.Items == nil {
+		f.dailyResult = service.InternalAnalyticsDailyResult{
+			Days:       in.Days,
+			EventGroup: in.EventGroup,
+			Items: []service.InternalAnalyticsDailyItem{{
+				AggregateDate: "2026-05-09",
+				EventGroup:    "dashboard",
+				EventName:     "dashboard.view",
+				SourceSurface: "web_admin",
+				Count:         3,
+			}},
+		}
+	}
+	return f.dailyResult, nil
+}
+
+func (f *fakeInternalAnalyticsService) Summary(_ context.Context, in service.InternalAnalyticsSummaryQuery) (service.InternalAnalyticsSummary, error) {
+	f.summaryCalled = true
+	f.summaryInput = in
+	if f.summaryErr != nil {
+		return service.InternalAnalyticsSummary{}, f.summaryErr
+	}
+	if f.summary.TotalCount == 0 {
+		f.summary = service.InternalAnalyticsSummary{
+			Days:       in.Days,
+			TotalCount: 5,
+			Groups:     []service.InternalAnalyticsGroupSummary{{EventGroup: "dashboard", Count: 5}},
+			TopEvents:  []service.InternalAnalyticsEventSummary{{EventName: "dashboard.view", EventGroup: "dashboard", Count: 5}},
+		}
+	}
+	return f.summary, nil
 }
 
 func analyticsRequest(body string) *http.Request {
@@ -173,5 +220,66 @@ func TestInternalAnalyticsHandlerMapsValidationErrorsSafely(t *testing.T) {
 	var validationErr *service.InternalAnalyticsValidationError
 	if !errors.As(fake.err, &validationErr) {
 		t.Fatalf("test setup error is not validation error")
+	}
+}
+
+func TestInternalAnalyticsHandlerListsDailyAggregatesFromQuery(t *testing.T) {
+	fake := &fakeInternalAnalyticsService{}
+	h := &InternalAnalytics{svc: fake}
+	req := analyticsRequest(``)
+	req = httptest.NewRequest(http.MethodGet, "/api/internal-analytics/daily?event_group=dashboard&days=14&limit=25", nil)
+	req = withClaims(req, jwt.MapClaims{"roles": []any{"admin"}, "permissions": []any{"analytics.read"}})
+	rec := httptest.NewRecorder()
+
+	h.ListDailyAggregates(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if !fake.dailyCalled {
+		t.Fatalf("daily service was not called")
+	}
+	if fake.dailyInput.EventGroup != "dashboard" || fake.dailyInput.Days != 14 || fake.dailyInput.Limit != 25 {
+		t.Fatalf("daily input = %+v, want query filters", fake.dailyInput)
+	}
+	if strings.Contains(rec.Body.String(), "metadata") || strings.Contains(rec.Body.String(), "raw_user_agent") {
+		t.Fatalf("daily response leaked raw metadata: %s", rec.Body.String())
+	}
+}
+
+func TestInternalAnalyticsHandlerRejectsInvalidDailyQuery(t *testing.T) {
+	fake := &fakeInternalAnalyticsService{}
+	h := &InternalAnalytics{svc: fake}
+	req := httptest.NewRequest(http.MethodGet, "/api/internal-analytics/daily?days=0", nil)
+	req = withClaims(req, jwt.MapClaims{"roles": []any{"admin"}, "permissions": []any{"analytics.read"}})
+	rec := httptest.NewRecorder()
+
+	h.ListDailyAggregates(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.dailyCalled {
+		t.Fatalf("daily service should not be called for invalid query")
+	}
+}
+
+func TestInternalAnalyticsHandlerReturnsSummary(t *testing.T) {
+	fake := &fakeInternalAnalyticsService{}
+	h := &InternalAnalytics{svc: fake}
+	req := httptest.NewRequest(http.MethodGet, "/api/internal-analytics/summary?days=30", nil)
+	req = withClaims(req, jwt.MapClaims{"roles": []any{"admin"}, "permissions": []any{"analytics.read"}})
+	rec := httptest.NewRecorder()
+
+	h.Summary(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if !fake.summaryCalled || fake.summaryInput.Days != 30 {
+		t.Fatalf("summary input = %+v, called=%v; want days query", fake.summaryInput, fake.summaryCalled)
+	}
+	if strings.Contains(rec.Body.String(), "metadata") || strings.Contains(rec.Body.String(), "actor_user_id") {
+		t.Fatalf("summary response leaked raw event fields: %s", rec.Body.String())
 	}
 }

@@ -66,6 +66,30 @@ describe('internal analytics phase 0 documentation contract', () => {
 		}
 	});
 
+	it('documents Phase 3 through Phase 6 implementation boundaries', () => {
+		for (const phrase of [
+			'Fase 3 - BFF proxy contract',
+			'/api/internal-analytics/events',
+			'forward JWT',
+			'Fase 4 - Public website instrumentation',
+			'public runtime deferred',
+			'fail-closed',
+			'tidak membuka unauthenticated public collector',
+			'Fase 5 - Internal app instrumentation',
+			'source_surface web_admin',
+			'tidak mengirim raw URL query',
+			'tidak mengirim raw user agent',
+			'Fase 6 - Dashboard read model',
+			'/api/internal-analytics/summary',
+			'/api/internal-analytics/daily',
+			'analytics.read',
+			'tidak expose raw event metadata',
+			'tidak menambahkan raw event export'
+		]) {
+			expect(analyticsPlanDoc.toLowerCase()).toContain(phrase.toLowerCase());
+		}
+	});
+
 	it('keeps the event allowlist and forbidden sensitive keys explicit', () => {
 		for (const phrase of [
 			'event allowlist',

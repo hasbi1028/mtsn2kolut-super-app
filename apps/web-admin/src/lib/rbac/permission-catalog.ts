@@ -20,6 +20,8 @@ export const RBAC_PERMISSION_CATALOG = [
 	{ code: 'asesmen.score', module: 'asesmen', action: 'score', description: 'Mengoreksi/menilai Asesmen.' },
 	{ code: 'asesmen.session_manage', module: 'asesmen', action: 'session_manage', description: 'Mengelola sesi Asesmen.' },
 	{ code: 'audit.read', module: 'audit', action: 'read', description: 'Melihat audit log sistem.' },
+	{ code: 'analytics.read', module: 'analytics', action: 'read', description: 'Melihat dashboard analytics internal yang hanya berisi agregat.' },
+	{ code: 'analytics.security_read', module: 'analytics', action: 'security_read', description: 'Melihat sinyal keamanan analytics yang sudah diagregasi.' },
 	{ code: 'bank_soal.analytics', module: 'bank_soal', action: 'analytics', description: 'Melihat analisis Bank Soal.' },
 	{ code: 'bank_soal.create', module: 'bank_soal', action: 'create', description: 'Membuat soal Bank Soal.' },
 	{ code: 'bank_soal.delete', module: 'bank_soal', action: 'delete', description: 'Menghapus soal.' },

@@ -1,6 +1,8 @@
 # Rencana Internal Analytics MTsN 2 Kolaka Utara
 
-Status: Tahap/Fase 2, Core API ingestion minimum. Fase 0 menetapkan arah, batas, dan readiness: Fase 0 tidak menambahkan runtime ingestion table, Fase 0 tidak menambahkan migration, API handler, BFF route, tracking frontend, dependency, deploy, atau restart PM2. Fase 1 menambahkan schema analytics internal melalui migration draft dan sqlc query contract saja. Fase 2 menambahkan endpoint ingestion minimum di Core API, tetapi tetap tidak menjalankan migration live, tidak deploy, tidak restart PM2, tidak menambahkan BFF route, dan tidak menambahkan frontend tracking.
+Status: Tahap/Fase 6, dashboard read model internal. Fase 0 menetapkan arah, batas, dan readiness. Fase 1 menambahkan schema analytics internal melalui migration draft dan sqlc query contract saja. Fase 2 menambahkan endpoint ingestion minimum di Core API. Fase 3 menambahkan BFF proxy internal. Fase 4 menambahkan scaffold public website yang fail-closed. Fase 5 menambahkan instrumentasi internal web-admin bernilai tinggi. Fase 6 menambahkan read model agregat dan halaman dashboard internal. Tidak ada deploy, live migration, restart PM2, public unauthenticated collector, raw event export, atau dependency analytics pihak ketiga.
+
+Catatan baseline: Fase 0 tidak menambahkan runtime ingestion table dan Fase 0 tidak menambahkan migration. Batas itu sudah berubah secara staged pada Fase 1-6 melalui migration draft, endpoint internal, BFF proxy internal, helper fail-closed, instrumentasi internal, dan dashboard agregat.
 
 ## Prinsip Utama
 
@@ -81,6 +83,66 @@ Batas Fase 2:
 - tidak menjalankan migration live.
 - tidak deploy.
 - tidak restart PM2.
+
+## Catatan Implementasi Fase 3-6
+
+### Fase 3 - BFF proxy contract
+
+Fase 3 menambahkan route BFF `POST /api/internal-analytics/events` di `apps/web-admin` sebagai proxy tipis ke Core API `POST /api/internal-analytics/events`.
+
+Kontrak runtime:
+
+- route BFF membutuhkan session melalui `event.locals.user`; unauthenticated request ditolak `401` sebelum proxy.
+- BFF membaca JSON dengan body cap kecil dan meneruskan payload ke Core API tanpa direct DB access.
+- BFF menggunakan pola proxy existing sehingga internal event melakukan forward JWT user asli, bukan `X-Internal-Key`.
+- BFF tidak mencatat raw metadata, tidak menambahkan public unauthenticated route, dan tidak memakai third-party script.
+
+### Fase 4 - Public website instrumentation
+
+Core API ingestion masih JWT protected. Karena itu public runtime deferred dan fail-closed sampai kebijakan public collector disetujui.
+
+Kontrak Fase 4:
+
+- helper public hanya membuat preview payload tersanitasi untuk event allowlisted.
+- public helper tidak mengirim request jaringan.
+- tidak membuka unauthenticated public collector.
+- tidak ada third-party analytics package, script, pixel, atau browser beacon.
+- public payload tidak membawa raw URL query, raw user agent, token, cookie, NIK/NIP/NISN, device fingerprint, atau isi form.
+
+### Fase 5 - Internal app instrumentation
+
+Fase 5 menambahkan helper `source_surface web_admin` dan instrumentasi minimal pada halaman bernilai tinggi:
+
+- `dashboard.view` pada dashboard utama.
+- `bank_soal.list_view` pada root Bank Soal.
+- `asesmen.hub_view` pada hub Asesmen.
+- `pusaka.dashboard_view` pada dashboard PUSAKA.
+- `users.list_view` pada Manajemen User.
+- `rbac.roles_view` pada Manajemen RBAC.
+
+Kontrak helper:
+
+- hanya event allowlisted yang dikirim.
+- analytics failure fail-silent dan tidak merusak UI.
+- tidak mengirim raw URL query, raw user agent, token, cookie, NIP/NISN/NIK, device fingerprint, PUSAKA credential, request body, response body, SQL, atau stack trace.
+- tidak mengirim raw user agent dari browser.
+- instrumentasi berjalan dari `onMount`, bukan SSR side effect.
+
+### Fase 6 - Dashboard read model
+
+Fase 6 menambahkan Core API read endpoint agregat:
+
+- `GET /api/internal-analytics/summary`
+- `GET /api/internal-analytics/daily`
+
+Keduanya membaca agregat dari `internal_analytics_daily_aggregates`, bukan raw event rows. Web Admin menambahkan BFF GET route dengan path yang sama dan halaman `/settings/analytics` untuk menampilkan summary, top event, dan tren harian.
+
+Guard dan batas:
+
+- read endpoint memakai `analytics.read` dengan fallback admin transisi.
+- `analytics.security_read` disiapkan sebagai permission terpisah untuk panel security bila nanti diekspos.
+- dashboard tidak expose raw event metadata, actor user id, raw event body, atau raw event export.
+- Fase 6 tidak menambahkan raw event export, public collector, deploy, live migration, atau restart PM2.
 
 ## RBAC Permissions Yang Direncanakan
 
@@ -167,18 +229,18 @@ Fase 0 ini hanya membuat kontrak. Tahap berikutnya wajib tetap kecil dan dapat d
    - Tambahkan endpoint ingestion internal untuk event allowlisted.
    - Validasi metadata per event group dan tolak forbidden sensitive keys.
    - Endpoint awal bersifat JWT protected, memakai body cap, dan belum membuka public unauthenticated ingestion.
-3. **Phase 3 - BFF proxy contract**
+3. **Fase 3 - BFF proxy contract**
    - Tambahkan route BFF yang meneruskan event ke Core API.
    - Forward JWT user asli untuk internal app event.
    - Public event tetap minim identitas.
-4. **Phase 4 - Public website instrumentation**
+4. **Fase 4 - Public website instrumentation**
    - Instrumentasi page view, CTA, dan download publik yang sudah allowlisted.
    - Tidak ada third-party script.
    - Pastikan consent/copy publik sesuai kebutuhan sekolah.
-5. **Phase 5 - Internal app instrumentation**
+5. **Fase 5 - Internal app instrumentation**
    - Instrumentasi dashboard, bank soal, asesmen, PUSAKA, users/RBAC, dan security event sesuai katalog.
    - Mulai dari event agregat bernilai tinggi, bukan semua klik.
-6. **Phase 6 - Dashboard read model**
+6. **Fase 6 - Dashboard read model**
    - Tambahkan API read aggregate dan dashboard Web Admin.
    - Terapkan `analytics.read` dan `analytics.security_read`.
    - Tampilkan skeleton/loading sesuai baseline UI.

@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { RouteId } from '$app/types';
 	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
+	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
 
 	type AppRole = 'admin' | 'guru' | 'staf' | 'kesiswaan' | 'siswa' | 'ortu';
 	type KnownRole = AppRole | (string & {});
@@ -170,6 +172,14 @@
 	function taskPriority(task: TaskCard, role: LauncherRole | undefined): number {
 		return role ? (task.priority[role] ?? 99) : 99;
 	}
+
+	onMount(() => {
+		void trackInternalAnalyticsEvent('asesmen.hub_view', {
+			pathname: window.location.pathname,
+			role: launcherRole,
+			metadata: { page_key: 'asesmen' }
+		});
+	});
 </script>
 
 <svelte:head>

@@ -141,6 +141,11 @@ describe('sidebar assessment configuration', () => {
 		});
 		expect(byHref.get('/settings/user-change-requests')?.permissions).toEqual(['profile_changes.review']);
 		expect(byHref.get('/settings/audit-logs')?.permissions).toEqual(['audit.read']);
+		expect(byHref.get('/settings/analytics')).toMatchObject({
+			label: 'Analytics Internal',
+			roles: ['admin'],
+			permissions: ['analytics.read']
+		});
 		expect(byHref.get('/settings/school-profile')?.permissions).toEqual(['settings.school_profile']);
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/tambah')?.permissions).toEqual(['bank_soal.create']);
 		expect(bankSoalItems.find((item) => item.href === '/bank-soal/verifikasi')?.permissions).toEqual(['bank_soal.review']);

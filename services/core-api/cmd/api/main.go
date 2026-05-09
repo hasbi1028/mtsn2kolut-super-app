@@ -226,6 +226,7 @@ func main() {
 	requireRolesRead := mw.RequirePermission("roles.read")
 	requireRolesManage := mw.RequirePermission("roles.manage")
 	requireAuditRead := mw.RequirePermission("audit.read")
+	requireAnalyticsRead := mw.RequireAnyPermissionOrRole([]string{"analytics.read"}, "admin")
 	requireSchoolProfileSettings := mw.RequirePermission("settings.school_profile")
 	requireEmployeesRead := mw.RequireAnyPermissionOrRole([]string{"employees.read", "employees.manage"}, "admin")
 	requireEmployeesManage := mw.RequireAnyPermissionOrRole([]string{"employees.manage"}, "admin")
@@ -255,6 +256,8 @@ func main() {
 		r.Post("/api/notifications/read-all", notificationH.MarkAllRead)
 		r.Post("/api/notifications/{id}/read", notificationH.MarkRead)
 		r.Post("/api/internal-analytics/events", internalAnalyticsH.CreateEvent)
+		r.With(requireAnalyticsRead).Get("/api/internal-analytics/summary", internalAnalyticsH.Summary)
+		r.With(requireAnalyticsRead).Get("/api/internal-analytics/daily", internalAnalyticsH.ListDailyAggregates)
 		r.Get("/api/school-profile", settH.SchoolProfile)
 		r.With(requireSchoolProfileSettings).Put("/api/school-profile", settH.UpdateSchoolProfile)
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -26,6 +27,7 @@ const (
 
 type internalAnalyticsStore interface {
 	CreateInternalAnalyticsEvent(ctx context.Context, arg db.CreateInternalAnalyticsEventParams) (db.InternalAnalyticsEvent, error)
+	ListInternalAnalyticsDailyAggregates(ctx context.Context, arg db.ListInternalAnalyticsDailyAggregatesParams) ([]db.InternalAnalyticsDailyAggregate, error)
 }
 
 type InternalAnalytics struct {
@@ -59,6 +61,59 @@ type InternalAnalyticsEventReceipt struct {
 	EventGroup         string    `json:"event_group"`
 	OccurredAt         time.Time `json:"occurred_at"`
 	RetentionExpiresAt time.Time `json:"retention_expires_at"`
+}
+
+type InternalAnalyticsDailyQuery struct {
+	EventGroup    string
+	EventName     string
+	SourceSurface string
+	Role          string
+	Result        string
+	Days          int32
+	Limit         int32
+	Offset        int32
+}
+
+type InternalAnalyticsSummaryQuery struct {
+	Days       int32
+	EventGroup string
+}
+
+type InternalAnalyticsDailyResult struct {
+	Days          int32                        `json:"days"`
+	EventGroup    string                       `json:"event_group,omitempty"`
+	EventName     string                       `json:"event_name,omitempty"`
+	SourceSurface string                       `json:"source_surface,omitempty"`
+	Items         []InternalAnalyticsDailyItem `json:"items"`
+}
+
+type InternalAnalyticsDailyItem struct {
+	AggregateDate string `json:"aggregate_date"`
+	EventGroup    string `json:"event_group"`
+	EventName     string `json:"event_name"`
+	SourceSurface string `json:"source_surface"`
+	Role          string `json:"role,omitempty"`
+	Result        string `json:"result,omitempty"`
+	Count         int64  `json:"count"`
+}
+
+type InternalAnalyticsSummary struct {
+	Days       int32                           `json:"days"`
+	EventGroup string                          `json:"event_group,omitempty"`
+	TotalCount int64                           `json:"total_count"`
+	Groups     []InternalAnalyticsGroupSummary `json:"groups"`
+	TopEvents  []InternalAnalyticsEventSummary `json:"top_events"`
+}
+
+type InternalAnalyticsGroupSummary struct {
+	EventGroup string `json:"event_group"`
+	Count      int64  `json:"count"`
+}
+
+type InternalAnalyticsEventSummary struct {
+	EventName  string `json:"event_name"`
+	EventGroup string `json:"event_group"`
+	Count      int64  `json:"count"`
 }
 
 type InternalAnalyticsValidationError struct {
@@ -263,6 +318,94 @@ func (s *InternalAnalytics) CreateEvent(ctx context.Context, in CreateInternalAn
 	return mapInternalAnalyticsReceipt(row), nil
 }
 
+func (s *InternalAnalytics) ListDailyAggregates(ctx context.Context, in InternalAnalyticsDailyQuery) (InternalAnalyticsDailyResult, error) {
+	if s == nil || s.q == nil {
+		return InternalAnalyticsDailyResult{}, fmt.Errorf("internal analytics store unavailable")
+	}
+	query := normalizeInternalAnalyticsDailyQuery(in)
+	endDate := internalAnalyticsDateOnly(s.clockNow())
+	startDate := endDate.AddDate(0, 0, -int(query.Days-1))
+	rows, err := s.q.ListInternalAnalyticsDailyAggregates(ctx, db.ListInternalAnalyticsDailyAggregatesParams{
+		StartDate:     pgtype.Date{Time: startDate, Valid: true},
+		EndDate:       pgtype.Date{Time: endDate, Valid: true},
+		EventGroup:    query.EventGroup,
+		EventName:     query.EventName,
+		SourceSurface: query.SourceSurface,
+		Role:          query.Role,
+		Result:        query.Result,
+		OffsetCount:   query.Offset,
+		LimitCount:    query.Limit,
+	})
+	if err != nil {
+		return InternalAnalyticsDailyResult{}, err
+	}
+	items := make([]InternalAnalyticsDailyItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, mapInternalAnalyticsDailyItem(row))
+	}
+	return InternalAnalyticsDailyResult{
+		Days:          query.Days,
+		EventGroup:    query.EventGroup,
+		EventName:     query.EventName,
+		SourceSurface: query.SourceSurface,
+		Items:         items,
+	}, nil
+}
+
+func (s *InternalAnalytics) Summary(ctx context.Context, in InternalAnalyticsSummaryQuery) (InternalAnalyticsSummary, error) {
+	query := InternalAnalyticsDailyQuery{
+		EventGroup: strings.TrimSpace(in.EventGroup),
+		Days:       in.Days,
+		Limit:      10000,
+	}
+	daily, err := s.ListDailyAggregates(ctx, query)
+	if err != nil {
+		return InternalAnalyticsSummary{}, err
+	}
+	groupCounts := map[string]int64{}
+	eventCounts := map[string]InternalAnalyticsEventSummary{}
+	var total int64
+	for _, item := range daily.Items {
+		total += item.Count
+		groupCounts[item.EventGroup] += item.Count
+		current := eventCounts[item.EventName]
+		current.EventName = item.EventName
+		current.EventGroup = item.EventGroup
+		current.Count += item.Count
+		eventCounts[item.EventName] = current
+	}
+	groups := make([]InternalAnalyticsGroupSummary, 0, len(groupCounts))
+	for group, count := range groupCounts {
+		groups = append(groups, InternalAnalyticsGroupSummary{EventGroup: group, Count: count})
+	}
+	sort.Slice(groups, func(i, j int) bool {
+		if groups[i].Count == groups[j].Count {
+			return groups[i].EventGroup < groups[j].EventGroup
+		}
+		return groups[i].Count > groups[j].Count
+	})
+	topEvents := make([]InternalAnalyticsEventSummary, 0, len(eventCounts))
+	for _, item := range eventCounts {
+		topEvents = append(topEvents, item)
+	}
+	sort.Slice(topEvents, func(i, j int) bool {
+		if topEvents[i].Count == topEvents[j].Count {
+			return topEvents[i].EventName < topEvents[j].EventName
+		}
+		return topEvents[i].Count > topEvents[j].Count
+	})
+	if len(topEvents) > 10 {
+		topEvents = topEvents[:10]
+	}
+	return InternalAnalyticsSummary{
+		Days:       daily.Days,
+		EventGroup: daily.EventGroup,
+		TotalCount: total,
+		Groups:     groups,
+		TopEvents:  topEvents,
+	}, nil
+}
+
 func (s *InternalAnalytics) clockNow() time.Time {
 	if s != nil && s.now != nil {
 		return s.now().UTC()
@@ -279,6 +422,42 @@ func defaultInternalAnalyticsRetention(eventGroup string, now time.Time) time.Ti
 	default:
 		return now.Add(180 * 24 * time.Hour)
 	}
+}
+
+func normalizeInternalAnalyticsDailyQuery(in InternalAnalyticsDailyQuery) InternalAnalyticsDailyQuery {
+	days := in.Days
+	if days <= 0 {
+		days = 30
+	}
+	if days > 180 {
+		days = 180
+	}
+	limit := in.Limit
+	if limit <= 0 {
+		limit = 500
+	}
+	if limit > 10000 {
+		limit = 10000
+	}
+	offset := in.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	return InternalAnalyticsDailyQuery{
+		EventGroup:    strings.TrimSpace(in.EventGroup),
+		EventName:     strings.TrimSpace(in.EventName),
+		SourceSurface: strings.TrimSpace(in.SourceSurface),
+		Role:          strings.TrimSpace(in.Role),
+		Result:        strings.TrimSpace(in.Result),
+		Days:          days,
+		Limit:         limit,
+		Offset:        offset,
+	}
+}
+
+func internalAnalyticsDateOnly(value time.Time) time.Time {
+	utc := value.UTC()
+	return time.Date(utc.Year(), utc.Month(), utc.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 func internalAnalyticsText(value string) pgtype.Text {
@@ -302,6 +481,25 @@ func mapInternalAnalyticsReceipt(row db.InternalAnalyticsEvent) InternalAnalytic
 		OccurredAt:         occurredAt,
 		RetentionExpiresAt: retentionExpiresAt,
 	}
+}
+
+func mapInternalAnalyticsDailyItem(row db.InternalAnalyticsDailyAggregate) InternalAnalyticsDailyItem {
+	return InternalAnalyticsDailyItem{
+		AggregateDate: formatInternalAnalyticsDate(row.AggregateDate),
+		EventGroup:    row.EventGroup,
+		EventName:     row.EventName,
+		SourceSurface: row.SourceSurface,
+		Role:          strings.TrimSpace(row.Role),
+		Result:        strings.TrimSpace(row.Result),
+		Count:         row.Count,
+	}
+}
+
+func formatInternalAnalyticsDate(value pgtype.Date) string {
+	if !value.Valid {
+		return ""
+	}
+	return internalAnalyticsDateOnly(value.Time).Format("2006-01-02")
 }
 
 func internalAnalyticsValidation(code, field string) *InternalAnalyticsValidationError {

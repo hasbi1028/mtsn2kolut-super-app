@@ -219,6 +219,76 @@ describe('api proxy route handlers', () => {
 		await expect(res.json()).resolves.toEqual({ username: 'guru.ipa', contact: { phone: '0812' } });
 	});
 
+	it('rejects unauthenticated internal analytics ingestion requests before proxying', async () => {
+		const mod = await import('../../routes/api/internal-analytics/events/+server');
+		const request = new Request('http://localhost/api/internal-analytics/events', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ event_name: 'dashboard.view' })
+		});
+		const event = createEvent({ request });
+
+		const res = await mod.POST(event as never);
+
+		expect(res.status).toBe(401);
+		await expect(res.json()).resolves.toEqual({ error: 'Unauthorized' });
+		expect(readRequestJsonMock).not.toHaveBeenCalled();
+		expect(proxyPostMock).not.toHaveBeenCalled();
+	});
+
+	it('forwards internal analytics ingestion to the JWT-protected Core API path', async () => {
+		const mod = await import('../../routes/api/internal-analytics/events/+server');
+		const request = new Request('http://localhost/api/internal-analytics/events', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				event_name: 'dashboard.view',
+				event_group: 'dashboard',
+				source_surface: 'web_admin',
+				metadata: { page_key: 'dashboard' }
+			})
+		});
+		const event = createEvent({
+			locals: {
+				user: { id: '1', username: 'admin', role: 'admin', roles: ['admin'] }
+			},
+			request
+		});
+		proxyPostMock.mockResolvedValueOnce({ id: 'event-1' });
+
+		const res = await mod.POST(event as never);
+
+		expect(readRequestJsonMock).toHaveBeenCalledWith(request, 16 * 1024);
+		expect(proxyPostMock).toHaveBeenCalledWith('/api/internal-analytics/events', {
+			event_name: 'dashboard.view',
+			event_group: 'dashboard',
+			source_surface: 'web_admin',
+			metadata: { page_key: 'dashboard' }
+		});
+		expect(res.status).toBe(201);
+		await expect(res.json()).resolves.toEqual({ id: 'event-1' });
+	});
+
+	it('forwards internal analytics read endpoints through authenticated BFF routes', async () => {
+		const summary = await import('../../routes/api/internal-analytics/summary/+server');
+		const daily = await import('../../routes/api/internal-analytics/daily/+server');
+		const event = createEvent({
+			locals: {
+				user: { id: '1', username: 'operator', role: '', roles: [], permissions: ['analytics.read'] }
+			},
+			url: new URL('http://localhost/api/internal-analytics/daily?event_group=dashboard&days=14')
+		});
+		proxyGetMock.mockResolvedValueOnce({ total_count: 3 }).mockResolvedValueOnce({ items: [] });
+
+		const summaryRes = await summary.GET(event as never);
+		const dailyRes = await daily.GET(event as never);
+
+		expect(summaryRes.status).toBe(200);
+		expect(dailyRes.status).toBe(200);
+		expect(proxyGetMock).toHaveBeenNthCalledWith(1, '/api/internal-analytics/summary?event_group=dashboard&days=14');
+		expect(proxyGetMock).toHaveBeenNthCalledWith(2, '/api/internal-analytics/daily?event_group=dashboard&days=14');
+	});
+
 	it('rejects account contact updates that try to edit official fields', async () => {
 		const mod = await import('../../routes/api/auth/account/+server');
 		const request = new Request('http://localhost/api/auth/account', {
