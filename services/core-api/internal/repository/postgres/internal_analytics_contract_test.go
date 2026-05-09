@@ -41,7 +41,7 @@ func TestInternalAnalyticsPhase1MigrationContract(t *testing.T) {
 		"retention_expires_at timestamptz not null",
 		"created_at timestamptz not null default now()",
 		"constraint chk_internal_analytics_events_group",
-		"event_group in ('public', 'auth', 'dashboard', 'bank_soal', 'asesmen', 'pusaka', 'users_rbac', 'security')",
+		"event_group in ('public', 'auth', 'dashboard', 'bank_soal', 'asesmen', 'pusaka', 'users', 'rbac', 'security')",
 		"constraint chk_internal_analytics_events_name",
 		"event_name ~ '^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$'",
 		"jsonb_typeof(metadata) = 'object'",
