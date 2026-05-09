@@ -269,6 +269,11 @@
 
 	async function retryDashboard() {
 		dashboardRefreshBusy = true;
+		void trackInternalAnalyticsEvent('dashboard.refresh', {
+			pathname: window.location.pathname,
+			role: roles[0],
+			metadata: { page_key: 'dashboard' }
+		});
 		try {
 			await refreshDashboard();
 		} finally {

@@ -14,18 +14,33 @@
 		internalAnalyticsExportFilename,
 		normalizeInternalAnalyticsOverview,
 		type InternalAnalyticsDailyResult,
+		type InternalAnalyticsDailyItem,
 		type InternalAnalyticsOverview,
 		type InternalAnalyticsSummary
 	} from '$lib/analytics/internal-analytics-dashboard';
+	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
 	import { clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
 
-	let analyticsPromise = $state<Promise<InternalAnalyticsOverview> | null>(null);
+	type AnalyticsTab = 'summary' | 'visitors' | 'modules' | 'security' | 'audit';
+	type AnalyticsDetail = InternalAnalyticsOverview & {
+		publicDaily: InternalAnalyticsDailyResult;
+		adminDaily: InternalAnalyticsDailyResult;
+		securityDaily: InternalAnalyticsDailyResult;
+	};
+
+	let analyticsPromise = $state<Promise<AnalyticsDetail> | null>(null);
+	let activeTab = $state<AnalyticsTab>('summary');
 	let selectedGroup = $state('');
+	let selectedSource = $state('');
+	let selectedRole = $state('');
+	let selectedResult = $state('');
 	let days = $state(30);
 	let exportBusy = $state(false);
 
 	const groupOptions = [
 		{ value: '', label: 'Semua' },
+		{ value: 'public', label: 'Publik' },
+		{ value: 'auth', label: 'Auth' },
 		{ value: 'dashboard', label: 'Dashboard' },
 		{ value: 'bank_soal', label: 'Bank Soal' },
 		{ value: 'asesmen', label: 'Asesmen' },
@@ -35,9 +50,52 @@
 		{ value: 'security', label: 'Security' }
 	];
 
-	function analyticsParams(limit: string) {
+	const sourceOptions = [
+		{ value: '', label: 'Semua source' },
+		{ value: 'public_website', label: 'Public website' },
+		{ value: 'web_admin', label: 'Web Admin' },
+		{ value: 'core_api', label: 'Core API' },
+		{ value: 'mobile_app', label: 'Mobile App' },
+		{ value: 'system', label: 'System' }
+	];
+
+	const roleOptions = [
+		{ value: '', label: 'Semua role' },
+		{ value: 'admin', label: 'Admin' },
+		{ value: 'guru', label: 'Guru' },
+		{ value: 'staf', label: 'Staf' },
+		{ value: 'kesiswaan', label: 'Kesiswaan' },
+		{ value: 'siswa', label: 'Siswa' },
+		{ value: 'ortu', label: 'Orang tua' }
+	];
+
+	const resultOptions = [
+		{ value: '', label: 'Semua hasil' },
+		{ value: 'success', label: 'Sukses' },
+		{ value: 'failed', label: 'Gagal' },
+		{ value: 'blocked', label: 'Diblokir' },
+		{ value: 'validation_failed', label: 'Validasi gagal' },
+		{ value: 'started', label: 'Dimulai' }
+	];
+
+	const tabOptions: Array<{ value: AnalyticsTab; label: string }> = [
+		{ value: 'summary', label: 'Ringkasan' },
+		{ value: 'visitors', label: 'Pengunjung' },
+		{ value: 'modules', label: 'Aktivitas Modul' },
+		{ value: 'security', label: 'Security' },
+		{ value: 'audit', label: 'Audit/Export' }
+	];
+
+	function analyticsParams(limit: string, overrides: Partial<Record<'event_group' | 'source_surface' | 'role' | 'result', string>> = {}) {
 		const params = new URLSearchParams({ days: String(days), limit });
-		if (selectedGroup) params.set('event_group', selectedGroup);
+		const eventGroup = overrides.event_group ?? selectedGroup;
+		const source = overrides.source_surface ?? selectedSource;
+		const role = overrides.role ?? selectedRole;
+		const result = overrides.result ?? selectedResult;
+		if (eventGroup) params.set('event_group', eventGroup);
+		if (source) params.set('source_surface', source);
+		if (role) params.set('role', role);
+		if (result) params.set('result', result);
 		return params;
 	}
 
@@ -47,8 +105,16 @@
 		const params = analyticsParams('60');
 		analyticsPromise = Promise.all([
 			fetch(clientApiPathWithQuery('/api/internal-analytics/summary', params)).then((response) => readClientApiData<InternalAnalyticsSummary>(response, 'Gagal memuat ringkasan analytics internal.')),
-			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', params)).then((response) => readClientApiData<InternalAnalyticsDailyResult>(response, 'Gagal memuat tren harian analytics internal.'))
-		]).then(([summary, daily]) => normalizeInternalAnalyticsOverview(summary, daily, activeDays, activeGroup));
+			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', params)).then((response) => readClientApiData<InternalAnalyticsDailyResult>(response, 'Gagal memuat tren harian analytics internal.')),
+			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', analyticsParams('60', { event_group: 'public', source_surface: '', role: '', result: '' }))).then((response) => readClientApiData<InternalAnalyticsDailyResult>(response, 'Gagal memuat agregat pengunjung.')),
+			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', analyticsParams('80', { event_group: '', source_surface: 'web_admin' }))).then((response) => readClientApiData<InternalAnalyticsDailyResult>(response, 'Gagal memuat aktivitas modul.')),
+			fetch(clientApiPathWithQuery('/api/internal-analytics/daily', analyticsParams('60', { event_group: 'security', source_surface: '', role: '' }))).then((response) => readClientApiData<InternalAnalyticsDailyResult>(response, 'Gagal memuat sinyal security.'))
+		]).then(([summary, daily, publicDaily, adminDaily, securityDaily]) => ({
+			...normalizeInternalAnalyticsOverview(summary, daily, activeDays, activeGroup),
+			publicDaily: normalizeInternalAnalyticsOverview(summary, publicDaily, activeDays, 'public').daily,
+			adminDaily: normalizeInternalAnalyticsOverview(summary, adminDaily, activeDays, '').daily,
+			securityDaily: normalizeInternalAnalyticsOverview(summary, securityDaily, activeDays, 'security').daily
+		}));
 	}
 
 	function analyticsErrorMessage(error: unknown) {
@@ -76,8 +142,40 @@
 		return groupOptions.find((option) => option.value === value)?.label ?? value;
 	}
 
+	function sourceLabel(value: string) {
+		return sourceOptions.find((option) => option.value === value)?.label ?? (value || 'Semua source');
+	}
+
+	function resultLabel(value: string) {
+		return resultOptions.find((option) => option.value === value)?.label ?? (value || 'Semua hasil');
+	}
+
+	function totalCount(items: InternalAnalyticsDailyItem[]) {
+		return items.reduce((sum, item) => sum + item.count, 0);
+	}
+
+	function topEvent(items: InternalAnalyticsDailyItem[]) {
+		const counts = new Map<string, number>();
+		for (const item of items) counts.set(item.event_name, (counts.get(item.event_name) ?? 0) + item.count);
+		return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] ?? null;
+	}
+
+	function reloadWithFilter() {
+		void trackInternalAnalyticsEvent('security.analytics_filter', {
+			pathname: window.location.pathname,
+			module: 'internal_analytics',
+			result: 'success'
+		});
+		loadAnalytics();
+	}
+
 	async function exportAggregates() {
 		exportBusy = true;
+		void trackInternalAnalyticsEvent('security.export_requested', {
+			pathname: window.location.pathname,
+			module: 'internal_analytics',
+			result: 'success'
+		});
 		try {
 			const response = await fetch(clientApiPathWithQuery('/api/internal-analytics/export', analyticsParams('10000')));
 			if (!response.ok) {
@@ -106,6 +204,11 @@
 	}
 
 	onMount(() => {
+		void trackInternalAnalyticsEvent('security.analytics_view', {
+			pathname: window.location.pathname,
+			module: 'internal_analytics',
+			result: 'success'
+		});
 		loadAnalytics();
 	});
 </script>
@@ -128,22 +231,60 @@
 				<DownloadIcon class="size-4" />
 				Export CSV Agregat
 			</LoadingButton>
-			<div class="flex flex-wrap items-center gap-2">
-				{#each groupOptions as option (option.value)}
-					<Button
-						type="button"
-						size="sm"
-						variant={selectedGroup === option.value ? 'default' : 'outline'}
-						onclick={() => {
-							selectedGroup = option.value;
-							loadAnalytics();
-						}}
-					>
-						{option.label}
-					</Button>
-				{/each}
-			</div>
 		</div>
+	</div>
+
+	<div class="grid gap-3 rounded-lg border border-border bg-card p-4 md:grid-cols-5">
+		<div>
+			<label for="analytics-days" class="mb-1 block text-xs font-medium text-muted-foreground">Periode</label>
+			<select id="analytics-days" bind:value={days} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+				<option value={7}>7 hari</option>
+				<option value={14}>14 hari</option>
+				<option value={30}>30 hari</option>
+				<option value={90}>90 hari</option>
+				<option value={180}>180 hari</option>
+			</select>
+		</div>
+		<div>
+			<label for="analytics-group" class="mb-1 block text-xs font-medium text-muted-foreground">Group</label>
+			<select id="analytics-group" bind:value={selectedGroup} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+				{#each groupOptions as option (option.value)}
+					<option value={option.value}>{option.label}</option>
+				{/each}
+			</select>
+		</div>
+		<div>
+			<label for="analytics-source" class="mb-1 block text-xs font-medium text-muted-foreground">Source</label>
+			<select id="analytics-source" bind:value={selectedSource} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+				{#each sourceOptions as option (option.value)}
+					<option value={option.value}>{option.label}</option>
+				{/each}
+			</select>
+		</div>
+		<div>
+			<label for="analytics-role" class="mb-1 block text-xs font-medium text-muted-foreground">Role</label>
+			<select id="analytics-role" bind:value={selectedRole} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+				{#each roleOptions as option (option.value)}
+					<option value={option.value}>{option.label}</option>
+				{/each}
+			</select>
+		</div>
+		<div>
+			<label for="analytics-result" class="mb-1 block text-xs font-medium text-muted-foreground">Hasil</label>
+			<select id="analytics-result" bind:value={selectedResult} onchange={reloadWithFilter} class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+				{#each resultOptions as option (option.value)}
+					<option value={option.value}>{option.label}</option>
+				{/each}
+			</select>
+		</div>
+	</div>
+
+	<div class="flex flex-wrap gap-2" role="tablist" aria-label="Section analytics internal">
+		{#each tabOptions as tab (tab.value)}
+			<Button type="button" size="sm" variant={activeTab === tab.value ? 'default' : 'outline'} onclick={() => (activeTab = tab.value)} aria-pressed={activeTab === tab.value}>
+				{tab.label}
+			</Button>
+		{/each}
 	</div>
 
 	<AsyncContent promise={analyticsPromise} onerror={handleRenderError}>
@@ -168,102 +309,147 @@
 		{/snippet}
 
 		{#snippet children(value)}
-			{@const overview = value as InternalAnalyticsOverview}
+			{@const overview = value as AnalyticsDetail}
 			{@const summary = overview.summary}
 			{@const daily = overview.daily}
 
-			<div class="grid gap-4 md:grid-cols-3">
-				<Card.Root>
-					<Card.Header class="pb-2">
-						<Card.Description>Total Event Agregat</Card.Description>
-					</Card.Header>
-					<Card.Content>
-						<p class="text-3xl font-semibold text-primary">{formatNumber(summary.total_count)}</p>
-						<p class="mt-1 text-xs text-muted-foreground">{summary.days} hari terakhir</p>
-					</Card.Content>
-				</Card.Root>
-				<Card.Root>
-					<Card.Header class="pb-2">
-						<Card.Description>Group Teratas</Card.Description>
-					</Card.Header>
-					<Card.Content>
-						<p class="text-3xl font-semibold text-primary">{summary.groups[0] ? groupLabel(summary.groups[0].event_group) : '—'}</p>
-						<p class="mt-1 text-xs text-muted-foreground">{summary.groups[0] ? `${formatNumber(summary.groups[0].count)} event` : 'Belum ada agregat'}</p>
-					</Card.Content>
-				</Card.Root>
-				<Card.Root>
-					<Card.Header class="pb-2">
-						<Card.Description>Filter Aktif</Card.Description>
-					</Card.Header>
-					<Card.Content>
-						<p class="text-3xl font-semibold text-primary">{groupLabel(selectedGroup)}</p>
-						<p class="mt-1 text-xs text-muted-foreground">{days} hari, agregat harian</p>
-					</Card.Content>
-				</Card.Root>
-			</div>
+			{#if activeTab === 'summary'}
+				<div class="grid gap-4 md:grid-cols-3">
+					<Card.Root>
+						<Card.Header class="pb-2">
+							<Card.Description>Total Event Agregat</Card.Description>
+						</Card.Header>
+						<Card.Content>
+							<p class="text-3xl font-semibold text-primary">{formatNumber(summary.total_count)}</p>
+							<p class="mt-1 text-xs text-muted-foreground">{summary.days} hari terakhir</p>
+						</Card.Content>
+					</Card.Root>
+					<Card.Root>
+						<Card.Header class="pb-2">
+							<Card.Description>Group Teratas</Card.Description>
+						</Card.Header>
+						<Card.Content>
+							<p class="text-3xl font-semibold text-primary">{summary.groups[0] ? groupLabel(summary.groups[0].event_group) : '—'}</p>
+							<p class="mt-1 text-xs text-muted-foreground">{summary.groups[0] ? `${formatNumber(summary.groups[0].count)} event` : 'Belum ada agregat'}</p>
+						</Card.Content>
+					</Card.Root>
+					<Card.Root>
+						<Card.Header class="pb-2">
+							<Card.Description>Filter Aktif</Card.Description>
+						</Card.Header>
+						<Card.Content>
+							<p class="text-2xl font-semibold text-primary">{groupLabel(selectedGroup)}</p>
+							<p class="mt-1 text-xs text-muted-foreground">{sourceLabel(selectedSource)} · {resultLabel(selectedResult)}</p>
+						</Card.Content>
+					</Card.Root>
+				</div>
 
-			{#if !hasInternalAnalyticsData(overview)}
-				<Card.Root class="border-dashed bg-muted/30">
-					<Card.Content class="space-y-2 pt-6">
-						<p class="text-sm font-medium text-foreground">Belum ada agregat analytics internal.</p>
-						<p class="text-sm text-muted-foreground">
-							Halaman siap digunakan, tetapi periode atau filter ini belum memiliki data agregat yang dapat ditampilkan.
-						</p>
+				{#if !hasInternalAnalyticsData(overview)}
+					<Card.Root class="border-dashed bg-muted/30">
+						<Card.Content class="space-y-2 pt-6">
+							<p class="text-sm font-medium text-foreground">Belum ada agregat analytics internal.</p>
+							<p class="text-sm text-muted-foreground">
+								Halaman siap digunakan, tetapi periode atau filter ini belum memiliki data agregat yang dapat ditampilkan.
+							</p>
+						</Card.Content>
+					</Card.Root>
+				{/if}
+
+				<div class="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
+					<Card.Root>
+						<Card.Header>
+							<Card.Title class="text-base">Distribusi Group</Card.Title>
+							<Card.Description>Jumlah event yang sudah diringkas per area modul.</Card.Description>
+						</Card.Header>
+						<Card.Content class="space-y-3">
+							{#if summary.groups.length > 0}
+								{#each summary.groups as item (item.event_group)}
+									<div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+										<span class="text-sm font-medium text-foreground">{groupLabel(item.event_group)}</span>
+										<Badge variant="outline">{formatNumber(item.count)}</Badge>
+									</div>
+								{/each}
+							{:else}
+								<p class="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Belum ada agregat untuk periode ini.</p>
+							{/if}
+						</Card.Content>
+					</Card.Root>
+
+					<Card.Root>
+						<Card.Header>
+							<Card.Title class="text-base">Event Teratas</Card.Title>
+							<Card.Description>Nama event allowlisted dengan jumlah tertinggi.</Card.Description>
+						</Card.Header>
+						<Card.Content class="space-y-3">
+							{#if summary.top_events.length > 0}
+								{#each summary.top_events as item (item.event_name)}
+									<div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+										<div>
+											<p class="text-sm font-medium text-foreground">{item.event_name}</p>
+											<p class="text-xs text-muted-foreground">{groupLabel(item.event_group)}</p>
+										</div>
+										<Badge variant="outline">{formatNumber(item.count)}</Badge>
+									</div>
+								{/each}
+							{:else}
+								<p class="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Belum ada event teratas untuk periode ini.</p>
+							{/if}
+						</Card.Content>
+					</Card.Root>
+				</div>
+			{:else if activeTab === 'visitors'}
+				{@const topPublic = topEvent(overview.publicDaily.items)}
+				<div class="grid gap-4 md:grid-cols-3">
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Event Pengunjung</p><p class="mt-2 text-3xl font-semibold text-primary">{formatNumber(totalCount(overview.publicDaily.items))}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Event Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topPublic ? topPublic[0] : '—'}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Source</p><p class="mt-2 text-xl font-semibold text-primary">Public website</p></Card.Content></Card.Root>
+				</div>
+			{:else if activeTab === 'modules'}
+				{@const topAdmin = topEvent(overview.adminDaily.items)}
+				<div class="grid gap-4 md:grid-cols-3">
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Aktivitas Web Admin</p><p class="mt-2 text-3xl font-semibold text-primary">{formatNumber(totalCount(overview.adminDaily.items))}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Event Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topAdmin ? topAdmin[0] : '—'}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Role Filter</p><p class="mt-2 text-xl font-semibold text-primary">{selectedRole || 'Semua'}</p></Card.Content></Card.Root>
+				</div>
+			{:else if activeTab === 'security'}
+				{@const topSecurity = topEvent(overview.securityDaily.items)}
+				<div class="grid gap-4 md:grid-cols-3">
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Sinyal Security</p><p class="mt-2 text-3xl font-semibold text-primary">{formatNumber(totalCount(overview.securityDaily.items))}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Sinyal Teratas</p><p class="mt-2 text-xl font-semibold text-primary">{topSecurity ? topSecurity[0] : '—'}</p></Card.Content></Card.Root>
+					<Card.Root><Card.Content class="pt-6"><p class="text-sm text-muted-foreground">Hasil</p><p class="mt-2 text-xl font-semibold text-primary">{resultLabel(selectedResult)}</p></Card.Content></Card.Root>
+				</div>
+			{:else}
+				<Card.Root>
+					<Card.Header>
+						<Card.Title class="text-base">Audit dan Export Agregat</Card.Title>
+						<Card.Description>Export memakai data agregat harian sesuai filter aktif. Permintaan export ikut dicatat sebagai event security agregat.</Card.Description>
+					</Card.Header>
+					<Card.Content class="space-y-4">
+						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+							<Badge variant="outline">Periode {days} hari</Badge>
+							<Badge variant="outline">{groupLabel(selectedGroup)}</Badge>
+							<Badge variant="outline">{sourceLabel(selectedSource)}</Badge>
+							<Badge variant="outline">{resultLabel(selectedResult)}</Badge>
+						</div>
+						<LoadingButton variant="outline" onclick={() => void exportAggregates()} loading={exportBusy} loadingLabel="Export..." label="Export CSV Agregat">
+							<DownloadIcon class="size-4" />
+							Export CSV Agregat
+						</LoadingButton>
 					</Card.Content>
 				</Card.Root>
 			{/if}
 
-			<div class="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
-				<Card.Root>
-					<Card.Header>
-						<Card.Title class="text-base">Distribusi Group</Card.Title>
-						<Card.Description>Jumlah event yang sudah diringkas per area modul.</Card.Description>
-					</Card.Header>
-					<Card.Content class="space-y-3">
-						{#if summary.groups.length > 0}
-							{#each summary.groups as item (item.event_group)}
-								<div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-									<span class="text-sm font-medium text-foreground">{groupLabel(item.event_group)}</span>
-									<Badge variant="outline">{formatNumber(item.count)}</Badge>
-								</div>
-							{/each}
-						{:else}
-							<p class="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Belum ada agregat untuk periode ini.</p>
-						{/if}
-					</Card.Content>
-				</Card.Root>
-
-				<Card.Root>
-					<Card.Header>
-						<Card.Title class="text-base">Event Teratas</Card.Title>
-						<Card.Description>Nama event allowlisted dengan jumlah tertinggi.</Card.Description>
-					</Card.Header>
-					<Card.Content class="space-y-3">
-						{#if summary.top_events.length > 0}
-							{#each summary.top_events as item (item.event_name)}
-								<div class="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-									<div>
-										<p class="text-sm font-medium text-foreground">{item.event_name}</p>
-										<p class="text-xs text-muted-foreground">{groupLabel(item.event_group)}</p>
-									</div>
-									<Badge variant="outline">{formatNumber(item.count)}</Badge>
-								</div>
-							{/each}
-						{:else}
-							<p class="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">Belum ada event teratas untuk periode ini.</p>
-						{/if}
-					</Card.Content>
-				</Card.Root>
-			</div>
-
 			<Card.Root>
 				<Card.Header>
 					<Card.Title class="text-base">Tren Harian</Card.Title>
-					<Card.Description>Agregat harian berdasarkan filter group aktif.</Card.Description>
+					<Card.Description>
+						{activeTab === 'visitors' ? 'Agregat event public website.' : activeTab === 'modules' ? 'Agregat aktivitas Web Admin.' : activeTab === 'security' ? 'Agregat sinyal security.' : 'Agregat harian berdasarkan filter aktif.'}
+					</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-3">
-					{#if daily.items.length > 0}
-						{#each daily.items as item (`${item.aggregate_date}-${item.event_name}-${item.source_surface}-${item.role}-${item.result}`)}
+					{@const activeItems = activeTab === 'visitors' ? overview.publicDaily.items : activeTab === 'modules' ? overview.adminDaily.items : activeTab === 'security' ? overview.securityDaily.items : daily.items}
+					{#if activeItems.length > 0}
+						{#each activeItems as item (`${item.aggregate_date}-${item.event_name}-${item.source_surface}-${item.role}-${item.result}`)}
 							<div class="grid gap-2 rounded-md border border-border px-3 py-3 md:grid-cols-[1fr,1.2fr,0.7fr,0.5fr] md:items-center">
 								<div>
 									<p class="text-sm font-medium text-foreground">{formatDate(item.aggregate_date)}</p>

@@ -5,6 +5,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import { readClientJson } from '$lib/client/api';
+	import { trackPublicAnalyticsEvent } from '$lib/analytics/public-analytics';
 
 	let nama = $state('');
 	let nis = $state('');
@@ -12,9 +13,24 @@
 	let parentName = $state('');
 	let parentPhone = $state('');
 	let busy = $state(false);
+	let registrationStarted = $state(false);
+
+	function trackRegistrationStart() {
+		if (registrationStarted) return;
+		registrationStarted = true;
+		void trackPublicAnalyticsEvent('public.form_start', {
+			pathname: '/ppdb',
+			metadata: { page_key: 'ppdb', form_key: 'ppdb_registration', form_step: 'identity' }
+		});
+	}
 
 	async function submitRegistration() {
 		if (!nama || !nis || !gender) {
+			void trackPublicAnalyticsEvent('public.form_submit', {
+				pathname: '/ppdb',
+				metadata: { page_key: 'ppdb', form_key: 'ppdb_registration', result: 'validation_failed' },
+				result: 'validation_failed'
+			});
 			toast.error('Nama, NIS, dan jenis kelamin wajib diisi');
 			return;
 		}
@@ -32,6 +48,11 @@
 				}),
 			});
 			await readClientJson<unknown>(res);
+			void trackPublicAnalyticsEvent('public.form_submit', {
+				pathname: '/ppdb',
+				metadata: { page_key: 'ppdb', form_key: 'ppdb_registration', result: 'success' },
+				result: 'success'
+			});
 			toast.success('Pendaftaran berhasil dikirim. Status awal sebagai calon siswa.');
 			nama = '';
 			nis = '';
@@ -39,6 +60,11 @@
 			parentName = '';
 			parentPhone = '';
 		} catch (error) {
+			void trackPublicAnalyticsEvent('public.form_submit', {
+				pathname: '/ppdb',
+				metadata: { page_key: 'ppdb', form_key: 'ppdb_registration', result: 'failed' },
+				result: 'failed'
+			});
 			toast.error(error instanceof Error && error.message.trim() ? error.message : 'Pendaftaran gagal dikirim. Periksa koneksi lalu coba lagi.');
 		} finally {
 			busy = false;
@@ -79,31 +105,31 @@
 					<Card.Description>Isi data dasar terlebih dahulu. Detail lanjutan bisa dilengkapi setelah verifikasi awal.</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-5 pt-6">
-					<div class="grid gap-4 sm:grid-cols-2">
+					<form name="ppdb_registration" data-analytics-form="ppdb_registration" class="grid gap-4 sm:grid-cols-2" onsubmit={(event) => { event.preventDefault(); void submitRegistration(); }}>
 						<div class="sm:col-span-2">
 							<label for="ppdb-nama" class="mb-1 block text-xs font-medium text-slate-600">Nama Lengkap</label>
-							<Input id="ppdb-nama" bind:value={nama} placeholder="Tuliskan nama lengkap calon siswa" />
+							<Input id="ppdb-nama" bind:value={nama} onfocus={trackRegistrationStart} placeholder="Tuliskan nama lengkap calon siswa" />
 						</div>
 						<div>
 							<label for="ppdb-nis" class="mb-1 block text-xs font-medium text-slate-600">NIS / Nomor Pendaftaran</label>
-							<Input id="ppdb-nis" bind:value={nis} placeholder="Nomor identitas atau nomor pendaftaran" />
+							<Input id="ppdb-nis" bind:value={nis} onfocus={trackRegistrationStart} placeholder="Nomor identitas atau nomor pendaftaran" />
 						</div>
 						<div>
 							<label for="ppdb-gender" class="mb-1 block text-xs font-medium text-slate-600">Jenis Kelamin</label>
-							<select id="ppdb-gender" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={gender}>
+							<select id="ppdb-gender" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={gender} onfocus={trackRegistrationStart}>
 								<option value="L">Laki-laki</option>
 								<option value="P">Perempuan</option>
 							</select>
 						</div>
 						<div>
 							<label for="ppdb-parent" class="mb-1 block text-xs font-medium text-slate-600">Nama Orang Tua / Wali</label>
-							<Input id="ppdb-parent" bind:value={parentName} placeholder="Nama orang tua atau wali utama" />
+							<Input id="ppdb-parent" bind:value={parentName} onfocus={trackRegistrationStart} placeholder="Nama orang tua atau wali utama" />
 						</div>
 						<div>
 							<label for="ppdb-phone" class="mb-1 block text-xs font-medium text-slate-600">Nomor HP Orang Tua / Wali</label>
-							<Input id="ppdb-phone" bind:value={parentPhone} placeholder="Gunakan nomor yang aktif dihubungi" />
+							<Input id="ppdb-phone" bind:value={parentPhone} onfocus={trackRegistrationStart} placeholder="Gunakan nomor yang aktif dihubungi" />
 						</div>
-					</div>
+					</form>
 
 					<div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-600">
 						Setelah pendaftaran dikirim, admin akan meninjau data ini dan menghubungi calon siswa atau wali bila diperlukan untuk melengkapi berkas lanjutan.

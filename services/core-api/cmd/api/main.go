@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -88,6 +89,12 @@ func main() {
 		os.Exit(1)
 	}
 	pusakaSchedulerSvc.Start(mainCtx)
+	internalAnalyticsRollupCancel := internalAnalyticsSvc.StartRollupLoop(mainCtx, service.InternalAnalyticsRollupLoopConfig{
+		Interval:       durationEnv("INTERNAL_ANALYTICS_ROLLUP_INTERVAL", 10*time.Minute),
+		Lookback:       durationEnv("INTERNAL_ANALYTICS_ROLLUP_LOOKBACK", 48*time.Hour),
+		Limit:          int32Env("INTERNAL_ANALYTICS_ROLLUP_LIMIT", 10000),
+		RunImmediately: boolEnv("INTERNAL_ANALYTICS_ROLLUP_RUN_IMMEDIATELY", true),
+	})
 
 	authH := handler.NewAuth(authSvc, q)
 	academicH := handler.NewAcademic(academicSvc)
@@ -132,6 +139,7 @@ func main() {
 
 	jwtSecret := mustEnv("JWT_SECRET")
 	workerKey := mustEnv("WORKER_API_KEY")
+	internalAPIKey := getEnv("INTERNAL_API_KEY", "")
 	examTokenMW := mw.ExamToken(examSvc.GetParticipantByToken)
 	trustedProxies := splitCSVEnv("TRUSTED_PROXY_CIDRS")
 	authRateLimit := ratelimit.RateLimitWithTrustedProxies(5, 1, trustedProxies)
@@ -142,6 +150,7 @@ func main() {
 	examLoginRateLimit := ratelimit.RateLimitWithTrustedProxies(8, 1, trustedProxies)
 	publicSiteRateLimit := ratelimit.RateLimitWithTrustedProxies(60, 30, trustedProxies)
 	analyticsIngestionRateLimit := ratelimit.RateLimitWithTrustedProxies(30, 10, trustedProxies)
+	publicAnalyticsRateLimit := ratelimit.RateLimitWithTrustedProxies(20, 5, trustedProxies)
 
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
@@ -162,6 +171,7 @@ func main() {
 	r.With(publicSiteRateLimit).Get("/api/public/site/announcements/{slug}", websiteH.GetPublishedAnnouncement)
 	r.With(publicSiteRateLimit).Get("/api/public/site/pages/{slug}", websiteH.GetPublishedPage)
 	r.Get("/api/website/media/{filename}", websiteMediaH.File)
+	r.With(publicAnalyticsRateLimit, mw.InternalKey(internalAPIKey)).Post("/api/internal-analytics/public-events", internalAnalyticsH.CreatePublicEvent)
 
 	// CBT/Bank Soal asset files are not public-by-obscurity. They may be accessed
 	// either by authenticated admin/guru requests or by active exam participants
@@ -236,6 +246,7 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(mw.JWT(jwtSecret, authSvc.CurrentAuthVersion, authSvc.ValidateAccessSession))
 		r.Use(mw.Audit(q))
+		r.Use(mw.InternalAnalytics(internalAnalyticsSvc))
 		r.Get("/api/auth/account", authH.GetAccount)
 		r.Get("/api/auth/account/change-history", authH.GetAccountChangeHistory)
 		r.Patch("/api/auth/account/contact", authH.UpdateAccountContact)
@@ -805,6 +816,7 @@ func main() {
 	<-mainCtx.Done()
 	slog.Info("shutting down...")
 
+	internalAnalyticsRollupCancel()
 	pusakaSchedulerSvc.Stop()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -829,6 +841,47 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func durationEnv(key string, def time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return def
+	}
+	if parsed, err := time.ParseDuration(raw); err == nil {
+		return parsed
+	}
+	if minutes, err := strconv.Atoi(raw); err == nil {
+		return time.Duration(minutes) * time.Minute
+	}
+	slog.Warn("invalid duration env, using default", "key", key, "value", raw)
+	return def
+}
+
+func int32Env(key string, def int32) int32 {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return def
+	}
+	parsed, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil {
+		slog.Warn("invalid int env, using default", "key", key, "value", raw)
+		return def
+	}
+	return int32(parsed)
+}
+
+func boolEnv(key string, def bool) bool {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return def
+	}
+	parsed, err := strconv.ParseBool(raw)
+	if err != nil {
+		slog.Warn("invalid bool env, using default", "key", key, "value", raw)
+		return def
+	}
+	return parsed
 }
 
 func splitCSVEnv(key string) []string {

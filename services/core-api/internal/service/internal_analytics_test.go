@@ -300,6 +300,56 @@ func TestInternalAnalyticsRejectsInvalidSourceSurface(t *testing.T) {
 	}
 }
 
+func TestInternalAnalyticsCreatePublicEventSanitizesToAllowlistedMetadata(t *testing.T) {
+	store := &fakeInternalAnalyticsStore{}
+	svc := newTestInternalAnalytics(store)
+
+	_, err := svc.CreatePublicEvent(context.Background(), CreatePublicAnalyticsEventInput{
+		EventName:  "public.search",
+		RouteGroup: "Berita?token=secret",
+		Result:     "success",
+		Metadata: map[string]any{
+			"page_key":             "Berita",
+			"search_bucket":        "informasi-umum",
+			"search_length_bucket": "11_20",
+			"raw_user_agent":       "Mozilla/5.0",
+			"query":                "nama calon siswa",
+			"token":                "secret",
+			"NISN":                 "1234567890",
+			"full_url":             "https://example.test/berita?token=secret",
+			"unknown_safe":         "ignored",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePublicEvent() error = %v", err)
+	}
+	if len(store.calls) != 1 {
+		t.Fatalf("CreateInternalAnalyticsEvent calls = %d, want 1", len(store.calls))
+	}
+	call := store.calls[0]
+	if call.EventName != "public.search" || call.EventGroup != "public" || call.SourceSurface != "public_website" || call.Module.String != "public_site" {
+		t.Fatalf("stored public event = %+v, want public website event", call)
+	}
+	if call.RouteGroup.String != "home" {
+		t.Fatalf("route group = %q, want fallback because raw query-like route was rejected", call.RouteGroup.String)
+	}
+	if call.Result.String != "success" {
+		t.Fatalf("result = %q, want success", call.Result.String)
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(call.Metadata, &metadata); err != nil {
+		t.Fatalf("metadata json: %v", err)
+	}
+	if metadata["page_key"] != "berita" || metadata["search_bucket"] != "informasi_umum" || metadata["search_length_bucket"] != "11_20" {
+		t.Fatalf("public metadata = %+v, want allowlisted tokenized keys", metadata)
+	}
+	for _, forbidden := range []string{"raw_user_agent", "query", "token", "nisn", "full_url", "unknown_safe", "Mozilla", "1234567890"} {
+		if strings.Contains(strings.ToLower(string(call.Metadata)), strings.ToLower(forbidden)) {
+			t.Fatalf("public metadata leaked %q: %s", forbidden, string(call.Metadata))
+		}
+	}
+}
+
 func TestInternalAnalyticsListsDailyAggregatesWithoutRawMetadata(t *testing.T) {
 	store := &fakeInternalAnalyticsStore{
 		dailyRows: []db.InternalAnalyticsDailyAggregate{
@@ -400,6 +450,29 @@ func TestInternalAnalyticsSummaryAggregatesCountsByGroupAndEvent(t *testing.T) {
 	}
 	if len(store.dailyCalls) != 1 || store.dailyCalls[0].LimitCount != 10000 {
 		t.Fatalf("summary daily call = %+v, want bounded aggregate read", store.dailyCalls)
+	}
+}
+
+func TestInternalAnalyticsSummaryForwardsAggregateFilters(t *testing.T) {
+	store := &fakeInternalAnalyticsStore{}
+	svc := newTestInternalAnalytics(store)
+
+	_, err := svc.Summary(context.Background(), InternalAnalyticsSummaryQuery{
+		Days:          14,
+		EventGroup:    " public ",
+		SourceSurface: " public_website ",
+		Role:          " admin ",
+		Result:        " success ",
+	})
+	if err != nil {
+		t.Fatalf("Summary() error = %v", err)
+	}
+	if len(store.dailyCalls) != 1 {
+		t.Fatalf("daily calls = %d, want 1", len(store.dailyCalls))
+	}
+	call := store.dailyCalls[0]
+	if call.EventGroup != "public" || call.SourceSurface != "public_website" || call.Role != "admin" || call.Result != "success" || call.LimitCount != 10000 {
+		t.Fatalf("summary daily call = %+v, want trimmed filters", call)
 	}
 }
 
@@ -637,5 +710,27 @@ func TestInternalAnalyticsRejectsExpandedSensitiveMetadataKeys(t *testing.T) {
 				t.Fatalf("store called for forbidden metadata key %q", key)
 			}
 		})
+	}
+}
+
+func TestInternalAnalyticsRollupLoopConfigDefaultsToTenMinutesWithSafeMinimum(t *testing.T) {
+	cfg := normalizeInternalAnalyticsRollupLoopConfig(InternalAnalyticsRollupLoopConfig{})
+	if cfg.Interval != 10*time.Minute {
+		t.Fatalf("default interval = %v, want 10m", cfg.Interval)
+	}
+	if cfg.Lookback != 48*time.Hour || cfg.Limit != 10000 {
+		t.Fatalf("default lookback/limit = %v/%d, want 48h/10000", cfg.Lookback, cfg.Limit)
+	}
+
+	cfg = normalizeInternalAnalyticsRollupLoopConfig(InternalAnalyticsRollupLoopConfig{
+		Interval: time.Second,
+		Lookback: time.Hour,
+		Limit:    50000,
+	})
+	if cfg.Interval != 5*time.Minute {
+		t.Fatalf("minimum interval = %v, want 5m", cfg.Interval)
+	}
+	if cfg.Lookback != 24*time.Hour || cfg.Limit != 10000 {
+		t.Fatalf("bounded lookback/limit = %v/%d, want 24h/10000", cfg.Lookback, cfg.Limit)
 	}
 }

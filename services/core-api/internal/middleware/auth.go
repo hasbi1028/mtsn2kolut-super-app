@@ -102,6 +102,19 @@ func InternalKeyOrJWT(internalKey, jwtSecret string, currentVersion authVersionP
 	}
 }
 
+func InternalKey(key string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got := r.Header.Get("X-Internal-Key")
+			if key == "" || subtle.ConstantTimeCompare([]byte(got), []byte(key)) != 1 {
+				api.Unauthorized(w)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // RequireAdmin enforces that the JWT claim "roles" includes "admin" or "role" == "admin".
 // Internal-key requests (BFF) bypass this check — the BFF is responsible for
 // gating admin-only routes via SvelteKit hooks before forwarding.

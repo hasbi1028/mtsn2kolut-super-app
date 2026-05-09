@@ -26,6 +26,7 @@ type InternalAnalytics struct {
 
 type internalAnalyticsService interface {
 	CreateEvent(ctx context.Context, in service.CreateInternalAnalyticsEventInput) (service.InternalAnalyticsEventReceipt, error)
+	CreatePublicEvent(ctx context.Context, in service.CreatePublicAnalyticsEventInput) (service.InternalAnalyticsEventReceipt, error)
 	ListDailyAggregates(ctx context.Context, in service.InternalAnalyticsDailyQuery) (service.InternalAnalyticsDailyResult, error)
 	Summary(ctx context.Context, in service.InternalAnalyticsSummaryQuery) (service.InternalAnalyticsSummary, error)
 	ExportAggregatesCSV(ctx context.Context, in service.InternalAnalyticsExportQuery) (service.InternalAnalyticsExport, error)
@@ -47,6 +48,13 @@ type internalAnalyticsEventRequest struct {
 	DurationBucket     string          `json:"duration_bucket"`
 	Metadata           json.RawMessage `json:"metadata"`
 	RetentionExpiresAt *time.Time      `json:"retention_expires_at"`
+}
+
+type publicAnalyticsEventRequest struct {
+	EventName  string          `json:"event_name"`
+	RouteGroup string          `json:"route_group"`
+	Result     string          `json:"result"`
+	Metadata   json.RawMessage `json:"metadata"`
 }
 
 func (h *InternalAnalytics) CreateEvent(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +96,30 @@ func (h *InternalAnalytics) CreateEvent(w http.ResponseWriter, r *http.Request) 
 	api.Created(w, row)
 }
 
+func (h *InternalAnalytics) CreatePublicEvent(w http.ResponseWriter, r *http.Request) {
+	var body publicAnalyticsEventRequest
+	metadata, ok := decodePublicAnalyticsJSON(w, r, &body)
+	if !ok {
+		return
+	}
+	row, err := h.svc.CreatePublicEvent(r.Context(), service.CreatePublicAnalyticsEventInput{
+		EventName:  body.EventName,
+		RouteGroup: body.RouteGroup,
+		Result:     body.Result,
+		Metadata:   metadata,
+	})
+	if err != nil {
+		var validationErr *service.InternalAnalyticsValidationError
+		if errors.As(err, &validationErr) {
+			api.BadRequest(w, internalAnalyticsValidationMessage(validationErr.Code))
+			return
+		}
+		api.Internal(w, err)
+		return
+	}
+	api.Created(w, row)
+}
+
 func (h *InternalAnalytics) ListDailyAggregates(w http.ResponseWriter, r *http.Request) {
 	query, ok := parseInternalAnalyticsDailyQuery(w, r)
 	if !ok {
@@ -107,8 +139,11 @@ func (h *InternalAnalytics) Summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.svc.Summary(r.Context(), service.InternalAnalyticsSummaryQuery{
-		Days:       int32(days),
-		EventGroup: strings.TrimSpace(r.URL.Query().Get("event_group")),
+		Days:          int32(days),
+		EventGroup:    strings.TrimSpace(r.URL.Query().Get("event_group")),
+		SourceSurface: strings.TrimSpace(r.URL.Query().Get("source_surface")),
+		Role:          strings.TrimSpace(r.URL.Query().Get("role")),
+		Result:        strings.TrimSpace(r.URL.Query().Get("result")),
 	})
 	if err != nil {
 		api.Internal(w, err)
@@ -209,6 +244,49 @@ func parseInternalAnalyticsNonNegativeInt(w http.ResponseWriter, r *http.Request
 
 func decodeInternalAnalyticsJSON(w http.ResponseWriter, r *http.Request, body *internalAnalyticsEventRequest) (map[string]any, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, internalAnalyticsBodyLimit)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	var raw json.RawMessage
+	if err := dec.Decode(&raw); err != nil {
+		writeInternalAnalyticsDecodeError(w, err)
+		return nil, false
+	}
+	var extra json.RawMessage
+	if err := dec.Decode(&extra); err != io.EOF {
+		writeInternalAnalyticsDecodeError(w, err)
+		return nil, false
+	}
+	if !jsonRawObject(raw) {
+		api.BadRequest(w, "request body must be a json object")
+		return nil, false
+	}
+
+	bodyDec := json.NewDecoder(bytes.NewReader(raw))
+	bodyDec.DisallowUnknownFields()
+	if err := bodyDec.Decode(body); err != nil {
+		writeInternalAnalyticsDecodeError(w, err)
+		return nil, false
+	}
+
+	metadata := map[string]any{}
+	if len(body.Metadata) == 0 {
+		return metadata, true
+	}
+	if !jsonRawObject(body.Metadata) {
+		api.BadRequest(w, "metadata must be a json object")
+		return nil, false
+	}
+	metadataDec := json.NewDecoder(bytes.NewReader(body.Metadata))
+	if err := metadataDec.Decode(&metadata); err != nil {
+		writeInternalAnalyticsDecodeError(w, err)
+		return nil, false
+	}
+	return metadata, true
+}
+
+func decodePublicAnalyticsJSON(w http.ResponseWriter, r *http.Request, body *publicAnalyticsEventRequest) (map[string]any, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 

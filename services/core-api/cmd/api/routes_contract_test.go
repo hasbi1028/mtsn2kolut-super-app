@@ -137,8 +137,32 @@ func TestInternalAnalyticsIngestionRouteStaysJWTProtected(t *testing.T) {
 	if strings.Contains(source[:jwtStart], "/api/internal-analytics/events") {
 		t.Fatalf("internal analytics ingestion must not be exposed before JWT middleware")
 	}
-	if strings.Contains(source, "/api/public/internal-analytics") || strings.Contains(source, "/api/public/analytics") {
-		t.Fatalf("phase 2 must not expose public unauthenticated analytics ingestion")
+	if strings.Contains(source, `"/api/internal-analytics/events/export"`) || strings.Contains(source, `"/api/internal-analytics/raw"`) {
+		t.Fatalf("internal analytics must not expose raw/export event ingestion routes")
+	}
+}
+
+func TestPublicAnalyticsCollectorUsesInternalKeyBeforeJWT(t *testing.T) {
+	raw, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	source := string(raw)
+	jwtStart := strings.Index(source, "r.Use(mw.JWT(jwtSecret")
+	if jwtStart < 0 {
+		t.Fatalf("authenticated route block not found")
+	}
+	publicRoute := `r.With(publicAnalyticsRateLimit, mw.InternalKey(internalAPIKey)).Post("/api/internal-analytics/public-events", internalAnalyticsH.CreatePublicEvent)`
+	if !strings.Contains(source[:jwtStart], publicRoute) {
+		t.Fatalf("public analytics collector must be before JWT and guarded by internal key route %q", publicRoute)
+	}
+	for _, want := range []string{
+		`internalAPIKey := getEnv("INTERNAL_API_KEY", "")`,
+		`publicAnalyticsRateLimit := ratelimit.RateLimitWithTrustedProxies`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("public analytics collector setup missing %q", want)
+		}
 	}
 }
 
@@ -209,6 +233,24 @@ func TestInternalAnalyticsExportRouteUsesExportPermissionAndRateLimitedIngestion
 	}
 }
 
+func TestInternalAnalyticsAdminActivityMiddlewareAndRollupLoopAreStarted(t *testing.T) {
+	raw, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	source := string(raw)
+	for _, want := range []string{
+		`internalAnalyticsRollupCancel := internalAnalyticsSvc.StartRollupLoop(mainCtx, service.InternalAnalyticsRollupLoopConfig{`,
+		`Interval:       durationEnv("INTERNAL_ANALYTICS_ROLLUP_INTERVAL", 10*time.Minute),`,
+		`internalAnalyticsRollupCancel()`,
+		`r.Use(mw.InternalAnalytics(internalAnalyticsSvc))`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("internal analytics startup contract missing %q", want)
+		}
+	}
+}
+
 func TestInternalAnalyticsPhase3BFFIsOnlyInternalWebAdminCollector(t *testing.T) {
 	routePath := filepath.Clean("../../../../apps/web-admin/src/routes/api/internal-analytics/events/+server.ts")
 	raw, err := os.ReadFile(routePath)
@@ -234,11 +276,10 @@ func TestInternalAnalyticsPhase3BFFIsOnlyInternalWebAdminCollector(t *testing.T)
 	}
 }
 
-func TestInternalAnalyticsFrontendDoesNotAddPublicCollectorOrThirdPartyTracking(t *testing.T) {
+func TestInternalAnalyticsFrontendKeepsCollectorFirstPartyAndNoThirdPartyTracking(t *testing.T) {
 	root := filepath.Clean("../../../../apps/web-admin/src")
 	forbiddenNeedles := []string{
 		"/api/public/internal-analytics",
-		"/api/public/analytics",
 		"navigator.sendBeacon",
 		"sendBeacon(",
 		"posthog",
@@ -266,7 +307,7 @@ func TestInternalAnalyticsFrontendDoesNotAddPublicCollectorOrThirdPartyTracking(
 		source := string(raw)
 		for _, needle := range forbiddenNeedles {
 			if strings.Contains(source, needle) {
-				t.Fatalf("internal analytics must not add public collector or third-party tracking; found %q in %s", needle, path)
+					t.Fatalf("internal analytics must not add third-party tracking; found %q in %s", needle, path)
 			}
 		}
 		return nil

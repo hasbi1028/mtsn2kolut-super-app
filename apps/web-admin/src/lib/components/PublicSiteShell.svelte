@@ -2,6 +2,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { trackPublicAnalyticsEvent, trackPublicPageView } from '$lib/analytics/public-analytics';
 
 	let { children, user } = $props<{
 		children: import('svelte').Snippet;
@@ -19,6 +20,7 @@
 
 	let mobileOpen = $state(false);
 	const mobileMenuId = 'public-site-mobile-menu';
+	const startedForms = new Set<string>();
 
 	const footerGroups = [
 		{
@@ -46,8 +48,141 @@
 
 	afterNavigate(() => {
 		mobileOpen = false;
+		void trackPublicPageView(page.url.pathname, {
+			page_key: publicPageKey(page.url.pathname),
+			page_kind: publicPageKind(page.url.pathname),
+			device_class: publicDeviceClass()
+		});
 	});
+
+	function publicPageKey(pathname: string) {
+		const clean = pathname.split(/[?#]/, 1)[0] ?? '/';
+		const parts = clean.split('/').filter(Boolean);
+		if (parts.length === 0) return 'home';
+		if (parts[0] === 'berita' && parts.length > 1) return 'berita_detail';
+		if (parts[0] === 'pengumuman' && parts.length > 1) return 'pengumuman_detail';
+		return safePublicToken(parts[0]);
+	}
+
+	function publicPageKind(pathname: string) {
+		const key = publicPageKey(pathname);
+		if (key.endsWith('_detail')) return 'detail';
+		if (key === 'berita' || key === 'pengumuman') return 'list';
+		if (key === 'ppdb') return 'form';
+		return 'page';
+	}
+
+	function publicDeviceClass() {
+		if (typeof window === 'undefined') return 'unknown';
+		if (window.matchMedia('(max-width: 640px)').matches) return 'mobile';
+		if (window.matchMedia('(max-width: 1024px)').matches) return 'tablet';
+		return 'desktop';
+	}
+
+	function handlePublicClick(event: MouseEvent) {
+		const target = event.target;
+		if (!(target instanceof Element)) return;
+		const trigger = target.closest('a,button');
+		if (!(trigger instanceof HTMLElement)) return;
+		const href = trigger instanceof HTMLAnchorElement ? trigger.getAttribute('href') || '' : '';
+		const sourceComponent = trigger.closest('header') ? 'header' : trigger.closest('footer') ? 'footer' : 'content';
+		const metadata = {
+			page_key: publicPageKey(page.url.pathname),
+			cta_key: safePublicToken(trigger.dataset.analyticsKey || linkKindFromHref(href) || trigger.getAttribute('type') || 'action'),
+			cta_group: safePublicToken(trigger.dataset.analyticsGroup || sourceComponent),
+			link_kind: linkKindFromHref(href),
+			source_component: sourceComponent
+		};
+		if (isDownloadHref(href) || (trigger instanceof HTMLAnchorElement && trigger.hasAttribute('download'))) {
+			void trackPublicAnalyticsEvent('public.download', {
+				pathname: page.url.pathname,
+				metadata: {
+					...metadata,
+					file_kind: fileKindFromHref(href),
+					download_kind: trigger.hasAttribute('download') ? 'explicit' : 'file_link'
+				}
+			});
+			return;
+		}
+		void trackPublicAnalyticsEvent('public.cta_click', { pathname: page.url.pathname, metadata });
+	}
+
+	function handlePublicFocusIn(event: FocusEvent) {
+		const target = event.target;
+		if (!(target instanceof Element)) return;
+		const form = target.closest('form');
+		if (!(form instanceof HTMLFormElement)) return;
+		const formKey = safePublicToken(form.dataset.analyticsForm || form.getAttribute('name') || publicPageKey(page.url.pathname));
+		if (startedForms.has(formKey)) return;
+		startedForms.add(formKey);
+		void trackPublicAnalyticsEvent('public.form_start', {
+			pathname: page.url.pathname,
+			metadata: { form_key: formKey, page_key: publicPageKey(page.url.pathname), source_component: 'form' }
+		});
+	}
+
+	function handlePublicSubmit(event: SubmitEvent) {
+		const target = event.target;
+		if (!(target instanceof HTMLFormElement)) return;
+		const formKey = safePublicToken(target.dataset.analyticsForm || target.getAttribute('name') || publicPageKey(page.url.pathname));
+		void trackPublicAnalyticsEvent('public.form_submit', {
+			pathname: page.url.pathname,
+			metadata: { form_key: formKey, page_key: publicPageKey(page.url.pathname), result: 'started', source_component: 'form' }
+		});
+	}
+
+	function handlePublicChange(event: Event) {
+		const target = event.target;
+		if (!(target instanceof HTMLInputElement)) return;
+		if (target.type !== 'search' && !target.dataset.publicSearch) return;
+		void trackPublicAnalyticsEvent('public.search', {
+			pathname: page.url.pathname,
+			metadata: {
+				page_key: publicPageKey(page.url.pathname),
+				search_length_bucket: searchLengthBucket(target.value),
+				search_bucket: 'public_site'
+			}
+		});
+	}
+
+	function safePublicToken(value: string) {
+		return (value || 'unknown').trim().toLowerCase().replace(/[-/\s]+/g, '_').replace(/[^a-z0-9_]/g, '').replace(/^_+|_+$/g, '').slice(0, 64) || 'unknown';
+	}
+
+	function linkKindFromHref(href: string) {
+		if (!href) return 'button';
+		if (href.startsWith('mailto:')) return 'email';
+		if (href.startsWith('tel:')) return 'phone';
+		if (/^https?:\/\//i.test(href)) return 'external';
+		const first = href.split(/[?#]/, 1)[0]?.split('/').filter(Boolean)[0] ?? 'home';
+		return safePublicToken(first);
+	}
+
+	function isDownloadHref(href: string) {
+		return /\.(pdf|docx?|xlsx?|pptx?|zip|jpg|jpeg|png|webp)$/i.test(href.split(/[?#]/, 1)[0] ?? '');
+	}
+
+	function fileKindFromHref(href: string) {
+		const clean = href.split(/[?#]/, 1)[0] ?? '';
+		const ext = clean.split('.').pop()?.toLowerCase() ?? '';
+		if (ext === 'pdf') return 'pdf';
+		if (['doc', 'docx'].includes(ext)) return 'document';
+		if (['xls', 'xlsx'].includes(ext)) return 'spreadsheet';
+		if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return 'image';
+		if (ext === 'zip') return 'archive';
+		return 'file';
+	}
+
+	function searchLengthBucket(value: string) {
+		const len = value.trim().length;
+		if (len === 0) return 'empty';
+		if (len <= 10) return '1_10';
+		if (len <= 20) return '11_20';
+		return 'gt_20';
+	}
 </script>
+
+<svelte:window onclick={handlePublicClick} onfocusin={handlePublicFocusIn} onsubmit={handlePublicSubmit} onchange={handlePublicChange} />
 
 <div class="min-h-screen bg-[linear-gradient(180deg,#f7faf7_0%,#f9fafb_22%,#ffffff_100%)]">
 	<header class="sticky top-0 z-30 border-b border-emerald-100/80 bg-white/90 backdrop-blur">

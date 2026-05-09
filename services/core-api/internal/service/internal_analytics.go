@@ -63,6 +63,13 @@ type CreateInternalAnalyticsEventInput struct {
 	RetentionExpiresAt *time.Time
 }
 
+type CreatePublicAnalyticsEventInput struct {
+	EventName  string
+	RouteGroup string
+	Result     string
+	Metadata   map[string]any
+}
+
 type InternalAnalyticsEventReceipt struct {
 	ID                 string    `json:"id"`
 	EventName          string    `json:"event_name"`
@@ -83,8 +90,11 @@ type InternalAnalyticsDailyQuery struct {
 }
 
 type InternalAnalyticsSummaryQuery struct {
-	Days       int32
-	EventGroup string
+	Days          int32
+	EventGroup    string
+	SourceSurface string
+	Role          string
+	Result        string
 }
 
 type InternalAnalyticsExportQuery struct {
@@ -207,6 +217,8 @@ var internalAnalyticsAllowedEvents = map[string]string{
 	"bank_soal.question_update":       "bank_soal",
 	"bank_soal.import_start":          "bank_soal",
 	"bank_soal.import_complete":       "bank_soal",
+	"bank_soal.export":                "bank_soal",
+	"bank_soal.review_view":           "bank_soal",
 	"bank_soal.review_decision":       "bank_soal",
 	"bank_soal.readiness_check":       "bank_soal",
 	"bank_soal.asset_upload":          "bank_soal",
@@ -226,6 +238,9 @@ var internalAnalyticsAllowedEvents = map[string]string{
 	"pusaka.job_completed":            "pusaka",
 	"pusaka.job_failed":               "pusaka",
 	"pusaka.job_retried":              "pusaka",
+	"pusaka.manual_run":               "pusaka",
+	"pusaka.scheduler_tick":           "pusaka",
+	"pusaka.queue_cancel":             "pusaka",
 	"pusaka.stale_recovered":          "pusaka",
 	"pusaka.employee_scope_update":    "pusaka",
 	"pusaka.settings_update":          "pusaka",
@@ -238,6 +253,10 @@ var internalAnalyticsAllowedEvents = map[string]string{
 	"rbac.roles_view":                 "rbac",
 	"rbac.permission_update":          "rbac",
 	"rbac.permission_denied":          "rbac",
+	"security.settings_view":          "security",
+	"security.settings_update":        "security",
+	"security.analytics_view":         "security",
+	"security.analytics_filter":       "security",
 	"security.rate_limited":           "security",
 	"security.forbidden":              "security",
 	"security.validation_rejected":    "security",
@@ -253,6 +272,23 @@ var internalAnalyticsAllowedSourceSurfaces = map[string]struct{}{
 	"core_api":       {},
 	"mobile_app":     {},
 	"system":         {},
+}
+
+var internalAnalyticsPublicMetadataKeys = map[string]struct{}{
+	"page_key":             {},
+	"page_kind":            {},
+	"cta_key":              {},
+	"cta_group":            {},
+	"link_kind":            {},
+	"file_kind":            {},
+	"download_kind":        {},
+	"search_bucket":        {},
+	"search_length_bucket": {},
+	"form_key":             {},
+	"form_step":            {},
+	"result":               {},
+	"device_class":         {},
+	"source_component":     {},
 }
 
 var internalAnalyticsForbiddenMetadataKeys = map[string]struct{}{
@@ -307,6 +343,23 @@ var internalAnalyticsForbiddenMetadataKeys = map[string]struct{}{
 	"request_body":                    {},
 	"response_body":                   {},
 	"raw_payload":                     {},
+}
+
+func (s *InternalAnalytics) CreatePublicEvent(ctx context.Context, in CreatePublicAnalyticsEventInput) (InternalAnalyticsEventReceipt, error) {
+	eventName := strings.TrimSpace(in.EventName)
+	if internalAnalyticsAllowedEvents[eventName] != "public" {
+		return InternalAnalyticsEventReceipt{}, internalAnalyticsValidation(InternalAnalyticsErrEventNotAllowlisted, eventName)
+	}
+	metadata := sanitizeInternalAnalyticsPublicMetadata(in.Metadata)
+	return s.CreateEvent(ctx, CreateInternalAnalyticsEventInput{
+		EventName:     eventName,
+		EventGroup:    "public",
+		SourceSurface: "public_website",
+		RouteGroup:    sanitizeInternalAnalyticsPublicToken(in.RouteGroup, "home"),
+		Module:        "public_site",
+		Result:        sanitizeInternalAnalyticsPublicResult(in.Result, metadata),
+		Metadata:      metadata,
+	})
 }
 
 func (s *InternalAnalytics) CreateEvent(ctx context.Context, in CreateInternalAnalyticsEventInput) (InternalAnalyticsEventReceipt, error) {
@@ -412,9 +465,12 @@ func (s *InternalAnalytics) ListDailyAggregates(ctx context.Context, in Internal
 
 func (s *InternalAnalytics) Summary(ctx context.Context, in InternalAnalyticsSummaryQuery) (InternalAnalyticsSummary, error) {
 	query := InternalAnalyticsDailyQuery{
-		EventGroup: strings.TrimSpace(in.EventGroup),
-		Days:       in.Days,
-		Limit:      10000,
+		EventGroup:    strings.TrimSpace(in.EventGroup),
+		SourceSurface: strings.TrimSpace(in.SourceSurface),
+		Role:          strings.TrimSpace(in.Role),
+		Result:        strings.TrimSpace(in.Result),
+		Days:          in.Days,
+		Limit:         10000,
 	}
 	daily, err := s.ListDailyAggregates(ctx, query)
 	if err != nil {
@@ -870,4 +926,89 @@ func internalAnalyticsNullableTime(value any) *time.Time {
 	default:
 		return nil
 	}
+}
+
+func sanitizeInternalAnalyticsPublicMetadata(input map[string]any) map[string]any {
+	output := map[string]any{}
+	for key, value := range input {
+		normalizedKey := normalizeInternalAnalyticsMetadataKey(key)
+		if _, ok := internalAnalyticsPublicMetadataKeys[normalizedKey]; !ok {
+			continue
+		}
+		switch typed := value.(type) {
+		case string:
+			safe := sanitizeInternalAnalyticsPublicToken(typed, "")
+			if safe != "" {
+				output[normalizedKey] = safe
+			}
+		case bool:
+			output[normalizedKey] = typed
+		case int:
+			output[normalizedKey] = typed
+		case int32:
+			output[normalizedKey] = typed
+		case int64:
+			output[normalizedKey] = typed
+		case float64:
+			if typed >= 0 && typed <= 10000 && typed == float64(int64(typed)) {
+				output[normalizedKey] = int64(typed)
+			}
+		}
+	}
+	return output
+}
+
+func sanitizeInternalAnalyticsPublicResult(result string, metadata map[string]any) string {
+	result = sanitizeInternalAnalyticsPublicToken(result, "")
+	if result == "" {
+		if raw, ok := metadata["result"].(string); ok {
+			result = sanitizeInternalAnalyticsPublicToken(raw, "")
+		}
+	}
+	switch result {
+	case "success", "failed", "error", "validation_failed", "started":
+		return result
+	default:
+		return ""
+	}
+}
+
+func sanitizeInternalAnalyticsPublicToken(value string, fallback string) string {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	if normalized == "" || internalAnalyticsLooksSensitivePublicValue(normalized) {
+		return fallback
+	}
+	normalized = strings.NewReplacer("-", "_", " ", "_", "/", "_").Replace(normalized)
+	var b strings.Builder
+	for _, r := range normalized {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
+			b.WriteRune(r)
+		}
+		if b.Len() >= 64 {
+			break
+		}
+	}
+	out := strings.Trim(b.String(), "_")
+	if out == "" {
+		return fallback
+	}
+	return out
+}
+
+func internalAnalyticsLooksSensitivePublicValue(value string) bool {
+	if strings.Contains(value, "://") || strings.Contains(value, "?") || strings.Contains(value, "=") || strings.Contains(value, "@") {
+		return true
+	}
+	consecutiveDigits := 0
+	for _, r := range value {
+		if r >= '0' && r <= '9' {
+			consecutiveDigits++
+			if consecutiveDigits >= 8 {
+				return true
+			}
+			continue
+		}
+		consecutiveDigits = 0
+	}
+	return false
 }

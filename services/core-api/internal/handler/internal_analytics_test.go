@@ -26,10 +26,12 @@ type fakeInternalAnalyticsService struct {
 	summary       service.InternalAnalyticsSummary
 	exportResult  service.InternalAnalyticsExport
 	err           error
+	publicErr     error
 	dailyErr      error
 	summaryErr    error
 	exportErr     error
 	called        bool
+	publicCalled  bool
 	dailyCalled   bool
 	summaryCalled bool
 	exportCalled  bool
@@ -51,6 +53,28 @@ func (f *fakeInternalAnalyticsService) CreateEvent(_ context.Context, in service
 		}
 	}
 	return f.row, nil
+}
+
+func (f *fakeInternalAnalyticsService) CreatePublicEvent(_ context.Context, in service.CreatePublicAnalyticsEventInput) (service.InternalAnalyticsEventReceipt, error) {
+	f.publicCalled = true
+	f.input = service.CreateInternalAnalyticsEventInput{
+		EventName:     in.EventName,
+		EventGroup:    "public",
+		SourceSurface: "public_website",
+		RouteGroup:    in.RouteGroup,
+		Metadata:      in.Metadata,
+		Result:        in.Result,
+	}
+	if f.publicErr != nil {
+		return service.InternalAnalyticsEventReceipt{}, f.publicErr
+	}
+	return service.InternalAnalyticsEventReceipt{
+		ID:                 "02000000-0000-0000-0000-000000000000",
+		EventName:          in.EventName,
+		EventGroup:         "public",
+		OccurredAt:         time.Date(2026, 5, 9, 10, 31, 0, 0, time.UTC),
+		RetentionExpiresAt: time.Date(2026, 8, 7, 10, 31, 0, 0, time.UTC),
+	}, nil
 }
 
 func (f *fakeInternalAnalyticsService) ListDailyAggregates(_ context.Context, in service.InternalAnalyticsDailyQuery) (service.InternalAnalyticsDailyResult, error) {
@@ -168,6 +192,47 @@ func TestInternalAnalyticsHandlerRejectsUnauthenticatedRequest(t *testing.T) {
 	}
 	if fake.called {
 		t.Fatalf("service should not be called for unauthenticated request")
+	}
+}
+
+func TestInternalAnalyticsHandlerCreatesPublicEventWithoutClaims(t *testing.T) {
+	fake := &fakeInternalAnalyticsService{}
+	h := &InternalAnalytics{svc: fake}
+	req := httptest.NewRequest(http.MethodPost, "/api/internal-analytics/public-events", strings.NewReader(`{"event_name":"public.page_view","route_group":"profil","result":"success","metadata":{"page_key":"profil","raw_user_agent":"must-not-forward"}}`))
+	rec := httptest.NewRecorder()
+
+	h.CreatePublicEvent(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", rec.Code, rec.Body.String())
+	}
+	if !fake.publicCalled {
+		t.Fatalf("public service was not called")
+	}
+	if fake.input.EventName != "public.page_view" || fake.input.RouteGroup != "profil" || fake.input.Result != "success" {
+		t.Fatalf("public input = %+v, want decoded public event", fake.input)
+	}
+	if fake.input.Metadata["page_key"] != "profil" || fake.input.Metadata["raw_user_agent"] != "must-not-forward" {
+		t.Fatalf("public metadata decode = %+v, want service-layer sanitizer to own filtering", fake.input.Metadata)
+	}
+	if strings.Contains(rec.Body.String(), "raw_user_agent") || strings.Contains(rec.Body.String(), "must-not-forward") {
+		t.Fatalf("public response leaked metadata: %s", rec.Body.String())
+	}
+}
+
+func TestInternalAnalyticsHandlerRejectsStrictPublicJSON(t *testing.T) {
+	fake := &fakeInternalAnalyticsService{}
+	h := &InternalAnalytics{svc: fake}
+	req := httptest.NewRequest(http.MethodPost, "/api/internal-analytics/public-events", strings.NewReader(`{"event_name":"public.page_view","source_surface":"public_website"}`))
+	rec := httptest.NewRecorder()
+
+	h.CreatePublicEvent(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if fake.publicCalled {
+		t.Fatalf("service should not be called for public payload with unknown fields")
 	}
 }
 
