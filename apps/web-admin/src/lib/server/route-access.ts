@@ -201,6 +201,7 @@ function usersPermission(pathname: string, method: string): string[] | undefined
 function settingsPermission(pathname: string): string[] | undefined {
 	if (matchesPathSegment(pathname, '/settings/account')) return undefined;
 	if (matchesPathSegment(pathname, '/settings/audit-logs')) return ['audit.read'];
+	if (matchesPathSegment(pathname, '/settings/analytics')) return ['analytics.read'];
 	if (matchesPathSegment(pathname, '/settings/rbac')) return ['roles.read'];
 	if (matchesPathSegment(pathname, '/settings/school-profile') || matchesPathSegment(pathname, '/api/school-profile')) return ['settings.school_profile'];
 	if (pathname === '/settings') return ['settings.account'];
@@ -323,6 +324,8 @@ function isRombelTimetableJournalSessionPath(pathname: string): boolean {
 export function requiredPermissionsForPath(pathname: string, method: string): string[] {
 	const settings = settingsPermission(pathname);
 	if (settings) return settings;
+	if (matchesPathSegment(pathname, '/api/internal-analytics/events')) return [];
+	if (matchesPathSegment(pathname, '/api/internal-analytics')) return isReadMethod(method) ? ['analytics.read'] : ['analytics.read'];
 	if (matchesPathSegment(pathname, '/api/rbac')) return isReadMethod(method) ? ['roles.read'] : ['roles.manage'];
 	if (matchesPathSegment(pathname, '/parents') || matchesPathSegment(pathname, '/api/parents')) return isReadMethod(method) ? ['parents.read'] : ['parents.manage'];
 	if (isRombelTimetableJournalSessionPath(pathname)) return ['journal.manage', 'journal.manage_all'];

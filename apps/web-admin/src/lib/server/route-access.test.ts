@@ -137,6 +137,23 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute({ ...user, permissions: [] }, '/settings/user-change-requests', 'GET')).toBe(false);
 	});
 
+	it('keeps internal analytics routes authenticated and read dashboard permission-scoped', () => {
+		const plainUser = { id: '1', username: 'plain', role: 'guru', roles: ['guru'], permissions: [] };
+		const analyticsReader = { id: '2', username: 'reader', role: '', roles: [], permissions: ['analytics.read'] };
+
+		expect(isPublicPath('/api/internal-analytics/events')).toBe(false);
+		expect(requiredPermissionsForPath('/api/internal-analytics/events', 'POST')).toEqual([]);
+		expect(canAccessProtectedRoute(undefined, '/api/internal-analytics/events', 'POST')).toBe(false);
+		expect(canAccessProtectedRoute(plainUser, '/api/internal-analytics/events', 'POST')).toBe(true);
+
+		expect(requiredPermissionsForPath('/settings/analytics', 'GET')).toEqual(['analytics.read']);
+		expect(requiredPermissionsForPath('/api/internal-analytics/summary', 'GET')).toEqual(['analytics.read']);
+		expect(requiredPermissionsForPath('/api/internal-analytics/daily', 'GET')).toEqual(['analytics.read']);
+		expect(canAccessProtectedRoute(plainUser, '/settings/analytics', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute(analyticsReader, '/settings/analytics', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute(analyticsReader, '/api/internal-analytics/summary', 'GET')).toBe(true);
+	});
+
 	it('guards student and parent portal routes by dedicated portal roles or permissions', () => {
 		const siswa = { id: '1', username: 'siswa', role: 'siswa', roles: ['siswa'], permissions: [] };
 		const ortu = { id: '2', username: 'ortu', role: 'ortu', roles: ['ortu'], permissions: [] };
@@ -242,6 +259,7 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/settings/users', 'GET')).toEqual(['users.read']);
 		expect(requiredPermissionsForPath('/settings', 'GET')).toEqual(['settings.account']);
 		expect(requiredPermissionsForPath('/settings/rbac', 'GET')).toEqual(['roles.read']);
+		expect(requiredPermissionsForPath('/settings/analytics', 'GET')).toEqual(['analytics.read']);
 		expect(requiredPermissionsForPath('/notifications', 'GET')).toEqual(['notifications.read']);
 		expect(requiredPermissionsForPath('/api/notifications', 'GET')).toEqual(['notifications.read']);
 		expect(requiredPermissionsForPath('/jadwal', 'GET')).toEqual(['academic.read', 'student_portal.schedule_read', 'parent_portal.child_schedule_read']);
@@ -252,6 +270,7 @@ describe('route access helpers', () => {
 		expect(requiredPermissionsForPath('/employees', 'GET')).toEqual(['employees.read', 'employees.manage']);
 		expect(requiredPermissionsForPath('/api/employees/employee-1', 'PUT')).toEqual(['employees.manage']);
 		expect(requiredPermissionsForPath('/api/rbac/matrix', 'GET')).toEqual(['roles.read']);
+		expect(requiredPermissionsForPath('/api/internal-analytics/daily', 'GET')).toEqual(['analytics.read']);
 		expect(requiredPermissionsForPath('/api/rbac/roles/guru/permissions', 'PUT')).toEqual(['roles.manage']);
 		expect(requiredPermissionsForPath('/settings/user-change-requests', 'GET')).toEqual(['profile_changes.review']);
 		expect(requiredPermissionsForPath('/api/users', 'POST')).toEqual(['users.create']);

@@ -13,6 +13,7 @@
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import { confirmAction } from '$lib/confirm-dialog';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
+	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
 	import {
 		employeeAccountGenerationCSV,
 		fetchRBACMatrix,
@@ -480,6 +481,10 @@
 	}
 
 	onMount(() => {
+		void trackInternalAnalyticsEvent('users.list_view', {
+			pathname: window.location.pathname,
+			metadata: { page_key: 'users' }
+		});
 		void load();
 	});
 </script>

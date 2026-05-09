@@ -13,7 +13,8 @@ const migration = [
 	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/076_profile_change_review_permission.sql'), 'utf8'),
 	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/079_journal_timetable_slot_scope.sql'), 'utf8'),
 	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/081_student_parent_account_portal.sql'), 'utf8'),
-	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/082_employee_rbac_permissions.sql'), 'utf8')
+	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/082_employee_rbac_permissions.sql'), 'utf8'),
+	readFileSync(resolve(repoRoot, 'services/core-api/db/migrations/084_internal_analytics_permissions.sql'), 'utf8')
 ].join('\n');
 const docs = readFileSync(resolve(repoRoot, 'docs/rbac-permission-catalog.md'), 'utf8');
 
@@ -28,6 +29,8 @@ describe('RBAC permission catalog stabilization', () => {
 		expect(permissionCatalogCodes()).toEqual(seeded);
 		expect(RBAC_PERMISSION_CATALOG.every((permission) => permission.code === `${permission.module}.${permission.action}`)).toBe(true);
 		expect(permissionLabel('roles.manage')).toContain('roles.manage');
+		expect(permissionLabel('analytics.read')).toContain('dashboard analytics internal');
+		expect(permissionLabel('analytics.security_read')).toContain('sinyal keamanan analytics');
 	});
 
 	it('documents every seeded permission in the operator catalog', () => {

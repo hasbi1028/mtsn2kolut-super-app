@@ -130,6 +130,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 				{ href: '/settings/rbac', label: 'Manajemen RBAC', icon: 'shield', roles: ['admin'], permissions: ['roles.read'] },
 				{ href: '/settings/user-change-requests', label: 'Perubahan Data', icon: 'file-text', roles: ['admin'], permissions: ['profile_changes.review'] },
 				{ href: '/settings/audit-logs', label: 'Audit Trail', icon: 'file-text', roles: ['admin'], permissions: ['audit.read'] },
+				{ href: '/settings/analytics', label: 'Analytics Internal', icon: 'activity', roles: ['admin'], permissions: ['analytics.read'] },
 				{ href: '/settings/school-profile', label: 'Profil Madrasah', icon: 'settings', roles: ['admin'], permissions: ['settings.school_profile'] }
 			]
 		}

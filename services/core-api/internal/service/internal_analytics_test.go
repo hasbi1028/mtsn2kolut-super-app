@@ -14,9 +14,12 @@ import (
 )
 
 type fakeInternalAnalyticsStore struct {
-	calls []db.CreateInternalAnalyticsEventParams
-	row   db.InternalAnalyticsEvent
-	err   error
+	calls      []db.CreateInternalAnalyticsEventParams
+	dailyCalls []db.ListInternalAnalyticsDailyAggregatesParams
+	row        db.InternalAnalyticsEvent
+	dailyRows  []db.InternalAnalyticsDailyAggregate
+	err        error
+	dailyErr   error
 }
 
 func (f *fakeInternalAnalyticsStore) CreateInternalAnalyticsEvent(_ context.Context, arg db.CreateInternalAnalyticsEventParams) (db.InternalAnalyticsEvent, error) {
@@ -41,6 +44,14 @@ func (f *fakeInternalAnalyticsStore) CreateInternalAnalyticsEvent(_ context.Cont
 		row.RetentionExpiresAt = arg.RetentionExpiresAt
 	}
 	return row, nil
+}
+
+func (f *fakeInternalAnalyticsStore) ListInternalAnalyticsDailyAggregates(_ context.Context, arg db.ListInternalAnalyticsDailyAggregatesParams) ([]db.InternalAnalyticsDailyAggregate, error) {
+	f.dailyCalls = append(f.dailyCalls, arg)
+	if f.dailyErr != nil {
+		return nil, f.dailyErr
+	}
+	return f.dailyRows, nil
 }
 
 func fixedAnalyticsNow() time.Time {
@@ -227,5 +238,88 @@ func TestInternalAnalyticsRejectsInvalidSourceSurface(t *testing.T) {
 	expectInternalAnalyticsValidationCode(t, err, InternalAnalyticsErrInvalidSourceSurface)
 	if len(store.calls) != 0 {
 		t.Fatalf("store called for invalid source surface")
+	}
+}
+
+func TestInternalAnalyticsListsDailyAggregatesWithoutRawMetadata(t *testing.T) {
+	store := &fakeInternalAnalyticsStore{
+		dailyRows: []db.InternalAnalyticsDailyAggregate{
+			{
+				AggregateDate: pgtype.Date{Time: time.Date(2026, 5, 9, 0, 0, 0, 0, time.UTC), Valid: true},
+				EventGroup:    "dashboard",
+				EventName:     "dashboard.view",
+				SourceSurface: "web_admin",
+				Role:          "admin",
+				Result:        "success",
+				Count:         7,
+				Metadata:      []byte(`{"raw_user_agent":"must-not-leak","safe":"ignored"}`),
+			},
+		},
+	}
+	svc := newTestInternalAnalytics(store)
+
+	result, err := svc.ListDailyAggregates(context.Background(), InternalAnalyticsDailyQuery{
+		EventGroup:    " dashboard ",
+		Days:          14,
+		SourceSurface: " web_admin ",
+		Limit:         25,
+	})
+	if err != nil {
+		t.Fatalf("ListDailyAggregates() error = %v", err)
+	}
+	if len(store.dailyCalls) != 1 {
+		t.Fatalf("ListInternalAnalyticsDailyAggregates calls = %d, want 1", len(store.dailyCalls))
+	}
+	call := store.dailyCalls[0]
+	if call.EventGroup != "dashboard" || call.SourceSurface != "web_admin" || call.LimitCount != 25 {
+		t.Fatalf("daily aggregate params = %+v, want trimmed filters and explicit limit", call)
+	}
+	if !call.EndDate.Time.Equal(time.Date(2026, 5, 9, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("end date = %v, want fixed now date", call.EndDate.Time)
+	}
+	if !call.StartDate.Time.Equal(time.Date(2026, 4, 26, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("start date = %v, want 14 day inclusive window", call.StartDate.Time)
+	}
+	if len(result.Items) != 1 {
+		t.Fatalf("daily result items = %d, want 1", len(result.Items))
+	}
+	item := result.Items[0]
+	if item.AggregateDate != "2026-05-09" || item.Count != 7 || item.Role != "admin" || item.Result != "success" {
+		t.Fatalf("daily item = %+v, want mapped aggregate fields", item)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal daily result: %v", err)
+	}
+	if strings.Contains(string(encoded), "raw_user_agent") || strings.Contains(string(encoded), "must-not-leak") || strings.Contains(string(encoded), "metadata") {
+		t.Fatalf("daily aggregate response leaked metadata: %s", encoded)
+	}
+}
+
+func TestInternalAnalyticsSummaryAggregatesCountsByGroupAndEvent(t *testing.T) {
+	store := &fakeInternalAnalyticsStore{
+		dailyRows: []db.InternalAnalyticsDailyAggregate{
+			{AggregateDate: pgtype.Date{Time: time.Date(2026, 5, 9, 0, 0, 0, 0, time.UTC), Valid: true}, EventGroup: "dashboard", EventName: "dashboard.view", SourceSurface: "web_admin", Count: 3},
+			{AggregateDate: pgtype.Date{Time: time.Date(2026, 5, 8, 0, 0, 0, 0, time.UTC), Valid: true}, EventGroup: "dashboard", EventName: "dashboard.view", SourceSurface: "web_admin", Count: 4},
+			{AggregateDate: pgtype.Date{Time: time.Date(2026, 5, 8, 0, 0, 0, 0, time.UTC), Valid: true}, EventGroup: "security", EventName: "security.forbidden", SourceSurface: "core_api", Count: 2},
+		},
+	}
+	svc := newTestInternalAnalytics(store)
+
+	summary, err := svc.Summary(context.Background(), InternalAnalyticsSummaryQuery{Days: 7})
+	if err != nil {
+		t.Fatalf("Summary() error = %v", err)
+	}
+	if summary.TotalCount != 9 {
+		t.Fatalf("summary total = %d, want 9", summary.TotalCount)
+	}
+	if len(summary.Groups) != 2 || summary.Groups[0].EventGroup != "dashboard" || summary.Groups[0].Count != 7 {
+		t.Fatalf("summary groups = %+v, want grouped counts sorted by count", summary.Groups)
+	}
+	if len(summary.TopEvents) != 2 || summary.TopEvents[0].EventName != "dashboard.view" || summary.TopEvents[0].Count != 7 {
+		t.Fatalf("summary top events = %+v, want event counts sorted by count", summary.TopEvents)
+	}
+	if len(store.dailyCalls) != 1 || store.dailyCalls[0].LimitCount != 10000 {
+		t.Fatalf("summary daily call = %+v, want bounded aggregate read", store.dailyCalls)
 	}
 }

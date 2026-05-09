@@ -46,6 +46,7 @@
 		type PermissionMetadataDraft
 	} from '$lib/rbac/permissions';
 	import { buildUIPolicyPreview } from '$lib/rbac/ui-policy';
+	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
 
 	type RBACOverview = {
 		matrix: RBACMatrix;
@@ -376,6 +377,10 @@
 	}
 
 	onMount(() => {
+		void trackInternalAnalyticsEvent('rbac.roles_view', {
+			pathname: window.location.pathname,
+			metadata: { page_key: 'rbac' }
+		});
 		void loadRBACOverview();
 	});
 </script>

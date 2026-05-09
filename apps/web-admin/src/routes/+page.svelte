@@ -9,6 +9,7 @@
 	import PublicHome from '$lib/components/PublicHome.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import { clientApiPath, readClientApiData } from '$lib/client/api';
+	import { trackInternalAnalyticsEvent } from '$lib/analytics/internal-analytics';
 	import { dashboardDataAccessForUser, visibleDashboardWidgetsForUser } from '$lib/rbac/dashboard-policy';
 
 	type WebsiteContent = {
@@ -285,6 +286,11 @@
 
 	onMount(() => {
 		if (data.user) {
+			void trackInternalAnalyticsEvent('dashboard.view', {
+				pathname: window.location.pathname,
+				role: roles[0],
+				metadata: { page_key: 'dashboard' }
+			});
 			refreshDashboard();
 		}
 	});
