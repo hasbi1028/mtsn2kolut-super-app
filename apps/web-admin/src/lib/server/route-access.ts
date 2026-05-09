@@ -358,6 +358,19 @@ export function canAccessProtectedRoute(user: AuthUser | undefined, pathname: st
 
 	const requiredPermissions = requiredPermissionsForPath(pathname, method);
 	if (requiredPermissions.length > 0 && hasAnyPermission(user, requiredPermissions)) return true;
+	if (
+		isGuruSafeAssessmentSupportReadPath(pathname, method)
+		&& hasAnyRole(user, ['guru'])
+		&& hasAnyPermission(user, [
+			'bank_soal.read',
+			'bank_soal.create',
+			'bank_soal.update',
+			'bank_soal.review',
+			'bank_soal.publish',
+			'bank_soal.import',
+			'bank_soal.analytics'
+		])
+	) return true;
 
 	if (isAdminOnlyPath(pathname) && !isGuruSafeAssessmentSupportReadPath(pathname, method)) return false;
 	if (isStudentPortalPath(pathname)) return hasAnyRole(user, ['siswa']);

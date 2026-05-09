@@ -230,6 +230,10 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute({ id: '4', username: 'guru', role: 'guru', roles: ['guru'], permissions: [] }, '/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toBe(false);
 		expect(canAccessProtectedRoute({ id: '5', username: 'journal-all', role: '', roles: [], permissions: ['journal.manage_all'] }, '/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toBe(true);
 		expect(canAccessProtectedRoute(reader, '/api/academic/rombel/class-1/timetable-slots/slot-1/journal-session', 'POST')).toBe(false);
+		expect(canAccessProtectedRoute({ ...plainGuru, permissions: ['bank_soal.create'] }, '/api/asesmen/events', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...plainGuru, permissions: ['bank_soal.create'] }, '/api/asesmen/events/event-1', 'GET')).toBe(true);
+		expect(canAccessProtectedRoute({ ...plainGuru, permissions: ['bank_soal.create'] }, '/api/asesmen/events/event-1/results', 'GET')).toBe(false);
+		expect(canAccessProtectedRoute({ ...plainGuru, permissions: ['bank_soal.create'] }, '/api/asesmen/events/event-1/question-targets', 'PUT')).toBe(false);
 		expect(canAccessProtectedRoute(reader, '/api/asesmen/events/event-1/question-targets', 'PUT')).toBe(false);
 		expect(canAccessProtectedRoute(mutator, '/api/asesmen/events/event-1/question-targets', 'PUT')).toBe(true);
 		expect(canAccessProtectedRoute(plainGuru, '/asesmen/hasil', 'GET')).toBe(false);
