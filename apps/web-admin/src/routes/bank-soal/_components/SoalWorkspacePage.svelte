@@ -3902,7 +3902,7 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 									<span class="font-semibold text-foreground">{questionTypeConfig.label}:</span> {questionTypeConfig.desc}
 								</span>
 							</div>
-							<div class="grid gap-2 lg:grid-cols-[8rem_minmax(0,1fr)_8rem_6.5rem_10.5rem] lg:items-end">
+							<div class="grid gap-2 lg:grid-cols-[8rem_minmax(0,1fr)_5.5rem_8rem_6.5rem_10.5rem] lg:items-end">
 								<div class="self-center">
 									<h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-foreground">Metadata</h3>
 									<p class="mt-0.5 text-[10px] text-muted-foreground">Data wajib</p>
@@ -3926,6 +3926,10 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 											<option value={s.id}>{s.name}</option>
 										{/each}
 									</select>
+								</div>
+								<div>
+									<label for="f-grade-level" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tingkat</label>
+									<Input id="f-grade-level" type="number" min="1" max="12" bind:value={fGradeLevel} class="h-8 text-sm font-medium" />
 								</div>
 								<div>
 									<label for="f-difficulty" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -3968,10 +3972,6 @@ type ComposerStageCard = { label: string; desc: string; status: string; tone: 'g
 									</label>
 								</div>
 								<div class="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
-									<div>
-										<label for="f-grade-level" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tingkat</label>
-										<Input id="f-grade-level" type="number" min="1" max="12" bind:value={fGradeLevel} class="h-8 text-sm" />
-									</div>
 									<div>
 										<label for="f-phase" class="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Fase</label>
 										<Input id="f-phase" placeholder="Fase D" bind:value={fAcademicPhase} class="h-8 text-sm" />
