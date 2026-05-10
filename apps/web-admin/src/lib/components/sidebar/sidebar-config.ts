@@ -70,6 +70,7 @@ export const sidebarNavGroups: SidebarNavGroup[] = [
 			{ href: '/asesmen/paket', label: 'Paket Soal', icon: 'book-open', roles: ['admin'], permissions: ['asesmen.package_manage'] },
 			{ href: '/asesmen/kegiatan', label: 'Kegiatan', icon: 'calendar', roles: ['admin'], permissions: ['asesmen.event_manage'] },
 			{ href: '/asesmen/persiapan', label: 'Persiapan', icon: 'file-text', roles: ['admin', 'guru'], permissions: ['asesmen.read'] },
+			{ href: '/asesmen/aplikasi-siswa/release', label: 'APK CBT Mobile', icon: 'package', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.read', 'asesmen.proctor'] },
 			{ href: '/asesmen/pelaksanaan', label: 'Pelaksanaan', icon: 'activity', roles: ['admin', 'guru', 'staf'], permissions: ['asesmen.proctor'] },
 			{ href: '/asesmen/hasil', label: 'Hasil', icon: 'clipboard', roles: ['admin', 'guru'], permissions: ['asesmen.result_read'] }
 		]
