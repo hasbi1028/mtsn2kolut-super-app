@@ -19,6 +19,7 @@ const PUBLIC_PREFIXES = [
 	'/berita/',
 	'/pengumuman/',
 	'/api/exam/',
+	'/releases/mobile/',
 	'/api/public/site/pages/',
 	'/api/public/site/posts/',
 	'/api/public/site/announcements/'
