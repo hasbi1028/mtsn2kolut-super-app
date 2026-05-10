@@ -423,7 +423,7 @@ func antiCheatRiskWeight(data map[string]any) int32 {
 	case severity == "critical" || reason == "anti_cheat_local_lock":
 		return 80
 	case reason == "split_screen_detected" || reason == "picture_in_picture_detected":
-		return 40
+		return 25
 	case reason == "window_focus_lost" || reason == "app_backgrounded":
 		return 30
 	default:

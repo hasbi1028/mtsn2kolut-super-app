@@ -71,12 +71,22 @@ class ExamClientEvents {
         'reason': reason,
         'violation_count': violationCount,
         'max_violations_before_lock': maxViolationsBeforeLock,
-        'severity': violationCount >= maxViolationsBeforeLock
-            ? 'critical'
-            : 'high',
+        'severity': _antiCheatSeverity(
+          violationCount: violationCount,
+          maxViolationsBeforeLock: maxViolationsBeforeLock,
+        ),
         ...data,
       }),
     );
+  }
+
+  static String _antiCheatSeverity({
+    required int violationCount,
+    required int maxViolationsBeforeLock,
+  }) {
+    if (violationCount >= maxViolationsBeforeLock) return 'critical';
+    if (violationCount >= 2) return 'high';
+    return 'warning';
   }
 
   static ExamClientEvent resumeGate({required int resumeAttemptCount}) {

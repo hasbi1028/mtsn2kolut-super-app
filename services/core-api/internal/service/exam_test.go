@@ -510,6 +510,18 @@ func TestExamOperationalMethodsHandleErrorsAndEvents(t *testing.T) {
 	}
 }
 
+func TestAntiCheatRiskWeightHybridEscalation(t *testing.T) {
+	if got := antiCheatRiskWeight(map[string]any{"reason": "split_screen_detected", "severity": "warning"}); got != 25 {
+		t.Fatalf("antiCheatRiskWeight(split screen first strike) = %d, want 25 for warning->high->lock escalation", got)
+	}
+	if got := antiCheatRiskWeight(map[string]any{"reason": "picture_in_picture_detected", "severity": "warning"}); got != 25 {
+		t.Fatalf("antiCheatRiskWeight(picture-in-picture first strike) = %d, want 25", got)
+	}
+	if got := antiCheatRiskWeight(map[string]any{"reason": "anti_cheat_local_lock", "severity": "critical"}); got != 80 {
+		t.Fatalf("antiCheatRiskWeight(local lock) = %d, want immediate critical lock weight", got)
+	}
+}
+
 func TestExamStatusAndHelpersCoverFallbackBranches(t *testing.T) {
 	ctx := context.Background()
 	participant := examActiveParticipant(t)
