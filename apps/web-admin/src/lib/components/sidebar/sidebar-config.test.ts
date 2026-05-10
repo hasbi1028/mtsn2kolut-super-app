@@ -32,6 +32,7 @@ describe('sidebar assessment configuration', () => {
 			'Paket Soal',
 			'Kegiatan',
 			'Persiapan',
+			'APK CBT Mobile',
 			'Pelaksanaan',
 			'Hasil'
 		]);
@@ -43,10 +44,11 @@ describe('sidebar assessment configuration', () => {
 			'/asesmen/paket',
 			'/asesmen/kegiatan',
 			'/asesmen/persiapan',
+			'/asesmen/aplikasi-siswa/release',
 			'/asesmen/pelaksanaan',
 			'/asesmen/hasil'
 		]);
-		expect(assessmentItems).toHaveLength(6);
+		expect(assessmentItems).toHaveLength(7);
 		expect(new Set(assessmentItems.map((item) => item.href)).size).toBe(assessmentItems.length);
 		expect(assessmentItems.some((item) => item.href === '/cbt/soal')).toBe(false);
 		expect(assessmentItems.some((item) => item.href === '/cbt/bank-soal')).toBe(false);
@@ -60,6 +62,7 @@ describe('sidebar assessment configuration', () => {
 		expect(assessmentItems.find((item) => item.href === '/asesmen/paket')?.roles).toEqual(['admin']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/kegiatan')?.roles).toEqual(['admin']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/persiapan')?.roles).toEqual(['admin', 'guru']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/aplikasi-siswa/release')?.roles).toEqual(['admin', 'guru', 'staf']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/pelaksanaan')?.roles).toEqual(['admin', 'guru', 'staf']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/hasil')?.roles).toEqual(['admin', 'guru']);
 		expect(assessmentItems.flatMap((item) => item.roles ?? [])).not.toContain('reviewer');
@@ -155,6 +158,7 @@ describe('sidebar assessment configuration', () => {
 		expect(bankSoalItems.filter((item) => !['/bank-soal/tambah', '/bank-soal/verifikasi', '/bank-soal/impor', '/bank-soal/analisis-butir', '/bank-soal/pengaturan'].includes(item.href)).every((item) => item.permissions.includes('bank_soal.read'))).toBe(true);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/kegiatan')?.permissions).toEqual(['asesmen.event_manage']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/paket')?.permissions).toEqual(['asesmen.package_manage']);
+		expect(assessmentItems.find((item) => item.href === '/asesmen/aplikasi-siswa/release')?.permissions).toEqual(['asesmen.read', 'asesmen.proctor']);
 		expect(assessmentItems.find((item) => item.href === '/asesmen/hasil')?.permissions).toEqual(['asesmen.result_read']);
 	});
 
