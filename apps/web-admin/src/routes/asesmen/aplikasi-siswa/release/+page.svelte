@@ -1,7 +1,30 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+
+	type MobileReleaseManifest = {
+		app_name: string;
+		channel: string;
+		platform: string;
+		abi: string;
+		version_name: string;
+		version_code: number;
+		commit: string;
+		build_time: string;
+		published_at: string;
+		file_name: string;
+		download_url: string;
+		absolute_download_url: string;
+		archive_url: string;
+		checksum_url: string;
+		qr_url: string;
+		size_bytes: number;
+		sha256: string;
+		server_url: string;
+		notes: string[];
+	};
 
 	const backendChecks = [
 		'Response login masih memuat field siswa, sesi, ruang, dan progres yang dipakai Flutter.',
@@ -50,6 +73,49 @@
 			description: 'Panduan singkat pengawas saat siswa mulai ujian dan ketika koneksi mulai bermasalah.'
 		}
 	];
+
+	let release = $state<MobileReleaseManifest | null>(null);
+	let releaseError = $state('');
+	let copied = $state(false);
+
+	onMount(async () => {
+		try {
+			const response = await fetch('/releases/mobile/latest.json', { cache: 'no-store' });
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+			release = await response.json();
+		} catch (error) {
+			releaseError = error instanceof Error ? error.message : 'Manifest rilis belum tersedia.';
+		}
+	});
+
+	function formatBytes(bytes: number) {
+		if (!Number.isFinite(bytes) || bytes <= 0) return '-';
+		const units = ['B', 'KB', 'MB', 'GB'];
+		let value = bytes;
+		let unit = 0;
+		while (value >= 1024 && unit < units.length - 1) {
+			value /= 1024;
+			unit += 1;
+		}
+		return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+	}
+
+	function formatDate(value: string) {
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return value || '-';
+		return new Intl.DateTimeFormat('id-ID', {
+			dateStyle: 'medium',
+			timeStyle: 'short',
+			timeZone: 'Asia/Makassar'
+		}).format(date);
+	}
+
+	async function copyDownloadLink() {
+		if (!release) return;
+		await navigator.clipboard?.writeText(release.absolute_download_url ?? release.download_url);
+		copied = true;
+		setTimeout(() => (copied = false), 1800);
+	}
 </script>
 
 <svelte:head>
@@ -74,6 +140,80 @@
 			</div>
 		</div>
 	</section>
+
+	<Card.Root class="overflow-hidden border-primary/20 shadow-sm">
+		<Card.Header class="bg-gradient-to-r from-primary/10 via-card to-card">
+			<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+				<div>
+					<div class="flex flex-wrap items-center gap-2">
+						<Badge class="border-primary/20 bg-primary/10 text-primary">APK Resmi</Badge>
+						<Badge class="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">Production</Badge>
+						<Badge class="border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300">Anti-cheat aktif</Badge>
+					</div>
+					<Card.Title class="mt-3 text-xl text-foreground">Download APK CBT Mobile Terbaru</Card.Title>
+					<Card.Description>
+						Data diambil otomatis dari manifest server. Jika APK baru dipublish, info dan link ini ikut berubah tanpa edit halaman.
+					</Card.Description>
+				</div>
+				{#if release}
+					<div class="rounded-2xl border border-border bg-background/80 px-4 py-3 text-sm">
+						<p class="text-muted-foreground">Commit</p>
+						<p class="font-mono font-semibold text-foreground">{release.commit}</p>
+					</div>
+				{/if}
+			</div>
+		</Card.Header>
+		<Card.Content class="grid gap-6 pt-6 lg:grid-cols-[1fr_220px]">
+			{#if release}
+				<div class="space-y-5">
+					<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+						<div class="rounded-2xl border border-border bg-muted/40 p-4">
+							<p class="text-xs uppercase tracking-wide text-muted-foreground">Nama App</p>
+							<p class="mt-1 text-sm font-semibold text-foreground">{release.app_name}</p>
+						</div>
+						<div class="rounded-2xl border border-border bg-muted/40 p-4">
+							<p class="text-xs uppercase tracking-wide text-muted-foreground">Versi</p>
+							<p class="mt-1 text-sm font-semibold text-foreground">v{release.version_name} · code {release.version_code}</p>
+						</div>
+						<div class="rounded-2xl border border-border bg-muted/40 p-4">
+							<p class="text-xs uppercase tracking-wide text-muted-foreground">Ukuran</p>
+							<p class="mt-1 text-sm font-semibold text-foreground">{formatBytes(release.size_bytes)}</p>
+						</div>
+						<div class="rounded-2xl border border-border bg-muted/40 p-4">
+							<p class="text-xs uppercase tracking-wide text-muted-foreground">Build</p>
+							<p class="mt-1 text-sm font-semibold text-foreground">{formatDate(release.build_time)}</p>
+						</div>
+					</div>
+
+					<div class="rounded-2xl border border-border bg-muted/30 p-4">
+						<p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">SHA256</p>
+						<p class="mt-2 break-all font-mono text-xs leading-6 text-foreground">{release.sha256}</p>
+					</div>
+
+					<div class="flex flex-wrap gap-3">
+						<Button href={release.download_url} class="h-10" download>Download APK Terbaru</Button>
+						<Button href={release.checksum_url} class="h-10" variant="outline" download>Download Checksum</Button>
+						<Button class="h-10" variant="outline" onclick={copyDownloadLink}>{copied ? 'Link Tersalin' : 'Salin Link'}</Button>
+					</div>
+
+					<div class="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-900 dark:text-amber-100">
+						<p class="font-semibold">Sumber resmi APK</p>
+						<p>Install hanya dari domain <span class="font-mono">{release.server_url}</span>. Jangan gunakan APK dari sumber lain.</p>
+					</div>
+				</div>
+				<div class="flex flex-col items-center justify-center rounded-2xl border border-border bg-muted/30 p-4 text-center">
+					<img src={release.qr_url} alt="QR download APK CBT Mobile" class="h-44 w-44 rounded-xl bg-white p-2" />
+					<p class="mt-3 text-sm font-semibold text-foreground">Scan untuk download</p>
+					<p class="mt-1 break-all text-xs leading-5 text-muted-foreground">{release.absolute_download_url}</p>
+				</div>
+			{:else}
+				<div class="lg:col-span-2 rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-sm leading-6 text-muted-foreground">
+					<p class="font-semibold text-foreground">Manifest APK belum terbaca.</p>
+					<p class="mt-1">{releaseError || 'Memuat latest.json dari server...'}</p>
+				</div>
+			{/if}
+		</Card.Content>
+	</Card.Root>
 
 	<Card.Root class="border-primary/20 bg-primary/10 shadow-sm">
 		<Card.Content class="grid gap-4 pt-6 md:grid-cols-3">
