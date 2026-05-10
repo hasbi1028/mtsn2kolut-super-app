@@ -155,6 +155,12 @@
 	let actionBusyId = $state('');
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 	let interval: ReturnType<typeof setInterval> | undefined;
+	let liveSource = $state<EventSource | null>(null);
+	let liveMode = $state<'connecting' | 'sse' | 'polling'>('connecting');
+	let seenEventIds = $state(new Set<string>());
+	let recentAlertEvents = $state<ProctoringEvent[]>([]);
+	let highlightedParticipantIds = $state(new Map<string, number>());
+	let hasPrimedLiveEvents = false;
 	let handoverLocked = $derived(Boolean(handover?.locked_at));
 
 	let participantStats = $derived.by(() => {
@@ -180,24 +186,138 @@
 	onMount(() => {
 		dashboardPromise = loadDashboard();
 		void loadHandover();
+		connectLiveStream();
 		interval = setInterval(() => {
 			if (typeof document !== 'undefined' && document.hidden) return;
+			if (liveMode === 'sse') return;
 			void refreshDashboard(true);
-		}, 15000);
+		}, 5000);
 	});
 
 	onDestroy(() => {
 		if (interval) clearInterval(interval);
+		liveSource?.close();
 	});
 
 	async function loadDashboard() {
 		const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/proctoring`);
 		const payload = await readClientApiData<DashboardPayload>(res, 'Gagal memuat dashboard pengawas ruang');
+		mergeDashboardPayload(payload);
+		return payload;
+	}
+
+
+	function mergeDashboardPayload(payload: DashboardPayload) {
 		room = payload.room;
 		proctors = Array.isArray(payload.proctors) ? payload.proctors : [];
 		participants = Array.isArray(payload.participants) ? payload.participants : [];
-		events = Array.isArray(payload.events) ? payload.events : [];
-		return payload;
+		const nextEvents = Array.isArray(payload.events) ? payload.events : [];
+		if (hasPrimedLiveEvents) notifyNewEvents(nextEvents);
+		else {
+			primeSeenEvents(nextEvents);
+			hasPrimedLiveEvents = true;
+		}
+		events = nextEvents;
+	}
+
+	function primeSeenEvents(items: ProctoringEvent[]) {
+		const next = new Set(seenEventIds);
+		for (const event of items) next.add(event.id);
+		seenEventIds = next;
+	}
+
+	function importantEvent(event: ProctoringEvent) {
+		return ['anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'proctor_force_submit', 'proctor_reset_access'].includes(event.event_type);
+	}
+
+	function eventReason(event: ProctoringEvent) {
+		if (event.event_data && typeof event.event_data === 'object' && 'reason' in event.event_data) {
+			const reason = (event.event_data as { reason?: unknown }).reason;
+			if (typeof reason === 'string' && reason.trim()) return reason.replaceAll('_', ' ');
+		}
+		return proctorEventLabel(event);
+	}
+
+	function notifyNewEvents(nextEvents: ProctoringEvent[]) {
+		const known = new Set(seenEventIds);
+		const fresh = nextEvents
+			.filter((event) => event.id && !known.has(event.id))
+			.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+		if (fresh.length === 0) return;
+		for (const event of fresh) known.add(event.id);
+		seenEventIds = known;
+		for (const event of fresh.filter(importantEvent)) {
+			recentAlertEvents = [event, ...recentAlertEvents.filter((item) => item.id !== event.id)].slice(0, 12);
+			highlightParticipant(event.participant_id);
+			const message = `${event.nama}: ${eventReason(event)}`;
+			if (event.event_type === 'anti_cheat_violation') toast.warning(message);
+			else if (event.event_type === 'app_switch' || event.event_type === 'screenshot_attempt') toast.warning(message);
+			else toast.info(message);
+		}
+	}
+
+	function handleLiveEvent(event: ProctoringEvent) {
+		notifyNewEvents([event]);
+		events = [event, ...events.filter((item) => item.id !== event.id)].slice(0, 100);
+		void refreshDashboard(true);
+	}
+
+	function connectLiveStream() {
+		if (typeof EventSource === 'undefined') {
+			liveMode = 'polling';
+			return;
+		}
+		liveSource?.close();
+		liveMode = 'connecting';
+		const source = new EventSource(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/proctoring/stream`);
+		liveSource = source;
+		source.addEventListener('ready', () => {
+			liveMode = 'sse';
+		});
+		source.addEventListener('proctor_event', (message) => {
+			liveMode = 'sse';
+			try {
+				handleLiveEvent(JSON.parse((message as MessageEvent).data) as ProctoringEvent);
+			} catch (error) {
+				console.error('Invalid proctoring SSE payload', error);
+			}
+		});
+		source.onerror = () => {
+			liveMode = 'polling';
+			source.close();
+			liveSource = null;
+			setTimeout(() => {
+				if (typeof document !== 'undefined' && document.hidden) return;
+				connectLiveStream();
+			}, 5000);
+		};
+	}
+
+	function highlightParticipant(participantId: string) {
+		if (!participantId) return;
+		const next = new Map(highlightedParticipantIds);
+		next.set(participantId, Date.now() + 15000);
+		highlightedParticipantIds = next;
+		setTimeout(() => {
+			const current = highlightedParticipantIds.get(participantId) ?? 0;
+			if (current <= Date.now()) {
+				const cleared = new Map(highlightedParticipantIds);
+				cleared.delete(participantId);
+				highlightedParticipantIds = cleared;
+			}
+		}, 15500);
+	}
+
+	function liveModeLabel() {
+		if (liveMode === 'sse') return 'Live connected';
+		if (liveMode === 'connecting') return 'Menghubungkan live';
+		return 'Fallback polling 5 detik';
+	}
+
+	function liveModeClass() {
+		if (liveMode === 'sse') return 'border-primary/20 bg-primary/10 text-primary';
+		if (liveMode === 'connecting') return 'border-warning/30 bg-warning/10 text-warning';
+		return 'border-destructive/30 bg-destructive/10 text-destructive';
 	}
 
 	async function loadHandover() {
@@ -473,6 +593,7 @@
 			<p class="text-sm text-muted-foreground">{room?.session_title ?? 'Memuat sesi'} · {room?.room_name ?? 'Memuat ruang'}</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
+			<Badge variant="outline" class={liveModeClass()}>{liveModeLabel()}</Badge>
 			{#if backgroundBusy}
 				<Badge variant="outline" class="border-primary/20 text-primary">Memperbarui</Badge>
 			{/if}
@@ -492,6 +613,22 @@
 
 	{#if operationState}
 		<OperationStatusPanel {...operationState} />
+	{/if}
+
+	{#if recentAlertEvents.length > 0}
+		<Card.Root class="border-warning/30 bg-warning/5">
+			<Card.Header class="pb-2">
+				<Card.Title class="text-base">Live Alert Kecurangan</Card.Title>
+			</Card.Header>
+			<Card.Content class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+				{#each recentAlertEvents.slice(0, 6) as event (event.id)}
+					<div class="rounded-lg border border-warning/20 bg-card p-3 text-sm">
+						<div class="font-semibold text-foreground">{event.nama}</div>
+						<div class="text-muted-foreground">{eventReason(event)} · {fmtDate(event.created_at)}</div>
+					</div>
+				{/each}
+			</Card.Content>
+		</Card.Root>
 	{/if}
 
 	<AsyncContent promise={dashboardPromise} onerror={handleRenderError}>
@@ -748,7 +885,7 @@
 								</Table.Header>
 								<Table.Body>
 									{#each participants as row (row.participant_id)}
-											<Table.Row class={rowAttentionClass(row)}>
+											<Table.Row class={`${rowAttentionClass(row)} ${highlightedParticipantIds.has(row.participant_id) ? 'ring-2 ring-warning/60 bg-warning/15' : ''}`}>
 											<Table.Cell>
 												<div class="font-medium text-foreground">{row.nama}</div>
 												<div class="text-xs text-muted-foreground">{row.nis}</div>
