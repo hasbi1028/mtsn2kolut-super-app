@@ -68,6 +68,11 @@
 			description: 'Checklist operasional build, verifikasi, dan distribusi APK internal.'
 		},
 		{
+			title: 'Mobile APK Release Center',
+			path: 'docs/mobile-apk-release-center.md',
+			description: 'Runbook publish APK terbaru ke endpoint SvelteKit/cloudflared tanpa rebuild web.'
+		},
+		{
 			title: 'Operator Quick Start',
 			path: 'apps/mobile/OPERATOR_QUICKSTART.md',
 			description: 'Panduan singkat pengawas saat siswa mulai ujian dan ketika koneksi mulai bermasalah.'
