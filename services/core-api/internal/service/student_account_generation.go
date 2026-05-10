@@ -93,11 +93,8 @@ func (s *StudentAccountGenerator) Generate(ctx context.Context, actorID pgtype.U
 				markStudentAccountGenerationFailed(&result, item, "student_id tidak valid")
 				continue
 			}
-			password, err := s.generatePassword()
+			password, err := s.studentInitialPassword(item)
 			if err != nil {
-				return err
-			}
-			if err := ValidatePassword(item.GeneratedUsername, password); err != nil {
 				return err
 			}
 			hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -170,6 +167,10 @@ func (s *StudentAccountGenerator) buildResult(rows []db.ListStudentAccountGenera
 			item.Reason = "siswa sudah punya akun"
 			item.ExistingUserID = uuidEntityID(row.ExistingUserID)
 			result.Skipped++
+		case strings.TrimSpace(row.Nisn) == "":
+			item.Status = "skipped"
+			item.Reason = "NISN belum diisi"
+			result.Skipped++
 		case base == "":
 			item.Status = "skipped"
 			item.Reason = "NISN/NIS belum diisi"
@@ -190,6 +191,17 @@ func (s *StudentAccountGenerator) accountRole() string {
 		return StudentAccountRole
 	}
 	return strings.TrimSpace(s.role)
+}
+
+func (s *StudentAccountGenerator) studentInitialPassword(item *StudentAccountGenerationCandidate) (string, error) {
+	if s.passwordGenerator != nil {
+		return s.passwordGenerator()
+	}
+	password := strings.TrimSpace(item.NISN)
+	if password == "" {
+		return "", fmt.Errorf("NISN belum diisi")
+	}
+	return password, nil
 }
 
 func (s *StudentAccountGenerator) generatePassword() (string, error) {

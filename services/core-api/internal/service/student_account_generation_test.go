@@ -74,7 +74,36 @@ func TestStudentAccountGenerationPreviewBuildsDeterministicUsernames(t *testing.
 	assertStudentCandidate(t, result.Candidates[1], existingStudentID, "", "skipped", "siswa sudah punya akun")
 	assertStudentCandidate(t, result.Candidates[2], duplicateAID, "9876543210", "ready", "")
 	assertStudentCandidate(t, result.Candidates[3], duplicateBID, "9876543210-01", "ready", "")
-	assertStudentCandidate(t, result.Candidates[4], missingBasisID, "", "skipped", "NISN/NIS belum diisi")
+	assertStudentCandidate(t, result.Candidates[4], missingBasisID, "", "skipped", "NISN belum diisi")
+}
+
+func TestStudentAccountGenerationGenerateUsesNISNAsDefaultInitialPassword(t *testing.T) {
+	studentID := testGenerationUUID(31)
+	userID := testGenerationUUID(95)
+	actorID := testGenerationUUID(96)
+	store := &fakeStudentAccountGenerationStore{
+		studentRows: []db.ListStudentAccountGenerationCandidatesRow{{
+			StudentID:    studentID,
+			Nis:          "201",
+			Nisn:         "0099887766",
+			Nama:         "Gita",
+			BaseUsername: "0099887766",
+		}},
+		createUserID: userID,
+	}
+	generator := &StudentAccountGenerator{q: store, role: StudentAccountRole}
+
+	result, err := generator.Generate(context.Background(), actorID)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	if result.Created != 1 || result.Candidates[0].TemporaryPassword != "0099887766" {
+		t.Fatalf("result = %+v, want one created candidate with NISN initial password", result)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(store.createArg.PasswordHash), []byte("0099887766")); err != nil {
+		t.Fatalf("password hash does not match NISN: %v", err)
+	}
 }
 
 func TestStudentAccountGenerationGenerateCreatesMustChangePasswordUserAndAudit(t *testing.T) {

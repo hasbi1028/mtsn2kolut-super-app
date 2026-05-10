@@ -347,7 +347,7 @@
 		if (!canManageStudentAccounts) return;
 		if (!(await confirmAction({
 			title: 'Generate Akun Siswa',
-			message: 'Password hanya tampil sekali. Simpan/unduh hasil generate sekarang.',
+			message: 'Password awal akan memakai NISN siswa dan hanya tampil sekali. Simpan/unduh hasil generate sekarang.',
 			confirmLabel: 'Generate Akun',
 			tone: 'warning'
 		}))) return;
@@ -425,7 +425,7 @@
 			<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 				<div>
 					<Card.Title class="text-base">Akun Siswa</Card.Title>
-					<p class="mt-1 text-sm text-muted-foreground">Password hanya tampil sekali. Simpan/unduh hasil generate sekarang.</p>
+					<p class="mt-1 text-sm text-muted-foreground">Password awal memakai NISN siswa dan hanya tampil sekali. Simpan/unduh hasil generate sekarang.</p>
 					<p class="mt-1 text-sm text-muted-foreground">Akun wajib mengganti password saat login pertama.</p>
 					<p class="mt-1 text-sm text-muted-foreground">Data resmi tetap dikunci dan perubahan melalui approval.</p>
 				</div>
