@@ -6,11 +6,12 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
-	import { clientApiPath, clientApiPathWithQuery, readClientApiData } from '$lib/client/api';
+	import { clientApiPath, clientApiPathWithQuery, readClientApiData, readClientJson } from '$lib/client/api';
 	import { proctorEventLabel } from '$lib/cbt/proctor-evidence';
 
 	type ProctoringRow = {
@@ -70,6 +71,8 @@
 	let interval: ReturnType<typeof setInterval> | undefined;
 	let liveMode = $state<'connecting' | 'sse' | 'polling'>('connecting');
 	let filter = $state<'all' | 'warning' | 'high' | 'locked' | 'offline'>('all');
+	let audioAlertsEnabled = $state(false);
+	let actionBusyId = $state('');
 	let hasPrimedEvents = false;
 
 	let roomSummaries = $derived.by<RoomSummary[]>(() => {
@@ -163,6 +166,7 @@
 			const message = `${event.room_name} · ${event.nama}: ${eventReason(event)}`;
 			if (event.event_type === 'anti_cheat_violation') toast.warning(message);
 			else toast.info(message);
+			if (shouldPlayAlertSound(event)) playAlertSound();
 		}
 	}
 
@@ -202,7 +206,7 @@
 	}
 
 	function importantEvent(event: ProctoringEvent) {
-		return ['anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'proctor_force_submit', 'proctor_reset_access'].includes(event.event_type);
+		return ['anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'proctor_force_submit', 'proctor_reset_access', 'proctor_unlock', 'proctor_acknowledge'].includes(event.event_type);
 	}
 
 	function eventReason(event: ProctoringEvent) {
@@ -211,6 +215,73 @@
 			if (typeof reason === 'string' && reason.trim()) return reason.replaceAll('_', ' ');
 		}
 		return proctorEventLabel(event);
+	}
+
+
+	function shouldPlayAlertSound(event: ProctoringEvent) {
+		if (!audioAlertsEnabled) return false;
+		if (event.event_type !== 'anti_cheat_violation') return event.event_type === 'app_switch' || event.event_type === 'screenshot_attempt';
+		const reason = eventReason(event).toLowerCase();
+		return reason.includes('locked') || reason.includes('high') || reason.includes('split') || reason.includes('switch');
+	}
+
+	function playAlertSound() {
+		try {
+			const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+			if (!Ctx) return;
+			const ctx = new Ctx();
+			const oscillator = ctx.createOscillator();
+			const gain = ctx.createGain();
+			oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+			gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+			gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02);
+			gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+			oscillator.connect(gain).connect(ctx.destination);
+			oscillator.start();
+			oscillator.stop(ctx.currentTime + 0.3);
+		} catch (error) {
+			console.warn('Audio alert gagal diputar', error);
+		}
+	}
+
+	async function unlockParticipant(row: ProctoringRow) {
+		if (!row.room_id) return;
+		const notes = window.prompt(`Catatan unlock untuk ${row.nama}`, 'Diverifikasi dari command center') ?? '';
+		actionBusyId = `unlock-${row.participant_id}`;
+		try {
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${row.room_id}/participants/${row.participant_id}/unlock`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ notes }),
+			});
+			await readClientJson<unknown>(res);
+			toast.success(`${row.nama} sudah di-unlock`);
+			await loadDashboard();
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal unlock peserta');
+		} finally {
+			actionBusyId = '';
+		}
+	}
+
+	async function acknowledgeEvent(event: ProctoringEvent) {
+		if (!event.room_id) return;
+		const notes = window.prompt(`Catatan pemeriksaan untuk ${event.nama}`, eventReason(event)) ?? '';
+		actionBusyId = `ack-${event.id}`;
+		try {
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${event.room_id}/participants/${event.participant_id}/acknowledge`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ event_id: event.id, notes }),
+			});
+			await readClientJson<unknown>(res);
+			toast.success(`${event.nama} ditandai sudah diperiksa`);
+			await loadEvents(true);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal menandai event');
+		} finally {
+			actionBusyId = '';
+		}
 	}
 
 	function minutesSince(value: string | null | undefined) {
@@ -299,6 +370,7 @@
 						<div class="rounded-lg border bg-card p-3 text-sm">
 							<div class="font-semibold">{event.room_name} · {event.nama}</div>
 							<div class="text-muted-foreground">{eventReason(event)} · {fmtDate(event.created_at)}</div>
+							<div class="mt-2"><LoadingButton size="sm" variant="outline" onclick={() => void acknowledgeEvent(event)} loading={actionBusyId === `ack-${event.id}`} disabled={!event.room_id || (actionBusyId !== '' && actionBusyId !== `ack-${event.id}`)} loadingLabel="Simpan...">Tandai diperiksa</LoadingButton></div>
 						</div>
 					{/each}
 				</Card.Content>
@@ -337,7 +409,7 @@
 			</Card.Header>
 			<Card.Content class="overflow-x-auto">
 				<Table.Root>
-					<Table.Header><Table.Row><Table.Head>Peserta</Table.Head><Table.Head>Ruang</Table.Head><Table.Head>Koneksi</Table.Head><Table.Head>Risk</Table.Head><Table.Head>Pelanggaran</Table.Head><Table.Head>Terakhir</Table.Head></Table.Row></Table.Header>
+					<Table.Header><Table.Row><Table.Head>Peserta</Table.Head><Table.Head>Ruang</Table.Head><Table.Head>Koneksi</Table.Head><Table.Head>Risk</Table.Head><Table.Head>Pelanggaran</Table.Head><Table.Head>Terakhir</Table.Head><Table.Head class="text-right">Aksi</Table.Head></Table.Row></Table.Header>
 					<Table.Body>
 						{#each filteredParticipants as row (row.participant_id)}
 							<Table.Row>
@@ -347,6 +419,7 @@
 								<Table.Cell><Badge variant="outline" class={badgeClass(riskLevel(row))}>{riskLevel(row)}</Badge></Table.Cell>
 								<Table.Cell>{row.violation_count ?? 0} · skor {row.risk_score ?? 0}</Table.Cell>
 								<Table.Cell>{row.last_violation_reason || fmtDate(row.last_violation_at)}</Table.Cell>
+								<Table.Cell class="text-right"><div class="flex justify-end gap-2"><Button size="sm" variant="outline" href={row.room_id ? resolve(`/asesmen/sesi/${sessionId}/rooms/${row.room_id}/proctoring`) : undefined}>Ruang</Button><LoadingButton size="sm" variant="outline" onclick={() => void unlockParticipant(row)} loading={actionBusyId === `unlock-${row.participant_id}`} disabled={!row.locked_at || !row.room_id || (actionBusyId !== '' && actionBusyId !== `unlock-${row.participant_id}`)} loadingLabel="Unlock...">Unlock</LoadingButton></div></Table.Cell>
 							</Table.Row>
 						{/each}
 					</Table.Body>

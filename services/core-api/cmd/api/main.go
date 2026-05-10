@@ -462,6 +462,8 @@ func main() {
 		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/handover/lock", sessionH.LockRoomHandover)
 		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/participants/{pid}/flag", sessionH.FlagRoomParticipant)
 		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/participants/{pid}/reset-access", sessionH.ResetRoomParticipantAccess)
+		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/participants/{pid}/unlock", sessionH.UnlockRoomParticipant)
+		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/participants/{pid}/acknowledge", sessionH.AcknowledgeRoomParticipantEvent)
 		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/participants/{pid}/force-submit", sessionH.ForceSubmitRoomParticipant)
 
 		// Essay Grading
@@ -559,6 +561,8 @@ func main() {
 		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/handover/lock", sessionH.LockRoomHandover)
 		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/participants/{pid}/flag", sessionH.FlagRoomParticipant)
 		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/participants/{pid}/reset-access", sessionH.ResetRoomParticipantAccess)
+		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/participants/{pid}/unlock", sessionH.UnlockRoomParticipant)
+		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/participants/{pid}/acknowledge", sessionH.AcknowledgeRoomParticipantEvent)
 		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/participants/{pid}/force-submit", sessionH.ForceSubmitRoomParticipant)
 		r.With(requireCbt).Get("/api/asesmen/sessions/{id}/ungraded-essays", sessionH.ListUngradedEssays)
 		r.With(requireCbt).Post("/api/asesmen/sessions/{id}/answers/{aid}/grade-essay", sessionH.GradeEssay)

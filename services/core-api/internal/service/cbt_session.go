@@ -123,6 +123,7 @@ type cbtParticipantForceSubmitStore interface {
 
 type cbtParticipantEventStore interface {
 	ResetParticipantRuntimeAccess(ctx context.Context, id pgtype.UUID) error
+	UnlockParticipantAntiCheat(ctx context.Context, id pgtype.UUID) (db.UnlockParticipantAntiCheatRow, error)
 	ListSessionParticipantEvents(ctx context.Context, arg db.ListSessionParticipantEventsParams) ([]db.ListSessionParticipantEventsRow, error)
 	InsertParticipantEvent(ctx context.Context, arg db.InsertParticipantEventParams) error
 }
@@ -502,6 +503,41 @@ func (s *CbtSession) ResetParticipantRuntimeAccess(ctx context.Context, particip
 		ParticipantID: participantID,
 		EventType:     "proctor_reset_access",
 		EventData:     marshalJSON(map[string]string{"actor": actor}),
+	})
+}
+
+func (s *CbtSession) UnlockParticipantAntiCheat(ctx context.Context, participantID pgtype.UUID, actor, notes string) (db.UnlockParticipantAntiCheatRow, error) {
+	q, ok := s.q.(cbtParticipantEventStore)
+	if !ok {
+		return db.UnlockParticipantAntiCheatRow{}, fmt.Errorf("cbt participant event store unavailable")
+	}
+	row, err := q.UnlockParticipantAntiCheat(ctx, participantID)
+	if err != nil {
+		return db.UnlockParticipantAntiCheatRow{}, err
+	}
+	if err := q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
+		ParticipantID: participantID,
+		EventType:     "proctor_unlock",
+		EventData:     marshalJSON(map[string]string{"actor": actor, "notes": strings.TrimSpace(notes)}),
+	}); err != nil {
+		return db.UnlockParticipantAntiCheatRow{}, err
+	}
+	return row, nil
+}
+
+func (s *CbtSession) AcknowledgeProctorEvent(ctx context.Context, participantID pgtype.UUID, eventID, actor, notes string) error {
+	q, ok := s.q.(cbtParticipantEventStore)
+	if !ok {
+		return fmt.Errorf("cbt participant event store unavailable")
+	}
+	return q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
+		ParticipantID: participantID,
+		EventType:     "proctor_acknowledge",
+		EventData: marshalJSON(map[string]string{
+			"actor":    actor,
+			"event_id": strings.TrimSpace(eventID),
+			"notes":    strings.TrimSpace(notes),
+		}),
 	})
 }
 

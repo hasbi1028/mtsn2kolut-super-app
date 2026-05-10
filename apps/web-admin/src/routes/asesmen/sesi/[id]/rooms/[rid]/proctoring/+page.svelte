@@ -160,6 +160,7 @@
 	let seenEventIds = $state(new Set<string>());
 	let recentAlertEvents = $state<ProctoringEvent[]>([]);
 	let highlightedParticipantIds = $state(new Map<string, number>());
+	let audioAlertsEnabled = $state(false);
 	let hasPrimedLiveEvents = false;
 	let handoverLocked = $derived(Boolean(handover?.locked_at));
 
@@ -227,7 +228,35 @@
 	}
 
 	function importantEvent(event: ProctoringEvent) {
-		return ['anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'proctor_force_submit', 'proctor_reset_access'].includes(event.event_type);
+		return ['anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'proctor_force_submit', 'proctor_reset_access', 'proctor_unlock', 'proctor_acknowledge'].includes(event.event_type);
+	}
+
+
+	function shouldPlayAlertSound(event: ProctoringEvent) {
+		if (!audioAlertsEnabled) return false;
+		if (event.event_type !== 'anti_cheat_violation') return event.event_type === 'app_switch' || event.event_type === 'screenshot_attempt';
+		const reason = eventReason(event).toLowerCase();
+		return reason.includes('locked') || reason.includes('high') || reason.includes('split') || reason.includes('switch');
+	}
+
+	function playAlertSound() {
+		try {
+			const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+			if (!Ctx) return;
+			const ctx = new Ctx();
+			const oscillator = ctx.createOscillator();
+			const gain = ctx.createGain();
+			oscillator.type = 'sine';
+			oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+			gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+			gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02);
+			gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+			oscillator.connect(gain).connect(ctx.destination);
+			oscillator.start();
+			oscillator.stop(ctx.currentTime + 0.3);
+		} catch (error) {
+			console.warn('Audio alert gagal diputar', error);
+		}
 	}
 
 	function eventReason(event: ProctoringEvent) {
@@ -253,6 +282,7 @@
 			if (event.event_type === 'anti_cheat_violation') toast.warning(message);
 			else if (event.event_type === 'app_switch' || event.event_type === 'screenshot_attempt') toast.warning(message);
 			else toast.info(message);
+			if (shouldPlayAlertSound(event)) playAlertSound();
 		}
 	}
 
@@ -504,6 +534,53 @@
 		}
 	}
 
+
+	async function unlockParticipant(row: ProctoringRow) {
+		const notes = window.prompt(`Catatan unlock untuk ${row.nama}`, 'Sudah diverifikasi pengawas ruang') ?? '';
+		if (!(await confirmAction({
+			title: 'Unlock Peserta',
+			message: `Buka status terkunci ${row.nama} tanpa menghapus histori pelanggaran.`,
+			confirmLabel: 'Unlock',
+			tone: 'warning',
+		}))) return;
+		actionBusyId = `unlock-${row.participant_id}`;
+		try {
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/participants/${row.participant_id}/unlock`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ notes }),
+			});
+			await readClientJson<unknown>(res);
+			operationState = { tone: 'success', title: 'Peserta Di-unlock', message: `${row.nama} sudah dibuka kembali dan tetap masuk atensi pengawas.` };
+			await refreshDashboard(true);
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			actionBusyId = '';
+		}
+	}
+
+	async function acknowledgeEvent(event: ProctoringEvent) {
+		const row = participants.find((item) => item.participant_id === event.participant_id);
+		if (!row) return;
+		const notes = window.prompt(`Catatan pemeriksaan untuk ${event.nama}`, eventReason(event)) ?? '';
+		actionBusyId = `ack-${event.id}`;
+		try {
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/participants/${event.participant_id}/acknowledge`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ event_id: event.id, notes }),
+			});
+			await readClientJson<unknown>(res);
+			toast.success(`${event.nama} ditandai sudah diperiksa`);
+			await refreshDashboard(true);
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			actionBusyId = '';
+		}
+	}
+
 	async function forceSubmit(row: ProctoringRow) {
 		if (!(await confirmAction({
 			title: 'Paksa Submit Peserta',
@@ -600,6 +677,9 @@
 			<Button variant="outline" onclick={exportEvidenceCSV} disabled={!room}>
 				<FileDownIcon class="mr-2 size-4" />
 				Export Evidence CSV (tanpa token)
+			</Button>
+			<Button variant={audioAlertsEnabled ? 'default' : 'outline'} onclick={() => audioAlertsEnabled = !audioAlertsEnabled}>
+				Audio {audioAlertsEnabled ? 'ON' : 'OFF'}
 			</Button>
 			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/print-pack`)}>
 				<PrinterIcon class="mr-2 size-4" />
@@ -944,6 +1024,11 @@
 										</div>
 									</div>
 									<p class="mt-1 text-xs text-muted-foreground">{event.nis} · {fmtDate(event.created_at)}</p>
+					<div class="mt-2 flex justify-end">
+						<LoadingButton size="sm" variant="outline" onclick={() => void acknowledgeEvent(event)} loading={actionBusyId === `ack-${event.id}`} disabled={actionBusyId !== '' && actionBusyId !== `ack-${event.id}`} loadingLabel="Menyimpan...">
+							Tandai diperiksa
+						</LoadingButton>
+					</div>
 								</div>
 							{:else}
 								<p class="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Belum ada log ruang</p>

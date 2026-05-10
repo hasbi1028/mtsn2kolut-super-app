@@ -194,6 +194,19 @@ SET device_fingerprint = NULL,
     suspicious_flag = FALSE
 WHERE id = $1;
 
+-- name: UnlockParticipantAntiCheat :one
+UPDATE cbt_exam_participants
+SET locked_at = NULL,
+    locked_reason = NULL,
+    risk_level = CASE
+      WHEN risk_score >= 50 OR violation_count >= 2 THEN 'high'
+      WHEN risk_score >= 20 OR violation_count >= 1 THEN 'warning'
+      ELSE 'normal'
+    END,
+    suspicious_flag = TRUE
+WHERE id = $1
+RETURNING id, violation_count, risk_score, risk_level, locked_at, locked_reason;
+
 -- name: AssignParticipantRoom :exec
 UPDATE cbt_exam_participants
 SET room_id = $2
