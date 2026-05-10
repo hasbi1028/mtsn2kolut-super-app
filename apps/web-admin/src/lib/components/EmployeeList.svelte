@@ -4,6 +4,7 @@
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
+  import PasswordInput from '$lib/components/PasswordInput.svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import { toast } from '$lib/components/ui/sonner';
   import { Skeleton } from '$lib/components/ui/skeleton';
@@ -770,7 +771,7 @@
       </div>
       <div class="space-y-1.5">
         <label for="pusaka-password" class="text-sm font-medium">Password Pusaka</label>
-        <Input id="pusaka-password" type="password" bind:value={pusakaPassword} placeholder="Kosongkan jika tidak diubah" />
+        <PasswordInput id="pusaka-password" bind:value={pusakaPassword} placeholder="Kosongkan jika tidak diubah" />
       </div>
     </div>
     <Dialog.Footer>

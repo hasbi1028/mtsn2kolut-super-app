@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card';
   import { Input } from '$lib/components/ui/input';
+  import PasswordInput from '$lib/components/PasswordInput.svelte';
   import { toast } from '$lib/components/ui/sonner';
   import LoadingButton from '$lib/components/LoadingButton.svelte';
   import SuccessPanel from '$lib/components/SuccessPanel.svelte';
@@ -136,7 +137,7 @@
           </div>
           <div>
             <label for="f-pass" class="mb-1 block text-xs font-medium text-muted-foreground">Password PUSAKA</label>
-            <Input id="f-pass" type="password" placeholder="Isi bersama username PUSAKA" bind:value={form.pusaka_password} />
+            <PasswordInput id="f-pass" placeholder="Isi bersama username PUSAKA" bind:value={form.pusaka_password} />
           </div>
         </div>
       {:else}

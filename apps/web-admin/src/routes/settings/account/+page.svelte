@@ -21,6 +21,7 @@
 	import { toast } from '$lib/components/ui/sonner';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
+	import PasswordInput from '$lib/components/PasswordInput.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { clearCbtComposerDrafts } from '$lib/client/cbt-drafts';
@@ -653,15 +654,15 @@
 						<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
 							<div>
 								<label for="account-pw-current-required" class="mb-1.5 block text-sm font-medium">Password Saat Ini</label>
-								<Input id="account-pw-current-required" type="password" bind:value={pwForm.current} autocomplete="current-password" />
+								<PasswordInput id="account-pw-current-required" bind:value={pwForm.current} autocomplete="current-password" />
 							</div>
 							<div>
 								<label for="account-pw-next-required" class="mb-1.5 block text-sm font-medium">Password Baru</label>
-								<Input id="account-pw-next-required" type="password" bind:value={pwForm.next} autocomplete="new-password" />
+								<PasswordInput id="account-pw-next-required" bind:value={pwForm.next} autocomplete="new-password" />
 							</div>
 							<div>
 								<label for="account-pw-confirm-required" class="mb-1.5 block text-sm font-medium">Konfirmasi Password</label>
-								<Input id="account-pw-confirm-required" type="password" bind:value={pwForm.confirm} autocomplete="new-password" />
+								<PasswordInput id="account-pw-confirm-required" bind:value={pwForm.confirm} autocomplete="new-password" />
 							</div>
 						</div>
 						<LoadingButton class="mt-4" onclick={() => void changePassword()} loading={pwLoading} loadingLabel="Menyimpan...">
@@ -935,15 +936,15 @@
 							<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
 								<div>
 									<label for="account-pw-current" class="mb-1.5 block text-sm font-medium">Password Saat Ini</label>
-									<Input id="account-pw-current" type="password" bind:value={pwForm.current} autocomplete="current-password" />
+									<PasswordInput id="account-pw-current" bind:value={pwForm.current} autocomplete="current-password" />
 								</div>
 								<div>
 									<label for="account-pw-next" class="mb-1.5 block text-sm font-medium">Password Baru</label>
-									<Input id="account-pw-next" type="password" bind:value={pwForm.next} autocomplete="new-password" />
+									<PasswordInput id="account-pw-next" bind:value={pwForm.next} autocomplete="new-password" />
 								</div>
 								<div>
 									<label for="account-pw-confirm" class="mb-1.5 block text-sm font-medium">Konfirmasi Password</label>
-									<Input id="account-pw-confirm" type="password" bind:value={pwForm.confirm} autocomplete="new-password" />
+									<PasswordInput id="account-pw-confirm" bind:value={pwForm.confirm} autocomplete="new-password" />
 								</div>
 							</div>
 							<LoadingButton class="mt-4" onclick={() => void changePassword()} loading={pwLoading} loadingLabel="Menyimpan...">
