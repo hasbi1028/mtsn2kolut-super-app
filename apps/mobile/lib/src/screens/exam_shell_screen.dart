@@ -37,6 +37,7 @@ class ExamShellScreen extends StatefulWidget {
     super.key,
     required this.client,
     required this.examToken,
+    this.roomToken = '',
     required this.initialPayload,
     required this.deviceFingerprint,
     this.restoredSnapshot,
@@ -52,6 +53,7 @@ class ExamShellScreen extends StatefulWidget {
 
   final ExamApiClient client;
   final String examToken;
+  final String roomToken;
   final ExamLoginPayload initialPayload;
   final String deviceFingerprint;
   final ExamSessionSnapshot? restoredSnapshot;
@@ -739,6 +741,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       ExamSessionSnapshot(
         baseUrl: widget.client.baseUrl,
         examToken: widget.examToken,
+        roomToken: widget.roomToken,
         deviceFingerprint: widget.deviceFingerprint,
         studentName: widget.initialPayload.student.nama,
         studentNis: widget.initialPayload.student.nis,

@@ -2,8 +2,12 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -17,6 +21,8 @@ type studentPortalService interface {
 	Profile(ctx context.Context, userID pgtype.UUID) (db.GetStudentByIDRow, error)
 	Schedule(ctx context.Context, userID pgtype.UUID) ([]db.ListStudentTimetableRow, error)
 	Results(ctx context.Context, userID pgtype.UUID) ([]db.ListStudentExamSessionsRow, error)
+	CbtSchedule(ctx context.Context, userID pgtype.UUID) ([]service.StudentPortalCbtScheduleItem, error)
+	RevealCbtToken(ctx context.Context, userID, participantID pgtype.UUID, roomToken, clientIP string) (service.StudentPortalTokenReveal, error)
 }
 
 type StudentPortal struct {
@@ -64,6 +70,54 @@ func (h *StudentPortal) Results(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, map[string]any{"results": studentPortalResults(results)})
+}
+
+func (h *StudentPortal) CbtSchedule(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.authorizedUserID(w, r)
+	if !ok {
+		return
+	}
+	schedule, err := h.svc.CbtSchedule(r.Context(), userID)
+	if err != nil {
+		writeDomainOrInternal(w, err, "Jadwal CBT siswa tidak tersedia")
+		return
+	}
+	api.OK(w, map[string]any{"schedule": schedule})
+}
+
+func (h *StudentPortal) RevealCbtToken(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.authorizedUserID(w, r)
+	if !ok {
+		return
+	}
+	participantID, err := parseUUID(strings.TrimSpace(chi.URLParam(r, "participantID")))
+	if err != nil {
+		api.BadRequest(w, "participant_id invalid")
+		return
+	}
+	var body struct {
+		RoomToken string `json:"room_token"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	result, err := h.svc.RevealCbtToken(r.Context(), userID, participantID, body.RoomToken, trustedClientIP(r))
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrRoomTokenRequired):
+			api.BadRequest(w, "room token required")
+		case errors.Is(err, service.ErrRoomTokenMismatch):
+			api.Err(w, http.StatusForbidden, "room token mismatch")
+		default:
+			writeDomainOrInternal(w, err, "Token ujian tidak dapat dibuka")
+		}
+		return
+	}
+	api.OK(w, result)
 }
 
 func (h *StudentPortal) authorizedUserID(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {

@@ -1,17 +1,25 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import AsyncContent from '$lib/components/AsyncContent.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
 	import {
+		fetchStudentPortalCbtSchedule,
 		fetchStudentPortalProfile,
 		fetchStudentPortalResults,
 		fetchStudentPortalSchedule,
+		revealStudentPortalCbtToken,
+		type StudentPortalCbtRevealPayload,
+		type StudentPortalCbtScheduleItem,
+		type StudentPortalCbtSchedulePayload,
 		type StudentPortalProfilePayload,
 		type StudentPortalResultsPayload,
 		type StudentPortalSchedulePayload
@@ -21,11 +29,18 @@
 		profile: StudentPortalProfilePayload;
 		schedule: StudentPortalSchedulePayload;
 		results: StudentPortalResultsPayload;
+		cbt: StudentPortalCbtSchedulePayload;
 	};
 
 	let portalPromise = $state<Promise<PortalOverview> | null>(null);
 	let portalData = $state<PortalOverview | null>(null);
 	let selectedDay = $state('all');
+	let revealOpen = $state(false);
+	let revealTarget = $state<StudentPortalCbtScheduleItem | null>(null);
+	let roomTokenInput = $state('');
+	let revealLoading = $state(false);
+	let revealError = $state('');
+	let revealedToken = $state<StudentPortalCbtRevealPayload | null>(null);
 
 	const dayLabels: Record<number, string> = {
 		1: 'Senin',
@@ -41,6 +56,7 @@
 		if (selectedDay === 'all') return schedule;
 		return schedule.filter((item) => item.day_of_week === Number(selectedDay));
 	});
+	const cbtSchedule = $derived(portalData?.cbt.schedule ?? []);
 
 	function applyPortalData(data: PortalOverview) {
 		portalData = data;
@@ -48,12 +64,13 @@
 	}
 
 	async function fetchPortalData(): Promise<PortalOverview> {
-		const [profile, schedule, results] = await Promise.all([
+		const [profile, schedule, results, cbt] = await Promise.all([
 			fetchStudentPortalProfile(),
 			fetchStudentPortalSchedule(),
-			fetchStudentPortalResults()
+			fetchStudentPortalResults(),
+			fetchStudentPortalCbtSchedule()
 		]);
-		return { profile, schedule, results };
+		return { profile, schedule, results, cbt };
 	}
 
 	function loadPortal() {
@@ -86,6 +103,57 @@
 			return typeof maybeValue === 'number' ? String(maybeValue) : '—';
 		}
 		return '—';
+	}
+
+	function fmtDateTime(value: string) {
+		if (!value) return '—';
+		return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+	}
+
+	function cbtStatusLabel(status: StudentPortalCbtScheduleItem['status']) {
+		const labels: Record<StudentPortalCbtScheduleItem['status'], string> = {
+			upcoming: 'Belum dibuka',
+			token_window: 'Siap dibuka',
+			active: 'Sedang berlangsung',
+			submitted: 'Selesai',
+			closed: 'Ditutup',
+			locked: 'Dikunci pengawas'
+		};
+		return labels[status] ?? status;
+	}
+
+	function cbtStatusVariant(status: StudentPortalCbtScheduleItem['status']) {
+		if (status === 'active' || status === 'token_window') return 'default';
+		if (status === 'locked' || status === 'closed') return 'destructive';
+		return 'outline';
+	}
+
+	function openReveal(item: StudentPortalCbtScheduleItem) {
+		revealTarget = item;
+		roomTokenInput = '';
+		revealError = '';
+		revealedToken = null;
+		revealOpen = true;
+	}
+
+	async function submitReveal() {
+		if (!revealTarget || revealLoading) return;
+		const roomToken = roomTokenInput.trim();
+		if (roomToken.length < 4) {
+			revealError = 'Token ruang minimal 4 karakter.';
+			return;
+		}
+		revealLoading = true;
+		revealError = '';
+		try {
+			revealedToken = await revealStudentPortalCbtToken(revealTarget.participant_id, roomToken);
+		} catch (error) {
+			revealError = error instanceof Error && error.message.trim()
+				? error.message
+				: 'Token ruang tidak sesuai. Pastikan Anda berada di ruang yang benar.';
+		} finally {
+			revealLoading = false;
+		}
 	}
 
 	onMount(() => {
@@ -187,6 +255,66 @@
 
 			<Card.Root class="overflow-hidden border-border shadow-sm">
 				<Card.Header class="pb-3">
+					<div class="flex flex-wrap items-start justify-between gap-3">
+						<div>
+							<Card.Title class="text-base">Jadwal Ujian CBT</Card.Title>
+							<Card.Description>Token siswa hanya dibuka di window ujian dengan token ruang dari pengawas.</Card.Description>
+						</div>
+						<Badge variant="outline">{cbtSchedule.length} sesi</Badge>
+					</div>
+				</Card.Header>
+				<Card.Content class="p-0">
+					<Table.Root>
+						<Table.Header>
+							<Table.Row>
+								<Table.Head>Ujian</Table.Head>
+								<Table.Head>Waktu</Table.Head>
+								<Table.Head>Ruang</Table.Head>
+								<Table.Head>Status</Table.Head>
+								<Table.Head>Token</Table.Head>
+								<Table.Head class="text-right">Aksi</Table.Head>
+							</Table.Row>
+						</Table.Header>
+						<Table.Body>
+							{#each cbtSchedule as item (item.participant_id)}
+								<Table.Row>
+									<Table.Cell>
+										<div class="font-medium">{item.session_title}</div>
+										<div class="text-xs text-muted-foreground">{item.package_title || 'Paket belum tersedia'}</div>
+									</Table.Cell>
+									<Table.Cell class="text-sm">
+										<div>{fmtDateTime(item.scheduled_start)}</div>
+										<div class="text-xs text-muted-foreground">sampai {fmtDateTime(item.scheduled_end)} · {item.duration_minutes} menit</div>
+									</Table.Cell>
+									<Table.Cell>
+										<div>{item.room_name || 'Belum ditetapkan'}</div>
+										<div class="text-xs text-muted-foreground">Meja {item.seat_no ?? '—'}</div>
+									</Table.Cell>
+									<Table.Cell><Badge variant={cbtStatusVariant(item.status)}>{cbtStatusLabel(item.status)}</Badge></Table.Cell>
+									<Table.Cell class="font-mono text-xs">{item.token_masked || 'Belum tersedia'}</Table.Cell>
+									<Table.Cell>
+										<div class="flex justify-end gap-2">
+											<Button size="sm" variant="outline" href={resolve(`/portal/siswa/cbt/${item.participant_id}`)}>Kartu</Button>
+											<Button size="sm" disabled={!item.can_reveal_token} onclick={() => openReveal(item)}>
+												{item.can_reveal_token ? 'Buka Token' : 'Belum Dibuka'}
+											</Button>
+										</div>
+									</Table.Cell>
+								</Table.Row>
+							{:else}
+								<Table.Row>
+									<Table.Cell colspan={6} class="p-4">
+										<EmptyStatePanel compact title="Belum ada jadwal CBT" description="Jadwal ujian akan tampil setelah peserta didaftarkan ke sesi CBT." />
+									</Table.Cell>
+								</Table.Row>
+							{/each}
+						</Table.Body>
+					</Table.Root>
+				</Card.Content>
+			</Card.Root>
+
+			<Card.Root class="overflow-hidden border-border shadow-sm">
+				<Card.Header class="pb-3">
 					<Card.Title class="text-base">Hasil Asesmen</Card.Title>
 				</Card.Header>
 				<Card.Content class="p-0">
@@ -223,3 +351,44 @@
 		{/snippet}
 	</AsyncContent>
 </div>
+
+<Dialog.Root bind:open={revealOpen}>
+	<Dialog.Content>
+		<Dialog.Header>
+			<Dialog.Title>Buka Token Ujian</Dialog.Title>
+			<Dialog.Description>Masukkan token ruang yang diberikan pengawas setelah peserta siap di ruang ujian.</Dialog.Description>
+		</Dialog.Header>
+		<div class="mt-4 space-y-4">
+			{#if revealTarget}
+				<div class="rounded-md border border-border bg-muted/40 p-3 text-sm">
+					<div class="font-medium">{revealTarget.session_title}</div>
+					<div class="text-muted-foreground">{revealTarget.room_name || 'Ruang belum ditetapkan'} · Meja {revealTarget.seat_no ?? '—'}</div>
+				</div>
+			{/if}
+
+			{#if revealedToken}
+				<div class="rounded-md border border-primary/20 bg-primary/10 p-4">
+					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Token Ujian Anda</p>
+					<p class="mt-2 break-all font-mono text-xl font-bold text-primary">{revealedToken.token}</p>
+					<p class="mt-2 text-xs text-muted-foreground">Gunakan hanya di perangkat Anda sendiri. Berlaku sampai {fmtDateTime(revealedToken.expires_at)}.</p>
+				</div>
+			{:else}
+				<div class="space-y-2">
+					<label for="portal-room-token" class="text-sm font-medium">Token Ruang</label>
+					<Input id="portal-room-token" bind:value={roomTokenInput} autocomplete="off" placeholder="Masukkan token ruang" />
+				</div>
+				{#if revealError}
+					<p class="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">{revealError}</p>
+				{/if}
+			{/if}
+		</div>
+		<Dialog.Footer>
+			<Button variant="outline" onclick={() => (revealOpen = false)}>Tutup</Button>
+			{#if !revealedToken}
+				<Button onclick={() => void submitReveal()} disabled={revealLoading}>
+					{revealLoading ? 'Memeriksa...' : 'Buka Token'}
+				</Button>
+			{/if}
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>

@@ -7,6 +7,7 @@ class ExamSessionSnapshot {
   const ExamSessionSnapshot({
     required this.baseUrl,
     required this.examToken,
+    this.roomToken = '',
     required this.deviceFingerprint,
     required this.studentName,
     required this.studentNis,
@@ -26,6 +27,7 @@ class ExamSessionSnapshot {
 
   final String baseUrl;
   final String examToken;
+  final String roomToken;
   final String deviceFingerprint;
   final String studentName;
   final String studentNis;
@@ -67,6 +69,7 @@ class ExamSessionSnapshot {
   Map<String, Object?> toSensitiveJson() {
     return <String, Object?>{
       'exam_token': examToken,
+      'room_token': roomToken,
       'device_fingerprint': deviceFingerprint,
       'answers': answers,
       'pending_answers': pendingAnswers,
@@ -77,6 +80,7 @@ class ExamSessionSnapshot {
     return ExamSessionSnapshot(
       baseUrl: json['base_url'] as String? ?? '',
       examToken: json['exam_token'] as String? ?? '',
+      roomToken: json['room_token'] as String? ?? '',
       deviceFingerprint: json['device_fingerprint'] as String? ?? '',
       studentName: json['student_name'] as String? ?? 'Siswa',
       studentNis: json['student_nis'] as String? ?? '-',

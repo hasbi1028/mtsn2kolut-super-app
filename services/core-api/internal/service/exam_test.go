@@ -163,6 +163,8 @@ func TestExamLoginIncludesMobileContractFields(t *testing.T) {
 			ID:              participantID,
 			SessionID:       sessionID,
 			Token:           "a1b2c3d4",
+			RoomID:          mustUUID(t, "12121212-1212-1212-1212-121212121212"),
+			RoomToken:       "ROOM-1",
 			Nis:             "12345",
 			Nama:            "Ahmad",
 			SessionStatus:   db.CbtSessionStatusEnumActive,
@@ -206,7 +208,7 @@ func TestExamLoginIncludesMobileContractFields(t *testing.T) {
 	}
 
 	svc := &Exam{q: store}
-	result, err := svc.Login(ctx, "a1b2c3d4", "device-1", "127.0.0.1")
+	result, err := svc.Login(ctx, "a1b2c3d4", "ROOM-1", "device-1", "127.0.0.1")
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
 	}
@@ -270,63 +272,63 @@ func TestExamLoginRejectsInvalidStatesAndPropagatesErrors(t *testing.T) {
 
 	storeErr := errors.New("store failed")
 	svc := &Exam{q: &fakeExamStore{participant: base}}
-	if _, err := svc.Login(ctx, "token", "", "127.0.0.1"); !errors.Is(err, ErrDeviceRequired) {
+	if _, err := svc.Login(ctx, "token", "ROOM-1", "", "127.0.0.1"); !errors.Is(err, ErrDeviceRequired) {
 		t.Fatalf("Login(empty device) error = %v, want ErrDeviceRequired", err)
 	}
 
 	svc = &Exam{q: &fakeExamStore{participantErr: storeErr}}
-	if _, err := svc.Login(ctx, "missing", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamNotFound) {
+	if _, err := svc.Login(ctx, "missing", "ROOM-1", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamNotFound) {
 		t.Fatalf("Login(missing token) error = %v, want ErrExamNotFound", err)
 	}
 
 	inactive := base
 	inactive.SessionStatus = db.CbtSessionStatusEnumScheduled
 	svc = &Exam{q: &fakeExamStore{participant: inactive}}
-	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamNotActive) {
+	if _, err := svc.Login(ctx, "token", "ROOM-1", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamNotActive) {
 		t.Fatalf("Login(inactive) error = %v, want ErrExamNotActive", err)
 	}
 
 	future := base
 	future.ScheduledStart = pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true}
 	svc = &Exam{q: &fakeExamStore{participant: future}}
-	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamNotStarted) {
+	if _, err := svc.Login(ctx, "token", "ROOM-1", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamNotStarted) {
 		t.Fatalf("Login(before scheduled_start) error = %v, want ErrExamNotStarted", err)
 	}
 
 	submitted := base
 	submitted.SubmittedAt = pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true}
 	svc = &Exam{q: &fakeExamStore{participant: submitted}}
-	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamAlreadySubmit) {
+	if _, err := svc.Login(ctx, "token", "ROOM-1", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamAlreadySubmit) {
 		t.Fatalf("Login(already submitted) error = %v, want ErrExamAlreadySubmit", err)
 	}
 
 	closed := base
 	closed.ScheduledEnd = pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true}
 	svc = &Exam{q: &fakeExamStore{participant: closed}}
-	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamWindowClosed) {
+	if _, err := svc.Login(ctx, "token", "ROOM-1", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamWindowClosed) {
 		t.Fatalf("Login(closed window) error = %v, want ErrExamWindowClosed", err)
 	}
 
 	bound := base
 	bound.DeviceFingerprint = pgtype.Text{String: "other-device", Valid: true}
 	svc = &Exam{q: &fakeExamStore{participant: bound}}
-	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, ErrDeviceMismatch) {
+	if _, err := svc.Login(ctx, "token", "ROOM-1", "device-1", "127.0.0.1"); !errors.Is(err, ErrDeviceMismatch) {
 		t.Fatalf("Login(device mismatch) error = %v, want ErrDeviceMismatch", err)
 	}
 
 	loginErr := errors.New("login update failed")
 	svc = &Exam{q: &fakeExamStore{participant: base, updateLoginErr: loginErr}}
-	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, loginErr) {
+	if _, err := svc.Login(ctx, "token", "ROOM-1", "device-1", "127.0.0.1"); !errors.Is(err, loginErr) {
 		t.Fatalf("Login(update error) error = %v, want %v", err, loginErr)
 	}
 	svc = &Exam{q: &fakeExamStore{participant: base, updateLoginErr: pgx.ErrNoRows}}
-	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, ErrDeviceMismatch) {
+	if _, err := svc.Login(ctx, "token", "ROOM-1", "device-1", "127.0.0.1"); !errors.Is(err, ErrDeviceMismatch) {
 		t.Fatalf("Login(update no rows) error = %v, want ErrDeviceMismatch", err)
 	}
 
 	questionsErr := errors.New("questions failed")
 	svc = &Exam{q: &fakeExamStore{participant: base, questionsErr: questionsErr}}
-	if _, err := svc.Login(ctx, "token", "device-1", "127.0.0.1"); !errors.Is(err, questionsErr) {
+	if _, err := svc.Login(ctx, "token", "ROOM-1", "device-1", "127.0.0.1"); !errors.Is(err, questionsErr) {
 		t.Fatalf("Login(questions error) error = %v, want %v", err, questionsErr)
 	}
 
@@ -335,6 +337,7 @@ func TestExamLoginRejectsInvalidStatesAndPropagatesErrors(t *testing.T) {
 	secondQuestionID := questionID
 	withRoom := base
 	withRoom.RoomID = roomID
+	withRoom.RoomToken = "ROOM-2"
 	withRoom.QuestionOrder = nil
 	store := &fakeExamStore{
 		participant: withRoom,
@@ -346,7 +349,7 @@ func TestExamLoginRejectsInvalidStatesAndPropagatesErrors(t *testing.T) {
 		room:       db.CbtExamRoom{ID: roomID, RoomName: "Ruang 1"},
 	}
 	svc = &Exam{q: store}
-	result, err := svc.Login(ctx, "token", "device-1", "127.0.0.1")
+	result, err := svc.Login(ctx, "token", "ROOM-2", "device-1", "127.0.0.1")
 	if err != nil {
 		t.Fatalf("Login(room/order) error = %v", err)
 	}
@@ -374,6 +377,46 @@ func TestExamLoginRejectsInvalidStatesAndPropagatesErrors(t *testing.T) {
 	}
 	if strings.Contains(string(store.events[0].EventData), "device-1") || !strings.Contains(string(store.events[0].EventData), "device_hash") {
 		t.Fatalf("login event data = %s, want hashed device without raw fingerprint", string(store.events[0].EventData))
+	}
+}
+
+func TestExamLoginValidatesRoomToken(t *testing.T) {
+	ctx := context.Background()
+	base := examActiveParticipant(t)
+
+	store := &fakeExamStore{participant: base}
+	svc := &Exam{q: store}
+	if _, err := svc.Login(ctx, "token", "", "device-1", "127.0.0.1"); !errors.Is(err, ErrRoomTokenRequired) {
+		t.Fatalf("Login(empty room token) error = %v, want ErrRoomTokenRequired", err)
+	}
+	if len(store.events) != 1 || store.events[0].EventType != "exam_room_token_mismatch" {
+		t.Fatalf("events = %+v, want room token mismatch audit", store.events)
+	}
+	if strings.Contains(string(store.events[0].EventData), "ROOM-1") || !strings.Contains(string(store.events[0].EventData), "room_token_required") {
+		t.Fatalf("mismatch event data = %s, want reason without raw token", string(store.events[0].EventData))
+	}
+
+	store = &fakeExamStore{participant: base}
+	svc = &Exam{q: store}
+	if _, err := svc.Login(ctx, "token", "WRONG", "device-1", "127.0.0.1"); !errors.Is(err, ErrRoomTokenMismatch) {
+		t.Fatalf("Login(wrong room token) error = %v, want ErrRoomTokenMismatch", err)
+	}
+	if len(store.events) != 1 || store.events[0].EventType != "exam_room_token_mismatch" || !strings.Contains(string(store.events[0].EventData), "room_token_mismatch") {
+		t.Fatalf("events = %+v, want room token mismatch event", store.events)
+	}
+
+	noRoom := base
+	noRoom.RoomID = pgtype.UUID{}
+	noRoom.RoomToken = ""
+	svc = &Exam{q: &fakeExamStore{participant: noRoom}}
+	if _, err := svc.Login(ctx, "token", "ROOM-1", "device-1", "127.0.0.1"); !errors.Is(err, ErrExamRoomRequired) {
+		t.Fatalf("Login(no room) error = %v, want ErrExamRoomRequired", err)
+	}
+
+	store = &fakeExamStore{participant: base}
+	svc = &Exam{q: store}
+	if _, err := svc.Login(ctx, "token", " room-1 ", "device-1", "127.0.0.1"); err != nil {
+		t.Fatalf("Login(matching room token) error = %v", err)
 	}
 }
 
@@ -639,6 +682,8 @@ func examActiveParticipant(t *testing.T) db.GetParticipantByTokenRow {
 		SessionID:       mustUUID(t, "02020202-0202-0202-0202-020202020202"),
 		StudentID:       mustUUID(t, "03030303-0303-0303-0303-030303030303"),
 		Token:           "token",
+		RoomID:          mustUUID(t, "05050505-0505-0505-0505-050505050505"),
+		RoomToken:       "ROOM-1",
 		Nis:             "12345",
 		Nama:            "Ahmad",
 		SessionStatus:   db.CbtSessionStatusEnumActive,

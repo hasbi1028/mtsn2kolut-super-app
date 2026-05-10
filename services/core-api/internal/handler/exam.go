@@ -34,7 +34,7 @@ const (
 )
 
 type examService interface {
-	Login(ctx context.Context, token, deviceFingerprint, loginIP string) (service.LoginResult, error)
+	Login(ctx context.Context, token, roomToken, deviceFingerprint, loginIP string) (service.LoginResult, error)
 	GetStatus(ctx context.Context, p db.GetParticipantByTokenRow) (service.StatusResult, error)
 	Heartbeat(ctx context.Context, participantID pgtype.UUID) error
 	RecordClientEvent(ctx context.Context, participantID pgtype.UUID, eventType string, data map[string]any) error
@@ -47,6 +47,7 @@ type examService interface {
 func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Token             string `json:"token"`
+		RoomToken         string `json:"room_token"`
 		DeviceFingerprint string `json:"device_fingerprint"`
 	}
 	if !decodeExamJSON(w, r, examLoginBodyLimit, &body) {
@@ -60,7 +61,7 @@ func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 
 	ip := trustedClientIP(r)
 
-	result, err := h.svc.Login(r.Context(), token, body.DeviceFingerprint, ip)
+	result, err := h.svc.Login(r.Context(), token, body.RoomToken, body.DeviceFingerprint, ip)
 	if err != nil {
 		switch err {
 		case service.ErrExamNotFound:
@@ -79,6 +80,12 @@ func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 			api.Err(w, http.StatusConflict, "token already bound to another device")
 		case service.ErrDeviceRequired:
 			api.BadRequest(w, "device fingerprint required")
+		case service.ErrExamRoomRequired:
+			api.Err(w, http.StatusForbidden, "exam room has not been assigned")
+		case service.ErrRoomTokenRequired:
+			api.BadRequest(w, "room token required")
+		case service.ErrRoomTokenMismatch:
+			api.Err(w, http.StatusForbidden, "room token mismatch")
 		default:
 			api.Internal(w, err)
 		}

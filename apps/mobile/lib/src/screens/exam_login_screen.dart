@@ -34,6 +34,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
   late final ExamSessionStore _sessionStore;
   late final DeviceFingerprintStore _deviceFingerprintStore;
   final _tokenController = TextEditingController();
+  final _roomTokenController = TextEditingController();
   final _baseUrlController = TextEditingController(
     text: const String.fromEnvironment(
       'API_BASE_URL',
@@ -67,6 +68,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
   void dispose() {
     _baseUrlController.removeListener(_refreshOperatorBaseUrlGuidance);
     _tokenController.dispose();
+    _roomTokenController.dispose();
     _baseUrlController.dispose();
     super.dispose();
   }
@@ -110,6 +112,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
       );
       final payload = await client.login(
         token: snapshot.examToken,
+        roomToken: snapshot.roomToken,
         deviceFingerprint: snapshot.deviceFingerprint,
       );
       if (!mounted) {
@@ -117,11 +120,13 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
       }
       _baseUrlController.text = snapshot.baseUrl;
       _tokenController.text = snapshot.examToken.toUpperCase();
+      _roomTokenController.text = snapshot.roomToken.toUpperCase();
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => ExamShellScreen(
             client: client,
             examToken: snapshot.examToken,
+            roomToken: snapshot.roomToken,
             initialPayload: payload,
             deviceFingerprint: snapshot.deviceFingerprint,
             restoredSnapshot: snapshot,
@@ -171,11 +176,20 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
 
   Future<void> _submit() async {
     final token = _tokenController.text.trim().toLowerCase();
+    final roomToken = _roomTokenController.text.trim();
     final baseUrl = _baseUrlController.text.trim();
 
     if (token.length < 8 || token.length > 64) {
       setState(() {
         _errorMessage = 'Token ujian tidak valid. Periksa kembali kartu ujian.';
+        _errorNotice = null;
+      });
+      return;
+    }
+
+    if (roomToken.length < 4 || roomToken.length > 64) {
+      setState(() {
+        _errorMessage = 'Token ruang tidak valid. Minta token ruang kepada pengawas.';
         _errorNotice = null;
       });
       return;
@@ -205,12 +219,14 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
       );
       final payload = await client.login(
         token: token,
+        roomToken: roomToken,
         deviceFingerprint: deviceFingerprint,
       );
       await _sessionStore.saveSnapshot(
         ExamSessionSnapshot(
           baseUrl: normalizedBaseUrl,
           examToken: token,
+          roomToken: roomToken,
           deviceFingerprint: deviceFingerprint,
           studentName: payload.student.nama,
           studentNis: payload.student.nis,
@@ -238,6 +254,7 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
           builder: (_) => ExamShellScreen(
             client: client,
             examToken: token,
+            roomToken: roomToken,
             initialPayload: payload,
             deviceFingerprint: deviceFingerprint,
             sessionStore: _sessionStore,
@@ -424,6 +441,17 @@ class _ExamLoginScreenState extends State<ExamLoginScreen> {
               decoration: const InputDecoration(
                 labelText: 'Token ujian',
                 hintText: 'Contoh: 32 karakter heksadesimal dari kartu ujian',
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _roomTokenController,
+              maxLength: 64,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'Token ruang',
+                hintText: 'Minta token ruang kepada pengawas',
                 counterText: '',
               ),
             ),
