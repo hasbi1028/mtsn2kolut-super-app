@@ -15,6 +15,7 @@ class ExamClientEvents {
   static const String typeAppSwitch = 'app_switch';
   static const String typeWarning = 'warning';
   static const String typeScreenshotAttempt = 'screenshot_attempt';
+  static const String typeAntiCheatViolation = 'anti_cheat_violation';
 
   static const String reasonResumeExam = 'resume_exam';
   static const String reasonRepeatResumeAttempt = 'repeat_resume_attempt';
@@ -55,6 +56,26 @@ class ExamClientEvents {
     return ExamClientEvent(
       eventType: typeWarning,
       data: _sanitizeData(<String, Object?>{'reason': reason, ...data}),
+    );
+  }
+
+  static ExamClientEvent antiCheatViolation({
+    required String reason,
+    required int violationCount,
+    required int maxViolationsBeforeLock,
+    Map<String, Object?> data = const <String, Object?>{},
+  }) {
+    return ExamClientEvent(
+      eventType: typeAntiCheatViolation,
+      data: _sanitizeData(<String, Object?>{
+        'reason': reason,
+        'violation_count': violationCount,
+        'max_violations_before_lock': maxViolationsBeforeLock,
+        'severity': violationCount >= maxViolationsBeforeLock
+            ? 'critical'
+            : 'high',
+        ...data,
+      }),
     );
   }
 

@@ -18,6 +18,7 @@ const PUBLIC_EXACT_PATHS = new Set([
 const PUBLIC_PREFIXES = [
 	'/berita/',
 	'/pengumuman/',
+	'/api/exam/',
 	'/api/public/site/pages/',
 	'/api/public/site/posts/',
 	'/api/public/site/announcements/'
