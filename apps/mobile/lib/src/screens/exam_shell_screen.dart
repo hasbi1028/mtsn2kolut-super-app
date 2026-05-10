@@ -201,11 +201,14 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     unawaited(_refreshAntiCheatWindowState());
   }
 
-  Future<void> _refreshAntiCheatWindowState() async {
+  Future<void> _refreshAntiCheatWindowState({
+    bool forceViolationIfBlocking = false,
+  }) async {
     final windowState = await _antiCheatGuard.getWindowState();
     if (!mounted) return;
     _updateAntiCheatSnapshot(
       _antiCheatSnapshot.copyWith(windowState: windowState),
+      forceViolationIfBlocking: forceViolationIfBlocking,
     );
     if (windowState.secureFlagEnabled && !_hasReportedSecureFlagEnabled) {
       _hasReportedSecureFlagEnabled = true;
@@ -221,13 +224,19 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     }
   }
 
-  void _updateAntiCheatSnapshot(AntiCheatSnapshot next) {
+  void _updateAntiCheatSnapshot(
+    AntiCheatSnapshot next, {
+    bool forceViolationIfBlocking = false,
+  }) {
     final wasBlocking = _antiCheatSnapshot.shouldBlockInteraction;
     final previousReason = _antiCheatSnapshot.primaryReason;
+    final shouldForceBlockingViolation =
+        forceViolationIfBlocking && next.shouldBlockInteraction && !next.locked;
     final isNewSevereSignal =
         next.shouldBlockInteraction &&
         (!wasBlocking || previousReason != next.primaryReason);
-    final nextViolationCount = isNewSevereSignal && !next.locked
+    final shouldCountViolation = isNewSevereSignal || shouldForceBlockingViolation;
+    final nextViolationCount = shouldCountViolation && !next.locked
         ? next.violationCount + 1
         : next.violationCount;
     final locked =
@@ -251,7 +260,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       _antiCheatSnapshot = updated;
     }
 
-    if (isNewSevereSignal ||
+    if (shouldCountViolation ||
         (locked && _lastAntiCheatReportedReason != updated.primaryReason)) {
       _lastAntiCheatReportedReason = updated.primaryReason;
       unawaited(_reportAntiCheatViolation(updated));
@@ -1278,7 +1287,9 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                       child: FilledButton.icon(
                         onPressed: snapshot.locked
                             ? null
-                            : _refreshAntiCheatWindowState,
+                            : () => _refreshAntiCheatWindowState(
+                                forceViolationIfBlocking: true,
+                              ),
                         icon: Icon(
                           snapshot.locked
                               ? Icons.supervisor_account

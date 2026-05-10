@@ -21,7 +21,7 @@ void main() {
   });
 
   group('AntiCheatSnapshot', () {
-    test('blocks split screen and emits sanitized high risk event', () {
+    test('blocks split screen and emits sanitized warning event for the first strike', () {
       const snapshot = AntiCheatSnapshot(
         windowState: AntiCheatWindowState(
           isMultiWindow: true,
@@ -36,9 +36,19 @@ void main() {
       expect(event.eventType, ExamClientEvents.typeAntiCheatViolation);
       expect(event.data['reason'], 'split_screen_detected');
       expect(event.data['violation_count'], 1);
-      expect(event.data['severity'], 'high');
+      expect(event.data['severity'], 'warning');
       expect(event.data.containsKey('device_fingerprint'), isFalse);
       expect(event.data.containsKey('token'), isFalse);
+    });
+
+    test('escalates the second anti-cheat strike to high severity', () {
+      const snapshot = AntiCheatSnapshot(
+        windowState: AntiCheatWindowState(isMultiWindow: true),
+        violationCount: 2,
+      );
+
+      final event = snapshot.toWarningEvent();
+      expect(event.data['severity'], 'high');
     });
 
     test('locks locally after configured max violations', () {
