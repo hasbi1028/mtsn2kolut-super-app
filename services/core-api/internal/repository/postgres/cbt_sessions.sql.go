@@ -2087,6 +2087,43 @@ func (q *Queries) SubmitParticipantExam(ctx context.Context, id pgtype.UUID) (Su
 	return i, err
 }
 
+const unlockParticipantAntiCheat = `-- name: UnlockParticipantAntiCheat :one
+UPDATE cbt_exam_participants
+SET locked_at = NULL,
+    locked_reason = NULL,
+    risk_level = CASE
+      WHEN risk_score >= 50 OR violation_count >= 2 THEN 'high'
+      WHEN risk_score >= 20 OR violation_count >= 1 THEN 'warning'
+      ELSE 'normal'
+    END,
+    suspicious_flag = TRUE
+WHERE id = $1
+RETURNING id, violation_count, risk_score, risk_level, locked_at, locked_reason
+`
+
+type UnlockParticipantAntiCheatRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	ViolationCount int32              `json:"violation_count"`
+	RiskScore      int32              `json:"risk_score"`
+	RiskLevel      string             `json:"risk_level"`
+	LockedAt       pgtype.Timestamptz `json:"locked_at"`
+	LockedReason   pgtype.Text        `json:"locked_reason"`
+}
+
+func (q *Queries) UnlockParticipantAntiCheat(ctx context.Context, id pgtype.UUID) (UnlockParticipantAntiCheatRow, error) {
+	row := q.db.QueryRow(ctx, unlockParticipantAntiCheat, id)
+	var i UnlockParticipantAntiCheatRow
+	err := row.Scan(
+		&i.ID,
+		&i.ViolationCount,
+		&i.RiskScore,
+		&i.RiskLevel,
+		&i.LockedAt,
+		&i.LockedReason,
+	)
+	return i, err
+}
+
 const updateAnswerCorrectness = `-- name: UpdateAnswerCorrectness :exec
 UPDATE cbt_student_answers sa
 SET is_correct = CASE

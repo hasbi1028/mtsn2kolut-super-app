@@ -72,6 +72,8 @@ type cbtSessionService interface {
 
 type cbtSessionProctorControlService interface {
 	ResetParticipantRuntimeAccess(ctx context.Context, participantID pgtype.UUID, actor string) error
+	UnlockParticipantAntiCheat(ctx context.Context, participantID pgtype.UUID, actor, notes string) (db.UnlockParticipantAntiCheatRow, error)
+	AcknowledgeProctorEvent(ctx context.Context, participantID pgtype.UUID, eventID, actor, notes string) error
 	ListParticipantEvents(ctx context.Context, sessionID, participantID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error)
 	ForceSubmitParticipant(ctx context.Context, sessionID, participantID pgtype.UUID, actor string) (db.ForceSubmitParticipantRow, error)
 }
@@ -1658,6 +1660,90 @@ func (h *CbtSession) ResetRoomParticipantAccess(w http.ResponseWriter, r *http.R
 		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
 	})
 	api.OK(w, map[string]string{"status": "reset"})
+}
+
+func (h *CbtSession) UnlockRoomParticipant(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, pid, ok := h.requireRoomParticipantControlParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomParticipant(w, r, sessionID, roomID, pid) {
+		return
+	}
+	var body struct {
+		Notes string `json:"notes"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+	}
+	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
+		return
+	}
+	row, err := proctorSvc.UnlockParticipantAntiCheat(r.Context(), pid, currentUsername(r), body.Notes)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PARTICIPANT_UNLOCK", "cbt_session_room", pgUUIDString(roomID), map[string]any{
+		"session_id":       pgUUIDString(sessionID),
+		"participant_id":   pgUUIDString(pid),
+		"notes":            strings.TrimSpace(body.Notes),
+		"actor_username":   currentUsername(r),
+		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, row)
+}
+
+func (h *CbtSession) AcknowledgeRoomParticipantEvent(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, pid, ok := h.requireRoomParticipantControlParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomParticipant(w, r, sessionID, roomID, pid) {
+		return
+	}
+	var body struct {
+		EventID string `json:"event_id"`
+		Notes   string `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
+		return
+	}
+	if err := proctorSvc.AcknowledgeProctorEvent(r.Context(), pid, body.EventID, currentUsername(r), body.Notes); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PARTICIPANT_ACKNOWLEDGE", "cbt_session_room", pgUUIDString(roomID), map[string]any{
+		"session_id":       pgUUIDString(sessionID),
+		"participant_id":   pgUUIDString(pid),
+		"event_id":         strings.TrimSpace(body.EventID),
+		"notes":            strings.TrimSpace(body.Notes),
+		"actor_username":   currentUsername(r),
+		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, map[string]string{"status": "acknowledged"})
 }
 
 func (h *CbtSession) ForceSubmitRoomParticipant(w http.ResponseWriter, r *http.Request) {
