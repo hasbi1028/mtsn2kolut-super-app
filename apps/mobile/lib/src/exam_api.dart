@@ -130,12 +130,14 @@ class ExamApiClient {
   Future<ExamLoginPayload> login({
     required String token,
     required String deviceFingerprint,
+    String roomToken = '',
   }) async {
     final payload = await _sendJson(
       'POST',
       '/api/exam/login',
       body: <String, Object?>{
         'token': token,
+        'room_token': roomToken,
         'device_fingerprint': deviceFingerprint,
       },
     );

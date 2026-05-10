@@ -27,6 +27,9 @@ var (
 	ErrExamNotStarted    = errors.New("exam session has not started")
 	ErrDeviceMismatch    = errors.New("token already bound to another device")
 	ErrDeviceRequired    = errors.New("device fingerprint required")
+	ErrExamRoomRequired  = errors.New("exam room has not been assigned")
+	ErrRoomTokenRequired = errors.New("room token required")
+	ErrRoomTokenMismatch = errors.New("room token mismatch")
 	ErrExamQuestionScope = errors.New("question is not part of participant exam")
 	ErrExamLocked        = errors.New("exam locked by anti-cheat policy")
 )
@@ -138,17 +141,24 @@ type ExamQuestion struct {
 	OptionE string `json:"option_e,omitempty"`
 }
 
-func (s *Exam) Login(ctx context.Context, token, deviceFingerprint, loginIP string) (LoginResult, error) {
+func (s *Exam) Login(ctx context.Context, token, roomToken, deviceFingerprint, loginIP string) (LoginResult, error) {
 	deviceFingerprint = strings.TrimSpace(deviceFingerprint)
 	if deviceFingerprint == "" {
 		return LoginResult{}, ErrDeviceRequired
 	}
-	p, err := s.q.GetParticipantByToken(ctx, token)
+	p, err := s.q.GetParticipantByToken(ctx, strings.TrimSpace(token))
 	if err != nil {
 		return LoginResult{}, ErrExamNotFound
 	}
 	if p.SessionStatus != db.CbtSessionStatusEnumActive {
 		return LoginResult{}, ErrExamNotActive
+	}
+	if !p.RoomID.Valid {
+		return LoginResult{}, ErrExamRoomRequired
+	}
+	if err := validateParticipantRoomToken(p, roomToken); err != nil {
+		s.recordRoomTokenMismatch(ctx, p, loginIP, err)
+		return LoginResult{}, err
 	}
 	if p.ScheduledStart.Valid && time.Now().Before(p.ScheduledStart.Time) {
 		return LoginResult{}, ErrExamNotStarted
@@ -251,6 +261,43 @@ func (s *Exam) Login(ctx context.Context, token, deviceFingerprint, loginIP stri
 	}
 
 	return result, nil
+}
+
+func validateParticipantRoomToken(p db.GetParticipantByTokenRow, roomToken string) error {
+	roomToken = strings.TrimSpace(roomToken)
+	if roomToken == "" {
+		return ErrRoomTokenRequired
+	}
+	if strings.TrimSpace(p.RoomToken) == "" || !strings.EqualFold(strings.TrimSpace(p.RoomToken), roomToken) {
+		return ErrRoomTokenMismatch
+	}
+	return nil
+}
+
+func (s *Exam) recordRoomTokenMismatch(ctx context.Context, p db.GetParticipantByTokenRow, loginIP string, cause error) {
+	_ = s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
+		ParticipantID: p.ID,
+		EventType:     "exam_room_token_mismatch",
+		EventData: marshalJSON(map[string]string{
+			"reason":                roomTokenFailureReason(cause),
+			"session_id":            pgUUIDString(p.SessionID),
+			"room_id":               pgUUIDString(p.RoomID),
+			"student_id":            pgUUIDString(p.StudentID),
+			"ip_hash":               hashString(loginIP),
+			"room_token_configured": strconv.FormatBool(strings.TrimSpace(p.RoomToken) != ""),
+		}),
+	})
+}
+
+func roomTokenFailureReason(err error) string {
+	switch {
+	case errors.Is(err, ErrRoomTokenRequired):
+		return "room_token_required"
+	case errors.Is(err, ErrRoomTokenMismatch):
+		return "room_token_mismatch"
+	default:
+		return "room_token_invalid"
+	}
 }
 
 func (s *Exam) Heartbeat(ctx context.Context, participantID pgtype.UUID) error {

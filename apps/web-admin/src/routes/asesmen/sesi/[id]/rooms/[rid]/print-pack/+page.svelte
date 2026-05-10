@@ -82,7 +82,7 @@
 	const checklistItems = [
 		'Ruang, kursi, dan nomor meja sesuai daftar peserta',
 		'Jaringan internet dan listrik sudah dicek sebelum sesi dimulai',
-		'Token ruang dan token siswa diverifikasi oleh pengawas',
+		'Token ruang diumumkan hanya setelah peserta siap di ruang dan dipakai sebagai validasi login APK/portal',
 		'Perangkat cadangan / prosedur login ulang sudah diketahui pengawas',
 		'Pengawas menyampaikan tata tertib, waktu, dan prosedur submit',
 		'Semua peserta akhir sesi sudah submit atau diberi catatan kejadian'
@@ -257,7 +257,7 @@
 				<div class="border border-primary/20 bg-primary/10 p-4 text-center">
 					<p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Token Ruang</p>
 					<p class="mt-3 font-mono text-3xl font-bold tracking-[0.18em] text-primary">{room.room_token || '—'}</p>
-					<p class="mt-3 text-[11px] leading-4 text-primary">Dipakai untuk identifikasi ruang dan koordinasi pengawas. Token siswa tetap tercantum pada daftar hadir.</p>
+					<p class="mt-3 text-[11px] leading-4 text-primary">Dipakai sebagai kunci ruang untuk membuka akses token siswa di portal dan/atau validasi login APK. Jangan diberikan sebelum peserta berada di ruang ujian.</p>
 				</div>
 			</section>
 

@@ -2006,6 +2006,8 @@ describe('api proxy route handlers', () => {
 		const profileMod = await import('../../routes/api/portal/siswa/profile/+server');
 		const scheduleMod = await import('../../routes/api/portal/siswa/schedule/+server');
 		const resultsMod = await import('../../routes/api/portal/siswa/results/+server');
+		const cbtMod = await import('../../routes/api/portal/siswa/cbt/+server');
+		const revealMod = await import('../../routes/api/portal/siswa/cbt/[participant_id]/reveal-token/+server');
 
 		proxyGetMock.mockResolvedValueOnce({ student: { nama: 'Siswa A' } });
 		await profileMod.GET(createEvent({ url: new URL('http://localhost/api/portal/siswa/profile?student_id=other') }) as never);
@@ -2018,6 +2020,20 @@ describe('api proxy route handlers', () => {
 		proxyGetMock.mockResolvedValueOnce({ results: [] });
 		await resultsMod.GET(createEvent({ url: new URL('http://localhost/api/portal/siswa/results?student_id=other') }) as never);
 		expect(proxyGetMock).toHaveBeenLastCalledWith('/api/portal/student/results');
+
+		proxyGetMock.mockResolvedValueOnce({ schedule: [] });
+		await cbtMod.GET(createEvent({ url: new URL('http://localhost/api/portal/siswa/cbt?student_id=other') }) as never);
+		expect(proxyGetMock).toHaveBeenLastCalledWith('/api/portal/student/cbt');
+
+		proxyPostMock.mockResolvedValueOnce({ token: 'student-token' });
+		await revealMod.POST(createEvent({
+			params: { participant_id: 'participant 1' },
+			request: new Request('http://localhost/api/portal/siswa/cbt/participant%201/reveal-token', {
+				method: 'POST',
+				body: JSON.stringify({ room_token: 'ROOM-1' })
+			})
+		}) as never);
+		expect(proxyPostMock).toHaveBeenLastCalledWith('/api/portal/student/cbt/participant%201/reveal-token', { room_token: 'ROOM-1' });
 	});
 
 });

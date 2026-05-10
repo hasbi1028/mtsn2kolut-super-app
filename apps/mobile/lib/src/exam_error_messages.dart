@@ -19,10 +19,19 @@ String loginFailureMessage(ExamApiException error) {
     return 'Perangkat belum bisa terhubung ke server ujian. Periksa alamat server dan koneksi yang sedang dipakai.';
   }
 
+  final normalizedMessage = error.message.trim().toLowerCase();
   switch (error.statusCode) {
     case 404:
       return 'Token ujian tidak ditemukan. Periksa kembali token dari pengawas atau kartu ujian.';
+    case 400:
+      if (normalizedMessage.contains('room token')) {
+        return 'Token ruang wajib diisi. Minta token ruang kepada pengawas.';
+      }
+      return error.message;
     case 403:
+      if (normalizedMessage.contains('room token')) {
+        return 'Token ruang tidak sesuai. Pastikan Anda berada di ruang ujian yang benar.';
+      }
       return 'Sesi ujian belum aktif atau sudah berakhir. Hubungi pengawas untuk memastikan jadwal sesi.';
     case 409:
       return 'Token ini sudah terhubung dengan perangkat lain. Gunakan perangkat yang sama atau minta bantuan pengawas.';

@@ -30,6 +30,7 @@ type fakeExamService struct {
 	commandsErr                 error
 	commandAckErr               error
 	lastLoginToken              string
+	lastLoginRoomToken          string
 	lastLoginDeviceFingerprint  string
 	lastLoginIP                 string
 	lastStatusParticipantID     pgtype.UUID
@@ -48,8 +49,9 @@ type fakeExamService struct {
 	submitCalls                 int
 }
 
-func (f *fakeExamService) Login(ctx context.Context, token, deviceFingerprint, loginIP string) (service.LoginResult, error) {
+func (f *fakeExamService) Login(ctx context.Context, token, roomToken, deviceFingerprint, loginIP string) (service.LoginResult, error) {
 	f.lastLoginToken = token
+	f.lastLoginRoomToken = roomToken
 	f.lastLoginDeviceFingerprint = deviceFingerprint
 	f.lastLoginIP = loginIP
 	return f.loginResult, f.loginErr
@@ -220,7 +222,7 @@ func TestExamLoginWritesWrappedJSONWithAbsoluteMediaURLs(t *testing.T) {
 	}
 	h := &Exam{svc: svc}
 
-	body := bytes.NewBufferString(`{"token":"a1b2c3d4","device_fingerprint":"device-1"}`)
+	body := bytes.NewBufferString(`{"token":"a1b2c3d4","room_token":"ROOM-1","device_fingerprint":"device-1"}`)
 	req := httptest.NewRequest("POST", "http://internal/api/exam/login", body)
 	req.RemoteAddr = "10.0.0.10:1234"
 	req.Header.Set("Content-Type", "application/json")
@@ -278,6 +280,9 @@ func TestExamLoginWritesWrappedJSONWithAbsoluteMediaURLs(t *testing.T) {
 	}
 	if svc.lastLoginToken != "a1b2c3d4" {
 		t.Fatalf("login token = %q, want %q", svc.lastLoginToken, "a1b2c3d4")
+	}
+	if svc.lastLoginRoomToken != "ROOM-1" {
+		t.Fatalf("room token = %q, want %q", svc.lastLoginRoomToken, "ROOM-1")
 	}
 	if svc.lastLoginDeviceFingerprint != "device-1" {
 		t.Fatalf("device fingerprint = %q, want %q", svc.lastLoginDeviceFingerprint, "device-1")
@@ -467,6 +472,24 @@ func TestExamLoginMapsKnownServiceErrors(t *testing.T) {
 			wantError:  "device fingerprint required",
 		},
 		{
+			name:       "exam room required",
+			err:        service.ErrExamRoomRequired,
+			wantStatus: 403,
+			wantError:  "exam room has not been assigned",
+		},
+		{
+			name:       "room token required",
+			err:        service.ErrRoomTokenRequired,
+			wantStatus: 400,
+			wantError:  "room token required",
+		},
+		{
+			name:       "room token mismatch",
+			err:        service.ErrRoomTokenMismatch,
+			wantStatus: 403,
+			wantError:  "room token mismatch",
+		},
+		{
 			name:       "unexpected error",
 			err:        errors.New("database down"),
 			wantStatus: 500,
@@ -477,7 +500,7 @@ func TestExamLoginMapsKnownServiceErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &Exam{svc: &fakeExamService{loginErr: tt.err}}
-			body := bytes.NewBufferString(`{"token":"a1b2c3d4","device_fingerprint":"device-1"}`)
+			body := bytes.NewBufferString(`{"token":"a1b2c3d4","room_token":"ROOM-1","device_fingerprint":"device-1"}`)
 			req := httptest.NewRequest("POST", "http://internal/api/exam/login", body)
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
@@ -567,7 +590,7 @@ func TestExamLoginHardensJSONBody(t *testing.T) {
 
 	t.Run("rejects trailing json", func(t *testing.T) {
 		h := &Exam{svc: &fakeExamService{}}
-		req := httptest.NewRequest("POST", "http://internal/api/exam/login", bytes.NewBufferString(`{"token":"a1b2c3d4","device_fingerprint":"device-1"} {}`))
+		req := httptest.NewRequest("POST", "http://internal/api/exam/login", bytes.NewBufferString(`{"token":"a1b2c3d4","room_token":"ROOM-1","device_fingerprint":"device-1"} {}`))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -590,7 +613,7 @@ func TestExamLoginHardensJSONBody(t *testing.T) {
 	t.Run("trims token before service lookup", func(t *testing.T) {
 		svc := &fakeExamService{}
 		h := &Exam{svc: svc}
-		req := httptest.NewRequest("POST", "http://internal/api/exam/login", bytes.NewBufferString(`{"token":"  a1b2c3d4  ","device_fingerprint":"device-1"}`))
+		req := httptest.NewRequest("POST", "http://internal/api/exam/login", bytes.NewBufferString(`{"token":"  a1b2c3d4  ","room_token":"  ROOM-1  ","device_fingerprint":"device-1"}`))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 
@@ -601,6 +624,9 @@ func TestExamLoginHardensJSONBody(t *testing.T) {
 		}
 		if svc.lastLoginToken != "a1b2c3d4" {
 			t.Fatalf("login token = %q, want trimmed token", svc.lastLoginToken)
+		}
+		if svc.lastLoginRoomToken != "  ROOM-1  " {
+			t.Fatalf("room token = %q, want forwarded request value", svc.lastLoginRoomToken)
 		}
 	})
 }

@@ -387,6 +387,7 @@ SELECT
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
   ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
   ep.last_heartbeat,
+  COALESCE(r.room_token, '') AS room_token,
   s.nis, s.nama, s.gender,
   cs.status AS session_status,
   cs.title AS session_title,
@@ -399,6 +400,7 @@ FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
 JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
 JOIN cbt_packages p ON p.id = cs.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 WHERE ep.token = $1
 `
 
@@ -423,6 +425,7 @@ type GetParticipantByTokenRow struct {
 	LockedAt           pgtype.Timestamptz   `json:"locked_at"`
 	LockedReason       pgtype.Text          `json:"locked_reason"`
 	LastHeartbeat      pgtype.Timestamptz   `json:"last_heartbeat"`
+	RoomToken          string               `json:"room_token"`
 	Nis                string               `json:"nis"`
 	Nama               string               `json:"nama"`
 	Gender             GenderEnum           `json:"gender"`
@@ -460,6 +463,7 @@ func (q *Queries) GetParticipantByToken(ctx context.Context, token string) (GetP
 		&i.LockedAt,
 		&i.LockedReason,
 		&i.LastHeartbeat,
+		&i.RoomToken,
 		&i.Nis,
 		&i.Nama,
 		&i.Gender,
@@ -1000,6 +1004,80 @@ func (q *Queries) GetSessionTeacherAccess(ctx context.Context, arg GetSessionTea
 	var has_access bool
 	err := row.Scan(&has_access)
 	return has_access, err
+}
+
+const getStudentPortalCbtParticipant = `-- name: GetStudentPortalCbtParticipant :one
+SELECT
+  ep.id AS participant_id,
+  ep.session_id,
+  ep.student_id,
+  ep.token,
+  ep.room_id,
+  ep.seat_no,
+  ep.submitted_at,
+  ep.locked_at,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(r.room_name, '') AS room_name,
+  COALESCE(r.room_token, '') AS room_token
+FROM cbt_exam_participants ep
+JOIN cbt_exam_sessions s ON s.id = ep.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.id = $1
+  AND ep.student_id = $2
+`
+
+type GetStudentPortalCbtParticipantParams struct {
+	ParticipantID pgtype.UUID `json:"participant_id"`
+	StudentID     pgtype.UUID `json:"student_id"`
+}
+
+type GetStudentPortalCbtParticipantRow struct {
+	ParticipantID   pgtype.UUID          `json:"participant_id"`
+	SessionID       pgtype.UUID          `json:"session_id"`
+	StudentID       pgtype.UUID          `json:"student_id"`
+	Token           string               `json:"token"`
+	RoomID          pgtype.UUID          `json:"room_id"`
+	SeatNo          pgtype.Int4          `json:"seat_no"`
+	SubmittedAt     pgtype.Timestamptz   `json:"submitted_at"`
+	LockedAt        pgtype.Timestamptz   `json:"locked_at"`
+	SessionTitle    string               `json:"session_title"`
+	SessionStatus   CbtSessionStatusEnum `json:"session_status"`
+	ScheduledStart  pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd    pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageTitle    string               `json:"package_title"`
+	DurationMinutes int32                `json:"duration_minutes"`
+	RoomName        string               `json:"room_name"`
+	RoomToken       string               `json:"room_token"`
+}
+
+func (q *Queries) GetStudentPortalCbtParticipant(ctx context.Context, arg GetStudentPortalCbtParticipantParams) (GetStudentPortalCbtParticipantRow, error) {
+	row := q.db.QueryRow(ctx, getStudentPortalCbtParticipant, arg.ParticipantID, arg.StudentID)
+	var i GetStudentPortalCbtParticipantRow
+	err := row.Scan(
+		&i.ParticipantID,
+		&i.SessionID,
+		&i.StudentID,
+		&i.Token,
+		&i.RoomID,
+		&i.SeatNo,
+		&i.SubmittedAt,
+		&i.LockedAt,
+		&i.SessionTitle,
+		&i.SessionStatus,
+		&i.ScheduledStart,
+		&i.ScheduledEnd,
+		&i.PackageTitle,
+		&i.DurationMinutes,
+		&i.RoomName,
+		&i.RoomToken,
+	)
+	return i, err
 }
 
 const gradeStudentEssay = `-- name: GradeStudentEssay :exec
@@ -1971,6 +2049,90 @@ func (q *Queries) ListStudentExamSessions(ctx context.Context, studentID pgtype.
 			&i.PackageTitle,
 			&i.DurationMinutes,
 			&i.RoomName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStudentPortalCbtSchedule = `-- name: ListStudentPortalCbtSchedule :many
+SELECT
+  ep.id AS participant_id,
+  ep.session_id,
+  ep.token,
+  ep.room_id,
+  ep.seat_no,
+  ep.submitted_at,
+  ep.locked_at,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(r.room_name, '') AS room_name,
+  COALESCE(r.room_token, '') AS room_token
+FROM cbt_exam_participants ep
+JOIN cbt_exam_sessions s ON s.id = ep.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.student_id = $1
+  AND s.status <> 'cancelled'
+  AND (
+    s.scheduled_end IS NULL
+    OR s.scheduled_end >= NOW() - INTERVAL '7 days'
+  )
+ORDER BY s.scheduled_start ASC NULLS LAST, s.title ASC
+`
+
+type ListStudentPortalCbtScheduleRow struct {
+	ParticipantID   pgtype.UUID          `json:"participant_id"`
+	SessionID       pgtype.UUID          `json:"session_id"`
+	Token           string               `json:"token"`
+	RoomID          pgtype.UUID          `json:"room_id"`
+	SeatNo          pgtype.Int4          `json:"seat_no"`
+	SubmittedAt     pgtype.Timestamptz   `json:"submitted_at"`
+	LockedAt        pgtype.Timestamptz   `json:"locked_at"`
+	SessionTitle    string               `json:"session_title"`
+	SessionStatus   CbtSessionStatusEnum `json:"session_status"`
+	ScheduledStart  pgtype.Timestamptz   `json:"scheduled_start"`
+	ScheduledEnd    pgtype.Timestamptz   `json:"scheduled_end"`
+	PackageTitle    string               `json:"package_title"`
+	DurationMinutes int32                `json:"duration_minutes"`
+	RoomName        string               `json:"room_name"`
+	RoomToken       string               `json:"room_token"`
+}
+
+func (q *Queries) ListStudentPortalCbtSchedule(ctx context.Context, studentID pgtype.UUID) ([]ListStudentPortalCbtScheduleRow, error) {
+	rows, err := q.db.Query(ctx, listStudentPortalCbtSchedule, studentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStudentPortalCbtScheduleRow{}
+	for rows.Next() {
+		var i ListStudentPortalCbtScheduleRow
+		if err := rows.Scan(
+			&i.ParticipantID,
+			&i.SessionID,
+			&i.Token,
+			&i.RoomID,
+			&i.SeatNo,
+			&i.SubmittedAt,
+			&i.LockedAt,
+			&i.SessionTitle,
+			&i.SessionStatus,
+			&i.ScheduledStart,
+			&i.ScheduledEnd,
+			&i.PackageTitle,
+			&i.DurationMinutes,
+			&i.RoomName,
+			&i.RoomToken,
 		); err != nil {
 			return nil, err
 		}

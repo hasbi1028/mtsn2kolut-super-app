@@ -126,6 +126,7 @@ SELECT
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
   ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
   ep.last_heartbeat,
+  COALESCE(r.room_token, '') AS room_token,
   s.nis, s.nama, s.gender,
   cs.status AS session_status,
   cs.title AS session_title,
@@ -138,6 +139,7 @@ FROM cbt_exam_participants ep
 JOIN students s ON s.id = ep.student_id
 JOIN cbt_exam_sessions cs ON cs.id = ep.session_id
 JOIN cbt_packages p ON p.id = cs.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 WHERE ep.token = $1;
 
 -- name: EnrollClassToSession :exec
@@ -445,6 +447,60 @@ JOIN cbt_packages p ON p.id = s.package_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 WHERE ep.student_id = $1
 ORDER BY s.scheduled_start DESC;
+
+-- name: ListStudentPortalCbtSchedule :many
+SELECT
+  ep.id AS participant_id,
+  ep.session_id,
+  ep.token,
+  ep.room_id,
+  ep.seat_no,
+  ep.submitted_at,
+  ep.locked_at,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(r.room_name, '') AS room_name,
+  COALESCE(r.room_token, '') AS room_token
+FROM cbt_exam_participants ep
+JOIN cbt_exam_sessions s ON s.id = ep.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.student_id = $1
+  AND s.status <> 'cancelled'
+  AND (
+    s.scheduled_end IS NULL
+    OR s.scheduled_end >= NOW() - INTERVAL '7 days'
+  )
+ORDER BY s.scheduled_start ASC NULLS LAST, s.title ASC;
+
+-- name: GetStudentPortalCbtParticipant :one
+SELECT
+  ep.id AS participant_id,
+  ep.session_id,
+  ep.student_id,
+  ep.token,
+  ep.room_id,
+  ep.seat_no,
+  ep.submitted_at,
+  ep.locked_at,
+  s.title AS session_title,
+  s.status AS session_status,
+  s.scheduled_start,
+  s.scheduled_end,
+  p.title AS package_title,
+  p.duration_minutes,
+  COALESCE(r.room_name, '') AS room_name,
+  COALESCE(r.room_token, '') AS room_token
+FROM cbt_exam_participants ep
+JOIN cbt_exam_sessions s ON s.id = ep.session_id
+JOIN cbt_packages p ON p.id = s.package_id
+LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
+WHERE ep.id = sqlc.arg(participant_id)
+  AND ep.student_id = sqlc.arg(student_id);
 
 -- name: GradeStudentEssay :exec
 UPDATE cbt_student_answers

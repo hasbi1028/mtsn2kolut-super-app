@@ -140,6 +140,8 @@ export function classifyProctorEvent(event: ProctorEvidenceEvent): ProctorEviden
 		return 'app_background_resume';
 	}
 	if (eventType === 'device_mismatch') return 'device_mismatch';
+	if (eventType === 'exam_room_token_mismatch' || eventType === 'student_portal_room_token_mismatch') return 'device_mismatch';
+	if (eventType === 'student_portal_token_reveal') return 'export_print';
 	if (eventType === 'submit_guard') return 'submit_guard';
 	if (eventType === 'anti_cheat_violation') return 'anti_cheat';
 	if (eventType === 'stale_connection' || eventType === 'heartbeat_failed') return 'stale_connection';
@@ -187,6 +189,9 @@ export function proctorEventLabel(event: ProctorEvidenceEvent): string {
 		proctor_incident_action: 'Tindak lanjut insiden',
 		participant_command: 'Instruksi ke APK',
 		participant_command_ack: 'Instruksi diterima APK',
+		student_portal_token_reveal: 'Token siswa dibuka portal',
+		student_portal_room_token_mismatch: 'Token ruang salah di portal',
+		exam_room_token_mismatch: 'Token ruang salah di APK',
 		proctor_heartbeat: 'Heartbeat pengawas',
 		anti_cheat_violation: 'Anti-cheat BYOD',
 		proctor_force_submit: 'Paksa submit'
