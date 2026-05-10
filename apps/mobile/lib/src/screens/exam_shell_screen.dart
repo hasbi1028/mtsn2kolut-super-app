@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../anti_cheat_guard.dart';
 import '../exam_api.dart';
 import '../exam_error_messages.dart';
 import '../exam_events.dart';
@@ -98,6 +99,11 @@ class _ExamShellScreenState extends State<ExamShellScreen>
   Timer? _countdownTimer;
   Timer? _heartbeatTimer;
   Timer? _textAutosaveTimer;
+  final AntiCheatGuard _antiCheatGuard = AntiCheatGuard();
+  StreamSubscription<AntiCheatWindowState>? _antiCheatSubscription;
+  AntiCheatSnapshot _antiCheatSnapshot = const AntiCheatSnapshot();
+  String? _lastAntiCheatReportedReason;
+  bool _hasReportedSecureFlagEnabled = false;
 
   ExamShellConnectionViewModel get _connectionState =>
       ExamShellConnectionViewModel(
@@ -118,6 +124,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     super.initState();
     _sessionStore = widget.sessionStore ?? ExamSessionStore();
     WidgetsBinding.instance.addObserver(this);
+    _startAntiCheatGuard();
     _answers = Map<String, String>.from(widget.restoredSnapshot?.answers ?? {});
     _pendingAnswers = Map<String, String>.from(
       widget.restoredSnapshot?.pendingAnswers ?? {},
@@ -166,6 +173,90 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     unawaited(_persistSnapshot());
   }
 
+  void _startAntiCheatGuard() {
+    unawaited(_antiCheatGuard.enableSecureFlag());
+    _antiCheatSubscription = _antiCheatGuard.windowStateStream.listen(
+      (windowState) {
+        _updateAntiCheatSnapshot(
+          _antiCheatSnapshot.copyWith(windowState: windowState),
+        );
+      },
+      onError: (_) {
+        // Anti-cheat native telemetry is best-effort; lifecycle guard remains active.
+      },
+    );
+    unawaited(_refreshAntiCheatWindowState());
+  }
+
+  Future<void> _refreshAntiCheatWindowState() async {
+    final windowState = await _antiCheatGuard.getWindowState();
+    if (!mounted) return;
+    _updateAntiCheatSnapshot(
+      _antiCheatSnapshot.copyWith(windowState: windowState),
+    );
+    if (windowState.secureFlagEnabled && !_hasReportedSecureFlagEnabled) {
+      _hasReportedSecureFlagEnabled = true;
+      unawaited(
+        widget.client.sendExamEvent(
+          token: widget.examToken,
+          event: ExamClientEvents.warning(
+            reason: 'screenshot_protection_enabled',
+            data: <String, Object?>{'secure_flag_enabled': true},
+          ),
+        ),
+      );
+    }
+  }
+
+  void _updateAntiCheatSnapshot(AntiCheatSnapshot next) {
+    final wasBlocking = _antiCheatSnapshot.shouldBlockInteraction;
+    final previousReason = _antiCheatSnapshot.primaryReason;
+    final isNewSevereSignal =
+        next.shouldBlockInteraction &&
+        (!wasBlocking || previousReason != next.primaryReason);
+    final nextViolationCount = isNewSevereSignal && !next.locked
+        ? next.violationCount + 1
+        : next.violationCount;
+    final locked =
+        next.locked || nextViolationCount >= next.maxViolationsBeforeLock;
+    final updated = next.copyWith(
+      violationCount: nextViolationCount,
+      locked: locked,
+    );
+
+    if (mounted) {
+      setState(() {
+        _antiCheatSnapshot = updated;
+        if (updated.shouldBlockInteraction) {
+          _statusMessage = null;
+          _errorMessage = updated.locked
+              ? 'Mode ujian terkunci karena pelanggaran anti-cheat berulang.'
+              : updated.message;
+        }
+      });
+    } else {
+      _antiCheatSnapshot = updated;
+    }
+
+    if (isNewSevereSignal ||
+        (locked && _lastAntiCheatReportedReason != updated.primaryReason)) {
+      _lastAntiCheatReportedReason = updated.primaryReason;
+      unawaited(_reportAntiCheatViolation(updated));
+    }
+  }
+
+  Future<void> _reportAntiCheatViolation(AntiCheatSnapshot snapshot) async {
+    if (_isSubmitted) return;
+    try {
+      await widget.client.sendExamEvent(
+        token: widget.examToken,
+        event: snapshot.toWarningEvent(),
+      );
+    } catch (_) {
+      // Do not unblock or crash the exam UI because telemetry failed.
+    }
+  }
+
   void _dropUnsupportedRuntimeAnswers() {
     final unsupportedQuestionIds = widget.initialPayload.questions
         .where((question) => question.isUnsupportedRuntime)
@@ -201,6 +292,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
     _countdownTimer?.cancel();
     _heartbeatTimer?.cancel();
     _textAutosaveTimer?.cancel();
+    _antiCheatSubscription?.cancel();
     for (final controller in _essayControllers) {
       controller.dispose();
     }
@@ -209,6 +301,12 @@ class _ExamShellScreenState extends State<ExamShellScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _updateAntiCheatSnapshot(
+      _antiCheatSnapshot.copyWith(lifecycleState: state),
+    );
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshAntiCheatWindowState());
+    }
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
@@ -1099,7 +1197,90 @@ class _ExamShellScreenState extends State<ExamShellScreen>
                     ),
                   ),
                 ),
+              if (_antiCheatSnapshot.shouldBlockInteraction && !_isSubmitted)
+                _buildAntiCheatOverlay(theme),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAntiCheatOverlay(ThemeData theme) {
+    final snapshot = _antiCheatSnapshot;
+    return Positioned.fill(
+      child: ColoredBox(
+        color: Colors.black.withValues(alpha: 0.72),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Card(
+              color: theme.colorScheme.errorContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          snapshot.locked
+                              ? Icons.lock_outline
+                              : Icons.security_update_warning_outlined,
+                          color: theme.colorScheme.onErrorContainer,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            snapshot.title,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              color: theme.colorScheme.onErrorContainer,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      snapshot.message,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onErrorContainer,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Pelanggaran tercatat: ${snapshot.violationCount}/${snapshot.maxViolationsBeforeLock}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onErrorContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: snapshot.locked
+                            ? null
+                            : _refreshAntiCheatWindowState,
+                        icon: Icon(
+                          snapshot.locked
+                              ? Icons.supervisor_account
+                              : Icons.fullscreen,
+                        ),
+                        label: Text(
+                          snapshot.locked
+                              ? 'Minta pengawas reset akses'
+                              : 'Saya sudah kembali ke layar penuh',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -1321,7 +1502,8 @@ class _ExamShellScreenState extends State<ExamShellScreen>
               if (_pendingAnswers.isNotEmpty) ...[
                 StatTile(
                   label: 'Jawaban lokal',
-                  value: '${_pendingAnswers.length} jawaban aman, perlu sinkron',
+                  value:
+                      '${_pendingAnswers.length} jawaban aman, perlu sinkron',
                   accent: true,
                 ),
                 const SizedBox(height: 12),

@@ -1,0 +1,66 @@
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/src/anti_cheat_guard.dart';
+import 'package:mobile/src/exam_events.dart';
+
+void main() {
+  group('AntiCheatWindowState', () {
+    test('parses native Android window state map', () {
+      final state = AntiCheatWindowState.fromMap(const <Object?, Object?>{
+        'isMultiWindow': true,
+        'isPictureInPicture': false,
+        'hasWindowFocus': false,
+        'secureFlagEnabled': true,
+      });
+
+      expect(state.isMultiWindow, isTrue);
+      expect(state.isPictureInPicture, isFalse);
+      expect(state.hasWindowFocus, isFalse);
+      expect(state.secureFlagEnabled, isTrue);
+    });
+  });
+
+  group('AntiCheatSnapshot', () {
+    test('blocks split screen and emits sanitized high risk event', () {
+      const snapshot = AntiCheatSnapshot(
+        windowState: AntiCheatWindowState(
+          isMultiWindow: true,
+          secureFlagEnabled: true,
+        ),
+        violationCount: 1,
+      );
+
+      expect(snapshot.shouldBlockInteraction, isTrue);
+      expect(snapshot.primaryReason, 'split_screen_detected');
+      final event = snapshot.toWarningEvent();
+      expect(event.eventType, ExamClientEvents.typeAntiCheatViolation);
+      expect(event.data['reason'], 'split_screen_detected');
+      expect(event.data['violation_count'], 1);
+      expect(event.data['severity'], 'high');
+      expect(event.data.containsKey('device_fingerprint'), isFalse);
+      expect(event.data.containsKey('token'), isFalse);
+    });
+
+    test('locks locally after configured max violations', () {
+      const snapshot = AntiCheatSnapshot(
+        windowState: AntiCheatWindowState(isPictureInPicture: true),
+        violationCount: 3,
+        locked: true,
+      );
+
+      expect(snapshot.shouldBlockInteraction, isTrue);
+      expect(snapshot.primaryReason, 'anti_cheat_local_lock');
+      final event = snapshot.toWarningEvent();
+      expect(event.data['severity'], 'critical');
+    });
+
+    test('treats background lifecycle as blocking', () {
+      const snapshot = AntiCheatSnapshot(
+        lifecycleState: AppLifecycleState.paused,
+      );
+
+      expect(snapshot.shouldBlockInteraction, isTrue);
+      expect(snapshot.primaryReason, 'app_backgrounded');
+    });
+  });
+}
