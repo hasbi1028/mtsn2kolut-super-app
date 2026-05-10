@@ -144,7 +144,9 @@ export function classifyProctorEvent(event: ProctorEvidenceEvent): ProctorEviden
 	if (eventType === 'anti_cheat_violation') return 'anti_cheat';
 	if (eventType === 'stale_connection' || eventType === 'heartbeat_failed') return 'stale_connection';
 	if (eventType === 'proctor_force_submit') return 'force_submit';
-	if (eventType === 'proctor_reset_access') return 'reset_access';
+	if (eventType === 'proctor_reset_access' || eventType === 'proctor_unlock') return 'reset_access';
+	if (eventType === 'proctor_acknowledge' || eventType === 'proctor_incident_action' || eventType === 'participant_command') return 'warning';
+	if (eventType === 'proctor_heartbeat') return 'heartbeat';
 
 	if (eventType === 'warning') {
 		if (reason === 'resume_exam' || reason === 'repeat_resume_attempt') return 'app_background_resume';
@@ -180,6 +182,12 @@ export function proctorEventLabel(event: ProctorEvidenceEvent): string {
 		heartbeat_failed: 'Heartbeat gagal',
 		screenshot_attempt: 'Percobaan screenshot',
 		proctor_reset_access: 'Reset akses',
+		proctor_unlock: 'Unlock peserta',
+		proctor_acknowledge: 'Tandai diperiksa',
+		proctor_incident_action: 'Tindak lanjut insiden',
+		participant_command: 'Instruksi ke APK',
+		participant_command_ack: 'Instruksi diterima APK',
+		proctor_heartbeat: 'Heartbeat pengawas',
 		anti_cheat_violation: 'Anti-cheat BYOD',
 		proctor_force_submit: 'Paksa submit'
 	};

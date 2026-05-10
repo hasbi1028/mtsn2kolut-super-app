@@ -18,27 +18,34 @@ import (
 )
 
 type fakeExamService struct {
-	loginResult                service.LoginResult
-	loginErr                   error
-	statusResult               service.StatusResult
-	statusErr                  error
-	heartbeatErr               error
-	eventErr                   error
-	answerErr                  error
-	submitErr                  error
-	lastLoginToken             string
-	lastLoginDeviceFingerprint string
-	lastLoginIP                string
-	lastStatusParticipantID    pgtype.UUID
-	lastHeartbeatParticipantID pgtype.UUID
-	lastEventParticipantID     pgtype.UUID
-	lastEventType              string
-	lastEventData              map[string]any
-	lastAnswerParticipantID    pgtype.UUID
-	lastAnswerQuestionID       pgtype.UUID
-	lastAnswerText             string
-	lastSubmitParticipantID    pgtype.UUID
-	submitCalls                int
+	loginResult                 service.LoginResult
+	loginErr                    error
+	statusResult                service.StatusResult
+	statusErr                   error
+	heartbeatErr                error
+	eventErr                    error
+	answerErr                   error
+	submitErr                   error
+	commands                    []service.ParticipantCommand
+	commandsErr                 error
+	commandAckErr               error
+	lastLoginToken              string
+	lastLoginDeviceFingerprint  string
+	lastLoginIP                 string
+	lastStatusParticipantID     pgtype.UUID
+	lastHeartbeatParticipantID  pgtype.UUID
+	lastEventParticipantID      pgtype.UUID
+	lastEventType               string
+	lastEventData               map[string]any
+	lastAnswerParticipantID     pgtype.UUID
+	lastAnswerQuestionID        pgtype.UUID
+	lastAnswerText              string
+	lastSubmitParticipantID     pgtype.UUID
+	lastCommandsParticipantID   pgtype.UUID
+	lastCommandAckParticipantID pgtype.UUID
+	lastCommandAckID            string
+	lastCommandAckStatus        string
+	submitCalls                 int
 }
 
 func (f *fakeExamService) Login(ctx context.Context, token, deviceFingerprint, loginIP string) (service.LoginResult, error) {
@@ -76,6 +83,18 @@ func (f *fakeExamService) Submit(ctx context.Context, p db.GetParticipantByToken
 	f.lastSubmitParticipantID = p.ID
 	f.submitCalls++
 	return f.submitErr
+}
+
+func (f *fakeExamService) ListPendingCommands(ctx context.Context, participantID pgtype.UUID) ([]service.ParticipantCommand, error) {
+	f.lastCommandsParticipantID = participantID
+	return f.commands, f.commandsErr
+}
+
+func (f *fakeExamService) AcknowledgeCommand(ctx context.Context, participantID pgtype.UUID, commandID, status string) error {
+	f.lastCommandAckParticipantID = participantID
+	f.lastCommandAckID = commandID
+	f.lastCommandAckStatus = status
+	return f.commandAckErr
 }
 
 func TestAbsolutizeExamAssetURLHonorsForwardedHeaders(t *testing.T) {
@@ -277,6 +296,15 @@ func TestExamTokenScopedEndpointsForwardParticipantContext(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
 	h.Status(httptest.NewRecorder(), req)
 
+	req = httptest.NewRequest("GET", "http://internal/api/exam/commands", nil)
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	h.Commands(httptest.NewRecorder(), req)
+
+	req = httptest.NewRequest("POST", "http://internal/api/exam/commands/cmd-1/ack", bytes.NewBufferString(`{"status":"read"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
+	h.AcknowledgeCommand(httptest.NewRecorder(), req)
+
 	req = httptest.NewRequest("POST", "http://internal/api/exam/heartbeat", nil)
 	req = req.WithContext(context.WithValue(req.Context(), mw.ExamParticipantKey, participant))
 	h.Heartbeat(httptest.NewRecorder(), req)
@@ -297,15 +325,20 @@ func TestExamTokenScopedEndpointsForwardParticipantContext(t *testing.T) {
 
 	want := participant.ID.String()
 	for endpoint, got := range map[string]string{
-		"status":    svc.lastStatusParticipantID.String(),
-		"heartbeat": svc.lastHeartbeatParticipantID.String(),
-		"event":     svc.lastEventParticipantID.String(),
-		"answer":    svc.lastAnswerParticipantID.String(),
-		"submit":    svc.lastSubmitParticipantID.String(),
+		"status":      svc.lastStatusParticipantID.String(),
+		"heartbeat":   svc.lastHeartbeatParticipantID.String(),
+		"event":       svc.lastEventParticipantID.String(),
+		"answer":      svc.lastAnswerParticipantID.String(),
+		"submit":      svc.lastSubmitParticipantID.String(),
+		"commands":    svc.lastCommandsParticipantID.String(),
+		"command_ack": svc.lastCommandAckParticipantID.String(),
 	} {
 		if got != want {
 			t.Fatalf("%s participant id = %q, want %q", endpoint, got, want)
 		}
+	}
+	if svc.lastCommandAckID != "cmd-1" || svc.lastCommandAckStatus != "read" {
+		t.Fatalf("command ack = %q/%q, want cmd-1/read", svc.lastCommandAckID, svc.lastCommandAckStatus)
 	}
 }
 
@@ -318,6 +351,11 @@ func TestExamStatusWritesWrappedJSON(t *testing.T) {
 				TimeRemainingSeconds: 1800,
 				IsSubmitted:          true,
 				SubmittedAt:          "2026-05-01T08:30:00Z",
+				Commands: []service.ParticipantCommand{{
+					ID:      "cmd-1",
+					Type:    "warning_message",
+					Message: "Tetap di aplikasi ujian.",
+				}},
 			},
 		},
 	}
@@ -344,6 +382,9 @@ func TestExamStatusWritesWrappedJSON(t *testing.T) {
 	}
 	if payload.Data.SubmittedAt != "2026-05-01T08:30:00Z" {
 		t.Fatalf("SubmittedAt = %q", payload.Data.SubmittedAt)
+	}
+	if len(payload.Data.Commands) != 1 || payload.Data.Commands[0].ID != "cmd-1" {
+		t.Fatalf("Commands = %+v, want one pending command", payload.Data.Commands)
 	}
 }
 

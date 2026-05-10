@@ -330,6 +330,21 @@ WHERE participant_id = $1
 ORDER BY created_at DESC
 LIMIT 100;
 
+-- name: ListPendingParticipantCommands :many
+SELECT ev.id, ev.participant_id, ev.event_type, ev.event_data, ev.created_at
+FROM cbt_participant_events ev
+WHERE ev.participant_id = $1
+  AND ev.event_type = 'participant_command'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM cbt_participant_events ack
+    WHERE ack.participant_id = ev.participant_id
+      AND ack.event_type = 'participant_command_ack'
+      AND ack.event_data->>'command_id' = ev.id::text
+  )
+ORDER BY ev.created_at ASC
+LIMIT 20;
+
 -- name: ListSessionParticipantEvents :many
 SELECT
   ev.id,

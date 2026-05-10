@@ -103,6 +103,8 @@ func TestExamMobileRoutesRemainTokenScoped(t *testing.T) {
 		`r.With(examLoginRateLimit).Post("/api/exam/login", examH.Login)`,
 		`r.Use(examTokenMW)`,
 		`r.Get("/api/exam/status", examH.Status)`,
+		`r.Get("/api/exam/commands", examH.Commands)`,
+		`r.Post("/api/exam/commands/{cid}/ack", examH.AcknowledgeCommand)`,
 		`r.Post("/api/exam/heartbeat", examH.Heartbeat)`,
 		`r.Post("/api/exam/event", examH.RecordEvent)`,
 		`r.Post("/api/exam/answer", examH.SubmitAnswer)`,

@@ -128,6 +128,12 @@ type cbtParticipantEventStore interface {
 	InsertParticipantEvent(ctx context.Context, arg db.InsertParticipantEventParams) error
 }
 
+const (
+	ParticipantCommandWarningMessage = "warning_message"
+	ParticipantCommandReconnect      = "reconnect"
+	ParticipantCommandUnlockNotice   = "unlock_notice"
+)
+
 func NewCbtSession(pool *pgxpool.Pool) *CbtSession {
 	return &CbtSession{q: db.New(pool), pool: pool}
 }
@@ -537,6 +543,53 @@ func (s *CbtSession) AcknowledgeProctorEvent(ctx context.Context, participantID 
 			"actor":    actor,
 			"event_id": strings.TrimSpace(eventID),
 			"notes":    strings.TrimSpace(notes),
+		}),
+	})
+}
+
+func (s *CbtSession) RecordIncidentAction(ctx context.Context, participantID pgtype.UUID, eventID, action, actor, notes string) error {
+	q, ok := s.q.(cbtParticipantEventStore)
+	if !ok {
+		return fmt.Errorf("cbt participant event store unavailable")
+	}
+	action = normalizeIncidentAction(action)
+	if action == "" {
+		return fmt.Errorf("%w: tindakan insiden tidak valid", domain.ErrBadRequest)
+	}
+	return q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
+		ParticipantID: participantID,
+		EventType:     "proctor_incident_action",
+		EventData: marshalJSON(map[string]string{
+			"actor":    strings.TrimSpace(actor),
+			"event_id": strings.TrimSpace(eventID),
+			"action":   action,
+			"notes":    strings.TrimSpace(notes),
+		}),
+	})
+}
+
+func (s *CbtSession) SendParticipantCommand(ctx context.Context, participantID pgtype.UUID, commandType, message, actor string) error {
+	q, ok := s.q.(cbtParticipantEventStore)
+	if !ok {
+		return fmt.Errorf("cbt participant event store unavailable")
+	}
+	commandType = normalizeParticipantCommand(commandType)
+	if commandType == "" {
+		return fmt.Errorf("%w: perintah peserta tidak valid", domain.ErrBadRequest)
+	}
+	message = strings.TrimSpace(message)
+	if message == "" {
+		message = defaultParticipantCommandMessage(commandType)
+	}
+	return q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
+		ParticipantID: participantID,
+		EventType:     "participant_command",
+		EventData: marshalJSON(map[string]string{
+			"actor":        strings.TrimSpace(actor),
+			"command_type": commandType,
+			"message":      message,
+			"severity":     participantCommandSeverity(commandType),
+			"issued_at":    time.Now().Format(time.RFC3339),
 		}),
 	})
 }
@@ -1175,6 +1228,50 @@ func forceSubmitParticipant(ctx context.Context, q cbtParticipantForceSubmitStor
 		return db.ForceSubmitParticipantRow{}, err
 	}
 	return row, nil
+}
+
+func normalizeIncidentAction(action string) string {
+	switch strings.TrimSpace(strings.ToLower(action)) {
+	case "reviewed", "cleared", "warning_given", "locked", "submitted", "escalated":
+		return strings.TrimSpace(strings.ToLower(action))
+	default:
+		return ""
+	}
+}
+
+func normalizeParticipantCommand(commandType string) string {
+	switch strings.TrimSpace(strings.ToLower(commandType)) {
+	case ParticipantCommandWarningMessage:
+		return ParticipantCommandWarningMessage
+	case ParticipantCommandReconnect:
+		return ParticipantCommandReconnect
+	case ParticipantCommandUnlockNotice:
+		return ParticipantCommandUnlockNotice
+	default:
+		return ""
+	}
+}
+
+func defaultParticipantCommandMessage(commandType string) string {
+	switch commandType {
+	case ParticipantCommandReconnect:
+		return "Silakan hubungi pengawas untuk login ulang setelah akses diverifikasi."
+	case ParticipantCommandUnlockNotice:
+		return "Akses ujian sudah dibuka. Lanjutkan hanya setelah pengawas memberi arahan."
+	default:
+		return "Tetap di aplikasi ujian dan ikuti arahan pengawas."
+	}
+}
+
+func participantCommandSeverity(commandType string) string {
+	switch commandType {
+	case ParticipantCommandReconnect:
+		return "warning"
+	case ParticipantCommandUnlockNotice:
+		return "info"
+	default:
+		return "warning"
+	}
 }
 
 // --- Essay Grading ---

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/time/rate"
 	"mtsn2kolut-super-app/backend/internal/api"
@@ -39,6 +40,8 @@ type examService interface {
 	RecordClientEvent(ctx context.Context, participantID pgtype.UUID, eventType string, data map[string]any) error
 	SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, questionID pgtype.UUID, answer string) error
 	Submit(ctx context.Context, p db.GetParticipantByTokenRow) error
+	ListPendingCommands(ctx context.Context, participantID pgtype.UUID) ([]service.ParticipantCommand, error)
+	AcknowledgeCommand(ctx context.Context, participantID pgtype.UUID, commandID, status string) error
 }
 
 func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +101,64 @@ func (h *Exam) Status(w http.ResponseWriter, r *http.Request) {
 	}
 	// Status payload currently has no media URLs; keep this path explicit if fields are added.
 	api.OK(w, result)
+}
+
+func (h *Exam) Commands(w http.ResponseWriter, r *http.Request) {
+	p, ok := mw.ParticipantFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	commands, err := h.svc.ListPendingCommands(r.Context(), p.ID)
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]any{"commands": commands})
+}
+
+func (h *Exam) AcknowledgeCommand(w http.ResponseWriter, r *http.Request) {
+	p, ok := mw.ParticipantFromContext(r.Context())
+	if !ok {
+		api.Unauthorized(w)
+		return
+	}
+	commandID := strings.TrimSpace(chi.URLParam(r, "cid"))
+	if commandID == "" {
+		commandID = examCommandIDFromPath(r.URL.Path)
+	}
+	if commandID == "" {
+		api.BadRequest(w, "command id required")
+		return
+	}
+	status := "seen"
+	if r.Body != nil {
+		var body struct {
+			Status string `json:"status"`
+		}
+		if decodeOptionalExamJSON(w, r, examEmptyBodyLimit, &body) {
+			if trimmed := strings.TrimSpace(body.Status); trimmed != "" {
+				status = trimmed
+			}
+		} else {
+			return
+		}
+	}
+	if err := h.svc.AcknowledgeCommand(r.Context(), p.ID, commandID, status); err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, map[string]string{"status": status})
+}
+
+func examCommandIDFromPath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i, part := range parts {
+		if part == "commands" && i+1 < len(parts) {
+			return strings.TrimSpace(parts[i+1])
+		}
+	}
+	return ""
 }
 
 func (h *Exam) Heartbeat(w http.ResponseWriter, r *http.Request) {
@@ -253,6 +314,25 @@ func validateOptionalEmptyExamJSONBody(w http.ResponseWriter, r *http.Request, l
 	}
 	if body == nil || len(body) > 0 {
 		api.BadRequest(w, "request body must be empty")
+		return false
+	}
+	return true
+}
+
+func decodeOptionalExamJSON(w http.ResponseWriter, r *http.Request, limit int64, dst any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(dst); err != nil {
+		if errors.Is(err, io.EOF) {
+			return true
+		}
+		writeExamDecodeError(w, err)
+		return false
+	}
+
+	var extra json.RawMessage
+	if err := dec.Decode(&extra); err != io.EOF {
+		writeExamDecodeError(w, err)
 		return false
 	}
 	return true

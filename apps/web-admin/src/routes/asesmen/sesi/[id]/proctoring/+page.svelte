@@ -206,7 +206,7 @@
 	}
 
 	function importantEvent(event: ProctoringEvent) {
-		return ['anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'proctor_force_submit', 'proctor_reset_access', 'proctor_unlock', 'proctor_acknowledge'].includes(event.event_type);
+		return ['anti_cheat_violation', 'app_switch', 'screenshot_attempt', 'proctor_force_submit', 'proctor_reset_access', 'proctor_unlock', 'proctor_acknowledge', 'proctor_incident_action', 'participant_command'].includes(event.event_type);
 	}
 
 	function eventReason(event: ProctoringEvent) {
@@ -339,8 +339,9 @@
 			<p class="text-sm text-muted-foreground">Pantau semua ruang, alert kecurangan, dan status peserta secara real-time.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			<Badge variant="outline" class={badgeClass(liveMode === 'sse' ? 'normal' : 'high')}>{liveModeLabel()}</Badge>
-			<Button variant="outline" onclick={() => { void loadDashboard(); void loadEvents(); }}>Refresh</Button>
+			<Button variant={audioAlertsEnabled ? 'default' : 'outline'} onclick={() => audioAlertsEnabled = !audioAlertsEnabled}>Audio {audioAlertsEnabled ? 'ON' : 'OFF'}</Button>
+			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/proctoring/report`)}>Rekap Insiden</Button>
+			<Button variant="outline" onclick={() => void loadEvents(true)}>Refresh Event</Button>
 		</div>
 	</div>
 

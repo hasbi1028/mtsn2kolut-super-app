@@ -53,6 +53,7 @@ type examStore interface {
 	UpdateParticipantAnswerCorrectness(ctx context.Context, participantID pgtype.UUID) error
 	SubmitParticipantExam(ctx context.Context, id pgtype.UUID) (db.SubmitParticipantExamRow, error)
 	ListCbtQuestionAssetsByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error)
+	ListPendingParticipantCommands(ctx context.Context, participantID pgtype.UUID) ([]db.CbtParticipantEvent, error)
 }
 
 type examTxStore interface {
@@ -86,6 +87,18 @@ type AntiCheatState struct {
 	Locked         bool   `json:"locked"`
 	LockedAt       string `json:"locked_at,omitempty"`
 	LockedReason   string `json:"locked_reason,omitempty"`
+}
+
+type ParticipantCommand struct {
+	ID          string         `json:"id"`
+	Type        string         `json:"type"`
+	Message     string         `json:"message"`
+	Severity    string         `json:"severity,omitempty"`
+	IssuedAt    string         `json:"issued_at"`
+	Actor       string         `json:"actor,omitempty"`
+	Payload     map[string]any `json:"payload,omitempty"`
+	RawEvent    string         `json:"raw_event,omitempty"`
+	LegacyLabel string         `json:"legacy_label,omitempty"`
 }
 
 type StudentInfo struct {
@@ -316,12 +329,13 @@ func (s *Exam) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, 
 }
 
 type StatusResult struct {
-	AnsweredCount        int            `json:"answered_count"`
-	TotalQuestions       int            `json:"total_questions"`
-	SubmittedAt          string         `json:"submitted_at,omitempty"`
-	TimeRemainingSeconds int64          `json:"time_remaining_seconds"`
-	IsSubmitted          bool           `json:"is_submitted"`
-	AntiCheat            AntiCheatState `json:"anti_cheat"`
+	AnsweredCount        int                  `json:"answered_count"`
+	TotalQuestions       int                  `json:"total_questions"`
+	SubmittedAt          string               `json:"submitted_at,omitempty"`
+	TimeRemainingSeconds int64                `json:"time_remaining_seconds"`
+	IsSubmitted          bool                 `json:"is_submitted"`
+	AntiCheat            AntiCheatState       `json:"anti_cheat"`
+	Commands             []ParticipantCommand `json:"commands"`
 }
 
 func (s *Exam) GetStatus(ctx context.Context, p db.GetParticipantByTokenRow) (StatusResult, error) {
@@ -341,7 +355,43 @@ func (s *Exam) GetStatus(ctx context.Context, p db.GetParticipantByTokenRow) (St
 	if p.SubmittedAt.Valid {
 		result.SubmittedAt = p.SubmittedAt.Time.Format(time.RFC3339)
 	}
+	commands, err := s.ListPendingCommands(ctx, p.ID)
+	if err != nil {
+		return StatusResult{}, err
+	}
+	result.Commands = commands
 	return result, nil
+}
+
+func (s *Exam) ListPendingCommands(ctx context.Context, participantID pgtype.UUID) ([]ParticipantCommand, error) {
+	rows, err := s.q.ListPendingParticipantCommands(ctx, participantID)
+	if err != nil {
+		return nil, err
+	}
+	commands := make([]ParticipantCommand, 0, len(rows))
+	for _, row := range rows {
+		commands = append(commands, participantCommandFromEvent(row))
+	}
+	return commands, nil
+}
+
+func (s *Exam) AcknowledgeCommand(ctx context.Context, participantID pgtype.UUID, commandID, status string) error {
+	commandID = strings.TrimSpace(commandID)
+	if commandID == "" {
+		return errors.New("command id required")
+	}
+	status = strings.TrimSpace(status)
+	if status == "" {
+		status = "seen"
+	}
+	return s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
+		ParticipantID: participantID,
+		EventType:     "participant_command_ack",
+		EventData: marshalJSON(map[string]string{
+			"command_id": commandID,
+			"status":     status,
+		}),
+	})
 }
 
 func (s *Exam) Submit(ctx context.Context, p db.GetParticipantByTokenRow) error {
@@ -455,6 +505,62 @@ func antiCheatStateFromParticipant(violationCount, riskScore int32, riskLevel st
 		state.LockedReason = lockedReason.String
 	}
 	return state
+}
+
+func participantCommandFromEvent(row db.CbtParticipantEvent) ParticipantCommand {
+	payload := map[string]any{}
+	if len(row.EventData) > 0 {
+		_ = json.Unmarshal(row.EventData, &payload)
+	}
+	commandType := stringFromMap(payload, "command_type")
+	if commandType == "" {
+		commandType = stringFromMap(payload, "type")
+	}
+	if commandType == "" {
+		commandType = "warning_message"
+	}
+	message := stringFromMap(payload, "message")
+	command := ParticipantCommand{
+		ID:       pgUUIDString(row.ID),
+		Type:     commandType,
+		Message:  message,
+		Severity: stringFromMap(payload, "severity"),
+		IssuedAt: "",
+		Actor:    stringFromMap(payload, "actor"),
+		Payload:  payload,
+		RawEvent: row.EventType,
+	}
+	if row.CreatedAt.Valid {
+		command.IssuedAt = row.CreatedAt.Time.Format(time.RFC3339)
+	}
+	switch command.Type {
+	case "reconnect":
+		command.LegacyLabel = "Login ulang"
+	case "unlock_notice":
+		command.LegacyLabel = "Akses dibuka"
+	default:
+		command.LegacyLabel = "Peringatan"
+	}
+	if len(command.Payload) == 0 {
+		command.Payload = nil
+	}
+	return command
+}
+
+func stringFromMap(values map[string]any, key string) string {
+	if values == nil {
+		return ""
+	}
+	value, ok := values[key]
+	if !ok {
+		return ""
+	}
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	default:
+		return ""
+	}
 }
 
 // --- helpers ---
