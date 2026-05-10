@@ -148,10 +148,32 @@ build/app/outputs/flutter-apk/app-release.apk
 ## Distribusi Internal
 
 - [ ] bagikan APK hanya lewat kanal resmi sekolah
+- [ ] pusat download resmi dicek di `/asesmen/aplikasi-siswa/release`
+- [ ] URL latest publik `https://mtsn2kolut.sch.id/releases/mobile/latest-arm64.apk` mengarah ke APK yang benar-benar diuji
+- [ ] `latest.json`, `latest-arm64.sha256`, dan QR code sudah sinkron setelah publish
 - [ ] satu gelombang uji memakai satu `API_BASE_URL` yang sama
 - [ ] siswa diminta memasang APK sebelum hari ujian
 - [ ] siswa diberi instruksi untuk tidak mengganti perangkat di tengah sesi
 - [ ] pengawas tahu arti status: `Tersambung`, `Sinkron`, `Cek Ulang`, `Lokal`, `Gangguan`, `Waspada`, dan `Menurun`
+
+## Publish ke Release Center
+
+Setelah APK lulus quality gate dan build release selesai, publish artifact ke endpoint web-admin/cloudflared:
+
+```bash
+cd /home/servermtsn2kolut/mtsn2kolut-super-app
+scripts/publish-mobile-apk.sh --apk apps/mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+```
+
+Jika memakai APK bernama khusus:
+
+```bash
+scripts/publish-mobile-apk.sh --apk apps/mobile/build/app/outputs/flutter-apk/mtsn2kolut-mobile-b6c762d-anti-cheat-phase23-arm64-v8a-release.apk --commit b6c762d
+```
+
+Script ini hanya mengubah artifact di `/home/servermtsn2kolut/releases/mtsn2kolut-mobile/`; tidak rebuild web-admin, tidak restart PM2, dan tidak menjalankan migration.
+
+Referensi lengkap: `docs/mobile-apk-release-center.md`.
 
 ## Catatan Operasional BYOD
 
