@@ -1,5 +1,7 @@
 package id.sch.mtsn2kolutara.mobile
 
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.os.Bundle
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
@@ -13,6 +15,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enforceSingleWindowMode()
         enableSecureFlag()
     }
 
@@ -49,6 +52,14 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        enforceSingleWindowMode()
+        enableSecureFlag()
+        emitAntiCheatState()
+    }
+
+    override fun onPostResume() {
+        super.onPostResume()
+        enforceSingleWindowMode()
         enableSecureFlag()
         emitAntiCheatState()
     }
@@ -61,12 +72,31 @@ class MainActivity : FlutterActivity() {
 
     override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean) {
         super.onMultiWindowModeChanged(isInMultiWindowMode)
+        enforceSingleWindowMode()
         emitAntiCheatState()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode)
+        enforceSingleWindowMode()
         emitAntiCheatState()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        enforceSingleWindowMode()
+        emitAntiCheatState()
+    }
+
+    private fun enforceSingleWindowMode() {
+        try {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        } catch (_: IllegalStateException) {
+            // Some OEM/Android combinations ignore or reject orientation requests
+            // while the activity is already in compatibility/multi-window mode.
+            // Manifest-level resizeableActivity=false remains the hard prevention;
+            // Flutter anti-cheat state still blocks interaction when detected.
+        }
     }
 
     private fun enableSecureFlag() {
