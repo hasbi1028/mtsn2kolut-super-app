@@ -74,6 +74,8 @@ type cbtSessionProctorControlService interface {
 	ResetParticipantRuntimeAccess(ctx context.Context, participantID pgtype.UUID, actor string) error
 	UnlockParticipantAntiCheat(ctx context.Context, participantID pgtype.UUID, actor, notes string) (db.UnlockParticipantAntiCheatRow, error)
 	AcknowledgeProctorEvent(ctx context.Context, participantID pgtype.UUID, eventID, actor, notes string) error
+	RecordIncidentAction(ctx context.Context, participantID pgtype.UUID, eventID, action, actor, notes string) error
+	SendParticipantCommand(ctx context.Context, participantID pgtype.UUID, commandType, message, actor string) error
 	ListParticipantEvents(ctx context.Context, sessionID, participantID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error)
 	ForceSubmitParticipant(ctx context.Context, sessionID, participantID pgtype.UUID, actor string) (db.ForceSubmitParticipantRow, error)
 }
@@ -1746,6 +1748,117 @@ func (h *CbtSession) AcknowledgeRoomParticipantEvent(w http.ResponseWriter, r *h
 	api.OK(w, map[string]string{"status": "acknowledged"})
 }
 
+func (h *CbtSession) RecordRoomParticipantIncidentAction(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, pid, ok := h.requireRoomParticipantControlParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomParticipant(w, r, sessionID, roomID, pid) {
+		return
+	}
+	var body struct {
+		EventID string `json:"event_id"`
+		Action  string `json:"action"`
+		Notes   string `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
+		return
+	}
+	if err := proctorSvc.RecordIncidentAction(r.Context(), pid, body.EventID, body.Action, currentUsername(r), body.Notes); err != nil {
+		writeClientError(w, err, "Tindakan insiden tidak valid")
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PARTICIPANT_INCIDENT_ACTION", "cbt_session_room", pgUUIDString(roomID), map[string]any{
+		"session_id":       pgUUIDString(sessionID),
+		"participant_id":   pgUUIDString(pid),
+		"event_id":         strings.TrimSpace(body.EventID),
+		"action":           strings.TrimSpace(body.Action),
+		"notes":            strings.TrimSpace(body.Notes),
+		"actor_username":   currentUsername(r),
+		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, map[string]string{"status": "recorded"})
+}
+
+func (h *CbtSession) SendRoomParticipantCommand(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, pid, ok := h.requireRoomParticipantControlParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomParticipant(w, r, sessionID, roomID, pid) {
+		return
+	}
+	var body struct {
+		CommandType string `json:"command_type"`
+		Message     string `json:"message"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	proctorSvc, ok := h.svc.(cbtSessionProctorControlService)
+	if !ok {
+		api.Internal(w, fmt.Errorf("cbt proctor control service unavailable"))
+		return
+	}
+	if err := proctorSvc.SendParticipantCommand(r.Context(), pid, body.CommandType, body.Message, currentUsername(r)); err != nil {
+		writeClientError(w, err, "Perintah peserta tidak valid")
+		return
+	}
+	h.auditEvent(r.Context(), "CBT_SESSION_ROOM_PARTICIPANT_COMMAND", "cbt_session_room", pgUUIDString(roomID), map[string]any{
+		"session_id":       pgUUIDString(sessionID),
+		"participant_id":   pgUUIDString(pid),
+		"command_type":     strings.TrimSpace(body.CommandType),
+		"message":          strings.TrimSpace(body.Message),
+		"actor_username":   currentUsername(r),
+		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, map[string]string{"status": "queued"})
+}
+
+func (h *CbtSession) RecordRoomProctorHeartbeat(w http.ResponseWriter, r *http.Request) {
+	sessionID, roomID, ok := h.requireSessionRoomParams(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireSessionRoom(w, r, sessionID, roomID) {
+		return
+	}
+	if !h.requireSessionRoomProctorOrAdmin(w, r, sessionID, roomID) {
+		return
+	}
+	employeeID := cbtSessionEmployeeID(r)
+	h.auditEvent(r.Context(), "CBT_PROCTOR_HEARTBEAT", "cbt_session_room", pgUUIDString(roomID), map[string]any{
+		"session_id":       pgUUIDString(sessionID),
+		"room_id":          pgUUIDString(roomID),
+		"employee_id":      pgUUIDString(employeeID),
+		"actor_username":   currentUsername(r),
+		"actor_session_id": cbtAuditClaimString(r.Context(), "ssid"),
+		"actor_claim_user": cbtAuditClaimString(r.Context(), "uid"),
+	})
+	api.OK(w, map[string]string{"status": "online"})
+}
+
 func (h *CbtSession) ForceSubmitRoomParticipant(w http.ResponseWriter, r *http.Request) {
 	sessionID, roomID, pid, ok := h.requireRoomParticipantControlParams(w, r)
 	if !ok {
@@ -2307,21 +2420,29 @@ func serializeProctoringRows(rows []db.GetSessionProctoringStatusRow, includeTok
 			token = row.Token
 		}
 		items = append(items, map[string]any{
-			"participant_id":     pgUUIDString(row.ParticipantID),
-			"student_id":         pgUUIDString(row.StudentID),
-			"nis":                row.Nis,
-			"nama":               row.Nama,
-			"token":              token,
-			"room_id":            pgUUIDString(row.RoomID),
-			"room_name":          row.RoomName,
-			"seat_no":            row.SeatNo,
-			"submitted_at":       row.SubmittedAt,
-			"last_heartbeat":     row.LastHeartbeat,
-			"app_switch_count":   row.AppSwitchCount,
-			"screenshot_attempt": row.ScreenshotAttempt,
-			"suspicious_flag":    row.SuspiciousFlag,
-			"answered_count":     row.AnsweredCount,
-			"score":              row.Score,
+			"participant_id":         pgUUIDString(row.ParticipantID),
+			"student_id":             pgUUIDString(row.StudentID),
+			"nis":                    row.Nis,
+			"nama":                   row.Nama,
+			"token":                  token,
+			"room_id":                pgUUIDString(row.RoomID),
+			"room_name":              row.RoomName,
+			"seat_no":                row.SeatNo,
+			"submitted_at":           row.SubmittedAt,
+			"last_heartbeat":         row.LastHeartbeat,
+			"app_switch_count":       row.AppSwitchCount,
+			"screenshot_attempt":     row.ScreenshotAttempt,
+			"suspicious_flag":        row.SuspiciousFlag,
+			"violation_count":        row.ViolationCount,
+			"risk_score":             row.RiskScore,
+			"risk_level":             row.RiskLevel,
+			"locked_at":              row.LockedAt,
+			"locked_reason":          row.LockedReason,
+			"recent_violation_count": row.RecentViolationCount,
+			"last_violation_at":      row.LastViolationAt,
+			"last_violation_reason":  row.LastViolationReason,
+			"answered_count":         row.AnsweredCount,
+			"score":                  row.Score,
 		})
 	}
 	return items

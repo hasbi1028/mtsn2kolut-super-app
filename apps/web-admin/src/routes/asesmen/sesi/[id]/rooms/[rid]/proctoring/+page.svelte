@@ -155,6 +155,8 @@
 	let actionBusyId = $state('');
 	let operationState = $state<{ tone: 'success' | 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 	let interval: ReturnType<typeof setInterval> | undefined;
+	let proctorHeartbeatInterval: ReturnType<typeof setInterval> | undefined;
+	let lastProctorHeartbeatAt = $state<string | null>(null);
 	let liveSource = $state<EventSource | null>(null);
 	let liveMode = $state<'connecting' | 'sse' | 'polling'>('connecting');
 	let seenEventIds = $state(new Set<string>());
@@ -187,6 +189,11 @@
 	onMount(() => {
 		dashboardPromise = loadDashboard();
 		void loadHandover();
+		void sendProctorHeartbeat();
+		proctorHeartbeatInterval = setInterval(() => {
+			if (typeof document !== 'undefined' && document.hidden) return;
+			void sendProctorHeartbeat();
+		}, 30000);
 		connectLiveStream();
 		interval = setInterval(() => {
 			if (typeof document !== 'undefined' && document.hidden) return;
@@ -197,6 +204,7 @@
 
 	onDestroy(() => {
 		if (interval) clearInterval(interval);
+		if (proctorHeartbeatInterval) clearInterval(proctorHeartbeatInterval);
 		liveSource?.close();
 	});
 
@@ -377,6 +385,18 @@
 		} finally {
 			refreshBusy = false;
 			backgroundBusy = false;
+		}
+	}
+
+	async function sendProctorHeartbeat() {
+		try {
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/proctoring/heartbeat`, {
+				method: 'POST',
+			});
+			await readClientJson<unknown>(res);
+			lastProctorHeartbeatAt = new Date().toISOString();
+		} catch (error) {
+			console.warn('Proctor heartbeat gagal dikirim', error);
 		}
 	}
 
@@ -581,6 +601,50 @@
 		}
 	}
 
+	async function recordIncidentAction(event: ProctoringEvent, action: 'reviewed' | 'cleared' | 'warning_given' | 'escalated') {
+		const notes = window.prompt(`Catatan ${action.replaceAll('_', ' ')} untuk ${event.nama}`, eventReason(event)) ?? '';
+		actionBusyId = `incident-${action}-${event.id}`;
+		try {
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/participants/${event.participant_id}/incident-action`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ event_id: event.id, action, notes }),
+			});
+			await readClientJson<unknown>(res);
+			toast.success('Tindakan insiden tersimpan');
+			await refreshDashboard(true);
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			actionBusyId = '';
+		}
+	}
+
+	async function sendParticipantCommand(row: ProctoringRow, commandType: 'warning_message' | 'reconnect' | 'unlock_notice') {
+		const defaultMessage = commandType === 'reconnect'
+			? 'Silakan hubungi pengawas untuk login ulang.'
+			: commandType === 'unlock_notice'
+				? 'Akses ujian sudah dibuka. Lanjutkan sesuai arahan pengawas.'
+				: 'Tetap di aplikasi ujian dan ikuti arahan pengawas.';
+		const message = window.prompt(`Pesan ke ${row.nama}`, defaultMessage) ?? '';
+		if (!message.trim()) return;
+		actionBusyId = `command-${commandType}-${row.participant_id}`;
+		try {
+			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${roomId}/participants/${row.participant_id}/command`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ command_type: commandType, message }),
+			});
+			await readClientJson<unknown>(res);
+			operationState = { tone: 'success', title: 'Pesan Dikirim ke APK', message: `${row.nama} akan menerima instruksi saat aplikasi melakukan polling status.` };
+			await refreshDashboard(true);
+		} catch (error) {
+			toast.error(detailErrorMessage(error));
+		} finally {
+			actionBusyId = '';
+		}
+	}
+
 	async function forceSubmit(row: ProctoringRow) {
 		if (!(await confirmAction({
 			title: 'Paksa Submit Peserta',
@@ -671,12 +735,18 @@
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
 			<Badge variant="outline" class={liveModeClass()}>{liveModeLabel()}</Badge>
+			<Badge variant="outline" class={lastProctorHeartbeatAt ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}>
+				Pengawas {lastProctorHeartbeatAt ? `online ${fmtDate(lastProctorHeartbeatAt)}` : 'menghubungkan'}
+			</Badge>
 			{#if backgroundBusy}
 				<Badge variant="outline" class="border-primary/20 text-primary">Memperbarui</Badge>
 			{/if}
 			<Button variant="outline" onclick={exportEvidenceCSV} disabled={!room}>
 				<FileDownIcon class="mr-2 size-4" />
 				Export Evidence CSV (tanpa token)
+			</Button>
+			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/rooms/${roomId}/proctoring/report`)}>
+				Berita Acara
 			</Button>
 			<Button variant={audioAlertsEnabled ? 'default' : 'outline'} onclick={() => audioAlertsEnabled = !audioAlertsEnabled}>
 				Audio {audioAlertsEnabled ? 'ON' : 'OFF'}
@@ -991,6 +1061,12 @@
 													<LoadingButton size="sm" variant="outline" onclick={() => void resetAccess(row)} loading={actionBusyId === `reset-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `reset-${row.participant_id}`} loadingLabel="Reset...">
 														Reset
 													</LoadingButton>
+													<LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'warning_message')} loading={actionBusyId === `command-warning_message-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-warning_message-${row.participant_id}`} loadingLabel="Kirim...">
+														Peringatkan
+													</LoadingButton>
+													<LoadingButton size="sm" variant="outline" onclick={() => void sendParticipantCommand(row, 'reconnect')} loading={actionBusyId === `command-reconnect-${row.participant_id}`} disabled={actionBusyId !== '' && actionBusyId !== `command-reconnect-${row.participant_id}`} loadingLabel="Kirim...">
+														Login Ulang
+													</LoadingButton>
 													<LoadingButton size="sm" onclick={() => void forceSubmit(row)} loading={actionBusyId === `submit-${row.participant_id}`} disabled={!!row.submitted_at || (actionBusyId !== '' && actionBusyId !== `submit-${row.participant_id}`)} loadingLabel="Submit...">
 														Submit
 													</LoadingButton>
@@ -1024,11 +1100,17 @@
 										</div>
 									</div>
 									<p class="mt-1 text-xs text-muted-foreground">{event.nis} · {fmtDate(event.created_at)}</p>
-					<div class="mt-2 flex justify-end">
-						<LoadingButton size="sm" variant="outline" onclick={() => void acknowledgeEvent(event)} loading={actionBusyId === `ack-${event.id}`} disabled={actionBusyId !== '' && actionBusyId !== `ack-${event.id}`} loadingLabel="Menyimpan...">
-							Tandai diperiksa
-						</LoadingButton>
-					</div>
+									<div class="mt-2 flex flex-wrap justify-end gap-2">
+										<LoadingButton size="sm" variant="outline" onclick={() => void acknowledgeEvent(event)} loading={actionBusyId === `ack-${event.id}`} disabled={actionBusyId !== '' && actionBusyId !== `ack-${event.id}`} loadingLabel="Menyimpan...">
+											Tandai diperiksa
+										</LoadingButton>
+										<LoadingButton size="sm" variant="outline" onclick={() => void recordIncidentAction(event, 'escalated')} loading={actionBusyId === `incident-escalated-${event.id}`} disabled={actionBusyId !== '' && actionBusyId !== `incident-escalated-${event.id}`} loadingLabel="Simpan...">
+											Eskalasi
+										</LoadingButton>
+										<LoadingButton size="sm" variant="outline" onclick={() => void recordIncidentAction(event, 'cleared')} loading={actionBusyId === `incident-cleared-${event.id}`} disabled={actionBusyId !== '' && actionBusyId !== `incident-cleared-${event.id}`} loadingLabel="Simpan...">
+											Clear
+										</LoadingButton>
+									</div>
 								</div>
 							{:else}
 								<p class="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">Belum ada log ruang</p>

@@ -186,6 +186,8 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(examTokenMW)
 		r.Get("/api/exam/status", examH.Status)
+		r.Get("/api/exam/commands", examH.Commands)
+		r.Post("/api/exam/commands/{cid}/ack", examH.AcknowledgeCommand)
 		r.Post("/api/exam/heartbeat", examH.Heartbeat)
 		r.Post("/api/exam/event", examH.RecordEvent)
 		r.Post("/api/exam/answer", examH.SubmitAnswer)
@@ -456,6 +458,7 @@ func main() {
 		r.With(requireAsesmenProctor).Post("/api/cbt/sessions/{id}/participants/{pid}/force-submit", sessionH.ForceSubmitParticipant)
 		r.With(requireCbtOps).Get("/api/cbt/proctoring/my-rooms", sessionH.ListMyProctorRooms)
 		r.With(requireCbtOps).Get("/api/cbt/sessions/{id}/rooms/{rid}/proctoring", sessionH.GetRoomProctoringDashboard)
+		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/proctoring/heartbeat", sessionH.RecordRoomProctorHeartbeat)
 		r.With(requireCbtOps).Get("/api/cbt/sessions/{id}/rooms/{rid}/print-pack", sessionH.GetRoomProctorPrintPack)
 		r.With(requireCbtOps).Get("/api/cbt/sessions/{id}/rooms/{rid}/handover", sessionH.GetRoomHandover)
 		r.With(requireCbtOps).Put("/api/cbt/sessions/{id}/rooms/{rid}/handover", sessionH.SaveRoomHandover)
@@ -464,6 +467,8 @@ func main() {
 		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/participants/{pid}/reset-access", sessionH.ResetRoomParticipantAccess)
 		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/participants/{pid}/unlock", sessionH.UnlockRoomParticipant)
 		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/participants/{pid}/acknowledge", sessionH.AcknowledgeRoomParticipantEvent)
+		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/participants/{pid}/incident-action", sessionH.RecordRoomParticipantIncidentAction)
+		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/participants/{pid}/command", sessionH.SendRoomParticipantCommand)
 		r.With(requireCbtOps).Post("/api/cbt/sessions/{id}/rooms/{rid}/participants/{pid}/force-submit", sessionH.ForceSubmitRoomParticipant)
 
 		// Essay Grading
@@ -555,6 +560,7 @@ func main() {
 		r.With(requireAsesmenProctor).Post("/api/asesmen/sessions/{id}/participants/{pid}/force-submit", sessionH.ForceSubmitParticipant)
 		r.With(requireCbtOps).Get("/api/asesmen/proctoring/my-rooms", sessionH.ListMyProctorRooms)
 		r.With(requireCbtOps).Get("/api/asesmen/sessions/{id}/rooms/{rid}/proctoring", sessionH.GetRoomProctoringDashboard)
+		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/proctoring/heartbeat", sessionH.RecordRoomProctorHeartbeat)
 		r.With(requireCbtOps).Get("/api/asesmen/sessions/{id}/rooms/{rid}/print-pack", sessionH.GetRoomProctorPrintPack)
 		r.With(requireCbtOps).Get("/api/asesmen/sessions/{id}/rooms/{rid}/handover", sessionH.GetRoomHandover)
 		r.With(requireCbtOps).Put("/api/asesmen/sessions/{id}/rooms/{rid}/handover", sessionH.SaveRoomHandover)
@@ -563,6 +569,8 @@ func main() {
 		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/participants/{pid}/reset-access", sessionH.ResetRoomParticipantAccess)
 		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/participants/{pid}/unlock", sessionH.UnlockRoomParticipant)
 		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/participants/{pid}/acknowledge", sessionH.AcknowledgeRoomParticipantEvent)
+		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/participants/{pid}/incident-action", sessionH.RecordRoomParticipantIncidentAction)
+		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/participants/{pid}/command", sessionH.SendRoomParticipantCommand)
 		r.With(requireCbtOps).Post("/api/asesmen/sessions/{id}/rooms/{rid}/participants/{pid}/force-submit", sessionH.ForceSubmitRoomParticipant)
 		r.With(requireCbt).Get("/api/asesmen/sessions/{id}/ungraded-essays", sessionH.ListUngradedEssays)
 		r.With(requireCbt).Post("/api/asesmen/sessions/{id}/answers/{aid}/grade-essay", sessionH.GradeEssay)

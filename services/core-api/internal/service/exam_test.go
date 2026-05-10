@@ -49,6 +49,9 @@ type fakeExamStore struct {
 	submitRow              db.SubmitParticipantExamRow
 	submitID               pgtype.UUID
 	submitErr              error
+	commandRows            []db.CbtParticipantEvent
+	commandParticipantID   pgtype.UUID
+	commandErr             error
 	assets                 map[string][]db.CbtQuestionAsset
 	assetsErr              error
 }
@@ -135,6 +138,11 @@ func (f *fakeExamStore) SubmitParticipantExam(ctx context.Context, id pgtype.UUI
 
 func (f *fakeExamStore) ListCbtQuestionAssetsByQuestion(ctx context.Context, questionID pgtype.UUID) ([]db.CbtQuestionAsset, error) {
 	return f.assets[pgUUIDString(questionID)], f.assetsErr
+}
+
+func (f *fakeExamStore) ListPendingParticipantCommands(ctx context.Context, participantID pgtype.UUID) ([]db.CbtParticipantEvent, error) {
+	f.commandParticipantID = participantID
+	return f.commandRows, f.commandErr
 }
 
 func TestExamLoginIncludesMobileContractFields(t *testing.T) {

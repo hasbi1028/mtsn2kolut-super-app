@@ -97,6 +97,17 @@ type fakeCbtSessionService struct {
 	resetParticipantID       pgtype.UUID
 	resetActor               string
 	resetErr                 error
+	incidentParticipantID    pgtype.UUID
+	incidentEventID          string
+	incidentAction           string
+	incidentActor            string
+	incidentNotes            string
+	incidentErr              error
+	commandParticipantID     pgtype.UUID
+	commandType              string
+	commandMessage           string
+	commandActor             string
+	commandErr               error
 	forceSubmitSessionID     pgtype.UUID
 	forceSubmitParticipantID pgtype.UUID
 	forceSubmitActor         string
@@ -451,6 +462,23 @@ func (f *fakeCbtSessionService) ResetParticipantRuntimeAccess(_ context.Context,
 	f.resetParticipantID = participantID
 	f.resetActor = actor
 	return f.resetErr
+}
+
+func (f *fakeCbtSessionService) RecordIncidentAction(_ context.Context, participantID pgtype.UUID, eventID, action, actor, notes string) error {
+	f.incidentParticipantID = participantID
+	f.incidentEventID = eventID
+	f.incidentAction = action
+	f.incidentActor = actor
+	f.incidentNotes = notes
+	return f.incidentErr
+}
+
+func (f *fakeCbtSessionService) SendParticipantCommand(_ context.Context, participantID pgtype.UUID, commandType, message, actor string) error {
+	f.commandParticipantID = participantID
+	f.commandType = commandType
+	f.commandMessage = message
+	f.commandActor = actor
+	return f.commandErr
 }
 
 func (f *fakeCbtSessionService) ListParticipantEvents(_ context.Context, sessionID, participantID pgtype.UUID, limit int32) ([]db.ListSessionParticipantEventsRow, error) {
