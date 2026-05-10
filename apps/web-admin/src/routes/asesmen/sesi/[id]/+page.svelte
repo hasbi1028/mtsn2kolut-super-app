@@ -1701,9 +1701,14 @@
 						Snapshot ringkas untuk operator: ruang, pengawas, submit, koneksi, atensi, dan handover.
 					</p>
 				</div>
-				<LoadingButton variant="outline" size="sm" loading={commandCenterBusy} loadingLabel="Memuat..." onclick={() => void refreshCommandCenter()}>
-					Refresh
-				</LoadingButton>
+				<div class="flex flex-wrap justify-end gap-2">
+					<Button variant="outline" size="sm" href={resolve(`/asesmen/sesi/${sessionId}/proctoring`)}>
+						Command Center
+					</Button>
+					<LoadingButton variant="outline" size="sm" loading={commandCenterBusy} loadingLabel="Memuat..." onclick={() => void refreshCommandCenter()}>
+						Refresh
+					</LoadingButton>
+				</div>
 			</Card.Header>
 			<Card.Content class="space-y-3">
 				<div class="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
