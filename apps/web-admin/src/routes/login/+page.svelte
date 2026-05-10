@@ -2,6 +2,7 @@
 	import type { ActionData } from './$types';
 	import * as Card from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
+	import PasswordInput from '$lib/components/PasswordInput.svelte';
 	import LoadingButton from '$lib/components/LoadingButton.svelte';
 	import { navigating } from '$app/state';
 
@@ -103,15 +104,14 @@
 
 								<div class="space-y-1.5">
 									<label for="password" class="block text-sm font-medium text-foreground">Password</label>
-									<Input
-										id="password"
-										name="password"
-										type="password"
-										autocomplete="current-password"
-										placeholder="••••••••"
-										aria-describedby={form?.error ? 'login-error' : undefined}
-										required
-									/>
+					<PasswordInput
+						id="password"
+						name="password"
+						autocomplete="current-password"
+						placeholder="••••••••"
+						aria-describedby={form?.error ? 'login-error' : undefined}
+						required
+					/>
 								</div>
 
 								<LoadingButton type="submit" class="w-full bg-primary hover:bg-primary/90" loading={pending} loadingLabel="Memproses..." label="Masuk" />

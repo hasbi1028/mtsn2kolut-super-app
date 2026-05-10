@@ -4,6 +4,7 @@
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import PasswordInput from '$lib/components/PasswordInput.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { toast } from '$lib/components/ui/sonner';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -569,7 +570,7 @@
 						</div>
 						<div>
 							<label for="u-pass" class="text-xs text-muted-foreground mb-1 block">Password</label>
-							<Input id="u-pass" type="password" bind:value={fPassword} placeholder="Minimal 8 karakter" />
+							<PasswordInput id="u-pass" bind:value={fPassword} placeholder="Minimal 8 karakter" />
 						</div>
 						<div>
 							<p class="mb-2 block text-xs text-muted-foreground">Peran Akses (boleh pilih lebih dari satu)</p>

@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import * as Card from '$lib/components/ui/card';
   import { Input } from '$lib/components/ui/input';
+  import PasswordInput from '$lib/components/PasswordInput.svelte';
   import { Button } from '$lib/components/ui/button';
   import { toast } from '$lib/components/ui/sonner';
   import { Skeleton } from '$lib/components/ui/skeleton';
@@ -433,15 +434,15 @@
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
           <label for="pw-current" class="mb-1.5 block text-sm font-medium">Password Saat Ini</label>
-          <Input id="pw-current" type="password" bind:value={pwForm.current} autocomplete="current-password" />
+          <PasswordInput id="pw-current" bind:value={pwForm.current} autocomplete="current-password" />
         </div>
         <div>
           <label for="pw-next" class="mb-1.5 block text-sm font-medium">Password Baru</label>
-          <Input id="pw-next" type="password" bind:value={pwForm.next} autocomplete="new-password" />
+          <PasswordInput id="pw-next" bind:value={pwForm.next} autocomplete="new-password" />
         </div>
         <div>
           <label for="pw-confirm" class="mb-1.5 block text-sm font-medium">Konfirmasi Password</label>
-          <Input id="pw-confirm" type="password" bind:value={pwForm.confirm} autocomplete="new-password" />
+          <PasswordInput id="pw-confirm" bind:value={pwForm.confirm} autocomplete="new-password" />
         </div>
       </div>
       <LoadingButton class="mt-4" onclick={() => void changePassword()} loading={pwLoading} loadingLabel="Menyimpan..." label="Simpan Password" />
