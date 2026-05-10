@@ -495,21 +495,17 @@ func examDeadline(end pgtype.Timestamptz, durationMin int32, joinedAt pgtype.Tim
 
 func orderQuestions(questions []db.GetExamQuestionsRow, orderJSON []byte, randomize bool) []db.GetExamQuestionsRow {
 	if len(orderJSON) == 0 {
-		if !randomize {
-			return questions
-		}
-		indices := shuffleInts(len(questions))
-		ordered := make([]db.GetExamQuestionsRow, len(questions))
-		for i, idx := range indices {
-			ordered[i] = questions[idx]
-		}
-		return ordered
+		return defaultQuestionOrder(questions, randomize)
 	}
 
-	// Reorder by stored question_order
+	// Reorder by stored question_order. Treat an empty JSON array as missing order
+	// so a reset/retake cannot accidentally produce an empty exam package.
 	var ids []string
 	if err := json.Unmarshal(orderJSON, &ids); err != nil {
 		return questions
+	}
+	if len(ids) == 0 {
+		return defaultQuestionOrder(questions, randomize)
 	}
 	idMap := make(map[string]db.GetExamQuestionsRow, len(questions))
 	for _, q := range questions {
@@ -520,6 +516,21 @@ func orderQuestions(questions []db.GetExamQuestionsRow, orderJSON []byte, random
 		if q, ok := idMap[id]; ok {
 			ordered = append(ordered, q)
 		}
+	}
+	if len(ordered) == 0 {
+		return defaultQuestionOrder(questions, randomize)
+	}
+	return ordered
+}
+
+func defaultQuestionOrder(questions []db.GetExamQuestionsRow, randomize bool) []db.GetExamQuestionsRow {
+	if !randomize {
+		return questions
+	}
+	indices := shuffleInts(len(questions))
+	ordered := make([]db.GetExamQuestionsRow, len(questions))
+	for i, idx := range indices {
+		ordered[i] = questions[idx]
 	}
 	return ordered
 }

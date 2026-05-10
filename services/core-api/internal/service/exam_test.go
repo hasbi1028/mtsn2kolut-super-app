@@ -535,6 +535,14 @@ func TestExamStatusAndHelpersCoverFallbackBranches(t *testing.T) {
 	if got := orderQuestions(rows, nil, false); len(got) != 2 || got[0].ID != firstID || got[1].ID != secondID {
 		t.Fatalf("orderQuestions(non-random empty) = %+v, want original order", got)
 	}
+	emptyOrderJSON, _ := json.Marshal([]string{})
+	if got := orderQuestions(rows, emptyOrderJSON, false); len(got) != 2 || got[0].ID != firstID || got[1].ID != secondID {
+		t.Fatalf("orderQuestions(empty json array) = %+v, want original order", got)
+	}
+	missingOrderJSON, _ := json.Marshal([]string{"missing"})
+	if got := orderQuestions(rows, missingOrderJSON, false); len(got) != 2 || got[0].ID != firstID || got[1].ID != secondID {
+		t.Fatalf("orderQuestions(all missing) = %+v, want original order", got)
+	}
 	if got := orderQuestions(rows, nil, true); len(got) != 2 {
 		t.Fatalf("orderQuestions(random empty) len = %d, want 2", len(got))
 	}
