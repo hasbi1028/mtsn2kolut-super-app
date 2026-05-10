@@ -5,6 +5,7 @@ export const PROCTOR_EVIDENCE_CATEGORIES = [
 	'submit_guard',
 	'stale_connection',
 	'warning',
+	'anti_cheat',
 	'force_submit',
 	'reset_access',
 	'export_print'
@@ -52,6 +53,7 @@ const PROCTOR_EVIDENCE_CATEGORY_LABELS: Record<ProctorEvidenceCategory, string> 
 	submit_guard: 'Submit guard',
 	stale_connection: 'Stale connection',
 	warning: 'Peringatan pengawas',
+	anti_cheat: 'Anti-cheat BYOD',
 	force_submit: 'Submitted/force submitted',
 	reset_access: 'Reset akses',
 	export_print: 'Export/print token-free'
@@ -64,6 +66,7 @@ const PROCTOR_EVIDENCE_CATEGORY_SUMMARIES: Record<ProctorEvidenceCategory, strin
 	submit_guard: 'Submit ditahan karena pending sinkron/degraded mode; tunggu jawaban aman terkirim.',
 	stale_connection: 'Koneksi stale atau heartbeat tertunda; pengawas perlu cek jaringan/perangkat.',
 	warning: 'Peringatan BYOD atau catatan manual dari runtime ujian.',
+	anti_cheat: 'Split screen, PiP, fokus hilang, background, atau lock anti-cheat tercatat.',
 	force_submit: 'Submit manual/force submit sudah tercatat sebagai tindakan pengawas.',
 	reset_access: 'Akses perangkat direset oleh pengawas setelah verifikasi ruang.',
 	export_print: 'Bukti cetak/export tersedia tanpa dump token mentah.'
@@ -138,6 +141,7 @@ export function classifyProctorEvent(event: ProctorEvidenceEvent): ProctorEviden
 	}
 	if (eventType === 'device_mismatch') return 'device_mismatch';
 	if (eventType === 'submit_guard') return 'submit_guard';
+	if (eventType === 'anti_cheat_violation') return 'anti_cheat';
 	if (eventType === 'stale_connection' || eventType === 'heartbeat_failed') return 'stale_connection';
 	if (eventType === 'proctor_force_submit') return 'force_submit';
 	if (eventType === 'proctor_reset_access') return 'reset_access';
@@ -158,6 +162,7 @@ export function proctorEventLabel(event: ProctorEvidenceEvent): string {
 	const data = eventDataRecord(event.event_data);
 	const reason = stringValue(data.reason).toLowerCase();
 	if (eventType === 'warning' && reason) return WARNING_REASON_LABELS[reason] ?? reason.replaceAll('_', ' ');
+	if (eventType === 'anti_cheat_violation' && reason) return reason.replaceAll('_', ' ');
 
 	const labels: Record<string, string> = {
 		login: 'Login',
@@ -175,6 +180,7 @@ export function proctorEventLabel(event: ProctorEvidenceEvent): string {
 		heartbeat_failed: 'Heartbeat gagal',
 		screenshot_attempt: 'Percobaan screenshot',
 		proctor_reset_access: 'Reset akses',
+		anti_cheat_violation: 'Anti-cheat BYOD',
 		proctor_force_submit: 'Paksa submit'
 	};
 	return labels[eventType] ?? event.event_type.replaceAll('_', ' ');

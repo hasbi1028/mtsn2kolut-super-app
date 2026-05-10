@@ -8,6 +8,7 @@ class ExamLoginPayload {
     required this.answeredCount,
     required this.totalQuestions,
     required this.timeRemainingSeconds,
+    this.antiCheat = const ExamAntiCheatState.safe(),
   });
 
   final String participantId;
@@ -18,6 +19,7 @@ class ExamLoginPayload {
   final int answeredCount;
   final int totalQuestions;
   final int timeRemainingSeconds;
+  final ExamAntiCheatState antiCheat;
 
   factory ExamLoginPayload.fromJson(Map<String, dynamic> json) {
     return ExamLoginPayload(
@@ -38,6 +40,9 @@ class ExamLoginPayload {
       answeredCount: json['answered_count'] as int? ?? 0,
       totalQuestions: json['total_questions'] as int? ?? 0,
       timeRemainingSeconds: json['time_remaining_seconds'] as int? ?? 0,
+      antiCheat: ExamAntiCheatState.fromJson(
+        json['anti_cheat'] as Map<String, dynamic>? ?? const {},
+      ),
     );
   }
 }
@@ -194,12 +199,14 @@ class ExamStatusPayload {
     required this.totalQuestions,
     required this.timeRemainingSeconds,
     required this.isSubmitted,
+    this.antiCheat = const ExamAntiCheatState.safe(),
   });
 
   final int answeredCount;
   final int totalQuestions;
   final int timeRemainingSeconds;
   final bool isSubmitted;
+  final ExamAntiCheatState antiCheat;
 
   factory ExamStatusPayload.fromJson(Map<String, dynamic> json) {
     return ExamStatusPayload(
@@ -207,6 +214,46 @@ class ExamStatusPayload {
       totalQuestions: json['total_questions'] as int? ?? 0,
       timeRemainingSeconds: json['time_remaining_seconds'] as int? ?? 0,
       isSubmitted: json['is_submitted'] as bool? ?? false,
+      antiCheat: ExamAntiCheatState.fromJson(
+        json['anti_cheat'] as Map<String, dynamic>? ?? const {},
+      ),
+    );
+  }
+}
+
+class ExamAntiCheatState {
+  const ExamAntiCheatState({
+    required this.violationCount,
+    required this.riskScore,
+    required this.riskLevel,
+    required this.locked,
+    required this.lockedAt,
+    required this.lockedReason,
+  });
+
+  const ExamAntiCheatState.safe()
+    : violationCount = 0,
+      riskScore = 0,
+      riskLevel = 'normal',
+      locked = false,
+      lockedAt = null,
+      lockedReason = '';
+
+  final int violationCount;
+  final int riskScore;
+  final String riskLevel;
+  final bool locked;
+  final DateTime? lockedAt;
+  final String lockedReason;
+
+  factory ExamAntiCheatState.fromJson(Map<String, dynamic> json) {
+    return ExamAntiCheatState(
+      violationCount: json['violation_count'] as int? ?? 0,
+      riskScore: json['risk_score'] as int? ?? 0,
+      riskLevel: json['risk_level'] as String? ?? 'normal',
+      locked: json['locked'] as bool? ?? false,
+      lockedAt: _tryParseDateTime(json['locked_at']),
+      lockedReason: json['locked_reason'] as String? ?? '',
     );
   }
 }

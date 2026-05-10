@@ -88,6 +88,7 @@ SELECT
   s.nis, s.nama, s.gender,
   ep.token, ep.room_id, ep.seat_no, ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
   ep.last_heartbeat, ep.created_at,
   COALESCE(r.room_name, '') AS room_name
 FROM cbt_exam_participants ep
@@ -102,6 +103,7 @@ SELECT
   s.nis, s.nama, s.gender,
   ep.token, ep.room_id, ep.seat_no, ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
   ep.last_heartbeat, ep.created_at,
   COALESCE(r.room_name, '') AS room_name
 FROM cbt_exam_participants ep
@@ -122,6 +124,7 @@ SELECT
   ep.token, ep.room_id, ep.seat_no, ep.device_fingerprint, ep.question_order,
   ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
   ep.last_heartbeat,
   s.nis, s.nama, s.gender,
   cs.status AS session_status,
@@ -182,7 +185,13 @@ RETURNING cbt_exam_participants.id, cbt_exam_participants.token;
 UPDATE cbt_exam_participants
 SET device_fingerprint = NULL,
     login_ip = NULL,
-    last_heartbeat = NULL
+    last_heartbeat = NULL,
+    violation_count = 0,
+    risk_score = 0,
+    risk_level = 'normal',
+    locked_at = NULL,
+    locked_reason = NULL,
+    suspicious_flag = FALSE
 WHERE id = $1;
 
 -- name: AssignParticipantRoom :exec
@@ -241,6 +250,30 @@ WHERE id = $1;
 UPDATE cbt_exam_participants
 SET suspicious_flag = $2
 WHERE id = $1;
+
+-- name: IncrementParticipantAntiCheatViolation :one
+UPDATE cbt_exam_participants
+SET violation_count = violation_count + 1,
+    risk_score = LEAST(100, risk_score + $2),
+    risk_level = CASE
+      WHEN locked_at IS NOT NULL OR violation_count + 1 >= $3 OR LEAST(100, risk_score + $2) >= 80 THEN 'locked'
+      WHEN LEAST(100, risk_score + $2) >= 50 OR violation_count + 1 >= 2 THEN 'high'
+      WHEN LEAST(100, risk_score + $2) >= 20 THEN 'warning'
+      ELSE risk_level
+    END,
+    locked_at = CASE
+      WHEN locked_at IS NOT NULL THEN locked_at
+      WHEN violation_count + 1 >= $3 OR LEAST(100, risk_score + $2) >= 80 THEN NOW()
+      ELSE NULL
+    END,
+    locked_reason = CASE
+      WHEN locked_at IS NOT NULL THEN locked_reason
+      WHEN violation_count + 1 >= $3 OR LEAST(100, risk_score + $2) >= 80 THEN $4
+      ELSE locked_reason
+    END,
+    suspicious_flag = TRUE
+WHERE id = $1
+RETURNING violation_count, risk_score, risk_level, locked_at, locked_reason;
 
 -- name: SubmitParticipantExam :one
 WITH score_parts AS (
@@ -320,6 +353,14 @@ SELECT
   ep.app_switch_count,
   ep.screenshot_attempt,
   ep.suspicious_flag,
+  ep.violation_count,
+  ep.risk_score,
+  ep.risk_level,
+  ep.locked_at,
+  ep.locked_reason,
+  COALESCE(v.recent_violation_count, 0)::int AS recent_violation_count,
+  v.last_violation_at,
+  v.last_violation_reason,
   COUNT(sa.id) FILTER (WHERE pq.question_id IS NOT NULL)::int AS answered_count,
   ep.score
 FROM cbt_exam_participants ep
@@ -328,9 +369,18 @@ JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
 LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt'))::int AS recent_violation_count,
+    MAX(ev.created_at) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')) AS last_violation_at,
+    COALESCE((array_agg(ev.event_data->>'reason' ORDER BY ev.created_at DESC) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')))[1], '') AS last_violation_reason
+  FROM cbt_participant_events ev
+  WHERE ev.participant_id = ep.id
+    AND ev.created_at >= NOW() - INTERVAL '30 minutes'
+) v ON TRUE
 WHERE ep.session_id = sqlc.arg(session_id)
   AND (sqlc.arg(room_id)::uuid IS NULL OR ep.room_id = sqlc.arg(room_id)::uuid)
-GROUP BY ep.id, s.nis, s.nama, ep.room_id, r.room_name
+GROUP BY ep.id, s.nis, s.nama, ep.room_id, r.room_name, v.recent_violation_count, v.last_violation_at, v.last_violation_reason
 ORDER BY r.room_name ASC NULLS LAST, ep.seat_no ASC NULLS LAST, s.nama ASC;
 
 -- name: ListParticipantsByRoom :many
@@ -563,6 +613,15 @@ JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
 LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt'))::int AS recent_violation_count,
+    MAX(ev.created_at) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')) AS last_violation_at,
+    COALESCE((array_agg(ev.event_data->>'reason' ORDER BY ev.created_at DESC) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')))[1], '') AS last_violation_reason
+  FROM cbt_participant_events ev
+  WHERE ev.participant_id = ep.id
+    AND ev.created_at >= NOW() - INTERVAL '30 minutes'
+) v ON TRUE
 WHERE ep.session_id = $1
 GROUP BY ep.id, s.nis, s.nama, s.gender, ep.room_id, ep.seat_no, r.room_name
 ORDER BY ep.score DESC NULLS LAST, s.nama ASC;
@@ -784,6 +843,15 @@ JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
 JOIN cbt_packages pkg ON pkg.id = ses.package_id
 LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
 LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt'))::int AS recent_violation_count,
+    MAX(ev.created_at) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')) AS last_violation_at,
+    COALESCE((array_agg(ev.event_data->>'reason' ORDER BY ev.created_at DESC) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')))[1], '') AS last_violation_reason
+  FROM cbt_participant_events ev
+  WHERE ev.participant_id = ep.id
+    AND ev.created_at >= NOW() - INTERVAL '30 minutes'
+) v ON TRUE
 WHERE ep.session_id = $1
   AND EXISTS (
     SELECT 1

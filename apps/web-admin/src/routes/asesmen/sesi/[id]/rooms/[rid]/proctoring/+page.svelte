@@ -76,6 +76,14 @@
 		app_switch_count: number;
 		screenshot_attempt: number;
 		suspicious_flag: boolean;
+		violation_count: number;
+		risk_score: number;
+		risk_level: string;
+		locked_at: string | null;
+		locked_reason: string | null;
+		recent_violation_count: number;
+		last_violation_at: string | null;
+		last_violation_reason: string;
 		answered_count: number;
 		score: string | null;
 	};
@@ -154,14 +162,18 @@
 		let stale = 0;
 		let offline = 0;
 		let submitted = 0;
+		let locked = 0;
+		let highRisk = 0;
 		for (const row of participants) {
 			const state = heartbeatState(row);
 			if (state === 'online') online += 1;
 			else if (state === 'stale') stale += 1;
 			else offline += 1;
 			if (row.submitted_at) submitted += 1;
+			if (row.locked_at || row.risk_level === 'locked') locked += 1;
+			if (row.risk_level === 'high' || row.risk_level === 'locked') highRisk += 1;
 		}
-		return { online, stale, offline, submitted };
+		return { online, stale, offline, submitted, locked, highRisk };
 	});
 	let evidenceSummary = $derived.by(() => summarizeProctorEvidence({ participants, events, hasPrintPack: true }));
 
@@ -268,6 +280,27 @@
 		return 'border-destructive/30 bg-destructive/10 text-destructive';
 	}
 
+	function riskLabel(row: ProctoringRow) {
+		if (row.locked_at || row.risk_level === 'locked') return 'Locked';
+		if (row.risk_level === 'high') return 'High';
+		if (row.risk_level === 'warning') return 'Warning';
+		return 'Normal';
+	}
+
+	function riskClass(row: ProctoringRow) {
+		if (row.locked_at || row.risk_level === 'locked') return 'border-destructive/40 bg-destructive/15 text-destructive';
+		if (row.risk_level === 'high') return 'border-warning/40 bg-warning/15 text-warning';
+		if (row.risk_level === 'warning') return 'border-accent bg-accent/60 text-accent-foreground';
+		return 'border-primary/20 bg-primary/10 text-primary';
+	}
+
+	function rowAttentionClass(row: ProctoringRow) {
+		if (row.locked_at || row.risk_level === 'locked') return 'bg-destructive/15';
+		if (row.risk_level === 'high' || row.suspicious_flag) return 'bg-destructive/10';
+		if (row.risk_level === 'warning' || row.app_switch_count >= 3 || row.violation_count > 0) return 'bg-warning/10';
+		return '';
+	}
+
 	function evidenceCategoryLabel(category: ProctorEvidenceCategory | null) {
 		return proctorEvidenceCategoryLabel(category);
 	}
@@ -280,7 +313,7 @@
 		if (category === 'device_mismatch' || category === 'submit_guard' || category === 'stale_connection') {
 			return 'border-warning/30 bg-warning/10 text-warning';
 		}
-		if (category === 'force_submit' || category === 'reset_access') return 'border-destructive/30 bg-destructive/10 text-destructive';
+		if (category === 'force_submit' || category === 'reset_access' || category === 'anti_cheat') return 'border-destructive/30 bg-destructive/10 text-destructive';
 		if (category === 'heartbeat' || category === 'export_print') return 'border-primary/20 bg-primary/10 text-primary';
 		return 'border-border bg-card text-muted-foreground';
 	}
@@ -511,11 +544,11 @@
 					</Card.Root>
 					<Card.Root class="border-primary/20">
 						<Card.Header class="pb-2">
-							<Card.Title class="text-sm text-muted-foreground">Atensi</Card.Title>
+							<Card.Title class="text-sm text-muted-foreground">Anti-cheat</Card.Title>
 						</Card.Header>
 						<Card.Content>
-							<div class="text-2xl font-bold text-destructive">{room.suspicious_count}</div>
-							<p class="text-xs text-muted-foreground">{room.missing_seat_count} tanpa nomor meja</p>
+							<div class="text-2xl font-bold text-destructive">{participantStats.highRisk}</div>
+							<p class="text-xs text-muted-foreground">{participantStats.locked} terkunci lokal/server</p>
 						</Card.Content>
 					</Card.Root>
 				</div>
@@ -708,13 +741,14 @@
 										<Table.Head class="text-center">Jawab</Table.Head>
 										<Table.Head class="text-center">Switch</Table.Head>
 										<Table.Head class="text-center">SS</Table.Head>
+										<Table.Head>Risk</Table.Head>
 										<Table.Head class="text-center">Skor</Table.Head>
 										<Table.Head class="text-right">Aksi</Table.Head>
 									</Table.Row>
 								</Table.Header>
 								<Table.Body>
 									{#each participants as row (row.participant_id)}
-											<Table.Row class={row.suspicious_flag ? 'bg-destructive/10' : row.app_switch_count >= 3 ? 'bg-warning/10' : ''}>
+											<Table.Row class={rowAttentionClass(row)}>
 											<Table.Cell>
 												<div class="font-medium text-foreground">{row.nama}</div>
 												<div class="text-xs text-muted-foreground">{row.nis}</div>
@@ -727,6 +761,10 @@
 											<Table.Cell class="text-center font-mono">{row.answered_count}</Table.Cell>
 											<Table.Cell class="text-center font-mono">{row.app_switch_count}</Table.Cell>
 											<Table.Cell class="text-center font-mono">{row.screenshot_attempt}</Table.Cell>
+											<Table.Cell>
+												<Badge variant="outline" class={riskClass(row)}>{riskLabel(row)} · {row.risk_score}</Badge>
+												<p class="mt-1 text-[11px] text-muted-foreground">{row.violation_count} violation{row.last_violation_reason ? ` · ${row.last_violation_reason.replaceAll('_', ' ')}` : ''}</p>
+											</Table.Cell>
 											<Table.Cell class="text-center font-mono">{fmtScore(row.score)}</Table.Cell>
 											<Table.Cell class="min-w-[260px] text-right">
 												<div class="flex flex-wrap justify-end gap-2">
@@ -744,7 +782,7 @@
 										</Table.Row>
 									{:else}
 										<Table.Row>
-											<Table.Cell colspan={8} class="py-10 text-center text-muted-foreground">Belum ada peserta di ruang ini</Table.Cell>
+											<Table.Cell colspan={9} class="py-10 text-center text-muted-foreground">Belum ada peserta di ruang ini</Table.Cell>
 										</Table.Row>
 									{/each}
 								</Table.Body>

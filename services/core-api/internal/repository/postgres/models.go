@@ -993,6 +993,11 @@ type CbtExamParticipant struct {
 	LoginIp           pgtype.Text        `json:"login_ip"`
 	SuspiciousFlag    bool               `json:"suspicious_flag"`
 	SeatNo            pgtype.Int4        `json:"seat_no"`
+	ViolationCount    int32              `json:"violation_count"`
+	RiskScore         int32              `json:"risk_score"`
+	RiskLevel         string             `json:"risk_level"`
+	LockedAt          pgtype.Timestamptz `json:"locked_at"`
+	LockedReason      pgtype.Text        `json:"locked_reason"`
 }
 
 type CbtExamRoom struct {

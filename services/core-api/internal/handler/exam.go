@@ -68,6 +68,8 @@ func (h *Exam) Login(w http.ResponseWriter, r *http.Request) {
 			api.Err(w, http.StatusForbidden, "exam session has not started")
 		case service.ErrExamAlreadySubmit:
 			api.Err(w, http.StatusConflict, "exam already submitted")
+		case service.ErrExamLocked:
+			api.Err(w, http.StatusLocked, "exam locked by anti-cheat policy")
 		case service.ErrExamWindowClosed:
 			api.Err(w, http.StatusForbidden, "exam window has closed")
 		case service.ErrDeviceMismatch:
@@ -170,6 +172,8 @@ func (h *Exam) SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 		switch err {
 		case service.ErrExamAlreadySubmit:
 			api.Err(w, http.StatusConflict, "exam already submitted")
+		case service.ErrExamLocked:
+			api.Err(w, http.StatusLocked, "exam locked by anti-cheat policy")
 		case service.ErrExamWindowClosed:
 			api.Err(w, http.StatusForbidden, "exam window has closed")
 		case service.ErrExamNotStarted:
@@ -200,6 +204,8 @@ func (h *Exam) Submit(w http.ResponseWriter, r *http.Request) {
 		switch err {
 		case service.ErrExamAlreadySubmit:
 			api.Err(w, http.StatusConflict, "exam already submitted")
+		case service.ErrExamLocked:
+			api.Err(w, http.StatusLocked, "exam locked by anti-cheat policy")
 		case service.ErrExamWindowClosed:
 			api.Err(w, http.StatusForbidden, "exam window has closed")
 		case service.ErrExamNotStarted:

@@ -385,6 +385,7 @@ SELECT
   ep.token, ep.room_id, ep.seat_no, ep.device_fingerprint, ep.question_order,
   ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
   ep.last_heartbeat,
   s.nis, s.nama, s.gender,
   cs.status AS session_status,
@@ -416,6 +417,11 @@ type GetParticipantByTokenRow struct {
 	AppSwitchCount     int32                `json:"app_switch_count"`
 	ScreenshotAttempt  int32                `json:"screenshot_attempt"`
 	SuspiciousFlag     bool                 `json:"suspicious_flag"`
+	ViolationCount     int32                `json:"violation_count"`
+	RiskScore          int32                `json:"risk_score"`
+	RiskLevel          string               `json:"risk_level"`
+	LockedAt           pgtype.Timestamptz   `json:"locked_at"`
+	LockedReason       pgtype.Text          `json:"locked_reason"`
 	LastHeartbeat      pgtype.Timestamptz   `json:"last_heartbeat"`
 	Nis                string               `json:"nis"`
 	Nama               string               `json:"nama"`
@@ -448,6 +454,11 @@ func (q *Queries) GetParticipantByToken(ctx context.Context, token string) (GetP
 		&i.AppSwitchCount,
 		&i.ScreenshotAttempt,
 		&i.SuspiciousFlag,
+		&i.ViolationCount,
+		&i.RiskScore,
+		&i.RiskLevel,
+		&i.LockedAt,
+		&i.LockedReason,
 		&i.LastHeartbeat,
 		&i.Nis,
 		&i.Nama,
@@ -693,6 +704,14 @@ SELECT
   ep.app_switch_count,
   ep.screenshot_attempt,
   ep.suspicious_flag,
+  ep.violation_count,
+  ep.risk_score,
+  ep.risk_level,
+  ep.locked_at,
+  ep.locked_reason,
+  COALESCE(v.recent_violation_count, 0)::int AS recent_violation_count,
+  v.last_violation_at,
+  v.last_violation_reason,
   COUNT(sa.id) FILTER (WHERE pq.question_id IS NOT NULL)::int AS answered_count,
   ep.score
 FROM cbt_exam_participants ep
@@ -701,9 +720,18 @@ JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
 LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt'))::int AS recent_violation_count,
+    MAX(ev.created_at) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')) AS last_violation_at,
+    COALESCE((array_agg(ev.event_data->>'reason' ORDER BY ev.created_at DESC) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')))[1], '') AS last_violation_reason
+  FROM cbt_participant_events ev
+  WHERE ev.participant_id = ep.id
+    AND ev.created_at >= NOW() - INTERVAL '30 minutes'
+) v ON TRUE
 WHERE ep.session_id = $1
   AND ($2::uuid IS NULL OR ep.room_id = $2::uuid)
-GROUP BY ep.id, s.nis, s.nama, ep.room_id, r.room_name
+GROUP BY ep.id, s.nis, s.nama, ep.room_id, r.room_name, v.recent_violation_count, v.last_violation_at, v.last_violation_reason
 ORDER BY r.room_name ASC NULLS LAST, ep.seat_no ASC NULLS LAST, s.nama ASC
 `
 
@@ -713,21 +741,29 @@ type GetSessionProctoringStatusParams struct {
 }
 
 type GetSessionProctoringStatusRow struct {
-	ParticipantID     pgtype.UUID        `json:"participant_id"`
-	StudentID         pgtype.UUID        `json:"student_id"`
-	Nis               string             `json:"nis"`
-	Nama              string             `json:"nama"`
-	Token             string             `json:"token"`
-	RoomID            pgtype.UUID        `json:"room_id"`
-	RoomName          string             `json:"room_name"`
-	SeatNo            pgtype.Int4        `json:"seat_no"`
-	SubmittedAt       pgtype.Timestamptz `json:"submitted_at"`
-	LastHeartbeat     pgtype.Timestamptz `json:"last_heartbeat"`
-	AppSwitchCount    int32              `json:"app_switch_count"`
-	ScreenshotAttempt int32              `json:"screenshot_attempt"`
-	SuspiciousFlag    bool               `json:"suspicious_flag"`
-	AnsweredCount     int32              `json:"answered_count"`
-	Score             pgtype.Numeric     `json:"score"`
+	ParticipantID        pgtype.UUID        `json:"participant_id"`
+	StudentID            pgtype.UUID        `json:"student_id"`
+	Nis                  string             `json:"nis"`
+	Nama                 string             `json:"nama"`
+	Token                string             `json:"token"`
+	RoomID               pgtype.UUID        `json:"room_id"`
+	RoomName             string             `json:"room_name"`
+	SeatNo               pgtype.Int4        `json:"seat_no"`
+	SubmittedAt          pgtype.Timestamptz `json:"submitted_at"`
+	LastHeartbeat        pgtype.Timestamptz `json:"last_heartbeat"`
+	AppSwitchCount       int32              `json:"app_switch_count"`
+	ScreenshotAttempt    int32              `json:"screenshot_attempt"`
+	SuspiciousFlag       bool               `json:"suspicious_flag"`
+	ViolationCount       int32              `json:"violation_count"`
+	RiskScore            int32              `json:"risk_score"`
+	RiskLevel            string             `json:"risk_level"`
+	LockedAt             pgtype.Timestamptz `json:"locked_at"`
+	LockedReason         pgtype.Text        `json:"locked_reason"`
+	RecentViolationCount int32              `json:"recent_violation_count"`
+	LastViolationAt      interface{}        `json:"last_violation_at"`
+	LastViolationReason  interface{}        `json:"last_violation_reason"`
+	AnsweredCount        int32              `json:"answered_count"`
+	Score                pgtype.Numeric     `json:"score"`
 }
 
 func (q *Queries) GetSessionProctoringStatus(ctx context.Context, arg GetSessionProctoringStatusParams) ([]GetSessionProctoringStatusRow, error) {
@@ -753,6 +789,14 @@ func (q *Queries) GetSessionProctoringStatus(ctx context.Context, arg GetSession
 			&i.AppSwitchCount,
 			&i.ScreenshotAttempt,
 			&i.SuspiciousFlag,
+			&i.ViolationCount,
+			&i.RiskScore,
+			&i.RiskLevel,
+			&i.LockedAt,
+			&i.LockedReason,
+			&i.RecentViolationCount,
+			&i.LastViolationAt,
+			&i.LastViolationReason,
 			&i.AnsweredCount,
 			&i.Score,
 		); err != nil {
@@ -782,6 +826,15 @@ JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
 LEFT JOIN cbt_exam_rooms r ON r.id = ep.room_id
 LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
 LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt'))::int AS recent_violation_count,
+    MAX(ev.created_at) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')) AS last_violation_at,
+    COALESCE((array_agg(ev.event_data->>'reason' ORDER BY ev.created_at DESC) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')))[1], '') AS last_violation_reason
+  FROM cbt_participant_events ev
+  WHERE ev.participant_id = ep.id
+    AND ev.created_at >= NOW() - INTERVAL '30 minutes'
+) v ON TRUE
 WHERE ep.session_id = $1
 GROUP BY ep.id, s.nis, s.nama, s.gender, ep.room_id, ep.seat_no, r.room_name
 ORDER BY ep.score DESC NULLS LAST, s.nama ASC
@@ -849,6 +902,15 @@ JOIN cbt_exam_sessions ses ON ses.id = ep.session_id
 JOIN cbt_packages pkg ON pkg.id = ses.package_id
 LEFT JOIN cbt_package_questions pq ON pq.package_id = ses.package_id
 LEFT JOIN cbt_student_answers sa ON sa.participant_id = ep.id AND sa.question_id = pq.question_id
+LEFT JOIN LATERAL (
+  SELECT
+    COUNT(*) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt'))::int AS recent_violation_count,
+    MAX(ev.created_at) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')) AS last_violation_at,
+    COALESCE((array_agg(ev.event_data->>'reason' ORDER BY ev.created_at DESC) FILTER (WHERE ev.event_type IN ('anti_cheat_violation', 'app_switch', 'screenshot_attempt')))[1], '') AS last_violation_reason
+  FROM cbt_participant_events ev
+  WHERE ev.participant_id = ep.id
+    AND ev.created_at >= NOW() - INTERVAL '30 minutes'
+) v ON TRUE
 WHERE ep.session_id = $1
   AND EXISTS (
     SELECT 1
@@ -1080,6 +1142,64 @@ func (q *Queries) HasSessionRoom(ctx context.Context, arg HasSessionRoomParams) 
 	return has_room, err
 }
 
+const incrementParticipantAntiCheatViolation = `-- name: IncrementParticipantAntiCheatViolation :one
+UPDATE cbt_exam_participants
+SET violation_count = violation_count + 1,
+    risk_score = LEAST(100, risk_score + $2),
+    risk_level = CASE
+      WHEN locked_at IS NOT NULL OR violation_count + 1 >= $3 OR LEAST(100, risk_score + $2) >= 80 THEN 'locked'
+      WHEN LEAST(100, risk_score + $2) >= 50 OR violation_count + 1 >= 2 THEN 'high'
+      WHEN LEAST(100, risk_score + $2) >= 20 THEN 'warning'
+      ELSE risk_level
+    END,
+    locked_at = CASE
+      WHEN locked_at IS NOT NULL THEN locked_at
+      WHEN violation_count + 1 >= $3 OR LEAST(100, risk_score + $2) >= 80 THEN NOW()
+      ELSE NULL
+    END,
+    locked_reason = CASE
+      WHEN locked_at IS NOT NULL THEN locked_reason
+      WHEN violation_count + 1 >= $3 OR LEAST(100, risk_score + $2) >= 80 THEN $4
+      ELSE locked_reason
+    END,
+    suspicious_flag = TRUE
+WHERE id = $1
+RETURNING violation_count, risk_score, risk_level, locked_at, locked_reason
+`
+
+type IncrementParticipantAntiCheatViolationParams struct {
+	ID             pgtype.UUID `json:"id"`
+	RiskScore      int32       `json:"risk_score"`
+	ViolationCount int32       `json:"violation_count"`
+	LockedReason   pgtype.Text `json:"locked_reason"`
+}
+
+type IncrementParticipantAntiCheatViolationRow struct {
+	ViolationCount int32              `json:"violation_count"`
+	RiskScore      int32              `json:"risk_score"`
+	RiskLevel      string             `json:"risk_level"`
+	LockedAt       pgtype.Timestamptz `json:"locked_at"`
+	LockedReason   pgtype.Text        `json:"locked_reason"`
+}
+
+func (q *Queries) IncrementParticipantAntiCheatViolation(ctx context.Context, arg IncrementParticipantAntiCheatViolationParams) (IncrementParticipantAntiCheatViolationRow, error) {
+	row := q.db.QueryRow(ctx, incrementParticipantAntiCheatViolation,
+		arg.ID,
+		arg.RiskScore,
+		arg.ViolationCount,
+		arg.LockedReason,
+	)
+	var i IncrementParticipantAntiCheatViolationRow
+	err := row.Scan(
+		&i.ViolationCount,
+		&i.RiskScore,
+		&i.RiskLevel,
+		&i.LockedAt,
+		&i.LockedReason,
+	)
+	return i, err
+}
+
 const incrementParticipantAppSwitch = `-- name: IncrementParticipantAppSwitch :exec
 UPDATE cbt_exam_participants
 SET app_switch_count = app_switch_count + 1
@@ -1124,6 +1244,7 @@ SELECT
   s.nis, s.nama, s.gender,
   ep.token, ep.room_id, ep.seat_no, ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
   ep.last_heartbeat, ep.created_at,
   COALESCE(r.room_name, '') AS room_name
 FROM cbt_exam_participants ep
@@ -1149,6 +1270,11 @@ type ListCbtExamParticipantsRow struct {
 	AppSwitchCount    int32              `json:"app_switch_count"`
 	ScreenshotAttempt int32              `json:"screenshot_attempt"`
 	SuspiciousFlag    bool               `json:"suspicious_flag"`
+	ViolationCount    int32              `json:"violation_count"`
+	RiskScore         int32              `json:"risk_score"`
+	RiskLevel         string             `json:"risk_level"`
+	LockedAt          pgtype.Timestamptz `json:"locked_at"`
+	LockedReason      pgtype.Text        `json:"locked_reason"`
 	LastHeartbeat     pgtype.Timestamptz `json:"last_heartbeat"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	RoomName          string             `json:"room_name"`
@@ -1179,6 +1305,11 @@ func (q *Queries) ListCbtExamParticipants(ctx context.Context, sessionID pgtype.
 			&i.AppSwitchCount,
 			&i.ScreenshotAttempt,
 			&i.SuspiciousFlag,
+			&i.ViolationCount,
+			&i.RiskScore,
+			&i.RiskLevel,
+			&i.LockedAt,
+			&i.LockedReason,
 			&i.LastHeartbeat,
 			&i.CreatedAt,
 			&i.RoomName,
@@ -1199,6 +1330,7 @@ SELECT
   s.nis, s.nama, s.gender,
   ep.token, ep.room_id, ep.seat_no, ep.joined_at, ep.submitted_at, ep.score,
   ep.app_switch_count, ep.screenshot_attempt, ep.suspicious_flag,
+  ep.violation_count, ep.risk_score, ep.risk_level, ep.locked_at, ep.locked_reason,
   ep.last_heartbeat, ep.created_at,
   COALESCE(r.room_name, '') AS room_name
 FROM cbt_exam_participants ep
@@ -1235,6 +1367,11 @@ type ListCbtExamParticipantsByTeacherRow struct {
 	AppSwitchCount    int32              `json:"app_switch_count"`
 	ScreenshotAttempt int32              `json:"screenshot_attempt"`
 	SuspiciousFlag    bool               `json:"suspicious_flag"`
+	ViolationCount    int32              `json:"violation_count"`
+	RiskScore         int32              `json:"risk_score"`
+	RiskLevel         string             `json:"risk_level"`
+	LockedAt          pgtype.Timestamptz `json:"locked_at"`
+	LockedReason      pgtype.Text        `json:"locked_reason"`
 	LastHeartbeat     pgtype.Timestamptz `json:"last_heartbeat"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 	RoomName          string             `json:"room_name"`
@@ -1265,6 +1402,11 @@ func (q *Queries) ListCbtExamParticipantsByTeacher(ctx context.Context, arg List
 			&i.AppSwitchCount,
 			&i.ScreenshotAttempt,
 			&i.SuspiciousFlag,
+			&i.ViolationCount,
+			&i.RiskScore,
+			&i.RiskLevel,
+			&i.LockedAt,
+			&i.LockedReason,
 			&i.LastHeartbeat,
 			&i.CreatedAt,
 			&i.RoomName,
@@ -1849,7 +1991,13 @@ const resetParticipantRuntimeAccess = `-- name: ResetParticipantRuntimeAccess :e
 UPDATE cbt_exam_participants
 SET device_fingerprint = NULL,
     login_ip = NULL,
-    last_heartbeat = NULL
+    last_heartbeat = NULL,
+    violation_count = 0,
+    risk_score = 0,
+    risk_level = 'normal',
+    locked_at = NULL,
+    locked_reason = NULL,
+    suspicious_flag = FALSE
 WHERE id = $1
 `
 

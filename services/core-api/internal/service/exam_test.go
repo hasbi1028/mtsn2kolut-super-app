@@ -34,6 +34,9 @@ type fakeExamStore struct {
 	appSwitchErr           error
 	screenshotID           pgtype.UUID
 	screenshotErr          error
+	antiCheatViolationArg  db.IncrementParticipantAntiCheatViolationParams
+	antiCheatViolationRow  db.IncrementParticipantAntiCheatViolationRow
+	antiCheatViolationErr  error
 	questionScopeArg       db.QuestionBelongsToParticipantPackageParams
 	questionOutsidePackage bool
 	questionScopeErr       error
@@ -94,6 +97,11 @@ func (f *fakeExamStore) IncrementParticipantAppSwitch(ctx context.Context, parti
 func (f *fakeExamStore) IncrementParticipantScreenshot(ctx context.Context, participantID pgtype.UUID) error {
 	f.screenshotID = participantID
 	return f.screenshotErr
+}
+
+func (f *fakeExamStore) IncrementParticipantAntiCheatViolation(ctx context.Context, arg db.IncrementParticipantAntiCheatViolationParams) (db.IncrementParticipantAntiCheatViolationRow, error) {
+	f.antiCheatViolationArg = arg
+	return f.antiCheatViolationRow, f.antiCheatViolationErr
 }
 
 func (f *fakeExamStore) QuestionBelongsToParticipantPackage(ctx context.Context, arg db.QuestionBelongsToParticipantPackageParams) (bool, error) {
