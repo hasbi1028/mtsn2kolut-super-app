@@ -138,6 +138,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         .toList();
     _answeredCount = _clampAnsweredCount(widget.initialPayload.answeredCount);
     _timeRemainingSeconds = widget.initialPayload.timeRemainingSeconds;
+    _applyServerAntiCheatState(widget.initialPayload.antiCheat);
     _currentQuestionIndex = _clampQuestionIndex(
       widget.restoredSnapshot?.currentQuestionIndex ?? 0,
     );
@@ -171,6 +172,18 @@ class _ExamShellScreenState extends State<ExamShellScreen>
       _syncStatus();
     }
     unawaited(_persistSnapshot());
+  }
+
+  void _applyServerAntiCheatState(ExamAntiCheatState state) {
+    _antiCheatSnapshot = _antiCheatSnapshot.copyWith(
+      violationCount: state.violationCount,
+      locked: state.locked,
+    );
+    if (state.locked) {
+      _errorMessage = state.lockedReason.trim().isEmpty
+          ? 'Ujian dikunci oleh kebijakan anti-cheat. Hubungi pengawas.'
+          : 'Ujian dikunci oleh kebijakan anti-cheat: ${state.lockedReason}';
+    }
   }
 
   void _startAntiCheatGuard() {
@@ -390,6 +403,7 @@ class _ExamShellScreenState extends State<ExamShellScreen>
         _answeredCount = _clampAnsweredCount(status.answeredCount);
         _timeRemainingSeconds = status.timeRemainingSeconds;
         _isSubmitted = status.isSubmitted;
+        _applyServerAntiCheatState(status.antiCheat);
       });
       _markServerContact();
       if (status.isSubmitted) {

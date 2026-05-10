@@ -28,6 +28,7 @@ var (
 	ErrDeviceMismatch    = errors.New("token already bound to another device")
 	ErrDeviceRequired    = errors.New("device fingerprint required")
 	ErrExamQuestionScope = errors.New("question is not part of participant exam")
+	ErrExamLocked        = errors.New("exam locked by anti-cheat policy")
 )
 
 type Exam struct {
@@ -46,6 +47,7 @@ type examStore interface {
 	UpdateParticipantHeartbeat(ctx context.Context, participantID pgtype.UUID) error
 	IncrementParticipantAppSwitch(ctx context.Context, participantID pgtype.UUID) error
 	IncrementParticipantScreenshot(ctx context.Context, participantID pgtype.UUID) error
+	IncrementParticipantAntiCheatViolation(ctx context.Context, arg db.IncrementParticipantAntiCheatViolationParams) (db.IncrementParticipantAntiCheatViolationRow, error)
 	QuestionBelongsToParticipantPackage(ctx context.Context, arg db.QuestionBelongsToParticipantPackageParams) (bool, error)
 	UpsertStudentAnswer(ctx context.Context, arg db.UpsertStudentAnswerParams) (int64, error)
 	UpdateParticipantAnswerCorrectness(ctx context.Context, participantID pgtype.UUID) error
@@ -74,6 +76,16 @@ type LoginResult struct {
 	AnsweredCount        int            `json:"answered_count"`
 	TotalQuestions       int            `json:"total_questions"`
 	TimeRemainingSeconds int64          `json:"time_remaining_seconds"`
+	AntiCheat            AntiCheatState `json:"anti_cheat"`
+}
+
+type AntiCheatState struct {
+	ViolationCount int    `json:"violation_count"`
+	RiskScore      int    `json:"risk_score"`
+	RiskLevel      string `json:"risk_level"`
+	Locked         bool   `json:"locked"`
+	LockedAt       string `json:"locked_at,omitempty"`
+	LockedReason   string `json:"locked_reason,omitempty"`
 }
 
 type StudentInfo struct {
@@ -130,6 +142,9 @@ func (s *Exam) Login(ctx context.Context, token, deviceFingerprint, loginIP stri
 	}
 	if p.SubmittedAt.Valid {
 		return LoginResult{}, ErrExamAlreadySubmit
+	}
+	if p.LockedAt.Valid {
+		return LoginResult{}, ErrExamLocked
 	}
 	if p.ScheduledEnd.Valid && time.Now().After(p.ScheduledEnd.Time) {
 		return LoginResult{}, ErrExamWindowClosed
@@ -212,6 +227,7 @@ func (s *Exam) Login(ctx context.Context, token, deviceFingerprint, loginIP stri
 		AnsweredCount:        len(answers),
 		TotalQuestions:       len(ordered),
 		TimeRemainingSeconds: remaining,
+		AntiCheat:            antiCheatStateFromParticipant(p.ViolationCount, p.RiskScore, p.RiskLevel, p.LockedAt, p.LockedReason),
 	}
 
 	if p.RoomID.Valid {
@@ -239,8 +255,12 @@ func (s *Exam) RecordClientEvent(ctx context.Context, participantID pgtype.UUID,
 	switch eventType {
 	case "app_switch":
 		_ = s.q.IncrementParticipantAppSwitch(ctx, participantID)
+		_ = s.incrementAntiCheatRisk(ctx, participantID, 25, "app_switch")
 	case "screenshot_attempt":
 		_ = s.q.IncrementParticipantScreenshot(ctx, participantID)
+		_ = s.incrementAntiCheatRisk(ctx, participantID, 35, "screenshot_attempt")
+	case "anti_cheat_violation":
+		_ = s.incrementAntiCheatRisk(ctx, participantID, antiCheatRiskWeight(data), antiCheatReason(data))
 	}
 	return s.q.InsertParticipantEvent(ctx, db.InsertParticipantEventParams{
 		ParticipantID: participantID,
@@ -252,6 +272,9 @@ func (s *Exam) RecordClientEvent(ctx context.Context, participantID pgtype.UUID,
 func (s *Exam) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, questionID pgtype.UUID, answer string) error {
 	if p.SubmittedAt.Valid {
 		return ErrExamAlreadySubmit
+	}
+	if p.LockedAt.Valid {
+		return ErrExamLocked
 	}
 	if examWindowNotStarted(p.ScheduledStart, time.Now()) {
 		return ErrExamNotStarted
@@ -293,11 +316,12 @@ func (s *Exam) SubmitAnswer(ctx context.Context, p db.GetParticipantByTokenRow, 
 }
 
 type StatusResult struct {
-	AnsweredCount        int    `json:"answered_count"`
-	TotalQuestions       int    `json:"total_questions"`
-	SubmittedAt          string `json:"submitted_at,omitempty"`
-	TimeRemainingSeconds int64  `json:"time_remaining_seconds"`
-	IsSubmitted          bool   `json:"is_submitted"`
+	AnsweredCount        int            `json:"answered_count"`
+	TotalQuestions       int            `json:"total_questions"`
+	SubmittedAt          string         `json:"submitted_at,omitempty"`
+	TimeRemainingSeconds int64          `json:"time_remaining_seconds"`
+	IsSubmitted          bool           `json:"is_submitted"`
+	AntiCheat            AntiCheatState `json:"anti_cheat"`
 }
 
 func (s *Exam) GetStatus(ctx context.Context, p db.GetParticipantByTokenRow) (StatusResult, error) {
@@ -312,6 +336,7 @@ func (s *Exam) GetStatus(ctx context.Context, p db.GetParticipantByTokenRow) (St
 		TotalQuestions:       len(questions),
 		TimeRemainingSeconds: calcRemaining(p.ScheduledEnd, p.DurationMinutes, p.JoinedAt),
 		IsSubmitted:          p.SubmittedAt.Valid,
+		AntiCheat:            antiCheatStateFromParticipant(p.ViolationCount, p.RiskScore, p.RiskLevel, p.LockedAt, p.LockedReason),
 	}
 	if p.SubmittedAt.Valid {
 		result.SubmittedAt = p.SubmittedAt.Time.Format(time.RFC3339)
@@ -322,6 +347,9 @@ func (s *Exam) GetStatus(ctx context.Context, p db.GetParticipantByTokenRow) (St
 func (s *Exam) Submit(ctx context.Context, p db.GetParticipantByTokenRow) error {
 	if p.SubmittedAt.Valid {
 		return ErrExamAlreadySubmit
+	}
+	if p.LockedAt.Valid {
+		return ErrExamLocked
 	}
 	if examWindowNotStarted(p.ScheduledStart, time.Now()) {
 		return ErrExamNotStarted
@@ -370,6 +398,63 @@ func submitExamWithStore(ctx context.Context, q examStore, participantID pgtype.
 		EventType:     "submit",
 		EventData:     marshalJSON(map[string]string{"submitted_at": row.SubmittedAt.Time.Format(time.RFC3339)}),
 	})
+}
+
+func (s *Exam) incrementAntiCheatRisk(ctx context.Context, participantID pgtype.UUID, riskWeight int32, reason string) error {
+	if riskWeight <= 0 {
+		riskWeight = 20
+	}
+	if reason == "" {
+		reason = "anti_cheat_violation"
+	}
+	_, err := s.q.IncrementParticipantAntiCheatViolation(ctx, db.IncrementParticipantAntiCheatViolationParams{
+		ID:             participantID,
+		RiskScore:      riskWeight,
+		ViolationCount: 3,
+		LockedReason:   pgtype.Text{String: reason, Valid: true},
+	})
+	return err
+}
+
+func antiCheatRiskWeight(data map[string]any) int32 {
+	severity, _ := data["severity"].(string)
+	reason := antiCheatReason(data)
+	switch {
+	case severity == "critical" || reason == "anti_cheat_local_lock":
+		return 80
+	case reason == "split_screen_detected" || reason == "picture_in_picture_detected":
+		return 40
+	case reason == "window_focus_lost" || reason == "app_backgrounded":
+		return 30
+	default:
+		return 25
+	}
+}
+
+func antiCheatReason(data map[string]any) string {
+	if data == nil {
+		return "anti_cheat_violation"
+	}
+	if reason, ok := data["reason"].(string); ok && strings.TrimSpace(reason) != "" {
+		return strings.TrimSpace(reason)
+	}
+	return "anti_cheat_violation"
+}
+
+func antiCheatStateFromParticipant(violationCount, riskScore int32, riskLevel string, lockedAt pgtype.Timestamptz, lockedReason pgtype.Text) AntiCheatState {
+	state := AntiCheatState{
+		ViolationCount: int(violationCount),
+		RiskScore:      int(riskScore),
+		RiskLevel:      firstNonEmpty(riskLevel, "normal"),
+		Locked:         lockedAt.Valid,
+	}
+	if lockedAt.Valid {
+		state.LockedAt = lockedAt.Time.Format(time.RFC3339)
+	}
+	if lockedReason.Valid {
+		state.LockedReason = lockedReason.String
+	}
+	return state
 }
 
 // --- helpers ---
