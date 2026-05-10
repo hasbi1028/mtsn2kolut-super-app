@@ -331,6 +331,35 @@
 			</div>
 		</div>
 
+		<Card.Root class="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-sm">
+			<Card.Content class="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center md:p-6">
+				<div class="space-y-3">
+					<div class="flex flex-wrap items-center gap-2">
+						<Badge class="border-primary/20 bg-primary/10 text-primary">APK CBT Mobile</Badge>
+						<Badge variant="outline">Terlihat untuk semua role</Badge>
+					</div>
+					<div>
+						<h2 class="text-lg font-semibold tracking-tight text-foreground">Download Center Aplikasi Siswa</h2>
+						<p class="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+							Ambil APK resmi CBT Mobile dari dashboard utama. Link ini bisa dibuka oleh admin, guru, staf, siswa, dan orang tua setelah login.
+						</p>
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<Button size="sm" href="/releases/mobile/latest-arm64.apk" download>Download APK Terbaru</Button>
+						<Button size="sm" variant="outline" href="/releases/mobile/latest-qr.svg">Buka QR Code</Button>
+						<Button size="sm" variant="outline" href="/asesmen/aplikasi-siswa/release">Detail Release Center</Button>
+					</div>
+				</div>
+				<div class="flex items-center gap-3 rounded-2xl border border-border bg-background/80 p-3 text-sm text-muted-foreground">
+					<img src="/releases/mobile/latest-qr.svg" alt="QR download APK CBT Mobile" class="h-20 w-20 rounded-lg bg-white p-1" />
+					<div class="hidden max-w-48 sm:block">
+						<p class="font-semibold text-foreground">Scan untuk install</p>
+						<p class="mt-1 break-all text-xs leading-5">mtsn2kolut.sch.id/releases/mobile/latest-arm64.apk</p>
+					</div>
+				</div>
+			</Card.Content>
+		</Card.Root>
+
 		<AsyncContent promise={dashboardPromise} onerror={handleDashboardRenderError}>
 		{#snippet pending()}
 			{#if isSiswa}

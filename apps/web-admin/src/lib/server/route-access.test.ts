@@ -202,6 +202,27 @@ describe('route access helpers', () => {
 		expect(canAccessProtectedRoute({ ...mustChangeUser, must_change_password: false }, '/portal/siswa', 'GET')).toBe(true);
 	});
 
+	it('keeps APK download release center visible for every authenticated role', () => {
+		const users = [
+			{ id: '1', username: 'admin', role: 'admin', roles: ['admin'], permissions: [] },
+			{ id: '2', username: 'guru', role: 'guru', roles: ['guru'], permissions: [] },
+			{ id: '3', username: 'staf', role: 'staf', roles: ['staf'], permissions: [] },
+			{ id: '4', username: 'siswa', role: 'siswa', roles: ['siswa'], permissions: [] },
+			{ id: '5', username: 'ortu', role: 'ortu', roles: ['ortu'], permissions: [] }
+		];
+
+		expect(isPublicPath('/asesmen/aplikasi-siswa/release')).toBe(false);
+		expect(requiredPermissionsForPath('/asesmen/aplikasi-siswa/release', 'GET')).toEqual([]);
+		expect(canAccessProtectedRoute(undefined, '/asesmen/aplikasi-siswa/release', 'GET')).toBe(false);
+		expect(users.map((user) => canAccessProtectedRoute(user, '/asesmen/aplikasi-siswa/release', 'GET'))).toEqual([
+			true,
+			true,
+			true,
+			true,
+			true
+		]);
+	});
+
 	it('keeps mutation route checks permission-specific', () => {
 		const reader = { id: '1', username: 'reader', role: '', roles: [], permissions: ['users.read', 'bank_soal.read', 'asesmen.read'] };
 		const mutator = { id: '2', username: 'mutator', role: '', roles: [], permissions: ['users.create', 'bank_soal.create', 'asesmen.event_manage'] };
