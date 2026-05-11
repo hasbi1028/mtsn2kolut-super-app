@@ -203,7 +203,7 @@
 	}
 
 	function handleRenderError(error: unknown) {
-		console.error('CBT package create render failed', error);
+		console.error('Form paket soal belum dapat ditampilkan', error);
 	}
 
 	function toggleQuestion(id: string) {
@@ -403,14 +403,14 @@
 	onMount(loadForm);
 </script>
 
-<svelte:head><title>{eventId ? 'Buat Paket Event CBT' : 'Buat Paket CBT'} — MTSN 2 Kolut</title></svelte:head>
+<svelte:head><title>{eventId ? 'Buat Paket Kegiatan Ujian' : 'Buat Paket Ujian'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
 	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-2">
 				<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Keranjang Soal CBT</p>
-				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Buat Paket Event' : 'Buat Paket Soal'}</h1>
+				<h1 class="text-3xl font-semibold tracking-tight text-foreground">{eventId ? 'Buat Paket Kegiatan' : 'Buat Paket Soal'}</h1>
 				<p class="text-sm leading-6 text-muted-foreground">Pilih soal terbit dari Bank Soal, atur bobot, lalu simpan paket untuk dipakai saat membuat sesi.</p>
 			</div>
 			<div class="flex flex-wrap gap-2">

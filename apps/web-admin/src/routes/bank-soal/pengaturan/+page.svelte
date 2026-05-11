@@ -35,7 +35,7 @@
 		{ label: 'Review', desc: 'Reviewer memeriksa substansi, konstruksi, bahasa, kunci/rubrik, dan kesesuaian KD/CP/TP.', tone: 'amber' },
 		{ label: 'Revisi', desc: 'Soal dikembalikan jika perlu perbaikan. Catatan reviewer wajib jelas dan bisa ditindaklanjuti.', tone: 'rose' },
 		{ label: 'Approved', desc: 'Soal lolos review dan siap dipakai untuk paket asesmen internal.', tone: 'emerald' },
-		{ label: 'Published', desc: 'Soal tersedia untuk pemakaian paket dan menjadi bagian repositori reusable.', tone: 'green' }
+		{ label: 'Terbit', desc: 'Soal tersedia untuk pemakaian paket dan menjadi bagian bank soal pakai ulang.', tone: 'green' }
 	];
 
 	const qualityRules = [
@@ -48,7 +48,7 @@
 	];
 
 	const sopItems: SopItem[] = [
-		{ title: 'Import massal', desc: 'Gunakan template resmi, jalankan preview dry-run, validasi error, baru lakukan import final.', owner: 'Admin/Guru', status: 'Aktif' },
+		{ title: 'Impor massal', desc: 'Gunakan format resmi, jalankan pratinjau cek data, perbaiki masalah, lalu lakukan impor final.', owner: 'Admin/Guru', status: 'Aktif' },
 		{ title: 'Review berkala', desc: 'Prioritaskan antrean review dan soal revisi sebelum periode asesmen aktif.', owner: 'Reviewer/Admin', status: 'Aktif' },
 		{ title: 'Coverage mapel', desc: 'Pantau Mapel & KD untuk memastikan soal tersebar merata dan metadata kurikulum lengkap.', owner: 'Admin Kurikulum', status: 'Monitoring' },
 		{ title: 'Analisis butir', desc: 'Gunakan halaman analisis untuk melihat pemakaian, HOTS, status review, dan tindak lanjut.', owner: 'Admin/Guru', status: 'Monitoring' }
@@ -56,9 +56,9 @@
 
 	const integrations = [
 		{ name: 'Daftar Soal', path: resolve('/bank-soal/daftar'), desc: 'Sumber data utama untuk pencarian, filter, pagination, dan aksi per soal.', required: 'read' },
-		{ name: 'Komposer', path: resolve('/bank-soal/tambah'), desc: 'Pembuatan/edit soal dengan autosave, shortcut, validasi, dan preview siswa.', required: 'create' },
+		{ name: 'Penyusun soal', path: resolve('/bank-soal/tambah'), desc: 'Pembuatan/edit soal dengan simpan otomatis, pintasan, pemeriksaan, dan pratinjau siswa.', required: 'create' },
 		{ name: 'Review', path: resolve('/bank-soal/verifikasi'), desc: 'Antrean verifikasi, catatan reviewer, timeline, approve/revisi.', required: 'review' },
-		{ name: 'Import', path: resolve('/bank-soal/impor'), desc: 'Preview dry-run dan import final dari Word/Excel/template.', required: 'import' },
+		{ name: 'Import', path: resolve('/bank-soal/impor'), desc: 'Pratinjau cek data dan impor final dari Word/Excel/format isian.', required: 'import' },
 		{ name: 'Asesmen Paket', path: resolve('/asesmen/paket'), desc: 'Pemakaian soal terbit ke paket asesmen.', required: 'read' }
 	] as const;
 
@@ -92,7 +92,7 @@
 	let cognitiveCoverage = $derived(summary.by_cognitive_level?.filter((item) => (item.total ?? 0) > 0).length ?? 0);
 	let operationalStatus = $derived([
 		{ label: 'Kesiapan Bank Soal', value: `${completionRate}%`, desc: `${readyQuestions} dari ${totalQuestions} soal approved/published` },
-		{ label: 'Antrean Review', value: pendingReview, desc: 'Soal menunggu keputusan reviewer' },
+		{ label: 'Antrean Verifikasi', value: pendingReview, desc: 'Soal menunggu keputusan reviewer' },
 		{ label: 'Coverage Mapel', value: subjectCoverage, desc: 'Mapel muncul pada ringkasan/sumber akademik' },
 		{ label: 'Level Kognitif', value: cognitiveCoverage, desc: 'Kategori Bloom/C-level berisi soal' }
 	]);
@@ -115,7 +115,7 @@
 				<div>
 					<p class="text-[10px] font-black uppercase tracking-[0.28em] text-primary">Governance Bank Soal</p>
 					<h1 class="mt-1 text-2xl font-black uppercase italic tracking-tight text-foreground">Pengaturan & SOP</h1>
-					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pusat panduan operasional Bank Soal: workflow, standar kualitas, SOP import/review, dan integrasi dengan modul Asesmen.</p>
+					<p class="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Pusat panduan operasional Bank Soal: alur kerja, standar kualitas, SOP impor/verifikasi, dan integrasi dengan modul Asesmen.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<a href={resolve('/bank-soal')} class="rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:bg-muted/50">Dashboard</a>
@@ -146,7 +146,7 @@
 			<section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
 				<div class="space-y-4">
 					<div class="rounded-xl border border-border bg-card p-4 shadow-sm">
-						<h2 class="text-base font-bold text-foreground">Workflow Standar</h2>
+						<h2 class="text-base font-bold text-foreground">Alur Standar</h2>
 						<p class="mt-1 text-xs text-muted-foreground">Status ini menjadi acuan operasional saat soal bergerak dari draft sampai siap dipakai.</p>
 						<div class="mt-4 grid gap-3 md:grid-cols-5">
 							{#each workflowSteps as step, index (step.label)}

@@ -44,15 +44,15 @@
 		},
 		{
 			step: '03',
-			title: 'Atur Sesi/Token',
-			description: 'Tetapkan jadwal, ruang, peserta, dan token sebelum ujian masuk hari pelaksanaan.',
+			title: 'Atur Sesi/Kode Ujian',
+			description: 'Tetapkan jadwal, ruang, peserta, dan kode ujian sebelum ujian masuk hari pelaksanaan.',
 			href: '/asesmen/sesi/new',
 			cta: 'Atur Sesi'
 		},
 		{
 			step: '04',
 			title: 'Lanjut Pelaksanaan',
-			description: 'Setelah paket, kegiatan, dan sesi siap, masuk ke ruang monitoring hari-H.',
+			description: 'Setelah paket, kegiatan, dan sesi siap, masuk ke ruang pemantauan hari-H.',
 			href: '/asesmen/pelaksanaan',
 			cta: 'Ke Pelaksanaan'
 		}
@@ -89,16 +89,16 @@
 			<div class="max-w-3xl space-y-3">
 				<div class="flex flex-wrap items-center gap-2">
 					<Badge class="border-primary/20 bg-card text-primary" variant="outline">Asesmen · Fase Persiapan</Badge>
-					<Badge class="border-border bg-card text-muted-foreground" variant="outline">UI-only</Badge>
+					<Badge class="border-border bg-card text-muted-foreground" variant="outline">Tanpa perubahan data</Badge>
 				</div>
 				<h1 class="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Persiapan Asesmen</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-					Mulai dari pekerjaan operasional sebelum hari ujian: paket, kegiatan, sesi, token, lalu pelaksanaan.
+					Mulai dari pekerjaan operasional sebelum hari ujian: paket, kegiatan, sesi, kode ujian, lalu pelaksanaan.
 					Penyusunan soal berada di modul Bank Soal, sementara CBT memakai soal terbit untuk paket dan sesi ujian.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
-				<Button href={resolve('/asesmen')} variant="outline">Dashboard Asesmen</Button>
+				<Button href={resolve('/asesmen')} variant="outline">Beranda Asesmen</Button>
 				<Button href={resolve('/asesmen/pelaksanaan')}>Ke Pelaksanaan</Button>
 			</div>
 		</div>
@@ -110,7 +110,7 @@
 				<p class="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Daftar tugas</p>
 				<h2 id="persiapan-tasks-title" class="mt-1 text-2xl font-semibold tracking-tight text-foreground">Selesaikan berurutan</h2>
 			</div>
-			<p class="max-w-lg text-sm leading-6 text-muted-foreground">Kartu ini menjaga operator tetap fokus pada jalur persiapan asesmen tanpa masuk ke authoring soal.</p>
+			<p class="max-w-lg text-sm leading-6 text-muted-foreground">Kartu ini menjaga operator tetap fokus pada jalur persiapan asesmen tanpa masuk ke penyusunan soal.</p>
 		</div>
 
 		<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -137,9 +137,9 @@
 			<Card.Description>
 				{#if userRoles.includes('admin')}
 					Bank Soal berdiri sebagai modul terpisah. Di sini fokuskan pekerjaan pada paket, kegiatan, sesi,
-					ruang, peserta, token, dan kesiapan masuk hari-H.
+					ruang, peserta, kode ujian, dan kesiapan masuk hari-H.
 				{:else}
-					Untuk guru, penyusunan dan review soal ada di modul Bank Soal. Halaman ini dipakai untuk membaca paket,
+					Untuk guru, penyusunan dan verifikasi soal ada di modul Bank Soal. Halaman ini dipakai untuk membaca paket,
 					hasil, dan akses pelaksanaan jika ditugaskan.
 				{/if}
 			</Card.Description>
@@ -151,10 +151,10 @@
 		<div class="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
 			<h2 class="text-xl font-semibold text-foreground">Akses terbatas</h2>
 			<p class="mt-3 text-sm leading-6 text-muted-foreground">
-				Fase persiapan asesmen hanya tersedia untuk admin dan guru. Silakan kembali ke Dashboard Asesmen untuk memilih pekerjaan lain.
+				Fase persiapan asesmen hanya tersedia untuk admin dan guru. Silakan kembali ke Beranda Asesmen untuk memilih pekerjaan lain.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/asesmen')} variant="outline">Kembali ke Dashboard Asesmen</Button>
+				<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Asesmen</Button>
 			</div>
 		</div>
 	</div>

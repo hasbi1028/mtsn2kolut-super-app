@@ -441,7 +441,7 @@
 		return {
 			title: 'Sesi siap dipantau',
 			message: 'Peserta, ruang, kapasitas, nomor meja, dan pengawas sudah siap.',
-			label: 'Pantau Proctoring',
+			label: 'Pantau Pengawasan Ujian',
 			tab: 'proctoring',
 			tone: 'success',
 		};
@@ -531,7 +531,7 @@
 	}
 
 	function itemRevisionNotes(row: ItemAnalysisRow) {
-		const sessionTitle = session?.title || 'Sesi CBT';
+		const sessionTitle = session?.title || 'Sesi Ujian';
 		const answeredText = `${row.answered_count}/${row.submitted_count} dijawab`;
 		const scoreSignal = row.question_type === 'essay'
 			? `skor rata-rata ${row.avg_manual_score.toFixed(1)}, belum dinilai ${row.unscored_count}`
@@ -663,7 +663,7 @@
 		{
 			label: 'Atensi',
 			value: `${(operationalRecap?.suspicious_count ?? proctoringStats.suspicious) + (operationalRecap?.incident_room_count ?? 0)}`,
-			helper: operationalRecap ? `${operationalRecap.force_submit_count} paksa submit, ${operationalRecap.reset_access_count} reset akses` : 'Dari proctoring aktif',
+			helper: operationalRecap ? `${operationalRecap.force_submit_count} paksa submit, ${operationalRecap.reset_access_count} reset akses` : 'Dari pengawasan aktif',
 			tab: 'operasional' as ActiveTab,
 		},
 		{
@@ -796,7 +796,7 @@
 	}
 
 	function handleDetailRenderError(error: unknown) {
-		console.error('CBT session detail render failed', error);
+		console.error('Detail sesi ujian belum dapat ditampilkan', error);
 	}
 
 	function mutationErrorMessage(error: unknown, fallback: string) {
@@ -816,7 +816,7 @@
 			paste_attempt: 'Tempel Teks',
 			cut_attempt: 'Potong Teks',
 			proctor_reset_access: 'Reset Akses',
-			proctor_force_submit: 'Paksa Submit',
+			proctor_force_submit: 'Paksa Kirim Jawaban',
 		};
 		return map[type] ?? type.replaceAll('_', ' ');
 	}
@@ -851,7 +851,7 @@
 			CBT_SESSION_SCHEDULE_UPDATE: 'Ubah Jadwal',
 			CBT_SESSION_PARTICIPANT_FLAG: 'Flag Peserta',
 			CBT_SESSION_PARTICIPANT_RESET_ACCESS: 'Reset Akses',
-			CBT_SESSION_PARTICIPANT_FORCE_SUBMIT: 'Paksa Submit',
+			CBT_SESSION_PARTICIPANT_FORCE_SUBMIT: 'Paksa Kirim Jawaban',
 			CBT_SESSION_ESSAY_GRADE: 'Koreksi Uraian',
 			CBT_SESSION_SCORE: 'Hitung Skor',
 			CBT_SESSION_ROOM_HANDOVER_SAVE: 'Simpan Handover',
@@ -983,7 +983,7 @@
 		const requestId = ++proctoringRequestId;
 		try {
 			const res = await fetch(`/api/asesmen/sessions/${sessionId}/proctoring`);
-			const rows = await readClientApiData<ProctoringRow[]>(res, 'Gagal memuat proctoring');
+			const rows = await readClientApiData<ProctoringRow[]>(res, 'Gagal memuat pengawasan ujian');
 			if (requestId !== proctoringRequestId) return;
 			proctoring = Array.isArray(rows) ? rows : [];
 		} catch (error) {
@@ -997,7 +997,7 @@
 		if (participantId) params.set('participant_id', participantId);
 		try {
 			const res = await fetch(clientApiPathWithQuery(clientApiPath`/api/asesmen/sessions/${sessionId}/proctoring/events`, params));
-			const rows = await readClientApiData<ProctoringEvent[]>(res, 'Gagal memuat log proctoring');
+			const rows = await readClientApiData<ProctoringEvent[]>(res, 'Gagal memuat riwayat pengawasan ujian');
 			if (requestId !== proctoringEventsRequestId) return;
 			proctoringEvents = Array.isArray(rows) ? rows : [];
 		} catch (error) {
@@ -1192,17 +1192,17 @@
 	}
 
 	async function generateTokens() {
-		if (!(await confirmPhrase('Buat Token Massal', 'Token baru akan dibuat untuk seluruh peserta sesi ini. Gunakan hanya saat token awal belum dibagikan atau harus direset terkontrol.', 'TOKEN'))) return;
+		if (!(await confirmPhrase('Buat Kode Ujian Massal', 'Kode ujian baru akan dibuat untuk seluruh peserta sesi ini. Gunakan hanya saat kode awal belum dibagikan atau harus diganti secara terkontrol.', 'TOKEN'))) return;
 		tokenBusy = true;
 		try {
 			const res = await fetch(`/api/asesmen/sessions/${sessionId}/generate-tokens`, { method: 'POST' });
 			await readClientJson<unknown>(res);
-			setOperationState('success', 'Token Massal Berhasil Dibuat', 'Token peserta sudah diperbarui. Bagikan ulang token hanya ke pengawas atau peserta yang berwenang.');
-			showToast('Token berhasil digenerate');
+			setOperationState('success', 'Kode Ujian Massal Berhasil Dibuat', 'Kode ujian peserta sudah diperbarui. Bagikan ulang kode hanya ke pengawas atau peserta yang berwenang.');
+			showToast('Kode ujian berhasil dibuat');
 			await loadParticipants();
 		} catch (error) {
-			setOperationState('error', 'Token Gagal Dibuat', 'Pembuatan token massal belum berhasil. Ulangi setelah memeriksa daftar peserta sesi ini.');
-			showToast(mutationErrorMessage(error, 'Gagal generate token'), false);
+			setOperationState('error', 'Kode Ujian Gagal Dibuat', 'Pembuatan kode ujian massal belum berhasil. Ulangi setelah memeriksa daftar peserta sesi ini.');
+			showToast(mutationErrorMessage(error, 'Gagal membuat kode ujian'), false);
 		} finally {
 			tokenBusy = false;
 		}
@@ -1210,21 +1210,21 @@
 
 	async function regenerateToken(pid: string) {
 		if (!(await confirmAction({
-			title: 'Buat Ulang Token Peserta',
-			message: 'Buat ulang token peserta ini? Token lama tidak sebaiknya dipakai lagi setelah tindakan ini.',
-			confirmLabel: 'Buat Ulang Token',
+			title: 'Buat Ulang Kode Ujian Peserta',
+			message: 'Buat ulang kode ujian peserta ini? Kode lama tidak sebaiknya dipakai lagi setelah tindakan ini.',
+			confirmLabel: 'Buat Ulang Kode Ujian',
 			tone: 'warning'
 		}))) return;
 		regenBusyId = pid;
 		try {
 			const res = await fetch(`/api/asesmen/sessions/${sessionId}/participants/${pid}/regenerate-token`, { method: 'POST' });
 			await readClientJson<unknown>(res);
-			setOperationState('warning', 'Token Peserta Diperbarui', 'Token lama untuk peserta terkait sebaiknya tidak dipakai lagi. Pastikan pengawas membagikan token terbaru.');
-			showToast('Token diperbarui');
+			setOperationState('warning', 'Kode Ujian Peserta Diperbarui', 'Kode lama untuk peserta terkait sebaiknya tidak dipakai lagi. Pastikan pengawas membagikan kode terbaru.');
+			showToast('Kode ujian diperbarui');
 			await loadParticipants();
 		} catch (error) {
-			setOperationState('error', 'Token Gagal Diperbarui', 'Pembuatan ulang token peserta belum berhasil. Coba ulang beberapa saat lagi.');
-			showToast(mutationErrorMessage(error, 'Gagal regenerate token'), false);
+			setOperationState('error', 'Kode Ujian Gagal Diperbarui', 'Pembuatan ulang kode ujian peserta belum berhasil. Coba ulang beberapa saat lagi.');
+			showToast(mutationErrorMessage(error, 'Gagal membuat ulang kode ujian'), false);
 		} finally {
 			regenBusyId = '';
 		}
@@ -1305,7 +1305,7 @@
 			showToast('Pengawas ruangan diperbarui');
 			await Promise.all([loadRooms(), loadRoomReadiness()]);
 		} catch (error) {
-			const message = cbtRoomSetupErrorMessage(error, 'Penugasan pengawas belum berhasil. Akses pengaturan sesi hanya untuk admin/operator CBT.');
+			const message = cbtRoomSetupErrorMessage(error, 'Penugasan pengawas belum berhasil. Akses pengaturan sesi hanya untuk admin/operator ujian.');
 			setOperationState('error', 'Pengawas Gagal Disimpan', message);
 			showToast(message, false);
 		} finally {
@@ -1401,12 +1401,12 @@
 				flag ? 'warning' : 'success',
 				flag ? 'Peserta Diberi Tanda' : 'Tanda Peserta Dihapus',
 				flag
-					? 'Peserta ditandai untuk perhatian pengawas. Tinjau kembali aktivitas proctoring sebelum mengambil langkah lanjutan.'
-					: 'Tanda kecurigaan pada peserta sudah dibersihkan dari daftar proctoring.',
+					? 'Peserta ditandai untuk perhatian pengawas. Tinjau kembali aktivitas pengawasan sebelum mengambil langkah lanjutan.'
+					: 'Tanda kecurigaan pada peserta sudah dibersihkan dari daftar pengawasan.',
 			);
 			await loadProctoring();
 		} catch (error) {
-			setOperationState('error', 'Tanda Peserta Gagal Diperbarui', 'Perubahan tanda proctoring belum berhasil. Coba ulang beberapa saat lagi.');
+			setOperationState('error', 'Tanda Peserta Gagal Diperbarui', 'Perubahan tanda pengawasan belum berhasil. Coba ulang beberapa saat lagi.');
 			showToast(mutationErrorMessage(error, 'Gagal memperbarui tanda peserta'), false);
 		} finally {
 			flagBusyId = '';
@@ -1432,18 +1432,18 @@
 	}
 
 	async function forceSubmitParticipant(pid: string, nama: string) {
-		if (!(await confirmPhrase('Paksa Submit Peserta', `Jawaban ${nama} akan dikunci dan skor objektif dihitung dari jawaban yang sudah tersimpan. Tindakan ini untuk kondisi darurat operasional.`, 'PAKSA SUBMIT'))) return;
+		if (!(await confirmPhrase('Paksa Kirim Jawaban Peserta', `Jawaban ${nama} akan dikunci dan skor objektif dihitung dari jawaban yang sudah tersimpan. Tindakan ini untuk kondisi darurat operasional.`, 'PAKSA SUBMIT'))) return;
 		forceSubmitBusyId = pid;
 		try {
 			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/participants/${pid}/force-submit`, { method: 'POST' });
 			await readClientJson<unknown>(res);
-			setOperationState('warning', 'Peserta Dipaksa Submit', `${nama} sudah ditandai submit oleh proktor. Periksa hasil akhir sebelum menutup sesi.`);
-			toast.success('Peserta disubmit oleh proktor');
+			setOperationState('warning', 'Jawaban Peserta Dikirim Paksa', `${nama} sudah ditandai submit oleh proktor. Periksa hasil akhir sebelum menutup sesi.`);
+			toast.success('Jawaban peserta dikirim oleh proktor');
 			eventPanelParticipantId = pid;
 			await Promise.all([loadProctoring(), loadProctoringEvents(pid), refreshSessionDetail()]);
 		} catch (error) {
-			setOperationState('error', 'Paksa Submit Gagal', 'Sistem belum berhasil mengunci submit peserta. Periksa status waktu ujian dan ulangi bila perlu.');
-			toast.error(mutationErrorMessage(error, 'Gagal paksa submit peserta'));
+			setOperationState('error', 'Paksa Kirim Jawaban Gagal', 'Sistem belum berhasil mengunci pengiriman jawaban peserta. Periksa status waktu ujian dan ulangi bila perlu.');
+			toast.error(mutationErrorMessage(error, 'Gagal memaksa kirim jawaban peserta'));
 		} finally {
 			forceSubmitBusyId = '';
 		}
@@ -1476,7 +1476,7 @@
 
 	function exportCSV() {
 		if (!session || results.length === 0) return;
-		const header = csvRow(['NIS', 'Nama', 'L/P', 'Jawaban Masuk', 'Benar', 'Skor', 'Waktu Submit']);
+		const header = csvRow(['NIS', 'Nama', 'L/P', 'Jawaban Masuk', 'Benar', 'Skor', 'Waktu Kirim Jawaban']);
 		const rows = results.map(r =>
 			csvRow([r.nis, r.nama, r.gender, r.total_answers, r.correct_answers,
 			 fmtScore(r.score), r.submitted_at ? fmtDt(r.submitted_at) : ''])
@@ -1493,7 +1493,7 @@
 
 	function exportOperationalCSV() {
 		if (!session || !operationalRecap) return;
-		const header = csvRow(['Ruang', 'Handover', 'Peserta', 'Login', 'Submit', 'No Show', 'Atensi', 'Force Submit', 'Reset Akses', 'App Switch', 'Screenshot', 'Catatan Kejadian', 'Catatan Operator', 'Catatan Serah Terima']);
+		const header = csvRow(['Ruang', 'Handover', 'Peserta', 'Login', 'Submit', 'No Show', 'Atensi', 'Paksa Kirim Jawaban', 'Reset Akses', 'App Switch', 'Screenshot', 'Catatan Kejadian', 'Catatan Operator', 'Catatan Serah Terima']);
 		const rows = operationalRooms.map((room) => csvRow([
 			room.room_name,
 			handoverStatusLabel(room),
@@ -1569,7 +1569,7 @@
 
 	onMount(() => {
 		void loadInitial();
-		void loadCommandCenterSnapshot().catch((error) => console.warn('CBT command center snapshot failed', error));
+		void loadCommandCenterSnapshot().catch((error) => console.warn('Ringkasan kendali ujian belum dapat dimuat', error));
 		const requestedTab = tabFromQuery(page.url.searchParams.get('tab'));
 		if (requestedTab && requestedTab !== activeTab) {
 			void switchTab(requestedTab);
@@ -1680,7 +1680,7 @@
 		<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
 			{#each [
 				{ label: 'Total Peserta', val: stats.total.toString() },
-				{ label: 'Sudah Submit', val: stats.submitted.toString() },
+				{ label: 'Sudah Kirim Jawaban', val: stats.submitted.toString() },
 				{ label: 'Rata-rata Nilai', val: stats.total > 0 ? stats.avgScore.toFixed(1) : '—' },
 				{ label: 'Lulus (≥75)', val: `${stats.passing} / ${stats.submitted}` },
 			] as s (s.label)}
@@ -1829,7 +1829,7 @@
 								<Table.Head class="text-center">Jawaban</Table.Head>
 								<Table.Head class="text-center">Benar</Table.Head>
 								<Table.Head class="text-center">Skor</Table.Head>
-								<Table.Head>Waktu Submit</Table.Head>
+								<Table.Head>Waktu Kirim Jawaban</Table.Head>
 							</Table.Row>
 						</Table.Header>
 						<Table.Body>
@@ -2040,14 +2040,14 @@
 		{:else if activeTab === 'peserta'}
 			<div id="panel-peserta" role="tabpanel" aria-labelledby="tab-peserta" class="space-y-4">
 			<div class="flex gap-2 flex-wrap">
-				<LoadingButton variant="outline" size="sm" onclick={() => void generateTokens()} loading={tokenBusy} disabled={tokenBusy} loadingLabel="Membuat token...">Buat Token Massal</LoadingButton>
+				<LoadingButton variant="outline" size="sm" onclick={() => void generateTokens()} loading={tokenBusy} disabled={tokenBusy} loadingLabel="Membuat kode ujian...">Buat Kode Ujian Massal</LoadingButton>
 				<LoadingButton variant="outline" size="sm" onclick={() => void refreshParticipants()} loading={participantRefreshBusy} loadingLabel="Memuat..." disabled={participantRefreshBusy}>↻ Refresh</LoadingButton>
 			</div>
 			<OperationStatusPanel
 				tone="warning"
 				compact
-				title="Aksi Sensitif Peserta & Token Rahasia"
-				message={roomControlsLocked ? 'Ruangan terkunci setelah sesi aktif/selesai. Token peserta tetap rahasia dan hanya boleh dibagikan ke pengawas atau peserta yang berwenang saat operasional ujian.' : 'Pembuatan token massal, ubah token, dan simpan nomor meja akan langsung mengubah data operasional ujian. Perlakukan token seperti kredensial ujian: jangan kirim ke kanal umum, jangan tampilkan di layar proyektor, dan bagikan hanya saat sesi siap.'}
+				title="Aksi Sensitif Peserta & Kode Ujian Rahasia"
+				message={roomControlsLocked ? 'Ruangan terkunci setelah sesi aktif/selesai. Kode ujian peserta tetap rahasia dan hanya boleh dibagikan ke pengawas atau peserta yang berwenang saat operasional ujian.' : 'Pembuatan kode ujian massal, ubah kode ujian, dan simpan nomor meja akan langsung mengubah data operasional ujian. Perlakukan kode ujian sebagai informasi rahasia: jangan kirim ke kanal umum, jangan tampilkan di layar proyektor, dan bagikan hanya saat sesi siap.'}
 			/>
 			<Card.Root>
 				<Card.Content class="p-0 overflow-x-auto">
@@ -2122,7 +2122,7 @@
 					tone="warning"
 					compact
 					title="Ruangan Terkunci"
-					message="Ruangan terkunci setelah sesi aktif/selesai. Gunakan tab proctoring dan rekap operasional untuk pemantauan tanpa mengubah setup ruang."
+					message="Ruangan terkunci setelah sesi aktif/selesai. Gunakan tab pengawasan dan rekap operasional untuk pemantauan tanpa mengubah pengaturan ruang."
 				/>
 			{/if}
 			<Card.Root class="border-success/20">
@@ -2321,7 +2321,7 @@
 			<OperationStatusPanel
 				tone={operationalTone(operationalRecap)}
 				compact
-				title="Status Penutupan CBT"
+				title="Status Penutupan Ujian"
 				message={operationalMessage(operationalRecap)}
 			/>
 
@@ -2329,9 +2329,9 @@
 				<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
 					{#each [
 						{ label: 'Handover Terkunci', value: `${operationalRecap.handover_locked_count}/${operationalRecap.room_count}`, hint: `${operationalRecap.handover_missing_count} belum ada` },
-						{ label: 'Submit Akhir', value: `${operationalRecap.submitted_count}/${operationalRecap.participant_count}`, hint: `${operationalRecap.no_show_count} belum login/no-show` },
+						{ label: 'Kirim Jawaban Akhir', value: `${operationalRecap.submitted_count}/${operationalRecap.participant_count}`, hint: `${operationalRecap.no_show_count} belum login/no-show` },
 						{ label: 'Ruang Berinsiden', value: operationalRecap.incident_room_count.toString(), hint: `${operationalRecap.incident_event_count} event atensi` },
-						{ label: 'Paksa Submit', value: operationalRecap.force_submit_count.toString(), hint: `${operationalRecap.reset_access_count} reset akses` },
+						{ label: 'Paksa Kirim Jawaban', value: operationalRecap.force_submit_count.toString(), hint: `${operationalRecap.reset_access_count} reset akses` },
 						{ label: 'Anti-Cheat', value: `${operationalRecap.app_switch_count}/${operationalRecap.screenshot_attempt_count}`, hint: 'app switch / screenshot' },
 					] as item (item.label)}
 						<Card.Root class="border-success/20">
@@ -2511,7 +2511,7 @@
 												loading={forceSubmitBusyId === p.participant_id}
 												disabled={!!p.submitted_at || (forceSubmitBusyId !== '' && forceSubmitBusyId !== p.participant_id)}
 												loadingLabel="Submit...">
-												Paksa Submit
+												Paksa Kirim Jawaban
 											</LoadingButton>
 											<Button
 												variant="outline" size="sm"

@@ -129,7 +129,7 @@
 
 	async function loadDashboard() {
 		const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/proctoring`);
-		participants = await readClientApiData<ProctoringRow[]>(res, 'Gagal memuat command center pengawasan');
+		participants = await readClientApiData<ProctoringRow[]>(res, 'Gagal memuat panel pengawasan');
 		return participants;
 	}
 
@@ -137,7 +137,7 @@
 		try {
 			const params = new URLSearchParams({ limit: '100' });
 			const res = await fetch(clientApiPathWithQuery(`/api/asesmen/sessions/${sessionId}/proctoring/events`, params));
-			const payload = await readClientApiData<ProctoringEvent[]>(res, 'Gagal memuat event pengawasan');
+			const payload = await readClientApiData<ProctoringEvent[]>(res, 'Gagal memuat riwayat pengawasan');
 			if (hasPrimedEvents) notifyNewEvents(payload);
 			else {
 				primeSeenEvents(payload);
@@ -145,7 +145,7 @@
 			}
 			events = payload;
 		} catch (error) {
-			if (!background) toast.error(error instanceof Error ? error.message : 'Gagal memuat event pengawasan');
+			if (!background) toast.error(error instanceof Error ? error.message : 'Gagal memuat riwayat pengawasan');
 		}
 	}
 
@@ -191,7 +191,7 @@
 			try {
 				handleLiveEvent(JSON.parse((message as MessageEvent).data) as ProctoringEvent);
 			} catch (error) {
-				console.error('Invalid session proctoring event', error);
+				console.error('Data pengawasan sesi ujian tidak valid', error);
 			}
 		});
 		source.onerror = () => {
@@ -246,7 +246,7 @@
 
 	async function unlockParticipant(row: ProctoringRow) {
 		if (!row.room_id) return;
-		const notes = window.prompt(`Catatan unlock untuk ${row.nama}`, 'Diverifikasi dari command center') ?? '';
+		const notes = window.prompt(`Catatan buka kunci untuk ${row.nama}`, 'Diverifikasi dari panel pengawasan') ?? '';
 		actionBusyId = `unlock-${row.participant_id}`;
 		try {
 			const res = await fetch(clientApiPath`/api/asesmen/sessions/${sessionId}/rooms/${row.room_id}/participants/${row.participant_id}/unlock`, {
@@ -255,10 +255,10 @@
 				body: JSON.stringify({ notes }),
 			});
 			await readClientJson<unknown>(res);
-			toast.success(`${row.nama} sudah di-unlock`);
+			toast.success(`${row.nama} sudah dibuka kuncinya`);
 			await loadDashboard();
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal unlock peserta');
+			toast.error(error instanceof Error ? error.message : 'Gagal membuka kunci peserta');
 		} finally {
 			actionBusyId = '';
 		}
@@ -278,7 +278,7 @@
 			toast.success(`${event.nama} ditandai sudah diperiksa`);
 			await loadEvents(true);
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal menandai event');
+			toast.error(error instanceof Error ? error.message : 'Gagal menandai kejadian');
 		} finally {
 			actionBusyId = '';
 		}
@@ -306,6 +306,37 @@
 		return 'normal';
 	}
 
+	function heartbeatLabel(state: ReturnType<typeof heartbeatState>) {
+		const labels: Record<ReturnType<typeof heartbeatState>, string> = {
+			submitted: 'Sudah kirim',
+			online: 'Terhubung',
+			stale: 'Waspada',
+			offline: 'Terputus',
+		};
+		return labels[state];
+	}
+
+	function riskLabel(level: string) {
+		const labels: Record<string, string> = {
+			locked: 'Terkunci',
+			high: 'Bahaya',
+			warning: 'Perlu perhatian',
+			normal: 'Normal',
+		};
+		return labels[level] ?? level;
+	}
+
+	function filterLabel(value: typeof filter) {
+		const labels: Record<typeof filter, string> = {
+			all: 'Semua',
+			warning: 'Perlu perhatian',
+			high: 'Bahaya',
+			locked: 'Terkunci',
+			offline: 'Terputus',
+		};
+		return labels[value];
+	}
+
 	function badgeClass(tone: string) {
 		if (tone === 'locked' || tone === 'offline') return 'border-destructive/30 bg-destructive/10 text-destructive';
 		if (tone === 'high' || tone === 'stale') return 'border-warning/30 bg-warning/10 text-warning';
@@ -314,9 +345,9 @@
 	}
 
 	function liveModeLabel() {
-		if (liveMode === 'sse') return 'Live connected';
-		if (liveMode === 'connecting') return 'Menghubungkan live';
-		return 'Fallback polling 5 detik';
+		if (liveMode === 'sse') return 'Terhubung langsung';
+		if (liveMode === 'connecting') return 'Menghubungkan pemantauan';
+		return 'Pembaruan berkala 5 detik';
 	}
 
 	function fmtDate(value: string | null | undefined) {
@@ -328,20 +359,20 @@
 </script>
 
 <svelte:head>
-	<title>Command Center Pengawasan CBT</title>
+	<title>Panel Pengawasan CBT</title>
 </svelte:head>
 
 <div class="space-y-5 p-4 md:p-6">
 	<div class="flex flex-col gap-3 border-b border-primary/20 pb-4 md:flex-row md:items-start md:justify-between">
 		<div>
 			<a href={resolve(`/asesmen/sesi/${sessionId}`)} class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Kembali ke detail sesi</a>
-			<h1 class="mt-2 text-2xl font-bold tracking-tight text-foreground">Command Center Pengawasan</h1>
-			<p class="text-sm text-muted-foreground">Pantau semua ruang, alert kecurangan, dan status peserta secara real-time.</p>
+			<h1 class="mt-2 text-2xl font-bold tracking-tight text-foreground">Panel Pengawasan</h1>
+			<p class="text-sm text-muted-foreground">Pantau semua ruang, peringatan pengawasan, dan status peserta secara langsung.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button variant={audioAlertsEnabled ? 'default' : 'outline'} onclick={() => audioAlertsEnabled = !audioAlertsEnabled}>Audio {audioAlertsEnabled ? 'ON' : 'OFF'}</Button>
 			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/proctoring/report`)}>Rekap Insiden</Button>
-			<Button variant="outline" onclick={() => void loadEvents(true)}>Refresh Event</Button>
+			<Button variant="outline" onclick={() => void loadEvents(true)}>Muat Ulang Riwayat</Button>
 		</div>
 	</div>
 
@@ -353,19 +384,19 @@
 		{/snippet}
 
 		{#snippet failed(error, reset)}
-			<RecoveryPanel title="Command Center Belum Termuat" message={error instanceof Error ? error.message : 'Gagal memuat command center'} onRetry={() => { reset?.(); dashboardPromise = loadDashboard(); }} />
+			<RecoveryPanel title="Panel Pengawasan Belum Termuat" message={error instanceof Error ? error.message : 'Gagal memuat panel pengawasan'} onRetry={() => { reset?.(); dashboardPromise = loadDashboard(); }} />
 		{/snippet}
 
 		<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
 			<Card.Root><Card.Header><Card.Title class="text-sm">Peserta</Card.Title></Card.Header><Card.Content><div class="text-2xl font-bold">{participants.length}</div></Card.Content></Card.Root>
-			<Card.Root><Card.Header><Card.Title class="text-sm">Warning/High</Card.Title></Card.Header><Card.Content><div class="text-2xl font-bold">{participants.filter((row) => riskLevel(row) === 'warning' || riskLevel(row) === 'high').length}</div></Card.Content></Card.Root>
-			<Card.Root><Card.Header><Card.Title class="text-sm">Locked</Card.Title></Card.Header><Card.Content><div class="text-2xl font-bold text-destructive">{participants.filter((row) => riskLevel(row) === 'locked').length}</div></Card.Content></Card.Root>
-			<Card.Root><Card.Header><Card.Title class="text-sm">Offline</Card.Title></Card.Header><Card.Content><div class="text-2xl font-bold">{participants.filter((row) => heartbeatState(row) === 'offline').length}</div></Card.Content></Card.Root>
+			<Card.Root><Card.Header><Card.Title class="text-sm">Perlu Perhatian/Bahaya</Card.Title></Card.Header><Card.Content><div class="text-2xl font-bold">{participants.filter((row) => riskLevel(row) === 'warning' || riskLevel(row) === 'high').length}</div></Card.Content></Card.Root>
+			<Card.Root><Card.Header><Card.Title class="text-sm">Terkunci</Card.Title></Card.Header><Card.Content><div class="text-2xl font-bold text-destructive">{participants.filter((row) => riskLevel(row) === 'locked').length}</div></Card.Content></Card.Root>
+			<Card.Root><Card.Header><Card.Title class="text-sm">Terputus</Card.Title></Card.Header><Card.Content><div class="text-2xl font-bold">{participants.filter((row) => heartbeatState(row) === 'offline').length}</div></Card.Content></Card.Root>
 		</div>
 
 		{#if recentAlertEvents.length > 0}
 			<Card.Root class="border-warning/30 bg-warning/5">
-				<Card.Header><Card.Title class="text-base">Live Alert Lintas Ruang</Card.Title></Card.Header>
+				<Card.Header><Card.Title class="text-base">Peringatan Langsung Lintas Ruang</Card.Title></Card.Header>
 				<Card.Content class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
 					{#each recentAlertEvents.slice(0, 9) as event (event.id)}
 						<div class="rounded-lg border bg-card p-3 text-sm">
@@ -389,10 +420,10 @@
 						</div>
 						<div class="mt-2 flex flex-wrap gap-2 text-xs">
 							<Badge variant="outline">{room.participant_count} peserta</Badge>
-							<Badge variant="outline" class={badgeClass('normal')}>{room.online_count} online</Badge>
-							<Badge variant="outline" class={badgeClass('warning')}>{room.warning_count} warning</Badge>
-							<Badge variant="outline" class={badgeClass('high')}>{room.high_count} high</Badge>
-							<Badge variant="outline" class={badgeClass('locked')}>{room.locked_count} locked</Badge>
+							<Badge variant="outline" class={badgeClass('normal')}>{room.online_count} terhubung</Badge>
+							<Badge variant="outline" class={badgeClass('warning')}>{room.warning_count} perlu perhatian</Badge>
+							<Badge variant="outline" class={badgeClass('high')}>{room.high_count} bahaya</Badge>
+							<Badge variant="outline" class={badgeClass('locked')}>{room.locked_count} terkunci</Badge>
 						</div>
 					</div>
 				{/each}
@@ -404,23 +435,23 @@
 				<Card.Title>Peserta Bermasalah / Semua Peserta</Card.Title>
 				<div class="flex flex-wrap gap-2">
 					{#each ['all', 'warning', 'high', 'locked', 'offline'] as item (item)}
-						<Button size="sm" variant={filter === item ? 'default' : 'outline'} onclick={() => filter = item as typeof filter}>{item}</Button>
+						<Button size="sm" variant={filter === item ? 'default' : 'outline'} onclick={() => filter = item as typeof filter}>{filterLabel(item as typeof filter)}</Button>
 					{/each}
 				</div>
 			</Card.Header>
 			<Card.Content class="overflow-x-auto">
 				<Table.Root>
-					<Table.Header><Table.Row><Table.Head>Peserta</Table.Head><Table.Head>Ruang</Table.Head><Table.Head>Koneksi</Table.Head><Table.Head>Risk</Table.Head><Table.Head>Pelanggaran</Table.Head><Table.Head>Terakhir</Table.Head><Table.Head class="text-right">Aksi</Table.Head></Table.Row></Table.Header>
+					<Table.Header><Table.Row><Table.Head>Peserta</Table.Head><Table.Head>Ruang</Table.Head><Table.Head>Koneksi</Table.Head><Table.Head>Risiko</Table.Head><Table.Head>Peringatan</Table.Head><Table.Head>Terakhir</Table.Head><Table.Head class="text-right">Aksi</Table.Head></Table.Row></Table.Header>
 					<Table.Body>
 						{#each filteredParticipants as row (row.participant_id)}
 							<Table.Row>
 								<Table.Cell><div class="font-semibold">{row.nama}</div><div class="text-xs text-muted-foreground">{row.nis}</div></Table.Cell>
 								<Table.Cell>{row.room_name || '—'}</Table.Cell>
-								<Table.Cell><Badge variant="outline" class={badgeClass(heartbeatState(row))}>{heartbeatState(row)}</Badge></Table.Cell>
-								<Table.Cell><Badge variant="outline" class={badgeClass(riskLevel(row))}>{riskLevel(row)}</Badge></Table.Cell>
+								<Table.Cell><Badge variant="outline" class={badgeClass(heartbeatState(row))}>{heartbeatLabel(heartbeatState(row))}</Badge></Table.Cell>
+								<Table.Cell><Badge variant="outline" class={badgeClass(riskLevel(row))}>{riskLabel(riskLevel(row))}</Badge></Table.Cell>
 								<Table.Cell>{row.violation_count ?? 0} · skor {row.risk_score ?? 0}</Table.Cell>
 								<Table.Cell>{row.last_violation_reason || fmtDate(row.last_violation_at)}</Table.Cell>
-								<Table.Cell class="text-right"><div class="flex justify-end gap-2"><Button size="sm" variant="outline" href={row.room_id ? resolve(`/asesmen/sesi/${sessionId}/rooms/${row.room_id}/proctoring`) : undefined}>Ruang</Button><LoadingButton size="sm" variant="outline" onclick={() => void unlockParticipant(row)} loading={actionBusyId === `unlock-${row.participant_id}`} disabled={!row.locked_at || !row.room_id || (actionBusyId !== '' && actionBusyId !== `unlock-${row.participant_id}`)} loadingLabel="Unlock...">Unlock</LoadingButton></div></Table.Cell>
+								<Table.Cell class="text-right"><div class="flex justify-end gap-2"><Button size="sm" variant="outline" href={row.room_id ? resolve(`/asesmen/sesi/${sessionId}/rooms/${row.room_id}/proctoring`) : undefined}>Ruang</Button><LoadingButton size="sm" variant="outline" onclick={() => void unlockParticipant(row)} loading={actionBusyId === `unlock-${row.participant_id}`} disabled={!row.locked_at || !row.room_id || (actionBusyId !== '' && actionBusyId !== `unlock-${row.participant_id}`)} loadingLabel="Membuka...">Buka Kunci</LoadingButton></div></Table.Cell>
 							</Table.Row>
 						{/each}
 					</Table.Body>

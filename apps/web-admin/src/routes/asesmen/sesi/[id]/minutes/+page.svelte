@@ -84,7 +84,7 @@
 	}
 
 	function handleMinutesRenderError(error: unknown) {
-		console.error('CBT session minutes render failed', error);
+		console.error('Berita acara sesi ujian belum dapat ditampilkan', error);
 	}
 
 	function fmtDt(value: string) {
@@ -172,7 +172,7 @@
 			<h2 class="text-xl font-semibold text-foreground">{currentSession.title}</h2>
 			<div class="mt-3 grid gap-2 text-sm text-foreground md:grid-cols-2">
 				<p><span class="font-medium">Paket:</span> {currentSession.package_title}</p>
-				<p><span class="font-medium">Kelas/Scope:</span> {currentSession.class_code || currentSession.scope_ref || currentSession.scope_type || '—'}</p>
+				<p><span class="font-medium">Kelas/Cakupan:</span> {currentSession.class_code || currentSession.scope_ref || currentSession.scope_type || '—'}</p>
 				<p><span class="font-medium">Mulai:</span> {fmtDt(currentSession.scheduled_start)}</p>
 				<p><span class="font-medium">Selesai:</span> {fmtDt(currentSession.scheduled_end)}</p>
 			</div>
@@ -184,7 +184,7 @@
 				<p class="mt-2 text-3xl font-bold text-primary">{currentParticipants.length}</p>
 			</div>
 			<div class="rounded-lg border border-primary/20 bg-card p-5 shadow-sm">
-				<p class="text-sm text-muted-foreground">Sudah submit</p>
+				<p class="text-sm text-muted-foreground">Sudah kirim</p>
 				<p class="mt-2 text-3xl font-bold text-primary">{currentParticipants.filter((p) => p.submitted_at).length}</p>
 			</div>
 			<div class="rounded-lg border border-primary/20 bg-card p-5 shadow-sm">
@@ -218,7 +218,7 @@
 		</section>
 
 		<section class="rounded-lg border border-primary/20 bg-card p-6 shadow-sm">
-			<h3 class="text-lg font-semibold text-foreground">Daftar Hadir dan Token</h3>
+			<h3 class="text-lg font-semibold text-foreground">Daftar Hadir dan Kode Ujian</h3>
 			<div class="mt-4 overflow-x-auto">
 				<table class="min-w-full text-sm">
 					<thead class="bg-primary/10 text-left text-muted-foreground">
@@ -227,7 +227,7 @@
 							<th class="px-3 py-2">Nama</th>
 							<th class="px-3 py-2">Ruangan</th>
 							<th class="px-3 py-2">No Meja</th>
-							<th class="px-3 py-2">Token</th>
+							<th class="px-3 py-2">Kode Ujian</th>
 							<th class="px-3 py-2">Paraf</th>
 						</tr>
 					</thead>

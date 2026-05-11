@@ -62,7 +62,7 @@
 	}
 
 	function handleCardsRenderError(error: unknown) {
-		console.error('CBT event exam cards render failed', error);
+		console.error('Kartu ujian kegiatan asesmen belum dapat ditampilkan', error);
 	}
 
 	function fmtDt(value: string) {

@@ -79,7 +79,7 @@
 			fetch(clientApiPathWithQuery(`/api/asesmen/sessions/${sessionId}/proctoring/events`, new URLSearchParams({ limit: '500' })))
 		]);
 		participants = await readClientApiData<ProctoringRow[]>(participantRes, 'Gagal memuat peserta pengawasan');
-		events = await readClientApiData<ProctoringEvent[]>(eventRes, 'Gagal memuat event pengawasan');
+		events = await readClientApiData<ProctoringEvent[]>(eventRes, 'Gagal memuat riwayat pengawasan');
 		} catch (error) {
 			loadError = error instanceof Error ? error.message : 'Gagal memuat rekap';
 		} finally {
@@ -114,8 +114,22 @@
 		return row?.risk_level ?? 'normal';
 	}
 
+	function riskLabel(value: string) {
+		const labels: Record<string, string> = {
+			normal: 'Normal',
+			warning: 'Perlu perhatian',
+			high: 'Bahaya',
+			locked: 'Terkunci',
+		};
+		return labels[value] ?? value;
+	}
+
+	function eventTypeLabel(type: string) {
+		return proctorEventLabel({ event_type: type, event_data: null } as ProctoringEvent);
+	}
+
 	function exportCsv() {
-		const rows = [['tanggal', 'ruang', 'nis', 'nama', 'event', 'kategori', 'risk', 'reviewed', 'detail']];
+		const rows = [['tanggal', 'ruang', 'nis', 'nama', 'kejadian', 'kategori', 'risiko', 'sudah_diperiksa', 'detail']];
 		for (const event of filteredEvents) {
 			const row = participants.find((p) => p.participant_id === event.participant_id);
 			rows.push([
@@ -123,9 +137,9 @@
 				event.room_name,
 				event.nis,
 				event.nama,
-				event.event_type,
+				proctorEventLabel(event),
 				proctorEvidenceCategoryLabel(classifyProctorEvent(event)),
-				riskBadge(row),
+				riskLabel(riskBadge(row)),
 				reviewedParticipantIds.has(event.participant_id) ? 'ya' : 'belum',
 				eventDetail(event)
 			]);
@@ -148,13 +162,13 @@
 <div class="mx-auto max-w-7xl space-y-6 p-4 md:p-6 print:max-w-none print:p-0">
 	<div class="flex flex-wrap items-start justify-between gap-3 print:hidden">
 		<div>
-			<p class="text-sm text-muted-foreground">Command Center</p>
+			<p class="text-sm text-muted-foreground">Panel Pengawasan</p>
 			<h1 class="text-2xl font-semibold tracking-tight">Rekap Insiden & Berita Acara CBT</h1>
-			<p class="text-sm text-muted-foreground">Filter, export CSV, dan cetak berita acara pengawasan per sesi.</p>
+			<p class="text-sm text-muted-foreground">Saring, unduh CSV, dan cetak berita acara pengawasan per sesi.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button variant="outline" href={resolve(`/asesmen/sesi/${sessionId}/proctoring`)}>Kembali</Button>
-			<Button variant="outline" onclick={exportCsv}>Export CSV</Button>
+			<Button variant="outline" onclick={exportCsv}>Unduh CSV</Button>
 			<Button onclick={() => window.print()}>Cetak Berita Acara</Button>
 		</div>
 	</div>
@@ -167,9 +181,9 @@
 
 		<div class="grid gap-4 md:grid-cols-4 print:hidden">
 			<Card.Root><Card.Content class="p-4"><p class="text-xs text-muted-foreground">Peserta</p><p class="text-2xl font-semibold">{participants.length}</p></Card.Content></Card.Root>
-			<Card.Root><Card.Content class="p-4"><p class="text-xs text-muted-foreground">Event</p><p class="text-2xl font-semibold">{events.length}</p></Card.Content></Card.Root>
+			<Card.Root><Card.Content class="p-4"><p class="text-xs text-muted-foreground">Kejadian</p><p class="text-2xl font-semibold">{events.length}</p></Card.Content></Card.Root>
 			<Card.Root><Card.Content class="p-4"><p class="text-xs text-muted-foreground">Insiden</p><p class="text-2xl font-semibold">{incidentCount}</p></Card.Content></Card.Root>
-			<Card.Root><Card.Content class="p-4"><p class="text-xs text-muted-foreground">Reviewed</p><p class="text-2xl font-semibold">{reviewedParticipantIds.size}</p></Card.Content></Card.Root>
+			<Card.Root><Card.Content class="p-4"><p class="text-xs text-muted-foreground">Diperiksa</p><p class="text-2xl font-semibold">{reviewedParticipantIds.size}</p></Card.Content></Card.Root>
 		</div>
 
 		<Card.Root class="print:hidden">
@@ -181,11 +195,11 @@
 				</select>
 				<input class="rounded-md border bg-background px-3 py-2 text-sm" placeholder="Cari nama/NIS" bind:value={participantFilter} />
 				<select class="rounded-md border bg-background px-3 py-2 text-sm" bind:value={eventTypeFilter}>
-					<option value="all">Semua event</option>
-					{#each eventTypeOptions as type}<option value={type}>{type}</option>{/each}
+					<option value="all">Semua kejadian</option>
+					{#each eventTypeOptions as type}<option value={type}>{eventTypeLabel(type)}</option>{/each}
 				</select>
 				<select class="rounded-md border bg-background px-3 py-2 text-sm" bind:value={riskFilter}>
-					<option value="all">Semua risiko</option><option value="normal">Normal</option><option value="warning">Warning</option><option value="high">High</option>
+					<option value="all">Semua risiko</option><option value="normal">Normal</option><option value="warning">Perlu perhatian</option><option value="high">Bahaya</option>
 				</select>
 				<select class="rounded-md border bg-background px-3 py-2 text-sm" bind:value={reviewFilter}>
 					<option value="all">Semua status</option><option value="reviewed">Sudah diperiksa</option><option value="unreviewed">Belum diperiksa</option>
@@ -205,7 +219,7 @@
 					<div><span class="text-muted-foreground">Jumlah insiden terfilter:</span> {filteredEvents.length}</div>
 				</div>
 				<Table.Root>
-					<Table.Header><Table.Row><Table.Head>Waktu</Table.Head><Table.Head>Ruang</Table.Head><Table.Head>Peserta</Table.Head><Table.Head>Event</Table.Head><Table.Head>Status</Table.Head><Table.Head>Detail/Tindakan</Table.Head></Table.Row></Table.Header>
+					<Table.Header><Table.Row><Table.Head>Waktu</Table.Head><Table.Head>Ruang</Table.Head><Table.Head>Peserta</Table.Head><Table.Head>Kejadian</Table.Head><Table.Head>Status</Table.Head><Table.Head>Detail/Tindakan</Table.Head></Table.Row></Table.Header>
 					<Table.Body>
 						{#each filteredEvents as event}
 							{@const row = participants.find((p) => p.participant_id === event.participant_id)}
@@ -214,7 +228,7 @@
 								<Table.Cell>{event.room_name}</Table.Cell>
 								<Table.Cell><div class="font-medium">{event.nama}</div><div class="text-xs text-muted-foreground">{event.nis}</div></Table.Cell>
 								<Table.Cell><Badge variant="outline">{proctorEventLabel(event)}</Badge></Table.Cell>
-								<Table.Cell><Badge variant="outline">{reviewedParticipantIds.has(event.participant_id) ? 'reviewed' : riskBadge(row)}</Badge></Table.Cell>
+								<Table.Cell><Badge variant="outline">{reviewedParticipantIds.has(event.participant_id) ? 'sudah diperiksa' : riskLabel(riskBadge(row))}</Badge></Table.Cell>
 								<Table.Cell class="max-w-md text-xs">{eventDetail(event)}</Table.Cell>
 							</Table.Row>
 						{/each}
@@ -222,7 +236,7 @@
 				</Table.Root>
 				<div class="grid gap-8 pt-8 text-center text-sm md:grid-cols-3 print:grid-cols-3">
 					<div><p>Pengawas Ruang</p><div class="h-16"></div><p class="border-t pt-2">Nama & Tanda Tangan</p></div>
-					<div><p>Operator/Admin CBT</p><div class="h-16"></div><p class="border-t pt-2">Nama & Tanda Tangan</p></div>
+					<div><p>Operator/Admin Ujian</p><div class="h-16"></div><p class="border-t pt-2">Nama & Tanda Tangan</p></div>
 					<div><p>Ketua Panitia</p><div class="h-16"></div><p class="border-t pt-2">Nama & Tanda Tangan</p></div>
 				</div>
 			</Card.Content>

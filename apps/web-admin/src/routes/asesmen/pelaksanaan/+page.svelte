@@ -23,14 +23,14 @@
 	const adminDayTasks: DayTask[] = [
 		{
 			title: 'Pantau Sesi Hari Ini',
-			description: 'Buka daftar sesi dengan fokus jadwal hari ini untuk memastikan ujian aktif dan token terkendali.',
+			description: 'Buka daftar sesi dengan fokus jadwal hari ini untuk memastikan ujian aktif dan kode ujian terkendali.',
 			href: '/asesmen/sesi',
 			query: '?schedule=today',
 			cta: 'Pantau Sesi',
 			tone: 'monitor'
 		},
 		{
-			title: 'Dashboard Ruang',
+			title: 'Panel Ruang',
 			description: 'Masuk ke pantauan ruang untuk membantu pengawas membaca status peserta dan kebutuhan tindak lanjut.',
 			href: '/asesmen/pengawasan',
 			cta: 'Buka Ruang',
@@ -38,7 +38,7 @@
 		},
 		{
 			title: 'Panduan BYOD',
-			description: 'Gunakan ringkasan status koneksi, submit readiness, dan panduan perangkat siswa saat ujian berlangsung.',
+			description: 'Gunakan ringkasan status koneksi, kesiapan kirim ujian, dan panduan perangkat siswa saat ujian berlangsung.',
 			href: '/asesmen/aplikasi-siswa',
 			cta: 'Baca Panduan',
 			tone: 'guide'
@@ -54,7 +54,7 @@
 
 	const operatorDayTasks: DayTask[] = [
 		{
-			title: 'Dashboard Ruang',
+			title: 'Panel Ruang',
 			description: 'Masuk ke pantauan ruang untuk membantu pengawas membaca status peserta dan kebutuhan tindak lanjut.',
 			href: '/asesmen/pengawasan',
 			cta: 'Buka Ruang',
@@ -62,16 +62,16 @@
 		},
 		{
 			title: 'Panduan BYOD',
-			description: 'Gunakan ringkasan status koneksi, submit readiness, dan panduan perangkat siswa saat ujian berlangsung.',
+			description: 'Gunakan ringkasan status koneksi, kesiapan kirim ujian, dan panduan perangkat siswa saat ujian berlangsung.',
 			href: '/asesmen/aplikasi-siswa',
 			cta: 'Baca Panduan',
 			tone: 'guide'
 		},
 		{
-			title: 'Status Guide',
+			title: 'Panduan Status',
 			description: 'Samakan bahasa status Tersambung, Lokal, Waspada, Gangguan, dan Menurun untuk siswa dan pengawas.',
 			href: '/asesmen/aplikasi-siswa',
-			cta: 'Buka Status Guide',
+			cta: 'Buka Panduan Status',
 			tone: 'monitor'
 		}
 	];
@@ -103,11 +103,11 @@
 			<div class="max-w-3xl space-y-3">
 				<div class="flex flex-wrap items-center gap-2">
 					<Badge class="border-primary/20 bg-card text-primary" variant="outline">CBT · Hari-H</Badge>
-					<Badge class="border-border bg-card text-muted-foreground" variant="outline">Tanpa API</Badge>
+					<Badge class="border-border bg-card text-muted-foreground" variant="outline">Tanpa perubahan data</Badge>
 				</div>
 				<h1 class="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Pelaksanaan CBT</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-					Fokus hari ujian dibuat ringkas: pantau sesi aktif, buka dashboard ruang, baca panduan BYOD, dan cetak kartu dari
+					Fokus hari ujian dibuat ringkas: pantau sesi aktif, buka panel ruang, baca panduan BYOD, dan cetak kartu dari
 					kegiatan bila diperlukan.
 				</p>
 			</div>
@@ -115,7 +115,7 @@
 				{#if canOpenPersiapan}
 					<Button href={resolve('/asesmen/persiapan')} variant="outline">Kembali ke Persiapan</Button>
 				{:else}
-					<Button href={resolve('/asesmen')} variant="outline">Kembali ke Dashboard</Button>
+					<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda</Button>
 				{/if}
 				<Button href={resolve('/asesmen/aplikasi-siswa')}>Panduan BYOD</Button>
 			</div>
@@ -155,12 +155,12 @@
 					Mulai dari sesi hari ini, lanjutkan ke ruang bila ada peserta bermasalah, lalu gunakan BYOD sebagai bahasa bersama
 					untuk siswa dan pengawas.
 				{:else}
-					Gunakan halaman ini untuk membuka dashboard ruang dan panduan BYOD tanpa masuk ke pengaturan sesi admin.
+					Gunakan halaman ini untuk membuka panel ruang dan panduan BYOD tanpa masuk ke pengaturan sesi admin.
 				{/if}
 			</Card.Description>
 			</Card.Header>
 			<Card.Footer>
-				<Button href={resolve('/asesmen')} variant="outline" class="w-full border-primary/20 text-primary hover:bg-primary/10">Beranda CBT</Button>
+				<Button href={resolve('/asesmen')} variant="outline" class="w-full border-primary/20 text-primary hover:bg-primary/10">Beranda Ujian</Button>
 			</Card.Footer>
 		</Card.Root>
 	</section>
@@ -170,10 +170,10 @@
 		<div class="max-w-lg rounded-2xl border border-border bg-card p-8 shadow-sm">
 			<h2 class="text-xl font-semibold text-foreground">Akses terbatas</h2>
 			<p class="mt-3 text-sm leading-6 text-muted-foreground">
-				Fase pelaksanaan CBT hanya tersedia untuk admin, guru, dan staf. Silakan kembali ke Dashboard CBT.
+				Fase pelaksanaan CBT hanya tersedia untuk admin, guru, dan staf. Silakan kembali ke Beranda Ujian.
 			</p>
 			<div class="mt-6">
-				<Button href={resolve('/asesmen')} variant="outline">Kembali ke Dashboard CBT</Button>
+				<Button href={resolve('/asesmen')} variant="outline">Kembali ke Beranda Ujian</Button>
 			</div>
 		</div>
 	</div>

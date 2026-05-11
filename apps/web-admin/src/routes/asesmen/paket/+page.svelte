@@ -448,7 +448,7 @@
 	}
 
 	function handlePackagesRenderError(error: unknown) {
-		console.error('CBT packages render failed', error);
+		console.error('Daftar paket soal belum dapat ditampilkan', error);
 	}
 
 	function showToast(msg: string) {
@@ -539,7 +539,7 @@
 	});
 </script>
 
-	<svelte:head><title>{eventId ? 'Paket Event CBT' : 'Template Paket CBT'} — MTSN 2 Kolut</title></svelte:head>
+	<svelte:head><title>{eventId ? 'Paket Kegiatan Ujian' : 'Format Paket Ujian'} — MTSN 2 Kolut</title></svelte:head>
 
 <div class="space-y-6">
 	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
@@ -555,7 +555,7 @@
 				{#if eventId}
 					<a href={resolve(`/asesmen/kegiatan/${eventId}`)} class="inline-flex items-center rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm font-semibold text-success hover:bg-success/15">Kembali ke Event</a>
 				{/if}
-				<a href={resolve('/asesmen')} class="inline-flex items-center rounded-md border border-success/20 bg-card px-3 py-2 text-sm font-semibold text-success hover:bg-success/10">Beranda CBT</a>
+				<a href={resolve('/asesmen')} class="inline-flex items-center rounded-md border border-success/20 bg-card px-3 py-2 text-sm font-semibold text-success hover:bg-success/10">Beranda Ujian</a>
 				<a href={createPackageHref} class="inline-flex items-center rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Buat Paket</a>
 			</div>
 		</div>
@@ -681,7 +681,7 @@
 						{:else}
 							{#if hiddenScopedQuestionCount > 0}
 								<div class="mb-2 rounded-md border border-accent bg-accent/60 px-3 py-2 text-xs text-accent-foreground">
-									{hiddenScopedQuestionCount} soal terbit disembunyikan karena {eventId ? 'tertaut ke kegiatan lain' : 'khusus kegiatan tertentu'}. Pool ini hanya memakai {eventId ? 'soal reusable dan soal kegiatan ini' : 'soal reusable/global'}.
+									{hiddenScopedQuestionCount} soal terbit disembunyikan karena {eventId ? 'tertaut ke kegiatan lain' : 'khusus kegiatan tertentu'}. Pool ini hanya memakai {eventId ? 'soal pakai ulang dan soal kegiatan ini' : 'soal pakai ulang/global'}.
 								</div>
 							{/if}
 							<div class="border rounded-md max-h-64 overflow-y-auto">

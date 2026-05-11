@@ -108,9 +108,27 @@ git commit -m "docs(ui): audit operator-facing copy across modules"
 
 Fokus pada kegiatan asesmen, sesi ujian, pengawasan ujian, paket soal, aplikasi siswa, kartu ujian, berita acara, dan hasil.
 
+**Implementation Notes (2026-05-12):**
+
+- Membersihkan copy operator pada 25 file Svelte modul Asesmen.
+- Istilah teknis user-facing yang diganti mencakup token, proctoring, session, event, package, readiness, matrix, release/build/version, endpoint/API/base URL, payload/JSON, dan pesan render failed.
+- Padanan utama: kode ujian/kode ruang/kode akses, pengawasan ujian, sesi ujian, kegiatan asesmen, paket soal, kesiapan ujian, tabel perangkat, rilis/versi aplikasi, alamat layanan sistem, data pengawasan, dan belum dapat ditampilkan.
+- Tidak mengubah route, endpoint, tipe data, nama variabel internal, atau logic operasional ujian.
+- Audit residual Tahap 2–3: `visible 0`, `code_only 443`.
+- Verifikasi: `npm --prefix apps/web-admin run check` PASS (`0 errors and 0 warnings`).
+
 ## Tahap 3 — Bank Soal
 
 Fokus pada tambah soal, impor soal, verifikasi, analisis butir, pengaturan bank soal, dan mapel/KD.
+
+**Implementation Notes (2026-05-12):**
+
+- Membersihkan copy operator pada komponen/halaman Bank Soal yang terkena audit: dashboard kesehatan, daftar soal, panel impor, pemeriksaan, workspace penyusun soal, dan pengaturan.
+- Istilah teknis user-facing yang diganti mencakup template, dry-run, error, permission, event, bulk, workflow, dan render failed.
+- Padanan utama: format isian, cek data sebelum impor, masalah, izin akses, kegiatan, aksi massal, alur verifikasi, dan belum dapat ditampilkan.
+- Tidak mengubah alur impor, penyusun soal, verifikasi, atau integrasi layanan.
+- Audit residual Tahap 2–3: `visible 0`, `code_only 443`.
+- Verifikasi: `npm --prefix apps/web-admin run check` PASS (`0 errors and 0 warnings`).
 
 ## Tahap 4 — Pengaturan & Akun
 

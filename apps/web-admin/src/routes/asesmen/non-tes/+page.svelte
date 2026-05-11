@@ -115,7 +115,7 @@
 		{ value: 'lainnya', label: 'Lainnya' },
 	] as const;
 	const STATUSES = [
-		{ value: 'draft', label: 'Draft' },
+		{ value: 'draft', label: 'Konsep' },
 		{ value: 'active', label: 'Aktif' },
 		{ value: 'closed', label: 'Ditutup' },
 		{ value: 'archived', label: 'Arsip' },
@@ -241,12 +241,12 @@
 		const unsyncedCount = syncFreshnessCount(item);
 		if (!item.grade_component_id) {
 			if (item.reviewed_submissions > 0) {
-				return `${item.reviewed_submissions} nilai reviewed siap dikirim ke gradebook.`;
+				return `${item.reviewed_submissions} nilai yang sudah dinilai siap dikirim ke buku nilai.`;
 			}
-			return 'Belum ada nilai reviewed yang bisa dikirim ke gradebook.';
+			return 'Belum ada nilai yang sudah dinilai untuk dikirim ke buku nilai.';
 		}
 		if (unsyncedCount > 0) {
-			return `${unsyncedCount} nilai reviewed berubah setelah sinkron terakhir. Kirim ulang agar gradebook mutakhir.`;
+			return `${unsyncedCount} nilai yang sudah dinilai berubah setelah sinkron terakhir. Kirim ulang agar buku nilai mutakhir.`;
 		}
 		return `Sinkron terakhir ${formatDateTime(item.grade_synced_at)}${item.grade_synced_by ? ` oleh ${item.grade_synced_by}` : ''}.`;
 	}
@@ -331,11 +331,11 @@
 	}
 
 	function handleRenderError(error: unknown) {
-		console.error('CBT non-test assessment render failed', error);
+		console.error('Asesmen non-tes belum dapat ditampilkan', error);
 	}
 
 	function handleSubmissionsRenderError(error: unknown) {
-		console.error('CBT non-test submissions render failed', error);
+		console.error('Kiriman asesmen non-tes belum dapat ditampilkan', error);
 	}
 
 	function resetForm() {
@@ -561,7 +561,7 @@
 			operationState = {
 				tone: 'success',
 				title: 'Nilai Non-Tes Tersinkron',
-				message: `${syncedEntries} nilai dari "${item.title}" sudah menjadi komponen nilai resmi. ${skippedEntries} entri dilewati karena belum reviewed.`,
+				message: `${syncedEntries} nilai dari "${item.title}" sudah menjadi komponen nilai resmi. ${skippedEntries} entri dilewati karena belum dinilai.`,
 			};
 			await refresh();
 			if (selectedAssessment?.id === item.id) {
@@ -611,7 +611,7 @@
 				operationState = {
 					tone: 'warning',
 					title: 'Nilai Berubah Setelah Sinkron',
-					message: `Nilai ${row.student_name} sudah diperbarui. Kirim ulang nilai "${assessment.title}" agar gradebook mengambil perubahan terbaru.`,
+					message: `Nilai ${row.student_name} sudah diperbarui. Kirim ulang nilai "${assessment.title}" agar buku nilai mengambil perubahan terbaru.`,
 				};
 			}
 			openScoringPanel(assessment);
@@ -663,7 +663,7 @@
 			<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">CBT / Penilaian Manual</p>
 			<h1 class="mt-1 text-2xl font-semibold text-foreground">Asesmen Non-Tes</h1>
 			<p class="mt-1 max-w-3xl text-sm text-muted-foreground">
-				Kelola praktik, portofolio, proyek, penugasan, dan observasi tanpa mencampurnya dengan bank soal ujian token.
+				Kelola praktik, portofolio, proyek, penugasan, dan observasi tanpa mencampurnya dengan bank soal ujian berkode.
 			</p>
 		</div>
 		<LoadingButton onclick={openCreateForm}>+ Buat Asesmen</LoadingButton>
@@ -684,7 +684,7 @@
 		</Card.Root>
 		<Card.Root class="border-accent shadow-sm">
 			<Card.Content class="p-4">
-				<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Draft</p>
+				<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Konsep</p>
 				<p class="mt-1 text-2xl font-semibold text-accent-foreground">{summary.draft}</p>
 			</Card.Content>
 		</Card.Root>
@@ -719,7 +719,7 @@
 				<div class="flex flex-wrap items-center justify-between gap-3">
 					<div>
 						<Card.Title class="text-base">{editingId ? 'Edit Asesmen Non-Tes' : 'Buat Asesmen Non-Tes'}</Card.Title>
-						<Card.Description>Mode Pemula ringkas; mode Advance membuka rubrik, bukti, dan checklist observasi.</Card.Description>
+						<Card.Description>Mode Pemula ringkas; mode Lengkap membuka rubrik, bukti, dan daftar pemeriksaan observasi.</Card.Description>
 					</div>
 					<div class="inline-flex rounded-md border border-border bg-card p-1">
 						<button
@@ -734,7 +734,7 @@
 							class={`rounded px-3 py-1.5 text-xs font-semibold ${formMode === 'advance' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/50'}`}
 							onclick={() => (formMode = 'advance')}
 						>
-							Advance
+							Lengkap
 						</button>
 					</div>
 				</div>
@@ -824,7 +824,7 @@
 						</div>
 					</div>
 					<div>
-						<label for="non-test-checklist" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Checklist Observasi</label>
+						<label for="non-test-checklist" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Daftar Pemeriksaan Observasi</label>
 						<Textarea id="non-test-checklist" rows={4} placeholder="Satu indikator per baris" bind:value={checklistText} />
 					</div>
 				{/if}
@@ -914,7 +914,7 @@
 					<div class="flex flex-wrap items-start justify-between gap-2">
 						<div>
 							<Card.Title class="text-base">Daftar Asesmen ({overview.totalItems})</Card.Title>
-							<Card.Description>Semua item di sini dinilai manual dan tidak masuk runtime ujian token.</Card.Description>
+							<Card.Description>Semua item di sini dinilai manual dan tidak masuk pelaksanaan ujian berkode.</Card.Description>
 						</div>
 						{#if filterNeedsSync}
 							<Badge class="border border-warning/30 bg-warning/15 text-warning">Filter Perlu Sinkron</Badge>
@@ -1099,7 +1099,7 @@
 				<div class="border-b border-border bg-muted/50 p-4">
 					<div class="grid gap-3 lg:grid-cols-[1fr_12rem_12rem_10rem]">
 						<div>
-							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Status Sinkron Gradebook</p>
+							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Status Sinkron Buku Nilai</p>
 							<div class="mt-2 flex flex-wrap items-center gap-2">
 								<Badge class={`border text-xs ${gradeSyncBadgeClass(selectedAssessment)}`}>{gradeSyncLabel(selectedAssessment)}</Badge>
 								{#if syncFreshnessCount(selectedAssessment) > 0}
@@ -1114,7 +1114,7 @@
 							<p class="text-xs text-muted-foreground">{selectedAssessment.grade_synced_by || 'Belum ada operator'}</p>
 						</div>
 						<div>
-							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Review Terakhir</p>
+							<p class="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Penilaian Terakhir</p>
 							<p class="mt-2 text-sm font-medium text-foreground">{formatDateTime(selectedAssessment.last_reviewed_at)}</p>
 							<p class="text-xs text-muted-foreground">{selectedAssessment.reviewed_submissions}/{selectedAssessment.total_submissions} dinilai</p>
 						</div>

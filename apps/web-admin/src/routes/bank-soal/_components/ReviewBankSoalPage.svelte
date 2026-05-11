@@ -59,7 +59,7 @@
 		return error instanceof Error && error.message.trim() ? error.message : fallback;
 	}
 
-	function stemPreview(question: Question): string {
+	function stemPratinjau(question: Question): string {
 		const text = htmlToPlainText(question.stem_html || question.question_text || '');
 		return text || '(Soal kosong)';
 	}
@@ -123,7 +123,7 @@
 	async function decide(action: 'approve' | 'reject') {
 		if (!activeQuestion) return;
 		if (!canReview) {
-			toast.warning('Aksi reviewer membutuhkan permission Bank Soal review.');
+			toast.warning('Aksi pemeriksa membutuhkan izin akses verifikasi Bank Soal.');
 			return;
 		}
 		const trimmed = notes.trim();
@@ -152,7 +152,7 @@
 	let reviewChecklist = $derived.by(() => {
 		const q = activeQuestion;
 		return [
-			{ label: 'Naskah', desc: q ? `${stemPreview(q).length} karakter` : 'Belum ada soal aktif', ok: Boolean(q && stemPreview(q).length >= 5) },
+			{ label: 'Naskah', desc: q ? `${stemPratinjau(q).length} karakter` : 'Belum ada soal aktif', ok: Boolean(q && stemPratinjau(q).length >= 5) },
 			{ label: 'Kunci/Rubrik', desc: q?.answer_key || q?.rubric_html ? 'Tersedia untuk reviewer' : 'Belum terlihat', ok: Boolean(q?.answer_key || q?.rubric_html) },
 			{ label: 'Pembahasan', desc: q?.explanation_html ? 'Ada pembahasan/catatan' : 'Opsional', ok: Boolean(q?.explanation_html) },
 			{ label: 'Catatan', desc: notes.trim() ? `${notes.trim().length} karakter catatan` : 'Opsional approve, wajib reject', ok: notes.trim().length >= 8 },
@@ -206,7 +206,7 @@
 			<Skeleton class="h-96 w-full" />
 		{/snippet}
 		{#snippet failed(error, reset)}
-			<RecoveryPanel title="Antrean Review Belum Tersaji" message={errorMessage(error, 'Gagal memuat antrean review.')} onRetry={() => { reset?.(); loadQueue(); }} />
+			<RecoveryPanel title="Antrean Verifikasi Belum Tersaji" message={errorMessage(error, 'Gagal memuat antrean review.')} onRetry={() => { reset?.(); loadQueue(); }} />
 		{/snippet}
 		{#snippet children()}
 			{#if !activeQuestion}
@@ -221,11 +221,11 @@
 								<span>{activeQuestion.code ?? 'Tanpa kode'}</span>
 								{#if activeQuestion.author_username}<span>Guru: {activeQuestion.author_username}</span>{/if}
 							</div>
-							<h2 class="mt-2 line-clamp-2 text-lg font-bold text-foreground">{stemPreview(activeQuestion)}</h2>
+							<h2 class="mt-2 line-clamp-2 text-lg font-bold text-foreground">{stemPratinjau(activeQuestion)}</h2>
 						</div>
 						<div class="space-y-4 bg-muted/50 p-4">
 							{#if activeQuestion.stimulus_html}<div class="rounded-xl border border-border bg-card p-3"><p class="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Stimulus</p><RichContent html={activeQuestion.stimulus_html} class="prose prose-sm max-w-none latex-preview" /></div>{/if}
-							<div class="rounded-xl border border-border bg-card p-3"><p class="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pertanyaan</p><RichContent html={activeQuestion.stem_html || activeQuestion.question_text || stemPreview(activeQuestion)} class="prose prose-sm max-w-none latex-preview" /></div>
+							<div class="rounded-xl border border-border bg-card p-3"><p class="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pertanyaan</p><RichContent html={activeQuestion.stem_html || activeQuestion.question_text || stemPratinjau(activeQuestion)} class="prose prose-sm max-w-none latex-preview" /></div>
 							{#if activeQuestion.options?.length}
 								<div class="rounded-xl border border-border bg-card p-3">
 									<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Opsi / Pasangan</p>
@@ -266,7 +266,7 @@
 							<div class="space-y-2">{#each reviewChecklist as item (item.label)}<div class="rounded-lg border px-3 py-2 text-xs {item.ok ? 'border-primary/20 bg-primary/10 text-primary' : 'border-warning/30 bg-warning/10 text-warning'}"><div class="flex items-center justify-between gap-2"><span class="font-semibold">{item.label}</span><span>{item.ok ? 'OK' : 'Cek'}</span></div><p class="mt-1 opacity-80">{item.desc}</p></div>{/each}</div>
 						</div>
 						<div class="rounded-xl border border-border bg-card p-4"><p class="mb-2 text-sm font-semibold text-foreground">Timeline</p>{#if timeline.length > 0}<div class="space-y-2">{#each timeline.slice(0, 8) as item, index (`timeline-${item.id ?? index}`)}<div class="rounded border border-border bg-muted/50 px-2 py-1.5 text-xs"><div class="flex flex-wrap items-center gap-1"><p class="font-semibold text-success">{item.action ?? item.status ?? 'Perubahan'}</p>{#if item.actor_username}<span class="text-muted-foreground">oleh {item.actor_username}</span>{/if}</div>{#if item.notes}<p class="mt-1 text-muted-foreground">{item.notes}</p>{/if}{#if item.created_at}<p class="mt-1 text-muted-foreground">{new Date(item.created_at).toLocaleString('id-ID')}</p>{/if}</div>{/each}</div>{:else}<p class="text-xs text-muted-foreground">Timeline belum tersedia.</p>{/if}</div>
-						<div class="overflow-hidden rounded-xl border border-border bg-card"><div class="border-b border-border px-3 py-2 text-sm font-semibold text-foreground">Antrean Review</div><Table.Root><Table.Body>{#each queue.slice(0, 8) as item, index (item.id)}<Table.Row class={index === activeIndex ? 'bg-success/10' : ''}><Table.Cell><button type="button" class="block w-full text-left text-xs" onclick={() => { activeIndex = index; void loadActiveDetail(); }}>{stemPreview(item).slice(0, 64)}</button></Table.Cell></Table.Row>{/each}</Table.Body></Table.Root></div>
+						<div class="overflow-hidden rounded-xl border border-border bg-card"><div class="border-b border-border px-3 py-2 text-sm font-semibold text-foreground">Antrean Verifikasi</div><Table.Root><Table.Body>{#each queue.slice(0, 8) as item, index (item.id)}<Table.Row class={index === activeIndex ? 'bg-success/10' : ''}><Table.Cell><button type="button" class="block w-full text-left text-xs" onclick={() => { activeIndex = index; void loadActiveDetail(); }}>{stemPratinjau(item).slice(0, 64)}</button></Table.Cell></Table.Row>{/each}</Table.Body></Table.Root></div>
 					</aside>
 				</section>
 			{/if}

@@ -30,7 +30,7 @@
 			restore: 'Lulus',
 			audio: 'Lulus',
 			submit: 'Lulus',
-			note: 'Stabil untuk baseline uji awal'
+			note: 'Stabil untuk acuan uji awal'
 		},
 		{
 			vendor: 'Xiaomi',
@@ -43,7 +43,7 @@
 			restore: 'Perlu perhatian',
 			audio: 'Lulus',
 			submit: 'Lulus',
-			note: 'Perlu cek lagi saat app dibawa ke background'
+			note: 'Perlu cek lagi saat aplikasi dibawa ke latar belakang'
 		},
 		{
 			vendor: 'Oppo',
@@ -62,10 +62,10 @@
 
 	const focusChecks = [
 		'APK bisa dipasang tanpa langkah aneh tambahan.',
-		'Login token berhasil pada koneksi yang dipakai siswa.',
-		'Restore sesi tetap berjalan setelah app ditutup lalu dibuka lagi.',
+		'Masuk dengan kode ujian berhasil pada koneksi yang dipakai siswa.',
+		'Pemulihan sesi tetap berjalan setelah aplikasi ditutup lalu dibuka lagi.',
 		'Status Waspada dan Menurun muncul sesuai simulasi gangguan.',
-		'Submit hanya dilakukan saat koneksi kembali sehat.'
+		'Kirim ujian hanya dilakukan saat koneksi kembali sehat.'
 	];
 
 	function badgeClass(value: string) {
@@ -76,23 +76,23 @@
 </script>
 
 <svelte:head>
-	<title>Matriks Perangkat BYOD — MTsN 2 Kolaka Utara</title>
+	<title>Tabel Perangkat BYOD — MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <div class="space-y-6">
 	<section class="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card to-primary/10 p-6 shadow-sm">
 		<div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 			<div class="max-w-3xl space-y-3">
-				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Perangkat & Kesiapan · Monitoring</p>
+				<p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Perangkat & Kesiapan · Pemantauan</p>
 				<h1 class="text-3xl font-semibold tracking-tight text-foreground">Perbandingan Perangkat BYOD</h1>
 				<p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-					Bagian pendukung setelah monitoring hari-H. Gunakan untuk membaca kesiapan perangkat siswa:
-					install, login, restore, media, koneksi, dan submit.
+					Bagian pendukung setelah pemantauan hari-H. Gunakan untuk membaca kesiapan perangkat siswa:
+					pemasangan, masuk ujian, pemulihan sesi, media, koneksi, dan kirim ujian.
 				</p>
 			</div>
 			<div class="flex flex-wrap gap-3">
-				<Button href="/asesmen/aplikasi-siswa">Kembali ke Monitoring</Button>
-				<Button href="/asesmen/pengawasan" variant="outline">Dashboard Ruang</Button>
+				<Button href="/asesmen/aplikasi-siswa">Kembali ke Pemantauan</Button>
+				<Button href="/asesmen/pengawasan" variant="outline">Panel Ruang</Button>
 				<Button href="/asesmen/sesi?schedule=today" variant="outline">Sesi Hari Ini</Button>
 			</div>
 		</div>
@@ -102,11 +102,11 @@
 		<Card.Content class="grid gap-4 pt-6 md:grid-cols-3">
 			<div>
 				<p class="text-sm font-semibold text-primary">Pantau Ujian</p>
-				<p class="mt-1 text-sm leading-6 text-muted-foreground">Untuk hari-H, mulai dari Monitoring, sesi hari ini, atau dashboard ruang.</p>
+				<p class="mt-1 text-sm leading-6 text-muted-foreground">Untuk hari-H, mulai dari Pemantauan, sesi hari ini, atau panel ruang.</p>
 			</div>
 			<div>
 				<p class="text-sm font-semibold text-primary">Panduan BYOD</p>
-				<p class="mt-1 text-sm leading-6 text-muted-foreground">Status guide dan checklist submit tetap berada di halaman Monitoring.</p>
+				<p class="mt-1 text-sm leading-6 text-muted-foreground">Panduan status dan daftar pemeriksaan kirim tetap berada di halaman Pemantauan.</p>
 			</div>
 			<div>
 				<p class="text-sm font-semibold text-primary">Perangkat & Kesiapan</p>
@@ -118,9 +118,9 @@
 	<div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
 		<Card.Root class="border-border shadow-sm">
 			<Card.Header>
-				<Card.Title class="text-lg text-foreground">Template Contoh Matriks Perangkat</Card.Title>
+				<Card.Title class="text-lg text-foreground">Contoh Tabel Perangkat</Card.Title>
 				<Card.Description>
-					Baris di bawah adalah contoh/template, bukan hasil sertifikasi perangkat resmi sekolah.
+					Baris di bawah adalah contoh format, bukan hasil sertifikasi perangkat resmi sekolah.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-4">
@@ -133,11 +133,11 @@
 								<Table.Head>Android</Table.Head>
 								<Table.Head>RAM</Table.Head>
 								<Table.Head>Koneksi</Table.Head>
-								<Table.Head>Install</Table.Head>
-								<Table.Head>Login</Table.Head>
-								<Table.Head>Restore</Table.Head>
+								<Table.Head>Pasang</Table.Head>
+								<Table.Head>Masuk</Table.Head>
+								<Table.Head>Pulihkan</Table.Head>
 								<Table.Head>Audio</Table.Head>
-								<Table.Head>Submit</Table.Head>
+								<Table.Head>Kirim</Table.Head>
 								<Table.Head>Catatan</Table.Head>
 							</Table.Row>
 						</Table.Header>
@@ -196,21 +196,21 @@
 				</Card.Header>
 				<Card.Content class="space-y-4">
 					<div class="rounded-2xl border border-primary/20 bg-primary/10 p-4">
-						<p class="text-sm font-semibold text-primary">Layak dipakai produksi awal</p>
+						<p class="text-sm font-semibold text-primary">Layak dipakai pada pemakaian awal</p>
 						<p class="mt-2 text-sm leading-6 text-primary/80">
-							Fungsi inti lulus, restore stabil, submit sehat, dan perangkat tidak sering masuk status Menurun.
+							Fungsi inti lulus, pemulihan sesi stabil, kirim ujian sehat, dan perangkat tidak sering masuk status Menurun.
 						</p>
 					</div>
 					<div class="rounded-2xl border border-warning/30 bg-warning/10 p-4">
 						<p class="text-sm font-semibold text-warning">Layak dengan catatan</p>
 						<p class="mt-2 text-sm leading-6 text-warning/80">
-							Fungsi inti jalan, tetapi ada issue minor seperti audio lambat atau perlu refresh manual sesekali.
+							Fungsi inti jalan, tetapi ada catatan kecil seperti audio lambat atau perlu perbarui manual sesekali.
 						</p>
 					</div>
 					<div class="rounded-2xl border border-destructive/30 bg-destructive/10 p-4">
 						<p class="text-sm font-semibold text-destructive">Tidak direkomendasikan</p>
 						<p class="mt-2 text-sm leading-6 text-destructive/80">
-							Login, restore, atau submit sering gagal walau perangkat lain pada jaringan yang sama berjalan baik.
+							Masuk ujian, pemulihan sesi, atau kirim ujian sering gagal walau perangkat lain pada jaringan yang sama berjalan baik.
 						</p>
 					</div>
 				</Card.Content>

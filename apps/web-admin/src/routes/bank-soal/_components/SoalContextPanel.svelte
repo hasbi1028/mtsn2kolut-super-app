@@ -28,7 +28,7 @@
 		<div class="min-w-0">
 			<p class="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Konteks opsional</p>
 			<h2 class="mt-1 truncate text-sm font-semibold text-foreground">{selectedEventTitle}</h2>
-			<p class="mt-1 text-xs text-muted-foreground">Kegiatan membantu target kebutuhan; daftar soal tetap repositori reusable.</p>
+			<p class="mt-1 text-xs text-muted-foreground">Kegiatan membantu target kebutuhan; daftar soal tetap menjadi bank soal pakai ulang.</p>
 		</div>
 		<div class="grid gap-2 md:grid-cols-3">
 			<div>
@@ -39,7 +39,7 @@
 					onchange={(event) => onEventChange((event.currentTarget as HTMLSelectElement).value)}
 					class="h-9 w-full rounded-md border border-border bg-card px-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
 				>
-					<option value="">Tanpa kegiatan - bank reusable</option>
+					<option value="">Tanpa kegiatan - bank pakai ulang</option>
 					{#each events as event (event.id)}
 						<option value={event.id}>{event.title}{event.status ? ` · ${event.status}` : ''}</option>
 					{/each}
@@ -69,7 +69,7 @@
 	</div>
 	{#if !selectedEventId}
 		<div class="mt-3 rounded-lg border border-dashed border-border bg-muted/50 px-3 py-2 text-sm text-foreground">
-			<p class="font-semibold">Mode bank reusable aktif.</p>
+			<p class="font-semibold">Mode bank pakai ulang aktif.</p>
 			<p class="mt-1 text-xs leading-5 text-muted-foreground">Pilih kegiatan hanya saat perlu melihat target kebutuhan atau penugasan event tertentu.</p>
 		</div>
 	{/if}
