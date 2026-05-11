@@ -13,6 +13,7 @@
 	import EditableSelectCell from '$lib/components/editable/EditableSelectCell.svelte';
 	import EmptyStatePanel from '$lib/components/EmptyStatePanel.svelte';
 	import RecoveryPanel from '$lib/components/RecoveryPanel.svelte';
+	import { academicCopy } from '$lib/academic/copy';
 	import { bindBeforeUnload, confirmDiscardChanges } from '$lib/client/unsaved-changes';
 	import { readClientApiData, readClientJson } from '$lib/client/api';
 	import type { EditableOption } from '$lib/components/editable/types';
@@ -137,7 +138,7 @@
 
 	async function fetchMatrix(): Promise<SubjectAssignmentMatrix> {
 		return await fetch('/api/academic/subject-assignment-matrix').then((response) =>
-			readClientApiData<SubjectAssignmentMatrix>(response, 'Gagal memuat matriks guru mapel')
+			readClientApiData<SubjectAssignmentMatrix>(response, 'Gagal memuat tabel penugasan guru mapel')
 		);
 	}
 
@@ -253,13 +254,13 @@
 
 	function statusBadge(status: MatrixCell['status']) {
 		if (status === 'complete') return 'Lengkap';
-		if (status === 'missing_teacher') return 'Guru tidak aktif';
+		if (status === 'missing_teacher') return 'Guru perlu diperiksa';
 		return 'Belum ada';
 	}
 
 	function matrixErrorMessage(error: unknown) {
 		if (error instanceof Error && error.message.trim()) return error.message;
-		return 'Matriks guru mapel belum dapat dimuat. Periksa koneksi backend lalu coba lagi.';
+		return 'Tabel penugasan guru mapel belum dapat dimuat. Periksa koneksi layanan sistem lalu coba lagi.';
 	}
 
 	function handleRenderError(error: unknown) {
@@ -273,19 +274,19 @@
 </script>
 
 <svelte:head>
-	<title>Guru Mapel | MTsN 2 Kolaka Utara</title>
+	<title>Penugasan Guru Mapel | MTsN 2 Kolaka Utara</title>
 </svelte:head>
 
 <div class="space-y-6">
 	<div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
 		<div>
 			<p class="text-sm font-medium text-primary">Akademik</p>
-			<h1 class="text-2xl font-semibold tracking-normal text-foreground">Guru Mapel</h1>
+			<h1 class="text-2xl font-semibold tracking-normal text-foreground">Penugasan Guru Mapel</h1>
 			<p class="mt-1 max-w-2xl text-sm text-muted-foreground">
-				Matriks mapel dan rombel tahun ajaran aktif untuk menetapkan guru pengampu.
+				Tabel mapel dan rombel tahun ajaran aktif untuk menetapkan guru pengampu.
 			</p>
 		</div>
-		<Button variant="outline" onclick={() => void refreshMatrix()} disabled={refreshBusy || saveBusy} aria-label="Muat ulang guru mapel">
+		<Button variant="outline" onclick={() => void refreshMatrix()} disabled={refreshBusy || saveBusy} aria-label="Muat ulang penugasan guru mapel">
 			<RefreshCw class={`mr-2 size-4 ${refreshBusy ? 'animate-spin' : ''}`} />
 			Muat Ulang
 		</Button>
@@ -305,7 +306,7 @@
 
 		{#snippet failed(error, reset)}
 			<RecoveryPanel
-				title="Guru Mapel Belum Tersaji"
+				title="Penugasan Guru Mapel Belum Tersaji"
 				message={matrixErrorMessage(error)}
 				onRetry={() => {
 					reset?.();
@@ -317,19 +318,19 @@
 		<div class="grid gap-3 md:grid-cols-3">
 			<Card.Root>
 				<Card.Header class="pb-2">
-					<Card.Description>Tahun Ajaran Aktif</Card.Description>
+					<Card.Description>{academicCopy.labels.activeAcademicYear}</Card.Description>
 					<Card.Title class="text-xl">{matrix?.academic_year_name || 'Belum ada'}</Card.Title>
 				</Card.Header>
 			</Card.Root>
 			<Card.Root>
 				<Card.Header class="pb-2">
-					<Card.Description>Cell Lengkap</Card.Description>
+					<Card.Description>Penugasan lengkap</Card.Description>
 					<Card.Title class="text-2xl">{summary.complete}</Card.Title>
 				</Card.Header>
 			</Card.Root>
 			<Card.Root>
 				<Card.Header class="pb-2">
-					<Card.Description>Perlu Dilengkapi</Card.Description>
+					<Card.Description>Perlu dilengkapi</Card.Description>
 					<Card.Title class="text-2xl">{summary.missing}</Card.Title>
 				</Card.Header>
 			</Card.Root>
@@ -337,13 +338,13 @@
 
 		<Card.Root>
 			<Card.Header>
-				<Card.Title class="text-base">Matriks Pengampu</Card.Title>
-				<Card.Description>{summary.teachers} guru aktif tersedia sebagai pilihan.</Card.Description>
+				<Card.Title class="text-base">{academicCopy.labels.teacherAssignmentTable}</Card.Title>
+				<Card.Description>{summary.teachers} guru aktif tersedia sebagai pilihan pengampu.</Card.Description>
 			</Card.Header>
 			<Card.Content class="space-y-4">
 				<div class="grid gap-3 md:grid-cols-[12rem_1fr]">
 					<div class="space-y-1">
-						<label for="matrix-level-filter" class="text-sm font-medium">Tingkat</label>
+						<label for="matrix-level-filter" class="text-sm font-medium">{academicCopy.labels.classLevel}</label>
 						<select
 							id="matrix-level-filter"
 							class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -357,7 +358,7 @@
 						</select>
 					</div>
 					<div class="space-y-1">
-						<label for="matrix-subject-search" class="text-sm font-medium">Cari Mapel</label>
+						<label for="matrix-subject-search" class="text-sm font-medium">Cari mapel</label>
 						<div class="relative">
 							<Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 							<Input id="matrix-subject-search" class="pl-9" bind:value={subjectSearch} placeholder="Nama, kode, atau kategori" disabled={saveBusy} />
@@ -368,7 +369,7 @@
 				{#if !matrix?.academic_year_id}
 					<EmptyStatePanel compact title="Tahun ajaran aktif belum ada" description="Aktifkan tahun ajaran sebelum mengatur guru mapel." />
 				{:else if visibleClasses.length === 0 || visibleSubjects.length === 0}
-					<EmptyStatePanel compact title="Data matriks kosong" description="Pastikan rombel dan mapel aktif tersedia untuk tahun ajaran berjalan." />
+					<EmptyStatePanel compact title="Tabel penugasan masih kosong" description="Pastikan rombel dan mapel aktif tersedia untuk tahun ajaran berjalan." />
 				{:else}
 					<div class="overflow-x-auto rounded-md border">
 						<Table.Root>
@@ -400,7 +401,7 @@
 														<Badge variant="secondary">Rapor</Badge>
 													{/if}
 													{#if subject.is_schedule_activity}
-														<Badge variant="outline">Kegiatan</Badge>
+														<Badge variant="outline">Aktivitas jadwal</Badge>
 													{/if}
 												</div>
 											</div>
@@ -454,8 +455,8 @@
 		<DirtyChangeBar
 			count={dirtyCount}
 			saving={saveBusy}
-			saveLabel={saveBusy ? 'Menyimpan...' : 'Simpan Perubahan'}
-			discardLabel="Batalkan"
+			saveLabel={saveBusy ? 'Menyimpan...' : academicCopy.actions.saveAll}
+			discardLabel={academicCopy.actions.cancel}
 			onsave={() => void saveChangedCells()}
 			ondiscard={() => resetCellDrafts()}
 		/>

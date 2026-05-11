@@ -230,6 +230,8 @@ npm --prefix apps/web-admin run check
 npm --prefix apps/web-admin run check
 ```
 
+**Implementation note:** Selesai pada Tahap 5. Halaman `apps/web-admin/src/routes/akademik/mapel/+page.svelte` dan `apps/web-admin/src/routes/akademik/guru-mapel/+page.svelte` dibersihkan dari istilah user-facing seperti `matrix/matriks`, `cell`, `backend`, `default`, `flag`, `error`, dan `Kegiatan` yang rancu. Copy diganti menjadi `Pengaturan mapel`, `Dipakai untuk asesmen`, `Masuk rapor`, `Aktivitas jadwal`, `JP per minggu`, `Tabel penugasan guru mapel`, `Penugasan lengkap`, dan `Perlu dilengkapi`.
+
 ---
 
 ## Task 6: Bersihkan Rombel, Detail Rombel, Jadwal, dan Siswa
