@@ -42,6 +42,7 @@ type fakeAcademicService struct {
 	activateYearID     pgtype.UUID
 	activateConfirm    string
 	previewInput       service.YearRolloverPreviewInput
+	applyInput         service.YearRolloverApplyInput
 	dryRunInput        service.AcademicImportDryRunInput
 	createClassArg     db.CreateSchoolClassParams
 	createSubjectArg   db.CreateSubjectParams
@@ -194,6 +195,21 @@ func (f *fakeAcademicService) PreviewYearRollover(_ context.Context, input servi
 			StudentsToPromote: 12,
 		},
 		Warnings: []string{"Preview ini tidak mengubah database."},
+	}, nil
+}
+
+func (f *fakeAcademicService) ApplyYearRollover(_ context.Context, input service.YearRolloverApplyInput) (service.YearRolloverApplyResult, error) {
+	f.applyInput = input
+	if f.previewErr != nil {
+		return service.YearRolloverApplyResult{}, f.previewErr
+	}
+	return service.YearRolloverApplyResult{
+		SourceAcademicYearName: "2025/2026",
+		TargetAcademicYearName: "2026/2027",
+		Counts: service.YearRolloverApplyCounts{
+			StudentsPromoted: 12,
+		},
+		Warnings: []string{"Apply rollover selesai."},
 	}, nil
 }
 

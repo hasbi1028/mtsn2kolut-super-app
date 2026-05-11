@@ -287,6 +287,38 @@ WHERE c.academic_year_id = $1
   AND cha.is_active = TRUE
 GROUP BY cha.class_id;
 
+-- name: ListYearRolloverHomeroomAssignmentDetails :many
+SELECT
+    cha.id,
+    cha.class_id,
+    cha.employee_id,
+    cha.academic_year_id,
+    cha.start_date,
+    cha.end_date,
+    cha.is_active,
+    cha.notes
+FROM class_homeroom_assignments cha
+JOIN school_classes c ON c.id = cha.class_id
+WHERE c.academic_year_id = $1
+  AND c.is_active = TRUE
+  AND cha.is_active = TRUE
+ORDER BY c.level ASC, c.name ASC, cha.start_date DESC;
+
+-- name: CountActiveHomeroomAssignmentByClass :one
+SELECT COUNT(*)::int
+FROM class_homeroom_assignments
+WHERE class_id = $1
+  AND is_active = TRUE;
+
+-- name: PromoteYearRolloverStudent :execrows
+UPDATE students
+SET class_id = sqlc.arg(target_class_id),
+    updated_at = NOW()
+WHERE id = sqlc.arg(student_id)
+  AND class_id = sqlc.arg(source_class_id)
+  AND is_active = TRUE
+  AND status = 'active';
+
 -- name: ListAcademicImportStudents :many
 SELECT
     id,

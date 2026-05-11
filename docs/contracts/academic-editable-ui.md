@@ -246,6 +246,7 @@ Endpoint backend:
 ```http
 POST /api/academic/years/{id}/activate
 POST /api/academic/year-rollover/preview
+POST /api/academic/year-rollover/apply
 POST /api/academic/import-export/dry-run
 ```
 
@@ -254,6 +255,7 @@ Endpoint SvelteKit BFF:
 ```http
 POST /api/academic/years/{id}/activate
 POST /api/academic/year-rollover/preview
+POST /api/academic/year-rollover/apply
 GET /api/academic/import-export/templates/{kind}
 POST /api/academic/import-export/dry-run
 ```
@@ -321,6 +323,43 @@ export type YearRolloverPreview = {
   warnings: string[];
 };
 
+export type YearRolloverApplyInput = {
+  source_academic_year_id?: string;
+  target_academic_year_id: string;
+  confirmation: string; // harus sama persis dengan preview.apply_challenge
+  safety_token?: string; // alias backward-compatible untuk confirmation
+};
+
+export type YearRolloverApplyResult = {
+  source_academic_year_id: string;
+  source_academic_year_name: string;
+  target_academic_year_id: string;
+  target_academic_year_name: string;
+  counts: {
+    classes_created: number;
+    classes_reused: number;
+    students_promoted: number;
+    students_skipped: number;
+    homerooms_copied: number;
+    assignments_copied: number;
+    timetable_slots_copied: number;
+  };
+  classes: Array<{
+    source_class_id: string;
+    source_code: string;
+    source_name: string;
+    source_level: string;
+    target_class_id: string;
+    target_code: string;
+    target_name: string;
+    target_level: string;
+    action: 'created' | 'reused' | 'skipped_inactive_target' | string;
+  }>;
+  students_promoted: YearRolloverPreview['students_to_promote'];
+  students_skipped: YearRolloverPreview['students_without_next_class'];
+  warnings: string[];
+};
+
 export type AcademicImportDryRunResult = {
   kind: 'siswa' | 'rombel' | 'guru_mapel' | 'jadwal' | string;
   total_rows: number;
@@ -333,14 +372,16 @@ export type AcademicImportDryRunResult = {
 };
 ```
 
-Validation dan guardrails Sprint 5:
+Validation dan guardrails Sprint 5–6:
 
 - Tahun ajaran baru wajib format `YYYY/YYYY`, rentang tahun berurutan, tanggal mulai < tanggal selesai, dan selalu dibuat nonaktif.
 - Aktivasi tahun ajaran wajib challenge `AKTIFKAN`; aktivasi hanya mengubah flag aktif/nonaktif, tidak menghapus data lama.
-- Rollover baru **preview-only**: tidak ada endpoint apply yang menjalankan mutasi massal sampai safety token/backup/QA disiapkan.
+- Rollover Sprint 5 adalah preview-only; Sprint 6 menambahkan apply aman dengan challenge persis dari `preview.apply_challenge` (`TERAPKAN ROLLOVER {sumber} KE {tujuan}`).
+- Apply rollover berjalan lewat Go API dalam transaksi, tidak menghapus data tahun lama, dan idempotent sejauh mungkin: rombel tujuan existing dipakai ulang, wali kelas aktif tidak diduplikasi, guru mapel tidak diduplikasi per rombel+mapel, jadwal tidak diduplikasi per assignment+hari+jam+ruang.
+- Apply membuat rombel tujuan VII→VIII dan VIII→IX bila belum ada, copy wali kelas/guru mapel/jadwal, lalu memindahkan siswa aktif ke rombel tujuan. Siswa tingkat IX atau siswa yang targetnya tidak aman dilaporkan sebagai `students_skipped` untuk tindak lanjut manual.
 - Template CSV tersedia untuk `siswa`, `rombel`, `guru_mapel`, dan `jadwal` dengan header Bahasa Indonesia.
 - Import dry-run hanya membaca CSV, memvalidasi baris, dan mengembalikan rencana tambah/ubah/skip/error; dry-run tidak mutate DB.
-- Audit write-event akademik belum diaktifkan karena service audit existing hanya mendukung cleanup/read lifecycle; Sprint 5 mendokumentasikan deferred audit integration agar tidak membuat pola audit ad-hoc.
+- Audit write-event akademik belum diaktifkan karena service audit existing hanya mendukung cleanup/read lifecycle; Sprint 5–6 mendokumentasikan deferred audit integration agar tidak membuat pola audit ad-hoc.
 
 ## Shared Editable Component Types
 

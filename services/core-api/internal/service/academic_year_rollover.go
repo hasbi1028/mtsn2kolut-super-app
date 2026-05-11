@@ -20,6 +20,7 @@ import (
 )
 
 const academicYearActivationChallenge = "AKTIFKAN"
+const academicYearRolloverApplyPrefix = "TERAPKAN ROLLOVER"
 
 var academicYearNamePattern = regexp.MustCompile(`^\d{4}/\d{4}$`)
 
@@ -28,15 +29,35 @@ type YearRolloverPreviewInput struct {
 	TargetAcademicYearID pgtype.UUID
 }
 
+type YearRolloverApplyInput struct {
+	SourceAcademicYearID pgtype.UUID
+	TargetAcademicYearID pgtype.UUID
+	Confirmation         string
+	SafetyToken          string
+}
+
 type YearRolloverPreview struct {
 	SourceAcademicYearID   string                       `json:"source_academic_year_id"`
 	SourceAcademicYearName string                       `json:"source_academic_year_name"`
 	TargetAcademicYearID   string                       `json:"target_academic_year_id"`
 	TargetAcademicYearName string                       `json:"target_academic_year_name"`
+	ApplyChallenge         string                       `json:"apply_challenge"`
 	Counts                 YearRolloverPreviewCounts    `json:"counts"`
 	ClassesToCreate        []YearRolloverClassToCreate  `json:"classes_to_create"`
 	StudentsToPromote      []YearRolloverStudentMove    `json:"students_to_promote"`
 	StudentsWithoutNext    []YearRolloverStudentWarning `json:"students_without_next_class"`
+	Warnings               []string                     `json:"warnings"`
+}
+
+type YearRolloverApplyResult struct {
+	SourceAcademicYearID   string                       `json:"source_academic_year_id"`
+	SourceAcademicYearName string                       `json:"source_academic_year_name"`
+	TargetAcademicYearID   string                       `json:"target_academic_year_id"`
+	TargetAcademicYearName string                       `json:"target_academic_year_name"`
+	Counts                 YearRolloverApplyCounts      `json:"counts"`
+	Classes                []YearRolloverClassApply     `json:"classes"`
+	StudentsPromoted       []YearRolloverStudentMove    `json:"students_promoted"`
+	StudentsSkipped        []YearRolloverStudentWarning `json:"students_skipped"`
 	Warnings               []string                     `json:"warnings"`
 }
 
@@ -49,6 +70,16 @@ type YearRolloverPreviewCounts struct {
 	TimetableSlotsCopy       int `json:"timetable_slots_to_copy"`
 }
 
+type YearRolloverApplyCounts struct {
+	ClassesCreated       int `json:"classes_created"`
+	ClassesReused        int `json:"classes_reused"`
+	StudentsPromoted     int `json:"students_promoted"`
+	StudentsSkipped      int `json:"students_skipped"`
+	HomeroomsCopied      int `json:"homerooms_copied"`
+	AssignmentsCopied    int `json:"assignments_copied"`
+	TimetableSlotsCopied int `json:"timetable_slots_copied"`
+}
+
 type YearRolloverClassToCreate struct {
 	SourceClassID string `json:"source_class_id"`
 	SourceCode    string `json:"source_code"`
@@ -57,6 +88,18 @@ type YearRolloverClassToCreate struct {
 	TargetCode    string `json:"target_code"`
 	TargetName    string `json:"target_name"`
 	TargetLevel   string `json:"target_level"`
+}
+
+type YearRolloverClassApply struct {
+	SourceClassID string `json:"source_class_id"`
+	SourceCode    string `json:"source_code"`
+	SourceName    string `json:"source_name"`
+	SourceLevel   string `json:"source_level"`
+	TargetClassID string `json:"target_class_id"`
+	TargetCode    string `json:"target_code"`
+	TargetName    string `json:"target_name"`
+	TargetLevel   string `json:"target_level"`
+	Action        string `json:"action"`
 }
 
 type YearRolloverStudentMove struct {
@@ -163,24 +206,9 @@ func (s *Academic) PreviewYearRollover(ctx context.Context, input YearRolloverPr
 	if !input.TargetAcademicYearID.Valid {
 		return YearRolloverPreview{}, fmt.Errorf("%w: tahun ajaran tujuan wajib dipilih", domain.ErrBadRequest)
 	}
-	target, err := s.q.GetAcademicYearByID(ctx, input.TargetAcademicYearID)
+	source, target, err := resolveYearRolloverYears(ctx, s.q, input.SourceAcademicYearID, input.TargetAcademicYearID)
 	if err != nil {
 		return YearRolloverPreview{}, err
-	}
-	var source db.AcademicYear
-	if input.SourceAcademicYearID.Valid {
-		source, err = s.q.GetAcademicYearByID(ctx, input.SourceAcademicYearID)
-	} else {
-		source, err = s.q.GetActiveAcademicYear(ctx)
-	}
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return YearRolloverPreview{}, fmt.Errorf("%w: tahun ajaran sumber tidak ditemukan", domain.ErrBadRequest)
-		}
-		return YearRolloverPreview{}, err
-	}
-	if pgUUIDString(source.ID) == pgUUIDString(target.ID) {
-		return YearRolloverPreview{}, fmt.Errorf("%w: tahun ajaran sumber dan tujuan harus berbeda", domain.ErrBadRequest)
 	}
 
 	classes, err := s.q.ListSchoolClasses(ctx)
@@ -219,6 +247,7 @@ func (s *Academic) PreviewYearRollover(ctx context.Context, input YearRolloverPr
 
 	targetBySourceClass := make(map[string]db.ListSchoolClassesRow)
 	classesToCreate := []YearRolloverClassToCreate{}
+	inactiveTargetClasses := map[string]bool{}
 	for _, class := range sortedClasses(sourceClasses) {
 		nextLevel, ok := nextAcademicLevel(class.Level)
 		if !ok {
@@ -228,9 +257,14 @@ func (s *Academic) PreviewYearRollover(ctx context.Context, input YearRolloverPr
 		targetName := rolloverNextLabel(class.Name, class.Level, nextLevel)
 		targetClass, exists := targetByCode[normalizeLookupKey(targetCode)]
 		if exists {
+			if !targetClass.IsActive {
+				inactiveTargetClasses[pgUUIDString(class.ID)] = true
+				continue
+			}
 			targetBySourceClass[pgUUIDString(class.ID)] = targetClass
 			continue
 		}
+		targetBySourceClass[pgUUIDString(class.ID)] = plannedRolloverClass(target, targetCode, targetName, nextLevel)
 		classesToCreate = append(classesToCreate, YearRolloverClassToCreate{
 			SourceClassID: pgUUIDString(class.ID),
 			SourceCode:    class.Code,
@@ -251,6 +285,8 @@ func (s *Academic) PreviewYearRollover(ctx context.Context, input YearRolloverPr
 			reason := "Rombel tujuan belum ada"
 			if _, ok := nextAcademicLevel(student.ClassLevel); !ok {
 				reason = "Tingkat akhir, perlu proses kelulusan atau mutasi manual"
+			} else if inactiveTargetClasses[sourceClassID] {
+				reason = "Rombel tujuan ada tetapi nonaktif"
 			}
 			studentsWithoutNext = append(studentsWithoutNext, YearRolloverStudentWarning{
 				StudentID:     pgUUIDString(student.ID),
@@ -302,13 +338,16 @@ func (s *Academic) PreviewYearRollover(ctx context.Context, input YearRolloverPr
 
 	warnings := []string{
 		"Preview ini tidak mengubah database.",
-		"Apply kenaikan siswa masih ditunda sampai token safety dan test kontrak operasi massal tersedia.",
+		"Apply wajib challenge eksplisit dan berjalan dalam transaksi; data tahun lama tidak dihapus.",
 	}
 	if len(classesToCreate) > 0 {
-		warnings = append(warnings, "Beberapa rombel tujuan belum ada. Buat rombel tujuan dulu sebelum promosi siswa.")
+		warnings = append(warnings, "Beberapa rombel tujuan belum ada dan akan dibuat saat apply.")
 	}
 	if len(studentsWithoutNext) > 0 {
 		warnings = append(warnings, "Ada siswa yang belum punya rombel tujuan atau berada di tingkat akhir.")
+	}
+	if len(inactiveTargetClasses) > 0 {
+		warnings = append(warnings, "Ada rombel tujuan yang sudah ada tetapi nonaktif; aktifkan manual sebelum apply bila ingin dipakai.")
 	}
 
 	return YearRolloverPreview{
@@ -316,6 +355,7 @@ func (s *Academic) PreviewYearRollover(ctx context.Context, input YearRolloverPr
 		SourceAcademicYearName: source.Name,
 		TargetAcademicYearID:   pgUUIDString(target.ID),
 		TargetAcademicYearName: target.Name,
+		ApplyChallenge:         yearRolloverApplyChallenge(source.Name, target.Name),
 		Counts: YearRolloverPreviewCounts{
 			ClassesToCreate:          len(classesToCreate),
 			StudentsToPromote:        len(studentsToPromote),
@@ -329,6 +369,303 @@ func (s *Academic) PreviewYearRollover(ctx context.Context, input YearRolloverPr
 		StudentsWithoutNext: studentsWithoutNext,
 		Warnings:            warnings,
 	}, nil
+}
+
+func (s *Academic) ApplyYearRollover(ctx context.Context, input YearRolloverApplyInput) (YearRolloverApplyResult, error) {
+	if !input.TargetAcademicYearID.Valid {
+		return YearRolloverApplyResult{}, fmt.Errorf("%w: tahun ajaran tujuan wajib dipilih", domain.ErrBadRequest)
+	}
+	var result YearRolloverApplyResult
+	err := s.withAcademicStore(ctx, func(store academicStore) error {
+		source, target, err := resolveYearRolloverYears(ctx, store, input.SourceAcademicYearID, input.TargetAcademicYearID)
+		if err != nil {
+			return err
+		}
+		expectedChallenge := yearRolloverApplyChallenge(source.Name, target.Name)
+		if !yearRolloverApplyAuthorized(input, expectedChallenge) {
+			return fmt.Errorf("%w: challenge apply rollover tidak sesuai", domain.ErrBadRequest)
+		}
+		applyResult, err := applyYearRolloverInStore(ctx, store, source, target)
+		if err != nil {
+			return err
+		}
+		result = applyResult
+		return nil
+	})
+	return result, err
+}
+
+type rolloverAssignmentRef struct {
+	ID                pgtype.UUID
+	ClassID           pgtype.UUID
+	SubjectID         pgtype.UUID
+	TeacherEmployeeID pgtype.UUID
+}
+
+func resolveYearRolloverYears(ctx context.Context, store academicStore, sourceID, targetID pgtype.UUID) (db.AcademicYear, db.AcademicYear, error) {
+	target, err := store.GetAcademicYearByID(ctx, targetID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.AcademicYear{}, db.AcademicYear{}, fmt.Errorf("%w: tahun ajaran tujuan tidak ditemukan", domain.ErrBadRequest)
+		}
+		return db.AcademicYear{}, db.AcademicYear{}, err
+	}
+	var source db.AcademicYear
+	if sourceID.Valid {
+		source, err = store.GetAcademicYearByID(ctx, sourceID)
+	} else {
+		source, err = store.GetActiveAcademicYear(ctx)
+	}
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.AcademicYear{}, db.AcademicYear{}, fmt.Errorf("%w: tahun ajaran sumber tidak ditemukan", domain.ErrBadRequest)
+		}
+		return db.AcademicYear{}, db.AcademicYear{}, err
+	}
+	if pgUUIDString(source.ID) == pgUUIDString(target.ID) {
+		return db.AcademicYear{}, db.AcademicYear{}, fmt.Errorf("%w: tahun ajaran sumber dan tujuan harus berbeda", domain.ErrBadRequest)
+	}
+	return source, target, nil
+}
+
+func applyYearRolloverInStore(ctx context.Context, store academicStore, source, target db.AcademicYear) (YearRolloverApplyResult, error) {
+	result := YearRolloverApplyResult{
+		SourceAcademicYearID:   pgUUIDString(source.ID),
+		SourceAcademicYearName: source.Name,
+		TargetAcademicYearID:   pgUUIDString(target.ID),
+		TargetAcademicYearName: target.Name,
+		Warnings: []string{
+			"Apply berjalan dalam transaksi; data tahun lama tidak dihapus.",
+		},
+	}
+
+	classes, err := store.ListSchoolClasses(ctx)
+	if err != nil {
+		return YearRolloverApplyResult{}, err
+	}
+	sourceClasses, targetByCode := splitRolloverClasses(classes, source.ID, target.ID)
+	targetBySourceClass := map[string]db.ListSchoolClassesRow{}
+	inactiveTargetClasses := map[string]bool{}
+	for _, class := range sortedClasses(sourceClasses) {
+		nextLevel, ok := nextAcademicLevel(class.Level)
+		if !ok {
+			continue
+		}
+		sourceClassKey := pgUUIDString(class.ID)
+		targetCode := rolloverNextLabel(class.Code, class.Level, nextLevel)
+		targetName := rolloverNextLabel(class.Name, class.Level, nextLevel)
+		if targetClass, exists := targetByCode[normalizeLookupKey(targetCode)]; exists {
+			if !targetClass.IsActive {
+				inactiveTargetClasses[sourceClassKey] = true
+				result.Classes = append(result.Classes, rolloverClassApplyRow(class, targetClass, "skipped_inactive_target"))
+				result.Warnings = append(result.Warnings, fmt.Sprintf("Rombel tujuan %s sudah ada tetapi nonaktif; data dari %s dilewati.", targetClass.Code, class.Code))
+				continue
+			}
+			targetBySourceClass[sourceClassKey] = targetClass
+			result.Counts.ClassesReused++
+			result.Classes = append(result.Classes, rolloverClassApplyRow(class, targetClass, "reused"))
+			continue
+		}
+		created, err := store.CreateSchoolClass(ctx, db.CreateSchoolClassParams{
+			AcademicYearID: target.ID,
+			Code:           targetCode,
+			Name:           targetName,
+			Level:          nextLevel,
+			IsActive:       true,
+		})
+		if err != nil {
+			return YearRolloverApplyResult{}, err
+		}
+		targetClass := schoolClassToListRow(created, target.Name)
+		targetByCode[normalizeLookupKey(targetCode)] = targetClass
+		targetBySourceClass[sourceClassKey] = targetClass
+		result.Counts.ClassesCreated++
+		result.Classes = append(result.Classes, rolloverClassApplyRow(class, targetClass, "created"))
+	}
+
+	if result.Counts.ClassesCreated > 0 {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("%d rombel tujuan baru dibuat.", result.Counts.ClassesCreated))
+	}
+	if result.Counts.ClassesReused > 0 {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("%d rombel tujuan existing dipakai ulang.", result.Counts.ClassesReused))
+	}
+
+	if err := copyYearRolloverHomerooms(ctx, store, source, target, targetBySourceClass, &result); err != nil {
+		return YearRolloverApplyResult{}, err
+	}
+	targetAssignmentsBySource, err := copyYearRolloverAssignments(ctx, store, targetBySourceClass, &result)
+	if err != nil {
+		return YearRolloverApplyResult{}, err
+	}
+	if err := copyYearRolloverTimetableSlots(ctx, store, targetAssignmentsBySource, &result); err != nil {
+		return YearRolloverApplyResult{}, err
+	}
+	if err := promoteYearRolloverStudents(ctx, store, source, targetBySourceClass, inactiveTargetClasses, &result); err != nil {
+		return YearRolloverApplyResult{}, err
+	}
+	result.Counts.StudentsSkipped = len(result.StudentsSkipped)
+	if result.Counts.StudentsSkipped > 0 {
+		result.Warnings = append(result.Warnings, "Sebagian siswa dilewati dan perlu tindak lanjut manual.")
+	}
+	return result, nil
+}
+
+func copyYearRolloverHomerooms(ctx context.Context, store academicStore, source, target db.AcademicYear, targetBySourceClass map[string]db.ListSchoolClassesRow, result *YearRolloverApplyResult) error {
+	homerooms, err := store.ListYearRolloverHomeroomAssignmentDetails(ctx, source.ID)
+	if err != nil {
+		return err
+	}
+	for _, homeroom := range homerooms {
+		targetClass, ok := targetBySourceClass[pgUUIDString(homeroom.ClassID)]
+		if !ok {
+			continue
+		}
+		existing, err := store.CountActiveHomeroomAssignmentByClass(ctx, targetClass.ID)
+		if err != nil {
+			return err
+		}
+		if existing > 0 {
+			continue
+		}
+		_, err = store.CreateHomeroomAssignment(ctx, db.CreateHomeroomAssignmentParams{
+			ClassID:                targetClass.ID,
+			HomeroomIsActive:       true,
+			EmployeeID:             homeroom.EmployeeID,
+			HomeroomAcademicYearID: target.ID,
+			HomeroomStartDate:      target.StartDate,
+			HomeroomEndDate:        pgtype.Date{},
+			Notes:                  rolloverCopiedNotes(homeroom.Notes, source.Name),
+		})
+		if err != nil {
+			return err
+		}
+		result.Counts.HomeroomsCopied++
+	}
+	return nil
+}
+
+func copyYearRolloverAssignments(ctx context.Context, store academicStore, targetBySourceClass map[string]db.ListSchoolClassesRow, result *YearRolloverApplyResult) (map[string]rolloverAssignmentRef, error) {
+	assignments, err := store.ListClassSubjectAssignments(ctx)
+	if err != nil {
+		return nil, err
+	}
+	targetAssignmentsBySource := map[string]rolloverAssignmentRef{}
+	targetByClassSubject := map[string]rolloverAssignmentRef{}
+	for _, assignment := range assignments {
+		targetByClassSubject[classSubjectKey(assignment.ClassID, assignment.SubjectID)] = assignmentRefFromList(assignment)
+	}
+	for _, assignment := range assignments {
+		targetClass, ok := targetBySourceClass[pgUUIDString(assignment.ClassID)]
+		if !ok {
+			continue
+		}
+		targetKey := classSubjectKey(targetClass.ID, assignment.SubjectID)
+		if existing, exists := targetByClassSubject[targetKey]; exists {
+			targetAssignmentsBySource[pgUUIDString(assignment.ID)] = existing
+			continue
+		}
+		created, err := store.CreateClassSubjectAssignment(ctx, db.CreateClassSubjectAssignmentParams{
+			ClassID:           targetClass.ID,
+			SubjectID:         assignment.SubjectID,
+			TeacherEmployeeID: assignment.TeacherEmployeeID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		ref := assignmentRefFromModel(created)
+		targetByClassSubject[targetKey] = ref
+		targetAssignmentsBySource[pgUUIDString(assignment.ID)] = ref
+		result.Counts.AssignmentsCopied++
+	}
+	return targetAssignmentsBySource, nil
+}
+
+func copyYearRolloverTimetableSlots(ctx context.Context, store academicStore, targetAssignmentsBySource map[string]rolloverAssignmentRef, result *YearRolloverApplyResult) error {
+	slots, err := store.ListTimetableSlots(ctx)
+	if err != nil {
+		return err
+	}
+	targetAssignmentIDs := map[string]bool{}
+	for _, assignment := range targetAssignmentsBySource {
+		targetAssignmentIDs[pgUUIDString(assignment.ID)] = true
+	}
+	existingTargetSlots := map[string]bool{}
+	sourceSlots := []db.ListTimetableSlotsRow{}
+	for _, slot := range slots {
+		if targetAssignmentIDs[pgUUIDString(slot.AssignmentID)] {
+			existingTargetSlots[timetableSlotKey(slot.AssignmentID, slot.DayOfWeek, slot.StartTime, slot.EndTime, slot.RoomLabel)] = true
+		}
+		if _, ok := targetAssignmentsBySource[pgUUIDString(slot.AssignmentID)]; ok {
+			sourceSlots = append(sourceSlots, slot)
+		}
+	}
+	for _, slot := range sourceSlots {
+		targetAssignment := targetAssignmentsBySource[pgUUIDString(slot.AssignmentID)]
+		key := timetableSlotKey(targetAssignment.ID, slot.DayOfWeek, slot.StartTime, slot.EndTime, slot.RoomLabel)
+		if existingTargetSlots[key] {
+			continue
+		}
+		_, err := store.CreateTimetableSlot(ctx, db.CreateTimetableSlotParams{
+			AssignmentID: targetAssignment.ID,
+			DayOfWeek:    slot.DayOfWeek,
+			StartTime:    slot.StartTime,
+			EndTime:      slot.EndTime,
+			RoomLabel:    slot.RoomLabel,
+			Notes:        slot.Notes,
+		})
+		if err != nil {
+			return err
+		}
+		existingTargetSlots[key] = true
+		result.Counts.TimetableSlotsCopied++
+	}
+	return nil
+}
+
+func promoteYearRolloverStudents(ctx context.Context, store academicStore, source db.AcademicYear, targetBySourceClass map[string]db.ListSchoolClassesRow, inactiveTargetClasses map[string]bool, result *YearRolloverApplyResult) error {
+	students, err := store.ListYearRolloverStudents(ctx, source.ID)
+	if err != nil {
+		return err
+	}
+	for _, student := range students {
+		sourceClassID := pgUUIDString(student.ClassID)
+		targetClass, exists := targetBySourceClass[sourceClassID]
+		if !exists {
+			reason := "Rombel tujuan belum tersedia"
+			if _, ok := nextAcademicLevel(student.ClassLevel); !ok {
+				reason = "Tingkat akhir, perlu proses kelulusan atau mutasi manual"
+			} else if inactiveTargetClasses[sourceClassID] {
+				reason = "Rombel tujuan ada tetapi nonaktif"
+			}
+			result.StudentsSkipped = append(result.StudentsSkipped, rolloverStudentWarning(student, reason))
+			continue
+		}
+		affected, err := store.PromoteYearRolloverStudent(ctx, db.PromoteYearRolloverStudentParams{
+			TargetClassID: targetClass.ID,
+			StudentID:     student.ID,
+			SourceClassID: student.ClassID,
+		})
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			result.StudentsSkipped = append(result.StudentsSkipped, rolloverStudentWarning(student, "Data siswa sudah berubah sebelum apply selesai"))
+			continue
+		}
+		result.Counts.StudentsPromoted++
+		result.StudentsPromoted = append(result.StudentsPromoted, YearRolloverStudentMove{
+			StudentID:     pgUUIDString(student.ID),
+			NIS:           student.Nis,
+			NISN:          student.Nisn,
+			Nama:          student.Nama,
+			FromClassID:   sourceClassID,
+			FromClassCode: student.ClassCode,
+			ToClassID:     pgUUIDString(targetClass.ID),
+			ToClassCode:   targetClass.Code,
+			ToClassName:   targetClass.Name,
+		})
+	}
+	return nil
 }
 
 func (s *Academic) DryRunAcademicImport(ctx context.Context, input AcademicImportDryRunInput) (AcademicImportDryRunResult, error) {
@@ -701,6 +1038,22 @@ func normalizeImportKind(value string) string {
 	}
 }
 
+func splitRolloverClasses(classes []db.ListSchoolClassesRow, sourceYearID, targetYearID pgtype.UUID) (map[string]db.ListSchoolClassesRow, map[string]db.ListSchoolClassesRow) {
+	sourceClasses := make(map[string]db.ListSchoolClassesRow)
+	targetByCode := make(map[string]db.ListSchoolClassesRow)
+	for _, class := range classes {
+		switch pgUUIDString(class.AcademicYearID) {
+		case pgUUIDString(sourceYearID):
+			if class.IsActive {
+				sourceClasses[pgUUIDString(class.ID)] = class
+			}
+		case pgUUIDString(targetYearID):
+			targetByCode[normalizeLookupKey(class.Code)] = class
+		}
+	}
+	return sourceClasses, targetByCode
+}
+
 func sortedClasses(classes map[string]db.ListSchoolClassesRow) []db.ListSchoolClassesRow {
 	out := make([]db.ListSchoolClassesRow, 0, len(classes))
 	for _, class := range classes {
@@ -713,6 +1066,108 @@ func sortedClasses(classes map[string]db.ListSchoolClassesRow) []db.ListSchoolCl
 		return out[i].Name < out[j].Name
 	})
 	return out
+}
+
+func plannedRolloverClass(target db.AcademicYear, code, name, level string) db.ListSchoolClassesRow {
+	return db.ListSchoolClassesRow{
+		Code:             code,
+		Name:             name,
+		Level:            level,
+		IsActive:         true,
+		AcademicYearID:   target.ID,
+		AcademicYearName: target.Name,
+	}
+}
+
+func schoolClassToListRow(class db.SchoolClass, academicYearName string) db.ListSchoolClassesRow {
+	return db.ListSchoolClassesRow{
+		ID:               class.ID,
+		Code:             class.Code,
+		Name:             class.Name,
+		Level:            class.Level,
+		IsActive:         class.IsActive,
+		CreatedAt:        class.CreatedAt,
+		UpdatedAt:        class.UpdatedAt,
+		AcademicYearID:   class.AcademicYearID,
+		AcademicYearName: academicYearName,
+	}
+}
+
+func rolloverClassApplyRow(source, target db.ListSchoolClassesRow, action string) YearRolloverClassApply {
+	return YearRolloverClassApply{
+		SourceClassID: pgUUIDString(source.ID),
+		SourceCode:    source.Code,
+		SourceName:    source.Name,
+		SourceLevel:   source.Level,
+		TargetClassID: pgUUIDString(target.ID),
+		TargetCode:    target.Code,
+		TargetName:    target.Name,
+		TargetLevel:   target.Level,
+		Action:        action,
+	}
+}
+
+func rolloverStudentWarning(student db.ListYearRolloverStudentsRow, reason string) YearRolloverStudentWarning {
+	return YearRolloverStudentWarning{
+		StudentID:     pgUUIDString(student.ID),
+		NIS:           student.Nis,
+		NISN:          student.Nisn,
+		Nama:          student.Nama,
+		FromClassID:   pgUUIDString(student.ClassID),
+		FromClassCode: student.ClassCode,
+		Reason:        reason,
+	}
+}
+
+func yearRolloverApplyChallenge(sourceName, targetName string) string {
+	return fmt.Sprintf("%s %s KE %s", academicYearRolloverApplyPrefix, strings.TrimSpace(sourceName), strings.TrimSpace(targetName))
+}
+
+func yearRolloverApplyAuthorized(input YearRolloverApplyInput, expectedChallenge string) bool {
+	confirmation := strings.TrimSpace(input.Confirmation)
+	safetyToken := strings.TrimSpace(input.SafetyToken)
+	return confirmation == expectedChallenge || safetyToken == expectedChallenge
+}
+
+func classSubjectKey(classID, subjectID pgtype.UUID) string {
+	return importPairKey(pgUUIDString(classID), pgUUIDString(subjectID))
+}
+
+func assignmentRefFromList(row db.ListClassSubjectAssignmentsRow) rolloverAssignmentRef {
+	return rolloverAssignmentRef{
+		ID:                row.ID,
+		ClassID:           row.ClassID,
+		SubjectID:         row.SubjectID,
+		TeacherEmployeeID: row.TeacherEmployeeID,
+	}
+}
+
+func assignmentRefFromModel(row db.ClassSubjectAssignment) rolloverAssignmentRef {
+	return rolloverAssignmentRef{
+		ID:                row.ID,
+		ClassID:           row.ClassID,
+		SubjectID:         row.SubjectID,
+		TeacherEmployeeID: row.TeacherEmployeeID,
+	}
+}
+
+func timetableSlotKey(assignmentID pgtype.UUID, dayOfWeek int16, startTime, endTime pgtype.Time, roomLabel string) string {
+	return strings.Join([]string{
+		pgUUIDString(assignmentID),
+		strconv.Itoa(int(dayOfWeek)),
+		strconv.FormatInt(startTime.Microseconds, 10),
+		strconv.FormatInt(endTime.Microseconds, 10),
+		normalizeLookupKey(roomLabel),
+	}, "|")
+}
+
+func rolloverCopiedNotes(notes, sourceYearName string) string {
+	notes = strings.TrimSpace(notes)
+	prefix := "Rollover dari " + strings.TrimSpace(sourceYearName)
+	if notes == "" {
+		return prefix
+	}
+	return prefix + " - " + notes
 }
 
 func nextAcademicLevel(level string) (string, bool) {

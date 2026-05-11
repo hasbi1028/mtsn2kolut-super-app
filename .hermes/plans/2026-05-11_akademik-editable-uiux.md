@@ -886,3 +886,12 @@ cd services/core-api && go test ./...
 - Updated dashboard/sidebar navigation with Tahun Ajaran entry and CTA links.
 - Documented Sprint 5 contracts and guardrails in `docs/contracts/academic-editable-ui.md`.
 - Audit write integration is intentionally deferred because the current audit service does not expose a safe generic write pattern; avoid adding ad-hoc audit writes until the audit contract is extended.
+## Sprint Akademik 6 Rollover Apply Aman — 2026-05-11
+
+- Added safe apply endpoint `POST /api/academic/year-rollover/apply` in Go core-api and matching SvelteKit BFF route; web-admin still proxies through Go API and never queries DB directly.
+- Preview now returns an `apply_challenge` string. Apply requires the exact challenge (`TERAPKAN ROLLOVER {source} KE {target}`) via `confirmation`/`safety_token` before any mutation runs.
+- Apply runs in the existing academic transaction wrapper and never deletes previous-year data.
+- Apply creates missing target rombel for VII→VIII and VIII→IX, reuses existing active target rombel, skips inactive target rombel, copies active wali kelas, copies guru mapel assignments, copies timetable slots, and promotes active students only when the target class is safe.
+- Idempotency guardrails: existing target rombel are reused; existing active homeroom assignments are not duplicated; existing target class+subject assignments are reused; existing target timetable slots are not duplicated; student promotion uses source-class guard so changed rows are skipped.
+- UI `/akademik/tahun-ajaran` now shows apply controls after preview, requires typing the challenge, and displays counts/details after apply.
+- Updated `docs/contracts/academic-editable-ui.md` with Sprint 6 apply contract and guardrails.

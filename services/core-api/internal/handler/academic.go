@@ -31,6 +31,7 @@ type academicService interface {
 	CreateYear(ctx context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error)
 	ActivateYear(ctx context.Context, id pgtype.UUID, confirmation string) (db.AcademicYear, error)
 	PreviewYearRollover(ctx context.Context, input service.YearRolloverPreviewInput) (service.YearRolloverPreview, error)
+	ApplyYearRollover(ctx context.Context, input service.YearRolloverApplyInput) (service.YearRolloverApplyResult, error)
 	DryRunAcademicImport(ctx context.Context, input service.AcademicImportDryRunInput) (service.AcademicImportDryRunResult, error)
 	CreateClass(ctx context.Context, p db.CreateSchoolClassParams) (db.SchoolClass, error)
 	CreateSubject(ctx context.Context, p db.CreateSubjectParams) (db.Subject, error)
@@ -195,6 +196,44 @@ func (h *Academic) PreviewYearRollover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	api.OK(w, preview)
+}
+
+func (h *Academic) ApplyYearRollover(w http.ResponseWriter, r *http.Request) {
+	if !adminAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	var body struct {
+		SourceAcademicYearID string `json:"source_academic_year_id"`
+		TargetAcademicYearID string `json:"target_academic_year_id"`
+		Confirmation         string `json:"confirmation"`
+		SafetyToken          string `json:"safety_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		api.BadRequest(w, "invalid json")
+		return
+	}
+	sourceID, err := parseOptionalUUID(body.SourceAcademicYearID)
+	if err != nil {
+		api.BadRequest(w, "source_academic_year_id invalid")
+		return
+	}
+	targetID, err := parseUUID(body.TargetAcademicYearID)
+	if err != nil {
+		api.BadRequest(w, "target_academic_year_id invalid")
+		return
+	}
+	result, err := h.svc.ApplyYearRollover(r.Context(), service.YearRolloverApplyInput{
+		SourceAcademicYearID: sourceID,
+		TargetAcademicYearID: targetID,
+		Confirmation:         body.Confirmation,
+		SafetyToken:          body.SafetyToken,
+	})
+	if err != nil {
+		writeDomainOrInternal(w, err, "Apply kenaikan tahun ajaran tidak valid")
+		return
+	}
+	api.OK(w, result)
 }
 
 func (h *Academic) DryRunAcademicImport(w http.ResponseWriter, r *http.Request) {
