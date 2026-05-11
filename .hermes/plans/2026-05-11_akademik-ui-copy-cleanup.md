@@ -317,9 +317,11 @@ fi
 bash scripts/check-academic-ui-copy.sh
 ```
 
+**Implementation note:** Selesai sebagai guard lanjutan sebelum validasi akhir. Script `scripts/check-academic-ui-copy.sh` dibuat untuk memeriksa teks langsung pada halaman Akademik dan halaman Siswa agar istilah teknis seperti `endpoint`, `payload`, `dry-run`, `rollover`, `matrix`, `backend`, `token`, `challenge`, `slot`, dan `assignment` tidak tampil ke operator madrasah. Script mengabaikan kemunculan code-only seperti nama variabel, route internal, atribut teknis, dan template literal dinamis. Hasil terakhir: `PASS`, tidak ada istilah teknis user-facing; `106` kemunculan code-only diabaikan.
+
 ---
 
-## Final validation
+## Task 9: Final validation copy-cleanup
 
 ```bash
 npm --prefix apps/web-admin run check
