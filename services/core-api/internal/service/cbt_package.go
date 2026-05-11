@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -54,6 +55,11 @@ type CreateCbtPackageInput struct {
 	Description        string
 	DurationMinutes    int32
 	RandomizeQuestions bool
+	RandomizeOptions   bool
+	SourceMode         string
+	DrawPgCount        int32
+	DrawEssayCount     int32
+	RandomSeed         string
 	IsActive           bool
 	QuestionIDs        []pgtype.UUID
 	QuestionWeights    map[string]int32
@@ -66,6 +72,15 @@ func (s *CbtPackage) Create(ctx context.Context, input CreateCbtPackageInput) (d
 	input.DurationMinutes = normalizeCbtPackageDuration(input.DurationMinutes)
 	if len(input.QuestionIDs) == 0 {
 		return db.CbtPackage{}, fmt.Errorf("question_ids wajib diisi")
+	}
+	if input.SourceMode == "" {
+		input.SourceMode = "teacher_class"
+	}
+	if !validCbtPackageSourceMode(input.SourceMode) {
+		return db.CbtPackage{}, fmt.Errorf("%w: mode sumber paket tidak valid", domain.ErrBadRequest)
+	}
+	if input.DrawPgCount < 0 || input.DrawEssayCount < 0 {
+		return db.CbtPackage{}, fmt.Errorf("%w: jumlah draw soal tidak boleh negatif", domain.ErrBadRequest)
 	}
 
 	tx, err := s.pool.Begin(ctx)
@@ -92,6 +107,27 @@ func createCbtPackage(ctx context.Context, q cbtPackageCreateStore, input Create
 		return db.CbtPackage{}, err
 	}
 	input.DurationMinutes = normalizeCbtPackageDuration(input.DurationMinutes)
+	if input.SourceMode == "" {
+		input.SourceMode = "teacher_class"
+	}
+	if !validCbtPackageSourceMode(input.SourceMode) {
+		return db.CbtPackage{}, fmt.Errorf("%w: mode sumber paket tidak valid", domain.ErrBadRequest)
+	}
+	if input.DrawPgCount < 0 || input.DrawEssayCount < 0 {
+		return db.CbtPackage{}, fmt.Errorf("%w: jumlah draw soal tidak boleh negatif", domain.ErrBadRequest)
+	}
+	compositionLog, err := json.Marshal(map[string]any{
+		"source_mode":             input.SourceMode,
+		"randomize_questions":     input.RandomizeQuestions,
+		"randomize_options":       input.RandomizeOptions,
+		"draw_pg_count":           input.DrawPgCount,
+		"draw_essay_count":        input.DrawEssayCount,
+		"random_seed":             input.RandomSeed,
+		"selected_question_count": len(input.QuestionIDs),
+	})
+	if err != nil {
+		return db.CbtPackage{}, err
+	}
 	pkg, err := q.CreateCbtPackage(ctx, db.CreateCbtPackageParams{
 		EventID:            input.EventID,
 		SubjectID:          input.SubjectID,
@@ -100,6 +136,12 @@ func createCbtPackage(ctx context.Context, q cbtPackageCreateStore, input Create
 		DurationMinutes:    input.DurationMinutes,
 		RandomizeQuestions: input.RandomizeQuestions,
 		IsActive:           input.IsActive,
+		SourceMode:         input.SourceMode,
+		RandomizeOptions:   input.RandomizeOptions,
+		DrawPgCount:        input.DrawPgCount,
+		DrawEssayCount:     input.DrawEssayCount,
+		RandomSeed:         input.RandomSeed,
+		CompositionLog:     compositionLog,
 	})
 	if err != nil {
 		return db.CbtPackage{}, err
@@ -141,6 +183,15 @@ func createCbtPackage(ctx context.Context, q cbtPackageCreateStore, input Create
 		}
 	}
 	return pkg, nil
+}
+
+func validCbtPackageSourceMode(value string) bool {
+	switch value {
+	case "teacher_class", "level_subject_teachers", "event_pool":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *CbtPackage) Delete(ctx context.Context, id pgtype.UUID) error {

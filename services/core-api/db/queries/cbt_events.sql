@@ -395,6 +395,71 @@ GROUP BY
   sa.target_essay
 ORDER BY sa.level ASC, sa.class_name ASC, sa.subject_name ASC, sa.teacher_name ASC;
 
+-- name: ListCbtEventQuestionPoolContributions :many
+WITH event_scope AS (
+  SELECT id, academic_year_id, target_levels
+  FROM cbt_exam_events
+  WHERE id = $1
+), req AS (
+  SELECT
+    COALESCE(r.scope_mode, 'per_rombel')::text AS scope_mode,
+    COALESCE(r.status_filter, 'published_only')::text AS status_filter
+  FROM event_scope ev
+  LEFT JOIN cbt_event_question_requirements r ON r.event_id = ev.id
+    AND r.level IS NULL
+    AND r.class_id IS NULL
+    AND r.subject_id IS NULL
+  ORDER BY r.updated_at DESC NULLS LAST
+  LIMIT 1
+), target_teachers AS (
+  SELECT DISTINCT
+    c.level,
+    a.subject_id,
+    s.name AS subject_name,
+    s.code AS subject_code,
+    a.teacher_employee_id,
+    e.nama AS teacher_name,
+    COALESCE(u.username, '')::text AS teacher_username,
+    CASE c.level WHEN 'VII' THEN 7 WHEN 'VIII' THEN 8 WHEN 'IX' THEN 9 ELSE NULL END::smallint AS numeric_grade_level
+  FROM event_scope ev
+  JOIN school_classes c ON c.academic_year_id = ev.academic_year_id
+    AND c.is_active = TRUE
+    AND (COALESCE(array_length(ev.target_levels, 1), 0) = 0 OR c.level = ANY(ev.target_levels))
+  JOIN class_subject_assignments a ON a.class_id = c.id
+  JOIN subjects s ON s.id = a.subject_id AND s.is_active = TRUE
+  JOIN employees e ON e.id = a.teacher_employee_id
+  LEFT JOIN LATERAL (
+    SELECT username
+    FROM users ux
+    WHERE ux.employee_id = e.id AND ux.deleted_at IS NULL
+    ORDER BY ux.created_at DESC
+    LIMIT 1
+  ) u ON TRUE
+)
+SELECT
+  tt.level,
+  tt.subject_id,
+  tt.subject_name,
+  tt.subject_code,
+  tt.teacher_employee_id,
+  tt.teacher_name,
+  tt.teacher_username,
+  req.scope_mode,
+  COALESCE(COUNT(DISTINCT q.id) FILTER (WHERE q.question_type = 'multiple_choice'), 0)::int AS available_pg,
+  COALESCE(COUNT(DISTINCT q.id) FILTER (WHERE q.question_type = 'essay'), 0)::int AS available_essay
+FROM target_teachers tt
+CROSS JOIN req
+LEFT JOIN cbt_questions q ON q.subject_id = tt.subject_id
+  AND q.author_username = tt.teacher_username
+  AND (q.event_id = $1 OR (q.event_id IS NULL AND q.status = 'published'))
+  AND (tt.numeric_grade_level IS NULL OR q.grade_level = tt.numeric_grade_level)
+  AND q.status <> 'archived'
+  AND q.workflow_status <> 'rejected'
+  AND (req.status_filter <> 'published_only' OR q.status = 'published')
+WHERE req.scope_mode = 'pool_level_subject'
+GROUP BY tt.level, tt.subject_id, tt.subject_name, tt.subject_code, tt.teacher_employee_id, tt.teacher_name, tt.teacher_username, req.scope_mode
+ORDER BY tt.level ASC, tt.subject_name ASC, tt.teacher_name ASC;
+
 -- name: ListCbtEventQuestionCompletenessExcludedLevels :many
 SELECT DISTINCT c.level
 FROM cbt_exam_events e

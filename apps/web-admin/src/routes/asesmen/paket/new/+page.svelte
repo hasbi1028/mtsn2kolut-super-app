@@ -39,7 +39,12 @@
 	type EventContext = { id: string; title: string; status: string; target_levels?: string[]; academic_year_name?: string };
 	type AcademicPayload = { subjects?: Subject[] };
 	type QuestionListPayload = { items?: Question[]; meta?: { total?: number; limit?: number; offset?: number } };
-	type FormData = { allQuestions: Question[]; subjects: Subject[]; eventContext: EventContext | null };
+	type QuestionCompleteness = {
+		requirements?: { scope_mode?: string; target_pg?: number; target_essay?: number; status_filter?: string };
+		rows?: Array<{ subject_id: string; subject_name: string; level: string; scope_mode?: string; target_pg: number; available_pg: number; missing_pg: number; target_essay: number; available_essay: number; missing_essay: number; complete: boolean }>;
+		contributions?: Array<{ subject_id: string; subject_name: string; level: string; teacher_name: string; teacher_username: string; available_pg: number; available_essay: number }>;
+	};
+	type FormData = { allQuestions: Question[]; subjects: Subject[]; eventContext: EventContext | null; completeness: QuestionCompleteness | null };
 	type BlueprintBucket = { label: string; count: number };
 	type BlueprintMatrixRow = {
 		key: string;
@@ -61,6 +66,7 @@
 	let allQuestions = $state<Question[]>([]);
 	let subjects = $state<Subject[]>([]);
 	let eventContext = $state<EventContext | null>(null);
+	let questionCompleteness = $state<QuestionCompleteness | null>(null);
 	let formPromise = $state<Promise<FormData> | null>(null);
 	let questionPoolTotal = $state(0);
 	let fSubjectId = $state('');
@@ -68,6 +74,11 @@
 	let fDescription = $state('');
 	let fDuration = $state(60);
 	let fRandomize = $state(false);
+	let fRandomizeOptions = $state(false);
+	let fSourceMode = $state<'teacher_class' | 'level_subject_teachers' | 'event_pool'>('teacher_class');
+	let fDrawPgCount = $state(0);
+	let fDrawEssayCount = $state(0);
+	let fRandomSeed = $state('');
 	let fActive = $state(true);
 	let fSelectedIds = new SvelteSet<string>();
 	let fQuestionWeights = new SvelteMap<string, number>();
@@ -92,6 +103,11 @@
 	let questionPoolCapped = $derived(questionPoolTotal > allQuestions.length);
 	let packageReadinessIssues = $derived(buildPackageReadinessIssues());
 	let canCreatePackage = $derived(packageReadinessIssues.length === 0 && !fBusy);
+	let eventSubjectCompletenessRows = $derived((questionCompleteness?.rows ?? []).filter((row) => row.subject_id === fSubjectId));
+	let eventSubjectMissingRows = $derived(eventSubjectCompletenessRows.filter((row) => !row.complete));
+	let eventSubjectContributions = $derived((questionCompleteness?.contributions ?? []).filter((row) => row.subject_id === fSubjectId));
+	let selectedPgCount = $derived(selectedQuestions.filter((question) => question.question_type === 'multiple_choice').length);
+	let selectedEssayCount = $derived(selectedQuestions.filter((question) => question.question_type === 'essay').length);
 	let listHref = $derived(`${resolve('/asesmen/paket')}${eventId ? `?event_id=${encodeURIComponent(eventId)}` : ''}`);
 
 	function isRecord(value: unknown): value is Record<string, unknown> {
@@ -143,23 +159,35 @@
 		}
 	}
 
+	async function fetchQuestionCompleteness() {
+		if (!eventId) return null;
+		try {
+			return await fetch(clientApiPath`/api/asesmen/events/${eventId}/question-completeness`).then((response) => readClientApiData<QuestionCompleteness>(response, 'Gagal memuat kelengkapan soal'));
+		} catch {
+			return null;
+		}
+	}
+
 	async function fetchFormData(): Promise<FormData> {
-		const [questionItems, academicPayload, context] = await Promise.all([
+		const [questionItems, academicPayload, context, completeness] = await Promise.all([
 			fetchAllQuestions(),
 			fetch('/api/academic').then((response) => readClientApiData<unknown>(response, 'Gagal memuat data akademik')),
-			fetchEventContext()
+			fetchEventContext(),
+			fetchQuestionCompleteness()
 		]);
-		return { allQuestions: questionItems, subjects: parseSubjects(academicPayload), eventContext: context };
+		return { allQuestions: questionItems, subjects: parseSubjects(academicPayload), eventContext: context, completeness };
 	}
 
 	function loadForm() {
 		allQuestions = [];
 		subjects = [];
 		questionPoolTotal = 0;
+		questionCompleteness = null;
 		formPromise = fetchFormData().then((data) => {
 			allQuestions = data.allQuestions;
 			subjects = data.subjects;
 			eventContext = data.eventContext;
+			questionCompleteness = data.completeness;
 			return data;
 		});
 	}
@@ -291,12 +319,48 @@
 		if (!fTitle.trim()) issues.push('Isi nama paket');
 		if (!fDuration || fDuration < 10) issues.push('Durasi minimal 10 menit');
 		if (selectedQuestions.length === 0) issues.push('Pilih minimal 1 soal terbit');
+		if (fDrawPgCount > 0 && selectedPgCount < fDrawPgCount) issues.push(`PG terpilih ${selectedPgCount}/${fDrawPgCount}`);
+		if (fDrawEssayCount > 0 && selectedEssayCount < fDrawEssayCount) issues.push(`Esai terpilih ${selectedEssayCount}/${fDrawEssayCount}`);
 		const invalidWeights = selectedQuestions.filter((question) => {
 			const weight = questionWeightValue(question.id);
 			return weight < 1 || weight > 100;
 		});
 		if (invalidWeights.length > 0) issues.push('Bobot setiap soal harus 1-100');
 		return issues;
+	}
+
+	function selectQuestionDraw() {
+		if (!fSubjectId) {
+			toast.warning('Pilih mata pelajaran dulu');
+			return;
+		}
+		const seed = fRandomSeed.trim() || `${Date.now()}`;
+		const pick = (items: Question[], count: number) => seededShuffle(items, seed).slice(0, Math.max(0, count));
+		const pg = fDrawPgCount > 0 ? pick(questionPool.filter((question) => question.question_type === 'multiple_choice'), fDrawPgCount) : [];
+		const essay = fDrawEssayCount > 0 ? pick(questionPool.filter((question) => question.question_type === 'essay'), fDrawEssayCount) : [];
+		const selected = [...pg, ...essay];
+		if (selected.length === 0) {
+			toast.warning('Isi target draw PG/Esai atau pilih soal manual');
+			return;
+		}
+		fSelectedIds.clear();
+		fQuestionWeights.clear();
+		for (const question of selected) {
+			fSelectedIds.add(question.id);
+			fQuestionWeights.set(question.id, 1);
+		}
+		toast.success(`Preview draw siap: ${pg.length} PG, ${essay.length} esai`);
+	}
+
+	function seededShuffle<T>(items: T[], seed: string): T[] {
+		let state = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0) || 1;
+		const out = [...items];
+		for (let i = out.length - 1; i > 0; i -= 1) {
+			state = (state * 1664525 + 1013904223) % 4294967296;
+			const j = state % (i + 1);
+			[out[i], out[j]] = [out[j], out[i]];
+		}
+		return out;
 	}
 
 	async function createPackage() {
@@ -315,6 +379,11 @@
 					description: fDescription,
 					duration_minutes: fDuration,
 					randomize_questions: fRandomize,
+					randomize_options: fRandomizeOptions,
+					source_mode: fSourceMode,
+					draw_pg_count: Math.max(0, Number(fDrawPgCount) || 0),
+					draw_essay_count: Math.max(0, Number(fDrawEssayCount) || 0),
+					random_seed: fRandomSeed.trim(),
 					is_active: fActive,
 					...(eventId ? { event_id: eventId } : {}),
 					question_ids: selectedQuestions.map((question) => question.id),
@@ -406,8 +475,32 @@
 						</div>
 						<div class="flex items-end gap-4 pb-1">
 							<label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={fRandomize} class="rounded" /> Acak urutan soal</label>
+							<label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={fRandomizeOptions} class="rounded" /> Acak opsi jawaban</label>
 							<label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={fActive} class="rounded" /> Paket aktif</label>
 						</div>
+					</div>
+
+					<div class="rounded-xl border border-border bg-muted/30 p-3">
+						<div class="grid gap-3 md:grid-cols-5">
+							<label class="space-y-1 text-xs text-muted-foreground">Mode sumber paket
+								<select bind:value={fSourceMode} class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground">
+									<option value="teacher_class">Guru pengampu rombel</option>
+									<option value="level_subject_teachers">Semua guru mapel tingkat</option>
+									<option value="event_pool">Pool kegiatan</option>
+								</select>
+							</label>
+							<label class="space-y-1 text-xs text-muted-foreground">Draw PG
+								<Input type="number" min={0} bind:value={fDrawPgCount} />
+							</label>
+							<label class="space-y-1 text-xs text-muted-foreground">Draw esai
+								<Input type="number" min={0} bind:value={fDrawEssayCount} />
+							</label>
+							<label class="space-y-1 text-xs text-muted-foreground">Seed opsional
+								<Input placeholder="mis: VIIA-MTK-2026" bind:value={fRandomSeed} />
+							</label>
+							<div class="flex items-end"><Button type="button" variant="outline" onclick={selectQuestionDraw}>Preview Draw</Button></div>
+						</div>
+						<p class="mt-2 text-xs text-muted-foreground">Preview draw hanya memilih soal ke keranjang; sumber soal tidak dimutasi. Komposisi tersimpan di audit/log paket saat disimpan.</p>
 					</div>
 
 					<div>
@@ -430,6 +523,20 @@
 							</div>
 							{#if hiddenScopedQuestionCount > 0}
 								<div class="mb-2 rounded-md border border-accent bg-accent/60 px-3 py-2 text-xs text-accent-foreground">{hiddenScopedQuestionCount} soal terbit disembunyikan karena {eventId ? 'tertaut ke kegiatan lain' : 'khusus kegiatan tertentu'}.</div>
+							{/if}
+							{#if eventSubjectMissingRows.length > 0}
+								<div class="mb-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning"><span class="font-semibold">Warning kelengkapan:</span> {eventSubjectMissingRows.length} baris mapel ini masih kurang dari target. Paket tetap boleh dibuat setelah preview sumber soal diverifikasi.</div>
+							{/if}
+							{#if eventSubjectCompletenessRows.length > 0}
+								<details class="mb-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
+									<summary class="cursor-pointer font-medium">Readiness dari Kelengkapan Soal ({eventSubjectCompletenessRows.length} baris)</summary>
+									<div class="mt-2 space-y-1">
+										{#each eventSubjectCompletenessRows.slice(0, 8) as row (`${row.level}-${row.subject_id}-${row.scope_mode}`)}
+											<p>{row.level} · {row.subject_name}: PG {row.available_pg}/{row.target_pg}, Esai {row.available_essay}/{row.target_essay} {row.complete ? '✓' : 'kurang'}</p>
+										{/each}
+										{#if eventSubjectContributions.length > 0}<p>Kontribusi pool: {eventSubjectContributions.map((row) => `${row.teacher_name}: PG ${row.available_pg}, Esai ${row.available_essay}`).join(' · ')}</p>{/if}
+									</div>
+								</details>
 							{/if}
 							{#if questionPool.length === 0}
 								<p class="rounded-md border py-4 text-center text-sm text-muted-foreground">Belum ada soal berstatus "Terbit" untuk mata pelajaran ini dalam cakupan paket ini.</p>
