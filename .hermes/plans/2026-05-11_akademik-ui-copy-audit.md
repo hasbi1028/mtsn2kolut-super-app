@@ -1,0 +1,558 @@
+# Audit Tahap 0–1: Pembersihan Bahasa UI Akademik
+
+Dibuat: 2026-05-11 22:22:11
+
+## Tahap 0 — Baseline Pelaksanaan
+
+- Branch kerja: `feature/comprehensive-improvements`.
+- Scope tahap ini: persiapan dan audit saja; belum mengubah copy UI production.
+- Tidak ada perubahan database, migration, business logic, build output, deploy, atau restart PM2.
+- File yang disengaja dibuat/diubah: plan copy cleanup dan audit ini.
+- File untracked lama di repo tidak disentuh: plan lama dan script seed UTS.
+
+## Tahap 1 — Audit Copy User-Facing
+
+- Total kandidat user-facing yang perlu dicek: 170 baris.
+- Temuan code-only/false positive yang sengaja dipisahkan: 503 baris.
+
+### Prioritas per halaman
+
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte`: 62 kandidat user-facing
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte`: 52 kandidat user-facing
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte`: 41 kandidat user-facing
+- `apps/web-admin/src/routes/akademik/guru-mapel/+page.svelte`: 10 kandidat user-facing
+- `apps/web-admin/src/routes/akademik/+page.svelte`: 3 kandidat user-facing
+- `apps/web-admin/src/routes/akademik/rombel/+page.svelte`: 1 kandidat user-facing
+- `apps/web-admin/src/routes/students/+page.svelte`: 1 kandidat user-facing
+
+### Istilah prioritas
+
+- `slot`: 82x → jam pelajaran / jadwal
+- `assignment`: 36x → penugasan
+- `rollover`: 27x → Kenaikan kelas / persiapan tahun ajaran
+- `apply`: 21x → Terapkan
+- `selected`: 14x → dipilih
+- `matrix`: 9x → Tabel penugasan
+- `dry-run`: 5x → Cek data sebelum impor / pratinjau
+- `endpoint`: 1x → Layanan sistem
+- `JSON`: 1x → Data
+
+### Daftar kandidat user-facing
+
+- `apps/web-admin/src/routes/akademik/+page.svelte:109` — assignment
+  - Saat ini: `tone: summary.subject_assignments_missing_teacher > 0 ? 'warning' : 'default'`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/+page.svelte:325` — matrix
+  - Saat ini: `<span class="block text-xs text-muted-foreground">Atur matrix guru per mapel dan rombel</span>`
+  - Arah ganti: Tabel penugasan
+- `apps/web-admin/src/routes/akademik/+page.svelte:339` — rollover
+  - Saat ini: `<span class="block text-xs text-muted-foreground">Aktivasi, preview rollover, dan import-export</span>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran
+- `apps/web-admin/src/routes/akademik/rombel/+page.svelte:382` — slot
+  - Saat ini: `<Table.Cell class="text-right tabular-nums">{rombel.total_timetable_slots}</Table.Cell>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:33` — assignment
+  - Saat ini: `} from '$lib/client/rombel-subject-assignments';`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:381` — assignment
+  - Saat ini: `subjectAssignmentSubjectId = '';`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:382` — assignment
+  - Saat ini: `subjectAssignmentTeacherId = '';`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:425` — assignment
+  - Saat ini: `message: `Hapus penugasan ${assignment.subject_name} - ${assignment.teacher_name}?`,`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:441` — assignment
+  - Saat ini: `deleteSubjectAssignmentBusyId = '';`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:461` — slot
+  - Saat ini: `timetableRoom = slot.room_label ?? '';`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:462` — slot
+  - Saat ini: `timetableNotes = slot.notes ?? '';`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:496` — slot
+  - Saat ini: `toast.error(errorMessage(error, 'Gagal menyimpan slot jadwal'));`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:504` — slot
+  - Saat ini: `title: 'Hapus Slot Jadwal',`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:505` — slot
+  - Saat ini: `message: `Hapus jadwal ${slot.subject_name} pada ${dayLabels[slot.day_of_week] ?? `hari ${slot.day_of_week}`} pukul ${fmtTime(slot.start_time)}-${fmtTime(slot.end_time)}?`,`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:513` — slot
+  - Saat ini: `toast.success('Slot jadwal dihapus');`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:519` — slot
+  - Saat ini: `toast.error(errorMessage(error, 'Gagal menghapus slot jadwal'));`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:532` — slot
+  - Saat ini: `journalOpenError = `Tanggal jurnal harus jatuh pada hari ${dayLabels[slot.day_of_week] ?? 'jadwal'} untuk slot ini.`;`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:596` — assignment
+  - Saat ini: `return `${assignment.subject_name} (${assignment.subject_code}) - ${assignment.teacher_name}`;`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:703` — assignment
+  - Saat ini: `<Card.Description>Assignment</Card.Description>`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:704` — assignment
+  - Saat ini: `<Card.Title class="text-2xl">{rombel.total_subject_assignments}</Card.Title>`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:709` — slot
+  - Saat ini: `<Card.Description>Slot Jadwal</Card.Description>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:710` — slot
+  - Saat ini: `<Card.Title class="text-2xl">{rombel.total_timetable_slots}</Card.Title>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:750` — assignment
+  - Saat ini: `<Tabs.Trigger value="teachers">Guru Mapel ({detail.subject_assignments.length})</Tabs.Trigger>`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:751` — slot
+  - Saat ini: `<Tabs.Trigger value="schedule">Jadwal ({detail.timetable_slots.length})</Tabs.Trigger>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:923` — selected
+  - Saat ini: `<p class="font-medium text-foreground">{selectedEmployeeOption.name}</p>`
+  - Arah ganti: dipilih
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:924` — selected
+  - Saat ini: `<p class="text-xs text-muted-foreground">{employeeOptionSubtitle(selectedEmployeeOption)}</p>`
+  - Arah ganti: dipilih
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:925` — selected
+  - Saat ini: `<Badge class="border-primary/20 bg-primary/15 text-primary">{employeeSourceLabel(selectedEmployeeOption)}</Badge>`
+  - Arah ganti: dipilih
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:974` — endpoint
+  - Saat ini: `? 'Muat ulang daftar pegawai, atau hubungi admin jika endpoint pegawai tidak dapat diakses.'`
+  - Arah ganti: Layanan sistem
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1050` — assignment
+  - Saat ini: `<Table.Cell class="font-medium">{assignment.subject_name}</Table.Cell>`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1051` — assignment
+  - Saat ini: `<Table.Cell class="text-muted-foreground">{assignment.subject_code}</Table.Cell>`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1052` — assignment
+  - Saat ini: `<Table.Cell>{assignment.teacher_name}</Table.Cell>`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1060` — assignment
+  - Saat ini: `disabled={subjectAssignmentSaveBusy || deleteSubjectAssignmentBusyId !== ''}`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1071` — assignment
+  - Saat ini: `disabled={subjectAssignmentSaveBusy || (deleteSubjectAssignmentBusyId !== '' && deleteSubjectAssignmentBusyId !== assignment.id)}`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1122` — assignment
+  - Saat ini: `<label for="subject-assignment-subject" class="block text-xs font-medium text-muted-foreground">Mata Pelajaran</label>`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1127` — assignment
+  - Saat ini: `id="subject-assignment-subject"`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1155` — assignment
+  - Saat ini: `<label for="subject-assignment-teacher" class="block text-xs font-medium text-muted-foreground">Guru Pengampu</label>`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1160` — assignment
+  - Saat ini: `id="subject-assignment-teacher"`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1178` — selected
+  - Saat ini: `<p class="font-medium text-foreground">{selectedSubjectOption ? subjectOptionLabel(selectedSubjectOption) : 'Mapel belum dipilih'}</p>`
+  - Arah ganti: dipilih
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1180` — selected
+  - Saat ini: `{selectedSubjectTeacherOption ? `${selectedSubjectTeacherOption.name} - ${employeeOptionSubtitle(selectedSubjectTeacherOption)}` : 'Guru pengampu belum dipilih'}`
+  - Arah ganti: dipilih
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1216` — assignment
+  - Saat ini: `disabled={!canSaveSubjectAssignment || deleteSubjectAssignmentBusyId !== ''}`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1243` — slot
+  - Saat ini: `<Card.Description>Slot pelajaran rombel dikelompokkan per hari dan diurutkan berdasarkan jam mulai.</Card.Description>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1247` — slot
+  - Saat ini: `<label for="journal-slot-date" class="block text-xs font-medium text-muted-foreground">Tanggal jurnal</label>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1276` — slot
+  - Saat ini: `<Badge variant="secondary">{group.slots.length} slot</Badge>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1283` — slot
+  - Saat ini: `<Badge variant="outline">{fmtTime(slot.start_time)}-{fmtTime(slot.end_time)}</Badge>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1285` — slot
+  - Saat ini: `<Badge variant="secondary">{slot.room_label}</Badge>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1288` — slot
+  - Saat ini: `<p class="mt-2 text-sm font-semibold text-foreground">{slot.subject_name} <span class="font-normal text-muted-foreground">({slot.subject_code})</span></p>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1289` — slot
+  - Saat ini: `<p class="mt-1 text-sm text-muted-foreground">{slot.teacher_name}</p>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1291` — slot
+  - Saat ini: `<p class="mt-2 rounded-md bg-background px-2 py-1 text-xs text-muted-foreground">{slot.notes}</p>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1295` — slot
+  - Saat ini: `Jurnal slot ini hanya bisa dibuka pada hari {dayLabels[slot.day_of_week] ?? 'jadwal'}.`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1341` — slot
+  - Saat ini: `<EmptyStatePanel compact title="Belum ada slot jadwal" description="Jadwal mingguan akan tampil setelah slot dibuat dari Guru Mapel rombel ini." />`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1356` — assignment
+  - Saat ini: `<label for="timetable-assignment" class="block text-xs font-medium text-muted-foreground">Guru Mapel</label>`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1358` — assignment
+  - Saat ini: `id="timetable-assignment"`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1365` — assignment
+  - Saat ini: `<option value={assignment.id}>{subjectAssignmentScheduleLabel(assignment)}</option>`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1417` — selected, assignment
+  - Saat ini: `<p class="font-medium text-foreground">{selectedTimetableAssignment.subject_name}</p>`
+  - Arah ganti: dipilih, penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1418` — selected, assignment
+  - Saat ini: `<p class="mt-1 text-xs text-muted-foreground">{selectedTimetableAssignment.teacher_name} - {dayLabels[Number(timetableDay)] ?? 'Hari belum dipilih'} {timetableStart || '--:--'}-{timetableEnd || '--:--'}</p>`
+  - Arah ganti: dipilih, penugasan
+- `apps/web-admin/src/routes/akademik/rombel/[id]/+page.svelte:1430` — slot
+  - Saat ini: `disabled={!canSaveTimetableSlot || deleteTimetableBusyId !== ''}`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:258` — selected
+  - Saat ini: `formDay = selectedDay !== 'all' ? selectedDay : '1';`
+  - Arah ganti: dipilih
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:274` — slot
+  - Saat ini: `formRoom = slot.room_label ?? '';`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:275` — slot
+  - Saat ini: `formNotes = slot.notes ?? '';`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:277` — slot
+  - Saat ini: `setTimeout(() => document.getElementById('timetable-slot-form')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:307` — slot
+  - Saat ini: `method: editingSlot ? 'PUT' : 'POST',`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:319` — slot
+  - Saat ini: `toast.success(editingSlot ? 'Slot jadwal diperbarui' : 'Slot jadwal ditambahkan');`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:333` — slot
+  - Saat ini: `title: 'Hapus Slot Jadwal',`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:334` — slot
+  - Saat ini: `message: `Hapus ${slot.subject_name} ${slot.class_code} pada ${dayLabels[slot.day_of_week] ?? 'hari ini'} pukul ${fmtTime(slot.start_time)}-${fmtTime(slot.end_time)}?`,`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:343` — slot
+  - Saat ini: `toast.success('Slot jadwal dihapus');`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:346` — slot
+  - Saat ini: `toast.error(errorMessage(error, 'Gagal menghapus slot jadwal.'));`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:372` — assignment
+  - Saat ini: `return `${assignment.subject_name} - ${assignment.teacher_name} (${activity})`;`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:380` — slot
+  - Saat ini: `return `${fmtTime(slot.start_time)}-${fmtTime(slot.end_time)}`;`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:415` — slot
+  - Saat ini: `<Button variant="outline" onclick={() => resetForm()} disabled={slotSaveBusy}>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:419` — slot
+  - Saat ini: `<Button variant="outline" onclick={() => void refreshWeekly()} disabled={refreshBusy || slotSaveBusy} aria-label="Muat ulang jadwal">`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:459` — slot
+  - Saat ini: `<Card.Description>Total Slot</Card.Description>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:460` — slot
+  - Saat ini: `<Card.Title class="text-2xl">{summary.totalSlots}</Card.Title>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:503` — selected
+  - Saat ini: `<select id="class-filter" bind:value={selectedClassId} class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">`
+  - Arah ganti: dipilih
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:513` — selected
+  - Saat ini: `<select id="teacher-filter" bind:value={selectedTeacherId} class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">`
+  - Arah ganti: dipilih
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:523` — selected
+  - Saat ini: `<select id="day-filter" bind:value={selectedDay} class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">`
+  - Arah ganti: dipilih
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:531` — slot
+  - Saat ini: `<label for="slot-search" class="text-sm font-medium">Cari</label>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:534` — slot
+  - Saat ini: `<Input id="slot-search" class="pl-9" bind:value={searchQuery} placeholder="Mapel, guru, ruang, atau rombel" />`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:550` — slot
+  - Saat ini: `<Card.Description>{filteredSlots.length} slot tampil dari {summary.totalSlots} slot aktif.</Card.Description>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:562` — slot
+  - Saat ini: `<EmptyStatePanel compact title="Slot jadwal belum ditemukan" description="Ubah filter atau tambahkan slot pertama untuk rombel yang dipilih." />`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:571` — slot
+  - Saat ini: `<Badge variant="outline">{group.slots.length} slot</Badge>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:576` — slot
+  - Saat ini: `<div class={`rounded-lg border p-4 ${slot.conflict_status !== 'ok' ? 'border-destructive/40 bg-destructive/5' : 'border-border bg-card'}`}>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:579` — slot
+  - Saat ini: `<p class="truncate text-sm font-semibold text-foreground">{slot.subject_name}</p>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:580` — slot
+  - Saat ini: `<p class="mt-1 text-xs text-muted-foreground">{slot.class_code} - {slot.teacher_name}</p>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:582` — slot
+  - Saat ini: `<Badge variant={slot.conflict_status === 'ok' ? 'outline' : 'destructive'}>{slot.conflict_label}</Badge>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:585` — slot
+  - Saat ini: `<Badge variant="secondary">{slotTimeLabel(slot)}</Badge>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:586` — slot
+  - Saat ini: `<Badge variant="outline">{slot.room_label || 'Ruang belum diisi'}</Badge>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:592` — slot
+  - Saat ini: `<p class="mt-3 text-xs text-muted-foreground">{slot.notes}</p>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:596` — slot
+  - Saat ini: `{#each slotConflicts(slot) as conflict (`${slot.id}-${conflict.conflict_type}-${conflict.related_slot_id ?? 'self'}`)}`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:601` — slot
+  - Saat ini: `: (conflict.related_slot_id ? `${conflict.related_class_code} ${conflict.related_subject_name}` : conflict.message)}`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:607` — slot
+  - Saat ini: `<Button variant="outline" size="xs" href={resolve(`/akademik/rombel/${slot.class_id}` as '/')}>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:611` — slot
+  - Saat ini: `<Button variant="outline" size="xs" onclick={() => editSlot(slot)} disabled={slotSaveBusy || deleteBusyId !== ''}>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:620` — slot
+  - Saat ini: `disabled={slotSaveBusy || (deleteBusyId !== '' && deleteBusyId !== slot.id)}`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:644` — slot
+  - Saat ini: `<Card.Description>{conflicts.length} konflik terdeteksi dari slot tahun ajaran aktif.</Card.Description>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:649` — slot
+  - Saat ini: `<EmptyStatePanel compact title="Tidak ada konflik jadwal" description="Slot aktif belum memiliki bentrok rombel, guru, atau ruang." />`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:657` — slot
+  - Saat ini: `<Table.Head>Slot Utama</Table.Head>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:658` — slot
+  - Saat ini: `<Table.Head>Slot Terkait</Table.Head>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:663` — slot
+  - Saat ini: `{#each conflicts as conflict (`${conflict.conflict_type}-${conflict.slot_id}-${conflict.related_slot_id ?? 'self'}`)}`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:693` — slot
+  - Saat ini: `<Card.Root id="timetable-slot-form">`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:697` — slot
+  - Saat ini: `<Card.Title class="text-base">{editingSlot ? 'Edit Slot Jadwal' : 'Tambah Slot Jadwal'}</Card.Title>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:698` — selected, assignment
+  - Saat ini: `<Card.Description>{selectedAssignment ? assignmentLabel(selectedAssignment) : 'Pilih rombel dan guru mapel aktif.'}</Card.Description>`
+  - Arah ganti: dipilih, penugasan
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:701` — slot
+  - Saat ini: `<Button variant="ghost" size="icon-sm" aria-label="Batalkan edit slot" onclick={() => resetForm(editingSlot?.class_id ?? formClassId)} disabled={slotSaveBusy}>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:712` — slot
+  - Saat ini: `<label for="slot-class" class="text-sm font-medium">Rombel</label>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:714` — slot
+  - Saat ini: `id="slot-class"`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:727` — assignment, slot
+  - Saat ini: `<label for="slot-assignment" class="text-sm font-medium">Guru Mapel</label>`
+  - Arah ganti: jam pelajaran / jadwal, penugasan
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:729` — assignment, slot
+  - Saat ini: `id="slot-assignment"`
+  - Arah ganti: jam pelajaran / jadwal, penugasan
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:736` — assignment
+  - Saat ini: `<option value={assignment.id}>{assignmentLabel(assignment)}</option>`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:745` — slot
+  - Saat ini: `<label for="slot-day" class="text-sm font-medium">Hari</label>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:746` — slot
+  - Saat ini: `<select id="slot-day" bind:value={formDay} disabled={slotSaveBusy} class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:747` — slot
+  - Saat ini: `{#each Object.entries(dayLabels) as [day, label] (`slot-day-${day}`)}`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:753` — slot
+  - Saat ini: `<label for="slot-room" class="text-sm font-medium">Ruang</label>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:754` — slot
+  - Saat ini: `<Input id="slot-room" bind:value={formRoom} placeholder="Mis. VII A / Lab IPA" disabled={slotSaveBusy} />`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:759` — slot
+  - Saat ini: `<label for="slot-start" class="text-sm font-medium">Mulai</label>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:763` — slot
+  - Saat ini: `<label for="slot-end" class="text-sm font-medium">Selesai</label>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:768` — slot
+  - Saat ini: `<label for="slot-notes" class="text-sm font-medium">Catatan</label>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:769` — slot
+  - Saat ini: `<Textarea id="slot-notes" bind:value={formNotes} rows={3} disabled={slotSaveBusy} />`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:773` — slot
+  - Saat ini: `<Button variant="outline" onclick={() => resetForm(editingSlot?.class_id ?? formClassId)} disabled={slotSaveBusy}>Batal</Button>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:775` — slot
+  - Saat ini: `<LoadingButton loading={slotSaveBusy} loadingLabel="Menyimpan..." disabled={!canSaveSlot} onclick={() => void saveSlot()}>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/jadwal/+page.svelte:776` — slot
+  - Saat ini: `{editingSlot ? 'Simpan Perubahan' : 'Tambah Slot'}`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:146` — slot
+  - Saat ini: `{ value: 'jadwal', label: 'Jadwal Pelajaran', description: 'Slot hari, jam, ruang, dan catatan.' }`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:255` — apply
+  - Saat ini: `applyChallengeInput = '';`
+  - Arah ganti: Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:326` — JSON
+  - Saat ini: `body: JSON.stringify({ confirmation: 'AKTIFKAN' })`
+  - Arah ganti: Data
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:379` — apply
+  - Saat ini: `applyChallengeInput = '';`
+  - Arah ganti: Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:380` — apply, rollover
+  - Saat ini: `toast.success('Apply rollover tahun ajaran selesai.');`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:383` — apply, rollover
+  - Saat ini: `toast.error(errorMessage(error, 'Gagal apply rollover tahun ajaran.'));`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:406` — dry-run
+  - Saat ini: `toast.success('Dry-run import selesai. Belum ada data yang diubah.');`
+  - Arah ganti: Cek data sebelum impor / pratinjau
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:409` — dry-run
+  - Saat ini: `toast.error(errorMessage(error, 'Gagal melakukan dry-run import.'));`
+  - Arah ganti: Cek data sebelum impor / pratinjau
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:457` — rollover
+  - Saat ini: `<p class="mt-1 text-sm leading-6 text-muted-foreground">Kelola periode akademik, preview rollover, dan import-export data dasar secara aman.</p>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:514` — rollover
+  - Saat ini: `<p class="text-xs font-semibold uppercase text-warning">Rollover Aman</p>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:516` — apply
+  - Saat ini: `<p class="text-sm text-muted-foreground">Apply berjalan lewat Go API dan transaksi.</p>`
+  - Arah ganti: Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:615` — rollover
+  - Saat ini: `<section class="grid gap-4 xl:grid-cols-[24rem_1fr]" aria-labelledby="rollover-title">`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:618` — rollover
+  - Saat ini: `<Card.Title id="rollover-title" class="text-base">Preview Kenaikan</Card.Title>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:619` — apply
+  - Saat ini: `<Card.Description>Jalankan preview sebelum apply. Data tahun lama tidak dihapus.</Card.Description>`
+  - Arah ganti: Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:640` — rollover
+  - Saat ini: `<LoadingButton class="w-full" loading={previewBusy} loadingLabel="Membuat preview..." disabled={!canPreview} onclick={() => void previewRollover()}>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:645` — apply, rollover
+  - Saat ini: `<p class="font-medium text-foreground">Apply Rollover</p>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:648` — apply, rollover
+  - Saat ini: `{rolloverPreview?.apply_challenge ?? 'Jalankan preview dulu'}`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:651` — apply, rollover
+  - Saat ini: `<label for="rollover-apply-challenge" class="mb-1 block text-sm font-medium">Challenge Apply</label>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:653` — apply, rollover
+  - Saat ini: `id="rollover-apply-challenge"`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:662` — apply, rollover
+  - Saat ini: `<LoadingButton class="mt-3 w-full" loading={applyBusy} loadingLabel="Apply berjalan..." disabled={!canApplyRollover} onclick={() => void applyRollover()}>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:672` — apply
+  - Saat ini: `<Card.Description>Gunakan angka ini untuk meninjau dampak sebelum apply.</Card.Description>`
+  - Arah ganti: Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:680` — apply
+  - Saat ini: `<p class="text-sm font-semibold text-primary">Apply Selesai</p>`
+  - Arah ganti: Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:681` — apply, rollover
+  - Saat ini: `<p class="text-sm text-muted-foreground">{rolloverApplyResult.source_academic_year_name} ke {rolloverApplyResult.target_academic_year_name}</p>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:690` — apply, rollover
+  - Saat ini: `['Rombel baru', rolloverApplyResult.counts.classes_created],`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:691` — apply, rollover
+  - Saat ini: `['Rombel reuse', rolloverApplyResult.counts.classes_reused],`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:692` — apply, rollover
+  - Saat ini: `['Siswa naik', rolloverApplyResult.counts.students_promoted],`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:693` — apply, rollover
+  - Saat ini: `['Siswa dilewati', rolloverApplyResult.counts.students_skipped],`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:694` — apply, rollover
+  - Saat ini: `['Wali kelas', rolloverApplyResult.counts.homerooms_copied],`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:695` — apply, rollover, assignment
+  - Saat ini: `['Guru mapel', rolloverApplyResult.counts.assignments_copied],`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan, penugasan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:696` — apply, rollover, slot
+  - Saat ini: `['Slot jadwal', rolloverApplyResult.counts.timetable_slots_copied]`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, Terapkan, jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:716` — rollover
+  - Saat ini: `<p class="mt-1 text-2xl font-semibold">{rolloverPreview.counts.classes_to_create}</p>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:720` — rollover
+  - Saat ini: `<p class="mt-1 text-2xl font-semibold">{rolloverPreview.counts.students_to_promote}</p>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:724` — rollover
+  - Saat ini: `<p class="mt-1 text-2xl font-semibold">{rolloverPreview.counts.students_without_next_class}</p>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:730` — rollover, assignment
+  - Saat ini: `<p class="mt-1 text-lg font-semibold">{rolloverPreview.counts.homeroom_assignments_to_copy}</p>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, penugasan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:734` — rollover, assignment
+  - Saat ini: `<p class="mt-1 text-lg font-semibold">{rolloverPreview.counts.subject_assignments_to_copy}</p>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, penugasan
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:737` — slot
+  - Saat ini: `<p class="text-muted-foreground">Slot jadwal kandidat</p>`
+  - Arah ganti: jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:738` — rollover, slot
+  - Saat ini: `<p class="mt-1 text-lg font-semibold">{rolloverPreview.counts.timetable_slots_to_copy}</p>`
+  - Arah ganti: Kenaikan kelas / persiapan tahun ajaran, jam pelajaran / jadwal
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:809` — dry-run
+  - Saat ini: `<Card.Description>Template berbahasa Indonesia. Dry-run tidak mengubah data.</Card.Description>`
+  - Arah ganti: Cek data sebelum impor / pratinjau
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:819` — selected
+  - Saat ini: `<p class="mt-1 text-xs text-muted-foreground">{selectedImportKind.description}</p>`
+  - Arah ganti: dipilih
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:838` — dry-run
+  - Saat ini: `<Card.Title class="text-base">Hasil Dry-run</Card.Title>`
+  - Arah ganti: Cek data sebelum impor / pratinjau
+- `apps/web-admin/src/routes/akademik/tahun-ajaran/+page.svelte:890` — dry-run
+  - Saat ini: `<EmptyStatePanel compact title="Belum ada dry-run" description="Unggah CSV dari template lalu jalankan dry-run untuk melihat tambah, ubah, skip, dan error." />`
+  - Arah ganti: Cek data sebelum impor / pratinjau
+- `apps/web-admin/src/routes/akademik/guru-mapel/+page.svelte:52` — assignment
+  - Saat ini: `status: 'complete' | 'missing_teacher' | 'missing_assignment';`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/guru-mapel/+page.svelte:159` — assignment
+  - Saat ini: `return cellByKey.get(cellKey(classId, subjectId))?.status ?? 'missing_assignment';`
+  - Arah ganti: penugasan
+- `apps/web-admin/src/routes/akademik/guru-mapel/+page.svelte:260` — matrix
+  - Saat ini: `function matrixErrorMessage(error: unknown) {`
+  - Arah ganti: Tabel penugasan
+- `apps/web-admin/src/routes/akademik/guru-mapel/+page.svelte:266` — matrix, assignment
+  - Saat ini: `console.error('Subject assignment matrix render failed', error);`
+  - Arah ganti: Tabel penugasan, penugasan
+- `apps/web-admin/src/routes/akademik/guru-mapel/+page.svelte:288` — matrix
+  - Saat ini: `<Button variant="outline" onclick={() => void refreshMatrix()} disabled={refreshBusy || saveBusy} aria-label="Muat ulang guru mapel">`
+  - Arah ganti: Tabel penugasan
+- `apps/web-admin/src/routes/akademik/guru-mapel/+page.svelte:321` — matrix
+  - Saat ini: `<Card.Title class="text-xl">{matrix?.academic_year_name || 'Belum ada'}</Card.Title>`
+  - Arah ganti: Tabel penugasan
+- `apps/web-admin/src/routes/akademik/guru-mapel/+page.svelte:346` — matrix
+  - Saat ini: `<label for="matrix-level-filter" class="text-sm font-medium">Tingkat</label>`
+  - Arah ganti: Tabel penugasan
+- `apps/web-admin/src/routes/akademik/guru-mapel/+page.svelte:348` — matrix
+  - Saat ini: `id="matrix-level-filter"`
+  - Arah ganti: Tabel penugasan
+- `apps/web-admin/src/routes/akademik/guru-mapel/+page.svelte:360` — matrix
+  - Saat ini: `<label for="matrix-subject-search" class="text-sm font-medium">Cari Mapel</label>`
+  - Arah ganti: Tabel penugasan
+- `apps/web-admin/src/routes/akademik/guru-mapel/+page.svelte:363` — matrix
+  - Saat ini: `<Input id="matrix-subject-search" class="pl-9" bind:value={subjectSearch} placeholder="Nama, kode, atau kategori" disabled={saveBusy} />`
+  - Arah ganti: Tabel penugasan
+- `apps/web-admin/src/routes/students/+page.svelte:722` — selected
+  - Saat ini: `<p class="text-sm font-medium text-primary">{selectedCount} siswa dipilih</p>`
+  - Arah ganti: dipilih
+
+## Catatan Pelaksanaan Tahap Berikutnya
+
+1. Mulai dari halaman Tahun Ajaran karena paling banyak istilah `rollover`, `apply`, `dry-run`, dan `token`.
+2. Lanjut Dashboard, Mapel, Guru Mapel, Rombel, Jadwal, lalu Siswa.
+3. Pertahankan nama variabel internal seperti `payload`, `assignment`, `slot`, `dirty` bila tidak tampil ke user; yang dibersihkan hanya copy user-facing.
+4. Setelah perubahan copy, jalankan `npm --prefix apps/web-admin run check`.
