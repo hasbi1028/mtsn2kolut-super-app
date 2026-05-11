@@ -489,11 +489,11 @@
 				}
 			);
 			await readClientJson<unknown>(response);
-			toast.success(editingTimetableSlotId ? 'Slot jadwal diperbarui' : 'Slot jadwal ditambahkan');
+			toast.success(editingTimetableSlotId ? 'Jam pelajaran diperbarui' : 'Jam pelajaran ditambahkan');
 			resetTimetableSlotForm();
 			await refreshDetail();
 		} catch (error) {
-			toast.error(errorMessage(error, 'Gagal menyimpan slot jadwal'));
+			toast.error(errorMessage(error, 'Gagal menyimpan jam pelajaran'));
 		} finally {
 			timetableSaveBusy = false;
 		}
@@ -501,7 +501,7 @@
 
 	async function deleteTimetableSlot(slot: TimetableSlot) {
 		if (!(await confirmAction({
-			title: 'Hapus Slot Jadwal',
+			title: 'Hapus Jam Pelajaran',
 			message: `Hapus jadwal ${slot.subject_name} pada ${dayLabels[slot.day_of_week] ?? `hari ${slot.day_of_week}`} pukul ${fmtTime(slot.start_time)}-${fmtTime(slot.end_time)}?`,
 			confirmLabel: 'Hapus',
 			tone: 'danger'
@@ -510,13 +510,13 @@
 		try {
 			const response = await fetch(`/api/academic/rombel/${classId}/timetable-slots/${slot.id}`, { method: 'DELETE' });
 			await readClientJson<unknown>(response);
-			toast.success('Slot jadwal dihapus');
+			toast.success('Jam pelajaran dihapus');
 			if (editingTimetableSlotId === slot.id) {
 				resetTimetableSlotForm();
 			}
 			await refreshDetail();
 		} catch (error) {
-			toast.error(errorMessage(error, 'Gagal menghapus slot jadwal'));
+			toast.error(errorMessage(error, 'Gagal menghapus jam pelajaran'));
 		} finally {
 			deleteTimetableBusyId = '';
 		}
@@ -529,7 +529,7 @@
 			return;
 		}
 		if (!isJournalDateCompatible(slot)) {
-			journalOpenError = `Tanggal jurnal harus jatuh pada hari ${dayLabels[slot.day_of_week] ?? 'jadwal'} untuk slot ini.`;
+			journalOpenError = `Tanggal jurnal harus jatuh pada hari ${dayLabels[slot.day_of_week] ?? 'jadwal'} untuk jam pelajaran ini.`;
 			toast.error(journalOpenError);
 			return;
 		}
@@ -700,13 +700,13 @@
 				</Card.Root>
 				<Card.Root>
 					<Card.Header class="pb-2">
-						<Card.Description>Assignment</Card.Description>
+						<Card.Description>Penugasan</Card.Description>
 						<Card.Title class="text-2xl">{rombel.total_subject_assignments}</Card.Title>
 					</Card.Header>
 				</Card.Root>
 				<Card.Root>
 					<Card.Header class="pb-2">
-						<Card.Description>Slot Jadwal</Card.Description>
+						<Card.Description>Jam Pelajaran</Card.Description>
 						<Card.Title class="text-2xl">{rombel.total_timetable_slots}</Card.Title>
 					</Card.Header>
 				</Card.Root>
@@ -756,7 +756,7 @@
 					<Card.Root>
 						<Card.Header>
 							<Card.Title class="text-base">Siswa Rombel</Card.Title>
-							<Card.Description>Daftar siswa aktif dan data orang tua lama dari master siswa.</Card.Description>
+							<Card.Description>Daftar siswa aktif dan data orang tua lama dari data induk siswa.</Card.Description>
 						</Card.Header>
 						<Card.Content class="p-0">
 							<div class="overflow-x-auto">
@@ -766,7 +766,7 @@
 											<Table.Head>Siswa</Table.Head>
 											<Table.Head>NISN</Table.Head>
 											<Table.Head>JK</Table.Head>
-											<Table.Head>Orang Tua Legacy</Table.Head>
+											<Table.Head>Data Wali Lama</Table.Head>
 											<Table.Head class="text-right">Link Orang Tua</Table.Head>
 											<Table.Head>Status</Table.Head>
 										</Table.Row>
@@ -806,7 +806,7 @@
 					<Card.Root>
 						<Card.Header>
 							<Card.Title class="text-base">Orang Tua Terhubung</Card.Title>
-							<Card.Description>Relasi ayah, ibu, wali, atau lainnya yang sudah dinormalisasi ke tabel orang tua.</Card.Description>
+							<Card.Description>Relasi ayah, ibu, wali, atau lainnya yang sudah dirapikan ke data orang tua.</Card.Description>
 						</Card.Header>
 						<Card.Content class="p-0">
 							<div class="overflow-x-auto">
@@ -898,7 +898,7 @@
 						<Card.Root>
 							<Card.Header>
 								<Card.Title class="text-base">{activeHomeroom ? 'Perbarui Wali Kelas' : 'Tetapkan Wali Kelas'}</Card.Title>
-								<Card.Description>Pilih dari pegawai aktif. Guru mapel dan wali aktif saat ini tetap muncul sebagai fallback.</Card.Description>
+								<Card.Description>Pilih dari pegawai aktif. Guru mapel dan wali aktif saat ini tetap muncul sebagai pilihan cadangan.</Card.Description>
 							</Card.Header>
 							<Card.Content class="space-y-3">
 								<div class="space-y-1.5">
@@ -971,7 +971,7 @@
 											compact
 											title="Belum ada opsi wali kelas"
 											description={employeesError
-												? 'Muat ulang daftar pegawai, atau hubungi admin jika endpoint pegawai tidak dapat diakses.'
+												? 'Muat ulang daftar pegawai, atau hubungi admin jika layanan data pegawai belum dapat diakses.'
 												: 'Tambahkan pegawai aktif lebih dulu agar wali kelas bisa dipilih.'}
 										/>
 									{:else if filteredEmployeeOptions.length === 0}
@@ -1215,7 +1215,7 @@
 										loadingLabel="Menyimpan..."
 										disabled={!canSaveSubjectAssignment || deleteSubjectAssignmentBusyId !== ''}
 										onclick={() => void saveSubjectAssignment()}
-										label={editingSubjectAssignmentId ? 'Simpan Perubahan' : 'Tambah Guru Mapel'}
+										label={editingSubjectAssignmentId ? 'Simpan perubahan' : 'Tambah Guru Mapel'}
 									/>
 									{#if editingSubjectAssignmentId}
 										<Button
@@ -1240,7 +1240,7 @@
 								<div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
 									<div class="min-w-0">
 										<Card.Title class="text-base">Jadwal Mingguan</Card.Title>
-										<Card.Description>Slot pelajaran rombel dikelompokkan per hari dan diurutkan berdasarkan jam mulai.</Card.Description>
+										<Card.Description>Jam pelajaran rombel dikelompokkan per hari dan diurutkan berdasarkan jam mulai.</Card.Description>
 									</div>
 									<div class="flex flex-wrap items-end gap-2">
 										<div class="space-y-1.5">
@@ -1273,7 +1273,7 @@
 										<section class="rounded-lg border border-border bg-muted/20 p-3">
 											<div class="flex flex-wrap items-center justify-between gap-2">
 												<h3 class="text-sm font-semibold text-foreground">{group.label}</h3>
-												<Badge variant="secondary">{group.slots.length} slot</Badge>
+												<Badge variant="secondary">{group.slots.length} jam</Badge>
 											</div>
 											<div class="mt-3 divide-y divide-border">
 												{#each group.slots as slot (slot.id)}
@@ -1292,7 +1292,7 @@
 															{/if}
 															{#if journalDate && !isJournalDateCompatible(slot)}
 																<p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
-																	Jurnal slot ini hanya bisa dibuka pada hari {dayLabels[slot.day_of_week] ?? 'jadwal'}.
+																	Jurnal jam pelajaran ini hanya bisa dibuka pada hari {dayLabels[slot.day_of_week] ?? 'jadwal'}.
 																</p>
 															{/if}
 														</div>
@@ -1338,19 +1338,19 @@
 										</section>
 									{/each}
 								{:else}
-									<EmptyStatePanel compact title="Belum ada slot jadwal" description="Jadwal mingguan akan tampil setelah slot dibuat dari Guru Mapel rombel ini." />
+									<EmptyStatePanel compact title="Belum ada jam pelajaran" description="Jadwal mingguan akan tampil setelah jam pelajaran dibuat dari penugasan guru mapel rombel ini." />
 								{/if}
 							</Card.Content>
 						</Card.Root>
 
 						<Card.Root>
 							<Card.Header>
-								<Card.Title class="text-base">{editingTimetableSlotId ? 'Edit Slot Jadwal' : 'Tambah Slot Jadwal'}</Card.Title>
-								<Card.Description>Pilih Guru Mapel rombel, hari, waktu, ruang, dan catatan operasional.</Card.Description>
+								<Card.Title class="text-base">{editingTimetableSlotId ? 'Edit jam pelajaran' : 'Tambah jam pelajaran'}</Card.Title>
+								<Card.Description>Pilih penugasan guru mapel rombel, hari, waktu, ruang, dan catatan operasional.</Card.Description>
 							</Card.Header>
 							<Card.Content class="space-y-3">
 								{#if detail.subject_assignments.length === 0}
-									<EmptyStatePanel compact title="Guru Mapel Belum Tersedia" description="Tambahkan Guru Mapel terlebih dahulu sebelum menyusun jadwal mingguan rombel." />
+									<EmptyStatePanel compact title="Penugasan guru mapel belum tersedia" description="Tambahkan penugasan guru mapel terlebih dahulu sebelum menyusun jadwal mingguan rombel." />
 								{:else}
 									<div class="space-y-1.5">
 										<label for="timetable-assignment" class="block text-xs font-medium text-muted-foreground">Guru Mapel</label>
@@ -1432,10 +1432,10 @@
 										>
 											{#if editingTimetableSlotId}
 												<Pencil class="mr-2 size-4" />
-												Simpan Perubahan
+												Simpan perubahan
 											{:else}
 												<Plus class="mr-2 size-4" />
-												Tambah Slot
+												Tambah jam pelajaran
 											{/if}
 										</LoadingButton>
 										{#if editingTimetableSlotId}

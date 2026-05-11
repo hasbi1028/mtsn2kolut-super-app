@@ -67,10 +67,10 @@
 	let studentAccountResult = $state<StudentAccountGenerationResult | null>(null);
 
 	const studentFormSteps: Array<{ id: StudentFormStep; label: string; description: string }> = [
-		{ id: 'identity', label: 'Identitas', description: 'NIS, NISN, nama, dan gender' },
-		{ id: 'class', label: 'Kelas', description: 'Kelas aktif dan lifecycle' },
+		{ id: 'identity', label: 'Identitas', description: 'NIS, NISN, nama, dan jenis kelamin' },
+		{ id: 'class', label: 'Rombel', description: 'Rombel aktif dan status siswa' },
 		{ id: 'guardian', label: 'Wali', description: 'Kontak orang tua/wali' },
-		{ id: 'status', label: 'Status', description: 'Aktif/nonaktif dan review akhir' }
+		{ id: 'status', label: 'Status', description: 'Aktif/nonaktif dan pemeriksaan akhir' }
 	];
 
 	const studentFormStepIndex = $derived(studentFormSteps.findIndex((step) => step.id === studentFormStep));
@@ -303,7 +303,7 @@
 	async function deleteStudent(id: string, nama: string) {
 		if (!(await confirmAction({
 			title: 'Hapus Data Siswa',
-			message: `Hapus siswa "${nama}"? Data terkait siswa ini dapat memengaruhi kelas, nilai, dan CBT.`,
+			message: `Hapus siswa "${nama}"? Data terkait siswa ini dapat memengaruhi rombel, nilai, dan asesmen.`,
 			confirmLabel: 'Hapus Siswa',
 			tone: 'danger'
 		}))) return;
@@ -328,7 +328,7 @@
 			mutated: 'Mutasi',
 		};
 		if (!(await confirmAction({
-			title: 'Ubah Lifecycle Siswa',
+			title: 'Ubah Status Siswa',
 			message: `Ubah status ${student.nama} menjadi ${labels[status] ?? status}?`,
 			confirmLabel: 'Ubah Status',
 			tone: 'warning'
@@ -342,10 +342,10 @@
 				body: JSON.stringify({ status }),
 			});
 			await readClientJson<unknown>(res);
-			showToast('Lifecycle siswa diperbarui');
+			showToast('Status siswa diperbarui');
 			await refreshOverviewAfterMutation();
 		} catch (error) {
-			showError(mutationErrorMessage(error, 'Gagal memperbarui lifecycle siswa. Periksa koneksi lalu coba lagi.'));
+			showError(mutationErrorMessage(error, 'Gagal memperbarui status siswa. Periksa koneksi lalu coba lagi.'));
 		} finally {
 			lifecycleBusyKey = '';
 		}
@@ -393,9 +393,9 @@
 		try {
 			studentAccountPreview = await previewStudentAccounts();
 			studentAccountResult = null;
-			showToast('Preview akun siswa siap ditinjau');
+			showToast('Pratinjau akun siswa siap ditinjau');
 		} catch (error) {
-			showError(mutationErrorMessage(error, 'Gagal memuat preview akun siswa.'));
+			showError(mutationErrorMessage(error, 'Gagal memuat pratinjau akun siswa.'));
 		} finally {
 			studentAccountBusy = '';
 		}
@@ -404,18 +404,18 @@
 	async function generateAccounts() {
 		if (!canManageStudentAccounts) return;
 		if (!(await confirmAction({
-			title: 'Generate Akun Siswa',
-			message: 'Password awal akan memakai NISN siswa dan hanya tampil sekali. Simpan/unduh hasil generate sekarang.',
-			confirmLabel: 'Generate Akun',
+			title: 'Buat Akun Siswa',
+			message: 'Password awal akan memakai NISN siswa dan hanya tampil sekali. Simpan/unduh hasil pembuatan akun sekarang.',
+			confirmLabel: 'Buat Akun',
 			tone: 'warning'
 		}))) return;
 		studentAccountBusy = 'generate';
 		try {
 			studentAccountResult = await generateStudentAccounts();
 			studentAccountPreview = studentAccountResult;
-			showToast('Generate akun siswa selesai');
+			showToast('Pembuatan akun siswa selesai');
 		} catch (error) {
-			showError(mutationErrorMessage(error, 'Gagal generate akun siswa.'));
+			showError(mutationErrorMessage(error, 'Gagal membuat akun siswa.'));
 		} finally {
 			studentAccountBusy = '';
 		}
@@ -479,12 +479,12 @@
 				<div class="rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4">
 					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">Total Siswa</p>
 					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.students.length}</p>
-					<p class="text-sm text-muted-foreground">seluruh entitas siswa yang sudah tersimpan</p>
+					<p class="text-sm text-muted-foreground">seluruh data siswa yang sudah tersimpan</p>
 				</div>
 				<div class="rounded-2xl border border-accent bg-accent/60 px-4 py-4">
 					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-foreground">Siswa Aktif</p>
 					<p class="mt-2 text-2xl font-semibold text-foreground">{overview.students.filter((item) => item.status === 'active').length}</p>
-					<p class="text-sm text-muted-foreground">siap dipakai untuk kelas, nilai, dan CBT</p>
+					<p class="text-sm text-muted-foreground">siap dipakai untuk rombel, nilai, dan asesmen</p>
 				</div>
 				<div class="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-4">
 					<p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-warning">Relasi Ortu</p>
@@ -500,9 +500,9 @@
 			<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 				<div>
 					<Card.Title class="text-base">Akun Siswa</Card.Title>
-					<p class="mt-1 text-sm text-muted-foreground">Password awal memakai NISN siswa dan hanya tampil sekali. Simpan/unduh hasil generate sekarang.</p>
+					<p class="mt-1 text-sm text-muted-foreground">Password awal memakai NISN siswa dan hanya tampil sekali. Simpan/unduh hasil pembuatan akun sekarang.</p>
 					<p class="mt-1 text-sm text-muted-foreground">Akun wajib mengganti password saat login pertama.</p>
-					<p class="mt-1 text-sm text-muted-foreground">Data resmi tetap dikunci dan perubahan melalui approval.</p>
+					<p class="mt-1 text-sm text-muted-foreground">Data resmi tetap dilindungi dan perubahan melalui persetujuan.</p>
 				</div>
 				<div class="flex flex-wrap gap-2">
 					<LoadingButton
@@ -511,20 +511,20 @@
 						loadingLabel="Memuat..."
 						disabled={!canManageStudentAccounts || studentAccountBusy !== ''}
 						onclick={() => void previewAccounts()}
-						label="Preview akun siswa"
+						label="Pratinjau akun siswa"
 					/>
 					<LoadingButton
 						loading={studentAccountBusy === 'generate'}
-						loadingLabel="Generate..."
+						loadingLabel="Membuat..."
 						disabled={!canManageStudentAccounts || studentAccountBusy !== ''}
 						onclick={() => void generateAccounts()}
-						label="Generate akun siswa"
+						label="Buat akun siswa"
 					/>
 				</div>
 			</div>
 			{#if !canManageStudentAccounts}
 				<p class="mt-3 rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
-					Aksi akun siswa memerlukan permission student_accounts.manage.
+					Aksi akun siswa memerlukan izin pengelolaan akun siswa.
 				</p>
 			{/if}
 		</Card.Header>
@@ -579,9 +579,9 @@
 	<EntityDrawer
 		bind:open={showForm}
 		title={editId ? 'Edit Data Siswa' : 'Tambah Siswa Baru'}
-		subtitle={editId ? 'Perbarui identitas, kelas, wali, dan status siswa.' : 'Isi data pokok siswa untuk kelas, nilai, portal orang tua, dan CBT.'}
+		subtitle={editId ? 'Perbarui identitas, kelas, wali, dan status siswa.' : 'Isi data pokok siswa untuk rombel, nilai, akun orang tua, dan asesmen.'}
 		hasUnsavedChanges={studentFormDirty}
-		closeLabel="Tutup drawer siswa"
+		closeLabel="Tutup panel siswa"
 	>
 				<div class="mb-4 grid gap-2 md:grid-cols-4">
 					{#each studentFormSteps as step, index (step.id)}
@@ -634,7 +634,7 @@
 								</select>
 							</div>
 							<div>
-								<label for="s-status" class="text-xs text-muted-foreground mb-1 block">Lifecycle Siswa</label>
+								<label for="s-status" class="text-xs text-muted-foreground mb-1 block">Status Siswa</label>
 								<select id="s-status" class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" bind:value={formStatus}>
 									<option value="prospective">Calon Siswa</option>
 									<option value="active">Aktif</option>
@@ -747,10 +747,10 @@
 							<Table.Head>Kelas</Table.Head>
 							<Table.Head>Wali</Table.Head>
 							<Table.Head>Status</Table.Head>
-							<Table.Head>Lifecycle</Table.Head>
+							<Table.Head>Status siswa</Table.Head>
 							<Table.Head>Status akun</Table.Head>
 							<Table.Head>Username</Table.Head>
-							<Table.Head>Role</Table.Head>
+							<Table.Head>Peran</Table.Head>
 							<Table.Head class="text-right">Aksi</Table.Head>
 						</Table.Row>
 					</Table.Header>
@@ -848,7 +848,7 @@
 											title={search ? 'Tidak ada siswa yang cocok' : 'Belum ada data siswa'}
 											description={search
 												? 'Coba ganti kata kunci pencarian, atau kosongkan filter untuk melihat seluruh daftar siswa.'
-												: 'Tambahkan siswa pertama agar modul kelas, orang tua, nilai, dan CBT bisa mulai terhubung.'}
+												: 'Tambahkan siswa pertama agar rombel, orang tua, nilai, dan asesmen bisa mulai terhubung.'}
 										>
 											{#if search}
 												<Button variant="outline" size="sm" onclick={() => (search = '')}>Reset pencarian</Button>
@@ -897,11 +897,11 @@
 								<Badge class={accountStatusClass(accountCandidate)}>{accountStatusLabel(accountCandidate)}</Badge>
 							</div>
 							<p class="mt-2 font-mono text-xs text-muted-foreground">
-								Username {accountCandidate?.generated_username || '—'} · Role {accountCandidate?.role || '—'}
+								Username {accountCandidate?.generated_username || '—'} · Peran {accountCandidate?.role || '—'}
 							</p>
 							<p class="mt-3 text-sm text-muted-foreground">{parentSummary(s)}</p>
 							{#if s.linked_parent_count > 0}
-								<p class="mt-1 text-xs text-primary">Relasi orang tua terhubung ke akun portal</p>
+								<p class="mt-1 text-xs text-primary">Relasi orang tua terhubung ke akun orang tua</p>
 							{/if}
 							<div class="mt-4 grid grid-cols-2 gap-2">
 								<LoadingButton
@@ -945,7 +945,7 @@
 								title={search ? 'Tidak ada siswa yang cocok' : 'Belum ada data siswa'}
 								description={search
 									? 'Ubah kata kunci pencarian atau reset filter untuk melihat kembali seluruh daftar siswa.'
-									: 'Tambahkan siswa pertama dari form di atas agar data akademik dan portal orang tua bisa mulai berjalan.'}
+									: 'Tambahkan siswa pertama dari panel ini agar data akademik dan akun orang tua bisa mulai berjalan.'}
 							>
 								{#if search}
 									<Button variant="outline" size="sm" onclick={() => (search = '')}>Reset pencarian</Button>

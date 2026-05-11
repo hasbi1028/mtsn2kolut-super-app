@@ -316,11 +316,11 @@
 				}),
 			});
 			await readClientJson<unknown>(response);
-			toast.success(editingSlot ? 'Slot jadwal diperbarui' : 'Slot jadwal ditambahkan');
+			toast.success(editingSlot ? 'Jam pelajaran diperbarui' : 'Jam pelajaran ditambahkan');
 			resetForm(classId);
 			await refreshWeekly();
 		} catch (error) {
-			const message = errorMessage(error, 'Gagal menyimpan slot jadwal.');
+			const message = errorMessage(error, 'Gagal menyimpan jam pelajaran.');
 			formError = message;
 			toast.error(message);
 		} finally {
@@ -330,7 +330,7 @@
 
 	async function deleteSlot(slot: WeeklySlot) {
 		if (!(await confirmAction({
-			title: 'Hapus Slot Jadwal',
+			title: 'Hapus Jam Pelajaran',
 			message: `Hapus ${slot.subject_name} ${slot.class_code} pada ${dayLabels[slot.day_of_week] ?? 'hari ini'} pukul ${fmtTime(slot.start_time)}-${fmtTime(slot.end_time)}?`,
 			confirmLabel: 'Hapus',
 			tone: 'danger',
@@ -340,10 +340,10 @@
 			const response = await fetch(clientApiPath`/api/academic/rombel/${slot.class_id}/timetable-slots/${slot.id}`, { method: 'DELETE' });
 			await readClientJson<unknown>(response);
 			if (editingSlot?.id === slot.id) resetForm(slot.class_id);
-			toast.success('Slot jadwal dihapus');
+			toast.success('Jam pelajaran dihapus');
 			await refreshWeekly();
 		} catch (error) {
-			toast.error(errorMessage(error, 'Gagal menghapus slot jadwal.'));
+			toast.error(errorMessage(error, 'Gagal menghapus jam pelajaran.'));
 		} finally {
 			deleteBusyId = '';
 		}
@@ -386,7 +386,7 @@
 	}
 
 	function weeklyErrorMessage(error: unknown) {
-		return errorMessage(error, 'Jadwal mingguan belum dapat dimuat. Periksa koneksi backend lalu coba lagi.');
+		return errorMessage(error, 'Jadwal mingguan belum dapat dimuat. Periksa layanan sistem lalu coba lagi.');
 	}
 
 	function handleRenderError(error: unknown) {
@@ -408,13 +408,13 @@
 			<p class="text-sm font-medium text-primary">Akademik</p>
 			<h1 class="text-2xl font-semibold tracking-normal text-foreground">Jadwal Pelajaran</h1>
 			<p class="mt-1 max-w-2xl text-sm text-muted-foreground">
-				Editor mingguan dasar untuk slot rombel dan guru pada tahun ajaran aktif.
+				Pengaturan jadwal mingguan untuk rombel dan guru pada tahun ajaran aktif.
 			</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
 			<Button variant="outline" onclick={() => resetForm()} disabled={slotSaveBusy}>
 				<Plus class="mr-2 size-4" />
-				Tambah Slot
+				Tambah jam pelajaran
 			</Button>
 			<Button variant="outline" onclick={() => void refreshWeekly()} disabled={refreshBusy || slotSaveBusy} aria-label="Muat ulang jadwal">
 				<RefreshCw class={`mr-2 size-4 ${refreshBusy ? 'animate-spin' : ''}`} />
@@ -456,7 +456,7 @@
 			</Card.Root>
 			<Card.Root>
 				<Card.Header class="pb-2">
-					<Card.Description>Total Slot</Card.Description>
+					<Card.Description>Total jam pelajaran</Card.Description>
 					<Card.Title class="text-2xl">{summary.totalSlots}</Card.Title>
 				</Card.Header>
 			</Card.Root>
@@ -468,7 +468,7 @@
 			</Card.Root>
 			<Card.Root>
 				<Card.Header class="pb-2">
-					<Card.Description>Konflik</Card.Description>
+					<Card.Description>Jadwal perlu diperiksa</Card.Description>
 					<Card.Title class={`text-2xl ${summary.totalConflicts > 0 ? 'text-destructive' : ''}`}>{summary.totalConflicts}</Card.Title>
 				</Card.Header>
 			</Card.Root>
@@ -477,7 +477,7 @@
 		<Card.Root>
 			<Card.Content class="grid gap-3 p-4 lg:grid-cols-[15rem_15rem_12rem_1fr]">
 				<div class="space-y-1.5">
-					<p class="text-sm font-medium">Mode</p>
+					<p class="text-sm font-medium">Tampilan</p>
 					<div id="timetable-mode" class="grid grid-cols-2 rounded-md border border-input bg-background p-1">
 						<button
 							type="button"
@@ -546,20 +546,20 @@
 						<Card.Header>
 							<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 								<div>
-									<Card.Title class="text-base">Minggu Pelajaran</Card.Title>
-									<Card.Description>{filteredSlots.length} slot tampil dari {summary.totalSlots} slot aktif.</Card.Description>
+									<Card.Title class="text-base">Jadwal Mingguan</Card.Title>
+									<Card.Description>{filteredSlots.length} jam pelajaran tampil dari {summary.totalSlots} jam pelajaran aktif.</Card.Description>
 								</div>
 								{#if summary.conflictedSlots > 0}
 									<Badge variant="destructive">
 										<AlertTriangle class="mr-1 size-3" />
-										{summary.conflictedSlots} slot perlu dicek
+										{summary.conflictedSlots} jadwal perlu diperiksa
 									</Badge>
 								{/if}
 							</div>
 						</Card.Header>
 						<Card.Content class="space-y-5">
 							{#if filteredSlots.length === 0}
-								<EmptyStatePanel compact title="Slot jadwal belum ditemukan" description="Ubah filter atau tambahkan slot pertama untuk rombel yang dipilih." />
+								<EmptyStatePanel compact title="Jam pelajaran belum ditemukan" description="Ubah pilihan pencarian atau tambahkan jam pelajaran pertama untuk rombel yang dipilih." />
 							{:else}
 								{#each dayGroups as group (group.day)}
 									<div class="space-y-3">
@@ -568,7 +568,7 @@
 												<CalendarDays class="size-4 text-primary" />
 												<h2 class="text-sm font-semibold text-foreground">{group.label}</h2>
 											</div>
-											<Badge variant="outline">{group.slots.length} slot</Badge>
+											<Badge variant="outline">{group.slots.length} jam</Badge>
 										</div>
 										{#if group.slots.length > 0}
 											<div class="grid gap-3 lg:grid-cols-2">
@@ -629,7 +629,7 @@
 											</div>
 										{:else}
 											<div class="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
-												Tidak ada slot pada hari ini.
+												Tidak ada jam pelajaran pada hari ini.
 											</div>
 										{/if}
 									</div>
@@ -640,13 +640,13 @@
 
 					<Card.Root>
 						<Card.Header>
-							<Card.Title class="text-base">Daftar Konflik</Card.Title>
-							<Card.Description>{conflicts.length} konflik terdeteksi dari slot tahun ajaran aktif.</Card.Description>
+							<Card.Title class="text-base">Daftar jadwal yang perlu diperiksa</Card.Title>
+							<Card.Description>{conflicts.length} jadwal perlu diperiksa pada tahun ajaran aktif.</Card.Description>
 						</Card.Header>
 						<Card.Content class="p-0">
 							{#if conflicts.length === 0}
 								<div class="p-4">
-									<EmptyStatePanel compact title="Tidak ada konflik jadwal" description="Slot aktif belum memiliki bentrok rombel, guru, atau ruang." />
+									<EmptyStatePanel compact title="Tidak ada jadwal yang perlu diperiksa" description="Jadwal aktif belum memiliki bentrok rombel, guru, atau ruang." />
 								</div>
 							{:else}
 								<div class="overflow-x-auto">
@@ -654,8 +654,8 @@
 										<Table.Header>
 											<Table.Row>
 												<Table.Head>Jenis</Table.Head>
-												<Table.Head>Slot Utama</Table.Head>
-												<Table.Head>Slot Terkait</Table.Head>
+												<Table.Head>Jadwal utama</Table.Head>
+												<Table.Head>Jadwal terkait</Table.Head>
 												<Table.Head>Hari/Jam</Table.Head>
 											</Table.Row>
 										</Table.Header>
@@ -694,11 +694,11 @@
 					<Card.Header>
 						<div class="flex items-start justify-between gap-3">
 							<div>
-								<Card.Title class="text-base">{editingSlot ? 'Edit Slot Jadwal' : 'Tambah Slot Jadwal'}</Card.Title>
+								<Card.Title class="text-base">{editingSlot ? 'Edit jam pelajaran' : 'Tambah jam pelajaran'}</Card.Title>
 								<Card.Description>{selectedAssignment ? assignmentLabel(selectedAssignment) : 'Pilih rombel dan guru mapel aktif.'}</Card.Description>
 							</div>
 							{#if editingSlot}
-								<Button variant="ghost" size="icon-sm" aria-label="Batalkan edit slot" onclick={() => resetForm(editingSlot?.class_id ?? formClassId)} disabled={slotSaveBusy}>
+								<Button variant="ghost" size="icon-sm" aria-label="Batalkan edit jam pelajaran" onclick={() => resetForm(editingSlot?.class_id ?? formClassId)} disabled={slotSaveBusy}>
 									<X class="size-4" />
 								</Button>
 							{/if}
@@ -773,7 +773,7 @@
 								<Button variant="outline" onclick={() => resetForm(editingSlot?.class_id ?? formClassId)} disabled={slotSaveBusy}>Batal</Button>
 							{/if}
 							<LoadingButton loading={slotSaveBusy} loadingLabel="Menyimpan..." disabled={!canSaveSlot} onclick={() => void saveSlot()}>
-								{editingSlot ? 'Simpan Perubahan' : 'Tambah Slot'}
+								{editingSlot ? 'Simpan perubahan' : 'Tambah jam pelajaran'}
 							</LoadingButton>
 						</div>
 					</Card.Content>
