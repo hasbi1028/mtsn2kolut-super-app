@@ -295,6 +295,7 @@ func main() {
 		})
 
 		r.Get("/api/academic", academicH.Overview)
+		r.Get("/api/academic/dashboard", academicH.GetDashboard)
 		r.Get("/api/academic/stats", academicH.GetStats)
 		r.Get("/api/academic/rombel", rombelH.List)
 		r.Get("/api/academic/rombel/{id}", rombelH.Get)

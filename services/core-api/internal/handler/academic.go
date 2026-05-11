@@ -25,6 +25,7 @@ type academicService interface {
 	ListAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
 	ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error)
 	GetStats(ctx context.Context) (db.GetAcademicStatsRow, error)
+	GetDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error)
 	CreateYear(ctx context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error)
 	CreateClass(ctx context.Context, p db.CreateSchoolClassParams) (db.SchoolClass, error)
 	CreateSubject(ctx context.Context, p db.CreateSubjectParams) (db.Subject, error)
@@ -85,6 +86,19 @@ func (h *Academic) GetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	row, err := h.svc.GetStats(r.Context())
+	if err != nil {
+		api.Internal(w, err)
+		return
+	}
+	api.OK(w, row)
+}
+
+func (h *Academic) GetDashboard(w http.ResponseWriter, r *http.Request) {
+	if !academicReadAccessAllowed(r) {
+		api.Forbidden(w)
+		return
+	}
+	row, err := h.svc.GetDashboardSummary(r.Context())
 	if err != nil {
 		api.Internal(w, err)
 		return

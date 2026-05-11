@@ -29,6 +29,9 @@ type fakeAcademicService struct {
 	statsCalled bool
 	statsErr    error
 
+	dashboardCalled bool
+	dashboardErr    error
+
 	createYearArg      db.CreateAcademicYearParams
 	createClassArg     db.CreateSchoolClassParams
 	createSubjectArg   db.CreateSubjectParams
@@ -108,6 +111,21 @@ func (f *fakeAcademicService) GetStats(context.Context) (db.GetAcademicStatsRow,
 		return db.GetAcademicStatsRow{}, f.statsErr
 	}
 	return db.GetAcademicStatsRow{TotalYears: 1, TotalClasses: 2, TotalSubjects: 3}, nil
+}
+
+func (f *fakeAcademicService) GetDashboardSummary(context.Context) (db.GetAcademicDashboardSummaryRow, error) {
+	f.dashboardCalled = true
+	if f.dashboardErr != nil {
+		return db.GetAcademicDashboardSummaryRow{}, f.dashboardErr
+	}
+	return db.GetAcademicDashboardSummaryRow{
+		ActiveAcademicYear:     "2026/2027",
+		ActiveSemester:         "Ganjil",
+		TotalClasses:           7,
+		TotalActiveStudents:    210,
+		StudentsWithoutClass:   3,
+		ClassesWithoutHomeroom: 1,
+	}, nil
 }
 
 func (f *fakeAcademicService) CreateYear(_ context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error) {
@@ -203,6 +221,12 @@ func TestAcademicOverviewAndStatsSuccess(t *testing.T) {
 	h.GetStats(rec, adminRequest(http.MethodGet, "/api/academic/stats", ""))
 	if rec.Code != http.StatusOK || !fake.statsCalled {
 		t.Fatalf("GetStats() status/called = %d/%v, want 200/true; body=%s", rec.Code, fake.statsCalled, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	h.GetDashboard(rec, adminRequest(http.MethodGet, "/api/academic/dashboard", ""))
+	if rec.Code != http.StatusOK || !fake.dashboardCalled || !strings.Contains(rec.Body.String(), "active_academic_year") {
+		t.Fatalf("GetDashboard() status/called/body = %d/%v/%s, want 200/true/summary", rec.Code, fake.dashboardCalled, rec.Body.String())
 	}
 }
 

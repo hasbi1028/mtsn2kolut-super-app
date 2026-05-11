@@ -17,6 +17,7 @@ type academicStore interface {
 	ListClassSubjectAssignments(ctx context.Context) ([]db.ListClassSubjectAssignmentsRow, error)
 	ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSlotsRow, error)
 	GetAcademicStats(ctx context.Context) (db.GetAcademicStatsRow, error)
+	GetAcademicDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error)
 	CreateAcademicYear(ctx context.Context, arg db.CreateAcademicYearParams) (db.AcademicYear, error)
 	CreateSchoolClass(ctx context.Context, arg db.CreateSchoolClassParams) (db.SchoolClass, error)
 	CreateSubject(ctx context.Context, arg db.CreateSubjectParams) (db.Subject, error)
@@ -71,6 +72,10 @@ func (s *Academic) ListTimetableSlots(ctx context.Context) ([]db.ListTimetableSl
 
 func (s *Academic) GetStats(ctx context.Context) (db.GetAcademicStatsRow, error) {
 	return s.q.GetAcademicStats(ctx)
+}
+
+func (s *Academic) GetDashboardSummary(ctx context.Context) (db.GetAcademicDashboardSummaryRow, error) {
+	return s.q.GetAcademicDashboardSummary(ctx)
 }
 
 func (s *Academic) CreateYear(ctx context.Context, p db.CreateAcademicYearParams) (db.AcademicYear, error) {
